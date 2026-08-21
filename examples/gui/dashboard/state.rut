@@ -214,7 +214,7 @@ export class Dashboard {
     }
 }
 
-// --- array helpers (shared by mutations; dataclasses carry no methods) ---
+// --- array helpers (shared by mutations; free fns keep models data-only) ---
 
 export(self) fn shift_left(xs: Array<f32>): void {
     for (let i = 1; i < xs.length; i += 1) {

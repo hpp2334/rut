@@ -2,8 +2,18 @@
 // Interface values are the ONLY dynamic dispatch (vtable).
 // Intersection types (`Drawable & HitTest`) are NEVER supported — compose
 // a wider interface instead (Widget below).
+//
+// Also demonstrates (RFC 0002 §5.1 + §6):
+//   * `requires` — an admission constraint, NOT subtyping: to implement
+//     Hashable, a type must ALSO implement Equal<Self>. No member
+//     inheritance, no interface-to-interface widening; vtables stay flat.
+//   * dataclass implementors: methods + `implements` on an all-public
+//     literal-constructed value record. The exhaustive dataclass limit
+//     list: no `private` fields, no `static` members, no `factory`,
+//     no `dispose()`. Everything else — including methods — is allowed.
 
 import { Canvas, newCanvas } from "app:gfx";
+import { Logger } from "std:log";
 
 interface Drawable {
     draw(g: Canvas): void;
@@ -16,6 +26,14 @@ interface HitTest {
 interface Widget {                   // composition replaces `Drawable & HitTest`
     draw(g: Canvas): void;
     hit_test(x: f32, y: f32): bool;
+}
+
+interface Equal<T> {                 // generic interface: eq is TYPED —
+    eq(other: T): bool;              // no downcast dance to recover the
+}                                    // other operand's fields
+
+interface Hashable requires Equal<Self> {   // §6 `requires`: Self binds to
+    hash(): u64;                            // the implementor below
 }
 
 class Sprite implements Widget {
@@ -37,14 +55,41 @@ class Sprite implements Widget {
     }
 }
 
+dataclass Cell implements Hashable, Equal<Cell> {   // BOTH listed: the
+    x: i32;                                         // requires rule
+    y: i32;                                         // public fields only
+
+    fn hash(): u64 {                                // direct dispatch on a
+        return u64(this.x) * 1000003 + u64(this.y); // concrete Cell
+    }
+
+    fn eq(other: Cell): bool {                      // typed other: fields
+        return other.x == this.x && other.y == this.y;   // at hand
+    }
+}
+
 fn blit_all(g: Canvas, items: Array<Widget>): void {
     for (const w of items) {
         w.draw(g);                   // vtable dispatch — the only dynamic call
     }
 }
 
+fn mixed_hash(keys: Array<Hashable>): u64 {
+    let acc: u64 = 0;
+    for (const k of keys) {
+        acc += k.hash();             // vtable dispatch through Hashable;
+    }                                // k.eq(..) would NOT compile: no
+    return acc;                      // widening Hashable -> Equal (§6)
+}
+
 export fn main(): void {
+    const log = Logger("interfaces");
     const s = Sprite();
     s.move_by(2, 2);
     blit_all(newCanvas(), [s]);      // bare Sprite boxes implicitly to Widget
+
+    const a = Cell { x: 1, y: 2 };   // literal — the ONLY dataclass factory
+    const b = Cell { x: 1, y: 2 };
+    log.info(f"eq={a.eq(b)} hash={mixed_hash([a, b])}");
+    //                        ^ bare dataclasses box implicitly to Hashable
 }

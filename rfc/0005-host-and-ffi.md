@@ -60,8 +60,10 @@ fn gfx_module() -> NativeModule {
   `require_props_object`.
 - Native modules may also register **enum types** (named `i32` constants,
   RFC 0002 §7) — they cross the boundary as identity + `i32` (§3), and
-  rut imports them like any type — and **class types**, generic ones
-  included (§5.1).
+  rut imports them like any type — **class types**, generic ones included
+  (§5.1), and **interface types** (with their own `requires` clauses and
+  builtin impls — `std:collection`'s `Equal<T>`/`Hashable` are the
+  canonical example, §5.1).
 - Failures are `Result<_, Trap>` values — a native fn that errors traps
   cleanly with a message and a rut backtrace (RFC 0008 §2).
 - Long-running host work must NOT block the loop: hand back a future
@@ -173,17 +175,25 @@ counts.get("key");                                 // -> Option<i32> (builtin)
 
 Registration — written by the embedding application (tur, say), not by
 the rut stdlib. Full listing: **`examples/host/my_map.rs`** (the `.rut`
-consumer side is `examples/host/my-map.rut` — the example is a pair):
+consumer side is `examples/host/my-map.rut` — the example is a pair).
+`std:collection` ships the constraint vocabulary: the native interfaces
+`Equal<T> { eq(other: T): bool }` and
+`Hashable requires Equal<Self> { hash(): u64 }` (RFC 0002 §6), plus
+builtin impls — `string`/numerics/`enum` by content, `Rc<T>` by identity
+(object-keyed maps) — so common keys work with no user code:
 
 ```rust
-struct MyMap<K: Key, V: Rut> { /* a HashMap — all Rust; rut never sees it */ }
-
-fn build_my_map<K: Key, V: Rut>(inst: &mut InstBuilder) -> Result<ClassTable, Trap> {
+fn build_my_map(generic_args: &GenericArgs, types: &TypeRegistry)
+    -> Result<ClassTable, Trap>
+{
     // Called ONCE per distinct MyMap<K, V> — the monomorphization point
-    // (RFC 0002 §10). `Key` is the host-hash contract: primitives,
-    // `string`, or a registered struct (§4) — checked here, so any other
-    // K traps at first use with an embedder-written message.
-    ClassTable::new::<MyMap<K, V>>(inst)
+    // (RFC 0002 §10).
+    let k = generic_args.of("K");                    // param by NAME
+    let i_hashable = types.interface_of("Hashable"); // shared TypeId
+
+    ClassTable::new::<MyMap<K, V>>(generic_args)
+        .constrain(k, i_hashable)   // K must implement Hashable — and,
+                                    // via `requires Equal<Self>`, Equal<K>
         .factory(|ctx: &mut VmCtx, cap: i32| Ok(MyMap::with_capacity(cap)))
         .method("set",  |ctx, this: &mut MyMap<K, V>, k: K, v: V| Ok(this.insert(k, v)))
         .method("get",  |ctx, this: &MyMap<K, V>, k: K| Ok(this.get(&k)))  // Option<V>
@@ -198,16 +208,34 @@ fn my_map_module() -> NativeModule {
 }
 ```
 
-- The **native factory** makes construction an ordinary type-call
-  (`MyMap<string, i32>(32)`), same rule as `Array<f32>(n)`: construction
-  is a function everywhere, and a host class simply supplies the function.
-  Helper fns like `newCanvas()` remain the shape for host-computed or
-  side-effecting construction.
+- **Constraints are interfaces — checked at compile (IR) time, never
+  runtime.** The module descriptor carries each generic param's
+  constraints; an instantiation like `MyMap<Canvas, i32>` is rejected
+  at the rut line (`Canvas` does not implement `Hashable`) and
+  re-checked by the load-time verifier against the descriptor
+  (RFC 0007 §8). Admission closes over the `requires` graph
+  automatically: implementing `Hashable` entails `Equal<Self>`.
+- **Who satisfies a constraint**: user classes and dataclasses
+  (`implements` — RFC 0002 §5.1/§6), builtins via registered impls
+  (content for `string`/numerics/`enum`, identity for `Rc<T>`), and
+  registered structs via a `register_struct` content voucher (the Rust
+  mirror is `Hash + Eq` — no rut-side methods needed). Interfaces
+  themselves, `Opaque`, `Array`, `Option`/`Result` satisfy nothing.
 - Methods are keyed `(TypeId, name)` exactly like `extern class` methods,
   and the header `TypeId` carries the instantiation:
   `MyMap<i32, i32>` ≠ `MyMap<string, Opaque>`.
 - Builtin types flow back natively — a method may return `Option<V>` or
   build an `Array<K>` host-side; rut cannot tell it wasn't written in rut.
+- Hashing/`eq` on a user type may be **rut code**, reached through the
+  interface vtable — a method call that re-enters the VM (`VmCtx`,
+  §1). Re-entrancy is already guarded: `set` holds `&mut this`, the
+  cell's borrow flag is set, and a hash impl that calls `m.set(..)`
+  again traps `borrowed by host` (§3) instead of corrupting the table.
+- The **native factory** makes construction an ordinary type-call
+  (`MyMap<string, i32>(32)`), same rule as `Array<f32>(n)`: construction
+  is a function everywhere, and a host class simply supplies the function.
+  Helper fns like `newCanvas()` remain the shape for host-computed or
+  side-effecting construction.
 
 See **`examples/host/my-map.rut`** (consumer side) and
 **`examples/host/my_map.rs`** (embedder side).
@@ -265,7 +293,8 @@ The standard library splits in two:
 - **`rt:*`** — native modules (this RFC): `rt:log`, and the IO/backing
   modules behind `std:fs`, `std:net`, `std:http`, `std:time`,
   `std:channel`, and `std:collection` (`Map<K, V>`, `Set<T>` —
-  registered host classes, §5.1).
+  registered host classes, §5.1 — plus the constraint interfaces
+  `Equal<T>` / `Hashable requires Equal<Self>` and their builtin impls).
 - **`std:*`** — rut source, compiled like user modules; they import `rt:*`
   for anything that touches the host. The split keeps policy (levels,
   formatting, wrappers) in auditable rut code and mechanism (syscalls,

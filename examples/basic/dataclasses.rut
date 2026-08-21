@@ -1,7 +1,8 @@
 // RFC 0002 §5.1 — dataclasses: open VALUE records.
-// Copied on assignment/passing/return. All fields public. NO methods —
-// behavior is free functions. Constructed ONLY by literal, everywhere
-// (module-const initializers included).
+// Copied on assignment/passing/return. All fields public. Methods and
+// `implements` ARE allowed (see interfaces.rut for impls); here the
+// idiom stays data + free functions. Constructed ONLY by literal,
+// everywhere (module-const initializers included).
 
 import { Logger } from "std:log";
 

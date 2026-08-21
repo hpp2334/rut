@@ -38,7 +38,9 @@ The tagged `Value` enum exists only at the host FFI boundary (RFC 0005 §3).
 #[repr(C)]
 struct RutClass {                    // heap object: an Rc<T> CELL (RFC 0002 §5.3)
     h: Header,                       // rc + type id (RFC 5004 §1)
-    vt: *const VTable,               // exact class's vtable — set at `Rc(v)`
+    vt: *const VTable,               // exact type's vtable — class OR
+                                     // dataclass (RFC 0002 §5.1) — set
+                                     // at `Rc(v)`
     // class fields follow inline at fixed offsets — the SAME repr-C block
     // as the bare value (RFC 0002 §10.2): boxing adds the prefix, it never
     // re-lays-out. Hosts read the block through StructRef (RFC 0005 §4).
@@ -53,9 +55,11 @@ struct VTable {
 }
 ```
 
-Interface method ids are assigned **globally per interface** at compile
-time; a class's vtable fills every slot of every interface it declares
-`implements` (the cell is minted by `Rc(v)` or by implicit boxing at an
+Interface method ids are assigned **globally per interface instantiation**
+at compile time (`Equal<Point>` ≠ `Equal<string>`, RFC 0002 §6); a
+class's — or a dataclass's (RFC 0002 §5.1) — vtable fills every slot of
+every interface instantiation it declares `implements` (the cell is
+minted by `Rc(v)` or by implicit boxing at an
 interface widening). A call through an interface is two loads and an
 indirect jump:
 

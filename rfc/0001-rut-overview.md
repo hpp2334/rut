@@ -98,7 +98,7 @@ lifetimes.
 | P2 | Isolate workers with typed channels and transferable buffers | 0003 |
 | P3 | Reference counting + cycle collector; deterministic destructors | 0004 |
 | P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0002 §3 |
-| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `factory` type-calls — no `new` keyword, `suspend factory` allowed), `interface` (vtable dispatch — the sole dynamic-dispatch mechanism), simple `enum`; no object literals, no data-enums, no intersections | 0002 |
+| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `factory` type-calls — no `new` keyword, `suspend factory` allowed), `interface` (vtable dispatch — the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0002 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0003 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0006, 0007, 0008 |
 | P8 | Both value types (`dataclass` **and** `class`) are **repr C**; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0002 §3.2/§10.2, 0005 §4 |

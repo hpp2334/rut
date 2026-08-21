@@ -17,7 +17,7 @@ RFCs.
 | `basic/dataclasses.rut` | value semantics, field initializers, free functions | 0002 §5.1 |
 | `basic/classes.rut` | factory type-calls, `Self {}` literal, `Option<Self>` try-factories, private, statics | 0002 §5.2 |
 | `basic/rc-and-dispose.rut` | `Rc(v)` boxing, ref-copy aliasing, `dispose()` | 0002 §5.3 |
-| `basic/interfaces.rut` | methods-only interfaces, composition over intersections | 0002 §6 |
+| `basic/interfaces.rut` | methods-only interfaces, `requires`, dataclass implementors, composition over intersections | 0002 §5.1, §6 |
 | `basic/type-tests.rut` | `is<T>()`, `upcast<T>()`; no `as`, no downcast | 0002 §6.1 |
 | `basic/closures-generics.rut` | arrows, monomorphized generics | 0002 §9 |
 | `basic/opaque.rut` | `Opaque(v)` / `downcast<T>` / `is<T>` erasure & recovery; snapshot vs shared | 0002 §3.1 |
@@ -38,7 +38,7 @@ RFCs.
 | `network/echo-server.rut` | accept loop + worker pool dispatch | 0003 §5 |
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0003 §5 |
 | `host/interop.rut` | `extern class` handles, repr C struct passing, buffer borrows, `Template` for l10n | 0005 |
-| `host/my-map.rut` + `host/my_map.rs` | embedder-defined native module (`plugin:*`): generic host class, native-factory type-call, `Opaque` values, native `Option`/`Array` returns — rut and Rust sides of one example | 0005 §5.1 |
+| `host/my-map.rut` + `host/my_map.rs` | embedder-defined native module (`plugin:*`): generic host class with interface-constrained params (`Equal<T>`/`Hashable requires Equal<Self>`, compile-time rejection), dataclass key, native-factory type-call, `Opaque` values, native `Option`/`Array` returns — rut and Rust sides of one example | 0005 §5.1 |
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0002 §3.1 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0003 §5 |
 

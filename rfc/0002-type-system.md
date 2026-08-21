@@ -9,7 +9,11 @@
   (no user data-enums); no sugar operators. Later: factories (`constructor`
   renamed to `factory` — construction is a function, `suspend factory`
   allowed), dataclass **and** class are **repr C** (§10.2), layout &
-  identity builtins added (§3.2), `box<T>` rejected outright (§2).
+  identity builtins added (§3.2), `box<T>` rejected outright (§2). Latest:
+  dataclasses gained **methods + `implements`** (remaining limits: no
+  `private` fields, no statics, no `factory`, no `dispose` — §5.1),
+  interface **`requires`** shipped (`extends` rejected — §6, OQ-4), and
+  `Rc<T>` over dataclasses allowed (§5.3, OQ-17).
 
 ## Summary
 
@@ -174,7 +178,7 @@ See **`examples/basic/module-visibility.rut`**.
 | heap: text | `string` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (§4.1), raw literals `r"..."` |
 | heap: binary | `bytes` | mutable, growable byte buffer |
 | heap: seq | `Array<T>` | mutable, growable, **unboxed** homogeneous storage |
-| user: value | `dataclass D { .. }` | open record — inline value, copied on assignment (§5.1); **repr C** (§10.2) |
+| user: value | `dataclass D { .. }` | open record — inline value, copied on assignment, methods & interface impls allowed (§5.1); **repr C** (§10.2) |
 | user: value | `class C { .. }` | sealed record — also a value type (§5.2), **repr C** (§10.2); `Rc<C>` for refs (§5.3) |
 
 - `Array<f32>` is a flat `Vec<f32>` behind a header — no per-element boxing,
@@ -360,13 +364,16 @@ f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
 ## 5. Dataclasses, classes & `Rc<T>`
 
 Two user data types, **both value types** — and one explicit reference
-wrapper. Neither has a `factory`, and there is **no `new` keyword**
-anywhere in rut.
+wrapper. A dataclass has no `factory` — the literal is its only
+construction; a class constructs through factories (§5.2). There is
+**no `new` keyword** anywhere in rut.
 
 ### 5.1 Dataclasses — open value records
 
 See **`examples/basic/dataclasses.rut`** — literal construction everywhere,
-copy-on-assignment, field initializers, free functions over data.
+copy-on-assignment, field initializers, free functions over data — and
+**`examples/basic/interfaces.rut`** for dataclass `implements` +
+`requires` in action.
 
 - **Value semantics**: assignment, argument passing, and returning copy the
   whole value (shallow: ref-typed fields copy the handle + retain; nested
@@ -379,11 +386,38 @@ copy-on-assignment, field initializers, free functions over data.
 - Dataclass literals must initialize **every** field (any order, by name);
   fields may declare initializers (`x: f32 = 0`), which the literal may then
   omit.
-- **No methods.** A dataclass is pure data; behavior is free functions
-  (`length(p: Point): f64`, not `p.length()`). Also no `static`, no
-  `dispose()` (a value that is copied around has no single death to hook),
-  no interface implementation (an interface value is an Rc-cell reference —
-  a dataclass would have to be boxed first; OQ-15).
+- **Methods and `implements` are allowed** — the dataclass is no longer
+  "pure data". Its body may contain fns: inherent methods and interface
+  impls, declared and dispatched exactly like class methods (`this`
+  included):
+
+  ```rut
+  dataclass Point implements Hashable, Equal<Point> {
+      x: f32;
+      y: f32;
+      fn hash(): u64 { .. }
+      fn eq(other: Point): bool {
+          return other.x == this.x && other.y == this.y;
+      }
+  }
+  ```
+
+  Calls on a concrete `Point` are direct (§6); the interface-ref form
+  boxes — below. The limits on a dataclass, exhaustively: **no `private`
+  fields** (above), **no `static` members**, **no `factory`** (the
+  literal is the only construction — that split *is* the
+  dataclass/class distinction), and **no `dispose()`** (a value that is
+  copied around has no single death to hook). Everything else
+  class-shaped is allowed. Free functions over data remain the default
+  idiom; methods are for interface impls and tight helpers.
+- **Boxing for interface refs.** A dataclass is still a bare inline
+  value; an interface value *is* an Rc cell reference (§5.3). A bare
+  dataclass widens to an interface type by **implicit boxing** at the
+  widening site — exactly the bare-class rule of §5.3 — and cells
+  minted this way (or by `Rc(p)`) carry the dataclass's impl vtable
+  (RFC 5002 §2). Layout never changes: methods and impl tables add
+  **nothing** to `size_of(D)`; the repr-C field block is copied into
+  the cell as-is.
 - **Representation: no header, no refcount** (RFC 0004 §1). A dataclass is
   its fields back-to-back, inline wherever it lives: registers/stack for
   locals, inline in class fields and Rc cells, inline in `Array<Point>`
@@ -403,7 +437,8 @@ See **`examples/basic/classes.rut`** — factory type-calls, the class-private
 - **Also a value type.** A bare `Circle` copies on assignment/passing/return
   exactly like a dataclass — inline, no header, no refcount. What a class
   *adds* over a dataclass is **sealing**: private fields, factory-only
-  construction, `static` members, `implements` (§6), and `dispose()` (§5.3).
+  construction, `static` members, and `dispose()` (§5.3). (`implements`
+  is no longer class-only — §5.1.)
 - **Construction is a type-call**: `Circle(1, 2, 3)` runs the class's
   `factory`. No `new` keyword exists, and there is no outside literal for
   a class — construction always flows through a factory.
@@ -443,9 +478,11 @@ Want shared, mutable, or long-lived identity? Say so — wrap the value.
 See **`examples/basic/rc-and-dispose.rut`** (aliasing vs value copies) and
 **`examples/memory/temp-file.rut`** (dispose at rc 0).
 
-- `Rc<T>` is a builtin generic wrapping a **class** `T` in a heap cell:
-  `Header + vtable + fields inline` (RFC 0004 §1). Creation: `Rc(v)` (type
-  inferred) or `Rc<Circle>(v)`. (Wrapping dataclasses is OQ-17.)
+- `Rc<T>` is a builtin generic wrapping a class **or dataclass** `T` in a
+  heap cell: `Header + vtable + fields inline` (RFC 0004 §1). Creation:
+  `Rc(v)` (type inferred) or `Rc<Circle>(v)`. `Rc(p)` over a dataclass is
+  how a value record gets shared identity — and what interface impls on
+  dataclasses box into (§5.1).
 - **Copy = ref-copy.** Assignment/passing/returning an `Rc<T>` copies the
   handle (`rc++`) — JS-like aliasing, but always visible in the type.
 - **Access goes through**: `b.x` reads the box's field; `b.x = 1` and
@@ -458,10 +495,11 @@ See **`examples/basic/rc-and-dispose.rut`** (aliasing vs value copies) and
   destruction.
 - **Interfaces need the box.** An interface value *is* an Rc cell reference
   (with its vtable — §10.2). `Rc<Circle>` widens implicitly to `Drawable`;
-  a **bare** class value converts to an interface type by **implicit
-  boxing** (allocates the Rc cell) at the widening site — the one place rut
-  heap-allocates without `rc` spelled out. `Array<Circle>` stays inline;
-  `Array<Rc<Circle>>` and `Array<Drawable>` store cell pointers.
+  a **bare** class value — or, identically, a **bare dataclass** (§5.1) —
+  converts to an interface type by **implicit boxing** (allocates the Rc
+  cell, vtable from the type's impl table) at the widening site — the one
+  place rut heap-allocates without `rc` spelled out. `Array<Circle>` stays
+  inline; `Array<Rc<Circle>>` and `Array<Drawable>` store cell pointers.
 - **Weak refs**: `Weak(b)` creates a `Weak<C>` that does not keep the cell
   alive (RFC 0004 §4). Rc cells are also what the cycle collector walks
   (RFC 0004 §5).
@@ -501,7 +539,8 @@ ever returns.
 ## 6. Interfaces
 
 See **`examples/basic/interfaces.rut`** — multiple `implements`, a composed
-`Widget` interface, interface-typed arrays.
+`Widget` interface, `requires`, dataclass implementors, interface-typed
+arrays.
 
 - Interfaces declare **plain methods only** — no fields, no properties of
   any kind (there is no `get`/`set` syntax in rut at all). Anything that
@@ -518,11 +557,27 @@ See **`examples/basic/interfaces.rut`** — multiple `implements`, a composed
 - `implements` is **nominal and declared** — structural ("duck") conformity
   does not satisfy an interface. This keeps runtime type identity exact
   (§10) and casts cheap.
-- Interfaces may not `extend` interfaces (no hierarchies, OQ-4), and are
-  implemented **by classes only** — a dataclass cannot `implements` (an
-  interface value is an Rc-cell reference; a dataclass would need boxing,
-  OQ-15). An interface type is never a value's exact type; every interface
-  value points at an Rc cell whose exact class it carries (RFC 5002 §2).
+- **`requires` — an admission constraint, not subtyping.** An interface
+  may require others: `interface Hashable requires Equal<Self> { .. }`.
+  To implement `Hashable`, a type's `implements` list must **also** list
+  `Equal<Self>` with `Self` bound to the implementor — `dataclass Point
+  implements Hashable, Equal<Point>`; `Equal<SomeOtherType>` does not
+  satisfy it. Requirements are transitive (`A requires B`, `B requires C`
+  ⇒ `A` needs `C` too), cycles in the requires-graph are a link error,
+  and registered builtin impls satisfy requirements like any other impl
+  (RFC 0005 §5.1). What `requires` deliberately is **not** (this is why
+  interface `extends` was rejected, OQ-4): no member inheritance —
+  `Hashable` declares only `hash`, and `eq` is reachable only through
+  an `Equal<T>` ref; no subtyping — a `Hashable` ref does not widen to
+  an `Equal<T>` ref; **vtables stay flat** — one interface, one vtable,
+  §10.3 stays a single scan. The requires-graph is a compile-time walk
+  over the implements list, never a runtime dispatch.
+- Interfaces are implemented **by classes and dataclasses** (§5.1).
+  An interface type is never a value's exact type; every interface
+  value points at an Rc cell whose exact class or dataclass it carries
+  (RFC 5002 §2). Generic interfaces exist — `Equal<T>` above is the
+  canonical example — and each instantiation has its own vtable slots
+  (`Equal<Point>` ≠ `Equal<string>`, RFC 5002 §2).
 - Interface-typed values are the **only** dynamic dispatch in rut: a
   reference plus a vtable lookup per call. No `dyn`-typed variables, no
   `any`, no dynamic field access, no dynamic `this`.
@@ -536,10 +591,10 @@ There are **no cast keywords** (`as`, `as?`) and no `is` operator. The two
 type-directed operations are prelude builtin generics. See
 **`examples/basic/type-tests.rut`**.
 
-- `is<T>(x): bool` — runtime test, true when `x`'s exact class implements
-  `T` (or `T` is the exact class itself). With no inheritance this is a
-  single descriptor lookup — exact `TypeId` compare plus one flat
-  `implements` scan. Machinery in §10.3.
+- `is<T>(x): bool` — runtime test, true when `x`'s exact class (or
+  dataclass — §5.1) implements `T` (or `T` is the exact type itself).
+  With no inheritance this is a single descriptor lookup — exact
+  `TypeId` compare plus one flat `implements` scan. Machinery in §10.3.
 - `upcast<T>(x): T` — explicit widening to an interface.
   **Compile-time checked** (`x`'s class must declare `implements T` —
   otherwise a compile error, never a runtime failure) and **zero runtime
@@ -656,8 +711,10 @@ rule, no exceptions:
   library.** `Map<K, V>` / `Set<T>` live in `std:collection` as registered
   host classes (RFC 0005 §5.1); the VM stays container-free.
   `examples/host/my-map.rut` shows an embedder doing the same.
-- OQ-4 interface `extends` (interface hierarchies) — defer; a flat
-  `implements` list keeps §10.3 a single scan.
+- OQ-4 ~~interface `extends` (interface hierarchies)~~ — **resolved:
+  rejected**; `requires` shipped instead (§6) — an implementor-side
+  admission constraint: flat vtables, no member inheritance, no
+  interface-to-interface widening.
 - OQ-5 class inheritance (`extends`/`super`/`override`) — removed from v1
   (§5.4); reintroduce only if composition proves insufficient, as a separate
   RFC.
@@ -681,17 +738,17 @@ rule, no exceptions:
   only.
 - OQ-14 `rf"..."` (raw + format combination) and precision/width specifiers
   in format placeholders (`{x:.2}`) — deferred.
-- OQ-15 dataclass interface implementation (would box the dataclass at the
-  widening site, like bare-class boxing in §5.3 — is that worth having
-  twice?).
+- OQ-15 ~~dataclass interface implementation~~ — **resolved: shipped**
+  (§5.1). The boxing is the same implicit-boxing rule as bare classes
+  (§5.3) — one mechanism, not two.
 - OQ-16 dataclass size warning threshold (compiler warns when a dataclass
   grows past N bytes, since copies are `size_of` memcpys).
-- OQ-17 `rc<dataclass>` — v1 allows `Rc<T>` over classes only (a shared
-  dataclass record can be wrapped in a one-field class); allow dataclasses
-  too?
+- OQ-17 ~~`rc<dataclass>`~~ — **resolved: allowed** (§5.3). Interface
+  impls on dataclasses (§5.1) made dataclass cells mandatory anyway.
 - OQ-18 `Opaque` extras: the `type_id()` accessor **shipped** (§3.2, with
   `size()` and `as_bytes()`); content equality/hashing for identity use in
-  collections remains open.
+  collections remains open — `std:collection`'s `Equal<T>` / `Hashable`
+  interfaces (RFC 0005 §5.1) are the shipped answer for user types.
 - OQ-19 derived-atom caching (deps/version tracking for `derive`-style
   user libraries) — pure recompute-on-read is the v1-simple contract;
   decide whether the stdlib ships an invalidation-based cache.

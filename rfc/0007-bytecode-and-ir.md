@@ -155,7 +155,10 @@ def-before-use, jump targets in-range and to block heads, `brtable`
 density, factory `Self { .. }` completeness (every uninitialized field
 covered — RFC 0002 §5.2), suspend
 state tables closed under resume edges, host-slot signatures vs the
-registered native fns (RFC 0005 §2). A failed verification is a load error
+registered native fns (RFC 0005 §2), and generic-class instantiation
+ops vs the module descriptor's param constraints — the `implements`
+scan closing over `requires` (RFC 0005 §5.1), so a bad
+`MyMap<Canvas, ..>` is a load error. A failed verification is a load error
 reporting the module and function — corrupted images never execute.
 
 ## 9. Optimization policy

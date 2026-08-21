@@ -122,10 +122,10 @@ import     := 'import' '{' name (',' name)* '}' 'from' Str ';'
 decl       := constdecl | enumdecl | dataclassdecl | classdecl | interfacedecl | fndecl
 constdecl  := 'const' Ident ':' Type '=' expr ';'
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
-dataclass  := 'dataclass' Ident genericparams? '{' field* '}'
+dataclass  := 'dataclass' Ident genericparams? ('implements' IfaceList)? '{' (field | 'fn')* '}'
 class      := 'class' Ident genericparams? ('implements' IfaceList)? '{' member* '}'
 member     := 'private'? ('static' field | 'static' 'fn' | ('suspend')? 'factory' | field | 'fn' | 'dispose')
-interface  := 'interface' Ident genericparams? '{' meth* '}'
+interface  := 'interface' Ident genericparams? ('requires' IfaceList)? '{' meth* '}'
 fndecl     := modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? block
 block      := '{' stmt* '}'
 stmt       := 'let' Ident (':' Type)? '=' expr ';' | 'const' …
@@ -189,10 +189,13 @@ enum Item {
     Import  { span, names: Vec<Ident>, from: LitStr },
     Const   { span, vis, name: Ident, ty: Option<Ty>, init: Expr },
     Enum    { span, vis, name: Ident, members: Vec<Ident> },
-    Dataclass{ span, vis, name, generics: Vec<Ident>, fields: Vec<Field> },
+    Dataclass{ span, vis, name, generics: Vec<Ident>, implements: Vec<Ty>,
+               fields: Vec<Field>, methods: Vec<FnDecl> },  // RFC 0002 §5.1:
+               // impls + inherent methods; no private/static/factory/dispose
     Class   { span, vis, name, generics, implements: Vec<Ty>,
               members: Vec<Member> },
-    Interface{ span, vis, name, generics, methods: Vec<FnSig> },
+    Interface{ span, vis, name, generics, requires: Vec<Ty>,  // RFC 0002 §6
+               methods: Vec<FnSig> },
     Fn      { span, vis, is_async, name, generics,
               params: Vec<Param>, ret: Option<Ty>, body: Block },
 }
@@ -240,8 +243,8 @@ errors on these with a "rut does not have X; use Y" message (§7).
   bound to the enclosing class inside its body (RFC 0002 §5.2); `fn`,
   `let`, `const`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
   `else`, `enum`, `class`, `dataclass`, `interface`, `implements`,
-  `import`, `export`, `from`, `private`, `static`, `suspend`, `await`,
-  `factory`, `dispose`, `true`, `false`, `extern` are keywords.
+  `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
+  `await`, `factory`, `dispose`, `true`, `false`, `extern` are keywords.
 
 ## 7. Diagnostics
 

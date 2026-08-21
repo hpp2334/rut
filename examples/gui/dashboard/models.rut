@@ -1,6 +1,7 @@
-// models.rut — domain data: dataclasses (pure data, no methods — helpers
-// are free functions) and simple enums. Shared by main, services, the
-// worker isolate, and components; imported by relative path.
+// models.rut — domain data: dataclasses (data-first records — methods are
+// allowed, but helpers stay free functions here) and simple enums.
+// Shared by main, services, the worker isolate, and components;
+// imported by relative path.
 
 import { Sender } from "std:channel";
 
@@ -45,7 +46,7 @@ export dataclass LiveEvent {
     who: string;
 }
 
-// --- free-function helpers over the data (dataclasses carry no methods) ---
+// --- free-function helpers over the data (the data-first idiom) ---
 
 export fn status_label(s: Status): string {
     return when (s) {

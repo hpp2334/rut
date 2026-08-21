@@ -4,9 +4,11 @@
 // VM and exported from its own namespace, "plugin:my_map" — the full Rust
 // side is the sibling file examples/host/my_map.rs (registration API:
 // RFC 0005 §5.1). rut sees no implementation — only the module surface:
-// one generic class, its native factory, its methods.
-// std:collection's Map<K,V>/Set<T> ride this same machinery (RFC 0002
-// OQ-3, resolved): containers are library types, not VM builtins.
+// one generic class whose K param is CONSTRAINED to the `Hashable`
+// interface (which `requires Equal<Self>`), its native factory, its
+// methods. std:collection's Map<K,V>/Set<T> ride this same machinery
+// (RFC 0002 OQ-3, resolved): containers are library types, not VM
+// builtins.
 //
 // Boundary crossings in this file: the class type itself (first use of
 // MyMap<A, B> builds that instantiation's method table), the native
@@ -14,13 +16,34 @@
 // flowing back out.
 
 import { MyMap } from "plugin:my_map";
-import { Canvas, newCanvas } from "app:gfx";
+import { Equal, Hashable } from "std:collection";   // native constraint
+import { Canvas, newCanvas } from "app:gfx";        // interfaces
 import { Logger } from "std:log";
+
+// A DATACLASS key (RFC 0002 §5.1): an all-public, literal-constructed
+// value record — with methods, because dataclasses implement interfaces
+// now. Its limits, exhaustively: no `private` fields, no `static`
+// members, no `factory`, no `dispose()`.
+dataclass Name implements Hashable, Equal<Name> {   // BOTH — Hashable
+    first: string;                                  // requires Equal<Self>
+    last: string;
+
+    fn hash(): u64 {                                // demo hash (length mix);
+        return u64(this.first.length) * 1000003     // real impls mix bytes
+             + u64(this.last.length);
+    }
+
+    fn eq(other: Name): bool {                      // typed other — fields
+        return other.first == this.first           // at hand, no downcast
+            && other.last == this.last;
+    }
+}
 
 export fn main(): void {
     const log = Logger("my-map");
 
-    // K = string, V = i32. Construction is a TYPE-CALL: MyMap<string,
+    // K = string: satisfies Hashable via a REGISTERED builtin impl —
+    // no user code needed. Construction is a TYPE-CALL: MyMap<string,
     // i32>(32) instantiates the generic host class and runs its native
     // factory with a capacity hint. Same rule as Array<f32>(n) — no `new`.
     const counts: MyMap<string, i32> = MyMap<string, i32>(32);
@@ -31,6 +54,23 @@ export fn main(): void {
     }
     const hits = counts.get("key-3").unwrap_or(-1); // native get returns
     log.info(f"size={counts.size()} key-3={hits}"); // rut's builtin Option
+
+    // K = a DATACLASS: satisfies Hashable because it implements it. The
+    // map's hashing calls back into THIS hash()/eq() — rut code reached
+    // through the interface vtable (re-entrant VM call, borrow-guarded).
+    const roster: MyMap<Name, i32> = MyMap<Name, i32>(4);
+    roster.set(Name { first: "ada", last: "lovelace" }, 1);
+    roster.set(Name { first: "grace", last: "hopper" }, 2);
+    log.info(f"roster size={roster.size()}");
+
+    // K = a class with no impl — rejected at COMPILE (IR) time, straight
+    // from the module descriptor; the verifier re-checks at load:
+    //
+    // const bad = MyMap<Canvas, i32>(4);
+    //                    ^^^^^^ error: `Canvas` does not implement
+    //                    `Hashable` — required by MyMap's K
+    //                    (satisfiable by: implements Hashable, or a
+    //                    registered builtin/struct impl)
 
     // V = Opaque: a SECOND instantiation (own TypeId) storing values rut
     // cannot see inside. Native set/get just move the boxes — the Rust
