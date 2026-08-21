@@ -1,0 +1,34 @@
+// plugin/my_map.rut — the DECLARATION module for "plugin:my_map".
+//
+// Declarations live in rut source (RFC 0005 §5): an extern decl is pure
+// surface — signatures, no bodies. The module compiles and verifies like
+// any rut module but generates no code of its own; rutc, the LSP, and
+// AOT image builds consume it with ZERO Rust linked (the tur
+// index.d.ts role, but in-language and type-checked). The Rust
+// IMPLEMENTATION is the sibling file examples/host/my_map.rs, bound by
+// name at embedder startup and proven signature-equal at vm.load link.
+//
+// Import specifiers map to decl modules by path: "plugin:my_map" ->
+// plugin/my_map.rut. Only EXPORTED decls are nameable outside.
+
+// Param bounds on extern decls are ADMISSION-ONLY syntax (RFC 0002
+// §5.2/§6 — user generics have no bounds; OQ-7 stays deferred): they
+// constrain which instantiations compile, and grant no method calls on
+// bare K. "Hashable" imports from std:collection — whose own decl
+// module ships with the toolchain exactly like this one.
+import { Hashable } from "std:collection";
+
+export extern class MyMap<K: Hashable, V> {
+    factory(cap: i32): Self;          // native factory: MyMap<K, V>(cap)
+    fn set(k: K, v: V): void;
+    fn get(k: K): Option<V>;
+    fn size(): i32;
+    fn keys(): Array<K>;              // Array<K>, NOT Array<Hashable>:
+}                                     // keys are unerased at the boundary
+                                      // (interface values cannot be
+                                      // downcast — RFC 0002 §6.1)
+// What compiling this module produces: a slot table
+//     factory -> 0, set -> 1, get -> 2, size -> 3, keys -> 4
+// (declaration order; part of the decl digest). Consumer calls compile
+// to Op::CallNative { slot } — names are binding-time labels for the
+// Rust impl, never dispatch keys, never in the IR (RFC 0007).

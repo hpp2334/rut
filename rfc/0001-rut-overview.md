@@ -164,7 +164,8 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
    with explicit wrapping intrinsics (RFC 0002 §4).
 3. ~~Standard-library container set (`map<K,V>`, `set<T>`) as builtins vs
    library types (RFC 0002 §6).~~ **Resolved — library:** `std:collection`
-   (`Map<K, V>`, `Set<T>`) as registered host classes (RFC 0005 §5.1).
+   (`Map<K, V>`, `Set<T>`) ships as a rut-source decl module + Rust bodies
+   (RFC 0005 §5, §5.1).
 4. Module/system semantics: URL-like specifiers (`tur:core` today) vs paths;
    how the host intercepts loads (RFC 0004 §6).
 5. Whether workers may share read-only immutable data (e.g. string interning

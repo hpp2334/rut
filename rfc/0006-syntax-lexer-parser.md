@@ -119,14 +119,18 @@ grammar (in order):
 ```
 module     := (import | export? decl)*
 import     := 'import' '{' name (',' name)* '}' 'from' Str ';'
-decl       := constdecl | enumdecl | dataclassdecl | classdecl | interfacedecl | fndecl
+decl       := constdecl | enumdecl | dataclassdecl | classdecl | interfacedecl | fndecl | externdecl
 constdecl  := 'const' Ident ':' Type '=' expr ';'
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
 dataclass  := 'dataclass' Ident genericparams? ('implements' IfaceList)? '{' (field | 'fn')* '}'
 class      := 'class' Ident genericparams? ('implements' IfaceList)? '{' member* '}'
 member     := 'private'? ('static' field | 'static' 'fn' | ('suspend')? 'factory' | field | 'fn' | 'dispose')
 interface  := 'interface' Ident genericparams? ('requires' IfaceList)? '{' meth* '}'
-fndecl     := modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? block
+externdecl := 'extern' 'fn' Ident genericparams? '(' params ')' (':' Type)? ';'
+           | 'extern' 'class' Ident extparams? '{' extmember* '}'      // decl-module only (RFC 0005 §5)
+extmember  := 'factory' '(' params ')' ':' Type ';'
+           | 'fn' Ident '(' params ')' (':' Type)? ';'
+extparams   := '<' (Ident (':' Iface)? ','?)+ '>'    // bounds are EXTERN-ONLY (admission; RFC 0002 §6)
 block      := '{' stmt* '}'
 stmt       := 'let' Ident (':' Type)? '=' expr ';' | 'const' …
             | 'if' '(' expr ')' block ('else' 'if' … | 'else' block)?
@@ -196,6 +200,9 @@ enum Item {
               members: Vec<Member> },
     Interface{ span, vis, name, generics, requires: Vec<Ty>,  // RFC 0002 §6
                methods: Vec<FnSig> },
+    ExternFn { span, vis, name, generics, params: Vec<Param>, ret: Ty },
+    ExternClass{ span, vis, name, params: Vec<(Ident, Option<Ty>)>, // bounds:
+                 members: Vec<ExternMember> },   // extern decls only — RFC 0005 §5
     Fn      { span, vis, is_async, name, generics,
               params: Vec<Param>, ret: Option<Ty>, body: Block },
 }

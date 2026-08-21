@@ -1,23 +1,25 @@
 // RFC 0005 §5.1 — an EMBEDDER-DEFINED native module in use.
 //
-// MyMap is implemented entirely in Rust by the application embedding the
-// VM and exported from its own namespace, "plugin:my_map" — the full Rust
-// side is the sibling file examples/host/my_map.rs (registration API:
-// RFC 0005 §5.1). rut sees no implementation — only the module surface:
-// one generic class whose K param is CONSTRAINED to the `Hashable`
-// interface (which `requires Equal<Self>`), its native factory, its
-// methods. std:collection's Map<K,V>/Set<T> ride this same machinery
-// (RFC 0002 OQ-3, resolved): containers are library types, not VM
-// builtins.
+// rut sees ONLY THE DECLARATION of MyMap: `export extern class MyMap<
+// K: Hashable, V> { .. }` — signatures, no bodies — in the decl module
+// examples/host/plugin/my_map.rut. The Rust IMPLEMENTATION is the
+// sibling file examples/host/my_map.rs, bound by name at embedder
+// startup and proven signature-equal at vm.load link. `rutc check` of
+// THIS file runs with no implementation (no Rust at all) present;
+// referencing MyMap with none bound fails at link, not mysteriously
+// later. std:collection's Map<K,V>/Set<T> ride this same machinery
+// (RFC 0002 OQ-3, resolved): containers are library types — decl
+// modules + Rust bodies — not VM builtins.
 //
 // Boundary crossings in this file: the class type itself (first use of
-// MyMap<A, B> builds that instantiation's method table), the native
-// factory (construction), every method call, and Option/Array values
-// flowing back out.
+// MyMap<A, B> reifies the instantiation and builds its method table),
+// the native factory (construction), every method call (Op::CallNative
+// by slot — names never dispatch), and Option/Array values flowing
+// back out.
 
-import { MyMap } from "plugin:my_map";
-import { Equal, Hashable } from "std:collection";   // native constraint
-import { Canvas, newCanvas } from "app:gfx";        // interfaces
+import { MyMap } from "plugin:my_map";                // resolves to the decl
+import { Equal, Hashable } from "std:collection";     // decl module: the
+import { Canvas, newCanvas } from "app:gfx";          // constraint interfaces
 import { Logger } from "std:log";
 
 // A DATACLASS key (RFC 0002 §5.1): an all-public, literal-constructed
@@ -63,8 +65,8 @@ export fn main(): void {
     roster.set(Name { first: "grace", last: "hopper" }, 2);
     log.info(f"roster size={roster.size()}");
 
-    // K = a class with no impl — rejected at COMPILE (IR) time, straight
-    // from the module descriptor; the verifier re-checks at load:
+    // K = a class with no impl — rejected at COMPILE (IR) time against
+    // the extern DECL (plugin/my_map.rut); the verifier re-checks at load:
     //
     // const bad = MyMap<Canvas, i32>(4);
     //                    ^^^^^^ error: `Canvas` does not implement

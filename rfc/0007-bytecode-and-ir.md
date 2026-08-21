@@ -79,9 +79,18 @@ brtable rIdx, table, n    ; `when` on enums, downcast chains
 call    f, args -> rD     ; direct (devirtualized) call
 callm   f, rThis, args    ; direct method call
 calli   slot, rRecv, args ; interface vtable call (RFC 5002 §2)
-callh   hid, args -> rD   ; host/native fn (RFC 0005 §2)
+callh   slot, (rRecv,) args -> rD
+                          ; native fn / extern-class member (RFC 0005 §5.1):
+                          ; slot indexes the module's native table — assigned
+                          ; at DECL compile, resolved at register, a constant
+                          ; at IR time (fold/CSE-safe, same class as calli
+                          ; with a known slot). Names never dispatch. The
+                          ; recv form covers extern methods & factories;
+                          ; the body stays opaque — never inlined
 ret     rD
 ctor    cid, args -> rD   ; class type-call: run factory -> instance
+                          ; (extern classes construct via callh — the native
+                          ; factory is a slot, not a cid)
 newrc   cid, rV -> rD     ; Rc(v): mint cell (RFC 5004 §1)
 getf    rD, rO, fidx      ; field load (inline value or Rc cell — layout known)
 setf    rO, fidx, rV      ; field store (+retain/release where typed)
@@ -118,8 +127,14 @@ struct ModuleImage {                 // serialized, versioned, hash-stable
                                        (RFC 5002 §2, repr C — RFC 0005 §4)
     consts: Vec<Const>,              // strings, byte blobs, i64/f64, tids
     funcs: Vec<FuncImage>,           // name, signature (typed regs), code,
-}                                    // state tables (suspend), host slots
+}                                     // state tables (suspend), host slots
 ```
+
+- Decl modules (RFC 0005 §5) compile to images whose **native slot
+  table** is the extern surface: member name → slot id, signatures, and
+  the module's **decl digest** (covers slots — a re-bound impl whose
+  table disagrees fails link, RFC 0008 §5). Member-name strings live
+  only in diagnostics data; `--strip-native-names` drops them.
 
 - Deterministic serialization: same AST + same dependency versions →
   byte-identical image (cacheable by content hash; the embedder may ship
@@ -155,10 +170,10 @@ def-before-use, jump targets in-range and to block heads, `brtable`
 density, factory `Self { .. }` completeness (every uninitialized field
 covered — RFC 0002 §5.2), suspend
 state tables closed under resume edges, host-slot signatures vs the
-registered native fns (RFC 0005 §2), and generic-class instantiation
-ops vs the module descriptor's param constraints — the `implements`
-scan closing over `requires` (RFC 0005 §5.1), so a bad
-`MyMap<Canvas, ..>` is a load error. A failed verification is a load error
+extern decl modules (RFC 0005 §5 — including generic-instantiation
+admission: the `implements` scan closing over `requires`, so a bad
+`MyMap<Canvas, ..>` is a load error), and `callh` slots present in the
+native table. A failed verification is a load error
 reporting the module and function — corrupted images never execute.
 
 ## 9. Optimization policy

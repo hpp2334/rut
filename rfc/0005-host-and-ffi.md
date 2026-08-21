@@ -7,18 +7,19 @@
   (§5 transfers), RFC 0004 (memory), RFC 0008 (VM)
 - **Covers:** the Rust embedding API — native modules, the checked value
   boundary, zero-copy borrows, **repr C struct interop for dataclass AND
-  class**, host types (`extern class`), and **template (`f"..."`) handling
-  across the boundary**.
+  class**, host types (`extern class` **declared in rut-source decl
+  modules**), and **template (`f"..."`) handling across the boundary**.
 
 ## Summary
 
 The host is a Rust program that owns a `Vm` (RFC 0008): it registers
-native modules with **typed** functions, loads modules (no load-time
-execution), and drives entry points. Every crossing is checked against
-reified types (RFC 0002 §10) — the bridge boilerplate tur needed simply
-does not exist. Fast paths exist where they are provable: repr C structs
-pass by pointer, buffers borrow zero-copy, and templates arrive
-**structured** (parts + typed values), not as pre-concatenated strings.
+native module **implementations** (surfaces are declared in rut-source
+**decl modules**, §5), loads modules (no load-time execution), and
+drives entry points. Every crossing is checked against reified types
+(RFC 0002 §10) — the bridge boilerplate tur needed simply does not
+exist. Fast paths exist where they are provable: repr C structs pass by
+pointer, buffers borrow zero-copy, and templates arrive **structured**
+(parts + typed values), not as pre-concatenated strings.
 
 **Non-feature:** there is no `box<T>` / loan / `&mut`-in-the-language. A
 loan needs an exclusivity proof; rut has no compile-time borrow checker
@@ -32,11 +33,18 @@ unsound and will not be added.
 ```rust
 let mut vm = Vm::new(HostHooks { .. });            // RFC 0008 §5
 vm.register_struct::<Vertex>("Vertex")?;           // §4 — layout contract
-vm.register_module("app:gfx", gfx_module())?;      // §2
+vm.register_module("app:gfx", gfx_module())?;      // bodies, bound against
+vm.register_module("plugin:my_map", my_map_module())?;  // decl modules (§5)
 vm.load("widgets")?;                               // verify + link, run nothing
 let t = vm.spawn("main", &[])?;                    // suspend entry
 vm.run_until_idle()?;                              // host owns the loop
 ```
+
+`register_module` binds **implementations only** — every native surface
+(what exists, its signatures, param bounds) is declared in rut source:
+decl modules (§5). Compiling and checking rut code never requires any
+Rust; `vm.load`'s link step proves every referenced native member has a
+bound, signature-equal implementation (§5.1).
 
 Native code never sees `&Vm` while rut runs (single-threaded); native fns
 receive a `VmCtx` that permits re-entrant `vm.call` (§3 guards make that
@@ -44,9 +52,13 @@ safe) and registering wakeups.
 
 ## 2. Native modules & typed functions
 
+Registration binds bodies against the module's decl module (§5) — the
+string labels below are binding-time keys resolved against the decl's
+slot table once, at startup; dispatch is by slot (§5.1):
+
 ```rust
 fn gfx_module() -> NativeModule {
-    NativeModule::new("app:gfx")
+    NativeModule::new("app:gfx")                  // decl: app/gfx.rut
         .fn_("newCanvas", |ctx, w: i32, h: i32| Ok(Canvas::new(ctx, w, h)))
         .fn_("blit",      |ctx, c: Handle<Canvas>, layer: StructRef<Vertex>,
                            n: u32| { .. Ok(Value::Void) })
@@ -58,12 +70,12 @@ fn gfx_module() -> NativeModule {
   checks every call against them using the same `TypeId` machinery as
   `is<T>` (RFC 5002 §3). No coercion code, no `as number`, no
   `require_props_object`.
-- Native modules may also register **enum types** (named `i32` constants,
-  RFC 0002 §7) — they cross the boundary as identity + `i32` (§3), and
-  rut imports them like any type — **class types**, generic ones included
-  (§5.1), and **interface types** (with their own `requires` clauses and
-  builtin impls — `std:collection`'s `Equal<T>`/`Hashable` are the
-  canonical example, §5.1).
+- Native registration supplies implementations for decl-module items:
+  **`extern fn`s** (above), **class methods / factories** (§5.1), and —
+  for the types themselves — the backing of **enum, interface, and
+  builtin-impl registry entries** declared in decl modules
+  (`std:collection`'s `Equal<T>`/`Hashable` + their builtin impls are
+  the canonical case, §8).
 - Failures are `Result<_, Trap>` values — a native fn that errors traps
   cleanly with a message and a rut backtrace (RFC 0008 §2).
 - Long-running host work must NOT block the loop: hand back a future
@@ -122,30 +134,59 @@ Script-side, the layout is queryable at compile time (RFC 0002 §3.2):
 `size_of<T>()`, `align_of<T>()`, `type_id<T>()` — `Array<T>` strides,
 `StructCopy` sizes, and host struct mirrors all agree on one number.
 
-## 5. Host types — `extern class`
+## 5. Host types — `extern class` declarations & decl modules
+
+Native surfaces are declared **in rut source** — a *decl module* whose
+extern declarations are pure surface (signatures, no bodies). The
+specifier maps to a decl module file (`"app:gfx"` → `app/gfx.rut`,
+`"plugin:my_map"` → `plugin/my_map.rut`, `"std:collection"` likewise):
+compiled and verified like any module, generating no code of its own.
+rutc, the LSP, and AOT image builds see the surface with **zero Rust
+linked** — the role tur's `index.d.ts` plays today, but in-language and
+type-checked.
 
 ```rut
-import { Canvas } from "app:gfx";
+// app/gfx.rut — decl module for "app:gfx"
+extern fn newCanvas(w: i32, h: i32): Canvas;   // module-level native fn
 
-extern class Canvas {              // declared for typing; built by the host
+export extern class Canvas {                   // exported: nameable outside
     fn circle(x: f32, y: f32, r: f32): void;
     fn flush(): void;
 }
 
-extern class Source<T> {           // generic host type — instantiation kept
-    fn get(): T;
-}
+export extern class Source<T> {                // generic — instantiation
+    fn get(): T;                               // identity KEPT on the value:
+}                                              // Source<i32> != Source<string>
+
+extern class Fence {                           // NOT exported: known inside
+    fn signal(): void;                         // app/gfx (callable via its
+}                                              // slot), nameable nowhere else
 ```
 
+- An `extern class` declaration may contain method signatures and a
+  **factory signature** (`factory(cap: i32): Self;`) — the native
+  factory keeps construction an ordinary type-call (§5.1). It may not
+  declare fields: extern instances box host values, not rut field
+  blocks.
+- **Param bounds on extern decls are admission-only syntax**: `K:
+  Hashable` constrains which instantiations compile (checked against
+  the interface + its `requires` graph, RFC 0002 §6) and grants nothing
+  else — no method calls on bare `K`, no static dispatch. User
+  generics keep no bounds (RFC 0002 OQ-7 untouched); a bound would be
+  pure forwarding anyway (RFC 0005 §5.1).
 - Instances are `RutOpaque` heap objects (RFC 5004 §1) holding a boxed host
   value; the header `TypeId` carries the class **and** its generic
   instantiation (`Source<i32>` ≠ `Source<string>` — the tur bug fixed
   structurally, RFC 0002 §10.1 #2).
-- Methods are native fns keyed `(TypeId, name)`; a call compiles to
-  `callh` with the handle as receiver. An `extern class` *declaration* may
-  not declare fields or a factory — construction happens host-side
-  (`newCanvas()`), or through a **native factory** bound at registration
-  (§5.1), which keeps construction an ordinary type-call.
+- **Methods dispatch by slot, not name.** Compiling the decl module
+  assigns every extern member a stable slot id (declaration order); the
+  module image carries the slot table. Calls compile to `CallNative {
+  slot }` (RFC 0007) — member names are binding-time labels for the
+  Rust side only (§5.1), never dispatch keys, never in IR.
+- **Visibility**: decl modules are ordinary modules — RFC 0002 §1.1
+  applies. Non-exported externs are *known* inside the module (callable
+  via their slots) but *nameable* nowhere else; slots are always
+  assigned (private members need them for intra-module calls).
 - **Destructors map to Drop**: when rc hits 0, the host value's Rust
   `Drop` runs at that point (RFC 0004 §3) — textures, sockets, and files
   release deterministically, never "at GC someday".
@@ -155,93 +196,119 @@ extern class Source<T> {           // generic host type — instantiation kept
 - Host fns returning `Opaque` accept any rut value (RFC 0002 §3.1) — the
   checked escape hatch for data with no static shape.
 
-### 5.1 Registered host classes — a user-defined map
+### 5.1 Decl + impl — a user-defined map
 
-`extern class` declarations (above) are how rut *types* handles the host
-hands out. The inverse also exists: a native module may **export the class
-itself** — there is no rut-side declaration at all, just the import. This
-is the embedder's extension mechanism, and it is exactly how
-`std:collection`'s `Map<K, V>` / `Set<T>` are provided (RFC 0002 OQ-3,
-resolved): **containers are library types, not VM builtins** — a library
-type may live entirely on the host side.
+The two halves of a native module (full listing:
+**`examples/host/plugin/my_map.rut`** — the declaration;
+**`examples/host/my_map.rs`** — the implementation;
+**`examples/host/my-map.rut`** — a consumer):
+
+**Declaration — rut source** (embedder-authored, ships with the plugin):
 
 ```rut
-import { MyMap } from "plugin:my_map";            // embedder-defined, all Rust
+// plugin/my_map.rut — the decl module for "plugin:my_map"
+import { Hashable } from "std:collection";
 
-const counts: MyMap<string, i32> = MyMap<string, i32>(32);  // type-call
-counts.set("key", 1);                              // native method
-counts.get("key");                                 // -> Option<i32> (builtin)
+export extern class MyMap<K: Hashable, V> {   // K bound = admission only
+    factory(cap: i32): Self;                  // native factory
+    fn set(k: K, v: V): void;
+    fn get(k: K): Option<V>;
+    fn size(): i32;
+    fn keys(): Array<K>;
+}
 ```
 
-Registration — written by the embedding application (tur, say), not by
-the rut stdlib. Full listing: **`examples/host/my_map.rs`** (the `.rut`
-consumer side is `examples/host/my-map.rut` — the example is a pair).
-`std:collection` ships the constraint vocabulary: the native interfaces
-`Equal<T> { eq(other: T): bool }` and
-`Hashable requires Equal<Self> { hash(): u64 }` (RFC 0002 §6), plus
-builtin impls — `string`/numerics/`enum` by content, `Rc<T>` by identity
-(object-keyed maps) — so common keys work with no user code:
+**Implementation — Rust, bodies only** (no surface data declared in Rust
+at all):
 
 ```rust
-fn build_my_map<V: Rut>(generic_args: &GenericArgs, types: &TypeRegistry)
-    -> Result<ClassTable, Trap>
-{
-    // Called ONCE per distinct MyMap<K, V> — the monomorphization point
-    // (RFC 0002 §10). Generic over V ONLY — see the crossing rule below.
-    let k = generic_args.of("K");                    // GenericParam —
-    let i_hashable = types.interface_of("Hashable"); // name + resolved Ty
-    let k_ty = k.ty();                               // for keys(), below
+pub struct MyMap {                              // NOT generic — see below
+    inner: HashMap<IfaceHandle, RutValue>,      // K: fat ref, V: erased
+}
 
-    ClassTable::new::<MyMap<V>>(generic_args)        // HashMap<IfaceHandle, V>
-        .constrain(&k, i_hashable)   // K must implement Hashable — and,
-                                    // via `requires Equal<Self>`, Equal<K>
+fn build_my_map(args: &GenericArgs, types: &TypeRegistry)
+    -> Result<ClassTable, Trap>                 // once per instantiation
+{
+    let v_ty = args.of("V").ty();               // reified V — drives checks
+    let k_ty = args.of("K").ty();               // for keys(): Array<K>
+
+    ClassTable::new::<MyMap>(args)
         .factory(|ctx: &mut VmCtx, cap: i32| Ok(MyMap::with_capacity(cap)))
-        .method("set",  |ctx, this: &mut MyMap<V>, k: IfaceHandle, v: V| Ok(this.inner.insert(k, v)))
-        .method("get",  |ctx, this: &MyMap<V>, k: IfaceHandle| Ok(this.inner.get(&k).cloned()))  // Option<V>
-        .method("size", |ctx, this: &MyMap<V>| Ok(this.inner.len() as i32))
-        .method("keys", |ctx, this: &MyMap<V>| /* Array<K> — see below */ ..)
+        .method("set",  |ctx, this: &mut MyMap, k: IfaceHandle, v: RutValue| {
+            ctx.check_arg(&v, v_ty)?;           // value's TypeId == this
+            this.inner.insert(k, v); Ok(())     // instantiation's V
+        })
+        .method("get",  |ctx, this: &MyMap, k: IfaceHandle|
+            Ok(this.inner.get(&k).cloned()))    // -> builtin Option<V>
+        .method("size", |ctx, this: &MyMap| Ok(this.inner.len() as i32))
+        .method("keys", |ctx, this: &MyMap| { /* Array<K> — unerased */ .. })
         .build()
 }
 
-fn my_map_module() -> NativeModule {
+pub fn my_map_module() -> NativeModule {
     NativeModule::new("plugin:my_map")
-        .generic_class("MyMap", 2, build_my_map)
+        .implement("MyMap", build_my_map)       // binds BY DECL NAME
 }
 ```
 
-- **Crossing rule for generic params.** An *unconstrained* param crosses
-  as its own host shape (`V: Rut` — monomorphized per concrete type). A
-  param *constrained to an interface* crosses uniformly as the
-  constraint's shape: **`IfaceHandle`** (RFC 5002 §2's fat ref), whose
-  `Hash`/`Eq` the rut crate implements **once**, by vtable dispatch into
-  the value's own `hash()`/`eq()` — user impls are rut code,
-  builtin/voucher impls are native trampolines. One Rust type covers
-  every legal K: content hashing for `string` keys and identity for
-  `Rc<T>` keys both fall out of which vtable the boundary attached.
-- **`keys(): Array<K>`, not `Array<Hashable>`.** The K `Ty` from
-  `generic_args` drives the host-built array's element type, and each key
-  is *unerased* back to its natural value (a `string` key yields
-  `Array<string>`) — rut could not consume interface refs here, since
-  interface values cannot be downcast (RFC 0002 §6.1).
+**The connection contract — two checkpoints:**
 
-- **Constraints are interfaces — checked at compile (IR) time, never
-  runtime.** The module descriptor carries each generic param's
-  constraints; an instantiation like `MyMap<Canvas, i32>` is rejected
-  at the rut line (`Canvas` does not implement `Hashable`) and
-  re-checked by the load-time verifier against the descriptor
-  (RFC 0007 §8). Admission closes over the `requires` graph
-  automatically: implementing `Hashable` entails `Equal<Self>`.
-- **Who satisfies a constraint**: user classes and dataclasses
+| checkpoint | when | checks | errors to |
+|---|---|---|---|
+| **compile/verify** | `rutc check` / `vm.load` verify | instantiation vs the **extern decl**: `MyMap<Canvas, ..>` is a rut-line error (`Canvas` does not implement `Hashable`); admission closes over the `requires` graph (implementing `Hashable` entails `Equal<Self>`, RFC 0002 §6). Checking needs **no Rust at all**. | rut author |
+| **link** | `vm.load` | every extern member **referenced** by rut code has a bound impl, and the ClassTable (reflected member names + Rust shapes under the crossing rule) equals the decl's signatures — a pure data compare, nothing runs. | loader / embedder |
+
+A name bound that no decl declares is an embedder **startup** error
+(typo guard). Drift between the halves never reaches a rut runtime.
+
+**What is `V`? Reified instantiation, erased storage.** A Rust generic
+(`build_my_map<V>`) is impossible: Rust monomorphizes at *Rust* compile
+time, but the builder runs at *rut* runtime, once per instantiation —
+nobody can supply `V`. Instead:
+
+- the rut side **reifies** each instantiation — `GenericArgs` carries
+  K's and V's `TypeId`s (RFC 0002 §10); that is what the builder
+  receives (`args.of("V").ty()`);
+- the Rust side stores **erased** — `RutValue` (owning handle;
+  `Value<'v>` in §3 is its call-scoped borrow), checked per call against
+  the reified V. `get` needs no per-call check: values only enter via
+  `set`, and the cell carries the instantiation's `TypeId`.
+
+**Crossing rule for decl types → Rust shapes:**
+
+| decl type | Rust shape |
+|---|---|
+| param constrained to an interface (`K: Hashable`) | `IfaceHandle` (RFC 5002 §2 fat ref) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `string` keys, identity for `Rc<T>` keys — same Rust type, different attached vtable. |
+| unconstrained param (`V`) | `RutValue` — erased owning handle; per-call check against the reified `TypeId` |
+| concrete types (`i32`, `f32`, `Template`, …) | the Rust type — as in §2, embedder-pinned at Rust compile time |
+| `Self` | the instance handle |
+
+Rust generics survive **only** for concrete signatures (§2); generic rut
+classes never see them. (OQ: a `.specialize(v_ty, builder)` escape hatch
+for unboxed storage on hot instantiations — the erased builder is the
+semantic baseline.)
+
+**Slots, not strings.** The `.method("get", ..)` label exists for the
+register step only: compiling the decl module assigns slot ids
+(`factory→0, set→1, get→2, …`); consumer calls compile to
+`CallNative { slot }` (RFC 0007 — fold/CSE-safe, no string in IR, no
+lookup at dispatch); `register_module` resolves each label against the
+slot table **once**, before any rut code runs — a typo is a startup
+error, never a runtime one. IR still cannot inline into native bodies
+(honest FFI limit); if a host wants an optimizable body, it is rut
+source.
+
+- **Who satisfies an interface constraint**: user classes and dataclasses
   (`implements` — RFC 0002 §5.1/§6), builtins via registered impls
   (content for `string`/numerics/`enum`, identity for `Rc<T>`), and
   registered structs via a `register_struct` content voucher (the Rust
   mirror is `Hash + Eq` — no rut-side methods needed). Interfaces
   themselves, `Opaque`, `Array`, `Option`/`Result` satisfy nothing.
-- Methods are keyed `(TypeId, name)` exactly like `extern class` methods,
-  and the header `TypeId` carries the instantiation:
-  `MyMap<i32, i32>` ≠ `MyMap<string, Opaque>`.
 - Builtin types flow back natively — a method may return `Option<V>` or
-  build an `Array<K>` host-side; rut cannot tell it wasn't written in rut.
+  build an `Array<K>` host-side (`keys()` yields `Array<K>`, **not**
+  `Array<Hashable>`: keys are *unerased* at the boundary — rut cannot
+  consume interface refs there, RFC 0002 §6.1); rut cannot tell it
+  wasn't written in rut.
 - Hashing/`eq` on a user type may be **rut code**, reached through the
   interface vtable — a method call that re-enters the VM (`VmCtx`,
   §1). Re-entrancy is already guarded: `set` holds `&mut this`, the
@@ -252,9 +319,6 @@ fn my_map_module() -> NativeModule {
   is a function everywhere, and a host class simply supplies the function.
   Helper fns like `newCanvas()` remain the shape for host-computed or
   side-effecting construction.
-
-See **`examples/host/my-map.rut`** (consumer side) and
-**`examples/host/my_map.rs`** (embedder side).
 
 ## 6. Templates — `f"..."` across the boundary
 
@@ -308,18 +372,24 @@ The standard library splits in two:
 
 - **`rt:*`** — native modules (this RFC): `rt:log`, and the IO/backing
   modules behind `std:fs`, `std:net`, `std:http`, `std:time`,
-  `std:channel`, and `std:collection` (`Map<K, V>`, `Set<T>` —
-  registered host classes, §5.1 — plus the constraint interfaces
-  `Equal<T>` / `Hashable requires Equal<Self>` and their builtin impls).
+  `std:channel`, and `std:collection`.
 - **`std:*`** — rut source, compiled like user modules; they import `rt:*`
   for anything that touches the host. The split keeps policy (levels,
   formatting, wrappers) in auditable rut code and mechanism (syscalls,
-  sinks) in Rust.
+  sinks) in Rust. **`std:collection` is a decl module + Rust bodies**
+  (§5/§5.1): its rut file declares the interfaces
+  `Equal<T> { eq(other: T): bool }`,
+  `Hashable requires Equal<Self> { hash(): u64 }`, and the containers
+  directly — `export extern class Map<K: Hashable, V> { .. }`, `Set<T>`
+  — with no facade; builtin impls (string/numerics/enum content,
+  `Rc<T>` identity, registered-struct vouchers) are host impl-registry
+  entries, not rut syntax. Containers are library types, not VM
+  builtins (RFC 0002 OQ-3, resolved).
 - **anything else** (`app:gfx`, `imaging`, `plugin:my_map`) — **embedder
-  modules**: native modules the embedding application registers for its
-  own domain. `std:collection` is this pattern, shipped — an embedder
-  adding `plugin:my_map` is doing precisely what the stdlib did. Every
-  specifier resolves through `load_module` (RFC 0008 §5).
+  modules**: decl modules + Rust bodies the embedding application ships
+  for its own domain — the same mechanism `std:collection` uses, in the
+  embedder's namespace. Every specifier resolves through `load_module`
+  (RFC 0008 §5).
 
 **`std:log` — the `Logger` class.** There is no `console`, no `print`, no
 global output builtin (RFC 0002 §1). All logging goes through an imported

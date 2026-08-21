@@ -1,10 +1,12 @@
 # rut examples — the design corpus
 
 rut has no compiler yet. These files define the target syntax: the RFCs
-reference them instead of inlining code. Host examples come in **pairs** —
-the `.rut` consumer side plus the `.rs` embedder side
-(`host/my-map.rut` + `host/my_map.rs`); other VM/Rust sketches stay in the
-RFCs.
+reference them instead of inlining code. Host examples span the
+**declaration/implementation split** (RFC 0005 §5): native surfaces are
+rut-source decl modules (`host/plugin/my_map.rut`), Rust bodies bind
+against them (`host/my_map.rs`), and consumers just import
+(`host/my-map.rut`, `host/interop.rut`); other VM/Rust sketches stay in
+the RFCs.
 
 | File | Demonstrates | RFC |
 |---|---|---|
@@ -37,8 +39,9 @@ RFCs.
 | `network/http-fetch.rut` | async client, `Result` at API boundaries | 0003 §2 |
 | `network/echo-server.rut` | accept loop + worker pool dispatch | 0003 §5 |
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0003 §5 |
-| `host/interop.rut` | `extern class` handles, repr C struct passing, buffer borrows, `Template` for l10n | 0005 |
-| `host/my-map.rut` + `host/my_map.rs` | embedder-defined native module (`plugin:*`): generic host class with interface-constrained params (`Equal<T>`/`Hashable requires Equal<Self>`, compile-time rejection), dataclass key, native-factory type-call, `Opaque` values, native `Option`/`Array` returns — rut and Rust sides of one example | 0005 §5.1 |
+| `host/interop.rut` | extern classes via decl modules, repr C struct passing, buffer borrows, `Template` for l10n | 0005 |
+| `host/plugin/my_map.rut` | **decl module** for `plugin:my_map`: `export extern class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0005 §5 |
+| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same decl: erased `RutValue`/`IfaceHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Array` returns | 0005 §5.1 |
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0002 §3.1 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0003 §5 |
 

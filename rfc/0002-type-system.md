@@ -98,8 +98,15 @@ function. There are no top-level statements and no load-time code. See
 **`examples/basic/module-structure.rut`**.
 
 - Allowed at module scope: `import`/`export`, `const`, `enum`, `dataclass`,
-  `interface`, `class`, `fn`. Anything else — top-level `let`, calls, any
+  `interface`, `class`, `fn`, and extern declarations (`extern fn`,
+  `extern class` — signature-only, for native surfaces; RFC 0005 §5).
+  Anything else — top-level `let`, calls, any
   statement — is a compile error.
+- Visibility applies uniformly to every declaration, extern included: only
+  `export`ed names enter a module's export table. A non-exported decl is
+  *known* inside its module (callable, type-checkable) but *nameable*
+  nowhere else — which is how native libraries hide implementation
+  surfaces behind exported ones (RFC 0005 §5).
 - **Imports have no `type` marker** (`import { Canvas, newCanvas } from
   "app:gfx"` — not `import { type Canvas }`). rut is fully statically
   typed: the compiler resolves every imported name and knows from usage
@@ -216,9 +223,10 @@ propagation operator. See **`examples/basic/option-result.rut`**.
 
 `Array<T>` completes the builtin generic set. `Map<K, V>` / `Set<T>` are
 deliberately absent from it: containers are **library types**, provided by
-`std:collection` as registered host classes (RFC 0005 §5.1, §8) — the
-example is a pair: `examples/host/my-map.rut` (rut side) +
-`examples/host/my_map.rs` (embedder side).
+`std:collection` as a decl module + Rust bodies (RFC 0005 §5.1, §8) —
+the example spans three files: `examples/host/plugin/my_map.rut`
+(decl), `examples/host/my-map.rut` (consumer) +
+`examples/host/my_map.rs` (implementation).
 
 ### 3.1 `Opaque` — explicit erasure with checked recovery
 
@@ -650,9 +658,16 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   typed opcodes (`arr.get<f32>` vs `arr.get<Handle>`). Instantiations whose
   bodies are descriptor-independent share one generic body at load time
   (RFC 0001 §Execution model); the compiler reports instantiation counts.
-- Generic parameters are unconstrained in v1 — no `T extends Iface` bounds
-  (OQ-7): you cannot call interface methods on a bare `T`. Pass values in,
-  or take an interface-typed parameter instead of a generic.
+- Generic parameters are unconstrained in v1 — no `T: Iface` bounds on
+  user generics (OQ-7): you cannot call interface methods on a bare `T`.
+  Pass values in, or take an interface-typed parameter instead of a
+  generic. **The one exception**: generic params of **extern class
+  declarations** may carry interface bounds (`MyMap<K: Hashable, V>`,
+  RFC 0005 §5) — admission-only syntax: it constrains which
+  instantiations compile (closing over `requires`), grants no method
+  calls on bare `K`, and adds no IR. A user-class bound would be pure
+  forwarding anyway (without dispatch, a body could only pass `K` onward
+  to extern positions) — deferred with OQ-7.
 
 ## 10. Reified runtime types
 
@@ -708,9 +723,10 @@ rule, no exceptions:
 - OQ-1 default int width (`i32` proposed).
 - OQ-2 `f16`/`bf16` for GPU-facing arrays.
 - OQ-3 ~~`map<K,V>` / `set<T>` builtin vs library~~ — **resolved:
-  library.** `Map<K, V>` / `Set<T>` live in `std:collection` as registered
-  host classes (RFC 0005 §5.1); the VM stays container-free.
-  `examples/host/my-map.rut` shows an embedder doing the same.
+  library.** `Map<K, V>` / `Set<T>` live in `std:collection` as a
+  decl module + Rust bodies (RFC 0005 §5, §5.1); the VM stays
+  container-free. The `examples/host/` trio (decl, consumer, impl)
+  shows an embedder doing the same.
 - OQ-4 ~~interface `extends` (interface hierarchies)~~ — **resolved:
   rejected**; `requires` shipped instead (§6) — an implementor-side
   admission constraint: flat vtables, no member inheritance, no
@@ -721,8 +737,10 @@ rule, no exceptions:
 - OQ-6 ~~constructor parameter properties~~ — **obsolete twice over**:
   factories are plain functions (params are params), and the
   `Self { field: name }` literal makes the param→field mapping explicit.
-- OQ-7 generic bounds `T extends Iface` (would unlock static dispatch on
-  bare `T` without interface refs).
+- OQ-7 generic bounds `T: Iface` (would unlock static dispatch on
+  bare `T` without interface refs) — still deferred for **user**
+  generics; the **admission-only** form shipped scoped to extern decls
+  (§9, RFC 0005 §5), which needs no dispatch and adds no IR.
 - OQ-8 first-class type values (`type_of(x)` as a manipulable value).
 - OQ-9 string indexing: byte-index + helpers proposal stands
   (`for (const c of s)` is the blessed iteration).
