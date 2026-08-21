@@ -2,7 +2,7 @@
 //
 // `host`/`extern` are .d.rut-ONLY keywords (RFC 0029): a .rut file that
 // spells either is a compile error. This file is pure surface —
-// signatures, no bodies — and compiles to a SymbolTable (.d.ir cache;
+// signatures, no bodies — and compiles to a DeclIr (.d.ir cache;
 // version-locked, regenerable) plus a native slot table. rutc, the LSP,
 // and AOT builds consume it with ZERO Rust linked (the tur index.d.ts
 // role, in-language and type-checked). The Rust IMPLEMENTATION is the

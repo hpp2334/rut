@@ -35,7 +35,7 @@ builtins (§3), `is<T>`/`upcast<T>` (RFC 0012 §3), `Opaque` recovery
    the same machinery.
 4. **Heterogeneous collections** — vtable dispatch (RFC 0012) needs the exact type
    reachable from every object header.
-5. **Debugging** — `debug.type_of(x)`, stack traces, formatter output.
+5. **Debugging** — `debug.type_of(x)`, stack traces (RFC 0036), formatter output.
 6. **Serialization** — stdlib walkers traverse `RutType` descriptors.
 7. **`Opaque` recovery** — `downcast<T>` (RFC 0014) checks the boxed cell's
    `TypeId`; `Opaque(v)` stamps it. Erasure without reification would be

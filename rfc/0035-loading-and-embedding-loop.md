@@ -70,6 +70,7 @@ RFC 0032 §1); when no value is ready, `chrecv` parks the frame like
 | `vm.register_module(name, native)` | native bodies (RFC 0022 §2) |
 | `vm.register_struct::<T>()` | repr-C layout check (RFC 0024) |
 | `vm.collect_cycles()` | force cycle pass (RFC 0017 §2) |
+| `vm.symbolicate(&raw) -> Vec<TraceEntry>` | trace names/spans from loaded images (RFC 0036 §3) |
 
 Errors are values (`Result`), bugs are traps, and the host is always in
 charge of time, IO, and lifetime — the embeddability pillar (RFC 0001 G8).

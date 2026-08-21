@@ -62,10 +62,11 @@ fn gfx_module() -> NativeModule {
   checks every call against them using the same `TypeId` machinery as
   `is<T>` (RFC 0015 §6). No coercion code, no `as number`, no
   `require_props_object`.
-- Native registration supplies implementations for decl-module items:
-  **`extern fn`s** (above), **class methods / factories** (RFC 0025, RFC
-  0026), and — for the types themselves — the backing of **enum, interface,
-  and builtin-impl registry entries** declared in declaration files
+- Native registration supplies implementations for declaration-file
+  items: **`host fn`s** (above), **class methods / factories** (RFC 0025,
+  RFC 0026), and — for the types themselves — the backing of **enum,
+  interface, and builtin-impl registry entries** declared in declaration
+  files
   (`std:collection`'s `Equal<T>`/`Hashable` + their builtin impls are
   the canonical case, RFC 0028).
 - Failures are `Result<_, Trap>` values — a native fn that errors traps
@@ -78,5 +79,9 @@ fn gfx_module() -> NativeModule {
 Native fns run **outside** the op budget (RFC 0034 §4) — the host is
 trusted to be fast or hand back a future (§2). Traps raised inside a
 native fn propagate as `Err(Trap)` with the native frame attributed in the
-backtrace; `vm.call` re-entrancy nests budgets per outer frame. This is
+backtrace (the `Native { module, slot }` marker frames, RFC 0036 §2);
+`vm.call` re-entrancy nests budgets per outer frame. This is
 the boundary where bugs become host problems — RFC 0001 P4's rule.
+`VmCtx` additionally exposes `capture_trace()` (RFC 0036 §6) — the native
+side of `std:debug.capture_stack_trace()` — so error factories written in
+Rust can attach rut-side traces to the values they return.

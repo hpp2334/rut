@@ -4,7 +4,7 @@
 - **Date:** 2026-08-22
 - **Author:** hpp2334
 - **Depends on:** RFC 0030 (AST), RFC 0003 (visibility), RFC 0029
-  (SymbolTables), Part B (type rules), RFC 0001 (M1)
+  (DeclIr), Part B (type rules), RFC 0001 (M1)
 - **Supersedes:** RFC 0007 §1–3, §9 + RFC 5002 §4 (pre-restructure)
 - **Part:** F — Toolchain & artifacts
 
@@ -22,7 +22,7 @@ Ast ─► resolve ─► typecheck (bidirectional inference)
 There is no JIT and no deopt (RFC 0001 P7): whatever HIR proves is final.
 The unit of compilation is the **module**; linking patches call targets at
 load (RFC 0035 §1). A `.d.rut` compiles through resolve/typecheck too —
-stopping before HIR, emitting a SymbolTable (RFC 0029 §3).
+stopping before HIR, emitting a DeclIr (RFC 0029 §3).
 
 ## 1. Resolve
 
@@ -31,7 +31,7 @@ the surface pipeline (RFC 0029 §5 — source, `.d.ir`, or `.d.rut`; never
 bodies), `Self` bound, `private`/`export` visibility checked (RFC 0003 §2),
 dataclass-vs-class distinction applied (literals only for dataclasses;
 type-calls only for classes/builtins, RFC 0009/0010), and surface
-declarations (`host`/`extern`) resolved against their SymbolTables with
+declarations (`host`/`extern`) resolved against their DeclIrs with
 slot ids attached to every member reference.
 
 ## 2. Typecheck

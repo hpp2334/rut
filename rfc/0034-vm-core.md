@@ -45,17 +45,26 @@ The loop is a `match` over decoded ops (`decode` is a table index, not a
 byte scan). Calls push frames; `ret` pops; ref discipline is emitted by the
 compiler and asserted in debug builds (RFC 0016 §3). Direct calls are an
 index + jump; interface calls are two loads + indirect jump (RFC 0015 §6);
-native calls cross `Value` (RFC 0023).
+native calls cross `Value` (RFC 0023). Every `callnat` additionally pushes
+a one-word `Native { module, slot }` **marker frame** so traces can show
+the host boundary (`at plugin:my_map.MyMap.set (host)`) — RFC 0036 §2.
 
 ## 2. Traps
 
 Arithmetic overflow (RFC 0004 §3), `Option.value` on `None`, failed
 assertions, `panic(...)`, stack/budget exhaustion, and verifier-impossible
-states unwind as `Err(Trap)` — not Rust panics. The trap carries a rut
-backtrace (frame pcs → function names, rendered with source spans via the
-image's tables). **Traps are catchable only at the host boundary** (RFC
-0001 P4): a `vm.call(...)` returns `Result<Value, Trap>`; rut code never
-catches one. Coroutine frames are dropped on the way out — destructors run
+states unwind as `Err(Trap)` — not Rust panics:
+
+```rust
+struct Trap { kind: TrapKind, msg: String, trace: RawTrace }  // RFC 0036 §2
+```
+
+The `RawTrace` (frame pcs + native-boundary markers) is captured at
+unwind; **rendering is lazy** — names and source spans are looked up in
+the image's `SymbolTable` only if someone prints it (RFC 0036). **Traps
+are catchable only at the host boundary** (RFC 0001 P4): a
+`vm.call(...)` returns `Result<Value, Trap>`; rut code never catches
+one. Coroutine frames are dropped on the way out — destructors run
 (RFC 0016 §3).
 
 ## 3. Coroutines & scheduling

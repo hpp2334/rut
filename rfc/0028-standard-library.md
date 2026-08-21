@@ -1,4 +1,4 @@
-# RFC 0028: The Standard Library — `rt:*`, `std:*`, `std:log`
+# RFC 0028: The Standard Library — `rt:*`, `std:*`, `std:log`, `std:debug`
 
 - **Status:** Draft
 - **Date:** 2026-08-22
@@ -25,7 +25,9 @@ The standard library splits in two:
   — with no facade; builtin impls (string/numerics/enum content,
   `Rc<T>` identity, registered-struct vouchers) are host impl-registry
   entries, not rut syntax. Containers are library types, not VM
-  builtins (RFC 0005 pre-restructure OQ, resolved).
+  builtins (RFC 0005 pre-restructure OQ, resolved). **`std:debug`**
+  (RFC 0036) rides the same mechanism: `Location`, `here()`,
+  `capture_stack_trace()`, and the `StackTrace` class.
 - **anything else** (`app:gfx`, `imaging`, `plugin:my_map`) — **embedder
   modules**: declaration files + Rust bodies the embedding application
   ships for its own domain — the same mechanism `std:collection` uses, in
@@ -81,3 +83,42 @@ export class Logger {
 msg: string): void`, which routes to `HostHooks.log` (RFC 0035 §1). An
 uninstalled sink is a **silent no-op** — a script cannot accidentally spam
 an embedded host's stdout; the host opts into logging explicitly.
+
+## `std:debug` — `Location` & `StackTrace`
+
+Diagnostics for error handling (RFC 0036): the *where* that errors and
+traps carry. `std:debug` is a declaration file + Rust bodies, like
+`std:collection` — the surface is tiny:
+
+```rut
+// std/debug.d.rut (excerpt — RFC 0036 §6)
+export dataclass Location { file: string, line: i32, col: i32 }
+export host fn here(): Location;                  // const-folded (RFC 0033 §3)
+export host fn capture_stack_trace(): StackTrace; // skips its own frame
+export host class StackTrace {
+    fn render(): string;                          // via loaded images'
+    fn depth(): i32;                              // SymbolTables; lazy
+}                                                 // — degraded when stripped
+```
+
+The three price points (RFC 0036 §1): `here()` is a compile-time constant
+(zero runtime — fold it like `type_id<T>()`); `capture_stack_trace()` is
+an explicit, cheap walk of the frame stack (raw pcs, no formatting); trap
+backtraces are automatic at unwind. Errors stay values (RFC 0001 P4) —
+attaching a `Location` (free) or an `Option<StackTrace>` (paid) to an
+error dataclass is user code:
+
+```rut
+import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
+
+dataclass LoadError {
+    msg:   string,
+    at:    Location,               // free — folded const
+    trace: Option<StackTrace>,     // paid only when asked for
+}
+```
+
+`VmCtx::capture_trace()` is the native half (RFC 0022 §3); the host-facing
+`vm.symbolicate(&raw)` restores names/spans from loaded images (RFC 0035
+§3, RFC 0036 §3) — and against stripped `--release` images, the
+`.rutc.map` sidecar does it offline (RFC 0036 §3).

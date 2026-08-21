@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-22
 - **Author:** hpp2334
-- **Depends on:** RFC 0032 (LIR), RFC 0029 (SymbolTable), RFC 0025
+- **Depends on:** RFC 0032 (LIR), RFC 0029 (DeclIr), RFC 0025
   (decl digest), RFC 0001 (M1)
 - **Supersedes:** RFC 0007 §5–8 (pre-restructure)
 - **Part:** F — Toolchain & artifacts
@@ -18,10 +18,12 @@ struct ModuleImage {                 // serialized, versioned, hash-stable
                                        (RFC 0015 §6, repr C — RFC 0024)
     consts: Vec<Const>,              // strings, byte blobs, i64/f64, tids
     funcs: Vec<FuncImage>,           // name, signature (typed regs), code,
-}                                     // state tables (suspend), host slots
+                                       // state tables (suspend), host slots
+    symbols: SymbolTable,            // function symbols + pc→span — RFC 0036;
+}                                     // strippable (below + RFC 0036 §4)
 ```
 
-- Decl surfaces (`.d.rut`, RFC 0029) compile to **SymbolTables**
+- Decl surfaces (`.d.rut`, RFC 0029) compile to **DeclIrs**
   (`.d.ir`), not images — no bodies exist. A module that references
   surface members carries their **native slot table**: member name → slot
   id, signatures, and the surface's **decl digest** (covers slots — a
@@ -35,6 +37,16 @@ struct ModuleImage {                 // serialized, versioned, hash-stable
 - `type_id`s are **module-local indices at rest**; link-time rebase maps
   them into the VM's global type table (RFC 0035 §1). `type_id<T>()`
   constants are re-based with everything else.
+- **Symbols & spans (RFC 0036).** `symbols: SymbolTable` carries
+  per-function names (`FuncSym.name`) and pc→span interval tables — the
+  data stack traces symbolicate against. Strip levels: default keeps
+  names + spans; `--strip-native-names` drops name strings; `--release`
+  additionally drops spans — traces still capture, degrading to
+  `pkg:mod #[3] @ pc 41`. `rutc build --map` serializes the same
+  `SymbolTable` as a `.rutc.map` sidecar keyed by the image's content
+  hash — a **stable, versioned contract** (the deliberate opposite of
+  `.d.ir`, an unstable DeclIr cache that contains no symbols at all,
+  RFC 0029 §4) for restoring traces captured against stripped images.
 
 ## 2. Verification (load time)
 
@@ -42,7 +54,7 @@ The verifier re-checks, per function: register types vs op signature,
 def-before-use, jump targets in-range and to block heads, `brtable`
 density, factory `Self { .. }` completeness (every uninitialized field
 covered — RFC 0010 §1), suspend state tables closed under resume edges,
-native-slot signatures vs the SymbolTables the module compiled against
+native-slot signatures vs the DeclIrs the module compiled against
 (RFC 0029 — including generic-instantiation admission: the `implements`
 scan closing over `requires`, so a bad `MyMap<Canvas, ..>` is a load
 error), and `callnat` slots present in the native table. A failed

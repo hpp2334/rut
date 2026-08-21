@@ -1,4 +1,4 @@
-# RFC 0029: Declaration Files & the SymbolTable — `.d.rut`, `.d.ir`, Publishing
+# RFC 0029: Declaration Files & the DeclIr — `.d.rut`, `.d.ir`, Publishing
 
 - **Status:** Draft
 - **Date:** 2026-08-22
@@ -16,7 +16,7 @@ Three file kinds, one rule each:
 |---|---|---|
 | `.rut` | implementation source | what authors write; **may not declare `host`/`extern`** — a compile error: "belongs in a `.d.rut`" |
 | `.d.rut` | declarations only — the surface | publishable, human-readable, hand-writable; **the only place `host fn/class` and `extern fn/class` may appear** |
-| `.d.ir` | compiled **SymbolTable** of a `.d.rut` | cache; version-locked (see §4) |
+| `.d.ir` | compiled **DeclIr** of a `.d.rut` — the declaration surface | cache; version-locked (see §4) |
 
 Plus the runtime artifact `.rutc` — the compiled module image (RFC 0033)
 with bodies. A published package ships `.rutc` (implementation) +
@@ -69,12 +69,12 @@ statements. And symmetrically, a `.rut` file that spells `host`/`extern`
 errors "declaration keyword in an implementation file — belongs in a
 `.d.rut`".
 
-## 3. Compiling a `.d.rut` — the SymbolTable
+## 3. Compiling a `.d.rut` — the DeclIr
 
-A `.d.rut` compiles to a **SymbolTable** (serialized as `.d.ir`):
+A `.d.rut` compiles to a **DeclIr** (serialized as `.d.ir`):
 
 ```rust
-struct SymbolTable {                  // .d.ir — no bodies, no code
+struct DeclIr {                       // .d.ir — no bodies, no code
     version: CompilerVersion,         // exact rutc version — §4
     module: String,                   // specifier this surface answers to
     exports: Vec<Symbol>,             // name, visibility, kind
@@ -102,8 +102,15 @@ must match the running rutc — on mismatch, rutc silently regenerates from
 the sibling `.d.rut` (or refetches it). Nothing may *link* or *ship* a
 `.d.ir` as a compatibility surface; the stable artifacts are `.d.rut`
 (text) and `.rutc` (image, versioned per RFC 0033 §1 policy). This keeps
-the SymbolTable format cheap to evolve — it can change quickly, cross
+the DeclIr format cheap to evolve — it can change quickly, cross
 version, without deprecation cycles.
+
+**Naming note:** the `.d.ir` payload is the **DeclIr** — *declaration
+IR*, literally what the extension spells. "Symbol table" is a reserved
+term in this series: it means the image-side function-symbol + pc→span
+tables inside `.rutc` (and their `.rutc.map` sidecar) that stack traces
+symbolicate against (RFC 0036). A DeclIr has no function symbols and
+never participates in trace restoration.
 
 ## 5. Import resolution during compilation
 
@@ -111,10 +118,10 @@ When module `M` imports `"pkg:mod"` and rutc needs its surface to typecheck
 `M`, resolution is (first hit wins):
 
 1. **source**: `pkg/mod.rut` present on the source path → compile it
-   normally (development mode; its exported surface *is* the SymbolTable);
+   normally (development mode; its exported surface *is* the DeclIr);
 2. **cache**: `pkg/mod.d.ir` with a matching compiler version → load the
-   SymbolTable directly — no parse, the fast path;
-3. **decl**: `pkg/mod.d.rut` → compile to a SymbolTable (and write the
+   DeclIr directly — no parse, the fast path;
+3. **decl**: `pkg/mod.d.rut` → compile to a DeclIr (and write the
    `.d.ir` cache next to it);
 4. **host registry**: for `host`-linked modules the embedder ships the
    `.d.rut` alongside the registered implementation (RFC 0022 §1).

@@ -15,6 +15,7 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `basic/module-visibility.rut` | `export` / `export(mod)` / `export(super)` / `export(self)` | 0003 §2 |
 | `basic/when.rut` | `when` pattern expressions, exhaustiveness | 0008 |
 | `basic/option-result.rut` | builtin `Option`/`Result`, `.value`, `unwrap_or`, `?` | 0005 |
+| `basic/error-context.rut` | `here()` / `capture_stack_trace()` on error values, lazy `render()`, stripped-image degradation | 0036 |
 | `basic/literals.rut` | numeric suffixes, plain/raw/format strings, constructors | 0007 |
 | `basic/dataclasses.rut` | value semantics, field initializers, free functions | 0009 |
 | `basic/classes.rut` | factory type-calls, `Self {}` literal, `Option<Self>` try-factories, private, statics | 0010 |

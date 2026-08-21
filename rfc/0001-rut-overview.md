@@ -166,17 +166,18 @@ final sections of the RFC they implement).
 - 0025 — host classes & declaration files
 - 0026 — generic host classes: a user-defined map
 - 0027 — templates: `f"..."` across the boundary
-- 0028 — the standard library: `rt:*`, `std:*`, `std:log`
+- 0028 — the standard library: `rt:*`, `std:*`, `std:log`, `std:debug`
 
 **Part F — Toolchain & artifacts**
 
-- 0029 — declaration files & the SymbolTable: `.d.rut`, `.d.ir`, publishing
+- 0029 — declaration files & the DeclIr: `.d.rut`, `.d.ir`, publishing
 - 0030 — frontend: lexer, parser, AST, diagnostics
 - 0031 — compiler: resolve, typecheck, HIR
 - 0032 — typed bytecode (LIR)
 - 0033 — module image & verification
 - 0034 — VM core: interpreter loop, traps, budgets
 - 0035 — loading, host hooks & the embedding loop
+- 0036 — diagnostics: stack traces, locations & symbolication
 
 ## Pillar decisions
 

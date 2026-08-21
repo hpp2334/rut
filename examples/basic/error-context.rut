@@ -1,0 +1,72 @@
+// error-context.rut — RFC 0036: the three price points of "where".
+//
+//   here()                  free     a compile-time const, folded like
+//                                    type_id<T>() — attach to EVERY error
+//   capture_stack_trace()   paid     an explicit walk of the frame stack
+//                                    (raw pcs, no formatting) — attach when
+//                                    a human will actually read it
+//   trap backtrace          auto     captured at unwind (RFC 0034 §2),
+//                                    rendered lazily — you never hold one
+//
+// Errors stay VALUES (RFC 0001 P4): attaching location/trace context is
+// plain user code — no hidden metadata on dataclasses, no Error.capture-
+// StackTrace mutation. `?` stays zero-cost: no auto-capture on
+// propagation.
+//
+// Restoration (RFC 0036 §3): a StackTrace is raw pcs + native-boundary
+// markers, symbolicated against the image's SymbolTable — in-VM when
+// symbols are loaded, offline via the .rutc.map sidecar when the image
+// shipped stripped (--release), or by recompiling: deterministic
+// serialization means identical pcs.
+
+import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
+import { Logger } from "std:log";
+
+const log = Logger("app");
+
+// The error carries WHERE for free, and a trace only if asked:
+dataclass FetchError {
+    url:    string,
+    at:     Location,              // zero-cost — a folded const at each
+    trace:  Option<StackTrace>,    // construction site
+}
+
+fn fetch(url: string): Result<string, FetchError> {
+    if (url.len() == 0) {
+        // The happy path pays nothing; this branch pays once. Skips its
+        // own frame automatically (no constructorOpt dance).
+        return Err(FetchError {
+            url:   url,
+            at:    here(),
+            trace: Option<StackTrace>.Some(capture_stack_trace()),
+        });
+    }
+    return Ok(url);
+}
+
+// Context accrues upward — each layer stamps its own (free) location;
+// the trace from the deepest layer survives untouched:
+fn load_config(): Result<string, FetchError> {
+    const r = fetch("")?;
+    return Ok(r);
+}
+
+fn main(): void {
+    when (load_config()) {
+        Ok(cfg) -> {
+            log.info(f"loaded {cfg.len()} bytes");
+        },
+        Err(e) -> {
+            // at: folded const — prints `examples/basic/error-context.rut:38:13`
+            log.error(f"fetch failed at {e.at.file}:{e.at.line}:{e.at.col}");
+            // render() symbolicates lazily; degrades to
+            // `pkg:mod #[3] @ pc 41` on stripped images instead of
+            // failing. Native frames appear as markers:
+            //   at plugin:my_map.MyMap.set (host)
+            when (e.trace) {
+                Option<StackTrace>.Some(t) -> log.error(t.render()),
+                Option<StackTrace>.None -> { /* the cheap-path error: no trace */ },
+            }
+        },
+    }
+}
