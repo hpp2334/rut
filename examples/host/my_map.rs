@@ -11,68 +11,76 @@
 use std::collections::HashMap;
 
 use rut::{ClassTable, GenericArgs, NativeModule, Trap, TypeRegistry, VmCtx};
-use rut::value::{Array, Iface, IfaceHandle, Rut};
+use rut::value::{Array, IfaceHandle, Rut};
 
-/// The container. `K` crosses as an INTERFACE REF — the `Hashable`
-/// constraint the rut side sees maps to `K: Iface` here: a handle that
-/// hashes and compares by **vtable dispatch into the value's own
-/// `hash()` / `eq()`** (RFC 0002 §6). Those may be rut code — a
-/// dataclass key's impls (RFC 0002 §5.1) call back into the VM.
-/// `V` is the host-side shape of any rut value (`i32`, `f64`, `string`,
-/// handles): the boundary converts (RFC 0005 §3) before any method runs.
-pub struct MyMap<K: Iface, V: Rut> {
-    inner: HashMap<K, V>,
-    // K: Iface implements Hash + Eq by dispatch — `insert`/`get` run the
-    // key's hash()/eq() through the interface vtable on every probe.
+/// The container. The CROSSING RULE (RFC 0005 §5.1): an *unconstrained*
+/// generic param crosses as its own host shape (`V: Rut` — monomorphized
+/// per concrete type: i32, f64, string, handles); a param *constrained to
+/// an interface* crosses uniformly as `IfaceHandle` — RFC 5002 §2's fat
+/// ref. So there is NO K generic here: every legal key arrives as an
+/// `IfaceHandle`, and `IfaceHandle: Hash + Eq` is implemented ONCE by the
+/// rut crate, by vtable dispatch into the key's own `hash()`/`eq()` —
+/// user impls are rut code, builtin/struct-voucher impls are native
+/// trampolines. Content hashing for `string` keys, identity for `Rc<T>`
+/// keys: both fall out of which vtable the boundary attached, and
+/// `HashMap` never knows the difference.
+pub struct MyMap<V: Rut> {
+    inner: HashMap<IfaceHandle, V>,
 }
 
-impl<K: Iface, V: Rut> MyMap<K, V> {
+impl<V: Rut> MyMap<V> {
     fn with_capacity(cap: i32) -> Self {
         MyMap { inner: HashMap::with_capacity(cap.max(0) as usize) }
     }
 }
 
 /// Called ONCE per distinct `MyMap<K, V>` — the monomorphization point
-/// (RFC 0002 §10). The param CONSTRAINTS are declared here, in terms of
-/// the same registered interfaces the rut side imports:
+/// (RFC 0002 §10). Generic over **V only**: K is not a host shape, it is
+/// its constraint's shape (`IfaceHandle`).
+///
+/// The param CONSTRAINTS are declared in terms of the same registered
+/// interfaces the rut side imports:
 ///
 ///     let k = generic_args.of("K");            // by NAME, not index
 ///     let i_hashable = types.interface_of("Hashable");
-///     ClassTable::new::<MyMap<K, V>>(generic_args)
-///         .constrain(k, i_hashable)            // the whole admission rule
+///     ClassTable::new::<MyMap<V>>(generic_args)
+///         .constrain(&k, i_hashable)           // the whole admission rule
 ///
 /// `Hashable requires Equal<Self>` (RFC 0002 §6) means the constraint
 /// closes over BOTH: a K that hashes but cannot compare is unrepresentable.
-/// Satisfaction: user classes & dataclasses via `implements`; builtins via
-/// registered impls (string/numerics/enum content, Rc<T> identity);
-/// registered structs via the register_struct content voucher.
-///
 /// Rejection is COMPILE (IR) time — the descriptor carries the constraint,
 /// the front-end flags the instantiation line, and the load-time verifier
 /// re-checks (RFC 0007 §8). Nothing ever escapes to a runtime trap.
-fn build_my_map<K: Iface, V: Rut>(generic_args: &GenericArgs,
-                                  types: &TypeRegistry) -> Result<ClassTable, Trap> {
-    let k = generic_args.of("K");                    // param by NAME
-    let i_hashable = types.interface_of("Hashable"); // shared TypeId
+fn build_my_map<V: Rut>(generic_args: &GenericArgs,
+                        types: &TypeRegistry) -> Result<ClassTable, Trap> {
+    let k = generic_args.of("K");                    // GenericParam —
+    let i_hashable = types.interface_of("Hashable"); // name + resolved Ty
 
-    ClassTable::new::<MyMap<K, V>>(generic_args)
-        .constrain(k, i_hashable)    // K must implement Hashable (+ Equal<K>)
+    let k_ty = k.ty();                // the instantiation's K — for keys()
+
+    ClassTable::new::<MyMap<V>>(generic_args)
+        .constrain(&k, i_hashable)    // K must implement Hashable (+ Equal<K>)
         // native factory -> `MyMap<K, V>(cap)` type-call on the rut side
         .factory(|ctx: &mut VmCtx, cap: i32| Ok(MyMap::with_capacity(cap)))
-        .method("set", |ctx, this: &mut MyMap<K, V>, k: K, v: V| {
-            this.inner.insert(k, v);        // dispatches k.hash()/eq();
-            Ok(())                          // handle V (e.g. Opaque) is
-        })                                  // RC-retained for the map's
-        .method("get", |ctx, this: &MyMap<K, V>, k: K| {      // lifetime
-            Ok(this.inner.get(&k).cloned()) // -> rut's builtin Option<V>,
+        .method("set", |ctx, this: &mut MyMap<V>, k: IfaceHandle, v: V| {
+            this.inner.insert(k, v);        // dispatches k.hash()/eq() via
+            Ok(())                          // the vtable; handle V (e.g.
+        })                                  // Opaque) is RC-retained for
+        .method("get", |ctx, this: &MyMap<V>, k: IfaceHandle| {   // its life
+            Ok(this.inner.get(&k).cloned()) // -> rut's builtin Option<V>;
         })                                  // the crossing is free (§5.1)
-        .method("size", |ctx, this: &MyMap<K, V>| Ok(this.inner.len() as i32))
-        .method("keys", |ctx: &mut VmCtx, this: &MyMap<K, V>| {
-            let mut arr = Array::with_len::<K>(ctx, this.inner.len() as u32)?;
-            for (i, k) in this.inner.keys().enumerate() {
-                arr.set(ctx, i as u32, k.as_handle().clone())?;   // built
-            }                                                     // host-side;
-            Ok(arr)                                               // rut can't tell
+        .method("size", |ctx, this: &MyMap<V>| Ok(this.inner.len() as i32))
+        .method("keys", |ctx, this: &MyMap<V>| {
+            // Array<K>, NOT Array<Hashable>: rut cannot consume interface
+            // refs here (no interface downcast — RFC 0002 §6.1). The K Ty
+            // captured above drives the element type; each key is unerased
+            // back to its natural value — a `string` key yields
+            // Array<string>, so `counts.get(k)` type-checks in the .rut.
+            let mut arr = Array::with_ty(ctx, k_ty, this.inner.len() as u32)?;
+            for (i, key) in this.inner.keys().enumerate() {
+                arr.set(ctx, i as u32, key.unerase(ctx))?;   // fat ref ->
+            }                                                // plain value
+            Ok(arr)
         })
         .build()
 }
@@ -93,9 +101,5 @@ pub fn my_map_module() -> NativeModule {
 //
 // Memory story (RFC 0004, §5): an instance lives in a RutOpaque cell as a
 // boxed host value; at rc-0 its derived Drop drops the HashMap, which
-// drops each K (an IfaceHandle: RC-dec) and each V — handles release (a
-// Canvas's Rust Drop runs right then), plain values just go.
-// Deterministic, no collector involvement.
-
-// `IfaceHandle: Clone` above is the thin clone of the reference, not the
-// referent — same rule as rut's own Rc copy.
+// drops each IfaceHandle (RC-dec — a Canvas's Rust Drop runs right then)
+// and each V. Deterministic, no collector involvement.

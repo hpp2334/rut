@@ -183,22 +183,23 @@ builtin impls — `string`/numerics/`enum` by content, `Rc<T>` by identity
 (object-keyed maps) — so common keys work with no user code:
 
 ```rust
-fn build_my_map(generic_args: &GenericArgs, types: &TypeRegistry)
+fn build_my_map<V: Rut>(generic_args: &GenericArgs, types: &TypeRegistry)
     -> Result<ClassTable, Trap>
 {
     // Called ONCE per distinct MyMap<K, V> — the monomorphization point
-    // (RFC 0002 §10).
-    let k = generic_args.of("K");                    // param by NAME
-    let i_hashable = types.interface_of("Hashable"); // shared TypeId
+    // (RFC 0002 §10). Generic over V ONLY — see the crossing rule below.
+    let k = generic_args.of("K");                    // GenericParam —
+    let i_hashable = types.interface_of("Hashable"); // name + resolved Ty
+    let k_ty = k.ty();                               // for keys(), below
 
-    ClassTable::new::<MyMap<K, V>>(generic_args)
-        .constrain(k, i_hashable)   // K must implement Hashable — and,
+    ClassTable::new::<MyMap<V>>(generic_args)        // HashMap<IfaceHandle, V>
+        .constrain(&k, i_hashable)   // K must implement Hashable — and,
                                     // via `requires Equal<Self>`, Equal<K>
         .factory(|ctx: &mut VmCtx, cap: i32| Ok(MyMap::with_capacity(cap)))
-        .method("set",  |ctx, this: &mut MyMap<K, V>, k: K, v: V| Ok(this.insert(k, v)))
-        .method("get",  |ctx, this: &MyMap<K, V>, k: K| Ok(this.get(&k)))  // Option<V>
-        .method("size", |ctx, this: &MyMap<K, V>| Ok(this.len() as i32))
-        .method("keys", |ctx, this: &MyMap<K, V>| Ok(this.keys()))         // Array<K>
+        .method("set",  |ctx, this: &mut MyMap<V>, k: IfaceHandle, v: V| Ok(this.inner.insert(k, v)))
+        .method("get",  |ctx, this: &MyMap<V>, k: IfaceHandle| Ok(this.inner.get(&k).cloned()))  // Option<V>
+        .method("size", |ctx, this: &MyMap<V>| Ok(this.inner.len() as i32))
+        .method("keys", |ctx, this: &MyMap<V>| /* Array<K> — see below */ ..)
         .build()
 }
 
@@ -207,6 +208,21 @@ fn my_map_module() -> NativeModule {
         .generic_class("MyMap", 2, build_my_map)
 }
 ```
+
+- **Crossing rule for generic params.** An *unconstrained* param crosses
+  as its own host shape (`V: Rut` — monomorphized per concrete type). A
+  param *constrained to an interface* crosses uniformly as the
+  constraint's shape: **`IfaceHandle`** (RFC 5002 §2's fat ref), whose
+  `Hash`/`Eq` the rut crate implements **once**, by vtable dispatch into
+  the value's own `hash()`/`eq()` — user impls are rut code,
+  builtin/voucher impls are native trampolines. One Rust type covers
+  every legal K: content hashing for `string` keys and identity for
+  `Rc<T>` keys both fall out of which vtable the boundary attached.
+- **`keys(): Array<K>`, not `Array<Hashable>`.** The K `Ty` from
+  `generic_args` drives the host-built array's element type, and each key
+  is *unerased* back to its natural value (a `string` key yields
+  `Array<string>`) — rut could not consume interface refs here, since
+  interface values cannot be downcast (RFC 0002 §6.1).
 
 - **Constraints are interfaces — checked at compile (IR) time, never
   runtime.** The module descriptor carries each generic param's

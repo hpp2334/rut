@@ -82,8 +82,9 @@ export fn main(): void {
         hud.value.circle(10, 10, 5);               // back in typed host API
     }
 
-    // counts.keys() built this Array<string> on the host; the loop itself
-    // is pure rut.
+    // counts.keys() -> Array<string> (K is preserved, not erased to
+    // Hashable — built host-side from the instantiation's K Ty, each key
+    // unerased to its natural value); the loop itself is pure rut.
     for (const k of counts.keys()) {
         log.debug(f"{k} -> {counts.get(k).unwrap_or(0)}");
     }
