@@ -88,7 +88,7 @@ export class Dashboard {
         // --- mutations: dispatched with payload dataclasses. The trailing
         //     `$` marks dispatch-inverted members (tur's start$/onMounted$
         //     rule). Closures capture the locals above by reference
-        //     (RFC 0002 §9) — the instance fields and the closures stay in
+        //     (RFC 0013) — the instance fields and the closures stay in
         //     lockstep because they were built from the same locals. ---
         const set_tab$ = mutation((st: Rc<Store>, t: Tab): void => {
             atom_set(st, tab, t);

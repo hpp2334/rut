@@ -1,0 +1,35 @@
+// plugin/my_map.d.rut — the DECLARATION FILE for "plugin:my_map".
+//
+// `host`/`extern` are .d.rut-ONLY keywords (RFC 0029): a .rut file that
+// spells either is a compile error. This file is pure surface —
+// signatures, no bodies — and compiles to a SymbolTable (.d.ir cache;
+// version-locked, regenerable) plus a native slot table. rutc, the LSP,
+// and AOT builds consume it with ZERO Rust linked (the tur index.d.ts
+// role, in-language and type-checked). The Rust IMPLEMENTATION is the
+// sibling file examples/host/my_map.rs, bound by name at embedder
+// startup and proven signature-equal at vm.load link.
+//
+// Import specifiers map to declaration files by path: "plugin:my_map" ->
+// plugin/my_map.d.rut. Only EXPORTED decls are nameable outside.
+
+// Param bounds on host decls are ADMISSION-ONLY syntax (RFC 0013 §2 —
+// user generics have no bounds): they constrain which instantiations
+// compile, and grant no method calls on bare K. "Hashable" imports from
+// std:collection — whose own declaration file ships with the toolchain
+// exactly like this one.
+import { Hashable } from "std:collection";
+
+export host class MyMap<K: Hashable, V> {
+    factory(cap: i32): Self;          // native factory: MyMap<K, V>(cap)
+    fn set(k: K, v: V): void;
+    fn get(k: K): Option<V>;
+    fn size(): i32;
+    fn keys(): Array<K>;              // Array<K>, NOT Array<Hashable>:
+}                                     // keys are unerased at the boundary
+                                      // (interface values cannot be
+                                      // downcast — RFC 0012 §3)
+// What compiling this file produces: a slot table
+//     factory -> 0, set -> 1, get -> 2, size -> 3, keys -> 4
+// (declaration order; part of the decl digest). Consumer calls compile
+// to callnat { slot } — names are binding-time labels for the Rust impl,
+// never dispatch keys, never in the IR (RFC 0032).

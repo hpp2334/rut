@@ -1,28 +1,29 @@
-// RFC 0005 §5.1 — an EMBEDDER-DEFINED native module in use.
+// RFC 0025/0026 — an EMBEDDER-DEFINED native module in use.
 //
-// rut sees ONLY THE DECLARATION of MyMap: `export extern class MyMap<
-// K: Hashable, V> { .. }` — signatures, no bodies — in the decl module
-// examples/host/plugin/my_map.rut. The Rust IMPLEMENTATION is the
-// sibling file examples/host/my_map.rs, bound by name at embedder
-// startup and proven signature-equal at vm.load link. `rutc check` of
-// THIS file runs with no implementation (no Rust at all) present;
-// referencing MyMap with none bound fails at link, not mysteriously
-// later. std:collection's Map<K,V>/Set<T> ride this same machinery
-// (RFC 0002 OQ-3, resolved): containers are library types — decl
-// modules + Rust bodies — not VM builtins.
+// rut sees ONLY THE DECLARATION of MyMap: `export host class MyMap<
+// K: Hashable, V> { .. }` — signatures, no bodies — in the declaration
+// file examples/host/plugin/my_map.d.rut (`.d.rut` is the only place
+// `host` may appear, RFC 0029). The Rust IMPLEMENTATION is the sibling
+// file examples/host/my_map.rs, bound by name at embedder startup and
+// proven signature-equal at vm.load link. `rutc check` of THIS file runs
+// with no implementation (no Rust at all) present; referencing MyMap
+// with none bound fails at link, not mysteriously later. std:collection's
+// Map<K,V>/Set<T> ride this same machinery (RFC 0005, resolved —
+// RFC 0028): containers are library types — declaration files + Rust
+// bodies — not VM builtins.
 //
 // Boundary crossings in this file: the class type itself (first use of
 // MyMap<A, B> reifies the instantiation and builds its method table),
-// the native factory (construction), every method call (Op::CallNative
-// by slot — names never dispatch), and Option/Array values flowing
+// the native factory (construction), every method call (callnat by slot —
+// names never dispatch, RFC 0032), and Option/Array values flowing
 // back out.
 
-import { MyMap } from "plugin:my_map";                // resolves to the decl
-import { Equal, Hashable } from "std:collection";     // decl module: the
+import { MyMap } from "plugin:my_map";                // resolves to the .d.rut
+import { Equal, Hashable } from "std:collection";     // declaration file: the
 import { Canvas, newCanvas } from "app:gfx";          // constraint interfaces
 import { Logger } from "std:log";
 
-// A DATACLASS key (RFC 0002 §5.1): an all-public, literal-constructed
+// A DATACLASS key (RFC 0009): an all-public, literal-constructed
 // value record — with methods, because dataclasses implement interfaces
 // now. Its limits, exhaustively: no `private` fields, no `static`
 // members, no `factory`, no `dispose()`.
@@ -66,7 +67,8 @@ export fn main(): void {
     log.info(f"roster size={roster.size()}");
 
     // K = a class with no impl — rejected at COMPILE (IR) time against
-    // the extern DECL (plugin/my_map.rut); the verifier re-checks at load:
+    // the host-class DECLARATION (plugin/my_map.d.rut); the verifier
+    // re-checks at load:
     //
     // const bad = MyMap<Canvas, i32>(4);
     //                    ^^^^^^ error: `Canvas` does not implement
@@ -91,4 +93,4 @@ export fn main(): void {
         log.debug(f"{k} -> {counts.get(k).unwrap_or(0)}");
     }
 }   // MyMap's Rust Drop releases the boxed values; each Canvas's Rust Drop
-    // runs at its rc-0 — deterministic, never "at GC someday" (RFC 0005 §5)
+    // runs at its rc-0 — deterministic, never "at GC someday" (RFC 0025)

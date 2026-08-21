@@ -1,7 +1,7 @@
 // workers/stats-worker.rut — a SEPARATE VM: own heap, own thread, traps
 // here cannot hurt the UI. Receives StatsRequests (the Array<f32> payload
 // deep-copied across isolates since the main state also holds it; a unique
-// buffer would transfer zero-copy — RFC 0003 §5.2), computes aggregates,
+// buffer would transfer zero-copy — RFC 0021 §2), computes aggregates,
 // replies on the embedded transferred endpoint. recv() == None (all
 // senders dropped) is the shutdown signal.
 

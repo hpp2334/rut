@@ -1,4 +1,4 @@
-// RFC 0004 §3 — deterministic destruction: dispose() runs at rc 0, then
+// RFC 0016 §3 — deterministic destruction: dispose() runs at rc 0, then
 // fields are released in order. No FinalizationRegistry, no "maybe later".
 
 import { remove } from "std:fs";

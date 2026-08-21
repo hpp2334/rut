@@ -1,4 +1,4 @@
-// RFC 0002 §3.2 / §10.2 — layout & type-identity builtins.
+// RFC 0015 — layout & type-identity builtins.
 // dataclass AND class are repr C: fields in declaration order, natural C
 // alignment, no hidden members. type_id<T>() / size_of<T>() / align_of<T>()
 // are compile-time constants; Opaque mirrors them at runtime — the toolkit

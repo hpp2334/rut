@@ -1,4 +1,4 @@
-// RFC 0002 §6.1 — type tests & upcasts are BUILTIN FUNCTIONS, not
+// RFC 0012 §3 — type tests & upcasts are BUILTIN FUNCTIONS, not
 // keywords: is<T>(x): bool and upcast<T>(x): T. There is no `as`, no
 // downcast, ever. is<T> monomorphizes with T as a compile-time constant.
 

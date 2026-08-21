@@ -1,0 +1,44 @@
+# RFC 0019: Tasks — `spawn`, `cancel`, `select`
+
+- **Status:** Draft
+- **Date:** 2026-08-22
+- **Author:** hpp2334
+- **Depends on:** RFC 0018 (suspend & await)
+- **Supersedes:** RFC 0003 §3 (pre-restructure)
+- **Part:** D — Concurrency
+
+## Summary
+
+See **`examples/concurrency/spawn-cancel.rut`** (cancellation-by-drop) and
+**`examples/concurrency/select.rut`** (racing with `select`/`select_all`).
+
+## 1. `spawn`
+
+- `spawn(fut): Task<T>` schedules the future on the current VM. `Task<T>` is
+  itself a `Future<Result<T, Cancelled>>`: `await task` joins it.
+
+## 2. `cancel`
+
+- `cancel()` marks the task cancelled and **drops the coroutine frame at its
+  next suspension point** — pending `sleep`s die with it, and every local with
+  a destructor (RFC 0016 §3) runs deterministically. Cancellation never
+  interrupts mid-expression.
+
+## 3. `select`
+
+- `await select { .. }` races futures; the winner's value is produced by its
+  arm expression, the losers are dropped (i.e. cancelled). Arms use `->`
+  like `when` (RFC 0008); `fut -> expr` discards the resolved value,
+  `fut as x -> expr` binds it.
+- `select_all(futs)` (stdlib, built on `select`) resolves with the first
+  ready value — used in the worker examples (RFC 0021).
+- v1 tasks are unstructured (no automatic child cancellation). Structured
+  scopes (`scope { .. }` cancelling children on exit) are OQ-3.
+
+## Open questions
+
+- OQ-1: cancellation observation — should `Task<T>` await resolve to
+  `Result<T, Cancelled>`, or should awaiting a cancelled task be a trap?
+- OQ-2: priorities/fairness — round-robin ready queue in v1; do we need
+  task priorities for UI responsiveness before M4?
+- OQ-3: structured concurrency scopes with child cancellation.

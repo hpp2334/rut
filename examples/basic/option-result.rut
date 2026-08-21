@@ -1,4 +1,4 @@
-// RFC 0002 §3 — Option<T> / Result<T,E> are builtin VM-native types.
+// RFC 0005 — Option<T> / Result<T,E> are builtin VM-native types.
 // Methods are snake_case; no ?. / ?? sugar — check, then read `.value`.
 
 import { Logger } from "std:log";

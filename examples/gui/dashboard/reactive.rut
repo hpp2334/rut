@@ -1,8 +1,8 @@
 // reactive.rut — tur's reactive primitives (state / source / derive /
 // mutation / watch / Store) implemented ENTIRELY in user rut. No host
 // support, no language magic. The one thing a heterogeneous store needs —
-// values of many types behind one table — is the Opaque builtin (RFC 0002
-// §3.1): entries are `Opaque` cells keyed by atom id, recovered with
+// values of many types behind one table — is the Opaque builtin
+// (RFC 0014): entries are `Opaque` cells keyed by atom id, recovered with
 // `downcast<T>`, checked by the reified runtime type.
 //
 //   state(v)       -> State<T>      writable atom; the store materializes
@@ -22,7 +22,7 @@ import { Logger } from "std:log";
 // ------------------------------------------------------------------ atoms
 
 /** Anything with an identity in the store — State, Source, Derived.
- *  Passing a bare atom to watch() boxes it into an Rc cell (RFC 0002 §6). */
+ *  Passing a bare atom to watch() boxes it into an Rc cell (RFC 0012 §2). */
 interface Atom {
     fn atom_id(): u32;
 }

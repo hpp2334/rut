@@ -1,4 +1,4 @@
-// RFC 0003 §3 — spawn schedules a task on this VM; cancel() drops the
+// RFC 0019 — spawn schedules a task on this VM; cancel() drops the
 // coroutine frame at its NEXT suspension point (real cancellation —
 // pending sleeps die with it, locals with destructors run).
 

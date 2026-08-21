@@ -1,4 +1,4 @@
-// RFC 0003 §3 — `await select { .. }` races futures: the winner produces
+// RFC 0019 — `await select { .. }` races futures: the winner produces
 // its arm's value, the losers are dropped (i.e. cancelled).
 //   future            -> expr   // discard the resolved value
 //   future as name    -> expr   // bind the resolved value

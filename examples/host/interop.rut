@@ -1,17 +1,17 @@
-// RFC 0005 — host & FFI: extern class handles, repr C struct passing,
+// RFC 0022–0028 — host & FFI: host-class handles, repr C struct passing,
 // zero-copy buffer borrows, and Template (structured f"...", for l10n).
-// The host side of this module is sketched in RFC 0005 §1-§6. Native
-// surfaces are DECLARED in rut source decl modules (RFC 0005 §5) —
-// app/gfx.rut declares Canvas, newCanvas, and Source below; the Rust
+// The host side of this module is sketched in RFC 0022–0028. Native
+// surfaces are DECLARED in rut-source declaration files (RFC 0025) —
+// app/gfx.d.rut declares Canvas, newCanvas, and Source below; the Rust
 // bodies bind by name at embedder startup.
 
-import { Canvas, newCanvas, Source } from "app:gfx";  // decl module
-import { log_l10n } from "app:log";                // fn log_l10n(t: Template): void
+import { Canvas, newCanvas, Source } from "app:gfx";  // declaration file
+import { log_l10n } from "app:log";                // host fn log_l10n(t: Template): void
 import { Logger } from "std:log";
 
-// app/gfx.rut (the decl module) contains, among others:
-//     export extern class Source<T> {  // instantiation identity KEPT:
-//         fn get(): T;                 // Source<i32> != Source<string>
+// app/gfx.d.rut (the declaration file) contains, among others:
+//     export host class Source<T> {  // instantiation identity KEPT:
+//         fn get(): T;               // Source<i32> != Source<string>
 //     }
 // — declared for typing; built and implemented entirely host-side.
 

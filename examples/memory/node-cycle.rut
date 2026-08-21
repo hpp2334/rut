@@ -1,4 +1,4 @@
-// RFC 0004 §5 — reference cycles never reach rc 0; the budgeted cycle
+// RFC 0017 §2 — reference cycles never reach rc 0; the budgeted cycle
 // collector (trial deletion) reclaims them. dispose() runs exactly once
 // per collected object.
 

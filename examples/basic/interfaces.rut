@@ -1,9 +1,9 @@
-// RFC 0002 §6 — interfaces: plain METHODS only, nominal `implements`.
+// RFC 0012 §2 — interfaces: plain METHODS only, nominal `implements`.
 // Interface values are the ONLY dynamic dispatch (vtable).
 // Intersection types (`Drawable & HitTest`) are NEVER supported — compose
 // a wider interface instead (Widget below).
 //
-// Also demonstrates (RFC 0002 §5.1 + §6):
+// Also demonstrates (RFC 0009, 0012):
 //   * `requires` — an admission constraint, NOT subtyping: to implement
 //     Hashable, a type must ALSO implement Equal<Self>. No member
 //     inheritance, no interface-to-interface widening; vtables stay flat.

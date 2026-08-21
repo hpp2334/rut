@@ -1,4 +1,4 @@
-// RFC 0003 §2 — suspend fn returns a COLD Future<T>: calling it runs
+// RFC 0018 — suspend fn returns a COLD Future<T>: calling it runs
 // nothing; `await` is the only suspension point.
 
 import { sleep } from "std:time";

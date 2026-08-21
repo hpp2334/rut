@@ -1,4 +1,4 @@
-// RFC 0002 §1.1 — module scope is DECLARATIONS ONLY (C++-style):
+// RFC 0003 §1 — module scope is DECLARATIONS ONLY (C++-style):
 // no top-level statements, no load-time code, const initializers must be
 // const-expressions.
 

@@ -1,4 +1,4 @@
-// RFC 0002 §5.3 — Rc<T>: explicit references. Rc(v) boxes a class value in
+// RFC 0011 — Rc<T>: explicit references. Rc(v) boxes a class value in
 // a refcounted heap cell; Rc handles are REF-copied — aliasing is always
 // visible in the type. Classes with dispose() must live behind Rc: their
 // factories hand out Rc<Self> directly.

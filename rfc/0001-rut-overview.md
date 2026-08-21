@@ -2,6 +2,8 @@
 
 - **Status:** Draft
 - **Date:** 2026-08-21
+- **Revised:** 2026-08-22 — RFC set restructured into a gradual series of
+  small, single-topic RFCs (this file is the index).
 - **Author:** hpp2334
 
 ## Summary
@@ -39,6 +41,46 @@ rut is designed so that these three problems are *structural*, not incidental:
 no erasure, native poll-based coroutines, host-owned values with deterministic
 lifetimes.
 
+## Why not JavaScript
+
+The pain points above are tur-specific (Boa). The case against shipping JS
+*at all* — the language-level rationale — is fourfold, and each item maps to
+a structural answer in rut:
+
+1. **History debt compounds.** Two nullish values (`null`/`undefined`),
+   direct vs indirect `eval`, `typeof null == "object"`, `==` coercion
+   rules, ASI — every one is a permanent spec liability the ecosystem
+   re-implements forever. rut starts from a closed, small grammar: no
+   nullish values (absence is `Option<T>`, RFC 0005), no `eval` and no
+   dynamic code at all (declarations-only modules, RFC 0003), no coercing
+   operators (RFC 0007 §1), and legacy JS constructs are reserved words
+   whose errors say what to use instead (RFC 0002 §4). Nothing legacy can
+   accrete: the grammar is small by charter.
+2. **Spec conformance means implementing the world.** A conformant engine
+   needs `BigInt`, `Intl`, `Date`'s quirks, microtask semantics — thousands
+   of person-hours before any user code runs. rut's VM contract is
+   deliberately tiny (primitives, `Option`/`Result`/`Array`, channels);
+   everything else is library: `Map`/`Set` are declaration-file + Rust
+   library types (RFC 0028), and logging, IO, and the host's own domain
+   live in their own modules (RFC 0022). A rut engine is small because the
+   spec is small; an embedder ships only what its domain needs.
+3. **Too slow without a JIT.** Interpreter-only JS runs one to two orders
+   of magnitude slower — a JS engine's speed *is* its JIT. rut's no-JIT
+   pillar (G7) is viable only because the language is statically typed:
+   the bytecode is typed (G2), generics monomorphize, `Array<f32>` is a
+   flat `Vec<f32>`, and calls are direct by default — vtable dispatch
+   exists only where an interface is named (RFC 0012 §1). The code shape a
+   JS JIT exists to speculate on — polymorphic property loads — does not
+   exist in rut.
+4. **Too much memory.** JS values are boxes: per-object headers, tagged or
+   NaN-boxed pointers, boxed array elements, GC mark/pause overhead. rut's
+   memory story is layout: untagged 8-byte slots (RFC 0015 §5), inline
+   repr-C values with no headers (RFC 0015 §4), flat unboxed arrays
+   (RFC 0016 §4), reference counting with deterministic destructors
+   (RFC 0016) and a budgeted cycle collector (RFC 0017). No NaN-boxing —
+   the per-platform layout bug class tur hit in Boa — and no collector on
+   the hot path.
+
 ## Goals
 
 - G1 — Types are held at runtime (reified), not erased like TypeScript.
@@ -58,57 +100,103 @@ lifetimes.
 ## Non-goals
 
 - No dynamic typing, no `any`/`dyn` values, no gradual typing. `Opaque`
-  (RFC 0002 §3.1) is the explicit, checked escape hatch for erasure — a
+  (RFC 0014) is the explicit, checked escape hatch for erasure — a
   boxed value that can do nothing until `downcast<T>` recovers it; it is
   not a loosening of the static type system.
 - No structural ("duck") typing, no object literals — interfaces are
-  nominal and declared (RFC 0002 §6).
-- No pattern matching, no data-carrying enums, no union or intersection
-  types; heterogeneous data goes through interfaces (RFC 0002 §7).
+  nominal and declared (RFC 0012).
+- No pattern matching beyond `when` literals/enums (RFC 0008), no
+  data-carrying enums (RFC 0006), no union or intersection types;
+  heterogeneous data goes through interfaces (RFC 0012).
 - No JIT, no tiering, no runtime specialization beyond compile-time
   monomorphization and cheap VM-level caches.
 - No shared-memory threads in the language. Workers communicate by message
-  passing only (RFC 0003).
+  passing only (RFC 0021).
 - No borrow checker, no lifetimes. Memory safety comes from the VM (RC), not
   from type-system proofs. There is no `box<T>`/loan construct: without
-  exclusivity proofs loans cannot be sound (RFC 0002 §2, RFC 0005 §3).
+  exclusivity proofs loans cannot be sound (RFC 0004, RFC 0023).
 - No C interop surface at first; host interop is the Rust embedding API only
-  (RFC 0005).
+  (Part E).
 
-## Document layout
+## Document layout — the series
 
-- **0xxx — language RFCs**: user-facing semantics. rut example code lives
-  in `examples/`, referenced by path; the RFCs hold prose.
-  - 0002 — type system (types, classes, interfaces, `Opaque`, layout)
-  - 0003 — suspend & workers
-  - 0004 — memory (RC, destructors, cycle collector)
-  - 0005 — host & FFI (embedding, repr C, templates)
-  - 0006 — syntax: lexer, AST, parser
-  - 0007 — IR & bytecode
-  - 0008 — VM (execution, loading, embedding loop)
-- **5xxx — implementation RFCs**: Rust/VM internals — sketches of layouts,
-  opcodes, and algorithms (5002 runtime types & dispatch, 5003 suspend &
-  workers, 5004 memory).
+The series is **gradual**: every RFC builds on the ones before it, one topic
+each, in reading order. rut example code lives in `examples/`, referenced by
+path; the RFCs hold prose and VM-side sketches (implementation sketches are
+final sections of the RFC they implement).
+
+**Part A — Orientation**
+
+- **0001 — this file**: overview, pillars, execution model, roadmap, index.
+
+**Part B — Language surface** (the script author's view)
+
+- 0002 — lexical structure: source model, identifiers (`$`), naming rules
+- 0003 — modules & visibility: declarations-only scope, `export` forms
+- 0004 — primitive types & integer semantics: the by-value regime
+- 0005 — builtin generic types: `Option`, `Result`, `Array`
+- 0006 — enums: simple named-int sets
+- 0007 — literals & inference: suffixes, conversions, plain/raw/format strings
+- 0008 — control flow & `when`: exhaustive pattern expressions
+- 0009 — dataclasses: open value records (methods + `implements`)
+- 0010 — classes & factories: sealed value records, no inheritance
+- 0011 — `Rc<T>`, dispose & identity: explicit references
+- 0012 — interfaces & dispatch: the sole dynamic mechanism; type tests
+- 0013 — functions, closures & generics
+- 0014 — `Opaque`: explicit erasure with checked recovery
+- 0015 — reified types & layout: `RutType`, repr C, slots & vtables
+
+**Part C — Memory**
+
+- 0016 — the RC heap & deterministic destructors
+- 0017 — weak references & the cycle collector
+
+**Part D — Concurrency**
+
+- 0018 — `suspend` & `await`: poll-based coroutines
+- 0019 — tasks: `spawn`, `cancel`, `select`
+- 0020 — the host-futures bridge
+- 0021 — workers & channels: isolate concurrency
+
+**Part E — Host & FFI**
+
+- 0022 — embedding model & native modules
+- 0023 — the `Value` boundary & borrow guards
+- 0024 — repr C struct interop
+- 0025 — host classes & declaration files
+- 0026 — generic host classes: a user-defined map
+- 0027 — templates: `f"..."` across the boundary
+- 0028 — the standard library: `rt:*`, `std:*`, `std:log`
+
+**Part F — Toolchain & artifacts**
+
+- 0029 — declaration files & the SymbolTable: `.d.rut`, `.d.ir`, publishing
+- 0030 — frontend: lexer, parser, AST, diagnostics
+- 0031 — compiler: resolve, typecheck, HIR
+- 0032 — typed bytecode (LIR)
+- 0033 — module image & verification
+- 0034 — VM core: interpreter loop, traps, budgets
+- 0035 — loading, host hooks & the embedding loop
 
 ## Pillar decisions
 
 | # | Decision | RFC |
 |---|----------|-----|
-| P1 | Fully static type system, **no dynamic typing**, inference-first, reified runtime types | 0002 |
-| P2 | Isolate workers with typed channels and transferable buffers | 0003 |
-| P3 | Reference counting + cycle collector; deterministic destructors | 0004 |
-| P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0002 §3 |
-| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `factory` type-calls — no `new` keyword, `suspend factory` allowed), `interface` (vtable dispatch — the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0002 |
-| P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0003 |
-| P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0006, 0007, 0008 |
-| P8 | Both value types (`dataclass` **and** `class`) are **repr C**; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0002 §3.2/§10.2, 0005 §4 |
+| P1 | Fully static type system, **no dynamic typing**, inference-first, reified runtime types | 0004–0015 |
+| P2 | Isolate workers with typed channels and transferable buffers | 0021 |
+| P3 | Reference counting + cycle collector; deterministic destructors | 0016–0017 |
+| P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0005, 0033 |
+| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `factory` type-calls — no `new` keyword, `suspend factory` allowed), `interface` (vtable dispatch — the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0006, 0009–0012 |
+| P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
+| P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
+| P8 | Both value types (`dataclass` **and** `class`) are **repr C**; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015, 0024 |
 
 ### Why "no dynamic typing" is workable
 
 Without `any`/`dyn`, JSON-shaped data becomes a small class set behind an
 interface (`interface JsonValue` implemented by `JString`/`JNum`/`JArr`/…),
 heterogeneous collections are interface-typed arrays, and host APIs that were
-`any`-shaped in JS become generics or opaque `extern class` handles. The one
+`any`-shaped in JS become generics or opaque `host class` handles. The one
 dynamic mechanism kept is **interface dispatch** — a checked vtable call on a
 value whose exact class is still known at runtime. What we keep from "types
 held at runtime" (G1) is what the *VM and the host* need: every value's type
@@ -131,42 +219,38 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
   speculation or deopt — what the type checker proves is all the IR gets.
   The IR keeps a per-value type lattice (exact > interface > opaque) and
   the two lattice-lowering features (interface refs, `Opaque`) are explicit,
-  boundary-local, and carry their own optimization rules (RFC 5002 §4).
+  boundary-local, and carry their own optimization rules (RFC 0031 §4).
 - **No JIT**: all optimization happens at compile time. The VM may keep cheap
   inline caches for field access on host opaques, but nothing is ever compiled
   to machine code.
 - **Single-threaded VM**: a `Vm` instance runs on one thread; workers are
-  separate `Vm`s (RFC 0003). No atomics inside the heap.
+  separate `Vm`s (RFC 0021). No atomics inside the heap.
 - **Host stepping**: the host owns time. `vm.run_until_idle()`,
   `vm.poll(deadline)`, op budgets and interrupt callbacks keep the UI thread
   responsive and enable virtual clocks in tests (the tur test scheduler model).
 
 ## Roadmap
 
-- **M0** — Lexer, parser, AST, pretty errors (RFC 0006).
+- **M0** — Lexer, parser, AST, pretty errors (RFC 0002, 0030).
 - **M1** — Type checker + inference; bytecode + VM for the static core
-  (no suspend, single module) (RFC 0007, RFC 0008).
+  (no suspend, single module) (RFC 0029, 0031–0034).
 - **M2** — Rust embedding API: modules, typed native fns, opaque types,
   `Result` mapping, interrupts/budgets, repr C struct registration
-  (RFC 0005).
+  (RFC 0022–0028).
 - **M3** — Coroutines: `suspend`/`await` state machines, host-driven executor,
-  cancellation (RFC 0003).
-- **M4** — Workers, channels, transferables (RFC 0003).
-- **M5** — Cycle collector, weak refs, finalization polish (RFC 0004).
+  cancellation (RFC 0018–0020).
+- **M4** — Workers, channels, transferables (RFC 0021).
+- **M5** — Cycle collector, weak refs, finalization polish (RFC 0017).
 - **M6** — Tooling: CLI runner, formatter, LSP, debugger protocol; pilot
   integration in tur behind a feature flag.
 
 ## Open questions
 
-1. Default integer type for uncontextualized literals (`i32` vs `i64`), and
-   implicit widening ladder (RFC 0002 §3).
-2. Integer overflow policy: trap always, or trap in debug / wrap in release
-   with explicit wrapping intrinsics (RFC 0002 §4).
-3. ~~Standard-library container set (`map<K,V>`, `set<T>`) as builtins vs
-   library types (RFC 0002 §6).~~ **Resolved — library:** `std:collection`
-   (`Map<K, V>`, `Set<T>`) ships as a rut-source decl module + Rust bodies
-   (RFC 0005 §5, §5.1).
-4. Module/system semantics: URL-like specifiers (`tur:core` today) vs paths;
-   how the host intercepts loads (RFC 0004 §6).
-5. Whether workers may share read-only immutable data (e.g. string interning
-   table) across isolates (RFC 0003 §6).
+Tracked in the owning RFCs:
+
+1. Default integer type for uncontextualized literals (`i32` vs `i64`) and
+   overflow policy — RFC 0004.
+2. Module/system semantics: URL-like specifiers vs paths; how the host
+   intercepts loads — RFC 0003.
+3. Whether workers may share read-only immutable data (e.g. string interning
+   table) across isolates — RFC 0021.

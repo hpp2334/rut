@@ -1,4 +1,4 @@
-// RFC 0003 §5 — workers are separate VM isolates; data crosses typed
+// RFC 0021 — workers are separate VM isolates; data crosses typed
 // channels; buffers transfer zero-copy when uniquely owned (rc == 1).
 
 import { blit } from "app:gfx";

@@ -1,4 +1,4 @@
-// RFC 0004 §4 — Weak<T> does not keep the cell alive; upgrade() returns
+// RFC 0017 §1 — Weak<T> does not keep the cell alive; upgrade() returns
 // Option<Rc<C>>. For caches/observers — not destructors.
 
 import { Logger } from "std:log";

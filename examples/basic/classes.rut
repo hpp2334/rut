@@ -1,4 +1,4 @@
-// RFC 0002 §5.2 — classes: sealed VALUE records with FACTORIES.
+// RFC 0010 — classes: sealed VALUE records with FACTORIES.
 // Construction is a TYPE-CALL — Counter(), Rect(3, 4); no `new` keyword.
 // A factory is just a function: implicitly static, builds the instance
 // with the class-private `Self { .. }` literal, returns Self by default.

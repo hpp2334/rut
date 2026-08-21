@@ -1,6 +1,6 @@
 // services/stream.rut — simulated live feed: a spawned producer task
 // pushes LiveEvents into a channel on a timer. EventStream owns the task
-// and cancels it in dispose() — deterministic shutdown (RFC 0002 §5.3:
+// and cancels it in dispose() — deterministic shutdown (RFC 0011:
 // dispose classes must live behind Rc).
 
 import { Channel, Receiver, Sender } from "std:channel";

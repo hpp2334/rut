@@ -1,4 +1,4 @@
-// RFC 0002 §4 — literals & inference. Construction is a TYPE-CALL
+// RFC 0007 — literals & inference. Construction is a TYPE-CALL
 // (`Array<f32>(1024)`); lowercase types keep lowercase calls (`bytes(64)`).
 
 import { Logger } from "std:log";

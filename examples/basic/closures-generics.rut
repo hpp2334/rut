@@ -1,4 +1,4 @@
-// RFC 0002 §9 — functions, arrow closures, generics (monomorphized at
+// RFC 0013 — functions, arrow closures, generics (monomorphized at
 // compile time; each instantiation emits its own typed opcodes).
 
 import { Logger } from "std:log";

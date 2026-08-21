@@ -1,4 +1,4 @@
-// RFC 0002 §1 — grammar tour: dataclass, interface, class + factory,
+// RFC 0009–0012 — grammar tour: dataclass, interface, class + factory,
 // Rc<T>, vtable dispatch, exhaustive when, format literals.
 //
 // NOTE: rut has no compiler yet — these files are the design corpus the
@@ -12,7 +12,7 @@ enum Color { Red, Green, Blue }
 dataclass Point {                          // VALUE type: copied on assignment
     x: f32;                                // all fields public; methods and
     y: f32;                                // implements are allowed too
-}                                          // (RFC 0002 §5.1) — here: data only
+}                                          // (RFC 0009) — here: data only
 
 fn length(p: Point): f64 {
     return math.sqrt(f64(p.x * p.x + p.y * p.y));
