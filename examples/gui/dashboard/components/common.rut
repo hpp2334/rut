@@ -1,0 +1,57 @@
+// components/common.rut — small shared widgets. Every component is a free
+// fn taking props (dataclasses) and returning Element. The host kit
+// ("app:ui") exports the widget fns + prop dataclasses; Color/Point are
+// host value types. The full assumed kit surface is documented in README.
+
+import { box, BoxProps, Color, column, Element, FlexProps, TextProps, text } from "app:ui";
+import { GAP, PAD, RADIUS } from "../theme.rut";
+import { Palette } from "../theme.rut";
+
+export fn transparent(): Color {
+    return Color.rgba(0, 0, 0, 0);
+}
+
+export fn title(th: Palette, s: string): Element {
+    return text(TextProps { text: s, size: 20, weight: 700, color: th.text });
+}
+
+export fn body(th: Palette, s: string): Element {
+    return text(TextProps { text: s, size: 14, weight: 400, color: th.text_dim });
+}
+
+export fn stat(th: Palette, s: string): Element {
+    return text(TextProps { text: s, size: 24, weight: 700, color: th.text });
+}
+
+export fn chip(th: Palette, label: string, fg: Color): Element {
+    return box(BoxProps {
+        pad: 8,
+        color: th.surface,
+        radius: 999,
+        border: Option.some(fg),
+        border_w: 1,
+        child: Option.some(text(TextProps { text: label, size: 12, color: fg })),
+    });
+}
+
+export fn vgap(h: f32): Element {
+    return box(BoxProps { h: h, color: transparent() });
+}
+
+export fn hgap(w: f32): Element {
+    return box(BoxProps { w: w, color: transparent() });
+}
+
+export fn panel(th: Palette, heading: string, child: Element): Element {
+    return box(BoxProps {
+        pad: PAD,
+        color: th.surface,
+        radius: RADIUS,
+        border: Option.some(th.border),
+        border_w: 1,
+        child: Option.some(column(FlexProps {
+            gap: GAP,
+            children: [title(th, heading), child],
+        })),
+    });
+}

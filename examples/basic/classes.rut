@@ -1,0 +1,70 @@
+// RFC 0002 §5.2 — classes: sealed VALUE records with FACTORIES.
+// Construction is a TYPE-CALL — Counter(), Rect(3, 4); no `new` keyword.
+// A factory is just a function: implicitly static, builds the instance
+// with the class-private `Self { .. }` literal, returns Self by default.
+
+import { Logger } from "std:log";
+
+class Counter {
+    private n: i32 = 0;             // field initializer
+    static instances: i32 = 0;      // static: one slot per class, per VM
+
+    factory() {                     // default return type: Self
+        Counter.instances &+= 1;    // construction logic runs here
+        return Self { };            // initializers satisfy all fields
+    }
+
+    press(): void {                 // instance method, public by default
+        this.n &+= 1;               // wrapping add (§8) — or `+=` to trap
+    }
+
+    count(): i32 { return this.n; } // plain method; no get/set syntax
+}
+
+class Rect {
+    private w: f32;
+    private h: f32;
+
+    factory(w: f32, h: f32): Self {
+        if (w <= 0 || h <= 0) {     // factories VALIDATE — they're functions
+            panic("Rect: negative extents");
+        }
+        return Self { w: w, h: h }; // must initialize fieldless-initialized
+    }
+
+    area(): f32 { return this.w * this.h; }
+}
+
+/** A "try" factory: declared return type Option<Self>. */
+class Version {
+    private major: i32;
+    private minor: i32;
+
+    private factory(major: i32, minor: i32): Self {
+        return Self { major: major, minor: minor };
+    }
+
+    factory parse(s: string): Option<Version> {
+        // ... split "1.2" — on failure:
+        return Option.none();
+    }
+
+    fn label(): string { return f"{this.major}.{this.minor}"; }
+}
+
+fn classes(): void {
+    const log = Logger("classes");
+    const c = Counter();            // TYPE-CALL -> factory
+    c.press();
+    c.press();
+    const r = Rect(3, 4);
+    const v = Version.parse("1.2"); // Option<Version> — try-construction
+    log.info(f"count={c.count()} area={r.area()} instances={Counter.instances}");
+    // const bad = Rect(3);         // ERROR: arity — the factory signature IS
+                                    // the class's construction contract
+    // Rect { w: 1, h: 1 };        // ERROR: classes have no outside literal
+}
+
+export fn main(): void {
+    classes();
+}

@@ -1,0 +1,29 @@
+// RFC 0003 §3 — `await select { .. }` races futures: the winner produces
+// its arm's value, the losers are dropped (i.e. cancelled).
+//   future            -> expr   // discard the resolved value
+//   future as name    -> expr   // bind the resolved value
+// select_all(futs) resolves with the first ready value of many.
+
+import { Channel, Receiver, Sender } from "std:channel";
+import { sleep, timeout } from "std:time";
+import { Logger } from "std:log";
+
+suspend fn wait_or_timeout(quit: Receiver<string>): string {
+    return await select {
+        timeout(500)          -> "timeout",
+        quit.recv() as msg    -> msg.unwrap_or("closed"),
+    };
+}
+
+suspend fn delayed_send(ch: Sender<string>): void {
+    await sleep(200);
+    ch.send("quit");
+}
+
+export suspend fn main(): void {
+    const log = Logger("select");
+    const q = Channel<string>();
+    spawn(delayed_send(q.sender));       // sender task shares the channel
+    const result = await wait_or_timeout(q.receiver);
+    log.info(result);                    // "quit" — beats the 500ms timeout
+}

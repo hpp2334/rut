@@ -1,0 +1,20 @@
+// RFC 0003 §3 — spawn schedules a task on this VM; cancel() drops the
+// coroutine frame at its NEXT suspension point (real cancellation —
+// pending sleeps die with it, locals with destructors run).
+
+import { sleep } from "std:time";
+import { Logger } from "std:log";
+
+suspend fn countdown(n: u32): void {
+    const log = Logger("spawn");
+    for (let i = n; i > 0; i -= 1) {
+        log.info(f"{i}");
+        await sleep(1000);
+    }
+}
+
+export suspend fn main(): void {
+    const task = spawn(countdown(10));   // runs concurrently on this VM
+    await sleep(2500);
+    task.cancel();                       // stops at the next suspension
+}

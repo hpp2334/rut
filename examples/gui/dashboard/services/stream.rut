@@ -1,0 +1,55 @@
+// services/stream.rut — simulated live feed: a spawned producer task
+// pushes LiveEvents into a channel on a timer. EventStream owns the task
+// and cancels it in dispose() — deterministic shutdown (RFC 0002 §5.3:
+// dispose classes must live behind Rc).
+
+import { Channel, Receiver, Sender } from "std:channel";
+import { now_ms, sleep } from "std:time";
+import { EventKind, LiveEvent } from "../models.rut";
+import { clamp_f32, lcg_next } from "./api.rut";
+
+export class EventStream {
+    private feed: Receiver<LiveEvent>;
+    private task: Task<void>;
+
+    factory(seed: u32): Self {
+        const ch = Channel<LiveEvent>();
+        return Self { feed: ch.receiver, task: spawn(produce(ch.sender, seed)) };
+    }
+
+    fn feed(): Receiver<LiveEvent> { return this.feed; }
+
+    dispose(): void {                    // runs when the last Rc drops
+        this.task.cancel();              // producer dies at its next await
+    }
+}
+
+suspend fn produce(out: Sender<LiveEvent>, seed: u32): void {
+    let rng = seed;
+    let v = 50.0f32;
+    for (let i = 0; i < 200; i += 1) {
+        await sleep(150);
+        rng = lcg_next(rng);
+        send_event(out, rng % 10u32, rng, v);
+        rng = lcg_next(rng);
+        v = clamp_f32(v + (f32(rng % 100u32) - 50.0f32) / 12.0f32, 4.0f32, 96.0f32);
+    }
+}
+
+export(self) fn send_event(out: Sender<LiveEvent>, roll: u32, rng: u32, v: f32): void {
+    const kind = when (roll) {
+        0u32, 1u32, 2u32 -> EventKind.Visit,
+        3u32            -> EventKind.Alert,
+        else            -> EventKind.Tick,
+    };
+    out.send(LiveEvent {
+        kind: kind,
+        at_ms: now_ms(),
+        value: v,
+        who: when (kind) {
+            EventKind.Alert -> f"sensor-{rng % 4u32}",
+            EventKind.Visit -> "guest",
+            EventKind.Tick  -> "",
+        },
+    });
+}

@@ -1,0 +1,25 @@
+// RFC 0003 §2.1 — the compiler splits the body at each `await` into
+// states; locals live across suspensions in the coroutine frame's
+// register file (a heap object). See the RFC for the lowered pseudo-
+// bytecode of THIS function.
+
+import { HttpError, get } from "std:http";
+import { Logger } from "std:log";
+
+suspend fn fetch_page(url: string): Result<bytes, HttpError> {
+    const raw = await get(url)?;       // await + `?` propagate in one expr
+    const html = decode(raw)?;         // stays in the resumed state
+    return Result.ok(html);
+}
+
+fn decode(raw: bytes): Result<bytes, HttpError> {
+    return Result.ok(raw);             // placeholder
+}
+
+export suspend fn main(): void {
+    const log = Logger("fetch");
+    const page = await fetch_page("https://example.com");
+    if (page.is_ok()) {
+        log.info(f"{page.value.length} bytes");
+    }
+}

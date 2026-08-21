@@ -1,0 +1,41 @@
+// RFC 0002 §3 — Option<T> / Result<T,E> are builtin VM-native types.
+// Methods are snake_case; no ?. / ?? sugar — check, then read `.value`.
+
+import { Logger } from "std:log";
+
+enum IoError { NotFound, Permission, Busy }
+
+fn find(xs: Array<string>, key: string): Option<i32> {
+    for (let i = 0; i < xs.length; i += 1) {
+        if (xs[i] == key) {
+            return Option.some(i);
+        }
+    }
+    return Option.none();
+}
+
+fn demo(list: Array<string>): void {
+    const log = Logger("option");
+    const idx = find(list, "beta");
+    if (idx.is_some()) {
+        log.info(f"{idx.value}");       // `.value` traps on None — check first
+    }
+    const v = idx.unwrap_or(0);         // Option<T>.unwrap_or(default: T): T
+}
+
+fn read_config(path: string): Result<bytes, IoError> {
+    const raw = fs.read(path)?;         // `?` propagates Err upward
+    return Result.ok(raw);
+}
+
+export fn main(): void {
+    const log = Logger("option");
+    demo(["alpha", "beta"]);
+
+    const r = read_config("app.cfg");
+    if (r.is_ok()) {
+        log.info(f"read {r.value.length} bytes");
+    } else {
+        log.info(f"error: {r.error}");  // enum renders its member name
+    }
+}

@@ -1,0 +1,95 @@
+// main.rut — the dashboard entry point, end to end:
+//   1. declare the graph (Dashboard's factory: state/source/derive)
+//   2. subscribe re-render (watch -> render the Element tree)
+//   3. bootstrap sources from the mock API (source_push / mutations)
+//   4. live loop: stream events in (dispatch apply_event$), stats out to
+//      the worker isolate, summaries back (source_push) — until a fatal
+//      alert flips `live`, or the producer finishes.
+// Shutdown is deterministic: returning drops the stream Rc (dispose
+// cancels the producer), the watch handles, and the job channel (the
+// worker recv()s None and exits).
+
+import { Logger } from "std:log";
+import { now_ms, timeout } from "std:time";
+import { Channel } from "std:channel";
+import { CrossAlign, Element, FlexProps, column, render, row } from "app:ui";
+import { StatsRequest, StatsSummary } from "./models.rut";
+import { Dashboard } from "./state.rut";
+import { dispatch } from "./reactive.rut";
+import { GAP, Palette, theme } from "./theme.rut";
+import { fetch_series, fetch_users } from "./services/api.rut";
+import { EventStream } from "./services/stream.rut";
+import { header } from "./components/header.rut";
+import { sidebar } from "./components/sidebar.rut";
+import { body } from "./components/common.rut";
+
+fn view(th: Palette, st: Rc<Dashboard>): Element {
+    const s = st.summary();
+    return row(FlexProps {
+        gap: GAP,
+        cross: CrossAlign.Start,
+        children: [
+            sidebar(th, st),
+            column(FlexProps {
+                gap: GAP,
+                children: [
+                    header(th, st),
+                    body(th, f"users {st.users_count()} · events {st.events_seen()} · visits {st.visits()}"),
+                    body(th, f"series n={st.samples().length} · summary n={s.n} mean={s.mean} last={s.last}"),
+                ],
+            }),
+        ],
+    });
+}
+
+export suspend fn main(): void {
+    const log = Logger("dashboard");
+    const th = theme();
+    const st = Rc(Dashboard(now_ms()));
+
+    // any watched atom change -> one redraw (flushed to a fixed point)
+    const handles = st.redraw_on_change((): void => render(view(th, st)));
+
+    // --- bootstrap: mock API -> sources/state ---
+    const users = await fetch_users(42u32);
+    if (users.is_ok()) {
+        st.set_users(users.value);           // source_push: external arrival
+    } else {
+        log.warn("user fetch failed; running with an empty table");
+    }
+    const series = await fetch_series("requests", "rps", 30, 42u32);
+    if (series.is_ok()) {
+        dispatch(st.store(), st.ingest_series$, series.value);
+    }
+
+    // --- the stats worker isolate (own heap; replies on embedded endpoint) ---
+    const jobs = Channel<StatsRequest>();
+    const replies = Channel<StatsSummary>();
+    spawn_worker("gui/dashboard/workers/stats-worker.rut", [jobs.receiver]);
+
+    // --- live loop ---
+    const stream = Rc(EventStream(7u32));
+    let ticks: i32 = 0;
+    while (st.live()) {
+        const ev = await stream.feed().recv();     // Option<LiveEvent>
+        if (ev.is_none()) {
+            break;                                 // producer finished
+        }
+        dispatch(st.store(), st.apply_event$, ev.value);
+
+        ticks += 1;
+        if (ticks % 10 == 0) {
+            jobs.send(StatsRequest { samples: st.samples(), reply: replies.sender });
+            const got = await select {
+                replies.recv() as s -> s,          // Option<StatsSummary>
+                timeout(50)         -> Option.none(),
+            };
+            if (got.is_some()) {
+                st.set_summary(got.value);         // source_push -> redraw
+            }
+        }
+    }
+
+    log.info(f"stream done after {st.events_seen()} events — shutting down");
+}   // handles drop (watchers gone), stream rc 0 (dispose cancels the
+    // producer task), jobs/replies drop (worker exits on recv() == None)

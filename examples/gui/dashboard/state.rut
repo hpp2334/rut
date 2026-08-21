@@ -1,0 +1,254 @@
+// state.rut — the dashboard's reactive setup, tur-style: the Dashboard
+// factory DECLARES the graph — state atoms (UI writes), sources (services
+// push snapshots), derives (computed views) — all living in the Store;
+// mutations are dispatched values, not methods. The instance itself holds
+// only inert handles (atom ids + closures), so sharing it behind Rc is
+// safe; writes land in the store by atom id, never in the instance.
+
+import {
+    Nil, Store, State, Source, Derived, Mutation, WatchHandle,
+    atom_get, atom_set, derive, derived_read, dispatch, mutation,
+    source, source_push, source_read, state, watch,
+} from "./reactive.rut";
+import {
+    EventKind, LiveEvent, Series, SortDir, StatsSummary, Tab, User,
+    event_label,
+} from "./models.rut";
+
+const MAX_SAMPLES: i32 = 120;
+const MAX_ALERTS: i32 = 8;
+
+export class Dashboard {
+    private store: Rc<Store>;
+
+    // --- state: writable atoms (UI-owned) ---
+    private tab: State<Tab>;
+    private query: State<string>;
+    private sort_dir: State<SortDir>;
+    private live: State<bool>;
+    private visits: State<i32>;
+    private events_seen: State<i32>;
+    private alerts: State<Array<string>>;
+    private samples: State<Array<f32>>;
+    private started_ms: i64;               // plain field — deliberately NOT
+                                           // reactive: set once at boot
+
+    // --- sources: external snapshots (services push) ---
+    private users_src: Source<Array<User>>;     // mock API replies land here
+    private summary_src: Source<StatsSummary>;  // worker-isolate replies
+
+    // --- derives: computed views ---
+    private users_view: Derived<Array<User>>;
+    private users_count: Derived<i32>;
+    private alert_count: Derived<i32>;
+
+    // --- mutations: dispatched with payload dataclasses. The trailing `$`
+    //     marks dispatch-inverted members (tur's start$/onMounted$ rule).
+    set_tab$: Mutation<Tab, void>;
+    set_query$: Mutation<string, void>;
+    toggle_sort$: Mutation<Nil, void>;
+    ingest_series$: Mutation<Series, void>;
+    apply_event$: Mutation<LiveEvent, void>;
+
+    factory(now_ms: i64): Self {
+        const store = Rc(Store());
+
+        // --- state: writable atoms (UI-owned) ---
+        const tab = state(Tab.Overview);
+        const query = state("");
+        const sort_dir = state(SortDir.Desc);
+        const live = state(true);
+        const visits = state(0);
+        const events_seen = state(0);
+        const alerts = state([]);
+        const samples = state([]);
+
+        // --- sources: external snapshots (services push) ---
+        const users_src = source((): Array<User> => []);
+        const summary_src = source((): StatsSummary =>
+            StatsSummary { n: 0, mean: 0, min: 0, max: 0, last: 0 });
+
+        // --- derives: computed views ---
+        const users_view = derive((ctx): Array<User> => {
+            const users = ctx.latest(users_src);
+            const q = ctx.get(query);
+            const out: Array<User> = [];
+            for (let i = 0; i < users.length; i += 1) {
+                const u = users[i];
+                if (q.length == 0 || str.contains(u.name, q)) {
+                    out.push(u);
+                }
+            }
+            sort_by_score(out, ctx.get(sort_dir));
+            return out;
+        });
+        const users_count = derive((ctx): i32 => ctx.latest(users_src).length);
+        const alert_count = derive((ctx): i32 => ctx.get(alerts).length);
+
+        // --- mutations: dispatched with payload dataclasses. The trailing
+        //     `$` marks dispatch-inverted members (tur's start$/onMounted$
+        //     rule). Closures capture the locals above by reference
+        //     (RFC 0002 §9) — the instance fields and the closures stay in
+        //     lockstep because they were built from the same locals. ---
+        const set_tab$ = mutation((st: Rc<Store>, t: Tab): void => {
+            atom_set(st, tab, t);
+        });
+
+        const set_query$ = mutation((st: Rc<Store>, q: string): void => {
+            atom_set(st, query, q);
+        });
+
+        const toggle_sort$ = mutation((st: Rc<Store>, n: Nil): void => {
+            const flipped = when (atom_get(st, sort_dir)) {
+                SortDir.Asc  -> SortDir.Desc,
+                SortDir.Desc -> SortDir.Asc,
+            };
+            atom_set(st, sort_dir, flipped);
+        });
+
+        const ingest_series$ = mutation((st: Rc<Store>, s: Series): void => {
+            atom_set(st, samples, s.samples);
+        });
+
+        const apply_event$ = mutation((st: Rc<Store>, ev: LiveEvent): void => {
+            atom_set(st, events_seen, atom_get(st, events_seen) + 1);
+            when (ev.kind) {
+                EventKind.Tick -> {
+                    const xs = atom_get(st, samples);
+                    xs.push(ev.value);
+                    if (xs.length > MAX_SAMPLES) {
+                        shift_left(xs);               // drop the oldest
+                    }
+                    atom_set(st, samples, xs);        // same handle: version bump
+                },
+                EventKind.Visit -> {
+                    atom_set(st, visits, atom_get(st, visits) + 1);
+                },
+                EventKind.Alert -> {
+                    const msgs = atom_get(st, alerts);
+                    msgs.push(f"{event_label(ev.kind)} at {ev.who}: {ev.value}");
+                    if (msgs.length > MAX_ALERTS) {
+                        shift_left_str(msgs);
+                    }
+                    atom_set(st, alerts, msgs);
+                    atom_set(st, live, false);        // fatal alert -> halt
+                },
+            }
+        });
+
+        return Self {
+            store: store,
+            started_ms: now_ms,          // deliberately NOT reactive
+            tab: tab,
+            query: query,
+            sort_dir: sort_dir,
+            live: live,
+            visits: visits,
+            events_seen: events_seen,
+            alerts: alerts,
+            samples: samples,
+            users_src: users_src,
+            summary_src: summary_src,
+            users_view: users_view,
+            users_count: users_count,
+            alert_count: alert_count,
+            set_tab$: set_tab$,
+            set_query$: set_query$,
+            toggle_sort$: toggle_sort$,
+            ingest_series$: ingest_series$,
+            apply_event$: apply_event$,
+        };
+    }
+
+    // --- reads (through the store; derives recompute per read) ---
+
+    fn store(): Rc<Store> { return this.store; }
+    fn started_ms(): i64 { return this.started_ms; }
+    fn tab(): Tab { return atom_get(this.store, this.tab); }
+    fn query(): string { return atom_get(this.store, this.query); }
+    fn sort_dir(): SortDir { return atom_get(this.store, this.sort_dir); }
+    fn live(): bool { return atom_get(this.store, this.live); }
+    fn events_seen(): i32 { return atom_get(this.store, this.events_seen); }
+    fn visits(): i32 { return atom_get(this.store, this.visits); }
+    fn samples(): Array<f32> { return atom_get(this.store, this.samples); }
+    fn users(): Array<User> { return source_read(this.store, this.users_src); }
+    fn summary(): StatsSummary { return source_read(this.store, this.summary_src); }
+    fn users_view(): Array<User> { return derived_read(this.store, this.users_view); }
+    fn users_count(): i32 { return derived_read(this.store, this.users_count); }
+    fn alert_count(): i32 { return derived_read(this.store, this.alert_count); }
+
+    fn alerts_text(): string {
+        let out = "";
+        const msgs = atom_get(this.store, this.alerts);
+        for (let i = 0; i < msgs.length; i += 1) {
+            out = str.concat(out, msgs[i], "\n");
+        }
+        return out;
+    }
+
+    // --- service bridges: push snapshots into the sources ---
+
+    fn set_users(users: Array<User>): void {
+        source_push(this.store, this.users_src, users);
+    }
+
+    fn set_summary(s: StatsSummary): void {
+        source_push(this.store, this.summary_src, s);
+    }
+
+    // --- re-render subscription: one callback, every watched atom ---
+
+    fn redraw_on_change(cb: fn(): void): Array<Rc<WatchHandle>> {
+        return [
+            watch(this.store, this.tab, cb),
+            watch(this.store, this.query, cb),
+            watch(this.store, this.sort_dir, cb),
+            watch(this.store, this.live, cb),
+            watch(this.store, this.visits, cb),
+            watch(this.store, this.events_seen, cb),
+            watch(this.store, this.alerts, cb),
+            watch(this.store, this.samples, cb),
+            watch(this.store, this.users_src, cb),
+            watch(this.store, this.summary_src, cb),
+        ];
+    }
+}
+
+// --- array helpers (shared by mutations; dataclasses carry no methods) ---
+
+export(self) fn shift_left(xs: Array<f32>): void {
+    for (let i = 1; i < xs.length; i += 1) {
+        xs[i - 1] = xs[i];
+    }
+    xs.pop();
+}
+
+export(self) fn shift_left_str(xs: Array<string>): void {
+    for (let i = 1; i < xs.length; i += 1) {
+        xs[i - 1] = xs[i];
+    }
+    xs.pop();
+}
+
+export(self) fn sort_by_score(xs: Array<User>, dir: SortDir): void {
+    for (let i = 1; i < xs.length; i += 1) {
+        let j = i;
+        while (j > 0 && score_lt(xs[j], xs[j - 1], dir)) {
+            swap_users(xs, j, j - 1);
+            j -= 1;
+        }
+    }
+}
+
+export(self) fn score_lt(a: User, b: User, dir: SortDir): bool {
+    return when (dir) {
+        SortDir.Asc  -> a.score < b.score,
+        SortDir.Desc -> b.score < a.score,
+    };
+}
+
+export(self) fn swap_users(xs: Array<User>, a: i32, b: i32): void {
+    const t = xs[a];
+    xs[a] = xs[b];
+    xs[b] = t;
+}

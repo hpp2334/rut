@@ -1,0 +1,26 @@
+// RFC 0004 §3 — deterministic destruction: dispose() runs at rc 0, then
+// fields are released in order. No FinalizationRegistry, no "maybe later".
+
+import { remove } from "std:fs";
+import { Logger } from "std:log";
+
+class TempFile {
+    private path: string;
+
+    factory(path: string): Self {             // bare value out of the factory
+        return Self { path: path };
+    }
+
+    fn write(data: bytes): void { /* ... */ }
+
+    dispose(): void {                    // reserved destructor — runs once
+        remove(this.path);
+    }
+}
+
+export fn main(): void {
+    const log = Logger("tempfile");
+    const f = Rc(TempFile("tmp.dat"));   // ...then box: dispose requires Rc
+    f.write(bytes(64));
+    log.info("working...");
+}   // rc hits 0 HERE: dispose() runs, then `path` is released

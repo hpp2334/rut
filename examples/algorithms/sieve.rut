@@ -1,0 +1,26 @@
+// Sieve of Eratosthenes — Array<T>/bytes unboxed storage, no boxing.
+
+import { Logger } from "std:log";
+
+fn sieve(limit: i32): Array<i32> {
+    const marks = bytes(limit + 1);       // zeroed: 0 = candidate, 1 = crossed
+    const primes: Array<i32> = [];
+    for (let i = 2; i <= limit; i += 1) {
+        if (marks[i] == 0) {
+            primes.push(i);
+            let m = i * i;
+            while (m <= limit) {
+                marks[m] = 1;
+                m += i;
+            }
+        }
+    }
+    return primes;
+}
+
+export fn main(): void {
+    const log = Logger("sieve");
+    const primes = sieve(100);
+    const last = primes[primes.length - 1];
+    log.info(f"{primes.length} primes up to 100, last={last}");
+}

@@ -1,0 +1,32 @@
+// RFC 0002 §1.2 — `when` is the ONLY match construct: an exhaustive
+// pattern EXPRESSION. switch/case/default do not exist.
+
+import { Logger } from "std:log";
+
+fn describe(n: i32): string {
+    return when (n) {
+        0         -> "zero",
+        1, 2, 3   -> "small",        // comma-separated alternatives
+        else      -> "big",          // non-enum scrutinee: else REQUIRED
+    };
+}
+
+enum Light { Green, Yellow, Red }
+
+fn drive(l: Light): void {              // statement usage = void-typed when
+    when (l) {
+        Light.Green  -> { go(); },
+        Light.Yellow -> { brake(); },
+        Light.Red    -> { stop(); },   // all members: no else needed
+    }
+}
+
+fn go(): void { /* ... */ }
+fn brake(): void { /* ... */ }
+fn stop(): void { /* ... */ }
+
+export fn main(): void {
+    const log = Logger("when");
+    log.info(describe(2));               // "small"
+    drive(Light.Yellow);
+}

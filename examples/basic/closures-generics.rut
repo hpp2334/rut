@@ -1,0 +1,33 @@
+// RFC 0002 §9 — functions, arrow closures, generics (monomorphized at
+// compile time; each instantiation emits its own typed opcodes).
+
+import { Logger } from "std:log";
+
+fn first<T>(xs: Array<T>): Option<T> {
+    if (xs.length == 0) {
+        return Option.none();
+    }
+    return Option.some(xs[0]);
+}
+
+fn sum(xs: Array<i32>): i32 {
+    let total = 0;
+    for (const x of xs) {
+        total += x;
+    }
+    return total;
+}
+
+export fn main(): void {
+    const log = Logger("closures");
+    const add = (a: i32, b: i32): i32 => a + b;      // single-expr arrow
+    const area_of = (r: f32): f32 => {               // block arrow
+        const sq = r * r;
+        return sq * 3.14159265f32;
+    };
+    log.info(f"add={add(1, 2)} area={area_of(1)} sum={sum([1, 2, 3])}");
+
+    const head = first([10, 20]);       // Option<i32>  — monomorphized
+    const name = first(["a", "b"]);     // Option<string> — separate instance
+    log.info(f"head={head.unwrap_or(-1)} name={name.unwrap_or("?")}");
+}

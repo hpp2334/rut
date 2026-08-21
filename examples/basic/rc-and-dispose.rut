@@ -1,0 +1,50 @@
+// RFC 0002 §5.3 — Rc<T>: explicit references. Rc(v) boxes a class value in
+// a refcounted heap cell; Rc handles are REF-copied — aliasing is always
+// visible in the type. Classes with dispose() must live behind Rc: their
+// factories hand out Rc<Self> directly.
+
+import { Logger } from "std:log";
+
+class Circle {
+    private r: f32;
+
+    factory(r: f32): Self {
+        return Self { r: r };
+    }
+
+    fn grow(): void { this.r += 1; }
+    fn radius(): f32 { return this.r; }
+}
+
+class TempFile {
+    private path: string;
+
+    factory(path: string): Rc<TempFile> {   // dispose class -> Rc<Self>
+        return Rc(Self { path: path });
+    }
+
+    fn write(data: bytes): void { /* ... */ }
+
+    dispose(): void {                // reserved: runs at rc 0
+        fs.remove(this.path);
+    }
+}
+
+fn refs(): void {
+    const log = Logger("rc");
+    const a = Circle(3);             // bare value: copies like a dataclass
+    const b = Rc(a);                 // box into a refcounted heap cell
+    const c = b;                     // Rc copy: handle copy — SAME object
+    b.grow();                        // visible through c, not through a
+    log.info(f"a={a.radius()} shared={c.radius()}");     // a=3 shared=4
+}
+
+fn scratch(): void {
+    const f = TempFile("tmp.dat");   // factory already returns Rc<TempFile>
+    f.write(bytes(64));
+}   // rc hits 0 HERE: dispose() runs, then `path` is released
+
+export fn main(): void {
+    refs();
+    scratch();
+}

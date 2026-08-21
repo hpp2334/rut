@@ -1,0 +1,57 @@
+// RFC 0002 §3.2 / §10.2 — layout & type-identity builtins.
+// dataclass AND class are repr C: fields in declaration order, natural C
+// alignment, no hidden members. type_id<T>() / size_of<T>() / align_of<T>()
+// are compile-time constants; Opaque mirrors them at runtime — the toolkit
+// for layout-aware heterogeneous storage WITHOUT uncontrolled erasure.
+
+import { Logger } from "std:log";
+
+dataclass Point { x: f32; y: f32 }          // 8 bytes, align 4
+
+dataclass Padded {                          // repr C does what C does:
+    a: u8;                                  //   offset 0, pad 3
+    b: u32;                                 //   offset 4
+    c: u8;                                  //   offset 8, tail pad 3
+}                                           // size_of = 12, align_of = 4
+
+class Vertex {                              // classes: SAME layout rule
+    private x: f32;
+    private y: f32;
+
+    factory(x: f32, y: f32): Self {
+        return Self { x: x, y: y };
+    }
+}
+
+const TID_POINT: u32 = type_id<Point>();    // const-expressions (§1.1) —
+const SZ_PADDED: u32 = size_of<Padded>();   // folded at compile time,
+const AL_PADDED: u32 = align_of<Padded>();  // never executed
+
+fn layout(): void {
+    const log = Logger("layout");
+    log.info(f"point tid={TID_POINT} size={size_of<Point>()} align={align_of<Point>()}");
+    log.info(f"padded size={SZ_PADDED} align={AL_PADDED}");    // 12 / 4
+    log.info(f"vertex size={size_of<Vertex>()}");              // 8 — same as Point
+    log.info(f"array stride: {size_of<Point>()}");             // Array<Point> strides by this
+}
+
+fn boxed_layout(): void {
+    const log = Logger("layout");
+    const box1 = Opaque(Point { x: 1, y: 2 });
+    const box2 = Opaque(Vertex(3, 4));
+
+    // Layout accessors without downcasting — group/slab/compare first,
+    // pay a checked downcast only when actually recovering the value.
+    log.info(f"box1 tid==Point: {box1.type_id() == TID_POINT}");
+    log.info(f"box2 size: {box2.size()}");                     // 8
+    log.info(f"box1 bytes: {box1.as_bytes().length}");         // 8-byte payload snapshot
+
+    // The payload snapshot is comparable — content hashing for stores:
+    const same = Opaque(Point { x: 1, y: 2 });
+    log.info(f"payloads equal: {box1.as_bytes() == same.as_bytes()}");
+}
+
+export fn main(): void {
+    layout();
+    boxed_layout();
+}

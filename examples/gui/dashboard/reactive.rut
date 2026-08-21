@@ -1,0 +1,315 @@
+// reactive.rut — tur's reactive primitives (state / source / derive /
+// mutation / watch / Store) implemented ENTIRELY in user rut. No host
+// support, no language magic. The one thing a heterogeneous store needs —
+// values of many types behind one table — is the Opaque builtin (RFC 0002
+// §3.1): entries are `Opaque` cells keyed by atom id, recovered with
+// `downcast<T>`, checked by the reified runtime type.
+//
+//   state(v)       -> State<T>      writable atom; the store materializes
+//                                   it on first read/write
+//   source(f)      -> Source<T>     EXTERNAL data, read-only: `f` seeds it,
+//                                   services push snapshots via source_push
+//   derive(fn)     -> Derived<T>    computed on every read (pull-based;
+//                                   OQ-19 tracks caching)
+//   mutation(fn)   -> Mutation<P,R> deferred handler; dispatched with a
+//                                   payload (Nil {} for zero-arg actions)
+//   watch(a, cb)   -> WatchHandle  change-only callback on any Atom,
+//                                   flushed to a fixed point after the top
+//                                   dispatch or source_push
+
+import { Logger } from "std:log";
+
+// ------------------------------------------------------------------ atoms
+
+/** Anything with an identity in the store — State, Source, Derived.
+ *  Passing a bare atom to watch() boxes it into an Rc cell (RFC 0002 §6). */
+interface Atom {
+    fn atom_id(): u32;
+}
+
+class Atoms {
+    static next: u32 = 0;                 // module-static slot, bumped in fns
+}
+
+export class State<T> implements Atom {
+    private id: u32;
+    private seed: Opaque;                 // first read materializes it
+
+    factory(v: T): Self {
+        Atoms.next &+= 1;                 // factories run logic too
+        return Self { id: Atoms.next, seed: Opaque(v) };
+    }
+
+    fn atom_id(): u32 { return this.id; }
+    fn seed_value(): Opaque { return this.seed; }
+}
+
+export fn state<T>(v: T): State<T> {
+    return State(v);                      // type-call, T inferred
+}
+
+export class Source<T> implements Atom {
+    private id: u32;
+    private pull: fn(): T;                // seeds the entry; steady state is push
+
+    factory(f: fn(): T): Self {
+        Atoms.next &+= 1;
+        return Self { id: Atoms.next, pull: f };
+    }
+
+    fn atom_id(): u32 { return this.id; }
+    fn pull_fn(): fn(): T { return this.pull; }
+}
+
+export fn source<T>(f: fn(): T): Source<T> {
+    return Source(f);
+}
+
+export class Derived<T> implements Atom {
+    private id: u32;
+    private compute: fn(ReadCtx): T;
+
+    factory(f: fn(ReadCtx): T): Self {
+        Atoms.next &+= 1;
+        return Self { id: Atoms.next, compute: f };
+    }
+
+    fn atom_id(): u32 { return this.id; }
+    fn compute_fn(): fn(ReadCtx): T { return this.compute; }
+}
+
+export fn derive<T>(f: fn(ReadCtx): T): Derived<T> {
+    return Derived(f);
+}
+
+/** Payload for zero-argument mutations (rut has no unit type, no variadics). */
+export dataclass Nil {}
+
+export class Mutation<P, R> {
+    private run: fn(Rc<Store>, P): R;
+
+    factory(f: fn(Rc<Store>, P): R): Self {
+        return Self { run: f };
+    }
+
+    fn run_fn(): fn(Rc<Store>, P): R { return this.run; }
+}
+
+export fn mutation<P, R>(f: fn(Rc<Store>, P): R): Mutation<P, R> {
+    return Mutation(f);
+}
+
+// ------------------------------------------------------------------ ctx
+
+/** Read-only view handed to `derive` closures (tur's ReadonlyStoreCtx). */
+export class ReadCtx {
+    private store: Rc<Store>;
+
+    factory(store: Rc<Store>): Self {
+        return Self { store: store };
+    }
+
+    fn get<T>(s: State<T>): T { return atom_get(this.store, s); }
+
+    fn latest<T>(s: Source<T>): T { return source_read(this.store, s); }
+
+    fn read<T>(d: Derived<T>): T { return derived_read(this.store, d); }
+}
+
+// ------------------------------------------------------------------ store
+
+export(self) dataclass Entry {
+    id: u32;
+    ver: u32;
+    value: Opaque;
+}
+
+class Watch {
+    wid: u32;                 // watch identity (for dispose)
+    atom: u32;                // watched atom id
+    last_ver: u32;
+    cb: fn(): void;
+
+    factory(wid: u32, atom: u32, last_ver: u32, cb: fn(): void): Self {
+        return Self { wid: wid, atom: atom, last_ver: last_ver, cb: cb };
+    }
+}
+
+const MAX_FLUSH_ROUNDS: i32 = 1000;
+
+export class Store {
+    entries: Array<Entry> = [];    // internal — treat as private
+    watches: Array<Rc<Watch>> = [];
+    depth: i32 = 0;
+
+    // all fields initialized -> default factory: bare Store(); box with
+    // Rc(Store())
+
+    fn find(id: u32): Option<Entry> {
+        for (let i = 0; i < this.entries.length; i += 1) {
+            if (this.entries[i].id == id) {
+                return Option.some(this.entries[i]);
+            }
+        }
+        return Option.none();
+    }
+
+    fn upsert(id: u32, v: Opaque): void {
+        for (let i = 0; i < this.entries.length; i += 1) {
+            if (this.entries[i].id == id) {
+                this.entries[i].ver &+= 1;
+                this.entries[i].value = v;
+                return;
+            }
+        }
+        this.entries.push(Entry { id: id, ver: 1, value: v });
+    }
+
+    fn version_of(id: u32): u32 {
+        const e = this.find(id);
+        if (e.is_some()) { return e.value.ver; }
+        return 0;
+    }
+}
+
+// ------------------------------------------------------------- public ops
+
+/** Read (and on first use, materialize) a state atom. */
+export fn atom_get<T>(store: Rc<Store>, s: State<T>): T {
+    const found = store.find(s.atom_id());
+    const cell = when (found.is_some()) {
+        true  -> found.value.value,
+        else  -> seed_into(store, s),
+    };
+    return downcast<T>(cell).expect("store: atom type mismatch");
+}
+
+export(self) fn seed_into<T>(store: Rc<Store>, s: State<T>): Opaque {
+    store.upsert(s.atom_id(), s.seed_value());
+    return s.seed_value();
+}
+
+/** Write a state atom (inside mutations); watchers flush at the top. */
+export fn atom_set<T>(store: Rc<Store>, s: State<T>, v: T): void {
+    store.upsert(s.atom_id(), Opaque(v));
+}
+
+/** Read a source's latest snapshot (pull-seeded on first read). */
+export fn source_read<T>(store: Rc<Store>, s: Source<T>): T {
+    const found = store.find(s.atom_id());
+    const cell = when (found.is_some()) {
+        true  -> found.value.value,
+        else  -> seed_source(store, s),
+    };
+    return downcast<T>(cell).expect("store: source type mismatch");
+}
+
+export(self) fn seed_source<T>(store: Rc<Store>, s: Source<T>): Opaque {
+    const v = Opaque(s.pull_fn()());
+    store.upsert(s.atom_id(), v);
+    return v;
+}
+
+/** External data arrived: store the snapshot; flush at the top level. */
+export fn source_push<T>(store: Rc<Store>, s: Source<T>, v: T): void {
+    store.depth &+= 1;
+    store.upsert(s.atom_id(), Opaque(v));
+    store.depth -= 1;
+    if (store.depth == 0) {
+        flush(store);
+    }
+}
+
+/** Read a derived atom — recomputes on every read (OQ-19: caching). */
+export fn derived_read<T>(store: Rc<Store>, d: Derived<T>): T {
+    const ctx = ReadCtx(store);
+    return d.compute_fn()(ctx);
+}
+
+/** Dispatch a mutation; nested dispatches flush once, at the top. */
+export fn dispatch<P, R>(store: Rc<Store>, m: Mutation<P, R>, p: P): R {
+    store.depth &+= 1;
+    const r = m.run_fn()(store, p);
+    store.depth -= 1;
+    if (store.depth == 0) {
+        flush(store);
+    }
+    return r;
+}
+
+/** Subscribe a change-only callback to any atom (State, Source, Derived). */
+export fn watch(store: Rc<Store>, a: Atom, cb: fn(): void): Rc<WatchHandle> {
+    Atoms.next &+= 1;
+    const w = Rc(Watch(Atoms.next, a.atom_id(), store.version_of(a.atom_id()), cb));
+    store.watches.push(w);
+    return Rc(WatchHandle(store, w.wid));
+}
+
+export class WatchHandle {
+    private store: Rc<Store>;
+    private wid: u32;
+
+    factory(store: Rc<Store>, wid: u32): Self {
+        return Self { store: store, wid: wid };
+    }
+
+    dispose(): void {                    // runs when the last Rc drops
+        const kept: Array<Rc<Watch>> = [];
+        for (let i = 0; i < this.store.watches.length; i += 1) {
+            if (this.store.watches[i].wid != this.wid) {
+                kept.push(this.store.watches[i]);
+            }
+        }
+        this.store.watches = kept;
+    }
+}
+
+/** Run changed watchers to a fixed point (tur's flush). */
+export fn flush(store: Rc<Store>): void {
+    let rounds = 0;
+    let changed = true;
+    while (changed) {
+        rounds += 1;
+        if (rounds > MAX_FLUSH_ROUNDS) {
+            panic("reactive: watch loop detected");
+        }
+        changed = false;
+        for (let i = 0; i < store.watches.length; i += 1) {
+            const w = store.watches[i];
+            const cur = store.version_of(w.atom);
+            if (cur != w.last_ver) {
+                w.last_ver = cur;        // through the Rc: shared cell
+                w.cb();
+                changed = true;
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------ smoke
+
+export(self) fn smoke(): void {
+    const log = Logger("reactive");
+    const store = Rc(Store());
+
+    const count = state(0);
+    const clock = source((): i32 => 0);   // external world, lazily seeded
+
+    const label = derive((ctx): string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
+
+    const bump = mutation((st: Rc<Store>, by: i32): void => {
+        atom_set(st, count, atom_get(st, count) + by);
+    });
+
+    const handle = watch(store, count, (): void => {   // State is an Atom
+        log.debug("count changed");
+    });
+
+    dispatch(store, bump, 2);            // logs "count changed" once (flush)
+    source_push(store, clock, 42);       // external arrival — flushes too
+    log.info(derived_read(store, label));   // "count is 2 at t=42"
+    handle.dispose();
+    dispatch(store, bump, 1);            // watcher gone: no log
+    source_push(store, clock, 43);
+    log.info(derived_read(store, label));   // "count is 3 at t=43"
+}

@@ -1,0 +1,64 @@
+// models.rut — domain data: dataclasses (pure data, no methods — helpers
+// are free functions) and simple enums. Shared by main, services, the
+// worker isolate, and components; imported by relative path.
+
+import { Sender } from "std:channel";
+
+export enum Status { Active, Idle, Blocked }
+export enum Tab { Overview, Users, Alerts }
+export enum SortDir { Asc, Desc }
+export enum EventKind { Tick, Visit, Alert }
+export enum ApiError { Network, NotFound, RateLimited }
+
+export dataclass User {
+    name: string;
+    role: string;
+    status: Status;
+    score: f32;
+}
+
+export dataclass Series {
+    metric: string;
+    unit: string;
+    samples: Array<f32>;
+}
+
+export dataclass StatsSummary {
+    n: i32;
+    mean: f64;
+    min: f32;
+    max: f32;
+    last: f32;
+}
+
+// Worker protocol: `samples` deep-copies across isolates (the state keeps
+// the original, so rc > 1); `reply` is a transferred channel endpoint.
+export dataclass StatsRequest {
+    samples: Array<f32>;
+    reply: Sender<StatsSummary>;
+}
+
+export dataclass LiveEvent {
+    kind: EventKind;
+    at_ms: i64;
+    value: f32;
+    who: string;
+}
+
+// --- free-function helpers over the data (dataclasses carry no methods) ---
+
+export fn status_label(s: Status): string {
+    return when (s) {
+        Status.Active  -> "active",
+        Status.Idle    -> "idle",
+        Status.Blocked -> "blocked",
+    };
+}
+
+export fn event_label(k: EventKind): string {
+    return when (k) {
+        EventKind.Tick  -> "tick",
+        EventKind.Visit -> "visit",
+        EventKind.Alert -> "alert",
+    };
+}

@@ -1,0 +1,37 @@
+// TCP echo server — accept loop on the main VM, a pool of worker isolates
+// connected by channels (one channel per worker; endpoints are
+// transferable). Cancellation-by-drop closes everything deterministically.
+
+import { Channel, Sender } from "std:channel";
+import { Conn, listen } from "std:net";
+import { Logger } from "std:log";
+
+const WORKERS: i32 = 4;
+
+export suspend fn main(): void {
+    const log = Logger("echo");
+    const started = listen("0.0.0.0:8080");
+    if (started.is_err()) {
+        log.error(f"listen failed: {started.error}");
+        return;
+    }
+    const server = started.value;
+
+    const senders: Array<Sender<Conn>> = [];
+    for (let i = 0; i < WORKERS; i += 1) {
+        const jobs = Channel<Conn>();                 // one channel per worker
+        spawn_worker("network/echo-worker.rut", [jobs.receiver]);
+        senders.push(jobs.sender);
+    }
+
+    let next = 0;
+    while (true) {
+        const got = await server.accept();           // Future<Result<Conn>>
+        if (got.is_err()) {
+            log.warn("accept failed; stopping");
+            return;                                  // senders drop -> workers exit
+        }
+        senders[next].send(got.value);               // round-robin dispatch
+        next = (next + 1) % senders.length;
+    }
+}

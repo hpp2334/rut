@@ -1,0 +1,24 @@
+// HTTP fetch — sequential awaits with `?` propagation, Result at the API
+// boundary, Task-free simple flow. Future<Result<T,E>> everywhere.
+
+import { HttpError, get } from "std:http";
+import { Logger } from "std:log";
+
+suspend fn fetch_all(urls: Array<string>): Result<Array<bytes>, HttpError> {
+    const bodies: Array<bytes> = [];
+    for (const u of urls) {
+        const body = await get(u)?;      // await + propagate in one expression
+        bodies.push(body);
+    }
+    return Result.ok(bodies);
+}
+
+export suspend fn main(): void {
+    const log = Logger("http");
+    const r = await fetch_all(["https://example.com", "https://example.org"]);
+    if (r.is_ok()) {
+        log.info(f"fetched {r.value.length} pages");
+    } else {
+        log.error(f"failed: {r.error}");   // enum renders its member name
+    }
+}

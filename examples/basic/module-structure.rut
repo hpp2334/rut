@@ -1,0 +1,32 @@
+// RFC 0002 §1.1 — module scope is DECLARATIONS ONLY (C++-style):
+// no top-level statements, no load-time code, const initializers must be
+// const-expressions.
+
+import { sleep } from "std:time";
+
+const MAX_RETRIES: i32 = 3;                    // const-expression
+const TILES: Array<f32> = Array<f32>(16);      // zeroed, const size
+const ORIGIN: Point = Point { x: 0, y: 0 };    // dataclass literal of consts
+
+enum Mode { Idle, Running }
+
+dataclass Point { x: f32; y: f32 }
+
+interface Service { start(): void; }
+
+class App implements Service {
+    private started: bool = false;
+    // default factory: App()
+
+    fn start(): void {
+        this.started = true;
+    }
+}
+
+fn run(m: Mode): void { /* ... */ }           // logic lives in functions
+
+export fn main(): void {                      // entry point — the host calls it
+    run(Mode.Running);
+    const app = App();
+    app.start();
+}

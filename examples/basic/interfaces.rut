@@ -1,0 +1,50 @@
+// RFC 0002 §6 — interfaces: plain METHODS only, nominal `implements`.
+// Interface values are the ONLY dynamic dispatch (vtable).
+// Intersection types (`Drawable & HitTest`) are NEVER supported — compose
+// a wider interface instead (Widget below).
+
+import { Canvas, newCanvas } from "app:gfx";
+
+interface Drawable {
+    draw(g: Canvas): void;
+}
+
+interface HitTest {
+    hit_test(x: f32, y: f32): bool;
+}
+
+interface Widget {                   // composition replaces `Drawable & HitTest`
+    draw(g: Canvas): void;
+    hit_test(x: f32, y: f32): bool;
+}
+
+class Sprite implements Widget {
+    private x: f32 = 0;
+    private y: f32 = 0;
+    // every field initialized -> default no-arg factory: Sprite()
+
+    fn move_by(dx: f32, dy: f32): void {
+        this.x += dx;
+        this.y += dy;
+    }
+
+    fn draw(g: Canvas): void {
+        g.circle(this.x, this.y, 1);
+    }
+
+    fn hit_test(px: f32, py: f32): bool {
+        return px == this.x && py == this.y;
+    }
+}
+
+fn blit_all(g: Canvas, items: Array<Widget>): void {
+    for (const w of items) {
+        w.draw(g);                   // vtable dispatch — the only dynamic call
+    }
+}
+
+export fn main(): void {
+    const s = Sprite();
+    s.move_by(2, 2);
+    blit_all(newCanvas(), [s]);      // bare Sprite boxes implicitly to Widget
+}

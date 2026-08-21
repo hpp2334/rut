@@ -1,0 +1,18 @@
+// RFC 0003 §2 — suspend fn returns a COLD Future<T>: calling it runs
+// nothing; `await` is the only suspension point.
+
+import { sleep } from "std:time";
+import { Logger } from "std:log";
+
+suspend fn countdown(n: u32): void {
+    const log = Logger("countdown");
+    for (let i = n; i > 0; i -= 1) {
+        log.info(f"{i}");
+        await sleep(1000);             // <- the ONLY way to suspend
+    }
+    log.info("done");
+}
+
+export suspend fn main(): void {
+    await countdown(3);
+}

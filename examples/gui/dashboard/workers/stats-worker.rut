@@ -1,0 +1,41 @@
+// workers/stats-worker.rut — a SEPARATE VM: own heap, own thread, traps
+// here cannot hurt the UI. Receives StatsRequests (the Array<f32> payload
+// deep-copied across isolates since the main state also holds it; a unique
+// buffer would transfer zero-copy — RFC 0003 §5.2), computes aggregates,
+// replies on the embedded transferred endpoint. recv() == None (all
+// senders dropped) is the shutdown signal.
+
+import { Receiver } from "std:channel";
+import { StatsRequest, StatsSummary } from "../models.rut";
+
+suspend fn main(reqs: Receiver<StatsRequest>): void {
+    while (true) {
+        const req = await reqs.recv();       // Future<Option<StatsRequest>>
+        if (req.is_none()) {
+            break;                           // dashboard gone: exit isolate
+        }
+        req.value.reply.send(summarize(req.value.samples));
+    }
+}
+
+fn summarize(xs: Array<f32>): StatsSummary {
+    if (xs.length == 0) {
+        return StatsSummary { n: 0, mean: 0, min: 0, max: 0, last: 0 };
+    }
+    let min = xs[0];
+    let max = xs[0];
+    let total = 0.0f64;
+    for (let i = 0; i < xs.length; i += 1) {
+        const v = xs[i];
+        if (v < min) { min = v; }
+        if (v > max) { max = v; }
+        total += f64(v);
+    }
+    return StatsSummary {
+        n: xs.length,
+        mean: total / f64(xs.length),
+        min: min,
+        max: max,
+        last: xs[xs.length - 1],
+    };
+}

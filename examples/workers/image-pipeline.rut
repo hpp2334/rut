@@ -1,0 +1,26 @@
+// RFC 0003 §5 — workers are separate VM isolates; data crosses typed
+// channels; buffers transfer zero-copy when uniquely owned (rc == 1).
+
+import { blit } from "app:gfx";
+import { channel, Receiver } from "std:channel";
+import { Image, Job } from "imaging";
+
+export suspend fn main(): void {
+    const urls = ["a.png", "b.png", "c.png", "d.png"];
+    const ports: Array<Receiver<Image>> = [];
+
+    for (let i = 0; i < urls.length; i += 1) {
+        const jobs = Channel<Job>();     // main -> worker (MPSC)
+        const imgs = Channel<Image>();   // worker -> main
+        spawn_worker("workers/image-worker.rut", [jobs.receiver, imgs.sender]);
+        jobs.sender.send(Job { url: urls[i] });
+        ports.push(imgs.receiver);
+    }
+
+    let left = urls.length;
+    while (left > 0) {
+        const img = await select_all(ports);   // first decoded wins
+        blit(img);
+        left -= 1;
+    }
+}   // senders dropped -> recv() resolves None -> each worker exits

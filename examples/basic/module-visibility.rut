@@ -1,0 +1,26 @@
+// RFC 0002 §1.1 — export visibility levels (D-style):
+//   export          — public: importable from anywhere (host, other packages)
+//   export(mod)     — visible everywhere inside this package's module tree
+//   export(super)   — visible to the parent module only
+//   export(self)    — module-private (the DEFAULT for unannotated decls)
+//
+// Imagine this file at ui/panels.rut in package "app": the parent module is
+// ui/, and the package root is app/. Module specifiers: RFC 0001 OQ-4.
+
+const INTERNAL_MAGIC: i32 = 7;            // default = export(self): file-private
+
+export(self) fn helper(): i32 {           // explicit form of the default
+    return INTERNAL_MAGIC;
+}
+
+export(super) fn panel_internal(): void { // callable from ui/* only
+    helper();
+}
+
+export(mod) fn app_wide(): i32 {          // callable from anywhere in "app"
+    return helper() * 2;
+}
+
+export fn panels(): i32 {                 // public API — importable anywhere
+    return app_wide() + helper();
+}

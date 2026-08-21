@@ -1,0 +1,55 @@
+// RFC 0002 §6.1 — type tests & upcasts are BUILTIN FUNCTIONS, not
+// keywords: is<T>(x): bool and upcast<T>(x): T. There is no `as`, no
+// downcast, ever. is<T> monomorphizes with T as a compile-time constant.
+
+import { Canvas, newCanvas } from "app:gfx";
+import { Logger } from "std:log";
+
+interface Drawable {
+    draw(g: Canvas): void;
+}
+
+interface HitTest {
+    hit_test(x: f32, y: f32): bool;
+}
+
+class Sprite implements Drawable, HitTest {
+    private x: f32 = 0;
+    private y: f32 = 0;
+    // default factory: Sprite()
+
+    fn draw(g: Canvas): void { g.circle(this.x, this.y, 1); }
+    fn hit_test(px: f32, py: f32): bool {
+        return px == this.x && py == this.y;
+    }
+}
+
+class Circle implements Drawable {
+    private x: f32 = 0;
+    private y: f32 = 0;
+    private r: f32 = 1;
+
+    factory(x: f32, y: f32, r: f32): Self {
+        return Self { x: x, y: y, r: r };
+    }
+
+    fn draw(g: Canvas): void { g.circle(this.x, this.y, this.r); }
+}
+
+fn type_tests(d: Drawable, s: Sprite, g: Canvas): void {
+    const log = Logger("types");
+    if (is<Circle>(d)) {             // runtime test — exact class check
+        d.draw(g);                   // no downcast exists; stay on the
+    }                                // interface
+
+    // upcast<T>(x): T — explicit widening; compile-time checked,
+    // zero runtime cost. Chiefly for disambiguation:
+    const views: Array<Drawable> = [s, upcast<Drawable>(s)];
+    const ht = upcast<HitTest>(s);
+
+    log.info(f"{views.length} {ht.hit_test(0, 0)}");
+}
+
+export fn main(): void {
+    type_tests(Circle(1, 2, 3), Sprite(), newCanvas());
+}

@@ -1,0 +1,47 @@
+// RFC 0002 §5.1 — dataclasses: open VALUE records.
+// Copied on assignment/passing/return. All fields public. NO methods —
+// behavior is free functions. Constructed ONLY by literal, everywhere
+// (module-const initializers included).
+
+import { Logger } from "std:log";
+
+dataclass Point {
+    x: f32;
+    y: f32;
+}
+
+dataclass Rect {
+    min: Point;                 // nesting: inline, not a pointer
+    max: Point;
+}
+
+dataclass Style {
+    color: u32 = 0xff00ff;      // field initializer: literals may omit it
+    width: f32 = 1;
+}
+
+fn nudge(pt: Point): Point {    // pass-by-value: parameter is a copy
+    pt.x += 1;                  // mutates the COPY only
+    return pt;                  // return-by-value: copy out
+}
+
+fn length(pt: Point): f64 {     // free function instead of a method
+    return math.sqrt(f64(pt.x * pt.x + pt.y * pt.y));
+}
+
+fn dataclasses(): void {
+    const log = Logger("dataclasses");
+    let p = Point { x: 1, y: 2 };    // literal — the only construction
+    p.x = 3;                         // mutable through `let`
+    const q = p;                     // COPY: q is an independent value
+    p.x = 4;                         // q.x is still 3
+
+    const r = Rect { min: p, max: q };   // nested values copied inline
+    const s = Style {};              // initializers satisfy all fields
+    const p2 = nudge(p);             // p itself is untouched
+    log.info(f"len={length(p2)} color={s.color} area={r.max.x - r.min.x}");
+}
+
+export fn main(): void {
+    dataclasses();
+}

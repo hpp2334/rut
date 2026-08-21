@@ -1,0 +1,42 @@
+// Quicksort — in-place Array<i32> mutation (arrays are handles: the
+// mutation is shared with the caller), recursion, explicit conversions.
+
+import { Logger } from "std:log";
+
+fn swap(xs: Array<i32>, a: i32, b: i32): void {
+    const t = xs[a];
+    xs[a] = xs[b];
+    xs[b] = t;
+}
+
+fn partition(xs: Array<i32>, lo: i32, hi: i32): i32 {
+    const pivot = xs[hi];
+    let i = lo - 1;
+    for (let j = lo; j < hi; j += 1) {
+        if (xs[j] <= pivot) {
+            i += 1;
+            swap(xs, i, j);
+        }
+    }
+    swap(xs, i + 1, hi);
+    return i + 1;
+}
+
+fn quicksort(xs: Array<i32>, lo: i32, hi: i32): void {
+    if (lo >= hi) { return; }
+    const p = partition(xs, lo, hi);
+    quicksort(xs, lo, p - 1);
+    quicksort(xs, p + 1, hi);
+}
+
+export fn main(): void {
+    const log = Logger("sort");
+    const xs = [5, 2, 9, 1, 7, 3, 8, 2];
+    quicksort(xs, 0, xs.length - 1);
+
+    let out = "";
+    for (let i = 0; i < xs.length; i += 1) {
+        out = str.concat(out, str(xs[i]), " ");
+    }
+    log.info(f"sorted: {out}");
+}

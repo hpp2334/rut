@@ -1,0 +1,54 @@
+// components/header.rut — app title bar: logo dot, title, live indicator,
+// events counter, uptime. Pure props-in/Element-out.
+
+import { box, BoxProps, Color, CrossAlign, Element, FlexProps, MainAlign, row, TextProps, text } from "app:ui";
+import { now_ms } from "std:time";
+import { GAP, PAD, RADIUS } from "../theme.rut";
+import { Palette } from "../theme.rut";
+import { Dashboard } from "../state.rut";
+import { body, chip, hgap } from "./common.rut";
+
+export fn header(th: Palette, st: Rc<Dashboard>): Element {
+    const live = st.live();
+    const dot = when (live) {
+        true -> th.ok,
+        else -> th.err,
+    };
+    const badge = when (live) {
+        true -> "live",
+        else -> "halted",
+    };
+    const uptime_s = (now_ms() - st.started_ms()) / 1000;
+
+    return box(BoxProps {
+        pad: PAD,
+        color: th.surface,
+        radius: RADIUS,
+        border: Option.some(th.border),
+        border_w: 1,
+        child: Option.some(row(FlexProps {
+            main: MainAlign.SpaceBetween,
+            cross: CrossAlign.Center,
+            children: [
+                row(FlexProps {
+                    gap: GAP,
+                    cross: CrossAlign.Center,
+                    children: [
+                        box(BoxProps { w: 12, h: 12, color: th.accent, radius: 6 }),
+                        text(TextProps { text: "rut · dashboard", size: 18, weight: 700, color: th.text }),
+                        chip(th, badge, dot),
+                    ],
+                }),
+                row(FlexProps {
+                    gap: GAP,
+                    cross: CrossAlign.Center,
+                    children: [
+                        body(th, f"events {st.events_seen()}"),
+                        body(th, f"visits {st.visits()}"),
+                        body(th, f"up {uptime_s}s"),
+                    ],
+                }),
+            ],
+        })),
+    });
+}

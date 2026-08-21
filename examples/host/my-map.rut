@@ -1,0 +1,51 @@
+// RFC 0005 §5.1 — an EMBEDDER-DEFINED native module in use.
+//
+// MyMap is implemented entirely in Rust by the application embedding the
+// VM and exported from its own namespace, "plugin:my_map" — the full Rust
+// side is the sibling file examples/host/my_map.rs (registration API:
+// RFC 0005 §5.1). rut sees no implementation — only the module surface:
+// one generic class, its native factory, its methods.
+// std:collection's Map<K,V>/Set<T> ride this same machinery (RFC 0002
+// OQ-3, resolved): containers are library types, not VM builtins.
+//
+// Boundary crossings in this file: the class type itself (first use of
+// MyMap<A, B> builds that instantiation's method table), the native
+// factory (construction), every method call, and Option/Array values
+// flowing back out.
+
+import { MyMap } from "plugin:my_map";
+import { Canvas, newCanvas } from "app:gfx";
+import { Logger } from "std:log";
+
+export fn main(): void {
+    const log = Logger("my-map");
+
+    // K = string, V = i32. Construction is a TYPE-CALL: MyMap<string,
+    // i32>(32) instantiates the generic host class and runs its native
+    // factory with a capacity hint. Same rule as Array<f32>(n) — no `new`.
+    const counts: MyMap<string, i32> = MyMap<string, i32>(32);
+
+    for (let i = 0; i < 20; i += 1) {
+        const k = f"key-{i % 7}";                  // 7 distinct keys
+        counts.set(k, counts.get(k).unwrap_or(0) + 1);
+    }
+    const hits = counts.get("key-3").unwrap_or(-1); // native get returns
+    log.info(f"size={counts.size()} key-3={hits}"); // rut's builtin Option
+
+    // V = Opaque: a SECOND instantiation (own TypeId) storing values rut
+    // cannot see inside. Native set/get just move the boxes — the Rust
+    // side never inspects them; downcast<Canvas> recovers on OUR side.
+    const surfaces: MyMap<string, Opaque> = MyMap<string, Opaque>(4);
+    surfaces.set("hud", Opaque(newCanvas()));
+    const hud = downcast<Canvas>(surfaces.get("hud").expect("hud present"));
+    if (hud.is_some()) {
+        hud.value.circle(10, 10, 5);               // back in typed host API
+    }
+
+    // counts.keys() built this Array<string> on the host; the loop itself
+    // is pure rut.
+    for (const k of counts.keys()) {
+        log.debug(f"{k} -> {counts.get(k).unwrap_or(0)}");
+    }
+}   // MyMap's Rust Drop releases the boxed values; each Canvas's Rust Drop
+    // runs at its rc-0 — deterministic, never "at GC someday" (RFC 0005 §5)

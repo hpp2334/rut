@@ -1,0 +1,24 @@
+// network/echo-worker.rut — one connection at a time per isolate; its own
+// heap, its own traps. recv() resolving None (all senders dropped) is the
+// shutdown signal.
+
+import { Receiver } from "std:channel";
+import { Conn } from "std:net";
+
+suspend fn serve(conn: Conn): void {
+    while (true) {
+        const got = await conn.read(4096);   // Future<Result<bytes>>
+        if (got.is_err()) { return; }        // connection error: drop it
+        const data = got.value;
+        if (data.length == 0) { return; }    // peer closed
+        await conn.write(data);              // echo back
+    }
+}
+
+suspend fn main(jobs: Receiver<Conn>): void {
+    while (true) {
+        const conn = await jobs.recv();      // Future<Option<Conn>>
+        if (conn.is_none()) { break; }       // server gone: exit isolate
+        await serve(conn.value);
+    }
+}

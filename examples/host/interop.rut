@@ -1,0 +1,48 @@
+// RFC 0005 — host & FFI: extern class handles, repr C struct passing,
+// zero-copy buffer borrows, and Template (structured f"...", for l10n).
+// The host side of this module is sketched in RFC 0005 §1-§6.
+
+import { Canvas, newCanvas } from "app:gfx";       // extern class + its ctor fn
+import { log_l10n } from "app:log";                // fn log_l10n(t: Template): void
+import { Logger } from "std:log";
+
+// Mirrored on the host as #[repr(C)] struct Vertex { x: f32, y: f32, color: u32 }
+// — register_struct::<Vertex>("Vertex") verified size/align/offsets at startup.
+dataclass Vertex {
+    x: f32;
+    y: f32;
+    color: u32;
+}
+
+extern class Source<T> {                           // generic host type — the
+    fn get(): T;                                   // instantiation is KEPT:
+}                                                  // Source<i32> != Source<string>
+
+fn draw_frame(c: Canvas, verts: Array<Vertex>): void {
+    // verts borrows zero-copy: the host reads the inline repr-C block for
+    // the duration of the call; rut-side mutation inside re-entrant calls
+    // would trap (borrow guard) instead of racing.
+    c.blit(verts);
+}
+
+fn localized(count: i32, user: string): void {
+    // The SAME literal that would concat to a string builds a structured
+    // Template here, because log_l10n expects one — the host formats
+    // per-locale with typed args; nothing was parsed back out of a string.
+    log_l10n(f"{user} has {count} alerts");
+}
+
+export fn main(): void {
+    const log = Logger("interop");
+    const c = newCanvas();                         // host constructs the handle
+    const verts: Array<Vertex> = [
+        Vertex { x: 0, y: 0, color: 0xFF00FF },
+        Vertex { x: 1, y: 1, color: 0x00FFFF },
+    ];
+    draw_frame(c, verts);
+
+    const hits: Source<i32> = c.hit_source();
+    log.info(f"hits={hits.get()}");                // checked: Source<i32>.get(): i32
+
+    localized(3, "ada");
+}   // c's rc hits 0 -> the host's Canvas::drop runs NOW (deterministic)

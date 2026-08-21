@@ -1,0 +1,25 @@
+// RFC 0004 §5 — reference cycles never reach rc 0; the budgeted cycle
+// collector (trial deletion) reclaims them. dispose() runs exactly once
+// per collected object.
+
+import { Logger } from "std:log";
+
+class Node {
+    next: Option<Rc<Node>> = Option.none();   // public field: plain data
+    // initializer covers `next` -> default factory: Node()
+}
+
+fn make_cycle(): Rc<Node> {
+    const a = Rc(Node());
+    const b = Rc(Node());
+    a.next = Option.some(b);       // rc(b) = 2
+    b.next = Option.some(a);       // rc(a) = 2 — a cycle: neither hits 0
+    return a;
+}
+
+export fn main(): void {
+    const log = Logger("cycle");
+    const head = make_cycle();
+    log.info("cycle allocated");
+}   // external refs dropped; the cycle is unreachable garbage; the
+    // collector's next pass reclaims a & b

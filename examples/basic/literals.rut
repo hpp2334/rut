@@ -1,0 +1,29 @@
+// RFC 0002 §4 — literals & inference. Construction is a TYPE-CALL
+// (`Array<f32>(1024)`); lowercase types keep lowercase calls (`bytes(64)`).
+
+import { Logger } from "std:log";
+
+dataclass Point { x: f32; y: f32 }
+
+fn literals(name: string): void {
+    const log = Logger("literals");
+    const a = 10;                      // i32 (default)
+    const b = 10u8;                    // u8 via suffix
+    const c: u64 = 10;                 // u64 via annotation
+    const d = 1.5;                     // f64
+    const e = 1.5f32;                  // f32
+    const s = "hi\tname";              // plain string: escapes processed
+    const raw = r"C:\temp\log.txt";    // raw literal: NO escape processing
+    const t = f"hi {name}!";           // format literal (§4.1)
+    const ch = 'h';                    // char
+    const arr = [1, 2, 3];             // Array<i32>
+    const zero: Array<f32> = Array<f32>(1024);   // zeroed, unboxed
+    const buf = bytes(64);             // zeroed
+    const p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
+
+    log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]}");
+}
+
+export fn main(): void {
+    literals("rut");
+}
