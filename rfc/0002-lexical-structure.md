@@ -86,10 +86,11 @@ compiler gives it no meaning; greppability is enforced by style.
   `let`, `const`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
   `enum`, `class`, `dataclass`, `interface`, `implements`,
   `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
-  `await`, `factory`, `dispose`, `true`, `false`, `extern`, `dyn`
+  `await`, `factory`, `dispose`, `true`, `false`, `extern`, `where`
+  (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
   (RFC 0012 §2) are keywords. `dyn` prefixes any **interface path** — a
   user `I`, `Any`, or the builtin `Slice<T>` — one rule, no syntax branch
   (RFC 0005, RFC 0014).
 
 Each reserved word's error message names the rut replacement ("rut does not
-have `switch`; use `when`") — the full diagnostic model is RFC 0029 §6.
+have `switch`; use `when`") — the full diagnostic model is RFC 0030 §6.

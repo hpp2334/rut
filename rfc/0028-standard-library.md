@@ -27,7 +27,10 @@ The standard library splits in two:
   entries, not rut syntax. Containers are library types, not VM
   builtins (RFC 0005 pre-restructure OQ, resolved). **`std:debug`**
   (RFC 0036) rides the same mechanism: `Location`, `here()`,
-  `capture_stack_trace()`, and the `StackTrace` class.
+  `capture_stack_trace()`, and the `StackTrace` class. **`std:reflect`**
+  (RFC 0037) too: the `Reflectable`/`Deserializable` protocols,
+  `TypeInfo`, and engine admission — reflection for userland serde
+  (`examples/json/`).
 - **anything else** (`app:gfx`, `imaging`, `plugin:my_map`) — **embedder
   modules**: declaration files + Rust bodies the embedding application
   ships for its own domain — the same mechanism `std:collection` uses, in

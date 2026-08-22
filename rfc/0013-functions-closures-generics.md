@@ -32,23 +32,28 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   v1 (RFC 0005); user generics stay type-only — `N` is a constant
   expression, part of the instantiation identity (`Array<i32, 3> ≠
   Array<i32, 4>`, RFC 0015 §3).
-- Generic parameters are unconstrained in v1 — no `T: Iface` bounds on
-  user generics (OQ-1): you cannot call interface methods on a bare `T`.
-  Pass values in, or take a `dyn I` parameter instead of a
-  generic. **The one exception**: generic params of **host/extern class
-  declarations** may carry interface bounds (`MyMap<K: Hashable, V>`,
-  RFC 0025 §1) — admission-only syntax: it constrains which
-  instantiations compile (closing over `requires`), grants no method
-  calls on bare `K`, and adds no IR. Bounds stay **bare** — `K: Hashable`,
-  never `K: dyn Hashable` (a bound names an interface, it does not form
-  an interface value; `T: Any` is rejected as vacuous, RFC 0014). A
-  user-class bound would be pure
-  forwarding anyway (without dispatch, a body could only pass `K` onward
-  to extern positions) — deferred with OQ-1.
+- Generic parameters are **unconstrained by default** — no `T: Iface`
+  bounds in the parameter list of user generics (OQ-1): you cannot call
+  interface methods on a bare `T`. Pass values in, or take a `dyn I`
+  parameter instead of a generic. Two **admission-only** forms ship —
+  both gate which instantiations compile (closing over `requires`),
+  grant no method calls on bare type params, and add no IR:
+  1. inline param bounds on **host/extern class declarations**
+     (`MyMap<K: Hashable, V>`, RFC 0025 §1) — always bare (`K: Hashable`,
+     never `K: dyn Hashable`; `T: Any` is vacuous and rejected, RFC 0014);
+  2. a trailing **`where` clause on user generic fns** (RFC 0037 §3) —
+     the serde motivating pair: producers that return `T` cannot take a
+     `dyn I` parameter instead, so the contract rides the call site:
+     `deserialize<T>(v: string): Result<T, JsonError> where T requires
+     Deserializable`. A body may widen a `T`-typed *value* to `dyn I`
+     (the bound proves the widening valid) but gains no static method
+     calls on bare `T`. (A user-class bound would be pure forwarding
+     anyway — deferred with OQ-1.)
 
 ## Open questions
 
-- OQ-1: generic bounds `T: Iface` (would unlock static dispatch on
-  bare `T` without `dyn I` refs) — still deferred for **user**
-  generics; the **admission-only** form shipped scoped to extern decls
-  (§2, RFC 0025 §1), which needs no dispatch and adds no IR.
+- OQ-1: generic bounds `T: Iface` with **static dispatch** on bare `T`
+  (would unlock it without `dyn I` refs) — still deferred; the
+  **admission-only** forms shipped (host/extern inline bounds, §2 +
+  RFC 0025 §1; user-fn `where` clauses, RFC 0037 §3) need no dispatch
+  and add no IR.

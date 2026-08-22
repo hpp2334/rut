@@ -68,7 +68,9 @@ fn gfx_module() -> NativeModule {
   interface, and builtin-impl registry entries** declared in declaration
   files
   (`std:collection`'s `Equal<T>`/`Hashable` + their builtin impls are
-  the canonical case, RFC 0028).
+  the canonical case, RFC 0028). std:reflect adds the reflection
+  protocols to the same registry — `Reflectable`/`Deserializable` for
+  `Option`/`Result`/`Vec`/`Array<T, N>` (RFC 0037).
 - Failures are `Result<_, Trap>` values — a native fn that errors traps
   cleanly with a message and a rut backtrace (RFC 0034 §2).
 - Long-running host work must NOT block the loop: hand back a future

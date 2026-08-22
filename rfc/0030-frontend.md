@@ -110,7 +110,9 @@ interface  := 'interface' Ident genericparams? ('requires' IfaceList)? '{' meths
 methsig    := 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
                                               // interface methods are always
                                               // instance methods (RFC 0012 §2)
-fndecl     := modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? block
+fndecl     := modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? whereclause? block
+whereclause := 'where' Ident 'requires' IfaceList  // admission-only bounds
+                                               // (RFC 0013 §2, RFC 0037 §3)
 block      := '{' stmt* '}'
 stmt       := 'let' Ident (':' Type)? '=' expr ';' | 'const' …
              | 'if' '(' expr ')' block ('else' 'if' … | 'else' block)?
@@ -285,4 +287,7 @@ struct Diag { span: Span, msg: String,
   Proposed: allowed everywhere a comma list exists.
 - OQ-2: attributes (`@inline`, `@repr(align)`) — `At` is lexed but
   unclaimed; park the token until a real need exists (repr C is the
-  default, RFC 0015 §4, so `@repr` is NOT planned).
+  default, RFC 0015 §4, so `@repr` is NOT planned). Decorators were
+  later designed for reflection policy (TypeId identity, protocol
+  downcasts, lazy class recipes) and **rejected for v1** — RFC 0037
+  OQ-1 records the history; reflection shipped on interfaces instead.

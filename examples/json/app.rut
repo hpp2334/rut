@@ -1,0 +1,161 @@
+// app.rut — the CONSUMER side of user-defined JSON (RFC 0037).
+//
+// This module declares an engine ONLY because it hand-writes Tree's
+// curated Reflectable view (a manual view IS structural power — the
+// `grep "implements ReflectEngine"` audit finds this module; RFC 0037
+// §3 rule 1). A module with no manual views and no walking imports
+// nothing from std:reflect at all — calling stringify/deserialize
+// carries the contract in the argument type / the bound.
+//
+//   // uncommenting this in a module with NO engine is a compile error:
+//   //   import { reflect } from "std:reflect";
+//   //   // error: structural reflection requires an engine — implement
+//   //   // std:reflect.ReflectEngine in this module (RFC 0037 §3)
+
+import { stringify, deserialize, Serializable, str_eq } from "./json";
+import { ReflectEngine, Reflectable, TypeInfo, reflect } from "std:reflect";
+import { Logger } from "std:log";
+
+const log = Logger("app");
+
+dataclass Views implements ReflectEngine { }   // the capability (manual views)
+
+enum Role { Admin, Member }
+
+dataclass Address { city: string; zip: i64 }
+
+// The opt-in contract costs ZERO methods: the Reflectable half of the
+// requires edge is auto-implemented for dataclasses (RFC 0037 §1).
+dataclass User implements Serializable {
+    id: i64;
+    login: string;
+    visits: i64 = 0;                    // initializer = the parse default
+    role: Role;                         // enum <-> member name
+    nickname: Option<string>;           // None <-> null (structural sum)
+    addresses: Vec<Address>;            // nested records
+    scores: Array<f32, 2>;              // Seq over a FIXED array (RFC 0005)
+}
+
+// The wire shape differs from the domain type? A separate dataclass,
+// mapped by hand — no decorators, no rename attributes (RFC 0037 OQ-1
+// records that design and why v1 rejected it).
+dataclass ApiUser implements Serializable {
+    user_id: i64;
+    login: string;
+}
+
+fn to_api(u: User): ApiUser {
+    return ApiUser { user_id: u.id, login: u.login };
+}
+
+fn from_api(a: ApiUser): User {
+    return User {
+        id: a.user_id,
+        login: a.login,
+        role: Role.Member,
+        nickname: Option<string>.None(),
+        addresses: Vec<Address>(),
+        scores: [0.0, 0.0],
+    };
+}
+
+// A MANUAL curated view: a class implementing Serializable — which
+// requires Reflectable, written by hand. The view chooses what exists:
+// arity 1, child(0) = root. `cache` is private and simply NOT exposed
+// — privacy is what the impl says (RFC 0037 §1), not a walker-side
+// law. Manual views serialize POSITIONALLY; they can never implement
+// Deserializable (auto/registry only — classes construct through
+// factories, RFC 0010 §1). NOTE the implements list names BOTH layers:
+// manual impls must list required interfaces explicitly (RFC 0012 §2)
+// — only auto-fills satisfy requires edges implicitly.
+class Tree implements Serializable, Reflectable {
+    private root: i64;
+    private cache: string;              // never serialized — unexposed
+
+    factory(root: i64): Self {
+        return Self { root: root, cache: "" };
+    }
+
+    fn reflect(self): TypeInfo { return reflect<Tree>(); }
+    fn arity(self): i32 { return 1; }
+    fn child(self, i: i32): Option<dyn Any> {
+        if (i == 0) { return Option<dyn Any>.Some(make_any(self.root)); }
+        return Option<dyn Any>.None();
+    }
+}
+
+fn seed(): Vec<Address> {
+    const a = Vec<Address>();
+    a.push(Address { city: "Osaka", zip: 530 });
+    return a;
+}
+
+export fn main(): void {
+    const u = User {
+        id: 7,
+        login: "hpp",
+        role: Role.Admin,
+        nickname: Option<string>.None(),
+        addresses: seed(),
+        scores: [1.5, 2.5],
+    };
+
+    // serialize: u widens to dyn Serializable at the parameter (one
+    // copy, vtable dispatch — RFC 0012 §3 / RFC 0037 §4).
+    when (stringify(u)) {
+        Ok(s)  -> log.info(f"user: {s}"),
+        Err(t) -> log.error(f"refused: {t}"),
+    }
+    // user: {"id":7,"login":"hpp","visits":0,"role":"Admin",
+    //        "nickname":null,"addresses":[{"city":"Osaka","zip":530}],
+    //        "scores":[1.5,2.5]}
+
+    // deserialize: the bound `where T requires Deserializable` is
+    // checked HERE, at the call site — User is a dataclass (auto), so
+    // it compiles. Absent fields fall back to initializers ("visits").
+    const wire = "{\"id\":9,\"login\":\"rt\",\"role\":\"Member\",\"addresses\":[{\"city\":\"Kyoto\",\"zip\":604}],\"scores\":[1.0,2.0]}";
+    when (deserialize<User>(wire)) {
+        Ok(back) -> {
+            assert(back.id == 9);
+            assert(back.visits == 0);            // absent -> initializer
+            assert(back.addresses.len() == 1);
+            assert(back.addresses[0].zip == 604);
+            assert(str_eq(back.login, "rt"));
+            when (back.nickname) {
+                Option<string>.None -> log.info("nickname round-tripped as null"),
+                Option<string>.Some(_) -> assert(false),
+            }
+            log.info(f"round trip ok: {back.login} / {back.role}");
+        },
+        Err(e) -> log.error(f"parse failed at {e.pos}: {e.msg}"),
+    }
+
+    // registry instantiations are Deserializable too — any Vec<T>/T
+    // combination (RFC 0037 §1):
+    when (deserialize<Vec<Address>>("[{\"city\":\"Nara\",\"zip\":630}]")) {
+        Ok(places) -> log.info(f"places: {places.len()} ({places[0].city})"),
+        Err(e)     -> log.error(f"vec parse failed at {e.pos}: {e.msg}"),
+    }
+
+    // the manual view, live — positional, cache invisible:
+    when (stringify(Tree(7))) {
+        Ok(s)  -> log.info(f"tree: {s}"),        // tree: [7]
+        Err(t) -> log.error(f"refused: {t}"),
+    }
+
+    // deserialize<Tree>(..) does NOT COMPILE — Deserializable is
+    // auto/registry-only and Tree cannot implement it; construction is
+    // the factory's job (RFC 0010 §1, RFC 0037 §1):
+    //     deserialize<Tree>("[7]");
+    //     // error: Tree does not implement Deserializable — use a
+    //     //        wire dataclass + factory (RFC 0037 §1)
+
+    // the wire-rename story, end to end (no decorators — just types):
+    when (stringify(to_api(u))) {
+        Ok(s)  -> log.info(f"wire: {s}"),        // wire: {"user_id":7,...
+        Err(t) -> log.error(f"refused: {t}"),
+    }
+    const back = from_api(ApiUser { user_id: 99, login: "wx" });
+    assert(back.id == 99);
+    log.info("wire rename round-tripped by hand");
+}

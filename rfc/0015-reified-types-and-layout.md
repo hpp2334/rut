@@ -36,7 +36,8 @@ builtins (§3), `is<T>` (RFC 0012 §3), `dyn Any` recovery
 4. **Heterogeneous collections** — vtable dispatch (RFC 0012) needs the exact type
    reachable from every object header.
 5. **Debugging** — `debug.type_of(x)`, stack traces (RFC 0036), formatter output.
-6. **Serialization** — stdlib walkers traverse `RutType` descriptors.
+6. **Serialization** — `std:reflect` walkers traverse `RutType`
+   descriptors (RFC 0037).
 7. **`dyn Any` recovery** — `downcast<T>` (RFC 0014) checks the boxed cell's
    `TypeId`; `make_any(v)` stamps it. Erasure without reification would be
    `any`; with reification it is a checked box.
@@ -66,6 +67,10 @@ const AL_POINT: u32  = align_of<Point>();    // 4
   buffer may exceed 4 GiB in v1.)
 - All three are **compile-time constants** — const-expressions (RFC 0003 §1),
   folded by HIR from the type table, never executed (RFC 0033 §3).
+- **Boxing widens** (RFC 0037 §3): `make_any` of an int stores i64
+  sign/zero-extended; a float, f64 — the §5 slot discipline. A kind
+  branch plus `downcast<i64>` / `downcast<f64>` / `downcast<bool>` /
+  `downcast<string>` is total in-branch.
 - `dyn Any` mirrors them at runtime: `a.type_id(): u32`, `a.size(): u32`,
   `a.as_bytes(): bytes` (a snapshot of the box's repr-C payload). Together
   they enable **layout-aware heterogeneous storage** — group entries by
@@ -192,3 +197,5 @@ reaches the vtable; the box mint is the only cost.
 ## Open questions
 
 - OQ-1: first-class type values (`type_of(x)` as a manipulable value).
+  (RFC 0037's `TypeInfo` is a descriptor *handle* — data about types,
+  not a type value — so this stays closed.)

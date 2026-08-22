@@ -32,7 +32,11 @@ bodies), `Self` bound, `private`/`export` visibility checked (RFC 0003 §2),
 dataclass-vs-class distinction applied (literals only for dataclasses;
 type-calls only for classes/builtins, RFC 0009/0010), and surface
 declarations (`host`/`extern`) resolved against their DeclIrs with
-slot ids attached to every member reference.
+slot ids attached to every member reference. The resolver also enforces
+**engine admission** (RFC 0037 §3): `std:reflect`'s structural symbols
+(`reflect<T>`, `type_of`, `TypeInfo`, `FieldInfo`, `SumVariant`)
+resolve only in modules declaring ≥1 `implements ReflectEngine` — the
+diagnostic names the interface and the fix.
 
 ## 2. Typecheck
 

@@ -78,7 +78,11 @@ the vtable. `final` is meaningless in v1 (nothing can override).
   satisfy it. Requirements are transitive (`A requires B`, `B requires C`
   ⇒ `A` needs `C` too), cycles in the requires-graph are a link error,
   and registered builtin impls satisfy requirements like any other impl
-  (RFC 0026). What `requires` deliberately is **not** (this is why
+  (RFC 0026). std:reflect's auto-impls (dataclass/enum) and registry
+  impls (`Option`/`Result`/`Vec`/`Array<T, N>`) enter the graph the
+  same way — auto-fills satisfy the `requires` edges of contract layers
+  built on top (`interface Serializable requires Reflectable {}`,
+  RFC 0037). What `requires` deliberately is **not** (this is why
   interface `extends` was rejected): no member inheritance —
   `Hashable` declares only `hash`, and `eq` is reachable only through
   an `Equal<T>` ref; no subtyping — a `Hashable` ref does not widen to

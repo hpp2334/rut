@@ -51,6 +51,10 @@ Two more builtins are type syntax rather than constructors:
   views valid and indexing bounds-checks view len ∩ owner len — a view
   that outlives a shrink traps, never reads garbage; RFC 0016 §4).
 
+`Vec<T>` and `Array<T, N>` implement `std:reflect`'s `Reflectable` and
+`Deserializable` for **every instantiation** via the builtin-impl
+registry (RFC 0037) — sequences are data: reflectable like records.
+
 `Map<K, V>` / `Set<T>` are
 deliberately absent from it: containers are **library types**, provided by
 `std:collection` as a declaration file + Rust bodies (RFC 0025, RFC 0026, RFC

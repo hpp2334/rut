@@ -63,7 +63,9 @@ a structural answer in rut:
    everything else is library: `Map`/`Set` are declaration-file + Rust
    library types (RFC 0028), and logging, IO, and the host's own domain
    live in their own modules (RFC 0022). A rut engine is small because the
-   spec is small; an embedder ships only what its domain needs.
+   spec is small; an embedder ships only what its domain needs. Even
+  `JSON` stays userland: reflection over reified types (RFC 0037) makes
+  user-defined serialization complete — `examples/json/` is the proof.
 3. **Too slow without a JIT.** Interpreter-only JS runs one to two orders
    of magnitude slower — a JS engine's speed *is* its JIT. rut's no-JIT
    pillar (G7) is viable only because the language is statically typed:
@@ -180,6 +182,11 @@ final sections of the RFC they implement).
 - 0034 — VM core: interpreter loop, traps, budgets
 - 0035 — loading, host hooks & the embedding loop
 - 0036 — diagnostics: stack traces, locations & symbolication
+
+**Part G — Reflection & serialization**
+
+- 0037 — reflection: `Reflectable`, `Deserializable`, `std:reflect` —
+  serde in userland (`examples/json/`)
 
 ## Pillar decisions
 

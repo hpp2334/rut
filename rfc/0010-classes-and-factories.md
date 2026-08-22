@@ -18,8 +18,15 @@ explicit `self` receivers, static fields.
 - **Also a value type.** A bare `Circle` copies on assignment/passing/return
   exactly like a dataclass — inline, no header, no refcount. What a class
   *adds* over a dataclass is **sealing**: private fields, factory-only
-  construction, `static` fields, and `dispose()` (RFC 0011). (`implements`
-  is no longer class-only — RFC 0009.)
+  construction, `static` fields, and `dispose()` (RFC 0011). Reflection:
+  a class is walkable **iff** it implements `std:reflect.Reflectable`
+  (or a contract layer requiring it — RFC 0037) — default opaque, a
+  *default* not a law; and it can never implement `Deserializable` —
+  construction is the factory's job, reflective mint is
+  descriptor-backed only. (`implements`
+  is no longer class-only — RFC 0009.) A dataclass auto-implements
+  `std:reflect`'s `Reflectable` + `Deserializable` (RFC 0037) — that,
+  not the keyword, is why it reflects and round-trips.
 - **Construction is a type-call**: `Circle(1, 2, 3)` runs the class's
   `factory`. No `new` keyword exists, and there is no outside literal for
   a class — construction always flows through a factory.

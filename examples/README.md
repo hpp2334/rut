@@ -46,6 +46,9 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `dyn Any` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
 
+| `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
+| `json/app.rut` | opt-in dataclasses (zero-method `implements Serializable`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |
+
 ### gui/dashboard — a multi-file project
 
 A tur-style web-app-shaped project (models / theme / reactive library /
