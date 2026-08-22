@@ -17,7 +17,7 @@ export suspend fn main(): void {
     const log = Logger("http");
     const r = await fetch_all(["https://example.com", "https://example.org"]);
     if (r.is_ok()) {
-        log.info(f"fetched {r.value.length} pages");
+        log.info(f"fetched {r.value.len()} pages");
     } else {
         log.error(f"failed: {r.error}");   // enum renders its member name
     }

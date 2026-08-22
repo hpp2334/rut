@@ -48,7 +48,7 @@ fn nested(): void {
     const log = Logger("any");
     // heterogeneous FIXED array — pure data, no allocation (RFC 0005)
     const boxes: Array<dyn Any, 3> = [make_any(1), make_any("x"), make_any(Point { x: 3, y: 4 })];
-    log.info(f"{boxes.length} boxes; first is i32: {is<i32>(boxes[0])}");
+    log.info(f"{boxes.len()} boxes; first is i32: {is<i32>(boxes[0])}");
 }
 
 export fn main(): void {

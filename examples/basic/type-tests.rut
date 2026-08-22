@@ -50,7 +50,7 @@ fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
     const views: Vec<dyn Drawable> = Vec.from([s, d2]);
     const ht: dyn HitTest = s;
 
-    log.info(f"{views.length} {ht.hit_test(0, 0)}");
+    log.info(f"{views.len()} {ht.hit_test(0, 0)}");
 }
 
 export fn main(): void {

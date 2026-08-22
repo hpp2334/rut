@@ -22,7 +22,7 @@ propagation operator. See **`examples/basic/option-result.rut`**.
 | `expect(msg: string): T` | `unwrap_or(d: T): T` |
 
 `Vec<T>` completes the builtin generic set: the mutable, growable,
-handle-shared sequence — `push`/`pop`, indexing, `.length` (RFC 0016 §4).
+handle-shared sequence — `push`/`pop`, indexing, `.len()` (RFC 0016 §4).
 Construction is a type-call: `Vec<f32>(1024)` (n zeroed elements),
 `Vec<i32>()` (empty), and `Vec.from(xs)` (copies out of a fixed
 `Array<T, N>`; const-foldable, RFC 0033 §3). `Vec<T>` also defines
@@ -35,7 +35,7 @@ Two more builtins are type syntax rather than constructors:
   and part of the type's identity (`Array<i32, 3> ≠ Array<i32, 4>`,
   RFC 0015 §3). Inline, headerless, **copied on assignment** like a
   dataclass; the literal is pure data: `[a, b, c] : Array<T, 3>`
-  (RFC 0007 §1). Indexing, `for..of`, `.length`; OOB traps. Widens to
+  (RFC 0007 §1). Indexing, `for..of`, `.len()`; OOB traps. Widens to
   `dyn Slice<T>` by implicit boxing (RFC 0011 §3).
 - **`Slice<T>` — the slice interface**: builtin and undeclarable (like
   `Any`, RFC 0014 — `implements Slice<T>` is a compile error). Its object
@@ -43,7 +43,7 @@ Two more builtins are type syntax rather than constructors:
   unsized (the slot stores the slice-cell handle, RFC 0031 §4), legal in
   any type position (`Rc<dyn Slice<i32>>`, `MyCow<dyn Slice<T>>`). The
   surface is VM-handled like `dyn Any`'s accessors — `x[i]` get/set,
-  `.length`, `for..of` — and nothing else: slices never grow. Two cell
+  `.len()`, `for..of` — and nothing else: slices never grow. Two cell
   kinds hide behind one type: the **owned** cell (boxed `Array<T, N>`,
   copied at the boxing) and the **lending view** (`Vec.as_slice()` —
   `Header + owner handle + off + len`, no copy, strong ref keeps the Vec

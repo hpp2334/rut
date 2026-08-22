@@ -4,7 +4,7 @@
 import { Logger } from "std:log";
 
 fn first<T>(xs: Vec<T>): Option<T> {
-    if (xs.length == 0) {
+    if (xs.len() == 0) {
         return Option.none();
     }
     return Option.some(xs[0]);

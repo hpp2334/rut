@@ -10,7 +10,7 @@ suspend fn serve(conn: Conn): void {
         const got = await conn.read(4096);   // Future<Result<bytes>>
         if (got.is_err()) { return; }        // connection error: drop it
         const data = got.value;
-        if (data.length == 0) { return; }    // peer closed
+        if (data.len() == 0) { return; }    // peer closed
         await conn.write(data);              // echo back
     }
 }

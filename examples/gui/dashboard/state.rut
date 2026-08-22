@@ -73,17 +73,17 @@ export class Dashboard {
             const users = ctx.latest(users_src);
             const q = ctx.get(query);
             const out: Vec<User> = Vec();
-            for (let i = 0; i < users.length; i += 1) {
+            for (let i = 0; i < users.len(); i += 1) {
                 const u = users[i];
-                if (q.length == 0 || str.contains(u.name, q)) {
+                if (q.len() == 0 || str.contains(u.name, q)) {
                     out.push(u);
                 }
             }
             sort_by_score(out, ctx.get(sort_dir));
             return out;
         });
-        const users_count = derive((ctx): i32 => ctx.latest(users_src).length);
-        const alert_count = derive((ctx): i32 => ctx.get(alerts).length);
+        const users_count = derive((ctx): i32 => ctx.latest(users_src).len());
+        const alert_count = derive((ctx): i32 => ctx.get(alerts).len());
 
         // --- mutations: dispatched with payload dataclasses. The trailing
         //     `$` marks dispatch-inverted members (tur's start$/onMounted$
@@ -116,7 +116,7 @@ export class Dashboard {
                 EventKind.Tick -> {
                     const xs = atom_get(st, samples);
                     xs.push(ev.value);
-                    if (xs.length > MAX_SAMPLES) {
+                    if (xs.len() > MAX_SAMPLES) {
                         shift_left(xs);               // drop the oldest
                     }
                     atom_set(st, samples, xs);        // same handle: version bump
@@ -127,7 +127,7 @@ export class Dashboard {
                 EventKind.Alert -> {
                     const msgs = atom_get(st, alerts);
                     msgs.push(f"{event_label(ev.kind)} at {ev.who}: {ev.value}");
-                    if (msgs.length > MAX_ALERTS) {
+                    if (msgs.len() > MAX_ALERTS) {
                         shift_left_str(msgs);
                     }
                     atom_set(st, alerts, msgs);
@@ -180,7 +180,7 @@ export class Dashboard {
     fn alerts_text(self): string {
         let out = "";
         const msgs = atom_get(self.store, self.alerts);
-        for (let i = 0; i < msgs.length; i += 1) {
+        for (let i = 0; i < msgs.len(); i += 1) {
             out = str.concat(out, msgs[i], "\n");
         }
         return out;
@@ -217,21 +217,21 @@ export class Dashboard {
 // --- vec helpers (shared by mutations; free fns keep models data-only) ---
 
 export(self) fn shift_left(xs: Vec<f32>): void {
-    for (let i = 1; i < xs.length; i += 1) {
+    for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
 export(self) fn shift_left_str(xs: Vec<string>): void {
-    for (let i = 1; i < xs.length; i += 1) {
+    for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
 export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir): void {
-    for (let i = 1; i < xs.length; i += 1) {
+    for (let i = 1; i < xs.len(); i += 1) {
         let j = i;
         while (j > 0 && score_lt(xs[j], xs[j - 1], dir)) {
             swap_users(xs, j, j - 1);

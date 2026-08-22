@@ -21,6 +21,6 @@ fn sieve(limit: i32): Vec<i32> {
 export fn main(): void {
     const log = Logger("sieve");
     const primes = sieve(100);
-    const last = primes[primes.length - 1];
-    log.info(f"{primes.length} primes up to 100, last={last}");
+    const last = primes[primes.len() - 1];
+    log.info(f"{primes.len()} primes up to 100, last={last}");
 }

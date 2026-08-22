@@ -147,7 +147,7 @@ export class Store {
     // Rc(Store())
 
     fn find(self, id: u32): Option<Entry> {
-        for (let i = 0; i < self.entries.length; i += 1) {
+        for (let i = 0; i < self.entries.len(); i += 1) {
             if (self.entries[i].id == id) {
                 return Option.some(self.entries[i]);
             }
@@ -156,7 +156,7 @@ export class Store {
     }
 
     fn upsert(self, id: u32, v: dyn Any): void {
-        for (let i = 0; i < self.entries.length; i += 1) {
+        for (let i = 0; i < self.entries.len(); i += 1) {
             if (self.entries[i].id == id) {
                 self.entries[i].ver &+= 1;
                 self.entries[i].value = v;
@@ -256,7 +256,7 @@ export class WatchHandle {
 
     dispose(self): void {               // runs when the last Rc drops
         const kept: Vec<Rc<Watch>> = Vec();
-        for (let i = 0; i < self.store.watches.length; i += 1) {
+        for (let i = 0; i < self.store.watches.len(); i += 1) {
             if (self.store.watches[i].wid != self.wid) {
                 kept.push(self.store.watches[i]);
             }
@@ -275,7 +275,7 @@ export fn flush(store: Rc<Store>): void {
             panic("reactive: watch loop detected");
         }
         changed = false;
-        for (let i = 0; i < store.watches.length; i += 1) {
+        for (let i = 0; i < store.watches.len(); i += 1) {
             const w = store.watches[i];
             const cur = store.version_of(w.atom);
             if (cur != w.last_ver) {

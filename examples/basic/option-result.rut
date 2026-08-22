@@ -6,7 +6,7 @@ import { Logger } from "std:log";
 enum IoError { NotFound, Permission, Busy }
 
 fn find(xs: Vec<string>, key: string): Option<i32> {
-    for (let i = 0; i < xs.length; i += 1) {
+    for (let i = 0; i < xs.len(); i += 1) {
         if (xs[i] == key) {
             return Option.some(i);
         }
@@ -34,7 +34,7 @@ export fn main(): void {
 
     const r = read_config("app.cfg");
     if (r.is_ok()) {
-        log.info(f"read {r.value.length} bytes");
+        log.info(f"read {r.value.len()} bytes");
     } else {
         log.info(f"error: {r.error}");  // enum renders its member name
     }

@@ -35,7 +35,7 @@ fn view(th: Palette, st: Rc<Dashboard>): Element {
                 children: [
                     header(th, st),
                     body(th, f"users {st.users_count()} · events {st.events_seen()} · visits {st.visits()}"),
-                    body(th, f"series n={st.samples().length} · summary n={s.n} mean={s.mean} last={s.last}"),
+                    body(th, f"series n={st.samples().len()} · summary n={s.n} mean={s.mean} last={s.last}"),
                 ],
             }),
         ],

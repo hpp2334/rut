@@ -32,6 +32,6 @@ export suspend fn main(): void {
             return;                                  // senders drop -> workers exit
         }
         senders[next].send(got.value);               // round-robin dispatch
-        next = (next + 1) % senders.length;
+        next = (next + 1) % senders.len();
     }
 }

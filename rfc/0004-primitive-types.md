@@ -34,6 +34,9 @@ value**, and why `box<T>` is rejected outright rather than deferred.
   refcounts — and `Array<Point, N>` has no header at all: it *is* the
   N-slot inline block, copied whole.
 - No `null`, no `undefined`. Absence is `Option<T>` (RFC 0005).
+- **One size accessor everywhere**: `.len()` — `string`, `bytes`, `Vec<T>`,
+  `Array<T, N>`, and `dyn Slice<T>` all spell it the same way; there is no
+  `.length` property or `.count()` variant anywhere in the language.
 
 ## 2. One default copy regime: by value
 

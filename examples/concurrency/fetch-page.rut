@@ -20,6 +20,6 @@ export suspend fn main(): void {
     const log = Logger("fetch");
     const page = await fetch_page("https://example.com");
     if (page.is_ok()) {
-        log.info(f"{page.value.length} bytes");
+        log.info(f"{page.value.len()} bytes");
     }
 }

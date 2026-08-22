@@ -29,7 +29,7 @@ fn literals(name: string): void {
     const buf = bytes(64);             // zeroed
     const p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
 
-    log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={shared.length}");
+    log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={shared.len()}");
 }
 
 export fn main(): void {

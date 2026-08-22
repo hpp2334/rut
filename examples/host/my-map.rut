@@ -32,8 +32,8 @@ dataclass Name implements Hashable, Equal<Name> {   // BOTH — Hashable
     last: string;
 
     fn hash(self): u64 {                             // demo hash (length mix);
-        return u64(self.first.length) * 1000003      // real impls mix bytes
-             + u64(self.last.length);
+        return u64(self.first.len()) * 1000003      // real impls mix bytes
+             + u64(self.last.len());
     }
 
     fn eq(self, other: Name): bool {                 // typed other — fields

@@ -46,7 +46,7 @@ fn boxed_layout(): void {
     // pay a checked downcast only when actually recovering the value.
     log.info(f"box1 tid==Point: {box1.type_id() == TID_POINT}");
     log.info(f"box2 size: {box2.size()}");                     // 8
-    log.info(f"box1 bytes: {box1.as_bytes().length}");         // 8-byte payload snapshot
+    log.info(f"box1 bytes: {box1.as_bytes().len()}");         // 8-byte payload snapshot
 
     // The payload snapshot is comparable — content hashing for stores:
     const same = make_any(Point { x: 1, y: 2 });

@@ -9,7 +9,7 @@ export suspend fn main(): void {
     const urls = ["a.png", "b.png", "c.png", "d.png"];
     const ports: Vec<Receiver<Image>> = Vec();
 
-    for (let i = 0; i < urls.length; i += 1) {
+    for (let i = 0; i < urls.len(); i += 1) {
         const jobs = Channel<Job>();     // main -> worker (MPSC)
         const imgs = Channel<Image>();   // worker -> main
         spawn_worker("workers/image-worker.rut", [jobs.receiver, imgs.sender]);
@@ -17,7 +17,7 @@ export suspend fn main(): void {
         ports.push(imgs.receiver);
     }
 
-    let left = urls.length;
+    let left = urls.len();
     while (left > 0) {
         const img = await select_all(ports);   // first decoded wins
         blit(img);
