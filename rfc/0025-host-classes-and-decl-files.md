@@ -4,7 +4,7 @@
 - **Date:** 2026-08-22
 - **Author:** hpp2334
 - **Depends on:** RFC 0022 (embedding), RFC 0012 (interfaces), RFC 0010
-  (factories), RFC 0016 §3 (Drop mapping), RFC 0029 (declaration files)
+  (constructors), RFC 0016 §3 (Drop mapping), RFC 0029 (declaration files)
 - **Supersedes:** RFC 0005 §5 (pre-restructure; `extern class` renamed to
   `host class` — "host" names where the implementation lives)
 - **Part:** E — Host & FFI
@@ -46,15 +46,15 @@ host class Fence {                              // NOT exported: known inside
 ```
 
 - A `host class` declaration may contain method signatures and a
-  **factory signature** (`factory(cap: i32): Self;`) — the native
-  factory keeps construction an ordinary type-call (RFC 0026). Host class
+  **constructor signature** (`constructor(cap: i32): Self;`) — the native
+  constructor keeps construction an ordinary type-call (RFC 0026). Host class
   methods are instance methods: they spell the `self` receiver like rut
   methods (`fn set(self, k: K, v: V): void;` — RFC 0010 §2; the Rust side's
   `this: &mut MyMap` parameter is that receiver). It may not
   declare fields: host instances box host values, not rut field
   blocks. An `extern class` (rut-package surface) has the same shape for
   the same reason — the package's fields are its business; you get
-  factories and methods.
+  constructors and methods.
 - **Param bounds on host/extern decls are admission-only syntax**: `K:
   Hashable` constrains which instantiations compile (checked against
   the interface + its `requires` graph, RFC 0012 §2) and grants nothing

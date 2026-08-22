@@ -6,12 +6,12 @@ import { channel, Receiver } from "std:channel";
 import { Image, Job } from "imaging";
 
 export suspend fn main(): void {
-    const urls = ["a.png", "b.png", "c.png", "d.png"];
-    const ports: Vec<Receiver<Image>> = Vec();
+    let urls = ["a.png", "b.png", "c.png", "d.png"];
+    let ports: Vec<Receiver<Image>> = Vec();
 
     for (let i = 0; i < urls.len(); i += 1) {
-        const jobs = Channel<Job>();     // main -> worker (MPSC)
-        const imgs = Channel<Image>();   // worker -> main
+        let jobs = Channel<Job>();     // main -> worker (MPSC)
+        let imgs = Channel<Image>();   // worker -> main
         spawn_worker("workers/image-worker.rut", [jobs.receiver, imgs.sender]);
         jobs.sender.send(Job { url: urls[i] });
         ports.push(imgs.receiver);
@@ -19,7 +19,7 @@ export suspend fn main(): void {
 
     let left = urls.len();
     while (left > 0) {
-        const img = await select_all(ports);   // first decoded wins
+        let img = await select_all(ports);   // first decoded wins
         blit(img);
         left -= 1;
     }

@@ -79,7 +79,7 @@ a structural answer in rut:
    memory story is layout: untagged 8-byte slots (RFC 0015 §5), inline
    repr-C values with no headers (RFC 0015 §4), flat unboxed vecs
    (RFC 0016 §4), reference counting with deterministic destructors
-   (RFC 0016) and a budgeted cycle collector (RFC 0017). No NaN-boxing —
+   (RFC 0016), with `Weak<T>` as the cycle answer (RFC 0017). No NaN-boxing —
    the per-platform layout bug class tur hit in Boa — and no collector on
    the hot path.
 
@@ -93,7 +93,7 @@ a structural answer in rut:
 - G4 — Kotlin-style coroutine suspend built on Rust-style poll semantics
   (cold futures, state machines, cancellation-by-drop). Not promise push.
 - G5 — Multi-threading via isolate workers (separate heaps, message passing).
-- G6 — Simple memory management: reference counting + cycle collector.
+- G6 — Simple memory management: reference counting and NO collector:
   Deterministic destruction for host resources.
 - G7 — No JIT. Ahead-of-time (to bytecode) compilation only. Predictable.
 - G8 — Embeddable: host registers native modules with typed functions; host
@@ -142,8 +142,8 @@ final sections of the RFC they implement).
 - 0007 — literals & inference: suffixes, conversions, plain/raw/format strings
 - 0008 — control flow & `when`: exhaustive pattern expressions
 - 0009 — dataclasses: open value records (methods + `implements`)
-- 0010 — classes & factories: sealed value records, no inheritance
-- 0011 — `Rc<T>`, dispose & identity: explicit references
+- 0010 — classes & constructors: sealed value records, no inheritance
+- 0011 — `Rc<T>`, disposal & identity: explicit references
 - 0012 — interfaces & dispatch: the sole dynamic mechanism; `dyn I` object
   types; type tests
 - 0013 — functions, closures & generics
@@ -153,7 +153,7 @@ final sections of the RFC they implement).
 **Part C — Memory**
 
 - 0016 — the RC heap & deterministic destructors
-- 0017 — weak references & the cycle collector
+- 0017 — weak references & the no-collector leak policy
 
 **Part D — Concurrency**
 
@@ -182,6 +182,7 @@ final sections of the RFC they implement).
 - 0034 — VM core: interpreter loop, traps, budgets
 - 0035 — loading, host hooks & the embedding loop
 - 0036 — diagnostics: stack traces, locations & symbolication
+- 0038 — module bundles: `.rutbundle` — image + surfaces, one file
 
 **Part G — Reflection & serialization**
 
@@ -194,9 +195,9 @@ final sections of the RFC they implement).
 |---|----------|-----|
 | P1 | Fully static type system, **no dynamic typing**, inference-first, reified runtime types | 0004–0015 |
 | P2 | Isolate workers with typed channels and transferable buffers | 0021 |
-| P3 | Reference counting + cycle collector; deterministic destructors | 0016–0017 |
-| P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0005, 0033 |
-| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `factory` type-calls — no `new` keyword, `suspend factory` allowed), `interface` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0006, 0009–0012 |
+| P3 | Reference counting; deterministic destructors; cycles leak by design (`Weak<T>`) | 0016–0017 |
+| P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0005, 0034 |
+| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `constructor` type-calls — no `new` keyword, `suspend constructor` allowed), `interface` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0006, 0009–0012 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
 | P8 | Both value types (`dataclass` **and** `class`) are **repr C**; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015, 0024 |
@@ -220,7 +221,7 @@ for serialization.
 
 ```
 source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-ish)
-      ─► const-fold / inline / monomorphize ─► typed bytecode ─► VM
+      ─► fold / inline / monomorphize ─► typed bytecode ─► VM
 ```
 
 - **Bytecode**: register-based, typed opcodes (`i32.add`, `f32.mul`,
@@ -234,6 +235,7 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
 - **No JIT**: all optimization happens at compile time. The VM may keep cheap
   inline caches for field access on host opaques, but nothing is ever compiled
   to machine code.
+  - **Interface members never devirtualize** (RFC 0012 §1): a method declared in an interface dispatches through the vtable even when the receiver's exact class is statically known; inherent methods stay direct.
 - **Single-threaded VM**: a `Vm` instance runs on one thread; workers are
   separate `Vm`s (RFC 0021). No atomics inside the heap.
 - **Host stepping**: the host owns time. `vm.run_until_idle()`,
@@ -247,12 +249,13 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
   (no suspend, single module) (RFC 0029, 0031–0034).
 - **M2** — Rust embedding API: modules, typed native fns, opaque types,
   `Result` mapping, interrupts/budgets, repr C struct registration
-  (RFC 0022–0028).
+  (RFC 0022–0028; includes the builtin-impl registry that RFC 0037's auto/registry impls ride).
 - **M3** — Coroutines: `suspend`/`await` state machines, host-driven executor,
   cancellation (RFC 0018–0020).
 - **M4** — Workers, channels, transferables (RFC 0021).
-- **M5** — Cycle collector, weak refs, finalization polish (RFC 0017).
-- **M6** — Tooling: CLI runner, formatter, LSP, debugger protocol; pilot
+- **M5** — Weak refs, shutdown leak reporting, finalization polish (RFC 0017).
+- **M6** — Tooling: CLI runner, formatter, LSP, debugger protocol;
+  `.rutbundle` packing/loading (RFC 0038); pilot
   integration in tur behind a feature flag.
 
 ## Open questions

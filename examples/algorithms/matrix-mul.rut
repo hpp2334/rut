@@ -6,7 +6,7 @@ import { Logger } from "std:log";
 fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, out: Vec<f32>): void {
     for (let i = 0; i < n; i += 1) {
         for (let k = 0; k < n; k += 1) {
-            const aik = a[i * n + k];
+            let aik = a[i * n + k];
             for (let j = 0; j < n; j += 1) {
                 out[i * n + j] += aik * b[k * n + j];
             }
@@ -15,11 +15,11 @@ fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, out: Vec<f32>): void {
 }
 
 export fn main(): void {
-    const log = Logger("matrix");
-    const n = 4;
-    const a = Vec<f32>(n * n);
-    const b = Vec<f32>(n * n);
-    const out = Vec<f32>(n * n);
+    let log = Logger("matrix");
+    let n = 4;
+    let a = Vec<f32>(n * n);
+    let b = Vec<f32>(n * n);
+    let out = Vec<f32>(n * n);
     for (let i = 0; i < n * n; i += 1) {
         a[i] = f32(i);
         b[i] = f32(i % 7);

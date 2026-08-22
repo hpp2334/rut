@@ -32,15 +32,15 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   v1 (RFC 0005); user generics stay type-only — `N` is a constant
   expression, part of the instantiation identity (`Array<i32, 3> ≠
   Array<i32, 4>`, RFC 0015 §3).
-- Generic parameters are **unconstrained by default** — no `T: Iface`
+- Generic parameters are **unconstrained by default** — no `T requires Iface`
   bounds in the parameter list of user generics (OQ-1): you cannot call
   interface methods on a bare `T`. Pass values in, or take a `dyn I`
   parameter instead of a generic. Two **admission-only** forms ship —
   both gate which instantiations compile (closing over `requires`),
   grant no method calls on bare type params, and add no IR:
   1. inline param bounds on **host/extern class declarations**
-     (`MyMap<K: Hashable, V>`, RFC 0025 §1) — always bare (`K: Hashable`,
-     never `K: dyn Hashable`; `T: Any` is vacuous and rejected, RFC 0014);
+     (`MyMap<K requires Hashable, V>`, RFC 0025 §1) — always bare (`K requires Hashable`,
+     never `K: dyn Hashable`; `T requires Any` is vacuous and rejected, RFC 0014);
   2. a trailing **`where` clause on user generic fns** (RFC 0037 §3) —
      the serde motivating pair: producers that return `T` cannot take a
      `dyn I` parameter instead, so the contract rides the call site:
@@ -52,7 +52,7 @@ block), and a generic `first<T>` monomorphized to two instantiations.
 
 ## Open questions
 
-- OQ-1: generic bounds `T: Iface` with **static dispatch** on bare `T`
+- OQ-1: generic bounds `T requires Iface` with **static dispatch** on bare `T`
   (would unlock it without `dyn I` refs) — still deferred; the
   **admission-only** forms shipped (host/extern inline bounds, §2 +
   RFC 0025 §1; user-fn `where` clauses, RFC 0037 §3) need no dispatch

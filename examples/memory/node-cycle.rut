@@ -1,25 +1,30 @@
-// RFC 0017 §2 — reference cycles never reach rc 0; the budgeted cycle
-// collector (trial deletion) reclaims them. dispose() runs exactly once
-// per collected object.
+// RFC 0017 — strong cycles LEAK by design (no collector). Disposal.dispose of a
+// leaked cycle never runs. Fix back-pointers with Weak<T>:
+// `next: Weak<Node>` instead of `Rc<Node>` breaks the cycle.
 
 import { Logger } from "std:log";
 
-class Node {
-    next: Option<Rc<Node>> = Option.none();   // public field: plain data
-    // initializer covers `next` -> default factory: Node()
+class Node {                              // initializer covers `next`
+    next: Option<Rc<Node>> = Option.none; // -> default constructor: Node()
+
+    fn link(mut self, other: Rc<Node>): void {
+        self.next = Option.some(other);
+    }
 }
 
-fn make_cycle(): Rc<Node> {
-    const a = Rc(Node());
-    const b = Rc(Node());
-    a.next = Option.some(b);       // rc(b) = 2
-    b.next = Option.some(a);       // rc(a) = 2 — a cycle: neither hits 0
+fn make_cycle(): Rc<Node> {               // a -> b -> a : strong cycle
+    let a = Rc(Node());
+    let b = Rc(Node());
+    a.link(b);
+    b.link(a);
     return a;
 }
 
 export fn main(): void {
-    const log = Logger("cycle");
-    const head = make_cycle();
-    log.info("cycle allocated");
-}   // external refs dropped; the cycle is unreachable garbage; the
-    // collector's next pass reclaims a & b
+    let log = Logger("cycle");
+    let head = make_cycle();
+    log.info(f"head.next alive: {head.next.is_some()}");
+
+    // The leak fix: hold `b` from `a` through Weak (RFC 0017 §1) so the
+    // pair frees deterministically at scope end.
+}

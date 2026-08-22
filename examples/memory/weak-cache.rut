@@ -6,7 +6,7 @@ import { Logger } from "std:log";
 class Tile {
     private n: i32;
 
-    factory(n: i32): Self {
+    constructor(n: i32): Self {
         return Self { n: n };
     }
 
@@ -14,19 +14,19 @@ class Tile {
 }
 
 fn probe(): Weak<Tile> {
-    const log = Logger("weak");
-    const t = Rc(Tile(7));
-    const w = Weak(t);            // Weak<Tile> — no strong reference held
+    let log = Logger("weak");
+    let t = Rc(Tile(7));
+    let w = Weak(t);            // Weak<Tile> — no strong reference held
     log.info(f"alive inside: {w.upgrade().is_some()}");   // true
     return w;
 }   // t dropped; no strong refs remain -> the cell dies, the WeakBox nulls
 
 export fn main(): void {
-    const log = Logger("weak");
-    const alive = Rc(Tile(1));
-    const a = Weak(alive);
+    let log = Logger("weak");
+    let alive = Rc(Tile(1));
+    let a = Weak(alive);
     log.info(f"held: {a.upgrade().is_some()} id={a.upgrade().value.id()}");
 
-    const w = probe();
+    let w = probe();
     log.info(f"alive after drop: {w.upgrade().is_some()}");   // false
 }

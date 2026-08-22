@@ -34,7 +34,8 @@ struct HostHooks {
   entirely by `load_module` — the VM has no filesystem access and no
   builtin loader policy (RFC 0003 OQ-2 stays a host decision).
 - **Native specifiers resolve through the surface pipeline** (RFC 0029
-  §5): source → `.d.ir` (version-matched) → `.d.rut` — compiled and
+  §5): source → mounted `.rutbundle` (RFC 0038 §5) → `.d.ir`
+  (version-matched) → `.d.rut` — compiled and
   verified like any module; declaration surfaces are pure, so checking
   needs no Rust and no package bodies. The **link** step then proves every
   surface member *referenced* by the image has its implementation:
@@ -69,11 +70,14 @@ RFC 0032 §1); when no value is ready, `chrecv` parks the frame like
 | `vm.run_until_idle() / vm.poll(deadline) / vm.resume()` | stepping |
 | `vm.register_module(name, native)` | native bodies (RFC 0022 §2) |
 | `vm.register_struct::<T>()` | repr-C layout check (RFC 0024) |
-| `vm.collect_cycles()` | force cycle pass (RFC 0017 §2) |
+| `vm.heap_stats()` | live per-type object counts (RFC 0017 §3) |
 | `vm.symbolicate(&raw) -> Vec<TraceEntry>` | trace names/spans from loaded images (RFC 0036 §3) |
 
 Errors are values (`Result`), bugs are traps, and the host is always in
 charge of time, IO, and lifetime — the embeddability pillar (RFC 0001 G8).
+Parse-time robustness is the same pillar: the frontend is stack-bounded
+with an explicit depth budget (RFC 0030 §4 C3) — malformed or hostile
+module source yields diagnostics, never a host stack overflow.
 
 ## 4. The tur frame loop
 

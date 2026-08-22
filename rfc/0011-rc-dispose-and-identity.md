@@ -1,4 +1,4 @@
-# RFC 0011: `Rc<T>`, Dispose & Identity — Explicit References
+# RFC 0011: `Rc<T>`, Disposal & Identity — Explicit References
 
 - **Status:** Draft
 - **Date:** 2026-08-22
@@ -26,12 +26,12 @@ See **`examples/basic/rc-and-dispose.rut`** (aliasing vs value copies) and
 - **Access goes through**: `b.x` reads the box's field; `b.x = 1` and
   `b.move_by(..)` mutate the shared box. There is no explicit deref syntax.
 
-## 2. Dispose classes must live behind `Rc`
+## 2. Classes implementing `Disposal` must live behind `Rc`
 
-- If a class declares `dispose(self)`, using it as a bare value is a compile
+- If a class implements `Disposal`, using it as a bare value is a compile
   error (a copyable value has no single death). Construct then box —
-  `Rc(TempFile("tmp.dat"))` — or hand out `Rc` from a factory (RFC 0010 §1).
-  When an Rc cell's count hits 0, `dispose(self)` runs, then fields are
+  `Rc(TempFile("tmp.dat"))` — or hand out `Rc` from a constructor (RFC 0010 §1).
+  When an Rc cell's count hits 0, `Disposal.dispose(mut self)` runs, then fields are
   released in order — deterministic destruction (RFC 0016 §3).
 
 ## 3. Interfaces need the box
@@ -48,7 +48,7 @@ See **`examples/basic/rc-and-dispose.rut`** (aliasing vs value copies) and
 ## 4. Weak references
 
 - `Weak(b)` creates a `Weak<C>` that does not keep the cell alive
-  (RFC 0017 §1). Rc cells are also what the cycle collector walks
+  (RFC 0017 §1). Rc cells are also what the shutdown leak report walks
   (RFC 0017 §2).
 
 ## Note

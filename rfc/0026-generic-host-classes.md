@@ -21,8 +21,8 @@ The two halves of a native module (full listing:
 // plugin/my_map.d.rut — the declaration file for "plugin:my_map"
 import { Hashable } from "std:collection";
 
-export host class MyMap<K: Hashable, V> {     // K bound = admission only
-    factory(cap: i32): Self;                  // native factory
+export host class MyMap<K requires Hashable, V> {     // K bound = admission only
+    constructor(cap: i32): Self;                  // native constructor
     fn set(self, k: K, v: V): void;
     fn get(self, k: K): Option<V>;
     fn size(self): i32;
@@ -45,7 +45,7 @@ fn build_my_map(args: &GenericArgs, types: &TypeRegistry)
     let k_ty = args.of("K").ty();               // for keys(): Vec<K>
 
     ClassTable::new::<MyMap>(args)
-        .factory(|ctx: &mut VmCtx, cap: i32| Ok(MyMap::with_capacity(cap)))
+        .constructor(|ctx: &mut VmCtx, cap: i32| Ok(MyMap::with_capacity(cap)))
         .method("set",  |ctx, this: &mut MyMap, k: IfaceHandle, v: RutValue| {
             ctx.check_arg(&v, v_ty)?;           // value's TypeId == this
             this.inner.insert(k, v); Ok(())     // instantiation's V
@@ -91,7 +91,7 @@ instantiation — nobody can supply `V`. Instead:
 
 | decl type | Rust shape |
 |---|---|
-| param constrained to an interface (`K: Hashable` — the bound stays bare on the rut side, RFC 0013 §2) | `IfaceHandle` (RFC 0015 §6 fat ref; the rut-facing object type is `dyn Hashable`) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `string` keys, identity for `Rc<T>` keys — same Rust type, different attached vtable. |
+| param constrained to an interface (`K requires Hashable` — the bound stays bare on the rut side, RFC 0013 §2) | `IfaceHandle` (RFC 0015 §6 fat ref; the rut-facing object type is `dyn Hashable`) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `string` keys, identity for `Rc<T>` keys — same Rust type, different attached vtable. |
 | unconstrained param (`V`) | `RutValue` — erased owning handle; per-call check against the reified `TypeId` |
 | concrete types (`i32`, `f32`, `Template`, …) | the Rust type — as in RFC 0022 §2, embedder-pinned at Rust compile time |
 | `Self` | the instance handle |
@@ -104,7 +104,7 @@ is the semantic baseline.)
 ## 4. Slots, not strings
 
 The `.method("get", ..)` label exists for the register step only:
-compiling the declaration file assigns slot ids (`factory→0, set→1, get→2, …`);
+compiling the declaration file assigns slot ids (`constructor→0, set→1, get→2, …`);
 consumer calls compile to `callnat { slot }` (RFC 0032 — fold/CSE-safe,
 no string in IR, no lookup at dispatch); `register_module` resolves each
 label against the slot table **once**, before any rut code runs — a typo is
@@ -131,7 +131,7 @@ source.
   RFC 0022 §1). Re-entrancy is already guarded: `set` holds `&mut this`, the
   cell's borrow flag is set, and a hash impl that calls `m.set(..)` again
   traps `borrowed by host` (RFC 0023 §2) instead of corrupting the table.
-- The **native factory** makes construction an ordinary type-call
+- The **native constructor** makes construction an ordinary type-call
   (`MyMap<string, i32>(32)`), same rule as `Vec<f32>(n)`: construction
   is a function everywhere, and a host class simply supplies the function.
   Helper fns like `newCanvas()` remain the shape for host-computed or

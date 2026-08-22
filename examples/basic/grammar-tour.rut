@@ -1,4 +1,4 @@
-// RFC 0009–0012 — grammar tour: dataclass, interface, class + factory,
+// RFC 0009–0012 — grammar tour: dataclass, interface, class + constructor,
 // Rc<T>, vtable dispatch, exhaustive when, format literals.
 //
 // NOTE: rut has no compiler yet — these files are the design corpus the
@@ -19,18 +19,18 @@ fn length(p: Point): f64 {
 }
 
 interface Drawable {
-    fn draw(self, g: Canvas): void;         // interfaces declare METHODS only
+    fn draw(self, g: Canvas): void;             // interfaces declare METHODS only
 }
 
 class Circle implements Drawable {         // also a VALUE type; Rc<T> for refs
     private center: Point;                 // dataclass field stored INLINE
     private r: f32;
 
-    factory(x: f32, y: f32, r: f32): Self {  // type-call: Circle(1, 2, 3)
+    constructor(x: f32, y: f32, r: f32): Self {  // type-call: Circle(1, 2, 3)
         return Self { center: Point { x: x, y: y }, r: r };
     }
 
-    fn move_by(self, dx: f32, dy: f32): void {   // all calls direct
+    fn move_by(mut self, dx: f32, dy: f32): void {   // all calls direct
         self.center.x += dx;
         self.center.y += dy;
     }
@@ -43,7 +43,7 @@ class Circle implements Drawable {         // also a VALUE type; Rc<T> for refs
 }
 
 fn blit_all(g: Canvas, items: Vec<dyn Drawable>): void {
-    for (const d of items) {               // `dyn`-typed loop variable
+    for (let d of items) {               // `dyn`-typed loop variable
         d.draw(g);                         // vtable dispatch
     }
 }
@@ -57,13 +57,13 @@ fn color_name(c: Color): string {
 }
 
 export fn main(): void {
-    const log = Logger("tour");
+    let log = Logger("tour");
     let p = Point { x: 1, y: 2 };          // dataclass literal: the only
     p.x = 3;                               // dataclass construction form
 
-    const c = Circle(1, 2, 3);             // class factory type-call
-    const shared = Rc(c);                  // want shared/ref semantics? say so
-    const g = newCanvas();
+    let c = Circle(1, 2, 3);             // class constructor type-call
+    let shared = Rc(c);                  // want shared/ref semantics? say so
+    let g = newCanvas();
     blit_all(g, Vec.from([shared]));       // Rc<Circle> widens to dyn Drawable
     log.info(f"{color_name(Color.Red)} area={c.area()} len={length(p)}");
 }

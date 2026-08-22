@@ -35,7 +35,7 @@ builtins (§3), `is<T>` (RFC 0012 §3), `dyn Any` recovery
    the same machinery.
 4. **Heterogeneous collections** — vtable dispatch (RFC 0012) needs the exact type
    reachable from every object header.
-5. **Debugging** — `debug.type_of(x)`, stack traces (RFC 0036), formatter output.
+5. **Debugging** — `debug.type_name(x)`, stack traces (RFC 0036), formatter output.
 6. **Serialization** — `std:reflect` walkers traverse `RutType`
    descriptors (RFC 0037).
 7. **`dyn Any` recovery** — `downcast<T>` (RFC 0014) checks the boxed cell's
@@ -45,9 +45,9 @@ builtins (§3), `is<T>` (RFC 0012 §3), `dyn Any` recovery
 ## 3. Layout & type-identity builtins
 
 ```rut
-const TID_POINT: u32 = type_id<Point>();
-const SZ_POINT: u32  = size_of<Point>();     // 8 — two f32s, repr C
-const AL_POINT: u32  = align_of<Point>();    // 4
+let TID_POINT: u32 = type_id<Point>();
+let SZ_POINT: u32  = size_of<Point>();     // 8 — two f32s, repr C
+let AL_POINT: u32  = align_of<Point>();    // 4
 ```
 
 - `type_id<T>(): u32` — identity of the *instantiated* type, unique per VM
@@ -65,7 +65,7 @@ const AL_POINT: u32  = align_of<Point>();    // 4
   slot stores the cell handle, RFC 0031 §4).
   (`u32`, not a word-sized type: rut has no `usize`, and no rut value or
   buffer may exceed 4 GiB in v1.)
-- All three are **compile-time constants** — const-expressions (RFC 0003 §1),
+- All three are **compile-time constants** — load-time expressions (RFC 0003 §1),
   folded by HIR from the type table, never executed (RFC 0033 §3).
 - **Boxing widens** (RFC 0037 §3): `make_any` of an int stores i64
   sign/zero-extended; a float, f64 — the §5 slot discipline. A kind
@@ -97,7 +97,12 @@ rule, no exceptions:
 - An `Rc<C>` cell wraps the *same* block behind `Header + vtable pointer`
   (§6): boxing never re-lays-out fields.
 - `enum`, `Option`, `Result` are *not* repr C (tagged layouts, RFC 0016 §5)
-  and never cross the FFI as structs — pass their payload fields.
+  and never cross the FFI as structs — pass their payload fields. Their
+  **inline layout** (fields, locals, `Vec` elements of value payloads):
+  one `u32` tag slot followed by the payload's slots, size = max variant
+  payload padded to the tag's alignment — fixed per type, part of the
+  field table, and what `size_of<T>()` reports for them. Still tagged,
+  still never repr C.
 
 ## 5. Internals: slots
 
@@ -142,7 +147,7 @@ struct RutClass {                    // heap object: an Rc<T> CELL (RFC 0011)
 #[repr(C)]
 struct VTable {
     ty: TypeId,                      // exact runtime type (points into RutType)
-    dispose: Option<unsafe fn(*mut RutClass)>,  // RFC 0011 §2 destructor
+    dispose: Option<unsafe fn(*mut RutClass)>,  // cached Disposal.dispose trampoline
     slots: [CodePtr],                // interface method slots, global ids
 }
 ```
@@ -165,10 +170,10 @@ Op::CallIface { recv, slot: 3, args } => {
 }
 ```
 
-Devirtualized direct call for comparison:
+Direct inherent call for contrast (interface members NEVER devirtualize, RFC 0012 §1):
 
 ```text
-Op::Call     { func: "Circle$area", recv, args }   ; c.area(), c: Circle
+Op::Call     { func: "Circle$area", recv, args }   ; c.area() — area INHERENT
 ```
 
 ### Type test
@@ -187,7 +192,9 @@ impl TypeTable {
 ```
 
 `is<T>` monomorphizes with `want` as a compile-time constant, so the check
-is: load the object's vtable `TypeId`, compare. (`Any` needs no descriptor
+is: load the object's vtable `TypeId`, compare — lowered `tidof` + `icmp`
+(RFC 0032 §1.1; no `is_a` op exists, and `downcast`'s check is `tidof` +
+`br` + guarded `unbox`, RFC 0014). (`Any` needs no descriptor
 entry — every type trivially implements it — so the `implements` scan only
 serves host-boundary argument checks on `dyn I` parameters.) The widening
 itself — implicit boxing to `dyn I` or `make_any(v)` — needs no dispatch

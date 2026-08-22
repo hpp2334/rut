@@ -47,7 +47,7 @@ export interface Deserializable requires Reflectable { }
 | `class`, no impl | — | — | compile error at call | compile error at call |
 | `class`, manual impl | hand-written (curated) | **impossible** | ✓ (positional view) | **compile error** |
 
-- **Auto-impls** are ordinary vtable fills (RFC 0012 §6): dataclass —
+- **Auto-impls** are ordinary vtable fills (RFC 0015 §6): dataclass —
   arity = field count, child(i) = field i (snapshot); enum — arity =
   the current variant's payloads. The `implements` list gains the
   entry implicitly; re-declaring one is a duplicate-impl error, and
@@ -58,8 +58,8 @@ export interface Deserializable requires Reflectable { }
 - **`Deserializable` is auto-only**: hand-writing `implements
   Deserializable` is a compile error (the `Any` admission precedent,
   RFC 0014) — reflective construction is descriptor-backed, and
-  classes construct through factories (RFC 0010 §1); reflection never
-  calls a factory. Not vacuous, so it *can* be a bound.
+  classes construct through constructors (RFC 0010 §1); reflection never
+  calls a constructor. Not vacuous, so it *can* be a bound.
 - Manual class views are **curated**: private fields stay hidden
   because the impl does not expose them — privacy is what the impl
   says, not a walker-side law. They serialize **positionally**
@@ -106,7 +106,7 @@ export host class TypeInfo {
 export host class FieldInfo {
     fn name(self): string;                // the wire name
     fn ty(self): TypeInfo;
-    fn default(self): Option<dyn Any>;    // const-folded initializer —
+    fn default(self): Option<dyn Any>;    // folded at compile time initializer —
 }                                          // THE parse-time default
 export host class SumVariant {
     fn name(self): string;
@@ -162,13 +162,12 @@ export fn stringify(v: dyn Serializable): Result<string, string> {
 
 export fn deserialize<T>(v: string): Result<T, JsonError>
         where T requires Deserializable {
-    const t = reflect<T>();             // guaranteed descriptor-backed
-    const tree = parse_tree(v)?;        // by the bound — no runtime
-    const built = build(t, tree)?;      // pre-check
-    return when (downcast<T>(built)) {  // monomorphized TypeId compare
-        Option<T>.Some(x) -> Ok(x),     // (RFC 0014)
-        Option<T>.None -> Err(construction_failed(t)),
-    };
+    let t = reflect<T>();             // guaranteed descriptor-backed
+    let tree = parse_tree(v)?;        // by the bound — no runtime
+    let built = build(t, tree)?;      // pre-check
+    let opt = downcast<T>(built);   // monomorphized TypeId compare (RFC 0014)
+    if (opt.is_none()) { return Err(construction_failed(t)); }
+    return Ok(opt.value);             // refined to exact T in this branch
 }
 ```
 

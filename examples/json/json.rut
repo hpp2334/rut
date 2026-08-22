@@ -77,9 +77,9 @@ export fn deserialize<T>(v: string): Result<T, JsonError>
     // contract rides the call site — T is guaranteed descriptor-backed
     // (dataclass/enum/Option/Result/Vec/Array<T, N>) by the BOUND; no
     // runtime walkability pre-check exists to delete.
-    const t = reflect<T>();
-    const tree = parse_tree(v)?;
-    const built = build(t, tree)?;
+    let t = reflect<T>();
+    let tree = parse_tree(v)?;
+    let built = build(t, tree)?;
     return when (downcast<T>(built)) {
         Option<T>.Some(x) -> Ok(x),
         Option<T>.None -> Err(JsonError { msg: "construction failed its check", pos: 0 }),
@@ -91,19 +91,19 @@ export fn deserialize<T>(v: string): Result<T, JsonError>
 fn write_val(t: TypeInfo, a: dyn Any): Result<string, string> {
     when (t.kind()) {
         TypeKind.Record -> {
-            const parts = Vec<string>();
-            const fs = t.fields();
+            let parts = Vec<string>();
+            let fs = t.fields();
             for (let i = 0; i < fs.len(); i += 1) {
                 // .value (not unwrap_or): the Record branch proves
                 // field i exists — a None there is a VM bug, and bugs
                 // are traps (RFC 0001 P4).
-                const v = write_val(fs[i].ty(), t.child(a, i).value)?;
+                let v = write_val(fs[i].ty(), t.child(a, i).value)?;
                 parts.push(f"{quote(fs[i].name())}:{v}");
             }
             return Ok(f"{{{join(parts)}}}");        // {{ }} -> { (RFC 0007 §2)
         },
         TypeKind.Seq -> {
-            const parts = Vec<string>();
+            let parts = Vec<string>();
             for (let i = 0; i < t.arity(a); i += 1) {
                 parts.push(write_val(t.elem(), t.child(a, i).value)?);
             }
@@ -113,7 +113,7 @@ fn write_val(t: TypeInfo, a: dyn Any): Result<string, string> {
             // STRUCTURAL policy (RFC 0037 §3 rule 4): dispatch on
             // payload counts, never on variant names — nothing here
             // changes under --release stripping.
-            const vs = t.variants();
+            let vs = t.variants();
             if (sum_all_payloadless(vs)) {
                 return Ok(vs[t.variant(a)].name());     // C-like enum
             }
@@ -136,9 +136,9 @@ fn write_val(t: TypeInfo, a: dyn Any): Result<string, string> {
                 // implements() query is the gate; the view renders
                 // positionally (named walking is the dataclass path).
                 if (t.implements(reflect<Reflectable>())) {
-                    const parts = Vec<string>();
+                    let parts = Vec<string>();
                     for (let i = 0; i < t.arity(a); i += 1) {
-                        const c = t.child(a, i).value;
+                        let c = t.child(a, i).value;
                         parts.push(write_val(type_of(c), c)?);
                     }
                     return Ok(f"[{join(parts)}]");
@@ -157,10 +157,10 @@ fn write_val(t: TypeInfo, a: dyn Any): Result<string, string> {
 fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
     when (t.kind()) {
         TypeKind.Record -> {
-            const fs = t.fields();
-            const vals = Vec<dyn Any>(fs.len());
+            let fs = t.fields();
+            let vals = Vec<dyn Any>(fs.len());
             for (let i = 0; i < fs.len(); i += 1) {
-                const f = fs[i];
+                let f = fs[i];
                 when (member(j, f.name())) {
                     Option<JsonValue>.Some(child) -> {
                         vals[i] = build(f.ty(), child)?;
@@ -183,8 +183,8 @@ fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
             };
         },
         TypeKind.Seq -> {
-            const items = want_items(j, t.name())?;
-            const vals = Vec<dyn Any>(items.len());
+            let items = want_items(j, t.name())?;
+            let vals = Vec<dyn Any>(items.len());
             for (let i = 0; i < items.len(); i += 1) {
                 vals[i] = build(t.elem(), items[i])?;
             }
@@ -194,9 +194,9 @@ fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
             };
         },
         TypeKind.Sum -> {
-            const vs = t.variants();
+            let vs = t.variants();
             if (sum_all_payloadless(vs)) {
-                const name = want_str(j, t.name())?;
+                let name = want_str(j, t.name())?;
                 for (let i = 0; i < vs.len(); i += 1) {
                     if (str_eq(vs[i].name(), name)) {
                         return mint_variant(t, i, Vec<dyn Any>(), j);
@@ -205,14 +205,14 @@ fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
                 return Err(JsonError { msg: f"unknown variant {name}", pos: j.pos });
             }
             if (sum_is_optional(vs)) {
-                const idx = optional_indices(vs);
+                let idx = optional_indices(vs);
                 when (j.kind) {
                     JKind.Null -> {
                         return mint_variant(t, idx[0], Vec<dyn Any>(), j);
                     },
                     else -> {
-                        const payload = build(vs[idx[1]].payloads()[0], j)?;
-                        const one = Vec<dyn Any>(1);
+                        let payload = build(vs[idx[1]].payloads()[0], j)?;
+                        let one = Vec<dyn Any>(1);
                         one[0] = payload;
                         return mint_variant(t, idx[1], one, j);
                     },
@@ -259,7 +259,7 @@ fn optional_indices(vs: Vec<SumVariant>): Array<i32, 2> {
 
 fn sum_is_optional(vs: Vec<SumVariant>): bool {
     if (vs.len() != 2) { return false; }
-    const idx = optional_indices(vs);
+    let idx = optional_indices(vs);
     return idx[0] >= 0 && idx[1] >= 0 && vs[idx[1]].payloads().len() == 1;
 }
 
@@ -268,7 +268,7 @@ fn sum_is_optional(vs: Vec<SumVariant>): bool {
 fn member(j: JsonValue, name: string): Option<JsonValue> {
     when (j.kind) {
         JKind.Obj -> {
-            const fs = downcast<Vec<JField>>(j.val.value).unwrap_or(Vec<JField>());
+            let fs = downcast<Vec<JField>>(j.val.value).unwrap_or(Vec<JField>());
             for (let i = 0; i < fs.len(); i += 1) {
                 if (str_eq(fs[i].name, name)) {
                     return Option<JsonValue>.Some(fs[i].value);
@@ -324,7 +324,7 @@ fn skip_ws(s: string, i0: i32): i32 {
         if (i >= s.len()) {
             scanning = false;
         } else {
-            const c = s.at(i);
+            let c = s.at(i);
             if (c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8) {
                 i += 1;
             } else {
@@ -336,8 +336,8 @@ fn skip_ws(s: string, i0: i32): i32 {
 }
 
 fn parse_tree(s: string): Result<JsonValue, JsonError> {
-    const first = parse_value(s, 0)?;
-    const rest = skip_ws(s, first.end);
+    let first = parse_value(s, 0)?;
+    let rest = skip_ws(s, first.end);
     if (rest < s.len()) {
         return Err(JsonError { msg: "trailing characters after value", pos: rest });
     }
@@ -345,11 +345,11 @@ fn parse_tree(s: string): Result<JsonValue, JsonError> {
 }
 
 fn parse_value(s: string, i0: i32): Result<Parsed, JsonError> {
-    const i = skip_ws(s, i0);
+    let i = skip_ws(s, i0);
     if (i >= s.len()) {
         return Err(JsonError { msg: "unexpected end of input", pos: i });
     }
-    const c = s.at(i);
+    let c = s.at(i);
     if (c == 123u8) { return parse_object(s, i); }   // '{'
     if (c == 91u8)  { return parse_array(s, i); }    // '['
     if (c == 34u8)  { return parse_string(s, i); }   // '"'
@@ -367,19 +367,19 @@ fn parse_lit(s: string, i: i32, text: string, value: JsonValue): Result<Parsed, 
 }
 
 fn parse_object(s: string, i: i32): Result<Parsed, JsonError> {
-    const fields = Vec<JField>();
+    let fields = Vec<JField>();
     let k = skip_ws(s, i + 1);
     if (k < s.len() && s.at(k) == 125u8) {           // '}'
         return Ok(Parsed { value: jobj(fields, i), end: k + 1 });
     }
     let more = true;
     while (more) {
-        const key = parse_string(s, k)?;
+        let key = parse_string(s, k)?;
         k = skip_ws(s, key.end);
         if (k >= s.len() || s.at(k) != 58u8) {       // ':'
             return Err(JsonError { msg: "':' expected", pos: k });
         }
-        const val = parse_value(s, k + 1)?;
+        let val = parse_value(s, k + 1)?;
         fields.push(JField {
             name: downcast<string>(key.value.val.value).unwrap_or(""),
             value: val.value,
@@ -399,14 +399,14 @@ fn parse_object(s: string, i: i32): Result<Parsed, JsonError> {
 }
 
 fn parse_array(s: string, i: i32): Result<Parsed, JsonError> {
-    const items = Vec<JsonValue>();
+    let items = Vec<JsonValue>();
     let k = skip_ws(s, i + 1);
     if (k < s.len() && s.at(k) == 93u8) {            // ']'
         return Ok(Parsed { value: jarr(items, i), end: k + 1 });
     }
     let more = true;
     while (more) {
-        const val = parse_value(s, k)?;
+        let val = parse_value(s, k)?;
         items.push(val.value);
         k = skip_ws(s, val.end);
         if (k < s.len() && s.at(k) == 44u8) {        // ','
@@ -422,11 +422,11 @@ fn parse_array(s: string, i: i32): Result<Parsed, JsonError> {
 }
 
 // escape tables — JSON text <-> rut text (RFC 0007 string escapes)
-const Q2T: string = "\\\"";     // text:  \"   (backslash, quote)
-const BS2T: string = "\\\\";    // text:  \\
-const NL2T: string = "\\n";
-const TB2T: string = "\\t";
-const CR2T: string = "\\r";
+let Q2T: string = "\\\"";     // text:  \"   (backslash, quote)
+let BS2T: string = "\\\\";    // text:  \\
+let NL2T: string = "\\n";
+let TB2T: string = "\\t";
+let CR2T: string = "\\r";
 
 fn esc_to_text(c: u8): string {          // for OUTPUT (quote)
     if (c == 34u8)  { return Q2T; }
@@ -451,7 +451,7 @@ fn parse_string(s: string, i: i32): Result<Parsed, JsonError> {
     let run = i + 1;
     let k = i + 1;
     while (k < s.len()) {
-        const c = s.at(k);
+        let c = s.at(k);
         if (c == 34u8) {                              // closing '"'
             if (k > run) { out = f"{out}{s.slice(run, k)}"; }
             return Ok(Parsed { value: jstr(out, i), end: k + 1 });
@@ -460,7 +460,7 @@ fn parse_string(s: string, i: i32): Result<Parsed, JsonError> {
             if (k + 1 >= s.len()) {
                 return Err(JsonError { msg: "unterminated escape", pos: k });
             }
-            const u = unesc_to_char(s.at(k + 1));
+            let u = unesc_to_char(s.at(k + 1));
             if (u.len() == 0) {
                 return Err(JsonError { msg: "unsupported escape (\\b, \\f, \\uXXXX — RFC 0007 OQ-1 helpers)", pos: k });
             }
@@ -489,9 +489,9 @@ fn parse_num(s: string, i: i32): Result<Parsed, JsonError> {
         if (k >= s.len()) {
             scanning = false;
         } else {
-            const c = s.at(k);
+            let c = s.at(k);
             if (is_digit(c)) {
-                const d = f64(i32(c) - 48);
+                let d = f64(i32(c) - 48);
                 if (dot) { fp = fp + d * scale; scale = scale / 10.0; }
                 else     { ip = ip * 10.0 + d; }
                 any_digit = true;
@@ -531,14 +531,14 @@ fn parse_num(s: string, i: i32): Result<Parsed, JsonError> {
 
 // === text helpers ===
 
-const DQ: string = "\"";
-const COMMA: string = ",";
+let DQ: string = "\"";
+let COMMA: string = ",";
 
 fn quote(sv: string): string {
     let out = DQ;
     let run = 0;
     for (let k = 0; k < sv.len(); k += 1) {
-        const e = esc_to_text(sv.at(k));
+        let e = esc_to_text(sv.at(k));
         if (e.len() > 0) {
             if (k > run) { out = f"{out}{sv.slice(run, k)}"; }
             out = f"{out}{e}";

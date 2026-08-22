@@ -10,9 +10,9 @@
 ## Summary
 
 The rut heap is **reference-counted**. Strong counts reach zero ⇒ the object
-is destroyed immediately — deterministic destructors for host resources, no
-pause-the-world collector in the common case (the budgeted cycle collector
-is RFC 0017). Every VM owns one heap on one thread; nothing is shared
+is destroyed immediately — deterministic destructors for host resources and
+**no collector at all**: strong cycles leak by design (`Weak<T>` is the
+answer — RFC 0017). Every VM owns one heap on one thread; nothing is shared
 between isolates (RFC 0021), so all counters are plain `Cell`s — no atomics.
 
 ## 1. Heap object model
@@ -49,11 +49,13 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 
 ## 3. Deterministic destructors
 
-See **`examples/memory/temp-file.rut`**. A class may declare a reserved
-`dispose(): void`; such classes must live behind `Rc` (bare use is a
-compile error — RFC 0011 §2). Ordering guarantees:
+See **`examples/memory/temp-file.rut`**. A class may implement the
+prelude interface `Disposal` (`fn dispose(mut self): void`, RFC 0028);
+such classes must live behind `Rc` (bare use is a compile error —
+RFC 0011 §2). Ordering guarantees:
 
-1. the user `dispose()` method runs first, with all fields still valid;
+1. `Disposal.dispose(mut self)` runs first — dispatched through the
+   type's vtable like any interface call — with all fields still valid;
 2. fields are then released in declaration order (recursively);
 3. host opaques (RFC 0025) run their Rust `Drop` at the same point —
    releasing textures/sockets when the last handle goes away, not "sometime
@@ -77,15 +79,20 @@ Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
   sees one count for the vec. `push`/`pop`/`set` emit the right inc/dec
   ops.
 - **`dyn Slice<T>` cells** — two kinds behind one object type (RFC 0005):
-  the **owned** cell (`RutSlice`: boxed `Array<T, N>` — elements inline,
-  mutable through the handle, never grows) and the **lending view**
-  (`RutSliceView`: `Vec.as_slice()` — holds a *cell handle* to the owner
-  Vec plus `off`/`len`, **never a pointer into the data block**). Views
-  dispatch through the owner cell, so growth (the buffer may move) keeps
-  them valid; indexing bounds-checks view len ∩ owner len — a view that
-  outlived a shrink traps, never reads garbage. This *refines* the
-  no-interior-pointer rule rather than breaking it: the scanner still
-  walks only typed cell handles (RFC 0017 §2).
+  the **owned** cell (`RutSlice`: boxed copy of an `Array<T, N>` —
+  elements inline, never grows) and the **backing** cell (`RutSliceRef`:
+  holds a *cell handle* to the owner Vec plus `off`/`len`, **never a
+  pointer into the data block**). Backing cells dispatch through the
+  owner cell, so growth (the buffer may move) keeps existing
+  `dyn Slice<T>` values valid; indexing bounds-checks len ∩ owner len —
+  an out-of-range index traps, never reads garbage. Both cell kinds
+  carry vtables with the builtin `Slice<T>` slots — dyn-slice `x[i]`
+  get/set, `.len()`, `for..of` lower to `calli` (RFC 0032 §1.1 R2), and
+  the backing cell's dispatch-through-owner is simply its slot target. Neither kind is
+  nameable or constructible in script: there is no `as_slice()`; slices
+  are born only from implicit widening at the widening site (RFC 0011
+  §3). This *refines* the no-interior-pointer rule rather than breaking
+  it: the heap walk still sees only typed cell handles.
 - Any slot typed with a **`dyn` type stores a cell handle** — `dyn I` and
   `dyn Slice<T>` alike (RFC 0031 §4); unsized payloads always sit behind
   a cell boundary.
@@ -103,7 +110,7 @@ Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
 struct Header {
     rc:   Cell<u32>,        // 0 = immortal (overflow sentinel, see §2)
     ty:   u32,              // index into the VM's RutType table (RFC 0015)
-    flags: Cell<u32>,       // CC colors + weak-list bit + has-dtor bit
+    flags: Cell<u32>,       // weak-list bit + has-disposal-impl bit
 }
 
 #[repr(C)]
@@ -114,10 +121,10 @@ struct RutBytes  { h: Header, len: u32, cap: u32, data: *mut u8 }
 struct RutVec    { h: Header, len: u32, cap: u32, elem: TypeId, data: *mut () } // unboxed (growable)
                                                              // Array<T, N> has no struct —
                                                              // the N-slot inline block itself
-struct RutSlice  { h: Header, len: u32, elem: TypeId, data: *mut () }            // owned slice cell
-struct RutSliceView { h: Header, owner: Handle<RutVec>, off: u32, len: u32 }     // Vec.as_slice() —
-                                                             // lends, never copies; strong ref
-                                                             // keeps the owner alive
+struct RutSlice      { h: Header, len: u32, elem: TypeId, data: *mut () } // owned slice cell (boxed Array copy)
+struct RutSliceRef   { h: Header, owner: Handle<RutVec>, off: u32, len: u32 } // backing cell over a Vec —
+                                                             // dispatches through the owner cell,
+                                                             // never a pointer into the data block
 #[repr(C)]
 struct RutClass  { h: Header, vt: *const VTable, fields: [Slot] } // Rc<T> CELL — Header + vt + the
                                                             // repr-C field block (RFC 0015 §4)
@@ -155,10 +162,8 @@ impl Heap {
         let n = h.rc.get().checked_sub(1).expect("rc underflow (bug)");
         h.rc.set(n);
         if n == 0 {
-            self.collect.release(p);   // dtor (§3) + release fields
-        } else if n == 1 && h.ty_desc().can_participate_in_cycles() {
-            self.collect.suspect(p);   // RFC 0017 §2: might be a dead cycle
-        }
+            self.heap.destroy(p);      // Disposal impl (§3) + release fields
+        }                              // no suspect list — cycles leak (RFC 0017)
     }
 }
 ```

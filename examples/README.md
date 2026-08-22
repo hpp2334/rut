@@ -10,16 +10,16 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 
 | File | Demonstrates | RFC |
 |---|---|---|
-| `basic/grammar-tour.rut` | dataclass, interface, class factory, `Rc<T>`, vtable dispatch, exhaustive `when`, `f""` | 0009–0012 |
-| `basic/module-structure.rut` | declarations-only modules, const-expressions, no load-time code | 0003 §1 |
+| `basic/grammar-tour.rut` | dataclass, interface, class constructor, `Rc<T>`, vtable dispatch, exhaustive `when`, `f""` | 0009–0012 |
+| `basic/module-structure.rut` | declarations-only modules, load-time expressions, no load-time code | 0003 §1 |
 | `basic/module-visibility.rut` | `export` / `export(mod)` / `export(super)` / `export(self)` | 0003 §2 |
 | `basic/when.rut` | `when` pattern expressions, exhaustiveness | 0008 |
 | `basic/option-result.rut` | builtin `Option`/`Result`, `.value`, `unwrap_or`, `?` | 0005 |
 | `basic/error-context.rut` | `here()` / `capture_stack_trace()` on error values, lazy `render()`, stripped-image degradation | 0036 |
-| `basic/literals.rut` | numeric suffixes, plain/raw/format strings, constructors, fixed arrays `Array<T, N>`, `dyn Slice<T>` boxing, `Vec.as_slice()` views | 0005, 0007 |
+| `basic/literals.rut` | numeric suffixes, plain/raw/format strings, constructors, fixed arrays `Array<T, N>`, `dyn Slice<T>` boxing, `Vec`/`Array` → `dyn Slice<T>` widening | 0005, 0007 |
 | `basic/dataclasses.rut` | value semantics, field initializers, free functions | 0009 |
-| `basic/classes.rut` | factory type-calls, `Self {}` literal, `Option<Self>` try-factories, private, static fields, explicit `self` receivers | 0010 |
-| `basic/rc-and-dispose.rut` | `Rc(v)` boxing, ref-copy aliasing, `dispose()` | 0011 |
+| `basic/classes.rut` | constructor type-calls, `Self {}` literal, `Option<Self>` try-constructors, private, static fields, explicit `self` receivers | 0010 |
+| `basic/rc-and-dispose.rut` | `Rc(v)` boxing, ref-copy aliasing, `Disposal.dispose` | 0011 |
 | `basic/interfaces.rut` | methods-only interfaces, `dyn I` object types, `requires`, dataclass implementors, composition over intersections | 0009, 0012 |
 | `basic/type-tests.rut` | concrete-only `is<T>()`; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
 | `basic/closures-generics.rut` | arrows, monomorphized generics | 0013 |
@@ -56,7 +56,7 @@ setup / services / worker isolate / components / entry). `reactive.rut`
 implements tur's `state` / `source` / `derive` / `mutation` / `watch` /
 `Store` entirely in user rut on top of `dyn Any` — proof that reactivity is
 a library, not a language feature (RFC 0014). `state.rut` is the
-tur-style *setup*: a `Dashboard` class whose factory declares **state**
+tur-style *setup*: a `Dashboard` class whose constructor declares **state**
 atoms (UI writes), **sources** (services push snapshots as data arrives),
 and **derives** (computed views); components *dispatch mutations* rather
 than call setters, and `main.rut` subscribes re-render with `watch`. The

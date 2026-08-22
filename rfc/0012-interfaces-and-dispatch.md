@@ -16,19 +16,24 @@ vecs.
 
 ## 1. Dispatch: direct by default, vtable at interfaces
 
-The static type decides the opcode:
+Dispatch splits on **where the method is declared**:
 
 ```text
-length(p)   // free fn        ->  call length$Point        (direct, always)
-c.area()    // c: Circle      ->  call Circle$area         (direct, always)
-b.area()    // b: Rc<Circle>  ->  call Circle$area         (direct — T known)
-d.draw(g)   // d: dyn Drawable -> calliface d, slot=3      (vtable load + call)
+length(p)    // free fn                   ->  call length$Point    (direct)
+c.area()     // c: Circle, inherent fn    ->  call Circle$area     (direct)
+b.area()     // b: Rc<Circle>, inherent   ->  call Circle$area     (direct)
+d.draw(g)    // draw declared in Drawable ->  calli d, slot=3      (vtable, ALWAYS)
 ```
 
-Calls on concrete dataclass/class/Rc types are always direct — the exact
-type is statically known and can never change (no inheritance, RFC 0010 §3).
-Only values whose static type is an interface object type dispatch through
-the vtable. `final` is meaningless in v1 (nothing can override).
+Free functions, constructors, and methods declared in a class/dataclass body
+itself dispatch directly — the exact type is statically known and can
+never change (no inheritance, RFC 0010 §3). Every method **declared in an
+interface** dispatches dynamically through the vtable — unconditionally,
+even when the receiver's exact class is statically known: a `Circle`
+calling its own `Drawable.draw` still emits `calli`. Interface members are
+dynamic by charter (one uniform rule, no devirtualization); static
+dispatch lives in monomorphized generics and inherent methods. `final` is
+meaningless in v1 (nothing can override).
 
 ## 2. Interfaces
 
@@ -38,7 +43,8 @@ the vtable. `final` is meaningless in v1 (nothing can override).
   Hashable>`, `Rc<dyn Slice<i32>>` (the builtin slice interface, RFC 0005);
   `dyn` composes wherever a type does. Positions that merely
   **name** an interface stay bare: the `interface` declaration itself,
-  `implements` / `requires` lists, and generic bounds (`K: Hashable` —
+  `implements` / `requires` lists, and generic bounds (`K requires
+  Hashable` —
   admission-only syntax, RFC 0013 §2) — none of them denote an interface
   *value*. Every `dyn` in the source marks a vtable-dispatch use site:
   greppable dynamic dispatch (Rust's rule, adopted verbatim). A bare
@@ -58,7 +64,7 @@ the vtable. `final` is meaningless in v1 (nothing can override).
   kind, no call-vs-load ambiguity at the vtable boundary. (`d.x` where `d`
   is interface-typed is a compile error.)
 - **`Any` — the implicit top interface (RFC 0014).** Every type implements
-  `Any`, nobody may declare or list it (`implements Any`, `T: Any` —
+  `Any`, nobody may declare or list it (`implements Any`, `T requires Any` —
   compile errors), and it declares no dispatch methods — only the layout
   accessors `type_id()` / `size()` / `as_bytes()`. Its object type `dyn
   Any` is the erased storage position and the bottom of the interface
@@ -119,7 +125,7 @@ provided by the host. See **`examples/basic/type-tests.rut`**.
 - **No `upcast` builtin.** Widening to `dyn I` is implicit on
   assignment/argument passing (`blit_all(g, [c])` passes a `Circle` as
   `dyn Drawable`); the explicit, greppable form is the `dyn` annotation at
-  the receiving position (`const d: dyn Drawable = s;`). `upcast` was
+  the receiving position (`let d: dyn Drawable = s;`). `upcast` was
   removed when `dyn` landed — the keyword does the marking.
 - **Interface values cannot be downcast.** An interface value is used
   through its interface methods — if you need `Circle`-specific behavior
@@ -131,6 +137,27 @@ provided by the host. See **`examples/basic/type-tests.rut`**.
   calls, not operators (RFC 0007 §1). Erasure likewise: **`make_any(v):
   dyn Any`** (RFC 0014), a prelude builtin — rut has no cast syntax at
   all.
+
+## 4. Equality — `==` / `!=` call `Equal<T>.equal`
+
+There is no built-in structural equality. `a == b` requires both operands'
+static type `T` to implement `Equal<T>` (RFC 0028) and compiles to a call
+of that implementation's `equal` method; `a != b` is its negation
+(`!(a == b)`).
+
+- Primitives, `string`, and enums satisfy `Equal<T>` through the host
+  impl registry — content equality; floats follow IEEE 754 (`NaN != NaN`,
+  `-0.0 == 0.0`). Registered structs get the content voucher (RFC 0026 §5).
+- A class or dataclass without `Equal<T>` in its `implements` list is a
+  compile error **at the `==` site** — equality is nominal and opt-in,
+  exactly like every other interface.
+- Dispatch follows §1: `equal` is interface-declared, so every `==` is a
+  vtable call (`calli`) — on concrete receivers only the slot id is
+  statically known, never inlined away.
+- `when` literal patterns are unaffected: arms match compile-time values,
+  never runtime `==`.
+- `Rc<C>` compares by identity unless `Rc<C>` itself implements an equal
+  relation (it does not — compare the pointee or wrap).
 
 ## Note
 

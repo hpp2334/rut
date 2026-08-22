@@ -1,6 +1,6 @@
 // error-context.rut — RFC 0036: the three price points of "where".
 //
-//   here()                  free     a compile-time const, folded like
+//   here()                  free     a compile-time constant, folded like
 //                                    type_id<T>() — attach to EVERY error
 //   capture_stack_trace()   paid     an explicit walk of the frame stack
 //                                    (raw pcs, no formatting) — attach when
@@ -22,12 +22,12 @@
 import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
 import { Logger } from "std:log";
 
-const log = Logger("app");
+let log = Logger("app");
 
 // The error carries WHERE for free, and a trace only if asked:
 dataclass FetchError {
     url:    string,
-    at:     Location,              // zero-cost — a folded const at each
+    at:     Location,              // zero-cost — a folded let at each
     trace:  Option<StackTrace>,    // construction site
 }
 
@@ -47,7 +47,7 @@ fn fetch(url: string): Result<string, FetchError> {
 // Context accrues upward — each layer stamps its own (free) location;
 // the trace from the deepest layer survives untouched:
 fn load_config(): Result<string, FetchError> {
-    const r = fetch("")?;
+    let r = fetch("")?;
     return Ok(r);
 }
 
@@ -57,7 +57,7 @@ fn main(): void {
             log.info(f"loaded {cfg.len()} bytes");
         },
         Err(e) -> {
-            // at: folded const — prints `examples/basic/error-context.rut:38:13`
+            // at: folded constant — prints `examples/basic/error-context.rut:38:13`
             log.error(f"fetch failed at {e.at.file}:{e.at.line}:{e.at.col}");
             // render() symbolicates lazily; degrades to
             // `pkg:mod #[3] @ pc 41` on stripped images instead of

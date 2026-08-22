@@ -6,27 +6,27 @@ import { Channel, Sender } from "std:channel";
 import { Conn, listen } from "std:net";
 import { Logger } from "std:log";
 
-const WORKERS: i32 = 4;
+let WORKERS: i32 = 4;
 
 export suspend fn main(): void {
-    const log = Logger("echo");
-    const started = listen("0.0.0.0:8080");
+    let log = Logger("echo");
+    let started = listen("0.0.0.0:8080");
     if (started.is_err()) {
         log.error(f"listen failed: {started.error}");
         return;
     }
-    const server = started.value;
+    let server = started.value;
 
-    const senders: Vec<Sender<Conn>> = Vec();
+    let senders: Vec<Sender<Conn>> = Vec();
     for (let i = 0; i < WORKERS; i += 1) {
-        const jobs = Channel<Conn>();                 // one channel per worker
+        let jobs = Channel<Conn>();                 // one channel per worker
         spawn_worker("network/echo-worker.rut", [jobs.receiver]);
         senders.push(jobs.sender);
     }
 
     let next = 0;
     while (true) {
-        const got = await server.accept();           // Future<Result<Conn>>
+        let got = await server.accept();           // Future<Result<Conn>>
         if (got.is_err()) {
             log.warn("accept failed; stopping");
             return;                                  // senders drop -> workers exit

@@ -33,12 +33,12 @@ variant lives in `examples/network/echo-server.rut` + `echo-worker.rut`.
 | `string` | copy (immutable) |
 | `bytes`, `Vec<T>` (T numeric/bool/char) | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case) |
 | `Array<T, N>` (fixed arrays are inline values) | deep copy, like a class instance — every element must itself be crossable |
-| `dyn Slice<T>` **owned** cells (boxed `Array<T, N>`) | transfer if refcount == 1, else deep copy — same rule as `bytes` |
-| `dyn Slice<T>` **views** (`Vec.as_slice()`) | **not transferable** — the view names a Vec cell in the sender's heap (compile-time error at the send site) |
+| `dyn Slice<T>` | transfer if refcount == 1, else deep copy — same rule as `bytes`; provenance (owned Array copy vs Vec backing cell) is invisible across the boundary |
 | `class` instances / builtin `Option`/`Result` | deep copy; every field must itself be crossable |
 | `Sender` / `Receiver` | transfer |
 | closures | **not transferable** in v1 — compile-time error at the send/`spawn_worker` site |
 | host opaque types | transfer **only** if registered `send` by the host (RFC 0025) — checked at the transfer, by `TypeId` |
+| `Template` | copy — builtin carrier value (RFC 0027); its `dyn Any` args must themselves be crossable (RFC 0014) |
 | anything else (e.g. `Task`, wakers) | compile-time error at the `send`/`spawn_worker` call site |
 
 Enforcement is static at the send site (checker knows `T`) plus a runtime

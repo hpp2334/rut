@@ -29,7 +29,7 @@ See **`examples/concurrency/spawn-cancel.rut`** (cancellation-by-drop) and
 - `await select { .. }` races futures; the winner's value is produced by its
   arm expression, the losers are dropped (i.e. cancelled). Arms use `->`
   like `when` (RFC 0008); `fut -> expr` discards the resolved value,
-  `fut as x -> expr` binds it.
+  `fut x -> expr` binds the resolved value to `x` (arm-local binding —\n  `as` stays reserved, RFC 0002 §4).
 - `select_all(futs)` (stdlib, built on `select`) resolves with the first
   ready value — used in the worker examples (RFC 0021).
 - v1 tasks are unstructured (no automatic child cancellation). Structured
@@ -37,8 +37,8 @@ See **`examples/concurrency/spawn-cancel.rut`** (cancellation-by-drop) and
 
 ## Open questions
 
-- OQ-1: cancellation observation — should `Task<T>` await resolve to
-  `Result<T, Cancelled>`, or should awaiting a cancelled task be a trap?
+- ~~OQ-1~~ **resolved:** `await task` on a cancelled task yields
+  `Result<T, Cancelled>` — §1 stands; never a trap.
 - OQ-2: priorities/fairness — round-robin ready queue in v1; do we need
   task priorities for UI responsiveness before M4?
 - OQ-3: structured concurrency scopes with child cancellation.

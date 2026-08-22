@@ -11,7 +11,7 @@
 
 See **`examples/basic/literals.rut`** — numeric suffixes and annotations,
 plain/raw/format strings, fixed-array and dataclass literals, and the
-lowercase factory-type calls (`Vec<f32>(1024)`, `bytes(64)`).
+lowercase constructor-type calls (`Vec<f32>(1024)`, `bytes(64)`).
 
 ## 1. Inference & conversions
 
@@ -27,7 +27,7 @@ lowercase factory-type calls (`Vec<f32>(1024)`, `bytes(64)`).
 - **Fixed-array literal**: `[e1, .., en]` has type `Array<T, n>` — an
   inline **value**, pure data, no allocation (RFC 0005). It infers `T`
   bidirectionally like any literal; at module scope it is a
-  const-expression when every element is (RFC 0003 §1). A growable needs
+  load-time expression when every element is (RFC 0003 §1). A growable needs
   its own constructor: `Vec<T>()`, `Vec<T>(n)` (zeroed), or
   `Vec.from([..])` (copies).
 
@@ -57,6 +57,9 @@ interpolation ever happens implicitly, unlike JS template literals):
 f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
 ```
 
+(`str`/`concat` are internal-native calls, RFC 0022 §2 — there is no
+`strcat` op; RFC 0032 §1.1 R2.)
+
 - Formattable types and their `str()` output:
 
 | type | rendering |
@@ -83,7 +86,7 @@ f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
 ## Open questions
 
 - OQ-1: string indexing: byte-index + helpers proposal stands
-  (`for (const c of s)` is the blessed iteration).
+  (`for (let c of s)` is the blessed iteration).
 - OQ-2: naming of lossy numeric conversions: `u8.wrap(x)` vs
   `u8.truncate(x)` vs `wrapTo<u8>(x)`.
 - OQ-3: `rf"..."` (raw + format combination) and precision/width specifiers

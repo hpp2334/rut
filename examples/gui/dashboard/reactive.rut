@@ -36,8 +36,8 @@ export class State<T> implements Atom {
     private id: u32;
     private seed: dyn Any;                // first read materializes it
 
-    factory(v: T): Self {
-        Atoms.next &+= 1;                 // factories run logic too
+    constructor(v: T): Self {
+        Atoms.next &+= 1;                 // constructors run logic too
         return Self { id: Atoms.next, seed: make_any(v) };
     }
 
@@ -53,7 +53,7 @@ export class Source<T> implements Atom {
     private id: u32;
     private pull: fn(): T;                // seeds the entry; steady state is push
 
-    factory(f: fn(): T): Self {
+    constructor(f: fn(): T): Self {
         Atoms.next &+= 1;
         return Self { id: Atoms.next, pull: f };
     }
@@ -70,7 +70,7 @@ export class Derived<T> implements Atom {
     private id: u32;
     private compute: fn(ReadCtx): T;
 
-    factory(f: fn(ReadCtx): T): Self {
+    constructor(f: fn(ReadCtx): T): Self {
         Atoms.next &+= 1;
         return Self { id: Atoms.next, compute: f };
     }
@@ -89,7 +89,7 @@ export dataclass Nil {}
 export class Mutation<P, R> {
     private run: fn(Rc<Store>, P): R;
 
-    factory(f: fn(Rc<Store>, P): R): Self {
+    constructor(f: fn(Rc<Store>, P): R): Self {
         return Self { run: f };
     }
 
@@ -106,7 +106,7 @@ export fn mutation<P, R>(f: fn(Rc<Store>, P): R): Mutation<P, R> {
 export class ReadCtx {
     private store: Rc<Store>;
 
-    factory(store: Rc<Store>): Self {
+    constructor(store: Rc<Store>): Self {
         return Self { store: store };
     }
 
@@ -131,19 +131,19 @@ class Watch {
     last_ver: u32;
     cb: fn(): void;
 
-    factory(wid: u32, atom: u32, last_ver: u32, cb: fn(): void): Self {
+    constructor(wid: u32, atom: u32, last_ver: u32, cb: fn(): void): Self {
         return Self { wid: wid, atom: atom, last_ver: last_ver, cb: cb };
     }
 }
 
-const MAX_FLUSH_ROUNDS: i32 = 1000;
+let MAX_FLUSH_ROUNDS: i32 = 1000;
 
 export class Store {
     entries: Vec<Entry> = Vec();        // internal — treat as private
     watches: Vec<Rc<Watch>> = Vec();
     depth: i32 = 0;
 
-    // all fields initialized -> default factory: bare Store(); box with
+    // all fields initialized -> default constructor: bare Store(); box with
     // Rc(Store())
 
     fn find(self, id: u32): Option<Entry> {
@@ -167,7 +167,7 @@ export class Store {
     }
 
     fn version_of(self, id: u32): u32 {
-        const e = self.find(id);
+        let e = self.find(id);
         if (e.is_some()) { return e.value.ver; }
         return 0;
     }
@@ -177,8 +177,8 @@ export class Store {
 
 /** Read (and on first use, materialize) a state atom. */
 export fn atom_get<T>(store: Rc<Store>, s: State<T>): T {
-    const found = store.find(s.atom_id());
-    const cell = when (found.is_some()) {
+    let found = store.find(s.atom_id());
+    let cell = when (found.is_some()) {
         true  -> found.value.value,
         else  -> seed_into(store, s),
     };
@@ -197,8 +197,8 @@ export fn atom_set<T>(store: Rc<Store>, s: State<T>, v: T): void {
 
 /** Read a source's latest snapshot (pull-seeded on first read). */
 export fn source_read<T>(store: Rc<Store>, s: Source<T>): T {
-    const found = store.find(s.atom_id());
-    const cell = when (found.is_some()) {
+    let found = store.find(s.atom_id());
+    let cell = when (found.is_some()) {
         true  -> found.value.value,
         else  -> seed_source(store, s),
     };
@@ -206,7 +206,7 @@ export fn source_read<T>(store: Rc<Store>, s: Source<T>): T {
 }
 
 export(self) fn seed_source<T>(store: Rc<Store>, s: Source<T>): dyn Any {
-    const v = make_any(s.pull_fn()());
+    let v = make_any(s.pull_fn()());
     store.upsert(s.atom_id(), v);
     return v;
 }
@@ -223,14 +223,14 @@ export fn source_push<T>(store: Rc<Store>, s: Source<T>, v: T): void {
 
 /** Read a derived atom — recomputes on every read (OQ-19: caching). */
 export fn derived_read<T>(store: Rc<Store>, d: Derived<T>): T {
-    const ctx = ReadCtx(store);
+    let ctx = ReadCtx(store);
     return d.compute_fn()(ctx);
 }
 
 /** Dispatch a mutation; nested dispatches flush once, at the top. */
 export fn dispatch<P, R>(store: Rc<Store>, m: Mutation<P, R>, p: P): R {
     store.depth &+= 1;
-    const r = m.run_fn()(store, p);
+    let r = m.run_fn()(store, p);
     store.depth -= 1;
     if (store.depth == 0) {
         flush(store);
@@ -241,7 +241,7 @@ export fn dispatch<P, R>(store: Rc<Store>, m: Mutation<P, R>, p: P): R {
 /** Subscribe a change-only callback to any atom (State, Source, Derived). */
 export fn watch(store: Rc<Store>, a: dyn Atom, cb: fn(): void): Rc<WatchHandle> {
     Atoms.next &+= 1;
-    const w = Rc(Watch(Atoms.next, a.atom_id(), store.version_of(a.atom_id()), cb));
+    let w = Rc(Watch(Atoms.next, a.atom_id(), store.version_of(a.atom_id()), cb));
     store.watches.push(w);
     return Rc(WatchHandle(store, w.wid));
 }
@@ -250,12 +250,12 @@ export class WatchHandle {
     private store: Rc<Store>;
     private wid: u32;
 
-    factory(store: Rc<Store>, wid: u32): Self {
+    constructor(store: Rc<Store>, wid: u32): Self {
         return Self { store: store, wid: wid };
     }
 
     dispose(self): void {               // runs when the last Rc drops
-        const kept: Vec<Rc<Watch>> = Vec();
+        let kept: Vec<Rc<Watch>> = Vec();
         for (let i = 0; i < self.store.watches.len(); i += 1) {
             if (self.store.watches[i].wid != self.wid) {
                 kept.push(self.store.watches[i]);
@@ -276,8 +276,8 @@ export fn flush(store: Rc<Store>): void {
         }
         changed = false;
         for (let i = 0; i < store.watches.len(); i += 1) {
-            const w = store.watches[i];
-            const cur = store.version_of(w.atom);
+            let w = store.watches[i];
+            let cur = store.version_of(w.atom);
             if (cur != w.last_ver) {
                 w.last_ver = cur;        // through the Rc: shared cell
                 w.cb();
@@ -290,19 +290,19 @@ export fn flush(store: Rc<Store>): void {
 // ------------------------------------------------------------------ smoke
 
 export(self) fn smoke(): void {
-    const log = Logger("reactive");
-    const store = Rc(Store());
+    let log = Logger("reactive");
+    let store = Rc(Store());
 
-    const count = state(0);
-    const clock = source((): i32 => 0);   // external world, lazily seeded
+    let count = state(0);
+    let clock = source((): i32 => 0);   // external world, lazily seeded
 
-    const label = derive((ctx): string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
+    let label = derive((ctx): string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
 
-    const bump = mutation((st: Rc<Store>, by: i32): void => {
+    let bump = mutation((st: Rc<Store>, by: i32): void => {
         atom_set(st, count, atom_get(st, count) + by);
     });
 
-    const handle = watch(store, count, (): void => {   // State is an Atom
+    let handle = watch(store, count, (): void => {   // State is an Atom
         log.debug("count changed");
     });
 

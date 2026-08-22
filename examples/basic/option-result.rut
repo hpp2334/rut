@@ -15,24 +15,24 @@ fn find(xs: Vec<string>, key: string): Option<i32> {
 }
 
 fn demo(list: Vec<string>): void {
-    const log = Logger("option");
-    const idx = find(list, "beta");
+    let log = Logger("option");
+    let idx = find(list, "beta");
     if (idx.is_some()) {
         log.info(f"{idx.value}");       // `.value` traps on None — check first
     }
-    const v = idx.unwrap_or(0);         // Option<T>.unwrap_or(default: T): T
+    let v = idx.unwrap_or(0);         // Option<T>.unwrap_or(default: T): T
 }
 
 fn read_config(path: string): Result<bytes, IoError> {
-    const raw = fs.read(path)?;         // `?` propagates Err upward
+    let raw = fs.read(path)?;         // `?` propagates Err upward
     return Result.ok(raw);
 }
 
 export fn main(): void {
-    const log = Logger("option");
+    let log = Logger("option");
     demo(["alpha", "beta"]);
 
-    const r = read_config("app.cfg");
+    let r = read_config("app.cfg");
     if (r.is_ok()) {
         log.info(f"read {r.value.len()} bytes");
     } else {

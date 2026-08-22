@@ -10,7 +10,7 @@ import { StatsRequest, StatsSummary } from "../models.rut";
 
 suspend fn main(reqs: Receiver<StatsRequest>): void {
     while (true) {
-        const req = await reqs.recv();       // Future<Option<StatsRequest>>
+        let req = await reqs.recv();       // Future<Option<StatsRequest>>
         if (req.is_none()) {
             break;                           // dashboard gone: exit isolate
         }
@@ -26,7 +26,7 @@ fn summarize(xs: Vec<f32>): StatsSummary {
     let max = xs[0];
     let total = 0.0f64;
     for (let i = 0; i < xs.len(); i += 1) {
-        const v = xs[i];
+        let v = xs[i];
         if (v < min) { min = v; }
         if (v > max) { max = v; }
         total += f64(v);

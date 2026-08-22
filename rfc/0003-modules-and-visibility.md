@@ -17,8 +17,8 @@ See **`examples/basic/module-structure.rut`** and
 
 ## 1. Module structure — declarations only
 
-- Allowed at module scope: `import`/`export`, `const`, `enum`, `dataclass`,
-  `interface`, `class`, `fn`. Anything else — top-level `let`, calls, any
+- Allowed at module scope: `import`/`export`, `let`, `enum`, `dataclass`,
+  `interface`, `class`, `fn`. Anything else — calls, any
   statement — is a compile error. (`host fn`/`host class` and
   `extern fn`/`extern class` — signature-only native/package surfaces —
   exist **only in declaration files** (`.d.rut`), never in `.rut`;
@@ -29,16 +29,26 @@ See **`examples/basic/module-structure.rut`** and
   whether it lands in type position (`Canvas` in an annotation) or value
   position (`newCanvas()`), so there is nothing for the user to annotate.
   (Unreferenced imports are a lint, not an error.)
-- `const` initializers at module scope must be **const-expressions**:
-  literals, enum members, builtin operators over const-expressions, dataclass
-  literals whose fields are const-expressions, fixed-array literals
+- Module-level `let` initializers must be **load-time expressions**:
+  literals, enum members, builtin operators over load-time expressions, dataclass
+  literals whose fields are load-time expressions, fixed-array literals
   (`[e1, .., en]` — RFC 0007 §1) whose elements are, and builtin zero
   allocations `Vec<T>(n)` / `Vec.from([..])` / `bytes(n)` with const `n`.
   Calls to user functions are not
-  const-expressions (OQ-1; enforced in the compiler, RFC 0033 §3).
+  load-time expressions (OQ-1; enforced in the compiler, RFC 0033 §3).
+- **Bindings: `let` vs `let mut`.** `let x = e;` binds immutably — no
+  reassignment and no field assignment through `x`. `let mut x = e;`
+  may be reassigned and grants write access to the bare value it holds
+  (every assignment path must run through a `mut` binding). Mutation
+  through an `Rc<T>` cell is always legal — shared identity implies
+  shared mutability (RFC 0011). Methods that assign fields declare
+  `mut self`; calling them on a bare value requires a `let mut`
+  receiver, on an `Rc<C>` it is always allowed (RFC 0010 §2).
+  Parameters may likewise declare `mut name` — a writable local copy
+  with call-site syntax identical to any binding.
 - There is no mutable module state. Program state is constructed in `main`
   or lives in class `static` fields (RFC 0010 §2), which follow the same
-  const-expression initializer rule and are materialized at load — **no user
+  load-time expression initializer rule and are materialized at load — **no user
   code runs at load**.
 - **Loading a module executes nothing.** The embedder loads, then explicitly
   calls an entry function (conventionally `main`, sync or suspend; worker
@@ -60,7 +70,7 @@ is the root module). Every module-scope declaration carries a visibility:
 
 - Unannotated = `export(self)`: safe-by-default privacy; nothing leaks
   unless it says `export`.
-- Applies to all module-scope declarations: `const`, `enum`, `dataclass`,
+- Applies to all module-scope declarations: `let`, `enum`, `dataclass`,
   `interface`, `class`, `fn`, extern declarations included (on `class`, it
   means the *type name* is visible; class members use `private` as in
   RFC 0010).
@@ -76,7 +86,7 @@ is the root module). Every module-scope declaration carries a visibility:
 
 ## Open questions
 
-- OQ-1: const-expression scope: do module-scope `const` / `static`
+- OQ-1: load-time expression scope: do module-scope `let` / `static`
   initializers ever allow calls to user functions (computed constants)?
   Proposed: no — literal folding and builtin zero-allocs only.
 - OQ-2: module/system semantics — URL-like specifiers (`tur:core` today) vs

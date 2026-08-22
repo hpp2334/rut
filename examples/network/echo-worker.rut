@@ -7,9 +7,9 @@ import { Conn } from "std:net";
 
 suspend fn serve(conn: Conn): void {
     while (true) {
-        const got = await conn.read(4096);   // Future<Result<bytes>>
+        let got = await conn.read(4096);   // Future<Result<bytes>>
         if (got.is_err()) { return; }        // connection error: drop it
-        const data = got.value;
+        let data = got.value;
         if (data.len() == 0) { return; }    // peer closed
         await conn.write(data);              // echo back
     }
@@ -17,7 +17,7 @@ suspend fn serve(conn: Conn): void {
 
 suspend fn main(jobs: Receiver<Conn>): void {
     while (true) {
-        const conn = await jobs.recv();      // Future<Option<Conn>>
+        let conn = await jobs.recv();      // Future<Option<Conn>>
         if (conn.is_none()) { break; }       // server gone: exit isolate
         await serve(conn.value);
     }

@@ -21,8 +21,10 @@ literals, chosen by expected type:
 - `f"hi {name}, n={n}"` in a `string`-expected position behaves exactly as
   RFC 0007 §2 (desugars to `concat` — zero new cost on the hot path).
 - The **same literal** in a `Template`-expected position (host fn
-  parameter annotated `Template`, or an explicit `const t: Template =
-  f"..."`) compiles to the `tmpl` op: a `Template { parts: Vec<string>,
+  parameter annotated `Template`, or an explicit `let t: Template =
+  f"..."`) compiles to the construction sequence — vec pushes +
+  `make_any` boxing, or one internal-native `tmpl` call (RFC 0032 §1.1
+  R2; no `tmpl` op): a `Template { parts: Vec<string>,
   args: Vec<dyn Any> }` — literal chunks and **boxed values with their
   runtime types** (`dyn Any`, RFC 0014), not pre-rendered text.
 - `Template` API: `t.str(): string` renders with rut's own `str()` rules

@@ -1,7 +1,7 @@
 // services/stream.rut — simulated live feed: a spawned producer task
 // pushes LiveEvents into a channel on a timer. EventStream owns the task
 // and cancels it in dispose() — deterministic shutdown (RFC 0011:
-// dispose classes must live behind Rc).
+// Disposal classes must live behind Rc).
 
 import { Channel, Receiver, Sender } from "std:channel";
 import { now_ms, sleep } from "std:time";
@@ -12,8 +12,8 @@ export class EventStream {
     private feed: Receiver<LiveEvent>;
     private task: Task<void>;
 
-    factory(seed: u32): Self {
-        const ch = Channel<LiveEvent>();
+    constructor(seed: u32): Self {
+        let ch = Channel<LiveEvent>();
         return Self { feed: ch.receiver, task: spawn(produce(ch.sender, seed)) };
     }
 
@@ -37,7 +37,7 @@ suspend fn produce(out: Sender<LiveEvent>, seed: u32): void {
 }
 
 export(self) fn send_event(out: Sender<LiveEvent>, roll: u32, rng: u32, v: f32): void {
-    const kind = when (roll) {
+    let kind = when (roll) {
         0u32, 1u32, 2u32 -> EventKind.Visit,
         3u32            -> EventKind.Alert,
         else            -> EventKind.Tick,

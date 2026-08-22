@@ -12,22 +12,22 @@ fn first<T>(xs: Vec<T>): Option<T> {
 
 fn sum(xs: Vec<i32>): i32 {
     let total = 0;
-    for (const x of xs) {
+    for (let x of xs) {
         total += x;
     }
     return total;
 }
 
 export fn main(): void {
-    const log = Logger("closures");
-    const add = (a: i32, b: i32): i32 => a + b;      // single-expr arrow
-    const area_of = (r: f32): f32 => {               // block arrow
-        const sq = r * r;
+    let log = Logger("closures");
+    let add = (a: i32, b: i32): i32 => a + b;      // single-expr arrow
+    let area_of = (r: f32): f32 => {               // block arrow
+        let sq = r * r;
         return sq * 3.14159265f32;
     };
     log.info(f"add={add(1, 2)} area={area_of(1)} sum={sum([1, 2, 3])}");
 
-    const head = first([10, 20]);       // Option<i32>  — monomorphized
-    const name = first(["a", "b"]);     // Option<string> — separate instance
+    let head = first([10, 20]);       // Option<i32>  — monomorphized
+    let name = first(["a", "b"]);     // Option<string> — separate instance
     log.info(f"head={head.unwrap_or(-1)} name={name.unwrap_or("?")}");
 }

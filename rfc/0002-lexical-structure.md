@@ -48,8 +48,8 @@ compiler gives it no meaning; greppability is enforced by style.
 - Scalars and simple buffers stay lowercase, C-style: `i32`, `u8`, `f32`,
   `bool`, `char`, `string`, `bytes`.
 - **Construction is a type-call** (RFC 0010): the type name in call position
-  constructs — `Circle(1, 2, 3)` (user class `factory`; `await Circle(..)`
-  when the factory is `suspend`), `Rc(c)`,
+  constructs — `Circle(1, 2, 3)` (user class `constructor`; `await Circle(..)`
+  when the constructor is `suspend`), `Rc(c)`,
   `Rc<Circle>(c)`, `Weak(b)`, `Vec<f32>(1024)`, `bytes(64)`,
   `Channel<Job>()`. Lowercase types keep lowercase calls (`bytes(64)`).
   Erasure is **not** a type-call — it is the prelude builtin
@@ -77,18 +77,20 @@ compiler gives it no meaning; greppability is enforced by style.
   `default`, `extends`, `super`, `as` (no casts at all — erasure is
   `make_any`, RFC 0014), `type` (type alias — future),
   `struct`, `match`, `null`, `undefined`, `any`, `unknown`, `typeof`,
-  `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`.
+  `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`,
+  `const` (bindings spell `let` / `let mut` — RFC 0003 §1).
 - `self` is contextual — the **receiver**: the first parameter of an
   instance method (`fn add(self, x, y)` — RFC 0010 §2) and the name it
   binds in the body; a method without `self` is a class method. There is
   no `this` keyword. `Self` is a normal identifier
   bound to the enclosing class inside its body (RFC 0010 §1); `fn`,
-  `let`, `const`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
+  `let`, `mut`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
   `enum`, `class`, `dataclass`, `interface`, `implements`,
   `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
-  `await`, `factory`, `dispose`, `true`, `false`, `extern`, `where`
+  `await`, `constructor`, `true`, `false`, `extern`, `where`
   (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
-  (RFC 0012 §2) are keywords. `dyn` prefixes any **interface path** — a
+  (RFC 0012 §2) are keywords. `panic(msg: string)` and
+  `assert(cond, msg?)` are prelude builtins, not keywords (RFC 0034 §2). `dyn` prefixes any **interface path** — a
   user `I`, `Any`, or the builtin `Slice<T>` — one rule, no syntax branch
   (RFC 0005, RFC 0014).
 

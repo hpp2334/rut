@@ -33,7 +33,10 @@ struct ModuleImage {                 // serialized, versioned, hash-stable
   names (RFC 0029 §6).
 - Deterministic serialization: same AST + same dependency versions →
   byte-identical image (cacheable by content hash; the embedder may ship
-  `.rutc` artifacts instead of sources).
+  `.rutc` artifacts instead of sources — loose, or zipped inside a
+  `.rutbundle` with the surface artifacts under a `rut.toml` manifest,
+  RFC 0038; strip levels and the `.rutc.map` sidecar are unchanged by
+  bundling).
 - `type_id`s are **module-local indices at rest**; link-time rebase maps
   them into the VM's global type table (RFC 0035 §1). `type_id<T>()`
   constants are re-based with everything else.
@@ -52,23 +55,27 @@ struct ModuleImage {                 // serialized, versioned, hash-stable
 
 The verifier re-checks, per function: register types vs op signature,
 def-before-use, jump targets in-range and to block heads, `brtable`
-density, factory `Self { .. }` completeness (every uninitialized field
+density, constructor `Self { .. }` completeness (every uninitialized field
 covered — RFC 0010 §1), suspend state tables closed under resume edges,
 native-slot signatures vs the DeclIrs the module compiled against
 (RFC 0029 — including generic-instantiation admission: the `implements`
 scan closing over `requires`, so a bad `MyMap<Canvas, ..>` is a load
-error), and `callnat` slots present in the native table. A failed
+error), `callnat` slots present in the native table, and `unbox` type
+operands concrete and — by convention — guarded by a preceding
+`tidof`+`icmp` branch (an unguarded `unbox` verifies but traps on
+mismatch, RFC 0032 §1.1). A failed
 verification is a load error reporting the module and function — corrupted
 images never execute.
 
-## 3. Const pool & const-expressions
+## 3. Const pool & load-time expressions
 
-RFC 0003 §1's const-expression rule is enforced here: module `const` and
+RFC 0003 §1's load-time expression rule is enforced here: module `let` and
 `static` initializers are **folded at compile time**; the surviving forms
 are literals, enum members, operators over consts, dataclass literals,
 fixed-array literals, `Vec<T>(n)`/`Vec.from([..])`/`bytes(n)` blobs, and
-the layout builtins. A call to a user
-function in a const position is a compile error (RFC 0003 OQ-1), not a
+the layout builtins (plus `Array<T, N>.len()` — the const `N` — and
+const-index bounds checks against it; RFC 0032 §1.1 R1). A call to a
+user function there is a compile error (RFC 0003 OQ-1), not a
 deferred-evaluation hack.
 
 `type_id<T>()`, `size_of<T>()`, `align_of<T>()` (RFC 0015 §3) never

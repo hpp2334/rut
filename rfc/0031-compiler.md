@@ -15,7 +15,7 @@ Compilation is AOT, in-process, deterministic:
 ```
 Ast ─► resolve ─► typecheck (bidirectional inference)
     ─► HIR: typed, SSA-ish, generic-free (monomorphization queue)
-    ─► optimize: const-fold, inline, CSE/LICM, downcast-chain → BrTable
+    ─► optimize: fold, inline, CSE/LICM, downcast-chain → BrTable
     ─► LIR: typed register bytecode (RFC 0032)
 ```
 
@@ -57,10 +57,13 @@ code (RFC 0013 §2). Instantiation admission for surface-generic types
   them — `when` expressions and short-circuit `&&`/`||`; mutable locals are
   explicit `SlotGet/SlotSet` on frame slots, NOT phi webs. Pragmatism over
   purity).
-- Optimizations run here: const-fold (incl. `type_id<T>()` /
-  `size_of<T>()` — RFC 0015 §3, RFC 0033 §3), inline (single-callee calls,
-  small bodies), CSE/LICM for pure ops (downcast, field loads on immutable
-  boxes), downcast chains → `BrTable` on `TypeId`.
+- Optimizations run here: folding (incl. `type_id<T>()` /
+  `size_of<T>()` — RFC 0015 §3, RFC 0033 §3, plus `Array<T, N>.len()` →
+  the const `N` and const-index bounds checks against it), inline
+  (single-callee calls, small bodies), CSE/LICM for pure ops (`tidof`
+  loads, the `downcast` prelude body, field loads on immutable boxes),
+  downcast chains → `BrTable` over one `tidof` + `icmp`s (RFC 0032
+  §1.1).
 - Closures capture by explicit `Capture` lists → a capture-struct class is
   synthesized (RFC 0013 §1); closures are values of `fn(..)` type backed by
   `{ fn_ptr, env: *const capture-struct }` pairs in two consecutive
@@ -87,7 +90,7 @@ admits every `dyn` type (RFC 0012 §2). The slice tier has its own boxing
 edge, parallel to interface widening:
 
 ```
-Array<T, N> (exact, sized value)  >  dyn Slice<T> (unsized object)
+Array<T, N> | Vec<T> (concrete)   >  dyn Slice<T> (unsized object)
 ```
 
 `N` is a constant expression, part of the type's identity

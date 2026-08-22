@@ -17,11 +17,14 @@ The standard library splits in two:
 - **`std:*`** — rut source, compiled like user modules; they import `rt:*`
   for anything that touches the host. The split keeps policy (levels,
   formatting, wrappers) in auditable rut code and mechanism (syscalls,
-  sinks) in Rust. **`std:collection` is a declaration file + Rust bodies**
+  sinks) in Rust. **`std:core`** is the prelude surface: the builtin
+  interfaces that are ordinary nominal impls — `Disposal`
+  (`fn dispose(mut self): void`, RFC 0011/0016) and the equality pair
+  used by `==`. **`std:collection` is a declaration file + Rust bodies**
   (RFC 0025, RFC 0026): its `.d.rut` declares the interfaces
-  `Equal<T> { fn eq(self, other: T): bool }`,
+  `Equal<T> { fn equal(self, other: T): bool }`,
   `Hashable requires Equal<Self> { fn hash(self): u64 }`, and the containers
-  directly — `export host class Map<K: Hashable, V> { .. }`, `Set<T>`
+  directly — `export host class Map<K requires Hashable, V> { .. }`, `Set<T>`
   — with no facade; builtin impls (string/numerics/enum content,
   `Rc<T>` identity, registered-struct vouchers) are host impl-registry
   entries, not rut syntax. Containers are library types, not VM
@@ -47,7 +50,7 @@ logging goes through an imported logger:
 import { Logger } from "std:log";
 
 fn work(): void {
-    const log = Logger("app");        // type-call -> factory; a bare value
+    let log = Logger("app");        // type-call -> constructor; a bare value
     log.info(f"started at {now()}");  // class, so construction is free
 }
 ```
@@ -63,7 +66,7 @@ export class Logger {
     private name: string;
     private level: Level = Level.Info;
 
-    factory(name: string) { return Self { name: name, level: Level.Info }; }
+    constructor(name: string) { return Self { name: name, level: Level.Info }; }
 
     fn set_level(self, l: Level): void { self.level = l; }
     fn level(self): Level { return self.level; }
@@ -96,7 +99,9 @@ traps carry. `std:debug` is a declaration file + Rust bodies, like
 ```rut
 // std/debug.d.rut (excerpt — RFC 0036 §6)
 export dataclass Location { file: string, line: i32, col: i32 }
-export host fn here(): Location;                  // const-folded (RFC 0033 §3)
+export host fn here(): Location;                  // folded at compile time (RFC 0033 §3)
+export host fn str(v: dyn Any): string;       // developer rendering (RFC 0007 §2)
+export host fn type_name(v: dyn Any): string; // debug type name
 export host fn capture_stack_trace(): StackTrace; // skips its own frame
 export host class StackTrace {
     fn render(): string;                          // via loaded images'
@@ -116,7 +121,7 @@ import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
 
 dataclass LoadError {
     msg:   string,
-    at:    Location,               // free — folded const
+    at:    Location,               // free — folded at compile time
     trace: Option<StackTrace>,     // paid only when asked for
 }
 ```

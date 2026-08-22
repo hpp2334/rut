@@ -41,7 +41,7 @@ Rules:
   or `spawn`ed (RFC 0019).
 - `await` is only legal inside `suspend fn`. There is no implicit yield
   anywhere else — no function is ever preempted mid-expression.
-- `?` composes: `const body = await fs.read(path)?;` awaits, then propagates
+- `?` composes: `let body = await fs.read(path)?;` awaits, then propagates
   `Err` in one expression.
 - A future may be awaited by exactly one task (`await` consumes it). Share a
   result by `spawn`ing a `Task<T>` and awaiting the task (RFC 0019).
@@ -71,8 +71,8 @@ state1:                                             ; resume jumps here
 /// One resumable suspend invocation. The register file persists across
 /// suspensions, so `state` only selects the resume block.
 pub struct CoroutineFrame {
-    pub func: Gc<RutFunction>,   // the monomorphized suspend instance
-    pub state: u32,              // resume index (set at each suspension)
+    pub func: Rc<RutFunction>,   // the monomorphized suspend instance
+    pub state: u8,               // resume index (set at each suspension)
     pub regs: Box<[Slot]>,       // typed per FnType (RFC 0015 §5)
     pub stack_base: u32,
 }

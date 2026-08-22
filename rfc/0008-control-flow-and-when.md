@@ -21,7 +21,9 @@ required for non-enum scrutinees) and as a statement (void arms).
 - `while (cond) { .. }`.
 - `for (let x of expr) { .. }` iterates vecs, fixed arrays, slices and
   strings (chars).
-- `for (let i = 0; i < n; i += 1) { .. }` — indexed form.
+- `for (let i = 0; i < n; i += 1) { .. }` — indexed form. The induction
+  variable is **loop-owned**: the update clause (and the body) may assign
+  it without `mut` — it is not a normal binding.
 - `return expr?;` — `expr` required unless the fn returns `void`.
 - No `break`/`continue` labels in v1 (plain `break`/`continue` exist for
   loops); no `do..while`.
@@ -47,7 +49,7 @@ required for non-enum scrutinees) and as a statement (void arms).
 
 ## Open questions
 
-- OQ-1: destructuring (`const [a, b] = pair`) — omitted from v1; revisit
+- OQ-1: destructuring (`let [a, b] = pair`) — omitted from v1; revisit
   with real code.
 - OQ-2: `when` pattern set: ranges (`1..9 ->`), destructuring, and
   guards (`x if cond ->`) — none in v1; enum members, literals, and `else`

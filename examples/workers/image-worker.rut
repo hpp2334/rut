@@ -7,7 +7,7 @@ import { decode, fetch, Image, Job } from "imaging";
 
 suspend fn main(jobs: Receiver<Job>, out: Sender<Image>): void {
     while (true) {
-        const job = await jobs.recv();   // Future<Option<Job>>
+        let job = await jobs.recv();   // Future<Option<Job>>
         if (job.is_none()) {
             break;                       // all senders gone: exit
         }

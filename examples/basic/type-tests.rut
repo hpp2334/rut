@@ -18,7 +18,7 @@ interface HitTest {
 class Sprite implements Drawable, HitTest {
     private x: f32 = 0;
     private y: f32 = 0;
-    // default factory: Sprite()
+    // default constructor: Sprite()
 
     fn draw(self, g: Canvas): void { g.circle(self.x, self.y, 1); }
     fn hit_test(self, px: f32, py: f32): bool {
@@ -31,7 +31,7 @@ class Circle implements Drawable {
     private y: f32 = 0;
     private r: f32 = 1;
 
-    factory(x: f32, y: f32, r: f32): Self {
+    constructor(x: f32, y: f32, r: f32): Self {
         return Self { x: x, y: y, r: r };
     }
 
@@ -39,16 +39,16 @@ class Circle implements Drawable {
 }
 
 fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
-    const log = Logger("types");
+    let log = Logger("types");
     if (is<Circle>(d)) {             // runtime test — exact class check
         d.draw(g);                   // no downcast exists; stay on the
     }                                // interface
 
     // widening to `dyn I` is implicit — the explicit form is the `dyn`
     // annotation at the receiving position, not a builtin:
-    const d2: dyn Drawable = s;      // boxes implicitly (RFC 0011 §3)
-    const views: Vec<dyn Drawable> = Vec.from([s, d2]);
-    const ht: dyn HitTest = s;
+    let d2: dyn Drawable = s;      // boxes implicitly (RFC 0011 §3)
+    let views: Vec<dyn Drawable> = Vec.from([s, d2]);
+    let ht: dyn HitTest = s;
 
     log.info(f"{views.len()} {ht.hit_test(0, 0)}");
 }

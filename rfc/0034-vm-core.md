@@ -17,7 +17,7 @@ One struct, one thread, one heap:
 ```rust
 pub struct Vm {
     types:  TypeTable,               // global RutType descriptors + vtables
-    heap:   Heap,                    // RFC 0016 §5 — RC + cycle collector
+    heap:   Heap,                    // RFC 0016 §5 — pure RC heap
     mods:   Vec<Module>,             // linked images (RFC 0033 §1)
     frames: Vec<Frame>,              // the call stack
     ready:  Deque<TaskId>,           // woken coroutines (RFC 0018 §4)
@@ -92,13 +92,14 @@ one. Coroutine frames are dropped on the way out — destructors run
   by wall time. These are the only stepping verbs (RFC 0001 "Host
   stepping").
 
-## 5. Heap & collector integration
+## 5. Heap integration
 
-RC ops are inline in the loop; a `release` to zero runs `dispose()` then
-frees (RFC 0016 §3). Suspect-list growth triggers the cycle collector
-between frames only — never mid-function (borrow guards, RFC 0023 §2, stay
-trivially sound). `vm.collect_cycles()` lets the host force a pass
-(RFC 0017 §2).
+RC ops are inline in the loop; a `release` to zero runs
+`Disposal.dispose` then frees (RFC 0016 §3). There is **no collection
+pass at all** — destruction happens inline at release-to-zero, so nothing
+ever interrupts a frame (borrow guards, RFC 0023 §2, stay trivially
+sound). Strong cycles leak by design; the shutdown leak report (RFC 0017
+§3) is the diagnostic surface.
 
 ## Open questions
 

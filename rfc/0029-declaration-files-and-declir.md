@@ -52,12 +52,12 @@ only, and — beyond RFC 0003's module scope — every declaration must be
 
 - `import` / `export` — visibility applies exactly as in RFC 0003 §2
   (non-exported decls are known inside the file, nameable nowhere else);
-- `const` — with const-expression initializers (RFC 0033 §3);
+- `let` — with load-time expression initializers (RFC 0033 §3);
 - `enum` — a member list *is* the whole definition;
 - `interface` — method signatures (+ `requires`) *are* the whole
   definition (`std:collection`'s `Equal<T>` / `Hashable` live this way,
   RFC 0028);
-- `dataclass` — **fields only** (with const-expr field initializers). The
+- `dataclass` — **fields only** (with load-time expression field initializers). The
   repr-C field block is an ABI (RFC 0015 §4), so a published value type is
   sound. No method bodies, no `implements` in v1 (OQ-2);
 - `host fn` / `host class` / `extern fn` / `extern class` — signatures
@@ -119,11 +119,15 @@ When module `M` imports `"pkg:mod"` and rutc needs its surface to typecheck
 
 1. **source**: `pkg/mod.rut` present on the source path → compile it
    normally (development mode; its exported surface *is* the DeclIr);
-2. **cache**: `pkg/mod.d.ir` with a matching compiler version → load the
+2. **bundle**: a mounted `.rutbundle` answering to `pkg:mod` → the
+   surface is its bundled `.d.ir` (or, regenerated from the bundled
+   `.d.rut` when version-stale) — RFC 0038 §5; explicit mount outranks
+   stray caches, never dev source;
+3. **cache**: `pkg/mod.d.ir` with a matching compiler version → load the
    DeclIr directly — no parse, the fast path;
-3. **decl**: `pkg/mod.d.rut` → compile to a DeclIr (and write the
+4. **decl**: `pkg/mod.d.rut` → compile to a DeclIr (and write the
    `.d.ir` cache next to it);
-4. **host registry**: for `host`-linked modules the embedder ships the
+5. **host registry**: for `host`-linked modules the embedder ships the
    `.d.rut` alongside the registered implementation (RFC 0022 §1).
 
 Bodies are resolved only at link/run: registered Rust for `host` decls;
@@ -144,6 +148,11 @@ An author publishes:
   hand-editable afterwards.
 - optionally `pkg/mod.d.ir` — pointless to ship (consumers regenerate,
   §4), but harmless.
+
+Everything above may instead ship as **one file**: `rutc pack` zips image +
+surface + DeclIr + the `.rutc.map` sidecar under a versioned `rut.toml`
+manifest — a `.rutbundle` (RFC 0038). Same contract, one file; the
+resolver (§5) treats a mounted bundle's entries as the loose artifacts.
 
 For an `extern class` in a consumer to link, the published `.rutc` must
 carry an export/slot table whose decl digest equals the one the consumer

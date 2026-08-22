@@ -17,8 +17,8 @@ in action.
 
 - **Value semantics**: assignment, argument passing, and returning copy the
   whole value (shallow: ref-typed fields copy the handle + retain; nested
-  dataclass fields copy inline). No `new`, no factory — `Name { field: expr, .. }`
-  is the only construction, available **everywhere** (module-const
+  dataclass fields copy inline). No `new`, no constructor — `Name { field: expr, .. }`
+  is the only construction, available **everywhere** (module-let
   initializers included, RFC 0003 §1).
 - **All fields public, always.** A dataclass is an open data record —
   `private` in a dataclass is a compile error. Privacy needs construction
@@ -36,15 +36,16 @@ in action.
       x: f32;
       y: f32;
       fn hash(self): u64 { .. }
-      fn eq(self, other: Point): bool {
+      fn equal(self, other: Point): bool {
           return other.x == self.x && other.y == self.y;
       }
   }
   ```
 
-  Calls on a concrete `Point` are direct (RFC 0012 §1); the `dyn I` ref
+  `hash`/`equal` are interface-declared members — calls dispatch through
+  the vtable per RFC 0012 §1; the `dyn I` ref
   form boxes — below. The limits on a dataclass, exhaustively: **no `private`
-  fields** (above), **no `static` members**, **no `factory`** (the
+  fields** (above), **no `static` members**, **no `constructor`** (the
   literal is the only construction — that split *is* the
   dataclass/class distinction), and **no `dispose()`** (a value that is
   copied around has no single death to hook). Everything else

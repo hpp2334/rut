@@ -10,7 +10,7 @@ import { dispatch } from "../reactive.rut";
 import { Tab } from "../models.rut";
 import { body, transparent } from "./common.rut";
 
-const SIDEBAR_W: f32 = 168;
+let SIDEBAR_W: f32 = 168;
 
 export fn sidebar(th: Palette, st: Rc<Dashboard>): Element {
     return box(BoxProps {
@@ -34,12 +34,12 @@ export fn sidebar(th: Palette, st: Rc<Dashboard>): Element {
 }
 
 export(self) fn nav_item(th: Palette, st: Rc<Dashboard>, tab: Tab, label: string): Element {
-    const active = st.tab() == tab;
-    const bg = when (active) {
+    let active = st.tab() == tab;
+    let bg = when (active) {
         true -> th.accent,
         else -> transparent(),
     };
-    const fg = when (active) {
+    let fg = when (active) {
         true -> Color.hex("#ffffff"),
         else -> th.text_dim,
     };

@@ -8,26 +8,26 @@ import { Logger } from "std:log";
 dataclass Point { x: f32; y: f32 }
 
 fn literals(name: string): void {
-    const log = Logger("literals");
-    const a = 10;                      // i32 (default)
-    const b = 10u8;                    // u8 via suffix
-    const c: u64 = 10;                 // u64 via annotation
-    const d = 1.5;                     // f64
-    const e = 1.5f32;                  // f32
-    const s = "hi\tname";              // plain string: escapes processed
-    const raw = r"C:\temp\log.txt";    // raw literal: NO escape processing
-    const t = f"hi {name}!";           // format literal (§4.1)
-    const ch = 'h';                    // char
-    const arr = [1, 2, 3];             // Array<i32, 3> — inline VALUE, copies
-    const zero: Vec<f32> = Vec<f32>(1024);      // growable, zeroed, unboxed
-    const grow = Vec.from([1, 2, 3]);  // fixed -> growable (copies)
-    const slice: dyn Slice<i32> = arr;           // dyn = unsized: slot holds
-    const shared: Rc<dyn Slice<i32>> = slice;    // the slice-cell handle; Rc
-    const view = zero.as_slice();                // shares the same cell
-    view[0] = 9.0f32;                  // Vec.as_slice(): LENDING view — no
-                                       // copy; write is visible via zero[0]
-    const buf = bytes(64);             // zeroed
-    const p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
+    let log = Logger("literals");
+    let a = 10;                      // i32 (default)
+    let b = 10u8;                    // u8 via suffix
+    let c: u64 = 10;                 // u64 via annotation
+    let d = 1.5;                     // f64
+    let e = 1.5f32;                  // f32
+    let s = "hi\tname";              // plain string: escapes processed
+    let raw = r"C:\temp\log.txt";    // raw literal: NO escape processing
+    let t = f"hi {name}!";           // format literal (§4.1)
+    let ch = 'h';                    // char
+    let arr = [1, 2, 3];             // Array<i32, 3> — inline VALUE, copies
+    let zero: Vec<f32> = Vec<f32>(1024);      // growable, zeroed, unboxed
+    let grow = Vec.from([1, 2, 3]);  // fixed -> growable (copies)
+    let slice: dyn Slice<i32> = arr;           // Array widens: OWNED cell copy
+    let shared: Rc<dyn Slice<i32>> = slice;    // the slice-cell handle; Rc
+    let view: dyn Slice<f32> = zero;           // Vec widens too: BACKING cell —
+    view[0] = 9.0f32;                  // dispatches through the Vec; growth-
+                                        // safe, write is visible via zero[0]
+    let buf = bytes(64);             // zeroed
+    let p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
 
     log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={shared.len()}");
 }

@@ -20,7 +20,7 @@
 import { Hashable } from "std:collection";
 
 export host class MyMap<K: Hashable, V> {
-    factory(cap: i32): Self;          // native factory: MyMap<K, V>(cap)
+    constructor(cap: i32): Self;          // native constructor: MyMap<K, V>(cap)
     fn set(self, k: K, v: V): void;
     fn get(self, k: K): Option<V>;
     fn size(self): i32;
@@ -29,7 +29,7 @@ export host class MyMap<K: Hashable, V> {
                                       // (interface values cannot be
                                       // downcast — RFC 0012 §3)
 // What compiling this file produces: a slot table
-//     factory -> 0, set -> 1, get -> 2, size -> 3, keys -> 4
+//     constructor -> 0, set -> 1, get -> 2, size -> 3, keys -> 4
 // (declaration order; part of the decl digest). Consumer calls compile
 // to callnat { slot } — names are binding-time labels for the Rust impl,
 // never dispatch keys, never in the IR (RFC 0032).

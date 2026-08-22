@@ -9,16 +9,16 @@ import { Dashboard } from "../state.rut";
 import { body, chip, hgap } from "./common.rut";
 
 export fn header(th: Palette, st: Rc<Dashboard>): Element {
-    const live = st.live();
-    const dot = when (live) {
+    let live = st.live();
+    let dot = when (live) {
         true -> th.ok,
         else -> th.err,
     };
-    const badge = when (live) {
+    let badge = when (live) {
         true -> "live",
         else -> "halted",
     };
-    const uptime_s = (now_ms() - st.started_ms()) / 1000;
+    let uptime_s = (now_ms() - st.started_ms()) / 1000;
 
     return box(BoxProps {
         pad: PAD,

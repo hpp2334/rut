@@ -2,7 +2,7 @@
 // Copied on assignment/passing/return. All fields public. Methods and
 // `implements` ARE allowed (see interfaces.rut for impls); here the
 // idiom stays data + free functions. Constructed ONLY by literal,
-// everywhere (module-const initializers included).
+// everywhere (module-module let initializers included).
 
 import { Logger } from "std:log";
 
@@ -21,8 +21,8 @@ dataclass Style {
     width: f32 = 1;
 }
 
-fn nudge(pt: Point): Point {    // pass-by-value: parameter is a copy
-    pt.x += 1;                  // mutates the COPY only
+fn nudge(mut pt: Point): Point { // pass-by-value: parameter is a copy;
+    pt.x += 1;                  // `mut` param: mutating mutates the COPY only
     return pt;                  // return-by-value: copy out
 }
 
@@ -31,15 +31,15 @@ fn length(pt: Point): f64 {     // free function instead of a method
 }
 
 fn dataclasses(): void {
-    const log = Logger("dataclasses");
+    let log = Logger("dataclasses");
     let p = Point { x: 1, y: 2 };    // literal — the only construction
     p.x = 3;                         // mutable through `let`
-    const q = p;                     // COPY: q is an independent value
+    let q = p;                     // COPY: q is an independent value
     p.x = 4;                         // q.x is still 3
 
-    const r = Rect { min: p, max: q };   // nested values copied inline
-    const s = Style {};              // initializers satisfy all fields
-    const p2 = nudge(p);             // p itself is untouched
+    let r = Rect { min: p, max: q };   // nested values copied inline
+    let s = Style {};              // initializers satisfy all fields
+    let p2 = nudge(p);             // p itself is untouched
     log.info(f"len={length(p2)} color={s.color} area={r.max.x - r.min.x}");
 }
 

@@ -5,17 +5,17 @@ import { HttpError, get } from "std:http";
 import { Logger } from "std:log";
 
 suspend fn fetch_all(urls: Vec<string>): Result<Vec<bytes>, HttpError> {
-    const bodies: Vec<bytes> = Vec();
-    for (const u of urls) {
-        const body = await get(u)?;      // await + propagate in one expression
+    let bodies: Vec<bytes> = Vec();
+    for (let u of urls) {
+        let body = await get(u)?;      // await + propagate in one expression
         bodies.push(body);
     }
     return Result.ok(bodies);
 }
 
 export suspend fn main(): void {
-    const log = Logger("http");
-    const r = await fetch_all(["https://example.com", "https://example.org"]);
+    let log = Logger("http");
+    let r = await fetch_all(["https://example.com", "https://example.org"]);
     if (r.is_ok()) {
         log.info(f"fetched {r.value.len()} pages");
     } else {

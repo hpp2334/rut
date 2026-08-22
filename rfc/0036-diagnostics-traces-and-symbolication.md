@@ -15,7 +15,7 @@ first question is *where*. Three tiers, three price points:
 
 | tier | cost | when it exists |
 |---|---|---|
-| `Location` (file:line:col) | compile-time const, zero runtime | attached to error values at construction |
+| `Location` (file:line:col) | compile-time constant, zero runtime | attached to error values at construction |
 | `StackTrace` (raw capture) | explicit; a walk of the frame stack | anyhow-style context on `Result` errors |
 | `Trap` backtrace | automatic at trap unwind | bugs/overflow/`panic` — the P4 boundary |
 
@@ -72,7 +72,9 @@ enum RawFrame {
    format contract** — the deliberate opposite of `.d.ir` (an unstable
    DeclIr cache; RFC 0029 §4). `rutc trace --map mod.rutc.map < raw.txt`
    restores a trace captured against a fully-stripped `--release`
-   image: the DWARF-separate-debug-file role.
+   image: the DWARF-separate-debug-file role. A `.rutbundle` carries the
+   sidecar inside the zip, and `vm.symbolicate`'s fallback reads it from
+   the mount (RFC 0038 §5).
 3. **Recompile-by-determinism (no artifact at all).** Deterministic
    serialization (RFC 0033 §1) means same source + pinned compiler
    version ⇒ byte-identical image ⇒ identical pcs ⇒ symbolicate against
@@ -111,7 +113,7 @@ import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
 
 dataclass LoadError {
     msg:   string,
-    at:    Location,               // free — folded const
+    at:    Location,               // free — folded at compile time
     trace: Option<StackTrace>,     // paid only when asked for
 }
 ```
@@ -129,7 +131,9 @@ Same declaration-file machinery as `plugin:my_map` (RFC 0025/0026/0029):
 ```rut
 // std/debug.d.rut (excerpt)
 export dataclass Location { file: string, line: i32, col: i32 }
-export host fn here(): Location;                  // const-folded (RFC 0033 §3)
+export host fn here(): Location;                  // folded at compile time (RFC 0033 §3)
+export host fn str(v: dyn Any): string;       // developer rendering (RFC 0007 §2)
+export host fn type_name(v: dyn Any): string; // debug type name
 export host fn capture_stack_trace(): StackTrace;
 export host class StackTrace {
     fn render(): string;

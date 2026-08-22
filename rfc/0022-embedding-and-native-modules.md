@@ -63,7 +63,7 @@ fn gfx_module() -> NativeModule {
   `is<T>` (RFC 0015 §6). No coercion code, no `as number`, no
   `require_props_object`.
 - Native registration supplies implementations for declaration-file
-  items: **`host fn`s** (above), **class methods / factories** (RFC 0025,
+  items: **`host fn`s** (above), **class methods / constructors** (RFC 0025,
   RFC 0026), and — for the types themselves — the backing of **enum,
   interface, and builtin-impl registry entries** declared in declaration
   files
@@ -71,6 +71,12 @@ fn gfx_module() -> NativeModule {
   the canonical case, RFC 0028). std:reflect adds the reflection
   protocols to the same registry — `Reflectable`/`Deserializable` for
   `Option`/`Result`/`Vec`/`Array<T, N>` (RFC 0037).
+- **Internal natives**: the VM boots with native modules of its own in
+  this same registry — `str`/`concat` (the `f""` desugaring, RFC 0007
+  §2), `make_any` (RFC 0014), Template construction (RFC 0027), and
+  concrete `Vec<T>`'s named API (`len`/`push`/`pop`, RFC 0005). They
+  are `callnat` slots fixed at boot, never IR ops (RFC 0032 §1.1 R2);
+  hosts see them exactly like their own registered modules.
 - Failures are `Result<_, Trap>` values — a native fn that errors traps
   cleanly with a message and a rut backtrace (RFC 0034 §2).
 - Long-running host work must NOT block the loop: hand back a future

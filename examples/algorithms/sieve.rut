@@ -3,8 +3,8 @@
 import { Logger } from "std:log";
 
 fn sieve(limit: i32): Vec<i32> {
-    const marks = bytes(limit + 1);       // zeroed: 0 = candidate, 1 = crossed
-    const primes: Vec<i32> = Vec();       // empty growable: Vec(), not []
+    let marks = bytes(limit + 1);       // zeroed: 0 = candidate, 1 = crossed
+    let primes: Vec<i32> = Vec();       // empty growable: Vec(), not []
     for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);
@@ -19,8 +19,8 @@ fn sieve(limit: i32): Vec<i32> {
 }
 
 export fn main(): void {
-    const log = Logger("sieve");
-    const primes = sieve(100);
-    const last = primes[primes.len() - 1];
+    let log = Logger("sieve");
+    let primes = sieve(100);
+    let last = primes[primes.len() - 1];
     log.info(f"{primes.len()} primes up to 100, last={last}");
 }

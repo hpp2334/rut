@@ -1,24 +1,24 @@
 // RFC 0003 §1 — module scope is DECLARATIONS ONLY (C++-style):
-// no top-level statements, no load-time code, const initializers must be
-// const-expressions.
+// no top-level statements, no load-time code, module let initializers must be
+// load-time expressions.
 
 import { sleep } from "std:time";
 
-const MAX_RETRIES: i32 = 3;                    // const-expression
-const TILES: Vec<f32> = Vec<f32>(16);       // zeroed, const size
-const ORIGIN: Point = Point { x: 0, y: 0 };    // dataclass literal of consts
+let MAX_RETRIES: i32 = 3;                    // load-time expression
+let TILES: Vec<f32> = Vec<f32>(16);       // zeroed, let size
+let ORIGIN: Point = Point { x: 0, y: 0 };    // dataclass literal of consts
 
 enum Mode { Idle, Running }
 
 dataclass Point { x: f32; y: f32 }
 
-interface Service { fn start(self): void; }
+interface Service { fn start(mut self): void; }
 
 class App implements Service {
     private started: bool = false;
-    // default factory: App()
+    // default constructor: App()
 
-    fn start(self): void {
+    fn start(mut self): void {
         self.started = true;
     }
 }
@@ -27,6 +27,6 @@ fn run(m: Mode): void { /* ... */ }           // logic lives in functions
 
 export fn main(): void {                      // entry point — the host calls it
     run(Mode.Running);
-    const app = App();
+    let app = App();
     app.start();
 }

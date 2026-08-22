@@ -39,15 +39,15 @@ fn localized(count: i32, user: string): void {
 }
 
 export fn main(): void {
-    const log = Logger("interop");
-    const c = newCanvas();                         // host constructs the handle
-    const verts: Array<Vertex, 2> = [
+    let log = Logger("interop");
+    let c = newCanvas();                         // host constructs the handle
+    let verts: Array<Vertex, 2> = [
         Vertex { x: 0, y: 0, color: 0xFF00FF },
         Vertex { x: 1, y: 1, color: 0x00FFFF },
     ];
     draw_frame(c, verts);
 
-    const hits: Source<i32> = c.hit_source();
+    let hits: Source<i32> = c.hit_source();
     log.info(f"hits={hits.get()}");                // checked: Source<i32>.get(): i32
 
     localized(3, "ada");

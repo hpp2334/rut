@@ -14,7 +14,7 @@
 //
 // Boundary crossings in this file: the class type itself (first use of
 // MyMap<A, B> reifies the instantiation and builds its method table),
-// the native factory (construction), every method call (callnat by slot —
+// the native constructor (construction), every method call (callnat by slot —
 // names never dispatch, RFC 0032), and Option/Vec values flowing
 // back out.
 
@@ -26,7 +26,7 @@ import { Logger } from "std:log";
 // A DATACLASS key (RFC 0009): an all-public, literal-constructed
 // value record — with methods, because dataclasses implement interfaces
 // now. Its limits, exhaustively: no `private` fields, no `static`
-// members, no `factory`, no `dispose()`.
+// members, no `constructor`, no `Disposal`.
 dataclass Name implements Hashable, Equal<Name> {   // BOTH — Hashable
     first: string;                                  // requires Equal<Self>
     last: string;
@@ -43,25 +43,25 @@ dataclass Name implements Hashable, Equal<Name> {   // BOTH — Hashable
 }
 
 export fn main(): void {
-    const log = Logger("my-map");
+    let log = Logger("my-map");
 
     // K = string: satisfies Hashable via a REGISTERED builtin impl —
     // no user code needed. Construction is a TYPE-CALL: MyMap<string,
     // i32>(32) instantiates the generic host class and runs its native
-    // factory with a capacity hint. Same rule as Vec<f32>(n) — no `new`.
-    const counts: MyMap<string, i32> = MyMap<string, i32>(32);
+    // constructor with a capacity hint. Same rule as Vec<f32>(n) — no `new`.
+    let counts: MyMap<string, i32> = MyMap<string, i32>(32);
 
     for (let i = 0; i < 20; i += 1) {
-        const k = f"key-{i % 7}";                  // 7 distinct keys
+        let k = f"key-{i % 7}";                  // 7 distinct keys
         counts.set(k, counts.get(k).unwrap_or(0) + 1);
     }
-    const hits = counts.get("key-3").unwrap_or(-1); // native get returns
+    let hits = counts.get("key-3").unwrap_or(-1); // native get returns
     log.info(f"size={counts.size()} key-3={hits}"); // rut's builtin Option
 
     // K = a DATACLASS: satisfies Hashable because it implements it. The
     // map's hashing calls back into THIS hash()/eq() — rut code reached
     // through the interface vtable (re-entrant VM call, borrow-guarded).
-    const roster: MyMap<Name, i32> = MyMap<Name, i32>(4);
+    let roster: MyMap<Name, i32> = MyMap<Name, i32>(4);
     roster.set(Name { first: "ada", last: "lovelace" }, 1);
     roster.set(Name { first: "grace", last: "hopper" }, 2);
     log.info(f"roster size={roster.size()}");
@@ -70,7 +70,7 @@ export fn main(): void {
     // the host-class DECLARATION (plugin/my_map.d.rut); the verifier
     // re-checks at load:
     //
-    // const bad = MyMap<Canvas, i32>(4);
+    // let bad = MyMap<Canvas, i32>(4);
     //                    ^^^^^^ error: `Canvas` does not implement
     //                    `Hashable` — required by MyMap's K
     //                    (satisfiable by: implements Hashable, or a
@@ -79,9 +79,9 @@ export fn main(): void {
     // V = dyn Any: a SECOND instantiation (own TypeId) storing values rut
     // cannot see inside. Native set/get just move the boxes — the Rust
     // side never inspects them; downcast<Canvas> recovers on OUR side.
-    const surfaces: MyMap<string, dyn Any> = MyMap<string, dyn Any>(4);
+    let surfaces: MyMap<string, dyn Any> = MyMap<string, dyn Any>(4);
     surfaces.set("hud", make_any(newCanvas()));
-    const hud = downcast<Canvas>(surfaces.get("hud").expect("hud present"));
+    let hud = downcast<Canvas>(surfaces.get("hud").expect("hud present"));
     if (hud.is_some()) {
         hud.value.circle(10, 10, 5);               // back in typed host API
     }
@@ -89,7 +89,7 @@ export fn main(): void {
     // counts.keys() -> Vec<string> (K is preserved, not erased to
     // dyn Hashable — built host-side from the instantiation's K Ty, each
     // key unerased to its natural value); the loop itself is pure rut.
-    for (const k of counts.keys()) {
+    for (let k of counts.keys()) {
         log.debug(f"{k} -> {counts.get(k).unwrap_or(0)}");
     }
 }   // MyMap's Rust Drop releases the boxed values; each Canvas's Rust Drop

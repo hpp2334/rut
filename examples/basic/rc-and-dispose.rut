@@ -1,48 +1,48 @@
 // RFC 0011 — Rc<T>: explicit references. Rc(v) boxes a class value in
 // a refcounted heap cell; Rc handles are REF-copied — aliasing is always
-// visible in the type. Classes with dispose() must live behind Rc: their
-// factories hand out Rc<Self> directly.
+// visible in the type. Classes implementing `Disposal` must live behind
+// Rc: their constructors hand out Rc<Self> directly.
 
 import { Logger } from "std:log";
 
 class Circle {
     private r: f32;
 
-    factory(r: f32): Self {
+    constructor(r: f32): Self {
         return Self { r: r };
     }
 
-    fn grow(self): void { self.r += 1; }
+    fn grow(mut self): void { self.r += 1; }
     fn radius(self): f32 { return self.r; }
 }
 
-class TempFile {
+class TempFile implements Disposal {
     private path: string;
 
-    factory(path: string): Rc<TempFile> {   // dispose class -> Rc<Self>
+    constructor(path: string): Rc<TempFile> {   // Disposal class -> Rc<Self>
         return Rc(Self { path: path });
     }
 
     fn write(self, data: bytes): void { /* ... */ }
 
-    dispose(self): void {             // reserved: runs at rc 0
+    fn dispose(mut self): void {      // Disposal impl — runs once, at rc 0
         fs.remove(self.path);
     }
 }
 
 fn refs(): void {
-    const log = Logger("rc");
-    const a = Circle(3);             // bare value: copies like a dataclass
-    const b = Rc(a);                 // box into a refcounted heap cell
-    const c = b;                     // Rc copy: handle copy — SAME object
+    let log = Logger("rc");
+    let a = Circle(3);             // bare value: copies like a dataclass
+    let b = Rc(a);                 // box into a refcounted heap cell
+    let c = b;                     // Rc copy: handle copy — SAME object
     b.grow();                        // visible through c, not through a
     log.info(f"a={a.radius()} shared={c.radius()}");     // a=3 shared=4
 }
 
 fn scratch(): void {
-    const f = TempFile("tmp.dat");   // factory already returns Rc<TempFile>
+    let f = TempFile("tmp.dat");   // constructor already returns Rc<TempFile>
     f.write(bytes(64));
-}   // rc hits 0 HERE: dispose() runs, then `path` is released
+}   // rc hits 0 HERE: Disposal.dispose runs, then `path` is released
 
 export fn main(): void {
     refs();

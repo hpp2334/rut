@@ -1,4 +1,4 @@
-# RFC 0010: Classes & Factories — Sealed Value Records, No Inheritance
+# RFC 0010: Classes & Constructors — Sealed Value Records, No Inheritance
 
 - **Status:** Draft
 - **Date:** 2026-08-22
@@ -9,28 +9,28 @@
 
 ## Summary
 
-See **`examples/basic/classes.rut`** — factory type-calls, the class-private
-`Self { .. }` literal, `suspend factory`, `private factory` sealing,
+See **`examples/basic/classes.rut`** — constructor type-calls, the class-private
+`Self { .. }` literal, `suspend constructor`, `private constructor` sealing,
 explicit `self` receivers, static fields.
 
-## 1. Classes — sealed value records with factories
+## 1. Classes — sealed value records with constructors
 
 - **Also a value type.** A bare `Circle` copies on assignment/passing/return
   exactly like a dataclass — inline, no header, no refcount. What a class
-  *adds* over a dataclass is **sealing**: private fields, factory-only
+  *adds* over a dataclass is **sealing**: private fields, constructor-only
   construction, `static` fields, and `dispose()` (RFC 0011). Reflection:
   a class is walkable **iff** it implements `std:reflect.Reflectable`
   (or a contract layer requiring it — RFC 0037) — default opaque, a
   *default* not a law; and it can never implement `Deserializable` —
-  construction is the factory's job, reflective mint is
+  construction is the constructor's job, reflective mint is
   descriptor-backed only. (`implements`
   is no longer class-only — RFC 0009.) A dataclass auto-implements
   `std:reflect`'s `Reflectable` + `Deserializable` (RFC 0037) — that,
   not the keyword, is why it reflects and round-trips.
 - **Construction is a type-call**: `Circle(1, 2, 3)` runs the class's
-  `factory`. No `new` keyword exists, and there is no outside literal for
-  a class — construction always flows through a factory.
-- **`factory` is just a function** — class-level by definition (it never
+  `constructor`. No `new` keyword exists, and there is no outside literal for
+  a class — construction always flows through a constructor.
+- **`constructor` is just a function** — class-level by definition (it never
   takes a `self` receiver), ordinary
   params, ordinary body, a `return`. It builds the instance with the
   **class-private `Self { field: expr, .. }` literal** (the class name
@@ -38,19 +38,19 @@ explicit `self` receivers, static fields.
   without an initializer; field initializers run for omitted fields.
   Private fields are settable in the literal — inside the class body only.
 - The return type defaults to `Self` and may be declared otherwise, so
-  "try" constructors are just factories:
-  `factory parse(s: string): Option<Version>`; a dispose class's factory
+  "try" constructors are just constructors:
+  `constructor parse(s: string): Option<Version>`; a `Disposal` class's constructor
   may hand out `Rc<Self>` directly (RFC 0011).
-- **`suspend factory` is allowed** — same function, `await` in the body:
+- **`suspend constructor` is allowed** — same function, `await` in the body:
   `Circle(..)` then returns `Future<Circle>` and callers write
   `await Circle(..)` (cold future, RFC 0018 §2). No partially constructed
   instance ever exists across an `await` — the `Self { .. }` literal is an
   ordinary expression, and locals live in the coroutine frame.
-- **No factory declared + every field has an initializer → default no-arg
-  factory** (`Sprite()`). A field without an initializer and no factory
+- **No constructor declared + every field has an initializer → default no-arg
+  constructor** (`Sprite()`). A field without an initializer and no constructor
   makes the class unconstructible outside its own body.
-- **`private factory` seals** the class: the type-call is legal only inside
-  the class body. The named-factory pattern is an opt-in on top — a class
+- **`private constructor` seals** the class: the type-call is legal only inside
+  the class body. The named-constructor pattern is an opt-in on top — a class
   method (`fn issue(): AuthToken { return AuthToken("..") }` — no `self`,
   §2) validates,
   caches, or registers, and outside code cannot bypass it.
@@ -64,13 +64,13 @@ explicit `self` receivers, static fields.
   `fn from(x: i32)` — invoked on the class itself (`Version.from(..)`).
   **There is no `static fn`**: presence or absence of `self` is the whole
   distinction, stated in the signature and greppable — the same
-  explicitness rule as `dyn` (RFC 0012 §2). Factories never take `self`
-  (construction has no receiver yet); `dispose` does (`dispose(self)`,
+  explicitness rule as `dyn` (RFC 0012 §2). Constructors never take `self`
+  (construction has no receiver yet); `Disposal.dispose` does (`dispose(mut self)`,
   RFC 0011 §2). Interface methods and host/extern class methods follow
   the identical rule (RFC 0012 §2, RFC 0025 §2).
 - `static` **fields** live in the class's module-static slot table. Static
-  initializers must be const-expressions (RFC 0003 §1) and are materialized
-  at load — factories and methods are the only places to run logic.
+  initializers must be load-time expressions (RFC 0003 §1) and are materialized
+  at load — constructors and methods are the only places to run logic.
 - No `get`/`set` accessor syntax anywhere — a computed property is just a
   method (`c.count()`), and a settable one takes an argument
   (`c.set_count(n)`). One member kind, one call convention, no hidden code
@@ -97,5 +97,5 @@ explicit `self` receivers, static fields.
   (§3); reintroduce only if composition proves insufficient, as a separate
   RFC.
 - ~~constructor parameter properties~~ — **obsolete twice over**:
-  factories are plain functions (params are params), and the
+  constructors are plain functions (params are params), and the
   `Self { field: name }` literal makes the param→field mapping explicit.

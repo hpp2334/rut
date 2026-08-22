@@ -14,40 +14,40 @@ enum Flavor { Sweet, Sour }
 class Session {
     private token: string;
 
-    factory(token: string): Self {
+    constructor(token: string): Self {
         return Self { token: token };
     }
 }
 
 fn erase_and_recover(): void {
-    const log = Logger("any");
-    const box1 = make_any(Point { x: 1, y: 2 });   // snapshot of a value
-    const box2 = make_any(Flavor.Sour);
-    const box3 = make_any("hello");
+    let log = Logger("any");
+    let box1 = make_any(Point { x: 1, y: 2 });   // snapshot of a value
+    let box2 = make_any(Flavor.Sour);
+    let box3 = make_any("hello");
 
-    const p = downcast<Point>(box1);               // Option<Point>
+    let p = downcast<Point>(box1);               // Option<Point>
     if (p.is_some()) {
         log.info(f"point {p.value.x} {p.value.y}");
     }
-    const wrong = downcast<i32>(box2);             // wrong type: None, no trap
+    let wrong = downcast<i32>(box2);             // wrong type: None, no trap
     log.info(f"sour? {downcast<Flavor>(box2).is_some()} wrong? {wrong.is_some()}");
     log.info(f"is string: {is<string>(box3)}");    // is<T> sees through
 }
 
 fn share_vs_snapshot(): void {
-    const log = Logger("any");
-    const s = Session("abc");
-    const snap: dyn Any = make_any(s);    // VALUE semantics: a COPY in the box
-    const shared: dyn Any = make_any(Rc(s));   // box the HANDLE: identity
+    let log = Logger("any");
+    let s = Session("abc");
+    let snap: dyn Any = make_any(s);    // VALUE semantics: a COPY in the box
+    let shared: dyn Any = make_any(Rc(s));   // box the HANDLE: identity
 
     log.info(f"recovered Rc: {downcast<Rc<Session>>(shared).is_some()}");
     log.info(f"recovered bare: {downcast<Session>(snap).is_some()}");
 }
 
 fn nested(): void {
-    const log = Logger("any");
+    let log = Logger("any");
     // heterogeneous FIXED array — pure data, no allocation (RFC 0005)
-    const boxes: Array<dyn Any, 3> = [make_any(1), make_any("x"), make_any(Point { x: 3, y: 4 })];
+    let boxes: Array<dyn Any, 3> = [make_any(1), make_any("x"), make_any(Point { x: 3, y: 4 })];
     log.info(f"{boxes.len()} boxes; first is i32: {is<i32>(boxes[0])}");
 }
 

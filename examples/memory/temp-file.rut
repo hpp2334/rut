@@ -1,26 +1,28 @@
-// RFC 0016 §3 — deterministic destruction: dispose() runs at rc 0, then
-// fields are released in order. No FinalizationRegistry, no "maybe later".
+// RFC 0016 §3 — deterministic destruction: the `Disposal` impl runs at
+// rc 0, then fields are released in order. No FinalizationRegistry, no
+// "maybe later".
 
 import { remove } from "std:fs";
 import { Logger } from "std:log";
+import { Disposal } from "std:core";
 
-class TempFile {
+class TempFile implements Disposal {
     private path: string;
 
-    factory(path: string): Self {             // bare value out of the factory
+    constructor(path: string): Self {             // bare value out of the constructor
         return Self { path: path };
     }
 
     fn write(self, data: bytes): void { /* ... */ }
 
-    dispose(self): void {             // reserved destructor — runs once
+    fn dispose(mut self): void {      // Disposal impl — runs once, at rc 0
         remove(self.path);
     }
 }
 
 export fn main(): void {
-    const log = Logger("tempfile");
-    const f = Rc(TempFile("tmp.dat"));   // ...then box: dispose requires Rc
+    let log = Logger("tempfile");
+    let f = Rc(TempFile("tmp.dat"));   // ...then box: Disposal requires Rc
     f.write(bytes(64));
     log.info("working...");
-}   // rc hits 0 HERE: dispose() runs, then `path` is released
+}   // rc hits 0 HERE: Disposal.dispose runs, then `path` is released
