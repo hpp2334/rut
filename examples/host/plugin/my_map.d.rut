@@ -21,10 +21,10 @@ import { Hashable } from "std:collection";
 
 export host class MyMap<K: Hashable, V> {
     factory(cap: i32): Self;          // native factory: MyMap<K, V>(cap)
-    fn set(k: K, v: V): void;
-    fn get(k: K): Option<V>;
-    fn size(): i32;
-    fn keys(): Array<K>;              // Array<K>, NOT Array<Hashable>:
+    fn set(self, k: K, v: V): void;
+    fn get(self, k: K): Option<V>;
+    fn size(self): i32;
+    fn keys(self): Array<K>;          // Array<K>, NOT Array<dyn Hashable>:
 }                                     // keys are unerased at the boundary
                                       // (interface values cannot be
                                       // downcast — RFC 0012 §3)

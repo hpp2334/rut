@@ -82,7 +82,7 @@ fn build_my_map(args: &GenericArgs, _types: &TypeRegistry) -> Result<ClassTable,
         })                                        // RC-retained for the
         .method("size", |ctx, this: &MyMap|       // map's lifetime
             Ok(this.inner.len() as i32))
-        // slot 4. Array<K>, NOT Array<Hashable>: k_ty drives the element
+        // slot 4. Array<K>, NOT Array<dyn Hashable>: k_ty drives the element
         // type and each key is UNERASED to its natural value (a `string`
         // key yields Array<string>) — rut cannot consume interface refs
         // here (no downcast, RFC 0012 §3). `get` needs no per-call V

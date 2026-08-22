@@ -162,24 +162,24 @@ export class Dashboard {
 
     // --- reads (through the store; derives recompute per read) ---
 
-    fn store(): Rc<Store> { return this.store; }
-    fn started_ms(): i64 { return this.started_ms; }
-    fn tab(): Tab { return atom_get(this.store, this.tab); }
-    fn query(): string { return atom_get(this.store, this.query); }
-    fn sort_dir(): SortDir { return atom_get(this.store, this.sort_dir); }
-    fn live(): bool { return atom_get(this.store, this.live); }
-    fn events_seen(): i32 { return atom_get(this.store, this.events_seen); }
-    fn visits(): i32 { return atom_get(this.store, this.visits); }
-    fn samples(): Array<f32> { return atom_get(this.store, this.samples); }
-    fn users(): Array<User> { return source_read(this.store, this.users_src); }
-    fn summary(): StatsSummary { return source_read(this.store, this.summary_src); }
-    fn users_view(): Array<User> { return derived_read(this.store, this.users_view); }
-    fn users_count(): i32 { return derived_read(this.store, this.users_count); }
-    fn alert_count(): i32 { return derived_read(this.store, this.alert_count); }
+    fn store(self): Rc<Store> { return self.store; }
+    fn started_ms(self): i64 { return self.started_ms; }
+    fn tab(self): Tab { return atom_get(self.store, self.tab); }
+    fn query(self): string { return atom_get(self.store, self.query); }
+    fn sort_dir(self): SortDir { return atom_get(self.store, self.sort_dir); }
+    fn live(self): bool { return atom_get(self.store, self.live); }
+    fn events_seen(self): i32 { return atom_get(self.store, self.events_seen); }
+    fn visits(self): i32 { return atom_get(self.store, self.visits); }
+    fn samples(self): Array<f32> { return atom_get(self.store, self.samples); }
+    fn users(self): Array<User> { return source_read(self.store, self.users_src); }
+    fn summary(self): StatsSummary { return source_read(self.store, self.summary_src); }
+    fn users_view(self): Array<User> { return derived_read(self.store, self.users_view); }
+    fn users_count(self): i32 { return derived_read(self.store, self.users_count); }
+    fn alert_count(self): i32 { return derived_read(self.store, self.alert_count); }
 
-    fn alerts_text(): string {
+    fn alerts_text(self): string {
         let out = "";
-        const msgs = atom_get(this.store, this.alerts);
+        const msgs = atom_get(self.store, self.alerts);
         for (let i = 0; i < msgs.length; i += 1) {
             out = str.concat(out, msgs[i], "\n");
         }
@@ -188,28 +188,28 @@ export class Dashboard {
 
     // --- service bridges: push snapshots into the sources ---
 
-    fn set_users(users: Array<User>): void {
-        source_push(this.store, this.users_src, users);
+    fn set_users(self, users: Array<User>): void {
+        source_push(self.store, self.users_src, users);
     }
 
-    fn set_summary(s: StatsSummary): void {
-        source_push(this.store, this.summary_src, s);
+    fn set_summary(self, s: StatsSummary): void {
+        source_push(self.store, self.summary_src, s);
     }
 
     // --- re-render subscription: one callback, every watched atom ---
 
-    fn redraw_on_change(cb: fn(): void): Array<Rc<WatchHandle>> {
+    fn redraw_on_change(self, cb: fn(): void): Array<Rc<WatchHandle>> {
         return [
-            watch(this.store, this.tab, cb),
-            watch(this.store, this.query, cb),
-            watch(this.store, this.sort_dir, cb),
-            watch(this.store, this.live, cb),
-            watch(this.store, this.visits, cb),
-            watch(this.store, this.events_seen, cb),
-            watch(this.store, this.alerts, cb),
-            watch(this.store, this.samples, cb),
-            watch(this.store, this.users_src, cb),
-            watch(this.store, this.summary_src, cb),
+            watch(self.store, self.tab, cb),
+            watch(self.store, self.query, cb),
+            watch(self.store, self.sort_dir, cb),
+            watch(self.store, self.live, cb),
+            watch(self.store, self.visits, cb),
+            watch(self.store, self.events_seen, cb),
+            watch(self.store, self.alerts, cb),
+            watch(self.store, self.samples, cb),
+            watch(self.store, self.users_src, cb),
+            watch(self.store, self.summary_src, cb),
         ];
     }
 }

@@ -1,7 +1,8 @@
 // RFC 0012 §2 — interfaces: plain METHODS only, nominal `implements`.
-// Interface values are the ONLY dynamic dispatch (vtable).
-// Intersection types (`Drawable & HitTest`) are NEVER supported — compose
-// a wider interface instead (Widget below).
+// Interface OBJECT types are the ONLY dynamic dispatch (vtable), spelled
+// `dyn I` in every type position (Rust-style; `implements`/`requires`/
+// bounds stay bare). Intersection types (`Drawable & HitTest`) are NEVER
+// supported — compose a wider interface instead (Widget below).
 //
 // Also demonstrates (RFC 0009, 0012):
 //   * `requires` — an admission constraint, NOT subtyping: to implement
@@ -16,24 +17,24 @@ import { Canvas, newCanvas } from "app:gfx";
 import { Logger } from "std:log";
 
 interface Drawable {
-    draw(g: Canvas): void;
+    fn draw(self, g: Canvas): void;
 }
 
 interface HitTest {
-    hit_test(x: f32, y: f32): bool;
+    fn hit_test(self, x: f32, y: f32): bool;
 }
 
 interface Widget {                   // composition replaces `Drawable & HitTest`
-    draw(g: Canvas): void;
-    hit_test(x: f32, y: f32): bool;
+    fn draw(self, g: Canvas): void;
+    fn hit_test(self, x: f32, y: f32): bool;
 }
 
 interface Equal<T> {                 // generic interface: eq is TYPED —
-    eq(other: T): bool;              // no downcast dance to recover the
+    fn eq(self, other: T): bool;     // no downcast dance to recover the
 }                                    // other operand's fields
 
 interface Hashable requires Equal<Self> {   // §6 `requires`: Self binds to
-    hash(): u64;                            // the implementor below
+    fn hash(self): u64;                     // the implementor below
 }
 
 class Sprite implements Widget {
@@ -41,17 +42,17 @@ class Sprite implements Widget {
     private y: f32 = 0;
     // every field initialized -> default no-arg factory: Sprite()
 
-    fn move_by(dx: f32, dy: f32): void {
-        this.x += dx;
-        this.y += dy;
+    fn move_by(self, dx: f32, dy: f32): void {
+        self.x += dx;
+        self.y += dy;
     }
 
-    fn draw(g: Canvas): void {
-        g.circle(this.x, this.y, 1);
+    fn draw(self, g: Canvas): void {
+        g.circle(self.x, self.y, 1);
     }
 
-    fn hit_test(px: f32, py: f32): bool {
-        return px == this.x && py == this.y;
+    fn hit_test(self, px: f32, py: f32): bool {
+        return px == self.x && py == self.y;
     }
 }
 
@@ -59,22 +60,22 @@ dataclass Cell implements Hashable, Equal<Cell> {   // BOTH listed: the
     x: i32;                                         // requires rule
     y: i32;                                         // public fields only
 
-    fn hash(): u64 {                                // direct dispatch on a
-        return u64(this.x) * 1000003 + u64(this.y); // concrete Cell
+    fn hash(self): u64 {                             // direct dispatch on a
+        return u64(self.x) * 1000003 + u64(self.y);  // concrete Cell
     }
 
-    fn eq(other: Cell): bool {                      // typed other: fields
-        return other.x == this.x && other.y == this.y;   // at hand
+    fn eq(self, other: Cell): bool {                 // typed other: fields
+        return other.x == self.x && other.y == self.y;   // at hand
     }
 }
 
-fn blit_all(g: Canvas, items: Array<Widget>): void {
+fn blit_all(g: Canvas, items: Array<dyn Widget>): void {
     for (const w of items) {
         w.draw(g);                   // vtable dispatch — the only dynamic call
     }
 }
 
-fn mixed_hash(keys: Array<Hashable>): u64 {
+fn mixed_hash(keys: Array<dyn Hashable>): u64 {
     let acc: u64 = 0;
     for (const k of keys) {
         acc += k.hash();             // vtable dispatch through Hashable;
@@ -86,10 +87,10 @@ export fn main(): void {
     const log = Logger("interfaces");
     const s = Sprite();
     s.move_by(2, 2);
-    blit_all(newCanvas(), [s]);      // bare Sprite boxes implicitly to Widget
+    blit_all(newCanvas(), [s]);      // bare Sprite boxes implicitly to dyn Widget
 
     const a = Cell { x: 1, y: 2 };   // literal — the ONLY dataclass factory
     const b = Cell { x: 1, y: 2 };
     log.info(f"eq={a.eq(b)} hash={mixed_hash([a, b])}");
-    //                        ^ bare dataclasses box implicitly to Hashable
+    //                        ^ bare dataclasses box implicitly to dyn Hashable
 }

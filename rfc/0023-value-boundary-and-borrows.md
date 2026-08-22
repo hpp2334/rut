@@ -23,7 +23,7 @@ pub enum Value<'v> {
     Bytes(Borrow<'v, [u8]>),               // zero-copy, call-scoped
     Array(Borrow<'v, RutArray>),           // typed elem, zero-copy
     Struct(StructRef<'v>),                 // repr C block — RFC 0024
-    Rc(Handle), Iface(Handle), Opaque(Handle), Host(Handle),
+    Rc(Handle), Iface(Handle), Any(Handle), Host(Handle),
     Opt(Option<Box<Value<'v>>>), Res(Result<Box<Value<'v>>, Box<Value<'v>>>),
     Template(Tmpl<'v>),                    // RFC 0027
 }

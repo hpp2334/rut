@@ -11,10 +11,10 @@ class TempFile {
         return Self { path: path };
     }
 
-    fn write(data: bytes): void { /* ... */ }
+    fn write(self, data: bytes): void { /* ... */ }
 
-    dispose(): void {                    // reserved destructor — runs once
-        remove(this.path);
+    dispose(self): void {             // reserved destructor — runs once
+        remove(self.path);
     }
 }
 

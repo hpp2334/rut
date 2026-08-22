@@ -28,21 +28,21 @@ in action.
   omit.
 - **Methods and `implements` are allowed** — the dataclass is no longer
   "pure data". Its body may contain fns: inherent methods and interface
-  impls, declared and dispatched exactly like class methods (`this`
-  included):
+  impls, declared and dispatched exactly like class methods (explicit
+  `self` receiver included — RFC 0010 §2):
 
   ```rut
   dataclass Point implements Hashable, Equal<Point> {
       x: f32;
       y: f32;
-      fn hash(): u64 { .. }
-      fn eq(other: Point): bool {
-          return other.x == this.x && other.y == this.y;
+      fn hash(self): u64 { .. }
+      fn eq(self, other: Point): bool {
+          return other.x == self.x && other.y == self.y;
       }
   }
   ```
 
-  Calls on a concrete `Point` are direct (RFC 0012 §1); the interface-ref
+  Calls on a concrete `Point` are direct (RFC 0012 §1); the `dyn I` ref
   form boxes — below. The limits on a dataclass, exhaustively: **no `private`
   fields** (above), **no `static` members**, **no `factory`** (the
   literal is the only construction — that split *is* the
@@ -52,7 +52,7 @@ in action.
   idiom; methods are for interface impls and tight helpers.
 - **Boxing for interface refs.** A dataclass is still a bare inline
   value; an interface value *is* an Rc cell reference (RFC 0011). A bare
-  dataclass widens to an interface type by **implicit boxing** at the
+  dataclass widens to `dyn I` by **implicit boxing** at the
   widening site — exactly the bare-class rule of RFC 0011 — and cells
   minted this way (or by `Rc(p)`) carry the dataclass's impl vtable
   (RFC 0015 §6). Layout never changes: methods and impl tables add

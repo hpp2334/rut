@@ -99,10 +99,10 @@ a structural answer in rut:
 
 ## Non-goals
 
-- No dynamic typing, no `any`/`dyn` values, no gradual typing. `Opaque`
-  (RFC 0014) is the explicit, checked escape hatch for erasure — a
-  boxed value that can do nothing until `downcast<T>` recovers it; it is
-  not a loosening of the static type system.
+- No dynamic typing, no `any`, no gradual typing. Erasure is explicit and
+  spelled out: `dyn I` interface objects (RFC 0012) for polymorphism,
+  `dyn Any` boxes via `make_any`/`downcast` (RFC 0014) for storage —
+  checked, recoverable, never silent.
 - No structural ("duck") typing, no object literals — interfaces are
   nominal and declared (RFC 0012).
 - No pattern matching beyond `when` literals/enums (RFC 0008), no
@@ -141,9 +141,10 @@ final sections of the RFC they implement).
 - 0009 — dataclasses: open value records (methods + `implements`)
 - 0010 — classes & factories: sealed value records, no inheritance
 - 0011 — `Rc<T>`, dispose & identity: explicit references
-- 0012 — interfaces & dispatch: the sole dynamic mechanism; type tests
+- 0012 — interfaces & dispatch: the sole dynamic mechanism; `dyn I` object
+  types; type tests
 - 0013 — functions, closures & generics
-- 0014 — `Opaque`: explicit erasure with checked recovery
+- 0014 — `dyn Any`: explicit erasure with checked recovery
 - 0015 — reified types & layout: `RutType`, repr C, slots & vtables
 
 **Part C — Memory**
@@ -187,16 +188,17 @@ final sections of the RFC they implement).
 | P2 | Isolate workers with typed channels and transferable buffers | 0021 |
 | P3 | Reference counting + cycle collector; deterministic destructors | 0016–0017 |
 | P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0005, 0033 |
-| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `factory` type-calls — no `new` keyword, `suspend factory` allowed), `interface` (vtable dispatch — the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0006, 0009–0012 |
+| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `factory` type-calls — no `new` keyword, `suspend factory` allowed), `interface` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0006, 0009–0012 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
 | P8 | Both value types (`dataclass` **and** `class`) are **repr C**; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015, 0024 |
 
 ### Why "no dynamic typing" is workable
 
-Without `any`/`dyn`, JSON-shaped data becomes a small class set behind an
-interface (`interface JsonValue` implemented by `JString`/`JNum`/`JArr`/…),
-heterogeneous collections are interface-typed arrays, and host APIs that were
+Without `any`, JSON-shaped data becomes a small class set behind an
+interface (`interface JsonValue` implemented by `JString`/`JNum`/`JArr`/…,
+held as `dyn JsonValue` refs),
+heterogeneous collections are `Array<dyn I>` arrays, and host APIs that were
 `any`-shaped in JS become generics or opaque `host class` handles. The one
 dynamic mechanism kept is **interface dispatch** — a checked vtable call on a
 value whose exact class is still known at runtime. What we keep from "types
@@ -218,8 +220,8 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
   exact register types; the verifier re-checks them at load time.
 - **Type stability is the optimization currency**: with no JIT there is no
   speculation or deopt — what the type checker proves is all the IR gets.
-  The IR keeps a per-value type lattice (exact > interface > opaque) and
-  the two lattice-lowering features (interface refs, `Opaque`) are explicit,
+  The IR keeps a per-value type lattice (exact > `dyn I` > `dyn Any`) and
+  the two lattice-lowering features (`dyn I` refs, `dyn Any` boxes) are explicit,
   boundary-local, and carry their own optimization rules (RFC 0031 §4).
 - **No JIT**: all optimization happens at compile time. The VM may keep cheap
   inline caches for field access on host opaques, but nothing is ever compiled

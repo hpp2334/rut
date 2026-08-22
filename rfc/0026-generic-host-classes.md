@@ -91,7 +91,7 @@ instantiation — nobody can supply `V`. Instead:
 
 | decl type | Rust shape |
 |---|---|
-| param constrained to an interface (`K: Hashable`) | `IfaceHandle` (RFC 0015 §6 fat ref) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `string` keys, identity for `Rc<T>` keys — same Rust type, different attached vtable. |
+| param constrained to an interface (`K: Hashable` — the bound stays bare on the rut side, RFC 0013 §2) | `IfaceHandle` (RFC 0015 §6 fat ref; the rut-facing object type is `dyn Hashable`) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `string` keys, identity for `Rc<T>` keys — same Rust type, different attached vtable. |
 | unconstrained param (`V`) | `RutValue` — erased owning handle; per-call check against the reified `TypeId` |
 | concrete types (`i32`, `f32`, `Template`, …) | the Rust type — as in RFC 0022 §2, embedder-pinned at Rust compile time |
 | `Self` | the instance handle |
@@ -119,10 +119,10 @@ source.
   (content for `string`/numerics/`enum`, identity for `Rc<T>`), and
   registered structs via a `register_struct` content voucher (the Rust
   mirror is `Hash + Eq` — no rut-side methods needed). Interfaces
-  themselves, `Opaque`, `Array`, `Option`/`Result` satisfy nothing.
+  themselves, `dyn Any` boxes, `Array`, `Option`/`Result` satisfy nothing.
 - Builtin types flow back natively — a method may return `Option<V>` or
   build an `Array<K>` host-side (`keys()` yields `Array<K>`, **not**
-  `Array<Hashable>`: keys are *unerased* at the boundary — rut cannot
+  `Array<dyn Hashable>`: keys are *unerased* at the boundary — rut cannot
   consume interface refs there, RFC 0012 §3); rut cannot tell it wasn't
   written in rut.
 - Hashing/`eq` on a user type may be **rut code**, reached through the

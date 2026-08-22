@@ -1,16 +1,18 @@
-// RFC 0012 §3 — type tests & upcasts are BUILTIN FUNCTIONS, not
-// keywords: is<T>(x): bool and upcast<T>(x): T. There is no `as`, no
-// downcast, ever. is<T> monomorphizes with T as a compile-time constant.
+// RFC 0012 §3 — type tests are BUILTIN FUNCTIONS, not keywords:
+// is<T>(x): bool, T CONCRETE only (interface type args are a compile
+// error — dynamic dispatch is what `dyn I` refs are for). No `as`, no
+// upcast builtin, no downcast, ever. Widening to `dyn I` is implicit;
+// the `dyn` annotation at the receiving position is the explicit form.
 
 import { Canvas, newCanvas } from "app:gfx";
 import { Logger } from "std:log";
 
 interface Drawable {
-    draw(g: Canvas): void;
+    fn draw(self, g: Canvas): void;
 }
 
 interface HitTest {
-    hit_test(x: f32, y: f32): bool;
+    fn hit_test(self, x: f32, y: f32): bool;
 }
 
 class Sprite implements Drawable, HitTest {
@@ -18,9 +20,9 @@ class Sprite implements Drawable, HitTest {
     private y: f32 = 0;
     // default factory: Sprite()
 
-    fn draw(g: Canvas): void { g.circle(this.x, this.y, 1); }
-    fn hit_test(px: f32, py: f32): bool {
-        return px == this.x && py == this.y;
+    fn draw(self, g: Canvas): void { g.circle(self.x, self.y, 1); }
+    fn hit_test(self, px: f32, py: f32): bool {
+        return px == self.x && py == self.y;
     }
 }
 
@@ -33,19 +35,20 @@ class Circle implements Drawable {
         return Self { x: x, y: y, r: r };
     }
 
-    fn draw(g: Canvas): void { g.circle(this.x, this.y, this.r); }
+    fn draw(self, g: Canvas): void { g.circle(self.x, self.y, self.r); }
 }
 
-fn type_tests(d: Drawable, s: Sprite, g: Canvas): void {
+fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
     const log = Logger("types");
     if (is<Circle>(d)) {             // runtime test — exact class check
         d.draw(g);                   // no downcast exists; stay on the
     }                                // interface
 
-    // upcast<T>(x): T — explicit widening; compile-time checked,
-    // zero runtime cost. Chiefly for disambiguation:
-    const views: Array<Drawable> = [s, upcast<Drawable>(s)];
-    const ht = upcast<HitTest>(s);
+    // widening to `dyn I` is implicit — the explicit form is the `dyn`
+    // annotation at the receiving position, not a builtin:
+    const d2: dyn Drawable = s;      // boxes implicitly (RFC 0011 §3)
+    const views: Array<dyn Drawable> = [s, d2];
+    const ht: dyn HitTest = s;
 
     log.info(f"{views.length} {ht.hit_test(0, 0)}");
 }

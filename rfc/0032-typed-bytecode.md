@@ -51,7 +51,7 @@ getf    rD, rO, fidx      ; field load (inline value or Rc cell — layout known
 setf    rO, fidx, rV      ; field store (+retain/release where typed)
 scopy   rD, rS, size      ; inline value copy (memcpy + ref fields)
 is_a    rD, rO, tid       ; type test (RFC 0015 §6)
-downc   rD, rO, tid       ; Opaque downcast → Option<T> (RFC 0014)
+downc   rD, rO, tid       ; dyn Any downcast → Option<T> (RFC 0014)
 typeid  rD, tid           ; const-folded from type table (RFC 0033 §3)
 arrnew  rD, tid, rLen     ; Array<T>(n) zeroed
 arrlen  rD, rO | arrget rD, rO, rI | arrset rO, rI, rV   ; typed by elem tid

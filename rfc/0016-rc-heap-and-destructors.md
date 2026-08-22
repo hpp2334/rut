@@ -102,7 +102,7 @@ struct RutClass  { h: Header, vt: *const VTable, fields: [Slot] } // Rc<T> CELL 
 struct RutEnum   { h: Header, tag: u32, payload: [Slot] }     // builtin Option/Result (RFC 0005)
 #[repr(C)]
 struct RutOpaque { h: Header, boxed: *mut HostBoxed }     // host opaques (RFC 0025) AND
-                                                          // user Opaque boxes (RFC 0014);
+                                                          // user `dyn Any` boxes (RFC 0014);
                                                           // the header TypeId discriminates
 ```
 

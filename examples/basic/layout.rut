@@ -1,7 +1,7 @@
 // RFC 0015 — layout & type-identity builtins.
 // dataclass AND class are repr C: fields in declaration order, natural C
 // alignment, no hidden members. type_id<T>() / size_of<T>() / align_of<T>()
-// are compile-time constants; Opaque mirrors them at runtime — the toolkit
+// are compile-time constants; dyn Any mirrors them at runtime — the toolkit
 // for layout-aware heterogeneous storage WITHOUT uncontrolled erasure.
 
 import { Logger } from "std:log";
@@ -37,8 +37,8 @@ fn layout(): void {
 
 fn boxed_layout(): void {
     const log = Logger("layout");
-    const box1 = Opaque(Point { x: 1, y: 2 });
-    const box2 = Opaque(Vertex(3, 4));
+    const box1 = make_any(Point { x: 1, y: 2 });
+    const box2 = make_any(Vertex(3, 4));
 
     // Layout accessors without downcasting — group/slab/compare first,
     // pay a checked downcast only when actually recovering the value.
@@ -47,7 +47,7 @@ fn boxed_layout(): void {
     log.info(f"box1 bytes: {box1.as_bytes().length}");         // 8-byte payload snapshot
 
     // The payload snapshot is comparable — content hashing for stores:
-    const same = Opaque(Point { x: 1, y: 2 });
+    const same = make_any(Point { x: 1, y: 2 });
     log.info(f"payloads equal: {box1.as_bytes() == same.as_bytes()}");
 }
 

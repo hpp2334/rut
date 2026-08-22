@@ -19,8 +19,8 @@ The standard library splits in two:
   formatting, wrappers) in auditable rut code and mechanism (syscalls,
   sinks) in Rust. **`std:collection` is a declaration file + Rust bodies**
   (RFC 0025, RFC 0026): its `.d.rut` declares the interfaces
-  `Equal<T> { eq(other: T): bool }`,
-  `Hashable requires Equal<Self> { hash(): u64 }`, and the containers
+  `Equal<T> { fn eq(self, other: T): bool }`,
+  `Hashable requires Equal<Self> { fn hash(self): u64 }`, and the containers
   directly — `export host class Map<K: Hashable, V> { .. }`, `Set<T>`
   — with no facade; builtin impls (string/numerics/enum content,
   `Rc<T>` identity, registered-struct vouchers) are host impl-registry
@@ -62,17 +62,17 @@ export class Logger {
 
     factory(name: string) { return Self { name: name, level: Level.Info }; }
 
-    fn set_level(l: Level): void { this.level = l; }
-    fn level(): Level { return this.level; }
+    fn set_level(self, l: Level): void { self.level = l; }
+    fn level(self): Level { return self.level; }
 
-    fn debug(msg: string): void { this.log_at(Level.Debug, msg); }
-    fn info(msg: string): void  { this.log_at(Level.Info, msg); }
-    fn warn(msg: string): void  { this.log_at(Level.Warn, msg); }
-    fn error(msg: string): void { this.log_at(Level.Error, msg); }
+    fn debug(self, msg: string): void { self.log_at(Level.Debug, msg); }
+    fn info(self, msg: string): void  { self.log_at(Level.Info, msg); }
+    fn warn(self, msg: string): void  { self.log_at(Level.Warn, msg); }
+    fn error(self, msg: string): void { self.log_at(Level.Error, msg); }
 
-    private fn log_at(l: Level, msg: string): void {
-        if (Level.to_int(l) >= Level.to_int(this.level)) {
-            emit(this.name, l, msg);
+    private fn log_at(self, l: Level, msg: string): void {
+        if (Level.to_int(l) >= Level.to_int(self.level)) {
+            emit(self.name, l, msg);
         }
     }
 }

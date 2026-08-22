@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-22
 - **Author:** hpp2334
-- **Depends on:** RFC 0007 §2 (format literals), RFC 0014 (`Opaque`),
+- **Depends on:** RFC 0007 §2 (format literals), RFC 0014 (`dyn Any`),
   RFC 0023 (Value boundary)
 - **Supersedes:** RFC 0005 §6 (pre-restructure)
 - **Part:** E — Host & FFI
@@ -23,12 +23,12 @@ literals, chosen by expected type:
 - The **same literal** in a `Template`-expected position (host fn
   parameter annotated `Template`, or an explicit `const t: Template =
   f"..."`) compiles to the `tmpl` op: a `Template { parts: Array<string>,
-  args: Array<Opaque> }` — literal chunks and **boxed values with their
-  runtime types** (`Opaque`, RFC 0014), not pre-rendered text.
+  args: Array<dyn Any> }` — literal chunks and **boxed values with their
+  runtime types** (`dyn Any`, RFC 0014), not pre-rendered text.
 - `Template` API: `t.str(): string` renders with rut's own `str()` rules
   (identical output to the `string` path); `t.parts()`, `t.args()`,
   `t.type_id(i)` for hosts/stdlibs doing per-arg formatting. Nothing else
-  — like `Opaque`, a template can't do anything until someone renders it.
+  — like `dyn Any`, a template can't do anything until someone renders it.
 - At the FFI, a `Template` parameter arrives as `Tmpl { parts: &[StrRef],
   args: &[Value] }` — the host formats per-locale, reorders placeholders,
   or logs structured fields, with **typed** args (`i64` stays `i64`, so

@@ -26,18 +26,21 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   (RFC 0001 §Execution model); the compiler reports instantiation counts.
 - Generic parameters are unconstrained in v1 — no `T: Iface` bounds on
   user generics (OQ-1): you cannot call interface methods on a bare `T`.
-  Pass values in, or take an interface-typed parameter instead of a
+  Pass values in, or take a `dyn I` parameter instead of a
   generic. **The one exception**: generic params of **host/extern class
   declarations** may carry interface bounds (`MyMap<K: Hashable, V>`,
   RFC 0025 §1) — admission-only syntax: it constrains which
   instantiations compile (closing over `requires`), grants no method
-  calls on bare `K`, and adds no IR. A user-class bound would be pure
+  calls on bare `K`, and adds no IR. Bounds stay **bare** — `K: Hashable`,
+  never `K: dyn Hashable` (a bound names an interface, it does not form
+  an interface value; `T: Any` is rejected as vacuous, RFC 0014). A
+  user-class bound would be pure
   forwarding anyway (without dispatch, a body could only pass `K` onward
   to extern positions) — deferred with OQ-1.
 
 ## Open questions
 
 - OQ-1: generic bounds `T: Iface` (would unlock static dispatch on
-  bare `T` without interface refs) — still deferred for **user**
+  bare `T` without `dyn I` refs) — still deferred for **user**
   generics; the **admission-only** form shipped scoped to extern decls
   (§2, RFC 0025 §1), which needs no dispatch and adds no IR.

@@ -10,7 +10,7 @@ class Tile {
         return Self { n: n };
     }
 
-    fn id(): i32 { return this.n; }
+    fn id(self): i32 { return self.n; }
 }
 
 fn probe(): Weak<Tile> {

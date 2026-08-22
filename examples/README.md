@@ -18,13 +18,13 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `basic/error-context.rut` | `here()` / `capture_stack_trace()` on error values, lazy `render()`, stripped-image degradation | 0036 |
 | `basic/literals.rut` | numeric suffixes, plain/raw/format strings, constructors | 0007 |
 | `basic/dataclasses.rut` | value semantics, field initializers, free functions | 0009 |
-| `basic/classes.rut` | factory type-calls, `Self {}` literal, `Option<Self>` try-factories, private, statics | 0010 |
+| `basic/classes.rut` | factory type-calls, `Self {}` literal, `Option<Self>` try-factories, private, static fields, explicit `self` receivers | 0010 |
 | `basic/rc-and-dispose.rut` | `Rc(v)` boxing, ref-copy aliasing, `dispose()` | 0011 |
-| `basic/interfaces.rut` | methods-only interfaces, `requires`, dataclass implementors, composition over intersections | 0009, 0012 |
-| `basic/type-tests.rut` | `is<T>()`, `upcast<T>()`; no `as`, no downcast | 0012 §3 |
+| `basic/interfaces.rut` | methods-only interfaces, `dyn I` object types, `requires`, dataclass implementors, composition over intersections | 0009, 0012 |
+| `basic/type-tests.rut` | concrete-only `is<T>()`; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
 | `basic/closures-generics.rut` | arrows, monomorphized generics | 0013 |
-| `basic/opaque.rut` | `Opaque(v)` / `downcast<T>` / `is<T>` erasure & recovery; snapshot vs shared | 0014 |
-| `basic/layout.rut` | repr C layouts, `type_id<T>()` / `size_of<T>()` / `align_of<T>()`, `Opaque` layout accessors | 0015 |
+| `basic/any.rut` | `make_any(v)` / `downcast<T>` / `is<T>` erasure & recovery on `dyn Any`; snapshot vs shared | 0014 |
+| `basic/layout.rut` | repr C layouts, `type_id<T>()` / `size_of<T>()` / `align_of<T>()`, `dyn Any` layout accessors | 0015 |
 | `concurrency/countdown.rut` | cold futures, `await` as sole suspension | 0018 |
 | `concurrency/fetch-page.rut` | `await` + `?` composition, state splitting | 0018 §3 |
 | `concurrency/spawn-cancel.rut` | tasks, cancellation-by-drop | 0019 |
@@ -42,8 +42,8 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0021 |
 | `host/interop.rut` | host classes via declaration files, repr C struct passing, buffer borrows, `Template` for l10n | 0022–0028 |
 | `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `export host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
-| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`IfaceHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Array` returns | 0026 |
-| `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0014 |
+| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`IfaceHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `dyn Any` values, native `Option`/`Array` returns | 0026 |
+| `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `dyn Any` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
 
 ### gui/dashboard — a multi-file project
@@ -51,7 +51,7 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 A tur-style web-app-shaped project (models / theme / reactive library /
 setup / services / worker isolate / components / entry). `reactive.rut`
 implements tur's `state` / `source` / `derive` / `mutation` / `watch` /
-`Store` entirely in user rut on top of `Opaque` — proof that reactivity is
+`Store` entirely in user rut on top of `dyn Any` — proof that reactivity is
 a library, not a language feature (RFC 0014). `state.rut` is the
 tur-style *setup*: a `Dashboard` class whose factory declares **state**
 atoms (UI writes), **sources** (services push snapshots as data arrives),

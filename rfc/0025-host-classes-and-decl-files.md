@@ -32,22 +32,25 @@ Two declaration keywords, two linkage targets (RFC 0029 — both are
 host fn newCanvas(w: i32, h: i32): Canvas;      // module-level host fn
 
 export host class Canvas {                      // exported: nameable outside
-    fn circle(x: f32, y: f32, r: f32): void;
-    fn flush(): void;
+    fn circle(self, x: f32, y: f32, r: f32): void;
+    fn flush(self): void;
 }
 
 export host class Source<T> {                   // generic — instantiation
-    fn get(): T;                                // identity KEPT on the value:
+    fn get(self): T;                            // identity KEPT on the value:
 }                                               // Source<i32> != Source<string>
 
 host class Fence {                              // NOT exported: known inside
-    fn signal(): void;                          // app/gfx (callable via its
+    fn signal(self): void;                      // app/gfx (callable via its
 }                                               // slot), nameable nowhere else
 ```
 
 - A `host class` declaration may contain method signatures and a
   **factory signature** (`factory(cap: i32): Self;`) — the native
-  factory keeps construction an ordinary type-call (RFC 0026). It may not
+  factory keeps construction an ordinary type-call (RFC 0026). Host class
+  methods are instance methods: they spell the `self` receiver like rut
+  methods (`fn set(self, k: K, v: V): void;` — RFC 0010 §2; the Rust side's
+  `this: &mut MyMap` parameter is that receiver). It may not
   declare fields: host instances box host values, not rut field
   blocks. An `extern class` (rut-package surface) has the same shape for
   the same reason — the package's fields are its business; you get
@@ -77,13 +80,14 @@ host class Fence {                              // NOT exported: known inside
 - **Workers**: a `host class` value may cross isolates only if the host
   registered the type `send` (RFC 0021 §2) — checked at the transfer, by
   `TypeId`.
-- Host fns returning `Opaque` accept any rut value (RFC 0014) — the
+- Host fns returning `dyn Any` accept any rut value (RFC 0014) — the
   checked escape hatch for data with no static shape.
 
 ## Open questions
 
-- OQ-1: `host class` static methods (host-namespaced functions today) —
-  keep as plain host fns; do not duplicate the feature.
+- OQ-1: `host class` class methods (methods without `self` —
+  host-namespaced functions today) — keep as plain host fns; do not
+  duplicate the feature.
 - OQ-2: slot stability across compiler versions — recompiling a
   declaration file must agree with an already-registered impl; the decl
   digest (RFC 0033 §1) covers slots, so disagreement fails link — but is

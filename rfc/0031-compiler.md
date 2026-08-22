@@ -71,33 +71,35 @@ there is no speculation and no deopt to recover what the type checker
 doesn't prove. The IR therefore tracks a per-SSA-value **type lattice**:
 
 ```
-exact concrete  >  interface (satisfies I)  >  opaque (unknown)
+exact concrete  >  dyn I (satisfies I)  >  dyn Any (erased)
 ```
+
+(`dyn Any` is the interface tier's bottom — RFC 0012 §2, RFC 0014.)
 
 Rules that bound the cost of the two lattice-lowering features:
 
-1. **Interface values** (RFC 0012): one indirect call per use; fields
-   inaccessible; callee unknown (no inlining without evidence). Cost is
+1. **Interface values** (`dyn I`, RFC 0012): one indirect call per use;
+   fields inaccessible; callee unknown (no inlining without evidence). Cost is
    per-call, never per-field — the vtable makes it a single load+jump.
-2. **`Opaque` + `downcast`** (RFC 0014): erasure is a hole in the
+2. **`dyn Any` + `downcast`** (RFC 0014): erasure is a hole in the
    lattice, but a *scoped* one:
    - the `downcast` check is the refinement — the `is_some()` branch
      re-enters the **exact** lattice position (strictly more information
-     than an interface value carries), so downstream code optimizes as if
+     than a `dyn I` value carries), so downstream code optimizes as if
      nothing was erased;
    - boxes are immutable ⇒ downcast is pure ⇒ **CSE** repeated checks,
      **LICM** invariant ones, cache results forever;
    - a chain of downcasts over the same cell **folds to a `TypeId` switch**
      — the compiler emits one jump table, not N checked boxes.
 3. **What the compiler must NOT assume**: the type inside a box at a given
-   program point. No speculative devirtualization through `Opaque` (that
+   program point. No speculative devirtualization through `dyn Any` (that
    is JIT behavior; rut has no deopt to fall back on).
 4. **Guardrails are language-level**: primitives in columnar user stores
    never box (typed arrays); hot shared state uses direct `Rc<State<T>>`
-   cells; lints flag `downcast` in loop bodies and `Opaque` crossing
+   cells; lints flag `downcast` in loop bodies and `dyn Any` crossing
    non-storage function boundaries. The intended shape of a rut program:
-   exact types on the hot path, interfaces where polymorphism is real,
-   `Opaque` only inside heterogeneous storage.
+   exact types on the hot path, `dyn I` where polymorphism is real,
+   `dyn Any` only inside heterogeneous storage.
 
 ## 5. Optimization policy
 

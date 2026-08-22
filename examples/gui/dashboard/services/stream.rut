@@ -17,10 +17,10 @@ export class EventStream {
         return Self { feed: ch.receiver, task: spawn(produce(ch.sender, seed)) };
     }
 
-    fn feed(): Receiver<LiveEvent> { return this.feed; }
+    fn feed(self): Receiver<LiveEvent> { return self.feed; }
 
-    dispose(): void {                    // runs when the last Rc drops
-        this.task.cancel();              // producer dies at its next await
+    dispose(self): void {              // runs when the last Rc drops
+        self.task.cancel();            // producer dies at its next await
     }
 }
 

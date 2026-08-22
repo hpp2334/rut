@@ -28,21 +28,21 @@ See **`examples/basic/rc-and-dispose.rut`** (aliasing vs value copies) and
 
 ## 2. Dispose classes must live behind `Rc`
 
-- If a class declares `dispose()`, using it as a bare value is a compile
+- If a class declares `dispose(self)`, using it as a bare value is a compile
   error (a copyable value has no single death). Construct then box —
   `Rc(TempFile("tmp.dat"))` — or hand out `Rc` from a factory (RFC 0010 §1).
-  When an Rc cell's count hits 0, `dispose()` runs, then fields are
+  When an Rc cell's count hits 0, `dispose(self)` runs, then fields are
   released in order — deterministic destruction (RFC 0016 §3).
 
 ## 3. Interfaces need the box
 
 - An interface value *is* an Rc cell reference (with its vtable — RFC 0015
-  §6). `Rc<Circle>` widens implicitly to `Drawable`; a **bare** class value
-  — or, identically, a **bare dataclass** (RFC 0009) — converts to an
-  interface type by **implicit boxing** (allocates the Rc cell, vtable from
+  §6). `Rc<Circle>` widens implicitly to `dyn Drawable`; a **bare** class value
+  — or, identically, a **bare dataclass** (RFC 0009) — converts to `dyn I`
+  by **implicit boxing** (allocates the Rc cell, vtable from
   the type's impl table) at the widening site — the one place rut
   heap-allocates without `rc` spelled out. `Array<Circle>` stays inline;
-  `Array<Rc<Circle>>` and `Array<Drawable>` store cell pointers.
+  `Array<Rc<Circle>>` and `Array<dyn Drawable>` store cell pointers.
 
 ## 4. Weak references
 

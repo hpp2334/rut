@@ -12,14 +12,14 @@ enum Mode { Idle, Running }
 
 dataclass Point { x: f32; y: f32 }
 
-interface Service { start(): void; }
+interface Service { fn start(self): void; }
 
 class App implements Service {
     private started: bool = false;
     // default factory: App()
 
-    fn start(): void {
-        this.started = true;
+    fn start(self): void {
+        self.started = true;
     }
 }
 

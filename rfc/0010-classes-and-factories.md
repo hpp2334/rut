@@ -10,19 +10,21 @@
 ## Summary
 
 See **`examples/basic/classes.rut`** — factory type-calls, the class-private
-`Self { .. }` literal, `suspend factory`, `private factory` sealing, statics.
+`Self { .. }` literal, `suspend factory`, `private factory` sealing,
+explicit `self` receivers, static fields.
 
 ## 1. Classes — sealed value records with factories
 
 - **Also a value type.** A bare `Circle` copies on assignment/passing/return
   exactly like a dataclass — inline, no header, no refcount. What a class
   *adds* over a dataclass is **sealing**: private fields, factory-only
-  construction, `static` members, and `dispose()` (RFC 0011). (`implements`
+  construction, `static` fields, and `dispose()` (RFC 0011). (`implements`
   is no longer class-only — RFC 0009.)
 - **Construction is a type-call**: `Circle(1, 2, 3)` runs the class's
   `factory`. No `new` keyword exists, and there is no outside literal for
   a class — construction always flows through a factory.
-- **`factory` is just a function** — implicitly static (no `this`), ordinary
+- **`factory` is just a function** — class-level by definition (it never
+  takes a `self` receiver), ordinary
   params, ordinary body, a `return`. It builds the instance with the
   **class-private `Self { field: expr, .. }` literal** (the class name
   spells it inside the body too). The literal must initialize every field
@@ -41,13 +43,25 @@ See **`examples/basic/classes.rut`** — factory type-calls, the class-private
   factory** (`Sprite()`). A field without an initializer and no factory
   makes the class unconstructible outside its own body.
 - **`private factory` seals** the class: the type-call is legal only inside
-  the class body. The named-factory pattern is an opt-in on top —
-  `static fn issue(): AuthToken { return AuthToken("..") }` validates,
+  the class body. The named-factory pattern is an opt-in on top — a class
+  method (`fn issue(): AuthToken { return AuthToken("..") }` — no `self`,
+  §2) validates,
   caches, or registers, and outside code cannot bypass it.
 
-## 2. Statics & accessors
+## 2. Methods: explicit `self` — plus static fields & accessors
 
-- `static` members live in the class's module-static slot table. Static
+- **The receiver is explicit.** An instance method spells its receiver as
+  the first parameter — `fn add(self, x: i32, y: i32)` — and the body
+  reads fields through `self`. There is no `this` keyword at all (RFC 0002
+  §4). A method without a `self` parameter is a **class method** —
+  `fn from(x: i32)` — invoked on the class itself (`Version.from(..)`).
+  **There is no `static fn`**: presence or absence of `self` is the whole
+  distinction, stated in the signature and greppable — the same
+  explicitness rule as `dyn` (RFC 0012 §2). Factories never take `self`
+  (construction has no receiver yet); `dispose` does (`dispose(self)`,
+  RFC 0011 §2). Interface methods and host/extern class methods follow
+  the identical rule (RFC 0012 §2, RFC 0025 §2).
+- `static` **fields** live in the class's module-static slot table. Static
   initializers must be const-expressions (RFC 0003 §1) and are materialized
   at load — factories and methods are the only places to run logic.
 - No `get`/`set` accessor syntax anywhere — a computed property is just a

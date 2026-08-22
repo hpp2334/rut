@@ -68,7 +68,7 @@ f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
   write a `to_string(): string` method on your class and call it explicitly.
 - In a **`Template`-expected position** the same literal builds a
   structured value instead — `Template { parts, args }` with the
-  placeholder values boxed (`Opaque`, RFC 0014), not rendered — for hosts,
+  placeholder values boxed (`dyn Any`, RFC 0014), not rendered — for hosts,
   l10n, and structured logging (RFC 0027). `t.str()` renders identically to
   the concat path; the default `string` behavior above is unchanged.
 - Raw + format don't combine in v1 (`rf"..."` is OQ-3).

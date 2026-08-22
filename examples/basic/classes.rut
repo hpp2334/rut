@@ -1,7 +1,9 @@
 // RFC 0010 — classes: sealed VALUE records with FACTORIES.
 // Construction is a TYPE-CALL — Counter(), Rect(3, 4); no `new` keyword.
-// A factory is just a function: implicitly static, builds the instance
-// with the class-private `Self { .. }` literal, returns Self by default.
+// A factory is just a class-level function (never a `self` receiver), it
+// builds the instance with the class-private `Self { .. }` literal and
+// returns Self by default. Instance methods spell `self` explicitly; a
+// method without `self` is a class method (there is no `static fn`).
 
 import { Logger } from "std:log";
 
@@ -14,11 +16,11 @@ class Counter {
         return Self { };            // initializers satisfy all fields
     }
 
-    press(): void {                 // instance method, public by default
-        this.n &+= 1;               // wrapping add (§8) — or `+=` to trap
+    fn press(self): void {           // instance method: explicit receiver,
+        self.n &+= 1;                // wrapping add (§8) — or `+=` to trap
     }
 
-    count(): i32 { return this.n; } // plain method; no get/set syntax
+    fn count(self): i32 { return self.n; }   // plain method; no get/set syntax
 }
 
 class Rect {
@@ -32,7 +34,7 @@ class Rect {
         return Self { w: w, h: h }; // must initialize fieldless-initialized
     }
 
-    area(): f32 { return this.w * this.h; }
+    fn area(self): f32 { return self.w * self.h; }
 }
 
 /** A "try" factory: declared return type Option<Self>. */
@@ -49,7 +51,7 @@ class Version {
         return Option.none();
     }
 
-    fn label(): string { return f"{this.major}.{this.minor}"; }
+    fn label(self): string { return f"{self.major}.{self.minor}"; }
 }
 
 fn classes(): void {

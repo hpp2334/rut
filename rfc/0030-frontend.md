@@ -97,10 +97,19 @@ import     := 'import' '{' name (',' name)* '}' 'from' Str ';'
 decl       := constdecl | enumdecl | dataclassdecl | classdecl | interfacedecl | fndecl
 constdecl  := 'const' Ident ':' Type '=' expr ';'
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
-dataclass  := 'dataclass' Ident genericparams? ('implements' IfaceList)? '{' (field | 'fn')* '}'
+dataclass  := 'dataclass' Ident genericparams? ('implements' IfaceList)? '{' (field | meth)* '}'
 class      := 'class' Ident genericparams? ('implements' IfaceList)? '{' member* '}'
-member     := 'private'? ('static' field | 'static' 'fn' | ('suspend')? 'factory' | field | 'fn' | 'dispose')
-interface  := 'interface' Ident genericparams? ('requires' IfaceList)? '{' meth* '}'
+member     := 'private'? ('static' field | ('suspend')? 'factory' | field | meth | dispose)
+meth       := 'fn' Ident '(' 'self'? params ')' (':' Type)? block
+                                              // 'self' first param => instance
+                                              // method; no 'self' => class
+                                              // method (RFC 0010 §2 — there
+                                              // is no 'static fn')
+dispose    := 'dispose' '(' 'self' ')' ':' 'void' block
+interface  := 'interface' Ident genericparams? ('requires' IfaceList)? '{' methsig* '}'
+methsig    := 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
+                                              // interface methods are always
+                                              // instance methods (RFC 0012 §2)
 fndecl     := modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? block
 block      := '{' stmt* '}'
 stmt       := 'let' Ident (':' Type)? '=' expr ';' | 'const' …
@@ -115,6 +124,15 @@ pattern    := path | literal | pattern (',' pattern)* | 'else'
 expr       := assignment | lambda | when-expr | …         // §3 precedence
 lambda     := '(' params ')' (':' Type)? '=>' (expr | block)
 ```
+
+`Type` in **value positions** (params, returns, locals, fields, generic
+arguments) may spell an interface object type with the `dyn` prefix —
+`d: dyn Drawable`, `Array<dyn Widget>`, `Rc<dyn Any>`; a bare interface
+name there is a type error with an "insert `dyn`" suggestion (RFC 0012 §2).
+`IfaceList` — `implements`, `requires`, and extparam bounds (§3) — stays
+**bare**: those positions name an interface, they do not form an interface
+value (RFC 0013 §2). `dyn` is a keyword (RFC 0002 §4); `as` remains
+reserved and always errors (erasure is the `make_any` call, RFC 0014).
 
 Declarations-only module scope (RFC 0003 §1) is enforced by the parser
 itself — a statement at module top level is a syntax error, not a semantic
@@ -131,7 +149,10 @@ surfacedecl := 'host' 'fn' Ident genericparams? '(' params ')' (':' Type)? ';'
              | 'host' 'class' Ident extparams? '{' extmember* '}'
              | 'extern' 'class' Ident extparams? '{' extmember* '}'
 extmember   := 'factory' '(' params ')' ':' Type ';'
-             | 'fn' Ident '(' params ')' (':' Type)? ';'
+             | 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
+                                            // host/extern class methods are
+                                            // instance methods — `self`
+                                            // spelled, no body (RFC 0025 §2)
 extparams   := '<' (Ident (':' Iface)? ','?)+ '>'    // bounds: surface decls only (RFC 0013 §2)
 ```
 
@@ -200,8 +221,10 @@ enum Item {
 // linkage: Host | Extern — declared ONLY in .d.rut (RFC 0029 §2)
 
 enum Member { Field(Field), Factory{ span, is_suspend, params, ret, body },
-              Method{ span, is_static, sig: FnSig, body: Block },
-              Dispose{ span, body: Block } }
+              Method{ span, has_self, sig: FnSig, body: Block },  // instance
+              Dispose{ span, body: Block } }  // iff has_self — RFC 0010 §2;
+                                              // no is_static: absence of
+                                              // `self` IS the class-method case
 
 enum Stmt { Let{..}, Const{..}, Expr(Expr), If{..}, While{..}, ForOf{..},
             ForC{..}, Return{..}, When{..} }

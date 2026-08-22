@@ -19,7 +19,7 @@ byte sequences spanning slots.
 
 `RutType` descriptors are *not* first-class script values in v1 (OQ-1);
 they are VM data. Language-facing surfaces of reification: the layout
-builtins (§3), `is<T>`/`upcast<T>` (RFC 0012 §3), `Opaque` recovery
+builtins (§3), `is<T>` (RFC 0012 §3), `dyn Any` recovery
 (RFC 0014), and the host boundary checks (RFC 0023).
 
 ## 2. Where reification is load-bearing
@@ -30,15 +30,15 @@ builtins (§3), `is<T>`/`upcast<T>` (RFC 0012 §3), `Opaque` recovery
    instantiation identity inside the handle: `store.get(src)` is checked
    statically *and* the handle knows its `T` (fixes tur's erased
    `Source<T>`).
-3. **Type tests & upcasts** — `is<T>` / `upcast<T>` builtins (RFC 0012 §3);
-   host fns declaring interface-typed parameters get their arguments checked by
+3. **Type tests** — the `is<T>` builtin (RFC 0012 §3);
+   host fns declaring `dyn I` parameters get their arguments checked by
    the same machinery.
 4. **Heterogeneous collections** — vtable dispatch (RFC 0012) needs the exact type
    reachable from every object header.
 5. **Debugging** — `debug.type_of(x)`, stack traces (RFC 0036), formatter output.
 6. **Serialization** — stdlib walkers traverse `RutType` descriptors.
-7. **`Opaque` recovery** — `downcast<T>` (RFC 0014) checks the boxed cell's
-   `TypeId`; `Opaque(v)` stamps it. Erasure without reification would be
+7. **`dyn Any` recovery** — `downcast<T>` (RFC 0014) checks the boxed cell's
+   `TypeId`; `make_any(v)` stamps it. Erasure without reification would be
    `any`; with reification it is a checked box.
 
 ## 3. Layout & type-identity builtins
@@ -61,12 +61,12 @@ const AL_POINT: u32  = align_of<Point>();    // 4
   buffer may exceed 4 GiB in v1.)
 - All three are **compile-time constants** — const-expressions (RFC 0003 §1),
   folded by HIR from the type table, never executed (RFC 0033 §3).
-- `Opaque` mirrors them at runtime: `o.type_id(): u32`, `o.size(): u32`,
-  `o.as_bytes(): bytes` (a snapshot of the box's repr-C payload). Together
+- `dyn Any` mirrors them at runtime: `a.type_id(): u32`, `a.size(): u32`,
+  `a.as_bytes(): bytes` (a snapshot of the box's repr-C payload). Together
   they enable **layout-aware heterogeneous storage** — group entries by
   `type_id`, preallocate `size_of`-sized slabs, compare payloads byte-wise —
-  while recovery still goes through checked `downcast<T>`. Constructing an
-  `Opaque` (or any value) *from* raw bytes is deliberately **not**
+  while recovery still goes through checked `downcast<T>`. Constructing a
+  `dyn Any` box (or any value) *from* raw bytes is deliberately **not**
   provided: it could forge private fields and class invariants.
 - Host struct mirroring runs on the same numbers (`register_struct`
   checks size/align/offsets at startup — RFC 0024).
@@ -141,16 +141,17 @@ Interface method ids are assigned **globally per interface instantiation**
 at compile time (`Equal<Point>` ≠ `Equal<string>`, RFC 0012 §2); a
 class's — or a dataclass's (RFC 0009) — vtable fills every slot of
 every interface instantiation it declares `implements` (the cell is
-minted by `Rc(v)` or by implicit boxing at an
-interface widening). A call through an interface is two loads and an
+minted by `Rc(v)` or by implicit boxing at a
+widening to `dyn I` — or by `make_any`, RFC 0014). A call through an
+interface is two loads and an
 indirect jump:
 
 ```rust
-// d.draw(g)  where d: Drawable, draw has global slot 3
+// d.draw(g)  where d: dyn Drawable, draw has global slot 3
 Op::CallIface { recv, slot: 3, args } => {
     let obj = unsafe { regs[recv].r.unwrap().as_ref() as &RutClass };
     let f = unsafe { (*obj.vt).slots[3] };
-    self.call_code(f, recv, args)?;    // `this` passed as receiver register
+    self.call_code(f, recv, args)?;    // `self` receiver arrives in recv
 }
 ```
 
@@ -160,13 +161,14 @@ Devirtualized direct call for comparison:
 Op::Call     { func: "Circle$area", recv, args }   ; c.area(), c: Circle
 ```
 
-### Type test & upcast
+### Type test
 
 ```rust
 impl TypeTable {
-    /// `is<T>(x)` builtin and host-boundary argument checks. The exact
-    /// type lives in the vtable; the descriptor lists the implemented
-    /// interfaces — a flat scan, no inheritance chain to walk (RFC 0010 §3).
+    /// `is<T>(x)` builtin and host-boundary argument checks (`want` is
+    /// always concrete, RFC 0012 §3). The exact type lives in the vtable;
+    /// the descriptor lists the implemented interfaces — a flat scan, no
+    /// inheritance chain to walk (RFC 0010 §3).
     fn is_a(&self, exact: TypeId, want: TypeId) -> bool {
         if exact == want { return true; }
         self.desc(exact).implements.iter().any(|&i| i == want)
@@ -175,10 +177,12 @@ impl TypeTable {
 ```
 
 `is<T>` monomorphizes with `want` as a compile-time constant, so the check
-is: load the object's vtable `TypeId`, compare, then (rarely) scan the
-descriptor's flat `implements` list. `upcast<T>` needs **no runtime code at
-all** — an interface value already *is* the object ref whose header reaches
-the vtable — it erases to a plain `MovRef` (often to nothing).
+is: load the object's vtable `TypeId`, compare. (`Any` needs no descriptor
+entry — every type trivially implements it — so the `implements` scan only
+serves host-boundary argument checks on `dyn I` parameters.) The widening
+itself — implicit boxing to `dyn I` or `make_any(v)` — needs no dispatch
+machinery: an interface value already *is* the object ref whose header
+reaches the vtable; the box mint is the only cost.
 
 ## Open questions
 

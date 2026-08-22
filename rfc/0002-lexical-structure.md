@@ -39,21 +39,25 @@ compiler gives it no meaning; greppability is enforced by style.
 ## 3. Naming conventions (enforced)
 
 - **Types are PascalCase** — user types and parameterized builtins:
-  `Array<T>`, `Option<T>`, `Result<T,E>`, `Rc<T>`, `Weak<T>`, `Opaque`,
+  `Array<T>`, `Option<T>`, `Result<T,E>`, `Rc<T>`, `Weak<T>`, `Any`
+  (object type `dyn Any`, RFC 0014),
   `Future<T>`, `Task<T>`, `Sender<T>`, `Receiver<T>`, `Point`, `Color`,
-  `Drawable`.
+  `Drawable` (object type `dyn Drawable`, RFC 0012 §2).
 - Scalars and simple buffers stay lowercase, C-style: `i32`, `u8`, `f32`,
   `bool`, `char`, `string`, `bytes`.
 - **Construction is a type-call** (RFC 0010): the type name in call position
   constructs — `Circle(1, 2, 3)` (user class `factory`; `await Circle(..)`
   when the factory is `suspend`), `Rc(c)`,
-  `Rc<Circle>(c)`, `Weak(b)`, `Opaque(v)`, `Array<f32>(1024)`, `bytes(64)`,
+  `Rc<Circle>(c)`, `Weak(b)`, `Array<f32>(1024)`, `bytes(64)`,
   `Channel<Job>()`. Lowercase types keep lowercase calls (`bytes(64)`).
+  Erasure is **not** a type-call — it is the prelude builtin
+  `make_any(v): dyn Any` (RFC 0014).
   Named variants of multi-case builtins stay statics: `Option.some`,
   `Option.none`, `Result.ok`, `Result.err`.
 - **Functions and methods are lowercase snake_case** — `unwrap_or(d)`,
-  `is<T>(x)`, `upcast<T>(x)`, `downcast<T>(o)`, `select_all(futs)`,
-  `spawn_worker(..)`.
+  `is<T>(x)`, `make_any(v)`, `downcast<T>(o)`, `select_all(futs)`,
+  `spawn_worker(..)`. `is<T>`/`downcast<T>` take **concrete `T` only**
+  (RFC 0012 §3, RFC 0014).
 - **A trailing `$` marks dispatch-inverted members** (tur convention,
   extended uniformly): anything a *runtime* fires or owns, rather than you
   calling it — event props (`on_click$: Mutation<ClickEvent, void>` or a
@@ -68,15 +72,20 @@ compiler gives it no meaning; greppability is enforced by style.
 ## 4. Reserved & contextual words
 
 - Reserved (parse error with explanation): `new`, `switch`, `case`,
-  `default`, `extends`, `super`, `as`, `type` (type alias — future),
+  `default`, `extends`, `super`, `as` (no casts at all — erasure is
+  `make_any`, RFC 0014), `type` (type alias — future),
   `struct`, `match`, `null`, `undefined`, `any`, `unknown`, `typeof`,
   `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`.
-- `this` is contextual (class members only); `Self` is a normal identifier
+- `self` is contextual — the **receiver**: the first parameter of an
+  instance method (`fn add(self, x, y)` — RFC 0010 §2) and the name it
+  binds in the body; a method without `self` is a class method. There is
+  no `this` keyword. `Self` is a normal identifier
   bound to the enclosing class inside its body (RFC 0010 §1); `fn`,
   `let`, `const`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
   `enum`, `class`, `dataclass`, `interface`, `implements`,
   `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
-  `await`, `factory`, `dispose`, `true`, `false`, `extern` are keywords.
+  `await`, `factory`, `dispose`, `true`, `false`, `extern`, `dyn`
+  (RFC 0012 §2) are keywords.
 
 Each reserved word's error message names the rut replacement ("rut does not
 have `switch`; use `when`") — the full diagnostic model is RFC 0029 §6.
