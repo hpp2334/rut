@@ -1,10 +1,10 @@
-// Sieve of Eratosthenes — Array<T>/bytes unboxed storage, no boxing.
+// Sieve of Eratosthenes — Vec<T>/bytes unboxed storage, no boxing.
 
 import { Logger } from "std:log";
 
-fn sieve(limit: i32): Array<i32> {
+fn sieve(limit: i32): Vec<i32> {
     const marks = bytes(limit + 1);       // zeroed: 0 = candidate, 1 = crossed
-    const primes: Array<i32> = [];
+    const primes: Vec<i32> = Vec();       // empty growable: Vec(), not []
     for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);

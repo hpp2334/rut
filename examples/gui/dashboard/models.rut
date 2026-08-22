@@ -21,7 +21,7 @@ export dataclass User {
 export dataclass Series {
     metric: string;
     unit: string;
-    samples: Array<f32>;
+    samples: Vec<f32>;
 }
 
 export dataclass StatsSummary {
@@ -35,7 +35,7 @@ export dataclass StatsSummary {
 // Worker protocol: `samples` deep-copies across isolates (the state keeps
 // the original, so rc > 1); `reply` is a transferred channel endpoint.
 export dataclass StatsRequest {
-    samples: Array<f32>;
+    samples: Vec<f32>;
     reply: Sender<StatsSummary>;
 }
 

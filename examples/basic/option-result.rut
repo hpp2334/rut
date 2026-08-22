@@ -5,7 +5,7 @@ import { Logger } from "std:log";
 
 enum IoError { NotFound, Permission, Busy }
 
-fn find(xs: Array<string>, key: string): Option<i32> {
+fn find(xs: Vec<string>, key: string): Option<i32> {
     for (let i = 0; i < xs.length; i += 1) {
         if (xs[i] == key) {
             return Option.some(i);
@@ -14,7 +14,7 @@ fn find(xs: Array<string>, key: string): Option<i32> {
     return Option.none();
 }
 
-fn demo(list: Array<string>): void {
+fn demo(list: Vec<string>): void {
     const log = Logger("option");
     const idx = find(list, "beta");
     if (idx.is_some()) {

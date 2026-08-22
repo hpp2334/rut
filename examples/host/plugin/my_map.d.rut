@@ -24,7 +24,7 @@ export host class MyMap<K: Hashable, V> {
     fn set(self, k: K, v: V): void;
     fn get(self, k: K): Option<V>;
     fn size(self): i32;
-    fn keys(self): Array<K>;          // Array<K>, NOT Array<dyn Hashable>:
+    fn keys(self): Vec<K>;             // Vec<K>, NOT Vec<dyn Hashable>:
 }                                     // keys are unerased at the boundary
                                       // (interface values cannot be
                                       // downcast — RFC 0012 §3)

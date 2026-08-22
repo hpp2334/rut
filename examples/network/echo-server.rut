@@ -17,7 +17,7 @@ export suspend fn main(): void {
     }
     const server = started.value;
 
-    const senders: Array<Sender<Conn>> = [];
+    const senders: Vec<Sender<Conn>> = Vec();
     for (let i = 0; i < WORKERS; i += 1) {
         const jobs = Channel<Conn>();                 // one channel per worker
         spawn_worker("network/echo-worker.rut", [jobs.receiver]);

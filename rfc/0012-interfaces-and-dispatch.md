@@ -12,7 +12,7 @@
 
 See **`examples/basic/interfaces.rut`** — multiple `implements`, a composed
 `Widget` interface, `requires`, dataclass implementors, `dyn`-typed
-arrays.
+vecs.
 
 ## 1. Dispatch: direct by default, vtable at interfaces
 
@@ -34,15 +34,18 @@ the vtable. `final` is meaningless in v1 (nothing can override).
 
 - **`dyn` — the object-type spelling.** An interface name in **type
   position** — parameter/return/local/field types, generic arguments — is
-  written `dyn I`: `d: dyn Drawable`, `Array<dyn Widget>`, `Rc<dyn
-  Hashable>`; `dyn` composes wherever a type does. Positions that merely
+  written `dyn I`: `d: dyn Drawable`, `Vec<dyn Widget>`, `Rc<dyn
+  Hashable>`, `Rc<dyn Slice<i32>>` (the builtin slice interface, RFC 0005);
+  `dyn` composes wherever a type does. Positions that merely
   **name** an interface stay bare: the `interface` declaration itself,
   `implements` / `requires` lists, and generic bounds (`K: Hashable` —
   admission-only syntax, RFC 0013 §2) — none of them denote an interface
   *value*. Every `dyn` in the source marks a vtable-dispatch use site:
   greppable dynamic dispatch (Rust's rule, adopted verbatim). A bare
   interface name where a type is expected is a compile error with an
-  "insert `dyn`" suggestion.
+  "insert `dyn`" suggestion. Every interface object type is **unsized**
+  — `dyn I` and `dyn Slice<T>` alike: the payload lives in a heap cell,
+  and the `dyn`-typed slot stores the cell handle (RFC 0031 §4).
 - Interfaces declare **plain methods only** — no fields, no properties of
   any kind (there is no `get`/`set` syntax in rut at all, RFC 0010 §2).
   Anything that reads like a property becomes a method: `x.count()` in the
@@ -92,8 +95,8 @@ the vtable. `final` is meaningless in v1 (nothing can override).
   reference plus a vtable lookup per call — every one spelled `dyn I` at
   the use site. No `any`, no dynamic field access, no `this` at all (the
   receiver is the explicit `self` parameter, RFC 0010 §2).
-- Heterogeneous collections are interface-typed arrays:
-  `Array<dyn Drawable>` — the replacement for both TS unions and the data-enums
+- Heterogeneous collections are interface-typed vecs:
+  `Vec<dyn Drawable>` — the replacement for both TS unions and the data-enums
   rut deliberately dropped (RFC 0006).
 
 ## 3. Type tests — builtin functions, not keywords

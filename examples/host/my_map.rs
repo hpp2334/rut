@@ -26,7 +26,7 @@
 use std::collections::HashMap;
 
 use rut::{ClassTable, GenericArgs, NativeModule, Trap, TypeRegistry, VmCtx};
-use rut::value::{Array, IfaceHandle, RutValue};
+use rut::value::{IfaceHandle, RutValue, RutVec};
 
 /// The container — **not generic**. A Rust generic would need V named at
 /// RUST compile time, but the builder below runs at RUT runtime, once
@@ -64,7 +64,7 @@ impl MyMap {
 fn build_my_map(args: &GenericArgs, _types: &TypeRegistry) -> Result<ClassTable, Trap> {
     let v_ty = args.of("V").ty();                 // reified V: drives the
                                                   // per-call check in set
-    let k_ty = args.of("K").ty();                 // for keys(): Array<K>
+    let k_ty = args.of("K").ty();                 // for keys(): RutVec<K>
 
     ClassTable::new::<MyMap>(args)
         // binds slot 0 (the declaration's factory -> 0)
@@ -82,14 +82,15 @@ fn build_my_map(args: &GenericArgs, _types: &TypeRegistry) -> Result<ClassTable,
         })                                        // RC-retained for the
         .method("size", |ctx, this: &MyMap|       // map's lifetime
             Ok(this.inner.len() as i32))
-        // slot 4. Array<K>, NOT Array<dyn Hashable>: k_ty drives the element
+        // slot 4. RutVec<K> (rut Vec<K>), NOT Vec<dyn Hashable>: k_ty drives
+        // the element
         // type and each key is UNERASED to its natural value (a `string`
-        // key yields Array<string>) — rut cannot consume interface refs
+        // key yields Vec<string>) — rut cannot consume interface refs
         // here (no downcast, RFC 0012 §3). `get` needs no per-call V
         // check: values only enter via set, and the cell carries this
         // instantiation's TypeId.
         .method("keys", |ctx, this: &MyMap| {
-            let mut arr = Array::with_ty(ctx, k_ty, this.inner.len() as u32)?;
+            let mut arr = RutVec::with_ty(ctx, k_ty, this.inner.len() as u32)?;
             for (i, key) in this.inner.keys().enumerate() {
                 arr.set(ctx, i as u32, key.unerase(ctx))?;  // fat ref -> value
             }

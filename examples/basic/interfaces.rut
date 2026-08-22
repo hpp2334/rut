@@ -69,13 +69,13 @@ dataclass Cell implements Hashable, Equal<Cell> {   // BOTH listed: the
     }
 }
 
-fn blit_all(g: Canvas, items: Array<dyn Widget>): void {
+fn blit_all(g: Canvas, items: Vec<dyn Widget>): void {
     for (const w of items) {
         w.draw(g);                   // vtable dispatch — the only dynamic call
     }
 }
 
-fn mixed_hash(keys: Array<dyn Hashable>): u64 {
+fn mixed_hash(keys: Vec<dyn Hashable>): u64 {
     let acc: u64 = 0;
     for (const k of keys) {
         acc += k.hash();             // vtable dispatch through Hashable;
@@ -87,10 +87,10 @@ export fn main(): void {
     const log = Logger("interfaces");
     const s = Sprite();
     s.move_by(2, 2);
-    blit_all(newCanvas(), [s]);      // bare Sprite boxes implicitly to dyn Widget
+    blit_all(newCanvas(), Vec.from([s]));  // bare Sprite boxes implicitly to dyn Widget
 
     const a = Cell { x: 1, y: 2 };   // literal — the ONLY dataclass factory
     const b = Cell { x: 1, y: 2 };
-    log.info(f"eq={a.eq(b)} hash={mixed_hash([a, b])}");
+    log.info(f"eq={a.eq(b)} hash={mixed_hash(Vec.from([a, b]))}");
     //                        ^ bare dataclasses box implicitly to dyn Hashable
 }

@@ -31,8 +31,10 @@ See **`examples/basic/module-structure.rut`** and
   (Unreferenced imports are a lint, not an error.)
 - `const` initializers at module scope must be **const-expressions**:
   literals, enum members, builtin operators over const-expressions, dataclass
-  literals whose fields are const-expressions, and builtin zero allocations
-  `Array<T>(n)` / `bytes(n)` with const `n`. Calls to user functions are not
+  literals whose fields are const-expressions, fixed-array literals
+  (`[e1, .., en]` — RFC 0007 §1) whose elements are, and builtin zero
+  allocations `Vec<T>(n)` / `Vec.from([..])` / `bytes(n)` with const `n`.
+  Calls to user functions are not
   const-expressions (OQ-1; enforced in the compiler, RFC 0033 §3).
 - There is no mutable module state. Program state is constructed in `main`
   or lives in class `static` fields (RFC 0010 §2), which follow the same

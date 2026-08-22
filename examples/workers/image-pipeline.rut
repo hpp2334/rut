@@ -7,7 +7,7 @@ import { Image, Job } from "imaging";
 
 export suspend fn main(): void {
     const urls = ["a.png", "b.png", "c.png", "d.png"];
-    const ports: Array<Receiver<Image>> = [];
+    const ports: Vec<Receiver<Image>> = Vec();
 
     for (let i = 0; i < urls.length; i += 1) {
         const jobs = Channel<Job>();     // main -> worker (MPSC)

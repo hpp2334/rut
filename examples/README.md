@@ -16,7 +16,7 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `basic/when.rut` | `when` pattern expressions, exhaustiveness | 0008 |
 | `basic/option-result.rut` | builtin `Option`/`Result`, `.value`, `unwrap_or`, `?` | 0005 |
 | `basic/error-context.rut` | `here()` / `capture_stack_trace()` on error values, lazy `render()`, stripped-image degradation | 0036 |
-| `basic/literals.rut` | numeric suffixes, plain/raw/format strings, constructors | 0007 |
+| `basic/literals.rut` | numeric suffixes, plain/raw/format strings, constructors, fixed arrays `Array<T, N>`, `dyn Slice<T>` boxing, `Vec.as_slice()` views | 0005, 0007 |
 | `basic/dataclasses.rut` | value semantics, field initializers, free functions | 0009 |
 | `basic/classes.rut` | factory type-calls, `Self {}` literal, `Option<Self>` try-factories, private, static fields, explicit `self` receivers | 0010 |
 | `basic/rc-and-dispose.rut` | `Rc(v)` boxing, ref-copy aliasing, `dispose()` | 0011 |
@@ -34,15 +34,15 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `memory/temp-file.rut` | deterministic destruction at rc 0 | 0016 §3 |
 | `memory/weak-cache.rut` | `Weak(v)`/`upgrade()` | 0017 §1 |
 | `memory/node-cycle.rut` | reference cycles and the collector | 0017 §2 |
-| `algorithms/sieve.rut` | unboxed `bytes`/`Array<i32>` | — |
-| `algorithms/quicksort.rut` | in-place array mutation, recursion | — |
-| `algorithms/matrix-mul.rut` | flat `Array<f32>` hot loops | — |
+| `algorithms/sieve.rut` | unboxed `bytes`/`Vec<i32>` | — |
+| `algorithms/quicksort.rut` | in-place vec mutation, recursion | — |
+| `algorithms/matrix-mul.rut` | flat `Vec<f32>` hot loops | — |
 | `network/http-fetch.rut` | async client, `Result` at API boundaries | 0018 |
 | `network/echo-server.rut` | accept loop + worker pool dispatch | 0021 |
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0021 |
 | `host/interop.rut` | host classes via declaration files, repr C struct passing, buffer borrows, `Template` for l10n | 0022–0028 |
 | `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `export host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
-| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`IfaceHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `dyn Any` values, native `Option`/`Array` returns | 0026 |
+| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`IfaceHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `dyn Any` values, native `Option`/`Vec` returns | 0026 |
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `dyn Any` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
 

@@ -32,7 +32,9 @@ fn layout(): void {
     log.info(f"point tid={TID_POINT} size={size_of<Point>()} align={align_of<Point>()}");
     log.info(f"padded size={SZ_PADDED} align={AL_PADDED}");    // 12 / 4
     log.info(f"vertex size={size_of<Vertex>()}");              // 8 — same as Point
-    log.info(f"array stride: {size_of<Point>()}");             // Array<Point> strides by this
+    log.info(f"vec stride: {size_of<Point>()}");           // Vec<Point> strides by this
+    log.info(f"fixed 8: {size_of<Array<Point, 8>>()}"      // Array<Point, N> = N × stride —
+             + f" handle: {size_of<Rc<Point>>()}");        // inline value, no header
 }
 
 fn boxed_layout(): void {

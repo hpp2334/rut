@@ -21,7 +21,7 @@ pub enum Value<'v> {
     I8(i8) /* .. */ I64(i64), U8(u8) /* .. */ U64(u64), F32(f32), F64(f64),
     Str(StrRef<'v>),                       // immutable, may point into heap
     Bytes(Borrow<'v, [u8]>),               // zero-copy, call-scoped
-    Array(Borrow<'v, RutArray>),           // typed elem, zero-copy
+    Vec(Borrow<'v, RutVec>),               // typed elem, zero-copy
     Struct(StructRef<'v>),                 // repr C block — RFC 0024
     Rc(Handle), Iface(Handle), Any(Handle), Host(Handle),
     Opt(Option<Box<Value<'v>>>), Res(Result<Box<Value<'v>>, Box<Value<'v>>>),

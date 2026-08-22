@@ -29,12 +29,13 @@ vm.register_struct::<Vertex>("Vertex")?;   // checks rut's Vertex layout:
 After registration, `StructRef<'v, Vertex>` in a native fn is literally
 `&Vertex` — the host reads/writes fields at native speed (zero copies, no
 per-field accessors). rut passes inline values by pointer to the frame /
-array element storage; the borrow flag guards re-entrant mutation
+vec element storage; the borrow flag guards re-entrant mutation
 (RFC 0023 §2).
 
 Script-side, the layout is queryable at compile time (RFC 0015 §3):
-`size_of<T>()`, `align_of<T>()`, `type_id<T>()` — `Array<T>` strides,
-`StructCopy` sizes, and host struct mirrors all agree on one number.
+`size_of<T>()`, `align_of<T>()`, `type_id<T>()` — `Vec<T>` strides,
+`StructCopy` sizes, and host struct mirrors all agree on one number
+(`size_of<Array<T, N>>() = N × stride`, RFC 0005).
 
 ## Open questions
 

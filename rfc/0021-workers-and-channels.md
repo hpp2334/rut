@@ -31,7 +31,10 @@ variant lives in `examples/network/echo-server.rut` + `echo-worker.rut`.
 |---|---|
 | ints/floats/bool/char | copy |
 | `string` | copy (immutable) |
-| `bytes`, `Array<T>` (T numeric/bool/char) | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case) |
+| `bytes`, `Vec<T>` (T numeric/bool/char) | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case) |
+| `Array<T, N>` (fixed arrays are inline values) | deep copy, like a class instance — every element must itself be crossable |
+| `dyn Slice<T>` **owned** cells (boxed `Array<T, N>`) | transfer if refcount == 1, else deep copy — same rule as `bytes` |
+| `dyn Slice<T>` **views** (`Vec.as_slice()`) | **not transferable** — the view names a Vec cell in the sender's heap (compile-time error at the send site) |
 | `class` instances / builtin `Option`/`Result` | deep copy; every field must itself be crossable |
 | `Sender` / `Receiver` | transfer |
 | closures | **not transferable** in v1 — compile-time error at the send/`spawn_worker` site |

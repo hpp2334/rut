@@ -1,15 +1,15 @@
-// Quicksort — in-place Array<i32> mutation (arrays are handles: the
+// Quicksort — in-place Vec<i32> mutation (vecs are handles: the
 // mutation is shared with the caller), recursion, explicit conversions.
 
 import { Logger } from "std:log";
 
-fn swap(xs: Array<i32>, a: i32, b: i32): void {
+fn swap(xs: Vec<i32>, a: i32, b: i32): void {
     const t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
 }
 
-fn partition(xs: Array<i32>, lo: i32, hi: i32): i32 {
+fn partition(xs: Vec<i32>, lo: i32, hi: i32): i32 {
     const pivot = xs[hi];
     let i = lo - 1;
     for (let j = lo; j < hi; j += 1) {
@@ -22,7 +22,7 @@ fn partition(xs: Array<i32>, lo: i32, hi: i32): i32 {
     return i + 1;
 }
 
-fn quicksort(xs: Array<i32>, lo: i32, hi: i32): void {
+fn quicksort(xs: Vec<i32>, lo: i32, hi: i32): void {
     if (lo >= hi) { return; }
     const p = partition(xs, lo, hi);
     quicksort(xs, lo, p - 1);
@@ -31,7 +31,7 @@ fn quicksort(xs: Array<i32>, lo: i32, hi: i32): void {
 
 export fn main(): void {
     const log = Logger("sort");
-    const xs = [5, 2, 9, 1, 7, 3, 8, 2];
+    const xs = Vec.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.length - 1);
 
     let out = "";

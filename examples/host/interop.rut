@@ -23,9 +23,10 @@ dataclass Vertex {
     color: u32;
 }
 
-fn draw_frame(c: Canvas, verts: Array<Vertex>): void {
+fn draw_frame(c: Canvas, verts: Array<Vertex, 2>): void {
     // verts borrows zero-copy: the host reads the inline repr-C block for
-    // the duration of the call; rut-side mutation inside re-entrant calls
+    // the duration of the call (a fixed Array<Vertex, N> IS the N-slot
+    // block — RFC 0005); rut-side mutation inside re-entrant calls
     // would trap (borrow guard) instead of racing.
     c.blit(verts);
 }
@@ -40,7 +41,7 @@ fn localized(count: i32, user: string): void {
 export fn main(): void {
     const log = Logger("interop");
     const c = newCanvas();                         // host constructs the handle
-    const verts: Array<Vertex> = [
+    const verts: Array<Vertex, 2> = [
         Vertex { x: 0, y: 0, color: 0xFF00FF },
         Vertex { x: 1, y: 1, color: 0x00FFFF },
     ];

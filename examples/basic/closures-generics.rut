@@ -3,14 +3,14 @@
 
 import { Logger } from "std:log";
 
-fn first<T>(xs: Array<T>): Option<T> {
+fn first<T>(xs: Vec<T>): Option<T> {
     if (xs.length == 0) {
         return Option.none();
     }
     return Option.some(xs[0]);
 }
 
-fn sum(xs: Array<i32>): i32 {
+fn sum(xs: Vec<i32>): i32 {
     let total = 0;
     for (const x of xs) {
         total += x;

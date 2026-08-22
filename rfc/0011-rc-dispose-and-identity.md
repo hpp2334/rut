@@ -41,8 +41,9 @@ See **`examples/basic/rc-and-dispose.rut`** (aliasing vs value copies) and
   — or, identically, a **bare dataclass** (RFC 0009) — converts to `dyn I`
   by **implicit boxing** (allocates the Rc cell, vtable from
   the type's impl table) at the widening site — the one place rut
-  heap-allocates without `rc` spelled out. `Array<Circle>` stays inline;
-  `Array<Rc<Circle>>` and `Array<dyn Drawable>` store cell pointers.
+  heap-allocates without `rc` spelled out. `Vec<Circle>` stays inline (as
+  does the fixed `Array<Circle, N>`); `Vec<Rc<Circle>>`, `Vec<dyn
+  Drawable>` and `dyn Slice<T>` store cell pointers.
 
 ## 4. Weak references
 

@@ -19,7 +19,8 @@ required for non-enum scrutinees) and as a statement (void arms).
 
 - `if (cond) { .. } else if (..) { .. } else { .. }` — braces required.
 - `while (cond) { .. }`.
-- `for (let x of expr) { .. }` iterates arrays and strings (chars).
+- `for (let x of expr) { .. }` iterates vecs, fixed arrays, slices and
+  strings (chars).
 - `for (let i = 0; i < n; i += 1) { .. }` — indexed form.
 - `return expr?;` — `expr` required unless the fn returns `void`.
 - No `break`/`continue` labels in v1 (plain `break`/`continue` exist for

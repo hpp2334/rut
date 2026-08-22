@@ -22,8 +22,8 @@ literals, chosen by expected type:
   RFC 0007 §2 (desugars to `concat` — zero new cost on the hot path).
 - The **same literal** in a `Template`-expected position (host fn
   parameter annotated `Template`, or an explicit `const t: Template =
-  f"..."`) compiles to the `tmpl` op: a `Template { parts: Array<string>,
-  args: Array<dyn Any> }` — literal chunks and **boxed values with their
+  f"..."`) compiles to the `tmpl` op: a `Template { parts: Vec<string>,
+  args: Vec<dyn Any> }` — literal chunks and **boxed values with their
   runtime types** (`dyn Any`, RFC 0014), not pre-rendered text.
 - `Template` API: `t.str(): string` renders with rut's own `str()` rules
   (identical output to the `string` path); `t.parts()`, `t.args()`,

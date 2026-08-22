@@ -31,10 +31,11 @@ See **`examples/memory/weak-cache.rut`** — `Weak(v): Weak<C>` and
 See **`examples/memory/node-cycle.rut`** for a minimal cycle.
 
 Cycles can only form through **mutable heap slots**: Rc-cell class fields,
-builtin `Option`/`Result` payloads holding refs, and `Array<T: ref>`
-elements. Strings, bytes, numeric arrays, dataclasses-without-refs, and bare
+builtin `Option`/`Result` payloads holding refs, and `Vec<T: ref>`
+elements. Strings, bytes, numeric vecs, dataclasses-without-refs, and bare
 class values can never participate (RFC 0016 §4) — the scanner skips them
-entirely.
+entirely. Slice view cells are walkable like any other cell: the owner
+field is a typed handle (RFC 0016 §4).
 
 Algorithm (Bacon–Rajan style trial deletion, stop-the-VM, budgeted):
 
@@ -48,7 +49,7 @@ Algorithm (Bacon–Rajan style trial deletion, stop-the-VM, budgeted):
 5. collected cycles are freed — destructors run (RFC 0016 §3), then fields.
 
 - The whole pass walks only composite objects that *can* point at refs —
-  never string/bytes/numeric-array payloads, never registers.
+  never string/bytes/numeric-vec payloads, never registers.
 - Budget: passes are capped by a work counter; if a pass exceeds it, the
   remainder is deferred to the next trigger (embedding-safe, like everything
   else — the host can also force `vm.collect_cycles()` between frames,

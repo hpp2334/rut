@@ -59,7 +59,7 @@ a structural answer in rut:
 2. **Spec conformance means implementing the world.** A conformant engine
    needs `BigInt`, `Intl`, `Date`'s quirks, microtask semantics — thousands
    of person-hours before any user code runs. rut's VM contract is
-   deliberately tiny (primitives, `Option`/`Result`/`Array`, channels);
+   deliberately tiny (primitives, `Option`/`Result`/`Vec`, channels);
    everything else is library: `Map`/`Set` are declaration-file + Rust
    library types (RFC 0028), and logging, IO, and the host's own domain
    live in their own modules (RFC 0022). A rut engine is small because the
@@ -67,15 +67,15 @@ a structural answer in rut:
 3. **Too slow without a JIT.** Interpreter-only JS runs one to two orders
    of magnitude slower — a JS engine's speed *is* its JIT. rut's no-JIT
    pillar (G7) is viable only because the language is statically typed:
-   the bytecode is typed (G2), generics monomorphize, `Array<f32>` is a
-   flat `Vec<f32>`, and calls are direct by default — vtable dispatch
+   the bytecode is typed (G2), generics monomorphize, `Vec<f32>` is a
+   flat `f32` buffer, and calls are direct by default — vtable dispatch
    exists only where an interface is named (RFC 0012 §1). The code shape a
    JS JIT exists to speculate on — polymorphic property loads — does not
    exist in rut.
 4. **Too much memory.** JS values are boxes: per-object headers, tagged or
    NaN-boxed pointers, boxed array elements, GC mark/pause overhead. rut's
    memory story is layout: untagged 8-byte slots (RFC 0015 §5), inline
-   repr-C values with no headers (RFC 0015 §4), flat unboxed arrays
+   repr-C values with no headers (RFC 0015 §4), flat unboxed vecs
    (RFC 0016 §4), reference counting with deterministic destructors
    (RFC 0016) and a budgeted cycle collector (RFC 0017). No NaN-boxing —
    the per-platform layout bug class tur hit in Boa — and no collector on
@@ -134,7 +134,8 @@ final sections of the RFC they implement).
 - 0002 — lexical structure: source model, identifiers (`$`), naming rules
 - 0003 — modules & visibility: declarations-only scope, `export` forms
 - 0004 — primitive types & integer semantics: the by-value regime
-- 0005 — builtin generic types: `Option`, `Result`, `Array`
+- 0005 — builtin generic types: `Option`, `Result`, `Vec` (+ `Array<T, N>`
+  fixed arrays, `dyn Slice<T>` slices)
 - 0006 — enums: simple named-int sets
 - 0007 — literals & inference: suffixes, conversions, plain/raw/format strings
 - 0008 — control flow & `when`: exhaustive pattern expressions
@@ -198,7 +199,7 @@ final sections of the RFC they implement).
 Without `any`, JSON-shaped data becomes a small class set behind an
 interface (`interface JsonValue` implemented by `JString`/`JNum`/`JArr`/…,
 held as `dyn JsonValue` refs),
-heterogeneous collections are `Array<dyn I>` arrays, and host APIs that were
+heterogeneous collections are `Vec<dyn I>` vecs, and host APIs that were
 `any`-shaped in JS become generics or opaque `host class` handles. The one
 dynamic mechanism kept is **interface dispatch** — a checked vtable call on a
 value whose exact class is still known at runtime. What we keep from "types

@@ -1,9 +1,9 @@
-// Flat f32 matrix multiply — Array<f32> is a flat unboxed buffer; this is
+// Flat f32 matrix multiply — Vec<f32> is a flat unboxed buffer; this is
 // the loop shape the typed-VM design targets (no per-element refcounts).
 
 import { Logger } from "std:log";
 
-fn gemm(n: i32, a: Array<f32>, b: Array<f32>, out: Array<f32>): void {
+fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, out: Vec<f32>): void {
     for (let i = 0; i < n; i += 1) {
         for (let k = 0; k < n; k += 1) {
             const aik = a[i * n + k];
@@ -17,9 +17,9 @@ fn gemm(n: i32, a: Array<f32>, b: Array<f32>, out: Array<f32>): void {
 export fn main(): void {
     const log = Logger("matrix");
     const n = 4;
-    const a = Array<f32>(n * n);
-    const b = Array<f32>(n * n);
-    const out = Array<f32>(n * n);
+    const a = Vec<f32>(n * n);
+    const b = Vec<f32>(n * n);
+    const out = Vec<f32>(n * n);
     for (let i = 0; i < n * n; i += 1) {
         a[i] = f32(i);
         b[i] = f32(i % 7);

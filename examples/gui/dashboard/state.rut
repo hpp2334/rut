@@ -28,17 +28,17 @@ export class Dashboard {
     private live: State<bool>;
     private visits: State<i32>;
     private events_seen: State<i32>;
-    private alerts: State<Array<string>>;
-    private samples: State<Array<f32>>;
+    private alerts: State<Vec<string>>;
+    private samples: State<Vec<f32>>;
     private started_ms: i64;               // plain field — deliberately NOT
                                            // reactive: set once at boot
 
     // --- sources: external snapshots (services push) ---
-    private users_src: Source<Array<User>>;     // mock API replies land here
+    private users_src: Source<Vec<User>>;     // mock API replies land here
     private summary_src: Source<StatsSummary>;  // worker-isolate replies
 
     // --- derives: computed views ---
-    private users_view: Derived<Array<User>>;
+    private users_view: Derived<Vec<User>>;
     private users_count: Derived<i32>;
     private alert_count: Derived<i32>;
 
@@ -64,15 +64,15 @@ export class Dashboard {
         const samples = state([]);
 
         // --- sources: external snapshots (services push) ---
-        const users_src = source((): Array<User> => []);
+        const users_src = source((): Vec<User> => Vec());
         const summary_src = source((): StatsSummary =>
             StatsSummary { n: 0, mean: 0, min: 0, max: 0, last: 0 });
 
         // --- derives: computed views ---
-        const users_view = derive((ctx): Array<User> => {
+        const users_view = derive((ctx): Vec<User> => {
             const users = ctx.latest(users_src);
             const q = ctx.get(query);
-            const out: Array<User> = [];
+            const out: Vec<User> = Vec();
             for (let i = 0; i < users.length; i += 1) {
                 const u = users[i];
                 if (q.length == 0 || str.contains(u.name, q)) {
@@ -170,10 +170,10 @@ export class Dashboard {
     fn live(self): bool { return atom_get(self.store, self.live); }
     fn events_seen(self): i32 { return atom_get(self.store, self.events_seen); }
     fn visits(self): i32 { return atom_get(self.store, self.visits); }
-    fn samples(self): Array<f32> { return atom_get(self.store, self.samples); }
-    fn users(self): Array<User> { return source_read(self.store, self.users_src); }
+    fn samples(self): Vec<f32> { return atom_get(self.store, self.samples); }
+    fn users(self): Vec<User> { return source_read(self.store, self.users_src); }
     fn summary(self): StatsSummary { return source_read(self.store, self.summary_src); }
-    fn users_view(self): Array<User> { return derived_read(self.store, self.users_view); }
+    fn users_view(self): Vec<User> { return derived_read(self.store, self.users_view); }
     fn users_count(self): i32 { return derived_read(self.store, self.users_count); }
     fn alert_count(self): i32 { return derived_read(self.store, self.alert_count); }
 
@@ -188,7 +188,7 @@ export class Dashboard {
 
     // --- service bridges: push snapshots into the sources ---
 
-    fn set_users(self, users: Array<User>): void {
+    fn set_users(self, users: Vec<User>): void {
         source_push(self.store, self.users_src, users);
     }
 
@@ -198,7 +198,7 @@ export class Dashboard {
 
     // --- re-render subscription: one callback, every watched atom ---
 
-    fn redraw_on_change(self, cb: fn(): void): Array<Rc<WatchHandle>> {
+    fn redraw_on_change(self, cb: fn(): void): Vec<Rc<WatchHandle>> {
         return [
             watch(self.store, self.tab, cb),
             watch(self.store, self.query, cb),
@@ -214,23 +214,23 @@ export class Dashboard {
     }
 }
 
-// --- array helpers (shared by mutations; free fns keep models data-only) ---
+// --- vec helpers (shared by mutations; free fns keep models data-only) ---
 
-export(self) fn shift_left(xs: Array<f32>): void {
+export(self) fn shift_left(xs: Vec<f32>): void {
     for (let i = 1; i < xs.length; i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
-export(self) fn shift_left_str(xs: Array<string>): void {
+export(self) fn shift_left_str(xs: Vec<string>): void {
     for (let i = 1; i < xs.length; i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
-export(self) fn sort_by_score(xs: Array<User>, dir: SortDir): void {
+export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir): void {
     for (let i = 1; i < xs.length; i += 1) {
         let j = i;
         while (j > 0 && score_lt(xs[j], xs[j - 1], dir)) {
@@ -247,7 +247,7 @@ export(self) fn score_lt(a: User, b: User, dir: SortDir): bool {
     };
 }
 
-export(self) fn swap_users(xs: Array<User>, a: i32, b: i32): void {
+export(self) fn swap_users(xs: Vec<User>, a: i32, b: i32): void {
     const t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;

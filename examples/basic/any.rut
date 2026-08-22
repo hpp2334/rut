@@ -2,7 +2,8 @@
 // make_any(v) (a prelude builtin) forgets the static type, KEEPS the
 // runtime type; downcast<T> recovers it or yields None. `Any` is the
 // implicit top interface — its object type `dyn Any` composes like any
-// other (`Rc<dyn Any>`, `Array<dyn Any>`). The only any-shaped value in
+// other (`Rc<dyn Any>`, `Vec<dyn Any>`, fixed `Array<dyn Any, 3>`). The
+// only any-shaped value in
 // rut — and it can do nothing until recovered.
 
 import { Logger } from "std:log";
@@ -45,7 +46,8 @@ fn share_vs_snapshot(): void {
 
 fn nested(): void {
     const log = Logger("any");
-    const boxes: Array<dyn Any> = [make_any(1), make_any("x"), make_any(Point { x: 3, y: 4 })];
+    // heterogeneous FIXED array — pure data, no allocation (RFC 0005)
+    const boxes: Array<dyn Any, 3> = [make_any(1), make_any("x"), make_any(Point { x: 3, y: 4 })];
     log.info(f"{boxes.length} boxes; first is i32: {is<i32>(boxes[0])}");
 }
 

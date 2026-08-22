@@ -127,7 +127,8 @@ lambda     := '(' params ')' (':' Type)? '=>' (expr | block)
 
 `Type` in **value positions** (params, returns, locals, fields, generic
 arguments) may spell an interface object type with the `dyn` prefix —
-`d: dyn Drawable`, `Array<dyn Widget>`, `Rc<dyn Any>`; a bare interface
+`d: dyn Drawable`, `Vec<dyn Widget>`, `Rc<dyn Any>`, `Rc<dyn Slice<i32>>`
+(the builtin slice interface, RFC 0005); a bare interface
 name there is a type error with an "insert `dyn`" suggestion (RFC 0012 §2).
 `IfaceList` — `implements`, `requires`, and extparam bounds (§3) — stays
 **bare**: those positions name an interface, they do not form an interface
@@ -184,7 +185,7 @@ left-recursion handling. Powers (loosest → tightest):
 
 Postfixes are a loop, so `p.value.x`, `arr[i].push(x)` chains compose
 without special cases. Generic arguments in call position
-(`downcast<Point>(o)`, `Array<f32>(n)`) parse when `<` follows an
+(`downcast<Point>(o)`, `Vec<f32>(n)`) parse when `<` follows an
 identifier **and** a matching `>` + `(` closes — the classic ambiguity
 with `<`/`>` comparisons is resolved by backtracking one token sequence
 (checkpoint/restore over the token slice; never over text).
@@ -241,7 +242,7 @@ enum Expr {
     Try{ span, expr: Box<Expr> },       // postfix `?`
     FStr{ span, parts: Vec<FPartAst> }, // holes are Exprs here
     Struct{ span, ty: Path, fields: Vec<(Ident, Expr)> },  // dataclass literal
-    Array{ span, elems: Vec<Expr> },
+    Array{ span, elems: Vec<Expr> },        // fixed-array literal: [e1..en] : Array<T, n>
     Cast{ span, ty: Ty, expr },         // i32(x) etc. — a Call on type name,
 }                                       // resolved to Cast in RFC 0031 §1
 ```

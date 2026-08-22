@@ -53,8 +53,14 @@ scopy   rD, rS, size      ; inline value copy (memcpy + ref fields)
 is_a    rD, rO, tid       ; type test (RFC 0015 §6)
 downc   rD, rO, tid       ; dyn Any downcast → Option<T> (RFC 0014)
 typeid  rD, tid           ; const-folded from type table (RFC 0033 §3)
-arrnew  rD, tid, rLen     ; Array<T>(n) zeroed
+arrnew  rD, tid, rLen     ; Vec<T>(n) zeroed
 arrlen  rD, rO | arrget rD, rO, rI | arrset rO, rI, rV   ; typed by elem tid
+                              ; Array<T, N> indexing lowers to arrget/arrset
+                              ; with a const length check (bounds still trap);
+                              ; dyn Slice<T> get/set/len dispatch on the two
+                              ; slice cell kinds (owned/view — RFC 0016 §4);
+                              ; Vec.as_slice() and Array->dyn Slice boxing
+                              ; lower to view/owned-cell alloc + copy ops
 strcat  rD, args          ; format-literal concat (RFC 0007 §2)
 tmpl    rD, parts, args   ; Template construction (RFC 0027)
 optsome rD, rV | optnone rD, tid | optis rD, rO ...

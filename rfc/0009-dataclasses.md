@@ -60,7 +60,7 @@ in action.
   the cell as-is.
 - **Representation: no header, no refcount** (RFC 0016 §1). A dataclass is
   its fields back-to-back, inline wherever it lives: registers/stack for
-  locals, inline in class fields and Rc cells, inline in `Array<Point>`
+  locals, inline in class fields and Rc cells, inline in `Vec<Point>`
   elements (unboxed and contiguous — a flat buffer of pairs). RC and the
   cycle collector only see a dataclass's ref-typed fields, via the
   compile-time field table.

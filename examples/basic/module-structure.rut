@@ -5,7 +5,7 @@
 import { sleep } from "std:time";
 
 const MAX_RETRIES: i32 = 3;                    // const-expression
-const TILES: Array<f32> = Array<f32>(16);      // zeroed, const size
+const TILES: Vec<f32> = Vec<f32>(16);       // zeroed, const size
 const ORIGIN: Point = Point { x: 0, y: 0 };    // dataclass literal of consts
 
 enum Mode { Idle, Running }

@@ -139,8 +139,8 @@ class Watch {
 const MAX_FLUSH_ROUNDS: i32 = 1000;
 
 export class Store {
-    entries: Array<Entry> = [];    // internal — treat as private
-    watches: Array<Rc<Watch>> = [];
+    entries: Vec<Entry> = Vec();        // internal — treat as private
+    watches: Vec<Rc<Watch>> = Vec();
     depth: i32 = 0;
 
     // all fields initialized -> default factory: bare Store(); box with
@@ -255,7 +255,7 @@ export class WatchHandle {
     }
 
     dispose(self): void {               // runs when the last Rc drops
-        const kept: Array<Rc<Watch>> = [];
+        const kept: Vec<Rc<Watch>> = Vec();
         for (let i = 0; i < self.store.watches.length; i += 1) {
             if (self.store.watches[i].wid != self.wid) {
                 kept.push(self.store.watches[i]);

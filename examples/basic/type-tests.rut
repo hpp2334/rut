@@ -47,7 +47,7 @@ fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
     // widening to `dyn I` is implicit — the explicit form is the `dyn`
     // annotation at the receiving position, not a builtin:
     const d2: dyn Drawable = s;      // boxes implicitly (RFC 0011 §3)
-    const views: Array<dyn Drawable> = [s, d2];
+    const views: Vec<dyn Drawable> = Vec.from([s, d2]);
     const ht: dyn HitTest = s;
 
     log.info(f"{views.length} {ht.hit_test(0, 0)}");

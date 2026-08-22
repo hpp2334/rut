@@ -39,8 +39,10 @@ compiler gives it no meaning; greppability is enforced by style.
 ## 3. Naming conventions (enforced)
 
 - **Types are PascalCase** — user types and parameterized builtins:
-  `Array<T>`, `Option<T>`, `Result<T,E>`, `Rc<T>`, `Weak<T>`, `Any`
-  (object type `dyn Any`, RFC 0014),
+  `Vec<T>`, `Array<T, N>` (const-generic), `Option<T>`, `Result<T,E>`,
+  `Rc<T>`, `Weak<T>`, `Any`
+  (object type `dyn Any`, RFC 0014), `Slice<T>` (builtin interface —
+  object type `dyn Slice<T>`, RFC 0005),
   `Future<T>`, `Task<T>`, `Sender<T>`, `Receiver<T>`, `Point`, `Color`,
   `Drawable` (object type `dyn Drawable`, RFC 0012 §2).
 - Scalars and simple buffers stay lowercase, C-style: `i32`, `u8`, `f32`,
@@ -48,7 +50,7 @@ compiler gives it no meaning; greppability is enforced by style.
 - **Construction is a type-call** (RFC 0010): the type name in call position
   constructs — `Circle(1, 2, 3)` (user class `factory`; `await Circle(..)`
   when the factory is `suspend`), `Rc(c)`,
-  `Rc<Circle>(c)`, `Weak(b)`, `Array<f32>(1024)`, `bytes(64)`,
+  `Rc<Circle>(c)`, `Weak(b)`, `Vec<f32>(1024)`, `bytes(64)`,
   `Channel<Job>()`. Lowercase types keep lowercase calls (`bytes(64)`).
   Erasure is **not** a type-call — it is the prelude builtin
   `make_any(v): dyn Any` (RFC 0014).
@@ -85,7 +87,9 @@ compiler gives it no meaning; greppability is enforced by style.
   `enum`, `class`, `dataclass`, `interface`, `implements`,
   `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
   `await`, `factory`, `dispose`, `true`, `false`, `extern`, `dyn`
-  (RFC 0012 §2) are keywords.
+  (RFC 0012 §2) are keywords. `dyn` prefixes any **interface path** — a
+  user `I`, `Any`, or the builtin `Slice<T>` — one rule, no syntax branch
+  (RFC 0005, RFC 0014).
 
 Each reserved word's error message names the rut replacement ("rut does not
 have `switch`; use `when`") — the full diagnostic model is RFC 0029 §6.

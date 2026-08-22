@@ -50,13 +50,18 @@ const AL_POINT: u32  = align_of<Point>();    // 4
 ```
 
 - `type_id<T>(): u32` — identity of the *instantiated* type, unique per VM
-  run and stable across modules (`Array<f32>` ≠ `Array<f64>`;
+  run and stable across modules (`Vec<f32>` ≠ `Vec<f64>`;
+  `Array<i32, 3> ≠ Array<i32, 4>` — const-generic `N` is part of the
+  identity, RFC 0005);
   `Point` = `Point` wherever declared). Comparable only — not a first-class
   type value (OQ-1).
 - `size_of<T>(): u32`, `align_of<T>(): u32` — the value representation:
   primitives their width/alignment; dataclass/class their **repr C field
-  block** (§4) — the number `Array<T>` strides by and value copies copy;
-  ref types (`Array`, `string`, `Rc<T>`) report handle size, not payload.
+  block** (§4) — the number `Vec<T>` strides by and value copies copy;
+  `Array<T, N>` is `N × stride`, sized like any value type. Ref types
+  (`Vec`, `string`, `Rc<T>`) report handle size, not payload — and so does
+  **every `dyn` type** (`dyn Drawable`, `dyn Any`, `dyn Slice<i32>`: the
+  slot stores the cell handle, RFC 0031 §4).
   (`u32`, not a word-sized type: rut has no `usize`, and no rut value or
   buffer may exceed 4 GiB in v1.)
 - All three are **compile-time constants** — const-expressions (RFC 0003 §1),
@@ -80,7 +85,7 @@ rule, no exceptions:
   its alignment. No hidden header, no tag, no vtable pointer inline.
 - `private`, `implements`, `dispose`, `static`, and generic parameters add
   **nothing** to the block — layout depends only on the field list.
-- The block is what assignment copies, what `Array<T>` stores inline
+- The block is what assignment copies, what `Vec<T>` stores inline
   (RFC 0016 §4), what `size_of<T>()`/`align_of<T>()` report (§3), and
   what the host mirrors with `#[repr(C)]` structs (RFC 0024) — rut↔host
   struct interop is pointer identity, not field-by-field conversion.
@@ -101,13 +106,13 @@ pub union Slot {
     pub f: f64,                       // f32 payloads widened
     pub b: bool,
     pub c: char,
-    pub r: Option<NonNull<Header>>,   // Rc cells, arrays, strings, bytes,
-}                                     // interface values, Option/Result of refs
+    pub r: Option<NonNull<Header>>,   // Rc cells, vecs/slices, strings,
+}                                     // bytes, interface values, Option/Result of refs
 ```
 
 Dataclass and bare class values don't fit a slot — they are **inline byte
 sequences** spanning consecutive slots (or a stack-frame region), laid out
-by the compile-time field table; `Array<Point>` elements are contiguous
+by the compile-time field table; `Vec<Point>` elements are contiguous
 inline values with no per-element headers (RFC 0016 §4). The bytecode is
 typed, so value copies (`StructCopy { dst, src, size }`) are plain memcpys
 with ref-field retain/release emitted by the compiler.

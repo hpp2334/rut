@@ -23,10 +23,10 @@ import { Hashable } from "std:collection";
 
 export host class MyMap<K: Hashable, V> {     // K bound = admission only
     factory(cap: i32): Self;                  // native factory
-    fn set(k: K, v: V): void;
-    fn get(k: K): Option<V>;
-    fn size(): i32;
-    fn keys(): Array<K>;
+    fn set(self, k: K, v: V): void;
+    fn get(self, k: K): Option<V>;
+    fn size(self): i32;
+    fn keys(self): Vec<K>;
 }
 ```
 
@@ -42,7 +42,7 @@ fn build_my_map(args: &GenericArgs, types: &TypeRegistry)
     -> Result<ClassTable, Trap>                 // once per instantiation
 {
     let v_ty = args.of("V").ty();               // reified V — drives checks
-    let k_ty = args.of("K").ty();               // for keys(): Array<K>
+    let k_ty = args.of("K").ty();               // for keys(): Vec<K>
 
     ClassTable::new::<MyMap>(args)
         .factory(|ctx: &mut VmCtx, cap: i32| Ok(MyMap::with_capacity(cap)))
@@ -53,7 +53,7 @@ fn build_my_map(args: &GenericArgs, types: &TypeRegistry)
         .method("get",  |ctx, this: &MyMap, k: IfaceHandle|
             Ok(this.inner.get(&k).cloned()))    // -> builtin Option<V>
         .method("size", |ctx, this: &MyMap| Ok(this.inner.len() as i32))
-        .method("keys", |ctx, this: &MyMap| { /* Array<K> — unerased */ .. })
+        .method("keys", |ctx, this: &MyMap| { /* Vec<K> — unerased */ .. })
         .build()
 }
 
@@ -119,10 +119,11 @@ source.
   (content for `string`/numerics/`enum`, identity for `Rc<T>`), and
   registered structs via a `register_struct` content voucher (the Rust
   mirror is `Hash + Eq` — no rut-side methods needed). Interfaces
-  themselves, `dyn Any` boxes, `Array`, `Option`/`Result` satisfy nothing.
+  themselves, `dyn Any` boxes, `Vec`/`Array<T, N>`/slices, `Option`/`Result`
+  satisfy nothing.
 - Builtin types flow back natively — a method may return `Option<V>` or
-  build an `Array<K>` host-side (`keys()` yields `Array<K>`, **not**
-  `Array<dyn Hashable>`: keys are *unerased* at the boundary — rut cannot
+  build a `Vec<K>` host-side (`keys()` yields `Vec<K>`, **not**
+  `Vec<dyn Hashable>`: keys are *unerased* at the boundary — rut cannot
   consume interface refs there, RFC 0012 §3); rut cannot tell it wasn't
   written in rut.
 - Hashing/`eq` on a user type may be **rut code**, reached through the
@@ -131,7 +132,7 @@ source.
   cell's borrow flag is set, and a hash impl that calls `m.set(..)` again
   traps `borrowed by host` (RFC 0023 §2) instead of corrupting the table.
 - The **native factory** makes construction an ordinary type-call
-  (`MyMap<string, i32>(32)`), same rule as `Array<f32>(n)`: construction
+  (`MyMap<string, i32>(32)`), same rule as `Vec<f32>(n)`: construction
   is a function everywhere, and a host class simply supplies the function.
   Helper fns like `newCanvas()` remain the shape for host-computed or
   side-effecting construction.

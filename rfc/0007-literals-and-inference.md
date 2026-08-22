@@ -10,8 +10,8 @@
 ## Summary
 
 See **`examples/basic/literals.rut`** — numeric suffixes and annotations,
-plain/raw/format strings, array and dataclass literals, and the lowercase
-factory-type calls (`Array<f32>(1024)`, `bytes(64)`).
+plain/raw/format strings, fixed-array and dataclass literals, and the
+lowercase factory-type calls (`Vec<f32>(1024)`, `bytes(64)`).
 
 ## 1. Inference & conversions
 
@@ -24,6 +24,12 @@ factory-type calls (`Array<f32>(1024)`, `bytes(64)`).
   conversions at all in v1. Narrowing (`i32`→`u8`, `f64`→`i32`) traps when
   the value doesn't fit; lossy intent is spelled out with `u8.wrap(x)` /
   `i32.trunc(x)` style builtins (OQ-2).
+- **Fixed-array literal**: `[e1, .., en]` has type `Array<T, n>` — an
+  inline **value**, pure data, no allocation (RFC 0005). It infers `T`
+  bidirectionally like any literal; at module scope it is a
+  const-expression when every element is (RFC 0003 §1). A growable needs
+  its own constructor: `Vec<T>()`, `Vec<T>(n)` (zeroed), or
+  `Vec.from([..])` (copies).
 
 ## 2. String literals: plain, raw, format
 
@@ -62,7 +68,8 @@ f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
 | `string` | contents, verbatim |
 | `enum` | member name (`Color.Red` → `"Red"`) |
 
-  Everything else (dataclass/class values, arrays, `Option`/`Result`,
+  Everything else (dataclass/class values, vecs and fixed arrays,
+  `Option`/`Result`,
   `bytes`) is a **compile error** inside `f"..."` — preventing accidental
   implementation-detail printing. Use `debug.str(x)` for developer output;
   write a `to_string(): string` method on your class and call it explicitly.

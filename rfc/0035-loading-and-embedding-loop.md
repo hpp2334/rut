@@ -52,7 +52,7 @@ struct HostHooks {
 
 `spawn_worker` (RFC 0021 §3) is a host hook: it constructs a new `Vm`
 (sharing the type table and loader, not the heap), loads the worker
-module, transfers arguments (move semantics on `bytes`/`Array`, rc==1
+module, transfers arguments (move semantics on `bytes`/`Vec`, rc==1
 checked — RFC 0021 §4), and returns `Sender`/`Receiver` pairs backed by OS
 channels. Channel ops inside the VM are ops (`chsend`/`chrecv`,
 RFC 0032 §1); when no value is ready, `chrecv` parks the frame like

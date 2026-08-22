@@ -76,6 +76,23 @@ exact concrete  >  dyn I (satisfies I)  >  dyn Any (erased)
 
 (`dyn Any` is the interface tier's bottom — RFC 0012 §2, RFC 0014.)
 
+Every `dyn` type is **unsized** — `dyn I` and `dyn Slice<T>` alike: the
+payload lives in a heap cell and a `dyn`-typed slot stores the cell
+handle. There is no `dyn`-specific sizedness error; every type position
+admits every `dyn` type (RFC 0012 §2). The slice tier has its own boxing
+edge, parallel to interface widening:
+
+```
+Array<T, N> (exact, sized value)  >  dyn Slice<T> (unsized object)
+```
+
+`N` is a constant expression, part of the type's identity
+(*"array length must be a constant expression"* otherwise — RFC 0005);
+`dyn Slice<T>` is **not** related to `dyn Any` (slices are not `Any`
+objects; `make_any` rejects them, RFC 0014). Fixed arrays and slices
+satisfy no interface bound — the same family as `Vec`/`Option`/`Result`
+(RFC 0026 §4).
+
 Rules that bound the cost of the two lattice-lowering features:
 
 1. **Interface values** (`dyn I`, RFC 0012): one indirect call per use;
@@ -95,7 +112,7 @@ Rules that bound the cost of the two lattice-lowering features:
    program point. No speculative devirtualization through `dyn Any` (that
    is JIT behavior; rut has no deopt to fall back on).
 4. **Guardrails are language-level**: primitives in columnar user stores
-   never box (typed arrays); hot shared state uses direct `Rc<State<T>>`
+   never box (typed vecs); hot shared state uses direct `Rc<State<T>>`
    cells; lints flag `downcast` in loop bodies and `dyn Any` crossing
    non-storage function boundaries. The intended shape of a rut program:
    exact types on the hot path, `dyn I` where polymorphism is real,

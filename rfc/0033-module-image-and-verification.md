@@ -66,17 +66,19 @@ images never execute.
 RFC 0003 §1's const-expression rule is enforced here: module `const` and
 `static` initializers are **folded at compile time**; the surviving forms
 are literals, enum members, operators over consts, dataclass literals,
-`Array<T>(n)`/`bytes(n)` blobs, and the layout builtins. A call to a user
+fixed-array literals, `Vec<T>(n)`/`Vec.from([..])`/`bytes(n)` blobs, and
+the layout builtins. A call to a user
 function in a const position is a compile error (RFC 0003 OQ-1), not a
 deferred-evaluation hack.
 
 `type_id<T>()`, `size_of<T>()`, `align_of<T>()` (RFC 0015 §3) never
 execute at runtime: HIR folds them to constants from the type table.
 `type_id<T>()` values are `u32`, comparable, and unique per *instantiated*
-type within a VM run (`Array<f32>` ≠ `Array<f64>`, `Point` = `Point`
+type within a VM run (`Vec<f32>` ≠ `Vec<f64>`, `Array<i32, 3> ≠
+Array<i32, 4>` — const `N` is identity, RFC 0005, `Point` = `Point`
 across modules — identity is assigned at link). `size_of<T>()`/`align_of<T>()`
 return the repr-C value size/alignment (RFC 0024): for dataclasses and
-classes this is the C-layout field block (what `Array<Point>` strides by,
+classes this is the C-layout field block (what `Vec<Point>` strides by,
 what `StructCopy` copies, what a host struct mirrors).
 
 ## Open questions

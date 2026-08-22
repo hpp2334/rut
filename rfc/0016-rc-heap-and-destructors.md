@@ -18,7 +18,7 @@ between isolates (RFC 0021), so all counters are plain `Cell`s — no atomics.
 ## 1. Heap object model
 
 Only these are heap objects: **Rc cells** (RFC 0011 — `Header +
-vtable + fields`), **arrays**, **strings**, **bytes**, builtin
+vtable + fields`), **vecs** and **slice cells**, **strings**, **bytes**, builtin
 `Option`/`Result` *of references* (payload of a ref type is a pointer;
 payload of a value type is inline), coroutine frames (RFC 0018 §4), and
 host opaques (RFC 0025). Dataclasses and bare class values are **never heap
@@ -35,12 +35,13 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 §5). Consequences:
 
 - **Function boundaries** pass references in registers; call/ret sequences
-  do the paired inc/dec. Nothing per-element happens inside `Array<f32>`
+  do the paired inc/dec. Nothing per-element happens inside `Vec<f32>`
   loops.
 - **rc overflow**: on increment past `u32::MAX` the object is *immortalized*
   (rc pinned to 0) — a deliberate, logged leak instead of memory unsafety
   (Swift's rule). Debug builds assert the counter discipline.
-- **Reference semantics** (RFC 0004 §2): Rc cells, arrays, strings and bytes
+- **Reference semantics** (RFC 0004 §2): Rc cells, vecs, slices, strings
+  and bytes
   are handles — passing them retains. There is no borrow syntax and no
   lifetimes; a handle simply keeps the referent alive, so nothing dangles.
   Uniqueness matters only for buffer *transfer* across isolates (RFC 0021
@@ -63,20 +64,36 @@ compile error — RFC 0011 §2). Ordering guarantees:
 Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
 "finalizer may run later or never".
 
-## 4. Arrays & strings: why they stay cheap
+## 4. Vecs, fixed arrays, slices & strings: why they stay cheap
 
-- `Array<T>` for numeric/bool/char `T` stores raw elements inline
-  (`Array<f32>` is literally `Vec<f32>` behind a header). Only the header is
+- `Vec<T>` for numeric/bool/char `T` stores raw elements inline (a flat
+  `f32` buffer behind a header). Only the header is
   refcounted; element copies in/out are plain `Slot` moves, no inc/dec.
-  `Array<Point>` (dataclass elements) is likewise inline and uncounted.
-- `Array<T: ref>` stores pointers; the scanner sees element pointers, RC
-  sees one count for the array. `push`/`pop`/`set` emit the right inc/dec
+  `Vec<Point>` (dataclass elements) is likewise inline and uncounted.
+- `Array<T, N>` (RFC 0005) is not a heap object at all: the N-slot inline
+  block itself, headerless, copied whole on assignment like a dataclass —
+  the second seq flavor after `Vec<T>`.
+- `Vec<T: ref>` stores pointers; the scanner sees element pointers, RC
+  sees one count for the vec. `push`/`pop`/`set` emit the right inc/dec
   ops.
+- **`dyn Slice<T>` cells** — two kinds behind one object type (RFC 0005):
+  the **owned** cell (`RutSlice`: boxed `Array<T, N>` — elements inline,
+  mutable through the handle, never grows) and the **lending view**
+  (`RutSliceView`: `Vec.as_slice()` — holds a *cell handle* to the owner
+  Vec plus `off`/`len`, **never a pointer into the data block**). Views
+  dispatch through the owner cell, so growth (the buffer may move) keeps
+  them valid; indexing bounds-checks view len ∩ owner len — a view that
+  outlived a shrink traps, never reads garbage. This *refines* the
+  no-interior-pointer rule rather than breaking it: the scanner still
+  walks only typed cell handles (RFC 0017 §2).
+- Any slot typed with a **`dyn` type stores a cell handle** — `dyn I` and
+  `dyn Slice<T>` alike (RFC 0031 §4); unsized payloads always sit behind
+  a cell boundary.
 - `string` is immutable → interned literals live in the module's constant
   pool (immortal, rc==0 sentinel); runtime-built strings are ordinary
   objects with no interior pointers. `bytes` likewise.
-- No interior pointers exist anywhere (no `&mut` into the middle of an
-  array/bytes in v1), which is exactly what keeps the cycle scanner a
+- No interior pointers exist anywhere (no `&mut` into the middle of a
+  vec/bytes in v1), which is exactly what keeps the cycle scanner a
   simple typed walk (RFC 0017 §2).
 
 ## 5. Internals: headers, layouts, refcount ops
@@ -94,7 +111,13 @@ struct RutString { h: Header, len: u32, bytes: [u8] }     // UTF-8, immutable
 #[repr(C)]
 struct RutBytes  { h: Header, len: u32, cap: u32, data: *mut u8 }
 #[repr(C)]
-struct RutArray  { h: Header, len: u32, cap: u32, elem: TypeId, data: *mut () } // unboxed
+struct RutVec    { h: Header, len: u32, cap: u32, elem: TypeId, data: *mut () } // unboxed (growable)
+                                                             // Array<T, N> has no struct —
+                                                             // the N-slot inline block itself
+struct RutSlice  { h: Header, len: u32, elem: TypeId, data: *mut () }            // owned slice cell
+struct RutSliceView { h: Header, owner: Handle<RutVec>, off: u32, len: u32 }     // Vec.as_slice() —
+                                                             // lends, never copies; strong ref
+                                                             // keeps the owner alive
 #[repr(C)]
 struct RutClass  { h: Header, vt: *const VTable, fields: [Slot] } // Rc<T> CELL — Header + vt + the
                                                             // repr-C field block (RFC 0015 §4)
@@ -143,7 +166,7 @@ impl Heap {
 ## Open questions
 
 - OQ-1: moving/compacting collector for long-lived UI heaps — defer to v2;
-  non-moving keeps host `&mut` borrows into `bytes`/`Array` trivially sound
+  non-moving keeps host `&mut` borrows into `bytes`/`Vec` trivially sound
   (RFC 0023 borrow guards).
 - OQ-2: finalizer-style `dispose()` observer vs destructor-only —
   destructor-only proposed (weak refs, RFC 0017, cover the observer use

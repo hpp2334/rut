@@ -24,6 +24,14 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   typed opcodes (`arr.get<f32>` vs `arr.get<Handle>`). Instantiations whose
   bodies are descriptor-independent share one generic body at load time
   (RFC 0001 §Execution model); the compiler reports instantiation counts.
+  The kind-specialization already covers **unsized `dyn` arguments**: a
+  `T`-typed slot instantiated at any `dyn` type (`Vec<dyn Widget>`,
+  `MyCow<dyn Slice<T>>`, RFC 0005) becomes a handle slot — `dyn` args are
+  ordinary interface-object arguments, satisfying no bound.
+- **Const-generic parameters exist only on the builtin `Array<T, N>`** in
+  v1 (RFC 0005); user generics stay type-only — `N` is a constant
+  expression, part of the instantiation identity (`Array<i32, 3> ≠
+  Array<i32, 4>`, RFC 0015 §3).
 - Generic parameters are unconstrained in v1 — no `T: Iface` bounds on
   user generics (OQ-1): you cannot call interface methods on a bare `T`.
   Pass values in, or take a `dyn I` parameter instead of a

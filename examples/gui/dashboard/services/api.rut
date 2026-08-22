@@ -15,19 +15,20 @@ export(self) fn lcg_f32(state: u32): f32 {
     return f32(lcg_next(state) % 1000u32) / 1000.0f32;
 }
 
-const FIRST: Array<string> = ["ada", "linus", "grace", "alan", "barbara", "dennis", "katherine", "ken"];
-const LAST: Array<string> = ["lovelace", "torvalds", "hopper", "turing", "liskov", "ritchie", "johnson", "thompson"];
-const ROLES: Array<string> = ["engineer", "designer", "ops", "pm", "analyst"];
-
+const FIRST: Array<string, 8> = ["ada", "linus", "grace", "alan", "barbara", "dennis", "katherine", "ken"];
+const LAST: Array<string, 8> = ["lovelace", "torvalds", "hopper", "turing", "liskov", "ritchie", "johnson", "thompson"];
+const ROLES: Array<string, 5> = ["engineer", "designer", "ops", "pm", "analyst"];   // fixed arrays:
+                                                                                   // module-const data,
+                                                                                   // no allocation
 // --- API ---
 
-export suspend fn fetch_users(seed: u32): Result<Array<User>, ApiError> {
+export suspend fn fetch_users(seed: u32): Result<Vec<User>, ApiError> {
     await sleep(120);                                  // simulated latency
     if (seed == 0) {
         return Result.err(ApiError.Network);           // the unhappy path exists
     }
     let rng = seed;
-    const users: Array<User> = [];
+    const users: Vec<User> = Vec();
     for (let i = 0; i < 12; i += 1) {
         rng = lcg_next(rng);
         const first = FIRST[i32(rng % 8u32)];
@@ -54,7 +55,7 @@ export suspend fn fetch_users(seed: u32): Result<Array<User>, ApiError> {
 
 export suspend fn fetch_series(metric: string, unit: string, n: i32, seed: u32): Result<Series, ApiError> {
     await sleep(80);
-    const samples: Array<f32> = [];
+    const samples: Vec<f32> = Vec();
     let v = 50.0f32;
     let rng = seed;
     for (let i = 0; i < n; i += 1) {

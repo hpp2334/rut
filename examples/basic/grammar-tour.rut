@@ -42,7 +42,7 @@ class Circle implements Drawable {         // also a VALUE type; Rc<T> for refs
     fn area(self): f32 { return self.r * self.r * 3.14159265f32; }
 }
 
-fn blit_all(g: Canvas, items: Array<dyn Drawable>): void {
+fn blit_all(g: Canvas, items: Vec<dyn Drawable>): void {
     for (const d of items) {               // `dyn`-typed loop variable
         d.draw(g);                         // vtable dispatch
     }
@@ -64,6 +64,6 @@ export fn main(): void {
     const c = Circle(1, 2, 3);             // class factory type-call
     const shared = Rc(c);                  // want shared/ref semantics? say so
     const g = newCanvas();
-    blit_all(g, [shared]);                 // Rc<Circle> widens to dyn Drawable
+    blit_all(g, Vec.from([shared]));       // Rc<Circle> widens to dyn Drawable
     log.info(f"{color_name(Color.Red)} area={c.area()} len={length(p)}");
 }
