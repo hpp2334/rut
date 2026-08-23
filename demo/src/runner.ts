@@ -1,6 +1,13 @@
 /**
  * RutApi resolution (RFC 0041 §3): probe public/rut.wasm at boot —
  * 200 → wasm mode; 404 → static-preview mode (expected output + banner).
+ *
+ * The wasm module is the rut-wasm crate over a raw ABI (RFC 0041 §2):
+ *   exports: memory, rut_alloc(len) -> ptr,
+ *            rut_compile(src_ptr, src_len) -> envelope,
+ *            rut_run(bin_ptr, bin_len, fuel, heap) -> envelope
+ * An envelope is [u32 LE length][JSON bytes]; the compile envelope carries
+ * the module binary base64-encoded (RFC 0033) — mirrored by rut-api.d.ts.
  */
 
 import type { CompileResult, RutApi, RunResult, Budget } from "./wasm/rut-api";
@@ -9,6 +16,79 @@ import { CASES, type RutCase } from "./cases";
 export interface RunnerState {
   mode: "wasm" | "preview";
   banner: string;
+}
+
+interface WasmExports {
+  memory: WebAssembly.Memory;
+  rut_alloc(len: number): number;
+  rut_compile(srcPtr: number, srcLen: number): number;
+  rut_run(
+    binPtr: number,
+    binLen: number,
+    fuel: bigint,
+    heap: bigint,
+  ): number;
+}
+
+function decodeBase64(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+class WasmApi implements RutApi {
+  private e: WasmExports;
+  private enc = new TextEncoder();
+  private dec = new TextDecoder();
+
+  constructor(inst: WebAssembly.Instance) {
+    this.e = inst.exports as unknown as WasmExports;
+  }
+
+  private write(bytes: Uint8Array): number {
+    const ptr = this.e.rut_alloc(bytes.length);
+    if (ptr === 0) throw new Error("wasm heap exhausted");
+    new Uint8Array(this.e.memory.buffer, ptr, bytes.length).set(bytes);
+    return ptr;
+  }
+
+  private readEnvelope(ptr: number): string {
+    const view = new DataView(this.e.memory.buffer, ptr, 4);
+    const len = view.getUint32(0, true);
+    return this.dec.decode(new Uint8Array(this.e.memory.buffer, ptr + 4, len));
+  }
+
+  compile(src: string): CompileResult {
+    const bytes = this.enc.encode(src);
+    const ptr = this.write(bytes);
+    const resPtr = this.e.rut_compile(ptr, bytes.length);
+    const json = this.readEnvelope(resPtr);
+    const parsed = JSON.parse(json) as CompileResult & { binary?: string };
+    return {
+      diags: parsed.diags ?? [],
+      astDump: parsed.astDump ?? "",
+      irDump: parsed.irDump ?? "",
+      binary: parsed.binary ? decodeBase64(parsed.binary) : undefined,
+    };
+  }
+
+  run(binary: Uint8Array, budget: Budget): RunResult {
+    const ptr = this.write(binary);
+    const resPtr = this.e.rut_run(
+      ptr,
+      binary.length,
+      BigInt(Math.max(0, Math.floor(budget.fuel))),
+      BigInt(Math.max(0, Math.floor(budget.heapBytes))),
+    );
+    const parsed = JSON.parse(this.readEnvelope(resPtr)) as RunResult;
+    return {
+      output: parsed.output ?? [],
+      trap: parsed.trap ?? undefined,
+      fuelUsed: parsed.fuelUsed ?? 0,
+      heapBytes: parsed.heapBytes ?? 0,
+    };
+  }
 }
 
 export class Runner {
@@ -24,11 +104,16 @@ export class Runner {
     try {
       const res = await fetch("rut.wasm");
       if (res.ok) {
-        // The rut-wasm crate (RFC 0041 §2) will instantiate and expose
-        // { compile, run } as plain exports over this bytes payload.
-        const bytes = await res.arrayBuffer();
-        const api = await instantiate(new Uint8Array(bytes));
-        return new Runner({ mode: "wasm", banner: "" }, api);
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        const { instance } = await WebAssembly.instantiate(bytes, {});
+        const api = new WasmApi(instance);
+        return new Runner(
+          {
+            mode: "wasm",
+            banner: "live — rut.wasm (M1 vertical slice: static core, no suspend/host modules)",
+          },
+          api,
+        );
       }
     } catch {
       /* fall through to preview mode */
@@ -37,7 +122,7 @@ export class Runner {
       {
         mode: "preview",
         banner:
-          "static preview — wasm module not built (RFC 0041 §3). " +
+          "static preview — wasm module not built (run `npm run build:wasm` in demo/, RFC 0041 §3). " +
           "Output below is the annotated expectation, not a live run.",
       },
       null,
@@ -75,15 +160,4 @@ export class Runner {
 
 function placeholder(what: string): string {
   return `(${what} dump requires the wasm build — RFC 0041 §3)`;
-}
-
-/**
- * Instantiate the wasm module. Until crates/rut-wasm exists this is
- * unreachable (boot() only calls it on a successful fetch), so the
- * signature doubles as the binding spec for the Rust side.
- */
-async function instantiate(_bytes: Uint8Array): Promise<RutApi> {
-  // const { instance } = await WebAssembly.instantiate(_bytes, {});
-  // return instance.exports as unknown as RutApi;
-  throw new Error("rut.wasm present but binding unimplemented — see RFC 0041 §2");
 }

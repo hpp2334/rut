@@ -1,0 +1,13 @@
+[package]
+name = "rutc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "rut compiler — frontend (RFC 0030), resolve/typecheck (0031), LIR (0032), binary emit (0033)"
+
+[lib]
+name = "rutc"
+path = "src/lib.rs"
+
+[dependencies]
+rut-core = { path = "../rut-core" }

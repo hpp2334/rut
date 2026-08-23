@@ -1,0 +1,15 @@
+[package]
+name = "rut-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "wasm shim exposing compile/run over a raw ABI (RFC 0041 §3) — no wasm-bindgen, plain exports"
+
+[lib]
+name = "rut_wasm"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rutc = { path = "../rutc" }
+rut-core = { path = "../rut-core" }

@@ -1,0 +1,263 @@
+//! Load-time verification — RFC 0033 §2: corrupted binaries never execute.
+//! Structural re-checks per function: register indices vs the signature,
+//! jump targets in range, call arities vs callee signatures, native/type
+//! operands present. A failure is a load error naming the function.
+
+use crate::binary::Program;
+use crate::ops::Op;
+use crate::types::TyKind;
+
+pub fn verify(prog: &Program) -> Result<(), String> {
+    let ntypes = prog.types.types.len() as u32;
+    for (fi, f) in prog.funcs.iter().enumerate() {
+        let nregs = f.regs.len();
+        let ctx = |m: String| format!("function {} (#{fi}): {m}", f.name);
+        for (pc, op) in f.code.iter().enumerate() {
+            let bad = |m: String| ctx(format!("op @{pc}: {m}"));
+            // every register operand must be in range
+            for r in regs_of(op) {
+                if r as usize >= nregs {
+                    return Err(bad(format!("register r{r} out of range ({nregs} regs)")));
+                }
+            }
+            // type operands must be in the table
+            for t in tys_of(op) {
+                if t != u32::MAX && t >= ntypes {
+                    return Err(bad(format!("type id {t} out of range")));
+                }
+            }
+            match op {
+                Op::Jmp { target } => {
+                    if *target as usize >= f.code.len() {
+                        return Err(bad(format!("jump target {target} out of range")));
+                    }
+                }
+                Op::Br { then_t, else_t, .. } => {
+                    for t in [then_t, else_t] {
+                        if *t as usize >= f.code.len() {
+                            return Err(bad(format!("branch target {t} out of range")));
+                        }
+                    }
+                }
+                Op::BrTable { table, default, .. } => {
+                    for t in table.iter().chain(std::iter::once(default)) {
+                        if *t as usize >= f.code.len() {
+                            return Err(bad(format!("brtable target {t} out of range")));
+                        }
+                    }
+                }
+                Op::Call { func, args, .. } => {
+                    let callee = prog
+                        .funcs
+                        .get(*func as usize)
+                        .ok_or_else(|| bad(format!("call target #{func} out of range")))?;
+                    if args.len() != callee.params.len() {
+                        return Err(bad(format!(
+                            "call arity: {} args for {} params",
+                            args.len(),
+                            callee.params.len()
+                        )));
+                    }
+                }
+                Op::CallM { func, args, .. } => {
+                    let callee = prog
+                        .funcs
+                        .get(*func as usize)
+                        .ok_or_else(|| bad(format!("call target #{func} out of range")))?;
+                    if !callee.is_method {
+                        return Err(bad("CallM to a non-method".into()));
+                    }
+                    if args.len() + 1 != callee.params.len() {
+                        return Err(bad(format!(
+                            "method arity: {} args + self for {} params",
+                            args.len(),
+                            callee.params.len()
+                        )));
+                    }
+                }
+                Op::CallI { slot, .. } => {
+                    if *slot as usize >= prog.trait_slots.len() {
+                        return Err(bad(format!("trait slot {slot} out of range")));
+                    }
+                }
+                Op::MakeClosure { func, .. } => {
+                    if *func as usize >= prog.funcs.len() {
+                        return Err(bad(format!("closure target #{func} out of range")));
+                    }
+                }
+                Op::EnumNew { ty, member, .. } => {
+                    if let TyKind::Enum { members } = prog.types.kind(*ty) {
+                        if *member as usize >= members.len() {
+                            return Err(bad("enum member out of range".into()));
+                        }
+                    } else {
+                        return Err(bad("EnumNew over a non-enum type".into()));
+                    }
+                }
+                Op::GetF { obj, field, .. } | Op::SetF { obj, field, .. } => {
+                    let ty = f.regs[*obj as usize];
+                    match prog.types.kind(ty) {
+                        TyKind::Data { fields } => {
+                            if *field as usize >= fields.len() {
+                                return Err(bad(format!("field index {field} out of range")));
+                            }
+                        }
+                        _ => return Err(bad("field access on a non-record register".into())),
+                    }
+                }
+                Op::IsTrait { want, .. } => {
+                    if *want as usize >= prog.traits.len() {
+                        return Err(bad("IsTrait want not in the trait table".into()));
+                    }
+                }
+                Op::Arith { ty, .. } | Op::Wrap { ty, .. } | Op::Bit { ty, .. } | Op::Cmp { ty, .. } => {
+                    if *ty != u32::MAX
+                        && !matches!(prog.types.kind(*ty), TyKind::Prim(_))
+                    {
+                        return Err(bad("numeric op over a non-primitive type".into()));
+                    }
+                }
+                Op::OptSome { ty, .. } | Op::OptNone { ty, .. } => {
+                    if !matches!(prog.types.kind(*ty), TyKind::Option { .. }) {
+                        return Err(bad("Option op over a non-Option type".into()));
+                    }
+                }
+                Op::ResOk { ty, .. } | Op::ResErr { ty, .. } => {
+                    if !matches!(prog.types.kind(*ty), TyKind::Result { .. }) {
+                        return Err(bad("Result op over a non-Result type".into()));
+                    }
+                }
+                _ => {}
+            }
+        }
+        match f.code.last() {
+            Some(Op::Ret { .. }) => {}
+            _ => return Err(ctx("function must end in Ret".into())),
+        }
+    }
+    Ok(())
+}
+
+fn regs_of(op: &Op) -> Vec<u16> {
+    let mut v = Vec::new();
+    let mut push = |r: u16| v.push(r);
+    match op {
+        // single-dst ops
+        Op::Mov { dst, src } | Op::MovRef { dst, src } => {
+            push(*dst);
+            push(*src);
+        }
+        Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
+        | Op::ArrNew { dst, .. } | Op::ArrLit { dst, .. } | Op::EnumNew { dst, .. }
+        | Op::OptNone { dst, .. } | Op::Panic { msg: dst } => push(*dst),
+        // two-operand scalar ops
+        Op::Not { dst, a } | Op::Neg { dst, a, .. } => {
+            push(*dst);
+            push(*a);
+        }
+        // three-operand ops
+        Op::Arith { dst, a, b, .. } | Op::Wrap { dst, a, b, .. } | Op::Bit { dst, a, b, .. }
+        | Op::Cmp { dst, a, b, .. } | Op::StrCmp { dst, a, b, .. } | Op::RefEq { dst, a, b, .. }
+        | Op::ArrGet { dst, arr: a, idx: b, .. } => {
+            push(*dst);
+            push(*a);
+            push(*b);
+        }
+        Op::Own { dst, src, .. } => {
+            push(*dst);
+            push(*src);
+        }
+        Op::OptSome { dst, val, .. } | Op::ResOk { dst, val, .. } | Op::ResErr { dst, val, .. } => {
+            push(*dst);
+            push(*val);
+        }
+        Op::SetF { obj, val, .. } => {
+            push(*obj);
+            push(*val);
+        }
+        Op::ArrSet { arr, idx, val } => {
+            push(*arr);
+            push(*idx);
+            push(*val);
+        }
+        Op::SumIs { dst, v: a, .. } | Op::Unwrap { dst, v: a, .. } | Op::Unbox { dst, box_: a, .. } => {
+            push(*dst);
+            push(*a);
+        }
+        Op::UnwrapOr { dst, v: a, default: b } => {
+            push(*dst);
+            push(*a);
+            push(*b);
+        }
+        Op::Box { dst, val, .. } => {
+            push(*dst);
+            push(*val);
+        }
+        Op::Expect { dst, v: a, msg: b } => {
+            push(*dst);
+            push(*a);
+            push(*b);
+        }
+        Op::TidOf { dst, obj } | Op::IsType { dst, obj, .. } | Op::IsTrait { dst, obj, .. } => {
+            push(*dst);
+            push(*obj);
+        }
+        Op::Br { cond, .. } => push(*cond),
+        Op::BrTable { idx, .. } => push(*idx),
+        Op::Call { args, dst, .. } => {
+            v.extend_from_slice(args);
+            dst.into_iter().for_each(|d| v.push(*d));
+        }
+        Op::CallM { recv, args, dst, .. } | Op::CallI { recv, args, dst, .. } => {
+            push(*recv);
+            v.extend_from_slice(args);
+            dst.into_iter().for_each(|d| v.push(*d));
+        }
+        Op::CallNat { recv, args, dst, .. } => {
+            recv.into_iter().for_each(|r| v.push(*r));
+            v.extend_from_slice(args);
+            dst.into_iter().for_each(|d| v.push(*d));
+        }
+        Op::CallFn { fval, args, dst } => {
+            push(*fval);
+            v.extend_from_slice(args);
+            dst.into_iter().for_each(|d| v.push(*d));
+        }
+        Op::Ret { val } => val.into_iter().for_each(|r| v.push(*r)),
+        Op::GetF { dst, obj, .. } => {
+            push(*dst);
+            push(*obj);
+        }
+        Op::MakeClosure { dst, captures, .. } => {
+            push(*dst);
+            v.extend_from_slice(captures);
+        }
+        Op::Conv { dst, src, .. } => {
+            push(*dst);
+            push(*src);
+        }
+        Op::StrCharAt { dst, s, idx } => {
+            push(*dst);
+            push(*s);
+            push(*idx);
+        }
+        Op::Assert { cond, msg } => {
+            push(*cond);
+            msg.into_iter().for_each(|m| v.push(*m));
+        }
+        Op::Jmp { .. } | Op::LoopHead => {}
+    }
+    v
+}
+
+fn tys_of(op: &Op) -> Vec<u32> {
+    match op {
+        Op::Arith { ty, .. } | Op::Wrap { ty, .. } | Op::Bit { ty, .. } | Op::Cmp { ty, .. }
+        | Op::Neg { ty, .. } | Op::NewCell { ty, .. } | Op::Own { ty, .. }
+        | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
+        | Op::OptSome { ty, .. } | Op::OptNone { ty, .. } | Op::ResOk { ty, .. }
+        | Op::ResErr { ty, .. } | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
+        | Op::Box { ty, .. } => vec![*ty],
+        _ => Vec::new(),
+    }
+}

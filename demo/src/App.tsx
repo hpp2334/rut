@@ -14,7 +14,6 @@ export function App(): JSX.Element {
   const [currentCase, setCurrentCase] = useState<RutCase>(CASES[0]);
   const [source, setSource] = useState(CASES[0].source);
   const [panes, setPanes] = useState<PaneData>(EMPTY_PANES);
-  const [lastBinary, setLastBinary] = useState<Uint8Array | undefined>();
   const [budget, setBudget] = useState(DEFAULT_BUDGET);
   const [fuelUsed, setFuelUsed] = useState(0);
   const [heapUsed, setHeapUsed] = useState(0);
@@ -29,7 +28,6 @@ export function App(): JSX.Element {
     setCurrentCase(c);
     setSource(c.source);
     setPanes(EMPTY_PANES);
-    setLastBinary(undefined);
     setFuelUsed(0);
     setHeapUsed(0);
   }, []);
@@ -58,8 +56,6 @@ export function App(): JSX.Element {
         setRunning(false);
         return;
       }
-      setLastBinary(compiled.binary);
-
       // run (sync in wasm mode; preview is sync by construction)
       const res = runner.run(source, compiled.binary, b, currentCase);
       if (token !== runToken.current) return; // stale
@@ -78,7 +74,7 @@ export function App(): JSX.Element {
 
   const banner = useMemo(() => {
     if (!runner) return "booting…";
-    return runner.state.mode === "preview" ? runner.state.banner : "";
+    return runner.state.banner;
   }, [runner]);
 
   return (

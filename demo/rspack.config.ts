@@ -1,5 +1,6 @@
 import type { RspackOptions } from "@rspack/core";
-import { ReactPlugin } from "@rspack/plugin-react";
+import { CopyRspackPlugin, HtmlRspackPlugin, rspack } from "@rspack/core";
+import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 
 const config: RspackOptions = {
   context: __dirname,
@@ -31,24 +32,18 @@ const config: RspackOptions = {
       },
       {
         test: /\.css$/,
-        loader: "builtin:css-loader",
+        type: "css",
       },
     ],
   },
-  plugins: [new ReactPlugin()],
-  builtins: {
-    html: [
-      {
-        template: "./src/index.html",
-      },
-    ],
-    copy: [
-      {
-        from: "public",
-        to: ".",
-      },
-    ],
-  },
+  plugins: [
+    new ReactRefreshRspackPlugin(),
+    new HtmlRspackPlugin({ template: "./src/index.html" }),
+    // ship rut.wasm with the bundle (RFC 0041 §3: the runner probes it)
+    new CopyRspackPlugin({
+      patterns: [{ from: "public", to: "." }],
+    }),
+  ],
   devServer: {
     static: {
       directory: "public",

@@ -1,0 +1,169 @@
+//! RutType descriptors — RFC 0015: every value's type exists at runtime;
+//! kind + width + field tables drive layout, `is`, and serialization.
+//! Type ids are program-global (single-module link in v1; RFC 0035 §1
+//! rebase lands with multi-module linking).
+
+pub type TypeId = u32;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrimTy {
+    U8, U16, U32, U64,
+    I8, I16, I32, I64,
+    F32, F64,
+    Bool, Char,
+}
+
+impl PrimTy {
+    pub fn is_int(self) -> bool {
+        !matches!(self, PrimTy::F32 | PrimTy::F64 | PrimTy::Bool | PrimTy::Char)
+    }
+    pub fn is_float(self) -> bool {
+        matches!(self, PrimTy::F32 | PrimTy::F64)
+    }
+    /// Slot width in bytes (RFC 0015 §5 — all slots are 8 bytes; this is
+    /// the *semantic* width used by truncating ops).
+    pub fn width(self) -> u32 {
+        match self {
+            PrimTy::U8 | PrimTy::I8 => 1,
+            PrimTy::U16 | PrimTy::I16 => 2,
+            PrimTy::U32 | PrimTy::I32 | PrimTy::F32 => 4,
+            _ => 8,
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            PrimTy::U8 => "u8", PrimTy::U16 => "u16", PrimTy::U32 => "u32", PrimTy::U64 => "u64",
+            PrimTy::I8 => "i8", PrimTy::I16 => "i16", PrimTy::I32 => "i32", PrimTy::I64 => "i64",
+            PrimTy::F32 => "f32", PrimTy::F64 => "f64",
+            PrimTy::Bool => "bool", PrimTy::Char => "char",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FieldInfo {
+    pub name: String,
+    pub ty: TypeId,
+    /// repr-C offset of the field inside the payload block (RFC 0015 §4)
+    pub offset: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TyKind {
+    Void,
+    Prim(PrimTy),
+    /// immutable UTF-8 string cell
+    Str,
+    /// growable buffer cell; flat for primitive elem, handle slots otherwise
+    Vec { elem: TypeId },
+    /// fixed-length cell; `len` is part of the type's identity (RFC 0005)
+    Array { elem: TypeId, len: u32 },
+    /// named-int set (RFC 0006); members are immortal singleton cells
+    Enum { members: Vec<(String, i64)> },
+    /// builtin sum (RFC 0005): tag 0 = some/ok, 1 = none/err
+    Option { elem: TypeId },
+    Result { ok: TypeId, err: TypeId },
+    /// dataclass or class payload cell — same repr-C block either way
+    /// (RFC 0009/0010); construction rules differ, layout does not
+    Data { fields: Vec<FieldInfo> },
+    /// `dyn I` — unsized object; the slot stores the cell handle and the
+    /// cell's own type reaches the vtable (RFC 0015 §6)
+    TraitObj { trait_id: u32 },
+    /// erasure box (RFC 0014)
+    Opaque,
+    /// fn(P..): R — a closure value { func, captures } in one slot
+    Fn { params: Vec<TypeId>, ret: TypeId },
+}
+
+#[derive(Clone, Debug)]
+pub struct RutType {
+    pub name: String,
+    pub kind: TyKind,
+    /// repr-C value size (what own() clones; RFC 0015 §3)
+    pub size: u32,
+    pub align: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TypeTable {
+    pub types: Vec<RutType>,
+}
+
+pub const TY_VOID: TypeId = 0;
+pub const TY_U8: TypeId = 1;
+pub const TY_U16: TypeId = 2;
+pub const TY_U32: TypeId = 3;
+pub const TY_U64: TypeId = 4;
+pub const TY_I8: TypeId = 5;
+pub const TY_I16: TypeId = 6;
+pub const TY_I32: TypeId = 7;
+pub const TY_I64: TypeId = 8;
+pub const TY_F32: TypeId = 9;
+pub const TY_F64: TypeId = 10;
+pub const TY_BOOL: TypeId = 11;
+pub const TY_CHAR: TypeId = 12;
+pub const TY_STR: TypeId = 13;
+pub const TY_OPAQUE: TypeId = 14;
+
+impl TypeTable {
+    /// Boot table: primitives + string + Opaque at fixed ids.
+    pub fn boot() -> TypeTable {
+        let mut t = TypeTable { types: Vec::new() };
+        let mut push = |name: &str, kind: TyKind, size: u32, align: u32| {
+            t.types.push(RutType {
+                name: name.to_string(),
+                kind,
+                size,
+                align,
+            });
+        };
+        push("void", TyKind::Void, 0, 1);
+        push("u8", TyKind::Prim(PrimTy::U8), 1, 1);
+        push("u16", TyKind::Prim(PrimTy::U16), 2, 2);
+        push("u32", TyKind::Prim(PrimTy::U32), 4, 4);
+        push("u64", TyKind::Prim(PrimTy::U64), 8, 8);
+        push("i8", TyKind::Prim(PrimTy::I8), 1, 1);
+        push("i16", TyKind::Prim(PrimTy::I16), 2, 2);
+        push("i32", TyKind::Prim(PrimTy::I32), 4, 4);
+        push("i64", TyKind::Prim(PrimTy::I64), 8, 8);
+        push("f32", TyKind::Prim(PrimTy::F32), 4, 4);
+        push("f64", TyKind::Prim(PrimTy::F64), 8, 8);
+        push("bool", TyKind::Prim(PrimTy::Bool), 1, 1);
+        push("char", TyKind::Prim(PrimTy::Char), 4, 4);
+        push("string", TyKind::Str, 8, 8);
+        push("Opaque", TyKind::Opaque, 8, 8);
+        t
+    }
+
+    pub fn intern(&mut self, ty: RutType) -> TypeId {
+        // structural interning for anonymous instantiations (Vec<T>, Option<T>...)
+        for (i, t) in self.types.iter().enumerate() {
+            if t.name == ty.name && t.kind == ty.kind {
+                return i as TypeId;
+            }
+        }
+        let id = self.types.len() as TypeId;
+        self.types.push(ty);
+        id
+    }
+
+    pub fn kind(&self, id: TypeId) -> &TyKind {
+        &self.types[id as usize].kind
+    }
+    pub fn name(&self, id: TypeId) -> &str {
+        &self.types[id as usize].name
+    }
+    pub fn is_prim(&self, id: TypeId) -> Option<PrimTy> {
+        match self.kind(id) {
+            TyKind::Prim(p) => Some(*p),
+            _ => None,
+        }
+    }
+    /// True when slots of this type are cell handles (RFC 0016 §1).
+    pub fn is_ref(&self, id: TypeId) -> bool {
+        !matches!(
+            self.kind(id),
+            TyKind::Void | TyKind::Prim(_) | TyKind::Fn { .. }
+        )
+    }
+}

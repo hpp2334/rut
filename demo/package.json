@@ -5,16 +5,17 @@
   "description": "rut language playground — React + rspack + TypeScript; runs rut as wasm (RFC 0041 §3)",
   "scripts": {
     "dev": "rspack serve",
-    "build": "rspack build"
+    "build": "rspack build",
+    "build:wasm": "cargo build -p rut-wasm --target wasm32-unknown-unknown --release && node -e \"require('fs').copyFileSync('../target/wasm32-unknown-unknown/release/rut_wasm.wasm','public/rut.wasm')\""
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@rspack/cli": "^1.0.0",
-    "@rspack/core": "^1.0.0",
-    "@rspack/plugin-react": "^1.0.0",
+    "@rspack/cli": "^2.1.10",
+    "@rspack/core": "^2.1.10",
+    "@rspack/plugin-react-refresh": "^2.0.2",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "typescript": "^5.5.0"

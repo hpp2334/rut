@@ -9,18 +9,21 @@ run under an explicit fuel + heap budget (RFC 0040).
 ```
 cd demo
 npm install
-npm run dev        # http://localhost:8080
-npm run build      # -> dist/
+npm run build:wasm  # cargo build -p rut-wasm (wasm32) + copy to public/rut.wasm
+npm run dev         # http://localhost:8080
+npm run build       # -> dist/ (ships rut.wasm alongside the bundle)
 ```
 
 ## Modes
 
-- **wasm mode**: the page probes `GET /rut.wasm` at boot. When a rut
-  build is dropped in at `public/rut.wasm` it is fetched, instantiated,
-  and used for real `compile`/`run` calls (see `src/wasm/rut-api.d.ts`).
+- **wasm mode (live)**: the page probes `GET /rut.wasm` at boot —
+  `npm run build:wasm` drops the artifact at `public/rut.wasm`, and the
+  page runs real `compile`/`run` calls through the raw ABI of the
+  `rut-wasm` crate (see `src/wasm/rut-api.d.ts` and
+  `../crates/rut-wasm/src/lib.rs`).
 - **static-preview mode**: with no wasm artifact, prepared cases show
   their annotated expected output with a banner; AST/IR panes show a
-  placeholder. The page exercises the *spec* today.
+  placeholder.
 
 ## The wasm contract
 
