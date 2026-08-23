@@ -31,7 +31,7 @@ builtins (§3), the `is` type tests (RFC 0012 §3), `Opaque` recovery
    statically *and* the handle knows its `T` (fixes tur's erased
    `Source<T>`).
 3. **Type tests** — the `is` keyword (RFC 0012 §3), concrete and
-   interface RHS alike;
+   trait RHS alike;
    host fns declaring `dyn I` parameters get their arguments checked by
    the same machinery.
 4. **Heterogeneous collections** — vtable dispatch (RFC 0012) needs the exact type
@@ -92,7 +92,7 @@ rule, no exceptions:
 
 - Fields in declaration order, natural C alignment, struct size padded to
   its alignment. No hidden header, no tag, no vtable pointer inline.
-- `private`, `implements`, `dispose`, `static`, and generic parameters add
+- `private`, `static`, generic parameters, and out-of-body impl blocks add
   **nothing** to the block — layout depends only on the field list.
 - The block is what `own(x)` clones (RFC 0011 §1), what
   `size_of<T>()`/`align_of<T>()` report (§3), and
@@ -130,7 +130,7 @@ pub union Slot {
     pub c: char,
     pub r: Option<NonNull<Header>>,   // every non-primitive: value cells,
 }                                     // vecs/slices, strings, enums,
-                                      // interface fat-refs, Opaque boxes
+                                      // trait-object fat-refs, Opaque boxes
 ```
 
 Every non-primitive register holds a cell handle (RFC 0016 §1) —
@@ -163,35 +163,35 @@ struct RutCell {                     // heap object: EVERY user value
 struct VTable {
     ty: TypeId,                      // exact runtime type (points into RutType)
     dispose: Option<unsafe fn(*mut RutCell)>,  // cached Disposal.dispose trampoline
-    slots: [CodePtr],                // interface method slots, global ids
+    slots: [CodePtr],                // trait method slots, global ids
 }
 ```
 
-Interface method ids are assigned **globally per interface instantiation**
+Trait method ids are assigned **globally per trait instantiation**
 at compile time (`Slice<Point>` ≠ `Slice<string>`, RFC 0012 §2); a
 class's — or a dataclass's (RFC 0009) — vtable fills every slot of
-every interface instantiation it declares `implements` **or
-auto-implements** (std:reflect's protocols — RFC 0037; registry entries
+every trait instantiation it has an impl for — **user impl blocks,
+auto-fills** (std:reflect's protocols — RFC 0037; registry entries
 for the builtin generics likewise, RFC 0022 §2). Every value cell is
 minted at construction — the `Self { .. }` literal inside a class
   method (RFC 0010 §1) — with its vtable
 already attached; widening a composite to
-`dyn I` **reuses the same cell and vtable** — the interface ref is the
+`dyn I` **reuses the same cell and vtable** — the trait-object ref is the
 handle plus the vtable pointer, no allocation, no copy (RFC 0011 §3). A
-call through an
-interface is two loads and an
+call through a
+trait object is two loads and an
 indirect jump:
 
 ```rust
 // d.draw(g)  where d: dyn Drawable, draw has global slot 3
-Op::CallIface { recv, slot: 3, args } => {
+Op::CallTrait { recv, slot: 3, args } => {
     let obj = unsafe { regs[recv].r.unwrap().as_ref() as &RutCell };
     let f = unsafe { (*obj.vt).slots[3] };
     self.call_code(f, recv, args)?;    // `self` receiver arrives in recv
 }
 ```
 
-Direct inherent call for contrast (interface members NEVER devirtualize, RFC 0012 §1):
+Direct inherent call for contrast (trait members NEVER devirtualize, RFC 0012 §1):
 
 ```text
 Op::Call     { func: "Circle$area", recv, args }   ; c.area() — area INHERENT
@@ -202,25 +202,25 @@ Op::Call     { func: "Circle$area", recv, args }   ; c.area() — area INHERENT
 ```rust
 impl TypeTable {
     /// The `is` keyword (RFC 0012 §3) and host-boundary argument checks
-    /// (`want` is a TypeId: exact for concrete RHS, the interface
+    /// (`want` is a TypeId: exact for concrete RHS, the trait
     /// instantiation's for `x is I`). The exact type lives in the vtable;
-    /// the descriptor lists the implemented interfaces — a flat scan, no
+    /// the descriptor lists the trait impls — a flat scan, no
     /// inheritance chain to walk (RFC 0010 §3).
     fn is_a(&self, exact: TypeId, want: TypeId) -> bool {
         if exact == want { return true; }
-        self.desc(exact).implements.iter().any(|&i| i == want)
+        self.desc(exact).impls.iter().any(|&i| i == want)
     }
 }
 ```
 
 `is` with a concrete `T` monomorphizes with `want` as a compile-time
 constant, so the check is: load the object's vtable `TypeId`, compare —
-lowered `tidof` + `icmp` (RFC 0032 §1.1; the `Op::IsIface` op exists
-only for the interface-RHS capability probe — `tidof` → descriptor →
-implements scan — never for concrete tests; `downcast`'s check is
+lowered `tidof` + `icmp` (RFC 0032 §1.1; the `Op::IsTrait` op exists
+only for the trait-RHS capability probe — `tidof` → descriptor →
+impls scan — never for concrete tests; `downcast`'s check is
 `tidof` + `br` + guarded `unbox`, RFC 0014). The widening
 itself — a composite to `dyn I` — needs no dispatch
-machinery and no allocation: an interface value already *is* the object
+machinery and no allocation: a trait object already *is* the object
 ref whose header reaches the vtable; `Opaque.new(v)` is the only box mint
 in the language (RFC 0014).
 

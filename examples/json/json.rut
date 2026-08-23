@@ -3,7 +3,7 @@
 // spec is small (RFC 0001 "Why not JavaScript" #2).
 //
 // The ENGINE (RFC 0037 §3 rule 1): std:reflect's structural symbols
-// resolve only in modules declaring `implements ReflectEngine` —
+// resolve only in modules declaring `impl ReflectEngine for T` —
 // JsonEngine below is this module's capability. App code (app.rut)
 // calls stringify/deserialize with NO engine: the contract rides the
 // argument type / the bound.
@@ -29,9 +29,11 @@
 import { ReflectEngine, Reflectable, Deserializable, TypeInfo,
          TypeKind, LeafKind, SumVariant, reflect, type_of } from "std:reflect";
 
-export dataclass JsonEngine implements ReflectEngine { }
+export dataclass JsonEngine { }
 
-export interface Serializable requires Reflectable { }
+impl ReflectEngine for JsonEngine { }    // the capability — an empty impl
+
+export trait Serializable requires Reflectable { }
 
 // === the tree (the library's OWN data — walked as ordinary typed rut;
 // reflection touches only USER types) ===
@@ -65,7 +67,7 @@ fn jobj(fields: Vec<JField>, pos: i32): JsonValue {
 // === entries — BOTH consents are compile-time (RFC 0037 §4) ===
 
 export fn stringify(v: dyn Serializable): Result<string, string> {
-    // consumer: an interface-typed param — one copy, vtable dispatch.
+    // consumer: a trait-object-typed param — one copy, vtable dispatch.
     // v.reflect() is the vtable call; v descends to Opaque (the
     // lattice bottom, RFC 0014) at write_val's parameter.
     return write_val(v.reflect(), v);
@@ -73,7 +75,7 @@ export fn stringify(v: dyn Serializable): Result<string, string> {
 
 export fn deserialize<T>(v: string): Result<T, JsonError>
         where T requires Deserializable {
-    // producer: an interface-typed return does not exist, so the
+    // producer: a trait-object-typed return does not exist, so the
     // contract rides the call site — T is guaranteed descriptor-backed
     // (dataclass/enum/Option/Result/Vec/Array<T, N>) by the BOUND; no
     // runtime walkability pre-check exists to delete.
@@ -133,9 +135,9 @@ fn write_val(t: TypeInfo, a: Opaque): Result<string, string> {
             }),                                                 // rule 3
             LeafKind.Class -> {
                 // a nested MANUAL view (RFC 0037 §1): the descriptor
-                // implements() query is the gate; the view renders
+                // is_a() query is the gate; the view renders
                 // positionally (named walking is the dataclass path).
-                if (t.implements(reflect<Reflectable>())) {
+                if (t.is_a(reflect<Reflectable>())) {
                     let parts = Vec<string>();
                     for (let i = 0; i < t.arity(a); i += 1) {
                         let c = t.child(a, i).value;
@@ -145,7 +147,7 @@ fn write_val(t: TypeInfo, a: Opaque): Result<string, string> {
                 }
                 return Err(t.name());
             },
-            LeafKind.Iface -> Err(t.name()),   // interface values have no
+            LeafKind.Trait -> Err(t.name()),     // trait objects have no
         },                                     // recovery (RFC 0012 §3)
     }
 }

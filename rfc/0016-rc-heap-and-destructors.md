@@ -57,12 +57,12 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 ## 3. Deterministic destructors
 
 See **`examples/memory/temp-file.rut`**. A class may implement the
-prelude interface `Disposal` (`fn dispose(mut self): void`, RFC 0028);
-a Disposal class is just a class.
+prelude trait `Disposal` (`fn dispose(mut self): void`, RFC 0028) via
+`impl Disposal for T` — a Disposal class is just a class.
 Ordering guarantees:
 
 1. `Disposal.dispose(mut self)` runs first — dispatched through the
-   type's vtable like any interface call — with all fields still valid;
+   type's vtable like any trait-object call — with all fields still valid;
 2. fields are then released in declaration order (recursively);
 3. host opaques (RFC 0025) run their Rust `Drop` at the same point —
    releasing textures/sockets when the last handle goes away, not "sometime

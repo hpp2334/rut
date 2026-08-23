@@ -4,7 +4,7 @@
 - **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0009 (dataclasses), RFC 0010 (classes), RFC 0012
-  (interfaces — read §3 after)
+  (traits — read §3 after)
 - **Supersedes:** RFC 0002 §5.3 (pre-restructure)
 - **Part:** B — Language surface
 
@@ -40,12 +40,12 @@ rc 0) and **`examples/memory/temp-file.rut`**.
   0, `Disposal.dispose(mut self)` runs, then fields are released in
   order — deterministic destruction (RFC 0016 §3).
 
-## 3. Interfaces share, never copy
+## 3. Trait objects share, never copy
 
-- An interface value is a **fat ref** — the cell handle plus the impl
+- A trait object is a **fat ref** — the cell handle plus the impl
   vtable (RFC 0015 §6). Widening a composite to `dyn I` **attaches the
-  vtable and keeps the handle** — no allocation, no copy: the interface
-  ref aliases the same object, and mutations through it are visible to
+  vtable and keeps the handle** — no allocation, no copy: the
+  trait-object ref aliases the same object, and mutations through it are visible to
   every other handle. `Vec<Circle>`, `Vec<dyn Drawable>`, and
   `dyn Slice<T>` all store cell pointers (RFC 0016 §4).
 

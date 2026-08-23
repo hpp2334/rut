@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0012 (interfaces)
+- **Depends on:** RFC 0012 (traits)
 - **Supersedes:** RFC 0002 §9 (pre-restructure)
 - **Part:** B — Language surface
 
@@ -27,14 +27,14 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   The kind-specialization already covers **unsized `dyn` arguments**: a
   `T`-typed slot instantiated at any `dyn` type (`Vec<dyn Widget>`,
   `MyCow<dyn Slice<T>>`, RFC 0005) becomes a handle slot — `dyn` args are
-  ordinary interface-object arguments, satisfying no bound.
+  ordinary trait-object arguments, satisfying no bound.
 - **Const-generic parameters exist only on the builtin `Array<T, N>`** in
   v1 (RFC 0005); user generics stay type-only — `N` is a constant
   expression, part of the instantiation identity (`Array<i32, 3> ≠
   Array<i32, 4>`, RFC 0015 §3).
-- Generic parameters are **unconstrained by default** — no `T requires Iface`
+- Generic parameters are **unconstrained by default** — no `T requires Trait`
   bounds in the parameter list of user generics (OQ-1): you cannot call
-  interface methods on a bare `T`. Pass values in, or take a `dyn I`
+  trait methods on a bare `T`. Pass values in, or take a `dyn I`
   parameter instead of a generic. Two **admission-only** forms ship —
   both gate which instantiations compile (closing over `requires`),
   grant no method calls on bare type params, and add no IR:
@@ -52,7 +52,7 @@ block), and a generic `first<T>` monomorphized to two instantiations.
 
 ## Open questions
 
-- OQ-1: generic bounds `T requires Iface` with **static dispatch** on bare `T`
+- OQ-1: generic bounds `T requires Trait` with **static dispatch** on bare `T`
   (would unlock it without `dyn I` refs) — deferred; the
   admission-only forms (host/extern inline bounds, §2 +
   RFC 0025 §1; user-fn `where` clauses, RFC 0037 §3) need no dispatch

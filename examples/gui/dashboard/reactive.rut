@@ -19,12 +19,13 @@
 //                                   dispatch or source_push
 
 import { Logger } from "std:log";
+import { Disposal } from "std:core";
 
 // ------------------------------------------------------------------ atoms
 
 /** Anything with an identity in the store — State, Source, Derived.
  *  Passing a bare atom to watch() widens it to dyn Atom (RFC 0012 §2). */
-interface Atom {
+trait Atom {
     fn atom_id(self): u32;
 }
 
@@ -32,7 +33,7 @@ class Atoms {
     static next: u32 = 0;                 // module-static slot, bumped in fns
 }
 
-export class State<T> implements Atom {
+export class State<T> {
     private id: u32;
     private seed: Opaque;                // first read materializes it
 
@@ -41,15 +42,18 @@ export class State<T> implements Atom {
         return Self { id: Atoms.next, seed: Opaque.new(v) };
     }
 
-    fn atom_id(self): u32 { return self.id; }
     fn seed_value(self): Opaque { return self.seed; }
+}
+
+impl Atom for State<T> {
+    fn atom_id(self): u32 { return self.id; }
 }
 
 export fn state<T>(v: T): State<T> {
     return State(v);                      // type-call, T inferred
 }
 
-export class Source<T> implements Atom {
+export class Source<T> {
     private id: u32;
     private pull: fn(): T;                // seeds the entry; steady state is push
 
@@ -58,15 +62,18 @@ export class Source<T> implements Atom {
         return Self { id: Atoms.next, pull: f };
     }
 
-    fn atom_id(self): u32 { return self.id; }
     fn pull_fn(self): fn(): T { return self.pull; }
+}
+
+impl Atom for Source<T> {
+    fn atom_id(self): u32 { return self.id; }
 }
 
 export fn source<T>(f: fn(): T): Source<T> {
     return Source(f);
 }
 
-export class Derived<T> implements Atom {
+export class Derived<T> {
     private id: u32;
     private compute: fn(ReadCtx): T;
 
@@ -75,8 +82,11 @@ export class Derived<T> implements Atom {
         return Self { id: Atoms.next, compute: f };
     }
 
-    fn atom_id(self): u32 { return self.id; }
     fn compute_fn(self): fn(ReadCtx): T { return self.compute; }
+}
+
+impl Atom for Derived<T> {
+    fn atom_id(self): u32 { return self.id; }
 }
 
 export fn derive<T>(f: fn(ReadCtx): T): Derived<T> {
@@ -253,8 +263,10 @@ export class WatchHandle {
     fn new(store: Store, wid: u32): Self {
         return Self { store: store, wid: wid };
     }
+}
 
-    dispose(self): void {               // runs when the last handle drops
+impl Disposal for WatchHandle {   // runs when the last handle drops
+    fn dispose(mut self): void {
         let kept: Vec<Watch> = Vec();
         for (let i = 0; i < self.store.watches.len(); i += 1) {
             if (self.store.watches[i].wid != self.wid) {

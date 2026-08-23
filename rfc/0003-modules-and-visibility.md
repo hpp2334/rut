@@ -18,7 +18,7 @@ See **`examples/basic/module-structure.rut`** and
 ## 1. Module structure — declarations only
 
 - Allowed at module scope: `import`/`export`, `let`, `enum`, `dataclass`,
-  `interface`, `class`, `fn`. Anything else — calls, any
+  `trait`, `impl`, `class`, `fn`. Anything else — calls, any
   statement — is a compile error. (`host fn`/`host class` and
   `extern fn`/`extern class` — signature-only native/package surfaces —
   exist **only in declaration files** (`.d.rut`), never in `.rut`;
@@ -74,7 +74,8 @@ is the root module). Every module-scope declaration carries a visibility:
 - Unannotated = `export(self)`: safe-by-default privacy; nothing leaks
   unless it says `export`.
 - Applies to all module-scope declarations: `let`, `enum`, `dataclass`,
-  `interface`, `class`, `fn`, extern declarations included (on `class`, it
+  `trait`, `impl` (an impl exports with its target type), `class`, `fn`,
+  extern declarations included (on `class`, it
   means the *type name* is visible; class members use `private` as in
   RFC 0010).
 - The entry point must be plain `export fn main` — the host imports it from

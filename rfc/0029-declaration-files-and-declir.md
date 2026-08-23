@@ -54,12 +54,12 @@ only, and — beyond RFC 0003's module scope — every declaration must be
   (non-exported decls are known inside the file, nameable nowhere else);
 - `let` — with load-time expression initializers (RFC 0033 §3);
 - `enum` — a member list *is* the whole definition;
-- `interface` — method signatures (+ `requires`) *are* the whole
+- `trait` — method signatures (+ `requires`) *are* the whole
   definition (`std:collection`'s `Hashable` lives this way,
   RFC 0028);
 - `dataclass` — **fields only** (with load-time expression field initializers). The
   repr-C field block is an ABI (RFC 0015 §4), so a published value type is
-  sound. No method bodies, no `implements` in v1 (OQ-2);
+  sound. No method bodies, no impl blocks in v1 (OQ-2);
 - `host fn` / `host class` / `extern fn` / `extern class` — signatures
   only, with admission-only param bounds (RFC 0025).
 
@@ -171,7 +171,7 @@ silent drift impossible.
 - OQ-1: should `rutc decl` (surface generation) also emit doc comments
   into `.d.rut`, and is a generated-then-edited file re-checkable against
   the binary (surface drift lint)?
-- OQ-2: `dataclass` in `.d.rut` with `implements`/method bodies — the
+- OQ-2: `dataclass` in `.d.rut` with impl blocks/method bodies — the
   impl table would live in the `.rutc` while the field block ships in the
   surface; defer until a package actually needs it.
 - OQ-3: multi-module packages — one `.d.rut` per module, or a package-level

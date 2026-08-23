@@ -43,7 +43,7 @@ compiler gives it no meaning; greppability is enforced by style.
   `Weak<T>`,
   `Opaque`
   (the erased-storage host class, RFC 0014),
-  `Slice<T>` (builtin interface —
+  `Slice<T>` (builtin trait —
   object type `dyn Slice<T>`, RFC 0005),
   `Future<T>`, `Task<T>`, `Sender<T>`, `Receiver<T>`, `Point`, `Color`,
   `Drawable` (object type `dyn Drawable`, RFC 0012 §2).
@@ -94,13 +94,13 @@ compiler gives it no meaning; greppability is enforced by style.
   no `this` keyword. `Self` is a normal identifier
   bound to the enclosing class inside its body (RFC 0010 §1); `fn`,
   `let`, `mut`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
-  `enum`, `class`, `dataclass`, `interface`, `implements`,
+  `enum`, `class`, `dataclass`, `trait`, `impl`,
   `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
   `await`, `true`, `false`, `extern`, `where`
   (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
   (RFC 0012 §2), and `is` (the type-test operator, `expr is Type` —
   RFC 0012 §3) are keywords. `panic(msg: string)` and
-  `assert(cond, msg?)` are prelude builtins, not keywords (RFC 0034 §2). `dyn` prefixes any **interface path** — a
+  `assert(cond, msg?)` are prelude builtins, not keywords (RFC 0034 §2). `dyn` prefixes any **trait path** — a
   user `I` or the builtin `Slice<T>` — one rule, no syntax branch
   (RFC 0005, RFC 0012 §2).
 

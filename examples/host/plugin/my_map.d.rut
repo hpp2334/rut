@@ -26,7 +26,7 @@ export host class MyMap<K: Hashable, V> {
     fn size(self): i32;
     fn keys(self): Vec<K>;             // Vec<K>, NOT Vec<dyn Hashable>:
 }                                     // keys are unerased at the boundary
-                                      // (interface values cannot be
+                                      // (trait objects cannot be
                                       // downcast — RFC 0012 §3)
 // What compiling this file produces: a slot table
 //     new -> 0, set -> 1, get -> 2, size -> 3, keys -> 4

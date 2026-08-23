@@ -12,12 +12,14 @@ enum Mode { Idle, Running }
 
 dataclass Point { x: f32; y: f32 }
 
-interface Service { fn start(mut self): void; }
+trait Service { fn start(mut self): void; }
 
-class App implements Service {
+class App {
     private started: bool = false;
     // no class methods -> sealed: constructible only inside its own body
+}
 
+impl Service for App {
     fn start(mut self): void {
         self.started = true;
     }

@@ -26,7 +26,7 @@
 use std::collections::HashMap;
 
 use rut::{ClassTable, GenericArgs, NativeModule, Trap, TypeRegistry, VmCtx};
-use rut::value::{IfaceHandle, RutValue, RutVec};
+use rut::value::{TraitHandle, RutValue, RutVec};
 
 /// The container — **not generic**. A Rust generic would need V named at
 /// RUST compile time, but the builder below runs at RUT runtime, once
@@ -39,8 +39,8 @@ use rut::value::{IfaceHandle, RutValue, RutVec};
 ///     against the reified V.
 ///
 /// K needs no erasure: the declaration's `K: Hashable` bound means K
-/// crosses uniformly as `IfaceHandle` (RFC 0015 §6's fat ref) —
-/// `IfaceHandle: Hash + Eq` is implemented once by the rut crate,
+/// crosses uniformly as `TraitHandle` (RFC 0015 §6's fat ref) —
+/// `TraitHandle: Hash + Eq` is implemented once by the rut crate,
 /// dispatching into the key's own hash()/eq() through the vtable
 /// (user impls and dataclass-derived fills are rut code; builtin/voucher
 /// impls are native trampolines).
@@ -48,7 +48,7 @@ use rut::value::{IfaceHandle, RutValue, RutVec};
 /// fall out of which vtable the boundary attached; this HashMap never
 /// knows the difference.
 pub struct MyMap {
-    inner: HashMap<IfaceHandle, RutValue>,
+    inner: HashMap<TraitHandle, RutValue>,
 }
 
 impl MyMap {
@@ -73,12 +73,12 @@ fn build_my_map(args: &GenericArgs, _types: &TypeRegistry) -> Result<ClassTable,
         // slot 1. "set" is a BINDING-TIME label — resolved against the
         // declaration's slot table here, once, at startup. Dispatch is
         // by slot.
-        .method("set", |ctx, this: &mut MyMap, k: IfaceHandle, v: RutValue| {
+        .method("set", |ctx, this: &mut MyMap, k: TraitHandle, v: RutValue| {
             ctx.check_arg(&v, v_ty)?;             // value's TypeId == this
             this.inner.insert(k, v);              // instantiation's V (link
             Ok(())                                // already proved decl
         })                                        // match — this is the
-        .method("get", |ctx, this: &MyMap, k: IfaceHandle| {   // runtime
+        .method("get", |ctx, this: &MyMap, k: TraitHandle| {   // runtime
             Ok(this.inner.get(&k).cloned())       // mirror). v is
         })                                        // RC-retained for the
         .method("size", |ctx, this: &MyMap|       // map's lifetime
@@ -86,7 +86,7 @@ fn build_my_map(args: &GenericArgs, _types: &TypeRegistry) -> Result<ClassTable,
         // slot 4. RutVec<K> (rut Vec<K>), NOT Vec<dyn Hashable>: k_ty drives
         // the element
         // type and each key is UNERASED to its natural value (a `string`
-        // key yields Vec<string>) — rut cannot consume interface refs
+        // key yields Vec<string>) — rut cannot consume trait-object refs
         // here (no downcast, RFC 0012 §3). `get` needs no per-call V
         // check: values only enter via set, and the cell carries this
         // instantiation's TypeId.
@@ -124,5 +124,5 @@ pub fn my_map_module() -> NativeModule {
 //
 // Memory (RFC 0016 §3): the instance lives in a RutOpaque cell as a
 // boxed host value; at rc-0 its derived Drop drops the HashMap, which
-// drops each IfaceHandle and RutValue (RC-decs — a Canvas's Rust Drop
+// drops each TraitHandle and RutValue (RC-decs — a Canvas's Rust Drop
 // runs right then). Deterministic, no collector involvement.

@@ -14,8 +14,9 @@ applications (typically UI apps, e.g. tur). It replaces JS engines such as Boa
 with a language whose type system is *not* erased: types exist at runtime, drive
 bytecode specialization, and make the host boundary fully checked.
 
-Syntax feels like TypeScript (`interface`/`class` implementing interfaces,
-simple `enum`, arrow functions); the concurrency model feels like Kotlin
+Syntax feels like TypeScript (arrow functions, simple `enum`, and the
+`class`/`dataclass` shape) with Rust's trait surface (`trait` +
+`impl Trait for Type`, object types `dyn I`); the concurrency model feels like Kotlin
 coroutines implemented with Rust's poll-based future semantics; the runtime is
 a bytecode VM with **no JIT**.
 
@@ -71,7 +72,7 @@ a structural answer in rut:
    pillar (G7) is viable only because the language is statically typed:
    the bytecode is typed (G2), generics monomorphize, `Vec<f32>` is a
    flat `f32` buffer, and calls are direct by default — vtable dispatch
-   exists only where an interface is named (RFC 0012 §1). The code shape a
+   exists only where a trait is named (RFC 0012 §1). The code shape a
    JS JIT exists to speculate on — polymorphic property loads — does not
    exist in rut.
 4. **Too much memory.** JS values are boxes: per-object headers, tagged or
@@ -91,7 +92,7 @@ a structural answer in rut:
   (`Vec<T>`/`Array<T, N>`).
 - G3 — Primitive types: `u8/u16/u32/u64`, `i8/i16/i32/i64`, `f32/f64`, `bool`,
   `char`, plus `string`, `Vec<T>`/`Array<T, N>`, and user
-  `interface`/`dataclass`/`class`/`enum` — everything beyond the
+  `trait`/`dataclass`/`class`/`enum` — everything beyond the
   primitives is a shared refcounted cell (RFC 0016 §1).
 - G4 — Kotlin-style coroutine suspend built on Rust-style poll semantics
   (cold futures, state machines, cancellation-by-drop). Not promise push.
@@ -105,14 +106,14 @@ a structural answer in rut:
 ## Non-goals
 
 - No dynamic typing, no `any`, no gradual typing. Erasure is explicit and
-  spelled out: `dyn I` interface objects (RFC 0012) for polymorphism,
+  spelled out: `dyn I` trait objects (RFC 0012) for polymorphism,
   `Opaque` boxes via `Opaque.new(v)`/`downcast` (RFC 0014) for storage —
   checked, recoverable, never silent.
-- No structural ("duck") typing, no object literals — interfaces are
+- No structural ("duck") typing, no object literals — traits are
   nominal and declared (RFC 0012).
 - No pattern matching beyond `when` literals/enums (RFC 0008), no
   data-carrying enums (RFC 0006), no union or intersection types;
-  heterogeneous data goes through interfaces (RFC 0012).
+  heterogeneous data goes through traits (RFC 0012).
 - No JIT, no tiering, no runtime specialization beyond compile-time
   monomorphization and cheap VM-level caches.
 - No shared-memory threads in the language. Workers communicate by message
@@ -144,10 +145,10 @@ final sections of the RFC they implement).
 - 0006 — enums: simple named-int sets
 - 0007 — literals & inference: suffixes, conversions, plain/raw/format strings
 - 0008 — control flow & `when`: exhaustive pattern expressions
-- 0009 — dataclasses: open value records (methods + `implements`)
+- 0009 — dataclasses: open value records (methods + impl blocks)
 - 0010 — classes: sealed value records, class-method construction
 - 0011 — reference semantics, `own`, `Weak` & disposal
-- 0012 — interfaces & dispatch: the sole dynamic mechanism; `dyn I` object
+- 0012 — traits & dispatch: the sole dynamic mechanism; `dyn I` object
   types; type tests
 - 0013 — functions, closures & generics
 - 0014 — `Opaque`: explicit erasure with checked recovery
@@ -203,19 +204,19 @@ final sections of the RFC they implement).
 | P2 | Isolate workers with typed channels and transferable buffers | 0021 |
 | P3 | Reference counting; deterministic destructors; cycles leak by design (`Weak<T>`) | 0016–0017 |
 | P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0005, 0034 |
-| P5 | TS-like data model: `dataclass`/`class` (both **shared refcounted cells** — reference semantics by default, `own(x)` for eager copies; classes construct through their own class methods — `Rect.new(..)`, no `constructor` keyword, no `new` expression, `suspend` class methods allowed), `interface` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0009–0012, 0016 |
+| P5 | TS-like data model: `dataclass`/`class` (both **shared refcounted cells** — reference semantics by default, `own(x)` for eager copies; classes construct through their own class methods — `Rect.new(..)`, no `constructor` keyword, no `new` expression, `suspend` class methods allowed), `trait` + `impl Trait for Type` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented for class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0009–0012, 0016 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
 | P8 | Both user types (`dataclass` **and** `class`) have **repr C** payloads inside their cells; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015, 0024 |
 
 ### Why "no dynamic typing" is workable
 
-Without `any`, JSON-shaped data becomes a small class set behind an
-interface (`interface JsonValue` implemented by `JString`/`JNum`/`JArr`/…,
+Without `any`, JSON-shaped data becomes a small class set behind a
+trait (`trait JsonValue` implemented by `JString`/`JNum`/`JArr`/…,
 held as `dyn JsonValue` refs),
 heterogeneous collections are `Vec<dyn I>` vecs, and host APIs that were
 `any`-shaped in JS become generics or opaque `host class` handles. The one
-dynamic mechanism kept is **interface dispatch** — a checked vtable call on a
+dynamic mechanism kept is **trait dispatch** — a checked vtable call on a
 value whose exact class is still known at runtime. What we keep from "types
 held at runtime" (G1) is what the *VM and the host* need: every value's type
 identity is available for checked type tests (`is` in script, argument
@@ -241,7 +242,7 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
 - **No JIT**: all optimization happens at compile time. The VM may keep cheap
   inline caches for field access on host opaques, but nothing is ever compiled
   to machine code.
-  - **Interface members never devirtualize** (RFC 0012 §1): a method declared in an interface dispatches through the vtable even when the receiver's exact class is statically known; inherent methods stay direct.
+  - **Trait members never devirtualize** (RFC 0012 §1): a method declared in a trait dispatches through the vtable even when the receiver's exact class is statically known; inherent methods stay direct.
 - **Single-threaded VM**: a `Vm` instance runs on one thread; workers are
   separate `Vm`s (RFC 0021). No atomics inside the heap.
 - **Host stepping**: the host owns time. `vm.run_until_idle()`,

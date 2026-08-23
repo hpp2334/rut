@@ -59,10 +59,10 @@ density, `Self { .. }` literal completeness inside class methods
 (every uninitialized field
 covered — RFC 0010 §1), suspend state tables closed under resume edges,
 native-slot signatures vs the DeclIrs the module compiled against
-(RFC 0029 — including generic-instantiation admission: the `implements`
+(RFC 0029 — including generic-instantiation admission: the impl
 scan closing over `requires`, so a bad `MyMap<Canvas, ..>` is a load
-error), `callnat` slots present in the native table, `IsIface` `want`
-operands present in the type table and interface-kinded
+error), `callnat` slots present in the native table, `IsTrait` `want`
+operands present in the type table and trait-kinded
 (RFC 0032 §1.1), and `unbox` type
 operands concrete and — by convention — guarded by a preceding
 `tidof`+`icmp` branch (an unguarded `unbox` verifies but traps on

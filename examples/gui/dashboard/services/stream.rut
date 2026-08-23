@@ -5,6 +5,7 @@
 
 import { Channel, Receiver, Sender } from "std:channel";
 import { now_ms, sleep } from "std:time";
+import { Disposal } from "std:core";
 import { EventKind, LiveEvent } from "../models.rut";
 import { clamp_f32, lcg_next } from "./api.rut";
 
@@ -18,9 +19,11 @@ export class EventStream {
     }
 
     fn feed(self): Receiver<LiveEvent> { return self.feed; }
+}
 
-    dispose(self): void {              // runs when the last handle drops
-        self.task.cancel();            // producer dies at its next await
+impl Disposal for EventStream {  // runs when the last handle drops
+    fn dispose(mut self): void {
+        self.task.cancel();      // producer dies at its next await
     }
 }
 

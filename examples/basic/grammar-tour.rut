@@ -1,5 +1,6 @@
-// RFC 0009–0012 — grammar tour: dataclass, interface, class + class-method
-// shared cells + `own`, vtable dispatch, exhaustive when, format literals.
+// RFC 0009–0012 — grammar tour: dataclass, trait, class + class-method,
+// impl blocks, shared cells + `own`, vtable dispatch, exhaustive when,
+// format literals.
 //
 // NOTE: rut has no compiler yet — these files are the design corpus the
 // RFCs reference; they define the target syntax.
@@ -10,20 +11,20 @@ import { Logger } from "std:log";
 enum Color { Red, Green, Blue }
 
 dataclass Point {                          // shared cell: assignment aliases
-    x: f32;                                // all fields public; methods and
-    y: f32;                                // implements are allowed too
-}                                          // (RFC 0009) — here: data only
+    x: f32;                                // all fields public; methods are
+    y: f32;                                // allowed too (RFC 0009) — plus
+}                                          // impl blocks outside — here: data only
 
 fn length(p: Point): f64 {
     return math.sqrt(f64(p.x * p.x + p.y * p.y));
 }
 
-interface Drawable {
-    fn draw(self, g: Canvas): void;             // interfaces declare METHODS only
+trait Drawable {
+    fn draw(self, g: Canvas): void;             // traits declare METHODS only
 }
 
-class Circle implements Drawable {         // a shared cell like everything
-    private center: Point;                 // composite field: cell-handle slot
+class Circle {                               // a shared cell like everything
+    private center: Point;                   // composite field: cell-handle slot
     private r: f32;
 
     fn new(x: f32, y: f32, r: f32): Self {   // class method: Circle.new(1, 2, 3)
@@ -35,11 +36,13 @@ class Circle implements Drawable {         // a shared cell like everything
         self.center.y += dy;
     }
 
-    fn draw(self, g: Canvas): void {
+    fn area(self): f32 { return self.r * self.r * 3.14159265f32; }
+}
+
+impl Drawable for Circle {                   // trait methods live in impl blocks
+    fn draw(self, g: Canvas): void {         // -> vtable dispatch (RFC 0012 §1)
         g.circle(self.center.x, self.center.y, self.r);
     }
-
-    fn area(self): f32 { return self.r * self.r * 3.14159265f32; }
 }
 
 fn blit_all(g: Canvas, items: Vec<dyn Drawable>): void {

@@ -44,7 +44,7 @@ struct Frame {
 The loop is a `match` over decoded ops (`decode` is a table index, not a
 byte scan). Calls push frames; `ret` pops; ref discipline is emitted by the
 compiler and asserted in debug builds (RFC 0016 §3). Direct calls are an
-index + jump; interface calls are two loads + indirect jump (RFC 0015 §6);
+index + jump; trait-object calls are two loads + indirect jump (RFC 0015 §6);
 native calls cross `Value` (RFC 0023). Every `callnat` additionally pushes
 a one-word `Native { module, slot }` **marker frame** so traces can show
 the host boundary (`at plugin:my_map.MyMap.set (host)`) — RFC 0036 §2.

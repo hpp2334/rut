@@ -3,7 +3,7 @@
 // assignment/passing ALIASE — mutation is visible through every handle.
 // own(x) is the eager shallow copy (fresh cell, handle fields shared).
 // Weak(x) demotes a handle to a non-keeping ref (RFC 0017). Classes
-// implementing `Disposal` run dispose at rc 0 — no wrapping needed.
+// with `impl Disposal for T` run dispose at rc 0 — no wrapping needed.
 
 import { Logger } from "std:log";
 
@@ -18,7 +18,7 @@ class Circle {
     fn radius(self): f32 { return self.r; }
 }
 
-class TempFile implements Disposal {
+class TempFile {
     private path: string;
 
     fn new(path: string): Self {      // plain Self — the handle IS ownership
@@ -26,8 +26,10 @@ class TempFile implements Disposal {
     }
 
     fn write(self, data: Vec<u8>): void { /* ... */ }
+}
 
-    fn dispose(mut self): void {      // Disposal impl — runs once, at rc 0
+impl Disposal for TempFile {       // Disposal impl — runs once, at rc 0
+    fn dispose(mut self): void {
         fs.remove(self.path);
     }
 }

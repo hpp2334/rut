@@ -25,8 +25,8 @@ deferred.
 | heap: text | `string` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4) |
 | heap: seq | `Vec<T>` | mutable, growable buffer — cell handle, **shared**; flat storage for primitive `T` (RFC 0016 §4) |
 | heap: seq | `Array<T, N>` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |
-| heap: slice | `Slice<T>` | builtin interface — object type `dyn Slice<T>` only (RFC 0005, RFC 0012 §2) |
-| user: value | `dataclass D { .. }` | open record — **cell handle, shared** (reference semantics; `own` for copies), methods & interface impls allowed (RFC 0009); payload **repr C** (RFC 0015 §4) |
+| heap: slice | `Slice<T>` | builtin trait — object type `dyn Slice<T>` only (RFC 0005, RFC 0012 §2) |
+| user: value | `dataclass D { .. }` | open record — **cell handle, shared** (reference semantics; `own` for copies), methods & impl blocks allowed (RFC 0009); payload **repr C** (RFC 0015 §4) |
 | user: value | `class C { .. }` | sealed record — also a cell handle, shared (RFC 0010), payload **repr C** (RFC 0015 §4) |
 
 - `Vec<f32>` is a flat `f32` buffer behind a header — no per-element boxing,

@@ -4,7 +4,7 @@
 - **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0004 (sharing regime), RFC 0005 (builtin generics),
-  RFC 0012 (interfaces — read §2 after)
+  RFC 0012 (traits — read §2 after)
 - **Supersedes:** RFC 0002 §5.1 (pre-restructure)
 - **Part:** B — Language surface
 
@@ -12,8 +12,8 @@
 
 See **`examples/basic/dataclasses.rut`** — literal construction everywhere,
 shared cells + `own` divergence, field initializers, free functions over
-data — and **`examples/basic/interfaces.rut`** for dataclass `implements`
-in action.
+data — and **`examples/basic/traits.rut`** for dataclass impl
+blocks in action.
 
 - **Reference semantics, like everything non-primitive** (RFC 0004 §2,
   RFC 0016 §1): a dataclass value is a heap cell handle; assignment,
@@ -30,39 +30,43 @@ in action.
 - Dataclass literals must initialize **every** field (any order, by name);
   fields may declare initializers (`x: f32 = 0`), which the literal may then
   omit.
-- **Methods and `implements` are allowed** — a dataclass is data
-  *plus* behavior. Its body may contain fns: inherent methods and interface
-  impls, declared and dispatched exactly like class methods (explicit
-  `self` receiver included — RFC 0010 §2):
+- **Methods and impl blocks are allowed** — a dataclass is data
+  *plus* behavior. Its body may contain fns: inherent methods,
+  declared and dispatched exactly like class methods (explicit
+  `self` receiver included — RFC 0010 §2); trait members live in
+  separate impl blocks (RFC 0012 §2):
 
   ```rut
-  dataclass Point implements Hashable {
+  dataclass Point {
       x: f32;
       y: f32;
+  }
+
+  impl Hashable for Point {
       fn hash(self): u64 { .. }
       fn eq(self, other: Point): bool { .. }
   }
   ```
 
-  `hash`/`eq` are interface-declared members — calls dispatch through
+  `hash`/`eq` are trait-declared members — calls dispatch through
   the vtable per RFC 0012 §1. The limits on a dataclass, exhaustively:
   **no `private` fields** (above), **no `static` members**, **no
   class methods** (the literal is the only construction — open literal
   vs class-method-gated *is* the dataclass/class distinction), and **no
-  `dispose()`** (a value
+  `Disposal` impl** (a value
   shared everywhere has no single death to hook; if you need a
   destructor, write a class — RFC 0010 §3, RFC 0011 §2). Everything else
   class-shaped is allowed. Free functions over data remain the default
-  idiom; methods are for interface impls and tight helpers.
+  idiom; methods are for tight helpers, impl blocks for trait contracts.
 - **Equality is identity, comparison is `Hashable`.** `==` on two
   dataclass values is a cell-identity test (RFC 0012 §4) — `own(p) == p`
   is false, two literals are never equal. Field-wise comparison is the
   `eq` method of an opted-in `Hashable` impl (RFC 0028) — the mechanism
   `Map`/`Set` keys use.
-- **Interface refs share, never box.** A dataclass value is already a
+- **Trait-object refs share, never box.** A dataclass value is already a
   cell; widening to `dyn I` **attaches the impl vtable to the same
   handle** (RFC 0011 §3, RFC 0015 §6) — no allocation, no copy: the
-  interface ref aliases the value. Layout never changes: methods and
+  trait-object ref aliases the value. Layout never changes: methods and
   impl tables add **nothing** to `size_of(D)`.
 - **Representation: payload repr C inside the cell** (RFC 0016 §5). A
   dataclass payload is its fields back-to-back — primitive fields inline,

@@ -36,7 +36,7 @@ rut/
 │   │   ├── grammar-tour.rut       #   0009–0012 tour
 │   │   ├── dataclasses.rut        #   0009  aliasing + own
 │   │   ├── classes.rut            #   0010  class-method construction, static fields
-│   │   ├── interfaces.rut         #   0012  dyn, requires, is
+│   │   ├── traits.rut             #   0012  dyn, impl, requires, is
 │   │   ├── closures-generics.rut  #   0013
 │   │   ├── when.rut               #   0008
 │   │   ├── option-result.rut      #   0005  + `?` (0034 §2)

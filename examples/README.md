@@ -10,7 +10,7 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 
 | File | Demonstrates | RFC |
 |---|---|---|
-| `basic/grammar-tour.rut` | dataclass, interface, class + class-method construction, shared cells + `own`, vtable dispatch, exhaustive `when`, `f""` | 0009–0012, 0016 |
+| `basic/grammar-tour.rut` | dataclass, trait, class + class-method construction, impl blocks, shared cells + `own`, vtable dispatch, exhaustive `when`, `f""` | 0009–0012, 0016 |
 | `basic/module-structure.rut` | declarations-only modules, load-time expressions, no load-time code | 0003 §1 |
 | `basic/module-visibility.rut` | `export` / `export(mod)` / `export(super)` / `export(self)` | 0003 §2 |
 | `basic/when.rut` | `when` pattern expressions, exhaustiveness | 0008 |
@@ -20,8 +20,8 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `basic/dataclasses.rut` | reference semantics (aliasing by default), `own` divergence, field initializers, free functions, identity `==` | 0009, 0011, 0016 |
 | `basic/classes.rut` | class-method construction (`new`/`from`/`parse`), `Self {}` literal, `Option<Self>` try-construction, private + sealing, static fields, explicit `self` receivers | 0010 |
 | `basic/rc-and-dispose.rut` | aliasing + `own(x)`, `Disposal.dispose` at rc 0 | 0011, 0016 |
-| `basic/interfaces.rut` | methods-only interfaces, `dyn I` object types, `requires`, dataclass implementors (hand `hash`/`eq`), `is` capability probe, composition over intersections | 0009, 0012 |
-| `basic/type-tests.rut` | the `is` keyword: exact-class tests + interface capability probes; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
+| `basic/traits.rut` | methods-only traits, `impl Trait for Type` blocks, `dyn I` object types, `requires`, dataclass implementors (hand `hash`/`eq`), `is` capability probe, composition over intersections | 0009, 0012 |
+| `basic/type-tests.rut` | the `is` keyword: exact-class tests + trait capability probes; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
 | `basic/closures-generics.rut` | arrows, monomorphized generics | 0013 |
 | `basic/opaque.rut` | `Opaque.new(v)` / `downcast<T>` / `is` erasure & recovery; zero-copy boxes, identity | 0014 |
 | `basic/layout.rut` | repr C layouts, `type_id<T>()` / `size_of<T>()` / `align_of<T>()`, `Opaque` layout accessors | 0015 |
@@ -42,12 +42,12 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0021 |
 | `host/interop.rut` | host classes via declaration files, repr C struct passing, buffer borrows, `Template` for l10n | 0022–0028 |
 | `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `export host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
-| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`IfaceHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Vec` returns | 0026 |
+| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`TraitHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Vec` returns | 0026 |
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
 
 | `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
-| `json/app.rut` | opt-in dataclasses (zero-method `implements Serializable`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |
+| `json/app.rut` | opt-in dataclasses (zero-method `impl Serializable for T {}`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |
 
 ### gui/dashboard — a multi-file project
 

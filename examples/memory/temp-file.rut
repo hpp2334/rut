@@ -6,7 +6,7 @@ import { remove } from "std:fs";
 import { Logger } from "std:log";
 import { Disposal } from "std:core";
 
-class TempFile implements Disposal {
+class TempFile {
     private path: string;
 
     fn new(path: string): Self {   // the handle IS the ownership —
@@ -14,8 +14,10 @@ class TempFile implements Disposal {
     }
 
     fn write(self, data: Vec<u8>): void { /* ... */ }
+}
 
-    fn dispose(mut self): void {      // Disposal impl — runs once, at rc 0
+impl Disposal for TempFile {   // Disposal impl — runs once, at rc 0
+    fn dispose(mut self): void {
         remove(self.path);
     }
 }

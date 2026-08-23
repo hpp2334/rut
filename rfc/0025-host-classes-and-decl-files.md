@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0022 (embedding), RFC 0012 (interfaces), RFC 0010
+- **Depends on:** RFC 0022 (embedding), RFC 0012 (traits), RFC 0010
   (class methods & construction), RFC 0016 §3 (Drop mapping), RFC 0029 (declaration files)
 - **Supersedes:** RFC 0005 §5 (pre-restructure; `extern class` renamed to
   `host class` — "host" names where the implementation lives)
@@ -59,7 +59,7 @@ host class Fence {                              // NOT exported: known inside
   class methods and instance methods.
 - **Param bounds on host/extern decls are admission-only syntax**: `K:
   Hashable` constrains which instantiations compile (checked against
-  the interface + its `requires` graph, RFC 0012 §2) and grants nothing
+  the trait + its `requires` graph, RFC 0012 §2) and grants nothing
   else — no method calls on bare `K`, no static dispatch. User
   generics keep no bounds (RFC 0013 OQ-1 untouched); a bound would be
   pure forwarding anyway (RFC 0026).

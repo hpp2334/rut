@@ -1,8 +1,8 @@
 // RFC 0009 — dataclasses: open data records.
 // Shared cells like every non-primitive (RFC 0016 §1): assignment
 // ALIASES — mutation is visible through every handle; `own(x)` is the
-// eager copy (RFC 0011 §1). All fields public. Methods and `implements`
-// ARE allowed (see interfaces.rut for impls); here the idiom stays
+// eager copy (RFC 0011 §1). All fields public. Methods and impl
+// blocks ARE allowed (see traits.rut for impls); here the idiom stays
 // data + free functions. Constructed ONLY by literal, everywhere
 // (module-level let initializers included).
 
@@ -49,7 +49,7 @@ fn dataclasses(): void {
 
     // `==` on composites is IDENTITY (RFC 0012 §4): two literals are
     // never equal, own(x) == x is always false. Field-wise comparison
-    // is Hashable.eq (interfaces.rut), not ==.
+    // is Hashable.eq (traits.rut), not ==.
     let same_cell = q == p;             // true — same handle
     let fresh = Point { x: 4, y: 2 } == p;   // false — different cells
 

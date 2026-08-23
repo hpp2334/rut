@@ -22,9 +22,9 @@ pub enum Value<'v> {
     Str(StrRef<'v>),                       // immutable, may point into heap
     Vec(Borrow<'v, RutVec>),               // typed elem, zero-copy
     Struct(StructRef<'v>),                 // repr C payload block — RFC 0024
-    Cell(Handle), Iface(Handle), Opaque(Handle), Host(Handle),
+    Cell(Handle), Trait(Handle), Opaque(Handle), Host(Handle),
                                           // user value cells / enums,
-                                          // fat interface refs (RFC 0015 §6),
+                                          // fat trait-object refs (RFC 0015 §6),
                                           // Opaque boxes (RFC 0014), host
     Opt(Option<Box<Value<'v>>>), Res(Result<Box<Value<'v>>, Box<Value<'v>>>),
     Template(Tmpl<'v>),                    // RFC 0027

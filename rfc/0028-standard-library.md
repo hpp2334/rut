@@ -18,13 +18,13 @@ The standard library splits in two:
   for anything that touches the host. The split keeps policy (levels,
   formatting, wrappers) in auditable rut code and mechanism (syscalls,
   sinks) in Rust. **`std:core`** is the prelude surface: the builtin
-  interfaces that are ordinary nominal impls — `Disposal`
+  traits that are ordinary nominal impls — `Disposal`
   (`fn dispose(mut self): void`, RFC 0011/0016) — plus the prelude
   builtins `own(x)` (the eager copy, RFC 0011 §1), `downcast<T>`
   (RFC 0014), and `assert`/`panic` (RFC 0034 §2); `==` needs no
-  interface at all (builtin, RFC 0012 §4). **`std:collection` is a
+  trait at all (builtin, RFC 0012 §4). **`std:collection` is a
   declaration file + Rust bodies**
-  (RFC 0025, RFC 0026): its `.d.rut` declares the interface
+  (RFC 0025, RFC 0026): its `.d.rut` declares the trait
   `Hashable { fn hash(self): u64; fn eq(self, other: Self): bool }`
   — hashing and key comparison are one contract — and
   the containers

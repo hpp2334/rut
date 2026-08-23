@@ -20,14 +20,14 @@ static fields.
   non-primitive (RFC 0004 §2, RFC 0016 §1): assignment shares, mutation
   is visible through aliases, `own(c)` is the eager copy (RFC 0011 §1).
   What a class *adds* over a dataclass is **sealing**: private fields,
-  class-method-gated construction, `static` fields, and `dispose()`
+  class-method-gated construction, `static` fields, and `impl Disposal`
   (RFC 0011). Reflection:
-  a class is walkable **iff** it implements `std:reflect.Reflectable`
+  a class is walkable **iff** it has `impl std:reflect.Reflectable for C`
   (or a contract layer requiring it — RFC 0037) — default opaque, a
   *default* not a law; and it can never implement `Deserializable` —
   construction is the class's own job, reflective mint is
-  descriptor-backed only. (`implements`
-  is allowed on dataclasses as well — RFC 0009.) A dataclass auto-implements
+  descriptor-backed only. (Impl blocks
+  are allowed for dataclasses as well — RFC 0009.) A dataclass auto-implements
   `std:reflect`'s `Reflectable` + `Deserializable` (RFC 0037) — that,
   not the keyword, is why it reflects and round-trips; classes stay
   opt-in by hand. `==` on class values is cell identity for both
@@ -86,9 +86,9 @@ static fields.
   explicitness rule as `dyn` (RFC 0012 §2). Class methods never take
   `self` (there is no receiver yet — or ever, for pure utilities);
   `Disposal.dispose` does (`dispose(mut self)`,
-  RFC 0011 §2). Interface methods and host/extern class methods follow
-  the identical rule (RFC 0012 §2, RFC 0025 §2). Interface declarations
-  may not contain class methods — interface members are instance
+  RFC 0011 §2). Trait methods and host/extern class methods follow
+  the identical rule (RFC 0012 §2, RFC 0025 §2). Trait declarations
+  may not contain class methods — trait members are instance
   methods with `self` (RFC 0012 §2).
 - `static` **fields** live in the class's module-static slot table. Static
   initializers must be load-time expressions (RFC 0003 §1) and are materialized
@@ -106,7 +106,7 @@ static fields.
   calls, no `protected`.
 - Classes are standalone types. Code sharing is composition (hold a helper
   object or dataclass in a field) or free functions; subtyping is only
-  class→interface via `implements` (RFC 0012).
+  class→trait object via `dyn` widening (RFC 0012).
 - Layout stays trivial: fields at fixed offsets — identical inside every
   cell payload (primitive fields inline, composite fields as handle
   slots), no prefix layout, no fat pointers, and every object has

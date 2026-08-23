@@ -34,12 +34,12 @@ type-calls only for classes/builtins, RFC 0009/0010), and surface
 declarations (`host`/`extern`) resolved against their DeclIrs with
 slot ids attached to every member reference. `is`-expressions resolve
 here: the RHS naming position yields either a concrete `TypeId` or an
-interface-instantiation `TypeId` (RFC 0012 §3), with `is Any`
+trait-instantiation `TypeId` (RFC 0012 §3), with `is Any`
 rejected as vacuous (RFC 0014). The resolver also enforces
 **engine admission** (RFC 0037 §3): `std:reflect`'s structural symbols
 (`reflect<T>`, `type_of`, `TypeInfo`, `FieldInfo`, `SumVariant`)
-resolve only in modules declaring ≥1 `implements ReflectEngine` — the
-diagnostic names the interface and the fix.
+resolve only in modules declaring ≥1 `impl ReflectEngine for T` — the
+diagnostic names the trait and the fix.
 
 ## 2. Typecheck
 
@@ -99,7 +99,7 @@ Every `dyn` type is **unsized** — `dyn I` and `dyn Slice<T>` alike: the
 payload lives in a heap cell and a `dyn`-typed slot stores the cell
 handle. There is no `dyn`-specific sizedness error; every type position
 admits every `dyn` type (RFC 0012 §2). The slice tier has its own boxing
-edge, parallel to interface widening:
+edge, parallel to trait-object widening:
 
 ```
 Array<T, N> | Vec<T> (concrete)   >  dyn Slice<T> (unsized object)
@@ -109,12 +109,12 @@ Array<T, N> | Vec<T> (concrete)   >  dyn Slice<T> (unsized object)
 (*"array length must be a constant expression"* otherwise — RFC 0005);
 slices are never boxed or erased (`Opaque.new(v)` rejects them, RFC 0014).
 Fixed arrays and slices
-satisfy no interface bound — the same family as `Vec`/`Option`/`Result`
+satisfy no trait bound — the same family as `Vec`/`Option`/`Result`
 (RFC 0026 §4).
 
 Rules that bound the cost of the two lattice-lowering features:
 
-1. **Interface values** (`dyn I`, RFC 0012): one indirect call per use;
+1. **Trait objects** (`dyn I`, RFC 0012): one indirect call per use;
    fields inaccessible; callee unknown (no inlining without evidence). Cost is
    per-call, never per-field — the vtable makes it a single load+jump.
 2. **`Opaque` + `downcast`** (RFC 0014): erasure is a hole in the

@@ -46,8 +46,8 @@ Two more builtins are type syntax only (no call form, no members):
 RFC 0032 §1.1 R1); OOB traps. Widens to
   `dyn Slice<T>` by minting a **view cell over the array's own cell**
   — sharing, never a copy (RFC 0011 §3, RFC 0016 §4).
-- **`Slice<T>` — the slice interface**: builtin and undeclarable
-  (user `implements Slice<T>` in source is a compile
+- **`Slice<T>` — the slice trait**: builtin and undeclarable
+  (user `impl Slice<T> for ..` in source is a compile
   error). It is implemented by exactly two builtins — `Vec<T>` and
   `Array<T, N>` — via the builtin-impl registry (RFC 0022 §2), so either
   widens to `dyn Slice<T>` by implicit view-cell minting at the
@@ -79,7 +79,7 @@ deliberately absent from it: containers are **library types**, provided by
 `examples/host/my_map.rs` (implementation).
 
 `==` on `Option<T>` / `Result<T, E>` is a **compile error**: there is no
-element-wise equality in v1 (no `Equal` interface — RFC 0012 §4; `==`
+element-wise equality in v1 (no `Equal` trait — RFC 0012 §4; `==`
 compares primitives by value and everything else by cell identity, which
 is almost never what an Option comparison wants). Compare structurally:
 `when`, `.is_some()` / `.is_ok()`, or the payload (`.value == d`).

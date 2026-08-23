@@ -48,8 +48,8 @@ fn boxed_layout(): void {
     log.info(f"box2 size: {box2.size()}");                     // 8
     log.info(f"box1 bytes: {box1.as_bytes().len()}");          // 8-byte payload snapshot
 
-    // Payload snapshots are Vec<u8> — NOT ==-comparable (Vec implements
-    // nothing; RFC 0012 §4). Identity of boxes is cell identity:
+    // Payload snapshots are Vec<u8> — NOT ==-comparable (no impl exists
+    // for `==`; RFC 0012 §4). Identity of boxes is cell identity:
     let fresh = Opaque.new(Point { x: 1, y: 2 });
     log.info(f"boxes distinct: {box1 == fresh}");              // false
     log.info(f"same type: {box1.type_id() == fresh.type_id()}"); // true — group by tid

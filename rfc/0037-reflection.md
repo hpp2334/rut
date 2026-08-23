@@ -13,12 +13,12 @@
 
 ## Summary
 
-Reflection is an **interface**, not a keyword privilege. `Reflectable`
+Reflection is a **trait**, not a keyword privilege. `Reflectable`
 is the mechanism protocol; auto-implementations (dataclass, enum) and
 builtin-impl registry entries (`Option`/`Result`/`Vec`/`Array<T, N>`)
 fill it for the data world; classes opt in by hand with a **curated**
-view. Libraries layer contracts on top (`interface Serializable
-requires Reflectable {}`) and take **interface-typed consumers**
+view. Libraries layer contracts on top (`trait Serializable
+requires Reflectable {}`) and take **trait-object-typed consumers**
 (`stringify(v: dyn Serializable)`) or **bounded producers**
 (`deserialize<T>(..) where T requires Deserializable`). Nothing in the
 language names a builtin; no strings are matched; nothing changes
@@ -31,17 +31,17 @@ conformance debt; rut's reflection suffices, so it doesn't).
 
 ```rut
 // std/reflect.d.rut
-export interface Reflectable {            // the mechanism protocol
+export trait Reflectable {                // the mechanism protocol
     fn reflect(self): TypeInfo;           // exact descriptor handle
     fn arity(self): i32;                  // children of THIS value
     fn child(self, i: i32): Option<Opaque>;  // i-th child, boxed
 }
-export interface Deserializable requires Reflectable { }
+export trait Deserializable requires Reflectable { }
 ```
 
 | type | `Reflectable` | `Deserializable` | stringify | deserialize |
 |---|---|---|---|---|
-| `dataclass` | compiler auto-impl | auto | needs opt-in (`implements Serializable`) | ✓ |
+| `dataclass` | compiler auto-impl | auto | needs opt-in (`impl Serializable for T {}`) | ✓ |
 | user `enum` | compiler auto-impl | auto | opt-in | ✓ |
 | `Option`/`Result`/`Vec`/`Array<T,N>` | builtin-impl registry, every instantiation | registry | as *fields* only | ✓ (Array<T, N> mint OQ-15 — v1 Vec) |
 | `class`, no impl | — | — | compile error at call | compile error at call |
@@ -50,14 +50,14 @@ export interface Deserializable requires Reflectable { }
 - **Auto-impls** are ordinary vtable fills (RFC 0015 §6): dataclass —
   arity = field count, child(i) = field i (boxed cell handle — shared,
   §2); enum — arity =
-  the current variant's payloads. The `implements` list gains the
+  the current variant's payloads. The descriptor's impl list gains the
   entry implicitly; re-declaring one is a duplicate-impl error, and
   auto-impls satisfy `requires` edges of contract layers written on
-  top (`dataclass User implements Serializable {}` costs zero methods).
+  top (`impl Serializable for User {}` costs zero methods).
 - **Registry impls** follow the `string: Hashable` pattern (RFC 0022
   §2, RFC 0028) for the builtin generics, all instantiations.
-- **`Deserializable` is auto-only**: hand-writing `implements
-  Deserializable` is a compile error (the `Any` admission precedent,
+- **`Deserializable` is auto-only**: hand-writing `impl
+  Deserializable for T` is a compile error (the `Any` admission precedent,
   RFC 0014) — reflective construction is descriptor-backed, and
   classes construct through their own class methods (RFC 0010 §1);
   reflection never
@@ -70,14 +70,14 @@ export interface Deserializable requires Reflectable { }
 ## 2. `std:reflect` — the surface
 
 ```rut
-export interface ReflectEngine { }        // module capability: implement
+export trait ReflectEngine { }            // module capability: implement
                                             // (≥1 per module) to use the
                                             // structural symbols
-export interface Reflectable { ..§1.. }
-export interface Deserializable requires Reflectable { }
+export trait Reflectable { ..§1.. }
+export trait Deserializable requires Reflectable { }
 export enum TypeKind { Leaf, Record, Sum, Seq }
-export enum LeafKind  { Bool, Int, Float, String, Class, Iface }
-export host fn reflect<T>(): TypeInfo;    // static T (incl. interface T)
+export enum LeafKind  { Bool, Int, Float, String, Class, Trait }
+export host fn reflect<T>(): TypeInfo;    // static T (incl. trait T)
 export host fn type_of(a: Opaque): TypeInfo;  // content descriptor
 
 export host class TypeInfo {
@@ -85,7 +85,7 @@ export host class TypeInfo {
     fn leaf(self): LeafKind;              // kind() == Leaf
     fn name(self): string;
     fn type_id(self): u32;                // == type_id<T>() for static T
-    fn implements(self, i: TypeInfo): bool;  // is_a (RFC 0015 §6) — the
+    fn is_a(self, i: TypeInfo): bool;     // RFC 0015 §6 — the
                                             // NESTED-node gate
     fn fields(self): Vec<FieldInfo>;      // Record: decl order (wire names)
     fn variants(self): Vec<SumVariant>;   // Sum: decl order
@@ -93,7 +93,7 @@ export host class TypeInfo {
     // dynamic re-entry — children return as Opaque (no recovery,
     // RFC 0012 §3), so the native dispatches arity/child through the
     // box's EXACT-type vtable (RFC 0015 §6 — the calli path), reaching
-    // auto and manual slots uniformly. Same slots as the interface
+    // auto and manual slots uniformly. Same slots as the trait
     // methods; rut code cannot spell this itself:
     fn arity(self, a: Opaque): i32;      // Seq .len() · Sum: current
                                             // variant's payloads
@@ -130,18 +130,18 @@ first-class type value (RFC 0015 OQ-1 stays closed).
 
 1. **Engine admission** (resolver, RFC 0031): the structural symbols
    (`reflect<T>`, `type_of`, `TypeInfo`, `FieldInfo`, `SumVariant`)
-   resolve only in modules declaring ≥1 `implements ReflectEngine`;
+   resolve only in modules declaring ≥1 `impl ReflectEngine for T`;
    violation is a compile error naming the fix. std:reflect and the
    host are exempt. *Calling* `stringify`/`deserialize` needs no
    engine — the arg type / bound carries the contract. The `is`
    keyword (RFC 0012 §3) is likewise ungated: it answers the
-   capability bit, while `TypeInfo.implements(i)` — descriptor
+   capability bit, while `TypeInfo.is_a(i)` — descriptor
    *walking* — stays behind the admission; walking and probing are
    different powers.
 2. **Walkability = implements the protocol** — auto, registry, or
    manual. Entries may demand a contract (`dyn Serializable`) or a
    capability (`where T requires Deserializable`). Nested nodes are
-   gated by the descriptor `implements(Reflectable)` query; misses are
+   gated by the descriptor `is_a(Reflectable)` query; misses are
    **values-shaped errors**, never traps.
 3. **Boxing widens** (normative; cross-noted RFC 0015 §3): `Opaque`
    of an int stores i64 sign/zero-extended; a float, f64 — the slot
@@ -154,7 +154,7 @@ first-class type value (RFC 0015 OQ-1 stays closed).
 5. **Admission-only `where` bounds on user generic fns** (RFC 0013
    extension): a trailing `where T requires I` gates instantiation
    admission against the requires graph at the call site — compile
-   error naming the interface. It grants **no method calls on bare
+   error naming the trait. It grants **no method calls on bare
    `T`** (host-decl param-bound semantics, RFC 0025 §1); bodies may
    still widen a `T`-typed *value* to `dyn I` — the bound proves the
    widening valid.
@@ -187,7 +187,7 @@ export fn deserialize<T>(v: string): Result<T, JsonError>
 joined); Seq → `arity`/`child` loop (`[...]`, Vec and `Array<T, N>`
 alike); Sum → all-payloadless: variant name; `{0,1}`: `null`/recurse
 payload; else `Err` ("unwrap first"); Leaf → `downcast` scalars
-(boxing-widened), `Leaf+Class` → `implements(Reflectable)` query →
+(boxing-widened), `Leaf+Class` → `is_a(Reflectable)` query →
 positional walk or `Err`. `build`: Record →
 `member(j, f.name())`; absent → `f.default()`, else error naming the
 field; `construct(vals)`. Sums → `construct_variant(i, [])` /
@@ -196,8 +196,9 @@ field; `construct(vals)`. Sums → `construct_variant(i, [])` /
 ## 5. The example
 
 `examples/json/json.rut` (the engine) + `app.rut` (the consumer) —
-user-defined JSON end to end: opt-in `implements Serializable`,
-manual `class Tree implements Serializable` (curated, positional),
+user-defined JSON end to end: opt-in `impl Serializable for T {}`,
+manual `impl Reflectable + Serializable for Tree` (curated,
+positional),
 `deserialize<Vec<Address>>` (registry instantiation), wire-dataclass
 renames by hand. **Dependency note:** recursive-descent parsing needs
 string byte access and byte↔string helpers — **RFC 0007 OQ-1** (the
@@ -229,6 +230,6 @@ example names its assumed helpers in a header comment.
   printers)? v1 no — contract is the discipline; debuggers use
   std:debug (RFC 0036).
 - OQ-14: `dyn Slice<T>`-typed fields — Seq view over lending cells
-  (RFC 0023 §2 borrows)? v1: unsupported `Leaf+Iface`.
+  (RFC 0023 §2 borrows)? v1: unsupported `Leaf+Trait`.
 - OQ-15: `Array<T, N>` mint — `construct` for const-generic shapes;
   v1 deserialize targets `Vec<T>`.

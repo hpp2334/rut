@@ -112,24 +112,32 @@ The authoritative surface syntax is the RFC series Part B + `examples/`;
 ```
 module     := (import | export? decl)*
 import     := 'import' '{' name (',' name)* '}' 'from' Str ';'
-decl       := letdecl | enumdecl | dataclassdecl | classdecl | interfacedecl | fndecl
+decl       := letdecl | enumdecl | dataclassdecl | classdecl | traitdecl | impldecl | fndecl
 letdecl    := 'let' Ident ':' Type '=' expr ';'   // module binding — load-time
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
-dataclass  := 'dataclass' Ident genericparams? ('implements' IfaceList)? '{' (field | meth)* '}'
-class      := 'class' Ident genericparams? ('implements' IfaceList)? '{' member* '}'
+dataclass  := 'dataclass' Ident genericparams? '{' (field | meth)* '}'
+class      := 'class' Ident genericparams? '{' member* '}'
 member     := 'private'? ('static' field | ('suspend')? meth)
 meth       := 'fn' Ident '(' 'mut'? 'self'? params ')' (':' Type)? block
                                               // 'self' first param => instance
                                               // method; no 'self' => class
                                               // method — the construction surface
                                               // (RFC 0010 §1); no 'static fn')
-dispose    := 'dispose' '(' 'self' ')' ':' 'void' block
-interface  := 'interface' Ident genericparams? ('requires' IfaceList)? '{' methsig* '}'
-methsig    := 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
-                                              // interface methods are always
-                                              // instance methods (RFC 0012 §2)
+trait      := 'trait' Ident genericparams? ('requires' TraitList)? '{' methsig* '}'
+methsig    := 'fn' Ident '(' 'mut'? 'self' ',' params ')' (':' Type)? ';'
+                                               // trait methods are always
+                                               // instance methods (RFC 0012 §2);
+                                               // 'mut' self for destructors —
+                                               // the old class-member `dispose`
+                                               // is gone: Disposal is an impl
+                                               // (RFC 0016 §3)
+impl       := 'impl' Ident 'for' Ident genericargs? '{' meth* '}'
+                                               // admission + bodies (RFC 0012
+                                               // §2): same module as the
+                                               // target type; every trait
+                                               // methsig covered exactly
 fndecl     := modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? whereclause? block
-whereclause := 'where' Ident 'requires' IfaceList  // admission-only bounds
+whereclause := 'where' Ident 'requires' TraitList  // admission-only bounds
                                                // (RFC 0013 §2, RFC 0037 §3)
 block      := '{' stmt* '}'
 stmt       := 'let' 'mut'? Ident (':' Type)? '=' expr ';'
@@ -149,14 +157,15 @@ isexpr     := expr 'is' Type                              // type test — relat
 ```
 
 `Type` in **value positions** (params, returns, locals, fields, generic
-arguments) may spell an interface object type with the `dyn` prefix —
+arguments) may spell a trait object type with the `dyn` prefix —
 `d: dyn Drawable`, `Vec<dyn Widget>`, `Vec<Opaque>`, `Array<dyn Slice<i32>, 4>`
-(the builtin slice interface, RFC 0005); a bare interface
+(the builtin slice trait, RFC 0005); a bare trait
 name there is a type error with an "insert `dyn`" suggestion (RFC 0012 §2).
-`IfaceList` — `implements`, `requires`, and extparam bounds (§3) — stays
-**bare**: those positions name an interface, they do not form an interface
-value (RFC 0013 §2). The `is` RHS is a **naming position** too — bare
-interface/instantiation or concrete type, never `dyn`-prefixed — but
+`TraitList` — `requires` lists and extparam bounds (§3) — stays
+**bare**: those positions name a trait, they do not form a trait
+object (RFC 0013 §2). Impl heads (`impl I for T`) are naming positions
+too. The `is` RHS is a **naming position** as well — bare
+trait/instantiation or concrete type, never `dyn`-prefixed — but
 resolved to a `TypeId` rather than a value type (RFC 0012 §3). `dyn` and
 `is` are keywords
 (RFC 0002 §4); `as` remains
@@ -182,12 +191,13 @@ extmember   := 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
                                             // host/extern class members:
                                              // instance methods spell `self`; no-`self` class
                                              // methods are the native construction surface (RFC 0025 §2)
-extparams   := '<' (Ident ('requires' Iface)? ','?)+ '>'   // bounds: 
-equires form    // bounds: surface decls only (RFC 0013 §2)
+extparams   := '<' (Ident ('requires' Trait)? ','?)+ '>'   // bounds: `requires` form
+                                               // only — surface decls (RFC 0013 §2)
 ```
 
 Mode is chosen by file extension. The parser in declaration mode rejects
-any `block` with *"implementation in a declaration file"*; in
+any `block` with *"implementation in a declaration file"* — impl blocks
+included (no `impl` in `.d.rut`, RFC 0029 §2); in
 implementation mode it rejects `host`/`extern` with *"declaration keyword
 in an implementation file — belongs in a `.d.rut`"* (RFC 0029 §2).
 
@@ -196,7 +206,7 @@ in an implementation file — belongs in a `.d.rut`"* (RFC 0029 §2).
 No native recursion (C2): one loop over the token slice drives two
 mechanisms. A **frame stack** handles structure — one frame kind per
 grammar rule (`Module`, `Item`, `Block`, `TypeArgList`, `Pattern`, `Arm`,
-…), each holding the children it has collected so far and the token it is
+`Impl`, …), each holding the children it has collected so far and the token it is
 waiting for; a rule that needs a child pushes a frame, a frame that
 completes pops and hands its `NodeId` to the parent. An embedded **Pratt
 engine** handles expressions — an operator stack plus an operand stack of
@@ -232,7 +242,7 @@ are `.`-dotted.
 
 | decision | mechanism |
 |---|---|
-| item dispatch | peek 1 (`import` `let` `enum` `dataclass` `class` `interface` `fn`) |
+| item dispatch | peek 1 (`import` `let` `enum` `dataclass` `class` `trait` `impl` `fn`) |
 | stmt vs expr-stmt | peek 1 (leading keyword: `let` `if` `while` `for` `return` `when`) |
 | `for`-of vs `for`-c | peek 4: `for ( let Ident <of or =>` |
 | instance vs class method | peek 4: `fn Ident ( <mut? self? …>` |
@@ -309,12 +319,16 @@ enum NodeKind {
     Import  { names: Vec<IdentId>, from: LitId },
     Let     { vis, name: IdentId, ty: Option<NodeId>, init: NodeId },  // module-level
     Enum    { vis, name: IdentId, members: Vec<IdentId> },
-    Dataclass{ vis, name, generics: Vec<IdentId>, implements: Vec<NodeId>,
+    Dataclass{ vis, name, generics: Vec<IdentId>,
                fields: Vec<NodeId>, methods: Vec<NodeId> },            // RFC 0009
-    Class   { vis, name, generics, implements: Vec<NodeId>,
+    Class   { vis, name, generics,
               members: Vec<NodeId> },
-    Interface{ vis, name, generics, requires: Vec<NodeId>,  // RFC 0012 §2
+    Trait   { vis, name, generics, requires: Vec<NodeId>,  // RFC 0012 §2
                methods: Vec<NodeId> },
+    Impl    { trait_ref: NodeId, target: NodeId,           // RFC 0012 §2
+               methods: Vec<NodeId> },  // same module as target — the
+                                         // admission itself; covers every
+                                         // trait methsig exactly
     Fn      { vis, is_suspend, name, generics,
               params: Vec<NodeId>, ret: Option<NodeId>, body: NodeId },
     SurfaceFn  { vis, linkage, name, generics, params: Vec<NodeId>, ret: NodeId },
@@ -326,7 +340,7 @@ enum NodeKind {
     MethodDecl{ has_self, is_mut, sig: NodeId, body: NodeId },
                // has_self=false => class method — construction included
                // (RFC 0010); is_mut = `mut self`: may assign fields;
-               // interface members
+               // trait-impl members
               // are always dynamic (RFC 0012). No is_static: absence of
               // `self` IS the class-method case (RFC 0010 §2)
     LetStmt { is_mut, name: IdentId, ty: Option<NodeId>, init: NodeId },
@@ -402,8 +416,8 @@ struct Diag { span: Span, msg: String,
 - OQ-2: attributes (`@inline`, `@repr(align)`) — `At` is lexed but
   unclaimed; park the token until a real need exists (repr C is the
   default, RFC 0015 §4, so `@repr` is NOT planned). Decorators for
-  reflection policy are **rejected for v1** — reflection runs on
-  `implements` interfaces (RFC 0037).
+  reflection policy are **rejected for v1** — reflection runs on the
+  module's impl blocks (RFC 0037).
 - OQ-3: the depth budget value (C3). Proposed: a single NEST_MAX = 1024
   shared by parser frame depth and lexer bracket depth — deep enough for
   generated code, shallow enough that exceeding it is pathological.

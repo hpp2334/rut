@@ -33,8 +33,8 @@ jmp     L | br rC, L1, L2
 brtable rIdx, table, n    ; `when` on enums, downcast chains
 call    f, args -> rD     ; direct call (inherent fns only)
 callm   f, rThis, args    ; direct method call
-calli   slot, rRecv, args ; interface vtable call (RFC 0015 §6) — the ONLY
-                          ; path for interface-declared members: always
+calli   slot, rRecv, args ; trait vtable call (RFC 0015 §6) — the ONLY
+                          ; path for trait-declared members: always
                           ; dynamic, even when the receiver's exact class is
                           ; statically known (no devirtualization)
 callnat slot, (rRecv,) args -> rD
@@ -118,9 +118,9 @@ The named type operations lower to R3 primitives:
 
 - `x is T` — the keyword (RFC 0012 §3). Concrete `T`: `tidof` + `icmp`
   — the exact "load the object's vtable `TypeId`, compare" of
-  RFC 0015 §6. Interface `T`: the capability probe lowers to the one
-  descriptor-scan op, `Op::IsIface { recv, want: TypeId const }` —
-  `tidof`, then the descriptor's flat `implements` scan
+  RFC 0015 §6. Trait `T`: the capability probe lowers to the one
+  descriptor-scan op, `Op::IsTrait { recv, want: TypeId const }` —
+  `tidof`, then the descriptor's flat `impls` scan
   (RFC 0015 §6); pure in `(recv, want)`, so repeated probes CSE and
   invariant ones hoist like `tidof` itself. Statically-answered
   receivers never emit an op — typecheck folded them (RFC 0031 §2).

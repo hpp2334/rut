@@ -20,17 +20,19 @@
 
 import { MyMap } from "plugin:my_map";                // resolves to the .d.rut
 import { Hashable } from "std:collection";            // declaration file: the
-import { Canvas, newCanvas } from "app:gfx";          // constraint interface
+import { Canvas, newCanvas } from "app:gfx";          // constraint trait
 import { Logger } from "std:log";
 
 // A DATACLASS key (RFC 0009): an all-public, literal-constructed
-// record — with methods, because dataclasses implement interfaces.
+// record — with impl blocks, because dataclasses implement traits.
 // Its limits, exhaustively: no `private` fields, no `static`
 // members, no class methods, no `Disposal`.
-dataclass Name implements Hashable {   // hash + eq: ONE contract (RFC 0028) —
-    first: string;                     // the value-keyed Map/Set key interface
+dataclass Name {                        // hash + eq: ONE contract (RFC 0028) —
+    first: string;                      // the value-keyed Map/Set key trait
     last: string;
+}
 
+impl Hashable for Name {
     fn hash(self): u64 {                             // demo hash (length mix);
         return u64(self.first.len()) * 1000003      // real impls mix bytes
              + u64(self.last.len());
@@ -59,9 +61,10 @@ export fn main(): void {
     let hits = counts.get("key-3").unwrap_or(-1); // native get returns
     log.info(f"size={counts.size()} key-3={hits}"); // rut's builtin Option
 
-    // K = a DATACLASS: satisfies Hashable because it implements it. The
-    // map's hashing calls back into THIS hash() and eq()
-    // — rut code reached through the interface vtable (re-entrant VM
+    // K = a DATACLASS: satisfies Hashable because `impl Hashable for
+    // Name` exists in this module. The map's hashing calls back into
+    // THIS hash() and eq()
+    // — rut code reached through the trait-object vtable (re-entrant VM
     // call, borrow-guarded).
     let roster: MyMap<Name, i32> = MyMap<Name, i32>.new(4);
     roster.set(Name { first: "ada", last: "lovelace" }, 1);
@@ -73,9 +76,9 @@ export fn main(): void {
     // re-checks at load:
     //
     // let bad = MyMap<Canvas, i32>.new(4);
-    //                    ^^^^^^ error: `Canvas` does not implement
-    //                    `Hashable` — required by MyMap's K
-    //                    (satisfiable by: implements Hashable, or a
+    //                    ^^^^^^ error: no `impl Hashable for Canvas`
+    //                    — required by MyMap's K
+    //                    (satisfiable by: impl Hashable for Canvas, or a
     //                    registered builtin/struct impl)
 
     // V = Opaque: a SECOND instantiation (own TypeId) storing values rut

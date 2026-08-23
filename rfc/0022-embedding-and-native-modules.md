@@ -66,7 +66,7 @@ fn gfx_module() -> NativeModule {
   items: **`host fn`s** (above), **class methods — construction
   included** (RFC 0025,
   RFC 0026), and — for the types themselves — the backing of **enum,
-  interface, and builtin-impl registry entries** declared in declaration
+  trait, and builtin-impl registry entries** declared in declaration
   files
   (`std:collection`'s `Hashable` + its builtin impls are
   the canonical case, RFC 0028). std:reflect adds the reflection
