@@ -16,7 +16,7 @@ interface Service { fn start(mut self): void; }
 
 class App implements Service {
     private started: bool = false;
-    // default constructor: App()
+    // no class methods -> sealed: constructible only inside its own body
 
     fn start(mut self): void {
         self.started = true;

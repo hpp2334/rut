@@ -6,7 +6,7 @@
 // CAPABILITY probe — does the value's exact type implement it (RFC 0015
 // §6 is_a scan). Grants nothing: no narrowing, no widening. `x is Any` is
 // a compile error (vacuous naming). No `as`, no upcast, no downcast
-// builtin for interface values; erasure/recovery is Opaque(v)/downcast<T>.
+// builtin for interface values; erasure/recovery is Opaque.new(v)/downcast<T>.
 
 import { Canvas, newCanvas } from "app:gfx";
 import { Logger } from "std:log";
@@ -22,7 +22,8 @@ interface HitTest {
 class Sprite implements Drawable, HitTest {
     private x: f32 = 0;
     private y: f32 = 0;
-    // default constructor: Sprite()
+
+    fn new(): Self { return Self {}; }   // explicit — no implicit default
 
     fn draw(self, g: Canvas): void { g.circle(self.x, self.y, 1); }
     fn hit_test(self, px: f32, py: f32): bool {
@@ -35,7 +36,7 @@ class Circle implements Drawable {
     private y: f32 = 0;
     private r: f32 = 1;
 
-    constructor(x: f32, y: f32, r: f32): Self {
+    fn new(x: f32, y: f32, r: f32): Self {
         return Self { x: x, y: y, r: r };
     }
 
@@ -43,7 +44,7 @@ class Circle implements Drawable {
 }
 
 fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
-    let log = Logger("types");
+    let log = Logger.new("types");
     if (d is Circle) {               // runtime test — exact-class check
         d.draw(g);                   // no downcast exists; stay on the
     }                                // interface
@@ -69,5 +70,5 @@ fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
 }
 
 export fn main(): void {
-    type_tests(Circle(1, 2, 3), Sprite(), newCanvas());
+    type_tests(Circle.new(1, 2, 3), Sprite.new(), newCanvas());
 }

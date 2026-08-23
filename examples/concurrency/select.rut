@@ -21,7 +21,7 @@ suspend fn delayed_send(ch: Sender<string>): void {
 }
 
 export suspend fn main(): void {
-    let log = Logger("select");
+    let log = Logger.new("select");
     let q = Channel<string>();
     spawn(delayed_send(q.sender));       // sender task shares the channel
     let result = await wait_or_timeout(q.receiver);

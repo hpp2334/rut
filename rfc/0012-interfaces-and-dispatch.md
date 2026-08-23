@@ -26,7 +26,7 @@ b.area()     // b: Circle (aliased handle ->  call Circle$area     (direct)
 d.draw(g)    // draw declared in Drawable ->  calli d, slot=3      (vtable, ALWAYS)
 ```
 
-Free functions, constructors, and methods declared in a class/dataclass body
+Free functions and methods declared in a class/dataclass body
 itself dispatch directly — the exact type is statically known and can
 never change (no inheritance, RFC 0010 §3). Every method **declared in an
 interface** dispatches dynamically through the vtable — unconditionally,
@@ -66,8 +66,8 @@ meaningless in v1 (nothing can override).
   kind, no call-vs-load ambiguity at the vtable boundary. (`d.x` where `d`
   is interface-typed is a compile error.)
 - **No top interface.** The erased-storage type is the concrete host
-  class `Opaque` (RFC 0014) — reached by the explicit type-call
-  `Opaque(v)`, never by widening, and never nameable in an
+  class `Opaque` (RFC 0014) — reached by the explicit class method
+  `Opaque.new(v)`, never by widening, and never nameable in an
   `implements`/`requires` list (it is a class, not an interface). The
   interface tier is simply `exact concrete > dyn I` (RFC 0031 §4);
   the universal type test is `x is Opaque` (§3).
@@ -160,8 +160,8 @@ type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
   interface types. The capability probe is not a recovery path: it
   answers whether dispatch is possible, never hands back a narrower ref.
 - Numeric and enum conversions follow the same principle: named function
-  calls, not operators (RFC 0007 §1). Erasure likewise: **`Opaque(v):
-  Opaque`** (RFC 0014), a host-class type-call — rut has no cast syntax at
+  calls, not operators (RFC 0007 §1). Erasure likewise: **`Opaque.new(v):
+  Opaque`** (RFC 0014), a host-class method call — rut has no cast syntax at
   all.
 
 ## 4. Equality — `==` is builtin: value for primitives, identity for cells

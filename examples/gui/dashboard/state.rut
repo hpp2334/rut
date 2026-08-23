@@ -1,5 +1,5 @@
 // state.rut — the dashboard's reactive setup, tur-style: the Dashboard
-// constructor DECLARES the graph — state atoms (UI writes), sources (services
+// construction method DECLARES the graph — state atoms (UI writes), sources (services
 // push snapshots), derives (computed views) — all living in the Store;
 // mutations are dispatched values, not methods. The instance itself holds
 // only inert handles (atom ids + closures), so sharing it is
@@ -50,8 +50,8 @@ export class Dashboard {
     ingest_series$: Mutation<Series, void>;
     apply_event$: Mutation<LiveEvent, void>;
 
-    constructor(now_ms: i64): Self {
-        let store = Store());
+    fn new(now_ms: i64): Self {
+        let store = Store.new();
 
         // --- state: writable atoms (UI-owned) ---
         let tab = state(Tab.Overview);

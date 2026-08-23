@@ -6,7 +6,7 @@ import { sleep } from "std:time";
 import { Logger } from "std:log";
 
 suspend fn countdown(n: u32): void {
-    let log = Logger("spawn");
+    let log = Logger.new("spawn");
     for (let i = n; i > 0; i -= 1) {
         log.info(f"{i}");
         await sleep(1000);

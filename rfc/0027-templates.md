@@ -23,7 +23,7 @@ literals, chosen by expected type:
 - The **same literal** in a `Template`-expected position (host fn
   parameter annotated `Template`, or an explicit `let t: Template =
   f"..."`) compiles to the construction sequence — vec pushes +
-  `Opaque(..)` boxing, or one internal-native `tmpl` call (RFC 0032 §1.1
+  `Opaque.new(..)` boxing, or one internal-native `tmpl` call (RFC 0032 §1.1
   R2; no `tmpl` op): a `Template { parts: Vec<string>,
   args: Vec<Opaque> }` — literal chunks and **boxed values with their
   runtime types** (`Opaque`, RFC 0014), not pre-rendered text.

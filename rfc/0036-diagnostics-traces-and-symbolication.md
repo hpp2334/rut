@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0034 (traps, frames), RFC 0033 (images, symbols),
+- **Depends on:** RFC 0034 (traps, frames), RFC 0033 (binaries, symbols),
   RFC 0029 (DeclIr — and what it is *not*), RFC 0028 (std modules),
   RFC 0022–0023 (`VmCtx`, native fns)
 - **Part:** F — Toolchain & artifacts
@@ -20,8 +20,8 @@ first question is *where*. Three tiers, three price points:
 | `Trap` backtrace | automatic at trap unwind | bugs/overflow/`panic` — the P4 boundary |
 
 And one restoration question: a trace is captured as **raw pcs** against
-whatever is loaded — possibly a stripped, published image (RFC 0029 §6).
-Restoration goes through the image's **SymbolTable** (§4), never through
+whatever is loaded — possibly a stripped, published binary (RFC 0029 §6).
+Restoration goes through the binary's **SymbolTable** (§4), never through
 `.d.ir`: a DeclIr is the declaration *surface* (exports/types/slots) and
 an unstable cache (RFC 0029 §4); it has no function symbols and no
 pc→span data, and never participates in trace restoration.
@@ -64,33 +64,33 @@ enum RawFrame {
 ## 3. Symbolication — three restoration paths
 
 1. **In-VM (dev default).** `vm.symbolicate(&raw) -> Vec<TraceEntry>`
-   reads names + pc→span tables from the *loaded images*
+   reads names + pc→span tables from the *loaded binaries*
    (`TraceEntry { module, func, span: Option<SourceSpan> }`).
 2. **Sidecar map (support builds).** `rutc build --map` serializes the
-   image's `SymbolTable` as `mod.rutc.map` next to the image, keyed by
-   the image's **content hash** (RFC 0033 §1). A **stable, versioned
+   binary's `SymbolTable` as `mod.rutc.map` next to the binary, keyed by
+   the binary's **content hash** (RFC 0033 §1). A **stable, versioned
    format contract** — the deliberate opposite of `.d.ir` (an unstable
    DeclIr cache; RFC 0029 §4). `rutc trace --map mod.rutc.map < raw.txt`
    restores a trace captured against a fully-stripped `--release`
-   image: the DWARF-separate-debug-file role. A `.rutbundle` carries the
+   binary: the DWARF-separate-debug-file role. A `.rutbundle` carries the
    sidecar inside the zip, and `vm.symbolicate`'s fallback reads it from
    the mount (RFC 0038 §5).
 3. **Recompile-by-determinism (no artifact at all).** Deterministic
    serialization (RFC 0033 §1) means same source + pinned compiler
-   version ⇒ byte-identical image ⇒ identical pcs ⇒ symbolicate against
-   a locally rebuilt image. Support tooling can rely on this instead of
+   version ⇒ byte-identical binary ⇒ identical pcs ⇒ symbolicate against
+   a locally rebuilt binary. Support tooling can rely on this instead of
    shipping maps.
 
 Stripped traces still *work* — they degrade to
 `pkg:mod #[3] @ pc 41` — and are restorable via path 2 or 3.
 
-## 4. The `SymbolTable` — image-side
+## 4. The `SymbolTable` — binary-side
 
 The name "symbol table" belongs here (the ELF `.symtab` role), never to
 `.d.ir` (RFC 0029's naming note):
 
 ```rust
-struct SymbolTable {               // in ModuleImage (RFC 0033 §1);
+struct SymbolTable {               // in ModuleBinary (RFC 0033 §1);
     funcs: Vec<FuncSym>,           //  == the .rutc.map sidecar payload
 }
 struct FuncSym {
@@ -119,7 +119,7 @@ dataclass LoadError {
 ```
 
 - `trace.render(): string` — native method; renders via the loaded
-  images' tables, degrades gracefully when stripped.
+  binaries' tables, degrades gracefully when stripped.
 - `Location` is a plain dataclass `{ file: string, line: i32, col: i32 }`
   — printable, no host state; crosses the `Value` boundary
   like any dataclass (RFC 0023). `==` on it is cell identity, like every
@@ -159,7 +159,7 @@ themselves (RFC 0035 §3) — tur, for instance, forwards them to devtools.
   debugging); needs a per-task frame retention policy.
 - OQ-3: opt-in `?`-sugar that attaches `here()` automatically (`?at`)?
 - OQ-4: standard SourceMap JSON export (web tooling interop only).
-- OQ-5: inlining vs spans — v1 images carry no cross-fn inlined code
+- OQ-5: inlining vs spans — v1 binaries carry no cross-fn inlined code
   (RFC 0031 OQ-2); if whole-program inlining lands, spans need inline
   frame chains (the DWARF `DW_AT_inlined_subroutine` analog).
 - OQ-6: serialized `RawTrace` schema versioning for crash reports.

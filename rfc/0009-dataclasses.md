@@ -21,7 +21,7 @@ in action.
   alias is visible through all of them. The private eager copy is
   `own(p)` — shallow: primitive fields cloned, handle-typed fields still
   shared (RFC 0011 §1). Writing is gated by the `mut`-binding law
-  (RFC 0003 §1). No `new`, no constructor — `Name { field: expr, .. }`
+  (RFC 0003 §1). No `new`, no class methods — `Name { field: expr, .. }`
   is the only construction, available **everywhere** (module-let
   initializers included, RFC 0003 §1); the literal allocates the cell.
 - **All fields public, always.** A dataclass is an open data record —
@@ -47,8 +47,9 @@ in action.
   `hash`/`eq` are interface-declared members — calls dispatch through
   the vtable per RFC 0012 §1. The limits on a dataclass, exhaustively:
   **no `private` fields** (above), **no `static` members**, **no
-  `constructor`** (the literal is the only construction — that split
-  *is* the dataclass/class distinction), and **no `dispose()`** (a value
+  class methods** (the literal is the only construction — open literal
+  vs class-method-gated *is* the dataclass/class distinction), and **no
+  `dispose()`** (a value
   shared everywhere has no single death to hook; if you need a
   destructor, write a class — RFC 0010 §3, RFC 0011 §2). Everything else
   class-shaped is allowed. Free functions over data remain the default

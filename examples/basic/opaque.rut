@@ -1,5 +1,5 @@
 // RFC 0014 — Opaque: explicit type erasure with checked recovery.
-// Opaque(v) (a host-class type-call) forgets the static type, KEEPS the
+// Opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the
 // runtime type; downcast<T> recovers it or yields None. `Opaque` is the
 // erased-storage CONCRETE type — it composes like any class (`Vec<Opaque>`,
 // fixed `Array<Opaque, 3>`, fields, returns). Under the all-cells regime
@@ -15,16 +15,16 @@ enum Flavor { Sweet, Sour }
 class Session {
     private token: string;
 
-    constructor(token: string): Self {
+    fn new(token: string): Self {
         return Self { token: token };
     }
 }
 
 fn erase_and_recover(): void {
-    let log = Logger("opaque");
-    let box1 = Opaque(Point { x: 1, y: 2 });    // erasure = type-call;
-    let box2 = Opaque(Flavor.Sour);             // zero-copy (shares the cell)
-    let box3 = Opaque("hello");
+    let log = Logger.new("opaque");
+    let box1 = Opaque.new(Point { x: 1, y: 2 });    // erasure = type-call;
+    let box2 = Opaque.new(Flavor.Sour);             // zero-copy (shares the cell)
+    let box3 = Opaque.new("hello");
 
     let p = downcast<Point>(box1);              // Option<Point>
     if (p.is_some()) {
@@ -36,23 +36,23 @@ fn erase_and_recover(): void {
 }
 
 fn share_vs_copy(): void {
-    let log = Logger("opaque");
-    let s = Session("abc");
-    let o = Opaque(s);            // SHARES the Session cell (zero-copy):
+    let log = Logger.new("opaque");
+    let s = Session.new("abc");
+    let o = Opaque.new(s);            // SHARES the Session cell (zero-copy):
                                   // mutation through s is visible in o
-    let o2 = Opaque(own(s));      // own() first: a private copy, new identity
+    let o2 = Opaque.new(own(s));      // own() first: a private copy, new identity
 
     log.info(f"same session: {downcast<Session>(o).is_some()}");
     log.info(f"distinct boxes: {o == o2}");     // false — two cells (RFC 0012 §4)
 }
 
 fn nested(): void {
-    let log = Logger("opaque");
+    let log = Logger.new("opaque");
     // heterogeneous FIXED array — pure data, one shared cell per slot
     // (RFC 0016 §1)
-    let boxes: Array<Opaque, 3> = [Opaque(1), Opaque("two"), Opaque(Point { x: 3, y: 4 })];
+    let boxes: Array<Opaque, 3> = [Opaque.new(1), Opaque.new("two"), Opaque.new(Point { x: 3, y: 4 })];
     log.info(f"{boxes.len()} boxes; first is i32: {boxes[0] is i32}");
-    let vec: Vec<Opaque> = Vec.from([Opaque(5)]);
+    let vec: Vec<Opaque> = Vec.from([Opaque.new(5)]);
     log.info(f"vec {vec.len()}");
 }
 

@@ -3,7 +3,7 @@
 // support, no language magic. The one thing a heterogeneous store needs —
 // values of many types behind one table — is the `Opaque` object type
 // (RFC 0014): entries are `Opaque` cells keyed by atom id, made with
-// `Opaque(v)`, recovered with `downcast<T>`, checked by the reified
+// `Opaque.new(v)`, recovered with `downcast<T>`, checked by the reified
 // runtime type.
 //
 //   state(v)       -> State<T>      writable atom; the store materializes
@@ -36,9 +36,9 @@ export class State<T> implements Atom {
     private id: u32;
     private seed: Opaque;                // first read materializes it
 
-    constructor(v: T): Self {
-        Atoms.next &+= 1;                 // constructors run logic too
-        return Self { id: Atoms.next, seed: Opaque(v) };
+    fn new(v: T): Self {
+        Atoms.next &+= 1;                 // class methods run logic too
+        return Self { id: Atoms.next, seed: Opaque.new(v) };
     }
 
     fn atom_id(self): u32 { return self.id; }
@@ -53,7 +53,7 @@ export class Source<T> implements Atom {
     private id: u32;
     private pull: fn(): T;                // seeds the entry; steady state is push
 
-    constructor(f: fn(): T): Self {
+    fn new(f: fn(): T): Self {
         Atoms.next &+= 1;
         return Self { id: Atoms.next, pull: f };
     }
@@ -70,7 +70,7 @@ export class Derived<T> implements Atom {
     private id: u32;
     private compute: fn(ReadCtx): T;
 
-    constructor(f: fn(ReadCtx): T): Self {
+    fn new(f: fn(ReadCtx): T): Self {
         Atoms.next &+= 1;
         return Self { id: Atoms.next, compute: f };
     }
@@ -89,7 +89,7 @@ export dataclass Nil {}
 export class Mutation<P, R> {
     private run: fn(Store, P): R;
 
-    constructor(f: fn(Store, P): R): Self {
+    fn new(f: fn(Store, P): R): Self {
         return Self { run: f };
     }
 
@@ -106,7 +106,7 @@ export fn mutation<P, R>(f: fn(Store, P): R): Mutation<P, R> {
 export class ReadCtx {
     private store: Store;
 
-    constructor(store: Store): Self {
+    fn new(store: Store): Self {
         return Self { store: store };
     }
 
@@ -131,7 +131,7 @@ class Watch {
     last_ver: u32;
     cb: fn(): void;
 
-    constructor(wid: u32, atom: u32, last_ver: u32, cb: fn(): void): Self {
+    fn new(wid: u32, atom: u32, last_ver: u32, cb: fn(): void): Self {
         return Self { wid: wid, atom: atom, last_ver: last_ver, cb: cb };
     }
 }
@@ -143,8 +143,8 @@ export class Store {
     watches: Vec<Watch> = Vec();
     depth: i32 = 0;
 
-    // all fields initialized -> default constructor: bare Store(); box with
-    // Store())
+    // all fields initialized -> an explicit no-arg constructor: bare
+    // Store.new()
 
     fn find(self, id: u32): Option<Entry> {
         for (let i = 0; i < self.entries.len(); i += 1) {
@@ -192,7 +192,7 @@ export(self) fn seed_into<T>(store: Store, s: State<T>): Opaque {
 
 /** Write a state atom (inside mutations); watchers flush at the top. */
 export fn atom_set<T>(store: Store, s: State<T>, v: T): void {
-    store.upsert(s.atom_id(), Opaque(v));
+    store.upsert(s.atom_id(), Opaque.new(v));
 }
 
 /** Read a source's latest snapshot (pull-seeded on first read). */
@@ -206,7 +206,7 @@ export fn source_read<T>(store: Store, s: Source<T>): T {
 }
 
 export(self) fn seed_source<T>(store: Store, s: Source<T>): Opaque {
-    let v = Opaque(s.pull_fn()());
+    let v = Opaque.new(s.pull_fn()());
     store.upsert(s.atom_id(), v);
     return v;
 }
@@ -214,7 +214,7 @@ export(self) fn seed_source<T>(store: Store, s: Source<T>): Opaque {
 /** External data arrived: store the snapshot; flush at the top level. */
 export fn source_push<T>(store: Store, s: Source<T>, v: T): void {
     store.depth &+= 1;
-    store.upsert(s.atom_id(), Opaque(v));
+    store.upsert(s.atom_id(), Opaque.new(v));
     store.depth -= 1;
     if (store.depth == 0) {
         flush(store);
@@ -241,16 +241,16 @@ export fn dispatch<P, R>(store: Store, m: Mutation<P, R>, p: P): R {
 /** Subscribe a change-only callback to any atom (State, Source, Derived). */
 export fn watch(store: Store, a: dyn Atom, cb: fn(): void): WatchHandle {
     Atoms.next &+= 1;
-    let w = Watch(Atoms.next, a.atom_id(), store.version_of(a.atom_id()), cb));
+    let w = Watch.new(Atoms.next, a.atom_id(), store.version_of(a.atom_id()), cb);
     store.watches.push(w);
-    return WatchHandle(store, w.wid));
+    return WatchHandle.new(store, w.wid);
 }
 
 export class WatchHandle {
     private store: Store;
     private wid: u32;
 
-    constructor(store: Store, wid: u32): Self {
+    fn new(store: Store, wid: u32): Self {
         return Self { store: store, wid: wid };
     }
 
@@ -290,8 +290,8 @@ export fn flush(store: Store): void {
 // ------------------------------------------------------------------ smoke
 
 export(self) fn smoke(): void {
-    let log = Logger("reactive");
-    let store = Store());
+    let log = Logger.new("reactive");
+    let store = Store.new();
 
     let count = state(0);
     let clock = source((): i32 => 0);   // external world, lazily seeded

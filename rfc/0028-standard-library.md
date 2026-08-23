@@ -54,8 +54,8 @@ logging goes through an imported logger:
 import { Logger } from "std:log";
 
 fn work(): void {
-    let log = Logger("app");        // type-call -> constructor; a bare value
-    log.info(f"started at {now()}");  // class, so construction is free
+    let log = Logger.new("app");     // class method -> construction; a bare
+    log.info(f"started at {now()}");  // value class, so construction is free
 }
 ```
 
@@ -70,7 +70,7 @@ export class Logger {
     private name: string;
     private level: Level = Level.Info;
 
-    constructor(name: string) { return Self { name: name, level: Level.Info }; }
+    fn new(name: string): Self { return Self { name: name, level: Level.Info }; }
 
     fn set_level(self, l: Level): void { self.level = l; }
     fn level(self): Level { return self.level; }
@@ -108,7 +108,7 @@ export host fn str(v: Opaque): string;           // developer rendering (RFC 000
 export host fn type_name(v: Opaque): string;  // debug type name
 export host fn capture_stack_trace(): StackTrace; // skips its own frame
 export host class StackTrace {
-    fn render(): string;                          // via loaded images'
+    fn render(): string;                          // via loaded binaries'
     fn depth(): i32;                              // SymbolTables; lazy
 }                                                 // — degraded when stripped
 ```
@@ -131,6 +131,6 @@ dataclass LoadError {
 ```
 
 `VmCtx::capture_trace()` is the native half (RFC 0022 §3); the host-facing
-`vm.symbolicate(&raw)` restores names/spans from loaded images (RFC 0035
-§3, RFC 0036 §3) — and against stripped `--release` images, the
+`vm.symbolicate(&raw)` restores names/spans from loaded binaries (RFC 0035
+§3, RFC 0036 §3) — and against stripped `--release` binaries, the
 `.rutc.map` sidecar does it offline (RFC 0036 §3).

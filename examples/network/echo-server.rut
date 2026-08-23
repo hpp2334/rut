@@ -9,7 +9,7 @@ import { Logger } from "std:log";
 let WORKERS: i32 = 4;
 
 export suspend fn main(): void {
-    let log = Logger("echo");
+    let log = Logger.new("echo");
     let started = listen("0.0.0.0:8080");
     if (started.is_err()) {
         log.error(f"listen failed: {started.error}");

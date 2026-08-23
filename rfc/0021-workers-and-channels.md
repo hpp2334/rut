@@ -57,7 +57,9 @@ parameters (RFC 0003-style entry — the worker example pair shows the shape).
 ## 4. Internals: spawn & cross-isolate transfer
 
 Static checks at the send site (the checker knows `T`), plus a runtime
-`transfer_into` on the receiving heap (unique-rc detection):
+`transfer_into` on the receiving heap (unique-rc detection). The child
+`Vm` carries its own `Limits`, and transfers are charged to the child
+budget before the worker starts (RFC 0040 §4):
 
 ```rust
 pub fn spawn_worker(&mut self, module: &str, args: Vec<Value>) -> Result<Worker, Error> {

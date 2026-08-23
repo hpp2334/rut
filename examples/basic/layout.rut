@@ -19,7 +19,7 @@ class Vertex {                              // classes: SAME layout rule
     private x: f32;
     private y: f32;
 
-    constructor(x: f32, y: f32): Self {
+    fn new(x: f32, y: f32): Self {
         return Self { x: x, y: y };
     }
 }
@@ -29,7 +29,7 @@ let SZ_PADDED: u32 = size_of<Padded>();   // folded at compile time,
 let AL_PADDED: u32 = align_of<Padded>();  // never executed
 
 fn layout(): void {
-    let log = Logger("layout");
+    let log = Logger.new("layout");
     log.info(f"point tid={TID_POINT} size={size_of<Point>()} align={align_of<Point>()}");
     log.info(f"padded size={SZ_PADDED} align={AL_PADDED}");    // 12 / 4
     log.info(f"vertex size={size_of<Vertex>()}");              // 8 — same as Point
@@ -38,9 +38,9 @@ fn layout(): void {
 }                                                        // buffer (RFC 0016 §4)
 
 fn boxed_layout(): void {
-    let log = Logger("layout");
-    let box1 = Opaque(Point { x: 1, y: 2 });
-    let box2 = Opaque(Vertex(3, 4));
+    let log = Logger.new("layout");
+    let box1 = Opaque.new(Point { x: 1, y: 2 });
+    let box2 = Opaque.new(Vertex.new(3, 4));
 
     // Layout accessors without downcasting — group/slab first,
     // pay a checked downcast only when actually recovering the value.
@@ -50,7 +50,7 @@ fn boxed_layout(): void {
 
     // Payload snapshots are Vec<u8> — NOT ==-comparable (Vec implements
     // nothing; RFC 0012 §4). Identity of boxes is cell identity:
-    let fresh = Opaque(Point { x: 1, y: 2 });
+    let fresh = Opaque.new(Point { x: 1, y: 2 });
     log.info(f"boxes distinct: {box1 == fresh}");              // false
     log.info(f"same type: {box1.type_id() == fresh.type_id()}"); // true — group by tid
 }

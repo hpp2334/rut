@@ -15,7 +15,7 @@ fn find(xs: Vec<string>, key: string): Option<i32> {
 }
 
 fn demo(list: Vec<string>): void {
-    let log = Logger("option");
+    let log = Logger.new("option");
     let idx = find(list, "beta");
     if (idx.is_some()) {
         log.info(f"{idx.value}");       // `.value` traps on None — check first
@@ -29,7 +29,7 @@ fn read_config(path: string): Result<Vec<u8>, IoError> {
 }
 
 export fn main(): void {
-    let log = Logger("option");
+    let log = Logger.new("option");
     demo(["alpha", "beta"]);
 
     let r = read_config("app.cfg");

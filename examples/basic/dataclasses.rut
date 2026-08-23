@@ -36,7 +36,7 @@ fn length(pt: Point): f64 {     // free function instead of a method
 }
 
 fn dataclasses(): void {
-    let log = Logger("dataclasses");
+    let log = Logger.new("dataclasses");
     let mut p = Point { x: 1, y: 2 };   // literal — the only construction
     p.x = 3;                            // needs the `mut` binding (RFC 0003 §1)
     let q = p;                          // ALIAS: q and p are the SAME cell

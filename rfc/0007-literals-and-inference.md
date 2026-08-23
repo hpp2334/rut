@@ -11,7 +11,7 @@
 
 See **`examples/basic/literals.rut`** — numeric suffixes and annotations,
 plain/raw/format strings, fixed-array and dataclass literals, and the
-lowercase constructor-type calls (`Vec<f32>(1024)`).
+builtin allocation calls (`Vec<f32>(1024)`).
 
 ## 1. Inference & conversions
 
@@ -28,7 +28,7 @@ lowercase constructor-type calls (`Vec<f32>(1024)`).
   inline **value**, pure data, no allocation (RFC 0005). It infers `T`
   bidirectionally like any literal; at module scope it is a
   load-time expression when every element is (RFC 0003 §1). A growable needs
-  its own constructor: `Vec<T>()`, `Vec<T>(n)` (zeroed), or
+  its builtin allocation forms: `Vec<T>()`, `Vec<T>(n)` (zeroed), or
   `Vec.from([..])` (copies).
 
 ## 2. String literals: plain, raw, format

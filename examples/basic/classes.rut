@@ -1,9 +1,9 @@
-// RFC 0010 — classes: sealed VALUE records with constructors.
-// Construction is a TYPE-CALL — Counter(), Rect(3, 4); no `new` keyword.
-// A constructor is just a class-level function (never a `self` receiver), it
-// builds the instance with the class-private `Self { .. }` literal and
-// returns Self by default. Instance methods spell `self` explicitly; a
-// method without `self` is a class method (there is no `static fn`).
+// RFC 0010 — classes: sealed VALUE records, class-method construction.
+// Classes construct through their OWN class methods — Rect.new(3, 4),
+// Counter.new(), Version.parse("1.2"); no `constructor` keyword, no
+// type-calls. A class method is just a function without a `self`
+// receiver; it builds the instance with the class-private `Self { .. }`
+// literal. Instance methods spell `self` explicitly (no `static fn`).
 
 import { Logger } from "std:log";
 
@@ -11,10 +11,10 @@ class Counter {
     private n: i32 = 0;             // field initializer
     static instances: i32 = 0;      // static: one slot per class, per VM
 
-    constructor() {                     // default return type: Self
-        Counter.instances &+= 1;    // construction logic runs here
-        return Self { };            // initializers satisfy all fields
-    }
+    fn new(): Self {                    // the construction surface — a
+        Counter.instances &+= 1;        // class method (no self); free to
+        return Self { };               // run logic. `new` is a convention,
+    }                                   // not syntax (RFC 0002 §4)
 
     fn press(mut self): void {           // instance method: explicit receiver,
         self.n &+= 1;                // wrapping add (§8) — or `+=` to trap
@@ -27,44 +27,48 @@ class Rect {
     private w: f32;
     private h: f32;
 
-    constructor(w: f32, h: f32): Self {
-        if (w <= 0 || h <= 0) {     // constructors VALIDATE — they're functions
+    fn new(w: f32, h: f32): Self {     // construction VALIDATES — it's
+        if (w <= 0 || h <= 0) {        // just a function
             panic("Rect: negative extents");
         }
         return Self { w: w, h: h }; // must initialize fieldless-initialized
     }
 
+    fn from_square(s: f32): Self {     // named constructors are siblings:
+        return Rect.new(s, s);         // any no-self method returning Self
+    }
+
     fn area(self): f32 { return self.w * self.h; }
 }
 
-/** A "try" constructor: declared return type Option<Self>. */
+/** Try-construction: a class method returning Option<Self>. */
 class Version {
     private major: i32;
     private minor: i32;
 
-    private constructor(major: i32, minor: i32): Self {
-        return Self { major: major, minor: minor };
+    private fn of(major: i32, minor: i32): Self {  // trusts its caller —
+        return Self { major: major, minor: minor }; // private: seals the class
     }
 
-    fn parse(s: string): Option<Version> {    // named-constructor pattern:
+    fn parse(s: string): Option<Version> {    // the public validating door:
         // ... split "1.2" — on failure:      // a class method over the
-        return Option.none();                 // private constructor
+        return Option.none();                 // private class method
     }
 
     fn label(self): string { return f"{self.major}.{self.minor}"; }
 }
 
 fn classes(): void {
-    let log = Logger("classes");
-    let c = Counter();            // TYPE-CALL -> constructor
+    let log = Logger.new("classes");
+    let c = Counter.new();         // class method -> construction
     c.press();
     c.press();
-    let r = Rect(3, 4);
-    let v = Version.parse("1.2"); // Option<Version> — try-construction
+    let r = Rect.new(3, 4);
+    let v = Version.parse("1.2");  // Option<Version> — try-construction
     log.info(f"count={c.count()} area={r.area()} instances={Counter.instances}");
-    // let bad = Rect(3);         // ERROR: arity — the constructor signature IS
-                                    // the class's construction contract
-    // Rect { w: 1, h: 1 };        // ERROR: classes have no outside literal
+    // let bad = Rect.new(3);       // ERROR: arity — the class's construction
+                                     // contract is whatever its methods say
+    // Rect { w: 1, h: 1 };         // ERROR: classes have no outside literal
 }
 
 export fn main(): void {

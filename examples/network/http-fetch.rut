@@ -14,7 +14,7 @@ suspend fn fetch_all(urls: Vec<string>): Result<Vec<Vec<u8>>, HttpError> {
 }
 
 export suspend fn main(): void {
-    let log = Logger("http");
+    let log = Logger.new("http");
     let r = await fetch_all(["https://example.com", "https://example.org"]);
     if (r.is_ok()) {
         log.info(f"fetched {r.value.len()} pages");

@@ -4,7 +4,7 @@
 - **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0022 (embedding), RFC 0012 (interfaces), RFC 0010
-  (constructors), RFC 0016 §3 (Drop mapping), RFC 0029 (declaration files)
+  (class methods & construction), RFC 0016 §3 (Drop mapping), RFC 0029 (declaration files)
 - **Supersedes:** RFC 0005 §5 (pre-restructure; `extern class` renamed to
   `host class` — "host" names where the implementation lives)
 - **Part:** E — Host & FFI
@@ -16,7 +16,7 @@ Native surfaces are declared **in rut source** — *declaration files*
 The specifier maps to a declaration file (`"app:gfx"` → `app/gfx.d.rut`,
 `"plugin:my_map"` → `plugin/my_map.d.rut`, `"std:collection"` likewise):
 compiled and verified like any module, generating no code of its own. rutc,
-the LSP, and AOT image builds see the surface with **zero Rust linked** —
+the LSP, and AOT binary builds see the surface with **zero Rust linked** —
 the role tur's `index.d.ts` plays today, but in-language and type-checked.
 
 Two declaration keywords, two linkage targets (RFC 0029 — both are
@@ -25,7 +25,7 @@ Two declaration keywords, two linkage targets (RFC 0029 — both are
 | keyword | implementation lives in | bound at link against |
 |---|---|---|
 | `host fn` / `host class` | the **embedding Rust** — a registered `NativeModule` | the ClassTable / fn table reflection |
-| `extern fn` / `extern class` | **another rut compilation unit** — a published `.rutc` image | the linked package image |
+| `extern fn` / `extern class` | **another rut compilation unit** — a published `.rutc` binary | the linked package binary |
 
 ```rut
 // app/gfx.d.rut — declaration file for "app:gfx"
@@ -45,16 +45,18 @@ host class Fence {                              // NOT exported: known inside
 }                                               // slot), nameable nowhere else
 ```
 
-- A `host class` declaration may contain method signatures and a
-  **constructor signature** (`constructor(cap: i32): Self;`) — the native
-  constructor keeps construction an ordinary type-call (RFC 0026). Host class
-  methods are instance methods: they spell the `self` receiver like rut
-  methods (`fn set(self, k: K, v: V): void;` — RFC 0010 §2; the Rust side's
+- A `host class` declaration may contain method signatures — instance
+  methods (`fn set(self, k: K, v: V): void;`) and **class methods**
+  (`fn new(cap: i32): Self;`, no `self` — RFC 0010 §2), the latter the
+  native construction surface: `MyMap.new(cap)` is an ordinary method
+  call (RFC 0026). Host class
+  methods spell the `self` receiver like rut
+  methods (RFC 0010 §2; the Rust side's
   `this: &mut MyMap` parameter is that receiver). It may not
   declare fields: host instances box host values, not rut field
   blocks. An `extern class` (rut-package surface) has the same shape for
   the same reason — the package's fields are its business; you get
-  constructors and methods.
+  class methods and instance methods.
 - **Param bounds on host/extern decls are admission-only syntax**: `K:
   Hashable` constrains which instantiations compile (checked against
   the interface + its `requires` graph, RFC 0012 §2) and grants nothing
@@ -67,7 +69,7 @@ host class Fence {                              // NOT exported: known inside
   structurally, RFC 0015 §2).
 - **Methods dispatch by slot, not name.** Compiling the declaration file
   assigns every host/extern member a stable slot id (declaration order); the
-  module image carries the slot table. Calls compile to `callnat {
+  module binary carries the slot table. Calls compile to `callnat {
   slot }` (RFC 0032) — member names are binding-time labels for the
   binding side only (RFC 0026), never dispatch keys, never in IR.
 - **Visibility**: declaration files are ordinary modules — RFC 0003 §2
@@ -91,4 +93,4 @@ host class Fence {                              // NOT exported: known inside
 - OQ-2: slot stability across compiler versions — recompiling a
   declaration file must agree with an already-registered impl; the decl
   digest (RFC 0033 §1) covers slots, so disagreement fails link — but is
-  renumbering allowed at all across image versions?
+  renumbering allowed at all across binary versions?

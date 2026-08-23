@@ -43,18 +43,20 @@ callnat slot, (rRecv,) args -> rD
                           ; compile, resolved at register, a constant at IR
                           ; time (fold/CSE-safe, same class as calli with a
                           ; known slot). Names never dispatch. The recv form
-                          ; covers host methods & constructors; the body stays
+                          ; covers host methods (construction `new` slots
+                          ; included); the body stays
                           ; opaque — never inlined. Also reaches the VM's
                           ; internal natives (§1.1 R2: `str`/`concat`/`tmpl`,
                           ; `Opaque` construction, Vec's named API) — slots fixed at
                           ; boot in the same registry (RFC 0022 §2)
 ret     rD
-ctor    cid, args -> rD   ; class type-call: run constructor -> instance
-                          ; (host classes construct via callnat — the native
-                          ; constructor is a slot, not a cid)
-newcell cid -> rD         ; mint a value cell (dataclass literal — RFC 0009;
-                           ; fields follow via setf); also the `own(x)` body:
+newcell cid -> rD         ; mint a value cell (the `Self { .. }` / dataclass
+                           ; literal — RFC 0009/0010; fields follow via setf);
+                           ; also the `own(x)` body:
                            ; newcell + payload copy + handle-field retains
+                           ; (class construction is a plain `call` of the
+                           ; class method; host classes construct via
+                           ; callnat on their native `new` slot — RFC 0026)
 getf    rD, rO, fidx      ; field load (cell — payload layout known)
 setf    rO, fidx, rV      ; field store (+retain/release where typed)
 scopy   rD, rS, size      ; payload copy for `own` (memcpy + ref-field
@@ -101,7 +103,7 @@ An op exists for exactly one of three things:
   vtable calls; the backing cell's dispatch-through-owner (RFC 0016 §4)
   is simply its slot target. And things rut spells with a **name** are
   internal natives, never ops: `str`/`concat` (the `f""` desugaring —
-  RFC 0007 §2), Template construction (RFC 0027), `Opaque(v)`
+  RFC 0007 §2), Template construction (RFC 0027), `Opaque.new(v)`
   (RFC 0014), and concrete `Vec<T>`'s `len`/`push`/`pop` — native
   modules the VM boots with, in the same registry host modules use
   (RFC 0022 §2), reached by `callnat`. Hence no `strcat`, no `tmpl`.
@@ -129,7 +131,7 @@ The named type operations lower to R3 primitives:
   (LICM), and a chain of downcasts over one cell folds to one `tidof`
   + `brtable` (RFC 0031 §3) — RFC 0014's IR contract falls out of the
   primitives instead of being blocked by an opaque `downc` op. The
-  symmetry is deliberate: `Opaque(v)` (erasure) is an internal-native
+  symmetry is deliberate: `Opaque.new(v)` (erasure) is an internal-native
   call and `downcast` (recovery) is prelude code — neither is magic.
 
 ## 2. Suspend lowering

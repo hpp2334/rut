@@ -59,8 +59,9 @@ export interface Deserializable requires Reflectable { }
 - **`Deserializable` is auto-only**: hand-writing `implements
   Deserializable` is a compile error (the `Any` admission precedent,
   RFC 0014) — reflective construction is descriptor-backed, and
-  classes construct through constructors (RFC 0010 §1); reflection never
-  calls a constructor. Not vacuous, so it *can* be a bound.
+  classes construct through their own class methods (RFC 0010 §1);
+  reflection never
+  calls one. Not vacuous, so it *can* be a bound.
 - Manual class views are **curated**: private fields stay hidden
   because the impl does not expose them — privacy is what the impl
   says, not a walker-side law. They serialize **positionally**
@@ -190,7 +191,7 @@ payload; else `Err` ("unwrap first"); Leaf → `downcast` scalars
 positional walk or `Err`. `build`: Record →
 `member(j, f.name())`; absent → `f.default()`, else error naming the
 field; `construct(vals)`. Sums → `construct_variant(i, [])` /
-`(payloaded_i, [v])`. Seq → `make_vec`. Leaves → `Opaque(v)`.
+`(payloaded_i, [v])`. Seq → `make_vec`. Leaves → `Opaque.new(v)`.
 
 ## 5. The example
 

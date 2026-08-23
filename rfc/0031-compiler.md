@@ -93,7 +93,7 @@ exact concrete  >  dyn I (satisfies I)
 ```
 
 (Erasure sits off the lattice: the concrete host class `Opaque`,
-reached only by the explicit `Opaque(v)` type-call — RFC 0014.)
+reached only by the explicit `Opaque.new(v)` class method — RFC 0014.)
 
 Every `dyn` type is **unsized** — `dyn I` and `dyn Slice<T>` alike: the
 payload lives in a heap cell and a `dyn`-typed slot stores the cell
@@ -107,7 +107,7 @@ Array<T, N> | Vec<T> (concrete)   >  dyn Slice<T> (unsized object)
 
 `N` is a constant expression, part of the type's identity
 (*"array length must be a constant expression"* otherwise — RFC 0005);
-slices are never boxed or erased (`Opaque(v)` rejects them, RFC 0014).
+slices are never boxed or erased (`Opaque.new(v)` rejects them, RFC 0014).
 Fixed arrays and slices
 satisfy no interface bound — the same family as `Vec`/`Option`/`Result`
 (RFC 0026 §4).
@@ -152,5 +152,5 @@ there is no tier-2 to fall back on, so LIR must be right the first time.
   may cost CSE precision; measure on the dashboard example before
   committing.
 - OQ-2: cross-module inlining after linking (whole-program at embed time) —
-  attractive for host-heavy code; needs image format support for re-emission
+  attractive for host-heavy code; needs binary format support for re-emission
   (RFC 0033 OQ-2).

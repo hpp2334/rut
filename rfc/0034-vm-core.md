@@ -1,7 +1,7 @@
 # RFC 0034: VM Core — Interpreter Loop, Traps, Budgets
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0032 (LIR), RFC 0016 (heap), RFC 0018–0019 (tasks),
   RFC 0022 (host), RFC 0001 (M1)
@@ -18,10 +18,10 @@ One struct, one thread, one heap:
 pub struct Vm {
     types:  TypeTable,               // global RutType descriptors + vtables
     heap:   Heap,                    // RFC 0016 §5 — pure RC heap
-    mods:   Vec<Module>,             // linked images (RFC 0033 §1)
+    mods:   Vec<Module>,             // linked binaries (RFC 0033 §1)
     frames: Vec<Frame>,              // the call stack
     ready:  Deque<TaskId>,           // woken coroutines (RFC 0018 §4)
-    budget: Budget,                  // §4 — ops, deadline, interrupt
+    lim:    Limits,                  // §4 + RFC 0040 — fuel, heap, deadline
     host:   HostHooks,               // RFC 0035 §1 — loader, timers, natives
 }
 ```
@@ -33,7 +33,7 @@ Everything the host needs is methods on it; nothing else is public.
 
 ```rust
 struct Frame {
-    func: &'static FuncImage,        // linked code (RFC 0033 §1)
+    func: &'static FuncCode,        // linked code (RFC 0033 §1)
     pc: u32,
     regs: Vec<Slot>,                 // typed per the signature; verified
     state: u8,                       // suspend resume state (RFC 0018 §4)
@@ -52,7 +52,8 @@ the host boundary (`at plugin:my_map.MyMap.set (host)`) — RFC 0036 §2.
 ## 2. Traps
 
 Arithmetic overflow (RFC 0004 §3), `Option.value` on `None`, failed
-assertions, `panic(...)`, stack/budget exhaustion, and verifier-impossible
+assertions, `panic(...)`, stack/budget exhaustion, `Trap::OutOfMemory`
+and `Trap::OutOfFuel` (RFC 0040), and verifier-impossible
 states unwind as `Err(Trap)` — not Rust panics:
 
 ```rust
@@ -61,7 +62,7 @@ struct Trap { kind: TrapKind, msg: String, trace: RawTrace }  // RFC 0036 §2
 
 The `RawTrace` (frame pcs + native-boundary markers) is captured at
 unwind; **rendering is lazy** — names and source spans are looked up in
-the image's `SymbolTable` only if someone prints it (RFC 0036). **Traps
+the binary's `SymbolTable` only if someone prints it (RFC 0036). **Traps
 are catchable only at the host boundary** (RFC 0001 P4): a
 `vm.call(...)` returns `Result<Value, Trap>`; rut code never catches
 one. Coroutine frames are dropped on the way out — destructors run
@@ -80,10 +81,15 @@ one. Coroutine frames are dropped on the way out — destructors run
 
 ## 4. Budgets & interrupts
 
-- `Budget { max_ops: u64, deadline: Option<Instant>, interrupt_every: u32 }`
-  checked every `interrupt_every` ops (default 1024): over budget →
-  `Err(Trap::Interrupted)` with the frame parked, **resumable** — the loop
-  state is the frame, so the host can continue it later (`vm.resume()`).
+- `Limits { fuel: Option<u64>, deadline: Option<Instant>,
+  interrupt_every: u32 }` (RFC 0040): fuel counts ops down and
+  `deadline` is wall-clock — both checked every `interrupt_every` ops
+  (default 1024) alongside the heap check at every allocation
+  (RFC 0039 §2); over any limit →
+  `Err(Trap::Interrupted | OutOfFuel | OutOfMemory)` with the frame
+  parked, **resumable** — the loop
+  state is the frame, so the host can continue it later (`vm.resume()`,
+  `vm.add_fuel(n)`, `vm.set_heap_limit`).
 - `interrupt()` lets a UI host yield mid-frame (16 ms slices) and tests
   cut infinite loops; native fns run outside the budget and are expected
   to be fast (RFC 0022 §3).

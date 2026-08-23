@@ -17,7 +17,7 @@ fn decode(raw: Vec<u8>): Result<Vec<u8>, HttpError> {
 }
 
 export suspend fn main(): void {
-    let log = Logger("fetch");
+    let log = Logger.new("fetch");
     let page = await fetch_page("https://example.com");
     if (page.is_ok()) {
         log.info(f"{page.value.len()} bytes");

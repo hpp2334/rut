@@ -1,4 +1,4 @@
-# RFC 0033: Module Image & Verification
+# RFC 0033: Module Binary & Verification
 
 - **Status:** Draft
 - **Date:** 2026-08-23
@@ -8,23 +8,23 @@
 - **Supersedes:** RFC 0007 §5–8 (pre-restructure)
 - **Part:** F — Toolchain & artifacts
 
-## 1. The `.rutc` module image
+## 1. The `.rutc` module binary
 
 ```rust
-struct ModuleImage {                 // serialized, versioned, hash-stable
+struct ModuleBinary {                 // serialized, versioned, hash-stable
     version: u32, name: String,
     imports: Vec<(specifier, Vec<ImportedName>)>,   // resolved by loader
     types: Vec<RutType>,             // incl. field layouts + vtables
                                        (RFC 0015 §6, repr C — RFC 0024)
     consts: Vec<Const>,              // strings, byte blobs, i64/f64, tids
-    funcs: Vec<FuncImage>,           // name, signature (typed regs), code,
+    funcs: Vec<FuncCode>,           // name, signature (typed regs), code,
                                        // state tables (suspend), host slots
     symbols: SymbolTable,            // function symbols + pc→span — RFC 0036;
 }                                     // strippable (below + RFC 0036 §4)
 ```
 
 - Decl surfaces (`.d.rut`, RFC 0029) compile to **DeclIrs**
-  (`.d.ir`), not images — no bodies exist. A module that references
+  (`.d.ir`), not binaries — no bodies exist. A module that references
   surface members carries their **native slot table**: member name → slot
   id, signatures, and the surface's **decl digest** (covers slots — a
   re-bound impl or republished package whose table disagrees fails link,
@@ -32,7 +32,7 @@ struct ModuleImage {                 // serialized, versioned, hash-stable
   `--strip-native-names` (or `--release`) drops them — publishing hides
   names (RFC 0029 §6).
 - Deterministic serialization: same AST + same dependency versions →
-  byte-identical image (cacheable by content hash; the embedder may ship
+  byte-identical binary (cacheable by content hash; the embedder may ship
   `.rutc` artifacts instead of sources — loose, or zipped inside a
   `.rutbundle` with the surface artifacts under a `rut.toml` manifest,
   RFC 0038; strip levels and the `.rutc.map` sidecar are unchanged by
@@ -46,16 +46,17 @@ struct ModuleImage {                 // serialized, versioned, hash-stable
   names + spans; `--strip-native-names` drops name strings; `--release`
   additionally drops spans — traces still capture, degrading to
   `pkg:mod #[3] @ pc 41`. `rutc build --map` serializes the same
-  `SymbolTable` as a `.rutc.map` sidecar keyed by the image's content
+  `SymbolTable` as a `.rutc.map` sidecar keyed by the binary's content
   hash — a **stable, versioned contract** (the deliberate opposite of
   `.d.ir`, an unstable DeclIr cache that contains no symbols at all,
-  RFC 0029 §4) for restoring traces captured against stripped images.
+  RFC 0029 §4) for restoring traces captured against stripped binaries.
 
 ## 2. Verification (load time)
 
 The verifier re-checks, per function: register types vs op signature,
 def-before-use, jump targets in-range and to block heads, `brtable`
-density, constructor `Self { .. }` completeness (every uninitialized field
+density, `Self { .. }` literal completeness inside class methods
+(every uninitialized field
 covered — RFC 0010 §1), suspend state tables closed under resume edges,
 native-slot signatures vs the DeclIrs the module compiled against
 (RFC 0029 — including generic-instantiation admission: the `implements`
@@ -67,7 +68,7 @@ operands concrete and — by convention — guarded by a preceding
 `tidof`+`icmp` branch (an unguarded `unbox` verifies but traps on
 mismatch, RFC 0032 §1.1). A failed
 verification is a load error reporting the module and function — corrupted
-images never execute.
+binaries never execute.
 
 ## 3. Const pool & load-time expressions
 
@@ -94,6 +95,6 @@ clones, what a host struct mirrors).
 
 ## Open questions
 
-- OQ-1: image compatibility across VM versions — `version` field exists;
+- OQ-1: binary compatibility across VM versions — `version` field exists;
   policy (refuse, recompile, or migration shims) undecided. (`.d.ir` has
   no such question — it is a cache, never a contract, RFC 0029 §4.)

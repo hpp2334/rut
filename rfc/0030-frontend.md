@@ -117,12 +117,12 @@ letdecl    := 'let' Ident ':' Type '=' expr ';'   // module binding — load-tim
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
 dataclass  := 'dataclass' Ident genericparams? ('implements' IfaceList)? '{' (field | meth)* '}'
 class      := 'class' Ident genericparams? ('implements' IfaceList)? '{' member* '}'
-member     := 'private'? ('static' field | ('suspend')? 'constructor' | field | meth)
+member     := 'private'? ('static' field | ('suspend')? meth)
 meth       := 'fn' Ident '(' 'mut'? 'self'? params ')' (':' Type)? block
                                               // 'self' first param => instance
                                               // method; no 'self' => class
-                                              // method (RFC 0010 §2 — there
-                                              // is no 'static fn')
+                                              // method — the construction surface
+                                              // (RFC 0010 §1); no 'static fn')
 dispose    := 'dispose' '(' 'self' ')' ':' 'void' block
 interface  := 'interface' Ident genericparams? ('requires' IfaceList)? '{' methsig* '}'
 methsig    := 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
@@ -160,7 +160,7 @@ interface/instantiation or concrete type, never `dyn`-prefixed — but
 resolved to a `TypeId` rather than a value type (RFC 0012 §3). `dyn` and
 `is` are keywords
 (RFC 0002 §4); `as` remains
-reserved and always errors (erasure is the `Opaque(v)` type-call,
+reserved and always errors (erasure is the `Opaque.new(v)` class method,
 RFC 0014).
 
 Declarations-only module scope (RFC 0003 §1) is enforced by the parser
@@ -177,12 +177,13 @@ surfacedecl := 'host' 'fn' Ident genericparams? '(' params ')' (':' Type)? ';'
              | 'extern' 'fn' Ident genericparams? '(' params ')' (':' Type)? ';'
              | 'host' 'class' Ident extparams? '{' extmember* '}'
              | 'extern' 'class' Ident extparams? '{' extmember* '}'
-extmember   := 'constructor' '(' params ')' ':' Type ';'
-             | 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
-                                            // host/extern class methods are
-                                            // instance methods — `self`
-                                            // spelled, no body (RFC 0025 §2)
-extparams   := '<' (Ident ('requires' Iface)? ','?)+ '>'   // bounds: equires form    // bounds: surface decls only (RFC 0013 §2)
+extmember   := 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
+              | ('suspend')? 'fn' Ident '(' params ')' (':' Type)? ';'
+                                            // host/extern class members:
+                                             // instance methods spell `self`; no-`self` class
+                                             // methods are the native construction surface (RFC 0025 §2)
+extparams   := '<' (Ident ('requires' Iface)? ','?)+ '>'   // bounds: 
+equires form    // bounds: surface decls only (RFC 0013 §2)
 ```
 
 Mode is chosen by file extension. The parser in declaration mode rejects
@@ -322,9 +323,10 @@ enum NodeKind {
                                             // ONLY in .d.rut (RFC 0029 §2)
     // Members & statements — same discipline:
     FieldDecl{ is_mut, name: IdentId, ty: NodeId, init: Option<NodeId> },
-    Constructor{ is_suspend, params: Vec<NodeId>, ret: NodeId, body: NodeId },
     MethodDecl{ has_self, is_mut, sig: NodeId, body: NodeId },
-              // is_mut = `mut self`: may assign fields; interface members
+               // has_self=false => class method — construction included
+               // (RFC 0010); is_mut = `mut self`: may assign fields;
+               // interface members
               // are always dynamic (RFC 0012). No is_static: absence of
               // `self` IS the class-method case (RFC 0010 §2)
     LetStmt { is_mut, name: IdentId, ty: Option<NodeId>, init: NodeId },

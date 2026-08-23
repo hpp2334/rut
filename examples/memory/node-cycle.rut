@@ -8,23 +8,24 @@ import { Logger } from "std:log";
 
 class Node {                              // initializer covers `next`
     next: Option<Node> = Option.none;     // a HANDLE slot — recursive types
-                                           // are legal (pointer-sized);
-                                           // -> default constructor: Node()
+                                           // are legal (pointer-sized)
+    fn new(): Self { return Self {}; }   // explicit construction — no
+                                           // implicit default
     fn link(mut self, other: Node): void {
         self.next = Option.some(other);
     }
 }
 
 fn make_cycle(): Node {                   // a -> b -> a : strong cycle
-    let a = Node();
-    let b = Node();
+    let a = Node.new();
+    let b = Node.new();
     a.link(b);
     b.link(a);
     return a;
 }
 
 export fn main(): void {
-    let log = Logger("cycle");
+    let log = Logger.new("cycle");
     let head = make_cycle();
     log.info(f"head.next alive: {head.next.is_some()}");
 

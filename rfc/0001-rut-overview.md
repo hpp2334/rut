@@ -106,7 +106,7 @@ a structural answer in rut:
 
 - No dynamic typing, no `any`, no gradual typing. Erasure is explicit and
   spelled out: `dyn I` interface objects (RFC 0012) for polymorphism,
-  `Opaque` boxes via `Opaque(v)`/`downcast` (RFC 0014) for storage —
+  `Opaque` boxes via `Opaque.new(v)`/`downcast` (RFC 0014) for storage —
   checked, recoverable, never silent.
 - No structural ("duck") typing, no object literals — interfaces are
   nominal and declared (RFC 0012).
@@ -145,7 +145,7 @@ final sections of the RFC they implement).
 - 0007 — literals & inference: suffixes, conversions, plain/raw/format strings
 - 0008 — control flow & `when`: exhaustive pattern expressions
 - 0009 — dataclasses: open value records (methods + `implements`)
-- 0010 — classes & constructors: sealed value records, no inheritance
+- 0010 — classes: sealed value records, class-method construction
 - 0011 — reference semantics, `own`, `Weak` & disposal
 - 0012 — interfaces & dispatch: the sole dynamic mechanism; `dyn I` object
   types; type tests
@@ -181,11 +181,14 @@ final sections of the RFC they implement).
 - 0030 — frontend: lexer, parser, AST, diagnostics
 - 0031 — compiler: resolve, typecheck, HIR
 - 0032 — typed bytecode (LIR)
-- 0033 — module image & verification
+- 0033 — module binary & verification
 - 0034 — VM core: interpreter loop, traps, budgets
 - 0035 — loading, host hooks & the embedding loop
 - 0036 — diagnostics: stack traces, locations & symbolication
-- 0038 — module bundles: `.rutbundle` — image + surfaces, one file
+- 0038 — module bundles: `.rutbundle` — binary + surfaces, one file
+- 0039 — the self-managed VM heap: accounted, budgeted, pooled
+- 0040 — resource limits: heap budget, fuel & hang detection
+- 0041 — project structure & the demo page
 
 **Part G — Reflection & serialization**
 
@@ -200,7 +203,7 @@ final sections of the RFC they implement).
 | P2 | Isolate workers with typed channels and transferable buffers | 0021 |
 | P3 | Reference counting; deterministic destructors; cycles leak by design (`Weak<T>`) | 0016–0017 |
 | P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0005, 0034 |
-| P5 | TS-like data model: `dataclass`/`class` (both **shared refcounted cells** — reference semantics by default, `own(x)` for eager copies; `constructor` type-calls — no `new` keyword, `suspend constructor` allowed), `interface` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0009–0012, 0016 |
+| P5 | TS-like data model: `dataclass`/`class` (both **shared refcounted cells** — reference semantics by default, `own(x)` for eager copies; classes construct through their own class methods — `Rect.new(..)`, no `constructor` keyword, no `new` expression, `suspend` class methods allowed), `interface` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0009–0012, 0016 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
 | P8 | Both user types (`dataclass` **and** `class`) have **repr C** payloads inside their cells; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015, 0024 |

@@ -111,8 +111,9 @@ Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
 - `string` is immutable → interned literals live in the module's constant
   pool (immortal, rc==0 sentinel); runtime-built strings are ordinary
   cells with no interior pointers, and their buffers are shared
-  copy-on-write **internally** (Rust-side `Rc<[u8]>`-style cloning at
-  concat) — an implementation detail never exposed to the user: there is
+  copy-on-write **internally** (VM-heap `StrBuf` blocks with their own
+  refcount — RFC 0039 §3) — an implementation detail never exposed to
+  the user: there is
   no mutation API on `string`, so COW and always-copy are
   observationally identical (RFC 0004 §2).
 - No interior pointers exist anywhere (no `&mut` into the middle of a
@@ -192,6 +193,17 @@ impl Heap {
     }
 }
 ```
+
+## 6. Where the bytes come from — the self-managed heap
+
+The heap manages itself (RFC 0039): host code may use std, but every
+byte backing a rut value is allocated through the VM's own manager —
+size-class freelists for cells (freelist push at release-to-zero, after
+`Disposal`), slab-backed buffers and register blocks, immortal
+singletons in a drop-time slab. Every allocation checks `Limits`
+before carving: over budget → `Trap::OutOfMemory`, resumable, no
+partial writes (RFC 0040 §1). `Vm::drop` frees the whole heap after
+the leak report (RFC 0017 §3).
 
 ## Open questions
 

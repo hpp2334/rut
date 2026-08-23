@@ -31,7 +31,7 @@ boot-registered module (RFC 0022 §2, RFC 0032 §1.1 R2) — while element
 access on a concrete `Vec<T>` stays the fused `arrget`/`arrset` ops
 (RFC 0016 §4).
 
-Two more builtins are type syntax rather than constructors:
+Two more builtins are type syntax only (no call form, no members):
 
 - **`Array<T, N>` — the fixed array**: a builtin **const-generic** type
   (the only one in v1 — RFC 0013 §2). `N` is a constant expression

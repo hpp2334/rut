@@ -30,7 +30,7 @@ fn quicksort(xs: Vec<i32>, lo: i32, hi: i32): void {
 }
 
 export fn main(): void {
-    let log = Logger("sort");
+    let log = Logger.new("sort");
     let xs = Vec.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.len() - 1);
 

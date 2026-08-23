@@ -40,7 +40,7 @@ builtins (§3), the `is` type tests (RFC 0012 §3), `Opaque` recovery
 6. **Serialization** — `std:reflect` walkers traverse `RutType`
    descriptors (RFC 0037).
 7. **`Opaque` recovery** — `downcast<T>` (RFC 0014) checks the boxed cell's
-   `TypeId`; `Opaque(v)` stamps it. Erasure without reification would be
+   `TypeId`; `Opaque.new(v)` stamps it. Erasure without reification would be
    `any`; with reification it is a checked box.
 
 ## 3. Layout & type-identity builtins
@@ -173,7 +173,8 @@ class's — or a dataclass's (RFC 0009) — vtable fills every slot of
 every interface instantiation it declares `implements` **or
 auto-implements** (std:reflect's protocols — RFC 0037; registry entries
 for the builtin generics likewise, RFC 0022 §2). Every value cell is
-minted at construction (the literal or the constructor) with its vtable
+minted at construction — the `Self { .. }` literal inside a class
+  method (RFC 0010 §1) — with its vtable
 already attached; widening a composite to
 `dyn I` **reuses the same cell and vtable** — the interface ref is the
 handle plus the vtable pointer, no allocation, no copy (RFC 0011 §3). A
@@ -220,7 +221,7 @@ implements scan — never for concrete tests; `downcast`'s check is
 `tidof` + `br` + guarded `unbox`, RFC 0014). The widening
 itself — a composite to `dyn I` — needs no dispatch
 machinery and no allocation: an interface value already *is* the object
-ref whose header reaches the vtable; `Opaque(v)` is the only box mint
+ref whose header reaches the vtable; `Opaque.new(v)` is the only box mint
 in the language (RFC 0014).
 
 ## Open questions

@@ -14,15 +14,15 @@
 // propagation.
 //
 // Restoration (RFC 0036 §3): a StackTrace is raw pcs + native-boundary
-// markers, symbolicated against the image's SymbolTable — in-VM when
-// symbols are loaded, offline via the .rutc.map sidecar when the image
+// markers, symbolicated against the binary's SymbolTable — in-VM when
+// symbols are loaded, offline via the .rutc.map sidecar when the binary
 // shipped stripped (--release), or by recompiling: deterministic
 // serialization means identical pcs.
 
 import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
 import { Logger } from "std:log";
 
-let log = Logger("app");
+let log = Logger.new("app");
 
 // The error carries WHERE for free, and a trace only if asked:
 dataclass FetchError {
@@ -60,7 +60,7 @@ fn main(): void {
             // at: folded constant — prints `examples/basic/error-context.rut:38:13`
             log.error(f"fetch failed at {e.at.file}:{e.at.line}:{e.at.col}");
             // render() symbolicates lazily; degrades to
-            // `pkg:mod #[3] @ pc 41` on stripped images instead of
+            // `pkg:mod #[3] @ pc 41` on stripped binaries instead of
             // failing. Native frames appear as markers:
             //   at plugin:my_map.MyMap.set (host)
             when (e.trace) {

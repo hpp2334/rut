@@ -18,22 +18,22 @@ Three file kinds, one rule each:
 | `.d.rut` | declarations only — the surface | publishable, human-readable, hand-writable; **the only place `host fn/class` and `extern fn/class` may appear** |
 | `.d.ir` | compiled **DeclIr** of a `.d.rut` — the declaration surface | cache; version-locked (see §4) |
 
-Plus the runtime artifact `.rutc` — the compiled module image (RFC 0033)
+Plus the runtime artifact `.rutc` — the compiled module binary (RFC 0033)
 with bodies. A published package ships `.rutc` (implementation) +
 `.d.rut` (surface). Consumers typecheck against the surface and link
-against the image — they never need package source.
+against the binary — they never need package source.
 
 The `.d.rut` mechanism serves both linkage kinds (RFC 0025):
 
 | keyword | implementation lives in | link check compares against |
 |---|---|---|
 | `host fn` / `host class` | the **embedding Rust** — a registered `NativeModule` | the ClassTable / fn-table reflection (RFC 0026 §1) |
-| `extern fn` / `extern class` | **another rut compilation unit** — a published `.rutc` image | the package image's export/slot table (§6) |
+| `extern fn` / `extern class` | **another rut compilation unit** — a published `.rutc` binary | the package binary's export/slot table (§6) |
 
 ## 1. Why declaration files exist
 
 - **Publishing without source.** Package authors likely want to hide
-  variable names and logic. Publishing compiled images (`.rutc`) does that:
+  variable names and logic. Publishing compiled binaries (`.rutc`) does that:
   bodies are compiled; local names are compiled away (§6).
 - **Cheap third-party typechecking.** To compile module `M` importing
   `"pkg:mod"`, the compiler needs only `pkg:mod`'s *surface* — names,
@@ -101,13 +101,13 @@ change freely, any release may regenerate them. The header's exact version
 must match the running rutc — on mismatch, rutc silently regenerates from
 the sibling `.d.rut` (or refetches it). Nothing may *link* or *ship* a
 `.d.ir` as a compatibility surface; the stable artifacts are `.d.rut`
-(text) and `.rutc` (image, versioned per RFC 0033 §1 policy). This keeps
+(text) and `.rutc` (binary, versioned per RFC 0033 §1 policy). This keeps
 the DeclIr format cheap to evolve — it can change quickly, cross
 version, without deprecation cycles.
 
 **Naming note:** the `.d.ir` payload is the **DeclIr** — *declaration
 IR*, literally what the extension spells. "Symbol table" is a reserved
-term in this series: it means the image-side function-symbol + pc→span
+term in this series: it means the binary-side function-symbol + pc→span
 tables inside `.rutc` (and their `.rutc.map` sidecar) that stack traces
 symbolicate against (RFC 0036). A DeclIr has no function symbols and
 never participates in trace restoration.
@@ -131,7 +131,7 @@ When module `M` imports `"pkg:mod"` and rutc needs its surface to typecheck
    `.d.rut` alongside the registered implementation (RFC 0022 §1).
 
 Bodies are resolved only at link/run: registered Rust for `host` decls;
-the published `pkg/mod.rutc` image for `extern` decls. Compiling `M`
+the published `pkg/mod.rutc` binary for `extern` decls. Compiling `M`
 against a package whose implementation is absent is legal and complete —
 `rutc check M.rut` passes; only `vm.load` requires the bodies.
 
@@ -139,17 +139,17 @@ against a package whose implementation is absent is legal and complete —
 
 An author publishes:
 
-- `pkg/mod.rutc` — the compiled image with bodies (RFC 0033). Local names
+- `pkg/mod.rutc` — the compiled binary with bodies (RFC 0033). Local names
   are compiled away during compilation; what remains in diagnostics data
   can be dropped entirely — `--strip-native-names` (or `--release`) leaves
-  member-name strings out of the image (RFC 0033 §1).
+  member-name strings out of the binary (RFC 0033 §1).
 - `pkg/mod.d.rut` — the surface, hand-written or generated
   (`rutc decl pkg/mod.rut` emits it from the module's exported surface);
   hand-editable afterwards.
 - optionally `pkg/mod.d.ir` — pointless to ship (consumers regenerate,
   §4), but harmless.
 
-Everything above may instead ship as **one file**: `rutc pack` zips image +
+Everything above may instead ship as **one file**: `rutc pack` zips binary +
 surface + DeclIr + the `.rutc.map` sidecar under a versioned `rut.toml`
 manifest — a `.rutbundle` (RFC 0038). Same contract, one file; the
 resolver (§5) treats a mounted bundle's entries as the loose artifacts.
@@ -158,7 +158,7 @@ For an `extern class` in a consumer to link, the published `.rutc` must
 carry an export/slot table whose decl digest equals the one the consumer
 compiled against (§3) — drift is a load error naming both modules, never
 a runtime surprise. This is the same two-checkpoint contract as RFC 0026
-§1 with "linked image" substituted for "ClassTable reflection".
+§1 with "linked binary" substituted for "ClassTable reflection".
 
 **Honesty note:** compilation is not encryption — published code is
 recoverable with effort, like any compiled artifact. What publishing
@@ -170,7 +170,7 @@ silent drift impossible.
 
 - OQ-1: should `rutc decl` (surface generation) also emit doc comments
   into `.d.rut`, and is a generated-then-edited file re-checkable against
-  the image (surface drift lint)?
+  the binary (surface drift lint)?
 - OQ-2: `dataclass` in `.d.rut` with `implements`/method bodies — the
   impl table would live in the `.rutc` while the field block ships in the
   surface; defer until a package actually needs it.

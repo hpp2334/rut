@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0034 (VM core), RFC 0033 (images), RFC 0029
+- **Depends on:** RFC 0034 (VM core), RFC 0033 (binaries), RFC 0029
   (declaration files), RFC 0022 (native modules), RFC 0021 (workers)
 - **Supersedes:** RFC 0008 §4–5, §8 + RFC 0003 §6 + RFC 5003 §5
   (pre-restructure)
@@ -27,7 +27,7 @@ struct HostHooks {
 }                                           // sink; None = silent no-op
 ```
 
-- **Loading executes nothing**: `load` verifies and links an image; the
+- **Loading executes nothing**: `load` verifies and links an binary; the
   host then calls an entry explicitly (`vm.call("main", ..)`, sync or
   suspend).
 - Import specifiers (`"std:fs"`, `"imaging"`, `"./state"`) are resolved
@@ -38,13 +38,13 @@ struct HostHooks {
   (version-matched) → `.d.rut` — compiled and
   verified like any module; declaration surfaces are pure, so checking
   needs no Rust and no package bodies. The **link** step then proves every
-  surface member *referenced* by the image has its implementation:
+  surface member *referenced* by the binary has its implementation:
   signature-equal under the crossing rule for `host` decls (ClassTable
   reflection, RFC 0026 §1) or decl-digest-equal for `extern` decls
-  (published image export table, RFC 0029 §6) — pure data compares,
+  (published binary export table, RFC 0029 §6) — pure data compares,
   nothing runs. Missing: `no implementation bound for
   'plugin:my_map.MyMap'` (a load error, not a runtime trap).
-- Cyclic imports are a link error (module set must be a DAG at the image
+- Cyclic imports are a link error (module set must be a DAG at the binary
   level).
 - `type_id` rebasing: link-time rebase maps module-local type indices into
   the global table (RFC 0033 §1).
@@ -52,7 +52,9 @@ struct HostHooks {
 ## 2. Workers hook
 
 `spawn_worker` (RFC 0021 §3) is a host hook: it constructs a new `Vm`
-(sharing the type table and loader, not the heap), loads the worker
+(sharing the type table and loader, not the heap) with **its own
+`Limits`** — transfers count against the child budget (RFC 0040 §4) —
+loads the worker
 module, transfers arguments (move semantics on every cell — transfer at
 rc==1, else copy — RFC 0021 §4), and returns `Sender`/`Receiver` pairs backed by OS
 channels. Channel ops inside the VM are ops (`chsend`/`chrecv`,
@@ -63,15 +65,16 @@ RFC 0032 §1); when no value is ready, `chrecv` parks the frame like
 
 | call | purpose |
 |---|---|
-| `Vm::new(host)` | construct; host owns hooks |
-| `vm.load(spec) / vm.load_image(bytes)` | verify + link (§1, RFC 0033 §2) |
+| `Vm::new(host)` / `Vm::new_in(host, limits)` | construct; budgeted form takes `Limits` (RFC 0040) |
+| `vm.set_heap_limit(n)` / `vm.set_fuel(n)` / `vm.add_fuel(n)` / `vm.fuel_remaining()` / `vm.heap_usage()` | live limit control & telemetry (RFC 0040) |
+| `vm.load(spec) / vm.load_binary(bytes)` | verify + link (§1, RFC 0033 §2) |
 | `vm.call(name, &[Value]) -> Result<Value, Trap>` | sync entry |
 | `vm.spawn(name, args) -> TaskHandle` | suspend entry; poll via RFC 0034 §4 |
 | `vm.run_until_idle() / vm.poll(deadline) / vm.resume()` | stepping |
 | `vm.register_module(name, native)` | native bodies (RFC 0022 §2) |
 | `vm.register_struct::<T>()` | repr-C layout check (RFC 0024) |
 | `vm.heap_stats()` | live per-type object counts (RFC 0017 §3) |
-| `vm.symbolicate(&raw) -> Vec<TraceEntry>` | trace names/spans from loaded images (RFC 0036 §3) |
+| `vm.symbolicate(&raw) -> Vec<TraceEntry>` | trace names/spans from loaded binaries (RFC 0036 §3) |
 
 Errors are values (`Result`), bugs are traps, and the host is always in
 charge of time, IO, and lifetime — the embeddability pillar (RFC 0001 G8).

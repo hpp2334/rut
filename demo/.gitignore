@@ -1,0 +1,5 @@
+node_modules/
+dist/
+public/rut.wasm
+*.log
+.DS_Store

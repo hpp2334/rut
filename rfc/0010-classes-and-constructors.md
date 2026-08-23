@@ -1,4 +1,4 @@
-# RFC 0010: Classes & Constructors — Sealed Value Records, No Inheritance
+# RFC 0010: Classes — Sealed Value Records, No Inheritance
 
 - **Status:** Draft
 - **Date:** 2026-08-23
@@ -9,59 +9,68 @@
 
 ## Summary
 
-See **`examples/basic/classes.rut`** — constructor type-calls, the class-private
-`Self { .. }` literal, `suspend constructor`, `private constructor` sealing,
-explicit `self` receivers, static fields.
+See **`examples/basic/classes.rut`** — class-method construction
+(`Rect.new(..)`), the class-private `Self { .. }` literal, `suspend`
+class methods, sealing without constructors, explicit `self` receivers,
+static fields.
 
-## 1. Classes — sealed value records with constructors
+## 1. Classes — sealed value records, class-method construction
 
 - **Also a shared cell.** A bare `Circle` is a heap cell handle like every
   non-primitive (RFC 0004 §2, RFC 0016 §1): assignment shares, mutation
   is visible through aliases, `own(c)` is the eager copy (RFC 0011 §1).
   What a class *adds* over a dataclass is **sealing**: private fields,
-  constructor-only construction, `static` fields, and `dispose()`
+  class-method-gated construction, `static` fields, and `dispose()`
   (RFC 0011). Reflection:
   a class is walkable **iff** it implements `std:reflect.Reflectable`
   (or a contract layer requiring it — RFC 0037) — default opaque, a
   *default* not a law; and it can never implement `Deserializable` —
-  construction is the constructor's job, reflective mint is
+  construction is the class's own job, reflective mint is
   descriptor-backed only. (`implements`
   is allowed on dataclasses as well — RFC 0009.) A dataclass auto-implements
   `std:reflect`'s `Reflectable` + `Deserializable` (RFC 0037) — that,
   not the keyword, is why it reflects and round-trips; classes stay
   opt-in by hand. `==` on class values is cell identity for both
   (RFC 0012 §4); field-wise comparison is an opted-in `Hashable.eq`.
-- **Construction is a type-call**: `Circle(1, 2, 3)` runs the class's
-  `constructor`. No `new` keyword exists, and there is no outside literal for
-  a class — construction always flows through a constructor.
-- **`constructor` is just a function** — class-level by definition (it never
-  takes a `self` receiver), ordinary
-  params, ordinary body, a `return`. It builds the instance with the
-  **class-private `Self { field: expr, .. }` literal** (the class name
-  spells it inside the body too). The literal must initialize every field
-  without an initializer; field initializers run for omitted fields.
-  Private fields are settable in the literal — inside the class body only.
-- The return type defaults to `Self` and may be declared otherwise, so
-  "try" constructors are just constructors:
-  `constructor parse(s: string): Option<Version>` (a `Disposal` class's
-  constructor still returns `Self` — the handle is the ownership,
-  RFC 0011 §2).
-- **No constructor parameter properties**: constructors are plain
-  functions (params are params), and the `Self { field: name }` literal
+- **Classes construct through their own class methods — nothing else
+  is constructible.** There is no `constructor` keyword and no
+  type-call: `Circle(1, 2, 3)` does not parse as construction, and no
+  outside literal for a class exists. A class method named by the
+  caller — `Rect.new(w, h)`, `Rect.from(other)`,
+  `Version.parse(s)` — is the one construction surface (§2 defines
+  class methods). `new` is not special syntax, just the conventional
+  primary-constructor name (`from`, `parse`, `open`, `default` are its
+  siblings); it is an ordinary identifier (RFC 0002 §4).
+- **The `Self { field: expr, .. }` literal is the class-private
+  construction** — legal anywhere inside the class body (class methods
+  and instance methods alike); the class name spells it inside the body
+  too (`Rect { .. }`). The literal must initialize every field without
+  an initializer; field initializers run for omitted fields. Private
+  fields are settable in the literal — inside the class body only.
+  That privacy *is* the seal: outside code can only build a class
+  value by calling a class method that chooses to build one.
+- **Class methods are just functions** — no `self` receiver (§2),
+  ordinary params, ordinary body, a `return`, and any declared return
+  type: `fn new(s: string): Option<Version>` is a "try" constructor,
+  `fn new(path: string): Self` an ordinary one (a `Disposal` class's
+  constructing method still returns `Self` — the handle is the ownership,
+  RFC 0011 §2). Being functions, they validate, default, cache,
+  register, or hand out singletons — construction logic has no
+  special rules.
+- **No parameter properties**: parameters are parameters — and the
+  `Self { field: name }` literal
   makes the param→field mapping explicit.
-- **`suspend constructor` is allowed** — same function, `await` in the body:
-  `Circle(..)` then returns `Future<Circle>` and callers write
-  `await Circle(..)` (cold future, RFC 0018 §2). No partially constructed
-  instance ever exists across an `await` — the `Self { .. }` literal is an
+- **`suspend` class methods are allowed** — same function, `await` in
+  the body: `await Socket.connect(addr)` returns when the connection
+  is up (cold future, RFC 0018 §2). No partially constructed instance
+  ever exists across an `await` — the `Self { .. }` literal is an
   ordinary expression, and locals live in the coroutine frame.
-- **No constructor declared + every field has an initializer → default no-arg
-  constructor** (`Sprite()`). A field without an initializer and no constructor
-  makes the class unconstructible outside its own body.
-- **`private constructor` seals** the class: the type-call is legal only inside
-  the class body. The named-constructor pattern is an opt-in on top — a class
-  method (`fn issue(): AuthToken { return AuthToken("..") }` — no `self`,
-  §2) validates,
-  caches, or registers, and outside code cannot bypass it.
+- **No implicit default construction.** A class whose fields all have
+  initializers still needs an explicit `fn new(): Self { return
+  Self {}; }` if outsiders should build it. A class with no accessible
+  constructing class method is **sealed** — constructible only inside
+  its own body (the `private fn of(..)` + public `fn parse(..)` pair
+  is the standard shape: parsing validates, `of` trusts).
 
 ## 2. Methods: explicit `self` — plus static fields & accessors
 
@@ -69,16 +78,22 @@ explicit `self` receivers, static fields.
   the first parameter — `fn add(self, x: i32, y: i32)` — and the body
   reads fields through `self`. There is no `this` keyword at all (RFC 0002
   §4). A method without a `self` parameter is a **class method** —
-  `fn from(x: i32)` — invoked on the class itself (`Version.from(..)`).
+  `fn new(w: f32, h: f32)`, `fn from(x: i32)` — invoked on the class
+  itself (`Rect.new(..)`, `Version.from(..)`, and `Self.new(..)` inside
+  the body). Class methods are the construction surface (§1).
   **There is no `static fn`**: presence or absence of `self` is the whole
   distinction, stated in the signature and greppable — the same
-  explicitness rule as `dyn` (RFC 0012 §2). Constructors never take `self`
-  (construction has no receiver yet); `Disposal.dispose` does (`dispose(mut self)`,
+  explicitness rule as `dyn` (RFC 0012 §2). Class methods never take
+  `self` (there is no receiver yet — or ever, for pure utilities);
+  `Disposal.dispose` does (`dispose(mut self)`,
   RFC 0011 §2). Interface methods and host/extern class methods follow
-  the identical rule (RFC 0012 §2, RFC 0025 §2).
+  the identical rule (RFC 0012 §2, RFC 0025 §2). Interface declarations
+  may not contain class methods — interface members are instance
+  methods with `self` (RFC 0012 §2).
 - `static` **fields** live in the class's module-static slot table. Static
   initializers must be load-time expressions (RFC 0003 §1) and are materialized
-  at load — constructors and methods are the only places to run logic.
+  at load — class methods and instance methods are the only places to
+  run logic.
 - No `get`/`set` accessor syntax anywhere — a computed property is just a
   method (`c.count()`), and a settable one takes an argument
   (`c.set_count(n)`). One member kind, one call convention, no hidden code

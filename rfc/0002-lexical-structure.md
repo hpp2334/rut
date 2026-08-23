@@ -49,12 +49,14 @@ compiler gives it no meaning; greppability is enforced by style.
   `Drawable` (object type `dyn Drawable`, RFC 0012 §2).
 - Scalars and simple buffers stay lowercase, C-style: `i32`, `u8`, `f32`,
   `bool`, `char`, `string`.
-- **Construction is a type-call** (RFC 0010): the type name in call position
-  constructs — `Circle(1, 2, 3)` (user class `constructor`; `await Circle(..)`
-  when the constructor is `suspend`),
-  `Weak(b)`, `Vec<f32>(1024)`,
-  `Channel<Job>()`.
-  **Erasure is a type-call too**: `Opaque(v): Opaque` (RFC 0014) — the
+- **Construction is a method call, never a type-call** (RFC 0010):
+  classes construct through their own class methods — `Rect.new(3, 4)`,
+  `Rect.from(other)`, `Version.parse(s)` (`await Socket.connect(..)`
+  when the class method is `suspend`); host classes likewise
+  (`MyMap.new(cap)`, RFC 0025). Only builtin types keep call forms —
+  allocation forms like `Vec<f32>(1024)`, `Weak(b)`, `Channel<Job>()`
+  are builtin syntax, not class construction. **Erasure is a class
+  method too**: `Opaque.new(v): Opaque` (RFC 0014) — the
   erased-storage host class, boxed by construction.
   Named variants of multi-case builtins stay statics: `Option.some`,
   `Option.none`, `Result.ok`, `Result.err`.
@@ -77,12 +79,15 @@ compiler gives it no meaning; greppability is enforced by style.
 
 ## 4. Reserved & contextual words
 
-- Reserved (parse error with explanation): `new`, `switch`, `case`,
+- Reserved (parse error with explanation): `switch`, `case`,
   `default`, `extends`, `super`, `as` (no casts at all — erasure is
-  the `Opaque(v)` type-call, RFC 0014), `type` (type alias — future),
+  the `Opaque.new(v)` class method, RFC 0014), `type` (type alias — future),
   `struct`, `match`, `null`, `undefined`, `any`, `unknown`, `typeof`,
   `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`,
   `const` (bindings spell `let` / `let mut` — RFC 0003 §1).
+- `new` is **not** reserved — it is an ordinary identifier and the
+  conventional construction method name (`Rect.new(..)`, RFC 0010);
+  there is no `new` expression anywhere.
 - `self` is contextual — the **receiver**: the first parameter of an
   instance method (`fn add(self, x, y)` — RFC 0010 §2) and the name it
   binds in the body; a method without `self` is a class method. There is
@@ -91,7 +96,7 @@ compiler gives it no meaning; greppability is enforced by style.
   `let`, `mut`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
   `enum`, `class`, `dataclass`, `interface`, `implements`,
   `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
-  `await`, `constructor`, `true`, `false`, `extern`, `where`
+  `await`, `true`, `false`, `extern`, `where`
   (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
   (RFC 0012 §2), and `is` (the type-test operator, `expr is Type` —
   RFC 0012 §3) are keywords. `panic(msg: string)` and

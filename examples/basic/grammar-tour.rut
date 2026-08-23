@@ -1,4 +1,4 @@
-// RFC 0009–0012 — grammar tour: dataclass, interface, class + constructor,
+// RFC 0009–0012 — grammar tour: dataclass, interface, class + class-method
 // shared cells + `own`, vtable dispatch, exhaustive when, format literals.
 //
 // NOTE: rut has no compiler yet — these files are the design corpus the
@@ -26,7 +26,7 @@ class Circle implements Drawable {         // a shared cell like everything
     private center: Point;                 // composite field: cell-handle slot
     private r: f32;
 
-    constructor(x: f32, y: f32, r: f32): Self {  // type-call: Circle(1, 2, 3)
+    fn new(x: f32, y: f32, r: f32): Self {   // class method: Circle.new(1, 2, 3)
         return Self { center: Point { x: x, y: y }, r: r };
     }
 
@@ -57,13 +57,13 @@ fn color_name(c: Color): string {
 }
 
 export fn main(): void {
-    let log = Logger("tour");
+    let log = Logger.new("tour");
     let p = Point { x: 1, y: 2 };          // dataclass literal: the only
     let mut pt = p;                        // dataclass construction form
     pt.x = 3;                              // `mut` binding: writes the SHARED
                                            // cell — p.x is 3 now (RFC 0016 §1)
 
-    let c = Circle(1, 2, 3);             // class constructor type-call
+    let c = Circle.new(1, 2, 3);       // class-method construction
     let g = newCanvas();
     blit_all(g, Vec.from([c]));           // c widens to dyn Drawable:
                                            // vtable attach, same cell

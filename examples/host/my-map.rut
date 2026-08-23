@@ -14,7 +14,7 @@
 //
 // Boundary crossings in this file: the class type itself (first use of
 // MyMap<A, B> reifies the instantiation and builds its method table),
-// the native constructor (construction), every method call (callnat by slot —
+// the native class method (construction), every method call (callnat by slot —
 // names never dispatch, RFC 0032), and Option/Vec values flowing
 // back out.
 
@@ -26,7 +26,7 @@ import { Logger } from "std:log";
 // A DATACLASS key (RFC 0009): an all-public, literal-constructed
 // record — with methods, because dataclasses implement interfaces.
 // Its limits, exhaustively: no `private` fields, no `static`
-// members, no `constructor`, no `Disposal`.
+// members, no class methods, no `Disposal`.
 dataclass Name implements Hashable {   // hash + eq: ONE contract (RFC 0028) —
     first: string;                     // the value-keyed Map/Set key interface
     last: string;
@@ -43,13 +43,14 @@ dataclass Name implements Hashable {   // hash + eq: ONE contract (RFC 0028) —
 }                                                    // identity — RFC 0012 §4)
 
 export fn main(): void {
-    let log = Logger("my-map");
+    let log = Logger.new("my-map");
 
     // K = string: satisfies Hashable via a REGISTERED builtin impl —
-    // no user code needed. Construction is a TYPE-CALL: MyMap<string,
-    // i32>(32) instantiates the generic host class and runs its native
-    // constructor with a capacity hint. Same rule as Vec<f32>(n) — no `new`.
-    let counts: MyMap<string, i32> = MyMap<string, i32>(32);
+    // no user code needed. Construction is a METHOD CALL on the
+    // instantiated host class: MyMap<string, i32>.new(32) reifies the
+    // instantiation and runs its native class method with a capacity
+    // hint (RFC 0026 §3).
+    let counts: MyMap<string, i32> = MyMap<string, i32>.new(32);
 
     for (let i = 0; i < 20; i += 1) {
         let k = f"key-{i % 7}";                  // 7 distinct keys
@@ -62,7 +63,7 @@ export fn main(): void {
     // map's hashing calls back into THIS hash() and eq()
     // — rut code reached through the interface vtable (re-entrant VM
     // call, borrow-guarded).
-    let roster: MyMap<Name, i32> = MyMap<Name, i32>(4);
+    let roster: MyMap<Name, i32> = MyMap<Name, i32>.new(4);
     roster.set(Name { first: "ada", last: "lovelace" }, 1);
     roster.set(Name { first: "grace", last: "hopper" }, 2);
     log.info(f"roster size={roster.size()}");
@@ -71,7 +72,7 @@ export fn main(): void {
     // the host-class DECLARATION (plugin/my_map.d.rut); the verifier
     // re-checks at load:
     //
-    // let bad = MyMap<Canvas, i32>(4);
+    // let bad = MyMap<Canvas, i32>.new(4);
     //                    ^^^^^^ error: `Canvas` does not implement
     //                    `Hashable` — required by MyMap's K
     //                    (satisfiable by: implements Hashable, or a
@@ -80,8 +81,8 @@ export fn main(): void {
     // V = Opaque: a SECOND instantiation (own TypeId) storing values rut
     // cannot see inside. Native set/get just move the boxes — the Rust
     // side never inspects them; downcast<Canvas> recovers on OUR side.
-    let surfaces: MyMap<string, Opaque> = MyMap<string, Opaque>(4);
-    surfaces.set("hud", Opaque(newCanvas()));
+    let surfaces: MyMap<string, Opaque> = MyMap<string, Opaque>.new(4);
+    surfaces.set("hud", Opaque.new(newCanvas()));
     let hud = downcast<Canvas>(surfaces.get("hud").expect("hud present"));
     if (hud.is_some()) {
         hud.value.circle(10, 10, 5);               // back in typed host API

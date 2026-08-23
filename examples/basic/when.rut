@@ -26,7 +26,7 @@ fn brake(): void { /* ... */ }
 fn stop(): void { /* ... */ }
 
 export fn main(): void {
-    let log = Logger("when");
+    let log = Logger.new("when");
     log.info(describe(2));               // "small"
     drive(Light.Yellow);
 }

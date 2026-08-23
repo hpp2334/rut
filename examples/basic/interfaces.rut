@@ -13,7 +13,7 @@
 //     vtables stay flat.
 //   * dataclass implementors: methods + `implements` on an all-public
 //     literal-constructed record. The exhaustive dataclass limit
-//     list: no `private` fields, no `static` members, no `constructor`,
+//     list: no `private` fields, no `static` members, no class methods,
 //     no `Disposal`. Everything else — including methods — is allowed.
 
 import { Canvas, newCanvas } from "app:gfx";
@@ -36,7 +36,9 @@ interface Widget {                   // composition replaces `Drawable & HitTest
 class Sprite implements Widget {
     private x: f32 = 0;
     private y: f32 = 0;
-    // every field initialized -> default no-arg constructor: Sprite()
+
+    fn new(): Self { return Self {}; }  // every field initialized — an
+                                        // explicit no-arg constructor
 
     fn move_by(mut self, dx: f32, dy: f32): void {
         self.x += dx;
@@ -80,8 +82,8 @@ fn mixed_hash(keys: Vec<dyn Hashable>): u64 {
 }
 
 export fn main(): void {
-    let log = Logger("interfaces");
-    let s = Sprite();
+    let log = Logger.new("interfaces");
+    let s = Sprite.new();
     s.move_by(2, 2);
     blit_all(newCanvas(), Vec.from([s]));  // the Sprite cell widens to dyn Widget
                                            // (vtable attach — no copy, RFC 0011 §3)

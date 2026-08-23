@@ -63,7 +63,8 @@ fn gfx_module() -> NativeModule {
   the `is` keyword (RFC 0015 §6). No coercion code, no `as number`, no
   `require_props_object`.
 - Native registration supplies implementations for declaration-file
-  items: **`host fn`s** (above), **class methods / constructors** (RFC 0025,
+  items: **`host fn`s** (above), **class methods — construction
+  included** (RFC 0025,
   RFC 0026), and — for the types themselves — the backing of **enum,
   interface, and builtin-impl registry entries** declared in declaration
   files

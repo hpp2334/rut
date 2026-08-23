@@ -12,7 +12,7 @@ export class EventStream {
     private feed: Receiver<LiveEvent>;
     private task: Task<void>;
 
-    constructor(seed: u32): Self {
+    fn new(seed: u32): Self {
         let ch = Channel<LiveEvent>();
         return Self { feed: ch.receiver, task: spawn(produce(ch.sender, seed)) };
     }

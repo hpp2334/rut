@@ -39,7 +39,7 @@ fn localized(count: i32, user: string): void {
 }
 
 export fn main(): void {
-    let log = Logger("interop");
+    let log = Logger.new("interop");
     let c = newCanvas();                         // host constructs the handle
     let verts: Array<Vertex, 2> = [
         Vertex { x: 0, y: 0, color: 0xFF00FF },
