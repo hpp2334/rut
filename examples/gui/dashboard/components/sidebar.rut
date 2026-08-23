@@ -1,6 +1,6 @@
 // components/sidebar.rut — navigation: one nav item per Tab with click
-// handlers that mutate the shared state (closures capture the Rc handle —
-// aliasing is visible in the type). The active item is highlighted.
+// handlers that mutate the shared state (closures capture the cell handle —
+// the default regime, RFC 0016 §1). The active item is highlighted.
 
 import { box, BoxProps, ClickProps, click, Color, column, Element, FlexProps, TextProps, text } from "app:ui";
 import { GAP, PAD, RADIUS } from "../theme.rut";
@@ -12,7 +12,7 @@ import { body, transparent } from "./common.rut";
 
 let SIDEBAR_W: f32 = 168;
 
-export fn sidebar(th: Palette, st: Rc<Dashboard>): Element {
+export fn sidebar(th: Palette, st: Dashboard): Element {
     return box(BoxProps {
         w: SIDEBAR_W,
         pad: PAD,
@@ -33,7 +33,7 @@ export fn sidebar(th: Palette, st: Rc<Dashboard>): Element {
     });
 }
 
-export(self) fn nav_item(th: Palette, st: Rc<Dashboard>, tab: Tab, label: string): Element {
+export(self) fn nav_item(th: Palette, st: Dashboard, tab: Tab, label: string): Element {
     let active = st.tab() == tab;
     let bg = when (active) {
         true -> th.accent,

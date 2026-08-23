@@ -1,7 +1,9 @@
-// RFC 0011 — Rc<T>: explicit references. Rc(v) boxes a class value in
-// a refcounted heap cell; Rc handles are REF-copied — aliasing is always
-// visible in the type. Classes implementing `Disposal` must live behind
-// Rc: their constructors hand out Rc<Self> directly.
+// RFC 0011 — reference semantics + own + Weak + Disposal.
+// Every non-primitive is a shared refcounted cell (RFC 0016 §1):
+// assignment/passing ALIASE — mutation is visible through every handle.
+// own(x) is the eager shallow copy (fresh cell, handle fields shared).
+// Weak(x) demotes a handle to a non-keeping ref (RFC 0017). Classes
+// implementing `Disposal` run dispose at rc 0 — no wrapping needed.
 
 import { Logger } from "std:log";
 
@@ -19,32 +21,35 @@ class Circle {
 class TempFile implements Disposal {
     private path: string;
 
-    constructor(path: string): Rc<TempFile> {   // Disposal class -> Rc<Self>
-        return Rc(Self { path: path });
+    constructor(path: string): Self {    // plain Self — the handle IS ownership
+        return Self { path: path };
     }
 
-    fn write(self, data: bytes): void { /* ... */ }
+    fn write(self, data: Vec<u8>): void { /* ... */ }
 
     fn dispose(mut self): void {      // Disposal impl — runs once, at rc 0
         fs.remove(self.path);
     }
 }
 
-fn refs(): void {
-    let log = Logger("rc");
-    let a = Circle(3);             // bare value: copies like a dataclass
-    let b = Rc(a);                 // box into a refcounted heap cell
-    let c = b;                     // Rc copy: handle copy — SAME object
-    b.grow();                        // visible through c, not through a
-    log.info(f"a={a.radius()} shared={c.radius()}");     // a=3 shared=4
+fn aliasing(): void {
+    let log = Logger("cells");
+    let a = Circle(3);             // a value — which is a shared cell
+    let b = a;                     // ALIAS: same cell, no copy
+    b.grow();                      // visible through a too
+    let c = own(a);                // private copy: new cell, new identity
+    c.grow();                      // touches only c
+    log.info(f"a={a.radius()} b={b.radius()} c={c.radius()}");  // 4 4 5
+    log.info(f"a==b {a == b} a==c {a == c}");                   // true false
 }
 
 fn scratch(): void {
-    let f = TempFile("tmp.dat");   // constructor already returns Rc<TempFile>
-    f.write(bytes(64));
-}   // rc hits 0 HERE: Disposal.dispose runs, then `path` is released
+    let f = TempFile("tmp.dat");   // constructor returns Self
+    f.write(Vec<u8>(64));
+}   // last handle drops HERE: rc hits 0, Disposal.dispose runs,
+    // then `path` is released — deterministic destruction (RFC 0016 §3)
 
 export fn main(): void {
-    refs();
+    aliasing();
     scratch();
 }

@@ -1,7 +1,7 @@
 # RFC 0003: Modules & Visibility — Declarations Only
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0002 (lexical structure)
 - **Supersedes:** RFC 0002 §1.1, §1.3 (pre-restructure)
@@ -33,19 +33,22 @@ See **`examples/basic/module-structure.rut`** and
   literals, enum members, builtin operators over load-time expressions, dataclass
   literals whose fields are load-time expressions, fixed-array literals
   (`[e1, .., en]` — RFC 0007 §1) whose elements are, and builtin zero
-  allocations `Vec<T>(n)` / `Vec.from([..])` / `bytes(n)` with const `n`.
+  allocations `Vec<T>(n)` / `Vec.from([..])` with const `n`.
   Calls to user functions are not
   load-time expressions (OQ-1; enforced in the compiler, RFC 0033 §3).
 - **Bindings: `let` vs `let mut`.** `let x = e;` binds immutably — no
-  reassignment and no field assignment through `x`. `let mut x = e;`
-  may be reassigned and grants write access to the bare value it holds
-  (every assignment path must run through a `mut` binding). Mutation
-  through an `Rc<T>` cell is always legal — shared identity implies
-  shared mutability (RFC 0011). Methods that assign fields declare
-  `mut self`; calling them on a bare value requires a `let mut`
-  receiver, on an `Rc<C>` it is always allowed (RFC 0010 §2).
-  Parameters may likewise declare `mut name` — a writable local copy
-  with call-site syntax identical to any binding.
+  reassignment and no field assignment through `x`, and no `mut self`
+  method calls on it either: it is a **read-only view of the shared
+  object**. `let mut x = e;` may be reassigned and grants write access
+  **to the object it holds** — and since every non-primitive is a shared
+  cell (RFC 0016 §1), that write is visible to every other handle:
+  `mut` is *permission*, never a copy (every assignment path must run
+  through a `mut` binding). Methods that assign fields declare
+  `mut self`; calling them requires a `let mut` receiver (RFC 0010 §2).
+  Parameters may likewise declare `mut name` — the callee's permission
+  to mutate **the caller's object** (`fn step(mut p: Point)` moves the
+  caller's point; `fn area(p: Point)` promises not to). Diverging —
+  mutating a private copy — is `own(p)` at the call site (RFC 0011 §1).
 - There is no mutable module state. Program state is constructed in `main`
   or lives in class `static` fields (RFC 0010 §2), which follow the same
   load-time expression initializer rule and are materialized at load — **no user

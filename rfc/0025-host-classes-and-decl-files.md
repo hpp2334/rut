@@ -1,7 +1,7 @@
 # RFC 0025: Host Classes & Declaration Files
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0022 (embedding), RFC 0012 (interfaces), RFC 0010
   (constructors), RFC 0016 §3 (Drop mapping), RFC 0029 (declaration files)
@@ -80,7 +80,7 @@ host class Fence {                              // NOT exported: known inside
 - **Workers**: a `host class` value may cross isolates only if the host
   registered the type `send` (RFC 0021 §2) — checked at the transfer, by
   `TypeId`.
-- Host fns returning `dyn Any` accept any rut value (RFC 0014) — the
+- Host fns returning `Opaque` accept any rut value (RFC 0014) — the
   checked escape hatch for data with no static shape.
 
 ## Open questions

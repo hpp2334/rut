@@ -1,11 +1,11 @@
 # RFC 0037: Reflection — `Reflectable`, `Deserializable`, `std:reflect`
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0005 (Vec, `Array<T, N>`), RFC 0012 (`dyn I`,
   `requires`, vtables, no-recovery), RFC 0013 (generics — extended §3),
-  RFC 0014 (`dyn Any`, `make_any`, `downcast`), RFC 0015 (descriptors,
+  RFC 0014 (`Opaque`, `downcast`), RFC 0015 (descriptors,
   `is_a`, boxing), RFC 0006/0009/0010, RFC 0022/0028 (builtin-impl
   registry), RFC 0025/0026, RFC 0030 (grammar — `where`), RFC 0031,
   RFC 0033
@@ -34,7 +34,7 @@ conformance debt; rut's reflection suffices, so it doesn't).
 export interface Reflectable {            // the mechanism protocol
     fn reflect(self): TypeInfo;           // exact descriptor handle
     fn arity(self): i32;                  // children of THIS value
-    fn child(self, i: i32): Option<dyn Any>;  // i-th child, boxed
+    fn child(self, i: i32): Option<Opaque>;  // i-th child, boxed
 }
 export interface Deserializable requires Reflectable { }
 ```
@@ -48,7 +48,8 @@ export interface Deserializable requires Reflectable { }
 | `class`, manual impl | hand-written (curated) | **impossible** | ✓ (positional view) | **compile error** |
 
 - **Auto-impls** are ordinary vtable fills (RFC 0015 §6): dataclass —
-  arity = field count, child(i) = field i (snapshot); enum — arity =
+  arity = field count, child(i) = field i (boxed cell handle — shared,
+  §2); enum — arity =
   the current variant's payloads. The `implements` list gains the
   entry implicitly; re-declaring one is a duplicate-impl error, and
   auto-impls satisfy `requires` edges of contract layers written on
@@ -76,7 +77,7 @@ export interface Deserializable requires Reflectable { }
 export enum TypeKind { Leaf, Record, Sum, Seq, Shared }
 export enum LeafKind  { Bool, Int, Float, String, Bytes, Class, Iface }
 export host fn reflect<T>(): TypeInfo;    // static T (incl. interface T)
-export host fn type_of(a: dyn Any): TypeInfo;  // content descriptor
+export host fn type_of(a: Opaque): TypeInfo;  // content descriptor
 
 export host class TypeInfo {
     fn kind(self): TypeKind;              // structural role
@@ -88,25 +89,25 @@ export host class TypeInfo {
     fn fields(self): Vec<FieldInfo>;      // Record: decl order (wire names)
     fn variants(self): Vec<SumVariant>;   // Sum: decl order
     fn elem(self): TypeInfo;              // Seq: Vec<T> / Array<T, N>
-    // dynamic re-entry — children return as dyn Any (no recovery,
+    // dynamic re-entry — children return as Opaque (no recovery,
     // RFC 0012 §3), so the native dispatches arity/child through the
     // box's EXACT-type vtable (RFC 0015 §6 — the calli path), reaching
     // auto and manual slots uniformly. Same slots as the interface
     // methods; rut code cannot spell this itself:
-    fn arity(self, a: dyn Any): i32;      // Seq .len() · Sum: current
+    fn arity(self, a: Opaque): i32;      // Seq .len() · Sum: current
                                             // variant's payloads
-    fn child(self, a: dyn Any, i: i32): Option<dyn Any>;
-    fn variant(self, a: dyn Any): i32;    // Sum: current variant index
+    fn child(self, a: Opaque, i: i32): Option<Opaque>;
+    fn variant(self, a: Opaque): i32;    // Sum: current variant index
     // mint — Deserializable territory; each member re-checks every
     // box against the reified signature (Option out, never a trap):
-    fn construct(self, vals: Vec<dyn Any>): Option<dyn Any>;             // Record
-    fn construct_variant(self, i: i32, vals: Vec<dyn Any>): Option<dyn Any>; // Sum
-    fn make_vec(self, vals: Vec<dyn Any>): Option<dyn Any>;              // Seq→Vec<T>
+    fn construct(self, vals: Vec<Opaque>): Option<Opaque>;             // Record
+    fn construct_variant(self, i: i32, vals: Vec<Opaque>): Option<Opaque>; // Sum
+    fn make_vec(self, vals: Vec<Opaque>): Option<Opaque>;              // Seq→Vec<T>
 }
 export host class FieldInfo {
     fn name(self): string;                // the wire name
     fn ty(self): TypeInfo;
-    fn default(self): Option<dyn Any>;    // folded at compile time initializer —
+    fn default(self): Option<Opaque>;    // folded at compile time initializer —
 }                                          // THE parse-time default
 export host class SumVariant {
     fn name(self): string;
@@ -116,8 +117,12 @@ export host class SumVariant {
 
 No builtin is named anywhere — `Option`/`Result` appear only as
 sum-shaped descriptors (`Some/None` is a `{0,1}` sum, `Ok/Err` a
-`{1,1}` sum, a C-like enum an all-payloadless sum). `Shared` (`Rc`)
-has no impl in v1. `TypeInfo` is a descriptor **handle**, not a
+`{1,1}` sum, a C-like enum an all-payloadless sum). There is no
+`Shared` node anymore: `Rc` is gone, and composite children box their
+**cell handle** (RFC 0016 §1) — a `child` of a record field aliases the
+parent's field, so mutation through the original is observable in the
+box; walkers treat them as their own Record/Sum nodes via the box's
+descriptor. `TypeInfo` is a descriptor **handle**, not a
 first-class type value (RFC 0015 OQ-1 stays closed).
 
 ## 3. Rules
@@ -127,13 +132,17 @@ first-class type value (RFC 0015 OQ-1 stays closed).
    resolve only in modules declaring ≥1 `implements ReflectEngine`;
    violation is a compile error naming the fix. std:reflect and the
    host are exempt. *Calling* `stringify`/`deserialize` needs no
-   engine — the arg type / bound carries the contract.
+   engine — the arg type / bound carries the contract. The `is`
+   keyword (RFC 0012 §3) is likewise ungated: it answers the
+   capability bit, while `TypeInfo.implements(i)` — descriptor
+   *walking* — stays behind the admission; walking and probing are
+   different powers.
 2. **Walkability = implements the protocol** — auto, registry, or
    manual. Entries may demand a contract (`dyn Serializable`) or a
    capability (`where T requires Deserializable`). Nested nodes are
    gated by the descriptor `implements(Reflectable)` query; misses are
    **values-shaped errors**, never traps.
-3. **Boxing widens** (normative; cross-noted RFC 0015 §3): `make_any`
+3. **Boxing widens** (normative; cross-noted RFC 0015 §3): `Opaque`
    of an int stores i64 sign/zero-extended; a float, f64 — the slot
    discipline of RFC 0015 §5. A `Leaf` branch + `downcast<i64>` /
    `downcast<f64>` / `downcast<bool>` / `downcast<string>` is total.
@@ -149,7 +158,9 @@ first-class type value (RFC 0015 OQ-1 stays closed).
    still widen a `T`-typed *value* to `dyn I` — the bound proves the
    widening valid.
 6. Accessors are total; `Option`/`i32` results signal mismatch. No
-   `field_set` (boxes snapshot — RFC 0014).
+   `field_set`: a composite child's `Opaque` **aliases** its source cell
+   (RFC 0014) — a mutator would reach the original value; v1 reflection
+   is read-only.
 
 ## 4. The walker (acceptance trace)
 
@@ -158,7 +169,7 @@ Every call below exists in §2 — this trace is the API's test:
 ```rut
 export fn stringify(v: dyn Serializable): Result<string, string> {
     return write_val(v.reflect(), v);   // vtable reflect(); v descends
-}                                       // to dyn Any (lattice bottom)
+}                                       // to Opaque (erased storage)
 
 export fn deserialize<T>(v: string): Result<T, JsonError>
         where T requires Deserializable {
@@ -176,10 +187,10 @@ joined); Seq → `arity`/`child` loop (`[...]`, Vec and `Array<T, N>`
 alike); Sum → all-payloadless: variant name; `{0,1}`: `null`/recurse
 payload; else `Err` ("unwrap first"); Leaf → `downcast` scalars
 (boxing-widened), `Leaf+Class` → `implements(Reflectable)` query →
-positional walk or `Err`; `Shared` → `Err`. `build`: Record →
+positional walk or `Err`. `build`: Record →
 `member(j, f.name())`; absent → `f.default()`, else error naming the
 field; `construct(vals)`. Sums → `construct_variant(i, [])` /
-`(payloaded_i, [v])`. Seq → `make_vec`. Leaves → `make_any(v)`.
+`(payloaded_i, [v])`. Seq → `make_vec`. Leaves → `Opaque(v)`.
 
 ## 5. The example
 
@@ -205,7 +216,9 @@ example names its assumed helpers in a header comment.
 - OQ-3: exact-builtin identity — the structural `{0,1}` pattern, or
   `type_id()` vs `reflect<Option<E>>().type_id()`.
 - OQ-4: `field_set` / mutators (deserialization-into-reuse).
-- OQ-5: `Shared` (Rc) — pointee walk, shared ids, cycles; v1 none.
+- OQ-5 (resolved): `Shared` (Rc) — moot: `Rc` was removed (RFC 0016 §1);
+  composite children are shared cell handles boxed as `Opaque`, walked
+  as their own Record/Sum nodes (§2).
 - OQ-6: content-driven walking via `type_of` (v1: declared types).
 - OQ-7: `child` copies per access — lazy views if profiling demands.
 - OQ-8: engine admission per-module vs per-declaration.

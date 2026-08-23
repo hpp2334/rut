@@ -1,7 +1,7 @@
 # RFC 0026: Generic Host Classes — a User-Defined Map
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0025 (host classes & declaration files), RFC 0012 §2
   (`requires`), RFC 0015 (reification)
@@ -67,7 +67,7 @@ pub fn my_map_module() -> NativeModule {
 
 | checkpoint | when | checks | errors to |
 |---|---|---|---|
-| **compile/verify** | `rutc check` / `vm.load` verify | instantiation vs the **host decl**: `MyMap<Canvas, ..>` is a rut-line error (`Canvas` does not implement `Hashable`); admission closes over the `requires` graph (implementing `Hashable` entails `Equal<Self>`, RFC 0012 §2). Checking needs **no Rust at all**. | rut author |
+| **compile/verify** | `rutc check` / `vm.load` verify | instantiation vs the **host decl**: `MyMap<Canvas, ..>` is a rut-line error (`Canvas` does not implement `Hashable`); admission closes over the `requires` graph (RFC 0037 — `Hashable` itself is standalone now, RFC 0028). Checking needs **no Rust at all**. | rut author |
 | **link** | `vm.load` | every host member **referenced** by rut code has a bound impl, and the ClassTable (reflected member names + Rust shapes under the crossing rule) equals the decl's signatures — a pure data compare, nothing runs. | loader / embedder |
 
 A name bound that no decl declares is an embedder **startup** error
@@ -91,7 +91,7 @@ instantiation — nobody can supply `V`. Instead:
 
 | decl type | Rust shape |
 |---|---|
-| param constrained to an interface (`K requires Hashable` — the bound stays bare on the rut side, RFC 0013 §2) | `IfaceHandle` (RFC 0015 §6 fat ref; the rut-facing object type is `dyn Hashable`) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `string` keys, identity for `Rc<T>` keys — same Rust type, different attached vtable. |
+| param constrained to an interface (`K requires Hashable` — the bound stays bare on the rut side, RFC 0013 §2) | `IfaceHandle` (RFC 0015 §6 fat ref; the rut-facing object type is `dyn Hashable`) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `string` keys, value hashing for primitive/enum keys — same Rust type, different attached vtable. |
 | unconstrained param (`V`) | `RutValue` — erased owning handle; per-call check against the reified `TypeId` |
 | concrete types (`i32`, `f32`, `Template`, …) | the Rust type — as in RFC 0022 §2, embedder-pinned at Rust compile time |
 | `Self` | the instance handle |
@@ -116,11 +116,12 @@ source.
 
 - **Who satisfies an interface constraint**: user classes and dataclasses
   (`implements` — RFC 0009, RFC 0012 §2), builtins via registered impls
-  (content for `string`/numerics/`enum`, identity for `Rc<T>`), and
-  registered structs via a `register_struct` content voucher (the Rust
-  mirror is `Hash + Eq` — no rut-side methods needed). Interfaces
-  themselves, `dyn Any` boxes, `Vec`/`Array<T, N>`/slices, `Option`/`Result`
-  satisfy nothing.
+  (`Hashable`: content for `string`, value for
+  numerics/`enum`), and registered structs via a `register_struct`
+  voucher (the Rust mirror is `Hash + Eq` — no rut-side
+  methods needed). The builtin generics
+  (`Option`/`Result`/`Vec`/`Array<T, N>`), interfaces themselves,
+  `Opaque` boxes, and slices satisfy nothing.
 - Builtin types flow back natively — a method may return `Option<V>` or
   build a `Vec<K>` host-side (`keys()` yields `Vec<K>`, **not**
   `Vec<dyn Hashable>`: keys are *unerased* at the boundary — rut cannot

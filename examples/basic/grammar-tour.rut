@@ -1,5 +1,5 @@
 // RFC 0009–0012 — grammar tour: dataclass, interface, class + constructor,
-// Rc<T>, vtable dispatch, exhaustive when, format literals.
+// shared cells + `own`, vtable dispatch, exhaustive when, format literals.
 //
 // NOTE: rut has no compiler yet — these files are the design corpus the
 // RFCs reference; they define the target syntax.
@@ -9,7 +9,7 @@ import { Logger } from "std:log";
 
 enum Color { Red, Green, Blue }
 
-dataclass Point {                          // VALUE type: copied on assignment
+dataclass Point {                          // shared cell: assignment aliases
     x: f32;                                // all fields public; methods and
     y: f32;                                // implements are allowed too
 }                                          // (RFC 0009) — here: data only
@@ -22,8 +22,8 @@ interface Drawable {
     fn draw(self, g: Canvas): void;             // interfaces declare METHODS only
 }
 
-class Circle implements Drawable {         // also a VALUE type; Rc<T> for refs
-    private center: Point;                 // dataclass field stored INLINE
+class Circle implements Drawable {         // a shared cell like everything
+    private center: Point;                 // composite field: cell-handle slot
     private r: f32;
 
     constructor(x: f32, y: f32, r: f32): Self {  // type-call: Circle(1, 2, 3)
@@ -59,11 +59,13 @@ fn color_name(c: Color): string {
 export fn main(): void {
     let log = Logger("tour");
     let p = Point { x: 1, y: 2 };          // dataclass literal: the only
-    p.x = 3;                               // dataclass construction form
+    let mut pt = p;                        // dataclass construction form
+    pt.x = 3;                              // `mut` binding: writes the SHARED
+                                           // cell — p.x is 3 now (RFC 0016 §1)
 
     let c = Circle(1, 2, 3);             // class constructor type-call
-    let shared = Rc(c);                  // want shared/ref semantics? say so
     let g = newCanvas();
-    blit_all(g, Vec.from([shared]));       // Rc<Circle> widens to dyn Drawable
-    log.info(f"{color_name(Color.Red)} area={c.area()} len={length(p)}");
+    blit_all(g, Vec.from([c]));           // c widens to dyn Drawable:
+                                           // vtable attach, same cell
+    log.info(f"{color_name(Color.Red)} area={c.area()} len={length(pt)}");
 }

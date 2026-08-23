@@ -78,9 +78,9 @@ class Tree implements Serializable, Reflectable {
 
     fn reflect(self): TypeInfo { return reflect<Tree>(); }
     fn arity(self): i32 { return 1; }
-    fn child(self, i: i32): Option<dyn Any> {
-        if (i == 0) { return Option<dyn Any>.Some(make_any(self.root)); }
-        return Option<dyn Any>.None();
+    fn child(self, i: i32): Option<Opaque> {
+        if (i == 0) { return Option<Opaque>.Some(Opaque(self.root)); }
+        return Option<Opaque>.None();
     }
 }
 

@@ -1,7 +1,7 @@
 # RFC 0001: rut — Overview & Pillar Decisions
 
 - **Status:** Draft
-- **Date:** 2026-08-21
+- **Date:** 2026-08-23
 - **Revised:** 2026-08-22 — RFC set restructured into a gradual series of
   small, single-topic RFCs (this file is the index).
 - **Author:** hpp2334
@@ -87,9 +87,12 @@ a structural answer in rut:
 
 - G1 — Types are held at runtime (reified), not erased like TypeScript.
 - G2 — Types make code faster: typed bytecode, typed register slots,
-  monomorphized generics, unboxed `array<T>`.
+  monomorphized generics, flat primitive buffers
+  (`Vec<T>`/`Array<T, N>`).
 - G3 — Primitive types: `u8/u16/u32/u64`, `i8/i16/i32/i64`, `f32/f64`, `bool`,
-  `char`, `string`, `bytes`, `array<T>`, plus user `interface`/`class`/`enum`.
+  `char`, plus `string`, `Vec<T>`/`Array<T, N>`, and user
+  `interface`/`dataclass`/`class`/`enum` — everything beyond the
+  primitives is a shared refcounted cell (RFC 0016 §1).
 - G4 — Kotlin-style coroutine suspend built on Rust-style poll semantics
   (cold futures, state machines, cancellation-by-drop). Not promise push.
 - G5 — Multi-threading via isolate workers (separate heaps, message passing).
@@ -103,7 +106,7 @@ a structural answer in rut:
 
 - No dynamic typing, no `any`, no gradual typing. Erasure is explicit and
   spelled out: `dyn I` interface objects (RFC 0012) for polymorphism,
-  `dyn Any` boxes via `make_any`/`downcast` (RFC 0014) for storage —
+  `Opaque` boxes via `Opaque(v)`/`downcast` (RFC 0014) for storage —
   checked, recoverable, never silent.
 - No structural ("duck") typing, no object literals — interfaces are
   nominal and declared (RFC 0012).
@@ -143,11 +146,11 @@ final sections of the RFC they implement).
 - 0008 — control flow & `when`: exhaustive pattern expressions
 - 0009 — dataclasses: open value records (methods + `implements`)
 - 0010 — classes & constructors: sealed value records, no inheritance
-- 0011 — `Rc<T>`, disposal & identity: explicit references
+- 0011 — reference semantics, `own`, `Weak` & disposal
 - 0012 — interfaces & dispatch: the sole dynamic mechanism; `dyn I` object
   types; type tests
 - 0013 — functions, closures & generics
-- 0014 — `dyn Any`: explicit erasure with checked recovery
+- 0014 — `Opaque`: explicit erasure with checked recovery
 - 0015 — reified types & layout: `RutType`, repr C, slots & vtables
 
 **Part C — Memory**
@@ -197,10 +200,10 @@ final sections of the RFC they implement).
 | P2 | Isolate workers with typed channels and transferable buffers | 0021 |
 | P3 | Reference counting; deterministic destructors; cycles leak by design (`Weak<T>`) | 0016–0017 |
 | P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0005, 0034 |
-| P5 | TS-like data model: `dataclass`/`class` (both **value types**; `Rc<T>` for explicit references; `constructor` type-calls — no `new` keyword, `suspend constructor` allowed), `interface` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0006, 0009–0012 |
+| P5 | TS-like data model: `dataclass`/`class` (both **shared refcounted cells** — reference semantics by default, `own(x)` for eager copies; `constructor` type-calls — no `new` keyword, `suspend constructor` allowed), `interface` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented by class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0009–0012, 0016 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
-| P8 | Both value types (`dataclass` **and** `class`) are **repr C**; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015, 0024 |
+| P8 | Both user types (`dataclass` **and** `class`) have **repr C** payloads inside their cells; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015, 0024 |
 
 ### Why "no dynamic typing" is workable
 
@@ -212,7 +215,7 @@ heterogeneous collections are `Vec<dyn I>` vecs, and host APIs that were
 dynamic mechanism kept is **interface dispatch** — a checked vtable call on a
 value whose exact class is still known at runtime. What we keep from "types
 held at runtime" (G1) is what the *VM and the host* need: every value's type
-identity is available for checked type tests (`is<T>` in script, argument
+identity is available for checked type tests (`is` in script, argument
 checks at the FFI), for distinct runtime identities of instantiated generics
 (`Source<i32>` ≠ `Source<string>` as opaque handle types), for debugging, and
 for serialization.
@@ -229,8 +232,8 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
   exact register types; the verifier re-checks them at load time.
 - **Type stability is the optimization currency**: with no JIT there is no
   speculation or deopt — what the type checker proves is all the IR gets.
-  The IR keeps a per-value type lattice (exact > `dyn I` > `dyn Any`) and
-  the two lattice-lowering features (`dyn I` refs, `dyn Any` boxes) are explicit,
+  The IR keeps a per-value type lattice (exact > `dyn I`) and
+  the lattice-lowering features (`dyn I` refs, `Opaque` boxes) are explicit,
   boundary-local, and carry their own optimization rules (RFC 0031 §4).
 - **No JIT**: all optimization happens at compile time. The VM may keep cheap
   inline caches for field access on host opaques, but nothing is ever compiled

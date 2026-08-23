@@ -1,7 +1,7 @@
 # RFC 0035: Loading, Host Hooks & the Embedding Loop
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0034 (VM core), RFC 0033 (images), RFC 0029
   (declaration files), RFC 0022 (native modules), RFC 0021 (workers)
@@ -53,8 +53,8 @@ struct HostHooks {
 
 `spawn_worker` (RFC 0021 §3) is a host hook: it constructs a new `Vm`
 (sharing the type table and loader, not the heap), loads the worker
-module, transfers arguments (move semantics on `bytes`/`Vec`, rc==1
-checked — RFC 0021 §4), and returns `Sender`/`Receiver` pairs backed by OS
+module, transfers arguments (move semantics on every cell — transfer at
+rc==1, else copy — RFC 0021 §4), and returns `Sender`/`Receiver` pairs backed by OS
 channels. Channel ops inside the VM are ops (`chsend`/`chrecv`,
 RFC 0032 §1); when no value is ready, `chrecv` parks the frame like
 `await` (wakers are the channel's, not timers').

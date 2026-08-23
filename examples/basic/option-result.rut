@@ -23,7 +23,7 @@ fn demo(list: Vec<string>): void {
     let v = idx.unwrap_or(0);         // Option<T>.unwrap_or(default: T): T
 }
 
-fn read_config(path: string): Result<bytes, IoError> {
+fn read_config(path: string): Result<Vec<u8>, IoError> {
     let raw = fs.read(path)?;         // `?` propagates Err upward
     return Result.ok(raw);
 }

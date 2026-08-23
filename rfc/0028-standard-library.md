@@ -1,7 +1,7 @@
 # RFC 0028: The Standard Library — `rt:*`, `std:*`, `std:log`, `std:debug`
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0022–0027 (host & FFI), RFC 0029 (declaration files)
 - **Supersedes:** RFC 0005 §8 (pre-restructure)
@@ -19,14 +19,19 @@ The standard library splits in two:
   formatting, wrappers) in auditable rut code and mechanism (syscalls,
   sinks) in Rust. **`std:core`** is the prelude surface: the builtin
   interfaces that are ordinary nominal impls — `Disposal`
-  (`fn dispose(mut self): void`, RFC 0011/0016) and the equality pair
-  used by `==`. **`std:collection` is a declaration file + Rust bodies**
-  (RFC 0025, RFC 0026): its `.d.rut` declares the interfaces
-  `Equal<T> { fn equal(self, other: T): bool }`,
-  `Hashable requires Equal<Self> { fn hash(self): u64 }`, and the containers
+  (`fn dispose(mut self): void`, RFC 0011/0016) — plus the prelude
+  builtins `own(x)` (the eager copy, RFC 0011 §1), `downcast<T>`
+  (RFC 0014), and `assert`/`panic` (RFC 0034 §2); `==` needs no
+  interface at all (builtin, RFC 0012 §4). **`std:collection` is a
+  declaration file + Rust bodies**
+  (RFC 0025, RFC 0026): its `.d.rut` declares the interface
+  `Hashable { fn hash(self): u64; fn eq(self, other: Self): bool }`
+  — hashing and key comparison are one contract (the old
+  `Equal`-`requires` pairing is gone with `Equal`, RFC 0012 §4) — and
+  the containers
   directly — `export host class Map<K requires Hashable, V> { .. }`, `Set<T>`
-  — with no facade; builtin impls (string/numerics/enum content,
-  `Rc<T>` identity, registered-struct vouchers) are host impl-registry
+  — with no facade; builtin impls (string content, numerics/enum value,
+  registered-struct vouchers) are host impl-registry
   entries, not rut syntax. Containers are library types, not VM
   builtins (RFC 0005 pre-restructure OQ, resolved). **`std:debug`**
   (RFC 0036) rides the same mechanism: `Location`, `here()`,
@@ -100,8 +105,8 @@ traps carry. `std:debug` is a declaration file + Rust bodies, like
 // std/debug.d.rut (excerpt — RFC 0036 §6)
 export dataclass Location { file: string, line: i32, col: i32 }
 export host fn here(): Location;                  // folded at compile time (RFC 0033 §3)
-export host fn str(v: dyn Any): string;       // developer rendering (RFC 0007 §2)
-export host fn type_name(v: dyn Any): string; // debug type name
+export host fn str(v: Opaque): string;           // developer rendering (RFC 0007 §2)
+export host fn type_name(v: Opaque): string;  // debug type name
 export host fn capture_stack_trace(): StackTrace; // skips its own frame
 export host class StackTrace {
     fn render(): string;                          // via loaded images'

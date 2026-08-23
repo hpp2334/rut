@@ -1,7 +1,7 @@
 # RFC 0010: Classes & Constructors — Sealed Value Records, No Inheritance
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0009 (dataclasses — the contrast case)
 - **Supersedes:** RFC 0002 §5.2, §5.4 (pre-restructure)
@@ -15,10 +15,12 @@ explicit `self` receivers, static fields.
 
 ## 1. Classes — sealed value records with constructors
 
-- **Also a value type.** A bare `Circle` copies on assignment/passing/return
-  exactly like a dataclass — inline, no header, no refcount. What a class
-  *adds* over a dataclass is **sealing**: private fields, constructor-only
-  construction, `static` fields, and `dispose()` (RFC 0011). Reflection:
+- **Also a shared cell.** A bare `Circle` is a heap cell handle like every
+  non-primitive (RFC 0004 §2, RFC 0016 §1): assignment shares, mutation
+  is visible through aliases, `own(c)` is the eager copy (RFC 0011 §1).
+  What a class *adds* over a dataclass is **sealing**: private fields,
+  constructor-only construction, `static` fields, and `dispose()`
+  (RFC 0011). Reflection:
   a class is walkable **iff** it implements `std:reflect.Reflectable`
   (or a contract layer requiring it — RFC 0037) — default opaque, a
   *default* not a law; and it can never implement `Deserializable` —
@@ -26,7 +28,9 @@ explicit `self` receivers, static fields.
   descriptor-backed only. (`implements`
   is no longer class-only — RFC 0009.) A dataclass auto-implements
   `std:reflect`'s `Reflectable` + `Deserializable` (RFC 0037) — that,
-  not the keyword, is why it reflects and round-trips.
+  not the keyword, is why it reflects and round-trips; classes stay
+  opt-in by hand. `==` on class values is cell identity for both
+  (RFC 0012 §4); field-wise comparison is an opted-in `Hashable.eq`.
 - **Construction is a type-call**: `Circle(1, 2, 3)` runs the class's
   `constructor`. No `new` keyword exists, and there is no outside literal for
   a class — construction always flows through a constructor.
@@ -39,8 +43,9 @@ explicit `self` receivers, static fields.
   Private fields are settable in the literal — inside the class body only.
 - The return type defaults to `Self` and may be declared otherwise, so
   "try" constructors are just constructors:
-  `constructor parse(s: string): Option<Version>`; a `Disposal` class's constructor
-  may hand out `Rc<Self>` directly (RFC 0011).
+  `constructor parse(s: string): Option<Version>` (a `Disposal` class's
+  constructor still returns `Self` — the handle is the ownership,
+  RFC 0011 §2).
 - **`suspend constructor` is allowed** — same function, `await` in the body:
   `Circle(..)` then returns `Future<Circle>` and callers write
   `await Circle(..)` (cold future, RFC 0018 §2). No partially constructed
@@ -84,9 +89,10 @@ explicit `self` receivers, static fields.
 - Classes are standalone types. Code sharing is composition (hold a helper
   object or dataclass in a field) or free functions; subtyping is only
   class→interface via `implements` (RFC 0012).
-- Layout stays trivial: fields at fixed offsets — inline in bare values and
-  Rc cells alike, no prefix layout, no fat pointers, and every object has
-  exactly one concrete class forever. This keeps `is<T>` a single descriptor
+- Layout stays trivial: fields at fixed offsets — identical inside every
+  cell payload (primitive fields inline, composite fields as handle
+  slots), no prefix layout, no fat pointers, and every object has
+  exactly one concrete class forever. This keeps `is` a single descriptor
   check (RFC 0015 §6) and the RC/cycle-collector walk flat (RFC 0017).
 - If real code demands it later, inheritance returns as a separate RFC —
   the vtable design (RFC 0015 §6) already reserves room for it (OQ-1).

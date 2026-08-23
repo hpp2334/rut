@@ -41,9 +41,10 @@ use rut::value::{IfaceHandle, RutValue, RutVec};
 /// K needs no erasure: the declaration's `K: Hashable` bound means K
 /// crosses uniformly as `IfaceHandle` (RFC 0015 §6's fat ref) —
 /// `IfaceHandle: Hash + Eq` is implemented once by the rut crate,
-/// dispatching into the key's own hash()/eq() through the vtable. User
-/// impls are rut code; builtin/voucher impls are native trampolines.
-/// Content hashing for `string` keys, identity for `Rc<T>` keys — both
+/// dispatching into the key's own hash()/eq() through the vtable
+/// (user impls and dataclass-derived fills are rut code; builtin/voucher
+/// impls are native trampolines).
+/// Content hashing for `string` keys, value hashing for primitive/enum keys — both
 /// fall out of which vtable the boundary attached; this HashMap never
 /// knows the difference.
 pub struct MyMap {

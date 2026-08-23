@@ -1,7 +1,7 @@
 # RFC 0004: Primitive Types & Integer Semantics — the By-Value Regime
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0003 (modules)
 - **Supersedes:** RFC 0002 §2, §8 (pre-restructure)
@@ -9,8 +9,10 @@
 
 ## Summary
 
-The primitive and heap-handle types, the **one default copy regime: by
-value**, and why `box<T>` is rejected outright rather than deferred.
+The primitive and heap-handle types, the **one sharing regime:
+primitives by value, everything else a refcounted cell handle**
+(RFC 0011, RFC 0016), and why `box<T>` is rejected outright rather than
+deferred.
 
 ## 1. The type table
 
@@ -20,41 +22,49 @@ value**, and why `box<T>` is rejected outright rather than deferred.
 | signed int | `i8 i16 i32 i64` | two's complement |
 | float | `f32 f64` | IEEE 754 |
 | misc | `bool`, `char` (Unicode scalar, 4 bytes) | |
-| heap: text | `string` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."` |
-| heap: binary | `bytes` | mutable, growable byte buffer |
-| heap: seq | `Vec<T>` | mutable, growable, **unboxed** homogeneous storage |
-| value: seq | `Array<T, N>` | fixed array — inline value, **copied** on assignment; `N` const, part of identity (RFC 0005) |
+| heap: text | `string` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4) |
+| heap: seq | `Vec<T>` | mutable, growable buffer — cell handle, **shared**; flat storage for primitive `T` (RFC 0016 §4) |
+| heap: seq | `Array<T, N>` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |
 | heap: slice | `Slice<T>` | builtin interface — object type `dyn Slice<T>` only (RFC 0005, RFC 0012 §2) |
-| user: value | `dataclass D { .. }` | open record — inline value, copied on assignment, methods & interface impls allowed (RFC 0009); **repr C** (RFC 0015 §4) |
-| user: value | `class C { .. }` | sealed record — also a value type (RFC 0010), **repr C** (RFC 0015 §4); `Rc<C>` for refs (RFC 0011) |
+| user: value | `dataclass D { .. }` | open record — **cell handle, shared** (reference semantics; `own` for copies), methods & interface impls allowed (RFC 0009); payload **repr C** (RFC 0015 §4) |
+| user: value | `class C { .. }` | sealed record — also a cell handle, shared (RFC 0010), payload **repr C** (RFC 0015 §4) |
 
 - `Vec<f32>` is a flat `f32` buffer behind a header — no per-element boxing,
   no per-element refcount traffic (RFC 0016 §4). `Vec<Point>` (dataclass or
   class element) is likewise flat: values stored inline, no headers, no
   refcounts — and `Array<Point, N>` has no header at all: it *is* the
   N-slot inline block, copied whole.
+- `Vec<f32>` is a flat `f32` buffer behind a header — no per-element
+  handles, no per-element refcount traffic (RFC 0016 §4). `Vec<Point>`
+  (composite elements) stores one cell pointer per element; `Array<T, N>`
+  is the same shape with the length frozen at `N`.
+- **Binary data has no dedicated type**: it is `Vec<u8>` (zeroed via
+  `Vec<u8>(n)`). The old `bytes` builtin was removed — one sequence
+  builtin family is enough (RFC 0005).
 - No `null`, no `undefined`. Absence is `Option<T>` (RFC 0005).
-- **One size accessor everywhere**: `.len()` — `string`, `bytes`, `Vec<T>`,
+- **One size accessor everywhere**: `.len()` — `string`, `Vec<T>`,
   `Array<T, N>`, and `dyn Slice<T>` all spell it the same way; there is no
   `.length` property or `.count()` variant anywhere in the language.
 
-## 2. One default copy regime: by value
+## 2. One regime: primitives by value, everything else shared
 
-Primitives and both user data types (`dataclass`, `class`) copy on
-assignment/passing/return — shallow copies; ref-typed *fields* copy the
-handle (a retain). The reference regime is **opt-in and explicit**: `Rc<C>`
-boxes a class value in a refcounted heap cell; Rc handles are ref-copied
-(RFC 0011). Builtin heap values (vecs, strings, bytes) are handles — they
-were born shared. Fixed arrays `Array<T, N>` are values like everything
-else: inline, copied on assignment (share one via `dyn Slice<T>` boxing,
-RFC 0005). There is no `&`/`*` syntax anywhere.
+Primitives (`u8..u64`, `i8..i64`, `u/isize`, `f32`/`f64`, `bool`,
+`char`) copy on assignment/passing/return — plain slot moves. **Every
+other type is a refcounted heap cell handle** (RFC 0016 §1):
+assignment shares, and mutation through any alias is visible through
+all of them — dataclass and class instances, `string`, `Vec`, `Array`,
+enums, `Opaque`, `dyn I` alike. Writing is gated by the `mut`-binding
+law (RFC 0003 §1), never by the sharing. The **eager copy is the
+`own(x)` builtin** (RFC 0011 §1): shallow — primitive fields copied,
+handle fields still shared. `Weak(x)` demotes any handle to a
+non-keeping ref (RFC 0017). There is no `&`/`*` syntax, no `Rc<T>`,
+and no copy-on-write anywhere.
 
 **No `box<T>`, no loans.** A loan needs an exclusivity proof; rut has no
-compile-time borrow checker and no runtime aliasing control over inline
-values (they are plain copies) — so loans could alias silently. The
-construct is **rejected, not deferred**. `Rc<T>` is the only boxing; the
-only borrows anywhere are host-side, call-scoped, flag-guarded ones at the
-FFI (RFC 0023).
+compile-time borrow checker and no runtime aliasing control over
+handles (they are all shared) — so loans could alias silently. The
+construct is **rejected, not deferred**. The only borrows anywhere are
+host-side, call-scoped, flag-guarded ones at the FFI (RFC 0023).
 
 ## 3. Integer semantics
 

@@ -1,8 +1,10 @@
-// RFC 0009 — dataclasses: open VALUE records.
-// Copied on assignment/passing/return. All fields public. Methods and
-// `implements` ARE allowed (see interfaces.rut for impls); here the
-// idiom stays data + free functions. Constructed ONLY by literal,
-// everywhere (module-module let initializers included).
+// RFC 0009 — dataclasses: open data records.
+// Shared cells like every non-primitive (RFC 0016 §1): assignment
+// ALIASES — mutation is visible through every handle; `own(x)` is the
+// eager copy (RFC 0011 §1). All fields public. Methods and `implements`
+// ARE allowed (see interfaces.rut for impls); here the idiom stays
+// data + free functions. Constructed ONLY by literal, everywhere
+// (module-level let initializers included).
 
 import { Logger } from "std:log";
 
@@ -12,8 +14,8 @@ dataclass Point {
 }
 
 dataclass Rect {
-    min: Point;                 // nesting: inline, not a pointer
-    max: Point;
+    min: Point;                 // composite fields are cell-handle slots
+    max: Point;                 // (RFC 0016 §1) — assignment shares them
 }
 
 dataclass Style {
@@ -21,9 +23,12 @@ dataclass Style {
     width: f32 = 1;
 }
 
-fn nudge(mut pt: Point): Point { // pass-by-value: parameter is a copy;
-    pt.x += 1;                  // `mut` param: mutating mutates the COPY only
-    return pt;                  // return-by-value: copy out
+fn nudge(mut pt: Point): void {  // `mut` param: permission to mutate THE
+    pt.x += 1;                   // CALLER'S point (no hidden copy — RFC 0003 §1)
+}
+
+fn nudged(pt: Point): Point {    // plain param: read-only view of the shared
+    return Point { x: pt.x + 1, y: pt.y };  // value — build a NEW one instead
 }
 
 fn length(pt: Point): f64 {     // free function instead of a method
@@ -32,15 +37,28 @@ fn length(pt: Point): f64 {     // free function instead of a method
 
 fn dataclasses(): void {
     let log = Logger("dataclasses");
-    let p = Point { x: 1, y: 2 };    // literal — the only construction
-    p.x = 3;                         // mutable through `let`
-    let q = p;                     // COPY: q is an independent value
-    p.x = 4;                         // q.x is still 3
+    let mut p = Point { x: 1, y: 2 };   // literal — the only construction
+    p.x = 3;                            // needs the `mut` binding (RFC 0003 §1)
+    let q = p;                          // ALIAS: q and p are the SAME cell
+    p.x = 4;                            // q.x is now 4 too — reference semantics
 
-    let r = Rect { min: p, max: q };   // nested values copied inline
+    // `own` diverges: a fresh private cell (primitive fields copied,
+    // composite fields still shared — one level deep)
+    let r1 = own(p);                    // r1.x == 4, but r1 != p (identity)
+    r1.x = 9;                           // touches only r1 — p is untouched
+
+    // `==` on composites is IDENTITY (RFC 0012 §4): two literals are
+    // never equal, own(x) == x is always false. Field-wise comparison
+    // is Hashable.eq (interfaces.rut), not ==.
+    let same_cell = q == p;             // true — same handle
+    let fresh = Point { x: 4, y: 2 } == p;   // false — different cells
+
+    let r = Rect { min: p, max: q };    // min and max SHARE p's and q's cells
     let s = Style {};              // initializers satisfy all fields
-    let p2 = nudge(p);             // p itself is untouched
-    log.info(f"len={length(p2)} color={s.color} area={r.max.x - r.min.x}");
+    nudged(p);                     // read-only: builds a new Point, p kept
+    nudge(p);                      // mutating call: p.x += 1 for real
+    log.info(f"len={length(p)} color={s.color} area={r.max.x - r.min.x}");
+    log.info(f"same_cell={same_cell} fresh={fresh} r1.x={r1.x}");
 }
 
 export fn main(): void {

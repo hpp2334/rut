@@ -1,7 +1,7 @@
 # RFC 0030: Frontend — Lexer, Parser, AST, Diagnostics
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0002 (lexical structure), RFC 0003 (modules),
   RFC 0029 (declaration files), RFC 0001 (M0)
@@ -143,17 +143,25 @@ arm        := pattern '->' (expr ',' | block)
 pattern    := path | literal | pattern (',' pattern)* | 'else'
 expr       := assignment | lambda | when-expr | …         // §3 precedence
 lambda     := '(' params ')' (':' Type)? '=>' (expr | block)
+isexpr     := expr 'is' Type                              // type test — relational
+                                                        // precedence, NON-
+                                                        // associative (RFC 0012 §3)
 ```
 
 `Type` in **value positions** (params, returns, locals, fields, generic
 arguments) may spell an interface object type with the `dyn` prefix —
-`d: dyn Drawable`, `Vec<dyn Widget>`, `Rc<dyn Any>`, `Rc<dyn Slice<i32>>`
+`d: dyn Drawable`, `Vec<dyn Widget>`, `Vec<Opaque>`, `Array<dyn Slice<i32>, 4>`
 (the builtin slice interface, RFC 0005); a bare interface
 name there is a type error with an "insert `dyn`" suggestion (RFC 0012 §2).
 `IfaceList` — `implements`, `requires`, and extparam bounds (§3) — stays
 **bare**: those positions name an interface, they do not form an interface
-value (RFC 0013 §2). `dyn` is a keyword (RFC 0002 §4); `as` remains
-reserved and always errors (erasure is the `make_any` call, RFC 0014).
+value (RFC 0013 §2). The `is` RHS is a **naming position** too — bare
+interface/instantiation or concrete type, never `dyn`-prefixed — but
+resolved to a `TypeId` rather than a value type (RFC 0012 §3). `dyn` and
+`is` are keywords
+(RFC 0002 §4); `as` remains
+reserved and always errors (erasure is the `Opaque(v)` type-call,
+RFC 0014).
 
 Declarations-only module scope (RFC 0003 §1) is enforced by the parser
 itself — a statement at module top level is a syntax error, not a semantic

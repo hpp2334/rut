@@ -6,13 +6,13 @@
 import { HttpError, get } from "std:http";
 import { Logger } from "std:log";
 
-suspend fn fetch_page(url: string): Result<bytes, HttpError> {
+suspend fn fetch_page(url: string): Result<Vec<u8>, HttpError> {
     let raw = await get(url)?;       // await + `?` propagate in one expr
     let html = decode(raw)?;         // stays in the resumed state
     return Result.ok(html);
 }
 
-fn decode(raw: bytes): Result<bytes, HttpError> {
+fn decode(raw: Vec<u8>): Result<Vec<u8>, HttpError> {
     return Result.ok(raw);             // placeholder
 }
 

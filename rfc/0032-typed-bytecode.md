@@ -1,7 +1,7 @@
 # RFC 0032: Typed Bytecode (LIR)
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0031 (HIR), RFC 0015 (slots, inline values),
   RFC 0018 (suspend), RFC 0025–0026 (native calls)
@@ -46,20 +46,23 @@ callnat slot, (rRecv,) args -> rD
                           ; covers host methods & constructors; the body stays
                           ; opaque — never inlined. Also reaches the VM's
                           ; internal natives (§1.1 R2: `str`/`concat`/`tmpl`,
-                          ; `make_any`, Vec's named API) — slots fixed at
+                          ; `Opaque` construction, Vec's named API) — slots fixed at
                           ; boot in the same registry (RFC 0022 §2)
 ret     rD
 ctor    cid, args -> rD   ; class type-call: run constructor -> instance
                           ; (host classes construct via callnat — the native
                           ; constructor is a slot, not a cid)
-newrc   cid, rV -> rD     ; Rc(v): mint cell (RFC 0011)
-getf    rD, rO, fidx      ; field load (inline value or Rc cell — layout known)
+newcell cid -> rD         ; mint a value cell (dataclass literal — RFC 0009;
+                           ; fields follow via setf); also the `own(x)` body:
+                           ; newcell + payload copy + handle-field retains
+getf    rD, rO, fidx      ; field load (cell — payload layout known)
 setf    rO, fidx, rV      ; field store (+retain/release where typed)
-scopy   rD, rS, size      ; inline value copy (memcpy + ref fields)
+scopy   rD, rS, size      ; payload copy for `own` (memcpy + ref-field
+                           ; retain/release)
 tidof   rD, rO            ; read an object handle's runtime TypeId → u32
-                          ; (dyn Any box, dyn I object, slice cell — the
+                          ; (Opaque box, dyn I object, slice cell — the
                           ; vtable ty load, RFC 0015 §6); a pure load
-unbox   rD, rO, tid       ; extract a dyn Any box's repr-C payload as the
+unbox   rD, rO, tid       ; extract an Opaque box's repr-C payload as the
                           ; statically known T (RFC 0014); traps on TypeId
                           ; mismatch — the compiler always guards (br on
                           ; tidof == tid first); the trap is the safety
@@ -67,12 +70,13 @@ unbox   rD, rO, tid       ; extract a dyn Any box's repr-C payload as the
 arrnew  rD, tid, rLen     ; Vec<T>(n) zeroed
 arrget  rD, rO, rI | arrset rO, rI, rV   ; CONCRETE Vec<T> / Array<T, N>
                           ; element access — typed by elem tid, layout
-                          ; known (unboxed inline elements, RFC 0016 §4),
+                          ; known (flat inline elements for primitive T,
+                           ; handle slots otherwise, RFC 0016 §4),
                           ; bounds trap. Array<T, N> const-index folds its
                           ; bounds check against const N (§1.1 R1); dyn
                           ; Slice<T> get/set/len are `calli` vtable slots
                           ; (§1.1 R2); Vec / Array → dyn Slice widening
-                          ; lowers to owned/backing-cell mint ops
+                          ; lowers to the view-cell mint op
                           ; (RFC 0016 §4)
 optsome rD, rV | optnone rD, tid | optis rD, rO ...
 await   rD, rF            ; suspend point — state N (RFC 0018 §3)
@@ -97,7 +101,7 @@ An op exists for exactly one of three things:
   vtable calls; the backing cell's dispatch-through-owner (RFC 0016 §4)
   is simply its slot target. And things rut spells with a **name** are
   internal natives, never ops: `str`/`concat` (the `f""` desugaring —
-  RFC 0007 §2), Template construction (RFC 0027), `make_any`
+  RFC 0007 §2), Template construction (RFC 0027), `Opaque(v)`
   (RFC 0014), and concrete `Vec<T>`'s `len`/`push`/`pop` — native
   modules the VM boots with, in the same registry host modules use
   (RFC 0022 §2), reached by `callnat`. Hence no `strcat`, no `tmpl`.
@@ -110,9 +114,14 @@ An op exists for exactly one of three things:
 
 The named type operations lower to R3 primitives:
 
-- `is<T>(a)` — concrete `T` only (RFC 0012) — is `tidof` + `icmp`: the
-  exact "load the object's vtable `TypeId`, compare" of RFC 0015 §6.
-  No `is_a` op exists.
+- `x is T` — the keyword (RFC 0012 §3). Concrete `T`: `tidof` + `icmp`
+  — the exact "load the object's vtable `TypeId`, compare" of
+  RFC 0015 §6. Interface `T`: the capability probe lowers to the one
+  descriptor-scan op, `Op::IsIface { recv, want: TypeId const }` —
+  `tidof`, then the descriptor's flat `implements` scan
+  (RFC 0015 §6); pure in `(recv, want)`, so repeated probes CSE and
+  invariant ones hoist like `tidof` itself. Statically-answered
+  receivers never emit an op — typecheck folded them (RFC 0031 §2).
 - `downcast<T>(a): Option<T>` (RFC 0014) is a **generic prelude
   function**: `tidof`; `br` on `icmp == TID_T`; `optsome(unbox)` on one
   arm, `optnone` on the other. The check is visible dataflow: `tidof`
@@ -120,7 +129,7 @@ The named type operations lower to R3 primitives:
   (LICM), and a chain of downcasts over one cell folds to one `tidof`
   + `brtable` (RFC 0031 §3) — RFC 0014's IR contract falls out of the
   primitives instead of being blocked by an opaque `downc` op. The
-  symmetry is deliberate: `make_any` (erasure) is an internal-native
+  symmetry is deliberate: `Opaque(v)` (erasure) is an internal-native
   call and `downcast` (recovery) is prelude code — neither is magic.
 
 ## 2. Suspend lowering

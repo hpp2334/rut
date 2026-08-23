@@ -8,7 +8,7 @@ import { Palette } from "../theme.rut";
 import { Dashboard } from "../state.rut";
 import { body, chip, hgap } from "./common.rut";
 
-export fn header(th: Palette, st: Rc<Dashboard>): Element {
+export fn header(th: Palette, st: Dashboard): Element {
     let live = st.live();
     let dot = when (live) {
         true -> th.ok,

@@ -1,7 +1,7 @@
 # RFC 0023: The `Value` Boundary & Borrow Guards
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0022 (native modules), RFC 0016 (heap)
 - **Supersedes:** RFC 0005 §3 (pre-restructure)
@@ -20,10 +20,12 @@ pub enum Value<'v> {
     Void, Bool(bool), Char(char),
     I8(i8) /* .. */ I64(i64), U8(u8) /* .. */ U64(u64), F32(f32), F64(f64),
     Str(StrRef<'v>),                       // immutable, may point into heap
-    Bytes(Borrow<'v, [u8]>),               // zero-copy, call-scoped
     Vec(Borrow<'v, RutVec>),               // typed elem, zero-copy
-    Struct(StructRef<'v>),                 // repr C block — RFC 0024
-    Rc(Handle), Iface(Handle), Any(Handle), Host(Handle),
+    Struct(StructRef<'v>),                 // repr C payload block — RFC 0024
+    Cell(Handle), Iface(Handle), Opaque(Handle), Host(Handle),
+                                          // user value cells / enums,
+                                          // fat interface refs (RFC 0015 §6),
+                                          // Opaque boxes (RFC 0014), host
     Opt(Option<Box<Value<'v>>>), Res(Result<Box<Value<'v>>, Box<Value<'v>>>),
     Template(Tmpl<'v>),                    // RFC 0027
 }

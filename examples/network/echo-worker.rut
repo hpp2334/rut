@@ -7,7 +7,7 @@ import { Conn } from "std:net";
 
 suspend fn serve(conn: Conn): void {
     while (true) {
-        let got = await conn.read(4096);   // Future<Result<bytes>>
+        let got = await conn.read(4096);   // Future<Result<Vec<u8>>>
         if (got.is_err()) { return; }        // connection error: drop it
         let data = got.value;
         if (data.len() == 0) { return; }    // peer closed

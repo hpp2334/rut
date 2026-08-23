@@ -1,7 +1,7 @@
 # RFC 0002: Lexical Structure — Source, Identifiers, Naming
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0001 (pillars)
 - **Supersedes:** RFC 0006 §1–2 and RFC 0002 "Naming conventions" (pre-restructure)
@@ -40,26 +40,30 @@ compiler gives it no meaning; greppability is enforced by style.
 
 - **Types are PascalCase** — user types and parameterized builtins:
   `Vec<T>`, `Array<T, N>` (const-generic), `Option<T>`, `Result<T,E>`,
-  `Rc<T>`, `Weak<T>`, `Any`
-  (object type `dyn Any`, RFC 0014), `Slice<T>` (builtin interface —
+  `Weak<T>`,
+  `Opaque`
+  (the erased-storage host class, RFC 0014),
+  `Slice<T>` (builtin interface —
   object type `dyn Slice<T>`, RFC 0005),
   `Future<T>`, `Task<T>`, `Sender<T>`, `Receiver<T>`, `Point`, `Color`,
   `Drawable` (object type `dyn Drawable`, RFC 0012 §2).
 - Scalars and simple buffers stay lowercase, C-style: `i32`, `u8`, `f32`,
-  `bool`, `char`, `string`, `bytes`.
+  `bool`, `char`, `string`.
 - **Construction is a type-call** (RFC 0010): the type name in call position
   constructs — `Circle(1, 2, 3)` (user class `constructor`; `await Circle(..)`
-  when the constructor is `suspend`), `Rc(c)`,
-  `Rc<Circle>(c)`, `Weak(b)`, `Vec<f32>(1024)`, `bytes(64)`,
-  `Channel<Job>()`. Lowercase types keep lowercase calls (`bytes(64)`).
-  Erasure is **not** a type-call — it is the prelude builtin
-  `make_any(v): dyn Any` (RFC 0014).
+  when the constructor is `suspend`),
+  `Weak(b)`, `Vec<f32>(1024)`,
+  `Channel<Job>()`.
+  **Erasure is a type-call too**: `Opaque(v): Opaque` (RFC 0014) — the
+  erased-storage host class, boxed by construction.
   Named variants of multi-case builtins stay statics: `Option.some`,
   `Option.none`, `Result.ok`, `Result.err`.
 - **Functions and methods are lowercase snake_case** — `unwrap_or(d)`,
-  `is<T>(x)`, `make_any(v)`, `downcast<T>(o)`, `select_all(futs)`,
-  `spawn_worker(..)`. `is<T>`/`downcast<T>` take **concrete `T` only**
-  (RFC 0012 §3, RFC 0014).
+  `own(v)`, `downcast<T>(o)`, `select_all(futs)`,
+  `spawn_worker(..)`. `own(v)` is the eager shallow copy (RFC 0011 §1);
+  `downcast<T>` takes **concrete `T` only**
+  (RFC 0014); the type *test* is not a function at all — it is the
+  `is` keyword (`x is Circle`, RFC 0012 §3).
 - **A trailing `$` marks dispatch-inverted members** (tur convention,
   extended uniformly): anything a *runtime* fires or owns, rather than you
   calling it — event props (`on_click$: Mutation<ClickEvent, void>` or a
@@ -75,7 +79,7 @@ compiler gives it no meaning; greppability is enforced by style.
 
 - Reserved (parse error with explanation): `new`, `switch`, `case`,
   `default`, `extends`, `super`, `as` (no casts at all — erasure is
-  `make_any`, RFC 0014), `type` (type alias — future),
+  the `Opaque(v)` type-call, RFC 0014), `type` (type alias — future),
   `struct`, `match`, `null`, `undefined`, `any`, `unknown`, `typeof`,
   `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`,
   `const` (bindings spell `let` / `let mut` — RFC 0003 §1).
@@ -89,10 +93,11 @@ compiler gives it no meaning; greppability is enforced by style.
   `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
   `await`, `constructor`, `true`, `false`, `extern`, `where`
   (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
-  (RFC 0012 §2) are keywords. `panic(msg: string)` and
+  (RFC 0012 §2), and `is` (the type-test operator, `expr is Type` —
+  RFC 0012 §3) are keywords. `panic(msg: string)` and
   `assert(cond, msg?)` are prelude builtins, not keywords (RFC 0034 §2). `dyn` prefixes any **interface path** — a
-  user `I`, `Any`, or the builtin `Slice<T>` — one rule, no syntax branch
-  (RFC 0005, RFC 0014).
+  user `I` or the builtin `Slice<T>` — one rule, no syntax branch
+  (RFC 0005, RFC 0012 §2).
 
 Each reserved word's error message names the rut replacement ("rut does not
 have `switch`; use `when`") — the full diagnostic model is RFC 0030 §6.

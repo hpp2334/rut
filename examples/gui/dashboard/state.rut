@@ -2,7 +2,7 @@
 // constructor DECLARES the graph — state atoms (UI writes), sources (services
 // push snapshots), derives (computed views) — all living in the Store;
 // mutations are dispatched values, not methods. The instance itself holds
-// only inert handles (atom ids + closures), so sharing it behind Rc is
+// only inert handles (atom ids + closures), so sharing it is
 // safe; writes land in the store by atom id, never in the instance.
 
 import {
@@ -19,7 +19,7 @@ let MAX_SAMPLES: i32 = 120;
 let MAX_ALERTS: i32 = 8;
 
 export class Dashboard {
-    private store: Rc<Store>;
+    private store: Store;
 
     // --- state: writable atoms (UI-owned) ---
     private tab: State<Tab>;
@@ -51,7 +51,7 @@ export class Dashboard {
     apply_event$: Mutation<LiveEvent, void>;
 
     constructor(now_ms: i64): Self {
-        let store = Rc(Store());
+        let store = Store());
 
         // --- state: writable atoms (UI-owned) ---
         let tab = state(Tab.Overview);
@@ -90,15 +90,15 @@ export class Dashboard {
         //     rule). Closures capture the locals above by reference
         //     (RFC 0013) — the instance fields and the closures stay in
         //     lockstep because they were built from the same locals. ---
-        let set_tab$ = mutation((st: Rc<Store>, t: Tab): void => {
+        let set_tab$ = mutation((st: Store, t: Tab): void => {
             atom_set(st, tab, t);
         });
 
-        let set_query$ = mutation((st: Rc<Store>, q: string): void => {
+        let set_query$ = mutation((st: Store, q: string): void => {
             atom_set(st, query, q);
         });
 
-        let toggle_sort$ = mutation((st: Rc<Store>, n: Nil): void => {
+        let toggle_sort$ = mutation((st: Store, n: Nil): void => {
             let flipped = when (atom_get(st, sort_dir)) {
                 SortDir.Asc  -> SortDir.Desc,
                 SortDir.Desc -> SortDir.Asc,
@@ -106,11 +106,11 @@ export class Dashboard {
             atom_set(st, sort_dir, flipped);
         });
 
-        let ingest_series$ = mutation((st: Rc<Store>, s: Series): void => {
+        let ingest_series$ = mutation((st: Store, s: Series): void => {
             atom_set(st, samples, s.samples);
         });
 
-        let apply_event$ = mutation((st: Rc<Store>, ev: LiveEvent): void => {
+        let apply_event$ = mutation((st: Store, ev: LiveEvent): void => {
             atom_set(st, events_seen, atom_get(st, events_seen) + 1);
             when (ev.kind) {
                 EventKind.Tick -> {
@@ -162,7 +162,7 @@ export class Dashboard {
 
     // --- reads (through the store; derives recompute per read) ---
 
-    fn store(self): Rc<Store> { return self.store; }
+    fn store(self): Store { return self.store; }
     fn started_ms(self): i64 { return self.started_ms; }
     fn tab(self): Tab { return atom_get(self.store, self.tab); }
     fn query(self): string { return atom_get(self.store, self.query); }
@@ -198,7 +198,7 @@ export class Dashboard {
 
     // --- re-render subscription: one callback, every watched atom ---
 
-    fn redraw_on_change(self, cb: fn(): void): Vec<Rc<WatchHandle>> {
+    fn redraw_on_change(self, cb: fn(): void): Vec<WatchHandle> {
         return [
             watch(self.store, self.tab, cb),
             watch(self.store, self.query, cb),

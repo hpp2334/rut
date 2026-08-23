@@ -1,13 +1,15 @@
 # RFC 0017: Weak References — Cycles Are the Program's Responsibility
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Revised:** 2026-08-22 — the cycle collector was **dropped**. rut ships
   RC + deterministic destructors + `Weak<T>`, and nothing else: reference
   cycles leak by design, and avoiding them is the program author's job
   (back-pointers go through `Weak`). This file keeps the weak-reference
   contract and the leak-reporting tooling; the trial-deletion collector
   is gone (header colors, suspect lists, stop-the-VM passes removed).
+  Revised again 2026-08-23 — `Weak` generalized to **any cell** with the
+  all-cells regime (RFC 0016 §1).
 - **Author:** hpp2334
 - **Depends on:** RFC 0016 (the RC heap)
 - **Supersedes:** the previous "Weak References & the Cycle Collector"
@@ -27,12 +29,15 @@ have a first-class answer.
 
 ## 1. Weak references
 
-See **`examples/memory/weak-cache.rut`** — `Weak(v): Weak<C>` and
-`upgrade(): Option<Rc<C>>`; **`examples/memory/node-cycle.rut`** shows a
+See **`examples/memory/weak-cache.rut`** — `Weak(v): Weak<T>` and
+`upgrade(): Option<T>`; **`examples/memory/node-cycle.rut`** shows a
 strong cycle and its `Weak` fix.
 
 - `Weak(v)` allocates a `WeakBox` side object holding a back-pointer that
-  is nulled when the referent dies (strong count hits 0). The referent's
+  is nulled when the referent dies (strong count hits 0). **It works over
+  any cell** (RFC 0016 §1) — a class, a dataclass, a `Vec`, an enum —
+  not just "objects": every non-primitive is a cell, so every
+  non-primitive is weak-referenceable. The referent's
   header keeps the weak list; `upgrade()` is a strong-count check +
   retain (`None` when gone).
 - Weak refs do not keep objects alive and are **not** destructors: they
@@ -47,11 +52,15 @@ strong cycle and its `Weak` fix.
   `Vm::drop`. No collector runs, no pass interrupts the VM, no destructor
   ordering surprises exist — what leaks leaks wholly and predictably.
 - **Guidance (review/lints, not runtime):** resource-holding classes
-  (`Disposal` impls, host opaques behind `Rc`) must not participate in
+  (`Disposal` impls, host opaques) must not participate in
   strong cycles; parent/child and observer shapes take `Weak`
-  back-pointers; pure-data cycles are harmless (memory only).
-- The compiler may warn on obvious self-boxing patterns (`Rc(c)` stored
-  into `c`'s own field); general cycle detection stays out of scope.
+  back-pointers; pure-data cycles are harmless (memory only). Note the
+  blast radius grew with the all-cells regime: cycles are possible
+  through **ordinary dataclass fields** now (`next: Option<Node>`
+  back-pointers — RFC 0016 §1), not just through collections.
+- The compiler may warn on obvious self-reference patterns (a value
+  stored into its own field through a handle path); general cycle
+  detection stays out of scope.
 
 ## 3. Safety & leak reporting
 

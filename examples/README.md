@@ -10,21 +10,21 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 
 | File | Demonstrates | RFC |
 |---|---|---|
-| `basic/grammar-tour.rut` | dataclass, interface, class constructor, `Rc<T>`, vtable dispatch, exhaustive `when`, `f""` | 0009–0012 |
+| `basic/grammar-tour.rut` | dataclass, interface, class constructor, shared cells + `own`, vtable dispatch, exhaustive `when`, `f""` | 0009–0012, 0016 |
 | `basic/module-structure.rut` | declarations-only modules, load-time expressions, no load-time code | 0003 §1 |
 | `basic/module-visibility.rut` | `export` / `export(mod)` / `export(super)` / `export(self)` | 0003 §2 |
 | `basic/when.rut` | `when` pattern expressions, exhaustiveness | 0008 |
 | `basic/option-result.rut` | builtin `Option`/`Result`, `.value`, `unwrap_or`, `?` | 0005 |
 | `basic/error-context.rut` | `here()` / `capture_stack_trace()` on error values, lazy `render()`, stripped-image degradation | 0036 |
 | `basic/literals.rut` | numeric suffixes, plain/raw/format strings, constructors, fixed arrays `Array<T, N>`, `dyn Slice<T>` boxing, `Vec`/`Array` → `dyn Slice<T>` widening | 0005, 0007 |
-| `basic/dataclasses.rut` | value semantics, field initializers, free functions | 0009 |
+| `basic/dataclasses.rut` | reference semantics (aliasing by default), `own` divergence, field initializers, free functions, identity `==` | 0009, 0011, 0016 |
 | `basic/classes.rut` | constructor type-calls, `Self {}` literal, `Option<Self>` try-constructors, private, static fields, explicit `self` receivers | 0010 |
-| `basic/rc-and-dispose.rut` | `Rc(v)` boxing, ref-copy aliasing, `Disposal.dispose` | 0011 |
-| `basic/interfaces.rut` | methods-only interfaces, `dyn I` object types, `requires`, dataclass implementors, composition over intersections | 0009, 0012 |
-| `basic/type-tests.rut` | concrete-only `is<T>()`; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
+| `basic/rc-and-dispose.rut` | aliasing + `own(x)`, `Disposal.dispose` at rc 0 | 0011, 0016 |
+| `basic/interfaces.rut` | methods-only interfaces, `dyn I` object types, `requires`, dataclass implementors (hand `hash`/`eq`), `is` capability probe, composition over intersections | 0009, 0012 |
+| `basic/type-tests.rut` | the `is` keyword: exact-class tests + interface capability probes; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
 | `basic/closures-generics.rut` | arrows, monomorphized generics | 0013 |
-| `basic/any.rut` | `make_any(v)` / `downcast<T>` / `is<T>` erasure & recovery on `dyn Any`; snapshot vs shared | 0014 |
-| `basic/layout.rut` | repr C layouts, `type_id<T>()` / `size_of<T>()` / `align_of<T>()`, `dyn Any` layout accessors | 0015 |
+| `basic/opaque.rut` | `Opaque(v)` / `downcast<T>` / `is` erasure & recovery; zero-copy boxes, identity | 0014 |
+| `basic/layout.rut` | repr C layouts, `type_id<T>()` / `size_of<T>()` / `align_of<T>()`, `Opaque` layout accessors | 0015 |
 | `concurrency/countdown.rut` | cold futures, `await` as sole suspension | 0018 |
 | `concurrency/fetch-page.rut` | `await` + `?` composition, state splitting | 0018 §3 |
 | `concurrency/spawn-cancel.rut` | tasks, cancellation-by-drop | 0019 |
@@ -34,7 +34,7 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `memory/temp-file.rut` | deterministic destruction at rc 0 | 0016 §3 |
 | `memory/weak-cache.rut` | `Weak(v)`/`upgrade()` | 0017 §1 |
 | `memory/node-cycle.rut` | reference cycles and the collector | 0017 §2 |
-| `algorithms/sieve.rut` | unboxed `bytes`/`Vec<i32>` | — |
+| `algorithms/sieve.rut` | flat `Vec<u8>`/`Vec<i32>` primitive buffers | — |
 | `algorithms/quicksort.rut` | in-place vec mutation, recursion | — |
 | `algorithms/matrix-mul.rut` | flat `Vec<f32>` hot loops | — |
 | `network/http-fetch.rut` | async client, `Result` at API boundaries | 0018 |
@@ -42,8 +42,8 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0021 |
 | `host/interop.rut` | host classes via declaration files, repr C struct passing, buffer borrows, `Template` for l10n | 0022–0028 |
 | `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `export host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
-| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`IfaceHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `dyn Any` values, native `Option`/`Vec` returns | 0026 |
-| `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `dyn Any` | 0014 |
+| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`IfaceHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Vec` returns | 0026 |
+| `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
 
 | `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
@@ -54,11 +54,11 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 A tur-style web-app-shaped project (models / theme / reactive library /
 setup / services / worker isolate / components / entry). `reactive.rut`
 implements tur's `state` / `source` / `derive` / `mutation` / `watch` /
-`Store` entirely in user rut on top of `dyn Any` — proof that reactivity is
+`Store` entirely in user rut on top of `Opaque` — proof that reactivity is
 a library, not a language feature (RFC 0014). `state.rut` is the
 tur-style *setup*: a `Dashboard` class whose constructor declares **state**
 atoms (UI writes), **sources** (services push snapshots as data arrives),
 and **derives** (computed views); components *dispatch mutations* rather
 than call setters, and `main.rut` subscribes re-render with `watch`. The
 instance holds only inert handles — all values live in the store by atom
-id — so sharing it behind `Rc` is trivially safe.
+id — so sharing it is trivially safe.

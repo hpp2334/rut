@@ -1,8 +1,9 @@
 // RFC 0015 — layout & type-identity builtins.
-// dataclass AND class are repr C: fields in declaration order, natural C
-// alignment, no hidden members. type_id<T>() / size_of<T>() / align_of<T>()
-// are compile-time constants; dyn Any mirrors them at runtime — the toolkit
-// for layout-aware heterogeneous storage WITHOUT uncontrolled erasure.
+// dataclass AND class payloads are repr C: fields in declaration order,
+// natural C alignment, no hidden members. type_id<T>() / size_of<T>() /
+// align_of<T>() are compile-time constants; Opaque mirrors them at
+// runtime — the toolkit for layout-aware heterogeneous storage WITHOUT
+// uncontrolled erasure.
 
 import { Logger } from "std:log";
 
@@ -32,25 +33,26 @@ fn layout(): void {
     log.info(f"point tid={TID_POINT} size={size_of<Point>()} align={align_of<Point>()}");
     log.info(f"padded size={SZ_PADDED} align={AL_PADDED}");    // 12 / 4
     log.info(f"vertex size={size_of<Vertex>()}");              // 8 — same as Point
-    log.info(f"vec stride: {size_of<Point>()}");           // Vec<Point> strides by this
-    log.info(f"fixed 8: {size_of<Array<Point, 8>>()}"      // Array<Point, N> = N × stride —
-             + f" handle: {size_of<Rc<Point>>()}");        // inline value, no header
-}
+    log.info(f"own-clone size: {size_of<Point>()}");      // what own() memcpy's
+    log.info(f"array payload: {size_of<Array<i32, 8>>()}");// 32 — flat primitive
+}                                                        // buffer (RFC 0016 §4)
 
 fn boxed_layout(): void {
     let log = Logger("layout");
-    let box1 = make_any(Point { x: 1, y: 2 });
-    let box2 = make_any(Vertex(3, 4));
+    let box1 = Opaque(Point { x: 1, y: 2 });
+    let box2 = Opaque(Vertex(3, 4));
 
-    // Layout accessors without downcasting — group/slab/compare first,
+    // Layout accessors without downcasting — group/slab first,
     // pay a checked downcast only when actually recovering the value.
     log.info(f"box1 tid==Point: {box1.type_id() == TID_POINT}");
     log.info(f"box2 size: {box2.size()}");                     // 8
-    log.info(f"box1 bytes: {box1.as_bytes().len()}");         // 8-byte payload snapshot
+    log.info(f"box1 bytes: {box1.as_bytes().len()}");          // 8-byte payload snapshot
 
-    // The payload snapshot is comparable — content hashing for stores:
-    let same = make_any(Point { x: 1, y: 2 });
-    log.info(f"payloads equal: {box1.as_bytes() == same.as_bytes()}");
+    // Payload snapshots are Vec<u8> — NOT ==-comparable (Vec implements
+    // nothing; RFC 0012 §4). Identity of boxes is cell identity:
+    let fresh = Opaque(Point { x: 1, y: 2 });
+    log.info(f"boxes distinct: {box1 == fresh}");              // false
+    log.info(f"same type: {box1.type_id() == fresh.type_id()}"); // true — group by tid
 }
 
 export fn main(): void {

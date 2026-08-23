@@ -1,7 +1,7 @@
 # RFC 0036: Diagnostics — Stack Traces, Locations & Symbolication
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0034 (traps, frames), RFC 0033 (images, symbols),
   RFC 0029 (DeclIr — and what it is *not*), RFC 0028 (std modules),
@@ -121,8 +121,9 @@ dataclass LoadError {
 - `trace.render(): string` — native method; renders via the loaded
   images' tables, degrades gracefully when stripped.
 - `Location` is a plain dataclass `{ file: string, line: i32, col: i32 }`
-  — comparable, printable, no host state; crosses the `Value` boundary
-  like any dataclass (RFC 0023).
+  — printable, no host state; crosses the `Value` boundary
+  like any dataclass (RFC 0023). `==` on it is cell identity, like every
+  composite (RFC 0012 §4) — compare fields if equality matters.
 
 ## 6. `std:debug` module shape
 
@@ -132,10 +133,14 @@ Same declaration-file machinery as `plugin:my_map` (RFC 0025/0026/0029):
 // std/debug.d.rut (excerpt)
 export dataclass Location { file: string, line: i32, col: i32 }
 export host fn here(): Location;                  // folded at compile time (RFC 0033 §3)
-export host fn str(v: dyn Any): string;       // developer rendering (RFC 0007 §2)
-export host fn type_name(v: dyn Any): string; // debug type name
+export host fn str(v: Opaque): string;        // developer rendering (RFC 0007 §2)
+export host fn type_name(v: Opaque): string;  // debug type name
 export host fn capture_stack_trace(): StackTrace;
 export host class StackTrace {
+                                             // every capture is a unique
+                                             // snapshot — identity `==`,
+                                             // like every composite
+                                             // (RFC 0012 §4)
     fn render(): string;
     fn depth(): i32;
 }

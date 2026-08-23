@@ -1,7 +1,7 @@
 # RFC 0007: Literals & Inference — Numeric Suffixes, Plain/Raw/Format Strings
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0004 (primitives), RFC 0006 (enums)
 - **Supersedes:** RFC 0002 §4, §4.1 (pre-restructure)
@@ -11,7 +11,7 @@
 
 See **`examples/basic/literals.rut`** — numeric suffixes and annotations,
 plain/raw/format strings, fixed-array and dataclass literals, and the
-lowercase constructor-type calls (`Vec<f32>(1024)`, `bytes(64)`).
+lowercase constructor-type calls (`Vec<f32>(1024)`).
 
 ## 1. Inference & conversions
 
@@ -72,13 +72,12 @@ f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
 | `enum` | member name (`Color.Red` → `"Red"`) |
 
   Everything else (dataclass/class values, vecs and fixed arrays,
-  `Option`/`Result`,
-  `bytes`) is a **compile error** inside `f"..."` — preventing accidental
+  `Option`/`Result`) is a **compile error** inside `f"..."` — preventing accidental
   implementation-detail printing. Use `debug.str(x)` for developer output;
   write a `to_string(): string` method on your class and call it explicitly.
 - In a **`Template`-expected position** the same literal builds a
   structured value instead — `Template { parts, args }` with the
-  placeholder values boxed (`dyn Any`, RFC 0014), not rendered — for hosts,
+  placeholder values boxed (`Opaque`, RFC 0014), not rendered — for hosts,
   l10n, and structured logging (RFC 0027). `t.str()` renders identically to
   the concat path; the default `string` behavior above is unchanged.
 - Raw + format don't combine in v1 (`rf"..."` is OQ-3).

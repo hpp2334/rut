@@ -1,7 +1,7 @@
 # RFC 0021: Workers & Channels — Isolate Concurrency
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0018 (suspend), RFC 0019 (tasks), RFC 0016 (heaps),
   RFC 0025 (host types `send`)
@@ -29,16 +29,14 @@ variant lives in `examples/network/echo-server.rut` + `echo-worker.rut`.
 
 | Type | Crossing rule |
 |---|---|
-| ints/floats/bool/char | copy |
+| primitives (ints/floats/bool/char) | copy |
 | `string` | copy (immutable) |
-| `bytes`, `Vec<T>` (T numeric/bool/char) | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case) |
-| `Array<T, N>` (fixed arrays are inline values) | deep copy, like a class instance — every element must itself be crossable |
-| `dyn Slice<T>` | transfer if refcount == 1, else deep copy — same rule as `bytes`; provenance (owned Array copy vs Vec backing cell) is invisible across the boundary |
-| `class` instances / builtin `Option`/`Result` | deep copy; every field must itself be crossable |
+| **every other cell** — `Vec<T>`, `Array<T, N>`, class/dataclass instances, builtin `Option`/`Result`, enums | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case); every element/field must itself be crossable |
+| `dyn Slice<T>` | transfer if refcount == 1, else deep copy — same rule as its owner cell; provenance (which Vec/Array cell it views) is invisible across the boundary |
 | `Sender` / `Receiver` | transfer |
 | closures | **not transferable** in v1 — compile-time error at the send/`spawn_worker` site |
 | host opaque types | transfer **only** if registered `send` by the host (RFC 0025) — checked at the transfer, by `TypeId` |
-| `Template` | copy — builtin carrier value (RFC 0027); its `dyn Any` args must themselves be crossable (RFC 0014) |
+| `Template` | copy — builtin carrier value (RFC 0027); its `Opaque` args must themselves be crossable (RFC 0014) |
 | anything else (e.g. `Task`, wakers) | compile-time error at the `send`/`spawn_worker` call site |
 
 Enforcement is static at the send site (checker knows `T`) plus a runtime

@@ -4,8 +4,8 @@
 import { HttpError, get } from "std:http";
 import { Logger } from "std:log";
 
-suspend fn fetch_all(urls: Vec<string>): Result<Vec<bytes>, HttpError> {
-    let bodies: Vec<bytes> = Vec();
+suspend fn fetch_all(urls: Vec<string>): Result<Vec<Vec<u8>>, HttpError> {
+    let bodies: Vec<Vec<u8>> = Vec();
     for (let u of urls) {
         let body = await get(u)?;      // await + propagate in one expression
         bodies.push(body);

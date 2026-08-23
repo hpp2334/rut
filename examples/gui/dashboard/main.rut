@@ -5,7 +5,7 @@
 //   4. live loop: stream events in (dispatch apply_event$), stats out to
 //      the worker isolate, summaries back (source_push) — until a fatal
 //      alert flips `live`, or the producer finishes.
-// Shutdown is deterministic: returning drops the stream Rc (dispose
+// Shutdown is deterministic: returning drops the stream handle (dispose
 // cancels the producer), the watch handles, and the job channel (the
 // worker recv()s None and exits).
 
@@ -23,7 +23,7 @@ import { header } from "./components/header.rut";
 import { sidebar } from "./components/sidebar.rut";
 import { body } from "./components/common.rut";
 
-fn view(th: Palette, st: Rc<Dashboard>): Element {
+fn view(th: Palette, st: Dashboard): Element {
     let s = st.summary();
     return row(FlexProps {
         gap: GAP,
@@ -45,7 +45,7 @@ fn view(th: Palette, st: Rc<Dashboard>): Element {
 export suspend fn main(): void {
     let log = Logger("dashboard");
     let th = theme();
-    let st = Rc(Dashboard(now_ms()));
+    let st = Dashboard(now_ms()));
 
     // any watched atom change -> one redraw (flushed to a fixed point)
     let handles = st.redraw_on_change((): void => render(view(th, st)));
@@ -68,7 +68,7 @@ export suspend fn main(): void {
     spawn_worker("gui/dashboard/workers/stats-worker.rut", [jobs.receiver]);
 
     // --- live loop ---
-    let stream = Rc(EventStream(7u32));
+    let stream = EventStream(7u32));
     let ticks: i32 = 0;
     while (st.live()) {
         let ev = await stream.feed().recv();     // Option<LiveEvent>

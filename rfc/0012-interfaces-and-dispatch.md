@@ -1,10 +1,10 @@
 # RFC 0012: Interfaces & Dispatch — the Sole Dynamic Mechanism
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0009 (dataclass implementors), RFC 0010 (classes),
-  RFC 0011 (Rc boxing), RFC 0014 (`Any` — read after)
+  RFC 0011 (reference semantics), RFC 0014 (`Opaque` — read after)
 - **Supersedes:** RFC 0002 §5.5, §6, §6.1 (pre-restructure)
 - **Part:** B — Language surface
 
@@ -21,7 +21,8 @@ Dispatch splits on **where the method is declared**:
 ```text
 length(p)    // free fn                   ->  call length$Point    (direct)
 c.area()     // c: Circle, inherent fn    ->  call Circle$area     (direct)
-b.area()     // b: Rc<Circle>, inherent   ->  call Circle$area     (direct)
+b.area()     // b: Circle (aliased handle ->  call Circle$area     (direct)
+              //  — the type is still exact)
 d.draw(g)    // draw declared in Drawable ->  calli d, slot=3      (vtable, ALWAYS)
 ```
 
@@ -39,8 +40,9 @@ meaningless in v1 (nothing can override).
 
 - **`dyn` — the object-type spelling.** An interface name in **type
   position** — parameter/return/local/field types, generic arguments — is
-  written `dyn I`: `d: dyn Drawable`, `Vec<dyn Widget>`, `Rc<dyn
-  Hashable>`, `Rc<dyn Slice<i32>>` (the builtin slice interface, RFC 0005);
+  written `dyn I`: `d: dyn Drawable`, `Vec<dyn Widget>`,
+  `Vec<dyn Hashable>`, `Array<dyn Slice<i32>, 4>` (the builtin slice
+  interface, RFC 0005);
   `dyn` composes wherever a type does. Positions that merely
   **name** an interface stay bare: the `interface` declaration itself,
   `implements` / `requires` lists, and generic bounds (`K requires
@@ -63,12 +65,12 @@ meaningless in v1 (nothing can override).
   is always a code pointer invoked with an explicit `(...)` — one member
   kind, no call-vs-load ambiguity at the vtable boundary. (`d.x` where `d`
   is interface-typed is a compile error.)
-- **`Any` — the implicit top interface (RFC 0014).** Every type implements
-  `Any`, nobody may declare or list it (`implements Any`, `T requires Any` —
-  compile errors), and it declares no dispatch methods — only the layout
-  accessors `type_id()` / `size()` / `as_bytes()`. Its object type `dyn
-  Any` is the erased storage position and the bottom of the interface
-  tier: `exact concrete > dyn I > dyn Any` (RFC 0031 §4).
+- **No top interface.** `Any` is gone (RFC 0014): the erased-storage
+  type is the concrete host class `Opaque` — reached by the explicit
+  type-call `Opaque(v)`, never by widening, and never nameable in an
+  `implements`/`requires` list (it is a class, not an interface). The
+  interface tier is simply `exact concrete > dyn I` (RFC 0031 §4);
+  the universal type test is `x is Opaque` (§3).
 - **Intersection types (`A & B`) are never supported** — not deferred, not
   planned: heterogeneous needs compose an interface that declares both
   method sets (`interface Widget` in the example). This is a design
@@ -77,30 +79,34 @@ meaningless in v1 (nothing can override).
   does not satisfy an interface. This keeps runtime type identity exact
   (RFC 0015) and casts cheap.
 - **`requires` — an admission constraint, not subtyping.** An interface
-  may require others: `interface Hashable requires Equal<Self> { .. }`.
-  To implement `Hashable`, a type's `implements` list must **also** list
-  `Equal<Self>` with `Self` bound to the implementor — `dataclass Point
-  implements Hashable, Equal<Point>`; `Equal<SomeOtherType>` does not
-  satisfy it. Requirements are transitive (`A requires B`, `B requires C`
-  ⇒ `A` needs `C` too), cycles in the requires-graph are a link error,
+  may require others: `interface Serializable requires Reflectable`
+  (RFC 0037). To implement `Serializable`, a type's `implements` list
+  must **also** list `Reflectable`; requiring a generic instantiation
+  binds `Self` to the implementor. Requirements are transitive (`A
+  requires B`, `B requires C` ⇒ `A` needs `C` too), cycles in the
+  requires-graph are a link error,
   and registered builtin impls satisfy requirements like any other impl
   (RFC 0026). std:reflect's auto-impls (dataclass/enum) and registry
-  impls (`Option`/`Result`/`Vec`/`Array<T, N>`) enter the graph the
+  impls (`Option`/`Result`/`Vec`/`Array<T, N>`'s `Reflectable`/
+  `Deserializable`) enter the graph the
   same way — auto-fills satisfy the `requires` edges of contract layers
-  built on top (`interface Serializable requires Reflectable {}`,
-  RFC 0037). What `requires` deliberately is **not** (this is why
+  built on top (`dataclass User implements Serializable {}` costs zero
+  methods, RFC 0037). What `requires` deliberately is **not** (this is why
   interface `extends` was rejected): no member inheritance —
-  `Hashable` declares only `hash`, and `eq` is reachable only through
-  an `Equal<T>` ref; no subtyping — a `Hashable` ref does not widen to
-  an `Equal<T>` ref; **vtables stay flat** — one interface, one vtable,
+  `Hashable` declares both `hash` and `eq` itself (RFC 0028; the old
+  `Hashable requires Equal<Self>` pairing died with `Equal`, §4), and
+  nothing else is reachable through it; no subtyping — a `Serializable`
+  ref does not widen to a `Reflectable` ref; **vtables stay flat** — one
+  interface, one vtable,
   the type test stays a single scan (RFC 0015 §6). The requires-graph is
   a compile-time walk over the implements list, never a runtime dispatch.
 - Interfaces are implemented **by classes and dataclasses** (RFC 0009).
   An interface type is never a value's exact type; every interface
-  value points at an Rc cell whose exact class or dataclass it carries
-  (RFC 0015 §6). Generic interfaces exist — `Equal<T>` above is the
-  canonical example — and each instantiation has its own vtable slots
-  (`Equal<Point>` ≠ `Equal<string>`, RFC 0015 §6). Interface object
+  value is a fat ref over a cell whose exact class or dataclass it
+  carries (RFC 0015 §6). Generic interfaces exist — the builtin
+  `Slice<T>` (RFC 0005) is the canonical example — and each
+  instantiation has its own vtable slots (`Slice<Point>` ≠
+  `Slice<string>`, RFC 0015 §6). Interface object
   types are the **only** dynamic dispatch in rut: a
   reference plus a vtable lookup per call — every one spelled `dyn I` at
   the use site. No `any`, no dynamic field access, no `this` at all (the
@@ -109,55 +115,92 @@ meaningless in v1 (nothing can override).
   `Vec<dyn Drawable>` — the replacement for both TS unions and the data-enums
   rut deliberately dropped (RFC 0006).
 
-## 3. Type tests — builtin functions, not keywords
+## 3. Type tests — the `is` keyword
 
-There are **no cast keywords** (`as` is reserved and always errors) and no
-`is` operator. The type-directed operations are prelude builtin generics
-provided by the host. See **`examples/basic/type-tests.rut`**.
+`as` remains reserved and always errors — rut has no cast syntax — but
+type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
+**`examples/basic/type-tests.rut`**.
 
-- `is<T>(x): bool` — runtime test, **`T` must be concrete** (an interface
-  type argument — any `dyn I` — is a compile error: if you already hold a
-  `dyn I`, testing against `I` is trivially true and anything else is a
-  `downcast`, which interface values do not have). True when `x`'s exact
-  class (or dataclass — RFC 0009) *is* `T`. With no inheritance this is a
-  single descriptor lookup — exact `TypeId` compare. Machinery in
-  RFC 0015 §6.
+- **Grammar:** `expr is Type` at relational precedence,
+  non-associative (RFC 0030 §2/§3). The RHS is a **naming position**
+  like `implements`/`requires` lists (§2): a bare interface name or
+  instantiation (`x is Hashable`, `x is Slice<T>`) or a concrete type
+  (`d is Circle`) — never `dyn`-prefixed. The old prelude builtin
+  `is<T>(x)` is **removed**; every type test spells `is`.
+- **Two probes, one keyword.** Concrete RHS — exact-type test:
+  true when `x`'s exact class (or dataclass — RFC 0009) *is* `T`;
+  with no inheritance this is a single descriptor lookup — exact
+  `TypeId` compare (RFC 0015 §6). Interface RHS — **capability
+  probe**: true when the value's exact type implements that interface
+  — the `is_a` descriptor/registry scan of RFC 0015 §6, now
+  user-reachable (`k is Hashable`, `x is Drawable`). `is` is
+  total: never traps, never recovers, yields only `bool`.
+- **`x is Opaque` is legal** — a plain concrete test ("is this value an
+  `Opaque` handle?"), folding to `true` on `Opaque`-typed receivers
+  with the usual lint. On an `Opaque` receiver, `o is T` / `o is I`
+  **see through the box**: they test the boxed value's type (RFC 0014).
+  Slices stay unnameable here as everywhere.
+- **No flow sensitivity:** `if (x is Hashable) { .. }` grants nothing
+  — no narrowing, no widening of `x` to `dyn I` (a bound proves
+  widening, RFC 0037 §3 rule 5). The keyword answers; it does not
+  admit.
+- **Static folds:** when the receiver's static type already answers
+  (concrete `x`, a monomorphized `T`, `d: dyn I is I`) the result is a
+  compile-time constant — folded, with an always-true/false lint
+  (assertion use is legitimate).
 - **No `upcast` builtin.** Widening to `dyn I` is implicit on
   assignment/argument passing (`blit_all(g, [c])` passes a `Circle` as
-  `dyn Drawable`); the explicit, greppable form is the `dyn` annotation at
-  the receiving position (`let d: dyn Drawable = s;`). `upcast` was
+  `dyn Drawable`); the explicit, greppable form is the `dyn` annotation
+  at the receiving position (`let d: dyn Drawable = s;`). `upcast` was
   removed when `dyn` landed — the keyword does the marking.
 - **Interface values cannot be downcast.** An interface value is used
   through its interface methods — if you need `Circle`-specific behavior
-  behind a `dyn Drawable`, put that behavior in the interface. Recovery of an
-  erased value exists only through `dyn Any` + `downcast<T>` (RFC 0014):
-  erasure is explicit, so nothing dynamic ever flows through interface
-  types.
+  behind a `dyn Drawable`, put that behavior in the interface. Recovery
+  of an erased value exists only through `Opaque` + `downcast<T>`
+  (RFC 0014): erasure is explicit, so nothing dynamic ever flows through
+  interface types. The capability probe is not a recovery path: it
+  answers whether dispatch is possible, never hands back a narrower ref.
 - Numeric and enum conversions follow the same principle: named function
-  calls, not operators (RFC 0007 §1). Erasure likewise: **`make_any(v):
-  dyn Any`** (RFC 0014), a prelude builtin — rut has no cast syntax at
+  calls, not operators (RFC 0007 §1). Erasure likewise: **`Opaque(v):
+  Opaque`** (RFC 0014), a host-class type-call — rut has no cast syntax at
   all.
 
-## 4. Equality — `==` / `!=` call `Equal<T>.equal`
+## 4. Equality — `==` is builtin: value for primitives, identity for cells
 
-There is no built-in structural equality. `a == b` requires both operands'
-static type `T` to implement `Equal<T>` (RFC 0028) and compiles to a call
-of that implementation's `equal` method; `a != b` is its negation
-(`!(a == b)`).
+There is **no `Equal` interface** (removed — see Note): `a == b` is a
+builtin operator with no vtable dispatch, no opting in, no
+element-wise story. The law is one sentence: **primitives compare by
+value; `string` compares by content; everything else compares by cell
+identity.** `a != b` is its negation (`!(a == b)`).
 
-- Primitives, `string`, and enums satisfy `Equal<T>` through the host
-  impl registry — content equality; floats follow IEEE 754 (`NaN != NaN`,
-  `-0.0 == 0.0`). Registered structs get the content voucher (RFC 0026 §5).
-- A class or dataclass without `Equal<T>` in its `implements` list is a
-  compile error **at the `==` site** — equality is nominal and opt-in,
-  exactly like every other interface.
-- Dispatch follows §1: `equal` is interface-declared, so every `==` is a
-  vtable call (`calli`) — on concrete receivers only the slot id is
-  statically known, never inlined away.
+- Primitives: `icmp`/`fcmp` value comparison; floats follow IEEE 754
+  (`NaN != NaN`, `-0.0 == 0.0`).
+- `string`: content comparison (immutable; interned literals make
+  identity accidentally work sometimes — content is the law, not the
+  accident).
+- **Everything else — class, dataclass, `Vec`, `Array`, enums,
+  `Opaque`, `dyn I` — is a handle test**: `a == b` is true exactly when
+  both point at the same cell (RFC 0016 §1). Since every non-primitive
+  is shared, this is aliasing made observable: `own(x) == x` is always
+  `false`, two structurally identical literals are never equal, and a
+  mutation does not change identity. Enum dataless variants are
+  immortal singleton cells (RFC 0016 §1), so `Flavor.Sweet ==
+  Flavor.Sweet` is `true` — the one place identity quietly behaves as
+  value.
+- **`==` on `Option<T>` / `Result<T, E>` is a compile error** (RFC 0005)
+  — identity on freshly built sum cells is almost never the intent;
+  compare with `when`, `.is_some()`, or the payload (`.value == d`).
+- An **identity-compare lint** flags `==` between two obviously
+  fresh composites (`Vec.from([..]) == Vec.from([..])`,
+  `Point{..} == Point{..}`): "always false — compare fields, or
+  implement `Hashable`" (assertion of distinctness is legitimate and
+  suppressible).
+- **Field-wise comparison is `Hashable.eq`** (RFC 0028): the interface
+  declares `hash` + `eq` together — the value-keyed contract
+  `Map`/`Set` keys ride (RFC 0026). It is not connected to `==`; a type
+  may be `Hashable` (maps) while `==` stays identity.
 - `when` literal patterns are unaffected: arms match compile-time values,
   never runtime `==`.
-- `Rc<C>` compares by identity unless `Rc<C>` itself implements an equal
-  relation (it does not — compare the pointee or wrap).
 
 ## Note
 
@@ -169,8 +212,22 @@ of that implementation's `equal` method; `a != b` is its negation
   `dyn`**; interface object types are spelled `dyn I` in every type
   position (Rust's rule, §2), while `implements`/`requires`/bounds stay
   bare.
-- ~~`upcast<T>` builtin; interface type args to `is<T>`/`downcast<T>``~~ —
-  **resolved: removed**; widening to `dyn I` is implicit (the `dyn`
-  annotation marks it), and `is<T>`/`downcast<T>` take **concrete `T`
-  only** (§3). Erasure is the prelude builtin `make_any(v): dyn Any`
-  (RFC 0014) — `as` stays reserved, rut has no cast syntax.
+- ~~`upcast<T>` builtin~~ — **resolved: removed**; widening to `dyn I`
+  is implicit (the `dyn` annotation marks it) and shares the cell —
+  no allocation (RFC 0011 §3). Erasure is the host-class type-call
+  `Opaque(v): Opaque` (RFC 0014) — `as` stays reserved, rut has no
+  cast syntax. (The same resolution's interface-type-arg ban on
+  `is<T>` was later superseded — next entry.)
+- ~~equality via an `Equal<T>` interface (opt-in `implements`, then
+  briefly auto-derived for dataclasses + always-registered for the
+  builtin generics)~~ — **resolved: removed entirely**: `==` is
+  builtin — primitives by value, `string` by content, everything else
+  by cell identity; `Option`/`Result` `==` is a compile error (§4).
+  Field-wise comparison survives only as `Hashable.eq` (RFC 0028),
+  the value-keyed contract for `Map`/`Set`.
+- ~~no `is` operator; `is<T>(x)` prelude builtin, concrete `T` only~~ —
+  **resolved: superseded by the `is` keyword** (§3): `expr is Type`
+  (relational, non-associative; RHS a naming position) — concrete RHS
+  keeps the exact-`TypeId` compare, interface RHS is the new
+  capability probe (`is_a` scan, RFC 0015 §6); the builtin fn is
+  removed. `downcast<T>` stays a builtin fn, concrete `T` only.

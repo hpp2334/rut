@@ -1,5 +1,6 @@
 // RFC 0017 §1 — Weak<T> does not keep the cell alive; upgrade() returns
-// Option<Rc<C>>. For caches/observers — not destructors.
+// Option<T>. Works over ANY cell (RFC 0016 §1). For caches/observers —
+// not destructors.
 
 import { Logger } from "std:log";
 
@@ -15,7 +16,7 @@ class Tile {
 
 fn probe(): Weak<Tile> {
     let log = Logger("weak");
-    let t = Rc(Tile(7));
+    let t = Tile(7);
     let w = Weak(t);            // Weak<Tile> — no strong reference held
     log.info(f"alive inside: {w.upgrade().is_some()}");   // true
     return w;
@@ -23,7 +24,7 @@ fn probe(): Weak<Tile> {
 
 export fn main(): void {
     let log = Logger("weak");
-    let alive = Rc(Tile(1));
+    let alive = Tile(1);
     let a = Weak(alive);
     log.info(f"held: {a.upgrade().is_some()} id={a.upgrade().value.id()}");
 

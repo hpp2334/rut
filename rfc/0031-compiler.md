@@ -1,7 +1,7 @@
 # RFC 0031: Compiler — Resolve, Typecheck, HIR
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0030 (AST), RFC 0003 (visibility), RFC 0029
   (DeclIr), Part B (type rules), RFC 0001 (M1)
@@ -32,7 +32,10 @@ bodies), `Self` bound, `private`/`export` visibility checked (RFC 0003 §2),
 dataclass-vs-class distinction applied (literals only for dataclasses;
 type-calls only for classes/builtins, RFC 0009/0010), and surface
 declarations (`host`/`extern`) resolved against their DeclIrs with
-slot ids attached to every member reference. The resolver also enforces
+slot ids attached to every member reference. `is`-expressions resolve
+here: the RHS naming position yields either a concrete `TypeId` or an
+interface-instantiation `TypeId` (RFC 0012 §3), with `is Any`
+rejected as vacuous (RFC 0014). The resolver also enforces
 **engine admission** (RFC 0037 §3): `std:reflect`'s structural symbols
 (`reflect<T>`, `type_of`, `TypeInfo`, `FieldInfo`, `SumVariant`)
 resolve only in modules declaring ≥1 `implements ReflectEngine` — the
@@ -47,6 +50,14 @@ decorated with a `TyId` (index into the module's type table) and generic
 functions enter the **monomorphization queue** — HIR contains no generic
 code (RFC 0013 §2). Instantiation admission for surface-generic types
 (`MyMap<Canvas, ..>`) closes over the `requires` graph here (RFC 0025).
+Typecheck also applies the **`==` law** (RFC 0012 §4): primitives and
+`string` always legal, every other cell type legal as an
+identity compare, and `Option`/`Result` operands a compile error
+("pattern-match instead"); the identity-compare lint flags `==` between
+two obviously fresh composites. `is`-expressions whose answer the
+receiver's static type
+already determines (concrete receivers, `d: dyn I is I`) fold to
+constants with an always-true/false lint (RFC 0012 §3).
 
 ## 3. HIR (typed, SSA-ish)
 
@@ -78,10 +89,13 @@ there is no speculation and no deopt to recover what the type checker
 doesn't prove. The IR therefore tracks a per-SSA-value **type lattice**:
 
 ```
-exact concrete  >  dyn I (satisfies I)  >  dyn Any (erased)
+exact concrete  >  dyn I (satisfies I)
 ```
 
-(`dyn Any` is the interface tier's bottom — RFC 0012 §2, RFC 0014.)
+(That is the whole interface tier — there is no bottom node: the old
+`dyn Any` tier died with `Any` (RFC 0014); erasure is now the concrete
+host class `Opaque`, off-lattice and reached only by the explicit
+`Opaque(v)` type-call.)
 
 Every `dyn` type is **unsized** — `dyn I` and `dyn Slice<T>` alike: the
 payload lives in a heap cell and a `dyn`-typed slot stores the cell
@@ -95,8 +109,8 @@ Array<T, N> | Vec<T> (concrete)   >  dyn Slice<T> (unsized object)
 
 `N` is a constant expression, part of the type's identity
 (*"array length must be a constant expression"* otherwise — RFC 0005);
-`dyn Slice<T>` is **not** related to `dyn Any` (slices are not `Any`
-objects; `make_any` rejects them, RFC 0014). Fixed arrays and slices
+slices are never boxed or erased (`Opaque(v)` rejects them, RFC 0014).
+Fixed arrays and slices
 satisfy no interface bound — the same family as `Vec`/`Option`/`Result`
 (RFC 0026 §4).
 
@@ -105,25 +119,26 @@ Rules that bound the cost of the two lattice-lowering features:
 1. **Interface values** (`dyn I`, RFC 0012): one indirect call per use;
    fields inaccessible; callee unknown (no inlining without evidence). Cost is
    per-call, never per-field — the vtable makes it a single load+jump.
-2. **`dyn Any` + `downcast`** (RFC 0014): erasure is a hole in the
+2. **`Opaque` + `downcast`** (RFC 0014): erasure is a hole in the
    lattice, but a *scoped* one:
    - the `downcast` check is the refinement — the `is_some()` branch
      re-enters the **exact** lattice position (strictly more information
      than a `dyn I` value carries), so downstream code optimizes as if
      nothing was erased;
-   - boxes are immutable ⇒ downcast is pure ⇒ **CSE** repeated checks,
+   - boxes are never re-sealed ⇒ downcast is pure ⇒ **CSE** repeated checks,
      **LICM** invariant ones, cache results forever;
    - a chain of downcasts over the same cell **folds to a `TypeId` switch**
      — the compiler emits one jump table, not N checked boxes.
 3. **What the compiler must NOT assume**: the type inside a box at a given
-   program point. No speculative devirtualization through `dyn Any` (that
+   program point. No speculative devirtualization through `Opaque` (that
    is JIT behavior; rut has no deopt to fall back on).
 4. **Guardrails are language-level**: primitives in columnar user stores
-   never box (typed vecs); hot shared state uses direct `Rc<State<T>>`
-   cells; lints flag `downcast` in loop bodies and `dyn Any` crossing
+   stay in typed vecs; shared state is a plain `State<T>` cell (the
+   default regime, RFC 0016 §1); lints flag `downcast` in loop bodies and
+   `Opaque` crossing
    non-storage function boundaries. The intended shape of a rut program:
    exact types on the hot path, `dyn I` where polymorphism is real,
-   `dyn Any` only inside heterogeneous storage.
+   `Opaque` only inside heterogeneous storage.
 
 ## 5. Optimization policy
 

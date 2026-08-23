@@ -1,8 +1,12 @@
-// RFC 0012 §3 — type tests are BUILTIN FUNCTIONS, not keywords:
-// is<T>(x): bool, T CONCRETE only (interface type args are a compile
-// error — dynamic dispatch is what `dyn I` refs are for). No `as`, no
-// upcast builtin, no downcast, ever. Widening to `dyn I` is implicit;
-// the `dyn` annotation at the receiving position is the explicit form.
+// RFC 0012 §3 — type tests are the `is` KEYWORD:
+// `expr is Type` at relational precedence, NON-associative. The RHS is a
+// naming position (like implements/requires): bare interface name or
+// instantiation, or a concrete type — never `dyn`-prefixed. Concrete RHS:
+// exact-class check (single descriptor lookup). Interface RHS: the
+// CAPABILITY probe — does the value's exact type implement it (RFC 0015
+// §6 is_a scan). Grants nothing: no narrowing, no widening. `x is Any` is
+// a compile error (vacuous naming). No `as`, no upcast, no downcast
+// builtin for interface values; erasure/recovery is Opaque(v)/downcast<T>.
 
 import { Canvas, newCanvas } from "app:gfx";
 import { Logger } from "std:log";
@@ -40,7 +44,7 @@ class Circle implements Drawable {
 
 fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
     let log = Logger("types");
-    if (is<Circle>(d)) {             // runtime test — exact class check
+    if (d is Circle) {               // runtime test — exact-class check
         d.draw(g);                   // no downcast exists; stay on the
     }                                // interface
 
@@ -50,7 +54,18 @@ fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
     let views: Vec<dyn Drawable> = Vec.from([s, d2]);
     let ht: dyn HitTest = s;
 
-    log.info(f"{views.len()} {ht.hit_test(0, 0)}");
+    // the CAPABILITY probe — interface RHS, real runtime scan of the
+    // value's exact-type descriptor (Sprite implements HitTest):
+    if (d is HitTest) {              // true iff d's exact class implements
+        log.info("drawable is also hittable");   // HitTest
+    }
+
+    // statically-answered probes fold at typecheck (with a lint):
+    let known = s is Drawable;       // folds true — Sprite's exact type
+    log.info(f"{views.len()} {ht.hit_test(0, 0)} {known}");   // is known
+
+    // `s is Any` does NOT compile — Any may not be named in any list
+    // position (implements Any / T requires Any / is Any — all errors).
 }
 
 export fn main(): void {

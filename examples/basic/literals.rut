@@ -1,6 +1,6 @@
 // RFC 0007 — literals & inference. Construction is a TYPE-CALL
-// (`Vec<f32>(1024)`); lowercase types keep lowercase calls (`bytes(64)`).
-// Fixed arrays `[a, b, c]` are inline VALUES (`Array<T, N>`); growables
+// (`Vec<f32>(1024)`).
+// Fixed arrays `[a, b, c]` are shared cells (`Array<T, N>`); growables
 // are `Vec<T>`; `dyn Slice<T>` is the unsized slice object type.
 
 import { Logger } from "std:log";
@@ -18,15 +18,15 @@ fn literals(name: string): void {
     let raw = r"C:\temp\log.txt";    // raw literal: NO escape processing
     let t = f"hi {name}!";           // format literal (§4.1)
     let ch = 'h';                    // char
-    let arr = [1, 2, 3];             // Array<i32, 3> — inline VALUE, copies
-    let zero: Vec<f32> = Vec<f32>(1024);      // growable, zeroed, unboxed
-    let grow = Vec.from([1, 2, 3]);  // fixed -> growable (copies)
-    let slice: dyn Slice<i32> = arr;           // Array widens: OWNED cell copy
-    let shared: Rc<dyn Slice<i32>> = slice;    // the slice-cell handle; Rc
-    let view: dyn Slice<f32> = zero;           // Vec widens too: BACKING cell —
-    view[0] = 9.0f32;                  // dispatches through the Vec; growth-
+    let mut arr = [1, 2, 3];         // Array<i32, 3> — flat cell (primitives)
+    let mut zero: Vec<f32> = Vec<f32>(1024);    // growable, zeroed, flat
+    let grow = Vec.from([1, 2, 3]);  // fixed -> growable (copies elements)
+    let slice: dyn Slice<i32> = arr;           // Array widens: VIEW cell over
+    let shared: dyn Slice<i32> = slice;        // a second handle — sharing
+    let view: dyn Slice<f32> = zero;           // Vec widens too — dispatches
+    view[0] = 9.0f32;                  // through the Vec; growth-
                                         // safe, write is visible via zero[0]
-    let buf = bytes(64);             // zeroed
+    let bin = Vec<u8>(64);           // binary data: Vec<u8> (bytes is gone)
     let p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
 
     log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={shared.len()}");

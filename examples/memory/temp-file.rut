@@ -9,11 +9,11 @@ import { Disposal } from "std:core";
 class TempFile implements Disposal {
     private path: string;
 
-    constructor(path: string): Self {             // bare value out of the constructor
-        return Self { path: path };
+    constructor(path: string): Self {   // the handle IS the ownership —
+        return Self { path: path };     // no boxing needed (RFC 0011 §2)
     }
 
-    fn write(self, data: bytes): void { /* ... */ }
+    fn write(self, data: Vec<u8>): void { /* ... */ }
 
     fn dispose(mut self): void {      // Disposal impl — runs once, at rc 0
         remove(self.path);
@@ -22,7 +22,8 @@ class TempFile implements Disposal {
 
 export fn main(): void {
     let log = Logger("tempfile");
-    let f = Rc(TempFile("tmp.dat"));   // ...then box: Disposal requires Rc
-    f.write(bytes(64));
+    let f = TempFile("tmp.dat");     // a Disposal class is just a class
+    f.write(Vec<u8>(64));
     log.info("working...");
-}   // rc hits 0 HERE: Disposal.dispose runs, then `path` is released
+}   // last handle drops HERE: rc hits 0, Disposal.dispose runs,
+    // then `path` is released

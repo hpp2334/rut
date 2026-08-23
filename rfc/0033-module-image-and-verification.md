@@ -1,7 +1,7 @@
 # RFC 0033: Module Image & Verification
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0032 (LIR), RFC 0029 (DeclIr), RFC 0025
   (decl digest), RFC 0001 (M1)
@@ -60,7 +60,9 @@ covered — RFC 0010 §1), suspend state tables closed under resume edges,
 native-slot signatures vs the DeclIrs the module compiled against
 (RFC 0029 — including generic-instantiation admission: the `implements`
 scan closing over `requires`, so a bad `MyMap<Canvas, ..>` is a load
-error), `callnat` slots present in the native table, and `unbox` type
+error), `callnat` slots present in the native table, `IsIface` `want`
+operands present in the type table and interface-kinded
+(RFC 0032 §1.1), and `unbox` type
 operands concrete and — by convention — guarded by a preceding
 `tidof`+`icmp` branch (an unguarded `unbox` verifies but traps on
 mismatch, RFC 0032 §1.1). A failed
@@ -71,8 +73,10 @@ images never execute.
 
 RFC 0003 §1's load-time expression rule is enforced here: module `let` and
 `static` initializers are **folded at compile time**; the surviving forms
-are literals, enum members, operators over consts, dataclass literals,
-fixed-array literals, `Vec<T>(n)`/`Vec.from([..])`/`bytes(n)` blobs, and
+are literals, enum members, operators over consts, dataclass literals
+(immortal constant-pool cells — every non-primitive is a cell, RFC 0016
+§1), fixed-array literals (immortal fixed cells likewise),
+`Vec<T>(n)`/`Vec.from([..])` blobs, and
 the layout builtins (plus `Array<T, N>.len()` — the const `N` — and
 const-index bounds checks against it; RFC 0032 §1.1 R1). A call to a
 user function there is a compile error (RFC 0003 OQ-1), not a
@@ -85,8 +89,8 @@ type within a VM run (`Vec<f32>` ≠ `Vec<f64>`, `Array<i32, 3> ≠
 Array<i32, 4>` — const `N` is identity, RFC 0005, `Point` = `Point`
 across modules — identity is assigned at link). `size_of<T>()`/`align_of<T>()`
 return the repr-C value size/alignment (RFC 0024): for dataclasses and
-classes this is the C-layout field block (what `Vec<Point>` strides by,
-what `StructCopy` copies, what a host struct mirrors).
+classes this is the C-layout payload block (what `own`/`StructCopy`
+clones, what a host struct mirrors).
 
 ## Open questions
 

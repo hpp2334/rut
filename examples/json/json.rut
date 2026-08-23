@@ -17,7 +17,7 @@
 // byte-index + helpers proposal; serde is its forcing case):
 //     s.at(i): u8            byte at i
 //     s.slice(a, b): string  substring [a, b)
-// Everything else is shipped surface: make_any/downcast/is (RFC 0014),
+// Everything else is shipped surface: Opaque(v)/downcast/is (RFC 0014),
 // std:reflect (RFC 0037), Vec (RFC 0005), f"" (RFC 0007 §2). JSON
 // escapes \b, \f and \uXXXX are NOT handled — they need byte<->char
 // helpers from the same OQ family (recorded, not invented).
@@ -38,35 +38,35 @@ export interface Serializable requires Reflectable { }
 
 enum JKind { Null, Bool, Num, Str, Arr, Obj }
 
-dataclass JsonValue { kind: JKind; val: Option<dyn Any>; pos: i32 }
+dataclass JsonValue { kind: JKind; val: Option<Opaque>; pos: i32 }
 dataclass JField { name: string; value: JsonValue; pos: i32 }
 dataclass JsonError { msg: string; pos: i32 }
 dataclass Parsed { value: JsonValue; end: i32 }
 
 fn jnull(pos: i32): JsonValue {
-    return JsonValue { kind: JKind.Null, val: Option<dyn Any>.None(), pos: pos };
+    return JsonValue { kind: JKind.Null, val: Option<Opaque>.None(), pos: pos };
 }
 fn jbool(b: bool, pos: i32): JsonValue {
-    return JsonValue { kind: JKind.Bool, val: Option<dyn Any>.Some(make_any(b)), pos: pos };
+    return JsonValue { kind: JKind.Bool, val: Option<Opaque>.Some(Opaque(b)), pos: pos };
 }
 fn jnum(v: f64, pos: i32): JsonValue {
-    return JsonValue { kind: JKind.Num, val: Option<dyn Any>.Some(make_any(v)), pos: pos };
+    return JsonValue { kind: JKind.Num, val: Option<Opaque>.Some(Opaque(v)), pos: pos };
 }
 fn jstr(sv: string, pos: i32): JsonValue {
-    return JsonValue { kind: JKind.Str, val: Option<dyn Any>.Some(make_any(sv)), pos: pos };
+    return JsonValue { kind: JKind.Str, val: Option<Opaque>.Some(Opaque(sv)), pos: pos };
 }
 fn jarr(items: Vec<JsonValue>, pos: i32): JsonValue {
-    return JsonValue { kind: JKind.Arr, val: Option<dyn Any>.Some(make_any(items)), pos: pos };
+    return JsonValue { kind: JKind.Arr, val: Option<Opaque>.Some(Opaque(items)), pos: pos };
 }
 fn jobj(fields: Vec<JField>, pos: i32): JsonValue {
-    return JsonValue { kind: JKind.Obj, val: Option<dyn Any>.Some(make_any(fields)), pos: pos };
+    return JsonValue { kind: JKind.Obj, val: Option<Opaque>.Some(Opaque(fields)), pos: pos };
 }
 
 // === entries — BOTH consents are compile-time (RFC 0037 §4) ===
 
 export fn stringify(v: dyn Serializable): Result<string, string> {
     // consumer: an interface-typed param — one copy, vtable dispatch.
-    // v.reflect() is the vtable call; v descends to dyn Any (the
+    // v.reflect() is the vtable call; v descends to Opaque (the
     // lattice bottom, RFC 0014) at write_val's parameter.
     return write_val(v.reflect(), v);
 }
@@ -88,7 +88,7 @@ export fn deserialize<T>(v: string): Result<T, JsonError>
 
 // === the serializer walker — RFC 0037 §4 acceptance trace ===
 
-fn write_val(t: TypeInfo, a: dyn Any): Result<string, string> {
+fn write_val(t: TypeInfo, a: Opaque): Result<string, string> {
     when (t.kind()) {
         TypeKind.Record -> {
             let parts = Vec<string>();
@@ -148,17 +148,17 @@ fn write_val(t: TypeInfo, a: dyn Any): Result<string, string> {
             LeafKind.Bytes -> Err(t.name()),
             LeafKind.Iface -> Err(t.name()),   // interface values have no
         },                                     // recovery (RFC 0012 §3)
-        TypeKind.Shared -> Err(t.name()),      // Rc: v1 unsupported (OQ-5)
+        TypeKind.Shared -> Err(t.name()),      // legacy: unsupported (OQ-5 moot)
     }
 }
 
 // === the deserializer builder — bottom-up, every node a checked box ===
 
-fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
+fn build(t: TypeInfo, j: JsonValue): Result<Opaque, JsonError> {
     when (t.kind()) {
         TypeKind.Record -> {
             let fs = t.fields();
-            let vals = Vec<dyn Any>(fs.len());
+            let vals = Vec<Opaque>(fs.len());
             for (let i = 0; i < fs.len(); i += 1) {
                 let f = fs[i];
                 when (member(j, f.name())) {
@@ -167,10 +167,10 @@ fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
                     },
                     Option<JsonValue>.None -> {
                         when (f.default()) {     // the initializer IS the
-                            Option<dyn Any>.Some(d) -> {   // default (RFC
+                            Option<Opaque>.Some(d) -> {   // default (RFC
                                 vals[i] = d;               // 0009)
                             },
-                            Option<dyn Any>.None -> {
+                            Option<Opaque>.None -> {
                                 return Err(JsonError { msg: f"missing field {f.name()}", pos: j.pos });
                             },
                         }
@@ -178,19 +178,19 @@ fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
                 }
             }
             return when (t.construct(vals)) {   // re-checked natively
-                Option<dyn Any>.Some(v) -> Ok(v),
-                Option<dyn Any>.None -> Err(JsonError { msg: "record rejected its input", pos: j.pos }),
+                Option<Opaque>.Some(v) -> Ok(v),
+                Option<Opaque>.None -> Err(JsonError { msg: "record rejected its input", pos: j.pos }),
             };
         },
         TypeKind.Seq -> {
             let items = want_items(j, t.name())?;
-            let vals = Vec<dyn Any>(items.len());
+            let vals = Vec<Opaque>(items.len());
             for (let i = 0; i < items.len(); i += 1) {
                 vals[i] = build(t.elem(), items[i])?;
             }
             return when (t.make_vec(vals)) {
-                Option<dyn Any>.Some(v) -> Ok(v),
-                Option<dyn Any>.None -> Err(JsonError { msg: "sequence rejected its elements", pos: j.pos }),
+                Option<Opaque>.Some(v) -> Ok(v),
+                Option<Opaque>.None -> Err(JsonError { msg: "sequence rejected its elements", pos: j.pos }),
             };
         },
         TypeKind.Sum -> {
@@ -199,7 +199,7 @@ fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
                 let name = want_str(j, t.name())?;
                 for (let i = 0; i < vs.len(); i += 1) {
                     if (str_eq(vs[i].name(), name)) {
-                        return mint_variant(t, i, Vec<dyn Any>(), j);
+                        return mint_variant(t, i, Vec<Opaque>(), j);
                     }
                 }
                 return Err(JsonError { msg: f"unknown variant {name}", pos: j.pos });
@@ -208,11 +208,11 @@ fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
                 let idx = optional_indices(vs);
                 when (j.kind) {
                     JKind.Null -> {
-                        return mint_variant(t, idx[0], Vec<dyn Any>(), j);
+                        return mint_variant(t, idx[0], Vec<Opaque>(), j);
                     },
                     else -> {
                         let payload = build(vs[idx[1]].payloads()[0], j)?;
-                        let one = Vec<dyn Any>(1);
+                        let one = Vec<Opaque>(1);
                         one[0] = payload;
                         return mint_variant(t, idx[1], one, j);
                     },
@@ -221,21 +221,21 @@ fn build(t: TypeInfo, j: JsonValue): Result<dyn Any, JsonError> {
             return Err(JsonError { msg: "unwrap Result-shaped values at the boundary (RFC 0001 P4)", pos: j.pos });
         },
         TypeKind.Leaf -> when (t.leaf()) {
-            LeafKind.String -> Ok(make_any(want_str(j, t.name())?)),
-            LeafKind.Int   -> Ok(make_any(want_num(j, t.name())?)),
-            LeafKind.Float -> Ok(make_any(want_num(j, t.name())?)),
-            LeafKind.Bool  -> Ok(make_any(want_bool(j, t.name())?)),
+            LeafKind.String -> Ok(Opaque(want_str(j, t.name())?)),
+            LeafKind.Int   -> Ok(Opaque(want_num(j, t.name())?)),
+            LeafKind.Float -> Ok(Opaque(want_num(j, t.name())?)),
+            LeafKind.Bool  -> Ok(Opaque(want_bool(j, t.name())?)),
             else -> Err(JsonError { msg: f"{t.name()} is not deserializable content", pos: j.pos }),
         },
-        TypeKind.Shared -> Err(JsonError { msg: "Rc fields are not walkable in v1 (RFC 0037 OQ-5)", pos: j.pos }),
+        TypeKind.Shared -> Err(JsonError { msg: "Shared fields are not walkable in v1 (RFC 0037 OQ-5)", pos: j.pos }),
     }
 }
 
-fn mint_variant(t: TypeInfo, i: i32, vals: Vec<dyn Any>,
-                j: JsonValue): Result<dyn Any, JsonError> {
+fn mint_variant(t: TypeInfo, i: i32, vals: Vec<Opaque>,
+                j: JsonValue): Result<Opaque, JsonError> {
     return when (t.construct_variant(i, vals)) {
-        Option<dyn Any>.Some(v) -> Ok(v),
-        Option<dyn Any>.None -> Err(JsonError { msg: "variant rejected its payload", pos: j.pos }),
+        Option<Opaque>.Some(v) -> Ok(v),
+        Option<Opaque>.None -> Err(JsonError { msg: "variant rejected its payload", pos: j.pos }),
     };
 }
 

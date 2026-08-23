@@ -19,16 +19,16 @@
 // back out.
 
 import { MyMap } from "plugin:my_map";                // resolves to the .d.rut
-import { Equal, Hashable } from "std:collection";     // declaration file: the
-import { Canvas, newCanvas } from "app:gfx";          // constraint interfaces
+import { Hashable } from "std:collection";            // declaration file: the
+import { Canvas, newCanvas } from "app:gfx";          // constraint interface
 import { Logger } from "std:log";
 
 // A DATACLASS key (RFC 0009): an all-public, literal-constructed
-// value record — with methods, because dataclasses implement interfaces
-// now. Its limits, exhaustively: no `private` fields, no `static`
+// record — with methods, because dataclasses implement interfaces.
+// Its limits, exhaustively: no `private` fields, no `static`
 // members, no `constructor`, no `Disposal`.
-dataclass Name implements Hashable, Equal<Name> {   // BOTH — Hashable
-    first: string;                                  // requires Equal<Self>
+dataclass Name implements Hashable {   // hash + eq: ONE contract (RFC 0028) —
+    first: string;                     // the value-keyed Map/Set key interface
     last: string;
 
     fn hash(self): u64 {                             // demo hash (length mix);
@@ -36,11 +36,11 @@ dataclass Name implements Hashable, Equal<Name> {   // BOTH — Hashable
              + u64(self.last.len());
     }
 
-    fn eq(self, other: Name): bool {                 // typed other — fields
-        return other.first == self.first            // at hand, no downcast
-            && other.last == self.last;
-    }
-}
+    fn eq(self, other: Name): bool {                 // field-wise equality —
+        return other.first == self.first            // what the map compares
+            && other.last == self.last;             // keys with after a hash
+    }                                                // hit (`==` itself is
+}                                                    // identity — RFC 0012 §4)
 
 export fn main(): void {
     let log = Logger("my-map");
@@ -59,8 +59,9 @@ export fn main(): void {
     log.info(f"size={counts.size()} key-3={hits}"); // rut's builtin Option
 
     // K = a DATACLASS: satisfies Hashable because it implements it. The
-    // map's hashing calls back into THIS hash()/eq() — rut code reached
-    // through the interface vtable (re-entrant VM call, borrow-guarded).
+    // map's hashing calls back into THIS hash() and eq()
+    // — rut code reached through the interface vtable (re-entrant VM
+    // call, borrow-guarded).
     let roster: MyMap<Name, i32> = MyMap<Name, i32>(4);
     roster.set(Name { first: "ada", last: "lovelace" }, 1);
     roster.set(Name { first: "grace", last: "hopper" }, 2);
@@ -76,11 +77,11 @@ export fn main(): void {
     //                    (satisfiable by: implements Hashable, or a
     //                    registered builtin/struct impl)
 
-    // V = dyn Any: a SECOND instantiation (own TypeId) storing values rut
+    // V = Opaque: a SECOND instantiation (own TypeId) storing values rut
     // cannot see inside. Native set/get just move the boxes — the Rust
     // side never inspects them; downcast<Canvas> recovers on OUR side.
-    let surfaces: MyMap<string, dyn Any> = MyMap<string, dyn Any>(4);
-    surfaces.set("hud", make_any(newCanvas()));
+    let surfaces: MyMap<string, Opaque> = MyMap<string, Opaque>(4);
+    surfaces.set("hud", Opaque(newCanvas()));
     let hud = downcast<Canvas>(surfaces.get("hud").expect("hud present"));
     if (hud.is_some()) {
         hud.value.circle(10, 10, 5);               // back in typed host API

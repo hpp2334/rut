@@ -1,9 +1,9 @@
-# RFC 0009: Dataclasses — Open Value Records
+# RFC 0009: Dataclasses — Open Data Records
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0004 (by-value regime), RFC 0005 (builtin generics),
+- **Depends on:** RFC 0004 (sharing regime), RFC 0005 (builtin generics),
   RFC 0012 (interfaces — read §2 after)
 - **Supersedes:** RFC 0002 §5.1 (pre-restructure)
 - **Part:** B — Language surface
@@ -11,15 +11,19 @@
 ## Summary
 
 See **`examples/basic/dataclasses.rut`** — literal construction everywhere,
-copy-on-assignment, field initializers, free functions over data — and
-**`examples/basic/interfaces.rut`** for dataclass `implements` + `requires`
+shared cells + `own` divergence, field initializers, free functions over
+data — and **`examples/basic/interfaces.rut`** for dataclass `implements`
 in action.
 
-- **Value semantics**: assignment, argument passing, and returning copy the
-  whole value (shallow: ref-typed fields copy the handle + retain; nested
-  dataclass fields copy inline). No `new`, no constructor — `Name { field: expr, .. }`
+- **Reference semantics, like everything non-primitive** (RFC 0004 §2,
+  RFC 0016 §1): a dataclass value is a heap cell handle; assignment,
+  argument passing, and returning share it, and mutation through any
+  alias is visible through all of them. The private eager copy is
+  `own(p)` — shallow: primitive fields cloned, handle-typed fields still
+  shared (RFC 0011 §1). Writing is gated by the `mut`-binding law
+  (RFC 0003 §1). No `new`, no constructor — `Name { field: expr, .. }`
   is the only construction, available **everywhere** (module-let
-  initializers included, RFC 0003 §1).
+  initializers included, RFC 0003 §1); the literal allocates the cell.
 - **All fields public, always.** A dataclass is an open data record —
   `private` in a dataclass is a compile error. Privacy needs construction
   control, which is the class's job (RFC 0010).
@@ -32,45 +36,50 @@ in action.
   `self` receiver included — RFC 0010 §2):
 
   ```rut
-  dataclass Point implements Hashable, Equal<Point> {
+  dataclass Point implements Hashable {
       x: f32;
       y: f32;
       fn hash(self): u64 { .. }
-      fn equal(self, other: Point): bool {
-          return other.x == self.x && other.y == self.y;
-      }
+      fn eq(self, other: Point): bool { .. }
   }
   ```
 
-  `hash`/`equal` are interface-declared members — calls dispatch through
-  the vtable per RFC 0012 §1; the `dyn I` ref
-  form boxes — below. The limits on a dataclass, exhaustively: **no `private`
-  fields** (above), **no `static` members**, **no `constructor`** (the
-  literal is the only construction — that split *is* the
-  dataclass/class distinction), and **no `dispose()`** (a value that is
-  copied around has no single death to hook). Everything else
+  `hash`/`eq` are interface-declared members — calls dispatch through
+  the vtable per RFC 0012 §1. The limits on a dataclass, exhaustively:
+  **no `private` fields** (above), **no `static` members**, **no
+  `constructor`** (the literal is the only construction — that split
+  *is* the dataclass/class distinction), and **no `dispose()`** (a value
+  shared everywhere has no single death to hook; if you need a
+  destructor, write a class — RFC 0010 §3, RFC 0011 §2). Everything else
   class-shaped is allowed. Free functions over data remain the default
   idiom; methods are for interface impls and tight helpers.
-- **Boxing for interface refs.** A dataclass is still a bare inline
-  value; an interface value *is* an Rc cell reference (RFC 0011). A bare
-  dataclass widens to `dyn I` by **implicit boxing** at the
-  widening site — exactly the bare-class rule of RFC 0011 — and cells
-  minted this way (or by `Rc(p)`) carry the dataclass's impl vtable
-  (RFC 0015 §6). Layout never changes: methods and impl tables add
-  **nothing** to `size_of(D)`; the repr-C field block is copied into
-  the cell as-is.
-- **Representation: no header, no refcount** (RFC 0016 §1). A dataclass is
-  its fields back-to-back, inline wherever it lives: registers/stack for
-  locals, inline in class fields and Rc cells, inline in `Vec<Point>`
-  elements (unboxed and contiguous — a flat buffer of pairs). RC and the
-  cycle collector only see a dataclass's ref-typed fields, via the
-  compile-time field table.
-- `Option<Point>` / `Result<Point, E>` hold the value inline in the payload.
-- Copy cost is `size_of(D)` bytes — dataclasses are for small data (points,
-  rects, colors, configs). Any size is allowed; the compiler warns past a
-  threshold (OQ-1).
+- **Equality is identity, comparison is `Hashable`.** `==` on two
+  dataclass values is a cell-identity test (RFC 0012 §4) — `own(p) == p`
+  is false, two literals are never equal. Field-wise comparison is the
+  `eq` method of an opted-in `Hashable` impl (RFC 0028) — the mechanism
+  `Map`/`Set` keys use.
+- **Interface refs share, never box.** A dataclass value is already a
+  cell; widening to `dyn I` **attaches the impl vtable to the same
+  handle** (RFC 0011 §3, RFC 0015 §6) — no allocation, no copy: the
+  interface ref aliases the value. Layout never changes: methods and
+  impl tables add **nothing** to `size_of(D)`.
+- **Representation: payload repr C inside the cell** (RFC 0016 §5). A
+  dataclass payload is its fields back-to-back — primitive fields inline,
+  composite fields as cell-handle slots; `Vec<Point>` stores one handle
+  per element (only primitive-element buffers are flat — RFC 0016 §4).
+  RC and the cycle collector see every handle field via the
+  compile-time field table; recursive shapes (`next: Option<Node>`) are
+  legal because composite fields are pointer-sized.
+- `Option<Point>` / `Result<Point, E>` hold the value's **handle** in
+  the payload slot (RFC 0005).
+- The natural size question is unchanged: dataclasses are for small data
+  (points, rects, colors, configs) — not because they copy (they share),
+  but because `own`/field clones are `size_of(D)` memcpys when you do
+  diverge. Any size is allowed; the compiler warns past a threshold
+  (OQ-1).
 
 ## Open questions
 
-- OQ-1: dataclass size warning threshold (compiler warns when a dataclass
-  grows past N bytes, since copies are `size_of` memcpys).
+- OQ-1: dataclass size warning threshold (compiler warns when a
+  dataclass payload grows past N bytes, since `own` clones are
+  `size_of` memcpys).

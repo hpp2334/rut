@@ -1,7 +1,7 @@
 # RFC 0029: Declaration Files & the DeclIr — `.d.rut`, `.d.ir`, Publishing
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0003 (modules), RFC 0025 (host classes — read after),
   RFC 0022 (embedding)
@@ -55,7 +55,7 @@ only, and — beyond RFC 0003's module scope — every declaration must be
 - `let` — with load-time expression initializers (RFC 0033 §3);
 - `enum` — a member list *is* the whole definition;
 - `interface` — method signatures (+ `requires`) *are* the whole
-  definition (`std:collection`'s `Equal<T>` / `Hashable` live this way,
+  definition (`std:collection`'s `Hashable` lives this way,
   RFC 0028);
 - `dataclass` — **fields only** (with load-time expression field initializers). The
   repr-C field block is an ABI (RFC 0015 §4), so a published value type is

@@ -1,7 +1,7 @@
 # RFC 0022: Embedding Model & Native Modules
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** Part D (RFC 0018–0021); RFC 0001 (G8)
 - **Supersedes:** RFC 0005 §1–2, §7 (pre-restructure)
@@ -16,7 +16,7 @@ drives entry points. Every crossing is checked against reified types
 (RFC 0015) — the bridge boilerplate tur needed simply does not exist.
 
 **Non-feature:** there is no `box<T>` / loan / `&mut`-in-the-language
-(RFC 0004 §2). The only shared-reference mechanism is `Rc<T>`; the only
+(RFC 0004 §2). Every non-primitive is a shared cell (RFC 0016 §1); the only
 borrows are **host-side, call-scoped, flag-guarded** (RFC 0023) — anything
 wider is unsound and will not be added.
 
@@ -60,20 +60,20 @@ fn gfx_module() -> NativeModule {
 
 - Parameter and return types are declared **once**, as Rust types; the VM
   checks every call against them using the same `TypeId` machinery as
-  `is<T>` (RFC 0015 §6). No coercion code, no `as number`, no
+  the `is` keyword (RFC 0015 §6). No coercion code, no `as number`, no
   `require_props_object`.
 - Native registration supplies implementations for declaration-file
   items: **`host fn`s** (above), **class methods / constructors** (RFC 0025,
   RFC 0026), and — for the types themselves — the backing of **enum,
   interface, and builtin-impl registry entries** declared in declaration
   files
-  (`std:collection`'s `Equal<T>`/`Hashable` + their builtin impls are
+  (`std:collection`'s `Hashable` + its builtin impls are
   the canonical case, RFC 0028). std:reflect adds the reflection
   protocols to the same registry — `Reflectable`/`Deserializable` for
   `Option`/`Result`/`Vec`/`Array<T, N>` (RFC 0037).
 - **Internal natives**: the VM boots with native modules of its own in
   this same registry — `str`/`concat` (the `f""` desugaring, RFC 0007
-  §2), `make_any` (RFC 0014), Template construction (RFC 0027), and
+  §2), `Opaque` construction (RFC 0014), Template construction (RFC 0027), and
   concrete `Vec<T>`'s named API (`len`/`push`/`pop`, RFC 0005). They
   are `callnat` slots fixed at boot, never IR ops (RFC 0032 §1.1 R2);
   hosts see them exactly like their own registered modules.
