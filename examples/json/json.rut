@@ -11,13 +11,13 @@
 // The CONTRACT (RFC 0037 §1): `Serializable` is an opt-in layer over
 // the mechanism protocol — wire shapes that differ from domain types
 // are separate dataclasses (ApiUser in app.rut); there are no
-// decorators (RFC 0037 OQ-1 records that history).
+// decorators (RFC 0037 OQ-1).
 //
 // RFC 0007 OQ-1 dependency — string byte access (the standing
 // byte-index + helpers proposal; serde is its forcing case):
 //     s.at(i): u8            byte at i
 //     s.slice(a, b): string  substring [a, b)
-// Everything else is shipped surface: Opaque(v)/downcast/is (RFC 0014),
+// Everything else is language surface: Opaque(v)/downcast/is (RFC 0014),
 // std:reflect (RFC 0037), Vec (RFC 0005), f"" (RFC 0007 §2). JSON
 // escapes \b, \f and \uXXXX are NOT handled — they need byte<->char
 // helpers from the same OQ family (recorded, not invented).
@@ -145,10 +145,8 @@ fn write_val(t: TypeInfo, a: Opaque): Result<string, string> {
                 }
                 return Err(t.name());
             },
-            LeafKind.Bytes -> Err(t.name()),
             LeafKind.Iface -> Err(t.name()),   // interface values have no
         },                                     // recovery (RFC 0012 §3)
-        TypeKind.Shared -> Err(t.name()),      // legacy: unsupported (OQ-5 moot)
     }
 }
 
@@ -227,7 +225,6 @@ fn build(t: TypeInfo, j: JsonValue): Result<Opaque, JsonError> {
             LeafKind.Bool  -> Ok(Opaque(want_bool(j, t.name())?)),
             else -> Err(JsonError { msg: f"{t.name()} is not deserializable content", pos: j.pos }),
         },
-        TypeKind.Shared -> Err(JsonError { msg: "Shared fields are not walkable in v1 (RFC 0037 OQ-5)", pos: j.pos }),
     }
 }
 

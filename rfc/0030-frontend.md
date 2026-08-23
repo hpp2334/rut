@@ -381,8 +381,8 @@ struct Diag { span: Span, msg: String,
 - The lexer and parser are pure functions (`&str -> (Vec<Token>, Vec<Diag>)`,
   `&[Token] -> (Ast, Vec<Diag>)`) — fuzzable, usable in an LSP or formatter
   without a VM.
-- Parser invariants, tested: the cursor is monotone (debug assert; the
-  checkpoint API no longer exists, so rollback is unrepresentable) and the
+- Parser invariants, tested: the cursor is monotone (debug assert —
+  the parser never backtracks, so rollback is unrepresentable) and the
   depth budgets fire as Diags — the corpus includes 100k-deep `((((`,
   `[[[[`, `{{{{`, unary chains, and nested generic args, each yielding one
   clean "nesting too deep" diag; fuzz targets assert no host stack overflow
@@ -399,10 +399,9 @@ struct Diag { span: Span, msg: String,
   Proposed: allowed everywhere a comma list exists.
 - OQ-2: attributes (`@inline`, `@repr(align)`) — `At` is lexed but
   unclaimed; park the token until a real need exists (repr C is the
-  default, RFC 0015 §4, so `@repr` is NOT planned). Decorators were
-  later designed for reflection policy (TypeId identity, protocol
-  downcasts, lazy class recipes) and **rejected for v1** — RFC 0037
-  OQ-1 records the history; reflection shipped on interfaces instead.
+  default, RFC 0015 §4, so `@repr` is NOT planned). Decorators for
+  reflection policy are **rejected for v1** — reflection runs on
+  `implements` interfaces (RFC 0037).
 - OQ-3: the depth budget value (C3). Proposed: a single NEST_MAX = 1024
   shared by parser frame depth and lexer bracket depth — deep enough for
   generated code, shallow enough that exceeding it is pathological.

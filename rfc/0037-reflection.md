@@ -74,8 +74,8 @@ export interface ReflectEngine { }        // module capability: implement
                                             // structural symbols
 export interface Reflectable { ..§1.. }
 export interface Deserializable requires Reflectable { }
-export enum TypeKind { Leaf, Record, Sum, Seq, Shared }
-export enum LeafKind  { Bool, Int, Float, String, Bytes, Class, Iface }
+export enum TypeKind { Leaf, Record, Sum, Seq }
+export enum LeafKind  { Bool, Int, Float, String, Class, Iface }
 export host fn reflect<T>(): TypeInfo;    // static T (incl. interface T)
 export host fn type_of(a: Opaque): TypeInfo;  // content descriptor
 
@@ -117,8 +117,8 @@ export host class SumVariant {
 
 No builtin is named anywhere — `Option`/`Result` appear only as
 sum-shaped descriptors (`Some/None` is a `{0,1}` sum, `Ok/Err` a
-`{1,1}` sum, a C-like enum an all-payloadless sum). There is no
-`Shared` node anymore: `Rc` is gone, and composite children box their
+`{1,1}` sum, a C-like enum an all-payloadless sum). Composite
+children box their
 **cell handle** (RFC 0016 §1) — a `child` of a record field aliases the
 parent's field, so mutation through the original is observable in the
 box; walkers treat them as their own Record/Sum nodes via the box's
@@ -209,18 +209,15 @@ example names its assumed helpers in a header comment.
   downcasts, lazy class recipes) and **rejected for v1** ("too
   complex"); `@` stays unclaimed (RFC 0030 OQ-2). Wire renames are
   separate wire dataclasses; wire contracts are `Serializable`.
-- OQ-2 (resolved): wire contracts — `Serializable` (opt-in) +
+- OQ-2: wire contracts — `Serializable` (opt-in) +
   `Deserializable` (capability); serialize exposes structure outward
   (consent matters), deserialize only builds valid public values
   (capability suffices).
 - OQ-3: exact-builtin identity — the structural `{0,1}` pattern, or
   `type_id()` vs `reflect<Option<E>>().type_id()`.
 - OQ-4: `field_set` / mutators (deserialization-into-reuse).
-- OQ-5 (resolved): `Shared` (Rc) — moot: `Rc` was removed (RFC 0016 §1);
-  composite children are shared cell handles boxed as `Opaque`, walked
-  as their own Record/Sum nodes (§2).
-- OQ-6: content-driven walking via `type_of` (v1: declared types).
-- OQ-7: `child` copies per access — lazy views if profiling demands.
+- OQ-5: content-driven walking via `type_of` (v1: declared types).
+- OQ-6: `child` copies per access — lazy views if profiling demands.
 - OQ-8: engine admission per-module vs per-declaration.
 - OQ-9: width folding under boxing-widens (u8/i16/i32/i64/f32/f64 →
   i64/f64); `char`'s Leaf classification.

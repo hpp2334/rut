@@ -26,7 +26,7 @@ fn literals(name: string): void {
     let view: dyn Slice<f32> = zero;           // Vec widens too — dispatches
     view[0] = 9.0f32;                  // through the Vec; growth-
                                         // safe, write is visible via zero[0]
-    let bin = Vec<u8>(64);           // binary data: Vec<u8> (bytes is gone)
+    let bin = Vec<u8>(64);           // binary data: Vec<u8>
     let p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
 
     log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={shared.len()}");

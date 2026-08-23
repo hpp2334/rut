@@ -26,7 +26,7 @@ explicit `self` receivers, static fields.
   *default* not a law; and it can never implement `Deserializable` —
   construction is the constructor's job, reflective mint is
   descriptor-backed only. (`implements`
-  is no longer class-only — RFC 0009.) A dataclass auto-implements
+  is allowed on dataclasses as well — RFC 0009.) A dataclass auto-implements
   `std:reflect`'s `Reflectable` + `Deserializable` (RFC 0037) — that,
   not the keyword, is why it reflects and round-trips; classes stay
   opt-in by hand. `==` on class values is cell identity for both
@@ -46,6 +46,9 @@ explicit `self` receivers, static fields.
   `constructor parse(s: string): Option<Version>` (a `Disposal` class's
   constructor still returns `Self` — the handle is the ownership,
   RFC 0011 §2).
+- **No constructor parameter properties**: constructors are plain
+  functions (params are params), and the `Self { field: name }` literal
+  makes the param→field mapping explicit.
 - **`suspend constructor` is allowed** — same function, `await` in the body:
   `Circle(..)` then returns `Future<Circle>` and callers write
   `await Circle(..)` (cold future, RFC 0018 §2). No partially constructed
@@ -99,9 +102,6 @@ explicit `self` receivers, static fields.
 
 ## Open questions
 
-- OQ-1: class inheritance (`extends`/`super`/`override`) — removed from v1
+- OQ-1: class inheritance (`extends`/`super`/`override`) — not in v1
   (§3); reintroduce only if composition proves insufficient, as a separate
   RFC.
-- ~~constructor parameter properties~~ — **obsolete twice over**:
-  constructors are plain functions (params are params), and the
-  `Self { field: name }` literal makes the param→field mapping explicit.

@@ -26,14 +26,13 @@ The standard library splits in two:
   declaration file + Rust bodies**
   (RFC 0025, RFC 0026): its `.d.rut` declares the interface
   `Hashable { fn hash(self): u64; fn eq(self, other: Self): bool }`
-  — hashing and key comparison are one contract (the old
-  `Equal`-`requires` pairing is gone with `Equal`, RFC 0012 §4) — and
+  — hashing and key comparison are one contract — and
   the containers
   directly — `export host class Map<K requires Hashable, V> { .. }`, `Set<T>`
   — with no facade; builtin impls (string content, numerics/enum value,
   registered-struct vouchers) are host impl-registry
   entries, not rut syntax. Containers are library types, not VM
-  builtins (RFC 0005 pre-restructure OQ, resolved). **`std:debug`**
+  builtins (RFC 0005). **`std:debug`**
   (RFC 0036) rides the same mechanism: `Location`, `here()`,
   `capture_stack_trace()`, and the `StackTrace` class. **`std:reflect`**
   (RFC 0037) too: the `Reflectable`/`Deserializable` protocols,

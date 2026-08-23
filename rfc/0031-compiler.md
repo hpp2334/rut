@@ -92,10 +92,8 @@ doesn't prove. The IR therefore tracks a per-SSA-value **type lattice**:
 exact concrete  >  dyn I (satisfies I)
 ```
 
-(That is the whole interface tier — there is no bottom node: the old
-`dyn Any` tier died with `Any` (RFC 0014); erasure is now the concrete
-host class `Opaque`, off-lattice and reached only by the explicit
-`Opaque(v)` type-call.)
+(Erasure sits off the lattice: the concrete host class `Opaque`,
+reached only by the explicit `Opaque(v)` type-call — RFC 0014.)
 
 Every `dyn` type is **unsized** — `dyn I` and `dyn Slice<T>` alike: the
 payload lives in a heap cell and a `dyn`-typed slot stores the cell

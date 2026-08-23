@@ -22,29 +22,23 @@ rc 0) and **`examples/memory/temp-file.rut`**.
   and returning copy the handle (`rc++`), and **mutation is visible
   through every alias**. Two handles are equal (`==`, RFC 0012 §4)
   exactly when they point at the same cell — identity is the default
-  comparison for composites, like it or not; field-wise comparison goes
-  through `Hashable.eq` (RFC 0028) when a type opts in.
+  comparison for composites; field-wise comparison goes
+  through `Hashable.eq` (RFC 0028) when a type opts in. Copying is always
+  explicit — a program never depends on when a copy happens.
 - **`own(x): T`** — prelude builtin, the eager **shallow** copy: a fresh
   cell with `x`'s payload cloned (primitive fields copied, handle-typed
-  fields still shared — divergence is one level deep, exactly like the
-  old value-copy regime's shallow copies; `own` it again for deeper
-  cuts). `own` is the only copy in the language. Over a buffer it clones
-  the buffer but shares composite element cells. Over a primitive it is
-  a no-op (lint). New identity by definition: `own(x) == x` is `false`.
-- There is no `Rc<T>` and no copy-on-write. An earlier draft had both:
-  `Rc` as the explicit aliasing opt-in, then COW as the default with
-  `Rc` alongside — **rejected** (see Note). Learning *two* regimes —
-  when does this assignment copy, when does it share — was judged harder
-  than one honest rule: everything shares, `own` diverges.
+  fields still shared — divergence is one level deep; `own` it again for
+  deeper cuts). `own` is the only copy in the language. Over a buffer it
+  clones the buffer but shares composite element cells. Over a primitive
+  it is a no-op (lint). New identity by definition: `own(x) == x` is
+  `false`.
 
 ## 2. `Disposal` — destructors for classes
 
 - A class implementing `Disposal` is just a class: construct it, store
   it, pass it — the handle *is* the ownership. When a cell's count hits
   0, `Disposal.dispose(mut self)` runs, then fields are released in
-  order — deterministic destruction (RFC 0016 §3). The old
-  "Disposal classes must live behind `Rc`" rule is gone with `Rc`:
-  there is no bare-value form left to forbid.
+  order — deterministic destruction (RFC 0016 §3).
 
 ## 3. Interfaces share, never copy
 
@@ -58,21 +52,8 @@ rc 0) and **`examples/memory/temp-file.rut`**.
 ## 4. Weak references
 
 - `Weak(x)` creates a `Weak<T>` that does not keep the cell alive — over
-  **any** cell now, not just class cells (RFC 0017 §1); `upgrade()`:
+  **any** cell (RFC 0017 §1); `upgrade()`:
   `Option<T>`. Cells are also what the shutdown leak report walks
   (RFC 0017 §2), and cycles are possible through any handle-typed field
-  or composite element — including plain dataclass fields now that
-  recursive types are legal (RFC 0016 §1).
-
-## Note
-
-- ~~`rc<dataclass>`~~ — **resolved: allowed, then moot** — the 0012-era
-  ruling that dataclasses may sit in Rc cells; under the all-cells
-  regime every dataclass value is a cell, so the question dissolves.
-- ~~`Rc<T>` — explicit references~~ — **resolved: removed**; the default
-  became the cell regime (RFC 0016 §1). History: v1 of this RFC made
-  `Rc` the explicit aliasing opt-in over copying bare values; a later
-  revision proposed COW-by-default with `Rc` retained; final ruling:
-  **one regime** — everything shares, `own(x)` is the copy — because
-  two mental models (COW-when-shared vs Rc-always-shared) are harder to
-  learn than either alone.
+  or composite element — plain dataclass fields included (recursive
+  types are legal — RFC 0016 §1).

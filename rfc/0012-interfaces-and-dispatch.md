@@ -65,9 +65,9 @@ meaningless in v1 (nothing can override).
   is always a code pointer invoked with an explicit `(...)` — one member
   kind, no call-vs-load ambiguity at the vtable boundary. (`d.x` where `d`
   is interface-typed is a compile error.)
-- **No top interface.** `Any` is gone (RFC 0014): the erased-storage
-  type is the concrete host class `Opaque` — reached by the explicit
-  type-call `Opaque(v)`, never by widening, and never nameable in an
+- **No top interface.** The erased-storage type is the concrete host
+  class `Opaque` (RFC 0014) — reached by the explicit type-call
+  `Opaque(v)`, never by widening, and never nameable in an
   `implements`/`requires` list (it is a class, not an interface). The
   interface tier is simply `exact concrete > dyn I` (RFC 0031 §4);
   the universal type test is `x is Opaque` (§3).
@@ -93,8 +93,7 @@ meaningless in v1 (nothing can override).
   built on top (`dataclass User implements Serializable {}` costs zero
   methods, RFC 0037). What `requires` deliberately is **not** (this is why
   interface `extends` was rejected): no member inheritance —
-  `Hashable` declares both `hash` and `eq` itself (RFC 0028; the old
-  `Hashable requires Equal<Self>` pairing died with `Equal`, §4), and
+  `Hashable` declares both `hash` and `eq` itself (RFC 0028), and
   nothing else is reachable through it; no subtyping — a `Serializable`
   ref does not widen to a `Reflectable` ref; **vtables stay flat** — one
   interface, one vtable,
@@ -125,14 +124,14 @@ type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
   non-associative (RFC 0030 §2/§3). The RHS is a **naming position**
   like `implements`/`requires` lists (§2): a bare interface name or
   instantiation (`x is Hashable`, `x is Slice<T>`) or a concrete type
-  (`d is Circle`) — never `dyn`-prefixed. The old prelude builtin
-  `is<T>(x)` is **removed**; every type test spells `is`.
+  (`d is Circle`) — never `dyn`-prefixed. Every type test spells `is` —
+  there is no `is<T>()` builtin.
 - **Two probes, one keyword.** Concrete RHS — exact-type test:
   true when `x`'s exact class (or dataclass — RFC 0009) *is* `T`;
   with no inheritance this is a single descriptor lookup — exact
   `TypeId` compare (RFC 0015 §6). Interface RHS — **capability
   probe**: true when the value's exact type implements that interface
-  — the `is_a` descriptor/registry scan of RFC 0015 §6, now
+  — the `is_a` descriptor/registry scan of RFC 0015 §6,
   user-reachable (`k is Hashable`, `x is Drawable`). `is` is
   total: never traps, never recovers, yields only `bool`.
 - **`x is Opaque` is legal** — a plain concrete test ("is this value an
@@ -151,8 +150,8 @@ type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
 - **No `upcast` builtin.** Widening to `dyn I` is implicit on
   assignment/argument passing (`blit_all(g, [c])` passes a `Circle` as
   `dyn Drawable`); the explicit, greppable form is the `dyn` annotation
-  at the receiving position (`let d: dyn Drawable = s;`). `upcast` was
-  removed when `dyn` landed — the keyword does the marking.
+  at the receiving position (`let d: dyn Drawable = s;`); there is no
+  `upcast` builtin — the keyword does the marking.
 - **Interface values cannot be downcast.** An interface value is used
   through its interface methods — if you need `Circle`-specific behavior
   behind a `dyn Drawable`, put that behavior in the interface. Recovery
@@ -167,7 +166,7 @@ type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
 
 ## 4. Equality — `==` is builtin: value for primitives, identity for cells
 
-There is **no `Equal` interface** (removed — see Note): `a == b` is a
+`a == b` is a
 builtin operator with no vtable dispatch, no opting in, no
 element-wise story. The law is one sentence: **primitives compare by
 value; `string` compares by content; everything else compares by cell
@@ -201,33 +200,3 @@ identity.** `a != b` is its negation (`!(a == b)`).
   may be `Hashable` (maps) while `==` stays identity.
 - `when` literal patterns are unaffected: arms match compile-time values,
   never runtime `==`.
-
-## Note
-
-- ~~interface `extends` (interface hierarchies)~~ — **resolved: rejected**;
-  `requires` shipped instead (§2) — an implementor-side admission
-  constraint: flat vtables, no member inheritance, no
-  interface-to-interface widening.
-- ~~bare interface names as value types~~ — **resolved: superseded by
-  `dyn`**; interface object types are spelled `dyn I` in every type
-  position (Rust's rule, §2), while `implements`/`requires`/bounds stay
-  bare.
-- ~~`upcast<T>` builtin~~ — **resolved: removed**; widening to `dyn I`
-  is implicit (the `dyn` annotation marks it) and shares the cell —
-  no allocation (RFC 0011 §3). Erasure is the host-class type-call
-  `Opaque(v): Opaque` (RFC 0014) — `as` stays reserved, rut has no
-  cast syntax. (The same resolution's interface-type-arg ban on
-  `is<T>` was later superseded — next entry.)
-- ~~equality via an `Equal<T>` interface (opt-in `implements`, then
-  briefly auto-derived for dataclasses + always-registered for the
-  builtin generics)~~ — **resolved: removed entirely**: `==` is
-  builtin — primitives by value, `string` by content, everything else
-  by cell identity; `Option`/`Result` `==` is a compile error (§4).
-  Field-wise comparison survives only as `Hashable.eq` (RFC 0028),
-  the value-keyed contract for `Map`/`Set`.
-- ~~no `is` operator; `is<T>(x)` prelude builtin, concrete `T` only~~ —
-  **resolved: superseded by the `is` keyword** (§3): `expr is Type`
-  (relational, non-associative; RHS a naming position) — concrete RHS
-  keeps the exact-`TypeId` compare, interface RHS is the new
-  capability probe (`is_a` scan, RFC 0015 §6); the builtin fn is
-  removed. `downcast<T>` stays a builtin fn, concrete `T` only.

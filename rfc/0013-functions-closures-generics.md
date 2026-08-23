@@ -1,7 +1,7 @@
 # RFC 0013: Functions, Closures & Generics
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0012 (interfaces)
 - **Supersedes:** RFC 0002 §9 (pre-restructure)
@@ -53,7 +53,7 @@ block), and a generic `first<T>` monomorphized to two instantiations.
 ## Open questions
 
 - OQ-1: generic bounds `T requires Iface` with **static dispatch** on bare `T`
-  (would unlock it without `dyn I` refs) — still deferred; the
-  **admission-only** forms shipped (host/extern inline bounds, §2 +
+  (would unlock it without `dyn I` refs) — deferred; the
+  admission-only forms (host/extern inline bounds, §2 +
   RFC 0025 §1; user-fn `where` clauses, RFC 0037 §3) need no dispatch
   and add no IR.

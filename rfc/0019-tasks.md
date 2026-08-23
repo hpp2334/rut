@@ -1,7 +1,7 @@
 # RFC 0019: Tasks — `spawn`, `cancel`, `select`
 
 - **Status:** Draft
-- **Date:** 2026-08-22
+- **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0018 (suspend & await)
 - **Supersedes:** RFC 0003 §3 (pre-restructure)
@@ -37,8 +37,8 @@ See **`examples/concurrency/spawn-cancel.rut`** (cancellation-by-drop) and
 
 ## Open questions
 
-- ~~OQ-1~~ **resolved:** `await task` on a cancelled task yields
-  `Result<T, Cancelled>` — §1 stands; never a trap.
+- OQ-1: `await task` on a cancelled task yields
+  `Result<T, Cancelled>` — §1; never a trap.
 - OQ-2: priorities/fairness — round-robin ready queue in v1; do we need
   task priorities for UI responsiveness before M4?
 - OQ-3: structured concurrency scopes with child cancellation.

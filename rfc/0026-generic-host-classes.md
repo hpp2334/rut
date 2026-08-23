@@ -67,7 +67,7 @@ pub fn my_map_module() -> NativeModule {
 
 | checkpoint | when | checks | errors to |
 |---|---|---|---|
-| **compile/verify** | `rutc check` / `vm.load` verify | instantiation vs the **host decl**: `MyMap<Canvas, ..>` is a rut-line error (`Canvas` does not implement `Hashable`); admission closes over the `requires` graph (RFC 0037 — `Hashable` itself is standalone now, RFC 0028). Checking needs **no Rust at all**. | rut author |
+| **compile/verify** | `rutc check` / `vm.load` verify | instantiation vs the **host decl**: `MyMap<Canvas, ..>` is a rut-line error (`Canvas` does not implement `Hashable`); admission closes over the `requires` graph (RFC 0037; `Hashable` is standalone — RFC 0028). Checking needs **no Rust at all**. | rut author |
 | **link** | `vm.load` | every host member **referenced** by rut code has a bound impl, and the ClassTable (reflected member names + Rust shapes under the crossing rule) equals the decl's signatures — a pure data compare, nothing runs. | loader / embedder |
 
 A name bound that no decl declares is an embedder **startup** error

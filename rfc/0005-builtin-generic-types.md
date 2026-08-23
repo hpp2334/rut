@@ -86,8 +86,3 @@ is almost never what an Option comparison wants). Compare structurally:
 
 Traps (`Option.value` on `None` included) unwind to the host boundary only
 (RFC 0034 §2) — errors as values, bugs as traps (RFC 0001 P4).
-
-## Note
-
-- ~~`map<K,V>` / `set<T>` builtin vs library~~ — **resolved: library**; see
-  RFC 0028. The VM stays container-free.

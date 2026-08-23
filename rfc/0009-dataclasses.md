@@ -30,8 +30,8 @@ in action.
 - Dataclass literals must initialize **every** field (any order, by name);
   fields may declare initializers (`x: f32 = 0`), which the literal may then
   omit.
-- **Methods and `implements` are allowed** — the dataclass is no longer
-  "pure data". Its body may contain fns: inherent methods and interface
+- **Methods and `implements` are allowed** — a dataclass is data
+  *plus* behavior. Its body may contain fns: inherent methods and interface
   impls, declared and dispatched exactly like class methods (explicit
   `self` receiver included — RFC 0010 §2):
 
@@ -72,9 +72,9 @@ in action.
   legal because composite fields are pointer-sized.
 - `Option<Point>` / `Result<Point, E>` hold the value's **handle** in
   the payload slot (RFC 0005).
-- The natural size question is unchanged: dataclasses are for small data
-  (points, rects, colors, configs) — not because they copy (they share),
-  but because `own`/field clones are `size_of(D)` memcpys when you do
+- Sizing guidance: dataclasses are for small data (points, rects,
+  colors, configs) — they share like everything else, but `own(x)`/field
+  clones are `size_of(D)` memcpys when you do
   diverge. Any size is allowed; the compiler warns past a threshold
   (OQ-1).
 

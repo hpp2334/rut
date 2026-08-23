@@ -39,8 +39,7 @@ deferred.
   (composite elements) stores one cell pointer per element; `Array<T, N>`
   is the same shape with the length frozen at `N`.
 - **Binary data has no dedicated type**: it is `Vec<u8>` (zeroed via
-  `Vec<u8>(n)`). The old `bytes` builtin was removed — one sequence
-  builtin family is enough (RFC 0005).
+  `Vec<u8>(n)`) — one sequence builtin family (RFC 0005).
 - No `null`, no `undefined`. Absence is `Option<T>` (RFC 0005).
 - **One size accessor everywhere**: `.len()` — `string`, `Vec<T>`,
   `Array<T, N>`, and `dyn Slice<T>` all spell it the same way; there is no
@@ -57,8 +56,7 @@ enums, `Opaque`, `dyn I` alike. Writing is gated by the `mut`-binding
 law (RFC 0003 §1), never by the sharing. The **eager copy is the
 `own(x)` builtin** (RFC 0011 §1): shallow — primitive fields copied,
 handle fields still shared. `Weak(x)` demotes any handle to a
-non-keeping ref (RFC 0017). There is no `&`/`*` syntax, no `Rc<T>`,
-and no copy-on-write anywhere.
+non-keeping ref (RFC 0017). There is no `&`/`*` syntax anywhere.
 
 **No `box<T>`, no loans.** A loan needs an exclusivity proof; rut has no
 compile-time borrow checker and no runtime aliasing control over

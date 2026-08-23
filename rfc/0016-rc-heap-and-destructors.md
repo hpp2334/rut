@@ -24,9 +24,9 @@ inline `Slot` values moved by plain `Mov`. Every other value — `string`,
 dataclass and class instances, `Opaque` boxes (RFC 0014), and host
 opaques (RFC 0025) — **is a heap cell handle**: assignment, passing, and
 returning copy the handle (`MovRef`, rc++), and mutation is visible
-through every alias. There is no `Rc<T>` wrapper and no copy-on-write:
-reference semantics is the one default regime (RFC 0004 §2; the eager
-copy is the `own(x)` builtin, RFC 0011 §1). Each cell starts with a
+through every alias. Reference semantics is the one default regime
+(RFC 0004 §2); the eager copy is the `own(x)` builtin (RFC 0011 §1).
+Each cell starts with a
 header (rc count, type id, flags); the exact layout is §5. Composite
 fields and composite elements store **cell handles** (pointer slots);
 only primitive-element buffers are flat (§4). Coroutine frames
@@ -57,9 +57,8 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 ## 3. Deterministic destructors
 
 See **`examples/memory/temp-file.rut`**. A class may implement the
-prelude interface `Disposal` (`fn dispose(mut self): void`, RFC 0028).
-There is no "must live behind Rc" rule anymore — every value is already
-a cell, so the rule is vacuous; a Disposal class is just a class.
+prelude interface `Disposal` (`fn dispose(mut self): void`, RFC 0028);
+a Disposal class is just a class.
 Ordering guarantees:
 
 1. `Disposal.dispose(mut self)` runs first — dispatched through the
@@ -98,10 +97,7 @@ Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
   dispatch through the owner cell, so growth (a Vec's buffer may move)
   keeps existing `dyn Slice<T>` values valid; indexing bounds-checks
   len ∩ owner len — an out-of-range index traps, never reads garbage.
-  (The old second kind — an owned boxed-copy cell minted when an `Array`
-  widened — is gone: under universal reference semantics a silent copy
-  at the widening site would be wrong; the Array cell is shared, not
-  duplicated.) View cells carry the builtin `Slice<T>` slots —
+  View cells carry the builtin `Slice<T>` slots —
   dyn-slice `x[i]` get/set, `.len()`, `for..of` lower to `calli`
   (RFC 0032 §1.1 R2), and dispatch-through-owner is simply the slot
   target. They are not
@@ -121,8 +117,8 @@ Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
   observationally identical (RFC 0004 §2).
 - No interior pointers exist anywhere (no `&mut` into the middle of a
   vec in v1), which is exactly what keeps the cycle scanner a
-  simple typed walk (RFC 0017 §2) — even though cycles are now possible
-  through ordinary user values (§1).
+  simple typed walk (RFC 0017 §2) — cycles through ordinary user values
+  included (§1).
 
 ## 5. Internals: headers, layouts, refcount ops
 
