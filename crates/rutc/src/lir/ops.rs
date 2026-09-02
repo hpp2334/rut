@@ -13,10 +13,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_binary(
         &mut self,
-        _node: NodeId,
+        _node: NodeHandle<AnyExpr>,
         op: crate::ast::BinOp,
-        lhs: NodeId,
-        rhs: NodeId,
+        lhs: NodeHandle<AnyExpr>,
+        rhs: NodeHandle<AnyExpr>,
         _expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
@@ -113,7 +113,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    pub(crate) fn compile_shortcircuit(&mut self, op: crate::ast::BinOp, lhs: NodeId, rhs: NodeId, sp: crate::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_shortcircuit(&mut self, op: crate::ast::BinOp, lhs: NodeHandle<AnyExpr>, rhs: NodeHandle<AnyExpr>, sp: crate::span::Span) -> TcResult<TypeId> {
         let lt = self.compile_expr(lhs, Some(TY_BOOL))?;
         if lt != TY_BOOL {
             self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.types.name(lt)));
@@ -150,14 +150,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_assign(
         &mut self,
-        _node: NodeId,
+        _node: NodeHandle<AnyExpr>,
         op: Option<crate::ast::BinOp>,
-        target: NodeId,
-        value: NodeId,
+        target: NodeHandle<AnyExpr>,
+        value: NodeHandle<AnyExpr>,
         sp: crate::span::Span,
     ) -> TcResult<()> {
-        match self.ctx.ast.node(target).kind.clone() {
-            NodeKind::Path { segs } if segs.len() >= 2 => {
+        match self.ctx.ast.expr(target).clone() {
+            ExprKind::Path { segs } if segs.len() >= 2 => {
                 // `p.x = 4`: the head must be a local; build the GetF chain,
                 // assign the last field
                 if segs[0].generics.is_empty() {
@@ -223,7 +223,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, "invalid assignment target");
                 Err(())
             }
-            NodeKind::Path { segs } if segs.len() == 1 => {
+            ExprKind::Path { segs } if segs.len() == 1 => {
                 let name = segs[0].name;
                 let Some(l) = self.lookup(name).copied() else {
                     self.ctx.err(sp, format!("unknown name `{}`", self.ctx.name(name)));
@@ -276,7 +276,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
                 Ok(())
-            }            NodeKind::Field { recv, name } => {
+            }            ExprKind::Field { recv, name } => {
                 if !self.check_recv_mut(recv, sp, "field assignment") {
                     return Err(());
                 }
@@ -314,7 +314,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            NodeKind::Index { recv, idx } => {
+            ExprKind::Index { recv, idx } => {
                 if !self.check_recv_mut(recv, sp, "index assignment") {
                     return Err(());
                 }

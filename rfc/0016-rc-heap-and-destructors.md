@@ -57,7 +57,7 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 ## 3. Deterministic destructors
 
 See **`examples/memory/temp-file.rut`**. A class may implement the
-prelude trait `Disposal` (`fn dispose(mut self): void`, RFC 0028) via
+prelude trait `Disposal` (`fn dispose(mut self): unit`, RFC 0028) via
 `impl Disposal for T` — a Disposal class is just a class.
 Ordering guarantees:
 

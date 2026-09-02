@@ -128,7 +128,7 @@ impl Vm {
                 (Value::Bool(v), TyKind::Prim(_)) => Slot::bool(*v),
                 (Value::Char(v), TyKind::Prim(_)) => Slot::ch(*v),
                 (Value::Str(s), TyKind::Str) => self.heap.alloc_str(s.clone())?,
-                (Value::Void, _) => Slot::int(0),
+                (Value::Unit, _) => Slot::int(0),
                 _ => Slot::int(0),
             };
         }
@@ -168,7 +168,7 @@ impl Vm {
     fn run_loop(&mut self) -> Result<Value, Trap> {
         loop {
             if !self.running {
-                return Ok(Value::Void);
+                return Ok(Value::Unit);
             }
             let code = self.prog.funcs[self.cur_func as usize].clone();
             let Some(op) = code.code.get(self.cur_pc as usize).cloned() else {
@@ -1090,7 +1090,7 @@ fn slot_to_value(v: Slot, ty: TypeId, prog: &Program) -> Value {
         TyKind::Prim(PrimTy::F32) | TyKind::Prim(PrimTy::F64) => Value::F64(unsafe { v.f }),
         TyKind::Prim(PrimTy::Bool) => Value::Bool(v.as_bool()),
         TyKind::Prim(PrimTy::Char) => Value::Char(v.as_char()),
-        TyKind::Prim(_) | TyKind::Void => Value::I64(unsafe { v.i }),
+        TyKind::Prim(_) | TyKind::Unit => Value::I64(unsafe { v.i }),
         TyKind::Str => Value::Str(cell_of(v).as_str().to_string()),
         _ => Value::I64(unsafe { v.i }),
     }

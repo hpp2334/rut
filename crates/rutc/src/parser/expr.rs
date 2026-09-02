@@ -8,7 +8,7 @@ use crate::token::{FPart, FStrTok, Tok};
 use super::*;
 
 impl Parser {
-    pub(crate) fn parse_expr(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_expr(&mut self) -> Option<NodeHandle<AnyExpr>> {
         // C3: expression nesting carries a recursion-safe budget (recursive
         // descent costs ~13 frames per level; RFC 0030 OQ-3's proposed 1024
         // assumes a frame-stack parser. The CONTRACT is "a Diag, never a
@@ -44,7 +44,7 @@ impl Parser {
         r
     }
 
-    pub(crate) fn parse_expr_inner(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_expr_inner(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         // lambda scan 1: `( params ) (: Type)? =>` —scan read-only
         if matches!(self.tok(), Tok::LParen) && self.scan_is_lambda() {
@@ -59,17 +59,17 @@ impl Parser {
                 self.bump(); // ident
                 self.bump(); // =>
                 let p = self.interner.intern(&name);
-                let param = self.push(
-                    NodeKind::Param { is_mut: false, name: p, ty: None },
+                let param = self.member(
+                    MemberKind::Param(ParamData { is_mut: false, name: p, ty: None }),
                     sp,
                 );
                 let body = if matches!(self.tok(), Tok::LBrace) {
-                    self.parse_block_stmt()?
+                    self.parse_block_stmt()?.into()
                 } else {
                     self.parse_expr()?
                 };
-                return Some(self.push(
-                    NodeKind::Lambda { params: vec![param], ret: None, body },
+                return Some(self.expr(
+                    ExprKind::Lambda { params: vec![param], ret: None, body },
                     sp.to(self.span()),
                 ));
             }
@@ -96,18 +96,19 @@ impl Parser {
         if is_assign {
             self.bump();
             let value = self.parse_expr()?; // right-associative
-            match self.nodes[lhs.0 as usize].kind {
-                NodeKind::Path { .. } | NodeKind::Field { .. } | NodeKind::Index { .. } => {}
+            match &self.nodes[lhs.id().0 as usize].kind {
+                Kind::Expr(ExprKind::Path { .. } | ExprKind::Field { .. } | ExprKind::Index { .. }) => {}
                 _ => {
-                    self.err(self.nodes[lhs.0 as usize].span, "invalid assignment target —expected a path, field, or index");
+                    let sp = self.nodes[lhs.id().0 as usize].span;
+                    self.err(sp, "invalid assignment target —expected a path, field, or index");
                 }
             }
-            return Some(self.push(NodeKind::Assign { op, target: lhs, value }, sp.to(self.span())));
+            return Some(self.expr(ExprKind::Assign { op, target: lhs, value }, sp.to(self.span())));
         }
         Some(lhs)
     }
 
-    pub(crate) fn parse_lambda(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_lambda(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let params = self.parse_params()?;
         let ret = if self.eat_punct(Tok::Colon) {
@@ -117,35 +118,35 @@ impl Parser {
         };
         self.expect(Tok::FatArrow);
         let body = if matches!(self.tok(), Tok::LBrace) {
-            self.parse_block_stmt()?
+            self.parse_block_stmt()?.into()
         } else {
             self.parse_expr()?
         };
-        Some(self.push(NodeKind::Lambda { params, ret, body }, sp.to(self.span())))
+        Some(self.expr(ExprKind::Lambda { params, ret, body }, sp.to(self.span())))
     }
 
     // precedence climb: || < && < == != < relational+is < | ^ < & < << >> < + - < * / %
-    pub(crate) fn parse_or(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_or(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut lhs = self.parse_and()?;
         while matches!(self.tok(), Tok::PipePipe) {
             self.bump();
             let rhs = self.parse_and()?;
-            lhs = self.push(NodeKind::Binary { op: BinOp::Or, lhs, rhs }, sp.to(self.span()));
+            lhs = self.expr(ExprKind::Binary { op: BinOp::Or, lhs, rhs }, sp.to(self.span()));
         }
         Some(lhs)
     }
-    pub(crate) fn parse_and(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_and(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut lhs = self.parse_eq()?;
         while matches!(self.tok(), Tok::AmpAmp) {
             self.bump();
             let rhs = self.parse_eq()?;
-            lhs = self.push(NodeKind::Binary { op: BinOp::And, lhs, rhs }, sp.to(self.span()));
+            lhs = self.expr(ExprKind::Binary { op: BinOp::And, lhs, rhs }, sp.to(self.span()));
         }
         Some(lhs)
     }
-    pub(crate) fn parse_eq(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_eq(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut lhs = self.parse_rel()?;
         loop {
@@ -156,12 +157,12 @@ impl Parser {
             };
             self.bump();
             let rhs = self.parse_rel()?;
-            lhs = self.push(NodeKind::Binary { op, lhs, rhs }, sp.to(self.span()));
+            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
         }
         Some(lhs)
     }
     /// Relational + `is` —`is` is NON-associative (RFC 0012 §3)
-    pub(crate) fn parse_rel(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_rel(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let lhs = self.parse_bit_or()?;
         let op = match self.tok() {
@@ -174,7 +175,7 @@ impl Parser {
         if let Some(op) = op {
             self.bump();
             let rhs = self.parse_bit_or()?;
-            return Some(self.push(NodeKind::Binary { op, lhs, rhs }, sp.to(self.span())));
+            return Some(self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span())));
         }
         if self.at_kw("is") {
             self.bump();
@@ -185,11 +186,11 @@ impl Parser {
                 self.bump();
             }
             let ty = self.parse_type()?;
-            return Some(self.push(NodeKind::Is { expr: lhs, ty }, sp.to(self.span())));
+            return Some(self.expr(ExprKind::Is { expr: lhs, ty }, sp.to(self.span())));
         }
         Some(lhs)
     }
-    pub(crate) fn parse_bit_or(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_bit_or(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut lhs = self.parse_bit_and()?;
         loop {
@@ -200,21 +201,21 @@ impl Parser {
             };
             self.bump();
             let rhs = self.parse_bit_and()?;
-            lhs = self.push(NodeKind::Binary { op, lhs, rhs }, sp.to(self.span()));
+            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
         }
         Some(lhs)
     }
-    pub(crate) fn parse_bit_and(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_bit_and(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut lhs = self.parse_shift()?;
         while matches!(self.tok(), Tok::Amp) {
             self.bump();
             let rhs = self.parse_shift()?;
-            lhs = self.push(NodeKind::Binary { op: BinOp::BitAnd, lhs, rhs }, sp.to(self.span()));
+            lhs = self.expr(ExprKind::Binary { op: BinOp::BitAnd, lhs, rhs }, sp.to(self.span()));
         }
         Some(lhs)
     }
-    pub(crate) fn parse_shift(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_shift(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut lhs = self.parse_add()?;
         loop {
@@ -225,11 +226,11 @@ impl Parser {
             };
             self.bump();
             let rhs = self.parse_add()?;
-            lhs = self.push(NodeKind::Binary { op, lhs, rhs }, sp.to(self.span()));
+            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
         }
         Some(lhs)
     }
-    pub(crate) fn parse_add(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_add(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut lhs = self.parse_mul()?;
         loop {
@@ -243,11 +244,11 @@ impl Parser {
             };
             self.bump();
             let rhs = self.parse_mul()?;
-            lhs = self.push(NodeKind::Binary { op, lhs, rhs }, sp.to(self.span()));
+            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
         }
         Some(lhs)
     }
-    pub(crate) fn parse_mul(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_mul(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut lhs = self.parse_unary()?;
         loop {
@@ -260,12 +261,12 @@ impl Parser {
             };
             self.bump();
             let rhs = self.parse_unary()?;
-            lhs = self.push(NodeKind::Binary { op, lhs, rhs }, sp.to(self.span()));
+            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
         }
         Some(lhs)
     }
 
-    pub(crate) fn parse_unary(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_unary(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let op = match self.tok() {
             Tok::Minus => Some(UnOp::Neg),
@@ -281,23 +282,23 @@ impl Parser {
             self.bump();
             let expr = self.parse_unary()?;
             self.leave();
-            return Some(self.push(NodeKind::Unary { op, expr }, sp.to(self.span())));
+            return Some(self.expr(ExprKind::Unary { op, expr }, sp.to(self.span())));
         }
         // `await` binds a unary-level operand; `await select {..}` is special
         if self.at_kw("await") {
             self.bump();
             if self.at_kw("select") && matches!(self.peek(1).tok, Tok::LBrace) {
                 let arms = self.parse_select_arms()?;
-                let sel = self.push(NodeKind::Select { arms }, sp.to(self.span()));
+                let sel = self.expr(ExprKind::Select { arms }, sp.to(self.span()));
                 return Some(sel);
             }
             let expr = self.parse_unary()?;
-            return Some(self.push(NodeKind::Await { expr }, sp.to(self.span())));
+            return Some(self.expr(ExprKind::Await { expr }, sp.to(self.span())));
         }
         self.parse_postfix()
     }
 
-    pub(crate) fn parse_select_arms(&mut self) -> Option<Vec<NodeId>> {
+    pub(crate) fn parse_select_arms(&mut self) -> Option<Vec<NodeHandle<AnyArm>>> {
         self.bump(); // select
         self.expect(Tok::LBrace);
         let mut arms = Vec::new();
@@ -317,14 +318,14 @@ impl Parser {
             self.expect(Tok::Arrow);
             let body = self.parse_expr()?;
             self.eat_punct(Tok::Comma);
-            arms.push(self.push(NodeKind::SelectArm { fut, bind, body }, sp.to(self.span())));
+            arms.push(self.arm(ArmKind::SelectArm { fut, bind, body }, sp.to(self.span())));
         }
         Some(arms)
     }
 
     /// Postfix loop: `.name` `.name<..>(..)` `(..)` `[..]` `?` —chains
     /// compose without special cases (RFC 0030 §3, prec 13).
-    pub(crate) fn parse_postfix(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_postfix(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         let mut e = self.parse_primary()?;
         if !self.enter() {
@@ -345,7 +346,7 @@ impl Parser {
                             }
                             let arg = if matches!(self.tok(), Tok::Int(..)) {
                                 let ex = self.parse_unary()?;
-                                self.push(NodeKind::TyConst(ex), self.span())
+                                self.typ(TypeKind::TyConst(ex), self.span())
                             } else {
                                 self.parse_type()?
                             };
@@ -359,28 +360,28 @@ impl Parser {
                     if matches!(self.tok(), Tok::LParen) {
                         self.bump();
                         let args = self.parse_call_args()?;
-                        e = self.push(
-                            NodeKind::Method { recv: e, name, generics, args },
+                        e = self.expr(
+                            ExprKind::Method { recv: e, name, generics, args },
                             sp.to(self.span()),
                         );
                     } else {
-                        e = self.push(NodeKind::Field { recv: e, name }, sp.to(self.span()));
+                        e = self.expr(ExprKind::Field { recv: e, name }, sp.to(self.span()));
                     }
                 }
                 Tok::LParen => {
                     self.bump();
                     let args = self.parse_call_args()?;
-                    e = self.push(NodeKind::Call { callee: e, args }, sp.to(self.span()));
+                    e = self.expr(ExprKind::Call { callee: e, args }, sp.to(self.span()));
                 }
                 Tok::LBracket => {
                     self.bump();
                     let idx = self.parse_expr()?;
                     self.expect(Tok::RBracket);
-                    e = self.push(NodeKind::Index { recv: e, idx }, sp.to(self.span()));
+                    e = self.expr(ExprKind::Index { recv: e, idx }, sp.to(self.span()));
                 }
                 Tok::Question => {
                     self.bump();
-                    e = self.push(NodeKind::Try { expr: e }, sp.to(self.span()));
+                    e = self.expr(ExprKind::Try { expr: e }, sp.to(self.span()));
                 }
                 _ => break,
             }
@@ -389,7 +390,7 @@ impl Parser {
         Some(e)
     }
 
-    pub(crate) fn parse_call_args(&mut self) -> Option<Vec<NodeId>> {
+    pub(crate) fn parse_call_args(&mut self) -> Option<Vec<NodeHandle<AnyExpr>>> {
         let mut args = Vec::new();
         loop {
             if self.eat_punct(Tok::RParen) {
@@ -405,32 +406,32 @@ impl Parser {
         Some(args)
     }
 
-    pub(crate) fn parse_primary(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_primary(&mut self) -> Option<NodeHandle<AnyExpr>> {
         let sp = self.span();
         match self.tok().clone() {
             Tok::Int(v, sfx) => {
                 self.bump();
-                Some(self.push(NodeKind::Lit(Lit::Int(v, sfx)), sp))
+                Some(self.expr(ExprKind::Lit(Lit::Int(v, sfx)), sp))
             }
             Tok::Float(bits, sfx) => {
                 self.bump();
-                Some(self.push(NodeKind::Lit(Lit::Float(bits, sfx)), sp))
+                Some(self.expr(ExprKind::Lit(Lit::Float(bits, sfx)), sp))
             }
             Tok::Str(s) => {
                 self.bump();
-                Some(self.push(NodeKind::Lit(Lit::Str(s)), sp))
+                Some(self.expr(ExprKind::Lit(Lit::Str(s)), sp))
             }
             Tok::RawStr(s) => {
                 self.bump();
-                Some(self.push(NodeKind::Lit(Lit::RawStr(s)), sp))
+                Some(self.expr(ExprKind::Lit(Lit::RawStr(s)), sp))
             }
             Tok::Char(c) => {
                 self.bump();
-                Some(self.push(NodeKind::Lit(Lit::Char(c)), sp))
+                Some(self.expr(ExprKind::Lit(Lit::Char(c)), sp))
             }
             Tok::Bool(b) => {
                 self.bump();
-                Some(self.push(NodeKind::Lit(Lit::Bool(b)), sp))
+                Some(self.expr(ExprKind::Lit(Lit::Bool(b)), sp))
             }
             Tok::FStr(f) => {
                 self.bump();
@@ -476,17 +477,17 @@ impl Parser {
                         break;
                     }
                 }
-                Some(self.push(NodeKind::ArrayLit { elems }, sp.to(self.span())))
+                Some(self.expr(ExprKind::ArrayLit { elems }, sp.to(self.span())))
             }
             Tok::Ident(name) => {
                 if name == "when" && matches!(self.peek(1).tok, Tok::LParen) {
                     let (scrut, arms) = self.parse_when_head()?;
-                    return Some(self.push(NodeKind::WhenExpr { scrut, arms }, sp.to(self.span())));
+                    return Some(self.expr(ExprKind::WhenExpr { scrut, arms }, sp.to(self.span())));
                 }
                 if name == "self" {
                     self.bump();
                     let seg = PathSeg { name: self.interner.intern("self"), generics: Vec::new() };
-                    return Some(self.push(NodeKind::Path { segs: vec![seg] }, sp));
+                    return Some(self.expr(ExprKind::Path { segs: vec![seg] }, sp));
                 }
                 if name == "Self" {
                     self.bump();
@@ -496,7 +497,7 @@ impl Parser {
                         return self.parse_struct_body(sp, ty_name);
                     }
                     let seg = PathSeg { name: self.interner.intern("Self"), generics: Vec::new() };
-                    return Some(self.push(NodeKind::Path { segs: vec![seg] }, sp));
+                    return Some(self.expr(ExprKind::Path { segs: vec![seg] }, sp));
                 }
                 // struct literal: `Ident {` (dataclass only —classes have no
                 // instance literal; the checker rejects `Circle { .. }`)
@@ -517,7 +518,7 @@ impl Parser {
                         }
                         let arg = if matches!(self.tok(), Tok::Int(..)) {
                             let ex = self.parse_unary()?;
-                            self.push(NodeKind::TyConst(ex), self.span())
+                            self.typ(TypeKind::TyConst(ex), self.span())
                         } else {
                             self.parse_type()?
                         };
@@ -551,15 +552,15 @@ impl Parser {
                         // built so far (the resolver decides static vs instance)
                         self.bump();
                         let args = self.parse_call_args()?;
-                        let recv = self.push(NodeKind::Path { segs }, sp);
-                        return Some(self.push(
-                            NodeKind::Method { recv, name, generics, args },
+                        let recv = self.expr(ExprKind::Path { segs }, sp);
+                        return Some(self.expr(
+                            ExprKind::Method { recv, name, generics, args },
                             sp.to(self.span()),
                         ));
                     }
                     segs.push(PathSeg { name, generics });
                 }
-                Some(self.push(NodeKind::Path { segs }, sp.to(self.span())))
+                Some(self.expr(ExprKind::Path { segs }, sp.to(self.span())))
             }
             _ => {
                 let found = self.peek(0).describe();
@@ -570,34 +571,31 @@ impl Parser {
     }
 
     /// Dataclass literal / `Self { .. }`: `Name { field: expr, .. }`
-    pub(crate) fn parse_struct_lit(&mut self, sp: Span, name: &str) -> Option<NodeId> {
+    pub(crate) fn parse_struct_lit(&mut self, sp: Span, name: &str) -> Option<NodeHandle<AnyExpr>> {
         let ty_name = self.interner.intern(name);
         self.bump(); // the ident
         self.parse_struct_body(sp, ty_name)
     }
 
     /// struct literal body: the cursor sits ON the `{`
-    pub(crate) fn parse_struct_body(&mut self, sp: Span, ty_name: IdentId) -> Option<NodeId> {
+    pub(crate) fn parse_struct_body(&mut self, sp: Span, ty_name: IdentId) -> Option<NodeHandle<AnyExpr>> {
         self.bump(); // {
-        if !self.enter() {
-            self.leave();
-            self.sync_stmt();
-            let ty = self.push(
-                NodeKind::TyPath {
+        let mk_ty = |p: &mut Parser| {
+            p.typ(
+                TypeKind::TyPath {
                     segs: vec![PathSeg { name: ty_name, generics: Vec::new() }],
                     is_dyn: false,
                 },
                 sp,
-            );
-            return Some(self.push(NodeKind::Struct { ty, fields: Vec::new() }, sp));
+            )
+        };
+        if !self.enter() {
+            self.leave();
+            self.sync_stmt();
+            let ty = mk_ty(self);
+            return Some(self.expr(ExprKind::Struct { ty, fields: Vec::new() }, sp));
         }
-        let ty = self.push(
-            NodeKind::TyPath {
-                segs: vec![PathSeg { name: ty_name, generics: Vec::new() }],
-                is_dyn: false,
-            },
-            sp,
-        );
+        let ty = mk_ty(self);
         let mut fields = Vec::new();
         loop {
             if self.eat_punct(Tok::RBrace) {
@@ -616,12 +614,12 @@ impl Parser {
             }
         }
         self.leave();
-        Some(self.push(NodeKind::Struct { ty, fields }, sp.to(self.span())))
+        Some(self.expr(ExprKind::Struct { ty, fields }, sp.to(self.span())))
     }
 
     /// f-string: holes were lexed as token streams (RFC 0030 §1.1) —parse
     /// each hole as an expression with real spans inside the literal.
-    pub(crate) fn parse_fstring(&mut self, f: FStrTok, sp: Span) -> Option<NodeId> {
+    pub(crate) fn parse_fstring(&mut self, f: FStrTok, sp: Span) -> Option<NodeHandle<AnyExpr>> {
         let mut parts = Vec::new();
         for part in f.parts {
             match part {
@@ -653,6 +651,6 @@ impl Parser {
                 }
             }
         }
-        Some(self.push(NodeKind::FStr { parts }, sp))
+        Some(self.expr(ExprKind::FStr { parts }, sp))
     }
 }

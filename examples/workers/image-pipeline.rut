@@ -5,7 +5,7 @@ import { blit } from "app:gfx";
 import { channel, Receiver } from "std:channel";
 import { Image, Job } from "imaging";
 
-export suspend fn main(): void {
+export suspend fn main(): unit {
     let urls = ["a.png", "b.png", "c.png", "d.png"];
     let ports: Vec<Receiver<Image>> = Vec();
 

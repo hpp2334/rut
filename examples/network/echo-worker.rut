@@ -5,7 +5,7 @@
 import { Receiver } from "std:channel";
 import { Conn } from "std:net";
 
-suspend fn serve(conn: Conn): void {
+suspend fn serve(conn: Conn): unit {
     while (true) {
         let got = await conn.read(4096);   // Future<Result<Vec<u8>>>
         if (got.is_err()) { return; }        // connection error: drop it
@@ -15,7 +15,7 @@ suspend fn serve(conn: Conn): void {
     }
 }
 
-suspend fn main(jobs: Receiver<Conn>): void {
+suspend fn main(jobs: Receiver<Conn>): unit {
     while (true) {
         let conn = await jobs.recv();      // Future<Option<Conn>>
         if (conn.is_none()) { break; }       // server gone: exit isolate

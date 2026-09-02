@@ -7,19 +7,19 @@ use super::*;
 
 impl<'a> Ctx<'a> {
 
-    pub fn resolve_trait_ref(&mut self, node: NodeId) -> Option<u32> {
-        match &self.ast.node(node).kind {
-            NodeKind::TyPath { segs, .. } if segs.len() == 1 => {
+    pub fn resolve_trait_ref(&mut self, node: NodeHandle<AnyTy>) -> Option<u32> {
+        match self.ast.ty(node) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 match self.trait_id_of(segs[0].name) {
                     Some(id) => Some(id),
                     None => {
-                        self.err(self.ast.node(node).span, format!("unknown trait `{}`", self.name(segs[0].name)));
+                        self.err(self.ast.span(node.id()), format!("unknown trait `{}`", self.name(segs[0].name)));
                         None
                     }
                 }
             }
             _ => {
-                self.err(self.ast.node(node).span, "expected a trait name");
+                self.err(self.ast.span(node.id()), "expected a trait name");
                 None
             }
         }
@@ -28,16 +28,16 @@ impl<'a> Ctx<'a> {
     /// A type in a NAMING position (impl heads, requires lists, is RHS) —
     /// bare trait name → the trait's dyn-obj type here means the TYPE;
     /// for `is` RHS we keep trait vs concrete distinction in the compiler.
-    pub fn resolve_naming_type(&mut self, node: NodeId) -> TypeId {
+    pub fn resolve_naming_type(&mut self, node: NodeHandle<AnyTy>) -> TypeId {
         self.resolve_type(node, &[])
     }
 
     /// Resolve a type AST node into the type table. `env` binds generic
     /// params of the enclosing instantiation.
-    pub fn resolve_type(&mut self, node: NodeId, env: &[(IdentId, TypeId)]) -> TypeId {
-        let sp = self.ast.node(node).span;
-        match &self.ast.node(node).kind {
-            NodeKind::TyFn { params, ret } => {
+    pub fn resolve_type(&mut self, node: NodeHandle<AnyTy>, env: &[(IdentId, TypeId)]) -> TypeId {
+        let sp = self.ast.span(node.id());
+        match self.ast.ty(node) {
+            TypeKind::TyFn { params, ret } => {
                 let mut ptys = Vec::new();
                 for p in params {
                     ptys.push(self.resolve_type(*p, env));
@@ -45,11 +45,11 @@ impl<'a> Ctx<'a> {
                 let rty = self.resolve_type(*ret, env);
                 self.mk_fn_ty(ptys, rty)
             }
-            NodeKind::TyConst(_) => {
+            TypeKind::TyConst(_) => {
                 self.err(sp, "a const expression is not a type here");
                 TY_I32
             }
-            NodeKind::TyPath { segs, is_dyn } => {
+            TypeKind::TyPath { segs, is_dyn } => {
                 if segs.len() > 1 {
                     self.err(sp, format!("unknown type `{}`", seg_str(self, segs)));
                     return TY_I32;
@@ -65,7 +65,7 @@ impl<'a> Ctx<'a> {
                 }
                 // primitives & builtins
                 let prim = match n.as_str() {
-                    "void" => Some(TY_VOID),
+                    "unit" => Some(TY_UNIT),
                     "u8" => Some(TY_U8), "u16" => Some(TY_U16), "u32" => Some(TY_U32), "u64" => Some(TY_U64),
                     "i8" => Some(TY_I8), "i16" => Some(TY_I16), "i32" => Some(TY_I32), "i64" => Some(TY_I64),
                     "f32" => Some(TY_F32), "f64" => Some(TY_F64),
@@ -176,23 +176,15 @@ impl<'a> Ctx<'a> {
                     }
                 }
             }
-            _ => {
-                self.err(sp, "expected a type");
-                TY_I32
-            }
         }
     }
 
-    pub(crate) fn const_len(&mut self, node: NodeId, sp: Span) -> u32 {
+    pub(crate) fn const_len(&mut self, node: NodeHandle<AnyTy>, sp: Span) -> u32 {
         // the parser wraps const args in TyConst (RFC 0030 §2)
-        if let NodeKind::TyConst(e) = &self.ast.node(node).kind {
-            match &self.ast.node(*e).kind {
-                NodeKind::Lit(Lit::Int(v, _)) => return *v as u32,
-                _ => {}
+        if let TypeKind::TyConst(e) = self.ast.ty(node) {
+            if let ExprKind::Lit(Lit::Int(v, _)) = self.ast.expr(*e) {
+                return *v as u32;
             }
-        }
-        if let NodeKind::Lit(Lit::Int(v, _)) = &self.ast.node(node).kind {
-            return *v as u32;
         }
         self.err(sp, "array length must be a constant expression (RFC 0005)");
         0

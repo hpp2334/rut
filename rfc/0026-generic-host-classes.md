@@ -23,7 +23,7 @@ import { Hashable } from "std:collection";
 
 export host class MyMap<K requires Hashable, V> {     // K bound = admission only
     fn new(cap: i32): Self;                        // native class method —
-    fn set(self, k: K, v: V): void;                // the construction surface
+    fn set(self, k: K, v: V): unit;                // the construction surface
     fn get(self, k: K): Option<V>;
     fn size(self): i32;
     fn keys(self): Vec<K>;

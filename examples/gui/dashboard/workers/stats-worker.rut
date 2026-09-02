@@ -8,7 +8,7 @@
 import { Receiver } from "std:channel";
 import { StatsRequest, StatsSummary } from "../models.rut";
 
-suspend fn main(reqs: Receiver<StatsRequest>): void {
+suspend fn main(reqs: Receiver<StatsRequest>): unit {
     while (true) {
         let req = await reqs.recv();       // Future<Option<StatsRequest>>
         if (req.is_none()) {

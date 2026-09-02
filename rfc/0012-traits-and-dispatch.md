@@ -59,7 +59,7 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
   Anything that reads like a property becomes a method: `x.count()` in the
   trait, defined in the type's impl block. Trait methods are
   instance methods and spell the `self` receiver like every other
-  (`fn draw(self, g: Canvas): void;` — RFC 0010 §2); a class method (no
+  (`fn draw(self, g: Canvas): unit;` — RFC 0010 §2); a class method (no
   `self`) is not declarable in a trait. Rationale: fields have
   no single offset rule under multiple impls, and a trait slot
   is always a code pointer invoked with an explicit `(...)` — one member

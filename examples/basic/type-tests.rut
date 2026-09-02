@@ -12,7 +12,7 @@ import { Canvas, newCanvas } from "app:gfx";
 import { Logger } from "std:log";
 
 trait Drawable {
-    fn draw(self, g: Canvas): void;
+    fn draw(self, g: Canvas): unit;
 }
 
 trait HitTest {
@@ -27,7 +27,7 @@ class Sprite {                  // inherent members only — the impls follow
 }
 
 impl Drawable for Sprite {
-    fn draw(self, g: Canvas): void { g.circle(self.x, self.y, 1); }
+    fn draw(self, g: Canvas): unit { g.circle(self.x, self.y, 1); }
 }
 
 impl HitTest for Sprite {
@@ -47,10 +47,10 @@ class Circle {
 }
 
 impl Drawable for Circle {
-    fn draw(self, g: Canvas): void { g.circle(self.x, self.y, self.r); }
+    fn draw(self, g: Canvas): unit { g.circle(self.x, self.y, self.r); }
 }
 
-fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
+fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): unit {
     let log = Logger.new("types");
     if (d is Circle) {               // runtime test — exact-class check
         d.draw(g);                   // no downcast exists; stay on the
@@ -76,6 +76,6 @@ fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): void {
     // position (impl Any / T requires Any / is Any — all errors).
 }
 
-export fn main(): void {
+export fn main(): unit {
     type_tests(Circle.new(1, 2, 3), Sprite.new(), newCanvas());
 }

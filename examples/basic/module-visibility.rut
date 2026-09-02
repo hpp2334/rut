@@ -13,7 +13,7 @@ export(self) fn helper(): i32 {           // explicit form of the default
     return INTERNAL_MAGIC;
 }
 
-export(super) fn panel_internal(): void { // callable from ui/* only
+export(super) fn panel_internal(): unit { // callable from ui/* only
     helper();
 }
 

@@ -53,7 +53,7 @@ fn gfx_module() -> NativeModule {
     NativeModule::new("app:gfx")                  // decl: app/gfx.rut
         .fn_("newCanvas", |ctx, w: i32, h: i32| Ok(Canvas::new(ctx, w, h)))
         .fn_("blit",      |ctx, c: Handle<Canvas>, layer: StructRef<Vertex>,
-                           n: u32| { .. Ok(Value::Void) })
+                           n: u32| { .. Ok(Value::Unit) })
         .fn_("label",     |ctx, t: Template| Ok(log_localized(ctx, t)))
 }
 ```

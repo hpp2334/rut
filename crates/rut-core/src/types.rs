@@ -50,7 +50,7 @@ pub struct FieldInfo {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TyKind {
-    Void,
+    Unit,
     Prim(PrimTy),
     /// immutable UTF-8 string cell
     Str,
@@ -89,7 +89,7 @@ pub struct TypeTable {
     pub types: Vec<RutType>,
 }
 
-pub const TY_VOID: TypeId = 0;
+pub const TY_UNIT: TypeId = 0;
 pub const TY_U8: TypeId = 1;
 pub const TY_U16: TypeId = 2;
 pub const TY_U32: TypeId = 3;
@@ -117,7 +117,7 @@ impl TypeTable {
                 align,
             });
         };
-        push("void", TyKind::Void, 0, 1);
+        push("unit", TyKind::Unit, 0, 1);
         push("u8", TyKind::Prim(PrimTy::U8), 1, 1);
         push("u16", TyKind::Prim(PrimTy::U16), 2, 2);
         push("u32", TyKind::Prim(PrimTy::U32), 4, 4);
@@ -163,7 +163,7 @@ impl TypeTable {
     pub fn is_ref(&self, id: TypeId) -> bool {
         !matches!(
             self.kind(id),
-            TyKind::Void | TyKind::Prim(_) | TyKind::Fn { .. }
+            TyKind::Unit | TyKind::Prim(_) | TyKind::Fn { .. }
         )
     }
 }

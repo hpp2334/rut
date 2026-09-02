@@ -16,7 +16,7 @@ class Counter {
         return Self { };               // run logic. `new` is a convention,
     }                                   // not syntax (RFC 0002 §4)
 
-    fn press(mut self): void {           // instance method: explicit receiver,
+    fn press(mut self): unit {           // instance method: explicit receiver,
         self.n &+= 1;                // wrapping add (§8) — or `+=` to trap
     }
 
@@ -58,7 +58,7 @@ class Version {
     fn label(self): string { return f"{self.major}.{self.minor}"; }
 }
 
-fn classes(): void {
+fn classes(): unit {
     let log = Logger.new("classes");
     let c = Counter.new();         // class method -> construction
     c.press();
@@ -71,6 +71,6 @@ fn classes(): void {
     // Rect { w: 1, h: 1 };         // ERROR: classes have no outside literal
 }
 
-export fn main(): void {
+export fn main(): unit {
     classes();
 }

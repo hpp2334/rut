@@ -13,7 +13,7 @@ fn describe(n: i32): string {
 
 enum Light { Green, Yellow, Red }
 
-fn drive(l: Light): void {              // statement usage = void-typed when
+fn drive(l: Light): unit {              // statement usage = unit-typed when
     when (l) {
         Light.Green  -> { go(); },
         Light.Yellow -> { brake(); },
@@ -21,11 +21,11 @@ fn drive(l: Light): void {              // statement usage = void-typed when
     }
 }
 
-fn go(): void { /* ... */ }
-fn brake(): void { /* ... */ }
-fn stop(): void { /* ... */ }
+fn go(): unit { /* ... */ }
+fn brake(): unit { /* ... */ }
+fn stop(): unit { /* ... */ }
 
-export fn main(): void {
+export fn main(): unit {
     let log = Logger.new("when");
     log.info(describe(2));               // "small"
     drive(Light.Yellow);

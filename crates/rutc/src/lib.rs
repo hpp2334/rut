@@ -17,3 +17,4 @@ pub use diag::Diag;
 pub use emit::{compile_module, ir_dump_of, CompileOutput};
 pub use parser::Mode;
 pub use span::Span;
+pub use dump::{render_json, render_text, to_dump_tree, DumpNode, DumpVal};

@@ -42,13 +42,13 @@ fn view(th: Palette, st: Dashboard): Element {
     });
 }
 
-export suspend fn main(): void {
+export suspend fn main(): unit {
     let log = Logger.new("dashboard");
     let th = theme();
     let st = Dashboard.new(now_ms());
 
     // any watched atom change -> one redraw (flushed to a fixed point)
-    let handles = st.redraw_on_change((): void => render(view(th, st)));
+    let handles = st.redraw_on_change((): unit => render(view(th, st)));
 
     // --- bootstrap: mock API -> sources/state ---
     let users = await fetch_users(42u32);

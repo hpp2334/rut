@@ -632,6 +632,7 @@ fn reserved_word_msg(w: &str) -> Option<String> {
     let repl: &str = match w {
         "switch" => "rut does not have `switch`; use `when`",
         "case" => "rut does not have `case`; `when` arms are `pattern -> body`",
+        "void" => "rut spells the unit type `unit`",
         "extends" => "rut has no inheritance (`extends`); compose instead (RFC 0010 §3)",
         "type" => "`type` is not available yet; name the type directly",
         "struct" => "rut does not have `struct`; use `dataclass`",

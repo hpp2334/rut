@@ -23,7 +23,7 @@ dataclass Style {
     width: f32 = 1;
 }
 
-fn nudge(mut pt: Point): void {  // `mut` param: permission to mutate THE
+fn nudge(mut pt: Point): unit {  // `mut` param: permission to mutate THE
     pt.x += 1;                   // CALLER'S point (no hidden copy — RFC 0003 §1)
 }
 
@@ -35,7 +35,7 @@ fn length(pt: Point): f64 {     // free function instead of a method
     return math.sqrt(f64(pt.x * pt.x + pt.y * pt.y));
 }
 
-fn dataclasses(): void {
+fn dataclasses(): unit {
     let log = Logger.new("dataclasses");
     let mut p = Point { x: 1, y: 2 };   // literal — the only construction
     p.x = 3;                            // needs the `mut` binding (RFC 0003 §1)
@@ -61,6 +61,6 @@ fn dataclasses(): void {
     log.info(f"same_cell={same_cell} fresh={fresh} r1.x={r1.x}");
 }
 
-export fn main(): void {
+export fn main(): unit {
     dataclasses();
 }

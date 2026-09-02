@@ -106,8 +106,8 @@ pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
         json_escape(&d.msg, &mut json);
         json.push('}');
     }
-    json.push_str("],\"astDump\":");
-    json_escape(&out.ast_dump, &mut json);
+    json.push_str("],\"ast\":");
+    json.push_str(&out.ast_json); // raw splice — it IS valid JSON
     json.push_str(",\"irDump\":");
     json_escape(&out.ir_dump, &mut json);
     match &out.binary {

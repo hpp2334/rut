@@ -17,7 +17,7 @@ a `Value<'v>` — call-scoped, checked, and borrow-guarded.
 
 ```rust
 pub enum Value<'v> {
-    Void, Bool(bool), Char(char),
+    Unit, Bool(bool), Char(char),
     I8(i8) /* .. */ I64(i64), U8(u8) /* .. */ U64(u64), F32(f32), F64(f64),
     Str(StrRef<'v>),                       // immutable, may point into heap
     Vec(Borrow<'v, RutVec>),               // typed elem, zero-copy

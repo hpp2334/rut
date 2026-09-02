@@ -67,7 +67,7 @@ class WasmApi implements RutApi {
     const parsed = JSON.parse(json) as CompileResult & { binary?: string };
     return {
       diags: parsed.diags ?? [],
-      astDump: parsed.astDump ?? "",
+      ast: parsed.ast,
       irDump: parsed.irDump ?? "",
       binary: parsed.binary ? decodeBase64(parsed.binary) : undefined,
     };
@@ -131,7 +131,7 @@ export class Runner {
 
   compile(src: string): CompileResult {
     if (this.api) return this.api.compile(src);
-    return { diags: [], astDump: placeholder("AST"), irDump: placeholder("LIR") };
+    return { diags: [], irDump: placeholder("LIR") };
   }
 
   run(

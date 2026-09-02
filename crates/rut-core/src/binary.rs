@@ -188,7 +188,7 @@ pub fn encode(prog: &Program) -> Vec<u8> {
 
 fn encode_kind(e: &mut Enc, k: &TyKind) {
     match k {
-        TyKind::Void => e.u8(0),
+        TyKind::Unit => e.u8(0),
         TyKind::Prim(p) => {
             e.u8(1);
             e.u8(match p {
@@ -349,7 +349,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
 
 fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
     Ok(match d.u8()? {
-        0 => TyKind::Void,
+        0 => TyKind::Unit,
         1 => TyKind::Prim(match d.u8()? {
             0 => PrimTy::U8, 1 => PrimTy::U16, 2 => PrimTy::U32, 3 => PrimTy::U64,
             4 => PrimTy::I8, 5 => PrimTy::I16, 6 => PrimTy::I32, 7 => PrimTy::I64,

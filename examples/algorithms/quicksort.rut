@@ -3,7 +3,7 @@
 
 import { Logger } from "std:log";
 
-fn swap(xs: Vec<i32>, a: i32, b: i32): void {
+fn swap(xs: Vec<i32>, a: i32, b: i32): unit {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
@@ -22,14 +22,14 @@ fn partition(xs: Vec<i32>, lo: i32, hi: i32): i32 {
     return i + 1;
 }
 
-fn quicksort(xs: Vec<i32>, lo: i32, hi: i32): void {
+fn quicksort(xs: Vec<i32>, lo: i32, hi: i32): unit {
     if (lo >= hi) { return; }
     let p = partition(xs, lo, hi);
     quicksort(xs, lo, p - 1);
     quicksort(xs, p + 1, hi);
 }
 
-export fn main(): void {
+export fn main(): unit {
     let log = Logger.new("sort");
     let xs = Vec.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.len() - 1);

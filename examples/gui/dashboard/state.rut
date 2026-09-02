@@ -44,11 +44,11 @@ export class Dashboard {
 
     // --- mutations: dispatched with payload dataclasses. The trailing `$`
     //     marks dispatch-inverted members (tur's start$/onMounted$ rule).
-    set_tab$: Mutation<Tab, void>;
-    set_query$: Mutation<string, void>;
-    toggle_sort$: Mutation<Nil, void>;
-    ingest_series$: Mutation<Series, void>;
-    apply_event$: Mutation<LiveEvent, void>;
+    set_tab$: Mutation<Tab, unit>;
+    set_query$: Mutation<string, unit>;
+    toggle_sort$: Mutation<Nil, unit>;
+    ingest_series$: Mutation<Series, unit>;
+    apply_event$: Mutation<LiveEvent, unit>;
 
     fn new(now_ms: i64): Self {
         let store = Store.new();
@@ -90,15 +90,15 @@ export class Dashboard {
         //     rule). Closures capture the locals above by reference
         //     (RFC 0013) — the instance fields and the closures stay in
         //     lockstep because they were built from the same locals. ---
-        let set_tab$ = mutation((st: Store, t: Tab): void => {
+        let set_tab$ = mutation((st: Store, t: Tab): unit => {
             atom_set(st, tab, t);
         });
 
-        let set_query$ = mutation((st: Store, q: string): void => {
+        let set_query$ = mutation((st: Store, q: string): unit => {
             atom_set(st, query, q);
         });
 
-        let toggle_sort$ = mutation((st: Store, n: Nil): void => {
+        let toggle_sort$ = mutation((st: Store, n: Nil): unit => {
             let flipped = when (atom_get(st, sort_dir)) {
                 SortDir.Asc  -> SortDir.Desc,
                 SortDir.Desc -> SortDir.Asc,
@@ -106,11 +106,11 @@ export class Dashboard {
             atom_set(st, sort_dir, flipped);
         });
 
-        let ingest_series$ = mutation((st: Store, s: Series): void => {
+        let ingest_series$ = mutation((st: Store, s: Series): unit => {
             atom_set(st, samples, s.samples);
         });
 
-        let apply_event$ = mutation((st: Store, ev: LiveEvent): void => {
+        let apply_event$ = mutation((st: Store, ev: LiveEvent): unit => {
             atom_set(st, events_seen, atom_get(st, events_seen) + 1);
             when (ev.kind) {
                 EventKind.Tick -> {
@@ -188,17 +188,17 @@ export class Dashboard {
 
     // --- service bridges: push snapshots into the sources ---
 
-    fn set_users(self, users: Vec<User>): void {
+    fn set_users(self, users: Vec<User>): unit {
         source_push(self.store, self.users_src, users);
     }
 
-    fn set_summary(self, s: StatsSummary): void {
+    fn set_summary(self, s: StatsSummary): unit {
         source_push(self.store, self.summary_src, s);
     }
 
     // --- re-render subscription: one callback, every watched atom ---
 
-    fn redraw_on_change(self, cb: fn(): void): Vec<WatchHandle> {
+    fn redraw_on_change(self, cb: fn(): unit): Vec<WatchHandle> {
         return [
             watch(self.store, self.tab, cb),
             watch(self.store, self.query, cb),
@@ -216,21 +216,21 @@ export class Dashboard {
 
 // --- vec helpers (shared by mutations; free fns keep models data-only) ---
 
-export(self) fn shift_left(xs: Vec<f32>): void {
+export(self) fn shift_left(xs: Vec<f32>): unit {
     for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
-export(self) fn shift_left_str(xs: Vec<string>): void {
+export(self) fn shift_left_str(xs: Vec<string>): unit {
     for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
-export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir): void {
+export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir): unit {
     for (let i = 1; i < xs.len(); i += 1) {
         let j = i;
         while (j > 0 && score_lt(xs[j], xs[j - 1], dir)) {
@@ -247,7 +247,7 @@ export(self) fn score_lt(a: User, b: User, dir: SortDir): bool {
     };
 }
 
-export(self) fn swap_users(xs: Vec<User>, a: i32, b: i32): void {
+export(self) fn swap_users(xs: Vec<User>, a: i32, b: i32): unit {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;

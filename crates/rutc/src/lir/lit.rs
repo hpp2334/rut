@@ -24,7 +24,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 FPartAst::Hole(e) => {
                     let t = self.compile_expr(*e, None)?;
-                    self.check_formattable(t, self.ctx.ast.node(*e).span)?;
+                    self.check_formattable(t, self.ctx.ast.span(e.id()))?;
                     let src = self.last_reg;
                     let sreg = self.new_reg(TY_STR);
                     self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![src], dst: Some(sreg) }, sp.lo);
@@ -39,7 +39,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     // ---- literals: struct / array ----
 
-    pub(crate) fn compile_struct(&mut self, ty: NodeId, fields: Vec<(IdentId, NodeId)>, _expected: Option<TypeId>, sp: crate::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_struct(&mut self, ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)>, _expected: Option<TypeId>, sp: crate::span::Span) -> TcResult<TypeId> {
         // `Self` binds inside class bodies (RFC 0010 §1)
         let sty = self.resolve_type_now(ty);
         let dname = self.ctx.datas.iter().find(|(_, d)| d.ty == sty).map(|(n, _)| *n);
@@ -65,7 +65,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.emit(Op::NewCell { dst: cell, ty: sty }, sp.lo);
         for (fname, v) in &fields {
             let Some(fidx) = d.fields.iter().position(|(n, _, _, _)| n == fname) else {
-                self.ctx.err(self.ctx.ast.node(*v).span, format!(
+                self.ctx.err(self.ctx.ast.span(v.id()), format!(
                     "`{}` has no field `{}`", self.ctx.name(dname), self.ctx.name(*fname)
                 ));
                 return Err(());
@@ -73,7 +73,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let fty = d.fields[fidx].1;
             let t = self.compile_expr(*v, Some(fty))?;
             if t != fty {
-                self.ctx.err(self.ctx.ast.node(*v).span, format!(
+                self.ctx.err(self.ctx.ast.span(v.id()), format!(
                     "field `{}` is `{}`, found `{}`",
                     self.ctx.name(*fname), self.ctx.types.name(fty), self.ctx.types.name(t)
                 ));
@@ -92,7 +92,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 let t = self.compile_expr(*init, Some(*fty))?;
                 if t != *fty {
-                    self.ctx.err(self.ctx.ast.node(*init).span, "field initializer type mismatch");
+                    self.ctx.err(self.ctx.ast.span(init.id()), "field initializer type mismatch");
                 }
                 self.emit(Op::SetF { obj: cell, field: fidx as u32, val: self.last_reg }, sp.lo);
             }
@@ -104,7 +104,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(sty)
     }
 
-    pub(crate) fn compile_array_lit(&mut self, elems: Vec<NodeId>, expected: Option<TypeId>, sp: crate::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_array_lit(&mut self, elems: Vec<NodeHandle<AnyExpr>>, expected: Option<TypeId>, sp: crate::span::Span) -> TcResult<TypeId> {
         // `[e1, .., en] : Array<T, n>` (RFC 0007 §1); T from expected or the
         // first element; uncontextualized int elements default to i32
         let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
@@ -126,7 +126,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if self.widens(u, t) {
                     ety = Some(t);
                 } else if !self.widens(t, u) {
-                    self.ctx.err(self.ctx.ast.node(*e).span, "array literal elements must agree on one type");
+                    self.ctx.err(self.ctx.ast.span(e.id()), "array literal elements must agree on one type");
                 }
             }
             eregs.push(self.last_reg);
@@ -143,31 +143,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_lambda(
         &mut self,
         lambda_node: NodeId,
-        params: Vec<NodeId>,
-        ret: Option<NodeId>,
-        body: NodeId,
+        params: Vec<NodeHandle<AnyParam>>,
+        ret: Option<NodeHandle<AnyTy>>,
+        body: NodeHandle<AnyExpr>,
         expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
         let (eptys, eret) = match expected.map(|e| self.ctx.types.kind(e).clone()) {
             Some(TyKind::Fn { params, ret }) => (params, ret),
-            _ => (Vec::new(), TY_VOID),
+            _ => (Vec::new(), TY_UNIT),
         };
         // param types: annotations first, then the expected fn type
         let mut param_tys = Vec::new();
         for (i, p) in params.iter().enumerate() {
-            let ty = match &self.ctx.ast.node(*p).kind {
-                NodeKind::Param { ty: Some(t), .. } => self.resolve_type_now(*t),
-                NodeKind::Param { ty: None, .. } => {
+            let ty = match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => self.resolve_type_now(*t),
+                MemberKind::Param(ParamData { ty: None, .. }) => {
                     if let Some(&t) = eptys.get(i) {
                         t
                     } else {
-                        self.ctx.err(self.ctx.ast.node(*p).span, "lambda parameter needs a type annotation (or an expected fn type)");
+                        self.ctx.err(self.ctx.ast.span(p.id()), "lambda parameter needs a type annotation (or an expected fn type)");
                         TY_I32
                     }
                 }
                 _ => {
-                    self.ctx.err(self.ctx.ast.node(*p).span, "lambdas take no `self`");
+                    self.ctx.err(self.ctx.ast.span(p.id()), "lambdas take no `self`");
                     TY_I32
                 }
             };
@@ -177,11 +177,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(eret);
         // capture scan: free names that resolve to enclosing locals
         let mut referenced = Vec::new();
-        self.scan_names(body, &mut referenced);
+        self.scan_names(body.id(), &mut referenced);
         let lambda_param_names: Vec<IdentId> = params
             .iter()
-            .filter_map(|p| match &self.ctx.ast.node(*p).kind {
-                NodeKind::Param { name, .. } => Some(*name),
+            .filter_map(|p| match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { name, .. }) => Some(*name),
                 _ => None,
             })
             .collect();
@@ -202,7 +202,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         // register the synthetic fn: params = declared ++ captures
-        let node_id = self.ctx.ast.node(body).span.lo; // not unique per node —use body NodeId instead
+                let node_id = self.ctx.ast.span(body.id()).lo; // not unique per node —use body NodeId instead
         let _ = node_id;
         // the Lambda node id: find it by body —the caller passes parts; the
         // lambda node is the PARENT of body. Store captures keyed by the
@@ -221,150 +221,131 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(fty)
     }
 
-    /// collect every single-segment path name under `node` (capture scan)
+    /// collect every single-segment path name under `node` (capture scan).
+    /// Generic walk over the arena by `NodeId` — it must cross statement and
+    /// expression categories freely; type subtrees carry no value names.
     pub(crate) fn scan_names(&mut self, node: NodeId, out: &mut Vec<IdentId>) {
         if out.len() > 4096 {
             return;
         }
-        let kind = self.ctx.ast.node(node).kind.clone();
         let kids = |n: NodeId, out: &mut Vec<IdentId>, s: &mut Self| s.scan_names(n, out);
-        match kind {
-            NodeKind::Path { segs } => {
+        match self.ctx.ast.kind(node).clone() {
+            // items / members / patterns / types carry no value names
+            Kind::Item(_) | Kind::Member(_) | Kind::Pat(_) | Kind::Type(_) => {}
+            Kind::Stmt(StmtKind::LetStmt { init, .. }) => kids(init.id(), out, self),
+            Kind::Stmt(StmtKind::If { cond, then, els }) => {
+                kids(cond.id(), out, self);
+                kids(then.id(), out, self);
+                if let Some(e) = els {
+                    match e {
+                        ElseBranch::If(h) => kids(h.id(), out, self),
+                        ElseBranch::Block(h) => kids(h.id(), out, self),
+                    }
+                }
+            }
+            Kind::Stmt(StmtKind::While { cond, body }) => {
+                kids(cond.id(), out, self);
+                kids(body.id(), out, self);
+            }
+            Kind::Stmt(StmtKind::ForOf { iter, body, .. }) => {
+                kids(iter.id(), out, self);
+                kids(body.id(), out, self);
+            }
+            Kind::Stmt(StmtKind::ForC { init, cond, update, body, .. }) => {
+                kids(init.id(), out, self);
+                kids(cond.id(), out, self);
+                kids(update.id(), out, self);
+                kids(body.id(), out, self);
+            }
+            Kind::Stmt(StmtKind::Return { value }) => {
+                if let Some(v) = value {
+                    kids(v.id(), out, self);
+                }
+            }
+            Kind::Stmt(StmtKind::WhenStmt { scrut, arms }) => {
+                kids(scrut.id(), out, self);
+                for a in arms {
+                    kids(a.id(), out, self);
+                }
+            }
+            Kind::Stmt(StmtKind::ExprStmt(e)) => kids(e.id(), out, self),
+            Kind::Stmt(StmtKind::Break | StmtKind::Continue) => {}
+            Kind::Arm(ArmKind::WhenArm { pats, body }) => {
+                for p in pats {
+                    kids(p.id(), out, self);
+                }
+                kids(body.id(), out, self);
+            }
+            Kind::Arm(ArmKind::SelectArm { fut, body, .. }) => {
+                kids(fut.id(), out, self);
+                kids(body.id(), out, self);
+            }
+            Kind::Expr(ExprKind::Block { stmts }) => {
+                for s in stmts {
+                    kids(s.id(), out, self);
+                }
+            }
+            Kind::Expr(ExprKind::Path { segs }) => {
                 if segs.len() == 1 && out.len() < 4096 && !out.contains(&segs[0].name) {
                     out.push(segs[0].name);
                 }
             }
-            NodeKind::Lit(_)
-            | NodeKind::Break
-            | NodeKind::Continue
-            | NodeKind::PatWild
-            | NodeKind::PatElse
-            | NodeKind::PatLit(_)
-            | NodeKind::PatPath { .. }
-            | NodeKind::PatCtor { .. }
-            | NodeKind::TyPath { .. }
-            | NodeKind::TyFn { .. }
-            | NodeKind::TyConst(_)
-            | NodeKind::Import { .. }
-            | NodeKind::ModuleLet { .. }
-            | NodeKind::Enum { .. }
-            | NodeKind::Dataclass { .. }
-            | NodeKind::Class { .. }
-            | NodeKind::Trait { .. }
-            | NodeKind::Impl { .. }
-            | NodeKind::Fn { .. }
-            | NodeKind::SurfaceFn { .. }
-            | NodeKind::SurfaceClass { .. }
-            | NodeKind::Module { .. }
-            | NodeKind::FieldDecl { .. }
-            | NodeKind::MethodDecl { .. }
-            | NodeKind::Param { .. }
-            | NodeKind::SelfParam { .. } => {}
-            NodeKind::Block { stmts } => {
-                for s in stmts {
-                    kids(s, out, self);
-                }
-            }
-            NodeKind::LetStmt { init, .. } => kids(init, out, self),
-            NodeKind::If { cond, then, els } => {
-                kids(cond, out, self);
-                kids(then, out, self);
-                if let Some(e) = els {
-                    kids(e, out, self);
-                }
-            }
-            NodeKind::While { cond, body } => {
-                kids(cond, out, self);
-                kids(body, out, self);
-            }
-            NodeKind::ForOf { iter, body, .. } => {
-                kids(iter, out, self);
-                kids(body, out, self);
-            }
-            NodeKind::ForC { init, cond, update, body, .. } => {
-                kids(init, out, self);
-                kids(cond, out, self);
-                kids(update, out, self);
-                kids(body, out, self);
-            }
-            NodeKind::Return { value } => {
-                if let Some(v) = value {
-                    kids(v, out, self);
-                }
-            }
-            NodeKind::WhenStmt { scrut, arms } | NodeKind::WhenExpr { scrut, arms } => {
-                kids(scrut, out, self);
-                for a in arms {
-                    kids(a, out, self);
-                }
-            }
-            NodeKind::ExprStmt(e) => kids(e, out, self),
-            NodeKind::WhenArm { pats, body } => {
-                for p in pats {
-                    kids(p, out, self);
-                }
-                kids(body, out, self);
-            }
-            NodeKind::SelectArm { fut, body, .. } => {
-                kids(fut, out, self);
-                kids(body, out, self);
-            }
-            NodeKind::Call { callee, args } => {
-                kids(callee, out, self);
+            Kind::Expr(ExprKind::Lit(_)) => {}
+            Kind::Expr(ExprKind::Call { callee, args }) => {
+                kids(callee.id(), out, self);
                 for a in args {
-                    kids(a, out, self);
+                    kids(a.id(), out, self);
                 }
             }
-            NodeKind::Method { recv, args, generics, .. } => {
-                kids(recv, out, self);
+            Kind::Expr(ExprKind::Method { recv, args, .. }) => {
+                kids(recv.id(), out, self);
                 for a in args {
-                    kids(a, out, self);
-                }
-                for g in generics {
-                    kids(g, out, self);
+                    kids(a.id(), out, self);
                 }
             }
-            NodeKind::Field { recv, .. } => kids(recv, out, self),
-            NodeKind::Index { recv, idx } => {
-                kids(recv, out, self);
-                kids(idx, out, self);
+            Kind::Expr(ExprKind::Field { recv, .. }) => kids(recv.id(), out, self),
+            Kind::Expr(ExprKind::Index { recv, idx }) => {
+                kids(recv.id(), out, self);
+                kids(idx.id(), out, self);
             }
-            NodeKind::Unary { expr, .. } => kids(expr, out, self),
-            NodeKind::Binary { lhs, rhs, .. } => {
-                kids(lhs, out, self);
-                kids(rhs, out, self);
+            Kind::Expr(ExprKind::Unary { expr, .. }) => kids(expr.id(), out, self),
+            Kind::Expr(ExprKind::Binary { lhs, rhs, .. }) => {
+                kids(lhs.id(), out, self);
+                kids(rhs.id(), out, self);
             }
-            NodeKind::Assign { target, value, .. } => {
-                kids(target, out, self);
-                kids(value, out, self);
+            Kind::Expr(ExprKind::Assign { target, value, .. }) => {
+                kids(target.id(), out, self);
+                kids(value.id(), out, self);
             }
-            NodeKind::Lambda { body: b, .. } => kids(b, out, self),
-            NodeKind::Try { expr } => kids(expr, out, self),
-            NodeKind::Await { expr } => kids(expr, out, self),
-            NodeKind::Select { arms } => {
+            Kind::Expr(ExprKind::Lambda { body: b, .. }) => kids(b.id(), out, self),
+            Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => kids(expr.id(), out, self),
+            Kind::Expr(ExprKind::Select { arms }) => {
                 for a in arms {
-                    kids(a, out, self);
+                    kids(a.id(), out, self);
                 }
             }
-            NodeKind::Is { expr, ty } => {
-                kids(expr, out, self);
-                kids(ty, out, self);
-            }
-            NodeKind::FStr { parts } => {
+            Kind::Expr(ExprKind::Is { expr, .. }) => kids(expr.id(), out, self),
+            Kind::Expr(ExprKind::FStr { parts }) => {
                 for p in parts {
                     if let FPartAst::Hole(e) = p {
-                        kids(e, out, self);
+                        kids(e.id(), out, self);
                     }
                 }
             }
-            NodeKind::Struct { fields, .. } => {
+            Kind::Expr(ExprKind::Struct { fields, .. }) => {
                 for (_, v) in fields {
-                    kids(v, out, self);
+                    kids(v.id(), out, self);
                 }
             }
-            NodeKind::ArrayLit { elems } => {
+            Kind::Expr(ExprKind::ArrayLit { elems }) => {
                 for e in elems {
-                    kids(e, out, self);
+                    kids(e.id(), out, self);
+                }
+            }
+            Kind::Expr(ExprKind::WhenExpr { scrut, arms }) => {
+                kids(scrut.id(), out, self);
+                for a in arms {
+                    kids(a.id(), out, self);
                 }
             }
         }

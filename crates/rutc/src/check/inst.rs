@@ -21,7 +21,7 @@ impl<'a> Ctx<'a> {
         self.funcs.push(FuncCode {
             name: self.inst_name(&inst),
             params: vec![],
-            ret: TY_VOID,
+            ret: TY_UNIT,
             is_method: false,
             n_captures: 0,
             regs: vec![],
@@ -50,7 +50,7 @@ impl<'a> Ctx<'a> {
         while let Some(inst) = self.queue.pop() {
             guard += 1;
             if guard > 100_000 {
-                self.err(self.ast.node(self.ast.root).span, "monomorphization queue exploded (>100k instantiations)");
+                self.err(self.ast.span(self.ast.root.id()), "monomorphization queue exploded (>100k instantiations)");
                 return Err(());
             }
             if self.diags.len() > 64 {
@@ -91,15 +91,15 @@ impl<'a> Ctx<'a> {
     // ---- module lets (RFC 0003 §1: load-time expressions only) ----
 
     pub fn compile_module_lets(&mut self) {
-        let entries: Vec<(IdentId, Option<NodeId>, NodeId)> = self.lets.clone();
+        let entries: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)> = self.lets.clone();
         for (_, ty, init) in entries {
-            let sp = self.ast.node(init).span;
-            match &self.ast.node(init).kind {
-                NodeKind::Lit(Lit::Int(v, sfx)) => {
+            let sp = self.ast.span(init.id());
+            match self.ast.expr(init) {
+                ExprKind::Lit(Lit::Int(v, sfx)) => {
                     let _ = (v, sfx);
                     // typed by annotation or default i32; store raw
                 }
-                NodeKind::Lit(Lit::Float(_, _)) | NodeKind::Lit(Lit::Str(_)) | NodeKind::Lit(Lit::Bool(_)) | NodeKind::Lit(Lit::Char(_)) => {}
+                ExprKind::Lit(Lit::Float(_, _)) | ExprKind::Lit(Lit::Str(_)) | ExprKind::Lit(Lit::Bool(_)) | ExprKind::Lit(Lit::Char(_)) => {}
                 _ => {
                     self.err(
                         sp,

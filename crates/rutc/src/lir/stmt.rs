@@ -10,9 +10,10 @@ use super::*;
 impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- statements ----
 
-    pub(crate) fn compile_block(&mut self, node: NodeId) -> TcResult<()> {
-        let NodeKind::Block { stmts } = &self.ctx.ast.node(node).kind else {
-            return Ok(());
+    pub(crate) fn compile_block(&mut self, h: impl Into<NodeId>) -> TcResult<()> {
+        let stmts = match self.ctx.ast.kind(h.into()) {
+            Kind::Expr(ExprKind::Block { stmts }) => stmts,
+            _ => return Ok(()),
         };
         let stmts = stmts.clone();
         let base = self.locals.len();
@@ -23,11 +24,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(())
     }
 
-    pub(crate) fn compile_stmt(&mut self, node: NodeId) -> TcResult<()> {
-        let sp = self.ctx.ast.node(node).span;
+    pub(crate) fn compile_stmt(&mut self, node: NodeHandle<AnyStmt>) -> TcResult<()> {
+        let sp = self.ctx.ast.span(node.id());
         self.span = sp.lo;
-        match self.ctx.ast.node(node).kind.clone() {
-            NodeKind::LetStmt { is_mut, name, ty, init } => {
+        match self.ctx.ast.stmt(node).clone() {
+            StmtKind::LetStmt { is_mut, name, ty, init } => {
                 let expected = ty.map(|t| self.resolve_type_now(t));
                 let t = self.compile_expr(init, expected)?;
                 if let Some(e) = expected {
@@ -43,24 +44,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.locals.push(Local { name, reg: self.last_reg, ty, is_mut, loop_var: false });
                 Ok(())
             }
-            NodeKind::If { cond, then, els } => {
+            StmtKind::If { cond, then, els } => {
                 self.compile_expr(cond, Some(TY_BOOL))?;
                 let cond_reg = self.last_reg;
                 let l_then = self.new_label();
                 let l_end = self.new_label();
-                let else_label = if els.is_some() { self.new_label() } else { l_end };
+                let has_else = els.is_some();
+                let else_label = if has_else { self.new_label() } else { l_end };
                 self.br(cond_reg, l_then, else_label);
                 self.bind(l_then);
                 self.compile_block(then)?;
                 self.jmp(l_end);
                 if let Some(e) = els {
                     self.bind(else_label);
-                    self.compile_stmt(e)?;
+                    match e {
+                        ElseBranch::If(h) => self.compile_stmt(h.into())?,
+                        ElseBranch::Block(_) => {
+                            // plain else-blocks reach the statement fallthrough
+                            // (blocks are expressions —same diag as before)
+                            self.ctx.err(sp, "expected a statement");
+                        }
+                    }
                 }
                 self.bind(l_end);
                 Ok(())
             }
-            NodeKind::While { cond, body } => {
+            StmtKind::While { cond, body } => {
                 let l_head = self.new_label();
                 let l_body = self.new_label();
                 let l_end = self.new_label();
@@ -77,8 +86,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.bind(l_end);
                 Ok(())
             }
-            NodeKind::ForOf { var, iter, body } => self.compile_for_of(node, var, iter, body, sp),
-            NodeKind::ForC { var, init, cond, update, body } => {
+            StmtKind::ForOf { var, iter, body } => self.compile_for_of(node.id(), var, iter, body, sp),
+            StmtKind::ForC { var, init, cond, update, body } => {
                 // induction var is loop-owned (RFC 0008 §1); bind directly
                 // to the initializer's register
                 let t = self.compile_expr(init, None)?;
@@ -103,7 +112,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.bind(l_end);
                 Ok(())
             }
-            NodeKind::Return { value } => {
+            StmtKind::Return { value } => {
                 match value {
                     Some(v) => {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;
@@ -116,7 +125,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.emit(Op::Ret { val: Some(self.last_reg) }, sp.lo);
                     }
                     None => {
-                        if self.ret_ty != TY_VOID {
+                        if self.ret_ty != TY_UNIT {
                             self.ctx.err(sp, "missing return value");
                         }
                         self.emit(Op::Ret { val: None }, sp.lo);
@@ -124,11 +133,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            NodeKind::WhenStmt { scrut, arms } => {
+            StmtKind::WhenStmt { scrut, arms } => {
                 self.compile_when(scrut, &arms, None, sp)?;
                 Ok(())
             }
-            NodeKind::Break => {
+            StmtKind::Break => {
                 let Some((_, brk)) = self.loops.last().copied() else {
                     self.ctx.err(sp, "`break` outside a loop");
                     return Ok(());
@@ -136,7 +145,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.jmp(brk);
                 Ok(())
             }
-            NodeKind::Continue => {
+            StmtKind::Continue => {
                 let Some((cont, _)) = self.loops.last().copied() else {
                     self.ctx.err(sp, "`continue` outside a loop");
                     return Ok(());
@@ -144,18 +153,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.jmp(cont);
                 Ok(())
             }
-            NodeKind::ExprStmt(e) => {
+            StmtKind::ExprStmt(e) => {
                 self.compile_expr(e, None)?;
-                Ok(())
-            }
-            _ => {
-                self.ctx.err(sp, "expected a statement");
                 Ok(())
             }
         }
     }
 
-    pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, iter: NodeId, body: NodeId, sp: crate::span::Span) -> TcResult<()> {
+    pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>, sp: crate::span::Span) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
         let elem_ty = match self.ctx.types.kind(it).clone() {
@@ -223,28 +228,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_when(
         &mut self,
-        scrut: NodeId,
-        arms: &[NodeId],
+        scrut: NodeHandle<AnyExpr>,
+        arms: &[NodeHandle<AnyArm>],
         expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
         let st = self.compile_expr(scrut, None)?;
         let scrut_reg = self.last_reg;
-        // arm type unification (statement-when: void)
+        // arm type unification (statement-when: unit)
         let result_ty = if let Some(e) = expected {
             e
         } else {
             // first expression-arm's type
-            let mut t = TY_VOID;
+            let mut t = TY_UNIT;
             for a in arms {
-                if let NodeKind::WhenArm { body, .. } = &self.ctx.ast.node(*a).kind {
+                if let ArmKind::WhenArm { body, .. } = self.ctx.ast.arm(*a) {
                     t = self.expr_type_hint(*body);
                     break;
                 }
             }
             t
         };
-        let result_reg = if result_ty != TY_VOID {
+        let result_reg = if result_ty != TY_UNIT {
             Some(self.new_reg(result_ty))
         } else {
             None
@@ -254,7 +259,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.check_when_exhaustive(st, arms, sp)?;
         for arm in arms {
             let arm = *arm;
-            let NodeKind::WhenArm { pats, body } = &self.ctx.ast.node(arm).kind else { continue };
+            let ArmKind::WhenArm { pats, body } = self.ctx.ast.arm(arm) else { continue };
             let l_arm = self.new_label();
             let l_next_arm = self.new_label();
             // alternatives chain within the arm: `1, 2, 3 -> ..`
@@ -270,10 +275,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             self.bind(l_arm);
-            let bt = self.compile_expr(*body, if result_ty != TY_VOID { Some(result_ty) } else { None })?;
-            if result_ty != TY_VOID {
+            let bt = self.compile_expr(*body, if result_ty != TY_UNIT { Some(result_ty) } else { None })?;
+            if result_ty != TY_UNIT {
                 if bt != result_ty {
-                    self.ctx.err(self.ctx.ast.node(*body).span, format!(
+                    self.ctx.err(self.ctx.ast.span(body.id()), format!(
                         "`when` arms must agree: `{}` vs `{}`",
                         self.ctx.types.name(result_ty), self.ctx.types.name(bt)
                     ));
@@ -300,58 +305,51 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             Ok(result_ty)
         } else {
-            Ok(TY_VOID)
+            Ok(TY_UNIT)
         }
     }
 
-    pub(crate) fn expr_type_hint(&mut self, node: NodeId) -> TypeId {
+    pub(crate) fn expr_type_hint(&mut self, node: NodeHandle<AnyExpr>) -> TypeId {
         // best-effort type for when-arm unification without full inference:
         // literals only; otherwise first arm decides later via compile
-        match &self.ctx.ast.node(node).kind {
-            NodeKind::Lit(Lit::Int(_, s)) => s.map(int_suffix_ty).unwrap_or(TY_I32),
-            NodeKind::Lit(Lit::Float(_, s)) => s.map(float_suffix_ty).unwrap_or(TY_F64),
-            NodeKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => TY_STR,
-            NodeKind::Lit(Lit::Bool(_)) => TY_BOOL,
-            NodeKind::Lit(Lit::Char(_)) => TY_CHAR,
-            NodeKind::Block { .. } => TY_VOID,
-            NodeKind::Struct { .. } => {
-                // resolve by name
-                if let NodeKind::Struct { ty, .. } = &self.ctx.ast.node(node).kind {
-                    return self.resolve_type_now(*ty);
-                }
-                TY_VOID
-            }
-            _ => TY_VOID,
+        match self.ctx.ast.expr(node) {
+            ExprKind::Lit(Lit::Int(_, s)) => s.map(int_suffix_ty).unwrap_or(TY_I32),
+            ExprKind::Lit(Lit::Float(_, s)) => s.map(float_suffix_ty).unwrap_or(TY_F64),
+            ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => TY_STR,
+            ExprKind::Lit(Lit::Bool(_)) => TY_BOOL,
+            ExprKind::Lit(Lit::Char(_)) => TY_CHAR,
+            ExprKind::Block { .. } => TY_UNIT,
+            ExprKind::Struct { ty, .. } => self.resolve_type_now(*ty),
+            _ => TY_UNIT,
         }
     }
 
-    pub(crate) fn check_when_exhaustive(&mut self, scrut_ty: TypeId, arms: &[NodeId], sp: crate::span::Span) -> TcResult<()> {
+    pub(crate) fn check_when_exhaustive(&mut self, scrut_ty: TypeId, arms: &[NodeHandle<AnyArm>], sp: crate::span::Span) -> TcResult<()> {
         let mut has_else = false;
         let mut seen: Vec<String> = Vec::new();
         for a in arms {
-            if let NodeKind::WhenArm { pats, .. } = &self.ctx.ast.node(*a).kind {
+            if let ArmKind::WhenArm { pats, .. } = self.ctx.ast.arm(*a) {
                 for p in pats {
-                    let key = match &self.ctx.ast.node(*p).kind {
-                        NodeKind::PatElse => {
+                    let key = match self.ctx.ast.pat(*p) {
+                        PatKind::PatElse => {
                             has_else = true;
                             "else".to_string()
                         }
-                        NodeKind::PatLit(l) => format!("{:?}", l),
-                        NodeKind::PatPath { segs } => segs
+                        PatKind::PatLit(l) => format!("{:?}", l),
+                        PatKind::PatPath { segs } => segs
                             .iter()
                             .map(|s| self.ctx.name(s.name).to_string())
                             .collect::<Vec<_>>()
                             .join("."),
-                        NodeKind::PatCtor { segs, .. } => segs
+                        PatKind::PatCtor { segs, .. } => segs
                             .iter()
                             .map(|s| self.ctx.name(s.name).to_string())
                             .collect::<Vec<_>>()
                             .join("."),
-                        NodeKind::PatWild => "_".to_string(),
-                        _ => "?".to_string(),
+                        PatKind::PatWild => "_".to_string(),
                     };
                     if seen.contains(&key) && key != "else" {
-                        self.ctx.err(self.ctx.ast.node(*p).span, format!("duplicate pattern `{key}` (RFC 0008 §2)"));
+                        self.ctx.err(self.ctx.ast.span(p.id()), format!("duplicate pattern `{key}` (RFC 0008 §2)"));
                     }
                     seen.push(key);
                 }
@@ -391,17 +389,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// Emit the match test for one pattern; returns the bool reg.
-    pub(crate) fn compile_pattern_test(&mut self, p: NodeId, scrut_ty: TypeId, scrut_reg: u16, sp: crate::span::Span) -> TcResult<u16> {
-        match self.ctx.ast.node(p).kind.clone() {
-            NodeKind::PatElse | NodeKind::PatWild => {
+    pub(crate) fn compile_pattern_test(&mut self, p: NodeHandle<AnyPat>, scrut_ty: TypeId, scrut_reg: u16, sp: crate::span::Span) -> TcResult<u16> {
+        match self.ctx.ast.pat(p).clone() {
+            PatKind::PatElse | PatKind::PatWild => {
                 let r = self.new_reg(TY_BOOL);
                 self.emit(Op::ConstRaw { dst: r, bits: 1 }, sp.lo);
                 Ok(r)
             }
-            NodeKind::PatLit(lit_node) => {
+            PatKind::PatLit(lit_node) => {
                 // the pattern holds a literal expression node
-                let lit = match &self.ctx.ast.node(lit_node).kind {
-                    NodeKind::Lit(l) => l.clone(),
+                let lit = match self.ctx.ast.expr(lit_node) {
+                    ExprKind::Lit(l) => l.clone(),
                     _ => {
                         self.ctx.err(sp, "pattern literal expected");
                         return Err(());
@@ -422,7 +420,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(r)
             }
-            NodeKind::PatPath { segs } => {
+            PatKind::PatPath { segs } => {
                 // enum member (RFC 0008 §2)
                 if segs.len() == 2 {
                     let ename = segs[0].name;
@@ -467,12 +465,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, "patterns in this build: enum members, literals, and `else`");
                 Err(())
             }
-            NodeKind::PatCtor { .. } => {
+            PatKind::PatCtor { .. } => {
                 self.ctx.err(sp, "constructor patterns (Ok(x), Some(y)) are not supported in this build (RFC 0008 OQ-2)");
-                Err(())
-            }
-            _ => {
-                self.ctx.err(sp, "unsupported pattern");
                 Err(())
             }
         }

@@ -14,7 +14,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Compile an expression; the value lands in a fresh register (the
     /// last register). `expected` flows down for bidirectional literal
     /// inference (RFC 0007 §1).
-    pub(crate) fn compile_expr(&mut self, node: NodeId, expected: Option<TypeId>) -> TcResult<TypeId> {
+    pub(crate) fn compile_expr(&mut self, node: NodeHandle<AnyExpr>, expected: Option<TypeId>) -> TcResult<TypeId> {
         if !self.enter() {
             self.leave();
             return Err(());
@@ -24,22 +24,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         r
     }
 
-    pub(crate) fn compile_expr_inner(&mut self, node: NodeId, expected: Option<TypeId>) -> TcResult<TypeId> {
-        let sp = self.ctx.ast.node(node).span;
+    pub(crate) fn compile_expr_inner(&mut self, node: NodeHandle<AnyExpr>, expected: Option<TypeId>) -> TcResult<TypeId> {
+        let sp = self.ctx.ast.span(node.id());
         self.span = sp.lo;
-        match self.ctx.ast.node(node).kind.clone() {
-            NodeKind::Lit(lit) => {
+        match self.ctx.ast.expr(node).clone() {
+            ExprKind::Lit(lit) => {
                 let (ty, reg) = self.load_lit(lit, expected, sp)?;
                 let _ = reg;
                 Ok(ty)
             }
-            NodeKind::Path { segs } => self.compile_path(node, segs, expected, sp),
-            NodeKind::Call { callee, args } => self.compile_call(node, callee, args, expected, sp),
-            NodeKind::Method { recv, name, generics, args } => {
+            ExprKind::Path { segs } => self.compile_path(node, segs, expected, sp),
+            ExprKind::Call { callee, args } => self.compile_call(node, callee, args, expected, sp),
+            ExprKind::Method { recv, name, generics, args } => {
                 self.compile_method(recv, name, generics, args, expected, sp)
             }
-            NodeKind::Field { recv, name } => self.compile_field(recv, name, sp),
-            NodeKind::Index { recv, idx } => {
+            ExprKind::Field { recv, name } => self.compile_field(recv, name, sp),
+            ExprKind::Index { recv, idx } => {
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
                 let it = self.compile_expr(idx, Some(TY_I32))?;
@@ -58,7 +58,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::ArrGet { dst, arr: rreg, idx: ireg }, sp.lo);
                 Ok(elem)
             }
-            NodeKind::Unary { op, expr } => {
+            ExprKind::Unary { op, expr } => {
                 use crate::ast::UnOp::*;
                 let t = match op {
                     Not => self.compile_expr(expr, Some(TY_BOOL))?,
@@ -85,35 +85,35 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(t)
             }
-            NodeKind::Binary { op, lhs, rhs } => self.compile_binary(node, op, lhs, rhs, expected, sp),
-            NodeKind::Assign { op, target, value } => {
+            ExprKind::Binary { op, lhs, rhs } => self.compile_binary(node, op, lhs, rhs, expected, sp),
+            ExprKind::Assign { op, target, value } => {
                 self.compile_assign(node, op, target, value, sp)?;
-                Ok(TY_VOID)
+                Ok(TY_UNIT)
             }
-            NodeKind::Lambda { params, ret, body } => {
-                self.compile_lambda(node, params, ret, body, expected, sp)
+            ExprKind::Lambda { params, ret, body } => {
+                self.compile_lambda(node.id(), params, ret, body, expected, sp)
             }
-            NodeKind::Try { .. } => {
+            ExprKind::Try { .. } => {
                 self.ctx.err(sp, "the `?` operator is not supported in this build (RFC 0005, M2)");
                 Err(())
             }
-            NodeKind::Await { .. } | NodeKind::Select { .. } => {
+            ExprKind::Await { .. } | ExprKind::Select { .. } => {
                 self.ctx.err(sp, "coroutines are not supported in this build (RFC 0018—020, M3)");
                 Err(())
             }
-            NodeKind::FStr { parts } => self.compile_fstr(parts, expected, sp),
-            NodeKind::Struct { ty, fields } => self.compile_struct(ty, fields, expected, sp),
-            NodeKind::ArrayLit { elems } => {
+            ExprKind::FStr { parts } => self.compile_fstr(parts, expected, sp),
+            ExprKind::Struct { ty, fields } => self.compile_struct(ty, fields, expected, sp),
+            ExprKind::ArrayLit { elems } => {
                 let arr_ty = self.compile_array_lit(elems, expected, sp)?;
                 Ok(arr_ty)
             }
-            NodeKind::WhenExpr { scrut, arms } => self.compile_when(scrut, &arms, expected, sp),
-            NodeKind::Is { expr, ty } => {
+            ExprKind::WhenExpr { scrut, arms } => self.compile_when(scrut, &arms, expected, sp),
+            ExprKind::Is { expr, ty } => {
                 let rt = self.compile_expr(expr, None)?;
                 let recv = self.last_reg;
                 let dst = self.new_reg(TY_BOOL);
                 // resolve the RHS (naming position, RFC 0012 §3)
-                if let NodeKind::TyPath { segs, is_dyn } = &self.ctx.ast.node(ty).kind {
+                if let TypeKind::TyPath { segs, is_dyn } = self.ctx.ast.ty(ty) {
                     if segs.len() == 1 && segs[0].generics.is_empty() {
                         let n = self.ctx.name(segs[0].name).to_string();
                         if *is_dyn {
@@ -268,7 +268,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    pub(crate) fn compile_path(&mut self, _node: NodeId, segs: Vec<PathSeg>, expected: Option<TypeId>, sp: crate::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_path(&mut self, _node: NodeHandle<AnyExpr>, segs: Vec<PathSeg>, expected: Option<TypeId>, sp: crate::span::Span) -> TcResult<TypeId> {
         // single name: local / module let / enum member of... / builtin value
         if segs.len() == 1 && segs[0].generics.is_empty() {
             let name = segs[0].name;
@@ -403,29 +403,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Err(())
     }
 
-    pub(crate) fn load_const_let(&mut self, init: NodeId, ty: TypeId, _expected: Option<TypeId>, sp: crate::span::Span) -> TcResult<u16> {
-        match self.ctx.ast.node(init).kind.clone() {
-            NodeKind::Lit(Lit::Int(v, _)) => {
+    pub(crate) fn load_const_let(&mut self, init: NodeHandle<AnyExpr>, ty: TypeId, _expected: Option<TypeId>, sp: crate::span::Span) -> TcResult<u16> {
+        match self.ctx.ast.expr(init).clone() {
+            ExprKind::Lit(Lit::Int(v, _)) => {
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits: v }, sp.lo);
                 Ok(reg)
             }
-            NodeKind::Lit(Lit::Float(b, _)) => {
+            ExprKind::Lit(Lit::Float(b, _)) => {
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits: b }, sp.lo);
                 Ok(reg)
             }
-            NodeKind::Lit(Lit::Bool(v)) => {
+            ExprKind::Lit(Lit::Bool(v)) => {
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits: v as u64 }, sp.lo);
                 Ok(reg)
             }
-            NodeKind::Lit(Lit::Char(c)) => {
+            ExprKind::Lit(Lit::Char(c)) => {
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits: c as u64 }, sp.lo);
                 Ok(reg)
             }
-            NodeKind::Lit(Lit::Str(s)) | NodeKind::Lit(Lit::RawStr(s)) => {
+            ExprKind::Lit(Lit::Str(s)) | ExprKind::Lit(Lit::RawStr(s)) => {
                 let k = self.konst(ConstVal::Str(s));
                 let reg = self.new_reg(TY_STR);
                 self.emit(Op::Const { dst: reg, k: k as u32 }, sp.lo);

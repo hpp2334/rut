@@ -35,9 +35,9 @@ pub struct DataDecl {
     pub kind: DataKind,
     pub ty: TypeId,
     /// (name, ty, initializer, is_private) in declaration order
-    pub fields: Vec<(IdentId, TypeId, Option<NodeId>, bool)>,
+    pub fields: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, bool)>,
     /// inherent methods (name → MethodDecl node)
-    pub methods: Vec<(IdentId, NodeId)>,
+    pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     pub generics: Vec<IdentId>,
 }
 
@@ -51,7 +51,7 @@ pub struct TraitDeclInfo {
 pub struct ImplDecl {
     pub trait_id: u32,
     pub target: TypeId,
-    pub methods: Vec<(IdentId, NodeId)>,
+    pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -85,11 +85,11 @@ pub struct Ctx<'a> {
     pub enums: Vec<(IdentId, EnumDecl)>,
     pub datas: Vec<(IdentId, DataDecl)>,
     pub impls: Vec<ImplDecl>,
-    pub lets: Vec<(IdentId, Option<NodeId>, NodeId)>,
+    pub lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)>,
     // name → index maps
     pub fn_index: Vec<IdentId>,
     /// free fn decl nodes: (name, Fn node)
-    pub fn_nodes: Vec<(IdentId, NodeId)>,
+    pub fn_nodes: Vec<(IdentId, NodeHandle<FnNode>)>,
     /// lambda capture lists, filled when the lambda is created:
     /// lambda node → (name, ty) per capture (by value — v1 deviation
     /// from RFC 0013 §1's by-reference capture, documented)
@@ -150,7 +150,7 @@ impl<'a> Ctx<'a> {
     pub fn find_trait(&self, name: IdentId) -> Option<&TraitDeclInfo> {
         self.trait_decls.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
     }
-    pub fn find_let(&self, name: IdentId) -> Option<&(IdentId, Option<NodeId>, NodeId)> {
+    pub fn find_let(&self, name: IdentId) -> Option<&(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)> {
         self.lets.iter().find(|(n, _, _)| *n == name)
     }
     pub fn find_free_fn(&self, name: IdentId) -> bool {

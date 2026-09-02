@@ -10,7 +10,7 @@ impl Parser {
 
     /// A type in any position. `dyn` prefixes trait paths in VALUE positions
     /// (RFC 0030 §2); naming positions call `parse_type_naming` instead.
-    pub(crate) fn parse_type(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_type(&mut self) -> Option<NodeHandle<AnyTy>> {
         let lo = self.span();
         if self.at_kw("fn") && matches!(self.peek(1).tok, Tok::LParen) {
             // fn type: `fn(Store, P): R` —params are bare types
@@ -32,7 +32,7 @@ impl Parser {
             }
             self.expect(Tok::Colon);
             let ret = self.parse_type()?;
-            return Some(self.push(NodeKind::TyFn { params, ret }, lo.to(self.span())));
+            return Some(self.typ(TypeKind::TyFn { params, ret }, lo.to(self.span())));
         }
         let is_dyn = if self.at_kw("dyn") {
             self.bump();
@@ -56,7 +56,7 @@ impl Parser {
                         || (matches!(self.tok(), Tok::Minus) && matches!(self.peek(1).tok, Tok::Int(..)))
                     {
                         let e = self.parse_unary()?;
-                        self.push(NodeKind::TyConst(e), self.span())
+                        self.typ(TypeKind::TyConst(e), self.span())
                     } else {
                         self.parse_type()?
                     };
@@ -73,7 +73,7 @@ impl Parser {
             }
             break;
         }
-        Some(self.push(NodeKind::TyPath { segs, is_dyn }, lo.to(self.span())))
+        Some(self.typ(TypeKind::TyPath { segs, is_dyn }, lo.to(self.span())))
     }
 
     /// §4.2 scan 1: `(` —`)` then `=>` (a `: Type` may sit between).

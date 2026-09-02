@@ -60,7 +60,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let Some(n) = ctx.fn_nodes.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
                     return Ok(()); // unknown fn —already diagnosed
                 };
-                (n, None, false, None)
+                (n.id(), None, false, None)
             }
             FnKey::Method { data, name } => {
                 let Some((_, d)) = ctx.datas.iter().find(|(n, _)| n == data) else {
@@ -70,7 +70,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let Some(m) = d.methods.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
                     return Ok(());
                 };
-                (m, Some(d.ty), true, Some(*data))
+                (m.id(), Some(d.ty), true, Some(*data))
             }
             FnKey::ImplMethod { idx, name } => {
                 let im = ctx.impls[*idx].clone();
@@ -78,32 +78,35 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Ok(());
                 };
                 let cname = ctx.datas.iter().find(|(_, d)| d.ty == im.target).map(|(n, _)| *n);
-                (m, Some(im.target), true, cname)
+                (m.id(), Some(im.target), true, cname)
             }
             FnKey::Lambda(_) => unreachable!(),
         };
-        let (params, ret, generics, body, fn_name, is_suspend) = match &ctx.ast.node(node).kind {
-            NodeKind::Fn { name, params, ret, generics, body, .. } => (
-                params.clone(),
-                *ret,
-                generics.clone(),
-                *body,
-                ctx.name(*name).to_string(),
-                matches!(&ctx.ast.node(node).kind, NodeKind::Fn { is_suspend: true, .. }),
+        let is_suspend = match ctx.ast.kind(node) {
+            Kind::Item(ItemKind::Fn(f)) => f.is_suspend,
+            Kind::Member(MemberKind::MethodDecl(m)) => m.is_suspend,
+            _ => return Ok(()),
+        };
+        let (params, ret, generics, body, fn_name) = match ctx.ast.kind(node) {
+            Kind::Item(ItemKind::Fn(f)) => (
+                f.params.clone(),
+                f.ret,
+                f.generics.clone(),
+                f.body.id(), // Fn bodies are always blocks
+                ctx.name(f.name).to_string(),
             ),
-            NodeKind::MethodDecl { name, params, ret, generics, body, .. } => (
-                params.clone(),
-                *ret,
-                generics.clone(),
-                body.unwrap_or(node), // bodiless shouldn't be queued
-                format!("{}$", ctx.name(*name)),
-                matches!(&ctx.ast.node(node).kind, NodeKind::MethodDecl { is_suspend: true, .. }),
+            Kind::Member(MemberKind::MethodDecl(m)) => (
+                m.params.clone(),
+                m.ret,
+                m.generics.clone(),
+                m.body.map(|b| b.id()).unwrap_or(node), // bodiless shouldn't be queued
+                format!("{}$", ctx.name(m.name)),
             ),
             _ => return Ok(()),
         };
         if is_suspend {
             ctx.err(
-                ctx.ast.node(node).span,
+                ctx.ast.span(node),
                 "`suspend` functions are not supported in this build (RFC 0018 —M3)",
             );
             return Err(());
@@ -114,7 +117,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             code: Vec::new(),
             spans: Vec::new(),
             locals: Vec::new(),
-            ret_ty: TY_VOID,
+            ret_ty: TY_UNIT,
             self_ty,
             subst: inst.subst.clone(),
             current_class: class_name,
@@ -128,12 +131,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // signature: params (self first for methods), resolved under subst
         let mut param_tys: Vec<TypeId> = Vec::new();
         for p in &params {
-            let ty = match &c.ctx.ast.node(*p).kind {
-                NodeKind::SelfParam { .. } => self_ty.unwrap_or(TY_VOID),
-                NodeKind::Param { ty: Some(t), .. } => c.resolve_type_now(*t),
-                NodeKind::Param { ty: None, name, .. } => {
+            let ty = match c.ctx.ast.param(*p) {
+                MemberKind::SelfParam(_) => self_ty.unwrap_or(TY_UNIT),
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
+                MemberKind::Param(ParamData { ty: None, name, .. }) => {
                     c.ctx.err(
-                        c.ctx.ast.node(*p).span,
+                        c.ctx.ast.span(p.id()),
                         format!(
                             "parameter `{}` needs a type annotation here",
                             c.ctx.name(*name)
@@ -146,26 +149,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             param_tys.push(ty);
         }
         // ret
-        let ret_ty = ret.map(|r| c.resolve_type_now(r)).unwrap_or(TY_VOID);
+        let ret_ty = ret.map(|r| c.resolve_type_now(r)).unwrap_or(TY_UNIT);
         c.ret_ty = ret_ty;
         // bind params as locals
         for (i, p) in params.iter().enumerate() {
-            match &c.ctx.ast.node(*p).kind {
-                NodeKind::SelfParam { is_mut } => {
-                    let reg = c.new_reg(self_ty.unwrap_or(TY_VOID));
+            match c.ctx.ast.param(*p) {
+                MemberKind::SelfParam(SelfParamData { is_mut }) => {
+                    let reg = c.new_reg(self_ty.unwrap_or(TY_UNIT));
                     // bind `self` —the ident exists iff the body spells it
                     // (the parser interns it on `self` paths)
                     if let Some(sid) = c.ctx.lookup_name("self") {
                         c.locals.push(Local {
                             name: sid,
                             reg,
-                            ty: self_ty.unwrap_or(TY_VOID),
+                            ty: self_ty.unwrap_or(TY_UNIT),
                             is_mut: *is_mut,
                             loop_var: false,
                         });
                     }
                 }
-                NodeKind::Param { name, is_mut, .. } => {
+                MemberKind::Param(ParamData { name, is_mut, .. }) => {
                     let reg = c.new_reg(param_tys[i]);
                     c.locals.push(Local {
                         name: *name,
@@ -183,7 +186,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if c.compile_block(body).is_err() {
             return Err(());
         }
-        // implicit `return` for void fns; non-void fns must return on all
+        // implicit `return` for unit fns; non-unit fns must return on all
         // paths (checked loosely: a final Ret with default value)
         c.emit(Op::Ret { val: None }, 0);
         c.resolve_labels();
@@ -207,8 +210,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_lambda_fn(ctx: &mut Ctx<'a>, inst: &Inst, fid: u32, lambda_node: NodeId) -> TcResult<()> {
         // the capture list was recorded when the MakeClosure was emitted;
         // the node we keyed on is the lambda BODY
-        let (params, ret, body) = match &ctx.ast.node(lambda_node).kind {
-            NodeKind::Lambda { params, ret, body } => (params.clone(), *ret, *body),
+        let (params, ret, body) = match ctx.ast.expr(NodeHandle::new(lambda_node)) {
+            ExprKind::Lambda { params, ret, body } => (params.clone(), *ret, *body),
             _ => return Ok(()),
         };
         let caps = ctx.lambda_info.get(&lambda_node).cloned().unwrap_or_default();
@@ -218,7 +221,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             code: Vec::new(),
             spans: Vec::new(),
             locals: Vec::new(),
-            ret_ty: TY_VOID,
+            ret_ty: TY_UNIT,
             self_ty: None,
             subst: inst.subst.clone(),
             current_class: None,
@@ -238,17 +241,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let saved = c.ctx.lambda_sigs.get(&lambda_node).cloned();
         let mut param_tys = Vec::new();
         for (i, p) in params.iter().enumerate() {
-            let ty = match &c.ctx.ast.node(*p).kind {
-                NodeKind::Param { ty: Some(t), .. } => c.resolve_type_now(*t),
+            let ty = match c.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
                 _ => saved.as_ref().and_then(|s| s.0.get(i).copied()).unwrap_or(TY_I32),
             };
             param_tys.push(ty);
         }
-        let ret_ty = ret.map(|r| c.resolve_type_now(r)).or(saved.as_ref().map(|s| s.1)).unwrap_or(TY_VOID);
+        let ret_ty = ret.map(|r| c.resolve_type_now(r)).or(saved.as_ref().map(|s| s.1)).unwrap_or(TY_UNIT);
         c.ret_ty = ret_ty;
         // bind params then captures
         for (i, p) in params.iter().enumerate() {
-            if let NodeKind::Param { name, is_mut, .. } = &c.ctx.ast.node(*p).kind {
+            if let MemberKind::Param(ParamData { name, is_mut, .. }) = c.ctx.ast.param(*p) {
                 let reg = c.new_reg(param_tys[i]);
                 c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false });
             }
@@ -261,15 +264,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let n_caps = caps.len() as u32;
         // body: block or single expression (RFC 0013 §1 arrows)
-        if matches!(&c.ctx.ast.node(body).kind, NodeKind::Block { .. }) {
-            if c.compile_block(body).is_err() {
+        if let Some(block) = c.ctx.ast.narrow_block(body) {
+            if c.compile_block(block).is_err() {
                 return Err(());
             }
             c.emit(Op::Ret { val: None }, 0);
         } else {
             let t = c.compile_expr(body, Some(ret_ty))?;
             if t != ret_ty {
-                c.ctx.err(c.ctx.ast.node(body).span, format!(
+                c.ctx.err(c.ctx.ast.span(body.id()), format!(
                     "lambda returns `{}` but is typed `{}`",
                     c.ctx.types.name(t), c.ctx.types.name(ret_ty)
                 ));
@@ -279,7 +282,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         c.resolve_labels();
         let (code, spans, regs) = (c.code, c.spans, c.regs);
         let fc = rut_core::binary::FuncCode {
-            name: format!("lambda@{}", body.0),
+            name: format!("lambda@{}", body.id().0),
             params: param_tys,
             ret: ret_ty,
             is_method: false,
@@ -347,16 +350,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.emit(Op::Br { cond, then_t: 0, else_t: 0 }, self.span);
     }
 
-    pub(crate) fn resolve_type_now(&mut self, node: NodeId) -> TypeId {
+    pub(crate) fn resolve_type_now(&mut self, node: NodeHandle<AnyTy>) -> TypeId {
         // `Self` binds to the enclosing type inside method bodies
-        if let NodeKind::TyPath { segs, .. } = &self.ctx.ast.node(node).kind {
+        if let TypeKind::TyPath { segs, .. } = self.ctx.ast.ty(node) {
             if segs.len() == 1 && segs[0].generics.is_empty() {
                 let n = self.ctx.name(segs[0].name).to_string();
                 if n == "Self" {
                     if let Some(t) = self.self_ty {
                         return t;
                     }
-                    self.ctx.err(self.ctx.ast.node(node).span, "`Self` outside a type body");
+                    self.ctx.err(self.ctx.ast.span(node.id()), "`Self` outside a type body");
                     return TY_I32;
                 }
             }

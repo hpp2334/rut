@@ -1,5 +1,22 @@
 // smoke: compile+run case1 through the wasm ABI (same glue the demo uses)
 const fs = require("fs");
+function countNodes(n) {
+  // structural walk over the flattened tagged AST objects
+  let k = 1;
+  for (const key of Object.keys(n)) {
+    const v = n[key];
+    if (v === null || typeof v !== "object") continue;
+    if (Array.isArray(v)) {
+      for (const x of v) {
+        if (x && typeof x === "object" && typeof x.kind === "string") k += countNodes(x);
+        else if (x && typeof x === "object" && x.node && typeof x.node.kind === "string") k += countNodes(x.node);
+      }
+    } else if (typeof v.kind === "string") {
+      k += countNodes(v);
+    }
+  }
+  return k;
+}
 (async () => {
   const bytes = fs.readFileSync("target/wasm32-unknown-unknown/release/rut_wasm.wasm");
   const { instance } = await WebAssembly.instantiate(bytes, {});
@@ -15,7 +32,7 @@ fn describe(f: Flavor): string {
         Flavor.Sour  -> "sour",
     };
 }
-export fn main(): void {
+export fn main(): unit {
     let name = "rut";
     let n = 41 + 1;
     print(f"hi {name}! n={n} tab:\\t'c'={'c'}");
@@ -29,7 +46,7 @@ export fn main(): void {
   const resJson = dec.decode(new Uint8Array(e.memory.buffer, resPtr + 4, resLen));
   const compiled = JSON.parse(resJson);
   console.log("diags:", compiled.diags.length);
-  console.log("astDump bytes:", compiled.astDump.length);
+  console.log("ast nodes:", compiled.ast ? countNodes(compiled.ast) : 0);
   console.log("irDump bytes:", compiled.irDump.length);
   console.log("binary b64 bytes:", compiled.binary ? compiled.binary.length : 0);
 

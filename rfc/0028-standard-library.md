@@ -19,7 +19,7 @@ The standard library splits in two:
   formatting, wrappers) in auditable rut code and mechanism (syscalls,
   sinks) in Rust. **`std:core`** is the prelude surface: the builtin
   traits that are ordinary nominal impls — `Disposal`
-  (`fn dispose(mut self): void`, RFC 0011/0016) — plus the prelude
+  (`fn dispose(mut self): unit`, RFC 0011/0016) — plus the prelude
   builtins `own(x)` (the eager copy, RFC 0011 §1), `downcast<T>`
   (RFC 0014), and `assert`/`panic` (RFC 0034 §2); `==` needs no
   trait at all (builtin, RFC 0012 §4). **`std:collection` is a
@@ -53,7 +53,7 @@ logging goes through an imported logger:
 ```rut
 import { Logger } from "std:log";
 
-fn work(): void {
+fn work(): unit {
     let log = Logger.new("app");     // class method -> construction; a bare
     log.info(f"started at {now()}");  // value class, so construction is free
 }
@@ -72,15 +72,15 @@ export class Logger {
 
     fn new(name: string): Self { return Self { name: name, level: Level.Info }; }
 
-    fn set_level(self, l: Level): void { self.level = l; }
+    fn set_level(self, l: Level): unit { self.level = l; }
     fn level(self): Level { return self.level; }
 
-    fn debug(self, msg: string): void { self.log_at(Level.Debug, msg); }
-    fn info(self, msg: string): void  { self.log_at(Level.Info, msg); }
-    fn warn(self, msg: string): void  { self.log_at(Level.Warn, msg); }
-    fn error(self, msg: string): void { self.log_at(Level.Error, msg); }
+    fn debug(self, msg: string): unit { self.log_at(Level.Debug, msg); }
+    fn info(self, msg: string): unit  { self.log_at(Level.Info, msg); }
+    fn warn(self, msg: string): unit  { self.log_at(Level.Warn, msg); }
+    fn error(self, msg: string): unit { self.log_at(Level.Error, msg); }
 
-    private fn log_at(self, l: Level, msg: string): void {
+    private fn log_at(self, l: Level, msg: string): unit {
         if (Level.to_int(l) >= Level.to_int(self.level)) {
             emit(self.name, l, msg);
         }
@@ -90,7 +90,7 @@ export class Logger {
 
 `rt:log` registers the enum `Level { Debug, Info, Warn, Error }` (RFC 0022
 §2 — host-registered enums) and one fn, `emit(name: string, level: Level,
-msg: string): void`, which routes to `HostHooks.log` (RFC 0035 §1). An
+msg: string): unit`, which routes to `HostHooks.log` (RFC 0035 §1). An
 uninstalled sink is a **silent no-op** — a script cannot accidentally spam
 an embedded host's stdout; the host opts into logging explicitly.
 

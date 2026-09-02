@@ -10,7 +10,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// generic params in a type node that are not yet bound
     pub(crate) fn free_generics(
         &self,
-        node: NodeId,
+        node: NodeHandle<AnyTy>,
         decl_generics: &[IdentId],
         subst: &[(IdentId, TypeId)],
     ) -> Vec<IdentId> {
@@ -21,13 +21,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn collect_free(
         &self,
-        node: NodeId,
+        node: NodeHandle<AnyTy>,
         decl_generics: &[IdentId],
         subst: &[(IdentId, TypeId)],
         out: &mut Vec<IdentId>,
     ) {
-        match &self.ctx.ast.node(node).kind {
-            NodeKind::TyPath { segs, .. } => {
+        match self.ctx.ast.ty(node) {
+            TypeKind::TyPath { segs, .. } => {
                 for seg in segs {
                     if decl_generics.contains(&seg.name)
                         && !subst.iter().any(|(n, _)| *n == seg.name)
@@ -40,7 +40,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
             }
-            NodeKind::TyFn { params, ret } => {
+            TypeKind::TyFn { params, ret } => {
                 for p in params {
                     self.collect_free(*p, decl_generics, subst, out);
                 }
@@ -53,7 +53,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// structural unification: bind generic params from an argument's type
     pub(crate) fn unify_generic(
         &mut self,
-        param_node: NodeId,
+        param_node: NodeHandle<AnyTy>,
         arg_ty: TypeId,
         decl_generics: &[IdentId],
         subst: &mut Vec<(IdentId, TypeId)>,
@@ -66,8 +66,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 subst.push((name, ty));
             }
         };
-        match &self.ctx.ast.node(param_node).kind.clone() {
-            NodeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
+        match self.ctx.ast.ty(param_node).clone() {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
                 let name = segs[0].name;
                 if decl_generics.contains(&name) {
                     if let Some(&(_, prev)) = subst.iter().find(|(n, _)| *n == name) {
@@ -95,7 +95,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            NodeKind::TyPath { segs, .. } => {
+            TypeKind::TyPath { segs, .. } => {
                 // builtin containers: unify element-wise
                 let head = self.ctx.name(segs[0].name);
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
@@ -114,8 +114,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     ("Array", TyKind::Array { elem, len }) if segs[0].generics.len() == 2 => {
                         // const N: match literally
-                        if let NodeKind::TyConst(e) = &self.ctx.ast.node(segs[0].generics[1]).kind {
-                            if let NodeKind::Lit(Lit::Int(v, _)) = &self.ctx.ast.node(*e).kind {
+                        if let TypeKind::TyConst(e) = self.ctx.ast.ty(segs[0].generics[1]) {
+                            if let ExprKind::Lit(Lit::Int(v, _)) = self.ctx.ast.expr(*e) {
                                 if *v as u32 != len {
                                     self.ctx.err(sp, format!(
                                         "array length mismatch: {v} vs {len} (N is part of the type, RFC 0005)"
@@ -140,7 +140,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
             }
-            NodeKind::TyFn { params, ret } => {
+            TypeKind::TyFn { params, ret } => {
                 // fn(P1, P2): R against the arg's fn type
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 if let TyKind::Fn { params: aps, ret: ar } = arg_kind {
@@ -151,8 +151,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     for (p, a) in params.iter().zip(aps.iter()) {
                         self.unify_generic(*p, *a, decl_generics, subst, sp)?;
                     }
-                    self.unify_generic(*ret, ar, decl_generics, subst, sp)
-                } else {
+                    self.unify_generic(ret, ar, decl_generics, subst, sp)} else {
                     self.ctx.err(sp, format!(
                         "expected an fn type, found `{}`",
                         self.ctx.types.name(arg_ty)

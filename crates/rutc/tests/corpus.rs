@@ -46,7 +46,7 @@ fn corpus_parses_clean() {
 #[test]
 fn depth_budget_is_a_diag_not_a_crash() {
     // 100k-deep parens: one clean "nesting too deep", never a host crash (C3)
-    let src = format!("fn f(): void {{ let x = {}1{}; }}", "(".repeat(100_000), ")".repeat(100_000));
+    let src = format!("fn f(): unit {{ let x = {}1{}; }}", "(".repeat(100_000), ")".repeat(100_000));
     let (_, diags) = parse(&src, Mode::Impl);
     assert!(diags.iter().any(|d| d.msg.contains("nesting too deep")), "want a nesting diag, got: {diags:?}");
 }
@@ -60,7 +60,7 @@ fn reserved_words_explain_themselves() {
         ("var", "let"),
         ("instanceof", "is"),
     ] {
-        let src = format!("fn f(): void {{ let x = {word}; }}");
+        let src = format!("fn f(): unit {{ let x = {word}; }}");
         let (_, diags) = parse(&src, Mode::Impl);
         assert!(
             diags.iter().any(|d| d.msg.contains(want)),
@@ -74,14 +74,14 @@ fn fstring_holes_allow_string_arguments() {
     // corpus-driven (closures-generics.rut L32): hole termination is
     // brace-based, so string literals lex fine inside holes — RFC 0007 §2's
     // "bind it first" stays a style note, not a lex error
-    let src = "fn f(): void { let name = Option.some(\"x\"); print(f\"n={name.unwrap_or(\"?\")}\"); }";
+    let src = "fn f(): unit { let name = Option.some(\"x\"); print(f\"n={name.unwrap_or(\"?\")}\"); }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
 }
 
 #[test]
 fn tuples_error_at_the_comma() {
-    let src = "fn f(): void { let x = (1, 2); }";
+    let src = "fn f(): unit { let x = (1, 2); }";
     let (_, diags) = parse(&src, Mode::Impl);
     assert!(diags.iter().any(|d| d.msg.contains("no tuples")), "{diags:?}");
 }

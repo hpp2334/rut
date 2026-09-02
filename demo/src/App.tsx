@@ -7,7 +7,7 @@ import { Panes, type PaneData } from "./components/Panes";
 import { StatusBar } from "./components/StatusBar";
 import type { CompileResult } from "./wasm/rut-api";
 
-const EMPTY_PANES: PaneData = { output: [], astDump: "", irDump: "" };
+const EMPTY_PANES: PaneData = { output: [], irDump: "" };
 
 export function App(): JSX.Element {
   const [runner, setRunner] = useState<Runner | null>(null);
@@ -50,7 +50,6 @@ export function App(): JSX.Element {
       } catch (err) {
         setPanes({
           output: [`compile failed: ${String(err)}`],
-          astDump: "",
           irDump: "",
         });
         setRunning(false);
@@ -61,7 +60,7 @@ export function App(): JSX.Element {
       if (token !== runToken.current) return; // stale
       setPanes({
         output: res.output,
-        astDump: compiled.astDump,
+        ast: compiled.ast,
         irDump: compiled.irDump,
         trap: res.trap,
       });
@@ -95,7 +94,7 @@ export function App(): JSX.Element {
           onSelect={selectCase}
         />
         <Editor value={source} onChange={setSource} />
-        <Panes data={panes} />
+        <Panes data={panes} source={source} />
       </main>
 
       <StatusBar

@@ -100,7 +100,7 @@ fn seed(): Vec<Address> {
     return a;
 }
 
-export fn main(): void {
+export fn main(): unit {
     let u = User {
         id: 7,
         login: "hpp",

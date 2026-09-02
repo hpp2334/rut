@@ -172,11 +172,50 @@ impl Parser {
     }
 
     // ---- arena ----
+    //
+    // Typed constructors: a child slot's type is enforced at every
+    // construction site — the parser cannot build a wrong-category link.
 
-    pub(crate) fn push(&mut self, kind: NodeKind, span: Span) -> NodeId {
+    fn push_raw(&mut self, kind: Kind, span: Span) -> NodeId {
         let id = NodeId(self.nodes.len() as u32);
         self.nodes.push(Node { span, kind });
         id
+    }
+    pub(crate) fn item(&mut self, k: ItemKind, span: Span) -> NodeHandle<AnyItem> {
+        NodeHandle::new(self.push_raw(Kind::Item(k), span))
+    }
+    pub(crate) fn stmt(&mut self, k: StmtKind, span: Span) -> NodeHandle<AnyStmt> {
+        NodeHandle::new(self.push_raw(Kind::Stmt(k), span))
+    }
+    pub(crate) fn expr(&mut self, k: ExprKind, span: Span) -> NodeHandle<AnyExpr> {
+        NodeHandle::new(self.push_raw(Kind::Expr(k), span))
+    }
+    pub(crate) fn pat(&mut self, k: PatKind, span: Span) -> NodeHandle<AnyPat> {
+        NodeHandle::new(self.push_raw(Kind::Pat(k), span))
+    }
+    pub(crate) fn typ(&mut self, k: TypeKind, span: Span) -> NodeHandle<AnyTy> {
+        NodeHandle::new(self.push_raw(Kind::Type(k), span))
+    }
+    pub(crate) fn arm(&mut self, k: ArmKind, span: Span) -> NodeHandle<AnyArm> {
+        NodeHandle::new(self.push_raw(Kind::Arm(k), span))
+    }
+    pub(crate) fn member(&mut self, k: MemberKind, span: Span) -> NodeHandle<AnyParam> {
+        NodeHandle::new(self.push_raw(Kind::Member(k), span))
+    }
+    pub(crate) fn field_decl(&mut self, d: FieldDeclData, span: Span) -> NodeHandle<FieldDeclNode> {
+        NodeHandle::new(self.push_raw(Kind::Member(MemberKind::FieldDecl(d)), span))
+    }
+    pub(crate) fn method_decl(&mut self, d: MethodDeclData, span: Span) -> NodeHandle<MethodDeclNode> {
+        NodeHandle::new(self.push_raw(Kind::Member(MemberKind::MethodDecl(d)), span))
+    }
+    pub(crate) fn fn_decl(&mut self, d: FnData, span: Span) -> NodeHandle<FnNode> {
+        NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Fn(d)), span))
+    }
+    pub(crate) fn block(&mut self, stmts: Vec<NodeHandle<AnyStmt>>, span: Span) -> NodeHandle<BlockNode> {
+        NodeHandle::new(self.push_raw(Kind::Expr(ExprKind::Block { stmts }), span))
+    }
+    pub(crate) fn if_stmt(&mut self, cond: NodeHandle<AnyExpr>, then: NodeHandle<BlockNode>, els: Option<ElseBranch>, span: Span) -> NodeHandle<IfNode> {
+        NodeHandle::new(self.push_raw(Kind::Stmt(StmtKind::If { cond, then, els }), span))
     }
 
     // ---- depth budget (C3) ----
@@ -235,7 +274,7 @@ impl Parser {
 
     // ---- module ----
 
-    pub(crate) fn parse_module(&mut self) -> NodeId {
+    pub(crate) fn parse_module(&mut self) -> NodeHandle<ModuleNode> {
         let lo = self.span().lo;
         let mut items = Vec::new();
         while !self.at_eof() {
@@ -252,7 +291,7 @@ impl Parser {
             }
         }
         let hi = self.span().hi;
-        self.push(NodeKind::Module { items }, Span::new(lo, hi))
+        NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Module { items }), Span::new(lo, hi)))
     }
 
 }

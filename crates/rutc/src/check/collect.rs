@@ -11,25 +11,20 @@ impl<'a> Ctx<'a> {
     // ---- collection ----
 
     pub fn collect(&mut self) {
-        let NodeKind::Module { items } = &self.ast.node(self.ast.root).kind else {
-            return;
-        };
-        let items = items.clone();
+        let items = self.ast.module_items(self.ast.root).to_vec();
         // pass 1: type declarations (enums, dataclasses, classes, traits)
         for it in &items {
-            match &self.ast.node(*it).kind {
-                NodeKind::Enum { vis, name, members } => self.collect_enum(*it, *vis, *name, members),
-                NodeKind::Dataclass { vis, name, generics, fields, methods }
-                | NodeKind::Class { vis, name, generics, fields, methods } => {
-                    let kind = match self.ast.node(*it).kind {
-                        NodeKind::Dataclass { .. } => DataKind::Dataclass,
-                        _ => DataKind::Class,
-                    };
-                    self.collect_data(*it, kind, *vis, *name, generics, fields, methods);
-                }
-                NodeKind::Trait { vis, name, generics, methods, .. } => {
-                    self.collect_trait(*it, *vis, *name, generics, methods)
-                }
+            match self.ast.item(*it) {
+            ItemKind::Enum { vis, name, members } => self.collect_enum(it.id(), *vis, *name, members),
+            ItemKind::Dataclass { vis, name, generics, fields, methods } => {
+                self.collect_data(it.id(), DataKind::Dataclass, *vis, *name, generics, fields, methods);
+            }
+            ItemKind::Class { vis, name, generics, fields, methods } => {
+                self.collect_data(it.id(), DataKind::Class, *vis, *name, generics, fields, methods);
+            }
+            ItemKind::Trait { vis, name, generics, methods, .. } => {
+                self.collect_trait(it.id(), *vis, *name, generics, methods)
+            }
                 _ => {}
             }
         }
@@ -37,40 +32,37 @@ impl<'a> Ctx<'a> {
         // (fields were resolved with a second pass inside collect_data)
         // pass 2: impls, fns, lets
         for it in &items {
-            match &self.ast.node(*it).kind {
-                NodeKind::Impl { trait_ref, target, methods } => {
-                    self.collect_impl(*it, *trait_ref, *target, methods)
+            match self.ast.item(*it) {
+                ItemKind::Impl { trait_ref, target, methods } => {
+                    self.collect_impl(it.id(), *trait_ref, *target, methods)
                 }
-                NodeKind::Fn { vis, name, .. } => {
-                    let is_pub = *vis == Vis::Pub;
-                    let n = self.name(*name).to_string();
-                    if self.fn_index.contains(name) {
-                        self.err(self.ast.node(*it).span, format!("duplicate fn `{n}`"));
+                ItemKind::Fn(f) => {
+                    let is_pub = f.vis == Vis::Pub;
+                    let n = self.name(f.name).to_string();
+                    if self.fn_index.contains(&f.name) {
+                        self.err(self.ast.span(it.id()), format!("duplicate fn `{n}`"));
                     }
-                    self.fn_index.push(*name);
-                    self.fn_nodes.push((*name, *it));
+                    self.fn_index.push(f.name);
+                    self.fn_nodes.push((f.name, NodeHandle::new(it.id())));
                     if is_pub {
                         // name recorded; the func id binds at finalize
                         self.exports.push((n, u32::MAX));
                     }
                 }
-                NodeKind::ModuleLet { name, ty, init, .. } => {
+                ItemKind::ModuleLet { name, ty, init, .. } => {
                     self.lets.push((*name, *ty, *init));
                 }
-                NodeKind::Import { .. } => {
+                ItemKind::Import { names, .. } => {
                     // module loading is M2+ (RFC 0035): the corpus parses,
                     // and unresolvable imports are compile errors only when
                     // their names are used
-                    for n in match &self.ast.node(*it).kind {
-                        NodeKind::Import { names, .. } => names.clone(),
-                        _ => vec![],
-                    } {
-                        let sp = self.ast.node(*it).span;
+                    let sp = self.ast.span(it.id());
+                    for n in names {
                         self.err(
                             sp,
                             format!(
                                 "module loading is not available in this build (RFC 0035, M2) — cannot import `{}`",
-                                self.name(n)
+                                self.name(*n)
                             ),
                         );
                     }
@@ -111,10 +103,10 @@ impl<'a> Ctx<'a> {
         _vis: Vis,
         name: IdentId,
         generics: &[IdentId],
-        fields: &[NodeId],
-        methods: &[NodeId],
+        fields: &[NodeHandle<FieldDeclNode>],
+        methods: &[NodeHandle<MethodDeclNode>],
     ) {
-        let sp = self.ast.node(node).span;
+        let sp = self.ast.span(node);
         if self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_trait(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
@@ -139,22 +131,21 @@ impl<'a> Ctx<'a> {
         });
         let mut resolved: Vec<FieldInfo> = Vec::new();
         for f in fields {
-            if let NodeKind::FieldDecl { name: fname, ty, is_private, is_static, .. } = &self.ast.node(*f).kind {
-                if *is_static {
-                    self.err(
-                        self.ast.node(*f).span,
-                        "class `static` fields are not supported in this build (module-static slot table, RFC 0010 §2)",
-                    );
-                }
-                let fty = self.resolve_type(*ty, &[]);
-                resolved.push(FieldInfo {
-                    name: self.name(*fname).to_string(),
-                    ty: fty,
-                    offset: 0,
-                });
-                // remember privacy for the body compiler
-                self.field_privacy(*f, *is_private);
+            let fd = self.ast.field_decl(*f);
+            if fd.is_static {
+                self.err(
+                    self.ast.span(f.id()),
+                    "class `static` fields are not supported in this build (module-static slot table, RFC 0010 §2)",
+                );
             }
+            let fty = self.resolve_type(fd.ty, &[]);
+            resolved.push(FieldInfo {
+                name: self.name(fd.name).to_string(),
+                ty: fty,
+                offset: 0,
+            });
+            // remember privacy for the body compiler
+            self.field_privacy(*f, fd.is_private);
         }
         let (size, align) = {
             // compute layout with resolved fields
@@ -169,25 +160,22 @@ impl<'a> Ctx<'a> {
         self.types.types[placeholder as usize].align = align;
 
         // collect fields with initializers + methods for the compiler
-        let mut flds: Vec<(IdentId, TypeId, Option<NodeId>, bool)> = Vec::new();
+        let mut flds: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, bool)> = Vec::new();
         for f in fields {
-            if let NodeKind::FieldDecl { name: fname, ty: _, init, is_private, .. } = &self.ast.node(*f).kind {
-                let fty = match self.types.kind(placeholder) {
-                    TyKind::Data { fields } => fields
-                        .iter()
-                        .find(|x| x.name == self.name(*fname))
-                        .map(|x| x.ty)
-                        .unwrap_or(TY_I32),
-                    _ => TY_I32,
-                };
-                flds.push((*fname, fty, *init, *is_private));
-            }
+            let fd = self.ast.field_decl(*f);
+            let fty = match self.types.kind(placeholder) {
+                TyKind::Data { fields } => fields
+                    .iter()
+                    .find(|x| x.name == self.name(fd.name))
+                    .map(|x| x.ty)
+                    .unwrap_or(TY_I32),
+                _ => TY_I32,
+            };
+            flds.push((fd.name, fty, fd.init, fd.is_private));
         }
-        let mut mths: Vec<(IdentId, NodeId)> = Vec::new();
+        let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
         for m in methods {
-            if let NodeKind::MethodDecl { name: mname, .. } = &self.ast.node(*m).kind {
-                mths.push((*mname, *m));
-            }
+            mths.push((self.ast.method_decl(*m).name, *m));
         }
         self.datas.push((
             name,
@@ -195,10 +183,10 @@ impl<'a> Ctx<'a> {
         ));
     }
 
-    pub(crate) fn field_privacy(&mut self, _f: NodeId, _is_private: bool) {}
+    pub(crate) fn field_privacy(&mut self, _f: NodeHandle<FieldDeclNode>, _is_private: bool) {}
 
-    pub(crate) fn collect_trait(&mut self, node: NodeId, vis: Vis, name: IdentId, generics: &[NodeId2], methods: &[NodeId]) {
-        let sp = self.ast.node(node).span;
+    pub(crate) fn collect_trait(&mut self, node: NodeId, vis: Vis, name: IdentId, generics: &[NodeId2], methods: &[NodeHandle<MethodDeclNode>]) {
+        let sp = self.ast.span(node);
         if self.find_trait(name).is_some() || self.find_data(name).is_some() || self.find_enum(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
@@ -211,37 +199,36 @@ impl<'a> Ctx<'a> {
         }
         let mut tms = Vec::new();
         for m in methods {
-            if let NodeKind::MethodDecl { name: mname, params, ret, .. } = &self.ast.node(*m).kind {
-                let mut ptys = Vec::new();
-                for p in params {
-                    match &self.ast.node(*p).kind {
-                        NodeKind::SelfParam { .. } => ptys.push(TY_VOID), // placeholder: Self resolved at impl
-                        NodeKind::Param { ty: Some(t), .. } => {
-                            ptys.push(self.resolve_type(*t, &[]));
-                        }
-                        NodeKind::Param { ty: None, .. } => {
-                            self.err(self.ast.node(*p).span, "trait method parameters need types");
-                            ptys.push(TY_I32);
-                        }
-                        _ => ptys.push(TY_I32),
+            let md = self.ast.method_decl(*m);
+            let mut ptys = Vec::new();
+            for p in &md.params {
+                match self.ast.param(*p) {
+                    MemberKind::SelfParam(_) => ptys.push(TY_UNIT), // placeholder: Self resolved at impl
+                    MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                        ptys.push(self.resolve_type(*t, &[]));
                     }
+                    MemberKind::Param(ParamData { ty: None, .. }) => {
+                        self.err(self.ast.span(p.id()), "trait method parameters need types");
+                        ptys.push(TY_I32);
+                    }
+                    _ => ptys.push(TY_I32),
                 }
-                let rty = ret.map(|r| self.resolve_type(r, &[]));
-                tms.push((self.name(*mname).to_string(), ptys, rty));
             }
+            let rty = md.ret.map(|r| self.resolve_type(r, &[]));
+            tms.push((self.name(md.name).to_string(), ptys, rty));
         }
         // first param must be self (RFC 0012 §2: trait methods are instance
         // methods)
         let id = self.traits.len() as u32;
         let mut desc = TraitDesc { name: self.name(name).to_string(), methods: vec![] };
         for (mname, ptys, rty) in tms {
-            if ptys.first() == Some(&TY_VOID) {
+            if ptys.first() == Some(&TY_UNIT) {
                 // replace the self placeholder: params exclude self in the
                 // binary desc; the compiler passes self as arg0
                 desc.methods.push(rut_core::binary::TraitMethod {
                     name: mname,
                     params: ptys[1..].to_vec(),
-                    ret: rty.unwrap_or(TY_VOID),
+                    ret: rty.unwrap_or(TY_UNIT),
                 });
             } else {
                 self.err(sp, format!("trait method `{mname}` must take `self` (RFC 0012 §2)"));
@@ -252,15 +239,15 @@ impl<'a> Ctx<'a> {
         self.trait_decls.push((name, TraitDeclInfo { id, node }));
     }
 
-    pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeId, target: NodeId, methods: &[NodeId]) {
-        let sp = self.ast.node(node).span;
+    pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, methods: &[NodeHandle<MethodDeclNode>]) {
+        let sp = self.ast.span(node);
         let Some(trait_id) = self.resolve_trait_ref(trait_ref) else {
             return;
         };
         // the target must be a local dataclass/class (RFC 0012 §2 placement)
         let target_ty = self.resolve_naming_type(target);
-        let is_local = match &self.ast.node(target).kind {
-            NodeKind::TyPath { segs, .. } if segs.len() == 1 => self
+        let is_local = match self.ast.ty(target) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 => self
                 .find_data(segs[0].name)
                 .map(|d| d.ty)
                 .is_some(),
@@ -279,9 +266,7 @@ impl<'a> Ctx<'a> {
         }
         let mut mths = Vec::new();
         for m in methods {
-            if let NodeKind::MethodDecl { name: mname, .. } = &self.ast.node(*m).kind {
-                mths.push((*mname, *m));
-            }
+            mths.push((self.ast.method_decl(*m).name, *m));
         }
         // coverage: every trait methsig covered exactly once, no extras
         let tdesc = self.traits[trait_id as usize].clone();
@@ -293,7 +278,7 @@ impl<'a> Ctx<'a> {
         for (n, mnode) in &mths {
             if !tdesc.methods.iter().any(|tm| tm.name == self.name(*n)) {
                 self.err(
-                    self.ast.node(*mnode).span,
+                    self.ast.span(mnode.id()),
                     format!("`{}` is not a member of {} — put inherent methods in the type body (RFC 0012 §2)", self.name(*n), tdesc.name),
                 );
             }

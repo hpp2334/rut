@@ -11,7 +11,7 @@ import { clamp_f32, lcg_next } from "./api.rut";
 
 export class EventStream {
     private feed: Receiver<LiveEvent>;
-    private task: Task<void>;
+    private task: Task<unit>;
 
     fn new(seed: u32): Self {
         let ch = Channel<LiveEvent>();
@@ -22,12 +22,12 @@ export class EventStream {
 }
 
 impl Disposal for EventStream {  // runs when the last handle drops
-    fn dispose(mut self): void {
+    fn dispose(mut self): unit {
         self.task.cancel();      // producer dies at its next await
     }
 }
 
-suspend fn produce(out: Sender<LiveEvent>, seed: u32): void {
+suspend fn produce(out: Sender<LiveEvent>, seed: u32): unit {
     let rng = seed;
     let v = 50.0f32;
     for (let i = 0; i < 200; i += 1) {
@@ -39,7 +39,7 @@ suspend fn produce(out: Sender<LiveEvent>, seed: u32): void {
     }
 }
 
-export(self) fn send_event(out: Sender<LiveEvent>, roll: u32, rng: u32, v: f32): void {
+export(self) fn send_event(out: Sender<LiveEvent>, roll: u32, rng: u32, v: f32): unit {
     let kind = when (roll) {
         0u32, 1u32, 2u32 -> EventKind.Visit,
         3u32            -> EventKind.Alert,

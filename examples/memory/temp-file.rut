@@ -13,16 +13,16 @@ class TempFile {
         return Self { path: path };     // no boxing needed (RFC 0011 §2)
     }
 
-    fn write(self, data: Vec<u8>): void { /* ... */ }
+    fn write(self, data: Vec<u8>): unit { /* ... */ }
 }
 
 impl Disposal for TempFile {   // Disposal impl — runs once, at rc 0
-    fn dispose(mut self): void {
+    fn dispose(mut self): unit {
         remove(self.path);
     }
 }
 
-export fn main(): void {
+export fn main(): unit {
     let log = Logger.new("tempfile");
     let f = TempFile.new("tmp.dat");     // a Disposal class is just a class
     f.write(Vec<u8>(64));

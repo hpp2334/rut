@@ -12,15 +12,15 @@ use super::*;
 impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_call(
         &mut self,
-        node: NodeId,
-        callee: NodeId,
-        args: Vec<NodeId>,
+        node: NodeHandle<AnyExpr>,
+        callee: NodeHandle<AnyExpr>,
+        args: Vec<NodeHandle<AnyExpr>>,
         expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
         let _ = node;
         // fn-typed local call: `f(x)` where f is a param/local of fn type
-        if let NodeKind::Path { segs } = &self.ctx.ast.node(callee).kind.clone() {
+        if let ExprKind::Path { segs } = self.ctx.ast.expr(callee).clone() {
             if segs.len() == 1 && self.lookup(segs[0].name).is_some() {
                 let ft = self.compile_expr(callee, None)?;
                 match self.ctx.types.kind(ft).clone() {
@@ -35,7 +35,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        if let NodeKind::Path { segs } = self.ctx.ast.node(callee).kind.clone() {
+        if let ExprKind::Path { segs } = self.ctx.ast.expr(callee).clone() {
             return self.compile_path_call(segs, args, expected, sp);
         }
         // fn-typed value call: `f(x)` where f: fn(T): U
@@ -55,7 +55,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn finish_call_fn(
         &mut self,
         freg: u16,
-        args: Vec<NodeId>,
+        args: Vec<NodeHandle<AnyExpr>>,
         _expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
@@ -76,14 +76,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             if !self.widens(t, ptys[i]) {
-                self.ctx.err(self.ctx.ast.node(*a).span, format!(
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.types.name(t), self.ctx.types.name(ptys[i])
                 ));
             }
             aregs.push(self.last_reg);
         }
-        let dst = if ret == TY_VOID { None } else { Some(self.new_reg(ret)) };
+        let dst = if ret == TY_UNIT { None } else { Some(self.new_reg(ret)) };
         self.emit(Op::CallFn { fval: freg, args: aregs, dst }, sp.lo);
         Ok(ret)
     }
@@ -91,7 +91,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_path_call(
         &mut self,
         segs: Vec<PathSeg>,
-        args: Vec<NodeId>,
+        args: Vec<NodeHandle<AnyExpr>>,
         expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
@@ -173,7 +173,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, "panic takes a `string`");
                 }
                 self.emit(Op::Panic { msg: self.last_reg }, sp.lo);
-                return Ok(TY_VOID);
+                return Ok(TY_UNIT);
             }
             "assert" => {
                 if args.is_empty() || args.len() > 2 {
@@ -195,7 +195,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None
                 };
                 self.emit(Op::Assert { cond, msg }, sp.lo);
-                return Ok(TY_VOID);
+                return Ok(TY_UNIT);
             }
             "print" => {
                 if args.len() != 1 {
@@ -207,7 +207,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, format!("print takes a `string`, found `{}`", self.ctx.types.name(t)));
                 }
                 self.emit(Op::CallNat { nat: Nat::Print, recv: None, args: vec![self.last_reg], dst: None }, sp.lo);
-                return Ok(TY_VOID);
+                return Ok(TY_UNIT);
             }
             "type_id" | "size_of" | "align_of" => {
                 // compile-time constants —never executed (RFC 0015 §3, 0033 §3)
@@ -251,7 +251,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], None)?;
-                self.check_formattable(t, self.ctx.ast.node(args[0]).span)?;
+                self.check_formattable(t, self.ctx.ast.span(args[0].id()))?;
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_STR);
                 self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
@@ -294,7 +294,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Err(())
     }
 
-    pub(crate) fn compile_vec_alloc(&mut self, generics: Vec<NodeId>, args: Vec<NodeId>, sp: crate::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_vec_alloc(&mut self, generics: Vec<NodeHandle<AnyTy>>, args: Vec<NodeHandle<AnyExpr>>, sp: crate::span::Span) -> TcResult<TypeId> {
         if generics.len() != 1 {
             self.ctx.err(sp, "Vec<T>(..) takes one type argument");
             return Err(());
@@ -333,10 +333,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_static_call(
         &mut self,
         base: IdentId,
-        base_generics: Vec<NodeId>,
+        base_generics: Vec<NodeHandle<AnyTy>>,
         member: IdentId,
-        _member_generics: Vec<NodeId>,
-        args: Vec<NodeId>,
+        _member_generics: Vec<NodeHandle<AnyTy>>,
+        args: Vec<NodeHandle<AnyExpr>>,
         expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
@@ -462,8 +462,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let Some((_, mnode)) = d.methods.iter().find(|(n, _)| *n == member).cloned() else { unreachable!() };
                 return self.compile_direct_method(dname, d, mnode, args, sp);
             }
-        }
-        if let Some(e) = self.ctx.find_enum(base) {
+        }        if let Some(e) = self.ctx.find_enum(base) {
             let _ = e;
             self.ctx.err(sp, format!("enum `{bn}` has no static `{mn}` in this build"));
             return Err(());
@@ -475,8 +474,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_free_fn_call(
         &mut self,
         name: IdentId,
-        generics: Vec<NodeId>,
-        args: Vec<NodeId>,
+        generics: Vec<NodeHandle<AnyTy>>,
+        args: Vec<NodeHandle<AnyExpr>>,
         _expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
@@ -484,12 +483,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, format!("unknown function `{}`", self.ctx.name(name)));
             return Err(());
         };
-        let (decl_generics, params, ret) = match &self.ctx.ast.node(fnode).kind {
-            NodeKind::Fn { generics, params, ret, .. } => {
-                (generics.clone(), params.clone(), *ret)
-            }
-            _ => return Err(()),
-        };
+        let fd = self.ctx.ast.fn_decl(fnode).clone();
+        let (decl_generics, params, ret) = (fd.generics, fd.params, fd.ret);
         if generics.len() > decl_generics.len() {
             self.ctx.err(sp, format!(
                 "`{}` takes {} generic arguments, {} given",
@@ -504,10 +499,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             subst.push((*g, t));
         }
         // compile args under best-effort expected types; unify generics
-        let param_nodes: Vec<Option<NodeId>> = params
+        let param_nodes: Vec<Option<NodeHandle<AnyTy>>> = params
             .iter()
-            .map(|p| match &self.ctx.ast.node(*p).kind {
-                NodeKind::Param { ty: Some(t), .. } => Some(*t),
+            .map(|p| match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => Some(*t),
                 _ => None,
             })
             .collect();
@@ -545,26 +540,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // final param types under the completed substitution
         let ptys: Vec<TypeId> = params
             .iter()
-            .map(|p| match &self.ctx.ast.node(*p).kind {
-                NodeKind::Param { ty: Some(t), .. } => self.ctx.resolve_type(*t, &subst),
+            .map(|p| match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => self.ctx.resolve_type(*t, &subst),
                 _ => TY_I32,
             })
             .collect();
         for (i, a) in args.iter().enumerate() {
             if !self.widens(arg_tys[i], ptys[i]) {
-                self.ctx.err(self.ctx.ast.node(*a).span, format!(
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.types.name(arg_tys[i]), self.ctx.types.name(ptys[i])
                 ));
             }
         }
-        let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_VOID);
+        let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_UNIT);
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Free(name),
             subst,
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_VOID { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
         self.emit(Op::Call { func: fid, args: aregs, dst }, sp.lo);
         Ok(ret_ty)
     }
@@ -575,24 +570,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         dname: IdentId,
         d: crate::check::DataDecl,
-        mnode: NodeId,
-        args: Vec<NodeId>,
+        mnode: NodeHandle<MethodDeclNode>,
+        args: Vec<NodeHandle<AnyExpr>>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
-        let (params, ret, mname) = match &self.ctx.ast.node(mnode).kind {
-            NodeKind::MethodDecl { params, ret, name, .. } => {
-                (params.clone(), *ret, *name)
-            }
-            _ => return Err(()),
-        };
-        if matches!(self.ctx.ast.node(params[0]).kind, NodeKind::SelfParam { .. }) {
+        let md = self.ctx.ast.method_decl(mnode).clone();
+        let (params, ret, mname) = (md.params, md.ret, md.name);
+        if matches!(self.ctx.ast.param(params[0]), MemberKind::SelfParam(_)) {
             self.ctx.err(sp, "instance methods are called on a value, not the class");
             return Err(());
         }
         let mut ptys = Vec::new();
         for p in &params {
-            match &self.ctx.ast.node(*p).kind {
-                NodeKind::Param { ty: Some(t), .. } => ptys.push(self.resolve_type_now(*t)),
+            match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
                 _ => ptys.push(TY_I32),
             }
         }
@@ -604,21 +595,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             if !self.widens(t, ptys[i]) {
-                self.ctx.err(self.ctx.ast.node(*a).span, format!(
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.types.name(t), self.ctx.types.name(ptys[i])
                 ));
             }
             aregs.push(self.last_reg);
         }
-        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_VOID);
+        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
         let _ = d;
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst: vec![],
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_VOID { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
         // class method: no receiver —plain Call
         self.emit(Op::Call { func: fid, args: aregs, dst }, sp.lo);
         Ok(ret_ty)
@@ -626,17 +617,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_method(
         &mut self,
-        recv: NodeId,
+        recv: NodeHandle<AnyExpr>,
         name: IdentId,
-        generics: Vec<NodeId>,
-        args: Vec<NodeId>,
+        generics: Vec<NodeHandle<AnyTy>>,
+        args: Vec<NodeHandle<AnyExpr>>,
         expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
         // static receiver? `Vec.from(..)`, `Option.some(v)`, `Color.to_int(c)`,
         // `Circle.new(..)` arrive as Method over a TYPE-name path — route to
         // the static-call compiler when the head is not shadowed by a local
-        if let NodeKind::Path { segs } = &self.ctx.ast.node(recv).kind.clone() {
+        if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
             if segs.len() == 1 && self.lookup(segs[0].name).is_none() && segs[0].generics.is_empty() {
                 let base = segs[0].name;
                 let bn = self.ctx.name(base).to_string();
@@ -674,7 +665,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     let t = self.compile_expr(args[0], Some(elem))?;
                     if t != elem {
-                        self.ctx.err(self.ctx.ast.node(args[0]).span, format!(
+                        self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
                             "unwrap_or takes `{}`, found `{}`",
                             self.ctx.types.name(elem), self.ctx.types.name(t)
                         ));
@@ -746,13 +737,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     let t = self.compile_expr(args[0], Some(elem))?;
                     if t != elem {
-                        self.ctx.err(self.ctx.ast.node(args[0]).span, format!(
+                        self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
                             "push takes `{}`, found `{}`",
                             self.ctx.types.name(elem), self.ctx.types.name(t)
                         ));
                     }
                     self.emit(Op::CallNat { nat: Nat::VecPush, recv: Some(rreg), args: vec![self.last_reg], dst: None }, sp.lo);
-                    return Ok(TY_VOID);
+                    return Ok(TY_UNIT);
                 }
                 "pop" => {
                     if !args.is_empty() {
@@ -845,9 +836,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         false
     }
 
-    pub(crate) fn check_recv_mut(&mut self, recv: NodeId, sp: crate::span::Span, what: &str) -> bool {
-        match &self.ctx.ast.node(recv).kind.clone() {
-            NodeKind::Path { segs } if segs.len() == 1 => {
+    pub(crate) fn check_recv_mut(&mut self, recv: NodeHandle<AnyExpr>, sp: crate::span::Span, what: &str) -> bool {
+        match self.ctx.ast.expr(recv).clone() {
+            ExprKind::Path { segs } if segs.len() == 1 => {
                 if let Some(l) = self.lookup(segs[0].name) {
                     if !l.is_mut && !l.loop_var {
                         self.ctx.err(sp, format!(
@@ -858,8 +849,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 true
             }
-            NodeKind::Field { recv: inner, .. } | NodeKind::Index { recv: inner, .. } => {
-                self.check_recv_mut(*inner, sp, what)
+            ExprKind::Field { recv: inner, .. } | ExprKind::Index { recv: inner, .. } => {
+                self.check_recv_mut(inner, sp, what)
             }
             _ => true,
         }
@@ -869,27 +860,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         dname: IdentId,
         d: crate::check::DataDecl,
-        mnode: NodeId,
+        mnode: NodeHandle<MethodDeclNode>,
         rreg: u16,
-        args: Vec<NodeId>,
+        args: Vec<NodeHandle<AnyExpr>>,
         _expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
-        let (params, ret, mname, mut_self) = match &self.ctx.ast.node(mnode).kind {
-            NodeKind::MethodDecl { params, ret, name, .. } => {
-                let mut_self = matches!(
-                    params.first().map(|p| &self.ctx.ast.node(*p).kind),
-                    Some(NodeKind::SelfParam { is_mut: true })
-                );
-                (params.clone(), *ret, *name, mut_self)
-            }
-            _ => return Err(()),
-        };
+        let md = self.ctx.ast.method_decl(mnode).clone();
+        let mut_self = matches!(
+            md.params.first().map(|p| self.ctx.ast.param(*p)),
+            Some(MemberKind::SelfParam(SelfParamData { is_mut: true }))
+        );
+        let (params, ret, mname) = (md.params, md.ret, md.name);
         let _ = (d, mut_self);
         let mut ptys = Vec::new();
         for p in params.iter().skip(1) {
-            match &self.ctx.ast.node(*p).kind {
-                NodeKind::Param { ty: Some(t), .. } => ptys.push(self.resolve_type_now(*t)),
+            match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
                 _ => ptys.push(TY_I32),
             }
         }
@@ -901,20 +888,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             if !self.widens(t, ptys[i]) {
-                self.ctx.err(self.ctx.ast.node(*a).span, format!(
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.types.name(t), self.ctx.types.name(ptys[i])
                 ));
             }
             aregs.push(self.last_reg);
         }
-        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_VOID);
+        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst: vec![],
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_VOID { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
         self.emit(Op::CallM { func: fid, recv: rreg, args: aregs, dst }, sp.lo);
         Ok(ret_ty)
     }
@@ -924,7 +911,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         impl_idx: usize,
         mname: IdentId,
         rreg: u16,
-        args: Vec<NodeId>,
+        args: Vec<NodeHandle<AnyExpr>>,
         expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
@@ -945,7 +932,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         param_tys: Vec<TypeId>,
         ret_ty: TypeId,
         rreg: u16,
-        args: Vec<NodeId>,
+        args: Vec<NodeHandle<AnyExpr>>,
         _expected: Option<TypeId>,
         sp: crate::span::Span,
     ) -> TcResult<TypeId> {
@@ -957,20 +944,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(param_tys[i]))?;
             if t != param_tys[i] {
-                self.ctx.err(self.ctx.ast.node(*a).span, format!(
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.types.name(t), self.ctx.types.name(param_tys[i])
                 ));
             }
             aregs.push(self.last_reg);
         }
-        let dst = if ret_ty == TY_VOID { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
         // trait-declared members NEVER devirtualize (RFC 0012 §1)
         self.emit(Op::CallI { slot, recv: rreg, args: aregs, dst }, sp.lo);
         Ok(ret_ty)
     }
 
-    pub(crate) fn compile_field(&mut self, recv: NodeId, name: IdentId, sp: crate::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_field(&mut self, recv: NodeHandle<AnyExpr>, name: IdentId, sp: crate::span::Span) -> TcResult<TypeId> {
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
         let fname = self.ctx.name(name).to_string();

@@ -60,7 +60,7 @@ impl Trap {
 
 #[derive(Clone, Debug)]
 pub enum Value {
-    Void,
+    Unit,
     I64(i64),
     F64(f64),
     Bool(bool),
@@ -401,7 +401,7 @@ impl Heap {
     /// primitive fields copied, handle fields shared.
     pub fn own(&self, s: Slot, ty: TypeId, table: &TypeTable) -> Result<Slot, Trap> {
         match table.kind(ty).clone() {
-            TyKind::Prim(_) | TyKind::Void | TyKind::Fn { .. } => Ok(s),
+            TyKind::Prim(_) | TyKind::Unit | TyKind::Fn { .. } => Ok(s),
             TyKind::Str => {
                 let cell = cell_of(s);
                 self.alloc_str(cell.as_str().to_string())

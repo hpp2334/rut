@@ -46,7 +46,7 @@ fn describe(f: Flavor): string {
         Flavor.Sour  -> "sour",
     };
 }
-export fn main(): void {
+export fn main(): unit {
     let name = "rut";
     let n = 41 + 1;
     print(f"hi {name}! n={n} tab:\t'c'={'c'}");
@@ -62,7 +62,7 @@ export fn main(): void {
 fn case2_cells_and_own() {
     let src = r#"
 dataclass Point { x: f32; y: f32 }
-export fn main(): void {
+export fn main(): unit {
     let mut p = Point { x: 1, y: 2 };
     let q = p;
     p.x = 4;
@@ -81,7 +81,7 @@ export fn main(): void {
 fn case3_opaque() {
     let src = r#"
 dataclass Point { x: f32; y: f32 }
-export fn main(): void {
+export fn main(): unit {
     let box1 = Opaque.new(Point { x: 1, y: 2 });
     let box2 = Opaque.new("hello");
     print(f"box1 is Point: {box1 is Point}");
@@ -115,7 +115,7 @@ fn sieve(limit: i32): Vec<i32> {
     }
     return primes;
 }
-export fn main(): void {
+export fn main(): unit {
     let primes = sieve(100);
     print(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
 }
@@ -140,7 +140,7 @@ fn mix(a: Color, b: Color): string {
         Color.Blue  -> "blueish",
     };
 }
-export fn main(): void {
+export fn main(): unit {
     print(mix(Color.Red, Color.Green));
     print(mix(Color.Blue, Color.Blue));
 }
@@ -167,7 +167,7 @@ impl Shape for Square {
     fn area(self): f32 { return self.s * self.s; }
     fn name(self): string { return "square"; }
 }
-export fn main(): void {
+export fn main(): unit {
     let shapes: Vec<dyn Shape> = Vec.from([
         Circle { r: 1 },
         Square { s: 2 },
@@ -195,7 +195,7 @@ fn map<T, U>(v: Vec<T>, f: fn(T): U): Vec<U> {
     for (let x of v) { out.push(f(x)); }
     return out;
 }
-export fn main(): void {
+export fn main(): unit {
     let xs = Vec.from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
@@ -210,7 +210,7 @@ export fn main(): void {
 #[test]
 fn case8_fuel_traps_and_parks() {
     let src = r#"
-export fn main(): void {
+export fn main(): unit {
     let mut i = 0;
     while (true) {
         i += 1;
@@ -232,7 +232,7 @@ export fn main(): void {
 #[test]
 fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
-export fn main(): void {
+export fn main(): unit {
     let mut x = 2147483647;
     x = x &+ 1;              // wrapping: fine (RFC 0004 §3)
     print(f"x={x}");
@@ -250,7 +250,7 @@ fn heap_budget_traps_before_the_write() {
     // RFC 0040 §1: OutOfMemory leaves the heap byte-identical — a tiny
     // budget fails the Vec allocation cleanly
     let src = r#"
-export fn main(): void {
+export fn main(): unit {
     let v = Vec<u8>(1000000);
     print("allocated");
 }
@@ -264,7 +264,7 @@ export fn main(): void {
 fn mut_binding_law_is_enforced() {
     let src = r#"
 dataclass P { x: i32 }
-export fn main(): void {
+export fn main(): unit {
     let p = P { x: 1 };
     p.x = 2;
 }
@@ -282,7 +282,7 @@ export fn main(): void {
 fn when_exhaustiveness_is_enforced() {
     let src = r#"
 enum Color { Red, Green, Blue }
-export fn main(): void {
+export fn main(): unit {
     print(when (Color.Red) { Color.Red -> "r" });
 }
 "#;
@@ -297,7 +297,7 @@ export fn main(): void {
 #[test]
 fn option_eq_is_a_compile_error() {
     let src = r#"
-export fn main(): void {
+export fn main(): unit {
     let a = Option.some(1);
     print(f"{a == a}");
 }
@@ -308,4 +308,38 @@ export fn main(): void {
         "{:?}",
         out.diags
     );
+}
+
+#[test]
+fn dump_is_labeled_and_spanned() {
+    // the CLI text dump and the demo JSON tree render from one mapping:
+    // labeled `field: value` lines, `- item` bullets, spans on every node,
+    // and no display strings on the JSON wire
+    let src = r#"enum Flavor { Sweet, Sour = 5 }
+export fn main(): unit { print(f"{1 + 1}"); }
+"#;
+    let out = rutc::compile_module(src, rutc::Mode::Impl, "main");
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let text = &out.ast_dump;
+    assert!(text.contains("@0 Enum Flavor [0,38)"), "header: {text}");
+    assert!(text.contains("vis: export(self)"), "vis label: {text}");
+    assert!(text.contains("- Sour = 5"), "member bullet: {text}");
+    let json = &out.ast_json;
+    let root = serde_hint_parse(json);
+    assert_eq!(root.kind, "Module");
+    assert!(json.contains("\"span\":[0,38]"), "span on the wire: {json}");
+    for banned in ["\"text\"", "\"label\"", "\"fields\"", "\"summary\""] {
+        assert!(!json.contains(banned), "banned key {banned} on the wire");
+    }
+}
+
+/// tiny structural probe: the root object's `kind` (no serde in this crate)
+fn serde_hint_parse(json: &str) -> KindProbe {
+    let i = json.find("\"kind\":\"").expect("kind key") + 8;
+    let rest = &json[i..];
+    let end = rest.find('"').unwrap();
+    KindProbe { kind: rest[..end].to_string() }
+}
+struct KindProbe {
+    kind: String,
 }

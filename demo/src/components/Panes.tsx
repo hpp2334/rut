@@ -1,8 +1,10 @@
 import { useState } from "react";
+import type { AstNode } from "../wasm/rut-api";
+import { AstTree } from "./AstTree";
 
 export interface PaneData {
   output: string[];
-  astDump: string;
+  ast?: AstNode;
   irDump: string;
   trap?: string;
 }
@@ -10,7 +12,7 @@ export interface PaneData {
 const TABS = ["Output", "AST", "IR"] as const;
 type TabName = (typeof TABS)[number];
 
-export function Panes(props: { data: PaneData }): JSX.Element {
+export function Panes(props: { data: PaneData; source: string }): JSX.Element {
   const [active, setActive] = useState<TabName>("Output");
 
   const output = [...props.data.output];
@@ -35,9 +37,13 @@ export function Panes(props: { data: PaneData }): JSX.Element {
         <pre className={cls("pane-body", active === "Output")}>
           {output.length ? output.join("\n") : "(no output)"}
         </pre>
-        <pre className={cls("pane-body", active === "AST")}>
-          {props.data.astDump || "(compile to see the AST dump)"}
-        </pre>
+        <div className={cls("pane-body ast-pane", active === "AST")}>
+          {props.data.ast ? (
+            <AstTree root={props.data.ast} source={props.source} />
+          ) : (
+            <pre>(compile to see the AST tree)</pre>
+          )}
+        </div>
         <pre className={cls("pane-body", active === "IR")}>
           {props.data.irDump || "(compile to see the IR dump)"}
         </pre>

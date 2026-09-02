@@ -44,7 +44,7 @@ impl Hashable for Name {
     }                                                // hit (`==` itself is
 }                                                    // identity — RFC 0012 §4)
 
-export fn main(): void {
+export fn main(): unit {
     let log = Logger.new("my-map");
 
     // K = string: satisfies Hashable via a REGISTERED builtin impl —

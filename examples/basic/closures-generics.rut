@@ -18,7 +18,7 @@ fn sum(xs: Vec<i32>): i32 {
     return total;
 }
 
-export fn main(): void {
+export fn main(): unit {
     let log = Logger.new("closures");
     let add = (a: i32, b: i32): i32 => a + b;      // single-expr arrow
     let area_of = (r: f32): f32 => {               // block arrow

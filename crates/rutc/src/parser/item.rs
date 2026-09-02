@@ -6,7 +6,7 @@ use crate::token::Tok;
 use super::*;
 
 impl Parser {
-    pub(crate) fn parse_item(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_item(&mut self) -> Option<NodeHandle<AnyItem>> {
         let sp = self.span();
         match self.tok().clone() {
             Tok::Ident(kw) => match kw.as_str() {
@@ -44,7 +44,7 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_export_item(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_export_item(&mut self) -> Option<NodeHandle<AnyItem>> {
         self.bump(); // export
         let vis = if self.eat_punct(Tok::LParen) {
             let v = match self.tok().clone() {
@@ -89,7 +89,7 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_import(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_import(&mut self) -> Option<NodeHandle<AnyItem>> {
         let lo = self.bump().span.lo; // import
         self.expect(Tok::LBrace)?;
         let mut names = Vec::new();
@@ -123,13 +123,13 @@ impl Parser {
             }
         };
         self.expect(Tok::Semi);
-        Some(self.push(
-            NodeKind::Import { names, from },
+        Some(self.item(
+            ItemKind::Import { names, from },
             Span::new(lo, self.span().hi),
         ))
     }
 
-    pub(crate) fn parse_module_let(&mut self, vis: Vis) -> Option<NodeId> {
+    pub(crate) fn parse_module_let(&mut self, vis: Vis) -> Option<NodeHandle<AnyItem>> {
         let lo = self.bump().span.lo; // let
         let name = self.expect_ident("a binding name")?;
         let ty = if self.eat_punct(Tok::Colon) {
@@ -140,13 +140,13 @@ impl Parser {
         self.expect(Tok::Eq);
         let init = self.parse_expr()?;
         self.expect(Tok::Semi);
-        Some(self.push(
-            NodeKind::ModuleLet { vis, name, ty, init },
+        Some(self.item(
+            ItemKind::ModuleLet { vis, name, ty, init },
             Span::new(lo, self.span().hi),
         ))
     }
 
-    pub(crate) fn parse_enum(&mut self, vis: Vis) -> Option<NodeId> {
+    pub(crate) fn parse_enum(&mut self, vis: Vis) -> Option<NodeHandle<AnyItem>> {
         let lo = self.bump().span.lo; // enum
         let name = self.expect_ident("an enum name")?;
         self.expect(Tok::LBrace);
@@ -176,8 +176,8 @@ impl Parser {
                 break;
             }
         }
-        Some(self.push(
-            NodeKind::Enum { vis, name, members },
+        Some(self.item(
+            ItemKind::Enum { vis, name, members },
             Span::new(lo, self.span().hi),
         ))
     }
@@ -203,7 +203,7 @@ impl Parser {
 
     /// dataclass/class body: fields and methods. Field separators are `;` or
     /// `,` (the corpus uses both); methods need none (RFC 0009/0010).
-    pub(crate) fn parse_type_body(&mut self, allow_private: bool, is_dataclass: bool) -> Option<(Vec<NodeId>, Vec<NodeId>)> {
+    pub(crate) fn parse_type_body(&mut self, allow_private: bool, is_dataclass: bool) -> Option<(Vec<NodeHandle<FieldDeclNode>>, Vec<NodeHandle<MethodDeclNode>>)> {
         self.expect(Tok::LBrace)?;
         if !self.enter() {
             self.sync_stmt();
@@ -265,8 +265,8 @@ impl Parser {
                     } else {
                         None
                     };
-                    let node = self.push(
-                        NodeKind::FieldDecl { is_private, is_static, name, ty, init },
+                    let node = self.field_decl(
+                        FieldDeclData { is_private, is_static, name, ty, init },
                         lo.to(self.span()),
                     );
                     fields.push(node);
@@ -292,7 +292,7 @@ impl Parser {
         Some((fields, methods))
     }
 
-    pub(crate) fn parse_dataclass(&mut self, vis: Vis) -> Option<NodeId> {
+    pub(crate) fn parse_dataclass(&mut self, vis: Vis) -> Option<NodeHandle<AnyItem>> {
         let lo = self.bump().span.lo; // dataclass
         let name = self.expect_ident("a dataclass name")?;
         let generics = if matches!(self.tok(), Tok::Lt) {
@@ -301,13 +301,13 @@ impl Parser {
             Vec::new()
         };
         let (fields, methods) = self.parse_type_body(false, true)?;
-        Some(self.push(
-            NodeKind::Dataclass { vis, name, generics, fields, methods },
+        Some(self.item(
+            ItemKind::Dataclass { vis, name, generics, fields, methods },
             Span::new(lo, self.span().hi),
         ))
     }
 
-    pub(crate) fn parse_class(&mut self, vis: Vis) -> Option<NodeId> {
+    pub(crate) fn parse_class(&mut self, vis: Vis) -> Option<NodeHandle<AnyItem>> {
         let lo = self.bump().span.lo; // class
         let name = self.expect_ident("a class name")?;
         let generics = if matches!(self.tok(), Tok::Lt) {
@@ -316,13 +316,13 @@ impl Parser {
             Vec::new()
         };
         let (fields, methods) = self.parse_type_body(true, false)?;
-        Some(self.push(
-            NodeKind::Class { vis, name, generics, fields, methods },
+        Some(self.item(
+            ItemKind::Class { vis, name, generics, fields, methods },
             Span::new(lo, self.span().hi),
         ))
     }
 
-    pub(crate) fn parse_trait(&mut self, vis: Vis) -> Option<NodeId> {
+    pub(crate) fn parse_trait(&mut self, vis: Vis) -> Option<NodeHandle<AnyItem>> {
         let lo = self.bump().span.lo; // trait
         let name = self.expect_ident("a trait name")?;
         let generics = if matches!(self.tok(), Tok::Lt) {
@@ -346,8 +346,8 @@ impl Parser {
         self.expect(Tok::LBrace)?;
         if !self.enter() {
             self.sync_stmt();
-            return Some(self.push(
-                NodeKind::Trait { vis, name, generics, requires, methods: Vec::new() },
+            return Some(self.item(
+                ItemKind::Trait { vis, name, generics, requires, methods: Vec::new() },
                 Span::new(lo, self.span().hi),
             ));
         }
@@ -368,13 +368,13 @@ impl Parser {
             }
         }
         self.leave();
-        Some(self.push(
-            NodeKind::Trait { vis, name, generics, requires, methods },
+        Some(self.item(
+            ItemKind::Trait { vis, name, generics, requires, methods },
             Span::new(lo, self.span().hi),
         ))
     }
 
-    pub(crate) fn parse_impl(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_impl(&mut self) -> Option<NodeHandle<AnyItem>> {
         let lo = self.bump().span.lo; // impl
         if self.mode == Mode::Decl {
             self.err(Span::new(lo, lo + 4), "implementation in a declaration file —`impl` blocks live in `.rut` (RFC 0029 §2)");
@@ -389,8 +389,8 @@ impl Parser {
         self.expect(Tok::LBrace);
         if !self.enter() {
             self.sync_stmt();
-            return Some(self.push(
-                NodeKind::Impl { trait_ref, target, methods: Vec::new() },
+            return Some(self.item(
+                ItemKind::Impl { trait_ref, target, methods: Vec::new() },
                 Span::new(lo, self.span().hi),
             ));
         }
@@ -411,8 +411,8 @@ impl Parser {
             }
         }
         self.leave();
-        Some(self.push(
-            NodeKind::Impl { trait_ref, target, methods },
+        Some(self.item(
+            ItemKind::Impl { trait_ref, target, methods },
             Span::new(lo, self.span().hi),
         ))
     }
@@ -424,7 +424,7 @@ impl Parser {
         is_private: bool,
         is_suspend: bool,
         with_body: bool,
-    ) -> Option<NodeId> {
+    ) -> Option<NodeHandle<MethodDeclNode>> {
         let lo = self.bump().span.lo; // fn
         let name = self.expect_ident("a method name")?;
         let generics = if matches!(self.tok(), Tok::Lt) {
@@ -441,20 +441,20 @@ impl Parser {
         if with_body && self.mode == Mode::Impl {
             self.expect(Tok::LBrace);
             let body = self.parse_block_body(lo)?;
-            Some(self.push(
-                NodeKind::MethodDecl { is_private, is_suspend, name, generics, params, ret, body: Some(body) },
+            Some(self.method_decl(
+                MethodDeclData { is_private, is_suspend, name, generics, params, ret, body: Some(body) },
                 Span::new(lo, self.span().hi),
             ))
         } else {
             self.expect(Tok::Semi);
-            Some(self.push(
-                NodeKind::MethodDecl { is_private, is_suspend, name, generics, params, ret, body: None },
+            Some(self.method_decl(
+                MethodDeclData { is_private, is_suspend, name, generics, params, ret, body: None },
                 Span::new(lo, self.span().hi),
             ))
         }
     }
 
-    pub(crate) fn parse_fn(&mut self, vis: Vis, pre_suspend: bool) -> Option<NodeId> {
+    pub(crate) fn parse_fn(&mut self, vis: Vis, pre_suspend: bool) -> Option<NodeHandle<AnyItem>> {
         let lo = self.bump().span.lo; // fn
         let is_suspend = pre_suspend || {
             let s = self.at_kw("suspend");
@@ -501,16 +501,17 @@ impl Parser {
         }
         self.expect(Tok::LBrace);
         let body = self.parse_block_body(lo)?;
-        Some(self.push(
-            NodeKind::Fn { vis, is_suspend, name, generics, params, ret, where_bounds, body },
+        let f = self.fn_decl(
+            FnData { vis, is_suspend, name, generics, params, ret, where_bounds, body },
             Span::new(lo, self.span().hi),
-        ))
+        );
+        Some(f.into())
     }
 
     /// `host fn` / `extern fn` / `host class` / `extern class` —.d.rut only
     /// (RFC 0030 §3). Mode is chosen by file extension at the entry point;
     /// surface keywords in an implementation file are rejected here.
-    pub(crate) fn parse_surface(&mut self, sp: Span) -> Option<NodeId> {
+    pub(crate) fn parse_surface(&mut self, sp: Span) -> Option<NodeHandle<AnyItem>> {
         let linkage = match self.tok().clone() {
             Tok::Ident(k) if k == "host" => Linkage::Host,
             _ => Linkage::Extern,
@@ -535,8 +536,8 @@ impl Parser {
                     None
                 };
                 self.expect(Tok::Semi);
-                Some(self.push(
-                    NodeKind::SurfaceFn { vis: Vis::Self_, linkage, name, generics, params, ret },
+                Some(self.item(
+                    ItemKind::SurfaceFn { vis: Vis::Self_, linkage, name, generics, params, ret },
                     Span::new(lo, self.span().hi),
                 ))
             }
@@ -589,8 +590,8 @@ impl Parser {
                         self.sync_stmt();
                     }
                 }
-                Some(self.push(
-                    NodeKind::SurfaceClass { vis: Vis::Self_, linkage, name, extparams, members },
+                Some(self.item(
+                    ItemKind::SurfaceClass { vis: Vis::Self_, linkage, name, extparams, members },
                     Span::new(lo, self.span().hi),
                 ))
             }
@@ -604,7 +605,7 @@ impl Parser {
 
     /// Parameter list: `self`, `mut self`, `name: Type`, `mut name: Type`.
     /// Lambda-param use (types optional) shares this parser.
-    pub(crate) fn parse_params(&mut self) -> Option<Vec<NodeId>> {
+    pub(crate) fn parse_params(&mut self) -> Option<Vec<NodeHandle<AnyParam>>> {
         self.expect(Tok::LParen)?;
         let mut out = Vec::new();
         loop {
@@ -619,7 +620,7 @@ impl Parser {
             }
             if self.at_kw("self") {
                 let _ = self.bump();
-                out.push(self.push(NodeKind::SelfParam { is_mut }, lo));
+                out.push(self.member(MemberKind::SelfParam(SelfParamData { is_mut }), lo));
                 if !self.eat_punct(Tok::Comma) {
                     self.expect(Tok::RParen);
                     break;
@@ -639,7 +640,7 @@ impl Parser {
             } else {
                 None
             };
-            out.push(self.push(NodeKind::Param { is_mut, name, ty }, lo.to(self.span())));
+            out.push(self.member(MemberKind::Param(ParamData { is_mut, name, ty }), lo.to(self.span())));
             if !self.eat_punct(Tok::Comma) {
                 self.expect(Tok::RParen);
                 break;

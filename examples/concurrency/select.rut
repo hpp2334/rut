@@ -15,12 +15,12 @@ suspend fn wait_or_timeout(quit: Receiver<string>): string {
     };
 }
 
-suspend fn delayed_send(ch: Sender<string>): void {
+suspend fn delayed_send(ch: Sender<string>): unit {
     await sleep(200);
     ch.send("quit");
 }
 
-export suspend fn main(): void {
+export suspend fn main(): unit {
     let log = Logger.new("select");
     let q = Channel<string>();
     spawn(delayed_send(q.sender));       // sender task shares the channel

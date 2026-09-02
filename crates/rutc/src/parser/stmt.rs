@@ -8,7 +8,7 @@ use super::*;
 impl Parser {
     // ---- statements ----
 
-    pub(crate) fn parse_block_body(&mut self, lo: u32) -> Option<NodeId> {
+    pub(crate) fn parse_block_body(&mut self, lo: u32) -> Option<NodeHandle<BlockNode>> {
         if !self.enter() {
             // depth-exceeded: consume to the matching brace so the cursor
             // stays monotone and the enclosing item can continue
@@ -31,7 +31,7 @@ impl Parser {
                     }
                 }
             }
-            return Some(self.push(NodeKind::Block { stmts: Vec::new() }, Span::new(lo, self.span().hi)));
+            return Some(self.block(Vec::new(), Span::new(lo, self.span().hi)));
         }
         let mut stmts = Vec::new();
         loop {
@@ -50,29 +50,29 @@ impl Parser {
             }
         }
         self.leave();
-        Some(self.push(NodeKind::Block { stmts }, Span::new(lo, self.span().hi)))
+        Some(self.block(stmts, Span::new(lo, self.span().hi)))
     }
 
     /// `{ stmts }` in statement position (callers of `parse_block_body`
     /// inline it after consuming `{`; this one starts at the brace).
-    pub(crate) fn parse_block_stmt(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_block_stmt(&mut self) -> Option<NodeHandle<BlockNode>> {
         let lo = self.expect(Tok::LBrace)?.lo;
         self.parse_block_body(lo)
     }
 
-    pub(crate) fn parse_stmt(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_stmt(&mut self) -> Option<NodeHandle<AnyStmt>> {
         let sp = self.span();
         match self.tok().clone() {
             Tok::Ident(kw) => match kw.as_str() {
                 "let" => self.parse_let_stmt(),
-                "if" => self.parse_if(),
+                "if" => Some(self.parse_if()?.into()),
                 "while" => {
                     self.bump();
                     self.expect(Tok::LParen);
                     let cond = self.parse_expr()?;
                     self.expect(Tok::RParen);
                     let body = self.parse_block_stmt()?;
-                    Some(self.push(NodeKind::While { cond, body }, sp.to(self.span())))
+                    Some(self.stmt(StmtKind::While { cond, body }, sp.to(self.span())))
                 }
                 "for" => self.parse_for(),
                 "return" => {
@@ -83,38 +83,38 @@ impl Parser {
                         Some(self.parse_expr()?)
                     };
                     self.expect(Tok::Semi);
-                    Some(self.push(NodeKind::Return { value }, sp.to(self.span())))
+                    Some(self.stmt(StmtKind::Return { value }, sp.to(self.span())))
                 }
                 "when" => {
                     let scrut_and_arms = self.parse_when_head()?;
                     let (scrut, arms) = scrut_and_arms;
-                    Some(self.push(NodeKind::WhenStmt { scrut, arms }, sp.to(self.span())))
+                    Some(self.stmt(StmtKind::WhenStmt { scrut, arms }, sp.to(self.span())))
                 }
                 "break" => {
                     self.bump();
                     self.expect(Tok::Semi);
-                    Some(self.push(NodeKind::Break, sp))
+                    Some(self.stmt(StmtKind::Break, sp))
                 }
                 "continue" => {
                     self.bump();
                     self.expect(Tok::Semi);
-                    Some(self.push(NodeKind::Continue, sp))
+                    Some(self.stmt(StmtKind::Continue, sp))
                 }
                 _ => {
                     let e = self.parse_expr()?;
                     self.expect(Tok::Semi);
-                    Some(self.push(NodeKind::ExprStmt(e), sp.to(self.span())))
+                    Some(self.stmt(StmtKind::ExprStmt(e), sp.to(self.span())))
                 }
             },
             _ => {
                 let e = self.parse_expr()?;
                 self.expect(Tok::Semi);
-                Some(self.push(NodeKind::ExprStmt(e), sp.to(self.span())))
+                Some(self.stmt(StmtKind::ExprStmt(e), sp.to(self.span())))
             }
         }
     }
 
-    pub(crate) fn parse_let_stmt(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_let_stmt(&mut self) -> Option<NodeHandle<AnyStmt>> {
         let lo = self.bump().span.lo; // let
         let is_mut = self.at_kw("mut") && {
             self.bump();
@@ -129,13 +129,13 @@ impl Parser {
         self.expect(Tok::Eq);
         let init = self.parse_expr()?;
         self.expect(Tok::Semi);
-        Some(self.push(
-            NodeKind::LetStmt { is_mut, name, ty, init },
+        Some(self.stmt(
+            StmtKind::LetStmt { is_mut, name, ty, init },
             Span::new(lo, self.span().hi),
         ))
     }
 
-    pub(crate) fn parse_if(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_if(&mut self) -> Option<NodeHandle<IfNode>> {
         let lo = self.bump().span.lo; // if
         self.expect(Tok::LParen);
         let cond = self.parse_expr()?;
@@ -144,17 +144,17 @@ impl Parser {
         let els = if self.at_kw("else") {
             self.bump();
             if self.at_kw("if") {
-                self.parse_if()
+                Some(ElseBranch::If(self.parse_if()?))
             } else {
-                self.parse_block_stmt()
+                Some(ElseBranch::Block(self.parse_block_stmt()?))
             }
         } else {
             None
         };
-        Some(self.push(NodeKind::If { cond, then, els }, Span::new(lo, self.span().hi)))
+        Some(self.if_stmt(cond, then, els, Span::new(lo, self.span().hi)))
     }
 
-    pub(crate) fn parse_for(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_for(&mut self) -> Option<NodeHandle<AnyStmt>> {
         let lo = self.bump().span.lo; // for
         self.expect(Tok::LParen);
         if !self.at_kw("let") {
@@ -170,7 +170,7 @@ impl Parser {
             let iter = self.parse_expr()?;
             self.expect(Tok::RParen);
             let body = self.parse_block_stmt()?;
-            return Some(self.push(NodeKind::ForOf { var, iter, body }, Span::new(lo, self.span().hi)));
+            return Some(self.stmt(StmtKind::ForOf { var, iter, body }, Span::new(lo, self.span().hi)));
         }
         self.expect(Tok::Eq);
         let init = self.parse_expr()?;
@@ -180,14 +180,14 @@ impl Parser {
         let update = self.parse_expr()?;
         self.expect(Tok::RParen);
         let body = self.parse_block_stmt()?;
-        Some(self.push(
-            NodeKind::ForC { var, init, cond, update, body },
+        Some(self.stmt(
+            StmtKind::ForC { var, init, cond, update, body },
             Span::new(lo, self.span().hi),
         ))
     }
 
     /// `when ( expr ) { arms }` —shared by stmt and expr positions.
-    pub(crate) fn parse_when_head(&mut self) -> Option<(NodeId, Vec<NodeId>)> {
+    pub(crate) fn parse_when_head(&mut self) -> Option<(NodeHandle<AnyExpr>, Vec<NodeHandle<AnyArm>>)> {
         self.bump(); // when
         self.expect(Tok::LParen);
         let scrut = self.parse_expr()?;
@@ -221,7 +221,7 @@ impl Parser {
             // body: `{` —block arm (peek 1 —RFC 0030 §4.1); else expr arm
             let is_block = matches!(self.tok(), Tok::LBrace);
             let body = if is_block {
-                self.parse_block_stmt()?
+                self.parse_block_stmt()?.into()
             } else {
                 self.parse_expr()?
             };
@@ -231,7 +231,7 @@ impl Parser {
             if !is_block && !had_comma && !matches!(self.tok(), Tok::RBrace) {
                 self.err_here("expression arms must be comma-separated (RFC 0008 §2)");
             }
-            arms.push(self.push(NodeKind::WhenArm { pats, body }, self.span()));
+            arms.push(self.arm(ArmKind::WhenArm { pats, body }, self.span()));
             if self.pos == before {
                 self.bump();
             }
@@ -240,25 +240,25 @@ impl Parser {
         Some((scrut, arms))
     }
 
-    pub(crate) fn parse_pattern(&mut self) -> Option<NodeId> {
+    pub(crate) fn parse_pattern(&mut self) -> Option<NodeHandle<AnyPat>> {
         let sp = self.span();
         match self.tok().clone() {
             Tok::Int(..) | Tok::Float(..) | Tok::Bool(_) | Tok::Char(_) | Tok::Str(_) | Tok::RawStr(_) => {
                 let lit = self.parse_primary()?;
-                Some(self.push(NodeKind::PatLit(lit), sp))
+                Some(self.pat(PatKind::PatLit(lit), sp))
             }
             Tok::Minus => {
                 // negative literal pattern
                 let lit = self.parse_unary()?;
-                Some(self.push(NodeKind::PatLit(lit), sp))
+                Some(self.pat(PatKind::PatLit(lit), sp))
             }
             Tok::Ident(kw) if kw == "else" => {
                 self.bump();
-                Some(self.push(NodeKind::PatElse, sp))
+                Some(self.pat(PatKind::PatElse, sp))
             }
             Tok::Ident(name) if name == "_" => {
                 self.bump();
-                Some(self.push(NodeKind::PatWild, sp))
+                Some(self.pat(PatKind::PatWild, sp))
             }
             Tok::Ident(_) => {
                 // path, possibly with generic args, possibly a constructor
@@ -315,9 +315,9 @@ impl Parser {
                             break;
                         }
                     }
-                    Some(self.push(NodeKind::PatCtor { segs, args }, sp))
+                    Some(self.pat(PatKind::PatCtor { segs, args }, sp))
                 } else {
-                    Some(self.push(NodeKind::PatPath { segs }, sp))
+                    Some(self.pat(PatKind::PatPath { segs }, sp))
                 }
             }
             _ => {

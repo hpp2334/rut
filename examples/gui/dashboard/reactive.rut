@@ -139,9 +139,9 @@ class Watch {
     wid: u32;                 // watch identity (for dispose)
     atom: u32;                // watched atom id
     last_ver: u32;
-    cb: fn(): void;
+    cb: fn(): unit;
 
-    fn new(wid: u32, atom: u32, last_ver: u32, cb: fn(): void): Self {
+    fn new(wid: u32, atom: u32, last_ver: u32, cb: fn(): unit): Self {
         return Self { wid: wid, atom: atom, last_ver: last_ver, cb: cb };
     }
 }
@@ -165,7 +165,7 @@ export class Store {
         return Option.none();
     }
 
-    fn upsert(self, id: u32, v: Opaque): void {
+    fn upsert(self, id: u32, v: Opaque): unit {
         for (let i = 0; i < self.entries.len(); i += 1) {
             if (self.entries[i].id == id) {
                 self.entries[i].ver &+= 1;
@@ -201,7 +201,7 @@ export(self) fn seed_into<T>(store: Store, s: State<T>): Opaque {
 }
 
 /** Write a state atom (inside mutations); watchers flush at the top. */
-export fn atom_set<T>(store: Store, s: State<T>, v: T): void {
+export fn atom_set<T>(store: Store, s: State<T>, v: T): unit {
     store.upsert(s.atom_id(), Opaque.new(v));
 }
 
@@ -222,7 +222,7 @@ export(self) fn seed_source<T>(store: Store, s: Source<T>): Opaque {
 }
 
 /** External data arrived: store the snapshot; flush at the top level. */
-export fn source_push<T>(store: Store, s: Source<T>, v: T): void {
+export fn source_push<T>(store: Store, s: Source<T>, v: T): unit {
     store.depth &+= 1;
     store.upsert(s.atom_id(), Opaque.new(v));
     store.depth -= 1;
@@ -249,7 +249,7 @@ export fn dispatch<P, R>(store: Store, m: Mutation<P, R>, p: P): R {
 }
 
 /** Subscribe a change-only callback to any atom (State, Source, Derived). */
-export fn watch(store: Store, a: dyn Atom, cb: fn(): void): WatchHandle {
+export fn watch(store: Store, a: dyn Atom, cb: fn(): unit): WatchHandle {
     Atoms.next &+= 1;
     let w = Watch.new(Atoms.next, a.atom_id(), store.version_of(a.atom_id()), cb);
     store.watches.push(w);
@@ -266,7 +266,7 @@ export class WatchHandle {
 }
 
 impl Disposal for WatchHandle {   // runs when the last handle drops
-    fn dispose(mut self): void {
+    fn dispose(mut self): unit {
         let kept: Vec<Watch> = Vec();
         for (let i = 0; i < self.store.watches.len(); i += 1) {
             if (self.store.watches[i].wid != self.wid) {
@@ -278,7 +278,7 @@ impl Disposal for WatchHandle {   // runs when the last handle drops
 }
 
 /** Run changed watchers to a fixed point (tur's flush). */
-export fn flush(store: Store): void {
+export fn flush(store: Store): unit {
     let rounds = 0;
     let changed = true;
     while (changed) {
@@ -301,7 +301,7 @@ export fn flush(store: Store): void {
 
 // ------------------------------------------------------------------ smoke
 
-export(self) fn smoke(): void {
+export(self) fn smoke(): unit {
     let log = Logger.new("reactive");
     let store = Store.new();
 
@@ -310,11 +310,11 @@ export(self) fn smoke(): void {
 
     let label = derive((ctx): string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
 
-    let bump = mutation((st: Store, by: i32): void => {
+    let bump = mutation((st: Store, by: i32): unit => {
         atom_set(st, count, atom_get(st, count) + by);
     });
 
-    let handle = watch(store, count, (): void => {   // State is an Atom
+    let handle = watch(store, count, (): unit => {   // State is an Atom
         log.debug("count changed");
     });
 

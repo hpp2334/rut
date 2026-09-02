@@ -13,6 +13,8 @@ use rut_core::types::TyKind;
 pub struct CompileOutput {
     pub diags: Vec<Diag>,
     pub ast_dump: String,
+    /// the demo tree UI's structured AST (flattened tagged JSON)
+    pub ast_json: String,
     pub ir_dump: String,
     pub binary: Option<Vec<u8>>,
 }
@@ -20,15 +22,17 @@ pub struct CompileOutput {
 /// Full pipeline over one module. Diags stop before emit (RFC 0030 §6).
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
     let (ast, mut diags) = parser::parse(src, mode);
-    let ast_dump = dump::dump(&ast);
+    let tree = dump::to_dump_tree(&ast);
+    let ast_dump = dump::render_text(&tree, src);
+    let ast_json = dump::render_json(&tree);
     if !diags.is_empty() {
-        return CompileOutput { diags, ast_dump, ir_dump: String::new(), binary: None };
+        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
     let mut ctx = Ctx::new(&ast);
     ctx.collect();
     if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags.clone());
-        return CompileOutput { diags, ast_dump, ir_dump: String::new(), binary: None };
+        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
     // module lets (load-time expression check, RFC 0003 §1)
     ctx.compile_module_lets();
@@ -44,12 +48,12 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     if let Some(root) = root {
         if ctx.compile_queue(root).is_err() {
             diags.append(&mut ctx.diags);
-            return CompileOutput { diags, ast_dump, ir_dump: String::new(), binary: None };
+            return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
         }
     }
     if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags);
-        return CompileOutput { diags, ast_dump, ir_dump: String::new(), binary: None };
+        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
     // global trait-method slots: same enumeration order as Ctx::trait_slot
     let mut trait_slots = Vec::new();
@@ -82,7 +86,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         exports,
     };
     let binary = encode(&prog);
-    CompileOutput { diags, ast_dump, ir_dump, binary: Some(binary) }
+    CompileOutput { diags, ast_dump, ast_json, ir_dump, binary: Some(binary) }
 }
 
 /// irDump — the demo page's IR pane (RFC 0041 §3): per-function typed
@@ -208,5 +212,5 @@ fn op_str(op: &Op) -> String {
 /// Unused-kind helper kept for dump parity.
 #[allow(dead_code)]
 fn is_cell(kind: &TyKind) -> bool {
-    !matches!(kind, TyKind::Void | TyKind::Prim(_) | TyKind::Fn { .. })
+    !matches!(kind, TyKind::Unit | TyKind::Prim(_) | TyKind::Fn { .. })
 }

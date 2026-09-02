@@ -44,7 +44,7 @@ export(self) fn nav_item(th: Palette, st: Dashboard, tab: Tab, label: string): E
         else -> th.text_dim,
     };
     return click(ClickProps {
-        on_click$: (): void => dispatch(st.store(), st.set_tab$, tab),   // mutation
+        on_click$: (): unit => dispatch(st.store(), st.set_tab$, tab),   // mutation
         child: box(BoxProps {
             pad: 10,
             radius: 8,

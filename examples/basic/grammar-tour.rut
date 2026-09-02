@@ -20,7 +20,7 @@ fn length(p: Point): f64 {
 }
 
 trait Drawable {
-    fn draw(self, g: Canvas): void;             // traits declare METHODS only
+    fn draw(self, g: Canvas): unit;             // traits declare METHODS only
 }
 
 class Circle {                               // a shared cell like everything
@@ -31,7 +31,7 @@ class Circle {                               // a shared cell like everything
         return Self { center: Point { x: x, y: y }, r: r };
     }
 
-    fn move_by(mut self, dx: f32, dy: f32): void {   // all calls direct
+    fn move_by(mut self, dx: f32, dy: f32): unit {   // all calls direct
         self.center.x += dx;
         self.center.y += dy;
     }
@@ -40,12 +40,12 @@ class Circle {                               // a shared cell like everything
 }
 
 impl Drawable for Circle {                   // trait methods live in impl blocks
-    fn draw(self, g: Canvas): void {         // -> vtable dispatch (RFC 0012 §1)
+    fn draw(self, g: Canvas): unit {         // -> vtable dispatch (RFC 0012 §1)
         g.circle(self.center.x, self.center.y, self.r);
     }
 }
 
-fn blit_all(g: Canvas, items: Vec<dyn Drawable>): void {
+fn blit_all(g: Canvas, items: Vec<dyn Drawable>): unit {
     for (let d of items) {               // `dyn`-typed loop variable
         d.draw(g);                         // vtable dispatch
     }
@@ -59,7 +59,7 @@ fn color_name(c: Color): string {
     };
 }
 
-export fn main(): void {
+export fn main(): unit {
     let log = Logger.new("tour");
     let p = Point { x: 1, y: 2 };          // dataclass literal: the only
     let mut pt = p;                        // dataclass construction form
