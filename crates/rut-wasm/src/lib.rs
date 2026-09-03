@@ -93,7 +93,7 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 #[no_mangle]
 pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
     let src = unsafe { read_str(src_ptr, src_len) };
-    let out = rutc::compile_module(src, rutc::Mode::Impl, "main");
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
     let mut json = String::from("{\"diags\":[");
     for (i, d) in out.diags.iter().enumerate() {
         if i > 0 {
@@ -170,14 +170,14 @@ pub extern "C" fn rut_run(
             return envelope(json.as_bytes());
         }
     };
-    if let Err(e) = rut_core::verify::verify(&prog) {
+    if let Err(e) = rut_vm::verify::verify(&prog) {
         json.push_str("{\"output\":[],\"trap\":");
         json_escape(&e, &mut json);
         json.push_str(",\"fuelUsed\":0,\"heapBytes\":0}");
         return envelope(json.as_bytes());
     }
     *OUTPUT.lock().unwrap() = Some(Vec::new());
-    let hooks = rut_core::interp::HostHooks {
+    let hooks = rut_vm::interp::HostHooks {
         print: Some(Rc::new(RefCell::new(|s: &str| {
             if let Ok(mut g) = OUTPUT.lock() {
                 if let Some(v) = g.as_mut() {
@@ -186,12 +186,12 @@ pub extern "C" fn rut_run(
             }
         }))),
     };
-    let limits = rut_core::interp::Limits {
+    let limits = rut_vm::interp::Limits {
         fuel: if fuel == 0 { None } else { Some(fuel) },
         heap_limit_bytes: if heap_bytes == 0 { None } else { Some(heap_bytes) },
         interrupt_every: 1024,
     };
-    let mut vm = match rut_core::interp::Vm::new(Rc::new(prog), &limits, hooks) {
+    let mut vm = match rut_vm::interp::Vm::new(Rc::new(prog), &limits, hooks) {
         Ok(vm) => vm,
         Err(t) => {
             json.push_str("{\"output\":[],\"trap\":");

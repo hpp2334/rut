@@ -6,28 +6,28 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
-    let out = rutc::compile_module(src, rutc::Mode::Impl, "main");
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.is_empty(),
         "unexpected diags:\n{}",
-        rutc::diag::render_diags(src, &out.diags)
+        rut_lexer::diag::render_diags(src, &out.diags)
     );
     let binary = out.binary.expect("binary");
     let prog = rut_core::binary::decode(&binary).expect("decode");
-    rut_core::verify::verify(&prog).expect("verify");
+    rut_vm::verify::verify(&prog).expect("verify");
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
-    let hooks = rut_core::interp::HostHooks {
+    let hooks = rut_vm::interp::HostHooks {
         print: Some(Rc::new(RefCell::new(move |s: &str| {
             sink.borrow_mut().push(s.to_string());
         }))),
     };
-    let limits = rut_core::interp::Limits {
+    let limits = rut_vm::interp::Limits {
         fuel: Some(fuel),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_core::interp::Vm::new(Rc::new(prog), &limits, hooks).expect("vm");
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, hooks).expect("vm");
     let trap = match vm.call("main", &[]) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -269,7 +269,7 @@ export fn main(): unit {
     p.x = 2;
 }
 "#;
-    let out = rutc::compile_module(src, rutc::Mode::Impl, "main");
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("let mut")),
         "want the mut-binding law diag: {:?}",
@@ -286,7 +286,7 @@ export fn main(): unit {
     print(when (Color.Red) { Color.Red -> "r" });
 }
 "#;
-    let out = rutc::compile_module(src, rutc::Mode::Impl, "main");
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("exhaustive")),
         "{:?}",
@@ -302,7 +302,7 @@ export fn main(): unit {
     print(f"{a == a}");
 }
 "#;
-    let out = rutc::compile_module(src, rutc::Mode::Impl, "main");
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("Option")),
         "{:?}",
@@ -318,7 +318,7 @@ fn dump_is_labeled_and_spanned() {
     let src = r#"enum Flavor { Sweet, Sour = 5 }
 export fn main(): unit { print(f"{1 + 1}"); }
 "#;
-    let out = rutc::compile_module(src, rutc::Mode::Impl, "main");
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let text = &out.ast_dump;
     assert!(text.contains("@0 Enum Flavor [0,38)"), "header: {text}");

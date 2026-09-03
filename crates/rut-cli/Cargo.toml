@@ -10,5 +10,8 @@ name = "rut"
 path = "src/main.rs"
 
 [dependencies]
-rutc = { path = "../rutc" }
+rut-driver = { path = "../rut-driver" }
 rut-core = { path = "../rut-core" }
+rut-vm = { path = "../rut-vm" }
+rut-lexer = { path = "../rut-lexer" }
+rut-parser = { path = "../rut-parser" }

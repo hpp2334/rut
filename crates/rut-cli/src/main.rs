@@ -52,9 +52,9 @@ fn load(path: &str) -> String {
 
 fn run(path: &str, fuel: Option<u64>) {
     let src = load(path);
-    let out = rutc::compile_module(&src, rutc::Mode::Impl, "main");
+    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "main");
     if !out.diags.is_empty() {
-        print!("{}", rutc::diag::render_diags(&src, &out.diags));
+        print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
         std::process::exit(1);
     }
     let Some(binary) = out.binary else {
@@ -68,19 +68,19 @@ fn run(path: &str, fuel: Option<u64>) {
             std::process::exit(1);
         }
     };
-    if let Err(e) = rut_core::verify::verify(&prog) {
+    if let Err(e) = rut_vm::verify::verify(&prog) {
         eprintln!("verify: {e}");
         std::process::exit(1);
     }
-    let hooks = rut_core::interp::HostHooks {
+    let hooks = rut_vm::interp::HostHooks {
         print: Some(Rc::new(RefCell::new(|s: &str| println!("{s}")))),
     };
-    let limits = rut_core::interp::Limits {
+    let limits = rut_vm::interp::Limits {
         fuel,
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = match rut_core::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks) {
+    let mut vm = match rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks) {
         Ok(vm) => vm,
         Err(t) => {
             eprintln!("boot: {}", t.msg);
@@ -98,9 +98,9 @@ fn run(path: &str, fuel: Option<u64>) {
 
 fn dump(path: &str) {
     let src = load(path);
-    let out = rutc::compile_module(&src, rutc::Mode::Impl, "main");
+    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "main");
     if !out.diags.is_empty() {
-        print!("{}", rutc::diag::render_diags(&src, &out.diags));
+        print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
         std::process::exit(1);
     }
     println!("== AST =="); 

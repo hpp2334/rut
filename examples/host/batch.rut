@@ -1,0 +1,61 @@
+// RFC 0022/0023/0025 — the host-class ROUND TRIP.
+//
+// The host provides Batch: declared in examples/host/plugin/batch.d.rut
+// (`export host class Batch` + `export host fn submit(b: Batch):
+// string`), implemented in Rust in examples/host/batch.rs. This module
+// receives an instance from the host, runs several procedures on it in
+// plain rut, then passes it BACK by calling submit — the host callback
+// — where the class itself is the crossing value.
+
+import { Batch, submit } from "plugin:batch";     // the declaration file
+import { Logger } from "std:log";
+
+// plain rut data feeding the pipeline (RFC 0009) — no host involvement
+dataclass Sample {
+    metric: string;
+    value: i64;
+}
+
+export fn main(): unit {
+    let log = Logger.new("batch");
+
+    // 1. the HOST constructs: Batch.new runs the native class method
+    //    (RFC 0026 §5) — the instance is a RutOpaque cell boxing the
+    //    Rust value (RFC 0025), rc 1, owned by this binding.
+    let b: Batch = Batch.new("hud-metrics");
+
+    // 2. several procedures, all ordinary rut: filter, aggregate, and
+    //    push — each push is one callnat crossing (RFC 0032); the host
+    //    never sees the loop.
+    let samples: Vec<Sample> = [
+        Sample { metric: "fps",     value: 60 },
+        Sample { metric: "draw_ms", value: 3 },
+        Sample { metric: "fps",     value: 59 },
+        Sample { metric: "heap_kb", value: 812 },
+    ];
+    let mut total: i64 = 0;
+    for (let s of samples) {
+        if (s.value > 0) {
+            b.push(s.metric, s.value);           // rut -> host
+            total += s.value;
+        }
+    }
+    b.push("total", total);                      // rut-computed aggregate
+    if (b.len() < 2) {
+        log.warn("batch suspiciously small");
+    }
+
+    // 3. pass it BACK: submit is a host fn whose parameter type is the
+    //    class itself — the callback. The instance crosses rut -> Rust
+    //    as a call-scoped Handle<Batch> (checked at the call site by
+    //    TypeId, RFC 0022 §2), and the receipt crosses back out as the
+    //    ordinary checked return value.
+    let receipt = submit(b);
+    log.info(f"submit -> {receipt} (batch holds {b.len()})");
+
+    // b is STILL usable here: submit borrowed it for the call's
+    // duration only (RFC 0023 §2) — a host that wants it past the
+    // return retains an owning clone (see batch.rs). rc semantics are
+    // unchanged by the crossing.
+}   // rc 0: the boxed Batch's Rust Drop runs NOW — the Vec releases,
+    // deterministic, never "at GC someday" (RFC 0016 §3)

@@ -2,7 +2,12 @@
 resolver = "2"
 members = [
     "crates/rut-core",
-    "crates/rutc",
+    "crates/rut-vm",
+    "crates/rut-lexer",
+    "crates/rut-ast",
+    "crates/rut-parser",
+    "crates/rut-lir",
+    "crates/rut-driver",
     "crates/rut-wasm",
     "crates/rut-cli",
 ]

@@ -3,7 +3,6 @@
 //! in the binary are program-global (link-time rebase, RFC 0035 §1, lands
 //! with multi-module).
 
-use crate::heap::Slot;
 use crate::ops::*;
 use crate::types::{FieldInfo, PrimTy, RutType, TyKind, TypeId, TypeTable};
 
@@ -659,18 +658,4 @@ impl<'a> Dec<'a> {
     fn u8opt(&mut self) -> Result<Option<u16>, String> {
         Ok(if self.u8()? != 0 { Some(self.u16()?) } else { None })
     }
-}
-
-/// A const-pool string materialized into a heap slot at load (immortal:
-/// the module keeps the Slot alive for the program's lifetime).
-pub fn const_to_slot(c: &ConstVal, heap: &crate::heap::Heap) -> Result<Slot, String> {
-    Ok(match c {
-        ConstVal::I64(v) => Slot::int(*v),
-        ConstVal::F64(v) => Slot::float(*v),
-        ConstVal::Bool(v) => Slot::bool(*v),
-        ConstVal::Char(v) => Slot::ch(*v),
-        ConstVal::Str(s) => heap
-            .alloc_str(s.clone())
-            .map_err(|t| format!("load: {}", t.msg))?,
-    })
 }

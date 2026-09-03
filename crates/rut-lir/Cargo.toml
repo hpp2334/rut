@@ -1,0 +1,15 @@
+[package]
+name = "rut-lir"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "the fused middle-end — resolve + typecheck with body compilation (RFC 0031 M1) producing LIR bytecode (0032)"
+
+[lib]
+name = "rut_lir"
+path = "src/lib.rs"
+
+[dependencies]
+rut-core = { path = "../rut-core" }
+rut-lexer = { path = "../rut-lexer" }
+rut-ast = { path = "../rut-ast" }

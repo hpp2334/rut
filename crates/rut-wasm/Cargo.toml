@@ -11,5 +11,7 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rutc = { path = "../rutc" }
+rut-driver = { path = "../rut-driver" }
 rut-core = { path = "../rut-core" }
+rut-vm = { path = "../rut-vm" }
+rut-parser = { path = "../rut-parser" }

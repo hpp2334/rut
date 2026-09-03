@@ -88,71 +88,92 @@ rut/
 
 ## 2. The planned workspace
 
-Planned — **no code yet** (the repo is the design corpus); every leaf
-names the RFC that specifies it:
+Partially built — the crate split below (rut-lexer / rut-ast /
+rut-parser, rut-lir / rut-driver, rut-core / rut-vm) exists as of v1;
+leaves marked "planned" (hir/, regalloc, decl/, session, pack,
+rut-host-std) are not yet written. Every leaf names the RFC that
+specifies it:
 
 ```
 rut/
 ├── Cargo.toml                      # [workspace] members = crates/*
 ├── crates/
-│   ├── rut-core/                   # the VM — std, self-managed heap (0039)
+│   ├── rut-lexer/                  # frontend base — std, wasm-compatible
 │   │   ├── Cargo.toml
 │   │   └── src/
-│   │       ├── lib.rs              #     Vm, Limits, entry points (0034, 0040)
-│   │       ├── heap.rs             #     the self-managed heap: alloc, pools,
-│   │       │                       #       accounting, teardown (0016 §6, 0039)
-│   │       ├── binary.rs           #     zero-copy binary reader (0033)
+│   │       ├── lib.rs
+│   │       ├── span.rs             #     Span + the shared NEST_MAX budget
+│   │       │                       #       (0030 OQ-3)
+│   │       ├── diag.rs             #     Diag + renderer (0030 §2/§6)
+│   │       ├── token.rs            #     kinds, reserved words (0002 §4)
+│   │       └── lexer.rs            #     iterative, bracket-budgeted (0030 §1)
+│   ├── rut-ast/                    # the AST — RFC 0030 §5
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── ast.rs              #     flat arena: NodeId records
+│   │       └── dump.rs             #     astDump pretty-printer (demo page)
+│   ├── rut-parser/                 # the parser — RFC 0030 §4
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs              #     parse(), Mode — monotone cursor,
+│   │       │                       #       no backtracking
+│   │       └── expr.rs  item.rs  stmt.rs  ty.rs
+│   ├── rut-core/                   # core vocabulary — std (0015/0032/0033)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── types.rs            #     RutType table, TypeId (0015)
+│   │       ├── ops.rs              #     typed bytecode ops (0032)
+│   │       └── binary.rs           #     binary encode/decode (0033)
+│   │                               #       + reloc.rs — type_id rebasing
+│   │                               #       at link (0035 §1) — planned
+│   ├── rut-vm/                     # the VM — std, self-managed heap (0039)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs              #     Slot/Value/Trap surface (0015 §5, 0023)
+│   │       ├── heap.rs             #     the RC heap: alloc, accounting,
+│   │       │                       #       teardown (0016 §6, 0039)
 │   │       ├── verify.rs           #     load-time verifier (0033 §2)
 │   │       ├── interp.rs           #     the loop, fuel checks (0034, 0040 §2)
-│   │       ├── types.rs            #     RutType table, TypeId (0015)
-│   │       ├── slot.rs             #     Slot, Value boundary prims (0015 §5, 0023)
 │   │       └── task.rs             #     coroutines, ready ring (0018–0019)
-│   ├── rutc/                       # compiler — std, wasm-compatible.
-│   │   │                           #   Layout rule: one directory per pipeline
-│   │   │                           #   STAGE; each stage is independently
-│   │   │                           #   testable over its input/output IR.
+│   ├── rut-lir/                    # the fused middle-end — std,
+│   │   │                           #   wasm-compatible: resolve + typecheck
+│   │   │                           #   WITH body compilation (RFC 0031 M1)
+│   │   │                           #   → LIR. Layout rule: one directory per
+│   │   │                           #   pipeline STAGE; each stage is
+│   │   │                           #   independently testable over its IR.
 │   │   ├── Cargo.toml
 │   │   └── src/
-│   │       ├── main.rs             #     CLI arg parse -> driver
-│   │       ├── lib.rs              #     library face (the wasm demo's
-│   │       │                       #       compile() targets this — §3)
-│   │       ├── driver/             #     orchestration
-│   │       │   ├── mod.rs          #       check / build / pack / run
-│   │       │   ├── session.rs      #       source map, fs trait, caching
-│   │       │   └── report.rs       #       diag collection + rendering (0030 §2)
-│   │       ├── syntax/             #     frontend — RFC 0030
-│   │       │   ├── token.rs        #       kinds, reserved words (0002 §4)
-│   │       │   ├── lexer.rs        #       iterative, bracket-budgeted
-│   │       │   ├── parser.rs       #       monotone cursor, no backtracking
-│   │       │   ├── ast.rs          #       flat arena: NodeId records (0030 §5)
-│   │       │   └── dump.rs         #       astDump pretty-printer (demo page)
-│   │       ├── resolve/            #     name resolution — RFC 0031 §1
-│   │       │   ├── mod.rs          #       modules, imports, visibility (0003)
-│   │       │   ├── scopes.rs       #       symbol tables, shadowing
-│   │       │   └── types.rs        #       type collection, requires-graph
-│   │       ├── check/              #     typecheck — RFC 0031 §2
-│   │       │   ├── mod.rs          #       the `==` law + lint, `is` folds
-│   │       │   ├── infer.rs        #       bidirectional literals (0007 §1)
-│   │       │   ├── coerce.rs       #       dyn widening, own/Weak sites
-│   │       │   └── admission.rs    #       generic bounds, requires closure
-│   │       ├── hir/                #     HIR — RFC 0031 §3
-│   │       │   ├── mod.rs          #       SSA-ish typed IR, TyId-tagged
+│   │       ├── lib.rs
+│   │       ├── check/              #     resolve/typecheck — RFC 0031 §1–2
+│   │       │   ├── mod.rs          #       Ctx — the fused driver (M1), `==` law
+│   │       │   ├── resolve.rs      #       name/type resolution
+│   │       │   ├── collect.rs      #       type/trait/impl collection
+│   │       │   ├── inst.rs         #       monomorphization queue (0013 §2)
+│   │       │   ├── infer.rs        #       bidirectional literals (0007 §1) — planned
+│   │       │   ├── coerce.rs       #       dyn widening, own/Weak sites — planned
+│   │       │   └── admission.rs    #       generic bounds, requires closure — planned
+│   │       ├── hir/                #     SSA-ish typed IR — RFC 0031 §3 — planned
 │   │       │   ├── lower.rs        #       ast -> hir
 │   │       │   ├── fold.rs         #       const folds, `is` folds, dead code
-│   │       │   └── mono.rs         #       monomorphization queue (0013 §2)
+│   │       │   └── mono.rs         #       (folded into inst.rs for M1)
 │   │       ├── lir/                #     bytecode — RFC 0032
-│   │       │   ├── mod.rs          #       ops, typed registers, verifier
-│   │       │   ├── codegen.rs      #       hir -> lir per function
-│   │       │   ├── regalloc.rs     #       typed register assignment
-│   │       │   ├── suspend.rs      #       state splitting at await (0032 §3)
-│   │       │   └── dump.rs         #       irDump pretty-printer (demo page)
-│   │       ├── emit/               #     binary writer — RFC 0033
-│   │       │   ├── mod.rs          #       layout, version, hash-stability
-│   │       │   └── reloc.rs        #       type_id rebasing at link (0035 §1)
-│   │       ├── decl/               #     declaration surfaces — RFC 0029
-│   │       │   ├── parse.rs        #       .d.rut parser (host/extern decls)
-│   │       │   └── declir.rs       #       .d.ir emit + decl digest
-│   │       └── pack.rs             #     .rutbundle — RFC 0038
+│   │       │   ├── mod.rs          #       FnCompiler, typed registers
+│   │       │   ├── expr.rs  stmt.rs  ops.rs  lit.rs  call.rs  generic.rs
+│   │       │   ├── regalloc.rs     #       typed register assignment — planned
+│   │       │   └── suspend.rs      #       state splitting at await (0032 §3) — planned
+│   │       └── decl/               #     declaration surfaces — RFC 0029 — planned
+│   │           ├── parse.rs        #       .d.rut parsing (in rut-parser today)
+│   │           └── declir.rs       #       .d.ir emit + decl digest
+│   ├── rut-driver/                 # pipeline driver — std, wasm-compatible
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs              #     compile_module / CompileOutput — the
+│   │       │                       #       library face (the wasm demo's
+│   │       │                       #       compile() targets this — §3)
+│   │       ├── session.rs          #     source map, fs trait, caching — planned
+│   │       ├── report.rs           #     diag collection + rendering (0030 §2) — planned
+│   │       └── pack.rs             #     .rutbundle — RFC 0038 — planned
 │   ├── rut-host-std/               # desktop host — std allowed
 │   │   └── src/
 │   │       ├── lib.rs              #     Vm::new convenience (0035 §3)
@@ -162,14 +183,15 @@ rut/
 │   │       └── natives_fs.rs  natives_net.rs      #  0028 rt:* backings
 │   ├── rut-wasm/                   # wasm-bindgen shim
 │   │   └── src/lib.rs              #     compile/run with budgets (0040 §3)
-│   └── rut-cli/                    # the `rut`/`rutc` binary
+│   └── rut-cli/                    # the `rut` binary
 │       └── src/main.rs
 ├── demo/                           # ships in-repo — §3
 ├── examples/                       # unchanged — the parser corpus (0030 §4)
 └── rfc/                            # unchanged
 ```
 
-Dependency graph, one line: `rutc ─emits binaries→ rut-core ←hosts─
+Dependency graph, one line: `rut-lexer ← rut-ast ← rut-parser ←
+rut-driver → rut-lir ─emits binaries via→ rut-core ← rut-vm ←hosts─
 rut-host-std / rut-wasm`; `rut-cli` and `demo/` sit on top.
 
 ## 3. The demo page

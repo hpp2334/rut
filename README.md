@@ -19,10 +19,16 @@ rut/
 ├── rfc/        41 single-topic RFCs — the spec (0001 has the index)
 ├── examples/   the target-syntax corpus; RFCs cite files by path
 ├── crates/     the Cargo workspace — RFC 0041 §2 layout
-│   ├── rut-core/    VM: RutType table (0015), RC heap (0016), binary +
-│   │                verifier (0033), interpreter + budgets (0034/0040)
-│   ├── rutc/        compiler: lexer/parser/AST/diags (0030), check +
-│   │                monomorphization (0031), LIR (0032), emit (0033)
+│   ├── rut-core/    core vocabulary: RutType table (0015), bytecode
+│   │                ops (0032), binary format (0033)
+│   ├── rut-vm/      the VM: RC heap (0016/0039), load verifier
+│   │                (0033 §2), interpreter + budgets (0034/0040)
+│   ├── rut-lexer/   frontend base: lexer (0030 §1), tokens (0002 §4),
+│   │                shared Span/Diag vocabulary (0030 §6)
+│   ├── rut-ast/     flat-arena AST (0030 §5) + astDump renderer
+│   ├── rut-parser/  monotone-cursor parser (0030 §4)
+│   ├── rut-lir/     fused resolve+typecheck+LIR (0031 M1, 0032)
+│   ├── rut-driver/  the compile_module pipeline (0031 → 0033)
 │   ├── rut-wasm/    the demo's compile/run surface over a raw wasm ABI
 │   └── rut-cli/     the `rut` binary (run / dump) + the e2e test suite
 └── demo/       wasm playground (React + rspack + TS) — RFC 0041 §3
@@ -65,7 +71,7 @@ deterministic destruction at rc 0, `Trap::OutOfFuel/OutOfMemory/
 Overflow/...` — all enforced by the verifier at load.
 
 Parse-only — the whole `examples/` corpus (39 `.rut` + `.d.rut`,
-zero diags; RFC 0030 §7 gate in `rutc/tests/corpus.rs`), including
+zero diags; RFC 0030 §7 gate in `rut-parser/tests/corpus.rs`), including
 `suspend`/`await`/`select` and declaration-mode surfaces; the compiler
 rejects those features with targeted M2/M3 messages.
 

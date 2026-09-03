@@ -367,7 +367,7 @@ const NodeRow = memo(function NodeRow(props: {
           [{node.span[0]},{node.span[1]})
         </span>
       </div>
-      {rows && (
+      {open && expandable && (
         <div className="ast-body">
           {rows.map((r, i) => (
             <div className="ast-field" key={i}>

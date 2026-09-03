@@ -43,6 +43,8 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `host/interop.rut` | host classes via declaration files, repr C struct passing, buffer borrows, `Template` for l10n | 0022–0028 |
 | `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `export host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
 | `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`TraitHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Vec` returns | 0026 |
+| `host/plugin/batch.d.rut` | **declaration file** for `plugin:batch`: `export host class Batch` + `export host fn submit(b: Batch): string` — a host callback whose parameter type **is** the host class | 0022, 0025, 0029 |
+| `host/batch.rut` + `host/batch.rs` | the **round trip**: host constructs a `Batch`, rut filters/aggregates/pushes, then passes the instance BACK via the `submit` callback — `Handle<Batch>` call-scoped borrow in, receipt `string` out; deterministic Drop at rc 0 | 0022–0026, 0023 |
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
 

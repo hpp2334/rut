@@ -1,0 +1,10 @@
+[package]
+name = "rut-lexer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "rut frontend base — the mode-stack lexer (RFC 0030 §1), tokens (0002 §4), plus the shared Span/Diag vocabulary (0030 §6, OQ-3)"
+
+[lib]
+name = "rut_lexer"
+path = "src/lib.rs"

@@ -3,11 +3,21 @@
 version = 4
 
 [[package]]
+name = "rut-ast"
+version = "0.1.0"
+dependencies = [
+ "rut-lexer",
+]
+
+[[package]]
 name = "rut-cli"
 version = "0.1.0"
 dependencies = [
  "rut-core",
- "rutc",
+ "rut-driver",
+ "rut-lexer",
+ "rut-parser",
+ "rut-vm",
 ]
 
 [[package]]
@@ -15,16 +25,50 @@ name = "rut-core"
 version = "0.1.0"
 
 [[package]]
+name = "rut-driver"
+version = "0.1.0"
+dependencies = [
+ "rut-ast",
+ "rut-core",
+ "rut-lexer",
+ "rut-lir",
+ "rut-parser",
+]
+
+[[package]]
+name = "rut-lexer"
+version = "0.1.0"
+
+[[package]]
+name = "rut-lir"
+version = "0.1.0"
+dependencies = [
+ "rut-ast",
+ "rut-core",
+ "rut-lexer",
+]
+
+[[package]]
+name = "rut-parser"
+version = "0.1.0"
+dependencies = [
+ "rut-ast",
+ "rut-lexer",
+]
+
+[[package]]
+name = "rut-vm"
+version = "0.1.0"
+dependencies = [
+ "rut-core",
+]
+
+[[package]]
 name = "rut-wasm"
 version = "0.1.0"
 dependencies = [
  "rut-core",
- "rutc",
-]
-
-[[package]]
-name = "rutc"
-version = "0.1.0"
-dependencies = [
- "rut-core",
+ "rut-driver",
+ "rut-parser",
+ "rut-vm",
 ]

@@ -3,7 +3,7 @@ name = "rut-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the rut VM — self-managed RC heap (0016/0039), typed bytecode loader+verifier (0033), interpreter with fuel+heap budgets (0034/0040)"
+description = "rut core vocabulary — RutType table (RFC 0015), typed bytecode ops (0032), module binary format (0033); shared by rut-lir/rut-driver and rut-vm"
 
 [lib]
 name = "rut_core"

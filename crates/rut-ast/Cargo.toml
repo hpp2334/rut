@@ -1,0 +1,13 @@
+[package]
+name = "rut-ast"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "the rut AST — flat arena NodeId records (RFC 0030 §5)"
+
+[lib]
+name = "rut_ast"
+path = "src/lib.rs"
+
+[dependencies]
+rut-lexer = { path = "../rut-lexer" }
