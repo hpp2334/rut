@@ -1,18 +1,24 @@
-//! Parser —RFC 0030 §4.
+//! Parser — RFC 0030 §4: the explicit-frame machine (contract C2 — no
+//! native recursion).
+//!
+//! One `run` loop (§4) drives two mechanisms: a **frame stack** for
+//! structure — one frame kind per grammar rule, each holding the children
+//! it has collected and the stage it suspended at — and an embedded
+//! **Pratt engine** for expressions (an operator stack plus an operand
+//! stack of `NodeId`s, reductions building nodes bottom-up). A frame that
+//! needs a child pushes a frame; a frame that completes pops and hands
+//! its result (`Done`) to the parent through the inbox. Host stack usage
+//! is constant regardless of input.
 //!
 //! Contracts honored here: **C1** flat arena AST (built bottom-up),
-//! **C3** depth budget —exceeding it is a normal `Diag`, never a host
-//! stack overflow, **C4** monotone cursor + lookahead discipline (local
-//! decisions peek —4 tokens; the two far decisions —lambda vs paren,
-//! generic-call vs `<` —are read-only balancing *scans*, §4.2; there is
+//! **C3** depth budgets — exceeding one is a normal `Diag`, never a host
+//! stack overflow (expressions `EXPR_MAX = 64`, brackets/blocks/
+//! `NEST_MAX = 1024`; the expression cap stays at 64 because downstream
+//! walks over the tree — dump, typecheck — are themselves recursive in
+//! this milestone), **C4** monotone cursor + lookahead discipline (local
+//! decisions peek ≤ 4 tokens; the two far decisions — lambda vs paren,
+//! generic-call vs `<` — are read-only balancing *scans*, §4.2; there is
 //! no checkpoint/rollback API, so backtracking is unrepresentable).
-//!
-//! C2 note (deviation, documented): v1 implements the depth budget over
-//! recursive descent rather than an explicit frame stack. The safety
-//! contract C3 exists to guarantee —untrusted source cannot overflow the
-//! host stack —holds via the NEST_MAX guard at every nested construct
-//! (and library entry points run the parse on a dedicated large-stack
-//! thread as a second guard). The explicit-stack refactor is deferred.
 
 use rut_ast::ast::*;
 use rut_lexer::diag::Diag;
@@ -21,31 +27,45 @@ use rut_lexer::span::{Span, NEST_MAX};
 use rut_lexer::token::{Tok, Token};
 
 mod expr;
+mod frame;
 mod item;
 mod stmt;
 mod ty;
 
+use frame::{Done, Frame, Step};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
-    /// `.rut` —full grammar, no `host`/`extern`
+    /// `.rut` — full grammar, no `host`/`extern`
     Impl,
-    /// `.d.rut` —same grammar + surface declarations, bodies forbidden
+    /// `.d.rut` — same grammar + surface declarations, bodies forbidden
     Decl,
 }
+
+/// Expression nesting budget (C3). Recursive descent cost ~13 host frames
+/// per level, so 64 fit a 1 MiB stack with margin; the frame machine has
+/// no host-stack cost of its own, but the *downstream* recursive walks
+/// (AST dump, fused typecheck) do — the cap keeps trees they visit shallow.
+pub(crate) const EXPR_MAX: u32 = 64;
 
 pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
     let (toks, mut diags) = lex(src);
     let mut p = Parser {
         toks,
         pos: 0,
+        max_pos: 0,
         diags: Vec::new(),
         mode,
-        depth: 0,
-        depth_reported: false,
+        frames: Vec::new(),
+        inbox: None,
+        nest: 0,
+        nest_reported: false,
+        expr_depth: 0,
+        expr_reported: false,
         nodes: Vec::new(),
         interner: Interner::default(),
     };
-    let root = p.parse_module();
+    let root = p.run();
     diags.append(&mut p.diags);
     let ast = Ast {
         nodes: p.nodes,
@@ -55,16 +75,26 @@ pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
     (ast, diags)
 }
 
-struct Parser {
-    toks: Vec<Token>,
-    pos: usize,
+pub(crate) struct Parser {
+    pub(crate) toks: Vec<Token>,
+    pub(crate) pos: usize,
+    /// debug monotone-cursor witness (C4): `pos` never moves backwards
+    /// within one token slice (the f-string hole slice switch resets it)
+    max_pos: usize,
     diags: Vec<Diag>,
-    mode: Mode,
-    depth: u32,
-    depth_reported: bool,
+    pub(crate) mode: Mode,
+    frames: Vec<Frame>,
+    /// the result a popped child frame handed to its parent
+    inbox: Option<Done>,
+    /// nesting-kind frames on the stack (blocks, types, unary-only exprs)
+    nest: u32,
+    nest_reported: bool,
+    /// full-expression frames on the stack (the EXPR_MAX budget)
+    expr_depth: u32,
+    expr_reported: bool,
     // arena
-    nodes: Vec<Node>,
-    interner: Interner,
+    pub(crate) nodes: Vec<Node>,
+    pub(crate) interner: Interner,
 }
 
 // ---- span/cursor helpers (C4: cursor only ever moves forward) ----
@@ -80,17 +110,41 @@ impl Parser {
         self.peek(0).span
     }
     pub(crate) fn bump(&mut self) -> Token {
+        debug_assert!(self.pos >= self.max_pos, "cursor moved backwards (C4)");
+        self.max_pos = self.pos;
         let t = self.peek(0).clone();
         if self.pos < self.toks.len() - 1 {
             self.pos += 1;
         }
         t
     }
+
+    /// switch to an f-string hole's sub-slice (RFC 0030 §4.4) — the one
+    /// sanctioned `pos` reset: a different token stream, not backtracking.
+    /// Returns the outer slice/position/budgets for the later restore.
+    pub(crate) fn switch_to_hole(&mut self, toks: Vec<Token>) -> (Vec<Token>, usize, u32, u32) {
+        let old_toks = std::mem::replace(&mut self.toks, toks);
+        let old_pos = std::mem::replace(&mut self.pos, 0);
+        self.max_pos = 0;
+        let ed = std::mem::replace(&mut self.expr_depth, 0);
+        let ne = std::mem::replace(&mut self.nest, 0);
+        (old_toks, old_pos, ed, ne)
+    }
+
+    /// restore the outer token slice and budgets after a hole parsed
+    pub(crate) fn restore_from_hole(&mut self, toks: Vec<Token>, pos: usize, ed: u32, ne: u32) {
+        self.toks = toks;
+        self.pos = pos;
+        self.max_pos = pos;
+        self.expr_depth = ed;
+        self.nest = ne;
+    }
+
     pub(crate) fn at_eof(&self) -> bool {
         matches!(self.tok(), Tok::Eof)
     }
 
-    /// `at` a keyword (keywords are Idents —RFC 0030 §1)
+    /// `at` a keyword (keywords are Idents — RFC 0030 §1)
     pub(crate) fn at_kw(&self, kw: &str) -> bool {
         matches!(self.tok(), Tok::Ident(s) if s == kw)
     }
@@ -138,7 +192,8 @@ impl Parser {
         }
     }
 
-    /// Expect `>`, splitting a maximal-munch `>>` (span arithmetic —    /// RFC 0030 §4.2: `Vec<Vec<i32>>` needs no re-lexing and no glued tokens).
+    /// Expect `>`, splitting a maximal-munch `>>` (span arithmetic — RFC
+    /// 0030 §4.2: `Vec<Vec<i32>>` needs no re-lexing and no glued tokens).
     pub(crate) fn expect_gt(&mut self) -> bool {
         match self.tok().clone() {
             Tok::Gt => {
@@ -211,6 +266,9 @@ impl Parser {
     pub(crate) fn fn_decl(&mut self, d: FnData, span: Span) -> NodeHandle<FnNode> {
         NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Fn(d)), span))
     }
+    pub(crate) fn module(&mut self, items: Vec<NodeHandle<AnyItem>>, span: Span) -> NodeHandle<ModuleNode> {
+        NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Module { items }), span))
+    }
     pub(crate) fn block(&mut self, stmts: Vec<NodeHandle<AnyStmt>>, span: Span) -> NodeHandle<BlockNode> {
         NodeHandle::new(self.push_raw(Kind::Expr(ExprKind::Block { stmts }), span))
     }
@@ -218,22 +276,128 @@ impl Parser {
         NodeHandle::new(self.push_raw(Kind::Stmt(StmtKind::If { cond, then, els }), span))
     }
 
-    // ---- depth budget (C3) ----
+    // ---- the driver loop (RFC 0030 §4) ----
 
-    pub(crate) fn enter(&mut self) -> bool {
-        self.depth += 1;
-        if self.depth > NEST_MAX {
-            if !self.depth_reported {
-                self.depth_reported = true;
+    fn run(&mut self) -> NodeHandle<ModuleNode> {
+        self.frames.push(Frame::Module(ModuleFrame::new()));
+        let mut root = None;
+        while let Some(mut frame) = self.frames.pop() {
+            let done = self.inbox.take();
+            let step = frame.step(self, done);
+            match step {
+                Step::Push(child) => {
+                    self.frames.push(frame);
+                    self.push_child(child);
+                }
+                Step::Pop(d) => {
+                    if frame.nests() {
+                        self.nest -= 1;
+                    }
+                    if frame.counts_full_expr() {
+                        self.expr_depth -= 1;
+                    }
+                    match d {
+                        Done::Root(h) => root = Some(h),
+                        d => self.inbox = Some(d),
+                    }
+                }
+            }
+        }
+        root.expect("the module frame must complete the parse")
+    }
+
+    /// Push a child frame, enforcing the depth budgets (C3). Over budget
+    /// is a normal (latched, once-per-parse) Diag plus a site-specific
+    /// degraded result — never a push, never a host stack overflow.
+    fn push_child(&mut self, child: Frame) {
+        if child.counts_full_expr() && self.expr_depth >= EXPR_MAX {
+            if !self.expr_reported {
+                self.expr_reported = true;
                 self.err(self.span(), "nesting too deep");
             }
-            self.depth -= 1;
-            return false;
+            self.skim_to_closer();
+            self.inbox = Some(Done::Failed);
+            return;
         }
-        true
+        if child.nests() && self.nest >= NEST_MAX {
+            if !self.nest_reported {
+                self.nest_reported = true;
+                self.err(self.span(), "nesting too deep");
+            }
+            // degraded results mirror the old enter()-failure sites:
+            // a block consumes its balanced braces and yields an empty
+            // block so the enclosing item can continue; everything else
+            // fails and lets the parent's recovery run
+            let d = match child {
+                Frame::Block(bf) => {
+                    self.skim_balanced();
+                    Done::Block(bf.empty(self))
+                }
+                _ => Done::Failed,
+            };
+            self.inbox = Some(d);
+            return;
+        }
+        if child.nests() {
+            self.nest += 1;
+        }
+        if child.counts_full_expr() {
+            self.expr_depth += 1;
+        }
+        self.frames.push(child);
     }
-    pub(crate) fn leave(&mut self) {
-        self.depth -= 1;
+
+    pub(crate) fn expr_nesting(&self) -> u32 {
+        self.expr_depth
+    }
+    pub(crate) fn expr_nesting_diag(&mut self) {
+        if !self.expr_reported {
+            self.expr_reported = true;
+            self.err(self.span(), "nesting too deep");
+        }
+    }
+
+    /// the EXPR_MAX recovery skim: skip forward to the matching closer
+    /// (or statement boundary); resync forward only
+    fn skim_to_closer(&mut self) {
+        let mut depth = 0i32;
+        loop {
+            match self.tok() {
+                Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
+                Tok::RParen | Tok::RBracket | Tok::RBrace => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        if depth == 0 {
+                            self.bump();
+                        }
+                        break;
+                    }
+                }
+                Tok::Semi | Tok::Eof => break,
+                _ => {}
+            }
+            self.bump();
+        }
+    }
+
+    /// consume through the matching `}` (block-budget recovery)
+    fn skim_balanced(&mut self) {
+        let mut depth = 0i32;
+        loop {
+            match self.tok() {
+                Tok::Eof => return,
+                Tok::LBrace => depth += 1,
+                Tok::RBrace => {
+                    if depth == 0 {
+                        self.bump();
+                        return;
+                    }
+                    depth -= 1;
+                }
+                _ => {}
+            }
+            self.bump();
+        }
     }
 
     // ---- recovery (RFC 0030 §6): resync forward at `;` / `}` / balanced block
@@ -271,32 +435,10 @@ impl Parser {
     pub(crate) fn sync_item(&mut self) {
         self.sync_stmt();
     }
-
-    // ---- module ----
-
-    pub(crate) fn parse_module(&mut self) -> NodeHandle<ModuleNode> {
-        let lo = self.span().lo;
-        let mut items = Vec::new();
-        while !self.at_eof() {
-            let before = self.pos;
-            match self.parse_item() {
-                Some(id) => items.push(id),
-                None => {
-                    if self.pos == before {
-                        self.err_here("expected a declaration");
-                        self.bump();
-                    }
-                    self.sync_item();
-                }
-            }
-        }
-        let hi = self.span().hi;
-        NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Module { items }), Span::new(lo, hi)))
-    }
-
 }
 
 pub(crate) fn is_reserved_kw(s: &str) -> bool {
     matches!(s, "let" | "mut" | "if" | "else" | "while" | "for" | "of" | "return" | "when" | "enum" | "class" | "dataclass" | "trait" | "impl" | "requires" | "import" | "export" | "from" | "private" | "static" | "suspend" | "await" | "extern" | "where" | "dyn" | "is" | "host" | "fn" | "true" | "false" | "select")
 }
 
+use crate::frame::ModuleFrame;

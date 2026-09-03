@@ -1,656 +1,1018 @@
-//! Expressions (RFC 0030 SS2): the precedence climb (assignment at the
-//! top, down through logicals, relationals, arithmetics to unary/postfix),
-//! primary forms (literals, paths, calls, lambdas, f-strings, struct
-//! literals), and postfix member/index/invocation.
+//! Expressions (RFC 0030 §4): the embedded Pratt engine — an operator
+//! stack plus an operand stack of `NodeId`s, reductions popping two
+//! operands and pushing one node, bottom-up (C1). Binding powers follow
+//! the §4 table: assignment right (1), `||` (3), `&&` (4), `== !=` (5),
+//! relational + `is` non-associative (6), `| ^` (7), `&` (8), `<< >>`
+//! (9), `+ - &+ &-` (10), `* / % &*` (11), unary right (12), postfix
+//! (13). Atoms (primary + postfix chains) are built by `AtomFrame`; the
+//! two §4.2 scans live in `ty.rs`.
 
+use rut_ast::ast::*;
 use rut_lexer::span::Span;
-use rut_lexer::token::{FPart, FStrTok, Tok};
-use super::*;
+use rut_lexer::token::{FPart, FStrTok, Tok, Token};
 
-impl Parser {
-    pub(crate) fn parse_expr(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        // C3: expression nesting carries a recursion-safe budget (recursive
-        // descent costs ~13 frames per level; RFC 0030 OQ-3's proposed 1024
-        // assumes a frame-stack parser. The CONTRACT is "a Diag, never a
-        // host stack overflow" — 64 levels fits a 1 MiB stack (Windows main
-        // thread, wasm) with margin; brackets and blocks keep NEST_MAX=1024.)
-        const EXPR_MAX: u32 = 64;
-        if self.depth >= EXPR_MAX {
-            self.err(self.span(), "nesting too deep");
-            // skip to the matching closer; resync forward only
-            let mut depth = 0i32;
-            loop {
-                match self.tok() {
-                    Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
-                    Tok::RParen | Tok::RBracket | Tok::RBrace => {
-                        depth -= 1;
-                        if depth <= 0 {
-                            if depth == 0 {
-                                self.bump();
-                            }
-                            break;
+use crate::frame::{Done, Frame, Step};
+use crate::item::ParamsFrame;
+use crate::stmt::{BlockFrame, WhenFrame};
+use crate::ty::TypeFrame;
+use crate::{is_reserved_kw, Parser, EXPR_MAX};
+
+/// how the frame was entered — `parse_expr` vs `parse_unary` in v1
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExprMode {
+    /// full expression: lambdas, assignment, binary operators
+    Full,
+    /// one unary-level operand: prefix sweep + postfix atom only
+    UnaryOnly,
+}
+
+#[derive(Clone, Copy)]
+enum Pfx {
+    Un(UnOp),
+    Await,
+}
+
+struct OpEntry {
+    op: BinOp,
+    bp: u8,
+}
+
+pub(crate) struct ExprFrame {
+    pub(crate) mode: ExprMode,
+    lo: Span,
+    stage: ExprStage,
+    ops: Vec<OpEntry>,
+    operands: Vec<NodeHandle<AnyExpr>>,
+    /// prefix operators swept for the operand being fetched
+    prefixes: Vec<(Pfx, Span)>,
+    /// the binding level of the last <=6-level operator shifted — the
+    /// non-associativity scope for relational/`is` (RFC 0012 §3)
+    last_level: u8,
+    pending_assign: Option<BinOp>,
+}
+
+enum ExprStage {
+    Start,
+    /// waiting for an atom (or the select form) — the operand
+    Operand,
+    /// waiting for the `is` right-hand type
+    IsTy,
+    /// waiting for the right-hand side of an assignment (a full
+    /// expression — assignment is right-associative through recursion)
+    AssignRhs,
+}
+
+impl ExprFrame {
+    pub(crate) fn new(p: &Parser, mode: ExprMode) -> Self {
+        ExprFrame {
+            mode,
+            lo: p.span(),
+            stage: ExprStage::Start,
+            ops: Vec::new(),
+            operands: Vec::new(),
+            prefixes: Vec::new(),
+            last_level: 0,
+            pending_assign: None,
+        }
+    }
+
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        debug_assert!(matches!(self.stage, ExprStage::Start));
+        if self.mode == ExprMode::Full {
+            // lambda scan 1: `( params ) (: Type)? =>` — scan read-only (§4.2)
+            if matches!(p.tok(), Tok::LParen) && p.scan_is_lambda() {
+                self.stage = ExprStage::Operand;
+                return Step::Push(Frame::Lambda(LambdaFrame::paren(self.lo)));
+            }
+            // lambda scan 2: single-ident form `x =>`
+            if let Tok::Ident(name) = p.tok().clone() {
+                if !is_reserved_kw(&name) && name != "else" && matches!(p.peek(1).tok, Tok::FatArrow) {
+                    let sp = p.span();
+                    p.bump(); // ident
+                    p.bump(); // =>
+                    let id = p.interner.intern(&name);
+                    let param = p.member(
+                        MemberKind::Param(ParamData { is_mut: false, name: id, ty: None }),
+                        sp,
+                    );
+                    self.stage = ExprStage::Operand;
+                    return Step::Push(Frame::Lambda(LambdaFrame::single(self.lo, vec![param])));
+                }
+            }
+        }
+        self.fetch_operand(p)
+    }
+
+    /// sweep prefix operators (`-` `!` `~` `await`), then fetch an atom.
+    /// `await select {..}` is the one prefix form that replaces its
+    /// operand outright (RFC 0019 §3).
+    fn fetch_operand(&mut self, p: &mut Parser) -> Step {
+        self.stage = ExprStage::Operand;
+        if let Some(f) = self.sweep(p) {
+            return Step::Push(f);
+        }
+        Step::Push(Frame::Atom(AtomFrame::new(self.lo, AtomMode::Postfix)))
+    }
+
+    fn sweep(&mut self, p: &mut Parser) -> Option<Frame> {
+        loop {
+            let pfx = match p.tok() {
+                Tok::Minus => Some(Pfx::Un(UnOp::Neg)),
+                Tok::Bang => Some(Pfx::Un(UnOp::Not)),
+                Tok::Tilde => Some(Pfx::Un(UnOp::BitNot)),
+                _ if p.at_kw("await") => {
+                    let is_select = matches!(&p.peek(1).tok, Tok::Ident(s) if s == "select")
+                        && matches!(p.peek(2).tok, Tok::LBrace);
+                    if is_select {
+                        return Some(Frame::Select(SelectFrame::new(p.span())));
+                    }
+                    Some(Pfx::Await)
+                }
+                _ => None,
+            };
+            let Some(pfx) = pfx else { break };
+            // C3: unary chains carry the expression budget — one clean
+            // Diag, the tree stays bounded, the cursor still advances
+            if p.expr_nesting() + self.prefixes.len() as u32 >= EXPR_MAX {
+                p.expr_nesting_diag();
+                p.bump();
+                continue;
+            }
+            self.prefixes.push((pfx, p.span()));
+            p.bump();
+        }
+        None
+    }
+
+    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
+        match d {
+            Done::Expr(e) => match self.stage {
+                ExprStage::Operand => {
+                    // wrap the swept prefixes, innermost first
+                    let mut e = e;
+                    while let Some((pfx, sp)) = self.prefixes.pop() {
+                        e = match pfx {
+                            Pfx::Un(op) => p.expr(ExprKind::Unary { op, expr: e }, sp.to(p.span())),
+                            Pfx::Await => p.expr(ExprKind::Await { expr: e }, sp.to(p.span())),
+                        };
+                    }
+                    if self.mode == ExprMode::UnaryOnly {
+                        return Step::Pop(Done::Expr(e));
+                    }
+                    self.operands.push(e);
+                    self.oploop(p)
+                }
+                ExprStage::AssignRhs => {
+                    let target = self.operands.pop().expect("assignment without a target");
+                    let sp = p.nodes[target.id().0 as usize].span;
+                    match &p.nodes[target.id().0 as usize].kind {
+                        Kind::Expr(ExprKind::Path { .. } | ExprKind::Field { .. } | ExprKind::Index { .. }) => {}
+                        _ => {
+                            p.err(sp, "invalid assignment target —expected a path, field, or index");
                         }
                     }
-                    Tok::Semi | Tok::Eof => break,
-                    _ => {}
+                    let node = p.expr(
+                        ExprKind::Assign { op: self.pending_assign, target, value: e },
+                        sp.to(p.span()),
+                    );
+                    self.operands.push(node);
+                    self.oploop(p)
                 }
-                self.bump();
+                _ => unreachable!("expr frame received an operand at the wrong stage"),
+            },
+            Done::Ty(t) => {
+                debug_assert!(matches!(self.stage, ExprStage::IsTy));
+                let lhs = self.operands.pop().expect("`is` without a left-hand side");
+                let sp = p.nodes[lhs.id().0 as usize].span;
+                let node = p.expr(ExprKind::Is { expr: lhs, ty: t }, sp.to(p.span()));
+                self.operands.push(node);
+                self.last_level = 6;
+                self.oploop(p)
             }
-            return None;
+            Done::Failed => Step::Pop(Done::Failed),
+            _ => unreachable!("expr frame receives expressions or types"),
         }
-        self.depth += 1;
-        let r = self.parse_expr_inner();
-        self.depth -= 1;
-        r
     }
 
-    pub(crate) fn parse_expr_inner(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        // lambda scan 1: `( params ) (: Type)? =>` —scan read-only
-        if matches!(self.tok(), Tok::LParen) && self.scan_is_lambda() {
-            return self.parse_lambda();
-        }
-        // lambda scan 2: single-ident form `x =>`
-        if let Tok::Ident(name) = self.tok().clone() {
-            if !is_reserved_kw(&name)
-                && matches!(self.peek(1).tok, Tok::FatArrow)
-                && name != "else"
-            {
-                self.bump(); // ident
-                self.bump(); // =>
-                let p = self.interner.intern(&name);
-                let param = self.member(
-                    MemberKind::Param(ParamData { is_mut: false, name: p, ty: None }),
-                    sp,
-                );
-                let body = if matches!(self.tok(), Tok::LBrace) {
-                    self.parse_block_stmt()?.into()
-                } else {
-                    self.parse_expr()?
-                };
-                return Some(self.expr(
-                    ExprKind::Lambda { params: vec![param], ret: None, body },
-                    sp.to(self.span()),
-                ));
-            }
-        }
-        let lhs = self.parse_or()?;
-        let (op, is_assign) = match self.tok() {
-            Tok::Eq => (None, true),
-            Tok::PlusEq => (Some(BinOp::Add), true),
-            Tok::MinusEq => (Some(BinOp::Sub), true),
-            Tok::StarEq => (Some(BinOp::Mul), true),
-            Tok::SlashEq => (Some(BinOp::Div), true),
-            Tok::PercentEq => (Some(BinOp::Mod), true),
-            Tok::AmpEq => (Some(BinOp::BitAnd), true),
-            Tok::PipeEq => (Some(BinOp::BitOr), true),
-            Tok::CaretEq => (Some(BinOp::BitXor), true),
-            Tok::ShlEq => (Some(BinOp::Shl), true),
-            Tok::ShrEq => (Some(BinOp::Shr), true),
-            Tok::AmpPlusEq => (Some(BinOp::WrapAdd), true),
-            Tok::AmpMinusEq => (Some(BinOp::WrapSub), true),
-            Tok::AmpStarEq => (Some(BinOp::WrapMul), true),
-            Tok::AmpShlEq => (Some(BinOp::WrapShl), true),
-            _ => (None, false),
-        };
-        if is_assign {
-            self.bump();
-            let value = self.parse_expr()?; // right-associative
-            match &self.nodes[lhs.id().0 as usize].kind {
-                Kind::Expr(ExprKind::Path { .. } | ExprKind::Field { .. } | ExprKind::Index { .. }) => {}
-                _ => {
-                    let sp = self.nodes[lhs.id().0 as usize].span;
-                    self.err(sp, "invalid assignment target —expected a path, field, or index");
-                }
-            }
-            return Some(self.expr(ExprKind::Assign { op, target: lhs, value }, sp.to(self.span())));
-        }
-        Some(lhs)
-    }
-
-    pub(crate) fn parse_lambda(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let params = self.parse_params()?;
-        let ret = if self.eat_punct(Tok::Colon) {
-            Some(self.parse_type()?)
-        } else {
-            None
-        };
-        self.expect(Tok::FatArrow);
-        let body = if matches!(self.tok(), Tok::LBrace) {
-            self.parse_block_stmt()?.into()
-        } else {
-            self.parse_expr()?
-        };
-        Some(self.expr(ExprKind::Lambda { params, ret, body }, sp.to(self.span())))
-    }
-
-    // precedence climb: || < && < == != < relational+is < | ^ < & < << >> < + - < * / %
-    pub(crate) fn parse_or(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut lhs = self.parse_and()?;
-        while matches!(self.tok(), Tok::PipePipe) {
-            self.bump();
-            let rhs = self.parse_and()?;
-            lhs = self.expr(ExprKind::Binary { op: BinOp::Or, lhs, rhs }, sp.to(self.span()));
-        }
-        Some(lhs)
-    }
-    pub(crate) fn parse_and(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut lhs = self.parse_eq()?;
-        while matches!(self.tok(), Tok::AmpAmp) {
-            self.bump();
-            let rhs = self.parse_eq()?;
-            lhs = self.expr(ExprKind::Binary { op: BinOp::And, lhs, rhs }, sp.to(self.span()));
-        }
-        Some(lhs)
-    }
-    pub(crate) fn parse_eq(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut lhs = self.parse_rel()?;
+    /// the operator loop: shift binary/assign/`is` operators with
+    /// precedence-driven reduction, or finish by reducing everything
+    fn oploop(&mut self, p: &mut Parser) -> Step {
         loop {
-            let op = match self.tok() {
-                Tok::EqEq => BinOp::Eq,
-                Tok::NotEq => BinOp::Ne,
-                _ => break,
-            };
-            self.bump();
-            let rhs = self.parse_rel()?;
-            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
-        }
-        Some(lhs)
-    }
-    /// Relational + `is` —`is` is NON-associative (RFC 0012 §3)
-    pub(crate) fn parse_rel(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let lhs = self.parse_bit_or()?;
-        let op = match self.tok() {
-            Tok::Lt => Some(BinOp::Lt),
-            Tok::Gt => Some(BinOp::Gt),
-            Tok::LtEq => Some(BinOp::Le),
-            Tok::GtEq => Some(BinOp::Ge),
-            _ => None,
-        };
-        if let Some(op) = op {
-            self.bump();
-            let rhs = self.parse_bit_or()?;
-            return Some(self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span())));
-        }
-        if self.at_kw("is") {
-            self.bump();
-            // naming position: bare trait/instantiation or concrete type,
-            // never `dyn`-prefixed (RFC 0030 §2)
-            if self.at_kw("dyn") {
-                self.err_here("the `is` right-hand side is a naming position —no `dyn` prefix (RFC 0012 §3)");
-                self.bump();
-            }
-            let ty = self.parse_type()?;
-            return Some(self.expr(ExprKind::Is { expr: lhs, ty }, sp.to(self.span())));
-        }
-        Some(lhs)
-    }
-    pub(crate) fn parse_bit_or(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut lhs = self.parse_bit_and()?;
-        loop {
-            let op = match self.tok() {
-                Tok::Pipe => BinOp::BitOr,
-                Tok::Caret => BinOp::BitXor,
-                _ => break,
-            };
-            self.bump();
-            let rhs = self.parse_bit_and()?;
-            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
-        }
-        Some(lhs)
-    }
-    pub(crate) fn parse_bit_and(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut lhs = self.parse_shift()?;
-        while matches!(self.tok(), Tok::Amp) {
-            self.bump();
-            let rhs = self.parse_shift()?;
-            lhs = self.expr(ExprKind::Binary { op: BinOp::BitAnd, lhs, rhs }, sp.to(self.span()));
-        }
-        Some(lhs)
-    }
-    pub(crate) fn parse_shift(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut lhs = self.parse_add()?;
-        loop {
-            let op = match self.tok() {
-                Tok::Shl => BinOp::Shl,
-                Tok::Shr => BinOp::Shr,
-                _ => break,
-            };
-            self.bump();
-            let rhs = self.parse_add()?;
-            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
-        }
-        Some(lhs)
-    }
-    pub(crate) fn parse_add(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut lhs = self.parse_mul()?;
-        loop {
-            let op = match self.tok() {
-                Tok::Plus => BinOp::Add,
-                Tok::Minus => BinOp::Sub,
-                // wrapping binary ops (RFC 0004 §3) sit at additive precedence
-                Tok::AmpPlus => BinOp::WrapAdd,
-                Tok::AmpMinus => BinOp::WrapSub,
-                _ => break,
-            };
-            self.bump();
-            let rhs = self.parse_mul()?;
-            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
-        }
-        Some(lhs)
-    }
-    pub(crate) fn parse_mul(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut lhs = self.parse_unary()?;
-        loop {
-            let op = match self.tok() {
-                Tok::Star => BinOp::Mul,
-                Tok::Slash => BinOp::Div,
-                Tok::Percent => BinOp::Mod,
-                Tok::AmpStar => BinOp::WrapMul,
-                _ => break,
-            };
-            self.bump();
-            let rhs = self.parse_unary()?;
-            lhs = self.expr(ExprKind::Binary { op, lhs, rhs }, sp.to(self.span()));
-        }
-        Some(lhs)
-    }
-
-    pub(crate) fn parse_unary(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let op = match self.tok() {
-            Tok::Minus => Some(UnOp::Neg),
-            Tok::Bang => Some(UnOp::Not),
-            Tok::Tilde => Some(UnOp::BitNot),
-            _ => None,
-        };
-        if let Some(op) = op {
-            if !self.enter() {
-                self.leave();
-                return self.parse_postfix();
-            }
-            self.bump();
-            let expr = self.parse_unary()?;
-            self.leave();
-            return Some(self.expr(ExprKind::Unary { op, expr }, sp.to(self.span())));
-        }
-        // `await` binds a unary-level operand; `await select {..}` is special
-        if self.at_kw("await") {
-            self.bump();
-            if self.at_kw("select") && matches!(self.peek(1).tok, Tok::LBrace) {
-                let arms = self.parse_select_arms()?;
-                let sel = self.expr(ExprKind::Select { arms }, sp.to(self.span()));
-                return Some(sel);
-            }
-            let expr = self.parse_unary()?;
-            return Some(self.expr(ExprKind::Await { expr }, sp.to(self.span())));
-        }
-        self.parse_postfix()
-    }
-
-    pub(crate) fn parse_select_arms(&mut self) -> Option<Vec<NodeHandle<AnyArm>>> {
-        self.bump(); // select
-        self.expect(Tok::LBrace);
-        let mut arms = Vec::new();
-        loop {
-            if self.eat_punct(Tok::RBrace) {
-                break;
-            }
-            let sp = self.span();
-            let fut = self.parse_expr()?;
-            let bind = if self.at_kw("as") {
-                // `as` is reserved (RFC 0002 §4) —legal ONLY here (RFC 0019 §3)
-                self.bump();
-                self.expect_ident("a binding name")
-            } else {
-                None
-            };
-            self.expect(Tok::Arrow);
-            let body = self.parse_expr()?;
-            self.eat_punct(Tok::Comma);
-            arms.push(self.arm(ArmKind::SelectArm { fut, bind, body }, sp.to(self.span())));
-        }
-        Some(arms)
-    }
-
-    /// Postfix loop: `.name` `.name<..>(..)` `(..)` `[..]` `?` —chains
-    /// compose without special cases (RFC 0030 §3, prec 13).
-    pub(crate) fn parse_postfix(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        let mut e = self.parse_primary()?;
-        if !self.enter() {
-            self.leave();
-            return Some(e);
-        }
-        loop {
-            match self.tok() {
-                Tok::Dot => {
-                    self.bump();
-                    let name = self.expect_ident("a member name")?;
-                    let mut generics = Vec::new();
-                    if matches!(self.tok(), Tok::Lt) && self.scan_is_generic_args(false) {
-                        self.bump();
-                        loop {
-                            if self.eat_punct(Tok::Gt) {
-                                break;
-                            }
-                            let arg = if matches!(self.tok(), Tok::Int(..)) {
-                                let ex = self.parse_unary()?;
-                                self.typ(TypeKind::TyConst(ex), self.span())
-                            } else {
-                                self.parse_type()?
-                            };
-                            generics.push(arg);
-                            if !self.eat_punct(Tok::Comma) {
-                                self.expect_gt();
-                                break;
-                            }
-                        }
+            let (op, bp, level) = match p.tok() {
+                Tok::PipePipe => (BinOp::Or, 3u8, 3u8),
+                Tok::AmpAmp => (BinOp::And, 4, 4),
+                Tok::EqEq => (BinOp::Eq, 5, 5),
+                Tok::NotEq => (BinOp::Ne, 5, 5),
+                Tok::Lt => (BinOp::Lt, 6, 6),
+                Tok::Gt => (BinOp::Gt, 6, 6),
+                Tok::LtEq => (BinOp::Le, 6, 6),
+                Tok::GtEq => (BinOp::Ge, 6, 6),
+                Tok::Pipe => (BinOp::BitOr, 7, 7),
+                Tok::Caret => (BinOp::BitXor, 7, 7),
+                Tok::Amp => (BinOp::BitAnd, 8, 8),
+                Tok::Shl => (BinOp::Shl, 9, 9),
+                Tok::Shr => (BinOp::Shr, 9, 9),
+                Tok::Plus => (BinOp::Add, 10, 10),
+                Tok::Minus => (BinOp::Sub, 10, 10),
+                Tok::AmpPlus => (BinOp::WrapAdd, 10, 10),
+                Tok::AmpMinus => (BinOp::WrapSub, 10, 10),
+                Tok::Star => (BinOp::Mul, 11, 11),
+                Tok::Slash => (BinOp::Div, 11, 11),
+                Tok::Percent => (BinOp::Mod, 11, 11),
+                Tok::AmpStar => (BinOp::WrapMul, 11, 11),
+                Tok::Eq => return self.shift_assign(p, None),
+                Tok::PlusEq => return self.shift_assign(p, Some(BinOp::Add)),
+                Tok::MinusEq => return self.shift_assign(p, Some(BinOp::Sub)),
+                Tok::StarEq => return self.shift_assign(p, Some(BinOp::Mul)),
+                Tok::SlashEq => return self.shift_assign(p, Some(BinOp::Div)),
+                Tok::PercentEq => return self.shift_assign(p, Some(BinOp::Mod)),
+                Tok::AmpEq => return self.shift_assign(p, Some(BinOp::BitAnd)),
+                Tok::PipeEq => return self.shift_assign(p, Some(BinOp::BitOr)),
+                Tok::CaretEq => return self.shift_assign(p, Some(BinOp::BitXor)),
+                Tok::ShlEq => return self.shift_assign(p, Some(BinOp::Shl)),
+                Tok::ShrEq => return self.shift_assign(p, Some(BinOp::Shr)),
+                Tok::AmpPlusEq => return self.shift_assign(p, Some(BinOp::WrapAdd)),
+                Tok::AmpMinusEq => return self.shift_assign(p, Some(BinOp::WrapSub)),
+                Tok::AmpStarEq => return self.shift_assign(p, Some(BinOp::WrapMul)),
+                Tok::AmpShlEq => return self.shift_assign(p, Some(BinOp::WrapShl)),
+                _ if p.at_kw("is") => {
+                    // `is` takes a TYPE as its right-hand side (naming
+                    // position, RFC 0012 §3) — non-associative at level 6
+                    if self.last_level == 6 {
+                        break;
                     }
-                    if matches!(self.tok(), Tok::LParen) {
-                        self.bump();
-                        let args = self.parse_call_args()?;
-                        e = self.expr(
-                            ExprKind::Method { recv: e, name, generics, args },
-                            sp.to(self.span()),
-                        );
-                    } else {
-                        e = self.expr(ExprKind::Field { recv: e, name }, sp.to(self.span()));
+                    p.bump(); // the `is` keyword
+                    self.reduce_while(p, 6);
+                    self.last_level = 6;
+                    if p.at_kw("dyn") {
+                        p.err_here("the `is` right-hand side is a naming position —no `dyn` prefix (RFC 0012 §3)");
+                        p.bump();
                     }
-                }
-                Tok::LParen => {
-                    self.bump();
-                    let args = self.parse_call_args()?;
-                    e = self.expr(ExprKind::Call { callee: e, args }, sp.to(self.span()));
-                }
-                Tok::LBracket => {
-                    self.bump();
-                    let idx = self.parse_expr()?;
-                    self.expect(Tok::RBracket);
-                    e = self.expr(ExprKind::Index { recv: e, idx }, sp.to(self.span()));
-                }
-                Tok::Question => {
-                    self.bump();
-                    e = self.expr(ExprKind::Try { expr: e }, sp.to(self.span()));
+                    self.stage = ExprStage::IsTy;
+                    return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
                 _ => break,
-            }
-        }
-        self.leave();
-        Some(e)
-    }
-
-    pub(crate) fn parse_call_args(&mut self) -> Option<Vec<NodeHandle<AnyExpr>>> {
-        let mut args = Vec::new();
-        loop {
-            if self.eat_punct(Tok::RParen) {
+            };
+            // non-associativity scope (RFC 0012 §3): one relational per
+            // context — a second level-6 op is left for the caller's
+            // expect, exactly as v1's parse_rel did
+            if level == 6 && self.last_level == 6 {
                 break;
             }
-            let a = self.parse_expr()?;
-            args.push(a);
-            if !self.eat_punct(Tok::Comma) {
-                self.expect(Tok::RParen);
-                break;
+            p.bump(); // the operator token
+            self.reduce_while(p, bp);
+            self.ops.push(OpEntry { op, bp });
+            if level <= 6 {
+                self.last_level = level;
             }
+            return self.fetch_operand(p);
         }
-        Some(args)
+        while !self.ops.is_empty() {
+            self.reduce_one(p);
+        }
+        Step::Pop(Done::Expr(self.operands.pop().expect("expr frame without a result")))
     }
 
-    pub(crate) fn parse_primary(&mut self) -> Option<NodeHandle<AnyExpr>> {
-        let sp = self.span();
-        match self.tok().clone() {
+    fn shift_assign(&mut self, p: &mut Parser, op: Option<BinOp>) -> Step {
+        p.bump(); // the assignment operator token
+        // right-associative: reduce only strictly tighter bindings
+        while let Some(top) = self.ops.last() {
+            if top.bp <= 1 {
+                break;
+            }
+            self.reduce_one(p);
+        }
+        self.last_level = 1;
+        self.pending_assign = op;
+        self.stage = ExprStage::AssignRhs;
+        Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
+    }
+
+    fn reduce_while(&mut self, p: &mut Parser, bp: u8) {
+        while self.ops.last().map(|t| t.bp >= bp).unwrap_or(false) {
+            self.reduce_one(p);
+        }
+    }
+
+    fn reduce_one(&mut self, p: &mut Parser) {
+        let top = self.ops.pop().expect("reduction on an empty operator stack");
+        let rhs = self.operands.pop().unwrap();
+        let lhs = self.operands.pop().unwrap();
+        let lo = p.nodes[lhs.id().0 as usize].span.lo;
+        let node = p.expr(ExprKind::Binary { op: top.op, lhs, rhs }, Span::new(lo, p.span().hi));
+        self.operands.push(node);
+    }
+}
+
+// ---- atoms: primary + postfix (RFC 0030 §3, prec 12–13) ----
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AtomMode {
+    /// primary + the postfix loop (parse_unary's operand)
+    Postfix,
+    /// one primary, nothing else (pattern literals use parse_primary)
+    Bare,
+}
+
+pub(crate) struct AtomFrame {
+    lo: Span,
+    mode: AtomMode,
+    stage: AtomStage,
+    cur_field: Option<IdentId>,
+}
+
+enum AtomStage {
+    Primary,
+    Paren { first: bool, e: Option<NodeHandle<AnyExpr>>, discard: bool },
+    Array { elems: Vec<NodeHandle<AnyExpr>> },
+    Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
+    PathDots { segs: Vec<PathSeg> },
+    PathGen { segs: Vec<PathSeg>, args: Vec<NodeHandle<AnyTy>> },
+    PathDotGen { segs: Vec<PathSeg>, name: IdentId, args: Vec<NodeHandle<AnyTy>> },
+    PathDotCall { segs: Vec<PathSeg>, name: IdentId, generics: Vec<NodeHandle<AnyTy>>, args: Vec<NodeHandle<AnyExpr>> },
+    Postfix { e: NodeHandle<AnyExpr> },
+    PostDotGen { recv: NodeHandle<AnyExpr>, name: IdentId, args: Vec<NodeHandle<AnyTy>> },
+    PostDotCall { recv: NodeHandle<AnyExpr>, name: IdentId, generics: Vec<NodeHandle<AnyTy>>, args: Vec<NodeHandle<AnyExpr>> },
+    PostCall { callee: NodeHandle<AnyExpr>, args: Vec<NodeHandle<AnyExpr>> },
+    PostIndex { recv: NodeHandle<AnyExpr> },
+}
+
+impl AtomFrame {
+    pub(crate) fn new(lo: Span, mode: AtomMode) -> Self {
+        AtomFrame { lo, mode, stage: AtomStage::Primary, cur_field: None }
+    }
+
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        debug_assert!(matches!(self.stage, AtomStage::Primary));
+        let sp = p.span();
+        match p.tok().clone() {
             Tok::Int(v, sfx) => {
-                self.bump();
-                Some(self.expr(ExprKind::Lit(Lit::Int(v, sfx)), sp))
+                p.bump();
+                let e = p.expr(ExprKind::Lit(Lit::Int(v, sfx)), sp);
+                self.finish(p, e)
             }
             Tok::Float(bits, sfx) => {
-                self.bump();
-                Some(self.expr(ExprKind::Lit(Lit::Float(bits, sfx)), sp))
+                p.bump();
+                let e = p.expr(ExprKind::Lit(Lit::Float(bits, sfx)), sp);
+                self.finish(p, e)
             }
             Tok::Str(s) => {
-                self.bump();
-                Some(self.expr(ExprKind::Lit(Lit::Str(s)), sp))
+                p.bump();
+                let e = p.expr(ExprKind::Lit(Lit::Str(s)), sp);
+                self.finish(p, e)
             }
             Tok::RawStr(s) => {
-                self.bump();
-                Some(self.expr(ExprKind::Lit(Lit::RawStr(s)), sp))
+                p.bump();
+                let e = p.expr(ExprKind::Lit(Lit::RawStr(s)), sp);
+                self.finish(p, e)
             }
             Tok::Char(c) => {
-                self.bump();
-                Some(self.expr(ExprKind::Lit(Lit::Char(c)), sp))
+                p.bump();
+                let e = p.expr(ExprKind::Lit(Lit::Char(c)), sp);
+                self.finish(p, e)
             }
             Tok::Bool(b) => {
-                self.bump();
-                Some(self.expr(ExprKind::Lit(Lit::Bool(b)), sp))
+                p.bump();
+                let e = p.expr(ExprKind::Lit(Lit::Bool(b)), sp);
+                self.finish(p, e)
             }
             Tok::FStr(f) => {
-                self.bump();
-                self.parse_fstring(f, sp)
+                p.bump();
+                Step::Push(Frame::FStr(FStrFrame::new(f, sp)))
             }
             Tok::LParen => {
-                self.bump();
-                let mut first = true;
-                let mut e = None;
-                loop {
-                    if self.eat_punct(Tok::RParen) {
-                        break;
-                    }
-                    if !first {
-                        // RFC 0030 §4.2: a comma inside parens that is not a
-                        // lambda errors AT THE COMMA —there are no tuples
-                        if matches!(self.tok(), Tok::Comma) {
-                            self.err_here("there are no tuples (RFC 0009) —if you meant a lambda, add `=>`");
-                            self.bump();
-                            continue;
-                        }
-                    }
-                    let x = self.parse_expr();
-                    if first {
-                        e = x;
-                        first = false;
-                    } else if x.is_none() {
-                        break;
-                    }
-                }
-                e
+                p.bump();
+                self.stage = AtomStage::Paren { first: true, e: None, discard: false };
+                self.paren_top(p)
             }
             Tok::LBracket => {
-                self.bump();
-                let mut elems = Vec::new();
-                loop {
-                    if self.eat_punct(Tok::RBracket) {
-                        break;
-                    }
-                    elems.push(self.parse_expr()?);
-                    if !self.eat_punct(Tok::Comma) {
-                        self.expect(Tok::RBracket);
-                        break;
-                    }
-                }
-                Some(self.expr(ExprKind::ArrayLit { elems }, sp.to(self.span())))
+                p.bump();
+                self.stage = AtomStage::Array { elems: Vec::new() };
+                self.array_top(p)
             }
             Tok::Ident(name) => {
-                if name == "when" && matches!(self.peek(1).tok, Tok::LParen) {
-                    let (scrut, arms) = self.parse_when_head()?;
-                    return Some(self.expr(ExprKind::WhenExpr { scrut, arms }, sp.to(self.span())));
+                if name == "when" && matches!(p.peek(1).tok, Tok::LParen) {
+                    return Step::Push(Frame::When(WhenFrame::new()));
                 }
                 if name == "self" {
-                    self.bump();
-                    let seg = PathSeg { name: self.interner.intern("self"), generics: Vec::new() };
-                    return Some(self.expr(ExprKind::Path { segs: vec![seg] }, sp));
+                    p.bump();
+                    let seg = PathSeg { name: p.interner.intern("self"), generics: Vec::new() };
+                    let e = p.expr(ExprKind::Path { segs: vec![seg] }, sp);
+                    return self.finish(p, e);
                 }
                 if name == "Self" {
-                    self.bump();
-                    // `Self { .. }` —the class-private literal (RFC 0010 §1)
-                    if matches!(self.tok(), Tok::LBrace) {
-                        let ty_name = self.interner.intern("Self");
-                        return self.parse_struct_body(sp, ty_name);
+                    p.bump();
+                    // `Self { .. }` — the class-private literal (RFC 0010 §1)
+                    if matches!(p.tok(), Tok::LBrace) {
+                        let ty_name = p.interner.intern("Self");
+                        return self.struct_enter(p, ty_name, true);
                     }
-                    let seg = PathSeg { name: self.interner.intern("Self"), generics: Vec::new() };
-                    return Some(self.expr(ExprKind::Path { segs: vec![seg] }, sp));
+                    let seg = PathSeg { name: p.interner.intern("Self"), generics: Vec::new() };
+                    let e = p.expr(ExprKind::Path { segs: vec![seg] }, sp);
+                    return self.finish(p, e);
                 }
-                // struct literal: `Ident {` (dataclass only —classes have no
-                // instance literal; the checker rejects `Circle { .. }`)
-                if matches!(self.peek(1).tok, Tok::LBrace) && !is_reserved_kw(&name) {
-                    return self.parse_struct_lit(sp, &name);
+                // struct literal: `Ident {` (dataclass only — classes have
+                // no instance literal; the checker rejects `Circle { .. }`)
+                if matches!(p.peek(1).tok, Tok::LBrace) && !is_reserved_kw(&name) {
+                    let ty_name = p.interner.intern(&name);
+                    return self.struct_enter(p, ty_name, false);
                 }
-                self.bump();
-                let first = PathSeg { name: self.interner.intern(&name), generics: Vec::new() };
-                let mut segs = vec![first];
+                p.bump();
+                let first = PathSeg { name: p.interner.intern(&name), generics: Vec::new() };
+                let segs = vec![first];
                 // generic args on the head segment: `Vec<f32>(1024)`,
                 // `downcast<Point>(o)`, `MyMap<K, V>.new(..)`, `Option<T>.Some(x)`
-                if matches!(self.tok(), Tok::Lt) && self.scan_is_generic_args(false) {
-                    self.bump();
-                    let mut generics = Vec::new();
-                    loop {
-                        if self.eat_punct(Tok::Gt) {
-                            break;
-                        }
-                        let arg = if matches!(self.tok(), Tok::Int(..)) {
-                            let ex = self.parse_unary()?;
-                            self.typ(TypeKind::TyConst(ex), self.span())
-                        } else {
-                            self.parse_type()?
-                        };
-                        generics.push(arg);
-                        if !self.eat_punct(Tok::Comma) {
-                            self.expect_gt();
-                            break;
-                        }
-                    }
-                    segs[0].generics = generics;
+                if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
+                    p.bump();
+                    self.stage = AtomStage::PathGen { segs, args: Vec::new() };
+                    return self.genarg_top(p);
                 }
-                while self.eat_punct(Tok::Dot) {
-                    let name = self.expect_ident("a member name")?;
-                    let mut generics = Vec::new();
-                    if matches!(self.tok(), Tok::Lt) && self.scan_is_generic_args(false) {
-                        self.bump();
-                        loop {
-                            if self.eat_punct(Tok::Gt) {
-                                break;
-                            }
-                            generics.push(self.parse_type()?);
-                            if !self.eat_punct(Tok::Comma) {
-                                self.expect_gt();
-                                break;
-                            }
-                        }
-                    }
-                    if matches!(self.tok(), Tok::LParen) {
-                        // a call after the segment: `p.area(..)`, `Vec.from(..)`,
-                        // `MyMap<K, V>.new(..)` —a METHOD node over the path
-                        // built so far (the resolver decides static vs instance)
-                        self.bump();
-                        let args = self.parse_call_args()?;
-                        let recv = self.expr(ExprKind::Path { segs }, sp);
-                        return Some(self.expr(
-                            ExprKind::Method { recv, name, generics, args },
-                            sp.to(self.span()),
-                        ));
-                    }
-                    segs.push(PathSeg { name, generics });
-                }
-                Some(self.expr(ExprKind::Path { segs }, sp.to(self.span())))
+                self.stage = AtomStage::PathDots { segs };
+                self.pathdots_top(p)
             }
             _ => {
-                let found = self.peek(0).describe();
-                self.err_here(format!("expected an expression, found {found}"));
-                None
+                let found = p.peek(0).describe();
+                p.err_here(format!("expected an expression, found {found}"));
+                Step::Pop(Done::Failed)
             }
         }
     }
 
-    /// Dataclass literal / `Self { .. }`: `Name { field: expr, .. }`
-    pub(crate) fn parse_struct_lit(&mut self, sp: Span, name: &str) -> Option<NodeHandle<AnyExpr>> {
-        let ty_name = self.interner.intern(name);
-        self.bump(); // the ident
-        self.parse_struct_body(sp, ty_name)
+    /// a completed atom: into the postfix loop, or straight out (Bare)
+    fn finish(&mut self, p: &mut Parser, e: NodeHandle<AnyExpr>) -> Step {
+        if self.mode == AtomMode::Bare {
+            return Step::Pop(Done::Expr(e));
+        }
+        self.stage = AtomStage::Postfix { e };
+        self.postfix_top(p)
     }
 
-    /// struct literal body: the cursor sits ON the `{`
-    pub(crate) fn parse_struct_body(&mut self, sp: Span, ty_name: IdentId) -> Option<NodeHandle<AnyExpr>> {
-        self.bump(); // {
-        let mk_ty = |p: &mut Parser| {
-            p.typ(
-                TypeKind::TyPath {
-                    segs: vec![PathSeg { name: ty_name, generics: Vec::new() }],
-                    is_dyn: false,
-                },
-                sp,
-            )
+    // -- postfix loop: `.name` `.name<..>(..)` `(..)` `[..]` `?` --
+
+    fn postfix_top(&mut self, p: &mut Parser) -> Step {
+        let mut e = match &self.stage {
+            AtomStage::Postfix { e } => *e,
+            _ => unreachable!("postfix loop outside the postfix stage"),
         };
-        if !self.enter() {
-            self.leave();
-            self.sync_stmt();
-            let ty = mk_ty(self);
-            return Some(self.expr(ExprKind::Struct { ty, fields: Vec::new() }, sp));
-        }
-        let ty = mk_ty(self);
-        let mut fields = Vec::new();
         loop {
-            if self.eat_punct(Tok::RBrace) {
-                break;
-            }
-            let Some(f) = self.expect_ident("a field name") else {
-                self.sync_stmt();
-                break;
-            };
-            self.expect(Tok::Colon);
-            let v = self.parse_expr()?;
-            fields.push((f, v));
-            if !self.eat_punct(Tok::Comma) {
-                self.expect(Tok::RBrace);
-                break;
+            match p.tok() {
+                Tok::Dot => {
+                    p.bump();
+                    let Some(name) = p.expect_ident("a member name") else {
+                        return Step::Pop(Done::Failed);
+                    };
+                    if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
+                        p.bump();
+                        self.stage = AtomStage::PostDotGen { recv: e, name, args: Vec::new() };
+                        return self.genarg_top(p);
+                    }
+                    if matches!(p.tok(), Tok::LParen) {
+                        p.bump();
+                        self.stage = AtomStage::PostDotCall {
+                            recv: e,
+                            name,
+                            generics: Vec::new(),
+                            args: Vec::new(),
+                        };
+                        return self.call_top(p);
+                    }
+                    e = p.expr(ExprKind::Field { recv: e, name }, self.lo.to(p.span()));
+                }
+                Tok::LParen => {
+                    p.bump();
+                    self.stage = AtomStage::PostCall { callee: e, args: Vec::new() };
+                    return self.call_top(p);
+                }
+                Tok::LBracket => {
+                    p.bump();
+                    self.stage = AtomStage::PostIndex { recv: e };
+                    return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
+                }
+                Tok::Question => {
+                    p.bump();
+                    e = p.expr(ExprKind::Try { expr: e }, self.lo.to(p.span()));
+                }
+                _ => return Step::Pop(Done::Expr(e)),
             }
         }
-        self.leave();
-        Some(self.expr(ExprKind::Struct { ty, fields }, sp.to(self.span())))
     }
 
-    /// f-string: holes were lexed as token streams (RFC 0030 §1.1) —parse
-    /// each hole as an expression with real spans inside the literal.
-    pub(crate) fn parse_fstring(&mut self, f: FStrTok, sp: Span) -> Option<NodeHandle<AnyExpr>> {
-        let mut parts = Vec::new();
-        for part in f.parts {
-            match part {
-                FPart::Lit(s) => parts.push(FPartAst::Lit(s)),
-                FPart::Hole(hole_toks) => {
-                    // sub-parse over the hole's token slice: same grammar, a
-                    // frame over the sub-slice, not a nested parse call site
-                    let mut sub = Parser {
-                        toks: hole_toks,
-                        pos: 0,
-                        diags: Vec::new(),
-                        mode: Mode::Impl,
-                        depth: 0,
-                        depth_reported: false,
-                        nodes: std::mem::take(&mut self.nodes),
-                        interner: std::mem::take(&mut self.interner),
-                    };
-                    let expr = sub.parse_expr();
-                    self.diags.append(&mut sub.diags);
-                    self.nodes = std::mem::take(&mut sub.nodes);
-                    self.interner = std::mem::take(&mut sub.interner);
-                    match expr {
-                        Some(e) => parts.push(FPartAst::Hole(e)),
-                        None => {
-                            self.err(sp, "could not parse the format-string placeholder");
-                            parts.push(FPartAst::Lit(String::new()));
+    // -- parenthesized expression: `( expr )` — no tuples (RFC 0009) --
+
+    fn paren_top(&mut self, p: &mut Parser) -> Step {
+        loop {
+            if p.eat_punct(Tok::RParen) {
+                let e = match &mut self.stage {
+                    AtomStage::Paren { e, .. } => e.take(),
+                    _ => unreachable!(),
+                };
+                return match e {
+                    Some(v) => self.finish(p, v),
+                    None => Step::Pop(Done::Failed), // `()` — v1 returned None silently
+                };
+            }
+            let (first, discard) = match &self.stage {
+                AtomStage::Paren { first, discard, .. } => (*first, *discard),
+                _ => unreachable!(),
+            };
+            if !first && !discard && matches!(p.tok(), Tok::Comma) {
+                // RFC 0030 §4.2: a comma inside parens that is not a
+                // lambda errors AT THE COMMA — there are no tuples
+                p.err_here("there are no tuples (RFC 0009) —if you meant a lambda, add `=>`");
+                p.bump();
+                if let AtomStage::Paren { discard, .. } = &mut self.stage {
+                    *discard = true;
+                }
+                continue;
+            }
+            return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
+        }
+    }
+
+    // -- array literal: `[ e1, .., en ]` --
+
+    fn array_top(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::RBracket) {
+            let elems = match &mut self.stage {
+                AtomStage::Array { elems } => std::mem::take(elems),
+                _ => unreachable!(),
+            };
+            return Step::Pop(Done::Expr(p.expr(ExprKind::ArrayLit { elems }, self.lo.to(p.span()))));
+        }
+        Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
+    }
+
+    // -- struct literal: `Name { field: expr, .. }` / `Self { .. }` --
+
+    fn struct_enter(&mut self, p: &mut Parser, ty_name: IdentId, ident_consumed: bool) -> Step {
+        if !ident_consumed {
+            p.bump(); // the type ident
+        }
+        p.bump(); // {
+        let ty = p.typ(
+            TypeKind::TyPath { segs: vec![PathSeg { name: ty_name, generics: Vec::new() }], is_dyn: false },
+            self.lo,
+        );
+        self.stage = AtomStage::Struct { ty, fields: Vec::new() };
+        self.struct_top(p)
+    }
+
+    fn struct_top(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::RBrace) {
+            return self.struct_pop(p);
+        }
+        let Some(f) = p.expect_ident("a field name") else {
+            p.sync_stmt();
+            return self.struct_pop(p);
+        };
+        p.expect(Tok::Colon);
+        self.cur_field = Some(f);
+        Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
+    }
+
+    fn struct_pop(&mut self, p: &mut Parser) -> Step {
+        let (ty, fields) = match &mut self.stage {
+            AtomStage::Struct { ty, fields } => (*ty, std::mem::take(fields)),
+            _ => unreachable!(),
+        };
+        Step::Pop(Done::Expr(p.expr(ExprKind::Struct { ty, fields }, self.lo.to(p.span()))))
+    }
+
+    // -- path building: `a.b.c`, generic args on segments, method calls --
+
+    fn pathdots_top(&mut self, p: &mut Parser) -> Step {
+        loop {
+            if !p.eat_punct(Tok::Dot) {
+                let segs = match &mut self.stage {
+                    AtomStage::PathDots { segs } => std::mem::take(segs),
+                    _ => unreachable!(),
+                };
+                let node = p.expr(ExprKind::Path { segs }, self.lo.to(p.span()));
+                return self.finish(p, node);
+            }
+            let Some(name) = p.expect_ident("a member name") else {
+                return Step::Pop(Done::Failed);
+            };
+            if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
+                p.bump();
+                let segs = match &mut self.stage {
+                    AtomStage::PathDots { segs } => std::mem::take(segs),
+                    _ => unreachable!(),
+                };
+                self.stage = AtomStage::PathDotGen { segs, name, args: Vec::new() };
+                return self.genarg_top(p);
+            }
+            if matches!(p.tok(), Tok::LParen) {
+                // a call after the segment: `p.area(..)`, `Vec.from(..)`,
+                // `MyMap<K, V>.new(..)` — a METHOD node over the path
+                // built so far (the resolver decides static vs instance)
+                p.bump();
+                let segs = match &mut self.stage {
+                    AtomStage::PathDots { segs } => std::mem::take(segs),
+                    _ => unreachable!(),
+                };
+                self.stage = AtomStage::PathDotCall {
+                    segs,
+                    name,
+                    generics: Vec::new(),
+                    args: Vec::new(),
+                };
+                return self.call_top(p);
+            }
+            if let AtomStage::PathDots { segs } = &mut self.stage {
+                segs.push(PathSeg { name, generics: Vec::new() });
+            }
+        }
+    }
+
+    /// generic-argument list top: `>` finishes, otherwise fetch an arg
+    /// (an integer expression is a const-generic arg, else a type)
+    fn genarg_top(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::Gt) {
+            return self.genarg_done(p);
+        }
+        if matches!(p.tok(), Tok::Int(..)) {
+            Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::UnaryOnly)))
+        } else {
+            Step::Push(Frame::Type(TypeFrame::new(p)))
+        }
+    }
+
+    fn genarg_after_arg(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::Comma) {
+            self.genarg_top(p)
+        } else {
+            p.expect_gt();
+            self.genarg_done(p)
+        }
+    }
+
+    fn genarg_done(&mut self, p: &mut Parser) -> Step {
+        match &mut self.stage {
+            AtomStage::PathGen { segs, args } => {
+                let args = std::mem::take(args);
+                segs[0].generics = args;
+                let segs = std::mem::take(segs);
+                self.stage = AtomStage::PathDots { segs };
+                self.pathdots_top(p)
+            }
+            AtomStage::PathDotGen { segs, name, args } => {
+                let args = std::mem::take(args);
+                let name = *name;
+                let mut segs = std::mem::take(segs);
+                segs.push(PathSeg { name, generics: args });
+                self.stage = AtomStage::PathDots { segs };
+                self.pathdots_top(p)
+            }
+            AtomStage::PostDotGen { recv, name, args } => {
+                let recv = *recv;
+                let name = *name;
+                let generics = std::mem::take(args);
+                if matches!(p.tok(), Tok::LParen) {
+                    p.bump();
+                    self.stage = AtomStage::PostDotCall { recv, name, generics, args: Vec::new() };
+                    self.call_top(p)
+                } else {
+                    let node = p.expr(ExprKind::Field { recv, name }, self.lo.to(p.span()));
+                    self.stage = AtomStage::Postfix { e: node };
+                    self.postfix_top(p)
+                }
+            }
+            _ => unreachable!("generic args at the wrong stage"),
+        }
+    }
+
+    /// call-argument list top: `)` finishes, otherwise an expression
+    fn call_top(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::RParen) {
+            return self.call_done(p);
+        }
+        Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
+    }
+
+    fn call_after_arg(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::Comma) {
+            self.call_top(p)
+        } else {
+            p.expect(Tok::RParen);
+            self.call_done(p)
+        }
+    }
+
+    fn call_done(&mut self, p: &mut Parser) -> Step {
+        match &mut self.stage {
+            AtomStage::PostCall { callee, args } => {
+                let callee = *callee;
+                let args = std::mem::take(args);
+                let node = p.expr(ExprKind::Call { callee, args }, self.lo.to(p.span()));
+                self.stage = AtomStage::Postfix { e: node };
+                self.postfix_top(p)
+            }
+            AtomStage::PostDotCall { recv, name, generics, args } => {
+                let recv = *recv;
+                let name = *name;
+                let generics = std::mem::take(generics);
+                let args = std::mem::take(args);
+                let node = p.expr(
+                    ExprKind::Method { recv, name, generics, args },
+                    self.lo.to(p.span()),
+                );
+                self.stage = AtomStage::Postfix { e: node };
+                self.postfix_top(p)
+            }
+            AtomStage::PathDotCall { segs, name, generics, args } => {
+                let name = *name;
+                let generics = std::mem::take(generics);
+                let args = std::mem::take(args);
+                let segs = std::mem::take(segs);
+                let recv = p.expr(ExprKind::Path { segs }, self.lo);
+                let node = p.expr(
+                    ExprKind::Method { recv, name, generics, args },
+                    self.lo.to(p.span()),
+                );
+                self.finish(p, node)
+            }
+            _ => unreachable!("call args at the wrong stage"),
+        }
+    }
+
+    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
+        match d {
+            Done::Expr(e) => match &mut self.stage {
+                AtomStage::Primary => self.finish(p, e), // an f-string child
+                AtomStage::Paren { first, e: slot, discard } => {
+                    if *discard {
+                        *discard = false;
+                    } else if *first {
+                        *slot = Some(e);
+                        *first = false;
+                    }
+                    self.paren_top(p)
+                }
+                AtomStage::Array { elems } => {
+                    elems.push(e);
+                    if p.eat_punct(Tok::Comma) {
+                        self.array_top(p)
+                    } else {
+                        p.expect(Tok::RBracket);
+                        let elems = std::mem::take(elems);
+                        Step::Pop(Done::Expr(p.expr(ExprKind::ArrayLit { elems }, self.lo.to(p.span()))))
+                    }
+                }
+                AtomStage::Struct { fields, .. } => {
+                    let f = self.cur_field.take().expect("struct field without a name");
+                    fields.push((f, e));
+                    if p.eat_punct(Tok::Comma) {
+                        self.struct_top(p)
+                    } else {
+                        p.expect(Tok::RBrace);
+                        self.struct_pop(p)
+                    }
+                }
+                AtomStage::PathGen { args, .. }
+                | AtomStage::PathDotGen { args, .. }
+                | AtomStage::PostDotGen { args, .. } => {
+                    // const-generic argument (RFC 0005): integer expression
+                    args.push(p.typ(TypeKind::TyConst(e), p.span()));
+                    self.genarg_after_arg(p)
+                }
+                AtomStage::PostCall { args, .. }
+                | AtomStage::PostDotCall { args, .. }
+                | AtomStage::PathDotCall { args, .. } => {
+                    args.push(e);
+                    self.call_after_arg(p)
+                }
+                AtomStage::PostIndex { recv } => {
+                    let recv = *recv;
+                    p.expect(Tok::RBracket);
+                    let node = p.expr(ExprKind::Index { recv, idx: e }, self.lo.to(p.span()));
+                    self.stage = AtomStage::Postfix { e: node };
+                    self.postfix_top(p)
+                }
+                AtomStage::Postfix { .. } | AtomStage::PathDots { .. } => {
+                    unreachable!("atom frame received an operand at the wrong stage")
+                }
+            },
+            Done::Ty(t) => {
+                match &mut self.stage {
+                    AtomStage::PathGen { args, .. }
+                    | AtomStage::PathDotGen { args, .. }
+                    | AtomStage::PostDotGen { args, .. } => args.push(t),
+                    _ => unreachable!("atom frame received a type at the wrong stage"),
+                }
+                self.genarg_after_arg(p)
+            }
+            Done::WhenParts { scrut, arms } => {
+                debug_assert!(matches!(self.stage, AtomStage::Primary));
+                let node = p.expr(ExprKind::WhenExpr { scrut, arms }, self.lo.to(p.span()));
+                self.finish(p, node)
+            }
+            Done::Failed => match self.stage {
+                AtomStage::Paren { first, .. } => {
+                    // v1: a failed first element re-enters the loop top;
+                    // a failed later element ends the parenthesized form
+                    if first {
+                        if let AtomStage::Paren { first, .. } = &mut self.stage {
+                            *first = false;
+                        }
+                        self.paren_top(p)
+                    } else {
+                        let e = match &mut self.stage {
+                            AtomStage::Paren { e, .. } => e.take(),
+                            _ => unreachable!(),
+                        };
+                        match e {
+                            Some(v) => self.finish(p, v),
+                            None => Step::Pop(Done::Failed),
                         }
                     }
                 }
+                _ => Step::Pop(Done::Failed),
+            },
+            _ => unreachable!("atom frame receives expressions, types, or when-parts"),
+        }
+    }
+}
+
+// ---- lambdas (RFC 0013 §1): `( params ) (: Type)? => expr | block` ----
+
+pub(crate) struct LambdaFrame {
+    sp: Span,
+    params: Option<Vec<NodeHandle<AnyParam>>>,
+    ret: Option<NodeHandle<AnyTy>>,
+}
+
+impl LambdaFrame {
+    /// `(a, b): T => ..` — params come from a ParamsFrame child
+    pub(crate) fn paren(sp: Span) -> Self {
+        LambdaFrame { sp, params: None, ret: None }
+    }
+    /// `x => ..` — the single param was pre-seeded by the caller
+    pub(crate) fn single(sp: Span, params: Vec<NodeHandle<AnyParam>>) -> Self {
+        LambdaFrame { sp, params: Some(params), ret: None }
+    }
+
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        if self.params.is_none() {
+            return Step::Push(Frame::Params(ParamsFrame::new()));
+        }
+        self.body(p)
+    }
+
+    fn after_params(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::Colon) {
+            return Step::Push(Frame::Type(TypeFrame::new(p)));
+        }
+        p.expect(Tok::FatArrow);
+        self.body(p)
+    }
+
+    fn body(&mut self, p: &mut Parser) -> Step {
+        if matches!(p.tok(), Tok::LBrace) {
+            Step::Push(Frame::Block(BlockFrame::strict(p)))
+        } else {
+            Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
+        }
+    }
+
+    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
+        match d {
+            Done::Members(ps) => {
+                self.params = Some(ps);
+                self.after_params(p)
+            }
+            Done::Ty(t) => {
+                self.ret = Some(t);
+                p.expect(Tok::FatArrow);
+                self.body(p)
+            }
+            Done::Expr(e) => Step::Pop(Done::Expr(self.mk(p, e))),
+            Done::Block(b) => Step::Pop(Done::Expr(self.mk(p, b.into()))),
+            Done::Failed => Step::Pop(Done::Failed),
+            _ => unreachable!("lambda frame receives params/types/exprs"),
+        }
+    }
+
+    fn mk(&mut self, p: &mut Parser, body: NodeHandle<AnyExpr>) -> NodeHandle<AnyExpr> {
+        let params = self.params.take().expect("lambda without params");
+        p.expr(ExprKind::Lambda { params, ret: self.ret.take(), body }, self.sp.to(p.span()))
+    }
+}
+
+// ---- f-strings (RFC 0030 §1.1/§4.4): holes are sub-slice frames ----
+
+pub(crate) struct FStrFrame {
+    sp: Span,
+    parts_in: Vec<FPart>,
+    idx: usize,
+    parts: Vec<FPartAst>,
+    /// the outer token slice, position, and budgets, saved while a hole
+    /// is being parsed by the same loop (no nested parse call)
+    saved: Option<(Vec<Token>, usize, u32, u32)>,
+}
+
+impl FStrFrame {
+    pub(crate) fn new(f: FStrTok, sp: Span) -> Self {
+        FStrFrame { sp, parts_in: f.parts, idx: 0, parts: Vec::new(), saved: None }
+    }
+
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        while self.idx < self.parts_in.len() {
+            match self.parts_in[self.idx].clone() {
+                FPart::Lit(s) => {
+                    self.parts.push(FPartAst::Lit(s));
+                    self.idx += 1;
+                }
+                FPart::Hole(hole_toks) => {
+                    // sub-parse over the hole's token slice: the same
+                    // loop, a frame over the sub-slice (RFC 0030 §4.4)
+                    self.idx += 1;
+                    let mut toks = hole_toks;
+                    toks.push(Token { tok: Tok::Eof, span: self.sp });
+                    self.saved = Some(p.switch_to_hole(toks));
+                    return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
+                }
             }
         }
-        Some(self.expr(ExprKind::FStr { parts }, sp))
+        Step::Pop(Done::Expr(p.expr(ExprKind::FStr { parts: std::mem::take(&mut self.parts) }, self.sp)))
+    }
+
+    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
+        match d {
+            Done::Expr(e) => self.parts.push(FPartAst::Hole(e)),
+            Done::Failed => {
+                p.err(self.sp, "could not parse the format-string placeholder");
+                self.parts.push(FPartAst::Lit(String::new()));
+            }
+            _ => unreachable!("f-string frame receives expressions"),
+        }
+        if let Some((toks, pos, ed, ne)) = self.saved.take() {
+            p.restore_from_hole(toks, pos, ed, ne);
+        }
+        self.step(p)
+    }
+}
+
+// ---- `await select { .. }` (RFC 0019 §3) ----
+
+pub(crate) struct SelectFrame {
+    sp: Span,
+    arms: Vec<NodeHandle<AnyArm>>,
+    cur: Option<(NodeHandle<AnyExpr>, Option<IdentId>)>,
+    cur_sp: Span,
+}
+
+impl SelectFrame {
+    pub(crate) fn new(sp: Span) -> Self {
+        SelectFrame { sp, arms: Vec::new(), cur: None, cur_sp: sp }
+    }
+
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        p.bump(); // await
+        p.bump(); // select
+        p.expect(Tok::LBrace);
+        self.arms_top(p)
+    }
+
+    fn arms_top(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::RBrace) {
+            let arms = std::mem::take(&mut self.arms);
+            return Step::Pop(Done::Expr(p.expr(ExprKind::Select { arms }, self.sp.to(p.span()))));
+        }
+        self.cur_sp = p.span();
+        Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
+    }
+
+    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
+        match d {
+            Done::Expr(e) => match self.cur.take() {
+                None => {
+                    // the future — `as name` binds it (RFC 0019 §3)
+                    let bind = if p.at_kw("as") {
+                        p.bump();
+                        let Some(id) = p.expect_ident("a binding name") else {
+                            return Step::Pop(Done::Failed);
+                        };
+                        Some(id)
+                    } else {
+                        None
+                    };
+                    p.expect(Tok::Arrow);
+                    self.cur = Some((e, bind));
+                    Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
+                }
+                Some((fut, bind)) => {
+                    let node = p.arm(
+                        ArmKind::SelectArm { fut, bind, body: e },
+                        self.cur_sp.to(p.span()),
+                    );
+                    self.arms.push(node);
+                    p.eat_punct(Tok::Comma);
+                    self.arms_top(p)
+                }
+            },
+            Done::Failed => Step::Pop(Done::Failed),
+            _ => unreachable!("select frame receives expressions"),
+        }
     }
 }

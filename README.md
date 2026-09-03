@@ -80,10 +80,13 @@ RFC 0018–0020), workers (M4), weak refs (M5).
 
 ### Documented deviations (M1 pragmatism; RFCs stay authoritative)
 
-- **C2**: the parser is depth-budgeted recursive descent, not the
-  explicit-frame machine of RFC 0030 §4 — the *contract* (untrusted
-  source cannot overflow the host stack; deep input is one clean
-  `Diag`) holds via budgets (expressions 64, brackets/blocks 1024).
+- **C2 (resolved)**: the parser is the explicit-frame machine of RFC
+  0030 §4 — zero native recursion, host stack usage constant regardless
+  of input (a 96 KiB thread stack parses budget-deep input;
+  `rut-parser/tests/deep.rs`). RFC 0030 OQ-3's single `NEST_MAX = 1024`
+  is *not* taken: expressions keep a 64 budget because the downstream
+  walks over the tree (AST dump, fused typecheck) are themselves
+  recursive in M1; brackets/blocks stay at 1024.
 - The SSA-ish HIR of RFC 0031 §3 is fused into a typed-AST → LIR walk;
   folding is limited to the layout builtins and `is` folds.
 - Closures capture **by value** (RFC 0013 §1 says by reference — lands

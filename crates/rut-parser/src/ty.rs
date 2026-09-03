@@ -1,82 +1,202 @@
-//! Types and the two far-decision balancing scans (RFC 0030 SS4.2):
+//! Types (RFC 0030 §2) and the two far-decision balancing scans (§4.2):
 //! scan_is_lambda ( ( ... ) then => ) and scan_is_generic_args
 //! ( < ... > then ( or . ). Read-only lookahead; no backtracking.
 
+use rut_ast::ast::*;
+use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
-use super::*;
 
-impl Parser {
-    // ---- types ----
+use crate::expr::{ExprFrame, ExprMode};
+use crate::frame::{Done, Frame, Step};
+use crate::Parser;
 
-    /// A type in any position. `dyn` prefixes trait paths in VALUE positions
-    /// (RFC 0030 §2); naming positions call `parse_type_naming` instead.
-    pub(crate) fn parse_type(&mut self) -> Option<NodeHandle<AnyTy>> {
-        let lo = self.span();
-        if self.at_kw("fn") && matches!(self.peek(1).tok, Tok::LParen) {
-            // fn type: `fn(Store, P): R` —params are bare types
-            self.bump();
-            self.expect(Tok::LParen);
-            let mut params = Vec::new();
-            loop {
-                if self.eat_punct(Tok::RParen) {
-                    break;
-                }
-                let Some(t) = self.parse_type() else {
-                    break;
-                };
-                params.push(t);
-                if !self.eat_punct(Tok::Comma) {
-                    self.expect(Tok::RParen);
-                    break;
-                }
-            }
-            self.expect(Tok::Colon);
-            let ret = self.parse_type()?;
-            return Some(self.typ(TypeKind::TyFn { params, ret }, lo.to(self.span())));
-        }
-        let is_dyn = if self.at_kw("dyn") {
-            self.bump();
-            true
-        } else {
-            false
-        };
-        let mut segs = Vec::new();
-        loop {
-            let name = self.expect_ident("a type name")?;
-            let mut generics = Vec::new();
-            if matches!(self.tok(), Tok::Lt) {
-                // type position: `<` is always generic args —no ambiguity
-                self.bump();
-                loop {
-                    if self.eat_punct(Tok::Gt) {
-                        break;
-                    }
-                    // const-generic arg: integer expression (RFC 0005)
-                    let arg = if matches!(self.tok(), Tok::Int(..))
-                        || (matches!(self.tok(), Tok::Minus) && matches!(self.peek(1).tok, Tok::Int(..)))
-                    {
-                        let e = self.parse_unary()?;
-                        self.typ(TypeKind::TyConst(e), self.span())
-                    } else {
-                        self.parse_type()?
-                    };
-                    generics.push(arg);
-                    if !self.eat_punct(Tok::Comma) {
-                        self.expect_gt();
-                        break;
-                    }
-                }
-            }
-            segs.push(PathSeg { name, generics });
-            if self.eat_punct(Tok::Dot) {
-                continue;
-            }
-            break;
-        }
-        Some(self.typ(TypeKind::TyPath { segs, is_dyn }, lo.to(self.span())))
+pub(crate) struct TypeFrame {
+    lo: Span,
+    stage: TyStage,
+}
+
+enum TyStage {
+    Init,
+    /// `fn(...)`: collecting parameter types
+    FnParams { params: Vec<NodeHandle<AnyTy>> },
+    /// `fn(...):` — waiting for the return type
+    FnRet { params: Vec<NodeHandle<AnyTy>> },
+    /// a path type, possibly mid-dot-chain
+    Path { is_dyn: bool, segs: Vec<PathSeg> },
+    /// inside a `<..>` after a segment name
+    GenArgs { is_dyn: bool, segs: Vec<PathSeg>, seg_name: IdentId, args: Vec<NodeHandle<AnyTy>> },
+}
+
+impl TypeFrame {
+    pub(crate) fn new(p: &Parser) -> Self {
+        TypeFrame { lo: p.span(), stage: TyStage::Init }
     }
 
-    /// §4.2 scan 1: `(` —`)` then `=>` (a `: Type` may sit between).
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        match self.stage {
+            TyStage::Init => {
+                // fn type: `fn(Store, P): R` — params are bare types
+                if p.at_kw("fn") && matches!(p.peek(1).tok, Tok::LParen) {
+                    p.bump();
+                    p.expect(Tok::LParen);
+                    self.stage = TyStage::FnParams { params: Vec::new() };
+                    return self.fnparams_top(p);
+                }
+                // `dyn` prefixes trait paths in value positions (RFC 0030 §2)
+                let is_dyn = p.at_kw("dyn");
+                if is_dyn {
+                    p.bump();
+                }
+                self.stage = TyStage::Path { is_dyn, segs: Vec::new() };
+                self.path_run(p)
+            }
+            _ => unreachable!("stepped a suspended type frame"),
+        }
+    }
+
+    /// dotted path segments; generic args suspend to a child frame and
+    /// resume through `genargs_done` — the loop is iterative (C2)
+    fn path_run(&mut self, p: &mut Parser) -> Step {
+        loop {
+            let Some(name) = p.expect_ident("a type name") else {
+                return Step::Pop(Done::Failed);
+            };
+            if matches!(p.tok(), Tok::Lt) {
+                // type position: `<` is always generic args — no ambiguity
+                p.bump();
+                let (is_dyn, segs) = match &mut self.stage {
+                    TyStage::Path { is_dyn, segs } => (*is_dyn, std::mem::take(segs)),
+                    _ => unreachable!(),
+                };
+                self.stage = TyStage::GenArgs { is_dyn, segs, seg_name: name, args: Vec::new() };
+                return self.genargs_top(p);
+            }
+            if let TyStage::Path { segs, .. } = &mut self.stage {
+                segs.push(PathSeg { name, generics: Vec::new() });
+            }
+            if !p.eat_punct(Tok::Dot) {
+                return self.path_pop(p);
+            }
+        }
+    }
+
+    /// resume after a generic-argument list completed one segment
+    fn path_resume(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::Dot) {
+            self.path_run(p)
+        } else {
+            self.path_pop(p)
+        }
+    }
+
+    fn path_pop(&mut self, p: &mut Parser) -> Step {
+        let (is_dyn, segs) = match &mut self.stage {
+            TyStage::Path { is_dyn, segs } => (*is_dyn, std::mem::take(segs)),
+            _ => unreachable!(),
+        };
+        Step::Pop(Done::Ty(p.typ(TypeKind::TyPath { segs, is_dyn }, self.lo.to(p.span()))))
+    }
+
+    fn genargs_top(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::Gt) {
+            return self.genargs_done(p);
+        }
+        // const-generic arg: integer expression (RFC 0005)
+        if matches!(p.tok(), Tok::Int(..))
+            || (matches!(p.tok(), Tok::Minus) && matches!(p.peek(1).tok, Tok::Int(..)))
+        {
+            Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::UnaryOnly)))
+        } else {
+            Step::Push(Frame::Type(TypeFrame::new(p)))
+        }
+    }
+
+    fn genargs_done(&mut self, p: &mut Parser) -> Step {
+        let (is_dyn, segs, seg_name, args) = match &mut self.stage {
+            TyStage::GenArgs { is_dyn, segs, seg_name, args } => {
+                (*is_dyn, std::mem::take(segs), *seg_name, std::mem::take(args))
+            }
+            _ => unreachable!(),
+        };
+        self.stage = TyStage::Path { is_dyn, segs };
+        if let TyStage::Path { segs, .. } = &mut self.stage {
+            segs.push(PathSeg { name: seg_name, generics: args });
+        }
+        self.path_resume(p)
+    }
+
+    fn fnparams_top(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::RParen) {
+            return self.to_fn_ret(p);
+        }
+        Step::Push(Frame::Type(TypeFrame::new(p)))
+    }
+
+    /// the parameter list closed (or failed): `:` then the return type
+    fn to_fn_ret(&mut self, p: &mut Parser) -> Step {
+        p.expect(Tok::Colon);
+        let params = match &mut self.stage {
+            TyStage::FnParams { params } => std::mem::take(params),
+            _ => unreachable!(),
+        };
+        self.stage = TyStage::FnRet { params };
+        Step::Push(Frame::Type(TypeFrame::new(p)))
+    }
+
+    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
+        match d {
+            Done::Ty(t) => match &mut self.stage {
+                TyStage::FnParams { params } => {
+                    params.push(t);
+                    if p.eat_punct(Tok::Comma) {
+                        self.fnparams_top(p)
+                    } else {
+                        p.expect(Tok::RParen);
+                        self.to_fn_ret(p)
+                    }
+                }
+                TyStage::FnRet { params } => {
+                    let params = std::mem::take(params);
+                    Step::Pop(Done::Ty(p.typ(TypeKind::TyFn { params, ret: t }, self.lo.to(p.span()))))
+                }
+                TyStage::GenArgs { args, .. } => {
+                    args.push(t);
+                    if p.eat_punct(Tok::Comma) {
+                        self.genargs_top(p)
+                    } else {
+                        p.expect_gt();
+                        self.genargs_done(p)
+                    }
+                }
+                _ => unreachable!("type frame received a type at the wrong stage"),
+            },
+            Done::Expr(e) => {
+                // const-generic argument (RFC 0005)
+                match &mut self.stage {
+                    TyStage::GenArgs { args, .. } => {
+                        args.push(p.typ(TypeKind::TyConst(e), p.span()));
+                    }
+                    _ => unreachable!("type frame received an expression at the wrong stage"),
+                }
+                if p.eat_punct(Tok::Comma) {
+                    self.genargs_top(p)
+                } else {
+                    p.expect_gt();
+                    self.genargs_done(p)
+                }
+            }
+            Done::Failed => match self.stage {
+                // v1: a failed parameter type breaks to the colon
+                TyStage::FnParams { .. } => self.to_fn_ret(p),
+                _ => Step::Pop(Done::Failed),
+            },
+            _ => unreachable!("type frame receives types or const expressions"),
+        }
+    }
+}
+
+impl Parser {
+    /// §4.2 scan 1: `(` … `)` then `=>` (a `: Type` may sit between).
     /// Read-only; never mutates parser state.
     pub(crate) fn scan_is_lambda(&self) -> bool {
         let mut i = self.pos + 1;
@@ -99,7 +219,7 @@ impl Parser {
         if i >= self.toks.len() {
             return false;
         }
-        // skip `: Type` —scan until `=>` at angle/paren depth 0
+        // skip `: Type` — scan until `=>` at angle/paren depth 0
         if matches!(self.toks[i].tok, Tok::FatArrow) {
             return true;
         }
@@ -127,7 +247,7 @@ impl Parser {
 
     /// §4.2 scan 2: from a `<` (at `self.pos`), is this a generic-argument
     /// list? Commits iff angle depth returns to 0 and the next token
-    /// continues a generic use (`(` call —TypeScript's rule —or `.`
+    /// continues a generic use (`(` call — TypeScript's rule —or `.`
     /// path continuation, which the corpus needs for `MyMap<K, V>.new` /
     /// `Option<T>.Some`). `>>` counts as two closers (span arithmetic).
     pub(crate) fn scan_is_generic_args(&self, _in_pattern: bool) -> bool {
@@ -152,5 +272,4 @@ impl Parser {
         }
         false
     }
-
 }
