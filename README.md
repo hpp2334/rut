@@ -30,7 +30,13 @@ rut/
 │   ├── rut-lir/     fused resolve+typecheck+LIR (0031 M1, 0032)
 │   ├── rut-driver/  the compile_module pipeline (0031 → 0033)
 │   ├── rut-wasm/    the demo's compile/run surface over a raw wasm ABI
+│   ├── rut-lsp/     the language server: semantic tokens, diagnostics,
+│   │                document symbols (the M6 LSP slice, early)
 │   └── rut-cli/     the `rut` binary (run / dump) + the e2e test suite
+├── integrations/
+│   └── vscode-extension/  the `rut-vscode` extension: TextMate grammar
+│                          + rut-lsp client; other-editor configs in
+│                          integrations/README.md
 └── demo/       wasm playground (React + rspack + TS) — RFC 0041 §3
 ```
 
@@ -55,6 +61,22 @@ Pick a prepared case (or edit one), press **Run**, and inspect
 Output / AST / IR — all three tabs are live compiler output. Every run
 is bounded by fuel + heap budgets (RFC 0040); the fuel demo case traps
 `OutOfFuel` with the frame parked, and **Resume** adds fuel and reruns.
+
+## Editor support
+
+`rut-lsp` (one server, every LSP editor — semantic-token grammar
+highlighting, diagnostics, document symbols):
+
+```sh
+cargo build -p rut-lsp --release    # target/release/rut-lsp[.exe]
+```
+
+- **VS Code** — `cd integrations/vscode-extension && npm install &&
+  npm run build:server && npm run compile`, then F5 (or install the
+  packaged `.vsix`); a TextMate grammar colors comments/strings/keywords
+  even without the server.
+- **Neovim / Helix / Zed / Emacs / Sublime** — config snippets in
+  [`integrations/README.md`](integrations/README.md).
 
 ## What runs today (the M1 slice)
 

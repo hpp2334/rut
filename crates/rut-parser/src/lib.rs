@@ -437,7 +437,10 @@ impl Parser {
     }
 }
 
-pub(crate) fn is_reserved_kw(s: &str) -> bool {
+/// Reserved words of the grammar (RFC 0002 §4) — keywords are `Ident`s
+/// matched by interner text (RFC 0002 §4/§5). Public: the LSP classifier
+/// and any tooling that needs the keyword set share this one table.
+pub fn is_reserved_kw(s: &str) -> bool {
     matches!(s, "let" | "mut" | "if" | "else" | "while" | "for" | "of" | "return" | "when" | "enum" | "class" | "dataclass" | "trait" | "impl" | "requires" | "import" | "export" | "from" | "private" | "static" | "suspend" | "await" | "extern" | "where" | "dyn" | "is" | "host" | "fn" | "true" | "false" | "select")
 }
 

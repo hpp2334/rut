@@ -1,0 +1,139 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "rut",
+  "scopeName": "source.rut",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#f-string" },
+    { "include": "#raw-string" },
+    { "include": "#string" },
+    { "include": "#char" },
+    { "include": "#number" },
+    { "include": "#boolean" },
+    { "include": "#self-type" },
+    { "include": "#primitive-type" },
+    { "include": "#control-keyword" },
+    { "include": "#keyword" },
+    { "include": "#operator" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.rut",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.rut",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "f-string": {
+      "name": "string.interpolated.rut",
+      "begin": "f\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.rut",
+          "match": "\\{\\{|\\}\\}"
+        },
+        {
+          "name": "meta.embedded.line.rut",
+          "begin": "\\{",
+          "end": "\\}",
+          "patterns": [
+            { "include": "source.rut" }
+          ]
+        }
+      ]
+    },
+    "raw-string": {
+      "name": "string.quoted.other.rut",
+      "begin": "r\"",
+      "end": "\""
+    },
+    "string": {
+      "name": "string.quoted.double.rut",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.rut",
+          "match": "\\\\(n|r|t|0|\\\\|\"|'|x[0-9a-fA-F]{2}|u\\{[0-9a-fA-F]{1,6}\\})"
+        }
+      ]
+    },
+    "char": {
+      "name": "constant.character.rut",
+      "match": "'(\\\\(n|r|t|0|\\\\|\"|'|x[0-9a-fA-F]{2}|u\\{[0-9a-fA-F]{1,6}\\})|[^'\\\\])'"
+    },
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.rut",
+          "match": "\\b0[xX][0-9a-fA-F_]+(u8|u16|u32|u64|i8|i16|i32|i64)?\\b"
+        },
+        {
+          "name": "constant.numeric.rut",
+          "match": "\\b0[bB][01_]+(u8|u16|u32|u64|i8|i16|i32|i64)?\\b"
+        },
+        {
+          "name": "constant.numeric.rut",
+          "match": "\\b0[oO][0-7_]+(u8|u16|u32|u64|i8|i16|i32|i64)?\\b"
+        },
+        {
+          "name": "constant.numeric.rut",
+          "match": "\\b[0-9][0-9_]*\\.[0-9][0-9_]*([eE][+-]?[0-9][0-9_]*)?(f32|f64)?\\b"
+        },
+        {
+          "name": "constant.numeric.rut",
+          "match": "\\b[0-9][0-9_]*[eE][+-]?[0-9][0-9_]*(f32|f64)?\\b"
+        },
+        {
+          "name": "constant.numeric.rut",
+          "match": "\\b[0-9][0-9_]*(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64)?\\b"
+        }
+      ]
+    },
+    "boolean": {
+      "name": "constant.language.boolean.rut",
+      "match": "\\b(true|false)\\b"
+    },
+    "self-type": {
+      "name": "entity.name.type.rut",
+      "match": "\\bSelf\\b"
+    },
+    "primitive-type": {
+      "name": "storage.type.primitive.rut",
+      "match": "\\b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|bool|string|unit)\\b"
+    },
+    "control-keyword": {
+      "name": "keyword.control.rut",
+      "match": "\\b(if|else|while|for|of|return|when|break|continue|select|await|suspend)\\b"
+    },
+    "keyword": {
+      "name": "keyword.other.rut",
+      "match": "\\b(let|mut|enum|dataclass|class|trait|impl|requires|import|export|from|private|static|extern|where|dyn|is|host|fn|as|super|default|self)\\b"
+    },
+    "operator": {
+      "name": "keyword.operator.rut",
+      "match": "<<=|>>=|&&=|\\|\\|=|&\\+=|&-=|&\\*=|&<<=|&<<|&\\+|&-|&\\*|<<|>>|<=|>=|==|!=|&&|\\|\\||->|=>|[+\\-*/%&|^!~=?@]"
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.definition.bracket.rut",
+          "match": "[()\\[\\]{}]"
+        },
+        {
+          "name": "punctuation.separator.rut",
+          "match": "[,;:.]"
+        }
+      ]
+    }
+  }
+}

@@ -10,6 +10,7 @@ members = [
     "crates/rut-driver",
     "crates/rut-wasm",
     "crates/rut-cli",
+    "crates/rut-lsp",
 ]
 
 [workspace.package]

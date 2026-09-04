@@ -9,13 +9,20 @@ use crate::diag::Diag;
 use crate::span::{Span, NEST_MAX};
 use crate::token::{FPart, FStrTok, FloatSuffix, IntSuffix, Tok, Token};
 
-pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
-    // CRLF -> LF normalization; spans index the normalized text (RFC 0002 §1).
-    let normalized = if src.contains('\r') {
+/// CRLF -> LF normalization (RFC 0002 §1). Spans index the normalized text,
+/// so every consumer that maps spans back to positions (the LSP's line
+/// index, diag renderers) must run the source through THIS function —
+/// parity with `lex` by construction.
+pub fn normalize(src: &str) -> String {
+    if src.contains('\r') {
         src.replace("\r\n", "\n").replace('\r', "\n")
     } else {
         src.to_string()
-    };
+    }
+}
+
+pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
+    let normalized = normalize(src);
     let mut lx = Lexer::new(&normalized);
     lx.run();
     (lx.toks, lx.diags)

@@ -1,0 +1,125 @@
+{
+  "name": "rut-vscode",
+  "displayName": "rut",
+  "description": "rut language support — grammar highlighting via rut-lsp semantic tokens, TextMate fallback, diagnostics, document symbols",
+  "version": "0.1.0",
+  "publisher": "rut",
+  "license": "MIT OR Apache-2.0",
+  "categories": [
+    "Programming Languages"
+  ],
+  "engines": {
+    "vscode": "^1.85"
+  },
+  "activationEvents": [
+    "onLanguage:rut"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "rut",
+        "aliases": [
+          "rut"
+        ],
+        "extensions": [
+          ".rut"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rut",
+        "scopeName": "source.rut",
+        "path": "./syntaxes/rut.tmLanguage.json"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "rut",
+        "scopes": {
+          "keyword": [
+            "keyword.other"
+          ],
+          "number": [
+            "constant.numeric"
+          ],
+          "string": [
+            "string"
+          ],
+          "type": [
+            "entity.name.type"
+          ],
+          "function": [
+            "entity.name.function"
+          ],
+          "method": [
+            "entity.name.function.member"
+          ],
+          "variable": [
+            "variable.other"
+          ],
+          "parameter": [
+            "variable.parameter"
+          ],
+          "property": [
+            "variable.other.property"
+          ],
+          "enum": [
+            "entity.name.type.enum"
+          ],
+          "enumMember": [
+            "variable.other.enummember"
+          ],
+          "class": [
+            "entity.name.type.class"
+          ],
+          "interface": [
+            "entity.name.type.interface"
+          ],
+          "operator": [
+            "keyword.operator"
+          ]
+        }
+      }
+    ],
+    "configuration": {
+      "title": "rut",
+      "properties": {
+        "rut.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the rut-lsp binary. Empty: use the bundled bin/rut-lsp(.exe) produced by `npm run build:server`."
+        },
+        "rut.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace rut-lsp communication (output channel `rut`)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "build:server": "cargo build -p rut-lsp --release && node scripts/copy-server.mjs",
+    "package": "npm run compile && vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.5.0"
+  }
+}

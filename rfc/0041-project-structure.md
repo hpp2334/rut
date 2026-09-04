@@ -76,6 +76,15 @@ rut/
 │           ├── components/        #   header.rut sidebar.rut common.rut
 │           ├── services/          #   api.rut stream.rut
 │           └── workers/           #   stats-worker.rut
+├── integrations/                   # editor integrations — vscode first
+│   ├── README.md                  #   rut-lsp configs: nvim/helix/zed/
+│   │                              #   emacs/sublime
+│   └── vscode-extension/          # `rut-vscode`: package.json (client +
+│                                  #   semanticTokenScopes + settings),
+│                                  #   language-configuration.json,
+│                                  #   syntaxes/rut.tmLanguage.json,
+│                                  #   src/extension.ts, esbuild.mjs,
+│                                  #   scripts/copy-server.mjs
 └── demo/                          # wasm playground — §3
     ├── package.json  rspack.config.ts  tsconfig.json
     ├── README.md  .gitignore
@@ -90,7 +99,10 @@ rut/
 
 Partially built — the crate split below (rut-lexer / rut-ast /
 rut-parser, rut-lir / rut-driver, rut-core / rut-vm) exists as of v1;
-leaves marked "planned" (hir/, regalloc, decl/, session, pack,
+`rut-lsp` + `integrations/` land the M6 LSP slice early (RFC 0001 M6:
+semantic tokens, diagnostics, document symbols — hover/completion/
+formatting stay with M6). It is also the workspace's first external
+dependency (tower-lsp-server + tokio). Leaves marked "planned" (hir/, regalloc, decl/, session, pack,
 rut-host-std) are not yet written. Every leaf names the RFC that
 specifies it:
 
@@ -183,8 +195,36 @@ rut/
 │   │       └── natives_fs.rs  natives_net.rs      #  0028 rt:* backings
 │   ├── rut-wasm/                   # wasm-bindgen shim
 │   │   └── src/lib.rs              #     compile/run with budgets (0040 §3)
+│   ├── rut-lsp/                    # the language server — the M6 LSP
+│   │   │                           #   slice, landed early (0001 M6)
+│   │   ├── Cargo.toml              #     tower-lsp-server + tokio — the
+│   │   │                           #     workspace's first external deps
+│   │   └── src/
+│   │       ├── lib.rs              #     module map
+│   │       ├── line_index.rs       #     byte spans (normalized src) ⇄
+│   │       │                       #       LSP UTF-16 positions
+│   │       ├── analysis.rs         #     analyze(): normalize → lex →
+│   │       │                       #       parse → tokens/diags/symbols
+│   │       ├── semantic.rs         #     the classifier: legend, keyword
+│   │       │                       #       set, name-token recovery,
+│   │       │                       #       symbol builder (pure, tested)
+│   │       ├── server.rs           #     Backend — full sync, semantic
+│   │       │                       #       tokens, documentSymbol,
+│   │       │                       #       publishDiagnostics
+│   │       └── main.rs             #     the `rut-lsp` stdio binary
 │   └── rut-cli/                    # the `rut` binary
 │       └── src/main.rs
+├── integrations/                   # editor integrations
+│   ├── README.md                   #   nvim/helix/zed/emacs/sublime
+│   │                               #   configs over the rut-lsp binary
+│   └── vscode-extension/           # `rut-vscode` — TM grammar + LSP
+│       ├── package.json            #   client; semanticTokenScopes,
+│       │                           #   rut.serverPath, build:server
+│       ├── language-configuration.json
+│       ├── syntaxes/rut.tmLanguage.json  # fallback coloring (0002/0007)
+│       ├── src/extension.ts        #   vscode-languageclient wiring
+│       ├── esbuild.mjs  scripts/copy-server.mjs
+│       └── README.md
 ├── demo/                           # ships in-repo — §3
 ├── examples/                       # unchanged — the parser corpus (0030 §4)
 └── rfc/                            # unchanged
@@ -192,7 +232,10 @@ rut/
 
 Dependency graph, one line: `rut-lexer ← rut-ast ← rut-parser ←
 rut-driver → rut-lir ─emits binaries via→ rut-core ← rut-vm ←hosts─
-rut-host-std / rut-wasm`; `rut-cli` and `demo/` sit on top.
+rut-host-std / rut-wasm`; `rut-cli` and `demo/` sit on top, and
+`rut-lsp` sits on `rut-lexer`/`rut-ast`/`rut-parser` (no driver dep —
+tokens and diags come from the frontend); `integrations/vscode-extension`
+launches it.
 
 ## 3. The demo page
 

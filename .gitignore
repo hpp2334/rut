@@ -1,2 +1,7 @@
 /target
 demo/node_modules
+integrations/vscode-extension/node_modules
+integrations/vscode-extension/out
+integrations/vscode-extension/bin
+integrations/vscode-extension/dist
+*.vsix

@@ -569,12 +569,16 @@ impl PatternFrame {
     }
 
     /// dotted path segments; generic args suspend to a child frame and
-    /// resume through `genargs_done` — the loops are iterative (C2)
+    /// resume through `genargs_done` — the loops are iterative (C2).
+    /// `self.sp` extends as segments land so the node span covers the
+    /// whole path (RFC 0030 C1 — spans on every node).
     fn path_run(&mut self, p: &mut Parser) -> Step {
         loop {
+            let ident_sp = p.span();
             let Some(name) = p.expect_ident("a pattern name") else {
                 return Step::Pop(Done::Failed);
             };
+            self.sp = self.sp.to(ident_sp);
             if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(true) {
                 p.bump();
                 self.stage = PatStage::GenArgs { seg_name: name };
@@ -608,16 +612,21 @@ impl PatternFrame {
 
     fn ctor_loop(&mut self, p: &mut Parser) -> Step {
         loop {
+            let rp_sp = p.span();
             if p.eat_punct(Tok::RParen) {
+                self.sp = self.sp.to(rp_sp);
                 return self.ctor_pop(p);
             }
+            let arg_sp = p.span();
             match p.tok().clone() {
                 Tok::Ident(b) if b == "_" => {
                     p.bump();
+                    self.sp = self.sp.to(arg_sp);
                     self.ctor_args.push(None);
                 }
                 Tok::Ident(b) => {
                     p.bump();
+                    self.sp = self.sp.to(arg_sp);
                     self.ctor_args.push(Some(p.interner.intern(&b)));
                 }
                 _ => {
@@ -630,7 +639,9 @@ impl PatternFrame {
                 }
             }
             if !p.eat_punct(Tok::Comma) {
-                p.expect(Tok::RParen);
+                if let Some(sp) = p.expect(Tok::RParen) {
+                    self.sp = self.sp.to(sp);
+                }
                 return self.ctor_pop(p);
             }
         }
