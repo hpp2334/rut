@@ -44,7 +44,7 @@ export suspend fn fetch_users(seed: u32): Result<Vec<User>, ApiError> {
         };
         rng = lcg_next(rng);
         users.push(User {
-            name: str.concat(first, ".", last),
+            name: f"{first}.{last}",
             role: role,
             status: status,
             score: lcg_f32(rng) * 100.0f32,

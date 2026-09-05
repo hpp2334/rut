@@ -5,7 +5,9 @@
 // Weak(x) demotes a handle to a non-keeping ref (RFC 0017). Classes
 // with `impl Disposal for T` run dispose at rc 0 — no wrapping needed.
 
+import { remove } from "std:fs";
 import { Logger } from "std:log";
+import { Disposal } from "std:core";
 
 class Circle {
     private r: f32;
@@ -30,7 +32,7 @@ class TempFile {
 
 impl Disposal for TempFile {       // Disposal impl — runs once, at rc 0
     fn dispose(mut self): unit {
-        fs.remove(self.path);
+        remove(self.path);
     }
 }
 

@@ -36,7 +36,7 @@ export fn main(): unit {
 
     let out = "";
     for (let i = 0; i < xs.len(); i += 1) {
-        out = str.concat(out, str(xs[i]), " ");
+        out = f"{out}{xs[i]} ";
     }
     log.info(f"sorted: {out}");
 }

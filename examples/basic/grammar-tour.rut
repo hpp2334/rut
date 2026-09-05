@@ -7,6 +7,7 @@
 
 import { Canvas, newCanvas } from "app:gfx";
 import { Logger } from "std:log";
+import { sqrt } from "std:math";
 
 enum Color { Red, Green, Blue }
 
@@ -16,7 +17,7 @@ dataclass Point {                          // shared cell: assignment aliases
 }                                          // impl blocks outside — here: data only
 
 fn length(p: Point): f64 {
-    return math.sqrt(f64(p.x * p.x + p.y * p.y));
+    return sqrt(f64(p.x * p.x + p.y * p.y));
 }
 
 trait Drawable {

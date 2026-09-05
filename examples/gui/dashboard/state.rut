@@ -75,7 +75,7 @@ export class Dashboard {
             let out: Vec<User> = Vec();
             for (let i = 0; i < users.len(); i += 1) {
                 let u = users[i];
-                if (q.len() == 0 || str.contains(u.name, q)) {
+                if (q.len() == 0 || u.name.contains(q)) {
                     out.push(u);
                 }
             }
@@ -181,7 +181,7 @@ export class Dashboard {
         let out = "";
         let msgs = atom_get(self.store, self.alerts);
         for (let i = 0; i < msgs.len(); i += 1) {
-            out = str.concat(out, msgs[i], "\n");
+            out = f"{out}{msgs[i]}\n";
         }
         return out;
     }

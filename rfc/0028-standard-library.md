@@ -52,10 +52,11 @@ logging goes through an imported logger:
 
 ```rut
 import { Logger } from "std:log";
+import { now_ms } from "std:time";
 
 fn work(): unit {
-    let log = Logger.new("app");     // class method -> construction; a bare
-    log.info(f"started at {now()}");  // value class, so construction is free
+    let log = Logger.new("app");        // class method -> construction; a bare
+    log.info(f"started at {now_ms()}"); // value class, so construction is free
 }
 ```
 

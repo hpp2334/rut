@@ -1,6 +1,7 @@
 // RFC 0005 — Option<T> / Result<T,E> are builtin VM-native types.
 // Methods are snake_case; no ?. / ?? sugar — check, then read `.value`.
 
+import { read } from "std:fs";
 import { Logger } from "std:log";
 
 enum IoError { NotFound, Permission, Busy }
@@ -24,7 +25,7 @@ fn demo(list: Vec<string>): unit {
 }
 
 fn read_config(path: string): Result<Vec<u8>, IoError> {
-    let raw = fs.read(path)?;         // `?` propagates Err upward
+    let raw = read(path)?;            // `?` propagates Err upward
     return Result.ok(raw);
 }
 
