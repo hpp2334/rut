@@ -206,6 +206,13 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("members", DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "SurfaceClass"
             }
+            ItemKind::SurfacePrimitive { vis, linkage, name, members } => {
+                fields.push(field("vis", DumpVal::Vis(*vis)));
+                fields.push(field("linkage", DumpVal::Str(if *linkage == Linkage::Host { "host" } else { "extern" }.to_string())));
+                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
+                fields.push(field("members", DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect())));
+                "SurfacePrimitive"
+            }
         },
         Kind::Member(k) => match k {
             MemberKind::FieldDecl(d) => {

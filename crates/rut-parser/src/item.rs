@@ -11,8 +11,7 @@ use crate::expr::{ExprFrame, ExprMode};
 use crate::frame::{Done, ExportFrame, Frame, Step};
 use crate::stmt::BlockFrame;
 use crate::ty::TypeFrame;
-use crate::Mode;
-use crate::Parser;
+use crate::{is_primitive_ty, Mode, Parser};
 
 // ---- item dispatch (v1's parse_item) ----
 
@@ -950,6 +949,7 @@ pub(crate) struct SurfaceFrame {
     lo: u32,
     stage: SuStage,
     is_class: bool,
+    is_primitive: bool,
     name: IdentId,
     generics: Vec<IdentId>,
     extparams: Vec<(IdentId, Option<NodeHandle<AnyTy>>)>,
@@ -974,6 +974,7 @@ impl SurfaceFrame {
             lo: 0,
             stage: SuStage::Params,
             is_class: false,
+            is_primitive: false,
             name: IdentId(0),
             generics: Vec::new(),
             extparams: Vec::new(),
@@ -1029,9 +1030,31 @@ impl SurfaceFrame {
                 p.expect(Tok::LBrace);
                 self.members_top(p)
             }
+            Tok::Ident(k) if k == "primitive" => {
+                // `host primitive string { ... }` — the native member
+                // surface of a primitive (RFC 0029 §2); `primitive` is
+                // contextual: only meaningful after the linkage keyword
+                p.bump();
+                self.is_class = true;
+                self.is_primitive = true;
+                let Some(name) = p.expect_ident("a primitive name") else {
+                    return Step::Pop(Done::Failed);
+                };
+                if !is_primitive_ty(p.interner.name(name)) {
+                    p.err_here(
+                        "`host primitive` names a primitive type (`string`, `i32`, …) — for a host class use `host class`",
+                    );
+                }
+                self.name = name;
+                self.stage = SuStage::Members;
+                p.expect(Tok::LBrace);
+                self.members_top(p)
+            }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!("expected `fn` or `class` after `host`/`extern`, found {found}"));
+                p.err_here(format!(
+                    "expected `fn`, `class`, or `primitive` after `host`/`extern`, found {found}"
+                ));
                 Step::Pop(Done::Failed)
             }
         }
@@ -1080,16 +1103,28 @@ impl SurfaceFrame {
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
-                let node = p.item(
-                    ItemKind::SurfaceClass {
-                        vis: Vis::Self_,
-                        linkage: self.linkage,
-                        name: self.name,
-                        extparams: std::mem::take(&mut self.extparams),
-                        members: std::mem::take(&mut self.methods),
-                    },
-                    Span::new(self.lo, p.span().hi),
-                );
+                let node = if self.is_primitive {
+                    p.item(
+                        ItemKind::SurfacePrimitive {
+                            vis: Vis::Self_,
+                            linkage: self.linkage,
+                            name: self.name,
+                            members: std::mem::take(&mut self.methods),
+                        },
+                        Span::new(self.lo, p.span().hi),
+                    )
+                } else {
+                    p.item(
+                        ItemKind::SurfaceClass {
+                            vis: Vis::Self_,
+                            linkage: self.linkage,
+                            name: self.name,
+                            extparams: std::mem::take(&mut self.extparams),
+                            members: std::mem::take(&mut self.methods),
+                        },
+                        Span::new(self.lo, p.span().hi),
+                    )
+                };
                 return Step::Pop(Done::Item(node));
             }
             let is_suspend = if p.at_kw("suspend") {

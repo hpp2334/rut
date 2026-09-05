@@ -339,6 +339,16 @@ pub enum ItemKind {
         extparams: Vec<(IdentId, Option<NodeHandle<AnyTy>>)>,
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
+    /// `host primitive string { ... }` — .d.rut only: the native method
+    /// surface of a primitive type. No instantiation, no `new` — the
+    /// primitive's own members, statically bound natives (RFC 0032 §1.1
+    /// R2). The declarative form of the host's builtin member table.
+    SurfacePrimitive {
+        vis: Vis,
+        linkage: Linkage,
+        name: IdentId,
+        members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
+    },
     Fn(FnData),
 }
 

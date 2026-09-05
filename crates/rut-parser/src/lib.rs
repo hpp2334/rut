@@ -444,4 +444,17 @@ pub fn is_reserved_kw(s: &str) -> bool {
     matches!(s, "let" | "mut" | "if" | "else" | "while" | "for" | "of" | "return" | "when" | "enum" | "class" | "dataclass" | "trait" | "impl" | "requires" | "import" | "export" | "from" | "private" | "static" | "suspend" | "await" | "extern" | "where" | "dyn" | "is" | "host" | "fn" | "true" | "false" | "select")
 }
 
+/// The primitive types (RFC 0002 §3) — contextual type names, matched by
+/// interner text. Public and canonical: `host primitive` decls (RFC 0029
+/// §2) and the LSP classifier share this one table. `string` included —
+/// it is a primitive, not a class; its native member surface is declared
+/// with `host primitive string { .. }` in the std `.d.rut`.
+pub fn is_primitive_ty(s: &str) -> bool {
+    matches!(
+        s,
+        "bool" | "string" | "unit" | "f32" | "f64"
+            | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
+    )
+}
+
 use crate::frame::ModuleFrame;
