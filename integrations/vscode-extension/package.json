@@ -110,6 +110,7 @@
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "build:server": "cargo build -p rut-lsp --release && node scripts/copy-server.mjs",
+    "test": "node scripts/run-vscode-test.mjs",
     "package": "npm run compile && vsce package"
   },
   "dependencies": {
