@@ -1,0 +1,6 @@
+// std/math.d.rut — floating-point natives (RFC 0028: an `rt:`-backed
+// std module). Status: landing — `sqrt` is the corpus' spelling; the
+// rest of the module grows as natives land (each entry true to the
+// implementation, per std/core.d.rut's contract).
+
+export host fn sqrt(x: f64): f64;

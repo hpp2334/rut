@@ -1,0 +1,9 @@
+// std/collection.d.rut — declaration file + Rust bodies (RFC 0025/0026,
+// RFC 0028): hashing and key comparison are ONE contract. The
+// containers (`Map<K requires Hashable, V>`, `Set<T>`) land with their
+// RFCs — same mechanism as `plugin:my_map`, in the toolchain namespace.
+
+export trait Hashable {
+    fn hash(self): u64;
+    fn eq(self, other: Self): bool;
+}
