@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "publisher": "rut",
   "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hpp2334/rut.git",
+    "directory": "integrations/vscode-extension"
+  },
   "categories": [
     "Programming Languages"
   ],
