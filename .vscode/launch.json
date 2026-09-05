@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run rut extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/integrations/vscode-extension"
+      ],
+      "outFiles": ["${workspaceFolder}/integrations/vscode-extension/out/**/*.js"]
+    }
+  ]
+}

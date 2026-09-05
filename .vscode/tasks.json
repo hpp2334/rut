@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build rut extension",
+      "type": "shell",
+      "command": "npm run compile",
+      "options": { "cwd": "${workspaceFolder}/integrations/vscode-extension" },
+      "problemMatcher": []
+    }
+  ]
+}
