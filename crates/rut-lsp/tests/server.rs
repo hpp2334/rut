@@ -171,8 +171,7 @@ async fn semantic_tokens_symbols_and_diags_on_the_wire() {
 }
 
 #[tokio::test]
-async fn broken_file_publishes_error_diags() {
-    let mut editor = spawn().await;
+async fn broken_file_publishes_error_diags() {    let mut editor = spawn().await;
     let uri = "file:///w/broken.rut";
     editor
         .notify(
@@ -231,3 +230,108 @@ async fn decl_files_parse_in_decl_mode() {
     assert!(!has_publish, "surface decls must not diagnose: {notes:?}");
 }
 
+
+/// (line, character) of the `n`-th occurrence of `needle` in `src` —
+/// chars within the line, like LSP positions
+fn pos_of(src: &str, needle: &str, n: usize) -> (u32, u32) {
+    let mut seen = 0;
+    for (li, line) in src.lines().enumerate() {
+        let mut from = 0;
+        while let Some(at) = line[from..].find(needle) {
+            if seen == n {
+                return (li as u32, (from + at) as u32);
+            }
+            seen += 1;
+            from += at + needle.len();
+        }
+    }
+    panic!("{needle} occurrence {n} not found");
+}
+
+#[tokio::test]
+async fn hover_on_the_wire() {
+    let mut editor = spawn().await;
+    let src = "\
+// a circle
+class Circle {
+    private r: f64;
+    fn area(self): f64 { return 3.14; }
+}
+fn go(c: Circle): f64 { return c.area(); }
+";
+    let uri = "file:///w/hover.rut";
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": uri, "languageId": "rut", "version": 1, "text": src
+            }}),
+        )
+        .await;
+
+    let mut notes = Vec::new();
+    // method hover at the use site `c.area()`
+    let (l, c) = pos_of(src, "area", 1);
+    let h = editor
+        .request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
+    assert!(md.contains("fn area(self): f64"), "signature: {md}");
+    assert!(md.contains("in `Circle`"), "owner: {md}");
+
+    // class hover shows the struct definition + doc
+    let (l, c) = pos_of(src, "Circle", 1);
+    let h = editor
+        .request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
+    assert!(md.contains("class Circle {"), "{md}");
+    assert!(md.contains("private r: f64"), "{md}");
+    assert!(md.contains("a circle"), "{md}");
+
+    // miss is null, never wrong text — inside the header comment
+    let h = editor
+        .request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": uri}, "position": {"line": 0, "character": 3}}),
+            &mut notes,
+        )
+        .await;
+    assert!(h["result"].is_null(), "no definition there: {h}");
+}
+
+#[tokio::test]
+async fn hover_resolves_std_surface() {
+    let mut editor = spawn().await;
+    let src = "fn n(): i32 { return \"abc\".len(); }\n";
+    let uri = "file:///w/str.rut";
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": uri, "languageId": "rut", "version": 1, "text": src
+            }}),
+        )
+        .await;
+    let mut notes = Vec::new();
+    let (l, c) = pos_of(src, "len", 0);
+    let h = editor
+        .request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
+    assert!(md.contains("fn len(self): i32"), "string native: {md}");
+    assert!(md.contains("std:core"), "provenance: {md}");
+    assert!(md.contains("in `string`"), "the primitive's own surface: {md}");
+}

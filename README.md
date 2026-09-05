@@ -31,8 +31,12 @@ rut/
 │   ├── rut-driver/  the compile_module pipeline (0031 → 0033)
 │   ├── rut-wasm/    the demo's compile/run surface over a raw wasm ABI
 │   ├── rut-lsp/     the language server: semantic tokens, diagnostics,
-│   │                document symbols (the M6 LSP slice, early)
+│   │                document symbols, hover over methods/classes/fns
+│   │                (the M6 LSP slice, early)
 │   └── rut-cli/     the `rut` binary (run / dump) + the e2e test suite
+├── std/            the toolchain's std surface: .d.rut declaration files
+│                   (host primitive string, builtin containers, math…)
+│                   — embedded by rut-lsp, consumed by rutc later
 ├── integrations/
 │   └── vscode-extension/  the `rut-vscode` extension: TextMate grammar
 │                          + rut-lsp client; other-editor configs in
@@ -65,7 +69,9 @@ is bounded by fuel + heap budgets (RFC 0040); the fuel demo case traps
 ## Editor support
 
 `rut-lsp` (one server, every LSP editor — semantic-token grammar
-highlighting, diagnostics, document symbols):
+highlighting, diagnostics, document symbols, **hover**: method
+signatures, class struct definitions, std natives from `std/*.d.rut` —
+each with its doc comment):
 
 ```sh
 cargo build -p rut-lsp --release    # target/release/rut-lsp[.exe]

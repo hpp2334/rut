@@ -94,11 +94,8 @@ pub fn is_keyword(s: &str) -> bool {
 }
 
 pub fn is_primitive_ty(s: &str) -> bool {
-    matches!(
-        s,
-        "bool" | "string" | "unit" | "f32" | "f64"
-            | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
-    )
+    // canonical table lives with the grammar (shared with `host primitive`)
+    rut_parser::is_primitive_ty(s)
 }
 
 /// A word the token layer already owns by text (keywords, `Self`) — never
@@ -279,6 +276,10 @@ fn classify_item(
         }
         ItemKind::SurfaceClass { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
+        }
+        ItemKind::SurfacePrimitive { name, .. } => {
+            // `host primitive string` — the primitive itself, a type
+            push_name(toks, span, ast.name(*name), TokenType::Type, out, false)
         }
         // methods classify via their own Member nodes; import names need
         // resolution (M2) — left unclassified
@@ -643,6 +644,10 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             vec![],
         )),
         ItemKind::SurfaceClass { name, members, .. } => {
+            let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
+            Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
+        }
+        ItemKind::SurfacePrimitive { name, members, .. } => {
             let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }

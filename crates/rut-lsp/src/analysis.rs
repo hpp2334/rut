@@ -9,6 +9,7 @@ use rut_parser::{parse, Mode};
 use std::str::FromStr;
 use tower_lsp_server::ls_types::*;
 
+use crate::hover;
 use crate::line_index::LineIndex;
 use crate::semantic::{self, RawSymbol, SymKind, TokenType};
 
@@ -16,6 +17,9 @@ pub struct Analysis {
     pub diags: Vec<Diagnostic>,
     pub tokens: Vec<SemanticToken>,
     pub symbols: Vec<DocumentSymbol>,
+    /// the hover definition index (origin patched by the caller —
+    /// `analyze_at` stamps the URI)
+    pub index: hover::DefIndex,
 }
 
 /// `.d.rut` parses in declaration mode (RFC 0030 §3); everything else is
@@ -41,6 +45,7 @@ pub fn analyze(src: &str, mode: Mode) -> Analysis {
         diags,
         tokens,
         symbols,
+        index: hover::index(&src, &ast),
     }
 }
 
@@ -127,10 +132,12 @@ fn set_related_uri(diags: &mut [Diagnostic], uri: &Uri) {
     }
 }
 
-/// The server's entry point: `analyze` + URI wiring for related info.
+/// The server's entry point: `analyze` + URI wiring for related info
+/// and hover provenance.
 pub fn analyze_at(uri: &Uri, src: &str, mode: Mode) -> Analysis {
     let mut a = analyze(src, mode);
     set_related_uri(&mut a.diags, uri);
+    a.index.origin = uri.as_str().to_string();
     a
 }
 

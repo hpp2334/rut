@@ -8,9 +8,12 @@
 //! Layout: `line_index` (byte spans ⇄ UTF-16 positions over the
 //! normalized source), `semantic` (the pure classifier — legend, keyword
 //! set, name-token recovery, symbol builder), `analysis` (one pure pass
-//! over a document → LSP values), `server` (the tower-lsp service).
+//! over a document → LSP values), `hover` (the definition index +
+//! lookup behind hover), `server` (the tower-lsp service — open doc +
+//! the embedded std surface + a workspace scan).
 
 pub mod analysis;
+pub mod hover;
 pub mod line_index;
 pub mod semantic;
 pub mod server;

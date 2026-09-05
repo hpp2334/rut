@@ -15,7 +15,7 @@ Three file kinds, one rule each:
 | Kind | Contents | Role |
 |---|---|---|
 | `.rut` | implementation source | what authors write; **may not declare `host`/`extern`** — a compile error: "belongs in a `.d.rut`" |
-| `.d.rut` | declarations only — the surface | publishable, human-readable, hand-writable; **the only place `host fn/class` and `extern fn/class` may appear** |
+| `.d.rut` | declarations only — the surface | publishable, human-readable, hand-writable; **the only place `host fn/class/primitive` and `extern fn/class` may appear** |
 | `.d.ir` | compiled **DeclIr** of a `.d.rut` — the declaration surface | cache; version-locked (see §4) |
 
 Plus the runtime artifact `.rutc` — the compiled module binary (RFC 0033)
@@ -61,7 +61,19 @@ only, and — beyond RFC 0003's module scope — every declaration must be
   repr-C field block is an ABI (RFC 0015 §4), so a published value type is
   sound. No method bodies, no impl blocks in v1 (OQ-2);
 - `host fn` / `host class` / `extern fn` / `extern class` — signatures
-  only, with admission-only param bounds (RFC 0025).
+  only, with admission-only param bounds (RFC 0025);
+- `host primitive` — **the native member surface of a primitive type**:
+  `export host primitive string { fn len(self): i32; }`. Members are
+  bodiless and statically bound (RFC 0032 §1.1 R2 — named things on
+  builtins are natives, never ops); the decl is the declarative form of
+  the host's builtin member table. This is how primitives grow methods
+  **without a wrapper-class fiction** — `string` stays the one name for
+  the type and the impl target (no `String`/`string` duality; the slot
+  table is per-primitive, same shape as a `host class`). `primitive` is
+  a contextual keyword, `.d.rut`-only after the linkage keyword — it
+  stays a legal identifier everywhere else. Builtin containers
+  (`Vec`, `Option`, …) remain `host class` decls: they are class-shaped
+  (statics, generics); primitives are not.
 
 Forbidden — the parser errors "implementation in a declaration file":
 `fn` with a body, `class` with a body, field/method bodies of any kind,

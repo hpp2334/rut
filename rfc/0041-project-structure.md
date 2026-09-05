@@ -208,12 +208,27 @@ rut/
 │   │       ├── semantic.rs         #     the classifier: legend, keyword
 │   │       │                       #       set, name-token recovery,
 │   │       │                       #       symbol builder (pure, tested)
+│   │       ├── hover.rs            #     the definition index behind
+│   │       │                       #       hover: verbatim signatures,
+│   │       │                       #       doc comments, the unified
+│   │       │                       #       method rule (own surface ∪
+│   │       │                       #       trait impls targeting T)
 │   │       ├── server.rs           #     Backend — full sync, semantic
-│   │       │                       #       tokens, documentSymbol,
-│   │       │                       #       publishDiagnostics
+│   │       │                       #       tokens, documentSymbol, hover,
+│   │       │                       #       publishDiagnostics; embeds
+│   │       │                       #       std/*.d.rut, scans the
+│   │       │                       #       workspace for cross-file defs
 │   │       └── main.rs             #     the `rut-lsp` stdio binary
 │   └── rut-cli/                    # the `rut` binary
 │       └── src/main.rs
+├── std/                            # the toolchain's std surface —
+│   ├── core.d.rut                  #   prelude: host primitive string,
+│   │                               #   Vec/Option/Result/Array host
+│   │                               #   classes, Disposal (0028; the
+│   │                               #   LSP embeds it, rutc follows)
+│   ├── math.d.rut                  #   host fns (0028)
+│   └── collection.d.rut            #   Hashable (0028; Map/Set land
+│                                   #   with 0025/0026)
 ├── integrations/                   # editor integrations
 │   ├── README.md                   #   nvim/helix/zed/emacs/sublime
 │   │                               #   configs over the rut-lsp binary
