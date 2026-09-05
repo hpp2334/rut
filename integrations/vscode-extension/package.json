@@ -9,7 +9,7 @@
     "Programming Languages"
   ],
   "engines": {
-    "vscode": "^1.85"
+    "vscode": "^1.85.0"
   },
   "activationEvents": [
     "onLanguage:rut"
