@@ -398,6 +398,19 @@ fn classify_expr(
         ExprKind::Path { segs } => {
             classify_path_segs(toks, ast, span, segs, out, TypeRule::Value);
         }
+        // a bare call `name(args)` colors its callee as a function (free
+        // fns and fn-typed locals read alike); conversions `i32(x)` keep
+        // their type color via the primitive guard below
+        ExprKind::Call { callee, .. } => {
+            if let ExprKind::Path { segs } = ast.expr(*callee) {
+                if segs.len() == 1 {
+                    let name = ast.name(segs[0].name);
+                    if !owned_by_tokens(name) && !is_primitive_ty(name) {
+                        push_name(toks, span, name, TokenType::Function, out, false);
+                    }
+                }
+            }
+        }
         _ => {}
     }
 }
@@ -443,7 +456,12 @@ fn classify_path_segs(
                         if i + 1 == n { TokenType::EnumMember } else { TokenType::Type }
                     }
                     TypeRule::Value => {
-                        if i + 1 == n {
+                        // primitives stay types even in call position —
+                        // the conversion family `i32(x)` / `f64(x)` reads
+                        // as a type operation, not a variable
+                        if is_primitive_ty(s) {
+                            TokenType::Type
+                        } else if i + 1 == n {
                             if is_cap(s) { TokenType::EnumMember }
                             else if n == 1 { TokenType::Variable }
                             else { TokenType::Property }
@@ -811,6 +829,28 @@ mod tests {
         let src = "dataclass T { unit: i32; }\n";
         let spans = classify_src(src);
         assert_eq!(find(src, &spans, "unit"), vec![TokenType::Property]);
+    }
+
+    #[test]
+    fn conversion_calls_keep_their_type_color() {
+        // `f64(x)` is the conversion family (RFC 0007) — the primitive
+        // stays a type in call position, not a variable
+        let src = "fn f(p: Point): f64 { return f64(p.x); }\n";
+        let spans = classify_src(src);
+        assert_eq!(find(src, &spans, "f64"), vec![TokenType::Type, TokenType::Type]);
+        assert_eq!(find(src, &spans, "p"), vec![TokenType::Parameter, TokenType::Variable]);
+    }
+
+    #[test]
+    fn bare_calls_color_their_callee_as_function() {
+        // `length(pt)` / `newCanvas()` — the callee gets the function
+        // color, overriding the single-seg path's variable class
+        let src = "fn go(): unit { let p = newCanvas(); blit_all(length(p), p); }\n";
+        let spans = classify_src(src);
+        assert_eq!(find(src, &spans, "newCanvas"), vec![TokenType::Function]);
+        assert_eq!(find(src, &spans, "blit_all"), vec![TokenType::Function]);
+        assert_eq!(find(src, &spans, "length"), vec![TokenType::Function]);
+        assert_eq!(find(src, &spans, "p"), vec![TokenType::Variable, TokenType::Variable, TokenType::Variable]);
     }
 
     #[test]
