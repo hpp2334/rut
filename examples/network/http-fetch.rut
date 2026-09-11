@@ -4,7 +4,7 @@
 import { HttpError, get } from "std:http";
 import { Logger } from "std:log";
 
-suspend fn fetch_all(urls: Vec<string>): Result<Vec<Vec<u8>>, HttpError> {
+suspend fn fetch_all(urls: Vec<string>) -> Result<Vec<Vec<u8>>, HttpError> {
     let bodies: Vec<Vec<u8>> = Vec();
     for (let u of urls) {
         let body = await get(u)?;      // await + propagate in one expression
@@ -13,7 +13,7 @@ suspend fn fetch_all(urls: Vec<string>): Result<Vec<Vec<u8>>, HttpError> {
     return Result.ok(bodies);
 }
 
-export suspend fn main(): unit {
+export suspend fn main() -> unit {
     let log = Logger.new("http");
     let r = await fetch_all(["https://example.com", "https://example.org"]);
     if (r.is_ok()) {

@@ -38,7 +38,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let ExprKind::Path { segs } = self.ctx.ast.expr(callee).clone() {
             return self.compile_path_call(segs, args, expected, sp);
         }
-        // fn-typed value call: `f(x)` where f: fn(T): U
+        // fn-typed value call: `f(x)` where f: fn(T) -> U
         let ft = self.compile_expr(callee, None)?;
         match self.ctx.types.kind(ft).clone() {
             TyKind::Fn { .. } => {

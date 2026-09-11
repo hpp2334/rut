@@ -4,7 +4,7 @@
 import { sleep } from "std:time";
 import { Logger } from "std:log";
 
-suspend fn countdown(n: u32): unit {
+suspend fn countdown(n: u32) -> unit {
     let log = Logger.new("countdown");
     for (let i = n; i > 0; i -= 1) {
         log.info(f"{i}");
@@ -13,6 +13,6 @@ suspend fn countdown(n: u32): unit {
     log.info("done");
 }
 
-export suspend fn main(): unit {
+export suspend fn main() -> unit {
     await countdown(3);
 }

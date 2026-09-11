@@ -50,7 +50,7 @@ export class Dashboard {
     ingest_series$: Mutation<Series, unit>;
     apply_event$: Mutation<LiveEvent, unit>;
 
-    fn new(now_ms: i64): Self {
+    fn new(now_ms: i64) -> Self {
         let store = Store.new();
 
         // --- state: writable atoms (UI-owned) ---
@@ -64,12 +64,12 @@ export class Dashboard {
         let samples = state([]);
 
         // --- sources: external snapshots (services push) ---
-        let users_src = source((): Vec<User> => Vec());
-        let summary_src = source((): StatsSummary =>
+        let users_src = source(() -> Vec<User> => Vec());
+        let summary_src = source(() -> StatsSummary =>
             StatsSummary { n: 0, mean: 0, min: 0, max: 0, last: 0 });
 
         // --- derives: computed views ---
-        let users_view = derive((ctx): Vec<User> => {
+        let users_view = derive((ctx) -> Vec<User> => {
             let users = ctx.latest(users_src);
             let q = ctx.get(query);
             let out: Vec<User> = Vec();
@@ -82,23 +82,23 @@ export class Dashboard {
             sort_by_score(out, ctx.get(sort_dir));
             return out;
         });
-        let users_count = derive((ctx): i32 => ctx.latest(users_src).len());
-        let alert_count = derive((ctx): i32 => ctx.get(alerts).len());
+        let users_count = derive((ctx) -> i32 => ctx.latest(users_src).len());
+        let alert_count = derive((ctx) -> i32 => ctx.get(alerts).len());
 
         // --- mutations: dispatched with payload dataclasses. The trailing
         //     `$` marks dispatch-inverted members (tur's start$/onMounted$
         //     rule). Closures capture the locals above by reference
         //     (RFC 0013) — the instance fields and the closures stay in
         //     lockstep because they were built from the same locals. ---
-        let set_tab$ = mutation((st: Store, t: Tab): unit => {
+        let set_tab$ = mutation((st: Store, t: Tab) -> unit => {
             atom_set(st, tab, t);
         });
 
-        let set_query$ = mutation((st: Store, q: string): unit => {
+        let set_query$ = mutation((st: Store, q: string) -> unit => {
             atom_set(st, query, q);
         });
 
-        let toggle_sort$ = mutation((st: Store, n: Nil): unit => {
+        let toggle_sort$ = mutation((st: Store, n: Nil) -> unit => {
             let flipped = when (atom_get(st, sort_dir)) {
                 SortDir.Asc  -> SortDir.Desc,
                 SortDir.Desc -> SortDir.Asc,
@@ -106,11 +106,11 @@ export class Dashboard {
             atom_set(st, sort_dir, flipped);
         });
 
-        let ingest_series$ = mutation((st: Store, s: Series): unit => {
+        let ingest_series$ = mutation((st: Store, s: Series) -> unit => {
             atom_set(st, samples, s.samples);
         });
 
-        let apply_event$ = mutation((st: Store, ev: LiveEvent): unit => {
+        let apply_event$ = mutation((st: Store, ev: LiveEvent) -> unit => {
             atom_set(st, events_seen, atom_get(st, events_seen) + 1);
             when (ev.kind) {
                 EventKind.Tick -> {
@@ -162,22 +162,22 @@ export class Dashboard {
 
     // --- reads (through the store; derives recompute per read) ---
 
-    fn store(self): Store { return self.store; }
-    fn started_ms(self): i64 { return self.started_ms; }
-    fn tab(self): Tab { return atom_get(self.store, self.tab); }
-    fn query(self): string { return atom_get(self.store, self.query); }
-    fn sort_dir(self): SortDir { return atom_get(self.store, self.sort_dir); }
-    fn live(self): bool { return atom_get(self.store, self.live); }
-    fn events_seen(self): i32 { return atom_get(self.store, self.events_seen); }
-    fn visits(self): i32 { return atom_get(self.store, self.visits); }
-    fn samples(self): Vec<f32> { return atom_get(self.store, self.samples); }
-    fn users(self): Vec<User> { return source_read(self.store, self.users_src); }
-    fn summary(self): StatsSummary { return source_read(self.store, self.summary_src); }
-    fn users_view(self): Vec<User> { return derived_read(self.store, self.users_view); }
-    fn users_count(self): i32 { return derived_read(self.store, self.users_count); }
-    fn alert_count(self): i32 { return derived_read(self.store, self.alert_count); }
+    fn store(self) -> Store { return self.store; }
+    fn started_ms(self) -> i64 { return self.started_ms; }
+    fn tab(self) -> Tab { return atom_get(self.store, self.tab); }
+    fn query(self) -> string { return atom_get(self.store, self.query); }
+    fn sort_dir(self) -> SortDir { return atom_get(self.store, self.sort_dir); }
+    fn live(self) -> bool { return atom_get(self.store, self.live); }
+    fn events_seen(self) -> i32 { return atom_get(self.store, self.events_seen); }
+    fn visits(self) -> i32 { return atom_get(self.store, self.visits); }
+    fn samples(self) -> Vec<f32> { return atom_get(self.store, self.samples); }
+    fn users(self) -> Vec<User> { return source_read(self.store, self.users_src); }
+    fn summary(self) -> StatsSummary { return source_read(self.store, self.summary_src); }
+    fn users_view(self) -> Vec<User> { return derived_read(self.store, self.users_view); }
+    fn users_count(self) -> i32 { return derived_read(self.store, self.users_count); }
+    fn alert_count(self) -> i32 { return derived_read(self.store, self.alert_count); }
 
-    fn alerts_text(self): string {
+    fn alerts_text(self) -> string {
         let out = "";
         let msgs = atom_get(self.store, self.alerts);
         for (let i = 0; i < msgs.len(); i += 1) {
@@ -188,17 +188,17 @@ export class Dashboard {
 
     // --- service bridges: push snapshots into the sources ---
 
-    fn set_users(self, users: Vec<User>): unit {
+    fn set_users(self, users: Vec<User>) -> unit {
         source_push(self.store, self.users_src, users);
     }
 
-    fn set_summary(self, s: StatsSummary): unit {
+    fn set_summary(self, s: StatsSummary) -> unit {
         source_push(self.store, self.summary_src, s);
     }
 
     // --- re-render subscription: one callback, every watched atom ---
 
-    fn redraw_on_change(self, cb: fn(): unit): Vec<WatchHandle> {
+    fn redraw_on_change(self, cb: fn() -> unit) -> Vec<WatchHandle> {
         return [
             watch(self.store, self.tab, cb),
             watch(self.store, self.query, cb),
@@ -216,21 +216,21 @@ export class Dashboard {
 
 // --- vec helpers (shared by mutations; free fns keep models data-only) ---
 
-export(self) fn shift_left(xs: Vec<f32>): unit {
+export(self) fn shift_left(xs: Vec<f32>) -> unit {
     for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
-export(self) fn shift_left_str(xs: Vec<string>): unit {
+export(self) fn shift_left_str(xs: Vec<string>) -> unit {
     for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
-export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir): unit {
+export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir) -> unit {
     for (let i = 1; i < xs.len(); i += 1) {
         let j = i;
         while (j > 0 && score_lt(xs[j], xs[j - 1], dir)) {
@@ -240,14 +240,14 @@ export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir): unit {
     }
 }
 
-export(self) fn score_lt(a: User, b: User, dir: SortDir): bool {
+export(self) fn score_lt(a: User, b: User, dir: SortDir) -> bool {
     return when (dir) {
         SortDir.Asc  -> a.score < b.score,
         SortDir.Desc -> b.score < a.score,
     };
 }
 
-export(self) fn swap_users(xs: Vec<User>, a: i32, b: i32): unit {
+export(self) fn swap_users(xs: Vec<User>, a: i32, b: i32) -> unit {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;

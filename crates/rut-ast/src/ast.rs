@@ -364,7 +364,7 @@ pub struct FieldDeclData {
     pub init: Option<NodeHandle<AnyExpr>>,
 }
 
-/// `private`? `suspend`? fn name<..>(self, ..): T { .. }
+/// `private`? `suspend`? fn name<..>(self, ..) -> T { .. }
 #[derive(Clone, Debug)]
 pub struct MethodDeclData {
     pub is_private: bool,
@@ -452,7 +452,7 @@ pub enum PatKind {
 pub enum TypeKind {
     /// path type, optionally `dyn`-prefixed in value positions (RFC 0030 §2)
     TyPath { segs: Vec<PathSeg>, is_dyn: bool },
-    /// fn type: `fn(Store, P): R` — params are bare types (RFC 0013 §1)
+    /// fn type: `fn(Store, P) -> R` — params are bare types (RFC 0013 §1)
     TyFn { params: Vec<NodeHandle<AnyTy>>, ret: NodeHandle<AnyTy> },
     /// const-generic argument (the `N` in `Array<T, N>`) — an expression
     TyConst(NodeHandle<AnyExpr>),

@@ -12,26 +12,26 @@ import { Canvas, newCanvas } from "app:gfx";
 import { Logger } from "std:log";
 
 trait Drawable {
-    fn draw(self, g: Canvas): unit;
+    fn draw(self, g: Canvas) -> unit;
 }
 
 trait HitTest {
-    fn hit_test(self, x: f32, y: f32): bool;
+    fn hit_test(self, x: f32, y: f32) -> bool;
 }
 
 class Sprite {                  // inherent members only — the impls follow
     private x: f32 = 0;
     private y: f32 = 0;
 
-    fn new(): Self { return Self {}; }   // explicit — no implicit default
+    fn new() -> Self { return Self {}; }   // explicit — no implicit default
 }
 
 impl Drawable for Sprite {
-    fn draw(self, g: Canvas): unit { g.circle(self.x, self.y, 1); }
+    fn draw(self, g: Canvas) -> unit { g.circle(self.x, self.y, 1); }
 }
 
 impl HitTest for Sprite {
-    fn hit_test(self, px: f32, py: f32): bool {
+    fn hit_test(self, px: f32, py: f32) -> bool {
         return px == self.x && py == self.y;
     }
 }
@@ -41,16 +41,16 @@ class Circle {
     private y: f32 = 0;
     private r: f32 = 1;
 
-    fn new(x: f32, y: f32, r: f32): Self {
+    fn new(x: f32, y: f32, r: f32) -> Self {
         return Self { x: x, y: y, r: r };
     }
 }
 
 impl Drawable for Circle {
-    fn draw(self, g: Canvas): unit { g.circle(self.x, self.y, self.r); }
+    fn draw(self, g: Canvas) -> unit { g.circle(self.x, self.y, self.r); }
 }
 
-fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): unit {
+fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas) -> unit {
     let log = Logger.new("types");
     if (d is Circle) {               // runtime test — exact-class check
         d.draw(g);                   // no downcast exists; stay on the
@@ -76,6 +76,6 @@ fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas): unit {
     // position (impl Any / T requires Any / is Any — all errors).
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     type_tests(Circle.new(1, 2, 3), Sprite.new(), newCanvas());
 }

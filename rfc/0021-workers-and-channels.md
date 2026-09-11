@@ -20,7 +20,7 @@ variant lives in `examples/network/echo-server.rut` + `echo-worker.rut`.
 
 - `Channel<T>()` returns a channel value with two endpoints, `sender` and
   `receiver` (unbounded, MPSC). `send(v)` is sync and cheap;
-  `recv(): Future<Option<T>>` suspends until a message arrives, resolves
+  `recv() -> Future<Option<T>>` suspends until a message arrives, resolves
   `None` when every sender is gone. (Bounded/suspend-send and MPMC are OQ-1.)
 - Channel endpoints are **transferable** values: pass one to a worker through
   `spawn_worker` args or through another channel.

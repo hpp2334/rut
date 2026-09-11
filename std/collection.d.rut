@@ -4,6 +4,6 @@
 // RFCs — same mechanism as `plugin:my_map`, in the toolchain namespace.
 
 export trait Hashable {
-    fn hash(self): u64;
-    fn eq(self, other: Self): bool;
+    fn hash(self) -> u64;
+    fn eq(self, other: Self) -> bool;
 }

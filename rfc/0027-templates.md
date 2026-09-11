@@ -27,7 +27,7 @@ literals, chosen by expected type:
   R2; no `tmpl` op): a `Template { parts: Vec<string>,
   args: Vec<Opaque> }` — literal chunks and **boxed values with their
   runtime types** (`Opaque`, RFC 0014), not pre-rendered text.
-- `Template` API: `t.str(): string` renders with rut's own `str()` rules
+- `Template` API: `t.str() -> string` renders with rut's own `str()` rules
   (identical output to the `string` path); `t.parts()`, `t.args()`,
   `t.type_id(i)` for hosts/stdlibs doing per-arg formatting. Nothing else
   — like `Opaque`, a template can't do anything until someone renders it.

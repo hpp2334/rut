@@ -7,23 +7,23 @@ import { box, BoxProps, Color, column, Element, FlexProps, TextProps, text } fro
 import { GAP, PAD, RADIUS } from "../theme.rut";
 import { Palette } from "../theme.rut";
 
-export fn transparent(): Color {
+export fn transparent() -> Color {
     return Color.rgba(0, 0, 0, 0);
 }
 
-export fn title(th: Palette, s: string): Element {
+export fn title(th: Palette, s: string) -> Element {
     return text(TextProps { text: s, size: 20, weight: 700, color: th.text });
 }
 
-export fn body(th: Palette, s: string): Element {
+export fn body(th: Palette, s: string) -> Element {
     return text(TextProps { text: s, size: 14, weight: 400, color: th.text_dim });
 }
 
-export fn stat(th: Palette, s: string): Element {
+export fn stat(th: Palette, s: string) -> Element {
     return text(TextProps { text: s, size: 24, weight: 700, color: th.text });
 }
 
-export fn chip(th: Palette, label: string, fg: Color): Element {
+export fn chip(th: Palette, label: string, fg: Color) -> Element {
     return box(BoxProps {
         pad: 8,
         color: th.surface,
@@ -34,15 +34,15 @@ export fn chip(th: Palette, label: string, fg: Color): Element {
     });
 }
 
-export fn vgap(h: f32): Element {
+export fn vgap(h: f32) -> Element {
     return box(BoxProps { h: h, color: transparent() });
 }
 
-export fn hgap(w: f32): Element {
+export fn hgap(w: f32) -> Element {
     return box(BoxProps { w: w, color: transparent() });
 }
 
-export fn panel(th: Palette, heading: string, child: Element): Element {
+export fn panel(th: Palette, heading: string, child: Element) -> Element {
     return box(BoxProps {
         pad: PAD,
         color: th.surface,

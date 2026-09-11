@@ -2,7 +2,7 @@
 
 import { Logger } from "std:log";
 
-fn sieve(limit: i32): Vec<i32> {
+fn sieve(limit: i32) -> Vec<i32> {
     let marks = Vec<u8>(limit + 1);     // zeroed: 0 = candidate, 1 = crossed
     let primes: Vec<i32> = Vec();       // empty growable: Vec(), not []
     for (let i = 2; i <= limit; i += 1) {
@@ -18,7 +18,7 @@ fn sieve(limit: i32): Vec<i32> {
     return primes;
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("sieve");
     let primes = sieve(100);
     let last = primes[primes.len() - 1];

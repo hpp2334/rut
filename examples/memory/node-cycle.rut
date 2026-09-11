@@ -9,14 +9,14 @@ import { Logger } from "std:log";
 class Node {                              // initializer covers `next`
     next: Option<Node> = Option.none;     // a HANDLE slot — recursive types
                                            // are legal (pointer-sized)
-    fn new(): Self { return Self {}; }   // explicit construction — no
+    fn new() -> Self { return Self {}; }   // explicit construction — no
                                            // implicit default
-    fn link(mut self, other: Node): unit {
+    fn link(mut self, other: Node) -> unit {
         self.next = Option.some(other);
     }
 }
 
-fn make_cycle(): Node {                   // a -> b -> a : strong cycle
+fn make_cycle() -> Node {                   // a -> b -> a : strong cycle
     let a = Node.new();
     let b = Node.new();
     a.link(b);
@@ -24,7 +24,7 @@ fn make_cycle(): Node {                   // a -> b -> a : strong cycle
     return a;
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("cycle");
     let head = make_cycle();
     log.info(f"head.next alive: {head.next.is_some()}");

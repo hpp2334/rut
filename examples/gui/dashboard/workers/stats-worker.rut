@@ -8,7 +8,7 @@
 import { Receiver } from "std:channel";
 import { StatsRequest, StatsSummary } from "../models.rut";
 
-suspend fn main(reqs: Receiver<StatsRequest>): unit {
+suspend fn main(reqs: Receiver<StatsRequest>) -> unit {
     while (true) {
         let req = await reqs.recv();       // Future<Option<StatsRequest>>
         if (req.is_none()) {
@@ -18,7 +18,7 @@ suspend fn main(reqs: Receiver<StatsRequest>): unit {
     }
 }
 
-fn summarize(xs: Vec<f32>): StatsSummary {
+fn summarize(xs: Vec<f32>) -> StatsSummary {
     if (xs.len() == 0) {
         return StatsSummary { n: 0, mean: 0, min: 0, max: 0, last: 0 };
     }

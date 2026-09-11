@@ -29,25 +29,25 @@ Two declaration keywords, two linkage targets (RFC 0029 — both are
 
 ```rut
 // app/gfx.d.rut — declaration file for "app:gfx"
-host fn newCanvas(w: i32, h: i32): Canvas;      // module-level host fn
+host fn newCanvas(w: i32, h: i32) -> Canvas;      // module-level host fn
 
 export host class Canvas {                      // exported: nameable outside
-    fn circle(self, x: f32, y: f32, r: f32): unit;
-    fn flush(self): unit;
+    fn circle(self, x: f32, y: f32, r: f32) -> unit;
+    fn flush(self) -> unit;
 }
 
 export host class Source<T> {                   // generic — instantiation
-    fn get(self): T;                            // identity KEPT on the value:
+    fn get(self) -> T;                            // identity KEPT on the value:
 }                                               // Source<i32> != Source<string>
 
 host class Fence {                              // NOT exported: known inside
-    fn signal(self): unit;                      // app/gfx (callable via its
+    fn signal(self) -> unit;                      // app/gfx (callable via its
 }                                               // slot), nameable nowhere else
 ```
 
 - A `host class` declaration may contain method signatures — instance
-  methods (`fn set(self, k: K, v: V): unit;`) and **class methods**
-  (`fn new(cap: i32): Self;`, no `self` — RFC 0010 §2), the latter the
+  methods (`fn set(self, k: K, v: V) -> unit;`) and **class methods**
+  (`fn new(cap: i32) -> Self;`, no `self` — RFC 0010 §2), the latter the
   native construction surface: `MyMap.new(cap)` is an ordinary method
   call (RFC 0026). Host class
   methods spell the `self` receiver like rut

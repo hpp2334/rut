@@ -11,34 +11,34 @@ class Counter {
     private n: i32 = 0;             // field initializer
     static instances: i32 = 0;      // static: one slot per class, per VM
 
-    fn new(): Self {                    // the construction surface — a
+    fn new() -> Self {                    // the construction surface — a
         Counter.instances &+= 1;        // class method (no self); free to
         return Self { };               // run logic. `new` is a convention,
     }                                   // not syntax (RFC 0002 §4)
 
-    fn press(mut self): unit {           // instance method: explicit receiver,
+    fn press(mut self) -> unit {           // instance method: explicit receiver,
         self.n &+= 1;                // wrapping add (§8) — or `+=` to trap
     }
 
-    fn count(self): i32 { return self.n; }   // plain method; no get/set syntax
+    fn count(self) -> i32 { return self.n; }   // plain method; no get/set syntax
 }
 
 class Rect {
     private w: f32;
     private h: f32;
 
-    fn new(w: f32, h: f32): Self {     // construction VALIDATES — it's
+    fn new(w: f32, h: f32) -> Self {     // construction VALIDATES — it's
         if (w <= 0 || h <= 0) {        // just a function
             panic("Rect: negative extents");
         }
         return Self { w: w, h: h }; // must initialize fieldless-initialized
     }
 
-    fn from_square(s: f32): Self {     // named constructors are siblings:
+    fn from_square(s: f32) -> Self {     // named constructors are siblings:
         return Rect.new(s, s);         // any no-self method returning Self
     }
 
-    fn area(self): f32 { return self.w * self.h; }
+    fn area(self) -> f32 { return self.w * self.h; }
 }
 
 /** Try-construction: a class method returning Option<Self>. */
@@ -46,19 +46,19 @@ class Version {
     private major: i32;
     private minor: i32;
 
-    private fn of(major: i32, minor: i32): Self {  // trusts its caller —
+    private fn of(major: i32, minor: i32) -> Self {  // trusts its caller —
         return Self { major: major, minor: minor }; // private: seals the class
     }
 
-    fn parse(s: string): Option<Version> {    // the public validating door:
+    fn parse(s: string) -> Option<Version> {    // the public validating door:
         // ... split "1.2" — on failure:      // a class method over the
         return Option.none();                 // private class method
     }
 
-    fn label(self): string { return f"{self.major}.{self.minor}"; }
+    fn label(self) -> string { return f"{self.major}.{self.minor}"; }
 }
 
-fn classes(): unit {
+fn classes() -> unit {
     let log = Logger.new("classes");
     let c = Counter.new();         // class method -> construction
     c.press();
@@ -71,6 +71,6 @@ fn classes(): unit {
     // Rect { w: 1, h: 1 };         // ERROR: classes have no outside literal
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     classes();
 }

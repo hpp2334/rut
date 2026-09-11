@@ -16,7 +16,7 @@ dataclass Sample {
     value: i64;
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("batch");
 
     // 1. the HOST constructs: Batch.new runs the native class method

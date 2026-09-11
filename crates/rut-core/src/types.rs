@@ -71,7 +71,7 @@ pub enum TyKind {
     TraitObj { trait_id: u32 },
     /// erasure box (RFC 0014)
     Opaque,
-    /// fn(P..): R — a closure value { func, captures } in one slot
+    /// fn(P..) -> R — a closure value { func, captures } in one slot
     Fn { params: Vec<TypeId>, ret: TypeId },
 }
 

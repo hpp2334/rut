@@ -124,7 +124,7 @@ The named type operations lower to R3 primitives:
   (RFC 0015 §6); pure in `(recv, want)`, so repeated probes CSE and
   invariant ones hoist like `tidof` itself. Statically-answered
   receivers never emit an op — typecheck folded them (RFC 0031 §2).
-- `downcast<T>(a): Option<T>` (RFC 0014) is a **generic prelude
+- `downcast<T>(a) -> Option<T>` (RFC 0014) is a **generic prelude
   function**: `tidof`; `br` on `icmp == TID_T`; `optsome(unbox)` on one
   arm, `optnone` on the other. The check is visible dataflow: `tidof`
   is a pure load, so repeated checks CSE and invariant ones hoist

@@ -25,7 +25,7 @@ export dataclass Palette {
     err: Color;
 }
 
-export fn theme(): Palette {
+export fn theme() -> Palette {
     return Palette {
         bg:       Color.hex("#0f1216"),
         surface:  Color.hex("#171c23"),

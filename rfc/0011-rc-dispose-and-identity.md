@@ -25,7 +25,7 @@ rc 0) and **`examples/memory/temp-file.rut`**.
   comparison for composites; field-wise comparison goes
   through `Hashable.eq` (RFC 0028) when a type opts in. Copying is always
   explicit — a program never depends on when a copy happens.
-- **`own(x): T`** — prelude builtin, the eager **shallow** copy: a fresh
+- **`own(x) -> T`** — prelude builtin, the eager **shallow** copy: a fresh
   cell with `x`'s payload cloned (primitive fields copied, handle-typed
   fields still shared — divergence is one level deep; `own` it again for
   deeper cuts). `own` is the only copy in the language. Over a buffer it

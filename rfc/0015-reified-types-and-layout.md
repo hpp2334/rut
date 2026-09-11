@@ -51,13 +51,13 @@ let SZ_POINT: u32  = size_of<Point>();     // 8 — two f32s, repr C
 let AL_POINT: u32  = align_of<Point>();    // 4
 ```
 
-- `type_id<T>(): u32` — identity of the *instantiated* type, unique per VM
+- `type_id<T>() -> u32` — identity of the *instantiated* type, unique per VM
   run and stable across modules (`Vec<f32>` ≠ `Vec<f64>`;
   `Array<i32, 3> ≠ Array<i32, 4>` — const-generic `N` is part of the
   identity, RFC 0005);
   `Point` = `Point` wherever declared). Comparable only — not a first-class
   type value (OQ-1).
-- `size_of<T>(): u32`, `align_of<T>(): u32` — the value representation:
+- `size_of<T>() -> u32`, `align_of<T>() -> u32` — the value representation:
   primitives their width/alignment; dataclass/class their **repr C payload
   block** (§4) — what `own` copies clone (RFC 0011 §1) and what
   `StructRef` exposes to hosts (RFC 0024);
@@ -74,9 +74,9 @@ let AL_POINT: u32  = align_of<Point>();    // 4
   sign/zero-extended; a float, f64 — the §5 slot discipline. A kind
   branch plus `downcast<i64>` / `downcast<f64>` / `downcast<bool>` /
   `downcast<string>` is total in-branch.
-- `Opaque` mirrors the layout builtins at runtime: `o.type_id(): u32`,
-  `o.size(): u32`,
-  `o.as_bytes(): Vec<u8>` (a snapshot of the box's repr-C payload). Together
+- `Opaque` mirrors the layout builtins at runtime: `o.type_id() -> u32`,
+  `o.size() -> u32`,
+  `o.as_bytes() -> Vec<u8>` (a snapshot of the box's repr-C payload). Together
   they enable **layout-aware heterogeneous storage** — group entries by
   `type_id`, preallocate `size_of`-sized slabs, compare payloads byte-wise —
   while recovery still goes through checked `downcast<T>`. Constructing an

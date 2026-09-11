@@ -5,7 +5,7 @@
 import { Receiver, Sender } from "std:channel";
 import { decode, fetch, Image, Job } from "imaging";
 
-suspend fn main(jobs: Receiver<Job>, out: Sender<Image>): unit {
+suspend fn main(jobs: Receiver<Job>, out: Sender<Image>) -> unit {
     while (true) {
         let job = await jobs.recv();   // Future<Option<Job>>
         if (job.is_none()) {

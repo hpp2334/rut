@@ -3,7 +3,7 @@
 
 import { Logger } from "std:log";
 
-fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, out: Vec<f32>): unit {
+fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, out: Vec<f32>) -> unit {
     for (let i = 0; i < n; i += 1) {
         for (let k = 0; k < n; k += 1) {
             let aik = a[i * n + k];
@@ -14,7 +14,7 @@ fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, out: Vec<f32>): unit {
     }
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("matrix");
     let n = 4;
     let a = Vec<f32>(n * n);

@@ -21,16 +21,16 @@ import { Hashable } from "std:collection";        // the prelude constraint
 import { Logger } from "std:log";                 // trait (RFC 0028)
 
 trait Drawable {
-    fn draw(self, g: Canvas): unit;
+    fn draw(self, g: Canvas) -> unit;
 }
 
 trait HitTest {
-    fn hit_test(self, x: f32, y: f32): bool;
+    fn hit_test(self, x: f32, y: f32) -> bool;
 }
 
 trait Widget {                   // composition replaces `Drawable & HitTest`
-    fn draw(self, g: Canvas): unit;
-    fn hit_test(self, x: f32, y: f32): bool;
+    fn draw(self, g: Canvas) -> unit;
+    fn hit_test(self, x: f32, y: f32) -> bool;
 }
 
 class Sprite {                   // inherent members only — headers list no traits
@@ -38,18 +38,18 @@ class Sprite {                   // inherent members only — headers list no tr
     private y: f32 = 0;
     // every field initialized -> default no-arg constructor: Sprite()
 
-    fn move_by(mut self, dx: f32, dy: f32): unit {
+    fn move_by(mut self, dx: f32, dy: f32) -> unit {
         self.x += dx;
         self.y += dy;
     }
 }
 
 impl Widget for Sprite {         // admission + bodies — one block per (trait, type)
-    fn draw(self, g: Canvas): unit {
+    fn draw(self, g: Canvas) -> unit {
         g.circle(self.x, self.y, 1);
     }
 
-    fn hit_test(self, px: f32, py: f32): bool {
+    fn hit_test(self, px: f32, py: f32) -> bool {
         return px == self.x && py == self.y;
     }
 }
@@ -60,22 +60,22 @@ dataclass Cell {                 // fields only — the value-key contract rides
 }
 
 impl Hashable for Cell {         // hash + eq: the value-key contract
-    fn hash(self): u64 {                             // vtable dispatch — trait
+    fn hash(self) -> u64 {                             // vtable dispatch — trait
         return u64(self.x) * 1000003 + u64(self.y);  // methods NEVER devirtualize
     }                                                // (RFC 0012 §1)
 
-    fn eq(self, other: Cell): bool {                 // field-wise equality —
+    fn eq(self, other: Cell) -> bool {                 // field-wise equality —
         return other.x == self.x && other.y == self.y;   // the HAND-WRITTEN
     }                                                // form; `==` itself is
 }                                                    // identity (RFC 0012 §4)
 
-fn blit_all(g: Canvas, items: Vec<dyn Widget>): unit {
+fn blit_all(g: Canvas, items: Vec<dyn Widget>) -> unit {
     for (let w of items) {
         w.draw(g);                   // vtable dispatch — the only dynamic call
     }
 }
 
-fn mixed_hash(keys: Vec<dyn Hashable>): u64 {
+fn mixed_hash(keys: Vec<dyn Hashable>) -> u64 {
     let acc: u64 = 0;
     for (let k of keys) {
         acc += k.hash();             // vtable dispatch through Hashable;
@@ -83,7 +83,7 @@ fn mixed_hash(keys: Vec<dyn Hashable>): u64 {
     return acc;
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger("traits");
     let s = Sprite();
     s.move_by(2, 2);

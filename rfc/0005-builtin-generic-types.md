@@ -16,10 +16,10 @@ propagation operator. See **`examples/basic/option-result.rut`**.
 
 | `Option<T>` | `Result<T, E>` |
 |---|---|
-| `is_some() / is_none(): bool` | `is_ok() / is_err(): bool` |
+| `is_some() / is_none() -> bool` | `is_ok() / is_err() -> bool` |
 | `value: T` (traps on `None`) | `value: T` (traps on `Err`) |
-| `unwrap_or(d: T): T` | `error: E` (traps on `Ok`) |
-| `expect(msg: string): T` | `unwrap_or(d: T): T` |
+| `unwrap_or(d: T) -> T` | `error: E` (traps on `Ok`) |
+| `expect(msg: string) -> T` | `unwrap_or(d: T) -> T` |
 
 `Vec<T>` completes the builtin generic set: the mutable, growable,
 handle-shared sequence — `push`/`pop`, indexing, `.len()` (RFC 0016 §4).

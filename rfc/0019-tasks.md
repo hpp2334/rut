@@ -14,7 +14,7 @@ See **`examples/concurrency/spawn-cancel.rut`** (cancellation-by-drop) and
 
 ## 1. `spawn`
 
-- `spawn(fut): Task<T>` schedules the future on the current VM. `Task<T>` is
+- `spawn(fut) -> Task<T>` schedules the future on the current VM. `Task<T>` is
   itself a `Future<Result<T, Cancelled>>`: `await task` joins it.
 
 ## 2. `cancel`

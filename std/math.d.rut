@@ -3,4 +3,4 @@
 // rest of the module grows as natives land (each entry true to the
 // implementation, per std/core.d.rut's contract).
 
-export host fn sqrt(x: f64): f64;
+export host fn sqrt(x: f64) -> f64;

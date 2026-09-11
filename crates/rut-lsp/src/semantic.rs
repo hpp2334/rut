@@ -747,7 +747,7 @@ mod tests {
 
     #[test]
     fn decls_and_keywords() {
-        let src = "enum Color { Red, Green }\nfn area(r: f32): f32 { return r * 2.0f32; }\n";
+        let src = "enum Color { Red, Green }\nfn area(r: f32) -> f32 { return r * 2.0f32; }\n";
         let spans = classify_src(src);
         assert_eq!(find(src, &spans, "enum"), vec![TokenType::Keyword]);
         assert_eq!(find(src, &spans, "Color"), vec![TokenType::Enum]);
@@ -763,7 +763,7 @@ mod tests {
 
     #[test]
     fn members_fields_and_locals() {
-        let src = "class Circle {\n    private r: f32;\n    fn scale(mut self, k: f32): Self { self.r = self.r * k; }\n}\n";
+        let src = "class Circle {\n    private r: f32;\n    fn scale(mut self, k: f32) -> Self { self.r = self.r * k; }\n}\n";
         let spans = classify_src(src);
         assert_eq!(find(src, &spans, "Circle"), vec![TokenType::Class]);
         // the declared field + both `self.r` path tails
@@ -777,7 +777,7 @@ mod tests {
 
     #[test]
     fn f_string_tiles_and_lexes_holes() {
-        let src = "fn f(): unit { log.info(f\"{color_name(Color.Red)} area={c.area()}\"); }";
+        let src = "fn f() -> unit { log.info(f\"{color_name(Color.Red)} area={c.area()}\"); }";
         let spans = classify_src(src);
         // the whole literal tiles with strings + hole tokens, no overlap
         let lit = src.find("f\"").unwrap() as u32;
@@ -803,7 +803,7 @@ mod tests {
     fn types_struct_literals_and_patterns() {
         let src = "enum Color { Red, Green }\n\
                    dataclass Point { x: f64; y: f64; }\n\
-                   fn make(c: Color): Point {\n\
+                   fn make(c: Color) -> Point {\n\
                        let p = Point { x: 1, y: 2 };\n\
                        return when (c) { Color.Red -> p, _ -> p, };\n\
                    }\n";
@@ -840,7 +840,7 @@ mod tests {
     fn conversion_calls_keep_their_type_color() {
         // `f64(x)` is the conversion family (RFC 0007) — the primitive
         // stays a type in call position, not a variable
-        let src = "fn f(p: Point): f64 { return f64(p.x); }\n";
+        let src = "fn f(p: Point) -> f64 { return f64(p.x); }\n";
         let spans = classify_src(src);
         assert_eq!(find(src, &spans, "f64"), vec![TokenType::Type, TokenType::Type]);
         assert_eq!(find(src, &spans, "p"), vec![TokenType::Parameter, TokenType::Variable]);
@@ -850,7 +850,7 @@ mod tests {
     fn bare_calls_color_their_callee_as_function() {
         // `length(pt)` / `newCanvas()` — the callee gets the function
         // color, overriding the single-seg path's variable class
-        let src = "fn go(): unit { let p = newCanvas(); blit_all(length(p), p); }\n";
+        let src = "fn go() -> unit { let p = newCanvas(); blit_all(length(p), p); }\n";
         let spans = classify_src(src);
         assert_eq!(find(src, &spans, "newCanvas"), vec![TokenType::Function]);
         assert_eq!(find(src, &spans, "blit_all"), vec![TokenType::Function]);
@@ -860,7 +860,7 @@ mod tests {
 
     #[test]
     fn symbols_outline() {
-        let src = "trait Drawable { fn draw(self, g: Canvas): unit; }\nimpl Drawable for Circle { fn draw(self, g: Canvas): unit {} }\nenum Color { Red }\nexport fn main(): unit {}\n";
+        let src = "trait Drawable { fn draw(self, g: Canvas) -> unit; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> unit {} }\nenum Color { Red }\nexport fn main() -> unit {}\n";
         let (toks, _) = rut_lexer::lexer::lex(src);
         let (ast, _) = parse(src, Mode::Impl);
         let syms = symbols(&toks, &ast);

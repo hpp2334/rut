@@ -43,8 +43,8 @@ blocks in action.
   }
 
   impl Hashable for Point {
-      fn hash(self): u64 { .. }
-      fn eq(self, other: Point): bool { .. }
+      fn hash(self) -> u64 { .. }
+      fn eq(self, other: Point) -> bool { .. }
   }
   ```
 

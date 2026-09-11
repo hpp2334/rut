@@ -3,14 +3,14 @@
 
 import { Logger } from "std:log";
 
-fn first<T>(xs: Vec<T>): Option<T> {
+fn first<T>(xs: Vec<T>) -> Option<T> {
     if (xs.len() == 0) {
         return Option.none();
     }
     return Option.some(xs[0]);
 }
 
-fn sum(xs: Vec<i32>): i32 {
+fn sum(xs: Vec<i32>) -> i32 {
     let total = 0;
     for (let x of xs) {
         total += x;
@@ -18,10 +18,10 @@ fn sum(xs: Vec<i32>): i32 {
     return total;
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("closures");
-    let add = (a: i32, b: i32): i32 => a + b;      // single-expr arrow
-    let area_of = (r: f32): f32 => {               // block arrow
+    let add = (a: i32, b: i32) -> i32 => a + b;      // single-expr arrow
+    let area_of = (r: f32) -> f32 => {               // block arrow
         let sq = r * r;
         return sq * 3.14159265f32;
     };

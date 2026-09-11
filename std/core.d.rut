@@ -15,41 +15,41 @@
 // not members, and are not declared.
 
 export host primitive string {
-    fn len(self): i32;
+    fn len(self) -> i32;
 }
 
 export host class Array<T> {
-    fn len(self): i32;                    // folds to the const N (RFC 0032 §1.1 R1)
+    fn len(self) -> i32;                    // folds to the const N (RFC 0032 §1.1 R1)
 }
 
 export host class Vec<T> {
-    fn from(arr: Array<T>): Self;         // array -> heap vector
-    fn len(self): i32;
-    fn push(self, v: T): unit;
-    fn pop(self): T;
+    fn from(arr: Array<T>) -> Self;         // array -> heap vector
+    fn len(self) -> i32;
+    fn push(self, v: T) -> unit;
+    fn pop(self) -> T;
 }
 
 export host class Option<T> {
-    fn some(v: T): Self;
-    fn none(): Self;                      // element inferred from the binding's annotation
-    fn is_some(self): bool;
-    fn is_none(self): bool;
-    fn unwrap_or(self, default: T): T;
-    fn expect(self, msg: string): T;      // panics with `msg` on None
+    fn some(v: T) -> Self;
+    fn none() -> Self;                      // element inferred from the binding's annotation
+    fn is_some(self) -> bool;
+    fn is_none(self) -> bool;
+    fn unwrap_or(self, default: T) -> T;
+    fn expect(self, msg: string) -> T;      // panics with `msg` on None
 }
 
 export host class Result<T, E> {
-    fn ok(v: T): Self;
-    fn err(e: E): Self;
-    fn is_ok(self): bool;
-    fn is_err(self): bool;
-    fn unwrap_or(self, default: T): T;
-    fn expect(self, msg: string): T;      // panics with `msg` on Err
+    fn ok(v: T) -> Self;
+    fn err(e: E) -> Self;
+    fn is_ok(self) -> bool;
+    fn is_err(self) -> bool;
+    fn unwrap_or(self, default: T) -> T;
+    fn expect(self, msg: string) -> T;      // panics with `msg` on Err
 }
 
 // RFC 0011/0016 — impl blocks for Disposal run `dispose` at rc 0; a
 // builtin trait with ordinary nominal impls (RFC 0028: part of the
 // prelude, spelled here because .d.rut declares traits too).
 export trait Disposal {
-    fn dispose(mut self): unit;
+    fn dispose(mut self) -> unit;
 }

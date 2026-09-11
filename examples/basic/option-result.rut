@@ -6,7 +6,7 @@ import { Logger } from "std:log";
 
 enum IoError { NotFound, Permission, Busy }
 
-fn find(xs: Vec<string>, key: string): Option<i32> {
+fn find(xs: Vec<string>, key: string) -> Option<i32> {
     for (let i = 0; i < xs.len(); i += 1) {
         if (xs[i] == key) {
             return Option.some(i);
@@ -15,7 +15,7 @@ fn find(xs: Vec<string>, key: string): Option<i32> {
     return Option.none();
 }
 
-fn demo(list: Vec<string>): unit {
+fn demo(list: Vec<string>) -> unit {
     let log = Logger.new("option");
     let idx = find(list, "beta");
     if (idx.is_some()) {
@@ -24,12 +24,12 @@ fn demo(list: Vec<string>): unit {
     let v = idx.unwrap_or(0);         // Option<T>.unwrap_or(default: T): T
 }
 
-fn read_config(path: string): Result<Vec<u8>, IoError> {
+fn read_config(path: string) -> Result<Vec<u8>, IoError> {
     let raw = read(path)?;            // `?` propagates Err upward
     return Result.ok(raw);
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("option");
     demo(["alpha", "beta"]);
 

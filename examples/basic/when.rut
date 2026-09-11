@@ -3,7 +3,7 @@
 
 import { Logger } from "std:log";
 
-fn describe(n: i32): string {
+fn describe(n: i32) -> string {
     return when (n) {
         0         -> "zero",
         1, 2, 3   -> "small",        // comma-separated alternatives
@@ -13,7 +13,7 @@ fn describe(n: i32): string {
 
 enum Light { Green, Yellow, Red }
 
-fn drive(l: Light): unit {              // statement usage = unit-typed when
+fn drive(l: Light) -> unit {              // statement usage = unit-typed when
     when (l) {
         Light.Green  -> { go(); },
         Light.Yellow -> { brake(); },
@@ -21,11 +21,11 @@ fn drive(l: Light): unit {              // statement usage = unit-typed when
     }
 }
 
-fn go(): unit { /* ... */ }
-fn brake(): unit { /* ... */ }
-fn stop(): unit { /* ... */ }
+fn go() -> unit { /* ... */ }
+fn brake() -> unit { /* ... */ }
+fn stop() -> unit { /* ... */ }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("when");
     log.info(describe(2));               // "small"
     drive(Light.Yellow);

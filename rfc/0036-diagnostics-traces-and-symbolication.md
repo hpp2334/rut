@@ -28,10 +28,10 @@ pc→span data, and never participates in trace restoration.
 
 ## 1. The three tiers
 
-- `std:debug.here(): Location` — the source position of the call. The
+- `std:debug.here() -> Location` — the source position of the call. The
   compiler folds it to a constant from the span table, exactly like
   `type_id<T>()` / `size_of<T>()` (RFC 0015 §3, RFC 0033 §3). Free.
-- `std:debug.capture_stack_trace(): StackTrace` — explicit capture (the
+- `std:debug.capture_stack_trace() -> StackTrace` — explicit capture (the
   JS `Error.captureStackTrace` role): a host fn that **skips its own
   frame** (the `constructorOpt` behavior, automatic).
 - `?` stays zero-cost — no auto-capture on propagation (RFC 0018's
@@ -118,7 +118,7 @@ dataclass LoadError {
 }
 ```
 
-- `trace.render(): string` — native method; renders via the loaded
+- `trace.render() -> string` — native method; renders via the loaded
   binaries' tables, degrades gracefully when stripped.
 - `Location` is a plain dataclass `{ file: string, line: i32, col: i32 }`
   — printable, no host state; crosses the `Value` boundary
@@ -132,17 +132,17 @@ Same declaration-file machinery as `plugin:my_map` (RFC 0025/0026/0029):
 ```rut
 // std/debug.d.rut (excerpt)
 export dataclass Location { file: string, line: i32, col: i32 }
-export host fn here(): Location;                  // folded at compile time (RFC 0033 §3)
-export host fn str(v: Opaque): string;        // developer rendering (RFC 0007 §2)
-export host fn type_name(v: Opaque): string;  // debug type name
-export host fn capture_stack_trace(): StackTrace;
+export host fn here() -> Location;                  // folded at compile time (RFC 0033 §3)
+export host fn str(v: Opaque) -> string;        // developer rendering (RFC 0007 §2)
+export host fn type_name(v: Opaque) -> string;  // debug type name
+export host fn capture_stack_trace() -> StackTrace;
 export host class StackTrace {
                                              // every capture is a unique
                                              // snapshot — identity `==`,
                                              // like every composite
                                              // (RFC 0012 §4)
-    fn render(): string;
-    fn depth(): i32;
+    fn render() -> string;
+    fn depth() -> i32;
 }
 ```
 

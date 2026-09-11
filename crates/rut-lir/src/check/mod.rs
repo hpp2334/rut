@@ -241,7 +241,7 @@ impl<'a> Ctx<'a> {
     }
     pub fn mk_fn_ty(&mut self, params: Vec<TypeId>, ret: TypeId) -> TypeId {
         let ps: Vec<String> = params.iter().map(|&p| self.types.name(p).to_string()).collect();
-        let name = format!("fn({}): {}", ps.join(", "), self.types.name(ret));
+        let name = format!("fn({}) -> {}", ps.join(", "), self.types.name(ret));
         self.types.intern(RutType {
             name,
             kind: TyKind::Fn { params, ret },

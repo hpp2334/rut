@@ -886,7 +886,7 @@ dataclass Point {
 }
 
 // euclidean length
-fn length(p: Point): f64 {
+fn length(p: Point) -> f64 {
     return p.x;
 }
 ";
@@ -918,10 +918,10 @@ class Circle {
         let src = "\
 class Circle {
     r: f64;
-    fn area(self): f64 { return 3.14; }
-    fn grow(self, k: f64): unit { self.r = self.r * k; }
+    fn area(self) -> f64 { return 3.14; }
+    fn grow(self, k: f64) -> unit { self.r = self.r * k; }
 }
-fn use_it(): f64 {
+fn use_it() -> f64 {
     let c = Circle.new(1.0);
     return c.area();
 }
@@ -929,7 +929,7 @@ fn use_it(): f64 {
         // 2nd occurrence: the call `c.area()`, receiver inferred from
         // `let c = Circle.new(..)`
         let md = hover_nth(src, "area", 1).unwrap();
-        assert!(md.contains("fn area(self): f64"), "{md}");
+        assert!(md.contains("fn area(self) -> f64"), "{md}");
         assert!(md.contains("in `Circle`"), "{md}");
     }
 
@@ -937,22 +937,22 @@ fn use_it(): f64 {
     fn trait_method_via_impl() {
         let src = "\
 trait Drawable {
-    fn draw(self): unit;
+    fn draw(self) -> unit;
 }
 class Circle {
     r: f64;
 }
 impl Drawable for Circle {
-    fn draw(self): unit { }
+    fn draw(self) -> unit { }
 }
-fn render(d: Circle): unit {
+fn render(d: Circle) -> unit {
     d.draw();
 }
 ";
         // 3rd occurrence: the call `d.draw()` — param-typed receiver,
         // resolved through the impl (the unified rule)
         let md = hover_nth(src, "draw", 2).unwrap();
-        assert!(md.contains("fn draw(self): unit"), "{md}");
+        assert!(md.contains("fn draw(self) -> unit"), "{md}");
         assert!(md.contains("from `impl Drawable for Circle`"), "{md}");
     }
 
@@ -960,11 +960,11 @@ fn render(d: Circle): unit {
     fn free_fn_unique_match() {
         let src = "\
 // euclidean length
-fn length(p: i32): f64 { return 1.0; }
-fn main(): unit { let x = length(3); }
+fn length(p: i32) -> f64 { return 1.0; }
+fn main() -> unit { let x = length(3); }
 ";
         let md = hover_at(src, "length").unwrap();
-        assert!(md.contains("fn length(p: i32): f64"), "{md}");
+        assert!(md.contains("fn length(p: i32) -> f64"), "{md}");
         assert!(md.contains("euclidean length"), "doc: {md}");
     }
 
@@ -972,7 +972,7 @@ fn main(): unit { let x = length(3); }
     fn ambiguity_lists_candidates() {
         // two workspace files each defining `helper`
         let mk = |origin: &str| {
-            let f = rut_lexer::lexer::normalize("fn helper(): unit { }\n");
+            let f = rut_lexer::lexer::normalize("fn helper() -> unit { }\n");
             let (fa, _) = rut_parser::parse(&f, rut_parser::Mode::Impl);
             let mut i = index(&f, &fa);
             i.origin = origin.to_string();
@@ -981,7 +981,7 @@ fn main(): unit { let x = length(3); }
         let a = mk("a.rut");
         let b = mk("b.rut");
 
-        let src = "fn go(): unit { let h = helper(); }\n";
+        let src = "fn go() -> unit { let h = helper(); }\n";
         let s = rut_lexer::lexer::normalize(src);
         let (toks, _) = rut_lexer::lexer::lex(&s);
         let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
@@ -997,13 +997,13 @@ fn main(): unit { let x = length(3); }
     #[test]
     fn host_primitive_surface_favors_own_methods() {
         // std-style surface index ahead of the doc
-        let surf_src = "export host primitive string {\n    fn len(self): i32;\n}\n";
+        let surf_src = "export host primitive string {\n    fn len(self) -> i32;\n}\n";
         let s2 = rut_lexer::lexer::normalize(surf_src);
         let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Decl);
         let mut surf = index(&s2, &sast);
         surf.origin = "std:core".to_string();
 
-        let doc = "fn main(): i32 { return \"abc\".len(); }\n";
+        let doc = "fn main() -> i32 { return \"abc\".len(); }\n";
         let d2 = rut_lexer::lexer::normalize(doc);
         let (toks, _) = rut_lexer::lexer::lex(&d2);
         let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
@@ -1012,13 +1012,13 @@ fn main(): unit { let x = length(3); }
         let idxs = [&di, &surf];
         let pos = find_ident_pos(&toks, "len", 0).unwrap();
         let h = hover(&idxs, &d2, &toks, &ast, pos).unwrap();
-        assert!(h.markdown.contains("fn len(self): i32"), "{}", h.markdown);
+        assert!(h.markdown.contains("fn len(self) -> i32"), "{}", h.markdown);
         assert!(h.markdown.contains("std:core"), "{}", h.markdown);
     }
 
     #[test]
     fn miss_is_none() {
-        let src = "fn main(): unit { let z = unknown_thing; }\n";
+        let src = "fn main() -> unit { let z = unknown_thing; }\n";
         assert!(hover_at(src, "unknown_thing").is_none());
     }
 }

@@ -31,7 +31,7 @@ dataclass FetchError {
     trace:  Option<StackTrace>,    // construction site
 }
 
-fn fetch(url: string): Result<string, FetchError> {
+fn fetch(url: string) -> Result<string, FetchError> {
     if (url.len() == 0) {
         // The happy path pays nothing; this branch pays once. Skips its
         // own frame automatically (no constructorOpt dance).
@@ -46,12 +46,12 @@ fn fetch(url: string): Result<string, FetchError> {
 
 // Context accrues upward — each layer stamps its own (free) location;
 // the trace from the deepest layer survives untouched:
-fn load_config(): Result<string, FetchError> {
+fn load_config() -> Result<string, FetchError> {
     let r = fetch("")?;
     return Ok(r);
 }
 
-fn main(): unit {
+fn main() -> unit {
     when (load_config()) {
         Ok(cfg) -> {
             log.info(f"loaded {cfg.len()} bytes");

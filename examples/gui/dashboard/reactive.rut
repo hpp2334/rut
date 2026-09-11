@@ -26,7 +26,7 @@ import { Disposal } from "std:core";
 /** Anything with an identity in the store — State, Source, Derived.
  *  Passing a bare atom to watch() widens it to dyn Atom (RFC 0012 §2). */
 trait Atom {
-    fn atom_id(self): u32;
+    fn atom_id(self) -> u32;
 }
 
 class Atoms {
@@ -37,59 +37,59 @@ export class State<T> {
     private id: u32;
     private seed: Opaque;                // first read materializes it
 
-    fn new(v: T): Self {
+    fn new(v: T) -> Self {
         Atoms.next &+= 1;                 // class methods run logic too
         return Self { id: Atoms.next, seed: Opaque.new(v) };
     }
 
-    fn seed_value(self): Opaque { return self.seed; }
+    fn seed_value(self) -> Opaque { return self.seed; }
 }
 
 impl Atom for State<T> {
-    fn atom_id(self): u32 { return self.id; }
+    fn atom_id(self) -> u32 { return self.id; }
 }
 
-export fn state<T>(v: T): State<T> {
+export fn state<T>(v: T) -> State<T> {
     return State(v);                      // type-call, T inferred
 }
 
 export class Source<T> {
     private id: u32;
-    private pull: fn(): T;                // seeds the entry; steady state is push
+    private pull: fn() -> T;                // seeds the entry; steady state is push
 
-    fn new(f: fn(): T): Self {
+    fn new(f: fn() -> T) -> Self {
         Atoms.next &+= 1;
         return Self { id: Atoms.next, pull: f };
     }
 
-    fn pull_fn(self): fn(): T { return self.pull; }
+    fn pull_fn(self) -> fn() -> T { return self.pull; }
 }
 
 impl Atom for Source<T> {
-    fn atom_id(self): u32 { return self.id; }
+    fn atom_id(self) -> u32 { return self.id; }
 }
 
-export fn source<T>(f: fn(): T): Source<T> {
+export fn source<T>(f: fn() -> T) -> Source<T> {
     return Source(f);
 }
 
 export class Derived<T> {
     private id: u32;
-    private compute: fn(ReadCtx): T;
+    private compute: fn(ReadCtx) -> T;
 
-    fn new(f: fn(ReadCtx): T): Self {
+    fn new(f: fn(ReadCtx) -> T) -> Self {
         Atoms.next &+= 1;
         return Self { id: Atoms.next, compute: f };
     }
 
-    fn compute_fn(self): fn(ReadCtx): T { return self.compute; }
+    fn compute_fn(self) -> fn(ReadCtx) -> T { return self.compute; }
 }
 
 impl Atom for Derived<T> {
-    fn atom_id(self): u32 { return self.id; }
+    fn atom_id(self) -> u32 { return self.id; }
 }
 
-export fn derive<T>(f: fn(ReadCtx): T): Derived<T> {
+export fn derive<T>(f: fn(ReadCtx) -> T) -> Derived<T> {
     return Derived(f);
 }
 
@@ -97,16 +97,16 @@ export fn derive<T>(f: fn(ReadCtx): T): Derived<T> {
 export dataclass Nil {}
 
 export class Mutation<P, R> {
-    private run: fn(Store, P): R;
+    private run: fn(Store, P) -> R;
 
-    fn new(f: fn(Store, P): R): Self {
+    fn new(f: fn(Store, P) -> R) -> Self {
         return Self { run: f };
     }
 
-    fn run_fn(self): fn(Store, P): R { return self.run; }
+    fn run_fn(self) -> fn(Store, P) -> R { return self.run; }
 }
 
-export fn mutation<P, R>(f: fn(Store, P): R): Mutation<P, R> {
+export fn mutation<P, R>(f: fn(Store, P) -> R) -> Mutation<P, R> {
     return Mutation(f);
 }
 
@@ -116,15 +116,15 @@ export fn mutation<P, R>(f: fn(Store, P): R): Mutation<P, R> {
 export class ReadCtx {
     private store: Store;
 
-    fn new(store: Store): Self {
+    fn new(store: Store) -> Self {
         return Self { store: store };
     }
 
-    fn get<T>(self, s: State<T>): T { return atom_get(self.store, s); }
+    fn get<T>(self, s: State<T>) -> T { return atom_get(self.store, s); }
 
-    fn latest<T>(self, s: Source<T>): T { return source_read(self.store, s); }
+    fn latest<T>(self, s: Source<T>) -> T { return source_read(self.store, s); }
 
-    fn read<T>(self, d: Derived<T>): T { return derived_read(self.store, d); }
+    fn read<T>(self, d: Derived<T>) -> T { return derived_read(self.store, d); }
 }
 
 // ------------------------------------------------------------------ store
@@ -139,9 +139,9 @@ class Watch {
     wid: u32;                 // watch identity (for dispose)
     atom: u32;                // watched atom id
     last_ver: u32;
-    cb: fn(): unit;
+    cb: fn() -> unit;
 
-    fn new(wid: u32, atom: u32, last_ver: u32, cb: fn(): unit): Self {
+    fn new(wid: u32, atom: u32, last_ver: u32, cb: fn() -> unit) -> Self {
         return Self { wid: wid, atom: atom, last_ver: last_ver, cb: cb };
     }
 }
@@ -156,7 +156,7 @@ export class Store {
     // all fields initialized -> an explicit no-arg constructor: bare
     // Store.new()
 
-    fn find(self, id: u32): Option<Entry> {
+    fn find(self, id: u32) -> Option<Entry> {
         for (let i = 0; i < self.entries.len(); i += 1) {
             if (self.entries[i].id == id) {
                 return Option.some(self.entries[i]);
@@ -165,7 +165,7 @@ export class Store {
         return Option.none();
     }
 
-    fn upsert(self, id: u32, v: Opaque): unit {
+    fn upsert(self, id: u32, v: Opaque) -> unit {
         for (let i = 0; i < self.entries.len(); i += 1) {
             if (self.entries[i].id == id) {
                 self.entries[i].ver &+= 1;
@@ -176,7 +176,7 @@ export class Store {
         self.entries.push(Entry { id: id, ver: 1, value: v });
     }
 
-    fn version_of(self, id: u32): u32 {
+    fn version_of(self, id: u32) -> u32 {
         let e = self.find(id);
         if (e.is_some()) { return e.value.ver; }
         return 0;
@@ -186,7 +186,7 @@ export class Store {
 // ------------------------------------------------------------- public ops
 
 /** Read (and on first use, materialize) a state atom. */
-export fn atom_get<T>(store: Store, s: State<T>): T {
+export fn atom_get<T>(store: Store, s: State<T>) -> T {
     let found = store.find(s.atom_id());
     let cell = when (found.is_some()) {
         true  -> found.value.value,
@@ -195,18 +195,18 @@ export fn atom_get<T>(store: Store, s: State<T>): T {
     return downcast<T>(cell).expect("store: atom type mismatch");
 }
 
-export(self) fn seed_into<T>(store: Store, s: State<T>): Opaque {
+export(self) fn seed_into<T>(store: Store, s: State<T>) -> Opaque {
     store.upsert(s.atom_id(), s.seed_value());
     return s.seed_value();
 }
 
 /** Write a state atom (inside mutations); watchers flush at the top. */
-export fn atom_set<T>(store: Store, s: State<T>, v: T): unit {
+export fn atom_set<T>(store: Store, s: State<T>, v: T) -> unit {
     store.upsert(s.atom_id(), Opaque.new(v));
 }
 
 /** Read a source's latest snapshot (pull-seeded on first read). */
-export fn source_read<T>(store: Store, s: Source<T>): T {
+export fn source_read<T>(store: Store, s: Source<T>) -> T {
     let found = store.find(s.atom_id());
     let cell = when (found.is_some()) {
         true  -> found.value.value,
@@ -215,14 +215,14 @@ export fn source_read<T>(store: Store, s: Source<T>): T {
     return downcast<T>(cell).expect("store: source type mismatch");
 }
 
-export(self) fn seed_source<T>(store: Store, s: Source<T>): Opaque {
+export(self) fn seed_source<T>(store: Store, s: Source<T>) -> Opaque {
     let v = Opaque.new(s.pull_fn()());
     store.upsert(s.atom_id(), v);
     return v;
 }
 
 /** External data arrived: store the snapshot; flush at the top level. */
-export fn source_push<T>(store: Store, s: Source<T>, v: T): unit {
+export fn source_push<T>(store: Store, s: Source<T>, v: T) -> unit {
     store.depth &+= 1;
     store.upsert(s.atom_id(), Opaque.new(v));
     store.depth -= 1;
@@ -232,13 +232,13 @@ export fn source_push<T>(store: Store, s: Source<T>, v: T): unit {
 }
 
 /** Read a derived atom — recomputes on every read (OQ-19: caching). */
-export fn derived_read<T>(store: Store, d: Derived<T>): T {
+export fn derived_read<T>(store: Store, d: Derived<T>) -> T {
     let ctx = ReadCtx(store);
     return d.compute_fn()(ctx);
 }
 
 /** Dispatch a mutation; nested dispatches flush once, at the top. */
-export fn dispatch<P, R>(store: Store, m: Mutation<P, R>, p: P): R {
+export fn dispatch<P, R>(store: Store, m: Mutation<P, R>, p: P) -> R {
     store.depth &+= 1;
     let r = m.run_fn()(store, p);
     store.depth -= 1;
@@ -249,7 +249,7 @@ export fn dispatch<P, R>(store: Store, m: Mutation<P, R>, p: P): R {
 }
 
 /** Subscribe a change-only callback to any atom (State, Source, Derived). */
-export fn watch(store: Store, a: dyn Atom, cb: fn(): unit): WatchHandle {
+export fn watch(store: Store, a: dyn Atom, cb: fn() -> unit) -> WatchHandle {
     Atoms.next &+= 1;
     let w = Watch.new(Atoms.next, a.atom_id(), store.version_of(a.atom_id()), cb);
     store.watches.push(w);
@@ -260,13 +260,13 @@ export class WatchHandle {
     private store: Store;
     private wid: u32;
 
-    fn new(store: Store, wid: u32): Self {
+    fn new(store: Store, wid: u32) -> Self {
         return Self { store: store, wid: wid };
     }
 }
 
 impl Disposal for WatchHandle {   // runs when the last handle drops
-    fn dispose(mut self): unit {
+    fn dispose(mut self) -> unit {
         let kept: Vec<Watch> = Vec();
         for (let i = 0; i < self.store.watches.len(); i += 1) {
             if (self.store.watches[i].wid != self.wid) {
@@ -278,7 +278,7 @@ impl Disposal for WatchHandle {   // runs when the last handle drops
 }
 
 /** Run changed watchers to a fixed point (tur's flush). */
-export fn flush(store: Store): unit {
+export fn flush(store: Store) -> unit {
     let rounds = 0;
     let changed = true;
     while (changed) {
@@ -301,20 +301,20 @@ export fn flush(store: Store): unit {
 
 // ------------------------------------------------------------------ smoke
 
-export(self) fn smoke(): unit {
+export(self) fn smoke() -> unit {
     let log = Logger.new("reactive");
     let store = Store.new();
 
     let count = state(0);
-    let clock = source((): i32 => 0);   // external world, lazily seeded
+    let clock = source(() -> i32 => 0);   // external world, lazily seeded
 
-    let label = derive((ctx): string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
+    let label = derive((ctx) -> string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
 
-    let bump = mutation((st: Store, by: i32): unit => {
+    let bump = mutation((st: Store, by: i32) -> unit => {
         atom_set(st, count, atom_get(st, count) + by);
     });
 
-    let handle = watch(store, count, (): unit => {   // State is an Atom
+    let handle = watch(store, count, () -> unit => {   // State is an Atom
         log.debug("count changed");
     });
 

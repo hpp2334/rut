@@ -256,9 +256,9 @@ The two decisions that cannot be answered in 4 tokens are scans (§4.2).
 
 ### 4.2 The two scans — peek far, commit once, never guess
 
-- **Lambda vs parenthesized expression** (`(a, b): T => …` vs
+- **Lambda vs parenthesized expression** (`(a, b) -> T => …` vs
   `(a + b) * 2`): scan read-only to the matching `)`; it is a lambda iff
-  the tokens form a valid parameter list **and** `=>` follows (`: Type`
+  the tokens form a valid parameter list **and** `=>` follows (`-> Type`
   may sit between). If not a lambda, a comma inside the parens errors
   *at the comma* — there are no tuples (RFC 0009) — with a note: "if you
   meant a lambda, add `=>`". (This also corrects the original design's

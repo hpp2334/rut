@@ -5,7 +5,7 @@
 use rut_parser::{parse, Mode};
 
 fn in_fn(body: &str) -> String {
-    format!("fn f(): unit {{ {body} }}")
+    format!("fn f() -> unit {{ {body} }}")
 }
 
 /// N nested `if (true)` blocks — rut has no bare block statements, so
@@ -17,7 +17,7 @@ fn nested_ifs(n: usize, inner: &str) -> String {
 #[test]
 fn depth_budget_is_a_diag_not_a_crash() {
     // 100k-deep parens: one clean "nesting too deep", never a host crash (C3)
-    let src = format!("fn f(): unit {{ let x = {}1{}; }}", "(".repeat(100_000), ")".repeat(100_000));
+    let src = format!("fn f() -> unit {{ let x = {}1{}; }}", "(".repeat(100_000), ")".repeat(100_000));
     let (_, diags) = parse(&src, Mode::Impl);
     assert!(diags.iter().any(|d| d.msg.contains("nesting too deep")), "want a nesting diag, got: {diags:?}");
 }
@@ -90,8 +90,8 @@ fn parses_on_a_tiny_stack() {
 #[test]
 fn malformed_input_terminates() {
     let cases = [
-        "fn f(): unit {",
-        "fn f(): unit ",
+        "fn f() -> unit {",
+        "fn f() -> unit ",
         "class C {",
         "class C { fn m(",
         "trait T { fn m",
@@ -101,16 +101,16 @@ fn malformed_input_terminates() {
         "import {",
         "dataclass D { x",
         "enum E {",
-        "fn f(): unit { let ",
-        "fn f(): unit { let x = (1, }",
-        "fn f(): unit { for (let x }",
+        "fn f() -> unit { let ",
+        "fn f() -> unit { let x = (1, }",
+        "fn f() -> unit { for (let x }",
         "host class K {",
-        "fn f(): unit { let x = f\"{;",
+        "fn f() -> unit { let x = f\"{;",
         "$",
-        "fn f(): unit { ] }",
+        "fn f() -> unit { ] }",
         "export(super) fn",
         "fn f<K where K",
-        "fn f(): unit { let x = await select { a -> 1, ; }",
+        "fn f() -> unit { let x = await select { a -> 1, ; }",
     ];
     for src in cases {
         let (ast, diags) = parse(src, Mode::Impl);
@@ -119,7 +119,7 @@ fn malformed_input_terminates() {
         let _ = diags.len();
     }
     // a few known shapes must produce diags
-    for src in ["enum E {", "import {", "when (x) {", "fn f(): unit { let "] {
+    for src in ["enum E {", "import {", "when (x) {", "fn f() -> unit { let "] {
         let (_, diags) = parse(src, Mode::Impl);
         assert!(!diags.is_empty(), "`{src}` should produce diags");
     }

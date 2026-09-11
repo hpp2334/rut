@@ -24,6 +24,6 @@ and why heterogeneous data goes through traits (RFC 0012).
 - Where TS would use a union of literals (`"left" | "right"`), rut uses an
   enum; where TS would use a union of *shapes*, rut uses a `dyn` trait
   ref (RFC 0012 §2).
-- Enum ↔ `i32` goes through per-enum builtins — `Color.to_int(c): i32` and
-  `Color.from_int(i: i32): Option<Color>` (`None` on unknown values) — not a
+- Enum ↔ `i32` goes through per-enum builtins — `Color.to_int(c) -> i32` and
+  `Color.from_int(i: i32) -> Option<Color>` (`None` on unknown values) — not a
   cast operator (RFC 0012 §3).

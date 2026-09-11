@@ -6,17 +6,17 @@
 import { HttpError, get } from "std:http";
 import { Logger } from "std:log";
 
-suspend fn fetch_page(url: string): Result<Vec<u8>, HttpError> {
+suspend fn fetch_page(url: string) -> Result<Vec<u8>, HttpError> {
     let raw = await get(url)?;       // await + `?` propagate in one expr
     let html = decode(raw)?;         // stays in the resumed state
     return Result.ok(html);
 }
 
-fn decode(raw: Vec<u8>): Result<Vec<u8>, HttpError> {
+fn decode(raw: Vec<u8>) -> Result<Vec<u8>, HttpError> {
     return Result.ok(raw);             // placeholder
 }
 
-export suspend fn main(): unit {
+export suspend fn main() -> unit {
     let log = Logger.new("fetch");
     let page = await fetch_page("https://example.com");
     if (page.is_ok()) {

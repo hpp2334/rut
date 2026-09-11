@@ -12,31 +12,31 @@ import { Disposal } from "std:core";
 class Circle {
     private r: f32;
 
-    fn new(r: f32): Self {
+    fn new(r: f32) -> Self {
         return Self { r: r };
     }
 
-    fn grow(mut self): unit { self.r += 1; }
-    fn radius(self): f32 { return self.r; }
+    fn grow(mut self) -> unit { self.r += 1; }
+    fn radius(self) -> f32 { return self.r; }
 }
 
 class TempFile {
     private path: string;
 
-    fn new(path: string): Self {      // plain Self — the handle IS ownership
+    fn new(path: string) -> Self {      // plain Self — the handle IS ownership
         return Self { path: path };
     }
 
-    fn write(self, data: Vec<u8>): unit { /* ... */ }
+    fn write(self, data: Vec<u8>) -> unit { /* ... */ }
 }
 
 impl Disposal for TempFile {       // Disposal impl — runs once, at rc 0
-    fn dispose(mut self): unit {
+    fn dispose(mut self) -> unit {
         remove(self.path);
     }
 }
 
-fn aliasing(): unit {
+fn aliasing() -> unit {
     let log = Logger.new("cells");
     let a = Circle.new(3);         // a value — which is a shared cell
     let b = a;                     // ALIAS: same cell, no copy
@@ -47,13 +47,13 @@ fn aliasing(): unit {
     log.info(f"a==b {a == b} a==c {a == c}");                   // true false
 }
 
-fn scratch(): unit {
+fn scratch() -> unit {
     let f = TempFile.new("tmp.dat");   // class method returns Self
     f.write(Vec<u8>(64));
 }   // last handle drops HERE: rc hits 0, Disposal.dispose runs,
     // then `path` is released — deterministic destruction (RFC 0016 §3)
 
-export fn main(): unit {
+export fn main() -> unit {
     aliasing();
     scratch();
 }

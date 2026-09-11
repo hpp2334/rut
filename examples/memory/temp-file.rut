@@ -9,20 +9,20 @@ import { Disposal } from "std:core";
 class TempFile {
     private path: string;
 
-    fn new(path: string): Self {   // the handle IS the ownership —
+    fn new(path: string) -> Self {   // the handle IS the ownership —
         return Self { path: path };     // no boxing needed (RFC 0011 §2)
     }
 
-    fn write(self, data: Vec<u8>): unit { /* ... */ }
+    fn write(self, data: Vec<u8>) -> unit { /* ... */ }
 }
 
 impl Disposal for TempFile {   // Disposal impl — runs once, at rc 0
-    fn dispose(mut self): unit {
+    fn dispose(mut self) -> unit {
         remove(self.path);
     }
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("tempfile");
     let f = TempFile.new("tmp.dat");     // a Disposal class is just a class
     f.write(Vec<u8>(64));

@@ -23,7 +23,7 @@ dataclass Vertex {
     color: u32;
 }
 
-fn draw_frame(c: Canvas, verts: Array<Vertex, 2>): unit {
+fn draw_frame(c: Canvas, verts: Array<Vertex, 2>) -> unit {
     // verts borrows zero-copy: the host reads the inline repr-C block for
     // the duration of the call (a fixed Array<Vertex, N> IS the N-slot
     // block — RFC 0005); rut-side mutation inside re-entrant calls
@@ -31,14 +31,14 @@ fn draw_frame(c: Canvas, verts: Array<Vertex, 2>): unit {
     c.blit(verts);
 }
 
-fn localized(count: i32, user: string): unit {
+fn localized(count: i32, user: string) -> unit {
     // The SAME literal that would concat to a string builds a structured
     // Template here, because log_l10n expects one — the host formats
     // per-locale with typed args; nothing was parsed back out of a string.
     log_l10n(f"{user} has {count} alerts");
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("interop");
     let c = newCanvas();                         // host constructs the handle
     let verts: Array<Vertex, 2> = [

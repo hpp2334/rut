@@ -7,14 +7,14 @@ import { Logger } from "std:log";
 class Tile {
     private n: i32;
 
-    fn new(n: i32): Self {
+    fn new(n: i32) -> Self {
         return Self { n: n };
     }
 
-    fn id(self): i32 { return self.n; }
+    fn id(self) -> i32 { return self.n; }
 }
 
-fn probe(): Weak<Tile> {
+fn probe() -> Weak<Tile> {
     let log = Logger.new("weak");
     let t = Tile.new(7);
     let w = Weak(t);            // Weak<Tile> — no strong reference held
@@ -22,7 +22,7 @@ fn probe(): Weak<Tile> {
     return w;
 }   // t dropped; no strong refs remain -> the cell dies, the WeakBox nulls
 
-export fn main(): unit {
+export fn main() -> unit {
     let log = Logger.new("weak");
     let alive = Tile.new(1);
     let a = Weak(alive);

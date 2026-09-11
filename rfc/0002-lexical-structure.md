@@ -56,7 +56,7 @@ compiler gives it no meaning; greppability is enforced by style.
   (`MyMap.new(cap)`, RFC 0025). Only builtin types keep call forms —
   allocation forms like `Vec<f32>(1024)`, `Weak(b)`, `Channel<Job>()`
   are builtin syntax, not class construction. **Erasure is a class
-  method too**: `Opaque.new(v): Opaque` (RFC 0014) — the
+  method too**: `Opaque.new(v) -> Opaque` (RFC 0014) — the
   erased-storage host class, boxed by construction.
   Named variants of multi-case builtins stay statics: `Option.some`,
   `Option.none`, `Result.ok`, `Result.err`.

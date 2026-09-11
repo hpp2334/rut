@@ -36,7 +36,7 @@ only suspension point.
 
 Rules:
 
-- `suspend fn f(..): T` describes a function returning `Future<T>`.
+- `suspend fn f(..) -> T` describes a function returning `Future<T>`.
   Calling it **does not run it** (cold). It runs when the future is `await`ed
   or `spawn`ed (RFC 0019).
 - `await` is only legal inside `suspend fn`. There is no implicit yield
@@ -55,7 +55,7 @@ heap object (refcounted, RFC 0016). `fetch_page` from
 pseudo-bytecode):
 
 ```text
-fetch_page$suspend(frame):
+fetch_page$suspend(frame) ->
 entry:
     call    http$get frame.url           -> f0
     await   f0                           -> raw      ; suspend: state=1

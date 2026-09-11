@@ -141,7 +141,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             TypeKind::TyFn { params, ret } => {
-                // fn(P1, P2): R against the arg's fn type
+                // fn(P1, P2) -> R against the arg's fn type
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 if let TyKind::Fn { params: aps, ret: ar } = arg_kind {
                     if params.len() != aps.len() {

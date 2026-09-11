@@ -48,7 +48,7 @@ export dataclass LiveEvent {
 
 // --- free-function helpers over the data (the data-first idiom) ---
 
-export fn status_label(s: Status): string {
+export fn status_label(s: Status) -> string {
     return when (s) {
         Status.Active  -> "active",
         Status.Idle    -> "idle",
@@ -56,7 +56,7 @@ export fn status_label(s: Status): string {
     };
 }
 
-export fn event_label(k: EventKind): string {
+export fn event_label(k: EventKind) -> string {
     return when (k) {
         EventKind.Tick  -> "tick",
         EventKind.Visit -> "visit",

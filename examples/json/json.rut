@@ -45,35 +45,35 @@ dataclass JField { name: string; value: JsonValue; pos: i32 }
 dataclass JsonError { msg: string; pos: i32 }
 dataclass Parsed { value: JsonValue; end: i32 }
 
-fn jnull(pos: i32): JsonValue {
+fn jnull(pos: i32) -> JsonValue {
     return JsonValue { kind: JKind.Null, val: Option<Opaque>.None(), pos: pos };
 }
-fn jbool(b: bool, pos: i32): JsonValue {
+fn jbool(b: bool, pos: i32) -> JsonValue {
     return JsonValue { kind: JKind.Bool, val: Option<Opaque>.Some(Opaque.new(b)), pos: pos };
 }
-fn jnum(v: f64, pos: i32): JsonValue {
+fn jnum(v: f64, pos: i32) -> JsonValue {
     return JsonValue { kind: JKind.Num, val: Option<Opaque>.Some(Opaque.new(v)), pos: pos };
 }
-fn jstr(sv: string, pos: i32): JsonValue {
+fn jstr(sv: string, pos: i32) -> JsonValue {
     return JsonValue { kind: JKind.Str, val: Option<Opaque>.Some(Opaque.new(sv)), pos: pos };
 }
-fn jarr(items: Vec<JsonValue>, pos: i32): JsonValue {
+fn jarr(items: Vec<JsonValue>, pos: i32) -> JsonValue {
     return JsonValue { kind: JKind.Arr, val: Option<Opaque>.Some(Opaque.new(items)), pos: pos };
 }
-fn jobj(fields: Vec<JField>, pos: i32): JsonValue {
+fn jobj(fields: Vec<JField>, pos: i32) -> JsonValue {
     return JsonValue { kind: JKind.Obj, val: Option<Opaque>.Some(Opaque.new(fields)), pos: pos };
 }
 
 // === entries — BOTH consents are compile-time (RFC 0037 §4) ===
 
-export fn stringify(v: dyn Serializable): Result<string, string> {
+export fn stringify(v: dyn Serializable) -> Result<string, string> {
     // consumer: a trait-object-typed param — one copy, vtable dispatch.
     // v.reflect() is the vtable call; v descends to Opaque (the
     // lattice bottom, RFC 0014) at write_val's parameter.
     return write_val(v.reflect(), v);
 }
 
-export fn deserialize<T>(v: string): Result<T, JsonError>
+export fn deserialize<T>(v: string) -> Result<T, JsonError>
         where T requires Deserializable {
     // producer: a trait-object-typed return does not exist, so the
     // contract rides the call site — T is guaranteed descriptor-backed
@@ -90,7 +90,7 @@ export fn deserialize<T>(v: string): Result<T, JsonError>
 
 // === the serializer walker — RFC 0037 §4 acceptance trace ===
 
-fn write_val(t: TypeInfo, a: Opaque): Result<string, string> {
+fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
     when (t.kind()) {
         TypeKind.Record -> {
             let parts = Vec<string>();
@@ -154,7 +154,7 @@ fn write_val(t: TypeInfo, a: Opaque): Result<string, string> {
 
 // === the deserializer builder — bottom-up, every node a checked box ===
 
-fn build(t: TypeInfo, j: JsonValue): Result<Opaque, JsonError> {
+fn build(t: TypeInfo, j: JsonValue) -> Result<Opaque, JsonError> {
     when (t.kind()) {
         TypeKind.Record -> {
             let fs = t.fields();
@@ -231,7 +231,7 @@ fn build(t: TypeInfo, j: JsonValue): Result<Opaque, JsonError> {
 }
 
 fn mint_variant(t: TypeInfo, i: i32, vals: Vec<Opaque>,
-                j: JsonValue): Result<Opaque, JsonError> {
+                j: JsonValue) -> Result<Opaque, JsonError> {
     return when (t.construct_variant(i, vals)) {
         Option<Opaque>.Some(v) -> Ok(v),
         Option<Opaque>.None -> Err(JsonError { msg: "variant rejected its payload", pos: j.pos }),
@@ -240,14 +240,14 @@ fn mint_variant(t: TypeInfo, i: i32, vals: Vec<Opaque>,
 
 // === sum-shape classification (structural — never name matching) ===
 
-fn sum_all_payloadless(vs: Vec<SumVariant>): bool {
+fn sum_all_payloadless(vs: Vec<SumVariant>) -> bool {
     for (let i = 0; i < vs.len(); i += 1) {
         if (vs[i].payloads().len() != 0) { return false; }
     }
     return true;
 }
 
-fn optional_indices(vs: Vec<SumVariant>): Array<i32, 2> {
+fn optional_indices(vs: Vec<SumVariant>) -> Array<i32, 2> {
     let less = -1;                 // the payloadless variant (None)
     let more = -1;                 // the payloaded variant (Some)
     for (let i = 0; i < vs.len(); i += 1) {
@@ -256,7 +256,7 @@ fn optional_indices(vs: Vec<SumVariant>): Array<i32, 2> {
     return [less, more];
 }
 
-fn sum_is_optional(vs: Vec<SumVariant>): bool {
+fn sum_is_optional(vs: Vec<SumVariant>) -> bool {
     if (vs.len() != 2) { return false; }
     let idx = optional_indices(vs);
     return idx[0] >= 0 && idx[1] >= 0 && vs[idx[1]].payloads().len() == 1;
@@ -264,7 +264,7 @@ fn sum_is_optional(vs: Vec<SumVariant>): bool {
 
 // === tree access ===
 
-fn member(j: JsonValue, name: string): Option<JsonValue> {
+fn member(j: JsonValue, name: string) -> Option<JsonValue> {
     when (j.kind) {
         JKind.Obj -> {
             let fs = downcast<Vec<JField>>(j.val.value).unwrap_or(Vec<JField>());
@@ -279,25 +279,25 @@ fn member(j: JsonValue, name: string): Option<JsonValue> {
     }
 }
 
-fn want_str(j: JsonValue, ty: string): Result<string, JsonError> {
+fn want_str(j: JsonValue, ty: string) -> Result<string, JsonError> {
     return when (j.kind) {
         JKind.Str -> Ok(downcast<string>(j.val.value).unwrap_or("")),
         else -> Err(JsonError { msg: f"string expected for {ty}", pos: j.pos }),
     };
 }
-fn want_num(j: JsonValue, ty: string): Result<f64, JsonError> {
+fn want_num(j: JsonValue, ty: string) -> Result<f64, JsonError> {
     return when (j.kind) {
         JKind.Num -> Ok(downcast<f64>(j.val.value).unwrap_or(0.0)),
         else -> Err(JsonError { msg: f"number expected for {ty}", pos: j.pos }),
     };
 }
-fn want_bool(j: JsonValue, ty: string): Result<bool, JsonError> {
+fn want_bool(j: JsonValue, ty: string) -> Result<bool, JsonError> {
     return when (j.kind) {
         JKind.Bool -> Ok(downcast<bool>(j.val.value).unwrap_or(false)),
         else -> Err(JsonError { msg: f"bool expected for {ty}", pos: j.pos }),
     };
 }
-fn want_items(j: JsonValue, ty: string): Result<Vec<JsonValue>, JsonError> {
+fn want_items(j: JsonValue, ty: string) -> Result<Vec<JsonValue>, JsonError> {
     return when (j.kind) {
         JKind.Arr -> Ok(downcast<Vec<JsonValue>>(j.val.value).unwrap_or(Vec<JsonValue>())),
         else -> Err(JsonError { msg: f"array expected for {ty}", pos: j.pos }),
@@ -306,9 +306,9 @@ fn want_items(j: JsonValue, ty: string): Result<Vec<JsonValue>, JsonError> {
 
 // === parser — recursive descent (RFC 0007 OQ-1 helpers) ===
 
-fn is_digit(c: u8): bool { return c >= 48u8 && c <= 57u8; }
+fn is_digit(c: u8) -> bool { return c >= 48u8 && c <= 57u8; }
 
-export fn str_eq(a: string, b: string): bool {
+export fn str_eq(a: string, b: string) -> bool {
     if (a.len() != b.len()) { return false; }
     for (let i = 0; i < a.len(); i += 1) {
         if (a.at(i) != b.at(i)) { return false; }
@@ -316,7 +316,7 @@ export fn str_eq(a: string, b: string): bool {
     return true;
 }
 
-fn skip_ws(s: string, i0: i32): i32 {
+fn skip_ws(s: string, i0: i32) -> i32 {
     let i = i0;
     let scanning = true;
     while (scanning) {
@@ -334,7 +334,7 @@ fn skip_ws(s: string, i0: i32): i32 {
     return i;
 }
 
-fn parse_tree(s: string): Result<JsonValue, JsonError> {
+fn parse_tree(s: string) -> Result<JsonValue, JsonError> {
     let first = parse_value(s, 0)?;
     let rest = skip_ws(s, first.end);
     if (rest < s.len()) {
@@ -343,7 +343,7 @@ fn parse_tree(s: string): Result<JsonValue, JsonError> {
     return Ok(first.value);
 }
 
-fn parse_value(s: string, i0: i32): Result<Parsed, JsonError> {
+fn parse_value(s: string, i0: i32) -> Result<Parsed, JsonError> {
     let i = skip_ws(s, i0);
     if (i >= s.len()) {
         return Err(JsonError { msg: "unexpected end of input", pos: i });
@@ -358,14 +358,14 @@ fn parse_value(s: string, i0: i32): Result<Parsed, JsonError> {
     return parse_num(s, i);
 }
 
-fn parse_lit(s: string, i: i32, text: string, value: JsonValue): Result<Parsed, JsonError> {
+fn parse_lit(s: string, i: i32, text: string, value: JsonValue) -> Result<Parsed, JsonError> {
     if (i + text.len() <= s.len() && str_eq(s.slice(i, i + text.len()), text)) {
         return Ok(Parsed { value: value, end: i + text.len() });
     }
     return Err(JsonError { msg: f"literal {text} expected", pos: i });
 }
 
-fn parse_object(s: string, i: i32): Result<Parsed, JsonError> {
+fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
     let fields = Vec<JField>();
     let k = skip_ws(s, i + 1);
     if (k < s.len() && s.at(k) == 125u8) {           // '}'
@@ -397,7 +397,7 @@ fn parse_object(s: string, i: i32): Result<Parsed, JsonError> {
     return Ok(Parsed { value: jobj(fields, i), end: k + 1 });
 }
 
-fn parse_array(s: string, i: i32): Result<Parsed, JsonError> {
+fn parse_array(s: string, i: i32) -> Result<Parsed, JsonError> {
     let items = Vec<JsonValue>();
     let k = skip_ws(s, i + 1);
     if (k < s.len() && s.at(k) == 93u8) {            // ']'
@@ -427,7 +427,7 @@ let NL2T: string = "\\n";
 let TB2T: string = "\\t";
 let CR2T: string = "\\r";
 
-fn esc_to_text(c: u8): string {          // for OUTPUT (quote)
+fn esc_to_text(c: u8) -> string {          // for OUTPUT (quote)
     if (c == 34u8)  { return Q2T; }
     if (c == 92u8)  { return BS2T; }
     if (c == 10u8)  { return NL2T; }
@@ -435,7 +435,7 @@ fn esc_to_text(c: u8): string {          // for OUTPUT (quote)
     if (c == 13u8)  { return CR2T; }
     return "";
 }
-fn unesc_to_char(c: u8): string {        // for INPUT (parse)
+fn unesc_to_char(c: u8) -> string {        // for INPUT (parse)
     if (c == 34u8)  { return "\""; }
     if (c == 92u8)  { return "\\"; }
     if (c == 47u8)  { return "/"; }
@@ -445,7 +445,7 @@ fn unesc_to_char(c: u8): string {        // for INPUT (parse)
     return "";
 }
 
-fn parse_string(s: string, i: i32): Result<Parsed, JsonError> {
+fn parse_string(s: string, i: i32) -> Result<Parsed, JsonError> {
     let out = "";
     let run = i + 1;
     let k = i + 1;
@@ -474,7 +474,7 @@ fn parse_string(s: string, i: i32): Result<Parsed, JsonError> {
     return Err(JsonError { msg: "unterminated string", pos: i });
 }
 
-fn parse_num(s: string, i: i32): Result<Parsed, JsonError> {
+fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
     let k = i;
     let neg = false;
     if (k < s.len() && s.at(k) == 45u8) { neg = true; k += 1; }   // '-'
@@ -533,7 +533,7 @@ fn parse_num(s: string, i: i32): Result<Parsed, JsonError> {
 let DQ: string = "\"";
 let COMMA: string = ",";
 
-fn quote(sv: string): string {
+fn quote(sv: string) -> string {
     let out = DQ;
     let run = 0;
     for (let k = 0; k < sv.len(); k += 1) {
@@ -549,7 +549,7 @@ fn quote(sv: string): string {
     return out;
 }
 
-fn join(parts: Vec<string>): string {
+fn join(parts: Vec<string>) -> string {
     // separators bind to consts: a string literal inside an f"" hole is
     // a lex error (RFC 0007 §2) — bind it first.
     let out = "";

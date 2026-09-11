@@ -40,13 +40,13 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
 fn case1_hello_format() {
     let src = r#"
 enum Flavor { Sweet, Sour }
-fn describe(f: Flavor): string {
+fn describe(f: Flavor) -> string {
     return when (f) {
         Flavor.Sweet -> "sweet",
         Flavor.Sour  -> "sour",
     };
 }
-export fn main(): unit {
+export fn main() -> unit {
     let name = "rut";
     let n = 41 + 1;
     print(f"hi {name}! n={n} tab:\t'c'={'c'}");
@@ -62,7 +62,7 @@ export fn main(): unit {
 fn case2_cells_and_own() {
     let src = r#"
 dataclass Point { x: f32; y: f32 }
-export fn main(): unit {
+export fn main() -> unit {
     let mut p = Point { x: 1, y: 2 };
     let q = p;
     p.x = 4;
@@ -81,7 +81,7 @@ export fn main(): unit {
 fn case3_opaque() {
     let src = r#"
 dataclass Point { x: f32; y: f32 }
-export fn main(): unit {
+export fn main() -> unit {
     let box1 = Opaque.new(Point { x: 1, y: 2 });
     let box2 = Opaque.new("hello");
     print(f"box1 is Point: {box1 is Point}");
@@ -100,7 +100,7 @@ export fn main(): unit {
 #[test]
 fn case4_sieve() {
     let src = r#"
-fn sieve(limit: i32): Vec<i32> {
+fn sieve(limit: i32) -> Vec<i32> {
     let mut marks = Vec<u8>(limit + 1);
     let primes: Vec<i32> = Vec();
     for (let i = 2; i <= limit; i += 1) {
@@ -115,7 +115,7 @@ fn sieve(limit: i32): Vec<i32> {
     }
     return primes;
 }
-export fn main(): unit {
+export fn main() -> unit {
     let primes = sieve(100);
     print(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
 }
@@ -129,7 +129,7 @@ export fn main(): unit {
 fn case5_when_exhaustive() {
     let src = r#"
 enum Color { Red, Green, Blue }
-fn mix(a: Color, b: Color): string {
+fn mix(a: Color, b: Color) -> string {
     return when (a) {
         Color.Red -> when (b) {
             Color.Red   -> "red+red",
@@ -140,7 +140,7 @@ fn mix(a: Color, b: Color): string {
         Color.Blue  -> "blueish",
     };
 }
-export fn main(): unit {
+export fn main() -> unit {
     print(mix(Color.Red, Color.Green));
     print(mix(Color.Blue, Color.Blue));
 }
@@ -154,20 +154,20 @@ export fn main(): unit {
 fn case6_dyn_dispatch() {
     let src = r#"
 trait Shape {
-    fn area(self): f32;
-    fn name(self): string;
+    fn area(self) -> f32;
+    fn name(self) -> string;
 }
 dataclass Circle { r: f32; }
 impl Shape for Circle {
-    fn area(self): f32 { return 3.14159265f32 * self.r * self.r; }
-    fn name(self): string { return "circle"; }
+    fn area(self) -> f32 { return 3.14159265f32 * self.r * self.r; }
+    fn name(self) -> string { return "circle"; }
 }
 dataclass Square { s: f32; }
 impl Shape for Square {
-    fn area(self): f32 { return self.s * self.s; }
-    fn name(self): string { return "square"; }
+    fn area(self) -> f32 { return self.s * self.s; }
+    fn name(self) -> string { return "square"; }
 }
-export fn main(): unit {
+export fn main() -> unit {
     let shapes: Vec<dyn Shape> = Vec.from([
         Circle { r: 1 },
         Square { s: 2 },
@@ -190,12 +190,12 @@ export fn main(): unit {
 #[test]
 fn case7_closures_generics() {
     let src = r#"
-fn map<T, U>(v: Vec<T>, f: fn(T): U): Vec<U> {
+fn map<T, U>(v: Vec<T>, f: fn(T) -> U) -> Vec<U> {
     let out: Vec<U> = Vec();
     for (let x of v) { out.push(f(x)); }
     return out;
 }
-export fn main(): unit {
+export fn main() -> unit {
     let xs = Vec.from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
@@ -210,7 +210,7 @@ export fn main(): unit {
 #[test]
 fn case8_fuel_traps_and_parks() {
     let src = r#"
-export fn main(): unit {
+export fn main() -> unit {
     let mut i = 0;
     while (true) {
         i += 1;
@@ -232,7 +232,7 @@ export fn main(): unit {
 #[test]
 fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
-export fn main(): unit {
+export fn main() -> unit {
     let mut x = 2147483647;
     x = x &+ 1;              // wrapping: fine (RFC 0004 §3)
     print(f"x={x}");
@@ -250,7 +250,7 @@ fn heap_budget_traps_before_the_write() {
     // RFC 0040 §1: OutOfMemory leaves the heap byte-identical — a tiny
     // budget fails the Vec allocation cleanly
     let src = r#"
-export fn main(): unit {
+export fn main() -> unit {
     let v = Vec<u8>(1000000);
     print("allocated");
 }
@@ -264,7 +264,7 @@ export fn main(): unit {
 fn mut_binding_law_is_enforced() {
     let src = r#"
 dataclass P { x: i32 }
-export fn main(): unit {
+export fn main() -> unit {
     let p = P { x: 1 };
     p.x = 2;
 }
@@ -282,7 +282,7 @@ export fn main(): unit {
 fn when_exhaustiveness_is_enforced() {
     let src = r#"
 enum Color { Red, Green, Blue }
-export fn main(): unit {
+export fn main() -> unit {
     print(when (Color.Red) { Color.Red -> "r" });
 }
 "#;
@@ -297,7 +297,7 @@ export fn main(): unit {
 #[test]
 fn option_eq_is_a_compile_error() {
     let src = r#"
-export fn main(): unit {
+export fn main() -> unit {
     let a = Option.some(1);
     print(f"{a == a}");
 }
@@ -316,7 +316,7 @@ fn dump_is_labeled_and_spanned() {
     // labeled `field: value` lines, `- item` bullets, spans on every node,
     // and no display strings on the JSON wire
     let src = r#"enum Flavor { Sweet, Sour = 5 }
-export fn main(): unit { print(f"{1 + 1}"); }
+export fn main() -> unit { print(f"{1 + 1}"); }
 "#;
     let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);

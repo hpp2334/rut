@@ -51,8 +51,8 @@ static fields.
   value by calling a class method that chooses to build one.
 - **Class methods are just functions** — no `self` receiver (§2),
   ordinary params, ordinary body, a `return`, and any declared return
-  type: `fn new(s: string): Option<Version>` is a "try" constructor,
-  `fn new(path: string): Self` an ordinary one (a `Disposal` class's
+  type: `fn new(s: string) -> Option<Version>` is a "try" constructor,
+  `fn new(path: string) -> Self` an ordinary one (a `Disposal` class's
   constructing method still returns `Self` — the handle is the ownership,
   RFC 0011 §2). Being functions, they validate, default, cache,
   register, or hand out singletons — construction logic has no
@@ -66,7 +66,7 @@ static fields.
   ever exists across an `await` — the `Self { .. }` literal is an
   ordinary expression, and locals live in the coroutine frame.
 - **No implicit default construction.** A class whose fields all have
-  initializers still needs an explicit `fn new(): Self { return
+  initializers still needs an explicit `fn new() -> Self { return
   Self {}; }` if outsiders should build it. A class with no accessible
   constructing class method is **sealed** — constructible only inside
   its own body (the `private fn of(..)` + public `fn parse(..)` pair

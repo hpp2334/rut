@@ -19,7 +19,7 @@ enum TyStage {
     Init,
     /// `fn(...)`: collecting parameter types
     FnParams { params: Vec<NodeHandle<AnyTy>> },
-    /// `fn(...):` — waiting for the return type
+    /// `fn(...) ->`: waiting for the return type
     FnRet { params: Vec<NodeHandle<AnyTy>> },
     /// a path type, possibly mid-dot-chain
     Path { is_dyn: bool, segs: Vec<PathSeg> },
@@ -35,7 +35,7 @@ impl TypeFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         match self.stage {
             TyStage::Init => {
-                // fn type: `fn(Store, P): R` — params are bare types
+                // fn type: `fn(Store, P) -> R` — params are bare types
                 if p.at_kw("fn") && matches!(p.peek(1).tok, Tok::LParen) {
                     p.bump();
                     p.expect(Tok::LParen);
@@ -132,9 +132,9 @@ impl TypeFrame {
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
-    /// the parameter list closed (or failed): `:` then the return type
+    /// the parameter list closed (or failed): `->` then the return type
     fn to_fn_ret(&mut self, p: &mut Parser) -> Step {
-        p.expect(Tok::Colon);
+        p.expect(Tok::Arrow);
         let params = match &mut self.stage {
             TyStage::FnParams { params } => std::mem::take(params),
             _ => unreachable!(),
@@ -186,7 +186,7 @@ impl TypeFrame {
                 }
             }
             Done::Failed => match self.stage {
-                // v1: a failed parameter type breaks to the colon
+                // v1: a failed parameter type breaks to the arrow
                 TyStage::FnParams { .. } => self.to_fn_ret(p),
                 _ => Step::Pop(Done::Failed),
             },
@@ -196,7 +196,7 @@ impl TypeFrame {
 }
 
 impl Parser {
-    /// §4.2 scan 1: `(` … `)` then `=>` (a `: Type` may sit between).
+    /// §4.2 scan 1: `(` … `)` then `=>` (a `-> Type` may sit between).
     /// Read-only; never mutates parser state.
     pub(crate) fn scan_is_lambda(&self) -> bool {
         let mut i = self.pos + 1;
@@ -219,11 +219,11 @@ impl Parser {
         if i >= self.toks.len() {
             return false;
         }
-        // skip `: Type` — scan until `=>` at angle/paren depth 0
+        // skip `-> Type` — scan until `=>` at angle/paren depth 0
         if matches!(self.toks[i].tok, Tok::FatArrow) {
             return true;
         }
-        if !matches!(self.toks[i].tok, Tok::Colon) {
+        if !matches!(self.toks[i].tok, Tok::Arrow) {
             return false;
         }
         let mut j = i + 1;

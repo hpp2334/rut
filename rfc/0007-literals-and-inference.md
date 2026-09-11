@@ -74,7 +74,7 @@ f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
   Everything else (dataclass/class values, vecs and fixed arrays,
   `Option`/`Result`) is a **compile error** inside `f"..."` — preventing accidental
   implementation-detail printing. Use `debug.str(x)` for developer output;
-  write a `to_string(): string` method on your class and call it explicitly.
+  write a `to_string() -> string` method on your class and call it explicitly.
 - In a **`Template`-expected position** the same literal builds a
   structured value instead — `Template { parts, args }` with the
   placeholder values boxed (`Opaque`, RFC 0014), not rendered — for hosts,

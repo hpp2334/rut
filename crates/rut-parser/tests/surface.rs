@@ -1,5 +1,5 @@
 //! `host primitive` surface decls (RFC 0029 §2): the native member
-//! surface of a primitive type — `host primitive string { fn len(self): i32; }`.
+//! surface of a primitive type — `host primitive string { fn len(self) -> i32; }`.
 //! Parses in declaration mode only, names a real primitive, terminates
 //! on malformed input.
 
@@ -9,8 +9,8 @@ use rut_parser::{parse, Mode};
 const STR_SURFACE: &str = "\
 // the string natives, declared where the host binds them
 export host primitive string {
-    fn len(self): i32;
-    fn contains(self, needle: string): bool;
+    fn len(self) -> i32;
+    fn contains(self, needle: string) -> bool;
 }
 ";
 
@@ -32,7 +32,7 @@ fn host_primitive_parses() {
 
 #[test]
 fn host_primitive_names_a_primitive() {
-    let (_, diags) = parse("export host primitive Widget { fn m(self): unit; }", Mode::Decl);
+    let (_, diags) = parse("export host primitive Widget { fn m(self) -> unit; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("`host primitive` names a primitive")),
         "non-primitive target must be diagnosed: {diags:?}"
@@ -42,7 +42,7 @@ fn host_primitive_names_a_primitive() {
 #[test]
 fn host_primitive_is_decl_only() {
     // RFC 0029 §2: `host`/`extern` belong to `.d.rut`
-    let (_, diags) = parse("host primitive string { fn len(self): i32; }", Mode::Impl);
+    let (_, diags) = parse("host primitive string { fn len(self) -> i32; }", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("RFC 0029")),
         "impl mode must reject the surface keyword: {diags:?}"

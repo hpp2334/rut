@@ -119,7 +119,7 @@ async fn initialize_shutdown_round_trip() {
 #[tokio::test]
 async fn semantic_tokens_symbols_and_diags_on_the_wire() {
     let mut editor = spawn().await;
-    let src = "enum Color { Red, Green }\nfn area(r: f64): f64 { return r * 3.14; }\n";
+    let src = "enum Color { Red, Green }\nfn area(r: f64) -> f64 { return r * 3.14; }\n";
     let uri = "file:///w/t.rut";
     editor
         .notify(
@@ -212,7 +212,7 @@ async fn decl_files_parse_in_decl_mode() {
             "textDocument/didOpen",
             json!({"textDocument": {
                 "uri": uri, "languageId": "rut", "version": 1,
-                "text": "host fn now_ms(): u64;\n"
+                "text": "host fn now_ms() -> u64;\n"
             }}),
         )
         .await;
@@ -255,9 +255,9 @@ async fn hover_on_the_wire() {
 // a circle
 class Circle {
     private r: f64;
-    fn area(self): f64 { return 3.14; }
+    fn area(self) -> f64 { return 3.14; }
 }
-fn go(c: Circle): f64 { return c.area(); }
+fn go(c: Circle) -> f64 { return c.area(); }
 ";
     let uri = "file:///w/hover.rut";
     editor
@@ -280,7 +280,7 @@ fn go(c: Circle): f64 { return c.area(); }
         )
         .await;
     let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
-    assert!(md.contains("fn area(self): f64"), "signature: {md}");
+    assert!(md.contains("fn area(self) -> f64"), "signature: {md}");
     assert!(md.contains("in `Circle`"), "owner: {md}");
 
     // class hover shows the struct definition + doc
@@ -311,7 +311,7 @@ fn go(c: Circle): f64 { return c.area(); }
 #[tokio::test]
 async fn hover_resolves_std_surface() {
     let mut editor = spawn().await;
-    let src = "fn n(): i32 { return \"abc\".len(); }\n";
+    let src = "fn n() -> i32 { return \"abc\".len(); }\n";
     let uri = "file:///w/str.rut";
     editor
         .notify(
@@ -331,7 +331,7 @@ async fn hover_resolves_std_surface() {
         )
         .await;
     let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
-    assert!(md.contains("fn len(self): i32"), "string native: {md}");
+    assert!(md.contains("fn len(self) -> i32"), "string native: {md}");
     assert!(md.contains("std:core"), "provenance: {md}");
     assert!(md.contains("in `string`"), "the primitive's own surface: {md}");
 }

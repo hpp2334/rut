@@ -63,7 +63,7 @@ only, and — beyond RFC 0003's module scope — every declaration must be
 - `host fn` / `host class` / `extern fn` / `extern class` — signatures
   only, with admission-only param bounds (RFC 0025);
 - `host primitive` — **the native member surface of a primitive type**:
-  `export host primitive string { fn len(self): i32; }`. Members are
+  `export host primitive string { fn len(self) -> i32; }`. Members are
   bodiless and statically bound (RFC 0032 §1.1 R2 — named things on
   builtins are natives, never ops); the decl is the declarative form of
   the host's builtin member table. This is how primitives grow methods

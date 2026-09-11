@@ -749,7 +749,7 @@ impl MethodFrame {
     }
 
     fn after_params(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::Colon) {
+        if p.eat_punct(Tok::Arrow) {
             self.stage = MeStage::Ret;
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
@@ -862,7 +862,7 @@ impl FnFrame {
     }
 
     fn after_params(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::Colon) {
+        if p.eat_punct(Tok::Arrow) {
             self.stage = FnSStage::Ret;
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
@@ -1147,7 +1147,7 @@ impl SurfaceFrame {
         match (self.stage, d) {
             (SuStage::Params, Done::Members(ps)) => {
                 self.params = Some(ps);
-                if p.eat_punct(Tok::Colon) {
+                if p.eat_punct(Tok::Arrow) {
                     self.stage = SuStage::Ret;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }

@@ -834,7 +834,7 @@ impl AtomFrame {
     }
 }
 
-// ---- lambdas (RFC 0013 §1): `( params ) (: Type)? => expr | block` ----
+// ---- lambdas (RFC 0013 §1): `( params ) (-> Type)? => expr | block` ----
 
 pub(crate) struct LambdaFrame {
     sp: Span,
@@ -843,7 +843,7 @@ pub(crate) struct LambdaFrame {
 }
 
 impl LambdaFrame {
-    /// `(a, b): T => ..` — params come from a ParamsFrame child
+    /// `(a, b) -> T => ..` — params come from a ParamsFrame child
     pub(crate) fn paren(sp: Span) -> Self {
         LambdaFrame { sp, params: None, ret: None }
     }
@@ -860,7 +860,7 @@ impl LambdaFrame {
     }
 
     fn after_params(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::Colon) {
+        if p.eat_punct(Tok::Arrow) {
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
         p.expect(Tok::FatArrow);

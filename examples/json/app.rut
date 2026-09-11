@@ -50,11 +50,11 @@ dataclass ApiUser {
 
 impl Serializable for ApiUser { }
 
-fn to_api(u: User): ApiUser {
+fn to_api(u: User) -> ApiUser {
     return ApiUser { user_id: u.id, login: u.login };
 }
 
-fn from_api(a: ApiUser): User {
+fn from_api(a: ApiUser) -> User {
     return User {
         id: a.user_id,
         login: a.login,
@@ -78,15 +78,15 @@ class Tree {
     private root: i64;
     private cache: string;              // never serialized — unexposed
 
-    fn new(root: i64): Self {
+    fn new(root: i64) -> Self {
         return Self { root: root, cache: "" };
     }
 }
 
 impl Reflectable for Tree {             // the curated view, by hand
-    fn reflect(self): TypeInfo { return reflect<Tree>(); }
-    fn arity(self): i32 { return 1; }
-    fn child(self, i: i32): Option<Opaque> {
+    fn reflect(self) -> TypeInfo { return reflect<Tree>(); }
+    fn arity(self) -> i32 { return 1; }
+    fn child(self, i: i32) -> Option<Opaque> {
         if (i == 0) { return Option<Opaque>.Some(Opaque.new(self.root)); }
         return Option<Opaque>.None();
     }
@@ -94,13 +94,13 @@ impl Reflectable for Tree {             // the curated view, by hand
 
 impl Serializable for Tree { }          // the empty layer — the opt-in itself
 
-fn seed(): Vec<Address> {
+fn seed() -> Vec<Address> {
     let a = Vec<Address>();
     a.push(Address { city: "Osaka", zip: 530 });
     return a;
 }
 
-export fn main(): unit {
+export fn main() -> unit {
     let u = User {
         id: 7,
         login: "hpp",
