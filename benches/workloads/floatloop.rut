@@ -1,0 +1,10 @@
+// floatloop — f64 hot loop: multiply-add, loop counter, compare/branch.
+// Scale: 2_000_000 iterations. Canonical reference: 1107013.7297975053.
+
+pub fn main() -> unit {
+    let mut s = 0.0;
+    for (let i = 0; i < 2000000; i += 1) {
+        s = s * 1.0000001 + 0.5;
+    }
+    print(f"CHECKSUM {s}");
+}

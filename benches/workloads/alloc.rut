@@ -1,0 +1,16 @@
+// alloc — record allocation/drop churn (RC heap). Scale: 2_000_000 records.
+// Canonical reference: 2_000_000^2 wrapped = 1385447424.
+
+dataclass Point {
+    x: i32,
+    y: i32,
+}
+
+pub fn main() -> unit {
+    let mut s: i32 = 0;
+    for (let i = 0; i < 2000000; i += 1) {
+        let p = Point { x: i, y: i &+ 1 };
+        s = s &+ p.x &+ p.y;
+    }
+    print(f"CHECKSUM {s}");
+}

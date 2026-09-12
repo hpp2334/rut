@@ -80,6 +80,10 @@ against the reference in `workloads/expected.json`.
 | `spectral-norm` | `f64` power iteration + `sqrt` | n = 150 | `1.274222872607514` |
 | `binary-trees` | RC allocation/drop churn | depth 14 | 2¹⁵−1 nodes = `32767` |
 | `fasta` | immutable-string building | n = 10 000 | `15246:10000` |
+| `intloop` | integer arith + loop dispatch | 5M iters | `628038624` |
+| `floatloop` | f64 mul/add + loop dispatch | 2M iters | `1107013.7297975053` |
+| `call` | call/return/frame overhead | fib(28) | `317811` |
+| `alloc` | record allocation/RC churn | 2M records | `1385447424` |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the

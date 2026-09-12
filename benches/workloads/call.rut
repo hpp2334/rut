@@ -1,0 +1,13 @@
+// call — recursion / call-frame overhead. Scale: fib(28).
+// Canonical reference: fib(28) = 317811.
+
+fn fib(n: i32) -> i32 {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+pub fn main() -> unit {
+    print(f"CHECKSUM {fib(28)}");
+}
