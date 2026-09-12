@@ -237,6 +237,47 @@ fn std_collection_barrel_expands_and_compiles() {
 }
 
 #[test]
+fn loads_a_directory_graph() {
+    let base = std::env::temp_dir().join(format!("rut-load-test-{}", std::process::id()));
+    let app = base.join("app");
+    let lib = base.join("lib");
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::create_dir_all(&lib).unwrap();
+    std::fs::write(
+        app.join("rut.toml"),
+        "name = \"app:main\"\nentry.lib = \"./entry.rut\"\n[deps]\n\"lib:math\" = { path = \"../lib\" }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        app.join("entry.rut"),
+        "import { seven } from \"lib:math\";\nfn main() -> i32 { return seven(); }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        lib.join("rut.toml"),
+        "name = \"lib:math\"\nentry.lib = \"./lib.rut\"\n",
+    )
+    .unwrap();
+    std::fs::write(lib.join("lib.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
+
+    let out = rut_driver::compile_dir(&app).expect("compile_dir");
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let p = out.program.expect("linked program");
+    // lib:math::seven called from app:main
+    let call = p
+        .funcs
+        .iter()
+        .flat_map(|f| &f.code)
+        .find_map(|op| match op {
+            rut_core::ops::Op::Call { func, .. } => Some(*func),
+            _ => None,
+        });
+    assert!(call.is_some(), "cross-module call present");
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
 fn graph_reports_a_missing_dependency() {
     let mut s = Session::new();
     s.register_module(

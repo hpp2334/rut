@@ -102,3 +102,9 @@ fn load_entry(dir: &Path, entry: &Entry) -> Result<String, String> {
         .ok_or_else(|| format!("module in {} has no entry", dir.display()))?;
     expand_module_source(&dir.join(rel)).map_err(|e| e.to_string())
 }
+
+/// Read a directory's `rut.toml` graph and compile it to one linked program.
+pub fn compile_dir(dir: &Path) -> Result<crate::graph::GraphOutput, String> {
+    let (session, root) = load_dir_session(dir)?;
+    Ok(crate::compile_graph(&session, &root))
+}

@@ -17,7 +17,7 @@ pub mod graph;
 pub use graph::{compile_graph, GraphOutput};
 
 pub mod loader;
-pub use loader::{expand_module_source, load_dir_session};
+pub use loader::{compile_dir, expand_module_source, load_dir_session};
 
 pub struct CompileOutput {
     pub diags: Vec<Diag>,
