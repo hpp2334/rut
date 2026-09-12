@@ -1175,3 +1175,33 @@ pub fn main() -> unit {
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["c"]);
 }
+
+#[test]
+fn next_based_iterator_contract() {
+    // the builtin `Iterator` contract: `impl Iterator for X` + `for..of`
+    // lowers to `next()` (CallI) with the impl's `Item` binding
+    let src = r#"
+class Countdown {
+    n: i32;
+    fn new(n: i32) -> Self { return Self { n: n }; }
+}
+impl Iterator for Countdown {
+    type Item = i32;
+    fn next(mut self) -> Option<i32> {
+        if (self.n <= 0) { return Option.none(); }
+        let v = self.n;
+        self.n -= 1;
+        return Option.some(v);
+    }
+}
+pub fn main() -> unit {
+    let c = Countdown.new(3);
+    let mut sum = 0;
+    for (let x of c) { sum += x; }
+    print(f"{sum}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["6"]);
+}

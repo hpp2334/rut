@@ -99,6 +99,9 @@ pub struct Ctx<'a> {
     /// the sequence-contract trait id once referenced (RFC 0012 `Iter`) —
     /// the sequence-lowering path keys on this, never on the trait's name
     pub seq_trait: Option<u32>,
+    /// the iterator-contract trait id once referenced (RFC 0012 `Iterator`)
+    /// — `for..of` lowers to `next` when a type implements it and not `Iter`
+    pub iter_trait: Option<u32>,
     pub funcs: Vec<FuncCode>,
     pub consts: Vec<ConstVal>,
     pub exports: Vec<(String, u32)>,
@@ -167,6 +170,7 @@ impl<'a> Ctx<'a> {
             traits: Vec::new(),
             trait_decls: Vec::new(),
             seq_trait: None,
+            iter_trait: None,
             funcs: Vec::new(),
             consts: Vec::new(),
             exports: Vec::new(),

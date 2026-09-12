@@ -1205,15 +1205,36 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// Substitute an associated-type placeholder with the concrete binding
-    /// from `im` (a concrete `impl Trait for T`).
+    /// from `im` (a concrete `impl Trait for T`); recurse through the
+    /// builtin containers so `Option<Item>` resolves too.
     fn subst_assoc(&mut self, im: &crate::check::ImplDecl, t: TypeId) -> TypeId {
-        let Some((_, name)) = self.ctx.assoc_ty.get(&t).cloned() else {
+        if let Some((_, name)) = self.ctx.assoc_ty.get(&t).cloned() {
+            if let Some((_, node)) = im.assoc.iter().find(|(n, _)| self.ctx.name(*n) == name).copied() {
+                return self.ctx.resolve_type(node, &[]);
+            }
             return t;
-        };
-        let Some((_, node)) = im.assoc.iter().find(|(n, _)| self.ctx.name(*n) == name).copied() else {
-            return t;
-        };
-        self.ctx.resolve_type(node, &[])
+        }
+        match self.ctx.types.kind(t).clone() {
+            TyKind::Option { elem } => {
+                let e = self.subst_assoc(im, elem);
+                self.ctx.mk_option(e)
+            }
+            TyKind::Array { elem } => {
+                let e = self.subst_assoc(im, elem);
+                self.ctx.mk_array(e)
+            }
+            TyKind::Result { ok, err } => {
+                let ok = self.subst_assoc(im, ok);
+                let err = self.subst_assoc(im, err);
+                self.ctx.mk_result(ok, err)
+            }
+            TyKind::Fn { params, ret } => {
+                let params: Vec<TypeId> = params.iter().map(|&p| self.subst_assoc(im, p)).collect();
+                let ret = self.subst_assoc(im, ret);
+                self.ctx.mk_fn_ty(params, ret)
+            }
+            _ => t,
+        }
     }
 
     pub(crate) fn finish_trait_call(

@@ -12,6 +12,7 @@ impl<'a> Ctx<'a> {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
                 let is_iter = self.name(tname) == "Iter";
+                let is_iterator = self.name(tname) == "Iterator";
                 let id = if let Some(t) = self.find_trait(tname).cloned() {
                     if segs[0].generics.is_empty() {
                         if t.id == u32::MAX {
@@ -43,12 +44,17 @@ impl<'a> Ctx<'a> {
                     // the builtin `Iter` sequence contract (RFC 0012) is
                     // undeclarable but need not be spelled in the module
                     Some(self.builtin_iter_trait(tname))
+                } else if is_iterator {
+                    Some(self.builtin_iterator_trait(tname))
                 } else {
                     self.err(self.ast.span(node.id()), format!("unknown trait `{}`", self.name(tname)));
                     None
                 };
                 if is_iter {
                     self.seq_trait = id;
+                }
+                if is_iterator {
+                    self.iter_trait = id;
                 }
                 id
             }
@@ -82,6 +88,31 @@ impl<'a> Ctx<'a> {
             generics: vec![],
             assoc: vec!["Target".to_string()],
         }));
+        id
+    }
+
+    /// The builtin `Iterator` contract (RFC 0012): `type Item`,
+    /// `fn next(mut self) -> Option<Item>`. `for..of` lowers to `next`
+    /// when a type implements it and is not a sequence.
+    pub fn builtin_iterator_trait(&mut self, name: IdentId) -> u32 {
+        if let Some(id) = self.trait_id_of(name) {
+            return id;
+        }
+        let id = self.traits.len() as u32;
+        self.traits.push(TraitDesc { name: "Iterator".to_string(), methods: vec![] });
+        self.trait_decls.push((name, TraitDeclInfo {
+            id,
+            node: rut_ast::ast::NodeId(0),
+            generics: vec![],
+            assoc: vec!["Item".to_string()],
+        }));
+        let item = self.mk_assoc(id, 0, "Item");
+        let opt = self.mk_option(item);
+        self.traits[id as usize].methods.push(rut_core::binary::TraitMethod {
+            name: "next".to_string(),
+            params: vec![],
+            ret: opt,
+        });
         id
     }
 

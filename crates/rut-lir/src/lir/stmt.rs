@@ -182,13 +182,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
         // the `Iter` sequence contract (Vec, Array, string, bytes, and any
-        // user `impl Iter`)
-        let Some(info) = self.slice_info(it) else {
-            self.ctx.err(sp, format!(
-                "`for (let .. of ..)` needs a sequence — `{}` does not implement `Iter` (RFC 0012)",
-                self.ctx.types.name(it)
-            ));
-            return Err(());
+        // user `impl Iter`); otherwise the `Iterator` contract (`next`)
+        let info = match self.slice_info(it) {
+            Some(info) => info,
+            None => {
+                if let Some((impl_idx, item_ty)) = self.iterator_info(it) {
+                    return self.compile_for_of_next(node, var, iter_reg, impl_idx, item_ty, body, sp);
+                }
+                self.ctx.err(sp, format!(
+                    "`for (let .. of ..)` needs a sequence — `{}` implements neither `Iter` nor `Iterator` (RFC 0012)",
+                    self.ctx.types.name(it)
+                ));
+                return Err(());
+            }
         };
         let elem_ty = info.elem;
         let idx = self.new_reg(TY_I32);
@@ -221,6 +227,52 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.jmp(l_head);
         self.bind(l_end);
         let _ = node;
+        Ok(())
+    }
+
+    /// `for (x of it)` where `it` implements `Iterator` (RFC 0012): lower to
+    /// a loop over `next()` — `CallI` through the impl's vtable slot, then
+    /// `Option` test/unwrap. The element type is the impl's `Item` binding.
+    fn compile_for_of_next(
+        &mut self,
+        _node: NodeId,
+        var: IdentId,
+        it_reg: u16,
+        impl_idx: usize,
+        item_ty: TypeId,
+        body: NodeHandle<BlockNode>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<()> {
+        let trait_id = self.ctx.impls[impl_idx].trait_id;
+        let midx = self.ctx.traits[trait_id as usize]
+            .methods
+            .iter()
+            .position(|m| m.name == "next")
+            .unwrap_or(0);
+        let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
+        let opt_ty = self.ctx.mk_option(item_ty);
+        let l_head = self.new_label();
+        let l_body = self.new_label();
+        let l_end = self.new_label();
+        let l_cont = self.new_label();
+        self.bind(l_head);
+        self.emit(Op::LoopHead, sp.lo);
+        let o = self.new_reg(opt_ty);
+        self.emit(Op::CallI { slot, recv: it_reg, args: vec![], dst: Some(o) }, sp.lo);
+        let done = self.new_reg(TY_BOOL);
+        self.emit(Op::SumIs { dst: done, v: o, want_err: true }, sp.lo);
+        self.br(done, l_end, l_body);
+        self.bind(l_body);
+        let x = self.new_reg(item_ty);
+        self.emit(Op::Unwrap { dst: x, v: o, want_err: false }, sp.lo);
+        self.locals.push(Local { name: var, reg: x, ty: item_ty, is_mut: false, loop_var: false });
+        self.loops.push((l_cont, l_end));
+        self.compile_block(body)?;
+        self.loops.pop();
+        self.locals.pop();
+        self.bind(l_cont);
+        self.jmp(l_head);
+        self.bind(l_end);
         Ok(())
     }
 
