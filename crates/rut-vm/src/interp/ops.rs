@@ -237,7 +237,7 @@ impl Vm {
     #[inline(always)]
     pub(super) fn op_arr_lit(&mut self, dst: Reg, ty: TypeId, elems: &[Reg]) -> Result<(), Trap> {
         let elem = match self.prog.types.kind(ty) {
-            TyKind::Array { elem, .. } | TyKind::Vec { elem } => *elem,
+            TyKind::Vec { elem } | TyKind::Array { elem } => *elem,
             _ => TY_ANY,
         };
         let vals: Vec<Slot> = elems.iter().map(|&e| self.cur_regs[e as usize]).collect();

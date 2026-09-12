@@ -77,7 +77,7 @@ pub fn deserialize<T>(v: string) -> Result<T, JsonError>
         where T requires Deserializable {
     // producer: a trait-object-typed return does not exist, so the
     // contract rides the call site — T is guaranteed descriptor-backed
-    // (dataclass/enum/Option/Result/Vec/Array<T, N>) by the BOUND; no
+    // (dataclass/enum/Option/Result/Vec/Array<T>) by the BOUND; no
     // runtime walkability pre-check exists to delete.
     let t = reflect<T>();
     let tree = parse_tree(v)?;
@@ -247,7 +247,7 @@ fn sum_all_payloadless(vs: Vec<SumVariant>) -> bool {
     return true;
 }
 
-fn optional_indices(vs: Vec<SumVariant>) -> Array<i32, 2> {
+fn optional_indices(vs: Vec<SumVariant>) -> Array<i32> {
     let less = -1;                 // the payloadless variant (None)
     let more = -1;                 // the payloaded variant (Some)
     for (let i = 0; i < vs.len(); i += 1) {

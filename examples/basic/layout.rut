@@ -34,8 +34,8 @@ fn layout() -> unit {
     log.info(f"padded size={SZ_PADDED} align={AL_PADDED}");    // 12 / 4
     log.info(f"vertex size={size_of<Vertex>()}");              // 8 — same as Point
     log.info(f"own-clone size: {size_of<Point>()}");      // what own() memcpy's
-    log.info(f"array payload: {size_of<Array<i32, 8>>()}");// 32 — flat primitive
-}                                                        // buffer (RFC 0016 §4)
+    log.info(f"array handle: {size_of<Array<i32>>()}");   // 8 — heap cell handle
+}                                                         // (payload on the heap)
 
 fn boxed_layout() -> unit {
     let log = Logger.new("layout");

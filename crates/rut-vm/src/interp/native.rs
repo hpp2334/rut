@@ -92,8 +92,9 @@ impl Vm {
             Nat::VecLen => {
                 let cell = cell_of(r!(recv.unwrap()));
                 let n = match &cell.data {
-                    crate::heap::CellData::Vec { items, .. } => items.borrow().len() as i64,
-                    _ => return Err(Trap::new(TrapKind::Invalid, "len on non-vec")),
+                    crate::heap::CellData::Vec { items, .. }
+                    | crate::heap::CellData::Array { items, .. } => items.borrow().len() as i64,
+                    _ => return Err(Trap::new(TrapKind::Invalid, "len on non-sequence")),
                 };
                 if let Some(d) = dst {
                     self.cur_regs[d as usize] = Slot::int(n);

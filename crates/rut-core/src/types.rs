@@ -119,8 +119,9 @@ pub enum TyKind {
     Bytes,
     /// growable buffer cell; flat for primitive elem, handle slots otherwise
     Vec { elem: TypeId },
-    /// fixed-length cell; `len` is part of the type's identity (RFC 0005)
-    Array { elem: TypeId, len: u32 },
+    /// heap array cell — runtime length, non-growable (RFC 0005). The
+    /// growable `Vec<T>` is a rut class over it (`std:collection`).
+    Array { elem: TypeId },
     /// named-int set (RFC 0006); members are immortal singleton cells
     Enum { members: Vec<(String, i64)> },
     /// builtin sum (RFC 0005): tag 0 = some/ok, 1 = none/err

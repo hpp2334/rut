@@ -271,14 +271,13 @@ impl<'a> Ctx<'a> {
             align: 8,
         })
     }
-    pub fn mk_array(&mut self, elem: TypeId, len: u32) -> TypeId {
-        let esz = self.types.types[elem as usize].size as u64;
-        let name = format!("Array<{}, {}>", self.types.name(elem), len);
+    pub fn mk_array(&mut self, elem: TypeId) -> TypeId {
+        let name = format!("Array<{}>", self.types.name(elem));
         self.types.intern(RutType {
             name,
-            kind: TyKind::Array { elem, len },
-            size: ((esz * len as u64).min(u32::MAX as u64)) as u32,
-            align: self.types.types[elem as usize].align,
+            kind: TyKind::Array { elem },
+            size: 8,
+            align: 8,
         })
     }
     pub fn mk_option(&mut self, elem: TypeId) -> TypeId {
@@ -343,10 +342,7 @@ impl<'a> Ctx<'a> {
                 let size = (off + align - 1) / align * align;
                 (size.max(1), align)
             }
-            TyKind::Array { elem, len } => {
-                let (es, ea) = self.layout_of(elem);
-                (es * len, ea)
-            }
+            TyKind::Array { .. } => (8, 8),
             TyKind::Option { elem } | TyKind::Result { ok: elem, .. } => {
                 let (es, ea) = self.layout_of(elem);
                 ((4 + es).max(8), ea.max(4))

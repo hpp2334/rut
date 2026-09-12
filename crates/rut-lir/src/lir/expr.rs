@@ -48,7 +48,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let ireg = self.last_reg;
                 let elem = match self.ctx.types.kind(rt).clone() {
-                    TyKind::Vec { elem } | TyKind::Array { elem, .. } => elem,
+                    TyKind::Vec { elem } | TyKind::Array { elem } => elem,
                     TyKind::Bytes => {
                         // immutable byte read (RFC 0004); bounds trap in the VM
                         let dst = self.new_reg(TY_U8);

@@ -114,7 +114,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
                     let ety = match prog.types.kind(f.regs[*arr as usize]) {
-                        TyKind::Vec { elem } | TyKind::Array { elem, .. } => *elem,
+                        TyKind::Vec { elem } | TyKind::Array { elem } => *elem,
                         _ => return Err(bad("array op on a non-sequence register".into())),
                     };
                     if prog.types.repr_of(ety) != *repr {

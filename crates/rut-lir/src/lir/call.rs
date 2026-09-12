@@ -490,12 +490,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => base_generics.first().map(|&g| self.resolve_type_now(g)),
                 };
                 let hint_ty = match want_elem {
-                    Some(e) => Some(self.ctx.mk_array(e, 0)),
+                    Some(e) => Some(self.ctx.mk_array(e)),
                     None => None,
                 };
                 let at = self.compile_expr(args[0], hint_ty)?;
                 let elem = match self.ctx.types.kind(at).clone() {
-                    TyKind::Array { elem, .. } | TyKind::Vec { elem } => elem,
+                    TyKind::Array { elem } | TyKind::Vec { elem } => elem,
                     _ => {
                         self.ctx.err(sp, format!("Vec.from expects an Array —found `{}`", self.ctx.types.name(at)));
                         return Err(());
@@ -517,13 +517,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, "bytes.from(source) takes one array or Vec<u8>");
                     return Err(());
                 }
-                // hint `Array<u8, _>` so a bare literal knows its element
-                let hint = Some(self.ctx.mk_array(TY_U8, 0));
+                // hint `Array<u8>` so a bare literal knows its element
+                let hint = Some(self.ctx.mk_array(TY_U8));
                 let at = self.compile_expr(args[0], hint)?;
                 match self.ctx.types.kind(at) {
-                    TyKind::Array { elem, .. } | TyKind::Vec { elem } if *elem == TY_U8 => {}
+                    TyKind::Array { elem } | TyKind::Vec { elem } if *elem == TY_U8 => {}
                     _ => {
-                        self.ctx.err(sp, format!("bytes.from expects `Array<u8, N>` or `Vec<u8>` —found `{}`", self.ctx.types.name(at)));
+                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` or `Vec<u8>` —found `{}`", self.ctx.types.name(at)));
                         return Err(());
                     }
                 }
@@ -867,11 +867,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 _ => {}
             },
-            TyKind::Array { len, .. } => match mname.as_str() {
+            TyKind::Array { .. } => match mname.as_str() {
                 "len" => {
-                    // folds to the const N (RFC 0032 §1.1 R1)
+                    // runtime length — the heap array cell carries it
                     let dst = self.new_reg(TY_I32);
-                    self.emit(Op::ConstRaw { dst, bits: len as u64 }, sp.lo);
+                    self.emit(Op::CallNat { nat: Nat::VecLen, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
                     return Ok(TY_I32);
                 }
                 _ => {}

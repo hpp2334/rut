@@ -112,18 +112,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.unify_generic(segs[0].generics[0], ok, decl_generics, subst, sp)?;
                         self.unify_generic(segs[0].generics[1], err, decl_generics, subst, sp)
                     }
-                    ("Array", TyKind::Array { elem, len }) if segs[0].generics.len() == 2 => {
-                        // const N: match literally
-                        if let TypeKind::TyConst(e) = self.ctx.ast.ty(segs[0].generics[1]) {
-                            if let ExprKind::Lit(Lit::Int(v, _)) = self.ctx.ast.expr(*e) {
-                                if *v as u32 != len {
-                                    self.ctx.err(sp, format!(
-                                        "array length mismatch: {v} vs {len} (N is part of the type, RFC 0005)"
-                                    ));
-                                    return Err(());
-                                }
-                            }
-                        }
+                    ("Array", TyKind::Array { elem }) if segs[0].generics.len() == 1 => {
                         self.unify_generic(segs[0].generics[0], elem, decl_generics, subst, sp)
                     }
                     _ => {

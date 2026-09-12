@@ -73,7 +73,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 7;
+pub const VERSION: u32 = 8;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -202,10 +202,9 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u8(3);
             e.u32(*elem);
         }
-        TyKind::Array { elem, len } => {
+        TyKind::Array { elem } => {
             e.u8(4);
             e.u32(*elem);
-            e.u32(*len);
         }
         TyKind::Enum { members } => {
             e.u8(5);
@@ -359,7 +358,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         2 => TyKind::Str,
         12 => TyKind::Bytes,
         3 => TyKind::Vec { elem: d.u32()? },
-        4 => TyKind::Array { elem: d.u32()?, len: d.u32()? },
+        4 => TyKind::Array { elem: d.u32()? },
         5 => {
             let n = d.u32()? as usize;
             let mut members = Vec::with_capacity(n);

@@ -336,7 +336,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
                 let elem = match self.ctx.types.kind(rt).clone() {
-                    TyKind::Vec { elem } | TyKind::Array { elem, .. } => elem,
+                    TyKind::Vec { elem } | TyKind::Array { elem } => elem,
                     _ => {
                         self.ctx.err(sp, "index assignment needs a Vec or Array");
                         return Err(());

@@ -1,7 +1,6 @@
 //! Type resolution: primitives, builtins (Vec/Array/Option/Result), user
-//! types, dyn I, fn types; naming-position resolution; const lengths.
+//! types, dyn I, fn types; naming-position resolution.
 
-use rut_lexer::span::Span;
 use rut_core::types::*;
 use super::*;
 
@@ -105,13 +104,12 @@ impl<'a> Ctx<'a> {
                                 self.err(sp, "Vec takes one generic argument");
                                 TY_I32
                             }
-                            ("Array", [e, l]) => {
+                            ("Array", [e]) => {
                                 let t = self.resolve_type(*e, env);
-                                let len = self.const_len(*l, sp);
-                                self.mk_array(t, len)
+                                self.mk_array(t)
                             }
                             ("Array", _) => {
-                                self.err(sp, "Array takes two generic arguments: Array<T, N>");
+                                self.err(sp, "Array takes one generic argument: Array<T>");
                                 TY_I32
                             }
                             ("Option", [e]) => {
@@ -178,17 +176,6 @@ impl<'a> Ctx<'a> {
                 }
             }
         }
-    }
-
-    pub(crate) fn const_len(&mut self, node: NodeHandle<AnyTy>, sp: Span) -> u32 {
-        // the parser wraps const args in TyConst (RFC 0030 §2)
-        if let TypeKind::TyConst(e) = self.ast.ty(node) {
-            if let ExprKind::Lit(Lit::Int(v, _)) = self.ast.expr(*e) {
-                return *v as u32;
-            }
-        }
-        self.err(sp, "array length must be a constant expression (RFC 0005)");
-        0
     }
 
 }

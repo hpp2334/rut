@@ -260,11 +260,11 @@ impl Heap {
                     Err(Trap::new(TrapKind::Invalid, "own: not a vec"))
                 }
             }
-            TyKind::Array { elem, len } => {
+            TyKind::Array { elem } => {
                 let cell = cell_of(s);
                 if let CellData::Array { items, .. } = &cell.data {
-                    let mut out = Vec::with_capacity(len as usize);
                     let src = items.borrow();
+                    let mut out = Vec::with_capacity(src.len());
                     for i in 0..src.len() {
                         if let Some(it) = src.get(i) {
                             out.push(self.clone_slot(it, elem, table)?);

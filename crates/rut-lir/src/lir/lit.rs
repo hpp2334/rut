@@ -107,10 +107,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     pub(crate) fn compile_array_lit(&mut self, elems: Vec<NodeHandle<AnyExpr>>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        // `[e1, .., en] : Array<T, n>` (RFC 0007 §1); T from expected or the
+        // `[e1, .., en] : Array<T>` (RFC 0007 §1); T from expected or the
         // first element; uncontextualized int elements default to i32
         let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-            Some(TyKind::Array { elem, .. }) | Some(TyKind::Vec { elem }) => Some(elem),
+            Some(TyKind::Array { elem }) | Some(TyKind::Vec { elem }) => Some(elem),
             _ => None,
         };
         let mut eregs = Vec::new();
@@ -134,7 +134,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             eregs.push(self.last_reg);
         }
         let elem = ety.unwrap_or(TY_I32);
-        let aty = self.ctx.mk_array(elem, elems.len() as u32);
+        let aty = self.ctx.mk_array(elem);
         let dst = self.new_reg(aty);
         self.emit(Op::ArrLit { dst, ty: aty, elems: eregs }, sp.lo);
         Ok(aty)

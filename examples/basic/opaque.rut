@@ -2,7 +2,7 @@
 // Opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the
 // runtime type; downcast<T> recovers it or yields None. `Opaque` is the
 // erased-storage CONCRETE type — it composes like any class (`Vec<Opaque>`,
-// fixed `Array<Opaque, 3>`, fields, returns). Under the all-cells regime
+// fixed `Array<Opaque>`, fields, returns). Under the all-cells regime
 // (RFC 0016 §1) boxing is ZERO-COPY: the box stores the cell handle, so
 // the box shares identity with the original. The only any-shaped value
 // in rut — and it can do nothing until recovered.
@@ -50,7 +50,7 @@ fn nested() -> unit {
     let log = Logger.new("opaque");
     // heterogeneous FIXED array — pure data, one shared cell per slot
     // (RFC 0016 §1)
-    let boxes: Array<Opaque, 3> = [Opaque.new(1), Opaque.new("two"), Opaque.new(Point { x: 3, y: 4 })];
+    let boxes: Array<Opaque> = [Opaque.new(1), Opaque.new("two"), Opaque.new(Point { x: 3, y: 4 })];
     log.info(f"{boxes.len()} boxes; first is i32: {boxes[0] is i32}");
     let vec: Vec<Opaque> = Vec.from([Opaque.new(5)]);
     log.info(f"vec {vec.len()}");

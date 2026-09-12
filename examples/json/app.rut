@@ -35,7 +35,7 @@ dataclass User {
     role: Role;                         // enum <-> member name
     nickname: Option<string>;           // None <-> null (structural sum)
     addresses: Vec<Address>;            // nested records
-    scores: Array<f32, 2>;              // Seq over a FIXED array (RFC 0005)
+    scores: Array<f32>;              // Seq over a FIXED array (RFC 0005)
 }
 
 impl Serializable for User { }         // the empty impl — the opt-in itself

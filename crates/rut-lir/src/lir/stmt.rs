@@ -163,7 +163,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let iter_reg = self.last_reg;
         let elem_ty = match self.ctx.types.kind(it).clone() {
             TyKind::Vec { elem } => elem,
-            TyKind::Array { elem, .. } => elem,
+            TyKind::Array { elem } => elem,
             TyKind::Str => TY_CHAR,
             TyKind::Bytes => TY_U8,
             _ => {
@@ -189,8 +189,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyKind::Vec { .. } => {
                 self.emit(Op::CallNat { nat: Nat::VecLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
             }
-            TyKind::Array { len, .. } => {
-                self.emit(Op::ConstRaw { dst: len_reg, bits: len as u64 }, sp.lo);
+            TyKind::Array { .. } => {
+                self.emit(Op::CallNat { nat: Nat::VecLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
             }
             TyKind::Str => {
                 self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
