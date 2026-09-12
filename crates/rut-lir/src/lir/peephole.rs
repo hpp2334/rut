@@ -192,7 +192,7 @@ fn mark(targets: &mut [bool], t: u32, n: usize) {
     targets[t] = true;
 }
 
-fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
+pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
     let mut d = Vec::new();
     let mut u = Vec::new();
     match op {
