@@ -13,6 +13,9 @@ use rut_core::types::TyKind;
 pub mod session;
 pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
 
+pub mod graph;
+pub use graph::{compile_graph, GraphOutput};
+
 pub struct CompileOutput {
     pub diags: Vec<Diag>,
     pub ast_dump: String,

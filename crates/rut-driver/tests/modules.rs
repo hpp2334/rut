@@ -2,6 +2,7 @@
 //! (RFC 0029 surface / RFC 0035 §1).
 
 use rut_parser::Mode;
+use rut_driver::{Module, Session};
 
 #[test]
 fn imports_and_links_a_function() {
@@ -114,4 +115,126 @@ fn imports_and_links_a_type() {
     let read = app.iter().flat_map(|f| &f.code).any(|op| matches!(op, rut_core::ops::Op::GetF { .. }));
     assert!(made, "app constructs the imported Point\n{app_ir}");
     assert!(read, "app reads an imported field\n{app_ir}");
+}
+
+#[test]
+fn graph_compiles_and_links_imports_in_order() {
+    let mut s = Session::new();
+    s.register_module(
+        "std:math",
+        Module {
+            source: Some(
+                "pub fn seven() -> i32 { return 7; }\n\
+                 fn main() -> i32 { return seven(); }\n"
+                    .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    s.register_module(
+        "app:main",
+        Module {
+            source: Some(
+                "import { seven } from \"std:math\";\n\
+                 fn main() -> i32 { return seven(); }\n"
+                    .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let out = rut_driver::compile_graph(&s, "app:main");
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let p = out.program.expect("linked program");
+    // std:math: main(0), seven(1); app:main: main(2)
+    assert_eq!(p.funcs.len(), 3);
+    let call = p.funcs[2]
+        .code
+        .iter()
+        .find_map(|op| match op {
+            rut_core::ops::Op::Call { func, .. } => Some(*func),
+            _ => None,
+        })
+        .expect("app calls seven");
+    assert_eq!(call, 1);
+    let bytes = rut_core::binary::encode(&p);
+    assert!(rut_core::binary::decode(&bytes).is_ok());
+}
+
+#[test]
+fn graph_threads_a_type_through_a_chain() {
+    let mut s = Session::new();
+    s.register_module(
+        "geo:base",
+        Module {
+            source: Some(
+                "dataclass Point { x: i32; y: i32; }\n\
+                 pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
+                 fn main() -> i32 { return 0; }\n"
+                    .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    s.register_module(
+        "geo:mid",
+        Module {
+            source: Some(
+                "import { Point, origin } from \"geo:base\";\n\
+                 pub fn shifted() -> Point { return origin(); }\n\
+                 fn main() -> i32 { return 0; }\n"
+                    .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    s.register_module(
+        "app:main",
+        Module {
+            source: Some(
+                "import { Point } from \"geo:base\";\n\
+                 import { shifted } from \"geo:mid\";\n\
+                 fn main() -> i32 { let p: Point = shifted(); return p.x; }\n"
+                    .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let out = rut_driver::compile_graph(&s, "app:main");
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let p = out.program.expect("linked program");
+    let points = (0..p.types.types.len() as u32)
+        .filter(|&i| p.types.name(i) == "Point")
+        .count();
+    assert_eq!(points, 1, "Point is shared across the chain, not duplicated");
+}
+
+#[test]
+fn graph_reports_a_missing_dependency() {
+    let mut s = Session::new();
+    s.register_module(
+        "app:main",
+        Module {
+            source: Some(
+                "import { nope } from \"std:missing\";\n\
+                 fn main() -> i32 { return 0; }\n"
+                    .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let out = rut_driver::compile_graph(&s, "app:main");
+    assert!(out.program.is_none());
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("package `std` is not mounted")),
+        "{:?}",
+        out.diags
+    );
 }
