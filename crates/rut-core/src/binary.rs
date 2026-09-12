@@ -66,6 +66,9 @@ pub struct SurfaceType {
     pub local: u32,
     /// records: a `class` (no outside literal) vs a `dataclass`
     pub is_class: bool,
+    /// a generic template (`Vec<T>`): a consumer must monomorphize it, so
+    /// the graph compiler source-inlines the module rather than linking it
+    pub is_generic: bool,
 }
 
 /// The importable surface a module publishes (traits still to come).

@@ -964,3 +964,66 @@ pub fn main() -> unit {
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["5 10 50 30", "50"]);
 }
+
+#[test]
+fn std_collection_vec_via_module_loader_runs() {
+    // the real rut/std-collection source, mounted as a module and imported
+    // by a consumer; generic Vec is inlined and monomorphized, then linked
+    // and executed
+    let coll = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../rut/std-collection/entry.rut");
+    let coll_src = rut_driver::expand_module_source(&coll).expect("expand");
+    let mut s = rut_driver::Session::new();
+    s.register_module(
+        "std:collection",
+        rut_driver::Module { source: Some(coll_src), ..Default::default() },
+    )
+    .unwrap();
+    s.register_module(
+        "app:main",
+        rut_driver::Module {
+            source: Some(
+                r#"
+import { Vec } from "std:collection";
+pub fn main() -> unit {
+    let mut v: Vec<i32> = Vec.new();
+    v.push(10);
+    v.push(20);
+    v.push(30);
+    let top = v.pop();
+    print(f"{v.len()} {top.value}");
+}
+"#
+                .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let out = rut_driver::compile_graph(&s, "app:main");
+    assert!(
+        out.diags.is_empty(),
+        "diags: {:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+    let prog = out.program.expect("program");
+    rut_vm::verify::verify(&prog).expect("verify");
+
+    let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+    let sink = lines.clone();
+    let hooks = rut_vm::interp::HostHooks {
+        print: Some(Rc::new(RefCell::new(move |s: &str| {
+            sink.borrow_mut().push(s.to_string());
+        }))),
+    };
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(2_000_000),
+        heap_limit_bytes: Some(4 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, hooks).expect("vm");
+    let trap = vm.call("main", &[]).err().map(|t| t.name());
+    assert_eq!(trap, None);
+    assert_eq!(*lines.borrow(), vec!["2 30"]);
+}

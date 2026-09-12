@@ -1,10 +1,15 @@
 //! Module-graph compilation — the driver half of RFC 0035 §1.
 //!
-//! Walks a root module's `import` statements through a [`Session`], compiles
-//! every dependency first (post-order), binds each module's surface into its
-//! importers, and links the lot into one dense [`Program`]. The order the
-//! programs are pushed is the link order, so every scope is registered before
-//! a dependent references it.
+//! Walks a root module's `import` statements through a [`Session`]. A module
+//! that only exports concrete items is compiled under its own scope and
+//! linked (its `Surface` is bound into each importer). A module that exports
+//! a *generic* type (`Vec<T>`) cannot be linked — RFC 0013 monomorphizes at
+//! compile time, and the instantiation must happen where the class body
+//! lives — so its source is inlined into the consumer instead (its own
+//! relative includes are already merged by the loader).
+//!
+//! Programs are pushed in post-order, so the link order registers every
+//! scope before a dependent references it.
 
 use std::collections::{HashMap, HashSet};
 
@@ -15,7 +20,7 @@ use rut_core::binary::Program;
 use rut_parser::{parse, Mode};
 
 use crate::session::Session;
-use crate::compile_program;
+use crate::compile_program_resolved;
 
 /// A linked module graph.
 pub struct GraphOutput {
@@ -34,7 +39,7 @@ pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
         visiting: HashSet::new(),
         diags: Vec::new(),
     };
-    if c.ensure(root_spec).is_none() {
+    if c.ensure(root_spec, false).is_none() {
         return GraphOutput { diags: c.diags, program: None };
     }
     match rut_core::link::link(c.programs) {
@@ -46,22 +51,29 @@ pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
     }
 }
 
+/// A resolved module: a linked scope, or source to inline (a generic export).
+#[derive(Clone)]
+enum Unit {
+    Linked { idx: usize, scope: rut_core::ScopeId },
+    Inline { source: String },
+}
+
 struct GraphCompiler<'a> {
     session: &'a Session,
     next_scope: rut_core::ScopeId,
     /// post-order: dependencies precede importers
     programs: Vec<Program>,
-    done: HashMap<String, usize>,
+    done: HashMap<String, Unit>,
     visiting: HashSet<String>,
     diags: Vec<Diag>,
 }
 
 impl<'a> GraphCompiler<'a> {
-    /// Compile `spec` if needed, returning its program index and scope.
-    fn ensure(&mut self, spec: &str) -> Option<(usize, rut_core::ScopeId)> {
-        if let Some(&i) = self.done.get(spec) {
-            let scope = self.programs[i].scope;
-            return Some((i, scope));
+    /// Compile (or inline) `spec` if needed. `as_dep` allows the inline path;
+    /// the root is always compiled and linked.
+    fn ensure(&mut self, spec: &str, as_dep: bool) -> Option<Unit> {
+        if let Some(u) = self.done.get(spec) {
+            return Some(u.clone());
         }
         if !self.visiting.insert(spec.to_string()) {
             self.diags.push(Diag::new(
@@ -77,7 +89,7 @@ impl<'a> GraphCompiler<'a> {
                 return None;
             }
         };
-        let Some(src) = module.source.as_deref() else {
+        let Some(src) = module.source.clone() else {
             self.diags.push(Diag::new(
                 Span::new(0, 0),
                 format!("module `{spec}` has no body source to compile"),
@@ -85,28 +97,35 @@ impl<'a> GraphCompiler<'a> {
             return None;
         };
 
-        // discover this module's imports (parse once up front)
-        let (ast, d) = parse(src, Mode::Impl);
+        let (ast, d) = parse(&src, Mode::Impl);
         if !d.is_empty() {
             self.diags.extend(d);
             return None;
         }
-        let imports = imports_of(&ast, src);
+        let imports = imports_of(&ast);
 
+        let mut extra = String::new();
         let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> = Vec::new();
         let mut bound_scopes = HashSet::new();
         for dep in &imports {
-            let Some((idx, dep_scope)) = self.ensure(dep) else {
-                return None;
-            };
-            if bound_scopes.insert(dep_scope) {
-                bound.push((dep_scope, self.programs[idx].surface.clone()));
+            match self.ensure(dep, true)? {
+                Unit::Inline { source } => {
+                    extra.push_str(&source);
+                    extra.push('\n');
+                }
+                Unit::Linked { idx, scope } => {
+                    if bound_scopes.insert(scope) {
+                        bound.push((scope, self.programs[idx].surface.clone()));
+                    }
+                }
             }
         }
 
+        // the compilation unit: inlined generic deps, then this module
+        let combined = if extra.is_empty() { src } else { format!("{extra}\n{src}") };
         let scope = self.next_scope;
         self.next_scope += 1;
-        let out = compile_program(src, Mode::Impl, spec, scope, &bound);
+        let out = compile_program_resolved(&combined, Mode::Impl, spec, scope, &bound, true);
         if !out.diags.is_empty() || out.program.is_none() {
             self.diags.extend(out.diags);
             if out.program.is_none() && self.diags.is_empty() {
@@ -117,15 +136,32 @@ impl<'a> GraphCompiler<'a> {
             }
             return None;
         }
+        let program = out.program.unwrap();
+        let has_generic = program.surface.type_exports.iter().any(|t| t.is_generic);
+        if as_dep && has_generic {
+            if !bound.is_empty() {
+                self.diags.push(Diag::new(
+                    Span::new(0, 0),
+                    format!(
+                        "module `{spec}` exports a generic type and also imports other modules — inlining a generic module with external imports is not supported yet"
+                    ),
+                ));
+                return None;
+            }
+            let unit = Unit::Inline { source: combined };
+            self.done.insert(spec.to_string(), unit.clone());
+            return Some(unit);
+        }
         let idx = self.programs.len();
-        self.programs.push(out.program.unwrap());
-        self.done.insert(spec.to_string(), idx);
-        Some((idx, scope))
+        self.programs.push(program);
+        let unit = Unit::Linked { idx, scope };
+        self.done.insert(spec.to_string(), unit.clone());
+        Some(unit)
     }
 }
 
 /// The exact specifiers a module imports, in source order, deduped.
-fn imports_of(ast: &Ast, _src: &str) -> Vec<String> {
+fn imports_of(ast: &Ast) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         if let ItemKind::Import { from, .. } = ast.item(it) {

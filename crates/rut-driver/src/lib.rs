@@ -47,6 +47,20 @@ pub fn compile_program(
     scope: rut_core::ScopeId,
     imports: &[(rut_core::ScopeId, rut_core::binary::Surface)],
 ) -> ProgramOutput {
+    compile_program_resolved(src, mode, module_name, scope, imports, !imports.is_empty())
+}
+
+/// As [`compile_program`] but with an explicit `allow_imports` flag — the
+/// graph compiler resolves every specifier itself (or inlines it), so it
+/// passes `true` even when a module's only imports were source-inlined.
+pub fn compile_program_resolved(
+    src: &str,
+    mode: Mode,
+    module_name: &str,
+    scope: rut_core::ScopeId,
+    imports: &[(rut_core::ScopeId, rut_core::binary::Surface)],
+    allow_imports: bool,
+) -> ProgramOutput {
     let (ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
     let ast_dump = dump::render_text(&tree, src);
@@ -55,7 +69,7 @@ pub fn compile_program(
         return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
-    ctx.allow_imports = !imports.is_empty();
+    ctx.allow_imports = allow_imports;
     for (dep_scope, surface) in imports {
         // types first: descriptors must be in the table before any own type
         // is interned (TypeTable::import_block)
@@ -181,6 +195,7 @@ pub fn compile_program(
                 name: ctx.name(*name).to_string(),
                 local: rut_core::local_of(d.ty),
                 is_class: d.kind == rut_lir::check::DataKind::Class,
+                is_generic: !d.generics.is_empty(),
             });
         }
         for (name, e) in &ctx.enums {
@@ -188,6 +203,7 @@ pub fn compile_program(
                 name: ctx.name(*name).to_string(),
                 local: rut_core::local_of(e.ty),
                 is_class: false,
+                is_generic: false,
             });
         }
     }

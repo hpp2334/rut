@@ -278,6 +278,45 @@ fn loads_a_directory_graph() {
 }
 
 #[test]
+fn consumer_uses_std_collection_vec() {
+    // a module exporting a generic type is source-inlined into its consumer
+    // (RFC 0013 monomorphizes at compile time); the consumer's `Vec<i32>`
+    // then instantiates against the inlined class body
+    let coll = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../rut/std-collection/entry.rut");
+    let coll_src = rut_driver::expand_module_source(&coll).expect("expand");
+    let mut s = Session::new();
+    s.register_module(
+        "std:collection",
+        Module { source: Some(coll_src), ..Default::default() },
+    )
+    .unwrap();
+    s.register_module(
+        "app:main",
+        Module {
+            source: Some(
+                "import { Vec } from \"std:collection\";\n\
+                 fn main() -> i32 {\n\
+                     let mut v: Vec<i32> = Vec.new();\n\
+                     v.push(1);\n\
+                     v.push(2);\n\
+                     return v.len();\n\
+                 }\n"
+                    .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let out = rut_driver::compile_graph(&s, "app:main");
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let p = out.program.expect("program");
+    assert_eq!(p.funcs.iter().filter(|f| f.name == "main").count(), 1);
+    assert_eq!(p.types.types.iter().filter(|t| t.name == "Vec<i32>").count(), 1);
+}
+
+#[test]
 fn graph_reports_a_missing_dependency() {
     let mut s = Session::new();
     s.register_module(
