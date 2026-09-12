@@ -51,3 +51,13 @@ pub host class Result<T, E> {
 pub trait Disposal {
     fn dispose(mut self) -> unit;
 }
+
+// RFC 0012 — the builtin read-only sequence contract. The compiler
+// registers `Iter` (it has compiler-backed impls for `Array`, `string`,
+// and `bytes`, and `Vec<T>` declares one in std:collection); spelled here
+// for tooling. `x[i]`, `.len()`, and `for (x of s)` lower through it.
+pub trait Iter {
+    type Target;
+    fn len(self) -> i32;
+    fn get(self, i: i32) -> Self.Target;
+}
