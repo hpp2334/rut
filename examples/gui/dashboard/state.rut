@@ -78,7 +78,7 @@ pub class Dashboard {
             let out: Vec<User> = Vec.new();
             for (let i = 0; i < users.len(); i += 1) {
                 let u = users[i];
-                if (q.len() == 0 || u.name.contains(q)) {
+                if (string_len(q) == 0 || u.name.contains(q)) {
                     out.push(u);
                 }
             }

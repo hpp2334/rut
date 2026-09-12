@@ -181,32 +181,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>, sp: rut_lexer::span::Span) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
-        // a `Slice<T>` sequence, or the `string`/`bytes` primitives
-        enum Iter {
-            Slice(super::slice::SliceInfo),
-            Str,
-            Bytes,
-        }
-        let kind = if let Some(info) = self.slice_info(it) {
-            Iter::Slice(info)
-        } else {
-            match self.ctx.types.kind(it) {
-                TyKind::Str => Iter::Str,
-                TyKind::Bytes => Iter::Bytes,
-                _ => {
-                    self.ctx.err(sp, format!(
-                        "`for (let .. of ..)` needs a sequence (Vec, Array, string, or bytes) —found `{}`",
-                        self.ctx.types.name(it)
-                    ));
-                    return Err(());
-                }
-            }
+        // the `Iter` sequence contract (Vec, Array, string, bytes, and any
+        // user `impl Iter`)
+        let Some(info) = self.slice_info(it) else {
+            self.ctx.err(sp, format!(
+                "`for (let .. of ..)` needs a sequence — `{}` does not implement `Iter` (RFC 0012)",
+                self.ctx.types.name(it)
+            ));
+            return Err(());
         };
-        let elem_ty = match &kind {
-            Iter::Slice(info) => info.elem,
-            Iter::Str => TY_CHAR,
-            Iter::Bytes => TY_U8,
-        };
+        let elem_ty = info.elem;
         let idx = self.new_reg(TY_I32);
         self.emit(Op::ConstRaw { dst: idx, bits: 0 }, sp.lo);
         let l_head = self.new_label();
@@ -215,38 +199,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let l_cont = self.new_label();
         self.bind(l_head);
         self.emit(Op::LoopHead, sp.lo);
-        let len_reg = match &kind {
-            Iter::Slice(info) => self.emit_slice_len(iter_reg, info, sp.lo)?,
-            Iter::Str => {
-                let d = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(iter_reg), args: vec![], dst: Some(d) }, sp.lo);
-                d
-            }
-            Iter::Bytes => {
-                let d = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(iter_reg), args: vec![], dst: Some(d) }, sp.lo);
-                d
-            }
-        };
+        let len_reg = self.emit_slice_len(iter_reg, &info, sp.lo)?;
         let cond_reg = self.new_reg(TY_BOOL);
         self.emit(cmpop(CmpOp::Lt, PrimTy::I32, cond_reg, idx, len_reg), sp.lo);
         self.br(cond_reg, l_body, l_end);
         self.bind(l_body);
         // var = iter[idx]; the dst register is the loop variable (one reg
         // reused every iteration, overwritten/released by the element op)
-        let var_reg = match &kind {
-            Iter::Slice(info) => self.emit_slice_get(iter_reg, idx, info, sp.lo)?,
-            Iter::Str => {
-                let d = self.new_reg(TY_CHAR);
-                self.emit(Op::StrCharAt { dst: d, s: iter_reg, idx }, sp.lo);
-                d
-            }
-            Iter::Bytes => {
-                let d = self.new_reg(TY_U8);
-                self.emit(Op::BytesGet { dst: d, s: iter_reg, idx }, sp.lo);
-                d
-            }
-        };
+        let var_reg = self.emit_slice_get(iter_reg, idx, &info, sp.lo)?;
         self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: false });
         self.loops.push((l_cont, l_end));
         self.compile_block(body)?;

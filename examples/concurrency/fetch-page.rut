@@ -20,6 +20,6 @@ pub suspend fn main() -> unit {
     let log = Logger.new("fetch");
     let page = await fetch_page("https://example.com");
     if (page.is_ok()) {
-        log.info(f"{page.value.len()} bytes");
+        log.info(f"{bytes_len(page.value)} bytes");
     }
 }

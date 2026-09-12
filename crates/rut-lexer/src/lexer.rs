@@ -643,7 +643,6 @@ fn reserved_word_msg(w: &str) -> Option<String> {
         "case" => "rut does not have `case`; `when` arms are `pattern -> body`",
         "void" => "rut spells the unit type `unit`",
         "extends" => "rut has no inheritance (`extends`); compose instead (RFC 0010 §3)",
-        "type" => "`type` is not available yet; name the type directly",
         "struct" => "rut does not have `struct`; use `dataclass`",
         "match" => "rut does not have `match`; use `when`",
         "null" => "rut has no `null`; absence is `Option<T>` (RFC 0005)",

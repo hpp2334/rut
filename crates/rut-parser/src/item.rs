@@ -12,7 +12,7 @@ use crate::expr::{ExprFrame, ExprMode};
 use crate::frame::{pub_scope, Done, PubFrame, Frame, Step};
 use crate::stmt::BlockFrame;
 use crate::ty::TypeFrame;
-use crate::{is_primitive_ty, Mode, Parser};
+use crate::{Mode, Parser};
 
 // ---- item dispatch (v1's parse_item) ----
 
@@ -328,7 +328,7 @@ impl TyDeclFrame {
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
-            Done::Body(fields, methods) => {
+            Done::Body(fields, methods, _assoc) => {
                 let (vis, name, generics) = (self.vis, self.name, std::mem::take(&mut self.generics));
                 let kind = if self.is_class {
                     ItemKind::Class { vis, name, generics, fields, methods }
@@ -405,7 +405,7 @@ impl TraitFrame {
                 self.stage = TrStage::Body;
                 Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Trait)))
             }
-            (TrStage::Body, Done::Body(_, methods)) => {
+            (TrStage::Body, Done::Body(_, methods, assoc)) => {
                 let (vis, name, generics, requires) = (
                     self.vis,
                     self.name,
@@ -413,7 +413,7 @@ impl TraitFrame {
                     std::mem::take(&mut self.requires),
                 );
                 let node = p.item(
-                    ItemKind::Trait { vis, name, generics, requires, methods },
+                    ItemKind::Trait { vis, name, generics, requires, assoc, methods },
                     Span::new(self.lo, p.span().hi),
                 );
                 Step::Pop(Done::Item(node))
@@ -473,11 +473,12 @@ impl ImplFrame {
                 self.stage = ImStage::Methods;
                 Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Impl)))
             }
-            (ImStage::Methods, Done::Body(_, methods)) => {
+            (ImStage::Methods, Done::Body(_, methods, assoc)) => {
                 let node = p.item(
                     ItemKind::Impl {
                         trait_ref: self.trait_ref.take().expect("impl without a trait"),
                         target: self.target.take().expect("impl without a target"),
+                        assoc,
                         methods,
                     },
                     Span::new(self.lo, p.span().hi),
@@ -505,6 +506,8 @@ pub(crate) struct TypeBodyFrame {
     mode: BodyMode,
     fields: Vec<NodeHandle<FieldDeclNode>>,
     methods: Vec<NodeHandle<MethodDeclNode>>,
+    /// `type` members of a trait/impl body (RFC 0012)
+    assoc: Vec<AssocType>,
     stage: TbStage,
     /// the field under construction
     f_lo: Span,
@@ -512,6 +515,8 @@ pub(crate) struct TypeBodyFrame {
     f_static: bool,
     f_name: IdentId,
     f_ty: Option<NodeHandle<AnyTy>>,
+    /// the associated type under construction
+    a_name: IdentId,
 }
 
 #[derive(Clone, Copy)]
@@ -522,6 +527,8 @@ enum TbStage {
     FieldTy,
     /// waiting for the current field's initializer
     FieldInit,
+    /// waiting for an associated type's binding/default
+    AssocTy,
     /// waiting for a method declaration
     Method,
 }
@@ -532,12 +539,23 @@ impl TypeBodyFrame {
             mode,
             fields: Vec::new(),
             methods: Vec::new(),
+            assoc: Vec::new(),
             stage: TbStage::Open,
             f_lo: Span::new(0, 0),
             f_vis: None,
             f_static: false,
             f_name: IdentId(0),
             f_ty: None,
+            a_name: IdentId(0),
+        }
+    }
+
+    /// the leading clause for a malformed trait/impl member diagnostic
+    fn mode_noun(&self) -> &'static str {
+        match self.mode {
+            BodyMode::Trait => "traits declare methods and associated types",
+            BodyMode::Impl => "impl blocks contain trait methods and associated types",
+            BodyMode::Class { .. } => "type bodies declare fields and methods",
         }
     }
 
@@ -561,7 +579,8 @@ impl TypeBodyFrame {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
                 let fields = std::mem::take(&mut self.fields);
                 let methods = std::mem::take(&mut self.methods);
-                return Step::Pop(Done::Body(fields, methods));
+                let assoc = std::mem::take(&mut self.assoc);
+                return Step::Pop(Done::Body(fields, methods, assoc));
             }
             match self.mode {
                 BodyMode::Class { allow_pub, is_dataclass } => {
@@ -627,22 +646,31 @@ impl TypeBodyFrame {
                         }
                     }
                 }
-                BodyMode::Trait => {
+                BodyMode::Trait | BodyMode::Impl => {
+                    if p.at_kw("type") {
+                        p.bump(); // `type`
+                        let name = p.expect_ident("an associated type name").unwrap_or(IdentId(0));
+                        if p.eat_punct(Tok::Eq) {
+                            self.stage = TbStage::AssocTy;
+                            self.a_name = name;
+                            return Step::Push(Frame::Type(TypeFrame::new(p)));
+                        }
+                        self.assoc.push(AssocType { name, ty: None });
+                        if !(p.eat_punct(Tok::Semi) || p.eat_punct(Tok::Comma))
+                            && !matches!(p.tok(), Tok::RBrace)
+                        {
+                            p.err_here("expected `;` after an associated type");
+                            p.sync_stmt();
+                        }
+                        continue;
+                    }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
-                        return Step::Push(Frame::Method(MethodFrame::new(None, false, false)));
+                        let with_body = matches!(self.mode, BodyMode::Impl);
+                        return Step::Push(Frame::Method(MethodFrame::new(None, false, with_body)));
                     }
-                    let found = p.peek(0).describe();
-                    p.err_here(format!("traits declare methods only —expected `fn`, found {found}"));
-                    p.sync_stmt();
-                }
-                BodyMode::Impl => {
-                    if p.at_kw("fn") {
-                        self.stage = TbStage::Method;
-                        return Step::Push(Frame::Method(MethodFrame::new(None, false, true)));
-                    }
-                    let found = p.peek(0).describe();
-                    p.err_here(format!("impl blocks contain trait methods —expected `fn`, found {found}"));
+                    let (what, found) = (self.mode_noun(), p.peek(0).describe());
+                    p.err_here(format!("{what} —expected `fn` or `type`, found {found}"));
                     p.sync_stmt();
                 }
             }
@@ -657,6 +685,17 @@ impl TypeBodyFrame {
                 self.members_top(p)
             }
             Done::Ty(t) => {
+                if matches!(self.stage, TbStage::AssocTy) {
+                    self.assoc.push(AssocType { name: self.a_name, ty: Some(t) });
+                    if !(p.eat_punct(Tok::Semi) || p.eat_punct(Tok::Comma))
+                        && !matches!(p.tok(), Tok::RBrace)
+                    {
+                        p.err_here("expected `;` after an associated type");
+                        p.sync_stmt();
+                    }
+                    self.stage = TbStage::Members;
+                    return self.members_top(p);
+                }
                 debug_assert!(matches!(self.stage, TbStage::FieldTy));
                 self.f_ty = Some(t);
                 if p.eat_punct(Tok::Eq) {
@@ -671,8 +710,9 @@ impl TypeBodyFrame {
                 self.field_done(p, Some(e))
             }
             Done::Failed => match self.stage {
-                // v1: a failed method or field type resyncs and continues
-                TbStage::Method | TbStage::FieldTy => {
+                // v1: a failed method, field type, or associated type
+                // resyncs and continues
+                TbStage::Method | TbStage::FieldTy | TbStage::AssocTy => {
                     p.sync_stmt();
                     self.stage = TbStage::Members;
                     self.members_top(p)
@@ -961,7 +1001,6 @@ pub(crate) struct SurfaceFrame {
     lo: u32,
     stage: SuStage,
     is_class: bool,
-    is_primitive: bool,
     name: IdentId,
     generics: Vec<IdentId>,
     extparams: Vec<(IdentId, Option<NodeHandle<AnyTy>>)>,
@@ -986,7 +1025,6 @@ impl SurfaceFrame {
             lo: 0,
             stage: SuStage::Params,
             is_class: false,
-            is_primitive: false,
             name: IdentId(0),
             generics: Vec::new(),
             extparams: Vec::new(),
@@ -1042,30 +1080,10 @@ impl SurfaceFrame {
                 p.expect(Tok::LBrace);
                 self.members_top(p)
             }
-            Tok::Ident(k) if k == "primitive" => {
-                // `host primitive string { ... }` — the native member
-                // surface of a primitive (RFC 0029 §2); `primitive` is
-                // contextual: only meaningful after the linkage keyword
-                p.bump();
-                self.is_class = true;
-                self.is_primitive = true;
-                let Some(name) = p.expect_ident("a primitive name") else {
-                    return Step::Pop(Done::Failed);
-                };
-                if !is_primitive_ty(p.interner.name(name)) {
-                    p.err_here(
-                        "`host primitive` names a primitive type (`string`, `i32`, …) — for a host class use `host class`",
-                    );
-                }
-                self.name = name;
-                self.stage = SuStage::Members;
-                p.expect(Tok::LBrace);
-                self.members_top(p)
-            }
             _ => {
                 let found = p.peek(0).describe();
                 p.err_here(format!(
-                    "expected `fn`, `class`, or `primitive` after `host`/`extern`, found {found}"
+                    "expected `fn` or `class` after `host`/`extern`, found {found}"
                 ));
                 Step::Pop(Done::Failed)
             }
@@ -1115,28 +1133,16 @@ impl SurfaceFrame {
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
-                let node = if self.is_primitive {
-                    p.item(
-                        ItemKind::SurfacePrimitive {
-                            vis: Vis::Self_,
-                            linkage: self.linkage,
-                            name: self.name,
-                            members: std::mem::take(&mut self.methods),
-                        },
-                        Span::new(self.lo, p.span().hi),
-                    )
-                } else {
-                    p.item(
-                        ItemKind::SurfaceClass {
-                            vis: Vis::Self_,
-                            linkage: self.linkage,
-                            name: self.name,
-                            extparams: std::mem::take(&mut self.extparams),
-                            members: std::mem::take(&mut self.methods),
-                        },
-                        Span::new(self.lo, p.span().hi),
-                    )
-                };
+                let node = p.item(
+                    ItemKind::SurfaceClass {
+                        vis: Vis::Self_,
+                        linkage: self.linkage,
+                        name: self.name,
+                        extparams: std::mem::take(&mut self.extparams),
+                        members: std::mem::take(&mut self.methods),
+                    },
+                    Span::new(self.lo, p.span().hi),
+                );
                 return Step::Pop(Done::Item(node));
             }
             let is_suspend = if p.at_kw("suspend") {

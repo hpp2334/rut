@@ -320,11 +320,17 @@ pub enum ItemKind {
         name: IdentId,
         generics: Vec<IdentId>,
         requires: Vec<NodeHandle<AnyTy>>, // type nodes — naming position, bare
+        /// associated `type` members (RFC 0012): `type Target;`
+        /// (`ty: None`) or a default `type Target = U;`
+        assoc: Vec<AssocType>,
         methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless MethodDecls
     },
     Impl {
         trait_ref: NodeHandle<AnyTy>,
         target: NodeHandle<AnyTy>,
+        /// `type Target = T;` — the impl's bindings for the trait's
+        /// associated types
+        assoc: Vec<AssocType>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },
     /// `host fn` / `extern fn` — .d.rut only (RFC 0030 §3)
@@ -344,20 +350,19 @@ pub enum ItemKind {
         extparams: Vec<(IdentId, Option<NodeHandle<AnyTy>>)>,
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
-    /// `host primitive string { ... }` — .d.rut only: the native method
-    /// surface of a primitive type. No instantiation, no `new` — the
-    /// primitive's own members, statically bound natives (RFC 0032 §1.1
-    /// R2). The declarative form of the host's builtin member table.
-    SurfacePrimitive {
-        vis: Vis,
-        linkage: Linkage,
-        name: IdentId,
-        members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
-    },
     Fn(FnData),
 }
 
 // ---- members ----
+
+/// an associated `type` member of a `trait` or `impl` body (RFC 0012):
+/// `type Target;` (no `ty`) or `type Target = Ty;`
+#[derive(Clone, Debug)]
+pub struct AssocType {
+    pub name: IdentId,
+    /// trait: the optional default; impl: the binding
+    pub ty: Option<NodeHandle<AnyTy>>,
+}
 
 /// dataclass/class field: `pub(..)`? `static`? name: ty (= init)?
 /// `vis: None` = unannotated — module-private, the RFC 0003 §2 default

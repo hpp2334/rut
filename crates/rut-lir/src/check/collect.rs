@@ -23,8 +23,8 @@ impl<'a> Ctx<'a> {
             ItemKind::Class { vis, name, generics, methods, .. } => {
                 self.declare_data(it.id(), DataKind::Class, *vis, *name, generics, methods);
             }
-            ItemKind::Trait { vis, name, generics, methods, .. } => {
-                self.declare_trait(it.id(), *vis, *name, generics, methods)
+            ItemKind::Trait { vis, name, generics, assoc, methods, .. } => {
+                self.declare_trait(it.id(), *vis, *name, generics, assoc, methods)
             }
                 _ => {}
             }
@@ -54,8 +54,8 @@ impl<'a> Ctx<'a> {
         // pass 2: impls, fns, lets
         for it in &items {
             match self.ast.item(*it) {
-                ItemKind::Impl { trait_ref, target, methods } => {
-                    self.collect_impl(it.id(), *trait_ref, *target, methods)
+                ItemKind::Impl { trait_ref, target, assoc, methods } => {
+                    self.collect_impl(it.id(), *trait_ref, *target, assoc, methods)
                 }
                 ItemKind::Fn(f) => {
                     let is_pub = f.vis == Vis::Pub;
@@ -215,6 +215,7 @@ impl<'a> Ctx<'a> {
         vis: Vis,
         name: IdentId,
         generics: &[NodeId2],
+        assoc: &[AssocType],
         _methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
@@ -230,7 +231,11 @@ impl<'a> Ctx<'a> {
         }
         let id = self.traits.len() as u32;
         self.traits.push(TraitDesc { name: self.name(name).to_string(), methods: vec![] });
-        self.trait_decls.push((name, TraitDeclInfo { id, node }));
+        self.trait_decls.push((name, TraitDeclInfo {
+            id,
+            node,
+            assoc: assoc.iter().map(|a| self.name(a.name).to_string()).collect(),
+        }));
         let _ = vis;
     }
 
@@ -288,22 +293,30 @@ impl<'a> Ctx<'a> {
     /// `dyn` object (the trait is non-generic, so `Self` has no concrete
     /// binding until an impl; `dyn Trait` is the honest static shape).
     fn resolve_trait_sig_ty(&mut self, node: NodeHandle<AnyTy>, trait_id: u32) -> TypeId {
-        let is_self = match self.ast.ty(node) {
-            TypeKind::TyPath { segs, .. } => {
-                segs.len() == 1
-                    && segs[0].generics.is_empty()
-                    && self.name(segs[0].name) == "Self"
+        if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
+            if segs.len() == 1 && segs[0].generics.is_empty() {
+                let name = segs[0].name;
+                if self.name(name) == "Self" {
+                    return self.mk_dyn(trait_id);
+                }
+                // a bare associated type name of this trait: the concrete
+                // type comes from the impl's `type X = ..;` binding at the
+                // use site, so the trait descriptor keeps a placeholder
+                let is_assoc = self
+                    .trait_decls
+                    .iter()
+                    .find(|(_, t)| t.id == trait_id)
+                    .map(|(_, t)| t.assoc.iter().any(|a| a == self.name(name)))
+                    .unwrap_or(false);
+                if is_assoc {
+                    return TY_I32;
+                }
             }
-            _ => false,
-        };
-        if is_self {
-            self.mk_dyn(trait_id)
-        } else {
-            self.resolve_type(node, &[])
         }
+        self.resolve_type(node, &[])
     }
 
-    pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, methods: &[NodeHandle<MethodDeclNode>]) {
+    pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, assoc: &[AssocType], methods: &[NodeHandle<MethodDeclNode>]) {
         let sp = self.ast.span(node);
         let Some(trait_id) = self.resolve_trait_ref(trait_ref) else {
             return;
@@ -365,6 +378,12 @@ impl<'a> Ctx<'a> {
         }
         for (n, mnode) in &mths {
             if !tdesc.methods.iter().any(|tm| tm.name == self.name(*n)) {
+                // mutable indexing is an optional hook on the read-only
+                // `Iter` contract (RFC 0012): `Array`/`Vec` provide `set`,
+                // `string`/`bytes` do not
+                if self.name(*n) == "set" {
+                    continue;
+                }
                 self.err(
                     self.ast.span(mnode.id()),
                     format!("`{}` is not a member of {} — put inherent methods in the type body (RFC 0012 §2)", self.name(*n), tdesc.name),
@@ -377,12 +396,45 @@ impl<'a> Ctx<'a> {
             }
             _ => Vec::new(),
         };
+        // associated-type bindings (RFC 0012): every trait `type` member
+        // must be bound exactly once; no extras
+        let trait_assoc: Vec<String> = self
+            .trait_decls
+            .iter()
+            .find(|(_, ti)| ti.id == trait_id)
+            .map(|(_, ti)| ti.assoc.clone())
+            .unwrap_or_default();
+        let mut assoc_bindings: Vec<(IdentId, NodeHandle<AnyTy>)> = Vec::new();
+        for a in assoc {
+            if !trait_assoc.iter().any(|n| n == self.name(a.name)) {
+                self.err(sp, format!(
+                    "`type {}` is not an associated type of {}",
+                    self.name(a.name), tdesc.name
+                ));
+                continue;
+            }
+            match a.ty {
+                Some(t) => assoc_bindings.push((a.name, t)),
+                None => self.err(sp, format!(
+                    "impl associated type `{}` needs a binding (`type {} = ..;`)",
+                    self.name(a.name), self.name(a.name)
+                )),
+            }
+        }
+        for name in &trait_assoc {
+            if !assoc_bindings.iter().any(|(n, _)| self.name(*n) == *name) {
+                self.err(sp, format!(
+                    "impl is missing `type {name}` from {}", tdesc.name
+                ));
+            }
+        }
         let is_generic = target_data.is_some();
         self.impls.push(ImplDecl {
             trait_id,
             target: target_ty,
             target_data,
             trait_args,
+            assoc: assoc_bindings,
             methods: mths,
         });
         // every impl method enters the monomorphization queue — vtables need

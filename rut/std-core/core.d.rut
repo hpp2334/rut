@@ -15,16 +15,13 @@
 // tables), never aspirational. Type-calls spelled with the type name
 // (`i32(x)` conversions — RFC 0007) are syntax, not members.
 
-pub host primitive string {
-    fn len(self) -> i32;
-    fn encode(self) -> bytes;                // UTF-8 -> bytes (RFC 0004)
-}
+pub host fn string_len(s: string) -> i32;       // number of chars
+pub host fn string_encode(s: string) -> bytes;  // UTF-8 -> bytes (RFC 0004)
 
-pub host primitive bytes {
-    fn len(self) -> i32;
-    fn decode(self) -> string;               // bytes -> UTF-8 string (lossy)
-    fn from(a: Array<u8>) -> bytes;          // copy an Array<u8> (RFC 0004)
-}
+pub host fn bytes_len(b: bytes) -> i32;
+pub host fn bytes_decode(b: bytes) -> string;   // bytes -> UTF-8 string (lossy)
+pub host fn bytes_from(a: Array<u8>) -> bytes;  // copy an Array<u8> (RFC 0004)
+pub host fn bytes_zeroed(n: i32) -> bytes;      // n zeroed octets
 
 pub host class Array<T> {
     fn len(self) -> i32;                    // the heap array's runtime length

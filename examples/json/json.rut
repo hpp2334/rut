@@ -310,8 +310,8 @@ fn want_items(j: JsonValue, ty: string) -> Result<Vec<JsonValue>, JsonError> {
 fn is_digit(c: u8) -> bool { return c >= 48u8 && c <= 57u8; }
 
 pub fn str_eq(a: string, b: string) -> bool {
-    if (a.len() != b.len()) { return false; }
-    for (let i = 0; i < a.len(); i += 1) {
+    if (string_len(a) != string_len(b)) { return false; }
+    for (let i = 0; i < string_len(a); i += 1) {
         if (a.at(i) != b.at(i)) { return false; }
     }
     return true;
@@ -321,7 +321,7 @@ fn skip_ws(s: string, i0: i32) -> i32 {
     let i = i0;
     let scanning = true;
     while (scanning) {
-        if (i >= s.len()) {
+        if (i >= string_len(s)) {
             scanning = false;
         } else {
             let c = s.at(i);
@@ -338,7 +338,7 @@ fn skip_ws(s: string, i0: i32) -> i32 {
 fn parse_tree(s: string) -> Result<JsonValue, JsonError> {
     let first = parse_value(s, 0)?;
     let rest = skip_ws(s, first.end);
-    if (rest < s.len()) {
+    if (rest < string_len(s)) {
         return Err(JsonError { msg: "trailing characters after value", pos: rest });
     }
     return Ok(first.value);
@@ -346,7 +346,7 @@ fn parse_tree(s: string) -> Result<JsonValue, JsonError> {
 
 fn parse_value(s: string, i0: i32) -> Result<Parsed, JsonError> {
     let i = skip_ws(s, i0);
-    if (i >= s.len()) {
+    if (i >= string_len(s)) {
         return Err(JsonError { msg: "unexpected end of input", pos: i });
     }
     let c = s.at(i);
@@ -360,8 +360,8 @@ fn parse_value(s: string, i0: i32) -> Result<Parsed, JsonError> {
 }
 
 fn parse_lit(s: string, i: i32, text: string, value: JsonValue) -> Result<Parsed, JsonError> {
-    if (i + text.len() <= s.len() && str_eq(s.slice(i, i + text.len()), text)) {
-        return Ok(Parsed { value: value, end: i + text.len() });
+    if (i + string_len(text) <= string_len(s) && str_eq(s.slice(i, i + string_len(text)), text)) {
+        return Ok(Parsed { value: value, end: i + string_len(text) });
     }
     return Err(JsonError { msg: f"literal {text} expected", pos: i });
 }
@@ -369,14 +369,14 @@ fn parse_lit(s: string, i: i32, text: string, value: JsonValue) -> Result<Parsed
 fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
     let fields = Vec<JField>.new();
     let k = skip_ws(s, i + 1);
-    if (k < s.len() && s.at(k) == 125u8) {           // '}'
+    if (k < string_len(s) && s.at(k) == 125u8) {           // '}'
         return Ok(Parsed { value: jobj(fields, i), end: k + 1 });
     }
     let more = true;
     while (more) {
         let key = parse_string(s, k)?;
         k = skip_ws(s, key.end);
-        if (k >= s.len() || s.at(k) != 58u8) {       // ':'
+        if (k >= string_len(s) || s.at(k) != 58u8) {       // ':'
             return Err(JsonError { msg: "':' expected", pos: k });
         }
         let val = parse_value(s, k + 1)?;
@@ -386,13 +386,13 @@ fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
             pos: i,
         });
         k = skip_ws(s, val.end);
-        if (k < s.len() && s.at(k) == 44u8) {        // ','
+        if (k < string_len(s) && s.at(k) == 44u8) {        // ','
             k = skip_ws(s, k + 1);
         } else {
             more = false;
         }
     }
-    if (k >= s.len() || s.at(k) != 125u8) {
+    if (k >= string_len(s) || s.at(k) != 125u8) {
         return Err(JsonError { msg: "'}' expected", pos: k });
     }
     return Ok(Parsed { value: jobj(fields, i), end: k + 1 });
@@ -401,7 +401,7 @@ fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
 fn parse_array(s: string, i: i32) -> Result<Parsed, JsonError> {
     let items = Vec<JsonValue>.new();
     let k = skip_ws(s, i + 1);
-    if (k < s.len() && s.at(k) == 93u8) {            // ']'
+    if (k < string_len(s) && s.at(k) == 93u8) {            // ']'
         return Ok(Parsed { value: jarr(items, i), end: k + 1 });
     }
     let more = true;
@@ -409,13 +409,13 @@ fn parse_array(s: string, i: i32) -> Result<Parsed, JsonError> {
         let val = parse_value(s, k)?;
         items.push(val.value);
         k = skip_ws(s, val.end);
-        if (k < s.len() && s.at(k) == 44u8) {        // ','
+        if (k < string_len(s) && s.at(k) == 44u8) {        // ','
             k = skip_ws(s, k + 1);
         } else {
             more = false;
         }
     }
-    if (k >= s.len() || s.at(k) != 93u8) {
+    if (k >= string_len(s) || s.at(k) != 93u8) {
         return Err(JsonError { msg: "']' expected", pos: k });
     }
     return Ok(Parsed { value: jarr(items, i), end: k + 1 });
@@ -450,18 +450,18 @@ fn parse_string(s: string, i: i32) -> Result<Parsed, JsonError> {
     let out = "";
     let run = i + 1;
     let k = i + 1;
-    while (k < s.len()) {
+    while (k < string_len(s)) {
         let c = s.at(k);
         if (c == 34u8) {                              // closing '"'
             if (k > run) { out = f"{out}{s.slice(run, k)}"; }
             return Ok(Parsed { value: jstr(out, i), end: k + 1 });
         }
         if (c == 92u8) {                              // '\'
-            if (k + 1 >= s.len()) {
+            if (k + 1 >= string_len(s)) {
                 return Err(JsonError { msg: "unterminated escape", pos: k });
             }
             let u = unesc_to_char(s.at(k + 1));
-            if (u.len() == 0) {
+            if (string_len(u) == 0) {
                 return Err(JsonError { msg: "unsupported escape (\\b, \\f, \\uXXXX — RFC 0007 OQ-1 helpers)", pos: k });
             }
             if (k > run) { out = f"{out}{s.slice(run, k)}"; }
@@ -478,7 +478,7 @@ fn parse_string(s: string, i: i32) -> Result<Parsed, JsonError> {
 fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
     let k = i;
     let neg = false;
-    if (k < s.len() && s.at(k) == 45u8) { neg = true; k += 1; }   // '-'
+    if (k < string_len(s) && s.at(k) == 45u8) { neg = true; k += 1; }   // '-'
     let ip = 0.0;
     let fp = 0.0;
     let scale = 0.1;
@@ -486,7 +486,7 @@ fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
     let any_digit = false;
     let scanning = true;
     while (scanning) {
-        if (k >= s.len()) {
+        if (k >= string_len(s)) {
             scanning = false;
         } else {
             let c = s.at(k);
@@ -506,15 +506,15 @@ fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
         return Err(JsonError { msg: "number expected", pos: i });
     }
     let v = ip + fp;
-    if (k < s.len() && (s.at(k) == 101u8 || s.at(k) == 69u8)) {    // e/E
+    if (k < string_len(s) && (s.at(k) == 101u8 || s.at(k) == 69u8)) {    // e/E
         let m = k + 1;
         let esign = 1.0;
-        if (m < s.len() && s.at(m) == 45u8) { esign = -1.0; m += 1; }
-        else { if (m < s.len() && s.at(m) == 43u8) { m += 1; } }   // '+'
+        if (m < string_len(s) && s.at(m) == 45u8) { esign = -1.0; m += 1; }
+        else { if (m < string_len(s) && s.at(m) == 43u8) { m += 1; } }   // '+'
         let e = 0.0;
         let digits = true;
         while (digits) {
-            if (m < s.len() && is_digit(s.at(m))) {
+            if (m < string_len(s) && is_digit(s.at(m))) {
                 e = e * 10.0 + f64(i32(s.at(m)) - 48);
                 m += 1;
             } else { digits = false; }
@@ -537,15 +537,15 @@ let COMMA: string = ",";
 fn quote(sv: string) -> string {
     let out = DQ;
     let run = 0;
-    for (let k = 0; k < sv.len(); k += 1) {
+    for (let k = 0; k < string_len(sv); k += 1) {
         let e = esc_to_text(sv.at(k));
-        if (e.len() > 0) {
+        if (string_len(e) > 0) {
             if (k > run) { out = f"{out}{sv.slice(run, k)}"; }
             out = f"{out}{e}";
             run = k + 1;
         }
     }
-    if (run < sv.len()) { out = f"{out}{sv.slice(run, sv.len())}"; }
+    if (run < string_len(sv)) { out = f"{out}{sv.slice(run, string_len(sv))}"; }
     out = f"{out}{DQ}";
     return out;
 }

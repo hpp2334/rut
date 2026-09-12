@@ -10,18 +10,18 @@ impl<'a> Ctx<'a> {
     pub fn resolve_trait_ref(&mut self, node: NodeHandle<AnyTy>) -> Option<u32> {
         match self.ast.ty(node) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
-                let is_slice = self.name(segs[0].name) == "Slice";
+                let is_iter = self.name(segs[0].name) == "Iter";
                 let id = match self.trait_id_of(segs[0].name) {
                     Some(id) => Some(id),
-                    // the builtin `Slice<T>` contract (RFC 0005) is
+                    // the builtin `Iter` sequence contract (RFC 0012) is
                     // undeclarable but need not be spelled in the module
-                    None if is_slice => Some(self.builtin_slice_trait(segs[0].name)),
+                    None if is_iter => Some(self.builtin_iter_trait(segs[0].name)),
                     None => {
                         self.err(self.ast.span(node.id()), format!("unknown trait `{}`", self.name(segs[0].name)));
                         None
                     }
                 };
-                if is_slice {
+                if is_iter {
                     self.slice_trait = id;
                 }
                 id
@@ -33,24 +33,28 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The builtin `Slice<T>` contract (RFC 0005): undeclarable in source,
-    /// but its method set is known. Registered on first reference so a
-    /// module that never mentions it keeps its trait-slot numbering.
-    pub fn builtin_slice_trait(&mut self, name: IdentId) -> u32 {
+    /// The builtin `Iter` sequence contract (RFC 0012): undeclarable in
+    /// source, but its member set is known — `type Target`, `len`, `get`.
+    /// Registered on first reference so a module that never mentions it
+    /// keeps its trait-slot numbering.
+    pub fn builtin_iter_trait(&mut self, name: IdentId) -> u32 {
         if let Some(id) = self.trait_id_of(name) {
             return id;
         }
         let id = self.traits.len() as u32;
         use rut_core::binary::TraitMethod;
         self.traits.push(TraitDesc {
-            name: "Slice".to_string(),
+            name: "Iter".to_string(),
             methods: vec![
                 TraitMethod { name: "len".to_string(), params: vec![], ret: TY_I32 },
                 TraitMethod { name: "get".to_string(), params: vec![TY_I32], ret: TY_I32 },
-                TraitMethod { name: "set".to_string(), params: vec![TY_I32, TY_I32], ret: TY_UNIT },
             ],
         });
-        self.trait_decls.push((name, TraitDeclInfo { id, node: rut_ast::ast::NodeId(0) }));
+        self.trait_decls.push((name, TraitDeclInfo {
+            id,
+            node: rut_ast::ast::NodeId(0),
+            assoc: vec!["Target".to_string()],
+        }));
         id
     }
 

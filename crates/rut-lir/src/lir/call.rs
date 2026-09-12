@@ -210,6 +210,95 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::CallNat { nat: Nat::Print, recv: None, args: vec![self.last_reg], dst: None }, sp.lo);
                 return Ok(TY_UNIT);
             }
+            "string_len" => {
+                if args.len() != 1 {
+                    self.ctx.err(sp, "string_len(s) takes one `string`");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_STR))?;
+                if t != TY_STR {
+                    self.ctx.err(sp, format!("string_len takes a `string`, found `{}`", self.ctx.types.name(t)));
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_I32);
+                self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
+                return Ok(TY_I32);
+            }
+            "string_encode" => {
+                if args.len() != 1 {
+                    self.ctx.err(sp, "string_encode(s) takes one `string`");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_STR))?;
+                if t != TY_STR {
+                    self.ctx.err(sp, format!("string_encode takes a `string`, found `{}`", self.ctx.types.name(t)));
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_BYTES);
+                self.emit(Op::CallNat { nat: Nat::StrEncode, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
+                return Ok(TY_BYTES);
+            }
+            "bytes_len" => {
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes_len(b) takes one `bytes`");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_BYTES))?;
+                if t != TY_BYTES {
+                    self.ctx.err(sp, format!("bytes_len takes a `bytes`, found `{}`", self.ctx.types.name(t)));
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_I32);
+                self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
+                return Ok(TY_I32);
+            }
+            "bytes_decode" => {
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes_decode(b) takes one `bytes`");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_BYTES))?;
+                if t != TY_BYTES {
+                    self.ctx.err(sp, format!("bytes_decode takes a `bytes`, found `{}`", self.ctx.types.name(t)));
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_STR);
+                self.emit(Op::CallNat { nat: Nat::BytesDecode, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
+                return Ok(TY_STR);
+            }
+            "bytes_from" => {
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes_from(source) takes one `Array<u8>`");
+                    return Err(());
+                }
+                let hint = Some(self.ctx.mk_array(TY_U8));
+                let at = self.compile_expr(args[0], hint)?;
+                match self.ctx.types.kind(at) {
+                    TyKind::Array { elem } if *elem == TY_U8 => {}
+                    _ => {
+                        self.ctx.err(sp, format!("bytes_from expects `Array<u8>` —found `{}`", self.ctx.types.name(at)));
+                        return Err(());
+                    }
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_BYTES);
+                self.emit(Op::CallNat { nat: Nat::BytesFrom, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
+                return Ok(TY_BYTES);
+            }
+            "bytes_zeroed" => {
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes_zeroed(n) takes one `i32`");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_I32))?;
+                if t != TY_I32 {
+                    self.ctx.err(sp, "bytes_zeroed takes an `i32`");
+                }
+                let len_reg = self.last_reg;
+                let dst = self.new_reg(TY_BYTES);
+                self.emit(Op::CallNat { nat: Nat::BytesNew, recv: None, args: vec![len_reg], dst: Some(dst) }, sp.lo);
+                return Ok(TY_BYTES);
+            }
             "type_id" => {
                 // compile-time constant —never executed (RFC 0015 §3, 0033 §3)
                 if generics.len() != 1 || !args.is_empty() {
@@ -466,24 +555,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_OPAQUE);
             }
             ("bytes", "from") => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "bytes.from(source) takes one `Array<u8>`");
-                    return Err(());
-                }
-                // hint `Array<u8>` so a bare literal knows its element
-                let hint = Some(self.ctx.mk_array(TY_U8));
-                let at = self.compile_expr(args[0], hint)?;
-                match self.ctx.types.kind(at) {
-                    TyKind::Array { elem } if *elem == TY_U8 => {}
-                    _ => {
-                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` —found `{}`", self.ctx.types.name(at)));
-                        return Err(());
-                    }
-                }
-                let src = self.last_reg;
-                let dst = self.new_reg(TY_BYTES);
-                self.emit(Op::CallNat { nat: Nat::BytesFrom, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
-                return Ok(TY_BYTES);
+                self.ctx.err(sp, "`bytes.from(..)` was replaced — use the free function `bytes_from(a)` (RFC 0004)");
+                return Err(());
             }
             _ => {}
         }
@@ -745,6 +818,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
         let mname = self.ctx.name(name).to_string();
+        // primitives have no method syntax (RFC 0004/0012): `string`/`bytes`
+        // operations are free functions (`string_len`, `string_encode`,
+        // `bytes_len`, `bytes_decode`, `bytes_from`)
+        match self.ctx.types.kind(rt) {
+            TyKind::Str => {
+                let who = recv_name(&self.ctx, recv);
+                self.ctx.err(sp, format!(
+                    "`string` has no methods — replace `{who}.{mname}()` with a free function (`string_len({who})`, `string_encode({who})`)"
+                ));
+                return Err(());
+            }
+            TyKind::Bytes => {
+                let who = recv_name(&self.ctx, recv);
+                self.ctx.err(sp, format!(
+                    "`bytes` has no methods — replace `{who}.{mname}()` with a free function (`bytes_len({who})`, `bytes_decode({who})`, `bytes_from({who})`)"
+                ));
+                return Err(());
+            }
+            _ => {}
+        }
         if !generics.is_empty() {
             self.ctx.err(sp, "generic method calls are not supported in this build");
             return Err(());
@@ -832,40 +925,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let dst = self.new_reg(ok);
                     self.emit(Op::Expect { dst, v: rreg, msg }, sp.lo);
                     return Ok(ok);
-                }
-                _ => {}
-            },
-            TyKind::Str => match mname.as_str() {
-                "len" => {
-                    let dst = self.new_reg(TY_I32);
-                    self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
-                    return Ok(TY_I32);
-                }
-                "encode" => {
-                    if !args.is_empty() {
-                        self.ctx.err(sp, "encode() takes no arguments");
-                        return Err(());
-                    }
-                    let dst = self.new_reg(TY_BYTES);
-                    self.emit(Op::CallNat { nat: Nat::StrEncode, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
-                    return Ok(TY_BYTES);
-                }
-                _ => {}
-            },
-            TyKind::Bytes => match mname.as_str() {
-                "len" => {
-                    let dst = self.new_reg(TY_I32);
-                    self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
-                    return Ok(TY_I32);
-                }
-                "decode" => {
-                    if !args.is_empty() {
-                        self.ctx.err(sp, "decode() takes no arguments");
-                        return Err(());
-                    }
-                    let dst = self.new_reg(TY_STR);
-                    self.emit(Op::CallNat { nat: Nat::BytesDecode, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
-                    return Ok(TY_STR);
                 }
                 _ => {}
             },
@@ -1204,5 +1263,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         self.ctx.err(sp, format!("`{}` has no field `{fname}`", self.ctx.types.name(rt)));
         Err(())
+    }
+}
+
+/// The receiver's source name for a diagnostic (`x` for `x.f()`, else
+/// `expr`) — used when a primitive method call is rejected.
+fn recv_name(ctx: &crate::check::Ctx, recv: NodeHandle<AnyExpr>) -> String {
+    match ctx.ast.expr(recv) {
+        ExprKind::Path { segs } => {
+            segs.iter().map(|s| ctx.name(s.name).to_string()).collect::<Vec<_>>().join(".")
+        }
+        _ => "expr".to_string(),
     }
 }

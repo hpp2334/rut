@@ -62,7 +62,7 @@ fn hex_val(c: string) -> i32 {
 }
 
 entry fn hex_dec(s: string) -> Result<bytes, string> {
-    if (s.len() % 2 != 0) {
+    if (string_len(s) % 2 != 0) {
         return Result.err("hex: odd-length input");
     }
     let mut out: Vec<u8> = Vec.new();
@@ -100,7 +100,7 @@ fn b64_table(url: bool) -> Vec<string> {
 
 entry fn b64_enc(data: bytes, url: bool) -> string {
     let t = b64_table(url);
-    let n = data.len();
+    let n = bytes_len(data);
     let mut out = "";
     for (let i = 0; i < n; i += 3) {
         let b0: u32 = u32(data[i]);
@@ -291,7 +291,7 @@ fn md5_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
-    let bits = u64(msg.len()) * 8;
+    let bits = u64(bytes_len(msg)) * 8;
     for (let i = 0; i < 8; i += 1) {
         m.push(u8((bits >> (u64(i) * 8)) & 0xFF));   // little-endian length
     }
@@ -370,7 +370,7 @@ fn sha_tail(m: Vec<u8>, msg_len: i32) -> unit {
 
 fn sha1_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
-    sha_tail(m, msg.len());
+    sha_tail(m, bytes_len(msg));
     let mut h0: u32 = 0x67452301;
     let mut h1: u32 = 0xEFCDAB89;
     let mut h2: u32 = 0x98BADCFE;
@@ -456,7 +456,7 @@ fn sha256_k() -> Vec<u32> {
 
 fn sha256_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
-    sha_tail(m, msg.len());
+    sha_tail(m, bytes_len(msg));
     let h = sha256_h();
     let k = sha256_k();
     let mut st: Vec<u32> = Vec.new();
@@ -548,7 +548,7 @@ fn sha512_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
     m.push(0x80);
     while (m.len() % 128 != 112) { m.push(0); }
-    let bits = u64(msg.len()) * 8;
+    let bits = u64(bytes_len(msg)) * 8;
     for (let i = 0; i < 8; i += 1) { m.push(0); }
     m.push(u8((bits >> 56) & 0xFF));
     m.push(u8((bits >> 48) & 0xFF));

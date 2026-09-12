@@ -329,7 +329,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::Impl { trait_ref, target, methods } => {
+            ItemKind::Impl { trait_ref, target, methods, .. } => {
                 let owner = format!(
                     "impl {} for {}",
                     ty_head(ast, *trait_ref),
@@ -379,19 +379,6 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     ast,
                     ast.name(*name),
                     TyForm::HostClass,
-                    Vec::new(),
-                    Vec::new(),
-                    ms,
-                    span,
-                ));
-            }
-            ItemKind::SurfacePrimitive { name, members, .. } => {
-                let ms = members_of(src, ast, members);
-                idx.types.push(ty_def(
-                    src,
-                    ast,
-                    ast.name(*name),
-                    TyForm::HostPrimitive,
                     Vec::new(),
                     Vec::new(),
                     ms,
@@ -1025,24 +1012,24 @@ fn main() -> unit { let x = length(3); }
     }
 
     #[test]
-    fn host_primitive_surface_favors_own_methods() {
+    fn host_fn_surface_favors_own_methods() {
         // std-style surface index ahead of the doc
-        let surf_src = "pub host primitive string {\n    fn len(self) -> i32;\n}\n";
+        let surf_src = "pub host fn string_len(s: string) -> i32;\n";
         let s2 = rut_lexer::lexer::normalize(surf_src);
         let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Decl);
         let mut surf = index(&s2, &sast);
         surf.origin = "std:core".to_string();
 
-        let doc = "fn main() -> i32 { return \"abc\".len(); }\n";
+        let doc = "fn main() -> i32 { return string_len(\"abc\"); }\n";
         let d2 = rut_lexer::lexer::normalize(doc);
         let (toks, _) = rut_lexer::lexer::lex(&d2);
         let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
         let mut di = index(&d2, &ast);
         di.origin = "main.rut".to_string();
         let idxs = [&di, &surf];
-        let pos = find_ident_pos(&toks, "len", 0).unwrap();
+        let pos = find_ident_pos(&toks, "string_len", 0).unwrap();
         let h = hover(&idxs, &d2, &toks, &ast, pos).unwrap();
-        assert!(h.markdown.contains("fn len(self) -> i32"), "{}", h.markdown);
+        assert!(h.markdown.contains("fn string_len"), "{}", h.markdown);
         assert!(h.markdown.contains("std:core"), "{}", h.markdown);
     }
 

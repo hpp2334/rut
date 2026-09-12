@@ -32,7 +32,7 @@ dataclass FetchError {
 }
 
 fn fetch(url: string) -> Result<string, FetchError> {
-    if (url.len() == 0) {
+    if (string_len(url) == 0) {
         // The happy path pays nothing; this branch pays once. Skips its
         // own frame automatically (no constructorOpt dance).
         return Err(FetchError {
@@ -54,7 +54,7 @@ fn load_config() -> Result<string, FetchError> {
 fn main() -> unit {
     when (load_config()) {
         Ok(cfg) -> {
-            log.info(f"loaded {cfg.len()} bytes");
+            log.info(f"loaded {string_len(cfg)} bytes");
         },
         Err(e) -> {
             // at: folded constant — prints `examples/basic/error-context.rut:38:13`

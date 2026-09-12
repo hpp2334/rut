@@ -42,7 +42,7 @@ pub enum Nat {
     Str,
     /// str.concat(parts...)
     Concat,
-    StrLen,
+    StrLen,      // `for..of`/`Iter::len`/`string_len` — the char count
     ArrLen,    // Array<T>.len() — the heap array's runtime length
     // ---- bytes (RFC 0004) — the immutable binary buffer ----
     BytesNew,    // bytes(n) zeroed

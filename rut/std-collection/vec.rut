@@ -72,15 +72,19 @@ pub class Vec<T> {
         for (let i = 0; i < n; i += 1) {
             a[i] = self.buf[i];
         }
-        return bytes.from(a);
+        return bytes_from(a);
     }
 }
 
-// The `Slice<T>` implementation (RFC 0005): `v.len()`, `v[i]`, `v[i] = x`,
-// and `for (x of v)` lower through these accessors. They are one-liners
+// The `Iter` implementation (RFC 0012): `v.len()`, `v[i]`, and
+// `for (x of v)` lower through these accessors. They are one-liners
 // over the backing `buf`/`len`, so the compiler inlines them at the use
 // site — element access stays fused (`arrget`/`arrset`), never a call.
-impl Slice<T> for Vec<T> {
+// `Iter` is read-only (`len`/`get`); `set` is the optional mutable-index
+// hook that makes `v[i] = x` work.
+impl Iter for Vec<T> {
+    type Target = T;
+
     fn len(self) -> i32 {
         return self.len;
     }

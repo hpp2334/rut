@@ -10,7 +10,7 @@ suspend fn serve(conn: Conn) -> unit {
         let got = await conn.read(4096);   // Future<Result<bytes>>
         if (got.is_err()) { return; }        // connection error: drop it
         let data = got.value;
-        if (data.len() == 0) { return; }    // peer closed
+        if (bytes_len(data) == 0) { return; }    // peer closed
         await conn.write(data);              // echo back
     }
 }

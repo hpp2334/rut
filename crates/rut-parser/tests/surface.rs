@@ -1,48 +1,45 @@
-//! `host primitive` surface decls (RFC 0029 §2): the native member
-//! surface of a primitive type — `host primitive string { fn len(self) -> i32; }`.
-//! Parses in declaration mode only, names a real primitive, terminates
-//! on malformed input.
+//! `host`/`extern` surface decls (RFC 0029 §2): `.d.rut` declares the host
+//! functions and classes the runtime binds — `pub host fn string_len(s:
+//! string) -> i32;`. Parses in declaration mode only; `host primitive` (the
+//! removed member-surface form) is rejected.
 
 use rut_ast::ast::*;
 use rut_parser::{parse, Mode};
 
-const STR_SURFACE: &str = "\
+const FN_SURFACE: &str = "\
 // the string natives, declared where the host binds them
-pub host primitive string {
-    fn len(self) -> i32;
-    fn contains(self, needle: string) -> bool;
-}
+pub host fn string_len(s: string) -> i32;
+pub extern fn string_encode(s: string) -> bytes;
 ";
 
 #[test]
-fn host_primitive_parses() {
-    let (ast, diags) = parse(STR_SURFACE, Mode::Decl);
+fn host_fn_parses() {
+    let (ast, diags) = parse(FN_SURFACE, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    assert_eq!(items.len(), 1);
-    let ItemKind::SurfacePrimitive { name, members, .. } = ast.item(items[0]) else {
-        panic!("expected a SurfacePrimitive item, got {:?}", ast.item(items[0]));
+    assert_eq!(items.len(), 2);
+    let ItemKind::SurfaceFn { name, params, .. } = ast.item(items[0]) else {
+        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
     };
-    assert_eq!(ast.name(*name), "string");
-    assert_eq!(members.len(), 2);
-    let m = ast.method_decl(members[0]);
-    assert_eq!(ast.name(m.name), "len");
-    assert!(m.body.is_none(), "surface members are bodiless");
+    assert_eq!(ast.name(*name), "string_len");
+    assert_eq!(params.len(), 1);
 }
 
 #[test]
-fn host_primitive_names_a_primitive() {
-    let (_, diags) = parse("pub host primitive Widget { fn m(self) -> unit; }", Mode::Decl);
+fn host_primitive_is_rejected() {
+    // the `host primitive <ty> { .. }` member-surface grammar was removed:
+    // primitive operations are now free `host fn`s
+    let (_, diags) = parse("pub host primitive string { fn len(self) -> i32; }", Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`host primitive` names a primitive")),
-        "non-primitive target must be diagnosed: {diags:?}"
+        diags.iter().any(|d| d.msg.contains("expected `fn` or `class`")),
+        "`host primitive` must be diagnosed: {diags:?}"
     );
 }
 
 #[test]
-fn host_primitive_is_decl_only() {
+fn host_fn_is_decl_only() {
     // RFC 0029 §2: `host`/`extern` belong to `.d.rut`
-    let (_, diags) = parse("host primitive string { fn len(self) -> i32; }", Mode::Impl);
+    let (_, diags) = parse("host fn string_len(s: string) -> i32;", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("RFC 0029")),
         "impl mode must reject the surface keyword: {diags:?}"
@@ -50,8 +47,8 @@ fn host_primitive_is_decl_only() {
 }
 
 #[test]
-fn host_primitive_terminates_on_malformed() {
-    for src in ["host primitive string {", "host primitive {", "host primitive"] {
+fn host_fn_terminates_on_malformed() {
+    for src in ["host fn x(", "host fn", "host class {"] {
         let (_, diags) = parse(src, Mode::Decl);
         let _ = diags.len(); // termination is the contract
     }

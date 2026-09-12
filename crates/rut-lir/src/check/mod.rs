@@ -48,6 +48,8 @@ pub struct DataDecl {
 pub struct TraitDeclInfo {
     pub id: u32,
     pub node: NodeId,
+    /// associated `type` names (RFC 0012), in declaration order
+    pub assoc: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -61,6 +63,10 @@ pub struct ImplDecl {
     pub target_data: Option<(IdentId, Vec<IdentId>)>,
     /// the trait ref's generic argument idents (`Slice<T>` → `[T]`)
     pub trait_args: Vec<IdentId>,
+    /// `type Target = T;` — the impl's bindings for the trait's
+    /// associated types, as type nodes resolved under the target generics
+    /// at the use site (the target may be generic: `Vec<T>`)
+    pub assoc: Vec<(IdentId, NodeHandle<AnyTy>)>,
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
 }
 

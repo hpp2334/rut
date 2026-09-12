@@ -311,7 +311,7 @@ fn go(c: Circle) -> f64 { return c.area(); }
 #[tokio::test]
 async fn hover_resolves_std_surface() {
     let mut editor = spawn().await;
-    let src = "fn n() -> i32 { return \"abc\".len(); }\n";
+    let src = "fn n() -> i32 { return string_len(\"abc\"); }\n";
     let uri = "file:///w/str.rut";
     editor
         .notify(
@@ -322,7 +322,7 @@ async fn hover_resolves_std_surface() {
         )
         .await;
     let mut notes = Vec::new();
-    let (l, c) = pos_of(src, "len", 0);
+    let (l, c) = pos_of(src, "string_len", 0);
     let h = editor
         .request(
             "textDocument/hover",
@@ -331,7 +331,6 @@ async fn hover_resolves_std_surface() {
         )
         .await;
     let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
-    assert!(md.contains("fn len(self) -> i32"), "string native: {md}");
+    assert!(md.contains("fn string_len"), "string native: {md}");
     assert!(md.contains("std:core"), "provenance: {md}");
-    assert!(md.contains("in `string`"), "the primitive's own surface: {md}");
 }

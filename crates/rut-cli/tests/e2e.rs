@@ -750,17 +750,17 @@ fn bytes_are_an_immutable_primitive() {
 import { Vec } from "std:collection";
 pub fn main() -> unit {
     let z = bytes(3);
-    print(f"z={z.len()}");
-    let a = bytes.from([1, 2, 3]);
-    let b = bytes.from([1, 2, 3]);
-    print(f"a={a.len()} eq={a == b} ne={a != z}");
+    print(f"z={bytes_len(z)}");
+    let a = bytes_from([1, 2, 3]);
+    let b = bytes_from([1, 2, 3]);
+    print(f"a={bytes_len(a)} eq={a == b} ne={a != z}");
     let mut buf: Vec<u8> = Vec.new();
     buf.push(9);
     buf.push(8);
     let f = buf.freeze();
-    print(f"f={f.len()} f0={f[0]} f1={f[1]}");
-    let enc = "rut".encode();
-    print(f"enc={enc.len()} dec={enc.decode()}");
+    print(f"f={bytes_len(f)} f0={f[0]} f1={f[1]}");
+    let enc = string_encode("rut");
+    print(f"enc={bytes_len(enc)} dec={bytes_decode(enc)}");
     let mut sum: u8 = 0u8;
     for (let x of a) { sum = sum + x; }
     print(f"sum={sum}");
@@ -778,7 +778,7 @@ pub fn main() -> unit {
 fn bytes_index_out_of_bounds_traps() {
     let src = r#"
 pub fn main() -> unit {
-    let a = bytes.from([1]);
+    let a = bytes_from([1]);
     print(f"{a[5]}");
 }
 "#;

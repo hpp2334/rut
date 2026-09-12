@@ -25,7 +25,7 @@ fn fasta(n: i32) -> string {
     for (let p of parts) {
         out = f"{out}{p}";
     }
-    return f"{checksum}:{out.len()}";
+    return f"{checksum}:{string_len(out)}";
 }
 
 pub fn main() -> unit {

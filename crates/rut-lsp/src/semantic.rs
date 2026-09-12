@@ -277,10 +277,6 @@ fn classify_item(
         ItemKind::SurfaceClass { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
-        ItemKind::SurfacePrimitive { name, .. } => {
-            // `host primitive string` — the primitive itself, a type
-            push_name(toks, span, ast.name(*name), TokenType::Type, out, false)
-        }
         // methods classify via their own Member nodes; import names need
         // resolution (M2) — left unclassified
         ItemKind::Impl { .. } | ItemKind::Import { .. } | ItemKind::Module { .. } => {}
@@ -629,7 +625,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .collect();
             Some(sym(ast.name(*name), SymKind::Interface, find_name(toks, span, ast.name(*name), false), children))
         }
-        ItemKind::Impl { trait_ref, target, methods } => {
+        ItemKind::Impl { trait_ref, target, methods, .. } => {
             let children = methods
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
@@ -644,10 +640,6 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             vec![],
         )),
         ItemKind::SurfaceClass { name, members, .. } => {
-            let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
-            Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
-        }
-        ItemKind::SurfacePrimitive { name, members, .. } => {
             let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }
