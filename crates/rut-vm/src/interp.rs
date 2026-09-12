@@ -83,14 +83,37 @@ pub struct Vm {
     sum_payload_repr: Vec<[Repr; 2]>,
 }
 
-/// Const-generic op codes for `arith_int` — RFC 0032: the opcode is the
-/// operation, so each specialized `addi`/`muli`/... instantiates a
+/// Const-generic op codes for the scalar op bodies — RFC 0032: the opcode is
+/// the operation, so each specialized `addi`/`andi`/`lti`/... instantiates a
 /// monomorphic body and the `match OP` folds without relying on inlining.
+/// (Enums can't be const generic params on stable, hence the `i32` codes.)
 const IOP_ADD: i32 = 0;
 const IOP_SUB: i32 = 1;
 const IOP_MUL: i32 = 2;
 const IOP_DIV: i32 = 3;
 const IOP_MOD: i32 = 4;
+
+const BOP_AND: i32 = 0;
+const BOP_OR: i32 = 1;
+const BOP_XOR: i32 = 2;
+const BOP_SHL: i32 = 3;
+const BOP_SHR: i32 = 4;
+const BOP_WRAPSHL: i32 = 5;
+
+/// Compare codes are shared by the int and float bodies (the operation is the
+/// same, only the operand interpretation differs).
+const COP_EQ: i32 = 0;
+const COP_NE: i32 = 1;
+const COP_LT: i32 = 2;
+const COP_GT: i32 = 3;
+const COP_LE: i32 = 4;
+const COP_GE: i32 = 5;
+
+const FOP_ADD: i32 = 0;
+const FOP_SUB: i32 = 1;
+const FOP_MUL: i32 = 2;
+const FOP_DIV: i32 = 3;
+const FOP_MOD: i32 = 4;
 
 impl Vm {
     pub fn new(prog: Rc<Program>, limits: &Limits, hooks: HostHooks) -> Result<Vm, Trap> {
@@ -420,79 +443,68 @@ impl Vm {
                 // float ops are their own opcodes (the `specialize` pass), so
                 // each arm is one machine op with no `prim`/`op` switch
                 Op::AddF { prim, dst, a, b } => {
-                    let r = unsafe { self.cur_regs[*a as usize].f }
-                        + unsafe { self.cur_regs[*b as usize].f };
-                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
-                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_regs[*dst as usize] = self.arith_float::<{ FOP_ADD }>(
+                        *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_pc += 1;
                 }
                 Op::SubF { prim, dst, a, b } => {
-                    let r = unsafe { self.cur_regs[*a as usize].f }
-                        - unsafe { self.cur_regs[*b as usize].f };
-                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
-                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_regs[*dst as usize] = self.arith_float::<{ FOP_SUB }>(
+                        *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_pc += 1;
                 }
                 Op::MulF { prim, dst, a, b } => {
-                    let r = unsafe { self.cur_regs[*a as usize].f }
-                        * unsafe { self.cur_regs[*b as usize].f };
-                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
-                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_regs[*dst as usize] = self.arith_float::<{ FOP_MUL }>(
+                        *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_pc += 1;
                 }
                 Op::DivF { prim, dst, a, b } => {
-                    let r = unsafe { self.cur_regs[*a as usize].f }
-                        / unsafe { self.cur_regs[*b as usize].f };
-                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
-                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_regs[*dst as usize] = self.arith_float::<{ FOP_DIV }>(
+                        *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_pc += 1;
                 }
                 Op::ModF { prim, dst, a, b } => {
-                    let r = unsafe { self.cur_regs[*a as usize].f }
-                        % unsafe { self.cur_regs[*b as usize].f };
-                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
-                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_regs[*dst as usize] = self.arith_float::<{ FOP_MOD }>(
+                        *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_pc += 1;
                 }
                 Op::NegF { prim, dst, a } => {
-                    let x = unsafe { self.cur_regs[*a as usize].f };
-                    let r = if *prim == PrimTy::F32 { (-(x as f32)) as f64 } else { -x };
-                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_regs[*dst as usize] =
+                        self.neg_float(*prim, self.cur_regs[*a as usize]);
                     self.cur_pc += 1;
                 }
                 Op::EqF { dst, a, b } => {
-                    let v = (unsafe { self.cur_regs[*a as usize].f })
-                        == (unsafe { self.cur_regs[*b as usize].f });
+                    let v = self.cmp_float::<{ COP_EQ }>(
+                        self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::NeF { dst, a, b } => {
-                    let v = (unsafe { self.cur_regs[*a as usize].f })
-                        != (unsafe { self.cur_regs[*b as usize].f });
+                    let v = self.cmp_float::<{ COP_NE }>(
+                        self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::LtF { dst, a, b } => {
-                    let v = (unsafe { self.cur_regs[*a as usize].f })
-                        < (unsafe { self.cur_regs[*b as usize].f });
+                    let v = self.cmp_float::<{ COP_LT }>(
+                        self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::GtF { dst, a, b } => {
-                    let v = (unsafe { self.cur_regs[*a as usize].f })
-                        > (unsafe { self.cur_regs[*b as usize].f });
+                    let v = self.cmp_float::<{ COP_GT }>(
+                        self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::LeF { dst, a, b } => {
-                    let v = (unsafe { self.cur_regs[*a as usize].f })
-                        <= (unsafe { self.cur_regs[*b as usize].f });
+                    let v = self.cmp_float::<{ COP_LE }>(
+                        self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::GeF { dst, a, b } => {
-                    let v = (unsafe { self.cur_regs[*a as usize].f })
-                        >= (unsafe { self.cur_regs[*b as usize].f });
+                    let v = self.cmp_float::<{ COP_GE }>(
+                        self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
@@ -550,62 +562,62 @@ impl Vm {
                     self.cur_pc += 1;
                 }
                 Op::AndI { prim, dst, a, b } => {
-                    let v = self.bitop_int(BitOp::And, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    let v = self.bitop_int::<{ BOP_AND }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::OrI { prim, dst, a, b } => {
-                    let v = self.bitop_int(BitOp::Or, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    let v = self.bitop_int::<{ BOP_OR }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::XorI { prim, dst, a, b } => {
-                    let v = self.bitop_int(BitOp::Xor, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    let v = self.bitop_int::<{ BOP_XOR }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::ShlI { prim, dst, a, b } => {
-                    let v = self.bitop_int(BitOp::Shl, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    let v = self.bitop_int::<{ BOP_SHL }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::ShrI { prim, dst, a, b } => {
-                    let v = self.bitop_int(BitOp::Shr, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    let v = self.bitop_int::<{ BOP_SHR }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::WrapShlI { prim, dst, a, b } => {
-                    let v = self.bitop_int(BitOp::WrapShl, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    let v = self.bitop_int::<{ BOP_WRAPSHL }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::EqI { prim, dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Eq, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    let v = self.cmp_int::<{ COP_EQ }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::NeI { prim, dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Ne, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    let v = self.cmp_int::<{ COP_NE }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::LtI { prim, dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Lt, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    let v = self.cmp_int::<{ COP_LT }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::GtI { prim, dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Gt, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    let v = self.cmp_int::<{ COP_GT }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::LeI { prim, dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Le, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    let v = self.cmp_int::<{ COP_LE }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
                 Op::GeI { prim, dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Ge, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    let v = self.cmp_int::<{ COP_GE }>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
@@ -1498,22 +1510,64 @@ impl Vm {
         Ok(Slot::int(trunc_to(r, p)))
     }
 
-    /// Integer bit-operation body without the `is_int` guard — the
-    /// specialized `andi`/`shli`/... opcodes call it with a constant `op`.
+    /// Float arithmetic, monomorphic per operation via const generics — the
+    /// `addf`/`subf`/... opcodes each instantiate their own body. The width
+    /// stays in `p` (the opcode is one per operation, not per width), so the
+    /// `f32` round still happens here, but the operation `match` folds.
     #[inline(always)]
-    fn bitop_int(&self, op: BitOp, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
+    fn arith_float<const OP: i32>(&self, p: PrimTy, x: Slot, y: Slot) -> Slot {
+        let a = unsafe { x.f };
+        let b = unsafe { y.f };
+        let r = match OP {
+            FOP_ADD => a + b,
+            FOP_SUB => a - b,
+            FOP_MUL => a * b,
+            FOP_DIV => a / b,
+            _ => a % b, // FOP_MOD
+        };
+        Slot::float(if p == PrimTy::F32 { r as f32 as f64 } else { r })
+    }
+
+    /// Float negate (`negf`); rounds to `f32` when `p` is `F32`.
+    #[inline(always)]
+    fn neg_float(&self, p: PrimTy, x: Slot) -> Slot {
+        let a = unsafe { x.f };
+        Slot::float(if p == PrimTy::F32 { (-(a as f32)) as f64 } else { -a })
+    }
+
+    /// Float compare, monomorphic per operation via const generics. Values
+    /// are compared as `f64`; IEEE `NaN` semantics fall out unchanged.
+    #[inline(always)]
+    fn cmp_float<const OP: i32>(&self, x: Slot, y: Slot) -> bool {
+        let a = unsafe { x.f };
+        let b = unsafe { y.f };
+        match OP {
+            COP_EQ => a == b,
+            COP_NE => a != b,
+            COP_LT => a < b,
+            COP_GT => a > b,
+            COP_LE => a <= b,
+            _ => a >= b, // COP_GE
+        }
+    }
+
+    /// Integer bit-operation body without the `is_int` guard — the
+    /// specialized `andi`/`shli`/... opcodes call it with a constant `OP`, so
+    /// the operation `match` folds and each opcode gets its own body.
+    #[inline(always)]
+    fn bitop_int<const OP: i32>(&self, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
         use PrimTy::*;
         let a = unsafe { x.i };
         let b = unsafe { y.i };
-        let (r, o) = match op {
-            BitOp::And => (a & b, false),
-            BitOp::Or => (a | b, false),
-            BitOp::Xor => (a ^ b, false),
-            BitOp::Shl => a.overflowing_shl((b & 63) as u32),
+        let (r, o) = match OP {
+            BOP_AND => (a & b, false),
+            BOP_OR => (a | b, false),
+            BOP_XOR => (a ^ b, false),
+            BOP_SHL => a.overflowing_shl((b & 63) as u32),
             // `>>` follows signedness: logical on unsigned (a u64 with its
             // top bit set must not sign-extend — RFC 0004 §1), arithmetic
             // on signed
-            BitOp::Shr => (
+            BOP_SHR => (
                 if matches!(p, U8 | U16 | U32 | U64) {
                     ((a as u64) >> (b & 63)) as i64
                 } else {
@@ -1523,7 +1577,8 @@ impl Vm {
             ),
             // wrapping `&<<` (RFC 0004 §3): the shifted-out bits are simply
             // gone — truncate to the operand width, never trap
-            BitOp::WrapShl => return Ok(Slot::int(trunc_to(a.wrapping_shl((b & 63) as u32), p))),
+            BOP_WRAPSHL => return Ok(Slot::int(trunc_to(a.wrapping_shl((b & 63) as u32), p))),
+            _ => unreachable!("bad bitop code"),
         };
         if o {
             return Err(Trap::new(TrapKind::Overflow, "shift overflow"));
@@ -1581,28 +1636,28 @@ impl Vm {
     }
 
     /// Integer compare without the float branch — the specialized `lti`/...
-    /// opcodes call it with a constant `op`. `p` selects the signedness, so
-    /// unsigned widths order unsigned.
+    /// opcodes call it with a constant `OP`, so the operation `match` folds.
+    /// `p` selects the signedness, so unsigned widths order unsigned.
     #[inline(always)]
-    fn cmp_int(&self, op: CmpOp, p: PrimTy, x: Slot, y: Slot) -> bool {
+    fn cmp_int<const OP: i32>(&self, p: PrimTy, x: Slot, y: Slot) -> bool {
         let a = unsafe { x.i };
         let b = unsafe { y.i };
-        match op {
-            CmpOp::Eq => a == b,
-            CmpOp::Ne => a != b,
+        match OP {
+            COP_EQ => a == b,
+            COP_NE => a != b,
             _ if p.is_unsigned() => {
                 let (a, b) = (a as u64, b as u64);
-                match op {
-                    CmpOp::Lt => a < b,
-                    CmpOp::Gt => a > b,
-                    CmpOp::Le => a <= b,
+                match OP {
+                    COP_LT => a < b,
+                    COP_GT => a > b,
+                    COP_LE => a <= b,
                     _ => a >= b,
                 }
             }
-            _ => match op {
-                CmpOp::Lt => a < b,
-                CmpOp::Gt => a > b,
-                CmpOp::Le => a <= b,
+            _ => match OP {
+                COP_LT => a < b,
+                COP_GT => a > b,
+                COP_LE => a <= b,
                 _ => a >= b,
             },
         }
