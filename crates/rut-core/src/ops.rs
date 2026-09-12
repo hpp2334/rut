@@ -70,6 +70,24 @@ pub enum Op {
     Cmp { op: CmpOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     Not { dst: Reg, a: Reg },          // bool !
     Neg { prim: PrimTy, dst: Reg, a: Reg }, // trapping negate
+    /// Float-specialized scalar ops (RFC 0032 "the opcode selects the type"):
+    /// the operation is the opcode, so the interpreter folds to a single
+    /// `addsd`/`mulsd`/`comisd` with no runtime `op`/`prim` switch — the
+    /// direct payoff of rut's static typing. Emitted by the `specialize`
+    /// pass for `F32`/`F64`; integer ops keep the generic `Arith`/`Cmp`
+    /// forms because their width-fitting is per-prim and does not fold.
+    AddF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    SubF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    MulF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    DivF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    ModF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    NegF { prim: PrimTy, dst: Reg, a: Reg },
+    EqF { dst: Reg, a: Reg, b: Reg },
+    NeF { dst: Reg, a: Reg, b: Reg },
+    LtF { dst: Reg, a: Reg, b: Reg },
+    GtF { dst: Reg, a: Reg, b: Reg },
+    LeF { dst: Reg, a: Reg, b: Reg },
+    GeF { dst: Reg, a: Reg, b: Reg },
     /// string content compare (RFC 0012 §4) — used for ==/!= on string
     StrCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
     /// cell identity compare (RFC 0012 §4) — used for ==/!= on ref types

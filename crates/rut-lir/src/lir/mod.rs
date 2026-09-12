@@ -16,6 +16,7 @@ mod generic;
 mod lit;
 mod ops;
 mod peephole;
+mod specialize;
 mod sroa;
 mod stmt;
 
@@ -192,7 +193,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // paths (checked loosely: a final Ret with default value)
         c.emit(Op::Ret { val: None }, 0);
         c.resolve_labels();
-        let (code, spans) = sroa::run(c.code, c.spans);
+        let (mut code, spans) = sroa::run(c.code, c.spans);
+        specialize::run(&mut code);
         let (code, spans) = peephole::run(code, spans);
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
@@ -284,7 +286,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             c.emit(Op::Ret { val: Some(c.last_reg) }, 0);
         }
         c.resolve_labels();
-        let (code, spans) = sroa::run(c.code, c.spans);
+        let (mut code, spans) = sroa::run(c.code, c.spans);
+        specialize::run(&mut code);
         let (code, spans) = peephole::run(code, spans);
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {

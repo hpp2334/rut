@@ -73,7 +73,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -404,6 +404,18 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::Cmp { op, prim, dst, a, b } => { e.u8(7); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::Not { dst, a } => { e.u8(8); e.u16(*dst); e.u16(*a); }
         Op::Neg { prim, dst, a } => { e.u8(9); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); }
+        Op::AddF { prim, dst, a, b } => { e.u8(50); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::SubF { prim, dst, a, b } => { e.u8(51); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::MulF { prim, dst, a, b } => { e.u8(52); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::DivF { prim, dst, a, b } => { e.u8(53); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::ModF { prim, dst, a, b } => { e.u8(54); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::NegF { prim, dst, a } => { e.u8(55); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); }
+        Op::EqF { dst, a, b } => { e.u8(56); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::NeF { dst, a, b } => { e.u8(57); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::LtF { dst, a, b } => { e.u8(58); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::GtF { dst, a, b } => { e.u8(59); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::LeF { dst, a, b } => { e.u8(60); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::GeF { dst, a, b } => { e.u8(61); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::StrCmp { eq, dst, a, b } => { e.u8(10); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::RefEq { eq, dst, a, b } => { e.u8(11); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::Jmp { target } => { e.u8(12); e.u32(*target); }
@@ -512,6 +524,18 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: prim(d.u8()?)?, to: prim(d.u8()?)? },
         48 => Op::StrCharAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
         49 => Op::MakeRecord { dst: d.u16()?, ty: d.u32()?, vals: d.u16s()? },
+        50 => Op::AddF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        51 => Op::SubF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        52 => Op::MulF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        53 => Op::DivF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        54 => Op::ModF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        55 => Op::NegF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
+        56 => Op::EqF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        57 => Op::NeF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        58 => Op::LtF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        59 => Op::GtF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        60 => Op::LeF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        61 => Op::GeF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         t => return Err(format!("bad opcode {t}")),
     })
 }

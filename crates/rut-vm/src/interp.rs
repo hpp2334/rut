@@ -450,6 +450,85 @@ impl Vm {
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
+                // float ops are their own opcodes (the `specialize` pass), so
+                // each arm is one machine op with no `prim`/`op` switch
+                Op::AddF { prim, dst, a, b } => {
+                    let r = unsafe { self.cur_regs[*a as usize].f }
+                        + unsafe { self.cur_regs[*b as usize].f };
+                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
+                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_pc += 1;
+                }
+                Op::SubF { prim, dst, a, b } => {
+                    let r = unsafe { self.cur_regs[*a as usize].f }
+                        - unsafe { self.cur_regs[*b as usize].f };
+                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
+                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_pc += 1;
+                }
+                Op::MulF { prim, dst, a, b } => {
+                    let r = unsafe { self.cur_regs[*a as usize].f }
+                        * unsafe { self.cur_regs[*b as usize].f };
+                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
+                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_pc += 1;
+                }
+                Op::DivF { prim, dst, a, b } => {
+                    let r = unsafe { self.cur_regs[*a as usize].f }
+                        / unsafe { self.cur_regs[*b as usize].f };
+                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
+                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_pc += 1;
+                }
+                Op::ModF { prim, dst, a, b } => {
+                    let r = unsafe { self.cur_regs[*a as usize].f }
+                        % unsafe { self.cur_regs[*b as usize].f };
+                    let r = if *prim == PrimTy::F32 { r as f32 as f64 } else { r };
+                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_pc += 1;
+                }
+                Op::NegF { prim, dst, a } => {
+                    let x = unsafe { self.cur_regs[*a as usize].f };
+                    let r = if *prim == PrimTy::F32 { (-(x as f32)) as f64 } else { -x };
+                    self.cur_regs[*dst as usize] = Slot::float(r);
+                    self.cur_pc += 1;
+                }
+                Op::EqF { dst, a, b } => {
+                    let v = (unsafe { self.cur_regs[*a as usize].f })
+                        == (unsafe { self.cur_regs[*b as usize].f });
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::NeF { dst, a, b } => {
+                    let v = (unsafe { self.cur_regs[*a as usize].f })
+                        != (unsafe { self.cur_regs[*b as usize].f });
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::LtF { dst, a, b } => {
+                    let v = (unsafe { self.cur_regs[*a as usize].f })
+                        < (unsafe { self.cur_regs[*b as usize].f });
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::GtF { dst, a, b } => {
+                    let v = (unsafe { self.cur_regs[*a as usize].f })
+                        > (unsafe { self.cur_regs[*b as usize].f });
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::LeF { dst, a, b } => {
+                    let v = (unsafe { self.cur_regs[*a as usize].f })
+                        <= (unsafe { self.cur_regs[*b as usize].f });
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::GeF { dst, a, b } => {
+                    let v = (unsafe { self.cur_regs[*a as usize].f })
+                        >= (unsafe { self.cur_regs[*b as usize].f });
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
                 Op::Jmp { target } => self.cur_pc = *target,
                 Op::Br { cond, then_t, else_t } => {
                     self.cur_pc =
@@ -625,6 +704,12 @@ impl Vm {
                     }
                 };
                 self.cur_regs[dst as usize] = v;
+            }
+            // float ops are their own opcodes and are always fast-pathed
+            Op::AddF { .. } | Op::SubF { .. } | Op::MulF { .. } | Op::DivF { .. }
+            | Op::ModF { .. } | Op::NegF { .. } | Op::EqF { .. } | Op::NeF { .. }
+            | Op::LtF { .. } | Op::GtF { .. } | Op::LeF { .. } | Op::GeF { .. } => {
+                unreachable!("float ops are handled in the run_loop fast path")
             }
             Op::StrCmp { eq, dst, a, b } => {
                 let sa = cell_of(r!(a)).as_str();

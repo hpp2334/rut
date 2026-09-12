@@ -172,6 +172,49 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     TyKind::Prim(p) if p == prim => {}
                     _ => return Err(bad("neg operand is not the embedded primitive".into())),
                 },
+                Op::AddF { prim, a, b, .. }
+                | Op::SubF { prim, a, b, .. }
+                | Op::MulF { prim, a, b, .. }
+                | Op::DivF { prim, a, b, .. }
+                | Op::ModF { prim, a, b, .. } => {
+                    if !prim.is_float() {
+                        return Err(bad("float arith op with a non-float primitive".into()));
+                    }
+                    for r in [a, b] {
+                        match prog.types.kind(f.regs[*r as usize]) {
+                            TyKind::Prim(p) if p == prim => {}
+                            _ => {
+                                return Err(bad(
+                                    "float arith operand is not the embedded primitive".into(),
+                                ))
+                            }
+                        }
+                    }
+                }
+                Op::NegF { prim, a, .. } => {
+                    if !prim.is_float() {
+                        return Err(bad("float neg with a non-float primitive".into()));
+                    }
+                    match prog.types.kind(f.regs[*a as usize]) {
+                        TyKind::Prim(p) if p == prim => {}
+                        _ => {
+                            return Err(bad("float neg operand is not the embedded primitive".into()))
+                        }
+                    }
+                }
+                Op::EqF { a, b, .. }
+                | Op::NeF { a, b, .. }
+                | Op::LtF { a, b, .. }
+                | Op::GtF { a, b, .. }
+                | Op::LeF { a, b, .. }
+                | Op::GeF { a, b, .. } => {
+                    for r in [a, b] {
+                        match prog.types.kind(f.regs[*r as usize]) {
+                            TyKind::Prim(p) if p.is_float() => {}
+                            _ => return Err(bad("float compare operand is not a float".into())),
+                        }
+                    }
+                }
                 Op::Conv { from, to, dst, src, .. } => {
                     if !matches!(prog.types.kind(f.regs[*src as usize]), TyKind::Prim(p) if p == from)
                         || !matches!(prog.types.kind(f.regs[*dst as usize]), TyKind::Prim(p) if p == to)
@@ -219,14 +262,18 @@ fn regs_of(op: &Op) -> Vec<u16> {
             }
         }
         // two-operand scalar ops
-        Op::Not { dst, a } | Op::Neg { dst, a, .. } => {
+        Op::Not { dst, a } | Op::Neg { dst, a, .. } | Op::NegF { dst, a, .. } => {
             push(*dst);
             push(*a);
         }
         // three-operand ops
         Op::Arith { dst, a, b, .. } | Op::Wrap { dst, a, b, .. } | Op::Bit { dst, a, b, .. }
         | Op::Cmp { dst, a, b, .. } | Op::StrCmp { dst, a, b, .. } | Op::RefEq { dst, a, b, .. }
-        | Op::ArrGet { dst, arr: a, idx: b, .. } => {
+        | Op::ArrGet { dst, arr: a, idx: b, .. }
+        | Op::AddF { dst, a, b, .. } | Op::SubF { dst, a, b, .. } | Op::MulF { dst, a, b, .. }
+        | Op::DivF { dst, a, b, .. } | Op::ModF { dst, a, b, .. } | Op::EqF { dst, a, b, .. }
+        | Op::NeF { dst, a, b, .. } | Op::LtF { dst, a, b, .. } | Op::GtF { dst, a, b, .. }
+        | Op::LeF { dst, a, b, .. } | Op::GeF { dst, a, b, .. } => {
             push(*dst);
             push(*a);
             push(*b);

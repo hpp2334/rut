@@ -216,12 +216,23 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
         | Op::Bit { dst, a, b, .. }
         | Op::Cmp { dst, a, b, .. }
         | Op::StrCmp { dst, a, b, .. }
-        | Op::RefEq { dst, a, b, .. } => {
+        | Op::RefEq { dst, a, b, .. }
+        | Op::AddF { dst, a, b, .. }
+        | Op::SubF { dst, a, b, .. }
+        | Op::MulF { dst, a, b, .. }
+        | Op::DivF { dst, a, b, .. }
+        | Op::ModF { dst, a, b, .. }
+        | Op::EqF { dst, a, b, .. }
+        | Op::NeF { dst, a, b, .. }
+        | Op::LtF { dst, a, b, .. }
+        | Op::GtF { dst, a, b, .. }
+        | Op::LeF { dst, a, b, .. }
+        | Op::GeF { dst, a, b, .. } => {
             d.push(*dst);
             u.push(*a);
             u.push(*b);
         }
-        Op::Not { dst, a } | Op::Neg { dst, a, .. } => {
+        Op::Not { dst, a } | Op::Neg { dst, a, .. } | Op::NegF { dst, a, .. } => {
             d.push(*dst);
             u.push(*a);
         }
@@ -356,11 +367,22 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         | Op::Bit { a, b, .. }
         | Op::Cmp { a, b, .. }
         | Op::StrCmp { a, b, .. }
-        | Op::RefEq { a, b, .. } => {
+        | Op::RefEq { a, b, .. }
+        | Op::AddF { a, b, .. }
+        | Op::SubF { a, b, .. }
+        | Op::MulF { a, b, .. }
+        | Op::DivF { a, b, .. }
+        | Op::ModF { a, b, .. }
+        | Op::EqF { a, b, .. }
+        | Op::NeF { a, b, .. }
+        | Op::LtF { a, b, .. }
+        | Op::GtF { a, b, .. }
+        | Op::LeF { a, b, .. }
+        | Op::GeF { a, b, .. } => {
             f(a);
             f(b);
         }
-        Op::Not { a, .. } | Op::Neg { a, .. } => f(a),
+        Op::Not { a, .. } | Op::Neg { a, .. } | Op::NegF { a, .. } => f(a),
         Op::Mov { src, .. } | Op::MovRef { src, .. } => f(src),
         Op::Br { cond, .. } => f(cond),
         Op::BrTable { idx, .. } => f(idx),
