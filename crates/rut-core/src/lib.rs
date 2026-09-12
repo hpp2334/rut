@@ -4,7 +4,9 @@
 //! and runs them.
 
 pub mod binary;
+pub mod link;
 pub mod ops;
 pub mod types;
 
+pub use link::{link, LinkError};
 pub use types::{PrimTy, RutType, TypeId, TypeTable, TyKind};

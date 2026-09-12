@@ -1,0 +1,297 @@
+//! Link — merge module binaries into one program (RFC 0035 §1).
+//!
+//! At rest every module's `TypeId`s, function ids, trait ids and trait
+//! slots are module-local. Linking rebases them into the global tables:
+//! all modules share the same fixed **boot type prefix** (`TypeTable::boot`),
+//! and each module's remaining types are appended after it. Function ids,
+//! trait ids, trait-method slots and const-pool indices are offset; every
+//! `TypeId` reachable from a type, trait, const, function or op is remapped
+//! (RFC 0033 §1: "type_id<T>() constants are re-based with everything else").
+//!
+//! This pass is pure data — nothing runs — and is the compile/link half of
+//! RFC 0035 §1; cyclic imports stay the loader's concern.
+
+use crate::binary::{ConstVal, FuncCode, Program, TraitDesc, TraitMethod};
+use crate::ops::Op;
+use crate::types::{RutType, TyKind, TypeId, TypeTable};
+
+/// A link failure — a load error, never a runtime trap.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LinkError(pub String);
+
+impl std::fmt::Display for LinkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+impl std::error::Error for LinkError {}
+
+/// Merge `modules` (in import order) into one [`Program`].
+pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
+    if modules.is_empty() {
+        return Err(LinkError("link: no modules".into()));
+    }
+    let mut seen = std::collections::HashSet::new();
+    for m in &modules {
+        if !seen.insert(m.name.clone()) {
+            return Err(LinkError(format!("link: duplicate module `{}`", m.name)));
+        }
+    }
+
+    let boot = boot_len();
+    let mut out = Program {
+        types: TypeTable::boot(),
+        vtables: vec![Vec::new(); boot],
+        ..Default::default()
+    };
+    out.name = modules
+        .first()
+        .map(|m| m.name.clone())
+        .unwrap_or_default();
+
+    let mut func_off: u32 = 0;
+    let mut const_off: u32 = 0;
+
+    for m in modules {
+        let nfuncs = m.funcs.len() as u32;
+        let nconsts = m.consts.len() as u32;
+
+        // this module's non-boot types are appended after the current tail
+        let base = out.types.types.len() as u32;
+        let map = move |id: TypeId| -> TypeId {
+            if (id as usize) < boot {
+                id
+            } else {
+                base + (id - boot as u32)
+            }
+        };
+
+        for t in m.types.types.iter().skip(boot) {
+            out.types.types.push(RutType {
+                name: t.name.clone(),
+                kind: remap_kind(&t.kind, &map),
+                size: t.size,
+                align: t.align,
+            });
+        }
+        out.vtables.resize(out.types.types.len(), Vec::new());
+
+        // traits: trait ids are appended; methods' types are remapped
+        let trait_off = out.traits.len() as u32;
+        for tr in m.traits {
+            out.traits.push(TraitDesc {
+                name: tr.name,
+                methods: tr
+                    .methods
+                    .into_iter()
+                    .map(|tm| TraitMethod {
+                        name: tm.name,
+                        params: tm.params.into_iter().map(map).collect(),
+                        ret: map(tm.ret),
+                    })
+                    .collect(),
+            });
+        }
+
+        // trait-method slots are appended; `slot` operands index this table
+        let slot_off = out.trait_slots.len() as u32;
+        for (t, meth) in m.trait_slots {
+            out.trait_slots.push((t + trait_off, meth));
+        }
+
+        // per-type vtables: keyed by type, slot-indexed, value = func id
+        for (i, vt) in m.vtables.into_iter().enumerate() {
+            if i < boot {
+                continue;
+            }
+            let gi = map(i as u32) as usize;
+            if gi >= out.vtables.len() {
+                out.vtables.resize(gi + 1, Vec::new());
+            }
+            let mut nv = vec![None; out.trait_slots.len()];
+            for (si, f) in vt.into_iter().enumerate() {
+                if let Some(fid) = f {
+                    nv[slot_off as usize + si] = Some(fid + func_off);
+                }
+            }
+            out.vtables[gi] = nv;
+        }
+
+        // consts: `type_id` entries are rebased
+        for c in m.consts {
+            out.consts.push(match c {
+                ConstVal::TypeId(t) => ConstVal::TypeId(map(t)),
+                other => other,
+            });
+        }
+
+        // funcs: signatures, register types and every op operand
+        for f in m.funcs {
+            out.funcs.push(FuncCode {
+                name: f.name,
+                params: f.params.into_iter().map(map).collect(),
+                ret: map(f.ret),
+                is_method: f.is_method,
+                n_captures: f.n_captures,
+                regs: f.regs.into_iter().map(map).collect(),
+                code: f
+                    .code
+                    .into_iter()
+                    .map(|op| remap_op(op, &map, func_off, slot_off, trait_off, const_off))
+                    .collect(),
+                spans: f.spans,
+            });
+        }
+
+        // exports: function ids
+        for (n, fid) in m.exports {
+            out.exports.push((n, fid + func_off));
+        }
+
+        func_off += nfuncs;
+        const_off += nconsts;
+    }
+
+    Ok(out)
+}
+
+/// Number of shared boot types every module's table starts with.
+fn boot_len() -> usize {
+    TypeTable::boot().types.len()
+}
+
+/// Remap the `TypeId`s inside a type descriptor.
+fn remap_kind(kind: &TyKind, map: &impl Fn(TypeId) -> TypeId) -> TyKind {
+    match kind {
+        TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => {
+            kind.clone()
+        }
+        TyKind::Vec { elem } => TyKind::Vec { elem: map(*elem) },
+        TyKind::Array { elem } => TyKind::Array { elem: map(*elem) },
+        TyKind::Enum { members } => TyKind::Enum { members: members.clone() },
+        TyKind::Option { elem } => TyKind::Option { elem: map(*elem) },
+        TyKind::Result { ok, err } => TyKind::Result { ok: map(*ok), err: map(*err) },
+        TyKind::Data { fields } => TyKind::Data {
+            fields: fields
+                .iter()
+                .map(|f| crate::types::FieldInfo {
+                    name: f.name.clone(),
+                    ty: map(f.ty),
+                    offset: f.offset,
+                })
+                .collect(),
+        },
+        // trait ids are NOT TypeIds; remapped with the trait table
+        TyKind::TraitObj { trait_id } => TyKind::TraitObj { trait_id: *trait_id },
+        TyKind::Fn { params, ret } => TyKind::Fn {
+            params: params.iter().map(|&p| map(p)).collect(),
+            ret: map(*ret),
+        },
+    }
+}
+
+/// Remap every id-bearing operand of an op. Ops without ids fall through.
+fn remap_op(
+    op: Op,
+    map: &impl Fn(TypeId) -> TypeId,
+    func_off: u32,
+    slot_off: u32,
+    trait_off: u32,
+    const_off: u32,
+) -> Op {
+    match op {
+        Op::Const { dst, k } => Op::Const { dst, k: k + const_off },
+        Op::NewCell { dst, ty } => Op::NewCell { dst, ty: map(ty) },
+        Op::MakeRecord { dst, ty, vals } => Op::MakeRecord { dst, ty: map(ty), vals },
+        Op::Own { dst, src, ty } => Op::Own { dst, src, ty: map(ty) },
+        Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst, ty: map(ty), len, repr },
+        Op::ArrLit { dst, ty, elems } => Op::ArrLit { dst, ty: map(ty), elems },
+        Op::EnumNew { dst, ty, member } => Op::EnumNew { dst, ty: map(ty), member },
+        Op::OptSome { dst, ty, val } => Op::OptSome { dst, ty: map(ty), val },
+        Op::OptNone { dst, ty } => Op::OptNone { dst, ty: map(ty) },
+        Op::ResOk { dst, ty, val } => Op::ResOk { dst, ty: map(ty), val },
+        Op::ResErr { dst, ty, val } => Op::ResErr { dst, ty: map(ty), val },
+        Op::IsType { dst, obj, want } => Op::IsType { dst, obj, want: map(want) },
+        Op::Unbox { dst, box_, ty } => Op::Unbox { dst, box_, ty: map(ty) },
+        Op::Box { dst, val, ty } => Op::Box { dst, val, ty: map(ty) },
+        Op::Call { func, args, dst } => Op::Call { func: func + func_off, args, dst },
+        Op::CallM { func, recv, args, dst } => {
+            Op::CallM { func: func + func_off, recv, args, dst }
+        }
+        Op::CallI { slot, recv, args, dst } => {
+            Op::CallI { slot: slot + slot_off, recv, args, dst }
+        }
+        Op::MakeClosure { dst, func, captures } => Op::MakeClosure {
+            dst,
+            func: func + func_off,
+            captures,
+        },
+        Op::IsTrait { dst, obj, want } => Op::IsTrait { dst, obj, want: want + trait_off },
+        other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::binary::FuncCode;
+    use crate::ops::Op;
+    use crate::types::{FieldInfo, TY_I32};
+
+    fn module(name: &str, with_point: bool) -> Program {
+        let mut p = Program::default();
+        p.name = name.to_string();
+        p.types = TypeTable::boot();
+        if with_point {
+            p.types.types.push(RutType {
+                name: "Point".into(),
+                kind: TyKind::Data {
+                    fields: vec![FieldInfo { name: "x".into(), ty: TY_I32, offset: 0 }],
+                },
+                size: 4,
+                align: 4,
+            });
+            let point = (p.types.types.len() - 1) as u32;
+            p.consts.push(ConstVal::TypeId(point));
+        }
+        p.funcs.push(FuncCode {
+            name: "main".into(),
+            params: vec![],
+            ret: TY_I32,
+            is_method: false,
+            n_captures: 0,
+            regs: vec![TY_I32],
+            code: vec![Op::Const { dst: 0, k: 0 }, Op::Ret { val: Some(0) }],
+            spans: vec![],
+        });
+        p.exports.push(("main".into(), 0));
+        p.vtables = vec![Vec::new(); p.types.types.len()];
+        p
+    }
+
+    #[test]
+    fn links_and_rebases_types_and_funcs() {
+        let boot = TypeTable::boot().types.len();
+        let a = module("a", true);
+        let b = module("b", true);
+        let out = link(vec![a, b]).expect("link");
+
+        // two points appended after the shared boot prefix
+        assert_eq!(out.types.types.len(), boot + 2);
+        // type_id consts rebased: a's Point -> boot, b's Point -> boot + 1
+        assert_eq!(out.consts[0], ConstVal::TypeId(boot as u32));
+        assert_eq!(out.consts[1], ConstVal::TypeId(boot as u32 + 1));
+        // func/const ids offset per module
+        assert_eq!(out.funcs.len(), 2);
+        assert_eq!(out.exports, vec![("main".into(), 0), ("main".into(), 1)]);
+        assert_eq!(out.funcs[1].code[0], Op::Const { dst: 0, k: 1 });
+        // boot prefix is not duplicated
+        assert_eq!(out.types.types[TY_I32 as usize].name, "i32");
+    }
+
+    #[test]
+    fn duplicate_module_is_an_error() {
+        let err = link(vec![module("a", false), module("a", false)]).unwrap_err();
+        assert!(err.to_string().contains("duplicate module `a`"), "{err}");
+    }
+}

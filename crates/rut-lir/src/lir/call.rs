@@ -216,12 +216,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 }
                 let t = self.resolve_type_now(generics[0]);
-                let v: u64 = match n.as_str() {
-                    "type_id" => t as u64,
-                    "size_of" => self.ctx.layout_of(t).0 as u64,
-                    _ => self.ctx.layout_of(t).1 as u64,
-                };
                 let dst = self.new_reg(TY_U32);
+                if n.as_str() == "type_id" {
+                    // a rebasable const-pool entry: link maps the module-local
+                    // TypeId into the global table (RFC 0035 §1)
+                    let k = self.konst(ConstVal::TypeId(t));
+                    self.emit(Op::Const { dst, k: k as u32 }, sp.lo);
+                    return Ok(TY_U32);
+                }
+                let v: u64 = if n.as_str() == "size_of" {
+                    self.ctx.layout_of(t).0 as u64
+                } else {
+                    self.ctx.layout_of(t).1 as u64
+                };
                 self.emit(Op::ConstRaw { dst, bits: v }, sp.lo);
                 return Ok(TY_U32);
             }

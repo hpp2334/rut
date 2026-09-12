@@ -36,6 +36,7 @@ fn const_to_slot(c: &ConstVal, heap: &Heap) -> Result<Slot, String> {
         ConstVal::Str(s) => heap
             .alloc_str(s.clone())
             .map_err(|t| format!("load: {}", t.msg))?,
+        ConstVal::TypeId(t) => Slot::int(*t as i64),
     })
 }
 

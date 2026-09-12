@@ -42,6 +42,9 @@ pub enum ConstVal {
     Bool(bool),
     Char(char),
     Str(String),
+    /// a `type_id<T>()` constant — a module-local `TypeId` at rest, rebased
+    /// to the global type table at link (RFC 0035 §1)
+    TypeId(TypeId),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -73,7 +76,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 8;
+pub const VERSION: u32 = 9;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -154,6 +157,10 @@ pub fn encode(prog: &Program) -> Vec<u8> {
             ConstVal::Str(s) => {
                 e.u8(4);
                 e.str(s);
+            }
+            ConstVal::TypeId(t) => {
+                e.u8(5);
+                e.u32(*t);
             }
         }
     }
@@ -310,6 +317,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             2 => ConstVal::Bool(d.u8()? != 0),
             3 => ConstVal::Char(char::from_u32(d.u32()?).unwrap_or('\0')),
             4 => ConstVal::Str(d.str()?),
+            5 => ConstVal::TypeId(d.u32()?),
             t => return Err(format!("bad const tag {t}")),
         });
     }
