@@ -1,5 +1,8 @@
-// fannkuch-redux — permutation flips. Scale: n = 10.
-// Checksum folds max-flips in: checksum * 1000 + max_flips (exact i32).
+// fannkuch-redux — pancake flips over all permutations. Scale: n = 7.
+// Canonical checksum: sum over all n! permutations of (+/- flips), sign
+// toggling every permutation (benchmarks-game definition). The value is
+// folded with max-flips: checksum * 1000 + max_flips (exact i32).
+// n=7 canonical: checksum 228, max_flips 16.
 
 fn fannkuch(n: i32) -> i32 {
     let mut perm = Vec<i32>(n);
@@ -38,12 +41,10 @@ fn fannkuch(n: i32) -> i32 {
         if (flips > max_flips) {
             max_flips = flips;
         }
-        if (perm1[0] != 0 && perm1[n - 1] != n - 1) {
-            if (perm_count % 2 == 0) {
-                checksum += flips;
-            } else {
-                checksum -= flips;
-            }
+        if (perm_count % 2 == 0) {
+            checksum += flips;
+        } else {
+            checksum -= flips;
         }
         while (r != n) {
             let first = perm1[0];

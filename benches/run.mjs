@@ -46,6 +46,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..");
 const WORKLOADS_DIR = join(HERE, "workloads");
+const EXPECTED_FILE = join(WORKLOADS_DIR, "expected.json");
 const RESULTS_DIR = join(HERE, "results");
 const RUT = join(ROOT, "target", "release", "rut");
 const PROBE = join(ROOT, "target", "release", "rut-bench-probe");
@@ -220,6 +221,7 @@ const med = (xs) => {
   return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
 };
 const min = (xs) => (xs.length ? Math.min(...xs) : NaN);
+const max = (xs) => (xs.length ? Math.max(...xs) : NaN);
 
 // numeric checksum agreement: exact string, or numeric within tolerance
 function checksumsAgree(a, b) {
@@ -312,7 +314,7 @@ function measureRuntime(spec, file, opt) {
     checksum: sample ? extractChecksum(sample.stdout) : null,
     wallMedianMs: med(walls),
     wallMinMs: min(walls),
-    peakRssKb: min(rss), // min across runs avoids one noisy RSS sample
+    peakRssKb: max(rss), // the worst observed per-run peak RSS
     ran: runs.length,
     ok: failures.length === 0 && walls.length > 0,
     error: failures.length
@@ -366,7 +368,7 @@ function pad(s, w, right = false) {
 }
 
 function renderCrossTable(rows) {
-  const head = ["workload", "runtime", "checksum", "wall median", "wall min", "peak RSS", "ok"];
+  const head = ["workload", "runtime", "checksum", "wall median", "wall min", "peak RSS", "ref", "ok"];
   const body = rows.map((r) => [
     r.workload,
     r.runtime,
@@ -374,6 +376,7 @@ function renderCrossTable(rows) {
     fmtMs(r.wallMedianMs),
     fmtMs(r.wallMinMs),
     fmtMb(r.peakRssKb),
+    r.refOk == null ? "—" : r.refOk ? "yes" : "MISMATCH",
     r.ok ? (r.agree ? "yes" : "MISMATCH") : `FAIL (${r.error})`,
   ]);
   const widths = head.map((h, i) =>
@@ -443,6 +446,14 @@ const crossRows = [];
 const rutRows = [];
 const perWorkload = [];
 
+// Optional canonical reference checksums (benches/workloads/expected.json).
+// Cross-runtime agreement alone cannot catch a bug shared by all three
+// implementations; this catches it.
+let expectedRefs = {};
+if (existsSync(EXPECTED_FILE)) {
+  expectedRefs = JSON.parse(readFileSync(EXPECTED_FILE, "utf8"));
+}
+
 for (const name of workloadNames) {
   const rutFile = join(WORKLOADS_DIR, `${name}.rut`);
   const jsFile = join(WORKLOADS_DIR, `${name}.js`);
@@ -465,9 +476,14 @@ for (const name of workloadNames) {
     const agree =
       m.checksum == null || checked.every((c) => checksumsAgree(m.checksum, c));
     if (m.checksum != null) checked.push(m.checksum);
-    entry.runtimes.push({ ...m, agree });
+    const ref = expectedRefs[name] ?? null;
+    const refOk =
+      ref == null || m.checksum == null
+        ? null
+        : checksumsAgree(m.checksum, String(ref));
+    entry.runtimes.push({ ...m, agree, refOk });
     entry.checksums[spec.name] = m.checksum;
-    crossRows.push({ workload: name, ...m, agree });
+    crossRows.push({ workload: name, ...m, agree, refOk });
   }
   if (opt.probe && runtimes.some((r) => r.name === "rut")) {
     process.stderr.write(`probe: ${name} [rut] … `);
@@ -486,6 +502,7 @@ for (const name of workloadNames) {
 }
 
 const mismatches = crossRows.filter((r) => !r.agree && r.checksum != null);
+const refMismatches = crossRows.filter((r) => r.refOk === false);
 
 console.log("\n=== cross-runtime (end-to-end process) ===\n");
 console.log(renderCrossTable(crossRows));
@@ -509,7 +526,10 @@ console.log(
   "* VM heap peak is rut's self-accounted live-cell high-water (RFC 0039), not process memory.",
 );
 if (mismatches.length) {
-  console.log(`\n!! checksum mismatch in: ${mismatches.map((m) => `${m.workload}/${m.runtime}`).join(", ")}`);
+  console.log(`\n!! cross-runtime checksum mismatch in: ${mismatches.map((m) => `${m.workload}/${m.runtime}`).join(", ")}`);
+}
+if (refMismatches.length) {
+  console.log(`\n!! reference checksum mismatch in: ${refMismatches.map((m) => `${m.workload}/${m.runtime}`).join(", ")}`);
 }
 
 if (opt.json || opt.md || opt.csv) mkdirSync(RESULTS_DIR, { recursive: true });
@@ -550,7 +570,10 @@ if (opt.md) {
     md.push(``, `## rut in-process`, ``, "```", renderRutTable(rutRows), "```");
   }
   if (mismatches.length) {
-    md.push(``, `**Checksum mismatches:** ${mismatches.map((m) => `${m.workload}/${m.runtime}`).join(", ")}`);
+    md.push(``, `**Cross-runtime checksum mismatches:** ${mismatches.map((m) => `${m.workload}/${m.runtime}`).join(", ")}`);
+  }
+  if (refMismatches.length) {
+    md.push(``, `**Reference checksum mismatches:** ${refMismatches.map((m) => `${m.workload}/${m.runtime}`).join(", ")}`);
   }
   writeFileSync(opt.md, md.join("\n") + "\n");
   console.log(`md:   ${opt.md}`);
@@ -574,4 +597,4 @@ if (opt.csv) {
   console.log(`csv:  ${opt.csv}`);
 }
 
-process.exit(mismatches.length ? 1 : 0);
+process.exit(mismatches.length || refMismatches.length ? 1 : 0);

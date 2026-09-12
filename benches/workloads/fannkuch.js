@@ -28,9 +28,7 @@ function fannkuch(n) {
       flips++;
     }
     if (flips > maxFlips) maxFlips = flips;
-    if (perm1[0] !== 0 && perm1[n - 1] !== n - 1) {
-      checksum += permCount % 2 === 0 ? flips : -flips;
-    }
+    checksum += permCount % 2 === 0 ? flips : -flips;
     while (r !== n) {
       const first = perm1[0];
       for (let i = 0; i < r; i++) perm1[i] = perm1[i + 1];

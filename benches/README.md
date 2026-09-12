@@ -21,7 +21,8 @@ benches/
 ├── probe/                  # rut-bench-probe: in-process phase/heap probe
 ├── workloads/
 │   ├── NAME.rut            # the rut program (no imports; builtin print)
-│   └── NAME.js             # the identical program for node + qjs
+│   ├── NAME.js             # the identical program for node + qjs
+│   └── expected.json       # canonical reference checksums (verified)
 └── results/                # generated reports (gitignored)
 ```
 
@@ -57,27 +58,33 @@ node benches/run.mjs --help
 ```
 
 Common options: `--repeats N`, `--warmup N`, `--probe-iters N`,
-`--timeout SEC`, `--no-probe`, `--no-build`. A full run of the suite
-takes a few minutes because rut executes the workloads (`--workload`
-and `--repeats 1` are useful while iterating).
+`--timeout SEC`, `--no-probe`, `--no-build`. A full suite run takes a
+minute or two (`--workload`, `--quick` and `--repeats 1` are useful
+while iterating).
 
 ## Workloads
 
-Every pair computes the same thing and prints one `CHECKSUM …` line; the
-runner fails the run if the runtimes disagree.
+Every pair computes the same thing and prints one `CHECKSUM …` line. The
+runner checks the checksum two ways: against the other runtimes **and**
+against the reference in `workloads/expected.json`.
 
-| Workload | Stresses | Scale | Checksum |
+| Workload | Stresses | Scale | Canonical reference |
 |---|---|---|---|
 | `empty` | process/compile startup floor | — | none |
-| `sieve` | `Vec<i32>` + tight integer loops | limit 500 000 | exact `41538` |
-| `quicksort` | recursion, in-place vec mutation | n = 10 000 | exact |
-| `matrix-mul` | flat `Vec<f64>` multiply-add | n = 64 | exact (see below) |
-| `mandelbrot` | `f64` control flow | 100 × 75, 200 iters | exact (integer) |
-| `fannkuch` | permutations, array churn | n = 7 | exact |
-| `nbody` | `f64` integration + `sqrt` | 1000 steps | exact |
-| `spectral-norm` | `f64` power iteration + `sqrt` | n = 150 | exact |
-| `binary-trees` | RC allocation/drop churn | depth 14 | exact `32767` |
-| `fasta` | immutable-string building | n = 10 000 | exact |
+| `sieve` | `Vec<i32>` + tight integer loops | limit 500 000 | π(500000) = `41538` |
+| `quicksort` | recursion, in-place vec mutation | n = 10 000 | sorted-array hash `653905516` |
+| `matrix-mul` | flat `Vec<f64>` multiply-add | n = 64 | `1609836480` |
+| `mandelbrot` | `f64` control flow | 100 × 75, 200 iters | escape-count `376659` |
+| `fannkuch` | permutations, array churn | n = 7 | checksum 228, max-flips 16 → `228016` |
+| `nbody` | `f64` integration + `sqrt` | 1000 steps | energy `-0.16908760523460628` |
+| `spectral-norm` | `f64` power iteration + `sqrt` | n = 150 | `1.274222872607514` |
+| `binary-trees` | RC allocation/drop churn | depth 14 | 2¹⁵−1 nodes = `32767` |
+| `fasta` | immutable-string building | n = 10 000 | `15246:10000` |
+
+`sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
+`spectral-norm` follow the standard algorithms (fannkuch and nbody to the
+benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
+— see the limitations below.
 
 ## Method (and what "fair" means here)
 
@@ -86,21 +93,26 @@ runner fails the run if the runtimes disagree.
   **includes parse/compile/verification** for all three.
 - Wall time is the median over `--repeats` timed runs after `--warmup`
   discarded runs; `wall min` is also reported.
-- **Peak RSS** is the whole-process high-water from GNU `time -f %M`.
-  It includes each runtime's baseline, so compare against the `empty`
-  row for the same runtime.
+- **Peak RSS** is the whole-process high-water from GNU `time -f %M`
+  (the largest value over the timed runs). It includes each runtime's
+  baseline, so compare against the `empty` row for the same runtime.
 - **rut's VM heap peak** is its own byte accounting (RFC 0039), not
   process memory: the high-water of live cells. It is reported
   separately by the probe.
 - The **rut probe** (`benches/probe`) compiles once, then runs `main`
   on a fresh `Vm` per iteration, splitting `compile` / `decode+verify` /
   `exec` and reading `fuel_used` (RFC 0040) and `heap_peak_bytes`.
-- Checksums must agree across runtimes. `f64` arithmetic is IEEE and
-  evaluated in the same order in rut and JS, and where the language has
-  no builtin `sqrt` both sides carry the **same fixed-iteration Newton
-  routine**, so even the float checksums match bit-for-bit. The runner
-  still tolerates a 1e-9 relative difference when comparing numeric
-  checksums.
+- **Correctness is checked against canonical references, not just
+  across runtimes.** Each workload's checksum is compared to
+  `workloads/expected.json` (the canonical value, or the value produced
+  by the independent reference implementation used when the workload was
+  written). Cross-runtime agreement alone cannot catch a bug shared by
+  all three implementations — that is exactly how a wrong fannkuch
+  checksum was caught. `f64` arithmetic is IEEE and evaluated in the
+  same order in rut and JS, and where the language has no builtin `sqrt`
+  both sides carry the **same fixed-iteration Newton routine**, so the
+  float checksums match bit-for-bit; the runner still tolerates a 1e-9
+  relative difference when comparing numeric checksums.
 
 ## Known limitations / deliberate choices
 
@@ -111,8 +123,12 @@ runner fails the run if the runtimes disagree.
   `regex-redux` (no regex), and `k-nucleotide` / `reverse-complement`
   (bytes/hashmap/stdin) from the benchmark-game set.
 - **Recursive dataclasses are not in the type system** (RFC 0009), so
-  `binary-trees` builds its nodes as `Opaque`-boxed dataclasses — which
-  is exactly the RC allocation path the benchmark is about.
+  `binary-trees` is an *adaptation*: it builds one `Opaque`-boxed
+  dataclass per node and counts them, rather than the benchmark-game's
+  varying-depth trees. It still exercises the RC allocation/drop path.
+- **`fasta`** is likewise an adaptation: LCG-driven ACGT string building
+  with a length/index checksum, not the benchmark-game's repeat-sequence
+  generator.
 - Scales are **reduced** from the official benchmark-game sizes: rut is
   an interpreter, so the full sizes would run for minutes to hours.
   They are still large enough that runtimes are measured, not just
@@ -126,28 +142,34 @@ runner fails the run if the runtimes disagree.
    computing identical results with the same integer widths / float
    order.
 2. Keep the scale as a named constant in both files.
-3. Run `node benches/run.mjs --workload NAME --repeats 1` and fix any
+3. Verify against an independent implementation and add the value to
+   `workloads/expected.json`.
+4. Run `node benches/run.mjs --workload NAME --repeats 1` and fix any
    compile errors or checksum mismatch.
-4. Add a row to the table above.
+5. Add a row to the table above.
 
 ## Sample output
 
 ```
 === cross-runtime (end-to-end process) ===
 
-workload      runtime     checksum  wall median  wall min  peak RSS   ok
-------------  -------  -----------  -----------  --------  --------  ---
-binary-trees  rut            32767     445.5 ms  445.5 ms   21.0 MB  yes
-binary-trees  node           32767      44.4 ms   44.4 ms   54.5 MB  yes
-binary-trees  qjs            32767      12.8 ms   12.8 ms    7.3 MB  yes
-fasta         rut      15246:10000     585.1 ms  585.1 ms    4.9 MB  yes
-fasta         node     15246:10000      20.7 ms   20.7 ms   46.9 MB  yes
-fasta         qjs      15246:10000     5.298 ms  5.298 ms    4.2 MB  yes
+workload       runtime   checksum            wall median  wall min  peak RSS  ref  ok
+-------------  -------  ------------------  -----------  --------  --------  ---  ---
+binary-trees   rut                  32767      33.1 ms   32.8 ms   20.9 MB  yes  yes
+binary-trees   node                 32767      45.1 ms   41.0 ms   54.7 MB  yes  yes
+binary-trees   qjs                  32767      12.4 ms   12.0 ms    7.4 MB  yes  yes
+fannkuch       rut                 228016      20.5 ms   20.1 ms    3.1 MB  yes  yes
+fannkuch       node                228016      21.7 ms   21.1 ms   52.8 MB  yes  yes
+fannkuch       qjs                 228016      10.8 ms   10.7 ms    3.5 MB  yes  yes
+sieve          rut                  41538     136.9 ms  130.3 ms   11.2 MB  yes  yes
+sieve          node                 41538      24.0 ms   23.8 ms   54.6 MB  yes  yes
+sieve          qjs                  41538      57.2 ms   56.1 ms    4.9 MB  yes  yes
 
 === rut in-process (rut-bench-probe) ===
 
-workload      compile    verify  exec median     fuel  VM heap peak  trap
-------------  --------  --------  -----------  -------  ------------  ----
-binary-trees  0.356 ms  0.010 ms     422.5 ms  1605577       4.50 MB     —
-fasta         0.264 ms  0.009 ms     582.3 ms  1220033      351.9 KB     —
+workload        compile    verify  exec median      fuel  VM heap peak  trap
+-------------  --------  --------  -----------  --------  ------------  ----
+binary-trees   0.300 ms  0.010 ms      28.4 ms   1605577       4.50 MB     —
+fannkuch       0.430 ms  0.013 ms      17.0 ms   2828979         273 B     —
+sieve          0.248 ms  0.009 ms     130.4 ms  22891359       4.13 MB     —
 ```

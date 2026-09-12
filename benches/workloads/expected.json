@@ -1,0 +1,11 @@
+{
+  "sieve": "41538",
+  "quicksort": "653905516",
+  "matrix-mul": "1609836480",
+  "mandelbrot": "376659",
+  "fannkuch": "228016",
+  "nbody": "-0.16908760523460628",
+  "spectral-norm": "1.274222872607514",
+  "binary-trees": "32767",
+  "fasta": "15246:10000"
+}
