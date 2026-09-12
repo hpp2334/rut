@@ -197,7 +197,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => {}
         }
         let cond_reg = self.new_reg(TY_BOOL);
-        self.emit(Op::Cmp { op: CmpOp::Lt, ty: TY_I32, dst: cond_reg, a: idx, b: len_reg }, sp.lo);
+        self.emit(Op::Cmp { op: CmpOp::Lt, prim: PrimTy::I32, dst: cond_reg, a: idx, b: len_reg }, sp.lo);
         self.br(cond_reg, l_body, l_end);
         self.bind(l_body);
         // var = iter[idx]
@@ -214,7 +214,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let one = self.new_reg(TY_I32);
         self.emit(Op::ConstRaw { dst: one, bits: 1 }, sp.lo);
         let next = self.new_reg(TY_I32);
-        self.emit(Op::Arith { op: ArithOp::Add, ty: TY_I32, dst: next, a: idx, b: one }, sp.lo);
+        self.emit(Op::Arith { op: ArithOp::Add, prim: PrimTy::I32, dst: next, a: idx, b: one }, sp.lo);
         self.emit(Op::Mov { dst: idx, src: next }, sp.lo);
         self.jmp(l_head);
         self.bind(l_end);
@@ -415,8 +415,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let (_lty, lreg) = self.load_lit(lit, Some(scrut_ty), sp)?;
                 let r = self.new_reg(TY_BOOL);
                 match self.ctx.types.kind(scrut_ty).clone() {
-                    TyKind::Prim(_) => {
-                        self.emit(Op::Cmp { op: CmpOp::Eq, ty: scrut_ty, dst: r, a: scrut_reg, b: lreg }, sp.lo);
+                    TyKind::Prim(p) => {
+                        self.emit(Op::Cmp { op: CmpOp::Eq, prim: p, dst: r, a: scrut_reg, b: lreg }, sp.lo);
                     }
                     TyKind::Str => {
                         self.emit(Op::StrCmp { eq: true, dst: r, a: scrut_reg, b: lreg }, sp.lo);

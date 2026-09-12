@@ -144,7 +144,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let want_reg = self.new_reg(TY_U32);
                 self.emit(Op::ConstRaw { dst: want_reg, bits: want as u64 }, sp.lo);
                 let eq = self.new_reg(TY_BOOL);
-                self.emit(Op::Cmp { op: CmpOp::Eq, ty: TY_U32, dst: eq, a: tid_reg, b: want_reg }, sp.lo);
+                self.emit(Op::Cmp { op: CmpOp::Eq, prim: PrimTy::U32, dst: eq, a: tid_reg, b: want_reg }, sp.lo);
                 let dst = self.new_reg(oty);
                 let l_some = self.new_label();
                 let l_none = self.new_label();
@@ -230,20 +230,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, format!("{n}(x) takes one argument"));
                     return Err(());
                 }
-                let to = match n.as_str() {
+                let to_ty = match n.as_str() {
                     "i8" => TY_I8, "i16" => TY_I16, "i32" => TY_I32, "i64" => TY_I64,
                     "u8" => TY_U8, "u16" => TY_U16, "u32" => TY_U32, "u64" => TY_U64,
                     "f32" => TY_F32, _ => TY_F64,
                 };
                 let from = self.compile_expr(args[0], None)?;
-                if !matches!(self.ctx.types.kind(from), TyKind::Prim(_)) {
+                let from_prim = if let TyKind::Prim(p) = self.ctx.types.kind(from) { Some(*p) } else { None };
+                let Some(from_prim) = from_prim else {
                     self.ctx.err(sp, format!("{}(..) converts numbers —found `{}`", n, self.ctx.types.name(from)));
                     return Err(());
-                }
+                };
+                let Some(to_prim) = (if let TyKind::Prim(p) = self.ctx.types.kind(to_ty) { Some(*p) } else { None }) else {
+                    self.ctx.err(sp, "internal: conversion target is not a primitive");
+                    return Err(());
+                };
                 let src = self.last_reg;
-                let dst = self.new_reg(to);
-                self.emit(Op::Conv { dst, src, from, to }, sp.lo);
-                return Ok(to);
+                let dst = self.new_reg(to_ty);
+                self.emit(Op::Conv { dst, src, from: from_prim, to: to_prim }, sp.lo);
+                return Ok(to_ty);
             }
             "str" => {
                 if args.len() != 1 {

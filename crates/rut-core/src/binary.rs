@@ -73,7 +73,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -398,12 +398,12 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::MovRef { dst, src } => { e.u8(1); e.u16(*dst); e.u16(*src); }
         Op::Const { dst, k } => { e.u8(2); e.u16(*dst); e.u32(*k); }
         Op::ConstRaw { dst, bits } => { e.u8(3); e.u16(*dst); e.u64(*bits); }
-        Op::Arith { op, ty, dst, a, b } => { e.u8(4); e.u8(*op as u8); e.u32(*ty); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::Wrap { op, ty, dst, a, b } => { e.u8(5); e.u8(*op as u8); e.u32(*ty); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::Bit { op, ty, dst, a, b } => { e.u8(6); e.u8(*op as u8); e.u32(*ty); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::Cmp { op, ty, dst, a, b } => { e.u8(7); e.u8(*op as u8); e.u32(*ty); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::Arith { op, prim, dst, a, b } => { e.u8(4); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::Wrap { op, prim, dst, a, b } => { e.u8(5); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::Bit { op, prim, dst, a, b } => { e.u8(6); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::Cmp { op, prim, dst, a, b } => { e.u8(7); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::Not { dst, a } => { e.u8(8); e.u16(*dst); e.u16(*a); }
-        Op::Neg { ty, dst, a } => { e.u8(9); e.u32(*ty); e.u16(*dst); e.u16(*a); }
+        Op::Neg { prim, dst, a } => { e.u8(9); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); }
         Op::StrCmp { eq, dst, a, b } => { e.u8(10); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::RefEq { eq, dst, a, b } => { e.u8(11); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::Jmp { target } => { e.u8(12); e.u32(*target); }
@@ -445,7 +445,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::Panic { msg } => { e.u8(44); e.u16(*msg); }
         Op::Assert { cond, msg } => { e.u8(45); e.u16(*cond); e.u8opt(msg); }
         Op::LoopHead => e.u8(46),
-        Op::Conv { dst, src, from, to } => { e.u8(47); e.u16(*dst); e.u16(*src); e.u32(*from); e.u32(*to); }
+        Op::Conv { dst, src, from, to } => { e.u8(47); e.u16(*dst); e.u16(*src); e.u8(from.to_u8()); e.u8(to.to_u8()); }
         Op::StrCharAt { dst, s, idx } => { e.u8(48); e.u16(*dst); e.u16(*s); e.u16(*idx); }
     }
 }
@@ -456,12 +456,12 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         1 => Op::MovRef { dst: d.u16()?, src: d.u16()? },
         2 => Op::Const { dst: d.u16()?, k: d.u32()? },
         3 => Op::ConstRaw { dst: d.u16()?, bits: d.u64()? },
-        4 => Op::Arith { op: arith(d.u8()?)?, ty: d.u32()?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        5 => Op::Wrap { op: arith(d.u8()?)?, ty: d.u32()?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        6 => Op::Bit { op: bitop(d.u8()?)?, ty: d.u32()?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        7 => Op::Cmp { op: cmpop(d.u8()?)?, ty: d.u32()?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        4 => Op::Arith { op: arith(d.u8()?)?, prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        5 => Op::Wrap { op: arith(d.u8()?)?, prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        6 => Op::Bit { op: bitop(d.u8()?)?, prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        7 => Op::Cmp { op: cmpop(d.u8()?)?, prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         8 => Op::Not { dst: d.u16()?, a: d.u16()? },
-        9 => Op::Neg { ty: d.u32()?, dst: d.u16()?, a: d.u16()? },
+        9 => Op::Neg { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
         10 => Op::StrCmp { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         11 => Op::RefEq { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         12 => Op::Jmp { target: d.u32()? },
@@ -508,14 +508,17 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         44 => Op::Panic { msg: d.u16()? },
         45 => Op::Assert { cond: d.u16()?, msg: d.u8opt()? },
         46 => Op::LoopHead,
-        47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: d.u32()?, to: d.u32()? },
+        47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: prim(d.u8()?)?, to: prim(d.u8()?)? },
         48 => Op::StrCharAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
         t => return Err(format!("bad opcode {t}")),
     })
 }
 
-fn arith(b: u8) -> Result<ArithOp, String> {
-    Ok(match b {
+fn prim(b: u8) -> Result<PrimTy, String> {
+    PrimTy::from_u8(b).ok_or_else(|| format!("bad prim tag {b}"))
+}
+
+fn arith(b: u8) -> Result<ArithOp, String> {    Ok(match b {
         0 => ArithOp::Add, 1 => ArithOp::Sub, 2 => ArithOp::Mul, 3 => ArithOp::Div, 4 => ArithOp::Mod,
         _ => return Err("bad arith tag".into()),
     })

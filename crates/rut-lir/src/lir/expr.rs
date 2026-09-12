@@ -70,10 +70,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let dst = self.new_reg(t);
                 match op {
                     Neg => {
-                        if !matches!(self.ctx.types.kind(t), TyKind::Prim(_)) {
+                        let prim = if let TyKind::Prim(p) = self.ctx.types.kind(t) { Some(*p) } else { None };
+                        let Some(prim) = prim else {
                             self.ctx.err(sp, "negation needs a number");
-                        }
-                        self.emit(Op::Neg { ty: t, dst, a: src }, sp.lo);
+                            return Err(());
+                        };
+                        self.emit(Op::Neg { prim, dst, a: src }, sp.lo);
                     }
                     Not => {
                         if t != TY_BOOL {

@@ -7,7 +7,7 @@
 //! materializes (family × prim) opcode bytes, same information (RFC 0032
 //! "the full table is mechanical").
 
-use crate::types::TypeId;
+use crate::types::{PrimTy, TypeId};
 
 pub type Reg = u16;
 pub type Label = u32;
@@ -61,14 +61,15 @@ pub enum Op {
     /// raw scalar const (i64 bits / f64 bits / bool / char) — folded form
     ConstRaw { dst: Reg, bits: u64 },
 
-    /// trapping arithmetic (RFC 0004 §3); `ty` selects the exact opcode
-    Arith { op: ArithOp, ty: TypeId, dst: Reg, a: Reg, b: Reg },
+    /// trapping arithmetic (RFC 0004 §3); `prim` is the resolved operand
+    /// type — the VM never consults the type table to execute it
+    Arith { op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     /// wrapping escapes: &+ &- &* (RFC 0004 §3)
-    Wrap { op: ArithOp, ty: TypeId, dst: Reg, a: Reg, b: Reg },
-    Bit { op: BitOp, ty: TypeId, dst: Reg, a: Reg, b: Reg },
-    Cmp { op: CmpOp, ty: TypeId, dst: Reg, a: Reg, b: Reg },
+    Wrap { op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    Bit { op: BitOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    Cmp { op: CmpOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     Not { dst: Reg, a: Reg },          // bool !
-    Neg { ty: TypeId, dst: Reg, a: Reg }, // trapping negate
+    Neg { prim: PrimTy, dst: Reg, a: Reg }, // trapping negate
     /// string content compare (RFC 0012 §4) — used for ==/!= on string
     StrCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
     /// cell identity compare (RFC 0012 §4) — used for ==/!= on ref types
@@ -143,7 +144,7 @@ pub enum Op {
 
     /// explicit numeric conversion `i32(x)` etc — always a call, never an
     /// operator (RFC 0007 §1); narrowing traps when the value doesn't fit
-    Conv { dst: Reg, src: Reg, from: TypeId, to: TypeId },
+    Conv { dst: Reg, src: Reg, from: PrimTy, to: PrimTy },
     /// string codepoint read (for-of strings, RFC 0008 §1); bounds trap
     StrCharAt { dst: Reg, s: Reg, idx: Reg },
 

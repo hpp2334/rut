@@ -38,6 +38,23 @@ impl PrimTy {
             PrimTy::Bool => "bool", PrimTy::Char => "char",
         }
     }
+    /// Stable wire code for the typed bytecode (RFC 0032) — the VM no
+    /// longer needs the type table to execute a scalar op.
+    pub fn to_u8(self) -> u8 {
+        match self {
+            PrimTy::U8 => 0, PrimTy::U16 => 1, PrimTy::U32 => 2, PrimTy::U64 => 3,
+            PrimTy::I8 => 4, PrimTy::I16 => 5, PrimTy::I32 => 6, PrimTy::I64 => 7,
+            PrimTy::F32 => 8, PrimTy::F64 => 9, PrimTy::Bool => 10, PrimTy::Char => 11,
+        }
+    }
+    pub fn from_u8(b: u8) -> Option<PrimTy> {
+        Some(match b {
+            0 => PrimTy::U8, 1 => PrimTy::U16, 2 => PrimTy::U32, 3 => PrimTy::U64,
+            4 => PrimTy::I8, 5 => PrimTy::I16, 6 => PrimTy::I32, 7 => PrimTy::I64,
+            8 => PrimTy::F32, 9 => PrimTy::F64, 10 => PrimTy::Bool, 11 => PrimTy::Char,
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

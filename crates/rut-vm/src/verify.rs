@@ -110,11 +110,31 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         return Err(bad("IsTrait want not in the trait table".into()));
                     }
                 }
-                Op::Arith { ty, .. } | Op::Wrap { ty, .. } | Op::Bit { ty, .. } | Op::Cmp { ty, .. } => {
-                    if *ty != u32::MAX
-                        && !matches!(prog.types.kind(*ty), TyKind::Prim(_))
+                Op::Arith { prim, a, b, .. }
+                | Op::Wrap { prim, a, b, .. }
+                | Op::Bit { prim, a, b, .. }
+                | Op::Cmp { prim, a, b, .. } => {
+                    // the embedded primitive must match the static register types
+                    for r in [a, b] {
+                        match prog.types.kind(f.regs[*r as usize]) {
+                            TyKind::Prim(p) if p == prim => {}
+                            _ => {
+                                return Err(bad(
+                                    "scalar op operand is not the embedded primitive".into(),
+                                ))
+                            }
+                        }
+                    }
+                }
+                Op::Neg { prim, a, .. } => match prog.types.kind(f.regs[*a as usize]) {
+                    TyKind::Prim(p) if p == prim => {}
+                    _ => return Err(bad("neg operand is not the embedded primitive".into())),
+                },
+                Op::Conv { from, to, dst, src, .. } => {
+                    if !matches!(prog.types.kind(f.regs[*src as usize]), TyKind::Prim(p) if p == from)
+                        || !matches!(prog.types.kind(f.regs[*dst as usize]), TyKind::Prim(p) if p == to)
                     {
-                        return Err(bad("numeric op over a non-primitive type".into()));
+                        return Err(bad("conv operand types do not match the embedded primitives".into()));
                     }
                 }
                 Op::OptSome { ty, .. } | Op::OptNone { ty, .. } => {
@@ -252,8 +272,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
 
 fn tys_of(op: &Op) -> Vec<u32> {
     match op {
-        Op::Arith { ty, .. } | Op::Wrap { ty, .. } | Op::Bit { ty, .. } | Op::Cmp { ty, .. }
-        | Op::Neg { ty, .. } | Op::NewCell { ty, .. } | Op::Own { ty, .. }
+        Op::NewCell { ty, .. } | Op::Own { ty, .. }
         | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
         | Op::OptSome { ty, .. } | Op::OptNone { ty, .. } | Op::ResOk { ty, .. }
         | Op::ResErr { ty, .. } | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }

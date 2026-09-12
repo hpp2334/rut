@@ -45,9 +45,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let eq = op == Eq;
                 let dst = self.new_reg(TY_BOOL);
                 match self.ctx.types.kind(ty).clone() {
-                    TyKind::Prim(_) => {
+                    TyKind::Prim(p) => {
                         let cop = if eq { CmpOp::Eq } else { CmpOp::Ne };
-                        self.emit(Op::Cmp { op: cop, ty, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                        self.emit(Op::Cmp { op: cop, prim: p, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                     }
                     TyKind::Str => {
                         self.emit(Op::StrCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
@@ -63,10 +63,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(TY_BOOL)
             }
             Lt | Gt | Le | Ge => {
-                if !matches!(self.ctx.types.kind(ty), TyKind::Prim(_)) {
+                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
+                let Some(prim) = prim else {
                     self.ctx.err(sp, format!("ordering comparisons need numbers —`{}` has none", self.ctx.types.name(ty)));
                     return Err(());
-                }
+                };
                 let cmp = match op {
                     Lt => CmpOp::Lt,
                     Gt => CmpOp::Gt,
@@ -74,14 +75,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => CmpOp::Ge,
                 };
                 let dst = self.new_reg(TY_BOOL);
-                self.emit(Op::Cmp { op: cmp, ty, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                self.emit(Op::Cmp { op: cmp, prim, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                 Ok(TY_BOOL)
             }
             Add | Sub | Mul | Div | Mod | WrapAdd | WrapSub | WrapMul => {
-                if !matches!(self.ctx.types.kind(ty), TyKind::Prim(p) if p.is_int() || p.is_float()) {
+                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
+                let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
                     self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.types.name(ty)));
                     return Err(());
-                }
+                };
                 let aop = match op {
                     Add | WrapAdd => ArithOp::Add,
                     Sub | WrapSub => ArithOp::Sub,
@@ -92,13 +94,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let wrapping = matches!(op, WrapAdd | WrapSub | WrapMul);
                 let dst = self.new_reg(ty);
                 if wrapping {
-                    self.emit(Op::Wrap { op: aop, ty, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                    self.emit(Op::Wrap { op: aop, prim, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                 } else {
-                    self.emit(Op::Arith { op: aop, ty, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                    self.emit(Op::Arith { op: aop, prim, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                 }
                 Ok(ty)
             }
             BitAnd | BitOr | BitXor | Shl | Shr | WrapShl => {
+                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
+                let Some(prim) = prim.filter(|p| p.is_int()) else {
+                    self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.types.name(ty)));
+                    return Err(());
+                };
                 let bop = match op {
                     BitAnd => BitOp::And,
                     BitOr => BitOp::Or,
@@ -108,7 +115,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => BitOp::Shr,
                 };
                 let dst = self.new_reg(ty);
-                self.emit(Op::Bit { op: bop, ty, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                self.emit(Op::Bit { op: bop, prim, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                 Ok(ty)
             }
             And | Or => unreachable!(),
@@ -377,8 +384,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
         use rut_ast::ast::BinOp::*;
+        let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
         match bin {
             Add | WrapAdd | Sub | WrapSub | Mul | WrapMul | Div | Mod => {
+                let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
+                    self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.types.name(ty)));
+                    return Err(());
+                };
                 let aop = match bin {
                     Add | WrapAdd => ArithOp::Add,
                     Sub | WrapSub => ArithOp::Sub,
@@ -387,12 +399,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => ArithOp::Mod,
                 };
                 if matches!(bin, WrapAdd | WrapSub | WrapMul) {
-                    self.emit(Op::Wrap { op: aop, ty, dst, a, b }, sp.lo);
+                    self.emit(Op::Wrap { op: aop, prim, dst, a, b }, sp.lo);
                 } else {
-                    self.emit(Op::Arith { op: aop, ty, dst, a, b }, sp.lo);
+                    self.emit(Op::Arith { op: aop, prim, dst, a, b }, sp.lo);
                 }
             }
             BitAnd | BitOr | BitXor | Shl | Shr | WrapShl => {
+                let Some(prim) = prim.filter(|p| p.is_int()) else {
+                    self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.types.name(ty)));
+                    return Err(());
+                };
                 let bop = match bin {
                     BitAnd => BitOp::And,
                     BitOr => BitOp::Or,
@@ -401,7 +417,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     WrapShl => BitOp::WrapShl,
                     _ => BitOp::Shr,
                 };
-                self.emit(Op::Bit { op: bop, ty, dst, a, b }, sp.lo);
+                self.emit(Op::Bit { op: bop, prim, dst, a, b }, sp.lo);
             }
             And | Or | Eq | Ne | Lt | Gt | Le | Ge => {
                 self.ctx.err(sp, "this operator has no compound-assignment form");

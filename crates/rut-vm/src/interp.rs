@@ -388,40 +388,39 @@ impl Vm {
             Op::ConstRaw { dst, bits } => self.cur_regs[dst as usize] = Slot { i: bits as i64 },
 
 
-            Op::Arith { op, ty, dst, a, b } => {
-                let v = self.arith(op, ty, r!(a), r!(b), false)?;
+            Op::Arith { op, prim, dst, a, b } => {
+                let v = self.arith(op, prim, r!(a), r!(b), false)?;
                 self.cur_regs[dst as usize] = v;
             }
-            Op::Wrap { op, ty, dst, a, b } => {
-                let v = self.arith(op, ty, r!(a), r!(b), true)?;
+            Op::Wrap { op, prim, dst, a, b } => {
+                let v = self.arith(op, prim, r!(a), r!(b), true)?;
                 self.cur_regs[dst as usize] = v;
             }
-            Op::Bit { op, ty, dst, a, b } => {
-                let v = self.bitop(op, ty, r!(a), r!(b))?;
+            Op::Bit { op, prim, dst, a, b } => {
+                let v = self.bitop(op, prim, r!(a), r!(b))?;
                 self.cur_regs[dst as usize] = v;
             }
-            Op::Cmp { op, ty, dst, a, b } => {
-                let v = self.cmp(op, ty, r!(a), r!(b));
+            Op::Cmp { op, prim, dst, a, b } => {
+                let v = self.cmp(op, prim, r!(a), r!(b));
                 self.cur_regs[dst as usize] = Slot::bool(v);
             }
             Op::Not { dst, a } => {
                 let v = !r!(a).as_bool();
                 self.cur_regs[dst as usize] = Slot::bool(v);
             }
-            Op::Neg { ty, dst, a } => {
+            Op::Neg { prim, dst, a } => {
                 let x = r!(a);
-                let v = match self.prog.types.kind(ty) {
-                    TyKind::Prim(PrimTy::F32) => Slot::float(-(unsafe { x.f } as f32) as f64),
-                    TyKind::Prim(PrimTy::F64) => Slot::float(-(unsafe { x.f })),
-                    TyKind::Prim(p) => {
+                let v = match prim {
+                    PrimTy::F32 => Slot::float(-(unsafe { x.f } as f32) as f64),
+                    PrimTy::F64 => Slot::float(-(unsafe { x.f })),
+                    p => {
                         let v = unsafe { x.i };
                         let (r, o) = v.overflowing_neg();
-                        if o || !fits(r, *p) {
+                        if o || !fits(r, p) {
                             return Err(Trap::new(TrapKind::Overflow, "negate overflow"));
                         }
                         Slot::int(r)
                     }
-                    _ => return Err(Trap::new(TrapKind::Invalid, "neg on non-number")),
                 };
                 self.cur_regs[dst as usize] = v;
             }
@@ -1042,11 +1041,8 @@ impl Vm {
 
     // ---- arithmetic (RFC 0004 §3) ----
 
-    fn arith(&self, op: ArithOp, ty: TypeId, x: Slot, y: Slot, wrapping: bool) -> Result<Slot, Trap> {
+    fn arith(&self, op: ArithOp, p: PrimTy, x: Slot, y: Slot, wrapping: bool) -> Result<Slot, Trap> {
         use PrimTy::*;
-        let TyKind::Prim(p) = self.prog.types.kind(ty).clone() else {
-            return Err(Trap::new(TrapKind::Invalid, "arith on non-numeric"));
-        };
         if p.is_float() {
             let a = unsafe { x.f };
             let b = unsafe { y.f };
@@ -1080,7 +1076,7 @@ impl Vm {
                 (if unsigned { (a as u64 % b as u64) as i64 } else { a % b }, false)
             }
         };
-        if (o || !fits(r, p)) && !wrapping {
+        if !wrapping && (o || !fits(r, p)) {
             return Err(Trap::new(
                 TrapKind::Overflow,
                 "arithmetic overflow — use the &+ &- &* wrapping forms (RFC 0004 §3)",
@@ -1089,14 +1085,13 @@ impl Vm {
         Ok(Slot::int(trunc_to(r, p)))
     }
 
-    fn bitop(&self, op: BitOp, ty: TypeId, x: Slot, y: Slot) -> Result<Slot, Trap> {
+    fn bitop(&self, op: BitOp, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
         use PrimTy::*;
+        if !p.is_int() {
+            return Err(Trap::new(TrapKind::Invalid, "bit op on non-integer"));
+        }
         let a = unsafe { x.i };
         let b = unsafe { y.i };
-        let p = match self.prog.types.kind(ty) {
-            TyKind::Prim(p) if p.is_int() => *p,
-            _ => return Err(Trap::new(TrapKind::Invalid, "bit op on non-integer")),
-        };
         let (r, o) = match op {
             BitOp::And => (a & b, false),
             BitOp::Or => (a | b, false),
@@ -1129,13 +1124,9 @@ impl Vm {
     /// Explicit numeric conversion (RFC 0007 §1): int↔int traps on
     /// narrowing loss; float→int traps on fraction/range; int→float and
     /// float↔float always convert.
-    fn convert(&self, v: Slot, from: TypeId, to: TypeId) -> Result<Slot, Trap> {
-        let f = self.prog.types.kind(from).clone();
-        let t = self.prog.types.kind(to).clone();
-        use rut_core::types::{PrimTy::*, TyKind::*};
-        let (Prim(fp), Prim(tp)) = (f, t) else {
-            return Err(Trap::new(TrapKind::Invalid, "conversion between non-numerics"));
-        };
+    fn convert(&self, v: Slot, from: PrimTy, to: PrimTy) -> Result<Slot, Trap> {
+        use rut_core::types::PrimTy::*;
+        let (fp, tp) = (from, to);
         Ok(match (fp.is_float(), tp.is_float()) {
             (false, false) => {
                 let x = unsafe { v.i };
@@ -1176,19 +1167,18 @@ impl Vm {
         })
     }
 
-    fn cmp(&self, op: CmpOp, ty: TypeId, x: Slot, y: Slot) -> bool {        if let TyKind::Prim(p) = self.prog.types.kind(ty) {
-            if p.is_float() {
-                let a = unsafe { x.f };
-                let b = unsafe { y.f };
-                return match op {
-                    CmpOp::Eq => a == b,
-                    CmpOp::Ne => a != b,
-                    CmpOp::Lt => a < b,
-                    CmpOp::Gt => a > b,
-                    CmpOp::Le => a <= b,
-                    CmpOp::Ge => a >= b,
-                };
-            }
+    fn cmp(&self, op: CmpOp, p: PrimTy, x: Slot, y: Slot) -> bool {
+        if p.is_float() {
+            let a = unsafe { x.f };
+            let b = unsafe { y.f };
+            return match op {
+                CmpOp::Eq => a == b,
+                CmpOp::Ne => a != b,
+                CmpOp::Lt => a < b,
+                CmpOp::Gt => a > b,
+                CmpOp::Le => a <= b,
+                CmpOp::Ge => a >= b,
+            };
         }
         let a = unsafe { x.i };
         let b = unsafe { y.i };
