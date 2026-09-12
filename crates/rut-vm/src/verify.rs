@@ -123,8 +123,8 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::ArrNew { ty, repr, .. } => {
                     let ety = match prog.types.kind(*ty) {
-                        TyKind::Vec { elem } => *elem,
-                        _ => return Err(bad("arrnew over a non-vec type".into())),
+                        TyKind::Vec { elem } | TyKind::Array { elem } => *elem,
+                        _ => return Err(bad("arrnew over a non-array type".into())),
                     };
                     if prog.types.repr_of(ety) != *repr {
                         return Err(bad("arrnew repr does not match the element type".into()));

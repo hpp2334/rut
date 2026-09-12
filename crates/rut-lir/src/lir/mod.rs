@@ -72,7 +72,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let Some(m) = d.methods.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
                     return Ok(());
                 };
-                (m.id(), Some(d.ty), true, Some(*data))
+                // a generic class's method is monomorphized per instantiation:
+                // `self_ty` is `Name<args>` from the Inst substitution, not the
+                // uninstantiated template
+                let self_ty = if d.generics.is_empty() {
+                    d.ty
+                } else {
+                    let args: Vec<TypeId> = d
+                        .generics
+                        .iter()
+                        .map(|g| {
+                            inst.subst
+                                .iter()
+                                .find(|(n, _)| n == g)
+                                .map(|(_, t)| *t)
+                                .unwrap_or(TY_I32)
+                        })
+                        .collect();
+                    ctx.mk_data_inst(*data, args)
+                };
+                (m.id(), Some(self_ty), true, Some(*data))
             }
             FnKey::ImplMethod { idx, name } => {
                 let im = ctx.impls[*idx].clone();

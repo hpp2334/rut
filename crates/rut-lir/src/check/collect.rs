@@ -35,7 +35,15 @@ impl<'a> Ctx<'a> {
         for it in &items {
             match self.ast.item(*it) {
                 ItemKind::Dataclass { name, fields, .. } | ItemKind::Class { name, fields, .. } => {
-                    self.resolve_data_fields(*name, fields);
+                    // generic records instantiate on use (mk_data_inst), so
+                    // their field types resolve under a substitution, not here
+                    let is_generic = self
+                        .find_data(*name)
+                        .map(|d| !d.generics.is_empty())
+                        .unwrap_or(false);
+                    if !is_generic {
+                        self.resolve_data_fields(*name, fields);
+                    }
                 }
                 ItemKind::Trait { name, methods, .. } => {
                     self.resolve_trait_sigs(it.id(), *name, methods)
@@ -133,15 +141,8 @@ impl<'a> Ctx<'a> {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
-        if !generics.is_empty() {
-            self.err(
-                sp,
-                format!(
-                    "generic user types are not supported in this build (`{}<...>`) — RFC 0013 monomorphization lands in M2",
-                    self.name(name)
-                ),
-            );
-        }
+        // generic records stay a template (empty fields) until instantiated;
+        // `Vec<T>` and RFC 0013 monomorphization enter at `mk_data_inst`
         let placeholder = self.types.intern(RutType {
             name: self.name(name).to_string(),
             kind: TyKind::Data { fields: vec![] },
@@ -154,7 +155,14 @@ impl<'a> Ctx<'a> {
         }
         self.datas.push((
             name,
-            DataDecl { kind, ty: placeholder, fields: vec![], methods: mths, generics: generics.to_vec() },
+            DataDecl {
+                kind,
+                ty: placeholder,
+                node: NodeHandle::new(node),
+                fields: vec![],
+                methods: mths,
+                generics: generics.to_vec(),
+            },
         ));
     }
 
@@ -258,7 +266,7 @@ impl<'a> Ctx<'a> {
                 match self.ast.param(*p) {
                     MemberKind::SelfParam(_) => ptys.push(TY_UNIT), // placeholder: Self resolved at impl
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                        ptys.push(self.resolve_type(*t, &[]));
+                        ptys.push(self.resolve_trait_sig_ty(*t, id));
                     }
                     MemberKind::Param(ParamData { ty: None, .. }) => {
                         self.err(self.ast.span(p.id()), "trait method parameters need types");
@@ -267,7 +275,7 @@ impl<'a> Ctx<'a> {
                     _ => ptys.push(TY_I32),
                 }
             }
-            let rty = md.ret.map(|r| self.resolve_type(r, &[]));
+            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id));
             tms.push((self.name(md.name).to_string(), ptys, rty));
         }
         // first param must be self (RFC 0012 §2: trait methods are instance
@@ -287,6 +295,25 @@ impl<'a> Ctx<'a> {
             }
         }
         self.traits[id as usize] = desc;
+    }
+
+    /// Resolve a trait-method signature type: a bare `Self` is the trait's
+    /// `dyn` object (the trait is non-generic, so `Self` has no concrete
+    /// binding until an impl; `dyn Trait` is the honest static shape).
+    fn resolve_trait_sig_ty(&mut self, node: NodeHandle<AnyTy>, trait_id: u32) -> TypeId {
+        let is_self = match self.ast.ty(node) {
+            TypeKind::TyPath { segs, .. } => {
+                segs.len() == 1
+                    && segs[0].generics.is_empty()
+                    && self.name(segs[0].name) == "Self"
+            }
+            _ => false,
+        };
+        if is_self {
+            self.mk_dyn(trait_id)
+        } else {
+            self.resolve_type(node, &[])
+        }
     }
 
     pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, methods: &[NodeHandle<MethodDeclNode>]) {
@@ -346,5 +373,67 @@ impl<'a> Ctx<'a> {
             };
             self.ensure_inst(inst);
         }
+    }
+
+    /// Instantiate a generic record for concrete type arguments (RFC 0013
+    /// monomorphization). The id is interned and cached before fields resolve
+    /// so recursive shapes (`Node<T> { next: Option<Node<T>> }`) terminate.
+    pub fn mk_data_inst(&mut self, data: IdentId, args: Vec<TypeId>) -> TypeId {
+        if let Some(&t) = self.type_inst.get(&(data, args.clone())) {
+            return t;
+        }
+        let Some(decl) = self.find_data(data).cloned() else {
+            return TY_I32;
+        };
+        let name = format!(
+            "{}<{}>",
+            self.name(data),
+            args.iter()
+                .map(|a| self.types.name(*a).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let ty = self.types.intern(RutType {
+            name,
+            kind: TyKind::Data { fields: vec![] },
+            size: 0,
+            align: 8,
+        });
+        self.type_inst.insert((data, args.clone()), ty);
+        self.inst_data.insert(ty, (data, args.clone()));
+        let env: Vec<(IdentId, TypeId)> =
+            decl.generics.iter().cloned().zip(args.iter().cloned()).collect();
+        let field_nodes: Vec<NodeHandle<FieldDeclNode>> = match self.ast.item(decl.node) {
+            ItemKind::Dataclass { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+            _ => Vec::new(),
+        };
+        let mut resolved: Vec<FieldInfo> = Vec::new();
+        for f in &field_nodes {
+            let fd = self.ast.field_decl(*f);
+            if fd.is_static {
+                self.err(
+                    self.ast.span(f.id()),
+                    "`static` fields do not exist — there is no mutable module state (RFC 0003 §1); thread state explicitly or hold it in an `Opaque` container the host passes back (RFC 0014)",
+                );
+            }
+            let fty = self.resolve_type(fd.ty, &env);
+            resolved.push(FieldInfo {
+                name: self.name(fd.name).to_string(),
+                ty: fty,
+                offset: 0,
+            });
+        }
+        let pi = self.types.dense(ty) as usize;
+        let (size, align) = {
+            let saved = self.types.types[pi].kind.clone();
+            self.types.types[pi].kind = TyKind::Data { fields: resolved.clone() };
+            let l = self.layout_of(ty);
+            self.types.types[pi].kind = saved;
+            l
+        };
+        self.types.types[pi].kind = TyKind::Data { fields: resolved };
+        self.types.types[pi].size = size;
+        self.types.types[pi].align = align;
+        ty
     }
 }

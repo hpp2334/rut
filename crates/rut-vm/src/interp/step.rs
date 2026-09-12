@@ -108,8 +108,8 @@ impl Vm {
 
             Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {
-                    TyKind::Vec { elem } => *elem,
-                    _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-vec")),
+                    TyKind::Vec { elem } | TyKind::Array { elem } => *elem,
+                    _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-array")),
                 };
                 let n = unsafe { r!(len).i }.max(0) as usize;
                 let c = self.heap.alloc_vec(elem, n, &self.prog.types)?;

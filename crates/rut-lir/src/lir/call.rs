@@ -302,10 +302,41 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.emit(Op::Call { func: ef.func, args: aregs, dst }, sp.lo);
             return Ok(ef.ret);
         }
+        // builtin type-call: Array<T>(n) — allocate n slots (runtime length,
+        // non-growable, RFC 0005); the storage under `std:collection`'s Vec
+        if n == "Array" && self.ctx.find_data(name).is_none() {
+            if generics.len() != 1 {
+                self.ctx.err(sp, "Array<T>(n) takes one type argument");
+                return Err(());
+            }
+            let elem = self.resolve_type_now(generics[0]);
+            let aty = self.ctx.mk_array(elem);
+            let len = match args.len() {
+                0 => {
+                    let z = self.new_reg(TY_I32);
+                    self.emit(Op::ConstRaw { dst: z, bits: 0 }, sp.lo);
+                    z
+                }
+                1 => {
+                    let t = self.compile_expr(args[0], Some(TY_I32))?;
+                    if t != TY_I32 {
+                        self.ctx.err(sp, format!("Array<T>(n) takes an `i32` length, found `{}`", self.ctx.types.name(t)));
+                    }
+                    self.last_reg
+                }
+                _ => {
+                    self.ctx.err(sp, "Array<T>() or Array<T>(n)");
+                    return Err(());
+                }
+            };
+            let dst = self.new_reg(aty);
+            self.emit(Op::ArrNew { dst, ty: aty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
+            return Ok(aty);
+        }
         // builtin type-call: Vec<T>(n) — or bare `Vec()` / `Vec(n)` with
         // the element inferred from the expected type (`let primes:
         // Vec<i32> = Vec()`, `let buf: Vec<u8> = Vec(1024)`)
-        if n == "Vec" {
+        if n == "Vec" && self.ctx.find_data(name).is_none() {
             if !generics.is_empty() {
                 return self.compile_vec_alloc(generics, args, sp);
             }
@@ -435,7 +466,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // Explicit type args on a static head are meaningful only where the
         // member can use them (`Vec<u32>.from(..)` — the element type);
         // everywhere else they stay unsupported rather than silently ignored.
-        if !base_generics.is_empty() && (bn != "Vec" || mn != "from" || base_generics.len() != 1) {
+        let is_data = self.ctx.find_data(base).is_some();
+        if !base_generics.is_empty() && !is_data && (bn != "Vec" || mn != "from" || base_generics.len() != 1) {
             self.ctx.err(sp, format!("generic type paths (`{bn}<..>.{mn}`) are not supported in this build"));
             return Err(());
         }
@@ -512,7 +544,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
                 return Ok(TY_OPAQUE);
             }
-            ("Vec", "from") => {
+            ("Vec", "from") if self.ctx.find_data(base).is_none() => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "Vec.from(arr) takes one array");
                     return Err(());
@@ -582,7 +614,51 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // (two `new`s in one module made the second uncallable)
         if let Some((dname, d)) = self.ctx.datas.iter().find(|(n, _)| *n == base).map(|(n, d)| (*n, d.clone())) {
             if let Some((_, mnode)) = d.methods.iter().find(|(m, _)| *m == member).cloned() {
-                return self.compile_direct_method(dname, d, mnode, args, sp);
+                // class instantiation args: explicit `Name<..>`, else the
+                // enclosing class's own args (a `Self`-ish call in a body)
+                let class_args: Vec<TypeId> = if !base_generics.is_empty() {
+                    base_generics.iter().map(|g| self.resolve_type_now(*g)).collect()
+                } else if !d.generics.is_empty() && self.current_class == Some(dname) {
+                    // a `Self`-ish call inside the class body: the enclosing
+                    // method's class args
+                    d.generics
+                        .iter()
+                        .map(|g| {
+                            self.subst
+                                .iter()
+                                .find(|(n, _)| n == g)
+                                .map(|(_, t)| *t)
+                                .unwrap_or(TY_I32)
+                        })
+                        .collect()
+                } else if !d.generics.is_empty() {
+                    // infer from the expected type: `let b: Box<i32> = Box.new(..)`
+                    match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
+                        Some((ed, eargs)) if ed == dname => eargs,
+                        _ => {
+                            self.ctx.err(sp, format!(
+                                "cannot infer the type arguments for `{bn}` — write `{bn}<..>.{mn}(..)` or annotate the binding"
+                            ));
+                            return Err(());
+                        }
+                    }
+                } else {
+                    vec![]
+                };
+                if !d.generics.is_empty() && class_args.len() != d.generics.len() {
+                    self.ctx.err(sp, format!(
+                        "`{bn}<..>` takes {} type argument(s), {} given",
+                        d.generics.len(),
+                        class_args.len()
+                    ));
+                    return Err(());
+                }
+                let self_ty = if d.generics.is_empty() {
+                    d.ty
+                } else {
+                    self.ctx.mk_data_inst(dname, class_args.clone())
+                };
+                return self.compile_direct_method(dname, class_args, self_ty, mnode, args, sp);
             }
         }        if let Some(e) = self.ctx.find_enum(base) {
             let _ = e;
@@ -691,11 +767,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_direct_method(
         &mut self,
         dname: IdentId,
-        d: crate::check::DataDecl,
+        class_args: Vec<TypeId>,
+        self_ty: TypeId,
         mnode: NodeHandle<MethodDeclNode>,
         args: Vec<NodeHandle<AnyExpr>>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
+        let d = self.ctx.find_data(dname).cloned().unwrap();
+        let class_subst: Vec<(IdentId, TypeId)> =
+            d.generics.iter().cloned().zip(class_args.iter().cloned()).collect();
         let md = self.ctx.ast.method_decl(mnode).clone();
         let (params, ret, mname) = (md.params, md.ret, md.name);
         // no-self first param (or no params at all) = class method
@@ -707,10 +787,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         let mut ptys = Vec::new();
-        // the callee's signature may spell `Self` — resolve its types under
-        // the CALLEE's class (the caller's self_ty is irrelevant here)
+        // the callee's signature may spell `Self`/`T` — resolve under the
+        // CALLEE's class instantiation (the caller's context is irrelevant)
         let saved_self = self.self_ty;
-        self.self_ty = Some(d.ty);
+        let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
+        self.self_ty = Some(self_ty);
         for p in &params {
             match self.ctx.ast.param(*p) {
                 MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
@@ -719,6 +800,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
         self.self_ty = saved_self;
+        self.subst = saved_subst;
         if args.len() != ptys.len() {
             self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
             return Err(());
@@ -736,7 +818,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
-            subst: vec![],
+            subst: class_subst,
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
@@ -953,20 +1035,30 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // user types: inherent methods first (direct), then trait impls
         // (vtable —ALWAYS, RFC 0012 §1)
         if let TyKind::Data { .. } = self.ctx.types.kind(rt).clone() {
-            let found = self
-                .ctx
-                .datas
-                .iter()
-                .find(|(_, d)| d.ty == rt)
-                .and_then(|(n, d)| {
-                    d.methods
-                        .iter()
-                        .find(|(mn, _)| *mn == name)
-                        .map(|(_, mn)| (*n, *mn))
-                });
-            if let Some((dname, mnode)) = found {
-                let d = self.ctx.find_data(dname).cloned().unwrap();
-                return self.compile_inherent_call(dname, d, mnode, rreg, args, expected, sp);
+            // the receiver is either an instantiated generic (decl + args in
+            // `inst_data`) or a local non-generic record
+            let target = match self.ctx.inst_data.get(&rt).cloned() {
+                Some((dname, cargs)) => Some((dname, cargs)),
+                None => self
+                    .ctx
+                    .datas
+                    .iter()
+                    .find(|(_, d)| d.ty == rt)
+                    .map(|(n, _)| (*n, vec![])),
+            };
+            let found = target.and_then(|(dname, cargs)| {
+                self.ctx
+                    .find_data(dname)
+                    .and_then(|d| {
+                        d.methods
+                            .iter()
+                            .find(|(mn, _)| *mn == name)
+                            .map(|(_, mnode)| (*mnode, cargs.clone()))
+                    })
+                    .map(|(mnode, cargs)| (dname, cargs, mnode))
+            });
+            if let Some((dname, class_args, mnode)) = found {
+                return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, args, expected, sp);
             }
             for idx in self.ctx.impls_of(rt) {
                 if self.ctx.impls[idx].methods.iter().any(|(n, _)| *n == name) {
@@ -1030,13 +1122,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_inherent_call(
         &mut self,
         dname: IdentId,
-        d: crate::check::DataDecl,
+        class_args: Vec<TypeId>,
+        self_ty: TypeId,
         mnode: NodeHandle<MethodDeclNode>,
         rreg: u16,
         args: Vec<NodeHandle<AnyExpr>>,
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
+        let d = self.ctx.find_data(dname).cloned().unwrap();
+        let class_subst: Vec<(IdentId, TypeId)> =
+            d.generics.iter().cloned().zip(class_args.iter().cloned()).collect();
         let md = self.ctx.ast.method_decl(mnode).clone();
         let mut_self = matches!(
             md.params.first().map(|p| self.ctx.ast.param(*p)),
@@ -1045,10 +1141,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let (params, ret, mname) = (md.params, md.ret, md.name);
         let _ = mut_self;
         let mut ptys = Vec::new();
-        // the callee's signature may spell `Self` — resolve its types under
-        // the CALLEE's class (the caller's self_ty is irrelevant here)
+        // the callee's signature may spell `Self`/`T` — resolve under the
+        // CALLEE's class instantiation (the caller's context is irrelevant)
         let saved_self = self.self_ty;
-        self.self_ty = Some(d.ty);
+        let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
+        self.self_ty = Some(self_ty);
         for p in params.iter().skip(1) {
             match self.ctx.ast.param(*p) {
                 MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
@@ -1057,7 +1154,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
         self.self_ty = saved_self;
-        let _ = d;
+        self.subst = saved_subst;
         if args.len() != ptys.len() {
             self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
             return Err(());
@@ -1075,7 +1172,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
-            subst: vec![],
+            subst: class_subst,
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };

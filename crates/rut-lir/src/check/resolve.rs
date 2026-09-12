@@ -89,8 +89,13 @@ impl<'a> Ctx<'a> {
                     self.err(sp, "`dyn` must prefix a trait name");
                     return TY_I32;
                 }
+                // a declared or imported type shadows a builtin name: a
+                // module's own/imported `Vec` (std:collection) replaces the
+                // builtin sequence type
+                let shadow = matches!(n.as_str(), "Vec" | "Array" | "Option" | "Result")
+                    && (self.find_data(name).is_some() || self.extern_types.contains_key(&name));
                 match n.as_str() {
-                    "Vec" | "Array" | "Option" | "Result" => {
+                    "Vec" | "Array" | "Option" | "Result" if !shadow => {
                         if *is_dyn {
                             self.err(sp, format!("`dyn {n}` — {n} is not a trait"));
                         }
@@ -144,13 +149,29 @@ impl<'a> Ctx<'a> {
                             return e.ty;
                         }
                         if let Some(d) = self.find_data(name).cloned() {
-                            if !seg.generics.is_empty() || !d.generics.is_empty() {
-                                // generic user types were rejected at collect
-                            }
                             if *is_dyn {
                                 self.err(sp, format!("`dyn {n}` — {n} is not a trait"));
                             }
-                            return d.ty;
+                            if d.generics.is_empty() {
+                                if !seg.generics.is_empty() {
+                                    self.err(sp, format!("`{n}` takes no generic arguments"));
+                                }
+                                return d.ty;
+                            }
+                            if seg.generics.len() != d.generics.len() {
+                                self.err(sp, format!(
+                                    "`{n}` takes {} generic argument(s), {} given",
+                                    d.generics.len(),
+                                    seg.generics.len()
+                                ));
+                                return TY_I32;
+                            }
+                            let args: Vec<TypeId> = seg
+                                .generics
+                                .iter()
+                                .map(|g| self.resolve_type(*g, env))
+                                .collect();
+                            return self.mk_data_inst(name, args);
                         }
                         if let Some(t) = self.find_trait(name).cloned() {
                             if !seg.generics.is_empty() {

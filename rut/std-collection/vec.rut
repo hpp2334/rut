@@ -31,7 +31,7 @@ pub class Vec<T> {
             if (cap == 0) {
                 cap = 4;
             }
-            let next = Array<T>(cap);
+            let mut next = Array<T>(cap);
             for (let i = 0; i < self.len; i += 1) {
                 next[i] = self.buf[i];
             }

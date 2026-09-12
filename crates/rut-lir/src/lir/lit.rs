@@ -42,15 +42,45 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_struct(&mut self, ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)>, _expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
         // `Self` binds inside class bodies (RFC 0010 §1)
         let sty = self.resolve_type_now(ty);
-        let dname = self.ctx.datas.iter().find(|(_, d)| d.ty == sty).map(|(n, _)| *n);
-        let Some(dname) = dname else {
+        // resolve the record: a local generic instantiation, a local record,
+        // or an imported one
+        let inst = self.ctx.inst_data.get(&sty).cloned();
+        let local = self.ctx.datas.iter().find(|(_, d)| d.ty == sty).map(|(n, d)| (*n, d.clone()));
+        let (dname, kind, field_list, class_subst): (
+            IdentId,
+            crate::check::DataKind,
+            Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>)>,
+            Vec<(IdentId, TypeId)>,
+        ) = if let Some((dname, cargs)) = inst {
+            let d = self.ctx.find_data(dname).cloned().unwrap();
+            let class_subst: Vec<(IdentId, TypeId)> =
+                d.generics.iter().cloned().zip(cargs.iter().cloned()).collect();
+            let field_nodes = match self.ctx.ast.item(d.node) {
+                ItemKind::Dataclass { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+                _ => Vec::new(),
+            };
+            let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
+            let saved_self = self.self_ty;
+            self.self_ty = Some(sty);
+            let mut list = Vec::new();
+            for f in &field_nodes {
+                let fd = self.ctx.ast.field_decl(*f);
+                let fty = self.resolve_type_now(fd.ty);
+                list.push((fd.name, fty, fd.init));
+            }
+            self.subst = saved_subst;
+            self.self_ty = saved_self;
+            (dname, d.kind, list, class_subst)
+        } else if let Some((dname, d)) = local {
+            let list = d.fields.iter().map(|(n, t, i, _)| (*n, *t, *i)).collect();
+            (dname, d.kind, list, Vec::new())
+        } else {
             return self.compile_struct_extern(sty, fields, sp);
         };
-        let d = self.ctx.find_data(dname).cloned().unwrap();
         // classes have no outside literal (RFC 0010 §1); the Self {} literal
         // is legal only inside the class body
         let inside_body = self.current_class == Some(dname);
-        if d.kind == crate::check::DataKind::Class && !inside_body {
+        if kind == crate::check::DataKind::Class && !inside_body {
             self.ctx.err(sp, format!(
                 "classes have no instance literal —construct through a class method (`{}.new(..)`, RFC 0010 §1)",
                 self.ctx.name(dname)
@@ -60,16 +90,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // every field initialized (any order, by name) or has an initializer
         // (RFC 0009); collect each field value in a register, then mint the
         // whole record with one MakeRecord (no NewCell/SetF/MovRef sequence)
-        let mut val_regs: Vec<Option<u16>> = vec![None; d.fields.len()];
-        let mut set: Vec<bool> = vec![false; d.fields.len()];
+        let mut val_regs: Vec<Option<u16>> = vec![None; field_list.len()];
+        let mut set: Vec<bool> = vec![false; field_list.len()];
         for (fname, v) in &fields {
-            let Some(fidx) = d.fields.iter().position(|(n, _, _, _)| n == fname) else {
+            let Some(fidx) = field_list.iter().position(|(n, _, _)| n == fname) else {
                 self.ctx.err(self.ctx.ast.span(v.id()), format!(
                     "`{}` has no field `{}`", self.ctx.name(dname), self.ctx.name(*fname)
                 ));
                 return Err(());
             };
-            let fty = d.fields[fidx].1;
+            let fty = field_list[fidx].1;
             let t = self.compile_expr(*v, Some(fty))?;
             if t != fty {
                 self.ctx.err(self.ctx.ast.span(v.id()), format!(
@@ -80,7 +110,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             val_regs[fidx] = Some(self.last_reg);
             set[fidx] = true;
         }
-        for (fidx, (fname, fty, init, _)) in d.fields.iter().enumerate() {
+        for (fidx, (fname, fty, init)) in field_list.iter().enumerate() {
             if !set[fidx] {
                 let Some(init) = init else {
                     self.ctx.err(sp, format!(
@@ -89,7 +119,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     ));
                     return Err(());
                 };
-                let t = self.compile_expr(*init, Some(*fty))?;
+                // initializers are class code: resolve under the class subst
+                let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
+                let saved_self = self.self_ty;
+                self.self_ty = Some(sty);
+                let t = self.compile_expr(*init, Some(*fty));
+                self.subst = saved_subst;
+                self.self_ty = saved_self;
+                let t = t?;
                 if t != *fty {
                     self.ctx.err(self.ctx.ast.span(init.id()), "field initializer type mismatch");
                 }

@@ -34,6 +34,8 @@ pub enum DataKind {
 pub struct DataDecl {
     pub kind: DataKind,
     pub ty: TypeId,
+    /// the declaration's AST node — re-read to instantiate generics
+    pub node: NodeHandle<AnyItem>,
     /// (name, ty, initializer, member vis — None = the module-private
     /// default, RFC 0003 §2; checked when modules load, M2) in decl order
     pub fields: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)>,
@@ -107,6 +109,10 @@ pub struct Ctx<'a> {
     pub extern_types: std::collections::HashMap<IdentId, TypeId>,
     /// imported types that are `class` (no outside record literal)
     pub extern_classes: std::collections::HashSet<TypeId>,
+    /// instantiated generic types: id -> (decl, type args)
+    pub inst_data: std::collections::HashMap<TypeId, (IdentId, Vec<TypeId>)>,
+    /// monomorphization cache: (decl, type args) -> id
+    pub type_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), TypeId>,
     /// whether `import` is resolved by the driver (module loading on)
     pub allow_imports: bool,
     // instantiation queue
@@ -152,6 +158,8 @@ impl<'a> Ctx<'a> {
             extern_fns: std::collections::HashMap::new(),
             extern_types: std::collections::HashMap::new(),
             extern_classes: std::collections::HashSet::new(),
+            inst_data: std::collections::HashMap::new(),
+            type_inst: std::collections::HashMap::new(),
             allow_imports: false,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),

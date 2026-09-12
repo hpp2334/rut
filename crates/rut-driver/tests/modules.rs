@@ -216,6 +216,27 @@ fn graph_threads_a_type_through_a_chain() {
 }
 
 #[test]
+fn std_collection_barrel_expands_and_compiles() {
+    // entry.rut inlines ./vec.rut + ./hash.rut into one module unit
+    let entry = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../rut/std-collection/entry.rut");
+    let merged = rut_driver::expand_module_source(&entry).expect("expand");
+    assert!(merged.contains("class Vec<T>"), "vec.rut inlined");
+    let src = format!(
+        "{merged}\nfn main() -> i32 {{\n\
+             let mut v: Vec<i32> = Vec.new();\n\
+             v.push(1);\n\
+             v.push(2);\n\
+             return v.len();\n\
+         }}\n"
+    );
+    let out = rut_driver::compile_program(&src, Mode::Impl, "std:collection", 1, &[]);
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let p = out.program.expect("program");
+    assert_eq!(p.types.types.iter().filter(|t| t.name == "Vec<i32>").count(), 1);
+}
+
+#[test]
 fn graph_reports_a_missing_dependency() {
     let mut s = Session::new();
     s.register_module(

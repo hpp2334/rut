@@ -912,3 +912,55 @@ pub fn main() -> unit {
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["v=0 has_next=false"]);
 }
+
+#[test]
+fn generic_vec_over_array_runs() {
+    // std:collection's Vec<T> shape: a generic class over the non-growable
+    // heap array primitive, monomorphized for i32 (RFC 0013 / RFC 0005).
+    let src = r#"
+class Vec<T> {
+    buf: Array<T>;
+    len: i32;
+    fn new() -> Self { return Vec.with_capacity(0); }
+    fn with_capacity(cap: i32) -> Self { return Self { buf: Array<T>(cap), len: 0 }; }
+    fn len(self) -> i32 { return self.len; }
+    fn push(mut self, v: T) -> unit {
+        if (self.len == self.buf.len()) {
+            let mut cap = self.buf.len() * 2;
+            if (cap == 0) {
+                cap = 4;
+            }
+            let mut next = Array<T>(cap);
+            for (let i = 0; i < self.len; i += 1) {
+                next[i] = self.buf[i];
+            }
+            self.buf = next;
+        }
+        self.buf[self.len] = v;
+        self.len += 1;
+    }
+    fn get(self, i: i32) -> T { return self.buf[i]; }
+    fn pop(mut self) -> Option<T> {
+        if (self.len == 0) {
+            return Option.none();
+        }
+        self.len -= 1;
+        return Option.some(self.buf[self.len]);
+    }
+}
+pub fn main() -> unit {
+    let mut v: Vec<i32> = Vec.new();
+    v.push(10);
+    v.push(20);
+    v.push(30);
+    v.push(40);
+    v.push(50);
+    print(f"{v.len()} {v.get(0)} {v.get(4)} {v.get(2)}");
+    let p = v.pop();
+    print(f"{p.value}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 2_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["5 10 50 30", "50"]);
+}
