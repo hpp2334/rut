@@ -71,6 +71,9 @@ pub struct Vm {
     const_slots: Vec<Slot>,
     /// recycled per-frame register files (avoids a Vec alloc per call)
     reg_pool: Vec<Vec<Slot>>,
+    /// per-function indices of reference-typed registers — `do_ret` only
+    /// needs to release these, so it skips the type-table lookup per slot
+    ref_regs: Vec<Vec<u16>>,
 }
 
 impl Vm {
@@ -81,6 +84,18 @@ impl Vm {
             let s = const_to_slot(c, &heap).map_err(|m| Trap::new(TrapKind::Invalid, m))?;
             const_slots.push(s);
         }
+        let ref_regs: Vec<Vec<u16>> = prog
+            .funcs
+            .iter()
+            .map(|f| {
+                f.regs
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, &ty)| prog.types.is_ref(ty))
+                    .map(|(i, _)| i as u16)
+                    .collect()
+            })
+            .collect();
         Ok(Vm {
             prog,
             heap,
@@ -97,6 +112,7 @@ impl Vm {
             hooks,
             const_slots,
             reg_pool: Vec::new(),
+            ref_regs,
         })
     }
 
@@ -432,15 +448,8 @@ impl Vm {
         }
         // release the active frame's registers (destructors, RFC 0016 §3)
         let regs = std::mem::take(&mut self.cur_regs);
-        for i in 0..regs.len() {
-            let ty = self
-                .prog
-                .funcs[func as usize]
-                .regs
-                .get(i)
-                .copied()
-                .unwrap_or(TY_ANY);
-            self.heap.release_typed(regs[i], ty, &self.prog.types);
+        for &i in &self.ref_regs[func as usize] {
+            self.heap.release(regs[i as usize]);
         }
         self.put_regs(regs);
         match self.frames.pop() {
