@@ -94,12 +94,19 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         return Err(bad("EnumNew over a non-enum type".into()));
                     }
                 }
-                Op::GetF { obj, field, .. } | Op::SetF { obj, field, .. } => {
+                Op::GetF { obj, field, repr, .. } | Op::SetF { obj, field, repr, .. } => {
                     let ty = f.regs[*obj as usize];
                     match prog.types.kind(ty) {
                         TyKind::Data { fields } => {
-                            if *field as usize >= fields.len() {
+                            let Some(fi) = fields.get(*field as usize) else {
                                 return Err(bad(format!("field index {field} out of range")));
+                            };
+                            // the baked repr must match the field's static type
+                            // (RFC 0033 §2) — a mismatch would mis-handle RC
+                            if prog.types.repr_of(fi.ty) != *repr {
+                                return Err(bad(
+                                    "field access repr does not match the field type".into(),
+                                ));
                             }
                         }
                         _ => return Err(bad("field access on a non-record register".into())),

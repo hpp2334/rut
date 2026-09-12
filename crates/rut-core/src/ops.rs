@@ -7,7 +7,7 @@
 //! materializes (family × prim) opcode bytes, same information (RFC 0032
 //! "the full table is mechanical").
 
-use crate::types::{PrimTy, TypeId};
+use crate::types::{PrimTy, Repr, TypeId};
 
 pub type Reg = u16;
 pub type Label = u32;
@@ -97,8 +97,10 @@ pub enum Op {
     /// mint a value cell (the `Self { .. }` / dataclass literal;
     /// RFC 0032 §1) — fields follow via SetF
     NewCell { dst: Reg, ty: TypeId },
-    GetF { dst: Reg, obj: Reg, field: u32 },
-    SetF { obj: Reg, field: u32, val: Reg },
+    /// `repr` is the field's baked representation (removes the runtime
+    /// field-type lookup + `is_ref`); `field` is the declaration index.
+    GetF { dst: Reg, obj: Reg, field: u32, repr: Repr },
+    SetF { obj: Reg, field: u32, val: Reg, repr: Repr },
     /// `own(x)` payload copy (RFC 0011 §1): data payload memcpy with
     /// handle-field retains; buffers clone; strings clone
     Own { dst: Reg, src: Reg, ty: TypeId },

@@ -9,7 +9,7 @@
 use rut_core::binary::{ConstVal, Program};
 use crate::heap::{cell_of, CellData, Heap, Packed, Slot, Trap, TrapKind, Value};
 use rut_core::ops::*;
-use rut_core::types::{PrimTy, TypeId, TyKind};
+use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -419,12 +419,12 @@ impl Vm {
                     self.op_arr_set(*arr, *idx, *val)?;
                     self.cur_pc += 1;
                 }
-                Op::GetF { dst, obj, field } => {
-                    self.op_getf(*dst, *obj, *field)?;
+                Op::GetF { dst, obj, field, repr } => {
+                    self.op_getf(*dst, *obj, *field, *repr)?;
                     self.cur_pc += 1;
                 }
-                Op::SetF { obj, field, val } => {
-                    self.op_setf(*obj, *field, *val)?;
+                Op::SetF { obj, field, val, repr } => {
+                    self.op_setf(*obj, *field, *val, *repr)?;
                     self.cur_pc += 1;
                 }
                 Op::Call { func, args, dst } => {
@@ -614,8 +614,8 @@ impl Vm {
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::GetF { dst, obj, field } => self.op_getf(dst, obj, field)?,
-            Op::SetF { obj, field, val } => self.op_setf(obj, field, val)?,
+            Op::GetF { dst, obj, field, repr } => self.op_getf(dst, obj, field, repr)?,
+            Op::SetF { obj, field, val, repr } => self.op_setf(obj, field, val, repr)?,
             Op::Own { dst, src, ty } => {
                 let v = self.heap.own(r!(src), ty, &self.prog.types)?;
                 let old = self.cur_regs[dst as usize];
@@ -853,13 +853,6 @@ impl Vm {
         }
     }
 
-    fn field_ty(&self, ty: TypeId, field: u32) -> TypeId {
-        match self.prog.types.kind(ty) {
-            TyKind::Data { fields } => fields.get(field as usize).map(|f| f.ty).unwrap_or(TY_ANY),
-            _ => TY_ANY,
-        }
-    }
-
     fn elem_ty_of(&self, cell: &crate::heap::CellVal) -> TypeId {
         match &cell.data {
             crate::heap::CellData::Vec { elem, .. } => *elem,
@@ -904,7 +897,7 @@ impl Vm {
 
     /// `GetF` — shared by `step` and the `run_loop` fast path.
     #[inline]
-    fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32) -> Result<(), Trap> {
+    fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32, repr: Repr) -> Result<(), Trap> {
         let cell = cell_of(self.cur_regs[obj as usize]);
         let v = match &cell.data {
             CellData::Record { fields } => fields
@@ -913,10 +906,9 @@ impl Vm {
                 .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
             _ => return Err(Trap::new(TrapKind::Invalid, "field on non-record")),
         };
-        let fty = self.field_ty(cell.ty, field);
         let old = self.cur_regs[dst as usize];
         self.cur_regs[dst as usize] = v;
-        if self.is_ref(fty) {
+        if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);
         }
@@ -925,9 +917,8 @@ impl Vm {
 
     /// `SetF` — shared by `step` and the `run_loop` fast path.
     #[inline]
-    fn op_setf(&mut self, obj: Reg, field: u32, val: Reg) -> Result<(), Trap> {
+    fn op_setf(&mut self, obj: Reg, field: u32, val: Reg, repr: Repr) -> Result<(), Trap> {
         let cell = cell_of(self.cur_regs[obj as usize]);
-        let fty = self.field_ty(cell.ty, field);
         let v = self.cur_regs[val as usize];
         let old = if let CellData::Record { fields } = &cell.data {
             fields
@@ -937,7 +928,7 @@ impl Vm {
         } else {
             return Err(Trap::new(TrapKind::Invalid, "field-set on non-record"));
         };
-        if self.is_ref(fty) {
+        if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);
         }

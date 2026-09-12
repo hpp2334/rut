@@ -1043,7 +1043,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some(fidx) = fields.iter().position(|f| f.name == fname) {
                 let fty = fields[fidx].ty;
                 let dst = self.new_reg(fty);
-                self.emit(Op::GetF { dst, obj: rreg, field: fidx as u32 }, sp.lo);
+                self.emit(Op::GetF { dst, obj: rreg, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                 return Ok(fty);
             }
             self.ctx.err(sp, format!("`{}` has no field `{fname}`", self.ctx.types.name(rt)));

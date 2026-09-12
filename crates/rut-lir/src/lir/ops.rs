@@ -194,7 +194,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             };
                             let fty = fields[fidx].ty;
                             let dst = self.new_reg(fty);
-                            self.emit(Op::GetF { dst, obj: cur, field: fidx as u32 }, sp.lo);
+                            self.emit(Op::GetF { dst, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                             cur = dst;
                             cur_ty = fty;
                         }
@@ -214,11 +214,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 if t != fty {
                                     self.ctx.err(sp, "field assignment type mismatch");
                                 }
-                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: self.last_reg }, sp.lo);
+                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                             }
                             Some(bin) => {
                                 let cur_v = self.new_reg(fty);
-                                self.emit(Op::GetF { dst: cur_v, obj: cur, field: fidx as u32 }, sp.lo);
+                                self.emit(Op::GetF { dst: cur_v, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                                 let t = self.compile_expr(value, Some(fty))?;
                                 if t != fty {
                                     self.ctx.err(sp, "assignment type mismatch");
@@ -226,7 +226,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 let val_reg = self.last_reg;
                                 let res = self.new_reg(fty);
                                 self.emit_compound(bin, fty, cur_v, val_reg, res, sp)?;
-                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: res }, sp.lo);
+                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: res, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                             }
                         }
                         return Ok(());
@@ -309,11 +309,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != fty {
                             self.ctx.err(sp, "field assignment type mismatch");
                         }
-                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: self.last_reg }, sp.lo);
+                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                     }
                     Some(bin) => {
                         let cur = self.new_reg(fty);
-                        self.emit(Op::GetF { dst: cur, obj: rreg, field: fidx as u32 }, sp.lo);
+                        self.emit(Op::GetF { dst: cur, obj: rreg, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                         let t = self.compile_expr(value, Some(fty))?;
                         if t != fty {
                             self.ctx.err(sp, "assignment type mismatch");
@@ -321,7 +321,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let val_reg = self.last_reg;
                         let res = self.new_reg(fty);
                         self.emit_compound(bin, fty, cur, val_reg, res, sp)?;
-                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: res }, sp.lo);
+                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: res, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                     }
                 }
                 Ok(())

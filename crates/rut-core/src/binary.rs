@@ -4,7 +4,7 @@
 //! with multi-module).
 
 use crate::ops::*;
-use crate::types::{FieldInfo, PrimTy, RutType, TyKind, TypeId, TypeTable};
+use crate::types::{FieldInfo, PrimTy, Repr, RutType, TyKind, TypeId, TypeTable};
 
 // ---- the loaded program ----
 
@@ -73,7 +73,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -420,8 +420,8 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::CallFn { fval, args, dst } => { e.u8(19); e.u16(*fval); e.u16s(args); e.u8opt(dst); }
         Op::Ret { val } => { e.u8(20); e.u8opt(val); }
         Op::NewCell { dst, ty } => { e.u8(21); e.u16(*dst); e.u32(*ty); }
-        Op::GetF { dst, obj, field } => { e.u8(22); e.u16(*dst); e.u16(*obj); e.u32(*field); }
-        Op::SetF { obj, field, val } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); }
+        Op::GetF { dst, obj, field, repr } => { e.u8(22); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u8(repr.to_u8()); }
+        Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
         Op::ArrNew { dst, ty, len } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); }
         Op::ArrLit { dst, ty, elems } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u16s(elems); }
@@ -483,8 +483,8 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         19 => Op::CallFn { fval: d.u16()?, args: d.u16s()?, dst: d.u8opt()? },
         20 => Op::Ret { val: d.u8opt()? },
         21 => Op::NewCell { dst: d.u16()?, ty: d.u32()? },
-        22 => Op::GetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()? },
-        23 => Op::SetF { obj: d.u16()?, field: d.u32()?, val: d.u16()? },
+        22 => Op::GetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, repr: repr(d.u8()?)? },
+        23 => Op::SetF { obj: d.u16()?, field: d.u32()?, val: d.u16()?, repr: repr(d.u8()?)? },
         24 => Op::Own { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
         25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()? },
         26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, elems: d.u16s()? },
@@ -516,6 +516,10 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
 
 fn prim(b: u8) -> Result<PrimTy, String> {
     PrimTy::from_u8(b).ok_or_else(|| format!("bad prim tag {b}"))
+}
+
+fn repr(b: u8) -> Result<Repr, String> {
+    Repr::from_u8(b).ok_or_else(|| format!("bad repr tag {b}"))
 }
 
 fn arith(b: u8) -> Result<ArithOp, String> {    Ok(match b {

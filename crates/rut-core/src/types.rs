@@ -57,6 +57,46 @@ impl PrimTy {
     }
 }
 
+/// Compact runtime representation of a value, resolved from its static
+/// type at compile time and baked into ops (RFC 0032 "the full table is
+/// mechanical"). `Prim` carries the scalar machine kind, `Ref` marks a cell
+/// handle needing retain/release, and `Any` is the conservative fallback
+/// (untyped registers, unit, fn values).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Repr {
+    Prim(PrimTy),
+    Ref,
+    Any,
+}
+
+impl Repr {
+    /// Wire codes for the non-primitive variants (primitive codes come from
+    /// `PrimTy::to_u8`).
+    pub const REF_CODE: u8 = 12;
+    pub const ANY_CODE: u8 = 13;
+
+    pub fn to_u8(self) -> u8 {
+        match self {
+            Repr::Prim(p) => p.to_u8(),
+            Repr::Ref => Self::REF_CODE,
+            Repr::Any => Self::ANY_CODE,
+        }
+    }
+
+    pub fn from_u8(b: u8) -> Option<Repr> {
+        match b {
+            Self::REF_CODE => Some(Repr::Ref),
+            Self::ANY_CODE => Some(Repr::Any),
+            _ => PrimTy::from_u8(b).map(Repr::Prim),
+        }
+    }
+
+    /// True when a slot of this representation is a retained cell handle.
+    pub fn is_ref(self) -> bool {
+        matches!(self, Repr::Ref)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct FieldInfo {
     pub name: String,
@@ -182,5 +222,16 @@ impl TypeTable {
             self.kind(id),
             TyKind::Unit | TyKind::Prim(_) | TyKind::Fn { .. }
         )
+    }
+
+    /// The baked runtime representation of a type (see [`Repr`]).
+    pub fn repr_of(&self, id: TypeId) -> Repr {
+        match self.kind(id) {
+            TyKind::Prim(p) => Repr::Prim(*p),
+            // unit is a zero slot; fn values are closure cells the compiler
+            // owns (v1 captures by value), so neither takes RC traffic
+            TyKind::Unit | TyKind::Fn { .. } => Repr::Any,
+            _ => Repr::Ref,
+        }
     }
 }

@@ -193,8 +193,8 @@ fn op_str(op: &Op) -> String {
         ),
         Op::Ret { val } => format!("ret {}", val.map(|r| format!("r{r}")).unwrap_or("_".into())),
         Op::NewCell { dst, ty } => format!("newcell r{dst}, t{ty}"),
-        Op::GetF { dst, obj, field } => format!("getf r{dst}, r{obj}, f{field}"),
-        Op::SetF { obj, field, val } => format!("setf r{obj}, f{field}, r{val}"),
+        Op::GetF { dst, obj, field, repr } => format!("getf r{dst}, r{obj}, f{field} :{}", repr.to_u8()),
+        Op::SetF { obj, field, val, repr } => format!("setf r{obj}, f{field}, r{val} :{}", repr.to_u8()),
         Op::Own { dst, src, ty } => format!("own r{dst}, r{src}, t{ty}"),
         Op::ArrNew { dst, ty, len } => format!("arrnew r{dst}, t{ty}, r{len}"),
         Op::ArrLit { dst, ty, elems } => format!(

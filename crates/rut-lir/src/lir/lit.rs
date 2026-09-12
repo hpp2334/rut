@@ -78,7 +78,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.name(*fname), self.ctx.types.name(fty), self.ctx.types.name(t)
                 ));
             }
-            self.emit(Op::SetF { obj: cell, field: fidx as u32, val: self.last_reg }, sp.lo);
+            self.emit(Op::SetF { obj: cell, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
             set[fidx] = true;
         }
         for (fidx, (fname, fty, init, _)) in d.fields.iter().enumerate() {
@@ -94,7 +94,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if t != *fty {
                     self.ctx.err(self.ctx.ast.span(init.id()), "field initializer type mismatch");
                 }
-                self.emit(Op::SetF { obj: cell, field: fidx as u32, val: self.last_reg }, sp.lo);
+                self.emit(Op::SetF { obj: cell, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(*fty) }, sp.lo);
             }
         }
         // the value lives in `cell` (allocated before the SetFs); move it out

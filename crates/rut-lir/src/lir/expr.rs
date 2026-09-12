@@ -359,7 +359,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     };
                     let fty = fields[fidx].ty;
                     let dst = self.new_reg(fty);
-                    self.emit(Op::GetF { dst, obj: cur, field: fidx as u32 }, sp.lo);
+                    self.emit(Op::GetF { dst, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                     cur = dst;
                     cur_ty = fty;
                 }
