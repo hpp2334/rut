@@ -53,6 +53,11 @@ pub struct FnCompiler<'a, 'b> {
     /// (`self`) use the receiver register directly — no copy, so element
     /// access pays no per-access ref copy
     inline_self: Option<(IdentId, u16)>,
+    /// while inlining a returned method body: `(result reg, end label)` —
+    /// `return` writes here and jumps, instead of emitting `Op::Ret`
+    inline_ret: Option<(u16, u32)>,
+    /// class methods currently being inlined — a recursion guard
+    inline_stack: Vec<(IdentId, IdentId)>,
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
@@ -154,6 +159,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             span: 0,
             last_reg: 0,
             inline_self: None,
+            inline_ret: None,
+            inline_stack: Vec::new(),
         };
         // signature: params (self first for methods), resolved under subst
         let mut param_tys: Vec<TypeId> = Vec::new();
@@ -261,6 +268,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             span: 0,
             last_reg: 0,
             inline_self: None,
+            inline_ret: None,
+            inline_stack: Vec::new(),
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type

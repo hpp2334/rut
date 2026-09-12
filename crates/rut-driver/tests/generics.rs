@@ -24,8 +24,10 @@ fn generic_class_monomorphizes_per_instantiation() {
     let p = out.program.expect("program");
     let boxes = p.types.types.iter().filter(|t| t.name == "Box<i32>").count();
     assert_eq!(boxes, 1, "Box<i32> instantiated once");
-    // the body compiled: new + get + main (at least)
-    assert!(p.funcs.len() >= 3, "funcs: {:?}", p.funcs.iter().map(|f| &f.name).collect::<Vec<_>>());
+    // body compiled: `new` (static) + `main`; `get` is a small instance
+    // method and inlines at its call site (RFC 0005 sequence lowering)
+    assert!(p.funcs.len() >= 2, "funcs: {:?}", p.funcs.iter().map(|f| &f.name).collect::<Vec<_>>());
+    assert!(p.funcs.iter().any(|f| f.name == "main"));
 }
 
 #[test]

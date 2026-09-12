@@ -1014,6 +1014,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
+        // small instance methods inline at the call site: the class's
+        // `push`/`pop`/`freeze` are rut code (RFC 0005), so an interpreted
+        // frame per call is the cost of the design; inlining removes it
+        if self.try_inline_method(
+            dname, &class_subst, self_ty, mnode, mname, mut_self, rreg, &aregs, &ptys, ret_ty, sp,
+        ) {
+            return Ok(ret_ty);
+        }
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst: class_subst,
@@ -1022,6 +1030,85 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
         self.emit(Op::CallM { func: fid, recv: rreg, args: aregs, dst }, sp.lo);
         Ok(ret_ty)
+    }
+
+    /// Inline a small, non-recursive instance method body at the call site.
+    /// Returns `true` when it compiled the body; `false` to emit `CallM`.
+    #[allow(clippy::too_many_arguments)]
+    fn try_inline_method(
+        &mut self,
+        dname: IdentId,
+        class_subst: &[(IdentId, TypeId)],
+        self_ty: TypeId,
+        mnode: NodeHandle<MethodDeclNode>,
+        mname: IdentId,
+        mut_self: bool,
+        recv: u16,
+        aregs: &[u16],
+        ptys: &[TypeId],
+        ret_ty: TypeId,
+        sp: rut_lexer::span::Span,
+    ) -> bool {
+        const MAX_STMTS: usize = 24;
+        const MAX_DEPTH: usize = 4;
+        if self.inline_stack.len() >= MAX_DEPTH || self.inline_stack.contains(&(dname, mname)) {
+            return false;
+        }
+        let md = self.ctx.ast.method_decl(mnode).clone();
+        if md.is_suspend {
+            return false; // `suspend` is diagnosed when the body is compiled
+        }
+        let Some(body) = md.body else { return false };
+        let stmts = match self.ctx.ast.kind(body.id()) {
+            Kind::Expr(ExprKind::Block { stmts }) => stmts.clone(),
+            _ => return false,
+        };
+        if stmts.len() > MAX_STMTS {
+            return false;
+        }
+        let saved_self_ty = self.self_ty;
+        let saved_subst = std::mem::replace(&mut self.subst, class_subst.to_vec());
+        let saved_class = self.current_class;
+        let saved_ret = self.ret_ty;
+        let saved_inline_ret = self.inline_ret;
+        let saved_inline_self = self.inline_self;
+        self.self_ty = Some(self_ty);
+        self.current_class = Some(dname);
+        self.ret_ty = ret_ty;
+        let base = self.locals.len();
+        let self_id = self.ctx.lookup_name("self");
+        if let Some(sid) = self_id {
+            self.locals.push(Local { name: sid, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false });
+            self.inline_self = Some((sid, recv));
+        }
+        let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
+        let mut ai = 0usize;
+        for p in &params {
+            if let MemberKind::Param(ParamData { name, is_mut, .. }) = self.ctx.ast.param(*p) {
+                self.locals.push(Local { name: *name, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false });
+                ai += 1;
+            }
+        }
+        let res = self.new_reg(ret_ty);
+        let l_end = self.new_label();
+        self.inline_ret = Some((res, l_end));
+        self.inline_stack.push((dname, mname));
+        let ok = self.compile_block(body.id()).is_ok();
+        self.inline_stack.pop();
+        self.bind(l_end);
+        self.locals.truncate(base);
+        self.self_ty = saved_self_ty;
+        self.subst = saved_subst;
+        self.current_class = saved_class;
+        self.ret_ty = saved_ret;
+        self.inline_ret = saved_inline_ret;
+        self.inline_self = saved_inline_self;
+        let _ = sp;
+        if !ok {
+            return false;
+        }
+        self.last_reg = res;
+        true
     }
 
     pub(crate) fn compile_trait_call(

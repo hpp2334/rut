@@ -111,6 +111,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             StmtKind::Return { value } => {
+                // inlined method body: `return` targets the inliner's result
+                if let Some((dst, l_end)) = self.inline_ret {
+                    if let Some(v) = value {
+                        let t = self.compile_expr(v, Some(self.ret_ty))?;
+                        if t != self.ret_ty {
+                            self.ctx.err(sp, format!(
+                                "return type mismatch: `{}` expected, `{}` returned",
+                                self.ctx.types.name(self.ret_ty), self.ctx.types.name(t)
+                            ));
+                        }
+                        let src = self.last_reg;
+                        if self.ctx.types.is_ref(self.ret_ty) {
+                            self.emit(Op::MovRef { dst, src }, sp.lo);
+                        } else {
+                            self.emit(Op::Mov { dst, src }, sp.lo);
+                        }
+                    }
+                    self.jmp(l_end);
+                    return Ok(());
+                }
                 match value {
                     Some(v) => {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;
