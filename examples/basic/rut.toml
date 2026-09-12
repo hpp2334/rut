@@ -1,0 +1,19 @@
+# examples/basic/rut.toml — package "basic" (RFC 0029/0035 module mount)
+name = "basic"
+
+[entries]
+"basic:classes" = "classes.rut"
+"basic:closures-generics" = "closures-generics.rut"
+"basic:dataclasses" = "dataclasses.rut"
+"basic:error-context" = "error-context.rut"
+"basic:grammar-tour" = "grammar-tour.rut"
+"basic:layout" = "layout.rut"
+"basic:literals" = "literals.rut"
+"basic:module-structure" = "module-structure.rut"
+"basic:module-visibility" = "module-visibility.rut"
+"basic:opaque" = "opaque.rut"
+"basic:option-result" = "option-result.rut"
+"basic:rc-and-dispose" = "rc-and-dispose.rut"
+"basic:traits" = "traits.rut"
+"basic:type-tests" = "type-tests.rut"
+"basic:when" = "when.rut"

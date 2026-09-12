@@ -1,0 +1,7 @@
+# examples/gui/dashboard/components/rut.toml — package "components" (RFC 0029/0035 module mount)
+name = "components"
+
+[entries]
+"components:common" = "common.rut"
+"components:header" = "header.rut"
+"components:sidebar" = "sidebar.rut"

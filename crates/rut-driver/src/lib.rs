@@ -10,6 +10,9 @@ use rut_core::binary::{encode, Program};
 use rut_core::ops::Op;
 use rut_core::types::TyKind;
 
+pub mod session;
+pub use session::{ManifestError, Module, Package, ResolveError, Session};
+
 pub struct CompileOutput {
     pub diags: Vec<Diag>,
     pub ast_dump: String,

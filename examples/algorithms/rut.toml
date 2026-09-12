@@ -1,0 +1,7 @@
+# examples/algorithms/rut.toml — package "algorithms" (RFC 0029/0035 module mount)
+name = "algorithms"
+
+[entries]
+"algorithms:matrix-mul" = "matrix-mul.rut"
+"algorithms:quicksort" = "quicksort.rut"
+"algorithms:sieve" = "sieve.rut"

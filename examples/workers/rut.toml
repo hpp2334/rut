@@ -1,0 +1,6 @@
+# examples/workers/rut.toml — package "workers" (RFC 0029/0035 module mount)
+name = "workers"
+
+[entries]
+"workers:image-pipeline" = "image-pipeline.rut"
+"workers:image-worker" = "image-worker.rut"

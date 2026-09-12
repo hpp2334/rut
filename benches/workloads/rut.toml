@@ -1,0 +1,18 @@
+# benches/workloads/rut.toml — package "workloads" (RFC 0029/0035 module mount)
+name = "workloads"
+
+[entries]
+"workloads:alloc" = "alloc.rut"
+"workloads:binary-trees" = "binary-trees.rut"
+"workloads:call" = "call.rut"
+"workloads:empty" = "empty.rut"
+"workloads:fannkuch" = "fannkuch.rut"
+"workloads:fasta" = "fasta.rut"
+"workloads:floatloop" = "floatloop.rut"
+"workloads:intloop" = "intloop.rut"
+"workloads:mandelbrot" = "mandelbrot.rut"
+"workloads:matrix-mul" = "matrix-mul.rut"
+"workloads:nbody" = "nbody.rut"
+"workloads:quicksort" = "quicksort.rut"
+"workloads:sieve" = "sieve.rut"
+"workloads:spectral-norm" = "spectral-norm.rut"

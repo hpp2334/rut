@@ -1,0 +1,6 @@
+# examples/gui/dashboard/services/rut.toml — package "services" (RFC 0029/0035 module mount)
+name = "services"
+
+[entries]
+"services:api" = "api.rut"
+"services:stream" = "stream.rut"

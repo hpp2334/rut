@@ -1,0 +1,9 @@
+# examples/gui/dashboard/rut.toml — package "dashboard" (RFC 0029/0035 module mount)
+name = "dashboard"
+
+[entries]
+"dashboard:main" = "main.rut"
+"dashboard:models" = "models.rut"
+"dashboard:reactive" = "reactive.rut"
+"dashboard:state" = "state.rut"
+"dashboard:theme" = "theme.rut"
