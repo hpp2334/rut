@@ -47,7 +47,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match self.ctx.types.kind(ty).clone() {
                     TyKind::Prim(p) => {
                         let cop = if eq { CmpOp::Eq } else { CmpOp::Ne };
-                        self.emit(Op::Cmp { op: cop, prim: p, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                        self.emit(cmpop(cop, p, dst, lhs_reg, rhs_reg), sp.lo);
                     }
                     TyKind::Str => {
                         self.emit(Op::StrCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
@@ -75,7 +75,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => CmpOp::Ge,
                 };
                 let dst = self.new_reg(TY_BOOL);
-                self.emit(Op::Cmp { op: cmp, prim, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                self.emit(cmpop(cmp, prim, dst, lhs_reg, rhs_reg), sp.lo);
                 Ok(TY_BOOL)
             }
             Add | Sub | Mul | Div | Mod | WrapAdd | WrapSub | WrapMul => {
@@ -94,9 +94,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let wrapping = matches!(op, WrapAdd | WrapSub | WrapMul);
                 let dst = self.new_reg(ty);
                 if wrapping {
-                    self.emit(Op::Wrap { op: aop, prim, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                    self.emit(wrap_arith(aop, prim, dst, lhs_reg, rhs_reg), sp.lo);
                 } else {
-                    self.emit(Op::Arith { op: aop, prim, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                    self.emit(arith(aop, prim, dst, lhs_reg, rhs_reg), sp.lo);
                 }
                 Ok(ty)
             }
@@ -115,7 +115,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => BitOp::Shr,
                 };
                 let dst = self.new_reg(ty);
-                self.emit(Op::Bit { op: bop, prim, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                self.emit(bitop(bop, prim, dst, lhs_reg, rhs_reg), sp.lo);
                 Ok(ty)
             }
             And | Or => unreachable!(),
@@ -399,9 +399,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => ArithOp::Mod,
                 };
                 if matches!(bin, WrapAdd | WrapSub | WrapMul) {
-                    self.emit(Op::Wrap { op: aop, prim, dst, a, b }, sp.lo);
+                    self.emit(wrap_arith(aop, prim, dst, a, b), sp.lo);
                 } else {
-                    self.emit(Op::Arith { op: aop, prim, dst, a, b }, sp.lo);
+                    self.emit(arith(aop, prim, dst, a, b), sp.lo);
                 }
             }
             BitAnd | BitOr | BitXor | Shl | Shr | WrapShl => {
@@ -417,7 +417,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     WrapShl => BitOp::WrapShl,
                     _ => BitOp::Shr,
                 };
-                self.emit(Op::Bit { op: bop, prim, dst, a, b }, sp.lo);
+                self.emit(bitop(bop, prim, dst, a, b), sp.lo);
             }
             And | Or | Eq | Ne | Lt | Gt | Le | Ge => {
                 self.ctx.err(sp, "this operator has no compound-assignment form");

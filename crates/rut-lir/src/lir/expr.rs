@@ -75,7 +75,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.err(sp, "negation needs a number");
                             return Err(());
                         };
-                        self.emit(Op::Neg { prim, dst, a: src }, sp.lo);
+                        self.emit(negop(prim, dst, src), sp.lo);
                     }
                     Not => {
                         if t != TY_BOOL {

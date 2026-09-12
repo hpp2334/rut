@@ -20,6 +20,9 @@ impl PrimTy {
     pub fn is_float(self) -> bool {
         matches!(self, PrimTy::F32 | PrimTy::F64)
     }
+    pub fn is_unsigned(self) -> bool {
+        matches!(self, PrimTy::U8 | PrimTy::U16 | PrimTy::U32 | PrimTy::U64)
+    }
     /// Slot width in bytes (RFC 0015 §5 — all slots are 8 bytes; this is
     /// the *semantic* width used by truncating ops).
     pub fn width(self) -> u32 {

@@ -354,14 +354,9 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::MovRef { dst, .. }
         | Op::Const { dst, .. }
         | Op::ConstRaw { dst, .. }
-        | Op::Arith { dst, .. }
-        | Op::Wrap { dst, .. }
-        | Op::Bit { dst, .. }
-        | Op::Cmp { dst, .. }
         | Op::StrCmp { dst, .. }
         | Op::RefEq { dst, .. }
         | Op::Not { dst, .. }
-        | Op::Neg { dst, .. }
         | Op::AddF { dst, .. }
         | Op::SubF { dst, .. }
         | Op::MulF { dst, .. }
@@ -449,11 +444,7 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.extend(vals.iter().copied());
         }
-        Op::Arith { dst, a, b, .. }
-        | Op::Wrap { dst, a, b, .. }
-        | Op::Bit { dst, a, b, .. }
-        | Op::Cmp { dst, a, b, .. }
-        | Op::StrCmp { dst, a, b, .. }
+        Op::StrCmp { dst, a, b, .. }
         | Op::RefEq { dst, a, b, .. }
         | Op::AddF { dst, a, b, .. }
         | Op::SubF { dst, a, b, .. }
@@ -492,7 +483,7 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             u.push(*a);
             u.push(*b);
         }
-        Op::Not { dst, a } | Op::Neg { dst, a, .. } | Op::NegF { dst, a, .. }
+        Op::Not { dst, a } | Op::NegF { dst, a, .. }
         | Op::NegI { dst, a, .. } => {
             d.push(*dst);
             u.push(*a);
@@ -623,11 +614,7 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         }
     };
     match op {
-        Op::Arith { a, b, .. }
-        | Op::Wrap { a, b, .. }
-        | Op::Bit { a, b, .. }
-        | Op::Cmp { a, b, .. }
-        | Op::StrCmp { a, b, .. }
+        Op::StrCmp { a, b, .. }
         | Op::RefEq { a, b, .. }
         | Op::AddF { a, b, .. }
         | Op::SubF { a, b, .. }
@@ -665,7 +652,7 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
             f(a);
             f(b);
         }
-        Op::Not { a, .. } | Op::Neg { a, .. } | Op::NegF { a, .. } | Op::NegI { a, .. } => f(a),
+        Op::Not { a, .. } | Op::NegF { a, .. } | Op::NegI { a, .. } => f(a),
         Op::Mov { src, .. } | Op::MovRef { src, .. } => f(src),
         Op::Br { cond, .. } => f(cond),
         Op::BrTable { idx, .. } => f(idx),

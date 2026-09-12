@@ -144,7 +144,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let want_reg = self.new_reg(TY_U32);
                 self.emit(Op::ConstRaw { dst: want_reg, bits: want as u64 }, sp.lo);
                 let eq = self.new_reg(TY_BOOL);
-                self.emit(Op::Cmp { op: CmpOp::Eq, prim: PrimTy::U32, dst: eq, a: tid_reg, b: want_reg }, sp.lo);
+                self.emit(cmpop(CmpOp::Eq, PrimTy::U32, eq, tid_reg, want_reg), sp.lo);
                 let dst = self.new_reg(oty);
                 let l_some = self.new_label();
                 let l_none = self.new_label();

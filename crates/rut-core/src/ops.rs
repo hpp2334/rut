@@ -2,10 +2,11 @@
 //! per-frame `Vec<Slot>`; every register has a static type in the function
 //! signature; the verifier re-checks at load (RFC 0033 §2).
 //!
-//! Op families carry their `TypeId` operand where the type selects the
-//! exact opcode (e.g. `Arith{ty: i32}` is `i32add`) — the binary encoding
-//! materializes (family × prim) opcode bytes, same information (RFC 0032
-//! "the full table is mechanical").
+//! Scalar operations are one opcode *per operation*, with the kind (int vs
+//! float) in the opcode and the width in the `prim` operand — `addf`/`addi`,
+//! not a generic `arith{op, ty}` the VM has to switch on. The frontend
+//! resolves `prim`, so there is no `specialize` pass and no runtime `op`
+//! selector (RFC 0032 "the opcode selects the type").
 
 use crate::types::{PrimTy, Repr, TypeId};
 
@@ -61,21 +62,11 @@ pub enum Op {
     /// raw scalar const (i64 bits / f64 bits / bool / char) — folded form
     ConstRaw { dst: Reg, bits: u64 },
 
-    /// trapping arithmetic (RFC 0004 §3); `prim` is the resolved operand
-    /// type — the VM never consults the type table to execute it
-    Arith { op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    /// wrapping escapes: &+ &- &* (RFC 0004 §3)
-    Wrap { op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    Bit { op: BitOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    Cmp { op: CmpOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     Not { dst: Reg, a: Reg },          // bool !
-    Neg { prim: PrimTy, dst: Reg, a: Reg }, // trapping negate
-    /// Float-specialized scalar ops (RFC 0032 "the opcode selects the type"):
-    /// the operation is the opcode, so the interpreter folds to a single
-    /// `addsd`/`mulsd`/`comisd` with no runtime `op`/`prim` switch — the
-    /// direct payoff of rut's static typing. Emitted by the `specialize`
-    /// pass for `F32`/`F64`; integer ops keep the generic `Arith`/`Cmp`
-    /// forms because their width-fitting is per-prim and does not fold.
+    /// Scalar arithmetic/bitwise/compare are one opcode *per operation*,
+    /// with the kind (int vs float) in the opcode and the width in `prim`
+    /// (RFC 0032 "the opcode selects the type"). The VM never consults the
+    /// type table, and there is no runtime `op` selector.
     AddF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     SubF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     MulF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
@@ -88,9 +79,6 @@ pub enum Op {
     GtF { dst: Reg, a: Reg, b: Reg },
     LeF { dst: Reg, a: Reg, b: Reg },
     GeF { dst: Reg, a: Reg, b: Reg },
-    /// Integer-specialized scalar ops, by operation. `prim` stays a field
-    /// (integer width fitting is per-prim and does not fold), but the
-    /// opcode removes the runtime `op` switch and the `is_float` test.
     AddI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     SubI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     MulI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
@@ -107,12 +95,14 @@ pub enum Op {
     ShlI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     ShrI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     WrapShlI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    EqI { dst: Reg, a: Reg, b: Reg },
-    NeI { dst: Reg, a: Reg, b: Reg },
-    LtI { dst: Reg, a: Reg, b: Reg },
-    GtI { dst: Reg, a: Reg, b: Reg },
-    LeI { dst: Reg, a: Reg, b: Reg },
-    GeI { dst: Reg, a: Reg, b: Reg },
+    /// int compare — `prim` selects signed vs unsigned ordering; bool/char
+    /// compare through here as well (their slot is an integer)
+    EqI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    NeI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    LtI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    GtI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    LeI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    GeI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     NegI { prim: PrimTy, dst: Reg, a: Reg },
     /// string content compare (RFC 0012 §4) — used for ==/!= on string
     StrCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
@@ -201,4 +191,88 @@ pub enum Op {
     /// fuel-check no-op back-edge marker (RFC 0040 §2: loop back-edges are
     /// natural checkpoints) — emitted at loop heads
     LoopHead,
+}
+
+// ---- specialized scalar-op constructors (RFC 0032) ----
+//
+// The frontend resolves `prim` before emitting, so it names the exact opcode
+// directly — no separate `specialize` pass and no runtime `op` selector.
+// `is_float` picks the int/float family; `prim` carries the width.
+
+/// Trapping arithmetic (`+ - * / %`) for int or float `prim`.
+pub fn arith(op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
+    if prim.is_float() {
+        match op {
+            ArithOp::Add => Op::AddF { prim, dst, a, b },
+            ArithOp::Sub => Op::SubF { prim, dst, a, b },
+            ArithOp::Mul => Op::MulF { prim, dst, a, b },
+            ArithOp::Div => Op::DivF { prim, dst, a, b },
+            ArithOp::Mod => Op::ModF { prim, dst, a, b },
+        }
+    } else {
+        match op {
+            ArithOp::Add => Op::AddI { prim, dst, a, b },
+            ArithOp::Sub => Op::SubI { prim, dst, a, b },
+            ArithOp::Mul => Op::MulI { prim, dst, a, b },
+            ArithOp::Div => Op::DivI { prim, dst, a, b },
+            ArithOp::Mod => Op::ModI { prim, dst, a, b },
+        }
+    }
+}
+
+/// Wrapping arithmetic (`&+ &- &* &/ &%`) — a no-op for floats.
+pub fn wrap_arith(op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
+    if prim.is_float() {
+        return arith(op, prim, dst, a, b);
+    }
+    match op {
+        ArithOp::Add => Op::WAddI { prim, dst, a, b },
+        ArithOp::Sub => Op::WSubI { prim, dst, a, b },
+        ArithOp::Mul => Op::WMulI { prim, dst, a, b },
+        ArithOp::Div => Op::WDivI { prim, dst, a, b },
+        ArithOp::Mod => Op::WModI { prim, dst, a, b },
+    }
+}
+
+pub fn bitop(op: BitOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
+    match op {
+        BitOp::And => Op::AndI { prim, dst, a, b },
+        BitOp::Or => Op::OrI { prim, dst, a, b },
+        BitOp::Xor => Op::XorI { prim, dst, a, b },
+        BitOp::Shl => Op::ShlI { prim, dst, a, b },
+        BitOp::Shr => Op::ShrI { prim, dst, a, b },
+        BitOp::WrapShl => Op::WrapShlI { prim, dst, a, b },
+    }
+}
+
+/// Compare. Floats compare in the f64 slot (no width); ints carry `prim` so
+/// unsigned widths order unsigned; bool/char compare as their integer slot.
+pub fn cmpop(op: CmpOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
+    if prim.is_float() {
+        match op {
+            CmpOp::Eq => Op::EqF { dst, a, b },
+            CmpOp::Ne => Op::NeF { dst, a, b },
+            CmpOp::Lt => Op::LtF { dst, a, b },
+            CmpOp::Gt => Op::GtF { dst, a, b },
+            CmpOp::Le => Op::LeF { dst, a, b },
+            CmpOp::Ge => Op::GeF { dst, a, b },
+        }
+    } else {
+        match op {
+            CmpOp::Eq => Op::EqI { prim, dst, a, b },
+            CmpOp::Ne => Op::NeI { prim, dst, a, b },
+            CmpOp::Lt => Op::LtI { prim, dst, a, b },
+            CmpOp::Gt => Op::GtI { prim, dst, a, b },
+            CmpOp::Le => Op::LeI { prim, dst, a, b },
+            CmpOp::Ge => Op::GeI { prim, dst, a, b },
+        }
+    }
+}
+
+pub fn negop(prim: PrimTy, dst: Reg, a: Reg) -> Op {
+    if prim.is_float() {
+        Op::NegF { prim, dst, a }
+    } else {
+        Op::NegI { prim, dst, a }
+    }
 }

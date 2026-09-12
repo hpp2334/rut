@@ -73,7 +73,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 5;
+pub const VERSION: u32 = 6;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -398,12 +398,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::MovRef { dst, src } => { e.u8(1); e.u16(*dst); e.u16(*src); }
         Op::Const { dst, k } => { e.u8(2); e.u16(*dst); e.u32(*k); }
         Op::ConstRaw { dst, bits } => { e.u8(3); e.u16(*dst); e.u64(*bits); }
-        Op::Arith { op, prim, dst, a, b } => { e.u8(4); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::Wrap { op, prim, dst, a, b } => { e.u8(5); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::Bit { op, prim, dst, a, b } => { e.u8(6); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::Cmp { op, prim, dst, a, b } => { e.u8(7); e.u8(*op as u8); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::Not { dst, a } => { e.u8(8); e.u16(*dst); e.u16(*a); }
-        Op::Neg { prim, dst, a } => { e.u8(9); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); }
         Op::AddF { prim, dst, a, b } => { e.u8(50); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::SubF { prim, dst, a, b } => { e.u8(51); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::MulF { prim, dst, a, b } => { e.u8(52); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
@@ -432,12 +427,12 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::ShlI { prim, dst, a, b } => { e.u8(75); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::ShrI { prim, dst, a, b } => { e.u8(76); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::WrapShlI { prim, dst, a, b } => { e.u8(77); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::EqI { dst, a, b } => { e.u8(78); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::NeI { dst, a, b } => { e.u8(79); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::LtI { dst, a, b } => { e.u8(80); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::GtI { dst, a, b } => { e.u8(81); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::LeI { dst, a, b } => { e.u8(82); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::GeI { dst, a, b } => { e.u8(83); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::EqI { prim, dst, a, b } => { e.u8(78); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::NeI { prim, dst, a, b } => { e.u8(79); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::LtI { prim, dst, a, b } => { e.u8(80); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::GtI { prim, dst, a, b } => { e.u8(81); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::LeI { prim, dst, a, b } => { e.u8(82); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::GeI { prim, dst, a, b } => { e.u8(83); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::NegI { prim, dst, a } => { e.u8(84); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); }
         Op::StrCmp { eq, dst, a, b } => { e.u8(10); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::RefEq { eq, dst, a, b } => { e.u8(11); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
@@ -492,12 +487,7 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         1 => Op::MovRef { dst: d.u16()?, src: d.u16()? },
         2 => Op::Const { dst: d.u16()?, k: d.u32()? },
         3 => Op::ConstRaw { dst: d.u16()?, bits: d.u64()? },
-        4 => Op::Arith { op: arith(d.u8()?)?, prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        5 => Op::Wrap { op: arith(d.u8()?)?, prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        6 => Op::Bit { op: bitop(d.u8()?)?, prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        7 => Op::Cmp { op: cmpop(d.u8()?)?, prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         8 => Op::Not { dst: d.u16()?, a: d.u16()? },
-        9 => Op::Neg { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
         10 => Op::StrCmp { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         11 => Op::RefEq { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         12 => Op::Jmp { target: d.u32()? },
@@ -575,12 +565,12 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         75 => Op::ShlI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         76 => Op::ShrI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         77 => Op::WrapShlI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        78 => Op::EqI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        79 => Op::NeI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        80 => Op::LtI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        81 => Op::GtI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        82 => Op::LeI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        83 => Op::GeI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        78 => Op::EqI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        79 => Op::NeI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        80 => Op::LtI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        81 => Op::GtI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        82 => Op::LeI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        83 => Op::GeI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         84 => Op::NegI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
         t => return Err(format!("bad opcode {t}")),
     })
@@ -594,24 +584,6 @@ fn repr(b: u8) -> Result<Repr, String> {
     Repr::from_u8(b).ok_or_else(|| format!("bad repr tag {b}"))
 }
 
-fn arith(b: u8) -> Result<ArithOp, String> {    Ok(match b {
-        0 => ArithOp::Add, 1 => ArithOp::Sub, 2 => ArithOp::Mul, 3 => ArithOp::Div, 4 => ArithOp::Mod,
-        _ => return Err("bad arith tag".into()),
-    })
-}
-fn bitop(b: u8) -> Result<BitOp, String> {
-    Ok(match b {
-        0 => BitOp::And, 1 => BitOp::Or, 2 => BitOp::Xor, 3 => BitOp::Shl, 4 => BitOp::Shr,
-        5 => BitOp::WrapShl,
-        _ => return Err("bad bitop tag".into()),
-    })
-}
-fn cmpop(b: u8) -> Result<CmpOp, String> {
-    Ok(match b {
-        0 => CmpOp::Eq, 1 => CmpOp::Ne, 2 => CmpOp::Lt, 3 => CmpOp::Gt, 4 => CmpOp::Le, 5 => CmpOp::Ge,
-        _ => return Err("bad cmp tag".into()),
-    })
-}
 fn nat(b: u8) -> Result<Nat, String> {
     Ok(match b {
         0 => Nat::Print, 1 => Nat::Str, 2 => Nat::Concat, 3 => Nat::StrLen,

@@ -152,26 +152,6 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         return Err(bad("IsTrait want not in the trait table".into()));
                     }
                 }
-                Op::Arith { prim, a, b, .. }
-                | Op::Wrap { prim, a, b, .. }
-                | Op::Bit { prim, a, b, .. }
-                | Op::Cmp { prim, a, b, .. } => {
-                    // the embedded primitive must match the static register types
-                    for r in [a, b] {
-                        match prog.types.kind(f.regs[*r as usize]) {
-                            TyKind::Prim(p) if p == prim => {}
-                            _ => {
-                                return Err(bad(
-                                    "scalar op operand is not the embedded primitive".into(),
-                                ))
-                            }
-                        }
-                    }
-                }
-                Op::Neg { prim, a, .. } => match prog.types.kind(f.regs[*a as usize]) {
-                    TyKind::Prim(p) if p == prim => {}
-                    _ => return Err(bad("neg operand is not the embedded primitive".into())),
-                },
                 Op::AddF { prim, a, b, .. }
                 | Op::SubF { prim, a, b, .. }
                 | Op::MulF { prim, a, b, .. }
@@ -254,16 +234,23 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         _ => return Err(bad("int neg operand is not the embedded primitive".into())),
                     }
                 }
-                Op::EqI { a, b, .. }
-                | Op::NeI { a, b, .. }
-                | Op::LtI { a, b, .. }
-                | Op::GtI { a, b, .. }
-                | Op::LeI { a, b, .. }
-                | Op::GeI { a, b, .. } => {
+                Op::EqI { prim, a, b, .. }
+                | Op::NeI { prim, a, b, .. }
+                | Op::LtI { prim, a, b, .. }
+                | Op::GtI { prim, a, b, .. }
+                | Op::LeI { prim, a, b, .. }
+                | Op::GeI { prim, a, b, .. } => {
+                    if prim.is_float() {
+                        return Err(bad("int compare with a float primitive".into()));
+                    }
                     for r in [a, b] {
                         match prog.types.kind(f.regs[*r as usize]) {
-                            TyKind::Prim(p) if p.is_int() => {}
-                            _ => return Err(bad("int compare operand is not an integer".into())),
+                            TyKind::Prim(p) if p == prim => {}
+                            _ => {
+                                return Err(bad(
+                                    "int compare operand is not the embedded primitive".into(),
+                                ))
+                            }
                         }
                     }
                 }
@@ -314,14 +301,13 @@ fn regs_of(op: &Op) -> Vec<u16> {
             }
         }
         // two-operand scalar ops
-        Op::Not { dst, a } | Op::Neg { dst, a, .. } | Op::NegF { dst, a, .. }
+        Op::Not { dst, a } | Op::NegF { dst, a, .. }
         | Op::NegI { dst, a, .. } => {
             push(*dst);
             push(*a);
         }
         // three-operand ops
-        Op::Arith { dst, a, b, .. } | Op::Wrap { dst, a, b, .. } | Op::Bit { dst, a, b, .. }
-        | Op::Cmp { dst, a, b, .. } | Op::StrCmp { dst, a, b, .. } | Op::RefEq { dst, a, b, .. }
+        Op::StrCmp { dst, a, b, .. } | Op::RefEq { dst, a, b, .. }
         | Op::ArrGet { dst, arr: a, idx: b, .. }
         | Op::AddF { dst, a, b, .. } | Op::SubF { dst, a, b, .. } | Op::MulF { dst, a, b, .. }
         | Op::DivF { dst, a, b, .. } | Op::ModF { dst, a, b, .. } | Op::EqF { dst, a, b, .. }

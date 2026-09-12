@@ -403,48 +403,6 @@ impl Vm {
                     self.cur_regs[*dst as usize] = Slot { i: *bits as i64 };
                     self.cur_pc += 1;
                 }
-                Op::Arith { op, prim, dst, a, b } => {
-                    let v = self.arith(
-                        *op,
-                        *prim,
-                        self.cur_regs[*a as usize],
-                        self.cur_regs[*b as usize],
-                        false,
-                    )?;
-                    self.cur_regs[*dst as usize] = v;
-                    self.cur_pc += 1;
-                }
-                Op::Wrap { op, prim, dst, a, b } => {
-                    let v = self.arith(
-                        *op,
-                        *prim,
-                        self.cur_regs[*a as usize],
-                        self.cur_regs[*b as usize],
-                        true,
-                    )?;
-                    self.cur_regs[*dst as usize] = v;
-                    self.cur_pc += 1;
-                }
-                Op::Bit { op, prim, dst, a, b } => {
-                    let v = self.bitop(
-                        *op,
-                        *prim,
-                        self.cur_regs[*a as usize],
-                        self.cur_regs[*b as usize],
-                    )?;
-                    self.cur_regs[*dst as usize] = v;
-                    self.cur_pc += 1;
-                }
-                Op::Cmp { op, prim, dst, a, b } => {
-                    let v = self.cmp(
-                        *op,
-                        *prim,
-                        self.cur_regs[*a as usize],
-                        self.cur_regs[*b as usize],
-                    );
-                    self.cur_regs[*dst as usize] = Slot::bool(v);
-                    self.cur_pc += 1;
-                }
                 Op::Not { dst, a } => {
                     let v = !self.cur_regs[*a as usize].as_bool();
                     self.cur_regs[*dst as usize] = Slot::bool(v);
@@ -612,33 +570,33 @@ impl Vm {
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
-                Op::EqI { dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Eq, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                Op::EqI { prim, dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Eq, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
-                Op::NeI { dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Ne, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                Op::NeI { prim, dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Ne, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
-                Op::LtI { dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Lt, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                Op::LtI { prim, dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Lt, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
-                Op::GtI { dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Gt, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                Op::GtI { prim, dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Gt, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
-                Op::LeI { dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Le, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                Op::LeI { prim, dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Le, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
-                Op::GeI { dst, a, b } => {
-                    let v = self.cmp_int(CmpOp::Ge, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                Op::GeI { prim, dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Ge, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
@@ -787,41 +745,9 @@ impl Vm {
             Op::ConstRaw { dst, bits } => self.cur_regs[dst as usize] = Slot { i: bits as i64 },
 
 
-            Op::Arith { op, prim, dst, a, b } => {
-                let v = self.arith(op, prim, r!(a), r!(b), false)?;
-                self.cur_regs[dst as usize] = v;
-            }
-            Op::Wrap { op, prim, dst, a, b } => {
-                let v = self.arith(op, prim, r!(a), r!(b), true)?;
-                self.cur_regs[dst as usize] = v;
-            }
-            Op::Bit { op, prim, dst, a, b } => {
-                let v = self.bitop(op, prim, r!(a), r!(b))?;
-                self.cur_regs[dst as usize] = v;
-            }
-            Op::Cmp { op, prim, dst, a, b } => {
-                let v = self.cmp(op, prim, r!(a), r!(b));
-                self.cur_regs[dst as usize] = Slot::bool(v);
-            }
             Op::Not { dst, a } => {
                 let v = !r!(a).as_bool();
                 self.cur_regs[dst as usize] = Slot::bool(v);
-            }
-            Op::Neg { prim, dst, a } => {
-                let x = r!(a);
-                let v = match prim {
-                    PrimTy::F32 => Slot::float(-(unsafe { x.f } as f32) as f64),
-                    PrimTy::F64 => Slot::float(-(unsafe { x.f })),
-                    p => {
-                        let v = unsafe { x.i };
-                        let (r, o) = v.overflowing_neg();
-                        if o || !fits(r, p) {
-                            return Err(Trap::new(TrapKind::Overflow, "negate overflow"));
-                        }
-                        Slot::int(r)
-                    }
-                };
-                self.cur_regs[dst as usize] = v;
             }
             // specialized scalar ops are their own opcodes and are always
             // fast-pathed
@@ -1526,24 +1452,6 @@ impl Vm {
 
     // ---- arithmetic (RFC 0004 §3) ----
 
-    fn arith(&self, op: ArithOp, p: PrimTy, x: Slot, y: Slot, wrapping: bool) -> Result<Slot, Trap> {
-        use PrimTy::*;
-        if p.is_float() {
-            let a = unsafe { x.f };
-            let b = unsafe { y.f };
-            let r = match op {
-                ArithOp::Add => a + b,
-                ArithOp::Sub => a - b,
-                ArithOp::Mul => a * b,
-                ArithOp::Div => a / b,
-                ArithOp::Mod => a % b,
-            };
-            let r = if p == F32 { r as f32 as f64 } else { r };
-            return Ok(Slot::float(r));
-        }
-        self.arith_int(op, p, x, y, wrapping)
-    }
-
     /// Integer arithmetic without the float branch — the specialized
     /// `addi`/`muli`/... opcodes call this with a constant `op`, folding the
     /// operation switch away.
@@ -1577,14 +1485,6 @@ impl Vm {
             ));
         }
         Ok(Slot::int(trunc_to(r, p)))
-    }
-
-    fn bitop(&self, op: BitOp, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
-        use PrimTy::*;
-        if !p.is_int() {
-            return Err(Trap::new(TrapKind::Invalid, "bit op on non-integer"));
-        }
-        self.bitop_int(op, p, x, y)
     }
 
     /// Integer bit-operation body without the `is_int` guard — the
@@ -1669,35 +1569,31 @@ impl Vm {
         })
     }
 
-    fn cmp(&self, op: CmpOp, p: PrimTy, x: Slot, y: Slot) -> bool {
-        if p.is_float() {
-            let a = unsafe { x.f };
-            let b = unsafe { y.f };
-            return match op {
-                CmpOp::Eq => a == b,
-                CmpOp::Ne => a != b,
-                CmpOp::Lt => a < b,
-                CmpOp::Gt => a > b,
-                CmpOp::Le => a <= b,
-                CmpOp::Ge => a >= b,
-            };
-        }
-        self.cmp_int(op, x, y)
-    }
-
     /// Integer compare without the float branch — the specialized `lti`/...
-    /// opcodes call it with a constant `op`.
+    /// opcodes call it with a constant `op`. `p` selects the signedness, so
+    /// unsigned widths order unsigned.
     #[inline]
-    fn cmp_int(&self, op: CmpOp, x: Slot, y: Slot) -> bool {
+    fn cmp_int(&self, op: CmpOp, p: PrimTy, x: Slot, y: Slot) -> bool {
         let a = unsafe { x.i };
         let b = unsafe { y.i };
         match op {
             CmpOp::Eq => a == b,
             CmpOp::Ne => a != b,
-            CmpOp::Lt => a < b,
-            CmpOp::Gt => a > b,
-            CmpOp::Le => a <= b,
-            CmpOp::Ge => a >= b,
+            _ if p.is_unsigned() => {
+                let (a, b) = (a as u64, b as u64);
+                match op {
+                    CmpOp::Lt => a < b,
+                    CmpOp::Gt => a > b,
+                    CmpOp::Le => a <= b,
+                    _ => a >= b,
+                }
+            }
+            _ => match op {
+                CmpOp::Lt => a < b,
+                CmpOp::Gt => a > b,
+                CmpOp::Le => a <= b,
+                _ => a >= b,
+            },
         }
     }
 
