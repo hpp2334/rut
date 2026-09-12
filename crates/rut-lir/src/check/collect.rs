@@ -12,24 +12,37 @@ impl<'a> Ctx<'a> {
 
     pub fn collect(&mut self) {
         let items = self.ast.module_items(self.ast.root).to_vec();
-        // pass 1: type declarations (enums, dataclasses, classes, traits)
+        // pass 1a: declare types (enums, dataclasses, classes, traits) so
+        // every name is in scope before any field/signature is resolved
         for it in &items {
             match self.ast.item(*it) {
             ItemKind::Enum { vis, name, members } => self.collect_enum(it.id(), *vis, *name, members),
-            ItemKind::Dataclass { vis, name, generics, fields, methods } => {
-                self.collect_data(it.id(), DataKind::Dataclass, *vis, *name, generics, fields, methods);
+            ItemKind::Dataclass { vis, name, generics, methods, .. } => {
+                self.declare_data(it.id(), DataKind::Dataclass, *vis, *name, generics, methods);
             }
-            ItemKind::Class { vis, name, generics, fields, methods } => {
-                self.collect_data(it.id(), DataKind::Class, *vis, *name, generics, fields, methods);
+            ItemKind::Class { vis, name, generics, methods, .. } => {
+                self.declare_data(it.id(), DataKind::Class, *vis, *name, generics, methods);
             }
             ItemKind::Trait { vis, name, generics, methods, .. } => {
-                self.collect_trait(it.id(), *vis, *name, generics, methods)
+                self.declare_trait(it.id(), *vis, *name, generics, methods)
             }
                 _ => {}
             }
         }
-        // data field types may reference enums/other datas — re-resolve now
-        // (fields were resolved with a second pass inside collect_data)
+        // pass 1b: resolve field types & trait signatures — with the names
+        // declared, self/forward/mutual references are legal (RFC 0009
+        // recursive shapes)
+        for it in &items {
+            match self.ast.item(*it) {
+                ItemKind::Dataclass { name, fields, .. } | ItemKind::Class { name, fields, .. } => {
+                    self.resolve_data_fields(*name, fields);
+                }
+                ItemKind::Trait { name, methods, .. } => {
+                    self.resolve_trait_sigs(it.id(), *name, methods)
+                }
+                _ => {}
+            }
+        }
         // pass 2: impls, fns, lets
         for it in &items {
             match self.ast.item(*it) {
@@ -101,14 +114,16 @@ impl<'a> Ctx<'a> {
         self.enums.push((name, EnumDecl { ty, members: member_ids }));
     }
 
-    pub(crate) fn collect_data(
+    /// Pass 1a — intern a dataclass/class placeholder and register its name.
+    /// Fields are resolved later (pass 1b), so a field may name this type or
+    /// any type declared later in the module (RFC 0009 recursive shapes).
+    pub(crate) fn declare_data(
         &mut self,
         node: NodeId,
         kind: DataKind,
         _vis: Vis,
         name: IdentId,
         generics: &[IdentId],
-        fields: &[NodeHandle<FieldDeclNode>],
         methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
@@ -125,15 +140,33 @@ impl<'a> Ctx<'a> {
                 ),
             );
         }
-        // two passes over fields: first intern the record type with field
-        // count, then resolve field types (self-reference is legal —
-        // RFC 0009 recursive shapes)
         let placeholder = self.types.intern(RutType {
             name: self.name(name).to_string(),
             kind: TyKind::Data { fields: vec![] },
             size: 0,
             align: 8,
         });
+        let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
+        for m in methods {
+            mths.push((self.ast.method_decl(*m).name, *m));
+        }
+        self.datas.push((
+            name,
+            DataDecl { kind, ty: placeholder, fields: vec![], methods: mths, generics: generics.to_vec() },
+        ));
+    }
+
+    /// Pass 1b — resolve a declared record's field types, stamp the payload
+    /// layout, and fill the `DataDecl`'s field list.
+    pub(crate) fn resolve_data_fields(
+        &mut self,
+        name: IdentId,
+        fields: &[NodeHandle<FieldDeclNode>],
+    ) {
+        let Some(idx) = self.datas.iter().position(|(n, _)| *n == name) else {
+            return;
+        };
+        let placeholder = self.datas[idx].1.ty;
         let mut resolved: Vec<FieldInfo> = Vec::new();
         for f in fields {
             let fd = self.ast.field_decl(*f);
@@ -151,14 +184,14 @@ impl<'a> Ctx<'a> {
             });
         }
         let (size, align) = {
-            // compute layout with resolved fields
+            // compute layout with the resolved fields in place
             let saved = self.types.types[placeholder as usize].kind.clone();
             self.types.types[placeholder as usize].kind = TyKind::Data { fields: resolved.clone() };
             let l = self.layout_of(placeholder);
             self.types.types[placeholder as usize].kind = saved;
             l
         };
-        self.types.types[placeholder as usize].kind = TyKind::Data { fields: resolved };
+        self.types.types[placeholder as usize].kind = TyKind::Data { fields: resolved.clone() };
         self.types.types[placeholder as usize].size = size;
         self.types.types[placeholder as usize].align = align;
 
@@ -166,27 +199,26 @@ impl<'a> Ctx<'a> {
         let mut flds: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)> = Vec::new();
         for f in fields {
             let fd = self.ast.field_decl(*f);
-            let fty = match self.types.kind(placeholder) {
-                TyKind::Data { fields } => fields
-                    .iter()
-                    .find(|x| x.name == self.name(fd.name))
-                    .map(|x| x.ty)
-                    .unwrap_or(TY_I32),
-                _ => TY_I32,
-            };
+            let fty = resolved
+                .iter()
+                .find(|x| x.name == self.name(fd.name))
+                .map(|x| x.ty)
+                .unwrap_or(TY_I32);
             flds.push((fd.name, fty, fd.init, fd.vis));
         }
-        let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
-        for m in methods {
-            mths.push((self.ast.method_decl(*m).name, *m));
-        }
-        self.datas.push((
-            name,
-            DataDecl { kind, ty: placeholder, fields: flds, methods: mths, generics: generics.to_vec() },
-        ));
+        self.datas[idx].1.fields = flds;
     }
 
-    pub(crate) fn collect_trait(&mut self, node: NodeId, vis: Vis, name: IdentId, generics: &[NodeId2], methods: &[NodeHandle<MethodDeclNode>]) {
+    /// Pass 1a — reserve the trait's id and register its name; signatures are
+    /// resolved in pass 1b, once every type name is in scope.
+    pub(crate) fn declare_trait(
+        &mut self,
+        node: NodeId,
+        vis: Vis,
+        name: IdentId,
+        generics: &[NodeId2],
+        _methods: &[NodeHandle<MethodDeclNode>],
+    ) {
         let sp = self.ast.span(node);
         if self.find_trait(name).is_some() || self.find_data(name).is_some() || self.find_enum(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
@@ -198,6 +230,23 @@ impl<'a> Ctx<'a> {
                 "generic traits are not supported in this build (RFC 0005 Slice<T> lands with M2)",
             );
         }
+        let id = self.traits.len() as u32;
+        self.traits.push(TraitDesc { name: self.name(name).to_string(), methods: vec![] });
+        self.trait_decls.push((name, TraitDeclInfo { id, node }));
+        let _ = vis;
+    }
+
+    /// Pass 1b — resolve a declared trait's method signatures.
+    pub(crate) fn resolve_trait_sigs(
+        &mut self,
+        node: NodeId,
+        name: IdentId,
+        methods: &[NodeHandle<MethodDeclNode>],
+    ) {
+        let sp = self.ast.span(node);
+        let Some(id) = self.trait_id_of(name) else {
+            return;
+        };
         let mut tms = Vec::new();
         for m in methods {
             let md = self.ast.method_decl(*m);
@@ -220,7 +269,6 @@ impl<'a> Ctx<'a> {
         }
         // first param must be self (RFC 0012 §2: trait methods are instance
         // methods)
-        let id = self.traits.len() as u32;
         let mut desc = TraitDesc { name: self.name(name).to_string(), methods: vec![] };
         for (mname, ptys, rty) in tms {
             if ptys.first() == Some(&TY_UNIT) {
@@ -235,9 +283,7 @@ impl<'a> Ctx<'a> {
                 self.err(sp, format!("trait method `{mname}` must take `self` (RFC 0012 §2)"));
             }
         }
-        let _ = vis;
-        self.traits.push(desc);
-        self.trait_decls.push((name, TraitDeclInfo { id, node }));
+        self.traits[id as usize] = desc;
     }
 
     pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, methods: &[NodeHandle<MethodDeclNode>]) {

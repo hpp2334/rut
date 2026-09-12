@@ -132,10 +132,11 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 - Missing language/std features exclude `pidigits` (no bigint),
   `regex-redux` (no regex), and `k-nucleotide` / `reverse-complement`
   (bytes/hashmap/stdin) from the benchmark-game set.
-- **Recursive dataclasses are not in the type system** (RFC 0009), so
-  `binary-trees` is an *adaptation*: it builds one `Opaque`-boxed
-  dataclass per node and counts them, rather than the benchmark-game's
-  varying-depth trees. It still exercises the RC allocation/drop path.
+- `binary-trees` is an *adaptation*: it builds recursive dataclasses
+  directly (`left/right: Option<Node>`, RFC 0009 recursive shapes) and
+  counts them, rather than the benchmark-game's varying-depth trees. Each
+  node is one RC cell, so the drop at scope exit is still the RC
+  allocation/drop path this workload measures.
 - **`fasta`** is likewise an adaptation: LCG-driven ACGT string building
   with a length/index checksum, not the benchmark-game's repeat-sequence
   generator.

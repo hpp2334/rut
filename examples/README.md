@@ -40,6 +40,7 @@ else on this page is parse-only.
 | `memory/temp-file.rut` | deterministic destruction at rc 0 | 0016 §3 |
 | `memory/weak-cache.rut` | `Weak(v)`/`upgrade()` | 0017 §1 |
 | `memory/node-cycle.rut` | reference cycles and the collector | 0017 §2 |
+| `memory/tree.rut` | recursive dataclasses (`Option<Node>`), composite fields as handle slots | 0009 §"Representation" |
 | `algorithms/sieve.rut` | flat `Vec<u8>`/`Vec<i32>` primitive buffers | — |
 | `algorithms/quicksort.rut` | in-place vec mutation, recursion | — |
 | `algorithms/matrix-mul.rut` | flat `Vec<f32>` hot loops | — |

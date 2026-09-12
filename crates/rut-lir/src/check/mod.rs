@@ -330,7 +330,15 @@ impl<'a> Ctx<'a> {
                 let mut off = 0u32;
                 let mut align = 1u32;
                 for f in &fields {
-                    let (fsz, fal) = self.layout_of(f.ty);
+                    // composite fields are cell-handle slots, not inline
+                    // payloads (RFC 0009 §1, RFC 0016 §1) — the runtime stores
+                    // one slot per field, so size them as one word. This also
+                    // keeps layout finite for recursive records.
+                    let (fsz, fal) = if self.types.repr_of(f.ty).is_ref() {
+                        (8, 8)
+                    } else {
+                        self.layout_of(f.ty)
+                    };
                     align = align.max(fal);
                     off = (off + fal - 1) / fal * fal;
                     off += fsz.max(fal);

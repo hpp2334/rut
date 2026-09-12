@@ -773,3 +773,86 @@ pub fn main() -> unit {
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["gauge=6 secret=600 w=3"]);
 }
+
+#[test]
+fn recursive_dataclass_tree_runs() {
+    // RFC 0009 §"Representation": recursive shapes like `left: Option<Node>`
+    // are legal. They used to fail at resolve (`unknown type Node`) because
+    // the record was registered only after its fields resolved, and the
+    // layout pass inlined field payloads (infinite recursion). Fields are
+    // now registered first and laid out as handle slots.
+    let src = r#"
+dataclass Node {
+    value: i32,
+    left: Option<Node>,
+    right: Option<Node>,
+}
+fn make(depth: i32, v: i32) -> Node {
+    if (depth <= 0) {
+        return Node { value: v, left: Option.none(), right: Option.none() };
+    }
+    let l = make(depth - 1, v * 2);
+    let r = make(depth - 1, v * 2 + 1);
+    return Node { value: v, left: Option.some(l), right: Option.some(r) };
+}
+fn count(n: Node) -> i32 {
+    let mut c = 1;
+    if (n.left.is_some()) { c += count(n.left.value); }
+    if (n.right.is_some()) { c += count(n.right.value); }
+    return c;
+}
+pub fn main() -> unit {
+    print(f"CHECKSUM {count(make(10, 1))}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 5_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["CHECKSUM 2047"]);
+}
+
+#[test]
+fn forward_and_mutually_recursive_types_resolve() {
+    // `Early` names `Later` before it is declared; `Later` names `Early`
+    // back. Declaration order must not matter.
+    let src = r#"
+dataclass Early {
+    later: Later,
+    tag: i32,
+}
+dataclass Later {
+    back: Option<Early>,
+    x: i32,
+}
+fn make_early() -> Early {
+    return Early { later: Later { back: Option.none(), x: 7 }, tag: 1 };
+}
+pub fn main() -> unit {
+    let e = make_early();
+    print(f"tag={e.tag} x={e.later.x}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["tag=1 x=7"]);
+}
+
+#[test]
+fn recursive_class_field_resolves_and_runs() {
+    // The class form of a self-referential field (a handle slot, so
+    // pointer-sized) — `examples/memory/node-cycle.rut`'s shape.
+    let src = r#"
+class Node {
+    v: i32 = 0;
+    next: Option<Node> = Option.none;
+    fn new() -> Self { return Self {}; }
+    fn val(self) -> i32 { return self.v; }
+}
+pub fn main() -> unit {
+    let a = Node.new();
+    print(f"v={a.val()} has_next={a.next.is_some()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["v=0 has_next=false"]);
+}
