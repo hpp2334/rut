@@ -69,6 +69,8 @@ pub struct Vm {
     since_check: u32,
     pub hooks: HostHooks,
     const_slots: Vec<Slot>,
+    /// recycled per-frame register files (avoids a Vec alloc per call)
+    reg_pool: Vec<Vec<Slot>>,
 }
 
 impl Vm {
@@ -94,6 +96,7 @@ impl Vm {
             since_check: 0,
             hooks,
             const_slots,
+            reg_pool: Vec::new(),
         })
     }
 
@@ -114,8 +117,28 @@ impl Vm {
         self.running
     }
 
-    fn enter(&mut self, func: u32, regs: Vec<Slot>, ret_dst: Option<Reg>) {
-        // save current frame if there is one
+    /// Take a zeroed register file from the pool (or allocate one).
+    fn take_regs(&mut self, n: usize) -> Vec<Slot> {
+        match self.reg_pool.pop() {
+            Some(mut v) => {
+                v.resize(n, Slot::int(0));
+                v
+            }
+            None => vec![Slot::int(0); n],
+        }
+    }
+
+    /// Return a frame's register file to the pool (values are released by
+    /// the caller first; slots are plain 8-byte words, so clearing is safe).
+    fn put_regs(&mut self, mut v: Vec<Slot>) {
+        const REG_POOL_MAX: usize = 64;
+        if self.reg_pool.len() < REG_POOL_MAX {
+            v.clear();
+            self.reg_pool.push(v);
+        }
+    }
+
+    fn enter(&mut self, func: u32, regs: Vec<Slot>, ret_dst: Option<Reg>) {        // save current frame if there is one
         if self.running {
             self.frames.push(SavedFrame {
                 func: self.cur_func,
@@ -148,7 +171,7 @@ impl Vm {
             ));
         }
         let nregs = self.prog.funcs[func as usize].regs.len();
-        let mut regs = vec![Slot::int(0); nregs];
+        let mut regs = self.take_regs(nregs);
         for (i, a) in args.iter().enumerate() {
             let pty = self.param_ty(func, i);
             regs[i] = self.value_in(a, pty)
@@ -331,6 +354,7 @@ impl Vm {
                 .unwrap_or(TY_ANY);
             self.heap.release_typed(regs[i], ty, &self.prog.types);
         }
+        self.put_regs(regs);
         match self.frames.pop() {
             Some(f) => {
                 self.cur_func = f.func;
@@ -446,7 +470,7 @@ impl Vm {
 
             Op::Call { func, args, dst } => {
                 let nregs = self.prog.funcs[func as usize].regs.len();
-                let mut regs = vec![Slot::int(0); nregs];
+                let mut regs = self.take_regs(nregs);
                 for (i, a) in args.iter().enumerate() {
                     regs[i] = r!(*a);
                     if self.is_ref(self.param_ty(func, i)) {
@@ -457,7 +481,7 @@ impl Vm {
             }
             Op::CallM { func, recv, args, dst } => {
                 let nregs = self.prog.funcs[func as usize].regs.len();
-                let mut regs = vec![Slot::int(0); nregs];
+                let mut regs = self.take_regs(nregs);
                 regs[0] = r!(recv);
                 if self.is_ref(self.param_ty(func, 0)) {
                     self.heap.retain(regs[0]);
@@ -488,7 +512,7 @@ impl Vm {
                         )
                     })?;
                 let nregs = self.prog.funcs[fid as usize].regs.len();
-                let mut regs = vec![Slot::int(0); nregs];
+                let mut regs = self.take_regs(nregs);
                 regs[0] = r!(recv);
                 if self.is_ref(self.param_ty(fid, 0)) {
                     self.heap.retain(regs[0]);
@@ -509,7 +533,7 @@ impl Vm {
                 let ncaptures = self.prog.funcs[fid as usize].n_captures as usize;
                 let declared = nparams.saturating_sub(ncaptures);
                 let nregs = self.prog.funcs[fid as usize].regs.len();
-                let mut regs = vec![Slot::int(0); nregs];
+                let mut regs = self.take_regs(nregs);
                 for (i, a) in args.iter().enumerate().take(declared) {
                     regs[i] = r!(*a);
                     if self.is_ref(self.param_ty(fid, i)) {
