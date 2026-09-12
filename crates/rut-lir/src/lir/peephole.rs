@@ -207,6 +207,10 @@ fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.extend(elems.iter().copied());
         }
+        Op::MakeRecord { dst, vals, .. } => {
+            d.push(*dst);
+            u.extend(vals.iter().copied());
+        }
         Op::Arith { dst, a, b, .. }
         | Op::Wrap { dst, a, b, .. }
         | Op::Bit { dst, a, b, .. }
@@ -388,6 +392,7 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         Op::Own { src, .. } => f(src),
         Op::ArrNew { len, .. } => f(len),
         Op::ArrLit { elems, .. } => elems.iter_mut().for_each(f),
+        Op::MakeRecord { vals, .. } => vals.iter_mut().for_each(f),
         Op::ArrGet { arr, idx, .. } => {
             f(arr);
             f(idx);

@@ -74,6 +74,8 @@ pub struct Vm {
     /// per-function indices of reference-typed registers — `do_ret` only
     /// needs to release these, so it skips the type-table lookup per slot
     ref_regs: Vec<Vec<u16>>,
+    /// per-type indices of reference-typed fields, for fused construction
+    data_ref_fields: Vec<Vec<u16>>,
 }
 
 impl Vm {
@@ -96,6 +98,20 @@ impl Vm {
                     .collect()
             })
             .collect();
+        let data_ref_fields: Vec<Vec<u16>> = prog
+            .types
+            .types
+            .iter()
+            .map(|t| match &t.kind {
+                TyKind::Data { fields } => fields
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, fd)| prog.types.repr_of(fd.ty).is_ref())
+                    .map(|(i, _)| i as u16)
+                    .collect(),
+                _ => Vec::new(),
+            })
+            .collect();
         Ok(Vm {
             prog,
             heap,
@@ -113,6 +129,7 @@ impl Vm {
             const_slots,
             reg_pool: Vec::new(),
             ref_regs,
+            data_ref_fields,
         })
     }
 
@@ -427,6 +444,10 @@ impl Vm {
                     self.op_setf(*obj, *field, *val, *repr)?;
                     self.cur_pc += 1;
                 }
+                Op::MakeRecord { dst, ty, vals } => {
+                    self.op_make_record(*dst, *ty, vals)?;
+                    self.cur_pc += 1;
+                }
                 Op::Call { func, args, dst } => {
                     // pc advances first: `enter` saves it as the return
                     // address and resets the callee's pc to 0
@@ -614,6 +635,7 @@ impl Vm {
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
+            Op::MakeRecord { dst, ty, vals } => self.op_make_record(dst, ty, &vals)?,
             Op::GetF { dst, obj, field, repr } => self.op_getf(dst, obj, field, repr)?,
             Op::SetF { obj, field, val, repr } => self.op_setf(obj, field, val, repr)?,
             Op::Own { dst, src, ty } => {
@@ -931,6 +953,26 @@ impl Vm {
             self.heap.retain(v);
             self.heap.release(old);
         }
+        Ok(())
+    }
+
+    /// `MakeRecord` — fused record literal (one alloc, all fields written).
+    #[inline]
+    fn op_make_record(&mut self, dst: Reg, ty: TypeId, vals: &[Reg]) -> Result<(), Trap> {
+        let c = self.heap.alloc_record_zeroed(ty, vals.len())?;
+        if let CellData::Record { fields } = &cell_of(c).data {
+            let mut fb = fields.borrow_mut();
+            for &i in &self.data_ref_fields[ty as usize] {
+                let v = self.cur_regs[vals[i as usize] as usize];
+                self.heap.retain(v);
+            }
+            for (i, &vre) in vals.iter().enumerate() {
+                fb.set(i, self.cur_regs[vre as usize]);
+            }
+        }
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = c;
+        self.heap.release(old);
         Ok(())
     }
 

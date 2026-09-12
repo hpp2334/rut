@@ -130,6 +130,23 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         return Err(bad("arrnew repr does not match the element type".into()));
                     }
                 }
+                Op::MakeRecord { ty, vals, .. } => match prog.types.kind(*ty) {
+                    TyKind::Data { fields } => {
+                        if vals.len() != fields.len() {
+                            return Err(bad(
+                                "MakeRecord value count does not match the field count".into(),
+                            ));
+                        }
+                        for (i, &v) in vals.iter().enumerate() {
+                            if f.regs[v as usize] != fields[i].ty {
+                                return Err(bad(
+                                    "MakeRecord value type does not match the field type".into(),
+                                ));
+                            }
+                        }
+                    }
+                    _ => return Err(bad("MakeRecord over a non-record type".into())),
+                },
                 Op::IsTrait { want, .. } => {
                     if *want as usize >= prog.traits.len() {
                         return Err(bad("IsTrait want not in the trait table".into()));
@@ -195,6 +212,12 @@ fn regs_of(op: &Op) -> Vec<u16> {
         Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
         | Op::ArrNew { dst, .. } | Op::ArrLit { dst, .. } | Op::EnumNew { dst, .. }
         | Op::OptNone { dst, .. } | Op::Panic { msg: dst } => push(*dst),
+        Op::MakeRecord { dst, vals, .. } => {
+            push(*dst);
+            for &v in vals {
+                push(v);
+            }
+        }
         // two-operand scalar ops
         Op::Not { dst, a } | Op::Neg { dst, a, .. } => {
             push(*dst);
@@ -301,7 +324,7 @@ fn tys_of(op: &Op) -> Vec<u32> {
         | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
         | Op::OptSome { ty, .. } | Op::OptNone { ty, .. } | Op::ResOk { ty, .. }
         | Op::ResErr { ty, .. } | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
-        | Op::Box { ty, .. } => vec![*ty],
+        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } => vec![*ty],
         _ => Vec::new(),
     }
 }

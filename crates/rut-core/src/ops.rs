@@ -97,6 +97,10 @@ pub enum Op {
     /// mint a value cell (the `Self { .. }` / dataclass literal;
     /// RFC 0032 §1) — fields follow via SetF
     NewCell { dst: Reg, ty: TypeId },
+    /// fused record literal: allocate and initialize every field in one op
+    /// (`vals[i]` is field `i`, in declaration order). Replaces the
+    /// `NewCell` + N×`SetF` + `MovRef` sequence (RFC 0009).
+    MakeRecord { dst: Reg, ty: TypeId, vals: Vec<Reg> },
     /// `repr` is the field's baked representation (removes the runtime
     /// field-type lookup + `is_ref`); `field` is the declaration index.
     GetF { dst: Reg, obj: Reg, field: u32, repr: Repr },

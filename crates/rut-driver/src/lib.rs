@@ -193,6 +193,10 @@ fn op_str(op: &Op) -> String {
         ),
         Op::Ret { val } => format!("ret {}", val.map(|r| format!("r{r}")).unwrap_or("_".into())),
         Op::NewCell { dst, ty } => format!("newcell r{dst}, t{ty}"),
+        Op::MakeRecord { dst, ty, vals } => format!(
+            "makerecord r{dst}, t{ty}, [{}]",
+            vals.iter().map(|v| format!("r{v}")).collect::<Vec<_>>().join(", ")
+        ),
         Op::GetF { dst, obj, field, repr } => format!("getf r{dst}, r{obj}, f{field} :{}", repr.to_u8()),
         Op::SetF { obj, field, val, repr } => format!("setf r{obj}, f{field}, r{val} :{}", repr.to_u8()),
         Op::Own { dst, src, ty } => format!("own r{dst}, r{src}, t{ty}"),

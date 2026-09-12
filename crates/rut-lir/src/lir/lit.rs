@@ -59,10 +59,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         // every field initialized (any order, by name) or has an initializer
-        // (RFC 0009)
+        // (RFC 0009); collect each field value in a register, then mint the
+        // whole record with one MakeRecord (no NewCell/SetF/MovRef sequence)
+        let mut val_regs: Vec<Option<u16>> = vec![None; d.fields.len()];
         let mut set: Vec<bool> = vec![false; d.fields.len()];
-        let cell = self.new_reg(sty);
-        self.emit(Op::NewCell { dst: cell, ty: sty }, sp.lo);
         for (fname, v) in &fields {
             let Some(fidx) = d.fields.iter().position(|(n, _, _, _)| n == fname) else {
                 self.ctx.err(self.ctx.ast.span(v.id()), format!(
@@ -78,7 +78,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.name(*fname), self.ctx.types.name(fty), self.ctx.types.name(t)
                 ));
             }
-            self.emit(Op::SetF { obj: cell, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+            val_regs[fidx] = Some(self.last_reg);
             set[fidx] = true;
         }
         for (fidx, (fname, fty, init, _)) in d.fields.iter().enumerate() {
@@ -94,13 +94,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if t != *fty {
                     self.ctx.err(self.ctx.ast.span(init.id()), "field initializer type mismatch");
                 }
-                self.emit(Op::SetF { obj: cell, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(*fty) }, sp.lo);
+                val_regs[fidx] = Some(self.last_reg);
             }
         }
-        // the value lives in `cell` (allocated before the SetFs); move it out
-        // so last_reg holds it
-        let out = self.new_reg(sty);
-        self.emit(Op::MovRef { dst: out, src: cell }, sp.lo);
+        let vals: Vec<u16> = val_regs
+            .into_iter()
+            .map(|r| r.expect("checked: every field is initialized"))
+            .collect();
+        let dst = self.new_reg(sty);
+        self.emit(Op::MakeRecord { dst, ty: sty, vals }, sp.lo);
         Ok(sty)
     }
 

@@ -420,6 +420,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::CallFn { fval, args, dst } => { e.u8(19); e.u16(*fval); e.u16s(args); e.u8opt(dst); }
         Op::Ret { val } => { e.u8(20); e.u8opt(val); }
         Op::NewCell { dst, ty } => { e.u8(21); e.u16(*dst); e.u32(*ty); }
+        Op::MakeRecord { dst, ty, vals } => { e.u8(49); e.u16(*dst); e.u32(*ty); e.u16s(vals); }
         Op::GetF { dst, obj, field, repr } => { e.u8(22); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u8(repr.to_u8()); }
         Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
@@ -510,6 +511,7 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         46 => Op::LoopHead,
         47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: prim(d.u8()?)?, to: prim(d.u8()?)? },
         48 => Op::StrCharAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
+        49 => Op::MakeRecord { dst: d.u16()?, ty: d.u32()?, vals: d.u16s()? },
         t => return Err(format!("bad opcode {t}")),
     })
 }
