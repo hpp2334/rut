@@ -427,6 +427,38 @@ impl Vm {
                     self.op_setf(*obj, *field, *val)?;
                     self.cur_pc += 1;
                 }
+                Op::Call { func, args, dst } => {
+                    // pc advances first: `enter` saves it as the return
+                    // address and resets the callee's pc to 0
+                    self.cur_pc += 1;
+                    self.op_call(*func, args, *dst);
+                }
+                Op::CallM { func, recv, args, dst } => {
+                    self.cur_pc += 1;
+                    self.op_call_m(*func, *recv, args, *dst);
+                }
+                Op::CallI { slot, recv, args, dst } => {
+                    self.cur_pc += 1;
+                    self.op_call_i(*slot, *recv, args, *dst)?;
+                }
+                Op::CallFn { fval, args, dst } => {
+                    self.cur_pc += 1;
+                    self.op_call_fn(*fval, args, *dst)?;
+                }
+                Op::CallNat { nat, recv, args, dst } => {
+                    self.call_nat(*nat, *recv, args, *dst)?;
+                    self.cur_pc += 1;
+                }
+                Op::ArrLit { dst, ty, elems } => {
+                    self.op_arr_lit(*dst, *ty, elems)?;
+                    self.cur_pc += 1;
+                }
+                Op::BrTable { idx, table, default } => {
+                    let m = cell_of(self.cur_regs[*idx as usize])
+                        .as_enum_member()
+                        .unwrap_or(u32::MAX) as usize;
+                    self.cur_pc = table.get(m).copied().unwrap_or(*default);
+                }
                 _ => {
                     self.cur_pc += 1;
                     self.step(op.clone())?;
@@ -565,89 +597,10 @@ impl Vm {
                 self.cur_pc = table.get(m).copied().unwrap_or(default);
             }
 
-            Op::Call { func, args, dst } => {
-                let nregs = self.prog.funcs[func as usize].regs.len();
-                let mut regs = self.take_regs(nregs);
-                for (i, a) in args.iter().enumerate() {
-                    regs[i] = r!(*a);
-                    if self.is_ref(self.param_ty(func, i)) {
-                        self.heap.retain(regs[i]);
-                    }
-                }
-                self.enter(func, regs, dst);
-            }
-            Op::CallM { func, recv, args, dst } => {
-                let nregs = self.prog.funcs[func as usize].regs.len();
-                let mut regs = self.take_regs(nregs);
-                regs[0] = r!(recv);
-                if self.is_ref(self.param_ty(func, 0)) {
-                    self.heap.retain(regs[0]);
-                }
-                for (i, a) in args.iter().enumerate() {
-                    regs[i + 1] = r!(*a);
-                    if self.is_ref(self.param_ty(func, i + 1)) {
-                        self.heap.retain(regs[i + 1]);
-                    }
-                }
-                self.enter(func, regs, dst);
-            }
-            Op::CallI { slot, recv, args, dst } => {
-                let ty = cell_of(r!(recv)).ty;
-                let fid = self
-                    .prog
-                    .vtables
-                    .get(ty as usize)
-                    .and_then(|v| v.get(slot as usize))
-                    .and_then(|f| *f)
-                    .ok_or_else(|| {
-                        Trap::new(
-                            TrapKind::Invalid,
-                            format!(
-                                "no impl for trait slot {slot} on {} — `is` would have said false",
-                                self.prog.types.name(ty)
-                            ),
-                        )
-                    })?;
-                let nregs = self.prog.funcs[fid as usize].regs.len();
-                let mut regs = self.take_regs(nregs);
-                regs[0] = r!(recv);
-                if self.is_ref(self.param_ty(fid, 0)) {
-                    self.heap.retain(regs[0]);
-                }
-                for (i, a) in args.iter().enumerate() {
-                    regs[i + 1] = r!(*a);
-                    if self.is_ref(self.param_ty(fid, i + 1)) {
-                        self.heap.retain(regs[i + 1]);
-                    }
-                }
-                self.enter(fid, regs, dst);
-            }
-            Op::CallFn { fval, args, dst } => {
-                let Some((fid, captures)) = cell_of(r!(fval)).as_closure() else {
-                    return Err(Trap::new(TrapKind::Invalid, "call on non-closure"));
-                };
-                let nparams = self.prog.funcs[fid as usize].params.len();
-                let ncaptures = self.prog.funcs[fid as usize].n_captures as usize;
-                let declared = nparams.saturating_sub(ncaptures);
-                let nregs = self.prog.funcs[fid as usize].regs.len();
-                let mut regs = self.take_regs(nregs);
-                for (i, a) in args.iter().enumerate().take(declared) {
-                    regs[i] = r!(*a);
-                    if self.is_ref(self.param_ty(fid, i)) {
-                        self.heap.retain(regs[i]);
-                    }
-                }
-                for (i, c) in captures.iter().enumerate() {
-                    if declared + i < regs.len() {
-                        regs[declared + i] = *c;
-                        let ty = self.param_ty(fid, declared + i);
-                        if self.is_ref(ty) {
-                            self.heap.retain(*c);
-                        }
-                    }
-                }
-                self.enter(fid, regs, dst);
-            }
+            Op::Call { func, args, dst } => self.op_call(func, &args, dst),
+            Op::CallM { func, recv, args, dst } => self.op_call_m(func, recv, &args, dst),
+            Op::CallI { slot, recv, args, dst } => self.op_call_i(slot, recv, &args, dst)?,
+            Op::CallFn { fval, args, dst } => self.op_call_fn(fval, &args, dst)?,
             Op::CallNat { nat, recv, args, dst } => self.call_nat(nat, recv, &args, dst)?,
             // handled in run_loop (root returns surface the run's value)
             Op::Ret { .. } => unreachable!("Op::Ret is handled by the run loop"),
@@ -689,17 +642,7 @@ impl Vm {
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::ArrLit { dst, ty, elems } => {
-                let elem = match self.prog.types.kind(ty) {
-                    TyKind::Array { elem, .. } | TyKind::Vec { elem } => *elem,
-                    _ => TY_ANY,
-                };
-                let vals: Vec<Slot> = elems.iter().map(|&e| r!(e)).collect();
-                let c = self.heap.alloc_array(elem, vals, &self.prog.types)?;
-                let old = self.cur_regs[dst as usize];
-                self.cur_regs[dst as usize] = c;
-                self.heap.release(old);
-            }
+            Op::ArrLit { dst, ty, elems } => self.op_arr_lit(dst, ty, &elems)?,
             Op::ArrGet { dst, arr, idx } => self.op_arr_get(dst, arr, idx)?,
             Op::ArrSet { arr, idx, val } => self.op_arr_set(arr, idx, val)?,
 
@@ -998,6 +941,122 @@ impl Vm {
             self.heap.retain(v);
             self.heap.release(old);
         }
+        Ok(())
+    }
+
+    /// `Call` — shared by `step` and the `run_loop` fast path (avoids
+    /// cloning the `args` vector per call).
+    #[inline]
+    fn op_call(&mut self, func: u32, args: &[Reg], dst: Option<Reg>) {
+        let nregs = self.prog.funcs[func as usize].regs.len();
+        let mut regs = self.take_regs(nregs);
+        for (i, &a) in args.iter().enumerate() {
+            regs[i] = self.cur_regs[a as usize];
+            if self.is_ref(self.param_ty(func, i)) {
+                self.heap.retain(regs[i]);
+            }
+        }
+        self.enter(func, regs, dst);
+    }
+
+    /// `CallM` — shared by `step` and the `run_loop` fast path.
+    #[inline]
+    fn op_call_m(&mut self, func: u32, recv: Reg, args: &[Reg], dst: Option<Reg>) {
+        let nregs = self.prog.funcs[func as usize].regs.len();
+        let mut regs = self.take_regs(nregs);
+        regs[0] = self.cur_regs[recv as usize];
+        if self.is_ref(self.param_ty(func, 0)) {
+            self.heap.retain(regs[0]);
+        }
+        for (i, &a) in args.iter().enumerate() {
+            regs[i + 1] = self.cur_regs[a as usize];
+            if self.is_ref(self.param_ty(func, i + 1)) {
+                self.heap.retain(regs[i + 1]);
+            }
+        }
+        self.enter(func, regs, dst);
+    }
+
+    /// `CallI` — shared by `step` and the `run_loop` fast path.
+    #[inline]
+    fn op_call_i(&mut self, slot: u32, recv: Reg, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+        let ty = cell_of(self.cur_regs[recv as usize]).ty;
+        let fid = self
+            .prog
+            .vtables
+            .get(ty as usize)
+            .and_then(|v| v.get(slot as usize))
+            .and_then(|f| *f)
+            .ok_or_else(|| {
+                Trap::new(
+                    TrapKind::Invalid,
+                    format!(
+                        "no impl for trait slot {slot} on {} — `is` would have said false",
+                        self.prog.types.name(ty)
+                    ),
+                )
+            })?;
+        let nregs = self.prog.funcs[fid as usize].regs.len();
+        let mut regs = self.take_regs(nregs);
+        regs[0] = self.cur_regs[recv as usize];
+        if self.is_ref(self.param_ty(fid, 0)) {
+            self.heap.retain(regs[0]);
+        }
+        for (i, &a) in args.iter().enumerate() {
+            regs[i + 1] = self.cur_regs[a as usize];
+            if self.is_ref(self.param_ty(fid, i + 1)) {
+                self.heap.retain(regs[i + 1]);
+            }
+        }
+        self.enter(fid, regs, dst);
+        Ok(())
+    }
+
+    /// `CallFn` — shared by `step` and the `run_loop` fast path. Reads the
+    /// captures by reference (no per-call `Vec` clone).
+    #[inline]
+    fn op_call_fn(&mut self, fval: Reg, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+        let cell = cell_of(self.cur_regs[fval as usize]);
+        let (fid, captures): (u32, &[Slot]) = match &cell.data {
+            CellData::Closure { func, captures, .. } => (*func, captures.as_slice()),
+            _ => return Err(Trap::new(TrapKind::Invalid, "call on non-closure")),
+        };
+        let nparams = self.prog.funcs[fid as usize].params.len();
+        let ncaptures = self.prog.funcs[fid as usize].n_captures as usize;
+        let declared = nparams.saturating_sub(ncaptures);
+        let nregs = self.prog.funcs[fid as usize].regs.len();
+        let mut regs = self.take_regs(nregs);
+        for (i, &a) in args.iter().enumerate().take(declared) {
+            regs[i] = self.cur_regs[a as usize];
+            if self.is_ref(self.param_ty(fid, i)) {
+                self.heap.retain(regs[i]);
+            }
+        }
+        for (i, &c) in captures.iter().enumerate() {
+            if declared + i < regs.len() {
+                regs[declared + i] = c;
+                let ty = self.param_ty(fid, declared + i);
+                if self.is_ref(ty) {
+                    self.heap.retain(c);
+                }
+            }
+        }
+        self.enter(fid, regs, dst);
+        Ok(())
+    }
+
+    /// `ArrLit` — shared by `step` and the `run_loop` fast path.
+    #[inline]
+    fn op_arr_lit(&mut self, dst: Reg, ty: TypeId, elems: &[Reg]) -> Result<(), Trap> {
+        let elem = match self.prog.types.kind(ty) {
+            TyKind::Array { elem, .. } | TyKind::Vec { elem } => *elem,
+            _ => TY_ANY,
+        };
+        let vals: Vec<Slot> = elems.iter().map(|&e| self.cur_regs[e as usize]).collect();
+        let c = self.heap.alloc_array(elem, vals, &self.prog.types)?;
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = c;
+        self.heap.release(old);
         Ok(())
     }
 
