@@ -286,6 +286,7 @@ fn json_codec_against_serde() {
         r#"  {  "spaced"  :  [  1 , 2 ]  }  "#,
         r#"{"s":"quote \" back \\ slash \/ solidus"}"#,
         r#"{"esc":"tab\there\nnl\rcr"}"#,
+        r#"{"ctl":"bs\bfh\fdel"}"#,
         r#"{"uni":"héllo wörld — ✓"}"#,
         r#"{"nums":[0,-0,1e10,-2.5E-3]}"#,
         r#"{"deep":{"a":{"b":{"c":{"d":[1,{"e":2}]}}}}}"#,

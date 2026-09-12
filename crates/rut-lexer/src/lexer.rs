@@ -167,6 +167,8 @@ impl<'a> Lexer<'a> {
             b't' => out.push('\t'),
             b'n' => out.push('\n'),
             b'r' => out.push('\r'),
+            b'b' => out.push('\u{8}'),
+            b'f' => out.push('\u{c}'),
             b'\\' => out.push('\\'),
             b'"' => out.push('"'),
             b'\'' => out.push('\''),

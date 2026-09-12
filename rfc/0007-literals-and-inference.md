@@ -38,7 +38,7 @@ interpolation ever happens implicitly, unlike JS template literals):
 
 | Form | Example | Meaning |
 |---|---|---|
-| plain | `"hi\tname"` | escapes processed (`\t \n \r \\ \" \u{...}`) |
+| plain | `"hi\tname"` | escapes processed (`\t \n \r \b \f \\ \" \u{...}`) |
 | raw | `r"C:\temp\log.txt"` | **no** escape processing; every byte is literal (C++ `R"(...)"` / Rust `r"..."` style, minus the parens) |
 | format | `f"hi {name}, n={n}"` | Rust-style placeholders, evaluated at runtime |
 
