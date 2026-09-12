@@ -8,9 +8,10 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 (`host/my_map.rs`), and consumers just import (`host/my-map.rut`,
 `host/interop.rut`); other VM/Rust sketches stay in the RFCs.
 
-The exception is [`00-todolist/`](00-todolist/) — a **runnable** Rust
-project from the first line of `todolist.rut` to the last `Value` out of
-the VM. Everything else on this page is parse-only.
+The exceptions are the **runnable** Rust projects —
+[`00-todolist/`](00-todolist/) and [`01-sort/`](01-sort/) — from the
+first line of their `.rut` to the last `Value` out of the VM. Everything
+else on this page is parse-only.
 
 | File | Demonstrates | RFC |
 |---|---|---|
@@ -63,6 +64,23 @@ primitives, `Option`/`Result` only (RFC 0023 §2 — enforced on entry
 signatures at compile time, RFC 0035 §3). All data stays in rut.
 `tests/session.rs` gates the session under `cargo test --workspace`. See
 [00-todolist/README.md](00-todolist/README.md).
+
+### 01-sort — the algorithmic one
+
+Also a Cargo project, a workspace member: **`cargo run -p sort`**. The
+rut side (`sort.rut`) is a sorting *library* — insertion / bubble /
+selection (loop-shaped) plus quicksort and merge sort (recursion:
+in-place partitioning vs. out-of-place merging) — behind one
+**dispatcher entry**, `sort(c, algo: string)`, a `when` over
+string-literal pattern arms (unknown names come back as `Result.err`,
+not a trap). The host holds one `Opaque` bank; `Vec<i32>` never crosses
+(RFC 0023 §2) — results return as `serialize(c)`, a JSON array string,
+so one compare checks a whole run. `fill(c, n, seed)` sizes a
+deterministic LCG input in one call (wrapping `&*`/`&+`, RFC 0004 §3),
+and `tests/session.rs` gates every algorithm on known inputs, edge
+cases (empty / single / duplicates / sorted / reverse / negatives),
+cross-algorithm agreement on 500 pseudo-random values, and trap
+cleanliness. See [01-sort/README.md](01-sort/README.md).
 
 | `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
 | `json/app.rut` | opt-in dataclasses (zero-method `impl Serializable for T {}`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, module-private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |

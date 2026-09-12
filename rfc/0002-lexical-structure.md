@@ -83,7 +83,7 @@ compiler gives it no meaning; greppability is enforced by style.
   `default`, `extends`, `super`, `as` (no casts at all — erasure is
   the `Opaque.new(v)` class method, RFC 0014), `type` (type alias — future),
   `struct`, `match`, `void` (the unit type is spelled `unit`), `null`,
-  `undefined`, `any`, `unknown`, `typeof`,
+  `undefined`, `any`, `typeof`,
   `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`,
   `const` (bindings spell `let` / `let mut` — RFC 0003 §1), `private`
   (members are private by default; visibility spells `pub` — RFC 0003 §2).

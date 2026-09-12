@@ -647,7 +647,6 @@ fn reserved_word_msg(w: &str) -> Option<String> {
         "null" => "rut has no `null`; absence is `Option<T>` (RFC 0005)",
         "undefined" => "rut has no `undefined`; absence is `Option<T>` (RFC 0005)",
         "any" => "rut has no `any`; use `dyn I` or `Opaque` (RFC 0012, RFC 0014)",
-        "unknown" => "rut has no `unknown`; use `dyn I` or `Opaque` (RFC 0012, RFC 0014)",
         "typeof" => "rut has no `typeof`; types are static — `x is T` tests at runtime",
         "instanceof" => "rut has no `instanceof`; use `is`",
         "delete" => "rut has no `delete`; there are no dynamic properties",

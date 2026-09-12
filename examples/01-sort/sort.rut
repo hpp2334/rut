@@ -1,0 +1,242 @@
+// sort.rut — a sorting library in rut, called from Rust.
+//
+// The shape: the HOST owns the session. It asks for a bank (`create`),
+// gets back a handle it can hold and pass around (an `Opaque` box —
+// RFC 0014, the one cell an embedder may keep), and drives FIVE
+// sorting algorithms through one `entry fn` dispatcher. The data never
+// leaves rut: `Vec<i32>` cannot cross the host boundary (RFC 0023 §2),
+// so the host reads results back as a JSON array (`serialize`), one
+// element at a time (`get`), or as a verdict (`is_sorted`).
+//
+// The algorithms are free fns over `Vec<i32>` — vecs are handles
+// (RFC 0016 §1), so in-place mutation inside a call is shared with the
+// bank. Three are loop-shaped (insertion / bubble / selection);
+// quicksort and merge sort add RECURSION — in-place partitioning vs.
+// out-of-place merging, the two classic shapes.
+
+// ---- shared helpers ----
+
+fn swap(mut xs: Vec<i32>, a: i32, b: i32) -> unit {
+    let t = xs[a];
+    xs[a] = xs[b];
+    xs[b] = t;
+}
+
+fn sorted_up(xs: Vec<i32>) -> bool {
+    for (let i = 1; i < xs.len(); i += 1) {
+        if (xs[i - 1] > xs[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// ---- the algorithms ----
+
+/// Classic shifting loop: grow a sorted prefix one element at a time.
+fn insertion_sort(mut xs: Vec<i32>) -> unit {
+    for (let i = 1; i < xs.len(); i += 1) {
+        let key = xs[i];
+        let mut j = i - 1;
+        while (j >= 0 && xs[j] > key) {
+            xs[j + 1] = xs[j];
+            j -= 1;
+        }
+        xs[j + 1] = key;
+    }
+}
+
+/// Adjacent swaps, bailing out as soon as a pass swaps nothing.
+fn bubble_sort(mut xs: Vec<i32>) -> unit {
+    let mut n = xs.len();
+    let mut swapped = true;
+    while (swapped) {
+        swapped = false;
+        for (let i = 1; i < n; i += 1) {
+            if (xs[i - 1] > xs[i]) {
+                swap(xs, i - 1, i);
+                swapped = true;
+            }
+        }
+        n -= 1;
+    }
+}
+
+/// Select the minimum of the suffix, swap it into place.
+fn selection_sort(mut xs: Vec<i32>) -> unit {
+    for (let i = 0; i < xs.len(); i += 1) {
+        let mut m = i;
+        for (let j = i + 1; j < xs.len(); j += 1) {
+            if (xs[j] < xs[m]) {
+                m = j;
+            }
+        }
+        swap(xs, i, m);
+    }
+}
+
+/// Lomuto partition around the last element.
+fn partition(mut xs: Vec<i32>, lo: i32, hi: i32) -> i32 {
+    let pivot = xs[hi];
+    let mut i = lo - 1;
+    for (let j = lo; j < hi; j += 1) {
+        if (xs[j] <= pivot) {
+            i += 1;
+            swap(xs, i, j);
+        }
+    }
+    swap(xs, i + 1, hi);
+    return i + 1;
+}
+
+/// In-place recursion: partition, then sort each side.
+fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> unit {
+    if (lo >= hi) {
+        return;
+    }
+    let p = partition(xs, lo, hi);
+    quicksort(xs, lo, p - 1);
+    quicksort(xs, p + 1, hi);
+}
+
+/// Out-of-place recursion: sort both halves into fresh vecs, merge
+/// back into the original — `push` builds the halves, indexing writes
+/// the result through the shared handle.
+fn merge_sort(mut xs: Vec<i32>) -> unit {
+    let n = xs.len();
+    if (n <= 1) {
+        return;
+    }
+    let mid = n / 2;
+    let left: Vec<i32> = Vec();
+    let right: Vec<i32> = Vec();
+    for (let i = 0; i < mid; i += 1) {
+        left.push(xs[i]);
+    }
+    for (let i = mid; i < n; i += 1) {
+        right.push(xs[i]);
+    }
+    merge_sort(left);
+    merge_sort(right);
+    let mut i = 0;
+    let mut j = 0;
+    let mut k = 0;
+    while (i < left.len() && j < right.len()) {
+        if (left[i] <= right[j]) {
+            xs[k] = left[i];
+            i += 1;
+        } else {
+            xs[k] = right[j];
+            j += 1;
+        }
+        k += 1;
+    }
+    while (i < left.len()) {
+        xs[k] = left[i];
+        i += 1;
+        k += 1;
+    }
+    while (j < right.len()) {
+        xs[k] = right[j];
+        j += 1;
+        k += 1;
+    }
+}
+
+// ---- the container ----
+
+/// The host-held bank: one opaque box around the data being sorted.
+/// `create` boxes it; every entry takes it back as its first argument
+/// and recovers it with `downcast` (a wrong box traps cleanly).
+dataclass Bank {
+    data: Vec<i32>;
+}
+
+// ---- the host surface (entry = callable by the embedder) ----
+
+entry fn create() -> Opaque {
+    return Opaque.new(Bank { data: Vec() });
+}
+
+/// Host-supplied data, one element per call — exact inputs.
+entry fn push(c: Opaque, x: i32) -> unit {
+    let b = downcast<Bank>(c).value;
+    b.data.push(x);
+}
+
+/// Replace the bank with `n` deterministic pseudo-random values — a
+/// Numerical-Recipes LCG over `seed`, folded into 0..1000 — so one call
+/// sizes the whole input; no host round-trip per element. The wrapping
+/// `&*`/`&+` forms keep the u32 math in range (RFC 0004 §3: plain `*`
+/// traps; plain `<<` would too — xorshift is out).
+entry fn fill(c: Opaque, n: u32, seed: u32) -> unit {
+    let mut b = downcast<Bank>(c).value;
+    let fresh: Vec<i32> = Vec();
+    let mut x = seed | 1;         // the LCG needs an odd state
+    for (let i = 0; i < i32(n); i += 1) {
+        x = (x &* 1664525) &+ 1013904223;
+        fresh.push(i32(x % 1000));
+    }
+    b.data = fresh;
+}
+
+/// Sort the bank in place. Unknown names come back as `Result.err` —
+/// an ordinary value, not a trap.
+entry fn sort(c: Opaque, algo: string) -> Result<bool, string> {
+    let b = downcast<Bank>(c).value;
+    let mut unknown = false;
+    when (algo) {
+        "insertion" -> { insertion_sort(b.data); },
+        "bubble"    -> { bubble_sort(b.data); },
+        "selection" -> { selection_sort(b.data); },
+        "quick"     -> { quicksort(b.data, 0, b.data.len() - 1); },
+        "merge"     -> { merge_sort(b.data); },
+        else        -> { unknown = true; },
+    }
+    if (unknown) {
+        return Result.err(f"unknown algorithm: {algo}");
+    }
+    return Result.ok(true);
+}
+
+entry fn len(c: Opaque) -> i32 {
+    return downcast<Bank>(c).value.data.len();
+}
+
+/// Element `i`, or `Option.none()` past the end — check, then read
+/// `.value` (RFC 0005: no `?.` sugar).
+entry fn get(c: Opaque, i: i32) -> Option<i32> {
+    let xs = downcast<Bank>(c).value.data;
+    if (i < 0 || i >= xs.len()) {
+        return Option.none();
+    }
+    return Option.some(xs[i]);
+}
+
+/// The machine-checkable form: a JSON array — `[1, 2, 3]`. One string
+/// crosses, so the host can assert a whole result in one compare.
+entry fn serialize(c: Opaque) -> string {
+    let xs = downcast<Bank>(c).value.data;
+    let mut out = "[";
+    for (let i = 0; i < xs.len(); i += 1) {
+        if (i > 0) {
+            out = f"{out}, ";
+        }
+        out = f"{out}{xs[i]}";
+    }
+    return f"{out}]";
+}
+
+/// The human listing the embedder prints.
+entry fn render(c: Opaque) -> string {
+    let xs = downcast<Bank>(c).value.data;
+    let mut out = f"Bank[{xs.len()}]";
+    for (let v of xs) {
+        out = f"{out} {v}";
+    }
+    return out;
+}
+
+entry fn is_sorted(c: Opaque) -> bool {
+    return sorted_up(downcast<Bank>(c).value.data);
+}

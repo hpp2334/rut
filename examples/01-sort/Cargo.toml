@@ -1,0 +1,17 @@
+[package]
+name = "sort"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "01-sort — a Rust app embedding rut: the rut side is a five-algorithm sorting library, the Rust side compiles, verifies, and drives it through one dispatcher entry"
+
+[dependencies]
+rut-core = { path = "../../crates/rut-core" }
+rut-lexer = { path = "../../crates/rut-lexer" }
+rut-parser = { path = "../../crates/rut-parser" }
+rut-driver = { path = "../../crates/rut-driver" }
+rut-vm = { path = "../../crates/rut-vm" }
+
+[[bin]]
+name = "sort"
+path = "src/main.rs"

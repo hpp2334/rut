@@ -12,6 +12,7 @@ members = [
     "crates/rut-cli",
     "crates/rut-lsp",
     "examples/00-todolist",
+    "examples/01-sort",
 ]
 
 [workspace.package]
