@@ -1076,6 +1076,7 @@ impl Vm {
     }
 
     fn bitop(&self, op: BitOp, ty: TypeId, x: Slot, y: Slot) -> Result<Slot, Trap> {
+        use PrimTy::*;
         let a = unsafe { x.i };
         let b = unsafe { y.i };
         let p = match self.prog.types.kind(ty) {
@@ -1087,7 +1088,17 @@ impl Vm {
             BitOp::Or => (a | b, false),
             BitOp::Xor => (a ^ b, false),
             BitOp::Shl => a.overflowing_shl((b & 63) as u32),
-            BitOp::Shr => a.overflowing_shr((b & 63) as u32),
+            // `>>` follows signedness: logical on unsigned (a u64 with its
+            // top bit set must not sign-extend — RFC 0004 §1), arithmetic
+            // on signed
+            BitOp::Shr => (
+                if matches!(p, U8 | U16 | U32 | U64) {
+                    ((a as u64) >> (b & 63)) as i64
+                } else {
+                    a.overflowing_shr((b & 63) as u32).0
+                },
+                false,
+            ),
             // wrapping `&<<` (RFC 0004 §3): the shifted-out bits are simply
             // gone — truncate to the operand width, never trap
             BitOp::WrapShl => return Ok(Slot::int(trunc_to(a.wrapping_shl((b & 63) as u32), p))),

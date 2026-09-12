@@ -269,6 +269,25 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn shr_follows_signedness() {
+    // RFC 0004 §1: `>>` is logical on unsigned (no sign-extension of the
+    // top bit — u64's bit 63 is magnitude, not sign), arithmetic on signed.
+    let src = r#"
+pub fn main() -> unit {
+    let u: u64 = 0xFFFFFFFFFFFFFFFF;
+    print(f"u={u >> 1}");
+    let v: u32 = 0x80000000;
+    print(f"v={v >> 31}");
+    let s = i64(-8);
+    print(f"s={s >> 1}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(lines, vec!["u=9223372036854775807", "v=1", "s=-4"]);
+    assert_eq!(trap, None);
+}
+
+#[test]
 fn heap_budget_traps_before_the_write() {
     // RFC 0040 §1: OutOfMemory leaves the heap byte-identical — a tiny
     // budget fails the Vec allocation cleanly
