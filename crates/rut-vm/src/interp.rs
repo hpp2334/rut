@@ -76,6 +76,11 @@ pub struct Vm {
     ref_regs: Vec<Vec<u16>>,
     /// per-type indices of reference-typed fields, for fused construction
     data_ref_fields: Vec<Vec<u16>>,
+    /// `type_repr[t]` — the baked representation of type `t` (no runtime
+    /// type-table match)
+    type_repr: Vec<Repr>,
+    /// `sum_payload_repr[t][tag]` — payload repr for Option/Result types
+    sum_payload_repr: Vec<[Repr; 2]>,
 }
 
 impl Vm {
@@ -112,6 +117,27 @@ impl Vm {
                 _ => Vec::new(),
             })
             .collect();
+        let type_repr: Vec<Repr> = prog.types.types.iter().map(|t| match &t.kind {
+            TyKind::Prim(p) => Repr::Prim(*p),
+            TyKind::Unit | TyKind::Fn { .. } => Repr::Any,
+            _ => Repr::Ref,
+        }).collect();
+        let sum_payload_repr: Vec<[Repr; 2]> = prog
+            .types
+            .types
+            .iter()
+            .map(|t| match &t.kind {
+                TyKind::Option { elem } => [
+                    type_repr.get(*elem as usize).copied().unwrap_or(Repr::Any),
+                    Repr::Any,
+                ],
+                TyKind::Result { ok, err } => [
+                    type_repr.get(*ok as usize).copied().unwrap_or(Repr::Any),
+                    type_repr.get(*err as usize).copied().unwrap_or(Repr::Any),
+                ],
+                _ => [Repr::Any, Repr::Any],
+            })
+            .collect();
         Ok(Vm {
             prog,
             heap,
@@ -130,6 +156,8 @@ impl Vm {
             reg_pool: Vec::new(),
             ref_regs,
             data_ref_fields,
+            type_repr,
+            sum_payload_repr,
         })
     }
 
@@ -315,7 +343,7 @@ impl Vm {
     }
 
     fn is_ref(&self, ty: TypeId) -> bool {
-        ty != TY_ANY && self.prog.types.is_ref(ty)
+        ty != TY_ANY && self.type_repr[ty as usize].is_ref()
     }
 
     fn run_loop(&mut self) -> Result<Value, Trap> {
@@ -642,7 +670,7 @@ impl Vm {
                 let v = self.heap.own(r!(src), ty, &self.prog.types)?;
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = v;
-                if self.prog.types.is_ref(ty) {
+                if self.is_ref(ty) {
                     self.heap.release(old);
                 }
             }
@@ -777,7 +805,7 @@ impl Vm {
             }
             Op::Box { dst, val, ty } => {
                 let v = r!(val);
-                if self.prog.types.is_ref(ty) {
+                if self.is_ref(ty) {
                     self.heap.retain(v);
                 }
                 let c = self.heap.alloc_opaque(v, ty)?;
@@ -841,14 +869,8 @@ impl Vm {
     }
 
     fn alloc_sum(&mut self, dst: Reg, ty: TypeId, tag: u32, payload: Option<Slot>) -> Result<(), Trap> {
-        let inner = match (self.prog.types.kind(ty).clone(), tag) {
-            (TyKind::Option { elem }, 0) => Some(elem),
-            (TyKind::Result { ok, .. }, 0) => Some(ok),
-            (TyKind::Result { err, .. }, 1) => Some(err),
-            _ => None,
-        };
-        if let (Some(v), Some(inner)) = (payload, inner) {
-            if self.is_ref(inner) {
+        if let Some(v) = payload {
+            if self.sum_payload_repr[ty as usize][tag as usize].is_ref() {
                 self.heap.retain(v);
             }
         }
