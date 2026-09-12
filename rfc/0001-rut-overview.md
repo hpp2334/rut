@@ -77,8 +77,8 @@ a structural answer in rut:
    exist in rut.
 4. **Too much memory.** JS values are boxes: per-object headers, tagged or
    NaN-boxed pointers, boxed array elements, GC mark/pause overhead. rut's
-   memory story is layout: untagged 8-byte slots (RFC 0015 §5), inline
-   repr-C values with no headers (RFC 0015 §4), flat unboxed vecs
+   memory story is layout: untagged 8-byte slots (RFC 0015 §5), record
+   payloads as slot arrays (RFC 0015 §4), flat unboxed vecs
    (RFC 0016 §4), reference counting with deterministic destructors
    (RFC 0016), with `Weak<T>` as the cycle answer (RFC 0017). No NaN-boxing —
    the per-platform layout bug class tur hit in Boa — and no collector on
@@ -152,7 +152,7 @@ final sections of the RFC they implement).
   types; type tests
 - 0013 — functions, closures & generics
 - 0014 — `Opaque`: explicit erasure with checked recovery
-- 0015 — reified types & layout: `RutType`, repr C, slots & vtables
+- 0015 — reified types: `RutType`, slots & vtables
 
 **Part C — Memory**
 
@@ -170,7 +170,7 @@ final sections of the RFC they implement).
 
 - 0022 — embedding model & native modules
 - 0023 — the `Value` boundary & borrow guards
-- 0024 — repr C struct interop
+- 0024 — repr C struct interop (**withdrawn**)
 - 0025 — host classes & declaration files
 - 0026 — generic host classes: a user-defined map
 - 0027 — templates: `f"..."` across the boundary
@@ -207,7 +207,7 @@ final sections of the RFC they implement).
 | P5 | TS-like data model: `dataclass`/`class` (both **shared refcounted cells** — reference semantics by default, `own(x)` for eager copies; classes construct through their own class methods — `Rect.new(..)`, no `constructor` keyword, no `new` expression, `suspend` class methods allowed), `trait` + `impl Trait for Type` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented for class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0009–0012, 0016 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
-| P8 | Both user types (`dataclass` **and** `class`) have **repr C** payloads inside their cells; layout & identity builtins `type_id<T>()` / `size_of<T>()` / `align_of<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015, 0024 |
+| P8 | Both user types (`dataclass` **and** `class`) are cells whose payload is one slot per field; identity builtin `type_id<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015 |
 
 ### Why "no dynamic typing" is workable
 
@@ -255,8 +255,9 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
 - **M1** — Type checker + inference; bytecode + VM for the static core
   (no suspend, single module) (RFC 0029, 0031–0034).
 - **M2** — Rust embedding API: modules, typed native fns, opaque types,
-  `Result` mapping, interrupts/budgets, repr C struct registration
+  `Result` mapping, interrupts/budgets
   (RFC 0022–0028; includes the builtin-impl registry that RFC 0037's auto/registry impls ride).
+  (repr-C struct registration was withdrawn — RFC 0024.)
 - **M3** — Coroutines: `suspend`/`await` state machines, host-driven executor,
   cancellation (RFC 0018–0020).
 - **M4** — Workers, channels, transferables (RFC 0021).

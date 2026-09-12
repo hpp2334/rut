@@ -22,7 +22,6 @@ pub enum Value<'v> {
     Str(StrRef<'v>),                       // immutable, may point into heap
     Bytes(BytesRef<'v>),                   // immutable octets (RFC 0004)
     Vec(Borrow<'v, RutVec>),               // typed elem, zero-copy — internal only
-    Struct(StructRef<'v>),                 // repr C payload block — RFC 0024
     Cell(Handle), Trait(Handle), Opaque(Handle), Host(Handle),
                                           // user value cells / enums,
                                           // fat trait-object refs (RFC 0015 §6),

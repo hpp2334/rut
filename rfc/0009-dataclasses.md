@@ -66,12 +66,13 @@ blocks in action.
 - **Trait-object refs share, never box.** A dataclass value is already a
   cell; widening to `dyn I` **attaches the impl vtable to the same
   handle** (RFC 0011 §3, RFC 0015 §6) — no allocation, no copy: the
-  trait-object ref aliases the value. Layout never changes: methods and
-  impl tables add **nothing** to `size_of(D)`.
-- **Representation: payload repr C inside the cell** (RFC 0016 §5). A
-  dataclass payload is its fields back-to-back — primitive fields inline,
-  composite fields as cell-handle slots; `Vec<Point>` stores one handle
-  per element (only primitive-element buffers are flat — RFC 0016 §4).
+  trait-object ref aliases the value. Representation never changes: methods
+  and impl tables add **nothing** to the payload.
+- **Representation: one slot per field inside the cell** (RFC 0016 §5). A
+  dataclass payload is its fields in declaration order — primitive fields
+  widened into their slot, composite fields as cell-handle slots;
+  `Vec<Point>` stores one handle per element (only primitive-element
+  buffers are flat — RFC 0016 §4).
   RC and the cycle collector see every handle field via the
   compile-time field table; recursive shapes (`next: Option<Node>`) are
   legal because composite fields are pointer-sized.
@@ -79,12 +80,12 @@ blocks in action.
   the payload slot (RFC 0005).
 - Sizing guidance: dataclasses are for small data (points, rects,
   colors, configs) — they share like everything else, but `own(x)`/field
-  clones are `size_of(D)` memcpys when you do
+  clones copy slot by slot when you do
   diverge. Any size is allowed; the compiler warns past a threshold
   (OQ-1).
 
 ## Open questions
 
 - OQ-1: dataclass size warning threshold (compiler warns when a
-  dataclass payload grows past N bytes, since `own` clones are
-  `size_of` memcpys).
+  dataclass payload grows past N slots, since `own` clones copy each
+  field).

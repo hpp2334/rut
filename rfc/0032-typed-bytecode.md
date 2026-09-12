@@ -13,10 +13,9 @@
 
 Registers are `u16` indices into a per-frame `Vec<Slot>` (RFC 0015 §5);
 every register has a **static type** recorded in the function signature —
-the verifier re-checks all of it at load (RFC 0033 §2). Inline values
-(dataclass / bare class, RFC 0015 §4) occupy consecutive registers;
-`StructCopy` is a `memcpy` of `size_of` bytes with compiler-emitted
-ref-field retain/release.
+the verifier re-checks all of it at load (RFC 0033 §2). Record values
+(dataclass / class, RFC 0015 §4) are cells; `GetF`/`SetF` address their
+fields by index with compiler-emitted ref-field retain/release.
 
 ## 1. Ops
 
@@ -57,14 +56,12 @@ newcell cid -> rD         ; mint a value cell (the `Self { .. }` / dataclass
                            ; (class construction is a plain `call` of the
                            ; class method; host classes construct via
                            ; callnat on their native `new` slot — RFC 0026)
-getf    rD, rO, fidx      ; field load (cell — payload layout known)
+getf    rD, rO, fidx      ; field load (cell — payload slot array)
 setf    rO, fidx, rV      ; field store (+retain/release where typed)
-scopy   rD, rS, size      ; payload copy for `own` (memcpy + ref-field
-                           ; retain/release)
 tidof   rD, rO            ; read an object handle's runtime TypeId → u32
                           ; (Opaque box, dyn I object, slice cell — the
                           ; vtable ty load, RFC 0015 §6); a pure load
-unbox   rD, rO, tid       ; extract an Opaque box's repr-C payload as the
+unbox   rD, rO, tid       ; extract an Opaque box's payload as the
                           ; statically known T (RFC 0014); traps on TypeId
                           ; mismatch — the compiler always guards (br on
                           ; tidof == tid first); the trap is the safety
@@ -92,8 +89,8 @@ panic   code, rMsg
 An op exists for exactly one of three things:
 
 - **R1 — nothing static.** What the type table answers is a const-pool
-  constant, never an op. `type_id<T>()` / `size_of<T>()` /
-  `align_of<T>()` fold at compile time (RFC 0015 §3, RFC 0033 §3);
+  constant, never an op. `type_id<T>()` folds at compile time
+  (RFC 0015 §3, RFC 0033 §3);
   `Array<T, N>.len()` is the const `N` — `N` is part of the type's
   identity (RFC 0005). Hence no `typeid`, no `arrlen`.
 - **R2 — nothing polymorphic, nothing named.** A `dyn` receiver gets

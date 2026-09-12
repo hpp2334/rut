@@ -148,10 +148,11 @@ struct RutSliceRef   { h: Header, owner: Handle<RutVec>, off: u32, len: u32 } //
 #[repr(C)]
 struct RutCell   { h: Header, vt: *const VTable, payload: [Slot] } // EVERY user value (dataclass,
                                                               // class) — Header + (vtable, when
-                                                              // the type has impls) + the repr-C
-                                                              // payload block (RFC 0015 §4);
+                                                              // the type has impls) + the payload
+                                                              // slot array (RFC 0015 §4);
                                                               // composite fields are cell-handle
-                                                              // Slots, primitive fields inline
+                                                              // Slots, primitive fields widened
+                                                              // into their slot
 #[repr(C)]
 struct RutEnum   { h: Header, tag: u32, payload: [Slot] }     // builtin Option/Result (RFC 0005)
                                                               // and user enums; dataless variants

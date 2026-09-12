@@ -127,8 +127,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             out.types.types.push(RutType {
                 name: t.name.clone(),
                 kind: remap_kind(&t.kind, &map),
-                size: t.size,
-                align: t.align,
             });
         }
         out.vtables.resize(out.types.types.len(), Vec::new());
@@ -233,7 +231,6 @@ fn remap_kind(kind: &TyKind, map: &impl Fn(TypeId) -> TypeId) -> TyKind {
                 .map(|f| crate::types::FieldInfo {
                     name: f.name.clone(),
                     ty: map(f.ty),
-                    offset: f.offset,
                 })
                 .collect(),
         },
@@ -302,10 +299,8 @@ mod tests {
             p.types.types.push(RutType {
                 name: "Point".into(),
                 kind: TyKind::Data {
-                    fields: vec![FieldInfo { name: "x".into(), ty: TY_I32, offset: 0 }],
+                    fields: vec![FieldInfo { name: "x".into(), ty: TY_I32 }],
                 },
-                size: 4,
-                align: 4,
             });
             let point = (p.types.types.len() - 1) as u32;
             p.consts.push(ConstVal::TypeId(point));

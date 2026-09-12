@@ -1,5 +1,5 @@
 //! Collection (RFC 0031 SS1): pass 1 declares types (enums, dataclasses,
-//! classes, traits), pass 2 impls/fns/lets. Field layout is repr-C
+//! classes, traits), pass 2 impls/fns/lets. Record payloads are slot arrays
 //! (RFC 0015 SS2); impl methods enter the instantiation queue eagerly.
 
 use rut_core::binary::TraitDesc;
@@ -117,8 +117,6 @@ impl<'a> Ctx<'a> {
         let ty = self.types.intern(RutType {
             name: self.name(name).to_string(),
             kind: TyKind::Enum { members: vals },
-            size: 8,
-            align: 8,
         });
         let member_ids: Vec<IdentId> = members.iter().map(|(m, _)| *m).collect();
         self.enums.push((name, EnumDecl { ty, members: member_ids }));
@@ -146,8 +144,6 @@ impl<'a> Ctx<'a> {
         let placeholder = self.types.intern(RutType {
             name: self.name(name).to_string(),
             kind: TyKind::Data { fields: vec![] },
-            size: 0,
-            align: 8,
         });
         let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
         for m in methods {
@@ -190,21 +186,12 @@ impl<'a> Ctx<'a> {
             resolved.push(FieldInfo {
                 name: self.name(fd.name).to_string(),
                 ty: fty,
-                offset: 0,
             });
         }
+        // publish the resolved field table on the descriptor (construction
+        // rules for dataclass vs class differ; the field table does not)
         let pi = self.types.dense(placeholder) as usize;
-        let (size, align) = {
-            // compute layout with the resolved fields in place
-            let saved = self.types.types[pi].kind.clone();
-            self.types.types[pi].kind = TyKind::Data { fields: resolved.clone() };
-            let l = self.layout_of(placeholder);
-            self.types.types[pi].kind = saved;
-            l
-        };
         self.types.types[pi].kind = TyKind::Data { fields: resolved.clone() };
-        self.types.types[pi].size = size;
-        self.types.types[pi].align = align;
 
         // collect fields with initializers + methods for the compiler
         let mut flds: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)> = Vec::new();
@@ -452,8 +439,6 @@ impl<'a> Ctx<'a> {
         let ty = self.types.intern(RutType {
             name,
             kind: TyKind::Data { fields: vec![] },
-            size: 0,
-            align: 8,
         });
         self.type_inst.insert((data, args.clone()), ty);
         self.inst_data.insert(ty, (data, args.clone()));
@@ -476,20 +461,10 @@ impl<'a> Ctx<'a> {
             resolved.push(FieldInfo {
                 name: self.name(fd.name).to_string(),
                 ty: fty,
-                offset: 0,
             });
         }
         let pi = self.types.dense(ty) as usize;
-        let (size, align) = {
-            let saved = self.types.types[pi].kind.clone();
-            self.types.types[pi].kind = TyKind::Data { fields: resolved.clone() };
-            let l = self.layout_of(ty);
-            self.types.types[pi].kind = saved;
-            l
-        };
         self.types.types[pi].kind = TyKind::Data { fields: resolved };
-        self.types.types[pi].size = size;
-        self.types.types[pi].align = align;
         ty
     }
 }

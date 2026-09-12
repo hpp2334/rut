@@ -1,5 +1,5 @@
-// RFC 0022–0028 — host & FFI: host-class handles, repr C struct passing,
-// zero-copy buffer borrows, and Template (structured f"...", for l10n).
+// RFC 0022–0028 — host & FFI: host-class handles, zero-copy buffer
+// borrows, and Template (structured f"...", for l10n).
 // The host side of this module is sketched in RFC 0022–0028. Native
 // surfaces are DECLARED in rut-source declaration files (RFC 0025) —
 // app/gfx.d.rut declares Canvas, newCanvas, and Source below; the Rust
@@ -15,22 +15,6 @@ import { Logger } from "std:log";
 //     }
 // — declared for typing; built and implemented entirely host-side.
 
-// Mirrored on the host as #[repr(C)] struct Vertex { x: f32, y: f32, color: u32 }
-// — register_struct::<Vertex>("Vertex") verified size/align/offsets at startup.
-dataclass Vertex {
-    x: f32;
-    y: f32;
-    color: u32;
-}
-
-fn draw_frame(c: Canvas, verts: Array<Vertex>) -> unit {
-    // verts borrows zero-copy: the host reads the inline repr-C block for
-    // the duration of the call (a fixed Array<Vertex> IS the N-slot
-    // block — RFC 0005); rut-side mutation inside re-entrant calls
-    // would trap (borrow guard) instead of racing.
-    c.blit(verts);
-}
-
 fn localized(count: i32, user: string) -> unit {
     // The SAME literal that would concat to a string builds a structured
     // Template here, because log_l10n expects one — the host formats
@@ -41,11 +25,6 @@ fn localized(count: i32, user: string) -> unit {
 pub fn main() -> unit {
     let log = Logger.new("interop");
     let c = newCanvas();                         // host constructs the handle
-    let verts: Array<Vertex> = [
-        Vertex { x: 0, y: 0, color: 0xFF00FF },
-        Vertex { x: 1, y: 1, color: 0x00FFFF },
-    ];
-    draw_frame(c, verts);
 
     let hits: Source<i32> = c.hit_source();
     log.info(f"hits={hits.get()}");                // checked: Source<i32>.get(): i32

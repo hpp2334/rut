@@ -210,28 +210,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::CallNat { nat: Nat::Print, recv: None, args: vec![self.last_reg], dst: None }, sp.lo);
                 return Ok(TY_UNIT);
             }
-            "type_id" | "size_of" | "align_of" => {
-                // compile-time constants —never executed (RFC 0015 §3, 0033 §3)
+            "type_id" => {
+                // compile-time constant —never executed (RFC 0015 §3, 0033 §3)
                 if generics.len() != 1 || !args.is_empty() {
                     self.ctx.err(sp, format!("{n}<T>() takes one explicit type argument"));
                     return Err(());
                 }
                 let t = self.resolve_type_now(generics[0]);
                 let dst = self.new_reg(TY_U32);
-                if n.as_str() == "type_id" {
-                    // a rebasable const-pool entry: link maps the module-local
-                    // TypeId into the global table (RFC 0035 §1)
-                    let k = self.konst(ConstVal::TypeId(t));
-                    self.emit(Op::Const { dst, k: k as u32 }, sp.lo);
-                    return Ok(TY_U32);
-                }
-                let v: u64 = if n.as_str() == "size_of" {
-                    self.ctx.layout_of(t).0 as u64
-                } else {
-                    self.ctx.layout_of(t).1 as u64
-                };
-                self.emit(Op::ConstRaw { dst, bits: v }, sp.lo);
+                // a rebasable const-pool entry: link maps the module-local
+                // TypeId into the global table (RFC 0035 §1)
+                let k = self.konst(ConstVal::TypeId(t));
+                self.emit(Op::Const { dst, k: k as u32 }, sp.lo);
                 return Ok(TY_U32);
+            }
+            "size_of" | "align_of" => {
+                // the repr-C layout contract was removed: records are slot
+                // arrays, not byte blocks, so there is no value size/alignment
+                self.ctx.err(sp, format!(
+                    "`{n}` was removed — records are stored as one slot per field, not a repr-C block"
+                ));
+                return Err(());
             }
             "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" => {
                 if args.len() != 1 {

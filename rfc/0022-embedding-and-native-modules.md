@@ -24,7 +24,6 @@ wider is unsound and will not be added.
 
 ```rust
 let mut vm = Vm::new(HostHooks { .. });            // RFC 0035 §1
-vm.register_struct::<Vertex>("Vertex")?;           // RFC 0024 — layout contract
 vm.register_module("app:gfx", gfx_module())?;      // bodies, bound against
 vm.register_module("plugin:my_map", my_map_module())?;  // declaration files (RFC 0025)
 vm.load("widgets")?;                               // verify + link, run nothing
@@ -52,8 +51,6 @@ slot table once, at startup; dispatch is by slot (RFC 0026):
 fn gfx_module() -> NativeModule {
     NativeModule::new("app:gfx")                  // decl: app/gfx.rut
         .fn_("newCanvas", |ctx, w: i32, h: i32| Ok(Canvas::new(ctx, w, h)))
-        .fn_("blit",      |ctx, c: Handle<Canvas>, layer: StructRef<Vertex>,
-                           n: u32| { .. Ok(Value::Unit) })
         .fn_("label",     |ctx, t: Template| Ok(log_localized(ctx, t)))
 }
 ```

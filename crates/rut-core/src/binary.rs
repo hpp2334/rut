@@ -117,7 +117,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 9;
+pub const VERSION: u32 = 10;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -129,8 +129,6 @@ pub fn encode(prog: &Program) -> Vec<u8> {
     e.u32(prog.types.types.len() as u32);
     for t in &prog.types.types {
         e.str(&t.name);
-        e.u32(t.size);
-        e.u32(t.align);
         encode_kind(&mut e, &t.kind);
     }
     // traits
@@ -273,7 +271,6 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             for f in fields {
                 e.str(&f.name);
                 e.u32(f.ty);
-                e.u32(f.offset);
             }
         }
         TyKind::TraitObj { trait_id } => {
@@ -306,10 +303,8 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
     types.types.reserve(ntypes);
     for _ in 0..ntypes {
         let tname = d.str()?;
-        let size = d.u32()?;
-        let align = d.u32()?;
         let kind = decode_kind(&mut d)?;
-        types.types.push(RutType { name: tname, kind, size, align });
+        types.types.push(RutType { name: tname, kind });
     }
     let ntraits = d.u32()? as usize;
     let mut traits = Vec::with_capacity(ntraits);
@@ -421,8 +416,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             for _ in 0..n {
                 let name = d.str()?;
                 let ty = d.u32()?;
-                let offset = d.u32()?;
-                fields.push(FieldInfo { name, ty, offset });
+                fields.push(FieldInfo { name, ty });
             }
             TyKind::Data { fields }
         }

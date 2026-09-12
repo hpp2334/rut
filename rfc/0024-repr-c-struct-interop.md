@@ -1,6 +1,8 @@
 # RFC 0024: Repr C Struct Interop
 
-- **Status:** Draft
+- **Status:** **Withdrawn** — repr-C layouts and pointer-identity struct
+  interop were dropped. Records are slot arrays (RFC 0015 §4); a host sees
+  them only through the boundary `Value` (RFC 0023). Retained for history.
 - **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0023 (Value boundary), RFC 0015 §4 (value layout)
@@ -8,6 +10,12 @@
 - **Part:** E — Host & FFI
 
 ## Summary
+
+> **Withdrawn.** The representation below no longer exists. `RutType` carries
+> no size/align, `FieldInfo` carries no offset, `size_of<T>()` /
+> `align_of<T>()` / `register_struct` / `StructRef` were removed, and user
+> record payloads are arrays of 8-byte slots (RFC 0015 §4). This document is
+> kept only as the historical design.
 
 Both user value types are **C-layout** (RFC 0015 §4): fields in
 declaration order, natural alignment, size padded to alignment; no hidden

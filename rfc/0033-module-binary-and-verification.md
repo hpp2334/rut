@@ -14,8 +14,8 @@
 struct ModuleBinary {                 // serialized, versioned, hash-stable
     version: u32, name: String,
     imports: Vec<(specifier, Vec<ImportedName>)>,   // resolved by loader
-    types: Vec<RutType>,             // incl. field layouts + vtables
-                                       (RFC 0015 §6, repr C — RFC 0024)
+    types: Vec<RutType>,             // incl. field tables + vtables
+                                       (RFC 0015 §6)
     consts: Vec<Const>,              // strings, byte blobs, i64/f64, tids
     funcs: Vec<FuncCode>,           // name, signature (typed regs), code,
                                        // state tables (suspend), host slots
@@ -83,15 +83,12 @@ const-index bounds checks against it; RFC 0032 §1.1 R1). A call to a
 user function there is a compile error (RFC 0003 OQ-1), not a
 deferred-evaluation hack.
 
-`type_id<T>()`, `size_of<T>()`, `align_of<T>()` (RFC 0015 §3) never
-execute at runtime: HIR folds them to constants from the type table.
+`type_id<T>()` (RFC 0015 §3) never
+executes at runtime: HIR folds it to a constant from the type table.
 `type_id<T>()` values are `u32`, comparable, and unique per *instantiated*
 type within a VM run (`Vec<f32>` ≠ `Vec<f64>`, `Array<i32, 3> ≠
 Array<i32, 4>` — const `N` is identity, RFC 0005, `Point` = `Point`
-across modules — identity is assigned at link). `size_of<T>()`/`align_of<T>()`
-return the repr-C value size/alignment (RFC 0024): for dataclasses and
-classes this is the C-layout payload block (what `own`/`StructCopy`
-clones, what a host struct mirrors).
+across modules — identity is assigned at link).
 
 ## Open questions
 

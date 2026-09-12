@@ -68,8 +68,8 @@ constants with an always-true/false lint (RFC 0012 §3).
   them — `when` expressions and short-circuit `&&`/`||`; mutable locals are
   explicit `SlotGet/SlotSet` on frame slots, NOT phi webs. Pragmatism over
   purity).
-- Optimizations run here: folding (incl. `type_id<T>()` /
-  `size_of<T>()` — RFC 0015 §3, RFC 0033 §3, plus `Array<T, N>.len()` →
+- Optimizations run here: folding (incl. `type_id<T>()` —
+  RFC 0015 §3, RFC 0033 §3, plus `Array<T, N>.len()` →
   the const `N` and const-index bounds checks against it), inline
   (single-callee calls, small bodies), CSE/LICM for pure ops (`tidof`
   loads, the `downcast` prelude body, field loads on immutable boxes),

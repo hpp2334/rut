@@ -1,5 +1,5 @@
 //! RutType descriptors — RFC 0015: every value's type exists at runtime;
-//! kind + width + field tables drive layout, `is`, and serialization.
+//! kind + field tables drive `is`, dispatch, and serialization.
 //! Type ids are program-global (single-module link in v1; RFC 0035 §1
 //! rebase lands with multi-module linking).
 
@@ -24,16 +24,6 @@ impl PrimTy {
     }
     pub fn is_unsigned(self) -> bool {
         matches!(self, PrimTy::U8 | PrimTy::U16 | PrimTy::U32 | PrimTy::U64)
-    }
-    /// Slot width in bytes (RFC 0015 §5 — all slots are 8 bytes; this is
-    /// the *semantic* width used by truncating ops).
-    pub fn width(self) -> u32 {
-        match self {
-            PrimTy::U8 | PrimTy::I8 => 1,
-            PrimTy::U16 | PrimTy::I16 => 2,
-            PrimTy::U32 | PrimTy::I32 | PrimTy::F32 => 4,
-            _ => 8,
-        }
     }
     pub fn name(self) -> &'static str {
         match self {
@@ -106,8 +96,6 @@ impl Repr {
 pub struct FieldInfo {
     pub name: String,
     pub ty: TypeId,
-    /// repr-C offset of the field inside the payload block (RFC 0015 §4)
-    pub offset: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -127,8 +115,8 @@ pub enum TyKind {
     /// builtin sum (RFC 0005): tag 0 = some/ok, 1 = none/err
     Option { elem: TypeId },
     Result { ok: TypeId, err: TypeId },
-    /// dataclass or class payload cell — same repr-C block either way
-    /// (RFC 0009/0010); construction rules differ, layout does not
+    /// dataclass or class record cell — fields stored as one slot each
+    /// (RFC 0009/0010); construction rules differ, representation does not
     Data { fields: Vec<FieldInfo> },
     /// `dyn I` — unsized object; the slot stores the cell handle and the
     /// cell's own type reaches the vtable (RFC 0015 §6)
@@ -143,9 +131,6 @@ pub enum TyKind {
 pub struct RutType {
     pub name: String,
     pub kind: TyKind,
-    /// repr-C value size (what own() clones; RFC 0015 §3)
-    pub size: u32,
-    pub align: u32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -195,30 +180,28 @@ impl TypeTable {
 
     fn boot_impl(packed: bool, scope: ScopeId) -> TypeTable {
         let mut t = TypeTable { packed, scope, ..Default::default() };
-        let mut push = |name: &str, kind: TyKind, size: u32, align: u32| {
+        let mut push = |name: &str, kind: TyKind| {
             t.types.push(RutType {
                 name: name.to_string(),
                 kind,
-                size,
-                align,
             });
         };
-        push("unit", TyKind::Unit, 0, 1);
-        push("u8", TyKind::Prim(PrimTy::U8), 1, 1);
-        push("u16", TyKind::Prim(PrimTy::U16), 2, 2);
-        push("u32", TyKind::Prim(PrimTy::U32), 4, 4);
-        push("u64", TyKind::Prim(PrimTy::U64), 8, 8);
-        push("i8", TyKind::Prim(PrimTy::I8), 1, 1);
-        push("i16", TyKind::Prim(PrimTy::I16), 2, 2);
-        push("i32", TyKind::Prim(PrimTy::I32), 4, 4);
-        push("i64", TyKind::Prim(PrimTy::I64), 8, 8);
-        push("f32", TyKind::Prim(PrimTy::F32), 4, 4);
-        push("f64", TyKind::Prim(PrimTy::F64), 8, 8);
-        push("bool", TyKind::Prim(PrimTy::Bool), 1, 1);
-        push("char", TyKind::Prim(PrimTy::Char), 4, 4);
-        push("string", TyKind::Str, 8, 8);
-        push("Opaque", TyKind::Opaque, 8, 8);
-        push("bytes", TyKind::Bytes, 8, 8);
+        push("unit", TyKind::Unit);
+        push("u8", TyKind::Prim(PrimTy::U8));
+        push("u16", TyKind::Prim(PrimTy::U16));
+        push("u32", TyKind::Prim(PrimTy::U32));
+        push("u64", TyKind::Prim(PrimTy::U64));
+        push("i8", TyKind::Prim(PrimTy::I8));
+        push("i16", TyKind::Prim(PrimTy::I16));
+        push("i32", TyKind::Prim(PrimTy::I32));
+        push("i64", TyKind::Prim(PrimTy::I64));
+        push("f32", TyKind::Prim(PrimTy::F32));
+        push("f64", TyKind::Prim(PrimTy::F64));
+        push("bool", TyKind::Prim(PrimTy::Bool));
+        push("char", TyKind::Prim(PrimTy::Char));
+        push("string", TyKind::Str);
+        push("Opaque", TyKind::Opaque);
+        push("bytes", TyKind::Bytes);
         t.boot_len = t.types.len() as u32;
         t.scope_base = vec![0; scope as usize + 1];
         if packed {

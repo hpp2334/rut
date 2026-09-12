@@ -30,7 +30,7 @@ pc→span data, and never participates in trace restoration.
 
 - `std:debug.here() -> Location` — the source position of the call. The
   compiler folds it to a constant from the span table, exactly like
-  `type_id<T>()` / `size_of<T>()` (RFC 0015 §3, RFC 0033 §3). Free.
+  `type_id<T>()` (RFC 0015 §3, RFC 0033 §3). Free.
 - `std:debug.capture_stack_trace() -> StackTrace` — explicit capture (the
   JS `Error.captureStackTrace` role): a host fn that **skips its own
   frame** (the `constructorOpt` behavior, automatic).

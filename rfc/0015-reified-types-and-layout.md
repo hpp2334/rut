@@ -1,4 +1,4 @@
-# RFC 0015: Reified Types & Layout — `RutType`, repr C, Slots & Vtables
+# RFC 0015: Reified Types — `RutType`, Slots & Vtables
 
 - **Status:** Draft
 - **Date:** 2026-08-23
@@ -10,17 +10,17 @@
 ## Summary
 
 Every value's type is available at runtime as a `RutType` descriptor
-(kind + width + for composites: field tables / vtable + for generics: the
+(kind + for composites: field tables / vtable + for generics: the
 instantiation descriptors). Slots are untagged 8-byte values — bytecode is
-typed, so hot paths carry no tags; dataclass/bare-class values are inline
-byte sequences spanning slots.
+typed, so hot paths carry no tags; dataclass/class payloads are arrays of
+those slots.
 
 ## 1. Reified runtime types
 
 `RutType` descriptors are *not* first-class script values in v1 (OQ-1);
-they are VM data. Language-facing surfaces of reification: the layout
-builtins (§3), the `is` type tests (RFC 0012 §3), `Opaque` recovery
-(RFC 0014), and the host boundary checks (RFC 0023).
+they are VM data. Language-facing surfaces of reification: the
+`type_id<T>()` builtin (§3), the `is` type tests (RFC 0012 §3), `Opaque`
+recovery (RFC 0014), and the host boundary checks (RFC 0023).
 
 ## 2. Where reification is load-bearing
 
@@ -43,12 +43,10 @@ builtins (§3), the `is` type tests (RFC 0012 §3), `Opaque` recovery
    `TypeId`; `Opaque.new(v)` stamps it. Erasure without reification would be
    `any`; with reification it is a checked box.
 
-## 3. Layout & type-identity builtins
+## 3. Type-identity builtin
 
 ```rut
 let TID_POINT: u32 = type_id<Point>();
-let SZ_POINT: u32  = size_of<Point>();     // 8 — two f32s, repr C
-let AL_POINT: u32  = align_of<Point>();    // 4
 ```
 
 - `type_id<T>() -> u32` — identity of the *instantiated* type, unique per VM
@@ -57,64 +55,42 @@ let AL_POINT: u32  = align_of<Point>();    // 4
   identity, RFC 0005);
   `Point` = `Point` wherever declared). Comparable only — not a first-class
   type value (OQ-1).
-- `size_of<T>() -> u32`, `align_of<T>() -> u32` — the value representation:
-  primitives their width/alignment; dataclass/class their **repr C payload
-  block** (§4) — what `own` copies clone (RFC 0011 §1) and what
-  `StructRef` exposes to hosts (RFC 0024);
-  `Array<T, N>` payload is `N × stride`, sized like any value type. Ref
-  types (`Vec`, `string`, `Opaque`) report handle size, not payload —
-  and so does
-  **every `dyn` type** (`dyn Drawable`, `dyn Slice<i32>`: the
-  slot stores the cell handle, RFC 0031 §4).
-  (`u32`, not a word-sized type: rut has no `usize`, and no rut value or
-  buffer may exceed 4 GiB in v1.)
-- All three are **compile-time constants** — load-time expressions (RFC 0003 §1),
+- It is a **compile-time constant** — a load-time expression (RFC 0003 §1),
   folded by HIR from the type table, never executed (RFC 0033 §3).
 - **Boxing widens** (RFC 0037 §3): `Opaque` of an int stores i64
   sign/zero-extended; a float, f64 — the §5 slot discipline. A kind
   branch plus `downcast<i64>` / `downcast<f64>` / `downcast<bool>` /
   `downcast<string>` is total in-branch.
-- `Opaque` mirrors the layout builtins at runtime: `o.type_id() -> u32`,
-  `o.size() -> u32`,
-  `o.as_bytes() -> bytes` (a snapshot of the box's repr-C payload). Together
-  they enable **layout-aware heterogeneous storage** — group entries by
-  `type_id`, preallocate `size_of`-sized slabs, compare payloads byte-wise —
-  while recovery still goes through checked `downcast<T>`. Constructing an
-  `Opaque` box (or any value) *from* raw bytes is deliberately **not**
+- `Opaque` mirrors identity at runtime, `o.type_id() -> u32`. Constructing
+  an `Opaque` box (or any value) *from* raw bytes is deliberately **not**
   provided: it could forge private fields and class invariants.
-- Host struct mirroring runs on the same numbers (`register_struct`
-  checks size/align/offsets at startup — RFC 0024).
+- There is **no `size_of<T>()` / `align_of<T>()`** and no runtime payload
+  footprint accessor: records are slot arrays (§4), so value size and
+  alignment are implementation details, not a language surface
+  (repr-C layouts were withdrawn — see §4).
 
-## 4. Value layout — repr C
+## 4. Value representation — slot arrays
 
-Both `dataclass` and `class` values are **C-layout structs** — one layout
-rule, no exceptions:
+Both `dataclass` and `class` values live in a `RutCell` — `Header +
+(vtable, when the type has impls) + the payload` (§6). The payload is a
+**slot array: one untagged 8-byte `Slot` per field, in declaration order**.
+Primitive fields are widened into their slot (sign/zero-extended; `f32`
+stored as `f64` per §5); composite fields are cell-handle slots
+(RFC 0016 §1). There is no byte-packed C block and no field-offset table:
+field access is by index (`GetF`/`SetF`), `own(x)` clones slot by slot
+(RFC 0011 §1), and heap accounting charges `fields × 8` bytes.
 
-- Fields in declaration order, natural C alignment, struct size padded to
-  its alignment. No hidden header, no tag, no vtable pointer inline.
 - Visibility, generic parameters, and out-of-body impl blocks add
-  **nothing** to the block — layout depends only on the field list.
-- The block is what `own(x)` clones (RFC 0011 §1), what
-  `size_of<T>()`/`align_of<T>()` report (§3), and
-  what the host mirrors with `#[repr(C)]` structs (RFC 0024) — rut↔host
-  struct interop is pointer identity, not field-by-field conversion.
-  Inside the block, **primitive fields sit inline; composite fields are
-  cell-handle slots** (RFC 0016 §1) — a `Point { x, y }` block is two
-  f32s; a `Rect { min: Point, max: Point }` block is two handles. Only
-  buffers of primitive elements (`Vec<f32>`, `Array<i32, N>`) hold
-  values inline (RFC 0016 §4).
-- Every dataclass/class value lives in a `RutCell` — `Header +
-  (vtable, when the type has impls) + the same block` (§6): sharing
-  never re-lays-out fields, and `own` clones the block as-is.
-- `enum`, `Option`, `Result` are *not* repr C (tagged layouts, RFC 0016 §5)
-  and never cross the FFI as structs — pass their payload fields. Their
-  **cell layout** (tag + payload slots):
-  one `u32` tag slot followed by the payload's slots — a primitive
-  payload inline, a composite payload a cell handle — size = max variant
-  payload padded to the tag's alignment, fixed per type, part of the
-  field table, and what `size_of<T>()` reports for them. Still tagged,
-  still never repr C. Dataless enum variants are immortal singleton
-  cells (RFC 0016 §1).
+  **nothing** — the payload depends only on the field list.
+- Buffers of primitive elements (`Vec<f32>`, `Array<i32, N>`) stay flat
+  and packed to the element's machine width (RFC 0016 §4); composite
+  elements are one handle slot each.
+- Builtin `Option`/`Result` and user enums are tagged cells (RFC 0016 §5),
+  represented as a tag slot plus a payload slot; dataless enum variants
+  are immortal singleton cells (RFC 0016 §1).
+- Host pointer-identity struct interop (former RFC 0024) is **withdrawn**:
+  a host sees records only through the boundary `Value` (RFC 0023), and
+  struct fields cross as returned/borrowed handle values.
 
 ## 5. Internals: slots
 
@@ -134,11 +110,10 @@ pub union Slot {
 ```
 
 Every non-primitive register holds a cell handle (RFC 0016 §1) —
-payloads live inside cells, laid out by the compile-time field table;
-only buffers of primitive elements store values inline between slots
-(RFC 0016 §4). The bytecode is typed, so cell clones (`own(x)` —
-`StructCopy { dst, src, size }`) are plain memcpys of the payload with
-retain/release emitted for handle-typed fields.
+payloads live inside cells as slot arrays (§4); only buffers of primitive
+elements store values inline between slots (RFC 0016 §4). The bytecode is
+typed, so `own(x)` clones the payload slot by slot, retaining/releasing
+each handle-typed field.
 
 The tagged `Value` enum exists only at the host FFI boundary (RFC 0023).
 
@@ -153,9 +128,8 @@ struct RutCell {                     // heap object: EVERY user value
                                      // dataclass (RFC 0009) — set at
                                      // construction (null when the type
                                      // has no impls)
-    // class fields follow inline at fixed offsets — the SAME repr-C block
-    // as §4: the cell adds the prefix, it never
-    // re-lays-out. Hosts read the block through StructRef (RFC 0024).
+    // class fields follow inline as one payload slot each — the slot array
+    // of §4: the cell adds the prefix, it never re-lays-out.
     // No base prefix — no inheritance (RFC 0010 §3).
 }
 

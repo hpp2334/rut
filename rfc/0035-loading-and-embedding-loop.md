@@ -75,7 +75,6 @@ RFC 0032 §1); when no value is ready, `chrecv` parks the frame like
 | `vm.spawn(name, args) -> TaskHandle` | suspend entry; poll via RFC 0034 §4 |
 | `vm.run_until_idle() / vm.poll(deadline) / vm.resume()` | stepping |
 | `vm.register_module(name, native)` | native bodies (RFC 0022 §2) |
-| `vm.register_struct::<T>()` | repr-C layout check (RFC 0024) |
 | `vm.heap_stats()` | live per-type object counts (RFC 0017 §3) |
 | `vm.symbolicate(&raw) -> Vec<TraceEntry>` | trace names/spans from loaded binaries (RFC 0036 §3) |
 

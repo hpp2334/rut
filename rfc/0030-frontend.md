@@ -424,8 +424,7 @@ struct Diag { span: Span, msg: String,
 - OQ-1: trailing commas — allowed in argument lists and dataclass literals?
   Proposed: allowed everywhere a comma list exists.
 - OQ-2: attributes (`@inline`, `@repr(align)`) — `At` is lexed but
-  unclaimed; park the token until a real need exists (repr C is the
-  default, RFC 0015 §4, so `@repr` is NOT planned). Decorators for
+  unclaimed; park the token until a real need exists. Decorators for
   reflection policy are **rejected for v1** — reflection runs on the
   module's impl blocks (RFC 0037).
 - OQ-3: the depth budget value (C3). Proposed: a single NEST_MAX = 1024

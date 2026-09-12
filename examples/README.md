@@ -30,7 +30,6 @@ else on this page is parse-only.
 | `basic/type-tests.rut` | the `is` keyword: exact-class tests + trait capability probes; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
 | `basic/closures-generics.rut` | arrows, monomorphized generics | 0013 |
 | `basic/opaque.rut` | `Opaque.new(v)` / `downcast<T>` / `is` erasure & recovery; zero-copy boxes, identity | 0014 |
-| `basic/layout.rut` | repr C layouts, `type_id<T>()` / `size_of<T>()` / `align_of<T>()`, `Opaque` layout accessors | 0015 |
 | `concurrency/countdown.rut` | cold futures, `await` as sole suspension | 0018 |
 | `concurrency/fetch-page.rut` | `await` + `?` composition, state splitting | 0018 §3 |
 | `concurrency/spawn-cancel.rut` | tasks, cancellation-by-drop | 0019 |
@@ -47,7 +46,7 @@ else on this page is parse-only.
 | `network/http-fetch.rut` | async client, `Result` at API boundaries | 0018 |
 | `network/echo-server.rut` | accept loop + worker pool dispatch | 0021 |
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0021 |
-| `host/interop.rut` | host classes via declaration files, repr C struct passing, buffer borrows, `Template` for l10n | 0022–0028 |
+| `host/interop.rut` | host classes via declaration files, zero-copy buffer borrows, `Template` for l10n | 0022–0028 |
 | `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `pub host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
 | `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`TraitHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Vec` returns | 0026 |
 | `host/plugin/batch.d.rut` | **declaration file** for `plugin:batch`: `pub host class Batch` + `pub host fn submit(b: Batch) -> string` — a host callback whose parameter type **is** the host class | 0022, 0025, 0029 |

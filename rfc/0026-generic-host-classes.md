@@ -117,9 +117,7 @@ source.
 - **Who satisfies a trait constraint**: user classes and dataclasses
   (impl blocks — RFC 0009, RFC 0012 §2), builtins via registered impls
   (`Hashable`: content for `string`, value for
-  numerics/`enum`), and registered structs via a `register_struct`
-  voucher (the Rust mirror is `Hash + Eq` — no rut-side
-  methods needed). The builtin generics
+  numerics/`enum`). The builtin generics
   (`Option`/`Result`/`Vec`/`Array<T, N>`), traits themselves,
   `Opaque` boxes, and slices satisfy nothing.
 - Builtin types flow back natively — a method may return `Option<V>` or

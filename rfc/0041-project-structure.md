@@ -41,7 +41,6 @@ rut/
 │   │   ├── when.rut               #   0008
 │   │   ├── option-result.rut      #   0005  + `?` (0034 §2)
 │   │   ├── literals.rut           #   0007
-│   │   ├── layout.rut             #   0015  size_of/align_of/Opaque
 │   │   ├── type-tests.rut         #   0012 §3  `is`
 │   │   ├── opaque.rut             #   0014  erasure + downcast
 │   │   ├── rc-and-dispose.rut     #   0011/0016  cells, Disposal

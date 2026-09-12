@@ -299,7 +299,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(l.ty);
             }
             match n.as_str() {
-                "own" | "downcast" | "panic" | "assert" | "print" | "type_id" | "size_of" | "align_of" => {
+                "own" | "downcast" | "panic" | "assert" | "print" | "type_id" => {
                     self.ctx.err(sp, format!("`{n}` is a function —call it: `{n}(..)`"));
                     return Err(());
                 }

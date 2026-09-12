@@ -339,8 +339,6 @@ impl<'a> Ctx<'a> {
         self.types.intern(RutType {
             name,
             kind: TyKind::Array { elem },
-            size: 8,
-            align: 8,
         })
     }
     pub fn mk_option(&mut self, elem: TypeId) -> TypeId {
@@ -348,8 +346,6 @@ impl<'a> Ctx<'a> {
         self.types.intern(RutType {
             name,
             kind: TyKind::Option { elem },
-            size: 16,
-            align: 8,
         })
     }
     pub fn mk_result(&mut self, ok: TypeId, err: TypeId) -> TypeId {
@@ -357,8 +353,6 @@ impl<'a> Ctx<'a> {
         self.types.intern(RutType {
             name,
             kind: TyKind::Result { ok, err },
-            size: 16,
-            align: 8,
         })
     }
     pub fn mk_dyn(&mut self, trait_id: u32) -> TypeId {
@@ -366,8 +360,6 @@ impl<'a> Ctx<'a> {
         self.types.intern(RutType {
             name,
             kind: TyKind::TraitObj { trait_id },
-            size: 8,
-            align: 8,
         })
     }
     pub fn mk_fn_ty(&mut self, params: Vec<TypeId>, ret: TypeId) -> TypeId {
@@ -376,42 +368,7 @@ impl<'a> Ctx<'a> {
         self.types.intern(RutType {
             name,
             kind: TyKind::Fn { params, ret },
-            size: 8,
-            align: 8,
         })
-    }
-
-    pub fn layout_of(&self, ty: TypeId) -> (u32, u32) {
-        // repr-C payload size/align (RFC 0015 §4)
-        match self.types.kind(ty).clone() {
-            TyKind::Prim(p) => (p.width(), p.width()),
-            TyKind::Data { fields } => {
-                let mut off = 0u32;
-                let mut align = 1u32;
-                for f in &fields {
-                    // composite fields are cell-handle slots, not inline
-                    // payloads (RFC 0009 §1, RFC 0016 §1) — the runtime stores
-                    // one slot per field, so size them as one word. This also
-                    // keeps layout finite for recursive records.
-                    let (fsz, fal) = if self.types.repr_of(f.ty).is_ref() {
-                        (8, 8)
-                    } else {
-                        self.layout_of(f.ty)
-                    };
-                    align = align.max(fal);
-                    off = (off + fal - 1) / fal * fal;
-                    off += fsz.max(fal);
-                }
-                let size = (off + align - 1) / align * align;
-                (size.max(1), align)
-            }
-            TyKind::Array { .. } => (8, 8),
-            TyKind::Option { elem } | TyKind::Result { ok: elem, .. } => {
-                let (es, ea) = self.layout_of(elem);
-                ((4 + es).max(8), ea.max(4))
-            }
-            _ => (8, 8),
-        }
     }
 }
 

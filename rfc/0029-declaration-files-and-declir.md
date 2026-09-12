@@ -57,9 +57,9 @@ only, and — beyond RFC 0003's module scope — every declaration must be
 - `trait` — method signatures (+ `requires`) *are* the whole
   definition (`std:collection`'s `Hashable` lives this way,
   RFC 0028);
-- `dataclass` — **fields only** (with load-time expression field initializers). The
-  repr-C field block is an ABI (RFC 0015 §4), so a published value type is
-  sound. No method bodies, no impl blocks in v1 (OQ-2);
+- `dataclass` — **fields only** (with load-time expression field initializers). Field
+  names and types are the published surface (RFC 0015 §4), so a published
+  value type is sound. No method bodies, no impl blocks in v1 (OQ-2);
 - `host fn` / `host class` / `extern fn` / `extern class` — signatures
   only, with admission-only param bounds (RFC 0025);
 - `host primitive` — **the native member surface of a primitive type**:
