@@ -112,6 +112,24 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         _ => return Err(bad("field access on a non-record register".into())),
                     }
                 }
+                Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
+                    let ety = match prog.types.kind(f.regs[*arr as usize]) {
+                        TyKind::Vec { elem } | TyKind::Array { elem, .. } => *elem,
+                        _ => return Err(bad("array op on a non-sequence register".into())),
+                    };
+                    if prog.types.repr_of(ety) != *repr {
+                        return Err(bad("array op repr does not match the element type".into()));
+                    }
+                }
+                Op::ArrNew { ty, repr, .. } => {
+                    let ety = match prog.types.kind(*ty) {
+                        TyKind::Vec { elem } => *elem,
+                        _ => return Err(bad("arrnew over a non-vec type".into())),
+                    };
+                    if prog.types.repr_of(ety) != *repr {
+                        return Err(bad("arrnew repr does not match the element type".into()));
+                    }
+                }
                 Op::IsTrait { want, .. } => {
                     if *want as usize >= prog.traits.len() {
                         return Err(bad("IsTrait want not in the trait table".into()));
@@ -202,7 +220,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*obj);
             push(*val);
         }
-        Op::ArrSet { arr, idx, val } => {
+        Op::ArrSet { arr, idx, val, .. } => {
             push(*arr);
             push(*idx);
             push(*val);

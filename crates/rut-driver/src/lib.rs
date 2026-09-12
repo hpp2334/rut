@@ -196,13 +196,13 @@ fn op_str(op: &Op) -> String {
         Op::GetF { dst, obj, field, repr } => format!("getf r{dst}, r{obj}, f{field} :{}", repr.to_u8()),
         Op::SetF { obj, field, val, repr } => format!("setf r{obj}, f{field}, r{val} :{}", repr.to_u8()),
         Op::Own { dst, src, ty } => format!("own r{dst}, r{src}, t{ty}"),
-        Op::ArrNew { dst, ty, len } => format!("arrnew r{dst}, t{ty}, r{len}"),
+        Op::ArrNew { dst, ty, len, .. } => format!("arrnew r{dst}, t{ty}, r{len}"),
         Op::ArrLit { dst, ty, elems } => format!(
             "arrlit r{dst}, t{ty}, [{}]",
             elems.iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", ")
         ),
-        Op::ArrGet { dst, arr, idx } => format!("arrget r{dst}, r{arr}, r{idx}"),
-        Op::ArrSet { arr, idx, val } => format!("arrset r{arr}, r{idx}, r{val}"),
+        Op::ArrGet { dst, arr, idx, repr } => format!("arrget r{dst}, r{arr}, r{idx} :{}", repr.to_u8()),
+        Op::ArrSet { arr, idx, val, repr } => format!("arrset r{arr}, r{idx}, r{val} :{}", repr.to_u8()),
         Op::EnumNew { dst, ty, member } => format!("enumnew r{dst}, t{ty}, m{member}"),
         Op::OptSome { dst, ty, val } => format!("optsome r{dst}, t{ty}, r{val}"),
         Op::OptNone { dst, ty } => format!("optnone r{dst}, t{ty}"),

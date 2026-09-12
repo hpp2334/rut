@@ -411,12 +411,12 @@ impl Vm {
                         if self.cur_regs[*cond as usize].as_bool() { *then_t } else { *else_t };
                 }
                 Op::LoopHead => self.cur_pc += 1,
-                Op::ArrGet { dst, arr, idx } => {
-                    self.op_arr_get(*dst, *arr, *idx)?;
+                Op::ArrGet { dst, arr, idx, repr } => {
+                    self.op_arr_get(*dst, *arr, *idx, *repr)?;
                     self.cur_pc += 1;
                 }
-                Op::ArrSet { arr, idx, val } => {
-                    self.op_arr_set(*arr, *idx, *val)?;
+                Op::ArrSet { arr, idx, val, repr } => {
+                    self.op_arr_set(*arr, *idx, *val, *repr)?;
                     self.cur_pc += 1;
                 }
                 Op::GetF { dst, obj, field, repr } => {
@@ -625,7 +625,7 @@ impl Vm {
                 }
             }
 
-            Op::ArrNew { dst, ty, len } => {
+            Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {
                     TyKind::Vec { elem } => *elem,
                     _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-vec")),
@@ -634,8 +634,9 @@ impl Vm {
                 let c = self.heap.alloc_vec(elem, n, &self.prog.types)?;
                 if let crate::heap::CellData::Vec { items, .. } = &cell_of(c).data {
                     let mut fb = items.borrow_mut();
+                    let dflt = default_slot_repr(repr);
                     for _ in 0..n {
-                        fb.push(default_slot(elem, &self.prog.types));
+                        fb.push(dflt);
                     }
                 }
                 let old = self.cur_regs[dst as usize];
@@ -643,8 +644,8 @@ impl Vm {
                 self.heap.release(old);
             }
             Op::ArrLit { dst, ty, elems } => self.op_arr_lit(dst, ty, &elems)?,
-            Op::ArrGet { dst, arr, idx } => self.op_arr_get(dst, arr, idx)?,
-            Op::ArrSet { arr, idx, val } => self.op_arr_set(arr, idx, val)?,
+            Op::ArrGet { dst, arr, idx, repr } => self.op_arr_get(dst, arr, idx, repr)?,
+            Op::ArrSet { arr, idx, val, repr } => self.op_arr_set(arr, idx, val, repr)?,
 
             Op::EnumNew { dst, ty, member } => {
                 let c = self.heap.enum_member(ty, member)?;
@@ -866,14 +867,13 @@ impl Vm {
     /// `ArrGet` — the fast path calls this directly, so it must stay small
     /// and inlinable.
     #[inline]
-    fn op_arr_get(&mut self, dst: Reg, arr: Reg, idx: Reg) -> Result<(), Trap> {
+    fn op_arr_get(&mut self, dst: Reg, arr: Reg, idx: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
         let v = seq_get(cell, i)?;
-        let elem = self.elem_ty_of(cell);
         let old = self.cur_regs[dst as usize];
         self.cur_regs[dst as usize] = v;
-        if self.is_ref(elem) {
+        if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);
         }
@@ -882,13 +882,12 @@ impl Vm {
 
     /// `ArrSet` — shared by `step` and the `run_loop` fast path.
     #[inline]
-    fn op_arr_set(&mut self, arr: Reg, idx: Reg, val: Reg) -> Result<(), Trap> {
+    fn op_arr_set(&mut self, arr: Reg, idx: Reg, val: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
-        let elem = self.elem_ty_of(cell);
         let v = self.cur_regs[val as usize];
         let old = seq_set(cell, i, v)?;
-        if self.is_ref(elem) {
+        if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);
         }
@@ -1497,9 +1496,11 @@ fn sum_parts(cell: &crate::heap::CellVal) -> Result<(u32, Option<Slot>), Trap> {
     }
 }
 
-fn default_slot(ty: TypeId, table: &rut_core::types::TypeTable) -> Slot {
-    match table.kind(ty) {
-        TyKind::Prim(_) => Slot::int(0),
+/// Zero/default element from a baked repr without a type-table lookup
+/// (used by `ArrNew`'s zero-fill): primitives default to 0, handles null.
+fn default_slot_repr(repr: Repr) -> Slot {
+    match repr {
+        Repr::Prim(_) => Slot::int(0),
         _ => Slot::null(),
     }
 }

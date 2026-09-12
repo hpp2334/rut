@@ -105,10 +105,10 @@ pub enum Op {
     /// handle-field retains; buffers clone; strings clone
     Own { dst: Reg, src: Reg, ty: TypeId },
 
-    ArrNew { dst: Reg, ty: TypeId, len: Reg },     // Vec<T>(n) zeroed
+    ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Vec<T>(n) zeroed
     ArrLit { dst: Reg, ty: TypeId, elems: Vec<Reg> }, // fixed Array<T, N>
-    ArrGet { dst: Reg, arr: Reg, idx: Reg },       // bounds trap
-    ArrSet { arr: Reg, idx: Reg, val: Reg },
+    ArrGet { dst: Reg, arr: Reg, idx: Reg, repr: Repr },       // bounds trap
+    ArrSet { arr: Reg, idx: Reg, val: Reg, repr: Repr },
 
     /// enum member value (immortal singleton cell, RFC 0016 §1)
     EnumNew { dst: Reg, ty: TypeId, member: u32 },

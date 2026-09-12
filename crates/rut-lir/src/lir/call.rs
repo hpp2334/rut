@@ -288,7 +288,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let zero = self.new_reg(TY_I32);
                     self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
                     let dst = self.new_reg(vty);
-                    self.emit(Op::ArrNew { dst, ty: vty, len: zero }, sp.lo);
+                    self.emit(Op::ArrNew { dst, ty: vty, len: zero, repr: self.ctx.types.repr_of(elem) }, sp.lo);
                 }
                 1 => {
                     if !matches!(self.ctx.types.kind(elem), TyKind::Prim(_)) {
@@ -301,7 +301,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     let len = self.last_reg;
                     let dst = self.new_reg(vty);
-                    self.emit(Op::ArrNew { dst, ty: vty, len }, sp.lo);
+                    self.emit(Op::ArrNew { dst, ty: vty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
                 }
                 _ => {
                     self.ctx.err(sp, "Vec() or Vec(n)");
@@ -333,7 +333,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let zero = self.new_reg(TY_I32);
                 self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
                 let dst = self.new_reg(vty);
-                self.emit(Op::ArrNew { dst, ty: vty, len: zero }, sp.lo);
+                self.emit(Op::ArrNew { dst, ty: vty, len: zero, repr: self.ctx.types.repr_of(elem) }, sp.lo);
                 Ok(vty)
             }
             1 => {
@@ -347,7 +347,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let len = self.last_reg;
                 let dst = self.new_reg(vty);
-                self.emit(Op::ArrNew { dst, ty: vty, len }, sp.lo);
+                self.emit(Op::ArrNew { dst, ty: vty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
                 Ok(vty)
             }
             _ => {

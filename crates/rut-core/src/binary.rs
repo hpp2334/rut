@@ -423,10 +423,10 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::GetF { dst, obj, field, repr } => { e.u8(22); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u8(repr.to_u8()); }
         Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
-        Op::ArrNew { dst, ty, len } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); }
+        Op::ArrNew { dst, ty, len, repr } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); e.u8(repr.to_u8()); }
         Op::ArrLit { dst, ty, elems } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u16s(elems); }
-        Op::ArrGet { dst, arr, idx } => { e.u8(27); e.u16(*dst); e.u16(*arr); e.u16(*idx); }
-        Op::ArrSet { arr, idx, val } => { e.u8(28); e.u16(*arr); e.u16(*idx); e.u16(*val); }
+        Op::ArrGet { dst, arr, idx, repr } => { e.u8(27); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u8(repr.to_u8()); }
+        Op::ArrSet { arr, idx, val, repr } => { e.u8(28); e.u16(*arr); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
         Op::EnumNew { dst, ty, member } => { e.u8(29); e.u16(*dst); e.u32(*ty); e.u32(*member); }
         Op::OptSome { dst, ty, val } => { e.u8(30); e.u16(*dst); e.u32(*ty); e.u16(*val); }
         Op::OptNone { dst, ty } => { e.u8(31); e.u16(*dst); e.u32(*ty); }
@@ -486,10 +486,10 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         22 => Op::GetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, repr: repr(d.u8()?)? },
         23 => Op::SetF { obj: d.u16()?, field: d.u32()?, val: d.u16()?, repr: repr(d.u8()?)? },
         24 => Op::Own { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
-        25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()? },
+        25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()?, repr: repr(d.u8()?)? },
         26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, elems: d.u16s()? },
-        27 => Op::ArrGet { dst: d.u16()?, arr: d.u16()?, idx: d.u16()? },
-        28 => Op::ArrSet { arr: d.u16()?, idx: d.u16()?, val: d.u16()? },
+        27 => Op::ArrGet { dst: d.u16()?, arr: d.u16()?, idx: d.u16()?, repr: repr(d.u8()?)? },
+        28 => Op::ArrSet { arr: d.u16()?, idx: d.u16()?, val: d.u16()?, repr: repr(d.u8()?)? },
         29 => Op::EnumNew { dst: d.u16()?, ty: d.u32()?, member: d.u32()? },
         30 => Op::OptSome { dst: d.u16()?, ty: d.u32()?, val: d.u16()? },
         31 => Op::OptNone { dst: d.u16()?, ty: d.u32()? },

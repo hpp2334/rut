@@ -350,11 +350,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != elem {
                             self.ctx.err(sp, "element assignment type mismatch");
                         }
-                        self.emit(Op::ArrSet { arr: rreg, idx: ireg, val: self.last_reg }, sp.lo);
+                        self.emit(Op::ArrSet { arr: rreg, idx: ireg, val: self.last_reg, repr: self.ctx.types.repr_of(elem) }, sp.lo);
                     }
                     Some(bin) => {
                         let cur = self.new_reg(elem);
-                        self.emit(Op::ArrGet { dst: cur, arr: rreg, idx: ireg }, sp.lo);
+                        self.emit(Op::ArrGet { dst: cur, arr: rreg, idx: ireg, repr: self.ctx.types.repr_of(elem) }, sp.lo);
                         let t = self.compile_expr(value, Some(elem))?;
                         if t != elem {
                             self.ctx.err(sp, "element assignment type mismatch");
@@ -362,7 +362,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let val_reg = self.last_reg;
                         let res = self.new_reg(elem);
                         self.emit_compound(bin, elem, cur, val_reg, res, sp)?;
-                        self.emit(Op::ArrSet { arr: rreg, idx: ireg, val: res }, sp.lo);
+                        self.emit(Op::ArrSet { arr: rreg, idx: ireg, val: res, repr: self.ctx.types.repr_of(elem) }, sp.lo);
                     }
                 }
                 Ok(())

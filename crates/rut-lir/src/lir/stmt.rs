@@ -203,7 +203,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // var = iter[idx]
         match self.ctx.types.kind(it).clone() {
             TyKind::Str => self.emit(Op::StrCharAt { dst: var_reg, s: iter_reg, idx }, sp.lo),
-            _ => self.emit(Op::ArrGet { dst: var_reg, arr: iter_reg, idx }, sp.lo),
+            _ => self.emit(Op::ArrGet { dst: var_reg, arr: iter_reg, idx, repr: self.ctx.types.repr_of(elem_ty) }, sp.lo),
         }
         self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: false });
         self.loops.push((l_cont, l_end));

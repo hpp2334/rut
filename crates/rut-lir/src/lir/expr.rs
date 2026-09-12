@@ -55,7 +55,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 };
                 let dst = self.new_reg(elem);
-                self.emit(Op::ArrGet { dst, arr: rreg, idx: ireg }, sp.lo);
+                self.emit(Op::ArrGet { dst, arr: rreg, idx: ireg, repr: self.ctx.types.repr_of(elem) }, sp.lo);
                 Ok(elem)
             }
             ExprKind::Unary { op, expr } => {
