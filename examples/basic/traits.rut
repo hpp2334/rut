@@ -13,7 +13,7 @@
 //     vtables stay flat.
 //   * dataclass implementors: an all-public literal-constructed record
 //     plus impl blocks. The exhaustive dataclass limit
-//     list: no `private` fields, no `static` members, no `constructor`,
+//     list: no `private` fields, no `constructor`,
 //     no `Disposal`. Everything else — including methods — is allowed.
 
 import { Canvas, newCanvas } from "app:gfx";

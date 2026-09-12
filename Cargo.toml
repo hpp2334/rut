@@ -11,6 +11,7 @@ members = [
     "crates/rut-wasm",
     "crates/rut-cli",
     "crates/rut-lsp",
+    "examples/00-todolist",
 ]
 
 [workspace.package]

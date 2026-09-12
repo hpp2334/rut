@@ -281,6 +281,10 @@ pub struct Node {
 pub struct FnData {
     pub vis: Vis,
     pub is_suspend: bool,
+    /// `entry fn` — host-callable (RFC 0035 §3): lands in the binary's
+    /// entry table; its signature must satisfy the crossing rule
+    /// (RFC 0023 §2), checked at compile time
+    pub entry: bool,
     pub name: IdentId,
     pub generics: Vec<IdentId>,
     pub params: Vec<NodeHandle<AnyParam>>,

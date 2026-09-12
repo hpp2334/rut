@@ -17,7 +17,9 @@ explode an embedder. Start at **[`rfc/0001-rut-overview.md`](rfc/0001-rut-overvi
 ```
 rut/
 ├── rfc/        41 single-topic RFCs — the spec (0001 has the index)
-├── examples/   the target-syntax corpus; RFCs cite files by path
+├── examples/   the target-syntax corpus; RFCs cite files by path —
+│               00-todolist/ is the one RUNNABLE example: a Rust host
+│               embedding rut around a rut todolist library
 ├── crates/     the Cargo workspace — RFC 0041 §2 layout
 │   ├── rut-core/    core vocabulary: RutType table (0015), bytecode
 │   │                ops (0032), binary format (0033)
@@ -47,9 +49,10 @@ rut/
 ## Quick start
 
 ```sh
-cargo test --workspace     # 18 tests: corpus gate + 8 demo cases end-to-end
+cargo test --workspace     # 81 tests: corpus gate, e2e pipeline cases, embedding example
 cargo run -q -p rut-cli -- run examples/algorithms/sieve.rut
 cargo run -q -p rut-cli -- dump path/to/file.rut    # AST + IR dumps
+cargo run -q -p todolist    # the embedding example: Rust host + rut todolist lib
 ```
 
 ## The demo page
@@ -96,7 +99,12 @@ monomorphized generic free functions, `when` expressions with
 exhaustiveness, all assignment operators incl. the wrapping `&+` family,
 conversions `i32(x)`…, `f"..."` with the RFC 0007 rendering table,
 deterministic destruction at rc 0, `Trap::OutOfFuel/OutOfMemory/
-Overflow/...` — all enforced by the verifier at load.
+Overflow/...` — all enforced by the verifier at load. **Embedding
+works** (RFC 0035 §3, the M1 slice): `entry fn`s are host-callable —
+signatures checked against the crossing rule (primitives, `string`,
+`Vec<u8>`, `Option`/`Result`, `Opaque`) at compile time — and the host
+holds `Opaque` containers across calls
+([examples/00-todolist](examples/00-todolist)).
 
 Parse-only — the whole `examples/` corpus (39 `.rut` + `.d.rut`,
 zero diags; RFC 0030 §7 gate in `rut-parser/tests/corpus.rs`), including

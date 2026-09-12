@@ -389,7 +389,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let hint = if is_ok { ok_hint } else { err_hint };
                 let t = self.compile_expr(args[0], hint)?;
                 let src = self.last_reg;
-                let other = if is_ok { t } else { t };
+                // the OTHER side's type comes from the expected hint
+                // (bidirectional, RFC 0007 §1) — without one it mirrors `t`
+                let other = match if is_ok { err_hint } else { ok_hint } {
+                    Some(o) => o,
+                    None => t,
+                };
                 let rty = self.ctx.mk_result(if is_ok { t } else { other }, if is_ok { other } else { t });
                 let dst = self.new_reg(rty);
                 if is_ok {
@@ -456,10 +461,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
         }
-        // class method call: `Circle.new(..)` (RFC 0010 §1)
-        if let Some((dname, d)) = self.ctx.datas.iter().find(|(_, d)| d.methods.iter().any(|(n, _)| *n == member)).map(|(n, d)| (*n, d.clone())) {
-            if dname == base {
-                let Some((_, mnode)) = d.methods.iter().find(|(n, _)| *n == member).cloned() else { unreachable!() };
+        // class method call: `Circle.new(..)` (RFC 0010 §1) — resolve the
+        // class BY NAME first, then its member: searching for the first
+        // class with a same-named method would shadow every later class
+        // (two `new`s in one module made the second uncallable)
+        if let Some((dname, d)) = self.ctx.datas.iter().find(|(n, _)| *n == base).map(|(n, d)| (*n, d.clone())) {
+            if let Some((_, mnode)) = d.methods.iter().find(|(m, _)| *m == member).cloned() {
                 return self.compile_direct_method(dname, d, mnode, args, sp);
             }
         }        if let Some(e) = self.ctx.find_enum(base) {
@@ -576,17 +583,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let md = self.ctx.ast.method_decl(mnode).clone();
         let (params, ret, mname) = (md.params, md.ret, md.name);
-        if matches!(self.ctx.ast.param(params[0]), MemberKind::SelfParam(_)) {
+        // no-self first param (or no params at all) = class method
+        if matches!(
+            params.first().map(|p| self.ctx.ast.param(*p)),
+            Some(MemberKind::SelfParam(_))
+        ) {
             self.ctx.err(sp, "instance methods are called on a value, not the class");
             return Err(());
         }
         let mut ptys = Vec::new();
+        // the callee's signature may spell `Self` — resolve its types under
+        // the CALLEE's class (the caller's self_ty is irrelevant here)
+        let saved_self = self.self_ty;
+        self.self_ty = Some(d.ty);
         for p in &params {
             match self.ctx.ast.param(*p) {
                 MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
                 _ => ptys.push(TY_I32),
             }
         }
+        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
+        self.self_ty = saved_self;
         if args.len() != ptys.len() {
             self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
             return Err(());
@@ -602,8 +619,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
-        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
-        let _ = d;
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst: vec![],
@@ -872,14 +887,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             Some(MemberKind::SelfParam(SelfParamData { is_mut: true }))
         );
         let (params, ret, mname) = (md.params, md.ret, md.name);
-        let _ = (d, mut_self);
+        let _ = mut_self;
         let mut ptys = Vec::new();
+        // the callee's signature may spell `Self` — resolve its types under
+        // the CALLEE's class (the caller's self_ty is irrelevant here)
+        let saved_self = self.self_ty;
+        self.self_ty = Some(d.ty);
         for p in params.iter().skip(1) {
             match self.ctx.ast.param(*p) {
                 MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
                 _ => ptys.push(TY_I32),
             }
         }
+        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
+        self.self_ty = saved_self;
+        let _ = d;
         if args.len() != ptys.len() {
             self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
             return Err(());
@@ -895,7 +917,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
-        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst: vec![],

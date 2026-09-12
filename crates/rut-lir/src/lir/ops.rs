@@ -119,18 +119,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.types.name(lt)));
         }
         let lreg = self.last_reg;
-        let rt_ = self.compile_expr(rhs, Some(TY_BOOL))?;
-        if rt_ != TY_BOOL {
-            self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.types.name(rt_)));
-        }
-        let rreg = self.last_reg;
         let dst = self.new_reg(TY_BOOL);
-        // short-circuit: `&&` false short-circuits; `||` true short-circuits
+        // short-circuit: `&&` false short-circuits; `||` true short-circuits.
+        // The rhs's CODE sits under l_rhs, so it only evaluates (or traps)
+        // on the path that needs it; each path writes the result into dst.
         let l_short = self.new_label(); // value already decided here
+        let l_rhs = self.new_label();
         let l_end = self.new_label();
         match op {
-            rut_ast::ast::BinOp::And => self.br(lreg, l_end, l_short),
-            _ => self.br(lreg, l_short, l_end),
+            rut_ast::ast::BinOp::And => self.br(lreg, l_rhs, l_short),
+            _ => self.br(lreg, l_short, l_rhs),
         }
         self.bind(l_short);
         let short_reg = self.new_reg(TY_BOOL);
@@ -138,8 +136,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.emit(Op::ConstRaw { dst: short_reg, bits: (!is_and) as u64 }, sp.lo);
         self.emit(Op::Mov { dst, src: short_reg }, sp.lo);
         self.jmp(l_end);
+        self.bind(l_rhs);
+        let rt_ = self.compile_expr(rhs, Some(TY_BOOL))?;
+        if rt_ != TY_BOOL {
+            self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.types.name(rt_)));
+        }
+        self.emit(Op::Mov { dst, src: self.last_reg }, sp.lo);
         self.bind(l_end);
-        let _ = rreg;
         // the value lives in `dst`; move it out so last_reg holds it
         let out = self.new_reg(TY_BOOL);
         self.emit(Op::Mov { dst: out, src: dst }, sp.lo);

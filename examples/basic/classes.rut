@@ -3,18 +3,18 @@
 // Counter.new(), Version.parse("1.2"); no `constructor` keyword, no
 // type-calls. A class method is just a function without a `self`
 // receiver; it builds the instance with the class-private `Self { .. }`
-// literal. Instance methods spell `self` explicitly (no `static fn`).
+// literal. Instance methods spell `self` explicitly; a method
+// without `self` is a class method — no separate "static" form.
 
 import { Logger } from "std:log";
 
 class Counter {
     private n: i32 = 0;             // field initializer
-    static instances: i32 = 0;      // static: one slot per class, per VM
 
     fn new() -> Self {                    // the construction surface — a
-        Counter.instances &+= 1;        // class method (no self); free to
-        return Self { };               // run logic. `new` is a convention,
-    }                                   // not syntax (RFC 0002 §4)
+        return Self { };               // class method (no self); free to
+    }                                   // run logic. `new` is a convention,
+                                        // not syntax (RFC 0002 §4)
 
     fn press(mut self) -> unit {           // instance method: explicit receiver,
         self.n &+= 1;                // wrapping add (§8) — or `+=` to trap
@@ -65,7 +65,7 @@ fn classes() -> unit {
     c.press();
     let r = Rect.new(3, 4);
     let v = Version.parse("1.2");  // Option<Version> — try-construction
-    log.info(f"count={c.count()} area={r.area()} instances={Counter.instances}");
+    log.info(f"count={c.count()} area={r.area()}");
     // let bad = Rect.new(3);       // ERROR: arity — the class's construction
                                      // contract is whatever its methods say
     // Rect { w: 1, h: 1 };         // ERROR: classes have no outside literal

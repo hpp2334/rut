@@ -31,7 +31,12 @@ impl Diag {
 /// surface returns structured diags; this is the pretty form).
 pub fn render_diags(src: &str, diags: &[Diag]) -> String {
     let mut out = String::new();
-    for d in diags {
+    // stable sort by span: emission order is compile-phase order (parse →
+    // collect → bodies), so an unsorted render interleaves later files'
+    // errors before earlier ones
+    let mut sorted: Vec<&Diag> = diags.iter().collect();
+    sorted.sort_by_key(|d| d.span.lo);
+    for d in sorted {
         let (line_no, col, line, caret_len) = locate(src, d.span);
         out.push_str(&format!("error: {}\n", d.msg));
         out.push_str(&format!("  --> line {}, byte {}\n", line_no, d.span.lo));

@@ -64,19 +64,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     Not => self.compile_expr(expr, Some(TY_BOOL))?,
                     _ => self.compile_expr(expr, None)?,
                 };
+                // capture the operand's register BEFORE new_reg — it
+                // overwrites last_reg with the destination
+                let src = self.last_reg;
                 let dst = self.new_reg(t);
                 match op {
                     Neg => {
                         if !matches!(self.ctx.types.kind(t), TyKind::Prim(_)) {
                             self.ctx.err(sp, "negation needs a number");
                         }
-                        self.emit(Op::Neg { ty: t, dst, a: self.last_reg }, sp.lo);
+                        self.emit(Op::Neg { ty: t, dst, a: src }, sp.lo);
                     }
                     Not => {
                         if t != TY_BOOL {
                             self.ctx.err(sp, "`!` needs a bool");
                         }
-                        self.emit(Op::Not { dst, a: self.last_reg }, sp.lo);
+                        self.emit(Op::Not { dst, a: src }, sp.lo);
                     }
                     BitNot => {
                         self.ctx.err(sp, "`~` is not supported in this build");
@@ -379,8 +382,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
             // Option.none / Option.none() without call parens
-            if self.ctx.name(base) == "Option" && self.ctx.name(member) == "none" {
-                let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
+            if self.ctx.name(base) == "Option" && self.ctx.name(member) == "none" {                let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
                     Some(TyKind::Option { elem }) => elem,
                     _ => {
                         self.ctx.err(sp, "cannot infer the element type of `Option.none` here —annotate the binding");

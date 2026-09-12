@@ -8,6 +8,10 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 (`host/my_map.rs`), and consumers just import (`host/my-map.rut`,
 `host/interop.rut`); other VM/Rust sketches stay in the RFCs.
 
+The exception is [`00-todolist/`](00-todolist/) — a **runnable** Rust
+project from the first line of `todolist.rut` to the last `Value` out of
+the VM. Everything else on this page is parse-only.
+
 | File | Demonstrates | RFC |
 |---|---|---|
 | `basic/grammar-tour.rut` | dataclass, trait, class + class-method construction, impl blocks, shared cells + `own`, vtable dispatch, exhaustive `when`, `f""` | 0009–0012, 0016 |
@@ -18,7 +22,7 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `basic/error-context.rut` | `here()` / `capture_stack_trace()` on error values, lazy `render()`, stripped-binary degradation | 0036 |
 | `basic/literals.rut` | numeric suffixes, plain/raw/format strings, builtin allocation calls, fixed arrays `Array<T, N>`, `dyn Slice<T>` boxing, `Vec`/`Array` → `dyn Slice<T>` widening | 0005, 0007 |
 | `basic/dataclasses.rut` | reference semantics (aliasing by default), `own` divergence, field initializers, free functions, identity `==` | 0009, 0011, 0016 |
-| `basic/classes.rut` | class-method construction (`new`/`from`/`parse`), `Self {}` literal, `Option<Self>` try-construction, private + sealing, static fields, explicit `self` receivers | 0010 |
+| `basic/classes.rut` | class-method construction (`new`/`from`/`parse`), `Self {}` literal, `Option<Self>` try-construction, private + sealing, explicit `self` receivers | 0010 |
 | `basic/rc-and-dispose.rut` | aliasing + `own(x)`, `Disposal.dispose` at rc 0 | 0011, 0016 |
 | `basic/traits.rut` | methods-only traits, `impl Trait for Type` blocks, `dyn I` object types, `requires`, dataclass implementors (hand `hash`/`eq`), `is` capability probe, composition over intersections | 0009, 0012 |
 | `basic/type-tests.rut` | the `is` keyword: exact-class tests + trait capability probes; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
@@ -47,6 +51,18 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 | `host/batch.rut` + `host/batch.rs` | the **round trip**: host constructs a `Batch`, rut filters/aggregates/pushes, then passes the instance BACK via the `submit` callback — `Handle<Batch>` call-scoped borrow in, receipt `string` out; deterministic Drop at rc 0 | 0022–0026, 0023 |
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
+
+### 00-todolist — the runnable one
+
+A Cargo project, a workspace member: **`cargo run -p todolist`**. The rut
+side (`todolist.rut`) is a todo-list *library* — `export class TodoList`
+with full CRUD plus an **`entry fn`** surface, no `main`. The Rust side
+(`src/main.rs`) drives it: `createContainer()` → an `Opaque` handle,
+`create(container)` → `u32` handles, then CRUD calls crossing with
+primitives, `Option`/`Result` only (RFC 0023 §2 — enforced on entry
+signatures at compile time, RFC 0035 §3). All data stays in rut.
+`tests/session.rs` gates the session under `cargo test --workspace`. See
+[00-todolist/README.md](00-todolist/README.md).
 
 | `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
 | `json/app.rut` | opt-in dataclasses (zero-method `impl Serializable for T {}`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |

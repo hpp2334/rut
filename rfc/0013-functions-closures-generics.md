@@ -46,7 +46,7 @@ block), and a generic `first<T>` monomorphized to two instantiations.
      `dyn I` parameter instead, so the contract rides the call site:
      `deserialize<T>(v: string): Result<T, JsonError> where T requires
      Deserializable`. A body may widen a `T`-typed *value* to `dyn I`
-     (the bound proves the widening valid) but gains no static method
+     (the bound proves the widening valid) but gains no class-method
      calls on bare `T`. (A user-class bound would be pure forwarding
      anyway — deferred with OQ-1.)
 

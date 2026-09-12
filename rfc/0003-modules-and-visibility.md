@@ -49,10 +49,10 @@ See **`examples/basic/module-structure.rut`** and
   to mutate **the caller's object** (`fn step(mut p: Point)` moves the
   caller's point; `fn area(p: Point)` promises not to). Diverging —
   mutating a private copy — is `own(p)` at the call site (RFC 0011 §1).
-- There is no mutable module state. Program state is constructed in `main`
-  or lives in class `static` fields (RFC 0010 §2), which follow the same
-  load-time expression initializer rule and are materialized at load — **no user
-  code runs at load**.
+- There is no mutable module state. Program state is constructed in `main`,
+  or is held by the embedder and passed back across the boundary — the
+  `Opaque` container pattern (RFC 0014, RFC 0023 §2) — **no user code runs
+  at load**.
 - **Loading a module executes nothing.** The embedder loads, then explicitly
   calls an entry function (conventionally `main`, sync or suspend; worker
   entry points receive transferred args — RFC 0021). Consequences: no
@@ -66,7 +66,7 @@ is the root module). Every module-scope declaration carries a visibility:
 
 | Form | Meaning |
 |---|---|
-| `export fn ..` | **public** — importable from anywhere (other packages, the host) |
+| `export fn ..` | **public** — importable by any rut module (other packages included) |
 | `export(mod) fn ..` | visible everywhere inside this **package's module tree** |
 | `export(super) fn ..` | visible to the **parent module** only |
 | `export(self) fn ..` | module-private — **the default** for unannotated declarations |
@@ -78,20 +78,25 @@ is the root module). Every module-scope declaration carries a visibility:
   extern declarations included (on `class`, it
   means the *type name* is visible; class members use `private` as in
   RFC 0010).
-- The entry point must be plain `export fn main` — the host imports it from
-  outside the package.
+- The conventional entry point is `export fn main`. The host may also
+  call any **`entry fn`** — `entry` is orthogonal to visibility: it
+  publishes a function to the *embedder* (RFC 0035 §3), and its
+  signature must satisfy the host crossing rule (RFC 0023 §1), checked
+  at compile time. `entry` does not combine with `export` modifiers.
 - Visibility is checked at compile time; it has no runtime representation.
   (Class-member `private` is likewise compile-time only.)
 - Visibility applies uniformly to every declaration, extern included: only
-  `export`ed names enter a module's export table. A non-exported decl is
+  `export`ed names enter a module's import table, and only `entry` fns
+  (plus the conventional `main`) enter the binary's host-entry table. A
+  non-exported decl is
   *known* inside its module (callable, type-checkable) but *nameable*
   nowhere else — which is how native libraries hide implementation
   surfaces behind exported ones (RFC 0025 §1).
 
 ## Open questions
 
-- OQ-1: load-time expression scope: do module-scope `let` / `static`
-  initializers ever allow calls to user functions (computed constants)?
+- OQ-1: load-time expression scope: do module-scope `let` initializers
+  ever allow calls to user functions (computed constants)?
   Proposed: no — literal folding and builtin zero-allocs only.
 - OQ-2: module/system semantics — URL-like specifiers (`tur:core` today) vs
   paths; how the host intercepts loads (RFC 0001 open question; loader

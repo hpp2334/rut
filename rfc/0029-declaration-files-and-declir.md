@@ -73,7 +73,7 @@ only, and — beyond RFC 0003's module scope — every declaration must be
   a contextual keyword, `.d.rut`-only after the linkage keyword — it
   stays a legal identifier everywhere else. Builtin containers
   (`Vec`, `Option`, …) remain `host class` decls: they are class-shaped
-  (statics, generics); primitives are not.
+  (generic); primitives are not.
 
 Forbidden — the parser errors "implementation in a declaration file":
 `fn` with a body, `class` with a body, field/method bodies of any kind,

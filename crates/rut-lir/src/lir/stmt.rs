@@ -59,10 +59,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.bind(else_label);
                     match e {
                         ElseBranch::If(h) => self.compile_stmt(h.into())?,
-                        ElseBranch::Block(_) => {
-                            // plain else-blocks reach the statement fallthrough
-                            // (blocks are expressions —same diag as before)
-                            self.ctx.err(sp, "expected a statement");
+                        ElseBranch::Block(b) => {
+                            self.compile_block(b)?;
                         }
                     }
                 }
@@ -275,7 +273,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             self.bind(l_arm);
-            let bt = self.compile_expr(*body, if result_ty != TY_UNIT { Some(result_ty) } else { None })?;
+            // unit arms may be statement blocks (`-> { a(); b(); }`,
+            // RFC 0008 §1) — blocks aren't value expressions in this
+            // build, so compile them as scoped statement blocks
+            let body_is_block = matches!(self.ctx.ast.expr(*body), ExprKind::Block { .. });
+            let bt = if body_is_block && result_ty == TY_UNIT {
+                self.compile_block(*body)?;
+                TY_UNIT
+            } else {
+                self.compile_expr(*body, if result_ty != TY_UNIT { Some(result_ty) } else { None })?
+            };
             if result_ty != TY_UNIT {
                 if bt != result_ty {
                     self.ctx.err(self.ctx.ast.span(body.id()), format!(

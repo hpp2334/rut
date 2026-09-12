@@ -30,22 +30,31 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     }
     let mut ctx = Ctx::new(&ast);
     ctx.collect();
+    // the entry surface's crossing contract is compile-time (RFC 0035 §3 /
+    // 0023 §2): bad signatures are source diagnostics, never call-time
+    // surprises for the embedder
+    ctx.check_entries();
     if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags.clone());
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
     // module lets (load-time expression check, RFC 0003 §1)
     ctx.compile_module_lets();
-    // entry: conventionally `main` (RFC 0003 §1) — required for a runnable
-    // binary; a module without one still compiles (library shape)
-    let main_id = ctx.lookup_name("main");
-    let mut root: Option<Inst> = None;
-    if let Some(m) = main_id {
+    // compilation roots: the conventional `main` (RFC 0003 §1) and every
+    // `entry fn` — the host-callable surface (RFC 0035 §3). A module may
+    // have either, both, or neither (pure library shape).
+    let mut roots: Vec<Inst> = Vec::new();
+    if let Some(m) = ctx.lookup_name("main") {
         if ctx.find_free_fn(m) {
-            root = Some(Inst { key: FnKey::Free(m), subst: vec![] });
+            roots.push(Inst { key: FnKey::Free(m), subst: vec![] });
         }
     }
-    if let Some(root) = root {
+    for name in ctx.entries.clone() {
+        if ctx.find_free_fn(name) {
+            roots.push(Inst { key: FnKey::Free(name), subst: vec![] });
+        }
+    }
+    for root in roots {
         if ctx.compile_queue(root).is_err() {
             diags.append(&mut ctx.diags);
             return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
@@ -63,12 +72,23 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         }
     }
     let vtables = ctx.build_vtables();
-    // finalize exports: names → function ids
+    // finalize the entry table (RFC 0035 §3): `entry fn`s — plus the
+    // conventional `main` when it is exported. Plain `export fn`s are
+    // import-visibility for M2 module loading (RFC 0003 §2), NOT host
+    // entries: their types are unrestricted.
     let mut exports = Vec::new();
-    for (n, _) in ctx.exports.clone() {
+    let mut names: Vec<String> = ctx
+        .entries
+        .iter()
+        .map(|&n| ctx.name(n).to_string())
+        .collect();
+    if ctx.exports.iter().any(|(n, _)| n == "main") && !names.iter().any(|n| n == "main") {
+        names.push("main".to_string());
+    }
+    for n in names {
         if let Some(id) = ctx.lookup_name(&n) {
             if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(id), subst: vec![] }) {
-                exports.push((n.clone(), f));
+                exports.push((n, f));
             }
         }
     }

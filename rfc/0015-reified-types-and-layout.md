@@ -92,7 +92,7 @@ rule, no exceptions:
 
 - Fields in declaration order, natural C alignment, struct size padded to
   its alignment. No hidden header, no tag, no vtable pointer inline.
-- `private`, `static`, generic parameters, and out-of-body impl blocks add
+- `private`, generic parameters, and out-of-body impl blocks add
   **nothing** to the block — layout depends only on the field list.
 - The block is what `own(x)` clones (RFC 0011 §1), what
   `size_of<T>()`/`align_of<T>()` report (§3), and

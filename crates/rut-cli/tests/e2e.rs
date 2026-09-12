@@ -343,3 +343,286 @@ fn serde_hint_parse(json: &str) -> KindProbe {
 struct KindProbe {
     kind: String,
 }
+
+#[test]
+fn if_else_chains_execute_both_arms() {
+    // else-blocks and else-if chains were a stubbed statement ("expected a
+    // statement") — the corpus never compiled them
+    let src = r#"
+fn classify(n: i32) -> string {
+    if (n == 0) {
+        return "zero";
+    } else if (n < 0) {
+        return "negative";
+    } else {
+        return "positive";
+    }
+}
+export fn main() -> unit {
+    print(classify(0));
+    print(classify(-3));
+    print(classify(7));
+    let mut late = 0;
+    for (let i = 0; i < 4; i += 1) {
+        if (i % 2 == 0) { late += 1; } else { late += 10; }
+    }
+    print(f"late={late}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["zero", "negative", "positive", "late=22"]);
+}
+
+#[test]
+fn shortcircuit_truth_table() {
+    // && and || both miscompiled: the rhs value never reached the result
+    // register (&& was always false; f||t was false too)
+    let src = r#"
+export fn main() -> unit {
+    let t = true;
+    let f = false;
+    print(f"and: {t && t} {t && f} {f && t} {f && f}");
+    print(f"or:  {t || t} {t || f} {f || t} {f || f}");
+    let n = 6;
+    if (n > 0 && n % 2 == 0) { print("even positive"); }
+    if (n < 0 || n % 3 == 0) { print("div by 3 or negative"); }
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(
+        lines,
+        vec![
+            "and: true false false false",
+            "or:  true true true false",
+            "even positive",
+            "div by 3 or negative",
+        ]
+    );
+}
+
+#[test]
+fn zero_param_class_constructor_and_self_ty() {
+    // zero-param class methods panicked on params[0]; `Self` in signature
+    // position was rejected at the call site
+    let src = r#"
+class Counter {
+    private n: i32;
+    fn new() -> Self { return Self { n: 0 }; }
+    fn bump(mut self) -> unit { self.n += 1; }
+    fn count(self) -> i32 { return self.n; }
+}
+class Wrapped {
+    private inner: Counter;
+    fn new() -> Self { return Self { inner: Counter.new() }; }
+    fn bump(mut self) -> unit { self.inner.bump(); }
+    fn count(self) -> i32 { return self.inner.count(); }
+}
+export fn main() -> unit {
+    let mut c = Counter.new();
+    c.bump();
+    c.bump();
+    print(f"count={c.count()}");
+    let mut w = Wrapped.new();
+    w.bump();
+    print(f"wrapped={w.count()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["count=2", "wrapped=1"]);
+}
+
+#[test]
+fn when_statement_block_arms() {
+    // `when` as a statement with block bodies was rejected ("unsupported
+    // expression in this build") — RFC 0008's statement form
+    let src = r#"
+enum Light { Green, Yellow, Red }
+export fn main() -> unit {
+    let mut dropped = 0;
+    let mut kept = 0;
+    for (let i = 0; i < 6; i += 1) {
+        when (i % 3) {
+            0       -> { dropped += 1; },
+            1, 2    -> { kept += 1; },
+            else    -> { kept += 100; },
+        }
+    }
+    print(f"dropped={dropped} kept={kept}");
+    when (Light.Red) {
+        Light.Green  -> { print("go"); },
+        Light.Yellow -> { print("brake"); },
+        Light.Red    -> { print("stop"); },
+    }
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["dropped=2 kept=4", "stop"]);
+}
+
+#[test]
+fn enum_singletons_survive_their_use_sites() {
+    // EnumNew stored the immortal singleton slot WITHOUT taking an owned
+    // reference — every frame teardown over-released, freeing the "immortal"
+    // cell while the singleton map still pointed at it (heap corruption;
+    // detected by case1's thread, locked here with many use sites)
+    let src = r#"
+enum Flavor { Sweet, Sour, Salty }
+fn describe(f: Flavor) -> string {
+    return when (f) {
+        Flavor.Sweet  -> "sweet",
+        Flavor.Sour   -> "sour",
+        Flavor.Salty  -> "salty",
+    };
+}
+export fn main() -> unit {
+    let hits = [describe(Flavor.Sweet), describe(Flavor.Sour), describe(Flavor.Salty)];
+    print(hits[0]);
+    print(hits[1]);
+    print(hits[2]);
+    for (let i = 0; i < 50; i += 1) {
+        print(describe(when (i % 2) { 0 -> Flavor.Sweet, else -> Flavor.Salty }));
+    }
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines[0], "sweet");
+    assert_eq!(lines[1], "sour");
+    assert_eq!(lines[2], "salty");
+    assert_eq!(lines.len(), 53);
+    assert!(lines[3..].iter().all(|l| l == "sweet" || l == "salty"));
+}
+
+// ---- the entry surface (RFC 0035 §3): host-callable fns, no main ----
+
+fn entry_vm(src: &str) -> rut_vm::interp::Vm {
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    assert!(
+        out.diags.is_empty(),
+        "unexpected diags:\n{}",
+        rut_lexer::diag::render_diags(src, &out.diags)
+    );
+    let prog = rut_core::binary::decode(out.binary.as_deref().expect("binary")).expect("decode");
+    rut_vm::verify::verify(&prog).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(1_000_000),
+        heap_limit_bytes: Some(4 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks { print: None }).expect("vm")
+}
+
+#[test]
+fn entry_fns_compile_without_main_and_cross_values() {
+    // a module with entries and NO main compiles (entries are roots) and
+    // the host drives it: Opaque container in/out, primitives, Vec<u8>,
+    // Option and Result in both arms
+    let src = r#"
+dataclass Row { id: i32; }
+dataclass Box { rows: Vec<Row>; }
+
+entry fn make() -> Opaque { return Opaque.new(Box { rows: Vec() }); }
+entry fn put(c: Opaque) -> u32 {
+    let b = downcast<Box>(c).value;
+    b.rows.push(Row { id: 1 });
+    return u32(b.rows.len());
+}
+entry fn echo_bytes(v: Vec<u8>) -> Vec<u8> { return v; }
+entry fn maybe(v: i32) -> Option<i32> {
+    return when (v > 0) { true -> Option.some(v), else -> Option.none() };
+}
+entry fn checked(v: i32) -> Result<i32, string> {
+    return when (v >= 0) { true -> Result.ok(v), else -> Result.err("negative") };
+}
+"#;
+    let mut vm = entry_vm(src);
+    use rut_vm::heap::Value;
+    let Value::Opaque(c) = vm.call("make", &[]).unwrap() else { unreachable!() };
+    assert_eq!(vm.call("put", &[Value::Opaque(c.clone())]).unwrap(), Value::I64(1));
+    assert_eq!(vm.call("put", &[Value::Opaque(c.clone())]).unwrap(), Value::I64(2));
+    assert_eq!(
+        vm.call("echo_bytes", &[Value::Bytes(vec![1, 2, 250])]).unwrap(),
+        Value::Bytes(vec![1, 2, 250])
+    );
+    assert_eq!(
+        vm.call("maybe", &[Value::I64(7)]).unwrap(),
+        Value::Opt(Some(Box::new(Value::I64(7))))
+    );
+    assert_eq!(vm.call("maybe", &[Value::I64(-1)]).unwrap(), Value::Opt(None));
+    assert_eq!(
+        vm.call("checked", &[Value::I64(3)]).unwrap(),
+        Value::Res(Ok(Box::new(Value::I64(3))))
+    );
+    assert_eq!(
+        vm.call("checked", &[Value::I64(-3)]).unwrap(),
+        Value::Res(Err(Box::new(Value::Str("negative".into()))))
+    );
+    // embedder mistakes are named traps, never silent zeros
+    let err = vm.call("maybe", &[Value::Str("x".into())]).unwrap_err();
+    assert!(err.msg.contains("argument"), "{}", err.msg);
+}
+
+#[test]
+fn entry_crossing_rule_is_compile_time() {
+    // rut cells never cross: dataclasses, Vec<T> of cells, generics —
+    // each is a source diagnostic naming the offending signature
+    let src = r#"
+dataclass Row { id: i32; }
+entry fn bad_param(r: Row) -> unit { }
+"#;
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("parameter `r` is `Row`")),
+        "{:?}",
+        out.diags
+    );
+
+    let src = r#"
+dataclass Row { id: i32; }
+entry fn bad_ret() -> Vec<Row> { return Vec(); }
+"#;
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("returns `Vec<Row>`")),
+        "{:?}",
+        out.diags
+    );
+
+    let src = r#"
+entry fn generic<T>(v: T) -> T { return v; }
+"#;
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("cannot be generic")),
+        "{:?}",
+        out.diags
+    );
+}
+
+#[test]
+fn plain_export_stays_unrestricted() {
+    // `export` is import-visibility for rut modules (RFC 0003 §2), NOT
+    // the host surface: a TodoList crosses fine between rut fns
+    let src = r#"
+dataclass Row { id: i32; }
+export class Stack {
+    private items: Vec<Row>;
+    fn new() -> Self { return Self { items: Vec() }; }
+    fn push(mut self, id: i32) -> unit { self.items.push(Row { id: id }); }
+    fn len(self) -> i32 { return self.items.len(); }
+}
+export fn drain(s: Stack) -> i32 { return s.len(); }
+export fn main() -> unit {
+    let mut st = Stack.new();
+    st.push(1);
+    print(f"drained {drain(st)}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["drained 1"]);
+}

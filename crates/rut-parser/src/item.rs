@@ -31,9 +31,15 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
                 // RFC 0030 §2: `suspend fn` — M1 parses it; the compiler
                 // rejects with a targeted M3 message
                 p.bump();
-                Some(Frame::Fn(FnFrame::new(Vis::Self_, true)))
+                Some(Frame::Fn(FnFrame::new(Vis::Self_, true, false)))
             }
-            "fn" => Some(Frame::Fn(FnFrame::new(Vis::Self_, false))),
+            "fn" => Some(Frame::Fn(FnFrame::new(Vis::Self_, false, false))),
+            // `entry fn` — the host-callable surface (RFC 0035 §3):
+            // contextual; only special directly before `fn`
+            "entry" if p.at_kw2("fn") => {
+                p.bump();
+                Some(Frame::Fn(FnFrame::new(Vis::Self_, false, true)))
+            }
             "host" | "extern" => Some(Frame::Surface(SurfaceFrame::new())),
             // statement keywords at module scope: RFC 0003 §1
             "if" | "while" | "for" | "return" | "when" | "break" | "continue" | "await" => {
@@ -68,9 +74,9 @@ pub(crate) fn classify_export(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "trait" => Some(Frame::Trait(TraitFrame::new(vis))),
             "suspend" if p.at_kw2("fn") => {
                 p.bump();
-                Some(Frame::Fn(FnFrame::new(vis, true)))
+                Some(Frame::Fn(FnFrame::new(vis, true, false)))
             }
-            "fn" => Some(Frame::Fn(FnFrame::new(vis, false))),
+            "fn" => Some(Frame::Fn(FnFrame::new(vis, false, false))),
             "host" | "extern" => Some(Frame::Surface(SurfaceFrame::new())),
             _ => {
                 p.err_here(format!("`export` must precede a declaration, found `{kw}`"));
@@ -803,6 +809,7 @@ impl MethodFrame {
 pub(crate) struct FnFrame {
     vis: Vis,
     pre_suspend: bool,
+    entry: bool,
     lo: u32,
     stage: FnSStage,
     is_suspend: bool,
@@ -823,10 +830,11 @@ enum FnSStage {
 }
 
 impl FnFrame {
-    pub(crate) fn new(vis: Vis, pre_suspend: bool) -> Self {
+    pub(crate) fn new(vis: Vis, pre_suspend: bool, entry: bool) -> Self {
         FnFrame {
             vis,
             pre_suspend,
+            entry,
             lo: 0,
             stage: FnSStage::Params,
             is_suspend: false,
@@ -925,6 +933,7 @@ impl FnFrame {
                     FnData {
                         vis: self.vis,
                         is_suspend: self.is_suspend,
+                        entry: self.entry,
                         name: self.name,
                         generics: std::mem::take(&mut self.generics),
                         params: self.params.take().expect("fn without params"),

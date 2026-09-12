@@ -1,0 +1,17 @@
+[package]
+name = "todolist"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "00-todolist — a Rust app embedding rut: the rut side is a todo-list CRUD library, the Rust side compiles, verifies, and runs it under budgets"
+
+[dependencies]
+rut-core = { path = "../../crates/rut-core" }
+rut-lexer = { path = "../../crates/rut-lexer" }
+rut-parser = { path = "../../crates/rut-parser" }
+rut-driver = { path = "../../crates/rut-driver" }
+rut-vm = { path = "../../crates/rut-vm" }
+
+[[bin]]
+name = "todolist"
+path = "src/main.rs"

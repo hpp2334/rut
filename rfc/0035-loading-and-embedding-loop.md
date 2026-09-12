@@ -27,9 +27,12 @@ struct HostHooks {
 }                                           // sink; None = silent no-op
 ```
 
-- **Loading executes nothing**: `load` verifies and links an binary; the
-  host then calls an entry explicitly (`vm.call("main", ..)`, sync or
-  suspend).
+- **Loading executes nothing**: `load` verifies and links a binary; the
+  host then calls an entry explicitly (`vm.call(name, ..)`, sync or
+  suspend). Callable names are the module's **`entry fn`s** (plus the
+  conventional `main`); their signatures were checked against the host
+  crossing rule at compile time (RFC 0023 §1), so a bad surface never
+  reaches the embedder as a runtime surprise.
 - Import specifiers (`"std:fs"`, `"imaging"`, `"./state"`) are resolved
   entirely by `load_module` — the VM has no filesystem access and no
   builtin loader policy (RFC 0003 OQ-2 stays a host decision).

@@ -97,6 +97,8 @@ pub struct Ctx<'a> {
     /// lambda signatures: body node → (resolved param types incl.
     /// expected-type inference, ret type)
     pub lambda_sigs: std::collections::HashMap<NodeId, (Vec<TypeId>, TypeId)>,
+    /// `entry fn` names (RFC 0035 §3): the host-callable surface
+    pub entries: Vec<IdentId>,
     // instantiation queue
     pub inst_map: std::collections::HashMap<Inst, u32>,
     queue: Vec<Inst>,
@@ -123,6 +125,7 @@ impl<'a> Ctx<'a> {
             fn_nodes: Vec::new(),
             lambda_info: std::collections::HashMap::new(),
             lambda_sigs: std::collections::HashMap::new(),
+            entries: Vec::new(),
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
         }
@@ -130,6 +133,74 @@ impl<'a> Ctx<'a> {
 
     pub fn err(&mut self, span: Span, msg: impl Into<String>) {
         self.diags.push(Diag::new(span, msg));
+    }
+
+    /// The crossing rule (RFC 0023 §2): what an `entry fn` signature may
+    /// carry. Primitives, `string`, `unit`, `Vec<u8>` buffers, `Option`/
+    /// `Result` over crossable types — and `Opaque`, the host-held box
+    /// (RFC 0014): the ONE cell shape an embedder may keep and pass back.
+    /// Every other cell (`TodoList`, `Vec<Todo>`, `dyn Trait`, …) stays
+    /// inside the VM.
+    pub fn crosses_boundary(&self, ty: TypeId) -> bool {
+        match self.types.kind(ty) {
+            TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Opaque => true,
+            TyKind::Option { elem } => self.crosses_boundary(*elem),
+            TyKind::Result { ok, err } => self.crosses_boundary(*ok) && self.crosses_boundary(*err),
+            TyKind::Vec { elem } => {
+                matches!(self.types.kind(*elem), TyKind::Prim(PrimTy::U8))
+            }
+            _ => false,
+        }
+    }
+
+    /// Compile-time enforcement of the crossing rule on every `entry fn`
+    /// (RFC 0035 §3): a bad surface is a source diagnostic with span and
+    /// parameter name — never a runtime "cannot call" surprise.
+    pub fn check_entries(&mut self) {
+        let entries = self.entries.clone();
+        for name in entries {
+            let Some((_, node)) = self.fn_nodes.iter().find(|(n, _)| *n == name).cloned() else {
+                continue;
+            };
+            let fd = self.ast.fn_decl(node).clone();
+            let fname = self.name(name).to_string();
+            if !fd.generics.is_empty() {
+                self.err(
+                    self.ast.span(node.id()),
+                    format!(
+                        "`entry fn {fname}` cannot be generic — the published signature is one concrete shape (RFC 0023 §2)"
+                    ),
+                );
+                continue;
+            }
+            for p in &fd.params {
+                let MemberKind::Param(pd) = self.ast.param(*p) else { continue };
+                let Some(t) = pd.ty else { continue };
+                let ty = self.resolve_type(t, &[]);
+                if !self.crosses_boundary(ty) {
+                    self.err(
+                        self.ast.span(p.id()),
+                        format!(
+                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `string`, `Vec<u8>`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
+                            self.name(pd.name),
+                            self.types.name(ty)
+                        ),
+                    );
+                }
+            }
+            if let Some(r) = fd.ret {
+                let ty = self.resolve_type(r, &[]);
+                if !self.crosses_boundary(ty) {
+                    self.err(
+                        self.ast.span(r.id()),
+                        format!(
+                            "`entry fn {fname}` returns `{}` — only primitives, `string`, `Vec<u8>`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
+                            self.types.name(ty)
+                        ),
+                    );
+                }
+            }
+        }
     }
 
     pub fn name(&self, id: IdentId) -> &str {

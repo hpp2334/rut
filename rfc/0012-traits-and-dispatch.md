@@ -90,7 +90,7 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
     exactly — receiver form (`self`/`mut self`), params, and return type;
     a missing signature is a compile error, and so is any extra or
     inherent method inside the block (put those in the class/dataclass
-    body). `private`, `static`, `suspend`, and constructors are not
+    body). `private`, `suspend`, and constructors are not
     declarable in impl blocks. An **empty** impl block is legal and is
     the opt-in marker: `impl Serializable for User {}` (RFC 0037).
   - **Generic targets:** `impl Hashable for Pair<A, B>` — the generic

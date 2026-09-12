@@ -116,8 +116,8 @@ decl       := letdecl | enumdecl | dataclassdecl | classdecl | traitdecl | impld
 letdecl    := 'let' Ident ':' Type '=' expr ';'   // module binding — load-time
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
 dataclass  := 'dataclass' Ident genericparams? '{' (field | meth)* '}'
-class      := 'class' Ident genericparams? '{' member* '}'
-member     := 'private'? ('static' field | ('suspend')? meth)
+class      := 'class' Ident genericparams? '{' (field | meth)* '}'
+field      := 'private'? Ident ':' Type ('=' expr)?
 meth       := 'fn' Ident '(' 'mut'? 'self'? params ')' (':' Type)? block
                                               // 'self' first param => instance
                                               // method; no 'self' => class
@@ -136,7 +136,11 @@ impl       := 'impl' Ident 'for' Ident genericargs? '{' meth* '}'
                                                // §2): same module as the
                                                // target type; every trait
                                                // methsig covered exactly
-fndecl     := modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? whereclause? block
+fndecl     := 'entry'? modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? whereclause? block
+                                               // 'entry' — the host-callable
+                                               // surface (RFC 0035 §3); does
+                                               // not combine with export
+                                               // modifiers (RFC 0003 §2)
 whereclause := 'where' Ident 'requires' TraitList  // admission-only bounds
                                                // (RFC 0013 §2, RFC 0037 §3)
 block      := '{' stmt* '}'

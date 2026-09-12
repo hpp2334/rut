@@ -58,7 +58,7 @@ impl Trap {
 
 // ---- the tagged Value exists only at the host boundary (RFC 0023) ----
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Value {
     Unit,
     I64(i64),
@@ -66,6 +66,53 @@ pub enum Value {
     Bool(bool),
     Char(char),
     Str(String),
+    /// `Vec<u8>` buffer crossing (RFC 0023 §2)
+    Bytes(Vec<u8>),
+    /// `Option<T>` — payload converted when `Some`
+    Opt(Option<Box<Value>>),
+    /// `Result<T, E>` — payloads converted in both arms
+    Res(Result<Box<Value>, Box<Value>>),
+    /// an `Opaque` box (RFC 0014) — the one cell the host may hold and
+    /// pass back; refcounted by the handle itself
+    Opaque(std::rc::Rc<CellVal>),
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Unit, Value::Unit) => true,
+            (Value::I64(a), Value::I64(b)) => a == b,
+            (Value::F64(a), Value::F64(b)) => a == b,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Char(a), Value::Char(b)) => a == b,
+            (Value::Str(a), Value::Str(b)) => a == b,
+            (Value::Bytes(a), Value::Bytes(b)) => a == b,
+            (Value::Opt(a), Value::Opt(b)) => a == b,
+            (Value::Res(a), Value::Res(b)) => a == b,
+            // boxes compare by identity — the payload's type is erased
+            (Value::Opaque(a), Value::Opaque(b)) => std::rc::Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Unit => write!(f, "Unit"),
+            Value::I64(v) => write!(f, "I64({v})"),
+            Value::F64(v) => write!(f, "F64({v})"),
+            Value::Bool(v) => write!(f, "Bool({v})"),
+            Value::Char(v) => write!(f, "Char({v:?})"),
+            Value::Str(v) => write!(f, "Str({v:?})"),
+            Value::Bytes(v) => write!(f, "Bytes(len {})", v.len()),
+            Value::Opt(None) => write!(f, "Opt(None)"),
+            Value::Opt(Some(v)) => write!(f, "Opt(Some({v:?}))"),
+            Value::Res(Ok(v)) => write!(f, "Res(Ok({v:?}))"),
+            Value::Res(Err(v)) => write!(f, "Res(Err({v:?}))"),
+            Value::Opaque(_) => write!(f, "Opaque(<cell>)"),
+        }
+    }
 }
 
 // ---- slots (RFC 0015 §5): untagged 8 bytes; bytecode is typed ----

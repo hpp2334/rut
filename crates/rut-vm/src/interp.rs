@@ -7,7 +7,7 @@
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
 use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, Heap, Slot, Trap, TrapKind, Value};
+use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
 use rut_core::ops::*;
 use rut_core::types::{PrimTy, TypeId, TyKind};
 use std::cell::RefCell;
@@ -100,6 +100,7 @@ impl Vm {
     pub fn heap_usage(&self) -> u64 {
         self.heap.used_bytes()
     }
+
     pub fn add_fuel(&mut self, n: u64) {
         self.fuel = self.fuel.map(|f| f.saturating_add(n));
     }
@@ -134,21 +135,91 @@ impl Vm {
             return Err(Trap::new(TrapKind::Invalid, format!("no export `{export}`")));
         };
         let code = self.prog.funcs[func as usize].clone();
+        if args.len() != code.params.len() {
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                format!("`{export}` takes {} args, {} given", code.params.len(), args.len()),
+            ));
+        }
         let mut regs = vec![Slot::int(0); code.regs.len()];
-        for (i, a) in args.iter().take(code.params.len()).enumerate() {
-            regs[i] = match (a, self.prog.types.kind(code.params[i])) {
-                (Value::I64(v), TyKind::Prim(_)) => Slot::int(*v),
-                (Value::F64(v), TyKind::Prim(_)) => Slot::float(*v),
-                (Value::Bool(v), TyKind::Prim(_)) => Slot::bool(*v),
-                (Value::Char(v), TyKind::Prim(_)) => Slot::ch(*v),
-                (Value::Str(s), TyKind::Str) => self.heap.alloc_str(s.clone())?,
-                (Value::Unit, _) => Slot::int(0),
-                _ => Slot::int(0),
-            };
+        for (i, a) in args.iter().enumerate() {
+            regs[i] = self.value_in(a, code.params[i])
+                .map_err(|m| Trap::new(TrapKind::Invalid, format!("`{export}` argument {i}: {m}")))?;
         }
         self.enter(func, regs, None);
         let v = self.run_loop()?;
         Ok(v)
+    }
+
+    /// Host `Value` → slot under the callee's declared param type. A kind
+    /// mismatch is a trap naming both sides — the rut module's signatures
+    /// were already checked against the crossing rule at compile time, so
+    /// this only fires when the EMBEDDER passes the wrong shape.
+    fn value_in(&mut self, v: &Value, ty: TypeId) -> Result<Slot, String> {
+        use rut_core::types::{PrimTy, TyKind};
+        let ty = if ty != u32::MAX { ty } else {
+            return Err(format!("internal: untyped parameter"));
+        };
+        Ok(match (v, self.prog.types.kind(ty).clone()) {
+            (Value::Unit, TyKind::Unit) | (Value::Unit, TyKind::Prim(_)) => Slot::int(0),
+            (Value::I64(n), TyKind::Prim(p)) => {
+                if !fits(*n, p) {
+                    return Err(format!("`{n}` does not fit `{}`", self.prog.types.name(ty)));
+                }
+                Slot::int(*n)
+            }
+            (Value::F64(f), TyKind::Prim(PrimTy::F32)) => Slot::float(*f as f32 as f64),
+            (Value::F64(f), TyKind::Prim(PrimTy::F64)) => Slot::float(*f),
+            (Value::Bool(b), TyKind::Prim(PrimTy::Bool)) => Slot::bool(*b),
+            (Value::Char(c), TyKind::Prim(PrimTy::Char)) => Slot::ch(*c),
+            (Value::Str(s), TyKind::Str) => self.heap.alloc_str(s.clone()).map_err(|t| t.msg)?,
+            (Value::Bytes(b), TyKind::Vec { elem }) if elem == self.ty_u8() => {
+                let cell = self.heap.alloc_vec(elem, b.len()).map_err(|t| t.msg)?;
+                if let CellData::Vec { items, .. } = &cell_of(cell).data {
+                    *items.borrow_mut() = b.iter().map(|&x| Slot::int(x as i64)).collect();
+                }
+                cell
+            }
+            (Value::Opt(None), TyKind::Option { .. }) => self.heap.alloc_sum(ty, 1, None).map_err(|t| t.msg)?,
+            (Value::Opt(Some(inner)), TyKind::Option { elem }) => {
+                let payload = self.value_in(inner, elem)?;
+                self.heap.alloc_sum(ty, 0, Some(payload)).map_err(|t| t.msg)?
+            }
+            (Value::Res(Ok(inner)), TyKind::Result { ok, .. }) => {
+                let payload = self.value_in(inner, ok)?;
+                self.heap.alloc_sum(ty, 0, Some(payload)).map_err(|t| t.msg)?
+            }
+            (Value::Res(Err(inner)), TyKind::Result { err, .. }) => {
+                let payload = self.value_in(inner, err)?;
+                self.heap.alloc_sum(ty, 1, Some(payload)).map_err(|t| t.msg)?
+            }
+            (Value::Opaque(rc), TyKind::Opaque) => {
+                if !matches!(rc.data, CellData::OpaqueBox { .. }) {
+                    return Err("not an Opaque box".to_string());
+                }
+                let s = Slot { r: Some(Rc::as_ptr(rc)) };
+                self.heap.retain(s); // the parameter register owns its reference
+                s
+            }
+            (v, _) => {
+                return Err(format!(
+                    "is `{}`, `{}` expected",
+                    value_kind_name(v),
+                    self.prog.types.name(ty)
+                ))
+            }
+        })
+    }
+
+    fn ty_u8(&self) -> TypeId {
+        // boot-table id for u8 (stable: interned at TypeTable::boot)
+        self.prog
+            .types
+            .types
+            .iter()
+            .position(|t| matches!(t.kind, TyKind::Prim(PrimTy::U8)))
+            .map(|i| i as u32)
+            .unwrap_or(u32::MAX)
     }
 
     /// Resume after a budget trap (RFC 0034 §4: the frame IS the loop state).
@@ -298,6 +369,7 @@ impl Vm {
                 self.heap.release(old);
             }
             Op::ConstRaw { dst, bits } => self.cur_regs[dst as usize] = Slot { i: bits as i64 },
+
 
             Op::Arith { op, ty, dst, a, b } => {
                 let v = self.arith(op, ty, r!(a), r!(b), false)?;
@@ -544,6 +616,12 @@ impl Vm {
 
             Op::EnumNew { dst, ty, member } => {
                 let c = self.heap.enum_member(ty, member)?;
+                // the singleton slot is BORROWED (enum_member leaks the
+                // base references) — the destination register takes an
+                // OWNED reference, like every other ref-typed store, or
+                // frame teardown over-releases and frees the "immortal"
+                // cell while the singleton map still points at it
+                self.heap.retain(c);
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
@@ -1100,13 +1178,74 @@ impl Vm {
 const TY_ANY: TypeId = u32::MAX;
 
 fn slot_to_value(v: Slot, ty: TypeId, prog: &Program) -> Value {
+    use rut_core::types::TyKind;
     match prog.types.kind(ty) {
         TyKind::Prim(PrimTy::F32) | TyKind::Prim(PrimTy::F64) => Value::F64(unsafe { v.f }),
         TyKind::Prim(PrimTy::Bool) => Value::Bool(v.as_bool()),
         TyKind::Prim(PrimTy::Char) => Value::Char(v.as_char()),
         TyKind::Prim(_) | TyKind::Unit => Value::I64(unsafe { v.i }),
         TyKind::Str => Value::Str(cell_of(v).as_str().to_string()),
+        // Vec<u8> is the one sequence that crosses (RFC 0023 §2)
+        TyKind::Vec { elem } => {
+            let cell = cell_of(v);
+            if let CellData::Vec { items, .. } = &cell.data {
+                Value::Bytes(items.borrow().iter().map(|s| unsafe { s.i } as u8).collect())
+            } else {
+                Value::Bytes(Vec::new())
+            }
+        }
+        TyKind::Option { elem } => {
+            let cell = cell_of(v);
+            match &cell.data {
+                CellData::Sum { tag: 1, .. } => Value::Opt(None),
+                CellData::Sum { tag: _, payload } => Value::Opt(Some(Box::new(
+                    slot_to_value(payload.expect("Some without payload"), *elem, prog),
+                ))),
+                _ => Value::Opt(None),
+            }
+        }
+        TyKind::Result { ok, err } => {
+            let cell = cell_of(v);
+            match &cell.data {
+                CellData::Sum { tag: 1, payload } => Value::Res(Err(Box::new(slot_to_value(
+                    payload.expect("Err without payload"),
+                    *err,
+                    prog,
+                )))),
+                CellData::Sum { tag: _, payload } => Value::Res(Ok(Box::new(slot_to_value(
+                    payload.expect("Ok without payload"),
+                    *ok,
+                    prog,
+                )))),
+                _ => Value::Res(Ok(Box::new(Value::Unit))),
+            }
+        }
+        // an Opaque box crosses as its handle: clone the Rc (the Value
+        // owns that reference); the pending reference stays with the slot
+        // for do_ret to release — balanced
+        TyKind::Opaque => {
+            let p = (unsafe { v.r }).expect("opaque slot without a cell");
+            let rc = unsafe { std::rc::Rc::from_raw(p) };
+            let out = rc.clone();
+            std::mem::forget(rc);
+            Value::Opaque(out)
+        }
         _ => Value::I64(unsafe { v.i }),
+    }
+}
+
+fn value_kind_name(v: &Value) -> &'static str {
+    match v {
+        Value::Unit => "unit",
+        Value::I64(_) => "an integer",
+        Value::F64(_) => "a float",
+        Value::Bool(_) => "a bool",
+        Value::Char(_) => "a char",
+        Value::Str(_) => "a string",
+        Value::Bytes(_) => "bytes",
+        Value::Opt(_) => "an Option",
+        Value::Res(_) => "a Result",
+        Value::Opaque(_) => "an Opaque",
     }
 }
 

@@ -1,0 +1,146 @@
+// todolist.rut — a todo-list library in rut, called from Rust.
+//
+// The shape: the HOST owns the session. It asks for an opaque container
+// (`createContainer`), gets back a handle it can hold and pass around
+// (an `Opaque` box — RFC 0014, the one cell an embedder may keep), and
+// drives CRUD through the `entry fn` surface below. All data — the
+// container, the lists, every row — lives in rut; only primitives,
+// `Option`/`Result`, and the container handle cross (RFC 0023 §2).
+//
+// `entry fn` marks the host-callable surface (RFC 0035 §3); the checker
+// enforces the crossing rule on those signatures at compile time. Plain
+// `export` is import-visibility for other rut modules (RFC 0003 §2) and
+// carries no such limit — `export class TodoList` stays fully typed.
+
+dataclass Todo {
+    id: i32;
+    title: string;
+    done: bool = false;      // field initializer — `done` may be omitted
+}
+
+export class TodoList {
+    private items: Vec<Todo>;
+    private next_id: i32;
+
+    fn new() -> Self {
+        return Self { items: Vec(), next_id: 1 };
+    }
+
+    // ---- CREATE ----
+
+    fn add(mut self, title: string) -> i32 {
+        let id = self.next_id;
+        self.items.push(Todo { id: id, title: title });
+        self.next_id += 1;
+        return id;
+    }
+
+    // ---- READ ----
+
+    fn len(self) -> i32 {
+        return self.items.len();
+    }
+
+    /// First title matching `id`, or `Option.none()` — check, then read
+    /// `.value` (RFC 0005: no `?.` sugar).
+    fn title_of(self, id: i32) -> Option<string> {
+        for (let t of self.items) {
+            if (t.id == id) {
+                return Option.some(t.title);
+            }
+        }
+        return Option.none();
+    }
+
+    /// The boxed listing the embedder prints.
+    fn render(self) -> string {
+        let mut out = f"TodoList[{self.len()}]";
+        for (let t of self.items) {
+            let mark = when (t.done) { true -> "x", else -> " " };
+            out = f"{out}\n  #{t.id} [{mark}] {t.title}";
+        }
+        return out;
+    }
+
+    // ---- UPDATE ----
+
+    fn set_done(mut self, id: i32, done: bool) -> bool {
+        for (let i = 0; i < self.items.len(); i += 1) {
+            if (self.items[i].id == id) {
+                self.items[i].done = done;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ---- DELETE ----
+
+    fn remove(mut self, id: i32) -> bool {
+        let kept: Vec<Todo> = Vec();
+        let mut removed = false;
+        for (let t of self.items) {
+            when (t.id == id) {
+                true -> { removed = true; },   // drop the row
+                else -> { kept.push(t); },     // keep everything else
+            }
+        }
+        if (removed) {
+            self.items = kept;
+        }
+        return removed;
+    }
+}
+
+/// The host-held container: one opaque box around all live lists.
+/// `createContainer` boxes it; every entry takes it back as its first
+/// argument and recovers it with `downcast` (a wrong box traps cleanly).
+dataclass Lists {
+    lists: Vec<TodoList>;    // handle = index; handles stay stable while held
+}
+
+/// Recover list `h` out of the container. Internal — an ordinary fn,
+/// unrestricted types.
+fn at(c: Opaque, h: u32) -> TodoList {
+    return downcast<Lists>(c).value.lists[i32(h)];
+}
+
+// ---- the host surface (entry = callable by the embedder) ----
+
+entry fn createContainer() -> Opaque {
+    return Opaque.new(Lists { lists: Vec() });
+}
+
+entry fn create(c: Opaque) -> u32 {
+    let k = downcast<Lists>(c).value;
+    k.lists.push(TodoList.new());
+    return u32(k.lists.len() - 1);
+}
+
+entry fn add(c: Opaque, h: u32, title: string) -> i32 {
+    return at(c, h).add(title);
+}
+
+entry fn set_done(c: Opaque, h: u32, id: i32, done: bool) -> bool {
+    return at(c, h).set_done(id, done);
+}
+
+entry fn remove(c: Opaque, h: u32, id: i32) -> Result<bool, string> {
+    let hit = at(c, h).remove(id);
+    if (hit) {
+        return Result.ok(true);
+    }
+    return Result.err(f"no todo #{id}");
+}
+
+entry fn len(c: Opaque, h: u32) -> i32 {
+    return at(c, h).len();
+}
+
+entry fn title_of(c: Opaque, h: u32, id: i32) -> Option<string> {
+    return at(c, h).title_of(id);
+}
+
+entry fn render(c: Opaque, h: u32) -> string {
+    return at(c, h).render();
+}

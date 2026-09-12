@@ -89,6 +89,9 @@ compiler gives it no meaning; greppability is enforced by style.
 - `new` is **not** reserved — it is an ordinary identifier and the
   conventional construction method name (`Rect.new(..)`, RFC 0010);
   there is no `new` expression anywhere.
+- `entry` is contextual — the **host-callable marker**: `entry fn` at
+  module scope publishes the function to the embedder (RFC 0035 §3);
+  everywhere else `entry` is an ordinary identifier.
 - `self` is contextual — the **receiver**: the first parameter of an
   instance method (`fn add(self, x, y)` — RFC 0010 §2) and the name it
   binds in the body; a method without `self` is a class method. There is
@@ -96,7 +99,7 @@ compiler gives it no meaning; greppability is enforced by style.
   bound to the enclosing class inside its body (RFC 0010 §1); `fn`,
   `let`, `mut`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
   `enum`, `class`, `dataclass`, `trait`, `impl`,
-  `requires`, `import`, `export`, `from`, `private`, `static`, `suspend`,
+  `requires`, `import`, `export`, `from`, `private`, `suspend`,
   `await`, `true`, `false`, `extern`, `where`
   (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
   (RFC 0012 §2), and `is` (the type-test operator, `expr is Type` —

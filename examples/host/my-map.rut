@@ -25,7 +25,7 @@ import { Logger } from "std:log";
 
 // A DATACLASS key (RFC 0009): an all-public, literal-constructed
 // record — with impl blocks, because dataclasses implement traits.
-// Its limits, exhaustively: no `private` fields, no `static`
+// Its limits, exhaustively: no `private` fields
 // members, no class methods, no `Disposal`.
 dataclass Name {                        // hash + eq: ONE contract (RFC 0028) —
     first: string;                      // the value-keyed Map/Set key trait

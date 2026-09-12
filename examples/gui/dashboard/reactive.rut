@@ -29,17 +29,23 @@ trait Atom {
     fn atom_id(self) -> u32;
 }
 
-class Atoms {
-    static next: u32 = 0;                 // module-static slot, bumped in fns
+/** Atom-id allocator: explicit, threaded — there is no mutable module
+ *  state (RFC 0003 §1); the owner (setup) creates one and passes it in. */
+export dataclass Ids {
+    next: u32 = 0;
+}
+
+fn fresh(ids: Ids) -> u32 {               // dataclass aliasing = shared cell
+    ids.next &+= 1;
+    return ids.next;
 }
 
 export class State<T> {
     private id: u32;
     private seed: Opaque;                // first read materializes it
 
-    fn new(v: T) -> Self {
-        Atoms.next &+= 1;                 // class methods run logic too
-        return Self { id: Atoms.next, seed: Opaque.new(v) };
+    fn new(ids: Ids, v: T) -> Self {      // class methods run logic too
+        return Self { id: fresh(ids), seed: Opaque.new(v) };
     }
 
     fn seed_value(self) -> Opaque { return self.seed; }
@@ -49,17 +55,16 @@ impl Atom for State<T> {
     fn atom_id(self) -> u32 { return self.id; }
 }
 
-export fn state<T>(v: T) -> State<T> {
-    return State(v);                      // type-call, T inferred
+export fn state<T>(ids: Ids, v: T) -> State<T> {
+    return State.new(ids, v);
 }
 
 export class Source<T> {
     private id: u32;
     private pull: fn() -> T;                // seeds the entry; steady state is push
 
-    fn new(f: fn() -> T) -> Self {
-        Atoms.next &+= 1;
-        return Self { id: Atoms.next, pull: f };
+    fn new(ids: Ids, f: fn() -> T) -> Self {
+        return Self { id: fresh(ids), pull: f };
     }
 
     fn pull_fn(self) -> fn() -> T { return self.pull; }
@@ -69,17 +74,16 @@ impl Atom for Source<T> {
     fn atom_id(self) -> u32 { return self.id; }
 }
 
-export fn source<T>(f: fn() -> T) -> Source<T> {
-    return Source(f);
+export fn source<T>(ids: Ids, f: fn() -> T) -> Source<T> {
+    return Source.new(ids, f);
 }
 
 export class Derived<T> {
     private id: u32;
     private compute: fn(ReadCtx) -> T;
 
-    fn new(f: fn(ReadCtx) -> T) -> Self {
-        Atoms.next &+= 1;
-        return Self { id: Atoms.next, compute: f };
+    fn new(ids: Ids, f: fn(ReadCtx) -> T) -> Self {
+        return Self { id: fresh(ids), compute: f };
     }
 
     fn compute_fn(self) -> fn(ReadCtx) -> T { return self.compute; }
@@ -89,8 +93,8 @@ impl Atom for Derived<T> {
     fn atom_id(self) -> u32 { return self.id; }
 }
 
-export fn derive<T>(f: fn(ReadCtx) -> T) -> Derived<T> {
-    return Derived(f);
+export fn derive<T>(ids: Ids, f: fn(ReadCtx) -> T) -> Derived<T> {
+    return Derived.new(ids, f);
 }
 
 /** Payload for zero-argument mutations (rut has no unit type, no variadics). */
@@ -249,9 +253,8 @@ export fn dispatch<P, R>(store: Store, m: Mutation<P, R>, p: P) -> R {
 }
 
 /** Subscribe a change-only callback to any atom (State, Source, Derived). */
-export fn watch(store: Store, a: dyn Atom, cb: fn() -> unit) -> WatchHandle {
-    Atoms.next &+= 1;
-    let w = Watch.new(Atoms.next, a.atom_id(), store.version_of(a.atom_id()), cb);
+export fn watch(store: Store, ids: Ids, a: dyn Atom, cb: fn() -> unit) -> WatchHandle {
+    let w = Watch.new(fresh(ids), a.atom_id(), store.version_of(a.atom_id()), cb);
     store.watches.push(w);
     return WatchHandle.new(store, w.wid);
 }
@@ -304,17 +307,18 @@ export fn flush(store: Store) -> unit {
 export(self) fn smoke() -> unit {
     let log = Logger.new("reactive");
     let store = Store.new();
+    let ids = Ids { };
 
-    let count = state(0);
-    let clock = source(() -> i32 => 0);   // external world, lazily seeded
+    let count = state(ids, 0);
+    let clock = source(ids, () -> i32 => 0);   // external world, lazily seeded
 
-    let label = derive((ctx) -> string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
+    let label = derive(ids, (ctx) -> string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
 
     let bump = mutation((st: Store, by: i32) -> unit => {
         atom_set(st, count, atom_get(st, count) + by);
     });
 
-    let handle = watch(store, count, () -> unit => {   // State is an Atom
+    let handle = watch(store, ids, count, () -> unit => {   // State is an Atom
         log.debug("count changed");
     });
 

@@ -50,7 +50,7 @@ blocks in action.
 
   `hash`/`eq` are trait-declared members — calls dispatch through
   the vtable per RFC 0012 §1. The limits on a dataclass, exhaustively:
-  **no `private` fields** (above), **no `static` members**, **no
+  **no `private` fields** (above), **no
   class methods** (the literal is the only construction — open literal
   vs class-method-gated *is* the dataclass/class distinction), and **no
   `Disposal` impl** (a value

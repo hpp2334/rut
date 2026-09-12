@@ -11,8 +11,7 @@
 
 See **`examples/basic/classes.rut`** — class-method construction
 (`Rect.new(..)`), the class-private `Self { .. }` literal, `suspend`
-class methods, sealing without constructors, explicit `self` receivers,
-static fields.
+class methods, sealing without constructors, explicit `self` receivers.
 
 ## 1. Classes — sealed value records, class-method construction
 
@@ -20,7 +19,7 @@ static fields.
   non-primitive (RFC 0004 §2, RFC 0016 §1): assignment shares, mutation
   is visible through aliases, `own(c)` is the eager copy (RFC 0011 §1).
   What a class *adds* over a dataclass is **sealing**: private fields,
-  class-method-gated construction, `static` fields, and `impl Disposal`
+  class-method-gated construction, and `impl Disposal`
   (RFC 0011). Reflection:
   a class is walkable **iff** it has `impl std:reflect.Reflectable for C`
   (or a contract layer requiring it — RFC 0037) — default opaque, a
@@ -72,7 +71,7 @@ static fields.
   its own body (the `private fn of(..)` + public `fn parse(..)` pair
   is the standard shape: parsing validates, `of` trusts).
 
-## 2. Methods: explicit `self` — plus static fields & accessors
+## 2. Methods: explicit `self` — plus accessors
 
 - **The receiver is explicit.** An instance method spells its receiver as
   the first parameter — `fn add(self, x: i32, y: i32)` — and the body
@@ -81,19 +80,15 @@ static fields.
   `fn new(w: f32, h: f32)`, `fn from(x: i32)` — invoked on the class
   itself (`Rect.new(..)`, `Version.from(..)`, and `Self.new(..)` inside
   the body). Class methods are the construction surface (§1).
-  **There is no `static fn`**: presence or absence of `self` is the whole
-  distinction, stated in the signature and greppable — the same
-  explicitness rule as `dyn` (RFC 0012 §2). Class methods never take
+  Presence or absence of `self` is the whole distinction, stated in the
+  signature and greppable — the same explicitness rule as `dyn`
+  (RFC 0012 §2); there is no separate "static" method form. Class methods never take
   `self` (there is no receiver yet — or ever, for pure utilities);
   `Disposal.dispose` does (`dispose(mut self)`,
   RFC 0011 §2). Trait methods and host/extern class methods follow
   the identical rule (RFC 0012 §2, RFC 0025 §2). Trait declarations
   may not contain class methods — trait members are instance
   methods with `self` (RFC 0012 §2).
-- `static` **fields** live in the class's module-static slot table. Static
-  initializers must be load-time expressions (RFC 0003 §1) and are materialized
-  at load — class methods and instance methods are the only places to
-  run logic.
 - No `get`/`set` accessor syntax anywhere — a computed property is just a
   method (`c.count()`), and a settable one takes an argument
   (`c.set_count(n)`). One member kind, one call convention, no hidden code

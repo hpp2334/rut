@@ -44,6 +44,11 @@ impl<'a> Ctx<'a> {
                     }
                     self.fn_index.push(f.name);
                     self.fn_nodes.push((f.name, NodeHandle::new(it.id())));
+                    // `entry fn` — the host-callable surface (RFC 0035 §3);
+                    // signature checked against the crossing rule below
+                    if f.entry {
+                        self.entries.push(f.name);
+                    }
                     if is_pub {
                         // name recorded; the func id binds at finalize
                         self.exports.push((n, u32::MAX));
@@ -135,7 +140,7 @@ impl<'a> Ctx<'a> {
             if fd.is_static {
                 self.err(
                     self.ast.span(f.id()),
-                    "class `static` fields are not supported in this build (module-static slot table, RFC 0010 §2)",
+                    "`static` fields do not exist — there is no mutable module state (RFC 0003 §1); thread state explicitly or hold it in an `Opaque` container the host passes back (RFC 0014)",
                 );
             }
             let fty = self.resolve_type(fd.ty, &[]);

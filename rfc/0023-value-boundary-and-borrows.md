@@ -31,6 +31,15 @@ pub enum Value<'v> {
 }
 ```
 
+**What may cross is a compile-time property of the surface.** An `entry
+fn`'s parameters and return must be built from: primitives, `string`,
+`unit`, `Vec<u8>` (the buffer), `Option`/`Result` over crossable types,
+and `Opaque` (RFC 0014 — the one cell an embedder may hold and pass
+back). Every other cell — dataclasses, classes, `Vec<T>` of cells,
+`dyn` — stays inside the VM; violating shapes are **compile errors on
+the `entry fn` declaration**, not call-time failures. Plain `export`
+carries no such restriction: rut modules exchange cells freely between
+themselves (RFC 0003 §2).
 ## 2. Borrow guards
 
 `Borrow<'v, _>` is **call-scoped**: the Rust lifetime prevents storing it
