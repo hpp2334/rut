@@ -234,11 +234,12 @@ impl Vm {
             }
 
             Op::MakeClosure { dst, func, captures } => {
-                let params = self.prog.funcs[func as usize].params.clone();
-                let ret = self.prog.funcs[func as usize].ret;
                 let caps: Vec<Slot> = captures.iter().map(|&c| r!(c)).collect();
-                let cap_tys: Vec<TypeId> = (params.len() - caps.len()..params.len())
-                    .map(|i| params[i])
+                // capture types are the tail of the callee's params; read them
+                // from the function table so the cell need not store them
+                let nparams = self.prog.funcs[func as usize].params.len();
+                let cap_tys: Vec<TypeId> = (nparams - caps.len()..nparams)
+                    .map(|i| self.param_ty(func, i))
                     .collect();
                 // captures retained into the cell
                 for (&c, &t) in caps.iter().zip(cap_tys.iter()) {
@@ -246,7 +247,7 @@ impl Vm {
                         self.heap.retain(c);
                     }
                 }
-                let c = self.heap.alloc_closure(func, params, ret, caps, cap_tys)?;
+                let c = self.heap.alloc_closure(func, caps)?;
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);

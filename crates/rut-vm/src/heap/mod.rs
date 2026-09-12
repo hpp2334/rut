@@ -152,20 +152,9 @@ impl Heap {
         self.mint(rut_core::types::TY_OPAQUE, CellData::OpaqueBox { val, val_ty }, 8)
     }
 
-    pub fn alloc_closure(
-        &self,
-        func: u32,
-        params: Vec<TypeId>,
-        ret: TypeId,
-        captures: Vec<Slot>,
-        cap_tys: Vec<TypeId>,
-    ) -> Result<Slot, Trap> {
+    pub fn alloc_closure(&self, func: u32, captures: Vec<Slot>) -> Result<Slot, Trap> {
         let n = captures.len() as u64;
-        self.mint(
-            0,
-            CellData::Closure { func, params, ret, captures, cap_tys },
-            n * 8,
-        )
+        self.mint(0, CellData::Closure { func, captures }, n * 8)
     }
 
     /// Enum member — the immortal singleton cell (RFC 0016 §1): the one

@@ -264,13 +264,13 @@ pub enum CellData {
     Record { fields: RefCell<Slots> },
     /// Opaque box (RFC 0014): the value + its runtime type
     OpaqueBox { val: Slot, val_ty: TypeId },
-    /// closure value (RFC 0013) — v1 captures by value
+    /// closure value (RFC 0013) — v1 captures by value. The callee's
+    /// signature (`params`/`ret`/capture types) is static program data in
+    /// `prog.funcs[func]`; the cell carries only the function id and the
+    /// per-instance captured values, so it stays small (RFC 0039).
     Closure {
         func: u32,
-        params: Vec<TypeId>,
-        ret: TypeId,
         captures: Vec<Slot>,
-        cap_tys: Vec<TypeId>,
     },
 }
 
@@ -302,7 +302,7 @@ impl CellVal {
     }
     pub fn as_closure(&self) -> Option<(u32, Vec<Slot>)> {
         match &self.data {
-            CellData::Closure { func, captures, .. } => Some((*func, captures.clone())),
+            CellData::Closure { func, captures } => Some((*func, captures.clone())),
             _ => None,
         }
     }
@@ -347,3 +347,9 @@ pub unsafe fn cell<'a>(s: Slot) -> &'a CellVal {
 pub fn cell_of(s: Slot) -> &'static CellVal {
     unsafe { &*s.r }
 }
+
+/// Every cell is one fixed-size record, so its size is set by the largest
+/// `CellData` variant. Guard it at compile time: a bulky variant silently
+/// taxes every allocation in the arena (RFC 0039). `Closure` is deliberately
+/// minimal — its signature lives in `prog.funcs`, not the cell.
+const _: () = assert!(std::mem::size_of::<CellVal>() <= 72);

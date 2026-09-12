@@ -206,7 +206,7 @@ impl Vm {
     pub(super) fn op_call_fn(&mut self, fval: Reg, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
         let cell = cell_of(self.cur_regs[fval as usize]);
         let (fid, captures): (u32, &[Slot]) = match &cell.data {
-            CellData::Closure { func, captures, .. } => (*func, captures.as_slice()),
+            CellData::Closure { func, captures } => (*func, captures.as_slice()),
             _ => return Err(Trap::new(TrapKind::Invalid, "call on non-closure")),
         };
         let nparams = self.prog.funcs[fid as usize].params.len();
