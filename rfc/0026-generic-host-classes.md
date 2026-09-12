@@ -21,7 +21,7 @@ The two halves of a native module (full listing:
 // plugin/my_map.d.rut — the declaration file for "plugin:my_map"
 import { Hashable } from "std:collection";
 
-export host class MyMap<K requires Hashable, V> {     // K bound = admission only
+pub host class MyMap<K requires Hashable, V> {     // K bound = admission only
     fn new(cap: i32) -> Self;                        // native class method —
     fn set(self, k: K, v: V) -> unit;                // the construction surface
     fn get(self, k: K) -> Option<V>;

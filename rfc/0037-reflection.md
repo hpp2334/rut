@@ -31,12 +31,12 @@ conformance debt; rut's reflection suffices, so it doesn't).
 
 ```rut
 // std/reflect.d.rut
-export trait Reflectable {                // the mechanism protocol
+pub trait Reflectable {                // the mechanism protocol
     fn reflect(self) -> TypeInfo;           // exact descriptor handle
     fn arity(self) -> i32;                  // children of THIS value
     fn child(self, i: i32) -> Option<Opaque>;  // i-th child, boxed
 }
-export trait Deserializable requires Reflectable { }
+pub trait Deserializable requires Reflectable { }
 ```
 
 | type | `Reflectable` | `Deserializable` | stringify | deserialize |
@@ -70,17 +70,17 @@ export trait Deserializable requires Reflectable { }
 ## 2. `std:reflect` — the surface
 
 ```rut
-export trait ReflectEngine { }            // module capability: implement
+pub trait ReflectEngine { }            // module capability: implement
                                             // (≥1 per module) to use the
                                             // structural symbols
-export trait Reflectable { ..§1.. }
-export trait Deserializable requires Reflectable { }
-export enum TypeKind { Leaf, Record, Sum, Seq }
-export enum LeafKind  { Bool, Int, Float, String, Class, Trait }
-export host fn reflect<T>() -> TypeInfo;    // static T (incl. trait T)
-export host fn type_of(a: Opaque) -> TypeInfo;  // content descriptor
+pub trait Reflectable { ..§1.. }
+pub trait Deserializable requires Reflectable { }
+pub enum TypeKind { Leaf, Record, Sum, Seq }
+pub enum LeafKind  { Bool, Int, Float, String, Class, Trait }
+pub host fn reflect<T>() -> TypeInfo;    // static T (incl. trait T)
+pub host fn type_of(a: Opaque) -> TypeInfo;  // content descriptor
 
-export host class TypeInfo {
+pub host class TypeInfo {
     fn kind(self) -> TypeKind;              // structural role
     fn leaf(self) -> LeafKind;              // kind() == Leaf
     fn name(self) -> string;
@@ -105,12 +105,12 @@ export host class TypeInfo {
     fn construct_variant(self, i: i32, vals: Vec<Opaque>) -> Option<Opaque>; // Sum
     fn make_vec(self, vals: Vec<Opaque>) -> Option<Opaque>;              // Seq→Vec<T>
 }
-export host class FieldInfo {
+pub host class FieldInfo {
     fn name(self) -> string;                // the wire name
     fn ty(self) -> TypeInfo;
     fn default(self) -> Option<Opaque>;    // folded at compile time initializer —
 }                                          // THE parse-time default
-export host class SumVariant {
+pub host class SumVariant {
     fn name(self) -> string;
     fn payloads(self) -> Vec<TypeInfo>;     // [] C-like · [T] Some/Ok/Err
 }
@@ -168,11 +168,11 @@ first-class type value (RFC 0015 OQ-1 stays closed).
 Every call below exists in §2 — this trace is the API's test:
 
 ```rut
-export fn stringify(v: dyn Serializable) -> Result<string, string> {
+pub fn stringify(v: dyn Serializable) -> Result<string, string> {
     return write_val(v.reflect(), v);   // vtable reflect(); v descends
 }                                       // to Opaque (erased storage)
 
-export fn deserialize<T>(v: string) -> Result<T, JsonError>
+pub fn deserialize<T>(v: string) -> Result<T, JsonError>
         where T requires Deserializable {
     let t = reflect<T>();             // guaranteed descriptor-backed
     let tree = parse_tree(v)?;        // by the bound — no runtime

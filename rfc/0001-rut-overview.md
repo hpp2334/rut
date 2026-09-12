@@ -138,7 +138,7 @@ final sections of the RFC they implement).
 **Part B — Language surface** (the script author's view)
 
 - 0002 — lexical structure: source model, identifiers (`$`), naming rules
-- 0003 — modules & visibility: declarations-only scope, `export` forms
+- 0003 — modules & visibility: declarations-only scope, `pub` forms
 - 0004 — primitive types & integer semantics: the by-value regime
 - 0005 — builtin generic types: `Option`, `Result`, `Vec` (+ `Array<T, N>`
   fixed arrays, `dyn Slice<T>` slices)

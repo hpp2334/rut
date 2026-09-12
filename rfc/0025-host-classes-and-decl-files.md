@@ -31,12 +31,12 @@ Two declaration keywords, two linkage targets (RFC 0029 — both are
 // app/gfx.d.rut — declaration file for "app:gfx"
 host fn newCanvas(w: i32, h: i32) -> Canvas;      // module-level host fn
 
-export host class Canvas {                      // exported: nameable outside
+pub host class Canvas {                      // exported: nameable outside
     fn circle(self, x: f32, y: f32, r: f32) -> unit;
     fn flush(self) -> unit;
 }
 
-export host class Source<T> {                   // generic — instantiation
+pub host class Source<T> {                   // generic — instantiation
     fn get(self) -> T;                            // identity KEPT on the value:
 }                                               // Source<i32> != Source<string>
 
@@ -75,7 +75,7 @@ host class Fence {                              // NOT exported: known inside
 - **Visibility**: declaration files are ordinary modules — RFC 0003 §2
   applies. Non-exported declarations are *known* inside the module (callable
   via their slots) but *nameable* nowhere else; slots are always
-  assigned (private members need them for intra-module calls).
+  assigned (unannotated members need them for intra-module calls).
 - **Destructors map to Drop**: when rc hits 0, the host value's Rust
   `Drop` runs at that point (RFC 0016 §3) — textures, sockets, and files
   release deterministically, never "at GC someday".

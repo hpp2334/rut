@@ -1,6 +1,6 @@
 // RFC 0025/0026 — an EMBEDDER-DEFINED native module in use.
 //
-// rut sees ONLY THE DECLARATION of MyMap: `export host class MyMap<
+// rut sees ONLY THE DECLARATION of MyMap: `pub host class MyMap<
 // K: Hashable, V> { .. }` — signatures, no bodies — in the declaration
 // file examples/host/plugin/my_map.d.rut (`.d.rut` is the only place
 // `host` may appear, RFC 0029). The Rust IMPLEMENTATION is the sibling
@@ -25,7 +25,7 @@ import { Logger } from "std:log";
 
 // A DATACLASS key (RFC 0009): an all-public, literal-constructed
 // record — with impl blocks, because dataclasses implement traits.
-// Its limits, exhaustively: no `private` fields
+// Its limits, exhaustively: no `pub` on fields, no hidden
 // members, no class methods, no `Disposal`.
 dataclass Name {                        // hash + eq: ONE contract (RFC 0028) —
     first: string;                      // the value-keyed Map/Set key trait
@@ -44,7 +44,7 @@ impl Hashable for Name {
     }                                                // hit (`==` itself is
 }                                                    // identity — RFC 0012 §4)
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger.new("my-map");
 
     // K = string: satisfies Hashable via a REGISTERED builtin impl —

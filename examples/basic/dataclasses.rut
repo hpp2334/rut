@@ -62,6 +62,6 @@ fn dataclasses() -> unit {
     log.info(f"same_cell={same_cell} fresh={fresh} r1.x={r1.x}");
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     dataclasses();
 }

@@ -34,8 +34,9 @@ pub enum DataKind {
 pub struct DataDecl {
     pub kind: DataKind,
     pub ty: TypeId,
-    /// (name, ty, initializer, is_private) in declaration order
-    pub fields: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, bool)>,
+    /// (name, ty, initializer, member vis — None = the module-private
+    /// default, RFC 0003 §2; checked when modules load, M2) in decl order
+    pub fields: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)>,
     /// inherent methods (name → MethodDecl node)
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     pub generics: Vec<IdentId>,

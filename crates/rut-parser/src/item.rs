@@ -1,4 +1,5 @@
-//! Declarations (RFC 0030 §2): items, exports, imports, type bodies,
+//! Declarations (RFC 0030 §2): items, pub visibility, imports, type
+//! bodies,
 //! fn/method signatures, surface stubs — as frames. `classify_item` is
 //! v1's `parse_item` dispatch (peek 1, keyword-led); the frames carry
 //! the state each rule accumulated across child pushes.
@@ -8,7 +9,7 @@ use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
 use crate::expr::{ExprFrame, ExprMode};
-use crate::frame::{Done, ExportFrame, Frame, Step};
+use crate::frame::{pub_scope, Done, PubFrame, Frame, Step};
 use crate::stmt::BlockFrame;
 use crate::ty::TypeFrame;
 use crate::{is_primitive_ty, Mode, Parser};
@@ -20,7 +21,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
             "import" => Some(Frame::Import(ImportFrame::new())),
-            "export" => Some(Frame::Export(ExportFrame::new())),
+            "pub" => Some(Frame::Pub(PubFrame::new())),
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(Vis::Self_))),
             "enum" => Some(Frame::Enum(EnumFrame::new(Vis::Self_))),
             "dataclass" => Some(Frame::Dataclass(TyDeclFrame::new(false, Vis::Self_))),
@@ -63,8 +64,8 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
 }
 
 /// v1's parse_export_item inner dispatch (the visibility was parsed by
-/// the export frame itself)
-pub(crate) fn classify_export(p: &mut Parser, vis: Vis) -> Option<Frame> {
+/// the pub frame itself)
+pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(vis))),
@@ -79,13 +80,13 @@ pub(crate) fn classify_export(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "fn" => Some(Frame::Fn(FnFrame::new(vis, false, false))),
             "host" | "extern" => Some(Frame::Surface(SurfaceFrame::new())),
             _ => {
-                p.err_here(format!("`export` must precede a declaration, found `{kw}`"));
+                p.err_here(format!("`pub` must precede a declaration, found `{kw}`"));
                 None
             }
         },
         _ => {
             let found = p.peek(0).describe();
-            p.err_here(format!("`export` must precede a declaration, found {found}"));
+            p.err_here(format!("`pub` must precede a declaration, found {found}"));
             None
         }
     }
@@ -320,7 +321,7 @@ impl TyDeclFrame {
             self.generics = generic_params(p);
         }
         Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Class {
-            allow_private: self.is_class,
+            allow_pub: self.is_class,
             is_dataclass: !self.is_class,
         })))
     }
@@ -493,7 +494,7 @@ impl ImplFrame {
 
 pub(crate) enum BodyMode {
     /// dataclass/class body: fields and methods
-    Class { allow_private: bool, is_dataclass: bool },
+    Class { allow_pub: bool, is_dataclass: bool },
     /// trait body: method signatures only
     Trait,
     /// impl body: trait method implementations
@@ -507,7 +508,7 @@ pub(crate) struct TypeBodyFrame {
     stage: TbStage,
     /// the field under construction
     f_lo: Span,
-    f_private: bool,
+    f_vis: Option<Vis>,
     f_static: bool,
     f_name: IdentId,
     f_ty: Option<NodeHandle<AnyTy>>,
@@ -533,7 +534,7 @@ impl TypeBodyFrame {
             methods: Vec::new(),
             stage: TbStage::Open,
             f_lo: Span::new(0, 0),
-            f_private: false,
+            f_vis: None,
             f_static: false,
             f_name: IdentId(0),
             f_ty: None,
@@ -563,20 +564,22 @@ impl TypeBodyFrame {
                 return Step::Pop(Done::Body(fields, methods));
             }
             match self.mode {
-                BodyMode::Class { allow_private, is_dataclass } => {
+                BodyMode::Class { allow_pub, is_dataclass } => {
                     let lo = p.span();
-                    let mut is_private = false;
+                    // RFC 0003 §2/0010 §2 — members default to module-private
+                    // (like every declaration); `pub` (+ scopes) exposes them
+                    let mut vis: Option<Vis> = None;
                     let mut is_static = false;
                     let mut is_suspend = false;
                     while let Tok::Ident(m) = p.tok().clone() {
                         match m.as_str() {
-                            "private" => {
-                                is_private = true;
+                            "pub" => {
                                 p.bump();
-                                if !allow_private {
+                                vis = Some(pub_scope(p));
+                                if !allow_pub {
                                     p.err(
                                         lo,
-                                        "`private` is not allowed in a dataclass —all fields are public (RFC 0009); privacy is the class's job (RFC 0010)",
+                                        "dataclasses have no member visibility —all fields are public (RFC 0009)",
                                     );
                                 }
                             }
@@ -603,14 +606,14 @@ impl TypeBodyFrame {
                                 );
                             }
                             self.stage = TbStage::Method;
-                            return Step::Push(Frame::Method(MethodFrame::new(is_private, is_suspend, true)));
+                            return Step::Push(Frame::Method(MethodFrame::new(vis, is_suspend, true)));
                         }
                         Tok::Ident(_) => {
                             let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
                             p.expect(Tok::Colon);
                             self.stage = TbStage::FieldTy;
                             self.f_lo = lo;
-                            self.f_private = is_private;
+                            self.f_vis = vis;
                             self.f_static = is_static;
                             self.f_name = name;
                             return Step::Push(Frame::Type(TypeFrame::new(p)));
@@ -627,7 +630,7 @@ impl TypeBodyFrame {
                 BodyMode::Trait => {
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
-                        return Step::Push(Frame::Method(MethodFrame::new(false, false, false)));
+                        return Step::Push(Frame::Method(MethodFrame::new(None, false, false)));
                     }
                     let found = p.peek(0).describe();
                     p.err_here(format!("traits declare methods only —expected `fn`, found {found}"));
@@ -636,7 +639,7 @@ impl TypeBodyFrame {
                 BodyMode::Impl => {
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
-                        return Step::Push(Frame::Method(MethodFrame::new(false, false, true)));
+                        return Step::Push(Frame::Method(MethodFrame::new(None, false, true)));
                     }
                     let found = p.peek(0).describe();
                     p.err_here(format!("impl blocks contain trait methods —expected `fn`, found {found}"));
@@ -685,7 +688,7 @@ impl TypeBodyFrame {
     fn field_done(&mut self, p: &mut Parser, init: Option<NodeHandle<AnyExpr>>) -> Step {
         let node = p.field_decl(
             FieldDeclData {
-                is_private: self.f_private,
+                vis: self.f_vis,
                 is_static: self.f_static,
                 name: self.f_name,
                 ty: self.f_ty.take().expect("field without a type"),
@@ -710,7 +713,7 @@ impl TypeBodyFrame {
 
 pub(crate) struct MethodFrame {
     lo: u32,
-    is_private: bool,
+    vis: Option<Vis>,
     is_suspend: bool,
     with_body: bool,
     stage: MeStage,
@@ -728,10 +731,10 @@ enum MeStage {
 }
 
 impl MethodFrame {
-    pub(crate) fn new(is_private: bool, is_suspend: bool, with_body: bool) -> Self {
+    pub(crate) fn new(vis: Option<Vis>, is_suspend: bool, with_body: bool) -> Self {
         MethodFrame {
             lo: 0,
-            is_private,
+            vis,
             is_suspend,
             with_body,
             stage: MeStage::Params,
@@ -774,7 +777,7 @@ impl MethodFrame {
 
     fn pop(&mut self, p: &mut Parser, body: Option<NodeHandle<BlockNode>>) -> Step {
         let d = MethodDeclData {
-            is_private: self.is_private,
+            vis: self.vis,
             is_suspend: self.is_suspend,
             name: self.name,
             generics: std::mem::take(&mut self.generics),
@@ -1144,7 +1147,7 @@ impl SurfaceFrame {
             };
             if p.at_kw("fn") {
                 self.stage = SuStage::Members;
-                return Step::Push(Frame::Method(MethodFrame::new(false, is_suspend, false)));
+                return Step::Push(Frame::Method(MethodFrame::new(None, is_suspend, false)));
             }
             let found = p.peek(0).describe();
             p.err_here(format!("expected a method declaration, found {found}"));

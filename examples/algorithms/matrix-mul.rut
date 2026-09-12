@@ -14,7 +14,7 @@ fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, out: Vec<f32>) -> unit {
     }
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger.new("matrix");
     let n = 4;
     let a = Vec<f32>(n * n);

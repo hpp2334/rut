@@ -50,7 +50,7 @@ A `.d.rut` is parsed in **declaration mode** (RFC 0030 §3): declarations
 only, and — beyond RFC 0003's module scope — every declaration must be
 *complete as a surface*. Allowed:
 
-- `import` / `export` — visibility applies exactly as in RFC 0003 §2
+- `import` / `pub` — visibility applies exactly as in RFC 0003 §2
   (non-exported decls are known inside the file, nameable nowhere else);
 - `let` — with load-time expression initializers (RFC 0033 §3);
 - `enum` — a member list *is* the whole definition;
@@ -63,7 +63,7 @@ only, and — beyond RFC 0003's module scope — every declaration must be
 - `host fn` / `host class` / `extern fn` / `extern class` — signatures
   only, with admission-only param bounds (RFC 0025);
 - `host primitive` — **the native member surface of a primitive type**:
-  `export host primitive string { fn len(self) -> i32; }`. Members are
+  `pub host primitive string { fn len(self) -> i32; }`. Members are
   bodiless and statically bound (RFC 0032 §1.1 R2 — named things on
   builtins are natives, never ops); the decl is the declarative form of
   the host's builtin member table. This is how primitives grow methods

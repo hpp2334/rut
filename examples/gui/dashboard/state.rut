@@ -18,40 +18,40 @@ import {
 let MAX_SAMPLES: i32 = 120;
 let MAX_ALERTS: i32 = 8;
 
-export class Dashboard {
-    private store: Store;
-    private ids: Ids;                     // atom-id allocator, owned here
+pub class Dashboard {
+    store: Store;
+    ids: Ids;                     // atom-id allocator, owned here
 
     // --- state: writable atoms (UI-owned) ---
-    private tab: State<Tab>;
-    private query: State<string>;
-    private sort_dir: State<SortDir>;
-    private live: State<bool>;
-    private visits: State<i32>;
-    private events_seen: State<i32>;
-    private alerts: State<Vec<string>>;
-    private samples: State<Vec<f32>>;
-    private started_ms: i64;               // plain field — deliberately NOT
+    tab: State<Tab>;
+    query: State<string>;
+    sort_dir: State<SortDir>;
+    live: State<bool>;
+    visits: State<i32>;
+    events_seen: State<i32>;
+    alerts: State<Vec<string>>;
+    samples: State<Vec<f32>>;
+    started_ms: i64;               // plain field — deliberately NOT
                                            // reactive: set once at boot
 
     // --- sources: external snapshots (services push) ---
-    private users_src: Source<Vec<User>>;     // mock API replies land here
-    private summary_src: Source<StatsSummary>;  // worker-isolate replies
+    users_src: Source<Vec<User>>;     // mock API replies land here
+    summary_src: Source<StatsSummary>;  // worker-isolate replies
 
     // --- derives: computed views ---
-    private users_view: Derived<Vec<User>>;
-    private users_count: Derived<i32>;
-    private alert_count: Derived<i32>;
+    users_view: Derived<Vec<User>>;
+    users_count: Derived<i32>;
+    alert_count: Derived<i32>;
 
     // --- mutations: dispatched with payload dataclasses. The trailing `$`
     //     marks dispatch-inverted members (tur's start$/onMounted$ rule).
-    set_tab$: Mutation<Tab, unit>;
-    set_query$: Mutation<string, unit>;
-    toggle_sort$: Mutation<Nil, unit>;
-    ingest_series$: Mutation<Series, unit>;
-    apply_event$: Mutation<LiveEvent, unit>;
+    pub set_tab$: Mutation<Tab, unit>;
+    pub set_query$: Mutation<string, unit>;
+    pub toggle_sort$: Mutation<Nil, unit>;
+    pub ingest_series$: Mutation<Series, unit>;
+    pub apply_event$: Mutation<LiveEvent, unit>;
 
-    fn new(now_ms: i64) -> Self {
+    pub fn new(now_ms: i64) -> Self {
         let store = Store.new();
         let ids = Ids { };
 
@@ -165,20 +165,20 @@ export class Dashboard {
 
     // --- reads (through the store; derives recompute per read) ---
 
-    fn store(self) -> Store { return self.store; }
-    fn started_ms(self) -> i64 { return self.started_ms; }
-    fn tab(self) -> Tab { return atom_get(self.store, self.tab); }
+    pub fn store(self) -> Store { return self.store; }
+    pub fn started_ms(self) -> i64 { return self.started_ms; }
+    pub fn tab(self) -> Tab { return atom_get(self.store, self.tab); }
     fn query(self) -> string { return atom_get(self.store, self.query); }
     fn sort_dir(self) -> SortDir { return atom_get(self.store, self.sort_dir); }
-    fn live(self) -> bool { return atom_get(self.store, self.live); }
-    fn events_seen(self) -> i32 { return atom_get(self.store, self.events_seen); }
-    fn visits(self) -> i32 { return atom_get(self.store, self.visits); }
-    fn samples(self) -> Vec<f32> { return atom_get(self.store, self.samples); }
+    pub fn live(self) -> bool { return atom_get(self.store, self.live); }
+    pub fn events_seen(self) -> i32 { return atom_get(self.store, self.events_seen); }
+    pub fn visits(self) -> i32 { return atom_get(self.store, self.visits); }
+    pub fn samples(self) -> Vec<f32> { return atom_get(self.store, self.samples); }
     fn users(self) -> Vec<User> { return source_read(self.store, self.users_src); }
-    fn summary(self) -> StatsSummary { return source_read(self.store, self.summary_src); }
+    pub fn summary(self) -> StatsSummary { return source_read(self.store, self.summary_src); }
     fn users_view(self) -> Vec<User> { return derived_read(self.store, self.users_view); }
-    fn users_count(self) -> i32 { return derived_read(self.store, self.users_count); }
-    fn alert_count(self) -> i32 { return derived_read(self.store, self.alert_count); }
+    pub fn users_count(self) -> i32 { return derived_read(self.store, self.users_count); }
+    pub fn alert_count(self) -> i32 { return derived_read(self.store, self.alert_count); }
 
     fn alerts_text(self) -> string {
         let out = "";
@@ -191,17 +191,17 @@ export class Dashboard {
 
     // --- service bridges: push snapshots into the sources ---
 
-    fn set_users(self, users: Vec<User>) -> unit {
+    pub fn set_users(self, users: Vec<User>) -> unit {
         source_push(self.store, self.users_src, users);
     }
 
-    fn set_summary(self, s: StatsSummary) -> unit {
+    pub fn set_summary(self, s: StatsSummary) -> unit {
         source_push(self.store, self.summary_src, s);
     }
 
     // --- re-render subscription: one callback, every watched atom ---
 
-    fn redraw_on_change(self, cb: fn() -> unit) -> Vec<WatchHandle> {
+    pub fn redraw_on_change(self, cb: fn() -> unit) -> Vec<WatchHandle> {
         return [
             watch(self.store, self.ids, self.tab, cb),
             watch(self.store, self.ids, self.query, cb),
@@ -219,21 +219,21 @@ export class Dashboard {
 
 // --- vec helpers (shared by mutations; free fns keep models data-only) ---
 
-export(self) fn shift_left(xs: Vec<f32>) -> unit {
+pub(self) fn shift_left(xs: Vec<f32>) -> unit {
     for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
-export(self) fn shift_left_str(xs: Vec<string>) -> unit {
+pub(self) fn shift_left_str(xs: Vec<string>) -> unit {
     for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }
     xs.pop();
 }
 
-export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir) -> unit {
+pub(self) fn sort_by_score(xs: Vec<User>, dir: SortDir) -> unit {
     for (let i = 1; i < xs.len(); i += 1) {
         let j = i;
         while (j > 0 && score_lt(xs[j], xs[j - 1], dir)) {
@@ -243,14 +243,14 @@ export(self) fn sort_by_score(xs: Vec<User>, dir: SortDir) -> unit {
     }
 }
 
-export(self) fn score_lt(a: User, b: User, dir: SortDir) -> bool {
+pub(self) fn score_lt(a: User, b: User, dir: SortDir) -> bool {
     return when (dir) {
         SortDir.Asc  -> a.score < b.score,
         SortDir.Desc -> b.score < a.score,
     };
 }
 
-export(self) fn swap_users(xs: Vec<User>, a: i32, b: i32) -> unit {
+pub(self) fn swap_users(xs: Vec<User>, a: i32, b: i32) -> unit {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;

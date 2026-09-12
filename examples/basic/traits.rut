@@ -13,7 +13,7 @@
 //     vtables stay flat.
 //   * dataclass implementors: an all-public literal-constructed record
 //     plus impl blocks. The exhaustive dataclass limit
-//     list: no `private` fields, no `constructor`,
+//     list: no member visibility, no `constructor`,
 //     no `Disposal`. Everything else — including methods — is allowed.
 
 import { Canvas, newCanvas } from "app:gfx";
@@ -34,8 +34,8 @@ trait Widget {                   // composition replaces `Drawable & HitTest`
 }
 
 class Sprite {                   // inherent members only — headers list no traits
-    private x: f32 = 0;
-    private y: f32 = 0;
+    x: f32 = 0;
+    y: f32 = 0;
     // every field initialized -> default no-arg constructor: Sprite()
 
     fn move_by(mut self, dx: f32, dy: f32) -> unit {
@@ -83,7 +83,7 @@ fn mixed_hash(keys: Vec<dyn Hashable>) -> u64 {
     return acc;
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger("traits");
     let s = Sprite();
     s.move_by(2, 2);

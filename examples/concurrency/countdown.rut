@@ -13,6 +13,6 @@ suspend fn countdown(n: u32) -> unit {
     log.info("done");
 }
 
-export suspend fn main() -> unit {
+pub suspend fn main() -> unit {
     await countdown(3);
 }

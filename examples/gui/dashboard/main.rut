@@ -42,7 +42,7 @@ fn view(th: Palette, st: Dashboard) -> Element {
     });
 }
 
-export suspend fn main() -> unit {
+pub suspend fn main() -> unit {
     let log = Logger.new("dashboard");
     let th = theme();
     let st = Dashboard.new(now_ms());

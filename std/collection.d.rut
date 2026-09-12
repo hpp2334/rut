@@ -3,7 +3,7 @@
 // containers (`Map<K requires Hashable, V>`, `Set<T>`) land with their
 // RFCs — same mechanism as `plugin:my_map`, in the toolchain namespace.
 
-export trait Hashable {
+pub trait Hashable {
     fn hash(self) -> u64;
     fn eq(self, other: Self) -> bool;
 }

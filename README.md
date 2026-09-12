@@ -132,7 +132,7 @@ RFC 0018–0020), workers (M4), weak refs (M5).
   observable contract (deterministic destructors, identity, `OutOfMemory`
   before any write) holds.
 - RFC 0002 §4: `super`/`as`/`default` are contextual, not hard-reserved
-  (`export(super)` RFC 0003 §2, `as` select-arm binding RFC 0019 §3,
+  (`pub(super)` RFC 0003 §2, `as` select-arm binding RFC 0019 §3,
   `.default()` members); f-string holes allow string literals (the
   lexer's hole termination is brace-based — RFC 0007 §2's note stays a
   style rule). Both decided by the corpus, which RFC 0030 §7 makes the

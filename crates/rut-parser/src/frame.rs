@@ -12,7 +12,7 @@ use rut_lexer::token::Tok;
 
 use crate::expr::{AtomFrame, ExprFrame, ExprMode, FStrFrame, LambdaFrame, SelectFrame};
 use crate::item::{
-    classify_export, classify_item, EnumFrame, FnFrame, ImplFrame, ImportFrame, MethodFrame,
+    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, ImportFrame, MethodFrame,
     ModuleLetFrame, ParamsFrame, SurfaceFrame, TraitFrame, TyDeclFrame, TypeBodyFrame,
 };
 use crate::stmt::{BlockFrame, IfFrame, PatternFrame, StmtFrame, WhenFrame};
@@ -47,7 +47,7 @@ pub(crate) enum Step {
 
 pub(crate) enum Frame {
     Module(ModuleFrame),
-    Export(ExportFrame),
+    Pub(PubFrame),
     Import(ImportFrame),
     ModuleLet(ModuleLetFrame),
     Enum(EnumFrame),
@@ -78,7 +78,7 @@ impl Frame {
         match done {
             None => match self {
                 Frame::Module(f) => f.step(p),
-                Frame::Export(f) => f.step(p),
+                Frame::Pub(f) => f.step(p),
                 Frame::Import(f) => f.step(p),
                 Frame::ModuleLet(f) => f.step(p),
                 Frame::Enum(f) => f.step(p),
@@ -105,7 +105,7 @@ impl Frame {
             },
             Some(d) => match self {
                 Frame::Module(f) => f.absorb(p, d),
-                Frame::Export(f) => f.absorb(p, d),
+                Frame::Pub(f) => f.absorb(p, d),
                 Frame::Import(f) => f.absorb(p, d),
                 Frame::ModuleLet(f) => f.absorb(p, d),
                 Frame::Enum(f) => f.absorb(p, d),
@@ -202,36 +202,21 @@ impl ModuleFrame {
     }
 }
 
-// ---- export (RFC 0003 §2) ----
+// ---- pub (RFC 0003 §2) ----
 
-pub(crate) struct ExportFrame {
+pub(crate) struct PubFrame {
     vis: Vis,
 }
 
-impl ExportFrame {
+impl PubFrame {
     pub(crate) fn new() -> Self {
-        ExportFrame { vis: Vis::Self_ }
+        PubFrame { vis: Vis::Self_ }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        p.bump(); // export
-        self.vis = if p.eat_punct(Tok::LParen) {
-            let v = match p.tok().clone() {
-                Tok::Ident(m) if m == "mod" => Vis::Mod,
-                Tok::Ident(m) if m == "super" => Vis::Super,
-                Tok::Ident(m) if m == "self" => Vis::Self_,
-                _ => {
-                    p.err_here("expected `mod`, `super`, or `self` in export(..)");
-                    Vis::Self_
-                }
-            };
-            p.bump();
-            p.expect(Tok::RParen);
-            v
-        } else {
-            Vis::Pub
-        };
-        match classify_export(p, self.vis) {
+        p.bump(); // pub
+        self.vis = pub_scope(p);
+        match classify_pub(p, self.vis) {
             Some(fr) => Step::Push(fr),
             None => Step::Pop(Done::Failed),
         }
@@ -242,5 +227,29 @@ impl ExportFrame {
             Done::Item(i) => Step::Pop(Done::Item(i)),
             _ => Step::Pop(Done::Failed),
         }
+    }
+}
+
+/// The optional scope after `pub` (RFC 0003 §2): nothing = public,
+/// `(mod|super|self)` = the package/parent/module scopes. Shared by
+/// module items and class members (RFC 0010 §2).
+pub(crate) fn pub_scope(p: &mut Parser) -> Vis {
+    if p.eat_punct(Tok::LParen) {
+        let v = match p.tok().clone() {
+            Tok::Ident(m) if m == "mod" => Vis::Mod,
+            Tok::Ident(m) if m == "super" => Vis::Super,
+            Tok::Ident(m) if m == "self" => Vis::Self_,
+            _ => {
+                p.err_here("expected `mod`, `super`, or `self` in pub(..)");
+                p.bump();
+                p.expect(Tok::RParen);
+                return Vis::Self_;
+            }
+        };
+        p.bump();
+        p.expect(Tok::RParen);
+        v
+    } else {
+        Vis::Pub
     }
 }

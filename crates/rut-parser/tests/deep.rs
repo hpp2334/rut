@@ -108,7 +108,7 @@ fn malformed_input_terminates() {
         "fn f() -> unit { let x = f\"{;",
         "$",
         "fn f() -> unit { ] }",
-        "export(super) fn",
+        "pub(super) fn",
         "fn f<K where K",
         "fn f() -> unit { let x = await select { a -> 1, ; }",
     ];

@@ -5,7 +5,7 @@
 import { Logger } from "std:log";
 
 class Tile {
-    private n: i32;
+    n: i32;
 
     fn new(n: i32) -> Self {
         return Self { n: n };
@@ -22,7 +22,7 @@ fn probe() -> Weak<Tile> {
     return w;
 }   // t dropped; no strong refs remain -> the cell dies, the WeakBox nulls
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger.new("weak");
     let alive = Tile.new(1);
     let a = Weak(alive);

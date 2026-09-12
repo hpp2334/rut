@@ -18,7 +18,8 @@ class methods, sealing without constructors, explicit `self` receivers.
 - **Also a shared cell.** A bare `Circle` is a heap cell handle like every
   non-primitive (RFC 0004 §2, RFC 0016 §1): assignment shares, mutation
   is visible through aliases, `own(c)` is the eager copy (RFC 0011 §1).
-  What a class *adds* over a dataclass is **sealing**: private fields,
+  What a class *adds* over a dataclass is **sealing**: module-private fields
+  (nothing is exposed without `pub`),
   class-method-gated construction, and `impl Disposal`
   (RFC 0011). Reflection:
   a class is walkable **iff** it has `impl std:reflect.Reflectable for C`
@@ -68,7 +69,7 @@ class methods, sealing without constructors, explicit `self` receivers.
   initializers still needs an explicit `fn new() -> Self { return
   Self {}; }` if outsiders should build it. A class with no accessible
   constructing class method is **sealed** — constructible only inside
-  its own body (the `private fn of(..)` + public `fn parse(..)` pair
+  its own body (the module-private `fn of(..)` + `pub fn parse(..)` pair
   is the standard shape: parsing validates, `of` trusts).
 
 ## 2. Methods: explicit `self` — plus accessors
@@ -93,6 +94,16 @@ class methods, sealing without constructors, explicit `self` receivers.
   method (`c.count()`), and a settable one takes an argument
   (`c.set_count(n)`). One member kind, one call convention, no hidden code
   behind field-access syntax.
+- **Member visibility is `pub`, scoped exactly like declarations**
+  (RFC 0003 §2). An unannotated field or method is module-private —
+  the same safe default every declaration gets; there is no `private`
+  keyword. `pub` exposes a member to importers, `pub(mod)`/`pub(super)`/
+  `pub(self)` scope it to the package/parent/module. The construction
+  surface is therefore explicit: `pub fn new(..)` builds, unannotated
+  members stay the class's own business (within its module). Static
+  fields take the same forms. Dataclass members are always public —
+  RFC 0009 keeps the all-record contract; trait signatures and impl
+  methods carry no visibility of their own (as public as the trait).
 
 ## 3. No inheritance
 

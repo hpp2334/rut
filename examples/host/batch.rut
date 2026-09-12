@@ -1,7 +1,7 @@
 // RFC 0022/0023/0025 — the host-class ROUND TRIP.
 //
 // The host provides Batch: declared in examples/host/plugin/batch.d.rut
-// (`export host class Batch` + `export host fn submit(b: Batch):
+// (`pub host class Batch` + `pub host fn submit(b: Batch):
 // string`), implemented in Rust in examples/host/batch.rs. This module
 // receives an instance from the host, runs several procedures on it in
 // plain rut, then passes it BACK by calling submit — the host callback
@@ -16,7 +16,7 @@ dataclass Sample {
     value: i64;
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger.new("batch");
 
     // 1. the HOST constructs: Batch.new runs the native class method

@@ -254,7 +254,7 @@ async fn hover_on_the_wire() {
     let src = "\
 // a circle
 class Circle {
-    private r: f64;
+    pub r: f64;
     fn area(self) -> f64 { return 3.14; }
 }
 fn go(c: Circle) -> f64 { return c.area(); }
@@ -294,7 +294,7 @@ fn go(c: Circle) -> f64 { return c.area(); }
         .await;
     let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
     assert!(md.contains("class Circle {"), "{md}");
-    assert!(md.contains("private r: f64"), "{md}");
+    assert!(md.contains("pub r: f64"), "{md}");
     assert!(md.contains("a circle"), "{md}");
 
     // miss is null, never wrong text — inside the header comment

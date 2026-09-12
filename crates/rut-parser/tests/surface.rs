@@ -8,7 +8,7 @@ use rut_parser::{parse, Mode};
 
 const STR_SURFACE: &str = "\
 // the string natives, declared where the host binds them
-export host primitive string {
+pub host primitive string {
     fn len(self) -> i32;
     fn contains(self, needle: string) -> bool;
 }
@@ -32,7 +32,7 @@ fn host_primitive_parses() {
 
 #[test]
 fn host_primitive_names_a_primitive() {
-    let (_, diags) = parse("export host primitive Widget { fn m(self) -> unit; }", Mode::Decl);
+    let (_, diags) = parse("pub host primitive Widget { fn m(self) -> unit; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("`host primitive` names a primitive")),
         "non-primitive target must be diagnosed: {diags:?}"

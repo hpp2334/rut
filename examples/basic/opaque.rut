@@ -13,7 +13,7 @@ dataclass Point { x: f32; y: f32 }
 enum Flavor { Sweet, Sour }
 
 class Session {
-    private token: string;
+    token: string;
 
     fn new(token: string) -> Self {
         return Self { token: token };
@@ -56,7 +56,7 @@ fn nested() -> unit {
     log.info(f"vec {vec.len()}");
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     erase_and_recover();
     share_vs_copy();
     nested();

@@ -20,7 +20,7 @@ suspend fn delayed_send(ch: Sender<string>) -> unit {
     ch.send("quit");
 }
 
-export suspend fn main() -> unit {
+pub suspend fn main() -> unit {
     let log = Logger.new("select");
     let q = Channel<string>();
     spawn(delayed_send(q.sender));       // sender task shares the channel

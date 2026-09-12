@@ -763,7 +763,7 @@ mod tests {
 
     #[test]
     fn members_fields_and_locals() {
-        let src = "class Circle {\n    private r: f32;\n    fn scale(mut self, k: f32) -> Self { self.r = self.r * k; }\n}\n";
+        let src = "class Circle {\n    pub r: f32;\n    fn scale(mut self, k: f32) -> Self { self.r = self.r * k; }\n}\n";
         let spans = classify_src(src);
         assert_eq!(find(src, &spans, "Circle"), vec![TokenType::Class]);
         // the declared field + both `self.r` path tails
@@ -860,7 +860,7 @@ mod tests {
 
     #[test]
     fn symbols_outline() {
-        let src = "trait Drawable { fn draw(self, g: Canvas) -> unit; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> unit {} }\nenum Color { Red }\nexport fn main() -> unit {}\n";
+        let src = "trait Drawable { fn draw(self, g: Canvas) -> unit; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> unit {} }\nenum Color { Red }\npub fn main() -> unit {}\n";
         let (toks, _) = rut_lexer::lexer::lex(src);
         let (ast, _) = parse(src, Mode::Impl);
         let syms = symbols(&toks, &ast);

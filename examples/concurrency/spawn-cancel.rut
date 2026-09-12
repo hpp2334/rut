@@ -13,7 +13,7 @@ suspend fn countdown(n: u32) -> unit {
     }
 }
 
-export suspend fn main() -> unit {
+pub suspend fn main() -> unit {
     let task = spawn(countdown(10));   // runs concurrently on this VM
     await sleep(2500);
     task.cancel();                       // stops at the next suspension

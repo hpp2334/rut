@@ -29,7 +29,7 @@ fn read_config(path: string) -> Result<Vec<u8>, IoError> {
     return Result.ok(raw);
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger.new("option");
     demo(["alpha", "beta"]);
 

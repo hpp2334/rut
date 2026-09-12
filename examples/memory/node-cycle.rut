@@ -24,7 +24,7 @@ fn make_cycle() -> Node {                   // a -> b -> a : strong cycle
     return a;
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger.new("cycle");
     let head = make_cycle();
     log.info(f"head.next alive: {head.next.is_some()}");

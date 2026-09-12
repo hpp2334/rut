@@ -11,13 +11,13 @@
 
 Module scope contains **declarations only** — C++-style: every statement
 lives inside a function, and **loading a module executes nothing**. Visibility
-is safe by default (`export(self)`) with package-scoped forms for libraries.
+is safe by default (`pub(self)`) with package-scoped forms for libraries.
 See **`examples/basic/module-structure.rut`** and
 **`examples/basic/module-visibility.rut`**.
 
 ## 1. Module structure — declarations only
 
-- Allowed at module scope: `import`/`export`, `let`, `enum`, `dataclass`,
+- Allowed at module scope: `import`/`pub`, `let`, `enum`, `dataclass`,
   `trait`, `impl`, `class`, `fn`. Anything else — calls, any
   statement — is a compile error. (`host fn`/`host class` and
   `extern fn`/`extern class` — signature-only native/package surfaces —
@@ -59,34 +59,38 @@ See **`examples/basic/module-structure.rut`** and
   import side-effect ordering, no load-order bugs, deterministic and cheap
   loads — unlike JS/TS modules.
 
-## 2. Export visibility — `export`, `export(mod)`, `export(super)`, `export(self)`
+## 2. Visibility — `pub`, `pub(mod)`, `pub(super)`, `pub(self)`
 
 Modules form a **tree per package** (files in directories; the package root
-is the root module). Every module-scope declaration carries a visibility:
+is the root module). Every declaration carries a visibility:
 
 | Form | Meaning |
 |---|---|
-| `export fn ..` | **public** — importable by any rut module (other packages included) |
-| `export(mod) fn ..` | visible everywhere inside this **package's module tree** |
-| `export(super) fn ..` | visible to the **parent module** only |
-| `export(self) fn ..` | module-private — **the default** for unannotated declarations |
+| `pub fn ..` | **public** — importable by any rut module (other packages included) |
+| `pub(mod) fn ..` | visible everywhere inside this **package's module tree** |
+| `pub(super) fn ..` | visible to the **parent module** only |
+| `pub(self) fn ..` | module-private — **the default** for unannotated declarations |
 
-- Unannotated = `export(self)`: safe-by-default privacy; nothing leaks
-  unless it says `export`.
+- Unannotated = `pub(self)`: safe-by-default privacy; nothing leaks
+  unless it says `pub`.
 - Applies to all module-scope declarations: `let`, `enum`, `dataclass`,
   `trait`, `impl` (an impl exports with its target type), `class`, `fn`,
   extern declarations included (on `class`, it
-  means the *type name* is visible; class members use `private` as in
-  RFC 0010).
-- The conventional entry point is `export fn main`. The host may also
+  means the *type name* is visible).
+- **Class members take the same forms** (RFC 0010 §2): an unannotated
+  field or method is module-private, and `pub` (optionally scoped)
+  exposes it to the form's audience. There is no `private` keyword —
+  the unannotated default *is* the private spelling. Dataclass members
+  are always public — no visibility dial (RFC 0009); trait method
+  signatures and impl methods are as visible as their trait.
+- The conventional entry point is `pub fn main`. The host may also
   call any **`entry fn`** — `entry` is orthogonal to visibility: it
   publishes a function to the *embedder* (RFC 0035 §3), and its
   signature must satisfy the host crossing rule (RFC 0023 §1), checked
-  at compile time. `entry` does not combine with `export` modifiers.
+  at compile time. `entry` does not combine with `pub` modifiers.
 - Visibility is checked at compile time; it has no runtime representation.
-  (Class-member `private` is likewise compile-time only.)
 - Visibility applies uniformly to every declaration, extern included: only
-  `export`ed names enter a module's import table, and only `entry` fns
+  `pub` names enter a module's import table, and only `entry` fns
   (plus the conventional `main`) enter the binary's host-entry table. A
   non-exported decl is
   *known* inside its module (callable, type-checkable) but *nameable*

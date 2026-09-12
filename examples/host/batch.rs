@@ -1,7 +1,7 @@
 // batch.rs — the IMPLEMENTATION half of "plugin:batch".
 //
 // The DECLARATION half is rut source: examples/host/plugin/batch.d.rut
-// (`export host class Batch { .. }` + `export host fn submit(b: Batch):
+// (`pub host class Batch { .. }` + `export host fn submit(b: Batch):
 // string` — .d.rut files are the only place `host` may appear,
 // RFC 0029). This file declares NO surface — it registers bodies, bound
 // by NAME at embedder startup and proven equal to the declaration at

@@ -20,8 +20,8 @@ trait HitTest {
 }
 
 class Sprite {                  // inherent members only — the impls follow
-    private x: f32 = 0;
-    private y: f32 = 0;
+    x: f32 = 0;
+    y: f32 = 0;
 
     fn new() -> Self { return Self {}; }   // explicit — no implicit default
 }
@@ -37,9 +37,9 @@ impl HitTest for Sprite {
 }
 
 class Circle {
-    private x: f32 = 0;
-    private y: f32 = 0;
-    private r: f32 = 1;
+    x: f32 = 0;
+    y: f32 = 0;
+    r: f32 = 1;
 
     fn new(x: f32, y: f32, r: f32) -> Self {
         return Self { x: x, y: y, r: r };
@@ -76,6 +76,6 @@ fn type_tests(d: dyn Drawable, s: Sprite, g: Canvas) -> unit {
     // position (impl Any / T requires Any / is Any — all errors).
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     type_tests(Circle.new(1, 2, 3), Sprite.new(), newCanvas());
 }

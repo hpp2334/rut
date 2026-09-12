@@ -51,12 +51,12 @@ fuel used: 680 of Some(1000000)
 ## What it demonstrates
 
 - **`entry fn`** — the host-callable surface (RFC 0035 §3), distinct from
-  `export` (import visibility for rut modules, RFC 0003 §2 — no type
+  `pub` (import visibility for rut modules, RFC 0003 §2 — no type
   limits there). An entry's signature is checked against the crossing
   rule **at compile time**: a `TodoList` parameter on an entry is a
   source diagnostic, never a call-time failure.
 - **module shape** — entries are compilation roots, so a library module
-  with no `main` still emits every entry (`export fn main` stays the
+  with no `main` still emits every entry (`pub fn main` stays the
   conventional entry for scripts)
 - **budgets** (RFC 0040) — the session runs under fuel + heap limits;
   embedder mistakes (wrong value shape) come back as named traps, never

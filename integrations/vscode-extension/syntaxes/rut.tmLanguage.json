@@ -117,7 +117,7 @@
     },
     "keyword": {
       "name": "keyword.other.rut",
-      "match": "\\b(let|mut|enum|dataclass|class|trait|impl|requires|import|export|from|private|static|extern|where|dyn|is|host|fn|as|super|default|self)\\b"
+      "match": "\\b(let|mut|enum|dataclass|class|trait|impl|requires|import|pub|from|static|extern|where|dyn|is|host|fn|as|super|default|self)\\b"
     },
     "operator": {
       "name": "keyword.operator.rut",

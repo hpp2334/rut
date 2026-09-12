@@ -15,7 +15,7 @@ dataclass Point { x: f32; y: f32 }
 trait Service { fn start(mut self) -> unit; }
 
 class App {
-    private started: bool = false;
+    started: bool = false;
     // no class methods -> sealed: constructible only inside its own body
 }
 
@@ -27,7 +27,7 @@ impl Service for App {
 
 fn run(m: Mode) -> unit { /* ... */ }           // logic lives in functions
 
-export fn main() -> unit {                      // entry point — the host calls it
+pub fn main() -> unit {                      // entry point — the host calls it
     run(Mode.Running);
     let app = App();
     app.start();

@@ -25,8 +25,8 @@ trait Drawable {
 }
 
 class Circle {                               // a shared cell like everything
-    private center: Point;                   // composite field: cell-handle slot
-    private r: f32;
+    center: Point;                   // composite field: cell-handle slot
+    r: f32;
 
     fn new(x: f32, y: f32, r: f32) -> Self {   // class method: Circle.new(1, 2, 3)
         return Self { center: Point { x: x, y: y }, r: r };
@@ -60,7 +60,7 @@ fn color_name(c: Color) -> string {
     };
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger.new("tour");
     let p = Point { x: 1, y: 2 };          // dataclass literal: the only
     let mut pt = p;                        // dataclass construction form

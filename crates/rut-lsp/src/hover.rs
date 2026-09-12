@@ -154,7 +154,80 @@ fn members_of(src: &str, ast: &Ast, methods: &[NodeHandle<MethodDeclNode>]) -> V
         .map(|m| {
             let d = ast.method_decl(*m);
             let sp = ast.span(m.id());
-            member(src, ast.name(d.name), sig_src(src, ast, sp, d.body), sp)
+            // `pub(..)`/`suspend` sit before `fn` — outside the decl span;
+            // restore them from the flags (truthful to intent)
+            let mut pre = String::new();
+            if let Some(v) = d.vis {
+                pre.push_str(&member_vis_str(v));
+                pre.push(' ');
+            }
+            if d.is_suspend {
+                pre.push_str("suspend ");
+            }
+            let sig = format!("{pre}{}", sig_src(src, ast, sp, d.body));
+            member(src, ast.name(d.name), sig, sp)
+        })
+        .collect()
+}
+
+/// the `pub`-form spelling of a member visibility
+fn member_vis_str(v: Vis) -> String {
+    match v {
+        Vis::Pub => "pub".to_string(),
+        Vis::Mod => "pub(mod)".to_string(),
+        Vis::Super => "pub(super)".to_string(),
+        Vis::Self_ => "pub(self)".to_string(),
+    }
+}
+
+/// strip leading member modifiers (`pub`, `pub(..)`, `static`) from a
+/// source slice — they are re-rendered from the decl's flags
+fn strip_member_mods(mut s: &str) -> &str {
+    loop {
+        let t = s.trim_start();
+        let word_end = t.find(char::is_whitespace).unwrap_or(t.len());
+        let rest = &t[word_end..];
+        match &t[..word_end] {
+            "pub" => {
+                let r = rest.trim_start();
+                if let Some(inner) = r.strip_prefix('(') {
+                    if let Some(i) = inner.find(')') {
+                        s = &inner[i + 1..];
+                        continue;
+                    }
+                }
+                s = rest;
+            }
+            "static" => s = rest,
+            _ => return t,
+        }
+    }
+}
+
+/// field member list: the decl slice carries the modifiers (the field
+/// span starts before them) — strip, then re-render from the flags
+fn field_members(src: &str, ast: &Ast, fields: &[NodeHandle<FieldDeclNode>]) -> Vec<MemberSrc> {
+    fields
+        .iter()
+        .map(|f| {
+            let d = ast.field_decl(*f);
+            let sp = ast.span(f.id());
+            let mut vis = String::new();
+            if let Some(v) = d.vis {
+                vis.push_str(&member_vis_str(v));
+                vis.push(' ');
+            }
+            if d.is_static {
+                vis.push_str("static ");
+            }
+            let body = strip_member_mods(
+                src[sp.lo as usize..sp.hi as usize]
+                    .trim_end()
+                    .trim_end_matches(';'),
+            )
+            .to_string();
+            let decl = format!("{vis}{body}");
+            member(src, ast.name(d.name), decl, sp)
         })
         .collect()
 }
@@ -193,30 +266,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
         let span = ast.span(h.id());
         match ast.item(*h) {
             ItemKind::Class { name, generics, fields, methods, .. } => {
-                let fs = fields
-                    .iter()
-                    .map(|f| {
-                        let d = ast.field_decl(*f);
-                        let sp = ast.span(f.id());
-                        // `private`/`static` sit outside the decl span —
-                        // restore them from the flags (truthful to intent)
-                        let mut vis = String::new();
-                        if d.is_private {
-                            vis.push_str("private ");
-                        }
-                        if d.is_static {
-                            vis.push_str("static ");
-                        }
-                        let body = src[sp.lo as usize..sp.hi as usize]
-                            .trim_end()
-                            .trim_end_matches(';')
-                            .trim_start_matches("private ")
-                            .trim_start_matches("static ")
-                            .to_string();
-                        let decl = format!("{vis}{body}");
-                        member(src, ast.name(d.name), decl, sp)
-                    })
-                    .collect();
+                let fs = field_members(src, ast, fields);
                 let ms = members_of(src, ast, methods);
                 idx.types.push(ty_def(
                     src,
@@ -230,28 +280,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::Dataclass { name, generics, fields, methods, .. } => {
-                let fs = fields
-                    .iter()
-                    .map(|f| {
-                        let d = ast.field_decl(*f);
-                        let sp = ast.span(f.id());
-                        let mut vis = String::new();
-                        if d.is_private {
-                            vis.push_str("private ");
-                        }
-                        if d.is_static {
-                            vis.push_str("static ");
-                        }
-                        let body = src[sp.lo as usize..sp.hi as usize]
-                            .trim_end()
-                            .trim_end_matches(';')
-                            .trim_start_matches("private ")
-                            .trim_start_matches("static ")
-                            .to_string();
-                        let decl = format!("{vis}{body}");
-                        member(src, ast.name(d.name), decl, sp)
-                    })
-                    .collect();
+                let fs = field_members(src, ast, fields);
                 let ms = members_of(src, ast, methods);
                 idx.types.push(ty_def(
                     src,
@@ -902,14 +931,15 @@ fn length(p: Point) -> f64 {
         let src = "\
 // a circle
 class Circle {
-    private r: f64;
+    pub r: f64;
     x: f64;
     y: f64;
 }
 ";
         let md = hover_at(src, "Circle").unwrap();
         assert!(md.contains("class Circle {"), "{md}");
-        assert!(md.contains("private r: f64"), "{md}");
+        assert!(md.contains("pub r: f64"), "{md}");
+        assert!(md.contains("x: f64"), "{md}");
         assert!(md.contains("a circle"), "doc: {md}");
     }
 
@@ -997,7 +1027,7 @@ fn main() -> unit { let x = length(3); }
     #[test]
     fn host_primitive_surface_favors_own_methods() {
         // std-style surface index ahead of the doc
-        let surf_src = "export host primitive string {\n    fn len(self) -> i32;\n}\n";
+        let surf_src = "pub host primitive string {\n    fn len(self) -> i32;\n}\n";
         let s2 = rut_lexer::lexer::normalize(surf_src);
         let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Decl);
         let mut surf = index(&s2, &sast);

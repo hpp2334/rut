@@ -16,7 +16,7 @@ fn decode(raw: Vec<u8>) -> Result<Vec<u8>, HttpError> {
     return Result.ok(raw);             // placeholder
 }
 
-export suspend fn main() -> unit {
+pub suspend fn main() -> unit {
     let log = Logger.new("fetch");
     let page = await fetch_page("https://example.com");
     if (page.is_ok()) {

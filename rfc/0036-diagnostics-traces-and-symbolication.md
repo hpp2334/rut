@@ -131,12 +131,12 @@ Same declaration-file machinery as `plugin:my_map` (RFC 0025/0026/0029):
 
 ```rut
 // std/debug.d.rut (excerpt)
-export dataclass Location { file: string, line: i32, col: i32 }
-export host fn here() -> Location;                  // folded at compile time (RFC 0033 §3)
-export host fn str(v: Opaque) -> string;        // developer rendering (RFC 0007 §2)
-export host fn type_name(v: Opaque) -> string;  // debug type name
-export host fn capture_stack_trace() -> StackTrace;
-export host class StackTrace {
+pub dataclass Location { file: string, line: i32, col: i32 }
+pub host fn here() -> Location;                  // folded at compile time (RFC 0033 §3)
+pub host fn str(v: Opaque) -> string;        // developer rendering (RFC 0007 §2)
+pub host fn type_name(v: Opaque) -> string;  // debug type name
+pub host fn capture_stack_trace() -> StackTrace;
+pub host class StackTrace {
                                              // every capture is a unique
                                              // snapshot — identity `==`,
                                              // like every composite

@@ -75,8 +75,8 @@ fn from_api(a: ApiUser) -> User {
 // BOTH impls: manual impls must name required traits explicitly (RFC
 // 0012 §2) — only auto-fills satisfy requires edges implicitly.
 class Tree {
-    private root: i64;
-    private cache: string;              // never serialized — unexposed
+    root: i64;
+    cache: string;              // never serialized — unexposed
 
     fn new(root: i64) -> Self {
         return Self { root: root, cache: "" };
@@ -100,7 +100,7 @@ fn seed() -> Vec<Address> {
     return a;
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let u = User {
         id: 7,
         login: "hpp",

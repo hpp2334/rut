@@ -25,8 +25,8 @@ blocks in action.
   is the only construction, available **everywhere** (module-let
   initializers included, RFC 0003 §1); the literal allocates the cell.
 - **All fields public, always.** A dataclass is an open data record —
-  `private` in a dataclass is a compile error. Privacy needs construction
-  control, which is the class's job (RFC 0010).
+  member visibility in a dataclass is a compile error. Privacy needs
+  construction control, which is the class's job (RFC 0010).
 - Dataclass literals must initialize **every** field (any order, by name);
   fields may declare initializers (`x: f32 = 0`), which the literal may then
   omit.
@@ -50,7 +50,7 @@ blocks in action.
 
   `hash`/`eq` are trait-declared members — calls dispatch through
   the vtable per RFC 0012 §1. The limits on a dataclass, exhaustively:
-  **no `private` fields** (above), **no
+  **no member visibility** (above), **no
   class methods** (the literal is the only construction — open literal
   vs class-method-gated *is* the dataclass/class distinction), and **no
   `Disposal` impl** (a value

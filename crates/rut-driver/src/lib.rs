@@ -73,7 +73,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     }
     let vtables = ctx.build_vtables();
     // finalize the entry table (RFC 0035 §3): `entry fn`s — plus the
-    // conventional `main` when it is exported. Plain `export fn`s are
+    // conventional `main` when it is exported. Plain `pub fn`s are
     // import-visibility for M2 module loading (RFC 0003 §2), NOT host
     // entries: their types are unrestricted.
     let mut exports = Vec::new();

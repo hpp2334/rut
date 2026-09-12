@@ -11,7 +11,7 @@
 
 Both user value types are **C-layout** (RFC 0015 §4): fields in
 declaration order, natural alignment, size padded to alignment; no hidden
-members; `private` and out-of-body impl blocks add **nothing**
+members; member visibility and out-of-body impl blocks add **nothing**
 to the layout. Every value lives in a `RutCell` — `Header +
 (vtable-ptr) + that same payload block`
 (RFC 0015 §6) — `StructRef::fields_ptr()` hides the prefix. Inside the

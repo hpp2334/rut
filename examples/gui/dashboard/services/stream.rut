@@ -9,16 +9,16 @@ import { Disposal } from "std:core";
 import { EventKind, LiveEvent } from "../models.rut";
 import { clamp_f32, lcg_next } from "./api.rut";
 
-export class EventStream {
-    private feed: Receiver<LiveEvent>;
-    private task: Task<unit>;
+pub class EventStream {
+    feed: Receiver<LiveEvent>;
+    task: Task<unit>;
 
-    fn new(seed: u32) -> Self {
+    pub fn new(seed: u32) -> Self {
         let ch = Channel<LiveEvent>();
         return Self { feed: ch.receiver, task: spawn(produce(ch.sender, seed)) };
     }
 
-    fn feed(self) -> Receiver<LiveEvent> { return self.feed; }
+    pub fn feed(self) -> Receiver<LiveEvent> { return self.feed; }
 }
 
 impl Disposal for EventStream {  // runs when the last handle drops
@@ -39,7 +39,7 @@ suspend fn produce(out: Sender<LiveEvent>, seed: u32) -> unit {
     }
 }
 
-export(self) fn send_event(out: Sender<LiveEvent>, roll: u32, rng: u32, v: f32) -> unit {
+pub(self) fn send_event(out: Sender<LiveEvent>, roll: u32, rng: u32, v: f32) -> unit {
     let kind = when (roll) {
         0u32, 1u32, 2u32 -> EventKind.Visit,
         3u32            -> EventKind.Alert,

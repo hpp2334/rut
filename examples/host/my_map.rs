@@ -1,7 +1,7 @@
 // my_map.rs — the IMPLEMENTATION half of "plugin:my_map".
 //
 // The DECLARATION half is rut source: examples/host/plugin/my_map.d.rut
-// (`export host class MyMap<K: Hashable, V> { .. }` — .d.rut files are
+// (`pub host class MyMap<K: Hashable, V> { .. }` — .d.rut files are
 // the only place `host` may appear, RFC 0029). This file declares NO
 // surface — it registers bodies, bound by NAME at embedder startup, and
 // proven equal to the declaration at vm.load link:

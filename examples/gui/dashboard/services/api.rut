@@ -7,11 +7,11 @@ import { ApiError, Series, Status, User } from "../models.rut";
 
 // --- deterministic pseudo-randomness (no std rand in v1) ---
 
-export fn lcg_next(state: u32) -> u32 {
+pub fn lcg_next(state: u32) -> u32 {
     return (state &* 1664525u32) &+ 1013904223u32;
 }
 
-export(self) fn lcg_f32(state: u32) -> f32 {
+pub(self) fn lcg_f32(state: u32) -> f32 {
     return f32(lcg_next(state) % 1000u32) / 1000.0f32;
 }
 
@@ -22,7 +22,7 @@ let ROLES: Array<string, 5> = ["engineer", "designer", "ops", "pm", "analyst"]; 
                                                                                    // no allocation
 // --- API ---
 
-export suspend fn fetch_users(seed: u32) -> Result<Vec<User>, ApiError> {
+pub suspend fn fetch_users(seed: u32) -> Result<Vec<User>, ApiError> {
     await sleep(120);                                  // simulated latency
     if (seed == 0) {
         return Result.err(ApiError.Network);           // the unhappy path exists
@@ -53,7 +53,7 @@ export suspend fn fetch_users(seed: u32) -> Result<Vec<User>, ApiError> {
     return Result.ok(users);
 }
 
-export suspend fn fetch_series(metric: string, unit: string, n: i32, seed: u32) -> Result<Series, ApiError> {
+pub suspend fn fetch_series(metric: string, unit: string, n: i32, seed: u32) -> Result<Series, ApiError> {
     await sleep(80);
     let samples: Vec<f32> = Vec();
     let v = 50.0f32;
@@ -67,7 +67,7 @@ export suspend fn fetch_series(metric: string, unit: string, n: i32, seed: u32) 
     return Result.ok(Series { metric: metric, unit: unit, samples: samples });
 }
 
-export fn clamp_f32(v: f32, lo: f32, hi: f32) -> f32 {
+pub fn clamp_f32(v: f32, lo: f32, hi: f32) -> f32 {
     if (v < lo) { return lo; }
     if (v > hi) { return hi; }
     return v;

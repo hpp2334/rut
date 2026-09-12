@@ -46,7 +46,7 @@ fn describe(f: Flavor) -> string {
         Flavor.Sour  -> "sour",
     };
 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let name = "rut";
     let n = 41 + 1;
     print(f"hi {name}! n={n} tab:\t'c'={'c'}");
@@ -62,7 +62,7 @@ export fn main() -> unit {
 fn case2_cells_and_own() {
     let src = r#"
 dataclass Point { x: f32; y: f32 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let mut p = Point { x: 1, y: 2 };
     let q = p;
     p.x = 4;
@@ -81,7 +81,7 @@ export fn main() -> unit {
 fn case3_opaque() {
     let src = r#"
 dataclass Point { x: f32; y: f32 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let box1 = Opaque.new(Point { x: 1, y: 2 });
     let box2 = Opaque.new("hello");
     print(f"box1 is Point: {box1 is Point}");
@@ -115,7 +115,7 @@ fn sieve(limit: i32) -> Vec<i32> {
     }
     return primes;
 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let primes = sieve(100);
     print(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
 }
@@ -140,7 +140,7 @@ fn mix(a: Color, b: Color) -> string {
         Color.Blue  -> "blueish",
     };
 }
-export fn main() -> unit {
+pub fn main() -> unit {
     print(mix(Color.Red, Color.Green));
     print(mix(Color.Blue, Color.Blue));
 }
@@ -167,7 +167,7 @@ impl Shape for Square {
     fn area(self) -> f32 { return self.s * self.s; }
     fn name(self) -> string { return "square"; }
 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let shapes: Vec<dyn Shape> = Vec.from([
         Circle { r: 1 },
         Square { s: 2 },
@@ -195,7 +195,7 @@ fn map<T, U>(v: Vec<T>, f: fn(T) -> U) -> Vec<U> {
     for (let x of v) { out.push(f(x)); }
     return out;
 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let xs = Vec.from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
@@ -210,7 +210,7 @@ export fn main() -> unit {
 #[test]
 fn case8_fuel_traps_and_parks() {
     let src = r#"
-export fn main() -> unit {
+pub fn main() -> unit {
     let mut i = 0;
     while (true) {
         i += 1;
@@ -232,7 +232,7 @@ export fn main() -> unit {
 #[test]
 fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
-export fn main() -> unit {
+pub fn main() -> unit {
     let mut x = 2147483647;
     x = x &+ 1;              // wrapping: fine (RFC 0004 §3)
     print(f"x={x}");
@@ -250,7 +250,7 @@ fn heap_budget_traps_before_the_write() {
     // RFC 0040 §1: OutOfMemory leaves the heap byte-identical — a tiny
     // budget fails the Vec allocation cleanly
     let src = r#"
-export fn main() -> unit {
+pub fn main() -> unit {
     let v = Vec<u8>(1000000);
     print("allocated");
 }
@@ -264,7 +264,7 @@ export fn main() -> unit {
 fn mut_binding_law_is_enforced() {
     let src = r#"
 dataclass P { x: i32 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let p = P { x: 1 };
     p.x = 2;
 }
@@ -282,7 +282,7 @@ export fn main() -> unit {
 fn when_exhaustiveness_is_enforced() {
     let src = r#"
 enum Color { Red, Green, Blue }
-export fn main() -> unit {
+pub fn main() -> unit {
     print(when (Color.Red) { Color.Red -> "r" });
 }
 "#;
@@ -297,7 +297,7 @@ export fn main() -> unit {
 #[test]
 fn option_eq_is_a_compile_error() {
     let src = r#"
-export fn main() -> unit {
+pub fn main() -> unit {
     let a = Option.some(1);
     print(f"{a == a}");
 }
@@ -316,18 +316,18 @@ fn dump_is_labeled_and_spanned() {
     // labeled `field: value` lines, `- item` bullets, spans on every node,
     // and no display strings on the JSON wire
     let src = r#"enum Flavor { Sweet, Sour = 5 }
-export fn main() -> unit { print(f"{1 + 1}"); }
+pub fn main() -> unit { print(f"{1 + 1}"); }
 "#;
     let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let text = &out.ast_dump;
-    assert!(text.contains("@0 Enum Flavor [0,38)"), "header: {text}");
-    assert!(text.contains("vis: export(self)"), "vis label: {text}");
+    assert!(text.contains("@0 Enum Flavor [0,35)"), "header: {text}");
+    assert!(text.contains("vis: pub(self)"), "vis label: {text}");
     assert!(text.contains("- Sour = 5"), "member bullet: {text}");
     let json = &out.ast_json;
     let root = serde_hint_parse(json);
     assert_eq!(root.kind, "Module");
-    assert!(json.contains("\"span\":[0,38]"), "span on the wire: {json}");
+    assert!(json.contains("\"span\":[0,35]"), "span on the wire: {json}");
     for banned in ["\"text\"", "\"label\"", "\"fields\"", "\"summary\""] {
         assert!(!json.contains(banned), "banned key {banned} on the wire");
     }
@@ -358,7 +358,7 @@ fn classify(n: i32) -> string {
         return "positive";
     }
 }
-export fn main() -> unit {
+pub fn main() -> unit {
     print(classify(0));
     print(classify(-3));
     print(classify(7));
@@ -379,7 +379,7 @@ fn shortcircuit_truth_table() {
     // && and || both miscompiled: the rhs value never reached the result
     // register (&& was always false; f||t was false too)
     let src = r#"
-export fn main() -> unit {
+pub fn main() -> unit {
     let t = true;
     let f = false;
     print(f"and: {t && t} {t && f} {f && t} {f && f}");
@@ -408,18 +408,18 @@ fn zero_param_class_constructor_and_self_ty() {
     // position was rejected at the call site
     let src = r#"
 class Counter {
-    private n: i32;
+    n: i32;
     fn new() -> Self { return Self { n: 0 }; }
     fn bump(mut self) -> unit { self.n += 1; }
     fn count(self) -> i32 { return self.n; }
 }
 class Wrapped {
-    private inner: Counter;
+    inner: Counter;
     fn new() -> Self { return Self { inner: Counter.new() }; }
     fn bump(mut self) -> unit { self.inner.bump(); }
     fn count(self) -> i32 { return self.inner.count(); }
 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let mut c = Counter.new();
     c.bump();
     c.bump();
@@ -440,7 +440,7 @@ fn when_statement_block_arms() {
     // expression in this build") — RFC 0008's statement form
     let src = r#"
 enum Light { Green, Yellow, Red }
-export fn main() -> unit {
+pub fn main() -> unit {
     let mut dropped = 0;
     let mut kept = 0;
     for (let i = 0; i < 6; i += 1) {
@@ -478,7 +478,7 @@ fn describe(f: Flavor) -> string {
         Flavor.Salty  -> "salty",
     };
 }
-export fn main() -> unit {
+pub fn main() -> unit {
     let hits = [describe(Flavor.Sweet), describe(Flavor.Sour), describe(Flavor.Salty)];
     print(hits[0]);
     print(hits[1]);
@@ -604,19 +604,19 @@ entry fn generic<T>(v: T) -> T { return v; }
 }
 
 #[test]
-fn plain_export_stays_unrestricted() {
-    // `export` is import-visibility for rut modules (RFC 0003 §2), NOT
-    // the host surface: a TodoList crosses fine between rut fns
+fn plain_pub_stays_unrestricted() {
+    // `pub` is import-visibility for rut modules (RFC 0003 §2), NOT
+    // the host surface: a Stack crosses fine between rut fns
     let src = r#"
 dataclass Row { id: i32; }
-export class Stack {
-    private items: Vec<Row>;
+pub class Stack {
+    items: Vec<Row>;                // unannotated member = module-private
     fn new() -> Self { return Self { items: Vec() }; }
     fn push(mut self, id: i32) -> unit { self.items.push(Row { id: id }); }
-    fn len(self) -> i32 { return self.items.len(); }
+    pub fn len(self) -> i32 { return self.items.len(); }
 }
-export fn drain(s: Stack) -> i32 { return s.len(); }
-export fn main() -> unit {
+pub fn drain(s: Stack) -> i32 { return s.len(); }
+pub fn main() -> unit {
     let mut st = Stack.new();
     st.push(1);
     print(f"drained {drain(st)}");
@@ -625,4 +625,35 @@ export fn main() -> unit {
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["drained 1"]);
+}
+
+#[test]
+fn member_pub_scopes_compile_and_run() {
+    // RFC 0003 §2 / 0010 §2: the pub scopes apply to class members —
+    // parsing, the AST dump label, and the compiled call path
+    let src = r#"
+pub class Gauge {
+    n: i32;                        // unannotated = module-private
+    pub w: i32;                    // pub field
+
+    pub fn new() -> Self { return Self { n: 0, w: 3 }; }
+    pub(mod) fn bump(mut self) -> unit { self.n &+= self.w; }
+    pub(self) fn raw(self) -> i32 { return self.n; }
+    fn secret(self) -> i32 { return self.n * 100; }
+}
+pub fn main() -> unit {
+    let mut g = Gauge.new();
+    g.bump();
+    g.bump();
+    print(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
+}
+"#;
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    // the dump labels member visibility (annotated members only)
+    assert!(out.ast_dump.contains("vis: pub(mod)"), "member vis label: {}", out.ast_dump);
+    assert!(!out.ast_dump.contains("vis: pub\n      name: n"), "unannotated stays quiet: {}", out.ast_dump);
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["gauge=6 secret=600 w=3"]);
 }

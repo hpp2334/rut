@@ -63,6 +63,9 @@ pub enum DumpVal {
     /// only emitted when true (quietness, not fabrication)
     Flag(bool),
     Vis(Vis),
+    /// member visibility — only pushed when annotated (None = the
+    /// unannotated module-private default, RFC 0003 §2)
+    OptVis(Option<Vis>),
     Op(BinOp),
     UnOp(UnOp),
 }
@@ -216,8 +219,8 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
         },
         Kind::Member(k) => match k {
             MemberKind::FieldDecl(d) => {
-                if d.is_private {
-                    fields.push(field("private", DumpVal::Flag(true)));
+                if let Some(v) = d.vis {
+                    fields.push(field("vis", DumpVal::OptVis(Some(v))));
                 }
                 if d.is_static {
                     fields.push(field("static", DumpVal::Flag(true)));
@@ -230,8 +233,8 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 "FieldDecl"
             }
             MemberKind::MethodDecl(d) => {
-                if d.is_private {
-                    fields.push(field("private", DumpVal::Flag(true)));
+                if let Some(v) = d.vis {
+                    fields.push(field("vis", DumpVal::OptVis(Some(v))));
                 }
                 if d.is_suspend {
                     fields.push(field("suspend", DumpVal::Flag(true)));
@@ -706,6 +709,10 @@ fn val_json(v: &DumpVal, out: &mut String) {
         DumpVal::Str(s) => json_escape(s, out),
         DumpVal::Flag(b) => out.push_str(if *b { "true" } else { "false" }),
         DumpVal::Vis(v) => out.push_str(&format!("\"{}\"", vis_tag(*v))),
+        DumpVal::OptVis(v) => match v {
+            Some(v) => out.push_str(&format!("\"{}\"", vis_tag(*v))),
+            None => out.push_str("null"),
+        },
         DumpVal::Op(op) => out.push_str(&format!("\"{:?}\"", op)),
         DumpVal::UnOp(op) => out.push_str(&format!("\"{:?}\"", op)),
     }
@@ -722,10 +729,10 @@ pub fn render_json(root: &DumpNode) -> String {
 
 fn vis_str(v: Vis) -> &'static str {
     match v {
-        Vis::Pub => "export",
-        Vis::Mod => "export(mod)",
-        Vis::Super => "export(super)",
-        Vis::Self_ => "export(self)",
+        Vis::Pub => "pub",
+        Vis::Mod => "pub(mod)",
+        Vis::Super => "pub(super)",
+        Vis::Self_ => "pub(self)",
     }
 }
 
@@ -863,6 +870,11 @@ fn val_text(label: &str, v: &DumpVal, d: usize, src: &str, out: &mut String) {
         DumpVal::Str(s) => out.push_str(&format!("{i}{label}: {s}\n")),
         DumpVal::Flag(b) => out.push_str(&format!("{i}{label}: {b}\n")),
         DumpVal::Vis(v) => out.push_str(&format!("{i}{label}: {}\n", vis_str(*v))),
+        DumpVal::OptVis(v) => {
+            if let Some(v) = v {
+                out.push_str(&format!("{i}{label}: {}\n", vis_str(*v)))
+            }
+        }
         DumpVal::Op(op) => out.push_str(&format!("{i}{label}: {}\n", binop_str(*op))),
         DumpVal::UnOp(op) => out.push_str(&format!("{i}{label}: {}\n", unop_str(*op))),
     }

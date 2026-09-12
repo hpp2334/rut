@@ -234,13 +234,14 @@ impl Interner {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Vis {
-    /// `export` — importable from anywhere
+    /// `pub` — importable from anywhere
     Pub,
-    /// `export(mod)`
+    /// `pub(mod)`
     Mod,
-    /// `export(super)`
+    /// `pub(super)`
     Super,
-    /// `export(self)` / unannotated — module-private (the default)
+    /// `pub(self)` / unannotated module items **and members** — module-private
+    /// (the default)
     Self_,
 }
 
@@ -358,20 +359,22 @@ pub enum ItemKind {
 
 // ---- members ----
 
-/// dataclass/class field: `private`? `static`? name: ty (= init)?
+/// dataclass/class field: `pub(..)`? `static`? name: ty (= init)?
+/// `vis: None` = unannotated — module-private, the RFC 0003 §2 default
 #[derive(Clone, Debug)]
 pub struct FieldDeclData {
-    pub is_private: bool,
+    pub vis: Option<Vis>,
     pub is_static: bool,
     pub name: IdentId,
     pub ty: NodeHandle<AnyTy>,
     pub init: Option<NodeHandle<AnyExpr>>,
 }
 
-/// `private`? `suspend`? fn name<..>(self, ..) -> T { .. }
+/// `pub(..)`? `suspend`? fn name<..>(self, ..) -> T { .. }
+/// `vis: None` = unannotated — module-private, the RFC 0003 §2 default
 #[derive(Clone, Debug)]
 pub struct MethodDeclData {
-    pub is_private: bool,
+    pub vis: Option<Vis>,
     pub is_suspend: bool,
     pub name: IdentId,
     pub generics: Vec<IdentId>,

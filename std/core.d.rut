@@ -14,22 +14,22 @@
 // (`Vec<T>()`, `Vec<T>(n)`, `i32(x)` conversions — RFC 0007) are syntax,
 // not members, and are not declared.
 
-export host primitive string {
+pub host primitive string {
     fn len(self) -> i32;
 }
 
-export host class Array<T> {
+pub host class Array<T> {
     fn len(self) -> i32;                    // folds to the const N (RFC 0032 §1.1 R1)
 }
 
-export host class Vec<T> {
+pub host class Vec<T> {
     fn from(arr: Array<T>) -> Self;         // array -> heap vector
     fn len(self) -> i32;
     fn push(self, v: T) -> unit;
     fn pop(self) -> T;
 }
 
-export host class Option<T> {
+pub host class Option<T> {
     fn some(v: T) -> Self;
     fn none() -> Self;                      // element inferred from the binding's annotation
     fn is_some(self) -> bool;
@@ -38,7 +38,7 @@ export host class Option<T> {
     fn expect(self, msg: string) -> T;      // panics with `msg` on None
 }
 
-export host class Result<T, E> {
+pub host class Result<T, E> {
     fn ok(v: T) -> Self;
     fn err(e: E) -> Self;
     fn is_ok(self) -> bool;
@@ -50,6 +50,6 @@ export host class Result<T, E> {
 // RFC 0011/0016 — impl blocks for Disposal run `dispose` at rc 0; a
 // builtin trait with ordinary nominal impls (RFC 0028: part of the
 // prelude, spelled here because .d.rut declares traits too).
-export trait Disposal {
+pub trait Disposal {
     fn dispose(mut self) -> unit;
 }

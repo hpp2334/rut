@@ -28,7 +28,7 @@ The standard library splits in two:
   `Hashable { fn hash(self) -> u64; fn eq(self, other: Self) -> bool }`
   — hashing and key comparison are one contract — and
   the containers
-  directly — `export host class Map<K requires Hashable, V> { .. }`, `Set<T>`
+  directly — `pub host class Map<K requires Hashable, V> { .. }`, `Set<T>`
   — with no facade; builtin impls (string content, numerics/enum value,
   registered-struct vouchers) are host impl-registry
   entries, not rut syntax. Containers are library types, not VM
@@ -65,23 +65,23 @@ construction is free):
 
 ```rut
 import { Level, emit } from "rt:log";     // native: enum + sink fn
-export { Level };
+pub { Level };
 
-export class Logger {
-    private name: string;
-    private level: Level = Level.Info;
+pub class Logger {
+    name: string;                      // unannotated = module-private
+    level: Level = Level.Info;
 
-    fn new(name: string) -> Self { return Self { name: name, level: Level.Info }; }
+    pub fn new(name: string) -> Self { return Self { name: name, level: Level.Info }; }
 
-    fn set_level(self, l: Level) -> unit { self.level = l; }
-    fn level(self) -> Level { return self.level; }
+    pub fn set_level(self, l: Level) -> unit { self.level = l; }
+    pub fn level(self) -> Level { return self.level; }
 
-    fn debug(self, msg: string) -> unit { self.log_at(Level.Debug, msg); }
-    fn info(self, msg: string) -> unit  { self.log_at(Level.Info, msg); }
-    fn warn(self, msg: string) -> unit  { self.log_at(Level.Warn, msg); }
-    fn error(self, msg: string) -> unit { self.log_at(Level.Error, msg); }
+    pub fn debug(self, msg: string) -> unit { self.log_at(Level.Debug, msg); }
+    pub fn info(self, msg: string) -> unit  { self.log_at(Level.Info, msg); }
+    pub fn warn(self, msg: string) -> unit  { self.log_at(Level.Warn, msg); }
+    pub fn error(self, msg: string) -> unit { self.log_at(Level.Error, msg); }
 
-    private fn log_at(self, l: Level, msg: string) -> unit {
+    fn log_at(self, l: Level, msg: string) -> unit {   // module-private
         if (Level.to_int(l) >= Level.to_int(self.level)) {
             emit(self.name, l, msg);
         }
@@ -103,12 +103,12 @@ traps carry. `std:debug` is a declaration file + Rust bodies, like
 
 ```rut
 // std/debug.d.rut (excerpt — RFC 0036 §6)
-export dataclass Location { file: string, line: i32, col: i32 }
-export host fn here() -> Location;                  // folded at compile time (RFC 0033 §3)
-export host fn str(v: Opaque) -> string;           // developer rendering (RFC 0007 §2)
-export host fn type_name(v: Opaque) -> string;  // debug type name
-export host fn capture_stack_trace() -> StackTrace; // skips its own frame
-export host class StackTrace {
+pub dataclass Location { file: string, line: i32, col: i32 }
+pub host fn here() -> Location;                  // folded at compile time (RFC 0033 §3)
+pub host fn str(v: Opaque) -> string;           // developer rendering (RFC 0007 §2)
+pub host fn type_name(v: Opaque) -> string;  // debug type name
+pub host fn capture_stack_trace() -> StackTrace; // skips its own frame
+pub host class StackTrace {
     fn render() -> string;                          // via loaded binaries'
     fn depth() -> i32;                              // SymbolTables; lazy
 }                                                 // — degraded when stripped

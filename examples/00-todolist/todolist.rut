@@ -9,8 +9,8 @@
 //
 // `entry fn` marks the host-callable surface (RFC 0035 §3); the checker
 // enforces the crossing rule on those signatures at compile time. Plain
-// `export` is import-visibility for other rut modules (RFC 0003 §2) and
-// carries no such limit — `export class TodoList` stays fully typed.
+// `pub` is import-visibility for other rut modules (RFC 0003 §2) and
+// carries no such limit — `pub class TodoList` stays fully typed.
 
 dataclass Todo {
     id: i32;
@@ -18,17 +18,17 @@ dataclass Todo {
     done: bool = false;      // field initializer — `done` may be omitted
 }
 
-export class TodoList {
-    private items: Vec<Todo>;
-    private next_id: i32;
+pub class TodoList {
+    items: Vec<Todo>;         // unannotated members = module-private
+    next_id: i32;             // (RFC 0003 §2 — the class's own business)
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         return Self { items: Vec(), next_id: 1 };
     }
 
     // ---- CREATE ----
 
-    fn add(mut self, title: string) -> i32 {
+    pub fn add(mut self, title: string) -> i32 {
         let id = self.next_id;
         self.items.push(Todo { id: id, title: title });
         self.next_id += 1;
@@ -37,13 +37,13 @@ export class TodoList {
 
     // ---- READ ----
 
-    fn len(self) -> i32 {
+    pub fn len(self) -> i32 {
         return self.items.len();
     }
 
     /// First title matching `id`, or `Option.none()` — check, then read
     /// `.value` (RFC 0005: no `?.` sugar).
-    fn title_of(self, id: i32) -> Option<string> {
+    pub fn title_of(self, id: i32) -> Option<string> {
         for (let t of self.items) {
             if (t.id == id) {
                 return Option.some(t.title);
@@ -53,7 +53,7 @@ export class TodoList {
     }
 
     /// The boxed listing the embedder prints.
-    fn render(self) -> string {
+    pub fn render(self) -> string {
         let mut out = f"TodoList[{self.len()}]";
         for (let t of self.items) {
             let mark = when (t.done) { true -> "x", else -> " " };
@@ -64,7 +64,7 @@ export class TodoList {
 
     // ---- UPDATE ----
 
-    fn set_done(mut self, id: i32, done: bool) -> bool {
+    pub fn set_done(mut self, id: i32, done: bool) -> bool {
         for (let i = 0; i < self.items.len(); i += 1) {
             if (self.items[i].id == id) {
                 self.items[i].done = done;
@@ -76,7 +76,7 @@ export class TodoList {
 
     // ---- DELETE ----
 
-    fn remove(mut self, id: i32) -> bool {
+    pub fn remove(mut self, id: i32) -> bool {
         let kept: Vec<Todo> = Vec();
         let mut removed = false;
         for (let t of self.items) {

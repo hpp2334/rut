@@ -28,7 +28,7 @@ stopping before HIR, emitting a DeclIr (RFC 0029 §3).
 
 Name resolution over the AST: paths → symbol ids, imports resolved through
 the surface pipeline (RFC 0029 §5 — source, `.d.ir`, or `.d.rut`; never
-bodies), `Self` bound, `private`/`export` visibility checked (RFC 0003 §2),
+bodies), `Self` bound, `pub` visibility checked (RFC 0003 §2),
 dataclass-vs-class distinction applied (literals only for dataclasses;
 type-calls only for classes/builtins, RFC 0009/0010), and surface
 declarations (`host`/`extern`) resolved against their DeclIrs with

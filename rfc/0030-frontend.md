@@ -110,15 +110,21 @@ inside a raw string does NOT close it. `rf"..."` is RFC 0007 OQ-3
 The authoritative surface syntax is the RFC series Part B + `examples/`;
 
 ```
-module     := (import | export? decl)*
+module     := (import | pub? decl)*
 import     := 'import' '{' name (',' name)* '}' 'from' Str ';'
 decl       := letdecl | enumdecl | dataclassdecl | classdecl | traitdecl | impldecl | fndecl
 letdecl    := 'let' Ident ':' Type '=' expr ';'   // module binding — load-time
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
 dataclass  := 'dataclass' Ident genericparams? '{' (field | meth)* '}'
 class      := 'class' Ident genericparams? '{' (field | meth)* '}'
-field      := 'private'? Ident ':' Type ('=' expr)?
-meth       := 'fn' Ident '(' 'mut'? 'self'? params ')' (':' Type)? block
+field      := membervis? 'static'? Ident ':' Type ('=' expr)?
+membervis  := 'pub' ('(' ('mod' | 'super' | 'self') ')')?
+                                               // RFC 0003 §2 — the same forms
+                                               // items take; unannotated =
+                                               // module-private. Class members
+                                               // only: dataclass members are
+                                               // always public (RFC 0009)
+meth       := membervis? 'suspend'? 'fn' Ident '(' 'mut'? 'self'? params ')' (':' Type)? block
                                               // 'self' first param => instance
                                               // method; no 'self' => class
                                               // method — the construction surface
@@ -139,7 +145,7 @@ impl       := 'impl' Ident 'for' Ident genericargs? '{' meth* '}'
 fndecl     := 'entry'? modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? whereclause? block
                                                // 'entry' — the host-callable
                                                // surface (RFC 0035 §3); does
-                                               // not combine with export
+                                               // not combine with pub
                                                // modifiers (RFC 0003 §2)
 whereclause := 'where' Ident 'requires' TraitList  // admission-only bounds
                                                // (RFC 0013 §2, RFC 0037 §3)

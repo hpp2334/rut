@@ -16,13 +16,13 @@ the VM. Everything else on this page is parse-only.
 |---|---|---|
 | `basic/grammar-tour.rut` | dataclass, trait, class + class-method construction, impl blocks, shared cells + `own`, vtable dispatch, exhaustive `when`, `f""` | 0009–0012, 0016 |
 | `basic/module-structure.rut` | declarations-only modules, load-time expressions, no load-time code | 0003 §1 |
-| `basic/module-visibility.rut` | `export` / `export(mod)` / `export(super)` / `export(self)` | 0003 §2 |
+| `basic/module-visibility.rut` | `pub` / `pub(mod)` / `pub(super)` / `pub(self)` — items **and** class members | 0003 §2, 0010 §2 |
 | `basic/when.rut` | `when` pattern expressions, exhaustiveness | 0008 |
 | `basic/option-result.rut` | builtin `Option`/`Result`, `.value`, `unwrap_or`, `?` | 0005 |
 | `basic/error-context.rut` | `here()` / `capture_stack_trace()` on error values, lazy `render()`, stripped-binary degradation | 0036 |
 | `basic/literals.rut` | numeric suffixes, plain/raw/format strings, builtin allocation calls, fixed arrays `Array<T, N>`, `dyn Slice<T>` boxing, `Vec`/`Array` → `dyn Slice<T>` widening | 0005, 0007 |
 | `basic/dataclasses.rut` | reference semantics (aliasing by default), `own` divergence, field initializers, free functions, identity `==` | 0009, 0011, 0016 |
-| `basic/classes.rut` | class-method construction (`new`/`from`/`parse`), `Self {}` literal, `Option<Self>` try-construction, private + sealing, explicit `self` receivers | 0010 |
+| `basic/classes.rut` | class-method construction (`new`/`from`/`parse`), `Self {}` literal, `Option<Self>` try-construction, member `pub` + sealing, explicit `self` receivers | 0010 |
 | `basic/rc-and-dispose.rut` | aliasing + `own(x)`, `Disposal.dispose` at rc 0 | 0011, 0016 |
 | `basic/traits.rut` | methods-only traits, `impl Trait for Type` blocks, `dyn I` object types, `requires`, dataclass implementors (hand `hash`/`eq`), `is` capability probe, composition over intersections | 0009, 0012 |
 | `basic/type-tests.rut` | the `is` keyword: exact-class tests + trait capability probes; no `as`, no upcast, no downcast; implicit widening to `dyn I` | 0012 §3 |
@@ -45,9 +45,9 @@ the VM. Everything else on this page is parse-only.
 | `network/echo-server.rut` | accept loop + worker pool dispatch | 0021 |
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0021 |
 | `host/interop.rut` | host classes via declaration files, repr C struct passing, buffer borrows, `Template` for l10n | 0022–0028 |
-| `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `export host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
+| `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `pub host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
 | `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`TraitHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Vec` returns | 0026 |
-| `host/plugin/batch.d.rut` | **declaration file** for `plugin:batch`: `export host class Batch` + `export host fn submit(b: Batch) -> string` — a host callback whose parameter type **is** the host class | 0022, 0025, 0029 |
+| `host/plugin/batch.d.rut` | **declaration file** for `plugin:batch`: `pub host class Batch` + `pub host fn submit(b: Batch) -> string` — a host callback whose parameter type **is** the host class | 0022, 0025, 0029 |
 | `host/batch.rut` + `host/batch.rs` | the **round trip**: host constructs a `Batch`, rut filters/aggregates/pushes, then passes the instance BACK via the `submit` callback — `Handle<Batch>` call-scoped borrow in, receipt `string` out; deterministic Drop at rc 0 | 0022–0026, 0023 |
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
@@ -55,7 +55,7 @@ the VM. Everything else on this page is parse-only.
 ### 00-todolist — the runnable one
 
 A Cargo project, a workspace member: **`cargo run -p todolist`**. The rut
-side (`todolist.rut`) is a todo-list *library* — `export class TodoList`
+side (`todolist.rut`) is a todo-list *library* — `pub class TodoList`
 with full CRUD plus an **`entry fn`** surface, no `main`. The Rust side
 (`src/main.rs`) drives it: `createContainer()` → an `Opaque` handle,
 `create(container)` → `u32` handles, then CRUD calls crossing with
@@ -65,7 +65,7 @@ signatures at compile time, RFC 0035 §3). All data stays in rut.
 [00-todolist/README.md](00-todolist/README.md).
 
 | `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
-| `json/app.rut` | opt-in dataclasses (zero-method `impl Serializable for T {}`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |
+| `json/app.rut` | opt-in dataclasses (zero-method `impl Serializable for T {}`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, module-private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |
 
 ### gui/dashboard — a multi-file project
 

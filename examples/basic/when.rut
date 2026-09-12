@@ -25,7 +25,7 @@ fn go() -> unit { /* ... */ }
 fn brake() -> unit { /* ... */ }
 fn stop() -> unit { /* ... */ }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     let log = Logger.new("when");
     log.info(describe(2));               // "small"
     drive(Light.Yellow);

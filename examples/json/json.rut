@@ -29,11 +29,11 @@
 import { ReflectEngine, Reflectable, Deserializable, TypeInfo,
          TypeKind, LeafKind, SumVariant, reflect, type_of } from "std:reflect";
 
-export dataclass JsonEngine { }
+pub dataclass JsonEngine { }
 
 impl ReflectEngine for JsonEngine { }    // the capability — an empty impl
 
-export trait Serializable requires Reflectable { }
+pub trait Serializable requires Reflectable { }
 
 // === the tree (the library's OWN data — walked as ordinary typed rut;
 // reflection touches only USER types) ===
@@ -66,14 +66,14 @@ fn jobj(fields: Vec<JField>, pos: i32) -> JsonValue {
 
 // === entries — BOTH consents are compile-time (RFC 0037 §4) ===
 
-export fn stringify(v: dyn Serializable) -> Result<string, string> {
+pub fn stringify(v: dyn Serializable) -> Result<string, string> {
     // consumer: a trait-object-typed param — one copy, vtable dispatch.
     // v.reflect() is the vtable call; v descends to Opaque (the
     // lattice bottom, RFC 0014) at write_val's parameter.
     return write_val(v.reflect(), v);
 }
 
-export fn deserialize<T>(v: string) -> Result<T, JsonError>
+pub fn deserialize<T>(v: string) -> Result<T, JsonError>
         where T requires Deserializable {
     // producer: a trait-object-typed return does not exist, so the
     // contract rides the call site — T is guaranteed descriptor-backed
@@ -308,7 +308,7 @@ fn want_items(j: JsonValue, ty: string) -> Result<Vec<JsonValue>, JsonError> {
 
 fn is_digit(c: u8) -> bool { return c >= 48u8 && c <= 57u8; }
 
-export fn str_eq(a: string, b: string) -> bool {
+pub fn str_eq(a: string, b: string) -> bool {
     if (a.len() != b.len()) { return false; }
     for (let i = 0; i < a.len(); i += 1) {
         if (a.at(i) != b.at(i)) { return false; }

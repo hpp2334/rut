@@ -632,7 +632,7 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
 ];
 
 /// Reserved words (RFC 0002 §4): hard errors naming the rut replacement.
-/// NOTE: `super` and `as` are NOT here — they are contextual (`export(super)`,
+/// NOTE: `super` and `as` are NOT here — they are contextual (`pub(super)`,
 /// RFC 0003 §2; `as` binds select arms, RFC 0019 §3); the parser rejects
 /// them in every other position.
 fn reserved_word_msg(w: &str) -> Option<String> {
@@ -655,6 +655,9 @@ fn reserved_word_msg(w: &str) -> Option<String> {
         "with" => "rut does not have `with`",
         "var" => "rut does not have `var`; use `let` / `let mut` (RFC 0003 §1)",
         "const" => "rut does not have `const`; use `let` (RFC 0003 §1)",
+        "private" => {
+            "members are private by default —add `pub` (RFC 0003 §2, RFC 0010 §2)"
+        }
         _ => return None,
     };
     Some(repl.to_string())

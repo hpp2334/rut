@@ -37,7 +37,7 @@ fn`'s parameters and return must be built from: primitives, `string`,
 and `Opaque` (RFC 0014 — the one cell an embedder may hold and pass
 back). Every other cell — dataclasses, classes, `Vec<T>` of cells,
 `dyn` — stays inside the VM; violating shapes are **compile errors on
-the `entry fn` declaration**, not call-time failures. Plain `export`
+the `entry fn` declaration**, not call-time failures. Plain `pub`
 carries no such restriction: rut modules exchange cells freely between
 themselves (RFC 0003 §2).
 ## 2. Borrow guards

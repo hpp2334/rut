@@ -5,57 +5,60 @@
 // receiver; it builds the instance with the class-private `Self { .. }`
 // literal. Instance methods spell `self` explicitly; a method
 // without `self` is a class method — no separate "static" form.
+// Members follow RFC 0003 §2 visibility: unannotated = module-private,
+// `pub` (optionally scoped: `pub(mod)`, `pub(super)`, `pub(self)`)
+// exposes them.
 
 import { Logger } from "std:log";
 
 class Counter {
-    private n: i32 = 0;             // field initializer
+    n: i32 = 0;             // field initializer — module-private
 
-    fn new() -> Self {                    // the construction surface — a
+    pub fn new() -> Self {                 // the construction surface — a
         return Self { };               // class method (no self); free to
     }                                   // run logic. `new` is a convention,
                                         // not syntax (RFC 0002 §4)
 
-    fn press(mut self) -> unit {           // instance method: explicit receiver,
+    pub fn press(mut self) -> unit {         // instance method: explicit receiver,
         self.n &+= 1;                // wrapping add (§8) — or `+=` to trap
     }
 
-    fn count(self) -> i32 { return self.n; }   // plain method; no get/set syntax
+    pub fn count(self) -> i32 { return self.n; }  // plain method; no get/set syntax
 }
 
 class Rect {
-    private w: f32;
-    private h: f32;
+    w: f32;
+    h: f32;
 
-    fn new(w: f32, h: f32) -> Self {     // construction VALIDATES — it's
+    pub fn new(w: f32, h: f32) -> Self {     // construction VALIDATES — it's
         if (w <= 0 || h <= 0) {        // just a function
             panic("Rect: negative extents");
         }
         return Self { w: w, h: h }; // must initialize fieldless-initialized
     }
 
-    fn from_square(s: f32) -> Self {     // named constructors are siblings:
+    pub fn from_square(s: f32) -> Self {     // named constructors are siblings:
         return Rect.new(s, s);         // any no-self method returning Self
     }
 
-    fn area(self) -> f32 { return self.w * self.h; }
+    pub fn area(self) -> f32 { return self.w * self.h; }
 }
 
 /** Try-construction: a class method returning Option<Self>. */
 class Version {
-    private major: i32;
-    private minor: i32;
+    major: i32;
+    minor: i32;
 
-    private fn of(major: i32, minor: i32) -> Self {  // trusts its caller —
-        return Self { major: major, minor: minor }; // private: seals the class
+    fn of(major: i32, minor: i32) -> Self {  // module-private — trusts its
+        return Self { major: major, minor: minor }; // caller; seals the class
     }
 
-    fn parse(s: string) -> Option<Version> {    // the public validating door:
-        // ... split "1.2" — on failure:      // a class method over the
-        return Option.none();                 // private class method
+    pub fn parse(s: string) -> Option<Version> {  // the public validating door:
+        // ... split "1.2" — on failure:        // a class method over the
+        return Option.none();                 // module-private class method
     }
 
-    fn label(self) -> string { return f"{self.major}.{self.minor}"; }
+    pub fn label(self) -> string { return f"{self.major}.{self.minor}"; }
 }
 
 fn classes() -> unit {
@@ -71,6 +74,6 @@ fn classes() -> unit {
     // Rect { w: 1, h: 1 };         // ERROR: classes have no outside literal
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     classes();
 }

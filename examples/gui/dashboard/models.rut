@@ -5,26 +5,26 @@
 
 import { Sender } from "std:channel";
 
-export enum Status { Active, Idle, Blocked }
-export enum Tab { Overview, Users, Alerts }
-export enum SortDir { Asc, Desc }
-export enum EventKind { Tick, Visit, Alert }
-export enum ApiError { Network, NotFound, RateLimited }
+pub enum Status { Active, Idle, Blocked }
+pub enum Tab { Overview, Users, Alerts }
+pub enum SortDir { Asc, Desc }
+pub enum EventKind { Tick, Visit, Alert }
+pub enum ApiError { Network, NotFound, RateLimited }
 
-export dataclass User {
+pub dataclass User {
     name: string;
     role: string;
     status: Status;
     score: f32;
 }
 
-export dataclass Series {
+pub dataclass Series {
     metric: string;
     unit: string;
     samples: Vec<f32>;
 }
 
-export dataclass StatsSummary {
+pub dataclass StatsSummary {
     n: i32;
     mean: f64;
     min: f32;
@@ -34,12 +34,12 @@ export dataclass StatsSummary {
 
 // Worker protocol: `samples` deep-copies across isolates (the state keeps
 // the original, so rc > 1); `reply` is a transferred channel endpoint.
-export dataclass StatsRequest {
+pub dataclass StatsRequest {
     samples: Vec<f32>;
     reply: Sender<StatsSummary>;
 }
 
-export dataclass LiveEvent {
+pub dataclass LiveEvent {
     kind: EventKind;
     at_ms: i64;
     value: f32;
@@ -48,7 +48,7 @@ export dataclass LiveEvent {
 
 // --- free-function helpers over the data (the data-first idiom) ---
 
-export fn status_label(s: Status) -> string {
+pub fn status_label(s: Status) -> string {
     return when (s) {
         Status.Active  -> "active",
         Status.Idle    -> "idle",
@@ -56,7 +56,7 @@ export fn status_label(s: Status) -> string {
     };
 }
 
-export fn event_label(k: EventKind) -> string {
+pub fn event_label(k: EventKind) -> string {
     return when (k) {
         EventKind.Tick  -> "tick",
         EventKind.Visit -> "visit",

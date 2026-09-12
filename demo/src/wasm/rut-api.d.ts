@@ -51,8 +51,8 @@ export interface AstSurfaceFn extends Base { kind: "SurfaceFn"; vis: VisTag; lin
 export interface AstSurfaceClass extends Base { kind: "SurfaceClass"; vis: VisTag; linkage: LinkageTag; name: string; extparams: AstExtParam[]; members: AstNode[] }
 
 // ---- members & statements ----
-export interface AstFieldDecl extends Base { kind: "FieldDecl"; private?: true; static?: true; name: string; ty: AstNode; init?: AstNode }
-export interface AstMethodDecl extends Base { kind: "MethodDecl"; private?: true; suspend?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; body?: AstNode }
+export interface AstFieldDecl extends Base { kind: "FieldDecl"; vis?: VisTag; static?: true; name: string; ty: AstNode; init?: AstNode }
+export interface AstMethodDecl extends Base { kind: "MethodDecl"; vis?: VisTag; suspend?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; body?: AstNode }
 export interface AstParam extends Base { kind: "Param"; mut?: true; name: string; ty?: AstNode }
 export interface AstSelfParam extends Base { kind: "SelfParam"; mut?: true }
 export interface AstBlock extends Base { kind: "Block"; stmts: AstNode[] }

@@ -85,7 +85,8 @@ compiler gives it no meaning; greppability is enforced by style.
   `struct`, `match`, `void` (the unit type is spelled `unit`), `null`,
   `undefined`, `any`, `unknown`, `typeof`,
   `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`,
-  `const` (bindings spell `let` / `let mut` — RFC 0003 §1).
+  `const` (bindings spell `let` / `let mut` — RFC 0003 §1), `private`
+  (members are private by default; visibility spells `pub` — RFC 0003 §2).
 - `new` is **not** reserved — it is an ordinary identifier and the
   conventional construction method name (`Rect.new(..)`, RFC 0010);
   there is no `new` expression anywhere.
@@ -99,7 +100,7 @@ compiler gives it no meaning; greppability is enforced by style.
   bound to the enclosing class inside its body (RFC 0010 §1); `fn`,
   `let`, `mut`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
   `enum`, `class`, `dataclass`, `trait`, `impl`,
-  `requires`, `import`, `export`, `from`, `private`, `suspend`,
+  `requires`, `import`, `pub`, `from`, `static`, `suspend`,
   `await`, `true`, `false`, `extern`, `where`
   (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
   (RFC 0012 §2), and `is` (the type-test operator, `expr is Type` —

@@ -4,16 +4,16 @@
 
 import { Color } from "app:ui";
 
-export let PAD: f32 = 16;
-export let PAD_S: f32 = 8;
-export let GAP: f32 = 12;
-export let CARD_W: f32 = 220;
-export let CARD_H: f32 = 96;
-export let RADIUS: f32 = 10;
-export let TITLE_SIZE: f32 = 20;
-export let BODY_SIZE: f32 = 14;
+pub let PAD: f32 = 16;
+pub let PAD_S: f32 = 8;
+pub let GAP: f32 = 12;
+pub let CARD_W: f32 = 220;
+pub let CARD_H: f32 = 96;
+pub let RADIUS: f32 = 10;
+pub let TITLE_SIZE: f32 = 20;
+pub let BODY_SIZE: f32 = 14;
 
-export dataclass Palette {
+pub dataclass Palette {
     bg: Color;
     surface: Color;
     border: Color;
@@ -25,7 +25,7 @@ export dataclass Palette {
     err: Color;
 }
 
-export fn theme() -> Palette {
+pub fn theme() -> Palette {
     return Palette {
         bg:       Color.hex("#0f1216"),
         surface:  Color.hex("#171c23"),

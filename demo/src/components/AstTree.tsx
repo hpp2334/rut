@@ -17,10 +17,10 @@ import type {
 // ---- derivation tables (the only display strings in this file) ----
 
 const VIS_LABEL: Record<VisTag, string> = {
-  pub: "export",
-  mod: "export(mod)",
-  super: "export(super)",
-  self: "export(self)",
+  pub: "pub",
+  mod: "pub(mod)",
+  super: "pub(super)",
+  self: "pub(self)",
 };
 
 const OP_SYMBOL: Record<BinOpTag | UnOpTag, string> = {
@@ -133,7 +133,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "FieldDecl":
       return [
-        ...(n.private ? [{ label: "private", text: "true" }] : []),
+        ...(n.vis ? [{ label: "vis", text: VIS_LABEL[n.vis] }] : []),
         ...(n.static ? [{ label: "static", text: "true" }] : []),
         { label: "name", text: n.name },
         { label: "ty", node: n.ty },
@@ -141,7 +141,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "MethodDecl":
       return [
-        ...(n.private ? [{ label: "private", text: "true" }] : []),
+        ...(n.vis ? [{ label: "vis", text: VIS_LABEL[n.vis] }] : []),
         ...(n.suspend ? [{ label: "suspend", text: "true" }] : []),
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),

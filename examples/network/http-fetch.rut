@@ -13,7 +13,7 @@ suspend fn fetch_all(urls: Vec<string>) -> Result<Vec<Vec<u8>>, HttpError> {
     return Result.ok(bodies);
 }
 
-export suspend fn main() -> unit {
+pub suspend fn main() -> unit {
     let log = Logger.new("http");
     let r = await fetch_all(["https://example.com", "https://example.org"]);
     if (r.is_ok()) {

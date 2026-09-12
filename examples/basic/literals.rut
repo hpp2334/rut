@@ -32,6 +32,6 @@ fn literals(name: string) -> unit {
     log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={shared.len()}");
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     literals("rut");
 }

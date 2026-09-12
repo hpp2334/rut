@@ -11,7 +11,7 @@
 // Import specifiers map to declaration files by path: "plugin:batch" ->
 // plugin/batch.d.rut. Only EXPORTED decls are nameable outside.
 
-export host class Batch {
+pub host class Batch {
     fn new(name: string) -> Self;              // native class method — the
     fn push(self, metric: string, value: i64) -> unit;   // construction
     fn len(self) -> i32;                       // surface (RFC 0010/0025)
@@ -22,7 +22,7 @@ export host class Batch {
 // the boundary — rut -> Rust — where it arrives as a call-scoped
 // Handle<Batch> (RFC 0022 §2, RFC 0023 §2); the receipt crosses back
 // out as an ordinary checked return value.
-export host fn submit(b: Batch) -> string;
+pub host fn submit(b: Batch) -> string;
 
 // Slot table (declaration order; part of the decl digest — RFC 0029 §3):
 //     Batch: new -> 0, push -> 1, len -> 2; module fn submit -> its own

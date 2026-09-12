@@ -149,8 +149,6 @@ impl<'a> Ctx<'a> {
                 ty: fty,
                 offset: 0,
             });
-            // remember privacy for the body compiler
-            self.field_privacy(*f, fd.is_private);
         }
         let (size, align) = {
             // compute layout with resolved fields
@@ -165,7 +163,7 @@ impl<'a> Ctx<'a> {
         self.types.types[placeholder as usize].align = align;
 
         // collect fields with initializers + methods for the compiler
-        let mut flds: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, bool)> = Vec::new();
+        let mut flds: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)> = Vec::new();
         for f in fields {
             let fd = self.ast.field_decl(*f);
             let fty = match self.types.kind(placeholder) {
@@ -176,7 +174,7 @@ impl<'a> Ctx<'a> {
                     .unwrap_or(TY_I32),
                 _ => TY_I32,
             };
-            flds.push((fd.name, fty, fd.init, fd.is_private));
+            flds.push((fd.name, fty, fd.init, fd.vis));
         }
         let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
         for m in methods {
@@ -187,8 +185,6 @@ impl<'a> Ctx<'a> {
             DataDecl { kind, ty: placeholder, fields: flds, methods: mths, generics: generics.to_vec() },
         ));
     }
-
-    pub(crate) fn field_privacy(&mut self, _f: NodeHandle<FieldDeclNode>, _is_private: bool) {}
 
     pub(crate) fn collect_trait(&mut self, node: NodeId, vis: Vis, name: IdentId, generics: &[NodeId2], methods: &[NodeHandle<MethodDeclNode>]) {
         let sp = self.ast.span(node);

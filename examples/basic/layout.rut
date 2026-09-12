@@ -16,8 +16,8 @@ dataclass Padded {                          // repr C does what C does:
 }                                           // size_of = 12, align_of = 4
 
 class Vertex {                              // classes: SAME layout rule
-    private x: f32;
-    private y: f32;
+    x: f32;
+    y: f32;
 
     fn new(x: f32, y: f32) -> Self {
         return Self { x: x, y: y };
@@ -55,7 +55,7 @@ fn boxed_layout() -> unit {
     log.info(f"same type: {box1.type_id() == fresh.type_id()}"); // true — group by tid
 }
 
-export fn main() -> unit {
+pub fn main() -> unit {
     layout();
     boxed_layout();
 }
