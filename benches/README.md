@@ -93,6 +93,12 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
   **includes parse/compile/verification** for all three.
 - Wall time is the median over `--repeats` timed runs after `--warmup`
   discarded runs; `wall min` is also reported.
+- **Startup is measured, not baked in.** Before the workloads, the runner
+  measures the `empty` program per runtime — process spawn + runtime init
+  + parse/compile of a trivial program — and reports **`net = wall −
+  startup`**, the workload's own cost. This matters because V8's ~20 ms
+  startup otherwise dominates its small workloads and hides the real
+  compute gap (e.g. node measures ~1.6 ms net on fannkuch, not 21 ms).
 - **Peak RSS** is the whole-process high-water from GNU `time -f %M`
   (the largest value over the timed runs). It includes each runtime's
   baseline, so compare against the `empty` row for the same runtime.
@@ -153,17 +159,25 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 ```
 === cross-runtime (end-to-end process) ===
 
-workload       runtime   checksum            wall median  wall min  peak RSS  ref  ok
--------------  -------  ------------------  -----------  --------  --------  ---  ---
-binary-trees   rut                  32767      33.1 ms   32.8 ms   20.9 MB  yes  yes
-binary-trees   node                 32767      45.1 ms   41.0 ms   54.7 MB  yes  yes
-binary-trees   qjs                  32767      12.4 ms   12.0 ms    7.4 MB  yes  yes
-fannkuch       rut                 228016      20.5 ms   20.1 ms    3.1 MB  yes  yes
-fannkuch       node                228016      21.7 ms   21.1 ms   52.8 MB  yes  yes
-fannkuch       qjs                 228016      10.8 ms   10.7 ms    3.5 MB  yes  yes
-sieve          rut                  41538     136.9 ms  130.3 ms   11.2 MB  yes  yes
-sieve          node                 41538      24.0 ms   23.8 ms   54.6 MB  yes  yes
-sieve          qjs                  41538      57.2 ms   56.1 ms    4.9 MB  yes  yes
+workload       runtime   checksum         wall median   startup  net median  wall min  peak RSS  ref   ok
+-------------  -------  ---------------  -----------  --------  ----------  --------  --------  ---  ---
+binary-trees   rut              32767      31.9 ms  3.048 ms     28.9 ms   29.7 ms   20.9 MB  yes  yes
+binary-trees   node             32767      44.5 ms   19.5 ms     25.0 ms   43.8 ms   54.8 MB  yes  yes
+binary-trees   qjs              32767      13.0 ms  3.637 ms    9.357 ms   12.3 ms    7.3 MB  yes  yes
+fannkuch       rut             228016      20.5 ms  3.048 ms     17.5 ms   20.0 ms    3.1 MB  yes  yes
+fannkuch       node            228016      21.1 ms   19.5 ms    1.563 ms   20.8 ms   52.8 MB  yes  yes
+fannkuch       qjs             228016      11.8 ms  3.637 ms    8.150 ms   11.4 ms    3.7 MB  yes  yes
+sieve          rut              41538     135.3 ms  3.048 ms    132.3 ms  134.2 ms   11.4 MB  yes  yes
+sieve          node             41538      25.9 ms   19.5 ms    6.386 ms   24.6 ms   55.0 MB  yes  yes
+sieve          qjs              41538      57.8 ms  3.637 ms     54.2 ms   56.5 ms    4.9 MB  yes  yes
+
+=== startup floor (empty program) ===
+
+runtime  startup wall  startup RSS
+-------  ------------  -----------
+rut          3.048 ms       3.0 MB
+node          19.5 ms      43.6 MB
+qjs          3.637 ms       3.6 MB
 
 === rut in-process (rut-bench-probe) ===
 

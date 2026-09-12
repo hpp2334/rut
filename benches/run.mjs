@@ -367,13 +367,52 @@ function pad(s, w, right = false) {
   return right ? s.padStart(w) : s.padEnd(w);
 }
 
+/// Startup floor: measure the `empty` program for each runtime. This is
+/// process spawn + runtime init + parse/compile of a trivial program —
+/// exactly the cost that end-to-end wall time otherwise folds into every
+/// workload. `net = wall − startup` is reported alongside the raw wall.
+function measureBaselines(runtimes, opt) {
+  const rutFile = join(WORKLOADS_DIR, "empty.rut");
+  const jsFile = join(WORKLOADS_DIR, "empty.js");
+  const out = {};
+  for (const spec of runtimes) {
+    const file = spec.ext === ".js" ? jsFile : rutFile;
+    if (!existsSync(file)) {
+      out[spec.name] = null;
+      continue;
+    }
+    process.stderr.write(`startup: empty [${spec.name}] … `);
+    const m = measureRuntime(spec, file, opt);
+    out[spec.name] = m.ok ? m : null;
+    process.stderr.write(m.ok ? `${fmtMs(m.wallMedianMs)}\n` : `FAIL (${m.error})\n`);
+  }
+  return out;
+}
+
+function renderStartupTable(baselines) {
+  const head = ["runtime", "startup wall", "startup RSS"];
+  const body = Object.entries(baselines).map(([rt, b]) => [
+    rt,
+    b ? fmtMs(b.wallMedianMs) : "—",
+    b ? fmtMb(b.peakRssKb) : "—",
+  ]);
+  const widths = head.map((h, i) =>
+    Math.max(h.length, ...body.map((b) => String(b[i]).length)),
+  );
+  const line = (cells) => cells.map((c, i) => pad(c, widths[i], i >= 1)).join("  ");
+  const sep = widths.map((w) => "-".repeat(w)).join("  ");
+  return [line(head), sep, ...body.map(line)].join("\n");
+}
+
 function renderCrossTable(rows) {
-  const head = ["workload", "runtime", "checksum", "wall median", "wall min", "peak RSS", "ref", "ok"];
+  const head = ["workload", "runtime", "checksum", "wall median", "startup", "net median", "wall min", "peak RSS", "ref", "ok"];
   const body = rows.map((r) => [
     r.workload,
     r.runtime,
     r.checksum ?? "—",
     fmtMs(r.wallMedianMs),
+    fmtMs(r.startupMs),
+    fmtMs(r.netMs),
     fmtMs(r.wallMinMs),
     fmtMb(r.peakRssKb),
     r.refOk == null ? "—" : r.refOk ? "yes" : "MISMATCH",
@@ -454,6 +493,10 @@ if (existsSync(EXPECTED_FILE)) {
   expectedRefs = JSON.parse(readFileSync(EXPECTED_FILE, "utf8"));
 }
 
+// Startup floor per runtime — measured before the workloads so every row
+// can report net (wall − startup) alongside the raw end-to-end wall.
+const baselines = measureBaselines(runtimes, opt);
+
 for (const name of workloadNames) {
   const rutFile = join(WORKLOADS_DIR, `${name}.rut`);
   const jsFile = join(WORKLOADS_DIR, `${name}.js`);
@@ -466,12 +509,19 @@ for (const name of workloadNames) {
       continue;
     }
     process.stderr.write(`run: ${name} [${spec.name}] … `);
-    const m = measureRuntime(spec, file, opt);
-    if (!m.ok) {
-      process.stderr.write(`FAIL (${m.error})\n`);
-      if (m.stderr) process.stderr.write(`      ${m.stderr}\n`);
-    } else {
+    let m;
+    if (name === "empty" && baselines[spec.name]) {
+      // reuse the startup-floor measurement so the empty row is exact
+      m = baselines[spec.name];
       process.stderr.write(`${fmtMs(m.wallMedianMs)}  ${fmtMb(m.peakRssKb)}\n`);
+    } else {
+      m = measureRuntime(spec, file, opt);
+      if (!m.ok) {
+        process.stderr.write(`FAIL (${m.error})\n`);
+        if (m.stderr) process.stderr.write(`      ${m.stderr}\n`);
+      } else {
+        process.stderr.write(`${fmtMs(m.wallMedianMs)}  ${fmtMb(m.peakRssKb)}\n`);
+      }
     }
     const agree =
       m.checksum == null || checked.every((c) => checksumsAgree(m.checksum, c));
@@ -481,9 +531,15 @@ for (const name of workloadNames) {
       ref == null || m.checksum == null
         ? null
         : checksumsAgree(m.checksum, String(ref));
-    entry.runtimes.push({ ...m, agree, refOk });
+    const base = baselines[spec.name];
+    const startupMs = base ? base.wallMedianMs : null;
+    const netMs =
+      startupMs != null && Number.isFinite(m.wallMedianMs)
+        ? Math.max(0, m.wallMedianMs - startupMs)
+        : null;
+    entry.runtimes.push({ ...m, agree, refOk, startupMs, netMs });
     entry.checksums[spec.name] = m.checksum;
-    crossRows.push({ workload: name, ...m, agree, refOk });
+    crossRows.push({ workload: name, ...m, agree, refOk, startupMs, netMs });
   }
   if (opt.probe && runtimes.some((r) => r.name === "rut")) {
     process.stderr.write(`probe: ${name} [rut] … `);
@@ -507,6 +563,9 @@ const refMismatches = crossRows.filter((r) => r.refOk === false);
 console.log("\n=== cross-runtime (end-to-end process) ===\n");
 console.log(renderCrossTable(crossRows));
 
+console.log("\n=== startup floor (empty program) ===\n");
+console.log(renderStartupTable(baselines));
+
 if (rutRows.length) {
   console.log("\n=== rut in-process (rut-bench-probe) ===\n");
   console.log(renderRutTable(rutRows));
@@ -518,6 +577,9 @@ console.log(
 );
 console.log(
   "* wall time includes parse/compile, verifier, and execution for every runtime, exactly as each is normally invoked.",
+);
+console.log(
+  "* startup is the measured cost of the `empty` program per runtime; net = wall − startup (the workload's own cost).",
 );
 console.log(
   "* peak RSS is the whole-process maximum resident set (GNU time %M); it includes each runtime's baseline — subtract the 'empty' row.",
@@ -544,7 +606,7 @@ const meta = {
   hasGnuTime,
   options: opt,
 };
-const payload = { meta, cross: crossRows, rut: rutRows, workloads: perWorkload };
+const payload = { meta, baseline: baselines, cross: crossRows, rut: rutRows, workloads: perWorkload };
 
 if (opt.json) {
   writeFileSync(opt.json, JSON.stringify(payload, null, 2));
@@ -565,6 +627,12 @@ if (opt.md) {
     "```",
     renderCrossTable(crossRows),
     "```",
+    ``,
+    `## Startup floor (empty program)`,
+    ``,
+    "```",
+    renderStartupTable(baselines),
+    "```",
   ];
   if (rutRows.length) {
     md.push(``, `## rut in-process`, ``, "```", renderRutTable(rutRows), "```");
@@ -579,7 +647,7 @@ if (opt.md) {
   console.log(`md:   ${opt.md}`);
 }
 if (opt.csv) {
-  const lines = ["workload,runtime,checksum,wall_median_ms,wall_min_ms,peak_rss_kb,ok"];
+  const lines = ["workload,runtime,checksum,wall_median_ms,startup_ms,net_median_ms,wall_min_ms,peak_rss_kb,ok"];
   for (const r of crossRows) {
     lines.push(
       [
@@ -587,6 +655,8 @@ if (opt.csv) {
         r.runtime,
         `"${r.checksum ?? ""}"`,
         Number.isFinite(r.wallMedianMs) ? r.wallMedianMs.toFixed(3) : "",
+        Number.isFinite(r.startupMs) ? r.startupMs.toFixed(3) : "",
+        Number.isFinite(r.netMs) ? r.netMs.toFixed(3) : "",
         Number.isFinite(r.wallMinMs) ? r.wallMinMs.toFixed(3) : "",
         r.peakRssKb ?? "",
         r.ok ? (r.agree ? "yes" : "mismatch") : "fail",
