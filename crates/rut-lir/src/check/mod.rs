@@ -100,19 +100,37 @@ pub struct Ctx<'a> {
     pub lambda_sigs: std::collections::HashMap<NodeId, (Vec<TypeId>, TypeId)>,
     /// `entry fn` names (RFC 0035 §3): the host-callable surface
     pub entries: Vec<IdentId>,
+    /// imported functions, bound before body compilation (RFC 0029 surface):
+    /// name -> signature + the exporter's scope-qualified function id
+    pub extern_fns: std::collections::HashMap<IdentId, ExternFn>,
+    /// whether `import` is resolved by the driver (module loading on)
+    pub allow_imports: bool,
     // instantiation queue
     pub inst_map: std::collections::HashMap<Inst, u32>,
     queue: Vec<Inst>,
+}
+
+/// An imported function: the exporter's scope-qualified id and signature.
+#[derive(Clone, Debug)]
+pub struct ExternFn {
+    pub func: u32,
+    pub params: Vec<TypeId>,
+    pub ret: TypeId,
 }
 
 pub type TcResult<T> = Result<T, ()>;
 
 impl<'a> Ctx<'a> {
     pub fn new(ast: &'a Ast) -> Ctx<'a> {
+        Ctx::new_scoped(ast, 1)
+    }
+
+    /// A module compiled under its own scope (RFC 0035 §1).
+    pub fn new_scoped(ast: &'a Ast, scope: rut_core::ScopeId) -> Ctx<'a> {
         Ctx {
             ast,
             diags: Vec::new(),
-            types: TypeTable::boot_scoped(1),
+            types: TypeTable::boot_scoped(scope),
             traits: Vec::new(),
             trait_decls: Vec::new(),
             funcs: Vec::new(),
@@ -127,9 +145,20 @@ impl<'a> Ctx<'a> {
             lambda_info: std::collections::HashMap::new(),
             lambda_sigs: std::collections::HashMap::new(),
             entries: Vec::new(),
+            extern_fns: std::collections::HashMap::new(),
+            allow_imports: false,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
         }
+    }
+
+    /// Bind an imported function before body compilation.
+    pub fn add_extern_fn(&mut self, name: IdentId, func: u32, params: Vec<TypeId>, ret: TypeId) {
+        self.extern_fns.insert(name, ExternFn { func, params, ret });
+    }
+
+    pub fn extern_fn(&self, name: IdentId) -> Option<&ExternFn> {
+        self.extern_fns.get(&name)
     }
 
     pub fn err(&mut self, span: Span, msg: impl Into<String>) {

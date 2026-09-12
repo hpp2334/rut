@@ -276,6 +276,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.find_free_fn(name) {
             return self.compile_free_fn_call(name, generics, args, expected, sp);
         }
+        // imported function: signature from the surface, a direct call to the
+        // exporter's scope-qualified id (RFC 0029 surface / RFC 0035 §1)
+        if let Some(ef) = self.ctx.extern_fn(name).cloned() {
+            if !generics.is_empty() {
+                self.ctx.err(sp, format!("`{}` is an imported fn and takes no type arguments", self.ctx.name(name)));
+                return Err(());
+            }
+            if args.len() != ef.params.len() {
+                self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ef.params.len()));
+                return Err(());
+            }
+            let mut aregs = Vec::new();
+            for (i, a) in args.iter().enumerate() {
+                let t = self.compile_expr(*a, Some(ef.params[i]))?;
+                if !self.widens(t, ef.params[i]) {
+                    self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1, self.ctx.types.name(t), self.ctx.types.name(ef.params[i])
+                    ));
+                }
+                aregs.push(self.last_reg);
+            }
+            let dst = if ef.ret == TY_UNIT { None } else { Some(self.new_reg(ef.ret)) };
+            self.emit(Op::Call { func: ef.func, args: aregs, dst }, sp.lo);
+            return Ok(ef.ret);
+        }
         // builtin type-call: Vec<T>(n) — or bare `Vec()` / `Vec(n)` with
         // the element inferred from the expected type (`let primes:
         // Vec<i32> = Vec()`, `let buf: Vec<u8> = Vec(1024)`)

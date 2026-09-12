@@ -47,9 +47,30 @@ pub enum ConstVal {
     TypeId(TypeId),
 }
 
+/// One exported function in a module's surface (RFC 0029 DeclIr sketch):
+/// the importable name, its signature, and its module-local id.
+#[derive(Clone, Debug, Default)]
+pub struct SurfaceFn {
+    pub name: String,
+    pub params: Vec<TypeId>,
+    pub ret: TypeId,
+    /// module-local function id (the exporter's)
+    pub local: u32,
+}
+
+/// The importable surface a module publishes (types/traits still to come).
+#[derive(Clone, Debug, Default)]
+pub struct Surface {
+    pub funcs: Vec<SurfaceFn>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Program {
     pub name: String,
+    /// the module's stable scope (RFC 0035 §1); `0` if unset
+    pub scope: crate::id::ScopeId,
+    /// exported surface, for importers (in-memory; not serialized)
+    pub surface: Surface,
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,
     /// global trait-method slots: (trait id, method index) — RFC 0015 §6
@@ -351,7 +372,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         let f = d.u32()?;
         exports.push((n, f));
     }
-    Ok(Program { name, types, traits, trait_slots, vtables, consts, funcs, exports })
+    Ok(Program { name, types, traits, trait_slots, vtables, consts, funcs, exports, ..Default::default() })
 }
 
 fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {

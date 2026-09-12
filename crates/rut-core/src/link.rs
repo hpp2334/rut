@@ -60,6 +60,10 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     let mut scope_base: std::collections::HashMap<crate::id::ScopeId, u32> =
         std::collections::HashMap::new();
     scope_base.insert(crate::id::BOOT_SCOPE, 0);
+    // scope -> global base of that scope's function block
+    let mut func_scope_base: std::collections::HashMap<crate::id::ScopeId, u32> =
+        std::collections::HashMap::new();
+    func_scope_base.insert(crate::id::BOOT_SCOPE, 0);
 
     let mut func_off: u32 = 0;
     let mut const_off: u32 = 0;
@@ -75,6 +79,20 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         if packed {
             scope_base.insert(m.types.scope, base);
         }
+        func_scope_base.insert(m.scope, func_off);
+        // function ids: `0`-scoped are this module's own (dense); other
+        // scopes name an imported module's block
+        let map_func = |f: u32| -> u32 {
+            if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
+                f + func_off
+            } else {
+                func_scope_base
+                    .get(&crate::id::scope_of(f))
+                    .copied()
+                    .unwrap_or(0)
+                    + crate::id::local_of(f)
+            }
+        };
         // packed `(scope, local)` (compiler) or dense (pre-link) -> global dense
         let map = |id: TypeId| -> TypeId {
             if id == u32::MAX {
@@ -139,7 +157,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             let mut nv = vec![None; out.trait_slots.len()];
             for (si, f) in vt.into_iter().enumerate() {
                 if let Some(fid) = f {
-                    nv[slot_off as usize + si] = Some(fid + func_off);
+                    nv[slot_off as usize + si] = Some(map_func(fid));
                 }
             }
             out.vtables[gi] = nv;
@@ -165,7 +183,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 code: f
                     .code
                     .into_iter()
-                    .map(|op| remap_op(op, &map, func_off, slot_off, trait_off, const_off))
+                    .map(|op| remap_op(op, &map, &map_func, slot_off, trait_off, const_off))
                     .collect(),
                 spans: f.spans,
             });
@@ -173,7 +191,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
         // exports: function ids
         for (n, fid) in m.exports {
-            out.exports.push((n, fid + func_off));
+            out.exports.push((n, map_func(fid)));
         }
 
         func_off += nfuncs;
@@ -222,7 +240,7 @@ fn remap_kind(kind: &TyKind, map: &impl Fn(TypeId) -> TypeId) -> TyKind {
 fn remap_op(
     op: Op,
     map: &impl Fn(TypeId) -> TypeId,
-    func_off: u32,
+    map_func: &impl Fn(u32) -> u32,
     slot_off: u32,
     trait_off: u32,
     const_off: u32,
@@ -242,16 +260,16 @@ fn remap_op(
         Op::IsType { dst, obj, want } => Op::IsType { dst, obj, want: map(want) },
         Op::Unbox { dst, box_, ty } => Op::Unbox { dst, box_, ty: map(ty) },
         Op::Box { dst, val, ty } => Op::Box { dst, val, ty: map(ty) },
-        Op::Call { func, args, dst } => Op::Call { func: func + func_off, args, dst },
+        Op::Call { func, args, dst } => Op::Call { func: map_func(func), args, dst },
         Op::CallM { func, recv, args, dst } => {
-            Op::CallM { func: func + func_off, recv, args, dst }
+            Op::CallM { func: map_func(func), recv, args, dst }
         }
         Op::CallI { slot, recv, args, dst } => {
             Op::CallI { slot: slot + slot_off, recv, args, dst }
         }
         Op::MakeClosure { dst, func, captures } => Op::MakeClosure {
             dst,
-            func: func + func_off,
+            func: map_func(func),
             captures,
         },
         Op::IsTrait { dst, obj, want } => Op::IsTrait { dst, obj, want: want + trait_off },

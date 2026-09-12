@@ -22,16 +22,41 @@ pub struct CompileOutput {
     pub binary: Option<Vec<u8>>,
 }
 
-/// Full pipeline over one module. Diags stop before emit (RFC 0030 §6).
-pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
+/// A compiled module. `program` still carries scope-qualified ids — the
+/// driver links a graph and flattens once (RFC 0035 §1).
+pub struct ProgramOutput {
+    pub diags: Vec<Diag>,
+    pub ast_dump: String,
+    pub ast_json: String,
+    pub ir_dump: String,
+    pub program: Option<Program>,
+}
+
+/// Compile one module under `scope`, binding imported function surfaces
+/// (RFC 0029 surface / RFC 0035 §1). Does not flatten or encode.
+pub fn compile_program(
+    src: &str,
+    mode: Mode,
+    module_name: &str,
+    scope: rut_core::ScopeId,
+    imports: &[(rut_core::ScopeId, rut_core::binary::Surface)],
+) -> ProgramOutput {
     let (ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
     let ast_dump = dump::render_text(&tree, src);
     let ast_json = dump::render_json(&tree);
     if !diags.is_empty() {
-        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
+        return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
     }
-    let mut ctx = Ctx::new(&ast);
+    let mut ctx = Ctx::new_scoped(&ast, scope);
+    ctx.allow_imports = !imports.is_empty();
+    for (dep_scope, surface) in imports {
+        for f in &surface.funcs {
+            if let Some(id) = ctx.ast.interner.lookup(&f.name) {
+                ctx.add_extern_fn(id, rut_core::pack(*dep_scope, f.local), f.params.clone(), f.ret);
+            }
+        }
+    }
     ctx.collect();
     // the entry surface's crossing contract is compile-time (RFC 0035 §3 /
     // 0023 §2): bad signatures are source diagnostics, never call-time
@@ -39,7 +64,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     ctx.check_entries();
     if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags.clone());
-        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
+        return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
     }
     // module lets (load-time expression check, RFC 0003 §1)
     ctx.compile_module_lets();
@@ -60,12 +85,12 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     for root in roots {
         if ctx.compile_queue(root).is_err() {
             diags.append(&mut ctx.diags);
-            return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
+            return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
         }
     }
     if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags);
-        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
+        return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
     }
     // global trait-method slots: same enumeration order as Ctx::trait_slot
     let mut trait_slots = Vec::new();
@@ -76,9 +101,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     }
     let vtables = ctx.build_vtables();
     // finalize the entry table (RFC 0035 §3): `entry fn`s — plus the
-    // conventional `main` when it is exported. Plain `pub fn`s are
-    // import-visibility for M2 module loading (RFC 0003 §2), NOT host
-    // entries: their types are unrestricted.
+    // conventional `main` when it is exported.
     let mut exports = Vec::new();
     let mut names: Vec<String> = ctx
         .entries
@@ -96,10 +119,27 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         }
     }
     let funcs = std::mem::take(&mut ctx.funcs);
-    // drop placeholder/empty entries never compiled (reserved, not emitted)
     let ir_dump = ir_dump_of(&funcs);
-    let prog = Program {
+    // exported surface: every `pub` fn + its signature, for importers
+    let mut surface = rut_core::binary::Surface::default();
+    for (name, _) in &ctx.exports {
+        if let Some(id) = ctx.lookup_name(name) {
+            if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(id), subst: vec![] }) {
+                if let Some(f) = funcs.get(fid as usize) {
+                    surface.funcs.push(rut_core::binary::SurfaceFn {
+                        name: name.clone(),
+                        params: f.params.clone(),
+                        ret: f.ret,
+                        local: fid,
+                    });
+                }
+            }
+        }
+    }
+    let program = Program {
         name: module_name.to_string(),
+        scope,
+        surface,
         types: ctx.types,
         traits: ctx.traits,
         trait_slots,
@@ -107,12 +147,22 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         consts: ctx.consts,
         funcs,
         exports,
+        ..Default::default()
     };
-    // the compiler emits `(scope, local)` ids; flatten them to dense global
-    // ids before serializing (RFC 0035 §1)
-    let prog = rut_core::link::flatten(prog);
-    let binary = encode(&prog);
-    CompileOutput { diags, ast_dump, ast_json, ir_dump, binary: Some(binary) }
+    ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program) }
+}
+
+/// Full pipeline over one module (no imports): compile, flatten, encode.
+pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
+    let out = compile_program(src, mode, module_name, 1, &[]);
+    let binary = out.program.map(|p| encode(&rut_core::link::flatten(p)));
+    CompileOutput {
+        diags: out.diags,
+        ast_dump: out.ast_dump,
+        ast_json: out.ast_json,
+        ir_dump: out.ir_dump,
+        binary,
+    }
 }
 
 /// irDump — the demo page's IR pane (RFC 0041 §3): per-function typed

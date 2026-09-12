@@ -71,18 +71,20 @@ impl<'a> Ctx<'a> {
                     self.lets.push((*name, *ty, *init));
                 }
                 ItemKind::Import { names, .. } => {
-                    // module loading is M2+ (RFC 0035): the corpus parses,
-                    // and unresolvable imports are compile errors only when
-                    // their names are used
-                    let sp = self.ast.span(it.id());
-                    for n in names {
-                        self.err(
-                            sp,
-                            format!(
-                                "module loading is not available in this build (RFC 0035, M2) — cannot import `{}`",
-                                self.name(*n)
-                            ),
-                        );
+                    // module loading is resolved by the driver before body
+                    // compilation (RFC 0035 §1); without it, imports are a
+                    // compile error only when the names are used
+                    if !self.allow_imports {
+                        let sp = self.ast.span(it.id());
+                        for n in names {
+                            self.err(
+                                sp,
+                                format!(
+                                    "module loading is not available in this build (RFC 0035, M2) — cannot import `{}`",
+                                    self.name(*n)
+                                ),
+                            );
+                        }
                     }
                 }
                 _ => {}
