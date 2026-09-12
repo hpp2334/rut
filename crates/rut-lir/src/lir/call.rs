@@ -263,8 +263,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.find_free_fn(name) {
             return self.compile_free_fn_call(name, generics, args, expected, sp);
         }
-        // builtin type-call: Vec<T>(n) — or bare `Vec()` with the element
-        // inferred from the expected type (`let primes: Vec<i32> = Vec()`)
+        // builtin type-call: Vec<T>(n) — or bare `Vec()` / `Vec(n)` with
+        // the element inferred from the expected type (`let primes:
+        // Vec<i32> = Vec()`, `let buf: Vec<u8> = Vec(1024)`)
         if n == "Vec" {
             if !generics.is_empty() {
                 return self.compile_vec_alloc(generics, args, sp);
@@ -277,10 +278,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             };
             let vty = self.ctx.mk_vec(elem);
-            let zero = self.new_reg(TY_I32);
-            self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
-            let dst = self.new_reg(vty);
-            self.emit(Op::ArrNew { dst, ty: vty, len: zero }, sp.lo);
+            match args.len() {
+                0 => {
+                    let zero = self.new_reg(TY_I32);
+                    self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
+                    let dst = self.new_reg(vty);
+                    self.emit(Op::ArrNew { dst, ty: vty, len: zero }, sp.lo);
+                }
+                1 => {
+                    if !matches!(self.ctx.types.kind(elem), TyKind::Prim(_)) {
+                        self.ctx.err(sp, "zeroed allocation needs a primitive element type (RFC 0005)");
+                        return Err(());
+                    }
+                    let t = self.compile_expr(args[0], Some(TY_I32))?;
+                    if t != TY_I32 {
+                        self.ctx.err(sp, format!("Vec(n) takes an `i32` length, found `{}`", self.ctx.types.name(t)));
+                    }
+                    let len = self.last_reg;
+                    let dst = self.new_reg(vty);
+                    self.emit(Op::ArrNew { dst, ty: vty, len }, sp.lo);
+                }
+                _ => {
+                    self.ctx.err(sp, "Vec() or Vec(n)");
+                    return Err(());
+                }
+            }
             return Ok(vty);
         }
         if self.ctx.find_data(name).is_some() {
@@ -342,7 +364,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let bn = self.ctx.name(base).to_string();
         let mn = self.ctx.name(member).to_string();
-        if !base_generics.is_empty() {
+        // Explicit type args on a static head are meaningful only where the
+        // member can use them (`Vec<u32>.from(..)` — the element type);
+        // everywhere else they stay unsupported rather than silently ignored.
+        if !base_generics.is_empty() && (bn != "Vec" || mn != "from" || base_generics.len() != 1) {
             self.ctx.err(sp, format!("generic type paths (`{bn}<..>.{mn}`) are not supported in this build"));
             return Err(());
         }
@@ -424,11 +449,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, "Vec.from(arr) takes one array");
                     return Err(());
                 }
-                let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
+                // the wanted element: the annotation's `expected`, else the
+                // explicit `Vec<T>.from(..)` argument — both play the same role
+                let want_elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
                     Some(TyKind::Vec { elem }) => Some(elem),
-                    _ => None,
+                    _ => base_generics.first().map(|&g| self.resolve_type_now(g)),
                 };
-                let hint_ty = match elem_hint {
+                let hint_ty = match want_elem {
                     Some(e) => Some(self.ctx.mk_array(e, 0)),
                     None => None,
                 };
@@ -440,9 +467,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Err(());
                     }
                 };
-                // widen through the expected element (RFC 0012 Section 2)
-                let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-                    Some(TyKind::Vec { elem: want }) if self.widens(elem, want) => want,
+                // widen through the wanted element (RFC 0012 Section 2)
+                let elem = match want_elem {
+                    Some(want) if self.widens(elem, want) => want,
                     _ => elem,
                 };
                 let vty = self.ctx.mk_vec(elem);
@@ -641,16 +668,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         // static receiver? `Vec.from(..)`, `Option.some(v)`, `Color.to_int(c)`,
         // `Circle.new(..)` arrive as Method over a TYPE-name path — route to
-        // the static-call compiler when the head is not shadowed by a local
+        // the static-call compiler when the head is not shadowed by a local.
+        // The head may carry generic args (`Vec<u32>.from(..)`) — they go
+        // along; compile_static_call decides which statics can use them.
         if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
-            if segs.len() == 1 && self.lookup(segs[0].name).is_none() && segs[0].generics.is_empty() {
+            if segs.len() == 1 && self.lookup(segs[0].name).is_none() {
                 let base = segs[0].name;
                 let bn = self.ctx.name(base).to_string();
                 let is_type = matches!(bn.as_str(), "Vec" | "Option" | "Result" | "Opaque")
                     || self.ctx.find_enum(base).is_some()
                     || self.ctx.find_data(base).is_some();
                 if is_type {
-                    return self.compile_static_call(base, Vec::new(), name, generics, args, expected, sp);
+                    return self.compile_static_call(base, segs[0].generics.clone(), name, generics, args, expected, sp);
                 }
             }
         }

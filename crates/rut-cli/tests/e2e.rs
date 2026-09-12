@@ -310,6 +310,57 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn bare_vec_with_length_allocates_zeroed_elements() {
+    // RFC 0005 §3: `Vec<f32>(1024)` — n zeroed elements. The bare form
+    // (element from the annotation) used to emit ArrNew with a hardcoded
+    // ZERO length — the argument was silently dropped, and the first
+    // index-assign on it trapped out of bounds.
+    let src = r#"
+pub fn main() -> unit {
+    let mut k: Vec<u32> = Vec(4);
+    print(f"a len={k.len()} k3={k[3]}");
+    k[0] = 7;
+    k[3] = 9;
+    print(f"b k0={k[0]} k3={k[3]} len={k.len()}");
+    let mut j: Vec<u8> = Vec(3);
+    j.push(1);
+    print(f"c len={j.len()} j0={j[0]} j3={j[3]}");
+    let e: Vec<u32> = Vec(0);
+    let b: Vec<u32> = Vec();
+    print(f"d {e.len()} {b.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(lines, vec!["a len=4 k3=0", "b k0=7 k3=9 len=4", "c len=4 j0=0 j3=1", "d 0 0"]);
+    assert_eq!(trap, None);
+}
+
+#[test]
+fn generic_static_receiver_resolves() {
+    // `Vec<u32>.from(..)` parses as a Method over Path[Vec<u32>] — the
+    // static-receiver route used to demand an EMPTY generics list, so the
+    // callee fell through to expression-compile and died as `unknown name
+    // Vec — module paths`, order-dependently. The explicit type argument
+    // now reaches the static: it plays the annotation's role.
+    let src = r#"
+pub fn main() -> unit {
+    let a: Vec<u32> = Vec<u32>.from([1, 2, 3]);
+    let b = Vec<u32>.from([4, 5]);
+    let c = Vec<u8>.from([250, 251]);
+    let d: Vec<u32> = Vec.from([6, 7]);   // bare form, annotation-driven
+    print(f"a={a[0] &+ a[1] &+ a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(lines, vec!["a=6 b=4 c=251 d=7 n=2"]);
+    assert_eq!(trap, None);
+    // everywhere else, explicit generics on a static head stay a clear error
+    let bad = "pub fn main() -> unit { let x = Option<i32>.some(5); print(f\"{x.value}\"); }";
+    let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
+    assert!(out.diags.iter().any(|d| d.msg.contains("not supported in this build")));
+}
+
+#[test]
 fn heap_budget_traps_before_the_write() {
     // RFC 0040 §1: OutOfMemory leaves the heap byte-identical — a tiny
     // budget fails the Vec allocation cleanly
