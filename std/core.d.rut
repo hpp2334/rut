@@ -16,6 +16,13 @@
 
 pub host primitive string {
     fn len(self) -> i32;
+    fn encode(self) -> bytes;                // UTF-8 -> bytes (RFC 0004)
+}
+
+pub host primitive bytes {
+    fn len(self) -> i32;
+    fn decode(self) -> string;               // bytes -> UTF-8 string (lossy)
+    fn from(a: Array<u8>) -> bytes;          // copy an Array<u8, N> (or Vec<u8>) (RFC 0004)
 }
 
 pub host class Array<T> {
@@ -27,6 +34,7 @@ pub host class Vec<T> {
     fn len(self) -> i32;
     fn push(self, v: T) -> unit;
     fn pop(self) -> T;
+    fn freeze(self) -> bytes;               // Vec<u8> mutable builder -> immutable bytes
 }
 
 pub host class Option<T> {

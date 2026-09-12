@@ -89,7 +89,8 @@ cleanliness. See [01-sort/README.md](01-sort/README.md).
 A Cargo project and workspace member: **`cargo run -p digests`** (the
 package is `digests`, not `digest`, to keep the dependency graph clear
 of RustCrypto's `digest` umbrella crate). The rut side (`digest.rut`)
-is a byte-level library over `Vec<u8>` — which crosses the host
+is a byte-level library over `bytes` (the immutable binary primitive,
+RFC 0004) — which crosses the host
 boundary directly, unlike 01-sort's `Vec<i32>` (RFC 0023 §2): hex and
 base64 codecs, MD5 / SHA-1 / SHA-256 / SHA-512 behind the same
 dispatcher-entry pattern, the hashmap hash keys CRC-32 / FNV-1a 32+64 /

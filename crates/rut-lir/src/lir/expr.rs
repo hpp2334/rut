@@ -49,8 +49,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let ireg = self.last_reg;
                 let elem = match self.ctx.types.kind(rt).clone() {
                     TyKind::Vec { elem } | TyKind::Array { elem, .. } => elem,
+                    TyKind::Bytes => {
+                        // immutable byte read (RFC 0004); bounds trap in the VM
+                        let dst = self.new_reg(TY_U8);
+                        self.emit(Op::BytesGet { dst, s: rreg, idx: ireg }, sp.lo);
+                        return Ok(TY_U8);
+                    }
                     _ => {
-                        self.ctx.err(sp, format!("indexing needs a Vec or Array —found `{}`", self.ctx.types.name(rt)));
+                        self.ctx.err(sp, format!("indexing needs a Vec, Array, or bytes —found `{}`", self.ctx.types.name(rt)));
                         return Err(());
                     }
                 };

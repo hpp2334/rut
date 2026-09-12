@@ -448,11 +448,12 @@ pub fn is_reserved_kw(s: &str) -> bool {
 /// interner text. Public and canonical: `host primitive` decls (RFC 0029
 /// §2) and the LSP classifier share this one table. `string` included —
 /// it is a primitive, not a class; its native member surface is declared
-/// with `host primitive string { .. }` in the std `.d.rut`.
+/// with `host primitive string { .. }` in the std `.d.rut`. `bytes`
+/// (RFC 0004) is the immutable binary primitive alongside `string`.
 pub fn is_primitive_ty(s: &str) -> bool {
     matches!(
         s,
-        "bool" | "string" | "unit" | "f32" | "f64"
+        "bool" | "string" | "bytes" | "unit" | "f32" | "f64"
             | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
     )
 }

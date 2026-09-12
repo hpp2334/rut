@@ -165,9 +165,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyKind::Vec { elem } => elem,
             TyKind::Array { elem, .. } => elem,
             TyKind::Str => TY_CHAR,
+            TyKind::Bytes => TY_U8,
             _ => {
                 self.ctx.err(sp, format!(
-                    "`for (let .. of ..)` needs a Vec, Array, or string —found `{}`",
+                    "`for (let .. of ..)` needs a Vec, Array, string, or bytes —found `{}`",
                     self.ctx.types.name(it)
                 ));
                 return Err(());
@@ -194,6 +195,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyKind::Str => {
                 self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
             }
+            TyKind::Bytes => {
+                self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
+            }
             _ => {}
         }
         let cond_reg = self.new_reg(TY_BOOL);
@@ -203,6 +207,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // var = iter[idx]
         match self.ctx.types.kind(it).clone() {
             TyKind::Str => self.emit(Op::StrCharAt { dst: var_reg, s: iter_reg, idx }, sp.lo),
+            TyKind::Bytes => self.emit(Op::BytesGet { dst: var_reg, s: iter_reg, idx }, sp.lo),
             _ => self.emit(Op::ArrGet { dst: var_reg, arr: iter_reg, idx, repr: self.ctx.types.repr_of(elem_ty) }, sp.lo),
         }
         self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: false });

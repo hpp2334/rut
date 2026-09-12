@@ -254,6 +254,8 @@ impl Packed {
 
 pub enum CellData {
     Str(String),
+    /// immutable binary buffer (RFC 0004) — contiguous octets, no slots
+    Bytes(Vec<u8>),
     Vec { elem: TypeId, items: RefCell<Packed> },
     Array { elem: TypeId, items: RefCell<Packed> },
     /// enum member — immortal singleton per (ty, member)
@@ -279,6 +281,13 @@ impl CellVal {
         match &self.data {
             CellData::Str(s) => s,
             _ => "",
+        }
+    }
+    /// The raw octets of a `bytes` cell (empty for any other shape).
+    pub fn as_bytes(&self) -> &[u8] {
+        match &self.data {
+            CellData::Bytes(b) => b,
+            _ => &[],
         }
     }
     /// Option/Result payload: (tag 0=some/ok 1=none/err, payload)
@@ -323,6 +332,22 @@ impl CellVal {
     pub fn elem_ty(&self) -> Option<TypeId> {
         match &self.data {
             CellData::Vec { elem, .. } | CellData::Array { elem, .. } => Some(*elem),
+            _ => None,
+        }
+    }
+    /// Copy a `Vec<u8>`/`Array<u8>` cell's packed payload to a flat byte
+    /// vector (the `bytes` conversion path); avoids widening through `Slot`.
+    pub fn seq_bytes_copy(&self) -> Option<Vec<u8>> {
+        match &self.data {
+            CellData::Vec { items, .. } | CellData::Array { items, .. } => {
+                let b = items.borrow();
+                Some(match &*b {
+                    Packed::U8(v) => v.clone(),
+                    other => (0..other.len())
+                        .map(|i| other.get(i).map(|s| unsafe { s.i } as u8).unwrap_or(0))
+                        .collect(),
+                })
+            }
             _ => None,
         }
     }

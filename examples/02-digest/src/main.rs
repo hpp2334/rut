@@ -3,7 +3,7 @@
 //! `digest.rut` is the application: byte-level encodings (hex, base64),
 //! crypto digests (MD5, SHA-1, SHA-256, SHA-512), hashmap hash keys
 //! (CRC-32, FNV-1a 32/64, djb2, sdbm), and a JSON codec — everything
-//! flowing over `Vec<u8>`/`string`/`Opaque`, the shapes RFC 0023 §2
+//! flowing over `bytes`/`string`/`Opaque`, the shapes RFC 0023 §2
 //! lets cross the host boundary.
 //!
 //! This file is the embedder AND the oracle: every rut result below is

@@ -7,7 +7,7 @@
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
 use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, CellData, Heap, Packed, Slot, Trap, TrapKind, Value};
+use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
 use rut_core::ops::*;
 use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
 use std::cell::RefCell;
@@ -311,17 +311,7 @@ impl Vm {
             (Value::Bool(b), TyKind::Prim(PrimTy::Bool)) => Slot::bool(*b),
             (Value::Char(c), TyKind::Prim(PrimTy::Char)) => Slot::ch(*c),
             (Value::Str(s), TyKind::Str) => self.heap.alloc_str(s.clone()).map_err(|t| t.msg)?,
-            (Value::Bytes(b), TyKind::Vec { elem }) if elem == self.ty_u8() => {
-                let cell = self
-                    .heap
-                    .alloc_vec(elem, b.len(), &self.prog.types)
-                    .map_err(|t| t.msg)?;
-                if let CellData::Vec { items, .. } = &cell_of(cell).data {
-                    *items.borrow_mut() =
-                        Packed::from_slots(elem, &self.prog.types, b.iter().map(|&x| Slot::int(x as i64)).collect());
-                }
-                cell
-            }
+            (Value::Bytes(b), TyKind::Bytes) => self.heap.alloc_bytes(b.clone()).map_err(|t| t.msg)?,
             (Value::Opt(None), TyKind::Option { .. }) => self.heap.alloc_sum(ty, 1, None).map_err(|t| t.msg)?,
             (Value::Opt(Some(inner)), TyKind::Option { elem }) => {
                 let payload = self.value_in(inner, elem)?;
@@ -351,17 +341,6 @@ impl Vm {
                 ))
             }
         })
-    }
-
-    fn ty_u8(&self) -> TypeId {
-        // boot-table id for u8 (stable: interned at TypeTable::boot)
-        self.prog
-            .types
-            .types
-            .iter()
-            .position(|t| matches!(t.kind, TyKind::Prim(PrimTy::U8)))
-            .map(|i| i as u32)
-            .unwrap_or(u32::MAX)
     }
 
     /// Resume after a budget trap (RFC 0034 §4: the frame IS the loop state).

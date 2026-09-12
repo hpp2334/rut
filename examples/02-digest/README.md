@@ -4,8 +4,9 @@ A Rust app embedding rut, in the shape of [00-todolist](../00-todolist) and
 [01-sort](../01-sort): `digest.rut` is the application, `src/main.rs` is the
 embedder — and this time the embedder is also the **oracle**.
 
-The rut side is a byte-level library, everything flowing over `Vec<u8>`,
-`string`, and `Opaque` — the shapes RFC 0023 §2 lets cross the host boundary:
+The rut side is a byte-level library, everything flowing over `bytes`
+(the immutable binary primitive, RFC 0004), `string`, and `Opaque` —
+the shapes RFC 0023 §2 lets cross the host boundary:
 
 - **encodings** — hex (encode/decode, case-insensitive) and base64
   (standard + URL-safe alphabets, padding, invalid-input rejection)
@@ -72,9 +73,9 @@ fuel used: 1007145 of Some(50000000)
   rotations need `>>` to be a *logical* shift on `u64` (a bug fixed in
   this repo right before this example) and `&<<` to truncate to the
   operand width
-- **`Vec<u8>` crosses directly** (RFC 0023 §2) — no opaque wrapper
-  needed for byte payloads; `Opaque` appears exactly once, boxing the
-  recursive JSON tree
+- **`bytes` crosses directly** (RFC 0023 §2, RFC 0004) — no opaque
+  wrapper needed for byte payloads; `Opaque` appears exactly once,
+  boxing the recursive JSON tree
 - **payloadless enums + dataclasses build a tagged union** (RFC 0006):
   `JTag` + `Json` with children as `Vec<Opaque>` — recursion through
   RFC 0014's escape hatch

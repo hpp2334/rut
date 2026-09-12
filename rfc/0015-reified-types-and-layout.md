@@ -76,7 +76,7 @@ let AL_POINT: u32  = align_of<Point>();    // 4
   `downcast<string>` is total in-branch.
 - `Opaque` mirrors the layout builtins at runtime: `o.type_id() -> u32`,
   `o.size() -> u32`,
-  `o.as_bytes() -> Vec<u8>` (a snapshot of the box's repr-C payload). Together
+  `o.as_bytes() -> bytes` (a snapshot of the box's repr-C payload). Together
   they enable **layout-aware heterogeneous storage** — group entries by
   `type_id`, preallocate `size_of`-sized slabs, compare payloads byte-wise —
   while recovery still goes through checked `downcast<T>`. Constructing an

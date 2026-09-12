@@ -39,9 +39,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ty = lt;
         match op {
             Eq | Ne => {
-                // the `==` law (RFC 0012 §4): primitives by value, string by
-                // content, everything else cell identity; Option/Result is a
-                // compile error
+                // the `==` law (RFC 0012 §4): primitives by value, string and
+                // bytes by content, everything else cell identity;
+                // Option/Result is a compile error
                 let eq = op == Eq;
                 let dst = self.new_reg(TY_BOOL);
                 match self.ctx.types.kind(ty).clone() {
@@ -51,6 +51,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     TyKind::Str => {
                         self.emit(Op::StrCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                    }
+                    TyKind::Bytes => {
+                        self.emit(Op::BytesCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                     }
                     TyKind::Option { .. } | TyKind::Result { .. } => {
                         self.ctx.err(sp, "`==` on Option/Result is a compile error —use `when`, `is_some()`, or compare the payload (RFC 0005)");

@@ -635,7 +635,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
 #[test]
 fn entry_fns_compile_without_main_and_cross_values() {
     // a module with entries and NO main compiles (entries are roots) and
-    // the host drives it: Opaque container in/out, primitives, Vec<u8>,
+    // the host drives it: Opaque container in/out, primitives, bytes,
     // Option and Result in both arms
     let src = r#"
 dataclass Row { id: i32; }
@@ -647,7 +647,7 @@ entry fn put(c: Opaque) -> u32 {
     b.rows.push(Row { id: 1 });
     return u32(b.rows.len());
 }
-entry fn echo_bytes(v: Vec<u8>) -> Vec<u8> { return v; }
+entry fn echo_bytes(v: bytes) -> bytes { return v; }
 entry fn maybe(v: i32) -> Option<i32> {
     return when (v > 0) { true -> Option.some(v), else -> Option.none() };
 }
@@ -708,6 +708,18 @@ entry fn bad_ret() -> Vec<Row> { return Vec(); }
         out.diags
     );
 
+    // `Vec<u8>` is a mutable builder, not the binary type: it no longer
+    // crosses — `bytes` is what does (RFC 0004, RFC 0023 §2)
+    let src = r#"
+entry fn old_buffer(v: Vec<u8>) -> Vec<u8> { return v; }
+"#;
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("parameter `v` is `Vec<u8>`")),
+        "{:?}",
+        out.diags
+    );
+
     let src = r#"
 entry fn generic<T>(v: T) -> T { return v; }
 "#;
@@ -717,6 +729,50 @@ entry fn generic<T>(v: T) -> T { return v; }
         "{:?}",
         out.diags
     );
+}
+
+#[test]
+fn bytes_are_an_immutable_primitive() {
+    // RFC 0004: bytes is the immutable binary primitive. Construction via
+    // bytes(n)/bytes.from(..), a Vec<u8> builder freezes into one, and ==
+    // compares content. `Vec<u8>` is a mutable builder, not the binary type.
+    let src = r#"
+pub fn main() -> unit {
+    let z = bytes(3);
+    print(f"z={z.len()}");
+    let a = bytes.from([1, 2, 3]);
+    let b = bytes.from([1, 2, 3]);
+    print(f"a={a.len()} eq={a == b} ne={a != z}");
+    let mut buf: Vec<u8> = Vec();
+    buf.push(9);
+    buf.push(8);
+    let f = buf.freeze();
+    print(f"f={f.len()} f0={f[0]} f1={f[1]}");
+    let enc = "rut".encode();
+    print(f"enc={enc.len()} dec={enc.decode()}");
+    let mut sum: u8 = 0u8;
+    for (let x of a) { sum = sum + x; }
+    print(f"sum={sum}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(
+        lines,
+        vec!["z=3", "a=3 eq=true ne=true", "f=2 f0=9 f1=8", "enc=3 dec=rut", "sum=6"]
+    );
+}
+
+#[test]
+fn bytes_index_out_of_bounds_traps() {
+    let src = r#"
+pub fn main() -> unit {
+    let a = bytes.from([1]);
+    print(f"{a[5]}");
+}
+"#;
+    let (_, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap.as_deref(), Some("IndexOutOfBounds"));
 }
 
 #[test]

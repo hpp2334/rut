@@ -71,6 +71,7 @@ impl<'a> Ctx<'a> {
                     "f32" => Some(TY_F32), "f64" => Some(TY_F64),
                     "bool" => Some(TY_BOOL), "char" => Some(TY_CHAR),
                     "string" => Some(TY_STR),
+                    "bytes" => Some(TY_BYTES),
                     "Opaque" => Some(TY_OPAQUE),
                     _ => None,
                 };

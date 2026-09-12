@@ -137,19 +137,16 @@ impl<'a> Ctx<'a> {
     }
 
     /// The crossing rule (RFC 0023 §2): what an `entry fn` signature may
-    /// carry. Primitives, `string`, `unit`, `Vec<u8>` buffers, `Option`/
-    /// `Result` over crossable types — and `Opaque`, the host-held box
-    /// (RFC 0014): the ONE cell shape an embedder may keep and pass back.
-    /// Every other cell (`TodoList`, `Vec<Todo>`, `dyn Trait`, …) stays
-    /// inside the VM.
+    /// carry. Primitives, `string`, `unit`, `bytes` (the binary buffer,
+    /// RFC 0004), `Option`/`Result` over crossable types — and `Opaque`,
+    /// the host-held box (RFC 0014): the ONE cell shape an embedder may
+    /// keep and pass back. Every other cell (`TodoList`, `Vec<Todo>`,
+    /// `dyn Trait`, `Vec<u8>` itself, …) stays inside the VM.
     pub fn crosses_boundary(&self, ty: TypeId) -> bool {
         match self.types.kind(ty) {
-            TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Opaque => true,
+            TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
             TyKind::Option { elem } => self.crosses_boundary(*elem),
             TyKind::Result { ok, err } => self.crosses_boundary(*ok) && self.crosses_boundary(*err),
-            TyKind::Vec { elem } => {
-                matches!(self.types.kind(*elem), TyKind::Prim(PrimTy::U8))
-            }
             _ => false,
         }
     }
@@ -182,7 +179,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         self.ast.span(p.id()),
                         format!(
-                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `string`, `Vec<u8>`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
+                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `string`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
                             self.name(pd.name),
                             self.types.name(ty)
                         ),
@@ -195,7 +192,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         self.ast.span(r.id()),
                         format!(
-                            "`entry fn {fname}` returns `{}` — only primitives, `string`, `Vec<u8>`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
+                            "`entry fn {fname}` returns `{}` — only primitives, `string`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
                             self.types.name(ty)
                         ),
                     );

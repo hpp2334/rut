@@ -50,6 +50,11 @@ impl Vm {
                 let sb = cell_of(r!(b)).as_str();
                 self.cur_regs[dst as usize] = Slot::bool((sa == sb) == eq);
             }
+            Op::BytesCmp { eq, dst, a, b } => {
+                let ba = cell_of(r!(a)).as_bytes();
+                let bb = cell_of(r!(b)).as_bytes();
+                self.cur_regs[dst as usize] = Slot::bool((ba == bb) == eq);
+            }
             Op::RefEq { eq, dst, a, b } => {
                 let v = Slot::same_ref(r!(a), r!(b)) == eq;
                 self.cur_regs[dst as usize] = Slot::bool(v);
@@ -283,6 +288,17 @@ impl Vm {
                         )
                     })?;
                 self.cur_regs[dst as usize] = Slot::ch(c);
+            }
+            Op::BytesGet { dst, s, idx } => {
+                let cell = cell_of(r!(s));
+                let i = unsafe { r!(idx).i };
+                let b = cell.as_bytes().get(i as usize).copied().ok_or_else(|| {
+                    Trap::new(
+                        TrapKind::IndexOutOfBounds,
+                        format!("bytes index {i} out of bounds (len {})", cell.as_bytes().len()),
+                    )
+                })?;
+                self.cur_regs[dst as usize] = Slot::int(b as i64);
             }
         }
         Ok(())

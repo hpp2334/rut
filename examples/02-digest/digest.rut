@@ -1,7 +1,8 @@
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
 //
-// The second algorithmic example: everything here operates on `Vec<u8>`
-// (which crosses the host boundary directly, RFC 0023 §2) and proves
+// The second algorithmic example: everything here operates on `bytes`
+// (the immutable binary primitive, which crosses the host boundary
+// directly, RFC 0023 §2 / RFC 0004) and proves
 // that the language's integer surface — hex literals, `u32`/`u64`,
 // the wrapping family `&+ &* &<<` (RFC 0004 §3), and the signedness
 // rules for `>>` — is enough to write real, verifiable algorithms:
@@ -31,7 +32,7 @@ fn hex_digits() -> Vec<string> {
 }
 
 /// bytes -> lowercase hex string.
-entry fn hex_enc(data: Vec<u8>) -> string {
+entry fn hex_enc(data: bytes) -> string {
     let d = hex_digits();
     let mut out = "";
     for (let b of data) {
@@ -59,7 +60,7 @@ fn hex_val(c: string) -> i32 {
     return -1;
 }
 
-entry fn hex_dec(s: string) -> Result<Vec<u8>, string> {
+entry fn hex_dec(s: string) -> Result<bytes, string> {
     if (s.len() % 2 != 0) {
         return Result.err("hex: odd-length input");
     }
@@ -78,7 +79,7 @@ entry fn hex_dec(s: string) -> Result<Vec<u8>, string> {
         }
         i = i + 1;
     }
-    return Result.ok(out);
+    return Result.ok(out.freeze());
 }
 
 // ------------------------------------------------------------ base64 ---
@@ -96,7 +97,7 @@ fn b64_table(url: bool) -> Vec<string> {
     return t;
 }
 
-entry fn b64_enc(data: Vec<u8>, url: bool) -> string {
+entry fn b64_enc(data: bytes, url: bool) -> string {
     let t = b64_table(url);
     let n = data.len();
     let mut out = "";
@@ -121,7 +122,7 @@ entry fn b64_enc(data: Vec<u8>, url: bool) -> string {
     return out;
 }
 
-entry fn b64_dec(s: string, url: bool) -> Result<Vec<u8>, string> {
+entry fn b64_dec(s: string, url: bool) -> Result<bytes, string> {
     let t = b64_table(url);
     let mut vals: Vec<u32> = Vec();
     let mut pad = 0;
@@ -158,14 +159,14 @@ entry fn b64_dec(s: string, url: bool) -> Result<Vec<u8>, string> {
         if (rem >= 3) { out.push(u8((w >> 8) & 255)); }
         if (rem == 4) { out.push(u8(w & 255)); }
     }
-    return Result.ok(out);
+    return Result.ok(out.freeze());
 }
 
 // ------------------------------------------------- hashmap hash keys ---
 
 /// CRC-32/ISO-HDLC (the zlib/PNG/zip one): reflected poly 0xEDB88320,
 /// bitwise — no table. "123456789" -> 0xCBF43926.
-entry fn crc32(data: Vec<u8>) -> u32 {
+entry fn crc32(data: bytes) -> u32 {
     let mut crc: u32 = 0xFFFFFFFF;
     for (let b of data) {
         crc = crc ^ u32(b);
@@ -180,7 +181,7 @@ entry fn crc32(data: Vec<u8>) -> u32 {
     return crc ^ 0xFFFFFFFF;
 }
 
-entry fn fnv1a32(data: Vec<u8>) -> u32 {
+entry fn fnv1a32(data: bytes) -> u32 {
     let mut h: u32 = 2166136261;
     for (let b of data) {
         h = (h ^ u32(b)) &* 16777619;
@@ -190,7 +191,7 @@ entry fn fnv1a32(data: Vec<u8>) -> u32 {
 
 /// FNV-1a 64: only `&*` and `^` — no 64-bit shifts needed, so the u64
 /// words never even exercise the shift path.
-entry fn fnv1a64(data: Vec<u8>) -> u64 {
+entry fn fnv1a64(data: bytes) -> u64 {
     let mut h: u64 = 14695981039346656037;
     for (let b of data) {
         h = (h ^ u64(b)) &* 1099511628211;
@@ -198,7 +199,7 @@ entry fn fnv1a64(data: Vec<u8>) -> u64 {
     return h;
 }
 
-entry fn djb2(data: Vec<u8>) -> u64 {
+entry fn djb2(data: bytes) -> u64 {
     let mut h: u64 = 5381;
     for (let b of data) {
         h = (h &* 33) &+ u64(b);
@@ -207,7 +208,7 @@ entry fn djb2(data: Vec<u8>) -> u64 {
 }
 
 /// sdbm: h = c + h*65599 (== c + (h<<6) + (h<<16) - h, mod 2^64).
-entry fn sdbm(data: Vec<u8>) -> u64 {
+entry fn sdbm(data: bytes) -> u64 {
     let mut h: u64 = 0;
     for (let b of data) {
         h = u64(b) &+ (h &* 65599);
@@ -235,7 +236,7 @@ fn rotr64(x: u64, n: u64) -> u64 {
     return (x >> n) | (x &<< (bits - n));
 }
 
-fn copy_bytes(msg: Vec<u8>) -> Vec<u8> {
+fn copy_bytes(msg: bytes) -> Vec<u8> {
     let m: Vec<u8> = Vec();
     for (let b of msg) { m.push(b); }
     return m;
@@ -285,7 +286,7 @@ fn md5_s() -> Vec<u32> {
     return s;
 }
 
-fn md5_impl(msg: Vec<u8>) -> Vec<u8> {
+fn md5_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
@@ -347,7 +348,7 @@ fn md5_impl(msg: Vec<u8>) -> Vec<u8> {
     for (let i = 0; i < 4; i += 1) { out.push(u8((w >> (u32(i) * 8)) & 0xFF)); }
     w = d0;
     for (let i = 0; i < 4; i += 1) { out.push(u8((w >> (u32(i) * 8)) & 0xFF)); }
-    return out;
+    return out.freeze();
 }
 
 /// SHA-1/SHA-2 padding: 0x80, zeros to n%{mod}=={res}, then the message
@@ -366,7 +367,7 @@ fn sha_tail(m: Vec<u8>, msg_len: i32) -> unit {
     m.push(u8(bits & 0xFF));
 }
 
-fn sha1_impl(msg: Vec<u8>) -> Vec<u8> {
+fn sha1_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
     sha_tail(m, msg.len());
     let mut h0: u32 = 0x67452301;
@@ -427,7 +428,7 @@ fn sha1_impl(msg: Vec<u8>) -> Vec<u8> {
         out.push(u8((ws[j] >> 8) & 0xFF));
         out.push(u8(ws[j] & 0xFF));
     }
-    return out;
+    return out.freeze();
 }
 
 fn sha256_k() -> Vec<u32> {
@@ -452,7 +453,7 @@ fn sha256_k() -> Vec<u32> {
     return k;
 }
 
-fn sha256_impl(msg: Vec<u8>) -> Vec<u8> {
+fn sha256_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
     sha_tail(m, msg.len());
     let h = sha256_h();
@@ -511,7 +512,7 @@ fn sha256_impl(msg: Vec<u8>) -> Vec<u8> {
         out.push(u8((st[j] >> 8) & 0xFF));
         out.push(u8(st[j] & 0xFF));
     }
-    return out;
+    return out.freeze();
 }
 
 fn sha512_k() -> Vec<u64> {
@@ -542,7 +543,7 @@ fn sha512_k() -> Vec<u64> {
 
 /// SHA-512 pads to 112 mod 128 and appends a 128-bit big-endian length
 /// (the high 64 bits are zero for any input this side of 2 EiB).
-fn sha512_impl(msg: Vec<u8>) -> Vec<u8> {
+fn sha512_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
     m.push(0x80);
     while (m.len() % 128 != 112) { m.push(0); }
@@ -620,16 +621,16 @@ fn sha512_impl(msg: Vec<u8>) -> Vec<u8> {
         out.push(u8((st[j] >> 8) & 0xFF));
         out.push(u8(st[j] & 0xFF));
     }
-    return out;
+    return out.freeze();
 }
 
-entry fn md5(data: Vec<u8>) -> Vec<u8> { return md5_impl(data); }
-entry fn sha1(data: Vec<u8>) -> Vec<u8> { return sha1_impl(data); }
-entry fn sha256(data: Vec<u8>) -> Vec<u8> { return sha256_impl(data); }
-entry fn sha512(data: Vec<u8>) -> Vec<u8> { return sha512_impl(data); }
+entry fn md5(data: bytes) -> bytes { return md5_impl(data); }
+entry fn sha1(data: bytes) -> bytes { return sha1_impl(data); }
+entry fn sha256(data: bytes) -> bytes { return sha256_impl(data); }
+entry fn sha512(data: bytes) -> bytes { return sha512_impl(data); }
 
 /// One name, one call — the 01-sort dispatcher pattern on strings.
-entry fn digest(algo: string, data: Vec<u8>) -> Result<Vec<u8>, string> {
+entry fn digest(algo: string, data: bytes) -> Result<bytes, string> {
     return when (algo) {
         "md5"    -> Result.ok(md5_impl(data)),
         "sha1"   -> Result.ok(sha1_impl(data)),

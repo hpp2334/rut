@@ -310,6 +310,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             return Ok(vty);
         }
+        // builtin bytes type-call: `bytes(n)` zeroed (RFC 0004)
+        if n == "bytes" {
+            return self.compile_bytes_alloc(args, sp);
+        }
         if self.ctx.find_data(name).is_some() {
             self.ctx.err(sp, format!(
                 "construction is a method call, never a type-call —use a class method ({}.new(..)) or a dataclass literal `{} {{ .. }}` (RFC 0010 §1)",
@@ -355,6 +359,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Err(())
             }
         }
+    }
+
+    /// `bytes(n)` — a zeroed immutable buffer of `n` octets (RFC 0004).
+    pub(crate) fn compile_bytes_alloc(&mut self, args: Vec<NodeHandle<AnyExpr>>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+        let len_reg = match args.len() {
+            0 => {
+                let z = self.new_reg(TY_I32);
+                self.emit(Op::ConstRaw { dst: z, bits: 0 }, sp.lo);
+                z
+            }
+            1 => {
+                let t = self.compile_expr(args[0], Some(TY_I32))?;
+                if t != TY_I32 {
+                    self.ctx.err(sp, format!("bytes(n) takes an `i32` length, found `{}`", self.ctx.types.name(t)));
+                }
+                self.last_reg
+            }
+            _ => {
+                self.ctx.err(sp, "bytes() or bytes(n)");
+                return Err(());
+            }
+        };
+        let dst = self.new_reg(TY_BYTES);
+        self.emit(Op::CallNat { nat: Nat::BytesNew, recv: None, args: vec![len_reg], dst: Some(dst) }, sp.lo);
+        Ok(TY_BYTES)
     }
 
     pub(crate) fn compile_static_call(
@@ -482,6 +511,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let dst = self.new_reg(vty);
                 self.emit(Op::CallNat { nat: Nat::VecFrom, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
                 return Ok(vty);
+            }
+            ("bytes", "from") => {
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes.from(source) takes one array or Vec<u8>");
+                    return Err(());
+                }
+                // hint `Array<u8, _>` so a bare literal knows its element
+                let hint = Some(self.ctx.mk_array(TY_U8, 0));
+                let at = self.compile_expr(args[0], hint)?;
+                match self.ctx.types.kind(at) {
+                    TyKind::Array { elem, .. } | TyKind::Vec { elem } if *elem == TY_U8 => {}
+                    _ => {
+                        self.ctx.err(sp, format!("bytes.from expects `Array<u8, N>` or `Vec<u8>` —found `{}`", self.ctx.types.name(at)));
+                        return Err(());
+                    }
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_BYTES);
+                self.emit(Op::CallNat { nat: Nat::BytesFrom, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
+                return Ok(TY_BYTES);
             }
             _ => {}
         }
@@ -680,7 +729,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if segs.len() == 1 && self.lookup(segs[0].name).is_none() {
                 let base = segs[0].name;
                 let bn = self.ctx.name(base).to_string();
-                let is_type = matches!(bn.as_str(), "Vec" | "Option" | "Result" | "Opaque")
+                let is_type = matches!(bn.as_str(), "Vec" | "Option" | "Result" | "Opaque" | "bytes")
                     || self.ctx.find_enum(base).is_some()
                     || self.ctx.find_data(base).is_some();
                 if is_type {
@@ -803,6 +852,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.emit(Op::CallNat { nat: Nat::VecPop, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
                     return Ok(elem);
                 }
+                "freeze" => {
+                    if !args.is_empty() {
+                        self.ctx.err(sp, "freeze() takes no arguments");
+                        return Err(());
+                    }
+                    if elem != TY_U8 {
+                        self.ctx.err(sp, "freeze() needs a `Vec<u8>` —binary data is built in a Vec and frozen to `bytes` (RFC 0004)");
+                        return Err(());
+                    }
+                    let dst = self.new_reg(TY_BYTES);
+                    self.emit(Op::CallNat { nat: Nat::VecFreeze, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
+                    return Ok(TY_BYTES);
+                }
                 _ => {}
             },
             TyKind::Array { len, .. } => match mname.as_str() {
@@ -819,6 +881,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let dst = self.new_reg(TY_I32);
                     self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
                     return Ok(TY_I32);
+                }
+                "encode" => {
+                    if !args.is_empty() {
+                        self.ctx.err(sp, "encode() takes no arguments");
+                        return Err(());
+                    }
+                    let dst = self.new_reg(TY_BYTES);
+                    self.emit(Op::CallNat { nat: Nat::StrEncode, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
+                    return Ok(TY_BYTES);
+                }
+                _ => {}
+            },
+            TyKind::Bytes => match mname.as_str() {
+                "len" => {
+                    let dst = self.new_reg(TY_I32);
+                    self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
+                    return Ok(TY_I32);
+                }
+                "decode" => {
+                    if !args.is_empty() {
+                        self.ctx.err(sp, "decode() takes no arguments");
+                        return Err(());
+                    }
+                    let dst = self.new_reg(TY_STR);
+                    self.emit(Op::CallNat { nat: Nat::BytesDecode, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
+                    return Ok(TY_STR);
                 }
                 _ => {}
             },

@@ -110,6 +110,12 @@ impl Heap {
         self.mint(rut_core::types::TY_STR, CellData::Str(s), n)
     }
 
+    /// Immutable binary buffer (RFC 0004) — one contiguous byte allocation.
+    pub fn alloc_bytes(&self, b: Vec<u8>) -> Result<Slot, Trap> {
+        let n = b.len() as u64;
+        self.mint(rut_core::types::TY_BYTES, CellData::Bytes(b), n)
+    }
+
     pub fn alloc_vec(&self, elem: TypeId, cap: usize, table: &TypeTable) -> Result<Slot, Trap> {
         let p = Packed::for_elem(elem, table, cap);
         let bytes = (cap as u64) * p.elem_width();
@@ -233,6 +239,10 @@ impl Heap {
             TyKind::Str => {
                 let cell = cell_of(s);
                 self.alloc_str(cell.as_str().to_string())
+            }
+            TyKind::Bytes => {
+                let cell = cell_of(s);
+                self.alloc_bytes(cell.as_bytes().to_vec())
             }
             TyKind::Vec { elem } => {
                 let cell = cell_of(s);

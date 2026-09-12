@@ -189,6 +189,7 @@ fn op_str(op: &Op) -> String {
         Op::GeI { prim, dst, a, b } => format!("gei.{} r{dst}, r{a}, r{b}", prim.name()),
         Op::NegI { prim, dst, a } => format!("negi.{} r{dst}, r{a}", prim.name()),
         Op::StrCmp { eq, dst, a, b } => format!("strcmp {eq} r{dst}, r{a}, r{b}"),
+        Op::BytesCmp { eq, dst, a, b } => format!("bytescmp {eq} r{dst}, r{a}, r{b}"),
         Op::RefEq { eq, dst, a, b } => format!("refeq {eq} r{dst}, r{a}, r{b}"),
         Op::Jmp { target } => format!("jmp L{target}"),
         Op::Br { cond, then_t, else_t } => format!("br r{cond}, L{then_t}, L{else_t}"),
@@ -260,6 +261,7 @@ fn op_str(op: &Op) -> String {
         Op::LoopHead => "loophead".to_string(),
         Op::Conv { dst, src, from, to } => format!("conv r{dst}, r{src}, {} -> {}", from.name(), to.name()),
         Op::StrCharAt { dst, s, idx } => format!("strcharat r{dst}, r{s}, r{idx}"),
+        Op::BytesGet { dst, s, idx } => format!("bytesget r{dst}, r{s}, r{idx}"),
     }
 }
 

@@ -73,7 +73,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 6;
+pub const VERSION: u32 = 7;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -197,6 +197,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             });
         }
         TyKind::Str => e.u8(2),
+        TyKind::Bytes => e.u8(12),
         TyKind::Vec { elem } => {
             e.u8(3);
             e.u32(*elem);
@@ -356,6 +357,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             t => return Err(format!("bad prim tag {t}")),
         }),
         2 => TyKind::Str,
+        12 => TyKind::Bytes,
         3 => TyKind::Vec { elem: d.u32()? },
         4 => TyKind::Array { elem: d.u32()?, len: d.u32()? },
         5 => {
@@ -478,6 +480,8 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::LoopHead => e.u8(46),
         Op::Conv { dst, src, from, to } => { e.u8(47); e.u16(*dst); e.u16(*src); e.u8(from.to_u8()); e.u8(to.to_u8()); }
         Op::StrCharAt { dst, s, idx } => { e.u8(48); e.u16(*dst); e.u16(*s); e.u16(*idx); }
+        Op::BytesCmp { eq, dst, a, b } => { e.u8(85); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::BytesGet { dst, s, idx } => { e.u8(86); e.u16(*dst); e.u16(*s); e.u16(*idx); }
     }
 }
 
@@ -572,6 +576,8 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         82 => Op::LeI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         83 => Op::GeI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         84 => Op::NegI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
+        85 => Op::BytesCmp { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        86 => Op::BytesGet { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
         t => return Err(format!("bad opcode {t}")),
     })
 }
@@ -589,6 +595,8 @@ fn nat(b: u8) -> Result<Nat, String> {
         0 => Nat::Print, 1 => Nat::Str, 2 => Nat::Concat, 3 => Nat::StrLen,
         4 => Nat::VecNew, 5 => Nat::VecZeroed, 6 => Nat::VecFrom, 7 => Nat::VecLen,
         8 => Nat::VecPush, 9 => Nat::VecPop,
+        10 => Nat::BytesNew, 11 => Nat::BytesFrom, 12 => Nat::VecFreeze,
+        13 => Nat::BytesLen, 14 => Nat::StrEncode, 15 => Nat::BytesDecode,
         _ => return Err("bad nat tag".into()),
     })
 }

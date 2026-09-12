@@ -10,15 +10,8 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
         TyKind::Prim(PrimTy::Char) => Value::Char(v.as_char()),
         TyKind::Prim(_) | TyKind::Unit => Value::I64(unsafe { v.i }),
         TyKind::Str => Value::Str(cell_of(v).as_str().to_string()),
-        // Vec<u8> is the one sequence that crosses (RFC 0023 §2)
-        TyKind::Vec { elem: _ } => {
-            let cell = cell_of(v);
-            if let CellData::Vec { items, .. } = &cell.data {
-                Value::Bytes(items.borrow().to_slots().iter().map(|s| unsafe { s.i } as u8).collect())
-            } else {
-                Value::Bytes(Vec::new())
-            }
-        }
+        // bytes is the one sequence that crosses (RFC 0023 §2, RFC 0004)
+        TyKind::Bytes => Value::Bytes(cell_of(v).as_bytes().to_vec()),
         TyKind::Option { elem } => {
             let cell = cell_of(v);
             match &cell.data {

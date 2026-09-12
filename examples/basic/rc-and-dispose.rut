@@ -27,7 +27,7 @@ class TempFile {
         return Self { path: path };
     }
 
-    fn write(self, data: Vec<u8>) -> unit { /* ... */ }
+    fn write(self, data: bytes) -> unit { /* ... */ }
 }
 
 impl Disposal for TempFile {       // Disposal impl — runs once, at rc 0
@@ -49,7 +49,7 @@ fn aliasing() -> unit {
 
 fn scratch() -> unit {
     let f = TempFile.new("tmp.dat");   // class method returns Self
-    f.write(Vec<u8>(64));
+    f.write(bytes(64));
 }   // last handle drops HERE: rc hits 0, Disposal.dispose runs,
     // then `path` is released — deterministic destruction (RFC 0016 §3)
 

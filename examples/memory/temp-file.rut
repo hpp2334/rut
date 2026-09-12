@@ -13,7 +13,7 @@ class TempFile {
         return Self { path: path };     // no boxing needed (RFC 0011 §2)
     }
 
-    fn write(self, data: Vec<u8>) -> unit { /* ... */ }
+    fn write(self, data: bytes) -> unit { /* ... */ }
 }
 
 impl Disposal for TempFile {   // Disposal impl — runs once, at rc 0
@@ -25,7 +25,7 @@ impl Disposal for TempFile {   // Disposal impl — runs once, at rc 0
 pub fn main() -> unit {
     let log = Logger.new("tempfile");
     let f = TempFile.new("tmp.dat");     // a Disposal class is just a class
-    f.write(Vec<u8>(64));
+    f.write(bytes(64));
     log.info("working...");
 }   // last handle drops HERE: rc hits 0, Disposal.dispose runs,
     // then `path` is released

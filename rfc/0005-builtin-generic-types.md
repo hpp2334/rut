@@ -31,6 +31,16 @@ boot-registered module (RFC 0022 §2, RFC 0032 §1.1 R2) — while element
 access on a concrete `Vec<T>` stays the fused `arrget`/`arrset` ops
 (RFC 0016 §4).
 
+**`bytes` — the immutable binary primitive** (RFC 0004): a non-generic
+builtin cell holding a contiguous octet buffer, compared by content.
+Construction: `bytes(n)` (n zeroed octets), `bytes.from(a)` (copies an
+`Array<u8, N>` or `Vec<u8>`), and `v.freeze()` on a mutable `Vec<u8>`
+builder. Reading: `.len()`, `b[i]: u8` (bounds trap), `for (let b of b)`,
+`==`/`!=` by content. `string.encode() -> bytes` (UTF-8) and
+`bytes.decode() -> string` (UTF-8, lossy) bridge text and binary.
+`Vec<u8>` itself is only a mutable builder; `bytes` is the binary type
+that crosses the host boundary (RFC 0023 §2).
+
 Two more builtins are type syntax only (no call form, no members):
 
 - **`Array<T, N>` — the fixed array**: a builtin **const-generic** type

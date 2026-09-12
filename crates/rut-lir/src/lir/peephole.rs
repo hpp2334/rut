@@ -355,6 +355,7 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::Const { dst, .. }
         | Op::ConstRaw { dst, .. }
         | Op::StrCmp { dst, .. }
+        | Op::BytesCmp { dst, .. }
         | Op::RefEq { dst, .. }
         | Op::Not { dst, .. }
         | Op::AddF { dst, .. }
@@ -415,7 +416,8 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::Box { dst, .. }
         | Op::MakeClosure { dst, .. }
         | Op::Conv { dst, .. }
-        | Op::StrCharAt { dst, .. } => Some(dst),
+        | Op::StrCharAt { dst, .. }
+        | Op::BytesGet { dst, .. } => Some(dst),
         Op::Call { dst, .. }
         | Op::CallM { dst, .. }
         | Op::CallI { dst, .. }
@@ -445,6 +447,7 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             u.extend(vals.iter().copied());
         }
         Op::StrCmp { dst, a, b, .. }
+        | Op::BytesCmp { dst, a, b, .. }
         | Op::RefEq { dst, a, b, .. }
         | Op::AddF { dst, a, b, .. }
         | Op::SubF { dst, a, b, .. }
@@ -600,6 +603,11 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             u.push(*s);
             u.push(*idx);
         }
+        Op::BytesGet { dst, s, idx } => {
+            d.push(*dst);
+            u.push(*s);
+            u.push(*idx);
+        }
         Op::Jmp { .. } | Op::LoopHead => {}
     }
     (d, u)
@@ -615,6 +623,7 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
     };
     match op {
         Op::StrCmp { a, b, .. }
+        | Op::BytesCmp { a, b, .. }
         | Op::RefEq { a, b, .. }
         | Op::AddF { a, b, .. }
         | Op::SubF { a, b, .. }
@@ -717,6 +726,10 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         }
         Op::Conv { src, .. } => f(src),
         Op::StrCharAt { s, idx, .. } => {
+            f(s);
+            f(idx);
+        }
+        Op::BytesGet { s, idx, .. } => {
             f(s);
             f(idx);
         }

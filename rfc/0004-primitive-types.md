@@ -23,6 +23,7 @@ deferred.
 | float | `f32 f64` | IEEE 754 |
 | misc | `bool`, `char` (Unicode scalar, 4 bytes) | |
 | heap: text | `string` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4) |
+| heap: binary | `bytes` | immutable raw octet buffer; contiguous, compared by content, COW-shared; built with `bytes(n)` (zeroed), `bytes.from(Array<u8,N>)`, or `Vec<u8>.freeze()` (RFC 0005) |
 | heap: seq | `Vec<T>` | mutable, growable buffer — cell handle, **shared**; flat storage for primitive `T` (RFC 0016 §4) |
 | heap: seq | `Array<T, N>` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |
 | heap: slice | `Slice<T>` | builtin trait — object type `dyn Slice<T>` only (RFC 0005, RFC 0012 §2) |
@@ -38,12 +39,16 @@ deferred.
   handles, no per-element refcount traffic (RFC 0016 §4). `Vec<Point>`
   (composite elements) stores one cell pointer per element; `Array<T, N>`
   is the same shape with the length frozen at `N`.
-- **Binary data has no dedicated type**: it is `Vec<u8>` (zeroed via
-  `Vec<u8>(n)`) — one sequence builtin family (RFC 0005).
+- **Binary data is `bytes`**: an immutable, content-compared octet buffer
+  (`Vec<u8>` remains the mutable builder; `freeze()` turns one into a
+  `bytes`). Compare it with `==`, index it as `b[i]: u8`, iterate it with
+  `for (let b of b)`, and cross the host boundary directly (RFC 0023 §2).
+  See RFC 0005 for the constructor surface.
 - No `null`, no `undefined`. Absence is `Option<T>` (RFC 0005).
-- **One size accessor everywhere**: `.len()` — `string`, `Vec<T>`,
-  `Array<T, N>`, and `dyn Slice<T>` all spell it the same way; there is no
-  `.length` property or `.count()` variant anywhere in the language.
+- **One size accessor everywhere**: `.len()` — `string`, `bytes`,
+  `Vec<T>`, `Array<T, N>`, and `dyn Slice<T>` all spell it the same way;
+  there is no `.length` property or `.count()` variant anywhere in the
+  language.
 
 ## 2. One regime: primitives by value, everything else shared
 

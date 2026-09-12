@@ -114,6 +114,9 @@ pub enum TyKind {
     Prim(PrimTy),
     /// immutable UTF-8 string cell
     Str,
+    /// immutable raw byte buffer cell (RFC 0004 — the language's binary
+    /// data type); contiguous, content-compared, COW-shared like `Str`
+    Bytes,
     /// growable buffer cell; flat for primitive elem, handle slots otherwise
     Vec { elem: TypeId },
     /// fixed-length cell; `len` is part of the type's identity (RFC 0005)
@@ -164,6 +167,9 @@ pub const TY_BOOL: TypeId = 11;
 pub const TY_CHAR: TypeId = 12;
 pub const TY_STR: TypeId = 13;
 pub const TY_OPAQUE: TypeId = 14;
+/// immutable binary buffer (RFC 0004) — appended after `Opaque`; fixed ids
+/// are wire-stable and must never be reordered
+pub const TY_BYTES: TypeId = 15;
 
 impl TypeTable {
     /// Boot table: primitives + string + Opaque at fixed ids.
@@ -192,6 +198,7 @@ impl TypeTable {
         push("char", TyKind::Prim(PrimTy::Char), 4, 4);
         push("string", TyKind::Str, 8, 8);
         push("Opaque", TyKind::Opaque, 8, 8);
+        push("bytes", TyKind::Bytes, 8, 8);
         t
     }
 

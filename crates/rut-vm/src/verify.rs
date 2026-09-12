@@ -308,6 +308,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
         }
         // three-operand ops
         Op::StrCmp { dst, a, b, .. } | Op::RefEq { dst, a, b, .. }
+        | Op::BytesCmp { dst, a, b, .. }
         | Op::ArrGet { dst, arr: a, idx: b, .. }
         | Op::AddF { dst, a, b, .. } | Op::SubF { dst, a, b, .. } | Op::MulF { dst, a, b, .. }
         | Op::DivF { dst, a, b, .. } | Op::ModF { dst, a, b, .. } | Op::EqF { dst, a, b, .. }
@@ -399,6 +400,11 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*src);
         }
         Op::StrCharAt { dst, s, idx } => {
+            push(*dst);
+            push(*s);
+            push(*idx);
+        }
+        Op::BytesGet { dst, s, idx } => {
             push(*dst);
             push(*s);
             push(*idx);
