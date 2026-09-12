@@ -212,6 +212,7 @@ impl ExprFrame {
                 Tok::Amp => (BinOp::BitAnd, 8, 8),
                 Tok::Shl => (BinOp::Shl, 9, 9),
                 Tok::Shr => (BinOp::Shr, 9, 9),
+                Tok::AmpShl => (BinOp::WrapShl, 9, 9),
                 Tok::Plus => (BinOp::Add, 10, 10),
                 Tok::Minus => (BinOp::Sub, 10, 10),
                 Tok::AmpPlus => (BinOp::WrapAdd, 10, 10),

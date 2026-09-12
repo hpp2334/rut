@@ -1088,6 +1088,9 @@ impl Vm {
             BitOp::Xor => (a ^ b, false),
             BitOp::Shl => a.overflowing_shl((b & 63) as u32),
             BitOp::Shr => a.overflowing_shr((b & 63) as u32),
+            // wrapping `&<<` (RFC 0004 §3): the shifted-out bits are simply
+            // gone — truncate to the operand width, never trap
+            BitOp::WrapShl => return Ok(Slot::int(trunc_to(a.wrapping_shl((b & 63) as u32), p))),
         };
         if o {
             return Err(Trap::new(TrapKind::Overflow, "shift overflow"));

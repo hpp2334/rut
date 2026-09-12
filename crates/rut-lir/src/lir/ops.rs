@@ -103,6 +103,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     BitOr => BitOp::Or,
                     BitXor => BitOp::Xor,
                     Shl => BitOp::Shl,
+                    WrapShl => BitOp::WrapShl,
                     _ => BitOp::Shr,
                 };
                 let dst = self.new_reg(ty);
@@ -395,7 +396,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     BitAnd => BitOp::And,
                     BitOr => BitOp::Or,
                     BitXor => BitOp::Xor,
-                    Shl | WrapShl => BitOp::Shl,
+                    Shl => BitOp::Shl,
+                    WrapShl => BitOp::WrapShl,
                     _ => BitOp::Shr,
                 };
                 self.emit(Op::Bit { op: bop, ty, dst, a, b }, sp.lo);

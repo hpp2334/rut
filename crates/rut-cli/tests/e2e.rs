@@ -236,12 +236,35 @@ pub fn main() -> unit {
     let mut x = 2147483647;
     x = x &+ 1;              // wrapping: fine (RFC 0004 §3)
     print(f"x={x}");
+    let mut s = 1073741824;  // 1 << 30
+    s = s &<< 1;             // wrapping shl: bits shifted out are gone
+    print(f"s={s}");
+    s &<<= 1;                // compound form, same law
+    print(f"s={s}");
+    let u: u32 = 3221225472; // 0xC000_0000
+    print(f"u={u &<< 1}");
     let y = 2147483647 + 1;  // trapping: overflow
     print(f"y={y}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(lines, vec!["x=-2147483648"]);
+    assert_eq!(lines, vec!["x=-2147483648", "s=-2147483648", "s=0", "u=2147483648"]);
+    assert_eq!(trap.as_deref(), Some("Overflow"));
+}
+
+#[test]
+fn plain_shl_traps_when_bits_leave_the_width() {
+    // RFC 0004 §3: `<<` traps; only `&<<` wraps. This was silently a
+    // RIGHT shift before BitOp::WrapShl existed.
+    let src = r#"
+pub fn main() -> unit {
+    print("before");
+    let s = 1073741824 << 1;   // 1 << 31 does not fit i32
+    print(f"after {s}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(lines, vec!["before"]);
     assert_eq!(trap.as_deref(), Some("Overflow"));
 }
 

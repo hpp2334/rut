@@ -523,6 +523,7 @@ fn arith(b: u8) -> Result<ArithOp, String> {
 fn bitop(b: u8) -> Result<BitOp, String> {
     Ok(match b {
         0 => BitOp::And, 1 => BitOp::Or, 2 => BitOp::Xor, 3 => BitOp::Shl, 4 => BitOp::Shr,
+        5 => BitOp::WrapShl,
         _ => return Err("bad bitop tag".into()),
     })
 }

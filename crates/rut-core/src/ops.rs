@@ -25,6 +25,9 @@ pub enum CmpOp {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitOp {
     And, Or, Xor, Shl, Shr,
+    /// wrapping `&<<` (RFC 0004 §3): left shift truncated to the operand
+    /// width — never traps, unlike `Shl`
+    WrapShl,
 }
 
 /// Internal natives reached via `CallNat` — RFC 0032 §1.1 R2: things rut
