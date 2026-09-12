@@ -7,7 +7,7 @@
 //! destruction, identity, `Trap::OutOfMemory` before any write — holds).
 
 use crate::arena::{release_cell, Arena};
-use rut_core::types::{TypeId, TypeTable, TyKind};
+use rut_core::types::{PrimTy, TypeId, TypeTable, TyKind};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -249,10 +249,179 @@ impl Slots {
     }
 }
 
+/// Compact element storage for a sequence cell (RFC 0015 §4: "flat for
+/// primitive elem"). Sub-slot-width primitives are packed to their machine
+/// width — a `Vec<u8>` costs one byte per element instead of eight — while
+/// 8-byte primitives and every reference-typed element keep an 8-byte slot.
+pub enum Packed {
+    Slots(Vec<Slot>),
+    U8(Vec<u8>),
+    I8(Vec<i8>),
+    U16(Vec<u16>),
+    I16(Vec<i16>),
+    U32(Vec<u32>),
+    I32(Vec<i32>),
+    F32(Vec<f32>),
+    Char(Vec<u32>),
+    Bool(Vec<u8>),
+}
+
+impl Packed {
+    /// Pick the storage kind for `elem`; unknown/sentinel ids (e.g. the
+    /// untyped `TY_ANY`) fall back to slots.
+    pub fn for_elem(elem: TypeId, table: &TypeTable, cap: usize) -> Packed {
+        if (elem as usize) >= table.types.len() {
+            return Packed::Slots(Vec::with_capacity(cap));
+        }
+        match table.kind(elem) {
+            TyKind::Prim(PrimTy::U8) => Packed::U8(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::I8) => Packed::I8(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::U16) => Packed::U16(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::I16) => Packed::I16(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::U32) => Packed::U32(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::I32) => Packed::I32(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::F32) => Packed::F32(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::Char) => Packed::Char(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::Bool) => Packed::Bool(Vec::with_capacity(cap)),
+            _ => Packed::Slots(Vec::with_capacity(cap)),
+        }
+    }
+
+    pub fn from_slots(elem: TypeId, table: &TypeTable, slots: Vec<Slot>) -> Packed {
+        let mut p = Packed::for_elem(elem, table, slots.len());
+        for s in slots {
+            p.push(s);
+        }
+        p
+    }
+
+    /// Bytes of accounting/actual storage per element.
+    pub fn elem_width(&self) -> u64 {
+        match self {
+            Packed::Slots(_) => 8,
+            Packed::U8(_) | Packed::I8(_) | Packed::Bool(_) => 1,
+            Packed::U16(_) | Packed::I16(_) => 2,
+            Packed::U32(_) | Packed::I32(_) | Packed::F32(_) | Packed::Char(_) => 4,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Packed::Slots(v) => v.len(),
+            Packed::U8(v) => v.len(),
+            Packed::I8(v) => v.len(),
+            Packed::U16(v) => v.len(),
+            Packed::I16(v) => v.len(),
+            Packed::U32(v) => v.len(),
+            Packed::I32(v) => v.len(),
+            Packed::F32(v) => v.len(),
+            Packed::Char(v) => v.len(),
+            Packed::Bool(v) => v.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Reconstruct a slot (the VM's untagged 8-byte value) from an element.
+    pub fn get(&self, i: usize) -> Option<Slot> {
+        Some(match self {
+            Packed::Slots(v) => *v.get(i)?,
+            Packed::U8(v) => Slot::int(*v.get(i)? as i64),
+            Packed::I8(v) => Slot::int(*v.get(i)? as i64),
+            Packed::U16(v) => Slot::int(*v.get(i)? as i64),
+            Packed::I16(v) => Slot::int(*v.get(i)? as i64),
+            Packed::U32(v) => Slot::int(*v.get(i)? as i64),
+            Packed::I32(v) => Slot::int(*v.get(i)? as i64),
+            Packed::F32(v) => Slot::float(*v.get(i)? as f64),
+            Packed::Char(v) => Slot::ch(char::from_u32(*v.get(i)?).unwrap_or('\0')),
+            Packed::Bool(v) => Slot::bool(*v.get(i)? != 0),
+        })
+    }
+
+    pub fn set(&mut self, i: usize, s: Slot) -> Option<Slot> {
+        let old = self.get(i)?;
+        match self {
+            Packed::Slots(v) => v[i] = s,
+            Packed::U8(v) => v[i] = unsafe { s.i } as u8,
+            Packed::I8(v) => v[i] = unsafe { s.i } as i8,
+            Packed::U16(v) => v[i] = unsafe { s.i } as u16,
+            Packed::I16(v) => v[i] = unsafe { s.i } as i16,
+            Packed::U32(v) => v[i] = unsafe { s.i } as u32,
+            Packed::I32(v) => v[i] = unsafe { s.i } as i32,
+            Packed::F32(v) => v[i] = unsafe { s.f } as f32,
+            Packed::Char(v) => v[i] = s.as_char() as u32,
+            Packed::Bool(v) => v[i] = s.as_bool() as u8,
+        }
+        Some(old)
+    }
+
+    pub fn push(&mut self, s: Slot) {
+        match self {
+            Packed::Slots(v) => v.push(s),
+            Packed::U8(v) => v.push(unsafe { s.i } as u8),
+            Packed::I8(v) => v.push(unsafe { s.i } as i8),
+            Packed::U16(v) => v.push(unsafe { s.i } as u16),
+            Packed::I16(v) => v.push(unsafe { s.i } as i16),
+            Packed::U32(v) => v.push(unsafe { s.i } as u32),
+            Packed::I32(v) => v.push(unsafe { s.i } as i32),
+            Packed::F32(v) => v.push(unsafe { s.f } as f32),
+            Packed::Char(v) => v.push(s.as_char() as u32),
+            Packed::Bool(v) => v.push(s.as_bool() as u8),
+        }
+    }
+
+    pub fn pop(&mut self) -> Option<Slot> {
+        let n = self.len();
+        if n == 0 {
+            return None;
+        }
+        let v = self.get(n - 1);
+        match self {
+            Packed::Slots(v) => {
+                v.pop();
+            }
+            Packed::U8(v) => {
+                v.pop();
+            }
+            Packed::I8(v) => {
+                v.pop();
+            }
+            Packed::U16(v) => {
+                v.pop();
+            }
+            Packed::I16(v) => {
+                v.pop();
+            }
+            Packed::U32(v) => {
+                v.pop();
+            }
+            Packed::I32(v) => {
+                v.pop();
+            }
+            Packed::F32(v) => {
+                v.pop();
+            }
+            Packed::Char(v) => {
+                v.pop();
+            }
+            Packed::Bool(v) => {
+                v.pop();
+            }
+        }
+        v
+    }
+
+    pub fn to_slots(&self) -> Vec<Slot> {
+        (0..self.len()).map(|i| self.get(i).unwrap()).collect()
+    }
+}
+
 pub enum CellData {
     Str(String),
-    Vec { elem: TypeId, items: RefCell<Vec<Slot>> },
-    Array { elem: TypeId, items: RefCell<Vec<Slot>> },
+    Vec { elem: TypeId, items: RefCell<Packed> },
+    Array { elem: TypeId, items: RefCell<Packed> },
     /// enum member — immortal singleton per (ty, member)
     Enum { member: u32 },
     /// Option/Result: tag 0 = some/ok, 1 = none/err
@@ -312,8 +481,8 @@ impl CellVal {
     }
     pub fn seq_items_copy(&self) -> Option<Vec<Slot>> {
         match &self.data {
-            CellData::Vec { items, .. } => Some(items.borrow().clone()),
-            CellData::Array { items, .. } => Some(items.borrow().clone()),
+            CellData::Vec { items, .. } => Some(items.borrow().to_slots()),
+            CellData::Array { items, .. } => Some(items.borrow().to_slots()),
             _ => None,
         }
     }
@@ -426,18 +595,27 @@ impl Heap {
         self.mint(rut_core::types::TY_STR, CellData::Str(s), n)
     }
 
-    pub fn alloc_vec(&self, elem: TypeId, cap: usize) -> Result<Slot, Trap> {
+    pub fn alloc_vec(&self, elem: TypeId, cap: usize, table: &TypeTable) -> Result<Slot, Trap> {
+        let p = Packed::for_elem(elem, table, cap);
+        let bytes = (cap as u64) * p.elem_width();
         self.mint(
             0, // Vec cells carry the elem kind in CellData; the *slot's*
                // static type knows the instantiation
-            CellData::Vec { elem, items: RefCell::new(Vec::with_capacity(cap)) },
-            (cap as u64) * 8,
+            CellData::Vec { elem, items: RefCell::new(p) },
+            bytes,
         )
     }
 
-    pub fn alloc_array(&self, elem: TypeId, items: Vec<Slot>) -> Result<Slot, Trap> {
-        let n = items.len() as u64;
-        self.mint(0, CellData::Array { elem, items: RefCell::new(items) }, n * 8)
+    pub fn alloc_array(&self, elem: TypeId, items: Vec<Slot>, table: &TypeTable) -> Result<Slot, Trap> {
+        let p = Packed::from_slots(elem, table, items);
+        let bytes = (p.len() as u64) * p.elem_width();
+        self.mint(0, CellData::Array { elem, items: RefCell::new(p) }, bytes)
+    }
+
+    /// Vec from an already-packed payload (the `own` deep-clone path).
+    fn alloc_vec_packed(&self, elem: TypeId, p: Packed) -> Result<Slot, Trap> {
+        let bytes = (p.len() as u64) * p.elem_width();
+        self.mint(0, CellData::Vec { elem, items: RefCell::new(p) }, bytes)
     }
 
     pub fn alloc_record(&self, ty: TypeId, fields: Vec<Slot>) -> Result<Slot, Trap> {
@@ -551,15 +729,13 @@ impl Heap {
                 if let CellData::Vec { items, .. } = &cell.data {
                     let src = items.borrow();
                     let mut out = Vec::with_capacity(src.len());
-                    for it in src.iter() {
-                        out.push(self.clone_slot(*it, elem, table)?);
-                    }
-                    self.alloc_vec(elem, out.len()).map(|v| {
-                        if let CellData::Vec { items, .. } = &cell_of(v).data {
-                            *items.borrow_mut() = out;
+                    for i in 0..src.len() {
+                        if let Some(it) = src.get(i) {
+                            out.push(self.clone_slot(it, elem, table)?);
                         }
-                        v
-                    })
+                    }
+                    drop(src);
+                    self.alloc_vec_packed(elem, Packed::from_slots(elem, table, out))
                 } else {
                     Err(Trap::new(TrapKind::Invalid, "own: not a vec"))
                 }
@@ -568,10 +744,14 @@ impl Heap {
                 let cell = cell_of(s);
                 if let CellData::Array { items, .. } = &cell.data {
                     let mut out = Vec::with_capacity(len as usize);
-                    for it in items.borrow().iter() {
-                        out.push(self.clone_slot(*it, elem, table)?);
+                    let src = items.borrow();
+                    for i in 0..src.len() {
+                        if let Some(it) = src.get(i) {
+                            out.push(self.clone_slot(it, elem, table)?);
+                        }
                     }
-                    self.alloc_array(elem, out)
+                    drop(src);
+                    self.alloc_array(elem, out, table)
                 } else {
                     Err(Trap::new(TrapKind::Invalid, "own: not an array"))
                 }

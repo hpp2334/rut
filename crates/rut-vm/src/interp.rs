@@ -7,7 +7,7 @@
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
 use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
+use crate::heap::{cell_of, CellData, Heap, Packed, Slot, Trap, TrapKind, Value};
 use rut_core::ops::*;
 use rut_core::types::{PrimTy, TypeId, TyKind};
 use std::cell::RefCell;
@@ -205,9 +205,13 @@ impl Vm {
             (Value::Char(c), TyKind::Prim(PrimTy::Char)) => Slot::ch(*c),
             (Value::Str(s), TyKind::Str) => self.heap.alloc_str(s.clone()).map_err(|t| t.msg)?,
             (Value::Bytes(b), TyKind::Vec { elem }) if elem == self.ty_u8() => {
-                let cell = self.heap.alloc_vec(elem, b.len()).map_err(|t| t.msg)?;
+                let cell = self
+                    .heap
+                    .alloc_vec(elem, b.len(), &self.prog.types)
+                    .map_err(|t| t.msg)?;
                 if let CellData::Vec { items, .. } = &cell_of(cell).data {
-                    *items.borrow_mut() = b.iter().map(|&x| Slot::int(x as i64)).collect();
+                    *items.borrow_mut() =
+                        Packed::from_slots(elem, &self.prog.types, b.iter().map(|&x| Slot::int(x as i64)).collect());
                 }
                 cell
             }
@@ -391,6 +395,22 @@ impl Vm {
                         if self.cur_regs[*cond as usize].as_bool() { *then_t } else { *else_t };
                 }
                 Op::LoopHead => self.cur_pc += 1,
+                Op::ArrGet { dst, arr, idx } => {
+                    self.op_arr_get(*dst, *arr, *idx)?;
+                    self.cur_pc += 1;
+                }
+                Op::ArrSet { arr, idx, val } => {
+                    self.op_arr_set(*arr, *idx, *val)?;
+                    self.cur_pc += 1;
+                }
+                Op::GetF { dst, obj, field } => {
+                    self.op_getf(*dst, *obj, *field)?;
+                    self.cur_pc += 1;
+                }
+                Op::SetF { obj, field, val } => {
+                    self.op_setf(*obj, *field, *val)?;
+                    self.cur_pc += 1;
+                }
                 _ => {
                     self.cur_pc += 1;
                     self.step(op.clone())?;
@@ -632,40 +652,8 @@ impl Vm {
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::GetF { dst, obj, field } => {
-                let cell = cell_of(r!(obj));
-                let v = match &cell.data {
-                    crate::heap::CellData::Record { fields } => fields
-                        .borrow()
-                        .get(field as usize)
-                        .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
-                    _ => return Err(Trap::new(TrapKind::Invalid, "field on non-record")),
-                };
-                let fty = self.field_ty(cell.ty, field);
-                let old = self.cur_regs[dst as usize];
-                self.cur_regs[dst as usize] = v;
-                if self.is_ref(fty) {
-                    self.heap.retain(v);
-                    self.heap.release(old);
-                }
-            }
-            Op::SetF { obj, field, val } => {
-                let cell = cell_of(r!(obj));
-                let fty = self.field_ty(cell.ty, field);
-                let v = r!(val);
-                let old = if let crate::heap::CellData::Record { fields } = &cell.data {
-                    fields
-                        .borrow_mut()
-                        .set(field as usize, v)
-                        .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?
-                } else {
-                    return Err(Trap::new(TrapKind::Invalid, "field-set on non-record"));
-                };
-                if self.is_ref(fty) {
-                    self.heap.retain(v);
-                    self.heap.release(old);
-                }
-            }
+            Op::GetF { dst, obj, field } => self.op_getf(dst, obj, field)?,
+            Op::SetF { obj, field, val } => self.op_setf(obj, field, val)?,
             Op::Own { dst, src, ty } => {
                 let v = self.heap.own(r!(src), ty, &self.prog.types)?;
                 let old = self.cur_regs[dst as usize];
@@ -681,7 +669,7 @@ impl Vm {
                     _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-vec")),
                 };
                 let n = unsafe { r!(len).i }.max(0) as usize;
-                let c = self.heap.alloc_vec(elem, n)?;
+                let c = self.heap.alloc_vec(elem, n, &self.prog.types)?;
                 if let crate::heap::CellData::Vec { items, .. } = &cell_of(c).data {
                     let mut fb = items.borrow_mut();
                     for _ in 0..n {
@@ -698,34 +686,13 @@ impl Vm {
                     _ => TY_ANY,
                 };
                 let vals: Vec<Slot> = elems.iter().map(|&e| r!(e)).collect();
-                let c = self.heap.alloc_array(elem, vals)?;
+                let c = self.heap.alloc_array(elem, vals, &self.prog.types)?;
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::ArrGet { dst, arr, idx } => {
-                let i = unsafe { r!(idx).i };
-                let cell = cell_of(r!(arr));
-                let v = seq_get(cell, i)?;
-                let elem = self.elem_ty_of(cell);
-                let old = self.cur_regs[dst as usize];
-                self.cur_regs[dst as usize] = v;
-                if self.is_ref(elem) {
-                    self.heap.retain(v);
-                    self.heap.release(old);
-                }
-            }
-            Op::ArrSet { arr, idx, val } => {
-                let i = unsafe { r!(idx).i };
-                let cell = cell_of(r!(arr));
-                let elem = self.elem_ty_of(cell);
-                let v = r!(val);
-                let old = seq_set(cell, i, v)?;
-                if self.is_ref(elem) {
-                    self.heap.retain(v);
-                    self.heap.release(old);
-                }
-            }
+            Op::ArrGet { dst, arr, idx } => self.op_arr_get(dst, arr, idx)?,
+            Op::ArrSet { arr, idx, val } => self.op_arr_set(arr, idx, val)?,
 
             Op::EnumNew { dst, ty, member } => {
                 let c = self.heap.enum_member(ty, member)?;
@@ -949,6 +916,82 @@ impl Vm {
         }
     }
 
+    // ---- op bodies shared by `step` and the `run_loop` fast path ----
+
+    /// `ArrGet` — the fast path calls this directly, so it must stay small
+    /// and inlinable.
+    #[inline]
+    fn op_arr_get(&mut self, dst: Reg, arr: Reg, idx: Reg) -> Result<(), Trap> {
+        let i = unsafe { self.cur_regs[idx as usize].i };
+        let cell = cell_of(self.cur_regs[arr as usize]);
+        let v = seq_get(cell, i)?;
+        let elem = self.elem_ty_of(cell);
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = v;
+        if self.is_ref(elem) {
+            self.heap.retain(v);
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
+    /// `ArrSet` — shared by `step` and the `run_loop` fast path.
+    #[inline]
+    fn op_arr_set(&mut self, arr: Reg, idx: Reg, val: Reg) -> Result<(), Trap> {
+        let i = unsafe { self.cur_regs[idx as usize].i };
+        let cell = cell_of(self.cur_regs[arr as usize]);
+        let elem = self.elem_ty_of(cell);
+        let v = self.cur_regs[val as usize];
+        let old = seq_set(cell, i, v)?;
+        if self.is_ref(elem) {
+            self.heap.retain(v);
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
+    /// `GetF` — shared by `step` and the `run_loop` fast path.
+    #[inline]
+    fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32) -> Result<(), Trap> {
+        let cell = cell_of(self.cur_regs[obj as usize]);
+        let v = match &cell.data {
+            CellData::Record { fields } => fields
+                .borrow()
+                .get(field as usize)
+                .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
+            _ => return Err(Trap::new(TrapKind::Invalid, "field on non-record")),
+        };
+        let fty = self.field_ty(cell.ty, field);
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = v;
+        if self.is_ref(fty) {
+            self.heap.retain(v);
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
+    /// `SetF` — shared by `step` and the `run_loop` fast path.
+    #[inline]
+    fn op_setf(&mut self, obj: Reg, field: u32, val: Reg) -> Result<(), Trap> {
+        let cell = cell_of(self.cur_regs[obj as usize]);
+        let fty = self.field_ty(cell.ty, field);
+        let v = self.cur_regs[val as usize];
+        let old = if let CellData::Record { fields } = &cell.data {
+            fields
+                .borrow_mut()
+                .set(field as usize, v)
+                .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?
+        } else {
+            return Err(Trap::new(TrapKind::Invalid, "field-set on non-record"));
+        };
+        if self.is_ref(fty) {
+            self.heap.retain(v);
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
     fn sum_payload_ty(&self, ty: TypeId, want_err: bool) -> TypeId {
         match self.prog.types.kind(ty) {
             TyKind::Option { elem } => *elem,
@@ -1001,12 +1044,12 @@ impl Vm {
                 }
             }
             Nat::VecNew => {
-                let c = self.heap.alloc_vec(TY_ANY, 0)?;
+                let c = self.heap.alloc_vec(TY_ANY, 0, &self.prog.types)?;
                 self.store_result(dst, c)?;
             }
             Nat::VecZeroed => {
                 let n = unsafe { r!(args[0]).i }.max(0) as usize;
-                let c = self.heap.alloc_vec(TY_ANY, n)?;
+                let c = self.heap.alloc_vec(TY_ANY, n, &self.prog.types)?;
                 if let crate::heap::CellData::Vec { items, .. } = &cell_of(c).data {
                     let mut fb = items.borrow_mut();
                     for _ in 0..n {
@@ -1021,7 +1064,7 @@ impl Vm {
                     return Err(Trap::new(TrapKind::Invalid, "Vec.from expects an array"));
                 };
                 let items = cell.seq_items_copy().unwrap_or_default();
-                let c = self.heap.alloc_vec(elem, items.len())?;
+                let c = self.heap.alloc_vec(elem, items.len(), &self.prog.types)?;
                 if let crate::heap::CellData::Vec { items: out, .. } = &cell_of(c).data {
                     let mut ob = out.borrow_mut();
                     for it in items {
@@ -1048,14 +1091,12 @@ impl Vm {
                 let elem = self.elem_ty_of(cell);
                 let v = r!(args[0]);
                 if let crate::heap::CellData::Vec { items, .. } = &cell.data {
-                    let len = items.borrow().len();
                     // growth accounting rides the heap budget (RFC 0040 §1)
-                    self.heap.charge_public(8)?;
+                    self.heap.charge_public(items.borrow().elem_width())?;
                     if self.is_ref(elem) {
                         self.heap.retain(v);
                     }
                     items.borrow_mut().push(v);
-                    let _ = len;
                     if let Some(d) = dst {
                         self.cur_regs[d as usize] = Slot::int(items.borrow().len() as i64);
                     }
@@ -1302,7 +1343,7 @@ fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) -> Value {
         TyKind::Vec { elem: _ } => {
             let cell = cell_of(v);
             if let CellData::Vec { items, .. } = &cell.data {
-                Value::Bytes(items.borrow().iter().map(|s| unsafe { s.i } as u8).collect())
+                Value::Bytes(items.borrow().to_slots().iter().map(|s| unsafe { s.i } as u8).collect())
             } else {
                 Value::Bytes(Vec::new())
             }
@@ -1368,7 +1409,6 @@ fn seq_get(cell: &crate::heap::CellVal, i: i64) -> Result<Slot, Trap> {
     };
     items
         .get(i as usize)
-        .copied()
         .ok_or_else(|| Trap::new(TrapKind::IndexOutOfBounds, format!("{what} index {i} out of bounds (len {})", items.len())))
 }
 
@@ -1378,11 +1418,10 @@ fn seq_set(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Result<Slot, Trap> {
         crate::heap::CellData::Array { items, .. } => items.borrow_mut(),
         _ => return Err(Trap::new(TrapKind::Invalid, "index-set on non-sequence")),
     };
-    let old = *items
-        .get(i as usize)
-        .ok_or_else(|| Trap::new(TrapKind::IndexOutOfBounds, format!("index {i} out of bounds (len {})", items.len())))?;
-    items[i as usize] = v;
-    Ok(old)
+    let len = items.len();
+    items
+        .set(i as usize, v)
+        .ok_or_else(|| Trap::new(TrapKind::IndexOutOfBounds, format!("index {i} out of bounds (len {len})")))
 }
 
 fn sum_tag(cell: &crate::heap::CellVal) -> Result<u32, Trap> {

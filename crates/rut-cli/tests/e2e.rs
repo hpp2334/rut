@@ -363,10 +363,11 @@ pub fn main() -> unit {
 #[test]
 fn heap_budget_traps_before_the_write() {
     // RFC 0040 §1: OutOfMemory leaves the heap byte-identical — a tiny
-    // budget fails the Vec allocation cleanly
+    // budget fails the Vec allocation cleanly. `Vec<u8>` packs one byte
+    // per element, so it takes 5M elements to exceed the 4 MB budget.
     let src = r#"
 pub fn main() -> unit {
-    let v = Vec<u8>(1000000);
+    let v = Vec<u8>(5000000);
     print("allocated");
 }
 "#;
