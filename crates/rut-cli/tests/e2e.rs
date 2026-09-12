@@ -1147,3 +1147,31 @@ pub fn main() -> unit {
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["6"]);
 }
+
+#[test]
+fn associated_type_substitutes_at_dispatch() {
+    // the impl binds `type Name = string` (not i32): the concrete-receiver
+    // dispatch substitutes the binding, and the trait signature uses the
+    // `Self.Name` projection
+    let src = r#"
+trait Named {
+    type Name;
+    fn name(self) -> Self.Name;
+}
+class C {
+    tag: i32;
+    fn new() -> Self { return Self { tag: 1 }; }
+}
+impl Named for C {
+    type Name = string;
+    fn name(self) -> string { return "c"; }
+}
+pub fn main() -> unit {
+    let c = C.new();
+    print(f"{c.name()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["c"]);
+}

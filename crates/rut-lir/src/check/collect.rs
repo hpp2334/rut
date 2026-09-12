@@ -308,8 +308,19 @@ impl<'a> Ctx<'a> {
                 if self.name(name) == "Self" {
                     return self.mk_dyn(trait_id);
                 }
-                if assoc.iter().any(|a| a == self.name(name)) {
-                    return TY_I32;
+                if let Some(idx) = assoc.iter().position(|a| a == self.name(name)) {
+                    return self.mk_assoc(trait_id, idx as u32, &assoc[idx]);
+                }
+            }
+            // projection `Self.Target` — the trait's associated type under
+            // `Self`; resolved per impl at the use site
+            if segs.len() == 2
+                && segs[0].generics.is_empty()
+                && segs[1].generics.is_empty()
+                && self.name(segs[0].name) == "Self"
+            {
+                if let Some(idx) = assoc.iter().position(|a| a == self.name(segs[1].name)) {
+                    return self.mk_assoc(trait_id, idx as u32, &assoc[idx]);
                 }
             }
         }

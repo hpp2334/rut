@@ -133,6 +133,9 @@ pub struct Ctx<'a> {
     pub type_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), TypeId>,
     /// generic-trait instantiation cache: (trait, type args) -> trait id
     pub trait_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), u32>,
+    /// associated-type placeholder types: interned type id -> (trait id,
+    /// assoc name). Substituted per impl at the dispatch site.
+    pub assoc_ty: std::collections::HashMap<TypeId, (u32, String)>,
     /// whether `import` is resolved by the driver (module loading on)
     pub allow_imports: bool,
     // instantiation queue
@@ -182,6 +185,7 @@ impl<'a> Ctx<'a> {
             inst_data: std::collections::HashMap::new(),
             type_inst: std::collections::HashMap::new(),
             trait_inst: std::collections::HashMap::new(),
+            assoc_ty: std::collections::HashMap::new(),
             allow_imports: false,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
@@ -373,6 +377,16 @@ impl<'a> Ctx<'a> {
             name,
             kind: TyKind::TraitObj { trait_id },
         })
+    }
+    /// An associated-type placeholder (`Trait::Target`): a handle-shaped
+    /// stand-in the dispatch site substitutes with the impl's binding. It
+    /// never reaches the VM; a unique name keeps it distinct per (trait,
+    /// index) under structural interning.
+    pub fn mk_assoc(&mut self, trait_id: u32, index: u32, assoc_name: &str) -> TypeId {
+        let name = format!("{}::assoc{}", self.traits[trait_id as usize].name, index);
+        let ty = self.types.intern(RutType { name, kind: TyKind::Opaque });
+        self.assoc_ty.insert(ty, (trait_id, assoc_name.to_string()));
+        ty
     }
     pub fn mk_fn_ty(&mut self, params: Vec<TypeId>, ret: TypeId) -> TypeId {
         let ps: Vec<String> = params.iter().map(|&p| self.types.name(p).to_string()).collect();
