@@ -83,6 +83,15 @@ pub struct Vm {
     sum_payload_repr: Vec<[Repr; 2]>,
 }
 
+/// Const-generic op codes for `arith_int` — RFC 0032: the opcode is the
+/// operation, so each specialized `addi`/`muli`/... instantiates a
+/// monomorphic body and the `match OP` folds without relying on inlining.
+const IOP_ADD: i32 = 0;
+const IOP_SUB: i32 = 1;
+const IOP_MUL: i32 = 2;
+const IOP_DIV: i32 = 3;
+const IOP_MOD: i32 = 4;
+
 impl Vm {
     pub fn new(prog: Rc<Program>, limits: &Limits, hooks: HostHooks) -> Result<Vm, Trap> {
         let heap = Heap::new(limits.heap_limit_bytes);
@@ -491,52 +500,52 @@ impl Vm {
                 // `bitop_int`/`cmp_int` fold their switch away; `prim` stays
                 // for the per-prim width fitting
                 Op::AddI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Add, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    let v = self.arith_int::<{ IOP_ADD }, false>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::SubI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Sub, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    let v = self.arith_int::<{ IOP_SUB }, false>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::MulI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Mul, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    let v = self.arith_int::<{ IOP_MUL }, false>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::DivI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Div, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    let v = self.arith_int::<{ IOP_DIV }, false>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::ModI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Mod, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    let v = self.arith_int::<{ IOP_MOD }, false>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::WAddI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Add, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    let v = self.arith_int::<{ IOP_ADD }, true>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::WSubI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Sub, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    let v = self.arith_int::<{ IOP_SUB }, true>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::WMulI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Mul, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    let v = self.arith_int::<{ IOP_MUL }, true>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::WDivI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Div, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    let v = self.arith_int::<{ IOP_DIV }, true>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
                 Op::WModI { prim, dst, a, b } => {
-                    let v = self.arith_int(ArithOp::Mod, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    let v = self.arith_int::<{ IOP_MOD }, true>(*prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
                     self.cur_regs[*dst as usize] = v;
                     self.cur_pc += 1;
                 }
@@ -1046,7 +1055,7 @@ impl Vm {
 
     /// `ArrGet` — the fast path calls this directly, so it must stay small
     /// and inlinable.
-    #[inline]
+    #[inline(always)]
     fn op_arr_get(&mut self, dst: Reg, arr: Reg, idx: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
@@ -1061,7 +1070,7 @@ impl Vm {
     }
 
     /// `ArrSet` — shared by `step` and the `run_loop` fast path.
-    #[inline]
+    #[inline(always)]
     fn op_arr_set(&mut self, arr: Reg, idx: Reg, val: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
@@ -1075,7 +1084,7 @@ impl Vm {
     }
 
     /// `GetF` — shared by `step` and the `run_loop` fast path.
-    #[inline]
+    #[inline(always)]
     fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32, repr: Repr) -> Result<(), Trap> {
         let cell = cell_of(self.cur_regs[obj as usize]);
         let v = match &cell.data {
@@ -1095,7 +1104,7 @@ impl Vm {
     }
 
     /// `SetF` — shared by `step` and the `run_loop` fast path.
-    #[inline]
+    #[inline(always)]
     fn op_setf(&mut self, obj: Reg, field: u32, val: Reg, repr: Repr) -> Result<(), Trap> {
         let cell = cell_of(self.cur_regs[obj as usize]);
         let v = self.cur_regs[val as usize];
@@ -1115,7 +1124,7 @@ impl Vm {
     }
 
     /// `MakeRecord` — fused record literal (one alloc, all fields written).
-    #[inline]
+    #[inline(always)]
     fn op_make_record(&mut self, dst: Reg, ty: TypeId, vals: &[Reg]) -> Result<(), Trap> {
         let c = self.heap.alloc_record_zeroed(ty, vals.len())?;
         if let CellData::Record { fields } = &cell_of(c).data {
@@ -1136,7 +1145,7 @@ impl Vm {
 
     /// `Call` — shared by `step` and the `run_loop` fast path (avoids
     /// cloning the `args` vector per call).
-    #[inline]
+    #[inline(always)]
     fn op_call(&mut self, func: u32, args: &[Reg], dst: Option<Reg>) {
         let nregs = self.prog.funcs[func as usize].regs.len();
         let mut regs = self.take_regs(nregs);
@@ -1150,7 +1159,7 @@ impl Vm {
     }
 
     /// `CallM` — shared by `step` and the `run_loop` fast path.
-    #[inline]
+    #[inline(always)]
     fn op_call_m(&mut self, func: u32, recv: Reg, args: &[Reg], dst: Option<Reg>) {
         let nregs = self.prog.funcs[func as usize].regs.len();
         let mut regs = self.take_regs(nregs);
@@ -1168,7 +1177,7 @@ impl Vm {
     }
 
     /// `CallI` — shared by `step` and the `run_loop` fast path.
-    #[inline]
+    #[inline(always)]
     fn op_call_i(&mut self, slot: u32, recv: Reg, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
         let ty = cell_of(self.cur_regs[recv as usize]).ty;
         let fid = self
@@ -1204,7 +1213,7 @@ impl Vm {
 
     /// `CallFn` — shared by `step` and the `run_loop` fast path. Reads the
     /// captures by reference (no per-call `Vec` clone).
-    #[inline]
+    #[inline(always)]
     fn op_call_fn(&mut self, fval: Reg, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
         let cell = cell_of(self.cur_regs[fval as usize]);
         let (fid, captures): (u32, &[Slot]) = match &cell.data {
@@ -1236,7 +1245,7 @@ impl Vm {
     }
 
     /// `ArrLit` — shared by `step` and the `run_loop` fast path.
-    #[inline]
+    #[inline(always)]
     fn op_arr_lit(&mut self, dst: Reg, ty: TypeId, elems: &[Reg]) -> Result<(), Trap> {
         let elem = match self.prog.types.kind(ty) {
             TyKind::Array { elem, .. } | TyKind::Vec { elem } => *elem,
@@ -1452,33 +1461,35 @@ impl Vm {
 
     // ---- arithmetic (RFC 0004 §3) ----
 
-    /// Integer arithmetic without the float branch — the specialized
-    /// `addi`/`muli`/... opcodes call this with a constant `op`, folding the
-    /// operation switch away.
-    #[inline]
-    fn arith_int(&self, op: ArithOp, p: PrimTy, x: Slot, y: Slot, wrapping: bool) -> Result<Slot, Trap> {
+    /// Integer arithmetic, monomorphic per (operation, wrapping) via const
+    /// generics — each specialized `addi`/`wmuli`/... opcode instantiates its
+    /// own body. `inline(always)` guarantees the fold; `#[inline]` alone left
+    /// the wider `Div`/`Mod` bodies as calls with a runtime `op` switch.
+    #[inline(always)]
+    fn arith_int<const OP: i32, const WRAP: bool>(&self, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
         use PrimTy::*;
         let a = unsafe { x.i };
         let b = unsafe { y.i };
         let unsigned = matches!(p, U8 | U16 | U32 | U64);
-        let (r, o) = match op {
-            ArithOp::Add => a.overflowing_add(b),
-            ArithOp::Sub => a.overflowing_sub(b),
-            ArithOp::Mul => a.overflowing_mul(b),
-            ArithOp::Div => {
+        let (r, o) = match OP {
+            IOP_ADD => a.overflowing_add(b),
+            IOP_SUB => a.overflowing_sub(b),
+            IOP_MUL => a.overflowing_mul(b),
+            IOP_DIV => {
                 if b == 0 {
                     return Err(Trap::new(TrapKind::DivByZero, "division by zero"));
                 }
                 (if unsigned { (a as u64 / b as u64) as i64 } else { a / b }, false)
             }
-            ArithOp::Mod => {
+            IOP_MOD => {
                 if b == 0 {
                     return Err(Trap::new(TrapKind::DivByZero, "mod by zero"));
                 }
                 (if unsigned { (a as u64 % b as u64) as i64 } else { a % b }, false)
             }
+            _ => unreachable!("bad arith op code"),
         };
-        if !wrapping && (o || !fits(r, p)) {
+        if !WRAP && (o || !fits(r, p)) {
             return Err(Trap::new(
                 TrapKind::Overflow,
                 "arithmetic overflow — use the &+ &- &* wrapping forms (RFC 0004 §3)",
@@ -1489,7 +1500,7 @@ impl Vm {
 
     /// Integer bit-operation body without the `is_int` guard — the
     /// specialized `andi`/`shli`/... opcodes call it with a constant `op`.
-    #[inline]
+    #[inline(always)]
     fn bitop_int(&self, op: BitOp, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
         use PrimTy::*;
         let a = unsafe { x.i };
@@ -1572,7 +1583,7 @@ impl Vm {
     /// Integer compare without the float branch — the specialized `lti`/...
     /// opcodes call it with a constant `op`. `p` selects the signedness, so
     /// unsigned widths order unsigned.
-    #[inline]
+    #[inline(always)]
     fn cmp_int(&self, op: CmpOp, p: PrimTy, x: Slot, y: Slot) -> bool {
         let a = unsafe { x.i };
         let b = unsafe { y.i };
@@ -1598,7 +1609,7 @@ impl Vm {
     }
 
     /// Integer negate without the float branch.
-    #[inline]
+    #[inline(always)]
     fn neg_int(&self, p: PrimTy, x: Slot) -> Result<Slot, Trap> {
         let v = unsafe { x.i };
         let (r, o) = v.overflowing_neg();
@@ -1727,6 +1738,7 @@ fn default_slot_repr(repr: Repr) -> Slot {
     }
 }
 
+#[inline(always)]
 fn trunc_to(v: i64, p: PrimTy) -> i64 {
     use PrimTy::*;
     match p {
@@ -1741,10 +1753,12 @@ fn trunc_to(v: i64, p: PrimTy) -> i64 {
     }
 }
 
+#[inline(always)]
 fn fits(v: i64, p: PrimTy) -> bool {
     trunc_to(v, p) == v
 }
 
+#[inline(always)]
 fn float_fits(x: f64, p: PrimTy) -> bool {
     match p {
         PrimTy::U8 => x >= 0.0 && x <= u8::MAX as f64,
