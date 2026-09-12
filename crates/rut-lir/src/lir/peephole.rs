@@ -19,15 +19,168 @@ use std::collections::HashMap;
 /// Run the peephole to a fixed point on one function.
 pub(crate) fn run(mut code: Vec<Op>, mut spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>) {
     // a handful of rounds catches chains (a copy feeding a copy)
-    for _ in 0..4 {
+    for _ in 0..6 {
         let (c, s, changed) = one_round(code, spans);
         code = c;
         spans = s;
-        if !changed {
+        let (c, s, changed2) = forward_once(code, spans);
+        code = c;
+        spans = s;
+        if !changed && !changed2 {
             break;
         }
     }
     (code, spans)
+}
+
+/// Producer forwarding: `OP d, ...; mov y, d` where `d` is defined only by
+/// `OP` and read only by the `mov` becomes `OP y, ...` with the `mov`
+/// deleted. This is the assignment shape the tree-walking emitter produces
+/// for `x = <op>(...)` (the op writes a temp, then a copy lands it in `x`).
+fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+    let n = code.len();
+    if n == 0 {
+        return (code, spans, false);
+    }
+    let mut reads: HashMap<u16, Vec<usize>> = HashMap::new();
+    let mut writes: HashMap<u16, Vec<usize>> = HashMap::new();
+    for (pc, op) in code.iter().enumerate() {
+        let (d, u) = def_use(op);
+        for r in d {
+            writes.entry(r).or_default().push(pc);
+        }
+        for r in u {
+            reads.entry(r).or_default().push(pc);
+        }
+    }
+    let mut is_target = vec![false; n + 1];
+    for op in &code {
+        match op {
+            Op::Jmp { target } => mark(&mut is_target, *target, n),
+            Op::Br { then_t, else_t, .. } => {
+                mark(&mut is_target, *then_t, n);
+                mark(&mut is_target, *else_t, n);
+            }
+            Op::BrTable { table, default, .. } => {
+                for t in table {
+                    mark(&mut is_target, *t, n);
+                }
+                mark(&mut is_target, *default, n);
+            }
+            _ => {}
+        }
+    }
+
+    let mut removed = vec![false; n];
+    let mut retarget: HashMap<usize, u16> = HashMap::new();
+    for use_pc in 0..n {
+        let Op::Mov { dst: y, src: d } = &code[use_pc] else {
+            continue;
+        };
+        let (y, d) = (*y, *d);
+        if y == d || is_target[use_pc] {
+            continue;
+        }
+        // the producer is the unique writer of `d`, and the copy is its only
+        // reader (otherwise the other readers would lose the definition)
+        let Some(ws) = writes.get(&d) else { continue };
+        if ws.len() != 1 {
+            continue;
+        }
+        let Some(rs) = reads.get(&d) else { continue };
+        if rs.len() != 1 || rs[0] != use_pc {
+            continue;
+        }
+        let pc = ws[0];
+        if pc >= use_pc {
+            continue;
+        }
+        // skip copy chains (handled by `one_round`)
+        if matches!(code[pc], Op::Mov { .. } | Op::MovRef { .. }) {
+            continue;
+        }
+        // straight-line (pc, use_pc]: no jump target or control transfer
+        let mut safe = true;
+        for k in (pc + 1)..=use_pc {
+            if is_target[k]
+                || matches!(
+                    code[k],
+                    Op::Jmp { .. } | Op::Br { .. } | Op::BrTable { .. } | Op::Ret { .. } | Op::LoopHead
+                )
+            {
+                safe = false;
+                break;
+            }
+        }
+        if !safe {
+            continue;
+        }
+        // `y` must not be read or written between the producer and the copy
+        if reads.get(&y).is_some_and(|rs| rs.iter().any(|&r| r > pc && r < use_pc)) {
+            continue;
+        }
+        if writes.get(&y).is_some_and(|ws| ws.iter().any(|&w| w > pc && w < use_pc)) {
+            continue;
+        }
+        // only one copy per producer
+        if retarget.contains_key(&pc) {
+            continue;
+        }
+        removed[use_pc] = true;
+        retarget.insert(pc, y);
+    }
+    if !removed.iter().any(|&b| b) {
+        return (code, spans, false);
+    }
+
+    let mut kept = vec![false; n];
+    let mut new_code = Vec::with_capacity(n);
+    for (pc, op) in code.iter().enumerate() {
+        if removed[pc] {
+            continue;
+        }
+        let mut op = op.clone();
+        if let Some(&y) = retarget.get(&pc) {
+            if let Some(slot) = dst_slot(&mut op) {
+                *slot = y;
+            }
+        }
+        kept[pc] = true;
+        new_code.push(op);
+    }
+    let mut old_to_new = vec![0u32; n + 1];
+    let mut c = 0u32;
+    for pc in 0..n {
+        old_to_new[pc] = c;
+        if kept[pc] {
+            c += 1;
+        }
+    }
+    old_to_new[n] = c;
+    for op in new_code.iter_mut() {
+        match op {
+            Op::Jmp { target } => *target = old_to_new[(*target as usize).min(n)],
+            Op::Br { then_t, else_t, .. } => {
+                *then_t = old_to_new[(*then_t as usize).min(n)];
+                *else_t = old_to_new[(*else_t as usize).min(n)];
+            }
+            Op::BrTable { table, default, .. } => {
+                for t in table.iter_mut() {
+                    *t = old_to_new[(*t as usize).min(n)];
+                }
+                *default = old_to_new[(*default as usize).min(n)];
+            }
+            _ => {}
+        }
+    }
+    let mut new_spans = Vec::with_capacity(spans.len());
+    for (pc, lo) in spans {
+        let pc = pc as usize;
+        if pc < n && kept[pc] {
+            new_spans.push((old_to_new[pc], lo));
+        }
+    }
+    (new_code, new_spans, true)
 }
 
 fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
@@ -76,7 +229,7 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
             continue;
         };
         let (dst, src) = (*dst, *src);
-        if dst == src || is_target[pc] {
+        if dst == src {
             continue;
         }
         let Some(rd) = reads.get(&dst) else { continue };
@@ -93,9 +246,11 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
             continue;
         }
         // straight-line only: no branch/ret/loophead and no jump target
-        // anywhere in [pc, use_pc]
+        // anywhere after the `mov` up to the read. The `mov` itself may be a
+        // jump target: deleting it collapses every branch to it onto the next
+        // kept op, and the read has already been rewritten to `src`.
         let mut safe = true;
-        for k in pc..=use_pc {
+        for k in (pc + 1)..=use_pc {
             if is_target[k]
                 || matches!(
                     code[k],
@@ -190,6 +345,89 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
 fn mark(targets: &mut [bool], t: u32, n: usize) {
     let t = (t as usize).min(n);
     targets[t] = true;
+}
+
+/// The destination register slot of an op, if it defines one.
+fn dst_slot(op: &mut Op) -> Option<&mut u16> {
+    match op {
+        Op::Mov { dst, .. }
+        | Op::MovRef { dst, .. }
+        | Op::Const { dst, .. }
+        | Op::ConstRaw { dst, .. }
+        | Op::Arith { dst, .. }
+        | Op::Wrap { dst, .. }
+        | Op::Bit { dst, .. }
+        | Op::Cmp { dst, .. }
+        | Op::StrCmp { dst, .. }
+        | Op::RefEq { dst, .. }
+        | Op::Not { dst, .. }
+        | Op::Neg { dst, .. }
+        | Op::AddF { dst, .. }
+        | Op::SubF { dst, .. }
+        | Op::MulF { dst, .. }
+        | Op::DivF { dst, .. }
+        | Op::ModF { dst, .. }
+        | Op::NegF { dst, .. }
+        | Op::EqF { dst, .. }
+        | Op::NeF { dst, .. }
+        | Op::LtF { dst, .. }
+        | Op::GtF { dst, .. }
+        | Op::LeF { dst, .. }
+        | Op::GeF { dst, .. }
+        | Op::AddI { dst, .. }
+        | Op::SubI { dst, .. }
+        | Op::MulI { dst, .. }
+        | Op::DivI { dst, .. }
+        | Op::ModI { dst, .. }
+        | Op::WAddI { dst, .. }
+        | Op::WSubI { dst, .. }
+        | Op::WMulI { dst, .. }
+        | Op::WDivI { dst, .. }
+        | Op::WModI { dst, .. }
+        | Op::AndI { dst, .. }
+        | Op::OrI { dst, .. }
+        | Op::XorI { dst, .. }
+        | Op::ShlI { dst, .. }
+        | Op::ShrI { dst, .. }
+        | Op::WrapShlI { dst, .. }
+        | Op::EqI { dst, .. }
+        | Op::NeI { dst, .. }
+        | Op::LtI { dst, .. }
+        | Op::GtI { dst, .. }
+        | Op::LeI { dst, .. }
+        | Op::GeI { dst, .. }
+        | Op::NegI { dst, .. }
+        | Op::NewCell { dst, .. }
+        | Op::MakeRecord { dst, .. }
+        | Op::GetF { dst, .. }
+        | Op::Own { dst, .. }
+        | Op::ArrNew { dst, .. }
+        | Op::ArrLit { dst, .. }
+        | Op::ArrGet { dst, .. }
+        | Op::EnumNew { dst, .. }
+        | Op::OptSome { dst, .. }
+        | Op::OptNone { dst, .. }
+        | Op::ResOk { dst, .. }
+        | Op::ResErr { dst, .. }
+        | Op::SumIs { dst, .. }
+        | Op::Unwrap { dst, .. }
+        | Op::UnwrapOr { dst, .. }
+        | Op::Expect { dst, .. }
+        | Op::TidOf { dst, .. }
+        | Op::IsType { dst, .. }
+        | Op::IsTrait { dst, .. }
+        | Op::Unbox { dst, .. }
+        | Op::Box { dst, .. }
+        | Op::MakeClosure { dst, .. }
+        | Op::Conv { dst, .. }
+        | Op::StrCharAt { dst, .. } => Some(dst),
+        Op::Call { dst, .. }
+        | Op::CallM { dst, .. }
+        | Op::CallI { dst, .. }
+        | Op::CallNat { dst, .. }
+        | Op::CallFn { dst, .. } => dst.as_mut(),
+        _ => None,
+    }
 }
 
 pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
