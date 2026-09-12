@@ -1061,3 +1061,89 @@ pub fn main() -> unit {
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["2 30"]);
 }
+
+#[test]
+fn associated_type_user_trait() {
+    // a user trait declares an associated `type Item`; the impl binds it.
+    // The trait's signature spells the bare `Item` (the projection syntax
+    // `Self::Item` is a follow-up).
+    let src = r#"
+trait Container {
+    type Item;
+    fn first(self) -> Item;
+    fn count(self) -> i32;
+}
+class Box {
+    v: i32;
+    fn new(v: i32) -> Self { return Self { v: v }; }
+}
+impl Container for Box {
+    type Item = i32;
+    fn first(self) -> i32 { return self.v; }
+    fn count(self) -> i32 { return 1; }
+}
+pub fn main() -> unit {
+    let b = Box.new(41);
+    print(f"{b.first()} {b.count()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["41 1"]);
+}
+
+#[test]
+fn generic_trait_dyn_dispatch() {
+    // `dyn Wrap<i32>` — one trait id per type-argument list
+    let src = r#"
+trait Wrap<T> {
+    fn get(self) -> T;
+}
+class B {
+    v: i32;
+    fn new(v: i32) -> Self { return Self { v: v }; }
+}
+impl Wrap<i32> for B {
+    fn get(self) -> i32 { return self.v; }
+}
+pub fn main() -> unit {
+    let b = B.new(7);
+    let w: dyn Wrap<i32> = b;
+    print(f"{w.get()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["7"]);
+}
+
+#[test]
+fn user_iter_contract() {
+    // a user-declared `trait Iter` with an associated `Target` drives
+    // `for..of` — no builtin involved
+    let src = r#"
+trait Iter {
+    type Target;
+    fn len(self) -> i32;
+    fn get(self, i: i32) -> Target;
+}
+class Range {
+    n: i32;
+    fn new(n: i32) -> Self { return Self { n: n }; }
+}
+impl Iter for Range {
+    type Target = i32;
+    fn len(self) -> i32 { return self.n; }
+    fn get(self, i: i32) -> i32 { return i * 2; }
+}
+pub fn main() -> unit {
+    let r = Range.new(3);
+    let mut sum = 0;
+    for (let x of r) { sum += x; }
+    print(f"{sum}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["6"]);
+}

@@ -48,7 +48,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyKind::Str => Some(SliceInfo { source: SliceSource::Str, elem: TY_CHAR }),
             TyKind::Bytes => Some(SliceInfo { source: SliceSource::Bytes, elem: TY_U8 }),
             TyKind::Data { .. } => {
-                let seq_trait = self.ctx.slice_trait;
+                let seq_trait = self.ctx.seq_trait;
                 // a source `impl Iter for ..` (concrete target or a generic
                 // `Class<..>` template with the receiver's args substituted)
                 let mut found: Option<(usize, Vec<(IdentId, TypeId)>, NodeHandle<AnyTy>)> = None;

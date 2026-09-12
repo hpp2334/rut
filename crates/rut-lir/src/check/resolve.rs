@@ -8,21 +8,47 @@ use super::*;
 impl<'a> Ctx<'a> {
 
     pub fn resolve_trait_ref(&mut self, node: NodeHandle<AnyTy>) -> Option<u32> {
-        match self.ast.ty(node) {
+        match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
-                let is_iter = self.name(segs[0].name) == "Iter";
-                let id = match self.trait_id_of(segs[0].name) {
-                    Some(id) => Some(id),
+                let tname = segs[0].name;
+                let is_iter = self.name(tname) == "Iter";
+                let id = if let Some(t) = self.find_trait(tname).cloned() {
+                    if segs[0].generics.is_empty() {
+                        if t.id == u32::MAX {
+                            self.err(self.ast.span(node.id()), format!(
+                                "generic trait `{}` needs type arguments in an impl head (e.g. `impl {}<i32> for ..`)",
+                                self.name(tname), self.name(tname)
+                            ));
+                            None
+                        } else {
+                            Some(t.id)
+                        }
+                    } else {
+                        let args: Vec<TypeId> = segs[0]
+                            .generics
+                            .iter()
+                            .map(|g| self.resolve_type(*g, &[]))
+                            .collect();
+                        if args.len() != t.generics.len() {
+                            self.err(self.ast.span(node.id()), format!(
+                                "`{}` takes {} type parameter(s), {} given",
+                                self.name(tname), t.generics.len(), args.len()
+                            ));
+                            None
+                        } else {
+                            Some(self.mk_trait_inst(tname, args))
+                        }
+                    }
+                } else if is_iter {
                     // the builtin `Iter` sequence contract (RFC 0012) is
                     // undeclarable but need not be spelled in the module
-                    None if is_iter => Some(self.builtin_iter_trait(segs[0].name)),
-                    None => {
-                        self.err(self.ast.span(node.id()), format!("unknown trait `{}`", self.name(segs[0].name)));
-                        None
-                    }
+                    Some(self.builtin_iter_trait(tname))
+                } else {
+                    self.err(self.ast.span(node.id()), format!("unknown trait `{}`", self.name(tname)));
+                    None
                 };
                 if is_iter {
-                    self.slice_trait = id;
+                    self.seq_trait = id;
                 }
                 id
             }
@@ -53,6 +79,7 @@ impl<'a> Ctx<'a> {
         self.trait_decls.push((name, TraitDeclInfo {
             id,
             node: rut_ast::ast::NodeId(0),
+            generics: vec![],
             assoc: vec!["Target".to_string()],
         }));
         id
@@ -200,9 +227,6 @@ impl<'a> Ctx<'a> {
                             return self.mk_data_inst(name, args);
                         }
                         if let Some(t) = self.find_trait(name).cloned() {
-                            if !seg.generics.is_empty() {
-                                self.err(sp, "generic traits are not supported in this build");
-                            }
                             if !*is_dyn {
                                 self.err(
                                     sp,
@@ -211,7 +235,29 @@ impl<'a> Ctx<'a> {
                                     ),
                                 );
                             }
-                            return self.mk_dyn(t.id);
+                            if seg.generics.is_empty() {
+                                if t.id == u32::MAX {
+                                    self.err(sp, format!(
+                                        "generic trait `{n}` needs type arguments (e.g. `dyn {n}<i32>`)"
+                                    ));
+                                    return TY_I32;
+                                }
+                                return self.mk_dyn(t.id);
+                            }
+                            if seg.generics.len() != t.generics.len() {
+                                self.err(sp, format!(
+                                    "`{n}` takes {} type argument(s), {} given",
+                                    t.generics.len(), seg.generics.len()
+                                ));
+                                return TY_I32;
+                            }
+                            let args: Vec<TypeId> = seg
+                                .generics
+                                .iter()
+                                .map(|g| self.resolve_type(*g, env))
+                                .collect();
+                            let id = self.mk_trait_inst(name, args);
+                            return self.mk_dyn(id);
                         }
                         // imported type (RFC 0035 §1): the exporter's
                         // scope-qualified id; link rebases it

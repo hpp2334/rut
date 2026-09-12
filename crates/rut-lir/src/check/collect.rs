@@ -223,17 +223,19 @@ impl<'a> Ctx<'a> {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
-        if !generics.is_empty() {
-            self.err(
-                sp,
-                "generic traits are not supported in this build (RFC 0005 Slice<T> lands with M2)",
-            );
-        }
-        let id = self.traits.len() as u32;
-        self.traits.push(TraitDesc { name: self.name(name).to_string(), methods: vec![] });
+        let id = if generics.is_empty() {
+            let id = self.traits.len() as u32;
+            self.traits.push(TraitDesc { name: self.name(name).to_string(), methods: vec![] });
+            id
+        } else {
+            // a generic trait has no single id — `mk_trait_inst` allocates
+            // one per type-argument list (RFC 0013 monomorphization)
+            u32::MAX
+        };
         self.trait_decls.push((name, TraitDeclInfo {
             id,
             node,
+            generics: generics.to_vec(),
             assoc: assoc.iter().map(|a| self.name(a.name).to_string()).collect(),
         }));
         let _ = vis;
@@ -250,6 +252,7 @@ impl<'a> Ctx<'a> {
         let Some(id) = self.trait_id_of(name) else {
             return;
         };
+        let assoc = self.find_trait(name).map(|t| t.assoc.clone()).unwrap_or_default();
         let mut tms = Vec::new();
         for m in methods {
             let md = self.ast.method_decl(*m);
@@ -258,7 +261,7 @@ impl<'a> Ctx<'a> {
                 match self.ast.param(*p) {
                     MemberKind::SelfParam(_) => ptys.push(TY_UNIT), // placeholder: Self resolved at impl
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                        ptys.push(self.resolve_trait_sig_ty(*t, id));
+                        ptys.push(self.resolve_trait_sig_ty(*t, id, &[], &assoc));
                     }
                     MemberKind::Param(ParamData { ty: None, .. }) => {
                         self.err(self.ast.span(p.id()), "trait method parameters need types");
@@ -267,7 +270,7 @@ impl<'a> Ctx<'a> {
                     _ => ptys.push(TY_I32),
                 }
             }
-            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id));
+            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &[], &assoc));
             tms.push((self.name(md.name).to_string(), ptys, rty));
         }
         // first param must be self (RFC 0012 §2: trait methods are instance
@@ -289,31 +292,79 @@ impl<'a> Ctx<'a> {
         self.traits[id as usize] = desc;
     }
 
-    /// Resolve a trait-method signature type: a bare `Self` is the trait's
-    /// `dyn` object (the trait is non-generic, so `Self` has no concrete
-    /// binding until an impl; `dyn Trait` is the honest static shape).
-    fn resolve_trait_sig_ty(&mut self, node: NodeHandle<AnyTy>, trait_id: u32) -> TypeId {
+    /// Resolve a trait-method signature type under `env`: a bare `Self` is
+    /// the trait's `dyn` object; a bare associated type name is an opaque
+    /// placeholder (the concrete type comes from the impl binding).
+    fn resolve_trait_sig_ty(
+        &mut self,
+        node: NodeHandle<AnyTy>,
+        trait_id: u32,
+        env: &[(IdentId, TypeId)],
+        assoc: &[String],
+    ) -> TypeId {
         if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
             if segs.len() == 1 && segs[0].generics.is_empty() {
                 let name = segs[0].name;
                 if self.name(name) == "Self" {
                     return self.mk_dyn(trait_id);
                 }
-                // a bare associated type name of this trait: the concrete
-                // type comes from the impl's `type X = ..;` binding at the
-                // use site, so the trait descriptor keeps a placeholder
-                let is_assoc = self
-                    .trait_decls
-                    .iter()
-                    .find(|(_, t)| t.id == trait_id)
-                    .map(|(_, t)| t.assoc.iter().any(|a| a == self.name(name)))
-                    .unwrap_or(false);
-                if is_assoc {
+                if assoc.iter().any(|a| a == self.name(name)) {
                     return TY_I32;
                 }
             }
         }
-        self.resolve_type(node, &[])
+        self.resolve_type(node, env)
+    }
+
+    /// Instantiate a generic trait for concrete type arguments (RFC 0013):
+    /// one `TraitDesc` (and trait id) per type-argument list, cached.
+    pub fn mk_trait_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
+        if let Some(&id) = self.trait_inst.get(&(name, args.clone())) {
+            return id;
+        }
+        let id = self.traits.len() as u32;
+        let tname = if args.is_empty() {
+            self.name(name).to_string()
+        } else {
+            format!(
+                "{}<{}>",
+                self.name(name),
+                args.iter().map(|a| self.types.name(*a).to_string()).collect::<Vec<_>>().join(", ")
+            )
+        };
+        self.traits.push(TraitDesc { name: tname, methods: vec![] });
+        self.trait_inst.insert((name, args.clone()), id);
+        let Some(info) = self.find_trait(name).cloned() else { return id };
+        let subst: Vec<(IdentId, TypeId)> =
+            info.generics.iter().cloned().zip(args.iter().cloned()).collect();
+        let methods = match self.ast.item(rut_ast::ast::NodeHandle::new(info.node)) {
+            ItemKind::Trait { methods, .. } => methods.clone(),
+            _ => Vec::new(),
+        };
+        let mut desc = TraitDesc { name: self.traits[id as usize].name.clone(), methods: vec![] };
+        for m in &methods {
+            let md = self.ast.method_decl(*m);
+            let mut ptys = Vec::new();
+            for p in &md.params {
+                match self.ast.param(*p) {
+                    MemberKind::SelfParam(_) => ptys.push(TY_UNIT),
+                    MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                        ptys.push(self.resolve_trait_sig_ty(*t, id, &subst, &info.assoc));
+                    }
+                    _ => ptys.push(TY_I32),
+                }
+            }
+            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &subst, &info.assoc));
+            if ptys.first() == Some(&TY_UNIT) {
+                desc.methods.push(rut_core::binary::TraitMethod {
+                    name: self.name(md.name).to_string(),
+                    params: ptys[1..].to_vec(),
+                    ret: rty.unwrap_or(TY_UNIT),
+                });
+            }
+        }
+        self.traits[id as usize] = desc;
+        id
     }
 
     pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, assoc: &[AssocType], methods: &[NodeHandle<MethodDeclNode>]) {

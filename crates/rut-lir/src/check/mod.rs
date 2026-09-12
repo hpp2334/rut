@@ -48,6 +48,8 @@ pub struct DataDecl {
 pub struct TraitDeclInfo {
     pub id: u32,
     pub node: NodeId,
+    /// generic parameters (`trait Foo<T>`) — empty for non-generic traits
+    pub generics: Vec<IdentId>,
     /// associated `type` names (RFC 0012), in declaration order
     pub assoc: Vec<String>,
 }
@@ -94,9 +96,9 @@ pub struct Ctx<'a> {
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,
     pub trait_decls: Vec<(IdentId, TraitDeclInfo)>,
-    /// the builtin `Slice<T>` trait id once referenced (RFC 0005) — the
-    /// sequence-lowering path keys on this, never on the trait's name
-    pub slice_trait: Option<u32>,
+    /// the sequence-contract trait id once referenced (RFC 0012 `Iter`) —
+    /// the sequence-lowering path keys on this, never on the trait's name
+    pub seq_trait: Option<u32>,
     pub funcs: Vec<FuncCode>,
     pub consts: Vec<ConstVal>,
     pub exports: Vec<(String, u32)>,
@@ -129,6 +131,8 @@ pub struct Ctx<'a> {
     pub inst_data: std::collections::HashMap<TypeId, (IdentId, Vec<TypeId>)>,
     /// monomorphization cache: (decl, type args) -> id
     pub type_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), TypeId>,
+    /// generic-trait instantiation cache: (trait, type args) -> trait id
+    pub trait_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), u32>,
     /// whether `import` is resolved by the driver (module loading on)
     pub allow_imports: bool,
     // instantiation queue
@@ -159,7 +163,7 @@ impl<'a> Ctx<'a> {
             types: TypeTable::boot_scoped(scope),
             traits: Vec::new(),
             trait_decls: Vec::new(),
-            slice_trait: None,
+            seq_trait: None,
             funcs: Vec::new(),
             consts: Vec::new(),
             exports: Vec::new(),
@@ -177,6 +181,7 @@ impl<'a> Ctx<'a> {
             extern_classes: std::collections::HashSet::new(),
             inst_data: std::collections::HashMap::new(),
             type_inst: std::collections::HashMap::new(),
+            trait_inst: std::collections::HashMap::new(),
             allow_imports: false,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
@@ -304,7 +309,8 @@ impl<'a> Ctx<'a> {
         self.fn_index.contains(&name)
     }
     pub fn trait_id_of(&self, name: IdentId) -> Option<u32> {
-        self.find_trait(name).map(|t| t.id)
+        // a generic trait has no uninstantiated id (`u32::MAX` sentinel)
+        self.find_trait(name).and_then(|t| (t.id != u32::MAX).then_some(t.id))
     }
     pub fn trait_by_id(&self, id: u32) -> &TraitDesc {
         &self.traits[id as usize]
