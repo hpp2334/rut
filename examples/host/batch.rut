@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // RFC 0022/0023/0025 — the host-class ROUND TRIP.
 //
 // The host provides Batch: declared in examples/host/plugin/batch.d.rut

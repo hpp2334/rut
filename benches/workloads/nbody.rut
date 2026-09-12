@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // nbody — the solar-system integration from the benchmark game.
 // Scale: 1000 steps of dt = 0.01.
 //
@@ -65,14 +66,14 @@ pub fn main() -> unit {
     let solar_mass = 4.0 * pi * pi;
     let days_per_year = 365.24;
 
-    let mass: Vec<f64> = Vec();
+    let mass: Vec<f64> = Vec.new();
     mass.push(solar_mass);
     mass.push(0.000954791938424327 * solar_mass);
     mass.push(0.000285885980666131 * solar_mass);
     mass.push(0.000043662440433516 * solar_mass);
     mass.push(0.000051513890204661 * solar_mass);
 
-    let pos: Vec<f64> = Vec();
+    let pos: Vec<f64> = Vec.new();
     pos.push(0.0);
     pos.push(0.0);
     pos.push(0.0);
@@ -89,7 +90,7 @@ pub fn main() -> unit {
     pos.push(-25.9193146099879);
     pos.push(0.179258772950371);
 
-    let mut vel: Vec<f64> = Vec();
+    let mut vel: Vec<f64> = Vec.new();
     vel.push(0.0);
     vel.push(0.0);
     vel.push(0.0);

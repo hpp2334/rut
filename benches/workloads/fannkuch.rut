@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // fannkuch-redux — pancake flips over all permutations. Scale: n = 7.
 // Canonical checksum: sum over all n! permutations of (+/- flips), sign
 // toggling every permutation (benchmarks-game definition). The value is
@@ -5,9 +6,9 @@
 // n=7 canonical: checksum 228, max_flips 16.
 
 fn fannkuch(n: i32) -> i32 {
-    let mut perm = Vec<i32>(n);
-    let mut perm1 = Vec<i32>(n);
-    let mut count = Vec<i32>(n);
+    let mut perm = Vec<i32>.zeroed(n);
+    let mut perm1 = Vec<i32>.zeroed(n);
+    let mut count = Vec<i32>.zeroed(n);
     for (let i = 0; i < n; i += 1) {
         perm1[i] = i;
     }

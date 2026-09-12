@@ -51,14 +51,19 @@ fn imports_and_links_a_function() {
 }
 
 #[test]
-fn imports_without_a_binding_still_error() {
-    // `compile_module` has no imports: the old diagnostic stands
+fn imports_of_an_unmounted_module_error() {
+    // `compile_module` mounts std:collection, but resolution is exact: a
+    // specifier nothing answers to is a load error, never a silent binding
     let out = rut_driver::compile_module(
         "import { add } from \"math\";\nfn main() -> i32 { return add(1, 2); }\n",
         Mode::Impl,
         "app",
     );
-    assert!(out.diags.iter().any(|d| d.msg.contains("module loading is not available")));
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("module specifier") || d.msg.contains("`math`")),
+        "{:?}",
+        out.diags
+    );
 }
 
 #[test]

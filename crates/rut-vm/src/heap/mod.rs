@@ -133,12 +133,6 @@ impl Heap {
         self.mint(0, CellData::Array { elem, items: RefCell::new(p) }, bytes)
     }
 
-    /// Vec from an already-packed payload (the `own` deep-clone path).
-    fn alloc_vec_packed(&self, elem: TypeId, p: Packed) -> Result<Slot, Trap> {
-        let bytes = (p.len() as u64) * p.elem_width();
-        self.mint(0, CellData::Vec { elem, items: RefCell::new(p) }, bytes)
-    }
-
     pub fn alloc_record(&self, ty: TypeId, fields: Vec<Slot>) -> Result<Slot, Trap> {
         let n = fields.len() as u64;
         self.mint(ty, CellData::Record { fields: RefCell::new(Slots::from_vec(fields)) }, n * 8)
@@ -243,22 +237,6 @@ impl Heap {
             TyKind::Bytes => {
                 let cell = cell_of(s);
                 self.alloc_bytes(cell.as_bytes().to_vec())
-            }
-            TyKind::Vec { elem } => {
-                let cell = cell_of(s);
-                if let CellData::Vec { items, .. } = &cell.data {
-                    let src = items.borrow();
-                    let mut out = Vec::with_capacity(src.len());
-                    for i in 0..src.len() {
-                        if let Some(it) = src.get(i) {
-                            out.push(self.clone_slot(it, elem, table)?);
-                        }
-                    }
-                    drop(src);
-                    self.alloc_vec_packed(elem, Packed::from_slots(elem, table, out))
-                } else {
-                    Err(Trap::new(TrapKind::Invalid, "own: not a vec"))
-                }
             }
             TyKind::Array { elem } => {
                 let cell = cell_of(s);

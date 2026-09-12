@@ -47,22 +47,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, format!("index must be `i32`, found `{}`", self.ctx.types.name(it)));
                 }
                 let ireg = self.last_reg;
-                let elem = match self.ctx.types.kind(rt).clone() {
-                    TyKind::Vec { elem } | TyKind::Array { elem } => elem,
-                    TyKind::Bytes => {
-                        // immutable byte read (RFC 0004); bounds trap in the VM
-                        let dst = self.new_reg(TY_U8);
-                        self.emit(Op::BytesGet { dst, s: rreg, idx: ireg }, sp.lo);
-                        return Ok(TY_U8);
-                    }
-                    _ => {
-                        self.ctx.err(sp, format!("indexing needs a Vec, Array, or bytes —found `{}`", self.ctx.types.name(rt)));
-                        return Err(());
-                    }
-                };
-                let dst = self.new_reg(elem);
-                self.emit(Op::ArrGet { dst, arr: rreg, idx: ireg, repr: self.ctx.types.repr_of(elem) }, sp.lo);
-                Ok(elem)
+                if let Some(info) = self.slice_info(rt) {
+                    self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
+                    return Ok(info.elem);
+                }
+                // `bytes` is the binary primitive — a byte read (RFC 0004)
+                if matches!(self.ctx.types.kind(rt), TyKind::Bytes) {
+                    let dst = self.new_reg(TY_U8);
+                    self.emit(Op::BytesGet { dst, s: rreg, idx: ireg }, sp.lo);
+                    return Ok(TY_U8);
+                }
+                self.ctx.err(sp, format!("indexing needs a sequence (Vec, Array, or bytes) —found `{}`", self.ctx.types.name(rt)));
+                Err(())
             }
             ExprKind::Unary { op, expr } => {
                 use rut_ast::ast::UnOp::*;
@@ -285,6 +281,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let name = segs[0].name;
             let n = self.ctx.name(name).to_string();
             if let Some(l) = self.lookup(name).copied() {
+                // inlined `Slice` accessor: `self` is the receiver register
+                // itself — no copy (RFC 0005 sequence access)
+                if let Some((sid, reg)) = self.inline_self {
+                    if sid == name {
+                        self.last_reg = reg;
+                        return Ok(l.ty);
+                    }
+                }
                 // copy into a fresh register (keeps regs SSA-ish)
                 let reg = self.new_reg(l.ty);
                 if self.ctx.types.is_ref(l.ty) {

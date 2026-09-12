@@ -108,7 +108,7 @@ impl Vm {
 
             Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {
-                    TyKind::Vec { elem } | TyKind::Array { elem } => *elem,
+                    TyKind::Array { elem } => *elem,
                     _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-array")),
                 };
                 let n = unsafe { r!(len).i }.max(0) as usize;
@@ -127,6 +127,8 @@ impl Vm {
             Op::ArrLit { dst, ty, elems } => self.op_arr_lit(dst, ty, &elems)?,
             Op::ArrGet { dst, arr, idx, repr } => self.op_arr_get(dst, arr, idx, repr)?,
             Op::ArrSet { arr, idx, val, repr } => self.op_arr_set(arr, idx, val, repr)?,
+            Op::ArrGetF { dst, obj, field, idx, repr } => self.op_arr_get_f(dst, obj, field, idx, repr)?,
+            Op::ArrSetF { obj, field, idx, val, repr } => self.op_arr_set_f(obj, field, idx, val, repr)?,
 
             Op::EnumNew { dst, ty, member } => {
                 let c = self.heap.enum_member(ty, member)?;

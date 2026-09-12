@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // workers/stats-worker.rut — a SEPARATE VM: own heap, own thread, traps
 // here cannot hurt the UI. Receives StatsRequests (the Vec<f32> payload
 // deep-copied across isolates since the main state also holds it; a unique

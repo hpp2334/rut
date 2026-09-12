@@ -204,7 +204,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // `[e1, .., en] : Array<T>` (RFC 0007 §1); T from expected or the
         // first element; uncontextualized int elements default to i32
         let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-            Some(TyKind::Array { elem }) | Some(TyKind::Vec { elem }) => Some(elem),
+            Some(TyKind::Array { elem }) => Some(elem),
             _ => None,
         };
         let mut eregs = Vec::new();

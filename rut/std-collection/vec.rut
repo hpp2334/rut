@@ -5,29 +5,34 @@
 //   a[i] get/set     (today's ArrGet / ArrSet)
 //   a.len()          the allocated length — the capacity
 //
-// The builtin `Vec` natives go away; this class is the sequence type.
-// Lands with the module loader (M2): it compiles once the compiler can
-// load std:collection.
+// Sequence syntax (`v[i]`, `v[i] = x`, `for (x of v)`) lowers through the
+// builtin `Slice<T>` contract, which resolves the `buf`/`len` backing
+// fields directly — never a per-element method call (RFC 0032 §1.1).
+// The builtin `Vec` natives are gone; this class is the sequence type.
 
 pub class Vec<T> {
-    buf: Array<T>;      // capacity == buf.len()
+    buf: Array<T>;      // capacity == buf.len() == cap
     len: i32;           // live length
+    cap: i32;           // capacity mirrored, so `push`'s hot path never
+                        // re-reads the `buf` handle (its GetF is an RC op)
 
     pub fn new() -> Self {
         return Vec.with_capacity(0);
     }
 
     pub fn with_capacity(cap: i32) -> Self {
-        return Self { buf: Array<T>(cap), len: 0 };
+        return Self { buf: Array<T>(cap), len: 0, cap: cap };
     }
 
-    pub fn len(self) -> i32 {
-        return self.len;
+    // `Vec<T>(n)` — n zeroed live elements (RFC 0005); the backing is
+    // exactly `n` slots, so length == capacity.
+    pub fn zeroed(n: i32) -> Self {
+        return Self { buf: Array<T>(n), len: n, cap: n };
     }
 
     pub fn push(mut self, v: T) -> unit {
-        if (self.len == self.buf.len()) {
-            let mut cap = self.buf.len() * 2;
+        if (self.len == self.cap) {
+            let mut cap = self.cap * 2;
             if (cap == 0) {
                 cap = 4;
             }
@@ -36,6 +41,7 @@ pub class Vec<T> {
                 next[i] = self.buf[i];
             }
             self.buf = next;
+            self.cap = cap;
         }
         self.buf[self.len] = v;
         self.len += 1;
@@ -47,5 +53,43 @@ pub class Vec<T> {
         }
         self.len -= 1;
         return Option.some(self.buf[self.len]);
+    }
+
+    pub fn from(arr: Array<T>) -> Self {
+        let n = arr.len();
+        let mut v = Self { buf: Array<T>(n), len: n, cap: n };
+        for (let i = 0; i < n; i += 1) {
+            v.buf[i] = arr[i];
+        }
+        return v;
+    }
+
+    // `Vec<u8>` is the mutable binary builder; `freeze` copies exactly the
+    // live length (not the capacity) into the immutable `bytes` (RFC 0004).
+    pub fn freeze(self) -> bytes {
+        let n = self.len;
+        let mut a = Array<u8>(n);
+        for (let i = 0; i < n; i += 1) {
+            a[i] = self.buf[i];
+        }
+        return bytes.from(a);
+    }
+}
+
+// The `Slice<T>` implementation (RFC 0005): `v.len()`, `v[i]`, `v[i] = x`,
+// and `for (x of v)` lower through these accessors. They are one-liners
+// over the backing `buf`/`len`, so the compiler inlines them at the use
+// site — element access stays fused (`arrget`/`arrset`), never a call.
+impl Slice<T> for Vec<T> {
+    fn len(self) -> i32 {
+        return self.len;
+    }
+
+    fn get(self, i: i32) -> T {
+        return self.buf[i];
+    }
+
+    fn set(mut self, i: i32, v: T) -> unit {
+        self.buf[i] = v;
     }
 }

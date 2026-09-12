@@ -161,55 +161,72 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>, sp: rut_lexer::span::Span) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
-        let elem_ty = match self.ctx.types.kind(it).clone() {
-            TyKind::Vec { elem } => elem,
-            TyKind::Array { elem } => elem,
-            TyKind::Str => TY_CHAR,
-            TyKind::Bytes => TY_U8,
-            _ => {
-                self.ctx.err(sp, format!(
-                    "`for (let .. of ..)` needs a Vec, Array, string, or bytes —found `{}`",
-                    self.ctx.types.name(it)
-                ));
-                return Err(());
+        // a `Slice<T>` sequence, or the `string`/`bytes` primitives
+        enum Iter {
+            Slice(super::slice::SliceInfo),
+            Str,
+            Bytes,
+        }
+        let kind = if let Some(info) = self.slice_info(it) {
+            Iter::Slice(info)
+        } else {
+            match self.ctx.types.kind(it) {
+                TyKind::Str => Iter::Str,
+                TyKind::Bytes => Iter::Bytes,
+                _ => {
+                    self.ctx.err(sp, format!(
+                        "`for (let .. of ..)` needs a sequence (Vec, Array, string, or bytes) —found `{}`",
+                        self.ctx.types.name(it)
+                    ));
+                    return Err(());
+                }
             }
+        };
+        let elem_ty = match &kind {
+            Iter::Slice(info) => info.elem,
+            Iter::Str => TY_CHAR,
+            Iter::Bytes => TY_U8,
         };
         let idx = self.new_reg(TY_I32);
         self.emit(Op::ConstRaw { dst: idx, bits: 0 }, sp.lo);
-        let var_reg = self.new_reg(elem_ty);
         let l_head = self.new_label();
         let l_body = self.new_label();
         let l_end = self.new_label();
         let l_cont = self.new_label();
         self.bind(l_head);
         self.emit(Op::LoopHead, sp.lo);
-        // len
-        let len_reg = self.new_reg(TY_I32);
-        match self.ctx.types.kind(it).clone() {
-            TyKind::Vec { .. } => {
-                self.emit(Op::CallNat { nat: Nat::VecLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
+        let len_reg = match &kind {
+            Iter::Slice(info) => self.emit_slice_len(iter_reg, info, sp.lo)?,
+            Iter::Str => {
+                let d = self.new_reg(TY_I32);
+                self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(iter_reg), args: vec![], dst: Some(d) }, sp.lo);
+                d
             }
-            TyKind::Array { .. } => {
-                self.emit(Op::CallNat { nat: Nat::VecLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
+            Iter::Bytes => {
+                let d = self.new_reg(TY_I32);
+                self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(iter_reg), args: vec![], dst: Some(d) }, sp.lo);
+                d
             }
-            TyKind::Str => {
-                self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
-            }
-            TyKind::Bytes => {
-                self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(iter_reg), args: vec![], dst: Some(len_reg) }, sp.lo);
-            }
-            _ => {}
-        }
+        };
         let cond_reg = self.new_reg(TY_BOOL);
         self.emit(cmpop(CmpOp::Lt, PrimTy::I32, cond_reg, idx, len_reg), sp.lo);
         self.br(cond_reg, l_body, l_end);
         self.bind(l_body);
-        // var = iter[idx]
-        match self.ctx.types.kind(it).clone() {
-            TyKind::Str => self.emit(Op::StrCharAt { dst: var_reg, s: iter_reg, idx }, sp.lo),
-            TyKind::Bytes => self.emit(Op::BytesGet { dst: var_reg, s: iter_reg, idx }, sp.lo),
-            _ => self.emit(Op::ArrGet { dst: var_reg, arr: iter_reg, idx, repr: self.ctx.types.repr_of(elem_ty) }, sp.lo),
-        }
+        // var = iter[idx]; the dst register is the loop variable (one reg
+        // reused every iteration, overwritten/released by the element op)
+        let var_reg = match &kind {
+            Iter::Slice(info) => self.emit_slice_get(iter_reg, idx, info, sp.lo)?,
+            Iter::Str => {
+                let d = self.new_reg(TY_CHAR);
+                self.emit(Op::StrCharAt { dst: d, s: iter_reg, idx }, sp.lo);
+                d
+            }
+            Iter::Bytes => {
+                let d = self.new_reg(TY_U8);
+                self.emit(Op::BytesGet { dst: d, s: iter_reg, idx }, sp.lo);
+                d
+            }
+        };
         self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: false });
         self.loops.push((l_cont, l_end));
         self.compile_block(body)?;

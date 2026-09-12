@@ -1,6 +1,8 @@
 // std/core.d.rut — the prelude surface (RFC 0028): what the language
-// itself ships — the `string` primitives' natives, the builtin
-// containers (RFC 0005), and the builtin `Disposal` trait.
+// itself ships — the `string`/`bytes` primitives' natives, the builtin
+// `Array`/`Option`/`Result` containers (RFC 0005), and the builtin
+// `Disposal` trait. `Vec<T>` is NOT here: it is std-lib rut code in
+// `std:collection`, over `Array<T>` with an `impl Slice<T> for Vec<T>`.
 //
 // This file is the declarative form of the host's builtin tables: every
 // member here is a statically bound native (RFC 0032 §1.1 R2 — named
@@ -11,8 +13,7 @@
 // Contract: declare a member here as its native lands — the surface is
 // kept TRUE to the implementation (signatures match rut-lir's builtin
 // tables), never aspirational. Type-calls spelled with the type name
-// (`Vec<T>()`, `Vec<T>(n)`, `i32(x)` conversions — RFC 0007) are syntax,
-// not members, and are not declared.
+// (`i32(x)` conversions — RFC 0007) are syntax, not members.
 
 pub host primitive string {
     fn len(self) -> i32;
@@ -22,19 +23,11 @@ pub host primitive string {
 pub host primitive bytes {
     fn len(self) -> i32;
     fn decode(self) -> string;               // bytes -> UTF-8 string (lossy)
-    fn from(a: Array<u8>) -> bytes;          // copy an Array<u8> (or Vec<u8>) (RFC 0004)
+    fn from(a: Array<u8>) -> bytes;          // copy an Array<u8> (RFC 0004)
 }
 
 pub host class Array<T> {
-    fn len(self) -> i32;                    // folds to the const N (RFC 0032 §1.1 R1)
-}
-
-pub host class Vec<T> {
-    fn from(arr: Array<T>) -> Self;         // array -> heap vector
-    fn len(self) -> i32;
-    fn push(self, v: T) -> unit;
-    fn pop(self) -> T;
-    fn freeze(self) -> bytes;               // Vec<u8> mutable builder -> immutable bytes
+    fn len(self) -> i32;                    // the heap array's runtime length
 }
 
 pub host class Option<T> {

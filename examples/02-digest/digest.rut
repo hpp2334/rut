@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
 //
 // The second algorithmic example: everything here operates on `bytes`
@@ -23,7 +24,7 @@
 // ---------------------------------------------------------------- hex ---
 
 fn hex_digits() -> Vec<string> {
-    let d: Vec<string> = Vec();
+    let d: Vec<string> = Vec.new();
     let src = "0123456789abcdef";
     for (let c of src) {
         d.push(f"{c}");
@@ -64,7 +65,7 @@ entry fn hex_dec(s: string) -> Result<bytes, string> {
     if (s.len() % 2 != 0) {
         return Result.err("hex: odd-length input");
     }
-    let mut out: Vec<u8> = Vec();
+    let mut out: Vec<u8> = Vec.new();
     let mut cur: u32 = 0;
     let mut i = 0;
     for (let c of s) {
@@ -85,7 +86,7 @@ entry fn hex_dec(s: string) -> Result<bytes, string> {
 // ------------------------------------------------------------ base64 ---
 
 fn b64_table(url: bool) -> Vec<string> {
-    let mut t: Vec<string> = Vec();
+    let mut t: Vec<string> = Vec.new();
     let alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     for (let c of alpha) {
         t.push(f"{c}");
@@ -124,7 +125,7 @@ entry fn b64_enc(data: bytes, url: bool) -> string {
 
 entry fn b64_dec(s: string, url: bool) -> Result<bytes, string> {
     let t = b64_table(url);
-    let mut vals: Vec<u32> = Vec();
+    let mut vals: Vec<u32> = Vec.new();
     let mut pad = 0;
     for (let c of s) {
         let cs = f"{c}";
@@ -147,7 +148,7 @@ entry fn b64_dec(s: string, url: bool) -> Result<bytes, string> {
     if (vals.len() % 4 == 1) {
         return Result.err("base64: impossible length");
     }
-    let mut out: Vec<u8> = Vec();
+    let mut out: Vec<u8> = Vec.new();
     let n = vals.len();
     for (let i = 0; i < n; i += 4) {
         let mut rem = n - i;
@@ -237,7 +238,7 @@ fn rotr64(x: u64, n: u64) -> u64 {
 }
 
 fn copy_bytes(msg: bytes) -> Vec<u8> {
-    let m: Vec<u8> = Vec();
+    let m: Vec<u8> = Vec.new();
     for (let b of msg) { m.push(b); }
     return m;
 }
@@ -302,7 +303,7 @@ fn md5_impl(msg: bytes) -> bytes {
     let s = md5_s();
     let blocks = m.len() / 64;
     for (let blk = 0; blk < blocks; blk += 1) {
-        let mut x: Vec<u32> = Vec();
+        let mut x: Vec<u32> = Vec.new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             x.push(u32(m[o]) | (u32(m[o + 1]) << 8) | (u32(m[o + 2]) << 16) | (u32(m[o + 3]) << 24));
@@ -339,7 +340,7 @@ fn md5_impl(msg: bytes) -> bytes {
         c0 = c0 &+ c;
         d0 = d0 &+ d;
     }
-    let mut out: Vec<u8> = Vec();
+    let mut out: Vec<u8> = Vec.new();
     let mut w = a0;
     for (let i = 0; i < 4; i += 1) { out.push(u8((w >> (u32(i) * 8)) & 0xFF)); }
     w = b0;
@@ -377,7 +378,7 @@ fn sha1_impl(msg: bytes) -> bytes {
     let mut h4: u32 = 0xC3D2E1F0;
     let blocks = m.len() / 64;
     for (let blk = 0; blk < blocks; blk += 1) {
-        let mut w: Vec<u32> = Vec();
+        let mut w: Vec<u32> = Vec.new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             w.push(u32(m[o]) << 24 | u32(m[o + 1]) << 16 | u32(m[o + 2]) << 8 | u32(m[o + 3]));
@@ -419,8 +420,8 @@ fn sha1_impl(msg: bytes) -> bytes {
         h3 = h3 &+ d;
         h4 = h4 &+ e;
     }
-    let mut out: Vec<u8> = Vec();
-    let ws: Vec<u32> = Vec();
+    let mut out: Vec<u8> = Vec.new();
+    let ws: Vec<u32> = Vec.new();
     ws.push(h0); ws.push(h1); ws.push(h2); ws.push(h3); ws.push(h4);
     for (let j = 0; j < 5; j += 1) {
         out.push(u8((ws[j] >> 24) & 0xFF));
@@ -458,11 +459,11 @@ fn sha256_impl(msg: bytes) -> bytes {
     sha_tail(m, msg.len());
     let h = sha256_h();
     let k = sha256_k();
-    let mut st: Vec<u32> = Vec();
+    let mut st: Vec<u32> = Vec.new();
     for (let i = 0; i < 8; i += 1) { st.push(h[i]); }
     let blocks = m.len() / 64;
     for (let blk = 0; blk < blocks; blk += 1) {
-        let mut w: Vec<u32> = Vec();
+        let mut w: Vec<u32> = Vec.new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 64 + j * 4;
             w.push(u32(m[o]) << 24 | u32(m[o + 1]) << 16 | u32(m[o + 2]) << 8 | u32(m[o + 3]));
@@ -505,7 +506,7 @@ fn sha256_impl(msg: bytes) -> bytes {
         st[6] = st[6] &+ g;
         st[7] = st[7] &+ hh;
     }
-    let mut out: Vec<u8> = Vec();
+    let mut out: Vec<u8> = Vec.new();
     for (let j = 0; j < 8; j += 1) {
         out.push(u8((st[j] >> 24) & 0xFF));
         out.push(u8((st[j] >> 16) & 0xFF));
@@ -559,11 +560,11 @@ fn sha512_impl(msg: bytes) -> bytes {
     m.push(u8(bits & 0xFF));
     let h = sha512_h();
     let k = sha512_k();
-    let mut st: Vec<u64> = Vec();
+    let mut st: Vec<u64> = Vec.new();
     for (let i = 0; i < 8; i += 1) { st.push(h[i]); }
     let blocks = m.len() / 128;
     for (let blk = 0; blk < blocks; blk += 1) {
-        let mut w: Vec<u64> = Vec();
+        let mut w: Vec<u64> = Vec.new();
         for (let j = 0; j < 16; j += 1) {
             let o = blk * 128 + j * 8;
             let mut word: u64 = 0;
@@ -610,7 +611,7 @@ fn sha512_impl(msg: bytes) -> bytes {
         st[6] = st[6] &+ g;
         st[7] = st[7] &+ hh;
     }
-    let mut out: Vec<u8> = Vec();
+    let mut out: Vec<u8> = Vec.new();
     for (let j = 0; j < 8; j += 1) {
         out.push(u8((st[j] >> 56) & 0xFF));
         out.push(u8((st[j] >> 48) & 0xFF));
@@ -659,11 +660,11 @@ dataclass Json {
 }
 
 fn noopaques() -> Vec<Opaque> {
-    let v: Vec<Opaque> = Vec();
+    let v: Vec<Opaque> = Vec.new();
     return v;
 }
 fn nostrings() -> Vec<string> {
-    let v: Vec<string> = Vec();
+    let v: Vec<string> = Vec.new();
     return v;
 }
 
@@ -682,7 +683,7 @@ fn jobj() -> Json { return Json { tag: JTag.Obj, num: "", str: "", arr: noopaque
 dataclass Cur { cs: Vec<string>; pos: i32; depth: i32; }
 
 fn split_chars(s: string) -> Vec<string> {
-    let cs: Vec<string> = Vec();
+    let cs: Vec<string> = Vec.new();
     for (let c of s) { cs.push(f"{c}"); }
     return cs;
 }
@@ -770,7 +771,7 @@ fn jparse_lit(mut cur: Cur, word: string, v: Json) -> Result<Opaque, string> {
 fn jparse_string(mut cur: Cur) -> Result<Opaque, string> {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
-    let out: Vec<string> = Vec();
+    let out: Vec<string> = Vec.new();
     let mut closed = false;
     let mut open = true;
     while (open && cur.pos < cur.cs.len()) {
@@ -810,7 +811,7 @@ fn jparse_string(mut cur: Cur) -> Result<Opaque, string> {
 
 fn jparse_number(mut cur: Cur) -> Result<Opaque, string> {
     let start = cur.pos;
-    let chars: Vec<string> = Vec();
+    let chars: Vec<string> = Vec.new();
     let mut again = true;
     while (again) {
         let c = jpeek(cur);
@@ -945,7 +946,7 @@ fn jencode(j: Json) -> string {
 /// Quote + minimally escape a JSON string body.
 fn jquote(s: string) -> string {
     let q = "\"";
-    let body: Vec<string> = Vec();
+    let body: Vec<string> = Vec.new();
     for (let c of s) {
         if (c == '"') { body.push("\\\""); }
         else if (c == '\\') { body.push("\\\\"); }

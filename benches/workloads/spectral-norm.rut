@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // spectral-norm — the benchmark-game power-iteration norm.
 // Scale: n = 150, 10 iterations. Same fixed-iteration Newton sqrt as the
 // JS twin, so the checksum is exact.
@@ -41,9 +42,9 @@ fn mul_atv(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {
 
 pub fn main() -> unit {
     let n = 150;
-    let mut u = Vec<f64>(n);
-    let v = Vec<f64>(n);
-    let tmp = Vec<f64>(n);
+    let mut u = Vec<f64>.zeroed(n);
+    let v = Vec<f64>.zeroed(n);
+    let tmp = Vec<f64>.zeroed(n);
     for (let i = 0; i < n; i += 1) {
         u[i] = 1.0;
     }

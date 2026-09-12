@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // Quicksort — in-place Vec<i32> mutation (vecs are handles: the
 // mutation is shared with the caller), recursion, explicit conversions.
 
@@ -31,7 +32,7 @@ fn quicksort(xs: Vec<i32>, lo: i32, hi: i32) -> unit {
 
 pub fn main() -> unit {
     let log = Logger.new("sort");
-    let xs = Vec.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
+    let xs = Vec<i32>.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.len() - 1);
 
     let out = "";

@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // quicksort — deterministic LCG input, in-place Lomuto quicksort, rolled
 // checksum. Scale: n = 100_000.
 //
@@ -28,7 +29,7 @@ fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> unit {
 
 pub fn main() -> unit {
     let n = 10000;
-    let xs: Vec<i32> = Vec();
+    let xs: Vec<i32> = Vec.new();
     let mut x: i32 = 42;
     for (let i = 0; i < n; i += 1) {
         x = (x &* 1664525) &+ 1013904223;

@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // HTTP fetch — sequential awaits with `?` propagation, Result at the API
 // boundary, Task-free simple flow. Future<Result<T,E>> everywhere.
 
@@ -5,7 +6,7 @@ import { HttpError, get } from "std:http";
 import { Logger } from "std:log";
 
 suspend fn fetch_all(urls: Vec<string>) -> Result<Vec<bytes>, HttpError> {
-    let bodies: Vec<bytes> = Vec();
+    let bodies: Vec<bytes> = Vec.new();
     for (let u of urls) {
         let body = await get(u)?;      // await + propagate in one expression
         bodies.push(body);

@@ -333,48 +333,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.emit(Op::ArrNew { dst, ty: aty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
             return Ok(aty);
         }
-        // builtin type-call: Vec<T>(n) — or bare `Vec()` / `Vec(n)` with
-        // the element inferred from the expected type (`let primes:
-        // Vec<i32> = Vec()`, `let buf: Vec<u8> = Vec(1024)`)
-        if n == "Vec" && self.ctx.find_data(name).is_none() {
-            if !generics.is_empty() {
-                return self.compile_vec_alloc(generics, args, sp);
-            }
-            let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-                Some(TyKind::Vec { elem }) => elem,
-                _ => {
-                    self.ctx.err(sp, "cannot infer the element type — write `Vec<T>()` or annotate the binding");
-                    return Err(());
-                }
-            };
-            let vty = self.ctx.mk_vec(elem);
-            match args.len() {
-                0 => {
-                    let zero = self.new_reg(TY_I32);
-                    self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
-                    let dst = self.new_reg(vty);
-                    self.emit(Op::ArrNew { dst, ty: vty, len: zero, repr: self.ctx.types.repr_of(elem) }, sp.lo);
-                }
-                1 => {
-                    if !matches!(self.ctx.types.kind(elem), TyKind::Prim(_)) {
-                        self.ctx.err(sp, "zeroed allocation needs a primitive element type (RFC 0005)");
-                        return Err(());
-                    }
-                    let t = self.compile_expr(args[0], Some(TY_I32))?;
-                    if t != TY_I32 {
-                        self.ctx.err(sp, format!("Vec(n) takes an `i32` length, found `{}`", self.ctx.types.name(t)));
-                    }
-                    let len = self.last_reg;
-                    let dst = self.new_reg(vty);
-                    self.emit(Op::ArrNew { dst, ty: vty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
-                }
-                _ => {
-                    self.ctx.err(sp, "Vec() or Vec(n)");
-                    return Err(());
-                }
-            }
-            return Ok(vty);
-        }
         // builtin bytes type-call: `bytes(n)` zeroed (RFC 0004)
         if n == "bytes" {
             return self.compile_bytes_alloc(args, sp);
@@ -388,42 +346,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         self.ctx.err(sp, format!("unknown function `{n}`"));
         Err(())
-    }
-
-    pub(crate) fn compile_vec_alloc(&mut self, generics: Vec<NodeHandle<AnyTy>>, args: Vec<NodeHandle<AnyExpr>>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        if generics.len() != 1 {
-            self.ctx.err(sp, "Vec<T>(..) takes one type argument");
-            return Err(());
-        }
-        let elem = self.resolve_type_now(generics[0]);
-        let vty = self.ctx.mk_vec(elem);
-        match args.len() {
-            0 => {
-                let zero = self.new_reg(TY_I32);
-                self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
-                let dst = self.new_reg(vty);
-                self.emit(Op::ArrNew { dst, ty: vty, len: zero, repr: self.ctx.types.repr_of(elem) }, sp.lo);
-                Ok(vty)
-            }
-            1 => {
-                if !matches!(self.ctx.types.kind(elem), TyKind::Prim(_)) {
-                    self.ctx.err(sp, "zeroed allocation needs a primitive element type (RFC 0005)");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_I32))?;
-                if t != TY_I32 {
-                    self.ctx.err(sp, format!("Vec<T>(n) takes an `i32` length, found `{}`", self.ctx.types.name(t)));
-                }
-                let len = self.last_reg;
-                let dst = self.new_reg(vty);
-                self.emit(Op::ArrNew { dst, ty: vty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
-                Ok(vty)
-            }
-            _ => {
-                self.ctx.err(sp, "Vec<T>() or Vec<T>(n)");
-                Err(())
-            }
-        }
     }
 
     /// `bytes(n)` — a zeroed immutable buffer of `n` octets (RFC 0004).
@@ -467,7 +389,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // member can use them (`Vec<u32>.from(..)` — the element type);
         // everywhere else they stay unsupported rather than silently ignored.
         let is_data = self.ctx.find_data(base).is_some();
-        if !base_generics.is_empty() && !is_data && (bn != "Vec" || mn != "from" || base_generics.len() != 1) {
+        if !base_generics.is_empty() && !is_data {
             self.ctx.err(sp, format!("generic type paths (`{bn}<..>.{mn}`) are not supported in this build"));
             return Err(());
         }
@@ -544,52 +466,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
                 return Ok(TY_OPAQUE);
             }
-            ("Vec", "from") if self.ctx.find_data(base).is_none() => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "Vec.from(arr) takes one array");
-                    return Err(());
-                }
-                // the wanted element: the annotation's `expected`, else the
-                // explicit `Vec<T>.from(..)` argument — both play the same role
-                let want_elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-                    Some(TyKind::Vec { elem }) => Some(elem),
-                    _ => base_generics.first().map(|&g| self.resolve_type_now(g)),
-                };
-                let hint_ty = match want_elem {
-                    Some(e) => Some(self.ctx.mk_array(e)),
-                    None => None,
-                };
-                let at = self.compile_expr(args[0], hint_ty)?;
-                let elem = match self.ctx.types.kind(at).clone() {
-                    TyKind::Array { elem } | TyKind::Vec { elem } => elem,
-                    _ => {
-                        self.ctx.err(sp, format!("Vec.from expects an Array —found `{}`", self.ctx.types.name(at)));
-                        return Err(());
-                    }
-                };
-                // widen through the wanted element (RFC 0012 Section 2)
-                let elem = match want_elem {
-                    Some(want) if self.widens(elem, want) => want,
-                    _ => elem,
-                };
-                let vty = self.ctx.mk_vec(elem);
-                let src = self.last_reg;
-                let dst = self.new_reg(vty);
-                self.emit(Op::CallNat { nat: Nat::VecFrom, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
-                return Ok(vty);
-            }
             ("bytes", "from") => {
                 if args.len() != 1 {
-                    self.ctx.err(sp, "bytes.from(source) takes one array or Vec<u8>");
+                    self.ctx.err(sp, "bytes.from(source) takes one `Array<u8>`");
                     return Err(());
                 }
                 // hint `Array<u8>` so a bare literal knows its element
                 let hint = Some(self.ctx.mk_array(TY_U8));
                 let at = self.compile_expr(args[0], hint)?;
                 match self.ctx.types.kind(at) {
-                    TyKind::Array { elem } | TyKind::Vec { elem } if *elem == TY_U8 => {}
+                    TyKind::Array { elem } if *elem == TY_U8 => {}
                     _ => {
-                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` or `Vec<u8>` —found `{}`", self.ctx.types.name(at)));
+                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` —found `{}`", self.ctx.types.name(at)));
                         return Err(());
                     }
                 }
@@ -845,7 +733,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if segs.len() == 1 && self.lookup(segs[0].name).is_none() {
                 let base = segs[0].name;
                 let bn = self.ctx.name(base).to_string();
-                let is_type = matches!(bn.as_str(), "Vec" | "Option" | "Result" | "Opaque" | "bytes")
+                // `Vec` is an ordinary class (std:collection), so it routes
+                // here through `find_data`, like any other class
+                let is_type = matches!(bn.as_str(), "Option" | "Result" | "Opaque" | "bytes")
                     || self.ctx.find_enum(base).is_some()
                     || self.ctx.find_data(base).is_some();
                 if is_type {
@@ -859,6 +749,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if !generics.is_empty() {
             self.ctx.err(sp, "generic method calls are not supported in this build");
             return Err(());
+        }
+        // `s.len()` — the Slice surface member shared by every sequence;
+        // lowered fused (RFC 0032 §1.1 R1), including the `Vec<T>` class
+        if mname == "len" && args.is_empty() {
+            if let Some(info) = self.slice_info(rt) {
+                self.emit_slice_len(rreg, &info, sp.lo)?;
+                return Ok(TY_I32);
+            }
         }
         // builtin members (RFC 0005 table; Vec's named API —RFC 0032 §1.1 R2)
         match self.ctx.types.kind(rt).clone() {
@@ -935,60 +833,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let dst = self.new_reg(ok);
                     self.emit(Op::Expect { dst, v: rreg, msg }, sp.lo);
                     return Ok(ok);
-                }
-                _ => {}
-            },
-            TyKind::Vec { elem } => match mname.as_str() {
-                "len" => {
-                    let dst = self.new_reg(TY_I32);
-                    self.emit(Op::CallNat { nat: Nat::VecLen, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
-                    return Ok(TY_I32);
-                }
-                "push" => {
-                    if args.len() != 1 {
-                        self.ctx.err(sp, "push(v) takes one argument");
-                        return Err(());
-                    }
-                    let t = self.compile_expr(args[0], Some(elem))?;
-                    if t != elem {
-                        self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                            "push takes `{}`, found `{}`",
-                            self.ctx.types.name(elem), self.ctx.types.name(t)
-                        ));
-                    }
-                    self.emit(Op::CallNat { nat: Nat::VecPush, recv: Some(rreg), args: vec![self.last_reg], dst: None }, sp.lo);
-                    return Ok(TY_UNIT);
-                }
-                "pop" => {
-                    if !args.is_empty() {
-                        self.ctx.err(sp, "pop() takes no arguments");
-                        return Err(());
-                    }
-                    let dst = self.new_reg(elem);
-                    self.emit(Op::CallNat { nat: Nat::VecPop, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
-                    return Ok(elem);
-                }
-                "freeze" => {
-                    if !args.is_empty() {
-                        self.ctx.err(sp, "freeze() takes no arguments");
-                        return Err(());
-                    }
-                    if elem != TY_U8 {
-                        self.ctx.err(sp, "freeze() needs a `Vec<u8>` —binary data is built in a Vec and frozen to `bytes` (RFC 0004)");
-                        return Err(());
-                    }
-                    let dst = self.new_reg(TY_BYTES);
-                    self.emit(Op::CallNat { nat: Nat::VecFreeze, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
-                    return Ok(TY_BYTES);
-                }
-                _ => {}
-            },
-            TyKind::Array { .. } => match mname.as_str() {
-                "len" => {
-                    // runtime length — the heap array cell carries it
-                    let dst = self.new_reg(TY_I32);
-                    self.emit(Op::CallNat { nat: Nat::VecLen, recv: Some(rreg), args: vec![], dst: Some(dst) }, sp.lo);
-                    return Ok(TY_I32);
                 }
                 _ => {}
             },

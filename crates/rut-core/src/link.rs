@@ -223,7 +223,6 @@ fn remap_kind(kind: &TyKind, map: &impl Fn(TypeId) -> TypeId) -> TyKind {
         TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => {
             kind.clone()
         }
-        TyKind::Vec { elem } => TyKind::Vec { elem: map(*elem) },
         TyKind::Array { elem } => TyKind::Array { elem: map(*elem) },
         TyKind::Enum { members } => TyKind::Enum { members: members.clone() },
         TyKind::Option { elem } => TyKind::Option { elem: map(*elem) },

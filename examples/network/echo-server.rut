@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // TCP echo server — accept loop on the main VM, a pool of worker isolates
 // connected by channels (one channel per worker; endpoints are
 // transferable). Cancellation-by-drop closes everything deterministically.
@@ -17,7 +18,7 @@ pub suspend fn main() -> unit {
     }
     let server = started.value;
 
-    let senders: Vec<Sender<Conn>> = Vec();
+    let senders: Vec<Sender<Conn>> = Vec.new();
     for (let i = 0; i < WORKERS; i += 1) {
         let jobs = Channel<Conn>();                 // one channel per worker
         spawn_worker("network/echo-worker.rut", [jobs.receiver]);

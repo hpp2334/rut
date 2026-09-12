@@ -1,10 +1,11 @@
+import { Vec } from "std:collection";
 // Sieve of Eratosthenes — flat Vec<u8>/Vec<i32> primitive buffers.
 
 import { Logger } from "std:log";
 
 fn sieve(limit: i32) -> Vec<i32> {
-    let marks = Vec<u8>(limit + 1);     // zeroed: 0 = candidate, 1 = crossed
-    let primes: Vec<i32> = Vec();       // empty growable: Vec(), not []
+    let marks = Vec<u8>.zeroed(limit + 1);     // zeroed: 0 = candidate, 1 = crossed
+    let primes: Vec<i32> = Vec.new();       // empty growable: Vec.new(), not []
     for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);

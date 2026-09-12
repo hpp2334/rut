@@ -32,14 +32,6 @@ impl Vm {
         }
     }
 
-    pub(super) fn elem_ty_of(&self, cell: &crate::heap::CellVal) -> TypeId {
-        match &cell.data {
-            crate::heap::CellData::Vec { elem, .. } => *elem,
-            crate::heap::CellData::Array { elem, .. } => *elem,
-            _ => TY_ANY,
-        }
-    }
-
     // ---- op bodies shared by `step` and the `run_loop` fast path ----
 
     /// `ArrGet` — the fast path calls this directly, so it must stay small
@@ -65,6 +57,54 @@ impl Vm {
         let cell = cell_of(self.cur_regs[arr as usize]);
         let v = self.cur_regs[val as usize];
         let old = seq_set(cell, i, v)?;
+        if repr.is_ref() {
+            self.heap.retain(v);
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
+    /// `ArrGetF` — fused `obj.field[idx]`; the field handle is borrowed, not
+    /// retained (the owner record keeps the array alive).
+    #[inline(always)]
+    pub(super) fn op_arr_get_f(&mut self, dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr) -> Result<(), Trap> {
+        let i = unsafe { self.cur_regs[idx as usize].i };
+        let arr = {
+            let obj_cell = cell_of(self.cur_regs[obj as usize]);
+            match &obj_cell.data {
+                CellData::Record { fields } => fields
+                    .borrow()
+                    .get(field as usize)
+                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
+                _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
+            }
+        };
+        let v = seq_get(cell_of(arr), i)?;
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = v;
+        if repr.is_ref() {
+            self.heap.retain(v);
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
+    /// `ArrSetF` — fused `obj.field[idx] = val`; field borrowed.
+    #[inline(always)]
+    pub(super) fn op_arr_set_f(&mut self, obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr) -> Result<(), Trap> {
+        let i = unsafe { self.cur_regs[idx as usize].i };
+        let v = self.cur_regs[val as usize];
+        let arr = {
+            let obj_cell = cell_of(self.cur_regs[obj as usize]);
+            match &obj_cell.data {
+                CellData::Record { fields } => fields
+                    .borrow()
+                    .get(field as usize)
+                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
+                _ => return Err(Trap::new(TrapKind::Invalid, "field-array set on non-record")),
+            }
+        };
+        let old = seq_set(cell_of(arr), i, v)?;
         if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);
@@ -237,7 +277,7 @@ impl Vm {
     #[inline(always)]
     pub(super) fn op_arr_lit(&mut self, dst: Reg, ty: TypeId, elems: &[Reg]) -> Result<(), Trap> {
         let elem = match self.prog.types.kind(ty) {
-            TyKind::Vec { elem } | TyKind::Array { elem } => *elem,
+            TyKind::Array { elem } => *elem,
             _ => TY_ANY,
         };
         let vals: Vec<Slot> = elems.iter().map(|&e| self.cur_regs[e as usize]).collect();

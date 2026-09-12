@@ -100,9 +100,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let head = self.ctx.name(segs[0].name);
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 match (head, arg_kind) {
-                    ("Vec", TyKind::Vec { elem }) if segs[0].generics.len() == 1 => {
-                        self.unify_generic(segs[0].generics[0], elem, decl_generics, subst, sp)
-                    }
                     ("Option", TyKind::Option { elem }) if segs[0].generics.len() == 1 => {
                         self.unify_generic(segs[0].generics[0], elem, decl_generics, subst, sp)
                     }

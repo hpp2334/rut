@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // RFC 0003 §1 — module scope is DECLARATIONS ONLY (C++-style):
 // no top-level statements, no load-time code, module let initializers must be
 // load-time expressions.
@@ -5,7 +6,7 @@
 import { sleep } from "std:time";
 
 let MAX_RETRIES: i32 = 3;                    // load-time expression
-let TILES: Vec<f32> = Vec<f32>(16);       // zeroed, let size
+let TILES: Vec<f32> = Vec<f32>.zeroed(16);       // zeroed, let size
 let ORIGIN: Point = Point { x: 0, y: 0 };    // dataclass literal of consts
 
 enum Mode { Idle, Running }

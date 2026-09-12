@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // json.rut — USER-DEFINED JSON on std:reflect (RFC 0037). Pure rut; no
 // VM JSON builtin exists, by design — a rut engine is small because the
 // spec is small (RFC 0001 "Why not JavaScript" #2).
@@ -93,7 +94,7 @@ pub fn deserialize<T>(v: string) -> Result<T, JsonError>
 fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
     when (t.kind()) {
         TypeKind.Record -> {
-            let parts = Vec<string>();
+            let parts = Vec<string>.new();
             let fs = t.fields();
             for (let i = 0; i < fs.len(); i += 1) {
                 // .value (not unwrap_or): the Record branch proves
@@ -105,7 +106,7 @@ fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
             return Ok(f"{{{join(parts)}}}");        // {{ }} -> { (RFC 0007 §2)
         },
         TypeKind.Seq -> {
-            let parts = Vec<string>();
+            let parts = Vec<string>.new();
             for (let i = 0; i < t.arity(a); i += 1) {
                 parts.push(write_val(t.elem(), t.child(a, i).value)?);
             }
@@ -138,7 +139,7 @@ fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
                 // is_a() query is the gate; the view renders
                 // positionally (named walking is the dataclass path).
                 if (t.is_a(reflect<Reflectable>())) {
-                    let parts = Vec<string>();
+                    let parts = Vec<string>.new();
                     for (let i = 0; i < t.arity(a); i += 1) {
                         let c = t.child(a, i).value;
                         parts.push(write_val(type_of(c), c)?);
@@ -158,7 +159,7 @@ fn build(t: TypeInfo, j: JsonValue) -> Result<Opaque, JsonError> {
     when (t.kind()) {
         TypeKind.Record -> {
             let fs = t.fields();
-            let vals = Vec<Opaque>(fs.len());
+            let vals = Vec<Opaque>.zeroed(fs.len());
             for (let i = 0; i < fs.len(); i += 1) {
                 let f = fs[i];
                 when (member(j, f.name())) {
@@ -184,7 +185,7 @@ fn build(t: TypeInfo, j: JsonValue) -> Result<Opaque, JsonError> {
         },
         TypeKind.Seq -> {
             let items = want_items(j, t.name())?;
-            let vals = Vec<Opaque>(items.len());
+            let vals = Vec<Opaque>.zeroed(items.len());
             for (let i = 0; i < items.len(); i += 1) {
                 vals[i] = build(t.elem(), items[i])?;
             }
@@ -199,7 +200,7 @@ fn build(t: TypeInfo, j: JsonValue) -> Result<Opaque, JsonError> {
                 let name = want_str(j, t.name())?;
                 for (let i = 0; i < vs.len(); i += 1) {
                     if (str_eq(vs[i].name(), name)) {
-                        return mint_variant(t, i, Vec<Opaque>(), j);
+                        return mint_variant(t, i, Vec<Opaque>.new(), j);
                     }
                 }
                 return Err(JsonError { msg: f"unknown variant {name}", pos: j.pos });
@@ -208,11 +209,11 @@ fn build(t: TypeInfo, j: JsonValue) -> Result<Opaque, JsonError> {
                 let idx = optional_indices(vs);
                 when (j.kind) {
                     JKind.Null -> {
-                        return mint_variant(t, idx[0], Vec<Opaque>(), j);
+                        return mint_variant(t, idx[0], Vec<Opaque>.new(), j);
                     },
                     else -> {
                         let payload = build(vs[idx[1]].payloads()[0], j)?;
-                        let one = Vec<Opaque>(1);
+                        let one = Vec<Opaque>.zeroed(1);
                         one[0] = payload;
                         return mint_variant(t, idx[1], one, j);
                     },
@@ -267,7 +268,7 @@ fn sum_is_optional(vs: Vec<SumVariant>) -> bool {
 fn member(j: JsonValue, name: string) -> Option<JsonValue> {
     when (j.kind) {
         JKind.Obj -> {
-            let fs = downcast<Vec<JField>>(j.val.value).unwrap_or(Vec<JField>());
+            let fs = downcast<Vec<JField>>(j.val.value).unwrap_or(Vec<JField>.new());
             for (let i = 0; i < fs.len(); i += 1) {
                 if (str_eq(fs[i].name, name)) {
                     return Option<JsonValue>.Some(fs[i].value);
@@ -299,7 +300,7 @@ fn want_bool(j: JsonValue, ty: string) -> Result<bool, JsonError> {
 }
 fn want_items(j: JsonValue, ty: string) -> Result<Vec<JsonValue>, JsonError> {
     return when (j.kind) {
-        JKind.Arr -> Ok(downcast<Vec<JsonValue>>(j.val.value).unwrap_or(Vec<JsonValue>())),
+        JKind.Arr -> Ok(downcast<Vec<JsonValue>>(j.val.value).unwrap_or(Vec<JsonValue>.new())),
         else -> Err(JsonError { msg: f"array expected for {ty}", pos: j.pos }),
     };
 }
@@ -366,7 +367,7 @@ fn parse_lit(s: string, i: i32, text: string, value: JsonValue) -> Result<Parsed
 }
 
 fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
-    let fields = Vec<JField>();
+    let fields = Vec<JField>.new();
     let k = skip_ws(s, i + 1);
     if (k < s.len() && s.at(k) == 125u8) {           // '}'
         return Ok(Parsed { value: jobj(fields, i), end: k + 1 });
@@ -398,7 +399,7 @@ fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
 }
 
 fn parse_array(s: string, i: i32) -> Result<Parsed, JsonError> {
-    let items = Vec<JsonValue>();
+    let items = Vec<JsonValue>.new();
     let k = skip_ws(s, i + 1);
     if (k < s.len() && s.at(k) == 93u8) {            // ']'
         return Ok(Parsed { value: jarr(items, i), end: k + 1 });

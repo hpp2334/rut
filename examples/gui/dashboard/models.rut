@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // models.rut — domain data: dataclasses (data-first records — methods are
 // allowed, but helpers stay free functions here) and simple enums.
 // Shared by main, services, the worker isolate, and components;

@@ -16,6 +16,7 @@ mod generic;
 mod lit;
 mod ops;
 mod peephole;
+mod slice;
 mod sroa;
 mod stmt;
 
@@ -48,6 +49,10 @@ pub struct FnCompiler<'a, 'b> {
     span: u32,
     /// the register holding the value produced by the last compile_expr
     last_reg: u16,
+    /// while inlining a `Slice` accessor (RFC 0005), reads of this local
+    /// (`self`) use the receiver register directly — no copy, so element
+    /// access pays no per-access ref copy
+    inline_self: Option<(IdentId, u16)>,
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
@@ -148,6 +153,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             fixups: Vec::new(),
             span: 0,
             last_reg: 0,
+            inline_self: None,
         };
         // signature: params (self first for methods), resolved under subst
         let mut param_tys: Vec<TypeId> = Vec::new();
@@ -254,6 +260,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             fixups: Vec::new(),
             span: 0,
             last_reg: 0,
+            inline_self: None,
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type

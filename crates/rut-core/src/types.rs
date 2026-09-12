@@ -119,8 +119,6 @@ pub enum TyKind {
     /// immutable raw byte buffer cell (RFC 0004 — the language's binary
     /// data type); contiguous, content-compared, COW-shared like `Str`
     Bytes,
-    /// growable buffer cell; flat for primitive elem, handle slots otherwise
-    Vec { elem: TypeId },
     /// heap array cell — runtime length, non-growable (RFC 0005). The
     /// growable `Vec<T>` is a rut class over it (`std:collection`).
     Array { elem: TypeId },

@@ -223,17 +223,44 @@ pub fn compile_program_resolved(
     ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program) }
 }
 
-/// Full pipeline over one module (no imports): compile, flatten, encode.
+/// The `std:collection` body, assembled from its parts (no filesystem): the
+/// relative includes are merged so the module can be mounted in-memory by
+/// wasm hosts and tests alike (RFC 0035 §1).
+pub fn std_collection_source() -> String {
+    format!(
+        "{}\n{}",
+        include_str!("../../../rut/std-collection/hash.rut"),
+        include_str!("../../../rut/std-collection/vec.rut"),
+    )
+}
+
+/// Full pipeline over one module: resolve its `import` statements against a
+/// session with `std:collection` mounted, then link, flatten, encode.
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
-    let out = compile_program(src, mode, module_name, 1, &[]);
-    let binary = out.program.map(|p| encode(&rut_core::link::flatten(p)));
-    CompileOutput {
-        diags: out.diags,
-        ast_dump: out.ast_dump,
-        ast_json: out.ast_json,
-        ir_dump: out.ir_dump,
-        binary,
+    let (ast, mut diags) = parse(src, mode);
+    let tree = dump::to_dump_tree(&ast);
+    let ast_dump = dump::render_text(&tree, src);
+    let ast_json = dump::render_json(&tree);
+    if !diags.is_empty() {
+        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
+    let mut session = Session::new();
+    let _ = session.register_module(
+        "std:collection",
+        Module { source: Some(std_collection_source()), ..Default::default() },
+    );
+    let spec = format!("app:{module_name}");
+    if let Err(e) = session.register_module(
+        &spec,
+        Module { source: Some(src.to_string()), ..Default::default() },
+    ) {
+        diags.push(Diag::new(rut_lexer::span::Span::new(0, 0), e.to_string()));
+        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
+    }
+    let g = compile_graph(&session, &spec);
+    let ir_dump = g.program.as_ref().map(|p| ir_dump_of(&p.funcs)).unwrap_or_default();
+    let binary = g.program.map(|p| encode(&p));
+    CompileOutput { diags: g.diags, ast_dump, ast_json, ir_dump, binary }
 }
 
 /// irDump — the demo page's IR pane (RFC 0041 §3): per-function typed
@@ -365,6 +392,8 @@ fn op_str(op: &Op) -> String {
         ),
         Op::ArrGet { dst, arr, idx, repr } => format!("arrget r{dst}, r{arr}, r{idx} :{}", repr.to_u8()),
         Op::ArrSet { arr, idx, val, repr } => format!("arrset r{arr}, r{idx}, r{val} :{}", repr.to_u8()),
+        Op::ArrGetF { dst, obj, field, idx, repr } => format!("arrgetf r{dst}, r{obj}, f{field}, r{idx} :{}", repr.to_u8()),
+        Op::ArrSetF { obj, field, idx, val, repr } => format!("arrsetf r{obj}, f{field}, r{idx}, r{val} :{}", repr.to_u8()),
         Op::EnumNew { dst, ty, member } => format!("enumnew r{dst}, t{ty}, m{member}"),
         Op::OptSome { dst, ty, val } => format!("optsome r{dst}, t{ty}, r{val}"),
         Op::OptNone { dst, ty } => format!("optnone r{dst}, t{ty}"),

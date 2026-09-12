@@ -56,40 +56,7 @@ impl Vm {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }
             }
-            Nat::VecNew => {
-                let c = self.heap.alloc_vec(TY_ANY, 0, &self.prog.types)?;
-                self.store_result(dst, c)?;
-            }
-            Nat::VecZeroed => {
-                let n = unsafe { r!(args[0]).i }.max(0) as usize;
-                let c = self.heap.alloc_vec(TY_ANY, n, &self.prog.types)?;
-                if let crate::heap::CellData::Vec { items, .. } = &cell_of(c).data {
-                    let mut fb = items.borrow_mut();
-                    for _ in 0..n {
-                        fb.push(Slot::null());
-                    }
-                }
-                self.store_result(dst, c)?;
-            }
-            Nat::VecFrom => {
-                let cell = cell_of(r!(args[0]));
-                let Some(elem) = cell.elem_ty() else {
-                    return Err(Trap::new(TrapKind::Invalid, "Vec.from expects an array"));
-                };
-                let items = cell.seq_items_copy().unwrap_or_default();
-                let c = self.heap.alloc_vec(elem, items.len(), &self.prog.types)?;
-                if let crate::heap::CellData::Vec { items: out, .. } = &cell_of(c).data {
-                    let mut ob = out.borrow_mut();
-                    for it in items {
-                        if self.is_ref(elem) {
-                            self.heap.retain(it);
-                        }
-                        ob.push(it);
-                    }
-                }
-                self.store_result(dst, c)?;
-            }
-            Nat::VecLen => {
+            Nat::ArrLen => {
                 let cell = cell_of(r!(recv.unwrap()));
                 let n = match &cell.data {
                     crate::heap::CellData::Vec { items, .. }
@@ -98,50 +65,6 @@ impl Vm {
                 };
                 if let Some(d) = dst {
                     self.cur_regs[d as usize] = Slot::int(n);
-                }
-            }
-            Nat::VecPush => {
-                let cell = cell_of(r!(recv.unwrap()));
-                let elem = self.elem_ty_of(cell);
-                let v = r!(args[0]);
-                if let crate::heap::CellData::Vec { items, .. } = &cell.data {
-                    // growth accounting rides the heap budget (RFC 0040 §1)
-                    self.heap.charge_public(items.borrow().elem_width())?;
-                    if self.is_ref(elem) {
-                        self.heap.retain(v);
-                    }
-                    items.borrow_mut().push(v);
-                    if let Some(d) = dst {
-                        self.cur_regs[d as usize] = Slot::int(items.borrow().len() as i64);
-                    }
-                }
-            }
-            Nat::VecPop => {
-                let cell = cell_of(r!(recv.unwrap()));
-                let elem = self.elem_ty_of(cell);
-                if let crate::heap::CellData::Vec { items, .. } = &cell.data {
-                    if items.borrow().is_empty() {
-                        return Err(Trap::new(TrapKind::IndexOutOfBounds, "pop on an empty vec"));
-                    }
-                    let popped = items.borrow_mut().pop();
-                    match popped {
-                        Some(v) => {
-                            if let Some(d) = dst {
-                                let old = self.cur_regs[d as usize];
-                                self.cur_regs[d as usize] = v;
-                                if self.is_ref(elem) {
-                                    self.heap.release(old);
-                                }
-                            } else if self.is_ref(elem) {
-                                self.heap.release(v);
-                            }
-                        }
-                        None => {
-                            if let Some(d) = dst {
-                                self.cur_regs[d as usize] = Slot::int(0);
-                            }
-                        }
-                    }
                 }
             }
             // ---- bytes (RFC 0004) ----
@@ -154,15 +77,7 @@ impl Vm {
                 let cell = cell_of(r!(args[0]));
                 let bytes = cell
                     .seq_bytes_copy()
-                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "bytes.from expects `Array<u8, N>` or `Vec<u8>`"))?;
-                let c = self.heap.alloc_bytes(bytes)?;
-                self.store_result(dst, c)?;
-            }
-            Nat::VecFreeze => {
-                let cell = cell_of(r!(recv.unwrap()));
-                let bytes = cell
-                    .seq_bytes_copy()
-                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "freeze on non-vec"))?;
+                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "bytes.from expects `Array<u8>`"))?;
                 let c = self.heap.alloc_bytes(bytes)?;
                 self.store_result(dst, c)?;
             }

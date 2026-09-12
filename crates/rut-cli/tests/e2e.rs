@@ -100,9 +100,10 @@ pub fn main() -> unit {
 #[test]
 fn case4_sieve() {
     let src = r#"
+import { Vec } from "std:collection";
 fn sieve(limit: i32) -> Vec<i32> {
-    let mut marks = Vec<u8>(limit + 1);
-    let primes: Vec<i32> = Vec();
+    let mut marks = Vec<u8>.zeroed(limit + 1);
+    let primes: Vec<i32> = Vec.new();
     for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);
@@ -153,6 +154,7 @@ pub fn main() -> unit {
 #[test]
 fn case6_dyn_dispatch() {
     let src = r#"
+import { Vec } from "std:collection";
 trait Shape {
     fn area(self) -> f32;
     fn name(self) -> string;
@@ -190,13 +192,14 @@ pub fn main() -> unit {
 #[test]
 fn case7_closures_generics() {
     let src = r#"
+import { Vec } from "std:collection";
 fn map<T, U>(v: Vec<T>, f: fn(T) -> U) -> Vec<U> {
-    let out: Vec<U> = Vec();
+    let out: Vec<U> = Vec<U>.new();
     for (let x of v) { out.push(f(x)); }
     return out;
 }
 pub fn main() -> unit {
-    let xs = Vec.from([1, 2, 3, 4]);
+    let xs = Vec<i32>.from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
     print(f"{ys[0]} {ys[1]} {ys[2]} {ys[3]}");
@@ -293,12 +296,13 @@ fn ne_on_primitives_is_not_eq() {
     // opposite comparison. It flowed everywhere: `while (len % 64 != 56)`
     // never entered its body.
     let src = r#"
+import { Vec } from "std:collection";
 pub fn main() -> unit {
     print(f"a={1 != 56}");
     print(f"b={1 == 56}");
     print(f"c={2 != 2}");
     if (3 != 4) { print("differs"); } else { print("equal"); }
-    let mut m: Vec<u8> = Vec();
+    let mut m: Vec<u8> = Vec.new();
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
     print(f"padded={m.len()}");
@@ -316,17 +320,18 @@ fn bare_vec_with_length_allocates_zeroed_elements() {
     // ZERO length — the argument was silently dropped, and the first
     // index-assign on it trapped out of bounds.
     let src = r#"
+import { Vec } from "std:collection";
 pub fn main() -> unit {
-    let mut k: Vec<u32> = Vec(4);
+    let mut k: Vec<u32> = Vec.zeroed(4);
     print(f"a len={k.len()} k3={k[3]}");
     k[0] = 7;
     k[3] = 9;
     print(f"b k0={k[0]} k3={k[3]} len={k.len()}");
-    let mut j: Vec<u8> = Vec(3);
+    let mut j: Vec<u8> = Vec.zeroed(3);
     j.push(1);
     print(f"c len={j.len()} j0={j[0]} j3={j[3]}");
-    let e: Vec<u32> = Vec(0);
-    let b: Vec<u32> = Vec();
+    let e: Vec<u32> = Vec.zeroed(0);
+    let b: Vec<u32> = Vec.new();
     print(f"d {e.len()} {b.len()}");
 }
 "#;
@@ -343,6 +348,7 @@ fn generic_static_receiver_resolves() {
     // Vec — module paths`, order-dependently. The explicit type argument
     // now reaches the static: it plays the annotation's role.
     let src = r#"
+import { Vec } from "std:collection";
 pub fn main() -> unit {
     let a: Vec<u32> = Vec<u32>.from([1, 2, 3]);
     let b = Vec<u32>.from([4, 5]);
@@ -366,8 +372,9 @@ fn heap_budget_traps_before_the_write() {
     // budget fails the Vec allocation cleanly. `Vec<u8>` packs one byte
     // per element, so it takes 5M elements to exceed the 4 MB budget.
     let src = r#"
+import { Vec } from "std:collection";
 pub fn main() -> unit {
-    let v = Vec<u8>(5000000);
+    let v = Vec<u8>.zeroed(5000000);
     print("allocated");
 }
 "#;
@@ -638,10 +645,11 @@ fn entry_fns_compile_without_main_and_cross_values() {
     // the host drives it: Opaque container in/out, primitives, bytes,
     // Option and Result in both arms
     let src = r#"
+import { Vec } from "std:collection";
 dataclass Row { id: i32; }
 dataclass Box { rows: Vec<Row>; }
 
-entry fn make() -> Opaque { return Opaque.new(Box { rows: Vec() }); }
+entry fn make() -> Opaque { return Opaque.new(Box { rows: Vec.new() }); }
 entry fn put(c: Opaque) -> u32 {
     let b = downcast<Box>(c).value;
     b.rows.push(Row { id: 1 });
@@ -698,8 +706,9 @@ entry fn bad_param(r: Row) -> unit { }
     );
 
     let src = r#"
+import { Vec } from "std:collection";
 dataclass Row { id: i32; }
-entry fn bad_ret() -> Vec<Row> { return Vec(); }
+entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
 "#;
     let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
     assert!(
@@ -711,6 +720,7 @@ entry fn bad_ret() -> Vec<Row> { return Vec(); }
     // `Vec<u8>` is a mutable builder, not the binary type: it no longer
     // crosses — `bytes` is what does (RFC 0004, RFC 0023 §2)
     let src = r#"
+import { Vec } from "std:collection";
 entry fn old_buffer(v: Vec<u8>) -> Vec<u8> { return v; }
 "#;
     let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
@@ -737,13 +747,14 @@ fn bytes_are_an_immutable_primitive() {
     // bytes(n)/bytes.from(..), a Vec<u8> builder freezes into one, and ==
     // compares content. `Vec<u8>` is a mutable builder, not the binary type.
     let src = r#"
+import { Vec } from "std:collection";
 pub fn main() -> unit {
     let z = bytes(3);
     print(f"z={z.len()}");
     let a = bytes.from([1, 2, 3]);
     let b = bytes.from([1, 2, 3]);
     print(f"a={a.len()} eq={a == b} ne={a != z}");
-    let mut buf: Vec<u8> = Vec();
+    let mut buf: Vec<u8> = Vec.new();
     buf.push(9);
     buf.push(8);
     let f = buf.freeze();
@@ -780,10 +791,11 @@ fn plain_pub_stays_unrestricted() {
     // `pub` is import-visibility for rut modules (RFC 0003 §2), NOT
     // the host surface: a Stack crosses fine between rut fns
     let src = r#"
+import { Vec } from "std:collection";
 dataclass Row { id: i32; }
 pub class Stack {
     items: Vec<Row>;                // unannotated member = module-private
-    fn new() -> Self { return Self { items: Vec() }; }
+    fn new() -> Self { return Self { items: Vec.new() }; }
     fn push(mut self, id: i32) -> unit { self.items.push(Row { id: id }); }
     pub fn len(self) -> i32 { return self.items.len(); }
 }
@@ -963,6 +975,28 @@ pub fn main() -> unit {
     let (lines, trap, _) = run_case(src, 2_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["5 10 50 30", "50"]);
+}
+
+#[test]
+fn vec_class_slice_syntax_runs() {
+    // `Vec` is rut std-lib code; `v[i]`, `v[i] = x`, and `for (x of v)`
+    // lower through its `impl Slice<T> for Vec<T>` (RFC 0005)
+    let src = r#"
+import { Vec } from "std:collection";
+pub fn main() -> unit {
+    let mut v: Vec<i32> = Vec.new();
+    v.push(1); v.push(2); v.push(3);
+    v[0] = 10;
+    let mut sum = 0;
+    for (let x of v) { sum += x; }
+    let w: Vec<i32> = Vec.from([7, 8]);
+    let z: Vec<u8> = Vec.zeroed(3);
+    print(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["10 3 15 8 3"]);
 }
 
 #[test]

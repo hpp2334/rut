@@ -114,7 +114,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
                     let ety = match prog.types.kind(f.regs[*arr as usize]) {
-                        TyKind::Vec { elem } | TyKind::Array { elem } => *elem,
+                        TyKind::Array { elem } => *elem,
                         _ => return Err(bad("array op on a non-sequence register".into())),
                     };
                     if prog.types.repr_of(ety) != *repr {
@@ -123,11 +123,26 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::ArrNew { ty, repr, .. } => {
                     let ety = match prog.types.kind(*ty) {
-                        TyKind::Vec { elem } | TyKind::Array { elem } => *elem,
+                        TyKind::Array { elem } => *elem,
                         _ => return Err(bad("arrnew over a non-array type".into())),
                     };
                     if prog.types.repr_of(ety) != *repr {
                         return Err(bad("arrnew repr does not match the element type".into()));
+                    }
+                }
+                Op::ArrGetF { obj, field, repr, .. } | Op::ArrSetF { obj, field, repr, .. } => {
+                    let ety = match prog.types.kind(f.regs[*obj as usize]) {
+                        TyKind::Data { fields } => match fields.get(*field as usize) {
+                            Some(fi) => match prog.types.kind(fi.ty) {
+                                TyKind::Array { elem } => *elem,
+                                _ => return Err(bad("field-array op on a non-array field".into())),
+                            },
+                            None => return Err(bad("field-array op field index out of range".into())),
+                        },
+                        _ => return Err(bad("field-array op on a non-record register".into())),
+                    };
+                    if prog.types.repr_of(ety) != *repr {
+                        return Err(bad("field-array op repr does not match the element type".into()));
                     }
                 }
                 Op::MakeRecord { ty, vals, .. } => match prog.types.kind(*ty) {
@@ -310,6 +325,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
         Op::StrCmp { dst, a, b, .. } | Op::RefEq { dst, a, b, .. }
         | Op::BytesCmp { dst, a, b, .. }
         | Op::ArrGet { dst, arr: a, idx: b, .. }
+        | Op::ArrGetF { dst, obj: a, idx: b, .. }
         | Op::AddF { dst, a, b, .. } | Op::SubF { dst, a, b, .. } | Op::MulF { dst, a, b, .. }
         | Op::DivF { dst, a, b, .. } | Op::ModF { dst, a, b, .. } | Op::EqF { dst, a, b, .. }
         | Op::NeF { dst, a, b, .. } | Op::LtF { dst, a, b, .. } | Op::GtF { dst, a, b, .. }
@@ -340,6 +356,11 @@ fn regs_of(op: &Op) -> Vec<u16> {
         }
         Op::ArrSet { arr, idx, val, .. } => {
             push(*arr);
+            push(*idx);
+            push(*val);
+        }
+        Op::ArrSetF { obj, idx, val, .. } => {
+            push(*obj);
             push(*idx);
             push(*val);
         }

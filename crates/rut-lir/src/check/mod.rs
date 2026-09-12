@@ -54,6 +54,13 @@ pub struct TraitDeclInfo {
 pub struct ImplDecl {
     pub trait_id: u32,
     pub target: TypeId,
+    /// `impl Trait<T> for Vec<T>`: the generic class and the target's
+    /// generic parameter idents. The impl's methods are not monomorphized
+    /// as standalone fns — the compiler inlines them at the use site
+    /// (RFC 0005 `Slice<T>`); `None` for ordinary concrete impls.
+    pub target_data: Option<(IdentId, Vec<IdentId>)>,
+    /// the trait ref's generic argument idents (`Slice<T>` → `[T]`)
+    pub trait_args: Vec<IdentId>,
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
 }
 
@@ -81,6 +88,9 @@ pub struct Ctx<'a> {
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,
     pub trait_decls: Vec<(IdentId, TraitDeclInfo)>,
+    /// the builtin `Slice<T>` trait id once referenced (RFC 0005) — the
+    /// sequence-lowering path keys on this, never on the trait's name
+    pub slice_trait: Option<u32>,
     pub funcs: Vec<FuncCode>,
     pub consts: Vec<ConstVal>,
     pub exports: Vec<(String, u32)>,
@@ -143,6 +153,7 @@ impl<'a> Ctx<'a> {
             types: TypeTable::boot_scoped(scope),
             traits: Vec::new(),
             trait_decls: Vec::new(),
+            slice_trait: None,
             funcs: Vec::new(),
             consts: Vec::new(),
             exports: Vec::new(),
@@ -323,15 +334,6 @@ impl<'a> Ctx<'a> {
 
     // ---- type construction ----
 
-    pub fn mk_vec(&mut self, elem: TypeId) -> TypeId {
-        let name = format!("Vec<{}>", self.types.name(elem));
-        self.types.intern(RutType {
-            name,
-            kind: TyKind::Vec { elem },
-            size: 8,
-            align: 8,
-        })
-    }
     pub fn mk_array(&mut self, elem: TypeId) -> TypeId {
         let name = format!("Array<{}>", self.types.name(elem));
         self.types.intern(RutType {

@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // RFC 0005 — Option<T> / Result<T,E> are builtin VM-native types.
 // Methods are snake_case; no ?. / ?? sugar — check, then read `.value`.
 

@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // RFC 0009–0012 — grammar tour: dataclass, trait, class + class-method,
 // impl blocks, shared cells + `own`, vtable dispatch, exhaustive when,
 // format literals.

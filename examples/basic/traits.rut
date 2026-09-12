@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // RFC 0012 §2 — traits: plain METHODS only, nominal `impl Trait for Type`.
 // Trait OBJECT types are the ONLY dynamic dispatch (vtable), spelled
 // `dyn I` in every type position (Rust-style; `impl` heads / `requires`/

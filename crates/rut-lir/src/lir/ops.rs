@@ -335,13 +335,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
-                let elem = match self.ctx.types.kind(rt).clone() {
-                    TyKind::Vec { elem } | TyKind::Array { elem } => elem,
-                    _ => {
-                        self.ctx.err(sp, "index assignment needs a Vec or Array");
-                        return Err(());
-                    }
+                let Some(info) = self.slice_info(rt) else {
+                    self.ctx.err(sp, "index assignment needs a sequence (Vec or Array)");
+                    return Err(());
                 };
+                let elem = info.elem;
                 let it = self.compile_expr(idx, Some(TY_I32))?;
                 if it != TY_I32 {
                     self.ctx.err(sp, "index must be i32");
@@ -353,11 +351,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != elem {
                             self.ctx.err(sp, "element assignment type mismatch");
                         }
-                        self.emit(Op::ArrSet { arr: rreg, idx: ireg, val: self.last_reg, repr: self.ctx.types.repr_of(elem) }, sp.lo);
+                        let vreg = self.last_reg;
+                        self.emit_slice_set(rreg, ireg, vreg, &info, sp.lo)?;
                     }
                     Some(bin) => {
-                        let cur = self.new_reg(elem);
-                        self.emit(Op::ArrGet { dst: cur, arr: rreg, idx: ireg, repr: self.ctx.types.repr_of(elem) }, sp.lo);
+                        let cur = self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
                         let t = self.compile_expr(value, Some(elem))?;
                         if t != elem {
                             self.ctx.err(sp, "element assignment type mismatch");
@@ -365,7 +363,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let val_reg = self.last_reg;
                         let res = self.new_reg(elem);
                         self.emit_compound(bin, elem, cur, val_reg, res, sp)?;
-                        self.emit(Op::ArrSet { arr: rreg, idx: ireg, val: res, repr: self.ctx.types.repr_of(elem) }, sp.lo);
+                        self.emit_slice_set(rreg, ireg, res, &info, sp.lo)?;
                     }
                 }
                 Ok(())

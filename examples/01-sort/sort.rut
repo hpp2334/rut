@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // sort.rut — a sorting library in rut, called from Rust.
 //
 // The shape: the HOST owns the session. It asks for a bank (`create`),
@@ -108,8 +109,8 @@ fn merge_sort(mut xs: Vec<i32>) -> unit {
         return;
     }
     let mid = n / 2;
-    let left: Vec<i32> = Vec();
-    let right: Vec<i32> = Vec();
+    let left: Vec<i32> = Vec.new();
+    let right: Vec<i32> = Vec.new();
     for (let i = 0; i < mid; i += 1) {
         left.push(xs[i]);
     }
@@ -155,7 +156,7 @@ dataclass Bank {
 // ---- the host surface (entry = callable by the embedder) ----
 
 entry fn create() -> Opaque {
-    return Opaque.new(Bank { data: Vec() });
+    return Opaque.new(Bank { data: Vec.new() });
 }
 
 /// Host-supplied data, one element per call — exact inputs.
@@ -171,7 +172,7 @@ entry fn push(c: Opaque, x: i32) -> unit {
 /// traps; plain `<<` would too — xorshift is out).
 entry fn fill(c: Opaque, n: u32, seed: u32) -> unit {
     let mut b = downcast<Bank>(c).value;
-    let fresh: Vec<i32> = Vec();
+    let fresh: Vec<i32> = Vec.new();
     let mut x = seed | 1;         // the LCG needs an odd state
     for (let i = 0; i < i32(n); i += 1) {
         x = (x &* 1664525) &+ 1013904223;

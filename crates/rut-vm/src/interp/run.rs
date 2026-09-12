@@ -264,6 +264,14 @@ impl Vm {
                     self.op_arr_set(*arr, *idx, *val, *repr)?;
                     self.cur_pc += 1;
                 }
+                Op::ArrGetF { dst, obj, field, idx, repr } => {
+                    self.op_arr_get_f(*dst, *obj, *field, *idx, *repr)?;
+                    self.cur_pc += 1;
+                }
+                Op::ArrSetF { obj, field, idx, val, repr } => {
+                    self.op_arr_set_f(*obj, *field, *idx, *val, *repr)?;
+                    self.cur_pc += 1;
+                }
                 Op::GetF { dst, obj, field, repr } => {
                     self.op_getf(*dst, *obj, *field, *repr)?;
                     self.cur_pc += 1;

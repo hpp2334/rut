@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // services/api.rut — mock HTTP layer: suspend fns returning Result, LCG-
 // generated deterministic data, simulated latency. The Result boundary is
 // the API contract (network calls fail); callers decide fallbacks.
@@ -28,7 +29,7 @@ pub suspend fn fetch_users(seed: u32) -> Result<Vec<User>, ApiError> {
         return Result.err(ApiError.Network);           // the unhappy path exists
     }
     let rng = seed;
-    let users: Vec<User> = Vec();
+    let users: Vec<User> = Vec.new();
     for (let i = 0; i < 12; i += 1) {
         rng = lcg_next(rng);
         let first = FIRST[i32(rng % 8u32)];
@@ -55,7 +56,7 @@ pub suspend fn fetch_users(seed: u32) -> Result<Vec<User>, ApiError> {
 
 pub suspend fn fetch_series(metric: string, unit: string, n: i32, seed: u32) -> Result<Series, ApiError> {
     await sleep(80);
-    let samples: Vec<f32> = Vec();
+    let samples: Vec<f32> = Vec.new();
     let v = 50.0f32;
     let rng = seed;
     for (let i = 0; i < n; i += 1) {

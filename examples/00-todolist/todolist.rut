@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // todolist.rut — a todo-list library in rut, called from Rust.
 //
 // The shape: the HOST owns the session. It asks for an opaque container
@@ -23,7 +24,7 @@ pub class TodoList {
     next_id: i32;             // (RFC 0003 §2 — the class's own business)
 
     pub fn new() -> Self {
-        return Self { items: Vec(), next_id: 1 };
+        return Self { items: Vec.new(), next_id: 1 };
     }
 
     // ---- CREATE ----
@@ -77,7 +78,7 @@ pub class TodoList {
     // ---- DELETE ----
 
     pub fn remove(mut self, id: i32) -> bool {
-        let kept: Vec<Todo> = Vec();
+        let kept: Vec<Todo> = Vec.new();
         let mut removed = false;
         for (let t of self.items) {
             when (t.id == id) {
@@ -108,7 +109,7 @@ fn at(c: Opaque, h: u32) -> TodoList {
 // ---- the host surface (entry = callable by the embedder) ----
 
 entry fn createContainer() -> Opaque {
-    return Opaque.new(Lists { lists: Vec() });
+    return Opaque.new(Lists { lists: Vec.new() });
 }
 
 entry fn create(c: Opaque) -> u32 {

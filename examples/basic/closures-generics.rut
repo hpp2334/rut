@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // RFC 0013 — functions, arrow closures, generics (monomorphized at
 // compile time; each instantiation emits its own typed opcodes).
 

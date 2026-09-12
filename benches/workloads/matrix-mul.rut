@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // matrix-mul — dense n x n f64 multiply-add hot loop, flat buffers.
 // Scale: n = 128. Checksum is a float sum (compare with tolerance).
 
@@ -14,9 +15,9 @@ fn gemm(n: i32, a: Vec<f64>, b: Vec<f64>, mut out: Vec<f64>) -> unit {
 
 pub fn main() -> unit {
     let n = 64;
-    let mut a = Vec<f64>(n * n);
-    let mut b = Vec<f64>(n * n);
-    let mut out = Vec<f64>(n * n);
+    let mut a = Vec<f64>.zeroed(n * n);
+    let mut b = Vec<f64>.zeroed(n * n);
+    let mut out = Vec<f64>.zeroed(n * n);
     for (let i = 0; i < n * n; i += 1) {
         a[i] = f64(i);
         b[i] = f64(i % 7);

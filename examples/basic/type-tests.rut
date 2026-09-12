@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // RFC 0012 §3 — type tests are the `is` KEYWORD:
 // `expr is Type` at relational precedence, NON-associative. The RHS is a
 // naming position (like impl heads/requires): bare trait name or

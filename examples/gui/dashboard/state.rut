@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // state.rut — the dashboard's reactive setup, tur-style: the Dashboard
 // construction method DECLARES the graph — state atoms (UI writes), sources (services
 // push snapshots), derives (computed views) — all living in the Store;
@@ -66,7 +67,7 @@ pub class Dashboard {
         let samples = state(ids, []);
 
         // --- sources: external snapshots (services push) ---
-        let users_src = source(ids, () -> Vec<User> => Vec());
+        let users_src = source(ids, () -> Vec<User> => Vec.new());
         let summary_src = source(ids, () -> StatsSummary =>
             StatsSummary { n: 0, mean: 0, min: 0, max: 0, last: 0 });
 
@@ -74,7 +75,7 @@ pub class Dashboard {
         let users_view = derive(ids, (ctx) -> Vec<User> => {
             let users = ctx.latest(users_src);
             let q = ctx.get(query);
-            let out: Vec<User> = Vec();
+            let out: Vec<User> = Vec.new();
             for (let i = 0; i < users.len(); i += 1) {
                 let u = users[i];
                 if (q.len() == 0 || u.name.contains(q)) {

@@ -321,22 +321,46 @@ impl<'a> Ctx<'a> {
         let Some(trait_id) = self.resolve_trait_ref(trait_ref) else {
             return;
         };
-        // the target must be a local dataclass/class (RFC 0012 §2 placement)
-        let target_ty = self.resolve_naming_type(target);
-        let is_local = match self.ast.ty(target) {
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 => self
-                .find_data(segs[0].name)
-                .map(|d| d.ty)
-                .is_some(),
-            _ => false,
+        // the target must be a local dataclass/class (RFC 0012 §2 placement).
+        // A generic target (`impl Slice<T> for Vec<T>`, RFC 0005) is kept as a
+        // template: its method bodies are inlined at the use site, never
+        // monomorphized as standalone fns.
+        let (target_ty, target_data) = match self.ast.ty(target) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
+                let name = segs[0].name;
+                let generics = segs[0].generics.clone();
+                let Some(d) = self.find_data(name).cloned() else {
+                    self.err(
+                        sp,
+                        "impl target must be a dataclass or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
+                    );
+                    return;
+                };
+                if d.generics.is_empty() {
+                    (d.ty, None)
+                } else {
+                    let Some(params) = self.ty_generic_idents(&generics) else {
+                        self.err(sp, "a generic impl target must name its type parameters (e.g. `Vec<T>`)");
+                        return;
+                    };
+                    if params.len() != d.generics.len() {
+                        self.err(sp, format!(
+                            "`{}<..>` takes {} type parameter(s), {} given",
+                            self.name(name), d.generics.len(), params.len()
+                        ));
+                        return;
+                    }
+                    (d.ty, Some((name, params)))
+                }
+            }
+            _ => {
+                self.err(
+                    sp,
+                    "impl target must be a dataclass or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
+                );
+                return;
+            }
         };
-        if !is_local {
-            self.err(
-                sp,
-                "impl target must be a dataclass or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
-            );
-            return;
-        }
         if let Some(_prev) = self.find_impl(trait_id, target_ty) {
             self.err(sp, "duplicate impl for the same (trait, type) pair (RFC 0012 §2)");
             return;
@@ -360,9 +384,26 @@ impl<'a> Ctx<'a> {
                 );
             }
         }
-        self.impls.push(ImplDecl { trait_id, target: target_ty, methods: mths });
+        let trait_args = match self.ast.ty(trait_ref) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
+                self.ty_generic_idents(&segs[0].generics).unwrap_or_default()
+            }
+            _ => Vec::new(),
+        };
+        let is_generic = target_data.is_some();
+        self.impls.push(ImplDecl {
+            trait_id,
+            target: target_ty,
+            target_data,
+            trait_args,
+            methods: mths,
+        });
         // every impl method enters the monomorphization queue — vtables need
-        // their bodies (RFC 0015 §6)
+        // their bodies (RFC 0015 §6). Generic-target impls are inlined at the
+        // use site instead (RFC 0005 `Slice<T>`).
+        if is_generic {
+            return;
+        }
         let idx = self.impls.len() - 1;
         let method_names: Vec<IdentId> =
             self.impls[idx].methods.iter().map(|(n, _)| *n).collect();
@@ -373,6 +414,21 @@ impl<'a> Ctx<'a> {
             };
             self.ensure_inst(inst);
         }
+    }
+
+    /// The identifier list of a generic argument list whose entries are all
+    /// bare type-parameter names (`<T>`, `<T, U>`); `None` otherwise.
+    fn ty_generic_idents(&self, generics: &[NodeHandle<AnyTy>]) -> Option<Vec<IdentId>> {
+        let mut out = Vec::with_capacity(generics.len());
+        for g in generics {
+            match self.ast.ty(*g) {
+                TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
+                    out.push(segs[0].name);
+                }
+                _ => return None,
+            }
+        }
+        Some(out)
     }
 
     /// Instantiate a generic record for concrete type arguments (RFC 0013

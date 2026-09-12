@@ -1,5 +1,6 @@
-//! Type resolution: primitives, builtins (Vec/Array/Option/Result), user
-//! types, dyn I, fn types; naming-position resolution.
+//! Type resolution: primitives, builtins (Array/Option/Result), user types
+//! (including `std:collection`'s `Vec` class), dyn I, fn types;
+//! naming-position resolution.
 
 use rut_core::types::*;
 use super::*;
@@ -9,19 +10,48 @@ impl<'a> Ctx<'a> {
     pub fn resolve_trait_ref(&mut self, node: NodeHandle<AnyTy>) -> Option<u32> {
         match self.ast.ty(node) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
-                match self.trait_id_of(segs[0].name) {
+                let is_slice = self.name(segs[0].name) == "Slice";
+                let id = match self.trait_id_of(segs[0].name) {
                     Some(id) => Some(id),
+                    // the builtin `Slice<T>` contract (RFC 0005) is
+                    // undeclarable but need not be spelled in the module
+                    None if is_slice => Some(self.builtin_slice_trait(segs[0].name)),
                     None => {
                         self.err(self.ast.span(node.id()), format!("unknown trait `{}`", self.name(segs[0].name)));
                         None
                     }
+                };
+                if is_slice {
+                    self.slice_trait = id;
                 }
+                id
             }
             _ => {
                 self.err(self.ast.span(node.id()), "expected a trait name");
                 None
             }
         }
+    }
+
+    /// The builtin `Slice<T>` contract (RFC 0005): undeclarable in source,
+    /// but its method set is known. Registered on first reference so a
+    /// module that never mentions it keeps its trait-slot numbering.
+    pub fn builtin_slice_trait(&mut self, name: IdentId) -> u32 {
+        if let Some(id) = self.trait_id_of(name) {
+            return id;
+        }
+        let id = self.traits.len() as u32;
+        use rut_core::binary::TraitMethod;
+        self.traits.push(TraitDesc {
+            name: "Slice".to_string(),
+            methods: vec![
+                TraitMethod { name: "len".to_string(), params: vec![], ret: TY_I32 },
+                TraitMethod { name: "get".to_string(), params: vec![TY_I32], ret: TY_I32 },
+                TraitMethod { name: "set".to_string(), params: vec![TY_I32, TY_I32], ret: TY_UNIT },
+            ],
+        });
+        self.trait_decls.push((name, TraitDeclInfo { id, node: rut_ast::ast::NodeId(0) }));
+        id
     }
 
     /// A type in a NAMING position (impl heads, requires lists, is RHS) —
@@ -89,26 +119,18 @@ impl<'a> Ctx<'a> {
                     self.err(sp, "`dyn` must prefix a trait name");
                     return TY_I32;
                 }
-                // a declared or imported type shadows a builtin name: a
-                // module's own/imported `Vec` (std:collection) replaces the
-                // builtin sequence type
-                let shadow = matches!(n.as_str(), "Vec" | "Array" | "Option" | "Result")
+                // a declared or imported type shadows a builtin name (RFC
+                // 0005: `std:collection`'s `Vec` is an ordinary class, so it
+                // never reaches the builtin table)
+                let shadow = matches!(n.as_str(), "Array" | "Option" | "Result")
                     && (self.find_data(name).is_some() || self.extern_types.contains_key(&name));
                 match n.as_str() {
-                    "Vec" | "Array" | "Option" | "Result" if !shadow => {
+                    "Array" | "Option" | "Result" if !shadow => {
                         if *is_dyn {
                             self.err(sp, format!("`dyn {n}` — {n} is not a trait"));
                         }
                         let generics = seg.generics.clone();
                         match (n.as_str(), generics.as_slice()) {
-                            ("Vec", [e]) => {
-                                let t = self.resolve_type(*e, env);
-                                self.mk_vec(t)
-                            }
-                            ("Vec", _) => {
-                                self.err(sp, "Vec takes one generic argument");
-                                TY_I32
-                            }
                             ("Array", [e]) => {
                                 let t = self.resolve_type(*e, env);
                                 self.mk_array(t)

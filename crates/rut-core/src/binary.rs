@@ -246,10 +246,6 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
         }
         TyKind::Str => e.u8(2),
         TyKind::Bytes => e.u8(12),
-        TyKind::Vec { elem } => {
-            e.u8(3);
-            e.u32(*elem);
-        }
         TyKind::Array { elem } => {
             e.u8(4);
             e.u32(*elem);
@@ -406,7 +402,6 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         }),
         2 => TyKind::Str,
         12 => TyKind::Bytes,
-        3 => TyKind::Vec { elem: d.u32()? },
         4 => TyKind::Array { elem: d.u32()? },
         5 => {
             let n = d.u32()? as usize;
@@ -530,6 +525,8 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::StrCharAt { dst, s, idx } => { e.u8(48); e.u16(*dst); e.u16(*s); e.u16(*idx); }
         Op::BytesCmp { eq, dst, a, b } => { e.u8(85); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::BytesGet { dst, s, idx } => { e.u8(86); e.u16(*dst); e.u16(*s); e.u16(*idx); }
+        Op::ArrGetF { dst, obj, field, idx, repr } => { e.u8(87); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u8(repr.to_u8()); }
+        Op::ArrSetF { obj, field, idx, val, repr } => { e.u8(88); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
     }
 }
 
@@ -626,6 +623,8 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         84 => Op::NegI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
         85 => Op::BytesCmp { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         86 => Op::BytesGet { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
+        87 => Op::ArrGetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, idx: d.u16()?, repr: repr(d.u8()?)? },
+        88 => Op::ArrSetF { obj: d.u16()?, field: d.u32()?, idx: d.u16()?, val: d.u16()?, repr: repr(d.u8()?)? },
         t => return Err(format!("bad opcode {t}")),
     })
 }
@@ -641,10 +640,9 @@ fn repr(b: u8) -> Result<Repr, String> {
 fn nat(b: u8) -> Result<Nat, String> {
     Ok(match b {
         0 => Nat::Print, 1 => Nat::Str, 2 => Nat::Concat, 3 => Nat::StrLen,
-        4 => Nat::VecNew, 5 => Nat::VecZeroed, 6 => Nat::VecFrom, 7 => Nat::VecLen,
-        8 => Nat::VecPush, 9 => Nat::VecPop,
-        10 => Nat::BytesNew, 11 => Nat::BytesFrom, 12 => Nat::VecFreeze,
-        13 => Nat::BytesLen, 14 => Nat::StrEncode, 15 => Nat::BytesDecode,
+        4 => Nat::ArrLen,
+        5 => Nat::BytesNew, 6 => Nat::BytesFrom,
+        7 => Nat::BytesLen, 8 => Nat::StrEncode, 9 => Nat::BytesDecode,
         _ => return Err("bad nat tag".into()),
     })
 }

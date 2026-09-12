@@ -1,3 +1,4 @@
+import { Vec } from "std:collection";
 // RFC 0021 — workers are separate VM isolates; data crosses typed
 // channels; buffers transfer zero-copy when uniquely owned (rc == 1).
 
@@ -7,7 +8,7 @@ import { Image, Job } from "imaging";
 
 pub suspend fn main() -> unit {
     let urls = ["a.png", "b.png", "c.png", "d.png"];
-    let ports: Vec<Receiver<Image>> = Vec();
+    let ports: Vec<Receiver<Image>> = Vec.new();
 
     for (let i = 0; i < urls.len(); i += 1) {
         let jobs = Channel<Job>();     // main -> worker (MPSC)

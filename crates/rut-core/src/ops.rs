@@ -43,16 +43,10 @@ pub enum Nat {
     /// str.concat(parts...)
     Concat,
     StrLen,
-    VecNew,    // Vec<T>() empty
-    VecZeroed, // Vec<T>(n)
-    VecFrom,   // Vec.from(Array<T, N>)
-    VecLen,
-    VecPush,
-    VecPop,
+    ArrLen,    // Array<T>.len() — the heap array's runtime length
     // ---- bytes (RFC 0004) — the immutable binary buffer ----
     BytesNew,    // bytes(n) zeroed
-    BytesFrom,   // bytes.from(Array<u8, N> | Vec<u8>) — one copy
-    VecFreeze,   // Vec<u8>.freeze() -> bytes (mutable builder -> immutable)
+    BytesFrom,   // bytes.from(Array<u8>) — one copy
     BytesLen,
     StrEncode,   // string.encode() -> bytes (UTF-8)
     BytesDecode, // bytes.decode() -> string (UTF-8, lossy)
@@ -156,6 +150,13 @@ pub enum Op {
     ArrLit { dst: Reg, ty: TypeId, elems: Vec<Reg> }, // fixed Array<T, N>
     ArrGet { dst: Reg, arr: Reg, idx: Reg, repr: Repr },       // bounds trap
     ArrSet { arr: Reg, idx: Reg, val: Reg, repr: Repr },
+    /// fused `obj.field[idx]` / `obj.field[idx] = val` — `field` is a known
+    /// `Array<T>` handle, read as a *borrow* (no retire/release): the owner
+    /// record keeps it alive for the duration of the access. This is the
+    /// `Vec<T>` class's element path (`impl Slice<T>`), so indexing a
+    /// std:collection sequence costs one op, not a field read per element.
+    ArrGetF { dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr },
+    ArrSetF { obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr },
 
     /// enum member value (immortal singleton cell, RFC 0016 §1)
     EnumNew { dst: Reg, ty: TypeId, member: u32 },
