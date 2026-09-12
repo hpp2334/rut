@@ -80,7 +80,8 @@ fn std_surface_parses_clean() {
     let mut failures = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();
-        let (_, diags) = parse(&src, Mode::Decl);
+        let mode = if f.to_string_lossy().ends_with(".d.rut") { Mode::Decl } else { Mode::Impl };
+        let (_, diags) = parse(&src, mode);
         if !diags.is_empty() {
             failures.push(format!("{}: first = {}", f.display(), diags[0].msg));
         }

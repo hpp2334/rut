@@ -25,20 +25,24 @@ use crate::semantic::TokenType;
 pub mod std_surface {
     pub const CORE: &str = include_str!("../../../rut/std-core/core.d.rut");
     pub const MATH: &str = include_str!("../../../rut/std-math/math.d.rut");
-    pub const COLLECTION: &str = include_str!("../../../rut/std-collection/collection.d.rut");
+    pub const COLLECTION: &str = include_str!("../../../rut/std-collection/collection.rut");
 }
 
 fn std_indexes() -> Vec<DefIndex> {
-    [(CORE_LABEL, std_surface::CORE), ("std:math", std_surface::MATH), ("std:collection", std_surface::COLLECTION)]
-        .into_iter()
-        .map(|(origin, src)| {
-            let src = rut_lexer::lexer::normalize(src);
-            let (ast, _) = rut_parser::parse(&src, rut_parser::Mode::Decl);
-            let mut idx = hover::index(&src, &ast);
-            idx.origin = origin.to_string();
-            idx
-        })
-        .collect()
+    [
+        (CORE_LABEL, std_surface::CORE, rut_parser::Mode::Decl),
+        ("std:math", std_surface::MATH, rut_parser::Mode::Decl),
+        ("std:collection", std_surface::COLLECTION, rut_parser::Mode::Impl),
+    ]
+    .into_iter()
+    .map(|(origin, src, mode)| {
+        let src = rut_lexer::lexer::normalize(src);
+        let (ast, _) = rut_parser::parse(&src, mode);
+        let mut idx = hover::index(&src, &ast);
+        idx.origin = origin.to_string();
+        idx
+    })
+    .collect()
 }
 
 const CORE_LABEL: &str = "std:core";
