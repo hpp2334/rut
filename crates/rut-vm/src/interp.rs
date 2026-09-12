@@ -282,14 +282,16 @@ impl Vm {
     }
 
     fn run_loop(&mut self) -> Result<Value, Trap> {
+        // one cheap Rc bump per run: lets the loop borrow the code while
+        // still taking `&mut self`, so `Op` need not be cloned per dispatch
+        let prog = Rc::clone(&self.prog);
         loop {
             if !self.running {
                 return Ok(Value::Unit);
             }
-            let Some(op) = self.prog.funcs[self.cur_func as usize]
+            let Some(op) = prog.funcs[self.cur_func as usize]
                 .code
                 .get(self.cur_pc as usize)
-                .cloned()
             else {
                 // fell off the end — verifier rejects this shape; be safe
                 let ret = self.do_ret(Slot::int(0));
@@ -317,7 +319,7 @@ impl Vm {
             }
             // `Ret` is the one op that can end the run — handle it here so
             // the root return value surfaces cleanly
-            if let Op::Ret { val } = &op {
+            if let Op::Ret { val } = op {
                 let v = val
                     .map(|r| self.cur_regs[r as usize])
                     .unwrap_or(Slot::int(0));
@@ -326,8 +328,74 @@ impl Vm {
                 }
                 continue;
             }
-            self.cur_pc += 1;
-            self.step(op)?;
+            // hot scalar ops run inline: no `Op` clone, no `step` call
+            match op {
+                Op::Mov { dst, src } => {
+                    self.cur_regs[*dst as usize] = self.cur_regs[*src as usize];
+                    self.cur_pc += 1;
+                }
+                Op::ConstRaw { dst, bits } => {
+                    self.cur_regs[*dst as usize] = Slot { i: *bits as i64 };
+                    self.cur_pc += 1;
+                }
+                Op::Arith { op, prim, dst, a, b } => {
+                    let v = self.arith(
+                        *op,
+                        *prim,
+                        self.cur_regs[*a as usize],
+                        self.cur_regs[*b as usize],
+                        false,
+                    )?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::Wrap { op, prim, dst, a, b } => {
+                    let v = self.arith(
+                        *op,
+                        *prim,
+                        self.cur_regs[*a as usize],
+                        self.cur_regs[*b as usize],
+                        true,
+                    )?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::Bit { op, prim, dst, a, b } => {
+                    let v = self.bitop(
+                        *op,
+                        *prim,
+                        self.cur_regs[*a as usize],
+                        self.cur_regs[*b as usize],
+                    )?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::Cmp { op, prim, dst, a, b } => {
+                    let v = self.cmp(
+                        *op,
+                        *prim,
+                        self.cur_regs[*a as usize],
+                        self.cur_regs[*b as usize],
+                    );
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::Not { dst, a } => {
+                    let v = !self.cur_regs[*a as usize].as_bool();
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::Jmp { target } => self.cur_pc = *target,
+                Op::Br { cond, then_t, else_t } => {
+                    self.cur_pc =
+                        if self.cur_regs[*cond as usize].as_bool() { *then_t } else { *else_t };
+                }
+                Op::LoopHead => self.cur_pc += 1,
+                _ => {
+                    self.cur_pc += 1;
+                    self.step(op.clone())?;
+                }
+            }
         }
     }
 
@@ -559,7 +627,7 @@ impl Vm {
                     TyKind::Data { fields } => fields.len(),
                     _ => 0,
                 };
-                let c = self.heap.alloc_record(ty, vec![Slot::null(); n])?;
+                let c = self.heap.alloc_record_zeroed(ty, n)?;
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
@@ -567,7 +635,10 @@ impl Vm {
             Op::GetF { dst, obj, field } => {
                 let cell = cell_of(r!(obj));
                 let v = match &cell.data {
-                    crate::heap::CellData::Record { fields } => fields.borrow()[field as usize],
+                    crate::heap::CellData::Record { fields } => fields
+                        .borrow()
+                        .get(field as usize)
+                        .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
                     _ => return Err(Trap::new(TrapKind::Invalid, "field on non-record")),
                 };
                 let fty = self.field_ty(cell.ty, field);
@@ -583,10 +654,10 @@ impl Vm {
                 let fty = self.field_ty(cell.ty, field);
                 let v = r!(val);
                 let old = if let crate::heap::CellData::Record { fields } = &cell.data {
-                    let mut fb = fields.borrow_mut();
-                    let old = fb[field as usize];
-                    fb[field as usize] = v;
-                    old
+                    fields
+                        .borrow_mut()
+                        .set(field as usize, v)
+                        .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?
                 } else {
                     return Err(Trap::new(TrapKind::Invalid, "field-set on non-record"));
                 };

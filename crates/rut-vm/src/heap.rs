@@ -180,6 +180,75 @@ pub struct CellVal {
     pub(crate) bytes: u32,
 }
 
+/// Payload slots for a record/array cell: small payloads live inline in
+/// the cell (RFC 0015 §4 "inline blocks"), larger ones spill to the heap.
+/// This removes the per-record `Vec` allocation for the common small
+/// dataclass.
+const INLINE_SLOTS: usize = 4;
+
+pub enum Slots {
+    Inline { len: u8, data: [Slot; INLINE_SLOTS] },
+    Heap(Vec<Slot>),
+}
+
+impl Slots {
+    pub fn zeroed(n: usize) -> Slots {
+        if n <= INLINE_SLOTS {
+            Slots::Inline { len: n as u8, data: [Slot::null(); INLINE_SLOTS] }
+        } else {
+            Slots::Heap(vec![Slot::null(); n])
+        }
+    }
+    pub fn from_vec(v: Vec<Slot>) -> Slots {
+        if v.len() <= INLINE_SLOTS {
+            let mut data = [Slot::null(); INLINE_SLOTS];
+            let len = v.len() as u8;
+            for (i, s) in v.into_iter().enumerate() {
+                data[i] = s;
+            }
+            Slots::Inline { len, data }
+        } else {
+            Slots::Heap(v)
+        }
+    }
+    pub fn len(&self) -> usize {
+        match self {
+            Slots::Inline { len, .. } => *len as usize,
+            Slots::Heap(v) => v.len(),
+        }
+    }
+    pub fn get(&self, i: usize) -> Option<Slot> {
+        match self {
+            Slots::Inline { len, data } => {
+                if i < *len as usize {
+                    Some(data[i])
+                } else {
+                    None
+                }
+            }
+            Slots::Heap(v) => v.get(i).copied(),
+        }
+    }
+    pub fn set(&mut self, i: usize, v: Slot) -> Option<Slot> {
+        match self {
+            Slots::Inline { len, data } => {
+                if i < *len as usize {
+                    let old = data[i];
+                    data[i] = v;
+                    Some(old)
+                } else {
+                    None
+                }
+            }
+            Slots::Heap(items) => {
+                let old = *items.get(i)?;
+                items[i] = v;
+                Some(old)
+            }
+        }
+    }
+}
+
 pub enum CellData {
     Str(String),
     Vec { elem: TypeId, items: RefCell<Vec<Slot>> },
@@ -189,7 +258,7 @@ pub enum CellData {
     /// Option/Result: tag 0 = some/ok, 1 = none/err
     Sum { tag: u32, payload: Option<Slot> },
     /// dataclass/class instance — the repr-C payload as slots
-    Record { fields: RefCell<Vec<Slot>> },
+    Record { fields: RefCell<Slots> },
     /// Opaque box (RFC 0014): the value + its runtime type
     OpaqueBox { val: Slot, val_ty: TypeId },
     /// closure value (RFC 0013) — v1 captures by value
@@ -256,18 +325,13 @@ impl CellVal {
     }
     pub fn record_get(&self, field: u32) -> Option<Slot> {
         match &self.data {
-            CellData::Record { fields } => fields.borrow().get(field as usize).copied(),
+            CellData::Record { fields } => fields.borrow().get(field as usize),
             _ => None,
         }
     }
     pub fn record_set(&self, field: u32, v: Slot) -> Option<Slot> {
         match &self.data {
-            CellData::Record { fields } => {
-                let mut fb = fields.borrow_mut();
-                let old = *fb.get(field as usize)?;
-                fb[field as usize] = v;
-                Some(old)
-            }
+            CellData::Record { fields } => fields.borrow_mut().set(field as usize, v),
             _ => None,
         }
     }
@@ -378,7 +442,13 @@ impl Heap {
 
     pub fn alloc_record(&self, ty: TypeId, fields: Vec<Slot>) -> Result<Slot, Trap> {
         let n = fields.len() as u64;
-        self.mint(ty, CellData::Record { fields: RefCell::new(fields) }, n * 8)
+        self.mint(ty, CellData::Record { fields: RefCell::new(Slots::from_vec(fields)) }, n * 8)
+    }
+
+    /// Record with `n` zeroed fields — the `Self { .. }` / dataclass literal
+    /// path (`Op::NewCell`), keeping small payloads inline.
+    pub fn alloc_record_zeroed(&self, ty: TypeId, n: usize) -> Result<Slot, Trap> {
+        self.mint(ty, CellData::Record { fields: RefCell::new(Slots::zeroed(n)) }, n as u64 * 8)
     }
 
     pub fn alloc_sum(&self, ty: TypeId, tag: u32, payload: Option<Slot>) -> Result<Slot, Trap> {
@@ -509,10 +579,14 @@ impl Heap {
             TyKind::Data { fields } => {
                 let cell = cell_of(s);
                 if let CellData::Record { fields: src } = &cell.data {
-                    let mut out = Vec::with_capacity(fields.len());
-                    for (it, f) in src.borrow().iter().zip(fields.iter()) {
-                        out.push(self.clone_slot(*it, f.ty, table)?);
+                    let srcb = src.borrow();
+                    let mut out = Vec::with_capacity(srcb.len());
+                    for (i, f) in fields.iter().enumerate() {
+                        if let Some(it) = srcb.get(i) {
+                            out.push(self.clone_slot(it, f.ty, table)?);
+                        }
                     }
+                    drop(srcb);
                     self.alloc_record(ty, out)
                 } else {
                     Err(Trap::new(TrapKind::Invalid, "own: not a record"))
