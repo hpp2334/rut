@@ -1,6 +1,0 @@
-# examples/json/rut.toml — package "json" (RFC 0029/0035 module mount)
-name = "json"
-
-[entries]
-"json:app" = "app.rut"
-"json:json" = "json.rut"

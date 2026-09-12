@@ -1,5 +1,0 @@
-# examples/00-todolist/rut.toml — package "00-todolist" (RFC 0029/0035 module mount)
-name = "00-todolist"
-
-[entries]
-"00-todolist:todolist" = "todolist.rut"

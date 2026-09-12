@@ -1,7 +1,0 @@
-# examples/network/rut.toml — package "network" (RFC 0029/0035 module mount)
-name = "network"
-
-[entries]
-"network:echo-server" = "echo-server.rut"
-"network:echo-worker" = "echo-worker.rut"
-"network:http-fetch" = "http-fetch.rut"

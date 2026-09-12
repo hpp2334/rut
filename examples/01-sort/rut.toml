@@ -1,5 +1,0 @@
-# examples/01-sort/rut.toml — package "01-sort" (RFC 0029/0035 module mount)
-name = "01-sort"
-
-[entries]
-"01-sort:sort" = "sort.rut"

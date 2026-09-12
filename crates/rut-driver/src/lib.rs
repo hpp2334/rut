@@ -11,7 +11,7 @@ use rut_core::ops::Op;
 use rut_core::types::TyKind;
 
 pub mod session;
-pub use session::{ManifestError, Module, Package, ResolveError, Session};
+pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
 
 pub struct CompileOutput {
     pub diags: Vec<Diag>,

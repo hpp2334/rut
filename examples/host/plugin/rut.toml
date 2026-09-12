@@ -1,6 +1,0 @@
-# examples/host/plugin/rut.toml — package "plugin" (RFC 0029/0035 module mount)
-name = "plugin"
-
-[entries]
-"plugin:batch" = "batch.d.rut"
-"plugin:my_map" = "my_map.d.rut"

@@ -1,8 +1,0 @@
-# examples/memory/rut.toml — package "memory" (RFC 0029/0035 module mount)
-name = "memory"
-
-[entries]
-"memory:node-cycle" = "node-cycle.rut"
-"memory:temp-file" = "temp-file.rut"
-"memory:tree" = "tree.rut"
-"memory:weak-cache" = "weak-cache.rut"

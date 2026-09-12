@@ -61,7 +61,7 @@ fn host_primitive_terminates_on_malformed() {
 /// files parse clean in Decl mode, like the corpus does for examples.
 #[test]
 fn std_surface_parses_clean() {
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../std");
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rut");
     let mut files = Vec::new();
     let mut stack = vec![root];
     while let Some(dir) = stack.pop() {

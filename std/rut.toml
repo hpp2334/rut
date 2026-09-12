@@ -1,7 +1,0 @@
-# std/rut.toml — package "std" (RFC 0029/0035 module mount)
-name = "std"
-
-[entries]
-"std:collection" = "collection.d.rut"
-"std:core" = "core.d.rut"
-"std:math" = "math.d.rut"

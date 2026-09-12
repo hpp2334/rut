@@ -1,7 +1,0 @@
-# examples/host/rut.toml — package "host" (RFC 0029/0035 module mount)
-name = "host"
-
-[entries]
-"host:batch" = "batch.rut"
-"host:interop" = "interop.rut"
-"host:my-map" = "my-map.rut"

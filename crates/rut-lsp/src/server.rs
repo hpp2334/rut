@@ -20,11 +20,12 @@ use crate::hover::{self, DefIndex};
 use crate::semantic::TokenType;
 
 /// the toolchain's std surface — embedded, indexed before the workspace
-/// (import specifiers map by path: "std:math" -> std/math.d.rut)
+/// (one directory per module: `rut/std-collection/rut.toml` names
+/// `"std:collection"`)
 pub mod std_surface {
-    pub const CORE: &str = include_str!("../../../std/core.d.rut");
-    pub const MATH: &str = include_str!("../../../std/math.d.rut");
-    pub const COLLECTION: &str = include_str!("../../../std/collection.d.rut");
+    pub const CORE: &str = include_str!("../../../rut/std-core/core.d.rut");
+    pub const MATH: &str = include_str!("../../../rut/std-math/math.d.rut");
+    pub const COLLECTION: &str = include_str!("../../../rut/std-collection/collection.d.rut");
 }
 
 fn std_indexes() -> Vec<DefIndex> {

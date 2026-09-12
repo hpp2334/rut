@@ -1,0 +1,2 @@
+name = "std:core"
+entry.type = "./core.d.rut"

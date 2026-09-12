@@ -1,5 +1,0 @@
-# examples/02-digest/rut.toml — package "02-digest" (RFC 0029/0035 module mount)
-name = "02-digest"
-
-[entries]
-"02-digest:digest" = "digest.rut"

@@ -1,59 +1,67 @@
 //! Module mounts & resolution — the compile-time half of RFC 0035 §1,
-//! shaped by RFC 0029 §5 (source resolution) and RFC 0003 (§2 packages
-//! and visibility).
+//! shaped by RFC 0029 §5 (source resolution) and RFC 0003 (§2).
 //!
-//! A **package** is a `rut.toml` naming a scope and the modules it exposes:
+//! **One directory is one module.** Its `rut.toml` names the exact
+//! specifier it answers to and how to reach its surface and body:
 //!
 //! ```toml
-//! # std/rut.toml
-//! name = "std"
-//! [entries]
-//! "std:core" = "core.d.rut"
+//! # rut/std-collection/rut.toml
+//! name = "std:collection"
+//! entry.type = "./collection.d.rut"   # the surface (RFC 0029)
+//! entry.lib  = "./collection.rut"     # the body (omitted while surface-only)
 //! ```
 //!
-//! Every entry key must be `"<name>:<local>"` — a package may only answer
-//! for its own scope. A **consumer** mounts packages with `[deps]`:
+//! A consumer mounts modules by exact specifier → directory:
 //!
 //! ```toml
 //! [deps]
-//! std = { path = "<sysroot>/std" }
+//! "std:collection" = { path = "rut/std-collection" }
 //! ```
 //!
-//! Resolution is exact and two-step, never derived: `"std:vec"` → the
-//! `std` package → its `"std:vec"` entry. Because the dep key *is* the
-//! scope, a missing package is diagnosable by name ("lacking pkg `std`").
+//! Resolution is exact and single-step: a specifier resolves only if a
+//! module with that `name` is mounted — nothing is derived. Since the
+//! specifier is `<scope>:<name>`, a miss is diagnosable by scope
+//! ("package `std` is missing").
 //!
-//! The manifest reader below intentionally parses only the TOML subset the
-//! format uses (comments, `key = "string"`, `[section]`, inline tables) so
-//! the driver stays dependency-free and wasm-compatible. The full
-//! `rut.toml` contract lives in RFC 0038 §2.
+//! The reader below parses only the TOML subset the format uses
+//! (comments, `key = "string"`, dotted keys, `[section]`, inline tables)
+//! so the driver stays dependency-free and wasm-compatible.
 
 use std::collections::BTreeMap;
 
-/// One module as the resolver sees it. A file-backed module carries a
-/// `path` (and optionally a `decl_path`) relative to its package root; an
-/// embedded module carries its `source`/`decl` text directly (wasm hosts,
-/// tests, plugins).
+/// A module's entry points: where its surface and body live, relative to
+/// the module directory.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Entry {
+    /// `.d.rut` surface path — the declaration/type half (RFC 0029)
+    pub type_path: Option<String>,
+    /// body path — `.rut` source, or a compiled `.rutc`/`.d.ir`
+    pub lib: Option<String>,
+    /// compiled IR path (`.d.ir`)
+    pub ir: Option<String>,
+}
+
+/// One mounted module: the specifier it answers to, its entry files, and
+/// (for embedded hosts) in-memory source/surface text.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Module {
-    /// `.rut` implementation file, relative to the package root
-    pub path: Option<String>,
-    /// `.d.rut` surface file, relative to the package root
-    pub decl_path: Option<String>,
-    /// in-memory `.rut` text (no filesystem)
+    /// the exact specifier, `"<scope>:<name>"`
+    pub spec: String,
+    pub entry: Entry,
+    /// in-memory `.rut` body (wasm hosts, tests, plugins)
     pub source: Option<String>,
-    /// in-memory `.d.rut` text (no filesystem)
+    /// in-memory `.d.rut` surface
     pub decl: Option<String>,
 }
 
-/// A parsed `rut.toml`: a scope name and the modules it exposes.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Package {
-    pub name: String,
-    pub entries: BTreeMap<String, Module>,
-    /// `[deps]` — package scope → its descriptor (`path = "..."`). Kept so
-    /// a consumer manifest round-trips; loading dep packages is the host's
-    /// job (RFC 0035 §1).
+/// A parsed `rut.toml` — either a module manifest (`name` + `entry.*`) or
+/// a consumer manifest (`[deps]`), or both.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Manifest {
+    pub name: Option<String>,
+    pub entry: Entry,
+    /// `[deps]` — exact specifier → descriptor (`path = "..."`). Kept for
+    /// the host to resolve; the Session does not read the filesystem.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
 }
 
@@ -74,10 +82,8 @@ impl std::error::Error for ManifestError {}
 pub enum ResolveError {
     /// not `<scope>:<name>`
     BadSpec { spec: String },
-    /// no package mounted for `<scope>`
-    NoPackage { spec: String, scope: String },
-    /// package exists but exposes no such entry
-    NoEntry { spec: String, scope: String, available: Vec<String> },
+    /// no module with that exact specifier is mounted
+    NoModule { spec: String, scope: String },
 }
 
 impl std::fmt::Display for ResolveError {
@@ -87,29 +93,22 @@ impl std::fmt::Display for ResolveError {
                 f,
                 "malformed module specifier `{spec}` — expected `<scope>:<name>`"
             ),
-            ResolveError::NoPackage { spec, scope } => write!(
+            ResolveError::NoModule { spec, scope } => write!(
                 f,
-                "cannot resolve `{spec}` — no package `{scope}` in deps"
+                "cannot resolve `{spec}` — package `{scope}` is not mounted"
             ),
-            ResolveError::NoEntry { spec, scope, available } => {
-                write!(f, "package `{scope}` has no entry `{spec}`")?;
-                if available.is_empty() {
-                    write!(f, " (it exposes nothing)")
-                } else {
-                    write!(f, " — available: {}", available.join(", "))
-                }
-            }
         }
     }
 }
 impl std::error::Error for ResolveError {}
 
 /// The business-owned mount table. The host decides what exists; the
-/// resolver only maps exact specifiers. Mirrors the runtime
+/// resolver maps exact specifiers. Mirrors the runtime
 /// `vm.register_module` (RFC 0035 §3).
 #[derive(Clone, Debug, Default)]
 pub struct Session {
-    packages: BTreeMap<String, Package>,
+    modules: BTreeMap<String, Module>,
+    deps: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 impl Session {
@@ -117,74 +116,89 @@ impl Session {
         Session::default()
     }
 
-    /// Register a whole package. Fails if any entry breaks scope
-    /// ownership (`"<name>:<local>"`).
-    pub fn register_package(&mut self, pkg: Package) -> Result<(), ManifestError> {
-        for spec in pkg.entries.keys() {
-            let want = format!("{}:", pkg.name);
-            if !spec.starts_with(&want) {
-                return Err(ManifestError(format!(
-                    "package `{}` may only declare entries in its own scope — `{spec}` must start with `{want}`",
-                    pkg.name
-                )));
-            }
-        }
-        self.packages.insert(pkg.name.clone(), pkg);
-        Ok(())
-    }
-
-    /// Programmatic single-module mount (wasm/tests/plugins) — no manifest
-    /// file needed.
-    pub fn register_module(&mut self, spec: &str, module: Module) -> Result<(), ManifestError> {
-        let Some((scope, _)) = spec.split_once(':') else {
+    /// Mount a module. Its `spec` must be `<scope>:<name>`.
+    pub fn mount(&mut self, module: Module) -> Result<(), ManifestError> {
+        if !valid_spec(&module.spec) {
             return Err(ManifestError(format!(
-                "malformed module specifier `{spec}` — expected `<scope>:<name>`"
+                "`{}` is not a module specifier — expected `<scope>:<name>`",
+                module.spec
             )));
-        };
-        let pkg = self.packages.entry(scope.to_string()).or_insert_with(|| Package {
-            name: scope.to_string(),
-            entries: BTreeMap::new(),
-            deps: BTreeMap::new(),
-        });
-        pkg.entries.insert(spec.to_string(), module);
+        }
+        self.modules.insert(module.spec.clone(), module);
         Ok(())
     }
 
-    /// Exact two-step resolution: specifier → package → entry.
+    /// Programmatic single-module mount (wasm/tests/plugins) — no file.
+    pub fn register_module(&mut self, spec: &str, module: Module) -> Result<(), ManifestError> {
+        let mut module = module;
+        module.spec = spec.to_string();
+        self.mount(module)
+    }
+
+    /// Exact resolution: the specifier must be mounted as-is.
     pub fn resolve(&self, spec: &str) -> Result<&Module, ResolveError> {
-        let Some((scope, _)) = spec.split_once(':') else {
+        if !valid_spec(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
-        };
-        let Some(pkg) = self.packages.get(scope) else {
-            return Err(ResolveError::NoPackage { spec: spec.to_string(), scope: scope.to_string() });
-        };
-        match pkg.entries.get(spec) {
+        }
+        match self.modules.get(spec) {
             Some(m) => Ok(m),
-            None => Err(ResolveError::NoEntry {
+            None => Err(ResolveError::NoModule {
                 spec: spec.to_string(),
-                scope: scope.to_string(),
-                available: pkg.entries.keys().cloned().collect(),
+                scope: scope_of(spec).to_string(),
             }),
         }
     }
 
-    /// Parse a `rut.toml` and mount it.
+    /// Parse and mount a module manifest; a consumer manifest's `[deps]`
+    /// are recorded for the host. Use [`parse_manifest`] directly when the
+    /// parsed `Manifest` itself is needed.
     pub fn load_manifest(&mut self, text: &str) -> Result<(), ManifestError> {
-        self.register_package(parse_manifest(text)?)
+        let manifest = parse_manifest(text)?;
+        if let Some(name) = &manifest.name {
+            self.mount(Module {
+                spec: name.clone(),
+                entry: manifest.entry.clone(),
+                source: None,
+                decl: None,
+            })?;
+        }
+        for (spec, dep) in &manifest.deps {
+            if !valid_spec(spec) {
+                return Err(ManifestError(format!(
+                    "dep `{spec}` is not a module specifier — expected `<scope>:<name>`"
+                )));
+            }
+            self.deps.insert(spec.clone(), dep.clone());
+        }
+        Ok(())
     }
 
-    pub fn packages(&self) -> impl Iterator<Item = (&String, &Package)> {
-        self.packages.iter()
+    pub fn modules(&self) -> impl Iterator<Item = (&String, &Module)> {
+        self.modules.iter()
+    }
+
+    pub fn deps(&self) -> impl Iterator<Item = (&String, &BTreeMap<String, String>)> {
+        self.deps.iter()
     }
 }
 
-/// Parse the `rut.toml` subset: top-level `name`, an `[entries]` table
-/// whose values are strings or `{ path = "...", decl = "..." }` inline
-/// tables, and an optional `[deps]` table (parsed, not resolved).
-pub fn parse_manifest(text: &str) -> Result<Package, ManifestError> {
-    let mut name: Option<String> = None;
-    let mut entries: BTreeMap<String, Module> = BTreeMap::new();
-    let mut deps: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+/// `<scope>:<name>` with a non-empty scope and name.
+fn valid_spec(spec: &str) -> bool {
+    match spec.split_once(':') {
+        Some((scope, name)) => !scope.is_empty() && !name.is_empty(),
+        None => false,
+    }
+}
+
+fn scope_of(spec: &str) -> &str {
+    spec.split_once(':').map(|(s, _)| s).unwrap_or(spec)
+}
+
+/// Parse the `rut.toml` subset: top-level `name`, `entry.type` /
+/// `entry.lib` / `entry.ir` (bare or under `[entry]`), and `[deps]`
+/// entries whose values are inline tables.
+pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
+    let mut m = Manifest::default();
     let mut section = Section::Top;
 
     for (lineno, raw) in text.lines().enumerate() {
@@ -194,7 +208,7 @@ pub fn parse_manifest(text: &str) -> Result<Package, ManifestError> {
         }
         if let Some(inner) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
             section = match inner.trim() {
-                "entries" => Section::Entries,
+                "entry" => Section::Entry,
                 "deps" => Section::Deps,
                 other => {
                     return Err(ManifestError(format!(
@@ -212,58 +226,38 @@ pub fn parse_manifest(text: &str) -> Result<Package, ManifestError> {
         let key = unquote(key.trim()).to_string();
         let value = value.trim();
         match section {
-            Section::Top => {
-                if key == "name" {
-                    name = Some(parse_string(value, lineno)?);
+            Section::Top => match key.as_str() {
+                "name" => m.name = Some(parse_string(value, lineno)?),
+                // dotted entry keys: `entry.type = "..."` etc.
+                "entry.type" => m.entry.type_path = Some(parse_string(value, lineno)?),
+                "entry.lib" => m.entry.lib = Some(parse_string(value, lineno)?),
+                "entry.ir" => m.entry.ir = Some(parse_string(value, lineno)?),
+                _ => {} // forward-compatible: ignore unknown top-level keys
+            },
+            Section::Entry => match key.as_str() {
+                "type" => m.entry.type_path = Some(parse_string(value, lineno)?),
+                "lib" => m.entry.lib = Some(parse_string(value, lineno)?),
+                "ir" => m.entry.ir = Some(parse_string(value, lineno)?),
+                other => {
+                    return Err(ManifestError(format!(
+                        "line {}: unknown `[entry]` key `{other}`",
+                        lineno + 1
+                    )))
                 }
-                // other top-level keys (format, version) are tolerated
-            }
-            Section::Entries => {
-                entries.insert(key, parse_module(value, lineno)?);
-            }
+            },
             Section::Deps => {
-                let table = parse_inline_table(value, lineno)?;
-                deps.insert(key, table);
+                m.deps.insert(key, parse_inline_table(value, lineno)?);
             }
         }
     }
-
-    let Some(name) = name else {
-        return Err(ManifestError("manifest has no `name`".to_string()));
-    };
-    Ok(Package { name, entries, deps })
+    Ok(m)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Section {
     Top,
-    Entries,
+    Entry,
     Deps,
-}
-
-fn parse_module(value: &str, lineno: usize) -> Result<Module, ManifestError> {
-    if value.starts_with('{') {
-        let table = parse_inline_table(value, lineno)?;
-        let mut m = Module::default();
-        for (k, v) in table {
-            match k.as_str() {
-                "path" => m.path = Some(v),
-                "decl" => m.decl_path = Some(v),
-                other => {
-                    return Err(ManifestError(format!(
-                        "line {}: unknown entry key `{other}` (expected `path` or `decl`)",
-                        lineno + 1
-                    )))
-                }
-            }
-        }
-        if m.path.is_none() && m.decl_path.is_none() {
-            return Err(ManifestError(format!("line {}: entry table needs `path`", lineno + 1)));
-        }
-        Ok(m)
-    } else {
-        Ok(Module { path: Some(parse_string(value, lineno)?), ..Default::default() })
-    }
 }
 
 fn parse_string(value: &str, lineno: usize) -> Result<String, ManifestError> {
@@ -293,9 +287,7 @@ fn parse_inline_table(value: &str, lineno: usize) -> Result<BTreeMap<String, Str
         let Some((k, val)) = split_eq(part) else {
             return Err(ManifestError(format!("line {}: bad table item `{part}`", lineno + 1)));
         };
-        let k = unquote(k.trim());
-        let val = parse_string(val.trim(), lineno)?;
-        out.insert(k.to_string(), val);
+        out.insert(unquote(k.trim()).to_string(), parse_string(val.trim(), lineno)?);
     }
     Ok(out)
 }
@@ -358,45 +350,43 @@ fn unquote(s: &str) -> &str {
 mod tests {
     use super::*;
 
-    const STD: &str = r#"
-# std/rut.toml
-name = "std"
-[entries]
-"std:core" = "core.d.rut"
-"std:math" = "math.d.rut"
-"std:vec"  = { path = "vec.rut", decl = "vec.d.rut" }
+    const COLLECTION: &str = r#"
+# rut/std-collection/rut.toml
+name = "std:collection"
+entry.type = "./collection.d.rut"
 "#;
 
     #[test]
-    fn parses_entries_and_resolves() {
-        let mut s = Session::new();
-        s.load_manifest(STD).expect("manifest");
-        let m = s.resolve("std:vec").expect("std:vec");
-        assert_eq!(m.path.as_deref(), Some("vec.rut"));
-        assert_eq!(m.decl_path.as_deref(), Some("vec.d.rut"));
-        assert_eq!(s.resolve("std:core").unwrap().path.as_deref(), Some("core.d.rut"));
+    fn parses_name_and_entry() {
+        let m = parse_manifest(COLLECTION).unwrap();
+        assert_eq!(m.name.as_deref(), Some("std:collection"));
+        assert_eq!(m.entry.type_path.as_deref(), Some("./collection.d.rut"));
     }
 
     #[test]
-    fn missing_package_names_the_scope() {
+    fn mount_and_resolve() {
         let mut s = Session::new();
-        s.load_manifest(STD).unwrap();
-        let err = s.resolve("imaging:gfx").unwrap_err();
+        s.load_manifest(COLLECTION).unwrap();
+        let m = s.resolve("std:collection").unwrap();
+        assert_eq!(m.entry.type_path.as_deref(), Some("./collection.d.rut"));
+    }
+
+    #[test]
+    fn entry_section_form() {
+        let text = "name = \"std:vec\"\n[entry]\ntype = \"./vec.d.rut\"\nlib = \"./vec.rut\"\n";
+        let m = parse_manifest(text).unwrap();
+        assert_eq!(m.entry.lib.as_deref(), Some("./vec.rut"));
+    }
+
+    #[test]
+    fn missing_module_names_the_scope() {
+        let s = Session::new();
+        let err = s.resolve("std:vec").unwrap_err();
         assert_eq!(
             err,
-            ResolveError::NoPackage { spec: "imaging:gfx".into(), scope: "imaging".into() }
+            ResolveError::NoModule { spec: "std:vec".into(), scope: "std".into() }
         );
-        assert!(err.to_string().contains("no package `imaging`"));
-    }
-
-    #[test]
-    fn missing_entry_lists_available() {
-        let mut s = Session::new();
-        s.load_manifest(STD).unwrap();
-        let err = s.resolve("std:log").unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("package `std` has no entry `std:log`"), "{msg}");
-        assert!(msg.contains("std:core"), "{msg}");
+        assert!(err.to_string().contains("package `std` is not mounted"));
     }
 
     #[test]
@@ -406,15 +396,7 @@ name = "std"
     }
 
     #[test]
-    fn scope_ownership_is_enforced() {
-        let bad = "name = \"std\"\n[entries]\n\"other:thing\" = \"x.rut\"\n";
-        let mut s = Session::new();
-        let err = s.load_manifest(bad).unwrap_err();
-        assert!(err.to_string().contains("its own scope"), "{err}");
-    }
-
-    #[test]
-    fn programmatic_mount() {
+    fn programmatic_mount_sets_spec() {
         let mut s = Session::new();
         s.register_module(
             "plugin:my_map",
@@ -425,10 +407,12 @@ name = "std"
     }
 
     #[test]
-    fn deps_parse_but_do_not_resolve() {
-        let text = "name = \"app\"\n[deps]\nstd = { path = \"../std\" }\n";
-        let pkg = parse_manifest(text).unwrap();
-        assert_eq!(pkg.deps.get("std").unwrap().get("path").unwrap(), "../std");
-        assert!(pkg.entries.is_empty());
+    fn deps_parse() {
+        let text = "name = \"app\"\n[deps]\n\"std:core\" = { path = \"rut/std-core\" }\n";
+        let m = parse_manifest(text).unwrap();
+        assert_eq!(
+            m.deps.get("std:core").unwrap().get("path").unwrap(),
+            "rut/std-core"
+        );
     }
 }

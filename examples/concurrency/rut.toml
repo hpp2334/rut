@@ -1,8 +1,0 @@
-# examples/concurrency/rut.toml — package "concurrency" (RFC 0029/0035 module mount)
-name = "concurrency"
-
-[entries]
-"concurrency:countdown" = "countdown.rut"
-"concurrency:fetch-page" = "fetch-page.rut"
-"concurrency:select" = "select.rut"
-"concurrency:spawn-cancel" = "spawn-cancel.rut"
