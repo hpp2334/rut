@@ -1,0 +1,30 @@
+// matrix-mul — dense n x n f64 multiply-add hot loop, flat buffers.
+// Scale: n = 128. Checksum is a float sum (compare with tolerance).
+
+fn gemm(n: i32, a: Vec<f64>, b: Vec<f64>, mut out: Vec<f64>) -> unit {
+    for (let i = 0; i < n; i += 1) {
+        for (let k = 0; k < n; k += 1) {
+            let aik = a[i * n + k];
+            for (let j = 0; j < n; j += 1) {
+                out[i * n + j] += aik * b[k * n + j];
+            }
+        }
+    }
+}
+
+pub fn main() -> unit {
+    let n = 64;
+    let mut a = Vec<f64>(n * n);
+    let mut b = Vec<f64>(n * n);
+    let mut out = Vec<f64>(n * n);
+    for (let i = 0; i < n * n; i += 1) {
+        a[i] = f64(i);
+        b[i] = f64(i % 7);
+    }
+    gemm(n, a, b, out);
+    let mut s = 0.0;
+    for (let i = 0; i < n * n; i += 1) {
+        s += out[i];
+    }
+    print(f"CHECKSUM {s}");
+}

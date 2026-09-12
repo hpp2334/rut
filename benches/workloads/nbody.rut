@@ -1,0 +1,127 @@
+// nbody — the solar-system integration from the benchmark game.
+// Scale: 1000 steps of dt = 0.01.
+//
+// `sqrt` is a std host fn (RFC 0028) and this build has no module loading
+// (RFC 0035 M2), so the workload carries a fixed-iteration Newton sqrt.
+// The JS twin uses the SAME routine, bit-for-bit, so the energy checksum
+// is exact rather than approximate.
+
+fn fsqrt(x: f64) -> f64 {
+    if (x <= 0.0) {
+        return 0.0;
+    }
+    let mut r = x;
+    let mut i = 0;
+    while (i < 30) {
+        r = 0.5 * (r + x / r);
+        i += 1;
+    }
+    return r;
+}
+
+fn energy(pos: Vec<f64>, vel: Vec<f64>, mass: Vec<f64>) -> f64 {
+    let mut e = 0.0;
+    for (let i = 0; i < 5; i += 1) {
+        e += 0.5
+            * mass[i]
+            * (vel[i * 3] * vel[i * 3]
+                + vel[i * 3 + 1] * vel[i * 3 + 1]
+                + vel[i * 3 + 2] * vel[i * 3 + 2]);
+        for (let j = i + 1; j < 5; j += 1) {
+            let dx = pos[i * 3] - pos[j * 3];
+            let dy = pos[i * 3 + 1] - pos[j * 3 + 1];
+            let dz = pos[i * 3 + 2] - pos[j * 3 + 2];
+            e -= (mass[i] * mass[j]) / fsqrt(dx * dx + dy * dy + dz * dz);
+        }
+    }
+    return e;
+}
+
+fn advance(mut pos: Vec<f64>, mut vel: Vec<f64>, mass: Vec<f64>, dt: f64) -> unit {
+    for (let i = 0; i < 5; i += 1) {
+        for (let j = i + 1; j < 5; j += 1) {
+            let dx = pos[i * 3] - pos[j * 3];
+            let dy = pos[i * 3 + 1] - pos[j * 3 + 1];
+            let dz = pos[i * 3 + 2] - pos[j * 3 + 2];
+            let d2 = dx * dx + dy * dy + dz * dz;
+            let mag = dt / (d2 * fsqrt(d2));
+            vel[i * 3] -= dx * mass[j] * mag;
+            vel[i * 3 + 1] -= dy * mass[j] * mag;
+            vel[i * 3 + 2] -= dz * mass[j] * mag;
+            vel[j * 3] += dx * mass[i] * mag;
+            vel[j * 3 + 1] += dy * mass[i] * mag;
+            vel[j * 3 + 2] += dz * mass[i] * mag;
+        }
+    }
+    for (let i = 0; i < 5; i += 1) {
+        pos[i * 3] += dt * vel[i * 3];
+        pos[i * 3 + 1] += dt * vel[i * 3 + 1];
+        pos[i * 3 + 2] += dt * vel[i * 3 + 2];
+    }
+}
+
+pub fn main() -> unit {
+    let pi = 3.141592653589793;
+    let solar_mass = 4.0 * pi * pi;
+    let days_per_year = 365.24;
+
+    let mass: Vec<f64> = Vec();
+    mass.push(solar_mass);
+    mass.push(0.000954791938424327 * solar_mass);
+    mass.push(0.000285885980666131 * solar_mass);
+    mass.push(0.000043662440433516 * solar_mass);
+    mass.push(0.000051513890204661 * solar_mass);
+
+    let pos: Vec<f64> = Vec();
+    pos.push(0.0);
+    pos.push(0.0);
+    pos.push(0.0);
+    pos.push(4.841431442464721);
+    pos.push(-1.160320044027428);
+    pos.push(-0.103622044471123);
+    pos.push(8.343366718244580);
+    pos.push(4.124798564124305);
+    pos.push(-0.403523417114321);
+    pos.push(12.8943695621391);
+    pos.push(-15.1111514016986);
+    pos.push(-0.223307578892656);
+    pos.push(15.3796971148509);
+    pos.push(-25.9193146099879);
+    pos.push(0.179258772950371);
+
+    let mut vel: Vec<f64> = Vec();
+    vel.push(0.0);
+    vel.push(0.0);
+    vel.push(0.0);
+    vel.push(0.001660076642744037 * days_per_year);
+    vel.push(0.007699011184197404 * days_per_year);
+    vel.push(-0.000069046001697206 * days_per_year);
+    vel.push(-0.002767425107268624 * days_per_year);
+    vel.push(0.004998528012349172 * days_per_year);
+    vel.push(0.000023041729757376 * days_per_year);
+    vel.push(0.002964601375647616 * days_per_year);
+    vel.push(0.002378471739594810 * days_per_year);
+    vel.push(-0.000029658956854024 * days_per_year);
+    vel.push(0.002680677724903893 * days_per_year);
+    vel.push(0.001628241700382423 * days_per_year);
+    vel.push(-0.000095159225451972 * days_per_year);
+
+    // offset the momentum so the system does not drift
+    let mut mvx = 0.0;
+    let mut mvy = 0.0;
+    let mut mvz = 0.0;
+    for (let i = 0; i < 5; i += 1) {
+        mvx += vel[i * 3] * mass[i];
+        mvy += vel[i * 3 + 1] * mass[i];
+        mvz += vel[i * 3 + 2] * mass[i];
+    }
+    vel[0] = -mvx / mass[0];
+    vel[1] = -mvy / mass[0];
+    vel[2] = -mvz / mass[0];
+
+    for (let s = 0; s < 1000; s += 1) {
+        advance(pos, vel, mass, 0.01);
+    }
+    let e = energy(pos, vel, mass);
+    print(f"CHECKSUM {e}");
+}

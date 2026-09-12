@@ -76,6 +76,15 @@ rut/
 │           ├── components/        #   header.rut sidebar.rut common.rut
 │           ├── services/          #   api.rut stream.rut
 │           └── workers/           #   stats-worker.rut
+├── benches/                       # rut vs QuickJS-ng vs V8 (README)
+│   ├── README.md                  #   method, fairness rules, workloads
+│   ├── run.mjs                    #   cross-runtime runner (wall + peak RSS)
+│   ├── probe/                     #   rut-bench-probe: compile/verify/exec,
+│   │                              #     fuel + VM-heap high-water (0039/0040)
+│   ├── tools/
+│   │   ├── quickjs-ng/            #   vendored engine (git submodule, pinned)
+│   │   └── build-quickjs.sh       #   gcc build -> .tools/qjs
+│   └── workloads/                 #   NAME.rut + NAME.js pairs, one checksum
 ├── integrations/                   # editor integrations — vscode first
 │   ├── README.md                  #   rut-lsp configs: nvim/helix/zed/
 │   │                              #   emacs/sublime
@@ -241,6 +250,7 @@ rut/
 │       ├── esbuild.mjs  scripts/copy-server.mjs
 │       └── README.md
 ├── demo/                           # ships in-repo — §3
+├── benches/                        # cross-runtime benchmarks — rut/QuickJS/V8
 ├── examples/                       # unchanged — the parser corpus (0030 §4)
 └── rfc/                            # unchanged
 ```

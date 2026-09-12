@@ -1,0 +1,17 @@
+[package]
+name = "rut-bench-probe"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "in-process benchmark probe for the rut VM — compile/verify/exec times, fuel and VM-heap high-water (RFC 0039/0040)"
+
+[[bin]]
+name = "rut-bench-probe"
+path = "src/main.rs"
+
+[dependencies]
+rut-core = { path = "../../crates/rut-core" }
+rut-vm = { path = "../../crates/rut-vm" }
+rut-lexer = { path = "../../crates/rut-lexer" }
+rut-parser = { path = "../../crates/rut-parser" }
+rut-driver = { path = "../../crates/rut-driver" }

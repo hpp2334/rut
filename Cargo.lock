@@ -361,6 +361,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rut-bench-probe"
+version = "0.1.0"
+dependencies = [
+ "rut-core",
+ "rut-driver",
+ "rut-lexer",
+ "rut-parser",
+ "rut-vm",
+]
+
+[[package]]
 name = "rut-cli"
 version = "0.1.0"
 dependencies = [

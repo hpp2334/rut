@@ -1,0 +1,27 @@
+// sieve — Sieve of Eratosthenes over a flat Vec<u8>.
+// Classic benchmark-game style: fixed scale, one checksum line.
+// Scale: limit = 500_000 (41538 primes).
+
+fn sieve(limit: i32) -> Vec<i32> {
+    let mut marks = Vec<u8>(limit + 1); // zeroed: 0 = candidate, 1 = crossed
+    let primes: Vec<i32> = Vec();
+    for (let i = 2; i <= limit; i += 1) {
+        if (marks[i] == 0) {
+            primes.push(i);
+            // guard `i * i` against i32 overflow for i > sqrt(limit)
+            if (i <= limit / i) {
+                let mut m = i * i;
+                while (m <= limit) {
+                    marks[m] = 1;
+                    m += i;
+                }
+            }
+        }
+    }
+    return primes;
+}
+
+pub fn main() -> unit {
+    let primes = sieve(500000);
+    print(f"CHECKSUM {primes.len()}");
+}

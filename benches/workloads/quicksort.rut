@@ -1,0 +1,43 @@
+// quicksort — deterministic LCG input, in-place Lomuto quicksort, rolled
+// checksum. Scale: n = 100_000.
+//
+// The LCG and the checksum use the wrapping ops (`&*`/`&+`, RFC 0004 §3)
+// so the i32 math matches JavaScript's `Math.imul(...) | 0` exactly.
+
+fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> unit {
+    if (lo >= hi) {
+        return;
+    }
+    let pivot = xs[hi];
+    let mut i = lo - 1;
+    for (let j = lo; j < hi; j += 1) {
+        if (xs[j] <= pivot) {
+            i += 1;
+            let t = xs[i];
+            xs[i] = xs[j];
+            xs[j] = t;
+        }
+    }
+    let t = xs[i + 1];
+    xs[i + 1] = xs[hi];
+    xs[hi] = t;
+    let p = i + 1;
+    quicksort(xs, lo, p - 1);
+    quicksort(xs, p + 1, hi);
+}
+
+pub fn main() -> unit {
+    let n = 10000;
+    let xs: Vec<i32> = Vec();
+    let mut x: i32 = 42;
+    for (let i = 0; i < n; i += 1) {
+        x = (x &* 1664525) &+ 1013904223;
+        xs.push(x % 1000);
+    }
+    quicksort(xs, 0, n - 1);
+    let mut h: i32 = 0;
+    for (let i = 0; i < n; i += 1) {
+        h = (h &* 31) &+ xs[i];
+    }
+    print(f"CHECKSUM {h}");
+}

@@ -14,6 +14,7 @@ members = [
     "examples/00-todolist",
     "examples/01-sort",
     "examples/02-digest",
+    "benches/probe",
 ]
 
 [workspace.package]

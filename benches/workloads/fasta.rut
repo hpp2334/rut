@@ -1,0 +1,32 @@
+// fasta — LCG-driven nucleotide string building (the benchmark-game
+// string churn). rut strings are immutable, so this exercises repeated
+// concatenation as well as allocation.
+// Scale: n = 10000.
+
+fn fasta(n: i32) -> string {
+    let parts: Vec<string> = Vec();
+    let letters = "ACGT";
+    let mut x: u32 = 42;
+    let mut checksum = 0;
+    for (let i = 0; i < n; i += 1) {
+        x = (x &* 1103515245) &+ 12345;
+        let idx = i32((x >> 16) % 4);
+        let mut k = 0;
+        for (let c of letters) {
+            if (k == idx) {
+                parts.push(f"{c}");
+            }
+            k += 1;
+        }
+        checksum += idx;
+    }
+    let mut out = "";
+    for (let p of parts) {
+        out = f"{out}{p}";
+    }
+    return f"{checksum}:{out.len()}";
+}
+
+pub fn main() -> unit {
+    print(f"CHECKSUM {fasta(10000)}");
+}

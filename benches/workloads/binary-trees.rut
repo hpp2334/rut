@@ -1,0 +1,37 @@
+// binary-trees — allocation churn. Recursive dataclasses are not in the
+// type system yet (RFC 0009 has no self-reference), so nodes are
+// `Opaque`-boxed dataclasses (RFC 0014) — which is precisely the RC
+// allocation/drop path this benchmark is meant to stress.
+// Scale: depth = 14 (32767 nodes).
+
+dataclass Node {
+    value: i32,
+    left: Option<Opaque>,
+    right: Option<Opaque>,
+}
+
+fn make(depth: i32, v: i32) -> Opaque {
+    if (depth <= 0) {
+        return Opaque.new(Node { value: v, left: Option.none(), right: Option.none() });
+    }
+    let l = make(depth - 1, v * 2);
+    let r = make(depth - 1, v * 2 + 1);
+    return Opaque.new(Node { value: v, left: Option.some(l), right: Option.some(r) });
+}
+
+fn count(o: Opaque) -> i32 {
+    let n = downcast<Node>(o).value;
+    let mut c = 1;
+    if (n.left.is_some()) {
+        c += count(n.left.value);
+    }
+    if (n.right.is_some()) {
+        c += count(n.right.value);
+    }
+    return c;
+}
+
+pub fn main() -> unit {
+    let root = make(14, 1);
+    print(f"CHECKSUM {count(root)}");
+}

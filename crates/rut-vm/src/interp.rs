@@ -101,6 +101,12 @@ impl Vm {
         self.heap.used_bytes()
     }
 
+    /// VM-heap high-water mark (RFC 0039 accounting) — the peak live
+    /// heap over the run, for embedding/benching hosts.
+    pub fn heap_peak(&self) -> u64 {
+        self.heap.peak_bytes()
+    }
+
     pub fn add_fuel(&mut self, n: u64) {
         self.fuel = self.fuel.map(|f| f.saturating_add(n));
     }

@@ -1,0 +1,3 @@
+[submodule "benches/tools/quickjs-ng"]
+	path = benches/tools/quickjs-ng
+	url = https://github.com/quickjs-ng/quickjs.git

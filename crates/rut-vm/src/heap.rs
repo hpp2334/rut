@@ -280,6 +280,9 @@ impl CellVal {
 
 pub struct HeapAcct {
     pub used: Cell<u64>,
+    /// high-water mark of `used` (RFC 0039 accounting) — never decreases,
+    /// so a host can read the peak live-heap after a run
+    pub peak: Cell<u64>,
     pub limit: Cell<Option<u64>>,
 }
 
@@ -296,13 +299,18 @@ const CELL_OVERHEAD: u64 = 24; // header + Rc box approximation
 impl Heap {
     pub fn new(limit: Option<u64>) -> Heap {
         Heap {
-            acct: Rc::new(HeapAcct { used: Cell::new(0), limit: Cell::new(limit) }),
+            acct: Rc::new(HeapAcct { used: Cell::new(0), peak: Cell::new(0), limit: Cell::new(limit) }),
             singletons: RefCell::new(HashMap::new()),
         }
     }
 
     pub fn used_bytes(&self) -> u64 {
         self.acct.used.get()
+    }
+    /// High-water mark of `used_bytes` since the heap was created — the
+    /// VM-heap peak (the probe/bencher reads this after a run).
+    pub fn peak_bytes(&self) -> u64 {
+        self.acct.peak.get()
     }
     pub fn limit(&self) -> Option<u64> {
         self.acct.limit.get()
@@ -330,6 +338,9 @@ impl Heap {
             }
         }
         a.used.set(next);
+        if next > a.peak.get() {
+            a.peak.set(next);
+        }
         Ok(())
     }
 
