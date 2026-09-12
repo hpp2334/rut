@@ -1357,12 +1357,29 @@ impl Vm {
                 }
             }
             Nat::Str => {
-                let s = self.render(r!(args[0]), args[0])?;
+                let v = r!(args[0]);
+                // a string already formats to itself — alias the cell instead
+                // of re-rendering a copy (the `f"{s}"` identity; this is the
+                // bulk of the cost in string-churn workloads like fasta).
+                // Gate on the *static* type: the slot of a non-string arg is
+                // not a cell handle, so `cell_of` must not touch it.
+                if matches!(self.prog.types.kind(self.regs_ty(args[0])), TyKind::Str) {
+                    if let Some(d) = dst {
+                        self.heap.retain(v);
+                        let old = self.cur_regs[d as usize];
+                        self.cur_regs[d as usize] = v;
+                        self.heap.release(old);
+                    }
+                    return Ok(());
+                }
+                let s = self.render(v, args[0])?;
                 let c = self.heap.alloc_str(s)?;
                 self.store_result(dst, c)?;
             }
             Nat::Concat => {
-                let mut out = String::new();
+                // size once — the parts' lengths are all known
+                let total: usize = args.iter().map(|a| cell_of(r!(*a)).as_str().len()).sum();
+                let mut out = String::with_capacity(total);
                 for a in args {
                     out.push_str(cell_of(r!(*a)).as_str());
                 }
