@@ -1,2 +1,2 @@
 name = "std:collection"
-entry.lib = "./collection.rut"
+entry.lib = "./entry.rut"

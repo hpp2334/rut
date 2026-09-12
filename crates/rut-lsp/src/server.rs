@@ -25,14 +25,20 @@ use crate::semantic::TokenType;
 pub mod std_surface {
     pub const CORE: &str = include_str!("../../../rut/std-core/core.d.rut");
     pub const MATH: &str = include_str!("../../../rut/std-math/math.d.rut");
-    pub const COLLECTION: &str = include_str!("../../../rut/std-collection/collection.rut");
+    /// `std:collection` is a directory module: `entry.rut` is the barrel
+    /// and `hash.rut`/`vec.rut` are its parts.
+    pub const COLLECTION_ENTRY: &str = include_str!("../../../rut/std-collection/entry.rut");
+    pub const COLLECTION_HASH: &str = include_str!("../../../rut/std-collection/hash.rut");
+    pub const COLLECTION_VEC: &str = include_str!("../../../rut/std-collection/vec.rut");
 }
 
 fn std_indexes() -> Vec<DefIndex> {
     [
         (CORE_LABEL, std_surface::CORE, rut_parser::Mode::Decl),
         ("std:math", std_surface::MATH, rut_parser::Mode::Decl),
-        ("std:collection", std_surface::COLLECTION, rut_parser::Mode::Impl),
+        ("std:collection", std_surface::COLLECTION_ENTRY, rut_parser::Mode::Impl),
+        ("std:collection", std_surface::COLLECTION_HASH, rut_parser::Mode::Impl),
+        ("std:collection", std_surface::COLLECTION_VEC, rut_parser::Mode::Impl),
     ]
     .into_iter()
     .map(|(origin, src, mode)| {

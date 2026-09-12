@@ -1,0 +1,7 @@
+// std:collection::hash — hashing and key comparison are ONE contract
+// (RFC 0025/0026, RFC 0028): the trait Map/Set keys must satisfy.
+
+pub trait Hashable {
+    fn hash(self) -> u64;
+    fn eq(self, other: Self) -> bool;
+}

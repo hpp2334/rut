@@ -1,0 +1,51 @@
+// std:collection::vec — Vec<T>, the growable sequence (RFC 0005/0028),
+// implemented in rut over the runtime buffer primitive:
+//
+//   Buffer<T>(cap)   allocate `cap` slots (today's ArrNew)
+//   b[i] get/set     (today's ArrGet / ArrSet)
+//   b.len()          the allocated length — the capacity
+//
+// The builtin `Vec` natives go away; this class is the sequence type.
+// Lands with the module loader (M2): it compiles once `Buffer` and the
+// module system exist.
+
+pub class Vec<T> {
+    buf: Buffer<T>;     // capacity == buf.len()
+    len: i32;           // live length
+
+    pub fn new() -> Self {
+        return Vec.with_capacity(0);
+    }
+
+    pub fn with_capacity(cap: i32) -> Self {
+        return Self { buf: Buffer<T>(cap), len: 0 };
+    }
+
+    pub fn len(self) -> i32 {
+        return self.len;
+    }
+
+    pub fn push(mut self, v: T) -> unit {
+        if (self.len == self.buf.len()) {
+            let mut cap = self.buf.len() * 2;
+            if (cap == 0) {
+                cap = 4;
+            }
+            let next = Buffer<T>(cap);
+            for (let i = 0; i < self.len; i += 1) {
+                next[i] = self.buf[i];
+            }
+            self.buf = next;
+        }
+        self.buf[self.len] = v;
+        self.len += 1;
+    }
+
+    pub fn pop(mut self) -> T {
+        if (self.len == 0) {
+            panic("Vec.pop on an empty vec");
+        }
+        self.len -= 1;
+        return self.buf[self.len];
+    }
+}
