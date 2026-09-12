@@ -1,0 +1,1175 @@
+// digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
+//
+// The second algorithmic example: everything here operates on `Vec<u8>`
+// (which crosses the host boundary directly, RFC 0023 §2) and proves
+// that the language's integer surface — hex literals, `u32`/`u64`,
+// the wrapping family `&+ &* &<<` (RFC 0004 §3), and the signedness
+// rules for `>>` — is enough to write real, verifiable algorithms:
+//
+//   encodings : hex, base64 (standard + URL-safe)
+//   digests   : MD5, SHA-1, SHA-256, SHA-512
+//   hash keys : CRC-32, FNV-1a 32/64, djb2, sdbm
+//   JSON      : decode -> Opaque tree, encode, round-trip
+//
+// The Rust host (src/main.rs, tests/session.rs) verifies every result
+// against the md-5 / sha1 / sha2 / base64 / serde_json / crc32fast
+// crates — the rut side never talks to them, only the tests do.
+//
+// SHA-512 is the u64-heavy one: its rotations lean on `>>` being a
+// LOGICAL shift for unsigned types (fixed in this repo) and `&<<`
+// truncating to the operand width.
+
+// ---------------------------------------------------------------- hex ---
+
+fn hex_digits() -> Vec<string> {
+    let d: Vec<string> = Vec();
+    let src = "0123456789abcdef";
+    for (let c of src) {
+        d.push(f"{c}");
+    }
+    return d;
+}
+
+/// bytes -> lowercase hex string.
+entry fn hex_enc(data: Vec<u8>) -> string {
+    let d = hex_digits();
+    let mut out = "";
+    for (let b of data) {
+        let hi = i32(u32(b) >> 4);
+        let lo = i32(u32(b) & 15);
+        out = f"{out}{d[hi]}{d[lo]}";
+    }
+    return out;
+}
+
+/// hex string -> bytes; -1 if the char is not a hex digit.
+fn hex_val(c: string) -> i32 {
+    let lower = "0123456789abcdef";
+    let upper = "0123456789ABCDEF";
+    let mut i = 0;
+    for (let t of lower) {
+        if (f"{t}" == c) { return i; }
+        i = i + 1;
+    }
+    i = 0;
+    for (let t of upper) {
+        if (f"{t}" == c) { return i; }
+        i = i + 1;
+    }
+    return -1;
+}
+
+entry fn hex_dec(s: string) -> Result<Vec<u8>, string> {
+    if (s.len() % 2 != 0) {
+        return Result.err("hex: odd-length input");
+    }
+    let mut out: Vec<u8> = Vec();
+    let mut cur: u32 = 0;
+    let mut i = 0;
+    for (let c of s) {
+        let v = hex_val(f"{c}");
+        if (v < 0) {
+            return Result.err(f"hex: invalid character at index {i}");
+        }
+        if (i % 2 == 0) {
+            cur = u32(v);
+        } else {
+            out.push(u8(cur * 16 + u32(v)));
+        }
+        i = i + 1;
+    }
+    return Result.ok(out);
+}
+
+// ------------------------------------------------------------ base64 ---
+
+fn b64_table(url: bool) -> Vec<string> {
+    let mut t: Vec<string> = Vec();
+    let alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for (let c of alpha) {
+        t.push(f"{c}");
+    }
+    if (url) {
+        t[62] = "-";
+        t[63] = "_";
+    }
+    return t;
+}
+
+entry fn b64_enc(data: Vec<u8>, url: bool) -> string {
+    let t = b64_table(url);
+    let n = data.len();
+    let mut out = "";
+    for (let i = 0; i < n; i += 3) {
+        let b0: u32 = u32(data[i]);
+        let mut b1: u32 = 0;
+        let mut b2: u32 = 0;
+        let mut have1 = false;
+        let mut have2 = false;
+        if (i + 1 < n) { b1 = u32(data[i + 1]); have1 = true; }
+        if (i + 2 < n) { b2 = u32(data[i + 2]); have2 = true; }
+        let w: u32 = (b0 << 16) | (b1 << 8) | b2;
+        out = f"{out}{t[i32((w >> 18) & 63)]}{t[i32((w >> 12) & 63)]}";
+        if (have2) {
+            out = f"{out}{t[i32((w >> 6) & 63)]}{t[i32(w & 63)]}";
+        } else if (have1) {
+            out = f"{out}{t[i32((w >> 6) & 63)]}=";
+        } else {
+            out = f"{out}==";
+        }
+    }
+    return out;
+}
+
+entry fn b64_dec(s: string, url: bool) -> Result<Vec<u8>, string> {
+    let t = b64_table(url);
+    let mut vals: Vec<u32> = Vec();
+    let mut pad = 0;
+    for (let c of s) {
+        let cs = f"{c}";
+        if (cs == "=") {
+            pad = pad + 1;
+        } else {
+            if (pad > 0) {
+                return Result.err("base64: data after padding");
+            }
+            let mut v: u32 = 256;
+            for (let i = 0; i < t.len(); i += 1) {
+                if (t[i] == cs) { v = u32(i); }
+            }
+            if (v == 256) {
+                return Result.err(f"base64: invalid character `{cs}`");
+            }
+            vals.push(v);
+        }
+    }
+    if (vals.len() % 4 == 1) {
+        return Result.err("base64: impossible length");
+    }
+    let mut out: Vec<u8> = Vec();
+    let n = vals.len();
+    for (let i = 0; i < n; i += 4) {
+        let mut rem = n - i;
+        if (rem > 4) { rem = 4; }
+        let mut w = (vals[i] << 18) | (vals[i + 1] << 12);
+        if (rem >= 3) { w = w | (vals[i + 2] << 6); }
+        if (rem == 4) { w = w | vals[i + 3]; }
+        out.push(u8(w >> 16));
+        if (rem >= 3) { out.push(u8((w >> 8) & 255)); }
+        if (rem == 4) { out.push(u8(w & 255)); }
+    }
+    return Result.ok(out);
+}
+
+// ------------------------------------------------- hashmap hash keys ---
+
+/// CRC-32/ISO-HDLC (the zlib/PNG/zip one): reflected poly 0xEDB88320,
+/// bitwise — no table. "123456789" -> 0xCBF43926.
+entry fn crc32(data: Vec<u8>) -> u32 {
+    let mut crc: u32 = 0xFFFFFFFF;
+    for (let b of data) {
+        crc = crc ^ u32(b);
+        for (let k = 0; k < 8; k += 1) {
+            if ((crc & 1) == 1) {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            } else {
+                crc = crc >> 1;
+            }
+        }
+    }
+    return crc ^ 0xFFFFFFFF;
+}
+
+entry fn fnv1a32(data: Vec<u8>) -> u32 {
+    let mut h: u32 = 2166136261;
+    for (let b of data) {
+        h = (h ^ u32(b)) &* 16777619;
+    }
+    return h;
+}
+
+/// FNV-1a 64: only `&*` and `^` — no 64-bit shifts needed, so the u64
+/// words never even exercise the shift path.
+entry fn fnv1a64(data: Vec<u8>) -> u64 {
+    let mut h: u64 = 14695981039346656037;
+    for (let b of data) {
+        h = (h ^ u64(b)) &* 1099511628211;
+    }
+    return h;
+}
+
+entry fn djb2(data: Vec<u8>) -> u64 {
+    let mut h: u64 = 5381;
+    for (let b of data) {
+        h = (h &* 33) &+ u64(b);
+    }
+    return h;
+}
+
+/// sdbm: h = c + h*65599 (== c + (h<<6) + (h<<16) - h, mod 2^64).
+entry fn sdbm(data: Vec<u8>) -> u64 {
+    let mut h: u64 = 0;
+    for (let b of data) {
+        h = u64(b) &+ (h &* 65599);
+    }
+    return h;
+}
+
+// ------------------------------------------------------ crypto core ---
+
+/// rotate left, 32-bit: `&<<` truncates, `>>` on u32 is logical.
+fn rotl32(x: u32, n: u32) -> u32 {
+    let bits = u32(32);
+    return (x &<< n) | (x >> (bits - n));
+}
+
+fn rotr32(x: u32, n: u32) -> u32 {
+    let bits = u32(32);
+    return (x >> n) | (x &<< (bits - n));
+}
+
+/// rotate right, 64-bit — THE `u64 >>` dogfood: SHA-512 words regularly
+/// carry bit 63, so an arithmetic `>>` would corrupt every one of them.
+fn rotr64(x: u64, n: u64) -> u64 {
+    let bits = u64(64);
+    return (x >> n) | (x &<< (bits - n));
+}
+
+fn copy_bytes(msg: Vec<u8>) -> Vec<u8> {
+    let m: Vec<u8> = Vec();
+    for (let b of msg) { m.push(b); }
+    return m;
+}
+
+fn md5_k() -> Vec<u32> {
+    let k: Vec<u32> = Vec(64);
+k.push(3614090360);
+k.push(3905402710);
+k.push(606105819);
+k.push(3250441966);
+k.push(4118548399);
+k.push(1200080426);
+k.push(2821735955);
+k.push(4249261313);
+k.push(1770035416);
+k.push(2336552879);
+k.push(4294925233);
+k.push(2304563134);
+k.push(1804603682);
+k.push(4254626195);
+k.push(2792965006);
+k.push(1236535329);
+k.push(4129170786);
+k.push(3225465664);
+k.push(643717713);
+k.push(3921069994);
+k.push(3593408605);
+k.push(38016083);
+k.push(3634488961);
+k.push(3889429448);
+k.push(568446438);
+k.push(3275163606);
+k.push(4107603335);
+k.push(1163531501);
+k.push(2850285829);
+k.push(4243563512);
+k.push(1735328473);
+k.push(2368359562);
+k.push(4294588738);
+k.push(2272392833);
+k.push(1839030562);
+k.push(4259657740);
+k.push(2763975236);
+k.push(1272893353);
+k.push(4139469664);
+k.push(3200236656);
+k.push(681279174);
+k.push(3936430074);
+k.push(3572445317);
+k.push(76029189);
+k.push(3654602809);
+k.push(3873151461);
+k.push(530742520);
+k.push(3299628645);
+k.push(4096336452);
+k.push(1126891415);
+k.push(2878612391);
+k.push(4237533241);
+k.push(1700485571);
+k.push(2399980690);
+k.push(4293915773);
+k.push(2240044497);
+k.push(1873313359);
+k.push(4264355552);
+k.push(2734768916);
+k.push(1309151649);
+k.push(4149444226);
+k.push(3174756917);
+k.push(718787259);
+k.push(3951481745);
+    return k;
+}
+
+fn md5_s() -> Vec<u32> {
+    let s: Vec<u32> = Vec();
+    for (let r = 0; r < 4; r += 1) {
+        s.push(7); s.push(12); s.push(17); s.push(22);
+    }
+    for (let r = 0; r < 4; r += 1) {
+        s.push(5); s.push(9); s.push(14); s.push(20);
+    }
+    for (let r = 0; r < 4; r += 1) {
+        s.push(4); s.push(11); s.push(16); s.push(23);
+    }
+    for (let r = 0; r < 4; r += 1) {
+        s.push(6); s.push(10); s.push(15); s.push(21);
+    }
+    return s;
+}
+
+fn md5_impl(msg: Vec<u8>) -> Vec<u8> {
+    let mut m = copy_bytes(msg);
+    m.push(0x80);
+    while (m.len() % 64 != 56) { m.push(0); }
+    let bits = u64(msg.len()) * 8;
+    for (let i = 0; i < 8; i += 1) {
+        m.push(u8((bits >> (u64(i) * 8)) & 0xFF));   // little-endian length
+    }
+    let mut a0: u32 = 0x67452301;
+    let mut b0: u32 = 0xefcdab89;
+    let mut c0: u32 = 0x98badcfe;
+    let mut d0: u32 = 0x10325476;
+    let k = md5_k();
+    let s = md5_s();
+    let blocks = m.len() / 64;
+    for (let blk = 0; blk < blocks; blk += 1) {
+        let mut x: Vec<u32> = Vec();
+        for (let j = 0; j < 16; j += 1) {
+            let o = blk * 64 + j * 4;
+            x.push(u32(m[o]) | (u32(m[o + 1]) << 8) | (u32(m[o + 2]) << 16) | (u32(m[o + 3]) << 24));
+        }
+        let mut a = a0;
+        let mut b = b0;
+        let mut c = c0;
+        let mut d = d0;
+        for (let i = 0; i < 64; i += 1) {
+            let mut f: u32 = 0;
+            let mut g = 0;
+            if (i < 16) {
+                f = (b & c) | (d & (b ^ 4294967295));
+                g = i;
+            } else if (i < 32) {
+                f = (d & b) | (c & (d ^ 4294967295));
+                g = (5 * i + 1) % 16;
+            } else if (i < 48) {
+                f = b ^ c ^ d;
+                g = (3 * i + 5) % 16;
+            } else {
+                f = c ^ (b | (d ^ 4294967295));
+                g = (7 * i) % 16;
+            }
+            let tmp = d;
+            d = c;
+            c = b;
+            let sum = (a &+ f) &+ (k[i] &+ x[g]);
+            b = b &+ rotl32(sum, s[i]);
+            a = tmp;
+        }
+        a0 = a0 &+ a;
+        b0 = b0 &+ b;
+        c0 = c0 &+ c;
+        d0 = d0 &+ d;
+    }
+    let mut out: Vec<u8> = Vec();
+    let mut w = a0;
+    for (let i = 0; i < 4; i += 1) { out.push(u8((w >> (u32(i) * 8)) & 0xFF)); }
+    w = b0;
+    for (let i = 0; i < 4; i += 1) { out.push(u8((w >> (u32(i) * 8)) & 0xFF)); }
+    w = c0;
+    for (let i = 0; i < 4; i += 1) { out.push(u8((w >> (u32(i) * 8)) & 0xFF)); }
+    w = d0;
+    for (let i = 0; i < 4; i += 1) { out.push(u8((w >> (u32(i) * 8)) & 0xFF)); }
+    return out;
+}
+
+/// SHA-1/SHA-2 padding: 0x80, zeros to n%{mod}=={res}, then the message
+/// length in bits as a big-endian 64-bit word.
+fn sha_tail(m: Vec<u8>, msg_len: i32) -> unit {
+    m.push(0x80);
+    while (m.len() % 64 != 56) { m.push(0); }
+    let bits = u64(msg_len) * 8;
+    m.push(u8((bits >> 56) & 0xFF));
+    m.push(u8((bits >> 48) & 0xFF));
+    m.push(u8((bits >> 40) & 0xFF));
+    m.push(u8((bits >> 32) & 0xFF));
+    m.push(u8((bits >> 24) & 0xFF));
+    m.push(u8((bits >> 16) & 0xFF));
+    m.push(u8((bits >> 8) & 0xFF));
+    m.push(u8(bits & 0xFF));
+}
+
+fn sha1_impl(msg: Vec<u8>) -> Vec<u8> {
+    let mut m = copy_bytes(msg);
+    sha_tail(m, msg.len());
+    let mut h0: u32 = 0x67452301;
+    let mut h1: u32 = 0xEFCDAB89;
+    let mut h2: u32 = 0x98BADCFE;
+    let mut h3: u32 = 0x10325476;
+    let mut h4: u32 = 0xC3D2E1F0;
+    let blocks = m.len() / 64;
+    for (let blk = 0; blk < blocks; blk += 1) {
+        let mut w: Vec<u32> = Vec();
+        for (let j = 0; j < 16; j += 1) {
+            let o = blk * 64 + j * 4;
+            w.push(u32(m[o]) << 24 | u32(m[o + 1]) << 16 | u32(m[o + 2]) << 8 | u32(m[o + 3]));
+        }
+        for (let i = 16; i < 80; i += 1) {
+            w.push(rotl32(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1));
+        }
+        let mut a = h0;
+        let mut b = h1;
+        let mut c = h2;
+        let mut d = h3;
+        let mut e = h4;
+        for (let i = 0; i < 80; i += 1) {
+            let mut f: u32 = 0;
+            let mut kk: u32 = 0;
+            if (i < 20) {
+                f = (b & c) | (d & (b ^ 4294967295));
+                kk = 0x5A827999;
+            } else if (i < 40) {
+                f = b ^ c ^ d;
+                kk = 0x6ED9EBA1;
+            } else if (i < 60) {
+                f = (b & c) | (b & d) | (c & d);
+                kk = 0x8F1BBCDC;
+            } else {
+                f = b ^ c ^ d;
+                kk = 0xCA62C1D6;
+            }
+            let tmp = rotl32(a, 5) &+ (f &+ e) &+ (kk &+ w[i]);
+            e = d;
+            d = c;
+            c = rotl32(b, 30);
+            b = a;
+            a = tmp;
+        }
+        h0 = h0 &+ a;
+        h1 = h1 &+ b;
+        h2 = h2 &+ c;
+        h3 = h3 &+ d;
+        h4 = h4 &+ e;
+    }
+    let mut out: Vec<u8> = Vec();
+    let ws: Vec<u32> = Vec();
+    ws.push(h0); ws.push(h1); ws.push(h2); ws.push(h3); ws.push(h4);
+    for (let j = 0; j < 5; j += 1) {
+        out.push(u8((ws[j] >> 24) & 0xFF));
+        out.push(u8((ws[j] >> 16) & 0xFF));
+        out.push(u8((ws[j] >> 8) & 0xFF));
+        out.push(u8(ws[j] & 0xFF));
+    }
+    return out;
+}
+
+fn sha256_k() -> Vec<u32> {
+    let k: Vec<u32> = Vec(64);
+k.push(1116352408);
+k.push(1899447441);
+k.push(3049323471);
+k.push(3921009573);
+k.push(961987163);
+k.push(1508970993);
+k.push(2453635748);
+k.push(2870763221);
+k.push(3624381080);
+k.push(310598401);
+k.push(607225278);
+k.push(1426881987);
+k.push(1925078388);
+k.push(2162078206);
+k.push(2614888103);
+k.push(3248222580);
+k.push(3835390401);
+k.push(4022224774);
+k.push(264347078);
+k.push(604807628);
+k.push(770255983);
+k.push(1249150122);
+k.push(1555081692);
+k.push(1996064986);
+k.push(2554220882);
+k.push(2821834349);
+k.push(2952996808);
+k.push(3210313671);
+k.push(3336571891);
+k.push(3584528711);
+k.push(113926993);
+k.push(338241895);
+k.push(666307205);
+k.push(773529912);
+k.push(1294757372);
+k.push(1396182291);
+k.push(1695183700);
+k.push(1986661051);
+k.push(2177026350);
+k.push(2456956037);
+k.push(2730485921);
+k.push(2820302411);
+k.push(3259730800);
+k.push(3345764771);
+k.push(3516065817);
+k.push(3600352804);
+k.push(4094571909);
+k.push(275423344);
+k.push(430227734);
+k.push(506948616);
+k.push(659060556);
+k.push(883997877);
+k.push(958139571);
+k.push(1322822218);
+k.push(1537002063);
+k.push(1747873779);
+k.push(1955562222);
+k.push(2024104815);
+k.push(2227730452);
+k.push(2361852424);
+k.push(2428436474);
+k.push(2756734187);
+k.push(3204031479);
+k.push(3329325298);
+    return k;
+}
+
+fn sha256_impl(msg: Vec<u8>) -> Vec<u8> {
+    let mut m = copy_bytes(msg);
+    sha_tail(m, msg.len());
+    let h = sha256_h();
+    let k = sha256_k();
+    let mut st: Vec<u32> = Vec();
+    for (let i = 0; i < 8; i += 1) { st.push(h[i]); }
+    let blocks = m.len() / 64;
+    for (let blk = 0; blk < blocks; blk += 1) {
+        let mut w: Vec<u32> = Vec();
+        for (let j = 0; j < 16; j += 1) {
+            let o = blk * 64 + j * 4;
+            w.push(u32(m[o]) << 24 | u32(m[o + 1]) << 16 | u32(m[o + 2]) << 8 | u32(m[o + 3]));
+        }
+        for (let i = 16; i < 64; i += 1) {
+            let s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >> 3);
+            let s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ (w[i - 2] >> 10);
+            w.push(w[i - 16] &+ s0 &+ w[i - 7] &+ s1);
+        }
+        let mut a = st[0];
+        let mut b = st[1];
+        let mut c = st[2];
+        let mut d = st[3];
+        let mut e = st[4];
+        let mut f = st[5];
+        let mut g = st[6];
+        let mut hh = st[7];
+        for (let i = 0; i < 64; i += 1) {
+            let big1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+            let ch = (e & f) ^ ((e ^ 4294967295) & g);
+            let t1 = (hh &+ big1) &+ (ch &+ (k[i] &+ w[i]));
+            let big0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let t2 = big0 &+ maj;
+            hh = g;
+            g = f;
+            f = e;
+            e = d &+ t1;
+            d = c;
+            c = b;
+            b = a;
+            a = t1 &+ t2;
+        }
+        st[0] = st[0] &+ a;
+        st[1] = st[1] &+ b;
+        st[2] = st[2] &+ c;
+        st[3] = st[3] &+ d;
+        st[4] = st[4] &+ e;
+        st[5] = st[5] &+ f;
+        st[6] = st[6] &+ g;
+        st[7] = st[7] &+ hh;
+    }
+    let mut out: Vec<u8> = Vec();
+    for (let j = 0; j < 8; j += 1) {
+        out.push(u8((st[j] >> 24) & 0xFF));
+        out.push(u8((st[j] >> 16) & 0xFF));
+        out.push(u8((st[j] >> 8) & 0xFF));
+        out.push(u8(st[j] & 0xFF));
+    }
+    return out;
+}
+
+fn sha512_k() -> Vec<u64> {
+    let k: Vec<u64> = Vec(80);
+k.push(4794697086780616226);
+k.push(8158064640168781261);
+k.push(13096744586834688815);
+k.push(16840607885511220156);
+k.push(4131703408338449720);
+k.push(6480981068601479193);
+k.push(10538285296894168987);
+k.push(12329834152419229976);
+k.push(15566598209576043074);
+k.push(1334009975649890238);
+k.push(2608012711638119052);
+k.push(6128411473006802146);
+k.push(8268148722764581231);
+k.push(9286055187155687089);
+k.push(11230858885718282805);
+k.push(13951009754708518548);
+k.push(16472876342353939154);
+k.push(17275323862435702243);
+k.push(1135362057144423861);
+k.push(2597628984639134821);
+k.push(3308224258029322869);
+k.push(5365058923640841347);
+k.push(6679025012923562964);
+k.push(8573033837759648693);
+k.push(10970295158949994411);
+k.push(12119686244451234320);
+k.push(12683024718118986047);
+k.push(13788192230050041572);
+k.push(14330467153632333762);
+k.push(15395433587784984357);
+k.push(489312712824947311);
+k.push(1452737877330783856);
+k.push(2861767655752347644);
+k.push(3322285676063803686);
+k.push(5560940570517711597);
+k.push(5996557281743188959);
+k.push(7280758554555802590);
+k.push(8532644243296465576);
+k.push(9350256976987008742);
+k.push(10552545826968843579);
+k.push(11727347734174303076);
+k.push(12113106623233404929);
+k.push(14000437183269869457);
+k.push(14369950271660146224);
+k.push(15101387698204529176);
+k.push(15463397548674623760);
+k.push(17586052441742319658);
+k.push(1182934255886127544);
+k.push(1847814050463011016);
+k.push(2177327727835720531);
+k.push(2830643537854262169);
+k.push(3796741975233480872);
+k.push(4115178125766777443);
+k.push(5681478168544905931);
+k.push(6601373596472566643);
+k.push(7507060721942968483);
+k.push(8399075790359081724);
+k.push(8693463985226723168);
+k.push(9568029438360202098);
+k.push(10144078919501101548);
+k.push(10430055236837252648);
+k.push(11840083180663258601);
+k.push(13761210420658862357);
+k.push(14299343276471374635);
+k.push(14566680578165727644);
+k.push(15097957966210449927);
+k.push(16922976911328602910);
+k.push(17689382322260857208);
+k.push(500013540394364858);
+k.push(748580250866718886);
+k.push(1242879168328830382);
+k.push(1977374033974150939);
+k.push(2944078676154940804);
+k.push(3659926193048069267);
+k.push(4368137639120453308);
+k.push(4836135668995329356);
+k.push(5532061633213252278);
+k.push(6448918945643986474);
+k.push(6902733635092675308);
+k.push(7801388544844847127);
+    return k;
+}
+
+/// SHA-512 pads to 112 mod 128 and appends a 128-bit big-endian length
+/// (the high 64 bits are zero for any input this side of 2 EiB).
+fn sha512_impl(msg: Vec<u8>) -> Vec<u8> {
+    let mut m = copy_bytes(msg);
+    m.push(0x80);
+    while (m.len() % 128 != 112) { m.push(0); }
+    let bits = u64(msg.len()) * 8;
+    for (let i = 0; i < 8; i += 1) { m.push(0); }
+    m.push(u8((bits >> 56) & 0xFF));
+    m.push(u8((bits >> 48) & 0xFF));
+    m.push(u8((bits >> 40) & 0xFF));
+    m.push(u8((bits >> 32) & 0xFF));
+    m.push(u8((bits >> 24) & 0xFF));
+    m.push(u8((bits >> 16) & 0xFF));
+    m.push(u8((bits >> 8) & 0xFF));
+    m.push(u8(bits & 0xFF));
+    let h = sha512_h();
+    let k = sha512_k();
+    let mut st: Vec<u64> = Vec();
+    for (let i = 0; i < 8; i += 1) { st.push(h[i]); }
+    let blocks = m.len() / 128;
+    for (let blk = 0; blk < blocks; blk += 1) {
+        let mut w: Vec<u64> = Vec();
+        for (let j = 0; j < 16; j += 1) {
+            let o = blk * 128 + j * 8;
+            let mut word: u64 = 0;
+            for (let t = 0; t < 8; t += 1) {
+                word = (word << 8) | u64(m[o + t]);
+            }
+            w.push(word);
+        }
+        for (let i = 16; i < 80; i += 1) {
+            let s0 = rotr64(w[i - 15], 1) ^ rotr64(w[i - 15], 8) ^ (w[i - 15] >> 7);
+            let s1 = rotr64(w[i - 2], 19) ^ rotr64(w[i - 2], 61) ^ (w[i - 2] >> 6);
+            w.push(w[i - 16] &+ s0 &+ w[i - 7] &+ s1);
+        }
+        let mut a = st[0];
+        let mut b = st[1];
+        let mut c = st[2];
+        let mut d = st[3];
+        let mut e = st[4];
+        let mut f = st[5];
+        let mut g = st[6];
+        let mut hh = st[7];
+        for (let i = 0; i < 80; i += 1) {
+            let big1 = rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41);
+            let ch = (e & f) ^ ((e ^ 18446744073709551615) & g);
+            let t1 = (hh &+ big1) &+ (ch &+ (k[i] &+ w[i]));
+            let big0 = rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39);
+            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let t2 = big0 &+ maj;
+            hh = g;
+            g = f;
+            f = e;
+            e = d &+ t1;
+            d = c;
+            c = b;
+            b = a;
+            a = t1 &+ t2;
+        }
+        st[0] = st[0] &+ a;
+        st[1] = st[1] &+ b;
+        st[2] = st[2] &+ c;
+        st[3] = st[3] &+ d;
+        st[4] = st[4] &+ e;
+        st[5] = st[5] &+ f;
+        st[6] = st[6] &+ g;
+        st[7] = st[7] &+ hh;
+    }
+    let mut out: Vec<u8> = Vec();
+    for (let j = 0; j < 8; j += 1) {
+        out.push(u8((st[j] >> 56) & 0xFF));
+        out.push(u8((st[j] >> 48) & 0xFF));
+        out.push(u8((st[j] >> 40) & 0xFF));
+        out.push(u8((st[j] >> 32) & 0xFF));
+        out.push(u8((st[j] >> 24) & 0xFF));
+        out.push(u8((st[j] >> 16) & 0xFF));
+        out.push(u8((st[j] >> 8) & 0xFF));
+        out.push(u8(st[j] & 0xFF));
+    }
+    return out;
+}
+
+entry fn md5(data: Vec<u8>) -> Vec<u8> { return md5_impl(data); }
+entry fn sha1(data: Vec<u8>) -> Vec<u8> { return sha1_impl(data); }
+entry fn sha256(data: Vec<u8>) -> Vec<u8> { return sha256_impl(data); }
+entry fn sha512(data: Vec<u8>) -> Vec<u8> { return sha512_impl(data); }
+
+/// One name, one call — the 01-sort dispatcher pattern on strings.
+entry fn digest(algo: string, data: Vec<u8>) -> Result<Vec<u8>, string> {
+    return when (algo) {
+        "md5"    -> Result.ok(md5_impl(data)),
+        "sha1"   -> Result.ok(sha1_impl(data)),
+        "sha256" -> Result.ok(sha256_impl(data)),
+        "sha512" -> Result.ok(sha512_impl(data)),
+        else     -> Result.err(f"unknown algorithm: {algo}"),
+    };
+}
+
+// ---------------------------------------------------------------- JSON ---
+//
+// RFC 0006: enums carry no data, and recursive dataclasses are not
+// expressible — so the tree is a tagged union by hand (JTag + Json),
+// with children boxed in `Opaque` (RFC 0014) to break the recursion:
+// `Json` contains `Vec<Opaque>`, each Opaque boxes another `Json`.
+
+enum JTag { Null, False, True, Num, Str, Arr, Obj }
+
+dataclass Json {
+    tag:  JTag;
+    num:  string;          // verbatim lexeme — exact round-trips, no
+    str:  string;          // float formatting anywhere in this file
+    arr:  Vec<Opaque>;
+    keys: Vec<string>;
+    vals: Vec<Opaque>;
+}
+
+fn noopaques() -> Vec<Opaque> {
+    let v: Vec<Opaque> = Vec();
+    return v;
+}
+fn nostrings() -> Vec<string> {
+    let v: Vec<string> = Vec();
+    return v;
+}
+
+fn jnull() -> Json { return Json { tag: JTag.Null, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jbool(b: bool) -> Json {
+    if (b) { return Json { tag: JTag.True, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+    return Json { tag: JTag.False, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() };
+}
+fn jnum(n: string) -> Json { return Json { tag: JTag.Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jstr(s: string) -> Json { return Json { tag: JTag.Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jarr() -> Json { return Json { tag: JTag.Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jobj() -> Json { return Json { tag: JTag.Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+
+/// The parser cursor. Strings iterate as `char`s, so the source is
+/// split once into single-char strings and walked by index.
+dataclass Cur { cs: Vec<string>; pos: i32; depth: i32; }
+
+fn split_chars(s: string) -> Vec<string> {
+    let cs: Vec<string> = Vec();
+    for (let c of s) { cs.push(f"{c}"); }
+    return cs;
+}
+
+fn jpeek(cur: Cur) -> string {
+    if (cur.pos < cur.cs.len()) { return cur.cs[cur.pos]; }
+    return "";
+}
+
+fn jskip(mut cur: Cur) -> unit {
+    let mut again = true;
+    while (again) {
+        let c = jpeek(cur);
+        again = c == " " || c == "\t" || c == "\n" || c == "\r";
+        if (again) { cur.pos = cur.pos + 1; }
+    }
+}
+
+fn is_digit(c: string) -> bool {
+    return c == "0" || c == "1" || c == "2" || c == "3" || c == "4"
+        || c == "5" || c == "6" || c == "7" || c == "8" || c == "9";
+}
+
+fn join_chars(cs: Vec<string>) -> string {
+    let mut out = "";
+    for (let i = 0; i < cs.len(); i += 1) {
+        out = f"{out}{cs[i]}";
+    }
+    return out;
+}
+
+/// JSON number grammar: -?int (.int)? ([eE][+-]?int)? — validated as a
+/// lexeme, stored verbatim.
+fn valid_number(cs: Vec<string>) -> bool {
+    let n = cs.len();
+    if (n == 0) { return false; }
+    let mut i = 0;
+    if (cs[0] == "-") { i = 1; }
+    let mut intd = 0;
+    while (i < n && is_digit(cs[i])) { i = i + 1; intd = intd + 1; }
+    if (intd == 0) { return false; }
+    if (i < n && cs[i] == ".") {
+        i = i + 1;
+        let mut fracd = 0;
+        while (i < n && is_digit(cs[i])) { i = i + 1; fracd = fracd + 1; }
+        if (fracd == 0) { return false; }
+    }
+    if (i < n && (cs[i] == "e" || cs[i] == "E")) {
+        i = i + 1;
+        if (i < n && (cs[i] == "+" || cs[i] == "-")) { i = i + 1; }
+        let mut exd = 0;
+        while (i < n && is_digit(cs[i])) { i = i + 1; exd = exd + 1; }
+        if (exd == 0) { return false; }
+    }
+    return i == n;
+}
+
+fn jparse_value(mut cur: Cur) -> Result<Opaque, string> {
+    jskip(cur);
+    let c = jpeek(cur);
+    if (c == "") { return Result.err("json: unexpected end of input"); }
+    if (c == "n") { return jparse_lit(cur, "null", jnull()); }
+    if (c == "t") { return jparse_lit(cur, "true", jbool(true)); }
+    if (c == "f") { return jparse_lit(cur, "false", jbool(false)); }
+    if (c == "\"") { return jparse_string(cur); }
+    if (c == "-" || is_digit(c)) { return jparse_number(cur); }
+    if (c == "[") { return jparse_array(cur); }
+    if (c == "{") { return jparse_object(cur); }
+    return Result.err(f"json: unexpected `{c}` at index {cur.pos}");
+}
+
+fn jparse_lit(mut cur: Cur, word: string, v: Json) -> Result<Opaque, string> {
+    let start = cur.pos;
+    let mut ok = true;
+    for (let wch of word) {
+        if (jpeek(cur) != f"{wch}") { ok = false; }
+        cur.pos = cur.pos + 1;
+    }
+    if (ok == false) {
+        return Result.err(f"json: bad literal at index {start}");
+    }
+    return Result.ok(Opaque.new(v));
+}
+
+fn jparse_string(mut cur: Cur) -> Result<Opaque, string> {
+    let start = cur.pos;
+    cur.pos = cur.pos + 1;   // opening quote
+    let out: Vec<string> = Vec();
+    let mut closed = false;
+    let mut open = true;
+    while (open && cur.pos < cur.cs.len()) {
+        let c = cur.cs[cur.pos];
+        cur.pos = cur.pos + 1;
+        if (c == "\"") {
+            closed = true;
+            open = false;
+        } else if (c == "\\") {
+            if (cur.pos >= cur.cs.len()) {
+                return Result.err(f"json: unterminated escape at index {cur.pos}");
+            }
+            let e = cur.cs[cur.pos];
+            cur.pos = cur.pos + 1;
+            if (e == "n") { out.push("\n"); }
+            else if (e == "t") { out.push("\t"); }
+            else if (e == "r") { out.push("\r"); }
+            else if (e == "\"") { out.push("\""); }
+            else if (e == "\\") { out.push("\\"); }
+            else if (e == "/") { out.push("/"); }
+            else if (e == "u") {
+                return Result.err("json: \\u escapes are not supported in this build");
+            } else {
+                return Result.err(f"json: bad escape at index {cur.pos - 1}");
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    if (closed == false) {
+        return Result.err(f"json: unterminated string starting at index {start}");
+    }
+    return Result.ok(Opaque.new(jstr(join_chars(out))));
+}
+
+fn jparse_number(mut cur: Cur) -> Result<Opaque, string> {
+    let start = cur.pos;
+    let chars: Vec<string> = Vec();
+    let mut again = true;
+    while (again) {
+        let c = jpeek(cur);
+        again = is_digit(c) || c == "-" || c == "+" || c == "." || c == "e" || c == "E";
+        if (again) {
+            chars.push(c);
+            cur.pos = cur.pos + 1;
+        }
+    }
+    if (valid_number(chars) == false) {
+        return Result.err(f"json: malformed number at index {start}");
+    }
+    return Result.ok(Opaque.new(jnum(join_chars(chars))));
+}
+
+fn jparse_array(mut cur: Cur) -> Result<Opaque, string> {
+    cur.depth = cur.depth + 1;
+    if (cur.depth > 64) {
+        return Result.err("json: nesting deeper than 64");
+    }
+    cur.pos = cur.pos + 1;   // '['
+    let v = jarr();
+    jskip(cur);
+    if (jpeek(cur) == "]") {
+        cur.pos = cur.pos + 1;
+        return Result.ok(Opaque.new(v));
+    }
+    let mut again = true;
+    while (again) {
+        let item = jparse_value(cur);
+        if (item.is_err()) { return item; }
+        let boxed = unwrap_box(item);
+        v.arr.push(boxed);
+        jskip(cur);
+        let c = jpeek(cur);
+        if (c == ",") {
+            cur.pos = cur.pos + 1;
+        } else if (c == "]") {
+            cur.pos = cur.pos + 1;
+            again = false;
+        } else {
+            return Result.err(f"json: expected `,` or `]` at index {cur.pos}");
+        }
+    }
+    cur.depth = cur.depth - 1;
+    return Result.ok(Opaque.new(v));
+}
+
+fn jparse_object(mut cur: Cur) -> Result<Opaque, string> {
+    cur.depth = cur.depth + 1;
+    if (cur.depth > 64) {
+        return Result.err("json: nesting deeper than 64");
+    }
+    cur.pos = cur.pos + 1;   // '{'
+    let v = jobj();
+    jskip(cur);
+    if (jpeek(cur) == "}") {
+        cur.pos = cur.pos + 1;
+        return Result.ok(Opaque.new(v));
+    }
+    let mut again = true;
+    while (again) {
+        jskip(cur);
+        if (jpeek(cur) != "\"") {
+            return Result.err(f"json: expected a key string at index {cur.pos}");
+        }
+        let key = jparse_string(cur);
+        if (key.is_err()) { return key; }
+        let kstr = downcast<Json>(unwrap_box(key)).value.str;
+        jskip(cur);
+        if (jpeek(cur) != ":") {
+            return Result.err(f"json: expected `:` at index {cur.pos}");
+        }
+        cur.pos = cur.pos + 1;
+        let val = jparse_value(cur);
+        if (val.is_err()) { return val; }
+        v.keys.push(kstr);
+        v.vals.push(unwrap_box(val));
+        jskip(cur);
+        let c = jpeek(cur);
+        if (c == ",") {
+            cur.pos = cur.pos + 1;
+        } else if (c == "}") {
+            cur.pos = cur.pos + 1;
+            again = false;
+        } else {
+            return Result.err(f"json: expected a comma or close-brace at index {cur.pos}");
+        }
+    }
+    cur.depth = cur.depth - 1;
+    return Result.ok(Opaque.new(v));
+}
+
+/// Unwrap a Result<Opaque, string> that is known-Ok (checked above);
+/// the unwrap_or default is unreachable and exists only because there
+/// is no `.unwrap()` in the surface.
+fn unwrap_box(r: Result<Opaque, string>) -> Opaque {
+    return r.unwrap_or(Opaque.new(jnull()));
+}
+
+/// Encode a tree back to compact JSON.
+fn jencode(j: Json) -> string {
+    let mut out = "";
+    when (j.tag) {
+        JTag.Null -> { out = "null"; },
+        JTag.False -> { out = "false"; },
+        JTag.True -> { out = "true"; },
+        JTag.Num -> { out = j.num; },
+        JTag.Str -> { out = jquote(j.str); },
+        JTag.Arr -> {
+            let mut s = "[";
+            for (let i = 0; i < j.arr.len(); i += 1) {
+                if (i > 0) { s = f"{s},"; }
+                s = f"{s}{jencode(downcast<Json>(j.arr[i]).value)}";
+            }
+            out = f"{s}]";
+        },
+        JTag.Obj -> {
+            let rb = "}";
+            let mut s = "{";
+            for (let i = 0; i < j.keys.len(); i += 1) {
+                if (i > 0) { s = f"{s},"; }
+                let vs = jencode(downcast<Json>(j.vals[i]).value);
+                s = f"{s}{jquote(j.keys[i])}:{vs}";
+            }
+            out = f"{s}{rb}";
+        },
+    }
+    return out;
+}
+
+/// Quote + minimally escape a JSON string body.
+fn jquote(s: string) -> string {
+    let q = "\"";
+    let body: Vec<string> = Vec();
+    for (let c of s) {
+        if (c == '"') { body.push("\\\""); }
+        else if (c == '\\') { body.push("\\\\"); }
+        else if (c == '\n') { body.push("\\n"); }
+        else if (c == '\r') { body.push("\\r"); }
+        else if (c == '\t') { body.push("\\t"); }
+        else { body.push(f"{c}"); }
+    }
+    return f"{q}{join_chars(body)}{q}";
+}
+
+entry fn json_dec(s: string) -> Result<Opaque, string> {
+    let cur = Cur { cs: split_chars(s), pos: 0, depth: 0 };
+    let v = jparse_value(cur);
+    if (v.is_err()) { return v; }
+    jskip(cur);
+    if (cur.pos != cur.cs.len()) {
+        return Result.err(f"json: trailing data at index {cur.pos}");
+    }
+    return v;
+}
+
+entry fn json_enc(o: Opaque) -> string {
+    return jencode(downcast<Json>(o).value);
+}
+
+entry fn json_roundtrip(s: string) -> Result<string, string> {
+    let v = json_dec(s);
+    if (v.is_err()) {
+        return Result.err(v.error);
+    }
+    return Result.ok(jencode(downcast<Json>(v.value).value));
+}
+
+/// A hand-built document for the embedder demo.
+entry fn sample_doc() -> Opaque {
+    let tags = jarr();
+    tags.arr.push(Opaque.new(jstr("tiny")));
+    tags.arr.push(Opaque.new(jstr("fast")));
+    tags.arr.push(Opaque.new(jstr("verified")));
+    let meta = jobj();
+    meta.keys.push("ok");
+    meta.vals.push(Opaque.new(jbool(true)));
+    meta.keys.push("lines");
+    meta.vals.push(Opaque.new(jnum("607")));
+    let root = jobj();
+    root.keys.push("name");
+    root.vals.push(Opaque.new(jstr("rut")));
+    root.keys.push("version");
+    root.vals.push(Opaque.new(jnum("0.2")));
+    root.keys.push("tags");
+    root.vals.push(Opaque.new(tags));
+    root.keys.push("meta");
+    root.vals.push(Opaque.new(meta));
+    return Opaque.new(root);
+}
+
+fn sha256_h() -> Vec<u32> {
+    let h: Vec<u32> = Vec(8);
+h.push(1779033703);
+h.push(3144134277);
+h.push(1013904242);
+h.push(2773480762);
+h.push(1359893119);
+h.push(2600822924);
+h.push(528734635);
+h.push(1541459225);
+    return h;
+}
+
+fn sha512_h() -> Vec<u64> {
+    let h: Vec<u64> = Vec(8);
+h.push(7640891576956012808);
+h.push(13503953896175478587);
+h.push(4354685564936845355);
+h.push(11912009170470909681);
+h.push(5840696475078001361);
+h.push(11170449401992604703);
+h.push(2270897969802886507);
+h.push(6620516959819538809);
+    return h;
+}

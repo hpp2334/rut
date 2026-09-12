@@ -9,7 +9,8 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 `host/interop.rut`); other VM/Rust sketches stay in the RFCs.
 
 The exceptions are the **runnable** Rust projects —
-[`00-todolist/`](00-todolist/) and [`01-sort/`](01-sort/) — from the
+[`00-todolist/`](00-todolist/), [`01-sort/`](01-sort/), and
+[`02-digest/`](02-digest/) — from the
 first line of their `.rut` to the last `Value` out of the VM. Everything
 else on this page is parse-only.
 
@@ -81,6 +82,26 @@ and `tests/session.rs` gates every algorithm on known inputs, edge
 cases (empty / single / duplicates / sorted / reverse / negatives),
 cross-algorithm agreement on 500 pseudo-random values, and trap
 cleanliness. See [01-sort/README.md](01-sort/README.md).
+
+### 02-digest — the byte-level one
+
+A Cargo project and workspace member: **`cargo run -p digests`** (the
+package is `digests`, not `digest`, to keep the dependency graph clear
+of RustCrypto's `digest` umbrella crate). The rut side (`digest.rut`)
+is a byte-level library over `Vec<u8>` — which crosses the host
+boundary directly, unlike 01-sort's `Vec<i32>` (RFC 0023 §2): hex and
+base64 codecs, MD5 / SHA-1 / SHA-256 / SHA-512 behind the same
+dispatcher-entry pattern, the hashmap hash keys CRC-32 / FNV-1a 32+64 /
+djb2 / sdbm, and a JSON codec (a hand-rolled tagged union — RFC 0006
+enums carry no data — with children boxed in `Opaque`, RFC 0014).
+SHA-512 is the u64 showcase: 64-bit rotations lean on `>>` being a
+logical shift for unsigned types and `&<<` truncating to the operand
+width. The host is the **oracle**: every result is checked against
+RFC 1321 / FIPS 180-4 / RFC 4648 vectors and the `md-5` / `sha1` /
+`sha2` / `base64` / `crc32fast` / `serde_json` crates — the repo's
+first crates.io dependencies, test-only in spirit, imported by the
+embedder so the demo prints the verdict per row. See
+[02-digest/README.md](02-digest/README.md).
 
 | `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
 | `json/app.rut` | opt-in dataclasses (zero-method `impl Serializable for T {}`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, module-private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |
