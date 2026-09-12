@@ -41,11 +41,11 @@ pub class Vec<T> {
         self.len += 1;
     }
 
-    pub fn pop(mut self) -> T {
+    pub fn pop(mut self) -> Option<T> {
         if (self.len == 0) {
-            panic("Vec.pop on an empty vec");
+            return Option.none();
         }
         self.len -= 1;
-        return self.buf[self.len];
+        return Option.some(self.buf[self.len]);
     }
 }

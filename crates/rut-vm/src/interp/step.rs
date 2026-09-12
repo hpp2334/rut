@@ -20,10 +20,17 @@ impl Vm {
             }
             Op::Const { dst, k } => {
                 let s = self.const_slots[k as usize];
-                self.heap.retain(s);
+                // only string consts are heap cells; `type_id`/scalar consts
+                // are plain words (RFC 0033 §3)
+                let is_ref = matches!(self.prog.consts[k as usize], ConstVal::Str(_));
+                if is_ref {
+                    self.heap.retain(s);
+                }
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = s;
-                self.heap.release(old);
+                if is_ref {
+                    self.heap.release(old);
+                }
             }
             Op::ConstRaw { dst, bits } => self.cur_regs[dst as usize] = Slot { i: bits as i64 },
 

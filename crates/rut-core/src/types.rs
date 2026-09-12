@@ -5,6 +5,8 @@
 
 pub type TypeId = u32;
 
+use crate::id::{local_of, pack, scope_of, ScopeId, BOOT_SCOPE};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimTy {
     U8, U16, U32, U64,
@@ -151,6 +153,16 @@ pub struct RutType {
 #[derive(Clone, Debug, Default)]
 pub struct TypeTable {
     pub types: Vec<RutType>,
+    /// packed-id mode (compiler): ids are `(scope, local)`; `scope_base[s]`
+    /// is the dense index where scope `s`'s block starts
+    pub scope_base: Vec<u32>,
+    /// the scope this table interns into (packed mode)
+    pub scope: ScopeId,
+    /// number of shared boot types (the dense prefix)
+    pub boot_len: u32,
+    /// `true` while ids are `(scope, local)` (compiler); `false` when ids
+    /// are dense indices (post-link / VM)
+    pub packed: bool,
 }
 
 pub const TY_UNIT: TypeId = 0;
@@ -173,9 +185,18 @@ pub const TY_OPAQUE: TypeId = 14;
 pub const TY_BYTES: TypeId = 15;
 
 impl TypeTable {
-    /// Boot table: primitives + string + Opaque at fixed ids.
+    /// Boot table (dense ids): primitives + string + Opaque/Bytes at fixed ids.
     pub fn boot() -> TypeTable {
-        let mut t = TypeTable { types: Vec::new() };
+        Self::boot_impl(false, BOOT_SCOPE)
+    }
+
+    /// Boot table whose ids are `(scope, local)` for a compiler module.
+    pub fn boot_scoped(scope: ScopeId) -> TypeTable {
+        Self::boot_impl(true, scope)
+    }
+
+    fn boot_impl(packed: bool, scope: ScopeId) -> TypeTable {
+        let mut t = TypeTable { packed, scope, ..Default::default() };
         let mut push = |name: &str, kind: TyKind, size: u32, align: u32| {
             t.types.push(RutType {
                 name: name.to_string(),
@@ -200,26 +221,59 @@ impl TypeTable {
         push("string", TyKind::Str, 8, 8);
         push("Opaque", TyKind::Opaque, 8, 8);
         push("bytes", TyKind::Bytes, 8, 8);
+        t.boot_len = t.types.len() as u32;
+        t.scope_base = vec![0; scope as usize + 1];
+        if packed {
+            t.scope_base[scope as usize] = t.boot_len;
+        }
         t
+    }
+
+    /// Dense index of an id (decodes `(scope, local)` in packed mode).
+    #[inline]
+    pub fn dense(&self, id: TypeId) -> u32 {
+        if !self.packed {
+            return id;
+        }
+        let base = self.scope_base.get(scope_of(id) as usize).copied().unwrap_or(0);
+        base + local_of(id)
+    }
+
+    /// Pack a dense index into this table's id space.
+    #[inline]
+    fn id_for(&self, dense: u32) -> TypeId {
+        if !self.packed {
+            return dense;
+        }
+        if dense < self.boot_len {
+            pack(BOOT_SCOPE, dense)
+        } else {
+            pack(self.scope, dense - self.boot_len)
+        }
     }
 
     pub fn intern(&mut self, ty: RutType) -> TypeId {
         // structural interning for anonymous instantiations (Vec<T>, Option<T>...)
         for (i, t) in self.types.iter().enumerate() {
             if t.name == ty.name && t.kind == ty.kind {
-                return i as TypeId;
+                return self.id_for(i as u32);
             }
         }
-        let id = self.types.len() as TypeId;
+        let d = self.types.len() as u32;
         self.types.push(ty);
-        id
+        self.id_for(d)
     }
 
+    /// The descriptor at `id`.
+    #[inline]
+    pub fn type_at(&self, id: TypeId) -> &RutType {
+        &self.types[self.dense(id) as usize]
+    }
     pub fn kind(&self, id: TypeId) -> &TyKind {
-        &self.types[id as usize].kind
+        &self.types[self.dense(id) as usize].kind
     }
     pub fn name(&self, id: TypeId) -> &str {
-        &self.types[id as usize].name
+        &self.types[self.dense(id) as usize].name
     }
     pub fn is_prim(&self, id: TypeId) -> Option<PrimTy> {
         match self.kind(id) {

@@ -142,7 +142,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let tid_reg = self.new_reg(TY_U32);
                 self.emit(Op::TidOf { dst: tid_reg, obj: orecv }, sp.lo);
                 let want_reg = self.new_reg(TY_U32);
-                self.emit(Op::ConstRaw { dst: want_reg, bits: want as u64 }, sp.lo);
+                let wk = self.konst(ConstVal::TypeId(want));
+                self.emit(Op::Const { dst: want_reg, k: wk as u32 }, sp.lo);
                 let eq = self.new_reg(TY_BOOL);
                 self.emit(cmpop(CmpOp::Eq, PrimTy::U32, eq, tid_reg, want_reg), sp.lo);
                 let dst = self.new_reg(oty);

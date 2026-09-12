@@ -80,7 +80,7 @@ impl<'a> Ctx<'a> {
                         subst: vec![],
                     };
                     if let Some(&fid) = self.inst_map.get(&inst) {
-                        vt[im.target as usize][slot as usize] = Some(fid);
+                        vt[self.types.dense(im.target) as usize][slot as usize] = Some(fid);
                     }
                 }
             }

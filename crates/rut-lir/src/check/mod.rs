@@ -112,7 +112,7 @@ impl<'a> Ctx<'a> {
         Ctx {
             ast,
             diags: Vec::new(),
-            types: TypeTable::boot(),
+            types: TypeTable::boot_scoped(1),
             traits: Vec::new(),
             trait_decls: Vec::new(),
             funcs: Vec::new(),

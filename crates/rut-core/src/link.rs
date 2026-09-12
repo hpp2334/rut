@@ -26,6 +26,13 @@ impl std::fmt::Display for LinkError {
 }
 impl std::error::Error for LinkError {}
 
+/// Flatten a single module's packed `(scope, local)` ids into dense global
+/// ids — the form the VM and the binary carry. Infallible: with one module
+/// there is nothing to resolve across scopes.
+pub fn flatten(prog: Program) -> Program {
+    link(vec![prog]).expect("flatten: single-module link cannot fail")
+}
+
 /// Merge `modules` (in import order) into one [`Program`].
 pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     if modules.is_empty() {
@@ -49,6 +56,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         .map(|m| m.name.clone())
         .unwrap_or_default();
 
+    // scope -> global dense base of that scope's type block (boot = 0)
+    let mut scope_base: std::collections::HashMap<crate::id::ScopeId, u32> =
+        std::collections::HashMap::new();
+    scope_base.insert(crate::id::BOOT_SCOPE, 0);
+
     let mut func_off: u32 = 0;
     let mut const_off: u32 = 0;
 
@@ -56,17 +68,33 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         let nfuncs = m.funcs.len() as u32;
         let nconsts = m.consts.len() as u32;
 
-        // this module's non-boot types are appended after the current tail
+        // where this module's own types land, and where its boot prefix ends
         let base = out.types.types.len() as u32;
-        let map = move |id: TypeId| -> TypeId {
-            if (id as usize) < boot {
+        let m_boot = if m.types.packed { m.types.boot_len } else { boot as u32 };
+        let packed = m.types.packed;
+        if packed {
+            scope_base.insert(m.types.scope, base);
+        }
+        // packed `(scope, local)` (compiler) or dense (pre-link) -> global dense
+        let map = |id: TypeId| -> TypeId {
+            if id == u32::MAX {
+                return id; // TY_ANY sentinel — never a real type
+            }
+            if packed {
+                let s = crate::id::scope_of(id);
+                if s == crate::id::BOOT_SCOPE {
+                    crate::id::local_of(id)
+                } else {
+                    scope_base.get(&s).copied().unwrap_or(0) + crate::id::local_of(id)
+                }
+            } else if id < m_boot {
                 id
             } else {
-                base + (id - boot as u32)
+                base + (id - m_boot)
             }
         };
 
-        for t in m.types.types.iter().skip(boot) {
+        for t in m.types.types.iter().skip(m_boot as usize) {
             out.types.types.push(RutType {
                 name: t.name.clone(),
                 kind: remap_kind(&t.kind, &map),
@@ -86,7 +114,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     .into_iter()
                     .map(|tm| TraitMethod {
                         name: tm.name,
-                        params: tm.params.into_iter().map(map).collect(),
+                        params: tm.params.into_iter().map(|p| map(p)).collect(),
                         ret: map(tm.ret),
                     })
                     .collect(),
@@ -101,10 +129,10 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
         // per-type vtables: keyed by type, slot-indexed, value = func id
         for (i, vt) in m.vtables.into_iter().enumerate() {
-            if i < boot {
+            if (i as u32) < m_boot {
                 continue;
             }
-            let gi = map(i as u32) as usize;
+            let gi = (base + (i as u32 - m_boot)) as usize;
             if gi >= out.vtables.len() {
                 out.vtables.resize(gi + 1, Vec::new());
             }
@@ -129,11 +157,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         for f in m.funcs {
             out.funcs.push(FuncCode {
                 name: f.name,
-                params: f.params.into_iter().map(map).collect(),
+                params: f.params.into_iter().map(|p| map(p)).collect(),
                 ret: map(f.ret),
                 is_method: f.is_method,
                 n_captures: f.n_captures,
-                regs: f.regs.into_iter().map(map).collect(),
+                regs: f.regs.into_iter().map(|r| map(r)).collect(),
                 code: f
                     .code
                     .into_iter()

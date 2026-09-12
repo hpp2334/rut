@@ -183,17 +183,18 @@ impl<'a> Ctx<'a> {
                 offset: 0,
             });
         }
+        let pi = self.types.dense(placeholder) as usize;
         let (size, align) = {
             // compute layout with the resolved fields in place
-            let saved = self.types.types[placeholder as usize].kind.clone();
-            self.types.types[placeholder as usize].kind = TyKind::Data { fields: resolved.clone() };
+            let saved = self.types.types[pi].kind.clone();
+            self.types.types[pi].kind = TyKind::Data { fields: resolved.clone() };
             let l = self.layout_of(placeholder);
-            self.types.types[placeholder as usize].kind = saved;
+            self.types.types[pi].kind = saved;
             l
         };
-        self.types.types[placeholder as usize].kind = TyKind::Data { fields: resolved.clone() };
-        self.types.types[placeholder as usize].size = size;
-        self.types.types[placeholder as usize].align = align;
+        self.types.types[pi].kind = TyKind::Data { fields: resolved.clone() };
+        self.types.types[pi].size = size;
+        self.types.types[pi].align = align;
 
         // collect fields with initializers + methods for the compiler
         let mut flds: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)> = Vec::new();

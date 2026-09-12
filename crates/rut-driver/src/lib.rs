@@ -108,6 +108,9 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         funcs,
         exports,
     };
+    // the compiler emits `(scope, local)` ids; flatten them to dense global
+    // ids before serializing (RFC 0035 §1)
+    let prog = rut_core::link::flatten(prog);
     let binary = encode(&prog);
     CompileOutput { diags, ast_dump, ast_json, ir_dump, binary: Some(binary) }
 }
