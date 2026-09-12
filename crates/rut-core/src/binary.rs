@@ -73,7 +73,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 4;
+pub const VERSION: u32 = 5;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -416,6 +416,29 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::GtF { dst, a, b } => { e.u8(59); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::LeF { dst, a, b } => { e.u8(60); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::GeF { dst, a, b } => { e.u8(61); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::AddI { prim, dst, a, b } => { e.u8(62); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::SubI { prim, dst, a, b } => { e.u8(63); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::MulI { prim, dst, a, b } => { e.u8(64); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::DivI { prim, dst, a, b } => { e.u8(65); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::ModI { prim, dst, a, b } => { e.u8(66); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::WAddI { prim, dst, a, b } => { e.u8(67); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::WSubI { prim, dst, a, b } => { e.u8(68); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::WMulI { prim, dst, a, b } => { e.u8(69); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::WDivI { prim, dst, a, b } => { e.u8(70); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::WModI { prim, dst, a, b } => { e.u8(71); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::AndI { prim, dst, a, b } => { e.u8(72); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::OrI { prim, dst, a, b } => { e.u8(73); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::XorI { prim, dst, a, b } => { e.u8(74); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::ShlI { prim, dst, a, b } => { e.u8(75); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::ShrI { prim, dst, a, b } => { e.u8(76); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::WrapShlI { prim, dst, a, b } => { e.u8(77); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::EqI { dst, a, b } => { e.u8(78); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::NeI { dst, a, b } => { e.u8(79); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::LtI { dst, a, b } => { e.u8(80); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::GtI { dst, a, b } => { e.u8(81); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::LeI { dst, a, b } => { e.u8(82); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::GeI { dst, a, b } => { e.u8(83); e.u16(*dst); e.u16(*a); e.u16(*b); }
+        Op::NegI { prim, dst, a } => { e.u8(84); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); }
         Op::StrCmp { eq, dst, a, b } => { e.u8(10); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::RefEq { eq, dst, a, b } => { e.u8(11); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::Jmp { target } => { e.u8(12); e.u32(*target); }
@@ -536,6 +559,29 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         59 => Op::GtF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         60 => Op::LeF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         61 => Op::GeF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        62 => Op::AddI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        63 => Op::SubI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        64 => Op::MulI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        65 => Op::DivI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        66 => Op::ModI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        67 => Op::WAddI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        68 => Op::WSubI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        69 => Op::WMulI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        70 => Op::WDivI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        71 => Op::WModI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        72 => Op::AndI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        73 => Op::OrI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        74 => Op::XorI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        75 => Op::ShlI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        76 => Op::ShrI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        77 => Op::WrapShlI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        78 => Op::EqI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        79 => Op::NeI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        80 => Op::LtI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        81 => Op::GtI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        82 => Op::LeI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        83 => Op::GeI { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        84 => Op::NegI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
         t => return Err(format!("bad opcode {t}")),
     })
 }

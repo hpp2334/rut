@@ -88,6 +88,32 @@ pub enum Op {
     GtF { dst: Reg, a: Reg, b: Reg },
     LeF { dst: Reg, a: Reg, b: Reg },
     GeF { dst: Reg, a: Reg, b: Reg },
+    /// Integer-specialized scalar ops, by operation. `prim` stays a field
+    /// (integer width fitting is per-prim and does not fold), but the
+    /// opcode removes the runtime `op` switch and the `is_float` test.
+    AddI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    SubI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    MulI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    DivI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    ModI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    WAddI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    WSubI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    WMulI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    WDivI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    WModI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    AndI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    OrI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    XorI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    ShlI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    ShrI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    WrapShlI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    EqI { dst: Reg, a: Reg, b: Reg },
+    NeI { dst: Reg, a: Reg, b: Reg },
+    LtI { dst: Reg, a: Reg, b: Reg },
+    GtI { dst: Reg, a: Reg, b: Reg },
+    LeI { dst: Reg, a: Reg, b: Reg },
+    GeI { dst: Reg, a: Reg, b: Reg },
+    NegI { prim: PrimTy, dst: Reg, a: Reg },
     /// string content compare (RFC 0012 §4) — used for ==/!= on string
     StrCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
     /// cell identity compare (RFC 0012 §4) — used for ==/!= on ref types

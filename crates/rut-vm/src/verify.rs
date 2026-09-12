@@ -215,6 +215,58 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         }
                     }
                 }
+                Op::AddI { prim, a, b, .. }
+                | Op::SubI { prim, a, b, .. }
+                | Op::MulI { prim, a, b, .. }
+                | Op::DivI { prim, a, b, .. }
+                | Op::ModI { prim, a, b, .. }
+                | Op::WAddI { prim, a, b, .. }
+                | Op::WSubI { prim, a, b, .. }
+                | Op::WMulI { prim, a, b, .. }
+                | Op::WDivI { prim, a, b, .. }
+                | Op::WModI { prim, a, b, .. }
+                | Op::AndI { prim, a, b, .. }
+                | Op::OrI { prim, a, b, .. }
+                | Op::XorI { prim, a, b, .. }
+                | Op::ShlI { prim, a, b, .. }
+                | Op::ShrI { prim, a, b, .. }
+                | Op::WrapShlI { prim, a, b, .. } => {
+                    if !prim.is_int() {
+                        return Err(bad("int op with a non-integer primitive".into()));
+                    }
+                    for r in [a, b] {
+                        match prog.types.kind(f.regs[*r as usize]) {
+                            TyKind::Prim(p) if p == prim => {}
+                            _ => {
+                                return Err(bad(
+                                    "int op operand is not the embedded primitive".into(),
+                                ))
+                            }
+                        }
+                    }
+                }
+                Op::NegI { prim, a, .. } => {
+                    if !prim.is_int() {
+                        return Err(bad("int neg with a non-integer primitive".into()));
+                    }
+                    match prog.types.kind(f.regs[*a as usize]) {
+                        TyKind::Prim(p) if p == prim => {}
+                        _ => return Err(bad("int neg operand is not the embedded primitive".into())),
+                    }
+                }
+                Op::EqI { a, b, .. }
+                | Op::NeI { a, b, .. }
+                | Op::LtI { a, b, .. }
+                | Op::GtI { a, b, .. }
+                | Op::LeI { a, b, .. }
+                | Op::GeI { a, b, .. } => {
+                    for r in [a, b] {
+                        match prog.types.kind(f.regs[*r as usize]) {
+                            TyKind::Prim(p) if p.is_int() => {}
+                            _ => return Err(bad("int compare operand is not an integer".into())),
+                        }
+                    }
+                }
                 Op::Conv { from, to, dst, src, .. } => {
                     if !matches!(prog.types.kind(f.regs[*src as usize]), TyKind::Prim(p) if p == from)
                         || !matches!(prog.types.kind(f.regs[*dst as usize]), TyKind::Prim(p) if p == to)
@@ -262,7 +314,8 @@ fn regs_of(op: &Op) -> Vec<u16> {
             }
         }
         // two-operand scalar ops
-        Op::Not { dst, a } | Op::Neg { dst, a, .. } | Op::NegF { dst, a, .. } => {
+        Op::Not { dst, a } | Op::Neg { dst, a, .. } | Op::NegF { dst, a, .. }
+        | Op::NegI { dst, a, .. } => {
             push(*dst);
             push(*a);
         }
@@ -273,7 +326,15 @@ fn regs_of(op: &Op) -> Vec<u16> {
         | Op::AddF { dst, a, b, .. } | Op::SubF { dst, a, b, .. } | Op::MulF { dst, a, b, .. }
         | Op::DivF { dst, a, b, .. } | Op::ModF { dst, a, b, .. } | Op::EqF { dst, a, b, .. }
         | Op::NeF { dst, a, b, .. } | Op::LtF { dst, a, b, .. } | Op::GtF { dst, a, b, .. }
-        | Op::LeF { dst, a, b, .. } | Op::GeF { dst, a, b, .. } => {
+        | Op::LeF { dst, a, b, .. } | Op::GeF { dst, a, b, .. }
+        | Op::AddI { dst, a, b, .. } | Op::SubI { dst, a, b, .. } | Op::MulI { dst, a, b, .. }
+        | Op::DivI { dst, a, b, .. } | Op::ModI { dst, a, b, .. } | Op::WAddI { dst, a, b, .. }
+        | Op::WSubI { dst, a, b, .. } | Op::WMulI { dst, a, b, .. } | Op::WDivI { dst, a, b, .. }
+        | Op::WModI { dst, a, b, .. } | Op::AndI { dst, a, b, .. } | Op::OrI { dst, a, b, .. }
+        | Op::XorI { dst, a, b, .. } | Op::ShlI { dst, a, b, .. } | Op::ShrI { dst, a, b, .. }
+        | Op::WrapShlI { dst, a, b, .. } | Op::EqI { dst, a, b, .. } | Op::NeI { dst, a, b, .. }
+        | Op::LtI { dst, a, b, .. } | Op::GtI { dst, a, b, .. } | Op::LeI { dst, a, b, .. }
+        | Op::GeI { dst, a, b, .. } => {
             push(*dst);
             push(*a);
             push(*b);

@@ -227,12 +227,35 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
         | Op::LtF { dst, a, b, .. }
         | Op::GtF { dst, a, b, .. }
         | Op::LeF { dst, a, b, .. }
-        | Op::GeF { dst, a, b, .. } => {
+        | Op::GeF { dst, a, b, .. }
+        | Op::AddI { dst, a, b, .. }
+        | Op::SubI { dst, a, b, .. }
+        | Op::MulI { dst, a, b, .. }
+        | Op::DivI { dst, a, b, .. }
+        | Op::ModI { dst, a, b, .. }
+        | Op::WAddI { dst, a, b, .. }
+        | Op::WSubI { dst, a, b, .. }
+        | Op::WMulI { dst, a, b, .. }
+        | Op::WDivI { dst, a, b, .. }
+        | Op::WModI { dst, a, b, .. }
+        | Op::AndI { dst, a, b, .. }
+        | Op::OrI { dst, a, b, .. }
+        | Op::XorI { dst, a, b, .. }
+        | Op::ShlI { dst, a, b, .. }
+        | Op::ShrI { dst, a, b, .. }
+        | Op::WrapShlI { dst, a, b, .. }
+        | Op::EqI { dst, a, b, .. }
+        | Op::NeI { dst, a, b, .. }
+        | Op::LtI { dst, a, b, .. }
+        | Op::GtI { dst, a, b, .. }
+        | Op::LeI { dst, a, b, .. }
+        | Op::GeI { dst, a, b, .. } => {
             d.push(*dst);
             u.push(*a);
             u.push(*b);
         }
-        Op::Not { dst, a } | Op::Neg { dst, a, .. } | Op::NegF { dst, a, .. } => {
+        Op::Not { dst, a } | Op::Neg { dst, a, .. } | Op::NegF { dst, a, .. }
+        | Op::NegI { dst, a, .. } => {
             d.push(*dst);
             u.push(*a);
         }
@@ -378,11 +401,33 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         | Op::LtF { a, b, .. }
         | Op::GtF { a, b, .. }
         | Op::LeF { a, b, .. }
-        | Op::GeF { a, b, .. } => {
+        | Op::GeF { a, b, .. }
+        | Op::AddI { a, b, .. }
+        | Op::SubI { a, b, .. }
+        | Op::MulI { a, b, .. }
+        | Op::DivI { a, b, .. }
+        | Op::ModI { a, b, .. }
+        | Op::WAddI { a, b, .. }
+        | Op::WSubI { a, b, .. }
+        | Op::WMulI { a, b, .. }
+        | Op::WDivI { a, b, .. }
+        | Op::WModI { a, b, .. }
+        | Op::AndI { a, b, .. }
+        | Op::OrI { a, b, .. }
+        | Op::XorI { a, b, .. }
+        | Op::ShlI { a, b, .. }
+        | Op::ShrI { a, b, .. }
+        | Op::WrapShlI { a, b, .. }
+        | Op::EqI { a, b, .. }
+        | Op::NeI { a, b, .. }
+        | Op::LtI { a, b, .. }
+        | Op::GtI { a, b, .. }
+        | Op::LeI { a, b, .. }
+        | Op::GeI { a, b, .. } => {
             f(a);
             f(b);
         }
-        Op::Not { a, .. } | Op::Neg { a, .. } | Op::NegF { a, .. } => f(a),
+        Op::Not { a, .. } | Op::Neg { a, .. } | Op::NegF { a, .. } | Op::NegI { a, .. } => f(a),
         Op::Mov { src, .. } | Op::MovRef { src, .. } => f(src),
         Op::Br { cond, .. } => f(cond),
         Op::BrTable { idx, .. } => f(idx),

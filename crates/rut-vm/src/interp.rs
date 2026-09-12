@@ -529,6 +529,124 @@ impl Vm {
                     self.cur_regs[*dst as usize] = Slot::bool(v);
                     self.cur_pc += 1;
                 }
+                // integer ops: the opcode is the operation, so `arith_int`/
+                // `bitop_int`/`cmp_int` fold their switch away; `prim` stays
+                // for the per-prim width fitting
+                Op::AddI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Add, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::SubI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Sub, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::MulI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Mul, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::DivI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Div, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::ModI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Mod, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], false)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::WAddI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Add, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::WSubI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Sub, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::WMulI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Mul, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::WDivI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Div, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::WModI { prim, dst, a, b } => {
+                    let v = self.arith_int(ArithOp::Mod, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize], true)?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::AndI { prim, dst, a, b } => {
+                    let v = self.bitop_int(BitOp::And, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::OrI { prim, dst, a, b } => {
+                    let v = self.bitop_int(BitOp::Or, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::XorI { prim, dst, a, b } => {
+                    let v = self.bitop_int(BitOp::Xor, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::ShlI { prim, dst, a, b } => {
+                    let v = self.bitop_int(BitOp::Shl, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::ShrI { prim, dst, a, b } => {
+                    let v = self.bitop_int(BitOp::Shr, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::WrapShlI { prim, dst, a, b } => {
+                    let v = self.bitop_int(BitOp::WrapShl, *prim, self.cur_regs[*a as usize], self.cur_regs[*b as usize])?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
+                Op::EqI { dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Eq, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::NeI { dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Ne, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::LtI { dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Lt, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::GtI { dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Gt, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::LeI { dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Le, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::GeI { dst, a, b } => {
+                    let v = self.cmp_int(CmpOp::Ge, self.cur_regs[*a as usize], self.cur_regs[*b as usize]);
+                    self.cur_regs[*dst as usize] = Slot::bool(v);
+                    self.cur_pc += 1;
+                }
+                Op::NegI { prim, dst, a } => {
+                    let v = self.neg_int(*prim, self.cur_regs[*a as usize])?;
+                    self.cur_regs[*dst as usize] = v;
+                    self.cur_pc += 1;
+                }
                 Op::Jmp { target } => self.cur_pc = *target,
                 Op::Br { cond, then_t, else_t } => {
                     self.cur_pc =
@@ -705,11 +823,18 @@ impl Vm {
                 };
                 self.cur_regs[dst as usize] = v;
             }
-            // float ops are their own opcodes and are always fast-pathed
+            // specialized scalar ops are their own opcodes and are always
+            // fast-pathed
             Op::AddF { .. } | Op::SubF { .. } | Op::MulF { .. } | Op::DivF { .. }
             | Op::ModF { .. } | Op::NegF { .. } | Op::EqF { .. } | Op::NeF { .. }
-            | Op::LtF { .. } | Op::GtF { .. } | Op::LeF { .. } | Op::GeF { .. } => {
-                unreachable!("float ops are handled in the run_loop fast path")
+            | Op::LtF { .. } | Op::GtF { .. } | Op::LeF { .. } | Op::GeF { .. }
+            | Op::AddI { .. } | Op::SubI { .. } | Op::MulI { .. } | Op::DivI { .. }
+            | Op::ModI { .. } | Op::WAddI { .. } | Op::WSubI { .. } | Op::WMulI { .. }
+            | Op::WDivI { .. } | Op::WModI { .. } | Op::AndI { .. } | Op::OrI { .. }
+            | Op::XorI { .. } | Op::ShlI { .. } | Op::ShrI { .. } | Op::WrapShlI { .. }
+            | Op::EqI { .. } | Op::NeI { .. } | Op::LtI { .. } | Op::GtI { .. }
+            | Op::LeI { .. } | Op::GeI { .. } | Op::NegI { .. } => {
+                unreachable!("specialized scalar ops are handled in the run_loop fast path")
             }
             Op::StrCmp { eq, dst, a, b } => {
                 let sa = cell_of(r!(a)).as_str();
@@ -1399,6 +1524,15 @@ impl Vm {
             let r = if p == F32 { r as f32 as f64 } else { r };
             return Ok(Slot::float(r));
         }
+        self.arith_int(op, p, x, y, wrapping)
+    }
+
+    /// Integer arithmetic without the float branch — the specialized
+    /// `addi`/`muli`/... opcodes call this with a constant `op`, folding the
+    /// operation switch away.
+    #[inline]
+    fn arith_int(&self, op: ArithOp, p: PrimTy, x: Slot, y: Slot, wrapping: bool) -> Result<Slot, Trap> {
+        use PrimTy::*;
         let a = unsafe { x.i };
         let b = unsafe { y.i };
         let unsigned = matches!(p, U8 | U16 | U32 | U64);
@@ -1433,6 +1567,14 @@ impl Vm {
         if !p.is_int() {
             return Err(Trap::new(TrapKind::Invalid, "bit op on non-integer"));
         }
+        self.bitop_int(op, p, x, y)
+    }
+
+    /// Integer bit-operation body without the `is_int` guard — the
+    /// specialized `andi`/`shli`/... opcodes call it with a constant `op`.
+    #[inline]
+    fn bitop_int(&self, op: BitOp, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
+        use PrimTy::*;
         let a = unsafe { x.i };
         let b = unsafe { y.i };
         let (r, o) = match op {
@@ -1523,6 +1665,13 @@ impl Vm {
                 CmpOp::Ge => a >= b,
             };
         }
+        self.cmp_int(op, x, y)
+    }
+
+    /// Integer compare without the float branch — the specialized `lti`/...
+    /// opcodes call it with a constant `op`.
+    #[inline]
+    fn cmp_int(&self, op: CmpOp, x: Slot, y: Slot) -> bool {
         let a = unsafe { x.i };
         let b = unsafe { y.i };
         match op {
@@ -1533,6 +1682,17 @@ impl Vm {
             CmpOp::Le => a <= b,
             CmpOp::Ge => a >= b,
         }
+    }
+
+    /// Integer negate without the float branch.
+    #[inline]
+    fn neg_int(&self, p: PrimTy, x: Slot) -> Result<Slot, Trap> {
+        let v = unsafe { x.i };
+        let (r, o) = v.overflowing_neg();
+        if o || !fits(r, p) {
+            return Err(Trap::new(TrapKind::Overflow, "negate overflow"));
+        }
+        Ok(Slot::int(r))
     }
 }
 
