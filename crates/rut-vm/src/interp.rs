@@ -140,16 +140,18 @@ impl Vm {
         let Some(func) = self.prog.export(export) else {
             return Err(Trap::new(TrapKind::Invalid, format!("no export `{export}`")));
         };
-        let code = self.prog.funcs[func as usize].clone();
-        if args.len() != code.params.len() {
+        let nparams = self.prog.funcs[func as usize].params.len();
+        if args.len() != nparams {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                format!("`{export}` takes {} args, {} given", code.params.len(), args.len()),
+                format!("`{export}` takes {nparams} args, {} given", args.len()),
             ));
         }
-        let mut regs = vec![Slot::int(0); code.regs.len()];
+        let nregs = self.prog.funcs[func as usize].regs.len();
+        let mut regs = vec![Slot::int(0); nregs];
         for (i, a) in args.iter().enumerate() {
-            regs[i] = self.value_in(a, code.params[i])
+            let pty = self.param_ty(func, i);
+            regs[i] = self.value_in(a, pty)
                 .map_err(|m| Trap::new(TrapKind::Invalid, format!("`{export}` argument {i}: {m}")))?;
         }
         self.enter(func, regs, None);
@@ -261,8 +263,11 @@ impl Vm {
             if !self.running {
                 return Ok(Value::Unit);
             }
-            let code = self.prog.funcs[self.cur_func as usize].clone();
-            let Some(op) = code.code.get(self.cur_pc as usize).cloned() else {
+            let Some(op) = self.prog.funcs[self.cur_func as usize]
+                .code
+                .get(self.cur_pc as usize)
+                .cloned()
+            else {
                 // fell off the end — verifier rejects this shape; be safe
                 let ret = self.do_ret(Slot::int(0));
                 if let Some(v) = ret {
@@ -316,9 +321,15 @@ impl Vm {
         }
         // release the active frame's registers (destructors, RFC 0016 §3)
         let regs = std::mem::take(&mut self.cur_regs);
-        let tys = self.prog.funcs[func as usize].regs.clone();
-        for (r, ty) in regs.into_iter().zip(tys.iter()) {
-            self.heap.release_typed(r, *ty, &self.prog.types);
+        for i in 0..regs.len() {
+            let ty = self
+                .prog
+                .funcs[func as usize]
+                .regs
+                .get(i)
+                .copied()
+                .unwrap_or(TY_ANY);
+            self.heap.release_typed(regs[i], ty, &self.prog.types);
         }
         match self.frames.pop() {
             Some(f) => {
@@ -435,8 +446,8 @@ impl Vm {
             }
 
             Op::Call { func, args, dst } => {
-                let callee = self.prog.funcs[func as usize].clone();
-                let mut regs = vec![Slot::int(0); callee.regs.len()];
+                let nregs = self.prog.funcs[func as usize].regs.len();
+                let mut regs = vec![Slot::int(0); nregs];
                 for (i, a) in args.iter().enumerate() {
                     regs[i] = r!(*a);
                     if self.is_ref(self.param_ty(func, i)) {
@@ -446,8 +457,8 @@ impl Vm {
                 self.enter(func, regs, dst);
             }
             Op::CallM { func, recv, args, dst } => {
-                let callee = self.prog.funcs[func as usize].clone();
-                let mut regs = vec![Slot::int(0); callee.regs.len()];
+                let nregs = self.prog.funcs[func as usize].regs.len();
+                let mut regs = vec![Slot::int(0); nregs];
                 regs[0] = r!(recv);
                 if self.is_ref(self.param_ty(func, 0)) {
                     self.heap.retain(regs[0]);
@@ -477,8 +488,8 @@ impl Vm {
                             ),
                         )
                     })?;
-                let callee = self.prog.funcs[fid as usize].clone();
-                let mut regs = vec![Slot::int(0); callee.regs.len()];
+                let nregs = self.prog.funcs[fid as usize].regs.len();
+                let mut regs = vec![Slot::int(0); nregs];
                 regs[0] = r!(recv);
                 if self.is_ref(self.param_ty(fid, 0)) {
                     self.heap.retain(regs[0]);
@@ -495,9 +506,11 @@ impl Vm {
                 let Some((fid, captures)) = cell_of(r!(fval)).as_closure() else {
                     return Err(Trap::new(TrapKind::Invalid, "call on non-closure"));
                 };
-                let callee = self.prog.funcs[fid as usize].clone();
-                let declared = callee.params.len().saturating_sub(callee.n_captures as usize);
-                let mut regs = vec![Slot::int(0); callee.regs.len()];
+                let nparams = self.prog.funcs[fid as usize].params.len();
+                let ncaptures = self.prog.funcs[fid as usize].n_captures as usize;
+                let declared = nparams.saturating_sub(ncaptures);
+                let nregs = self.prog.funcs[fid as usize].regs.len();
+                let mut regs = vec![Slot::int(0); nregs];
                 for (i, a) in args.iter().enumerate().take(declared) {
                     regs[i] = r!(*a);
                     if self.is_ref(self.param_ty(fid, i)) {
@@ -738,10 +751,11 @@ impl Vm {
             }
 
             Op::MakeClosure { dst, func, captures } => {
-                let callee = self.prog.funcs[func as usize].clone();
+                let params = self.prog.funcs[func as usize].params.clone();
+                let ret = self.prog.funcs[func as usize].ret;
                 let caps: Vec<Slot> = captures.iter().map(|&c| r!(c)).collect();
-                let cap_tys: Vec<TypeId> = (callee.params.len() - caps.len()..callee.params.len())
-                    .map(|i| callee.params[i])
+                let cap_tys: Vec<TypeId> = (params.len() - caps.len()..params.len())
+                    .map(|i| params[i])
                     .collect();
                 // captures retained into the cell
                 for (&c, &t) in caps.iter().zip(cap_tys.iter()) {
@@ -749,13 +763,7 @@ impl Vm {
                         self.heap.retain(c);
                     }
                 }
-                let c = self.heap.alloc_closure(
-                    func,
-                    callee.params.clone(),
-                    callee.ret,
-                    caps,
-                    cap_tys,
-                )?;
+                let c = self.heap.alloc_closure(func, params, ret, caps, cap_tys)?;
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
