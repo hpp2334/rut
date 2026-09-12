@@ -29,18 +29,18 @@ growable, handle-shared sequence API — `push`/`pop`, indexing, `.len()`
 (n zeroed live elements), `Vec.from(arr)` (copy an `Array<T>`). There is
 no `Vec<T>(..)` type-call: class construction is always a method call
 (RFC 0010 §1). Element access (`v[i]`, `v[i] = x`, `for (x of v)`) and
-`.len()` lower through its `impl Slice<T> for Vec<T>` (below) to the
-fused `arrget`/`arrset` ops on the backing `buf` (RFC 0032 §1.1 R2) —
+`.len()` lower through its `impl Iter for Vec<T>` (below) to the fused
+`arrget`/`arrset` ops on the backing `buf` (RFC 0032 §1.1 R2) —
 never a per-element call; `push`/`pop` are ordinary rut methods compiled
 per instantiation (RFC 0013 §2).
 
 **`bytes` — the immutable binary primitive** (RFC 0004): a non-generic
 builtin cell holding a contiguous octet buffer, compared by content.
-Construction: `bytes(n)` (n zeroed octets), `bytes.from(a)` (copies an
-`Array<u8, N>` or `Vec<u8>`), and `v.freeze()` on a mutable `Vec<u8>`
-builder. Reading: `.len()`, `b[i]: u8` (bounds trap), `for (let b of b)`,
-`==`/`!=` by content. `string.encode() -> bytes` (UTF-8) and
-`bytes.decode() -> string` (UTF-8, lossy) bridge text and binary.
+Construction: `bytes(n)` (n zeroed octets), `bytes_from(a)` (copies an
+`Array<u8>`), and `freeze()` on a mutable `Vec<u8>` builder. Reading:
+`bytes_len(b): i32`, `b[i]: u8` (bounds trap), `for (let b of b)`,
+`==`/`!=` by content. `string_encode(s) -> bytes` (UTF-8) and
+`bytes_decode(b) -> string` (UTF-8, lossy) bridge text and binary.
 `Vec<u8>` itself is only a mutable builder; `bytes` is the binary type
 that crosses the host boundary (RFC 0023 §2).
 
@@ -53,24 +53,31 @@ One more builtin is type syntax plus a member:
   `[a, b, c] : Array<T>` (RFC 0007 §1) — it allocates the cell.
   Indexing, `for..of`, `.len()` (the runtime length via `arrlen`,
   RFC 0032 §1.1 R2); OOB traps. `Array<T>` has the builtin (native)
-  `Slice<T>` impl.
+  `Iter` impl.
 
-**`Slice<T>` — the sequence contract**: builtin and resolved by the
-compiler, not dispatchable by name. `x[i]` get/set, `x[i] = v`,
-`.len()`, and `for (x of s)` lower through the receiver's `Slice`
-impl. Implementations:
+**`Iter` — the sequence contract** (RFC 0012): a read-only trait with an
+associated element type — `type Target`, `len`, `get`. `x[i]`,
+`.len()`, and `for (x of s)` lower through the receiver's `Iter` impl.
+Implementations:
 
 - `Array<T>` — the builtin (native) impl, lowering to the fused
-  `arrget`/`arrset`/`arrlen` ops (RFC 0032 §1.1 R2).
-- `Vec<T>` — a real `impl Slice<T> for Vec<T>` in `std:collection`
-  (`len`/`get`/`set`); the compiler inlines the one-line accessors under
-  the concrete instantiation, so element access is the fused
-  `arrget`/`arrset` on the backing `buf`, not a per-element call.
-  `string`/`bytes` are **not** `Slice`: their indexing and iteration are
-  language primitives (`strcharat`/`bytesget`, RFC 0004).
+  `arrget`/`arrlen` ops (RFC 0032 §1.1 R2), `Target = T`.
+- `string` — the builtin (native) impl, `Target = char`; iteration and
+  indexing use `strcharat`/`strlen`.
+- `bytes` — the builtin (native) impl, `Target = u8`; `bytesget`.
+- `Vec<T>` — a real `impl Iter for Vec<T> { type Target = T; .. }` in
+  `std:collection` (`len`/`get`); the compiler inlines the one-line
+  accessors under the concrete instantiation, so element access is the
+  fused `arrget`/`arrset` on the backing `buf`, not a per-element call.
 
-The `dyn Slice<T>` object form (view cells over the owner, RFC 0016 §4)
-is the follow-up; today `Slice` is resolved statically per receiver.
+`Iter` is read-only: mutable element write (`a[i] = v`) stays on the
+concrete `Array`/`Vec` fused `arrset` path (the impl's optional `set`
+hook). `string`/`bytes` have **no method syntax** — their operations are
+free functions (`string_len`, `string_encode`, `bytes_len`,
+`bytes_decode`, `bytes_from`, `bytes_zeroed`, RFC 0012); `string_len`
+counts characters, `bytes_len` counts octets. The `dyn Iter` object form
+(RFC 0012 §2) is the follow-up; today `Iter` is resolved statically per
+receiver.
 
 `Vec<T>` and `Array<T>` implement `std:reflect`'s `Reflectable` and
 `Deserializable` for **every instantiation** via the builtin-impl

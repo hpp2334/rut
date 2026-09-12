@@ -6,7 +6,7 @@
 //   a.len()          the allocated length — the capacity
 //
 // Sequence syntax (`v[i]`, `v[i] = x`, `for (x of v)`) lowers through the
-// builtin `Slice<T>` contract, which resolves the `buf`/`len` backing
+// builtin `Iter` contract (RFC 0012), which resolves the `buf`/`len` backing
 // fields directly — never a per-element method call (RFC 0032 §1.1).
 // The builtin `Vec` natives are gone; this class is the sequence type.
 

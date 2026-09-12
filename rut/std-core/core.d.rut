@@ -2,7 +2,7 @@
 // itself ships — the `string`/`bytes` primitives' natives, the builtin
 // `Array`/`Option`/`Result` containers (RFC 0005), and the builtin
 // `Disposal` trait. `Vec<T>` is NOT here: it is std-lib rut code in
-// `std:collection`, over `Array<T>` with an `impl Slice<T> for Vec<T>`.
+// `std:collection`, over `Array<T>` with an `impl Iter for Vec<T>`.
 //
 // This file is the declarative form of the host's builtin tables: every
 // member here is a statically bound native (RFC 0032 §1.1 R2 — named

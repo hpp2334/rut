@@ -41,8 +41,8 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
 - **`dyn` — the object-type spelling.** A trait name in **type
   position** — parameter/return/local/field types, generic arguments — is
   written `dyn I`: `d: dyn Drawable`, `Vec<dyn Widget>`,
-  `Vec<dyn Hashable>`, `Array<dyn Slice<i32>, 4>` (the builtin slice
-  trait, RFC 0005);
+  `Vec<dyn Hashable>`, and `dyn Wrap<i32>` for a generic trait
+  instantiation (RFC 0012 §2.1);
   `dyn` composes wherever a type does. Positions that merely
   **name** a trait stay bare: the `trait` declaration itself,
   `impl` heads and `requires` lists, and generic bounds (`K requires
@@ -52,7 +52,7 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
   greppable dynamic dispatch (Rust's rule, adopted verbatim). A bare
   trait name where a type is expected is a compile error with an
   "insert `dyn`" suggestion. Every trait object type is **unsized**
-  — `dyn I` and `dyn Slice<T>` alike: the payload lives in a heap cell,
+  — `dyn I` and `dyn Iter` alike: the payload lives in a heap cell,
   and the `dyn`-typed slot stores the cell handle (RFC 0031 §4).
 - Traits declare **plain methods only** — no fields, no properties of
   any kind (there is no `get`/`set` syntax in rut at all, RFC 0010 §2).
@@ -121,14 +121,26 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
 - Traits are implemented **for classes and dataclasses** (RFC 0009)
   via impl blocks. A trait type is never a value's exact type; every trait
   object is a fat ref over a cell whose exact class or dataclass it
-  carries (RFC 0015 §6). Generic traits exist — the builtin
-  `Slice<T>` (RFC 0005) is the canonical example — and each
-  instantiation has its own vtable slots (`Slice<Point>` ≠
-  `Slice<string>`, RFC 0015 §6). Trait object
+  carries (RFC 0015 §6). **Generic traits** are supported — `trait Wrap<T>`
+  — and each type-argument list is its own instantiation with its own
+  trait id and vtable slots (`Wrap<i32>` ≠ `Wrap<string>`, RFC 0015 §6).
+  A generic instantiation is spelled in type position as `dyn Wrap<i32>`.
+  Trait object
   types are the **only** dynamic dispatch in rut: a
   reference plus a vtable lookup per call — every one spelled `dyn I` at
   the use site. No `any`, no dynamic field access, no `this` at all (the
   receiver is the explicit `self` parameter, RFC 0010 §2).
+- **Associated types** — a trait may declare `type` members, and each impl
+  binds them: `trait Iter { type Target; fn len(self) -> i32; fn get(self,
+  i: i32) -> Target; }` with `impl Iter for Vec<T> { type Target = T; .. }`.
+  The element type is a named member rather than a positional trait
+  argument, so one contract spans types with different element types
+  (`string → char`, `bytes → u8`, `Array<T>/Vec<T> → T`, RFC 0005). Within
+  a trait signature a bare associated name is the opaque per-impl type; the
+  `Self::Target` projection and `dyn Trait<Target = X>` object bindings are
+  the follow-up. The builtin read-only `Iter` contract (`type Target`,
+  `len`, `get`) is what `x[i]`, `.len()`, and `for (x of s)` lower through;
+  mutable element write stays on `Array`/`Vec`'s fused `arrset` path.
 - Heterogeneous collections are trait-typed vecs:
   `Vec<dyn Drawable>` — the replacement for both TS unions and the data-enums
   rut deliberately dropped (RFC 0006).
@@ -142,7 +154,7 @@ type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
 - **Grammar:** `expr is Type` at relational precedence,
   non-associative (RFC 0030 §2/§3). The RHS is a **naming position**
   like `impl`/`requires` lists (§2): a bare trait name or
-  instantiation (`x is Hashable`, `x is Slice<T>`) or a concrete type
+  instantiation (`x is Hashable`, `x is Wrap<i32>`) or a concrete type
   (`d is Circle`) — never `dyn`-prefixed. Every type test spells `is` —
   there is no `is<T>()` builtin.
 - **Two probes, one keyword.** Concrete RHS — exact-type test:
@@ -157,7 +169,6 @@ type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
   `Opaque` handle?"), folding to `true` on `Opaque`-typed receivers
   with the usual lint. On an `Opaque` receiver, `o is T` / `o is I`
   **see through the box**: they test the boxed value's type (RFC 0014).
-  Slices stay unnameable here as everywhere.
 - **No flow sensitivity:** `if (x is Hashable) { .. }` grants nothing
   — no narrowing, no widening of `x` to `dyn I` (a bound proves
   widening, RFC 0037 §3 rule 5). The keyword answers; it does not

@@ -2,7 +2,9 @@ import { Vec } from "std:collection";
 // RFC 0007 — literals & inference. Construction is a TYPE-CALL
 // (`Vec<f32>.zeroed(1024)`).
 // Arrays `[a, b, c]` are shared heap cells (`Array<T>`, non-growable);
-// growables are `Vec<T>`; `dyn Slice<T>` is the unsized slice object type.
+// growables are `Vec<T>`. Both implement `Iter` (RFC 0012), so `a[i]`,
+// `a.len()` and `for (x of a)` lower through the same contract. The
+// `dyn Iter<Target = T>` object form is a follow-up.
 
 import { Logger } from "std:log";
 
@@ -22,15 +24,12 @@ fn literals(name: string) -> unit {
     let mut arr = [1, 2, 3];         // Array<i32> — heap cell
     let mut zero: Vec<f32> = Vec<f32>.zeroed(1024);    // growable, zeroed, flat
     let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable (copies elements)
-    let slice: dyn Slice<i32> = arr;           // Array widens: VIEW cell over
-    let shared: dyn Slice<i32> = slice;        // a second handle — sharing
-    let view: dyn Slice<f32> = zero;           // Vec widens too — dispatches
-    view[0] = 9.0f32;                  // through the Vec; growth-
-                                        // safe, write is visible via zero[0]
+    arr[0] = 7;                      // static sequence write (fused arrset)
+    zero[0] = 9.0f32;                // through the Vec
     let bin = bytes(64);             // binary data: bytes
     let p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
 
-    log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={shared.len()}");
+    log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()}");
 }
 
 pub fn main() -> unit {
