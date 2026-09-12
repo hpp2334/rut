@@ -44,8 +44,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let sty = self.resolve_type_now(ty);
         let dname = self.ctx.datas.iter().find(|(_, d)| d.ty == sty).map(|(n, _)| *n);
         let Some(dname) = dname else {
-            self.ctx.err(sp, format!("`{}` is not a dataclass/class of this module", self.ctx.types.name(sty)));
-            return Err(());
+            return self.compile_struct_extern(sty, fields, sp);
         };
         let d = self.ctx.find_data(dname).cloned().unwrap();
         // classes have no outside literal (RFC 0010 §1); the Self {} literal
@@ -101,6 +100,64 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .into_iter()
             .map(|r| r.expect("checked: every field is initialized"))
             .collect();
+        let dst = self.new_reg(sty);
+        self.emit(Op::MakeRecord { dst, ty: sty, vals }, sp.lo);
+        Ok(sty)
+    }
+
+    /// Record literal for an IMPORTED dataclass (RFC 0035 §1): the layout is
+    /// the copied type descriptor; field names compare by string (separate
+    /// ASTs intern separately), and imported field defaults are not carried.
+    fn compile_struct_extern(
+        &mut self,
+        sty: TypeId,
+        fields: Vec<(IdentId, NodeHandle<AnyExpr>)>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let TyKind::Data { fields: desc } = self.ctx.types.kind(sty).clone() else {
+            self.ctx.err(sp, format!("`{}` is not a dataclass/class of this module", self.ctx.types.name(sty)));
+            return Err(());
+        };
+        if self.ctx.extern_classes.contains(&sty) {
+            self.ctx.err(sp, format!(
+                "classes have no instance literal — construct through a class method (`{}.new(..)`, RFC 0010 §1)",
+                self.ctx.types.name(sty)
+            ));
+            return Err(());
+        }
+        let n = desc.len();
+        let mut val_regs: Vec<Option<u16>> = vec![None; n];
+        for (fname, v) in &fields {
+            let fs = self.ctx.name(*fname).to_string();
+            let Some(fidx) = desc.iter().position(|f| f.name == fs) else {
+                self.ctx.err(self.ctx.ast.span(v.id()), format!(
+                    "`{}` has no field `{fs}`", self.ctx.types.name(sty)
+                ));
+                return Err(());
+            };
+            let fty = desc[fidx].ty;
+            let t = self.compile_expr(*v, Some(fty))?;
+            if t != fty {
+                self.ctx.err(self.ctx.ast.span(v.id()), format!(
+                    "field `{fs}` is `{}`, found `{}`",
+                    self.ctx.types.name(fty), self.ctx.types.name(t)
+                ));
+            }
+            val_regs[fidx] = Some(self.last_reg);
+        }
+        if let Some(missing) = desc
+            .iter()
+            .zip(&val_regs)
+            .find(|(_, r)| r.is_none())
+            .map(|(f, _)| f.name.clone())
+        {
+            self.ctx.err(sp, format!(
+                "imported record `{}` must initialize every field — `{missing}` is missing (imported field defaults are not carried, RFC 0035 §1)",
+                self.ctx.types.name(sty)
+            ));
+            return Err(());
+        }
+        let vals: Vec<u16> = val_regs.into_iter().map(|r| r.unwrap()).collect();
         let dst = self.new_reg(sty);
         self.emit(Op::MakeRecord { dst, ty: sty, vals }, sp.lo);
         Ok(sty)

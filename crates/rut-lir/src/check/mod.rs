@@ -103,6 +103,10 @@ pub struct Ctx<'a> {
     /// imported functions, bound before body compilation (RFC 0029 surface):
     /// name -> signature + the exporter's scope-qualified function id
     pub extern_fns: std::collections::HashMap<IdentId, ExternFn>,
+    /// imported types: name -> the exporter's scope-qualified type id
+    pub extern_types: std::collections::HashMap<IdentId, TypeId>,
+    /// imported types that are `class` (no outside record literal)
+    pub extern_classes: std::collections::HashSet<TypeId>,
     /// whether `import` is resolved by the driver (module loading on)
     pub allow_imports: bool,
     // instantiation queue
@@ -146,6 +150,8 @@ impl<'a> Ctx<'a> {
             lambda_sigs: std::collections::HashMap::new(),
             entries: Vec::new(),
             extern_fns: std::collections::HashMap::new(),
+            extern_types: std::collections::HashMap::new(),
+            extern_classes: std::collections::HashSet::new(),
             allow_imports: false,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
@@ -159,6 +165,24 @@ impl<'a> Ctx<'a> {
 
     pub fn extern_fn(&self, name: IdentId) -> Option<&ExternFn> {
         self.extern_fns.get(&name)
+    }
+
+    /// Bind an imported type name to the exporter's scope-qualified id.
+    pub fn add_extern_type(&mut self, name: IdentId, ty: TypeId, is_class: bool) {
+        self.extern_types.insert(name, ty);
+        if is_class {
+            self.extern_classes.insert(ty);
+        }
+    }
+
+    /// Import another module's type descriptors so `(scope, local)` ids
+    /// resolve for typechecking and layout (RFC 0035 §1).
+    pub fn import_types(
+        &mut self,
+        descs: Vec<RutType>,
+        blocks: &[(rut_core::ScopeId, u32)],
+    ) {
+        self.types.import_block(descs, blocks);
     }
 
     pub fn err(&mut self, span: Span, msg: impl Into<String>) {

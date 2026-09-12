@@ -58,10 +58,27 @@ pub struct SurfaceFn {
     pub local: u32,
 }
 
-/// The importable surface a module publishes (types/traits still to come).
+/// One exported type: its importable name and module-local id.
+#[derive(Clone, Debug, Default)]
+pub struct SurfaceType {
+    pub name: String,
+    /// local id within the exporter's own type block
+    pub local: u32,
+    /// records: a `class` (no outside literal) vs a `dataclass`
+    pub is_class: bool,
+}
+
+/// The importable surface a module publishes (traits still to come).
 #[derive(Clone, Debug, Default)]
 pub struct Surface {
     pub funcs: Vec<SurfaceFn>,
+    /// the exporter's non-boot type descriptors, verbatim; ids inside are
+    /// packed with the exporter's scope (RFC 0035 §1)
+    pub types: Vec<crate::types::RutType>,
+    /// scope -> local offset inside `types` for each block it carries
+    pub scope_blocks: Vec<(crate::id::ScopeId, u32)>,
+    /// exported (pub) type names
+    pub type_exports: Vec<SurfaceType>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -72,10 +72,21 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         let nfuncs = m.funcs.len() as u32;
         let nconsts = m.consts.len() as u32;
 
-        // where this module's own types land, and where its boot prefix ends
+        // where this module's OWN types land, and where its boot prefix ends
         let base = out.types.types.len() as u32;
         let m_boot = if m.types.packed { m.types.boot_len } else { boot as u32 };
         let packed = m.types.packed;
+        // imported blocks carried in the table belong to their own scopes and
+        // were appended by those modules — link only this module's own block
+        let own_base = if packed {
+            m.types
+                .scope_base
+                .get(m.types.scope as usize)
+                .copied()
+                .unwrap_or(m_boot)
+        } else {
+            m_boot
+        };
         if packed {
             scope_base.insert(m.types.scope, base);
         }
@@ -112,7 +123,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             }
         };
 
-        for t in m.types.types.iter().skip(m_boot as usize) {
+        for t in m.types.types.iter().skip(own_base as usize) {
             out.types.types.push(RutType {
                 name: t.name.clone(),
                 kind: remap_kind(&t.kind, &map),
@@ -147,10 +158,10 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
         // per-type vtables: keyed by type, slot-indexed, value = func id
         for (i, vt) in m.vtables.into_iter().enumerate() {
-            if (i as u32) < m_boot {
+            if (i as u32) < own_base {
                 continue;
             }
-            let gi = (base + (i as u32 - m_boot)) as usize;
+            let gi = (base + (i as u32 - own_base)) as usize;
             if gi >= out.vtables.len() {
                 out.vtables.resize(gi + 1, Vec::new());
             }

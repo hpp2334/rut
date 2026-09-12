@@ -239,17 +239,64 @@ impl TypeTable {
         base + local_of(id)
     }
 
-    /// Pack a dense index into this table's id space.
+    /// Pack a dense index into this table's id space. Handles multi-scope
+    /// tables: imported blocks keep the scope they were declared under.
     #[inline]
     fn id_for(&self, dense: u32) -> TypeId {
         if !self.packed {
             return dense;
         }
         if dense < self.boot_len {
-            pack(BOOT_SCOPE, dense)
-        } else {
-            pack(self.scope, dense - self.boot_len)
+            return pack(BOOT_SCOPE, dense);
         }
+        let s = self.scope_of_dense(dense);
+        let base = self.scope_base.get(s as usize).copied().unwrap_or(0);
+        pack(s, dense - base)
+    }
+
+    /// Which scope's block contains a non-boot dense index (the greatest
+    /// registered block start `<= dense`).
+    fn scope_of_dense(&self, dense: u32) -> ScopeId {
+        if dense < self.boot_len {
+            return BOOT_SCOPE;
+        }
+        let mut best = self.scope;
+        let mut best_base = 0u32;
+        for s in 0..self.scope_base.len() as u32 {
+            if s == BOOT_SCOPE as u32 {
+                continue;
+            }
+            let b = self.scope_base[s as usize];
+            if b <= dense && b >= best_base {
+                best = s as ScopeId;
+                best_base = b;
+            }
+        }
+        best
+    }
+
+    /// Import another module's type descriptors. `blocks` gives each scope's
+    /// block start as a local offset inside `descs`; the own block is moved to
+    /// the end so later [`TypeTable::intern`] calls append after the imports.
+    /// Must run before any own type is interned.
+    pub fn import_block(&mut self, descs: Vec<crate::types::RutType>, blocks: &[(ScopeId, u32)]) {
+        if !self.packed {
+            return;
+        }
+        let start = self.types.len() as u32;
+        self.types.extend(descs);
+        for (s, off) in blocks {
+            let need = *s as usize + 1;
+            if self.scope_base.len() < need {
+                self.scope_base.resize(need, 0);
+            }
+            self.scope_base[*s as usize] = start + *off;
+        }
+        let need = self.scope as usize + 1;
+        if self.scope_base.len() < need {
+            self.scope_base.resize(need, 0);
+        }
+        self.scope_base[self.scope as usize] = self.types.len() as u32;
     }
 
     pub fn intern(&mut self, ty: RutType) -> TypeId {

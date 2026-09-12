@@ -51,9 +51,17 @@ pub fn compile_program(
     let mut ctx = Ctx::new_scoped(&ast, scope);
     ctx.allow_imports = !imports.is_empty();
     for (dep_scope, surface) in imports {
+        // types first: descriptors must be in the table before any own type
+        // is interned (TypeTable::import_block)
+        ctx.import_types(surface.types.clone(), &surface.scope_blocks);
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(&f.name) {
                 ctx.add_extern_fn(id, rut_core::pack(*dep_scope, f.local), f.params.clone(), f.ret);
+            }
+        }
+        for t in &surface.type_exports {
+            if let Some(id) = ctx.ast.interner.lookup(&t.name) {
+                ctx.add_extern_type(id, rut_core::pack(*dep_scope, t.local), t.is_class);
             }
         }
     }
@@ -81,6 +89,18 @@ pub fn compile_program(
         if ctx.find_free_fn(name) {
             roots.push(Inst { key: FnKey::Free(name), subst: vec![] });
         }
+    }
+    // library surface: every non-generic `pub fn` is importable, so its body
+    // must be compiled even when nothing local calls it (RFC 0029 surface)
+    for (name, node) in ctx.fn_nodes.clone() {
+        let is_pub = ctx.exports.iter().any(|(n, _)| *n == ctx.name(name));
+        if !is_pub {
+            continue;
+        }
+        if !ctx.ast.fn_decl(node).generics.is_empty() {
+            continue;
+        }
+        roots.push(Inst { key: FnKey::Free(name), subst: vec![] });
     }
     for root in roots {
         if ctx.compile_queue(root).is_err() {
@@ -134,6 +154,35 @@ pub fn compile_program(
                     });
                 }
             }
+        }
+    }
+    // type surface: the whole non-boot block (so `(scope, local)` ids and
+    // field layouts resolve in an importer) + the exported names
+    {
+        let boot_len = ctx.types.boot_len as usize;
+        surface.types = ctx.types.types[boot_len..].to_vec();
+        for s in 0..ctx.types.scope_base.len() as u32 {
+            if s == rut_core::BOOT_SCOPE as u32 {
+                continue;
+            }
+            let base = ctx.types.scope_base[s as usize];
+            if base >= ctx.types.boot_len {
+                surface.scope_blocks.push((s as rut_core::ScopeId, base - ctx.types.boot_len));
+            }
+        }
+        for (name, d) in &ctx.datas {
+            surface.type_exports.push(rut_core::binary::SurfaceType {
+                name: ctx.name(*name).to_string(),
+                local: rut_core::local_of(d.ty),
+                is_class: d.kind == rut_lir::check::DataKind::Class,
+            });
+        }
+        for (name, e) in &ctx.enums {
+            surface.type_exports.push(rut_core::binary::SurfaceType {
+                name: ctx.name(*name).to_string(),
+                local: rut_core::local_of(e.ty),
+                is_class: false,
+            });
         }
     }
     let program = Program {

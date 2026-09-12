@@ -166,6 +166,17 @@ impl<'a> Ctx<'a> {
                             }
                             return self.mk_dyn(t.id);
                         }
+                        // imported type (RFC 0035 §1): the exporter's
+                        // scope-qualified id; link rebases it
+                        if let Some(&t) = self.extern_types.get(&name) {
+                            if !seg.generics.is_empty() {
+                                self.err(sp, format!("imported type `{n}` takes no generic arguments"));
+                            }
+                            if *is_dyn {
+                                self.err(sp, format!("`dyn {n}` — {n} is not a trait"));
+                            }
+                            return t;
+                        }
                         if n == "Self" {
                             self.err(sp, "`Self` is only valid inside a type body (RFC 0010 §1)");
                             return TY_I32;
