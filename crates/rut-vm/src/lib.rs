@@ -6,4 +6,6 @@ pub mod heap;
 pub mod interp;
 pub mod verify;
 
+pub(crate) mod arena;
+
 pub use heap::{Slot, Trap, TrapKind, Value};

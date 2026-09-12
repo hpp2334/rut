@@ -224,11 +224,11 @@ impl Vm {
                 let payload = self.value_in(inner, err)?;
                 self.heap.alloc_sum(ty, 1, Some(payload)).map_err(|t| t.msg)?
             }
-            (Value::Opaque(rc), TyKind::Opaque) => {
-                if !matches!(rc.data, CellData::OpaqueBox { .. }) {
+            (Value::Opaque(h), TyKind::Opaque) => {
+                let s = Slot { r: Some(h.ptr()) };
+                if !matches!(cell_of(s).data, CellData::OpaqueBox { .. }) {
                     return Err("not an Opaque box".to_string());
                 }
-                let s = Slot { r: Some(Rc::as_ptr(rc)) };
                 self.heap.retain(s); // the parameter register owns its reference
                 s
             }
@@ -377,7 +377,7 @@ impl Vm {
             }
             None => {
                 self.running = false;
-                let out = slot_to_value(val, ret_ty, &self.prog);
+                let out = slot_to_value(val, ret_ty, &self.prog, &self.heap);
                 if is_ref {
                     self.heap.release(val);
                 }
@@ -1219,7 +1219,7 @@ impl Vm {
 
 const TY_ANY: TypeId = u32::MAX;
 
-fn slot_to_value(v: Slot, ty: TypeId, prog: &Program) -> Value {
+fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) -> Value {
     use rut_core::types::TyKind;
     match prog.types.kind(ty) {
         TyKind::Prim(PrimTy::F32) | TyKind::Prim(PrimTy::F64) => Value::F64(unsafe { v.f }),
@@ -1228,7 +1228,7 @@ fn slot_to_value(v: Slot, ty: TypeId, prog: &Program) -> Value {
         TyKind::Prim(_) | TyKind::Unit => Value::I64(unsafe { v.i }),
         TyKind::Str => Value::Str(cell_of(v).as_str().to_string()),
         // Vec<u8> is the one sequence that crosses (RFC 0023 §2)
-        TyKind::Vec { elem } => {
+        TyKind::Vec { elem: _ } => {
             let cell = cell_of(v);
             if let CellData::Vec { items, .. } = &cell.data {
                 Value::Bytes(items.borrow().iter().map(|s| unsafe { s.i } as u8).collect())
@@ -1241,7 +1241,7 @@ fn slot_to_value(v: Slot, ty: TypeId, prog: &Program) -> Value {
             match &cell.data {
                 CellData::Sum { tag: 1, .. } => Value::Opt(None),
                 CellData::Sum { tag: _, payload } => Value::Opt(Some(Box::new(
-                    slot_to_value(payload.expect("Some without payload"), *elem, prog),
+                    slot_to_value(payload.expect("Some without payload"), *elem, prog, heap),
                 ))),
                 _ => Value::Opt(None),
             }
@@ -1253,24 +1253,22 @@ fn slot_to_value(v: Slot, ty: TypeId, prog: &Program) -> Value {
                     payload.expect("Err without payload"),
                     *err,
                     prog,
+                    heap,
                 )))),
                 CellData::Sum { tag: _, payload } => Value::Res(Ok(Box::new(slot_to_value(
                     payload.expect("Ok without payload"),
                     *ok,
                     prog,
+                    heap,
                 )))),
                 _ => Value::Res(Ok(Box::new(Value::Unit))),
             }
         }
-        // an Opaque box crosses as its handle: clone the Rc (the Value
-        // owns that reference); the pending reference stays with the slot
-        // for do_ret to release — balanced
+        // an Opaque box crosses as its handle: the handle owns a fresh
+        // arena reference; the pending slot reference is released by do_ret
         TyKind::Opaque => {
             let p = (unsafe { v.r }).expect("opaque slot without a cell");
-            let rc = unsafe { std::rc::Rc::from_raw(p) };
-            let out = rc.clone();
-            std::mem::forget(rc);
-            Value::Opaque(out)
+            Value::Opaque(heap.opaque_handle(p))
         }
         _ => Value::I64(unsafe { v.i }),
     }

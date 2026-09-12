@@ -6,11 +6,13 @@
 //! arena is a later milestone; the observable contract — deterministic
 //! destruction, identity, `Trap::OutOfMemory` before any write — holds).
 
+use crate::arena::{release_cell, Arena};
 use rut_core::types::{TypeId, TypeTable, TyKind};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::mem;
 use std::rc::Rc;
+
+pub use crate::arena::OpaqueRef;
 
 // ---- traps (RFC 0034 §2) ----
 
@@ -73,8 +75,8 @@ pub enum Value {
     /// `Result<T, E>` — payloads converted in both arms
     Res(Result<Box<Value>, Box<Value>>),
     /// an `Opaque` box (RFC 0014) — the one cell the host may hold and
-    /// pass back; refcounted by the handle itself
-    Opaque(std::rc::Rc<CellVal>),
+    /// pass back; the handle owns one arena reference
+    Opaque(OpaqueRef),
 }
 
 impl PartialEq for Value {
@@ -90,7 +92,7 @@ impl PartialEq for Value {
             (Value::Opt(a), Value::Opt(b)) => a == b,
             (Value::Res(a), Value::Res(b)) => a == b,
             // boxes compare by identity — the payload's type is erased
-            (Value::Opaque(a), Value::Opaque(b)) => std::rc::Rc::ptr_eq(a, b),
+            (Value::Opaque(a), Value::Opaque(b)) => a == b,
             _ => false,
         }
     }
@@ -171,8 +173,11 @@ impl std::fmt::Debug for Slot {
 pub struct CellVal {
     pub ty: TypeId,
     pub data: CellData,
-    acct: Option<Rc<HeapAcct>>,
-    bytes: u32,
+    /// intrusive strong count (RFC 0039 self-managed arena); `u32::MAX`
+    /// marks an immortal enum singleton
+    pub(crate) refs: Cell<u32>,
+    /// accounted bytes, refunded on release
+    pub(crate) bytes: u32,
 }
 
 pub enum CellData {
@@ -195,14 +200,6 @@ pub enum CellData {
         captures: Vec<Slot>,
         cap_tys: Vec<TypeId>,
     },
-}
-
-impl Drop for CellVal {
-    fn drop(&mut self) {
-        if let Some(a) = &self.acct {
-            a.used.set(a.used.get().saturating_sub(self.bytes as u64));
-        }
-    }
 }
 
 impl CellVal {
@@ -290,6 +287,7 @@ pub struct HeapAcct {
 
 pub struct Heap {
     acct: Rc<HeapAcct>,
+    arena: Rc<Arena>,
     /// enum member singletons (RFC 0016 §1)
     singletons: RefCell<HashMap<(TypeId, u32), *const CellVal>>,
 }
@@ -300,6 +298,7 @@ impl Heap {
     pub fn new(limit: Option<u64>) -> Heap {
         Heap {
             acct: Rc::new(HeapAcct { used: Cell::new(0), peak: Cell::new(0), limit: Cell::new(limit) }),
+            arena: Rc::new(Arena::new()),
             singletons: RefCell::new(HashMap::new()),
         }
     }
@@ -350,10 +349,12 @@ impl Heap {
         let cell = CellVal {
             ty,
             data,
-            acct: Some(self.acct.clone()),
+            refs: Cell::new(1),
             bytes: bytes.min(u32::MAX as u64) as u32,
         };
-        Ok(Slot { r: Some(Rc::into_raw(Rc::new(cell))) })
+        let p = self.arena.alloc_slot();
+        unsafe { p.write(cell) };
+        Ok(Slot { r: Some(p as *const CellVal) })
     }
 
     pub fn alloc_str(&self, s: String) -> Result<Slot, Trap> {
@@ -415,37 +416,48 @@ impl Heap {
         let cell = CellVal {
             ty,
             data: CellData::Enum { member },
-            acct: None,
+            refs: Cell::new(u32::MAX),
             bytes: 0,
         };
-        let raw = Rc::into_raw(Rc::new(cell));
-        self.singletons.borrow_mut().insert((ty, member), raw);
-        // keep it alive forever: leak one Rc reference
-        mem::forget(unsafe { Rc::from_raw(raw) }.clone());
-        Ok(Slot { r: Some(raw) })
+        let p = self.arena.alloc_slot();
+        unsafe { p.write(cell) };
+        self.singletons.borrow_mut().insert((ty, member), p as *const CellVal);
+        Ok(Slot { r: Some(p as *const CellVal) })
     }
 
     // ---- ref discipline (RFC 0016 §5) ----
 
-    /// rc += 1 (immortal singletons have no counter pressure: their Rc is
-    /// pinned, so clone never frees)
+    /// rc += 1 (immortal singletons saturate at `u32::MAX`).
     pub fn retain(&self, s: Slot) {
         let Some(p) = (unsafe { s.r }) else { return };
         unsafe {
-            let rc = Rc::from_raw(p);
-            let dup = rc.clone();
-            mem::forget(rc);
-            mem::forget(dup);
+            let c = &*p;
+            c.refs.set(c.refs.get().saturating_add(1));
         }
     }
 
-    /// rc -= 1; at zero the cell drops (fields release recursively —
-    /// deterministic destructors, RFC 0016 §3)
+    /// rc -= 1; at zero the cell is dropped and its slot recycled. Note the
+    /// current ref discipline does not recursively release a cell's child
+    /// slots on drop (matching the previous `Rc` behaviour).
     pub fn release(&self, s: Slot) {
         let Some(p) = (unsafe { s.r }) else { return };
         unsafe {
-            drop(Rc::from_raw(p));
+            let c = &*p;
+            let n = c.refs.get();
+            if n == u32::MAX {
+                return; // immortal singleton
+            }
+            if n <= 1 {
+                release_cell(&self.arena, &self.acct, p as *mut CellVal);
+            } else {
+                c.refs.set(n - 1);
+            }
         }
+    }
+
+    /// Build an owning host handle for an `Opaque` cell (retains once).
+    pub fn opaque_handle(&self, p: *const CellVal) -> OpaqueRef {
+        OpaqueRef::new(&self.arena, &self.acct, p)
     }
 
     /// Deep release of a slot by static type — used when dropping frames.
