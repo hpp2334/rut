@@ -69,7 +69,10 @@ pub union Slot {
     pub f: f64,
     pub b: bool,
     pub c: char,
-    pub r: Option<*const CellVal>,
+    /// cell handle; null = "no cell". A raw pointer (not `Option<*const _>`)
+    /// keeps `Slot` 8 bytes — `Option<*const T>` has no null niche and would
+    /// double the slot (and every register file / cell payload with it).
+    pub r: *const CellVal,
 }
 
 impl Slot {
@@ -95,11 +98,16 @@ impl Slot {
         char::from_u32(unsafe { self.i } as u32).unwrap_or('\0')
     }
     pub fn null() -> Slot {
-        Slot { r: None }
+        Slot { r: std::ptr::null() }
     }
     /// SAFETY: caller guarantees the slot is a ref slot (verifier-checked).
     pub unsafe fn get_ref(&self) -> Option<*const CellVal> {
-        unsafe { self.r }
+        let r = unsafe { self.r };
+        if r.is_null() {
+            None
+        } else {
+            Some(r)
+        }
     }
     pub fn same_ref(a: Slot, b: Slot) -> bool {
         unsafe { a.r == b.r } // cell identity (RFC 0012 §4)
@@ -111,3 +119,8 @@ impl std::fmt::Debug for Slot {
         write!(f, "slot({:#x})", unsafe { self.i as u64 })
     }
 }
+
+/// A slot is exactly one machine word (RFC 0015 §5). Guarded at compile
+/// time: `Option<*const T>` has no null niche, so wrapping `r` in `Option`
+/// silently doubled every register file and cell payload.
+const _: () = assert!(std::mem::size_of::<Slot>() == 8);

@@ -102,7 +102,7 @@ impl Heap {
         };
         let p = self.arena.alloc_slot();
         unsafe { p.write(cell) };
-        Ok(Slot { r: Some(p as *const CellVal) })
+        Ok(Slot { r: p as *const CellVal })
     }
 
     pub fn alloc_str(&self, s: String) -> Result<Slot, Trap> {
@@ -172,7 +172,7 @@ impl Heap {
     /// place identity quietly behaves as value (RFC 0012 §4).
     pub fn enum_member(&self, ty: TypeId, member: u32) -> Result<Slot, Trap> {
         if let Some(p) = self.singletons.borrow().get(&(ty, member)) {
-            return Ok(Slot { r: Some(*p) });
+            return Ok(Slot { r: *p });
         }
         // account once, never on drop — immortal
         self.charge(CELL_OVERHEAD + 8)?;
@@ -185,14 +185,17 @@ impl Heap {
         let p = self.arena.alloc_slot();
         unsafe { p.write(cell) };
         self.singletons.borrow_mut().insert((ty, member), p as *const CellVal);
-        Ok(Slot { r: Some(p as *const CellVal) })
+        Ok(Slot { r: p as *const CellVal })
     }
 
     // ---- ref discipline (RFC 0016 §5) ----
 
     /// rc += 1 (immortal singletons saturate at `u32::MAX`).
     pub fn retain(&self, s: Slot) {
-        let Some(p) = (unsafe { s.r }) else { return };
+        let p = unsafe { s.r };
+        if p.is_null() {
+            return;
+        }
         unsafe {
             let c = &*p;
             c.refs.set(c.refs.get().saturating_add(1));
@@ -203,7 +206,10 @@ impl Heap {
     /// current ref discipline does not recursively release a cell's child
     /// slots on drop (matching the previous `Rc` behaviour).
     pub fn release(&self, s: Slot) {
-        let Some(p) = (unsafe { s.r }) else { return };
+        let p = unsafe { s.r };
+        if p.is_null() {
+            return;
+        }
         unsafe {
             let c = &*p;
             let n = c.refs.get();

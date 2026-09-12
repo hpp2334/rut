@@ -341,9 +341,9 @@ impl CellVal {
 }
 /// SAFETY: `s` must hold a live cell pointer.
 pub unsafe fn cell<'a>(s: Slot) -> &'a CellVal {
-    unsafe { &*s.r.unwrap_unchecked() }
+    unsafe { &*s.r }
 }
 
 pub fn cell_of(s: Slot) -> &'static CellVal {
-    unsafe { &*(s.r.unwrap() as *const CellVal) }
+    unsafe { &*s.r }
 }

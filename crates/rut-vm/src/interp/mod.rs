@@ -336,7 +336,7 @@ impl Vm {
                 self.heap.alloc_sum(ty, 1, Some(payload)).map_err(|t| t.msg)?
             }
             (Value::Opaque(h), TyKind::Opaque) => {
-                let s = Slot { r: Some(h.ptr()) };
+                let s = Slot { r: h.ptr() };
                 if !matches!(cell_of(s).data, CellData::OpaqueBox { .. }) {
                     return Err("not an Opaque box".to_string());
                 }

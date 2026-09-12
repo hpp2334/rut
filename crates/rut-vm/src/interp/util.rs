@@ -50,7 +50,8 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
         // an Opaque box crosses as its handle: the handle owns a fresh
         // arena reference; the pending slot reference is released by do_ret
         TyKind::Opaque => {
-            let p = (unsafe { v.r }).expect("opaque slot without a cell");
+            let p = unsafe { v.r };
+            debug_assert!(!p.is_null(), "opaque slot without a cell");
             Value::Opaque(heap.opaque_handle(p))
         }
         _ => Value::I64(unsafe { v.i }),
