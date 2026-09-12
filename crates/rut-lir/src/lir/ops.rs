@@ -46,7 +46,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let dst = self.new_reg(TY_BOOL);
                 match self.ctx.types.kind(ty).clone() {
                     TyKind::Prim(_) => {
-                        self.emit(Op::Cmp { op: CmpOp::Eq, ty, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                        let cop = if eq { CmpOp::Eq } else { CmpOp::Ne };
+                        self.emit(Op::Cmp { op: cop, ty, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                     }
                     TyKind::Str => {
                         self.emit(Op::StrCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);

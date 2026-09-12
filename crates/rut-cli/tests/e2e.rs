@@ -288,6 +288,28 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn ne_on_primitives_is_not_eq() {
+    // `!=` on numbers used to compile to `CmpOp::Eq` — silently the
+    // opposite comparison. It flowed everywhere: `while (len % 64 != 56)`
+    // never entered its body.
+    let src = r#"
+pub fn main() -> unit {
+    print(f"a={1 != 56}");
+    print(f"b={1 == 56}");
+    print(f"c={2 != 2}");
+    if (3 != 4) { print("differs"); } else { print("equal"); }
+    let mut m: Vec<u8> = Vec();
+    m.push(0x80);
+    while (m.len() % 64 != 56) { m.push(0); }
+    print(f"padded={m.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(lines, vec!["a=true", "b=false", "c=false", "differs", "padded=56"]);
+    assert_eq!(trap, None);
+}
+
+#[test]
 fn heap_budget_traps_before_the_write() {
     // RFC 0040 §1: OutOfMemory leaves the heap byte-identical — a tiny
     // budget fails the Vec allocation cleanly
