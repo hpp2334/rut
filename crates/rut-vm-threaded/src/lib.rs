@@ -29,6 +29,8 @@
 mod api;
 pub use api::{tag_of, Flow, Machine, Table, ThreadOut, NTAGS};
 
+pub mod dispatch_bench;
+
 #[cfg(rut_threaded)]
 mod native;
 #[cfg(rut_threaded)]
