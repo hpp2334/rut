@@ -28,11 +28,13 @@ growable, handle-shared sequence API — `push`/`pop`, indexing, `.len()`
 `Vec.new()` (empty), `Vec.with_capacity(n)` (reserve), `Vec.zeroed(n)`
 (n zeroed live elements), `Vec.from(arr)` (copy an `Array<T>`). There is
 no `Vec<T>(..)` type-call: class construction is always a method call
-(RFC 0010 §1). Element access (`v[i]`, `v[i] = x`, `for (x of v)`) and
-`.len()` lower through its `impl Iter for Vec<T>` (below) to the fused
-`arrget`/`arrset` ops on the backing `buf` (RFC 0032 §1.1 R2) —
-never a per-element call; `push`/`pop` are ordinary rut methods compiled
-per instantiation (RFC 0013 §2).
+(RFC 0010 §1). Element access (`v[i]`, `v[i] = x`, `.len()`) and
+`for (x of v)` lower through its `impl Index<T> for Vec<T>` (below) to
+the fused `arrget`/`arrset` ops on the backing `buf` (RFC 0032 §1.1 R2)
+— never a per-element call; `push`/`pop` are ordinary rut methods
+compiled per instantiation (RFC 0013 §2). A cursor,
+`VecIter<T>` (`impl Iterator<T>`), backs `for (x of v.iter())` — `Vec`
+is rut code, so it ships its own iterator.
 
 **`bytes` — the immutable binary primitive** (RFC 0004): a non-generic
 builtin cell holding a contiguous octet buffer, compared by content.
@@ -53,31 +55,38 @@ One more builtin is type syntax plus a member:
   `[a, b, c] : Array<T>` (RFC 0007 §1) — it allocates the cell.
   Indexing, `for..of`, `.len()` (the runtime length via `arrlen`,
   RFC 0032 §1.1 R2); OOB traps. `Array<T>` has the builtin (native)
-  `Iter` impl.
+  `Index` impl.
 
-**`Iter` — the sequence contract** (RFC 0012): a read-only trait with an
-associated element type — `type Target`, `len`, `get`. `x[i]`,
-`.len()`, and `for (x of s)` lower through the receiver's `Iter` impl.
+**`Index<T>` — the random-access contract** (RFC 0012): a `len` +
+`get`/`set` interface whose element is the interface's **type argument**
+(`Index<T>`, not an associated type). `x[i]`, `x[i] = v`, `.len()`, and
+`for (x of s)` lower through the receiver's `Index` impl.
 Implementations:
 
 - `Array<T>` — the builtin (native) impl, lowering to the fused
-  `arrget`/`arrlen` ops (RFC 0032 §1.1 R2), `Target = T`.
-- `string` — the builtin (native) impl, `Target = char`; iteration and
+  `arrget`/`arrset`/`arrlen` ops (RFC 0032 §1.1 R2), element `T`.
+- `string` — the builtin (native) impl, element `char`; iteration and
   indexing use `strcharat`/`strlen`.
-- `bytes` — the builtin (native) impl, `Target = u8`; `bytesget`.
-- `Vec<T>` — a real `impl Iter for Vec<T> { type Target = T; .. }` in
-  `std:collection` (`len`/`get`); the compiler inlines the one-line
-  accessors under the concrete instantiation, so element access is the
-  fused `arrget`/`arrset` on the backing `buf`, not a per-element call.
+- `bytes` — the builtin (native) impl, element `u8`; `bytesget`.
+- `Vec<T>` — a real `impl Index<T> for Vec<T>` in `std:collection`
+  (`len`/`get`/`set`); the compiler inlines the one-line accessors under
+  the concrete instantiation, so element access is the fused
+  `arrget`/`arrset` on the backing `buf`, not a per-element call.
 
-`Iter` is read-only: mutable element write (`a[i] = v`) stays on the
-concrete `Array`/`Vec` fused `arrset` path (the impl's optional `set`
-hook). `string`/`bytes` have **no method syntax** — their operations are
+`string`/`bytes` have **no method syntax** — their operations are
 free functions (`string_len`, `string_encode`, `bytes_len`,
 `bytes_decode`, `bytes_from`, `bytes_zeroed`, RFC 0012); `string_len`
-counts characters, `bytes_len` counts octets. The `dyn Iter` object form
-(RFC 0012 §2) is the follow-up; today `Iter` is resolved statically per
-receiver.
+counts characters, `bytes_len` counts octets.
+
+**`Iterator<T>` — the cursor contract** (RFC 0012): `next(mut self) ->
+Option<T>` (no `len`). `for (x of it)` lowers to `next` until `None`.
+The compiler inlines small `next` bodies at the use site, so a
+generic cursor (`VecIter<T>`) needs no vtable entry. Indexable
+sequences may also be iterated directly through `Index` (the fast
+indexed lowering). Both contracts are resolved statically per receiver
+today; the interface-object form (`Vec<Index<T>>`, `Vec<Iterator<T>>`)
+is the follow-up — an interface name in type position *is* the object
+type (there is no `dyn`).
 
 `Vec<T>` and `Array<T>` implement `std:reflect`'s `Reflectable` and
 `Deserializable` for **every instantiation** via the builtin-impl
@@ -91,7 +100,7 @@ deliberately absent from it: containers are **library types**, provided by
 `examples/host/my_map.rs` (implementation).
 
 `==` on `Option<T>` / `Result<T, E>` is a **compile error**: there is no
-element-wise equality in v1 (no `Equal` trait — RFC 0012 §4; `==`
+element-wise equality in v1 (no `Equal` interface — RFC 0012 §4; `==`
 compares primitives by value and everything else by cell identity, which
 is almost never what an Option comparison wants). Compare structurally:
 `when`, `.is_some()` / `.is_ok()`, or the payload (`.value == d`).
