@@ -199,16 +199,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_UNIT);
             }
             "print" => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "print(s) takes one string");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_STR))?;
-                if t != TY_STR {
-                    self.ctx.err(sp, format!("print takes a `string`, found `{}`", self.ctx.types.name(t)));
-                }
-                self.emit(Op::CallNat { nat: Nat::Print, recv: None, args: vec![self.last_reg], dst: None }, sp.lo);
-                return Ok(TY_UNIT);
+                self.ctx.err(sp, "`print` was removed — import a logger (`import { log } from \"std:log\"`)");
+                return Err(());
             }
             "string_len" => {
                 if args.len() != 1 {

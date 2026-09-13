@@ -1,8 +1,5 @@
 //! the `rut` binary — run / dump (RFC 0041 §2).
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let Some(cmd) = args.get(1).map(|s| s.as_str()) else {
@@ -72,9 +69,7 @@ fn run(path: &str, fuel: Option<u64>) {
         eprintln!("verify: {e}");
         std::process::exit(1);
     }
-    let hooks = rut_vm::interp::HostHooks {
-        print: Some(Rc::new(RefCell::new(|s: &str| println!("{s}")))),
-    };
+    let hooks = rut_vm::interp::HostHooks::default();
     let limits = rut_vm::interp::Limits {
         fuel,
         heap_limit_bytes: Some(64 * 1024 * 1024),
@@ -87,6 +82,8 @@ fn run(path: &str, fuel: Option<u64>) {
             std::process::exit(1);
         }
     };
+    // the host half of `std:log` (RFC 0022/0026)
+    rut_std::logger::install_std_log(&mut vm, |msg| println!("{msg}"));
     match vm.call("main", &[]) {
         Ok(_) => {}
         Err(t) => {

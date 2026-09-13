@@ -1,3 +1,5 @@
+import { log } from "std:log";
+
 // binary-trees — allocation churn. Nodes are recursive dataclasses
 // (RFC 0009 recursive shapes): `make` builds the tree bottom-up with
 // children held as shared handles (RFC 0011 §1), and the whole tree drops
@@ -32,5 +34,5 @@ fn count(n: Node) -> i32 {
 
 pub fn main() -> unit {
     let root = make(14, 1);
-    print(f"CHECKSUM {count(root)}");
+    log(f"CHECKSUM {count(root)}");
 }

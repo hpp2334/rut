@@ -24,7 +24,7 @@ fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(heap),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks { print: None }).unwrap()
+    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap()
 }
 
 fn hex(b: &[u8]) -> String {

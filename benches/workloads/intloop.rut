@@ -1,3 +1,5 @@
+import { log } from "std:log";
+
 // intloop — integer hot loop: wrapping add/mul, loop counter, compare/branch.
 // Scale: 5_000_000 iterations. Canonical reference: 628038624.
 
@@ -6,5 +8,5 @@ pub fn main() -> unit {
     for (let i = 0; i < 5000000; i += 1) {
         s = (s &+ (i &* 3)) &- 1;
     }
-    print(f"CHECKSUM {s}");
+    log(f"CHECKSUM {s}");
 }

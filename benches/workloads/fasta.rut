@@ -1,3 +1,5 @@
+import { log } from "std:log";
+
 import { Vec } from "std:collection";
 // fasta — LCG-driven nucleotide string building (the benchmark-game
 // string churn). rut strings are immutable, so this exercises repeated
@@ -29,5 +31,5 @@ fn fasta(n: i32) -> string {
 }
 
 pub fn main() -> unit {
-    print(f"CHECKSUM {fasta(10000)}");
+    log(f"CHECKSUM {fasta(10000)}");
 }

@@ -379,6 +379,7 @@ dependencies = [
  "rut-driver",
  "rut-lexer",
  "rut-parser",
+ "rut-std",
  "rut-vm",
 ]
 
@@ -432,6 +433,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rut-std"
+version = "0.1.0"
+dependencies = [
+ "rut-core",
+ "rut-vm",
+]
+
+[[package]]
 name = "rut-vm"
 version = "0.1.0"
 dependencies = [
@@ -445,6 +454,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-parser",
+ "rut-std",
  "rut-vm",
 ]
 

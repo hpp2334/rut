@@ -640,8 +640,8 @@ fn repr(b: u8) -> Result<Repr, String> {
 
 fn nat(b: u8) -> Result<Nat, String> {
     Ok(match b {
-        0 => Nat::Print, 1 => Nat::Str, 2 => Nat::Concat, 3 => Nat::StrLen,
-        4 => Nat::ArrLen,
+        0 => Nat::Str, 1 => Nat::Concat, 2 => Nat::StrLen,
+        3 => Nat::ArrLen,
         _ => return Err("bad nat tag".into()),
     })
 }

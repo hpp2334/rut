@@ -36,8 +36,6 @@ pub enum BitOp {
 /// the host print sink).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Nat {
-    /// host print sink (RFC 0028: uninstalled sink is a silent no-op)
-    Print,
     /// per-type formatting (the `f""` desugaring, RFC 0007 §2)
     Str,
     /// str.concat(parts...)

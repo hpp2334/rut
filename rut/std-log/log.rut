@@ -1,17 +1,28 @@
 // std-log/log.rut — the logger (RFC 0028 §std:log).
 //
-// `Logger`/output go through the host function `emit` from the native
-// module `rt:log` (RFC 0022/0026); the embedder installs the actual sink.
-// Because `std:log` is an ordinary module, a host or user may mount their
-// own in its place.
-import { emit } from "rt:log";
+// The primitives are the host functions `create_logger`/`logger_log` from
+// the native module `rt:log` (RFC 0022/0026): the host owns the logger's
+// layout, so rut only ever holds an `Opaque` handle. `Logger` is an
+// ordinary rut class over that handle; a host or user may mount their own
+// `std:log` in its place.
+import { create_logger, logger_log } from "rt:log";
 
-// One-off output at Info.
-pub fn log(msg: string) -> unit {
-    emit("app", 1, msg);
+pub class Logger {
+    internal: Opaque;
+
+    pub fn new(name: string) -> Self {
+        return Self { internal: create_logger(name) };
+    }
+
+    pub fn debug(self, msg: string) -> unit { logger_log(self.internal, 0, msg); }
+    pub fn info(self, msg: string) -> unit { logger_log(self.internal, 1, msg); }
+    pub fn warn(self, msg: string) -> unit { logger_log(self.internal, 2, msg); }
+    pub fn error(self, msg: string) -> unit { logger_log(self.internal, 3, msg); }
+    pub fn log(self, msg: string) -> unit { logger_log(self.internal, 1, msg); }
 }
 
-pub fn debug(name: string, msg: string) -> unit { emit(name, 0, msg); }
-pub fn info(name: string, msg: string) -> unit { emit(name, 1, msg); }
-pub fn warn(name: string, msg: string) -> unit { emit(name, 2, msg); }
-pub fn error(name: string, msg: string) -> unit { emit(name, 3, msg); }
+// One-off output at Info (a convenience free function; the `Logger` class
+// above is the structured form).
+pub fn log(msg: string) -> unit {
+    logger_log(create_logger("app"), 1, msg);
+}

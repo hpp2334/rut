@@ -1,3 +1,5 @@
+import { log } from "std:log";
+
 import { Vec } from "std:collection";
 // quicksort — deterministic LCG input, in-place Lomuto quicksort, rolled
 // checksum. Scale: n = 100_000.
@@ -40,5 +42,5 @@ pub fn main() -> unit {
     for (let i = 0; i < n; i += 1) {
         h = (h &* 31) &+ xs[i];
     }
-    print(f"CHECKSUM {h}");
+    log(f"CHECKSUM {h}");
 }

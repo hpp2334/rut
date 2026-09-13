@@ -1,3 +1,5 @@
+import { log } from "std:log";
+
 // mandelbrot — escape-time iteration count over a grid.
 // Scale: 400 x 300, max_iter = 500. Integer checksum (exact for f64).
 
@@ -36,5 +38,5 @@ fn mandelbrot(
 
 pub fn main() -> unit {
     let checksum = mandelbrot(-2.0, -1.2, 0.8, 1.2, 100, 75, 200);
-    print(f"CHECKSUM {checksum}");
+    log(f"CHECKSUM {checksum}");
 }

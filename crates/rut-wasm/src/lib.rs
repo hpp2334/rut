@@ -177,21 +177,12 @@ pub extern "C" fn rut_run(
         return envelope(json.as_bytes());
     }
     *OUTPUT.lock().unwrap() = Some(Vec::new());
-    let hooks = rut_vm::interp::HostHooks {
-        print: Some(Rc::new(RefCell::new(|s: &str| {
-            if let Ok(mut g) = OUTPUT.lock() {
-                if let Some(v) = g.as_mut() {
-                    v.push(s.to_string());
-                }
-            }
-        }))),
-    };
     let limits = rut_vm::interp::Limits {
         fuel: if fuel == 0 { None } else { Some(fuel) },
         heap_limit_bytes: if heap_bytes == 0 { None } else { Some(heap_bytes) },
         interrupt_every: 1024,
     };
-    let mut vm = match rut_vm::interp::Vm::new(Rc::new(prog), &limits, hooks) {
+    let mut vm = match rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()) {
         Ok(vm) => vm,
         Err(t) => {
             json.push_str("{\"output\":[],\"trap\":");
@@ -200,6 +191,13 @@ pub extern "C" fn rut_run(
             return envelope(json.as_bytes());
         }
     };
+    rut_std::logger::install_std_log(&mut vm, |s| {
+        if let Ok(mut g) = OUTPUT.lock() {
+            if let Some(v) = g.as_mut() {
+                v.push(s.to_string());
+            }
+        }
+    });
     let (trap, fuel_used) = match vm.call("main", &[]) {
         Ok(_) => (None, vm.fuel_used),
         Err(t) => (Some(t.name()), vm.fuel_used),

@@ -220,6 +220,11 @@ impl Heap {
         OpaqueRef::new(&self.arena, &self.acct, p)
     }
 
+    /// The `(payload, payload type)` inside an `Opaque` handle (RFC 0014).
+    pub fn opaque_inner(&self, h: &OpaqueRef) -> Option<(Slot, TypeId)> {
+        cell_of(Slot { r: h.ptr() }).as_opaque()
+    }
+
     /// Deep release of a slot by static type — used when dropping frames.
     pub fn release_typed(&self, s: Slot, ty: TypeId, table: &TypeTable) {
         if table.is_ref(ty) {

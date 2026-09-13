@@ -1,3 +1,5 @@
+import { log } from "std:log";
+
 import { Vec } from "std:collection";
 // sieve — Sieve of Eratosthenes over a flat Vec<u8>.
 // Classic benchmark-game style: fixed scale, one checksum line.
@@ -24,5 +26,5 @@ fn sieve(limit: i32) -> Vec<i32> {
 
 pub fn main() -> unit {
     let primes = sieve(500000);
-    print(f"CHECKSUM {primes.len()}");
+    log(f"CHECKSUM {primes.len()}");
 }

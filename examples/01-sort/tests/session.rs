@@ -17,7 +17,7 @@ fn vm() -> (rut_vm::interp::Vm, Value) {
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks { print: None }).unwrap();
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
     let Value::Opaque(c) = vm.call("create", &[]).unwrap() else { unreachable!() };
     (vm, Value::Opaque(c))
 }

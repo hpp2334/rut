@@ -151,7 +151,7 @@ fn main() {
         let mut vm = Vm::new(
             Rc::clone(&prog),
             &limits,
-            HostHooks { print: None },
+            HostHooks::default(),
         )
         .unwrap_or_else(|t| fail(format!("boot: {}", t.msg)));
         let t = Instant::now();

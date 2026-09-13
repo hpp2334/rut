@@ -14,4 +14,5 @@ crate-type = ["cdylib", "rlib"]
 rut-driver = { path = "../rut-driver" }
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
+rut-std = { path = "../rut-std" }
 rut-parser = { path = "../rut-parser" }

@@ -6,15 +6,6 @@ use super::*;
 impl Vm {
     pub(super) fn call_str_nat(&mut self, nat: Nat, recv: Option<Reg>, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
         match nat {
-            Nat::Print => {
-                let s = cell_of(self.reg(args[0])).as_str().to_string();
-                if let Some(h) = &self.hooks.print {
-                    (h.borrow_mut())(&s);
-                }
-                if let Some(d) = dst {
-                    self.cur_regs[d as usize] = Slot::int(0);
-                }
-            }
             Nat::Str => {
                 let v = self.reg(args[0]);
                 // a string already formats to itself — alias the cell instead

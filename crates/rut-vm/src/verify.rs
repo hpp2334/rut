@@ -10,6 +10,10 @@ use rut_core::types::{TY_U8, TyKind};
 pub fn verify(prog: &Program) -> Result<(), String> {
     let ntypes = prog.types.types.len() as u32;
     for (fi, f) in prog.funcs.iter().enumerate() {
+        // bodyless host functions (RFC 0022/0026) have no code to verify
+        if f.host.is_some() {
+            continue;
+        }
         let nregs = f.regs.len();
         let ctx = |m: String| format!("function {} (#{fi}): {m}", f.name);
         for (pc, op) in f.code.iter().enumerate() {

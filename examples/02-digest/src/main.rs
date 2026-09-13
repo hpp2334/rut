@@ -92,7 +92,7 @@ fn main() {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks { print: None }).unwrap();
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
     let call = |vm: &mut rut_vm::interp::Vm, name: &str, args: &[Value]| vm.call(name, args).unwrap();
 
     // ---- hex + base64 read-back -------------------------------------

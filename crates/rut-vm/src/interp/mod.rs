@@ -54,15 +54,12 @@ impl Default for Limits {
 }
 
 #[derive(Default, Clone)]
-pub struct HostHooks {
-    /// the print sink — None is a silent no-op (RFC 0028: a script cannot
-    /// spam an embedded host's stdout; the host opts in)
-    pub print: Option<Rc<RefCell<dyn FnMut(&str)>>>,
-}
+pub struct HostHooks {}
 
 /// An embedder implementation for a bodyless host function
-/// (RFC 0022/0026): registered by name against `FuncCode.host`.
-pub type HostFn = Rc<RefCell<dyn FnMut(&[Value]) -> Result<Value, Trap>>>;
+/// (RFC 0022/0026): registered by name against `FuncCode.host`. It gets the
+/// VM so it can allocate/inspect `Opaque` handles (RFC 0014).
+pub type HostFn = Rc<RefCell<dyn FnMut(&mut Vm, &[Value]) -> Result<Value, Trap>>>;
 
 struct SavedFrame {
     func: u32,
@@ -356,7 +353,7 @@ impl Vm {
     /// (RFC 0022/0026), bound by the `FuncCode.host` name.
     pub fn register_host_fn<F>(&mut self, name: &str, f: F)
     where
-        F: FnMut(&[Value]) -> Result<Value, Trap> + 'static,
+        F: FnMut(&mut Vm, &[Value]) -> Result<Value, Trap> + 'static,
     {
         self.host_fns.insert(name.to_string(), Rc::new(RefCell::new(f)));
     }
@@ -379,7 +376,7 @@ impl Vm {
         };
         let out = {
             let mut f = f.borrow_mut();
-            f(&vals)?
+            f(self, &vals)?
         };
         if let Some(d) = dst {
             let s = self

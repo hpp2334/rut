@@ -6,34 +6,39 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
+    // append the logger import so the original spans stay put
+    let combined = format!("{src}\nimport {{ log }} from \"std:log\";\n");
+    let out = rut_driver::compile_module(&combined, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.is_empty(),
         "unexpected diags:\n{}",
-        rut_lexer::diag::render_diags(src, &out.diags)
+        rut_lexer::diag::render_diags(&combined, &out.diags)
     );
     let binary = out.binary.expect("binary");
     let prog = rut_core::binary::decode(&binary).expect("decode");
     rut_vm::verify::verify(&prog).expect("verify");
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
-    let hooks = rut_vm::interp::HostHooks {
-        print: Some(Rc::new(RefCell::new(move |s: &str| {
-            sink.borrow_mut().push(s.to_string());
-        }))),
-    };
     let limits = rut_vm::interp::Limits {
         fuel: Some(fuel),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, hooks).expect("vm");
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
+    rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
     let trap = match vm.call("main", &[]) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
     };
     let lines = lines.borrow().clone();
     (lines, trap, vm.fuel_used)
+}
+
+/// Compile a snippet with the logger import appended (the original spans of
+/// `src` are preserved).
+fn compile(src: &str, module: &str) -> rut_driver::CompileOutput {
+    let combined = format!("{src}\nimport {{ log }} from \"std:log\";\n");
+    rut_driver::compile_module(&combined, rut_parser::Mode::Impl, module)
 }
 
 #[test]
@@ -49,8 +54,8 @@ fn describe(f: Flavor) -> string {
 pub fn main() -> unit {
     let name = "rut";
     let n = 41 + 1;
-    print(f"hi {name}! n={n} tab:\t'c'={'c'}");
-    print(describe(Flavor.Sour));
+    log(f"hi {name}! n={n} tab:\t'c'={'c'}");
+    log(describe(Flavor.Sour));
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -68,8 +73,8 @@ pub fn main() -> unit {
     p.x = 4;
     let mut r = own(p);
     r.x = 9;
-    print(f"q.x={q.x} p.x={p.x} r.x={r.x}");
-    print(f"q==p {q == p}, r==p {r == p}");
+    log(f"q.x={q.x} p.x={p.x} r.x={r.x}");
+    log(f"q==p {q == p}, r==p {r == p}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -84,11 +89,11 @@ dataclass Point { x: f32; y: f32 }
 pub fn main() -> unit {
     let box1 = Opaque.new(Point { x: 1, y: 2 });
     let box2 = Opaque.new("hello");
-    print(f"box1 is Point: {box1 is Point}");
-    print(f"box2 is Point: {box2 is Point}");
+    log(f"box1 is Point: {box1 is Point}");
+    log(f"box2 is Point: {box2 is Point}");
     let p = downcast<Point>(box1);
     if (p.is_some()) {
-        print(f"recovered {p.value.x} {p.value.y}");
+        log(f"recovered {p.value.x} {p.value.y}");
     }
 }
 "#;
@@ -118,7 +123,7 @@ fn sieve(limit: i32) -> Vec<i32> {
 }
 pub fn main() -> unit {
     let primes = sieve(100);
-    print(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
+    log(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 10_000_000);
@@ -142,8 +147,8 @@ fn mix(a: Color, b: Color) -> string {
     };
 }
 pub fn main() -> unit {
-    print(mix(Color.Red, Color.Green));
-    print(mix(Color.Blue, Color.Blue));
+    log(mix(Color.Red, Color.Green));
+    log(mix(Color.Blue, Color.Blue));
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -175,10 +180,10 @@ pub fn main() -> unit {
         Square { s: 2 },
     ]);
     for (let s of shapes) {
-        print(f"{s.name()} area={s.area()}");
+        log(f"{s.name()} area={s.area()}");
     }
     let c = Circle { r: 1 };
-    print(f"c is Shape: {c is Shape}");
+    log(f"c is Shape: {c is Shape}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -202,7 +207,7 @@ pub fn main() -> unit {
     let xs = Vec<i32>.from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
-    print(f"{ys[0]} {ys[1]} {ys[2]} {ys[3]}");
+    log(f"{ys[0]} {ys[1]} {ys[2]} {ys[3]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -218,7 +223,7 @@ pub fn main() -> unit {
     while (true) {
         i += 1;
         if (i % 1000000 == 0) {
-            print(f"tick {i}");
+            log(f"tick {i}");
         }
     }
 }
@@ -238,16 +243,16 @@ fn overflow_traps_and_wrapping_escapes() {
 pub fn main() -> unit {
     let mut x = 2147483647;
     x = x &+ 1;              // wrapping: fine (RFC 0004 §3)
-    print(f"x={x}");
+    log(f"x={x}");
     let mut s = 1073741824;  // 1 << 30
     s = s &<< 1;             // wrapping shl: bits shifted out are gone
-    print(f"s={s}");
+    log(f"s={s}");
     s &<<= 1;                // compound form, same law
-    print(f"s={s}");
+    log(f"s={s}");
     let u: u32 = 3221225472; // 0xC000_0000
-    print(f"u={u &<< 1}");
+    log(f"u={u &<< 1}");
     let y = 2147483647 + 1;  // trapping: overflow
-    print(f"y={y}");
+    log(f"y={y}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -261,9 +266,9 @@ fn plain_shl_traps_when_bits_leave_the_width() {
     // RIGHT shift before BitOp::WrapShl existed.
     let src = r#"
 pub fn main() -> unit {
-    print("before");
+    log("before");
     let s = 1073741824 << 1;   // 1 << 31 does not fit i32
-    print(f"after {s}");
+    log(f"after {s}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -278,11 +283,11 @@ fn shr_follows_signedness() {
     let src = r#"
 pub fn main() -> unit {
     let u: u64 = 0xFFFFFFFFFFFFFFFF;
-    print(f"u={u >> 1}");
+    log(f"u={u >> 1}");
     let v: u32 = 0x80000000;
-    print(f"v={v >> 31}");
+    log(f"v={v >> 31}");
     let s = i64(-8);
-    print(f"s={s >> 1}");
+    log(f"s={s >> 1}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -298,14 +303,14 @@ fn ne_on_primitives_is_not_eq() {
     let src = r#"
 import { Vec } from "std:collection";
 pub fn main() -> unit {
-    print(f"a={1 != 56}");
-    print(f"b={1 == 56}");
-    print(f"c={2 != 2}");
-    if (3 != 4) { print("differs"); } else { print("equal"); }
+    log(f"a={1 != 56}");
+    log(f"b={1 == 56}");
+    log(f"c={2 != 2}");
+    if (3 != 4) { log("differs"); } else { log("equal"); }
     let mut m: Vec<u8> = Vec.new();
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
-    print(f"padded={m.len()}");
+    log(f"padded={m.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -323,16 +328,16 @@ fn bare_vec_with_length_allocates_zeroed_elements() {
 import { Vec } from "std:collection";
 pub fn main() -> unit {
     let mut k: Vec<u32> = Vec.zeroed(4);
-    print(f"a len={k.len()} k3={k[3]}");
+    log(f"a len={k.len()} k3={k[3]}");
     k[0] = 7;
     k[3] = 9;
-    print(f"b k0={k[0]} k3={k[3]} len={k.len()}");
+    log(f"b k0={k[0]} k3={k[3]} len={k.len()}");
     let mut j: Vec<u8> = Vec.zeroed(3);
     j.push(1);
-    print(f"c len={j.len()} j0={j[0]} j3={j[3]}");
+    log(f"c len={j.len()} j0={j[0]} j3={j[3]}");
     let e: Vec<u32> = Vec.zeroed(0);
     let b: Vec<u32> = Vec.new();
-    print(f"d {e.len()} {b.len()}");
+    log(f"d {e.len()} {b.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -354,14 +359,14 @@ pub fn main() -> unit {
     let b = Vec<u32>.from([4, 5]);
     let c = Vec<u8>.from([250, 251]);
     let d: Vec<u32> = Vec.from([6, 7]);   // bare form, annotation-driven
-    print(f"a={a[0] &+ a[1] &+ a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
+    log(f"a={a[0] &+ a[1] &+ a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(lines, vec!["a=6 b=4 c=251 d=7 n=2"]);
     assert_eq!(trap, None);
     // everywhere else, explicit generics on a static head stay a clear error
-    let bad = "pub fn main() -> unit { let x = Option<i32>.some(5); print(f\"{x.value}\"); }";
+    let bad = "pub fn main() -> unit { let x = Option<i32>.some(5); log(f\"{x.value}\"); }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("not supported in this build")));
 }
@@ -375,7 +380,7 @@ fn heap_budget_traps_before_the_write() {
 import { Vec } from "std:collection";
 pub fn main() -> unit {
     let v = Vec<u8>.zeroed(5000000);
-    print("allocated");
+    log("allocated");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -392,7 +397,7 @@ pub fn main() -> unit {
     p.x = 2;
 }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
+    let out = compile(src, "main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("let mut")),
         "want the mut-binding law diag: {:?}",
@@ -406,10 +411,10 @@ fn when_exhaustiveness_is_enforced() {
     let src = r#"
 enum Color { Red, Green, Blue }
 pub fn main() -> unit {
-    print(when (Color.Red) { Color.Red -> "r" });
+    log(when (Color.Red) { Color.Red -> "r" });
 }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
+    let out = compile(src, "main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("exhaustive")),
         "{:?}",
@@ -422,10 +427,10 @@ fn option_eq_is_a_compile_error() {
     let src = r#"
 pub fn main() -> unit {
     let a = Option.some(1);
-    print(f"{a == a}");
+    log(f"{a == a}");
 }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
+    let out = compile(src, "main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("Option")),
         "{:?}",
@@ -439,9 +444,9 @@ fn dump_is_labeled_and_spanned() {
     // labeled `field: value` lines, `- item` bullets, spans on every node,
     // and no display strings on the JSON wire
     let src = r#"enum Flavor { Sweet, Sour = 5 }
-pub fn main() -> unit { print(f"{1 + 1}"); }
+pub fn main() -> unit { log(f"{1 + 1}"); }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
+    let out = compile(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let text = &out.ast_dump;
     assert!(text.contains("@0 Enum Flavor [0,35)"), "header: {text}");
@@ -482,14 +487,14 @@ fn classify(n: i32) -> string {
     }
 }
 pub fn main() -> unit {
-    print(classify(0));
-    print(classify(-3));
-    print(classify(7));
+    log(classify(0));
+    log(classify(-3));
+    log(classify(7));
     let mut late = 0;
     for (let i = 0; i < 4; i += 1) {
         if (i % 2 == 0) { late += 1; } else { late += 10; }
     }
-    print(f"late={late}");
+    log(f"late={late}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -505,11 +510,11 @@ fn shortcircuit_truth_table() {
 pub fn main() -> unit {
     let t = true;
     let f = false;
-    print(f"and: {t && t} {t && f} {f && t} {f && f}");
-    print(f"or:  {t || t} {t || f} {f || t} {f || f}");
+    log(f"and: {t && t} {t && f} {f && t} {f && f}");
+    log(f"or:  {t || t} {t || f} {f || t} {f || f}");
     let n = 6;
-    if (n > 0 && n % 2 == 0) { print("even positive"); }
-    if (n < 0 || n % 3 == 0) { print("div by 3 or negative"); }
+    if (n > 0 && n % 2 == 0) { log("even positive"); }
+    if (n < 0 || n % 3 == 0) { log("div by 3 or negative"); }
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -546,10 +551,10 @@ pub fn main() -> unit {
     let mut c = Counter.new();
     c.bump();
     c.bump();
-    print(f"count={c.count()}");
+    log(f"count={c.count()}");
     let mut w = Wrapped.new();
     w.bump();
-    print(f"wrapped={w.count()}");
+    log(f"wrapped={w.count()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -573,11 +578,11 @@ pub fn main() -> unit {
             else    -> { kept += 100; },
         }
     }
-    print(f"dropped={dropped} kept={kept}");
+    log(f"dropped={dropped} kept={kept}");
     when (Light.Red) {
-        Light.Green  -> { print("go"); },
-        Light.Yellow -> { print("brake"); },
-        Light.Red    -> { print("stop"); },
+        Light.Green  -> { log("go"); },
+        Light.Yellow -> { log("brake"); },
+        Light.Red    -> { log("stop"); },
     }
 }
 "#;
@@ -603,11 +608,11 @@ fn describe(f: Flavor) -> string {
 }
 pub fn main() -> unit {
     let hits = [describe(Flavor.Sweet), describe(Flavor.Sour), describe(Flavor.Salty)];
-    print(hits[0]);
-    print(hits[1]);
-    print(hits[2]);
+    log(hits[0]);
+    log(hits[1]);
+    log(hits[2]);
     for (let i = 0; i < 50; i += 1) {
-        print(describe(when (i % 2) { 0 -> Flavor.Sweet, else -> Flavor.Salty }));
+        log(describe(when (i % 2) { 0 -> Flavor.Sweet, else -> Flavor.Salty }));
     }
 }
 "#;
@@ -623,7 +628,7 @@ pub fn main() -> unit {
 // ---- the entry surface (RFC 0035 §3): host-callable fns, no main ----
 
 fn entry_vm(src: &str) -> rut_vm::interp::Vm {
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    let out = compile(src, "m");
     assert!(
         out.diags.is_empty(),
         "unexpected diags:\n{}",
@@ -636,7 +641,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks { print: None }).expect("vm")
+    rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm")
 }
 
 #[test]
@@ -698,7 +703,7 @@ fn entry_crossing_rule_is_compile_time() {
 dataclass Row { id: i32; }
 entry fn bad_param(r: Row) -> unit { }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    let out = compile(src, "m");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("parameter `r` is `Row`")),
         "{:?}",
@@ -710,7 +715,7 @@ import { Vec } from "std:collection";
 dataclass Row { id: i32; }
 entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    let out = compile(src, "m");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("returns `Vec<Row>`")),
         "{:?}",
@@ -723,7 +728,7 @@ entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
 import { Vec } from "std:collection";
 entry fn old_buffer(v: Vec<u8>) -> Vec<u8> { return v; }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    let out = compile(src, "m");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("parameter `v` is `Vec<u8>`")),
         "{:?}",
@@ -733,7 +738,7 @@ entry fn old_buffer(v: Vec<u8>) -> Vec<u8> { return v; }
     let src = r#"
 entry fn generic<T>(v: T) -> T { return v; }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "m");
+    let out = compile(src, "m");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("cannot be generic")),
         "{:?}",
@@ -750,20 +755,20 @@ fn bytes_are_an_immutable_primitive() {
 import { Vec } from "std:collection";
 pub fn main() -> unit {
     let z = bytes(3);
-    print(f"z={bytes_len(z)}");
+    log(f"z={bytes_len(z)}");
     let a = bytes_from([1, 2, 3]);
     let b = bytes_from([1, 2, 3]);
-    print(f"a={bytes_len(a)} eq={a == b} ne={a != z}");
+    log(f"a={bytes_len(a)} eq={a == b} ne={a != z}");
     let mut buf: Vec<u8> = Vec.new();
     buf.push(9);
     buf.push(8);
     let f = buf.freeze();
-    print(f"f={bytes_len(f)} f0={f[0]} f1={f[1]}");
+    log(f"f={bytes_len(f)} f0={f[0]} f1={f[1]}");
     let enc = string_encode("rut");
-    print(f"enc={bytes_len(enc)} dec={bytes_decode(enc)}");
+    log(f"enc={bytes_len(enc)} dec={bytes_decode(enc)}");
     let mut sum: u8 = 0u8;
     for (let x of a) { sum = sum + x; }
-    print(f"sum={sum}");
+    log(f"sum={sum}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -779,7 +784,7 @@ fn bytes_index_out_of_bounds_traps() {
     let src = r#"
 pub fn main() -> unit {
     let a = bytes_from([1]);
-    print(f"{a[5]}");
+    log(f"{a[5]}");
 }
 "#;
     let (_, trap, _) = run_case(src, 1_000_000);
@@ -803,7 +808,7 @@ pub fn drain(s: Stack) -> i32 { return s.len(); }
 pub fn main() -> unit {
     let mut st = Stack.new();
     st.push(1);
-    print(f"drained {drain(st)}");
+    log(f"drained {drain(st)}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -829,10 +834,10 @@ pub fn main() -> unit {
     let mut g = Gauge.new();
     g.bump();
     g.bump();
-    print(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
+    log(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
 }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
+    let out = compile(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     // the dump labels member visibility (annotated members only)
     assert!(out.ast_dump.contains("vis: pub(mod)"), "member vis label: {}", out.ast_dump);
@@ -870,7 +875,7 @@ fn count(n: Node) -> i32 {
     return c;
 }
 pub fn main() -> unit {
-    print(f"CHECKSUM {count(make(10, 1))}");
+    log(f"CHECKSUM {count(make(10, 1))}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 5_000_000);
@@ -896,7 +901,7 @@ fn make_early() -> Early {
 }
 pub fn main() -> unit {
     let e = make_early();
-    print(f"tag={e.tag} x={e.later.x}");
+    log(f"tag={e.tag} x={e.later.x}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -917,7 +922,7 @@ class Node {
 }
 pub fn main() -> unit {
     let a = Node.new();
-    print(f"v={a.val()} has_next={a.next.is_some()}");
+    log(f"v={a.val()} has_next={a.next.is_some()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -967,9 +972,9 @@ pub fn main() -> unit {
     v.push(30);
     v.push(40);
     v.push(50);
-    print(f"{v.len()} {v.get(0)} {v.get(4)} {v.get(2)}");
+    log(f"{v.len()} {v.get(0)} {v.get(4)} {v.get(2)}");
     let p = v.pop();
-    print(f"{p.value}");
+    log(f"{p.value}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
@@ -991,7 +996,7 @@ pub fn main() -> unit {
     for (let x of v) { sum += x; }
     let w: Vec<i32> = Vec.from([7, 8]);
     let z: Vec<u8> = Vec.zeroed(3);
-    print(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
+    log(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1013,19 +1018,21 @@ fn std_collection_vec_via_module_loader_runs() {
         rut_driver::Module { source: Some(coll_src), ..Default::default() },
     )
     .unwrap();
+    rut_driver::mount_std_log(&mut s);
     s.register_module(
         "app:main",
         rut_driver::Module {
             source: Some(
                 r#"
 import { Vec } from "std:collection";
+import { log } from "std:log";
 pub fn main() -> unit {
     let mut v: Vec<i32> = Vec.new();
     v.push(10);
     v.push(20);
     v.push(30);
     let top = v.pop();
-    print(f"{v.len()} {top.value}");
+    log(f"{v.len()} {top.value}");
 }
 "#
                 .into(),
@@ -1046,17 +1053,13 @@ pub fn main() -> unit {
 
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
-    let hooks = rut_vm::interp::HostHooks {
-        print: Some(Rc::new(RefCell::new(move |s: &str| {
-            sink.borrow_mut().push(s.to_string());
-        }))),
-    };
     let limits = rut_vm::interp::Limits {
         fuel: Some(2_000_000),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, hooks).expect("vm");
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
+    rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
     let trap = vm.call("main", &[]).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["2 30"]);
@@ -1079,7 +1082,7 @@ impl Wrap<i32> for B {
 pub fn main() -> unit {
     let b = B.new(7);
     let w: Wrap<i32> = b;
-    print(f"{w.get()}");
+    log(f"{w.get()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1109,7 +1112,7 @@ pub fn main() -> unit {
     let mut sum = 0;
     for (let i = 0; i < r.len(); i += 1) { sum += r[i]; }
     for (let x of r) { sum += x; }
-    print(f"{sum} {r[2]}");
+    log(f"{sum} {r[2]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1138,7 +1141,7 @@ pub fn main() -> unit {
     let c = Countdown.new(3);
     let mut sum = 0;
     for (let x of c) { sum += x; }
-    print(f"{sum}");
+    log(f"{sum}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1156,7 +1159,7 @@ pub fn main() -> unit {
     let v = Vec<i32>.from([10, 20, 30]);
     let mut sum = 0;
     for (let x of v.iter()) { sum += x; }
-    print(f"{sum} {v.len()}");
+    log(f"{sum} {v.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);

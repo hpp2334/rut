@@ -13,5 +13,6 @@ path = "src/main.rs"
 rut-driver = { path = "../rut-driver" }
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
+rut-std = { path = "../rut-std" }
 rut-lexer = { path = "../rut-lexer" }
 rut-parser = { path = "../rut-parser" }

@@ -1,3 +1,5 @@
+import { log } from "std:log";
+
 import { Vec } from "std:collection";
 // fannkuch-redux — pancake flips over all permutations. Scale: n = 7.
 // Canonical checksum: sum over all n! permutations of (+/- flips), sign
@@ -68,5 +70,5 @@ fn fannkuch(n: i32) -> i32 {
 }
 
 pub fn main() -> unit {
-    print(f"CHECKSUM {fannkuch(7)}");
+    log(f"CHECKSUM {fannkuch(7)}");
 }

@@ -21,7 +21,7 @@ fn main() {
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks { print: None }).unwrap();
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
 
     // the session: one bank, exact values in, JSON out
     let Value::Opaque(c) = vm.call("create", &[]).unwrap() else { unreachable!() };

@@ -8,7 +8,7 @@ use rut_ast::dump;
 use rut_parser::{parse, Mode};
 use rut_core::binary::{encode, Program};
 use rut_core::ops::Op;
-use rut_core::types::{TyKind, TY_I32, TY_STR, TY_UNIT};
+use rut_core::types::{TyKind, TY_I32, TY_OPAQUE, TY_STR, TY_UNIT};
 
 pub mod session;
 pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
@@ -240,8 +240,37 @@ pub fn std_log_source() -> String {
     include_str!("../../../rut/std-log/log.rut").to_string()
 }
 
+/// Mount the standard modules every rut program expects: `std:collection`
+/// (rut source) and the `std:log` logger over the `rt:log` native module
+/// (RFC 0022/0026).
+pub fn mount_std(session: &mut Session) {
+    let _ = session.register_module(
+        "std:collection",
+        Module { source: Some(std_collection_source()), ..Default::default() },
+    );
+    mount_std_log(session);
+}
+
+/// Mount `std:log` over its `rt:log` native module (the logger; RFC 0028).
+pub fn mount_std_log(session: &mut Session) {
+    let _ = session.register_module(
+        "rt:log",
+        Module {
+            host_funcs: vec![
+                ("create_logger".to_string(), vec![TY_STR], TY_OPAQUE),
+                ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_UNIT),
+            ],
+            ..Default::default()
+        },
+    );
+    let _ = session.register_module(
+        "std:log",
+        Module { source: Some(std_log_source()), ..Default::default() },
+    );
+}
+
 /// Full pipeline over one module: resolve its `import` statements against a
-/// session with `std:collection` mounted, then link, flatten, encode.
+/// session with the standard modules mounted, then link, flatten, encode.
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
     let (ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
@@ -251,22 +280,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
     let mut session = Session::new();
-    let _ = session.register_module(
-        "std:collection",
-        Module { source: Some(std_collection_source()), ..Default::default() },
-    );
-    // the native module (RFC 0022/0026) behind `std:log`
-    let _ = session.register_module(
-        "rt:log",
-        Module {
-            host_funcs: vec![("emit".to_string(), vec![TY_STR, TY_I32, TY_STR], TY_UNIT)],
-            ..Default::default()
-        },
-    );
-    let _ = session.register_module(
-        "std:log",
-        Module { source: Some(std_log_source()), ..Default::default() },
-    );
+    mount_std(&mut session);
     let spec = format!("app:{module_name}");
     if let Err(e) = session.register_module(
         &spec,

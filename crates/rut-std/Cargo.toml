@@ -1,0 +1,14 @@
+[package]
+name = "rut-std"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "host-side runtime helpers (RFC 0022/0026/0028) — implementations of native-module functions that embedders install"
+
+[lib]
+name = "rut_std"
+path = "src/lib.rs"
+
+[dependencies]
+rut-core = { path = "../rut-core" }
+rut-vm = { path = "../rut-vm" }
