@@ -147,8 +147,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             }
                             return Ok(TY_BOOL);
                         }
-                        // Opaque RHS
-                        if n == "Opaque" {
+                        // Opaque RHS — import-gated like the type (RFC 0028)
+                        if n == "Opaque"
+                            && self.ctx.extern_native_types.get(&segs[0].name).copied()
+                                == Some(rut_core::binary::NativeTy::Opaque)
+                        {
                             match self.ctx.types.kind(rt).clone() {
                                 TyKind::Opaque => {
                                     self.emit(Op::ConstRaw { dst, bits: 1 }, sp.lo);
@@ -304,7 +307,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(l.ty);
             }
             match n.as_str() {
-                "own" | "downcast" | "panic" | "assert" | "print" | "type_id" => {
+                "own" | "downcast" | "panic" | "assert" if self.ctx.extern_native_fns.contains(&name) => {
+                    self.ctx.err(sp, format!("`{n}` is a function —call it: `{n}(..)`"));
+                    return Err(());
+                }
+                "print" | "type_id" => {
                     self.ctx.err(sp, format!("`{n}` is a function —call it: `{n}(..)`"));
                     return Err(());
                 }
@@ -322,7 +329,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
                 return Ok(ty);
             }
-            self.ctx.err(sp, format!("unknown name `{n}`"));
+            let msg = self
+                .ctx
+                .not_in_core_scope(&n)
+                .unwrap_or_else(|| format!("unknown name `{n}`"));
+            self.ctx.err(sp, msg);
             return Err(());
         }
         // `Math.PI` — the `std:math` constants (namespace member)
@@ -416,8 +427,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, format!("`{}` is not a member of enum {}", self.ctx.name(member), self.ctx.name(base)));
                 return Err(());
             }
-            // Option.none / Option.none() without call parens
-            if self.ctx.name(base) == "Option" && self.ctx.name(member) == "none" {                let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
+            // Option.none / Option.none() without call parens — import-gated
+            // like the type (RFC 0028)
+            if self.ctx.name(base) == "Option"
+                && self.ctx.name(member) == "none"
+                && self.ctx.extern_native_types.get(&base).copied()
+                    == Some(rut_core::binary::NativeTy::Option)
+            {                let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
                     Some(TyKind::Option { elem }) => elem,
                     _ => {
                         self.ctx.err(sp, "cannot infer the element type of `Option.none` here —annotate the binding");

@@ -94,10 +94,15 @@ impl<'a> GraphCompiler<'a> {
         // a native module (RFC 0022/0026): no rut body — synthesize a
         // placeholder program whose bodyless funcs the embedder implements.
         // Intrinsics (compiler-lowered) and constants ride the same surface.
+        // `std:core` rides it too: no funcs, just the native type/iface/fn
+        // names of the prelude (RFC 0028).
         if module.source.is_none()
             && (!module.host_funcs.is_empty()
                 || !module.intrinsics.is_empty()
-                || !module.consts.is_empty())
+                || !module.consts.is_empty()
+                || !module.native_types.is_empty()
+                || !module.native_ifaces.is_empty()
+                || !module.native_fns.is_empty())
         {
             use rut_core::binary::{FuncCode, Program};
             // host functions obey the same crossing rule as `entry fn`
@@ -158,6 +163,9 @@ impl<'a> GraphCompiler<'a> {
                     bits: *bits,
                 });
             }
+            surface.native_types = module.native_types.clone();
+            surface.native_ifaces = module.native_ifaces.clone();
+            surface.native_fns = module.native_fns.clone();
             let program = Program { name: spec.to_string(), scope, surface, funcs, ..Default::default() };
             let idx = self.programs.len();
             self.programs.push(program);

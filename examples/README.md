@@ -20,7 +20,7 @@ else on this page is parse-only.
 | `basic/module-structure.rut` | declarations-only modules, load-time expressions, no load-time code | 0003 §1 |
 | `basic/module-visibility.rut` | `pub` / `pub(mod)` / `pub(super)` / `pub(self)` — items **and** class members | 0003 §2, 0010 §2 |
 | `basic/when.rut` | `when` pattern expressions, exhaustiveness | 0008 |
-| `basic/option-result.rut` | builtin `Option`/`Result`, `.value`, `unwrap_or`, `?` | 0005 |
+| `basic/option-result.rut` | builtin `Option`/`Result` imported from `std:core`, `.value`, `unwrap_or`, `?` | 0005, 0028 |
 | `basic/error-context.rut` | `here()` / `capture_stack_trace()` on error values, lazy `render()`, stripped-binary degradation | 0036 |
 | `basic/literals.rut` | numeric suffixes, plain/raw/format strings, builtin allocation calls, fixed arrays `Array<T, N>`, `dyn Slice<T>` boxing, `Vec`/`Array` → `dyn Slice<T>` widening | 0005, 0007 |
 | `basic/dataclasses.rut` | reference semantics (aliasing by default), `own` divergence, field initializers, free functions, identity `==` | 0009, 0011, 0016 |

@@ -104,6 +104,26 @@ pub fn compile_program_resolved(
                 ctx.add_extern_type(id, rut_core::pack(*dep_scope, t.local), t.is_class);
             }
         }
+        // std:core's native surface (RFC 0028): builtin containers,
+        // interfaces, and compiler-lowered fns — bound BY LOOKUP only (no
+        // interning), so a name resolves exactly when the importer wrote
+        // it: `import { Option } from "std:core"` gates `Option`, nothing
+        // else. The prelude is imported, never ambient.
+        for (n, kind) in &surface.native_types {
+            if let Some(id) = ctx.ast.interner.lookup(n) {
+                ctx.add_extern_native_type(id, *kind);
+            }
+        }
+        for (n, iface) in &surface.native_ifaces {
+            if let Some(id) = ctx.ast.interner.lookup(n) {
+                ctx.add_extern_iface(id, *iface);
+            }
+        }
+        for n in &surface.native_fns {
+            if let Some(id) = ctx.ast.interner.lookup(n) {
+                ctx.add_extern_native_fn(id);
+            }
+        }
     }
     ctx.collect();
     // the entry surface's crossing contract is compile-time (RFC 0035 §3 /
@@ -261,11 +281,32 @@ pub fn std_log_source() -> String {
     include_str!("../../../rut/std-log/log.rut").to_string()
 }
 
+/// Mount `std:core` — the prelude surface (RFC 0028): the builtin
+/// containers (`Array`/`Option`/`Result`/`Opaque`), the builtin interfaces
+/// (`Disposal`/`Index`/`Iterator`), and the compiler-lowered functions
+/// (`own`, `downcast`, `assert`/`panic`, the `str`/`bytes` natives). A
+/// native module with no body: its surface is
+/// [`rut_core::binary::Surface::core`], the single source of truth
+/// (`rut/std-core/core.d.rut` mirrors it for the LSP). Nothing here is
+/// ambient — every name must be imported.
+pub fn mount_std_core(session: &mut Session) {
+    let _ = session.register_module(
+        "std:core",
+        Module {
+            native_types: rut_core::binary::Surface::core().native_types,
+            native_ifaces: rut_core::binary::Surface::core().native_ifaces,
+            native_fns: rut_core::binary::Surface::core().native_fns,
+            ..Default::default()
+        },
+    );
+}
+
 /// Mount the standard modules every rut program expects: `std:collection`
 /// (rut source), `std:math` (float host fns + constants + compiler
 /// intrinsics), and the `std:log` logger over the `rt:log` native module
 /// (RFC 0022/0026/0028).
 pub fn mount_std(session: &mut Session) {
+    mount_std_core(session);
     let _ = session.register_module(
         "std:collection",
         Module { source: Some(std_collection_source()), ..Default::default() },

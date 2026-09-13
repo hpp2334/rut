@@ -1,3 +1,4 @@
+import { Array, Opaque, own, downcast } from "std:core";
 import { Vec } from "std:collection";
 // RFC 0014 — Opaque: explicit type erasure with checked recovery.
 // Opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the

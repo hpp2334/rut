@@ -235,7 +235,15 @@ fn std_collection_barrel_expands_and_compiles() {
              return v.len();\n\
          }}\n"
     );
-    let out = rut_driver::compile_program(&src, Mode::Impl, "std:collection", 1, &[]);
+    let out = rut_driver::compile_program(
+        &src,
+        Mode::Impl,
+        "std:collection",
+        1,
+        // the prelude surface as the unit's one import (RFC 0028): the
+        // barrel source itself imports std:core
+        &[(2, rut_core::binary::Surface::core())],
+    );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
     assert_eq!(p.types.types.iter().filter(|t| t.name == "Vec<i32>").count(), 1);
@@ -291,6 +299,8 @@ fn consumer_uses_std_collection_vec() {
         .join("../../rut/std-collection/entry.rut");
     let coll_src = rut_driver::expand_module_source(&coll).expect("expand");
     let mut s = Session::new();
+    // std:core first: the collection source imports its prelude names
+    rut_driver::mount_std_core(&mut s);
     s.register_module(
         "std:collection",
         Module { source: Some(coll_src), ..Default::default() },

@@ -18,6 +18,7 @@
 // names never dispatch, RFC 0032), and Option/Vec values flowing
 // back out.
 
+import { Opaque, downcast } from "std:core";
 import { MyMap } from "plugin:my_map";                // resolves to the .d.rut
 import { Hashable } from "std:collection";            // declaration file: the
 import { Canvas, newCanvas } from "app:gfx";          // constraint interface

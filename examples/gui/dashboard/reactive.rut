@@ -21,7 +21,7 @@ import { Math } from "std:math";
 //                                   dispatch or source_push
 
 import { Logger } from "std:log";
-import { Disposal } from "std:core";
+import { Option, Opaque, Disposal, downcast, panic } from "std:core";
 
 // ------------------------------------------------------------------ atoms
 

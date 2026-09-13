@@ -11,8 +11,10 @@ impl<'a> Ctx<'a> {
         match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
-                let is_seq = self.name(tname) == "Index";
-                let is_next = self.name(tname) == "Iterator";
+                // an imported std:core interface (RFC 0028): `Index`/
+                // `Iterator`/`Disposal` are ordinary names gated on the
+                // import — never ambient
+                let core_iface = self.extern_ifaces.get(&tname).copied();
                 let id = if let Some(t) = self.find_trait(tname).cloned() {
                     if segs[0].generics.is_empty() {
                         if t.id == u32::MAX {
@@ -40,18 +42,31 @@ impl<'a> Ctx<'a> {
                             Some(self.mk_trait_inst(tname, args))
                         }
                     }
-                } else if is_seq {
-                    Some(self.builtin_contract(tname, true))
-                } else if is_next {
-                    Some(self.builtin_contract(tname, false))
                 } else {
-                    self.err(self.ast.span(node.id()), format!("unknown interface `{}`", self.name(tname)));
-                    None
+                    match core_iface {
+                        Some(rut_core::binary::NativeIface::Index) => {
+                            Some(self.builtin_contract(tname, true))
+                        }
+                        Some(rut_core::binary::NativeIface::Iterator) => {
+                            Some(self.builtin_contract(tname, false))
+                        }
+                        Some(rut_core::binary::NativeIface::Disposal) => {
+                            Some(self.builtin_disposal(tname))
+                        }
+                        None => {
+                            let n = self.name(tname).to_string();
+                            let msg = self
+                                .not_in_core_scope(&n)
+                                .unwrap_or_else(|| format!("unknown interface `{n}`"));
+                            self.err(self.ast.span(node.id()), msg);
+                            None
+                        }
+                    }
                 };
-                if is_seq {
+                if core_iface == Some(rut_core::binary::NativeIface::Index) {
                     self.seq_trait = id;
                 }
-                if is_next {
+                if core_iface == Some(rut_core::binary::NativeIface::Iterator) {
                     self.iter_trait = id;
                 }
                 id
@@ -87,6 +102,32 @@ impl<'a> Ctx<'a> {
             ("Iterator", vec![TraitMethod { name: "next".to_string(), params: vec![], ret: TY_I32 }])
         };
         self.traits.push(TraitDesc { name: desc_name.to_string(), methods });
+        self.trait_decls.push((name, TraitDeclInfo {
+            id,
+            node: rut_ast::ast::NodeId(0),
+            generics: vec![],
+        }));
+        id
+    }
+
+    /// The builtin `Disposal` contract (RFC 0011/0016, declared in
+    /// std:core): `fn dispose(mut self) -> unit`. Registered on first
+    /// reference like the sequence contracts — an ordinary trait with
+    /// ordinary nominal impls; the rc-0 destructor wiring is the host/VM's,
+    /// not a compiler name match.
+    pub fn builtin_disposal(&mut self, name: IdentId) -> u32 {
+        if let Some(id) = self.trait_id_of(name) {
+            return id;
+        }
+        let id = self.traits.len() as u32;
+        self.traits.push(TraitDesc {
+            name: "Disposal".to_string(),
+            methods: vec![rut_core::binary::TraitMethod {
+                name: "dispose".to_string(),
+                params: vec![],
+                ret: TY_UNIT,
+            }],
+        });
         self.trait_decls.push((name, TraitDeclInfo {
             id,
             node: rut_ast::ast::NodeId(0),
@@ -142,7 +183,6 @@ impl<'a> Ctx<'a> {
                     "bool" => Some(TY_BOOL), "char" => Some(TY_CHAR),
                     "str" => Some(TY_STR),
                     "bytes" => Some(TY_BYTES),
-                    "Opaque" => Some(TY_OPAQUE),
                     _ => None,
                 };
                 if let Some(p) = prim {
@@ -160,45 +200,53 @@ impl<'a> Ctx<'a> {
                     self.err(sp, "`dyn` was removed — an interface name in type position is the object type (RFC 0012)");
                     return TY_I32;
                 }
+                // an imported std:core builtin container (RFC 0028): the
+                // prelude is imported, never ambient — `Array`/`Option`/
+                // `Result`/`Opaque` resolve only when the name was bound
+                // from the std:core surface
+                let core_ty = self.extern_native_types.get(&name).copied();
                 // a declared or imported type shadows a builtin name (RFC
                 // 0005: `std:collection`'s `Vec` is an ordinary class, so it
                 // never reaches the builtin table)
-                let shadow = matches!(n.as_str(), "Array" | "Option" | "Result")
+                let shadow = matches!(n.as_str(), "Array" | "Option" | "Result" | "Opaque")
                     && (self.find_data(name).is_some() || self.extern_types.contains_key(&name));
-                match n.as_str() {
-                    "Array" | "Option" | "Result" if !shadow => {
-                        let generics = seg.generics.clone();
-                        match (n.as_str(), generics.as_slice()) {
-                            ("Array", [e]) => {
-                                let t = self.resolve_type(*e, env);
-                                self.mk_array(t)
-                            }
-                            ("Array", _) => {
-                                self.err(sp, "Array takes one generic argument: Array<T>");
-                                TY_I32
-                            }
-                            ("Option", [e]) => {
-                                let t = self.resolve_type(*e, env);
-                                self.mk_option(t)
-                            }
-                            ("Option", _) => {
-                                self.err(sp, "Option takes one generic argument");
-                                TY_I32
-                            }
-                            ("Result", [o, e]) => {
-                                let ok = self.resolve_type(*o, env);
-                                let err = self.resolve_type(*e, env);
-                                self.mk_result(ok, err)
-                            }
-                            ("Result", _) => {
-                                self.err(sp, "Result takes two generic arguments");
-                                TY_I32
-                            }
-                            _ => unreachable!(),
+                if let Some(kind) = core_ty.filter(|_| !shadow) {
+                    let generics = seg.generics.clone();
+                    return match (kind, generics.as_slice()) {
+                        (rut_core::binary::NativeTy::Array, [e]) => {
+                            let t = self.resolve_type(*e, env);
+                            self.mk_array(t)
                         }
-                    }
-                    _ => {
-                        // user types
+                        (rut_core::binary::NativeTy::Array, _) => {
+                            self.err(sp, "Array takes one generic argument: Array<T>");
+                            TY_I32
+                        }
+                        (rut_core::binary::NativeTy::Option, [e]) => {
+                            let t = self.resolve_type(*e, env);
+                            self.mk_option(t)
+                        }
+                        (rut_core::binary::NativeTy::Option, _) => {
+                            self.err(sp, "Option takes one generic argument");
+                            TY_I32
+                        }
+                        (rut_core::binary::NativeTy::Result, [o, e]) => {
+                            let ok = self.resolve_type(*o, env);
+                            let err = self.resolve_type(*e, env);
+                            self.mk_result(ok, err)
+                        }
+                        (rut_core::binary::NativeTy::Result, _) => {
+                            self.err(sp, "Result takes two generic arguments");
+                            TY_I32
+                        }
+                        (rut_core::binary::NativeTy::Opaque, []) => TY_OPAQUE,
+                        (rut_core::binary::NativeTy::Opaque, _) => {
+                            self.err(sp, "`Opaque` takes no generic arguments");
+                            TY_I32
+                        }
+                    };
+                }
+                {
+                    // user types
                         if let Some(e) = self.find_enum(name).cloned() {
                             if !seg.generics.is_empty() {
                                 self.err(sp, format!("enum `{n}` takes no generic arguments"));
@@ -266,10 +314,12 @@ impl<'a> Ctx<'a> {
                             self.err(sp, "`Self` is only valid inside a type body (RFC 0010 §1)");
                             return TY_I32;
                         }
-                        self.err(sp, format!("unknown type `{n}`"));
+                        let msg = self
+                            .not_in_core_scope(&n)
+                            .unwrap_or_else(|| format!("unknown type `{n}`"));
+                        self.err(sp, msg);
                         TY_I32
                     }
-                }
             }
         }
     }

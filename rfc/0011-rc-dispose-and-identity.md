@@ -25,13 +25,14 @@ rc 0) and **`examples/memory/temp-file.rut`**.
   comparison for composites; field-wise comparison goes
   through `Hashable.eq` (RFC 0028) when a type opts in. Copying is always
   explicit — a program never depends on when a copy happens.
-- **`own(x) -> T`** — prelude builtin, the eager **shallow** copy: a fresh
+- **`own(x) -> T`** — a std:core function, the eager **shallow** copy: a fresh
   cell with `x`'s payload cloned (primitive fields copied, handle-typed
   fields still shared — divergence is one level deep; `own` it again for
   deeper cuts). `own` is the only copy in the language. Over a buffer it
   clones the buffer but shares composite element cells. Over a primitive
   it is a no-op (lint). New identity by definition: `own(x) == x` is
-  `false`.
+  `false`. Imported from `"std:core"` like every prelude name (RFC 0028)
+  — never ambient.
 
 ## 2. `Disposal` — destructors for classes
 

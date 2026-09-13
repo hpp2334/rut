@@ -3,6 +3,7 @@
 // ("app:ui") exports the widget fns + prop dataclasses; Color/Point are
 // host value types. The full assumed kit surface is documented in README.
 
+import { Option } from "std:core";
 import { box, BoxProps, Color, column, Element, FlexProps, TextProps, text } from "app:ui";
 import { GAP, PAD, RADIUS } from "../theme.rut";
 import { Palette } from "../theme.rut";

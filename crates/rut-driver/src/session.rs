@@ -62,6 +62,14 @@ pub struct Module {
     pub intrinsics: Vec<(String, rut_core::ops::Intrinsic, usize)>,
     /// Exported constants: `(name, type, raw bits)` — `std:math::PI`.
     pub consts: Vec<(String, rut_core::types::TypeId, u64)>,
+    /// Builtin containers published by name (`std:core` only): the type is
+    /// the compiler's own; the NAME is import-gated (RFC 0028)
+    pub native_types: Vec<(String, rut_core::binary::NativeTy)>,
+    /// Builtin interfaces published by name (`std:core` only)
+    pub native_ifaces: Vec<(String, rut_core::binary::NativeIface)>,
+    /// Compiler-lowered builtin function names (`std:core` only) — no
+    /// bodies; rut-lir lowers them, reached only through the import
+    pub native_fns: Vec<String>,
     /// Force source-inlining into every consumer (`std:log`): a module whose
     /// class methods must resolve at the call site cannot be linked.
     pub inline: bool,

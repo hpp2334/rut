@@ -2,6 +2,7 @@
 // heap, its own traps. recv() resolving None (all senders dropped) is the
 // shutdown signal.
 
+import { bytes_len } from "std:core";
 import { Receiver } from "std:channel";
 import { Conn } from "std:net";
 

@@ -18,11 +18,20 @@ The standard library splits in two:
   for anything that touches the host. The split keeps policy (levels,
   formatting, wrappers) in auditable rut code and mechanism (syscalls,
   sinks) in Rust. **`std:core`** is the prelude surface: the builtin
-  traits that are ordinary nominal impls — `Disposal`
-  (`fn dispose(mut self) -> unit`, RFC 0011/0016) — plus the prelude
-  builtins `own(x)` (the eager copy, RFC 0011 §1), `downcast<T>`
-  (RFC 0014), and `assert`/`panic` (RFC 0034 §2); `==` needs no
-  trait at all (builtin, RFC 0012 §4). **`std:collection` is a
+  containers `Array<T>`/`Option<T>`/`Result<T,E>` (RFC 0005) and
+  `Opaque` (RFC 0014), the builtin traits that are ordinary nominal
+  impls — `Disposal` (`fn dispose(mut self) -> unit`,
+  RFC 0011/0016), `Index<T>` and `Iterator<T>` (RFC 0012) — plus the
+  prelude functions `own(x)` (the eager copy, RFC 0011 §1),
+  `downcast<T>` (RFC 0014), `assert`/`panic` (RFC 0034 §2), and the
+  `str`/`bytes` natives (`string_len`, `string_encode`, `string_join`,
+  `bytes_len`, `bytes_decode`, `bytes_from`, `bytes_zeroed`); `==` needs
+  no trait at all (builtin, RFC 0012 §4). **The prelude is imported,
+  never ambient: nothing from `std:core` is in scope until a module
+  writes `import { .. } from "std:core"`** — a missing import is a
+  source diagnostic naming the fix. (Primitive types and their
+  conversion syntax — `i32`, `str`, `bytes(n)`, `i32(x)` — are grammar,
+  RFC 0007, not imports.) **`std:collection` is a
   declaration file + Rust bodies**
   (RFC 0025, RFC 0026): its `.d.rut` declares the trait
   `Hashable { fn hash(self) -> u64; fn eq(self, other: Self) -> bool }`

@@ -49,6 +49,8 @@ export const CASES: RutCase[] = [
     blurb: "reference semantics by default; own(x) is the eager copy",
     rfcs: "0011 §1, 0016 §1",
     source: [
+      "import { own } from \"std:core\";",
+      "",
       "dataclass Point { x: f32; y: f32 }",
       "",
       "pub fn main() -> unit {",
@@ -71,6 +73,8 @@ export const CASES: RutCase[] = [
     blurb: "explicit erasure with checked recovery",
     rfcs: "0014",
     source: [
+      "import { Opaque, downcast } from \"std:core\";",
+      "",
       "dataclass Point { x: f32; y: f32 }",
       "",
       "pub fn main() -> unit {",

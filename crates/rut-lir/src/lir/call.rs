@@ -109,8 +109,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let name = segs[0].name;
         let n = self.ctx.name(name).to_string();
         let generics = segs[0].generics.clone();
+        // std:core prelude functions (RFC 0028): compiler-lowered, visible
+        // only when the name was imported from the std:core surface — the
+        // prelude is imported, never ambient. A local fn of the same name
+        // wins when the import is absent (fallthrough below).
+        let core_fn = self.ctx.extern_native_fns.contains(&name);
         match n.as_str() {
-            "own" => {
+            "own" if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "own(x) takes one argument (RFC 0011 §1)");
                     return Err(());
@@ -121,7 +126,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Own { dst, src, ty: t }, sp.lo);
                 return Ok(t);
             }
-            "downcast" => {
+            "downcast" if core_fn => {
                 // prelude body: tidof + icmp + br + guarded unbox (RFC 0032 §1.1)
                 if args.len() != 1 || generics.len() != 1 {
                     self.ctx.err(sp, "downcast<T>(o) takes one explicit type argument and one value (RFC 0014)");
@@ -164,7 +169,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::MovRef { dst: out, src: dst }, sp.lo);
                 return Ok(oty);
             }
-            "panic" => {
+            "panic" if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "panic(msg) takes a message (RFC 0034 §2)");
                     return Err(());
@@ -176,7 +181,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Panic { msg: self.last_reg }, sp.lo);
                 return Ok(TY_UNIT);
             }
-            "assert" => {
+            "assert" if core_fn => {
                 if args.is_empty() || args.len() > 2 {
                     self.ctx.err(sp, "assert(cond, msg?) takes a condition (RFC 0034 §2)");
                     return Err(());
@@ -202,7 +207,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, "`print` was removed — import a logger (`import { log } from \"std:log\"`)");
                 return Err(());
             }
-            "string_len" => {
+            "string_len" if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "string_len(s) takes one `str`");
                     return Err(());
@@ -216,7 +221,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
                 return Ok(TY_I32);
             }
-            "string_join" => {
+            "string_join" if core_fn => {
                 // join every element of an `Array<str>` in one pass: the
                 // native sizes once and allocates once (RFC 0032 §1.1 R2).
                 if args.len() != 1 {
@@ -237,7 +242,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::CallNat { nat: Nat::StrJoin, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
                 return Ok(TY_STR);
             }
-            "string_encode" => {
+            "string_encode" if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "string_encode(s) takes one `str`");
                     return Err(());
@@ -251,7 +256,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.last_reg = dst;
                 return Ok(TY_BYTES);
             }
-            "bytes_len" => {
+            "bytes_len" if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "bytes_len(b) takes one `bytes`");
                     return Err(());
@@ -265,7 +270,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
                 return Ok(TY_I32);
             }
-            "bytes_decode" => {
+            "bytes_decode" if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "bytes_decode(b) takes one `bytes`");
                     return Err(());
@@ -279,7 +284,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.last_reg = dst;
                 return Ok(TY_STR);
             }
-            "bytes_from" => {
+            "bytes_from" if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "bytes_from(source) takes one `Array<u8>`");
                     return Err(());
@@ -298,7 +303,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Own { dst, src, ty: TY_BYTES }, sp.lo);
                 return Ok(TY_BYTES);
             }
-            "bytes_zeroed" => {
+            "bytes_zeroed" if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "bytes_zeroed(n) takes one `i32`");
                     return Err(());
@@ -408,8 +413,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(ef.ret);
         }
         // builtin type-call: Array<T>(n) — allocate n slots (runtime length,
-        // non-growable, RFC 0005); the storage under `std:collection`'s Vec
-        if n == "Array" && self.ctx.find_data(name).is_none() {
+        // non-growable, RFC 0005); the storage under `std:collection`'s Vec.
+        // Import-gated like the type itself (RFC 0028)
+        if n == "Array"
+            && self.ctx.find_data(name).is_none()
+            && self.ctx.extern_native_types.get(&name).copied()
+                == Some(rut_core::binary::NativeTy::Array)
+        {
             if generics.len() != 1 {
                 self.ctx.err(sp, "Array<T>(n) takes one type argument");
                 return Err(());
@@ -449,7 +459,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ));
             return Err(());
         }
-        self.ctx.err(sp, format!("unknown function `{n}`"));
+        let msg = self
+            .ctx
+            .not_in_core_scope(&n)
+            .unwrap_or_else(|| format!("unknown function `{n}`"));
+        self.ctx.err(sp, msg);
         Err(())
     }
 
@@ -490,6 +504,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let bn = self.ctx.name(base).to_string();
         let mn = self.ctx.name(member).to_string();
+        // std:core builtin statics (RFC 0028): `Option.some`, `Result.ok`,
+        // `Opaque.new` — the prelude is imported, never ambient, so the
+        // arms fire only when the base name was bound from the surface
+        let core_ty = self.ctx.extern_native_types.get(&base).copied();
         // Explicit type args on a static head are meaningful only where the
         // member can use them (`Vec<u32>.from(..)` — the element type);
         // everywhere else they stay unsupported rather than silently ignored.
@@ -502,7 +520,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ("Math", _) => {
                 return self.compile_math_member(member, &args, expected, sp);
             }
-            ("Option", "some") => {
+            ("Option", "some") if core_ty == Some(rut_core::binary::NativeTy::Option) => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "Option.some(v) takes one value");
                     return Err(());
@@ -518,7 +536,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::OptSome { dst, ty: oty, val: src }, sp.lo);
                 return Ok(oty);
             }
-            ("Option", "none") => {
+            ("Option", "none") if core_ty == Some(rut_core::binary::NativeTy::Option) => {
                 let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
                     Some(TyKind::Option { elem }) => elem,
                     _ => {
@@ -531,7 +549,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::OptNone { dst, ty: oty }, sp.lo);
                 return Ok(oty);
             }
-            ("Result", "ok") | ("Result", "err") => {
+            ("Result", "ok") | ("Result", "err")
+                if core_ty == Some(rut_core::binary::NativeTy::Result) =>
+            {
                 let is_ok = mn == "ok";
                 if args.len() != 1 {
                     self.ctx.err(sp, format!("Result.{mn}(v) takes one value"));
@@ -559,7 +579,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 return Ok(rty);
             }
-            ("Opaque", "new") => {
+            ("Opaque", "new") if core_ty == Some(rut_core::binary::NativeTy::Opaque) => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "Opaque.new(v) takes one value");
                     return Err(());
@@ -645,7 +665,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, format!("enum `{bn}` has no static `{mn}` in this build"));
             return Err(());
         }
-        self.ctx.err(sp, format!("unknown name `{bn}.{mn}`"));
+        let msg = self
+            .ctx
+            .not_in_core_scope(&bn)
+            .unwrap_or_else(|| format!("unknown name `{bn}.{mn}`"));
+        self.ctx.err(sp, msg);
         Err(())
     }
 
@@ -826,8 +850,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let base = segs[0].name;
                 let bn = self.ctx.name(base).to_string();
                 // `Vec` is an ordinary class (std:collection), so it routes
-                // here through `find_data`, like any other class
-                let is_type = matches!(bn.as_str(), "Option" | "Result" | "Opaque" | "bytes" | "Math")
+                // here through `find_data`, like any other class; the
+                // std:core statics (`Option`, `Result`, `Opaque`) route only
+                // when imported (RFC 0028)
+                let is_type = matches!(bn.as_str(), "bytes" | "Math")
+                    || self.ctx.extern_native_types.contains_key(&base)
                     || self.ctx.find_enum(base).is_some()
                     || self.ctx.find_data(base).is_some();
                 if is_type {

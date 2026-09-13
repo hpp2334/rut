@@ -9,6 +9,7 @@
 // `pub` (optionally scoped: `pub(mod)`, `pub(super)`, `pub(self)`)
 // exposes them.
 
+import { Option, panic } from "std:core";
 import { Logger } from "std:log";
 import { Math } from "std:math";
 

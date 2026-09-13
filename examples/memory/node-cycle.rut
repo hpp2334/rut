@@ -4,6 +4,7 @@
 // are cell handles (RFC 0016 §1), so plain class fields cycle just fine —
 // that is exactly why Weak exists.
 
+import { Option } from "std:core";
 import { Logger } from "std:log";
 
 class Node {                              // initializer covers `next`

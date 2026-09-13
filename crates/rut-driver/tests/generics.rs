@@ -4,7 +4,16 @@
 use rut_parser::Mode;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    rut_driver::compile_program(src, Mode::Impl, "test", 1, &[])
+    // the std:core surface bound as the one import (RFC 0028): these tests
+    // exercise generic monomorphization, not import discipline — the
+    // prelude is imported, never ambient
+    rut_driver::compile_program(
+        src,
+        Mode::Impl,
+        "test",
+        1,
+        &[(2, rut_core::binary::Surface::core())],
+    )
 }
 
 #[test]

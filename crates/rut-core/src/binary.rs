@@ -90,6 +90,36 @@ pub struct SurfaceType {
     pub is_generic: bool,
 }
 
+/// A builtin container published by `std:core`'s native surface (RFC 0028):
+/// the type constructor is the compiler's own — the NAME resolves only once
+/// the importer wrote `import { .. } from "std:core"`. The prelude is
+/// imported, never ambient.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeTy {
+    /// `Array<T>` — the heap array cell (RFC 0005)
+    Array,
+    /// `Option<T>` — the builtin sum (RFC 0005)
+    Option,
+    /// `Result<T, E>` — the builtin sum (RFC 0005)
+    Result,
+    /// `Opaque` — the erasure box (RFC 0014); a boot-table type whose name
+    /// is import-gated like the containers
+    Opaque,
+}
+
+/// A builtin interface published by `std:core`'s native surface (RFC 0028):
+/// registered on first reference, exactly like a declared trait — but only
+/// for importers that named it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeIface {
+    /// `Disposal { fn dispose(mut self) -> unit }` (RFC 0011/0016)
+    Disposal,
+    /// `Index<T>` — the random-access contract (RFC 0012)
+    Index,
+    /// `Iterator<T>` — the cursor contract (RFC 0012)
+    Iterator,
+}
+
 /// The importable surface a module publishes (traits still to come).
 #[derive(Clone, Debug, Default)]
 pub struct Surface {
@@ -103,6 +133,74 @@ pub struct Surface {
     pub scope_blocks: Vec<(crate::id::ScopeId, u32)>,
     /// exported (pub) type names
     pub type_exports: Vec<SurfaceType>,
+    /// builtin container names (`std:core` only): name -> constructor
+    pub native_types: Vec<(String, NativeTy)>,
+    /// builtin interface names (`std:core` only): name -> contract
+    pub native_ifaces: Vec<(String, NativeIface)>,
+    /// compiler-lowered builtin function names (`std:core` only) — no
+    /// `FuncCode`; the bodies are rut-lir lowering, reached only through
+    /// the import binding
+    pub native_fns: Vec<String>,
+}
+
+/// The `std:core` prelude function names (RFC 0028), in surface order.
+pub const CORE_FNS: &[&str] = &[
+    "own", "downcast", "assert", "panic",
+    "string_len", "string_encode", "string_join",
+    "bytes_len", "bytes_decode", "bytes_from", "bytes_zeroed",
+];
+
+impl Surface {
+    /// The `std:core` prelude surface (RFC 0028): the builtin containers,
+    /// the builtin interfaces, and the compiler-lowered functions. One
+    /// source of truth — the driver mounts it (`mount_std_core`), the
+    /// compiler hints from it, and `rut/std-core/core.d.rut` mirrors it
+    /// for the LSP (kept true to the implementation by test).
+    pub fn core() -> Surface {
+        Surface {
+            native_types: vec![
+                ("Array".to_string(), NativeTy::Array),
+                ("Option".to_string(), NativeTy::Option),
+                ("Result".to_string(), NativeTy::Result),
+                ("Opaque".to_string(), NativeTy::Opaque),
+            ],
+            native_ifaces: vec![
+                ("Disposal".to_string(), NativeIface::Disposal),
+                ("Index".to_string(), NativeIface::Index),
+                ("Iterator".to_string(), NativeIface::Iterator),
+            ],
+            native_fns: CORE_FNS.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+}
+
+/// A `std:core` builtin container by name, if it is one.
+pub fn core_native_type(name: &str) -> Option<NativeTy> {
+    Surface::core()
+        .native_types
+        .iter()
+        .find(|(n, _)| n == name)
+        .map(|(_, k)| *k)
+}
+
+/// A `std:core` builtin interface by name, if it is one.
+pub fn core_native_iface(name: &str) -> Option<NativeIface> {
+    Surface::core()
+        .native_ifaces
+        .iter()
+        .find(|(n, _)| n == name)
+        .map(|(_, k)| *k)
+}
+
+/// Is `name` one of the `std:core` prelude functions?
+pub fn is_core_fn(name: &str) -> bool {
+    CORE_FNS.contains(&name)
+}
+
+/// Is `name` any `std:core` prelude name (type, interface, or function)?
+pub fn is_core_name(name: &str) -> bool {
+    is_core_fn(name) || core_native_type(name).is_some() || core_native_iface(name).is_some()
 }
 
 #[derive(Clone, Debug, Default)]

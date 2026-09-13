@@ -1,3 +1,4 @@
+import { Option } from "std:core";
 import { Logger } from "std:log";
 
 // binary-trees — allocation churn. Nodes are recursive dataclasses

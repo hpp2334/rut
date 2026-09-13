@@ -12,7 +12,10 @@
 `Option<T>`, `Result<T, E>` are **builtin (VM-native)** types — they cannot
 be user-defined because user enums carry no data (RFC 0006). No sugar
 operators (`?.`, `??`); the API is explicit snake_case methods plus the `?`
-propagation operator. See **`examples/basic/option-result.rut`**.
+propagation operator. Their NAMES live in `std:core` like every prelude
+name: `import { Option, Result } from "std:core"` (RFC 0028) — the types
+are builtin, the names are imported, never ambient. See
+**`examples/basic/option-result.rut`**.
 
 | `Option<T>` | `Result<T, E>` |
 |---|---|

@@ -138,7 +138,11 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
   the use site from the impl's argument and stays reified in the type
   table. Two builtin contracts: `Index<T>` (`len`/`get`/`set`) drives
   `x[i]` and the indexed `for..of`; `Iterator<T>` (`next`, no `len`) drives
-  cursor `for..of`. A type may have more than one element choice; the use
+  cursor `for..of`. Both are std:core imports like every prelude name
+  (RFC 0028) — the builtin `Array`/`str`/`bytes` index themselves without
+  the trait; user types reach the contracts through
+  `import { Index, Iterator } from "std:core"`. A type may have more
+  than one element choice; the use
   site selects it. `Vec` (rut code) declares `impl Index<T> for Vec<T>` and
   ships `VecIter<T>` for `v.iter()`.
 - Heterogeneous collections are interface-typed vecs:

@@ -233,7 +233,8 @@ rut/
 │   ├── core.d.rut                  #   prelude: host primitive str,
 │   │                               #   Vec/Option/Result/Array host
 │   │                               #   classes, Disposal (0028; the
-│   │                               #   LSP embeds it, rutc follows)
+│   │                               #   LSP embeds it, rutc follows) —
+│   │                               #   imported, never ambient
 │   ├── math.d.rut                  #   host fns (0028)
 │   └── collection.d.rut            #   Hashable (0028; Map/Set land
 │                                   #   with 0025/0026)

@@ -96,20 +96,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             TypeKind::TyPath { segs, .. } => {
-                // builtin containers: unify element-wise
+                // builtin containers: unify element-wise — the std:core
+                // names, gated on the import like everywhere else (an
+                // unimported name falls through to `resolve_type`, which
+                // reports it as not in scope)
                 let head = self.ctx.name(segs[0].name);
+                let core = self.ctx.extern_native_types.contains_key(&segs[0].name);
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
-                match (head, arg_kind) {
-                    ("Option", TyKind::Option { elem }) if segs[0].generics.len() == 1 => {
+                match (core, head, arg_kind) {
+                    (true, "Option", TyKind::Option { elem }) if segs[0].generics.len() == 1 => {
                         self.unify_generic(segs[0].generics[0], elem, decl_generics, subst, sp)
                     }
-                    ("Result", TyKind::Result { ok, err })
+                    (true, "Result", TyKind::Result { ok, err })
                         if segs[0].generics.len() == 2 =>
                     {
                         self.unify_generic(segs[0].generics[0], ok, decl_generics, subst, sp)?;
                         self.unify_generic(segs[0].generics[1], err, decl_generics, subst, sp)
                     }
-                    ("Array", TyKind::Array { elem }) if segs[0].generics.len() == 1 => {
+                    (true, "Array", TyKind::Array { elem }) if segs[0].generics.len() == 1 => {
                         self.unify_generic(segs[0].generics[0], elem, decl_generics, subst, sp)
                     }
                     _ => {

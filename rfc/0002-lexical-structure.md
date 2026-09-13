@@ -105,7 +105,9 @@ compiler gives it no meaning; greppability is enforced by style.
   (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
   (RFC 0012 §2), and `is` (the type-test operator, `expr is Type` —
   RFC 0012 §3) are keywords. `panic(msg: str)` and
-  `assert(cond, msg?)` are prelude builtins, not keywords (RFC 0034 §2). `dyn` prefixes any **trait path** — a
+  `assert(cond, msg?)` are prelude functions, not keywords (RFC 0034 §2)
+  — and like every prelude name they are **imported, never ambient**
+  (`import { assert, panic } from "std:core"`, RFC 0028). `dyn` prefixes any **trait path** — a
   user `I` or the builtin `Slice<T>` — one rule, no syntax branch
   (RFC 0005, RFC 0012 §2).
 

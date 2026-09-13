@@ -1,6 +1,7 @@
 // components/header.rut — app title bar: logo dot, title, live indicator,
 // events counter, uptime. Pure props-in/Element-out.
 
+import { Option } from "std:core";
 import { box, BoxProps, Color, CrossAlign, Element, FlexProps, MainAlign, row, TextProps, text } from "app:ui";
 import { now_ms } from "std:time";
 import { GAP, PAD, RADIUS } from "../theme.rut";

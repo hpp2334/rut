@@ -2,6 +2,7 @@
 // handlers that mutate the shared state (closures capture the cell handle —
 // the default regime, RFC 0016 §1). The active item is highlighted.
 
+import { Option } from "std:core";
 import { box, BoxProps, ClickProps, click, Color, column, Element, FlexProps, TextProps, text } from "app:ui";
 import { GAP, PAD, RADIUS } from "../theme.rut";
 import { Palette } from "../theme.rut";

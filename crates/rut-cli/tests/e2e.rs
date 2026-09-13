@@ -368,9 +368,18 @@ pub fn main() -> unit {
     assert_eq!(lines, vec!["a=6 b=4 c=251 d=7 n=2"]);
     assert_eq!(trap, None);
     // everywhere else, explicit generics on a static head stay a clear error
-    let bad = "pub fn main() -> unit { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
+    // (the prelude import is present, so the static route engages — RFC 0028)
+    let bad = "import { Option } from \"std:core\";\npub fn main() -> unit { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("not supported in this build")));
+    // and without the import the name is simply not in scope (RFC 0028:
+    // the prelude is imported, never ambient)
+    let unimported = "pub fn main() -> unit { let x = Option.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
+    let out = rut_driver::compile_module(unimported, rut_parser::Mode::Impl, "main");
+    assert!(out
+        .diags
+        .iter()
+        .any(|d| d.msg.contains("`Option` is not in scope") && d.msg.contains("std:core")));
 }
 
 #[test]
@@ -1050,6 +1059,8 @@ fn std_collection_vec_via_module_loader_runs() {
         .join("../../rut/std-collection/entry.rut");
     let coll_src = rut_driver::expand_module_source(&coll).expect("expand");
     let mut s = rut_driver::Session::new();
+    // std:core first: the collection source imports its prelude names
+    rut_driver::mount_std_core(&mut s);
     s.register_module(
         "std:collection",
         rut_driver::Module { source: Some(coll_src), ..Default::default() },

@@ -19,6 +19,7 @@
 // shipped stripped (--release), or by recompiling: deterministic
 // serialization means identical pcs.
 
+import { Option, Result, string_len } from "std:core";
 import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
 import { Logger } from "std:log";
 

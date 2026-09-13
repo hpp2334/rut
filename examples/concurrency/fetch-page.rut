@@ -3,6 +3,7 @@
 // register file (a heap object). See the RFC for the lowered pseudo-
 // bytecode of THIS function.
 
+import { Result } from "std:core";
 import { HttpError, get } from "std:http";
 import { Logger } from "std:log";
 

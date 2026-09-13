@@ -3,6 +3,7 @@
 // handle (reference semantics, RFC 0011 §1), and cycles leak by design
 // (RFC 0017). A binary tree is the canonical recursive shape.
 
+import { Option } from "std:core";
 dataclass Node {
     value: i32,
     left: Option<Node>,

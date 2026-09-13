@@ -1,3 +1,4 @@
+import { Result, Opaque, downcast, string_len, bytes_len } from "std:core";
 import { Vec } from "std:collection";
 import { Math } from "std:math";
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.

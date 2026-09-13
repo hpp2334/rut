@@ -1,3 +1,4 @@
+import { string_len } from "std:core";
 import { Vec } from "std:collection";
 // state.rut — the dashboard's reactive setup, tur-style: the Dashboard
 // construction method DECLARES the graph — state atoms (UI writes), sources (services

@@ -1,3 +1,4 @@
+import { Result } from "std:core";
 import { Vec } from "std:collection";
 // HTTP fetch — sequential awaits with `?` propagation, Result at the API
 // boundary, Task-free simple flow. Future<Result<T,E>> everywhere.

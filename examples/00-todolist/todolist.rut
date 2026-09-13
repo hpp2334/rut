@@ -1,3 +1,4 @@
+import { Option, Result, Opaque, downcast } from "std:core";
 import { Vec } from "std:collection";
 // todolist.rut — a todo-list library in rut, called from Rust.
 //

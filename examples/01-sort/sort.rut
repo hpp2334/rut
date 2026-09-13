@@ -1,3 +1,4 @@
+import { Option, Result, Opaque, downcast } from "std:core";
 import { Vec } from "std:collection";
 import { Math } from "std:math";
 // sort.rut — a sorting library in rut, called from Rust.

@@ -14,6 +14,25 @@
 // kept TRUE to the implementation (signatures match rut-lir's builtin
 // tables), never aspirational. Type-calls spelled with the type name
 // (`i32(x)` conversions — RFC 0007) are syntax, not members.
+//
+// The prelude is IMPORTED, never ambient (RFC 0028): nothing here is in
+// scope until a module writes `import { .. } from "std:core"`. The
+// compiler's copy of this surface is `rut_core::binary::Surface::core`;
+// a driver test asserts the two stay in lockstep.
+
+// RFC 0011 §1 — the eager shallow copy: a fresh cell, handle fields
+// shared. The generic parameter is inferred from the argument.
+pub host fn own<T>(x: T) -> T;
+
+// RFC 0014 — recover the concrete value from an erasure box: a type
+// test plus a guarded unbox, yielding `Option<T>` (None on a mismatch).
+pub host fn downcast<T>(o: Opaque) -> Option<T>;
+
+// RFC 0034 §2 — `msg` is optional at the call site (1 or 2 arguments).
+pub host fn assert(cond: bool, msg: str) -> unit;
+
+// RFC 0034 §2 — abort with the message.
+pub host fn panic(msg: str) -> unit;
 
 pub host fn string_len(s: str) -> i32;       // number of chars
 pub host fn string_encode(s: str) -> bytes;  // UTF-8 -> bytes (RFC 0004)
@@ -44,6 +63,14 @@ pub host class Result<T, E> {
     fn is_err(self) -> bool;
     fn unwrap_or(self, default: T) -> T;
     fn expect(self, msg: str) -> T;      // panics with `msg` on Err
+}
+
+// RFC 0014 — the erasure box: any non-`dyn` value goes in via `Opaque.new`,
+// `downcast<T>(o)` recovers it (and `x is T` probes it). A boot-table type
+// whose NAME is import-gated exactly like the containers above; `new`'s
+// parameter is any value — the method spells that with its own `<T>`.
+pub host class Opaque {
+    fn new<T>(v: T) -> Self;
 }
 
 // RFC 0011/0016 — impl blocks for Disposal run `dispose` at rc 0; a

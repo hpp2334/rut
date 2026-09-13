@@ -130,6 +130,8 @@ The named type operations lower to R3 primitives:
   primitives instead of being blocked by an opaque `downc` op. The
   symmetry is deliberate: `Opaque.new(v)` (erasure) is an internal-native
   call and `downcast` (recovery) is prelude code — neither is magic.
+  Both names are imported from `"std:core"` (RFC 0028): the prelude is
+  compiler-lowered but never ambient.
 
 ## 2. Suspend lowering
 

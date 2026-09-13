@@ -9,6 +9,7 @@
 // cancels the producer), the watch handles, and the job channel (the
 // worker recv()s None and exits).
 
+import { Option } from "std:core";
 import { Logger } from "std:log";
 import { now_ms, timeout } from "std:time";
 import { Channel } from "std:channel";

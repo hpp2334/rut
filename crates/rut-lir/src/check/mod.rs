@@ -131,6 +131,17 @@ pub struct Ctx<'a> {
     pub extern_types: std::collections::HashMap<IdentId, TypeId>,
     /// imported types that are `class` (no outside record literal)
     pub extern_classes: std::collections::HashSet<TypeId>,
+    /// imported std:core builtin containers (RFC 0028): name -> constructor.
+    /// The prelude is imported, never ambient — `Array`/`Option`/`Result`/
+    /// `Opaque` resolve only through this map
+    pub extern_native_types: std::collections::HashMap<IdentId, rut_core::binary::NativeTy>,
+    /// imported std:core builtin interfaces: name -> contract
+    /// (`Disposal`/`Index`/`Iterator`)
+    pub extern_ifaces: std::collections::HashMap<IdentId, rut_core::binary::NativeIface>,
+    /// imported std:core compiler-lowered functions (`own`, `downcast`,
+    /// `assert`/`panic`, the `str`/`bytes` natives): the name is callable
+    /// only when bound
+    pub extern_native_fns: std::collections::HashSet<IdentId>,
     /// instantiated generic types: id -> (decl, type args)
     pub inst_data: std::collections::HashMap<TypeId, (IdentId, Vec<TypeId>)>,
     /// monomorphization cache: (decl, type args) -> id
@@ -188,6 +199,9 @@ impl<'a> Ctx<'a> {
             extern_consts: std::collections::HashMap::new(),
             extern_types: std::collections::HashMap::new(),
             extern_classes: std::collections::HashSet::new(),
+            extern_native_types: std::collections::HashMap::new(),
+            extern_ifaces: std::collections::HashMap::new(),
+            extern_native_fns: std::collections::HashSet::new(),
             inst_data: std::collections::HashMap::new(),
             type_inst: std::collections::HashMap::new(),
             trait_inst: std::collections::HashMap::new(),
@@ -226,6 +240,37 @@ impl<'a> Ctx<'a> {
         if is_class {
             self.extern_classes.insert(ty);
         }
+    }
+
+    /// Bind an imported std:core builtin container (`Array`/`Option`/
+    /// `Result`/`Opaque` — RFC 0028): the type constructor is the
+    /// compiler's own; the binding gates the NAME.
+    pub fn add_extern_native_type(&mut self, name: IdentId, kind: rut_core::binary::NativeTy) {
+        self.extern_native_types.insert(name, kind);
+    }
+
+    /// Bind an imported std:core builtin interface (`Disposal`/`Index`/
+    /// `Iterator`): registered as a trait on first reference, like a
+    /// declared one — but only for importers that named it.
+    pub fn add_extern_iface(&mut self, name: IdentId, iface: rut_core::binary::NativeIface) {
+        self.extern_ifaces.insert(name, iface);
+    }
+
+    /// Bind an imported std:core compiler-lowered function (`own`,
+    /// `downcast`, `assert`/`panic`, the `str`/`bytes` natives).
+    pub fn add_extern_native_fn(&mut self, name: IdentId) {
+        self.extern_native_fns.insert(name);
+    }
+
+    /// The `std:core` not-in-scope diagnostic (RFC 0028): the prelude is
+    /// imported, never ambient. `None` when `n` is not a prelude name —
+    /// the caller keeps its ordinary message.
+    pub fn not_in_core_scope(&self, n: &str) -> Option<String> {
+        rut_core::binary::is_core_name(n).then(|| {
+            format!(
+                "`{n}` is not in scope — `import {{ {n} }} from \"std:core\"` (RFC 0028: the prelude is imported, never implicit)"
+            )
+        })
     }
 
     /// Import another module's type descriptors so `(scope, local)` ids

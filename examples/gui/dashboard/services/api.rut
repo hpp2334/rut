@@ -1,3 +1,4 @@
+import { Array, Result } from "std:core";
 import { Vec } from "std:collection";
 import { Math } from "std:math";
 // services/api.rut — mock HTTP layer: suspend fns returning Result, LCG-

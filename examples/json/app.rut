@@ -1,3 +1,4 @@
+import { Array, Option, Opaque, assert } from "std:core";
 import { Vec } from "std:collection";
 // app.rut — the CONSUMER side of user-defined JSON (RFC 0037).
 //

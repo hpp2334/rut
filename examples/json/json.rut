@@ -1,3 +1,4 @@
+import { Array, Option, Result, Opaque, downcast, string_len } from "std:core";
 import { Vec } from "std:collection";
 // json.rut — USER-DEFINED JSON on std:reflect (RFC 0037). Pure rut; no
 // VM JSON builtin exists, by design — a rut engine is small because the
