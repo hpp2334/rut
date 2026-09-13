@@ -72,7 +72,37 @@ pub const T_LTF: u8 = 50;
 pub const T_GTF: u8 = 51;
 pub const T_LEF: u8 = 52;
 pub const T_GEF: u8 = 53;
-pub const NTAGS: usize = 54;
+pub const T_MOVREF: u8 = 54;
+pub const T_CONST: u8 = 55;
+pub const T_STRCMP: u8 = 56;
+pub const T_ARRAYCMP: u8 = 57;
+pub const T_REFEQ: u8 = 58;
+pub const T_BRTABLE: u8 = 59;
+pub const T_NEWCELL: u8 = 60;
+pub const T_MAKERECORD: u8 = 61;
+pub const T_OWN: u8 = 62;
+pub const T_ARRNEW: u8 = 63;
+pub const T_ARRLIT: u8 = 64;
+pub const T_ENUMNEW: u8 = 65;
+pub const T_OPTSOME: u8 = 66;
+pub const T_OPTNONE: u8 = 67;
+pub const T_RESOK: u8 = 68;
+pub const T_RESERR: u8 = 69;
+pub const T_SUMIS: u8 = 70;
+pub const T_UNWRAP: u8 = 71;
+pub const T_UNWRAPOR: u8 = 72;
+pub const T_EXPECT: u8 = 73;
+pub const T_TIDOF: u8 = 74;
+pub const T_ISTYPE: u8 = 75;
+pub const T_ISTRAIT: u8 = 76;
+pub const T_UNBOX: u8 = 77;
+pub const T_BOX: u8 = 78;
+pub const T_MAKECLOSURE: u8 = 79;
+pub const T_PANIC: u8 = 80;
+pub const T_ASSERT: u8 = 81;
+pub const T_CONV: u8 = 82;
+pub const T_STRCHARAT: u8 = 83;
+pub const NTAGS: usize = 84;
 
 pub fn tag_of(op: &Op) -> u8 {
     match op {
@@ -129,6 +159,39 @@ pub fn tag_of(op: &Op) -> u8 {
         Op::GtF { .. } => T_GTF,
         Op::LeF { .. } => T_LEF,
         Op::GeF { .. } => T_GEF,
+        Op::MovRef { .. } => T_MOVREF,
+        Op::Const { .. } => T_CONST,
+        Op::StrCmp { .. } => T_STRCMP,
+        Op::ArrayCmp { .. } => T_ARRAYCMP,
+        Op::RefEq { .. } => T_REFEQ,
+        Op::BrTable { .. } => T_BRTABLE,
+        Op::NewCell { .. } => T_NEWCELL,
+        Op::MakeRecord { .. } => T_MAKERECORD,
+        Op::Own { .. } => T_OWN,
+        Op::ArrNew { .. } => T_ARRNEW,
+        Op::ArrLit { .. } => T_ARRLIT,
+        Op::EnumNew { .. } => T_ENUMNEW,
+        Op::OptSome { .. } => T_OPTSOME,
+        Op::OptNone { .. } => T_OPTNONE,
+        Op::ResOk { .. } => T_RESOK,
+        Op::ResErr { .. } => T_RESERR,
+        Op::SumIs { .. } => T_SUMIS,
+        Op::Unwrap { .. } => T_UNWRAP,
+        Op::UnwrapOr { .. } => T_UNWRAPOR,
+        Op::Expect { .. } => T_EXPECT,
+        Op::TidOf { .. } => T_TIDOF,
+        Op::IsType { .. } => T_ISTYPE,
+        Op::IsTrait { .. } => T_ISTRAIT,
+        Op::Unbox { .. } => T_UNBOX,
+        Op::Box { .. } => T_BOX,
+        Op::MakeClosure { .. } => T_MAKECLOSURE,
+        Op::Panic { .. } => T_PANIC,
+        Op::Assert { .. } => T_ASSERT,
+        Op::Conv { .. } => T_CONV,
+        Op::StrCharAt { .. } => T_STRCHARAT,
+        // every current variant has a tag; keep the fallback so a future op
+        // still runs (via the match interpreter) instead of miscompiling
+        #[allow(unreachable_patterns)]
         _ => T_SLOW,
     }
 }
@@ -175,6 +238,12 @@ pub trait Machine {
     fn sync_fuel(&mut self, fuel: i64, fuel_used: u64) {
         let _ = (fuel, fuel_used);
         unimplemented!("sync_fuel: not threaded by this Machine")
+    }
+    /// Fast path for `Flow::Redispatch`: the frame pointers + pc only, with
+    /// no fuel reads/writes (the engine keeps fuel in its arguments).
+    fn frame_ptrs(&mut self) -> (*const Op, *const u8, *mut Self::Word, u32) {
+        let _ = self;
+        unimplemented!("frame_ptrs: not threaded by this Machine")
     }
 
     fn op_mov(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
@@ -311,6 +380,36 @@ pub trait Machine {
     fn op_gtf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_lef(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_gef(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_movref(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_const(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_strcmp(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_arraycmp(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_refeq(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_brtable(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_newcell(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_makerecord(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_own(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_arrnew(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_arrlit(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_enumnew(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_optsome(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_optnone(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_resok(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_reserr(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_sumis(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_unwrap(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_unwrapor(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_expect(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_tidof(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_istype(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_istrait(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_unbox(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_box(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_makeclosure(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_panic(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_assert(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_conv(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_strcharat(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
 }
 
 /// A threaded handler: same ABI, arguments, and return type for every op (a

@@ -18,9 +18,9 @@
 //! [`ThreadOut::Bail`] with the pc left at that op so the VM's match
 //! interpreter takes over.
 //!
-//! **Status:** wired into `rut-vm` and the default on native. See
-//! `README.md` for the A/B numbers (about 2× on scalar loops, net-positive
-//! across most workloads) and the remaining ops to thread.
+//! **Status:** wired into `rut-vm` and the default on native. Every op has a
+//! handler, so hot code never bails; see `README.md` for the A/B numbers
+//! (every workload faster, ~1.5× geomean).
 
 #![cfg_attr(rut_threaded, feature(explicit_tail_calls, rust_preserve_none_cc))]
 #![cfg_attr(rut_threaded, allow(incomplete_features))]

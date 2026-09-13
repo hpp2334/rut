@@ -52,11 +52,10 @@ macro_rules! op_handler {
                 }
                 Flow::Done(o) => return Ok(ThreadOut::Done(o)),
                 Flow::Redispatch => {
-                    unsafe { (*m).sync_fuel(next_fuel, used) };
-                    let st = unsafe { (*m).thread_state() };
-                    let tag = unsafe { *st.tags.add(st.pc as usize) } as usize;
+                    let (c, t, r, p) = unsafe { (*m).frame_ptrs() };
+                    let tag = unsafe { *t.add(p as usize) } as usize;
                     let h = unsafe { *(table as *const Handler<M>).add(tag) };
-                    become h(m, table, st.code, st.tags, st.regs, st.pc, st.fuel, st.fuel_used)
+                    become h(m, table, c, t, r, p, next_fuel, used)
                 }
             }
         }
@@ -116,6 +115,36 @@ op_handler!(h_ltf, op_ltf);
 op_handler!(h_gtf, op_gtf);
 op_handler!(h_lef, op_lef);
 op_handler!(h_gef, op_gef);
+op_handler!(h_movref, op_movref);
+op_handler!(h_const, op_const);
+op_handler!(h_strcmp, op_strcmp);
+op_handler!(h_arraycmp, op_arraycmp);
+op_handler!(h_refeq, op_refeq);
+op_handler!(h_brtable, op_brtable);
+op_handler!(h_newcell, op_newcell);
+op_handler!(h_makerecord, op_makerecord);
+op_handler!(h_own, op_own);
+op_handler!(h_arrnew, op_arrnew);
+op_handler!(h_arrlit, op_arrlit);
+op_handler!(h_enumnew, op_enumnew);
+op_handler!(h_optsome, op_optsome);
+op_handler!(h_optnone, op_optnone);
+op_handler!(h_resok, op_resok);
+op_handler!(h_reserr, op_reserr);
+op_handler!(h_sumis, op_sumis);
+op_handler!(h_unwrap, op_unwrap);
+op_handler!(h_unwrapor, op_unwrapor);
+op_handler!(h_expect, op_expect);
+op_handler!(h_tidof, op_tidof);
+op_handler!(h_istype, op_istype);
+op_handler!(h_istrait, op_istrait);
+op_handler!(h_unbox, op_unbox);
+op_handler!(h_box, op_box);
+op_handler!(h_makeclosure, op_makeclosure);
+op_handler!(h_panic, op_panic);
+op_handler!(h_assert, op_assert);
+op_handler!(h_conv, op_conv);
+op_handler!(h_strcharat, op_strcharat);
 
 fn table<M: Machine>() -> Table<M> {
     let mut t: [Handler<M>; NTAGS] = [h_slow::<M>; NTAGS];
@@ -172,6 +201,36 @@ fn table<M: Machine>() -> Table<M> {
     t[T_GTF as usize] = h_gtf::<M>;
     t[T_LEF as usize] = h_lef::<M>;
     t[T_GEF as usize] = h_gef::<M>;
+    t[T_MOVREF as usize] = h_movref::<M>;
+    t[T_CONST as usize] = h_const::<M>;
+    t[T_STRCMP as usize] = h_strcmp::<M>;
+    t[T_ARRAYCMP as usize] = h_arraycmp::<M>;
+    t[T_REFEQ as usize] = h_refeq::<M>;
+    t[T_BRTABLE as usize] = h_brtable::<M>;
+    t[T_NEWCELL as usize] = h_newcell::<M>;
+    t[T_MAKERECORD as usize] = h_makerecord::<M>;
+    t[T_OWN as usize] = h_own::<M>;
+    t[T_ARRNEW as usize] = h_arrnew::<M>;
+    t[T_ARRLIT as usize] = h_arrlit::<M>;
+    t[T_ENUMNEW as usize] = h_enumnew::<M>;
+    t[T_OPTSOME as usize] = h_optsome::<M>;
+    t[T_OPTNONE as usize] = h_optnone::<M>;
+    t[T_RESOK as usize] = h_resok::<M>;
+    t[T_RESERR as usize] = h_reserr::<M>;
+    t[T_SUMIS as usize] = h_sumis::<M>;
+    t[T_UNWRAP as usize] = h_unwrap::<M>;
+    t[T_UNWRAPOR as usize] = h_unwrapor::<M>;
+    t[T_EXPECT as usize] = h_expect::<M>;
+    t[T_TIDOF as usize] = h_tidof::<M>;
+    t[T_ISTYPE as usize] = h_istype::<M>;
+    t[T_ISTRAIT as usize] = h_istrait::<M>;
+    t[T_UNBOX as usize] = h_unbox::<M>;
+    t[T_BOX as usize] = h_box::<M>;
+    t[T_MAKECLOSURE as usize] = h_makeclosure::<M>;
+    t[T_PANIC as usize] = h_panic::<M>;
+    t[T_ASSERT as usize] = h_assert::<M>;
+    t[T_CONV as usize] = h_conv::<M>;
+    t[T_STRCHARAT as usize] = h_strcharat::<M>;
     Table { entries: t }
 }
 

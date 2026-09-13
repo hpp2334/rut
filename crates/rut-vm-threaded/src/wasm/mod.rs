@@ -84,20 +84,47 @@ pub fn run<M: Machine>(m: &mut M, pc0: u32, _table: &Table<M>) -> Result<ThreadO
             T_GTF => m.op_gtf(op, regs, pc)?,
             T_LEF => m.op_lef(op, regs, pc)?,
             T_GEF => m.op_gef(op, regs, pc)?,
+            T_MOVREF => m.op_movref(op, regs, pc)?,
+            T_CONST => m.op_const(op, regs, pc)?,
+            T_STRCMP => m.op_strcmp(op, regs, pc)?,
+            T_ARRAYCMP => m.op_arraycmp(op, regs, pc)?,
+            T_REFEQ => m.op_refeq(op, regs, pc)?,
+            T_BRTABLE => m.op_brtable(op, regs, pc)?,
+            T_NEWCELL => m.op_newcell(op, regs, pc)?,
+            T_MAKERECORD => m.op_makerecord(op, regs, pc)?,
+            T_OWN => m.op_own(op, regs, pc)?,
+            T_ARRNEW => m.op_arrnew(op, regs, pc)?,
+            T_ARRLIT => m.op_arrlit(op, regs, pc)?,
+            T_ENUMNEW => m.op_enumnew(op, regs, pc)?,
+            T_OPTSOME => m.op_optsome(op, regs, pc)?,
+            T_OPTNONE => m.op_optnone(op, regs, pc)?,
+            T_RESOK => m.op_resok(op, regs, pc)?,
+            T_RESERR => m.op_reserr(op, regs, pc)?,
+            T_SUMIS => m.op_sumis(op, regs, pc)?,
+            T_UNWRAP => m.op_unwrap(op, regs, pc)?,
+            T_UNWRAPOR => m.op_unwrapor(op, regs, pc)?,
+            T_EXPECT => m.op_expect(op, regs, pc)?,
+            T_TIDOF => m.op_tidof(op, regs, pc)?,
+            T_ISTYPE => m.op_istype(op, regs, pc)?,
+            T_ISTRAIT => m.op_istrait(op, regs, pc)?,
+            T_UNBOX => m.op_unbox(op, regs, pc)?,
+            T_BOX => m.op_box(op, regs, pc)?,
+            T_MAKECLOSURE => m.op_makeclosure(op, regs, pc)?,
+            T_PANIC => m.op_panic(op, regs, pc)?,
+            T_ASSERT => m.op_assert(op, regs, pc)?,
+            T_CONV => m.op_conv(op, regs, pc)?,
+            T_STRCHARAT => m.op_strcharat(op, regs, pc)?,
             _ => m.op_loophead(op, regs, pc)?,
         };
         match flow {
             Flow::Next(n) => pc = n,
             Flow::Done(o) => return Ok(ThreadOut::Done(o)),
             Flow::Redispatch => {
-                m.sync_fuel(fuel, used);
-                let st = m.thread_state();
-                code = st.code;
-                tags = st.tags;
-                regs = st.regs;
-                pc = st.pc;
-                fuel = st.fuel;
-                used = st.fuel_used;
+                let (c, t, r, p) = m.frame_ptrs();
+                code = c;
+                tags = t;
+                regs = r;
+                pc = p;
             }
         }
     }

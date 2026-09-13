@@ -27,42 +27,40 @@ handler executes one op through a shared `Machine::op_*` method, then
 tail-call-interpreter shape; `dispatch_bench` measures it ~25% faster than an
 equivalent `match` loop.
 
-`rut-vm` drives it from `run_loop`: a threaded stretch runs until it hits an
-op the crate does not thread, which returns `ThreadOut::Bail` with the
-machine state synced; `step_one` then runs that one op with the match
-interpreter and re-enters threading. `Flow::Redispatch` handles calls/ret
-(frame changes) by re-reading `thread_state`.
+Every `Op` variant has a tag and a handler, so hot code never bails. Calls and
+`ret` change frames and return `Flow::Redispatch`; the engine re-reads the new
+frame's code/tags/regs/pc through `Machine::frame_ptrs` (fuel stays in the
+threaded arguments, so redispatch is a handful of loads). `T_SLOW` remains as
+a safety net: a future op with no handler still maps to it and runs through
+`rut-vm`'s match interpreter (`step_one`), with the machine state synced.
 
-`Machine::op_*` is the single source of truth for op behavior — both the
-native handlers and the wasm loop call it.
+`Machine::op_*` bodies destructure the current op with `unreachable_op!`,
+which is a **runtime-checked** `#[cold] #[inline(never)]` panic. The tag
+derivation makes a mismatch impossible, but a bug is a clean panic rather
+than UB, and the cold marker keeps the check off the hot path.
 
 ## Status & results
 
 Wired and default on native. Benchmarks (in-process `exec_min_ms`, A/B on the
 same machine, lower is better):
 
-| workload | match | threaded | |
+| workload | match | threaded | speedup |
 |---|--:|--:|--:|
-| intloop | 88.2 | 45.0 | **2.0×** |
-| floatloop | 30.6 | 15.3 | **2.0×** |
-| alloc | 31.9 | 17.8 | **1.8×** |
-| mandelbrot | 11.3 | 7.9 | **1.4×** |
-| nbody | 9.6 | 7.1 | **1.4×** |
-| call | 41.5 | 29.6 | **1.4×** |
-| sieve | 29.8 | 28.5 | 1.05× |
-| fasta | 3.84 | 3.63 | 1.06× |
-| matrix-mul | 9.48 | 9.31 | 1.02× |
-| spectral-norm | 57.2 | 52.1 | 1.10× |
-| binary-trees | 6.61 | 7.09 | 0.93× |
-| quicksort | 8.53 | 9.71 | 0.88× |
-| fannkuch | 4.59 | 5.35 | 0.86× |
+| floatloop | 31.2 | 15.4 | **2.0×** |
+| intloop | 88.2 | 44.2 | **2.0×** |
+| alloc | 32.3 | 17.3 | **1.9×** |
+| nbody | 9.2 | 5.5 | **1.7×** |
+| matrix-mul | 10.1 | 6.5 | **1.6×** |
+| spectral-norm | 54.7 | 36.7 | **1.5×** |
+| fasta | 4.02 | 2.71 | **1.5×** |
+| mandelbrot | 11.3 | 7.8 | **1.4×** |
+| sieve | 30.3 | 21.2 | **1.4×** |
+| fannkuch | 4.57 | 3.28 | **1.4×** |
+| call | 35.2 | 25.4 | **1.4×** |
+| quicksort | 8.66 | 6.43 | **1.4×** |
+| binary-trees | 6.75 | 5.53 | **1.2×** |
 
-All bench checksums match; the full test suite passes.
-
-Remaining work to make the last four net-positive: thread the record/sum
-allocators (`NewCell`, `MakeRecord`, `OptSome/OptNone`, `ResOk/ResErr`,
-`SumIs`, `Unwrap*`, `EnumNew`, `ArrNew`, `ArrLit`, `Own`, `Conv`) so they stop
-bailing, and trim the `Redispatch` overhead on deep recursion.
+All bench checksums match; the full test suite passes; no workload regresses.
 
 ## Running
 
