@@ -23,7 +23,7 @@ deferred.
 | float | `f32 f64` | IEEE 754 |
 | misc | `bool`, `char` (Unicode scalar, 4 bytes) | |
 | heap: text | `string` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4) |
-| heap: binary | `bytes` | immutable raw octet buffer; contiguous, compared by content, COW-shared; built with `bytes(n)` (zeroed), `bytes.from(Array<u8,N>)`, or `Vec<u8>.freeze()` (RFC 0005) |
+| heap: binary | `bytes` | immutable, content-compared octet buffer; at the engine level a `u8` array; built with `bytes(n)` (zeroed), `bytes_from(Array<u8>)`, or `Vec<u8>.freeze()` (RFC 0005) |
 | heap: seq | `Vec<T>` | mutable, growable buffer — cell handle, **shared**; flat storage for primitive `T` (RFC 0016 §4) |
 | heap: seq | `Array<T, N>` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |
 | heap: slice | `Slice<T>` | builtin trait — object type `dyn Slice<T>` only (RFC 0005, RFC 0012 §2) |
@@ -43,12 +43,12 @@ deferred.
   (`Vec<u8>` remains the mutable builder; `freeze()` turns one into a
   `bytes`). Compare it with `==`, index it as `b[i]: u8`, iterate it with
   `for (let b of b)`, and cross the host boundary directly (RFC 0023 §2).
-  See RFC 0005 for the constructor surface.
+  At the engine level `bytes` is a `u8` array (RFC 0005).
 - No `null`, no `undefined`. Absence is `Option<T>` (RFC 0005).
-- **One size accessor everywhere**: `.len()` — `string`, `bytes`,
-  `Vec<T>`, `Array<T, N>`, and `dyn Slice<T>` all spell it the same way;
-  there is no `.length` property or `.count()` variant anywhere in the
-  language.
+- **Size accessor**: `.len()` on `Vec<T>`/`Array<T>` (and any `Index<T>`
+  object); `string`/`bytes` have no method syntax, so their size is the
+  free functions `string_len(s)` / `bytes_len(b)` (RFC 0012). There is no
+  `.length` property or `.count()` variant anywhere in the language.
 
 ## 2. One regime: primitives by value, everything else shared
 

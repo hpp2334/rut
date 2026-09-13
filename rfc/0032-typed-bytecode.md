@@ -36,26 +36,22 @@ calli   slot, rRecv, args ; trait vtable call (RFC 0015 §6) — the ONLY
                           ; path for trait-declared members: always
                           ; dynamic, even when the receiver's exact class is
                           ; statically known (no devirtualization)
-callnat slot, (rRecv,) args -> rD
-                          ; host/extern member (RFC 0025/0026): slot indexes
-                          ; the module's native table — assigned at .d.rut
-                          ; compile, resolved at register, a constant at IR
-                          ; time (fold/CSE-safe, same class as calli with a
-                          ; known slot). Names never dispatch. The recv form
-                          ; covers host methods (construction `new` slots
-                          ; included); the body stays
-                          ; opaque — never inlined. Also reaches the VM's
-                          ; internal natives (§1.1 R2: `str`/`concat`/`tmpl`,
-                          ; `Opaque` construction, Vec's named API) — slots fixed at
-                          ; boot in the same registry (RFC 0022 §2)
+ callnat nat, (rRecv,) args -> rD
+                          ; VM-internal natives (RFC 0032 §1.1 R2):
+                          ; `str`/`concat` (the `f""` desugaring, RFC 0007 §2),
+                          ; `string_len`, `array_len` — a fixed, compiled-in set.
+                          ; HOST FUNCTIONS (RFC 0022/0026) are bodyless
+                          ; `FuncCode`s carrying a `host` name; `call` on one
+                          ; dispatches to the embedder's registered body
+                          ; instead of interpreting.
 ret     rD
 newcell cid -> rD         ; mint a value cell (the `Self { .. }` / dataclass
                            ; literal — RFC 0009/0010; fields follow via setf);
                            ; also the `own(x)` body:
                            ; newcell + payload copy + handle-field retains
                            ; (class construction is a plain `call` of the
-                           ; class method; host classes construct via
-                           ; callnat on their native `new` slot — RFC 0026)
+                           ; class method; a host function constructs via its
+                           ; native-module body — RFC 0026)
 getf    rD, rO, fidx      ; field load (cell — payload slot array)
 setf    rO, fidx, rV      ; field store (+retain/release where typed)
 tidof   rD, rO            ; read an object handle's runtime TypeId → u32
@@ -95,15 +91,19 @@ An op exists for exactly one of three things:
   identity (RFC 0005). Hence no `typeid`, no `arrlen`.
 - **R2 — nothing polymorphic, nothing named.** A `dyn` receiver gets
   exactly one op: `calli` through its vtable. `dyn Slice<T>`'s `x[i]`
-  get/set, `.len()`, `for..of` are the builtin `Slice<T>` impl's slots
+  get/set, `.len()`, `for..of` are the builtin `Index<T>` impl's slots
   (RFC 0005; registered like any builtin impl, RFC 0022 §2) — ordinary
   vtable calls; the backing cell's dispatch-through-owner (RFC 0016 §4)
   is simply its slot target. And things rut spells with a **name** are
   internal natives, never ops: `str`/`concat` (the `f""` desugaring —
-  RFC 0007 §2), Template construction (RFC 0027), `Opaque.new(v)`
-  (RFC 0014), and concrete `Vec<T>`'s `len`/`push`/`pop` — native
-  modules the VM boots with, in the same registry host modules use
-  (RFC 0022 §2), reached by `callnat`. Hence no `strcat`, no `tmpl`.
+  RFC 0007 §2), `string_len`, and `array_len` — the only entries in the
+  `callnat` table. `Opaque.new(v)` (RFC 0014) is an internal-native call;
+  a **host function** (RFC 0022/0026) is a bodyless `FuncCode` carrying a
+  `host` name, and `Op::Call` dispatches it to the embedder's registered
+  body instead of interpreting — so `std:log`'s `create_logger`/
+  `logger_log` are host functions, not natives. `Vec<T>` is rut code:
+  its `len`/`push`/`pop` are ordinary methods, not natives. Hence no
+  `strcat`, no `tmpl`.
 - **R3 — concrete memory + control + the type machine's two readbacks.**
   Ops touch memory only through compile-time-known layouts (inline
   blocks, cells with known headers: `getf`/`setf`/`scopy`,

@@ -36,15 +36,19 @@ compiled per instantiation (RFC 0013 §2). A cursor,
 `VecIter<T>` (`impl Iterator<T>`), backs `for (x of v.iter())` — `Vec`
 is rut code, so it ships its own iterator.
 
-**`bytes` — the immutable binary primitive** (RFC 0004): a non-generic
-builtin cell holding a contiguous octet buffer, compared by content.
-Construction: `bytes(n)` (n zeroed octets), `bytes_from(a)` (copies an
-`Array<u8>`), and `freeze()` on a mutable `Vec<u8>` builder. Reading:
-`bytes_len(b): i32`, `b[i]: u8` (bounds trap), `for (let b of b)`,
-`==`/`!=` by content. `string_encode(s) -> bytes` (UTF-8) and
-`bytes_decode(b) -> string` (UTF-8, lossy) bridge text and binary.
-`Vec<u8>` itself is only a mutable builder; `bytes` is the binary type
-that crosses the host boundary (RFC 0023 §2).
+**`bytes` — the immutable binary primitive** (RFC 0004): at the language
+level a distinct, immutable, content-compared type; **at the engine level
+a `u8` array cell** (`Array<u8>`), so it reuses the array ops — `b[i]` is
+`ArrGet`, `bytes_len(b)` is `ArrLen`, `bytes_zeroed(n)`/`bytes(n)` are
+`ArrNew`, `bytes_from(a)` is an array copy (`Own`), and `==` is the
+content comparison `ArrayCmp`. Construction: `bytes(n)` (n zeroed
+octets), `bytes_from(a)` (copies an `Array<u8>`), and `freeze()` on a
+mutable `Vec<u8>` builder. Reading: `bytes_len(b): i32`, `b[i]: u8`
+(bounds trap), `for (let b of b)`. `string_encode(s) -> bytes` (UTF-8)
+and `bytes_decode(b) -> string` (UTF-8, lossy) are lowered by the
+compiler as LIR loops (no native). `Vec<u8>` itself is only a mutable
+builder; `bytes` is the binary type that crosses the host boundary
+(RFC 0023 §2).
 
 One more builtin is type syntax plus a member:
 

@@ -207,6 +207,9 @@ identity.** `a != b` is its negation (`!(a == b)`).
 - `string`: content comparison (immutable; interned literals make
   identity accidentally work sometimes — content is the law, not the
   accident).
+- `bytes`: content comparison (RFC 0004) — the engine lowers it to the
+  generic content op `ArrayCmp` because `bytes` is a `u8` array; plain
+  `Array<T>` stays identity (below).
 - **Everything else — class, dataclass, `Vec`, `Array`, enums,
   `Opaque`, `I` — is a handle test**: `a == b` is true exactly when
   both point at the same cell (RFC 0016 §1). Since every non-primitive

@@ -60,38 +60,30 @@ fn work() -> unit {
 }
 ```
 
-`std:log` itself (rut source; `Logger` is a value class, so per-function
-construction is free):
+`std:log` itself (rut source — source-inlined, so its `Logger` methods
+resolve at the call site, RFC 0035 §1):
 
 ```rut
-import { Level, emit } from "rt:log";     // native: enum + sink fn
-pub { Level };
+import { create_logger, logger_log } from "rt:log";  // native module
 
 pub class Logger {
-    name: string;                      // unannotated = module-private
-    level: Level = Level.Info;
+    internal: Opaque;                  // the host owns the layout
 
-    pub fn new(name: string) -> Self { return Self { name: name, level: Level.Info }; }
+    pub fn new(name: string) -> Self { return Self { internal: create_logger(name) }; }
 
-    pub fn set_level(self, l: Level) -> unit { self.level = l; }
-    pub fn level(self) -> Level { return self.level; }
-
-    pub fn debug(self, msg: string) -> unit { self.log_at(Level.Debug, msg); }
-    pub fn info(self, msg: string) -> unit  { self.log_at(Level.Info, msg); }
-    pub fn warn(self, msg: string) -> unit  { self.log_at(Level.Warn, msg); }
-    pub fn error(self, msg: string) -> unit { self.log_at(Level.Error, msg); }
-
-    fn log_at(self, l: Level, msg: string) -> unit {   // module-private
-        if (Level.to_int(l) >= Level.to_int(self.level)) {
-            emit(self.name, l, msg);
-        }
-    }
+    pub fn debug(self, msg: string) -> unit { logger_log(self.internal, 0, msg); }
+    pub fn info(self, msg: string) -> unit  { logger_log(self.internal, 1, msg); }
+    pub fn warn(self, msg: string) -> unit  { logger_log(self.internal, 2, msg); }
+    pub fn error(self, msg: string) -> unit { logger_log(self.internal, 3, msg); }
 }
 ```
 
-`rt:log` registers the enum `Level { Debug, Info, Warn, Error }` (RFC 0022
-§2 — host-registered enums) and one fn, `emit(name: string, level: Level,
-msg: string) -> unit`, which routes to `HostHooks.log` (RFC 0035 §1). An
+`rt:log` is a **native module** (RFC 0022/0026): the host functions
+`create_logger(name: string) -> Opaque` and `logger_log(logger: Opaque,
+level: i32, msg: string) -> unit`. The host owns the logger's layout; rut
+only ever holds an `Opaque` handle (RFC 0014) and never inspects it. The
+embedder half ships as `rut-std::logger::install_std_log`
+(`create_logger` boxes the name; `logger_log` routes to the sink). An
 uninstalled sink is a **silent no-op** — a script cannot accidentally spam
 an embedded host's stdout; the host opts into logging explicitly.
 
