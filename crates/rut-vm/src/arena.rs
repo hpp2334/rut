@@ -9,13 +9,67 @@
 //! `OpaqueRef` is the host-facing handle (RFC 0014): it owns one arena
 //! reference and holds the shared arena, so it can outlive the `Vm`.
 
-use crate::heap::{CellVal, HeapAcct};
+use crate::heap::{CellData, CellVal, HeapAcct, Slot};
+use rut_core::binary::FuncCode;
+use rut_core::types::{TypeTable, TyKind};
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::mem::MaybeUninit;
 use std::rc::Rc;
 
 const ARENA_CHUNK: usize = 1024;
+
+/// What a dying cell must release with itself (RFC 0016 §3: "fields are
+/// then released in declaration order (recursively)"). Precomputed from
+/// the program's type table + func signatures so the release path — a
+/// free fn with no VM access — can walk a cell's ref-typed children
+/// without touching tag bytes or per-op type lookups.
+pub(crate) struct ReleasePlan {
+    /// per type id: is a value of the type a cell handle
+    is_ref: Vec<bool>,
+    /// per Data type: indices of ref-typed fields
+    record_refs: Vec<Vec<u16>>,
+    /// per Option/Result type: is the tag-0 / tag-1 payload a cell handle
+    sum_payload_ref: Vec<[bool; 2]>,
+    /// per func: are its captured slots cell handles
+    closure_capture_ref: Vec<Vec<bool>>,
+}
+
+impl ReleasePlan {
+    pub(crate) fn build(types: &TypeTable, funcs: &[FuncCode]) -> ReleasePlan {
+        let is_ref: Vec<bool> = (0..types.types.len())
+            .map(|i| types.is_ref(i as u32))
+            .collect();
+        let of = |t: &u32| is_ref.get(*t as usize).copied().unwrap_or(false);
+        let record_refs = types
+            .types
+            .iter()
+            .map(|t| match &t.kind {
+                TyKind::Data { fields } => fields
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, f)| of(&f.ty))
+                    .map(|(i, _)| i as u16)
+                    .collect(),
+                _ => Vec::new(),
+            })
+            .collect();
+        let sum_payload_ref = types
+            .types
+            .iter()
+            .map(|t| match &t.kind {
+                TyKind::Option { elem } => [of(elem), false],
+                TyKind::Result { ok, err } => [of(ok), of(err)],
+                _ => [false, false],
+            })
+            .collect();
+        let closure_capture_ref = funcs
+            .iter()
+            .map(|f| f.params.iter().map(of).collect())
+            .collect();
+        ReleasePlan { is_ref, record_refs, sum_payload_ref, closure_capture_ref }
+    }
+}
 
 /// Chunked cell storage with a free list. Pointers into a chunk are stable,
 /// so a `Slot` can hold a raw `*const CellVal` for the cell's lifetime.
@@ -24,14 +78,17 @@ pub(crate) struct Arena {
     chunks: RefCell<Vec<Box<[MaybeUninit<CellVal>; ARENA_CHUNK]>>>,
     /// slots used in the last chunk
     bump: Cell<usize>,
+    /// which of a dying cell's children die with it (RFC 0016 §3)
+    pub(crate) plan: Rc<ReleasePlan>,
 }
 
 impl Arena {
-    pub(crate) fn new() -> Arena {
+    pub(crate) fn new(plan: Rc<ReleasePlan>) -> Arena {
         Arena {
             free: RefCell::new(Vec::new()),
             chunks: RefCell::new(Vec::new()),
             bump: Cell::new(ARENA_CHUNK),
+            plan,
         }
     }
 
@@ -80,13 +137,112 @@ impl Drop for Arena {
 
 /// Drop a cell whose strong count reached zero: refund its accounting,
 /// run its destructor, and recycle the slot.
+/// One reference gone. At rc-0 the cell dies — and its ref-typed children
+/// die with it (RFC 0016 §3): `release_cell` collects them and recurses,
+/// so a record's `str`/`Opaque`/vec fields no longer pin their children
+/// until VM end.
+#[inline(always)]
+pub(crate) fn release_ref_slot(arena: &Arena, acct: &HeapAcct, s: Slot) {
+    let p = unsafe { s.r };
+    if p.is_null() {
+        return;
+    }
+    unsafe {
+        let c = &*p;
+        let n = c.refs.get();
+        if n == u32::MAX {
+            return; // immortal singleton
+        }
+        if n <= 1 {
+            release_cell(arena, acct, p as *mut CellVal);
+        } else {
+            c.refs.set(n - 1);
+        }
+    }
+}
+
+/// The cell's ref-typed child slots, in declaration order. The slots are
+/// copied out, not taken — the parent is dead memory the moment
+/// `drop_in_place` runs, and `Slots`/`Packed` have no drop glue of their
+/// own, so nothing double-releases.
+#[inline(always)]
+unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
+    // childless kinds (the common churn: strs, enum singletons, host
+    // boxes) skip the plan lookups entirely
+    match &c.data {
+        CellData::Str(_) | CellData::Enum { .. } | CellData::HostBoxed { .. } => return Vec::new(),
+        _ => {}
+    }
+    let mut out = Vec::new();
+    match &c.data {
+        CellData::Record { fields } => {
+            let fb = fields.borrow();
+            for &i in plan
+                .record_refs
+                .get(c.ty as usize)
+                .into_iter()
+                .flatten()
+            {
+                if let Some(s) = fb.get(i as usize) {
+                    out.push(s);
+                }
+            }
+        }
+        CellData::Sum { tag, payload } => {
+            if let Some(p) = payload {
+                let refs = plan
+                    .sum_payload_ref
+                    .get(c.ty as usize)
+                    .copied()
+                    .unwrap_or([false, false]);
+                if refs[*tag as usize] {
+                    out.push(*p);
+                }
+            }
+        }
+        CellData::Array { elem, items } => {
+            // the ELEMENT type decides: a `Vec<str>`'s slots are cell handles
+            if plan.is_ref.get(*elem as usize).copied().unwrap_or(false) {
+                out.extend(items.borrow_mut().take_slots());
+            }
+        }
+        // a user box stores the inner handle — its release is the box's
+        // own (RFC 0014: box death drops the boxed value's reference)
+        CellData::OpaqueBox { val, val_ty } => {
+            if plan.is_ref.get(*val_ty as usize).copied().unwrap_or(false) {
+                out.push(*val);
+            }
+        }
+        CellData::Closure { func, captures } => {
+            if let Some(flags) = plan.closure_capture_ref.get(*func as usize) {
+                for (&cap, &is_ref) in captures.iter().zip(flags.iter()) {
+                    if is_ref {
+                        out.push(cap);
+                    }
+                }
+            }
+        }
+        // a host payload box has no rut-typed children — the Rust payload
+        // is dropped with the cell through its own Drop (RFC 0023/0026)
+        CellData::HostBoxed { .. } | CellData::Enum { .. } | CellData::Str(_) => {}
+    }
+    out
+}
+
+#[inline(always)]
 pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
+    // children are collected first and released after the parent is freed,
+    // so a release cascade can never observe the dying cell
+    let children = unsafe { collect_ref_children(&*p, &arena.plan) };
     unsafe {
         let bytes = (*p).bytes as u64;
         acct.used.set(acct.used.get().saturating_sub(bytes));
         std::ptr::drop_in_place(p);
     }
     arena.free.borrow_mut().push(p);
+    for s in children {
+        release_ref_slot(arena, acct, s);
+    }
 }
 
 /// A host-held `Opaque` handle (RFC 0014): owns one arena reference.
@@ -128,15 +284,11 @@ impl Clone for OpaqueRef {
 
 impl Drop for OpaqueRef {
     fn drop(&mut self) {
-        let n = unsafe { (*self.ptr).refs.get() };
-        if n == u32::MAX {
-            return; // immortal singleton
-        }
-        if n <= 1 {
-            release_cell(&self.arena, &self.acct, self.ptr as *mut CellVal);
-        } else {
-            unsafe { (*self.ptr).refs.set(n - 1) };
-        }
+        release_ref_slot(
+            &self.arena,
+            &self.acct,
+            Slot { r: self.ptr },
+        );
     }
 }
 

@@ -248,18 +248,3 @@ pub(super) fn trunc_to(v: i64, p: PrimTy) -> i64 {
 pub(super) fn fits(v: i64, p: PrimTy) -> bool {
     trunc_to(v, p) == v
 }
-
-#[inline(always)]
-pub(super) fn float_fits(x: f64, p: PrimTy) -> bool {
-    match p {
-        PrimTy::U8 => x >= 0.0 && x <= u8::MAX as f64,
-        PrimTy::U16 => x >= 0.0 && x <= u16::MAX as f64,
-        PrimTy::U32 => x >= 0.0 && x <= u32::MAX as f64,
-        PrimTy::U64 => x >= 0.0 && x <= u64::MAX as f64,
-        PrimTy::I8 => x >= i8::MIN as f64 && x <= i8::MAX as f64,
-        PrimTy::I16 => x >= i16::MIN as f64 && x <= i16::MAX as f64,
-        PrimTy::I32 => x >= i32::MIN as f64 && x <= i32::MAX as f64,
-        PrimTy::I64 => x >= i64::MIN as f64 && x <= i64::MAX as f64,
-        _ => true,
-    }
-}

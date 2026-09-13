@@ -45,6 +45,19 @@ impl Slots {
             Slots::Heap(v)
         }
     }
+    /// Drain all slots (release-path helper: the release walk reads a
+    /// record's ref-typed fields out before the cell dies). Leaves the
+    /// container empty.
+    pub fn take_slots(&mut self) -> Vec<Slot> {
+        match self {
+            Slots::Heap(v) => std::mem::take(v),
+            Slots::Inline { len, data } => {
+                let n = (*len).min(INLINE_SLOTS as u8) as usize;
+                *len = 0;
+                data[..n].to_vec()
+            }
+        }
+    }
     pub fn len(&self) -> usize {
         match self {
             Slots::Inline { len, .. } => *len as usize,
@@ -249,6 +262,17 @@ impl Packed {
 
     pub fn to_slots(&self) -> Vec<Slot> {
         (0..self.len()).map(|i| self.get(i).unwrap()).collect()
+    }
+
+    /// Drain all slots (release-path helper: the release walk reads them
+    /// out before the container dies). Leaves the container empty. Only
+    /// the `Slots` variant stores cell handles; prim-packed variants have
+    /// no children.
+    pub fn take_slots(&mut self) -> Vec<Slot> {
+        match self {
+            Packed::Slots(v) => std::mem::take(v),
+            _ => Vec::new(),
+        }
     }
 }
 

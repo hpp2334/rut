@@ -6,7 +6,7 @@
 //! arena is a later milestone; the observable contract — deterministic
 //! destruction, identity, `Trap::OutOfMemory` before any write — holds).
 
-use crate::arena::{release_cell, Arena};
+use crate::arena::{release_ref_slot, Arena, ReleasePlan};
 use rut_core::types::{PrimTy, TypeId, TypeTable, TyKind};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -46,10 +46,10 @@ pub struct Heap {
 const CELL_OVERHEAD: u64 = 24; // header + Rc box approximation
 
 impl Heap {
-    pub fn new(limit: Option<u64>) -> Heap {
+    pub(crate) fn new(limit: Option<u64>, plan: ReleasePlan) -> Heap {
         Heap {
             acct: Rc::new(HeapAcct { used: Cell::new(0), peak: Cell::new(0), limit: Cell::new(limit) }),
-            arena: Rc::new(Arena::new()),
+            arena: Rc::new(Arena::new(Rc::new(plan))),
             singletons: RefCell::new(HashMap::new()),
         }
     }
@@ -251,22 +251,7 @@ impl Heap {
     /// current ref discipline does not recursively release a cell's child
     /// slots on drop (matching the previous `Rc` behaviour).
     pub fn release(&self, s: Slot) {
-        let p = unsafe { s.r };
-        if p.is_null() {
-            return;
-        }
-        unsafe {
-            let c = &*p;
-            let n = c.refs.get();
-            if n == u32::MAX {
-                return; // immortal singleton
-            }
-            if n <= 1 {
-                release_cell(&self.arena, &self.acct, p as *mut CellVal);
-            } else {
-                c.refs.set(n - 1);
-            }
-        }
+        release_ref_slot(&self.arena, &self.acct, s);
     }
 
     /// Build an owning host handle for an `Opaque` cell (retains once).

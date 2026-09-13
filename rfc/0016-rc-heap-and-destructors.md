@@ -75,12 +75,13 @@ Ordering guarantees:
 Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
 "finalizer may run later or never".
 
-Implementation status: the current heap releases a record's refcounted
-FIELDS only when the record's own rc hits 0 through the ref-aware write
-path — a record field's child slot is not yet recursively released at
-cell death, so a class instance holding an `Opaque` field pins that box
-until VM end. The recursive field walk is the remaining piece of this
-contract.
+Implementation status: shipped — `release_cell` walks a dying cell's
+ref-typed children (record fields per the type's ref-field list, sum
+payloads, array elements, `Opaque` box inners, closure captures) and
+releases each recursively, so a class instance's `str`/`Opaque`/`Vec`
+fields die with it instead of pinning them until VM end. The walk is
+driven by a precomputed per-type release plan built once from the type
+table + func signatures.
 
 ## 4. Vecs, arrays, slices & strings: where flatness survives
 

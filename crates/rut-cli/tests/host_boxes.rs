@@ -150,17 +150,15 @@ fn host_boxes_hold_any_rust_type() {
     let held = vm.call("make", &[]).unwrap();
     let Value::Opaque(_) = &held else { unreachable!("{held:?}") };
 
-    // the wrapper class drives it too — and its record pins the box (the
-    // record-field discipline above), so the wrapper gets its own box
+    // drive it from rut, both through the wrapper class and direct — the
+    // wrapper's records release the box's field retain when they die, so
+    // this is the flow that needs the recursive field release to hold
     vm.call("wrap_put", &[held.clone(), Value::Str("via-wrapper".into()), Value::I64(1)]).unwrap();
     assert_eq!(as_i64(vm.call("wrap_get", &[held.clone(), Value::Str("via-wrapper".into())]).unwrap()), 1);
-
-    // a second box for the handle-lifecycle half of the test
-    let held = vm.call("make", &[]).unwrap();
     vm.call("put", &[held.clone(), Value::Str("key-3".into()), Value::I64(41)]).unwrap();
     vm.call("put", &[held.clone(), Value::Str("key-7".into()), Value::I64(7)]).unwrap();
     assert_eq!(as_i64(vm.call("get", &[held.clone(), Value::Str("key-3".into())]).unwrap()), 41);
-    assert_eq!(as_i64(vm.call("size", &[held.clone()]).unwrap()), 2);
+    assert_eq!(as_i64(vm.call("size", &[held.clone()]).unwrap()), 3);
     assert_eq!(as_i64(vm.call("get", &[held.clone(), Value::Str("missing".into())]).unwrap()), -1);
 
     // RFC 0014 erasure laws on the rut side
@@ -197,10 +195,9 @@ fn host_boxes_hold_any_rust_type() {
     .unwrap();
     b.with(|_| {}).expect("the guard clears when the closure returns");
 
-    // rc-0 (RFC 0016 §3): this box's only references are the three
-    // handles — the payload's Drop runs with the last one, VM alive or
-    // not. (A box STORED in a wrapper-class field lives until VM end —
-    // record fields are not recursively released today.)
+    // rc-0 (RFC 0016 §3): the wrapper records are gone (their field
+    // retains released with them), so the box's only references are the
+    // three handles — the payload's Drop runs with the last one
     drop(held);
     drop(shared);
     assert!(!dropped.get(), "b still holds");
@@ -209,3 +206,54 @@ fn host_boxes_hold_any_rust_type() {
     drop(vm);
     assert!(dropped.get());
 }
+
+#[test]
+fn record_fields_release_at_rc0() {
+    // the direct proof of the recursive field release: pure rut, class
+    // instances with `str` / `Opaque` / `Vec<str>` fields created and
+    // dropped in a loop — before the fix every record leaked its fields'
+    // references and the heap climbed by ~n cells; now it returns to
+    // baseline (plus the run's immortal singletons).
+    let src = r#"
+import { Opaque } from "std:core";
+import { Vec } from "std:collection";
+
+class Node {
+    name: str;
+    tag: Opaque;
+    tags: Vec<str>;
+    fn new(name: str) -> Self { return Self { name: name, tag: Opaque.new(0), tags: Vec.new() }; }
+}
+
+entry fn churn(n: i64) -> unit {
+    for (let i = 0i64; i < n; i += 1) {
+        let node = Node.new(f"n{i}");
+        node.tags.push(f"t{i}");
+    }
+}
+"#;
+    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "churn");
+    assert!(
+        out.diags.is_empty(),
+        "{}",
+        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    );
+    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
+    rut_vm::verify::verify(&prog).unwrap();
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(10_000_000),
+        heap_limit_bytes: Some(8 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+
+    vm.call("churn", &[Value::I64(1)]).unwrap();
+    let base = vm.heap.used_bytes();
+    vm.call("churn", &[Value::I64(2000)]).unwrap();
+    let after = vm.heap.used_bytes();
+    assert!(
+        after <= base + 4096,
+        "records must release their fields at rc-0: baseline {base}, after churn(2000): {after}"
+    );
+}
+

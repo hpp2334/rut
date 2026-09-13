@@ -141,7 +141,8 @@ const TY_ANY: TypeId = u32::MAX;
 
 impl Vm {
     pub fn new(prog: Rc<Program>, limits: &Limits, hooks: HostHooks) -> Result<Vm, Trap> {
-        let heap = Heap::new(limits.heap_limit_bytes);
+        let heap =
+            Heap::new(limits.heap_limit_bytes, crate::arena::ReleasePlan::build(&prog.types, &prog.funcs));
         let mut const_slots = Vec::with_capacity(prog.consts.len());
         for c in &prog.consts {
             let s = const_to_slot(c, &heap).map_err(|m| Trap::new(TrapKind::Invalid, m))?;
