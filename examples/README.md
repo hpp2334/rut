@@ -37,7 +37,7 @@ else on this page is parse-only.
 | `workers/image-pipeline.rut` | isolate workers, channels, transferable endpoints | 0021 |
 | `workers/image-worker.rut` | worker entry point args, channel-driven shutdown | 0021 |
 | `memory/temp-file.rut` | deterministic destruction at rc 0 | 0016 §3 |
-| `memory/weak-cache.rut` | `Weak(v)`/`upgrade()` | 0017 §1 |
+| `memory/weak-cache.rut` | the cache/observer shape `Weak<T>` exists for, shown with today's strong refs (`Weak`/`upgrade()` are RFC 0017 M5) | 0017 §1 |
 | `memory/node-cycle.rut` | reference cycles and the collector | 0017 §2 |
 | `memory/tree.rut` | recursive dataclasses (`Option<Node>`), composite fields as handle slots | 0009 §"Representation" |
 | `algorithms/sieve.rut` | flat `Vec<u8>`/`Vec<i32>` primitive buffers | — |

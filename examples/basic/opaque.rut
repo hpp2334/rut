@@ -52,8 +52,8 @@ fn nested() -> unit {
     let log = Logger.new("opaque");
     // heterogeneous FIXED array — pure data, one shared cell per slot
     // (RFC 0016 §1)
-    let boxes: Array<Opaque> = [Opaque.new(1), Opaque.new("two"), Opaque.new(Point { x: 3, y: 4 })];
-    log.info(f"{boxes.len()} boxes; first is i32: {boxes[0] is i32}");
+    let boxes: Array<Opaque> = [Opaque.new(Point { x: 3, y: 4 }), Opaque.new("two"), Opaque.new(Point { x: 5, y: 6 })];
+    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS — primitives recover via downcast
     let vec: Vec<Opaque> = Vec.from([Opaque.new(5)]);
     log.info(f"vec {vec.len()}");
 }

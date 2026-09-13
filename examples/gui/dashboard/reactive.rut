@@ -37,7 +37,7 @@ pub dataclass Ids {
     next: u32 = 0;
 }
 
-fn fresh(ids: Ids) -> u32 {               // dataclass aliasing = shared cell
+fn fresh(mut ids: Ids) -> u32 {          // dataclass aliasing = shared cell
     ids.next = Math.wrapping_add(ids.next, 1);
     return ids.next;
 }
@@ -150,6 +150,8 @@ class Watch {
     fn new(wid: u32, atom: u32, last_ver: u32, cb: fn() -> unit) -> Self {
         return Self { wid: wid, atom: atom, last_ver: last_ver, cb: cb };
     }
+
+    fn cb_fn(self) -> fn() -> unit { return self.cb; }   // fn-typed field: read via accessor, then call
 }
 
 let MAX_FLUSH_ROUNDS: i32 = 1000;
@@ -284,8 +286,8 @@ impl Disposal for WatchHandle {   // runs when the last handle drops
 
 /** Run changed watchers to a fixed point (tur's flush). */
 pub fn flush(store: Store) -> unit {
-    let rounds = 0;
-    let changed = true;
+    let mut rounds = 0;
+    let mut changed = true;
     while (changed) {
         rounds += 1;
         if (rounds > MAX_FLUSH_ROUNDS) {
@@ -293,11 +295,11 @@ pub fn flush(store: Store) -> unit {
         }
         changed = false;
         for (let i = 0; i < store.watches.len(); i += 1) {
-            let w = store.watches[i];
+            let mut w = store.watches[i];
             let cur = store.version_of(w.atom);
             if (cur != w.last_ver) {
                 w.last_ver = cur;        // shared cell: visible to readers
-                w.cb();
+                w.cb_fn()();             // fn-typed field: accessor, then call
                 changed = true;
             }
         }

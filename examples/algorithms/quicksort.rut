@@ -4,7 +4,7 @@ import { Vec } from "std:collection";
 
 import { Logger } from "std:log";
 
-fn swap(xs: Vec<i32>, a: i32, b: i32) -> unit {
+fn swap(mut xs: Vec<i32>, a: i32, b: i32) -> unit {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
@@ -12,7 +12,7 @@ fn swap(xs: Vec<i32>, a: i32, b: i32) -> unit {
 
 fn partition(xs: Vec<i32>, lo: i32, hi: i32) -> i32 {
     let pivot = xs[hi];
-    let i = lo - 1;
+    let mut i = lo - 1;
     for (let j = lo; j < hi; j += 1) {
         if (xs[j] <= pivot) {
             i += 1;
@@ -35,9 +35,9 @@ pub fn main() -> unit {
     let xs = Vec<i32>.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> growable
     quicksort(xs, 0, xs.len() - 1);
 
-    let out = "";
+    let mut out = "";
     for (let i = 0; i < xs.len(); i += 1) {
-        out = f"{out}{xs[i]} ";
+        out = f"{out}{xs[i]} ";      // `mut`: rebinding; the f-string form builds in place
     }
     log.info(f"sorted: {out}");
 }

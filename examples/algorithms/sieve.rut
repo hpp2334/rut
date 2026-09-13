@@ -4,12 +4,12 @@ import { Vec } from "std:collection";
 import { Logger } from "std:log";
 
 fn sieve(limit: i32) -> Vec<i32> {
-    let marks = Vec<u8>.zeroed(limit + 1);     // zeroed: 0 = candidate, 1 = crossed
+    let mut marks = Vec<u8>.zeroed(limit + 1);  // zeroed: 0 = candidate, 1 = crossed; `mut` — index writes (RFC 0003 §1)
     let primes: Vec<i32> = Vec.new();       // empty growable: Vec.new(), not []
     for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);
-            let m = i * i;
+            let mut m = i * i;
             while (m <= limit) {
                 marks[m] = 1;
                 m += i;

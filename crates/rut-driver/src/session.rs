@@ -52,6 +52,10 @@ pub struct Module {
     pub source: Option<String>,
     /// in-memory `.d.rut` surface
     pub decl: Option<String>,
+    /// the body itself is a `.d.rut` surface (RFC 0029): parse in
+    /// declaration mode — nothing to compile or run, but `rut dump`
+    /// shows the AST
+    pub is_decl: bool,
     /// in-memory HOST surface (RFC 0022/0026): bodyless functions, bound by
     /// the embedder at run time — `(name, params, ret)`. A module with these
     /// and no `source` is a native module.

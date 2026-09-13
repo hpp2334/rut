@@ -41,15 +41,37 @@ fn usage() {
 }
 
 fn load(path: &str) -> String {
-    std::fs::read_to_string(path).unwrap_or_else(|e| {
-        eprintln!("cannot read {path}: {e}");
-        std::process::exit(2);
-    })
+    // one file is one module: its `import { .. } from "./sibling.rut"`
+    // lines are intra-module includes, inlined exactly as the loader
+    // does for mounted modules (RFC 0035 §1) — so `rut run main.rut`
+    // sees the whole multi-file module
+    let expanded = rut_driver::expand_module_source(std::path::Path::new(path));
+    match expanded {
+        Ok(src) => src,
+        Err(e) => {
+            eprintln!("cannot read {path}: {e}");
+            std::process::exit(2);
+        }
+    }
+}
+
+/// `.d.rut` parses in declaration mode (RFC 0030 §3) — a surface, not a
+/// runnable module.
+fn mode_of(path: &str) -> rut_parser::Mode {
+    if path.ends_with(".d.rut") {
+        rut_parser::Mode::Decl
+    } else {
+        rut_parser::Mode::Impl
+    }
 }
 
 fn run(path: &str, fuel: Option<u64>) {
+    if path.ends_with(".d.rut") {
+        eprintln!("run: {path} is a declaration file (a `.d.rut` surface) — nothing to run");
+        std::process::exit(2);
+    }
     let src = load(path);
-    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(&src, mode_of(path), "main");
     if !out.diags.is_empty() {
         print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
         std::process::exit(1);
@@ -97,7 +119,7 @@ fn run(path: &str, fuel: Option<u64>) {
 
 fn dump(path: &str) {
     let src = load(path);
-    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(&src, mode_of(path), "main");
     if !out.diags.is_empty() {
         print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
         std::process::exit(1);

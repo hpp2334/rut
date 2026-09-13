@@ -181,7 +181,7 @@ impl<'a> GraphCompiler<'a> {
             return None;
         };
 
-        let (ast, d) = parse(&src, Mode::Impl);
+        let (ast, d) = parse(&src, if module.is_decl { Mode::Decl } else { Mode::Impl });
         if !d.is_empty() {
             self.diags.extend(d);
             return None;
@@ -210,11 +210,25 @@ impl<'a> GraphCompiler<'a> {
             }
         }
 
-        // the compilation unit: inlined generic deps, then this module
-        let combined = if extra.is_empty() { src } else { format!("{extra}\n{src}") };
+        // the compilation unit: inlined generic deps, then this module.
+        // A declaration unit (`.d.rut`) takes no spliced bodies — its
+        // imports bind surfaces only; a decl file is pure surface
+        // (RFC 0029), and Decl mode rejects implementations.
+        let combined = if extra.is_empty() || module.is_decl {
+            src
+        } else {
+            format!("{extra}\n{src}")
+        };
         let scope = self.next_scope;
         self.next_scope += 1;
-        let out = compile_program_resolved(&combined, Mode::Impl, spec, scope, &bound, true);
+        let out = compile_program_resolved(
+            &combined,
+            if module.is_decl { Mode::Decl } else { Mode::Impl },
+            spec,
+            scope,
+            &bound,
+            true,
+        );
         if !out.diags.is_empty() || out.program.is_none() {
             self.diags.extend(out.diags);
             if out.program.is_none() && self.diags.is_empty() {

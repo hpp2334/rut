@@ -25,24 +25,42 @@ fn expand(path: &Path, seen: &mut HashSet<PathBuf>) -> std::io::Result<String> {
     let src = std::fs::read_to_string(path)?;
     let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut out = String::new();
-    for line in src.lines() {
-        match relative_import(line) {
-            Some(rel) => {
-                let child = dir.join(rel);
-                if seen.insert(child.clone()) {
-                    out.push_str(&expand(&child, seen)?);
+    let mut lines = src.lines().peekable();
+    while let Some(line) = lines.next() {
+        if line.trim_start().starts_with("import") {
+            // an import statement may span lines (`import { ..\n.. } from
+            // "..";`) — buffer it whole before deciding, so the multi-line
+            // form inlines exactly like the single-line one
+            let mut stmt = vec![line];
+            while !stmt.last().map(|l| l.trim_end().ends_with(';')).unwrap_or(true) {
+                match lines.next() {
+                    Some(l) => stmt.push(l),
+                    None => break,
                 }
             }
-            None => out.push_str(line),
+            let whole = stmt.join("\n");
+            match relative_import(&whole) {
+                Some(rel) => {
+                    let child = dir.join(rel);
+                    if seen.insert(child.clone()) {
+                        out.push_str(&expand(&child, seen)?);
+                    }
+                }
+                None => out.push_str(&whole),
+            }
+            out.push('\n');
+            continue;
         }
+        out.push_str(line);
         out.push('\n');
     }
     Ok(out)
 }
 
-/// The relative specifier of an `import ... from "./x.rut"` line, if any.
-fn relative_import(line: &str) -> Option<String> {
-    let t = line.trim_start();
+/// The relative specifier of an `import ... from "./x.rut"` statement, if
+/// any. The statement may span lines — take it whole.
+fn relative_import(stmt: &str) -> Option<String> {
+    let t = stmt.trim_start();
     if !t.starts_with("import") {
         return None;
     }

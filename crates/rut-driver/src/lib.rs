@@ -408,7 +408,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     let spec = format!("app:{module_name}");
     if let Err(e) = session.register_module(
         &spec,
-        Module { source: Some(src.to_string()), ..Default::default() },
+        Module { source: Some(src.to_string()), is_decl: mode == Mode::Decl, ..Default::default() },
     ) {
         diags.push(Diag::new(rut_lexer::span::Span::new(0, 0), e.to_string()));
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };

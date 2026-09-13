@@ -46,8 +46,8 @@ fn dataclasses() -> unit {
 
     // `own` diverges: a fresh private cell (primitive fields copied,
     // composite fields still shared — one level deep)
-    let r1 = own(p);                    // r1.x == 4, but r1 != p (identity)
-    r1.x = 9;                           // touches only r1 — p is untouched
+    let mut r1 = own(p);                  // r1.x == 4, but r1 != p (identity)
+    r1.x = 9;                             // touches only r1 — p is untouched
 
     // `==` on composites is IDENTITY (RFC 0012 §4): two literals are
     // never equal, own(x) == x is always false. Field-wise comparison

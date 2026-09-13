@@ -14,7 +14,7 @@ import { Vec } from "std:collection";
 //   //   // error: structural reflection requires an engine — implement
 //   //   // std:reflect.ReflectEngine in this module (RFC 0037 §3)
 
-import { stringify, deserialize, Serializable, str_eq } from "./json";
+import { stringify, deserialize, Serializable, str_eq } from "./json.rut";
 import { ReflectEngine, Reflectable, TypeInfo, reflect } from "std:reflect";
 import { Logger } from "std:log";
 
