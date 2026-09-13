@@ -250,6 +250,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 match op {
                     None => {
+                        // `s = f"{s}{..}"` builds into `s` in place (amortized
+                        // growth, no copy of the growing prefix each step);
+                        // see `compile_fstr_into`.
+                        if l.ty == TY_STR && self.try_accumulate_fstr(value, name, l.reg, sp)? {
+                            return Ok(());
+                        }
                         let t = self.compile_expr(value, Some(l.ty))?;
                         if t != l.ty {
                             self.ctx.err(sp, format!(

@@ -13,8 +13,84 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- f-strings: the concat desugaring (RFC 0007 §2) ----
 
     pub(crate) fn compile_fstr(&mut self, parts: Vec<FPartAst>, _expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+        let part_regs = self.compile_fstr_parts(&parts, sp)?;
+        // An f-string with a single part needs no concatenation — the part
+        // already is the result (`f"{x}"` is `x` after the `Str` above).
+        if part_regs.len() == 1 {
+            self.last_reg = part_regs[0];
+            return Ok(TY_STR);
+        }
+        let dst = self.new_reg(TY_STR);
+        self.emit(Op::CallNat { nat: Nat::Concat, recv: None, args: part_regs, dst: Some(dst) }, sp.lo);
+        Ok(TY_STR)
+    }
+
+    /// The accumulator form `s = f"{s}{..}"`: build the concat with `acc`
+    /// (the accumulator's own register) as BOTH the first operand and the
+    /// destination. `compile_expr` would otherwise copy the local into a
+    /// fresh register, so the VM could never append in place and every step
+    /// would copy the whole prefix — O(n^2) for a string built in a loop.
+    /// With `dst == args[0]` the VM appends into the uniquely-owned cell
+    /// (geometric growth, amortized O(1)). `parts[..skip]` is the
+    /// accumulator; `parts[skip..]` are compiled normally.
+    pub(crate) fn compile_fstr_into(
+        &mut self,
+        parts: &[FPartAst],
+        skip: usize,
+        acc: u16,
+        _expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let mut part_regs = vec![acc];
+        part_regs.extend(self.compile_fstr_parts(&parts[skip..], sp)?);
+        self.emit(Op::CallNat { nat: Nat::Concat, recv: None, args: part_regs, dst: Some(acc) }, sp.lo);
+        Ok(TY_STR)
+    }
+
+    /// If `value` is `f"{name}{rest..}"` — the accumulator's own name as the
+    /// first hole — lower it into `acc` via `compile_fstr_into` and return
+    /// `true`. Bails when the name reappears in a later part: it would alias
+    /// the cell (defeating the in-place append), and a nested reassignment
+    /// would change evaluation order.
+    pub(crate) fn try_accumulate_fstr(
+        &mut self,
+        value: NodeHandle<AnyExpr>,
+        name: IdentId,
+        acc: u16,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<bool> {
+        let ExprKind::FStr { parts } = self.ctx.ast.expr(value).clone() else {
+            return Ok(false);
+        };
+        if parts.len() < 2 {
+            return Ok(false);
+        }
+        let FPartAst::Hole(e0) = &parts[0] else { return Ok(false) };
+        let ExprKind::Path { segs } = self.ctx.ast.expr(*e0).clone() else {
+            return Ok(false);
+        };
+        if segs.len() != 1 || segs[0].name != name || !segs[0].generics.is_empty() {
+            return Ok(false);
+        }
+        for p in &parts[1..] {
+            if let FPartAst::Hole(e) = p {
+                let mut names = Vec::new();
+                self.scan_names(e.id(), &mut names);
+                if names.contains(&name) {
+                    return Ok(false);
+                }
+            }
+        }
+        self.compile_fstr_into(&parts, 1, acc, Some(TY_STR), sp)?;
+        Ok(true)
+    }
+
+    /// Compile f-string parts into registers: a literal becomes a `str`
+    /// constant, a hole its value (converted through `Nat::Str` unless it is
+    /// already a `str`, RFC 0007 §2).
+    fn compile_fstr_parts(&mut self, parts: &[FPartAst], sp: rut_lexer::span::Span) -> TcResult<Vec<u16>> {
         let mut part_regs: Vec<u16> = Vec::new();
-        for p in &parts {
+        for p in parts {
             match p {
                 FPartAst::Lit(s) => {
                     let k = self.konst(ConstVal::Str(s.clone()));
@@ -38,15 +114,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        // An f-string with a single part needs no concatenation — the part
-        // already is the result (`f"{x}"` is `x` after the `Str` above).
-        if part_regs.len() == 1 {
-            self.last_reg = part_regs[0];
-            return Ok(TY_STR);
-        }
-        let dst = self.new_reg(TY_STR);
-        self.emit(Op::CallNat { nat: Nat::Concat, recv: None, args: part_regs, dst: Some(dst) }, sp.lo);
-        Ok(TY_STR)
+        Ok(part_regs)
     }
 
     // ---- literals: struct / array ----

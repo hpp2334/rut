@@ -1176,6 +1176,32 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn fstring_accumulator_appends_in_place() {
+    // `s = f"{s}..."` lowers to `Concat([s, ..]) -> s` (dst == args[0]), so
+    // the VM appends into the uniquely-owned cell — amortized growth, not a
+    // copy of the whole prefix each step. Correctness must hold for the
+    // bail cases (alias in a later part, different target) too.
+    let src = r#"
+pub fn main() -> unit {
+    let mut s = "";
+    let mut i = 0;
+    while (i < 1000) { s = f"{s}ab"; i += 1; }
+    let mut a = "a";
+    a = f"{a}{a}";
+    let base = "x";
+    let b = f"{base}y";
+    let mut n = "";
+    let mut k = 0;
+    while (k < 5) { n = f"{n}{k},"; k += 1; }
+    Logger.new("app").info(f"{string_len(s)} {a} {b} {base} {n}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 4_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["2000 aa xy x 0,1,2,3,4,"]);
+}
+
+#[test]
 fn string_builder_flattens_via_join() {
     // `to_str` seals the pending tail then hands the whole chunk list to the
     // `string_join` native (one sizing pass, one allocation, RFC 0032
