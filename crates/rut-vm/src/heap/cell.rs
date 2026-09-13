@@ -252,8 +252,17 @@ impl Packed {
     }
 }
 
+/// A `str` payload plus its ASCII-ness, cached once at allocation. `str`
+/// is a `char` sequence, but the common case is all-ASCII — and then the
+/// char index equals the byte index, so `s[i]` / `for..of` is O(1)
+/// instead of re-decoding the UTF-8 prefix every step (RFC 0008).
+pub struct StrVal {
+    pub s: String,
+    pub ascii: bool,
+}
+
 pub enum CellData {
-    Str(String),
+    Str(StrVal),
     Array { elem: TypeId, items: RefCell<Packed> },
     /// enum member — immortal singleton per (ty, member)
     Enum { member: u32 },
@@ -276,9 +285,13 @@ pub enum CellData {
 impl CellVal {
     pub fn as_str(&self) -> &str {
         match &self.data {
-            CellData::Str(s) => s,
+            CellData::Str(v) => &v.s,
             _ => "",
         }
+    }
+    /// True when this `str` is all-ASCII, so a char index is a byte index.
+    pub fn str_ascii(&self) -> bool {
+        matches!(&self.data, CellData::Str(v) if v.ascii)
     }
     /// The raw octets of a `bytes` cell — `bytes` is a `u8` array at the
     /// engine level (RFC 0004); empty for any other shape.

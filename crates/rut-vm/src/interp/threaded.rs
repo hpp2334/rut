@@ -819,19 +819,29 @@ impl Machine for Vm {
         };
         let str_cell = cell_of(unsafe { *regs.add(*s as usize) });
         let i = unsafe { (*regs.add(*idx as usize)).i };
-        let c = str_cell
-            .as_str()
-            .chars()
-            .nth(i as usize)
-            .ok_or_else(|| {
+        let text = str_cell.as_str();
+        // ASCII: char index == byte index (O(1)); else decode the prefix.
+        let c = if str_cell.str_ascii() {
+            match text.as_bytes().get(i as usize) {
+                Some(b) => *b as char,
+                None => {
+                    return Err(Trap::new(
+                        TrapKind::IndexOutOfBounds,
+                        format!("string index {i} out of bounds ({} bytes)", text.len()),
+                    ))
+                }
+            }
+        } else {
+            text.chars().nth(i as usize).ok_or_else(|| {
                 Trap::new(
                     TrapKind::IndexOutOfBounds,
                     format!(
                         "string index {i} out of bounds ({} chars)",
-                        str_cell.as_str().chars().count()
+                        text.chars().count()
                     ),
                 )
-            })?;
+            })?
+        };
         unsafe { *regs.add(*dst as usize) = Slot::ch(c) };
         Ok(Flow::Next(pc + 1))
     }

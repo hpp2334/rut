@@ -794,6 +794,41 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn str_index_ascii_and_utf8_and_for_of_array() {
+    // `str` is a `char` sequence: the ASCII fast path makes `s[i]`/`for..of`
+    // O(1), while a non-ASCII string still decodes the UTF-8 prefix. The
+    // `for..of` over the fixed `Array` also exercises the hoisted length.
+    let src = r#"
+pub fn main() -> unit {
+    let a = "ACGT";
+    let u = "héllo";
+    let mut k = 0;
+    for (let c of u) { k += 1; }
+    Logger.new("app").info(f"{a[0]}{a[3]}{u[1]} {k}");
+    let xs = [10, 20, 30];
+    let mut s = 0;
+    for (let x of xs) { s += x; }
+    Logger.new("app").info(f"s={s}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["ATé 5", "s=60"]);
+}
+
+#[test]
+fn str_index_out_of_bounds_traps() {
+    let src = r#"
+pub fn main() -> unit {
+    let a = "ACGT";
+    Logger.new("app").info(f"{a[9]}");
+}
+"#;
+    let (_, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap.as_deref(), Some("IndexOutOfBounds"));
+}
+
+#[test]
 fn plain_pub_stays_unrestricted() {
     // `pub` is import-visibility for rut modules (RFC 0003 §2), NOT
     // the host surface: a Stack crosses fine between rut fns

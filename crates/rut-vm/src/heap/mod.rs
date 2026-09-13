@@ -17,7 +17,7 @@ mod trap;
 mod value;
 
 pub use crate::arena::OpaqueRef;
-pub use cell::{cell, cell_of, CellData, CellVal, Packed, Slots};
+pub use cell::{cell, cell_of, CellData, CellVal, Packed, Slots, StrVal};
 pub use trap::{Trap, TrapKind};
 pub use value::{Slot, Value};
 
@@ -107,7 +107,8 @@ impl Heap {
 
     pub fn alloc_str(&self, s: String) -> Result<Slot, Trap> {
         let n = s.len() as u64;
-        self.mint(rut_core::types::TY_STR, CellData::Str(s), n)
+        let ascii = s.is_ascii();
+        self.mint(rut_core::types::TY_STR, CellData::Str(StrVal { s, ascii }), n)
     }
 
     /// Append `extra` to a `Str` cell **in place**. The caller must
@@ -126,9 +127,10 @@ impl Heap {
         unsafe {
             let cell = &mut *p;
             match &mut cell.data {
-                CellData::Str(buf) => {
-                    buf.push_str(extra);
-                    cell.bytes = (CELL_OVERHEAD + buf.len() as u64).min(u32::MAX as u64) as u32;
+                CellData::Str(v) => {
+                    v.ascii = v.ascii && extra.is_ascii();
+                    v.s.push_str(extra);
+                    cell.bytes = (CELL_OVERHEAD + v.s.len() as u64).min(u32::MAX as u64) as u32;
                 }
                 _ => unreachable!(),
             }
