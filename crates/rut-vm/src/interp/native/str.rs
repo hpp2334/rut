@@ -53,26 +53,25 @@ impl Vm {
                         && !args[1..].iter().any(|a| unsafe { self.reg(*a).r } == tref)
                     {
                         for a in &args[1..] {
-                            let s = cell_of(self.reg(*a)).as_str();
-                            self.heap.append_str(target, s)?;
+                            let extra = cell_of(self.reg(*a)).as_bytes();
+                            self.heap.append_bytes(target, extra)?;
                         }
                         return Ok(());
                     }
                 }
-                // size once — the parts' lengths are all known
-                let total: usize = args.iter().map(|a| cell_of(self.reg(*a)).as_str().len()).sum();
-                let mut out = String::with_capacity(total);
+                // size once — the parts' byte lengths are all known
+                let total: usize = args.iter().map(|a| cell_of(self.reg(*a)).as_bytes().len()).sum();
+                let mut out = Vec::with_capacity(total);
                 for a in args {
-                    out.push_str(cell_of(self.reg(*a)).as_str());
+                    out.extend_from_slice(cell_of(self.reg(*a)).as_bytes());
                 }
-                let c = self.heap.alloc_str(out)?;
+                let c = self.heap.alloc_str_bytes(out)?;
                 self.store_result(dst, c)?;
             }
             Nat::StrLen => {
-                let s = cell_of(self.reg(recv.unwrap())).as_str();
-                // ASCII is the common case: `len` skips the UTF-8 decode that
-                // `chars().count()` walks.
-                let n = if s.is_ascii() { s.len() } else { s.chars().count() } as i64;
+                // ASCII is the common case: the flag is cached on the cell,
+                // so `len` is the byte length with no UTF-8 walk at all.
+                let n = cell_of(self.reg(recv.unwrap())).char_len() as i64;
                 if let Some(d) = dst {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }
@@ -94,16 +93,16 @@ impl Vm {
                     }
                     _ => return Err(Trap::new(TrapKind::Invalid, "string_join on non-array")),
                 };
-                let mut out = String::with_capacity(total);
+                let mut out = Vec::with_capacity(total);
                 if let crate::heap::CellData::Array { items, .. } = &cell_of(arr).data {
                     let items = items.borrow();
                     for i in 0..items.len() {
                         if let Some(s) = items.get(i) {
-                            out.push_str(cell_of(s).as_str());
+                            out.extend_from_slice(cell_of(s).as_bytes());
                         }
                     }
                 }
-                let c = self.heap.alloc_str(out)?;
+                let c = self.heap.alloc_str_bytes(out)?;
                 self.store_result(dst, c)?;
             }
             _ => unreachable!("call_str_nat: non-string native"),

@@ -495,8 +495,8 @@ impl Machine for Vm {
 
     fn op_strcmp(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::StrCmp { eq, dst, a, b } = op else { unreachable_op!("op_strcmp: unexpected op") };
-        let sa = cell_of(unsafe { *regs.add(*a as usize) }).as_str();
-        let sb = cell_of(unsafe { *regs.add(*b as usize) }).as_str();
+        let sa = cell_of(unsafe { *regs.add(*a as usize) }).as_bytes();
+        let sb = cell_of(unsafe { *regs.add(*b as usize) }).as_bytes();
         unsafe { *regs.add(*dst as usize) = Slot::bool((sa == sb) == *eq) };
         Ok(Flow::Next(pc + 1))
     }
@@ -819,19 +819,22 @@ impl Machine for Vm {
         };
         let str_cell = cell_of(unsafe { *regs.add(*s as usize) });
         let i = unsafe { (*regs.add(*idx as usize)).i };
-        let text = str_cell.as_str();
         // ASCII: char index == byte index (O(1)); else decode the prefix.
         let c = if str_cell.str_ascii() {
-            match text.as_bytes().get(i as usize) {
+            match str_cell.as_bytes().get(i as usize) {
                 Some(b) => *b as char,
                 None => {
                     return Err(Trap::new(
                         TrapKind::IndexOutOfBounds,
-                        format!("string index {i} out of bounds ({} bytes)", text.len()),
+                        format!(
+                            "string index {i} out of bounds ({} bytes)",
+                            str_cell.as_bytes().len()
+                        ),
                     ))
                 }
             }
         } else {
+            let text = str_cell.as_str();
             text.chars().nth(i as usize).ok_or_else(|| {
                 Trap::new(
                     TrapKind::IndexOutOfBounds,

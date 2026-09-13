@@ -105,35 +105,48 @@ impl Heap {
         Ok(Slot { r: p as *const CellVal })
     }
 
+    /// A `str` cell from owned text — the boundary path (literals at load,
+    /// `render`, `own`, host values). The octets move in; `String` is only
+    /// the caller's spelling of "these bytes are valid UTF-8".
     pub fn alloc_str(&self, s: String) -> Result<Slot, Trap> {
-        let n = s.len() as u64;
-        let ascii = s.is_ascii();
-        self.mint(rut_core::types::TY_STR, CellData::Str(StrVal { s, ascii }), n)
+        self.alloc_str_bytes(s.into_bytes())
+    }
+
+    /// A `str` cell from raw octets — the internal assembly path
+    /// (`Concat`, `StrJoin`). The bytes must be valid UTF-8; every caller
+    /// builds them out of other valid UTF-8 cells, which is what keeps the
+    /// invariant.
+    pub fn alloc_str_bytes(&self, bytes: Vec<u8>) -> Result<Slot, Trap> {
+        let n = bytes.len() as u64;
+        let ascii = bytes.is_ascii();
+        self.mint(rut_core::types::TY_STR, CellData::Str(StrVal { bytes, ascii }), n)
     }
 
     /// Append `extra` to a `Str` cell **in place**. The caller must
     /// guarantee the cell is uniquely owned (`rc == 1`): no other slot
-    /// aliases it, so mutating behind the shared handle is sound. Charges
-    /// the added bytes (before the write, so an OOM trap leaves the cell
-    /// untouched) and grows the cell's accounted size — this is what keeps
-    /// an accumulator loop like `bytes_decode`'s `out = out + c` linear
-    /// instead of copying the whole prefix every step.
-    pub fn append_str(&self, s: Slot, extra: &str) -> Result<(), Trap> {
+    /// aliases it, so mutating behind the shared handle is sound. Grows the
+    /// buffer amortized (like any `Vec`) and charges the cell's *capacity*
+    /// rather than its length, so the accounted bytes are the allocation
+    /// the cell actually holds — this is what keeps an accumulator loop
+    /// like `bytes_decode`'s `out = out + c` linear instead of copying the
+    /// whole prefix every step. A failed charge leaves the text untouched
+    /// (only spare capacity was reserved).
+    pub fn append_bytes(&self, s: Slot, extra: &[u8]) -> Result<(), Trap> {
         let p = unsafe { s.r } as *mut CellVal;
         if !matches!(unsafe { &(*p).data }, CellData::Str(_)) {
-            return Err(Trap::new(TrapKind::Invalid, "append_str on non-str"));
+            return Err(Trap::new(TrapKind::Invalid, "append_bytes on non-str"));
         }
-        self.charge(extra.len() as u64)?;
         unsafe {
             let cell = &mut *p;
-            match &mut cell.data {
-                CellData::Str(v) => {
-                    v.ascii = v.ascii && extra.is_ascii();
-                    v.s.push_str(extra);
-                    cell.bytes = (CELL_OVERHEAD + v.s.len() as u64).min(u32::MAX as u64) as u32;
-                }
-                _ => unreachable!(),
-            }
+            let CellData::Str(v) = &mut cell.data else { unreachable!() };
+            v.bytes.reserve(extra.len());
+            // the growth to charge for is the capacity the extend sits in
+            let new_bytes =
+                (CELL_OVERHEAD + v.bytes.capacity() as u64).min(u32::MAX as u64) as u32;
+            self.charge((new_bytes as u64).saturating_sub(cell.bytes as u64))?;
+            v.ascii = v.ascii && extra.is_ascii();
+            v.bytes.extend_from_slice(extra);
+            cell.bytes = new_bytes;
         }
         Ok(())
     }
@@ -267,7 +280,7 @@ impl Heap {
             TyKind::Prim(_) | TyKind::Unit | TyKind::Fn { .. } => Ok(s),
             TyKind::Str => {
                 let cell = cell_of(s);
-                self.alloc_str(cell.as_str().to_string())
+                self.alloc_str_bytes(cell.as_bytes().to_vec())
             }
             TyKind::Bytes => {
                 let cell = cell_of(s);

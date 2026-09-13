@@ -141,8 +141,9 @@ impl Vm {
                 self.cur_regs[dst as usize] = Slot::bool(v);
             }
             Op::StrCmp { eq, dst, a, b } => {
-                let sa = cell_of(r!(a)).as_str();
-                let sb = cell_of(r!(b)).as_str();
+                // UTF-8 byte equality IS string equality
+                let sa = cell_of(r!(a)).as_bytes();
+                let sb = cell_of(r!(b)).as_bytes();
                 self.cur_regs[dst as usize] = Slot::bool((sa == sb) == eq);
             }
             Op::ArrayCmp { eq, dst, a, b } => {
@@ -367,21 +368,24 @@ impl Vm {
             Op::StrCharAt { dst, s, idx } => {
                 let str_cell = cell_of(r!(s));
                 let i = unsafe { r!(idx).i };
-                let text = str_cell.as_str();
                 // ASCII: the char index IS the byte index, so this is O(1)
                 // (the cell's flag is computed once at allocation). Only a
                 // mixed/non-ASCII string decodes the UTF-8 prefix.
                 let c = if str_cell.str_ascii() {
-                    match text.as_bytes().get(i as usize) {
+                    match str_cell.as_bytes().get(i as usize) {
                         Some(b) => *b as char,
                         None => {
                             return Err(Trap::new(
                                 TrapKind::IndexOutOfBounds,
-                                format!("string index {i} out of bounds ({} bytes)", text.len()),
+                                format!(
+                                    "string index {i} out of bounds ({} bytes)",
+                                    str_cell.as_bytes().len()
+                                ),
                             ))
                         }
                     }
                 } else {
+                    let text = str_cell.as_str();
                     text.chars().nth(i as usize).ok_or_else(|| {
                         Trap::new(
                             TrapKind::IndexOutOfBounds,

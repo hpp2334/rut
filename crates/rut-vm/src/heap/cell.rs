@@ -252,12 +252,19 @@ impl Packed {
     }
 }
 
-/// A `str` payload plus its ASCII-ness, cached once at allocation. `str`
-/// is a `char` sequence, but the common case is all-ASCII — and then the
-/// char index equals the byte index, so `s[i]` / `for..of` is O(1)
-/// instead of re-decoding the UTF-8 prefix every step (RFC 0008).
+/// A `str` payload: the engine's own UTF-8 octets plus the ASCII-ness,
+/// cached once at allocation. `str` is a `char` sequence, but the common
+/// case is all-ASCII — and then the char index equals the byte index, so
+/// `s[i]` / `for..of` is O(1) instead of re-decoding the UTF-8 prefix
+/// every step (RFC 0008).
+///
+/// The engine owns the UTF-8 invariant rather than a type: `bytes` is
+/// valid UTF-8 by construction (every source is a `&str`, a literal, or a
+/// `render`), and appending valid UTF-8 to valid UTF-8 stays valid. So
+/// `as_str` asserts the invariant instead of re-checking it, and the
+/// byte-level accessors (`as_bytes`, `char_len`) are the primary path.
 pub struct StrVal {
-    pub s: String,
+    pub bytes: Vec<u8>,
     pub ascii: bool,
 }
 
@@ -283,10 +290,29 @@ pub enum CellData {
 }
 
 impl CellVal {
+    /// The text as a `&str`. The engine maintains the UTF-8 invariant
+    /// itself (see `StrVal`), so this asserts it instead of re-checking it;
+    /// byte-level callers should prefer `as_bytes`.
     pub fn as_str(&self) -> &str {
         match &self.data {
-            CellData::Str(v) => &v.s,
+            CellData::Str(v) => unsafe { std::str::from_utf8_unchecked(&v.bytes) },
             _ => "",
+        }
+    }
+    /// The raw UTF-8 octets of a `str` cell — empty for any other shape.
+    pub fn as_bytes(&self) -> &[u8] {
+        match &self.data {
+            CellData::Str(v) => &v.bytes,
+            _ => &[],
+        }
+    }
+    /// The number of `char`s: the byte length when all-ASCII (the flag is
+    /// computed once at allocation), else a UTF-8 scan.
+    pub fn char_len(&self) -> usize {
+        match &self.data {
+            CellData::Str(v) if v.ascii => v.bytes.len(),
+            CellData::Str(_) => self.as_str().chars().count(),
+            _ => 0,
         }
     }
     /// True when this `str` is all-ASCII, so a char index is a byte index.
