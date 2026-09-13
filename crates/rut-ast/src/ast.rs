@@ -486,6 +486,10 @@ pub enum ExprKind {
     Select { arms: Vec<NodeHandle<AnyArm>> },
     /// `expr is Type` — relational precedence, non-associative (RFC 0012 §3)
     Is { expr: NodeHandle<AnyExpr>, ty: NodeHandle<AnyTy> },
+    /// `expr as T` — the numeric cast, truncating like C/Rust; binds
+    /// tighter than `*`, left-associative, RHS a naming position
+    /// restricted to the numeric primitives (RFC 0007 §1)
+    Cast { expr: NodeHandle<AnyExpr>, ty: NodeHandle<AnyTy> },
 }
 
 #[derive(Clone, Debug)]

@@ -2,7 +2,7 @@
 //! bidirectional inference (RFC 0007 SS1), path/field-chain reads,
 //! enum members, and module-let loads.
 
-use crate::check::{float_suffix_ty, int_suffix_ty, TcResult};
+use crate::check::{float_suffix_ty, int_suffix_ty, numeric_prim, TcResult};
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
 use rut_core::types::*;
@@ -185,6 +185,35 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 self.ctx.err(sp, "the `is` right-hand side must be a type name");
                 Err(())
+            }
+            ExprKind::Cast { expr, ty } => {
+                // `expr as T` (RFC 0007 §1): the numeric cast — truncating,
+                // C/Rust semantics, one `Op::Conv`. The RHS is a naming
+                // position restricted to the numeric primitives.
+                let from = self.compile_expr(expr, None)?;
+                let src = self.last_reg;
+                let want = self.resolve_type_now(ty);
+                let Some(to) = (if let TyKind::Prim(p) = self.ctx.types.kind(want) {
+                    numeric_prim(*p).then_some(*p)
+                } else {
+                    None
+                }) else {
+                    self.ctx.err(sp, format!(
+                        "`as` converts between numeric primitives —`{}` is not one (RFC 0007 §1)",
+                        self.ctx.types.name(want)
+                    ));
+                    return Err(());
+                };
+                let TyKind::Prim(from_prim) = self.ctx.types.kind(from).clone() else {
+                    self.ctx.err(sp, format!(
+                        "`as` converts between numeric primitives —found `{}` (RFC 0007 §1)",
+                        self.ctx.types.name(from)
+                    ));
+                    return Err(());
+                };
+                let dst = self.new_reg(want);
+                self.emit(Op::Conv { dst, src, from: from_prim, to }, sp.lo);
+                Ok(want)
             }
             _ => {
                 self.ctx.err(sp, "unsupported expression in this build");

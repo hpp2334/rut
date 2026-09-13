@@ -1231,6 +1231,41 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn as_casts_truncate_like_c_and_rust() {
+    // `expr as T` (RFC 0007 §1): conversions never trap. int→int keeps
+    // the target's low bits (signed targets sign-extend), float→int
+    // truncates toward zero and saturates at the bounds (NaN -> 0). The
+    // cast binds tighter than `*` (Rust placement) and chains left.
+    let src = r#"
+import { Logger } from "std:log";
+pub fn main() -> unit {
+    let a = 300 as u8;
+    let b = -1 as u8;
+    let c = 4294967295u32 as i32;
+    let d = 2.9 as i32;
+    let e = 1.0e300 as i32;
+    let f = (0.0 / 0.0) as i32;
+    let g = -300 as u8;
+    let h = 2u8 * 300 as u8;
+    let i = 300 as u8 as i32;
+    let j = -2.9 as i32;
+    let k = 1.0e300 as u8;
+    Logger.new("app").info(f"{a} {b} {c} {d} {e} {f} {g} {h} {i} {j} {k}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["44 255 -1 2 2147483647 0 212 88 44 -2 255"]);
+
+    // the cast RHS is restricted to the numeric primitives at the parse
+    // level — anything else leaves `as` for the select-arm bind
+    // (`fut as name`, RFC 0019 §3), so `1 as str` is a syntax error
+    let bad = "pub fn main() -> unit { let x = 1 as str; }";
+    let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
+    assert!(out.diags.iter().any(|d| d.msg.contains("expected")));
+}
+
+#[test]
 fn math_namespace_intrinsics_run() {
     // `std:math`'s `Math` namespace: wrapping/saturating/checked integer
     // arithmetic (compiler-lowered) plus abs/min/max/signum and the f64

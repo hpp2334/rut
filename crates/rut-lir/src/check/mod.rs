@@ -464,6 +464,17 @@ pub fn int_suffix_ty(s: IntSuffix) -> TypeId {
     }
 }
 
+/// The ten numeric primitives — the only `as` cast source/target kinds
+/// (`Bool`/`Char` are excluded; RFC 0007 §1).
+pub fn numeric_prim(p: PrimTy) -> bool {
+    matches!(
+        p,
+        PrimTy::U8 | PrimTy::U16 | PrimTy::U32 | PrimTy::U64
+            | PrimTy::I8 | PrimTy::I16 | PrimTy::I32 | PrimTy::I64
+            | PrimTy::F32 | PrimTy::F64
+    )
+}
+
 pub fn float_suffix_ty(s: FloatSuffix) -> TypeId {
     match s {
         FloatSuffix::F32 => TY_F32,

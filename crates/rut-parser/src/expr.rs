@@ -3,8 +3,10 @@
 //! operands and pushing one node, bottom-up (C1). Binding powers follow
 //! the §4 table: assignment right (1), `||` (3), `&&` (4), `== !=` (5),
 //! relational + `is` non-associative (6), `| ^` (7), `&` (8), `<< >>`
-//! (9), `+ -` (10), `* / %` (11), unary right (12), postfix
-//! (13). Atoms (primary + postfix chains) are built by `AtomFrame`; the
+//! (9), `+ -` (10), `* / %` (11), `as` (12 — Rust placement: tighter
+//! than `*`, looser than unary), unary right, postfix — the last two
+//! structural (prefix sweep + atom), not oploop entries. Atoms (primary
+//! + postfix chains) are built by `AtomFrame`; the
 //! two §4.2 scans live in `ty.rs`.
 
 use rut_ast::ast::*;
@@ -16,6 +18,18 @@ use crate::item::ParamsFrame;
 use crate::stmt::{BlockFrame, WhenFrame};
 use crate::ty::TypeFrame;
 use crate::{is_reserved_kw, Parser, EXPR_MAX};
+
+/// The ten numeric primitive names — the only spellings an `as` cast
+/// accepts as its right-hand side (RFC 0007 §1). When the word after
+/// `as` is anything else, the keyword belongs to the select-arm bind
+/// (`fut as name`, RFC 0019 §3), which shares it.
+fn is_numeric_prim(s: &str) -> bool {
+    matches!(s, "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64")
+}
+
+fn peek_is_numeric_prim(p: &Parser) -> bool {
+    matches!(p.peek(1).tok, Tok::Ident(ref n) if is_numeric_prim(n))
+}
 
 /// how the frame was entered — `parse_expr` vs `parse_unary` in v1
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +71,8 @@ enum ExprStage {
     Operand,
     /// waiting for the `is` right-hand type
     IsTy,
+    /// waiting for the `as` right-hand type (the numeric cast, RFC 0007 §1)
+    AsTy,
     /// waiting for the right-hand side of an assignment (a full
     /// expression — assignment is right-associative through recursion)
     AssignRhs,
@@ -181,12 +197,21 @@ impl ExprFrame {
                 _ => unreachable!("expr frame received an operand at the wrong stage"),
             },
             Done::Ty(t) => {
-                debug_assert!(matches!(self.stage, ExprStage::IsTy));
-                let lhs = self.operands.pop().expect("`is` without a left-hand side");
+                let cast = matches!(self.stage, ExprStage::AsTy);
+                debug_assert!(matches!(self.stage, ExprStage::IsTy | ExprStage::AsTy));
+                let lhs = self.operands.pop().expect("`is`/`as` without a left-hand side");
                 let sp = p.nodes[lhs.id().0 as usize].span;
-                let node = p.expr(ExprKind::Is { expr: lhs, ty: t }, sp.to(p.span()));
+                let node = if cast {
+                    p.expr(ExprKind::Cast { expr: lhs, ty: t }, sp.to(p.span()))
+                } else {
+                    p.expr(ExprKind::Is { expr: lhs, ty: t }, sp.to(p.span()))
+                };
                 self.operands.push(node);
-                self.last_level = 6;
+                if !cast {
+                    // the cast sits above the relational non-associativity
+                    // scope (level 12), so only `is` marks it
+                    self.last_level = 6;
+                }
                 self.oploop(p)
             }
             Done::Failed => Step::Pop(Done::Failed),
@@ -242,6 +267,20 @@ impl ExprFrame {
                         p.bump();
                     }
                     self.stage = ExprStage::IsTy;
+                    return Step::Push(Frame::Type(TypeFrame::new(p)));
+                }
+                _ if p.at_kw("as") && peek_is_numeric_prim(p) => {
+                    // `expr as T` — the numeric cast (RFC 0007 §1):
+                    // truncating like C/Rust. Left-associative at level 12,
+                    // tighter than `*` (Rust placement), so `a * b as u32`
+                    // casts `b` and `x as u32 as u64` chains. The RHS is a
+                    // naming position type; when the next word is not one
+                    // of the numeric primitives the keyword is left for the
+                    // select-arm bind (`fut as name`, RFC 0019 §3), which
+                    // shares it.
+                    p.bump(); // the `as` keyword
+                    self.reduce_while(p, 12);
+                    self.stage = ExprStage::AsTy;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
                 _ => break,

@@ -501,6 +501,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             Kind::Expr(ExprKind::Is { expr, .. }) => kids(expr.id(), out, self),
+            Kind::Expr(ExprKind::Cast { expr, .. }) => kids(expr.id(), out, self),
             Kind::Expr(ExprKind::FStr { parts }) => {
                 for p in parts {
                     if let FPartAst::Hole(e) = p {

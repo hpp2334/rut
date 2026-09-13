@@ -124,22 +124,23 @@ impl Vm {
     /// Explicit numeric conversion (RFC 0007 §1): int↔int traps on
     /// narrowing loss; float→int traps on fraction/range; int→float and
     /// float↔float always convert.
+    /// `expr as T` (RFC 0007 §1): the numeric cast, truncating like
+    /// C/Rust — conversions never trap. int→int keeps the target's low
+    /// bits (signed targets sign-extend, `trunc_to`); float→int
+    /// truncates toward zero and saturates at the target bounds, NaN → 0
+    /// (the Rust 1.45 rules — the bounds are exact powers of two in
+    /// f64); int→float rounds (unsigned sources read bit 63 as
+    /// magnitude); float→float rounds.
     pub(super) fn convert(&self, v: Slot, from: PrimTy, to: PrimTy) -> Result<Slot, Trap> {
         use rut_core::types::PrimTy::*;
         let (fp, tp) = (from, to);
         Ok(match (fp.is_float(), tp.is_float()) {
-            (false, false) => {
-                let x = unsafe { v.i };
-                if !fits(x, tp) {
-                    return Err(Trap::new(
-                        TrapKind::Overflow,
-                        format!("narrowing conversion {} -> {} loses the value (RFC 0007 §1)", fp.name(), tp.name()),
-                    ));
-                }
-                Slot::int(x)
-            }
+            (false, false) => Slot::int(trunc_to(unsafe { v.i }, tp)),
             (false, true) => {
-                let x = unsafe { v.i } as f64;
+                let x = unsafe { v.i };
+                // an unsigned source carries bit 63 — the f64 must see the
+                // magnitude, not the two's-complement sign
+                let x = if fp.is_unsigned() { (x as u64) as f64 } else { x as f64 };
                 if tp == F32 {
                     Slot::float(x as f32 as f64)
                 } else {
@@ -148,13 +149,34 @@ impl Vm {
             }
             (true, false) => {
                 let x = unsafe { v.f };
-                if x.fract() != 0.0 || !x.is_finite() || !float_fits(x, tp) {
-                    return Err(Trap::new(
-                        TrapKind::Overflow,
-                        format!("float {} does not convert to {} (fractional or out of range — RFC 0007 §1)", x, tp.name()),
-                    ));
+                if x.is_nan() {
+                    return Ok(Slot::int(0));
                 }
-                Slot::int(x as i64)
+                let t = x.trunc();
+                // [lo, hi) bounds in f64, plus the target MIN/MAX as the
+                // stored i64 bit pattern
+                let (lo, hi, min, max) = match tp {
+                    U8 => (0.0, 256.0, 0, u8::MAX as i64),
+                    U16 => (0.0, 65536.0, 0, u16::MAX as i64),
+                    U32 => (0.0, 4294967296.0, 0, u32::MAX as i64),
+                    U64 => (0.0, 18446744073709551616.0, 0, u64::MAX as i64),
+                    I8 => (-128.0, 128.0, i8::MIN as i64, i8::MAX as i64),
+                    I16 => (-32768.0, 32768.0, i16::MIN as i64, i16::MAX as i64),
+                    I32 => (-2147483648.0, 2147483648.0, i32::MIN as i64, i32::MAX as i64),
+                    I64 => (-9223372036854775808.0, 9223372036854775808.0, i64::MIN, i64::MAX),
+                    // Char/Bool are not numeric cast targets; the compiler
+                    // rejects them before this runs
+                    _ => return Ok(Slot::int(0)),
+                };
+                if t < lo {
+                    Slot::int(min)
+                } else if t >= hi {
+                    Slot::int(max)
+                } else if to.is_unsigned() {
+                    Slot::int((t as u64) as i64)
+                } else {
+                    Slot::int(t as i64)
+                }
             }
             (true, true) => {
                 let x = unsafe { v.f };

@@ -487,6 +487,11 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, ty.id())))));
                 "Is"
             }
+            ExprKind::Cast { expr, ty } => {
+                fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, expr.id())))));
+                fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, ty.id())))));
+                "Cast"
+            }
         },
     };
     DumpNode { id: id.0, kind, span, fields }
