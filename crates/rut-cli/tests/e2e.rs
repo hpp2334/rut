@@ -1166,3 +1166,60 @@ pub fn main() -> unit {
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["60 3"]);
 }
+
+#[test]
+fn float_literal_defaults_to_f32() {
+    // an uncontextualized float literal is `f32` (RFC 0007 §1); the slot
+    // carries f32 precision, so a literal and a computed f32 agree.
+    let src = r#"
+pub fn main() -> unit {
+    let a = 0.1;            // default: f32
+    let b: f64 = 0.1;       // annotation: f64
+    let c = 0.1 + 0.0;      // computed f32
+    Logger.new("app").info(f"{a} {b} {c}");
+    Logger.new("app").info(f"{a == c}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["0.1 0.1 0.1", "true"]);
+}
+
+#[test]
+fn float_literal_default_does_not_implicitly_widen() {
+    // the default is f32, and there are no implicit numeric conversions:
+    // feeding it to `f64` is a width error (RFC 0007 §1)
+    let src = r#"
+import { Vec } from "std:collection";
+pub fn main() -> unit {
+    let a = 0.1;                 // f32 by default
+    let v: Vec<f64> = Vec.new();
+    v.push(a);                   // must not widen to f64
+}
+"#;
+    let out = compile(src, "main");
+    let msg = out
+        .diags
+        .iter()
+        .map(|d| d.msg.clone())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(msg.contains("f32") && msg.contains("f64"), "expected a width diagnostic, got:\n{msg}");
+}
+
+#[test]
+fn literals_adapt_to_expected_float_in_unary_and_binary() {
+    // `-2.0` as an `f64` argument and the lhs of `1.0 / 4.0` under an
+    // `f64` annotation both take the expected type (RFC 0007 §1)
+    let src = r#"
+fn offset(x: f64) -> f64 { return x + 0.5; }
+pub fn main() -> unit {
+    let r = offset(-2.0);
+    let v: f64 = 1.0 / 4.0;
+    Logger.new("app").info(f"{r} {v}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["-1.5 0.25"]);
+}

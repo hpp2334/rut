@@ -58,7 +58,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 use rut_ast::ast::UnOp::*;
                 let t = match op {
                     Not => self.compile_expr(expr, Some(TY_BOOL))?,
-                    _ => self.compile_expr(expr, None)?,
+                    // `-lit` in a typed position still adapts the literal
+                    // (`-2.0` passed to an `f64` param), so forward `expected`
+                    _ => self.compile_expr(expr, expected)?,
                 };
                 // capture the operand's register BEFORE new_reg — it
                 // overwrites last_reg with the destination
@@ -243,8 +245,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     Some(s) => float_suffix_ty(s),
                     None => match expected {
                         Some(e) if matches!(self.ctx.types.kind(e), TyKind::Prim(p) if p.is_float()) => e,
-                        _ => TY_F64,
+                        _ => TY_F32,
                     },
+                };
+                // The lexer stores literals as f64 bits. Narrow that payload
+                // to the register's width so an `f32` literal actually carries
+                // f32 precision in its slot — arithmetic and `str()` re-narrow,
+                // but float comparisons read the slot back as f64 (RFC 0004 §3).
+                let bits = if ty == TY_F32 {
+                    (f64::from_bits(bits) as f32 as f64).to_bits()
+                } else {
+                    bits
                 };
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
@@ -419,8 +430,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(reg)
             }
             ExprKind::Lit(Lit::Float(b, _)) => {
+                // same f32 narrowing as `load_lit`
+                let bits = if ty == TY_F32 {
+                    (f64::from_bits(b) as f32 as f64).to_bits()
+                } else {
+                    b
+                };
                 let reg = self.new_reg(ty);
-                self.emit(Op::ConstRaw { dst: reg, bits: b }, sp.lo);
+                self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
                 Ok(reg)
             }
             ExprKind::Lit(Lit::Bool(v)) => {

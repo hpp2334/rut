@@ -80,6 +80,6 @@ host-side, call-scoped, flag-guarded ones at the FFI (RFC 0023).
 
 ## Open questions
 
-- OQ-1: default integer type for uncontextualized literals (`i32` proposed,
-  RFC 0007 §1) and implicit widening ladder.
+- OQ-1: default type for uncontextualized literals — `i32` for integers and
+  `f32` for floats (RFC 0007 §1) — and implicit widening ladder.
 - OQ-2: `f16`/`bf16` for GPU-facing vecs.

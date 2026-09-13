@@ -24,7 +24,7 @@ fn a(i: i32, j: i32) -> f64 {
 
 fn mul_av(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {
     for (let i = 0; i < n; i += 1) {
-        let mut s = 0.0;
+        let mut s: f64 = 0.0;
         for (let j = 0; j < n; j += 1) {
             s += a(i, j) * v[j];
         }
@@ -34,7 +34,7 @@ fn mul_av(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {
 
 fn mul_atv(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {
     for (let i = 0; i < n; i += 1) {
-        let mut s = 0.0;
+        let mut s: f64 = 0.0;
         for (let j = 0; j < n; j += 1) {
             s += a(j, i) * v[j];
         }
@@ -56,8 +56,8 @@ pub fn main() -> unit {
         mul_av(v, tmp, n);
         mul_atv(tmp, u, n);
     }
-    let mut vbv = 0.0;
-    let mut vv = 0.0;
+    let mut vbv: f64 = 0.0;
+    let mut vv: f64 = 0.0;
     for (let i = 0; i < n; i += 1) {
         vbv += u[i] * v[i];
         vv += v[i] * v[i];

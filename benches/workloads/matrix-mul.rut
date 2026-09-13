@@ -25,7 +25,7 @@ pub fn main() -> unit {
         b[i] = f64(i % 7);
     }
     gemm(n, a, b, out);
-    let mut s = 0.0;
+    let mut s: f64 = 0.0;
     for (let i = 0; i < n * n; i += 1) {
         s += out[i];
     }

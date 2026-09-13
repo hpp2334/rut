@@ -23,7 +23,7 @@ fn fsqrt(x: f64) -> f64 {
 }
 
 fn energy(pos: Vec<f64>, vel: Vec<f64>, mass: Vec<f64>) -> f64 {
-    let mut e = 0.0;
+    let mut e: f64 = 0.0;
     for (let i = 0; i < 5; i += 1) {
         e += 0.5
             * mass[i]
@@ -64,9 +64,9 @@ fn advance(mut pos: Vec<f64>, mut vel: Vec<f64>, mass: Vec<f64>, dt: f64) -> uni
 }
 
 pub fn main() -> unit {
-    let pi = 3.141592653589793;
-    let solar_mass = 4.0 * pi * pi;
-    let days_per_year = 365.24;
+    let pi: f64 = 3.141592653589793;
+    let solar_mass: f64 = 4.0 * pi * pi;
+    let days_per_year: f64 = 365.24;
 
     let mass: Vec<f64> = Vec.new();
     mass.push(solar_mass);
@@ -110,9 +110,9 @@ pub fn main() -> unit {
     vel.push(-0.000095159225451972 * days_per_year);
 
     // offset the momentum so the system does not drift
-    let mut mvx = 0.0;
-    let mut mvy = 0.0;
-    let mut mvz = 0.0;
+    let mut mvx: f64 = 0.0;
+    let mut mvy: f64 = 0.0;
+    let mut mvz: f64 = 0.0;
     for (let i = 0; i < 5; i += 1) {
         mvx += vel[i * 3] * mass[i];
         mvy += vel[i * 3 + 1] * mass[i];

@@ -479,9 +479,9 @@ fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
     let k = i;
     let neg = false;
     if (k < string_len(s) && s.at(k) == 45u8) { neg = true; k += 1; }   // '-'
-    let ip = 0.0;
-    let fp = 0.0;
-    let scale = 0.1;
+    let ip: f64 = 0.0;
+    let fp: f64 = 0.0;
+    let scale: f64 = 0.1;
     let dot = false;
     let any_digit = false;
     let scanning = true;
@@ -508,10 +508,10 @@ fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
     let v = ip + fp;
     if (k < string_len(s) && (s.at(k) == 101u8 || s.at(k) == 69u8)) {    // e/E
         let m = k + 1;
-        let esign = 1.0;
+        let esign: f64 = 1.0;
         if (m < string_len(s) && s.at(m) == 45u8) { esign = -1.0; m += 1; }
         else { if (m < string_len(s) && s.at(m) == 43u8) { m += 1; } }   // '+'
-        let e = 0.0;
+        let e: f64 = 0.0;
         let digits = true;
         while (digits) {
             if (m < string_len(s) && is_digit(s.at(m))) {
@@ -519,7 +519,7 @@ fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
                 m += 1;
             } else { digits = false; }
         }
-        let mul = 1.0;
+        let mul: f64 = 1.0;
         let q = 0;
         while (q < i32(e)) { mul = mul * 10.0; q += 1; }
         if (esign > 0.0) { v = v * mul; } else { v = v / mul; }

@@ -16,7 +16,7 @@ builtin allocation calls (`Vec<f32>(1024)`).
 ## 1. Inference & conversions
 
 - Inference is bidirectional (literal ↔ expected type); a literal without
-  context defaults to `i32` / `f64` (default-width OQ — RFC 0004 OQ-1).
+  context defaults to `i32` / `f32` (default-width OQ — RFC 0004 OQ-1).
 - Numeric literals: decimal and `0x`/`0b`/`0o`, `_` separators, suffixes
   `u8..u64 i8..i64 f32 f64` (`3.14159f32`, `0xFF_u32`).
 - **Conversions are always explicit function calls** — `i32(x)`, `u8(x)`,

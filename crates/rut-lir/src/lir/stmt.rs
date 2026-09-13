@@ -401,7 +401,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // literals only; otherwise first arm decides later via compile
         match self.ctx.ast.expr(node) {
             ExprKind::Lit(Lit::Int(_, s)) => s.map(int_suffix_ty).unwrap_or(TY_I32),
-            ExprKind::Lit(Lit::Float(_, s)) => s.map(float_suffix_ty).unwrap_or(TY_F64),
+            ExprKind::Lit(Lit::Float(_, s)) => s.map(float_suffix_ty).unwrap_or(TY_F32),
             ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => TY_STR,
             ExprKind::Lit(Lit::Bool(_)) => TY_BOOL,
             ExprKind::Lit(Lit::Char(_)) => TY_CHAR,

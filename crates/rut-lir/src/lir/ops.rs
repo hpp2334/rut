@@ -17,15 +17,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         op: rut_ast::ast::BinOp,
         lhs: NodeHandle<AnyExpr>,
         rhs: NodeHandle<AnyExpr>,
-        _expected: Option<TypeId>,
+        expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         use rut_ast::ast::BinOp::*;
         if matches!(op, And | Or) {
             return self.compile_shortcircuit(op, lhs, rhs, sp);
         }
-        // bidirectional unification: lhs decides, rhs adapts (literals)
-        let lt = self.compile_expr(lhs, None)?;
+        // bidirectional unification (RFC 0007 §1): an expected type from the
+        // enclosing position (return/assignment/argument) seeds the lhs, then
+        // rhs adapts to the lhs. Without it, `1.0 / f64(x)` and unannotated
+        // `4.0 * pi` would default the lhs to f32 and mismatch.
+        let lt = self.compile_expr(lhs, expected)?;
         let lhs_reg = self.last_reg;
         let rt_ = self.compile_expr(rhs, Some(lt))?;
         let rhs_reg = self.last_reg;

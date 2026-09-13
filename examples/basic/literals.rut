@@ -15,8 +15,9 @@ fn literals(name: string) -> unit {
     let a = 10;                      // i32 (default)
     let b = 10u8;                    // u8 via suffix
     let c: u64 = 10;                 // u64 via annotation
-    let d = 1.5;                     // f64
-    let e = 1.5f32;                  // f32
+    let d = 1.5;                     // f32 (default)
+    let e = 1.5f32;                  // f32 via suffix
+    let d64: f64 = 1.5;              // f64 via annotation
     let s = "hi\tname";              // plain string: escapes processed
     let raw = r"C:\temp\log.txt";    // raw literal: NO escape processing
     let t = f"hi {name}!";           // format literal (§4.1)
@@ -29,7 +30,7 @@ fn literals(name: string) -> unit {
     let bin = bytes(64);             // binary data: bytes
     let p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
 
-    log.info(f"a={a} e={e} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()}");
+    log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()}");
 }
 
 pub fn main() -> unit {

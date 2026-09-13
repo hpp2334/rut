@@ -17,8 +17,8 @@ fn mandelbrot(
         let ci = y0 + (y1 - y0) * f64(y) / f64(h);
         for (let x = 0; x < w; x += 1) {
             let cr = x0 + (x1 - x0) * f64(x) / f64(w);
-            let mut zr = 0.0;
-            let mut zi = 0.0;
+            let mut zr: f64 = 0.0;
+            let mut zi: f64 = 0.0;
             let mut i = 0;
             while (i < max_iter) {
                 let zr2 = zr * zr;
