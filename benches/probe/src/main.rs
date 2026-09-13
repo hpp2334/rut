@@ -23,6 +23,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use rut_core::binary::decode;
+use rut_std::logger::install_std_log;
 use rut_vm::interp::{HostHooks, Limits, Vm};
 
 struct Args {
@@ -154,6 +155,10 @@ fn main() {
             HostHooks::default(),
         )
         .unwrap_or_else(|t| fail(format!("boot: {}", t.msg)));
+        // the workloads log their final checksum through `std:log`; the
+        // probe discards it (like the old `print: None`) so stdout stays a
+        // single JSON object — the embedder's half of the native module.
+        install_std_log(&mut vm, |_msg| {});
         let t = Instant::now();
         let res = vm.call("main", &[]);
         exec_ms.push(t.elapsed().as_secs_f64() * 1e3);
