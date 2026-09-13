@@ -1141,6 +1141,44 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn string_builder_flattens_via_join() {
+    // `to_str` seals the pending tail then hands the whole chunk list to the
+    // `string_join` native (one sizing pass, one allocation, RFC 0032
+    // §1.1 R2) — the O(total^2/32) chunk-by-chunk concat is gone.
+    let src = r#"
+import { String } from "std:string";
+pub fn main() -> unit {
+    let mut b = String.with_capacity(64);
+    let mut i = 0;
+    while (i < 1000) { b.push("ab"); i += 1; }
+    let n = b.len();
+    let s = b.to_str();
+    Logger.new("app").info(f"{n} {string_len(s)}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 4_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["2000 2000"]);
+}
+
+#[test]
+fn string_join_and_vec_as_array_run() {
+    // the builtin `string_join(Array<str>)` and the `Vec<T>.as_array()` bridge
+    let src = r#"
+import { Vec } from "std:collection";
+pub fn main() -> unit {
+    let mut v: Vec<str> = Vec.new();
+    v.push("x"); v.push("y"); v.push("z");
+    let e: Vec<str> = Vec.new();
+    Logger.new("app").info(f"{string_join(v.as_array())} {string_len(string_join(e.as_array()))}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["xyz 0"]);
+}
+
+#[test]
 fn math_namespace_intrinsics_run() {
     // `std:math`'s `Math` namespace: wrapping/saturating/checked integer
     // arithmetic (compiler-lowered) plus abs/min/max/signum and the f64

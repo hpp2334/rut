@@ -74,6 +74,20 @@ pub class Vec<T> {
         }
         return bytes_from(a);
     }
+
+    // Copy the live elements into a fresh, exactly-sized `Array<T>`. The
+    // backing `buf` may have spare capacity, so `buf.len()` is not the live
+    // length — this is the bridge from the growable `Vec` to the builtin
+    // array (`string_join` consumes the chunks of a `Vec<str>` this way).
+    pub fn as_array(self) -> Array<T> {
+        let n = self.len;
+        let mut a = Array<T>(n);
+        for (let i = 0; i < n; i += 1) {
+            a[i] = self.buf[i];
+        }
+        return a;
+    }
+
     // A fresh cursor over the live elements (`for (x of v.iter())`).
     pub fn iter(self) -> VecIter<T> {
         return VecIter<T>.new(self);

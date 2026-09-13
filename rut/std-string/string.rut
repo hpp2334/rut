@@ -25,11 +25,18 @@ pub class String {
     total: i32;       // chars pushed since `new`
 
     pub fn new() -> Self {
-        return Self { parts: Vec.new(), cur: "", cur_len: 0, total: 0 };
+        return String.with_capacity(0);
     }
 
-    pub fn with_capacity(_cap: i32) -> Self {
-        return String.new();
+    // `cap` is a hint in CHARS; sealed chunks hold ~32 chars, so reserve the
+    // matching number of chunk slots in the backing `Vec` (chunking is the
+    // amortization, this just skips the `Vec`'s early regrowth).
+    pub fn with_capacity(cap: i32) -> Self {
+        let mut chunks = 0;
+        if (cap > 0) {
+            chunks = (cap + 31) / 32;
+        }
+        return Self { parts: Vec.with_capacity(chunks), cur: "", cur_len: 0, total: 0 };
     }
 
     // seal `cur` into `parts` once it is full
@@ -67,13 +74,16 @@ pub class String {
         return self.total == 0;
     }
 
-    // flatten to an immutable `str`
-    pub fn to_str(self) -> str {
-        let mut out = "";
-        for (let p of self.parts) {
-            out = f"{out}{p}";
+    // Flatten to an immutable `str` in one pass: seal the pending tail, then
+    // hand the whole chunk list to `string_join`, which sizes once and
+    // allocates once (RFC 0032 §1.1 R2). Concatenating chunk by chunk would
+    // copy the growing prefix every step (`O(total^2 / 32)`).
+    pub fn to_str(mut self) -> str {
+        if (self.cur_len > 0) {
+            self.parts.push(self.cur);
+            self.cur = "";
+            self.cur_len = 0;
         }
-        out = f"{out}{self.cur}";
-        return out;
+        return string_join(self.parts.as_array());
     }
 }

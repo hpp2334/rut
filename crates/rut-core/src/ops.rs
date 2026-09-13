@@ -55,6 +55,8 @@ pub enum Nat {
     Concat,
     StrLen,    // `for..of`/`Index::len`/`string_len` — the char count
     ArrLen,    // Array<T>.len()/bytes_len — the heap sequence's runtime length
+    /// join every element of an `Array<str>` (one sizing pass, one alloc)
+    StrJoin,
 }
 
 #[derive(Clone, Debug, PartialEq)]

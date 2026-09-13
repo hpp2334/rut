@@ -57,6 +57,35 @@ impl Vm {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }
             }
+            Nat::StrJoin => {
+                // join every element of an `Array<str>`: one sizing pass,
+                // then one copy into a single allocation (RFC 0032 §1.1 R2).
+                let arr = self.reg(args[0]);
+                let total = match &cell_of(arr).data {
+                    crate::heap::CellData::Array { items, .. } => {
+                        let items = items.borrow();
+                        let mut n = 0usize;
+                        for i in 0..items.len() {
+                            if let Some(s) = items.get(i) {
+                                n += cell_of(s).as_str().len();
+                            }
+                        }
+                        n
+                    }
+                    _ => return Err(Trap::new(TrapKind::Invalid, "string_join on non-array")),
+                };
+                let mut out = String::with_capacity(total);
+                if let crate::heap::CellData::Array { items, .. } = &cell_of(arr).data {
+                    let items = items.borrow();
+                    for i in 0..items.len() {
+                        if let Some(s) = items.get(i) {
+                            out.push_str(cell_of(s).as_str());
+                        }
+                    }
+                }
+                let c = self.heap.alloc_str(out)?;
+                self.store_result(dst, c)?;
+            }
             _ => unreachable!("call_str_nat: non-string native"),
         }
         Ok(())

@@ -216,6 +216,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
                 return Ok(TY_I32);
             }
+            "string_join" => {
+                // join every element of an `Array<str>` in one pass: the
+                // native sizes once and allocates once (RFC 0032 §1.1 R2).
+                if args.len() != 1 {
+                    self.ctx.err(sp, "string_join(parts) takes one `Array<str>`");
+                    return Err(());
+                }
+                let hint = Some(self.ctx.mk_array(TY_STR));
+                let at = self.compile_expr(args[0], hint)?;
+                match self.ctx.types.kind(at) {
+                    TyKind::Array { elem } if *elem == TY_STR => {}
+                    _ => {
+                        self.ctx.err(sp, format!("string_join expects `Array<str>` —found `{}`", self.ctx.types.name(at)));
+                        return Err(());
+                    }
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_STR);
+                self.emit(Op::CallNat { nat: Nat::StrJoin, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
+                return Ok(TY_STR);
+            }
             "string_encode" => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "string_encode(s) takes one `str`");

@@ -17,6 +17,7 @@
 
 pub host fn string_len(s: str) -> i32;       // number of chars
 pub host fn string_encode(s: str) -> bytes;  // UTF-8 -> bytes (RFC 0004)
+pub host fn string_join(parts: Array<str>) -> str;  // join in one pass (RFC 0007)
 
 pub host fn bytes_len(b: bytes) -> i32;
 pub host fn bytes_decode(b: bytes) -> str;   // bytes -> UTF-8 string (lossy)
