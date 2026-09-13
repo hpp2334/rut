@@ -1023,10 +1023,10 @@ impl SurfaceFrame {
                 self.stage = SuStage::Params;
                 Step::Push(Frame::Params(ParamsFrame::new()))
             }
-            Tok::Ident(k) if k == "interface" => {
+            Tok::Ident(k) if k == "class" => {
                 p.bump();
                 self.is_class = true;
-                let Some(name) = p.expect_ident("an interface name") else {
+                let Some(name) = p.expect_ident("a class name") else {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
@@ -1044,7 +1044,7 @@ impl SurfaceFrame {
             _ => {
                 let found = p.peek(0).describe();
                 p.err_here(format!(
-                    "expected `fn` or `interface` after `host`/`extern`, found {found}"
+                    "expected `fn` or `class` after `host`/`extern`, found {found}"
                 ));
                 Step::Pop(Done::Failed)
             }
@@ -1095,7 +1095,7 @@ impl SurfaceFrame {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
                 let node = p.item(
-                    ItemKind::SurfaceInterface {
+                    ItemKind::SurfaceClass {
                         vis: Vis::Self_,
                         linkage: self.linkage,
                         name: self.name,

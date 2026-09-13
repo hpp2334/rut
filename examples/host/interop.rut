@@ -10,7 +10,7 @@ import { log_l10n } from "app:log";                // host fn log_l10n(t: Templa
 import { Logger } from "std:log";
 
 // app/gfx.d.rut (the declaration file) contains, among others:
-//     pub host interface Source<T> {  // instantiation identity KEPT:
+//     pub host class Source<T> {  // instantiation identity KEPT:
 //         fn get(): T;               // Source<i32> != Source<string>
 //     }
 // — declared for typing; built and implemented entirely host-side.

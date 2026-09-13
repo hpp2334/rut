@@ -372,7 +372,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     line: line_of(src, span.lo),
                 });
             }
-            ItemKind::SurfaceInterface { name, members, .. } => {
+            ItemKind::SurfaceClass { name, members, .. } => {
                 let ms = members_of(src, ast, members);
                 idx.types.push(ty_def(
                     src,

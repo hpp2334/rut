@@ -274,7 +274,7 @@ fn classify_item(
         ItemKind::Trait { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Interface, out, false)
         }
-        ItemKind::SurfaceInterface { name, .. } => {
+        ItemKind::SurfaceClass { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
         // methods classify via their own Member nodes; import names need
@@ -639,7 +639,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             find_name(toks, span, ast.name(*name), false),
             vec![],
         )),
-        ItemKind::SurfaceInterface { name, members, .. } => {
+        ItemKind::SurfaceClass { name, members, .. } => {
             let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }

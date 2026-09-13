@@ -1,6 +1,6 @@
 // plugin/batch.d.rut — the DECLARATION FILE for "plugin:batch".
 //
-// One host interface, one host fn — the whole surface of a telemetry-style
+// One host class, one host fn — the whole surface of a telemetry-style
 // batch plugin. `host`/`extern` are .d.rut-ONLY keywords (RFC 0029):
 // signatures, no bodies. The Rust IMPLEMENTATION is the sibling file
 // examples/host/batch.rs, bound by name at embedder startup and proven
@@ -11,14 +11,14 @@
 // Import specifiers map to declaration files by path: "plugin:batch" ->
 // plugin/batch.d.rut. Only EXPORTED decls are nameable outside.
 
-pub host interface Batch {
+pub host class Batch {
     fn new(name: string) -> Self;              // native class method — the
     fn push(self, metric: string, value: i64) -> unit;   // construction
     fn len(self) -> i32;                       // surface (RFC 0010/0025)
 }
 
 // The HOST CALLBACK: a module-level host fn whose PARAMETER TYPE is the
-// host interface itself. Calling submit(b) hands the instance back across
+// host class itself. Calling submit(b) hands the instance back across
 // the boundary — rut -> Rust — where it arrives as a call-scoped
 // Handle<Batch> (RFC 0022 §2, RFC 0023 §2); the receipt crosses back
 // out as an ordinary checked return value.

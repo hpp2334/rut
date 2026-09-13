@@ -336,8 +336,8 @@ pub enum ItemKind {
         params: Vec<NodeHandle<AnyParam>>,
         ret: Option<NodeHandle<AnyTy>>,
     },
-    /// `host interface` / `extern interface` — .d.rut only
-    SurfaceInterface {
+    /// `host class` / `extern class` — .d.rut only
+    SurfaceClass {
         vis: Vis,
         linkage: Linkage,
         name: IdentId,

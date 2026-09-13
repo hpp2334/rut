@@ -2,7 +2,7 @@ import { Vec } from "std:collection";
 // RFC 0022/0023/0025 — the host-class ROUND TRIP.
 //
 // The host provides Batch: declared in examples/host/plugin/batch.d.rut
-// (`pub host interface Batch` + `pub host fn submit(b: Batch):
+// (`pub host class Batch` + `pub host fn submit(b: Batch):
 // string`), implemented in Rust in examples/host/batch.rs. This module
 // receives an instance from the host, runs several procedures on it in
 // plain rut, then passes it BACK by calling submit — the host callback
