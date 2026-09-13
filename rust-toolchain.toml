@@ -1,0 +1,5 @@
+[toolchain]
+# rut-vm-threaded depends on `#![feature(explicit_tail_calls)]` and
+# `#![feature(rust_preserve_none_cc)]`, both incomplete. Pin the nightly so
+# codegen/correctness can't drift under us without an explicit bump.
+channel = "nightly-2026-07-15"

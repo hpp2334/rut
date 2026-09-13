@@ -1,0 +1,12 @@
+[package]
+name = "rut-vm-threaded"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "tail-call threaded dispatch for the rut VM — the only crate that enables the nightly `become`/`rust-preserve-none` features; native backend under cfg(rut_threaded), portable loop otherwise"
+
+[lib]
+name = "rut_vm_threaded"
+path = "src/lib.rs"
+
+[dependencies]
