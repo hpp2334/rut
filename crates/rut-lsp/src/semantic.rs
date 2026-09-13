@@ -396,7 +396,7 @@ fn classify_expr(
             classify_path_segs(toks, ast, span, segs, out, TypeRule::Value);
         }
         // a bare call `name(args)` colors its callee as a function (free
-        // fns and fn-typed locals read alike); conversions `i32(x)` keep
+        // fns and fn-typed locals read alike); casts `x as i32` keep
         // their type color via the primitive guard below
         ExprKind::Call { callee, .. } => {
             if let ExprKind::Path { segs } = ast.expr(*callee) {
@@ -454,7 +454,7 @@ fn classify_path_segs(
                     }
                     TypeRule::Value => {
                         // primitives stay types even in call position —
-                        // the conversion family `i32(x)` / `f64(x)` reads
+                        // the cast family `x as i32` / `x as f64` reads
                         // as a type operation, not a variable
                         if is_primitive_ty(s) {
                             TokenType::Type
@@ -829,10 +829,10 @@ mod tests {
     }
 
     #[test]
-    fn conversion_calls_keep_their_type_color() {
-        // `f64(x)` is the conversion family (RFC 0007) — the primitive
-        // stays a type in call position, not a variable
-        let src = "fn f(p: Point) -> f64 { return f64(p.x); }\n";
+    fn cast_types_keep_their_type_color() {
+        // `x as f64` is the conversion family (RFC 0007 §1) — the
+        // primitive after `as` stays a type, not a variable
+        let src = "fn f(p: Point) -> f64 { return p.x as f64; }\n";
         let spans = classify_src(src);
         assert_eq!(find(src, &spans, "f64"), vec![TokenType::Type, TokenType::Type]);
         assert_eq!(find(src, &spans, "p"), vec![TokenType::Parameter, TokenType::Variable]);

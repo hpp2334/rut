@@ -26,7 +26,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // bidirectional unification (RFC 0007 §1): an expected type from the
         // enclosing position (return/assignment/argument) seeds the lhs, then
-        // rhs adapts to the lhs. Without it, `1.0 / f64(x)` and unannotated
+        // rhs adapts to the lhs. Without it, `1.0 / x as f64` and unannotated
         // `4.0 * pi` would default the lhs to f32 and mismatch.
         let lt = self.compile_expr(lhs, expected)?;
         let lhs_reg = self.last_reg;

@@ -62,7 +62,7 @@ dataclass Cell {                 // fields only — the value-key contract rides
 
 impl Hashable for Cell {         // hash + eq: the value-key contract
     fn hash(self) -> u64 {                             // vtable dispatch — interface
-        return u64(self.x) * 1000003 + u64(self.y);  // methods NEVER devirtualize
+        return (self.x) as u64 * 1000003 + (self.y) as u64;  // methods NEVER devirtualize
     }                                                // (RFC 0012 §1)
 
     fn eq(self, other: Cell) -> bool {                 // field-wise equality —

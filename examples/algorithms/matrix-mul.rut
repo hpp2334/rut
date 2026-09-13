@@ -22,8 +22,8 @@ pub fn main() -> unit {
     let mut b = Vec<f32>.zeroed(n * n);
     let out = Vec<f32>.zeroed(n * n);     // written through gemm's own `mut` param
     for (let i = 0; i < n * n; i += 1) {
-        a[i] = f32(i);
-        b[i] = f32(i % 7);
+        a[i] = i as f32;
+        b[i] = (i % 7) as f32;
     }
     gemm(n, a, b, out);
     log.info(f"out[0]={out[0]} out[last]={out[n * n - 1]}");

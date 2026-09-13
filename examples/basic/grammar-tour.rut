@@ -18,7 +18,7 @@ dataclass Point { // shared cell: assignment aliases
 } // impl blocks outside — here: data only
 
 fn length(p: Point) -> f64 {
- return sqrt(f64(p.x * p.x + p.y * p.y));
+ return sqrt((p.x * p.x + p.y * p.y) as f64);
 }
 
 interface Drawable {

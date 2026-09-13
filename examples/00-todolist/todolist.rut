@@ -104,7 +104,7 @@ dataclass Lists {
 /// Recover list `h` out of the container. Internal — an ordinary fn,
 /// unrestricted types.
 fn at(c: Opaque, h: u32) -> TodoList {
-    return downcast<Lists>(c).value.lists[i32(h)];
+    return downcast<Lists>(c).value.lists[h as i32];
 }
 
 // ---- the host surface (entry = callable by the embedder) ----
@@ -116,7 +116,7 @@ entry fn createContainer() -> Opaque {
 entry fn create(c: Opaque) -> u32 {
     let k = downcast<Lists>(c).value;
     k.lists.push(TodoList.new());
-    return u32(k.lists.len() - 1);
+    return (k.lists.len() - 1) as u32;
 }
 
 entry fn add(c: Opaque, h: u32, title: str) -> i32 {

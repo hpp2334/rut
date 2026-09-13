@@ -19,7 +19,7 @@ fn fsqrt(x: f64) -> f64 {
 }
 
 fn a(i: i32, j: i32) -> f64 {
-    return 1.0 / f64((i + j) * (i + j + 1) / 2 + i + 1);
+    return 1.0 / ((i + j) * (i + j + 1) / 2 + i + 1) as f64;
 }
 
 fn mul_av(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {

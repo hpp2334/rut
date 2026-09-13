@@ -15,7 +15,7 @@ pub fn lcg_next(state: u32) -> u32 {
 }
 
 pub(self) fn lcg_f32(state: u32) -> f32 {
-    return f32(lcg_next(state) % 1000u32) / 1000.0f32;
+    return (lcg_next(state) % 1000u32) as f32 / 1000.0f32;
 }
 
 let FIRST: Array<str> = ["ada", "linus", "grace", "alan", "barbara", "dennis", "katherine", "ken"];
@@ -34,11 +34,11 @@ pub suspend fn fetch_users(seed: u32) -> Result<Vec<User>, ApiError> {
     let users: Vec<User> = Vec.new();
     for (let i = 0; i < 12; i += 1) {
         rng = lcg_next(rng);
-        let first = FIRST[i32(rng % 8u32)];
+        let first = FIRST[(rng % 8u32) as i32];
         rng = lcg_next(rng);
-        let last = LAST[i32(rng % 8u32)];
+        let last = LAST[(rng % 8u32) as i32];
         rng = lcg_next(rng);
-        let role = ROLES[i32(rng % 5u32)];
+        let role = ROLES[(rng % 5u32) as i32];
         rng = lcg_next(rng);
         let status = when (rng % 3u32) {
             0u32 -> Status.Active,

@@ -35,8 +35,8 @@ dataclass Name {                        // hash + eq: ONE contract (RFC 0028) â€
 
 impl Hashable for Name {
     fn hash(self) -> u64 {                             // demo hash (length mix);
-        return u64(self.first.len()) * 1000003      // real impls mix bytes
-             + u64(self.last.len());
+        return (self.first.len()) as u64 * 1000003      // real impls mix bytes
+             + (self.last.len()) as u64;
     }
 
     fn eq(self, other: Name) -> bool {                 // field-wise equality â€”

@@ -492,7 +492,7 @@ fn parse_num(s: str, i: i32) -> Result<Parsed, JsonError> {
         } else {
             let c = s.at(k);
             if (is_digit(c)) {
-                let d = f64(i32(c) - 48);
+                let d = (c as i32 - 48) as f64;
                 if (dot) { fp = fp + d * scale; scale = scale / 10.0; }
                 else     { ip = ip * 10.0 + d; }
                 any_digit = true;
@@ -516,13 +516,13 @@ fn parse_num(s: str, i: i32) -> Result<Parsed, JsonError> {
         let digits = true;
         while (digits) {
             if (m < string_len(s) && is_digit(s.at(m))) {
-                e = e * 10.0 + f64(i32(s.at(m)) - 48);
+                e = e * 10.0 + ((s.at(m)) as i32 - 48) as f64;
                 m += 1;
             } else { digits = false; }
         }
         let mul: f64 = 1.0;
         let q = 0;
-        while (q < i32(e)) { mul = mul * 10.0; q += 1; }
+        while (q < e as i32) { mul = mul * 10.0; q += 1; }
         if (esign > 0.0) { v = v * mul; } else { v = v / mul; }
         k = m;
     }

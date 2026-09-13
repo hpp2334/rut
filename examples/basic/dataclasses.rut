@@ -34,7 +34,7 @@ fn nudged(pt: Point) -> Point {    // plain param: read-only view of the shared
 }
 
 fn length(pt: Point) -> f64 {     // free function instead of a method
-    return sqrt(f64(pt.x * pt.x + pt.y * pt.y));
+    return sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
 }
 
 fn dataclasses() -> unit {

@@ -35,7 +35,7 @@ suspend fn produce(out: Sender<LiveEvent>, seed: u32) -> unit {
         rng = lcg_next(rng);
         send_event(out, rng % 10u32, rng, v);
         rng = lcg_next(rng);
-        v = clamp_f32(v + (f32(rng % 100u32) - 50.0f32) / 12.0f32, 4.0f32, 96.0f32);
+        v = clamp_f32(v + ((rng % 100u32) as f32 - 50.0f32) / 12.0f32, 4.0f32, 96.0f32);
     }
 }
 

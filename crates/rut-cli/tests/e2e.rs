@@ -288,7 +288,7 @@ pub fn main() -> unit {
     Logger.new("app").info(f"u={u >> 1}");
     let v: u32 = 0x80000000;
     Logger.new("app").info(f"v={v >> 31}");
-    let s = i64(-8);
+    let s = -8 as i64;
     Logger.new("app").info(f"s={s >> 1}");
 }
 "#;
@@ -669,7 +669,7 @@ entry fn make() -> Opaque { return Opaque.new(Box { rows: Vec.new() }); }
 entry fn put(c: Opaque) -> u32 {
     let b = downcast<Box>(c).value;
     b.rows.push(Row { id: 1 });
-    return u32(b.rows.len());
+    return b.rows.len() as u32;
 }
 entry fn echo_bytes(v: bytes) -> bytes { return v; }
 entry fn maybe(v: i32) -> Option<i32> {

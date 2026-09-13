@@ -14,9 +14,9 @@ fn mandelbrot(
 ) -> i32 {
     let mut checksum = 0;
     for (let y = 0; y < h; y += 1) {
-        let ci = y0 + (y1 - y0) * f64(y) / f64(h);
+        let ci = y0 + (y1 - y0) * y as f64 / h as f64;
         for (let x = 0; x < w; x += 1) {
-            let cr = x0 + (x1 - x0) * f64(x) / f64(w);
+            let cr = x0 + (x1 - x0) * x as f64 / w as f64;
             let mut zr: f64 = 0.0;
             let mut zi: f64 = 0.0;
             let mut i = 0;

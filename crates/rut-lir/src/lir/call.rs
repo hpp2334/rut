@@ -340,29 +340,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
             "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, format!("{n}(x) takes one argument"));
-                    return Err(());
-                }
-                let to_ty = match n.as_str() {
-                    "i8" => TY_I8, "i16" => TY_I16, "i32" => TY_I32, "i64" => TY_I64,
-                    "u8" => TY_U8, "u16" => TY_U16, "u32" => TY_U32, "u64" => TY_U64,
-                    "f32" => TY_F32, _ => TY_F64,
-                };
-                let from = self.compile_expr(args[0], None)?;
-                let from_prim = if let TyKind::Prim(p) = self.ctx.types.kind(from) { Some(*p) } else { None };
-                let Some(from_prim) = from_prim else {
-                    self.ctx.err(sp, format!("{}(..) converts numbers —found `{}`", n, self.ctx.types.name(from)));
-                    return Err(());
-                };
-                let Some(to_prim) = (if let TyKind::Prim(p) = self.ctx.types.kind(to_ty) { Some(*p) } else { None }) else {
-                    self.ctx.err(sp, "internal: conversion target is not a primitive");
-                    return Err(());
-                };
-                let src = self.last_reg;
-                let dst = self.new_reg(to_ty);
-                self.emit(Op::Conv { dst, src, from: from_prim, to: to_prim }, sp.lo);
-                return Ok(to_ty);
+                // removed when the `as` cast landed (RFC 0007 §1) — the
+                // conversion family is spelled `x as T` now. The message
+                // mirrors the `size_of` removal above.
+                self.ctx.err(sp, format!("`{n}(x)` was removed — use `x as {n}` (RFC 0007 §1)"));
+                return Err(());
             }
             "str" => {
                 if args.len() != 1 {
