@@ -1,0 +1,17 @@
+// std-log/log.rut — the logger (RFC 0028 §std:log).
+//
+// `Logger`/output go through the host function `emit` from the native
+// module `rt:log` (RFC 0022/0026); the embedder installs the actual sink.
+// Because `std:log` is an ordinary module, a host or user may mount their
+// own in its place.
+import { emit } from "rt:log";
+
+// One-off output at Info.
+pub fn log(msg: string) -> unit {
+    emit("app", 1, msg);
+}
+
+pub fn debug(name: string, msg: string) -> unit { emit(name, 0, msg); }
+pub fn info(name: string, msg: string) -> unit { emit(name, 1, msg); }
+pub fn warn(name: string, msg: string) -> unit { emit(name, 2, msg); }
+pub fn error(name: string, msg: string) -> unit { emit(name, 3, msg); }

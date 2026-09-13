@@ -52,6 +52,10 @@ pub struct Module {
     pub source: Option<String>,
     /// in-memory `.d.rut` surface
     pub decl: Option<String>,
+    /// in-memory HOST surface (RFC 0022/0026): bodyless functions, bound by
+    /// the embedder at run time — `(name, params, ret)`. A module with these
+    /// and no `source` is a native module.
+    pub host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>,
 }
 
 /// A parsed `rut.toml` — either a module manifest (`name` + `entry.*`) or
@@ -158,8 +162,7 @@ impl Session {
             self.mount(Module {
                 spec: name.clone(),
                 entry: manifest.entry.clone(),
-                source: None,
-                decl: None,
+                ..Default::default()
             })?;
         }
         for (spec, dep) in &manifest.deps {

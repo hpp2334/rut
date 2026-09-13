@@ -288,7 +288,11 @@ impl Vm {
                     // pc advances first: `enter` saves it as the return
                     // address and resets the callee's pc to 0
                     self.cur_pc += 1;
-                    self.op_call(*func, args, *dst);
+                    if self.prog.funcs[*func as usize].host.is_some() {
+                        self.call_host(*func, args, *dst)?;
+                    } else {
+                        self.op_call(*func, args, *dst);
+                    }
                 }
                 Op::CallM { func, recv, args, dst } => {
                     self.cur_pc += 1;

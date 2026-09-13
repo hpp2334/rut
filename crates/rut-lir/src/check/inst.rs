@@ -27,6 +27,7 @@ impl<'a> Ctx<'a> {
             regs: vec![],
             code: vec![],
             spans: vec![],
+            host: None,
         });
         self.queue.push(inst);
         fid

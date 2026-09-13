@@ -237,6 +237,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             regs,
             code,
             spans,
+            host: None,
         };
         let f = &mut c.ctx.funcs[fid as usize];
         *f = fc;
@@ -332,6 +333,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             regs,
             code,
             spans,
+            host: None,
         };
         let f = &mut c.ctx.funcs[fid as usize];
         *f = fc;

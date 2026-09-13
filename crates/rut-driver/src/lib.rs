@@ -8,7 +8,7 @@ use rut_ast::dump;
 use rut_parser::{parse, Mode};
 use rut_core::binary::{encode, Program};
 use rut_core::ops::Op;
-use rut_core::types::TyKind;
+use rut_core::types::{TyKind, TY_I32, TY_STR, TY_UNIT};
 
 pub mod session;
 pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
@@ -234,6 +234,12 @@ pub fn std_collection_source() -> String {
     )
 }
 
+/// The `std:log` body (RFC 0028) — an ordinary rut module over the host
+/// function `rt:log::emit`.
+pub fn std_log_source() -> String {
+    include_str!("../../../rut/std-log/log.rut").to_string()
+}
+
 /// Full pipeline over one module: resolve its `import` statements against a
 /// session with `std:collection` mounted, then link, flatten, encode.
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
@@ -248,6 +254,18 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     let _ = session.register_module(
         "std:collection",
         Module { source: Some(std_collection_source()), ..Default::default() },
+    );
+    // the native module (RFC 0022/0026) behind `std:log`
+    let _ = session.register_module(
+        "rt:log",
+        Module {
+            host_funcs: vec![("emit".to_string(), vec![TY_STR, TY_I32, TY_STR], TY_UNIT)],
+            ..Default::default()
+        },
+    );
+    let _ = session.register_module(
+        "std:log",
+        Module { source: Some(std_log_source()), ..Default::default() },
     );
     let spec = format!("app:{module_name}");
     if let Err(e) = session.register_module(

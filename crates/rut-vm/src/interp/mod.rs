@@ -11,6 +11,7 @@ use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
 use rut_core::ops::*;
 use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 mod native;
@@ -59,6 +60,10 @@ pub struct HostHooks {
     pub print: Option<Rc<RefCell<dyn FnMut(&str)>>>,
 }
 
+/// An embedder implementation for a bodyless host function
+/// (RFC 0022/0026): registered by name against `FuncCode.host`.
+pub type HostFn = Rc<RefCell<dyn FnMut(&[Value]) -> Result<Value, Trap>>>;
+
 struct SavedFrame {
     func: u32,
     pc: u32,
@@ -81,6 +86,8 @@ pub struct Vm {
     interrupt_every: u32,
     since_check: u32,
     pub hooks: HostHooks,
+    /// host-function impls by name (RFC 0022/0026)
+    host_fns: HashMap<String, HostFn>,
     const_slots: Vec<Slot>,
     /// recycled per-frame register files (avoids a Vec alloc per call)
     reg_pool: Vec<Vec<Slot>>,
@@ -199,6 +206,7 @@ impl Vm {
             interrupt_every: limits.interrupt_every.max(1),
             since_check: 0,
             hooks,
+            host_fns: HashMap::new(),
             const_slots,
             reg_pool: Vec::new(),
             ref_regs,
@@ -342,6 +350,48 @@ impl Vm {
                 ))
             }
         })
+    }
+
+    /// Register an embedder implementation for a bodyless host function
+    /// (RFC 0022/0026), bound by the `FuncCode.host` name.
+    pub fn register_host_fn<F>(&mut self, name: &str, f: F)
+    where
+        F: FnMut(&[Value]) -> Result<Value, Trap> + 'static,
+    {
+        self.host_fns.insert(name.to_string(), Rc::new(RefCell::new(f)));
+    }
+
+    /// Dispatch `Op::Call` to a host function: convert the args to `Value`s,
+    /// invoke the embedder's impl, convert the result. The name was bound at
+    /// link; an unregistered name traps at the boundary.
+    pub(super) fn call_host(&mut self, func: u32, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+        let fc = &self.prog.funcs[func as usize];
+        let name = fc.host.clone().expect("call_host: not a host function");
+        let params = fc.params.clone();
+        let ret = fc.ret;
+        let mut vals = Vec::with_capacity(args.len());
+        for (i, a) in args.iter().enumerate() {
+            let ty = params.get(i).copied().unwrap_or(rut_core::types::TY_I32);
+            vals.push(slot_to_value(self.cur_regs[*a as usize], ty, &self.prog, &self.heap));
+        }
+        let Some(f) = self.host_fns.get(&name).cloned() else {
+            return Err(Trap::new(TrapKind::Invalid, format!("host function `{name}` is not registered")));
+        };
+        let out = {
+            let mut f = f.borrow_mut();
+            f(&vals)?
+        };
+        if let Some(d) = dst {
+            let s = self
+                .value_in(&out, ret)
+                .map_err(|m| Trap::new(TrapKind::Invalid, format!("host `{name}` result: {m}")))?;
+            if self.is_ref(ret) {
+                let old = self.cur_regs[d as usize];
+                self.heap.release(old);
+            }
+            self.cur_regs[d as usize] = s;
+        }
+        Ok(())
     }
 
     /// Resume after a budget trap (RFC 0034 §4: the frame IS the loop state).

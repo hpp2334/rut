@@ -89,6 +89,40 @@ impl<'a> GraphCompiler<'a> {
                 return None;
             }
         };
+        // a native module (RFC 0022/0026): no rut body — synthesize a
+        // placeholder program whose bodyless funcs the embedder implements.
+        if module.source.is_none() && !module.host_funcs.is_empty() {
+            use rut_core::binary::{FuncCode, Program};
+            let scope = self.next_scope;
+            self.next_scope += 1;
+            let mut surface = rut_core::binary::Surface::default();
+            let mut funcs = Vec::new();
+            for (i, (name, params, ret)) in module.host_funcs.iter().enumerate() {
+                surface.funcs.push(rut_core::binary::SurfaceFn {
+                    name: name.clone(),
+                    params: params.clone(),
+                    ret: *ret,
+                    local: i as u32,
+                });
+                funcs.push(FuncCode {
+                    name: name.clone(),
+                    params: params.clone(),
+                    ret: *ret,
+                    is_method: false,
+                    n_captures: 0,
+                    regs: vec![],
+                    code: vec![],
+                    spans: vec![],
+                    host: Some(format!("{spec}::{name}")),
+                });
+            }
+            let program = Program { name: spec.to_string(), scope, surface, funcs, ..Default::default() };
+            let idx = self.programs.len();
+            self.programs.push(program);
+            let unit = Unit::Linked { idx, scope };
+            self.done.insert(spec.to_string(), unit.clone());
+            return Some(unit);
+        }
         let Some(src) = module.source.clone() else {
             self.diags.push(Diag::new(
                 Span::new(0, 0),

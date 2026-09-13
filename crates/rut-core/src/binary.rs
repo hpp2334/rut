@@ -33,6 +33,10 @@ pub struct FuncCode {
     pub code: Vec<Op>,
     /// pc → source byte offset (RFC 0036 — symbolication data)
     pub spans: Vec<(u32, u32)>,
+    /// host-function binding (RFC 0022/0026/0029): `Some(name)` when the
+    /// function has no rut body — `Op::Call` dispatches to the embedder's
+    /// impl registered under `name`.
+    pub host: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -221,6 +225,10 @@ pub fn encode(prog: &Program) -> Vec<u8> {
             e.u32(*pc);
             e.u32(*lo);
         }
+        e.u8(f.host.is_some() as u8);
+        if let Some(h) = &f.host {
+            e.str(h);
+        }
     }
     // exports
     e.u32(prog.exports.len() as u32);
@@ -374,7 +382,8 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             let lo = d.u32()?;
             spans.push((pc, lo));
         }
-        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, code, spans });
+        let host = if d.u8()? != 0 { Some(d.str()?) } else { None };
+        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, code, spans, host });
     }
     let nexp = d.u32()? as usize;
     let mut exports = Vec::with_capacity(nexp);

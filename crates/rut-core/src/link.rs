@@ -195,6 +195,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     .map(|op| remap_op(op, &map, &map_func, slot_off, trait_off, const_off))
                     .collect(),
                 spans: f.spans,
+                host: f.host,
             });
         }
 
@@ -314,6 +315,7 @@ mod tests {
             regs: vec![TY_I32],
             code: vec![Op::Const { dst: 0, k: 0 }, Op::Ret { val: Some(0) }],
             spans: vec![],
+            host: None,
         });
         p.exports.push(("main".into(), 0));
         p.vtables = vec![Vec::new(); p.types.types.len()];
