@@ -446,6 +446,7 @@ name = "rut-vm"
 version = "0.1.0"
 dependencies = [
  "rut-core",
+ "rut-vm-threaded",
 ]
 
 [[package]]

@@ -19,6 +19,7 @@ mod ops;
 mod run;
 mod scalar;
 mod step;
+mod threaded;
 mod util;
 
 // free helpers live in the submodules; pull them into `interp` so the
@@ -98,6 +99,10 @@ pub struct Vm {
     type_repr: Vec<Repr>,
     /// `sum_payload_repr[t][tag]` — payload repr for Option/Result types
     sum_payload_repr: Vec<[Repr; 2]>,
+    /// per-function dispatch tags for `rut-vm-threaded` (one per op)
+    op_tags: Vec<Vec<u8>>,
+    /// threaded handler table, built once and reused across bails
+    thread_table: Rc<rut_vm_threaded::Table<Vm>>,
 }
 
 /// Const-generic op codes for the scalar op bodies — RFC 0032: the opcode is
@@ -189,6 +194,13 @@ impl Vm {
                 _ => [Repr::Any, Repr::Any],
             })
             .collect();
+        // precompute the threaded dispatch tags (one per op)
+        let op_tags: Vec<Vec<u8>> = prog
+            .funcs
+            .iter()
+            .map(|f| f.code.iter().map(rut_vm_threaded::tag_of).collect())
+            .collect();
+        let thread_table = Rc::new(rut_vm_threaded::build_table::<Vm>());
         Ok(Vm {
             prog,
             heap,
@@ -210,6 +222,8 @@ impl Vm {
             data_ref_fields,
             type_repr,
             sum_payload_repr,
+            op_tags,
+            thread_table,
         })
     }
 

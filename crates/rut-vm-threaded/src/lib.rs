@@ -27,7 +27,7 @@
 #![cfg_attr(rut_threaded, allow(incomplete_features))]
 
 mod api;
-pub use api::{tag_of, Flow, Machine, Table, ThreadOut, NTAGS};
+pub use api::*;
 
 pub mod dispatch_bench;
 

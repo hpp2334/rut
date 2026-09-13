@@ -1,20 +1,28 @@
-//! Native backend — `become`-threaded dispatch.
+//! Native backend — `become`-threaded dispatch with state in arguments.
 //!
-//! Each threaded handler performs one op via the shared [`Machine`] method,
-//! then **tail-calls** the next op's handler. `become` replaces the caller's
-//! frame with the callee's, so a long scalar stretch never grows the stack.
-//! `h_slow` handles [`T_SLOW`]: it leaves the pc at the slow op and returns
-//! [`ThreadOut::Bail`] so the VM's match interpreter runs it.
+//! Each handler performs one op via the shared [`Machine`] method, then
+//! **tail-calls** the next op's handler, carrying code/tags/regs/pc/fuel in
+//! register arguments. `become` replaces the caller's frame with the
+//! callee's, so a long scalar stretch never grows the stack and touches no
+//! shared `self` memory.
+//!
+//! `h_slow` handles [`T_SLOW`]: it syncs the machine's pc/fuel and returns
+//! [`ThreadOut::Bail`] so the VM's match interpreter runs that op.
 
 use crate::api::*;
+use rut_core::ops::Op;
 
-/// Unthreaded op — leave the pc and hand back to the VM.
 extern "rust-preserve-none" fn h_slow<M: Machine>(
     m: *mut M,
     _table: *const (),
+    _code: *const Op,
+    _tags: *const u8,
+    _regs: *mut M::Word,
     pc: u32,
+    fuel: i64,
+    fuel_used: u64,
 ) -> Result<ThreadOut<M::Out>, M::Err> {
-    unsafe { (*m).set_pc(pc) };
+    unsafe { (*m).sync(pc, fuel, fuel_used) };
     Ok(ThreadOut::Bail)
 }
 
@@ -23,14 +31,24 @@ macro_rules! op_handler {
         extern "rust-preserve-none" fn $name<M: Machine>(
             m: *mut M,
             table: *const (),
+            code: *const Op,
+            tags: *const u8,
+            regs: *mut M::Word,
             pc: u32,
+            fuel: i64,
+            fuel_used: u64,
         ) -> Result<ThreadOut<M::Out>, M::Err> {
-            unsafe { (*m).tick(pc)? };
-            match unsafe { (*m).$method(pc)? } {
+            let used = fuel_used + 1;
+            if fuel == 0 {
+                return Err(unsafe { (*m).park(pc, used) });
+            }
+            let next_fuel = if fuel < 0 { fuel } else { fuel - 1 };
+            let op = unsafe { &*code.add(pc as usize) };
+            match unsafe { (*m).$method(op, regs, pc)? } {
                 Flow::Next(n) => {
-                    let tag = unsafe { (*m).op_tag(n) } as usize;
+                    let tag = unsafe { *tags.add(n as usize) } as usize;
                     let h = unsafe { *(table as *const Handler<M>).add(tag) };
-                    become h(m, table, n)
+                    become h(m, table, code, tags, regs, n, next_fuel, used)
                 }
                 Flow::Done(o) => return Ok(ThreadOut::Done(o)),
             }
@@ -79,13 +97,12 @@ pub fn build_table<M: Machine>() -> Table<M> {
     table::<M>()
 }
 
-/// Run a threaded stretch from `pc`. Returns [`ThreadOut::Done`] if the run
-/// finished, or [`ThreadOut::Bail`] if an unthreaded op was reached (pc left
-/// at that op). `table` is reused across calls.
+/// Run a threaded stretch from `pc`.
 pub fn run<M: Machine>(m: &mut M, pc: u32, table: &Table<M>) -> Result<ThreadOut<M::Out>, M::Err> {
+    let st = m.thread_state();
     let mp = m as *mut M;
     let tp = table.entries.as_ptr() as *const ();
-    let tag = unsafe { (*mp).op_tag(pc) } as usize;
+    let tag = unsafe { *st.tags.add(pc as usize) } as usize;
     let h = unsafe { *(tp as *const Handler<M>).add(tag) };
-    h(mp, tp, pc)
+    h(mp, tp, st.code, st.tags, st.regs, pc, st.fuel, st.fuel_used)
 }

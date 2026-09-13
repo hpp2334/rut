@@ -39,18 +39,114 @@ impl Vm {
                 let v = !r!(a).as_bool();
                 self.cur_regs[dst as usize] = Slot::bool(v);
             }
-            // specialized scalar ops are their own opcodes and are always
-            // fast-pathed
-            Op::AddF { .. } | Op::SubF { .. } | Op::MulF { .. } | Op::DivF { .. }
-            | Op::ModF { .. } | Op::NegF { .. } | Op::EqF { .. } | Op::NeF { .. }
-            | Op::LtF { .. } | Op::GtF { .. } | Op::LeF { .. } | Op::GeF { .. }
-            | Op::AddI { .. } | Op::SubI { .. } | Op::MulI { .. } | Op::DivI { .. }
-            | Op::ModI { .. } | Op::WAddI { .. } | Op::WSubI { .. } | Op::WMulI { .. }
-            | Op::WDivI { .. } | Op::WModI { .. } | Op::AndI { .. } | Op::OrI { .. }
-            | Op::XorI { .. } | Op::ShlI { .. } | Op::ShrI { .. } | Op::WrapShlI { .. }
-            | Op::EqI { .. } | Op::NeI { .. } | Op::LtI { .. } | Op::GtI { .. }
-            | Op::LeI { .. } | Op::GeI { .. } | Op::NegI { .. } => {
-                unreachable!("specialized scalar ops are handled in the run_loop fast path")
+            // threaded scalar ops are handled by rut-vm-threaded; they never
+            // reach this match
+            Op::AddI { .. } | Op::SubI { .. } | Op::WAddI { .. } | Op::WSubI { .. }
+            | Op::WMulI { .. } | Op::LtI { .. }
+            | Op::AddF { .. } | Op::SubF { .. } | Op::MulF { .. } => {
+                unreachable!("threaded scalar ops are handled by rut-vm-threaded")
+            }
+            // remaining scalar ops run here (the `T_SLOW` path)
+            Op::MulI { prim, dst, a, b } => {
+                let v = self.arith_int::<{ IOP_MUL }, false>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::DivI { prim, dst, a, b } => {
+                let v = self.arith_int::<{ IOP_DIV }, false>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::ModI { prim, dst, a, b } => {
+                let v = self.arith_int::<{ IOP_MOD }, false>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::WDivI { prim, dst, a, b } => {
+                let v = self.arith_int::<{ IOP_DIV }, true>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::WModI { prim, dst, a, b } => {
+                let v = self.arith_int::<{ IOP_MOD }, true>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::AndI { prim, dst, a, b } => {
+                let v = self.bitop_int::<{ BOP_AND }>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::OrI { prim, dst, a, b } => {
+                let v = self.bitop_int::<{ BOP_OR }>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::XorI { prim, dst, a, b } => {
+                let v = self.bitop_int::<{ BOP_XOR }>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::ShlI { prim, dst, a, b } => {
+                let v = self.bitop_int::<{ BOP_SHL }>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::ShrI { prim, dst, a, b } => {
+                let v = self.bitop_int::<{ BOP_SHR }>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::WrapShlI { prim, dst, a, b } => {
+                let v = self.bitop_int::<{ BOP_WRAPSHL }>(prim, r!(a), r!(b))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::EqI { prim, dst, a, b } => {
+                let v = self.cmp_int::<{ COP_EQ }>(prim, r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::NeI { prim, dst, a, b } => {
+                let v = self.cmp_int::<{ COP_NE }>(prim, r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::GtI { prim, dst, a, b } => {
+                let v = self.cmp_int::<{ COP_GT }>(prim, r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::LeI { prim, dst, a, b } => {
+                let v = self.cmp_int::<{ COP_LE }>(prim, r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::GeI { prim, dst, a, b } => {
+                let v = self.cmp_int::<{ COP_GE }>(prim, r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::NegI { prim, dst, a } => {
+                let v = self.neg_int(prim, r!(a))?;
+                self.cur_regs[dst as usize] = v;
+            }
+            Op::DivF { prim, dst, a, b } => {
+                self.cur_regs[dst as usize] = self.arith_float::<{ FOP_DIV }>(prim, r!(a), r!(b));
+            }
+            Op::ModF { prim, dst, a, b } => {
+                self.cur_regs[dst as usize] = self.arith_float::<{ FOP_MOD }>(prim, r!(a), r!(b));
+            }
+            Op::NegF { prim, dst, a } => {
+                self.cur_regs[dst as usize] = self.neg_float(prim, r!(a));
+            }
+            Op::EqF { dst, a, b } => {
+                let v = self.cmp_float::<{ COP_EQ }>(r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::LtF { dst, a, b } => {
+                let v = self.cmp_float::<{ COP_LT }>(r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::NeF { dst, a, b } => {
+                let v = self.cmp_float::<{ COP_NE }>(r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::GtF { dst, a, b } => {
+                let v = self.cmp_float::<{ COP_GT }>(r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::LeF { dst, a, b } => {
+                let v = self.cmp_float::<{ COP_LE }>(r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
+            }
+            Op::GeF { dst, a, b } => {
+                let v = self.cmp_float::<{ COP_GE }>(r!(a), r!(b));
+                self.cur_regs[dst as usize] = Slot::bool(v);
             }
             Op::StrCmp { eq, dst, a, b } => {
                 let sa = cell_of(r!(a)).as_str();

@@ -1,4 +1,4 @@
-//! Phase 0/1 — validate the threaded mechanism on the real engine API.
+//! Validate the threaded mechanism on the real engine API.
 //!
 //! A synthetic `Machine` (this file is a separate crate, so it also proves
 //! the generic handlers instantiate across the crate boundary). A long
@@ -6,7 +6,7 @@
 //! real tail calls, it overflows and the test aborts.
 
 use rut_core::ops::Op;
-use rut_vm_threaded::{Flow, Machine, ThreadOut};
+use rut_vm_threaded::{Flow, Machine, ThreadOut, ThreadState, T_MOV};
 
 const N: i64 = 5_000_000;
 
@@ -14,29 +14,36 @@ const N: i64 = 5_000_000;
 /// handler, which tail-jumps forever until the counter says stop.
 struct Counter {
     ops: Vec<Op>,
+    tags: Vec<u8>,
+    regs: Vec<i64>,
     acc: i64,
 }
 
 impl Machine for Counter {
     type Out = i64;
     type Err = ();
+    type Word = i64;
 
-    fn pc(&self) -> u32 {
-        0
+    fn thread_state(&mut self) -> ThreadState<i64> {
+        ThreadState {
+            code: self.ops.as_ptr(),
+            tags: self.tags.as_ptr(),
+            regs: self.regs.as_mut_ptr(),
+            pc: 0,
+            fuel: -1,
+            fuel_used: 0,
+        }
     }
-    fn set_pc(&mut self, _pc: u32) {}
-    fn op_at(&self, pc: u32) -> &Op {
-        &self.ops[pc as usize]
-    }
-    fn tick(&mut self, _pc: u32) -> Result<(), ()> {
-        Ok(())
-    }
-    fn op_mov(&mut self, _pc: u32) -> Result<Flow<i64>, ()> {
+    fn sync(&mut self, _pc: u32, _fuel: i64, _used: u64) {}
+    fn park(&mut self, _pc: u32, _used: u64) {}
+
+    fn op_mov(&mut self, _op: &Op, regs: *mut i64, pc: u32) -> Result<Flow<i64>, ()> {
         self.acc += 1;
+        unsafe { *regs.add(0) = self.acc };
         if self.acc >= N {
             Ok(Flow::Done(self.acc))
         } else {
-            Ok(Flow::Next(0))
+            Ok(Flow::Next(pc))
         }
     }
 }
@@ -48,8 +55,12 @@ fn long_chain_is_flat_and_correct() {
     let handle = std::thread::Builder::new()
         .stack_size(256 * 1024)
         .spawn(|| {
-            let ops = vec![Op::Mov { dst: 0, src: 0 }];
-            let mut c = Counter { ops, acc: 0 };
+            let mut c = Counter {
+                ops: vec![Op::Mov { dst: 0, src: 0 }],
+                tags: vec![T_MOV],
+                regs: vec![0],
+                acc: 0,
+            };
             let table = rut_vm_threaded::build_table::<Counter>();
             match rut_vm_threaded::run(&mut c, 0, &table).unwrap() {
                 ThreadOut::Done(v) => v,
