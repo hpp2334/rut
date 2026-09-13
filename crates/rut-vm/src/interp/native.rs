@@ -81,7 +81,7 @@ impl Vm {
                 self.store_result(dst, c)?;
             }
             Nat::BytesLen => {
-                let n = cell_of(r!(recv.unwrap())).as_bytes().len() as i64;
+                let n = cell_of(r!(recv.unwrap())).seq_len().unwrap_or(0) as i64;
                 if let Some(d) = dst {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }
@@ -92,7 +92,7 @@ impl Vm {
                 self.store_result(dst, c)?;
             }
             Nat::BytesDecode => {
-                let s = String::from_utf8_lossy(cell_of(r!(recv.unwrap())).as_bytes()).into_owned();
+                let s = String::from_utf8_lossy(&cell_of(r!(recv.unwrap())).bytes_copy()).into_owned();
                 let c = self.heap.alloc_str(s)?;
                 self.store_result(dst, c)?;
             }

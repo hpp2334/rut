@@ -254,8 +254,6 @@ impl Packed {
 
 pub enum CellData {
     Str(String),
-    /// immutable binary buffer (RFC 0004) — contiguous octets, no slots
-    Bytes(Vec<u8>),
     Array { elem: TypeId, items: RefCell<Packed> },
     /// enum member — immortal singleton per (ty, member)
     Enum { member: u32 },
@@ -282,12 +280,22 @@ impl CellVal {
             _ => "",
         }
     }
-    /// The raw octets of a `bytes` cell (empty for any other shape).
-    pub fn as_bytes(&self) -> &[u8] {
-        match &self.data {
-            CellData::Bytes(b) => b,
-            _ => &[],
+    /// The raw octets of a `bytes` cell — `bytes` is a `u8` array at the
+    /// engine level (RFC 0004); empty for any other shape.
+    pub fn bytes_copy(&self) -> Vec<u8> {
+        self.seq_bytes_copy().unwrap_or_default()
+    }
+    /// Byte-content equality (the `==` law for `bytes`, RFC 0012 §4).
+    pub fn bytes_eq(&self, other: &CellVal) -> bool {
+        if let (CellData::Array { items: a, .. }, CellData::Array { items: b, .. }) =
+            (&self.data, &other.data)
+        {
+            let (a, b) = (a.borrow(), b.borrow());
+            if let (Packed::U8(x), Packed::U8(y)) = (&*a, &*b) {
+                return x == y;
+            }
         }
+        self.seq_bytes_copy() == other.seq_bytes_copy()
     }
     /// Option/Result payload: (tag 0=some/ok 1=none/err, payload)
     pub fn as_sum(&self) -> Option<(u32, Option<Slot>)> {

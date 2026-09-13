@@ -110,10 +110,11 @@ impl Heap {
         self.mint(rut_core::types::TY_STR, CellData::Str(s), n)
     }
 
-    /// Immutable binary buffer (RFC 0004) — one contiguous byte allocation.
+    /// Immutable binary buffer (RFC 0004) — a `u8` array (the `bytes` type
+    /// is an array of octets at the engine level).
     pub fn alloc_bytes(&self, b: Vec<u8>) -> Result<Slot, Trap> {
         let n = b.len() as u64;
-        self.mint(rut_core::types::TY_BYTES, CellData::Bytes(b), n)
+        self.mint(0, CellData::Array { elem: rut_core::types::TY_U8, items: RefCell::new(Packed::U8(b)) }, n)
     }
 
     /// A `CellData::Array` with `n` elements pre-filled with `default` — the
@@ -237,7 +238,7 @@ impl Heap {
             }
             TyKind::Bytes => {
                 let cell = cell_of(s);
-                self.alloc_bytes(cell.as_bytes().to_vec())
+                self.alloc_bytes(cell.bytes_copy())
             }
             TyKind::Array { elem } => {
                 let cell = cell_of(s);
