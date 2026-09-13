@@ -110,6 +110,32 @@ impl Heap {
         self.mint(rut_core::types::TY_STR, CellData::Str(s), n)
     }
 
+    /// Append `extra` to a `Str` cell **in place**. The caller must
+    /// guarantee the cell is uniquely owned (`rc == 1`): no other slot
+    /// aliases it, so mutating behind the shared handle is sound. Charges
+    /// the added bytes (before the write, so an OOM trap leaves the cell
+    /// untouched) and grows the cell's accounted size — this is what keeps
+    /// an accumulator loop like `bytes_decode`'s `out = out + c` linear
+    /// instead of copying the whole prefix every step.
+    pub fn append_str(&self, s: Slot, extra: &str) -> Result<(), Trap> {
+        let p = unsafe { s.r } as *mut CellVal;
+        if !matches!(unsafe { &(*p).data }, CellData::Str(_)) {
+            return Err(Trap::new(TrapKind::Invalid, "append_str on non-str"));
+        }
+        self.charge(extra.len() as u64)?;
+        unsafe {
+            let cell = &mut *p;
+            match &mut cell.data {
+                CellData::Str(buf) => {
+                    buf.push_str(extra);
+                    cell.bytes = (CELL_OVERHEAD + buf.len() as u64).min(u32::MAX as u64) as u32;
+                }
+                _ => unreachable!(),
+            }
+        }
+        Ok(())
+    }
+
     /// Immutable binary buffer (RFC 0004) — a `u8` array (the `bytes` type
     /// is an array of octets at the engine level).
     pub fn alloc_bytes(&self, b: Vec<u8>) -> Result<Slot, Trap> {

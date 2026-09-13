@@ -39,6 +39,26 @@ impl Vm {
                     }
                     return Ok(());
                 }
+                // `dst` IS the first part and that cell is uniquely owned:
+                // append in place rather than copying the growing prefix.
+                // The `bytes_decode` lowering is `out = out + c` per code
+                // point, so copying would be quadratic. `rc == 1` means no
+                // other slot aliases the cell; a later part must not either.
+                if let Some(d) = dst {
+                    let target = self.reg(d);
+                    let tref = unsafe { target.r };
+                    if d == args[0]
+                        && !tref.is_null()
+                        && cell_of(target).refs.get() == 1
+                        && !args[1..].iter().any(|a| unsafe { self.reg(*a).r } == tref)
+                    {
+                        for a in &args[1..] {
+                            let s = cell_of(self.reg(*a)).as_str();
+                            self.heap.append_str(target, s)?;
+                        }
+                        return Ok(());
+                    }
+                }
                 // size once — the parts' lengths are all known
                 let total: usize = args.iter().map(|a| cell_of(self.reg(*a)).as_str().len()).sum();
                 let mut out = String::with_capacity(total);
