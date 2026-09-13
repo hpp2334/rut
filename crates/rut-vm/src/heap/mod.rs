@@ -13,11 +13,14 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 mod cell;
+mod hostbox;
 mod trap;
 mod value;
 
 pub use crate::arena::OpaqueRef;
-pub use cell::{cell, cell_of, CellData, CellVal, Packed, Slots, StrVal};
+
+pub use cell::{cell, cell_of, CellData, CellVal, HostPayload, Packed, Slots, StrVal};
+pub use hostbox::OpaqueBox;
 pub use trap::{Trap, TrapKind};
 pub use value::{Slot, Value};
 
@@ -195,6 +198,16 @@ impl Heap {
         self.mint(rut_core::types::TY_OPAQUE, CellData::OpaqueBox { val, val_ty }, 8)
     }
 
+    /// A host payload box (RFC 0023/0026): `val` — any `'static` Rust
+    /// value — moves into the arena behind an `Opaque` surface. The cell
+    /// accounts the payload's shallow `size_of::<T>()` (RFC 0040); at
+    /// rc-0 the payload's own `Drop` runs deterministically (RFC 0016 §3).
+    pub fn alloc_host_box<T: 'static>(&self, val: T) -> Result<Slot, Trap> {
+        let payload = Box::new(HostPayload::new(val));
+        let n = (std::mem::size_of::<T>() as u64).max(8);
+        self.mint(rut_core::types::TY_OPAQUE, CellData::HostBoxed { payload }, n)
+    }
+
     pub fn alloc_closure(&self, func: u32, captures: Vec<Slot>) -> Result<Slot, Trap> {
         let n = captures.len() as u64;
         self.mint(0, CellData::Closure { func, captures }, n * 8)
@@ -259,6 +272,16 @@ impl Heap {
     /// Build an owning host handle for an `Opaque` cell (retains once).
     pub fn opaque_handle(&self, p: *const CellVal) -> OpaqueRef {
         OpaqueRef::new(&self.arena, &self.acct, p)
+    }
+
+    /// The owning variant for a cell minted this instant (RFC 0023/0026):
+    /// the handle takes over the mint reference instead of adding one, so
+    /// `mint -> handle -> Value` accounts exactly one reference. The
+    /// embedder equivalent of `OpaqueBox::alloc` — for host fns that
+    /// build a box from rut-shaped parts (`alloc_str`/`alloc_opaque`)
+    /// and hand it straight back.
+    pub fn opaque_handle_take(&self, p: *const CellVal) -> OpaqueRef {
+        OpaqueRef::owning(&self.arena, &self.acct, p)
     }
 
     /// The `(payload, payload type)` inside an `Opaque` handle (RFC 0014).
@@ -348,8 +371,16 @@ impl Heap {
                 }
             }
             TyKind::Opaque => {
-                // box once, share the inner handle (RFC 0014)
-                let Some((val, val_ty)) = cell_of(s).as_opaque() else {
+                // box once, share the inner handle (RFC 0014). A host
+                // payload box has no inner rut value to re-box (RFC 0023):
+                // own is a plain reference share — the box's identity and
+                // its payload Drop timing are unchanged.
+                let cell = cell_of(s);
+                if matches!(cell.data, CellData::HostBoxed { .. }) {
+                    self.retain(s);
+                    return Ok(s);
+                }
+                let Some((val, val_ty)) = cell.as_opaque() else {
                     return Err(Trap::new(TrapKind::Invalid, "own: not a box"));
                 };
                 let inner = self.clone_slot(val, val_ty, table)?;

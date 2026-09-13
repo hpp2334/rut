@@ -8,4 +8,4 @@ pub mod verify;
 
 pub(crate) mod arena;
 
-pub use heap::{Slot, Trap, TrapKind, Value};
+pub use heap::{OpaqueBox, Slot, Trap, TrapKind, Value};

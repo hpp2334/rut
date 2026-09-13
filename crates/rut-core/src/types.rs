@@ -166,6 +166,11 @@ pub const TY_OPAQUE: TypeId = 14;
 /// immutable binary buffer (RFC 0004) — appended after `Opaque`; fixed ids
 /// are wire-stable and must never be reordered
 pub const TY_BYTES: TypeId = 15;
+/// A host payload box's runtime type as `TidOf` reports it (RFC 0023/0026):
+/// the payload is Rust, so no rut type describes it. Type ids are type-table
+/// indices, which can never reach this value — `downcast<T>` therefore
+/// compares false for every `T` and yields `None`, never a trap (RFC 0014).
+pub const HOST_BOX_TID: TypeId = u32::MAX;
 
 impl TypeTable {
     /// Boot table (dense ids): primitives + string + Opaque/Bytes at fixed ids.

@@ -52,18 +52,7 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
 }
 
 pub(super) fn value_kind_name(v: &Value) -> &'static str {
-    match v {
-        Value::Unit => "unit",
-        Value::I64(_) => "an integer",
-        Value::F64(_) => "a float",
-        Value::Bool(_) => "a bool",
-        Value::Char(_) => "a char",
-        Value::Str(_) => "a string",
-        Value::Bytes(_) => "bytes",
-        Value::Opt(_) => "an Option",
-        Value::Res(_) => "a Result",
-        Value::Opaque(_) => "an Opaque",
-    }
+    v.kind_name()
 }
 
 pub(super) fn seq_get(cell: &crate::heap::CellVal, i: i64) -> Result<Slot, Trap> {

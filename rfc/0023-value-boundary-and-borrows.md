@@ -22,10 +22,13 @@ pub enum Value<'v> {
     Str(StrRef<'v>),                       // immutable, may point into heap
     Bytes(BytesRef<'v>),                   // immutable octets (RFC 0004)
     Vec(Borrow<'v, RutVec>),               // typed elem, zero-copy — internal only
-    Cell(Handle), Trait(Handle), Opaque(Handle), Host(Handle),
-                                          // user value cells / enums,
-                                          // fat trait-object refs (RFC 0015 §6),
-                                          // Opaque boxes (RFC 0014), host
+    Cell(Handle), Trait(Handle), Opaque(Handle),
+    // user value cells / enums, fat trait-object refs (RFC 0015 §6),
+    // and Opaque boxes (RFC 0014) — user-erased values and host
+    // payloads (RFC 0023/0026) share the one handle: the cell
+    // discriminates, the rut type is `Opaque` either way (revised from
+    // the earlier separate `Host(Handle)` — the boundary never needed
+    // two currencies for one box)
     Opt(Option<Box<Value<'v>>>), Res(Result<Box<Value<'v>>, Box<Value<'v>>>),
     Template(Tmpl<'v>),                    // RFC 0027
 }

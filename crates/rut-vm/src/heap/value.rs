@@ -61,6 +61,24 @@ impl std::fmt::Debug for Value {
     }
 }
 
+impl Value {
+    /// Boundary diagnostics: what a `Value` is, in words (`an Opaque`, ...).
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Value::Unit => "unit",
+            Value::I64(_) => "an integer",
+            Value::F64(_) => "a float",
+            Value::Bool(_) => "a bool",
+            Value::Char(_) => "a char",
+            Value::Str(_) => "a string",
+            Value::Bytes(_) => "bytes",
+            Value::Opt(_) => "an Option",
+            Value::Res(_) => "a Result",
+            Value::Opaque(_) => "an Opaque",
+        }
+    }
+}
+
 // ---- slots (RFC 0015 §5): untagged 8 bytes; bytecode is typed ----
 
 #[derive(Clone, Copy)]

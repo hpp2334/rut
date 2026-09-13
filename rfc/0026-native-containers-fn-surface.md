@@ -78,6 +78,21 @@ call, `TraitHandle` fat-ref keys reaching back into the VM for
 re-enters the VM through a vtable, and no native signature has a type
 parameter.
 
+## 2a. Implementation status
+
+The payload half is shipped: `rut_vm::OpaqueBox<T>` — `alloc(vm, value)`
+mints the box immediately (shallow `size_of::<T>()` accounted against the
+heap budget, RFC 0040), `from_value` is the checked view over a crossing
+`Value::Opaque` (a wrong payload type is a `Trap` naming both sides),
+`with`/`with_mut` are call-scoped borrows guarded by a flag in the box
+(RFC 0023 §2 — a nested exclusive borrow traps `borrowed by an outer
+host call`), and `into_value` hands the plain handle to rut. Bodies bind
+by name via `Vm::register_host_fn` against `FuncCode.host`
+(`"<spec>::<name>"`), the `rt:log` logger being the in-tree consumer.
+The typed `NativeModule` builder sketched above (a `Crossing` marshal
+trait over `Value`) and the embedder-side link table are the remaining
+piece.
+
 The consumer wraps the fns in a class (RFC 0025 — the `Logger` pattern):
 the wrapper owns the name, the methods, and any impl blocks; each method
 is one host fn call.

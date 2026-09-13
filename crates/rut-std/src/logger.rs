@@ -25,7 +25,9 @@ where
         let s = vm.heap.alloc_str(name)?;
         let p = vm.heap.alloc_opaque(s, rut_core::types::TY_STR)?;
         let ptr = unsafe { p.r };
-        Ok(Value::Opaque(vm.heap.opaque_handle(ptr)))
+        // owning handle: the box was minted this instant, so the Value
+        // takes over the mint reference (see OpaqueBox::alloc)
+        Ok(Value::Opaque(vm.heap.opaque_handle_take(ptr)))
     });
     vm.register_host_fn("rt:log::logger_log", move |_vm, args| {
         if let Some(Value::Str(msg)) = args.get(2) {

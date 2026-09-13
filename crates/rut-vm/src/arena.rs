@@ -109,6 +109,14 @@ impl OpaqueRef {
         unsafe { Self::bump(ptr) };
         OpaqueRef { arena: arena.clone(), acct: acct.clone(), ptr }
     }
+
+    /// Wrap a cell JUST minted (`refs` == 1): the handle takes over the
+    /// mint reference instead of adding one. `OpaqueBox::alloc` and the
+    /// host-fn return path use this — mint, then hand straight to the
+    /// boundary — so the box's first crossing owns exactly one reference.
+    pub(crate) fn owning(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, ptr: *const CellVal) -> OpaqueRef {
+        OpaqueRef { arena: arena.clone(), acct: acct.clone(), ptr }
+    }
 }
 
 impl Clone for OpaqueRef {

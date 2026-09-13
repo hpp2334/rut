@@ -28,6 +28,9 @@ impl Vm {
     pub(super) fn effective_ty(&self, cell: &crate::heap::CellVal) -> TypeId {
         match &cell.data {
             crate::heap::CellData::OpaqueBox { val_ty, .. } => *val_ty,
+            // a host payload box's rut type is the box itself (RFC 0023):
+            // `o is Opaque` is true, `o is T` misses for every rut T
+            crate::heap::CellData::HostBoxed { .. } => cell.ty,
             _ => cell.ty,
         }
     }

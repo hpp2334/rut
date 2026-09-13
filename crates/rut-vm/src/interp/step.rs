@@ -279,7 +279,14 @@ impl Vm {
 
             Op::TidOf { dst, obj } => {
                 let cell = cell_of(r!(obj));
-                let ty = self.effective_ty(cell);
+                // a host payload box has no rut runtime type (RFC 0023):
+                // report the sentinel so `downcast<T>` compares false for
+                // every T and yields None — never a trap (RFC 0014)
+                let ty = if matches!(cell.data, CellData::HostBoxed { .. }) {
+                    rut_core::types::HOST_BOX_TID
+                } else {
+                    self.effective_ty(cell)
+                };
                 self.cur_regs[dst as usize] = Slot::int(ty as i64);
             }
             Op::IsType { dst, obj, want } => {

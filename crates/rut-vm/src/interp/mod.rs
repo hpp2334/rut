@@ -347,7 +347,7 @@ impl Vm {
             }
             (Value::Opaque(h), TyKind::Opaque) => {
                 let s = Slot { r: h.ptr() };
-                if !matches!(cell_of(s).data, CellData::OpaqueBox { .. }) {
+                if !matches!(cell_of(s).data, CellData::OpaqueBox { .. } | CellData::HostBoxed { .. }) {
                     return Err("not an Opaque box".to_string());
                 }
                 self.heap.retain(s); // the parameter register owns its reference

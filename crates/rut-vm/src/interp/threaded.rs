@@ -696,7 +696,12 @@ impl Machine for Vm {
     fn op_tidof(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::TidOf { dst, obj } = op else { unreachable_op!("op_tidof: unexpected op") };
         let cell = cell_of(unsafe { *regs.add(*obj as usize) });
-        let ty = self.effective_ty(cell);
+        // host payload boxes report the sentinel — see the step.rs TidOf
+        let ty = if matches!(cell.data, CellData::HostBoxed { .. }) {
+            rut_core::types::HOST_BOX_TID
+        } else {
+            self.effective_ty(cell)
+        };
         unsafe { *regs.add(*dst as usize) = Slot::int(ty as i64) };
         Ok(Flow::Next(pc + 1))
     }

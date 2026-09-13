@@ -75,6 +75,13 @@ Ordering guarantees:
 Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
 "finalizer may run later or never".
 
+Implementation status: the current heap releases a record's refcounted
+FIELDS only when the record's own rc hits 0 through the ref-aware write
+path — a record field's child slot is not yet recursively released at
+cell death, so a class instance holding an `Opaque` field pins that box
+until VM end. The recursive field walk is the remaining piece of this
+contract.
+
 ## 4. Vecs, arrays, slices & strings: where flatness survives
 
 - **Primitive-element buffers stay flat.** `Vec<T>` and `Array<T, N>` for
@@ -163,6 +170,13 @@ struct RutEnum   { h: Header, tag: u32, payload: [Slot] }     // builtin Option/
 struct RutOpaque { h: Header, boxed: *mut HostBoxed }     // host opaques (RFC 0025) AND
                                                           // user `Opaque` boxes (RFC 0014);
                                                           // the header TypeId discriminates
+                                                          // (shipped: one `OpaqueBox` cell kind
+                                                          // with a `val: Slot, val_ty` payload for
+                                                          // user boxes and a boxed `HostPayload` —
+                                                          // erased Rust value, one-fn drop vtable +
+                                                          // `TypeId` token, no `dyn` — for host
+                                                          // boxes; the shallow `size_of::<T>()` is
+                                                          // what the cell accounts, RFC 0040)
 ```
 
 Refcount ops — the compiler emits ref-aware ops only where a reference can
