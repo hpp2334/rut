@@ -1,4 +1,4 @@
-import { log } from "std:log";
+import { Logger } from "std:log";
 
 import { Vec } from "std:collection";
 // nbody — the solar-system integration from the benchmark game.
@@ -126,5 +126,5 @@ pub fn main() -> unit {
         advance(pos, vel, mass, 0.01);
     }
     let e = energy(pos, vel, mass);
-    log(f"CHECKSUM {e}");
+    Logger.new("app").info(f"CHECKSUM {e}");
 }

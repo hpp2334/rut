@@ -56,6 +56,9 @@ pub struct Module {
     /// the embedder at run time — `(name, params, ret)`. A module with these
     /// and no `source` is a native module.
     pub host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>,
+    /// Force source-inlining into every consumer (`std:log`): a module whose
+    /// class methods must resolve at the call site cannot be linked.
+    pub inline: bool,
 }
 
 /// A parsed `rut.toml` — either a module manifest (`name` + `entry.*`) or

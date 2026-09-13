@@ -1,4 +1,4 @@
-import { log } from "std:log";
+import { Logger } from "std:log";
 
 import { Vec } from "std:collection";
 // matrix-mul — dense n x n f64 multiply-add hot loop, flat buffers.
@@ -29,5 +29,5 @@ pub fn main() -> unit {
     for (let i = 0; i < n * n; i += 1) {
         s += out[i];
     }
-    log(f"CHECKSUM {s}");
+    Logger.new("app").info(f"CHECKSUM {s}");
 }

@@ -1,4 +1,4 @@
-import { log } from "std:log";
+import { Logger } from "std:log";
 
 import { Vec } from "std:collection";
 // fasta — LCG-driven nucleotide string building (the benchmark-game
@@ -31,5 +31,5 @@ fn fasta(n: i32) -> string {
 }
 
 pub fn main() -> unit {
-    log(f"CHECKSUM {fasta(10000)}");
+    Logger.new("app").info(f"CHECKSUM {fasta(10000)}");
 }

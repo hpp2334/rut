@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
     // append the logger import so the original spans stay put
-    let combined = format!("{src}\nimport {{ log }} from \"std:log\";\n");
+    let combined = format!("{src}\nimport {{ Logger }} from \"std:log\";\n");
     let out = rut_driver::compile_module(&combined, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.is_empty(),
@@ -37,7 +37,7 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
 /// Compile a snippet with the logger import appended (the original spans of
 /// `src` are preserved).
 fn compile(src: &str, module: &str) -> rut_driver::CompileOutput {
-    let combined = format!("{src}\nimport {{ log }} from \"std:log\";\n");
+    let combined = format!("{src}\nimport {{ Logger }} from \"std:log\";\n");
     rut_driver::compile_module(&combined, rut_parser::Mode::Impl, module)
 }
 
@@ -54,8 +54,8 @@ fn describe(f: Flavor) -> string {
 pub fn main() -> unit {
     let name = "rut";
     let n = 41 + 1;
-    log(f"hi {name}! n={n} tab:\t'c'={'c'}");
-    log(describe(Flavor.Sour));
+    Logger.new("app").info(f"hi {name}! n={n} tab:\t'c'={'c'}");
+    Logger.new("app").info(describe(Flavor.Sour));
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -73,8 +73,8 @@ pub fn main() -> unit {
     p.x = 4;
     let mut r = own(p);
     r.x = 9;
-    log(f"q.x={q.x} p.x={p.x} r.x={r.x}");
-    log(f"q==p {q == p}, r==p {r == p}");
+    Logger.new("app").info(f"q.x={q.x} p.x={p.x} r.x={r.x}");
+    Logger.new("app").info(f"q==p {q == p}, r==p {r == p}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -89,11 +89,11 @@ dataclass Point { x: f32; y: f32 }
 pub fn main() -> unit {
     let box1 = Opaque.new(Point { x: 1, y: 2 });
     let box2 = Opaque.new("hello");
-    log(f"box1 is Point: {box1 is Point}");
-    log(f"box2 is Point: {box2 is Point}");
+    Logger.new("app").info(f"box1 is Point: {box1 is Point}");
+    Logger.new("app").info(f"box2 is Point: {box2 is Point}");
     let p = downcast<Point>(box1);
     if (p.is_some()) {
-        log(f"recovered {p.value.x} {p.value.y}");
+        Logger.new("app").info(f"recovered {p.value.x} {p.value.y}");
     }
 }
 "#;
@@ -123,7 +123,7 @@ fn sieve(limit: i32) -> Vec<i32> {
 }
 pub fn main() -> unit {
     let primes = sieve(100);
-    log(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
+    Logger.new("app").info(f"{primes.len()} primes up to 100, last={primes[primes.len() - 1]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 10_000_000);
@@ -147,8 +147,8 @@ fn mix(a: Color, b: Color) -> string {
     };
 }
 pub fn main() -> unit {
-    log(mix(Color.Red, Color.Green));
-    log(mix(Color.Blue, Color.Blue));
+    Logger.new("app").info(mix(Color.Red, Color.Green));
+    Logger.new("app").info(mix(Color.Blue, Color.Blue));
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -180,10 +180,10 @@ pub fn main() -> unit {
         Square { s: 2 },
     ]);
     for (let s of shapes) {
-        log(f"{s.name()} area={s.area()}");
+        Logger.new("app").info(f"{s.name()} area={s.area()}");
     }
     let c = Circle { r: 1 };
-    log(f"c is Shape: {c is Shape}");
+    Logger.new("app").info(f"c is Shape: {c is Shape}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -207,7 +207,7 @@ pub fn main() -> unit {
     let xs = Vec<i32>.from([1, 2, 3, 4]);
     let k = 10;
     let ys = map<i32, i32>(xs, (x) => x * k);
-    log(f"{ys[0]} {ys[1]} {ys[2]} {ys[3]}");
+    Logger.new("app").info(f"{ys[0]} {ys[1]} {ys[2]} {ys[3]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -223,7 +223,7 @@ pub fn main() -> unit {
     while (true) {
         i += 1;
         if (i % 1000000 == 0) {
-            log(f"tick {i}");
+            Logger.new("app").info(f"tick {i}");
         }
     }
 }
@@ -243,16 +243,16 @@ fn overflow_traps_and_wrapping_escapes() {
 pub fn main() -> unit {
     let mut x = 2147483647;
     x = x &+ 1;              // wrapping: fine (RFC 0004 §3)
-    log(f"x={x}");
+    Logger.new("app").info(f"x={x}");
     let mut s = 1073741824;  // 1 << 30
     s = s &<< 1;             // wrapping shl: bits shifted out are gone
-    log(f"s={s}");
+    Logger.new("app").info(f"s={s}");
     s &<<= 1;                // compound form, same law
-    log(f"s={s}");
+    Logger.new("app").info(f"s={s}");
     let u: u32 = 3221225472; // 0xC000_0000
-    log(f"u={u &<< 1}");
+    Logger.new("app").info(f"u={u &<< 1}");
     let y = 2147483647 + 1;  // trapping: overflow
-    log(f"y={y}");
+    Logger.new("app").info(f"y={y}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -266,9 +266,9 @@ fn plain_shl_traps_when_bits_leave_the_width() {
     // RIGHT shift before BitOp::WrapShl existed.
     let src = r#"
 pub fn main() -> unit {
-    log("before");
+    Logger.new("app").info("before");
     let s = 1073741824 << 1;   // 1 << 31 does not fit i32
-    log(f"after {s}");
+    Logger.new("app").info(f"after {s}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -283,11 +283,11 @@ fn shr_follows_signedness() {
     let src = r#"
 pub fn main() -> unit {
     let u: u64 = 0xFFFFFFFFFFFFFFFF;
-    log(f"u={u >> 1}");
+    Logger.new("app").info(f"u={u >> 1}");
     let v: u32 = 0x80000000;
-    log(f"v={v >> 31}");
+    Logger.new("app").info(f"v={v >> 31}");
     let s = i64(-8);
-    log(f"s={s >> 1}");
+    Logger.new("app").info(f"s={s >> 1}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -303,14 +303,14 @@ fn ne_on_primitives_is_not_eq() {
     let src = r#"
 import { Vec } from "std:collection";
 pub fn main() -> unit {
-    log(f"a={1 != 56}");
-    log(f"b={1 == 56}");
-    log(f"c={2 != 2}");
-    if (3 != 4) { log("differs"); } else { log("equal"); }
+    Logger.new("app").info(f"a={1 != 56}");
+    Logger.new("app").info(f"b={1 == 56}");
+    Logger.new("app").info(f"c={2 != 2}");
+    if (3 != 4) { Logger.new("app").info("differs"); } else { Logger.new("app").info("equal"); }
     let mut m: Vec<u8> = Vec.new();
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
-    log(f"padded={m.len()}");
+    Logger.new("app").info(f"padded={m.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -328,16 +328,16 @@ fn bare_vec_with_length_allocates_zeroed_elements() {
 import { Vec } from "std:collection";
 pub fn main() -> unit {
     let mut k: Vec<u32> = Vec.zeroed(4);
-    log(f"a len={k.len()} k3={k[3]}");
+    Logger.new("app").info(f"a len={k.len()} k3={k[3]}");
     k[0] = 7;
     k[3] = 9;
-    log(f"b k0={k[0]} k3={k[3]} len={k.len()}");
+    Logger.new("app").info(f"b k0={k[0]} k3={k[3]} len={k.len()}");
     let mut j: Vec<u8> = Vec.zeroed(3);
     j.push(1);
-    log(f"c len={j.len()} j0={j[0]} j3={j[3]}");
+    Logger.new("app").info(f"c len={j.len()} j0={j[0]} j3={j[3]}");
     let e: Vec<u32> = Vec.zeroed(0);
     let b: Vec<u32> = Vec.new();
-    log(f"d {e.len()} {b.len()}");
+    Logger.new("app").info(f"d {e.len()} {b.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -359,14 +359,14 @@ pub fn main() -> unit {
     let b = Vec<u32>.from([4, 5]);
     let c = Vec<u8>.from([250, 251]);
     let d: Vec<u32> = Vec.from([6, 7]);   // bare form, annotation-driven
-    log(f"a={a[0] &+ a[1] &+ a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
+    Logger.new("app").info(f"a={a[0] &+ a[1] &+ a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(lines, vec!["a=6 b=4 c=251 d=7 n=2"]);
     assert_eq!(trap, None);
     // everywhere else, explicit generics on a static head stay a clear error
-    let bad = "pub fn main() -> unit { let x = Option<i32>.some(5); log(f\"{x.value}\"); }";
+    let bad = "pub fn main() -> unit { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("not supported in this build")));
 }
@@ -380,7 +380,7 @@ fn heap_budget_traps_before_the_write() {
 import { Vec } from "std:collection";
 pub fn main() -> unit {
     let v = Vec<u8>.zeroed(5000000);
-    log("allocated");
+    Logger.new("app").info("allocated");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -411,7 +411,7 @@ fn when_exhaustiveness_is_enforced() {
     let src = r#"
 enum Color { Red, Green, Blue }
 pub fn main() -> unit {
-    log(when (Color.Red) { Color.Red -> "r" });
+    Logger.new("app").info(when (Color.Red) { Color.Red -> "r" });
 }
 "#;
     let out = compile(src, "main");
@@ -427,7 +427,7 @@ fn option_eq_is_a_compile_error() {
     let src = r#"
 pub fn main() -> unit {
     let a = Option.some(1);
-    log(f"{a == a}");
+    Logger.new("app").info(f"{a == a}");
 }
 "#;
     let out = compile(src, "main");
@@ -444,7 +444,7 @@ fn dump_is_labeled_and_spanned() {
     // labeled `field: value` lines, `- item` bullets, spans on every node,
     // and no display strings on the JSON wire
     let src = r#"enum Flavor { Sweet, Sour = 5 }
-pub fn main() -> unit { log(f"{1 + 1}"); }
+pub fn main() -> unit { Logger.new("app").info(f"{1 + 1}"); }
 "#;
     let out = compile(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
@@ -487,14 +487,14 @@ fn classify(n: i32) -> string {
     }
 }
 pub fn main() -> unit {
-    log(classify(0));
-    log(classify(-3));
-    log(classify(7));
+    Logger.new("app").info(classify(0));
+    Logger.new("app").info(classify(-3));
+    Logger.new("app").info(classify(7));
     let mut late = 0;
     for (let i = 0; i < 4; i += 1) {
         if (i % 2 == 0) { late += 1; } else { late += 10; }
     }
-    log(f"late={late}");
+    Logger.new("app").info(f"late={late}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -510,11 +510,11 @@ fn shortcircuit_truth_table() {
 pub fn main() -> unit {
     let t = true;
     let f = false;
-    log(f"and: {t && t} {t && f} {f && t} {f && f}");
-    log(f"or:  {t || t} {t || f} {f || t} {f || f}");
+    Logger.new("app").info(f"and: {t && t} {t && f} {f && t} {f && f}");
+    Logger.new("app").info(f"or:  {t || t} {t || f} {f || t} {f || f}");
     let n = 6;
-    if (n > 0 && n % 2 == 0) { log("even positive"); }
-    if (n < 0 || n % 3 == 0) { log("div by 3 or negative"); }
+    if (n > 0 && n % 2 == 0) { Logger.new("app").info("even positive"); }
+    if (n < 0 || n % 3 == 0) { Logger.new("app").info("div by 3 or negative"); }
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -551,10 +551,10 @@ pub fn main() -> unit {
     let mut c = Counter.new();
     c.bump();
     c.bump();
-    log(f"count={c.count()}");
+    Logger.new("app").info(f"count={c.count()}");
     let mut w = Wrapped.new();
     w.bump();
-    log(f"wrapped={w.count()}");
+    Logger.new("app").info(f"wrapped={w.count()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -578,11 +578,11 @@ pub fn main() -> unit {
             else    -> { kept += 100; },
         }
     }
-    log(f"dropped={dropped} kept={kept}");
+    Logger.new("app").info(f"dropped={dropped} kept={kept}");
     when (Light.Red) {
-        Light.Green  -> { log("go"); },
-        Light.Yellow -> { log("brake"); },
-        Light.Red    -> { log("stop"); },
+        Light.Green  -> { Logger.new("app").info("go"); },
+        Light.Yellow -> { Logger.new("app").info("brake"); },
+        Light.Red    -> { Logger.new("app").info("stop"); },
     }
 }
 "#;
@@ -608,11 +608,11 @@ fn describe(f: Flavor) -> string {
 }
 pub fn main() -> unit {
     let hits = [describe(Flavor.Sweet), describe(Flavor.Sour), describe(Flavor.Salty)];
-    log(hits[0]);
-    log(hits[1]);
-    log(hits[2]);
+    Logger.new("app").info(hits[0]);
+    Logger.new("app").info(hits[1]);
+    Logger.new("app").info(hits[2]);
     for (let i = 0; i < 50; i += 1) {
-        log(describe(when (i % 2) { 0 -> Flavor.Sweet, else -> Flavor.Salty }));
+        Logger.new("app").info(describe(when (i % 2) { 0 -> Flavor.Sweet, else -> Flavor.Salty }));
     }
 }
 "#;
@@ -755,20 +755,20 @@ fn bytes_are_an_immutable_primitive() {
 import { Vec } from "std:collection";
 pub fn main() -> unit {
     let z = bytes(3);
-    log(f"z={bytes_len(z)}");
+    Logger.new("app").info(f"z={bytes_len(z)}");
     let a = bytes_from([1, 2, 3]);
     let b = bytes_from([1, 2, 3]);
-    log(f"a={bytes_len(a)} eq={a == b} ne={a != z}");
+    Logger.new("app").info(f"a={bytes_len(a)} eq={a == b} ne={a != z}");
     let mut buf: Vec<u8> = Vec.new();
     buf.push(9);
     buf.push(8);
     let f = buf.freeze();
-    log(f"f={bytes_len(f)} f0={f[0]} f1={f[1]}");
+    Logger.new("app").info(f"f={bytes_len(f)} f0={f[0]} f1={f[1]}");
     let enc = string_encode("rut");
-    log(f"enc={bytes_len(enc)} dec={bytes_decode(enc)}");
+    Logger.new("app").info(f"enc={bytes_len(enc)} dec={bytes_decode(enc)}");
     let mut sum: u8 = 0u8;
     for (let x of a) { sum = sum + x; }
-    log(f"sum={sum}");
+    Logger.new("app").info(f"sum={sum}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -784,7 +784,7 @@ fn bytes_index_out_of_bounds_traps() {
     let src = r#"
 pub fn main() -> unit {
     let a = bytes_from([1]);
-    log(f"{a[5]}");
+    Logger.new("app").info(f"{a[5]}");
 }
 "#;
     let (_, trap, _) = run_case(src, 1_000_000);
@@ -808,7 +808,7 @@ pub fn drain(s: Stack) -> i32 { return s.len(); }
 pub fn main() -> unit {
     let mut st = Stack.new();
     st.push(1);
-    log(f"drained {drain(st)}");
+    Logger.new("app").info(f"drained {drain(st)}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -834,7 +834,7 @@ pub fn main() -> unit {
     let mut g = Gauge.new();
     g.bump();
     g.bump();
-    log(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
+    Logger.new("app").info(f"gauge={g.raw()} secret={g.secret()} w={g.w}");
 }
 "#;
     let out = compile(src, "main");
@@ -875,7 +875,7 @@ fn count(n: Node) -> i32 {
     return c;
 }
 pub fn main() -> unit {
-    log(f"CHECKSUM {count(make(10, 1))}");
+    Logger.new("app").info(f"CHECKSUM {count(make(10, 1))}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 5_000_000);
@@ -901,7 +901,7 @@ fn make_early() -> Early {
 }
 pub fn main() -> unit {
     let e = make_early();
-    log(f"tag={e.tag} x={e.later.x}");
+    Logger.new("app").info(f"tag={e.tag} x={e.later.x}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -922,7 +922,7 @@ class Node {
 }
 pub fn main() -> unit {
     let a = Node.new();
-    log(f"v={a.val()} has_next={a.next.is_some()}");
+    Logger.new("app").info(f"v={a.val()} has_next={a.next.is_some()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -972,9 +972,9 @@ pub fn main() -> unit {
     v.push(30);
     v.push(40);
     v.push(50);
-    log(f"{v.len()} {v.get(0)} {v.get(4)} {v.get(2)}");
+    Logger.new("app").info(f"{v.len()} {v.get(0)} {v.get(4)} {v.get(2)}");
     let p = v.pop();
-    log(f"{p.value}");
+    Logger.new("app").info(f"{p.value}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
@@ -996,7 +996,7 @@ pub fn main() -> unit {
     for (let x of v) { sum += x; }
     let w: Vec<i32> = Vec.from([7, 8]);
     let z: Vec<u8> = Vec.zeroed(3);
-    log(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
+    Logger.new("app").info(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1025,14 +1025,14 @@ fn std_collection_vec_via_module_loader_runs() {
             source: Some(
                 r#"
 import { Vec } from "std:collection";
-import { log } from "std:log";
+import { Logger } from "std:log";
 pub fn main() -> unit {
     let mut v: Vec<i32> = Vec.new();
     v.push(10);
     v.push(20);
     v.push(30);
     let top = v.pop();
-    log(f"{v.len()} {top.value}");
+    Logger.new("app").info(f"{v.len()} {top.value}");
 }
 "#
                 .into(),
@@ -1082,7 +1082,7 @@ impl Wrap<i32> for B {
 pub fn main() -> unit {
     let b = B.new(7);
     let w: Wrap<i32> = b;
-    log(f"{w.get()}");
+    Logger.new("app").info(f"{w.get()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1112,7 +1112,7 @@ pub fn main() -> unit {
     let mut sum = 0;
     for (let i = 0; i < r.len(); i += 1) { sum += r[i]; }
     for (let x of r) { sum += x; }
-    log(f"{sum} {r[2]}");
+    Logger.new("app").info(f"{sum} {r[2]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1141,7 +1141,7 @@ pub fn main() -> unit {
     let c = Countdown.new(3);
     let mut sum = 0;
     for (let x of c) { sum += x; }
-    log(f"{sum}");
+    Logger.new("app").info(f"{sum}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1159,7 +1159,7 @@ pub fn main() -> unit {
     let v = Vec<i32>.from([10, 20, 30]);
     let mut sum = 0;
     for (let x of v.iter()) { sum += x; }
-    log(f"{sum} {v.len()}");
+    Logger.new("app").info(f"{sum} {v.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);

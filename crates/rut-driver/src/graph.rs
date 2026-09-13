@@ -51,11 +51,13 @@ pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
     }
 }
 
-/// A resolved module: a linked scope, or source to inline (a generic export).
+/// A resolved module: a linked scope, or source to inline.
 #[derive(Clone)]
 enum Unit {
     Linked { idx: usize, scope: rut_core::ScopeId },
-    Inline { source: String },
+    /// source to splice into the consumer, plus the imports its own source
+    /// names (so the consumer binds them too)
+    Inline { source: String, bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> },
 }
 
 struct GraphCompiler<'a> {
@@ -143,9 +145,14 @@ impl<'a> GraphCompiler<'a> {
         let mut bound_scopes = HashSet::new();
         for dep in &imports {
             match self.ensure(dep, true)? {
-                Unit::Inline { source } => {
+                Unit::Inline { source, bound: b } => {
                     extra.push_str(&source);
                     extra.push('\n');
+                    for (sc, surf) in b {
+                        if bound_scopes.insert(sc) {
+                            bound.push((sc, surf));
+                        }
+                    }
                 }
                 Unit::Linked { idx, scope } => {
                     if bound_scopes.insert(scope) {
@@ -172,17 +179,10 @@ impl<'a> GraphCompiler<'a> {
         }
         let program = out.program.unwrap();
         let has_generic = program.surface.type_exports.iter().any(|t| t.is_generic);
-        if as_dep && has_generic {
-            if !bound.is_empty() {
-                self.diags.push(Diag::new(
-                    Span::new(0, 0),
-                    format!(
-                        "module `{spec}` exports a generic type and also imports other modules — inlining a generic module with external imports is not supported yet"
-                    ),
-                ));
-                return None;
-            }
-            let unit = Unit::Inline { source: combined };
+        // an explicitly-inlined module (e.g. `std:log`) or a generic export
+        // cannot be linked — splice its source (and its imports) in
+        if as_dep && (module.inline || has_generic) {
+            let unit = Unit::Inline { source: combined, bound };
             self.done.insert(spec.to_string(), unit.clone());
             return Some(unit);
         }

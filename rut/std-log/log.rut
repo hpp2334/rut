@@ -20,9 +20,3 @@ pub class Logger {
     pub fn error(self, msg: string) -> unit { logger_log(self.internal, 3, msg); }
     pub fn log(self, msg: string) -> unit { logger_log(self.internal, 1, msg); }
 }
-
-// One-off output at Info (a convenience free function; the `Logger` class
-// above is the structured form).
-pub fn log(msg: string) -> unit {
-    logger_log(create_logger("app"), 1, msg);
-}

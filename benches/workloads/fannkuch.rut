@@ -1,4 +1,4 @@
-import { log } from "std:log";
+import { Logger } from "std:log";
 
 import { Vec } from "std:collection";
 // fannkuch-redux — pancake flips over all permutations. Scale: n = 7.
@@ -70,5 +70,5 @@ fn fannkuch(n: i32) -> i32 {
 }
 
 pub fn main() -> unit {
-    log(f"CHECKSUM {fannkuch(7)}");
+    Logger.new("app").info(f"CHECKSUM {fannkuch(7)}");
 }

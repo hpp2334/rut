@@ -1,4 +1,4 @@
-import { log } from "std:log";
+import { Logger } from "std:log";
 
 import { Vec } from "std:collection";
 // sieve — Sieve of Eratosthenes over a flat Vec<u8>.
@@ -26,5 +26,5 @@ fn sieve(limit: i32) -> Vec<i32> {
 
 pub fn main() -> unit {
     let primes = sieve(500000);
-    log(f"CHECKSUM {primes.len()}");
+    Logger.new("app").info(f"CHECKSUM {primes.len()}");
 }

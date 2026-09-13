@@ -1,4 +1,4 @@
-import { log } from "std:log";
+import { Logger } from "std:log";
 
 // call — recursion / call-frame overhead. Scale: fib(28).
 // Canonical reference: fib(28) = 317811.
@@ -11,5 +11,5 @@ fn fib(n: i32) -> i32 {
 }
 
 pub fn main() -> unit {
-    log(f"CHECKSUM {fib(28)}");
+    Logger.new("app").info(f"CHECKSUM {fib(28)}");
 }

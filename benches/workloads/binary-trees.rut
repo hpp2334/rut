@@ -1,4 +1,4 @@
-import { log } from "std:log";
+import { Logger } from "std:log";
 
 // binary-trees — allocation churn. Nodes are recursive dataclasses
 // (RFC 0009 recursive shapes): `make` builds the tree bottom-up with
@@ -34,5 +34,5 @@ fn count(n: Node) -> i32 {
 
 pub fn main() -> unit {
     let root = make(14, 1);
-    log(f"CHECKSUM {count(root)}");
+    Logger.new("app").info(f"CHECKSUM {count(root)}");
 }

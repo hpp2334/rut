@@ -265,7 +265,7 @@ pub fn mount_std_log(session: &mut Session) {
     );
     let _ = session.register_module(
         "std:log",
-        Module { source: Some(std_log_source()), ..Default::default() },
+        Module { source: Some(std_log_source()), inline: true, ..Default::default() },
     );
 }
 

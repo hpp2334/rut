@@ -1,4 +1,4 @@
-import { log } from "std:log";
+import { Logger } from "std:log";
 
 import { Vec } from "std:collection";
 // quicksort — deterministic LCG input, in-place Lomuto quicksort, rolled
@@ -42,5 +42,5 @@ pub fn main() -> unit {
     for (let i = 0; i < n; i += 1) {
         h = (h &* 31) &+ xs[i];
     }
-    log(f"CHECKSUM {h}");
+    Logger.new("app").info(f"CHECKSUM {h}");
 }
