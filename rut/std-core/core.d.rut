@@ -1,7 +1,7 @@
 // std/core.d.rut — the prelude surface (RFC 0028): what the language
 // itself ships — the `string`/`bytes` primitives' natives, the builtin
 // `Array`/`Option`/`Result` containers (RFC 0005), and the builtin
-// `Disposal` trait. `Vec<T>` is NOT here: it is std-lib rut code in
+// `Disposal` interface. `Vec<T>` is NOT here: it is std-lib rut code in
 // `std:collection`, over `Array<T>` with an `impl Iter for Vec<T>`.
 //
 // This file is the declarative form of the host's builtin tables: every
@@ -46,18 +46,24 @@ pub host class Result<T, E> {
 }
 
 // RFC 0011/0016 — impl blocks for Disposal run `dispose` at rc 0; a
-// builtin trait with ordinary nominal impls (RFC 0028: part of the
+// builtin interface with ordinary nominal impls (RFC 0028: part of the
 // prelude, spelled here because .d.rut declares traits too).
-pub trait Disposal {
+pub interface Disposal {
     fn dispose(mut self) -> unit;
 }
 
-// RFC 0012 — the builtin read-only sequence contract. The compiler
-// registers `Iter` (it has compiler-backed impls for `Array`, `string`,
-// and `bytes`, and `Vec<T>` declares one in std:collection); spelled here
-// for tooling. `x[i]`, `.len()`, and `for (x of s)` lower through it.
-pub trait Iter {
-    type Target;
+// RFC 0012 — the compiler-backed random-access contract. `Index` has a
+// length and `get`/`set`; `x[i]` and `x[i] = v` lower through it. The
+// element type is the interface argument. `Array`/`string`/`bytes` are
+// compiler-backed; `Vec<T>` declares one in std:collection.
+pub interface Index<T> {
     fn len(self) -> i32;
-    fn get(self, i: i32) -> Self.Target;
+    fn get(self, i: i32) -> T;
+}
+
+// RFC 0012 — the next()-based cursor contract. `for (x of it)` lowers to
+// `next` until `None`. `Vec<T>` ships a cursor (`VecIter<T>`) in
+// std:collection.
+pub interface Iterator<T> {
+    fn next(mut self) -> Option<T>;
 }

@@ -34,8 +34,8 @@ pub(crate) enum Done {
     Pat(NodeHandle<AnyPat>),
     Members(Vec<NodeHandle<AnyParam>>),
     Method(NodeHandle<MethodDeclNode>),
-    /// a dataclass/class/trait/impl body: (fields, methods, assoc types)
-    Body(Vec<NodeHandle<FieldDeclNode>>, Vec<NodeHandle<MethodDeclNode>>, Vec<AssocType>),
+    /// a dataclass/class/trait/impl body: (fields, methods)
+    Body(Vec<NodeHandle<FieldDeclNode>>, Vec<NodeHandle<MethodDeclNode>>),
     WhenParts { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
     Failed,
 }

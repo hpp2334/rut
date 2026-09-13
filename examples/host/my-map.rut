@@ -20,7 +20,7 @@
 
 import { MyMap } from "plugin:my_map";                // resolves to the .d.rut
 import { Hashable } from "std:collection";            // declaration file: the
-import { Canvas, newCanvas } from "app:gfx";          // constraint trait
+import { Canvas, newCanvas } from "app:gfx";          // constraint interface
 import { Logger } from "std:log";
 
 // A DATACLASS key (RFC 0009): an all-public, literal-constructed
@@ -28,7 +28,7 @@ import { Logger } from "std:log";
 // Its limits, exhaustively: no `pub` on fields, no hidden
 // members, no class methods, no `Disposal`.
 dataclass Name {                        // hash + eq: ONE contract (RFC 0028) —
-    first: string;                      // the value-keyed Map/Set key trait
+    first: string;                      // the value-keyed Map/Set key interface
     last: string;
 }
 
@@ -64,7 +64,7 @@ pub fn main() -> unit {
     // K = a DATACLASS: satisfies Hashable because `impl Hashable for
     // Name` exists in this module. The map's hashing calls back into
     // THIS hash() and eq()
-    // — rut code reached through the trait-object vtable (re-entrant VM
+    // — rut code reached through the interface-object vtable (re-entrant VM
     // call, borrow-guarded).
     let roster: MyMap<Name, i32> = MyMap<Name, i32>.new(4);
     roster.set(Name { first: "ada", last: "lovelace" }, 1);
@@ -92,7 +92,7 @@ pub fn main() -> unit {
     }
 
     // counts.keys() -> Vec<string> (K is preserved, not erased to
-    // dyn Hashable — built host-side from the instantiation's K Ty, each
+    // Hashable — built host-side from the instantiation's K Ty, each
     // key unerased to its natural value); the loop itself is pure rut.
     for (let k of counts.keys()) {
         log.debug(f"{k} -> {counts.get(k).unwrap_or(0)}");

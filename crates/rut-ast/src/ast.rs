@@ -320,17 +320,11 @@ pub enum ItemKind {
         name: IdentId,
         generics: Vec<IdentId>,
         requires: Vec<NodeHandle<AnyTy>>, // type nodes — naming position, bare
-        /// associated `type` members (RFC 0012): `type Target;`
-        /// (`ty: None`) or a default `type Target = U;`
-        assoc: Vec<AssocType>,
         methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless MethodDecls
     },
     Impl {
         trait_ref: NodeHandle<AnyTy>,
         target: NodeHandle<AnyTy>,
-        /// `type Target = T;` — the impl's bindings for the trait's
-        /// associated types
-        assoc: Vec<AssocType>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },
     /// `host fn` / `extern fn` — .d.rut only (RFC 0030 §3)
@@ -354,15 +348,6 @@ pub enum ItemKind {
 }
 
 // ---- members ----
-
-/// an associated `type` member of a `trait` or `impl` body (RFC 0012):
-/// `type Target;` (no `ty`) or `type Target = Ty;`
-#[derive(Clone, Debug)]
-pub struct AssocType {
-    pub name: IdentId,
-    /// trait: the optional default; impl: the binding
-    pub ty: Option<NodeHandle<AnyTy>>,
-}
 
 /// dataclass/class field: `pub(..)`? `static`? name: ty (= init)?
 /// `vis: None` = unannotated — module-private, the RFC 0003 §2 default

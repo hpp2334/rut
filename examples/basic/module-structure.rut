@@ -13,7 +13,7 @@ enum Mode { Idle, Running }
 
 dataclass Point { x: f32; y: f32 }
 
-trait Service { fn start(mut self) -> unit; }
+interface Service { fn start(mut self) -> unit; }
 
 class App {
     started: bool = false;

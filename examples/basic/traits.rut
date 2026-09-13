@@ -1,16 +1,16 @@
 import { Vec } from "std:collection";
 // RFC 0012 §2 — traits: plain METHODS only, nominal `impl Trait for Type`.
 // Trait OBJECT types are the ONLY dynamic dispatch (vtable), spelled
-// `dyn I` in every type position (Rust-style; `impl` heads / `requires`/
+// `I` in every type position (Rust-style; `impl` heads / `requires`/
 // bounds stay bare). Intersection types (`Drawable & HitTest`) are NEVER
-// supported — compose a wider trait instead (Widget below).
+// supported — compose a wider interface instead (Widget below).
 //
 // Also demonstrates (RFC 0009, 0012):
 //   * `requires` — an admission constraint, NOT subtyping: implementing
 //     `Serializable` entails `impl Reflectable for T` too (RFC 0037).
 //     `Hashable` is standalone: hash + eq are ONE contract (RFC 0028) —
-//     it is the value-keyed Map/Set key trait, unrelated to `==`.
-//     No member inheritance, no trait-to-trait widening;
+//     it is the value-keyed Map/Set key interface, unrelated to `==`.
+//     No member inheritance, no interface-to-interface widening;
 //     vtables stay flat.
 //   * dataclass implementors: an all-public literal-constructed record
 //     plus impl blocks. The exhaustive dataclass limit
@@ -19,17 +19,17 @@ import { Vec } from "std:collection";
 
 import { Canvas, newCanvas } from "app:gfx";
 import { Hashable } from "std:collection";        // the prelude constraint
-import { Logger } from "std:log";                 // trait (RFC 0028)
+import { Logger } from "std:log";                 // interface (RFC 0028)
 
-trait Drawable {
+interface Drawable {
     fn draw(self, g: Canvas) -> unit;
 }
 
-trait HitTest {
+interface HitTest {
     fn hit_test(self, x: f32, y: f32) -> bool;
 }
 
-trait Widget {                   // composition replaces `Drawable & HitTest`
+interface Widget {                   // composition replaces `Drawable & HitTest`
     fn draw(self, g: Canvas) -> unit;
     fn hit_test(self, x: f32, y: f32) -> bool;
 }
@@ -45,7 +45,7 @@ class Sprite {                   // inherent members only — headers list no tr
     }
 }
 
-impl Widget for Sprite {         // admission + bodies — one block per (trait, type)
+impl Widget for Sprite {         // admission + bodies — one block per (interface, type)
     fn draw(self, g: Canvas) -> unit {
         g.circle(self.x, self.y, 1);
     }
@@ -61,7 +61,7 @@ dataclass Cell {                 // fields only — the value-key contract rides
 }
 
 impl Hashable for Cell {         // hash + eq: the value-key contract
-    fn hash(self) -> u64 {                             // vtable dispatch — trait
+    fn hash(self) -> u64 {                             // vtable dispatch — interface
         return u64(self.x) * 1000003 + u64(self.y);  // methods NEVER devirtualize
     }                                                // (RFC 0012 §1)
 
@@ -70,13 +70,13 @@ impl Hashable for Cell {         // hash + eq: the value-key contract
     }                                                // form; `==` itself is
 }                                                    // identity (RFC 0012 §4)
 
-fn blit_all(g: Canvas, items: Vec<dyn Widget>) -> unit {
+fn blit_all(g: Canvas, items: Vec<Widget>) -> unit {
     for (let w of items) {
         w.draw(g);                   // vtable dispatch — the only dynamic call
     }
 }
 
-fn mixed_hash(keys: Vec<dyn Hashable>) -> u64 {
+fn mixed_hash(keys: Vec<Hashable>) -> u64 {
     let acc: u64 = 0;
     for (let k of keys) {
         acc += k.hash();             // vtable dispatch through Hashable;
@@ -88,19 +88,19 @@ pub fn main() -> unit {
     let log = Logger("traits");
     let s = Sprite();
     s.move_by(2, 2);
-    blit_all(newCanvas(), Vec.from([s]));  // the Sprite cell widens to dyn Widget
+    blit_all(newCanvas(), Vec.from([s]));  // the Sprite cell widens to Widget
                                            // (vtable attach — no copy, RFC 0011 §3)
 
     let a = Cell { x: 1, y: 2 };   // literal — dataclasses have no `constructor`
     let b = Cell { x: 1, y: 2 };
     // eq: field-wise, through the Hashable vtable (the map-key compare):
     log.info(f"eq={a.eq(b)} hash={mixed_hash(Vec.from([a, b]))}");
-    //                        ^ bare dataclasses widen implicitly to dyn Hashable
+    //                        ^ bare dataclasses widen implicitly to Hashable
     // `==` is NOT eq — it is cell identity (RFC 0012 §4):
     log.info(f"identity: {a == b} {a == a}");   // false, then true
 
     // the `is` KEYWORD — capability probe (RFC 0012 §3): does the value's
-    // exact type have an impl for the trait? Grants nothing (no narrowing,
+    // exact type have an impl for the interface? Grants nothing (no narrowing,
     // no widening).
     if (a is Hashable) {             // statically true -> folded + linted
         log.info("Cell is Hashable");

@@ -23,8 +23,8 @@ impl<'a> Ctx<'a> {
             ItemKind::Class { vis, name, generics, methods, .. } => {
                 self.declare_data(it.id(), DataKind::Class, *vis, *name, generics, methods);
             }
-            ItemKind::Trait { vis, name, generics, assoc, methods, .. } => {
-                self.declare_trait(it.id(), *vis, *name, generics, assoc, methods)
+            ItemKind::Trait { vis, name, generics, methods, .. } => {
+                self.declare_trait(it.id(), *vis, *name, generics, methods)
             }
                 _ => {}
             }
@@ -54,8 +54,8 @@ impl<'a> Ctx<'a> {
         // pass 2: impls, fns, lets
         for it in &items {
             match self.ast.item(*it) {
-                ItemKind::Impl { trait_ref, target, assoc, methods } => {
-                    self.collect_impl(it.id(), *trait_ref, *target, assoc, methods)
+                ItemKind::Impl { trait_ref, target, methods, .. } => {
+                    self.collect_impl(it.id(), *trait_ref, *target, methods)
                 }
                 ItemKind::Fn(f) => {
                     let is_pub = f.vis == Vis::Pub;
@@ -207,15 +207,14 @@ impl<'a> Ctx<'a> {
         self.datas[idx].1.fields = flds;
     }
 
-    /// Pass 1a — reserve the trait's id and register its name; signatures are
-    /// resolved in pass 1b, once every type name is in scope.
+    /// Pass 1a — reserve the interface's id and register its name; signatures
+    /// are resolved in pass 1b, once every type name is in scope.
     pub(crate) fn declare_trait(
         &mut self,
         node: NodeId,
         vis: Vis,
         name: IdentId,
         generics: &[NodeId2],
-        assoc: &[AssocType],
         _methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
@@ -228,7 +227,7 @@ impl<'a> Ctx<'a> {
             self.traits.push(TraitDesc { name: self.name(name).to_string(), methods: vec![] });
             id
         } else {
-            // a generic trait has no single id — `mk_trait_inst` allocates
+            // a generic interface has no single id — `mk_trait_inst` allocates
             // one per type-argument list (RFC 0013 monomorphization)
             u32::MAX
         };
@@ -236,7 +235,6 @@ impl<'a> Ctx<'a> {
             id,
             node,
             generics: generics.to_vec(),
-            assoc: assoc.iter().map(|a| self.name(a.name).to_string()).collect(),
         }));
         let _ = vis;
     }
@@ -252,7 +250,6 @@ impl<'a> Ctx<'a> {
         let Some(id) = self.trait_id_of(name) else {
             return;
         };
-        let assoc = self.find_trait(name).map(|t| t.assoc.clone()).unwrap_or_default();
         let mut tms = Vec::new();
         for m in methods {
             let md = self.ast.method_decl(*m);
@@ -261,20 +258,20 @@ impl<'a> Ctx<'a> {
                 match self.ast.param(*p) {
                     MemberKind::SelfParam(_) => ptys.push(TY_UNIT), // placeholder: Self resolved at impl
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                        ptys.push(self.resolve_trait_sig_ty(*t, id, &[], &assoc));
+                        ptys.push(self.resolve_trait_sig_ty(*t, id, &[]));
                     }
                     MemberKind::Param(ParamData { ty: None, .. }) => {
-                        self.err(self.ast.span(p.id()), "trait method parameters need types");
+                        self.err(self.ast.span(p.id()), "interface method parameters need types");
                         ptys.push(TY_I32);
                     }
                     _ => ptys.push(TY_I32),
                 }
             }
-            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &[], &assoc));
+            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &[]));
             tms.push((self.name(md.name).to_string(), ptys, rty));
         }
-        // first param must be self (RFC 0012 §2: trait methods are instance
-        // methods)
+        // first param must be self (RFC 0012 §2: interface methods are
+        // instance methods)
         let mut desc = TraitDesc { name: self.name(name).to_string(), methods: vec![] };
         for (mname, ptys, rty) in tms {
             if ptys.first() == Some(&TY_UNIT) {
@@ -286,42 +283,23 @@ impl<'a> Ctx<'a> {
                     ret: rty.unwrap_or(TY_UNIT),
                 });
             } else {
-                self.err(sp, format!("trait method `{mname}` must take `self` (RFC 0012 §2)"));
+                self.err(sp, format!("interface method `{mname}` must take `self` (RFC 0012 §2)"));
             }
         }
         self.traits[id as usize] = desc;
     }
 
-    /// Resolve a trait-method signature type under `env`: a bare `Self` is
-    /// the trait's `dyn` object; a bare associated type name is an opaque
-    /// placeholder (the concrete type comes from the impl binding).
+    /// Resolve an interface-method signature type under `env`: a bare
+    /// `Self` is the interface's object type.
     fn resolve_trait_sig_ty(
         &mut self,
         node: NodeHandle<AnyTy>,
         trait_id: u32,
         env: &[(IdentId, TypeId)],
-        assoc: &[String],
     ) -> TypeId {
         if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
-            if segs.len() == 1 && segs[0].generics.is_empty() {
-                let name = segs[0].name;
-                if self.name(name) == "Self" {
-                    return self.mk_dyn(trait_id);
-                }
-                if let Some(idx) = assoc.iter().position(|a| a == self.name(name)) {
-                    return self.mk_assoc(trait_id, idx as u32, &assoc[idx]);
-                }
-            }
-            // projection `Self.Target` — the trait's associated type under
-            // `Self`; resolved per impl at the use site
-            if segs.len() == 2
-                && segs[0].generics.is_empty()
-                && segs[1].generics.is_empty()
-                && self.name(segs[0].name) == "Self"
-            {
-                if let Some(idx) = assoc.iter().position(|a| a == self.name(segs[1].name)) {
-                    return self.mk_assoc(trait_id, idx as u32, &assoc[idx]);
-                }
+            if segs.len() == 1 && segs[0].generics.is_empty() && self.name(segs[0].name) == "Self" {
+                return self.mk_dyn(trait_id);
             }
         }
         self.resolve_type(node, env)
@@ -360,12 +338,12 @@ impl<'a> Ctx<'a> {
                 match self.ast.param(*p) {
                     MemberKind::SelfParam(_) => ptys.push(TY_UNIT),
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                        ptys.push(self.resolve_trait_sig_ty(*t, id, &subst, &info.assoc));
+                        ptys.push(self.resolve_trait_sig_ty(*t, id, &subst));
                     }
                     _ => ptys.push(TY_I32),
                 }
             }
-            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &subst, &info.assoc));
+            let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &subst));
             if ptys.first() == Some(&TY_UNIT) {
                 desc.methods.push(rut_core::binary::TraitMethod {
                     name: self.name(md.name).to_string(),
@@ -378,15 +356,22 @@ impl<'a> Ctx<'a> {
         id
     }
 
-    pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, assoc: &[AssocType], methods: &[NodeHandle<MethodDeclNode>]) {
+    pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, methods: &[NodeHandle<MethodDeclNode>]) {
         let sp = self.ast.span(node);
         let Some(trait_id) = self.resolve_trait_ref(trait_ref) else {
             return;
         };
+        // the interface's source name and its written type arguments
+        let (trait_name, trait_arg_nodes) = match self.ast.ty(trait_ref) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
+                (segs[0].name, segs[0].generics.clone())
+            }
+            _ => return,
+        };
         // the target must be a local dataclass/class (RFC 0012 §2 placement).
-        // A generic target (`impl Slice<T> for Vec<T>`, RFC 0005) is kept as a
-        // template: its method bodies are inlined at the use site, never
-        // monomorphized as standalone fns.
+        // A generic target (`impl Iter<T> for Vec<T>`) is kept as a template:
+        // its method bodies are inlined at the use site, never monomorphized
+        // as standalone fns.
         let (target_ty, target_data) = match self.ast.ty(target) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let name = segs[0].name;
@@ -424,14 +409,14 @@ impl<'a> Ctx<'a> {
             }
         };
         if let Some(_prev) = self.find_impl(trait_id, target_ty) {
-            self.err(sp, "duplicate impl for the same (trait, type) pair (RFC 0012 §2)");
+            self.err(sp, "duplicate impl for the same (interface, type) pair (RFC 0012 §2)");
             return;
         }
         let mut mths = Vec::new();
         for m in methods {
             mths.push((self.ast.method_decl(*m).name, *m));
         }
-        // coverage: every trait methsig covered exactly once, no extras
+        // coverage: every interface methsig covered exactly once, no extras
         let tdesc = self.traits[trait_id as usize].clone();
         for tm in &tdesc.methods {
             if !mths.iter().any(|(n, _)| self.name(*n) == tm.name) {
@@ -452,56 +437,18 @@ impl<'a> Ctx<'a> {
                 );
             }
         }
-        let trait_args = match self.ast.ty(trait_ref) {
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
-                self.ty_generic_idents(&segs[0].generics).unwrap_or_default()
-            }
-            _ => Vec::new(),
-        };
-        // associated-type bindings (RFC 0012): every trait `type` member
-        // must be bound exactly once; no extras
-        let trait_assoc: Vec<String> = self
-            .trait_decls
-            .iter()
-            .find(|(_, ti)| ti.id == trait_id)
-            .map(|(_, ti)| ti.assoc.clone())
-            .unwrap_or_default();
-        let mut assoc_bindings: Vec<(IdentId, NodeHandle<AnyTy>)> = Vec::new();
-        for a in assoc {
-            if !trait_assoc.iter().any(|n| n == self.name(a.name)) {
-                self.err(sp, format!(
-                    "`type {}` is not an associated type of {}",
-                    self.name(a.name), tdesc.name
-                ));
-                continue;
-            }
-            match a.ty {
-                Some(t) => assoc_bindings.push((a.name, t)),
-                None => self.err(sp, format!(
-                    "impl associated type `{}` needs a binding (`type {} = ..;`)",
-                    self.name(a.name), self.name(a.name)
-                )),
-            }
-        }
-        for name in &trait_assoc {
-            if !assoc_bindings.iter().any(|(n, _)| self.name(*n) == *name) {
-                self.err(sp, format!(
-                    "impl is missing `type {name}` from {}", tdesc.name
-                ));
-            }
-        }
         let is_generic = target_data.is_some();
         self.impls.push(ImplDecl {
             trait_id,
+            trait_name,
             target: target_ty,
             target_data,
-            trait_args,
-            assoc: assoc_bindings,
+            trait_arg_nodes,
             methods: mths,
         });
         // every impl method enters the monomorphization queue — vtables need
         // their bodies (RFC 0015 §6). Generic-target impls are inlined at the
-        // use site instead (RFC 0005 `Slice<T>`).
+        // use site instead.
         if is_generic {
             return;
         }

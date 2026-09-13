@@ -975,14 +975,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let tdesc = self.ctx.trait_by_id(trait_id).clone();
             if let Some(midx) = tdesc.methods.iter().position(|m| m.name == mname) {
                 let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
-                let m = &tdesc.methods[midx];
-                if m.params.iter().chain(std::iter::once(&m.ret)).any(|t| self.ctx.assoc_ty.contains_key(t)) {
-                    self.ctx.err(sp, format!(
-                        "`{}` returns/accepts an associated type — `dyn` dispatch needs an object binding (`dyn {}<Target = ..>`, deferred)",
-                        mname, tdesc.name
-                    ));
-                    return Err(());
-                }
                 return self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp);
             }
             self.ctx.err(sp, format!(
@@ -1101,7 +1093,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Inline a small, non-recursive instance method body at the call site.
     /// Returns `true` when it compiled the body; `false` to emit `CallM`.
     #[allow(clippy::too_many_arguments)]
-    fn try_inline_method(
+    pub(crate) fn try_inline_method(
         &mut self,
         dname: IdentId,
         class_subst: &[(IdentId, TypeId)],
@@ -1194,47 +1186,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .position(|m| m.name == self.ctx.name(mname))
             .unwrap_or(0);
         let slot = self.ctx.trait_slot(im.trait_id, midx as u32).unwrap();
-        // associated-type placeholders resolve to this impl's bindings
-        let params: Vec<TypeId> = tdesc.methods[midx]
-            .params
-            .iter()
-            .map(|&t| self.subst_assoc(&im, t))
-            .collect();
-        let ret = self.subst_assoc(&im, tdesc.methods[midx].ret);
-        self.finish_trait_call(slot, params, ret, rreg, args, expected, sp)
-    }
-
-    /// Substitute an associated-type placeholder with the concrete binding
-    /// from `im` (a concrete `impl Trait for T`); recurse through the
-    /// builtin containers so `Option<Item>` resolves too.
-    fn subst_assoc(&mut self, im: &crate::check::ImplDecl, t: TypeId) -> TypeId {
-        if let Some((_, name)) = self.ctx.assoc_ty.get(&t).cloned() {
-            if let Some((_, node)) = im.assoc.iter().find(|(n, _)| self.ctx.name(*n) == name).copied() {
-                return self.ctx.resolve_type(node, &[]);
-            }
-            return t;
-        }
-        match self.ctx.types.kind(t).clone() {
-            TyKind::Option { elem } => {
-                let e = self.subst_assoc(im, elem);
-                self.ctx.mk_option(e)
-            }
-            TyKind::Array { elem } => {
-                let e = self.subst_assoc(im, elem);
-                self.ctx.mk_array(e)
-            }
-            TyKind::Result { ok, err } => {
-                let ok = self.subst_assoc(im, ok);
-                let err = self.subst_assoc(im, err);
-                self.ctx.mk_result(ok, err)
-            }
-            TyKind::Fn { params, ret } => {
-                let params: Vec<TypeId> = params.iter().map(|&p| self.subst_assoc(im, p)).collect();
-                let ret = self.subst_assoc(im, ret);
-                self.ctx.mk_fn_ty(params, ret)
-            }
-            _ => t,
-        }
+        self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp)
     }
 
     pub(crate) fn finish_trait_call(

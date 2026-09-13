@@ -34,7 +34,7 @@ pub dataclass JsonEngine { }
 
 impl ReflectEngine for JsonEngine { }    // the capability — an empty impl
 
-pub trait Serializable requires Reflectable { }
+pub interface Serializable requires Reflectable { }
 
 // === the tree (the library's OWN data — walked as ordinary typed rut;
 // reflection touches only USER types) ===
@@ -67,8 +67,8 @@ fn jobj(fields: Vec<JField>, pos: i32) -> JsonValue {
 
 // === entries — BOTH consents are compile-time (RFC 0037 §4) ===
 
-pub fn stringify(v: dyn Serializable) -> Result<string, string> {
-    // consumer: a trait-object-typed param — one copy, vtable dispatch.
+pub fn stringify(v: Serializable) -> Result<string, string> {
+    // consumer: a interface-object-typed param — one copy, vtable dispatch.
     // v.reflect() is the vtable call; v descends to Opaque (the
     // lattice bottom, RFC 0014) at write_val's parameter.
     return write_val(v.reflect(), v);
@@ -76,7 +76,7 @@ pub fn stringify(v: dyn Serializable) -> Result<string, string> {
 
 pub fn deserialize<T>(v: string) -> Result<T, JsonError>
         where T requires Deserializable {
-    // producer: a trait-object-typed return does not exist, so the
+    // producer: a interface-object-typed return does not exist, so the
     // contract rides the call site — T is guaranteed descriptor-backed
     // (dataclass/enum/Option/Result/Vec/Array<T>) by the BOUND; no
     // runtime walkability pre-check exists to delete.
@@ -148,7 +148,7 @@ fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
                 }
                 return Err(t.name());
             },
-            LeafKind.Trait -> Err(t.name()),     // trait objects have no
+            LeafKind.Trait -> Err(t.name()),     // interface objects have no
         },                                     // recovery (RFC 0012 §3)
     }
 }

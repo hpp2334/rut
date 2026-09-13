@@ -111,7 +111,7 @@ pub fn main() -> unit {
         scores: [1.5, 2.5],
     };
 
-    // serialize: u widens to dyn Serializable at the parameter (one
+    // serialize: u widens to Serializable at the parameter (one
     // copy, vtable dispatch — RFC 0012 §3 / RFC 0037 §4).
     when (stringify(u)) {
         Ok(s)  -> log.info(f"user: {s}"),

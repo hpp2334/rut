@@ -42,11 +42,9 @@ impl TypeFrame {
                     self.stage = TyStage::FnParams { params: Vec::new() };
                     return self.fnparams_top(p);
                 }
-                // `dyn` prefixes trait paths in value positions (RFC 0030 §2)
-                let is_dyn = p.at_kw("dyn");
-                if is_dyn {
-                    p.bump();
-                }
+                // an interface name in type position is the object type —
+                // the engine decides dispatch, so there is no `dyn` prefix
+                let is_dyn = false;
                 self.stage = TyStage::Path { is_dyn, segs: Vec::new() };
                 self.path_run(p)
             }

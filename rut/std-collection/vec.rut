@@ -74,17 +74,41 @@ pub class Vec<T> {
         }
         return bytes_from(a);
     }
+    // A fresh cursor over the live elements (`for (x of v.iter())`).
+    pub fn iter(self) -> VecIter<T> {
+        return VecIter<T>.new(self);
+    }
 }
 
-// The `Iter` implementation (RFC 0012): `v.len()`, `v[i]`, and
-// `for (x of v)` lower through these accessors. They are one-liners
-// over the backing `buf`/`len`, so the compiler inlines them at the use
-// site — element access stays fused (`arrget`/`arrset`), never a call.
-// `Iter` is read-only (`len`/`get`); `set` is the optional mutable-index
-// hook that makes `v[i] = x` work.
-impl Iter for Vec<T> {
-    type Target = T;
+// The next()-based cursor for `Vec` (RFC 0012). `Vec` is not builtin, so
+// it ships its own iterator; `for (x of v.iter())` lowers to `next`.
+pub class VecIter<T> {
+    v: Vec<T>;
+    i: i32;
 
+    fn new(v: Vec<T>) -> Self {
+        return Self { v: v, i: 0 };
+    }
+}
+
+impl Iterator<T> for VecIter<T> {
+    fn next(mut self) -> Option<T> {
+        if (self.i >= self.v.len()) {
+            return Option.none();
+        }
+        let x = self.v[self.i];
+        self.i += 1;
+        return Option.some(x);
+    }
+}
+
+// The `Index` implementation (RFC 0012): `v[i]`, `v[i] = x`, `v.len()`,
+// and `for (x of v)` lower through these accessors. The element type is
+// the interface's type argument (`Index<T>`), resolved at the use site.
+// They are one-liners over the backing `buf`/`len`, so the compiler
+// inlines them — element access stays fused (`arrget`/`arrset`), never a
+// call.
+impl Index<T> for Vec<T> {
     fn len(self) -> i32 {
         return self.len;
     }

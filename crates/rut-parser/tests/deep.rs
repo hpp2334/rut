@@ -94,7 +94,7 @@ fn malformed_input_terminates() {
         "fn f() -> unit ",
         "class C {",
         "class C { fn m(",
-        "trait T { fn m",
+        "interface T { fn m",
         "when (x) {",
         "fn f() { when (x) { 1 -> } }",
         "impl T for C {",

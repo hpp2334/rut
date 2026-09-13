@@ -134,25 +134,19 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
                 "Class"
             }
-            ItemKind::Trait { vis, name, generics, requires, assoc, methods } => {
+            ItemKind::Trait { vis, name, generics, requires, methods } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
                 if !generics.is_empty() {
                     fields.push(field("generics", DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect())));
                 }
                 fields.push(field("requires", DumpVal::Nodes(requires.iter().map(|&t| node_dump(a, t.id())).collect())));
-                if !assoc.is_empty() {
-                    fields.push(field("assoc", DumpVal::Idents(assoc.iter().map(|x| a.name(x.name).to_string()).collect())));
-                }
                 fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "Trait"
             }
-            ItemKind::Impl { trait_ref, target, assoc, methods } => {
+            ItemKind::Impl { trait_ref, target, methods } => {
                 fields.push(field("trait", DumpVal::Node(Box::new(node_dump(a, trait_ref.id())))));
                 fields.push(field("target", DumpVal::Node(Box::new(node_dump(a, target.id())))));
-                if !assoc.is_empty() {
-                    fields.push(field("assoc", DumpVal::Idents(assoc.iter().map(|x| a.name(x.name).to_string()).collect())));
-                }
                 fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "Impl"
             }

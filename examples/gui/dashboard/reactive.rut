@@ -25,8 +25,8 @@ import { Disposal } from "std:core";
 // ------------------------------------------------------------------ atoms
 
 /** Anything with an identity in the store — State, Source, Derived.
- *  Passing a bare atom to watch() widens it to dyn Atom (RFC 0012 §2). */
-trait Atom {
+ *  Passing a bare atom to watch() widens it to Atom (RFC 0012 §2). */
+interface Atom {
     fn atom_id(self) -> u32;
 }
 
@@ -254,7 +254,7 @@ pub fn dispatch<P, R>(store: Store, m: Mutation<P, R>, p: P) -> R {
 }
 
 /** Subscribe a change-only callback to any atom (State, Source, Derived). */
-pub fn watch(store: Store, ids: Ids, a: dyn Atom, cb: fn() -> unit) -> WatchHandle {
+pub fn watch(store: Store, ids: Ids, a: Atom, cb: fn() -> unit) -> WatchHandle {
     let w = Watch.new(fresh(ids), a.atom_id(), store.version_of(a.atom_id()), cb);
     store.watches.push(w);
     return WatchHandle.new(store, w.wid);

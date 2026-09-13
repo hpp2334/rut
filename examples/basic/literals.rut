@@ -4,7 +4,7 @@ import { Vec } from "std:collection";
 // Arrays `[a, b, c]` are shared heap cells (`Array<T>`, non-growable);
 // growables are `Vec<T>`. Both implement `Iter` (RFC 0012), so `a[i]`,
 // `a.len()` and `for (x of a)` lower through the same contract. The
-// `dyn Iter<Target = T>` object form is a follow-up.
+// `Iter<Target = T>` object form is a follow-up.
 
 import { Logger } from "std:log";
 

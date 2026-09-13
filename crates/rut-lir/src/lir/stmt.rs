@@ -186,8 +186,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let info = match self.slice_info(it) {
             Some(info) => info,
             None => {
-                if let Some((impl_idx, item_ty)) = self.iterator_info(it) {
-                    return self.compile_for_of_next(node, var, iter_reg, impl_idx, item_ty, body, sp);
+                if let Some((impl_idx, item_ty, subst)) = self.iterator_info(it) {
+                    return self.compile_for_of_next(node, var, iter_reg, it, impl_idx, item_ty, subst, body, sp);
                 }
                 self.ctx.err(sp, format!(
                     "`for (let .. of ..)` needs a sequence — `{}` implements neither `Iter` nor `Iterator` (RFC 0012)",
@@ -231,34 +231,60 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// `for (x of it)` where `it` implements `Iterator` (RFC 0012): lower to
-    /// a loop over `next()` — `CallI` through the impl's vtable slot, then
-    /// `Option` test/unwrap. The element type is the impl's `Item` binding.
+    /// a loop over `next()`. The impl's `next` body is inlined at the use
+    /// site (so generic cursors like `VecIter<T>` need no vtable entry);
+    /// a concrete impl too large to inline falls back to `CallI`.
+    #[allow(clippy::too_many_arguments)]
     fn compile_for_of_next(
         &mut self,
         _node: NodeId,
         var: IdentId,
         it_reg: u16,
+        it_ty: TypeId,
         impl_idx: usize,
         item_ty: TypeId,
+        subst: Vec<(IdentId, TypeId)>,
         body: NodeHandle<BlockNode>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
-        let trait_id = self.ctx.impls[impl_idx].trait_id;
-        let midx = self.ctx.traits[trait_id as usize]
-            .methods
-            .iter()
-            .position(|m| m.name == "next")
-            .unwrap_or(0);
-        let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
         let opt_ty = self.ctx.mk_option(item_ty);
+        // the impl's `next` method + its target class
+        let im = self.ctx.impls[impl_idx].clone();
+        let Some((next_name, next_node)) = im.methods.iter().find(|(n, _)| self.ctx.name(*n) == "next").copied() else {
+            self.ctx.err(sp, "the `Iterator` impl has no `next`");
+            return Err(());
+        };
+        let dname = im.target_data.as_ref().map(|(d, _)| *d);
+        let mut_self = matches!(
+            self.ctx.ast.method_decl(next_node).params.first().map(|p| self.ctx.ast.param(*p)),
+            Some(MemberKind::SelfParam(SelfParamData { is_mut: true }))
+        );
         let l_head = self.new_label();
         let l_body = self.new_label();
         let l_end = self.new_label();
         let l_cont = self.new_label();
         self.bind(l_head);
         self.emit(Op::LoopHead, sp.lo);
-        let o = self.new_reg(opt_ty);
-        self.emit(Op::CallI { slot, recv: it_reg, args: vec![], dst: Some(o) }, sp.lo);
+        // inline `next` where possible; else dispatch through the vtable
+        let inlined = dname.is_some_and(|d| {
+            self.try_inline_method(
+                d, &subst, it_ty, next_node, next_name, mut_self, it_reg, &[], &[], opt_ty, sp,
+            )
+        });
+        let o = if inlined {
+            self.last_reg
+        } else {
+            let trait_id = im.trait_id;
+            let midx = self.ctx.traits[trait_id as usize]
+                .methods
+                .iter()
+                .position(|m| m.name == "next")
+                .unwrap_or(0);
+            let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
+            let dst = self.new_reg(opt_ty);
+            self.emit(Op::CallI { slot, recv: it_reg, args: vec![], dst: Some(dst) }, sp.lo);
+            dst
+        };
         let done = self.new_reg(TY_BOOL);
         self.emit(Op::SumIs { dst: done, v: o, want_err: true }, sp.lo);
         self.br(done, l_end, l_body);

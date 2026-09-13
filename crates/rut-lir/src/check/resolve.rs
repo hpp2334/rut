@@ -11,13 +11,13 @@ impl<'a> Ctx<'a> {
         match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
-                let is_iter = self.name(tname) == "Iter";
-                let is_iterator = self.name(tname) == "Iterator";
+                let is_seq = self.name(tname) == "Index";
+                let is_next = self.name(tname) == "Iterator";
                 let id = if let Some(t) = self.find_trait(tname).cloned() {
                     if segs[0].generics.is_empty() {
                         if t.id == u32::MAX {
                             self.err(self.ast.span(node.id()), format!(
-                                "generic trait `{}` needs type arguments in an impl head (e.g. `impl {}<i32> for ..`)",
+                                "generic interface `{}` needs type arguments in an impl head (e.g. `impl {}<i32> for ..`)",
                                 self.name(tname), self.name(tname)
                             ));
                             None
@@ -40,79 +40,58 @@ impl<'a> Ctx<'a> {
                             Some(self.mk_trait_inst(tname, args))
                         }
                     }
-                } else if is_iter {
-                    // the builtin `Iter` sequence contract (RFC 0012) is
-                    // undeclarable but need not be spelled in the module
-                    Some(self.builtin_iter_trait(tname))
-                } else if is_iterator {
-                    Some(self.builtin_iterator_trait(tname))
+                } else if is_seq {
+                    Some(self.builtin_contract(tname, true))
+                } else if is_next {
+                    Some(self.builtin_contract(tname, false))
                 } else {
-                    self.err(self.ast.span(node.id()), format!("unknown trait `{}`", self.name(tname)));
+                    self.err(self.ast.span(node.id()), format!("unknown interface `{}`", self.name(tname)));
                     None
                 };
-                if is_iter {
+                if is_seq {
                     self.seq_trait = id;
                 }
-                if is_iterator {
+                if is_next {
                     self.iter_trait = id;
                 }
                 id
             }
             _ => {
-                self.err(self.ast.span(node.id()), "expected a trait name");
+                self.err(self.ast.span(node.id()), "expected an interface name");
                 None
             }
         }
     }
 
-    /// The builtin `Iter` sequence contract (RFC 0012): undeclarable in
-    /// source, but its member set is known — `type Target`, `len`, `get`.
-    /// Registered on first reference so a module that never mentions it
-    /// keeps its trait-slot numbering.
-    pub fn builtin_iter_trait(&mut self, name: IdentId) -> u32 {
+    /// The builtin sequence (`seq = true` → `Index`: `len`/`get`/`set`) or
+    /// iterator (`seq = false` → `Iterator`: `next`) contract. Undeclarable
+    /// in source, registered on first reference. The element type is carried
+    /// as the impl/interface ref's type argument and resolved at the use
+    /// site.
+    pub fn builtin_contract(&mut self, name: IdentId, seq: bool) -> u32 {
         if let Some(id) = self.trait_id_of(name) {
             return id;
         }
         let id = self.traits.len() as u32;
         use rut_core::binary::TraitMethod;
-        self.traits.push(TraitDesc {
-            name: "Iter".to_string(),
-            methods: vec![
-                TraitMethod { name: "len".to_string(), params: vec![], ret: TY_I32 },
-                TraitMethod { name: "get".to_string(), params: vec![TY_I32], ret: TY_I32 },
-            ],
-        });
+        let (desc_name, methods) = if seq {
+            (
+                "Index",
+                vec![
+                    TraitMethod { name: "len".to_string(), params: vec![], ret: TY_I32 },
+                    TraitMethod { name: "get".to_string(), params: vec![TY_I32], ret: TY_I32 },
+                    TraitMethod { name: "set".to_string(), params: vec![TY_I32, TY_I32], ret: TY_UNIT },
+                ],
+            )
+        } else {
+            ("Iterator", vec![TraitMethod { name: "next".to_string(), params: vec![], ret: TY_I32 }])
+        };
+        self.traits.push(TraitDesc { name: desc_name.to_string(), methods });
         self.trait_decls.push((name, TraitDeclInfo {
             id,
             node: rut_ast::ast::NodeId(0),
             generics: vec![],
-            assoc: vec!["Target".to_string()],
         }));
-        id
-    }
-
-    /// The builtin `Iterator` contract (RFC 0012): `type Item`,
-    /// `fn next(mut self) -> Option<Item>`. `for..of` lowers to `next`
-    /// when a type implements it and is not a sequence.
-    pub fn builtin_iterator_trait(&mut self, name: IdentId) -> u32 {
-        if let Some(id) = self.trait_id_of(name) {
-            return id;
-        }
-        let id = self.traits.len() as u32;
-        self.traits.push(TraitDesc { name: "Iterator".to_string(), methods: vec![] });
-        self.trait_decls.push((name, TraitDeclInfo {
-            id,
-            node: rut_ast::ast::NodeId(0),
-            generics: vec![],
-            assoc: vec!["Item".to_string()],
-        }));
-        let item = self.mk_assoc(id, 0, "Item");
-        let opt = self.mk_option(item);
-        self.traits[id as usize].methods.push(rut_core::binary::TraitMethod {
-            name: "next".to_string(),
-            params: vec![],
-            ret: opt,
-        });
         id
     }
 
@@ -140,7 +119,7 @@ impl<'a> Ctx<'a> {
                 self.err(sp, "a const expression is not a type here");
                 TY_I32
             }
-            TypeKind::TyPath { segs, is_dyn } => {
+            TypeKind::TyPath { segs, .. } => {
                 if segs.len() > 1 {
                     self.err(sp, format!("unknown type `{}`", seg_str(self, segs)));
                     return TY_I32;
@@ -178,7 +157,7 @@ impl<'a> Ctx<'a> {
                     return TY_I32;
                 }
                 if n == "dyn" {
-                    self.err(sp, "`dyn` must prefix a trait name");
+                    self.err(sp, "`dyn` was removed — an interface name in type position is the object type (RFC 0012)");
                     return TY_I32;
                 }
                 // a declared or imported type shadows a builtin name (RFC
@@ -188,9 +167,6 @@ impl<'a> Ctx<'a> {
                     && (self.find_data(name).is_some() || self.extern_types.contains_key(&name));
                 match n.as_str() {
                     "Array" | "Option" | "Result" if !shadow => {
-                        if *is_dyn {
-                            self.err(sp, format!("`dyn {n}` — {n} is not a trait"));
-                        }
                         let generics = seg.generics.clone();
                         match (n.as_str(), generics.as_slice()) {
                             ("Array", [e]) => {
@@ -227,15 +203,9 @@ impl<'a> Ctx<'a> {
                             if !seg.generics.is_empty() {
                                 self.err(sp, format!("enum `{n}` takes no generic arguments"));
                             }
-                            if *is_dyn {
-                                self.err(sp, format!("`dyn {n}` — {n} is an enum, not a trait"));
-                            }
                             return e.ty;
                         }
                         if let Some(d) = self.find_data(name).cloned() {
-                            if *is_dyn {
-                                self.err(sp, format!("`dyn {n}` — {n} is not a trait"));
-                            }
                             if d.generics.is_empty() {
                                 if !seg.generics.is_empty() {
                                     self.err(sp, format!("`{n}` takes no generic arguments"));
@@ -258,18 +228,12 @@ impl<'a> Ctx<'a> {
                             return self.mk_data_inst(name, args);
                         }
                         if let Some(t) = self.find_trait(name).cloned() {
-                            if !*is_dyn {
-                                self.err(
-                                    sp,
-                                    format!(
-                                        "a trait name in a type position must be spelled `dyn {n}` (RFC 0012 §2)"
-                                    ),
-                                );
-                            }
+                            // an interface name in type position IS the
+                            // object type (RFC 0012) — no `dyn` prefix
                             if seg.generics.is_empty() {
                                 if t.id == u32::MAX {
                                     self.err(sp, format!(
-                                        "generic trait `{n}` needs type arguments (e.g. `dyn {n}<i32>`)"
+                                        "generic interface `{n}` needs type arguments (e.g. `{n}<i32>`)"
                                     ));
                                     return TY_I32;
                                 }
@@ -295,9 +259,6 @@ impl<'a> Ctx<'a> {
                         if let Some(&t) = self.extern_types.get(&name) {
                             if !seg.generics.is_empty() {
                                 self.err(sp, format!("imported type `{n}` takes no generic arguments"));
-                            }
-                            if *is_dyn {
-                                self.err(sp, format!("`dyn {n}` — {n} is not a trait"));
                             }
                             return t;
                         }

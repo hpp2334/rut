@@ -117,7 +117,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 10;
+pub const VERSION: u32 = 1;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();

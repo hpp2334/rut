@@ -689,7 +689,7 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         TypeKind::TyPath { segs, is_dyn } => {
             let names: Vec<&str> = segs.iter().map(|s| ast.name(s.name)).collect();
             if *is_dyn {
-                format!("dyn {}", names.join("."))
+                names.join(".")
             } else {
                 names.join(".")
             }
@@ -852,7 +852,7 @@ mod tests {
 
     #[test]
     fn symbols_outline() {
-        let src = "trait Drawable { fn draw(self, g: Canvas) -> unit; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> unit {} }\nenum Color { Red }\npub fn main() -> unit {}\n";
+        let src = "interface Drawable { fn draw(self, g: Canvas) -> unit; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> unit {} }\nenum Color { Red }\npub fn main() -> unit {}\n";
         let (toks, _) = rut_lexer::lexer::lex(src);
         let (ast, _) = parse(src, Mode::Impl);
         let syms = symbols(&toks, &ast);

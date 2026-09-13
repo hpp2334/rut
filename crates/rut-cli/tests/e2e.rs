@@ -155,7 +155,7 @@ pub fn main() -> unit {
 fn case6_dyn_dispatch() {
     let src = r#"
 import { Vec } from "std:collection";
-trait Shape {
+interface Shape {
     fn area(self) -> f32;
     fn name(self) -> string;
 }
@@ -170,7 +170,7 @@ impl Shape for Square {
     fn name(self) -> string { return "square"; }
 }
 pub fn main() -> unit {
-    let shapes: Vec<dyn Shape> = Vec.from([
+    let shapes: Vec<Shape> = Vec.from([
         Circle { r: 1 },
         Square { s: 2 },
     ]);
@@ -1063,40 +1063,10 @@ pub fn main() -> unit {
 }
 
 #[test]
-fn associated_type_user_trait() {
-    // a user trait declares an associated `type Item`; the impl binds it.
-    // The trait's signature spells the bare `Item` (the projection syntax
-    // `Self::Item` is a follow-up).
+fn generic_interface_dispatch() {
+    // `Wrap<i32>` — one interface id per type-argument list
     let src = r#"
-trait Container {
-    type Item;
-    fn first(self) -> Item;
-    fn count(self) -> i32;
-}
-class Box {
-    v: i32;
-    fn new(v: i32) -> Self { return Self { v: v }; }
-}
-impl Container for Box {
-    type Item = i32;
-    fn first(self) -> i32 { return self.v; }
-    fn count(self) -> i32 { return 1; }
-}
-pub fn main() -> unit {
-    let b = Box.new(41);
-    print(f"{b.first()} {b.count()}");
-}
-"#;
-    let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(trap, None);
-    assert_eq!(lines, vec!["41 1"]);
-}
-
-#[test]
-fn generic_trait_dyn_dispatch() {
-    // `dyn Wrap<i32>` — one trait id per type-argument list
-    let src = r#"
-trait Wrap<T> {
+interface Wrap<T> {
     fn get(self) -> T;
 }
 class B {
@@ -1108,7 +1078,7 @@ impl Wrap<i32> for B {
 }
 pub fn main() -> unit {
     let b = B.new(7);
-    let w: dyn Wrap<i32> = b;
+    let w: Wrap<i32> = b;
     print(f"{w.get()}");
 }
 "#;
@@ -1118,75 +1088,45 @@ pub fn main() -> unit {
 }
 
 #[test]
-fn user_iter_contract() {
-    // a user-declared `trait Iter` with an associated `Target` drives
-    // `for..of` — no builtin involved
+fn user_index_contract() {
+    // a user interface implements `Index<i32>`; `r[i]`, `r.len()`, and
+    // `for (x of r)` all lower through it (the element is the type argument)
     let src = r#"
-trait Iter {
-    type Target;
+interface Index<T> {
     fn len(self) -> i32;
-    fn get(self, i: i32) -> Target;
+    fn get(self, i: i32) -> T;
 }
 class Range {
     n: i32;
     fn new(n: i32) -> Self { return Self { n: n }; }
 }
-impl Iter for Range {
-    type Target = i32;
+impl Index<i32> for Range {
     fn len(self) -> i32 { return self.n; }
     fn get(self, i: i32) -> i32 { return i * 2; }
 }
 pub fn main() -> unit {
     let r = Range.new(3);
     let mut sum = 0;
+    for (let i = 0; i < r.len(); i += 1) { sum += r[i]; }
     for (let x of r) { sum += x; }
-    print(f"{sum}");
+    print(f"{sum} {r[2]}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["6"]);
-}
-
-#[test]
-fn associated_type_substitutes_at_dispatch() {
-    // the impl binds `type Name = string` (not i32): the concrete-receiver
-    // dispatch substitutes the binding, and the trait signature uses the
-    // `Self.Name` projection
-    let src = r#"
-trait Named {
-    type Name;
-    fn name(self) -> Self.Name;
-}
-class C {
-    tag: i32;
-    fn new() -> Self { return Self { tag: 1 }; }
-}
-impl Named for C {
-    type Name = string;
-    fn name(self) -> string { return "c"; }
-}
-pub fn main() -> unit {
-    let c = C.new();
-    print(f"{c.name()}");
-}
-"#;
-    let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(trap, None);
-    assert_eq!(lines, vec!["c"]);
+    assert_eq!(lines, vec!["12 4"]);
 }
 
 #[test]
 fn next_based_iterator_contract() {
-    // the builtin `Iterator` contract: `impl Iterator for X` + `for..of`
-    // lowers to `next()` (CallI) with the impl's `Item` binding
+    // the builtin `Iterator<i32>` contract: `impl Iterator<i32> for X`
+    // + `for..of` lowers to `next`
     let src = r#"
 class Countdown {
     n: i32;
     fn new(n: i32) -> Self { return Self { n: n }; }
 }
-impl Iterator for Countdown {
-    type Item = i32;
+impl Iterator<i32> for Countdown {
     fn next(mut self) -> Option<i32> {
         if (self.n <= 0) { return Option.none(); }
         let v = self.n;
@@ -1204,4 +1144,22 @@ pub fn main() -> unit {
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["6"]);
+}
+
+#[test]
+fn vec_iter_cursor() {
+    // `Vec` is rut code and ships its own cursor: `for (x of v.iter())`
+    // inlines `VecIter<T>.next` (a generic-target impl, no vtable needed)
+    let src = r#"
+import { Vec } from "std:collection";
+pub fn main() -> unit {
+    let v = Vec<i32>.from([10, 20, 30]);
+    let mut sum = 0;
+    for (let x of v.iter()) { sum += x; }
+    print(f"{sum} {v.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["60 3"]);
 }

@@ -1,5 +1,5 @@
 import { Vec } from "std:collection";
-// RFC 0009–0012 — grammar tour: dataclass, trait, class + class-method,
+// RFC 0009–0012 — grammar tour: dataclass, interface, class + class-method,
 // impl blocks, shared cells + `own`, vtable dispatch, exhaustive when,
 // format literals.
 //
@@ -12,65 +12,65 @@ import { sqrt } from "std:math";
 
 enum Color { Red, Green, Blue }
 
-dataclass Point {                          // shared cell: assignment aliases
-    x: f32;                                // all fields public; methods are
-    y: f32;                                // allowed too (RFC 0009) — plus
-}                                          // impl blocks outside — here: data only
+dataclass Point { // shared cell: assignment aliases
+ x: f32; // all fields public; methods are
+ y: f32; // allowed too (RFC 0009) — plus
+} // impl blocks outside — here: data only
 
 fn length(p: Point) -> f64 {
-    return sqrt(f64(p.x * p.x + p.y * p.y));
+ return sqrt(f64(p.x * p.x + p.y * p.y));
 }
 
-trait Drawable {
-    fn draw(self, g: Canvas) -> unit;             // traits declare METHODS only
+interface Drawable {
+ fn draw(self, g: Canvas) -> unit; // traits declare METHODS only
 }
 
-class Circle {                               // a shared cell like everything
-    center: Point;                   // composite field: cell-handle slot
-    r: f32;
+class Circle { // a shared cell like everything
+ center: Point; // composite field: cell-handle slot
+ r: f32;
 
-    fn new(x: f32, y: f32, r: f32) -> Self {   // class method: Circle.new(1, 2, 3)
-        return Self { center: Point { x: x, y: y }, r: r };
-    }
+ fn new(x: f32, y: f32, r: f32) -> Self { // class method: Circle.new(1, 2, 3)
+ return Self { center: Point { x: x, y: y }, r: r };
+ }
 
-    fn move_by(mut self, dx: f32, dy: f32) -> unit {   // all calls direct
-        self.center.x += dx;
-        self.center.y += dy;
-    }
+ fn move_by(mut self, dx: f32, dy: f32) -> unit { // all calls direct
+ self.center.x += dx;
+ self.center.y += dy;
+ }
 
-    fn area(self) -> f32 { return self.r * self.r * 3.14159265f32; }
+ fn area(self) -> f32 { return self.r * self.r * 3.14159265f32; }
 }
 
-impl Drawable for Circle {                   // trait methods live in impl blocks
-    fn draw(self, g: Canvas) -> unit {         // -> vtable dispatch (RFC 0012 §1)
-        g.circle(self.center.x, self.center.y, self.r);
-    }
+impl Drawable for Circle { // interface methods live in impl blocks
+ fn draw(self, g: Canvas) -> unit { // -> vtable dispatch (RFC 0012 §1)
+ g.circle(self.center.x, self.center.y, self.r);
+ }
 }
 
-fn blit_all(g: Canvas, items: Vec<dyn Drawable>) -> unit {
-    for (let d of items) {               // `dyn`-typed loop variable
-        d.draw(g);                         // vtable dispatch
-    }
+fn blit_all(g: Canvas, items: Vec<Drawable>) -> unit {
+ for (let d of items) { // `-typed loop variable
+ d.draw(g); // vtable dispatch
+ }
 }
 
 fn color_name(c: Color) -> string {
-    return when (c) {                      // exhaustive: all members covered
-        Color.Red   -> "red",
-        Color.Green -> "green",
-        Color.Blue  -> "blue",
-    };
+ return when (c) { // exhaustive: all members covered
+ Color.Red -> "red",
+ Color.Green -> "green",
+ Color.Blue -> "blue",
+ };
 }
 
 pub fn main() -> unit {
-    let log = Logger.new("tour");
-    let p = Point { x: 1, y: 2 };          // dataclass literal: the only
-    let mut pt = p;                        // dataclass construction form
-    pt.x = 3;                              // `mut` binding: writes the SHARED
-                                           // cell — p.x is 3 now (RFC 0016 §1)
+ let log = Logger.new("tour");
+ let p = Point { x: 1, y: 2 }; // dataclass literal: the only
+ let mut pt = p; // dataclass construction form
+ pt.x = 3; // `mut` binding: writes the SHARED
+ // cell — p.x is 3 now (RFC 0016 §1)
 
-    let c = Circle.new(1, 2, 3);       // class-method construction
-    let g = newCanvas();
-    blit_all(g, Vec.from([c]));           // c widens to dyn Drawable:
-                                           // vtable attach, same cell
-    log.info(f"{color_name(Color.Red)} area={c.area()} len={length(pt)}");
+ let c = Circle.new(1, 2, 3); // class-method construction
+ let g = newCanvas();
+ blit_all(g, Vec.from([c])); // c widens to Drawable:
+ // vtable attach, same cell
+ log.info(f"{color_name(Color.Red)} area={c.area()} len={length(pt)}");
 }

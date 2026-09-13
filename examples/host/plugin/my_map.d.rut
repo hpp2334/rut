@@ -24,9 +24,9 @@ pub host class MyMap<K: Hashable, V> {
     fn set(self, k: K, v: V) -> unit;      // construction surface (RFC 0010/0025)
     fn get(self, k: K) -> Option<V>;
     fn size(self) -> i32;
-    fn keys(self) -> Vec<K>;             // Vec<K>, NOT Vec<dyn Hashable>:
+    fn keys(self) -> Vec<K>;             // Vec<K>, NOT Vec<Hashable>:
 }                                     // keys are unerased at the boundary
-                                      // (trait objects cannot be
+                                      // (interface objects cannot be
                                       // downcast — RFC 0012 §3)
 // What compiling this file produces: a slot table
 //     new -> 0, set -> 1, get -> 2, size -> 3, keys -> 4

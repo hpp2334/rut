@@ -63,8 +63,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         (None, _) if im.target == ty => Vec::new(),
                         _ => continue,
                     };
-                    // the impl's `type Target = ..` binding supplies the element
-                    let Some((_, ty_node)) = im.assoc.first().copied() else { continue };
+                    // the interface ref's first type argument is the element
+                    let Some(ty_node) = im.trait_arg_nodes.first().copied() else { continue };
                     found = Some((i, subst, ty_node));
                     break;
                 }
@@ -76,8 +76,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// Resolve the `Iterator` impl for `ty`, if any: `(impl index, Item)`.
-    pub(crate) fn iterator_info(&mut self, ty: TypeId) -> Option<(usize, TypeId)> {
+    /// Resolve the `Iterator` impl for `ty`, if any: `(impl index, Item,
+    /// target subst)`. The subst resolves the `next` body and its return
+    /// type under the receiver's instantiation.
+    pub(crate) fn iterator_info(&mut self, ty: TypeId) -> Option<(usize, TypeId, Vec<(IdentId, TypeId)>)> {
         let iter_trait = self.ctx.iter_trait?;
         for (i, im) in self.ctx.impls.iter().enumerate() {
             if Some(im.trait_id) != Some(iter_trait) {
@@ -90,9 +92,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 (None, _) if im.target == ty => Vec::new(),
                 _ => continue,
             };
-            let Some((_, ty_node)) = im.assoc.first().copied() else { continue };
+            let Some(ty_node) = im.trait_arg_nodes.first().copied() else { continue };
             let item = self.ctx.resolve_type(ty_node, &subst);
-            return Some((i, item));
+            return Some((i, item, subst));
         }
         None
     }
