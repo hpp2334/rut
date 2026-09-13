@@ -249,7 +249,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
+                self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
                 return Ok(TY_I32);
             }
             "bytes_decode" => {
@@ -282,7 +282,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_BYTES);
-                self.emit(Op::CallNat { nat: Nat::BytesFrom, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
+                self.emit(Op::Own { dst, src, ty: TY_BYTES }, sp.lo);
                 return Ok(TY_BYTES);
             }
             "bytes_zeroed" => {
@@ -296,7 +296,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let len_reg = self.last_reg;
                 let dst = self.new_reg(TY_BYTES);
-                self.emit(Op::CallNat { nat: Nat::BytesNew, recv: None, args: vec![len_reg], dst: Some(dst) }, sp.lo);
+                self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
                 return Ok(TY_BYTES);
             }
             "type_id" => {
@@ -457,7 +457,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         };
         let dst = self.new_reg(TY_BYTES);
-        self.emit(Op::CallNat { nat: Nat::BytesNew, recv: None, args: vec![len_reg], dst: Some(dst) }, sp.lo);
+        self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
         Ok(TY_BYTES)
     }
 

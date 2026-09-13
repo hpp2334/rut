@@ -51,12 +51,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
                     return Ok(info.elem);
                 }
-                // `bytes` is the binary primitive — a byte read (RFC 0004)
-                if matches!(self.ctx.types.kind(rt), TyKind::Bytes) {
-                    let dst = self.new_reg(TY_U8);
-                    self.emit(Op::BytesGet { dst, s: rreg, idx: ireg }, sp.lo);
-                    return Ok(TY_U8);
-                }
                 self.ctx.err(sp, format!("indexing needs a sequence (Vec, Array, or bytes) —found `{}`", self.ctx.types.name(rt)));
                 Err(())
             }

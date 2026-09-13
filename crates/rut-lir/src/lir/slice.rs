@@ -114,7 +114,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             SliceSource::Bytes => {
                 let dst = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::BytesLen, recv: Some(recv), args: vec![], dst: Some(dst) }, sp);
+                self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(recv), args: vec![], dst: Some(dst) }, sp);
                 Ok(dst)
             }
             SliceSource::Impl { .. } => {
@@ -139,8 +139,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(dst)
             }
             SliceSource::Bytes => {
+                let repr = self.ctx.types.repr_of(TY_U8);
                 let dst = self.new_reg(TY_U8);
-                self.emit(Op::BytesGet { dst, s: recv, idx }, sp);
+                self.emit(Op::ArrGet { dst, arr: recv, idx, repr }, sp);
                 Ok(dst)
             }
             SliceSource::Impl { .. } => {

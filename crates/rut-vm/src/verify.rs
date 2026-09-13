@@ -5,7 +5,7 @@
 
 use rut_core::binary::Program;
 use rut_core::ops::Op;
-use rut_core::types::TyKind;
+use rut_core::types::{TY_U8, TyKind};
 
 pub fn verify(prog: &Program) -> Result<(), String> {
     let ntypes = prog.types.types.len() as u32;
@@ -115,6 +115,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
                     let ety = match prog.types.kind(f.regs[*arr as usize]) {
                         TyKind::Array { elem } => *elem,
+                        TyKind::Bytes => TY_U8,
                         _ => return Err(bad("array op on a non-sequence register".into())),
                     };
                     if prog.types.repr_of(ety) != *repr {
@@ -124,6 +125,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 Op::ArrNew { ty, repr, .. } => {
                     let ety = match prog.types.kind(*ty) {
                         TyKind::Array { elem } => *elem,
+                        TyKind::Bytes => TY_U8,
                         _ => return Err(bad("arrnew over a non-array type".into())),
                     };
                     if prog.types.repr_of(ety) != *repr {
@@ -323,7 +325,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
         }
         // three-operand ops
         Op::StrCmp { dst, a, b, .. } | Op::RefEq { dst, a, b, .. }
-        | Op::BytesCmp { dst, a, b, .. }
+        | Op::ArrayCmp { dst, a, b, .. }
         | Op::ArrGet { dst, arr: a, idx: b, .. }
         | Op::ArrGetF { dst, obj: a, idx: b, .. }
         | Op::AddF { dst, a, b, .. } | Op::SubF { dst, a, b, .. } | Op::MulF { dst, a, b, .. }
@@ -421,11 +423,6 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*src);
         }
         Op::StrCharAt { dst, s, idx } => {
-            push(*dst);
-            push(*s);
-            push(*idx);
-        }
-        Op::BytesGet { dst, s, idx } => {
             push(*dst);
             push(*s);
             push(*idx);

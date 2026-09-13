@@ -57,8 +57,8 @@ impl Vm {
                 let sb = cell_of(r!(b)).as_str();
                 self.cur_regs[dst as usize] = Slot::bool((sa == sb) == eq);
             }
-            Op::BytesCmp { eq, dst, a, b } => {
-                let same = cell_of(r!(a)).bytes_eq(cell_of(r!(b)));
+            Op::ArrayCmp { eq, dst, a, b } => {
+                let same = cell_of(r!(a)).array_eq(cell_of(r!(b)));
                 self.cur_regs[dst as usize] = Slot::bool(same == eq);
             }
             Op::RefEq { eq, dst, a, b } => {
@@ -108,6 +108,7 @@ impl Vm {
             Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {
                     TyKind::Array { elem } => *elem,
+                    TyKind::Bytes => rut_core::types::TY_U8,
                     _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-array")),
                 };
                 let n = unsafe { r!(len).i }.max(0) as usize;
@@ -289,15 +290,6 @@ impl Vm {
                         )
                     })?;
                 self.cur_regs[dst as usize] = Slot::ch(c);
-            }
-            Op::BytesGet { dst, s, idx } => {
-                let cell = cell_of(r!(s));
-                let i = unsafe { r!(idx).i };
-                let n = cell.seq_len().unwrap_or(0);
-                let b = seq_get(cell, i).map_err(|_| {
-                    Trap::new(TrapKind::IndexOutOfBounds, format!("bytes index {i} out of bounds (len {n})"))
-                })?;
-                self.cur_regs[dst as usize] = b;
             }
         }
         Ok(())

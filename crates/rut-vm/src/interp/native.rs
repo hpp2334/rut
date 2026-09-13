@@ -66,26 +66,6 @@ impl Vm {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }
             }
-            // ---- bytes (RFC 0004) ----
-            Nat::BytesNew => {
-                let n = unsafe { r!(args[0]).i }.max(0) as usize;
-                let c = self.heap.alloc_bytes(vec![0u8; n])?;
-                self.store_result(dst, c)?;
-            }
-            Nat::BytesFrom => {
-                let cell = cell_of(r!(args[0]));
-                let bytes = cell
-                    .seq_bytes_copy()
-                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "bytes.from expects `Array<u8>`"))?;
-                let c = self.heap.alloc_bytes(bytes)?;
-                self.store_result(dst, c)?;
-            }
-            Nat::BytesLen => {
-                let n = cell_of(r!(recv.unwrap())).seq_len().unwrap_or(0) as i64;
-                if let Some(d) = dst {
-                    self.cur_regs[d as usize] = Slot::int(n);
-                }
-            }
             Nat::StrEncode => {
                 let bytes = cell_of(r!(recv.unwrap())).as_str().to_string().into_bytes();
                 let c = self.heap.alloc_bytes(bytes)?;

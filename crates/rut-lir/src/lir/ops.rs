@@ -53,7 +53,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.emit(Op::StrCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                     }
                     TyKind::Bytes => {
-                        self.emit(Op::BytesCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                        self.emit(Op::ArrayCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                     }
                     TyKind::Option { .. } | TyKind::Result { .. } => {
                         self.ctx.err(sp, "`==` on Option/Result is a compile error —use `when`, `is_some()`, or compare the payload (RFC 0005)");

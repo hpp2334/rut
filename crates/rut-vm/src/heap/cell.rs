@@ -285,17 +285,33 @@ impl CellVal {
     pub fn bytes_copy(&self) -> Vec<u8> {
         self.seq_bytes_copy().unwrap_or_default()
     }
-    /// Byte-content equality (the `==` law for `bytes`, RFC 0012 §4).
-    pub fn bytes_eq(&self, other: &CellVal) -> bool {
-        if let (CellData::Array { items: a, .. }, CellData::Array { items: b, .. }) =
-            (&self.data, &other.data)
-        {
-            let (a, b) = (a.borrow(), b.borrow());
-            if let (Packed::U8(x), Packed::U8(y)) = (&*a, &*b) {
-                return x == y;
+    /// Content equality of two sequences (RFC 0012 §4: `bytes` compares by
+    /// content — it is a `u8` array). Element-wise, shallow.
+    pub fn array_eq(&self, other: &CellVal) -> bool {
+        let (a, b) = match (&self.data, &other.data) {
+            (CellData::Array { items: a, .. }, CellData::Array { items: b, .. }) => {
+                (a.borrow(), b.borrow())
             }
+            _ => return false,
+        };
+        if a.len() != b.len() {
+            return false;
         }
-        self.seq_bytes_copy() == other.seq_bytes_copy()
+        match (&*a, &*b) {
+            (Packed::U8(x), Packed::U8(y)) => x == y,
+            (Packed::I8(x), Packed::I8(y)) => x == y,
+            (Packed::U16(x), Packed::U16(y)) => x == y,
+            (Packed::I16(x), Packed::I16(y)) => x == y,
+            (Packed::U32(x), Packed::U32(y)) => x == y,
+            (Packed::I32(x), Packed::I32(y)) => x == y,
+            (Packed::F32(x), Packed::F32(y)) => x == y,
+            (Packed::Char(x), Packed::Char(y)) => x == y,
+            (Packed::Bool(x), Packed::Bool(y)) => x == y,
+            (Packed::Slots(x), Packed::Slots(y)) => {
+                x.iter().zip(y.iter()).all(|(p, q)| Slot::same_ref(*p, *q))
+            }
+            _ => false,
+        }
     }
     /// Option/Result payload: (tag 0=some/ok 1=none/err, payload)
     pub fn as_sum(&self) -> Option<(u32, Option<Slot>)> {

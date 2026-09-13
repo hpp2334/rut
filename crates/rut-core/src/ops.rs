@@ -42,14 +42,10 @@ pub enum Nat {
     Str,
     /// str.concat(parts...)
     Concat,
-    StrLen,      // `for..of`/`Iter::len`/`string_len` — the char count
-    ArrLen,    // Array<T>.len() — the heap array's runtime length
-    // ---- bytes (RFC 0004) — the immutable binary buffer ----
-    BytesNew,    // bytes(n) zeroed
-    BytesFrom,   // bytes.from(Array<u8>) — one copy
-    BytesLen,
-    StrEncode,   // string.encode() -> bytes (UTF-8)
-    BytesDecode, // bytes.decode() -> string (UTF-8, lossy)
+    StrLen,    // `for..of`/`Index::len`/`string_len` — the char count
+    ArrLen,    // Array<T>.len()/bytes_len — the heap sequence's runtime length
+    StrEncode,   // string_encode -> bytes (UTF-8)
+    BytesDecode, // bytes_decode -> string (UTF-8, lossy)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -108,7 +104,7 @@ pub enum Op {
     /// string content compare (RFC 0012 §4) — used for ==/!= on string
     StrCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
     /// bytes content compare (RFC 0004) — used for ==/!= on bytes
-    BytesCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
+    ArrayCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
     /// cell identity compare (RFC 0012 §4) — used for ==/!= on ref types
     RefEq { eq: bool, dst: Reg, a: Reg, b: Reg },
 
@@ -197,8 +193,6 @@ pub enum Op {
     Conv { dst: Reg, src: Reg, from: PrimTy, to: PrimTy },
     /// string codepoint read (for-of strings, RFC 0008 §1); bounds trap
     StrCharAt { dst: Reg, s: Reg, idx: Reg },
-    /// byte read (indexing / for-of on bytes); bounds trap
-    BytesGet { dst: Reg, s: Reg, idx: Reg },
 
     /// fuel-check no-op back-edge marker (RFC 0040 §2: loop back-edges are
     /// natural checkpoints) — emitted at loop heads
