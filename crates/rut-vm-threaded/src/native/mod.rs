@@ -51,6 +51,13 @@ macro_rules! op_handler {
                     become h(m, table, code, tags, regs, n, next_fuel, used)
                 }
                 Flow::Done(o) => return Ok(ThreadOut::Done(o)),
+                Flow::Redispatch => {
+                    unsafe { (*m).sync_fuel(next_fuel, used) };
+                    let st = unsafe { (*m).thread_state() };
+                    let tag = unsafe { *st.tags.add(st.pc as usize) } as usize;
+                    let h = unsafe { *(table as *const Handler<M>).add(tag) };
+                    become h(m, table, st.code, st.tags, st.regs, st.pc, st.fuel, st.fuel_used)
+                }
             }
         }
     };
@@ -71,6 +78,44 @@ op_handler!(h_mulf, op_mulf);
 op_handler!(h_br, op_br);
 op_handler!(h_jmp, op_jmp);
 op_handler!(h_loophead, op_loophead);
+op_handler!(h_arrget, op_arr_get);
+op_handler!(h_arrset, op_arr_set);
+op_handler!(h_arrgetf, op_arr_get_f);
+op_handler!(h_arrsetf, op_arr_set_f);
+op_handler!(h_getf, op_getf);
+op_handler!(h_setf, op_setf);
+op_handler!(h_call, op_call);
+op_handler!(h_callm, op_call_m);
+op_handler!(h_calli, op_call_i);
+op_handler!(h_callfn, op_call_fn);
+op_handler!(h_callnat, op_call_nat);
+op_handler!(h_ret, op_ret);
+op_handler!(h_muli, op_muli);
+op_handler!(h_divi, op_divi);
+op_handler!(h_modi, op_modi);
+op_handler!(h_wdivi, op_wdivi);
+op_handler!(h_wmodi, op_wmodi);
+op_handler!(h_andi, op_andi);
+op_handler!(h_ori, op_ori);
+op_handler!(h_xori, op_xori);
+op_handler!(h_shli, op_shli);
+op_handler!(h_shri, op_shri);
+op_handler!(h_wrapshli, op_wrapshli);
+op_handler!(h_eqi, op_eqi);
+op_handler!(h_nei, op_nei);
+op_handler!(h_gti, op_gti);
+op_handler!(h_lei, op_lei);
+op_handler!(h_gei, op_gei);
+op_handler!(h_negi, op_negi);
+op_handler!(h_divf, op_divf);
+op_handler!(h_modf, op_modf);
+op_handler!(h_negf, op_negf);
+op_handler!(h_eqf, op_eqf);
+op_handler!(h_nef, op_nef);
+op_handler!(h_ltf, op_ltf);
+op_handler!(h_gtf, op_gtf);
+op_handler!(h_lef, op_lef);
+op_handler!(h_gef, op_gef);
 
 fn table<M: Machine>() -> Table<M> {
     let mut t: [Handler<M>; NTAGS] = [h_slow::<M>; NTAGS];
@@ -89,6 +134,44 @@ fn table<M: Machine>() -> Table<M> {
     t[T_BR as usize] = h_br::<M>;
     t[T_JMP as usize] = h_jmp::<M>;
     t[T_LOOPHEAD as usize] = h_loophead::<M>;
+    t[T_ARRGET as usize] = h_arrget::<M>;
+    t[T_ARRSET as usize] = h_arrset::<M>;
+    t[T_ARRGETF as usize] = h_arrgetf::<M>;
+    t[T_ARRSETF as usize] = h_arrsetf::<M>;
+    t[T_GETF as usize] = h_getf::<M>;
+    t[T_SETF as usize] = h_setf::<M>;
+    t[T_CALL as usize] = h_call::<M>;
+    t[T_CALLM as usize] = h_callm::<M>;
+    t[T_CALLI as usize] = h_calli::<M>;
+    t[T_CALLFN as usize] = h_callfn::<M>;
+    t[T_CALLNAT as usize] = h_callnat::<M>;
+    t[T_RET as usize] = h_ret::<M>;
+    t[T_MULI as usize] = h_muli::<M>;
+    t[T_DIVI as usize] = h_divi::<M>;
+    t[T_MODI as usize] = h_modi::<M>;
+    t[T_WDIVI as usize] = h_wdivi::<M>;
+    t[T_WMODI as usize] = h_wmodi::<M>;
+    t[T_ANDI as usize] = h_andi::<M>;
+    t[T_ORI as usize] = h_ori::<M>;
+    t[T_XORI as usize] = h_xori::<M>;
+    t[T_SHLI as usize] = h_shli::<M>;
+    t[T_SHRI as usize] = h_shri::<M>;
+    t[T_WRAPSHLI as usize] = h_wrapshli::<M>;
+    t[T_EQI as usize] = h_eqi::<M>;
+    t[T_NEI as usize] = h_nei::<M>;
+    t[T_GTI as usize] = h_gti::<M>;
+    t[T_LEI as usize] = h_lei::<M>;
+    t[T_GEI as usize] = h_gei::<M>;
+    t[T_NEGI as usize] = h_negi::<M>;
+    t[T_DIVF as usize] = h_divf::<M>;
+    t[T_MODF as usize] = h_modf::<M>;
+    t[T_NEGF as usize] = h_negf::<M>;
+    t[T_EQF as usize] = h_eqf::<M>;
+    t[T_NEF as usize] = h_nef::<M>;
+    t[T_LTF as usize] = h_ltf::<M>;
+    t[T_GTF as usize] = h_gtf::<M>;
+    t[T_LEF as usize] = h_lef::<M>;
+    t[T_GEF as usize] = h_gef::<M>;
     Table { entries: t }
 }
 

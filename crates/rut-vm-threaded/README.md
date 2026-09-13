@@ -4,82 +4,69 @@ Tail-call threaded dispatch for the rut VM — the **only** crate that enables
 the nightly `become` / `rust-preserve-none` features, so nothing else in the
 workspace has to know about them.
 
-**Status: isolated experiment, not wired into `rut-vm`.** A full Phase 1
-wiring was implemented and measured; it regressed every workload, so it was
-reverted (see "Results"). The crate is kept because the mechanism is proven
-and the trait/backends are reusable once the design changes described below
-are made.
+It is wired into `rut-vm` and is the production dispatch path on native
+x86_64/aarch64. wasm (and any target without verified `become` lowering) runs
+the same op methods through a portable loop instead.
 
 ## Layout
 
 ```
 build.rs          emits cfg(rut_threaded) = not wasm && (x86_64 || aarch64)
-src/api.rs        Machine trait, Flow/ThreadOut, Table, tag_of/NTAGS
+src/api.rs        Machine trait, Flow/ThreadOut/ThreadState, Table, tag_of/NTAGS
 src/native/mod.rs become-threaded handlers (cfg rut_threaded)
 src/wasm/mod.rs   portable loop over the same Machine methods (otherwise)
+src/dispatch_bench.rs  isolated match-vs-threaded microbenchmark
 ```
 
-wasm (and any target without verified `become` lowering) uses the portable
-loop; only `native/` contains `become`. Both backends call the same
-`Machine::op_*` methods, so op behavior is shared.
+## How it works
 
-## Phase 0 — mechanism validated
+Handlers carry the hot frame state in **arguments** — code base, tag stream,
+register base, pc, and fuel — instead of reloading it from `self`. Each
+handler executes one op through a shared `Machine::op_*` method, then
+`become`s the next handler (an indirect tail jump). This is the reference
+tail-call-interpreter shape; `dispatch_bench` measures it ~25% faster than an
+equivalent `match` loop.
 
-`tests/phase0.rs` runs a synthetic `Machine` for 5M steps on a **256 KB**
-stack: it survives, so the calls really are tail calls. Release codegen for a
-handler is a clean indirect jump with no prologue/spills:
+`rut-vm` drives it from `run_loop`: a threaded stretch runs until it hits an
+op the crate does not thread, which returns `ThreadOut::Bail` with the
+machine state synced; `step_one` then runs that one op with the match
+interpreter and re-enters threading. `Flow::Redispatch` handles calls/ret
+(frame changes) by re-reading `thread_state`.
 
-```
-h_inc:
-    incq   0x18(%r12)            ; op body
-    inc    %r14d                 ; pc += 1
-    movzbl (%rax,%r14,1),%eax    ; next tag
-    mov    0x0(%r13,%rax,8),%rax ; table[tag]
-    jmp    *%rax                 ; indirect tail jump
-```
+`Machine::op_*` is the single source of truth for op behavior — both the
+native handlers and the wasm loop call it.
 
-## Phase 1 — measured, then reverted
+## Status & results
 
-Phase 1 wired the engine into `Vm::run_loop`: native threads a scalar stretch
-and returns `Bail` on any unthreaded op, at which point `step_one` runs that
-one op through the match interpreter and re-enters. Precomputed per-op tags
-and a cached handler table were added.
+Wired and default on native. Benchmarks (in-process `exec_min_ms`, A/B on the
+same machine, lower is better):
 
-In-process `exec_median_ms` (release, 5 iters):
-
-| workload | match (baseline) | threaded | Δ |
+| workload | match | threaded | |
 |---|--:|--:|--:|
-| intloop | 88.3 | 110 | −25% |
-| floatloop | 31.3 | 39 | −25% |
-| call | 40.6 | 46 | −13% |
-| sieve | 30.7 | 61 | −99% |
-| quicksort | 8.9 | 16 | −80% |
+| intloop | 88.2 | 45.0 | **2.0×** |
+| floatloop | 30.6 | 15.3 | **2.0×** |
+| alloc | 31.9 | 17.8 | **1.8×** |
+| mandelbrot | 11.3 | 7.9 | **1.4×** |
+| nbody | 9.6 | 7.1 | **1.4×** |
+| call | 41.5 | 29.6 | **1.4×** |
+| sieve | 29.8 | 28.5 | 1.05× |
+| fasta | 3.84 | 3.63 | 1.06× |
+| matrix-mul | 9.48 | 9.31 | 1.02× |
+| spectral-norm | 57.2 | 52.1 | 1.10× |
+| binary-trees | 6.61 | 7.09 | 0.93× |
+| quicksort | 8.53 | 9.71 | 0.88× |
+| fannkuch | 4.59 | 5.35 | 0.86× |
 
-All checksums were correct; it was purely a performance loss, so the
-`rut-vm` wiring was reverted and the match loop restored.
+All bench checksums match; the full test suite passes.
 
-## Why it lost, and what a win needs
+Remaining work to make the last four net-positive: thread the record/sum
+allocators (`NewCell`, `MakeRecord`, `OptSome/OptNone`, `ResOk/ResErr`,
+`SumIs`, `Unwrap*`, `EnumNew`, `ArrNew`, `ArrLit`, `Own`, `Conv`) so they stop
+bailing, and trim the `Redispatch` overhead on deep recursion.
 
-The handler dispatch is fast (`jmp *`), but the **op bodies were not**: every
-handler reloads `Vm` state from memory (`m`-relative loads/stores) and calls
-back into `tick`/`op_*`, whereas the match fast path keeps that state live in
-registers across the loop. Cold-heavy code (sieve/quicksort) additionally
-paid the `Bail` → `step_one` round-trip per array/object/call op.
-
-To beat the match loop this crate needs the reference-interpreter shape:
-
-1. **Thread the hot state as arguments** — `pc`, the register slice, the
-   current function/tag stream, and fuel — so the handlers keep them in
-   registers instead of `m`-relative memory. (`extern "rust-preserve-none"`
-   exists precisely for this.)
-2. **Full op coverage** so the hot paths never `Bail`; the `Bail` loop is a
-   large per-op tax on array/object-heavy code.
-3. **No per-op `tick` call**: fold fuel into the threaded argument set.
-
-Until then the match interpreter is faster, and `rut-vm` uses it.
-
-## Running the test
+## Running
 
 ```
-cargo test -p rut-vm-threaded            # flat-stack + codegen mechanism
+cargo test -p rut-vm-threaded            # mechanism: flat stack + codegen
+cargo test -p rut-vm-threaded --release --test dispatch -- --nocapture
 ```

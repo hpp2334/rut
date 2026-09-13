@@ -13,12 +13,13 @@ pub fn build_table<M: Machine>() -> Table<M> {
 
 pub fn run<M: Machine>(m: &mut M, pc0: u32, _table: &Table<M>) -> Result<ThreadOut<M::Out>, M::Err> {
     let st = m.thread_state();
-    let (code, tags, regs) = (st.code, st.tags, st.regs);
+    let (mut code, mut tags, mut regs) = (st.code, st.tags, st.regs);
     let mut pc = pc0;
     let mut fuel = st.fuel;
     let mut used = st.fuel_used;
     loop {
-        let tag = unsafe { *tags.add(pc as usize) };        if tag == T_SLOW {
+        let tag = unsafe { *tags.add(pc as usize) };
+        if tag == T_SLOW {
             m.sync(pc, fuel, used);
             return Ok(ThreadOut::Bail);
         }
@@ -45,11 +46,59 @@ pub fn run<M: Machine>(m: &mut M, pc0: u32, _table: &Table<M>) -> Result<ThreadO
             T_MULF => m.op_mulf(op, regs, pc)?,
             T_BR => m.op_br(op, regs, pc)?,
             T_JMP => m.op_jmp(op, regs, pc)?,
+            T_ARRGET => m.op_arr_get(op, regs, pc)?,
+            T_ARRSET => m.op_arr_set(op, regs, pc)?,
+            T_ARRGETF => m.op_arr_get_f(op, regs, pc)?,
+            T_ARRSETF => m.op_arr_set_f(op, regs, pc)?,
+            T_GETF => m.op_getf(op, regs, pc)?,
+            T_SETF => m.op_setf(op, regs, pc)?,
+            T_CALL => m.op_call(op, regs, pc)?,
+            T_CALLM => m.op_call_m(op, regs, pc)?,
+            T_CALLI => m.op_call_i(op, regs, pc)?,
+            T_CALLFN => m.op_call_fn(op, regs, pc)?,
+            T_CALLNAT => m.op_call_nat(op, regs, pc)?,
+            T_RET => m.op_ret(op, regs, pc)?,
+            T_MULI => m.op_muli(op, regs, pc)?,
+            T_DIVI => m.op_divi(op, regs, pc)?,
+            T_MODI => m.op_modi(op, regs, pc)?,
+            T_WDIVI => m.op_wdivi(op, regs, pc)?,
+            T_WMODI => m.op_wmodi(op, regs, pc)?,
+            T_ANDI => m.op_andi(op, regs, pc)?,
+            T_ORI => m.op_ori(op, regs, pc)?,
+            T_XORI => m.op_xori(op, regs, pc)?,
+            T_SHLI => m.op_shli(op, regs, pc)?,
+            T_SHRI => m.op_shri(op, regs, pc)?,
+            T_WRAPSHLI => m.op_wrapshli(op, regs, pc)?,
+            T_EQI => m.op_eqi(op, regs, pc)?,
+            T_NEI => m.op_nei(op, regs, pc)?,
+            T_GTI => m.op_gti(op, regs, pc)?,
+            T_LEI => m.op_lei(op, regs, pc)?,
+            T_GEI => m.op_gei(op, regs, pc)?,
+            T_NEGI => m.op_negi(op, regs, pc)?,
+            T_DIVF => m.op_divf(op, regs, pc)?,
+            T_MODF => m.op_modf(op, regs, pc)?,
+            T_NEGF => m.op_negf(op, regs, pc)?,
+            T_EQF => m.op_eqf(op, regs, pc)?,
+            T_NEF => m.op_nef(op, regs, pc)?,
+            T_LTF => m.op_ltf(op, regs, pc)?,
+            T_GTF => m.op_gtf(op, regs, pc)?,
+            T_LEF => m.op_lef(op, regs, pc)?,
+            T_GEF => m.op_gef(op, regs, pc)?,
             _ => m.op_loophead(op, regs, pc)?,
         };
         match flow {
             Flow::Next(n) => pc = n,
             Flow::Done(o) => return Ok(ThreadOut::Done(o)),
+            Flow::Redispatch => {
+                m.sync_fuel(fuel, used);
+                let st = m.thread_state();
+                code = st.code;
+                tags = st.tags;
+                regs = st.regs;
+                pc = st.pc;
+                fuel = st.fuel;
+                used = st.fuel_used;
+            }
         }
     }
 }

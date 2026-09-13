@@ -34,7 +34,45 @@ pub const T_MULF: u8 = 12;
 pub const T_BR: u8 = 13;
 pub const T_JMP: u8 = 14;
 pub const T_LOOPHEAD: u8 = 15;
-pub const NTAGS: usize = 16;
+pub const T_ARRGET: u8 = 16;
+pub const T_ARRSET: u8 = 17;
+pub const T_ARRGETF: u8 = 18;
+pub const T_ARRSETF: u8 = 19;
+pub const T_GETF: u8 = 20;
+pub const T_SETF: u8 = 21;
+pub const T_CALL: u8 = 22;
+pub const T_CALLM: u8 = 23;
+pub const T_CALLI: u8 = 24;
+pub const T_CALLFN: u8 = 25;
+pub const T_CALLNAT: u8 = 26;
+pub const T_RET: u8 = 27;
+pub const T_MULI: u8 = 28;
+pub const T_DIVI: u8 = 29;
+pub const T_MODI: u8 = 30;
+pub const T_WDIVI: u8 = 31;
+pub const T_WMODI: u8 = 32;
+pub const T_ANDI: u8 = 33;
+pub const T_ORI: u8 = 34;
+pub const T_XORI: u8 = 35;
+pub const T_SHLI: u8 = 36;
+pub const T_SHRI: u8 = 37;
+pub const T_WRAPSHLI: u8 = 38;
+pub const T_EQI: u8 = 39;
+pub const T_NEI: u8 = 40;
+pub const T_GTI: u8 = 41;
+pub const T_LEI: u8 = 42;
+pub const T_GEI: u8 = 43;
+pub const T_NEGI: u8 = 44;
+pub const T_DIVF: u8 = 45;
+pub const T_MODF: u8 = 46;
+pub const T_NEGF: u8 = 47;
+pub const T_EQF: u8 = 48;
+pub const T_NEF: u8 = 49;
+pub const T_LTF: u8 = 50;
+pub const T_GTF: u8 = 51;
+pub const T_LEF: u8 = 52;
+pub const T_GEF: u8 = 53;
+pub const NTAGS: usize = 54;
 
 pub fn tag_of(op: &Op) -> u8 {
     match op {
@@ -53,6 +91,44 @@ pub fn tag_of(op: &Op) -> u8 {
         Op::Br { .. } => T_BR,
         Op::Jmp { .. } => T_JMP,
         Op::LoopHead => T_LOOPHEAD,
+        Op::ArrGet { .. } => T_ARRGET,
+        Op::ArrSet { .. } => T_ARRSET,
+        Op::ArrGetF { .. } => T_ARRGETF,
+        Op::ArrSetF { .. } => T_ARRSETF,
+        Op::GetF { .. } => T_GETF,
+        Op::SetF { .. } => T_SETF,
+        Op::Call { .. } => T_CALL,
+        Op::CallM { .. } => T_CALLM,
+        Op::CallI { .. } => T_CALLI,
+        Op::CallFn { .. } => T_CALLFN,
+        Op::CallNat { .. } => T_CALLNAT,
+        Op::Ret { .. } => T_RET,
+        Op::MulI { .. } => T_MULI,
+        Op::DivI { .. } => T_DIVI,
+        Op::ModI { .. } => T_MODI,
+        Op::WDivI { .. } => T_WDIVI,
+        Op::WModI { .. } => T_WMODI,
+        Op::AndI { .. } => T_ANDI,
+        Op::OrI { .. } => T_ORI,
+        Op::XorI { .. } => T_XORI,
+        Op::ShlI { .. } => T_SHLI,
+        Op::ShrI { .. } => T_SHRI,
+        Op::WrapShlI { .. } => T_WRAPSHLI,
+        Op::EqI { .. } => T_EQI,
+        Op::NeI { .. } => T_NEI,
+        Op::GtI { .. } => T_GTI,
+        Op::LeI { .. } => T_LEI,
+        Op::GeI { .. } => T_GEI,
+        Op::NegI { .. } => T_NEGI,
+        Op::DivF { .. } => T_DIVF,
+        Op::ModF { .. } => T_MODF,
+        Op::NegF { .. } => T_NEGF,
+        Op::EqF { .. } => T_EQF,
+        Op::NeF { .. } => T_NEF,
+        Op::LtF { .. } => T_LTF,
+        Op::GtF { .. } => T_GTF,
+        Op::LeF { .. } => T_LEF,
+        Op::GeF { .. } => T_GEF,
         _ => T_SLOW,
     }
 }
@@ -61,6 +137,8 @@ pub fn tag_of(op: &Op) -> u8 {
 pub enum Flow<O> {
     Next(u32),
     Done(O),
+    /// the frame changed (call/ret): re-read `thread_state` and continue
+    Redispatch,
 }
 
 /// Result of a threaded stretch.
@@ -92,6 +170,12 @@ pub trait Machine {
     fn sync(&mut self, pc: u32, fuel: i64, fuel_used: u64);
     /// Park on fuel exhaustion and return the trap.
     fn park(&mut self, pc: u32, fuel_used: u64) -> Self::Err;
+    /// Write the fuel counters back (used by `Redispatch`); the pc is
+    /// already in the VM (set by the call/ret body).
+    fn sync_fuel(&mut self, fuel: i64, fuel_used: u64) {
+        let _ = (fuel, fuel_used);
+        unimplemented!("sync_fuel: not threaded by this Machine")
+    }
 
     fn op_mov(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
         let _ = (op, regs, pc);
@@ -153,6 +237,80 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_loophead: not threaded by this Machine")
     }
+    fn op_arr_get(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_arr_get: not threaded by this Machine")
+    }
+    fn op_arr_set(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_arr_set: not threaded by this Machine")
+    }
+    fn op_arr_get_f(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_arr_get_f: not threaded by this Machine")
+    }
+    fn op_arr_set_f(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_arr_set_f: not threaded by this Machine")
+    }
+    fn op_getf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_getf: not threaded by this Machine")
+    }
+    fn op_setf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_setf: not threaded by this Machine")
+    }
+    fn op_call(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_call: not threaded by this Machine")
+    }
+    fn op_call_m(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_call_m: not threaded by this Machine")
+    }
+    fn op_call_i(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_call_i: not threaded by this Machine")
+    }
+    fn op_call_fn(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_call_fn: not threaded by this Machine")
+    }
+    fn op_call_nat(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_call_nat: not threaded by this Machine")
+    }
+    fn op_ret(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> {
+        let _ = (op, regs, pc);
+        unimplemented!("op_ret: not threaded by this Machine")
+    }
+    fn op_muli(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_divi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_modi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_wdivi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_wmodi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_andi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_ori(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_xori(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_shli(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_shri(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_wrapshli(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_eqi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_nei(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_gti(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_lei(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_gei(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_negi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_divf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_modf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_negf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_eqf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_nef(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_ltf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_gtf(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_lef(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_gef(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
 }
 
 /// A threaded handler: same ABI, arguments, and return type for every op (a

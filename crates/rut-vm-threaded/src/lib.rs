@@ -18,10 +18,9 @@
 //! [`ThreadOut::Bail`] with the pc left at that op so the VM's match
 //! interpreter takes over.
 //!
-//! **Status:** the mechanism (Phase 0) is validated, but wiring it into
-//! `rut-vm` (Phase 1) regressed every workload, so `rut-vm` still uses its
-//! match loop. See `README.md` for the measurements and what a winning
-//! design needs (thread hot state as arguments; full op coverage).
+//! **Status:** wired into `rut-vm` and the default on native. See
+//! `README.md` for the A/B numbers (about 2× on scalar loops, net-positive
+//! across most workloads) and the remaining ops to thread.
 
 #![cfg_attr(rut_threaded, feature(explicit_tail_calls, rust_preserve_none_cc))]
 #![cfg_attr(rut_threaded, allow(incomplete_features))]
