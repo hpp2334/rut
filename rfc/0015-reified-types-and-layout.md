@@ -26,10 +26,10 @@ recovery (RFC 0014), and the host boundary checks (RFC 0023).
 
 1. **Host boundary** — native fns declare parameter types once; the VM checks
    every call; no bridge-side coercion code (RFC 0022 §2).
-2. **Opaque host types** — `host class Source<T>` (RFC 0025) carries its
-   instantiation identity inside the handle: `store.get(src)` is checked
-   statically *and* the handle knows its `T` (fixes tur's erased
-   `Source<T>`).
+2. **Opaque host values** — a host fn's `Opaque` parameter is checked
+   against the box's runtime `TypeId` at the boundary (the boxed value
+   keeps its type, RFC 0014); rut wrapper classes restore the nominal
+   shape rut-side (RFC 0025, revised).
 3. **Type tests** — the `is` keyword (RFC 0012 §3), concrete and
    trait RHS alike;
    host fns declaring `dyn I` parameters get their arguments checked by

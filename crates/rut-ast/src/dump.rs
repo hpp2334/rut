@@ -38,10 +38,6 @@ pub struct DumpWhere {
     pub ident: String,
     pub ty: DumpNode,
 }
-pub struct DumpExtParam {
-    pub ident: String,
-    pub ty: Option<DumpNode>,
-}
 pub enum DumpFPart {
     Lit(String),
     Hole(DumpNode),
@@ -54,7 +50,6 @@ pub enum DumpVal {
     Members(Vec<DumpMember>),
     StructFields(Vec<DumpStructField>),
     Wheres(Vec<DumpWhere>),
-    ExtParams(Vec<DumpExtParam>),
     Segs(Vec<DumpSeg>),
     PatArgs(Vec<Option<String>>),
     FParts(Vec<DumpFPart>),
@@ -179,7 +174,10 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             }
             ItemKind::SurfaceFn { vis, linkage, name, generics, params, ret } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("linkage", DumpVal::Str(if *linkage == Linkage::Host { "host" } else { "extern" }.to_string())));
+                fields.push(field("linkage", DumpVal::Str(match linkage {
+                    Linkage::Host => "host",
+                    Linkage::Builtin => "builtin",
+                }.to_string())));
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
                 if !generics.is_empty() {
                     fields.push(field("generics", DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect())));
@@ -190,24 +188,29 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 }
                 "SurfaceFn"
             }
-            ItemKind::SurfaceClass { vis, linkage, name, extparams, members } => {
+            ItemKind::SurfaceDataclass { vis, name, fields: fs } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("linkage", DumpVal::Str(if *linkage == Linkage::Host { "host" } else { "extern" }.to_string())));
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                fields.push(field(
-                    "extparams",
-                    DumpVal::ExtParams(
-                        extparams
-                            .iter()
-                            .map(|(n, t)| DumpExtParam {
-                                ident: a.name(*n).to_string(),
-                                ty: t.map(|x| node_dump(a, x.id())),
-                            })
-                            .collect(),
-                    ),
-                ));
+                fields.push(field("fields", DumpVal::Nodes(fs.iter().map(|&f| node_dump(a, f.id())).collect())));
+                "SurfaceDataclass"
+            }
+            ItemKind::BuiltinTy { vis, name, generics, members } => {
+                fields.push(field("vis", DumpVal::Vis(*vis)));
+                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
+                if !generics.is_empty() {
+                    fields.push(field("generics", DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect())));
+                }
                 fields.push(field("members", DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect())));
-                "SurfaceClass"
+                "BuiltinTy"
+            }
+            ItemKind::BuiltinIface { vis, name, generics, methods } => {
+                fields.push(field("vis", DumpVal::Vis(*vis)));
+                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
+                if !generics.is_empty() {
+                    fields.push(field("generics", DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect())));
+                }
+                fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
+                "BuiltinIface"
             }
         },
         Kind::Member(k) => match k {
@@ -632,24 +635,6 @@ fn val_json(v: &DumpVal, out: &mut String) {
             }
             out.push(']');
         }
-        DumpVal::ExtParams(ps) => {
-            out.push('[');
-            for (i, p) in ps.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                out.push('{');
-                json_escape("ident", out);
-                out.push(':');
-                json_escape(&p.ident, out);
-                if let Some(t) = &p.ty {
-                    out.push_str(",\"ty\":");
-                    node_json(t, out);
-                }
-                out.push('}');
-            }
-            out.push(']');
-        }
         DumpVal::Segs(segs) => {
             out.push('[');
             for (i, s) in segs.iter().enumerate() {
@@ -822,15 +807,6 @@ fn val_text(label: &str, v: &DumpVal, d: usize, src: &str, out: &mut String) {
             for w in ws {
                 out.push_str(&format!("{}- {} requires\n", ind(d + 1), w.ident));
                 node_text(&w.ty, d + 2, src, out);
-            }
-        }
-        DumpVal::ExtParams(ps) => {
-            out.push_str(&format!("{i}{label}:\n"));
-            for p in ps {
-                out.push_str(&format!("{}- {}\n", ind(d + 1), p.ident));
-                if let Some(t) = &p.ty {
-                    node_text(t, d + 2, src, out);
-                }
             }
         }
         DumpVal::Segs(segs) => {

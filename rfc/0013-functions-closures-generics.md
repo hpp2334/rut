@@ -35,25 +35,22 @@ block), and a generic `first<T>` monomorphized to two instantiations.
 - Generic parameters are **unconstrained by default** — no `T requires Trait`
   bounds in the parameter list of user generics (OQ-1): you cannot call
   trait methods on a bare `T`. Pass values in, or take a `dyn I`
-  parameter instead of a generic. Two **admission-only** forms ship —
-  both gate which instantiations compile (closing over `requires`),
-  grant no method calls on bare type params, and add no IR:
-  1. inline param bounds on **host/extern class declarations**
-     (`MyMap<K requires Hashable, V>`, RFC 0025 §1) — always bare (`K requires Hashable`,
-     never `K: dyn Hashable`; `T requires Any` is vacuous and rejected, RFC 0014);
-  2. a trailing **`where` clause on user generic fns** (RFC 0037 §3) —
-     the serde motivating pair: producers that return `T` cannot take a
-     `dyn I` parameter instead, so the contract rides the call site:
-     `deserialize<T>(v: str): Result<T, JsonError> where T requires
-     Deserializable`. A body may widen a `T`-typed *value* to `dyn I`
-     (the bound proves the widening valid) but gains no class-method
-     calls on bare `T`. (A user-class bound would be pure forwarding
-     anyway — deferred with OQ-1.)
+  parameter instead of a generic. One **admission-only** form ships —
+  it gates which instantiations compile (closing over `requires`),
+  grants no method calls on bare type params, and adds no IR:
+  a trailing **`where` clause on user generic fns** (RFC 0037 §3) —
+  the serde motivating pair: producers that return `T` cannot take a
+  `dyn I` parameter instead, so the contract rides the call site:
+  `deserialize<T>(v: str): Result<T, JsonError> where T requires
+  Deserializable`. A body may widen a `T`-typed *value* to `dyn I`
+  (the bound proves the widening valid) but gains no class-method
+  calls on bare `T`. (A user-class bound would be pure forwarding
+  anyway — deferred with OQ-1. The old inline bounds on `host class`
+  declarations went with `host class` itself — RFC 0025, revised.)
 
 ## Open questions
 
 - OQ-1: generic bounds `T requires Trait` with **static dispatch** on bare `T`
   (would unlock it without `dyn I` refs) — deferred; the
-  admission-only forms (host/extern inline bounds, §2 +
-  RFC 0025 §1; user-fn `where` clauses, RFC 0037 §3) need no dispatch
-  and add no IR.
+  admission-only form (user-fn `where` clauses, RFC 0037 §3) needs no dispatch
+  and adds no IR.

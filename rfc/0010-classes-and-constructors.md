@@ -86,8 +86,9 @@ class methods, sealing without constructors, explicit `self` receivers.
   (RFC 0012 §2); there is no separate "static" method form. Class methods never take
   `self` (there is no receiver yet — or ever, for pure utilities);
   `Disposal.dispose` does (`dispose(mut self)`,
-  RFC 0011 §2). Trait methods and host/extern class methods follow
-  the identical rule (RFC 0012 §2, RFC 0025 §2). Trait declarations
+  RFC 0011 §2). Trait methods follow the identical rule (RFC 0012 §2);
+  native surfaces declare no methods at all — host fns live behind a
+  rut wrapper class's methods (RFC 0025, revised). Trait declarations
   may not contain class methods — trait members are instance
   methods with `self` (RFC 0012 §2).
 - No `get`/`set` accessor syntax anywhere — a computed property is just a

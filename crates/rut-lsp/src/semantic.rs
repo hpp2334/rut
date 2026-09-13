@@ -274,7 +274,10 @@ fn classify_item(
         ItemKind::Trait { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Interface, out, false)
         }
-        ItemKind::SurfaceClass { name, .. } => {
+        ItemKind::BuiltinIface { name, .. } => {
+            push_name(toks, span, ast.name(*name), TokenType::Interface, out, false)
+        }
+        ItemKind::BuiltinTy { name, .. } | ItemKind::SurfaceDataclass { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
         // methods classify via their own Member nodes; import names need
@@ -639,8 +642,19 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             find_name(toks, span, ast.name(*name), false),
             vec![],
         )),
-        ItemKind::SurfaceClass { name, members, .. } => {
+        ItemKind::BuiltinTy { name, members, .. } => {
             let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
+            Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
+        }
+        ItemKind::BuiltinIface { name, methods, .. } => {
+            let children = methods
+                .iter()
+                .map(|m| method_symbol(toks, ast, *m))
+                .collect();
+            Some(sym(ast.name(*name), SymKind::Interface, find_name(toks, span, ast.name(*name), false), children))
+        }
+        ItemKind::SurfaceDataclass { name, fields, .. } => {
+            let children = member_symbols(toks, ast, fields, &[]);
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }
         ItemKind::Import { .. } | ItemKind::Module { .. } => None,

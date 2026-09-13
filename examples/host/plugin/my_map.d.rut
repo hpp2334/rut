@@ -1,35 +1,35 @@
 // plugin/my_map.d.rut — the DECLARATION FILE for "plugin:my_map".
 //
-// `host`/`extern` are .d.rut-ONLY keywords (RFC 0029): a .rut file that
-// spells either is a compile error. This file is pure surface —
-// signatures, no bodies — and compiles to a DeclIr (.d.ir cache;
-// version-locked, regenerable) plus a native slot table. rutc, the LSP,
-// and AOT builds consume it with ZERO Rust linked (the tur index.d.ts
-// role, in-language and type-checked). The Rust IMPLEMENTATION is the
-// sibling file examples/host/my_map.rs, bound by name at embedder
+// `host` is a .d.rut-ONLY keyword (RFC 0029): a .rut file that spells it
+// is a compile error. This file is pure surface — signatures, no bodies —
+// and compiles to a DeclIr (.d.ir cache; version-locked, regenerable).
+// rutc, the LSP, and AOT builds consume it with ZERO Rust linked (the tur
+// index.d.ts role, in-language and type-checked). The Rust IMPLEMENTATION
+// is the sibling file examples/host/my_map.rs, bound by name at embedder
 // startup and proven signature-equal at vm.load link.
 //
 // Import specifiers map to declaration files by path: "plugin:my_map" ->
 // plugin/my_map.d.rut. Only EXPORTED decls are nameable outside.
+//
+// There is no `host class` anymore: native state crosses as `Opaque` and
+// RUT wraps it in a class (examples/host/my-map.rut — the `Logger`
+// pattern, RFC 0028). Host fn signatures are CONCRETE over the crossing
+// set (RFC 0023 §1): primitives, str, bytes, unit, Option/Result over
+// those, Opaque — so a map's values cross as `Opaque` (the checked
+// erasure of RFC 0014; `downcast<T>` recovers them) and keys are `str`
+// (hashed host-side by content). Generic host state and admission-only
+// bounds (`K requires Hashable`) went with `host class`: what crosses is
+// exactly what the boundary can check.
 
-// Param bounds on host decls are ADMISSION-ONLY syntax (RFC 0013 §2 —
-// user generics have no bounds): they constrain which instantiations
-// compile, and grant no method calls on bare K. "Hashable" imports from
-// std:collection — whose own declaration file ships with the toolchain
-// exactly like this one.
-import { Hashable } from "std:collection";
+// the instance handle — an Opaque box holding the Rust HashMap; the
+// boxed value's Rust Drop runs when the box's rc hits 0 (RFC 0016 §5)
+pub host fn my_map_new(cap: i32) -> Opaque;
+pub host fn my_map_set(m: Opaque, k: str, v: Opaque) -> unit;
+pub host fn my_map_get(m: Opaque, k: str) -> Option<Opaque>;   // None on a miss
+pub host fn my_map_size(m: Opaque) -> i32;
 
-pub host class MyMap<K: Hashable, V> {
-    fn new(cap: i32) -> Self;              // native class method — the
-    fn set(self, k: K, v: V) -> unit;      // construction surface (RFC 0010/0025)
-    fn get(self, k: K) -> Option<V>;
-    fn size(self) -> i32;
-    fn keys(self) -> Vec<K>;             // Vec<K>, NOT Vec<Hashable>:
-}                                     // keys are unerased at the boundary
-                                      // (interface objects cannot be
-                                      // downcast — RFC 0012 §3)
 // What compiling this file produces: a slot table
-//     new -> 0, set -> 1, get -> 2, size -> 3, keys -> 4
+//     my_map_new -> 0, my_map_set -> 1, my_map_get -> 2, my_map_size -> 3
 // (declaration order; part of the decl digest). Consumer calls compile
 // to callnat { slot } — names are binding-time labels for the Rust impl,
 // never dispatch keys, never in the IR (RFC 0032).

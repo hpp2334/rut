@@ -193,23 +193,258 @@ A `.d.rut` file parses under the same grammar **plus** the surface
 declarations of RFC 0029 §2, with bodies forbidden:
 
 ```
-surfacedecl := 'host' 'fn' Ident genericparams? '(' params ')' (':' Type)? ';'
-             | 'extern' 'fn' Ident genericparams? '(' params ')' (':' Type)? ';'
-             | 'host' 'class' Ident extparams? '{' extmember* '}'
-             | 'extern' 'class' Ident extparams? '{' extmember* '}'
+surfacedecl := 'host' 'fn' Ident '(' params ')' (':' Type)? ';'
+                                                // concrete signature over
+                                                // the crossing set — a
+                                                // generic host fn errors
+             | 'host' 'dataclass' Ident '{' field* '}'
+                                                // flat record; every field
+                                                // a crossing type; no
+                                                // methods, no initializers
+             | 'builtin' 'fn' Ident genericparams? '(' params ')' (':' Type)? ';'
+             | 'builtin' Ident genericparams? '{' extmember* '}'
+             | 'builtin' 'interface' Ident genericparams? '{' extmember* '}'
+                                                // engine-woven contract:
+                                                // Disposal/Index/Iterator
 extmember   := 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
-              | ('suspend')? 'fn' Ident '(' params ')' (':' Type)? ';'
-                                            // host/extern class members:
-                                             // instance methods spell `self`; no-`self` class
-                                             // methods are the native construction surface (RFC 0025 §2)
-extparams   := '<' (Ident ('requires' Trait)? ','?)+ '>'   // bounds: `requires` form
-                                               // only — surface decls (RFC 0013 §2)
+               | ('suspend')? 'fn' Ident '(' params ')' (':' Type)? ';'
+                                             // builtin type members: instance
+                                              // methods spell `self`; no-`self`
+                                              // class methods are the
+                                              // constructors (`Option.some`,
+                                              // RFC 0025)
 ```
 
 Mode is chosen by file extension. The parser in declaration mode rejects
 any `block` with *"implementation in a declaration file"* — impl blocks
 included (no `impl` in `.d.rut`, RFC 0029 §2); in
-implementation mode it rejects `host`/`extern` with *"declaration keyword
+implementation mode it rejects `host`/`builtin` with *"declaration keyword
+in an implementation file — belongs in a `.d.rut`"* (RFC 0029 §2).
+
+## 4. The parser — explicit-stack descent, iterative precedence climbing
+
+No native recursion (C2): one loop over the token slice drives two
+mechanisms. A **frame stack** handles structure — one frame kind per
+grammar rule (`Module`, `Item`, `Block`, `TypeArgList`, `Pattern`, `Arm`,
+`Impl`, …), each holding the children it has collected so far and the token it is
+waiting for; a rule that needs a child pushes a frame, a frame that
+completes pops and hands its `NodeId` to the parent. An embedded **Pratt
+engine** handles expressions — an operator stack plus an operand stack of
+`NodeId`s; binary/assign steps push an operator, reductions pop two
+operands and push one node, bottom-up (C1). No grammar-generator, no
+left-recursion handling. Binding powers (loosest → tightest):
+
+| prec | associativity | operators |
+|---|---|---|
+| 1 | – | `=` `+=` `-=` … (assignment, right; target must be a path/index) |
+| 2 | – | `=>` lambdas — `(params)` or single-ident form; decided by the §4.2 scan *before* the Pratt loop starts, not by binding powers |
+| 3 | left | `\|\|` |
+| 4 | left | `&&` |
+| 5 | left | `==` `!=` |
+| 6 | left | `<` `>` `<=` `>=` |
+| 7 | left | `\|` `^` |
+| 8 | left | `&` |
+| 9 | left | `<<` `>>` |
+| 10 | left | `+` `-` |
+| 11 | left | `*` `/` `%` |
+| 12 | left | `as` — numeric cast `expr as T`, RHS a naming position (RFC 0007 §1) |
+| 13 | right | unary `-` `!` `~` |
+| 14 | left | postfix: `.name` `.name<..>(..)` `(..)` `[..]` `?` (`as` is level 12 — RFC 0007 §1) |
+
+Postfixes are a loop, so `p.value.x`, `arr[i].push(x)` chains compose
+without special cases.
+
+### 4.1 Lookahead audit — every local decision peeks ≤ 4 tokens
+
+rut's grammar makes this cheap: statements are keyword-led, `{` never
+starts an expression (no block-expressions; dataclass literals start
+with `Ident`), there are no tuples (RFC 0009), imports are flat, paths
+are `.`-dotted.
+
+| decision | mechanism |
+|---|---|
+| item dispatch | peek 1 (`import` `let` `enum` `dataclass` `class` `trait` `impl` `fn`) |
+| stmt vs expr-stmt | peek 1 (leading keyword: `let` `if` `while` `for` `return` `when`) |
+| `for`-of vs `for`-c | peek 4: `for ( let Ident <of or =>` |
+| instance vs class method | peek 4: `fn Ident ( <mut? self? …>` |
+| dataclass literal vs path expr | peek 2: `Ident {` ⇒ Struct literal (classes have no instance literal, RFC 0009) |
+| `when`-arm body form | peek 1 after `->` (`{` ⇒ block arm, else expr arm) |
+| postfix loop step | peek 1 (`.` `(` `[` `?`) |
+| assignment target | no lookahead — parse the expression, then validate (path/index) |
+| declaration-mode rejections | keyword-led, peek 1 (RFC 0029 §2) |
+
+The two decisions that cannot be answered in 4 tokens are scans (§4.2).
+
+### 4.2 The two scans — peek far, commit once, never guess
+
+- **Lambda vs parenthesized expression** (`(a, b) -> T => …` vs
+  `(a + b) * 2`): scan read-only to the matching `)`; it is a lambda iff
+  the tokens form a valid parameter list **and** `=>` follows (`-> Type`
+  may sit between). If not a lambda, a comma inside the parens errors
+  *at the comma* — there are no tuples (RFC 0009) — with a note: "if you
+  meant a lambda, add `=>`". (This also corrects the original design's
+  claim that one token of lookahead disambiguates call vs lambda — you
+  must see past the `)`.)
+- **Generic call vs `<` comparison** (`Vec<f32>(n)` vs `a < b > (c)`):
+  scan read-only from the `<`, tracking angle depth — a `Shr`/`Shl`
+  consumed where a closer/opener is expected counts as two (span
+  arithmetic), so `Vec<Vec<i32>>` needs no re-lexing and no glued
+  tokens. Generic arguments commit iff depth returns to 0 on a `>`
+  **and the very next token is `(`** — TypeScript's rule. `a < b > (c)`
+  is then not expressible unparenthesized: write `(a < b) > (c)`. When
+  `f<a>(b)` commits but `f` is not generic, the resolver reports it with
+  a "wrap the left side in parens" note (RFC 0031).
+
+Scans never mutate parser state: they look, answer yes/no, and the
+parser then moves forward once. Peeking at arbitrary distance is
+allowed; *guessing* — checkpoint, parse, roll back — is forbidden.
+
+### 4.3 Monotone cursor, depth budget
+
+The cursor is non-decreasing for the whole parse, recovery included;
+debug builds assert it. The token-slice checkpoint/restore of the
+original design (backtracking one token sequence to resolve
+`Vec<f32>(n)`) is **deleted** — the API does not exist, so rollback is
+unrepresentable. Depth is bounded the same way: frame-stack depth and
+the lexer's bracket depth carry budgets, and exceeding one is a normal
+`Diag` ("nesting too deep", span at the offending opener), never a host
+stack overflow (C3) — malformed or hostile source cannot crash the
+embedding process at parse time (RFC 0035 §3).
+
+### 4.4 Holes and `when` arms
+
+An `f"..."` hole's tokens (§1.1) parse as a frame whose input is the
+hole's sub-slice — the same loop, no nested parse call. `when` in
+expression position parses arms as `pattern -> expr ,` — the comma is
+required between expression arms and forbidden after block arms
+(RFC 0008 §2).
+
+## 5. AST — flat arena, ESTree-style
+
+C1 in full: nodes are plain records in one arena; children are `NodeId`s
+into it, never `Box<Expr>`. Construction is bottom-up — a node is pushed
+after its children exist (the Pratt reductions and frame pops of §4 do
+exactly that) — so drop/clone are flat `Vec` ops: no input can overflow
+the host stack through the tree itself. Spans on every node; no `String`
+keys — names are `IdentId`s into an interner, resolved later (RFC 0031
+§1). Sketch (abbreviated — the full enum is mechanical):
+
+```rust
+struct Ast { nodes: Vec<Node>, idents: Vec<IdentData>, root: NodeId }
+struct NodeId(u32);                       // index into nodes — nothing else
+struct IdentId(u32);                      // interner index
+struct Node { span: Span, kind: NodeKind }
+
+enum NodeKind {
+    // Items (§2) — children as NodeId / Vec<NodeId>:
+    Import  { names: Vec<IdentId>, from: LitId },
+    Let     { vis, name: IdentId, ty: Option<NodeId>, init: NodeId },  // module-level
+    Enum    { vis, name: IdentId, members: Vec<IdentId> },
+    Dataclass{ vis, name, generics: Vec<IdentId>,
+               fields: Vec<NodeId>, methods: Vec<NodeId> },            // RFC 0009
+    Class   { vis, name, generics,
+              members: Vec<NodeId> },
+    Trait   { vis, name, generics, requires: Vec<NodeId>,  // RFC 0012 §2
+               methods: Vec<NodeId> },
+    Impl    { trait_ref: NodeId, target: NodeId,           // RFC 0012 §2
+               methods: Vec<NodeId> },  // same module as target — the
+                                         // admission itself; covers every
+                                         // trait methsig exactly
+    Fn      { vis, is_suspend, name, generics,
+              params: Vec<NodeId>, ret: Option<NodeId>, body: NodeId },
+    SurfaceFn  { vis, linkage, name, generics, params: Vec<NodeId>, ret: NodeId },
+    SurfaceClass{ vis, linkage, name, params: Vec<NodeId>,
+                  members: Vec<NodeId> },  // linkage = Host | Extern —
+                                            // ONLY in .d.rut (RFC 0029 §2)
+    // Members & statements — same discipline:
+    FieldDecl{ is_mut, name: IdentId, ty: NodeId, init: Option<NodeId> },
+    MethodDecl{ has_self, is_mut, sig: NodeId, body: NodeId },
+               // has_self=false => class method — construction included
+               // (RFC 0010); is_mut = `mut self`: may assign fields;
+               // trait-impl members
+              // are always dynamic (RFC 0012). No is_static: absence of
+              // `self` IS the class-method case (RFC 0010 §2)
+    LetStmt { is_mut, name: IdentId, ty: Option<NodeId>, init: NodeId },
+    If{..}, While{..}, ForOf{..}, ForC{..}, Return{..}, When{..},
+    ExprStmt(NodeId),
+    // Expressions (§4):
+    Lit(Lit), Path(Vec<IdentId>),
+    Call    { callee: NodeId, generics: Vec<NodeId>, args: Vec<NodeId> },
+    Method  { recv: NodeId, name: IdentId, generics: Vec<NodeId>, args: Vec<NodeId> },
+    Field   { recv: NodeId, name: IdentId },             // field access
+    Index   { recv: NodeId, idx: NodeId },
+    Unary{..}, Binary{ op: Tok, lhs: NodeId, rhs: NodeId }, Assign{..},
+    Lambda  { params: Vec<NodeId>, ret: Option<NodeId>, body: NodeId },
+    When    { scrut: NodeId, arms: Vec<NodeId> },
+    Try     { expr: NodeId },             // postfix `?`
+    FStr    { parts: Vec<FPartAst> },     // holes are NodeIds here
+    Struct  { ty: Vec<IdentId>, fields: Vec<(IdentId, NodeId)> },  // dataclass
+                                          // literal — classes have none
+    Array   { elems: Vec<NodeId> },       // fixed-array literal: [e1..en] : Array<T, n>
+    Cast    { ty: NodeId, expr: NodeId }, // i32(x) etc. — a Call on a type
+}                                         // name, resolved to Cast (RFC 0031 §1)
+```
+
+Stable `NodeId`s are what the rest of the pipeline wants: the resolver
+keys its side tables by `NodeId` (RFC 0031 §1 walks the arena), diag
+labels reach spans through them (§6), and symbolication / LSP / formatter
+hooks (§7, RFC 0036) hold stable, copyable references — no reparenting,
+no `Box` juggling.
+
+Note what the AST **does not contain**: no `new`, `switch`/`case`,
+`?.`/`??` — the lexer errors on these reserved words with a "rut does not
+have X; use Y" message (RFC 0002 §4, §6 here).
+
+## 6. Diagnostics
+
+```rust
+struct Diag { span: Span, msg: String,
+              labels: Vec<(Span, String)>, notes: Vec<String>, fatal: bool }
+```
+
+- One renderer for lexer/parser/resolver/typecheck (RFC 0031): caret spans,
+  a primary message, optional secondary labels, optional notes; unit-tested
+  against golden files (`tests/diagnostics/*.txt`).
+- **Recovery**: within a file, the parser resyncs at `;`, `}`, or the token
+  after a balanced block, and keeps parsing — a file yields many diags, not
+  one. Resync only ever skips *forward* — the §4.3 monotone-cursor
+  invariant survives errors. Compilation stops before IR if any diag exists.
+- Suggestions: `did you mean \`when\`?` for `switch`/`match`; "bind it to a
+  name first" for str literals in `f"..."` holes; "classes have no
+  instance literal — use \`Circle(..)\`" for `Circle { .. }` on a class.
+
+## 7. Testing & tooling hooks
+
+- The lexer and parser are pure functions (`&str -> (Vec<Token>, Vec<Diag>)`,
+  `&[Token] -> (Ast, Vec<Diag>)`) — fuzzable, usable in an LSP or formatter
+  without a VM.
+- Parser invariants, tested: the cursor is monotone (debug assert —
+  the parser never backtracks, so rollback is unrepresentable) and the
+  depth budgets fire as Diags — the corpus includes 100k-deep `((((`,
+  `[[[[`, `{{{{`, unary chains, and nested generic args, each yielding one
+  clean "nesting too deep" diag; fuzz targets assert no host stack overflow
+  and no rollback.
+- Round-trip invariant: `parse(pretty(ast)) == ast` (formatter) and
+  `examples/**/*.rut` parse with zero diags — the corpus *is* the parser's
+  conformance suite (declaration mode: `examples/**/*.d.rut`).
+- Comments and blank lines are dropped from the AST (doc comments kept on
+  declarations); formatting fidelity is the formatter's job, not the AST's.
+
+## Open questions
+
+- OQ-1: trailing commas — allowed in argument lists and dataclass literals?
+  Proposed: allowed everywhere a comma list exists.
+- OQ-2: attributes (`@inline`, `@repr(align)`) — `At` is lexed but
+  unclaimed; park the token until a real need exists. Decorators for
+  reflection policy are **rejected for v1** — reflection runs on the
+  module's impl blocks (RFC 0037).
+- OQ-3: the depth budget value (C3). Proposed: a single NEST_MAX = 1024
+  shared by parser frame depth and lexer bracket depth — deep enough for
+  generated code, shallow enough that exceeding it is pathological.
+- OQ-4: a lint for generic-scan near-misses (§4.2): source shaped like
+  `a < b > (c)` parses as comparisons; the lint would suggest parens
+  when the trailing `(c)` makes the comparison-chain reading suspicious.
+
 in an implementation file — belongs in a `.d.rut`"* (RFC 0029 §2).
 
 ## 4. The parser — explicit-stack descent, iterative precedence climbing

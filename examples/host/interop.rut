@@ -1,19 +1,35 @@
-// RFC 0022–0028 — host & FFI: host-class handles, zero-copy buffer
-// borrows, and Template (structured f"...", for l10n).
-// The host side of this module is sketched in RFC 0022–0028. Native
-// surfaces are DECLARED in rut-source declaration files (RFC 0025) —
-// app/gfx.d.rut declares Canvas, newCanvas, and Source below; the Rust
-// bodies bind by name at embedder startup.
+// RFC 0022–0028 — host & FFI: host-fn handles, zero-copy buffer borrows,
+// and Template (structured f"...", for l10n). Native surfaces are
+// DECLARED in rut-source declaration files (RFC 0025) — app/gfx.d.rut
+// declares the host fns below; the Rust bodies bind by name at embedder
+// startup.
+//
+// There is no `host class` Canvas to import: the handle crosses as
+// `Opaque` and the WRAPPER CLASS below gives it its name and methods
+// (the `Logger` pattern, RFC 0028). What used to be a generic host
+// class (`Source<T>`) is now a plain host fn returning the value —
+// types that cross are exactly the crossing set (RFC 0023 §1).
 
-import { Canvas, newCanvas, Source } from "app:gfx";  // declaration file
-import { log_l10n } from "app:log";                // host fn log_l10n(t: Template): unit
+import { Opaque } from "std:core";
+import { newCanvas, canvas_circle, canvas_hits, canvas_flush } from "app:gfx";
+import { log_l10n } from "app:log";   // host fn log_l10n(t: Template): unit
 import { Logger } from "std:log";
 
 // app/gfx.d.rut (the declaration file) contains, among others:
-//     pub host class Source<T> {  // instantiation identity KEPT:
-//         fn get(): T;               // Source<i32> != Source<str>
-//     }
-// — declared for typing; built and implemented entirely host-side.
+//     pub host fn newCanvas() -> Opaque;
+//     pub host fn canvas_circle(c: Opaque, x: f32, y: f32, r: f32) -> unit;
+//     pub host fn canvas_hits(c: Opaque) -> i32;         // was Source<i32>.get()
+//     pub host fn canvas_flush(c: Opaque) -> unit;
+// — declared for typing; implemented entirely host-side.
+
+// the wrapper: one Opaque field, one host fn per method
+class Canvas {
+    h: Opaque;
+
+    fn circle(mut self, x: f32, y: f32, r: f32) -> unit { canvas_circle(self.h, x, y, r); }
+    fn hits(self) -> i32 { return canvas_hits(self.h); }
+    fn flush(mut self) -> unit { canvas_flush(self.h); }
+}
 
 fn localized(count: i32, user: str) -> unit {
     // The SAME literal that would concat to a string builds a structured
@@ -24,10 +40,11 @@ fn localized(count: i32, user: str) -> unit {
 
 pub fn main() -> unit {
     let log = Logger.new("interop");
-    let c = newCanvas();                         // host constructs the handle
+    let c = Canvas { h: newCanvas() };        // host constructs the handle
 
-    let hits: Source<i32> = c.hit_source();
-    log.info(f"hits={hits.get()}");                // checked: Source<i32>.get(): i32
+    c.circle(100.0, 100.0, 42.0);
+    log.info(f"hits={c.hits()}");               // checked: i32 comes back
 
     localized(3, "ada");
-}   // c's rc hits 0 -> the host's Canvas::drop runs NOW (deterministic)
+    c.flush();
+}   // c's rc hits 0 -> the boxed host value's Drop runs NOW (deterministic)

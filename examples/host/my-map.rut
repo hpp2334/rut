@@ -1,102 +1,68 @@
-// RFC 0025/0026 — an EMBEDDER-DEFINED native module in use.
+// RFC 0023/0025 — an EMBEDDER-DEFINED native module in use.
 //
-// rut sees ONLY THE DECLARATION of MyMap: `pub host class MyMap<
-// K: Hashable, V> { .. }` — signatures, no bodies — in the declaration
-// file examples/host/plugin/my_map.d.rut (`.d.rut` is the only place
-// `host` may appear, RFC 0029). The Rust IMPLEMENTATION is the sibling
-// file examples/host/my_map.rs, bound by name at embedder startup and
-// proven signature-equal at vm.load link. `rutc check` of THIS file runs
-// with no implementation (no Rust at all) present; referencing MyMap
-// with none bound fails at link, not mysteriously later. std:collection's
-// Map<K,V>/Set<T> ride this same machinery (RFC 0005, resolved —
-// RFC 0028): containers are library types — declaration files + Rust
-// bodies — not VM builtins.
+// rut sees ONLY THE DECLARATION of plugin:my_map (the host fns in
+// examples/host/plugin/my_map.d.rut — `.d.rut` is the only place `host`
+// may appear, RFC 0029). The Rust IMPLEMENTATION is the sibling file
+// examples/host/my_map.rs, bound by name at embedder startup and proven
+// signature-equal at vm.load link. `rutc check` of THIS file runs with
+// no implementation (no Rust at all) present; referencing a fn with none
+// bound fails at link, not mysteriously later.
 //
-// Boundary crossings in this file: the class type itself (first use of
-// MyMap<A, B> reifies the instantiation and builds its method table),
-// the native class method (construction), every method call (callnat by slot —
-// names never dispatch, RFC 0032), and Option/Vec values flowing
-// back out.
+// There is no `host class` to import: native state crosses as `Opaque`
+// and the WRAPPER CLASS below gives it back its name, its methods, and
+// its impl blocks (the `Logger` pattern, RFC 0028). Every method body is
+// one host fn call — the same single crossing a host-class method would
+// have paid — and the wrapper is ordinary rut: auditable, optimizable
+// around the calls, and free to grow helpers the host never ships.
 
 import { Opaque, downcast } from "std:core";
-import { MyMap } from "plugin:my_map";                // resolves to the .d.rut
-import { Hashable } from "std:collection";            // declaration file: the
-import { Canvas, newCanvas } from "app:gfx";          // constraint interface
+import { my_map_new, my_map_set, my_map_get, my_map_size } from "plugin:my_map";
+import { Canvas, newCanvas } from "app:gfx";
 import { Logger } from "std:log";
 
-// A DATACLASS key (RFC 0009): an all-public, literal-constructed
-// record — with impl blocks, because dataclasses implement traits.
-// Its limits, exhaustively: no `pub` on fields, no hidden
-// members, no class methods, no `Disposal`.
-dataclass Name {                        // hash + eq: ONE contract (RFC 0028) —
-    first: str;                      // the value-keyed Map/Set key interface
-    last: str;
+// The wrapper: one Opaque field, one host fn per method. Construction is
+// a class method (RFC 0010 §1) — `Self { .. }` over the host's handle.
+class MyMap {
+    h: Opaque;                              // the Rust HashMap, boxed
+
+    fn new(cap: i32) -> Self { return Self { h: my_map_new(cap) }; }
+    fn set(mut self, k: str, v: Opaque) -> unit { my_map_set(self.h, k, v); }
+    fn get(self, k: str) -> Option<Opaque> { return my_map_get(self.h, k); }
+    fn size(self) -> i32 { return my_map_size(self.h); }
 }
-
-impl Hashable for Name {
-    fn hash(self) -> u64 {                             // demo hash (length mix);
-        return (self.first.len()) as u64 * 1000003      // real impls mix bytes
-             + (self.last.len()) as u64;
-    }
-
-    fn eq(self, other: Name) -> bool {                 // field-wise equality —
-        return other.first == self.first            // what the map compares
-            && other.last == self.last;             // keys with after a hash
-    }                                                // hit (`==` itself is
-}                                                    // identity — RFC 0012 §4)
 
 pub fn main() -> unit {
     let log = Logger.new("my-map");
 
-    // K = str: satisfies Hashable via a REGISTERED builtin impl —
-    // no user code needed. Construction is a METHOD CALL on the
-    // instantiated host class: MyMap<str, i32>.new(32) reifies the
-    // instantiation and runs its native class method with a capacity
-    // hint (RFC 0026 §3).
-    let counts: MyMap<str, i32> = MyMap<str, i32>.new(32);
-
+    // str keys hash by content host-side (a registered builtin impl —
+    // no user code needed). Values cross as Opaque: RFC 0014's checked
+    // erasure is the value story now that generic host state is gone —
+    // set/get just move the boxes, `downcast<T>` recovers them typed.
+    let counts = MyMap.new(32);
     for (let i = 0; i < 20; i += 1) {
         let k = f"key-{i % 7}";                  // 7 distinct keys
-        counts.set(k, counts.get(k).unwrap_or(0) + 1);
+        let prev = counts.get(k).unwrap_or(Opaque.new(0));
+        let n = downcast<i32>(prev).unwrap_or(0) + 1;
+        counts.set(k, Opaque.new(n));
     }
-    let hits = counts.get("key-3").unwrap_or(-1); // native get returns
-    log.info(f"size={counts.size()} key-3={hits}"); // rut's builtin Option
-
-    // K = a DATACLASS: satisfies Hashable because `impl Hashable for
-    // Name` exists in this module. The map's hashing calls back into
-    // THIS hash() and eq()
-    // — rut code reached through the interface-object vtable (re-entrant VM
-    // call, borrow-guarded).
-    let roster: MyMap<Name, i32> = MyMap<Name, i32>.new(4);
-    roster.set(Name { first: "ada", last: "lovelace" }, 1);
-    roster.set(Name { first: "grace", last: "hopper" }, 2);
-    log.info(f"roster size={roster.size()}");
-
-    // K = a class with no impl — rejected at COMPILE (IR) time against
-    // the host-class DECLARATION (plugin/my_map.d.rut); the verifier
-    // re-checks at load:
-    //
-    // let bad = MyMap<Canvas, i32>.new(4);
-    //                    ^^^^^^ error: no `impl Hashable for Canvas`
-    //                    — required by MyMap's K
-    //                    (satisfiable by: impl Hashable for Canvas, or a
-    //                    registered builtin/struct impl)
-
-    // V = Opaque: a SECOND instantiation (own TypeId) storing values rut
-    // cannot see inside. Native set/get just move the boxes — the Rust
-    // side never inspects them; downcast<Canvas> recovers on OUR side.
-    let surfaces: MyMap<str, Opaque> = MyMap<str, Opaque>.new(4);
-    surfaces.set("hud", Opaque.new(newCanvas()));
+    let hits = downcast<i32>(counts.get("key-3").unwrap_or(Opaque.new(-1))).unwrap_or(-1);
+    log.info(f"size={counts.size()} key-3={hits}");  // native get returns
+                                                    // rut's builtin Option
+    // A value of a HOST type rides just as well: box the Canvas handle
+    // (it is already an Opaque), fish it back, downcast on OUR side.
+    let surfaces = MyMap.new(4);
+    surfaces.set("hud", newCanvas());
     let hud = downcast<Canvas>(surfaces.get("hud").expect("hud present"));
     if (hud.is_some()) {
         hud.value.circle(10, 10, 5);               // back in typed host API
     }
 
-    // counts.keys() -> Vec<str> (K is preserved, not erased to
-    // Hashable — built host-side from the instantiation's K Ty, each
-    // key unerased to its natural value); the loop itself is pure rut.
-    for (let k of counts.keys()) {
-        log.debug(f"{k} -> {counts.get(k).unwrap_or(0)}");
-    }
-}   // MyMap's Rust Drop releases the boxed values; each Canvas's Rust Drop
-    // runs at its rc-0 — deterministic, never "at GC someday" (RFC 0025)
+    // What the wrapper cannot give back (the honest cost of no host
+    // class): admission-only bounds — `MyMap<Canvas, ..>` once failed at
+    // COMPILE against `K requires Hashable`; any Opaque fits anywhere
+    // now, and wrong downcasts yield None (checked, never a trap).
+    // Keys are str: a dataclass key would need an explicit Opaque wrap
+    // and a host-side hash with no `Hashable` contract to call back
+    // into (the vtable re-entry story left with host class generics).
+}   // the Opaque boxes' rc hit 0 here — each boxed value's Rust Drop
+    // runs NOW, deterministic, never "at GC someday" (RFC 0016 §3/§5)

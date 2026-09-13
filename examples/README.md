@@ -46,11 +46,11 @@ else on this page is parse-only.
 | `network/http-fetch.rut` | async client, `Result` at API boundaries | 0018 |
 | `network/echo-server.rut` | accept loop + worker pool dispatch | 0021 |
 | `network/echo-worker.rut` | per-connection serving in an isolate | 0021 |
-| `host/interop.rut` | host classes via declaration files, zero-copy buffer borrows, `Template` for l10n | 0022–0028 |
-| `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `pub host class MyMap<K: Hashable, V>`, slot table, admission-only param bounds | 0025, 0029 |
-| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: erased `RutValue`/`TraitHandle` storage, reified instantiations, `.implement` binding checked at link, dataclass key, `Opaque` values, native `Option`/`Vec` returns | 0026 |
-| `host/plugin/batch.d.rut` | **declaration file** for `plugin:batch`: `pub host class Batch` + `pub host fn submit(b: Batch) -> str` — a host callback whose parameter type **is** the host class | 0022, 0025, 0029 |
-| `host/batch.rut` + `host/batch.rs` | the **round trip**: host constructs a `Batch`, rut filters/aggregates/pushes, then passes the instance BACK via the `submit` callback — `Handle<Batch>` call-scoped borrow in, receipt `str` out; deterministic Drop at rc 0 | 0022–0026, 0023 |
+| `host/interop.rut` | host fns via declaration files, an `Opaque`-handle wrapper class, zero-copy buffer borrows, `Template` for l10n | 0022–0028 |
+| `host/plugin/my_map.d.rut` | **declaration file** for `plugin:my_map`: `pub host fn` surface over `Opaque` handles — concrete signatures, crossing set (RFC 0023 §1), slot table | 0025, 0029 |
+| `host/my-map.rut` + `host/my_map.rs` | the consumer + Rust **implementation** of the same declaration: the wrapper `class MyMap` over `Opaque` (the `Logger` pattern), `str` keys hashed host-side, `Option<Opaque>` returns, `downcast<T>` recovery | 0025, 0026 |
+| `host/plugin/batch.d.rut` | **declaration file** for `plugin:batch`: `batch_new/push/len` + `pub host fn submit(b: Opaque) -> str` — a host callback whose parameter is the same handle the wrapper holds | 0022, 0025, 0029 |
+| `host/batch.rut` + `host/batch.rs` | the **round trip**: host constructs a `Batch` box, rut filters/aggregates/pushes through the wrapper class, then passes the handle BACK via the `submit` callback — call-scoped borrow in, receipt `str` out; deterministic Drop at rc 0 | 0022, 0023, 0025 |
 | `gui/dashboard/reactive.rut` | tur's `state`/`source`/`derive`/`mutation`/`watch`/`Store` in **user** rut, on `Opaque` | 0014 |
 | `gui/dashboard/main.rut` | end-to-end app: declare graph, watch→render, bootstrap sources, live loop + worker | 0021 |
 

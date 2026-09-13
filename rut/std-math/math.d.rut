@@ -1,12 +1,16 @@
 // std/math.d.rut — `std:math`, the `Math` namespace (RFC 0028). The float
-// members are host functions (`rt:`-backed, `f64`); the integer members are
-// compiler-lowered intrinsics, generic over every integer width (RFC 0032
-// §1.1 R2). The class carries no `self` members: `fn f(x) -> y` without
-// `self` IS a class method (RFC 0010 §2).
+// members are host functions (`rt:`-backed, `f64`, bodies in `rut-std`);
+// the integer members are compiler-lowered intrinsics, generic over
+// every integer width (RFC 0032 §1.1 R2). No `host class` namespace
+// fiction: these are the module's own functions, reached qualified —
 //
 //   import { Math } from "std:math";
 //   let d = Math.sqrt(x * x + y * y);
 //   let wrapped = Math.wrapping_mul(x, 1103515245);
+//
+// `builtin` here is the same engine linkage as std:core's own/downcast:
+// compiler-lowered, nothing to register — std decl files only, never an
+// embedder surface.
 //
 // Constants (f64, compiler-materialized — the surface grammar has no
 // `static` field form):
@@ -18,45 +22,45 @@
 // — signatures match rut-lir's lowering tables, never aspirational. The
 // integer members are shown at `i32`; the implementation is width-generic.
 
-pub host class Math {
-    // ---- f64 host functions ----
-    fn sqrt(x: f64) -> f64;
-    fn floor(x: f64) -> f64;
-    fn ceil(x: f64) -> f64;
-    fn round(x: f64) -> f64;
-    fn trunc(x: f64) -> f64;
-    fn exp(x: f64) -> f64;
-    fn ln(x: f64) -> f64;
-    fn log2(x: f64) -> f64;
-    fn log10(x: f64) -> f64;
-    fn sin(x: f64) -> f64;
-    fn cos(x: f64) -> f64;
-    fn tan(x: f64) -> f64;
-    fn asin(x: f64) -> f64;
-    fn acos(x: f64) -> f64;
-    fn atan(x: f64) -> f64;
-    fn sinh(x: f64) -> f64;
-    fn cosh(x: f64) -> f64;
-    fn tanh(x: f64) -> f64;
-    fn pow(x: f64, y: f64) -> f64;
-    fn atan2(y: f64, x: f64) -> f64;
-    fn hypot(x: f64, y: f64) -> f64;
-    fn copysign(x: f64, y: f64) -> f64;
-    fn fma(x: f64, y: f64, z: f64) -> f64;
+// ---- f64 host functions (the embedding Rust implements them) ----
 
-    // ---- integer intrinsics (compiler-lowered; width-generic) ----
-    fn wrapping_add(x: i32, y: i32) -> i32;
-    fn wrapping_sub(x: i32, y: i32) -> i32;
-    fn wrapping_mul(x: i32, y: i32) -> i32;
-    fn wrapping_shl(x: i32, n: i32) -> i32;
-    fn saturating_add(x: i32, y: i32) -> i32;
-    fn saturating_sub(x: i32, y: i32) -> i32;
-    fn saturating_mul(x: i32, y: i32) -> i32;
-    fn checked_add(x: i32, y: i32) -> Option<i32>;
-    fn checked_sub(x: i32, y: i32) -> Option<i32>;
-    fn checked_mul(x: i32, y: i32) -> Option<i32>;
-    fn abs(x: i32) -> i32;
-    fn min(x: i32, y: i32) -> i32;
-    fn max(x: i32, y: i32) -> i32;
-    fn signum(x: i32) -> i32;
-}
+pub host fn sqrt(x: f64) -> f64;
+pub host fn floor(x: f64) -> f64;
+pub host fn ceil(x: f64) -> f64;
+pub host fn round(x: f64) -> f64;
+pub host fn trunc(x: f64) -> f64;
+pub host fn exp(x: f64) -> f64;
+pub host fn ln(x: f64) -> f64;
+pub host fn log2(x: f64) -> f64;
+pub host fn log10(x: f64) -> f64;
+pub host fn sin(x: f64) -> f64;
+pub host fn cos(x: f64) -> f64;
+pub host fn tan(x: f64) -> f64;
+pub host fn asin(x: f64) -> f64;
+pub host fn acos(x: f64) -> f64;
+pub host fn atan(x: f64) -> f64;
+pub host fn sinh(x: f64) -> f64;
+pub host fn cosh(x: f64) -> f64;
+pub host fn tanh(x: f64) -> f64;
+pub host fn pow(x: f64, y: f64) -> f64;
+pub host fn atan2(y: f64, x: f64) -> f64;
+pub host fn hypot(x: f64, y: f64) -> f64;
+pub host fn copysign(x: f64, y: f64) -> f64;
+pub host fn fma(x: f64, y: f64, z: f64) -> f64;
+
+// ---- integer intrinsics (compiler-lowered; width-generic) ----
+
+pub builtin fn wrapping_add(x: i32, y: i32) -> i32;
+pub builtin fn wrapping_sub(x: i32, y: i32) -> i32;
+pub builtin fn wrapping_mul(x: i32, y: i32) -> i32;
+pub builtin fn wrapping_shl(x: i32, n: i32) -> i32;
+pub builtin fn saturating_add(x: i32, y: i32) -> i32;
+pub builtin fn saturating_sub(x: i32, y: i32) -> i32;
+pub builtin fn saturating_mul(x: i32, y: i32) -> i32;
+pub builtin fn checked_add(x: i32, y: i32) -> Option<i32>;
+pub builtin fn checked_sub(x: i32, y: i32) -> Option<i32>;
+pub builtin fn checked_mul(x: i32, y: i32) -> Option<i32>;
+pub builtin fn abs(x: i32) -> i32;
+pub builtin fn min(x: i32, y: i32) -> i32;
+pub builtin fn max(x: i32, y: i32) -> i32;
+pub builtin fn signum(x: i32) -> i32;

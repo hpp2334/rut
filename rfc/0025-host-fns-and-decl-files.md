@@ -1,0 +1,151 @@
+# RFC 0025: Host Fns, Host Dataclasses & Declaration Files
+
+- **Status:** Draft (revised — **supersedes the `host class` design**)
+- **Date:** 2026-09-13
+- **Author:** hpp2334
+- **Depends on:** RFC 0022 (embedding), RFC 0023 §1 (the crossing rule),
+  RFC 0029 (declaration files), RFC 0014 (`Opaque`), RFC 0010 §2 (class
+  methods), RFC 0016 §3/§5 (Drop mapping, host boxes)
+- **Supersedes:** RFC 0005 §5 (pre-restructure), and this RFC's own
+  earlier draft: `host class` / `extern class` / `extern fn` are
+  **removed**; `host primitive` (removed earlier) stays removed
+- **Part:** E — Host & FFI
+
+## Summary
+
+Native surfaces are declared **in rut source** — *declaration files*
+(`.d.rut`) whose declarations are pure surface (signatures, no bodies).
+The specifier maps to a declaration file (`"app:gfx"` → `app/gfx.d.rut`,
+`"plugin:my_map"` → `plugin/my_map.d.rut`): compiled and verified like
+any module, generating no code of its own. rutc, the LSP, and AOT binary
+builds see the surface with **zero Rust linked** — the role tur's
+`index.d.ts` plays today, but in-language and type-checked.
+
+One linkage keyword, one implementer:
+
+| keyword | implementation lives in | bound at link against |
+|---|---|---|
+| `host fn` / `host dataclass` | the **embedding Rust** — a registered `NativeModule` | the fn-table reflection |
+| `builtin` / `builtin fn` / `builtin interface` | **the engine itself** — compiler-lowered (ops / intrinsics / lowering hooks); the toolchain's std decl files only | nothing to bind; the decl is a pure signature contract |
+
+`extern` is gone: rut→rut imports resolve through the module loader
+(RFC 0029 §5) and host→rut entry points are `entry fn` (RFC 0035 §3) —
+`host` is the one foreign-body case left.
+
+```rut
+// app/gfx.d.rut — declaration file for "app:gfx"
+pub host fn newCanvas() -> Opaque;            // the handle mints the box
+pub host fn canvas_circle(c: Opaque, x: f32, y: f32, r: f32) -> unit;
+pub host fn canvas_hits(c: Opaque) -> i32;
+pub host fn canvas_flush(c: Opaque) -> unit;
+pub host fn hit_test(c: Opaque, x: f32, y: f32) -> Option<f32>;
+```
+
+**There is no `host class`.** Native state crosses as an `Opaque` box
+(RFC 0014, RFC 0016 §5) and rut wraps it in a class of its own — the
+`Logger` pattern (RFC 0028), now the canonical native API shape:
+
+```rut
+// app side (or the consumer's own module): ordinary rut source
+class Canvas {
+    h: Opaque;
+    fn circle(mut self, x: f32, y: f32, r: f32) -> unit { canvas_circle(self.h, x, y, r); }
+    fn hits(self) -> i32 { return canvas_hits(self.h); }
+    fn flush(mut self) -> unit { canvas_flush(self.h); }
+}
+```
+
+The wrapper is ordinary rut: methods and impl blocks live there
+(`impl Hashable for Canvas` in the wrapper's own module is legal,
+RFC 0012 §2), bodies are auditable source the compiler can optimize
+*around*, and every method costs exactly one host fn call — the same
+single crossing a host-class method would have paid.
+
+## Why `host class` went (the decision record)
+
+- **The boundary stays small and fast.** Everything a host fn sees is a
+  scalar, an immutable buffer (`str`/`bytes`), a sum of those, or an
+  `Opaque` handle — never a user cell layout, never a borrow-guarded
+  user structure, never a vtable the host reaches back through. The
+  crossing rule (RFC 0023 §1) is a compile-time property of the surface
+  again, and marshaling is a fixed constant per argument.
+- **Data accessors are ops, capability objects are host fns.** Members
+  of the builtin containers are compiler-lowered (`OptSome`, `SumIs`,
+  …, RFC 0032 §1.1) — fold/CSE-able. A native call blocks all of that;
+  keeping data out of the native surface is the performance rule.
+- **One nominal fiction fewer.** `host class` was a second class system
+  (slots, ClassTables, instantiation builders, erased-storage generics)
+  duplicating what rut classes + `Opaque` already do; `std:math`'s
+  `Math` was a namespace fiction over it. The wrapper class gives back
+  the name, the methods, and the impl blocks with zero new machinery.
+- **What is honestly lost:** admission-only bounds on native
+  instantiations (`MyMap<Canvas, ..>` was a compile error; now any
+  `Opaque` fits and `downcast` yields `None` on mismatch — checked,
+  never a trap), per-instantiation type identity across the boundary,
+  and native trait-object keys (`Hashable` vtable re-entry). Str keys
+  hash host-side by content (a registered builtin impl); dataclass keys
+  are the rut-side wrapper's business.
+
+## The surface grammar (RFC 0030 §3)
+
+```rut
+host fn name(params) -> T;          // concrete signature; generics are a
+                                    // compile error — a generic parameter
+                                    // has no shape the boundary checks
+host dataclass Name { fields }      // flat record; every field a
+                                    // crossing type; no methods, no
+                                    // field initializers — the host
+                                    // constructs and reads it through
+                                    // the field table (the shape IS the
+                                    // whole surface)
+builtin fn name<T>(params) -> T;    // engine fn, compiler-lowered
+builtin Name<T> { methods }         // engine type member contract
+builtin interface Name<T> { .. }    // engine-woven contract
+```
+
+- **`host fn` signatures are concrete** over the crossing set: unit,
+  primitives, `str`, `bytes`, `Option`/`Result` over crossable types,
+  `Opaque` — and `host dataclass` records whose fields are all
+  crossable. Everything else (dataclass cells, user classes, `Vec`,
+  `dyn`, closures) stays inside the VM; violating shapes are compile
+  errors on the declaration.
+- **`builtin` is the engine's own surface**, spelled in the toolchain's
+  decl files only (`std:core`, `std:math`): the builtin containers
+  (`Array`/`Option`/`Result`/`Opaque`), the engine-lowered prelude fns
+  (`own`, `downcast`, `assert`, `panic`, the `str`/`bytes` natives —
+  all of `std:core`'s functions; the prelude registers **no** host
+  bodies), and the **engine-woven interfaces** (`Disposal`, `Index`,
+  `Iterator`) — contracts the engine has built-in knowledge of
+  (compiler-backed impls, lowering hooks for `x[i]`, `for (x of it)`,
+  rc-0 disposal). Users implement those with ordinary `impl` blocks:
+  `builtin interface` is the engine's reservation, not an access rule.
+  Library contracts without engine knowledge (`Hashable`,
+  `std:collection`) stay plain `interface`. No embedder decl may spell
+  `builtin` — a `builtin` outside the mounted std surface is a compile
+  error. The decl is a pure signature contract (users and the LSP see
+  every member); there is nothing to register and no slots.
+- **Methods dispatch by slot, not name.** Compiling the declaration
+  file assigns every host fn a stable slot id (declaration order); the
+  module binary carries the slot table. Calls compile to `callnat
+  { slot }` (RFC 0032) — names are binding-time labels for the binding
+  side only, never dispatch keys, never in IR.
+- **Visibility**: declaration files are ordinary modules — RFC 0003 §2
+  applies. Non-exported declarations are *known* inside the module
+  (callable via their slots) but *nameable* nowhere else.
+- **Destructors map to Drop**: the host value lives in the `Opaque` box;
+  when its rc hits 0, the Rust `Drop` runs at that point (RFC 0016 §3) —
+  textures, sockets, and files release deterministically, never "at GC
+  someday".
+- **Workers**: an `Opaque` box may cross isolates only if the host
+  registered the boxed type `send` (RFC 0021 §2) — checked at the
+  transfer, by `TypeId`.
+
+## Open questions
+
+- OQ-1: should `rutc` grow a lint that a wrapper class's `h: Opaque`
+  field flows only into one native module's fns (a soft stand-in for
+  the lost nominal identity)?
+- OQ-2: slot stability across compiler versions — recompiling a
+  declaration file must agree with an already-registered impl; the decl
+  digest (RFC 0033 §1) covers slots, so disagreement fails link — but is
+  renumbering allowed at all across binary versions?

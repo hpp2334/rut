@@ -198,7 +198,8 @@ truncating, RHS a naming position restricted to the numeric primitives
 - Numeric conversions are the one cast: `expr as T` (RFC 0007 §1) —
   its RHS is a naming position, so types stay out of operand position
   otherwise. Enum and erasure conversions remain named type-calls:
-  **`Opaque(v): Opaque`** (RFC 0014), a host-class type-call — there is
+  **`Opaque(v): Opaque`** (RFC 0014), the erasure builtin's class
+  method — there is
   no `as` for anything but the numeric primitives.
 
 ## 4. Equality — `==` is builtin: value for primitives, identity for cells

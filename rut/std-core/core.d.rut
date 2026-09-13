@@ -1,53 +1,54 @@
 // std/core.d.rut — the prelude surface (RFC 0028): what the language
-// itself ships — the `str`/`bytes` primitives' natives, the builtin
-// `Array`/`Option`/`Result` containers (RFC 0005), and the builtin
-// `Disposal` interface. `Vec<T>` is NOT here: it is std-lib rut code in
-// `std:collection`, over `Array<T>` with an `impl Iter for Vec<T>`.
+// itself ships — the `str`/`bytes` fns, the engine builtins `Array`/
+// `Option`/`Result`/`Opaque` (RFC 0005, RFC 0014), and the engine-woven
+// interfaces `Disposal`/`Index`/`Iterator`.
 //
-// This file is the declarative form of the host's builtin tables: every
-// member here is a statically bound native (RFC 0032 §1.1 R2 — named
-// things are natives, never ops). The LSP consumes it today for hover
-// and signature display; rutc consumes it the same way `host class`
-// decls are consumed (RFC 0029) when the module loader lands (RFC 0035).
-//
-// Contract: declare a member here as its native lands — the surface is
-// kept TRUE to the implementation (signatures match rut-lir's builtin
-// tables), never aspirational. Type-calls spelled with the type name
-// (`x as i32` casts — RFC 0007) are syntax, not members.
+// One surface kind in this file: `builtin` — the ENGINE implements it,
+// compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1). std:core
+// registers no host bodies at all; `host fn` is exclusively the
+// EMBEDDER'S surface (a registered NativeModule, RFC 0025). The decls
+// exist so users and the LSP see every signature — the lockstep test
+// keeps them true to rut-lir's lowering tables.
 //
 // The prelude is IMPORTED, never ambient (RFC 0028): nothing here is in
 // scope until a module writes `import { .. } from "std:core"`. The
 // compiler's copy of this surface is `rut_core::binary::Surface::core`;
-// a driver test asserts the two stay in lockstep.
+// a driver test asserts the two stay in lockstep. Type-calls spelled
+// with the type name (`x as i32` casts — RFC 0007) are syntax, not
+// members.
+
+// ---- engine functions (compiler-lowered) ----
 
 // RFC 0011 §1 — the eager shallow copy: a fresh cell, handle fields
 // shared. The generic parameter is inferred from the argument.
-pub host fn own<T>(x: T) -> T;
+pub builtin fn own<T>(x: T) -> T;
 
 // RFC 0014 — recover the concrete value from an erasure box: a type
 // test plus a guarded unbox, yielding `Option<T>` (None on a mismatch).
-pub host fn downcast<T>(o: Opaque) -> Option<T>;
+pub builtin fn downcast<T>(o: Opaque) -> Option<T>;
 
 // RFC 0034 §2 — `msg` is optional at the call site (1 or 2 arguments).
-pub host fn assert(cond: bool, msg: str) -> unit;
+pub builtin fn assert(cond: bool, msg: str) -> unit;
 
 // RFC 0034 §2 — abort with the message.
-pub host fn panic(msg: str) -> unit;
+pub builtin fn panic(msg: str) -> unit;
 
-pub host fn string_len(s: str) -> i32;       // number of chars
-pub host fn string_encode(s: str) -> bytes;  // UTF-8 -> bytes (RFC 0004)
-pub host fn string_join(parts: Array<str>) -> str;  // join in one pass (RFC 0007)
+pub builtin fn string_len(s: str) -> i32;       // number of chars
+pub builtin fn string_encode(s: str) -> bytes;  // UTF-8 -> bytes (RFC 0004)
+pub builtin fn string_join(parts: Array<str>) -> str;  // join in one pass (RFC 0007)
 
-pub host fn bytes_len(b: bytes) -> i32;
-pub host fn bytes_decode(b: bytes) -> str;   // bytes -> UTF-8 string (lossy)
-pub host fn bytes_from(a: Array<u8>) -> bytes;  // copy an Array<u8> (RFC 0004)
-pub host fn bytes_zeroed(n: i32) -> bytes;      // n zeroed octets
+pub builtin fn bytes_len(b: bytes) -> i32;
+pub builtin fn bytes_decode(b: bytes) -> str;   // bytes -> UTF-8 string (lossy)
+pub builtin fn bytes_from(a: Array<u8>) -> bytes;  // copy an Array<u8> (RFC 0004)
+pub builtin fn bytes_zeroed(n: i32) -> bytes;      // n zeroed octets
 
-pub host class Array<T> {
+// ---- engine builtin types (compiler-lowered members) ----
+
+pub builtin Array<T> {
     fn len(self) -> i32;                    // the heap array's runtime length
 }
 
-pub host class Option<T> {
+pub builtin Option<T> {
     fn some(v: T) -> Self;
     fn none() -> Self;                      // element inferred from the binding's annotation
     fn is_some(self) -> bool;
@@ -56,7 +57,7 @@ pub host class Option<T> {
     fn expect(self, msg: str) -> T;      // panics with `msg` on None
 }
 
-pub host class Result<T, E> {
+pub builtin Result<T, E> {
     fn ok(v: T) -> Self;
     fn err(e: E) -> Self;
     fn is_ok(self) -> bool;
@@ -69,14 +70,18 @@ pub host class Result<T, E> {
 // `downcast<T>(o)` recovers it (and `x is T` probes it). A boot-table type
 // whose NAME is import-gated exactly like the containers above; `new`'s
 // parameter is any value — the method spells that with its own `<T>`.
-pub host class Opaque {
+pub builtin Opaque {
     fn new<T>(v: T) -> Self;
 }
 
-// RFC 0011/0016 — impl blocks for Disposal run `dispose` at rc 0; a
-// builtin interface with ordinary nominal impls (RFC 0028: part of the
-// prelude, spelled here because .d.rut declares traits too).
-pub interface Disposal {
+// ---- engine-woven interfaces ----
+// `builtin interface` = the engine has built-in knowledge: compiler-
+// backed impls and lowering hooks. Users implement them with ordinary
+// `impl` blocks. Library contracts without engine knowledge (std:
+// collection's `Hashable`) stay plain `interface`.
+
+// RFC 0011/0016 — impl blocks for Disposal run `dispose` at rc 0.
+pub builtin interface Disposal {
     fn dispose(mut self) -> unit;
 }
 
@@ -84,7 +89,7 @@ pub interface Disposal {
 // length and `get`/`set`; `x[i]` and `x[i] = v` lower through it. The
 // element type is the interface argument. `Array`/`str`/`bytes` are
 // compiler-backed; `Vec<T>` declares one in std:collection.
-pub interface Index<T> {
+pub builtin interface Index<T> {
     fn len(self) -> i32;
     fn get(self, i: i32) -> T;
 }
@@ -92,6 +97,6 @@ pub interface Index<T> {
 // RFC 0012 — the next()-based cursor contract. `for (x of it)` lowers to
 // `next` until `None`. `Vec<T>` ships a cursor (`VecIter<T>`) in
 // std:collection.
-pub interface Iterator<T> {
+pub builtin interface Iterator<T> {
     fn next(mut self) -> Option<T>;
 }

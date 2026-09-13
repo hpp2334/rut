@@ -247,10 +247,17 @@ pub enum Vis {
 
 // ---- linkage (.d.rut surface decls, RFC 0029 §2 / RFC 0030 §3) ----
 
+/// Who implements a surface declaration. The `extern` kind (a linked rut
+/// package) is gone: rut→rut imports go through the module loader and
+/// host→rut entry points are `entry fn` — `host` is the one foreign-body
+/// case left (embedding Rust).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Linkage {
+    /// `host` — the embedding Rust (a registered `NativeModule`)
     Host,
-    Extern,
+    /// `builtin` — the engine itself, compiler-lowered (std:core only;
+    /// nothing to register, the decl is a pure signature contract)
+    Builtin,
 }
 
 #[derive(Clone, Debug)]
@@ -327,7 +334,10 @@ pub enum ItemKind {
         target: NodeHandle<AnyTy>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },
-    /// `host fn` / `extern fn` — .d.rut only (RFC 0030 §3)
+    /// `host fn` / `builtin fn` — .d.rut only (RFC 0030 §3). `host`:
+    /// embedding-Rust body, concrete signature over the crossing set
+    /// (RFC 0023 §1); `builtin`: engine-lowered (generics allowed —
+    /// nothing crosses a boundary).
     SurfaceFn {
         vis: Vis,
         linkage: Linkage,
@@ -336,13 +346,36 @@ pub enum ItemKind {
         params: Vec<NodeHandle<AnyParam>>,
         ret: Option<NodeHandle<AnyTy>>,
     },
-    /// `host class` / `extern class` — .d.rut only
-    SurfaceClass {
+    /// `host dataclass` — .d.rut only: a flat record whose every field is
+    /// a crossing type. Host fns take/return it; the host constructs and
+    /// reads it through the field table (the shape is the whole surface).
+    SurfaceDataclass {
         vis: Vis,
-        linkage: Linkage,
         name: IdentId,
-        extparams: Vec<(IdentId, Option<NodeHandle<AnyTy>>)>,
+        fields: Vec<NodeHandle<FieldDeclNode>>,
+    },
+    /// `builtin Name<..>` — .d.rut only, std:core only: an engine builtin
+    /// type's member contract (`Option`, `Result`, `Opaque`, `Array`).
+    /// Members are compiler-lowered (ops, RFC 0032 §1.1) — the decl exists
+    /// so users and the LSP see every signature; no impl ever registers.
+    BuiltinTy {
+        vis: Vis,
+        name: IdentId,
+        generics: Vec<IdentId>,
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
+    },
+    /// `builtin interface Name<..>` — .d.rut only, std:core only: an
+    /// interface the ENGINE is woven into (compiler-backed impls /
+    /// lowering hooks — `x[i]` through `Index`, `for (x of it)` through
+    /// `Iterator`, rc-0 `Disposal`). Users still implement it with
+    /// ordinary `impl` blocks; the `builtin` marker is the engine's
+    /// reservation, not an access rule. Library contracts without
+    /// engine knowledge (`Hashable`) stay plain `interface`.
+    BuiltinIface {
+        vis: Vis,
+        name: IdentId,
+        generics: Vec<IdentId>,
+        methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
     Fn(FnData),
 }

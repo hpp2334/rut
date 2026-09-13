@@ -41,7 +41,20 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
                 p.bump();
                 Some(Frame::Fn(FnFrame::new(Vis::Self_, false, true)))
             }
-            "host" | "extern" => Some(Frame::Surface(SurfaceFrame::new())),
+            // `host` — the one native linkage left: the embedding Rust
+            // (RFC 0025). `extern` is removed — the loader + `entry fn`
+            // cover it.
+            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
+            // `builtin` — contextual (a legal identifier everywhere else):
+            // the ENGINE surface, std:core only, compiler-lowered
+            "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin))),
+            "extern" => {
+                p.err(
+                    sp,
+                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages import through the module loader (RFC 0029 §2)",
+                );
+                None
+            }
             // statement keywords at module scope: RFC 0003 §1
             "if" | "while" | "for" | "return" | "when" | "break" | "continue" | "await" => {
                 p.err(
@@ -78,7 +91,14 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
                 Some(Frame::Fn(FnFrame::new(vis, true, false)))
             }
             "fn" => Some(Frame::Fn(FnFrame::new(vis, false, false))),
-            "host" | "extern" => Some(Frame::Surface(SurfaceFrame::new())),
+            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
+            "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin))),
+            "extern" => {
+                p.err_here(
+                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages import through the module loader (RFC 0029 §2)",
+                );
+                None
+            }
             _ => {
                 p.err_here(format!("`pub` must precede a declaration, found `{kw}`"));
                 None
@@ -495,6 +515,9 @@ impl ImplFrame {
 pub(crate) enum BodyMode {
     /// dataclass/class body: fields and methods
     Class { allow_pub: bool, is_dataclass: bool },
+    /// `host dataclass` body: fields only, no initializers — the host
+    /// constructs the record (RFC 0025)
+    HostDataclass,
     /// trait body: method signatures only
     Trait,
     /// impl body: trait method implementations
@@ -546,6 +569,7 @@ impl TypeBodyFrame {
         match self.mode {
             BodyMode::Trait => "interfaces declare methods",
             BodyMode::Impl => "impl blocks contain interface methods",
+            BodyMode::HostDataclass => "host dataclasses declare fields",
             BodyMode::Class { .. } => "type bodies declare fields and methods",
         }
     }
@@ -553,7 +577,7 @@ impl TypeBodyFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         // v1 brace strictness: dataclass/class and trait bodies bail on a
         // missing `{`; impl and surface bodies had already expected it
-        let strict = matches!(self.mode, BodyMode::Class { .. } | BodyMode::Trait);
+        let strict = matches!(self.mode, BodyMode::Class { .. } | BodyMode::HostDataclass | BodyMode::Trait);
         if strict {
             if p.expect(Tok::LBrace).is_none() {
                 return Step::Pop(Done::Failed);
@@ -573,6 +597,47 @@ impl TypeBodyFrame {
                 return Step::Pop(Done::Body(fields, methods));
             }
             match self.mode {
+                BodyMode::HostDataclass => {
+                    let lo = p.span();
+                    while let Tok::Ident(m) = p.tok().clone() {
+                        match m.as_str() {
+                            "pub" => {
+                                p.bump();
+                                let _ = pub_scope(p);
+                                p.err(lo, "host dataclass fields carry no visibility —all fields are public (RFC 0025)");
+                            }
+                            "static" | "suspend" => {
+                                p.bump();
+                                p.err(lo, format!("host dataclass fields carry no modifiers —`{m}` is not declarable here (RFC 0025)"));
+                            }
+                            _ => break,
+                        }
+                    }
+                    match p.tok().clone() {
+                        // parse (bodiless) to stay in sync; the methods are
+                        // dropped — SurfaceDataclass keeps fields only
+                        Tok::Ident(kw) if kw == "fn" => {
+                            p.err(lo, "host dataclasses declare fields only —methods live in rut wrapper classes (RFC 0025)");
+                            self.stage = TbStage::Method;
+                            return Step::Push(Frame::Method(MethodFrame::new(None, false, false)));
+                        }
+                        Tok::Ident(_) => {
+                            let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
+                            p.expect(Tok::Colon);
+                            self.stage = TbStage::FieldTy;
+                            self.f_lo = lo;
+                            self.f_vis = None;
+                            self.f_static = false;
+                            self.f_name = name;
+                            return Step::Push(Frame::Type(TypeFrame::new(p)));
+                        }
+                        _ => {
+                            let found = p.peek(0).describe();
+                            p.err_here(format!("expected a field, found {found}"));
+                            p.sync_stmt();
+                        }
+                    }
+                }
                 BodyMode::Class { allow_pub, is_dataclass } => {
                     let lo = p.span();
                     // RFC 0003 §2/0010 §2 — members default to module-private
@@ -661,6 +726,12 @@ impl TypeBodyFrame {
                 debug_assert!(matches!(self.stage, TbStage::FieldTy));
                 self.f_ty = Some(t);
                 if p.eat_punct(Tok::Eq) {
+                    if matches!(self.mode, BodyMode::HostDataclass) {
+                        p.err(
+                            p.span(),
+                            "host dataclass fields have no initializers —the host constructs the record (RFC 0025)",
+                        );
+                    }
                     self.stage = TbStage::FieldInit;
                     Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
                 } else {
@@ -955,87 +1026,154 @@ impl FnFrame {
     }
 }
 
-// ---- host/extern surface declarations (.d.rut, RFC 0030 §3) ----
+// ---- host/builtin surface declarations (.d.rut, RFC 0030 §3) ----
+//
+// Two linkages (RFC 0025): `host` — the embedding Rust implements it;
+// `builtin` — the engine itself (compiler-lowered, std:core only). What
+// each may spell:
+//
+//     host fn name(params) -> T;        concrete signature over the
+//                                       crossing set (RFC 0023 §1)
+//     host dataclass Name { fields }    flat record; every field a
+//                                       crossing type; host-constructed
+//     builtin fn name<T>(params) -> T;  engine fn (generics fine —
+//                                       nothing crosses)
+//     builtin Name<T> { methods }       engine type's member contract
+//     builtin interface Name<T> { .. }  engine-woven contract (Index,
+//                                       Iterator, Disposal)
+//
+// `host class` and `extern` are gone: native state crosses as `Opaque`
+// and rut wraps it in a class (the `Logger` pattern, RFC 0028).
 
 pub(crate) struct SurfaceFrame {
     linkage: Linkage,
     lo: u32,
     stage: SuStage,
-    is_class: bool,
+    /// `builtin interface Name { .. }` — collects members like BuiltinTy
+    /// but emits the interface node
+    is_iface: bool,
     name: IdentId,
     generics: Vec<IdentId>,
-    extparams: Vec<(IdentId, Option<NodeHandle<AnyTy>>)>,
     methods: Vec<NodeHandle<MethodDeclNode>>,
     params: Option<Vec<NodeHandle<AnyParam>>>,
     ret: Option<NodeHandle<AnyTy>>,
-    ext_name: Option<IdentId>,
 }
 
 #[derive(Clone, Copy)]
 enum SuStage {
     Params,
     Ret,
-    ExtBound,
     Members,
 }
 
 impl SurfaceFrame {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(linkage: Linkage) -> Self {
         SurfaceFrame {
-            linkage: Linkage::Extern,
+            linkage,
             lo: 0,
             stage: SuStage::Params,
-            is_class: false,
+            is_iface: false,
             name: IdentId(0),
             generics: Vec::new(),
-            extparams: Vec::new(),
             methods: Vec::new(),
             params: None,
             ret: None,
-            ext_name: None,
         }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.linkage = match p.tok().clone() {
-            Tok::Ident(k) if k == "host" => Linkage::Host,
-            _ => Linkage::Extern,
-        };
         let sp = p.span();
         if p.mode == Mode::Impl {
             p.err(
                 sp,
-                "declaration keyword in an implementation file —`host`/`extern` belong in a `.d.rut` (RFC 0029 §2)",
+                "declaration keyword in an implementation file —`host`/`builtin` belong in a `.d.rut` (RFC 0029 §2)",
             );
         }
         self.lo = p.bump().span.lo;
+        match self.linkage {
+            Linkage::Host => self.host_step(p),
+            Linkage::Builtin => self.builtin_step(p),
+        }
+    }
+
+    fn host_step(&mut self, p: &mut Parser) -> Step {
         match p.tok().clone() {
             Tok::Ident(k) if k == "fn" => {
                 p.bump();
-                self.is_class = false;
                 let Some(name) = p.expect_ident("a function name") else {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
+                if matches!(p.tok(), Tok::Lt) {
+                    // RFC 0023 §1: a host fn's parameters and returns are
+                    // built from the crossing set — a generic parameter
+                    // has no shape the boundary could check
+                    p.err(
+                        p.span(),
+                        "host fn signatures are concrete —generic parameters cannot cross the boundary (RFC 0023 §1)",
+                    );
+                    self.generics = generic_params(p);
+                }
+                self.stage = SuStage::Params;
+                Step::Push(Frame::Params(ParamsFrame::new()))
+            }
+            Tok::Ident(k) if k == "dataclass" => {
+                p.bump();
+                let Some(name) = p.expect_ident("a dataclass name") else {
+                    return Step::Pop(Done::Failed);
+                };
+                self.name = name;
+                self.stage = SuStage::Members;
+                Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::HostDataclass)))
+            }
+            Tok::Ident(k) if k == "class" => {
+                p.err(
+                    p.span(),
+                    "`host class` is removed —declare `host fn`s and wrap native state in a rut `class` over `Opaque` (RFC 0025)",
+                );
+                Step::Pop(Done::Failed)
+            }
+            _ => {
+                let found = p.peek(0).describe();
+                p.err_here(format!("expected `fn` or `dataclass` after `host`, found {found}"));
+                Step::Pop(Done::Failed)
+            }
+        }
+    }
+
+    fn builtin_step(&mut self, p: &mut Parser) -> Step {
+        match p.tok().clone() {
+            Tok::Ident(k) if k == "fn" => {
+                p.bump();
+                let Some(name) = p.expect_ident("a function name") else {
+                    return Step::Pop(Done::Failed);
+                };
+                self.name = name;
+                // engine fns are compiler-lowered (own<T>, downcast<T>) —
+                // generics are fine: nothing crosses a boundary
                 if matches!(p.tok(), Tok::Lt) {
                     self.generics = generic_params(p);
                 }
                 self.stage = SuStage::Params;
                 Step::Push(Frame::Params(ParamsFrame::new()))
             }
-            Tok::Ident(k) if k == "class" => {
-                p.bump();
-                self.is_class = true;
-                let Some(name) = p.expect_ident("a class name") else {
+            Tok::Ident(_) => {
+                // `builtin interface Name<T> { .. }` — an engine-woven
+                // contract (RFC 0025); plain `interface` stays the
+                // library/user form
+                let is_iface = if p.at_kw("interface") {
+                    p.bump();
+                    true
+                } else {
+                    false
+                };
+                let Some(name) = p.expect_ident("a builtin type name") else {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
-                // extparams: `K: Hashable` (corpus) or `K requires Hashable`
-                // (RFC 0030 §3) — bounds are the `requires` form's meaning only
+                self.is_iface = is_iface;
                 if matches!(p.tok(), Tok::Lt) {
-                    p.bump();
-                    self.stage = SuStage::ExtBound;
-                    return self.extparams_run(p);
+                    self.generics = generic_params(p);
                 }
                 self.stage = SuStage::Members;
                 p.expect(Tok::LBrace);
@@ -1043,67 +1181,36 @@ impl SurfaceFrame {
             }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!(
-                    "expected `fn` or `class` after `host`/`extern`, found {found}"
-                ));
+                p.err_here(format!("expected `fn`, `interface`, or a type name after `builtin`, found {found}"));
                 Step::Pop(Done::Failed)
             }
-        }
-    }
-
-    /// the extparam list — `>` (or a failure) finishes; a bound suspends
-    fn extparams_run(&mut self, p: &mut Parser) -> Step {
-        loop {
-            if p.eat_punct(Tok::Gt) {
-                break;
-            }
-            let Some(name) = p.expect_ident("a generic parameter") else {
-                break;
-            };
-            if p.eat_punct(Tok::Colon) || (p.at_kw("requires") && {
-                p.bump();
-                true
-            }) {
-                self.ext_name = Some(name);
-                return Step::Push(Frame::Type(TypeFrame::new(p)));
-            }
-            self.extparams.push((name, None));
-            if !p.eat_punct(Tok::Comma) {
-                p.expect_gt();
-                break;
-            }
-        }
-        self.stage = SuStage::Members;
-        p.expect(Tok::LBrace);
-        self.members_top(p)
-    }
-
-    fn extparams_after_bound(&mut self, p: &mut Parser, bound: Option<NodeHandle<AnyTy>>) -> Step {
-        let name = self.ext_name.take().expect("ext bound without a name");
-        self.extparams.push((name, bound));
-        if p.eat_punct(Tok::Comma) {
-            self.extparams_run(p)
-        } else {
-            p.expect_gt();
-            self.stage = SuStage::Members;
-            p.expect(Tok::LBrace);
-            self.members_top(p)
         }
     }
 
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
-                let node = p.item(
-                    ItemKind::SurfaceClass {
-                        vis: Vis::Self_,
-                        linkage: self.linkage,
-                        name: self.name,
-                        extparams: std::mem::take(&mut self.extparams),
-                        members: std::mem::take(&mut self.methods),
-                    },
-                    Span::new(self.lo, p.span().hi),
-                );
+                let node = if self.is_iface {
+                    p.item(
+                        ItemKind::BuiltinIface {
+                            vis: Vis::Self_,
+                            name: self.name,
+                            generics: std::mem::take(&mut self.generics),
+                            methods: std::mem::take(&mut self.methods),
+                        },
+                        Span::new(self.lo, p.span().hi),
+                    )
+                } else {
+                    p.item(
+                        ItemKind::BuiltinTy {
+                            vis: Vis::Self_,
+                            name: self.name,
+                            generics: std::mem::take(&mut self.generics),
+                            members: std::mem::take(&mut self.methods),
+                        },
+                        Span::new(self.lo, p.span().hi),
+                    )
+                };
                 return Step::Pop(Done::Item(node));
             }
             let is_suspend = if p.at_kw("suspend") {
@@ -1140,16 +1247,29 @@ impl SurfaceFrame {
                 self.pop_fn(p)
             }
             (SuStage::Ret, Done::Failed) => Step::Pop(Done::Failed),
-            (SuStage::ExtBound, Done::Ty(t)) => self.extparams_after_bound(p, Some(t)),
-            // v1: a failed bound is simply an unbounded parameter
-            (SuStage::ExtBound, Done::Failed) => self.extparams_after_bound(p, None),
             (SuStage::Members, Done::Method(m)) => {
                 self.methods.push(m);
                 self.members_top(p)
             }
+            // a host dataclass body arrives as (fields, no methods) — any
+            // `fn` member was diagnosed by the body frame and is dropped
+            (SuStage::Members, Done::Body(fields, _methods)) => {
+                let node = p.item(
+                    ItemKind::SurfaceDataclass {
+                        vis: Vis::Self_,
+                        name: self.name,
+                        fields,
+                    },
+                    Span::new(self.lo, p.span().hi),
+                );
+                Step::Pop(Done::Item(node))
+            }
             (SuStage::Members, Done::Failed) => {
                 p.sync_stmt();
-                self.members_top(p)
+                match self.linkage {
+                    Linkage::Host => Step::Pop(Done::Failed),
+                    Linkage::Builtin => self.members_top(p),
+                }
             }
             (_, d) => unreachable!("surface frame received the wrong child: {d:?}"),
         }

@@ -1,31 +1,34 @@
 // plugin/batch.d.rut — the DECLARATION FILE for "plugin:batch".
 //
-// One host class, one host fn — the whole surface of a telemetry-style
-// batch plugin. `host`/`extern` are .d.rut-ONLY keywords (RFC 0029):
-// signatures, no bodies. The Rust IMPLEMENTATION is the sibling file
-// examples/host/batch.rs, bound by name at embedder startup and proven
-// signature-equal at vm.load link; the consumer is examples/host/
-// batch.rut (construct in Rust, operate in rut, hand the instance BACK
-// through the submit callback).
+// A telemetry-style batch plugin: native state (a Rust Batch) held by
+// rut as an `Opaque` box, operated on through host fns, and handed BACK
+// across the boundary through a host fn parameter — the callback.
+//
+// `host` is a .d.rut-ONLY keyword (RFC 0029): signatures, no bodies. The
+// Rust IMPLEMENTATION is the sibling file examples/host/batch.rs, bound
+// by name at embedder startup and proven signature-equal at vm.load
+// link; the consumer is examples/host/batch.rut (a rut wrapper class
+// over these fns — the `Logger` pattern, RFC 0028). No `host class`:
+// the handle IS the crossing value, and the class lives in rut where it
+// can carry methods and impl blocks.
 //
 // Import specifiers map to declaration files by path: "plugin:batch" ->
 // plugin/batch.d.rut. Only EXPORTED decls are nameable outside.
 
-pub host class Batch {
-    fn new(name: str) -> Self;              // native class method — the
-    fn push(self, metric: str, value: i64) -> unit;   // construction
-    fn len(self) -> i32;                       // surface (RFC 0010/0025)
-}
+// the instance handle: an Opaque box; its Rust Drop runs at rc 0
+pub host fn batch_new(name: str) -> Opaque;
+pub host fn batch_push(b: Opaque, metric: str, value: i64) -> unit;
+pub host fn batch_len(b: Opaque) -> i32;
 
-// The HOST CALLBACK: a module-level host fn whose PARAMETER TYPE is the
-// host class itself. Calling submit(b) hands the instance back across
-// the boundary — rut -> Rust — where it arrives as a call-scoped
-// Handle<Batch> (RFC 0022 §2, RFC 0023 §2); the receipt crosses back
-// out as an ordinary checked return value.
-pub host fn submit(b: Batch) -> str;
+// the HOST CALLBACK: a host fn whose PARAMETER is the same Opaque the
+// wrapper holds. Calling submit(b) hands the instance back across the
+// boundary — rut -> Rust — where it arrives as the box's call-scoped
+// borrow (RFC 0022 §2, RFC 0023 §2); the receipt crosses back out as an
+// ordinary checked return value.
+pub host fn submit(b: Opaque) -> str;
 
 // Slot table (declaration order; part of the decl digest — RFC 0029 §3):
-//     Batch: new -> 0, push -> 1, len -> 2; module fn submit -> its own
-// slot in the module table. Consumer calls compile to callnat { slot } —
-// names are binding-time labels for the Rust impl, never dispatch keys,
-// never in the IR (RFC 0032).
+//     batch_new -> 0, batch_push -> 1, batch_len -> 2; module fn submit
+// -> its own slot in the module table. Consumer calls compile to
+// callnat { slot } — names are binding-time labels for the Rust impl,
+// never dispatch keys, never in the IR (RFC 0032).

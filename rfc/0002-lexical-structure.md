@@ -42,7 +42,7 @@ compiler gives it no meaning; greppability is enforced by style.
   `Vec<T>`, `Array<T, N>` (const-generic), `Option<T>`, `Result<T,E>`,
   `Weak<T>`,
   `Opaque`
-  (the erased-storage host class, RFC 0014),
+  (the erasure-box builtin, RFC 0014),
   `Slice<T>` (builtin trait —
   object type `dyn Slice<T>`, RFC 0005),
   `Future<T>`, `Task<T>`, `Sender<T>`, `Receiver<T>`, `Point`, `Color`,
@@ -52,12 +52,12 @@ compiler gives it no meaning; greppability is enforced by style.
 - **Construction is a method call, never a type-call** (RFC 0010):
   classes construct through their own class methods — `Rect.new(3, 4)`,
   `Rect.from(other)`, `Version.parse(s)` (`await Socket.connect(..)`
-  when the class method is `suspend`); host classes likewise
-  (`MyMap.new(cap)`, RFC 0025). Only builtin types keep call forms —
+  when the class method is `suspend`); rut wrapper classes over host fns
+  likewise (`MyMap.new(cap)` — the wrapper, RFC 0025). Only builtin types keep call forms —
   allocation forms like `Vec<f32>(1024)`, `Weak(b)`, `Channel<Job>()`
   are builtin syntax, not class construction. **Erasure is a class
   method too**: `Opaque.new(v) -> Opaque` (RFC 0014) — the
-  erased-storage host class, boxed by construction.
+  erasure-box builtin, boxed by construction.
   Named variants of multi-case builtins stay statics: `Option.some`,
   `Option.none`, `Result.ok`, `Result.err`.
 - **Functions and methods are lowercase snake_case** — `unwrap_or(d)`,

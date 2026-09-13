@@ -1,8 +1,7 @@
 //! Hover 鈥?a definition index over the parsed document, plus lookup and
 //! markdown rendering. One rule for method lookup (mirrors the
 //! compiler's): **methods on type `T` = T's own surface (class body,
-//! `host class`, `host primitive`) 鈭?interface methods from impls targeting
-//! `T`.** Heuristic, like the classifier: a miss is an empty hover,
+//! `builtin`) 鈭?interface methods from impls targeting `T`.** Heuristic, like the classifier: a miss is an empty hover,
 //! never wrong text. Signatures render as verbatim source slices 鈥?no
 //! pretty-printer, truthful to what was written.
 
@@ -20,9 +19,14 @@ pub enum TyForm {
     Dataclass,
     Trait,
     Enum,
-    HostClass,
-    /// `host primitive string { .. }` 鈥?a primitive's native surface
-    HostPrimitive,
+    /// `builtin Name<..>` — an engine builtin's member contract (std:core
+    /// only; members are compiler-lowered)
+    Builtin,
+    /// `builtin interface Name<..>` — an engine-woven contract (Index,
+    /// Iterator, Disposal); users implement it with ordinary impl blocks
+    BuiltinIface,
+    /// `host dataclass Name { fields }` — a flat host-constructed record
+    HostDataclass,
 }
 
 impl TyForm {
@@ -32,8 +36,9 @@ impl TyForm {
             TyForm::Dataclass => "dataclass",
             TyForm::Trait => "trait",
             TyForm::Enum => "enum",
-            TyForm::HostClass => "host class",
-            TyForm::HostPrimitive => "host primitive",
+            TyForm::Builtin => "builtin",
+            TyForm::BuiltinIface => "builtin interface",
+            TyForm::HostDataclass => "host dataclass",
         }
     }
 }
@@ -372,14 +377,40 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     line: line_of(src, span.lo),
                 });
             }
-            ItemKind::SurfaceClass { name, members, .. } => {
+            ItemKind::BuiltinTy { name, generics, members, .. } => {
                 let ms = members_of(src, ast, members);
                 idx.types.push(ty_def(
                     src,
                     ast,
                     ast.name(*name),
-                    TyForm::HostClass,
+                    TyForm::Builtin,
+                    generics_of(ast, generics),
                     Vec::new(),
+                    ms,
+                    span,
+                ));
+            }
+            ItemKind::SurfaceDataclass { name, fields, .. } => {
+                let fs = field_members(src, ast, fields);
+                idx.types.push(ty_def(
+                    src,
+                    ast,
+                    ast.name(*name),
+                    TyForm::HostDataclass,
+                    Vec::new(),
+                    fs,
+                    Vec::new(),
+                    span,
+                ));
+            }
+            ItemKind::BuiltinIface { name, generics, methods, .. } => {
+                let ms = members_of(src, ast, methods);
+                idx.types.push(ty_def(
+                    src,
+                    ast,
+                    ast.name(*name),
+                    TyForm::BuiltinIface,
+                    generics_of(ast, generics),
                     Vec::new(),
                     ms,
                     span,
@@ -764,7 +795,7 @@ fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 members.join(", ")
             )));
         }
-        TyForm::Trait | TyForm::HostClass | TyForm::HostPrimitive => {
+        TyForm::Trait | TyForm::Builtin | TyForm::BuiltinIface => {
             let mut body = String::new();
             for m in &ty.methods {
                 body.push_str("    ");
@@ -779,7 +810,7 @@ fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 body
             )));
         }
-        TyForm::Class | TyForm::Dataclass => {
+        TyForm::Class | TyForm::Dataclass | TyForm::HostDataclass => {
             let mut body = String::new();
             for f in &ty.fields {
                 body.push_str("    ");

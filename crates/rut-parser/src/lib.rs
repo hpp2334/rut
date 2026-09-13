@@ -36,7 +36,7 @@ use frame::{Done, Frame, Step};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
-    /// `.rut` — full grammar, no `host`/`extern`
+    /// `.rut` — full grammar, no `host`/`builtin`
     Impl,
     /// `.d.rut` — same grammar + surface declarations, bodies forbidden
     Decl,

@@ -171,8 +171,8 @@ final sections of the RFC they implement).
 - 0022 — embedding model & native modules
 - 0023 — the `Value` boundary & borrow guards
 - 0024 — repr C struct interop (**withdrawn**)
-- 0025 — host classes & declaration files
-- 0026 — generic host classes: a user-defined map
+- 0025 — host fns & declaration files
+- 0026 — native containers: a user-defined map (fn surface)
 - 0027 — templates: `f"..."` across the boundary
 - 0028 — the standard library: `rt:*`, `std:*`, `std:log`, `std:debug`
 
@@ -215,7 +215,7 @@ Without `any`, JSON-shaped data becomes a small class set behind a
 trait (`trait JsonValue` implemented by `JString`/`JNum`/`JArr`/…,
 held as `dyn JsonValue` refs),
 heterogeneous collections are `Vec<dyn I>` vecs, and host APIs that were
-`any`-shaped in JS become generics or opaque `host class` handles. The one
+`any`-shaped in JS become generics or `Opaque` handles over host fns. The one
 dynamic mechanism kept is **trait dispatch** — a checked vtable call on a
 value whose exact class is still known at runtime. What we keep from "types
 held at runtime" (G1) is what the *VM and the host* need: every value's type

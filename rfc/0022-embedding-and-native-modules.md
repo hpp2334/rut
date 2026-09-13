@@ -60,12 +60,12 @@ fn gfx_module() -> NativeModule {
   the `is` keyword (RFC 0015 §6). No coercion code, no `as number`, no
   `require_props_object`.
 - Native registration supplies implementations for declaration-file
-  items: **`host fn`s** (above), **class methods — construction
-  included** (RFC 0025,
-  RFC 0026), and — for the types themselves — the backing of **enum,
+  items: **`host fn`s** — the only native member kind (RFC 0025,
+  revised). Native state crosses as `Opaque` and rut wraps it in a
+  class (`std:log`'s `Logger` is the canonical wrapper); there is no
+  `host class` to implement. Registration additionally backs **enum,
   trait, and builtin-impl registry entries** declared in declaration
-  files
-  (`std:collection`'s `Hashable` + its builtin impls are
+  files (`std:collection`'s `Hashable` + its builtin impls are
   the canonical case, RFC 0028). std:reflect adds the reflection
   protocols to the same registry — `Reflectable`/`Deserializable` for
   `Option`/`Result`/`Vec`/`Array<T, N>` (RFC 0037).

@@ -42,11 +42,10 @@ struct HostHooks {
   verified like any module; declaration surfaces are pure, so checking
   needs no Rust and no package bodies. The **link** step then proves every
   surface member *referenced* by the binary has its implementation:
-  signature-equal under the crossing rule for `host` decls (ClassTable
-  reflection, RFC 0026 §1) or decl-digest-equal for `extern` decls
-  (published binary export table, RFC 0029 §6) — pure data compares,
+  signature-equal under the crossing rule for `host` decls (fn-table
+  reflection, RFC 0026 §1) — a pure data compare,
   nothing runs. Missing: `no implementation bound for
-  'plugin:my_map.MyMap'` (a load error, not a runtime trap).
+  'plugin:my_map.my_map_get'` (a load error, not a runtime trap).
 - Cyclic imports are a link error (module set must be a DAG at the binary
   level).
 - `type_id` rebasing: link-time rebase maps module-local type indices into

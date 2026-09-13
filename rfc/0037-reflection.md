@@ -77,43 +77,55 @@ pub trait Reflectable { ..§1.. }
 pub trait Deserializable requires Reflectable { }
 pub enum TypeKind { Leaf, Record, Sum, Seq }
 pub enum LeafKind  { Bool, Int, Float, String, Class, Trait }
-pub host fn reflect<T>() -> TypeInfo;    // static T (incl. trait T)
-pub host fn type_of(a: Opaque) -> TypeInfo;  // content descriptor
+pub builtin fn reflect<T>() -> Opaque;     // static T (incl. trait T) —
+                                           // the descriptor, boxed;
+                                           // folded at compile time
+                                           // (RFC 0033 §3)
+pub host fn type_of(a: Opaque) -> Opaque;  // content descriptor, boxed
+```
 
-pub host class TypeInfo {
-    fn kind(self) -> TypeKind;              // structural role
-    fn leaf(self) -> LeafKind;              // kind() == Leaf
-    fn name(self) -> str;
-    fn type_id(self) -> u32;                // == type_id<T>() for static T
-    fn is_a(self, i: TypeInfo) -> bool;     // RFC 0015 §6 — the
-                                            // NESTED-node gate
-    fn fields(self) -> Vec<FieldInfo>;      // Record: decl order (wire names)
-    fn variants(self) -> Vec<SumVariant>;   // Sum: decl order
-    fn elem(self) -> TypeInfo;              // Seq: Vec<T> / Array<T, N>
-    // dynamic re-entry — children return as Opaque (no recovery,
-    // RFC 0012 §3), so the native dispatches arity/child through the
-    // box's EXACT-type vtable (RFC 0015 §6 — the calli path), reaching
-    // auto and manual slots uniformly. Same slots as the trait
-    // methods; rut code cannot spell this itself:
-    fn arity(self, a: Opaque) -> i32;      // Seq .len() · Sum: current
-                                            // variant's payloads
-    fn child(self, a: Opaque, i: i32) -> Option<Opaque>;
-    fn variant(self, a: Opaque) -> i32;    // Sum: current variant index
-    // mint — Deserializable territory; each member re-checks every
-    // box against the reified signature (Option out, never a trap):
-    fn construct(self, vals: Vec<Opaque>) -> Option<Opaque>;             // Record
-    fn construct_variant(self, i: i32, vals: Vec<Opaque>) -> Option<Opaque>; // Sum
-    fn make_vec(self, vals: Vec<Opaque>) -> Option<Opaque>;              // Seq→Vec<T>
-}
-pub host class FieldInfo {
-    fn name(self) -> str;                // the wire name
-    fn ty(self) -> TypeInfo;
-    fn default(self) -> Option<Opaque>;    // folded at compile time initializer —
-}                                          // THE parse-time default
-pub host class SumVariant {
-    fn name(self) -> str;
-    fn payloads(self) -> Vec<TypeInfo>;     // [] C-like · [T] Some/Ok/Err
-}
+No `host class` (RFC 0025, revised): a `TypeInfo` **is** an `Opaque`
+handle, and the surface is host fns over it — `std:reflect`'s rut source
+wraps the handle in `pub class TypeInfo { d: Opaque; .. }` whose methods
+forward to the fns below. (Ordinals stand in for the `TypeKind`/
+`LeafKind` enums; `FieldInfo`/`SumVariant` are boxed descriptors reached
+by index, since containers do not cross.)
+
+```rut
+// the fn surface the wrapper forwards to (sketch — the container-
+// carrying shapes are re-specified under the crossing rule, RFC 0023
+// §1, when std:reflect lands):
+pub host fn type_kind(t: Opaque) -> i32;          // TypeKind ordinal
+pub host fn type_leaf(t: Opaque) -> i32;          // LeafKind ordinal
+pub host fn type_name(t: Opaque) -> str;
+pub host fn type_id(t: Opaque) -> u32;            // == type_id<T>() for static T
+pub host fn type_is_a(t: Opaque, i: Opaque) -> bool;  // RFC 0015 §6 — the
+                                                      // NESTED-node gate
+pub host fn type_fields_len(t: Opaque) -> i32;    // Record: decl order
+pub host fn type_field(t: Opaque, i: i32) -> Opaque;       // FieldInfo box
+pub host fn type_variants_len(t: Opaque) -> i32;  // Sum: decl order
+pub host fn type_variant(t: Opaque, i: i32) -> Opaque;     // SumVariant box
+pub host fn type_elem(t: Opaque) -> Opaque;       // Seq: Vec<T> / Array<T, N>
+// dynamic re-entry — children return as Opaque (no recovery,
+// RFC 0012 §3), so the native dispatches arity/child through the
+// box's EXACT-type vtable (RFC 0015 §6 — the calli path), reaching
+// auto and manual slots uniformly. Same slots as the trait
+// methods; rut code cannot spell this itself:
+pub host fn type_arity(t: Opaque, a: Opaque) -> i32;   // Seq .len() · Sum:
+                                                       // current variant's
+                                                       // payloads
+pub host fn type_child(t: Opaque, a: Opaque, i: i32) -> Option<Opaque>;
+pub host fn type_variant_of(t: Opaque, a: Opaque) -> i32;  // Sum: current
+                                                           // variant index
+// mint — Deserializable territory; each fn re-checks every
+// box against the reified signature (Option out, never a trap):
+pub host fn type_construct(t: Opaque, vals: ..) -> Option<Opaque>;                 // Record
+pub host fn type_construct_variant(t: Opaque, i: i32, vals: ..) -> Option<Opaque>; // Sum
+pub host fn type_make_vec(t: Opaque, vals: ..) -> Option<Opaque>;                  // Seq→Vec<T>
+// FieldInfo / SumVariant accessors (each over its Opaque handle):
+//   name: str · ty: TypeInfo box · default: Option<Opaque> (the folded
+//   load-time initializer — THE parse-time default) · payloads: ordinals
+//   ([] C-like · [T] Some/Ok/Err)
 ```
 
 No builtin is named anywhere — `Option`/`Result` appear only as

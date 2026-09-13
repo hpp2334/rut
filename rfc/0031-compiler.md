@@ -48,8 +48,9 @@ types flow up; generic calls get their instantiation inferred or take
 explicit args (`downcast<Point>(o)`). Output: every AST expression node is
 decorated with a `TyId` (index into the module's type table) and generic
 functions enter the **monomorphization queue** — HIR contains no generic
-code (RFC 0013 §2). Instantiation admission for surface-generic types
-(`MyMap<Canvas, ..>`) closes over the `requires` graph here (RFC 0025).
+code (RFC 0013 §2). Surface declarations are concrete (RFC 0025,
+revised — no generic host types), so instantiation admission applies
+only to user-generic `where` clauses (RFC 0013 §2) here.
 Typecheck also applies the **`==` law** (RFC 0012 §4): primitives and
 `str` always legal, every other cell type legal as an
 identity compare, and `Option`/`Result` operands a compile error
@@ -92,7 +93,7 @@ doesn't prove. The IR therefore tracks a per-SSA-value **type lattice**:
 exact concrete  >  dyn I (satisfies I)
 ```
 
-(Erasure sits off the lattice: the concrete host class `Opaque`,
+(Erasure sits off the lattice: the engine builtin `Opaque`,
 reached only by the explicit `Opaque.new(v)` class method — RFC 0014.)
 
 Every `dyn` type is **unsized** — `dyn I` and `dyn Slice<T>` alike: the

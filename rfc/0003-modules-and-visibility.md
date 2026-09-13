@@ -19,8 +19,8 @@ See **`examples/basic/module-structure.rut`** and
 
 - Allowed at module scope: `import`/`pub`, `let`, `enum`, `dataclass`,
   `trait`, `impl`, `class`, `fn`. Anything else — calls, any
-  statement — is a compile error. (`host fn`/`host class` and
-  `extern fn`/`extern class` — signature-only native/package surfaces —
+  statement — is a compile error. (`host fn`/`host dataclass` and
+  `builtin`/`builtin fn` — signature-only native/engine surfaces —
   exist **only in declaration files** (`.d.rut`), never in `.rut`;
   RFC 0029 §2.)
 - **Imports have no `type` marker** (`import { Canvas, newCanvas } from

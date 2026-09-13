@@ -230,14 +230,17 @@ rut/
 │   └── rut-cli/                    # the `rut` binary
 │       └── src/main.rs
 ├── std/                            # the toolchain's std surface —
-│   ├── core.d.rut                  #   prelude: host primitive str,
-│   │                               #   Vec/Option/Result/Array host
-│   │                               #   classes, Disposal (0028; the
-│   │                               #   LSP embeds it, rutc follows) —
-│   │                               #   imported, never ambient
-│   ├── math.d.rut                  #   host fns (0028)
-│   └── collection.d.rut            #   Hashable (0028; Map/Set land
-│                                   #   with 0025/0026)
+│   ├── core.d.rut                  #   prelude: uniformly `builtin` —
+│   │                               #   fns (own/downcast/assert/panic/
+│   │                               #   str/bytes natives), types
+│   │                               #   (Option/Result/Opaque/Array),
+│   │                               #   interfaces (Disposal/Index/
+│   │                               #   Iterator) (0028; RFC 0025
+│   │                               #   revised) — imported, never
+│   │                               #   ambient
+│   ├── math.d.rut                  #   host fns + builtin intrinsics (0028)
+│   └── collection.d.rut            #   Hashable + Map/Set host fns;
+│                                   #   wrappers in rut source (0025/0026)
 ├── integrations/                   # editor integrations
 │   ├── README.md                   #   nvim/helix/zed/emacs/sublime
 │   │                               #   configs over the rut-lsp binary

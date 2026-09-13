@@ -3,7 +3,8 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0003 (modules), RFC 0025 (host classes — read after),
+- **Depends on:** RFC 0003 (modules), RFC 0025 (host fns & declaration
+  files — read after),
   RFC 0022 (embedding)
 - **Part:** F — Toolchain & artifacts
 
@@ -15,7 +16,7 @@ Three file kinds, one rule each:
 | Kind | Contents | Role |
 |---|---|---|
 | `.rut` | implementation source | what authors write; **may not declare `host`/`extern`** — a compile error: "belongs in a `.d.rut`" |
-| `.d.rut` | declarations only — the surface | publishable, human-readable, hand-writable; **the only place `host fn/class/primitive` and `extern fn/class` may appear** |
+| `.d.rut` | declarations only — the surface | publishable, human-readable, hand-writable; **the only place `host fn`/`host dataclass` and `builtin`/`builtin fn` may appear** |
 | `.d.ir` | compiled **DeclIr** of a `.d.rut` — the declaration surface | cache; version-locked (see §4) |
 
 Plus the runtime artifact `.rutc` — the compiled module binary (RFC 0033)
@@ -23,12 +24,16 @@ with bodies. A published package ships `.rutc` (implementation) +
 `.d.rut` (surface). Consumers typecheck against the surface and link
 against the binary — they never need package source.
 
-The `.d.rut` mechanism serves both linkage kinds (RFC 0025):
+The `.d.rut` mechanism serves the one native linkage (RFC 0025,
+revised):
 
 | keyword | implementation lives in | link check compares against |
 |---|---|---|
-| `host fn` / `host class` | the **embedding Rust** — a registered `NativeModule` | the ClassTable / fn-table reflection (RFC 0026 §1) |
-| `extern fn` / `extern class` | **another rut compilation unit** — a published `.rutc` binary | the package binary's export/slot table (§6) |
+| `host fn` / `host dataclass` | the **embedding Rust** — a registered `NativeModule` | the fn-table reflection (RFC 0026 §1) |
+| `builtin` / `builtin fn` | **the engine itself** — compiler-lowered; the toolchain's std decl files only | nothing — the decl is a pure signature contract |
+
+(`extern` is removed: rut→rut imports resolve through the module loader
+below, §5; host→rut entry points are `entry fn`, RFC 0035 §3.)
 
 ## 1. Why declaration files exist
 
@@ -60,21 +65,26 @@ only, and — beyond RFC 0003's module scope — every declaration must be
 - `dataclass` — **fields only** (with load-time expression field initializers). Field
   names and types are the published surface (RFC 0015 §4), so a published
   value type is sound. No method bodies, no impl blocks in v1 (OQ-2);
-- `host fn` / `host class` / `extern fn` / `extern class` — signatures
-  only, with admission-only param bounds (RFC 0025);
-- `host primitive` — **the native member surface of a primitive type**:
-  `pub host primitive str { fn len(self) -> i32; }`. Members are
-  bodiless and statically bound (RFC 0032 §1.1 R2 — named things on
-  builtins are natives, never ops); the decl is the declarative form of
-  the host's builtin member table. This is how primitives grow methods
-  **without a wrapper-class fiction** — `str` stays the one name for
-  the type and the impl target (the `std:string` `String` builder is a
-  separate class, not a wrapper name; the slot
-  table is per-primitive, same shape as a `host class`). `primitive` is
-  a contextual keyword, `.d.rut`-only after the linkage keyword — it
-  stays a legal identifier everywhere else. Builtin containers
-  (`Vec`, `Option`, …) remain `host class` decls: they are class-shaped
-  (generic); primitives are not.
+- `host fn` / `host dataclass` — signatures only, **concrete** over the
+  crossing set (RFC 0023 §1: a generic host fn is a compile error — a
+  generic parameter has no shape the boundary checks); `host dataclass`
+  declares a flat record whose every field is a crossing type — the
+  shape is the whole surface, no methods, no field initializers
+  (RFC 0025);
+- `builtin` / `builtin fn` / `builtin interface` — **the engine's own
+  surface**, spelled in the toolchain's decl files only (`std:core`,
+  `std:math`): the builtin containers (`Array`/`Option`/`Result`/
+  `Opaque` — class-shaped, generic, members compiler-lowered to ops,
+  RFC 0032 §1.1), the engine-lowered fns (all of `std:core`'s — `own`,
+  `downcast`, `assert`, `panic`, the `str`/`bytes` natives; the prelude
+  registers no host bodies), and the engine-woven interfaces
+  (`Disposal`/`Index`/`Iterator` — compiler-backed impls and lowering
+  hooks; users implement them with ordinary `impl` blocks, while plain
+  `interface` remains the library form — `Hashable` in
+  `std:collection`). The decls exist so users and the LSP see every
+  signature; no impl ever registers, and an embedder decl that spells
+  `builtin` is a compile error. `builtin` is a contextual keyword,
+  `.d.rut`-only — it stays a legal identifier everywhere else.
 
 Forbidden — the parser errors "implementation in a declaration file":
 `fn` with a body, `class` with a body, field/method bodies of any kind,
@@ -92,7 +102,7 @@ struct DeclIr {                       // .d.ir — no bodies, no code
     module: String,                   // specifier this surface answers to
     exports: Vec<Symbol>,             // name, visibility, kind
     types: Vec<RutType>,              // full resolved types incl. bounds
-    slots: Vec<(String, SlotId, Sig)>,// host/extern members, decl order
+    slots: Vec<(String, SlotId, Sig)>,// host fn members, decl order
     digest: DeclDigest,               // hash over everything above
 }
 ```
@@ -100,9 +110,8 @@ struct DeclIr {                       // .d.ir — no bodies, no code
 - **Slot ids** are assigned here, in declaration order (RFC 0025) — the
   table every consumer's `callnat { slot }` ops index.
 - The **decl digest** covers names, kinds, full types under the crossing
-  rule (RFC 0026 §3), bounds, and slots. Link compares digests — a pure
-  data compare, nothing runs (RFC 0026 §1 for `host`; §6 here for
-  `extern`).
+  rule (RFC 0026 §2), and slots. Link compares digests — a pure data
+  compare, nothing runs (RFC 0026 §1).
 - Compiling a `.d.rut` runs the same resolve/typecheck passes as `.rut`
   (RFC 0031) minus code generation: bad imports, unknown types, cyclic
   `requires` — all surface errors surface here, with zero Rust linked.
@@ -143,8 +152,9 @@ When module `M` imports `"pkg:mod"` and rutc needs its surface to typecheck
 5. **host registry**: for `host`-linked modules the embedder ships the
    `.d.rut` alongside the registered implementation (RFC 0022 §1).
 
-Bodies are resolved only at link/run: registered Rust for `host` decls;
-the published `pkg/mod.rutc` binary for `extern` decls. Compiling `M`
+Bodies are resolved only at link/run: registered Rust for `host` decls
+(`builtin` decls need none — the engine lowers them); rut bodies come
+from source or bundle, per the resolution order above. Compiling `M`
 against a package whose implementation is absent is legal and complete —
 `rutc check M.rut` passes; only `vm.load` requires the bodies.
 
@@ -167,11 +177,11 @@ surface + DeclIr + the `.rutc.map` sidecar under a versioned `rut.toml`
 manifest — a `.rutbundle` (RFC 0038). Same contract, one file; the
 resolver (§5) treats a mounted bundle's entries as the loose artifacts.
 
-For an `extern class` in a consumer to link, the published `.rutc` must
-carry an export/slot table whose decl digest equals the one the consumer
+For a consumer to link against a published package, the `.rutc` must
+carry an export table whose decl digest equals the one the consumer
 compiled against (§3) — drift is a load error naming both modules, never
 a runtime surprise. This is the same two-checkpoint contract as RFC 0026
-§1 with "linked binary" substituted for "ClassTable reflection".
+§1 with "linked binary" substituted for "fn-table reflection".
 
 **Honesty note:** compilation is not encryption — published code is
 recoverable with effort, like any compiled artifact. What publishing
