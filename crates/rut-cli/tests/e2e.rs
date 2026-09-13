@@ -251,7 +251,7 @@ pub fn main() -> unit {
     Logger.new("app").info(f"s={s}");
     s = Math.wrapping_shl(s, 1);   // same law
     Logger.new("app").info(f"s={s}");
-    let u: u32 = 3221225472; // 0xC000_0000
+    let u: u32 = 3221225472u32; // 0xC000_0000
     Logger.new("app").info(f"u={Math.wrapping_shl(u, 1)}");
     let y = 2147483647 + 1;  // trapping: overflow
     Logger.new("app").info(f"y={y}");
@@ -284,9 +284,9 @@ fn shr_follows_signedness() {
     // top bit — u64's bit 63 is magnitude, not sign), arithmetic on signed.
     let src = r#"
 pub fn main() -> unit {
-    let u: u64 = 0xFFFFFFFFFFFFFFFF;
+    let u: u64 = 0xFFFFFFFFFFFFFFFFu64;
     Logger.new("app").info(f"u={u >> 1}");
-    let v: u32 = 0x80000000;
+    let v: u32 = 0x80000000u32;
     Logger.new("app").info(f"v={v >> 31}");
     let s = -8 as i64;
     Logger.new("app").info(f"s={s >> 1}");
@@ -1243,13 +1243,13 @@ pub fn main() -> unit {
     let b = -1 as u8;
     let c = 4294967295u32 as i32;
     let d = 2.9 as i32;
-    let e = 1.0e300 as i32;
+    let e = 1.0e300f64 as i32;
     let f = (0.0 / 0.0) as i32;
     let g = -300 as u8;
     let h = 2u8 * 300 as u8;
     let i = 300 as u8 as i32;
     let j = -2.9 as i32;
-    let k = 1.0e300 as u8;
+    let k = 1.0e300f64 as u8;
     Logger.new("app").info(f"{a} {b} {c} {d} {e} {f} {g} {h} {i} {j} {k}");
 }
 "#;
@@ -1263,6 +1263,53 @@ pub fn main() -> unit {
     let bad = "pub fn main() -> unit { let x = 1 as str; }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("expected")));
+}
+
+#[test]
+fn unsuffixed_int_literals_must_fit_i32() {
+    // RFC 0007 §1: bidirectional inference absorbs an unsuffixed literal
+    // only while it fits the `i32` default — past it the literal must
+    // declare its width, even in a `u64` position, so a dropped or
+    // doubled digit can't masquerade as a constant
+    let ok = "pub fn main() -> unit { let x: u64 = 5; let y = 2147483647; }";
+    let out = rut_driver::compile_module(ok, rut_parser::Mode::Impl, "main");
+    assert!(
+        out.diags.is_empty(),
+        "diags: {:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+
+    let in_u64_ctx = "pub fn main() -> unit { let x: u64 = 13503953896175478587; }";
+    let out = rut_driver::compile_module(in_u64_ctx, rut_parser::Mode::Impl, "main");
+    assert!(out
+        .diags
+        .iter()
+        .any(|d| d.msg.contains("exceeds the `i32` default") && d.msg.contains("u64")));
+
+    let no_ctx = "pub fn main() -> unit { let x = 99999999999; }";
+    let out = rut_driver::compile_module(no_ctx, rut_parser::Mode::Impl, "main");
+    assert!(out.diags.iter().any(|d| d.msg.contains("exceeds the `i32` default")));
+
+    let fixed = "pub fn main() -> unit { let x: u64 = 13503953896175478587u64; }";
+    let out = rut_driver::compile_module(fixed, rut_parser::Mode::Impl, "main");
+    assert!(
+        out.diags.is_empty(),
+        "diags: {:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+
+    // floats: magnitude is the trigger, precision is not
+    let float_ok = "pub fn main() -> unit { let x: f64 = 0.1; }";
+    let out = rut_driver::compile_module(float_ok, rut_parser::Mode::Impl, "main");
+    assert!(out.diags.is_empty());
+
+    let float_bad = "pub fn main() -> unit { let x: f64 = 1.0e300; }";
+    let out = rut_driver::compile_module(float_bad, rut_parser::Mode::Impl, "main");
+    assert!(out.diags.iter().any(|d| d.msg.contains("exceeds the `f32` default")));
+
+    let float_fixed = "pub fn main() -> unit { let x: f64 = 1.0e300f64; }";
+    let out = rut_driver::compile_module(float_fixed, rut_parser::Mode::Impl, "main");
+    assert!(out.diags.is_empty());
 }
 
 #[test]
@@ -1295,7 +1342,7 @@ pub fn main() -> unit {
     let hi: i8 = 127;
     log.info(f"{Math.wrapping_add(hi, 1i8)} {Math.saturating_add(hi, 1i8)} {Math.wrapping_sub(lo, 1i8)} {Math.saturating_sub(lo, 1i8)}");
     // u64 edge
-    let w: u64 = 18446744073709551615;
+    let w: u64 = 18446744073709551615u64;
     log.info(f"{Math.wrapping_add(w, 1u64)} {Math.saturating_add(w, 1u64)} {Math.checked_add(w, 1u64).is_some()}");
     // wrapping shift + int helpers
     log.info(f"{Math.wrapping_shl(1073741824, 1)}");

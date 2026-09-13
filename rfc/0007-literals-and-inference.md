@@ -17,13 +17,22 @@ builtin allocation calls (`Vec<f32>(1024)`).
 
 - Inference is bidirectional (literal ↔ expected type); a literal without
   context defaults to `i32` / `f32` (default-width OQ — RFC 0004 OQ-1).
+  **The default is also a ceiling**: an unsuffixed literal adapts to the
+  expected type only while it fits that default (`1` → any int width,
+  `1.0` → any float width). Past it the literal must declare itself —
+  `Vec<u64>.from([13503953896175478587u64, ..])`, never the bare digits —
+  so a dropped or doubled digit cannot silently re-base a constant.
+  Floats: magnitude is the trigger, precision is not (`0.1` is fine
+  anywhere; `1.0e300` needs `f64` even in an `f64` position).
 - Numeric literals: decimal and `0x`/`0b`/`0o`, `_` separators, suffixes
   `u8..u64 i8..i64 f32 f64` (`3.14159f32`, `0xFF_u32`).
-- **Conversions are always explicit function calls** — `i32(x)`, `u8(x)`,
-  `f32(x)`; there is no `as` operator (RFC 0012 §3). No implicit numeric
-  conversions at all in v1. Narrowing (`i32`→`u8`, `f64`→`i32`) traps when
-  the value doesn't fit; lossy intent is spelled out with `u8.wrap(x)` /
-  `i32.trunc(x)` style builtins (OQ-2).
+- **Conversions are casts**: `expr as T`, truncating like C/Rust —
+  int→int keeps the target's low bits (signed targets sign-extend),
+  float→int truncates toward zero and saturates at the target bounds
+  (NaN → 0), and a conversion never traps (arithmetic still does).
+  `as` binds tighter than `*`, left-associative, and its RHS is a naming
+  position restricted to the numeric primitives. There are no implicit
+  numeric conversions at all in v1.
 - **Fixed-array literal**: `[e1, .., en]` has type `Array<T, n>` — an
   inline **value**, pure data, no allocation (RFC 0005). It infers `T`
   bidirectionally like any literal; at module scope it is a
@@ -86,7 +95,7 @@ f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
 
 - OQ-1: str indexing: byte-index + helpers proposal stands
   (`for (let c of s)` is the blessed iteration).
-- OQ-2: naming of lossy numeric conversions: `u8.wrap(x)` vs
-  `u8.truncate(x)` vs `wrapTo<u8>(x)`.
+- OQ-2: a *checked* conversion builtin (`u32.checked(x)` → `Option`,
+  try-into style) — `as` is the lossy form; nothing checks.
 - OQ-3: `rf"..."` (raw + format combination) and precision/width specifiers
   in format placeholders (`{x:.2}`) — deferred.

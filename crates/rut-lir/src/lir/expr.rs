@@ -230,23 +230,48 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             Lit::Int(v, sfx) => {
                 let ty = match sfx {
                     Some(s) => int_suffix_ty(s),
-                    None => match expected {
-                        // bidirectional inference (RFC 0007 §1): an int
-                        // literal adapts to the expected numeric type — int
-                        // widths AND float positions (`x: f32 = 1`)
-                        Some(e) if matches!(self.ctx.types.kind(e), TyKind::Prim(p) if p.is_int()) => e,
-                        Some(e) if matches!(self.ctx.types.kind(e), TyKind::Prim(p) if p.is_float()) => {
-                            let f = v as f64;
-                            let reg = self.new_reg(e);
-                            if e == TY_F32 {
-                                self.emit(Op::ConstRaw { dst: reg, bits: ((f as f32) as f64).to_bits() }, sp.lo);
-                            } else {
-                                self.emit(Op::ConstRaw { dst: reg, bits: f.to_bits() }, sp.lo);
-                            }
-                            return Ok((e, reg));
+                    None => {
+                        // RFC 0007 §1: an unsuffixed literal defaults to
+                        // `i32` and adapts bidirectionally — but only while
+                        // it FITS that default. Past it the literal must
+                        // declare itself: `Vec<u64>.from([..])` no longer
+                        // silently absorbs a 20-digit literal, so a dropped
+                        // or doubled digit can't masquerade as a value.
+                        let over_default = v > i32::MAX as u64;
+                        if over_default {
+                            let hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
+                                Some(TyKind::Prim(p)) if p.is_float() => {
+                                    format!(" —in a float position write `{v}.0`")
+                                }
+                                _ => String::new(),
+                            };
+                            self.ctx.err(sp, format!(
+                                "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64`{hint} (RFC 0007 §1)"
+                            ));
                         }
-                        _ => TY_I32,
-                    },
+                        match expected {
+                            // bidirectional inference (RFC 0007 §1): an int
+                            // literal adapts to the expected numeric type — int
+                            // widths AND float positions (`x: f32 = 1`)
+                            Some(e) if matches!(self.ctx.types.kind(e), TyKind::Prim(p) if p.is_int()) => e,
+                            Some(e) if matches!(self.ctx.types.kind(e), TyKind::Prim(p) if p.is_float()) => {
+                                let f = v as f64;
+                                let reg = self.new_reg(e);
+                                if e == TY_F32 {
+                                    self.emit(Op::ConstRaw { dst: reg, bits: ((f as f32) as f64).to_bits() }, sp.lo);
+                                } else {
+                                    self.emit(Op::ConstRaw { dst: reg, bits: f.to_bits() }, sp.lo);
+                                }
+                                return Ok((e, reg));
+                            }
+                            // past the default without a suffix there is no
+                            // honest type left — `u64` is the smallest width
+                            // that holds the value and keeps codegen going
+                            // for the remaining diagnostics
+                            _ if over_default => TY_U64,
+                            _ => TY_I32,
+                        }
+                    }
                 };
                 // range check (RFC 0007 §1)
                 if let TyKind::Prim(p) = self.ctx.types.kind(ty) {
@@ -273,6 +298,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok((ty, reg))
             }
             Lit::Float(bits, sfx) => {
+                // the same law as the ints above, for the `f32` default: an
+                // unsuffixed literal whose magnitude only exists in f64
+                // must say so (precision is not the trigger — range is)
+                if sfx.is_none() {
+                    let x = f64::from_bits(bits);
+                    if !x.is_finite() || x.abs() > f32::MAX as f64 {
+                        self.ctx.err(sp, format!(
+                            "float literal {:e} exceeds the `f32` default —add an explicit `f64` suffix (RFC 0007 §1)",
+                            x
+                        ));
+                    }
+                }
                 let ty = match sfx {
                     Some(s) => float_suffix_ty(s),
                     None => match expected {
@@ -487,7 +524,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn load_const_let(&mut self, init: NodeHandle<AnyExpr>, ty: TypeId, _expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<u16> {
         match self.ctx.ast.expr(init).clone() {
-            ExprKind::Lit(Lit::Int(v, _)) => {
+            ExprKind::Lit(Lit::Int(v, sfx)) => {
+                // the same default-width law as `load_lit` — module scope
+                // gets no free pass (RFC 0007 §1)
+                if sfx.is_none() && v > i32::MAX as u64 {
+                    self.ctx.err(sp, format!(
+                        "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64` (RFC 0007 §1)"
+                    ));
+                }
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits: v }, sp.lo);
                 Ok(reg)

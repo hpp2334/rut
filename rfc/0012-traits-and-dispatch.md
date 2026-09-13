@@ -151,8 +151,10 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
 
 ## 3. Type tests — the `is` keyword
 
-`as` remains reserved and always errors — rut has no cast syntax — but
-type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
+`as` is now the numeric cast and nothing else — `expr as T`,
+truncating, RHS a naming position restricted to the numeric primitives
+(RFC 0007 §1) — but type tests are the **`is` keyword**: `expr is Type`
+→ `bool`. See
 **`examples/basic/type-tests.rut`**.
 
 - **Grammar:** `expr is Type` at relational precedence,
@@ -193,10 +195,11 @@ type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
   (RFC 0014): erasure is explicit, so nothing dynamic ever flows through
   interface types. The capability probe is not a recovery path: it
   answers whether dispatch is possible, never hands back a narrower ref.
-- Numeric and enum conversions follow the same principle: named function
-  calls, not operators (RFC 0007 §1). Erasure likewise: **`Opaque(v):
-  Opaque`** (RFC 0014), a host-class type-call — rut has no cast syntax
-  at all.
+- Numeric conversions are the one cast: `expr as T` (RFC 0007 §1) —
+  its RHS is a naming position, so types stay out of operand position
+  otherwise. Enum and erasure conversions remain named type-calls:
+  **`Opaque(v): Opaque`** (RFC 0014), a host-class type-call — there is
+  no `as` for anything but the numeric primitives.
 
 ## 4. Equality — `==` is builtin: value for primitives, identity for cells
 

@@ -241,7 +241,15 @@ impl<'a> Lexer<'a> {
             };
             self.pos += 2;
             let start = self.pos;
-            while !self.at_end() && (self.peek().is_ascii_alphanumeric() || self.peek() == b'_') {
+            // scan only digits the radix accepts — a trailing `u32`/`i64`
+            // suffix is alphanumeric too, and eating it here made every
+            // suffixed `0x..` literal fail with "out of range"
+            let valid = |b: u8| match radix {
+                16 => b.is_ascii_hexdigit(),
+                8 => (b'0'..=b'7').contains(&b),
+                _ => b == b'0' || b == b'1',
+            };
+            while !self.at_end() && (valid(self.peek()) || self.peek() == b'_') {
                 self.pos += 1;
             }
             let digits: String = self.src[start..self.pos]
@@ -262,7 +270,9 @@ impl<'a> Lexer<'a> {
                 }
             };
             let sfx = self.try_int_suffix();
-            if sfx.is_none() && self.next_is_ident_continue() {
+            // garbage glued to the literal is an error with or without a
+            // real suffix: `123abc`, `0xFFu32x`
+            if self.next_is_ident_continue() {
                 self.err(self.span(lo), "invalid numeric suffix");
             }
             self.push(Tok::Int(value, sfx), lo);
@@ -313,7 +323,9 @@ impl<'a> Lexer<'a> {
                 }
             };
             let sfx = self.try_int_suffix();
-            if sfx.is_none() && self.next_is_ident_continue() {
+            // garbage glued to the literal is an error with or without a
+            // real suffix: `123abc`, `0xFFu32x`
+            if self.next_is_ident_continue() {
                 self.err(self.span(lo), "invalid numeric suffix");
             }
             self.push(Tok::Int(v, sfx), lo);

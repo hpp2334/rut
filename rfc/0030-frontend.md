@@ -238,8 +238,9 @@ left-recursion handling. Binding powers (loosest → tightest):
 | 9 | left | `<<` `>>` |
 | 10 | left | `+` `-` |
 | 11 | left | `*` `/` `%` |
-| 12 | right | unary `-` `!` `~` |
-| 13 | left | postfix: `.name` `.name<..>(..)` `(..)` `[..]` `?` (no `as` — RFC 0012 §3) |
+| 12 | left | `as` — numeric cast `expr as T`, RHS a naming position (RFC 0007 §1) |
+| 13 | right | unary `-` `!` `~` |
+| 14 | left | postfix: `.name` `.name<..>(..)` `(..)` `[..]` `?` (`as` is level 12 — RFC 0007 §1) |
 
 Postfixes are a loop, so `p.value.x`, `arr[i].push(x)` chains compose
 without special cases.

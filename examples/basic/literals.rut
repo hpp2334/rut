@@ -14,7 +14,10 @@ fn literals(name: str) -> unit {
     let log = Logger.new("literals");
     let a = 10;                      // i32 (default)
     let b = 10u8;                    // u8 via suffix
-    let c: u64 = 10;                 // u64 via annotation
+    let c: u64 = 10;                 // u64 via annotation — fits the default
+    let big = 18446744073709551615u64; // past the `i32` default: suffix REQUIRED
+    // let bad = 13503953896175478587; // ERROR —exceeds `i32`, add `u64`
+    let cast = 300 as u8;            // 44 — `as` truncates, C/Rust semantics
     let d = 1.5;                     // f32 (default)
     let e = 1.5f32;                  // f32 via suffix
     let d64: f64 = 1.5;              // f64 via annotation
