@@ -67,19 +67,17 @@ pub(super) fn value_kind_name(v: &Value) -> &'static str {
 }
 
 pub(super) fn seq_get(cell: &crate::heap::CellVal, i: i64) -> Result<Slot, Trap> {
-    let (items, what) = match &cell.data {
-        crate::heap::CellData::Vec { items, .. } => (items.borrow(), "vec"),
-        crate::heap::CellData::Array { items, .. } => (items.borrow(), "array"),
+    let items = match &cell.data {
+        crate::heap::CellData::Array { items, .. } => items.borrow(),
         _ => return Err(Trap::new(TrapKind::Invalid, "index on non-sequence")),
     };
     items
         .get(i as usize)
-        .ok_or_else(|| Trap::new(TrapKind::IndexOutOfBounds, format!("{what} index {i} out of bounds (len {})", items.len())))
+        .ok_or_else(|| Trap::new(TrapKind::IndexOutOfBounds, format!("array index {i} out of bounds (len {})", items.len())))
 }
 
 pub(super) fn seq_set(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Result<Slot, Trap> {
     let mut items = match &cell.data {
-        crate::heap::CellData::Vec { items, .. } => items.borrow_mut(),
         crate::heap::CellData::Array { items, .. } => items.borrow_mut(),
         _ => return Err(Trap::new(TrapKind::Invalid, "index-set on non-sequence")),
     };

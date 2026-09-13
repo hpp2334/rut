@@ -112,14 +112,7 @@ impl Vm {
                     _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-array")),
                 };
                 let n = unsafe { r!(len).i }.max(0) as usize;
-                let c = self.heap.alloc_vec(elem, n, &self.prog.types)?;
-                if let crate::heap::CellData::Vec { items, .. } = &cell_of(c).data {
-                    let mut fb = items.borrow_mut();
-                    let dflt = default_slot_repr(repr);
-                    for _ in 0..n {
-                        fb.push(dflt);
-                    }
-                }
+                let c = self.heap.alloc_array_filled(elem, n, default_slot_repr(repr), &self.prog.types)?;
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);

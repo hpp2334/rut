@@ -146,7 +146,7 @@ pub enum Op {
     /// handle-field retains; buffers clone; strings clone
     Own { dst: Reg, src: Reg, ty: TypeId },
 
-    ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Vec<T>(n) zeroed
+    ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Array<T>(n) zeroed
     ArrLit { dst: Reg, ty: TypeId, elems: Vec<Reg> }, // fixed Array<T, N>
     ArrGet { dst: Reg, arr: Reg, idx: Reg, repr: Repr },       // bounds trap
     ArrSet { arr: Reg, idx: Reg, val: Reg, repr: Repr },

@@ -116,15 +116,16 @@ impl Heap {
         self.mint(rut_core::types::TY_BYTES, CellData::Bytes(b), n)
     }
 
-    pub fn alloc_vec(&self, elem: TypeId, cap: usize, table: &TypeTable) -> Result<Slot, Trap> {
-        let p = Packed::for_elem(elem, table, cap);
-        let bytes = (cap as u64) * p.elem_width();
-        self.mint(
-            0, // Vec cells carry the elem kind in CellData; the *slot's*
-               // static type knows the instantiation
-            CellData::Vec { elem, items: RefCell::new(p) },
-            bytes,
-        )
+    /// A `CellData::Array` with `n` elements pre-filled with `default` — the
+    /// `Array<T>(n)` / `bytes_zeroed` path. Builds the packed store at its
+    /// final length in one allocation (no `Vec<Slot>` temporary).
+    pub fn alloc_array_filled(&self, elem: TypeId, n: usize, default: Slot, table: &TypeTable) -> Result<Slot, Trap> {
+        let mut p = Packed::for_elem(elem, table, n);
+        for _ in 0..n {
+            p.push(default);
+        }
+        let bytes = (n as u64) * p.elem_width();
+        self.mint(0, CellData::Array { elem, items: RefCell::new(p) }, bytes)
     }
 
     pub fn alloc_array(&self, elem: TypeId, items: Vec<Slot>, table: &TypeTable) -> Result<Slot, Trap> {

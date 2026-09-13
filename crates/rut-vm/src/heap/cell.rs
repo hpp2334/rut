@@ -256,7 +256,6 @@ pub enum CellData {
     Str(String),
     /// immutable binary buffer (RFC 0004) — contiguous octets, no slots
     Bytes(Vec<u8>),
-    Vec { elem: TypeId, items: RefCell<Packed> },
     Array { elem: TypeId, items: RefCell<Packed> },
     /// enum member — immortal singleton per (ty, member)
     Enum { member: u32 },
@@ -317,21 +316,19 @@ impl CellVal {
     }
     pub fn seq_len(&self) -> Option<usize> {
         match &self.data {
-            CellData::Vec { items, .. } => Some(items.borrow().len()),
             CellData::Array { items, .. } => Some(items.borrow().len()),
             _ => None,
         }
     }
     pub fn seq_items_copy(&self) -> Option<Vec<Slot>> {
         match &self.data {
-            CellData::Vec { items, .. } => Some(items.borrow().to_slots()),
             CellData::Array { items, .. } => Some(items.borrow().to_slots()),
             _ => None,
         }
     }
     pub fn elem_ty(&self) -> Option<TypeId> {
         match &self.data {
-            CellData::Vec { elem, .. } | CellData::Array { elem, .. } => Some(*elem),
+            CellData::Array { elem, .. } => Some(*elem),
             _ => None,
         }
     }
@@ -339,7 +336,7 @@ impl CellVal {
     /// vector (the `bytes` conversion path); avoids widening through `Slot`.
     pub fn seq_bytes_copy(&self) -> Option<Vec<u8>> {
         match &self.data {
-            CellData::Vec { items, .. } | CellData::Array { items, .. } => {
+            CellData::Array { items, .. } => {
                 let b = items.borrow();
                 Some(match &*b {
                     Packed::U8(v) => v.clone(),
