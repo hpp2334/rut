@@ -1,6 +1,6 @@
 // RFC 0025/0026 — an EMBEDDER-DEFINED native module in use.
 //
-// rut sees ONLY THE DECLARATION of MyMap: `pub host class MyMap<
+// rut sees ONLY THE DECLARATION of MyMap: `pub host interface MyMap<
 // K: Hashable, V> { .. }` — signatures, no bodies — in the declaration
 // file examples/host/plugin/my_map.d.rut (`.d.rut` is the only place
 // `host` may appear, RFC 0029). The Rust IMPLEMENTATION is the sibling
@@ -49,7 +49,7 @@ pub fn main() -> unit {
 
     // K = string: satisfies Hashable via a REGISTERED builtin impl —
     // no user code needed. Construction is a METHOD CALL on the
-    // instantiated host class: MyMap<string, i32>.new(32) reifies the
+    // instantiated host interface: MyMap<string, i32>.new(32) reifies the
     // instantiation and runs its native class method with a capacity
     // hint (RFC 0026 §3).
     let counts: MyMap<string, i32> = MyMap<string, i32>.new(32);

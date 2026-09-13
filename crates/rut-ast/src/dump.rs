@@ -190,7 +190,7 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 }
                 "SurfaceFn"
             }
-            ItemKind::SurfaceClass { vis, linkage, name, extparams, members } => {
+            ItemKind::SurfaceInterface { vis, linkage, name, extparams, members } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
                 fields.push(field("linkage", DumpVal::Str(if *linkage == Linkage::Host { "host" } else { "extern" }.to_string())));
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
@@ -207,7 +207,7 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                     ),
                 ));
                 fields.push(field("members", DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect())));
-                "SurfaceClass"
+                "SurfaceInterface"
             }
         },
         Kind::Member(k) => match k {

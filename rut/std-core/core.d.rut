@@ -7,7 +7,7 @@
 // This file is the declarative form of the host's builtin tables: every
 // member here is a statically bound native (RFC 0032 §1.1 R2 — named
 // things are natives, never ops). The LSP consumes it today for hover
-// and signature display; rutc consumes it the same way `host class`
+// and signature display; rutc consumes it the same way `host interface`
 // decls are consumed (RFC 0029) when the module loader lands (RFC 0035).
 //
 // Contract: declare a member here as its native lands — the surface is
@@ -23,11 +23,11 @@ pub host fn bytes_decode(b: bytes) -> string;   // bytes -> UTF-8 string (lossy)
 pub host fn bytes_from(a: Array<u8>) -> bytes;  // copy an Array<u8> (RFC 0004)
 pub host fn bytes_zeroed(n: i32) -> bytes;      // n zeroed octets
 
-pub host class Array<T> {
+pub host interface Array<T> {
     fn len(self) -> i32;                    // the heap array's runtime length
 }
 
-pub host class Option<T> {
+pub host interface Option<T> {
     fn some(v: T) -> Self;
     fn none() -> Self;                      // element inferred from the binding's annotation
     fn is_some(self) -> bool;
@@ -36,7 +36,7 @@ pub host class Option<T> {
     fn expect(self, msg: string) -> T;      // panics with `msg` on None
 }
 
-pub host class Result<T, E> {
+pub host interface Result<T, E> {
     fn ok(v: T) -> Self;
     fn err(e: E) -> Self;
     fn is_ok(self) -> bool;

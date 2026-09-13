@@ -31,7 +31,7 @@ fn host_primitive_is_rejected() {
     // primitive operations are now free `host fn`s
     let (_, diags) = parse("pub host primitive string { fn len(self) -> i32; }", Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected `fn` or `class`")),
+        diags.iter().any(|d| d.msg.contains("expected `fn` or `interface`")),
         "`host primitive` must be diagnosed: {diags:?}"
     );
 }

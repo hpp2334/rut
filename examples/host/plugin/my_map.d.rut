@@ -19,7 +19,7 @@
 // exactly like this one.
 import { Hashable } from "std:collection";
 
-pub host class MyMap<K: Hashable, V> {
+pub host interface MyMap<K: Hashable, V> {
     fn new(cap: i32) -> Self;              // native class method — the
     fn set(self, k: K, v: V) -> unit;      // construction surface (RFC 0010/0025)
     fn get(self, k: K) -> Option<V>;
