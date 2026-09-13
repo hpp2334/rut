@@ -1,16 +1,19 @@
-//! Phase 0 — validate the threaded mechanism.
+//! Phase 0/1 — validate the threaded mechanism on the real engine API.
 //!
 //! A synthetic `Machine` (this file is a separate crate, so it also proves
 //! the generic handlers instantiate across the crate boundary). A long
 //! chain runs on a deliberately tiny stack: if the backend is not doing
-//! real tail calls, it overflows and the test aborts. We also decode a
-//! couple of handlers and assert they end in an indirect jump.
+//! real tail calls, it overflows and the test aborts.
 
-use rut_vm_threaded::Machine;
+use rut_core::ops::Op;
+use rut_vm_threaded::{Flow, Machine, ThreadOut};
 
-/// `ops` is a tag stream: 0 = inc, 1 = dec, 2 = halt.
+const N: i64 = 5_000_000;
+
+/// Loops on a single `Mov`; the engine's tag maps it to the threaded
+/// handler, which tail-jumps forever until the counter says stop.
 struct Counter {
-    ops: Vec<u8>,
+    ops: Vec<Op>,
     acc: i64,
 }
 
@@ -18,37 +21,42 @@ impl Machine for Counter {
     type Out = i64;
     type Err = ();
 
-    fn tag_at(&self, pc: u32) -> u8 {
-        self.ops[pc as usize]
+    fn pc(&self) -> u32 {
+        0
     }
-    fn inc(&mut self, pc: u32) -> Result<u32, ()> {
+    fn set_pc(&mut self, _pc: u32) {}
+    fn op_at(&self, pc: u32) -> &Op {
+        &self.ops[pc as usize]
+    }
+    fn tick(&mut self, _pc: u32) -> Result<(), ()> {
+        Ok(())
+    }
+    fn op_mov(&mut self, _pc: u32) -> Result<Flow<i64>, ()> {
         self.acc += 1;
-        Ok(pc + 1)
-    }
-    fn dec(&mut self, pc: u32) -> Result<u32, ()> {
-        self.acc -= 1;
-        Ok(pc + 1)
-    }
-    fn halt(&mut self, _pc: u32) -> i64 {
-        self.acc
+        if self.acc >= N {
+            Ok(Flow::Done(self.acc))
+        } else {
+            Ok(Flow::Next(0))
+        }
     }
 }
 
 #[test]
 fn long_chain_is_flat_and_correct() {
-    const N: u32 = 5_000_000;
-
     // A tiny stack makes the tail-call guarantee observable: 5M ordinary
     // frames would need hundreds of MB.
     let handle = std::thread::Builder::new()
         .stack_size(256 * 1024)
         .spawn(|| {
-            let mut ops = vec![0u8; N as usize];
-            ops.push(2); // halt
+            let ops = vec![Op::Mov { dst: 0, src: 0 }];
             let mut c = Counter { ops, acc: 0 };
-            rut_vm_threaded::run(&mut c, 0).unwrap()
+            let table = rut_vm_threaded::build_table::<Counter>();
+            match rut_vm_threaded::run(&mut c, 0, &table).unwrap() {
+                ThreadOut::Done(v) => v,
+                ThreadOut::Bail => panic!("unexpected bail"),
+            }
         })
         .expect("spawn");
 
-    assert_eq!(handle.join().expect("join"), N as i64);
+    assert_eq!(handle.join().expect("join"), N);
 }

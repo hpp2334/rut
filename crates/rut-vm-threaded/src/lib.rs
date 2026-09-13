@@ -8,26 +8,33 @@
 //! `build.rs` (native x86_64/aarch64 — see the module docs there):
 //!
 //! - [`native`] — `become`-threaded handlers: each op ends by replacing its
-//!   frame with the next handler's, so dispatch is a direct/indirect
-//!   tail-jump and hot state lives in registers.
-//! - [`wasm`] — a portable loop over the same [`Machine`] methods, used on
-//!   wasm and any other target without verified tail calls.
+//!   frame with the next handler's, so dispatch is a tail jump and hot state
+//!   stays in registers.
+//! - [`wasm`] — a portable loop over the same [`Machine`] methods, for wasm
+//!   and any other target without verified tail calls.
 //!
-//! Both backends call the **same** `Machine` op methods, so behavior is
-//! identical; only the dispatch shape differs.
+//! Both backends call the **same** `Machine::op_*` methods, so behavior is
+//! identical; only the dispatch shape differs. Unthreaded ops return
+//! [`ThreadOut::Bail`] with the pc left at that op so the VM's match
+//! interpreter takes over.
+//!
+//! **Status:** the mechanism (Phase 0) is validated, but wiring it into
+//! `rut-vm` (Phase 1) regressed every workload, so `rut-vm` still uses its
+//! match loop. See `README.md` for the measurements and what a winning
+//! design needs (thread hot state as arguments; full op coverage).
 
 #![cfg_attr(rut_threaded, feature(explicit_tail_calls, rust_preserve_none_cc))]
 #![cfg_attr(rut_threaded, allow(incomplete_features))]
 
 mod api;
-pub use api::Machine;
+pub use api::{tag_of, Flow, Machine, Table, ThreadOut, NTAGS};
 
 #[cfg(rut_threaded)]
 mod native;
 #[cfg(rut_threaded)]
-pub use native::run;
+pub use native::{build_table, run};
 
 #[cfg(not(rut_threaded))]
 mod wasm;
 #[cfg(not(rut_threaded))]
-pub use wasm::run;
+pub use wasm::{build_table, run};

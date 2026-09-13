@@ -451,6 +451,9 @@ dependencies = [
 [[package]]
 name = "rut-vm-threaded"
 version = "0.1.0"
+dependencies = [
+ "rut-core",
+]
 
 [[package]]
 name = "rut-wasm"

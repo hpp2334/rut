@@ -10,3 +10,7 @@ name = "rut_vm_threaded"
 path = "src/lib.rs"
 
 [dependencies]
+rut-core = { path = "../rut-core" }
+
+[dev-dependencies]
+rut-core = { path = "../rut-core" }
