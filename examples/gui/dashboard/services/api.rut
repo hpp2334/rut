@@ -17,9 +17,9 @@ pub(self) fn lcg_f32(state: u32) -> f32 {
     return f32(lcg_next(state) % 1000u32) / 1000.0f32;
 }
 
-let FIRST: Array<string> = ["ada", "linus", "grace", "alan", "barbara", "dennis", "katherine", "ken"];
-let LAST: Array<string> = ["lovelace", "torvalds", "hopper", "turing", "liskov", "ritchie", "johnson", "thompson"];
-let ROLES: Array<string> = ["engineer", "designer", "ops", "pm", "analyst"];   // fixed arrays:
+let FIRST: Array<str> = ["ada", "linus", "grace", "alan", "barbara", "dennis", "katherine", "ken"];
+let LAST: Array<str> = ["lovelace", "torvalds", "hopper", "turing", "liskov", "ritchie", "johnson", "thompson"];
+let ROLES: Array<str> = ["engineer", "designer", "ops", "pm", "analyst"];   // fixed arrays:
                                                                                    // module-let data,
                                                                                    // no allocation
 // --- API ---
@@ -55,7 +55,7 @@ pub suspend fn fetch_users(seed: u32) -> Result<Vec<User>, ApiError> {
     return Result.ok(users);
 }
 
-pub suspend fn fetch_series(metric: string, unit: string, n: i32, seed: u32) -> Result<Series, ApiError> {
+pub suspend fn fetch_series(metric: str, unit: str, n: i32, seed: u32) -> Result<Series, ApiError> {
     await sleep(80);
     let samples: Vec<f32> = Vec.new();
     let v = 50.0f32;

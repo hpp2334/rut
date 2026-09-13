@@ -1,5 +1,5 @@
 //! `string_encode` / `bytes_decode` (RFC 0004) lowered as a composition of
-//! LIR ops — there is no VM native for either. `string` is a `CellData::Str`
+//! LIR ops — there is no VM native for either. `str` is a `CellData::Str`
 //! (a Rust `String`, UTF-8); `bytes` is a `u8` array. Both routines are
 //! loops over `StrCharAt` (encode) / `ArrGet` (decode) with the UTF-8 bit
 //! arithmetic emitted inline.
@@ -261,7 +261,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     // ---- bytes_decode ----
 
-    /// `bytes_decode(b) -> string` — lossy UTF-8 decode, one char per code
+    /// `bytes_decode(b) -> str` — lossy UTF-8 decode, one char per code
     /// point (`Nat::Str` + `Nat::Concat`).
     pub(crate) fn emit_bytes_decode(&mut self, src: u16, sp: u32) -> u16 {
         let out = self.new_reg(TY_STR);

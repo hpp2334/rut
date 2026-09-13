@@ -26,12 +26,12 @@ let log = Logger.new("app");
 
 // The error carries WHERE for free, and a trace only if asked:
 dataclass FetchError {
-    url:    string,
+    url: str,
     at:     Location,              // zero-cost — a folded let at each
     trace:  Option<StackTrace>,    // construction site
 }
 
-fn fetch(url: string) -> Result<string, FetchError> {
+fn fetch(url: str) -> Result<str, FetchError> {
     if (string_len(url) == 0) {
         // The happy path pays nothing; this branch pays once. Skips its
         // own frame automatically (no constructorOpt dance).
@@ -46,7 +46,7 @@ fn fetch(url: string) -> Result<string, FetchError> {
 
 // Context accrues upward — each layer stamps its own (free) location;
 // the trace from the deepest layer survives untouched:
-fn load_config() -> Result<string, FetchError> {
+fn load_config() -> Result<str, FetchError> {
     let r = fetch("")?;
     return Ok(r);
 }

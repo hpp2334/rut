@@ -140,7 +140,7 @@ impl<'a> Ctx<'a> {
                     "i8" => Some(TY_I8), "i16" => Some(TY_I16), "i32" => Some(TY_I32), "i64" => Some(TY_I64),
                     "f32" => Some(TY_F32), "f64" => Some(TY_F64),
                     "bool" => Some(TY_BOOL), "char" => Some(TY_CHAR),
-                    "string" => Some(TY_STR),
+                    "str" => Some(TY_STR),
                     "bytes" => Some(TY_BYTES),
                     "Opaque" => Some(TY_OPAQUE),
                     _ => None,

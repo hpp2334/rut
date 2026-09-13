@@ -13,7 +13,7 @@ import { Logger } from "std:log";
 
 // plain rut data feeding the pipeline (RFC 0009) — no host involvement
 dataclass Sample {
-    metric: string;
+    metric: str;
     value: i64;
 }
 

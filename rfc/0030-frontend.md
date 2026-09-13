@@ -400,7 +400,7 @@ struct Diag { span: Span, msg: String,
   one. Resync only ever skips *forward* — the §4.3 monotone-cursor
   invariant survives errors. Compilation stops before IR if any diag exists.
 - Suggestions: `did you mean \`when\`?` for `switch`/`match`; "bind it to a
-  name first" for string literals in `f"..."` holes; "classes have no
+  name first" for str literals in `f"..."` holes; "classes have no
   instance literal — use \`Circle(..)\`" for `Circle { .. }` on a class.
 
 ## 7. Testing & tooling hooks

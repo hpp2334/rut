@@ -44,7 +44,7 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   2. a trailing **`where` clause on user generic fns** (RFC 0037 §3) —
      the serde motivating pair: producers that return `T` cannot take a
      `dyn I` parameter instead, so the contract rides the call site:
-     `deserialize<T>(v: string): Result<T, JsonError> where T requires
+     `deserialize<T>(v: str): Result<T, JsonError> where T requires
      Deserializable`. A body may widen a `T`-typed *value* to `dyn I`
      (the bound proves the widening valid) but gains no class-method
      calls on bare `T`. (A user-class bound would be pure forwarding

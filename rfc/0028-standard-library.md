@@ -69,18 +69,18 @@ import { create_logger, logger_log } from "rt:log";  // native module
 pub class Logger {
     internal: Opaque;                  // the host owns the layout
 
-    pub fn new(name: string) -> Self { return Self { internal: create_logger(name) }; }
+    pub fn new(name: str) -> Self { return Self { internal: create_logger(name) }; }
 
-    pub fn debug(self, msg: string) -> unit { logger_log(self.internal, 0, msg); }
-    pub fn info(self, msg: string) -> unit  { logger_log(self.internal, 1, msg); }
-    pub fn warn(self, msg: string) -> unit  { logger_log(self.internal, 2, msg); }
-    pub fn error(self, msg: string) -> unit { logger_log(self.internal, 3, msg); }
+    pub fn debug(self, msg: str) -> unit { logger_log(self.internal, 0, msg); }
+    pub fn info(self, msg: str) -> unit  { logger_log(self.internal, 1, msg); }
+    pub fn warn(self, msg: str) -> unit  { logger_log(self.internal, 2, msg); }
+    pub fn error(self, msg: str) -> unit { logger_log(self.internal, 3, msg); }
 }
 ```
 
 `rt:log` is a **native module** (RFC 0022/0026): the host functions
-`create_logger(name: string) -> Opaque` and `logger_log(logger: Opaque,
-level: i32, msg: string) -> unit`. The host owns the logger's layout; rut
+`create_logger(name: str) -> Opaque` and `logger_log(logger: Opaque,
+level: i32, msg: str) -> unit`. The host owns the logger's layout; rut
 only ever holds an `Opaque` handle (RFC 0014) and never inspects it. The
 embedder half ships as `rut-std::logger::install_std_log`
 (`create_logger` boxes the name; `logger_log` routes to the sink). An
@@ -95,13 +95,13 @@ traps carry. `std:debug` is a declaration file + Rust bodies, like
 
 ```rut
 // std/debug.d.rut (excerpt — RFC 0036 §6)
-pub dataclass Location { file: string, line: i32, col: i32 }
+pub dataclass Location { file: str, line: i32, col: i32 }
 pub host fn here() -> Location;                  // folded at compile time (RFC 0033 §3)
-pub host fn str(v: Opaque) -> string;           // developer rendering (RFC 0007 §2)
-pub host fn type_name(v: Opaque) -> string;  // debug type name
+pub host fn str(v: Opaque) -> str;           // developer rendering (RFC 0007 §2)
+pub host fn type_name(v: Opaque) -> str;  // debug type name
 pub host fn capture_stack_trace() -> StackTrace; // skips its own frame
 pub host class StackTrace {
-    fn render() -> string;                          // via loaded binaries'
+    fn render() -> str;                          // via loaded binaries'
     fn depth() -> i32;                              // SymbolTables; lazy
 }                                                 // — degraded when stripped
 ```
@@ -117,7 +117,7 @@ error dataclass is user code:
 import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
 
 dataclass LoadError {
-    msg:   string,
+    msg: str,
     at:    Location,               // free — folded at compile time
     trace: Option<StackTrace>,     // paid only when asked for
 }

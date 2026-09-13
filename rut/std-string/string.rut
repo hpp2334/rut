@@ -1,15 +1,15 @@
 // std:string — a mutable UTF-8 string builder (RFC 0007 §2 / RFC 0008).
 //
-// rut `string` values are immutable, so `s = f"{s}{x}"` inside a loop is
+// rut `str` values are immutable, so `s = f"{s}{x}"` inside a loop is
 // O(n^2): every step copies the whole prefix. `String` accumulates the
-// pieces into bounded chunks and flattens them once at `finish`, which is
+// pieces into bounded chunks and flattens them once at `to_str`, which is
 // amortized O(n) — the rut counterpart of a JS `parts.join("")`.
 //
 //   let mut b = String.new();
 //   for (x of xs) { b.push(x); }
-//   let s = b.finish();
+//   let s = b.to_str();
 //
-// The backing `Vec` is ordered; `finish` walks it once. Class methods are
+// The backing `Vec` is ordered; `to_str` walks it once. Class methods are
 // `mut self` receivers, so a binding must be declared `mut`.
 import { Vec } from "std:collection";
 
@@ -19,10 +19,10 @@ import { Vec } from "std:collection";
 // grammar yet (std:collection spells its defaults inline the same way).
 
 pub class String {
-    parts: Vec<string>;   // sealed chunks, each <= 32 chars
-    cur: string;          // the pending, unsealed tail
-    cur_len: i32;         // chars currently in `cur`
-    total: i32;           // chars pushed since `new`
+    parts: Vec<str>;  // sealed chunks, each <= 32 chars
+    cur: str;         // the pending, unsealed tail
+    cur_len: i32;     // chars currently in `cur`
+    total: i32;       // chars pushed since `new`
 
     pub fn new() -> Self {
         return Self { parts: Vec.new(), cur: "", cur_len: 0, total: 0 };
@@ -42,7 +42,7 @@ pub class String {
     }
 
     // append a string
-    pub fn push(mut self, s: string) -> unit {
+    pub fn push(mut self, s: str) -> unit {
         self.cur = f"{self.cur}{s}";
         let n = string_len(s);
         self.cur_len += n;
@@ -67,8 +67,8 @@ pub class String {
         return self.total == 0;
     }
 
-    // flatten to an immutable `string`
-    pub fn finish(self) -> string {
+    // flatten to an immutable `str`
+    pub fn to_str(self) -> str {
         let mut out = "";
         for (let p of self.parts) {
             out = f"{out}{p}";

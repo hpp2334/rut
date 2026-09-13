@@ -94,7 +94,7 @@ struct SymbolTable {               // in ModuleBinary (RFC 0033 §1);
     funcs: Vec<FuncSym>,           //  == the .rutc.map sidecar payload
 }
 struct FuncSym {
-    name: Option<string>,          // None when names stripped
+    name: Option<str>,          // None when names stripped
     spans: SpanTable,              // sorted [(pc_start, pc_end) -> (byte_off, line, col)]
 }
 ```
@@ -112,15 +112,15 @@ struct FuncSym {
 import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
 
 dataclass LoadError {
-    msg:   string,
+    msg: str,
     at:    Location,               // free — folded at compile time
     trace: Option<StackTrace>,     // paid only when asked for
 }
 ```
 
-- `trace.render() -> string` — native method; renders via the loaded
+- `trace.render() -> str` — native method; renders via the loaded
   binaries' tables, degrades gracefully when stripped.
-- `Location` is a plain dataclass `{ file: string, line: i32, col: i32 }`
+- `Location` is a plain dataclass `{ file: str, line: i32, col: i32 }`
   — printable, no host state; crosses the `Value` boundary
   like any dataclass (RFC 0023). `==` on it is cell identity, like every
   composite (RFC 0012 §4) — compare fields if equality matters.
@@ -131,17 +131,17 @@ Same declaration-file machinery as `plugin:my_map` (RFC 0025/0026/0029):
 
 ```rut
 // std/debug.d.rut (excerpt)
-pub dataclass Location { file: string, line: i32, col: i32 }
+pub dataclass Location { file: str, line: i32, col: i32 }
 pub host fn here() -> Location;                  // folded at compile time (RFC 0033 §3)
-pub host fn str(v: Opaque) -> string;        // developer rendering (RFC 0007 §2)
-pub host fn type_name(v: Opaque) -> string;  // debug type name
+pub host fn str(v: Opaque) -> str;        // developer rendering (RFC 0007 §2)
+pub host fn type_name(v: Opaque) -> str;  // debug type name
 pub host fn capture_stack_trace() -> StackTrace;
 pub host class StackTrace {
                                              // every capture is a unique
                                              // snapshot — identity `==`,
                                              // like every composite
                                              // (RFC 0012 §4)
-    fn render() -> string;
+    fn render() -> str;
     fn depth() -> i32;
 }
 ```

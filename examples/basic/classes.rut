@@ -54,12 +54,12 @@ class Version {
         return Self { major: major, minor: minor }; // caller; seals the class
     }
 
-    pub fn parse(s: string) -> Option<Version> {  // the public validating door:
+    pub fn parse(s: str) -> Option<Version> {  // the public validating door:
         // ... split "1.2" — on failure:        // a class method over the
         return Option.none();                 // module-private class method
     }
 
-    pub fn label(self) -> string { return f"{self.major}.{self.minor}"; }
+    pub fn label(self) -> str { return f"{self.major}.{self.minor}"; }
 }
 
 fn classes() -> unit {

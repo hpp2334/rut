@@ -52,7 +52,7 @@ fn build_batch(_args: &GenericArgs, _types: &TypeRegistry) -> Result<ClassTable,
         .build()
 }
 
-/// The host callback — `submit(b: Batch): string` in the declaration.
+/// The host callback — `submit(b: Batch): str` in the declaration.
 ///
 /// The class-typed parameter crosses as `Handle<Batch>` (RFC 0022 §2):
 /// the VM already checked the argument's TypeId against the declared

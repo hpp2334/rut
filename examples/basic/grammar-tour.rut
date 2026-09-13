@@ -53,7 +53,7 @@ fn blit_all(g: Canvas, items: Vec<Drawable>) -> unit {
  }
 }
 
-fn color_name(c: Color) -> string {
+fn color_name(c: Color) -> str {
  return when (c) { // exhaustive: all members covered
  Color.Red -> "red",
  Color.Green -> "green",

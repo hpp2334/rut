@@ -171,7 +171,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let t = self.compile_expr(args[0], Some(TY_STR))?;
                 if t != TY_STR {
-                    self.ctx.err(sp, "panic takes a `string`");
+                    self.ctx.err(sp, "panic takes a `str`");
                 }
                 self.emit(Op::Panic { msg: self.last_reg }, sp.lo);
                 return Ok(TY_UNIT);
@@ -189,7 +189,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let msg = if args.len() == 2 {
                     let t = self.compile_expr(args[1], Some(TY_STR))?;
                     if t != TY_STR {
-                        self.ctx.err(sp, "assert message must be a `string`");
+                        self.ctx.err(sp, "assert message must be a `str`");
                     }
                     Some(self.last_reg)
                 } else {
@@ -204,12 +204,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             "string_len" => {
                 if args.len() != 1 {
-                    self.ctx.err(sp, "string_len(s) takes one `string`");
+                    self.ctx.err(sp, "string_len(s) takes one `str`");
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], Some(TY_STR))?;
                 if t != TY_STR {
-                    self.ctx.err(sp, format!("string_len takes a `string`, found `{}`", self.ctx.types.name(t)));
+                    self.ctx.err(sp, format!("string_len takes a `str`, found `{}`", self.ctx.types.name(t)));
                 }
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_I32);
@@ -218,12 +218,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             "string_encode" => {
                 if args.len() != 1 {
-                    self.ctx.err(sp, "string_encode(s) takes one `string`");
+                    self.ctx.err(sp, "string_encode(s) takes one `str`");
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], Some(TY_STR))?;
                 if t != TY_STR {
-                    self.ctx.err(sp, format!("string_encode takes a `string`, found `{}`", self.ctx.types.name(t)));
+                    self.ctx.err(sp, format!("string_encode takes a `str`, found `{}`", self.ctx.types.name(t)));
                 }
                 let src = self.last_reg;
                 let dst = self.emit_string_encode(src, sp.lo);
@@ -817,14 +817,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
         let mname = self.ctx.name(name).to_string();
-        // primitives have no method syntax (RFC 0004/0012): `string`/`bytes`
+        // primitives have no method syntax (RFC 0004/0012): `str`/`bytes`
         // operations are free functions (`string_len`, `string_encode`,
         // `bytes_len`, `bytes_decode`, `bytes_from`)
         match self.ctx.types.kind(rt) {
             TyKind::Str => {
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
-                    "`string` has no methods — replace `{who}.{mname}()` with a free function (`string_len({who})`, `string_encode({who})`)"
+                    "`str` has no methods — replace `{who}.{mname}()` with a free function (`string_len({who})`, `string_encode({who})`)"
                 ));
                 return Err(());
             }
@@ -885,7 +885,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     let t = self.compile_expr(args[0], Some(TY_STR))?;
                     if t != TY_STR {
-                        self.ctx.err(sp, "expect takes a `string`");
+                        self.ctx.err(sp, "expect takes a `str`");
                     }
                     let msg = self.last_reg;
                     let dst = self.new_reg(elem);

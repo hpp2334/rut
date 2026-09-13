@@ -63,12 +63,13 @@ only, and — beyond RFC 0003's module scope — every declaration must be
 - `host fn` / `host class` / `extern fn` / `extern class` — signatures
   only, with admission-only param bounds (RFC 0025);
 - `host primitive` — **the native member surface of a primitive type**:
-  `pub host primitive string { fn len(self) -> i32; }`. Members are
+  `pub host primitive str { fn len(self) -> i32; }`. Members are
   bodiless and statically bound (RFC 0032 §1.1 R2 — named things on
   builtins are natives, never ops); the decl is the declarative form of
   the host's builtin member table. This is how primitives grow methods
-  **without a wrapper-class fiction** — `string` stays the one name for
-  the type and the impl target (no `String`/`string` duality; the slot
+  **without a wrapper-class fiction** — `str` stays the one name for
+  the type and the impl target (the `std:string` `String` builder is a
+  separate class, not a wrapper name; the slot
   table is per-primitive, same shape as a `host class`). `primitive` is
   a contextual keyword, `.d.rut`-only after the linkage keyword — it
   stays a legal identifier everywhere else. Builtin containers

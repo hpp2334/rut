@@ -445,15 +445,15 @@ pub fn is_reserved_kw(s: &str) -> bool {
 }
 
 /// The primitive types (RFC 0002 §3) — contextual type names, matched by
-/// interner text. Public and canonical: `host primitive` decls (RFC 0029
-/// §2) and the LSP classifier share this one table. `string` included —
-/// it is a primitive, not a class; its native member surface is declared
-/// with `host primitive string { .. }` in the std `.d.rut`. `bytes`
-/// (RFC 0004) is the immutable binary primitive alongside `string`.
+/// interner text. Public and canonical: surface decls (RFC 0029 §2) and
+/// the LSP classifier share this one table. `str` included — it is a
+/// primitive, not a class; its natives are the free `string_len`/
+/// `string_encode` host fns declared in std:core. `bytes` (RFC 0004) is
+/// the immutable binary primitive alongside `str`.
 pub fn is_primitive_ty(s: &str) -> bool {
     matches!(
         s,
-        "bool" | "string" | "bytes" | "unit" | "f32" | "f64"
+        "bool" | "str" | "bytes" | "unit" | "f32" | "f64"
             | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
     )
 }

@@ -22,7 +22,7 @@ deferred.
 | signed int | `i8 i16 i32 i64` | two's complement |
 | float | `f32 f64` | IEEE 754 |
 | misc | `bool`, `char` (Unicode scalar, 4 bytes) | |
-| heap: text | `string` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4) |
+| heap: text | `str` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4) |
 | heap: binary | `bytes` | immutable, content-compared octet buffer; at the engine level a `u8` array; built with `bytes(n)` (zeroed), `bytes_from(Array<u8>)`, or `Vec<u8>.freeze()` (RFC 0005) |
 | heap: seq | `Vec<T>` | mutable, growable buffer — cell handle, **shared**; flat storage for primitive `T` (RFC 0016 §4) |
 | heap: seq | `Array<T, N>` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |
@@ -46,7 +46,7 @@ deferred.
   At the engine level `bytes` is a `u8` array (RFC 0005).
 - No `null`, no `undefined`. Absence is `Option<T>` (RFC 0005).
 - **Size accessor**: `.len()` on `Vec<T>`/`Array<T>` (and any `Index<T>`
-  object); `string`/`bytes` have no method syntax, so their size is the
+  object); `str`/`bytes` have no method syntax, so their size is the
   free functions `string_len(s)` / `bytes_len(b)` (RFC 0012). There is no
   `.length` property or `.count()` variant anywhere in the language.
 
@@ -56,7 +56,7 @@ Primitives (`u8..u64`, `i8..i64`, `u/isize`, `f32`/`f64`, `bool`,
 `char`) copy on assignment/passing/return — plain slot moves. **Every
 other type is a refcounted heap cell handle** (RFC 0016 §1):
 assignment shares, and mutation through any alias is visible through
-all of them — dataclass and class instances, `string`, `Vec`, `Array`,
+all of them — dataclass and class instances, `str`, `Vec`, `Array`,
 enums, `Opaque`, `dyn I` alike. Writing is gated by the `mut`-binding
 law (RFC 0003 §1), never by the sharing. The **eager copy is the
 `own(x)` builtin** (RFC 0011 §1): shallow — primitive fields copied,

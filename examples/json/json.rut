@@ -17,14 +17,14 @@ import { Vec } from "std:collection";
 // RFC 0007 OQ-1 dependency — string byte access (the standing
 // byte-index + helpers proposal; serde is its forcing case):
 //     s.at(i): u8            byte at i
-//     s.slice(a, b): string  substring [a, b)
+//     s.slice(a, b): str  substring [a, b)
 // Everything else is language surface: Opaque.new(v)/downcast/is (RFC 0014),
 // std:reflect (RFC 0037), Vec (RFC 0005), f"" (RFC 0007 §2). JSON
 // escapes \b, \f and \uXXXX are NOT handled — they need byte<->char
 // helpers from the same OQ family (recorded, not invented).
 //
 // Numbers are f64, JS semantics; >2^53 integer fidelity is documented
-// lost. `str_eq` is exported for consumers: string content equality
+// lost. `str_eq` is exported for consumers: str content equality
 // over the same OQ-1 surface (rut has no `==` on strings).
 
 import { ReflectEngine, Reflectable, Deserializable, TypeInfo,
@@ -42,8 +42,8 @@ pub interface Serializable requires Reflectable { }
 enum JKind { Null, Bool, Num, Str, Arr, Obj }
 
 dataclass JsonValue { kind: JKind; val: Option<Opaque>; pos: i32 }
-dataclass JField { name: string; value: JsonValue; pos: i32 }
-dataclass JsonError { msg: string; pos: i32 }
+dataclass JField { name: str; value: JsonValue; pos: i32 }
+dataclass JsonError { msg: str; pos: i32 }
 dataclass Parsed { value: JsonValue; end: i32 }
 
 fn jnull(pos: i32) -> JsonValue {
@@ -55,7 +55,7 @@ fn jbool(b: bool, pos: i32) -> JsonValue {
 fn jnum(v: f64, pos: i32) -> JsonValue {
     return JsonValue { kind: JKind.Num, val: Option<Opaque>.Some(Opaque.new(v)), pos: pos };
 }
-fn jstr(sv: string, pos: i32) -> JsonValue {
+fn jstr(sv: str, pos: i32) -> JsonValue {
     return JsonValue { kind: JKind.Str, val: Option<Opaque>.Some(Opaque.new(sv)), pos: pos };
 }
 fn jarr(items: Vec<JsonValue>, pos: i32) -> JsonValue {
@@ -67,14 +67,14 @@ fn jobj(fields: Vec<JField>, pos: i32) -> JsonValue {
 
 // === entries — BOTH consents are compile-time (RFC 0037 §4) ===
 
-pub fn stringify(v: Serializable) -> Result<string, string> {
+pub fn stringify(v: Serializable) -> Result<str, str> {
     // consumer: a interface-object-typed param — one copy, vtable dispatch.
     // v.reflect() is the vtable call; v descends to Opaque (the
     // lattice bottom, RFC 0014) at write_val's parameter.
     return write_val(v.reflect(), v);
 }
 
-pub fn deserialize<T>(v: string) -> Result<T, JsonError>
+pub fn deserialize<T>(v: str) -> Result<T, JsonError>
         where T requires Deserializable {
     // producer: a interface-object-typed return does not exist, so the
     // contract rides the call site — T is guaranteed descriptor-backed
@@ -91,10 +91,10 @@ pub fn deserialize<T>(v: string) -> Result<T, JsonError>
 
 // === the serializer walker — RFC 0037 §4 acceptance trace ===
 
-fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
+fn write_val(t: TypeInfo, a: Opaque) -> Result<str, str> {
     when (t.kind()) {
         TypeKind.Record -> {
-            let parts = Vec<string>.new();
+            let parts = Vec<str>.new();
             let fs = t.fields();
             for (let i = 0; i < fs.len(); i += 1) {
                 // .value (not unwrap_or): the Record branch proves
@@ -106,7 +106,7 @@ fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
             return Ok(f"{{{join(parts)}}}");        // {{ }} -> { (RFC 0007 §2)
         },
         TypeKind.Seq -> {
-            let parts = Vec<string>.new();
+            let parts = Vec<str>.new();
             for (let i = 0; i < t.arity(a); i += 1) {
                 parts.push(write_val(t.elem(), t.child(a, i).value)?);
             }
@@ -128,7 +128,7 @@ fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
             return Err(t.name());   // {1,1} (Result-like): unwrap first (P4)
         },
         TypeKind.Leaf -> when (t.leaf()) {
-            LeafKind.String -> Ok(quote(downcast<string>(a).value)),
+            LeafKind.String -> Ok(quote(downcast<str>(a).value)),
             LeafKind.Int    -> Ok(f"{downcast<i64>(a).value}"),  // boxing
             LeafKind.Float  -> Ok(f"{downcast<f64>(a).value}"),  // widens —
             LeafKind.Bool   -> Ok(when (downcast<bool>(a).value) {   // RFC
@@ -139,7 +139,7 @@ fn write_val(t: TypeInfo, a: Opaque) -> Result<string, string> {
                 // is_a() query is the gate; the view renders
                 // positionally (named walking is the dataclass path).
                 if (t.is_a(reflect<Reflectable>())) {
-                    let parts = Vec<string>.new();
+                    let parts = Vec<str>.new();
                     for (let i = 0; i < t.arity(a); i += 1) {
                         let c = t.child(a, i).value;
                         parts.push(write_val(type_of(c), c)?);
@@ -265,7 +265,7 @@ fn sum_is_optional(vs: Vec<SumVariant>) -> bool {
 
 // === tree access ===
 
-fn member(j: JsonValue, name: string) -> Option<JsonValue> {
+fn member(j: JsonValue, name: str) -> Option<JsonValue> {
     when (j.kind) {
         JKind.Obj -> {
             let fs = downcast<Vec<JField>>(j.val.value).unwrap_or(Vec<JField>.new());
@@ -280,25 +280,25 @@ fn member(j: JsonValue, name: string) -> Option<JsonValue> {
     }
 }
 
-fn want_str(j: JsonValue, ty: string) -> Result<string, JsonError> {
+fn want_str(j: JsonValue, ty: str) -> Result<str, JsonError> {
     return when (j.kind) {
-        JKind.Str -> Ok(downcast<string>(j.val.value).unwrap_or("")),
+        JKind.Str -> Ok(downcast<str>(j.val.value).unwrap_or("")),
         else -> Err(JsonError { msg: f"string expected for {ty}", pos: j.pos }),
     };
 }
-fn want_num(j: JsonValue, ty: string) -> Result<f64, JsonError> {
+fn want_num(j: JsonValue, ty: str) -> Result<f64, JsonError> {
     return when (j.kind) {
         JKind.Num -> Ok(downcast<f64>(j.val.value).unwrap_or(0.0)),
         else -> Err(JsonError { msg: f"number expected for {ty}", pos: j.pos }),
     };
 }
-fn want_bool(j: JsonValue, ty: string) -> Result<bool, JsonError> {
+fn want_bool(j: JsonValue, ty: str) -> Result<bool, JsonError> {
     return when (j.kind) {
         JKind.Bool -> Ok(downcast<bool>(j.val.value).unwrap_or(false)),
         else -> Err(JsonError { msg: f"bool expected for {ty}", pos: j.pos }),
     };
 }
-fn want_items(j: JsonValue, ty: string) -> Result<Vec<JsonValue>, JsonError> {
+fn want_items(j: JsonValue, ty: str) -> Result<Vec<JsonValue>, JsonError> {
     return when (j.kind) {
         JKind.Arr -> Ok(downcast<Vec<JsonValue>>(j.val.value).unwrap_or(Vec<JsonValue>.new())),
         else -> Err(JsonError { msg: f"array expected for {ty}", pos: j.pos }),
@@ -309,7 +309,7 @@ fn want_items(j: JsonValue, ty: string) -> Result<Vec<JsonValue>, JsonError> {
 
 fn is_digit(c: u8) -> bool { return c >= 48u8 && c <= 57u8; }
 
-pub fn str_eq(a: string, b: string) -> bool {
+pub fn str_eq(a: str, b: str) -> bool {
     if (string_len(a) != string_len(b)) { return false; }
     for (let i = 0; i < string_len(a); i += 1) {
         if (a.at(i) != b.at(i)) { return false; }
@@ -317,7 +317,7 @@ pub fn str_eq(a: string, b: string) -> bool {
     return true;
 }
 
-fn skip_ws(s: string, i0: i32) -> i32 {
+fn skip_ws(s: str, i0: i32) -> i32 {
     let i = i0;
     let scanning = true;
     while (scanning) {
@@ -335,7 +335,7 @@ fn skip_ws(s: string, i0: i32) -> i32 {
     return i;
 }
 
-fn parse_tree(s: string) -> Result<JsonValue, JsonError> {
+fn parse_tree(s: str) -> Result<JsonValue, JsonError> {
     let first = parse_value(s, 0)?;
     let rest = skip_ws(s, first.end);
     if (rest < string_len(s)) {
@@ -344,7 +344,7 @@ fn parse_tree(s: string) -> Result<JsonValue, JsonError> {
     return Ok(first.value);
 }
 
-fn parse_value(s: string, i0: i32) -> Result<Parsed, JsonError> {
+fn parse_value(s: str, i0: i32) -> Result<Parsed, JsonError> {
     let i = skip_ws(s, i0);
     if (i >= string_len(s)) {
         return Err(JsonError { msg: "unexpected end of input", pos: i });
@@ -359,14 +359,14 @@ fn parse_value(s: string, i0: i32) -> Result<Parsed, JsonError> {
     return parse_num(s, i);
 }
 
-fn parse_lit(s: string, i: i32, text: string, value: JsonValue) -> Result<Parsed, JsonError> {
+fn parse_lit(s: str, i: i32, text: str, value: JsonValue) -> Result<Parsed, JsonError> {
     if (i + string_len(text) <= string_len(s) && str_eq(s.slice(i, i + string_len(text)), text)) {
         return Ok(Parsed { value: value, end: i + string_len(text) });
     }
     return Err(JsonError { msg: f"literal {text} expected", pos: i });
 }
 
-fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
+fn parse_object(s: str, i: i32) -> Result<Parsed, JsonError> {
     let fields = Vec<JField>.new();
     let k = skip_ws(s, i + 1);
     if (k < string_len(s) && s.at(k) == 125u8) {           // '}'
@@ -381,7 +381,7 @@ fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
         }
         let val = parse_value(s, k + 1)?;
         fields.push(JField {
-            name: downcast<string>(key.value.val.value).unwrap_or(""),
+            name: downcast<str>(key.value.val.value).unwrap_or(""),
             value: val.value,
             pos: i,
         });
@@ -398,7 +398,7 @@ fn parse_object(s: string, i: i32) -> Result<Parsed, JsonError> {
     return Ok(Parsed { value: jobj(fields, i), end: k + 1 });
 }
 
-fn parse_array(s: string, i: i32) -> Result<Parsed, JsonError> {
+fn parse_array(s: str, i: i32) -> Result<Parsed, JsonError> {
     let items = Vec<JsonValue>.new();
     let k = skip_ws(s, i + 1);
     if (k < string_len(s) && s.at(k) == 93u8) {            // ']'
@@ -422,13 +422,13 @@ fn parse_array(s: string, i: i32) -> Result<Parsed, JsonError> {
 }
 
 // escape tables — JSON text <-> rut text (RFC 0007 string escapes)
-let Q2T: string = "\\\"";     // text:  \"   (backslash, quote)
-let BS2T: string = "\\\\";    // text:  \\
-let NL2T: string = "\\n";
-let TB2T: string = "\\t";
-let CR2T: string = "\\r";
+let Q2T: str = "\\\"";     // text:  \"   (backslash, quote)
+let BS2T: str = "\\\\";    // text:  \\
+let NL2T: str = "\\n";
+let TB2T: str = "\\t";
+let CR2T: str = "\\r";
 
-fn esc_to_text(c: u8) -> string {          // for OUTPUT (quote)
+fn esc_to_text(c: u8) -> str {          // for OUTPUT (quote)
     if (c == 34u8)  { return Q2T; }
     if (c == 92u8)  { return BS2T; }
     if (c == 10u8)  { return NL2T; }
@@ -436,7 +436,7 @@ fn esc_to_text(c: u8) -> string {          // for OUTPUT (quote)
     if (c == 13u8)  { return CR2T; }
     return "";
 }
-fn unesc_to_char(c: u8) -> string {        // for INPUT (parse)
+fn unesc_to_char(c: u8) -> str {        // for INPUT (parse)
     if (c == 34u8)  { return "\""; }
     if (c == 92u8)  { return "\\"; }
     if (c == 47u8)  { return "/"; }
@@ -446,7 +446,7 @@ fn unesc_to_char(c: u8) -> string {        // for INPUT (parse)
     return "";
 }
 
-fn parse_string(s: string, i: i32) -> Result<Parsed, JsonError> {
+fn parse_string(s: str, i: i32) -> Result<Parsed, JsonError> {
     let out = "";
     let run = i + 1;
     let k = i + 1;
@@ -475,7 +475,7 @@ fn parse_string(s: string, i: i32) -> Result<Parsed, JsonError> {
     return Err(JsonError { msg: "unterminated string", pos: i });
 }
 
-fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
+fn parse_num(s: str, i: i32) -> Result<Parsed, JsonError> {
     let k = i;
     let neg = false;
     if (k < string_len(s) && s.at(k) == 45u8) { neg = true; k += 1; }   // '-'
@@ -531,10 +531,10 @@ fn parse_num(s: string, i: i32) -> Result<Parsed, JsonError> {
 
 // === text helpers ===
 
-let DQ: string = "\"";
-let COMMA: string = ",";
+let DQ: str = "\"";
+let COMMA: str = ",";
 
-fn quote(sv: string) -> string {
+fn quote(sv: str) -> str {
     let out = DQ;
     let run = 0;
     for (let k = 0; k < string_len(sv); k += 1) {
@@ -550,7 +550,7 @@ fn quote(sv: string) -> string {
     return out;
 }
 
-fn join(parts: Vec<string>) -> string {
+fn join(parts: Vec<str>) -> str {
     // separators bind to consts: a string literal inside an f"" hole is
     // a lex error (RFC 0007 §2) — bind it first.
     let out = "";

@@ -8,8 +8,8 @@ use rut_parser::{parse, Mode};
 
 const FN_SURFACE: &str = "\
 // the string natives, declared where the host binds them
-pub host fn string_len(s: string) -> i32;
-pub extern fn string_encode(s: string) -> bytes;
+pub host fn string_len(s: str) -> i32;
+pub extern fn string_encode(s: str) -> bytes;
 ";
 
 #[test]
@@ -39,7 +39,7 @@ fn host_primitive_is_rejected() {
 #[test]
 fn host_fn_is_decl_only() {
     // RFC 0029 §2: `host`/`extern` belong to `.d.rut`
-    let (_, diags) = parse("host fn string_len(s: string) -> i32;", Mode::Impl);
+    let (_, diags) = parse("host fn string_len(s: str) -> i32;", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("RFC 0029")),
         "impl mode must reject the surface keyword: {diags:?}"

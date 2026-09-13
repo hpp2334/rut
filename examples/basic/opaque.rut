@@ -14,9 +14,9 @@ dataclass Point { x: f32; y: f32 }
 enum Flavor { Sweet, Sour }
 
 class Session {
-    token: string;
+    token: str;
 
-    fn new(token: string) -> Self {
+    fn new(token: str) -> Self {
         return Self { token: token };
     }
 }
@@ -33,7 +33,7 @@ fn erase_and_recover() -> unit {
     }
     let wrong = downcast<i32>(box2);            // wrong type: None, no trap
     log.info(f"sour? {downcast<Flavor>(box2).is_some()} wrong? {wrong.is_some()}");
-    log.info(f"is string: {box3 is string}");   // `is` sees through the box
+    log.info(f"is str: {box3 is str}");   // `is` sees through the box
 }
 
 fn share_vs_copy() -> unit {

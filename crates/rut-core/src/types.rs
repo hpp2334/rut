@@ -199,7 +199,7 @@ impl TypeTable {
         push("f64", TyKind::Prim(PrimTy::F64));
         push("bool", TyKind::Prim(PrimTy::Bool));
         push("char", TyKind::Prim(PrimTy::Char));
-        push("string", TyKind::Str);
+        push("str", TyKind::Str);
         push("Opaque", TyKind::Opaque);
         push("bytes", TyKind::Bytes);
         t.boot_len = t.types.len() as u32;
@@ -330,7 +330,7 @@ impl TypeTable {
 
     /// The crossing rule (RFC 0023 §2 / RFC 0035 §3): the value shapes a
     /// host may hold and pass back. `entry fn` is the host-callable surface,
-    /// so **host functions obey the same rule** — primitives, `string`,
+    /// so **host functions obey the same rule** — primitives, `str`,
     /// `bytes`, `Opaque`, and `Option`/`Result` over those.
     pub fn crosses_boundary(&self, id: TypeId) -> bool {
         match self.kind(id) {

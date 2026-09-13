@@ -33,7 +33,7 @@ pub fn sidebar(th: Palette, st: Dashboard) -> Element {
     });
 }
 
-pub(self) fn nav_item(th: Palette, st: Dashboard, tab: Tab, label: string) -> Element {
+pub(self) fn nav_item(th: Palette, st: Dashboard, tab: Tab, label: str) -> Element {
     let active = st.tab() == tab;
     let bg = when (active) {
         true -> th.accent,

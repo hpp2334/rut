@@ -40,7 +40,7 @@ the host boundary (RFC 0023 §2 — enforced on `entry fn` signatures at
 compile time), so `create()` boxes a `Bank` in an `Opaque` (RFC 0014)
 and the host holds the handle. Results come back three ways:
 
-- `serialize(c) -> string` — a JSON array, `[1, 2, 3]`: one string
+- `serialize(c) -> str` — a JSON array, `[1, 2, 3]`: one string
   crosses, so a whole result is one host-side compare
 - `get(c, i) -> Option<i32>` — element-by-element, `Option.none()`
   past the end

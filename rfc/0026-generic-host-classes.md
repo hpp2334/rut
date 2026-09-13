@@ -91,7 +91,7 @@ instantiation — nobody can supply `V`. Instead:
 
 | decl type | Rust shape |
 |---|---|
-| param constrained to a trait (`K requires Hashable` — the bound stays bare on the rut side, RFC 0013 §2) | `TraitHandle` (RFC 0015 §6 fat ref; the rut-facing object type is `dyn Hashable`) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `string` keys, value hashing for primitive/enum keys — same Rust type, different attached vtable. |
+| param constrained to a trait (`K requires Hashable` — the bound stays bare on the rut side, RFC 0013 §2) | `TraitHandle` (RFC 0015 §6 fat ref; the rut-facing object type is `dyn Hashable`) — concrete; its `Hash`/`Eq` are implemented **once** by the rut crate, vtable-dispatching into the value's own `hash()`/`eq()` (user impls are rut code; builtin/voucher impls are native trampolines). Content hashing for `str` keys, value hashing for primitive/enum keys — same Rust type, different attached vtable. |
 | unconstrained param (`V`) | `RutValue` — erased owning handle; per-call check against the reified `TypeId` |
 | concrete types (`i32`, `f32`, `Template`, …) | the Rust type — as in RFC 0022 §2, embedder-pinned at Rust compile time |
 | `Self` | the instance handle |
@@ -116,7 +116,7 @@ source.
 
 - **Who satisfies a trait constraint**: user classes and dataclasses
   (impl blocks — RFC 0009, RFC 0012 §2), builtins via registered impls
-  (`Hashable`: content for `string`, value for
+  (`Hashable`: content for `str`, value for
   numerics/`enum`). The builtin generics
   (`Option`/`Result`/`Vec`/`Array<T, N>`), traits themselves,
   `Opaque` boxes, and slices satisfy nothing.
@@ -131,7 +131,7 @@ source.
   cell's borrow flag is set, and a hash impl that calls `m.set(..)` again
   traps `borrowed by host` (RFC 0023 §2) instead of corrupting the table.
 - The **native class method** makes construction an ordinary method
-  call (`MyMap<string, i32>.new(32)`), same rule as user classes
+  call (`MyMap<str, i32>.new(32)`), same rule as user classes
   (RFC 0010 §1): construction is a function everywhere, and a host
   class simply supplies the function.
   Helper fns like `newCanvas()` remain the shape for host-computed or

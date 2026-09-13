@@ -51,8 +51,8 @@ class methods, sealing without constructors, explicit `self` receivers.
   value by calling a class method that chooses to build one.
 - **Class methods are just functions** — no `self` receiver (§2),
   ordinary params, ordinary body, a `return`, and any declared return
-  type: `fn new(s: string) -> Option<Version>` is a "try" constructor,
-  `fn new(path: string) -> Self` an ordinary one (a `Disposal` class's
+  type: `fn new(s: str) -> Option<Version>` is a "try" constructor,
+  `fn new(path: str) -> Self` an ordinary one (a `Disposal` class's
   constructing method still returns `Self` — the handle is the ownership,
   RFC 0011 §2). Being functions, they validate, default, cache,
   register, or hand out singletons — construction logic has no

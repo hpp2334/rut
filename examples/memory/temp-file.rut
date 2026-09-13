@@ -7,9 +7,9 @@ import { Logger } from "std:log";
 import { Disposal } from "std:core";
 
 class TempFile {
-    path: string;
+    path: str;
 
-    fn new(path: string) -> Self {   // the handle IS the ownership —
+    fn new(path: str) -> Self {   // the handle IS the ownership —
         return Self { path: path };     // no boxing needed (RFC 0011 §2)
     }
 

@@ -19,7 +19,7 @@ between isolates (RFC 0021), so all counters are plain `Cell`s — no atomics.
 
 **Everything except primitives is a heap cell.** The numeric types
 (`u8..u64`, `i8..i64`, `u/isize`), `f32`/`f64`, `bool`, and `char` are
-inline `Slot` values moved by plain `Mov`. Every other value — `string`,
+inline `Slot` values moved by plain `Mov`. Every other value — `str`,
 `Vec<T>`, `Array<T, N>`, builtin `Option`/`Result`, user enums,
 dataclass and class instances, `Opaque` boxes (RFC 0014), and host
 opaques (RFC 0025) — **is a heap cell handle**: assignment, passing, and
@@ -108,13 +108,13 @@ Note the difference from boa: no `FinalizationRegistry`, no flush jobs, no
 - Any slot typed with a **`dyn` type stores a cell handle** — `dyn I` and
   `dyn Slice<T>` alike (RFC 0031 §4); unsized payloads always sit behind
   a cell boundary.
-- `string` is immutable → interned literals live in the module's constant
+- `str` is immutable → interned literals live in the module's constant
   pool (immortal, rc==0 sentinel); runtime-built strings are ordinary
   cells with no interior pointers, and their buffers are shared
   copy-on-write **internally** (VM-heap `StrBuf` blocks with their own
   refcount — RFC 0039 §3) — an implementation detail never exposed to
   the user: there is
-  no mutation API on `string`, so COW and always-copy are
+  no mutation API on `str`, so COW and always-copy are
   observationally identical (RFC 0004 §2).
 - No interior pointers exist anywhere (no `&mut` into the middle of a
   vec in v1), which is exactly what keeps the cycle scanner a

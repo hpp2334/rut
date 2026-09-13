@@ -17,7 +17,7 @@ rc 0) and **`examples/memory/temp-file.rut`**.
 
 ## 1. Reference semantics — and the `own` escape hatch
 
-- Every non-primitive value (dataclass, class, `string`, `Vec`, `Array`,
+- Every non-primitive value (dataclass, class, `str`, `Vec`, `Array`,
   enums, `Opaque`, `dyn I`) is a heap cell handle: assignment, passing,
   and returning copy the handle (`rc++`), and **mutation is visible
   through every alias**. Two handles are equal (`==`, RFC 0012 §4)

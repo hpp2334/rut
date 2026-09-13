@@ -11,19 +11,19 @@ pub fn transparent() -> Color {
     return Color.rgba(0, 0, 0, 0);
 }
 
-pub fn title(th: Palette, s: string) -> Element {
+pub fn title(th: Palette, s: str) -> Element {
     return text(TextProps { text: s, size: 20, weight: 700, color: th.text });
 }
 
-pub fn body(th: Palette, s: string) -> Element {
+pub fn body(th: Palette, s: str) -> Element {
     return text(TextProps { text: s, size: 14, weight: 400, color: th.text_dim });
 }
 
-pub fn stat(th: Palette, s: string) -> Element {
+pub fn stat(th: Palette, s: str) -> Element {
     return text(TextProps { text: s, size: 24, weight: 700, color: th.text });
 }
 
-pub fn chip(th: Palette, label: string, fg: Color) -> Element {
+pub fn chip(th: Palette, label: str, fg: Color) -> Element {
     return box(BoxProps {
         pad: 8,
         color: th.surface,
@@ -42,7 +42,7 @@ pub fn hgap(w: f32) -> Element {
     return box(BoxProps { w: w, color: transparent() });
 }
 
-pub fn panel(th: Palette, heading: string, child: Element) -> Element {
+pub fn panel(th: Palette, heading: str, child: Element) -> Element {
     return box(BoxProps {
         pad: PAD,
         color: th.surface,

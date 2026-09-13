@@ -81,7 +81,7 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
   cheap.
   - **Placement:** an impl block lives in the **module that declares
     `Type`** — anywhere else is a compile error ("impl for a foreign
-    type"). Builtin types (`Vec`, `Option`, `string`, …) are not
+    type"). Builtin types (`Vec`, `Option`, `str`, …) are not
     declarable as impl targets either: their interface admissions are
     registered natively (RFC 0026 registry). One impl per (interface, type)
     pair per program — a duplicate (two modules, or two blocks in one) is
@@ -123,7 +123,7 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
   object is a fat ref over a cell whose exact class or dataclass it
   carries (RFC 0015 §6). **Generic interfaces** are supported — `interface Wrap<T>`
   — and each type-argument list is its own instantiation with its own
-  interface id and vtable slots (`Wrap<i32>` ≠ `Wrap<string>`, RFC 0015 §6).
+  interface id and vtable slots (`Wrap<i32>` ≠ `Wrap<str>`, RFC 0015 §6).
   A generic instantiation is spelled in type position as `Wrap<i32>`.
   Interface object
   types are the **only** dynamic dispatch in rut: a
@@ -133,7 +133,7 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
   receiver is the explicit `self` parameter, RFC 0010 §2).
 - **The element is a type argument, not an associated type.** An interface
   may be generic (`Index<T>`, `Iterator<T>`) and each impl names the
-  element: `impl Iterator<char> for string`, `impl Index<T> for Vec<T>`.
+  element: `impl Iterator<char> for str`, `impl Index<T> for Vec<T>`.
   There are no associated `type` members. The element type is resolved at
   the use site from the impl's argument and stays reified in the type
   table. Two builtin contracts: `Index<T>` (`len`/`get`/`set`) drives
@@ -199,12 +199,12 @@ type tests are now the **`is` keyword**: `expr is Type` → `bool`. See
 `a == b` is a
 builtin operator with no vtable dispatch, no opting in, no
 element-wise story. The law is one sentence: **primitives compare by
-value; `string` compares by content; everything else compares by cell
+value; `str` compares by content; everything else compares by cell
 identity.** `a != b` is its negation (`!(a == b)`).
 
 - Primitives: `icmp`/`fcmp` value comparison; floats follow IEEE 754
   (`NaN != NaN`, `-0.0 == 0.0`).
-- `string`: content comparison (immutable; interned literals make
+- `str`: content comparison (immutable; interned literals make
   identity accidentally work sometimes — content is the law, not the
   accident).
 - `bytes`: content comparison (RFC 0004) — the engine lowers it to the

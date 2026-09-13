@@ -46,7 +46,7 @@ fn compile(src: &str, module: &str) -> rut_driver::CompileOutput {
 fn case1_hello_format() {
     let src = r#"
 enum Flavor { Sweet, Sour }
-fn describe(f: Flavor) -> string {
+fn describe(f: Flavor) -> str {
     return when (f) {
         Flavor.Sweet -> "sweet",
         Flavor.Sour  -> "sour",
@@ -136,7 +136,7 @@ pub fn main() -> unit {
 fn case5_when_exhaustive() {
     let src = r#"
 enum Color { Red, Green, Blue }
-fn mix(a: Color, b: Color) -> string {
+fn mix(a: Color, b: Color) -> str {
     return when (a) {
         Color.Red -> when (b) {
             Color.Red   -> "red+red",
@@ -163,17 +163,17 @@ fn case6_dyn_dispatch() {
 import { Vec } from "std:collection";
 interface Shape {
     fn area(self) -> f32;
-    fn name(self) -> string;
+    fn name(self) -> str;
 }
 dataclass Circle { r: f32; }
 impl Shape for Circle {
     fn area(self) -> f32 { return 3.14159265f32 * self.r * self.r; }
-    fn name(self) -> string { return "circle"; }
+    fn name(self) -> str { return "circle"; }
 }
 dataclass Square { s: f32; }
 impl Shape for Square {
     fn area(self) -> f32 { return self.s * self.s; }
-    fn name(self) -> string { return "square"; }
+    fn name(self) -> str { return "square"; }
 }
 pub fn main() -> unit {
     let shapes: Vec<Shape> = Vec.from([
@@ -479,7 +479,7 @@ fn if_else_chains_execute_both_arms() {
     // else-blocks and else-if chains were a stubbed statement ("expected a
     // statement") — the corpus never compiled them
     let src = r#"
-fn classify(n: i32) -> string {
+fn classify(n: i32) -> str {
     if (n == 0) {
         return "zero";
     } else if (n < 0) {
@@ -601,7 +601,7 @@ fn enum_singletons_survive_their_use_sites() {
     // detected by case1's thread, locked here with many use sites)
     let src = r#"
 enum Flavor { Sweet, Sour, Salty }
-fn describe(f: Flavor) -> string {
+fn describe(f: Flavor) -> str {
     return when (f) {
         Flavor.Sweet  -> "sweet",
         Flavor.Sour   -> "sour",
@@ -666,7 +666,7 @@ entry fn echo_bytes(v: bytes) -> bytes { return v; }
 entry fn maybe(v: i32) -> Option<i32> {
     return when (v > 0) { true -> Option.some(v), else -> Option.none() };
 }
-entry fn checked(v: i32) -> Result<i32, string> {
+entry fn checked(v: i32) -> Result<i32, str> {
     return when (v >= 0) { true -> Result.ok(v), else -> Result.err("negative") };
 }
 "#;
@@ -1072,7 +1072,7 @@ pub fn main() -> unit {
 fn std_string_builder_via_module_loader_runs() {
     // the real rut/std-string source, mounted and imported by a consumer;
     // the mutable `String` builder accumulates pieces in chunks and flattens
-    // once (RFC 0007 §2), so building is amortized O(n) not O(n^2)
+    // once via `to_str` (RFC 0007 §2), so building is amortized O(n) not O(n^2)
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
     s.register_module(
@@ -1087,7 +1087,7 @@ pub fn main() -> unit {
     b.push("hello");
     b.push_char(' ');
     b.push("world");
-    Logger.new("app").info(f"{b.len()} {b.finish()}");
+    Logger.new("app").info(f"{b.len()} {b.to_str()}");
 }
 "#
                 .into(),

@@ -21,9 +21,9 @@ class Circle {
 }
 
 class TempFile {
-    path: string;
+    path: str;
 
-    fn new(path: string) -> Self {      // plain Self — the handle IS ownership
+    fn new(path: str) -> Self {      // plain Self — the handle IS ownership
         return Self { path: path };
     }
 

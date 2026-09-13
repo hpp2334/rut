@@ -34,7 +34,7 @@ compile(src): { diags, astDump, irDump, binary? }
 run(binary, { fuel, heapBytes }): { output, trap?, fuelUsed, heapBytes }
 ```
 
-The demo host exposes one native to the guest: `print(s: string)`.
+The demo host exposes one native to the guest: `print(s: str)`.
 Default budgets: 10M fuel / 4 MiB heap. Case 8 intentionally loops
 forever to demonstrate `Trap::OutOfFuel` + the resume button.
 

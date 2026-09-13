@@ -6,7 +6,7 @@
 import { HttpError, get } from "std:http";
 import { Logger } from "std:log";
 
-suspend fn fetch_page(url: string) -> Result<bytes, HttpError> {
+suspend fn fetch_page(url: str) -> Result<bytes, HttpError> {
     let raw = await get(url)?;       // await + `?` propagate in one expr
     let html = decode(raw)?;         // stays in the resumed state
     return Result.ok(html);

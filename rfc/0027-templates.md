@@ -10,7 +10,7 @@
 
 ## Summary
 
-Problem: `f"..."` normally renders to a `string` at the call site
+Problem: `f"..."` normally renders to a `str` at the call site
 (RFC 0007 §2 — `concat("a=", str(a))`), which destroys structure. Hosts
 that need the structure — **localization**, structured logging, analytics —
 must not re-parse strings.
@@ -18,17 +18,17 @@ must not re-parse strings.
 Design: a builtin **`Template`** value type, built **only** by format
 literals, chosen by expected type:
 
-- `f"hi {name}, n={n}"` in a `string`-expected position behaves exactly as
+- `f"hi {name}, n={n}"` in a `str`-expected position behaves exactly as
   RFC 0007 §2 (desugars to `concat` — zero new cost on the hot path).
 - The **same literal** in a `Template`-expected position (host fn
   parameter annotated `Template`, or an explicit `let t: Template =
   f"..."`) compiles to the construction sequence — vec pushes +
   `Opaque.new(..)` boxing, or one internal-native `tmpl` call (RFC 0032 §1.1
-  R2; no `tmpl` op): a `Template { parts: Vec<string>,
+  R2; no `tmpl` op): a `Template { parts: Vec<str>,
   args: Vec<Opaque> }` — literal chunks and **boxed values with their
   runtime types** (`Opaque`, RFC 0014), not pre-rendered text.
-- `Template` API: `t.str() -> string` renders with rut's own `str()` rules
-  (identical output to the `string` path); `t.parts()`, `t.args()`,
+- `Template` API: `t.str() -> str` renders with rut's own `str()` rules
+  (identical output to the `str` path); `t.parts()`, `t.args()`,
   `t.type_id(i)` for hosts/stdlibs doing per-arg formatting. Nothing else
   — like `Opaque`, a template can't do anything until someone renders it.
 - At the FFI, a `Template` parameter arrives as `Tmpl { parts: &[StrRef],

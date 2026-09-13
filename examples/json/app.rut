@@ -25,16 +25,16 @@ impl ReflectEngine for Views { }
 
 enum Role { Admin, Member }
 
-dataclass Address { city: string; zip: i64 }
+dataclass Address { city: str; zip: i64 }
 
 // The opt-in contract costs ZERO methods: the Reflectable half of the
 // requires edge is auto-implemented for dataclasses (RFC 0037 §1).
 dataclass User {
     id: i64;
-    login: string;
+    login: str;
     visits: i64 = 0;                    // initializer = the parse default
     role: Role;                         // enum <-> member name
-    nickname: Option<string>;           // None <-> null (structural sum)
+    nickname: Option<str>;           // None <-> null (structural sum)
     addresses: Vec<Address>;            // nested records
     scores: Array<f32>;              // Seq over a FIXED array (RFC 0005)
 }
@@ -46,7 +46,7 @@ impl Serializable for User { }         // the empty impl — the opt-in itself
 // records that design and why v1 rejected it).
 dataclass ApiUser {
     user_id: i64;
-    login: string;
+    login: str;
 }
 
 impl Serializable for ApiUser { }
@@ -60,7 +60,7 @@ fn from_api(a: ApiUser) -> User {
         id: a.user_id,
         login: a.login,
         role: Role.Member,
-        nickname: Option<string>.None(),
+        nickname: Option<str>.None(),
         addresses: Vec<Address>.new(),
         scores: [0.0, 0.0],
     };
@@ -77,7 +77,7 @@ fn from_api(a: ApiUser) -> User {
 // 0012 §2) — only auto-fills satisfy requires edges implicitly.
 class Tree {
     root: i64;
-    cache: string;              // never serialized — unexposed
+    cache: str;              // never serialized — unexposed
 
     fn new(root: i64) -> Self {
         return Self { root: root, cache: "" };
@@ -106,7 +106,7 @@ pub fn main() -> unit {
         id: 7,
         login: "hpp",
         role: Role.Admin,
-        nickname: Option<string>.None(),
+        nickname: Option<str>.None(),
         addresses: seed(),
         scores: [1.5, 2.5],
     };
@@ -133,8 +133,8 @@ pub fn main() -> unit {
             assert(back.addresses[0].zip == 604);
             assert(str_eq(back.login, "rt"));
             when (back.nickname) {
-                Option<string>.None -> log.info("nickname round-tripped as null"),
-                Option<string>.Some(_) -> assert(false),
+                Option<str>.None -> log.info("nickname round-tripped as null"),
+                Option<str>.Some(_) -> assert(false),
             }
             log.info(f"round trip ok: {back.login} / {back.role}");
         },

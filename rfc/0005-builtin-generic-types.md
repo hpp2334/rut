@@ -19,7 +19,7 @@ propagation operator. See **`examples/basic/option-result.rut`**.
 | `is_some() / is_none() -> bool` | `is_ok() / is_err() -> bool` |
 | `value: T` (traps on `None`) | `value: T` (traps on `Err`) |
 | `unwrap_or(d: T) -> T` | `error: E` (traps on `Ok`) |
-| `expect(msg: string) -> T` | `unwrap_or(d: T) -> T` |
+| `expect(msg: str) -> T` | `unwrap_or(d: T) -> T` |
 
 `Vec<T>` is **std-lib rut code**, not a VM builtin: a `pub class` in
 `std:collection` over the non-growable `Array<T>`, with the mutable,
@@ -45,7 +45,7 @@ content comparison `ArrayCmp`. Construction: `bytes(n)` (n zeroed
 octets), `bytes_from(a)` (copies an `Array<u8>`), and `freeze()` on a
 mutable `Vec<u8>` builder. Reading: `bytes_len(b): i32`, `b[i]: u8`
 (bounds trap), `for (let b of b)`. `string_encode(s) -> bytes` (UTF-8)
-and `bytes_decode(b) -> string` (UTF-8, lossy) are lowered by the
+and `bytes_decode(b) -> str` (UTF-8, lossy) are lowered by the
 compiler as LIR loops (no native). `Vec<u8>` itself is only a mutable
 builder; `bytes` is the binary type that crosses the host boundary
 (RFC 0023 §2).
@@ -69,7 +69,7 @@ Implementations:
 
 - `Array<T>` — the builtin (native) impl, lowering to the fused
   `arrget`/`arrset`/`arrlen` ops (RFC 0032 §1.1 R2), element `T`.
-- `string` — the builtin (native) impl, element `char`; iteration and
+- `str` — the builtin (native) impl, element `char`; iteration and
   indexing use `strcharat`/`strlen`.
 - `bytes` — the builtin (native) impl, element `u8`; `bytesget`.
 - `Vec<T>` — a real `impl Index<T> for Vec<T>` in `std:collection`
@@ -77,7 +77,7 @@ Implementations:
   the concrete instantiation, so element access is the fused
   `arrget`/`arrset` on the backing `buf`, not a per-element call.
 
-`string`/`bytes` have **no method syntax** — their operations are
+`str`/`bytes` have **no method syntax** — their operations are
 free functions (`string_len`, `string_encode`, `bytes_len`,
 `bytes_decode`, `bytes_from`, `bytes_zeroed`, RFC 0012); `string_len`
 counts characters, `bytes_len` counts octets.

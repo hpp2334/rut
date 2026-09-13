@@ -230,7 +230,7 @@ rut/
 │   └── rut-cli/                    # the `rut` binary
 │       └── src/main.rs
 ├── std/                            # the toolchain's std surface —
-│   ├── core.d.rut                  #   prelude: host primitive string,
+│   ├── core.d.rut                  #   prelude: host primitive str,
 │   │                               #   Vec/Option/Result/Array host
 │   │                               #   classes, Disposal (0028; the
 │   │                               #   LSP embeds it, rutc follows)

@@ -10,7 +10,7 @@ import { Logger } from "std:log";
 
 dataclass Point { x: f32; y: f32 }
 
-fn literals(name: string) -> unit {
+fn literals(name: str) -> unit {
     let log = Logger.new("literals");
     let a = 10;                      // i32 (default)
     let b = 10u8;                    // u8 via suffix

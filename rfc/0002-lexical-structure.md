@@ -48,7 +48,7 @@ compiler gives it no meaning; greppability is enforced by style.
   `Future<T>`, `Task<T>`, `Sender<T>`, `Receiver<T>`, `Point`, `Color`,
   `Drawable` (object type `dyn Drawable`, RFC 0012 §2).
 - Scalars and simple buffers stay lowercase, C-style: `i32`, `u8`, `f32`,
-  `bool`, `char`, `string`.
+  `bool`, `char`, `str`.
 - **Construction is a method call, never a type-call** (RFC 0010):
   classes construct through their own class methods — `Rect.new(3, 4)`,
   `Rect.from(other)`, `Version.parse(s)` (`await Socket.connect(..)`
@@ -104,7 +104,7 @@ compiler gives it no meaning; greppability is enforced by style.
   `await`, `true`, `false`, `extern`, `where`
   (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
   (RFC 0012 §2), and `is` (the type-test operator, `expr is Type` —
-  RFC 0012 §3) are keywords. `panic(msg: string)` and
+  RFC 0012 §3) are keywords. `panic(msg: str)` and
   `assert(cond, msg?)` are prelude builtins, not keywords (RFC 0034 §2). `dyn` prefixes any **trait path** — a
   user `I` or the builtin `Slice<T>` — one rule, no syntax branch
   (RFC 0005, RFC 0012 §2).

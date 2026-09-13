@@ -38,7 +38,7 @@ pub host class Canvas {                      // exported: nameable outside
 
 pub host class Source<T> {                   // generic — instantiation
     fn get(self) -> T;                            // identity KEPT on the value:
-}                                               // Source<i32> != Source<string>
+}                                               // Source<i32> != Source<str>
 
 host class Fence {                              // NOT exported: known inside
     fn signal(self) -> unit;                      // app/gfx (callable via its
@@ -65,7 +65,7 @@ host class Fence {                              // NOT exported: known inside
   pure forwarding anyway (RFC 0026).
 - Host instances are `RutOpaque` heap objects (RFC 0016 §5) holding a boxed
   host value; the header `TypeId` carries the class **and** its generic
-  instantiation (`Source<i32>` ≠ `Source<string>` — the tur bug fixed
+  instantiation (`Source<i32>` ≠ `Source<str>` — the tur bug fixed
   structurally, RFC 0015 §2).
 - **Methods dispatch by slot, not name.** Compiling the declaration file
   assigns every host/extern member a stable slot id (declaration order); the

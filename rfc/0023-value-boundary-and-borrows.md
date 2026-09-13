@@ -32,7 +32,7 @@ pub enum Value<'v> {
 ```
 
 **What may cross is a compile-time property of the surface.** An `entry
-fn`'s parameters and return must be built from: primitives, `string`,
+fn`'s parameters and return must be built from: primitives, `str`,
 `bytes` (the immutable binary buffer, RFC 0004), `unit`, `Option`/`Result`
 over crossable types, and `Opaque` (RFC 0014 — the one cell an embedder
 may hold and pass back). Every other cell — dataclasses, classes,

@@ -110,7 +110,7 @@ impl<'a> GraphCompiler<'a> {
                     self.diags.push(Diag::new(
                         Span::new(0, 0),
                         format!(
-                            "host function `{spec}::{name}`: only primitives, `string`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)"
+                            "host function `{spec}::{name}`: only primitives, `str`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)"
                         ),
                     ));
                     return None;

@@ -91,7 +91,7 @@ a structural answer in rut:
   monomorphized generics, flat primitive buffers
   (`Vec<T>`/`Array<T, N>`).
 - G3 — Primitive types: `u8/u16/u32/u64`, `i8/i16/i32/i64`, `f32/f64`, `bool`,
-  `char`, plus `string`, `Vec<T>`/`Array<T, N>`, and user
+  `char`, plus `str`, `Vec<T>`/`Array<T, N>`, and user
   `trait`/`dataclass`/`class`/`enum` — everything beyond the
   primitives is a shared refcounted cell (RFC 0016 §1).
 - G4 — Kotlin-style coroutine suspend built on Rust-style poll semantics
@@ -221,7 +221,7 @@ value whose exact class is still known at runtime. What we keep from "types
 held at runtime" (G1) is what the *VM and the host* need: every value's type
 identity is available for checked type tests (`is` in script, argument
 checks at the FFI), for distinct runtime identities of instantiated generics
-(`Source<i32>` ≠ `Source<string>` as opaque handle types), for debugging, and
+(`Source<i32>` ≠ `Source<str>` as opaque handle types), for debugging, and
 for serialization.
 
 ## Execution model

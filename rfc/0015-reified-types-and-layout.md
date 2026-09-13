@@ -60,7 +60,7 @@ let TID_POINT: u32 = type_id<Point>();
 - **Boxing widens** (RFC 0037 §3): `Opaque` of an int stores i64
   sign/zero-extended; a float, f64 — the §5 slot discipline. A kind
   branch plus `downcast<i64>` / `downcast<f64>` / `downcast<bool>` /
-  `downcast<string>` is total in-branch.
+  `downcast<str>` is total in-branch.
 - `Opaque` mirrors identity at runtime, `o.type_id() -> u32`. Constructing
   an `Opaque` box (or any value) *from* raw bytes is deliberately **not**
   provided: it could forge private fields and class invariants.
@@ -142,7 +142,7 @@ struct VTable {
 ```
 
 Trait method ids are assigned **globally per trait instantiation**
-at compile time (`Slice<Point>` ≠ `Slice<string>`, RFC 0012 §2); a
+at compile time (`Slice<Point>` ≠ `Slice<str>`, RFC 0012 §2); a
 class's — or a dataclass's (RFC 0009) — vtable fills every slot of
 every trait instantiation it has an impl for — **user impl blocks,
 auto-fills** (std:reflect's protocols — RFC 0037; registry entries

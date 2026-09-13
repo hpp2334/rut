@@ -11,11 +11,11 @@ import { Logger } from "std:log";
 
 // app/gfx.d.rut (the declaration file) contains, among others:
 //     pub host class Source<T> {  // instantiation identity KEPT:
-//         fn get(): T;               // Source<i32> != Source<string>
+//         fn get(): T;               // Source<i32> != Source<str>
 //     }
 // — declared for typing; built and implemented entirely host-side.
 
-fn localized(count: i32, user: string) -> unit {
+fn localized(count: i32, user: str) -> unit {
     // The SAME literal that would concat to a string builds a structured
     // Template here, because log_l10n expects one — the host formats
     // per-locale with typed args; nothing was parsed back out of a string.

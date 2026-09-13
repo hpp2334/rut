@@ -5,7 +5,7 @@
 //! Implementations:
 //! - `Array<T>` — the builtin (native) impl, emitting the fused
 //!   `arrget`/`arrlen` ops (RFC 0032 §1.1 R2).
-//! - `string` / `bytes` — the builtin (native) impls over the primitive
+//! - `str` / `bytes` — the builtin (native) impls over the primitive
 //!   cells, emitting `strcharat`/`strlen` and `bytesget`/`byteslen`.
 //! - `Vec<T>` — std-lib rut code: `impl Iter for Vec<T> { type Target = T; .. }`
 //!   in `rut/std-collection/vec.rut`; the one-line accessors are inlined
@@ -21,7 +21,7 @@ use super::*;
 pub(crate) enum SliceSource {
     /// builtin `Array<T>` — fused element ops
     Array,
-    /// builtin `string` — `char` elements
+    /// builtin `str` — `char` elements
     Str,
     /// builtin `bytes` — `u8` elements
     Bytes,
@@ -152,7 +152,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// `s[i] = val` — element write. Only the concrete `Array`/`Vec` path
-    /// has a mutable element; `string`/`bytes` and the read-only `Iter`
+    /// has a mutable element; `str`/`bytes` and the read-only `Iter`
     /// contract do not.
     pub(crate) fn emit_slice_set(&mut self, recv: u16, idx: u16, val: u16, info: &SliceInfo, sp: u32) -> TcResult<()> {
         match &info.source {
@@ -162,7 +162,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             SliceSource::Str | SliceSource::Bytes => {
-                self.ctx.err(Span::new(sp, sp + 1), "`string`/`bytes` are immutable — element assignment is not allowed");
+                self.ctx.err(Span::new(sp, sp + 1), "`str`/`bytes` are immutable — element assignment is not allowed");
                 Err(())
             }
             SliceSource::Impl { impl_idx, self_ty, .. } => {

@@ -466,7 +466,7 @@ fn tok_at<'t>(toks: &'t [Token], pos: u32) -> Option<&'t Token> {
 }
 
 /// when the hovered token follows a dot: the receiver's source text —
-/// an identifier, or the `string` primitive for string literals
+/// an identifier, or the `str` primitive for string literals
 fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String> {
     let i = toks.iter().position(|x| x.span.lo == t.span.lo)?;
     if i < 2 || toks[i - 1].tok != Tok::Dot {
@@ -474,7 +474,7 @@ fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String> {
     }
     match &toks[i - 2].tok {
         Tok::Ident(s) => Some(s.clone()),
-        Tok::Str(_) => Some("string".to_string()),
+        Tok::Str(_) => Some("str".to_string()),
         _ => None,
     }
 }
@@ -627,7 +627,7 @@ fn init_ty(ast: &Ast, init: NodeHandle<AnyExpr>) -> Option<String> {
             }
         }
         ExprKind::Struct { ty, .. } => Some(ty_head(ast, *ty)),
-        ExprKind::Lit(Lit::Str(_)) => Some("string".to_string()),
+        ExprKind::Lit(Lit::Str(_)) => Some("str".to_string()),
         _ => None,
     }
 }
@@ -1014,7 +1014,7 @@ fn main() -> unit { let x = length(3); }
     #[test]
     fn host_fn_surface_favors_own_methods() {
         // std-style surface index ahead of the doc
-        let surf_src = "pub host fn string_len(s: string) -> i32;\n";
+        let surf_src = "pub host fn string_len(s: str) -> i32;\n";
         let s2 = rut_lexer::lexer::normalize(surf_src);
         let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Decl);
         let mut surf = index(&s2, &sast);

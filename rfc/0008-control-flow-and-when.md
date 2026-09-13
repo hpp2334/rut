@@ -34,7 +34,7 @@ required for non-enum scrutinees) and as a statement (unit arms).
   matching arm's body produces its value. No fallthrough; exactly one arm
   runs.
 - Patterns in v1: enum members, literals (`i32`/`f64`/`bool`/`char`/
-  `string`), comma-separated alternatives, and the `else` wildcard.
+  `str`), comma-separated alternatives, and the `else` wildcard.
   Ranges and destructuring are OQ-2.
 - **Exhaustiveness is always enforced.** Enum-typed scrutinee: cover every
   member (then `else` is optional) or add `else` — a partial `when` is a

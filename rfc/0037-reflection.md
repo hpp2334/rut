@@ -54,7 +54,7 @@ pub trait Deserializable requires Reflectable { }
   entry implicitly; re-declaring one is a duplicate-impl error, and
   auto-impls satisfy `requires` edges of contract layers written on
   top (`impl Serializable for User {}` costs zero methods).
-- **Registry impls** follow the `string: Hashable` pattern (RFC 0022
+- **Registry impls** follow the `str: Hashable` pattern (RFC 0022
   §2, RFC 0028) for the builtin generics, all instantiations.
 - **`Deserializable` is auto-only**: hand-writing `impl
   Deserializable for T` is a compile error (the `Any` admission precedent,
@@ -83,7 +83,7 @@ pub host fn type_of(a: Opaque) -> TypeInfo;  // content descriptor
 pub host class TypeInfo {
     fn kind(self) -> TypeKind;              // structural role
     fn leaf(self) -> LeafKind;              // kind() == Leaf
-    fn name(self) -> string;
+    fn name(self) -> str;
     fn type_id(self) -> u32;                // == type_id<T>() for static T
     fn is_a(self, i: TypeInfo) -> bool;     // RFC 0015 §6 — the
                                             // NESTED-node gate
@@ -106,12 +106,12 @@ pub host class TypeInfo {
     fn make_vec(self, vals: Vec<Opaque>) -> Option<Opaque>;              // Seq→Vec<T>
 }
 pub host class FieldInfo {
-    fn name(self) -> string;                // the wire name
+    fn name(self) -> str;                // the wire name
     fn ty(self) -> TypeInfo;
     fn default(self) -> Option<Opaque>;    // folded at compile time initializer —
 }                                          // THE parse-time default
 pub host class SumVariant {
-    fn name(self) -> string;
+    fn name(self) -> str;
     fn payloads(self) -> Vec<TypeInfo>;     // [] C-like · [T] Some/Ok/Err
 }
 ```
@@ -146,7 +146,7 @@ first-class type value (RFC 0015 OQ-1 stays closed).
 3. **Boxing widens** (normative; cross-noted RFC 0015 §3): `Opaque`
    of an int stores i64 sign/zero-extended; a float, f64 — the slot
    discipline of RFC 0015 §5. A `Leaf` branch + `downcast<i64>` /
-   `downcast<f64>` / `downcast<bool>` / `downcast<string>` is total.
+   `downcast<f64>` / `downcast<bool>` / `downcast<str>` is total.
 4. **No string identity**: field/variant names are descriptor data
    (layout tables, RFC 0015 §6), not symbols — `--strip-native-names`
    / `--release` never touches them. Sum policy dispatches on
@@ -168,11 +168,11 @@ first-class type value (RFC 0015 OQ-1 stays closed).
 Every call below exists in §2 — this trace is the API's test:
 
 ```rut
-pub fn stringify(v: dyn Serializable) -> Result<string, string> {
+pub fn stringify(v: dyn Serializable) -> Result<str, str> {
     return write_val(v.reflect(), v);   // vtable reflect(); v descends
 }                                       // to Opaque (erased storage)
 
-pub fn deserialize<T>(v: string) -> Result<T, JsonError>
+pub fn deserialize<T>(v: str) -> Result<T, JsonError>
         where T requires Deserializable {
     let t = reflect<T>();             // guaranteed descriptor-backed
     let tree = parse_tree(v)?;        // by the bound — no runtime

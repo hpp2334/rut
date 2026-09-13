@@ -8,21 +8,21 @@ import { Channel, Receiver, Sender } from "std:channel";
 import { sleep, timeout } from "std:time";
 import { Logger } from "std:log";
 
-suspend fn wait_or_timeout(quit: Receiver<string>) -> string {
+suspend fn wait_or_timeout(quit: Receiver<str>) -> str {
     return await select {
         timeout(500)          -> "timeout",
         quit.recv() as msg    -> msg.unwrap_or("closed"),
     };
 }
 
-suspend fn delayed_send(ch: Sender<string>) -> unit {
+suspend fn delayed_send(ch: Sender<str>) -> unit {
     await sleep(200);
     ch.send("quit");
 }
 
 pub suspend fn main() -> unit {
     let log = Logger.new("select");
-    let q = Channel<string>();
+    let q = Channel<str>();
     spawn(delayed_send(q.sender));       // sender task shares the channel
     let result = await wait_or_timeout(q.receiver);
     log.info(result);                    // "quit" — beats the 500ms timeout

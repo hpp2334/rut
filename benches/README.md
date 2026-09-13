@@ -20,7 +20,7 @@ benches/
 │   └── build-quickjs.sh    # gcc build → benches/.tools/qjs
 ├── probe/                  # rut-bench-probe: in-process phase/heap probe
 ├── workloads/
-│   ├── NAME.rut            # the rut program (no imports; builtin print)
+│   ├── NAME.rut            # the rut program (`std:*` imports; logs CHECKSUM)
 │   ├── NAME.js             # the identical program for node + qjs
 │   └── expected.json       # canonical reference checksums (verified)
 └── results/                # generated reports (gitignored)
@@ -79,7 +79,7 @@ against the reference in `workloads/expected.json`.
 | `nbody` | `f64` integration + `sqrt` | 1000 steps | energy `-0.16908760523460628` |
 | `spectral-norm` | `f64` power iteration + `sqrt` | n = 150 | `1.274222872607514` |
 | `binary-trees` | RC allocation/drop churn | depth 14 | 2¹⁵−1 nodes = `32767` |
-| `fasta` | immutable-string building | n = 10 000 | `15246:10000` |
+| `fasta` | string building (`std:string` builder) | n = 10 000 | `15246:10000` |
 | `intloop` | integer arith + loop dispatch | 5M iters | `628038624` |
 | `floatloop` | f64 mul/add + loop dispatch | 2M iters | `1107013.7297975053` |
 | `call` | call/return/frame overhead | fib(28) | `317811` |
@@ -127,9 +127,9 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 
 ## Known limitations / deliberate choices
 
-- **This build has no module loading** (RFC 0035, M2), so workloads are
-  single files and use the builtin `print`; the `std:log`-style imports
-  in `examples/` would not run.
+- Workloads are still single files, but they import `std:collection`,
+  `std:math`, `std:string` and `std:log` through the module loader
+  (RFC 0035); the probe and the `rut` driver install the host halves.
 - Missing language/std features exclude `pidigits` (no bigint),
   `regex-redux` (no regex), and `k-nucleotide` / `reverse-complement`
   (bytes/hashmap/stdin) from the benchmark-game set.
@@ -138,9 +138,9 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
   counts them, rather than the benchmark-game's varying-depth trees. Each
   node is one RC cell, so the drop at scope exit is still the RC
   allocation/drop path this workload measures.
-- **`fasta`** is likewise an adaptation: LCG-driven ACGT string building
-  with a length/index checksum, not the benchmark-game's repeat-sequence
-  generator.
+- **`fasta`** is likewise an adaptation: LCG-driven ACGT building through
+  the `std:string` builder with a length/index checksum, not the
+  benchmark-game's repeat-sequence generator.
 - Scales are **reduced** from the official benchmark-game sizes: rut is
   an interpreter, so the full sizes would run for minutes to hours.
   They are still large enough that runtimes are measured, not just
@@ -149,8 +149,8 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 
 ## Adding a workload
 
-1. Add `benches/workloads/NAME.rut` (no imports, `pub fn main`, print
-   `CHECKSUM <value>`) and `NAME.js` (`console.log("CHECKSUM " + v)`),
+1. Add `benches/workloads/NAME.rut` (`pub fn main`, log `CHECKSUM
+   <value>` via `std:log`) and `NAME.js` (`console.log("CHECKSUM " + v)`),
    computing identical results with the same integer widths / float
    order.
 2. Keep the scale as a named constant in both files.

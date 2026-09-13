@@ -1,5 +1,5 @@
 // std/core.d.rut — the prelude surface (RFC 0028): what the language
-// itself ships — the `string`/`bytes` primitives' natives, the builtin
+// itself ships — the `str`/`bytes` primitives' natives, the builtin
 // `Array`/`Option`/`Result` containers (RFC 0005), and the builtin
 // `Disposal` interface. `Vec<T>` is NOT here: it is std-lib rut code in
 // `std:collection`, over `Array<T>` with an `impl Iter for Vec<T>`.
@@ -15,11 +15,11 @@
 // tables), never aspirational. Type-calls spelled with the type name
 // (`i32(x)` conversions — RFC 0007) are syntax, not members.
 
-pub host fn string_len(s: string) -> i32;       // number of chars
-pub host fn string_encode(s: string) -> bytes;  // UTF-8 -> bytes (RFC 0004)
+pub host fn string_len(s: str) -> i32;       // number of chars
+pub host fn string_encode(s: str) -> bytes;  // UTF-8 -> bytes (RFC 0004)
 
 pub host fn bytes_len(b: bytes) -> i32;
-pub host fn bytes_decode(b: bytes) -> string;   // bytes -> UTF-8 string (lossy)
+pub host fn bytes_decode(b: bytes) -> str;   // bytes -> UTF-8 string (lossy)
 pub host fn bytes_from(a: Array<u8>) -> bytes;  // copy an Array<u8> (RFC 0004)
 pub host fn bytes_zeroed(n: i32) -> bytes;      // n zeroed octets
 
@@ -33,7 +33,7 @@ pub host class Option<T> {
     fn is_some(self) -> bool;
     fn is_none(self) -> bool;
     fn unwrap_or(self, default: T) -> T;
-    fn expect(self, msg: string) -> T;      // panics with `msg` on None
+    fn expect(self, msg: str) -> T;      // panics with `msg` on None
 }
 
 pub host class Result<T, E> {
@@ -42,7 +42,7 @@ pub host class Result<T, E> {
     fn is_ok(self) -> bool;
     fn is_err(self) -> bool;
     fn unwrap_or(self, default: T) -> T;
-    fn expect(self, msg: string) -> T;      // panics with `msg` on Err
+    fn expect(self, msg: str) -> T;      // panics with `msg` on Err
 }
 
 // RFC 0011/0016 — impl blocks for Disposal run `dispose` at rc 0; a
@@ -54,7 +54,7 @@ pub interface Disposal {
 
 // RFC 0012 — the compiler-backed random-access contract. `Index` has a
 // length and `get`/`set`; `x[i]` and `x[i] = v` lower through it. The
-// element type is the interface argument. `Array`/`string`/`bytes` are
+// element type is the interface argument. `Array`/`str`/`bytes` are
 // compiler-backed; `Vec<T>` declares one in std:collection.
 pub interface Index<T> {
     fn len(self) -> i32;

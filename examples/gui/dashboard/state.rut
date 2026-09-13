@@ -25,12 +25,12 @@ pub class Dashboard {
 
     // --- state: writable atoms (UI-owned) ---
     tab: State<Tab>;
-    query: State<string>;
+    query: State<str>;
     sort_dir: State<SortDir>;
     live: State<bool>;
     visits: State<i32>;
     events_seen: State<i32>;
-    alerts: State<Vec<string>>;
+    alerts: State<Vec<str>>;
     samples: State<Vec<f32>>;
     started_ms: i64;               // plain field — deliberately NOT
                                            // reactive: set once at boot
@@ -47,7 +47,7 @@ pub class Dashboard {
     // --- mutations: dispatched with payload dataclasses. The trailing `$`
     //     marks dispatch-inverted members (tur's start$/onMounted$ rule).
     pub set_tab$: Mutation<Tab, unit>;
-    pub set_query$: Mutation<string, unit>;
+    pub set_query$: Mutation<str, unit>;
     pub toggle_sort$: Mutation<Nil, unit>;
     pub ingest_series$: Mutation<Series, unit>;
     pub apply_event$: Mutation<LiveEvent, unit>;
@@ -97,7 +97,7 @@ pub class Dashboard {
             atom_set(st, tab, t);
         });
 
-        let set_query$ = mutation((st: Store, q: string) -> unit => {
+        let set_query$ = mutation((st: Store, q: str) -> unit => {
             atom_set(st, query, q);
         });
 
@@ -169,7 +169,7 @@ pub class Dashboard {
     pub fn store(self) -> Store { return self.store; }
     pub fn started_ms(self) -> i64 { return self.started_ms; }
     pub fn tab(self) -> Tab { return atom_get(self.store, self.tab); }
-    fn query(self) -> string { return atom_get(self.store, self.query); }
+    fn query(self) -> str { return atom_get(self.store, self.query); }
     fn sort_dir(self) -> SortDir { return atom_get(self.store, self.sort_dir); }
     pub fn live(self) -> bool { return atom_get(self.store, self.live); }
     pub fn events_seen(self) -> i32 { return atom_get(self.store, self.events_seen); }
@@ -181,7 +181,7 @@ pub class Dashboard {
     pub fn users_count(self) -> i32 { return derived_read(self.store, self.users_count); }
     pub fn alert_count(self) -> i32 { return derived_read(self.store, self.alert_count); }
 
-    fn alerts_text(self) -> string {
+    fn alerts_text(self) -> str {
         let out = "";
         let msgs = atom_get(self.store, self.alerts);
         for (let i = 0; i < msgs.len(); i += 1) {
@@ -227,7 +227,7 @@ pub(self) fn shift_left(xs: Vec<f32>) -> unit {
     xs.pop();
 }
 
-pub(self) fn shift_left_str(xs: Vec<string>) -> unit {
+pub(self) fn shift_left_str(xs: Vec<str>) -> unit {
     for (let i = 1; i < xs.len(); i += 1) {
         xs[i - 1] = xs[i];
     }

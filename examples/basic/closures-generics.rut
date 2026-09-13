@@ -29,6 +29,6 @@ pub fn main() -> unit {
     log.info(f"add={add(1, 2)} area={area_of(1)} sum={sum([1, 2, 3])}");
 
     let head = first([10, 20]);       // Option<i32>  — monomorphized
-    let name = first(["a", "b"]);     // Option<string> — separate instance
+    let name = first(["a", "b"]);     // Option<str> — separate instance
     log.info(f"head={head.unwrap_or(-1)} name={name.unwrap_or("?")}");
 }

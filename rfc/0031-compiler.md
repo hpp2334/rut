@@ -51,7 +51,7 @@ functions enter the **monomorphization queue** — HIR contains no generic
 code (RFC 0013 §2). Instantiation admission for surface-generic types
 (`MyMap<Canvas, ..>`) closes over the `requires` graph here (RFC 0025).
 Typecheck also applies the **`==` law** (RFC 0012 §4): primitives and
-`string` always legal, every other cell type legal as an
+`str` always legal, every other cell type legal as an
 identity compare, and `Option`/`Result` operands a compile error
 ("pattern-match instead"); the identity-compare lint flags `==` between
 two obviously fresh composites. `is`-expressions whose answer the

@@ -314,7 +314,7 @@ pub(self) fn smoke() -> unit {
     let count = state(ids, 0);
     let clock = source(ids, () -> i32 => 0);   // external world, lazily seeded
 
-    let label = derive(ids, (ctx) -> string => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
+    let label = derive(ids, (ctx) -> str => f"count is {ctx.get(count)} at t={ctx.latest(clock)}");
 
     let bump = mutation((st: Store, by: i32) -> unit => {
         atom_set(st, count, atom_get(st, count) + by);

@@ -5,7 +5,7 @@ A Rust app embedding rut, in the shape of [00-todolist](../00-todolist) and
 embedder — and this time the embedder is also the **oracle**.
 
 The rut side is a byte-level library, everything flowing over `bytes`
-(the immutable binary primitive, RFC 0004), `string`, and `Opaque` —
+(the immutable binary primitive, RFC 0004), `str`, and `Opaque` —
 the shapes RFC 0023 §2 lets cross the host boundary:
 
 - **encodings** — hex (encode/decode, case-insensitive) and base64

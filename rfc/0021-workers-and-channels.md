@@ -30,7 +30,7 @@ variant lives in `examples/network/echo-server.rut` + `echo-worker.rut`.
 | Type | Crossing rule |
 |---|---|
 | primitives (ints/floats/bool/char) | copy |
-| `string` | copy (immutable) |
+| `str` | copy (immutable) |
 | **every other cell** — `Vec<T>`, `Array<T, N>`, class/dataclass instances, builtin `Option`/`Result`, enums | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case); every element/field must itself be crossable |
 | `dyn Slice<T>` | transfer if refcount == 1, else deep copy — same rule as its owner cell; provenance (which Vec/Array cell it views) is invisible across the boundary |
 | `Sender` / `Receiver` | transfer |

@@ -44,7 +44,7 @@ use rut::value::{TraitHandle, RutValue, RutVec};
 /// dispatching into the key's own hash()/eq() through the vtable
 /// (user impls and dataclass-derived fills are rut code; builtin/voucher
 /// impls are native trampolines).
-/// Content hashing for `string` keys, value hashing for primitive/enum keys — both
+/// Content hashing for `str` keys, value hashing for primitive/enum keys — both
 /// fall out of which vtable the boundary attached; this HashMap never
 /// knows the difference.
 pub struct MyMap {
@@ -85,8 +85,8 @@ fn build_my_map(args: &GenericArgs, _types: &TypeRegistry) -> Result<ClassTable,
             Ok(this.inner.len() as i32))
         // slot 4. RutVec<K> (rut Vec<K>), NOT Vec<dyn Hashable>: k_ty drives
         // the element
-        // type and each key is UNERASED to its natural value (a `string`
-        // key yields Vec<string>) — rut cannot consume trait-object refs
+        // type and each key is UNERASED to its natural value (a `str`
+        // key yields Vec<str>) — rut cannot consume trait-object refs
         // here (no downcast, RFC 0012 §3). `get` needs no per-call V
         // check: values only enter via set, and the cell carries this
         // instantiation's TypeId.

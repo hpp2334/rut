@@ -44,8 +44,8 @@ fuel used: 680 of Some(1000000)
 2. `create(container)` → `u32` — a new list inside the container; the
    host keeps the handle and passes it (plus the container) to every
    later call.
-3. CRUD calls cross with **plain values only**: `string`/`i32`/`bool` in,
-   `i32`/`bool`/`string`/`Option`/`Result` out (RFC 0023 §2). `TodoList`
+3. CRUD calls cross with **plain values only**: `str`/`i32`/`bool` in,
+   `i32`/`bool`/`str`/`Option`/`Result` out (RFC 0023 §2). `TodoList`
    instances never leave the VM.
 
 ## What it demonstrates

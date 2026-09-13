@@ -427,7 +427,7 @@ impl<'a> Ctx<'a> {
             if !tdesc.methods.iter().any(|tm| tm.name == self.name(*n)) {
                 // mutable indexing is an optional hook on the read-only
                 // `Iter` contract (RFC 0012): `Array`/`Vec` provide `set`,
-                // `string`/`bytes` do not
+                // `str`/`bytes` do not
                 if self.name(*n) == "set" {
                     continue;
                 }

@@ -15,7 +15,7 @@ import { Vec } from "std:collection";
 
 dataclass Todo {
     id: i32;
-    title: string;
+    title: str;
     done: bool = false;      // field initializer — `done` may be omitted
 }
 
@@ -29,7 +29,7 @@ pub class TodoList {
 
     // ---- CREATE ----
 
-    pub fn add(mut self, title: string) -> i32 {
+    pub fn add(mut self, title: str) -> i32 {
         let id = self.next_id;
         self.items.push(Todo { id: id, title: title });
         self.next_id += 1;
@@ -44,7 +44,7 @@ pub class TodoList {
 
     /// First title matching `id`, or `Option.none()` — check, then read
     /// `.value` (RFC 0005: no `?.` sugar).
-    pub fn title_of(self, id: i32) -> Option<string> {
+    pub fn title_of(self, id: i32) -> Option<str> {
         for (let t of self.items) {
             if (t.id == id) {
                 return Option.some(t.title);
@@ -54,7 +54,7 @@ pub class TodoList {
     }
 
     /// The boxed listing the embedder prints.
-    pub fn render(self) -> string {
+    pub fn render(self) -> str {
         let mut out = f"TodoList[{self.len()}]";
         for (let t of self.items) {
             let mark = when (t.done) { true -> "x", else -> " " };
@@ -118,7 +118,7 @@ entry fn create(c: Opaque) -> u32 {
     return u32(k.lists.len() - 1);
 }
 
-entry fn add(c: Opaque, h: u32, title: string) -> i32 {
+entry fn add(c: Opaque, h: u32, title: str) -> i32 {
     return at(c, h).add(title);
 }
 
@@ -126,7 +126,7 @@ entry fn set_done(c: Opaque, h: u32, id: i32, done: bool) -> bool {
     return at(c, h).set_done(id, done);
 }
 
-entry fn remove(c: Opaque, h: u32, id: i32) -> Result<bool, string> {
+entry fn remove(c: Opaque, h: u32, id: i32) -> Result<bool, str> {
     let hit = at(c, h).remove(id);
     if (hit) {
         return Result.ok(true);
@@ -138,10 +138,10 @@ entry fn len(c: Opaque, h: u32) -> i32 {
     return at(c, h).len();
 }
 
-entry fn title_of(c: Opaque, h: u32, id: i32) -> Option<string> {
+entry fn title_of(c: Opaque, h: u32, id: i32) -> Option<str> {
     return at(c, h).title_of(id);
 }
 
-entry fn render(c: Opaque, h: u32) -> string {
+entry fn render(c: Opaque, h: u32) -> str {
     return at(c, h).render();
 }

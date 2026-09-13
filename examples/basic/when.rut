@@ -3,7 +3,7 @@
 
 import { Logger } from "std:log";
 
-fn describe(n: i32) -> string {
+fn describe(n: i32) -> str {
     return when (n) {
         0         -> "zero",
         1, 2, 3   -> "small",        // comma-separated alternatives

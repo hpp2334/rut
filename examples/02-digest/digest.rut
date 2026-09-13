@@ -25,8 +25,8 @@ import { Math } from "std:math";
 
 // ---------------------------------------------------------------- hex ---
 
-fn hex_digits() -> Vec<string> {
-    let d: Vec<string> = Vec.new();
+fn hex_digits() -> Vec<str> {
+    let d: Vec<str> = Vec.new();
     let src = "0123456789abcdef";
     for (let c of src) {
         d.push(f"{c}");
@@ -35,7 +35,7 @@ fn hex_digits() -> Vec<string> {
 }
 
 /// bytes -> lowercase hex string.
-entry fn hex_enc(data: bytes) -> string {
+entry fn hex_enc(data: bytes) -> str {
     let d = hex_digits();
     let mut out = "";
     for (let b of data) {
@@ -47,7 +47,7 @@ entry fn hex_enc(data: bytes) -> string {
 }
 
 /// hex string -> bytes; -1 if the char is not a hex digit.
-fn hex_val(c: string) -> i32 {
+fn hex_val(c: str) -> i32 {
     let lower = "0123456789abcdef";
     let upper = "0123456789ABCDEF";
     let mut i = 0;
@@ -63,7 +63,7 @@ fn hex_val(c: string) -> i32 {
     return -1;
 }
 
-entry fn hex_dec(s: string) -> Result<bytes, string> {
+entry fn hex_dec(s: str) -> Result<bytes, str> {
     if (string_len(s) % 2 != 0) {
         return Result.err("hex: odd-length input");
     }
@@ -87,8 +87,8 @@ entry fn hex_dec(s: string) -> Result<bytes, string> {
 
 // ------------------------------------------------------------ base64 ---
 
-fn b64_table(url: bool) -> Vec<string> {
-    let mut t: Vec<string> = Vec.new();
+fn b64_table(url: bool) -> Vec<str> {
+    let mut t: Vec<str> = Vec.new();
     let alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     for (let c of alpha) {
         t.push(f"{c}");
@@ -100,7 +100,7 @@ fn b64_table(url: bool) -> Vec<string> {
     return t;
 }
 
-entry fn b64_enc(data: bytes, url: bool) -> string {
+entry fn b64_enc(data: bytes, url: bool) -> str {
     let t = b64_table(url);
     let n = bytes_len(data);
     let mut out = "";
@@ -125,7 +125,7 @@ entry fn b64_enc(data: bytes, url: bool) -> string {
     return out;
 }
 
-entry fn b64_dec(s: string, url: bool) -> Result<bytes, string> {
+entry fn b64_dec(s: str, url: bool) -> Result<bytes, str> {
     let t = b64_table(url);
     let mut vals: Vec<u32> = Vec.new();
     let mut pad = 0;
@@ -633,7 +633,7 @@ entry fn sha256(data: bytes) -> bytes { return sha256_impl(data); }
 entry fn sha512(data: bytes) -> bytes { return sha512_impl(data); }
 
 /// One name, one call — the 01-sort dispatcher pattern on strings.
-entry fn digest(algo: string, data: bytes) -> Result<bytes, string> {
+entry fn digest(algo: str, data: bytes) -> Result<bytes, str> {
     return when (algo) {
         "md5"    -> Result.ok(md5_impl(data)),
         "sha1"   -> Result.ok(sha1_impl(data)),
@@ -654,10 +654,10 @@ enum JTag { Null, False, True, Num, Str, Arr, Obj }
 
 dataclass Json {
     tag:  JTag;
-    num:  string;          // verbatim lexeme — exact round-trips, no
-    str:  string;          // float formatting anywhere in this file
+    num: str;          // verbatim lexeme — exact round-trips, no
+    str: str;          // float formatting anywhere in this file
     arr:  Vec<Opaque>;
-    keys: Vec<string>;
+    keys: Vec<str>;
     vals: Vec<Opaque>;
 }
 
@@ -665,8 +665,8 @@ fn noopaques() -> Vec<Opaque> {
     let v: Vec<Opaque> = Vec.new();
     return v;
 }
-fn nostrings() -> Vec<string> {
-    let v: Vec<string> = Vec.new();
+fn nostrings() -> Vec<str> {
+    let v: Vec<str> = Vec.new();
     return v;
 }
 
@@ -675,22 +675,22 @@ fn jbool(b: bool) -> Json {
     if (b) { return Json { tag: JTag.True, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
     return Json { tag: JTag.False, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() };
 }
-fn jnum(n: string) -> Json { return Json { tag: JTag.Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
-fn jstr(s: string) -> Json { return Json { tag: JTag.Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jnum(n: str) -> Json { return Json { tag: JTag.Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jstr(s: str) -> Json { return Json { tag: JTag.Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 fn jarr() -> Json { return Json { tag: JTag.Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 fn jobj() -> Json { return Json { tag: JTag.Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 
 /// The parser cursor. Strings iterate as `char`s, so the source is
 /// split once into single-char strings and walked by index.
-dataclass Cur { cs: Vec<string>; pos: i32; depth: i32; }
+dataclass Cur { cs: Vec<str>; pos: i32; depth: i32; }
 
-fn split_chars(s: string) -> Vec<string> {
-    let cs: Vec<string> = Vec.new();
+fn split_chars(s: str) -> Vec<str> {
+    let cs: Vec<str> = Vec.new();
     for (let c of s) { cs.push(f"{c}"); }
     return cs;
 }
 
-fn jpeek(cur: Cur) -> string {
+fn jpeek(cur: Cur) -> str {
     if (cur.pos < cur.cs.len()) { return cur.cs[cur.pos]; }
     return "";
 }
@@ -704,12 +704,12 @@ fn jskip(mut cur: Cur) -> unit {
     }
 }
 
-fn is_digit(c: string) -> bool {
+fn is_digit(c: str) -> bool {
     return c == "0" || c == "1" || c == "2" || c == "3" || c == "4"
         || c == "5" || c == "6" || c == "7" || c == "8" || c == "9";
 }
 
-fn join_chars(cs: Vec<string>) -> string {
+fn join_chars(cs: Vec<str>) -> str {
     let mut out = "";
     for (let i = 0; i < cs.len(); i += 1) {
         out = f"{out}{cs[i]}";
@@ -719,7 +719,7 @@ fn join_chars(cs: Vec<string>) -> string {
 
 /// JSON number grammar: -?int (.int)? ([eE][+-]?int)? — validated as a
 /// lexeme, stored verbatim.
-fn valid_number(cs: Vec<string>) -> bool {
+fn valid_number(cs: Vec<str>) -> bool {
     let n = cs.len();
     if (n == 0) { return false; }
     let mut i = 0;
@@ -743,7 +743,7 @@ fn valid_number(cs: Vec<string>) -> bool {
     return i == n;
 }
 
-fn jparse_value(mut cur: Cur) -> Result<Opaque, string> {
+fn jparse_value(mut cur: Cur) -> Result<Opaque, str> {
     jskip(cur);
     let c = jpeek(cur);
     if (c == "") { return Result.err("json: unexpected end of input"); }
@@ -757,7 +757,7 @@ fn jparse_value(mut cur: Cur) -> Result<Opaque, string> {
     return Result.err(f"json: unexpected `{c}` at index {cur.pos}");
 }
 
-fn jparse_lit(mut cur: Cur, word: string, v: Json) -> Result<Opaque, string> {
+fn jparse_lit(mut cur: Cur, word: str, v: Json) -> Result<Opaque, str> {
     let start = cur.pos;
     let mut ok = true;
     for (let wch of word) {
@@ -770,10 +770,10 @@ fn jparse_lit(mut cur: Cur, word: string, v: Json) -> Result<Opaque, string> {
     return Result.ok(Opaque.new(v));
 }
 
-fn jparse_string(mut cur: Cur) -> Result<Opaque, string> {
+fn jparse_string(mut cur: Cur) -> Result<Opaque, str> {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
-    let out: Vec<string> = Vec.new();
+    let out: Vec<str> = Vec.new();
     let mut closed = false;
     let mut open = true;
     while (open && cur.pos < cur.cs.len()) {
@@ -811,9 +811,9 @@ fn jparse_string(mut cur: Cur) -> Result<Opaque, string> {
     return Result.ok(Opaque.new(jstr(join_chars(out))));
 }
 
-fn jparse_number(mut cur: Cur) -> Result<Opaque, string> {
+fn jparse_number(mut cur: Cur) -> Result<Opaque, str> {
     let start = cur.pos;
-    let chars: Vec<string> = Vec.new();
+    let chars: Vec<str> = Vec.new();
     let mut again = true;
     while (again) {
         let c = jpeek(cur);
@@ -829,7 +829,7 @@ fn jparse_number(mut cur: Cur) -> Result<Opaque, string> {
     return Result.ok(Opaque.new(jnum(join_chars(chars))));
 }
 
-fn jparse_array(mut cur: Cur) -> Result<Opaque, string> {
+fn jparse_array(mut cur: Cur) -> Result<Opaque, str> {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return Result.err("json: nesting deeper than 64");
@@ -862,7 +862,7 @@ fn jparse_array(mut cur: Cur) -> Result<Opaque, string> {
     return Result.ok(Opaque.new(v));
 }
 
-fn jparse_object(mut cur: Cur) -> Result<Opaque, string> {
+fn jparse_object(mut cur: Cur) -> Result<Opaque, str> {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return Result.err("json: nesting deeper than 64");
@@ -907,15 +907,15 @@ fn jparse_object(mut cur: Cur) -> Result<Opaque, string> {
     return Result.ok(Opaque.new(v));
 }
 
-/// Unwrap a Result<Opaque, string> that is known-Ok (checked above);
+/// Unwrap a Result<Opaque, str> that is known-Ok (checked above);
 /// the unwrap_or default is unreachable and exists only because there
 /// is no `.unwrap()` in the surface.
-fn unwrap_box(r: Result<Opaque, string>) -> Opaque {
+fn unwrap_box(r: Result<Opaque, str>) -> Opaque {
     return r.unwrap_or(Opaque.new(jnull()));
 }
 
 /// Encode a tree back to compact JSON.
-fn jencode(j: Json) -> string {
+fn jencode(j: Json) -> str {
     let mut out = "";
     when (j.tag) {
         JTag.Null -> { out = "null"; },
@@ -946,9 +946,9 @@ fn jencode(j: Json) -> string {
 }
 
 /// Quote + minimally escape a JSON string body.
-fn jquote(s: string) -> string {
+fn jquote(s: str) -> str {
     let q = "\"";
-    let body: Vec<string> = Vec.new();
+    let body: Vec<str> = Vec.new();
     for (let c of s) {
         if (c == '"') { body.push("\\\""); }
         else if (c == '\\') { body.push("\\\\"); }
@@ -962,7 +962,7 @@ fn jquote(s: string) -> string {
     return f"{q}{join_chars(body)}{q}";
 }
 
-entry fn json_dec(s: string) -> Result<Opaque, string> {
+entry fn json_dec(s: str) -> Result<Opaque, str> {
     let cur = Cur { cs: split_chars(s), pos: 0, depth: 0 };
     let v = jparse_value(cur);
     if (v.is_err()) { return v; }
@@ -973,11 +973,11 @@ entry fn json_dec(s: string) -> Result<Opaque, string> {
     return v;
 }
 
-entry fn json_enc(o: Opaque) -> string {
+entry fn json_enc(o: Opaque) -> str {
     return jencode(downcast<Json>(o).value);
 }
 
-entry fn json_roundtrip(s: string) -> Result<string, string> {
+entry fn json_roundtrip(s: str) -> Result<str, str> {
     let v = json_dec(s);
     if (v.is_err()) {
         return Result.err(v.error);

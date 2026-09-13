@@ -68,23 +68,23 @@ f"a={a} b={f(b())}"   ->   concat("a=", str(a), " b=", str(f(b())))
 | `f32`/`f64` | shortest round-trip decimal (`3.5`, `0.1`, `1e300`) |
 | `bool` | `true` / `false` |
 | `char` | the character itself |
-| `string` | contents, verbatim |
+| `str` | contents, verbatim |
 | `enum` | member name (`Color.Red` → `"Red"`) |
 
   Everything else (dataclass/class values, vecs and fixed arrays,
   `Option`/`Result`) is a **compile error** inside `f"..."` — preventing accidental
   implementation-detail printing. Use `debug.str(x)` for developer output;
-  write a `to_string() -> string` method on your class and call it explicitly.
+  write a `to_string() -> str` method on your class and call it explicitly.
 - In a **`Template`-expected position** the same literal builds a
   structured value instead — `Template { parts, args }` with the
   placeholder values boxed (`Opaque`, RFC 0014), not rendered — for hosts,
   l10n, and structured logging (RFC 0027). `t.str()` renders identically to
-  the concat path; the default `string` behavior above is unchanged.
+  the concat path; the default `str` behavior above is unchanged.
 - Raw + format don't combine in v1 (`rf"..."` is OQ-3).
 
 ## Open questions
 
-- OQ-1: string indexing: byte-index + helpers proposal stands
+- OQ-1: str indexing: byte-index + helpers proposal stands
   (`for (let c of s)` is the blessed iteration).
 - OQ-2: naming of lossy numeric conversions: `u8.wrap(x)` vs
   `u8.truncate(x)` vs `wrapTo<u8>(x)`.

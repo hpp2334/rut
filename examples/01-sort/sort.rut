@@ -185,7 +185,7 @@ entry fn fill(c: Opaque, n: u32, seed: u32) -> unit {
 
 /// Sort the bank in place. Unknown names come back as `Result.err` —
 /// an ordinary value, not a trap.
-entry fn sort(c: Opaque, algo: string) -> Result<bool, string> {
+entry fn sort(c: Opaque, algo: str) -> Result<bool, str> {
     let b = downcast<Bank>(c).value;
     let mut unknown = false;
     when (algo) {
@@ -218,7 +218,7 @@ entry fn get(c: Opaque, i: i32) -> Option<i32> {
 
 /// The machine-checkable form: a JSON array — `[1, 2, 3]`. One string
 /// crosses, so the host can assert a whole result in one compare.
-entry fn serialize(c: Opaque) -> string {
+entry fn serialize(c: Opaque) -> str {
     let xs = downcast<Bank>(c).value.data;
     let mut out = "[";
     for (let i = 0; i < xs.len(); i += 1) {
@@ -231,7 +231,7 @@ entry fn serialize(c: Opaque) -> string {
 }
 
 /// The human listing the embedder prints.
-entry fn render(c: Opaque) -> string {
+entry fn render(c: Opaque) -> str {
     let xs = downcast<Bank>(c).value.data;
     let mut out = f"Bank[{xs.len()}]";
     for (let v of xs) {

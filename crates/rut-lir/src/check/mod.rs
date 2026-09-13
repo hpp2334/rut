@@ -243,7 +243,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// The crossing rule (RFC 0023 §2): what an `entry fn` signature may
-    /// carry. Primitives, `string`, `unit`, `bytes` (the binary buffer,
+    /// carry. Primitives, `str`, `unit`, `bytes` (the binary buffer,
     /// RFC 0004), `Option`/`Result` over crossable types — and `Opaque`,
     /// the host-held box (RFC 0014): the ONE cell shape an embedder may
     /// keep and pass back. Every other cell (`TodoList`, `Vec<Todo>`,
@@ -280,7 +280,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         self.ast.span(p.id()),
                         format!(
-                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `string`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
+                            "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `str`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
                             self.name(pd.name),
                             self.types.name(ty)
                         ),
@@ -293,7 +293,7 @@ impl<'a> Ctx<'a> {
                     self.err(
                         self.ast.span(r.id()),
                         format!(
-                            "`entry fn {fname}` returns `{}` — only primitives, `string`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
+                            "`entry fn {fname}` returns `{}` — only primitives, `str`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
                             self.types.name(ty)
                         ),
                     );

@@ -13,15 +13,15 @@ pub enum EventKind { Tick, Visit, Alert }
 pub enum ApiError { Network, NotFound, RateLimited }
 
 pub dataclass User {
-    name: string;
-    role: string;
+    name: str;
+    role: str;
     status: Status;
     score: f32;
 }
 
 pub dataclass Series {
-    metric: string;
-    unit: string;
+    metric: str;
+    unit: str;
     samples: Vec<f32>;
 }
 
@@ -44,12 +44,12 @@ pub dataclass LiveEvent {
     kind: EventKind;
     at_ms: i64;
     value: f32;
-    who: string;
+    who: str;
 }
 
 // --- free-function helpers over the data (the data-first idiom) ---
 
-pub fn status_label(s: Status) -> string {
+pub fn status_label(s: Status) -> str {
     return when (s) {
         Status.Active  -> "active",
         Status.Idle    -> "idle",
@@ -57,7 +57,7 @@ pub fn status_label(s: Status) -> string {
     };
 }
 
-pub fn event_label(k: EventKind) -> string {
+pub fn event_label(k: EventKind) -> str {
     return when (k) {
         EventKind.Tick  -> "tick",
         EventKind.Visit -> "visit",
