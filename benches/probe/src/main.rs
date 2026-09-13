@@ -159,6 +159,8 @@ fn main() {
         // probe discards it (like the old `print: None`) so stdout stays a
         // single JSON object — the embedder's half of the native module.
         install_std_log(&mut vm, |_msg| {});
+        // the host half of `std:math` (RFC 0028)
+        rut_std::math::install_std_math(&mut vm);
         let t = Instant::now();
         let res = vm.call("main", &[]);
         exec_ms.push(t.elapsed().as_secs_f64() * 1e3);

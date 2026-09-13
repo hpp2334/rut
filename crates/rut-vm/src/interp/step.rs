@@ -59,14 +59,6 @@ impl Vm {
                 let v = self.arith_int::<{ IOP_MOD }, false>(prim, r!(a), r!(b))?;
                 self.cur_regs[dst as usize] = v;
             }
-            Op::WDivI { prim, dst, a, b } => {
-                let v = self.arith_int::<{ IOP_DIV }, true>(prim, r!(a), r!(b))?;
-                self.cur_regs[dst as usize] = v;
-            }
-            Op::WModI { prim, dst, a, b } => {
-                let v = self.arith_int::<{ IOP_MOD }, true>(prim, r!(a), r!(b))?;
-                self.cur_regs[dst as usize] = v;
-            }
             Op::AndI { prim, dst, a, b } => {
                 let v = self.bitop_int::<{ BOP_AND }>(prim, r!(a), r!(b))?;
                 self.cur_regs[dst as usize] = v;

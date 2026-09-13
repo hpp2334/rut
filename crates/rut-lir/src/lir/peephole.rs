@@ -497,8 +497,6 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::WAddI { dst, .. }
         | Op::WSubI { dst, .. }
         | Op::WMulI { dst, .. }
-        | Op::WDivI { dst, .. }
-        | Op::WModI { dst, .. }
         | Op::AndI { dst, .. }
         | Op::OrI { dst, .. }
         | Op::XorI { dst, .. }
@@ -587,8 +585,6 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
         | Op::WAddI { dst, a, b, .. }
         | Op::WSubI { dst, a, b, .. }
         | Op::WMulI { dst, a, b, .. }
-        | Op::WDivI { dst, a, b, .. }
-        | Op::WModI { dst, a, b, .. }
         | Op::AndI { dst, a, b, .. }
         | Op::OrI { dst, a, b, .. }
         | Op::XorI { dst, a, b, .. }
@@ -768,8 +764,6 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         | Op::WAddI { a, b, .. }
         | Op::WSubI { a, b, .. }
         | Op::WMulI { a, b, .. }
-        | Op::WDivI { a, b, .. }
-        | Op::WModI { a, b, .. }
         | Op::AndI { a, b, .. }
         | Op::OrI { a, b, .. }
         | Op::XorI { a, b, .. }

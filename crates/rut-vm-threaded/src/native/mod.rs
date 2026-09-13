@@ -92,8 +92,6 @@ op_handler!(h_ret, op_ret);
 op_handler!(h_muli, op_muli);
 op_handler!(h_divi, op_divi);
 op_handler!(h_modi, op_modi);
-op_handler!(h_wdivi, op_wdivi);
-op_handler!(h_wmodi, op_wmodi);
 op_handler!(h_andi, op_andi);
 op_handler!(h_ori, op_ori);
 op_handler!(h_xori, op_xori);
@@ -178,8 +176,6 @@ fn table<M: Machine>() -> Table<M> {
     t[T_MULI as usize] = h_muli::<M>;
     t[T_DIVI as usize] = h_divi::<M>;
     t[T_MODI as usize] = h_modi::<M>;
-    t[T_WDIVI as usize] = h_wdivi::<M>;
-    t[T_WMODI as usize] = h_wmodi::<M>;
     t[T_ANDI as usize] = h_andi::<M>;
     t[T_ORI as usize] = h_ori::<M>;
     t[T_XORI as usize] = h_xori::<M>;

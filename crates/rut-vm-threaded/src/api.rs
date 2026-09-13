@@ -49,8 +49,6 @@ pub const T_RET: u8 = 27;
 pub const T_MULI: u8 = 28;
 pub const T_DIVI: u8 = 29;
 pub const T_MODI: u8 = 30;
-pub const T_WDIVI: u8 = 31;
-pub const T_WMODI: u8 = 32;
 pub const T_ANDI: u8 = 33;
 pub const T_ORI: u8 = 34;
 pub const T_XORI: u8 = 35;
@@ -136,8 +134,6 @@ pub fn tag_of(op: &Op) -> u8 {
         Op::MulI { .. } => T_MULI,
         Op::DivI { .. } => T_DIVI,
         Op::ModI { .. } => T_MODI,
-        Op::WDivI { .. } => T_WDIVI,
-        Op::WModI { .. } => T_WMODI,
         Op::AndI { .. } => T_ANDI,
         Op::OrI { .. } => T_ORI,
         Op::XorI { .. } => T_XORI,
@@ -357,8 +353,6 @@ pub trait Machine {
     fn op_muli(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_divi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_modi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
-    fn op_wdivi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
-    fn op_wmodi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_andi(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_ori(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_xori(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }

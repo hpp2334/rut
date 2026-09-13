@@ -84,6 +84,8 @@ fn run(path: &str, fuel: Option<u64>) {
     };
     // the host half of `std:log` (RFC 0022/0026)
     rut_std::logger::install_std_log(&mut vm, |msg| println!("{msg}"));
+    // the host half of `std:math` (RFC 0028)
+    rut_std::math::install_std_math(&mut vm);
     match vm.call("main", &[]) {
         Ok(_) => {}
         Err(t) => {

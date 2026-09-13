@@ -77,7 +77,7 @@ string-literal pattern arms (unknown names come back as `Result.err`,
 not a trap). The host holds one `Opaque` bank; `Vec<i32>` never crosses
 (RFC 0023 §2) — results return as `serialize(c)`, a JSON array string,
 so one compare checks a whole run. `fill(c, n, seed)` sizes a
-deterministic LCG input in one call (wrapping `&*`/`&+`, RFC 0004 §3),
+deterministic LCG input in one call (wrapping `Math.wrapping_mul`/`Math.wrapping_add`, RFC 0004 §3),
 and `tests/session.rs` gates every algorithm on known inputs, edge
 cases (empty / single / duplicates / sorted / reverse / negatives),
 cross-algorithm agreement on 500 pseudo-random values, and trap
@@ -96,7 +96,7 @@ dispatcher-entry pattern, the hashmap hash keys CRC-32 / FNV-1a 32+64 /
 djb2 / sdbm, and a JSON codec (a hand-rolled tagged union — RFC 0006
 enums carry no data — with children boxed in `Opaque`, RFC 0014).
 SHA-512 is the u64 showcase: 64-bit rotations lean on `>>` being a
-logical shift for unsigned types and `&<<` truncating to the operand
+logical shift for unsigned types and `Math.wrapping_shl` truncating to the operand
 width. The host is the **oracle**: every result is checked against
 RFC 1321 / FIPS 180-4 / RFC 4648 vectors and the `md-5` / `sha1` /
 `sha2` / `base64` / `crc32fast` / `serde_json` crates — the repo's

@@ -1,11 +1,12 @@
 import { Logger } from "std:log";
 
 import { Vec } from "std:collection";
+import { Math } from "std:math";
 // quicksort — deterministic LCG input, in-place Lomuto quicksort, rolled
 // checksum. Scale: n = 100_000.
 //
-// The LCG and the checksum use the wrapping ops (`&*`/`&+`, RFC 0004 §3)
-// so the i32 math matches JavaScript's `Math.imul(...) | 0` exactly.
+// The LCG and the checksum use `Math.wrapping_*` (RFC 0004 §3) so the i32
+// math matches JavaScript's `Math.imul(...) | 0` exactly.
 
 fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> unit {
     if (lo >= hi) {
@@ -34,13 +35,13 @@ pub fn main() -> unit {
     let xs: Vec<i32> = Vec.new();
     let mut x: i32 = 42;
     for (let i = 0; i < n; i += 1) {
-        x = (x &* 1664525) &+ 1013904223;
+        x = Math.wrapping_add(Math.wrapping_mul(x, 1664525), 1013904223);
         xs.push(x % 1000);
     }
     quicksort(xs, 0, n - 1);
     let mut h: i32 = 0;
     for (let i = 0; i < n; i += 1) {
-        h = (h &* 31) &+ xs[i];
+        h = Math.wrapping_add(Math.wrapping_mul(h, 31), xs[i]);
     }
     Logger.new("app").info(f"CHECKSUM {h}");
 }

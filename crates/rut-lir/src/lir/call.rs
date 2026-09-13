@@ -359,6 +359,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // imported function: signature from the surface, a direct call to the
         // exporter's scope-qualified id (RFC 0029 surface / RFC 0035 §1)
         if let Some(ef) = self.ctx.extern_fn(name).cloned() {
+            if let Some(i) = ef.intrinsic {
+                // a compiler-lowered intrinsic (RFC 0032 §1.1 R2): no call
+                return self.compile_intrinsic(i, &args, expected, sp);
+            }
             if !generics.is_empty() {
                 self.ctx.err(sp, format!("`{}` is an imported fn and takes no type arguments", self.ctx.name(name)));
                 return Err(());
@@ -474,6 +478,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         match (bn.as_str(), mn.as_str()) {
+            ("Math", _) => {
+                return self.compile_math_member(member, &args, expected, sp);
+            }
             ("Option", "some") => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "Option.some(v) takes one value");
@@ -799,7 +806,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let bn = self.ctx.name(base).to_string();
                 // `Vec` is an ordinary class (std:collection), so it routes
                 // here through `find_data`, like any other class
-                let is_type = matches!(bn.as_str(), "Option" | "Result" | "Opaque" | "bytes")
+                let is_type = matches!(bn.as_str(), "Option" | "Result" | "Opaque" | "bytes" | "Math")
                     || self.ctx.find_enum(base).is_some()
                     || self.ctx.find_data(base).is_some();
                 if is_type {
@@ -1213,6 +1220,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     pub(crate) fn compile_field(&mut self, recv: NodeHandle<AnyExpr>, name: IdentId, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+        // `Math.PI` — a `std:math` namespace constant (checked before the
+        // receiver is compiled, since `Math` is not a value)
+        if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
+            if segs.len() == 1 && self.ctx.name(segs[0].name) == "Math" {
+                if let Some((ty, bits)) = self.ctx.extern_const(name) {
+                    let reg = self.new_reg(ty);
+                    self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
+                    return Ok(ty);
+                }
+                let fname = self.ctx.name(name).to_string();
+                self.ctx.err(sp, format!("`Math.{fname}` is not a math constant"));
+                return Err(());
+            }
+        }
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
         let fname = self.ctx.name(name).to_string();

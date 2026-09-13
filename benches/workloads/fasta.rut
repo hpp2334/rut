@@ -1,6 +1,7 @@
 import { Logger } from "std:log";
 
 import { Vec } from "std:collection";
+import { Math } from "std:math";
 // fasta — LCG-driven nucleotide string building (the benchmark-game
 // string churn). rut strings are immutable, so this exercises repeated
 // concatenation as well as allocation.
@@ -12,7 +13,7 @@ fn fasta(n: i32) -> string {
     let mut x: u32 = 42;
     let mut checksum = 0;
     for (let i = 0; i < n; i += 1) {
-        x = (x &* 1103515245) &+ 12345;
+        x = Math.wrapping_add(Math.wrapping_mul(x, 1103515245), 12345);
         let idx = i32((x >> 16) % 4);
         let mut k = 0;
         for (let c of letters) {

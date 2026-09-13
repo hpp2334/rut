@@ -72,10 +72,11 @@ enum Tok {
 struct Token { tok: Tok, span: Span }
 ```
 
-- **Wrapping-arith assignment** (`&+=`, `&-=` …, RFC 0004 §3) lexes as
-  dedicated `Amp` + `PlusEq`-style digraph tokens (`AmpPlusEq` etc. exist
-  in the real enum; the sketch abbreviates). Assignment operators are one
-  token each — no maximal-munch ambiguity.
+- **Wrapping arithmetic** (RFC 0004 §3) is no longer grammar: the surface
+  spells it `Math.wrapping_add`/`wrapping_sub`/`wrapping_mul`/
+  `wrapping_shl` (`std:math`, RFC 0028), and the frontend lowers those
+  calls inline to the `wrap` opcodes (RFC 0032 §1.1 R2). Assignment
+  operators are one token each — no maximal-munch ambiguity.
 - **Maximal munch** with an explicit longest-match table; `/` vs `//` vs
   `/*` resolved by one lookahead.
 - Numeric literals: per RFC 0007 §1 (`0x`/`0b`/`0o`, `_` separators,
@@ -226,7 +227,7 @@ left-recursion handling. Binding powers (loosest → tightest):
 
 | prec | associativity | operators |
 |---|---|---|
-| 1 | – | `=` `+=` `-=` `&+=` … (assignment, right; target must be a path/index) |
+| 1 | – | `=` `+=` `-=` … (assignment, right; target must be a path/index) |
 | 2 | – | `=>` lambdas — `(params)` or single-ident form; decided by the §4.2 scan *before* the Pratt loop starts, not by binding powers |
 | 3 | left | `\|\|` |
 | 4 | left | `&&` |

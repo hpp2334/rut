@@ -138,8 +138,8 @@ pub fn token_type(tok: &Tok) -> Option<TokenType> {
         | Tok::Semi
         | Tok::Colon
         | Tok::Dot => None,
-        // arrows, `?` `@` `~`, and the whole arithmetic/bitwise/wrapping
-        // families (RFC 0004 §3)
+        // arrows, `?` `@` `~`, and the arithmetic/bitwise families
+        // (RFC 0004 §3)
         _ => Some(TokenType::Operator),
     }
 }

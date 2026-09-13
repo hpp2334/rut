@@ -3,7 +3,7 @@
 //! operands and pushing one node, bottom-up (C1). Binding powers follow
 //! the §4 table: assignment right (1), `||` (3), `&&` (4), `== !=` (5),
 //! relational + `is` non-associative (6), `| ^` (7), `&` (8), `<< >>`
-//! (9), `+ - &+ &-` (10), `* / % &*` (11), unary right (12), postfix
+//! (9), `+ -` (10), `* / %` (11), unary right (12), postfix
 //! (13). Atoms (primary + postfix chains) are built by `AtomFrame`; the
 //! two §4.2 scans live in `ty.rs`.
 
@@ -212,15 +212,11 @@ impl ExprFrame {
                 Tok::Amp => (BinOp::BitAnd, 8, 8),
                 Tok::Shl => (BinOp::Shl, 9, 9),
                 Tok::Shr => (BinOp::Shr, 9, 9),
-                Tok::AmpShl => (BinOp::WrapShl, 9, 9),
                 Tok::Plus => (BinOp::Add, 10, 10),
                 Tok::Minus => (BinOp::Sub, 10, 10),
-                Tok::AmpPlus => (BinOp::WrapAdd, 10, 10),
-                Tok::AmpMinus => (BinOp::WrapSub, 10, 10),
                 Tok::Star => (BinOp::Mul, 11, 11),
                 Tok::Slash => (BinOp::Div, 11, 11),
                 Tok::Percent => (BinOp::Mod, 11, 11),
-                Tok::AmpStar => (BinOp::WrapMul, 11, 11),
                 Tok::Eq => return self.shift_assign(p, None),
                 Tok::PlusEq => return self.shift_assign(p, Some(BinOp::Add)),
                 Tok::MinusEq => return self.shift_assign(p, Some(BinOp::Sub)),
@@ -232,10 +228,6 @@ impl ExprFrame {
                 Tok::CaretEq => return self.shift_assign(p, Some(BinOp::BitXor)),
                 Tok::ShlEq => return self.shift_assign(p, Some(BinOp::Shl)),
                 Tok::ShrEq => return self.shift_assign(p, Some(BinOp::Shr)),
-                Tok::AmpPlusEq => return self.shift_assign(p, Some(BinOp::WrapAdd)),
-                Tok::AmpMinusEq => return self.shift_assign(p, Some(BinOp::WrapSub)),
-                Tok::AmpStarEq => return self.shift_assign(p, Some(BinOp::WrapMul)),
-                Tok::AmpShlEq => return self.shift_assign(p, Some(BinOp::WrapShl)),
                 _ if p.at_kw("is") => {
                     // `is` takes a TYPE as its right-hand side (naming
                     // position, RFC 0012 §3) — non-associative at level 6

@@ -216,8 +216,6 @@ impl Machine for Vm {
     int_arith!(op_muli, MulI, { IOP_MUL }, false);
     int_arith!(op_divi, DivI, { IOP_DIV }, false);
     int_arith!(op_modi, ModI, { IOP_MOD }, false);
-    int_arith!(op_wdivi, WDivI, { IOP_DIV }, true);
-    int_arith!(op_wmodi, WModI, { IOP_MOD }, true);
 
     bitop!(op_andi, AndI, { BOP_AND });
     bitop!(op_ori, OrI, { BOP_OR });

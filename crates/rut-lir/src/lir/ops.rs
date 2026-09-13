@@ -84,29 +84,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(cmpop(cmp, prim, dst, lhs_reg, rhs_reg), sp.lo);
                 Ok(TY_BOOL)
             }
-            Add | Sub | Mul | Div | Mod | WrapAdd | WrapSub | WrapMul => {
+            Add | Sub | Mul | Div | Mod => {
                 let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
                 let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
                     self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.types.name(ty)));
                     return Err(());
                 };
                 let aop = match op {
-                    Add | WrapAdd => ArithOp::Add,
-                    Sub | WrapSub => ArithOp::Sub,
-                    Mul | WrapMul => ArithOp::Mul,
+                    Add => ArithOp::Add,
+                    Sub => ArithOp::Sub,
+                    Mul => ArithOp::Mul,
                     Div => ArithOp::Div,
                     _ => ArithOp::Mod,
                 };
-                let wrapping = matches!(op, WrapAdd | WrapSub | WrapMul);
                 let dst = self.new_reg(ty);
-                if wrapping {
-                    self.emit(wrap_arith(aop, prim, dst, lhs_reg, rhs_reg), sp.lo);
-                } else {
-                    self.emit(arith(aop, prim, dst, lhs_reg, rhs_reg), sp.lo);
-                }
+                self.emit(arith(aop, prim, dst, lhs_reg, rhs_reg), sp.lo);
                 Ok(ty)
             }
-            BitAnd | BitOr | BitXor | Shl | Shr | WrapShl => {
+            BitAnd | BitOr | BitXor | Shl | Shr => {
                 let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
                 let Some(prim) = prim.filter(|p| p.is_int()) else {
                     self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.types.name(ty)));
@@ -117,7 +112,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     BitOr => BitOp::Or,
                     BitXor => BitOp::Xor,
                     Shl => BitOp::Shl,
-                    WrapShl => BitOp::WrapShl,
                     _ => BitOp::Shr,
                 };
                 let dst = self.new_reg(ty);
@@ -390,25 +384,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         use rut_ast::ast::BinOp::*;
         let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
         match bin {
-            Add | WrapAdd | Sub | WrapSub | Mul | WrapMul | Div | Mod => {
+            Add | Sub | Mul | Div | Mod => {
                 let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
                     self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.types.name(ty)));
                     return Err(());
                 };
                 let aop = match bin {
-                    Add | WrapAdd => ArithOp::Add,
-                    Sub | WrapSub => ArithOp::Sub,
-                    Mul | WrapMul => ArithOp::Mul,
+                    Add => ArithOp::Add,
+                    Sub => ArithOp::Sub,
+                    Mul => ArithOp::Mul,
                     Div => ArithOp::Div,
                     _ => ArithOp::Mod,
                 };
-                if matches!(bin, WrapAdd | WrapSub | WrapMul) {
-                    self.emit(wrap_arith(aop, prim, dst, a, b), sp.lo);
-                } else {
-                    self.emit(arith(aop, prim, dst, a, b), sp.lo);
-                }
+                self.emit(arith(aop, prim, dst, a, b), sp.lo);
             }
-            BitAnd | BitOr | BitXor | Shl | Shr | WrapShl => {
+            BitAnd | BitOr | BitXor | Shl | Shr => {
                 let Some(prim) = prim.filter(|p| p.is_int()) else {
                     self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.types.name(ty)));
                     return Err(());
@@ -418,7 +408,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     BitOr => BitOp::Or,
                     BitXor => BitOp::Xor,
                     Shl => BitOp::Shl,
-                    WrapShl => BitOp::WrapShl,
                     _ => BitOp::Shr,
                 };
                 self.emit(bitop(bop, prim, dst, a, b), sp.lo);

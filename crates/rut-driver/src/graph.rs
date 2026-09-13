@@ -93,7 +93,12 @@ impl<'a> GraphCompiler<'a> {
         };
         // a native module (RFC 0022/0026): no rut body — synthesize a
         // placeholder program whose bodyless funcs the embedder implements.
-        if module.source.is_none() && !module.host_funcs.is_empty() {
+        // Intrinsics (compiler-lowered) and constants ride the same surface.
+        if module.source.is_none()
+            && (!module.host_funcs.is_empty()
+                || !module.intrinsics.is_empty()
+                || !module.consts.is_empty())
+        {
             use rut_core::binary::{FuncCode, Program};
             // host functions obey the same crossing rule as `entry fn`
             // (RFC 0023 §2 / RFC 0035 §3)
@@ -121,6 +126,7 @@ impl<'a> GraphCompiler<'a> {
                     params: params.clone(),
                     ret: *ret,
                     local: i as u32,
+                    intrinsic: None,
                 });
                 funcs.push(FuncCode {
                     name: name.clone(),
@@ -132,6 +138,24 @@ impl<'a> GraphCompiler<'a> {
                     code: vec![],
                     spans: vec![],
                     host: Some(format!("{spec}::{name}")),
+                });
+            }
+            for (name, id, arity) in &module.intrinsics {
+                // the declared signature is a placeholder: the LIR types the
+                // call from its arguments (RFC 0032 §1.1 R2)
+                surface.funcs.push(rut_core::binary::SurfaceFn {
+                    name: name.clone(),
+                    params: vec![rut_core::types::TY_I32; *arity],
+                    ret: rut_core::types::TY_I32,
+                    local: 0,
+                    intrinsic: Some(*id),
+                });
+            }
+            for (name, ty, bits) in &module.consts {
+                surface.consts.push(rut_core::binary::SurfaceConst {
+                    name: name.clone(),
+                    ty: *ty,
+                    bits: *bits,
                 });
             }
             let program = Program { name: spec.to_string(), scope, surface, funcs, ..Default::default() };

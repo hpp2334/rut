@@ -8,7 +8,7 @@ use rut_ast::dump;
 use rut_parser::{parse, Mode};
 use rut_core::binary::{encode, Program};
 use rut_core::ops::Op;
-use rut_core::types::{TyKind, TY_I32, TY_OPAQUE, TY_STR, TY_UNIT};
+use rut_core::types::{TyKind, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_UNIT};
 
 pub mod session;
 pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
@@ -61,12 +61,23 @@ pub fn compile_program_resolved(
     imports: &[(rut_core::ScopeId, rut_core::binary::Surface)],
     allow_imports: bool,
 ) -> ProgramOutput {
-    let (ast, mut diags) = parse(src, mode);
+    let (mut ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
     let ast_dump = dump::render_text(&tree, src);
     let ast_json = dump::render_json(&tree);
     if !diags.is_empty() {
         return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
+    }
+    // Intern every imported surface name, so a namespace import (`Math`)
+    // resolves its members by name even though the member name is never
+    // written in `import { .. }` (RFC 0029 surface).
+    for (_, surface) in imports {
+        for f in &surface.funcs {
+            ast.interner.intern(&f.name);
+        }
+        for c in &surface.consts {
+            ast.interner.intern(&c.name);
+        }
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
     ctx.allow_imports = allow_imports;
@@ -76,7 +87,16 @@ pub fn compile_program_resolved(
         ctx.import_types(surface.types.clone(), &surface.scope_blocks);
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(&f.name) {
-                ctx.add_extern_fn(id, rut_core::pack(*dep_scope, f.local), f.params.clone(), f.ret);
+                if let Some(i) = f.intrinsic {
+                    ctx.add_extern_intrinsic(id, i);
+                } else {
+                    ctx.add_extern_fn(id, rut_core::pack(*dep_scope, f.local), f.params.clone(), f.ret);
+                }
+            }
+        }
+        for c in &surface.consts {
+            if let Some(id) = ctx.ast.interner.lookup(&c.name) {
+                ctx.add_extern_const(id, c.ty, c.bits);
             }
         }
         for t in &surface.type_exports {
@@ -171,6 +191,7 @@ pub fn compile_program_resolved(
                         params: f.params.clone(),
                         ret: f.ret,
                         local: fid,
+                        intrinsic: None,
                     });
                 }
             }
@@ -246,8 +267,9 @@ pub fn std_log_source() -> String {
 }
 
 /// Mount the standard modules every rut program expects: `std:collection`
-/// and `std:string` (rut source) and the `std:log` logger over the
-/// `rt:log` native module (RFC 0022/0026).
+/// and `std:string` (rut source), `std:math` (float host fns + constants +
+/// compiler intrinsics), and the `std:log` logger over the `rt:log` native
+/// module (RFC 0022/0026/0028).
 pub fn mount_std(session: &mut Session) {
     let _ = session.register_module(
         "std:collection",
@@ -257,7 +279,68 @@ pub fn mount_std(session: &mut Session) {
         "std:string",
         Module { source: Some(std_string_source()), ..Default::default() },
     );
+    mount_std_math(session);
     mount_std_log(session);
+}
+
+/// Mount `std:math` — a native module (RFC 0028): `f64` host functions
+/// (bodies in `rut-std`), `f64` constants, and width-polymorphic integer
+/// intrinsics the LIR expands inline (RFC 0032 §1.1 R2).
+pub fn mount_std_math(session: &mut Session) {
+    use rut_core::ops::Intrinsic;
+    let u = |name: &str| (name.to_string(), vec![TY_F64], TY_F64);
+    let b = |name: &str| (name.to_string(), vec![TY_F64, TY_F64], TY_F64);
+    let host_funcs = vec![
+        u("sqrt"), u("floor"), u("ceil"), u("round"), u("trunc"),
+        u("exp"), u("ln"), u("log2"), u("log10"),
+        u("sin"), u("cos"), u("tan"), u("asin"), u("acos"), u("atan"),
+        u("sinh"), u("cosh"), u("tanh"),
+        b("pow"), b("atan2"), b("hypot"), b("copysign"),
+        ("fma".to_string(), vec![TY_F64, TY_F64, TY_F64], TY_F64),
+    ];
+
+    let c = |name: &str, v: f64| (name.to_string(), TY_F64, v.to_bits());
+    let consts = vec![
+        c("PI", std::f64::consts::PI),
+        c("TAU", std::f64::consts::TAU),
+        c("E", std::f64::consts::E),
+        c("SQRT_2", std::f64::consts::SQRT_2),
+        c("LN_2", std::f64::consts::LN_2),
+        c("LN_10", std::f64::consts::LN_10),
+        c("LOG2_E", std::f64::consts::LOG2_E),
+        c("LOG10_E", std::f64::consts::LOG10_E),
+        c("INFINITY", f64::INFINITY),
+        c("NEG_INFINITY", f64::NEG_INFINITY),
+        c("NAN", f64::NAN),
+        c("EPSILON", f64::EPSILON),
+        c("MAX", f64::MAX),
+        c("MIN", f64::MIN),
+        c("MIN_POSITIVE", f64::MIN_POSITIVE),
+    ];
+
+    let i2 = |name: &str, id: Intrinsic| (name.to_string(), id, 2usize);
+    let i1 = |name: &str, id: Intrinsic| (name.to_string(), id, 1usize);
+    let intrinsics = vec![
+        i2("wrapping_add", Intrinsic::WrappingAdd),
+        i2("wrapping_sub", Intrinsic::WrappingSub),
+        i2("wrapping_mul", Intrinsic::WrappingMul),
+        i2("wrapping_shl", Intrinsic::WrappingShl),
+        i2("saturating_add", Intrinsic::SaturatingAdd),
+        i2("saturating_sub", Intrinsic::SaturatingSub),
+        i2("saturating_mul", Intrinsic::SaturatingMul),
+        i2("checked_add", Intrinsic::CheckedAdd),
+        i2("checked_sub", Intrinsic::CheckedSub),
+        i2("checked_mul", Intrinsic::CheckedMul),
+        i1("abs", Intrinsic::Abs),
+        i2("min", Intrinsic::Min),
+        i2("max", Intrinsic::Max),
+        i1("signum", Intrinsic::Signum),
+    ];
+
+    let _ = session.register_module(
+        "std:math",
+        Module { host_funcs, consts, intrinsics, ..Default::default() },
+    );
 }
 
 /// Mount `std:log` over its `rt:log` native module (the logger; RFC 0028).
@@ -368,8 +451,6 @@ fn op_str(op: &Op) -> String {
         Op::WAddI { prim, dst, a, b } => format!("waddi.{} r{dst}, r{a}, r{b}", prim.name()),
         Op::WSubI { prim, dst, a, b } => format!("wsubi.{} r{dst}, r{a}, r{b}", prim.name()),
         Op::WMulI { prim, dst, a, b } => format!("wmuli.{} r{dst}, r{a}, r{b}", prim.name()),
-        Op::WDivI { prim, dst, a, b } => format!("wdivi.{} r{dst}, r{a}, r{b}", prim.name()),
-        Op::WModI { prim, dst, a, b } => format!("wmodi.{} r{dst}, r{a}, r{b}", prim.name()),
         Op::AndI { prim, dst, a, b } => format!("andi.{} r{dst}, r{a}, r{b}", prim.name()),
         Op::OrI { prim, dst, a, b } => format!("ori.{} r{dst}, r{a}, r{b}", prim.name()),
         Op::XorI { prim, dst, a, b } => format!("xori.{} r{dst}, r{a}, r{b}", prim.name()),

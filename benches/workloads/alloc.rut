@@ -1,4 +1,5 @@
 import { Logger } from "std:log";
+import { Math } from "std:math";
 
 // alloc — record allocation/drop churn (RC heap). Scale: 2_000_000 records.
 // Canonical reference: 2_000_000^2 wrapped = 1385447424.
@@ -11,8 +12,8 @@ dataclass Point {
 pub fn main() -> unit {
     let mut s: i32 = 0;
     for (let i = 0; i < 2000000; i += 1) {
-        let p = Point { x: i, y: i &+ 1 };
-        s = s &+ p.x &+ p.y;
+        let p = Point { x: i, y: Math.wrapping_add(i, 1) };
+        s = Math.wrapping_add(Math.wrapping_add(s, p.x), p.y);
     }
     Logger.new("app").info(f"CHECKSUM {s}");
 }

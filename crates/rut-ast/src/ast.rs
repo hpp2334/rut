@@ -517,6 +517,4 @@ pub enum BinOp {
     Eq, Ne, Lt, Gt, Le, Ge,
     And, Or, // logical short-circuit
     BitAnd, BitOr, BitXor, Shl, Shr,
-    // wrapping family (RFC 0004 §3)
-    WrapAdd, WrapSub, WrapMul, WrapShl,
 }

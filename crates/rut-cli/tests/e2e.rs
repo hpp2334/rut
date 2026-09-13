@@ -26,6 +26,7 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
     };
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
     rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
+    rut_std::math::install_std_math(&mut vm);
     let trap = match vm.call("main", &[]) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -240,17 +241,18 @@ pub fn main() -> unit {
 #[test]
 fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
+import { Math } from "std:math";
 pub fn main() -> unit {
     let mut x = 2147483647;
-    x = x &+ 1;              // wrapping: fine (RFC 0004 §3)
+    x = Math.wrapping_add(x, 1);   // wrapping: fine (RFC 0004 §3)
     Logger.new("app").info(f"x={x}");
     let mut s = 1073741824;  // 1 << 30
-    s = s &<< 1;             // wrapping shl: bits shifted out are gone
+    s = Math.wrapping_shl(s, 1);   // wrapping shl: bits shifted out are gone
     Logger.new("app").info(f"s={s}");
-    s &<<= 1;                // compound form, same law
+    s = Math.wrapping_shl(s, 1);   // same law
     Logger.new("app").info(f"s={s}");
     let u: u32 = 3221225472; // 0xC000_0000
-    Logger.new("app").info(f"u={u &<< 1}");
+    Logger.new("app").info(f"u={Math.wrapping_shl(u, 1)}");
     let y = 2147483647 + 1;  // trapping: overflow
     Logger.new("app").info(f"y={y}");
 }
@@ -262,7 +264,7 @@ pub fn main() -> unit {
 
 #[test]
 fn plain_shl_traps_when_bits_leave_the_width() {
-    // RFC 0004 §3: `<<` traps; only `&<<` wraps. This was silently a
+    // RFC 0004 §3: `<<` traps; only `Math.wrapping_shl` wraps. This was silently a
     // RIGHT shift before BitOp::WrapShl existed.
     let src = r#"
 pub fn main() -> unit {
@@ -359,7 +361,7 @@ pub fn main() -> unit {
     let b = Vec<u32>.from([4, 5]);
     let c = Vec<u8>.from([250, 251]);
     let d: Vec<u32> = Vec.from([6, 7]);   // bare form, annotation-driven
-    Logger.new("app").info(f"a={a[0] &+ a[1] &+ a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
+    Logger.new("app").info(f"a={a[0] + a[1] + a[2]} b={b[0]} c={c[1]} d={d[1]} n={d.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -826,7 +828,7 @@ pub class Gauge {
     pub w: i32;                    // pub field
 
     pub fn new() -> Self { return Self { n: 0, w: 3 }; }
-    pub(mod) fn bump(mut self) -> unit { self.n &+= self.w; }
+    pub(mod) fn bump(mut self) -> unit { self.n += self.w; }
     pub(self) fn raw(self) -> i32 { return self.n; }
     fn secret(self) -> i32 { return self.n * 100; }
 }
@@ -1060,6 +1062,7 @@ pub fn main() -> unit {
     };
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
     rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
+    rut_std::math::install_std_math(&mut vm);
     let trap = vm.call("main", &[]).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["2 30"]);
@@ -1112,6 +1115,7 @@ pub fn main() -> unit {
     };
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
     rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
+    rut_std::math::install_std_math(&mut vm);
     let trap = vm.call("main", &[]).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["11 hello world"]);
@@ -1134,6 +1138,64 @@ pub fn main() -> unit {
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["abc x 3"]);
+}
+
+#[test]
+fn math_namespace_intrinsics_run() {
+    // `std:math`'s `Math` namespace: wrapping/saturating/checked integer
+    // arithmetic (compiler-lowered) plus abs/min/max/signum and the f64
+    // host functions/constants (RFC 0004 §3, RFC 0028).
+    let src = r#"
+import { Math } from "std:math";
+pub fn main() -> unit {
+    let log = Logger.new("app");
+    // i32 wrapping
+    log.info(f"{Math.wrapping_add(2147483647, 1)} {Math.wrapping_sub(-2147483647 - 1, 1)} {Math.wrapping_mul(65536, 65536)}");
+    // i32 saturating
+    log.info(f"{Math.saturating_add(2147483647, 1)} {Math.saturating_sub(-2147483647 - 1, 1)} {Math.saturating_mul(65536, 65536)} {Math.saturating_mul(-65536, 65536)}");
+    // i32 checked -> Option
+    let a = Math.checked_add(2147483647, 1);
+    let b = Math.checked_add(1, 2);
+    let c = Math.checked_mul(65536, 65536);
+    let d = Math.checked_mul(-65536, 65536);
+    log.info(f"{a.is_some()} {b.is_some()} {b.value} {c.is_some()} {d.is_some()}");
+    log.info(f"{a.unwrap_or(-1)} {c.unwrap_or(-1)}");
+    // u8 edges
+    let u: u8 = 255;
+    let z: u8 = 0;
+    log.info(f"{Math.wrapping_add(u, 1u8)} {Math.saturating_add(u, 1u8)} {Math.checked_add(u, 1u8).is_some()}");
+    log.info(f"{Math.wrapping_sub(z, 1u8)} {Math.saturating_sub(z, 1u8)} {Math.checked_sub(z, 1u8).is_some()}");
+    // i8 edges
+    let lo: i8 = -127 - 1;
+    let hi: i8 = 127;
+    log.info(f"{Math.wrapping_add(hi, 1i8)} {Math.saturating_add(hi, 1i8)} {Math.wrapping_sub(lo, 1i8)} {Math.saturating_sub(lo, 1i8)}");
+    // u64 edge
+    let w: u64 = 18446744073709551615;
+    log.info(f"{Math.wrapping_add(w, 1u64)} {Math.saturating_add(w, 1u64)} {Math.checked_add(w, 1u64).is_some()}");
+    // wrapping shift + int helpers
+    log.info(f"{Math.wrapping_shl(1073741824, 1)}");
+    log.info(f"{Math.abs(-5)} {Math.abs(-2147483647 - 1)} {Math.min(3, 9)} {Math.max(3, 9)} {Math.signum(-7)} {Math.signum(0)} {Math.signum(7)}");
+    // float helpers + constants
+    log.info(f"{Math.abs(-2.5)} {Math.min(1.0, 2.0)} {Math.max(1.0, 2.0)} {Math.signum(-3.5)} {Math.signum(0.0)} {Math.signum(4.5)}");
+    log.info(f"{Math.sqrt(2.0)} {Math.PI}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 2_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec![
+        "-2147483648 2147483647 0",
+        "2147483647 -2147483648 2147483647 -2147483648",
+        "false true 3 false false",
+        "-1 -1",
+        "0 255 false",
+        "255 0 false",
+        "-128 127 127 -128",
+        "0 18446744073709551615 false",
+        "-2147483648",
+        "5 -2147483648 3 9 -1 0 1",
+        "2.5 1 2 -1 0 1",
+        "1.4142135623730951 3.141592653589793",
+    ]);
 }
 
 #[test]

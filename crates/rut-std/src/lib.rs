@@ -3,3 +3,4 @@
 //! module; the implementations an embedder installs live here.
 
 pub mod logger;
+pub mod math;

@@ -72,8 +72,10 @@ host-side, call-scoped, flag-guarded ones at the FFI (RFC 0023).
 ## 3. Integer semantics
 
 - Overflow in `+ - * <<` **traps** in debug and release by default.
-  Wrapping escapes: `&+ &- &* &<<` (compound: `&+= &-= &*= &<<=`);
-  saturating: `x.saturating_add(y)`.
+  Wrapping escapes: `Math.wrapping_add`/`wrapping_sub`/`wrapping_mul`/
+  `wrapping_shl` (`std:math`, RFC 0028); saturating:
+  `Math.saturating_add`/`saturating_sub`/`saturating_mul`; checked:
+  `Math.checked_add`/`checked_sub`/`checked_mul` → `Option<T>`.
 - Division by zero traps; `int / int` is integer division.
 - Mixed-width arithmetic: both operands must have equal width (convert
   first — RFC 0007 §1).

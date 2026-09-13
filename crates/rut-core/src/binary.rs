@@ -60,6 +60,21 @@ pub struct SurfaceFn {
     pub ret: TypeId,
     /// module-local function id (the exporter's)
     pub local: u32,
+    /// `Some` for a compiler-lowered intrinsic (`std:math` wrapping/
+    /// saturating/checked and `abs`/`min`/`max`/`signum`): there is no
+    /// `FuncCode`, and the declared signature is a placeholder — `rut-lir`
+    /// types the call from its arguments (RFC 0032 §1.1 R2).
+    pub intrinsic: Option<crate::ops::Intrinsic>,
+}
+
+/// One exported constant in a module's surface — `std:math::PI` and
+/// friends. `bits` is the raw scalar payload (f64 bits, i64 bits, …) the
+/// importer materializes with `ConstRaw`.
+#[derive(Clone, Debug, Default)]
+pub struct SurfaceConst {
+    pub name: String,
+    pub ty: TypeId,
+    pub bits: u64,
 }
 
 /// One exported type: its importable name and module-local id.
@@ -79,6 +94,8 @@ pub struct SurfaceType {
 #[derive(Clone, Debug, Default)]
 pub struct Surface {
     pub funcs: Vec<SurfaceFn>,
+    /// exported constants (native modules: `std:math`)
+    pub consts: Vec<SurfaceConst>,
     /// the exporter's non-boot type descriptors, verbatim; ids inside are
     /// packed with the exporter's scope (RFC 0035 §1)
     pub types: Vec<crate::types::RutType>,
@@ -467,8 +484,6 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::WAddI { prim, dst, a, b } => { e.u8(67); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::WSubI { prim, dst, a, b } => { e.u8(68); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::WMulI { prim, dst, a, b } => { e.u8(69); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::WDivI { prim, dst, a, b } => { e.u8(70); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::WModI { prim, dst, a, b } => { e.u8(71); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::AndI { prim, dst, a, b } => { e.u8(72); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::OrI { prim, dst, a, b } => { e.u8(73); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::XorI { prim, dst, a, b } => { e.u8(74); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
@@ -608,8 +623,6 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         67 => Op::WAddI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         68 => Op::WSubI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         69 => Op::WMulI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        70 => Op::WDivI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        71 => Op::WModI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         72 => Op::AndI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         73 => Op::OrI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         74 => Op::XorI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },

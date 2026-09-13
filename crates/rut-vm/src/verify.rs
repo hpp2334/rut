@@ -224,8 +224,6 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 | Op::WAddI { prim, a, b, .. }
                 | Op::WSubI { prim, a, b, .. }
                 | Op::WMulI { prim, a, b, .. }
-                | Op::WDivI { prim, a, b, .. }
-                | Op::WModI { prim, a, b, .. }
                 | Op::AndI { prim, a, b, .. }
                 | Op::OrI { prim, a, b, .. }
                 | Op::XorI { prim, a, b, .. }
@@ -338,8 +336,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
         | Op::LeF { dst, a, b, .. } | Op::GeF { dst, a, b, .. }
         | Op::AddI { dst, a, b, .. } | Op::SubI { dst, a, b, .. } | Op::MulI { dst, a, b, .. }
         | Op::DivI { dst, a, b, .. } | Op::ModI { dst, a, b, .. } | Op::WAddI { dst, a, b, .. }
-        | Op::WSubI { dst, a, b, .. } | Op::WMulI { dst, a, b, .. } | Op::WDivI { dst, a, b, .. }
-        | Op::WModI { dst, a, b, .. } | Op::AndI { dst, a, b, .. } | Op::OrI { dst, a, b, .. }
+        | Op::WSubI { dst, a, b, .. } | Op::WMulI { dst, a, b, .. } | Op::AndI { dst, a, b, .. } | Op::OrI { dst, a, b, .. }
         | Op::XorI { dst, a, b, .. } | Op::ShlI { dst, a, b, .. } | Op::ShrI { dst, a, b, .. }
         | Op::WrapShlI { dst, a, b, .. } | Op::EqI { dst, a, b, .. } | Op::NeI { dst, a, b, .. }
         | Op::LtI { dst, a, b, .. } | Op::GtI { dst, a, b, .. } | Op::LeI { dst, a, b, .. }

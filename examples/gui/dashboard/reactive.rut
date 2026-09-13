@@ -1,4 +1,5 @@
 import { Vec } from "std:collection";
+import { Math } from "std:math";
 // reactive.rut — tur's reactive primitives (state / source / derive /
 // mutation / watch / Store) implemented ENTIRELY in user rut. No host
 // support, no language magic. The one thing a heterogeneous store needs —
@@ -37,7 +38,7 @@ pub dataclass Ids {
 }
 
 fn fresh(ids: Ids) -> u32 {               // dataclass aliasing = shared cell
-    ids.next &+= 1;
+    ids.next = Math.wrapping_add(ids.next, 1);
     return ids.next;
 }
 
@@ -173,7 +174,7 @@ pub class Store {
     fn upsert(self, id: u32, v: Opaque) -> unit {
         for (let i = 0; i < self.entries.len(); i += 1) {
             if (self.entries[i].id == id) {
-                self.entries[i].ver &+= 1;
+                self.entries[i].ver = Math.wrapping_add(self.entries[i].ver, 1);
                 self.entries[i].value = v;
                 return;
             }
@@ -228,7 +229,7 @@ pub(self) fn seed_source<T>(store: Store, s: Source<T>) -> Opaque {
 
 /** External data arrived: store the snapshot; flush at the top level. */
 pub fn source_push<T>(store: Store, s: Source<T>, v: T) -> unit {
-    store.depth &+= 1;
+    store.depth = Math.wrapping_add(store.depth, 1);
     store.upsert(s.atom_id(), Opaque.new(v));
     store.depth -= 1;
     if (store.depth == 0) {
@@ -244,7 +245,7 @@ pub fn derived_read<T>(store: Store, d: Derived<T>) -> T {
 
 /** Dispatch a mutation; nested dispatches flush once, at the top. */
 pub fn dispatch<P, R>(store: Store, m: Mutation<P, R>, p: P) -> R {
-    store.depth &+= 1;
+    store.depth = Math.wrapping_add(store.depth, 1);
     let r = m.run_fn()(store, p);
     store.depth -= 1;
     if (store.depth == 0) {

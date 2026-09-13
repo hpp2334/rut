@@ -26,9 +26,22 @@ pub enum CmpOp {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitOp {
     And, Or, Xor, Shl, Shr,
-    /// wrapping `&<<` (RFC 0004 §3): left shift truncated to the operand
-    /// width — never traps, unlike `Shl`
+    /// wrapping `std:math::wrapping_shl` (RFC 0004 §3): left shift
+    /// truncated to the operand width — never traps, unlike `Shl`
     WrapShl,
+}
+
+/// Compiler-lowered native functions (RFC 0032 §1.1 R2): operations the
+/// frontend expands inline rather than calling. `std:math`'s wrapping,
+/// saturating and checked integer arithmetic and its `abs`/`min`/`max`/
+/// `signum` helpers. The id travels in the module surface (no `FuncCode`);
+/// `rut-lir` owns the lowering.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Intrinsic {
+    WrappingAdd, WrappingSub, WrappingMul, WrappingShl,
+    SaturatingAdd, SaturatingSub, SaturatingMul,
+    CheckedAdd, CheckedSub, CheckedMul,
+    Abs, Min, Max, Signum,
 }
 
 /// Internal natives reached via `CallNat` — RFC 0032 §1.1 R2: things rut
@@ -80,8 +93,6 @@ pub enum Op {
     WAddI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     WSubI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     WMulI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    WDivI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    WModI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     AndI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     OrI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
     XorI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
@@ -222,7 +233,8 @@ pub fn arith(op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
     }
 }
 
-/// Wrapping arithmetic (`&+ &- &* &/ &%`) — a no-op for floats.
+/// Wrapping arithmetic (`std:math::wrapping_add/sub/mul`) — a no-op for
+/// floats. `&/`/`&%` were never spellable, so there is no wrapping div/rem.
 pub fn wrap_arith(op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
     if prim.is_float() {
         return arith(op, prim, dst, a, b);
@@ -231,8 +243,7 @@ pub fn wrap_arith(op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
         ArithOp::Add => Op::WAddI { prim, dst, a, b },
         ArithOp::Sub => Op::WSubI { prim, dst, a, b },
         ArithOp::Mul => Op::WMulI { prim, dst, a, b },
-        ArithOp::Div => Op::WDivI { prim, dst, a, b },
-        ArithOp::Mod => Op::WModI { prim, dst, a, b },
+        ArithOp::Div | ArithOp::Mod => unreachable!("no wrapping division (RFC 0004 §3)"),
     }
 }
 

@@ -119,9 +119,10 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
   written). Cross-runtime agreement alone cannot catch a bug shared by
   all three implementations — that is exactly how a wrong fannkuch
   checksum was caught. `f64` arithmetic is IEEE and evaluated in the
-  same order in rut and JS, and where the language has no builtin `sqrt`
-  both sides carry the **same fixed-iteration Newton routine**, so the
-  float checksums match bit-for-bit; the runner still tolerates a 1e-9
+  same order in rut and JS; the `nbody`/`spectral-norm` workloads keep
+  the **same fixed-iteration Newton `fsqrt`** on both sides (rather than
+  rut's `Math.sqrt` vs JS's `Math.sqrt`) so the float checksums match
+  bit-for-bit; the runner still tolerates a 1e-9
   relative difference when comparing numeric checksums.
 
 ## Known limitations / deliberate choices

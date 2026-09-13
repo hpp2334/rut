@@ -61,8 +61,6 @@ pub fn run<M: Machine>(m: &mut M, pc0: u32, _table: &Table<M>) -> Result<ThreadO
             T_MULI => m.op_muli(op, regs, pc)?,
             T_DIVI => m.op_divi(op, regs, pc)?,
             T_MODI => m.op_modi(op, regs, pc)?,
-            T_WDIVI => m.op_wdivi(op, regs, pc)?,
-            T_WMODI => m.op_wmodi(op, regs, pc)?,
             T_ANDI => m.op_andi(op, regs, pc)?,
             T_ORI => m.op_ori(op, regs, pc)?,
             T_XORI => m.op_xori(op, regs, pc)?,

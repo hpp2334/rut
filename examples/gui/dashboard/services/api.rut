@@ -1,4 +1,5 @@
 import { Vec } from "std:collection";
+import { Math } from "std:math";
 // services/api.rut — mock HTTP layer: suspend fns returning Result, LCG-
 // generated deterministic data, simulated latency. The Result boundary is
 // the API contract (network calls fail); callers decide fallbacks.
@@ -9,7 +10,7 @@ import { ApiError, Series, Status, User } from "../models.rut";
 // --- deterministic pseudo-randomness (no std rand in v1) ---
 
 pub fn lcg_next(state: u32) -> u32 {
-    return (state &* 1664525u32) &+ 1013904223u32;
+    return Math.wrapping_add(Math.wrapping_mul(state, 1664525u32), 1013904223u32);
 }
 
 pub(self) fn lcg_f32(state: u32) -> f32 {

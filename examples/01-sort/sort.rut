@@ -1,4 +1,5 @@
 import { Vec } from "std:collection";
+import { Math } from "std:math";
 // sort.rut — a sorting library in rut, called from Rust.
 //
 // The shape: the HOST owns the session. It asks for a bank (`create`),
@@ -168,14 +169,15 @@ entry fn push(c: Opaque, x: i32) -> unit {
 /// Replace the bank with `n` deterministic pseudo-random values — a
 /// Numerical-Recipes LCG over `seed`, folded into 0..1000 — so one call
 /// sizes the whole input; no host round-trip per element. The wrapping
-/// `&*`/`&+` forms keep the u32 math in range (RFC 0004 §3: plain `*`
+/// `Math.wrapping_mul`/`wrapping_add` forms keep the u32 math in range
+/// (RFC 0004 §3: plain `*`
 /// traps; plain `<<` would too — xorshift is out).
 entry fn fill(c: Opaque, n: u32, seed: u32) -> unit {
     let mut b = downcast<Bank>(c).value;
     let fresh: Vec<i32> = Vec.new();
     let mut x = seed | 1;         // the LCG needs an odd state
     for (let i = 0; i < i32(n); i += 1) {
-        x = (x &* 1664525) &+ 1013904223;
+        x = Math.wrapping_add(Math.wrapping_mul(x, 1664525), 1013904223);
         fresh.push(i32(x % 1000));
     }
     b.data = fresh;

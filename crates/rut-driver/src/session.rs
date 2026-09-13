@@ -56,6 +56,12 @@ pub struct Module {
     /// the embedder at run time — `(name, params, ret)`. A module with these
     /// and no `source` is a native module.
     pub host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>,
+    /// Compiler-lowered intrinsics (native modules): `(name, id, arity)`.
+    /// Bodyless and hostless — `rut-lir` expands the call inline
+    /// (RFC 0032 §1.1 R2); `std:math`'s wrapping/saturating/checked ops.
+    pub intrinsics: Vec<(String, rut_core::ops::Intrinsic, usize)>,
+    /// Exported constants: `(name, type, raw bits)` — `std:math::PI`.
+    pub consts: Vec<(String, rut_core::types::TypeId, u64)>,
     /// Force source-inlining into every consumer (`std:log`): a module whose
     /// class methods must resolve at the call site cannot be linked.
     pub inline: bool,

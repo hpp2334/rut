@@ -13,6 +13,7 @@ use rut_core::types::*;
 mod call;
 mod expr;
 mod generic;
+mod intrinsic;
 mod lit;
 mod ops;
 mod peephole;

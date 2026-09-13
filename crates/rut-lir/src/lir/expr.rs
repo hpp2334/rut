@@ -316,7 +316,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let _reg = self.load_const_let(init, ty, expected, sp)?;
                 return Ok(ty);
             }
+            // imported constant (native modules: `std:math::PI`)
+            if let Some((ty, bits)) = self.ctx.extern_const(name) {
+                let reg = self.new_reg(ty);
+                self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
+                return Ok(ty);
+            }
             self.ctx.err(sp, format!("unknown name `{n}`"));
+            return Err(());
+        }
+        // `Math.PI` — the `std:math` constants (namespace member)
+        let math_const = segs.len() == 2 && self.ctx.name(segs[0].name) == "Math";
+        if math_const {
+            if let Some((ty, bits)) = self.ctx.extern_const(segs[1].name) {
+                let reg = self.new_reg(ty);
+                self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
+                return Ok(ty);
+            }
+            let m = self.ctx.name(segs[1].name).to_string();
+            self.ctx.err(sp, format!("`Math.{m}` is not a math constant"));
             return Err(());
         }
         // two segments: local field chain `p.x`, `req.value.reply` — locals

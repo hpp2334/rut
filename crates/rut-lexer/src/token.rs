@@ -26,9 +26,6 @@ pub enum Tok {
     Amp, Pipe, Caret, Tilde, Shl, Shr,               // & | ^ ~ << >>
     AmpEq, PipeEq, CaretEq, ShlEq, ShrEq,            // &= |= ^= <<= >>=
     AmpAmpEq, PipePipeEq,                            // &&= ||=
-    // wrapping-arith (RFC 0004 §3): dedicated digraphs, no maximal-munch ambiguity
-    AmpPlus, AmpMinus, AmpStar, AmpShl,              // &+ &- &* &<<
-    AmpPlusEq, AmpMinusEq, AmpStarEq, AmpShlEq,      // &+= &-= &*= &<<=
     Question, At,
 
     Eof,
@@ -98,10 +95,6 @@ impl Token {
             AmpEq => "`&=`".into(), PipeEq => "`|=`".into(), CaretEq => "`^=`".into(),
             ShlEq => "`<<=`".into(), ShrEq => "`>>=`".into(),
             AmpAmpEq => "`&&=`".into(), PipePipeEq => "`||=`".into(),
-            AmpPlus => "`&+`".into(), AmpMinus => "`&-`".into(),
-            AmpStar => "`&*`".into(), AmpShl => "`&<<`".into(),
-            AmpPlusEq => "`&+=`".into(), AmpMinusEq => "`&-=`".into(),
-            AmpStarEq => "`&*=`".into(), AmpShlEq => "`&<<=`".into(),
             Question => "`?`".into(), At => "`@`".into(),
             Eof => "end of file".into(),
         }

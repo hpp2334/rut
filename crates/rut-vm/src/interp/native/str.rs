@@ -71,7 +71,15 @@ impl Vm {
             TyKind::Prim(PrimTy::F64) => Ok(format!("{}", unsafe { v.f })),
             TyKind::Prim(PrimTy::Bool) => Ok(if v.as_bool() { "true".into() } else { "false".into() }),
             TyKind::Prim(PrimTy::Char) => Ok(v.as_char().to_string()),
-            TyKind::Prim(_) => Ok(unsafe { v.i }.to_string()),
+            TyKind::Prim(p) => Ok(match p {
+                // unsigned widths must format unsigned — the slot is an i64,
+                // so a u64 with bit 63 set would otherwise print negative
+                PrimTy::U8 => (unsafe { v.i } as u8).to_string(),
+                PrimTy::U16 => (unsafe { v.i } as u16).to_string(),
+                PrimTy::U32 => (unsafe { v.i } as u32).to_string(),
+                PrimTy::U64 => (unsafe { v.i } as u64).to_string(),
+                _ => unsafe { v.i }.to_string(),
+            }),
             TyKind::Str => Ok(cell_of(v).as_str().to_string()),
             TyKind::Enum { members } => {
                 let Some(member) = cell_of(v).as_enum_member() else {
