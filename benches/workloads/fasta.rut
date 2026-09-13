@@ -16,13 +16,7 @@ fn fasta(n: i32) -> str {
     for (let i = 0; i < n; i += 1) {
         x = Math.wrapping_add(Math.wrapping_mul(x, 1103515245), 12345);
         let idx = i32((x >> 16) % 4);
-        let mut k = 0;
-        for (let c of letters) {
-            if (k == idx) {
-                b.push_char(c);
-            }
-            k += 1;
-        }
+        b.push_char(letters[idx]);
         checksum += idx;
     }
     let out = b.to_str();
