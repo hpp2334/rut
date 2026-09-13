@@ -234,6 +234,11 @@ pub fn std_collection_source() -> String {
     )
 }
 
+/// The `std:string` body — a mutable UTF-8 string builder (rut source).
+pub fn std_string_source() -> String {
+    include_str!("../../../rut/std-string/string.rut").to_string()
+}
+
 /// The `std:log` body (RFC 0028) — an ordinary rut module over the host
 /// function `rt:log::emit`.
 pub fn std_log_source() -> String {
@@ -241,12 +246,16 @@ pub fn std_log_source() -> String {
 }
 
 /// Mount the standard modules every rut program expects: `std:collection`
-/// (rut source) and the `std:log` logger over the `rt:log` native module
-/// (RFC 0022/0026).
+/// and `std:string` (rut source) and the `std:log` logger over the
+/// `rt:log` native module (RFC 0022/0026).
 pub fn mount_std(session: &mut Session) {
     let _ = session.register_module(
         "std:collection",
         Module { source: Some(std_collection_source()), ..Default::default() },
+    );
+    let _ = session.register_module(
+        "std:string",
+        Module { source: Some(std_string_source()), ..Default::default() },
     );
     mount_std_log(session);
 }

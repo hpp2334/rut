@@ -1,0 +1,79 @@
+// std:string — a mutable UTF-8 string builder (RFC 0007 §2 / RFC 0008).
+//
+// rut `string` values are immutable, so `s = f"{s}{x}"` inside a loop is
+// O(n^2): every step copies the whole prefix. `String` accumulates the
+// pieces into bounded chunks and flattens them once at `finish`, which is
+// amortized O(n) — the rut counterpart of a JS `parts.join("")`.
+//
+//   let mut b = String.new();
+//   for (x of xs) { b.push(x); }
+//   let s = b.finish();
+//
+// The backing `Vec` is ordered; `finish` walks it once. Class methods are
+// `mut self` receivers, so a binding must be declared `mut`.
+import { Vec } from "std:collection";
+
+// Pieces are sealed into a chunk once it reaches this many chars: it keeps
+// each push's copy small (<= CHUNK) without producing one chunk per piece.
+// Inlined rather than a named const because `const` items are not in the
+// grammar yet (std:collection spells its defaults inline the same way).
+
+pub class String {
+    parts: Vec<string>;   // sealed chunks, each <= 32 chars
+    cur: string;          // the pending, unsealed tail
+    cur_len: i32;         // chars currently in `cur`
+    total: i32;           // chars pushed since `new`
+
+    pub fn new() -> Self {
+        return Self { parts: Vec.new(), cur: "", cur_len: 0, total: 0 };
+    }
+
+    pub fn with_capacity(_cap: i32) -> Self {
+        return String.new();
+    }
+
+    // seal `cur` into `parts` once it is full
+    fn seal(mut self) -> unit {
+        if (self.cur_len >= 32) {
+            self.parts.push(self.cur);
+            self.cur = "";
+            self.cur_len = 0;
+        }
+    }
+
+    // append a string
+    pub fn push(mut self, s: string) -> unit {
+        self.cur = f"{self.cur}{s}";
+        let n = string_len(s);
+        self.cur_len += n;
+        self.total += n;
+        self.seal();
+    }
+
+    // append a single character
+    pub fn push_char(mut self, c: char) -> unit {
+        self.cur = f"{self.cur}{c}";
+        self.cur_len += 1;
+        self.total += 1;
+        self.seal();
+    }
+
+    // the number of chars accumulated so far
+    pub fn len(self) -> i32 {
+        return self.total;
+    }
+
+    pub fn is_empty(self) -> bool {
+        return self.total == 0;
+    }
+
+    // flatten to an immutable `string`
+    pub fn finish(self) -> string {
+        let mut out = "";
+        for (let p of self.parts) {
+            out = f"{out}{p}";
+        }
+        out = f"{out}{self.cur}";
+        return out;
+    }
+}

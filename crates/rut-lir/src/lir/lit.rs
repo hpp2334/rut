@@ -26,11 +26,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let t = self.compile_expr(*e, None)?;
                     self.check_formattable(t, self.ctx.ast.span(e.id()))?;
                     let src = self.last_reg;
-                    let sreg = self.new_reg(TY_STR);
-                    self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![src], dst: Some(sreg) }, sp.lo);
-                    part_regs.push(sreg);
+                    if t == TY_STR {
+                        // already a string: `Str` is a pure alias (RFC 0007 §2)
+                        // — skip the call and use the value directly.
+                        part_regs.push(src);
+                    } else {
+                        let sreg = self.new_reg(TY_STR);
+                        self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![src], dst: Some(sreg) }, sp.lo);
+                        part_regs.push(sreg);
+                    }
                 }
             }
+        }
+        // An f-string with a single part needs no concatenation — the part
+        // already is the result (`f"{x}"` is `x` after the `Str` above).
+        if part_regs.len() == 1 {
+            self.last_reg = part_regs[0];
+            return Ok(TY_STR);
         }
         let dst = self.new_reg(TY_STR);
         self.emit(Op::CallNat { nat: Nat::Concat, recv: None, args: part_regs, dst: Some(dst) }, sp.lo);

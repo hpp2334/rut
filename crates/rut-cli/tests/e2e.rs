@@ -1066,6 +1066,77 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn std_string_builder_via_module_loader_runs() {
+    // the real rut/std-string source, mounted and imported by a consumer;
+    // the mutable `String` builder accumulates pieces in chunks and flattens
+    // once (RFC 0007 §2), so building is amortized O(n) not O(n^2)
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    s.register_module(
+        "app:main",
+        rut_driver::Module {
+            source: Some(
+                r#"
+import { String } from "std:string";
+import { Logger } from "std:log";
+pub fn main() -> unit {
+    let mut b = String.new();
+    b.push("hello");
+    b.push_char(' ');
+    b.push("world");
+    Logger.new("app").info(f"{b.len()} {b.finish()}");
+}
+"#
+                .into(),
+            ),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let out = rut_driver::compile_graph(&s, "app:main");
+    assert!(
+        out.diags.is_empty(),
+        "diags: {:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+    let prog = out.program.expect("program");
+    rut_vm::verify::verify(&prog).expect("verify");
+
+    let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+    let sink = lines.clone();
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(4_000_000),
+        heap_limit_bytes: Some(4 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
+    rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
+    let trap = vm.call("main", &[]).err().map(|t| t.name());
+    assert_eq!(trap, None);
+    assert_eq!(*lines.borrow(), vec!["11 hello world"]);
+}
+
+#[test]
+fn fstring_single_part_needs_no_concat() {
+    // `f"{s}"` is the identity on a string and `f"{c}"` a char render — the
+    // LIR now elides the one-argument `Concat` these used to emit
+    // (RFC 0007 §2); the observable result is unchanged.
+    let src = r#"
+pub fn main() -> unit {
+    let s = "abc";
+    let t = f"{s}";
+    let c = 'x';
+    let u = f"{c}";
+    Logger.new("app").info(f"{t} {u} {string_len(t)}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["abc x 3"]);
+}
+
+#[test]
 fn generic_interface_dispatch() {
     // `Wrap<i32>` — one interface id per type-argument list
     let src = r#"

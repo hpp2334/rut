@@ -27,6 +27,18 @@ impl Vm {
                 self.store_result(dst, c)?;
             }
             Nat::Concat => {
+                // a one-part concat is the identity — alias the existing cell
+                // instead of allocating a copy of it.
+                if args.len() == 1 {
+                    let v = self.reg(args[0]);
+                    if let Some(d) = dst {
+                        self.heap.retain(v);
+                        let old = self.cur_regs[d as usize];
+                        self.cur_regs[d as usize] = v;
+                        self.heap.release(old);
+                    }
+                    return Ok(());
+                }
                 // size once — the parts' lengths are all known
                 let total: usize = args.iter().map(|a| cell_of(self.reg(*a)).as_str().len()).sum();
                 let mut out = String::with_capacity(total);
@@ -37,7 +49,10 @@ impl Vm {
                 self.store_result(dst, c)?;
             }
             Nat::StrLen => {
-                let n = cell_of(self.reg(recv.unwrap())).as_str().chars().count() as i64;
+                let s = cell_of(self.reg(recv.unwrap())).as_str();
+                // ASCII is the common case: `len` skips the UTF-8 decode that
+                // `chars().count()` walks.
+                let n = if s.is_ascii() { s.len() } else { s.chars().count() } as i64;
                 if let Some(d) = dst {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }

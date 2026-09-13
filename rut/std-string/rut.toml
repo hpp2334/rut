@@ -1,0 +1,2 @@
+name = "std:string"
+entry.lib = "./string.rut"
