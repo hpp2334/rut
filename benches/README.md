@@ -79,7 +79,7 @@ against the reference in `workloads/expected.json`.
 | `nbody` | `f64` integration + `sqrt` | 1000 steps | energy `-0.16908760523460628` |
 | `spectral-norm` | `f64` power iteration + `sqrt` | n = 150 | `1.274222872607514` |
 | `binary-trees` | RC allocation/drop churn | depth 14 | 2¹⁵−1 nodes = `32767` |
-| `fasta` | string building (`std:string` builder) | n = 10 000 | `15246:10000` |
+| `fasta` | string building (`f""` accumulation) | n = 10 000 | `15246:10000` |
 | `intloop` | integer arith + loop dispatch | 5M iters | `628038624` |
 | `floatloop` | f64 mul/add + loop dispatch | 2M iters | `1107013.7297975053` |
 | `call` | call/return/frame overhead | fib(28) | `317811` |
@@ -128,7 +128,7 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 ## Known limitations / deliberate choices
 
 - Workloads are still single files, but they import `std:collection`,
-  `std:math`, `std:string` and `std:log` through the module loader
+  `std:math` and `std:log` through the module loader
   (RFC 0035); the probe and the `rut` driver install the host halves.
 - Missing language/std features exclude `pidigits` (no bigint),
   `regex-redux` (no regex), and `k-nucleotide` / `reverse-complement`
@@ -138,9 +138,9 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
   counts them, rather than the benchmark-game's varying-depth trees. Each
   node is one RC cell, so the drop at scope exit is still the RC
   allocation/drop path this workload measures.
-- **`fasta`** is likewise an adaptation: LCG-driven ACGT building through
-  the `std:string` builder with a length/index checksum, not the
-  benchmark-game's repeat-sequence generator.
+- **`fasta`** is likewise an adaptation: LCG-driven ACGT building into one
+  accumulating `str` (`out = f"{out}{..}"`, appended in place) with a
+  length/index checksum, not the benchmark-game's repeat-sequence generator.
 - Scales are **reduced** from the official benchmark-game sizes: rut is
   an interpreter, so the full sizes would run for minutes to hours.
   They are still large enough that runtimes are measured, not just

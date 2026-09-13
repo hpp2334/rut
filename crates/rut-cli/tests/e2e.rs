@@ -1104,10 +1104,10 @@ pub fn main() -> unit {
 }
 
 #[test]
-fn std_string_builder_via_module_loader_runs() {
-    // the real rut/std-string source, mounted and imported by a consumer;
-    // the mutable `String` builder accumulates pieces in chunks and flattens
-    // once via `to_str` (RFC 0007 §2), so building is amortized O(n) not O(n^2)
+fn std_collection_via_module_loader_runs() {
+    // the real rut/std-collection source, mounted and imported by a
+    // consumer: `Vec<T>` is rut source over the engine's `Array<T>` cell,
+    // so this exercises the rut-source module loader end to end
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
     s.register_module(
@@ -1115,14 +1115,15 @@ fn std_string_builder_via_module_loader_runs() {
         rut_driver::Module {
             source: Some(
                 r#"
-import { String } from "std:string";
+import { Vec } from "std:collection";
 import { Logger } from "std:log";
 pub fn main() -> unit {
-    let mut b = String.new();
-    b.push("hello");
-    b.push_char(' ');
-    b.push("world");
-    Logger.new("app").info(f"{b.len()} {b.to_str()}");
+    let mut v: Vec<str> = Vec.new();
+    v.push("hello");
+    v.push(" ");
+    v.push("world");
+    let s = string_join(v.as_array());
+    Logger.new("app").info(f"{string_len(s)} {s}");
 }
 "#
                 .into(),
@@ -1199,27 +1200,6 @@ pub fn main() -> unit {
     let (lines, trap, _) = run_case(src, 4_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["2000 aa xy x 0,1,2,3,4,"]);
-}
-
-#[test]
-fn string_builder_flattens_via_join() {
-    // `to_str` seals the pending tail then hands the whole chunk list to the
-    // `string_join` native (one sizing pass, one allocation, RFC 0032
-    // §1.1 R2) — the O(total^2/32) chunk-by-chunk concat is gone.
-    let src = r#"
-import { String } from "std:string";
-pub fn main() -> unit {
-    let mut b = String.with_capacity(64);
-    let mut i = 0;
-    while (i < 1000) { b.push("ab"); i += 1; }
-    let n = b.len();
-    let s = b.to_str();
-    Logger.new("app").info(f"{n} {string_len(s)}");
-}
-"#;
-    let (lines, trap, _) = run_case(src, 4_000_000);
-    assert_eq!(trap, None);
-    assert_eq!(lines, vec!["2000 2000"]);
 }
 
 #[test]

@@ -1,25 +1,23 @@
 import { Logger } from "std:log";
 import { Math } from "std:math";
-import { String } from "std:string";
 // fasta — LCG-driven nucleotide string building (the benchmark-game
-// string churn). The pieces go through the `std:string` builder, which
-// chunks them and flattens once — the rut counterpart of the JS
-// `parts.push` + `parts.join""`. This exercises the builder (and the
-// immutable `str` it flattens into).
+// string churn). The result accumulates into one `str`: `out =
+// f"{out}{..}"` lowers to a concat whose destination is the accumulator,
+// so the engine appends into the uniquely-owned cell — amortized O(n),
+// not a copy of the growing prefix per piece.
 // Scale: n = 10000.
 
 fn fasta(n: i32) -> str {
-    let mut b = String.new();
+    let mut out = "";
     let letters = "ACGT";
     let mut x: u32 = 42;
     let mut checksum = 0;
     for (let i = 0; i < n; i += 1) {
         x = Math.wrapping_add(Math.wrapping_mul(x, 1103515245), 12345);
         let idx = i32((x >> 16) % 4);
-        b.push_char(letters[idx]);
+        out = f"{out}{letters[idx]}";
         checksum += idx;
     }
-    let out = b.to_str();
     return f"{checksum}:{string_len(out)}";
 }
 
