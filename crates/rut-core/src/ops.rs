@@ -44,8 +44,6 @@ pub enum Nat {
     Concat,
     StrLen,    // `for..of`/`Index::len`/`string_len` — the char count
     ArrLen,    // Array<T>.len()/bytes_len — the heap sequence's runtime length
-    StrEncode,   // string_encode -> bytes (UTF-8)
-    BytesDecode, // bytes_decode -> string (UTF-8, lossy)
 }
 
 #[derive(Clone, Debug, PartialEq)]

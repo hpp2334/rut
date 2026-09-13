@@ -66,16 +66,6 @@ impl Vm {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }
             }
-            Nat::StrEncode => {
-                let bytes = cell_of(r!(recv.unwrap())).as_str().to_string().into_bytes();
-                let c = self.heap.alloc_bytes(bytes)?;
-                self.store_result(dst, c)?;
-            }
-            Nat::BytesDecode => {
-                let s = String::from_utf8_lossy(&cell_of(r!(recv.unwrap())).bytes_copy()).into_owned();
-                let c = self.heap.alloc_str(s)?;
-                self.store_result(dst, c)?;
-            }
         }
         Ok(())
     }

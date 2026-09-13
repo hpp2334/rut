@@ -633,7 +633,6 @@ fn nat(b: u8) -> Result<Nat, String> {
     Ok(match b {
         0 => Nat::Print, 1 => Nat::Str, 2 => Nat::Concat, 3 => Nat::StrLen,
         4 => Nat::ArrLen,
-        5 => Nat::StrEncode, 6 => Nat::BytesDecode,
         _ => return Err("bad nat tag".into()),
     })
 }

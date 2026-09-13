@@ -234,8 +234,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, format!("string_encode takes a `string`, found `{}`", self.ctx.types.name(t)));
                 }
                 let src = self.last_reg;
-                let dst = self.new_reg(TY_BYTES);
-                self.emit(Op::CallNat { nat: Nat::StrEncode, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
+                let dst = self.emit_string_encode(src, sp.lo);
+                self.last_reg = dst;
                 return Ok(TY_BYTES);
             }
             "bytes_len" => {
@@ -262,8 +262,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, format!("bytes_decode takes a `bytes`, found `{}`", self.ctx.types.name(t)));
                 }
                 let src = self.last_reg;
-                let dst = self.new_reg(TY_STR);
-                self.emit(Op::CallNat { nat: Nat::BytesDecode, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
+                let dst = self.emit_bytes_decode(src, sp.lo);
+                self.last_reg = dst;
                 return Ok(TY_STR);
             }
             "bytes_from" => {

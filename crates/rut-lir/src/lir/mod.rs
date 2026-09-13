@@ -19,6 +19,7 @@ mod peephole;
 mod slice;
 mod sroa;
 mod stmt;
+mod utf8;
 
 const NEST_MAX: u32 = 1024;
 
