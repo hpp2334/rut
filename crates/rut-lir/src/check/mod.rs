@@ -229,12 +229,7 @@ impl<'a> Ctx<'a> {
     /// keep and pass back. Every other cell (`TodoList`, `Vec<Todo>`,
     /// `dyn Trait`, `Vec<u8>` itself, …) stays inside the VM.
     pub fn crosses_boundary(&self, ty: TypeId) -> bool {
-        match self.types.kind(ty) {
-            TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
-            TyKind::Option { elem } => self.crosses_boundary(*elem),
-            TyKind::Result { ok, err } => self.crosses_boundary(*ok) && self.crosses_boundary(*err),
-            _ => false,
-        }
+        self.types.crosses_boundary(ty)
     }
 
     /// Compile-time enforcement of the crossing rule on every `entry fn`

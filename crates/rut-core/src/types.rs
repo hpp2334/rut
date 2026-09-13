@@ -327,4 +327,17 @@ impl TypeTable {
             _ => Repr::Ref,
         }
     }
+
+    /// The crossing rule (RFC 0023 §2 / RFC 0035 §3): the value shapes a
+    /// host may hold and pass back. `entry fn` is the host-callable surface,
+    /// so **host functions obey the same rule** — primitives, `string`,
+    /// `bytes`, `Opaque`, and `Option`/`Result` over those.
+    pub fn crosses_boundary(&self, id: TypeId) -> bool {
+        match self.kind(id) {
+            TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
+            TyKind::Option { elem } => self.crosses_boundary(*elem),
+            TyKind::Result { ok, err } => self.crosses_boundary(*ok) && self.crosses_boundary(*err),
+            _ => false,
+        }
+    }
 }

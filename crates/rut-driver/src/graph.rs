@@ -95,6 +95,22 @@ impl<'a> GraphCompiler<'a> {
         // placeholder program whose bodyless funcs the embedder implements.
         if module.source.is_none() && !module.host_funcs.is_empty() {
             use rut_core::binary::{FuncCode, Program};
+            // host functions obey the same crossing rule as `entry fn`
+            // (RFC 0023 §2 / RFC 0035 §3)
+            let boot_tt = rut_core::types::TypeTable::boot();
+            for (name, params, ret) in &module.host_funcs {
+                let bad = params.iter().any(|p| !boot_tt.crosses_boundary(*p))
+                    || !boot_tt.crosses_boundary(*ret);
+                if bad {
+                    self.diags.push(Diag::new(
+                        Span::new(0, 0),
+                        format!(
+                            "host function `{spec}::{name}`: only primitives, `string`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)"
+                        ),
+                    ));
+                    return None;
+                }
+            }
             let scope = self.next_scope;
             self.next_scope += 1;
             let mut surface = rut_core::binary::Surface::default();
