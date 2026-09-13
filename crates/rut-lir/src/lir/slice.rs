@@ -40,6 +40,15 @@ pub(crate) struct SliceInfo {
     pub elem: TypeId,
 }
 
+impl SliceInfo {
+    /// The length is loop-invariant: `str`/`bytes` are immutable and
+    /// `Array` is fixed-size, so a `for..of` need only read it once. An
+    /// `impl Iter` accessor may be arbitrary, so its `len` stays live.
+    pub(crate) fn fixed_len(&self) -> bool {
+        !matches!(self.source, SliceSource::Impl { .. })
+    }
+}
+
 impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Resolve the `Iter` impl for `ty`, if any.
     pub(crate) fn slice_info(&mut self, ty: TypeId) -> Option<SliceInfo> {

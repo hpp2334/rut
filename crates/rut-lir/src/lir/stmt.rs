@@ -199,13 +199,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let elem_ty = info.elem;
         let idx = self.new_reg(TY_I32);
         self.emit(Op::ConstRaw { dst: idx, bits: 0 }, sp.lo);
+        // read a fixed source's length once, before the back-edge (`str`/
+        // `bytes` are immutable, `Array` is fixed-size); an `impl Iter`
+        // accessor stays inside the loop
+        let hoisted_len = if info.fixed_len() {
+            Some(self.emit_slice_len(iter_reg, &info, sp.lo)?)
+        } else {
+            None
+        };
         let l_head = self.new_label();
         let l_body = self.new_label();
         let l_end = self.new_label();
         let l_cont = self.new_label();
         self.bind(l_head);
         self.emit(Op::LoopHead, sp.lo);
-        let len_reg = self.emit_slice_len(iter_reg, &info, sp.lo)?;
+        let len_reg = match hoisted_len {
+            Some(r) => r,
+            None => self.emit_slice_len(iter_reg, &info, sp.lo)?,
+        };
         let cond_reg = self.new_reg(TY_BOOL);
         self.emit(cmpop(CmpOp::Lt, PrimTy::I32, cond_reg, idx, len_reg), sp.lo);
         self.br(cond_reg, l_body, l_end);
