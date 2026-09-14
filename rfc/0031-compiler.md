@@ -143,7 +143,8 @@ Rules that bound the cost of the two lattice-lowering features:
 
 Fixed pipeline, no flags in v1: resolve → infer → monomorphize → fold →
 inline (budget: callee < N ops, single call site) → CSE/LICM (pure ops) →
-code emit. Everything is measurable against the `examples/` corpus before
+code emit. Everything is measurable against the example programs
+(`examples/00–03`, `demo/src/examples/`) before
 anything fancier is added; the no-JIT rule keeps the pipeline honest —
 there is no tier-2 to fall back on, so LIR must be right the first time.
 

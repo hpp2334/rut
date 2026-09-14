@@ -14,8 +14,7 @@ be user-defined because user enums carry no data (RFC 0006). No sugar
 operators (`?.`, `??`); the API is explicit snake_case methods plus the `?`
 propagation operator. Their NAMES live in `std:core` like every prelude
 name: `import { Option, Result } from "std:core"` (RFC 0028) — the types
-are builtin, the names are imported, never ambient. See
-**`examples/basic/option-result.rut`**.
+are builtin, the names are imported, never ambient.
 
 | `Option<T>` | `Result<T, E>` |
 |---|---|
@@ -102,9 +101,8 @@ registry (RFC 0037) — sequences are data: reflectable like records.
 `Map<K, V>` / `Set<T>` are
 deliberately absent from it: containers are **library types**, provided by
 `std:collection` as a declaration file + Rust bodies (RFC 0025, RFC 0026, RFC
-0028) — the example spans three files: `examples/host/plugin/my_map.d.rut`
-(decl), `examples/host/my-map.rut` (consumer) +
-`examples/host/my_map.rs` (implementation).
+0028) — the `my_map` declaration is inlined in RFC 0026 §1, and the
+consumer-side wrapper class is the `Logger` pattern (RFC 0028).
 
 `==` on `Option<T>` / `Result<T, E>` is a **compile error**: there is no
 element-wise equality in v1 (no `Equal` interface — RFC 0012 §4; `==`

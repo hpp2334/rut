@@ -10,10 +10,9 @@
 
 ## Summary
 
-See **`examples/basic/dataclasses.rut`** — literal construction everywhere,
+See **`demo/src/examples/dataclasses.rut`** — literal construction everywhere,
 shared cells + `own` divergence, field initializers, free functions over
-data — and **`examples/basic/traits.rut`** for dataclass impl
-blocks in action.
+data.
 
 - **Reference semantics, like everything non-primitive** (RFC 0004 §2,
   RFC 0016 §1): a dataclass value is a heap cell handle; assignment,

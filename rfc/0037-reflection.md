@@ -23,7 +23,7 @@ requires Reflectable {}`) and take **trait-object-typed consumers**
 (`deserialize<T>(..) where T requires Deserializable`). Nothing in the
 language names a builtin; no strings are matched; nothing changes
 under `--release` stripping. The proving example is user-defined JSON
-in `examples/json/` — serialization stays **userland** (RFC 0001 "Why
+(§5) — serialization stays **userland** (RFC 0001 "Why
 not JavaScript" #2: an engine that must ship `JSON` is an engine with
 conformance debt; rut's reflection suffices, so it doesn't).
 
@@ -207,8 +207,8 @@ field; `construct(vals)`. Sums → `construct_variant(i, [])` /
 
 ## 5. The example
 
-`examples/json/json.rut` (the engine) + `app.rut` (the consumer) —
-user-defined JSON end to end: opt-in `impl Serializable for T {}`,
+User-defined JSON end to end: an engine (`JsonEngine` over
+`std:reflect`) and a consumer — opt-in `impl Serializable for T {}`,
 manual `impl Reflectable + Serializable for Tree` (curated,
 positional),
 `deserialize<Vec<Address>>` (registry instantiation), wire-dataclass

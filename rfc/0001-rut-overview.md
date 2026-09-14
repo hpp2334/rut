@@ -66,7 +66,8 @@ a structural answer in rut:
    live in their own modules (RFC 0022). A rut engine is small because the
    spec is small; an embedder ships only what its domain needs. Even
   `JSON` stays userland: reflection over reified types (RFC 0037) makes
-  user-defined serialization complete — `examples/json/` is the proof.
+  user-defined serialization complete — userland JSON is the proof
+  (RFC 0037 §5).
 3. **Too slow without a JIT.** Interpreter-only JS runs one to two orders
    of magnitude slower — a JS engine's speed *is* its JIT. rut's no-JIT
    pillar (G7) is viable only because the language is statically typed:
@@ -127,8 +128,9 @@ a structural answer in rut:
 ## Document layout — the series
 
 The series is **gradual**: every RFC builds on the ones before it, one topic
-each, in reading order. rut example code lives in `examples/`, referenced by
-path; the RFCs hold prose and VM-side sketches (implementation sketches are
+each, in reading order. Runnable example code lives in `examples/` (the
+`00–03` projects, referenced by path) and in `demo/src/examples/` (the
+playground classics); the RFCs hold prose and VM-side sketches (implementation sketches are
 final sections of the RFC they implement).
 
 **Part A — Orientation**
@@ -194,7 +196,7 @@ final sections of the RFC they implement).
 **Part G — Reflection & serialization**
 
 - 0037 — reflection: `Reflectable`, `Deserializable`, `std:reflect` —
-  serde in userland (`examples/json/`)
+  serde in userland (RFC 0037 §5)
 
 ## Pillar decisions
 

@@ -56,8 +56,8 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 
 ## 3. Deterministic destructors
 
-See **`examples/memory/temp-file.rut`**. A class may implement the
-std:core trait `Disposal` (`fn dispose(mut self) -> unit`, RFC 0028) via
+A class may implement the
+`std:core` trait `Disposal` (`fn dispose(mut self) -> unit`, RFC 0028) via
 `impl Disposal for T` — a Disposal class is just a class. `Disposal` is
 imported like every prelude name (`import { Disposal } from
 "std:core"`).

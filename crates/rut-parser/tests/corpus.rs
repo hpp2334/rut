@@ -1,12 +1,18 @@
-//! Corpus conformance — RFC 0030 §7: `examples/**/*.rut` parse with zero
-//! diags (declaration mode for `*.d.rut`); the corpus IS the parser's
-//! conformance suite. Also: depth budgets fire as one clean Diag (C3).
+//! Corpus conformance — RFC 0030 §7: the runnable example projects
+//! (`examples/**`) and the playground classics (`demo/src/examples/`)
+//! parse with zero diags (declaration mode for `*.d.rut`); together they
+//! are the parser's conformance suite. Also: depth budgets fire as one
+//! clean Diag (C3).
 
 use rut_parser::{parse, Mode};
 
 fn corpus() -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
-    let mut stack = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples")];
+    let roots = [
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples"),
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demo/src/examples"),
+    ];
+    let mut stack = roots.to_vec();
     while let Some(dir) = stack.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
         for e in entries.flatten() {
@@ -25,7 +31,7 @@ fn corpus() -> Vec<std::path::PathBuf> {
 #[test]
 fn corpus_parses_clean() {
     let files = corpus();
-    assert!(files.len() >= 35, "expected the full corpus, found {}", files.len());
+    assert!(files.len() >= 15, "expected the full corpus, found {}", files.len());
     let mut failures = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();

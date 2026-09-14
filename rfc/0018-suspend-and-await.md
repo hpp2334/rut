@@ -31,8 +31,19 @@ driver future (`TaskHandle::abort`); in rut it falls out of the model for free.
 
 ## 2. `suspend fn` and `await`
 
-See **`examples/concurrency/countdown.rut`** — cold future, `await` as the
-only suspension point.
+A `suspend fn` returns a **cold** `Future<T>` — calling it runs nothing;
+`await` is the only suspension point:
+
+```rut
+suspend fn countdown(n: u32) -> unit {
+    let log = Logger.new("countdown");
+    for (let i = n; i > 0; i -= 1) {
+        log.info(f"{i}");
+        await sleep(1000);             // <- the ONLY way to suspend
+    }
+    log.info("done");
+}
+```
 
 Rules:
 
@@ -50,9 +61,18 @@ Rules:
 
 The body is split at each `await` into states; every local live across an
 `await` is stored in the coroutine frame's register file, which lives in a
-heap object (refcounted, RFC 0016). `fetch_page` from
-**`examples/concurrency/fetch-page.rut`** becomes (illustrative
-pseudo-bytecode):
+heap object (refcounted, RFC 0016). This `fetch_page` — `await` and `?`
+composing in one expression —
+
+```rut
+suspend fn fetch_page(url: str) -> Result<bytes, HttpError> {
+    let raw = await get(url)?;       // await + `?` propagate in one expr
+    let html = decode(raw)?;         // stays in the resumed state
+    return Result.ok(html);
+}
+```
+
+becomes (illustrative pseudo-bytecode):
 
 ```text
 fetch_page$suspend(frame) ->

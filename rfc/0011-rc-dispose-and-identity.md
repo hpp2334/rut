@@ -11,9 +11,9 @@
 ## Summary
 
 One regime, no opt-ins: everything except primitives is a shared,
-refcounted cell (RFC 0016 §1). Want a private copy? Say `own(x)`. See
-**`examples/basic/rc-and-dispose.rut`** (aliasing, `own`, dispose at
-rc 0) and **`examples/memory/temp-file.rut`**.
+refcounted cell (RFC 0016 §1). Want a private copy? Say `own(x)` — see
+**`demo/src/examples/dataclasses.rut`** for aliasing vs. `own` divergence
+in action.
 
 ## 1. Reference semantics — and the `own` escape hatch
 

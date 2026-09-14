@@ -30,51 +30,12 @@ rut/
 │   ├── 0039-vm-heap.md            # self-managed VM heap
 │   ├── 0040-resource-limits.md    # heap budget, fuel, hang detection
 │   └── 0041-project-structure.md  # this file
-├── examples/                      # target-syntax corpus; RFCs cite files by path
-│   ├── README.md                  # example → RFC index table
-│   ├── basic/                     # one feature at a time
-│   │   ├── grammar-tour.rut       #   0009–0012 tour
-│   │   ├── dataclasses.rut        #   0009  aliasing + own
-│   │   ├── classes.rut            #   0010  class-method construction, static fields
-│   │   ├── traits.rut             #   0012  dyn, impl, requires, is
-│   │   ├── closures-generics.rut  #   0013
-│   │   ├── when.rut               #   0008
-│   │   ├── option-result.rut      #   0005  + `?` (0034 §2)
-│   │   ├── literals.rut           #   0007
-│   │   ├── type-tests.rut         #   0012 §3  `is`
-│   │   ├── opaque.rut             #   0014  erasure + downcast
-│   │   ├── rc-and-dispose.rut     #   0011/0016  cells, Disposal
-│   │   ├── error-context.rut      #   0036
-│   │   ├── module-structure.rut   #   0003
-│   │   └── module-visibility.rut  #   0003
-│   ├── algorithms/                # corpus code, no host deps
-│   │   ├── sieve.rut  quicksort.rut  matrix-mul.rut
-│   ├── concurrency/               # 0018–0019
-│   │   ├── fetch-page.rut  spawn-cancel.rut  select.rut  countdown.rut
-│   ├── network/                   # 0021-shaped echo/http pairs
-│   │   ├── echo-server.rut  echo-worker.rut  http-fetch.rut
-│   ├── workers/                   # isolate pipelines (0021)
-│   │   ├── image-pipeline.rut  image-worker.rut
-│   ├── memory/                    # 0016–0017
-│   │   ├── temp-file.rut  node-cycle.rut  weak-cache.rut
-│   ├── host/                      # 0022–0026: rut + Rust + .d.rut together
-│   │   ├── my-map.rut             #   consumer
-│   │   ├── my_map.rs              #   Rust implementation
-│   │   ├── plugin/my_map.d.rut    #   declaration file
-│   │   └── interop.rut
-│   ├── json/                      # 0037: userland serde
-│   │   ├── json.rut               #   the engine
-│   │   └── app.rut                #   the consumer
-│   └── gui/
-│       └── dashboard/             # the app-shaped project (tur-style)
-│           ├── main.rut           #   entry, deterministic shutdown
-│           ├── models.rut         #   domain dataclasses/enums
-│           ├── state.rut          #   the reactive setup
-│           ├── reactive.rut       #   state/source/derive/mutation/watch/Store
-│           ├── theme.rut
-│           ├── components/        #   header.rut sidebar.rut common.rut
-│           ├── services/          #   api.rut stream.rut
-│           └── workers/           #   stats-worker.rut
+├── examples/                      # the runnable example projects
+│   ├── README.md                  # what each project demonstrates
+│   ├── 00-todolist/               # entry-fn surface over a rut class (CRUD)
+│   ├── 01-sort/                   # sorting library behind one dispatcher entry
+│   ├── 02-digest/                 # byte-level codecs + hashes, host is the oracle
+│   └── 03-plugin/                 # module directory + .rutbundle chat moderator
 ├── benches/                       # rut vs QuickJS-ng vs V8 (README)
 │   ├── README.md                  #   method, fairness rules, workloads
 │   ├── run.mjs                    #   cross-runtime runner (wall + peak RSS)
@@ -258,7 +219,9 @@ rut/
 │       └── README.md
 ├── demo/                           # ships in-repo — §3
 ├── benches/                        # cross-runtime benchmarks — rut/QuickJS/V8
-├── examples/                       # unchanged — the parser corpus (0030 §4)
+├── examples/                       # the 00–03 runnable projects (§1); the
+│                                  #   parse corpus is those + the demo
+│                                  #   classics (0030 §7)
 └── rfc/                            # unchanged
 ```
 

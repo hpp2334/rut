@@ -958,7 +958,7 @@ pub fn main() -> unit {
 #[test]
 fn recursive_class_field_resolves_and_runs() {
     // The class form of a self-referential field (a handle slot, so
-    // pointer-sized) — `examples/memory/node-cycle.rut`'s shape.
+    // pointer-sized) — `demo/src/examples/node-cycle.rut`'s shape.
     let src = r#"
 class Node {
     v: i32 = 0;

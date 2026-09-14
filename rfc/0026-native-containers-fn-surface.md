@@ -12,10 +12,8 @@
 
 ## Summary
 
-The two halves of a native module (full listing:
-**`examples/host/plugin/my_map.d.rut`** — the declaration;
-**`examples/host/my_map.rs`** — the implementation;
-**`examples/host/my-map.rut`** — a consumer). No ClassTable, no
+The two halves of a native module (§1 carries the full `my_map` listing,
+declaration and Rust implementation side by side). No ClassTable, no
 `GenericArgs`, no slot-per-instantiation: **host fns with concrete
 signatures over `Opaque` handles**, wrapped in a rut class on the
 consumer side.

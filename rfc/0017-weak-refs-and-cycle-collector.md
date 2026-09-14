@@ -21,8 +21,8 @@ have a first-class answer.
 
 ## 1. Weak references
 
-See **`examples/memory/weak-cache.rut`** — `Weak(v) -> Weak<T>` and
-`upgrade() -> Option<T>`; **`examples/memory/node-cycle.rut`** shows a
+See **`demo/src/examples/weak-cache.rut`** — `Weak(v) -> Weak<T>` and
+`upgrade() -> Option<T>`; **`demo/src/examples/node-cycle.rut`** shows a
 strong cycle and its `Weak` fix.
 
 - `Weak(v)` allocates a `WeakBox` side object holding a back-pointer that

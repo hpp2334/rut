@@ -9,7 +9,7 @@
 
 ## Summary
 
-See **`examples/basic/literals.rut`** — numeric suffixes and annotations,
+See **`demo/src/examples/literals.rut`** — numeric suffixes and annotations,
 plain/raw/format strings, fixed-array and dataclass literals, and the
 builtin allocation calls (`Vec<f32>(1024)`).
 

@@ -12,7 +12,7 @@
 rut has the classic structured statements — `if`/`else`, `while`, `for..of`,
 indexed `for` — and **one** match construct: `when`, an exhaustive pattern
 *expression*. `switch`/`case`/`default` do not exist. See
-**`examples/basic/when.rut`** — `when` as an expression (with `else`
+**`demo/src/examples/when.rut`** — `when` as an expression (with `else`
 required for non-enum scrutinees) and as a statement (unit arms).
 
 ## 1. Statements

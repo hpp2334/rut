@@ -9,8 +9,11 @@
 
 ## Summary
 
-See **`examples/concurrency/spawn-cancel.rut`** (cancellation-by-drop) and
-**`examples/concurrency/select.rut`** (racing with `select`/`select_all`).
+`spawn(fut) -> Task<T>` schedules a future on the current VM;
+`cancel()` **drops the coroutine frame at its next suspension point**
+(real cancellation — pending sleeps die with it, locals with destructors
+run deterministically); `await select { .. }` races futures, the winner's
+arm produces the value, the losers are dropped.
 
 ## 1. `spawn`
 

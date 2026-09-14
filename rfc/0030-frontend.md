@@ -108,7 +108,9 @@ inside a raw string does NOT close it. `rf"..."` is RFC 0007 OQ-3
 
 ## 2. Grammar summary
 
-The authoritative surface syntax is the RFC series Part B + `examples/`;
+The authoritative surface syntax is the RFC series Part B plus the
+runnable examples (`examples/00–03` projects, `demo/src/examples`
+classics);
 
 ```
 module     := (import | pub? decl)*
@@ -425,7 +427,8 @@ struct Diag { span: Span, msg: String,
   clean "nesting too deep" diag; fuzz targets assert no host stack overflow
   and no rollback.
 - Round-trip invariant: `parse(pretty(ast)) == ast` (formatter) and
-  `examples/**/*.rut` parse with zero diags — the corpus *is* the parser's
+  `examples/**/*.rut` + `demo/src/examples/*.rut` parse with zero diags —
+  the corpus *is* the parser's
   conformance suite (declaration mode: `examples/**/*.d.rut`).
 - Comments and blank lines are dropped from the AST (doc comments kept on
   declarations); formatting fidelity is the formatter's job, not the AST's.
@@ -651,7 +654,8 @@ struct Diag { span: Span, msg: String,
   clean "nesting too deep" diag; fuzz targets assert no host stack overflow
   and no rollback.
 - Round-trip invariant: `parse(pretty(ast)) == ast` (formatter) and
-  `examples/**/*.rut` parse with zero diags — the corpus *is* the parser's
+  `examples/**/*.rut` + `demo/src/examples/*.rut` parse with zero diags —
+  the corpus *is* the parser's
   conformance suite (declaration mode: `examples/**/*.d.rut`).
 - Comments and blank lines are dropped from the AST (doc comments kept on
   declarations); formatting fidelity is the formatter's job, not the AST's.

@@ -11,10 +11,7 @@
 ## Summary
 
 Workers are **separate VMs on separate threads** with separate heaps (RFC
-0016). No shared memory; all data crosses typed channels. See
-**`examples/workers/image-pipeline.rut`** (main side) and
-**`examples/workers/image-worker.rut`** (worker side); a larger server-shaped
-variant lives in `examples/network/echo-server.rut` + `echo-worker.rut`.
+0016). No shared memory; all data crosses typed channels.
 
 ## 1. Channel semantics (v1)
 

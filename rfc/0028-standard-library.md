@@ -51,7 +51,7 @@ The standard library splits in two:
   `capture_stack_trace()`, and the `StackTrace` class. **`std:reflect`**
   (RFC 0037) too: the `Reflectable`/`Deserializable` protocols,
   `TypeInfo`, and engine admission — reflection for userland serde
-  (`examples/json/`).
+  (RFC 0037 §5).
 - **anything else** (`app:gfx`, `imaging`, `plugin:my_map`) — **embedder
   modules**: declaration files + Rust bodies the embedding application
   ships for its own domain — the same mechanism `std:collection` uses, in

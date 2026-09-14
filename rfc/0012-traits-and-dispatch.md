@@ -10,9 +10,9 @@
 
 ## Summary
 
-See **`examples/basic/traits.rut`** — multiple `impl` blocks, a composed
-`Widget` interface, `requires`, dataclass implementors, `dyn`-typed
-vecs.
+`trait I` interfaces: methods only, `impl Trait for Type` blocks, `dyn I`
+object types, `requires` bounds, multiple `impl` blocks per type, composed
+interfaces, `is` capability probes.
 
 ## 1. Dispatch: direct by default, vtable at traits
 
@@ -154,8 +154,7 @@ inherent methods. `final` is meaningless in v1 (nothing can override).
 `as` is now the numeric cast and nothing else — `expr as T`,
 truncating, RHS a naming position restricted to the numeric primitives
 (RFC 0007 §1) — but type tests are the **`is` keyword**: `expr is Type`
-→ `bool`. See
-**`examples/basic/type-tests.rut`**.
+→ `bool`.
 
 - **Grammar:** `expr is Type` at relational precedence,
   non-associative (RFC 0030 §2/§3). The RHS is a **naming position**

@@ -9,7 +9,7 @@
 
 ## Summary
 
-See **`examples/basic/closures-generics.rut`** — arrows (single-expr and
+See **`demo/src/examples/closures-generics.rut`** — arrows (single-expr and
 block), and a generic `first<T>` monomorphized to two instantiations.
 
 ## 1. Closures

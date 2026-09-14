@@ -9,7 +9,7 @@
 
 ## Summary
 
-See **`examples/basic/classes.rut`** — class-method construction
+See **`demo/src/examples/classes.rut`** — class-method construction
 (`Rect.new(..)`), the class-private `Self { .. }` literal, `suspend`
 class methods, sealing without constructors, explicit `self` receivers.
 

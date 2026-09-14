@@ -12,8 +12,6 @@
 Module scope contains **declarations only** — C++-style: every statement
 lives inside a function, and **loading a module executes nothing**. Visibility
 is safe by default (`pub(self)`) with package-scoped forms for libraries.
-See **`examples/basic/module-structure.rut`** and
-**`examples/basic/module-visibility.rut`**.
 
 ## 1. Module structure — declarations only
 
