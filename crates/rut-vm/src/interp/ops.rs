@@ -118,7 +118,7 @@ impl Vm {
     /// `GetF` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
     pub(super) fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32, repr: Repr) -> Result<(), Trap> {
-        let cell = cell_of(self.cur_regs[obj as usize]);
+        let cell = cell_of(self.nil_checked(self.cur_regs[obj as usize])?);
         let v = match &cell.data {
             CellData::Record { fields } => fields
                 .borrow()
@@ -138,7 +138,7 @@ impl Vm {
     /// `SetF` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
     pub(super) fn op_setf(&mut self, obj: Reg, field: u32, val: Reg, repr: Repr) -> Result<(), Trap> {
-        let cell = cell_of(self.cur_regs[obj as usize]);
+        let cell = cell_of(self.nil_checked(self.cur_regs[obj as usize])?);
         let v = self.cur_regs[val as usize];
         let old = if let CellData::Record { fields } = &cell.data {
             fields
@@ -153,6 +153,47 @@ impl Vm {
             self.heap.release(old);
         }
         Ok(())
+    }
+
+    /// `MakePtr` — box `v` into a fresh one-slot cell (RFC 0005). The
+    /// result is a nil-able `*T`; `ty` is the pointer's own type.
+    #[inline(always)]
+    pub(super) fn op_make_ptr(&mut self, dst: Reg, src: Reg, ty: TypeId) -> Result<(), Trap> {
+        let v = self.cur_regs[src as usize];
+        let c = self.heap.alloc_record_zeroed(ty, 1)?;
+        if let CellData::Record { fields } = &cell_of(c).data {
+            fields.borrow_mut().set(0, v);
+        }
+        let elem = match self.prog.types.kind(ty) {
+            TyKind::Ptr { elem } => *elem,
+            _ => unreachable!("MakePtr on a non-pointer type"),
+        };
+        if self.prog.types.repr_of(elem).is_ref() {
+            self.heap.retain(v);
+        }
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = c;
+        if self.is_ref(ty) {
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
+    /// `OnDrop` — attach a cleanup closure to a cell (RFC 0016 §3).
+    #[inline(always)]
+    pub(super) fn op_on_drop(&mut self, obj: Reg, cleanup: Reg) -> Result<(), Trap> {
+        self.heap
+            .set_drop_fn(self.cur_regs[obj as usize], self.cur_regs[cleanup as usize])
+    }
+
+    /// `nil` legality (RFC 0005): a null slot reaching a dereference is
+    /// the `NilDeref` trap — never a silent read.
+    #[inline]
+    pub(super) fn nil_checked(&self, s: Slot) -> Result<Slot, Trap> {
+        if unsafe { s.r.is_null() } {
+            return Err(Trap::new(TrapKind::NilDeref, "nil dereference"));
+        }
+        Ok(s)
     }
 
     /// `MakeRecord` — fused record literal (one alloc, all fields written).

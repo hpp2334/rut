@@ -9,6 +9,28 @@
 
 ## Summary
 
+## 8. Pointers — `*T` and `nil` (v1.1)
+
+`*T` is a nil-able, rc-backed pointer. `nil` is its null literal;
+dereferencing `nil` (field access through it) is the `NilDeref` trap —
+never a silent read. Sharing is explicit: `make_ptr(v)` boxes `v` into a
+fresh one-slot cell (the literal-forwarding case costs nothing), and
+writes through the pointer hit the shared cell.
+
+- `p.x` / `p.m(..)` auto-deref: field and method access through a
+  pointer reads the pointee.
+- `p == nil` / `p != nil` compare against the null pointer; `*T == *T`
+  is cell identity.
+- `on_drop<T>(p: *T, cleanup: fn(*T))` (RFC 0016 §3) attaches a cleanup
+  that runs when the cell's refcount reaches zero — one callback per
+  pointer, a second attach is an error.
+
+## 9. The bracket spelling — `[T]` (v1.1)
+
+`[T]` is the accepted spelling of the heap array `Array<T>` (runtime
+length, non-growable): `let xs: [i32] = [1, 2, 3];`.
+
+
 `Option<T>`, `Result<T, E>` are **builtin (VM-native)** types — they cannot
 be user-defined because user enums carry no data (RFC 0006). No sugar
 operators (`?.`, `??`); the API is explicit snake_case methods plus the `?`

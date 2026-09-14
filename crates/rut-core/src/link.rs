@@ -241,6 +241,7 @@ fn remap_kind(kind: &TyKind, map: &impl Fn(TypeId) -> TypeId) -> TyKind {
             params: params.iter().map(|&p| map(p)).collect(),
             ret: map(*ret),
         },
+        TyKind::Ptr { elem } => TyKind::Ptr { elem: map(*elem) },
     }
 }
 
@@ -258,6 +259,7 @@ fn remap_op(
         Op::NewCell { dst, ty } => Op::NewCell { dst, ty: map(ty) },
         Op::MakeRecord { dst, ty, vals } => Op::MakeRecord { dst, ty: map(ty), vals },
         Op::Own { dst, src, ty } => Op::Own { dst, src, ty: map(ty) },
+        Op::MakePtr { dst, src, ty } => Op::MakePtr { dst, src, ty: map(ty) },
         Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst, ty: map(ty), len, repr },
         Op::ArrLit { dst, ty, elems } => Op::ArrLit { dst, ty: map(ty), elems },
         Op::EnumNew { dst, ty, member } => Op::EnumNew { dst, ty: map(ty), member },

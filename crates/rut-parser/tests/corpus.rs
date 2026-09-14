@@ -86,8 +86,41 @@ fn fstring_holes_allow_string_arguments() {
 }
 
 #[test]
-fn tuples_error_at_the_comma() {
-    let src = "fn f() -> unit { let x = (1, 2); }";
+fn tuples_parse_and_destructure() {
+    // RFC 0007: tuples are records with numeric fields; `()` is unit
+    let src = "fn f() -> unit { let x = (1, 2); let (a, b) = x; let n = x.0; }";
     let (_, diags) = parse(&src, Mode::Impl);
-    assert!(diags.iter().any(|d| d.msg.contains("no tuples")), "{diags:?}");
+    assert!(diags.is_empty(), "{diags:?}");
+    // a one-element paren is still a grouping, not a tuple
+    let src = "fn f() -> unit { let x = (1); }";
+    let (_, diags) = parse(&src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn pointers_and_nil_parse() {
+    // RFC 0005: `*T` types, the `nil` literal, `make_ptr`/`on_drop` decls
+    let src = "fn f() -> unit { let p: *i32 = make_ptr(7); if (p != nil) { } }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    // anonymous closures: `fn (params) { .. }` — no arrow
+    let src = "fn f() -> unit { let g = fn (a: i32) -> bool { return a > 0; }; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn bracket_array_and_async_parse() {
+    // `[T]` is the accepted spelling of `Array<T>` (RFC 0005)
+    let src = "fn f(xs: [i32]) -> i32 { return xs.len(); }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    // `async fn` — the `suspend fn` spelling (RFC 0018 §2)
+    let src = "async fn tick() -> unit { }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    // the fn type with an omitted return is `unit` (RFC 0013 §1)
+    let src = "fn run(f: fn(i32)) -> unit { f(1); }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
 }

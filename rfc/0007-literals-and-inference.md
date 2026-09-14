@@ -9,6 +9,12 @@
 
 ## Summary
 
+`nil` is the pointer literal (RFC 0005). Tuples are first-class values:
+type `(A, B)`, value `(a, b)`, destructuring `let (a, b) = ..`, numeric
+field access `.0`/`.1`; `()` is the unit value. Every type has a zero
+value (RFC 0007 §1.1): `0`, `0.0`, `false`, the empty string, `nil`, the
+zeroed record — an omitted struct-literal field takes its zero value.
+
 See **`demo/src/examples/literals.rut`** — numeric suffixes and annotations,
 plain/raw/format strings, fixed-array and dataclass literals, and the
 builtin allocation calls (`Vec<f32>(1024)`).

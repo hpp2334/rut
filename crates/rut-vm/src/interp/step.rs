@@ -194,6 +194,9 @@ impl Vm {
                 }
             }
 
+            Op::MakePtr { dst, src, ty } => self.op_make_ptr(dst, src, ty)?,
+            Op::OnDrop { obj, cleanup } => self.op_on_drop(obj, cleanup)?,
+
             Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {
                     TyKind::Array { elem } => *elem,

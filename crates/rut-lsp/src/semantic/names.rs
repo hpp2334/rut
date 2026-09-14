@@ -134,6 +134,9 @@ fn classify_type(
             classify_path_segs(toks, ast, span, segs, out, TypeRule::Type);
         }
         TypeKind::TyFn { .. } | TypeKind::TyConst(_) => {}
+        // `*T` / `(A, B)` — the puncts carry no classification; the
+        // element types classify themselves
+        TypeKind::TyPtr { .. } | TypeKind::TyTuple { .. } => {}
     }
 }
 

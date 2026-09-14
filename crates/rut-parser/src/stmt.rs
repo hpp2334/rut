@@ -89,9 +89,9 @@ pub(crate) struct StmtFrame {
 enum StmtStage {
     Dispatch,
     /// `let` — waiting for the optional type
-    LetTy { is_mut: bool, name: IdentId },
+    LetTy { is_mut: bool, name: IdentId, destructure: Option<Vec<IdentId>> },
     /// `let` — waiting for the initializer
-    LetInit { is_mut: bool, name: IdentId, ty: Option<NodeHandle<AnyTy>> },
+    LetInit { is_mut: bool, name: IdentId, destructure: Option<Vec<IdentId>>, ty: Option<NodeHandle<AnyTy>> },
     WhileCond,
     WhileBody,
     ForIter { var: IdentId },
@@ -123,14 +123,41 @@ impl StmtFrame {
                         p.bump();
                         true
                     };
-                    let Some(name) = p.expect_ident("a binding name") else {
-                        return Step::Pop(Done::Failed);
+                    // `let (a, b) = ..` — tuple destructuring (RFC 0007)
+                    let destructure = if matches!(p.tok(), Tok::LParen) {
+                        p.bump();
+                        let mut names = Vec::new();
+                        loop {
+                            let Some(n) = p.expect_ident("a binding name") else {
+                                return Step::Pop(Done::Failed);
+                            };
+                            names.push(n);
+                            if !p.eat_punct(Tok::Comma) {
+                                break;
+                            }
+                            if matches!(p.tok(), Tok::RParen) {
+                                break; // trailing comma
+                            }
+                        }
+                        p.expect(Tok::RParen);
+                        Some(names)
+                    } else {
+                        None
+                    };
+                    let name = match &destructure {
+                        Some(names) => names[0],
+                        None => {
+                            let Some(name) = p.expect_ident("a binding name") else {
+                                return Step::Pop(Done::Failed);
+                            };
+                            name
+                        }
                     };
                     if p.eat_punct(Tok::Colon) {
-                        self.stage = StmtStage::LetTy { is_mut, name };
+                        self.stage = StmtStage::LetTy { is_mut, name, destructure };
                         return Step::Push(Frame::Type(TypeFrame::new(p)));
                     }
-                    self.let_eq(p, is_mut, name, None)
+                    self.let_eq(p, is_mut, name, destructure, None)
                 }
                 "if" => Step::Push(Frame::If(IfFrame::new())),
                 "while" => {
@@ -181,10 +208,11 @@ impl StmtFrame {
         p: &mut Parser,
         is_mut: bool,
         name: IdentId,
+        destructure: Option<Vec<IdentId>>,
         ty: Option<NodeHandle<AnyTy>>,
     ) -> Step {
         p.expect(Tok::Eq);
-        self.stage = StmtStage::LetInit { is_mut, name, ty };
+        self.stage = StmtStage::LetInit { is_mut, name, destructure, ty };
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
@@ -193,12 +221,13 @@ impl StmtFrame {
         p: &mut Parser,
         is_mut: bool,
         name: IdentId,
+        destructure: Option<Vec<IdentId>>,
         ty: Option<NodeHandle<AnyTy>>,
         init: NodeHandle<AnyExpr>,
     ) -> Step {
         p.expect(Tok::Semi);
         Step::Pop(Done::Stmt(p.stmt(
-            StmtKind::LetStmt { is_mut, name, ty, init },
+            StmtKind::LetStmt { is_mut, name, destructure, ty, init },
             self.lo.to(p.span()),
         )))
     }
@@ -228,9 +257,11 @@ impl StmtFrame {
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match (std::mem::replace(&mut self.stage, StmtStage::Dispatch), d) {
-            (StmtStage::LetTy { is_mut, name }, Done::Ty(t)) => self.let_eq(p, is_mut, name, Some(t)),
-            (StmtStage::LetInit { is_mut, name, ty }, Done::Expr(e)) => {
-                self.let_done(p, is_mut, name, ty, e)
+            (StmtStage::LetTy { is_mut, name, destructure }, Done::Ty(t)) => {
+                self.let_eq(p, is_mut, name, destructure, Some(t))
+            }
+            (StmtStage::LetInit { is_mut, name, destructure, ty }, Done::Expr(e)) => {
+                self.let_done(p, is_mut, name, destructure, ty, e)
             }
             (StmtStage::WhileCond, Done::Expr(cond)) => {
                 p.expect(Tok::RParen);

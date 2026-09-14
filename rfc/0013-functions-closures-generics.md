@@ -14,6 +14,10 @@ block), and a generic `first<T>` monomorphized to two instantiations.
 
 ## 1. Closures
 
+- The closure spelling is an **anonymous fn**: `fn (a: i32) -> bool
+  { return a > 0; }` — block bodies, no arrow form. Function types are
+  first-class: `fn apply(f: fn(i32) -> i32, v: i32) -> i32`; an
+  anonymous fn inhabits `fn(P..) -> R` directly.
 - Closures capture **by reference** to the enclosing bindings (JS-like),
   which RC keeps safe within a VM (RFC 0016 §2). Closures are not
   transferable across isolates in v1 (RFC 0021 §3).

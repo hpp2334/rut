@@ -552,6 +552,15 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*src);
         }
+        // MakePtr defs a fresh pointer; OnDrop reads both and defs nothing
+        Op::MakePtr { dst, src, .. } => {
+            d.push(*dst);
+            u.push(*src);
+        }
+        Op::OnDrop { obj, cleanup } => {
+            u.push(*obj);
+            u.push(*cleanup);
+        }
         Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
         | Op::ArrNew { dst, .. } | Op::EnumNew { dst, .. }
         | Op::OptNone { dst, .. } => d.push(*dst),

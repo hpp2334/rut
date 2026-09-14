@@ -439,7 +439,7 @@ pub enum ElseBranch {
 
 #[derive(Clone, Debug)]
 pub enum StmtKind {
-    LetStmt { is_mut: bool, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
+    LetStmt { is_mut: bool, name: IdentId, destructure: Option<Vec<IdentId>>, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
     If { cond: NodeHandle<AnyExpr>, then: NodeHandle<BlockNode>, els: Option<ElseBranch> },
     While { cond: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode> },
     ForOf { var: IdentId, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode> },
@@ -484,6 +484,10 @@ pub enum TypeKind {
     TyPath { segs: Vec<PathSeg>, is_dyn: bool },
     /// fn type: `fn(Store, P) -> R` — params are bare types (RFC 0013 §1)
     TyFn { params: Vec<NodeHandle<AnyTy>>, ret: NodeHandle<AnyTy> },
+    /// pointer type `*T` (RFC 0005) — nil-able, rc-backed reference
+    TyPtr { inner: NodeHandle<AnyTy> },
+    /// tuple type `(A, B, ..)` — a record with numeric fields (RFC 0007)
+    TyTuple { elems: Vec<NodeHandle<AnyTy>> },
     /// const-generic argument (the `N` in `Array<T, N>`) — an expression
     TyConst(NodeHandle<AnyExpr>),
 }
@@ -511,6 +515,9 @@ pub enum ExprKind {
     FStr { parts: Vec<FPartAst> },
     /// dataclass / `Self { .. }` literal — classes have no instance literal
     Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
+    /// tuple expression `(a, b, ..)` / `()` — a record with numeric fields
+    /// (RFC 0007; `()` is the unit value)
+    Tuple { elems: Vec<NodeHandle<AnyExpr>> },
     /// `[e1, .., en] : Array<T, n>` (RFC 0007 §1)
     ArrayLit { elems: Vec<NodeHandle<AnyExpr>> },
     WhenExpr { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
@@ -539,6 +546,8 @@ pub enum Lit {
     RawStr(String),
     Char(char),
     Bool(bool),
+    /// `nil` — the null pointer literal (RFC 0005)
+    Nil,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

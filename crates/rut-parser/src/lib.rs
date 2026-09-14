@@ -441,7 +441,7 @@ impl Parser {
 /// matched by interner text (RFC 0002 §4/§5). Public: the LSP classifier
 /// and any tooling that needs the keyword set share this one table.
 pub fn is_reserved_kw(s: &str) -> bool {
-    matches!(s, "let" | "mut" | "if" | "else" | "while" | "for" | "of" | "return" | "when" | "enum" | "class" | "dataclass" | "interface" | "impl" | "requires" | "import" | "pub" | "from" | "static" | "suspend" | "await" | "extern" | "where" | "is" | "host" | "fn" | "true" | "false" | "select")
+    matches!(s, "let" | "mut" | "if" | "else" | "while" | "for" | "of" | "return" | "when" | "enum" | "class" | "dataclass" | "interface" | "impl" | "requires" | "import" | "pub" | "from" | "static" | "suspend" | "async" | "await" | "extern" | "where" | "is" | "host" | "fn" | "true" | "false" | "nil" | "select")
 }
 
 /// The primitive types (RFC 0002 §3) — contextual type names, matched by

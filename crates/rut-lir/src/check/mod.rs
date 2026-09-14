@@ -437,6 +437,30 @@ impl<'a> Ctx<'a> {
             kind: TyKind::TraitObj { trait_id },
         })
     }
+    /// `*T` (RFC 0005) — nil-able rc-backed pointer
+    pub fn mk_ptr(&mut self, elem: TypeId) -> TypeId {
+        let name = format!("*{}", self.types.name(elem));
+        self.types.intern(RutType {
+            name,
+            kind: TyKind::Ptr { elem },
+        })
+    }
+    /// `(A, B, ..)` (RFC 0007) — a record with numeric field names
+    pub fn mk_tuple(&mut self, elems: Vec<TypeId>) -> TypeId {
+        let name = format!(
+            "({})",
+            elems.iter().map(|&t| self.types.name(t)).collect::<Vec<_>>().join(", ")
+        );
+        let fields = elems
+            .into_iter()
+            .enumerate()
+            .map(|(i, ty)| FieldInfo { name: i.to_string(), ty })
+            .collect();
+        self.types.intern(RutType {
+            name,
+            kind: TyKind::Data { fields },
+        })
+    }
     pub fn mk_fn_ty(&mut self, params: Vec<TypeId>, ret: TypeId) -> TypeId {
         let ps: Vec<String> = params.iter().map(|&p| self.types.name(p).to_string()).collect();
         let name = format!("fn({}) -> {}", ps.join(", "), self.types.name(ret));

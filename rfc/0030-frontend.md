@@ -162,8 +162,10 @@ stmt       := 'let' 'mut'? Ident (':' Type)? '=' expr ';'
              | expr ';'                                   // calls, assignments
 arm        := pattern '->' (expr ',' | block)
 pattern    := path | literal | pattern (',' pattern)* | 'else'
-expr       := assignment | lambda | when-expr | …         // §3 precedence
+expr       := assignment | lambda | anonfn | tuple | when-expr | …  // §3 precedence
 lambda     := '(' params ')' (':' Type)? '=>' (expr | block)
+anonfn     := 'fn' '(' params ')' ('->' Type)? block        // RFC 0013 §1
+tuple      := '(' ')' | '(' expr (',' expr)+ ')? ')'          // RFC 0007
 isexpr     := expr 'is' Type                              // type test — relational
                                                         // precedence, NON-
                                                         // associative (RFC 0012 §3)

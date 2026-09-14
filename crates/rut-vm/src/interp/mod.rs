@@ -184,6 +184,14 @@ impl Vm {
                     .filter(|(_, fd)| prog.types.repr_of(fd.ty).is_ref())
                     .map(|(i, _)| i as u16)
                     .collect(),
+                // `*T` (RFC 0005): a one-slot pointer box retains its payload
+                TyKind::Ptr { elem } => {
+                    if prog.types.repr_of(*elem).is_ref() {
+                        vec![0]
+                    } else {
+                        Vec::new()
+                    }
+                }
                 _ => Vec::new(),
             })
             .collect();
@@ -333,6 +341,9 @@ impl Vm {
             self.running = false; // enter() must not push a phantom frame
             self.enter(func, regs, None);
             let r = self.run_loop();
+            // queued `on_drop` callbacks run before the cursor restore —
+            // the machine is idle here (RFC 0016 §3)
+            let r = self.drain_after(r);
             self.frames = outer.frames;
             self.cur_func = outer.func;
             self.cur_pc = outer.pc;
@@ -342,8 +353,68 @@ impl Vm {
             r
         } else {
             self.enter(func, regs, None);
-            self.run_loop()
+            let r = self.run_loop();
+            self.drain_after(r)
         }
+    }
+
+    /// Run queued `on_drop` callbacks after a successful root call
+    /// (RFC 0016 §3): each callback receives the pinned cell; the pin's
+    /// release afterwards is what finally frees it. A callback may itself
+    /// drop pointers — the loop drains until the queue stays empty. A trap
+    /// from the main call skips the drain (unwinding semantics are OQ).
+    fn drain_after(&mut self, r: Result<Value, Trap>) -> Result<Value, Trap> {
+        let v = r?;
+        loop {
+            let Some((obj, cleanup)) = self.heap.take_pending_drop() else {
+                break;
+            };
+            let done = self.run_drop_callback(cleanup, obj);
+            self.heap.release(obj);
+            self.heap.release(cleanup);
+            done?;
+        }
+        Ok(v)
+    }
+
+    /// Call one `on_drop` cleanup closure with the dying cell as its `*T`
+    /// argument — the same frame machine, run to completion.
+    fn run_drop_callback(&mut self, cleanup: Slot, arg: Slot) -> Result<(), Trap> {
+        let (fid, captures): (u32, &[Slot]) = match &cell_of(cleanup).data {
+            CellData::Closure { func, captures } => (*func, captures.as_slice()),
+            _ => {
+                return Err(Trap::new(
+                    TrapKind::Invalid,
+                    "on_drop cleanup is not a closure",
+                ));
+            }
+        };
+        let nparams = self.prog.funcs[fid as usize].params.len();
+        let ncaptures = self.prog.funcs[fid as usize].n_captures as usize;
+        let declared = nparams.saturating_sub(ncaptures);
+        let nregs = self.prog.funcs[fid as usize].regs.len();
+        let mut regs = self.take_regs(nregs);
+        if declared >= 1 {
+            regs[0] = arg;
+            if self.is_ref(self.param_ty(fid, 0)) {
+                self.heap.retain(arg);
+            }
+        }
+        for (i, &c) in captures.iter().enumerate() {
+            if declared + i < regs.len() {
+                regs[declared + i] = c;
+                let ty = self.param_ty(fid, declared + i);
+                if self.is_ref(ty) {
+                    self.heap.retain(regs[declared + i]);
+                }
+            }
+        }
+        let was_running = self.running;
+        self.running = false;
+        self.enter(fid, regs, None);
+        let r = self.run_loop();
+        self.running = was_running;
+        r.map(|_| ())
     }
 
     /// Host `Value` → slot under the callee's declared param type. A kind

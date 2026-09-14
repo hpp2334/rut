@@ -247,6 +247,33 @@ impl Heap {
         }
     }
 
+    /// Attach a drop callback to a cell (RFC 0016 §3). Traps on `nil` or a
+    /// second attach. The cleanup slot is retained for the map's lifetime.
+    pub fn set_drop_fn(&self, obj: Slot, cleanup: Slot) -> Result<(), Trap> {
+        let p = unsafe { obj.r };
+        if p.is_null() {
+            return Err(Trap::new(TrapKind::NilDeref, "on_drop on nil"));
+        }
+        if unsafe { cleanup.r.is_null() } {
+            return Err(Trap::new(TrapKind::Invalid, "on_drop: nil cleanup"));
+        }
+        self.retain(cleanup);
+        if !self.arena.set_drop_fn(p, cleanup) {
+            self.release(cleanup);
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                "on_drop already attached to this pointer (RFC 0016 §3)",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Pop one queued drop callback: `(pinned cell, cleanup)`. The caller
+    /// runs `cleanup(cell)` and then releases both.
+    pub fn take_pending_drop(&self) -> Option<(Slot, Slot)> {
+        self.arena.take_pending_drop().map(|(p, cleanup)| (Slot { r: p }, cleanup))
+    }
+
     /// rc -= 1; at zero the cell is dropped, its slot recycled, and its
     /// ref-typed children collected and released recursively (RFC 0016 §3).
     pub fn release(&self, s: Slot) {
@@ -284,7 +311,7 @@ impl Heap {
     /// primitive fields copied, handle fields shared.
     pub fn own(&self, s: Slot, ty: TypeId, table: &TypeTable) -> Result<Slot, Trap> {
         match table.kind(ty).clone() {
-            TyKind::Prim(_) | TyKind::Unit | TyKind::Fn { .. } => Ok(s),
+            TyKind::Prim(_) | TyKind::Unit | TyKind::Fn { .. } | TyKind::Ptr { .. } => Ok(s),
             TyKind::Str => {
                 let cell = cell_of(s);
                 self.alloc_str_bytes(cell.as_bytes().to_vec())

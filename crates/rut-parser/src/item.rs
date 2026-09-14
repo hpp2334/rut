@@ -34,6 +34,11 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
                 p.bump();
                 Some(Frame::Fn(FnFrame::new(Vis::Self_, true, false)))
             }
+            // `async fn` — the new spelling of `suspend fn` (RFC 0018 §2)
+            "async" if p.at_kw2("fn") => {
+                p.bump();
+                Some(Frame::Fn(FnFrame::new(Vis::Self_, true, false)))
+            }
             "fn" => Some(Frame::Fn(FnFrame::new(Vis::Self_, false, false))),
             // `entry fn` — the host-callable surface (RFC 0035 §3):
             // contextual; only special directly before `fn`
@@ -87,6 +92,11 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "class" => Some(Frame::Class(TyDeclFrame::new(true, vis))),
             "interface" => Some(Frame::Trait(TraitFrame::new(vis))),
             "suspend" if p.at_kw2("fn") => {
+                p.bump();
+                Some(Frame::Fn(FnFrame::new(vis, true, false)))
+            }
+            // `async fn` — the new spelling of `suspend fn` (RFC 0018 §2)
+            "async" if p.at_kw2("fn") => {
                 p.bump();
                 Some(Frame::Fn(FnFrame::new(vis, true, false)))
             }
@@ -606,7 +616,7 @@ impl TypeBodyFrame {
                                 let _ = pub_scope(p);
                                 p.err(lo, "host dataclass fields carry no visibility —all fields are public (RFC 0025)");
                             }
-                            "static" | "suspend" => {
+                            "static" | "suspend" | "async" => {
                                 p.bump();
                                 p.err(lo, format!("host dataclass fields carry no modifiers —`{m}` is not declarable here (RFC 0025)"));
                             }
@@ -664,7 +674,7 @@ impl TypeBodyFrame {
                                     p.err(lo, "dataclasses have no `static` members (RFC 0009)");
                                 }
                             }
-                            "suspend" => {
+                            "suspend" | "async" => {
                                 is_suspend = true;
                                 p.bump();
                             }

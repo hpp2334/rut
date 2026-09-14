@@ -5,7 +5,7 @@
 
 use rut_core::binary::Program;
 use rut_core::ops::Op;
-use rut_core::types::{TY_U8, TyKind};
+use rut_core::types::{Repr, TY_U8, TyKind};
 
 pub fn verify(prog: &Program) -> Result<(), String> {
     let ntypes = prog.types.types.len() as u32;
@@ -100,8 +100,16 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::GetF { obj, field, repr, .. } | Op::SetF { obj, field, repr, .. } => {
                     let ty = f.regs[*obj as usize];
-                    match prog.types.kind(ty) {
-                        TyKind::Data { fields } => {
+                    // `p.x` auto-derefs (RFC 0005): a pointer register's
+                    // field 0 is the pointee cell (a ref slot); reads
+                    // against a Data register index the record's fields
+                    let fields = match prog.types.kind(ty) {
+                        TyKind::Data { fields } => Some(fields),
+                        TyKind::Ptr { .. } => None,
+                        _ => None,
+                    };
+                    match fields {
+                        Some(fields) => {
                             let Some(fi) = fields.get(*field as usize) else {
                                 return Err(bad(format!("field index {field} out of range")));
                             };
@@ -113,7 +121,15 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                                 ));
                             }
                         }
-                        _ => return Err(bad("field access on a non-record register".into())),
+                        None => {
+                            // pointer box: the only access is the whole
+                            // payload slot (field 0, always a ref)
+                            if *field != 0 || *repr != Repr::Ref {
+                                return Err(bad(
+                                    "field access on a pointer must be the payload slot".into(),
+                                ));
+                            }
+                        }
                     }
                 }
                 Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
@@ -349,6 +365,14 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*dst);
             push(*src);
         }
+        Op::MakePtr { dst, src, .. } => {
+            push(*dst);
+            push(*src);
+        }
+        Op::OnDrop { obj, cleanup } => {
+            push(*obj);
+            push(*cleanup);
+        }
         Op::OptSome { dst, val, .. } | Op::ResOk { dst, val, .. } | Op::ResErr { dst, val, .. } => {
             push(*dst);
             push(*val);
@@ -443,7 +467,7 @@ fn tys_of(op: &Op) -> Vec<u32> {
         | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
         | Op::OptSome { ty, .. } | Op::OptNone { ty, .. } | Op::ResOk { ty, .. }
         | Op::ResErr { ty, .. } | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
-        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } => vec![*ty],
+        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakePtr { ty, .. } => vec![*ty],
         _ => Vec::new(),
     }
 }

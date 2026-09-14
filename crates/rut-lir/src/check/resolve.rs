@@ -156,6 +156,17 @@ impl<'a> Ctx<'a> {
                 let rty = self.resolve_type(*ret, env);
                 self.mk_fn_ty(ptys, rty)
             }
+            TypeKind::TyPtr { inner } => {
+                let elem = self.resolve_type(*inner, env);
+                self.mk_ptr(elem)
+            }
+            TypeKind::TyTuple { elems } => {
+                let mut etys = Vec::new();
+                for e in elems {
+                    etys.push(self.resolve_type(*e, env));
+                }
+                self.mk_tuple(etys)
+            }
             TypeKind::TyConst(_) => {
                 self.err(sp, "a const expression is not a type here");
                 TY_I32

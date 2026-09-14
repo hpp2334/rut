@@ -58,7 +58,11 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 
 A class may implement the
 `std:core` trait `Disposal` (`fn dispose(mut self) -> unit`, RFC 0028) via
-`impl Disposal for T` — a Disposal class is just a class. `Disposal` is
+`impl Disposal for T` — a Disposal class is just a class. Alongside it,
+v1.1 adds the builtin `on_drop<T>(p: *T, cleanup: fn(*T))` (RFC 0005):
+attach a cleanup to a pointer and it runs when the cell's refcount
+reaches zero — one callback per pointer (a second attach is an error),
+callbacks drain at call boundaries. `Disposal` is
 imported like every prelude name (`import { Disposal } from
 "std:core"`).
 Ordering guarantees:

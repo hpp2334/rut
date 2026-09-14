@@ -14,6 +14,7 @@ pub enum TrapKind {
     Panic,
     BadUnbox,
     Invalid,
+    NilDeref,
 }
 
 #[derive(Clone, Debug)]
@@ -39,6 +40,7 @@ impl Trap {
             TrapKind::Panic => "Panic".into(),
             TrapKind::BadUnbox => "BadUnbox".into(),
             TrapKind::Invalid => "Invalid".into(),
+            TrapKind::NilDeref => "NilDeref".into(),
         }
     }
 }

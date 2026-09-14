@@ -150,6 +150,12 @@ pub enum Op {
     /// `own(x)` payload copy (RFC 0011 §1): data payload memcpy with
     /// handle-field retains; buffers clone; strings clone
     Own { dst: Reg, src: Reg, ty: TypeId },
+    /// `make_ptr(v)` (RFC 0005): box `v` into a fresh one-slot cell —
+    /// the result is a nil-able `*T` (`ty` is the pointer type)
+    MakePtr { dst: Reg, src: Reg, ty: TypeId },
+    /// `on_drop(p, cleanup)` (RFC 0016 §3): run `cleanup(p)` when p's
+    /// cell refcount reaches zero
+    OnDrop { obj: Reg, cleanup: Reg },
 
     ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Array<T>(n) zeroed
     ArrLit { dst: Reg, ty: TypeId, elems: Vec<Reg> }, // fixed Array<T, N>

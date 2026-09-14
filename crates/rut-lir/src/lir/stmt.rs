@@ -28,7 +28,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let sp = self.ctx.ast.span(node.id());
         self.span = sp.lo;
         match self.ctx.ast.stmt(node).clone() {
-            StmtKind::LetStmt { is_mut, name, ty, init } => {
+            StmtKind::LetStmt { is_mut, name, destructure, ty, init } => {
                 let expected = ty.map(|t| self.resolve_type_now(t));
                 let t = self.compile_expr(init, expected)?;
                 if let Some(e) = expected {
@@ -40,8 +40,48 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
                 let ty = expected.unwrap_or(t);
-                // bind the local directly to the initializer's register
-                self.locals.push(Local { name, reg: self.last_reg, ty, is_mut, loop_var: false });
+                match destructure {
+                    None => {
+                        // bind the local directly to the initializer's register
+                        self.locals.push(Local { name, reg: self.last_reg, ty, is_mut, loop_var: false });
+                    }
+                    Some(names) => {
+                        // `let (a, b) = ..` (RFC 0007): each binding takes
+                        // the matching tuple field
+                        let TyKind::Data { fields } = self.ctx.types.kind(ty).clone() else {
+                            self.ctx.err(sp, "destructuring needs a tuple —`(a, b) = ..`");
+                            return Err(());
+                        };
+                        if fields.len() != names.len() {
+                            self.ctx.err(sp, format!(
+                                "the pattern binds {} names but the tuple has {} fields",
+                                names.len(), fields.len()
+                            ));
+                            return Err(());
+                        }
+                        let tuple_reg = self.last_reg;
+                        for (i, n) in names.iter().enumerate() {
+                            let fty = fields[i].ty;
+                            let reg = self.new_reg(fty);
+                            self.emit(
+                                Op::GetF {
+                                    dst: reg,
+                                    obj: tuple_reg,
+                                    field: i as u32,
+                                    repr: self.ctx.types.repr_of(fty),
+                                },
+                                sp.lo,
+                            );
+                            self.locals.push(Local {
+                                name: *n,
+                                reg,
+                                ty: fty,
+                                is_mut,
+                                loop_var: false,
+                            });
+                        }
+                    }
+                }
                 Ok(())
             }
             StmtKind::If { cond, then, els } => {

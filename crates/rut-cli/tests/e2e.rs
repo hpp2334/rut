@@ -1528,3 +1528,99 @@ pub fn main() -> unit {
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["-1.5 0.25"]);
 }
+
+// ---- A1 surface (RFC 0005/0007/0013/0016): nil + *T, make_ptr, on_drop,
+// tuples, anonymous closures, zero-value field defaults ----
+
+#[test]
+fn a1_make_ptr_deref_and_nil() {
+    let src = r#"
+import { make_ptr } from "std:core";
+dataclass P { x: i32 = 0; }
+pub fn main() -> unit {
+    let p = make_ptr(P { x: 5 });
+    Logger.new("t").info(f"x={p.x} nil={p == nil}");
+    let n: *P = nil;
+    Logger.new("t").info(f"n nil={n == nil}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["x=5 nil=false", "n nil=true"]);
+}
+
+#[test]
+fn a1_nil_deref_traps() {
+    let src = r#"
+dataclass P { x: i32 = 0; }
+pub fn main() -> unit {
+    let n: *P = nil;
+    let _ = n.x;
+}
+"#;
+    let (_, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap.as_deref(), Some("NilDeref"));
+}
+
+#[test]
+fn a1_on_drop_runs_at_refcount_zero() {
+    let src = r#"
+import { make_ptr, on_drop } from "std:core";
+dataclass P { x: i32 = 0; }
+pub fn main() -> unit {
+    let p = make_ptr(P { x: 9 });
+    on_drop(p, fn (p: *P) { Logger.new("t").info(f"dropped {p.x}"); });
+    Logger.new("t").info("body done");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["body done", "dropped 9"]);
+}
+
+#[test]
+fn a1_tuples_multi_return() {
+    let src = r#"
+fn divmod(a: i32, b: i32) -> (i32, i32) {
+    return (a / b, a % b);
+}
+pub fn main() -> unit {
+    let (q, r) = divmod(7, 2);
+    Logger.new("t").info(f"q={q} r={r}");
+    Logger.new("t").info(f"t1={divmod(9, 4).1}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["q=3 r=1", "t1=1"]);
+}
+
+#[test]
+fn a1_anonymous_fn_and_fn_typed_param() {
+    let src = r#"
+fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
+    return f(v);
+}
+pub fn main() -> unit {
+    let r = apply(fn (x: i32) -> i32 { return x + 1; }, 5);
+    Logger.new("t").info(f"r={r}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["r=6"]);
+}
+
+#[test]
+fn a1_zero_value_field_defaults() {
+    let src = r#"
+dataclass P3 { x: i32; s: str; }
+pub fn main() -> unit {
+    let p = P3 { };
+    Logger.new("t").info(f"x={p.x} s=[{p.s}]");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["x=0 s=[]"]);
+}

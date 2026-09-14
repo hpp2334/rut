@@ -79,6 +79,9 @@ compiler gives it no meaning; greppability is enforced by style.
 
 ## 4. Reserved & contextual words
 
+- Keywords are matched by interner text (RFC 0030 §1); `nil` (the
+  null-pointer literal, RFC 0005) and `async` (the `suspend fn`
+  spelling, RFC 0018 §2) are grammar keywords in v1.1.
 - Reserved (parse error with explanation): `switch`, `case`,
   `default`, `extends`, `super`, `as` (no casts at all — erasure is
   the `Opaque.new(v)` class method, RFC 0014), `type` (type alias — future),

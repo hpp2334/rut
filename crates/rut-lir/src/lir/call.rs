@@ -126,6 +126,42 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Own { dst, src, ty: t }, sp.lo);
                 return Ok(t);
             }
+            "make_ptr" if core_fn => {
+                // make_ptr(v) (RFC 0005): box v into a fresh one-slot cell;
+                // the result is a nil-able `*T`
+                if args.len() != 1 {
+                    self.ctx.err(sp, "make_ptr(v) takes one argument (RFC 0005)");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], None)?;
+                let src = self.last_reg;
+                let pty = self.ctx.mk_ptr(t);
+                let dst = self.new_reg(pty);
+                self.emit(Op::MakePtr { dst, src, ty: pty }, sp.lo);
+                return Ok(pty);
+            }
+            "on_drop" if core_fn => {
+                // on_drop(p, cleanup) (RFC 0016 §3): cleanup runs when the
+                // cell's refcount reaches zero
+                if args.len() != 2 {
+                    self.ctx.err(sp, "on_drop(p, cleanup) takes two arguments (RFC 0016 §3)");
+                    return Err(());
+                }
+                let pt = self.compile_expr(args[0], None)?;
+                if !matches!(self.ctx.types.kind(pt), TyKind::Ptr { .. }) {
+                    self.ctx.err(sp, "on_drop needs a pointer —`*T` from `make_ptr` (RFC 0016 §3)");
+                    return Err(());
+                }
+                let obj = self.last_reg;
+                let ct = self.compile_expr(args[1], None)?;
+                if !matches!(self.ctx.types.kind(ct), TyKind::Fn { .. }) {
+                    self.ctx.err(sp, "on_drop's cleanup must be a function value —`fn(*T)` (RFC 0016 §3)");
+                    return Err(());
+                }
+                let cleanup = self.last_reg;
+                self.emit(Op::OnDrop { obj, cleanup }, sp.lo);
+                return Ok(TY_UNIT);
+            }
             "downcast" if core_fn => {
                 // prelude body: tidof + icmp + br + guarded unbox (RFC 0032 §1.1)
                 if args.len() != 1 || generics.len() != 1 {
@@ -1267,6 +1303,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
         let fname = self.ctx.name(name).to_string();
+        // `p.x` auto-derefs (RFC 0005): load the pointee cell first, then
+        // the field reads from it
+        let (rreg, rt) = match self.ctx.types.kind(rt).clone() {
+            TyKind::Ptr { elem } if matches!(self.ctx.types.kind(elem), TyKind::Data { .. }) => {
+                let dreg = self.new_reg(elem);
+                self.emit(Op::GetF { dst: dreg, obj: rreg, field: 0, repr: Repr::Ref }, sp.lo);
+                (dreg, elem)
+            }
+            _ => (rreg, rt),
+        };
         // Option/Result payload accessors (RFC 0005)
         match self.ctx.types.kind(rt).clone() {
             TyKind::Option { elem } => {

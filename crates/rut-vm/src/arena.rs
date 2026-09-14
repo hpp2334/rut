@@ -13,7 +13,7 @@ use crate::heap::{CellData, CellVal, HeapAcct, Slot};
 use rut_core::binary::FuncCode;
 use rut_core::types::{TypeTable, TyKind};
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::mem::MaybeUninit;
 use std::rc::Rc;
 
@@ -51,6 +51,14 @@ impl ReleasePlan {
                     .filter(|(_, f)| of(&f.ty))
                     .map(|(i, _)| i as u16)
                     .collect(),
+                // `*T` (RFC 0005): the one payload slot dies with the pointee
+                TyKind::Ptr { elem } => {
+                    if of(elem) {
+                        vec![0]
+                    } else {
+                        Vec::new()
+                    }
+                }
                 _ => Vec::new(),
             })
             .collect();
@@ -80,6 +88,13 @@ pub(crate) struct Arena {
     bump: Cell<usize>,
     /// which of a dying cell's children die with it (RFC 0016 §3)
     pub(crate) plan: Rc<ReleasePlan>,
+    /// `on_drop` callbacks (RFC 0016 §3): cell address -> cleanup closure.
+    /// The closure slot is retained for the map's lifetime.
+    drop_fns: RefCell<HashMap<usize, Slot>>,
+    /// cells whose drop callback is queued: (pinned cell, cleanup). The
+    /// interpreter drains these at call boundaries and releases the pin
+    /// after the callback runs.
+    pending_drops: RefCell<Vec<(*const CellVal, Slot)>>,
 }
 
 impl Arena {
@@ -89,7 +104,36 @@ impl Arena {
             chunks: RefCell::new(Vec::new()),
             bump: Cell::new(ARENA_CHUNK),
             plan,
+            drop_fns: RefCell::new(HashMap::new()),
+            pending_drops: RefCell::new(Vec::new()),
         }
+    }
+
+    /// Attach a drop callback to a cell (RFC 0016 §3). One per cell — a
+    /// second attach is the caller's error to report. The closure slot is
+    /// retained for the map's lifetime.
+    pub(crate) fn set_drop_fn(&self, p: *const CellVal, cleanup: Slot) -> bool {
+        let key = p as usize;
+        let mut map = self.drop_fns.borrow_mut();
+        if map.contains_key(&key) {
+            return false;
+        }
+        map.insert(key, cleanup);
+        true
+    }
+
+    /// Take a cell off the drop queue: (pinned cell pointer, cleanup slot).
+    /// The caller owns the pin and the cleanup reference — release both
+    /// after the callback runs.
+    pub(crate) fn take_pending_drop(&self) -> Option<(*const CellVal, Slot)> {
+        self.pending_drops.borrow_mut().pop()
+    }
+
+    /// Remove and return a cell's registered drop callback (the release
+    /// path, when the cell's last reference dies). The taker owns the
+    /// retained cleanup slot.
+    pub(crate) fn take_drop_fn(&self, key: usize) -> Option<Slot> {
+        self.drop_fns.borrow_mut().remove(&key)
     }
 
     /// Hand out a slot (free list first, then bump within the last chunk).
@@ -152,6 +196,14 @@ pub(crate) fn release_ref_slot(arena: &Arena, acct: &HeapAcct, s: Slot) {
             return; // immortal singleton
         }
         if n <= 1 {
+            // on_drop (RFC 0016 §3): a registered callback pins the cell
+            // (refs stay 1) and queues it; the interpreter runs the
+            // callback at a call boundary and releases the pin afterwards.
+            if let Some(cleanup) = arena.take_drop_fn(p as usize) {
+                c.refs.set(1);
+                arena.pending_drops.borrow_mut().push((p, cleanup));
+                return;
+            }
             release_cell(arena, acct, p as *mut CellVal);
         } else {
             c.refs.set(n - 1);

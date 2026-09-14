@@ -39,6 +39,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.compile_method(recv, name, generics, args, expected, sp)
             }
             ExprKind::Field { recv, name } => self.compile_field(recv, name, sp),
+            ExprKind::Tuple { elems } => {
+                // `(a, b, ..)` (RFC 0007): a record with numeric fields.
+                // `()` is the unit value.
+                if elems.is_empty() {
+                    let reg = self.new_reg(TY_UNIT);
+                    self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);
+                    return Ok(TY_UNIT);
+                }
+                let mut etys = Vec::new();
+                let mut vals = Vec::new();
+                for e in &elems {
+                    let t = self.compile_expr(*e, None)?;
+                    etys.push(t);
+                    vals.push(self.last_reg);
+                }
+                let ty = self.ctx.mk_tuple(etys);
+                let dst = self.new_reg(ty);
+                self.emit(Op::MakeRecord { dst, ty, vals }, sp.lo);
+                Ok(ty)
+            }
             ExprKind::Index { recv, idx } => {
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
@@ -346,6 +366,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::ConstRaw { dst: reg, bits: b as u64 }, sp.lo);
                 Ok((TY_BOOL, reg))
             }
+            Lit::Nil => {
+                // `nil` (RFC 0005): typed by the expected position —
+                // `let p: *T = nil`, `p == nil` — or the default `*unit`.
+                // The null slot IS zero bits (Slot::null).
+                let ty = match expected {
+                    Some(e) if matches!(self.ctx.types.kind(e), TyKind::Ptr { .. }) => e,
+                    _ => self.ctx.mk_ptr(TY_UNIT),
+                };
+                let reg = self.new_reg(ty);
+                self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);
+                Ok((ty, reg))
+            }
         }
     }
 
@@ -426,7 +458,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Err(());
                     }
                     // Option/Result payload accessors mid-chain (RFC 0005)
+                    // + `p.x` auto-deref through a pointer (RFC 0005)
                     match self.ctx.types.kind(cur_ty).clone() {
+                        TyKind::Ptr { elem } => {
+                            // deref: load the pointee cell, then read the
+                            // field from it
+                            let dst = self.new_reg(elem);
+                            self.emit(Op::GetF { dst, obj: cur, field: 0, repr: Repr::Ref }, sp.lo);
+                            cur = dst;
+                            cur_ty = elem;
+                        }
                         TyKind::Option { elem } if self.ctx.name(seg.name) == "value" => {
                             let dst = self.new_reg(elem);
                             self.emit(Op::Unwrap { dst, v: cur, want_err: false }, sp.lo);

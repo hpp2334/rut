@@ -266,11 +266,19 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             }
         },
         Kind::Stmt(k) => match k {
-            StmtKind::LetStmt { is_mut, name, ty, init } => {
+            StmtKind::LetStmt { is_mut, name, destructure, ty, init } => {
                 if *is_mut {
                     fields.push(field("mut", DumpVal::Flag(true)));
                 }
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
+                if let Some(names) = destructure {
+                    fields.push(field(
+                        "destructure",
+                        DumpVal::Str(
+                            names.iter().map(|n| a.name(*n).to_string()).collect::<Vec<_>>().join(", "),
+                        ),
+                    ));
+                }
                 if let Some(t) = ty {
                     fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, t.id())))));
                 }
@@ -371,6 +379,14 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("ret", DumpVal::Node(Box::new(node_dump(a, ret.id())))));
                 "TyFn"
             }
+            TypeKind::TyPtr { inner } => {
+                fields.push(field("inner", DumpVal::Node(Box::new(node_dump(a, inner.id())))));
+                "TyPtr"
+            }
+            TypeKind::TyTuple { elems } => {
+                fields.push(field("elems", DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect())));
+                "TyTuple"
+            }
             TypeKind::TyConst(e) => {
                 fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, e.id())))));
                 "TyConst"
@@ -467,6 +483,10 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                     ),
                 ));
                 "Struct"
+            }
+            ExprKind::Tuple { elems } => {
+                fields.push(field("elems", DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect())));
+                "Tuple"
             }
             ExprKind::ArrayLit { elems } => {
                 fields.push(field("elems", DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect())));

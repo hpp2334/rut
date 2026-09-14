@@ -364,7 +364,11 @@ impl Machine for Vm {
         let Op::GetF { dst, obj, field, repr } = op else {
             unreachable_op!("op_getf: unexpected op")
         };
-        let cell = cell_of(unsafe { *regs.add(*obj as usize) });
+        let s = unsafe { *regs.add(*obj as usize) };
+        if unsafe { s.r.is_null() } {
+            return Err(Trap::new(TrapKind::NilDeref, "nil dereference"));
+        }
+        let cell = cell_of(s);
         let v = match &cell.data {
             CellData::Record { fields } => fields
                 .borrow()

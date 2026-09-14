@@ -146,6 +146,7 @@ pub struct Surface {
 /// The `std:core` prelude function names (RFC 0028), in surface order.
 pub const CORE_FNS: &[&str] = &[
     "own", "downcast", "assert", "panic",
+    "make_ptr", "on_drop",
     "string_len", "string_encode", "string_join",
     "bytes_len", "bytes_decode", "bytes_from", "bytes_zeroed",
 ];
@@ -406,6 +407,10 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.tys(params);
             e.u32(*ret);
         }
+        TyKind::Ptr { elem } => {
+            e.u8(13);
+            e.u32(*elem);
+        }
     }
 }
 
@@ -551,6 +556,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             let ret = d.u32()?;
             TyKind::Fn { params, ret }
         }
+        13 => TyKind::Ptr { elem: d.u32()? },
         t => return Err(format!("bad type kind tag {t}")),
     })
 }
@@ -615,6 +621,8 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::GetF { dst, obj, field, repr } => { e.u8(22); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u8(repr.to_u8()); }
         Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
+        Op::MakePtr { dst, src, ty } => { e.u8(89); e.u16(*dst); e.u16(*src); e.u32(*ty); }
+        Op::OnDrop { obj, cleanup } => { e.u8(90); e.u16(*obj); e.u16(*cleanup); }
         Op::ArrNew { dst, ty, len, repr } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); e.u8(repr.to_u8()); }
         Op::ArrLit { dst, ty, elems } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u16s(elems); }
         Op::ArrGet { dst, arr, idx, repr } => { e.u8(27); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u8(repr.to_u8()); }
@@ -676,6 +684,8 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         22 => Op::GetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, repr: repr(d.u8()?)? },
         23 => Op::SetF { obj: d.u16()?, field: d.u32()?, val: d.u16()?, repr: repr(d.u8()?)? },
         24 => Op::Own { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
+        89 => Op::MakePtr { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
+        90 => Op::OnDrop { obj: d.u16()?, cleanup: d.u16()? },
         25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()?, repr: repr(d.u8()?)? },
         26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, elems: d.u16s()? },
         27 => Op::ArrGet { dst: d.u16()?, arr: d.u16()?, idx: d.u16()?, repr: repr(d.u8()?)? },

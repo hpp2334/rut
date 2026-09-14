@@ -17,6 +17,12 @@ pub(crate) struct TypeFrame {
 
 enum TyStage {
     Init,
+    /// `*T` — pointer (RFC 0005)
+    Ptr,
+    /// `[T]` — the array type (RFC 0005)
+    Bracket,
+    /// `(A, B)` / `(T)` / `()` — tuple, grouping, unit (RFC 0007)
+    Tuple { elems: Vec<NodeHandle<AnyTy>> },
     /// `fn(...)`: collecting parameter types
     FnParams { params: Vec<NodeHandle<AnyTy>> },
     /// `fn(...) ->`: waiting for the return type
@@ -35,6 +41,21 @@ impl TypeFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         match self.stage {
             TyStage::Init => {
+                // pointer type `*T` (RFC 0005)
+                if p.eat_punct(Tok::Star) {
+                    self.stage = TyStage::Ptr;
+                    return Step::Push(Frame::Type(TypeFrame::new(p)));
+                }
+                // `[T]` — the array type (RFC 0005)
+                if p.eat_punct(Tok::LBracket) {
+                    self.stage = TyStage::Bracket;
+                    return Step::Push(Frame::Type(TypeFrame::new(p)));
+                }
+                // tuple type `(A, B)` / grouping `(T)` / unit `()` (RFC 0007)
+                if p.eat_punct(Tok::LParen) {
+                    self.stage = TyStage::Tuple { elems: Vec::new() };
+                    return self.tuple_top(p);
+                }
                 // fn type: `fn(Store, P) -> R` — params are bare types
                 if p.at_kw("fn") && matches!(p.peek(1).tok, Tok::LParen) {
                     p.bump();
@@ -130,13 +151,48 @@ impl TypeFrame {
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
-    /// the parameter list closed (or failed): `->` then the return type
+    /// tuple type element list: `()` closes as unit; elements separate on
+    /// commas, one-element `(T)` is a grouping
+    fn tuple_top(&mut self, p: &mut Parser) -> Step {
+        if p.eat_punct(Tok::RParen) {
+            return Step::Pop(Done::Ty(self.unit_ty(p)));
+        }
+        Step::Push(Frame::Type(TypeFrame::new(p)))
+    }
+
+    fn unit_ty(&mut self, p: &mut Parser) -> NodeHandle<AnyTy> {
+        let unit = p.interner.intern("unit");
+        p.typ(
+            TypeKind::TyPath {
+                segs: vec![PathSeg { name: unit, generics: Vec::new() }],
+                is_dyn: false,
+            },
+            self.lo.to(p.span()),
+        )
+    }
+
+    /// the parameter list closed (or failed): optional `->` then the
+    /// return type — an omitted return is `unit` (RFC 0013 §1)
     fn to_fn_ret(&mut self, p: &mut Parser) -> Step {
-        p.expect(Tok::Arrow);
         let params = match &mut self.stage {
             TyStage::FnParams { params } => std::mem::take(params),
             _ => unreachable!(),
         };
+        if !p.eat_punct(Tok::Arrow) {
+            let unit = p.interner.intern("unit");
+            let ret = p.typ(
+                TypeKind::TyPath {
+                    segs: vec![PathSeg { name: unit, generics: Vec::new() }],
+                    is_dyn: false,
+                },
+                self.lo.to(p.span()),
+            );
+            self.stage = TyStage::Init;
+            return Step::Pop(Done::Ty(p.typ(
+                TypeKind::TyFn { params, ret },
+                self.lo.to(p.span()),
+            )));
+        }
         self.stage = TyStage::FnRet { params };
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
@@ -144,6 +200,34 @@ impl TypeFrame {
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
             Done::Ty(t) => match &mut self.stage {
+                TyStage::Ptr => {
+                    Step::Pop(Done::Ty(p.typ(TypeKind::TyPtr { inner: t }, self.lo.to(p.span()))))
+                }
+                TyStage::Bracket => {
+                    p.expect(Tok::RBracket);
+                    let array = p.interner.intern("Array");
+                    let segs = vec![PathSeg {
+                        name: array,
+                        generics: vec![t],
+                    }];
+                    Step::Pop(Done::Ty(p.typ(
+                        TypeKind::TyPath { segs, is_dyn: false },
+                        self.lo.to(p.span()),
+                    )))
+                }
+                TyStage::Tuple { elems } => {
+                    elems.push(t);
+                    if p.eat_punct(Tok::Comma) {
+                        return self.tuple_top(p);
+                    }
+                    p.expect(Tok::RParen);
+                    let elems = std::mem::take(elems);
+                    if elems.len() == 1 {
+                        // `(T)` is a grouping — the type itself
+                        return Step::Pop(Done::Ty(elems.into_iter().next().unwrap()));
+                    }
+                    Step::Pop(Done::Ty(p.typ(TypeKind::TyTuple { elems }, self.lo.to(p.span()))))
+                }
                 TyStage::FnParams { params } => {
                     params.push(t);
                     if p.eat_punct(Tok::Comma) {

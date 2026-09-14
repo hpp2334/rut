@@ -464,6 +464,8 @@ fn f_type_name(_funcs: &[rut_core::binary::FuncCode], ty: u32) -> String {
 
 fn op_str(op: &Op) -> String {
     match op {
+        Op::MakePtr { dst, src, .. } => format!("makeptr r{dst}, r{src}"),
+        Op::OnDrop { obj, cleanup } => format!("ondrop r{obj}, r{cleanup}"),
         Op::Mov { dst, src } => format!("mov r{dst}, r{src}"),
         Op::MovRef { dst, src } => format!("movref r{dst}, r{src}"),
         Op::Const { dst, k } => format!("const r{dst}, k{k}"),

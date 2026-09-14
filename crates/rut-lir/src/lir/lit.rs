@@ -192,25 +192,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         for (fidx, (fname, fty, init)) in field_list.iter().enumerate() {
             if !set[fidx] {
-                let Some(init) = init else {
-                    self.ctx.err(sp, format!(
-                        "literal must initialize every field —`{}` is missing (RFC 0009)",
-                        self.ctx.name(*fname)
-                    ));
-                    return Err(());
-                };
-                // initializers are class code: resolve under the class subst
-                let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
-                let saved_self = self.self_ty;
-                self.self_ty = Some(sty);
-                let t = self.compile_expr(*init, Some(*fty));
-                self.subst = saved_subst;
-                self.self_ty = saved_self;
-                let t = t?;
-                if t != *fty {
-                    self.ctx.err(self.ctx.ast.span(init.id()), "field initializer type mismatch");
+                match init {
+                    None => {
+                        // zero-value defaults (RFC 0007): an omitted field
+                        // takes its type's zero value
+                        let z = self.zero_value(*fty, sp)?;
+                        val_regs[fidx] = Some(z);
+                        continue;
+                    }
+                    Some(init) => {
+                        // initializers are class code: resolve under the class subst
+                        let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
+                        let saved_self = self.self_ty;
+                        self.self_ty = Some(sty);
+                        let t = self.compile_expr(*init, Some(*fty));
+                        self.subst = saved_subst;
+                        self.self_ty = saved_self;
+                        let t = t?;
+                        if t != *fty {
+                            self.ctx.err(self.ctx.ast.span(init.id()), "field initializer type mismatch");
+                        }
+                        val_regs[fidx] = Some(self.last_reg);
+                    }
                 }
-                val_regs[fidx] = Some(self.last_reg);
             }
         }
         let vals: Vec<u16> = val_regs
@@ -220,6 +224,43 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let dst = self.new_reg(sty);
         self.emit(Op::MakeRecord { dst, ty: sty, vals }, sp.lo);
         Ok(sty)
+    }
+
+    /// The zero value of a type (RFC 0007): `0`/`0.0`/`false`/`'\0'`, the
+    /// empty string, `nil` for pointers, `None` for Option, member 0 for
+    /// enums, the all-zero record for dataclasses.
+    pub(crate) fn zero_value(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<u16> {
+        let reg = self.new_reg(ty);
+        match self.ctx.types.kind(ty).clone() {
+            TyKind::Prim(_) | TyKind::Unit | TyKind::Ptr { .. } => {
+                self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);
+            }
+            TyKind::Str => {
+                let k = self.konst(ConstVal::Str(String::new()));
+                self.emit(Op::Const { dst: reg, k: k as u32 }, sp.lo);
+            }
+            TyKind::Option { .. } => {
+                self.emit(Op::OptNone { dst: reg, ty }, sp.lo);
+            }
+            TyKind::Enum { .. } => {
+                self.emit(Op::EnumNew { dst: reg, ty, member: 0 }, sp.lo);
+            }
+            TyKind::Data { fields } => {
+                let mut vals = Vec::with_capacity(fields.len());
+                for f in &fields {
+                    vals.push(self.zero_value(f.ty, sp)?);
+                }
+                self.emit(Op::MakeRecord { dst: reg, ty, vals }, sp.lo);
+            }
+            _ => {
+                self.ctx.err(sp, format!(
+                    "a literal must initialize `{}` —it has no zero value (RFC 0009)",
+                    self.ctx.types.name(ty)
+                ));
+                return Err(());
+            }
+        }
+        Ok(reg)
     }
 
     /// Record literal for an IMPORTED dataclass (RFC 0035 §1): the layout is
@@ -515,6 +556,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             Kind::Expr(ExprKind::ArrayLit { elems }) => {
+                for e in elems {
+                    kids(e.id(), out, self);
+                }
+            }
+            Kind::Expr(ExprKind::Tuple { elems }) => {
                 for e in elems {
                     kids(e.id(), out, self);
                 }

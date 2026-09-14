@@ -114,6 +114,13 @@ impl ExprFrame {
                     self.stage = ExprStage::Operand;
                     return Step::Push(Frame::Lambda(LambdaFrame::single(self.lo, vec![param])));
                 }
+                // anonymous closure: `fn (params) -> T { .. }` — the scan
+                // consumes `fn`; ParamsFrame takes the `(`
+                if name == "fn" && matches!(p.peek(1).tok, Tok::LParen) {
+                    p.bump(); // fn
+                    self.stage = ExprStage::Operand;
+                    return Step::Push(Frame::Lambda(LambdaFrame::anon(self.lo)));
+                }
             }
         }
         self.fetch_operand(p)
@@ -355,7 +362,7 @@ pub(crate) struct AtomFrame {
 
 enum AtomStage {
     Primary,
-    Paren { first: bool, e: Option<NodeHandle<AnyExpr>>, discard: bool },
+    Paren { first: bool, e: Option<NodeHandle<AnyExpr>>, elems: Vec<NodeHandle<AnyExpr>> },
     Array { elems: Vec<NodeHandle<AnyExpr>> },
     Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
     PathDots { segs: Vec<PathSeg> },
@@ -414,7 +421,7 @@ impl AtomFrame {
             }
             Tok::LParen => {
                 p.bump();
-                self.stage = AtomStage::Paren { first: true, e: None, discard: false };
+                self.stage = AtomStage::Paren { first: true, e: None, elems: Vec::new() };
                 self.paren_top(p)
             }
             Tok::LBracket => {
@@ -425,6 +432,17 @@ impl AtomFrame {
             Tok::Ident(name) => {
                 if name == "when" && matches!(p.peek(1).tok, Tok::LParen) {
                     return Step::Push(Frame::When(WhenFrame::new()));
+                }
+                // `nil` — the null pointer literal (RFC 0005)
+                if name == "nil" {
+                    p.bump();
+                    let e = p.expr(ExprKind::Lit(Lit::Nil), sp);
+                    return self.finish(p, e);
+                }
+                // anonymous closure: handled at the expression start —
+                // see ExprFrame::step (scan 3)
+                if name == "fn" && matches!(p.peek(1).tok, Tok::LParen) {
+                    p.err_here("closures are expressions — `fn (..) { .. }` cannot appear here");
                 }
                 if name == "self" {
                     p.bump();
@@ -490,8 +508,18 @@ impl AtomFrame {
             match p.tok() {
                 Tok::Dot => {
                     p.bump();
-                    let Some(name) = p.expect_ident("a member name") else {
-                        return Step::Pop(Done::Failed);
+                    // `.0`/`.1` — tuple field access (RFC 0007)
+                    let name = match p.tok().clone() {
+                        Tok::Int(v, None) => {
+                            p.bump();
+                            p.interner.intern(&v.to_string())
+                        }
+                        _ => {
+                            let Some(name) = p.expect_ident("a member name") else {
+                                return Step::Pop(Done::Failed);
+                            };
+                            name
+                        }
                     };
                     if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
                         p.bump();
@@ -534,27 +562,45 @@ impl AtomFrame {
     fn paren_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RParen) {
-                let e = match &mut self.stage {
-                    AtomStage::Paren { e, .. } => e.take(),
+                let (e, elems) = match &mut self.stage {
+                    AtomStage::Paren { e, elems, .. } => (e.take(), std::mem::take(elems)),
                     _ => unreachable!(),
                 };
-                return match e {
-                    Some(v) => self.finish(p, v),
-                    None => Step::Pop(Done::Failed), // `()` — v1 returned None silently
-                };
+                // `(a)` groups; `()` and `(a, b)` are tuples (RFC 0007)
+                if elems.is_empty() {
+                    return match e {
+                        Some(v) => self.finish(p, v),
+                        None => Step::Pop(Done::Expr(
+                            p.expr(ExprKind::Tuple { elems: Vec::new() }, self.lo.to(p.span())),
+                        )),
+                    };
+                }
+                let mut elems = elems;
+                if let Some(v) = e {
+                    elems.push(v);
+                }
+                return Step::Pop(Done::Expr(
+                    p.expr(ExprKind::Tuple { elems }, self.lo.to(p.span())),
+                ));
             }
-            let (first, discard) = match &self.stage {
-                AtomStage::Paren { first, discard, .. } => (*first, *discard),
+            let (first, has_e) = match &self.stage {
+                AtomStage::Paren { first, e, .. } => (*first, e.is_some()),
                 _ => unreachable!(),
             };
-            if !first && !discard && matches!(p.tok(), Tok::Comma) {
-                // RFC 0030 §4.2: a comma inside parens that is not a
-                // lambda errors AT THE COMMA — there are no tuples
-                p.err_here("there are no tuples (RFC 0009) —if you meant a lambda, add `=>`");
-                p.bump();
-                if let AtomStage::Paren { discard, .. } = &mut self.stage {
-                    *discard = true;
+            if !first && matches!(p.tok(), Tok::Comma) {
+                // tuple element separator (RFC 0007): fold the element,
+                // parse the next
+                if has_e {
+                    if let AtomStage::Paren { e, elems, .. } = &mut self.stage {
+                        elems.push(e.take().unwrap());
+                    }
                 }
+                p.bump();
+                return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
+            }
+            if first && matches!(p.tok(), Tok::Comma) {
+                p.err_here("expected an expression");
+                p.bump();
                 continue;
             }
             return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
@@ -621,6 +667,23 @@ impl AtomFrame {
                 };
                 let node = p.expr(ExprKind::Path { segs }, self.lo.to(p.span()));
                 return self.finish(p, node);
+            }
+            // `.0` — a tuple field (RFC 0007): close the path so far and
+            // switch to a Field node; the postfix loop chains from there
+            if let Tok::Int(v, None) = p.tok().clone() {
+                let segs = match &mut self.stage {
+                    AtomStage::PathDots { segs } => std::mem::take(segs),
+                    _ => unreachable!(),
+                };
+                let path_node = p.expr(ExprKind::Path { segs }, self.lo.to(p.span()));
+                p.bump(); // the digits
+                let fname = p.interner.intern(&v.to_string());
+                let fnode = p.expr(
+                    ExprKind::Field { recv: path_node, name: fname },
+                    self.lo.to(p.span()),
+                );
+                self.stage = AtomStage::Postfix { e: fnode };
+                return self.postfix_top(p);
             }
             let Some(name) = p.expect_ident("a member name") else {
                 return Step::Pop(Done::Failed);
@@ -772,12 +835,13 @@ impl AtomFrame {
         match d {
             Done::Expr(e) => match &mut self.stage {
                 AtomStage::Primary => self.finish(p, e), // an f-string child
-                AtomStage::Paren { first, e: slot, discard } => {
-                    if *discard {
-                        *discard = false;
-                    } else if *first {
+                AtomStage::Paren { first, e: slot, elems } => {
+                    if *first {
                         *slot = Some(e);
                         *first = false;
+                    } else {
+                        // a post-comma element: fold into the tuple
+                        elems.push(e);
                     }
                     self.paren_top(p)
                 }
@@ -872,16 +936,22 @@ pub(crate) struct LambdaFrame {
     sp: Span,
     params: Option<Vec<NodeHandle<AnyParam>>>,
     ret: Option<NodeHandle<AnyTy>>,
+    /// anonymous-fn form `fn (params) -> T { .. }` — no `=>`, block required
+    anon: bool,
 }
 
 impl LambdaFrame {
     /// `(a, b) -> T => ..` — params come from a ParamsFrame child
     pub(crate) fn paren(sp: Span) -> Self {
-        LambdaFrame { sp, params: None, ret: None }
+        LambdaFrame { sp, params: None, ret: None, anon: false }
     }
     /// `x => ..` — the single param was pre-seeded by the caller
     pub(crate) fn single(sp: Span, params: Vec<NodeHandle<AnyParam>>) -> Self {
-        LambdaFrame { sp, params: Some(params), ret: None }
+        LambdaFrame { sp, params: Some(params), ret: None, anon: false }
+    }
+    /// `fn (params) -> T { .. }` (RFC 0013 §1) — the `(` was not consumed
+    pub(crate) fn anon(sp: Span) -> Self {
+        LambdaFrame { sp, params: None, ret: None, anon: true }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -895,11 +965,19 @@ impl LambdaFrame {
         if p.eat_punct(Tok::Arrow) {
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
-        p.expect(Tok::FatArrow);
+        if !self.anon {
+            p.expect(Tok::FatArrow);
+        }
         self.body(p)
     }
 
     fn body(&mut self, p: &mut Parser) -> Step {
+        if self.anon {
+            // anonymous closures are block-bodied: `fn (..) { .. }`
+            if !matches!(p.tok(), Tok::LBrace) {
+                p.err_here("anonymous closures take a block —`fn (..) { .. }` (RFC 0013 §1)");
+            }
+        }
         if matches!(p.tok(), Tok::LBrace) {
             Step::Push(Frame::Block(BlockFrame::strict(p)))
         } else {
@@ -915,7 +993,9 @@ impl LambdaFrame {
             }
             Done::Ty(t) => {
                 self.ret = Some(t);
-                p.expect(Tok::FatArrow);
+                if !self.anon {
+                    p.expect(Tok::FatArrow);
+                }
                 self.body(p)
             }
             Done::Expr(e) => Step::Pop(Done::Expr(self.mk(p, e))),
