@@ -34,6 +34,12 @@ const config: RspackOptions = {
         test: /\.css$/,
         type: "css",
       },
+      // the classics (RFC 0041 §3): example sources + expected sidecars,
+      // imported as strings by demo/src/examples/index.ts
+      {
+        test: /\.(rut|expected)$/,
+        type: "asset/source",
+      },
     ],
   },
   plugins: [

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CASES, DEFAULT_BUDGET, type RutCase } from "./cases";
+import { EXAMPLES } from "./examples";
 import { Runner } from "./runner";
-import { CaseList } from "./components/CaseList";
+import { CaseList, type CaseGroup } from "./components/CaseList";
 import { Editor } from "./components/Editor";
 import { Panes, type PaneData } from "./components/Panes";
 import { StatusBar } from "./components/StatusBar";
@@ -10,6 +11,13 @@ import type { CompileResult } from "./wasm/rut-api";
 const EMPTY_PANES: PaneData = { output: [], irDump: "" };
 
 export function App(): JSX.Element {
+  const groups: CaseGroup[] = useMemo(
+    () => [
+      { title: "cases", cases: CASES },
+      { title: "classics", cases: EXAMPLES },
+    ],
+    [],
+  );
   const [runner, setRunner] = useState<Runner | null>(null);
   const [currentCase, setCurrentCase] = useState<RutCase>(CASES[0]);
   const [source, setSource] = useState(CASES[0].source);
@@ -89,7 +97,7 @@ export function App(): JSX.Element {
 
       <main className="app-main">
         <CaseList
-          cases={CASES}
+          groups={groups}
           selectedId={currentCase.id}
           onSelect={selectCase}
         />

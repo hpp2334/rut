@@ -1,0 +1,35 @@
+// RFC 0017 — strong cycles LEAK by design (no collector). Disposal.dispose of a
+// leaked cycle never runs. Fix back-pointers with Weak<T>:
+// `next: Weak<Node>` instead of `Node` breaks the cycle. Composite fields
+// are cell handles (RFC 0016 §1), so plain class fields cycle just fine —
+// that is exactly why Weak exists.
+
+import { Option } from "std:core";
+import { Logger } from "std:log";
+
+class Node {                              // initializer covers `next`
+    next: Option<Node> = Option.none;     // a HANDLE slot — recursive types
+                                           // are legal (pointer-sized)
+    fn new() -> Self { return Self {}; }   // explicit construction — no
+                                           // implicit default
+    fn link(mut self, other: Node) -> unit {
+        self.next = Option.some(other);
+    }
+}
+
+fn make_cycle() -> Node {                   // a -> b -> a : strong cycle
+    let a = Node.new();
+    let b = Node.new();
+    a.link(b);
+    b.link(a);
+    return a;
+}
+
+pub fn main() -> unit {
+    let log = Logger.new("cycle");
+    let head = make_cycle();
+    log.info(f"head.next alive: {head.next.is_some()}");
+
+    // The leak fix: hold `b` from `a` through Weak (RFC 0017 §1) so the
+    // pair frees deterministically at scope end.
+}

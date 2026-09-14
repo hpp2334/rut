@@ -48,10 +48,12 @@ src/
   main.tsx               createRoot bootstrap
   App.tsx                layout, run/resume wiring, budget state
   cases.ts               prepared cases (name, blurb, source, expected[])
+  examples/              the classics — real .rut files + .expected sidecars
+    index.ts             metadata + raw imports (asset/source); playground order
   runner.ts              RutApi resolution: wasm -> stub fallback
   wasm/rut-api.d.ts      the compile/run contract
   components/
-    CaseList.tsx         case selector
+    CaseList.tsx         case selector (groups: cases, classics)
     Editor.tsx           textarea + line-number gutter (tab = 2 spaces)
     Panes.tsx            Output / AST / IR tabs
     StatusBar.tsx        run/resume, fuel+heap inputs, telemetry

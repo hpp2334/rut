@@ -1,0 +1,65 @@
+import { Array, Opaque, own, downcast } from "std:core";
+import { Vec } from "std:collection";
+// RFC 0014 — Opaque: explicit type erasure with checked recovery.
+// Opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the
+// runtime type; downcast<T> recovers it or yields None. `Opaque` is the
+// erased-storage CONCRETE type — it composes like any class (`Vec<Opaque>`,
+// fixed `Array<Opaque>`, fields, returns). Under the all-cells regime
+// (RFC 0016 §1) boxing is ZERO-COPY: the box stores the cell handle, so
+// the box shares identity with the original. The only any-shaped value
+// in rut — and it can do nothing until recovered.
+
+import { Logger } from "std:log";
+
+dataclass Point { x: f32; y: f32 }
+enum Flavor { Sweet, Sour }
+
+class Session {
+    token: str;
+
+    fn new(token: str) -> Self {
+        return Self { token: token };
+    }
+}
+
+fn erase_and_recover() -> unit {
+    let log = Logger.new("opaque");
+    let box1 = Opaque.new(Point { x: 1, y: 2 });    // erasure = type-call;
+    let box2 = Opaque.new(Flavor.Sour);             // zero-copy (shares the cell)
+    let box3 = Opaque.new("hello");
+
+    let p = downcast<Point>(box1);              // Option<Point>
+    if (p.is_some()) {
+        log.info(f"point {p.value.x} {p.value.y}");
+    }
+    let wrong = downcast<i32>(box2);            // wrong type: None, no trap
+    log.info(f"sour? {downcast<Flavor>(box2).is_some()} wrong? {wrong.is_some()}");
+    log.info(f"is str: {box3 is str}");   // `is` sees through the box
+}
+
+fn share_vs_copy() -> unit {
+    let log = Logger.new("opaque");
+    let s = Session.new("abc");
+    let o = Opaque.new(s);            // SHARES the Session cell (zero-copy):
+                                  // mutation through s is visible in o
+    let o2 = Opaque.new(own(s));      // own() first: a private copy, new identity
+
+    log.info(f"same session: {downcast<Session>(o).is_some()}");
+    log.info(f"distinct boxes: {o == o2}");     // false — two cells (RFC 0012 §4)
+}
+
+fn nested() -> unit {
+    let log = Logger.new("opaque");
+    // heterogeneous FIXED array — pure data, one shared cell per slot
+    // (RFC 0016 §1)
+    let boxes: Array<Opaque> = [Opaque.new(Point { x: 3, y: 4 }), Opaque.new("two"), Opaque.new(Point { x: 5, y: 6 })];
+    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS — primitives recover via downcast
+    let vec: Vec<Opaque> = Vec.from([Opaque.new(5)]);
+    log.info(f"vec {vec.len()}");
+}
+
+pub fn main() -> unit {
+    erase_and_recover();
+    share_vs_copy();
+    nested();
+}

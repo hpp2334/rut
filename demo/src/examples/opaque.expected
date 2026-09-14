@@ -1,0 +1,7 @@
+point 1 2
+sour? true wrong? false
+is str: true
+same session: true
+distinct boxes: false
+3 boxes; first is Point: true
+vec 1

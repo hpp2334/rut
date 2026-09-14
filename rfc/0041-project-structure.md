@@ -99,6 +99,10 @@ rut/
     ├── public/                    #   rut.wasm drops here (gitignored for now)
     └── src/
         ├── index.html  main.tsx  App.tsx  cases.ts  runner.ts  styles.css
+        ├── examples/              #   the classics — real .rut files + .expected
+        │   ├── index.ts           #     metadata; raw-imports both (asset/source)
+        │   ├── sieve.rut …        #     gate: crates/rut-cli/tests/playground.rs
+        │   └── sieve.expected …   #     actual pipeline output, asserted
         ├── wasm/rut-api.d.ts      #   the compile/run contract
         └── components/            #   CaseList Editor Panes StatusBar (.tsx)
 ```
@@ -272,7 +276,14 @@ rspack + TypeScript**, no editor dependency (a textarea component with
 line numbers; a CodeMirror upgrade is noted but not taken).
 
 - **Layout**: case selector (left) | editor (center) | tabs — Output /
-  AST / IR (right) | status bar (fuel used, heap bytes, trap).
+  AST / IR (right) | status bar (fuel used, heap bytes, trap). The
+  selector has two groups: **cases** (the spec snippets in `cases.ts`)
+  and **classics** — real, runnable programs loaded from
+  `src/examples/*.rut` (raw-imported; the playground edits live files,
+  not string copies). Each classic carries a `NAME.expected` sidecar
+  that is the program's *actual* pipeline output, gated by
+  `crates/rut-cli/tests/playground.rs` — the static-preview text is
+  never a hand-written guess.
 - **Wasm API contract** — fixed now, mirrored by
   `demo/src/wasm/rut-api.d.ts`:
   ```ts
