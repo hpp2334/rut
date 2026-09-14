@@ -6,11 +6,12 @@
 //! Emacs / Sublime configs in `integrations/README.md`).
 //!
 //! Layout: `line_index` (byte spans ⇄ UTF-16 positions over the
-//! normalized source), `semantic` (the pure classifier — legend, keyword
-//! set, name-token recovery, symbol builder), `analysis` (one pure pass
+//! normalized source), `semantic` (the pure classifier — `legend`,
+//! `tokens`, `names`, `recover`, `symbols`), `analysis` (one pure pass
 //! over a document → LSP values), `hover` (the definition index +
-//! lookup behind hover), `server` (the tower-lsp service — open doc +
-//! the embedded std surface + a workspace scan).
+//! lookup — `types`, `build`, `lookup`, `infer`, `render`), `server`
+//! (the tower-lsp service — open doc + the embedded std surface + a
+//! workspace scan).
 
 pub mod analysis;
 pub mod hover;

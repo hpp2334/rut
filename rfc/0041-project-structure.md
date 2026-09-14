@@ -178,14 +178,23 @@ rut/
 │   │       │                       #       LSP UTF-16 positions
 │   │       ├── analysis.rs         #     analyze(): normalize → lex →
 │   │       │                       #       parse → tokens/diags/symbols
-│   │       ├── semantic.rs         #     the classifier: legend, keyword
-│   │       │                       #       set, name-token recovery,
-│   │       │                       #       symbol builder (pure, tested)
-│   │       ├── hover.rs            #     the definition index behind
-│   │       │                       #       hover: verbatim signatures,
-│   │       │                       #       doc comments, the unified
-│   │       │                       #       method rule (own surface ∪
-│   │       │                       #       trait impls targeting T)
+│   │       ├── semantic/           #     the classifier (pure, tested)
+│   │       │   ├── legend.rs       #       token-type legend, keyword
+│   │       │   │                   #       set
+│   │       │   ├── tokens.rs       #       token-pass classes, f-string
+│   │       │   │                   #       tiling
+│   │       │   ├── names.rs        #       AST-pass name classes
+│   │       │   ├── recover.rs      #       name-token recovery
+│   │       │   └── symbols.rs      #       the outline builder
+│   │       ├── hover/              #     the definition index behind
+│   │       │   ├── types.rs        #       hover: verbatim signatures,
+│   │       │   │                   #       doc comments, the unified
+│   │       │   │                   #       method rule (own surface ∪
+│   │       │   │                   #       trait impls targeting T)
+│   │       │   ├── build.rs        #       the index pass
+│   │       │   ├── lookup.rs       #       what's under the cursor
+│   │       │   ├── infer.rs        #       local receiver inference
+│   │       │   └── render.rs       #       markdown rendering
 │   │       ├── server.rs           #     Backend — full sync, semantic
 │   │       │                       #       tokens, documentSymbol, hover,
 │   │       │                       #       publishDiagnostics; embeds

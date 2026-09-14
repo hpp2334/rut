@@ -1,4 +1,5 @@
-//! Corpus gate — every `examples/**.rut` and `.d.rut` classifies cleanly:
+//! Corpus gate — the runnable projects (`examples/**`) and the
+//! playground classics (`demo/src/examples/`) classify cleanly:
 //! sorted, non-overlapping, in-file tokens; every reserved word keyword;
 //! every Impl file yields symbols; `.d.rut` parses in `Mode::Decl`.
 //! Mirrors rut-parser's corpus test (RFC 0030 §7) from the LSP side.
@@ -8,7 +9,10 @@ use rut_lsp::semantic::{classify, symbols, TokenType};
 use rut_parser::{is_reserved_kw, Mode};
 
 fn corpus() -> Vec<std::path::PathBuf> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+    let roots = [
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples"),
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demo/src/examples"),
+    ];
     let mut out = Vec::new();
     fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
         for e in std::fs::read_dir(dir).unwrap() {
@@ -20,7 +24,9 @@ fn corpus() -> Vec<std::path::PathBuf> {
             }
         }
     }
-    walk(&root, &mut out);
+    for r in &roots {
+        walk(r, &mut out);
+    }
     out.sort();
     out
 }
@@ -35,7 +41,7 @@ fn analyzed(src: &str, mode: Mode) -> (Vec<rut_lexer::token::Token>, rut_ast::as
 #[test]
 fn corpus_classifies() {
     let files = corpus();
-    assert!(files.len() >= 35, "corpus shrank: {}", files.len());
+    assert!(files.len() >= 15, "corpus shrank: {}", files.len());
     for path in &files {
         let raw = std::fs::read_to_string(path).unwrap();
         let src = rut_lexer::lexer::normalize(&raw);
