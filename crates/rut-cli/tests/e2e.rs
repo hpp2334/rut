@@ -711,19 +711,9 @@ entry fn checked(v: i32) -> Result<i32, str> {
 
 #[test]
 fn entry_crossing_rule_is_compile_time() {
-    // rut cells never cross: dataclasses, Vec<T> of cells, generics —
-    // each is a source diagnostic naming the offending signature
-    let src = r#"
-struct Row { id: i32; }
-entry fn bad_param(r: Row) -> unit { }
-"#;
-    let out = compile(src, "m");
-    assert!(
-        out.diags.iter().any(|d| d.msg.contains("parameter `r` is `Row`")),
-        "{:?}",
-        out.diags
-    );
-
+    // v1.1 crossing rule: structs of crossing fields DO cross (copy-by-value
+    // makes them safe); Vec<T> of non-crossing types still does not.
+    // `struct Row { id: i32 }` now crosses fine (all fields are prims).
     let src = r#"
 import { Vec } from "std:collection";
 struct Row { id: i32; }
