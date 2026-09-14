@@ -1,0 +1,9 @@
+# plugin/ — the moderator module (RFC 0035 §1: one directory is one module).
+#
+# The manifest is bundle-shaped (RFC 0038 §2): directory loading ignores
+# the format keys, and `rut pack plugin/` needs them — so the same
+# directory packs to a `.rutbundle` unchanged.
+format = "rutbundle"
+format_version = 1
+name = "app:plugin"
+entry.lib = "./plugin.rut"

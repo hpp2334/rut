@@ -107,18 +107,23 @@ embedder so the demo prints the verdict per row. See
 ### 03-plugin — the server one
 
 A Cargo project and workspace member: **`cargo run -p plugin`**. The rut
-side (`plugin.rut`) is a chat-room **moderator plugin** — the business
-logic is a plain `class Moderator` (flood control, `!stats` command,
-mute/rejoin rules); the crossing protocol is ~15 lines of `entry fn`
-shims. The Rust side (`src/lib.rs`) is the server SDK: the host's event
-bus goes into rut as a **host-constructed `OpaqueBox<EventBus>`** whose
+side (`plugin/` — the first example loaded as a module **directory**,
+`plugin/rut.toml` naming `app:plugin`) is a chat-room **moderator
+plugin** — the business logic is a plain `class Moderator`
+(`plugin/moderator.rut`: flood control, `!stats` command, mute/rejoin
+rules); the crossing protocol is ~15 lines of `entry fn` shims
+(`plugin/plugin.rut`). The Rust side (`src/lib.rs`) is the server SDK:
+the host's event bus goes into rut as a **host-constructed
+`OpaqueBox<EventBus>`** whose
 `subscribe`/`emit` fns are its callbacks, rut's state comes back as a
 rut-constructed `Opaque`, and every `emit` **re-enters rut** to format
 its wire line while the emitting handler is parked mid-op (RFC 0022 §1)
 — the RFC 0023 borrow guard is what makes holding the bus across that
-nested call sound. `tests/session.rs` asserts the exact transcript and
-that `emits == renders` (every line crossed the nested call). See
-[03-plugin/README.md](03-plugin/README.md).
+nested call sound. `Plugin::load` takes the path-based loader: the demo
+runs the session through both the directory and a `.rutbundle` packed
+from it (RFC 0038), and `tests/session.rs` asserts the exact transcript,
+`emits == renders` (every line crossed the nested call), and the bundle
+round trip. See [03-plugin/README.md](03-plugin/README.md).
 
 | `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
 | `json/app.rut` | opt-in dataclasses (zero-method `impl Serializable for T {}`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, module-private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |

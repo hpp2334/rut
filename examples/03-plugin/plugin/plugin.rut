@@ -1,0 +1,53 @@
+// plugin.rut — the moderator plugin of a chat-room server (03-plugin).
+//
+// The layering this file teaches: the business logic lives in
+// `./moderator.rut` (inlined here by the loader — one module, one scope);
+// THIS file is the ADAPTER: registration plus one-line forwards, the
+// entire host-visible surface (RFC 0035 §3).
+//
+// Callbacks cannot cross the boundary as values (RFC 0023 §2), so
+// registration is BY NAME: the plugin hands the host the export names
+// it wants wired to each topic. The host later fires those exports with
+// the state handle `init` returned.
+
+import { Moderator } from "./moderator.rut";
+
+// ---- the adapter: the ONLY entry fns. Registration + one-line forwards.
+
+/// The host calls this once with its bus box; the plugin registers its
+/// callback names and returns the handle to its own state.
+entry fn init(bus: Opaque) -> Opaque {
+    subscribe(bus, "join", "on_join");
+    subscribe(bus, "msg", "on_msg");
+    subscribe(bus, "leave", "on_leave");
+    subscribe(bus, "tick", "on_tick");
+    return Opaque.new(Moderator.new(bus));
+}
+
+entry fn on_join(c: Opaque, name: str) -> unit {
+    downcast<Moderator>(c).value.on_join(name);
+}
+
+entry fn on_msg(c: Opaque, user: str, text: str) -> unit {
+    downcast<Moderator>(c).value.on_msg(user, text);
+}
+
+entry fn on_leave(c: Opaque, name: str) -> unit {
+    downcast<Moderator>(c).value.on_leave(name);
+}
+
+entry fn on_tick(c: Opaque, n: i64) -> unit {
+    downcast<Moderator>(c).value.on_tick(n);
+}
+
+/// The wire formatter — the host calls this NESTED, from inside `emit`,
+/// while the handler that emitted is still parked mid-op (RFC 0022 §1).
+entry fn render_line(topic: str, payload: str) -> str {
+    return f"[{topic}] {payload}";
+}
+
+entry fn shutdown(c: Opaque) -> i64 {
+    let m = downcast<Moderator>(c).value;
+    m.say("system", f"shutdown: {m.stats()}");
+    return m.msgs;
+}

@@ -40,11 +40,14 @@ pub struct Plugin {
 }
 
 impl Plugin {
-    /// Compile + verify + load the plugin module, hand the plugin our
-    /// bus box, and take back its state handle. `init` registers the
-    /// callback names; the table is frozen from then on.
-    pub fn load(src: &str, limits: &Limits) -> Result<Plugin, Trap> {
-        let mut session = rut_driver::Session::new();
+    /// Load the plugin module from a module directory (`rut.toml`) or a
+    /// packed `.rutbundle` (RFC 0038) — the two forms of the same
+    /// contract; the root spec comes from the manifest, not the caller.
+    /// `init` registers the callback names; the table is frozen from
+    /// then on.
+    pub fn load(path: &std::path::Path, limits: &Limits) -> Result<Plugin, Trap> {
+        let (mut session, root) =
+            rut_driver::load_path_session(path).map_err(|e| Trap::new(TrapKind::Invalid, e))?;
         rut_driver::mount_std(&mut session);
         session
             .register_module(
@@ -59,17 +62,7 @@ impl Plugin {
                 },
             )
             .map_err(|e| Trap::new(TrapKind::Invalid, e.to_string()))?;
-        session
-            .register_module(
-                "app:plugin",
-                rut_driver::Module {
-                    spec: "app:plugin".into(),
-                    source: Some(src.to_string()),
-                    ..Default::default()
-                },
-            )
-            .map_err(|e| Trap::new(TrapKind::Invalid, e.to_string()))?;
-        let g = rut_driver::compile_graph(&session, "app:plugin");
+        let g = rut_driver::compile_graph(&session, &root);
         if !g.diags.is_empty() {
             return Err(Trap::new(
                 TrapKind::Invalid,
