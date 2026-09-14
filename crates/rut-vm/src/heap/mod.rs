@@ -247,9 +247,8 @@ impl Heap {
         }
     }
 
-    /// rc -= 1; at zero the cell is dropped and its slot recycled. Note the
-    /// current ref discipline does not recursively release a cell's child
-    /// slots on drop (matching the previous `Rc` behaviour).
+    /// rc -= 1; at zero the cell is dropped, its slot recycled, and its
+    /// ref-typed children collected and released recursively (RFC 0016 §3).
     pub fn release(&self, s: Slot) {
         release_ref_slot(&self.arena, &self.acct, s);
     }

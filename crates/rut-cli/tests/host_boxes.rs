@@ -5,10 +5,10 @@
 //! trap), `own` shares identity — and the payload's `Drop` runs when the
 //! box's rc hits 0 (RFC 0016 §3).
 //!
-//! Note the drop-timing flow passes the box straight between host fns:
-//! a wrapper-class INSTANCE also works (the `Logger` pattern) but today's
-//! ref discipline does not recursively release record fields, so a box
-//! stored in a class field lives until VM end (RFC 0016 §3, known edge).
+//! The drop-timing flow drives the box through a wrapper-class record as
+//! well as direct host calls — the record's field retain releases with the
+//! record at rc-0, so the payload's `Drop` runs with the last handle even
+//! with the wrapper in the mix (RFC 0016 §3's recursive field walk).
 
 use std::cell::Cell;
 use std::collections::HashMap;

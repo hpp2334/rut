@@ -135,8 +135,6 @@ impl Drop for Arena {
     }
 }
 
-/// Drop a cell whose strong count reached zero: refund its accounting,
-/// run its destructor, and recycle the slot.
 /// One reference gone. At rc-0 the cell dies — and its ref-typed children
 /// die with it (RFC 0016 §3): `release_cell` collects them and recurses,
 /// so a record's `str`/`Opaque`/vec fields no longer pin their children
@@ -229,6 +227,9 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
     out
 }
 
+/// Drop a cell whose strong count reached zero: refund its accounting,
+/// release its ref-typed children (see `collect_ref_children`), run its
+/// destructor, and recycle the slot.
 #[inline(always)]
 pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
     // children are collected first and released after the parent is freed,
