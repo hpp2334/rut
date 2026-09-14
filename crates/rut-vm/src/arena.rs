@@ -165,12 +165,6 @@ pub(crate) fn release_ref_slot(arena: &Arena, acct: &HeapAcct, s: Slot) {
 /// own, so nothing double-releases.
 #[inline(always)]
 unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
-    // childless kinds (the common churn: strs, enum singletons, host
-    // boxes) skip the plan lookups entirely
-    match &c.data {
-        CellData::Str(_) | CellData::Enum { .. } | CellData::HostBoxed { .. } => return Vec::new(),
-        _ => {}
-    }
     let mut out = Vec::new();
     match &c.data {
         CellData::Record { fields } => {
@@ -232,17 +226,26 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
 /// destructor, and recycle the slot.
 #[inline(always)]
 pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
-    // children are collected first and released after the parent is freed,
-    // so a release cascade can never observe the dying cell
-    let children = unsafe { collect_ref_children(&*p, &arena.plan) };
+    // children are collected first and released after the parent is
+    // freed, so a release cascade can never observe the dying cell.
+    // Childless kinds (the churn case: strs, singletons, host boxes)
+    // never build the child vec at all.
+    let children = unsafe {
+        match (*p).data {
+            CellData::Str(_) | CellData::Enum { .. } | CellData::HostBoxed { .. } => None,
+            _ => Some(collect_ref_children(&*p, &arena.plan)),
+        }
+    };
     unsafe {
         let bytes = (*p).bytes as u64;
         acct.used.set(acct.used.get().saturating_sub(bytes));
         std::ptr::drop_in_place(p);
     }
     arena.free.borrow_mut().push(p);
-    for s in children {
-        release_ref_slot(arena, acct, s);
+    if let Some(children) = children {
+        for s in children {
+            release_ref_slot(arena, acct, s);
+        }
     }
 }
 
