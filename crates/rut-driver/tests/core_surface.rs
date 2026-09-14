@@ -35,7 +35,7 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
             ItemKind::BuiltinTy { name, .. } => builtin_types.push(ast.name(*name).to_string()),
             ItemKind::BuiltinIface { name, .. } => builtin_ifaces.push(ast.name(*name).to_string()),
             ItemKind::Trait { name, .. } => plain_ifaces.push(ast.name(*name).to_string()),
-            // `host fn`/`host dataclass` are the embedder's surface — a
+            // `host fn`/`host struct` are the embedder's surface — a
             // toolchain decl file may not spell them
             other => panic!("std:core declares an embedder surface item: {other:?}"),
         }

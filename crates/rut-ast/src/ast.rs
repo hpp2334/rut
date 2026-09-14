@@ -346,7 +346,7 @@ pub enum ItemKind {
         params: Vec<NodeHandle<AnyParam>>,
         ret: Option<NodeHandle<AnyTy>>,
     },
-    /// `host dataclass` — .d.rut only: a flat record whose every field is
+    /// `host struct` — .d.rut only: a flat record whose every field is
     /// a crossing type. Host fns take/return it; the host constructs and
     /// reads it through the field table (the shape is the whole surface).
     SurfaceDataclass {
@@ -382,7 +382,7 @@ pub enum ItemKind {
 
 // ---- members ----
 
-/// dataclass/class field: `pub(..)`? `static`? name: ty (= init)?
+/// struct/class field: `pub(..)`? `static`? name: ty (= init)?
 /// `vis: None` = unannotated — module-private, the RFC 0003 §2 default
 #[derive(Clone, Debug)]
 pub struct FieldDeclData {
@@ -513,7 +513,7 @@ pub enum ExprKind {
     Lambda { params: Vec<NodeHandle<AnyParam>>, ret: Option<NodeHandle<AnyTy>>, body: NodeHandle<AnyExpr> },
     Try { expr: NodeHandle<AnyExpr> }, // postfix `?`
     FStr { parts: Vec<FPartAst> },
-    /// dataclass / `Self { .. }` literal — classes have no instance literal
+    /// struct / `Self { .. }` literal — classes have no instance literal
     Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
     /// tuple expression `(a, b, ..)` / `()` — a record with numeric fields
     /// (RFC 0007; `()` is the unit value)
@@ -555,6 +555,8 @@ pub enum UnOp {
     Neg,
     Not,
     BitNot,
+    /// `*p` — pointer dereference, copies the pointee out (RFC 0005)
+    Deref,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

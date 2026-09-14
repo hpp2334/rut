@@ -357,7 +357,7 @@ fn md5_impl(msg: bytes) -> bytes {
 
 /// SHA-1/SHA-2 padding: 0x80, zeros to n%{mod}=={res}, then the message
 /// length in bits as a big-endian 64-bit word.
-fn sha_tail(m: Vec<u8>, msg_len: i32) -> unit {
+fn sha_tail(m: *Vec<u8>, msg_len: i32) -> unit {
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
     let bits = msg_len as u64 * 8;
@@ -373,7 +373,9 @@ fn sha_tail(m: Vec<u8>, msg_len: i32) -> unit {
 
 fn sha1_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
-    sha_tail(m, bytes_len(msg));
+    let mp = make_ptr(m);
+    sha_tail(mp, bytes_len(msg));
+    m = *mp;
     let mut h0: u32 = 0x67452301;
     let mut h1: u32 = 0xEFCDAB89u32;
     let mut h2: u32 = 0x98BADCFEu32;
@@ -459,7 +461,9 @@ fn sha256_k() -> Vec<u32> {
 
 fn sha256_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
-    sha_tail(m, bytes_len(msg));
+    let mp = make_ptr(m);
+    sha_tail(mp, bytes_len(msg));
+    m = *mp;
     let h = sha256_h();
     let k = sha256_k();
     let mut st: Vec<u32> = Vec.new();
@@ -653,7 +657,7 @@ entry fn digest(algo: str, data: bytes) -> Result<bytes, str> {
 
 enum JTag { Null, False, True, Num, Str, Arr, Obj }
 
-dataclass Json {
+struct Json {
     tag:  JTag;
     num: str;          // verbatim lexeme — exact round-trips, no
     str: str;          // float formatting anywhere in this file
@@ -683,7 +687,7 @@ fn jobj() -> Json { return Json { tag: JTag.Obj, num: "", str: "", arr: noopaque
 
 /// The parser cursor. Strings iterate as `char`s, so the source is
 /// split once into single-char strings and walked by index.
-dataclass Cur { cs: Vec<str>; pos: i32; depth: i32; }
+struct Cur { cs: Vec<str>; pos: i32; depth: i32; }
 
 fn split_chars(s: str) -> Vec<str> {
     let cs: Vec<str> = Vec.new();
@@ -691,12 +695,12 @@ fn split_chars(s: str) -> Vec<str> {
     return cs;
 }
 
-fn jpeek(cur: Cur) -> str {
+fn jpeek(cur: *Cur) -> str {
     if (cur.pos < cur.cs.len()) { return cur.cs[cur.pos]; }
     return "";
 }
 
-fn jskip(mut cur: Cur) -> unit {
+fn jskip(cur: *Cur) -> unit {
     let mut again = true;
     while (again) {
         let c = jpeek(cur);
@@ -744,7 +748,7 @@ fn valid_number(cs: Vec<str>) -> bool {
     return i == n;
 }
 
-fn jparse_value(mut cur: Cur) -> Result<Opaque, str> {
+fn jparse_value(cur: *Cur) -> Result<Opaque, str> {
     jskip(cur);
     let c = jpeek(cur);
     if (c == "") { return Result.err("json: unexpected end of input"); }
@@ -758,7 +762,7 @@ fn jparse_value(mut cur: Cur) -> Result<Opaque, str> {
     return Result.err(f"json: unexpected `{c}` at index {cur.pos}");
 }
 
-fn jparse_lit(mut cur: Cur, word: str, v: Json) -> Result<Opaque, str> {
+fn jparse_lit(cur: *Cur, word: str, v: Json) -> Result<Opaque, str> {
     let start = cur.pos;
     let mut ok = true;
     for (let wch of word) {
@@ -771,7 +775,7 @@ fn jparse_lit(mut cur: Cur, word: str, v: Json) -> Result<Opaque, str> {
     return Result.ok(Opaque.new(v));
 }
 
-fn jparse_string(mut cur: Cur) -> Result<Opaque, str> {
+fn jparse_string(cur: *Cur) -> Result<Opaque, str> {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
     let out: Vec<str> = Vec.new();
@@ -812,7 +816,7 @@ fn jparse_string(mut cur: Cur) -> Result<Opaque, str> {
     return Result.ok(Opaque.new(jstr(join_chars(out))));
 }
 
-fn jparse_number(mut cur: Cur) -> Result<Opaque, str> {
+fn jparse_number(cur: *Cur) -> Result<Opaque, str> {
     let start = cur.pos;
     let chars: Vec<str> = Vec.new();
     let mut again = true;
@@ -830,7 +834,7 @@ fn jparse_number(mut cur: Cur) -> Result<Opaque, str> {
     return Result.ok(Opaque.new(jnum(join_chars(chars))));
 }
 
-fn jparse_array(mut cur: Cur) -> Result<Opaque, str> {
+fn jparse_array(cur: *Cur) -> Result<Opaque, str> {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return Result.err("json: nesting deeper than 64");
@@ -863,7 +867,7 @@ fn jparse_array(mut cur: Cur) -> Result<Opaque, str> {
     return Result.ok(Opaque.new(v));
 }
 
-fn jparse_object(mut cur: Cur) -> Result<Opaque, str> {
+fn jparse_object(cur: *Cur) -> Result<Opaque, str> {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return Result.err("json: nesting deeper than 64");
@@ -883,7 +887,8 @@ fn jparse_object(mut cur: Cur) -> Result<Opaque, str> {
         }
         let key = jparse_string(cur);
         if (key.is_err()) { return key; }
-        let kstr = downcast<Json>(unwrap_box(key)).value.str;
+        let (kdoc, _) = downcast<Json>(unwrap_box(key));
+        let kstr = kdoc.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
             return Result.err(f"json: expected `:` at index {cur.pos}");
@@ -928,7 +933,8 @@ fn jencode(j: Json) -> str {
             let mut s = "[";
             for (let i = 0; i < j.arr.len(); i += 1) {
                 if (i > 0) { s = f"{s},"; }
-                s = f"{s}{jencode(downcast<Json>(j.arr[i]).value)}";
+                let ae = downcast<Json>(j.arr[i]).0;
+                s = f"{s}{jencode(ae)}";
             }
             out = f"{s}]";
         },
@@ -937,7 +943,7 @@ fn jencode(j: Json) -> str {
             let mut s = "{";
             for (let i = 0; i < j.keys.len(); i += 1) {
                 if (i > 0) { s = f"{s},"; }
-                let vs = jencode(downcast<Json>(j.vals[i]).value);
+                let vs = jencode(downcast<Json>(j.vals[i]).0);
                 s = f"{s}{jquote(j.keys[i])}:{vs}";
             }
             out = f"{s}{rb}";
@@ -964,7 +970,7 @@ fn jquote(s: str) -> str {
 }
 
 entry fn json_dec(s: str) -> Result<Opaque, str> {
-    let cur = Cur { cs: split_chars(s), pos: 0, depth: 0 };
+    let cur = make_ptr(Cur { cs: split_chars(s), pos: 0, depth: 0 });
     let v = jparse_value(cur);
     if (v.is_err()) { return v; }
     jskip(cur);
@@ -975,7 +981,7 @@ entry fn json_dec(s: str) -> Result<Opaque, str> {
 }
 
 entry fn json_enc(o: Opaque) -> str {
-    return jencode(downcast<Json>(o).value);
+    return jencode(downcast<Json>(o).0);
 }
 
 entry fn json_roundtrip(s: str) -> Result<str, str> {
@@ -983,7 +989,7 @@ entry fn json_roundtrip(s: str) -> Result<str, str> {
     if (v.is_err()) {
         return Result.err(v.error);
     }
-    return Result.ok(jencode(downcast<Json>(v.value).value));
+    return Result.ok(jencode(downcast<Json>(v.value).0));
 }
 
 /// A hand-built document for the embedder demo.

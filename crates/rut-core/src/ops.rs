@@ -136,7 +136,7 @@ pub enum Op {
     CallFn { fval: Reg, args: Vec<Reg>, dst: Option<Reg> },
     Ret { val: Option<Reg> },
 
-    /// mint a value cell (the `Self { .. }` / dataclass literal;
+    /// mint a value cell (the `Self { .. }` / struct literal;
     /// RFC 0032 §1) — fields follow via SetF
     NewCell { dst: Reg, ty: TypeId },
     /// fused record literal: allocate and initialize every field in one op
@@ -150,12 +150,19 @@ pub enum Op {
     /// `own(x)` payload copy (RFC 0011 §1): data payload memcpy with
     /// handle-field retains; buffers clone; strings clone
     Own { dst: Reg, src: Reg, ty: TypeId },
+    /// copy-by-value (RFC 0009/0016 v1.1): deep-copy the record/array in
+    /// `src` into a fresh cell — nested value fields clone recursively,
+    /// `str`/`bytes`/`*T`/closure children share. `ty` is the value type.
+    CloneVal { dst: Reg, src: Reg, ty: TypeId },
     /// `make_ptr(v)` (RFC 0005): box `v` into a fresh one-slot cell —
     /// the result is a nil-able `*T` (`ty` is the pointer type)
     MakePtr { dst: Reg, src: Reg, ty: TypeId },
     /// `on_drop(p, cleanup)` (RFC 0016 §3): run `cleanup(p)` when p's
     /// cell refcount reaches zero
     OnDrop { obj: Reg, cleanup: Reg },
+    /// structural `==`/`!=` on values (RFC 0009/0016 v1.1): recursive,
+    /// field-by-field; `str`/`bytes` by content; `*T` by identity
+    ValEq { dst: Reg, a: Reg, b: Reg, ty: TypeId, eq: bool },
 
     ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Array<T>(n) zeroed
     ArrLit { dst: Reg, ty: TypeId, elems: Vec<Reg> }, // fixed Array<T, N>

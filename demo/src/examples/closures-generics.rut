@@ -1,15 +1,14 @@
-import { Option } from "std:core";
 import { Vec } from "std:collection";
-// RFC 0013 — functions, arrow closures, generics (monomorphized at
+// RFC 0013 — functions, anonymous closures, generics (monomorphized at
 // compile time; each instantiation emits its own typed opcodes).
 
 import { Logger } from "std:log";
 
-fn first<T>(xs: Array<T>) -> Option<T> {   // builtin container: `T` infers
+fn first<T>(xs: [T], fallback: T) -> T {   // builtin container: `T` infers
     if (xs.len() == 0) {                  // from the argument's element
-        return Option.none();             // type (RFC 0013 §2)
+        return fallback;                  // type (RFC 0013 §2)
     }
-    return Option.some(xs[0]);
+    return xs[0];
 }
 
 fn sum(xs: Vec<i32>) -> i32 {             // a generic CLASS (Vec<T>) in a
@@ -22,14 +21,14 @@ fn sum(xs: Vec<i32>) -> i32 {             // a generic CLASS (Vec<T>) in a
 
 pub fn main() -> unit {
     let log = Logger.new("closures");
-    let add = (a: i32, b: i32) -> i32 => a + b;      // single-expr arrow
-    let area_of = (r: f32) -> f32 => {               // block arrow
+    let add = fn (a: i32, b: i32) -> i32 { return a + b; };   // anonymous fn
+    let area_of = fn (r: f32) -> f32 {                        // block body
         let sq = r * r;
         return sq * 3.14159265f32;
     };
     log.info(f"add={add(1, 2)} area={area_of(1)} sum={sum(Vec<i32>.from([1, 2, 3]))}");
 
-    let head = first([10, 20]);           // Option<i32>  — monomorphized
-    let name = first(["a", "b"]);         // Option<str> — separate instance
-    log.info(f"head={head.unwrap_or(-1)} name={name.unwrap_or("?")}");
+    let head = first([10, 20], -1);       // first<i32>   — monomorphized
+    let name = first(["a", "b"], "?");    // first<str>   — separate instance
+    log.info(f"head={head} name={name}");
 }

@@ -21,6 +21,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let r = self.compile_expr_inner(node, expected);
         self.leave();
+        // copy-by-value boundary (RFC 0009/0016 v1.1): every VALUE-typed
+        // expression result is a fresh cell the consumer owns — records and
+        // arrays deep-copy here, once, at the expression boundary. Receivers
+        // and assignment-target chains bypass this wrapper and alias.
         r
     }
 
@@ -62,6 +66,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Index { recv, idx } => {
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
+                // `p[i]` auto-derefs (RFC 0005)
+                let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let it = self.compile_expr(idx, Some(TY_I32))?;
                 if it != TY_I32 {
                     self.ctx.err(sp, format!("index must be `i32`, found `{}`", self.ctx.types.name(it)));
@@ -77,6 +83,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Unary { op, expr } => {
                 use rut_ast::ast::UnOp::*;
                 let t = match op {
+                    Deref => {
+                        // `*p` (RFC 0005): load the pointee — a copy out of
+                        // the box (the box's payload slot, repr = the
+                        // pointee's own repr)
+                        let pt = self.compile_expr(expr, None)?;
+                        let src = self.last_reg;
+                        let TyKind::Ptr { elem } = self.ctx.types.kind(pt).clone() else {
+                            self.ctx.err(sp, "`*` dereferences a pointer —the operand is not `*T`");
+                            return Err(());
+                        };
+                        let dst = self.new_reg(elem);
+                        self.emit(
+                            Op::GetF { dst, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) },
+                            sp.lo,
+                        );
+                        return Ok(elem);
+                    }
                     Not => self.compile_expr(expr, Some(TY_BOOL))?,
                     // `-lit` in a typed position still adapts the literal
                     // (`-2.0` passed to an `f64` param), so forward `expected`
@@ -105,6 +128,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, "`~` is not supported in this build");
                         return Err(());
                     }
+                    // `*p` returned early — the pointee load is the value
+                    Deref => {}
                 }
                 Ok(t)
             }
@@ -395,7 +420,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Ok(l.ty);
                     }
                 }
-                // copy into a fresh register (keeps regs SSA-ish)
+                // copy into a fresh register (keeps regs SSA-ish); the
+                // wrapper clones value results at the boundary
                 let reg = self.new_reg(l.ty);
                 if self.ctx.types.is_ref(l.ty) {
                     self.emit(Op::MovRef { dst: reg, src: l.reg }, sp.lo);

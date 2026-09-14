@@ -178,7 +178,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, "downcast takes an `Opaque` box (RFC 0014)");
                     return Err(());
                 }
-                let oty = self.ctx.mk_option(want);
+                // v1.1: downcast yields a TUPLE `(T, bool)` — the value and
+                // a success flag; no Option in the language anymore
+                let tty = self.ctx.mk_tuple([want, TY_BOOL].to_vec());
                 let orecv = self.last_reg;
                 let tid_reg = self.new_reg(TY_U32);
                 self.emit(Op::TidOf { dst: tid_reg, obj: orecv }, sp.lo);
@@ -187,7 +189,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Const { dst: want_reg, k: wk as u32 }, sp.lo);
                 let eq = self.new_reg(TY_BOOL);
                 self.emit(cmpop(CmpOp::Eq, PrimTy::U32, eq, tid_reg, want_reg), sp.lo);
-                let dst = self.new_reg(oty);
+                let dst = self.new_reg(tty);
                 let l_some = self.new_label();
                 let l_none = self.new_label();
                 let l_end = self.new_label();
@@ -195,15 +197,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.bind(l_some);
                 let un = self.new_reg(want);
                 self.emit(Op::Unbox { dst: un, box_: orecv, ty: want }, sp.lo);
-                self.emit(Op::OptSome { dst, ty: oty, val: un }, sp.lo);
+                self.emit(Op::MakeRecord { dst, ty: tty, vals: vec![un, eq] }, sp.lo);
                 self.jmp(l_end);
                 self.bind(l_none);
-                self.emit(Op::OptNone { dst, ty: oty }, sp.lo);
+                let zero = self.new_reg(want);
+                self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
+                let no = self.new_reg(TY_BOOL);
+                self.emit(Op::ConstRaw { dst: no, bits: 0 }, sp.lo);
+                self.emit(Op::MakeRecord { dst, ty: tty, vals: vec![zero, no] }, sp.lo);
                 self.bind(l_end);
                 // the value lives in `dst`; move it out so last_reg holds it
-                let out = self.new_reg(oty);
+                let out = self.new_reg(tty);
                 self.emit(Op::MovRef { dst: out, src: dst }, sp.lo);
-                return Ok(oty);
+                return Ok(tty);
             }
             "panic" if core_fn => {
                 if args.len() != 1 {
@@ -424,7 +430,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         i + 1, self.ctx.types.name(t), self.ctx.types.name(ef.params[i])
                     ));
                 }
-                aregs.push(self.last_reg);
+                aregs.push(self.clone_arg(self.last_reg, ef.params[i], sp.lo));
             }
             let dst = if ef.ret == TY_UNIT { None } else { Some(self.new_reg(ef.ret)) };
             self.emit(Op::Call { func: ef.func, args: aregs, dst }, sp.lo);
@@ -472,7 +478,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         if self.ctx.find_data(name).is_some() {
             self.ctx.err(sp, format!(
-                "construction is a method call, never a type-call —use a class method ({}.new(..)) or a dataclass literal `{} {{ .. }}` (RFC 0010 §1)",
+                "construction is a method call, never a type-call —use a class method ({}.new(..)) or a struct literal `{} {{ .. }}` (RFC 0010 §1)",
                 n, n
             ));
             return Err(());
@@ -880,8 +886,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        let rt = self.compile_expr(recv, None)?;
-        let rreg = self.last_reg;
+        // receiver bypass (RFC 0009/0016 v1.1): a mutating method operates
+        // on the ORIGINAL binding — a single-name receiver uses its register
+        // raw instead of a boundary clone
+        let recv_raw = match self.ctx.ast.expr(recv).clone() {
+            ExprKind::Path { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
+                self.lookup(segs[0].name).map(|l| (l.ty, l.reg))
+            }
+            _ => None,
+        };
+        let (rt, rreg) = match recv_raw {
+            Some((ty, reg)) => self.deref_for_use(ty, reg, sp.lo),
+            None => {
+                let rt = self.compile_expr(recv, None)?;
+                let rreg = self.last_reg;
+                // `p.m(..)` auto-derefs (RFC 0005)
+                self.deref_for_use(rt, rreg, sp.lo)
+            }
+        };
         let mname = self.ctx.name(name).to_string();
         // primitives have no method syntax (RFC 0004/0012): `str`/`bytes`
         // operations are free functions (`string_len`, `string_encode`,
@@ -1070,7 +1092,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match self.ctx.ast.expr(recv).clone() {
             ExprKind::Path { segs } if segs.len() == 1 => {
                 if let Some(l) = self.lookup(segs[0].name) {
-                    if !l.is_mut && !l.loop_var {
+                    // a pointer binding is immutable, its POINTEE is not —
+                    // element stores through `xs: *Vec<i32>` are legal
+                    let head_is_ptr = matches!(
+                        self.ctx.types.kind(l.ty).clone(),
+                        TyKind::Ptr { .. }
+                    );
+                    if !l.is_mut && !l.loop_var && !head_is_ptr {
                         self.ctx.err(sp, format!(
                             "{what} requires a `let mut` binding (the mut-binding law, RFC 0003 §1)"
                         ));
@@ -1135,7 +1163,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     i + 1, self.ctx.types.name(t), self.ctx.types.name(ptys[i])
                 ));
             }
-            aregs.push(self.last_reg);
+            // ptys here excludes `self` — args align 1:1
+            aregs.push(self.clone_arg(self.last_reg, ptys[i], sp.lo));
         }
         // small instance methods inline at the call site: the class's
         // `push`/`pop`/`freeze` are rut code (RFC 0005), so an interpreted

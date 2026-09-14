@@ -47,6 +47,20 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
             debug_assert!(!p.is_null(), "opaque slot without a cell");
             Value::Opaque(heap.opaque_handle(p))
         }
+        // tuples cross field-by-field (RFC 0007 v1.1)
+        TyKind::Data { fields } => {
+            let cell = cell_of(v);
+            let mut out = Vec::with_capacity(fields.len());
+            if let CellData::Record { fields: slots } = &cell.data {
+                let sb = slots.borrow();
+                for (i, f) in fields.iter().enumerate() {
+                    if let Some(sv) = sb.get(i) {
+                        out.push(slot_to_value(sv, f.ty, prog, heap));
+                    }
+                }
+            }
+            Value::Tuple(out)
+        }
         _ => Value::I64(unsafe { v.i }),
     }
 }

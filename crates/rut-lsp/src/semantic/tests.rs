@@ -97,7 +97,7 @@ fn f_string_tiles_and_lexes_holes() {
 #[test]
 fn types_struct_literals_and_patterns() {
     let src = "enum Color { Red, Green }\n\
-               dataclass Point { x: f64; y: f64; }\n\
+               struct Point { x: f64; y: f64; }\n\
                fn make(c: Color) -> Point {\n\
                    let p = Point { x: 1, y: 2 };\n\
                    return when (c) { Color.Red -> p, _ -> p, };\n\
@@ -126,7 +126,7 @@ fn recovery_miss_skips_instead_of_guessing() {
 fn ast_wins_over_token_layer_at_equal_start() {
     // a field named `unit` would be token-classified `type`; the AST
     // pass must replace it with `property`
-    let src = "dataclass T { unit: i32; }\n";
+    let src = "struct T { unit: i32; }\n";
     let spans = classify_src(src);
     assert_eq!(find(src, &spans, "unit"), vec![TokenType::Property]);
 }

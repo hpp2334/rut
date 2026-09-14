@@ -184,7 +184,7 @@ fn classify_expr(
         ExprKind::Field { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Property, out, true)
         }
-        // dataclass literal labels (`Point { x: 1 }`) lead their values
+        // struct literal labels (`Point { x: 1 }`) lead their values
         ExprKind::Struct { fields, .. } => {
             for (fid, _) in fields {
                 push_name(toks, span, ast.name(*fid), TokenType::Property, out, false);

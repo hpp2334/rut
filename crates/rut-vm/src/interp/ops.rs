@@ -155,21 +155,25 @@ impl Vm {
         Ok(())
     }
 
-    /// `MakePtr` — box `v` into a fresh one-slot cell (RFC 0005). The
-    /// result is a nil-able `*T`; `ty` is the pointer's own type.
+    /// `MakePtr` — box `v` into a fresh one-slot cell (RFC 0005). A value
+    /// payload deep-copies (RFC 0009/0016 v1.1); ref payloads (str/bytes/
+    /// `*T`/closures) share. `ty` is the pointer's own type.
     #[inline(always)]
     pub(super) fn op_make_ptr(&mut self, dst: Reg, src: Reg, ty: TypeId) -> Result<(), Trap> {
-        let v = self.cur_regs[src as usize];
-        let c = self.heap.alloc_record_zeroed(ty, 1)?;
-        if let CellData::Record { fields } = &cell_of(c).data {
-            fields.borrow_mut().set(0, v);
-        }
+        let raw = self.cur_regs[src as usize];
         let elem = match self.prog.types.kind(ty) {
             TyKind::Ptr { elem } => *elem,
             _ => unreachable!("MakePtr on a non-pointer type"),
         };
-        if self.prog.types.repr_of(elem).is_ref() {
-            self.heap.retain(v);
+        let v = if self.prog.types.is_value(elem) {
+            self.heap.clone_val(raw, elem, &self.prog.types)?
+        } else {
+            self.heap.retain(raw);
+            raw
+        };
+        let c = self.heap.alloc_record_zeroed(ty, 1)?;
+        if let CellData::Record { fields } = &cell_of(c).data {
+            fields.borrow_mut().set(0, v);
         }
         let old = self.cur_regs[dst as usize];
         self.cur_regs[dst as usize] = c;
@@ -184,6 +188,101 @@ impl Vm {
     pub(super) fn op_on_drop(&mut self, obj: Reg, cleanup: Reg) -> Result<(), Trap> {
         self.heap
             .set_drop_fn(self.cur_regs[obj as usize], self.cur_regs[cleanup as usize])
+    }
+
+    /// Structural equality on values (RFC 0009/0016 v1.1): records and
+    /// arrays compare field-by-field / element-by-element recursively,
+    /// `str`/`bytes` by content, `*T` and boundary objects by identity.
+    /// Value graphs are acyclic (only `*T`/closures close cycles and both
+    /// compare by identity), so the recursion terminates.
+    pub(super) fn vals_equal(&self, a: Slot, b: Slot, ty: TypeId) -> Result<bool, Trap> {
+        if unsafe { a.i == b.i } {
+            return Ok(true); // same cell or same scalar bits
+        }
+        match self.prog.types.kind(ty).clone() {
+            TyKind::Data { fields } => {
+                let ca = cell_of(a);
+                let cb = cell_of(b);
+                let (fa, fb) = match (&ca.data, &cb.data) {
+                    (CellData::Record { fields: fa }, CellData::Record { fields: fb }) => (fa.borrow(), fb.borrow()),
+                    _ => return Err(Trap::new(TrapKind::Invalid, "value compare on a non-record")),
+                };
+                for (i, f) in fields.iter().enumerate() {
+                    let xa = fa.get(i).unwrap_or_else(Slot::null);
+                    let xb = fb.get(i).unwrap_or_else(Slot::null);
+                    if !self.vals_equal(xa, xb, f.ty)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            TyKind::Array { elem } => {
+                let ca = cell_of(a);
+                let cb = cell_of(b);
+                let (ia, ib) = match (&ca.data, &cb.data) {
+                    (CellData::Array { items: ia, elem: _ }, CellData::Array { items: ib, .. }) => (ia.borrow(), ib.borrow()),
+                    _ => return Err(Trap::new(TrapKind::Invalid, "value compare on a non-array")),
+                };
+                if ia.len() != ib.len() {
+                    return Ok(false);
+                }
+                for i in 0..ia.len() {
+                    let xa = ia.get(i).unwrap_or_else(Slot::null);
+                    let xb = ib.get(i).unwrap_or_else(Slot::null);
+                    if !self.vals_equal(xa, xb, elem)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            TyKind::Str => {
+                let sa = cell_of(a).as_bytes();
+                let sb = cell_of(b).as_bytes();
+                Ok(sa == sb)
+            }
+            TyKind::Bytes => {
+                let sa = cell_of(a).as_bytes();
+                let sb = cell_of(b).as_bytes();
+                Ok(sa == sb)
+            }
+            TyKind::Option { elem } => {
+                let (ta, pa) = cell_of(a).as_sum().ok_or_else(|| Trap::new(TrapKind::Invalid, "value compare on a non-sum"))?;
+                let (tb, pb) = cell_of(b).as_sum().ok_or_else(|| Trap::new(TrapKind::Invalid, "value compare on a non-sum"))?;
+                if ta != tb { return Ok(false); }
+                match (pa, pb) {
+                    (Some(x), Some(y)) => self.vals_equal(x, y, elem),
+                    _ => Ok(true),
+                }
+            }
+            TyKind::Result { ok, err } => {
+                let (ta, pa) = cell_of(a).as_sum().ok_or_else(|| Trap::new(TrapKind::Invalid, "value compare on a non-sum"))?;
+                let (tb, pb) = cell_of(b).as_sum().ok_or_else(|| Trap::new(TrapKind::Invalid, "value compare on a non-sum"))?;
+                if ta != tb { return Ok(false); }
+                let ety = if ta == 0 { ok } else { err };
+                match (pa, pb) {
+                    (Some(x), Some(y)) => self.vals_equal(x, y, ety),
+                    _ => Ok(true),
+                }
+            }
+            TyKind::Enum { .. } => Ok(Slot::same_ref(a, b)),
+            _ => Ok(Slot::same_ref(a, b)),
+        }
+    }
+
+    /// `CloneVal` — deep-copy a value (RFC 0009/0016 v1.1): records and
+    /// arrays clone into fresh cells; ref-typed children share.
+    #[inline(always)]
+    pub(super) fn op_clone_val(&mut self, dst: Reg, src: Reg, ty: TypeId) -> Result<(), Trap> {
+        let v = self.heap.clone_val(self.cur_regs[src as usize], ty, &self.prog.types).map_err(|t| {
+            let f = &self.prog.funcs[self.cur_func as usize];
+            Trap::new(t.kind, format!("{} (in {} @ pc {} r{src}, type {}, bits {:#x})", t.msg, f.name, self.cur_pc, self.prog.types.name(ty), unsafe { self.cur_regs[src as usize].i }))
+        })?;
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = v;
+        if self.is_ref(ty) {
+            self.heap.release(old);
+        }
+        Ok(())
     }
 
     /// `nil` legality (RFC 0005): a null slot reaching a dereference is

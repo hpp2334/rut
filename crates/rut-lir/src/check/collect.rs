@@ -122,7 +122,7 @@ impl<'a> Ctx<'a> {
         self.enums.push((name, EnumDecl { ty, members: member_ids }));
     }
 
-    /// Pass 1a — intern a dataclass/class placeholder and register its name.
+    /// Pass 1a — intern a struct/class placeholder and register its name.
     /// Fields are resolved later (pass 1b), so a field may name this type or
     /// any type declared later in the module (RFC 0009 recursive shapes).
     pub(crate) fn declare_data(
@@ -189,7 +189,7 @@ impl<'a> Ctx<'a> {
             });
         }
         // publish the resolved field table on the descriptor (construction
-        // rules for dataclass vs class differ; the field table does not)
+        // rules for struct vs class differ; the field table does not)
         let pi = self.types.dense(placeholder) as usize;
         self.types.types[pi].kind = TyKind::Data { fields: resolved.clone() };
 
@@ -368,7 +368,7 @@ impl<'a> Ctx<'a> {
             }
             _ => return,
         };
-        // the target must be a local dataclass/class (RFC 0012 §2 placement).
+        // the target must be a local struct/class (RFC 0012 §2 placement).
         // A generic target (`impl Iter<T> for Vec<T>`) is kept as a template:
         // its method bodies are inlined at the use site, never monomorphized
         // as standalone fns.
@@ -379,7 +379,7 @@ impl<'a> Ctx<'a> {
                 let Some(d) = self.find_data(name).cloned() else {
                     self.err(
                         sp,
-                        "impl target must be a dataclass or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
+                        "impl target must be a struct or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
                     );
                     return;
                 };
@@ -403,7 +403,7 @@ impl<'a> Ctx<'a> {
             _ => {
                 self.err(
                     sp,
-                    "impl target must be a dataclass or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
+                    "impl target must be a struct or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
                 );
                 return;
             }

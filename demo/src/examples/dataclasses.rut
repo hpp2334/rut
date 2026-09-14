@@ -1,36 +1,35 @@
-// RFC 0009 — dataclasses: open data records.
-// Shared cells like every non-primitive (RFC 0016 §1): assignment
-// ALIASES — mutation is visible through every handle; `own(x)` is the
-// eager copy (RFC 0011 §1). All fields public. Methods and impl
-// blocks ARE allowed (see traits.rut for impls); here the idiom stays
-// data + free functions. Constructed ONLY by literal, everywhere
-// (module-level let initializers included).
+// RFC 0009 — structs: open data records (v1.1 spells the keyword
+// `struct`; this classic predates the rename). Copy-by-value (RFC 0016
+// §1): every binding owns its own cell — assignment deep-copies, and
+// mutations never leak between bindings. All fields public. Methods
+// and impl blocks ARE allowed (see traits.rut for impls); here the
+// idiom stays data + free functions. Constructed ONLY by literal,
+// everywhere (module-level let initializers included).
 
-import { own } from "std:core";
 import { Logger } from "std:log";
 import { sqrt } from "std:math";
 
-dataclass Point {
+struct Point {
     x: f32;
     y: f32;
 }
 
-dataclass Rect {
-    min: Point;                 // composite fields are cell-handle slots
-    max: Point;                 // (RFC 0016 §1) — assignment shares them
+struct Rect {
+    min: Point;                 // value fields: the record owns them
+    max: Point;                 // (RFC 0016 §1) — copies are deep
 }
 
-dataclass Style {
+struct Style {
     color: u32 = 0xff00ff;      // field initializer: literals may omit it
     width: f32 = 1;
 }
 
-fn nudge(mut pt: Point) -> unit {  // `mut` param: permission to mutate THE
-    pt.x += 1;                   // CALLER'S point (no hidden copy — RFC 0003 §1)
+fn nudge(pt: *Point) -> unit {     // pointer param: mutation is shared —
+    pt.x += 1;                     // writes through hit the caller's Point
 }
 
-fn nudged(pt: Point) -> Point {    // plain param: read-only view of the shared
-    return Point { x: pt.x + 1, y: pt.y };  // value — build a NEW one instead
+fn nudged(pt: Point) -> Point {    // value param: the caller keeps its own
+    return Point { x: pt.x + 1, y: pt.y };  // copy — build a NEW one instead
 }
 
 fn length(pt: Point) -> f64 {     // free function instead of a method
@@ -41,26 +40,25 @@ fn dataclasses() -> unit {
     let log = Logger.new("dataclasses");
     let mut p = Point { x: 1, y: 2 };   // literal — the only construction
     p.x = 3;                            // needs the `mut` binding (RFC 0003 §1)
-    let q = p;                          // ALIAS: q and p are the SAME cell
-    p.x = 4;                            // q.x is now 4 too — reference semantics
+    let q = p;                          // COPY: q owns a deep copy of p
+    p.x = 4;                            // q.x is still 3 — value semantics
 
-    // `own` diverges: a fresh private cell (primitive fields copied,
-    // composite fields still shared — one level deep)
-    let mut r1 = own(p);                  // r1.x == 4, but r1 != p (identity)
-    r1.x = 9;                             // touches only r1 — p is untouched
+    // pointers share, explicitly (RFC 0005): `make_ptr` boxes the value
+    // and writes through the pointer hit every holder of the box
+    let rp = make_ptr(p);                 // rp: *Point — shares p's cell
+    rp.x = 9;                             // p.x is now 9 too
 
-    // `==` on composites is IDENTITY (RFC 0012 §4): two literals are
-    // never equal, own(x) == x is always false. Field-wise comparison
-    // is Hashable.eq (traits.rut), not ==.
-    let same_cell = q == p;             // true — same handle
-    let fresh = Point { x: 4, y: 2 } == p;   // false — different cells
+    // `==` on values is STRUCTURAL, field by field (RFC 0012 §4):
+    // two separately-built records with equal fields ARE equal
+    let same_fields = q == Point { x: 3, y: 2 };   // true — equal contents
+    let diverged = q == p;                    // false — the copy diverged
 
-    let r = Rect { min: p, max: q };    // min and max SHARE p's and q's cells
-    let s = Style {};              // initializers satisfy all fields
-    nudged(p);                     // read-only: builds a new Point, p kept
-    nudge(p);                      // mutating call: p.x += 1 for real
+    let r = Rect { min: p, max: q };    // min and max are p's and q's COPIES
+    let s = Style {};              // zero-value defaults fill the fields
+    nudge(make_ptr(p));            // shared write: p.x += 1 for real
+    nudged(p);                     // value param: builds a new Point, p kept
     log.info(f"len={length(p)} color={s.color} area={r.max.x - r.min.x}");
-    log.info(f"same_cell={same_cell} fresh={fresh} r1.x={r1.x}");
+    log.info(f"same={same_fields} diverged={diverged} rp.x={rp.x}");
 }
 
 pub fn main() -> unit {

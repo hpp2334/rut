@@ -55,8 +55,16 @@ fn as_str(v: Value) -> String {
     s
 }
 fn as_err_str(v: Value) -> String {
-    let Value::Res(Err(e)) = v else { unreachable!("{v:?}") };
-    as_str(*e)
+    // v1.1: fallible entries return `(bytes, str)` — the error string rides
+    // in the second field
+    let Value::Tuple(parts) = v else { unreachable!("{v:?}") };
+    let Value::Str(err) = &parts[1] else { unreachable!() };
+    err.clone()
+}
+fn as_dec_bytes(v: Value) -> Vec<u8> {
+    let Value::Tuple(parts) = v else { unreachable!("{v:?}") };
+    let Value::Bytes(b) = &parts[0] else { unreachable!() };
+    b.clone()
 }
 fn as_u64(v: Value) -> u64 {
     let Value::I64(x) = v else { unreachable!("{v:?}") };

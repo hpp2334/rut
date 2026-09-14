@@ -24,7 +24,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             "pub" => Some(Frame::Pub(PubFrame::new())),
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(Vis::Self_))),
             "enum" => Some(Frame::Enum(EnumFrame::new(Vis::Self_))),
-            "dataclass" => Some(Frame::Dataclass(TyDeclFrame::new(false, Vis::Self_))),
+            "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, Vis::Self_))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, Vis::Self_))),
             "interface" => Some(Frame::Trait(TraitFrame::new(Vis::Self_))),
             "impl" => Some(Frame::Impl(ImplFrame::new())),
@@ -88,7 +88,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
         Tok::Ident(kw) => match kw.as_str() {
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(vis))),
             "enum" => Some(Frame::Enum(EnumFrame::new(vis))),
-            "dataclass" => Some(Frame::Dataclass(TyDeclFrame::new(false, vis))),
+            "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, vis))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, vis))),
             "interface" => Some(Frame::Trait(TraitFrame::new(vis))),
             "suspend" if p.at_kw2("fn") => {
@@ -325,7 +325,7 @@ fn generic_params(p: &mut Parser) -> Vec<IdentId> {
     out
 }
 
-// ---- dataclass / class ----
+// ---- struct / class ----
 
 pub(crate) struct TyDeclFrame {
     is_class: bool,
@@ -341,8 +341,8 @@ impl TyDeclFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // dataclass | class
-        let what = if self.is_class { "a class name" } else { "a dataclass name" };
+        self.lo = p.bump().span.lo; // struct | class
+        let what = if self.is_class { "a class name" } else { "a struct name" };
         let Some(name) = p.expect_ident(what) else {
             return Step::Pop(Done::Failed);
         };
@@ -520,12 +520,12 @@ impl ImplFrame {
     }
 }
 
-// ---- dataclass/class/trait/impl bodies ----
+// ---- struct/class/trait/impl bodies ----
 
 pub(crate) enum BodyMode {
-    /// dataclass/class body: fields and methods
+    /// struct/class body: fields and methods
     Class { allow_pub: bool, is_dataclass: bool },
-    /// `host dataclass` body: fields only, no initializers — the host
+    /// `host struct` body: fields only, no initializers — the host
     /// constructs the record (RFC 0025)
     HostDataclass,
     /// trait body: method signatures only
@@ -585,7 +585,7 @@ impl TypeBodyFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        // v1 brace strictness: dataclass/class and trait bodies bail on a
+        // v1 brace strictness: struct/class and trait bodies bail on a
         // missing `{`; impl and surface bodies had already expected it
         let strict = matches!(self.mode, BodyMode::Class { .. } | BodyMode::HostDataclass | BodyMode::Trait);
         if strict {
@@ -614,11 +614,11 @@ impl TypeBodyFrame {
                             "pub" => {
                                 p.bump();
                                 let _ = pub_scope(p);
-                                p.err(lo, "host dataclass fields carry no visibility —all fields are public (RFC 0025)");
+                                p.err(lo, "host struct fields carry no visibility —all fields are public (RFC 0025)");
                             }
                             "static" | "suspend" | "async" => {
                                 p.bump();
-                                p.err(lo, format!("host dataclass fields carry no modifiers —`{m}` is not declarable here (RFC 0025)"));
+                                p.err(lo, format!("host struct fields carry no modifiers —`{m}` is not declarable here (RFC 0025)"));
                             }
                             _ => break,
                         }
@@ -739,7 +739,7 @@ impl TypeBodyFrame {
                     if matches!(self.mode, BodyMode::HostDataclass) {
                         p.err(
                             p.span(),
-                            "host dataclass fields have no initializers —the host constructs the record (RFC 0025)",
+                            "host struct fields have no initializers —the host constructs the record (RFC 0025)",
                         );
                     }
                     self.stage = TbStage::FieldInit;
@@ -1044,7 +1044,7 @@ impl FnFrame {
 //
 //     host fn name(params) -> T;        concrete signature over the
 //                                       crossing set (RFC 0023 §1)
-//     host dataclass Name { fields }    flat record; every field a
+//     host struct Name { fields }    flat record; every field a
 //                                       crossing type; host-constructed
 //     builtin fn name<T>(params) -> T;  engine fn (generics fine —
 //                                       nothing crosses)
@@ -1127,9 +1127,9 @@ impl SurfaceFrame {
                 self.stage = SuStage::Params;
                 Step::Push(Frame::Params(ParamsFrame::new()))
             }
-            Tok::Ident(k) if k == "dataclass" => {
+            Tok::Ident(k) if k == "struct" => {
                 p.bump();
-                let Some(name) = p.expect_ident("a dataclass name") else {
+                let Some(name) = p.expect_ident("a struct name") else {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
@@ -1145,7 +1145,7 @@ impl SurfaceFrame {
             }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!("expected `fn` or `dataclass` after `host`, found {found}"));
+                p.err_here(format!("expected `fn` or `struct` after `host`, found {found}"));
                 Step::Pop(Done::Failed)
             }
         }
@@ -1261,7 +1261,7 @@ impl SurfaceFrame {
                 self.methods.push(m);
                 self.members_top(p)
             }
-            // a host dataclass body arrives as (fields, no methods) — any
+            // a host struct body arrives as (fields, no methods) — any
             // `fn` member was diagnosed by the body frame and is dropped
             (SuStage::Members, Done::Body(fields, _methods)) => {
                 let node = p.item(

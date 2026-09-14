@@ -514,6 +514,8 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::MakeRecord { dst, .. }
         | Op::GetF { dst, .. }
         | Op::Own { dst, .. }
+        | Op::MakePtr { dst, .. }
+        | Op::CloneVal { dst, .. }
         | Op::ArrNew { dst, .. }
         | Op::ArrLit { dst, .. }
         | Op::ArrGet { dst, .. }
@@ -556,6 +558,15 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
         Op::MakePtr { dst, src, .. } => {
             d.push(*dst);
             u.push(*src);
+        }
+        Op::CloneVal { dst, src, .. } => {
+            d.push(*dst);
+            u.push(*src);
+        }
+        Op::ValEq { dst, a, b, .. } => {
+            d.push(*dst);
+            u.push(*a);
+            u.push(*b);
         }
         Op::OnDrop { obj, cleanup } => {
             u.push(*obj);

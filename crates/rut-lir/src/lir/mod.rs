@@ -350,6 +350,72 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         r
     }
 
+    /// Move a value into `dst` under v1.1 copy-by-value (RFC 0009/0016):
+    /// value types (records, arrays) deep-copy — two bindings never alias;
+    /// immutable sequences (`str`/`bytes`), pointers, enums, `Option`/
+    /// `Result`, closures and boundary objects share the cell.
+    pub(crate) fn mov_value(&mut self, dst: u16, src: u16, ty: TypeId, sp_lo: u32) {
+        if self.ctx.types.is_value(ty) && !self.last_reg_is_fresh_value() {
+            self.emit(Op::CloneVal { dst, src, ty }, sp_lo);
+        } else if self.ctx.types.is_ref(ty) {
+            self.emit(Op::MovRef { dst, src }, sp_lo);
+        } else {
+            self.emit(Op::Mov { dst, src }, sp_lo);
+        }
+    }
+
+    /// True when `last_reg` was just written by a fresh-producing op (a
+    /// call result, a record/array construction, a clone) — the value is
+    /// already owned by the consumer, so a boundary clone is pure waste.
+    fn last_reg_is_fresh_value(&self) -> bool {
+        matches!(
+            self.code.last(),
+            Some(
+                Op::Call { dst: Some(_), .. }
+                    | Op::CallM { dst: Some(_), .. }
+                    | Op::CallFn { dst: Some(_), .. }
+                    | Op::CallNat { dst: Some(_), .. }
+                    | Op::MakeRecord { .. }
+                    | Op::MakePtr { .. }
+                    | Op::CloneVal { .. }
+                    | Op::ArrNew { .. }
+                    | Op::ArrLit { .. }
+                    | Op::MakeClosure { .. }
+                    | Op::Unwrap { .. }
+                    | Op::Box { .. }
+            )
+        )
+    }
+
+    /// An argument register for a value-typed parameter: the callee gets
+    /// its own deep copy (RFC 0009/0016 v1.1). Saves/restores `last_reg` —
+    /// the convention must survive the clone's temporary.
+    pub(crate) fn clone_arg(&mut self, reg: u16, pty: TypeId, sp_lo: u32) -> u16 {
+        if self.ctx.types.is_value(pty) {
+            let keep = self.last_reg;
+            let tmp = self.new_reg(pty);
+            self.emit(Op::CloneVal { dst: tmp, src: reg, ty: pty }, sp_lo);
+            self.last_reg = keep;
+            tmp
+        } else {
+            reg
+        }
+    }
+
+    /// `p.m(..)` / `p[i]` auto-deref (RFC 0005): a pointer used as a
+    /// receiver or indexee loads its pointee cell first. Returns the
+    /// (type, register) to continue from.
+    pub(crate) fn deref_for_use(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
+        match self.ctx.types.kind(ty).clone() {
+            TyKind::Ptr { elem } => {
+                let d = self.new_reg(elem);
+                self.emit(Op::GetF { dst: d, obj: reg, field: 0, repr: Repr::Ref }, sp_lo);
+                (elem, d)
+            }
+            _ => (ty, reg),
+        }
+    }
+
     pub(crate) fn emit(&mut self, op: Op, span_lo: u32) {
         self.spans.push((self.code.len() as u32, span_lo));
         self.code.push(op);

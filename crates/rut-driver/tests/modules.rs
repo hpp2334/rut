@@ -70,7 +70,7 @@ fn imports_of_an_unmounted_module_error() {
 fn imports_and_links_a_type() {
     // dependency "geo" scope 1 exports a record + a fn returning it
     let dep = rut_driver::compile_program(
-        "dataclass Point { x: i32; y: i32; }\n\
+        "struct Point { x: i32; y: i32; }\n\
          pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
          fn main() -> i32 { return 0; }\n",
         Mode::Impl,
@@ -175,7 +175,7 @@ fn graph_threads_a_type_through_a_chain() {
         "geo:base",
         Module {
             source: Some(
-                "dataclass Point { x: i32; y: i32; }\n\
+                "struct Point { x: i32; y: i32; }\n\
                  pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
                  fn main() -> i32 { return 0; }\n"
                     .into(),

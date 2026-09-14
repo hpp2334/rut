@@ -99,7 +99,7 @@ fn malformed_input_terminates() {
         "fn f() { when (x) { 1 -> } }",
         "impl T for C {",
         "import {",
-        "dataclass D { x",
+        "struct D { x",
         "enum E {",
         "fn f() -> unit { let ",
         "fn f() -> unit { let x = (1, }",

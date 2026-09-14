@@ -167,6 +167,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match &info.source {
             SliceSource::Array => {
                 let repr = self.ctx.types.repr_of(info.elem);
+                let val = self.clone_arg(val, info.elem, sp);
                 self.emit(Op::ArrSet { arr: recv, idx, val, repr }, sp);
                 Ok(())
             }

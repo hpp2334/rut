@@ -57,7 +57,7 @@ fn every_algorithm_sorts_a_known_input() {
     for algo in ALGOS {
         let (mut vm, c) = vm();
         push_all(&mut vm, &c, &[9, -3, 5, 5, 0, 42, -7, 3]);
-        assert_eq!(sort(&mut vm, &c, algo), Value::Res(Ok(Box::new(Value::Bool(true)))), "{algo}");
+        assert_eq!(sort(&mut vm, &c, algo), Value::Str("".into()), "{algo}");
         assert_eq!(
             s(vm.call("serialize", &[c.clone()]).unwrap()),
             "[-7, -3, 0, 3, 5, 5, 9, 42]",
@@ -119,25 +119,26 @@ fn large_input_is_monotonic_through_get() {
     sort(&mut vm, &c, "quick");
     let mut prev = i64::MIN;
     for i in 0..500 {
-        let Value::Opt(Some(v)) = vm.call("get", &[c.clone(), Value::I64(i)]).unwrap() else {
-            panic!("get({i}) was None");
+        assert!(b(vm.call("has", &[c.clone(), Value::I64(i)]).unwrap()), "has({i})");
+        let Value::I64(x) = vm.call("get", &[c.clone(), Value::I64(i)]).unwrap() else {
+            panic!("get({i}) was not an i64");
         };
-        let Value::I64(x) = *v else { unreachable!("{v:?}") };
         assert!(x >= prev, "not monotonic at {i}: {x} < {prev}");
         prev = x;
     }
-    // out of range is Option.none(), not a trap
-    assert_eq!(vm.call("get", &[c.clone(), Value::I64(500)]).unwrap(), Value::Opt(None));
-    assert_eq!(vm.call("get", &[c.clone(), Value::I64(-1)]).unwrap(), Value::Opt(None));
+    // out of range reads 0, and `has` says false — no trap
+    assert_eq!(vm.call("get", &[c.clone(), Value::I64(500)]).unwrap(), Value::I64(0));
+    assert_eq!(vm.call("has", &[c.clone(), Value::I64(500)]).unwrap(), Value::Bool(false));
+    assert_eq!(vm.call("has", &[c.clone(), Value::I64(-1)]).unwrap(), Value::Bool(false));
 }
 
 #[test]
-fn unknown_algorithm_is_a_result_err() {
+fn unknown_algorithm_is_an_error_string() {
     let (mut vm, c) = vm();
     push_all(&mut vm, &c, &[1]);
     assert_eq!(
         sort(&mut vm, &c, "bogus"),
-        Value::Res(Err(Box::new(Value::Str("unknown algorithm: bogus".into())))),
+        Value::Str("unknown algorithm: bogus".into()),
     );
     // a failed dispatch leaves the data untouched
     assert_eq!(s(vm.call("serialize", &[c.clone()]).unwrap()), "[1]");
@@ -147,8 +148,8 @@ fn unknown_algorithm_is_a_result_err() {
 fn wrong_container_traps_cleanly() {
     let (mut vm, c) = vm();
     drop(c);
-    // passing None where the Opaque bank is expected is an embedder
+    // passing an integer where the Opaque bank is expected is an embedder
     // mistake: a named trap, not a panic or silent zero
-    let err = vm.call("sort", &[Value::Opt(None), Value::Str("quick".into())]).unwrap_err();
+    let err = vm.call("sort", &[Value::I64(0), Value::Str("quick".into())]).unwrap_err();
     assert!(err.msg.contains("argument"), "{}", err.msg);
 }

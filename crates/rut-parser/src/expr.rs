@@ -143,6 +143,7 @@ impl ExprFrame {
                 Tok::Minus => Some(Pfx::Un(UnOp::Neg)),
                 Tok::Bang => Some(Pfx::Un(UnOp::Not)),
                 Tok::Tilde => Some(Pfx::Un(UnOp::BitNot)),
+                Tok::Star => Some(Pfx::Un(UnOp::Deref)),
                 _ if p.at_kw("await") => {
                     let is_select = matches!(&p.peek(1).tok, Tok::Ident(s) if s == "select")
                         && matches!(p.peek(2).tok, Tok::LBrace);
@@ -461,7 +462,7 @@ impl AtomFrame {
                     let e = p.expr(ExprKind::Path { segs: vec![seg] }, sp);
                     return self.finish(p, e);
                 }
-                // struct literal: `Ident {` (dataclass only — classes have
+                // struct literal: `Ident {` (struct only — classes have
                 // no instance literal; the checker rejects `Circle { .. }`)
                 if matches!(p.peek(1).tok, Tok::LBrace) && !is_reserved_kw(&name) {
                     let ty_name = p.interner.intern(&name);

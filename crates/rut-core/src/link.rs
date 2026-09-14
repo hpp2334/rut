@@ -260,6 +260,8 @@ fn remap_op(
         Op::MakeRecord { dst, ty, vals } => Op::MakeRecord { dst, ty: map(ty), vals },
         Op::Own { dst, src, ty } => Op::Own { dst, src, ty: map(ty) },
         Op::MakePtr { dst, src, ty } => Op::MakePtr { dst, src, ty: map(ty) },
+        Op::CloneVal { dst, src, ty } => Op::CloneVal { dst, src, ty: map(ty) },
+        Op::ValEq { dst, a, b, ty, eq } => Op::ValEq { dst, a, b, ty: map(ty), eq },
         Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst, ty: map(ty), len, repr },
         Op::ArrLit { dst, ty, elems } => Op::ArrLit { dst, ty: map(ty), elems },
         Op::EnumNew { dst, ty, member } => Op::EnumNew { dst, ty: map(ty), member },

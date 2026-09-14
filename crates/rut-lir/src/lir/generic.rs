@@ -87,6 +87,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // non-generic: resolve and compare
                 let want = self.ctx.resolve_type(param_node, subst);
                 if want != arg_ty {
+                    eprintln!("UNIFY-FAIL arg_ty={}", self.ctx.types.name(arg_ty));
                     self.ctx.err(sp, format!(
                         "argument is `{}`, `{}` expected",
                         self.ctx.types.name(arg_ty), self.ctx.types.name(want)

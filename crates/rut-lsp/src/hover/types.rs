@@ -16,7 +16,7 @@ pub enum TyForm {
     /// `builtin interface Name<..>` — an engine-woven contract (Index,
     /// Iterator, Disposal); users implement it with ordinary impl blocks
     BuiltinIface,
-    /// `host dataclass Name { fields }` — a flat host-constructed record
+    /// `host struct Name { fields }` — a flat host-constructed record
     HostDataclass,
 }
 
@@ -24,12 +24,12 @@ impl TyForm {
     pub(crate) fn keyword(self) -> &'static str {
         match self {
             TyForm::Class => "class",
-            TyForm::Dataclass => "dataclass",
+            TyForm::Dataclass => "struct",
             TyForm::Trait => "trait",
             TyForm::Enum => "enum",
             TyForm::Builtin => "builtin",
             TyForm::BuiltinIface => "builtin interface",
-            TyForm::HostDataclass => "host dataclass",
+            TyForm::HostDataclass => "host struct",
         }
     }
 }

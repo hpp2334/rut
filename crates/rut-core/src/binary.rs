@@ -83,7 +83,7 @@ pub struct SurfaceType {
     pub name: String,
     /// local id within the exporter's own type block
     pub local: u32,
-    /// records: a `class` (no outside literal) vs a `dataclass`
+    /// records: a `class` (no outside literal) vs a `struct`
     pub is_class: bool,
     /// a generic template (`Vec<T>`): a consumer must monomorphize it, so
     /// the graph compiler source-inlines the module rather than linking it
@@ -622,6 +622,8 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
         Op::MakePtr { dst, src, ty } => { e.u8(89); e.u16(*dst); e.u16(*src); e.u32(*ty); }
+        Op::CloneVal { dst, src, ty } => { e.u8(91); e.u16(*dst); e.u16(*src); e.u32(*ty); }
+        Op::ValEq { dst, a, b, ty, eq } => { e.u8(92); e.u16(*dst); e.u16(*a); e.u16(*b); e.u32(*ty); e.u8(*eq as u8); }
         Op::OnDrop { obj, cleanup } => { e.u8(90); e.u16(*obj); e.u16(*cleanup); }
         Op::ArrNew { dst, ty, len, repr } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); e.u8(repr.to_u8()); }
         Op::ArrLit { dst, ty, elems } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u16s(elems); }
@@ -685,6 +687,8 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         23 => Op::SetF { obj: d.u16()?, field: d.u32()?, val: d.u16()?, repr: repr(d.u8()?)? },
         24 => Op::Own { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
         89 => Op::MakePtr { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
+        91 => Op::CloneVal { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
+        92 => Op::ValEq { dst: d.u16()?, a: d.u16()?, b: d.u16()?, ty: d.u32()?, eq: d.u8()? != 0 },
         90 => Op::OnDrop { obj: d.u16()?, cleanup: d.u16()? },
         25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()?, repr: repr(d.u8()?)? },
         26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, elems: d.u16s()? },

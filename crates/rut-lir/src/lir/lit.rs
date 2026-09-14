@@ -263,7 +263,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(reg)
     }
 
-    /// Record literal for an IMPORTED dataclass (RFC 0035 §1): the layout is
+    /// Record literal for an IMPORTED struct (RFC 0035 §1): the layout is
     /// the copied type descriptor; field names compare by string (separate
     /// ASTs intern separately), and imported field defaults are not carried.
     fn compile_struct_extern(
@@ -273,7 +273,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let TyKind::Data { fields: desc } = self.ctx.types.kind(sty).clone() else {
-            self.ctx.err(sp, format!("`{}` is not a dataclass/class of this module", self.ctx.types.name(sty)));
+            self.ctx.err(sp, format!("`{}` is not a struct/class of this module", self.ctx.types.name(sty)));
             return Err(());
         };
         if self.ctx.extern_classes.contains(&sty) {

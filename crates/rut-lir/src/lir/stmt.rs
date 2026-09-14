@@ -42,14 +42,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let ty = expected.unwrap_or(t);
                 match destructure {
                     None => {
-                        // bind the local directly to the initializer's register
-                        self.locals.push(Local { name, reg: self.last_reg, ty, is_mut, loop_var: false });
+                        // copy-by-value binding (RFC 0009/0016 v1.1): a
+                        // value-typed initializer that is not a fresh
+                        // construction deep-copies into the binding's own
+                        // cell — the two never alias
+                        let reg = if self.ctx.types.is_value(ty) && !self.last_reg_is_fresh_value() {
+                            let src = self.last_reg;
+                            let r = self.new_reg(ty);
+                            self.emit(Op::CloneVal { dst: r, src, ty }, sp.lo);
+                            r
+                        } else {
+                            self.last_reg
+                        };
+                        self.locals.push(Local { name, reg, ty, is_mut, loop_var: false });
                     }
                     Some(names) => {
                         // `let (a, b) = ..` (RFC 0007): each binding takes
                         // the matching tuple field
                         let TyKind::Data { fields } = self.ctx.types.kind(ty).clone() else {
-                            self.ctx.err(sp, "destructuring needs a tuple —`(a, b) = ..`");
+                            self.ctx.err(sp, format!("destructuring needs a tuple —got `{}`", self.ctx.types.name(ty)));
                             return Err(());
                         };
                         if fields.len() != names.len() {
@@ -62,7 +73,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let tuple_reg = self.last_reg;
                         for (i, n) in names.iter().enumerate() {
                             let fty = fields[i].ty;
-                            let reg = self.new_reg(fty);
+                            let mut reg = self.new_reg(fty);
                             self.emit(
                                 Op::GetF {
                                     dst: reg,
@@ -72,6 +83,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 },
                                 sp.lo,
                             );
+                            if self.ctx.types.is_value(fty) {
+                                let c = self.new_reg(fty);
+                                self.emit(Op::CloneVal { dst: c, src: reg, ty: fty }, sp.lo);
+                                reg = c;
+                            }
+                            if self.ctx.types.is_value(fty) {
+                                let c = self.new_reg(fty);
+                                self.emit(Op::CloneVal { dst: c, src: reg, ty: fty }, sp.lo);
+                                reg = c;
+                            }
                             self.locals.push(Local {
                                 name: *n,
                                 reg,
@@ -221,6 +242,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>, sp: rut_lexer::span::Span) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
+        // `for (v of p)` auto-derefs a pointer (RFC 0005)
+        let (it, iter_reg) = self.deref_for_use(it, iter_reg, sp.lo);
         // the `Iter` sequence contract (Vec, Array, string, bytes, and any
         // user `impl Iter`); otherwise the `Iterator` contract (`next`)
         let info = match self.slice_info(it) {

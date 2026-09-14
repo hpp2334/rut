@@ -369,6 +369,15 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*dst);
             push(*src);
         }
+        Op::CloneVal { dst, src, .. } => {
+            push(*dst);
+            push(*src);
+        }
+        Op::ValEq { dst, a, b, .. } => {
+            push(*dst);
+            push(*a);
+            push(*b);
+        }
         Op::OnDrop { obj, cleanup } => {
             push(*obj);
             push(*cleanup);
@@ -467,7 +476,8 @@ fn tys_of(op: &Op) -> Vec<u32> {
         | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
         | Op::OptSome { ty, .. } | Op::OptNone { ty, .. } | Op::ResOk { ty, .. }
         | Op::ResErr { ty, .. } | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
-        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakePtr { ty, .. } => vec![*ty],
+        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakePtr { ty, .. }
+        | Op::CloneVal { ty, .. } | Op::ValEq { ty, .. } => vec![*ty],
         _ => Vec::new(),
     }
 }

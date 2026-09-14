@@ -17,7 +17,7 @@ pub struct CellVal {
 /// Payload slots for a record/array cell: small payloads live inline in
 /// the cell (RFC 0015 §4), larger ones spill to the heap.
 /// This removes the per-record `Vec` allocation for the common small
-/// dataclass.
+/// struct.
 const INLINE_SLOTS: usize = 4;
 
 pub enum Slots {
@@ -377,7 +377,7 @@ pub enum CellData {
     Enum { member: u32 },
     /// Option/Result: tag 0 = some/ok, 1 = none/err
     Sum { tag: u32, payload: Option<Slot> },
-    /// dataclass/class instance — the payload as one slot per field
+    /// struct/class instance — the payload as one slot per field
     Record { fields: RefCell<Slots> },
     /// Opaque box (RFC 0014): the value + its runtime type
     OpaqueBox { val: Slot, val_ty: TypeId },

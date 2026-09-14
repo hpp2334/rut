@@ -31,7 +31,7 @@ fn find_ident_pos(toks: &[Token], name: &str, n: usize) -> Option<u32> {
 fn method_hover_shows_signature_doc_and_owner() {
     let src = "\
 // a 2D point
-dataclass Point {
+struct Point {
 x: f64;
 y: f64;
 }

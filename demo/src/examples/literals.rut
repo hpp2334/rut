@@ -8,7 +8,7 @@ import { Vec } from "std:collection";
 
 import { Logger } from "std:log";
 
-dataclass Point { x: f32; y: f32 }
+struct Point { x: f32; y: f32 }
 
 fn literals(name: str) -> unit {
     let log = Logger.new("literals");
@@ -31,7 +31,7 @@ fn literals(name: str) -> unit {
     arr[0] = 7;                      // static sequence write (fused arrset)
     zero[0] = 9.0f32;                // through the Vec
     let bin = bytes(64);             // binary data: bytes
-    let p = Point { x: 1, y: 2 };    // dataclass literal: no `new`
+    let p = Point { x: 1, y: 2 };    // struct literal: no `new`
 
     log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()}");
 }

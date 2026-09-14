@@ -62,6 +62,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, "`==` on Option/Result is a compile error —use `when`, `is_some()`, or compare the payload (RFC 0005)");
                         return Err(());
                     }
+                    TyKind::Data { .. } => {
+                        // structural equality on values (RFC 0009/0016 v1.1)
+                        self.emit(Op::ValEq { dst, a: lhs_reg, b: rhs_reg, ty, eq }, sp.lo);
+                    }
                     _ => {
                         self.emit(Op::RefEq { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                     }
@@ -174,7 +178,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // assign the last field
                 if segs[0].generics.is_empty() {
                     if let Some(l) = self.lookup(segs[0].name).copied() {
-                        if !l.is_mut && !l.loop_var {
+                        let head_is_ptr =
+                            matches!(self.ctx.types.kind(l.ty).clone(), TyKind::Ptr { .. });
+                        // a pointer binding is immutable, its POINTEE is not —
+                        // stores through `p.x` are legal on a plain `let p`
+                        if !l.is_mut && !l.loop_var && !head_is_ptr {
                             self.ctx.err(sp, format!(
                                 "assignment through `{}` requires a `let mut` binding (the mut-binding law, RFC 0003 §1)",
                                 self.ctx.name(segs[0].name)
@@ -183,7 +191,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let mut cur = l.reg;
                         let mut cur_ty = l.ty;
+                        if head_is_ptr {
+                            let (t, d) = self.deref_for_use(cur_ty, cur, sp.lo);
+                            cur = d;
+                            cur_ty = t;
+                        }
                         for seg in &segs[1..segs.len() - 1] {
+                            // a pointer mid-chain derefs before the next field
+                            if matches!(self.ctx.types.kind(cur_ty).clone(), TyKind::Ptr { .. }) {
+                                let (t, d) = self.deref_for_use(cur_ty, cur, sp.lo);
+                                cur = d;
+                                cur_ty = t;
+                            }
                             let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone() else {
                                 self.ctx.err(sp, "field assignment through a non-record");
                                 return Err(());
@@ -214,7 +233,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 if t != fty {
                                     self.ctx.err(sp, "field assignment type mismatch");
                                 }
-                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                                let sval = self.clone_arg(self.last_reg, fty, sp.lo);
+                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: sval, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                             }
                             Some(bin) => {
                                 let cur_v = self.new_reg(fty);
@@ -263,19 +283,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 self.ctx.types.name(l.ty), self.ctx.types.name(t)
                             ));
                         }
-                        if self.ctx.types.is_ref(l.ty) {
-                            self.emit(Op::MovRef { dst: l.reg, src: self.last_reg }, sp.lo);
-                        } else {
-                            self.emit(Op::Mov { dst: l.reg, src: self.last_reg }, sp.lo);
-                        }
+                        // copy-by-value (RFC 0009/0016 v1.1): the binding
+                        // owns a deep copy of the assigned value
+                        self.mov_value(l.reg, self.last_reg, l.ty, sp.lo);
                     }
                     Some(bin) => {
                         let cur = self.new_reg(l.ty);
-                        if self.ctx.types.is_ref(l.ty) {
-                            self.emit(Op::MovRef { dst: cur, src: l.reg }, sp.lo);
-                        } else {
-                            self.emit(Op::Mov { dst: cur, src: l.reg }, sp.lo);
-                        }
+                        self.mov_value(cur, l.reg, l.ty, sp.lo);
                         let t = self.compile_expr(value, Some(l.ty))?;
                         if t != l.ty {
                             self.ctx.err(sp, format!(
@@ -286,6 +300,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let val_reg = self.last_reg;
                         let res = self.new_reg(l.ty);
                         self.emit_compound(bin, l.ty, cur, val_reg, res, sp)?;
+                        // res is freshly computed (arith) — a handle move
                         if self.ctx.types.is_ref(l.ty) {
                             self.emit(Op::MovRef { dst: l.reg, src: res }, sp.lo);
                         } else {
@@ -301,7 +316,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
                 let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() else {
-                    self.ctx.err(sp, "field assignment needs a dataclass/class receiver");
+                    self.ctx.err(sp, "field assignment needs a struct/class receiver");
                     return Err(());
                 };
                 let Some(fidx) = fields.iter().position(|f| f.name == self.ctx.name(name)) else {
@@ -315,7 +330,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != fty {
                             self.ctx.err(sp, "field assignment type mismatch");
                         }
-                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                        let sval = self.clone_arg(self.last_reg, fty, sp.lo);
+                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: sval, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                     }
                     Some(bin) => {
                         let cur = self.new_reg(fty);
@@ -338,6 +354,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
+                // `xs[i] = ..` through a pointer auto-derefs (RFC 0005)
+                let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let Some(info) = self.slice_info(rt) else {
                     self.ctx.err(sp, "index assignment needs a sequence (Vec or Array)");
                     return Err(());

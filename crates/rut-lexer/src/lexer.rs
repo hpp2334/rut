@@ -649,7 +649,7 @@ fn reserved_word_msg(w: &str) -> Option<String> {
         "extends" => "rut has no inheritance (`extends`); compose instead (RFC 0010 §3)",
         "trait" => "rut spells this `interface`",
         "type" => "`type` members are not available — the element is a type argument (`interface Iter<T>`, RFC 0012)",
-        "struct" => "rut does not have `struct`; use `dataclass`",
+        "dataclass" => "`dataclass` was removed —spell it `struct` (RFC 0009 v1.1)",
         "match" => "rut does not have `match`; use `when`",
         "null" => "rut has no `null`; absence is `Option<T>` (RFC 0005)",
         "undefined" => "rut has no `undefined`; absence is `Option<T>` (RFC 0005)",

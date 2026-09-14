@@ -155,6 +155,12 @@ impl Vm {
                 self.cur_regs[dst as usize] = Slot::bool(v);
             }
 
+            Op::ValEq { dst, a, b, ty, eq } => {
+                let same = self.vals_equal(r!(a), r!(b), ty)?;
+                self.cur_regs[dst as usize] = Slot::bool(same == eq);
+            }
+
+
             Op::Jmp { target } => self.cur_pc = target,
             Op::Br { cond, then_t, else_t } => {
                 self.cur_pc = if r!(cond).as_bool() { then_t } else { else_t };
@@ -196,6 +202,7 @@ impl Vm {
 
             Op::MakePtr { dst, src, ty } => self.op_make_ptr(dst, src, ty)?,
             Op::OnDrop { obj, cleanup } => self.op_on_drop(obj, cleanup)?,
+            Op::CloneVal { dst, src, ty } => self.op_clone_val(dst, src, ty)?,
 
             Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {

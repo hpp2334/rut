@@ -1,4 +1,4 @@
-import { Array, Opaque, own, downcast } from "std:core";
+import { Array, Opaque, downcast, make_ptr } from "std:core";
 import { Vec } from "std:collection";
 // RFC 0014 — Opaque: explicit type erasure with checked recovery.
 // Opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the
@@ -11,7 +11,7 @@ import { Vec } from "std:collection";
 
 import { Logger } from "std:log";
 
-dataclass Point { x: f32; y: f32 }
+struct Point { x: f32; y: f32 }
 enum Flavor { Sweet, Sour }
 
 class Session {
@@ -28,12 +28,12 @@ fn erase_and_recover() -> unit {
     let box2 = Opaque.new(Flavor.Sour);             // zero-copy (shares the cell)
     let box3 = Opaque.new("hello");
 
-    let p = downcast<Point>(box1);              // Option<Point>
-    if (p.is_some()) {
-        log.info(f"point {p.value.x} {p.value.y}");
+    let (p, ok) = downcast<Point>(box1);        // (Point, bool)
+    if (ok) {
+        log.info(f"point {p.x} {p.y}");
     }
-    let wrong = downcast<i32>(box2);            // wrong type: None, no trap
-    log.info(f"sour? {downcast<Flavor>(box2).is_some()} wrong? {wrong.is_some()}");
+    let (wrong, wrong_ok) = downcast<i32>(box2); // wrong type: false, no trap
+    log.info(f"sour? {downcast<Flavor>(box2).1} wrong? {wrong_ok}");
     log.info(f"is str: {box3 is str}");   // `is` sees through the box
 }
 
@@ -42,9 +42,9 @@ fn share_vs_copy() -> unit {
     let s = Session.new("abc");
     let o = Opaque.new(s);            // SHARES the Session cell (zero-copy):
                                   // mutation through s is visible in o
-    let o2 = Opaque.new(own(s));      // own() first: a private copy, new identity
+    let o2 = Opaque.new(*make_ptr(s));    // a private copy, new identity
 
-    log.info(f"same session: {downcast<Session>(o).is_some()}");
+    log.info(f"same session: {downcast<Session>(o).1}");
     log.info(f"distinct boxes: {o == o2}");     // false — two cells (RFC 0012 §4)
 }
 

@@ -75,7 +75,7 @@ fn builtin_ty_parses() {
 }
 
 const HOST_DATACLASS: &str = "\
-pub host dataclass Location {
+pub host struct Location {
     file: str,
     line: i32,
     col: i32,
@@ -99,12 +99,12 @@ fn host_dataclass_parses() {
 fn host_dataclass_members_are_fields_only() {
     // methods and initializers are rejected: the shape is the whole
     // surface, the host constructs the record (RFC 0025)
-    let (_, diags) = parse("host dataclass L { fn f(self) -> i32; }", Mode::Decl);
+    let (_, diags) = parse("host struct L { fn f(self) -> i32; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("fields only")),
         "a method must be diagnosed: {diags:?}"
     );
-    let (_, diags) = parse("host dataclass L { x: i32 = 0, }", Mode::Decl);
+    let (_, diags) = parse("host struct L { x: i32 = 0, }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("no initializers")),
         "an initializer must be diagnosed: {diags:?}"
@@ -127,7 +127,7 @@ fn removed_forms_are_rejected() {
     // `host primitive` — the removed member-surface grammar
     let (_, diags) = parse("pub host primitive string { fn len(self) -> i32; }", Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected `fn` or `dataclass` after `host`")),
+        diags.iter().any(|d| d.msg.contains("expected `fn` or `struct` after `host`")),
         "`host primitive` must be diagnosed: {diags:?}"
     );
     // `host class` — removed: wrap native state in a rut class over Opaque
@@ -165,8 +165,8 @@ fn host_fn_terminates_on_malformed() {
         "host fn x(",
         "host fn",
         "host class {",
-        "host dataclass L {",
-        "host dataclass L { x",
+        "host struct L {",
+        "host struct L { x",
         "builtin Option<T> {",
         "builtin fn f(",
         "builtin interface I {",

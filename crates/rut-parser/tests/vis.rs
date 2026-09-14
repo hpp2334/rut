@@ -69,11 +69,11 @@ class Sink {
 
 #[test]
 fn dataclass_rejects_member_pub() {
-    // RFC 0009: dataclass members are always public — no visibility dial
-    let (_, diags) = parse("dataclass P { pub x: i32; }", Mode::Impl);
+    // RFC 0009: struct members are always public — no visibility dial
+    let (_, diags) = parse("struct P { pub x: i32; }", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("dataclasses have no member visibility")),
-        "member pub must be diagnosed in a dataclass: {diags:?}"
+        "member pub must be diagnosed in a struct: {diags:?}"
     );
 }
 

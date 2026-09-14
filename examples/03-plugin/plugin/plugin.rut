@@ -10,6 +10,7 @@
 // it wants wired to each topic. The host later fires those exports with
 // the state handle `init` returned.
 
+import { make_ptr } from "std:core";
 import { Moderator } from "./moderator.rut";
 
 // ---- the adapter: the ONLY entry fns. Registration + one-line forwards.
@@ -21,23 +22,27 @@ entry fn init(bus: Opaque) -> Opaque {
     subscribe(bus, "msg", "on_msg");
     subscribe(bus, "leave", "on_leave");
     subscribe(bus, "tick", "on_tick");
-    return Opaque.new(Moderator.new(bus));
+    return Opaque.new(make_ptr(Moderator.new(bus)));
 }
 
 entry fn on_join(c: Opaque, name: str) -> unit {
-    downcast<Moderator>(c).value.on_join(name);
+    let (mod, _) = downcast<*Moderator>(c);
+    mod.on_join(name);
 }
 
 entry fn on_msg(c: Opaque, user: str, text: str) -> unit {
-    downcast<Moderator>(c).value.on_msg(user, text);
+    let (mod, _) = downcast<*Moderator>(c);
+    mod.on_msg(user, text);
 }
 
 entry fn on_leave(c: Opaque, name: str) -> unit {
-    downcast<Moderator>(c).value.on_leave(name);
+    let (mod, _) = downcast<*Moderator>(c);
+    mod.on_leave(name);
 }
 
 entry fn on_tick(c: Opaque, n: i64) -> unit {
-    downcast<Moderator>(c).value.on_tick(n);
+    let (mod, _) = downcast<*Moderator>(c);
+    mod.on_tick(n);
 }
 
 /// The wire formatter — the host calls this NESTED, from inside `emit`,
@@ -47,7 +52,7 @@ entry fn render_line(topic: str, payload: str) -> str {
 }
 
 entry fn shutdown(c: Opaque) -> i64 {
-    let m = downcast<Moderator>(c).value;
+    let (m, _) = downcast<*Moderator>(c);
     m.say("system", f"shutdown: {m.stats()}");
     return m.msgs;
 }

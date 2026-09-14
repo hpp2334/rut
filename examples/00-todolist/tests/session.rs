@@ -46,17 +46,19 @@ fn crud_session() {
     assert_eq!(vm.call("set_done", &args(&[Value::I64(2), Value::Bool(true)])).unwrap(), Value::Bool(true));
     assert_eq!(
         vm.call("title_of", &args(&[Value::I64(2)])).unwrap(),
-        Value::Opt(Some(Box::new(Value::Str("implement the VM".into()))))
+        Value::Str("implement the VM".into())
     );
-    assert_eq!(vm.call("title_of", &args(&[Value::I64(42)])).unwrap(), Value::Opt(None));
+    assert_eq!(vm.call("title_of", &args(&[Value::I64(42)])).unwrap(), Value::Str("".into()));
+    assert_eq!(vm.call("has_title", &args(&[Value::I64(2)])).unwrap(), Value::Bool(true));
+    assert_eq!(vm.call("has_title", &args(&[Value::I64(42)])).unwrap(), Value::Bool(false));
 
     assert_eq!(
         vm.call("remove", &args(&[Value::I64(1)])).unwrap(),
-        Value::Res(Ok(Box::new(Value::Bool(true))))
+        Value::Bool(true)
     );
     assert_eq!(
         vm.call("remove", &args(&[Value::I64(1)])).unwrap(),
-        Value::Res(Err(Box::new(Value::Str("no todo #1".into()))))
+        Value::Bool(false)
     );
     assert_eq!(i(vm.call("len", &args(&[])).unwrap()), 2);
 

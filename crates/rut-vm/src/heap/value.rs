@@ -21,6 +21,8 @@ pub enum Value {
     /// an `Opaque` box (RFC 0014) — the one cell the host may hold and
     /// pass back; the handle owns one arena reference
     Opaque(OpaqueRef),
+    /// a tuple crossing (RFC 0007 v1.1) — records with numeric fields
+    Tuple(Vec<Value>),
 }
 
 impl PartialEq for Value {
@@ -37,6 +39,7 @@ impl PartialEq for Value {
             (Value::Res(a), Value::Res(b)) => a == b,
             // boxes compare by identity — the payload's type is erased
             (Value::Opaque(a), Value::Opaque(b)) => a == b,
+            (Value::Tuple(a), Value::Tuple(b)) => a == b,
             _ => false,
         }
     }
@@ -57,6 +60,7 @@ impl std::fmt::Debug for Value {
             Value::Res(Ok(v)) => write!(f, "Res(Ok({v:?}))"),
             Value::Res(Err(v)) => write!(f, "Res(Err({v:?}))"),
             Value::Opaque(_) => write!(f, "Opaque(<cell>)"),
+            Value::Tuple(v) => write!(f, "Tuple({v:?})"),
         }
     }
 }
@@ -75,6 +79,7 @@ impl Value {
             Value::Opt(_) => "an Option",
             Value::Res(_) => "a Result",
             Value::Opaque(_) => "an Opaque",
+            Value::Tuple(_) => "a tuple",
         }
     }
 }

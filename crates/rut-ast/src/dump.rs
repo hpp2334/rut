@@ -753,6 +753,7 @@ fn unop_str(op: UnOp) -> &'static str {
         UnOp::Neg => "-",
         UnOp::Not => "!",
         UnOp::BitNot => "~",
+        UnOp::Deref => "*",
     }
 }
 

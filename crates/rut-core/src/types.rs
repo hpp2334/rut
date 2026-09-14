@@ -115,7 +115,7 @@ pub enum TyKind {
     /// builtin sum (RFC 0005): tag 0 = some/ok, 1 = none/err
     Option { elem: TypeId },
     Result { ok: TypeId, err: TypeId },
-    /// dataclass or class record cell — fields stored as one slot each
+    /// struct or class record cell — fields stored as one slot each
     /// (RFC 0009/0010); construction rules differ, representation does not
     Data { fields: Vec<FieldInfo> },
     /// `dyn I` — unsized object; the slot stores the cell handle and the
@@ -324,6 +324,17 @@ impl TypeTable {
         )
     }
 
+    /// True when the type is a MUTABLE VALUE (v1.1 copy-by-value,
+    /// RFC 0009/0016): records and arrays deep-copy on move, so two
+    /// bindings never alias. Everything else that is a cell shares it —
+    /// `str`/`bytes` are immutable, `*T` is the explicit shared pointer,
+    /// enums/`Option`/`Result` cells are immutable after construction,
+    /// closures capture by reference, and `Opaque`/`dyn` are boundary
+    /// objects.
+    pub fn is_value(&self, id: TypeId) -> bool {
+        matches!(self.kind(id), TyKind::Data { .. } | TyKind::Array { .. })
+    }
+
     /// The baked runtime representation of a type (see [`Repr`]).
     pub fn repr_of(&self, id: TypeId) -> Repr {
         match self.kind(id) {
@@ -344,6 +355,9 @@ impl TypeTable {
             TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
             TyKind::Option { elem } => self.crosses_boundary(*elem),
             TyKind::Result { ok, err } => self.crosses_boundary(*ok) && self.crosses_boundary(*err),
+            // tuples cross field-by-field (RFC 0007 v1.1): `(bytes, str)`
+            // is the error convention; named records still do not cross
+            TyKind::Data { fields } => fields.iter().all(|f| self.crosses_boundary(f.ty)),
             _ => false,
         }
     }

@@ -438,6 +438,27 @@ impl Vm {
             (Value::F64(f), TyKind::Prim(PrimTy::F64)) => Slot::float(*f),
             (Value::Bool(b), TyKind::Prim(PrimTy::Bool)) => Slot::bool(*b),
             (Value::Char(c), TyKind::Prim(PrimTy::Char)) => Slot::ch(*c),
+            (Value::Tuple(parts), TyKind::Data { fields }) => {
+                if parts.len() != fields.len() {
+                    return Err(format!(
+                        "tuple arity {}: {} fields expected",
+                        parts.len(),
+                        fields.len()
+                    ));
+                }
+                let mut slots = Vec::with_capacity(parts.len());
+                for (i, p) in parts.iter().enumerate() {
+                    let fty = fields[i].ty;
+                    slots.push(self.value_in(p, fty).map_err(|m| format!("field {i}: {m}"))?);
+                }
+                let c = self.heap.alloc_record_zeroed(ty, fields.len()).map_err(|t| t.msg)?;
+                if let CellData::Record { fields: fs } = &cell_of(c).data {
+                    for (i, sv) in slots.iter().enumerate() {
+                        fs.borrow_mut().set(i, *sv);
+                    }
+                }
+                c
+            }
             (Value::Str(s), TyKind::Str) => self.heap.alloc_str(s.clone()).map_err(|t| t.msg)?,
             (Value::Bytes(b), TyKind::Bytes) => self.heap.alloc_bytes(b.clone()).map_err(|t| t.msg)?,
             (Value::Opt(None), TyKind::Option { .. }) => self.heap.alloc_sum(ty, 1, None).map_err(|t| t.msg)?,

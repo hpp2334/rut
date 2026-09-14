@@ -99,7 +99,7 @@ fn recv_type(idxs: &[&DefIndex], src: &str, ast: &Ast, pos: u32, recv: &str) -> 
     }
 }
 
-/// the type whose body contains `pos` — a class/dataclass/interface body, or
+/// the type whose body contains `pos` — a class/struct/interface body, or
 /// the target of the enclosing impl (via the method's owner)
 fn enclosing_type<'a>(idxs: &'a [&'a DefIndex], pos: u32) -> Option<(&'a DefIndex, &'a TyDef)> {
     let mut best: Option<(u32, &'a DefIndex, &'a TyDef)> = None;

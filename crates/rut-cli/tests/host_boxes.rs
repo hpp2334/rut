@@ -17,7 +17,7 @@ use std::rc::Rc;
 use rut_vm::{OpaqueBox, Trap, Value};
 
 const SRC: &str = r#"
-import { Opaque, downcast, own } from "std:core";
+import { Opaque, downcast } from "std:core";
 import { store_new, store_set, store_get, store_size } from "plugin:boxes";
 
 // the wrapper class (the Logger pattern, RFC 0028): one Opaque field,
@@ -43,11 +43,13 @@ entry fn wrap_get(c: Opaque, k: str) -> i64 {
 entry fn erase_laws(c: Opaque) -> bool {
     // RFC 0014 on a host payload box: it is an Opaque and nothing more
     // specific — no rut type recovers from it, checked, never a trap
-    return c is Opaque && downcast<i64>(c).is_none() && downcast<str>(c).is_none();
+    let (_, i64_ok) = downcast<i64>(c);
+    let (_, str_ok) = downcast<str>(c);
+    return c is Opaque && !i64_ok && !str_ok;
 }
 entry fn share(c: Opaque) -> Opaque {
-    // own on a host box shares the box (no re-box, identity preserved)
-    return own(c);
+    // a host box IS a handle — returning it shares identity (v1.1)
+    return c;
 }
 "#;
 

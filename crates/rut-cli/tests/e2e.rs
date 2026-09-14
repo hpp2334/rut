@@ -65,14 +65,16 @@ pub fn main() -> unit {
 }
 
 #[test]
-fn case2_cells_and_own() {
+fn case2_values_diverge() {
+    // copy-by-value (RFC 0009/0016 v1.1): every binding owns its own cell —
+    // `own` is gone, sharing is spelled with pointers (`*T`)
     let src = r#"
-dataclass Point { x: f32; y: f32 }
+struct Point { x: f32; y: f32 }
 pub fn main() -> unit {
     let mut p = Point { x: 1, y: 2 };
     let q = p;
     p.x = 4;
-    let mut r = own(p);
+    let mut r = p;
     r.x = 9;
     Logger.new("app").info(f"q.x={q.x} p.x={p.x} r.x={r.x}");
     Logger.new("app").info(f"q==p {q == p}, r==p {r == p}");
@@ -80,21 +82,21 @@ pub fn main() -> unit {
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["q.x=4 p.x=4 r.x=9", "q==p true, r==p false"]);
+    assert_eq!(lines, vec!["q.x=1 p.x=4 r.x=9", "q==p false, r==p false"]);
 }
 
 #[test]
 fn case3_opaque() {
     let src = r#"
-dataclass Point { x: f32; y: f32 }
+struct Point { x: f32; y: f32 }
 pub fn main() -> unit {
     let box1 = Opaque.new(Point { x: 1, y: 2 });
     let box2 = Opaque.new("hello");
     Logger.new("app").info(f"box1 is Point: {box1 is Point}");
     Logger.new("app").info(f"box2 is Point: {box2 is Point}");
-    let p = downcast<Point>(box1);
-    if (p.is_some()) {
-        Logger.new("app").info(f"recovered {p.value.x} {p.value.y}");
+    let (p, ok) = downcast<Point>(box1);
+    if (ok) {
+        Logger.new("app").info(f"recovered {p.x} {p.y}");
     }
 }
 "#;
@@ -165,12 +167,12 @@ interface Shape {
     fn area(self) -> f32;
     fn name(self) -> str;
 }
-dataclass Circle { r: f32; }
+struct Circle { r: f32; }
 impl Shape for Circle {
     fn area(self) -> f32 { return 3.14159265f32 * self.r * self.r; }
     fn name(self) -> str { return "circle"; }
 }
-dataclass Square { s: f32; }
+struct Square { s: f32; }
 impl Shape for Square {
     fn area(self) -> f32 { return self.s * self.s; }
     fn name(self) -> str { return "square"; }
@@ -402,7 +404,7 @@ pub fn main() -> unit {
 #[test]
 fn mut_binding_law_is_enforced() {
     let src = r#"
-dataclass P { x: i32 }
+struct P { x: i32 }
 pub fn main() -> unit {
     let p = P { x: 1 };
     p.x = 2;
@@ -662,12 +664,13 @@ fn entry_fns_compile_without_main_and_cross_values() {
     // Option and Result in both arms
     let src = r#"
 import { Vec } from "std:collection";
-dataclass Row { id: i32; }
-dataclass Box { rows: Vec<Row>; }
+import { make_ptr } from "std:core";
+struct Row { id: i32; }
+struct Box { rows: Vec<Row>; }
 
-entry fn make() -> Opaque { return Opaque.new(Box { rows: Vec.new() }); }
+entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
 entry fn put(c: Opaque) -> u32 {
-    let b = downcast<Box>(c).value;
+    let (b, _) = downcast<*Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -711,7 +714,7 @@ fn entry_crossing_rule_is_compile_time() {
     // rut cells never cross: dataclasses, Vec<T> of cells, generics —
     // each is a source diagnostic naming the offending signature
     let src = r#"
-dataclass Row { id: i32; }
+struct Row { id: i32; }
 entry fn bad_param(r: Row) -> unit { }
 "#;
     let out = compile(src, "m");
@@ -723,7 +726,7 @@ entry fn bad_param(r: Row) -> unit { }
 
     let src = r#"
 import { Vec } from "std:collection";
-dataclass Row { id: i32; }
+struct Row { id: i32; }
 entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
 "#;
     let out = compile(src, "m");
@@ -843,7 +846,7 @@ fn plain_pub_stays_unrestricted() {
     // the host surface: a Stack crosses fine between rut fns
     let src = r#"
 import { Vec } from "std:collection";
-dataclass Row { id: i32; }
+struct Row { id: i32; }
 pub class Stack {
     items: Vec<Row>;                // unannotated member = module-private
     fn new() -> Self { return Self { items: Vec.new() }; }
@@ -901,7 +904,7 @@ fn recursive_dataclass_tree_runs() {
     // layout pass inlined field payloads (infinite recursion). Fields are
     // now registered first and laid out as handle slots.
     let src = r#"
-dataclass Node {
+struct Node {
     value: i32,
     left: Option<Node>,
     right: Option<Node>,
@@ -934,11 +937,11 @@ fn forward_and_mutually_recursive_types_resolve() {
     // `Early` names `Later` before it is declared; `Later` names `Early`
     // back. Declaration order must not matter.
     let src = r#"
-dataclass Early {
+struct Early {
     later: Later,
     tag: i32,
 }
-dataclass Later {
+struct Later {
     back: Option<Early>,
     x: i32,
 }
@@ -1536,7 +1539,7 @@ pub fn main() -> unit {
 fn a1_make_ptr_deref_and_nil() {
     let src = r#"
 import { make_ptr } from "std:core";
-dataclass P { x: i32 = 0; }
+struct P { x: i32 = 0; }
 pub fn main() -> unit {
     let p = make_ptr(P { x: 5 });
     Logger.new("t").info(f"x={p.x} nil={p == nil}");
@@ -1552,7 +1555,7 @@ pub fn main() -> unit {
 #[test]
 fn a1_nil_deref_traps() {
     let src = r#"
-dataclass P { x: i32 = 0; }
+struct P { x: i32 = 0; }
 pub fn main() -> unit {
     let n: *P = nil;
     let _ = n.x;
@@ -1566,7 +1569,7 @@ pub fn main() -> unit {
 fn a1_on_drop_runs_at_refcount_zero() {
     let src = r#"
 import { make_ptr, on_drop } from "std:core";
-dataclass P { x: i32 = 0; }
+struct P { x: i32 = 0; }
 pub fn main() -> unit {
     let p = make_ptr(P { x: 9 });
     on_drop(p, fn (p: *P) { Logger.new("t").info(f"dropped {p.x}"); });
@@ -1614,7 +1617,7 @@ pub fn main() -> unit {
 #[test]
 fn a1_zero_value_field_defaults() {
     let src = r#"
-dataclass P3 { x: i32; s: str; }
+struct P3 { x: i32; s: str; }
 pub fn main() -> unit {
     let p = P3 { };
     Logger.new("t").info(f"x={p.x} s=[{p.s}]");
@@ -1623,4 +1626,157 @@ pub fn main() -> unit {
     let (lines, trap, _) = run_case(src, 100_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["x=0 s=[]"]);
+}
+
+#[test]
+fn dbg_digest() {
+    let src = std::fs::read_to_string("../../examples/02-digest/digest.rut").expect("digest.rut");
+    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "digests");
+    assert!(out.diags.is_empty(), "{:?}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
+    println!("{}", out.ir_dump);
+}
+
+#[test]
+fn dbg_digest_md5() {
+    let src = r#"
+import { Vec } from "std:collection";
+import { make_ptr } from "std:core";
+struct Row { id: i32; }
+struct Box { rows: Vec<Row>; }
+entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
+entry fn put(c: Opaque) -> u32 {
+    let (b, _) = downcast<*Box>(c);
+    b.rows.push(Row { id: 1 });
+    return b.rows.len() as u32;
+}
+"#;
+    let out = compile(src, "m");
+    let binary = out.binary.expect("binary");
+    let prog = rut_core::binary::decode(&binary).expect("decode");
+    let limits = rut_vm::interp::Limits { fuel: Some(1_000_000), heap_limit_bytes: Some(8*1024*1024), interrupt_every: 1024 };
+    let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog.clone()), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+    use rut_vm::heap::Value;
+    let Value::Opaque(c) = vm.call("make", &[]).unwrap() else { unreachable!() };
+    for _ in 0..2 {
+        for f in prog.funcs.iter() {
+            if f.name == "put" {
+                for (jj, op) in f.code.iter().enumerate() {
+                    if (40..=45).contains(&jj) { println!("put op {jj}: {op:?}"); }
+                }
+            }
+        }
+        let r = vm.call("put", &[Value::Opaque(c.clone())]);
+        println!("PUT RESULT {r:?}");
+    }
+}
+
+#[test]
+fn dbg_vec_build() {
+    let src = r#"
+import { Vec } from "std:collection";
+fn table() -> Vec<str> {
+    let t: Vec<str> = Vec.new();
+    t.push("a");
+    t.push("b");
+    return t;
+}
+pub fn main() -> unit {
+    let t = table();
+    Logger.new("t").info(f"len={t.len()} first={t[0]}");
+}
+"#;
+    let out = compile(src, "main");
+    println!("IR:\n{}", out.ir_dump);
+    let (lines, trap, _) = run_case(src, 100_000);
+    println!("LINES {lines:?} TRAP {trap:?}");
+}
+
+#[test]
+fn dbg_put_ir() {
+    let src = r#"
+import { Vec } from "std:collection";
+import { make_ptr } from "std:core";
+struct Row { id: i32; }
+struct Box { rows: Vec<Row>; }
+entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
+entry fn put(c: Opaque) -> u32 {
+    let (b, _) = downcast<*Box>(c);
+    b.rows.push(Row { id: 1 });
+    return b.rows.len() as u32;
+}
+"#;
+    let out = compile(src, "m");
+    println!("IR:\n{}", out.ir_dump);
+}
+
+#[test]
+fn a2_value_semantics_diverge() {
+    // copy-by-value: the binding owns a deep copy — mutations of the
+    // original never leak into the copy (RFC 0009/0016 v1.1)
+    let src = r#"
+import { Vec } from "std:collection";
+struct Inner { v: i32 = 0; }
+struct Outer { inner: Inner; nums: Vec<i32>; tag: str; }
+pub fn main() -> unit {
+    let mut o = Outer { inner: Inner { v: 1 }, nums: Vec.new(), tag: "x" };
+    o.nums.push(7);
+    let snap = o;
+    o.inner.v = 99;
+    o.nums.push(8);
+    o.tag = "y";
+    Logger.new("t").info(f"snap inner={snap.inner.v} tag=[{snap.tag}]");
+    Logger.new("t").info(f"o inner={o.inner.v} tag=[{o.tag}] n0={o.nums[0]} n1={o.nums[1]}");
+    Logger.new("t").info(f"snap n={snap.nums.len()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 200_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec![
+        "snap inner=1 tag=[x]",
+        "o inner=99 tag=[y] n0=7 n1=8",
+        "snap n=1",
+    ]);
+}
+
+#[test]
+fn a2_mutating_method_hits_the_original() {
+    // receiver aliasing: push on the binding mutates the binding's cell
+    let src = r#"
+import { Vec } from "std:collection";
+pub fn main() -> unit {
+    let t: Vec<str> = Vec.new();
+    t.push("a");
+    t.push("b");
+    Logger.new("t").info(f"len={t.len()} first={t[0]}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["len=2 first=a"]);
+}
+
+
+#[test]
+fn dbg_freeze() {
+    let src = r#"
+import { Vec } from "std:collection";
+entry fn f(s: str) -> (bytes, str) {
+    let mut out: Vec<u8> = Vec.new();
+    out.push(7);
+    return (out.freeze(), s);
+}
+"#;
+    let out = compile(src, "m");
+    println!("IR:\n{}", out.ir_dump);
+    println!("DIAGS: {:?}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
+}
+
+#[test]
+fn dbg_digest_diags() {
+    let src = std::fs::read_to_string("../../examples/02-digest/digest.rut").unwrap();
+    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "digests");
+    for d in &out.diags {
+        let line = src[..d.span.lo as usize].bytes().filter(|&b| b == b'\n').count() + 1;
+        println!("DIAG line {line}: {}", d.msg);
+    }
 }
