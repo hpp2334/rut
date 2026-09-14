@@ -1,0 +1,21 @@
+[package]
+name = "plugin"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "03-plugin — a Rust chat-room server with a rut moderator plugin: the host fires events into subscribed rut exports and rut emits data back through a host Opaque box; every emit re-enters rut to format its line (RFC 0022 §1)"
+
+[dependencies]
+rut-core = { path = "../../crates/rut-core" }
+rut-lexer = { path = "../../crates/rut-lexer" }
+rut-parser = { path = "../../crates/rut-parser" }
+rut-driver = { path = "../../crates/rut-driver" }
+rut-vm = { path = "../../crates/rut-vm" }
+
+[lib]
+name = "plugin"
+path = "src/lib.rs"
+
+[[bin]]
+name = "plugin"
+path = "src/main.rs"

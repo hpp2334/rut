@@ -16,6 +16,7 @@ members = [
     "examples/00-todolist",
     "examples/01-sort",
     "examples/02-digest",
+    "examples/03-plugin",
     "benches/probe",
 ]
 

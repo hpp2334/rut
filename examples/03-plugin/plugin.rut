@@ -1,0 +1,134 @@
+import { Opaque, downcast } from "std:core";
+import { Vec } from "std:collection";
+import { subscribe, emit } from "plugin:server";
+
+// plugin.rut — the moderator plugin of a chat-room server (03-plugin).
+//
+// The layering this file teaches: `Moderator` is the business logic — a
+// plain class that never mentions `entry fn` or the crossing protocol.
+// The four `entry fn`s at the bottom are the ADAPTER: registration plus
+// one-line forwards, the entire host-visible surface (RFC 0035 §3).
+// Everything the plugin knows about the server is the `bus` handle — a
+// host-constructed `Opaque` box (RFC 0014/0023) whose `subscribe` and
+// `emit` fns are its callbacks.
+//
+// Callbacks cannot cross the boundary as values (RFC 0023 §2), so
+// registration is BY NAME: the plugin hands the host the export names
+// it wants wired to each topic. The host later fires those exports with
+// the state handle `init` returned.
+
+class Moderator {
+    bus: Opaque;          // the host's server — held, never inspected
+    users: Vec<str>;      // who ever joined (append-only; Vec has no remove)
+    muted: Vec<str>;      // flood-control offenders
+    online: i32;          // live count (users.len() would never shrink)
+    msgs: i64;
+    mutes: i64;
+    last_sender: str;
+    streak: i32;
+
+    pub fn new(bus: Opaque) -> Self {
+        return Self { bus: bus, users: Vec.new(), muted: Vec.new(), online: 0,
+                      msgs: 0, mutes: 0, last_sender: "", streak: 0 };
+    }
+
+    // the one bus primitive the business logic ever needs
+    fn say(self, topic: str, payload: str) -> unit {
+        emit(self.bus, topic, payload);
+    }
+
+    fn is_muted(self, name: str) -> bool {
+        for (let m of self.muted) {
+            if (m == name) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    pub fn on_msg(mut self, user: str, text: str) -> unit {
+        if (self.is_muted(user)) {
+            self.say("muted", user);
+        } else if (text == "!stats") {
+            self.say("direct", f"{user}: {self.stats()}");
+        } else {
+            if (user == self.last_sender) {
+                self.streak += 1;
+            } else {
+                self.last_sender = user;
+                self.streak = 1;
+            }
+            if (self.streak == 3) {
+                self.muted.push(user);
+                self.mutes += 1;
+                self.say("system", f"{user} muted for flooding");
+            } else {
+                self.msgs += 1;
+                self.say("broadcast", f"<{user}> {text}");
+            }
+        }
+    }
+
+    pub fn on_join(mut self, name: str) -> unit {
+        if (self.is_muted(name)) {
+            self.say("system", f"{name} tried to rejoin while muted");
+        } else {
+            self.users.push(name);
+            self.online += 1;
+            self.say("system", f"*** {name} joined ({self.online} online)");
+        }
+    }
+
+    pub fn on_leave(mut self, name: str) -> unit {
+        self.online -= 1;
+        self.say("system", f"{name} left ({self.online} online)");
+    }
+
+    pub fn on_tick(self, n: i64) -> unit {
+        self.say("system", f"[tick {n}] {self.stats()}");
+    }
+
+    pub fn stats(self) -> str {
+        return f"{self.online} online, {self.msgs} msgs, {self.mutes} mutes";
+    }
+}
+
+// ---- the adapter: the ONLY entry fns. Registration + one-line forwards.
+
+/// The host calls this once with its bus box; the plugin registers its
+/// callback names and returns the handle to its own state.
+entry fn init(bus: Opaque) -> Opaque {
+    subscribe(bus, "join", "on_join");
+    subscribe(bus, "msg", "on_msg");
+    subscribe(bus, "leave", "on_leave");
+    subscribe(bus, "tick", "on_tick");
+    return Opaque.new(Moderator.new(bus));
+}
+
+entry fn on_join(c: Opaque, name: str) -> unit {
+    downcast<Moderator>(c).value.on_join(name);
+}
+
+entry fn on_msg(c: Opaque, user: str, text: str) -> unit {
+    downcast<Moderator>(c).value.on_msg(user, text);
+}
+
+entry fn on_leave(c: Opaque, name: str) -> unit {
+    downcast<Moderator>(c).value.on_leave(name);
+}
+
+entry fn on_tick(c: Opaque, n: i64) -> unit {
+    downcast<Moderator>(c).value.on_tick(n);
+}
+
+/// The wire formatter — the host calls this NESTED, from inside `emit`,
+/// while the handler that emitted is still parked mid-op (RFC 0022 §1).
+entry fn render_line(topic: str, payload: str) -> str {
+    return f"[{topic}] {payload}";
+}
+
+entry fn shutdown(c: Opaque) -> i64 {
+    let m = downcast<Moderator>(c).value;
+    m.say("system", f"shutdown: {m.stats()}");
+    return m.msgs;
+}

@@ -9,8 +9,8 @@ a `.d.rut`-only keyword), Rust bodies bind against them
 `host/interop.rut`); other VM/Rust sketches stay in the RFCs.
 
 The exceptions are the **runnable** Rust projects —
-[`00-todolist/`](00-todolist/), [`01-sort/`](01-sort/), and
-[`02-digest/`](02-digest/) — from the
+[`00-todolist/`](00-todolist/), [`01-sort/`](01-sort/),
+[`02-digest/`](02-digest/), and [`03-plugin/`](03-plugin/) — from the
 first line of their `.rut` to the last `Value` out of the VM. Everything
 else on this page is parse-only.
 
@@ -103,6 +103,22 @@ RFC 1321 / FIPS 180-4 / RFC 4648 vectors and the `md-5` / `sha1` /
 first crates.io dependencies, test-only in spirit, imported by the
 embedder so the demo prints the verdict per row. See
 [02-digest/README.md](02-digest/README.md).
+
+### 03-plugin — the server one
+
+A Cargo project and workspace member: **`cargo run -p plugin`**. The rut
+side (`plugin.rut`) is a chat-room **moderator plugin** — the business
+logic is a plain `class Moderator` (flood control, `!stats` command,
+mute/rejoin rules); the crossing protocol is ~15 lines of `entry fn`
+shims. The Rust side (`src/lib.rs`) is the server SDK: the host's event
+bus goes into rut as a **host-constructed `OpaqueBox<EventBus>`** whose
+`subscribe`/`emit` fns are its callbacks, rut's state comes back as a
+rut-constructed `Opaque`, and every `emit` **re-enters rut** to format
+its wire line while the emitting handler is parked mid-op (RFC 0022 §1)
+— the RFC 0023 borrow guard is what makes holding the bus across that
+nested call sound. `tests/session.rs` asserts the exact transcript and
+that `emits == renders` (every line crossed the nested call). See
+[03-plugin/README.md](03-plugin/README.md).
 
 | `json/json.rut` | user-defined JSON on `std:reflect`: the engine module (`JsonEngine`), `Serializable` contract, `stringify(v: dyn Serializable)`, `deserialize<T> … where T requires Deserializable`, structural sum policy, manual recursive descent | 0037 |
 | `json/app.rut` | opt-in dataclasses (zero-method `impl Serializable for T {}`), initializer defaults, `Vec`/fixed `Array<T, N>` fields, manual curated class view (positional, module-private field unexposed), wire dataclass renames by hand, round-trip asserts | 0037 |
