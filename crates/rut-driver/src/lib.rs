@@ -16,8 +16,14 @@ pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session}
 pub mod graph;
 pub use graph::{compile_graph, GraphOutput};
 
+pub mod bundle;
+pub use bundle::{crc32, parse_bundle, write_bundle, BundleError};
+
 pub mod loader;
-pub use loader::{compile_dir, expand_module_source, load_dir_session};
+pub use loader::{
+    compile_dir, expand_module_source, load_bundle_bytes, load_bundle_session, load_dir_session,
+    load_path_session, pack_dir,
+};
 
 pub struct CompileOutput {
     pub diags: Vec<Diag>,

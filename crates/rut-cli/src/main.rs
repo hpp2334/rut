@@ -9,11 +9,18 @@ fn main() {
     match cmd {
         "run" => {
             let Some(path) = args.get(2) else {
-                eprintln!("run: missing <file.rut>");
+                eprintln!("run: missing <file.rut | dir | mod.rutbundle>");
                 std::process::exit(2);
             };
             let fuel: Option<u64> = arg_flag(&args, "--fuel").map(|v| v.parse().unwrap_or(10_000_000));
             run(path, fuel);
+        }
+        "pack" => {
+            let Some(dir) = args.get(2) else {
+                eprintln!("pack: missing <dir>");
+                std::process::exit(2);
+            };
+            pack(dir, arg_flag(&args, "-o").as_deref());
         }
         "dump" => {
             let Some(path) = args.get(2) else {
@@ -37,7 +44,7 @@ fn arg_flag(args: &[String], name: &str) -> Option<String> {
 }
 
 fn usage() {
-    eprintln!("rut — run <file.rut> [--fuel N] | dump <file.rut>");
+    eprintln!("rut — run <file.rut | dir | mod.rutbundle> [--fuel N] | pack <dir> [-o out.rutbundle] | dump <file.rut>");
 }
 
 fn load(path: &str) -> String {
@@ -70,21 +77,50 @@ fn run(path: &str, fuel: Option<u64>) {
         eprintln!("run: {path} is a declaration file (a `.d.rut` surface) — nothing to run");
         std::process::exit(2);
     }
-    let src = load(path);
-    let out = rut_driver::compile_module(&src, mode_of(path), "main");
-    if !out.diags.is_empty() {
-        print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
-        std::process::exit(1);
-    }
-    let Some(binary) = out.binary else {
-        eprintln!("no binary emitted");
-        std::process::exit(1);
-    };
-    let prog = match rut_core::binary::decode(&binary) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("decode: {e}");
+    let p = std::path::Path::new(path);
+    let packed = p.is_dir() || p.extension().map_or(false, |e| e == "rutbundle");
+    let prog = if packed {
+        // a module directory (`rut.toml`) or a `.rutbundle` — load the
+        // graph, mount std, compile, link (RFC 0035 §1 / RFC 0038 §5)
+        let (mut session, root) = match rut_driver::load_path_session(p) {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        };
+        rut_driver::mount_std(&mut session);
+        let g = rut_driver::compile_graph(&session, &root);
+        if !g.diags.is_empty() {
+            for d in &g.diags {
+                eprintln!("{}", d.msg);
+            }
             std::process::exit(1);
+        }
+        match g.program {
+            Some(p) => p,
+            None => {
+                eprintln!("no program emitted");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        let src = load(path);
+        let out = rut_driver::compile_module(&src, mode_of(path), "main");
+        if !out.diags.is_empty() {
+            print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
+            std::process::exit(1);
+        }
+        let Some(binary) = out.binary else {
+            eprintln!("no binary emitted");
+            std::process::exit(1);
+        };
+        match rut_core::binary::decode(&binary) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("decode: {e}");
+                std::process::exit(1);
+            }
         }
     };
     if let Err(e) = rut_vm::verify::verify(&prog) {
@@ -115,6 +151,30 @@ fn run(path: &str, fuel: Option<u64>) {
             std::process::exit(1);
         }
     }
+}
+
+/// `rut pack <dir> [-o out.rutbundle]` — pack a module directory into a
+/// deterministic `.rutbundle` (RFC 0038).
+fn pack(dir: &str, out: Option<&str>) {
+    let p = std::path::Path::new(dir);
+    let bytes = match rut_driver::pack_dir(p) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("pack: {e}");
+            std::process::exit(1);
+        }
+    };
+    let out = out
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            let stem = p.file_name().unwrap_or(p.as_os_str()).to_string_lossy();
+            p.with_file_name(format!("{stem}.rutbundle"))
+        });
+    if let Err(e) = std::fs::write(&out, &bytes) {
+        eprintln!("pack: cannot write {}: {e}", out.display());
+        std::process::exit(1);
+    }
+    println!("packed {} -> {} ({} bytes)", p.display(), out.display(), bytes.len());
 }
 
 fn dump(path: &str) {

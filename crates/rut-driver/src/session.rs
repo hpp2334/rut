@@ -85,6 +85,12 @@ pub struct Module {
 pub struct Manifest {
     pub name: Option<String>,
     pub entry: Entry,
+    /// `format = "rutbundle"` — bundle-shaped manifests (RFC 0038 §2);
+    /// directory loading ignores it
+    pub format: Option<String>,
+    /// `format_version` — the bundle LAYOUT version, refused on load when
+    /// unknown (RFC 0038 §4)
+    pub format_version: Option<u64>,
     /// `[deps]` — exact specifier → descriptor (`path = "..."`). Kept for
     /// the host to resolve; the Session does not read the filesystem.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
@@ -252,6 +258,9 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
         match section {
             Section::Top => match key.as_str() {
                 "name" => m.name = Some(parse_string(value, lineno)?),
+                // bundle-shaped manifests (RFC 0038 §2)
+                "format" => m.format = Some(parse_string(value, lineno)?),
+                "format_version" => m.format_version = Some(parse_u64(value, lineno)?),
                 // dotted entry keys: `entry.type = "..."` etc.
                 "entry.type" => m.entry.type_path = Some(parse_string(value, lineno)?),
                 "entry.lib" => m.entry.lib = Some(parse_string(value, lineno)?),
@@ -291,6 +300,12 @@ fn parse_string(value: &str, lineno: usize) -> Result<String, ManifestError> {
     } else {
         Err(ManifestError(format!("line {}: expected a quoted string, found `{v}`", lineno + 1)))
     }
+}
+
+fn parse_u64(value: &str, lineno: usize) -> Result<u64, ManifestError> {
+    let v = value.trim();
+    v.parse::<u64>()
+        .map_err(|_| ManifestError(format!("line {}: expected an integer, found `{v}`", lineno + 1)))
 }
 
 /// Parse `{ k = "v", k2 = "v2" }` (single-line, string values only).
@@ -400,6 +415,14 @@ entry.type = "./collection.d.rut"
         let text = "name = \"std:vec\"\n[entry]\ntype = \"./vec.d.rut\"\nlib = \"./vec.rut\"\n";
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.entry.lib.as_deref(), Some("./vec.rut"));
+    }
+
+    #[test]
+    fn bundle_manifest_keys() {
+        let text = "format = \"rutbundle\"\nformat_version = 1\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n";
+        let m = parse_manifest(text).unwrap();
+        assert_eq!(m.format.as_deref(), Some("rutbundle"));
+        assert_eq!(m.format_version, Some(1));
     }
 
     #[test]

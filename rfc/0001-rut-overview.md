@@ -186,7 +186,7 @@ final sections of the RFC they implement).
 - 0034 — VM core: interpreter loop, traps, budgets
 - 0035 — loading, host hooks & the embedding loop
 - 0036 — diagnostics: stack traces, locations & symbolication
-- 0038 — module bundles: `.rutbundle` — binary + surfaces, one file
+- 0038 — module bundles: `.rutbundle` — manifest + sources, one file
 - 0039 — the self-managed VM heap: accounted, budgeted, pooled
 - 0040 — resource limits: heap budget, fuel & hang detection
 - 0041 — project structure & the demo page
