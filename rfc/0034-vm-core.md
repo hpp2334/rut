@@ -93,6 +93,13 @@ one. Coroutine frames are dropped on the way out — destructors run
 - `interrupt()` lets a UI host yield mid-frame (16 ms slices) and tests
   cut infinite loops; native fns run outside the budget and are expected
   to be fast (RFC 0022 §3).
+- Re-entrant `vm.call` (a host fn calling back into rut, RFC 0022 §1)
+  runs the callee on a fresh frame stack under the same budget; the
+  outer cursor is restored on return or trap, so a propagated nested
+  `OutOfFuel` parks the outer frame AT the host op and `resume()`
+  re-runs the host fn — the standing rule for any trap raised inside a
+  host fn. The alternative is for the host fn itself to catch the trap,
+  `add_fuel(n)`, and retry its nested call.
 - `run_until_idle()`: drain `ready` + all non-suspended frames until
   nothing is runnable. `poll(deadline)`: like `run_until_idle` but bounded
   by wall time. These are the only stepping verbs (RFC 0001 "Host

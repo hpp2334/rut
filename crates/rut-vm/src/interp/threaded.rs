@@ -408,6 +408,10 @@ impl Machine for Vm {
             unreachable_op!("op_call: unexpected op")
         };
         if self.prog.funcs[*func as usize].host.is_some() {
+            // park at this op on a trap — `resume()` re-runs the host fn
+            // (including any nested `vm.call` it makes) rather than
+            // skipping the call and losing its result
+            self.cur_pc = pc;
             self.call_host(*func, args, *dst)?;
             Ok(Flow::Next(pc + 1))
         } else {

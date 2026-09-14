@@ -86,7 +86,10 @@ Native fns run **outside** the op budget (RFC 0034 §4) — the host is
 trusted to be fast or hand back a future (§2). Traps raised inside a
 native fn propagate as `Err(Trap)` with the native frame attributed in the
 backtrace (the `Native { module, slot }` marker frames, RFC 0036 §2);
-`vm.call` re-entrancy nests budgets per outer frame. This is
+`vm.call` re-entrancy nests budgets per outer frame (the nested call
+draws the same pool; a nested `OutOfFuel` either unwinds to the embedder
+parked at the host op — `resume()` re-runs the host fn, RFC 0034 §4 — or
+the native fn catches it, refuels, and retries). This is
 the boundary where bugs become host problems — RFC 0001 P4's rule.
 `VmCtx` additionally exposes `capture_trace()` (RFC 0036 §6) — the native
 side of `std:debug.capture_stack_trace()` — so error factories written in

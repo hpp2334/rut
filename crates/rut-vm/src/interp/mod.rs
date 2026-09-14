@@ -69,6 +69,19 @@ struct SavedFrame {
     ret_dst: Option<Reg>,
 }
 
+/// The full interpreter cursor, swappable for a re-entrant `vm.call`
+/// (RFC 0022 §1: a host fn may call back into rut). The outer frame's
+/// registers and frame stack are stashed while the nested call runs on a
+/// fresh stack; both Ok and Trap restore the outer cursor exactly, so a
+/// propagated nested trap leaves the outer frame resumable.
+struct InterpCursor {
+    frames: Vec<SavedFrame>,
+    func: u32,
+    pc: u32,
+    regs: Vec<Slot>,
+    ret_dst: Option<Reg>,
+}
+
 pub struct Vm {
     pub prog: Rc<Program>,
     pub heap: Heap,
@@ -283,11 +296,13 @@ impl Vm {
     }
 
     /// Call an exported function with host values — the host boundary
-    /// (RFC 0035 §3). Traps unwind here (RFC 0034 §2).
+    /// (RFC 0035 §3). Traps unwind here (RFC 0034 §2). Re-entrant: a host
+    /// fn holding `&mut Vm` may call back into rut (RFC 0022 §1) — the
+    /// nested call runs on a fresh frame stack under the same budget, and
+    /// the outer cursor is restored whether the callee returns or traps
+    /// (a propagated nested trap keeps the outer frame resumable; resuming
+    /// re-runs the host fn from its op, the standing host-fn-trap rule).
     pub fn call(&mut self, export: &str, args: &[Value]) -> Result<Value, Trap> {
-        if self.running {
-            return Err(Trap::new(TrapKind::Invalid, "vm busy — resume() first"));
-        }
         let Some(func) = self.prog.export(export) else {
             return Err(Trap::new(TrapKind::Invalid, format!("no export `{export}`")));
         };
@@ -305,9 +320,30 @@ impl Vm {
             regs[i] = self.value_in(a, pty)
                 .map_err(|m| Trap::new(TrapKind::Invalid, format!("`{export}` argument {i}: {m}")))?;
         }
-        self.enter(func, regs, None);
-        let v = self.run_loop()?;
-        Ok(v)
+        if self.running {
+            // nested entry: stash the outer cursor, run the callee to its
+            // root ret on a clean frame stack, restore either way
+            let outer = InterpCursor {
+                frames: std::mem::take(&mut self.frames),
+                func: self.cur_func,
+                pc: self.cur_pc,
+                regs: std::mem::take(&mut self.cur_regs),
+                ret_dst: self.cur_ret_dst,
+            };
+            self.running = false; // enter() must not push a phantom frame
+            self.enter(func, regs, None);
+            let r = self.run_loop();
+            self.frames = outer.frames;
+            self.cur_func = outer.func;
+            self.cur_pc = outer.pc;
+            self.cur_regs = outer.regs;
+            self.cur_ret_dst = outer.ret_dst;
+            self.running = true;
+            r
+        } else {
+            self.enter(func, regs, None);
+            self.run_loop()
+        }
     }
 
     /// Host `Value` → slot under the callee's declared param type. A kind
