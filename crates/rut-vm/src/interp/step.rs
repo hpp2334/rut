@@ -385,9 +385,6 @@ impl Vm {
             Op::StrCharAt { dst, s, idx } => {
                 let str_cell = cell_of(r!(s));
                 let i = unsafe { r!(idx).i };
-                // ASCII: the char index IS the byte index, so this is O(1)
-                // (the cell's flag is computed once at allocation). Only a
-                // mixed/non-ASCII string decodes the UTF-8 prefix.
                 let c = if str_cell.str_ascii() {
                     match str_cell.as_bytes().get(i as usize) {
                         Some(b) => *b as char,

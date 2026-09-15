@@ -54,7 +54,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn slice_info(&mut self, ty: TypeId) -> Option<SliceInfo> {
         match self.ctx.types.kind(ty).clone() {
             TyKind::Array { elem } => Some(SliceInfo { source: SliceSource::Array, elem }),
-            TyKind::Str => Some(SliceInfo { source: SliceSource::Str, elem: TY_CHAR }),
+            TyKind::Str => Some(SliceInfo { source: SliceSource::Str, elem: TY_STR }),
             TyKind::Bytes => Some(SliceInfo { source: SliceSource::Bytes, elem: TY_U8 }),
             TyKind::Data { .. } => {
                 let seq_trait = self.ctx.seq_trait;
@@ -143,8 +143,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(dst)
             }
             SliceSource::Str => {
-                let dst = self.new_reg(TY_CHAR);
-                self.emit(Op::StrCharAt { dst, s: recv, idx }, sp);
+                // StrCharAt yields a char slot; convert to a 1-codepoint str
+                let creg = self.new_reg(TY_CHAR);
+                self.emit(Op::StrCharAt { dst: creg, s: recv, idx }, sp);
+                let dst = self.new_reg(TY_STR);
+                self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![creg], dst: Some(dst) }, sp);
                 Ok(dst)
             }
             SliceSource::Bytes => {

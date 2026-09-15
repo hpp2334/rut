@@ -145,7 +145,7 @@ pub struct Surface {
 
 /// The `std:core` prelude function names (RFC 0028), in surface order.
 pub const CORE_FNS: &[&str] = &[
-    "downcast", "assert", "panic",
+    "own", "downcast", "assert", "panic",
     "make_ptr", "on_drop",
     "string_len", "string_encode", "string_join",
     "bytes_len", "bytes_decode", "bytes_from", "bytes_zeroed",
@@ -161,6 +161,8 @@ impl Surface {
         Surface {
             native_types: vec![
                 ("Array".to_string(), NativeTy::Array),
+                ("Option".to_string(), NativeTy::Option),
+                ("Result".to_string(), NativeTy::Result),
                 ("Opaque".to_string(), NativeTy::Opaque),
             ],
             native_ifaces: vec![

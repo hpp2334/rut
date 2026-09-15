@@ -959,13 +959,13 @@ fn jquote(s: str) -> str {
     let q = "\"";
     let body: Vec<str> = Vec.new();
     for (let c of s) {
-        if (c == '"') { body.push("\\\""); }
-        else if (c == '\\') { body.push("\\\\"); }
-        else if (c == '\n') { body.push("\\n"); }
-        else if (c == '\r') { body.push("\\r"); }
-        else if (c == '\t') { body.push("\\t"); }
-        else if (c == '\b') { body.push("\\b"); }
-        else if (c == '\f') { body.push("\\f"); }
+        if (c == "\"") { body.push("\\\""); }
+        else if (c == "\\\\") { body.push("\\\\"); }
+        else if (c == "\n") { body.push("\\n"); }
+        else if (c == "\r") { body.push("\\r"); }
+        else if (c == "\t") { body.push("\\t"); }
+        else if (c == "\b") { body.push("\\b"); }
+        else if (c == "\f") { body.push("\\f"); }
         else { body.push(f"{c}"); }
     }
     return f"{q}{join_chars(body)}{q}";

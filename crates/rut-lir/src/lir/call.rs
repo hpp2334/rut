@@ -115,6 +115,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // wins when the import is absent (fallthrough below).
         let core_fn = self.ctx.extern_native_fns.contains(&name);
         match n.as_str() {
+            "own" if core_fn => {
+                if args.len() != 1 {
+                    self.ctx.err(sp, "own(x) takes one argument (RFC 0011 §1)");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], None)?;
+                let src = self.last_reg;
+                let dst = self.new_reg(t);
+                self.emit(Op::Own { dst, src, ty: t }, sp.lo);
+                return Ok(t);
+            }
             "make_ptr" if core_fn => {
                 // make_ptr(v) (RFC 0005): box v into a fresh one-slot cell;
                 // the result is a nil-able `*T`
