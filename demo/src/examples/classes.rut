@@ -9,7 +9,7 @@
 // `pub` (optionally scoped: `pub(mod)`, `pub(super)`, `pub(self)`)
 // exposes them.
 
-import { Option, panic } from "std:core";
+import { make_ptr, panic } from "std:core";
 import { Logger } from "std:log";
 import { Math } from "std:math";
 
@@ -46,18 +46,14 @@ class Rect {
     pub fn area(self) -> f32 { return self.w * self.h; }
 }
 
-/** Try-construction: a class method returning Option<Self>. */
+// Try-construction: a class method returning a pointer — nil on failure.
 class Version {
     major: i32;
     minor: i32;
 
-    fn of(major: i32, minor: i32) -> Self {  // module-private — trusts its
-        return Self { major: major, minor: minor }; // caller; seals the class
-    }
-
-    pub fn parse(s: str) -> Option<Version> {  // the public validating door:
-        // ... split "1.2" — on failure:        // a class method over the
-        return Option.none();                 // module-private class method
+    pub fn parse(s: str) -> *Version {
+        // ... split "1.2" — on failure:
+        return nil;                        // nil = the validation failed
     }
 
     pub fn label(self) -> str { return f"{self.major}.{self.minor}"; }
@@ -69,7 +65,7 @@ fn classes() -> unit {
     c.press();
     c.press();
     let r = Rect.new(3, 4);
-    let v = Version.parse("1.2");  // Option<Version> — try-construction
+    let v = Version.parse("1.2");  // *Version — nil on failure
     log.info(f"count={c.count()} area={r.area()}");
     // let bad = Rect.new(3);       // ERROR: arity — the class's construction
                                      // contract is whatever its methods say
