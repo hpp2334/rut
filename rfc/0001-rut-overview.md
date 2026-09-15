@@ -14,11 +14,22 @@ applications (typically UI apps, e.g. tur). It replaces JS engines such as Boa
 with a language whose type system is *not* erased: types exist at runtime, drive
 bytecode specialization, and make the host boundary fully checked.
 
-Syntax feels like TypeScript (arrow functions, simple `enum`, and the
-`class`/`dataclass` shape) with Rust's trait surface (`trait` +
-`impl Trait for Type`, object types `dyn I`); the concurrency model feels like Kotlin
-coroutines implemented with Rust's poll-based future semantics; the runtime is
-a bytecode VM with **no JIT**.
+Syntax feels like TypeScript (simple `enum`, the `class`/`struct` shape,
+`fn (params) -> T { .. }` anonymous functions) with a Rust-flavored
+interface surface (`interface I` + duck-typed satisfaction — a type
+satisfies an interface by declaring its members, no `impl` head); the
+concurrency model feels like Kotlin coroutines implemented with Rust's
+poll-based future semantics; the runtime is a bytecode VM with **no JIT**.
+
+> **Revised (v1.1) — everything is a value.** The type system's spine
+> changed: every type has a zero value and copy-on-assignment semantics
+> (fresh values cost nothing — freshness elision); sharing is explicit
+> through `*T` cells (`make_ptr`) and closure capture. `dataclass` is
+> `struct`; `own`, `Option`, `Result`, `char`, and `impl Trait for Type`
+> are removed — errors are `(T, err)` records, absence is `nil` on a
+> pointer, and interfaces are duck-typed with vtables synthesized per
+> (type × interface) at the use site (RFC 0004 §4, 0005 §8–10, 0009 §7,
+> 0012 §5–6, 0016 §1).`
 
 ## Motivation
 
@@ -205,8 +216,8 @@ final sections of the RFC they implement).
 | P1 | Fully static type system, **no dynamic typing**, inference-first, reified runtime types | 0004–0015 |
 | P2 | Isolate workers with typed channels and transferable buffers | 0021 |
 | P3 | Reference counting; deterministic destructors; cycles leak by design (`Weak<T>`) | 0016–0017 |
-| P4 | `Result<T, E>` + `?` for recoverable errors; traps (panics) catchable only at the host boundary | 0005, 0034 |
-| P5 | TS-like data model: `dataclass`/`class` (both **shared refcounted cells** — reference semantics by default, `own(x)` for eager copies; classes construct through their own class methods — `Rect.new(..)`, no `constructor` keyword, no `new` expression, `suspend` class methods allowed), `trait` + `impl Trait for Type` (object type `dyn I` — vtable dispatch, the sole dynamic-dispatch mechanism; implemented for class **and** dataclass; `requires` admission constraints), simple `enum`; no object literals, no data-enums, no intersections | 0009–0012, 0016 |
+| P4 | Errors are values: `(T, err)` records — an empty/`false`/`nil` second element is success; traps (panics) catchable only at the host boundary (v1.1: `Result` + `?` removed) | 0005 §10, 0034 |
+| P5 | TS-like data model (v1.1): `struct`/`class` — **every binding owns its cell** (copy-on-assignment; fresh values are free); sharing is explicit `*T` via `make_ptr`; classes construct through their own class methods — `Rect.new(..)`, no `constructor` keyword, no `new` expression. Interfaces are duck-typed: satisfaction at the use site, vtables synthesized per (type × interface) — the sole dynamic-dispatch mechanism; iteration is the `__iterate` protocol (§6). No object literals, no data-enums, no intersections | 0009 §7, 0012 §5–6, 0016 §1 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
 | P8 | Both user types (`dataclass` **and** `class`) are cells whose payload is one slot per field; identity builtin `type_id<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015 |
