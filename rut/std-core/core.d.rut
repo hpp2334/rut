@@ -56,6 +56,20 @@ pub builtin fn bytes_from(a: Array<u8>) -> bytes;  // copy an Array<u8> (RFC 000
 pub builtin fn bytes_zeroed(n: i32) -> bytes;      // n zeroed octets
 
 // ---- engine builtin types (compiler-lowered members) ----
+// v1.1: the primitive members are declared per type — `str`/`bytes`
+// carry their own member contracts (RFC 0004 v1.1); `len` is the
+// sequence member shared by every sequence.
+pub builtin str {
+    fn len(self) -> i32;            // codepoints
+    fn code(self) -> u32;           // the FIRST codepoint (traps on empty)
+    fn encode(self) -> bytes;       // the UTF-8 octets
+}
+
+pub builtin bytes {
+    fn len(self) -> i32;            // octets
+    fn decode(self) -> str;         // UTF-8 (lossy)
+}
+// type-methods: bytes.zeroed(n) -> bytes, bytes.from(a: Array<u8>) -> bytes
 // NOTE: `Option`/`Result`/`own` were removed in v1.1 — absence is
 // `nil` on a pointer type or a `(T, err)` tuple; use sites diagnose
 // with the removal and its replacement.

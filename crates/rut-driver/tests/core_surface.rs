@@ -32,7 +32,14 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
                 );
                 builtin_fns.push(ast.name(*name).to_string());
             }
-            ItemKind::BuiltinTy { name, .. } => builtin_types.push(ast.name(*name).to_string()),
+            ItemKind::BuiltinTy { name, .. } => {
+                let n = ast.name(*name).to_string();
+                // `str`/`bytes` are language primitives (RFC 0004) — their
+                // member contracts are doc surface, not registered natives
+                if !rut_parser::is_primitive_ty(&n) {
+                    builtin_types.push(n);
+                }
+            }
             ItemKind::BuiltinIface { name, .. } => builtin_ifaces.push(ast.name(*name).to_string()),
             ItemKind::Trait { name, .. } => plain_ifaces.push(ast.name(*name).to_string()),
             // `host fn`/`host struct` are the embedder's surface — a

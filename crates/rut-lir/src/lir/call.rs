@@ -555,8 +555,40 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_OPAQUE);
             }
             ("bytes", "from") => {
-                self.ctx.err(sp, "`bytes.from(..)` was replaced — use the free function `bytes_from(a)` (RFC 0004)");
-                return Err(());
+                // bytes.from(a) — copy an Array<u8> into an immutable
+                // buffer (RFC 0004)
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes.from(source) takes one `Array<u8>`");
+                    return Err(());
+                }
+                let hint = Some(self.ctx.mk_array(TY_U8));
+                let at = self.compile_expr(args[0], hint)?;
+                match self.ctx.types.kind(at) {
+                    TyKind::Array { elem } if *elem == TY_U8 => {}
+                    _ => {
+                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` —found `{}`", self.ctx.types.name(at)));
+                        return Err(());
+                    }
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_BYTES);
+                self.emit(Op::Own { dst, src, ty: TY_BYTES }, sp.lo);
+                return Ok(TY_BYTES);
+            }
+            ("bytes", "zeroed") => {
+                // bytes.zeroed(n) — n zeroed octets (RFC 0004)
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes.zeroed(n) takes one `i32`");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_I32))?;
+                if t != TY_I32 {
+                    self.ctx.err(sp, "bytes.zeroed takes an `i32`");
+                }
+                let len_reg = self.last_reg;
+                let dst = self.new_reg(TY_BYTES);
+                self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
+                return Ok(TY_BYTES);
             }
             ("str", "from_code") => {
                 // str.from_code(n) -> str — the 1-codepoint str for the
@@ -879,16 +911,34 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.emit(Op::Conv { dst, src: creg, from: PrimTy::Char, to: PrimTy::U32 }, sp.lo);
                     return Ok(TY_U32);
                 }
+                if mname == "encode" && args.is_empty() {
+                    // s.encode() -> bytes — the UTF-8 octets (RFC 0004)
+                    let dst = self.emit_string_encode(rreg, sp.lo);
+                    self.last_reg = dst;
+                    return Ok(TY_BYTES);
+                }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
-                    "`str` has no methods — replace `{who}.{mname}()` with a free function (`string_len({who})`, `string_encode({who})`)"
+                    "`str` has no method `{mname}` — its members are `len`/`code`/`encode` (`string_len({who})` is the free-fn spelling)"
                 ));
                 return Err(());
             }
             TyKind::Bytes => {
+                if mname == "decode" && args.is_empty() {
+                    // b.decode() -> str — UTF-8, lossy (RFC 0004)
+                    let dst = self.emit_bytes_decode(rreg, sp.lo);
+                    self.last_reg = dst;
+                    return Ok(TY_STR);
+                }
+                if mname == "len" && args.is_empty() {
+                    if let Some(info) = self.slice_info(rt) {
+                        self.emit_slice_len(rreg, &info, sp.lo)?;
+                        return Ok(TY_I32);
+                    }
+                }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
-                    "`bytes` has no methods — replace `{who}.{mname}()` with a free function (`bytes_len({who})`, `bytes_decode({who})`, `bytes_from({who})`)"
+                    "`bytes` has no method `{mname}` — its members are `len`/`decode` (`bytes_len({who})` is the free-fn spelling)"
                 ));
                 return Err(());
             }
