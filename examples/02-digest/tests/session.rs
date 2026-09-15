@@ -55,8 +55,12 @@ fn as_str(v: Value) -> String {
     s
 }
 fn as_err_str(v: Value) -> String {
-    let Value::Res(Err(e)) = v else { unreachable!("{v:?}") };
-    as_str(*e)
+    // v1.1 error convention: `(T, err)` — position 1 carries the message.
+    let Value::Tuple(parts) = v else { unreachable!("{v:?}") };
+    match &parts[1] {
+        Value::Str(s) => s.clone(),
+        v => unreachable!("{v:?}"),
+    }
 }
 fn as_u64(v: Value) -> u64 {
     let Value::I64(x) = v else { unreachable!("{v:?}") };
@@ -139,7 +143,6 @@ fn crate_cross_check_on_padding_edges() {
 }
 
 #[test]
-#[ignore = "a2: str accumulate under copy-by-value"]
 fn base64_rfc4648_and_errors() {
     let mut vm = session(1_000_000, 8 * 1024 * 1024);
     for (data, want) in [
@@ -154,8 +157,8 @@ fn base64_rfc4648_and_errors() {
         let got = as_str(vm.call("b64_enc", &[Value::Bytes(data.to_vec()), Value::Bool(false)]).unwrap());
         assert_eq!(got, want);
         let dec = match vm.call("b64_dec", &[Value::Str(want.into()), Value::Bool(false)]).unwrap() {
-            Value::Res(Ok(b)) => match *b {
-                Value::Bytes(v) => v,
+            Value::Tuple(parts) => match &parts[0] {
+                Value::Bytes(v) => v.clone(),
                 v => unreachable!("{v:?}"),
             },
             v => unreachable!("{v:?}"),
@@ -175,12 +178,11 @@ fn base64_rfc4648_and_errors() {
 }
 
 #[test]
-#[ignore = "a2: str accumulate under copy-by-value"]
 fn hex_roundtrip_and_errors() {
     let mut vm = session(1_000_000, 8 * 1024 * 1024);
     let data = lcg(257, 3);
     let enc = as_str(vm.call("hex_enc", &[Value::Bytes(data.clone())]).unwrap());
-    // TODO(a2): hex_enc accumulate path produces wrong output under copy-by-value
+    assert_eq!(enc, hex(&data));
     let dec = match vm.call("hex_dec", &[Value::Str(enc)]).unwrap() {
         Value::Tuple(parts) => match &parts[0] {
             Value::Bytes(v) => v.clone(),
@@ -263,13 +265,15 @@ fn hash_key_vectors_and_cross_check() {
 }
 
 #[test]
-#[ignore = "a2: str accumulate under copy-by-value"]
 fn json_codec_against_serde() {
     let mut vm = session(200_000_000, 32 * 1024 * 1024);
     let roundtrip = |vm: &mut rut_vm::interp::Vm, s: &str| -> Result<String, String> {
         match vm.call("json_roundtrip", &[Value::Str(s.into())]).unwrap() {
-            Value::Res(Ok(b)) => Ok(as_str(*b)),
-            Value::Res(Err(e)) => Err(as_str(*e)),
+            Value::Tuple(parts) => match (&parts[0], &parts[1]) {
+                (Value::Str(out), Value::Str(e)) if e.is_empty() => Ok(out.clone()),
+                (Value::Str(_), Value::Str(e)) => Err(e.clone()),
+                v => unreachable!("{v:?}"),
+            },
             v => unreachable!("{v:?}"),
         }
     };
@@ -343,7 +347,6 @@ fn json_codec_against_serde() {
 }
 
 #[test]
-#[ignore = "a2: str accumulate under copy-by-value"]
 fn dispatcher_matches_direct_entries() {
     let mut vm = session(20_000_000, 32 * 1024 * 1024);
     let data = lcg(150, 11);

@@ -960,7 +960,7 @@ fn jquote(s: str) -> str {
     let body: Vec<str> = Vec.new();
     for (let c of s) {
         if (c == "\"") { body.push("\\\""); }
-        else if (c == "\\\\") { body.push("\\\\"); }
+        else if (c == "\\") { body.push("\\\\"); }
         else if (c == "\n") { body.push("\\n"); }
         else if (c == "\r") { body.push("\\r"); }
         else if (c == "\t") { body.push("\\t"); }
