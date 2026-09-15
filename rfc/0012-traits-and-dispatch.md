@@ -247,3 +247,26 @@ identity.** `a != b` is its negation (`!(a == b)`).
   may be `Hashable` (maps) while `==` stays identity.
 - `when` literal patterns are unaffected: arms match compile-time values,
   never runtime `==`.
+
+## 5. v1.1 — duck-typed interfaces
+
+`impl Trait for Type` heads are removed. **Satisfaction is structural
+and evaluated at the use site**: a type satisfies an interface when the
+type itself declares a member for every interface method — same name,
+same arity, same resolved signature under the instantiation. There is
+nothing to opt into and no orphan rule; a value of the type flows into
+an interface-typed slot wherever the shape matches, and a mismatch names
+the missing member.
+
+- **Vtables synthesize per (type × interface).** After the module
+  compiles, every concrete data type (and every generic instantiation)
+  that structurally satisfies an interface gets its slots filled from
+  its own methods, which compile at that point with their transitive
+  calls. Dead satisfactions cost a slot fill, nothing more.
+- **Interface members are not overridable hooks** — the type's method
+  IS the implementation, used by both direct and vtable dispatch.
+- The engine contracts are gone from the prelude: `Index` (indexing is
+  builtin over `[T]`/`Vec`/`str`/`bytes`; a `Vec` is recognized by its
+  `buf`/`len` record shape), `Iterator` (§6, the `__iterate` protocol),
+  and `Disposal` (`on_drop`, RFC 0016 v1.1). Library contracts without
+  engine knowledge (`Hashable`) stay plain `interface` in their module.
