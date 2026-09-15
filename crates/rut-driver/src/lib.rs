@@ -130,6 +130,13 @@ pub fn compile_program_resolved(
                 ctx.add_extern_native_fn(id);
             }
         }
+        // the namespace head (`Math`): bound by lookup like the natives —
+        // resolving exactly when the importer wrote it in `import { .. }`
+        if let Some(ns) = &surface.namespace {
+            if let Some(id) = ctx.ast.interner.lookup(ns) {
+                ctx.add_extern_namespace(id);
+            }
+        }
     }
     ctx.collect();
     // the entry surface's crossing contract is compile-time (RFC 0035 §3 /
@@ -288,9 +295,11 @@ pub fn std_log_source() -> String {
 }
 
 /// Mount `std:core` — the prelude surface (RFC 0028): the builtin
-/// containers (`Array`/`Option`/`Result`/`Opaque`), the builtin interfaces
+/// containers (`Array`/`Opaque`), the builtin interfaces
 /// (`Disposal`/`Index`/`Iterator`), and the compiler-lowered functions
-/// (`own`, `downcast`, `assert`/`panic`, the `str`/`bytes` natives). A
+/// (`downcast`, `assert`/`panic`, `make_ptr`/`on_drop`, the `str`/`bytes`
+/// natives). v1.1 removed `Option`/`Result`/`own` — use sites diagnose
+/// with the removal. A
 /// native module with no body: its surface is
 /// [`rut_core::binary::Surface::core`], the single source of truth
 /// (`rut/std-core/core.d.rut` mirrors it for the LSP). Nothing here is
@@ -377,7 +386,13 @@ pub fn mount_std_math(session: &mut Session) {
 
     let _ = session.register_module(
         "std:math",
-        Module { host_funcs, consts, intrinsics, ..Default::default() },
+        Module {
+            namespace: Some("Math".to_string()),
+            host_funcs,
+            consts,
+            intrinsics,
+            ..Default::default()
+        },
     );
 }
 

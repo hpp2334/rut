@@ -186,12 +186,17 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 // primitives & builtins
+                // v1.1 removals first: a removed type explains itself
+                if let Some(msg) = rut_core::binary::removed_core(&n) {
+                    self.err(sp, msg);
+                    return TY_I32;
+                }
                 let prim = match n.as_str() {
                     "unit" => Some(TY_UNIT),
                     "u8" => Some(TY_U8), "u16" => Some(TY_U16), "u32" => Some(TY_U32), "u64" => Some(TY_U64),
                     "i8" => Some(TY_I8), "i16" => Some(TY_I16), "i32" => Some(TY_I32), "i64" => Some(TY_I64),
                     "f32" => Some(TY_F32), "f64" => Some(TY_F64),
-                    "bool" => Some(TY_BOOL), "char" => Some(TY_CHAR),
+                    "bool" => Some(TY_BOOL),
                     "str" => Some(TY_STR),
                     "bytes" => Some(TY_BYTES),
                     _ => None,

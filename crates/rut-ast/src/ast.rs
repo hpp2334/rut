@@ -544,7 +544,6 @@ pub enum Lit {
     Float(u64 /*f64 bits*/, Option<rut_lexer::token::FloatSuffix>),
     Str(String),
     RawStr(String),
-    Char(char),
     Bool(bool),
     /// `nil` — the null pointer literal (RFC 0005)
     Nil,

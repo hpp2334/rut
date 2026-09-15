@@ -62,12 +62,13 @@ fn two_instantiations_are_distinct() {
 
 #[test]
 fn recursive_generic_terminates() {
-    // Node<T> { next: Option<Node<T>> } — the cache must break the cycle
+    // Node<T> { next: *Node<T> } (v1.1: the recursive edge is a pointer,
+    // nil = end) — the cache must break the cycle
     let out = compile(
         "class Node<T> {\n\
              value: T;\n\
-             next: Option<Node<T>>;\n\
-             fn new(v: T) -> Self { return Self { value: v, next: Option.none() }; }\n\
+             next: *Node<T>;\n\
+             fn new(v: T) -> Self { return Self { value: v, next: nil }; }\n\
          }\n\
          fn main() -> i32 { let n: Node<i32> = Node.new(1); return n.value; }\n",
     );

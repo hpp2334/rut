@@ -47,6 +47,9 @@ pub struct Entry {
 pub struct Module {
     /// the exact specifier, `"<scope>:<name>"`
     pub spec: String,
+    /// The namespace head for qualified member access (`Math.sqrt`) —
+    /// `None` when the module has no namespace form (RFC 0028).
+    pub namespace: Option<String>,
     pub entry: Entry,
     /// in-memory `.rut` body (wasm hosts, tests, plugins)
     pub source: Option<String>,

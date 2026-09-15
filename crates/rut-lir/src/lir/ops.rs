@@ -33,13 +33,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let rt_ = self.compile_expr(rhs, Some(lt))?;
         let rhs_reg = self.last_reg;
         if lt != rt_ {
-            let l_sp = self.ctx.ast.span(lhs.id());
-            let r_sp = self.ctx.ast.span(rhs.id());
-            eprintln!("WIDTH-FAIL lt={} rt={} lhs@{}:{} rhs@{}:{}",
-                self.ctx.types.name(lt), self.ctx.types.name(rt_), l_sp.lo, l_sp.hi, r_sp.lo, r_sp.hi);
-            let lhs_kind = self.ctx.ast.kind(lhs.id());
-            let rhs_kind = self.ctx.ast.kind(rhs.id());
-            eprintln!("  lhs_kind={:?} rhs_kind={:?}", &lhs_kind, &rhs_kind);
             self.ctx.err(sp, format!(
                 "operands must have equal width (RFC 0004 §3): `{}` vs `{}` —convert first (RFC 0007 §1)",
                 self.ctx.types.name(lt), self.ctx.types.name(rt_)

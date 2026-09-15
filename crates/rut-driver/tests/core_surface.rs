@@ -80,15 +80,15 @@ fn core_decl_matches_the_compilers_surface() {
 
 #[test]
 fn the_prelude_is_imported_never_ambient() {
-    // `Option` with no import: the diagnostic names the fix. With the
-    // import, the same module compiles (RFC 0028).
+    // `Option` is a v1.1 removal: use-sites diagnose with the removal and
+    // its replacement — with or without the import (RFC 0028 v1.1).
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module(
         "app:main",
         rut_driver::Module {
             source: Some(
-                "fn main() -> i32 { let x = Option.some(1); return x.unwrap_or(0); }\n".into(),
+                "fn main() -> i32 { let x = Option.some(1); return 0; }\n".into(),
             ),
             ..Default::default()
         },
@@ -96,7 +96,7 @@ fn the_prelude_is_imported_never_ambient() {
     .unwrap();
     let out = rut_driver::compile_graph(&s, "app:main");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`Option` is not in scope")),
+        out.diags.iter().any(|d| d.msg.contains("`Option` was removed")),
         "diags: {:?}",
         out.diags
     );
@@ -108,7 +108,7 @@ fn the_prelude_is_imported_never_ambient() {
         rut_driver::Module {
             source: Some(
                 "import { Option } from \"std:core\";\n\
-                 fn main() -> i32 { let x = Option.some(1); return x.unwrap_or(0); }\n"
+                 fn main() -> i32 { let x = Option.some(1); return 0; }\n"
                     .into(),
             ),
             ..Default::default()
@@ -116,6 +116,9 @@ fn the_prelude_is_imported_never_ambient() {
     )
     .unwrap();
     let out = rut_driver::compile_graph(&s, "app:main");
-    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
-    assert!(out.program.is_some());
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("`Option` was removed")),
+        "diags: {:?}",
+        out.diags
+    );
 }

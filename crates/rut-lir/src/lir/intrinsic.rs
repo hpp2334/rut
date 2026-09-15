@@ -78,16 +78,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `Math.method(..)` — the `std:math` namespace: a host call for the
     /// `f64` primitives, or an inline lowering for the integer intrinsics
     /// (RFC 0032 §1.1 R2).
-    pub(crate) fn compile_math_member(
+    /// A namespace member call (`Math.sqrt(x)`, `Math.wrapping_add(a, b)`):
+    /// an extern fn or intrinsic of the imported module (RFC 0028). The
+    /// namespace head is passed only for diagnostics — routing is the
+    /// caller's bound-namespace check, name-generic.
+    pub(crate) fn compile_namespace_member(
         &mut self,
+        ns: IdentId,
         member: IdentId,
         args: &[NodeHandle<AnyExpr>],
         expected: Option<TypeId>,
         sp: Span,
     ) -> TcResult<TypeId> {
         let Some(ef) = self.ctx.extern_fn(member).cloned() else {
+            let head = self.ctx.name(ns).to_string();
             let name = self.ctx.name(member).to_string();
-            self.ctx.err(sp, format!("`Math.{name}` is not a math member"));
+            self.ctx.err(sp, format!("`{head}.{name}` is not a namespace member"));
             return Err(());
         };
         if let Some(i) = ef.intrinsic {
@@ -391,20 +397,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let (ty, prim, a, b) = self.int_binop_args(args, sp, who)?;
         let op = Self::arith_of(i);
         let (r, ovf) = self.wrap_and_overflow(op, prim, ty, a, b, sp.lo);
-        let opt = self.ctx.mk_option(ty);
-        let dst = self.new_reg(opt);
-        let l_some = self.new_label();
-        let l_none = self.new_label();
-        let l_end = self.new_label();
-        self.br(ovf, l_none, l_some);
-        self.bind(l_some);
-        self.emit(Op::OptSome { dst, ty: opt, val: r }, sp.lo);
-        self.jmp(l_end);
-        self.bind(l_none);
-        self.emit(Op::OptNone { dst, ty: opt }, sp.lo);
-        self.bind(l_end);
+        // v1.1: the tuple convention — `(wrapped, ok)`, false on overflow
+        let no = self.new_reg(TY_BOOL);
+        self.emit(Op::ConstRaw { dst: no, bits: 0 }, sp.lo);
+        let ok = self.cmp(CmpOp::Eq, PrimTy::Bool, ovf, no, sp.lo);
+        let tty = self.ctx.mk_tuple(vec![ty, TY_BOOL]);
+        let dst = self.new_reg(tty);
+        self.emit(Op::MakeRecord { dst, ty: tty, vals: vec![r, ok] }, sp.lo);
         self.last_reg = dst;
-        Ok(opt)
+        Ok(tty)
     }
 
     // ---- abs / min / max / signum (int and float) ----

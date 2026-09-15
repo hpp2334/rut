@@ -381,11 +381,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Const { dst: reg, k: k as u32 }, sp.lo);
                 Ok((TY_STR, reg))
             }
-            Lit::Char(c) => {
-                let reg = self.new_reg(TY_CHAR);
-                self.emit(Op::ConstRaw { dst: reg, bits: c as u64 }, sp.lo);
-                Ok((TY_CHAR, reg))
-            }
             Lit::Bool(b) => {
                 let reg = self.new_reg(TY_BOOL);
                 self.emit(Op::ConstRaw { dst: reg, bits: b as u64 }, sp.lo);
@@ -460,16 +455,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, msg);
             return Err(());
         }
-        // `Math.PI` — the `std:math` constants (namespace member)
-        let math_const = segs.len() == 2 && self.ctx.name(segs[0].name) == "Math";
-        if math_const {
+        // `<namespace>.CONST` — an imported namespace's constants
+        // (`Math.PI`; RFC 0028). Name-generic: routed by the bound
+        // namespace head, never by a hardcoded string.
+        if segs.len() == 2 && self.ctx.is_extern_namespace(segs[0].name) {
             if let Some((ty, bits)) = self.ctx.extern_const(segs[1].name) {
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
                 return Ok(ty);
             }
+            let ns = self.ctx.name(segs[0].name).to_string();
             let m = self.ctx.name(segs[1].name).to_string();
-            self.ctx.err(sp, format!("`Math.{m}` is not a math constant"));
+            self.ctx.err(sp, format!("`{ns}.{m}` is not a namespace constant"));
             return Err(());
         }
         // two segments: local field chain `p.x`, `req.value.reply` — locals
@@ -617,11 +614,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Lit(Lit::Bool(v)) => {
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits: v as u64 }, sp.lo);
-                Ok(reg)
-            }
-            ExprKind::Lit(Lit::Char(c)) => {
-                let reg = self.new_reg(ty);
-                self.emit(Op::ConstRaw { dst: reg, bits: c as u64 }, sp.lo);
                 Ok(reg)
             }
             ExprKind::Lit(Lit::Str(s)) | ExprKind::Lit(Lit::RawStr(s)) => {

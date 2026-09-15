@@ -142,6 +142,10 @@ pub struct Ctx<'a> {
     /// `assert`/`panic`, the `str`/`bytes` natives): the name is callable
     /// only when bound
     pub extern_native_fns: std::collections::HashSet<IdentId>,
+    /// Bound namespace heads (`Math` for `std:math`) — the qualified
+    /// access form `<namespace>.<member>` (RFC 0028). Name-generic: the
+    /// LIR routes by membership here, never by a hardcoded string.
+    pub extern_namespaces: std::collections::HashSet<IdentId>,
     /// instantiated generic types: id -> (decl, type args)
     pub inst_data: std::collections::HashMap<TypeId, (IdentId, Vec<TypeId>)>,
     /// monomorphization cache: (decl, type args) -> id
@@ -202,6 +206,7 @@ impl<'a> Ctx<'a> {
             extern_native_types: std::collections::HashMap::new(),
             extern_ifaces: std::collections::HashMap::new(),
             extern_native_fns: std::collections::HashSet::new(),
+            extern_namespaces: std::collections::HashSet::new(),
             inst_data: std::collections::HashMap::new(),
             type_inst: std::collections::HashMap::new(),
             trait_inst: std::collections::HashMap::new(),
@@ -262,10 +267,24 @@ impl<'a> Ctx<'a> {
         self.extern_native_fns.insert(name);
     }
 
+    /// Bind a namespace head (RFC 0028): `import { Math } from "std:math"`.
+    pub fn add_extern_namespace(&mut self, name: IdentId) {
+        self.extern_namespaces.insert(name);
+    }
+
+    /// Is `name` a bound namespace head?
+    pub fn is_extern_namespace(&self, name: IdentId) -> bool {
+        self.extern_namespaces.contains(&name)
+    }
+
     /// The `std:core` not-in-scope diagnostic (RFC 0028): the prelude is
-    /// imported, never ambient. `None` when `n` is not a prelude name —
+    /// imported, never ambient. A v1.1-removed name diagnoses with its
+    /// replacement instead. `None` when `n` is not a prelude name —
     /// the caller keeps its ordinary message.
     pub fn not_in_core_scope(&self, n: &str) -> Option<String> {
+        if let Some(msg) = rut_core::binary::removed_core(n) {
+            return Some(msg.to_string());
+        }
         rut_core::binary::is_core_name(n).then(|| {
             format!(
                 "`{n}` is not in scope — `import {{ {n} }} from \"std:core\"` (RFC 0028: the prelude is imported, never implicit)"

@@ -12,7 +12,6 @@ pub enum Tok {
     Str(String),           // decoded UTF-8, escapes resolved
     RawStr(String),        // no escape processing
     FStr(FStrTok),         // RFC 0030 §1.1 — parts + lexed holes
-    Char(char),
     Bool(bool),
     Ident(String),         // includes keywords after the reservation check
 
@@ -73,7 +72,6 @@ impl Token {
             Float(v, _) => format!("float literal `{}`", f64::from_bits(*v)),
             Str(s) | RawStr(s) => format!("string literal {s:?}"),
             FStr(_) => "format string".to_string(),
-            Char(c) => format!("char literal '{c}'"),
             Bool(b) => format!("`{b}`"),
             Ident(s) => format!("`{s}`"),
             LParen => "`(`".into(), RParen => "`)`".into(),

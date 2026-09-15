@@ -55,13 +55,13 @@ fn describe(f: Flavor) -> str {
 pub fn main() -> unit {
     let name = "rut";
     let n = 41 + 1;
-    Logger.new("app").info(f"hi {name}! n={n} tab:\t'c'={'c'}");
+    Logger.new("app").info(f"hi {name}! n={n} tab:\t");
     Logger.new("app").info(describe(Flavor.Sour));
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["hi rut! n=42 tab:\t'c'=c", "sour"]);
+    assert_eq!(lines, vec!["hi rut! n=42 tab:\t", "sour"]);
 }
 
 #[test]
@@ -373,15 +373,13 @@ pub fn main() -> unit {
     // (the prelude import is present, so the static route engages — RFC 0028)
     let bad = "import { Option } from \"std:core\";\npub fn main() -> unit { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
-    assert!(out.diags.iter().any(|d| d.msg.contains("not supported in this build")));
-    // and without the import the name is simply not in scope (RFC 0028:
-    // the prelude is imported, never ambient)
-    let unimported = "pub fn main() -> unit { let x = Option.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
+    // no backward compat: a removed head is an unknown name, full stop
+    assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
+    // the plain (non-generic) spelling still reaches the removal diag —
+    // that one lives on the ordinary name-resolution path (RFC 0028 v1.1)
+    let unimported = "pub fn main() -> unit { let x = Option.some(5); Logger.new(\"app\").info(f\"{x}\"); }";
     let out = rut_driver::compile_module(unimported, rut_parser::Mode::Impl, "main");
-    assert!(out
-        .diags
-        .iter()
-        .any(|d| d.msg.contains("`Option` is not in scope") && d.msg.contains("std:core")));
+    assert!(out.diags.iter().any(|d| d.msg.contains("`Option` was removed")));
 }
 
 #[test]
@@ -661,7 +659,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
 fn entry_fns_compile_without_main_and_cross_values() {
     // a module with entries and NO main compiles (entries are roots) and
     // the host drives it: Opaque container in/out, primitives, bytes,
-    // Option and Result in both arms
+    // and tuples (the v1.1 error/presence convention) crossing back
     let src = r#"
 import { Vec } from "std:collection";
 import { make_ptr } from "std:core";
@@ -675,11 +673,11 @@ entry fn put(c: Opaque) -> u32 {
     return b.rows.len() as u32;
 }
 entry fn echo_bytes(v: bytes) -> bytes { return v; }
-entry fn maybe(v: i32) -> Option<i32> {
-    return when (v > 0) { true -> Option.some(v), else -> Option.none() };
+entry fn maybe(v: i32) -> (i32, bool) {
+    return when (v > 0) { true -> (v, true), else -> (0, false) };
 }
-entry fn checked(v: i32) -> Result<i32, str> {
-    return when (v >= 0) { true -> Result.ok(v), else -> Result.err("negative") };
+entry fn checked(v: i32) -> (i32, str) {
+    return when (v >= 0) { true -> (v, ""), else -> (0, "negative") };
 }
 "#;
     let mut vm = entry_vm(src);
@@ -693,16 +691,19 @@ entry fn checked(v: i32) -> Result<i32, str> {
     );
     assert_eq!(
         vm.call("maybe", &[Value::I64(7)]).unwrap(),
-        Value::Opt(Some(Box::new(Value::I64(7))))
+        Value::Tuple(vec![Value::I64(7), Value::Bool(true)])
     );
-    assert_eq!(vm.call("maybe", &[Value::I64(-1)]).unwrap(), Value::Opt(None));
+    assert_eq!(
+        vm.call("maybe", &[Value::I64(-1)]).unwrap(),
+        Value::Tuple(vec![Value::I64(0), Value::Bool(false)])
+    );
     assert_eq!(
         vm.call("checked", &[Value::I64(3)]).unwrap(),
-        Value::Res(Ok(Box::new(Value::I64(3))))
+        Value::Tuple(vec![Value::I64(3), Value::Str("".into())])
     );
     assert_eq!(
         vm.call("checked", &[Value::I64(-3)]).unwrap(),
-        Value::Res(Err(Box::new(Value::Str("negative".into()))))
+        Value::Tuple(vec![Value::I64(0), Value::Str("negative".into())])
     );
     // embedder mistakes are named traps, never silent zeros
     let err = vm.call("maybe", &[Value::Str("x".into())]).unwrap_err();
@@ -888,29 +889,31 @@ pub fn main() -> unit {
 
 #[test]
 fn recursive_dataclass_tree_runs() {
-    // RFC 0009 §"Representation": recursive shapes like `left: Option<Node>`
-    // are legal. They used to fail at resolve (`unknown type Node`) because
-    // the record was registered only after its fields resolved, and the
-    // layout pass inlined field payloads (infinite recursion). Fields are
-    // now registered first and laid out as handle slots.
+    // RFC 0009 §"Representation": recursive shapes are legal; v1.1 spells
+    // the recursive edge as a pointer (`left: *Node`, nil = leaf). They
+    // used to fail at resolve (`unknown type Node`) because the record was
+    // registered only after its fields resolved, and the layout pass
+    // inlined field payloads (infinite recursion). Fields are registered
+    // first and laid out as handle slots.
     let src = r#"
+import { make_ptr } from "std:core";
 struct Node {
     value: i32,
-    left: Option<Node>,
-    right: Option<Node>,
+    left: *Node,
+    right: *Node,
 }
 fn make(depth: i32, v: i32) -> Node {
     if (depth <= 0) {
-        return Node { value: v, left: Option.none(), right: Option.none() };
+        return Node { value: v, left: nil, right: nil };
     }
     let l = make(depth - 1, v * 2);
     let r = make(depth - 1, v * 2 + 1);
-    return Node { value: v, left: Option.some(l), right: Option.some(r) };
+    return Node { value: v, left: make_ptr(l), right: make_ptr(r) };
 }
 fn count(n: Node) -> i32 {
     let mut c = 1;
-    if (n.left.is_some()) { c += count(n.left.value); }
-    if (n.right.is_some()) { c += count(n.right.value); }
+    if (n.left != nil) { c += count(*n.left); }
+    if (n.right != nil) { c += count(*n.right); }
     return c;
 }
 pub fn main() -> unit {
@@ -932,11 +935,11 @@ struct Early {
     tag: i32,
 }
 struct Later {
-    back: Option<Early>,
+    back: *Early,
     x: i32,
 }
 fn make_early() -> Early {
-    return Early { later: Later { back: Option.none(), x: 7 }, tag: 1 };
+    return Early { later: Later { back: nil, x: 7 }, tag: 1 };
 }
 pub fn main() -> unit {
     let e = make_early();
@@ -955,13 +958,13 @@ fn recursive_class_field_resolves_and_runs() {
     let src = r#"
 class Node {
     v: i32 = 0;
-    next: Option<Node> = Option.none;
+    next: *Node = nil;
     fn new() -> Self { return Self {}; }
     fn val(self) -> i32 { return self.v; }
 }
 pub fn main() -> unit {
     let a = Node.new();
-    Logger.new("app").info(f"v={a.val()} has_next={a.next.is_some()}");
+    Logger.new("app").info(f"v={a.val()} has_next={a.next != nil}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -996,12 +999,11 @@ class Vec<T> {
         self.len += 1;
     }
     fn get(self, i: i32) -> T { return self.buf[i]; }
-    fn pop(mut self) -> Option<T> {
-        if (self.len == 0) {
-            return Option.none();
-        }
+    // v1.1: pop returns the value; an empty pop is the caller's contract
+    // breach (guard with `len()`), not an error value
+    fn pop(mut self) -> T {
         self.len -= 1;
-        return Option.some(self.buf[self.len]);
+        return self.buf[self.len];
     }
 }
 pub fn main() -> unit {
@@ -1013,12 +1015,12 @@ pub fn main() -> unit {
     v.push(50);
     Logger.new("app").info(f"{v.len()} {v.get(0)} {v.get(4)} {v.get(2)}");
     let p = v.pop();
-    Logger.new("app").info(f"{p.value}");
+    Logger.new("app").info(f"{v.len()} {p}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["5 10 50 30", "50"]);
+    assert_eq!(lines, vec!["5 10 50 30", "4 50"]);
 }
 
 #[test]
@@ -1073,7 +1075,7 @@ pub fn main() -> unit {
     v.push(20);
     v.push(30);
     let top = v.pop();
-    Logger.new("app").info(f"{v.len()} {top.value}");
+    Logger.new("app").info(f"{v.len()} {top}");
 }
 "#
                 .into(),
@@ -1163,14 +1165,14 @@ pub fn main() -> unit {
 
 #[test]
 fn fstring_single_part_needs_no_concat() {
-    // `f"{s}"` is the identity on a string and `f"{c}"` a char render — the
-    // LIR now elides the one-argument `Concat` these used to emit
-    // (RFC 0007 §2); the observable result is unchanged.
+    // `f"{s}"` is the identity on a string — the LIR elides the
+    // one-argument `Concat` this used to emit (RFC 0007 §2); the
+    // observable result is unchanged.
     let src = r#"
-pub fn main() -> unit {
+pub fn main() {
     let s = "abc";
     let t = f"{s}";
-    let c = 'x';
+    let c = "x";
     let u = f"{c}";
     Logger.new("app").info(f"{t} {u} {string_len(t)}");
 }
@@ -1318,25 +1320,28 @@ pub fn main() -> unit {
     log.info(f"{Math.wrapping_add(2147483647, 1)} {Math.wrapping_sub(-2147483647 - 1, 1)} {Math.wrapping_mul(65536, 65536)}");
     // i32 saturating
     log.info(f"{Math.saturating_add(2147483647, 1)} {Math.saturating_sub(-2147483647 - 1, 1)} {Math.saturating_mul(65536, 65536)} {Math.saturating_mul(-65536, 65536)}");
-    // i32 checked -> Option
+    // i32 checked -> (value, ok) — the v1.1 tuple convention
     let a = Math.checked_add(2147483647, 1);
     let b = Math.checked_add(1, 2);
     let c = Math.checked_mul(65536, 65536);
     let d = Math.checked_mul(-65536, 65536);
-    log.info(f"{a.is_some()} {b.is_some()} {b.value} {c.is_some()} {d.is_some()}");
-    log.info(f"{a.unwrap_or(-1)} {c.unwrap_or(-1)}");
+    log.info(f"{a.1} {b.1} {b.0} {c.1} {d.1}");
+    log.info(f"{a.0} {c.0}");
     // u8 edges
     let u: u8 = 255;
     let z: u8 = 0;
-    log.info(f"{Math.wrapping_add(u, 1u8)} {Math.saturating_add(u, 1u8)} {Math.checked_add(u, 1u8).is_some()}");
-    log.info(f"{Math.wrapping_sub(z, 1u8)} {Math.saturating_sub(z, 1u8)} {Math.checked_sub(z, 1u8).is_some()}");
+    let cu = Math.checked_add(u, 1u8);
+    let cs = Math.checked_sub(z, 1u8);
+    log.info(f"{Math.wrapping_add(u, 1u8)} {Math.saturating_add(u, 1u8)} {cu.1}");
+    log.info(f"{Math.wrapping_sub(z, 1u8)} {Math.saturating_sub(z, 1u8)} {cs.1}");
     // i8 edges
     let lo: i8 = -127 - 1;
     let hi: i8 = 127;
     log.info(f"{Math.wrapping_add(hi, 1i8)} {Math.saturating_add(hi, 1i8)} {Math.wrapping_sub(lo, 1i8)} {Math.saturating_sub(lo, 1i8)}");
     // u64 edge
     let w: u64 = 18446744073709551615u64;
-    log.info(f"{Math.wrapping_add(w, 1u64)} {Math.saturating_add(w, 1u64)} {Math.checked_add(w, 1u64).is_some()}");
+    let cw = Math.checked_add(w, 1u64);
+    log.info(f"{Math.wrapping_add(w, 1u64)} {Math.saturating_add(w, 1u64)} {cw.1}");
     // wrapping shift + int helpers
     log.info(f"{Math.wrapping_shl(1073741824, 1)}");
     log.info(f"{Math.abs(-5)} {Math.abs(-2147483647 - 1)} {Math.min(3, 9)} {Math.max(3, 9)} {Math.signum(-7)} {Math.signum(0)} {Math.signum(7)}");
@@ -1351,7 +1356,7 @@ pub fn main() -> unit {
         "-2147483648 2147483647 0",
         "2147483647 -2147483648 2147483647 -2147483648",
         "false true 3 false false",
-        "-1 -1",
+        "-2147483648 0",
         "0 255 false",
         "255 0 false",
         "-128 127 127 -128",
@@ -1416,53 +1421,6 @@ pub fn main() -> unit {
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["12 4"]);
-}
-
-#[test]
-fn next_based_iterator_contract() {
-    // the builtin `Iterator<i32>` contract: `impl Iterator<i32> for X`
-    // + `for..of` lowers to `next`
-    let src = r#"
-class Countdown {
-    n: i32;
-    fn new(n: i32) -> Self { return Self { n: n }; }
-}
-impl Iterator<i32> for Countdown {
-    fn next(mut self) -> Option<i32> {
-        if (self.n <= 0) { return Option.none(); }
-        let v = self.n;
-        self.n -= 1;
-        return Option.some(v);
-    }
-}
-pub fn main() -> unit {
-    let c = Countdown.new(3);
-    let mut sum = 0;
-    for (let x of c) { sum += x; }
-    Logger.new("app").info(f"{sum}");
-}
-"#;
-    let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(trap, None);
-    assert_eq!(lines, vec!["6"]);
-}
-
-#[test]
-fn vec_iter_cursor() {
-    // `Vec` is rut code and ships its own cursor: `for (x of v.iter())`
-    // inlines `VecIter<T>.next` (a generic-target impl, no vtable needed)
-    let src = r#"
-import { Vec } from "std:collection";
-pub fn main() -> unit {
-    let v = Vec<i32>.from([10, 20, 30]);
-    let mut sum = 0;
-    for (let x of v.iter()) { sum += x; }
-    Logger.new("app").info(f"{sum} {v.len()}");
-}
-"#;
-    let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(trap, None);
-    assert_eq!(lines, vec!["60 3"]);
 }
 
 #[test]

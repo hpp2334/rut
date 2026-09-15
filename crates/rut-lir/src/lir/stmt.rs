@@ -480,7 +480,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Lit(Lit::Float(_, s)) => s.map(float_suffix_ty).unwrap_or(TY_F32),
             ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => TY_STR,
             ExprKind::Lit(Lit::Bool(_)) => TY_BOOL,
-            ExprKind::Lit(Lit::Char(_)) => TY_CHAR,
             ExprKind::Block { .. } => TY_UNIT,
             ExprKind::Struct { ty, .. } => self.resolve_type_now(*ty),
             _ => TY_UNIT,

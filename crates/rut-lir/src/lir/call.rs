@@ -115,16 +115,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // wins when the import is absent (fallthrough below).
         let core_fn = self.ctx.extern_native_fns.contains(&name);
         match n.as_str() {
-            "own" if core_fn => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "own(x) takes one argument (RFC 0011 §1)");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], None)?;
-                let src = self.last_reg;
-                let dst = self.new_reg(t);
-                self.emit(Op::Own { dst, src, ty: t }, sp.lo);
-                return Ok(t);
+            "own" => {
+                self.ctx.err(sp, rut_core::binary::removed_core("own").unwrap());
+                return Err(());
             }
             "make_ptr" if core_fn => {
                 // make_ptr(v) (RFC 0005): box v into a fresh one-slot cell;
@@ -540,69 +533,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, format!("generic type paths (`{bn}<..>.{mn}`) are not supported in this build"));
             return Err(());
         }
+        // an imported namespace's members (`Math.sqrt`; RFC 0028) —
+        // routed by the bound head, name-generic
+        if self.ctx.is_extern_namespace(base) {
+            return self.compile_namespace_member(base, member, &args, expected, sp);
+        }
         match (bn.as_str(), mn.as_str()) {
-            ("Math", _) => {
-                return self.compile_math_member(member, &args, expected, sp);
-            }
-            ("Option", "some") if core_ty == Some(rut_core::binary::NativeTy::Option) => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "Option.some(v) takes one value");
-                    return Err(());
-                }
-                let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-                    Some(TyKind::Option { elem }) => Some(elem),
-                    _ => None,
-                };
-                let t = self.compile_expr(args[0], elem_hint)?;
-                let src = self.last_reg;
-                let oty = self.ctx.mk_option(t);
-                let dst = self.new_reg(oty);
-                self.emit(Op::OptSome { dst, ty: oty, val: src }, sp.lo);
-                return Ok(oty);
-            }
-            ("Option", "none") if core_ty == Some(rut_core::binary::NativeTy::Option) => {
-                let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-                    Some(TyKind::Option { elem }) => elem,
-                    _ => {
-                        self.ctx.err(sp, "cannot infer the element type —annotate the binding `let x: Option<T> = Option.none()`");
-                        return Err(());
-                    }
-                };
-                let oty = self.ctx.mk_option(elem);
-                let dst = self.new_reg(oty);
-                self.emit(Op::OptNone { dst, ty: oty }, sp.lo);
-                return Ok(oty);
-            }
-            ("Result", "ok") | ("Result", "err")
-                if core_ty == Some(rut_core::binary::NativeTy::Result) =>
-            {
-                let is_ok = mn == "ok";
-                if args.len() != 1 {
-                    self.ctx.err(sp, format!("Result.{mn}(v) takes one value"));
-                    return Err(());
-                }
-                let (ok_hint, err_hint) = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-                    Some(TyKind::Result { ok, err }) => (Some(ok), Some(err)),
-                    _ => (None, None),
-                };
-                let hint = if is_ok { ok_hint } else { err_hint };
-                let t = self.compile_expr(args[0], hint)?;
-                let src = self.last_reg;
-                // the OTHER side's type comes from the expected hint
-                // (bidirectional, RFC 0007 §1) — without one it mirrors `t`
-                let other = match if is_ok { err_hint } else { ok_hint } {
-                    Some(o) => o,
-                    None => t,
-                };
-                let rty = self.ctx.mk_result(if is_ok { t } else { other }, if is_ok { other } else { t });
-                let dst = self.new_reg(rty);
-                if is_ok {
-                    self.emit(Op::ResOk { dst, ty: rty, val: src }, sp.lo);
-                } else {
-                    self.emit(Op::ResErr { dst, ty: rty, val: src }, sp.lo);
-                }
-                return Ok(rty);
-            }
             ("Opaque", "new") if core_ty == Some(rut_core::binary::NativeTy::Opaque) => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "Opaque.new(v) takes one value");
@@ -621,6 +557,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ("bytes", "from") => {
                 self.ctx.err(sp, "`bytes.from(..)` was replaced — use the free function `bytes_from(a)` (RFC 0004)");
                 return Err(());
+            }
+            ("str", "from_code") => {
+                // str.from_code(n) -> str — the 1-codepoint str for the
+                // codepoint `n` (RFC 0004 v1.1: `char` is gone)
+                if args.len() != 1 {
+                    self.ctx.err(sp, "str.from_code(n) takes one `u32` codepoint");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_U32))?;
+                if t != TY_U32 {
+                    self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                        "str.from_code takes a `u32`, found `{}`",
+                        self.ctx.types.name(t)
+                    ));
+                }
+                let cp = self.last_reg;
+                let c = self.new_reg(TY_CHAR);
+                self.emit(Op::Conv { dst: c, src: cp, from: PrimTy::U32, to: PrimTy::Char }, sp.lo);
+                let dst = self.new_reg(TY_STR);
+                self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![c], dst: Some(dst) }, sp.lo);
+                return Ok(TY_STR);
             }
             _ => {}
         }
@@ -877,8 +834,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // here through `find_data`, like any other class; the
                 // std:core statics (`Option`, `Result`, `Opaque`) route only
                 // when imported (RFC 0028)
-                let is_type = matches!(bn.as_str(), "bytes" | "Math")
+                let is_type = matches!(bn.as_str(), "str" | "bytes")
                     || self.ctx.extern_native_types.contains_key(&base)
+                    || self.ctx.is_extern_namespace(base)
                     || self.ctx.find_enum(base).is_some()
                     || self.ctx.find_data(base).is_some();
                 if is_type {
@@ -907,9 +865,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mname = self.ctx.name(name).to_string();
         // primitives have no method syntax (RFC 0004/0012): `str`/`bytes`
         // operations are free functions (`string_len`, `string_encode`,
-        // `bytes_len`, `bytes_decode`, `bytes_from`)
+        // `bytes_len`, `bytes_decode`, `bytes_from`) — except `s.code()`,
+        // the v1.1 codepoint reader that replaced `char` (RFC 0004)
         match self.ctx.types.kind(rt) {
             TyKind::Str => {
+                if mname == "code" && args.is_empty() {
+                    // s.code() -> u32 — the FIRST codepoint; traps on empty
+                    let creg = self.new_reg(TY_CHAR);
+                    let zero = self.new_reg(TY_I32);
+                    self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
+                    self.emit(Op::StrCharAt { dst: creg, s: rreg, idx: zero }, sp.lo);
+                    let dst = self.new_reg(TY_U32);
+                    self.emit(Op::Conv { dst, src: creg, from: PrimTy::Char, to: PrimTy::U32 }, sp.lo);
+                    return Ok(TY_U32);
+                }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
                     "`str` has no methods — replace `{who}.{mname}()` with a free function (`string_len({who})`, `string_encode({who})`)"
@@ -1315,17 +1284,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     pub(crate) fn compile_field(&mut self, recv: NodeHandle<AnyExpr>, name: IdentId, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        // `Math.PI` — a `std:math` namespace constant (checked before the
-        // receiver is compiled, since `Math` is not a value)
+        // `<namespace>.CONST` — an imported namespace's constant (checked
+        // before the receiver is compiled, since the head is not a value;
+        // RFC 0028). Name-generic: routed by the bound head.
         if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
-            if segs.len() == 1 && self.ctx.name(segs[0].name) == "Math" {
+            if segs.len() == 1 && self.ctx.is_extern_namespace(segs[0].name) {
                 if let Some((ty, bits)) = self.ctx.extern_const(name) {
                     let reg = self.new_reg(ty);
                     self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
                     return Ok(ty);
                 }
+                let ns = self.ctx.name(segs[0].name).to_string();
                 let fname = self.ctx.name(name).to_string();
-                self.ctx.err(sp, format!("`Math.{fname}` is not a math constant"));
+                self.ctx.err(sp, format!("`{ns}.{fname}` is not a namespace constant"));
                 return Err(());
             }
         }

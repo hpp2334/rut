@@ -116,7 +116,7 @@ impl<'a> Lexer<'a> {
                     self.push(Tok::Str(s), lo);
                 }
                 b'\'' => {
-                    self.lex_char(lo);
+                    self.lex_removed_char_lit(lo);
                 }
                 b'0'..=b'9' => self.lex_number(lo),
                 c if is_ident_start(c) || c >= 0x80 => self.lex_word(lo),
@@ -202,33 +202,23 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn lex_char(&mut self, lo: usize) {
+    /// `'x'` — removed in v1.1 (RFC 0004): consume the literal, diagnose,
+    /// push nothing. Codepoints are `u32` (`s.code()`, `str.from_code`).
+    fn lex_removed_char_lit(&mut self, lo: usize) {
         self.pos += 1; // opening '
-        if self.at_end() || self.peek() == b'\n' {
-            self.err(self.span(lo), "unterminated char literal");
-            return;
-        }
-        let c: char;
-        if self.peek() == b'\\' {
-            let mut buf = String::new();
-            self.pos += 1;
-            self.lex_escape(lo, &mut buf);
-            c = buf.chars().next().unwrap_or('\0');
-        } else {
-            let start = self.pos;
-            let len = utf8_len(self.peek());
-            self.pos += len;
-            c = String::from_utf8_lossy(&self.src[start..self.pos.min(self.src.len())])
-                .chars()
-                .next()
-                .unwrap_or('\0');
+        while !self.at_end() && self.peek() != b'\n' && self.peek() != b'\'' {
+            if self.peek() == b'\\' {
+                self.pos += 1;
+            }
+            if !self.at_end() {
+                let len = utf8_len(self.peek());
+                self.pos += len;
+            }
         }
         if self.peek() == b'\'' {
             self.pos += 1;
-        } else {
-            self.err(self.span(lo), "unterminated char literal");
         }
-        self.push(Tok::Char(c), lo);
+        self.err(self.span(lo), "`char` literals were removed (RFC 0004 v1.1) —use a one-character str (\"x\"); `s.code()` reads a codepoint, `str.from_code(n)` builds one");
     }
 
     fn lex_number(&mut self, lo: usize) {
@@ -517,7 +507,7 @@ impl<'a> Lexer<'a> {
                     self.pos = (self.pos + 2).min(self.src.len());
                 }
                 b'0'..=b'9' => self.lex_number(hlo),
-                b'\'' => self.lex_char(hlo),
+                b'\'' => self.lex_removed_char_lit(hlo),
                 b'"' => {
                     self.pos += 1; // opening quote
                     let s = self.lex_plain_string_body(hlo);

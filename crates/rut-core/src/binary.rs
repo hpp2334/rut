@@ -123,6 +123,11 @@ pub enum NativeIface {
 /// The importable surface a module publishes (traits still to come).
 #[derive(Clone, Debug, Default)]
 pub struct Surface {
+    /// The qualified-access head for a namespace module (`std:math` ->
+    /// `Math`): members are reached as `<namespace>.<member>`. `None`
+    /// when the module has no namespace form. Routing is name-generic:
+    /// the compiler binds the head only when the importer wrote it.
+    pub namespace: Option<String>,
     pub funcs: Vec<SurfaceFn>,
     /// exported constants (native modules: `std:math`)
     pub consts: Vec<SurfaceConst>,
@@ -145,7 +150,7 @@ pub struct Surface {
 
 /// The `std:core` prelude function names (RFC 0028), in surface order.
 pub const CORE_FNS: &[&str] = &[
-    "own", "downcast", "assert", "panic",
+    "downcast", "assert", "panic",
     "make_ptr", "on_drop",
     "string_len", "string_encode", "string_join",
     "bytes_len", "bytes_decode", "bytes_from", "bytes_zeroed",
@@ -161,8 +166,6 @@ impl Surface {
         Surface {
             native_types: vec![
                 ("Array".to_string(), NativeTy::Array),
-                ("Option".to_string(), NativeTy::Option),
-                ("Result".to_string(), NativeTy::Result),
                 ("Opaque".to_string(), NativeTy::Opaque),
             ],
             native_ifaces: vec![
@@ -202,6 +205,24 @@ pub fn is_core_fn(name: &str) -> bool {
 /// Is `name` any `std:core` prelude name (type, interface, or function)?
 pub fn is_core_name(name: &str) -> bool {
     is_core_fn(name) || core_native_type(name).is_some() || core_native_iface(name).is_some()
+}
+
+/// `std:core` names removed in v1.1, each with its replacement. Use
+/// sites diagnose with these instead of "unknown" — a removed surface
+/// explains itself (RFC 0028 v1.1).
+pub const REMOVED_CORE: &[(&str, &str)] = &[
+    ("own", "`own` was removed — values copy on assignment (RFC 0016 §1); share a cell via `make_ptr`"),
+    ("Option", "`Option` was removed — absence is `nil` on a pointer type, or a `(T, err)` tuple (v1.1)"),
+    ("Result", "`Result` was removed — errors are `(T, err)` tuples; an empty err is success (v1.1)"),
+    ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"),
+];
+
+/// The v1.1 removal message for `name`, if it is a removed `std:core` name.
+pub fn removed_core(name: &str) -> Option<&'static str> {
+    REMOVED_CORE
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, msg)| *msg)
 }
 
 #[derive(Clone, Debug, Default)]

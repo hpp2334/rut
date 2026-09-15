@@ -13,7 +13,7 @@ pub fn token_type(tok: &Tok) -> Option<TokenType> {
     match tok {
         Tok::Bool(_) => Some(TokenType::Keyword),
         Tok::Int(..) | Tok::Float(..) => Some(TokenType::Number),
-        Tok::Str(_) | Tok::RawStr(_) | Tok::Char(_) => Some(TokenType::String),
+        Tok::Str(_) | Tok::RawStr(_) => Some(TokenType::String),
         Tok::Ident(s) => {
             if s == "Self" || is_primitive_ty(s) {
                 Some(TokenType::Type)

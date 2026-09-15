@@ -406,11 +406,6 @@ impl AtomFrame {
                 let e = p.expr(ExprKind::Lit(Lit::RawStr(s)), sp);
                 self.finish(p, e)
             }
-            Tok::Char(c) => {
-                p.bump();
-                let e = p.expr(ExprKind::Lit(Lit::Char(c)), sp);
-                self.finish(p, e)
-            }
             Tok::Bool(b) => {
                 p.bump();
                 let e = p.expr(ExprKind::Lit(Lit::Bool(b)), sp);

@@ -100,7 +100,7 @@ impl<'a> Ctx<'a> {
                     let _ = (v, sfx);
                     // typed by annotation or default i32; store raw
                 }
-                ExprKind::Lit(Lit::Float(_, _)) | ExprKind::Lit(Lit::Str(_)) | ExprKind::Lit(Lit::Bool(_)) | ExprKind::Lit(Lit::Char(_)) => {}
+                ExprKind::Lit(Lit::Float(_, _)) | ExprKind::Lit(Lit::Str(_)) | ExprKind::Lit(Lit::Bool(_)) => {}
                 _ => {
                     self.err(
                         sp,

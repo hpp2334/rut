@@ -569,7 +569,7 @@ impl PatternFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         self.sp = p.span();
         match p.tok().clone() {
-            Tok::Int(..) | Tok::Float(..) | Tok::Bool(_) | Tok::Char(_) | Tok::Str(_) | Tok::RawStr(_) => {
+            Tok::Int(..) | Tok::Float(..) | Tok::Bool(_) | Tok::Str(_) | Tok::RawStr(_) => {
                 self.stage = PatStage::Lit;
                 Step::Push(Frame::Atom(AtomFrame::new(self.sp, AtomMode::Bare)))
             }

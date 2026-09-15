@@ -163,6 +163,7 @@ impl<'a> GraphCompiler<'a> {
                     bits: *bits,
                 });
             }
+            surface.namespace = module.namespace.clone();
             surface.native_types = module.native_types.clone();
             surface.native_ifaces = module.native_ifaces.clone();
             surface.native_fns = module.native_fns.clone();

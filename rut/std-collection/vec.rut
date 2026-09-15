@@ -10,7 +10,7 @@
 // fields directly — never a per-element method call (RFC 0032 §1.1).
 // The builtin `Vec` natives are gone; this class is the sequence type.
 
-import { Array, Option, Index, Iterator, bytes_from } from "std:core";
+import { Array, Index, bytes_from } from "std:core";
 pub class Vec<T> {
     buf: Array<T>;      // capacity == buf.len() == cap
     len: i32;           // live length
@@ -48,12 +48,13 @@ pub class Vec<T> {
         self.len += 1;
     }
 
-    pub fn pop(mut self) -> Option<T> {
-        if (self.len == 0) {
-            return Option.none();
-        }
+    /// Removes and returns the last element. Traps on an empty Vec —
+    /// guard with `len() > 0` (v1.1: no `Option`; the tuple convention
+    /// carries errors, and an empty pop is a contract breach, not an
+    /// error value).
+    pub fn pop(mut self) -> T {
         self.len -= 1;
-        return Option.some(self.buf[self.len]);
+        return self.buf[self.len];
     }
 
     pub fn from(arr: Array<T>) -> Self {
@@ -89,32 +90,6 @@ pub class Vec<T> {
         return a;
     }
 
-    // A fresh cursor over the live elements (`for (x of v.iter())`).
-    pub fn iter(self) -> VecIter<T> {
-        return VecIter<T>.new(self);
-    }
-}
-
-// The next()-based cursor for `Vec` (RFC 0012). `Vec` is not builtin, so
-// it ships its own iterator; `for (x of v.iter())` lowers to `next`.
-pub class VecIter<T> {
-    v: Vec<T>;
-    i: i32;
-
-    fn new(v: Vec<T>) -> Self {
-        return Self { v: v, i: 0 };
-    }
-}
-
-impl Iterator<T> for VecIter<T> {
-    fn next(mut self) -> Option<T> {
-        if (self.i >= self.v.len()) {
-            return Option.none();
-        }
-        let x = self.v[self.i];
-        self.i += 1;
-        return Option.some(x);
-    }
 }
 
 // The `Index` implementation (RFC 0012): `v[i]`, `v[i] = x`, `v.len()`,
