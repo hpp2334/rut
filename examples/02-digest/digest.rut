@@ -357,7 +357,7 @@ fn md5_impl(msg: bytes) -> bytes {
 
 /// SHA-1/SHA-2 padding: 0x80, zeros to n%{mod}=={res}, then the message
 /// length in bits as a big-endian 64-bit word.
-fn sha_tail(m: *Vec<u8>, msg_len: i32) -> unit {
+fn sha_tail(m: *Vec<u8>, msg_len: i32) {
     m.push(0x80);
     while (m.len() % 64 != 56) { m.push(0); }
     let bits = msg_len as u64 * 8;
@@ -702,7 +702,7 @@ fn jpeek(cur: *Cur) -> str {
     return "";
 }
 
-fn jskip(cur: *Cur) -> unit {
+fn jskip(cur: *Cur) {
     let mut again = true;
     while (again) {
         let c = jpeek(cur);

@@ -19,7 +19,7 @@ fn sieve(limit: i32) -> Vec<i32> {
     return primes;
 }
 
-pub fn main() -> unit {
+pub fn main() {
     let log = Logger.new("sieve");
     let primes = sieve(100);
     let last = primes[primes.len() - 1];

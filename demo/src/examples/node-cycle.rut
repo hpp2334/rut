@@ -10,7 +10,7 @@ class Node {                              // initializer covers `next`
                                           // are legal (one word, nullable)
     fn new() -> Self { return Self {}; }  // explicit construction — no
                                           // implicit default
-    fn link(mut self, other: *Node) -> unit {
+    fn link(mut self, other: *Node) {
         self.next = other;
     }
 }
@@ -23,7 +23,7 @@ fn make_cycle() -> *Node {                  // a -> b -> a : strong cycle
     return a;
 }
 
-pub fn main() -> unit {
+pub fn main() {
     let log = Logger.new("cycle");
     let head = make_cycle();
     log.info(f"head.next alive: {head.next != nil}");

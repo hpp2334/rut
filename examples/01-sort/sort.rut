@@ -19,7 +19,7 @@ import { Math } from "std:math";
 
 // ---- shared helpers ----
 
-fn swap(xs: *Vec<i32>, a: i32, b: i32) -> unit {
+fn swap(xs: *Vec<i32>, a: i32, b: i32) {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
@@ -37,7 +37,7 @@ fn sorted_up(xs: *Vec<i32>) -> bool {
 // ---- the algorithms ----
 
 /// Classic shifting loop: grow a sorted prefix one element at a time.
-fn insertion_sort(xs: *Vec<i32>) -> unit {
+fn insertion_sort(xs: *Vec<i32>) {
     for (let i = 1; i < xs.len(); i += 1) {
         let key = xs[i];
         let mut j = i - 1;
@@ -50,7 +50,7 @@ fn insertion_sort(xs: *Vec<i32>) -> unit {
 }
 
 /// Adjacent swaps, bailing out as soon as a pass swaps nothing.
-fn bubble_sort(xs: *Vec<i32>) -> unit {
+fn bubble_sort(xs: *Vec<i32>) {
     let mut n = xs.len();
     let mut swapped = true;
     while (swapped) {
@@ -66,7 +66,7 @@ fn bubble_sort(xs: *Vec<i32>) -> unit {
 }
 
 /// Select the minimum of the suffix, swap it into place.
-fn selection_sort(xs: *Vec<i32>) -> unit {
+fn selection_sort(xs: *Vec<i32>) {
     for (let i = 0; i < xs.len(); i += 1) {
         let mut m = i;
         for (let j = i + 1; j < xs.len(); j += 1) {
@@ -93,7 +93,7 @@ fn partition(xs: *Vec<i32>, lo: i32, hi: i32) -> i32 {
 }
 
 /// In-place recursion: partition, then sort each side.
-fn quicksort(xs: *Vec<i32>, lo: i32, hi: i32) -> unit {
+fn quicksort(xs: *Vec<i32>, lo: i32, hi: i32) {
     if (lo >= hi) {
         return;
     }
@@ -105,7 +105,7 @@ fn quicksort(xs: *Vec<i32>, lo: i32, hi: i32) -> unit {
 /// Out-of-place recursion: sort both halves into fresh vecs, merge
 /// back into the original — `push` builds the halves, indexing writes
 /// the result through the shared handle.
-fn merge_sort(xs: *Vec<i32>) -> unit {
+fn merge_sort(xs: *Vec<i32>) {
     let n = xs.len();
     if (n <= 1) {
         return;
@@ -162,7 +162,7 @@ entry fn create() -> Opaque {
 }
 
 /// Host-supplied data, one element per call — exact inputs.
-entry fn push(c: Opaque, x: i32) -> unit {
+entry fn push(c: Opaque, x: i32) {
     let (b, _) = downcast<*Bank>(c);
     b.data.push(x);
 }
@@ -173,7 +173,7 @@ entry fn push(c: Opaque, x: i32) -> unit {
 /// `Math.wrapping_mul`/`wrapping_add` forms keep the u32 math in range
 /// (RFC 0004 §3: plain `*`
 /// traps; plain `<<` would too — xorshift is out).
-entry fn fill(c: Opaque, n: u32, seed: u32) -> unit {
+entry fn fill(c: Opaque, n: u32, seed: u32) {
     let (b, _) = downcast<*Bank>(c);
     let fresh: Vec<i32> = Vec.new();
     let mut x = seed | 1;         // the LCG needs an odd state

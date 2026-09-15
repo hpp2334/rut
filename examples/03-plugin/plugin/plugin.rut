@@ -25,22 +25,22 @@ entry fn init(bus: Opaque) -> Opaque {
     return Opaque.new(make_ptr(Moderator.new(bus)));
 }
 
-entry fn on_join(c: Opaque, name: str) -> unit {
+entry fn on_join(c: Opaque, name: str) {
     let (mod, _) = downcast<*Moderator>(c);
     mod.on_join(name);
 }
 
-entry fn on_msg(c: Opaque, user: str, text: str) -> unit {
+entry fn on_msg(c: Opaque, user: str, text: str) {
     let (mod, _) = downcast<*Moderator>(c);
     mod.on_msg(user, text);
 }
 
-entry fn on_leave(c: Opaque, name: str) -> unit {
+entry fn on_leave(c: Opaque, name: str) {
     let (mod, _) = downcast<*Moderator>(c);
     mod.on_leave(name);
 }
 
-entry fn on_tick(c: Opaque, n: i64) -> unit {
+entry fn on_tick(c: Opaque, n: i64) {
     let (mod, _) = downcast<*Moderator>(c);
     mod.on_tick(n);
 }

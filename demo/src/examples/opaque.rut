@@ -22,7 +22,7 @@ class Session {
     }
 }
 
-fn erase_and_recover() -> unit {
+fn erase_and_recover() {
     let log = Logger.new("opaque");
     let box1 = Opaque.new(Point { x: 1, y: 2 });    // erasure = type-call;
     let box2 = Opaque.new(Flavor.Sour);             // zero-copy (shares the cell)
@@ -37,7 +37,7 @@ fn erase_and_recover() -> unit {
     log.info(f"is str: {box3 is str}");   // `is` sees through the box
 }
 
-fn share_vs_copy() -> unit {
+fn share_vs_copy() {
     let log = Logger.new("opaque");
     let s = Session.new("abc");
     let o = Opaque.new(s);            // SHARES the Session cell (zero-copy):
@@ -48,7 +48,7 @@ fn share_vs_copy() -> unit {
     log.info(f"distinct boxes: {o == o2}");     // false — two cells (RFC 0012 §4)
 }
 
-fn nested() -> unit {
+fn nested() {
     let log = Logger.new("opaque");
     // heterogeneous FIXED array — pure data, one shared cell per slot
     // (RFC 0016 §1)
@@ -58,7 +58,7 @@ fn nested() -> unit {
     log.info(f"vec {vec.len()}");
 }
 
-pub fn main() -> unit {
+pub fn main() {
     erase_and_recover();
     share_vs_copy();
     nested();

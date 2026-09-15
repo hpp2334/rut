@@ -24,7 +24,7 @@ struct Style {
     width: f32 = 1;
 }
 
-fn nudge(pt: *Point) -> unit {     // pointer param: mutation is shared —
+fn nudge(pt: *Point) {     // pointer param: mutation is shared —
     pt.x += 1;                     // writes through hit the caller's Point
 }
 
@@ -36,7 +36,7 @@ fn length(pt: Point) -> f64 {     // free function instead of a method
     return sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
 }
 
-fn dataclasses() -> unit {
+fn dataclasses() {
     let log = Logger.new("dataclasses");
     let mut p = Point { x: 1, y: 2 };   // literal — the only construction
     p.x = 3;                            // needs the `mut` binding (RFC 0003 §1)
@@ -61,6 +61,6 @@ fn dataclasses() -> unit {
     log.info(f"same={same_fields} diverged={diverged} rp.x={rp.x}");
 }
 
-pub fn main() -> unit {
+pub fn main() {
     dataclasses();
 }

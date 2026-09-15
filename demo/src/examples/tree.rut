@@ -28,7 +28,7 @@ fn count(n: *Node) -> i32 {
     return c;
 }
 
-pub fn main() -> unit {
+pub fn main() {
     let log = Logger.new("tree");
     let root = make_ptr(make(3, 1));
     log.info(f"nodes={count(root)}");

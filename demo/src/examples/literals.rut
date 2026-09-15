@@ -10,7 +10,7 @@ import { Logger } from "std:log";
 
 struct Point { x: f32; y: f32 }
 
-fn literals(name: str) -> unit {
+fn literals(name: str) {
     let log = Logger.new("literals");
     let a = 10;                      // i32 (default)
     let b = 10u8;                    // u8 via suffix
@@ -36,6 +36,6 @@ fn literals(name: str) -> unit {
     log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()}");
 }
 
-pub fn main() -> unit {
+pub fn main() {
     literals("rut");
 }

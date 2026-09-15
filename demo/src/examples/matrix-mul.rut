@@ -4,7 +4,7 @@ import { Vec } from "std:collection";
 
 import { Logger } from "std:log";
 
-fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, mut out: Vec<f32>) -> unit {
+fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, mut out: Vec<f32>) {
     for (let i = 0; i < n; i += 1) {
         for (let k = 0; k < n; k += 1) {
             let aik = a[i * n + k];
@@ -15,7 +15,7 @@ fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, mut out: Vec<f32>) -> unit {
     }
 }
 
-pub fn main() -> unit {
+pub fn main() {
     let log = Logger.new("matrix");
     let n = 4;
     let mut a = Vec<f32>.zeroed(n * n);   // `mut`: index writes (RFC 0003 §1)

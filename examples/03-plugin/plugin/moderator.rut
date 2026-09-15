@@ -27,7 +27,7 @@ class Moderator {
     }
 
     // the one bus primitive the business logic ever needs
-    fn say(self, topic: str, payload: str) -> unit {
+    fn say(self, topic: str, payload: str) {
         emit(self.bus, topic, payload);
     }
 
@@ -40,7 +40,7 @@ class Moderator {
         return false;
     }
 
-    pub fn on_msg(mut self, user: str, text: str) -> unit {
+    pub fn on_msg(mut self, user: str, text: str) {
         if (self.is_muted(user)) {
             self.say("muted", user);
         } else if (text == "!stats") {
@@ -63,7 +63,7 @@ class Moderator {
         }
     }
 
-    pub fn on_join(mut self, name: str) -> unit {
+    pub fn on_join(mut self, name: str) {
         if (self.is_muted(name)) {
             self.say("system", f"{name} tried to rejoin while muted");
         } else {
@@ -73,12 +73,12 @@ class Moderator {
         }
     }
 
-    pub fn on_leave(mut self, name: str) -> unit {
+    pub fn on_leave(mut self, name: str) {
         self.online -= 1;
         self.say("system", f"{name} left ({self.online} online)");
     }
 
-    pub fn on_tick(self, n: i64) -> unit {
+    pub fn on_tick(self, n: i64) {
         self.say("system", f"[tick {n}] {self.stats()}");
     }
 
