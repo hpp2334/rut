@@ -181,12 +181,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 }
                                 exact => {
                                     let _ = exact;
-                                    // exact receiver: fold by impl presence (RFC 0012 §3)
-                                    let has = self
-                                        .ctx
-                                        .impls
-                                        .iter()
-                                        .any(|i| i.trait_id == tid && i.target == rt);
+                                    // exact receiver: fold by duck-typed
+                                    // satisfaction (RFC 0012 v1.1)
+                                    let has = self.ctx.duck_satisfies(rt, tid);
                                     self.emit(Op::ConstRaw { dst, bits: has as u64 }, sp.lo);
                                 }
                             }

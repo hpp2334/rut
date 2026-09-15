@@ -411,6 +411,49 @@ impl<'a> Ctx<'a> {
             .collect()
     }
 
+    /// Duck-typed satisfaction (RFC 0012 v1.1): `ty` satisfies the
+    /// interface when the type declares a member for every interface
+    /// method — same name, same arity, same resolved signature. No
+    /// `impl` head is involved; vtables synthesize per (type × shape).
+    pub fn duck_satisfies(&mut self, ty: TypeId, trait_id: u32) -> bool {
+        let (dname, args): (IdentId, Vec<TypeId>) = match self.inst_data.get(&ty) {
+            Some((d, a)) => (*d, a.clone()),
+            None => match self.datas.iter().find(|(_, d)| d.ty == ty) {
+                Some((n, d)) if d.generics.is_empty() => (*n, vec![]),
+                _ => return false,
+            },
+        };
+        let Some((_, d)) = self.datas.iter().find(|(n, _)| n == &dname) else {
+            return false;
+        };
+        let d = d.clone();
+        let tdesc = self.trait_by_id(trait_id).clone();
+        // the class substitution: generic parameter -> the receiver's arg
+        let env: Vec<(IdentId, TypeId)> =
+            d.generics.iter().cloned().zip(args.iter().cloned()).collect();
+        let mut ok = true;
+        for tm in &tdesc.methods {
+            let Some((_, mnode)) = d.methods.iter().find(|(n, _)| self.name(*n) == tm.name) else {
+                ok = false;
+                break;
+            };
+            let md = self.ast.method_decl(*mnode).clone();
+            // the signature after `self`, resolved under the instantiation
+            let mut ptys = Vec::new();
+            for p in &md.params {
+                if let MemberKind::Param(ParamData { ty: Some(t), .. }) = self.ast.param(*p) {
+                    ptys.push(self.resolve_type(*t, &env));
+                }
+            }
+            let ret = md.ret.map(|r| self.resolve_type(r, &env)).unwrap_or(TY_UNIT);
+            if ptys != tm.params || ret != tm.ret {
+                ok = false;
+                break;
+            }
+        }
+        ok
+    }
+
     /// global trait-method slot id (RFC 0015 §6: assigned per trait
     /// instantiation; v1 non-generic traits only)
     pub fn trait_slot(&self, trait_id: u32, method: u32) -> Option<u32> {

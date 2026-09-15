@@ -167,13 +167,15 @@ interface Shape {
     fn area(self) -> f32;
     fn name(self) -> str;
 }
-struct Circle { r: f32; }
-impl Shape for Circle {
+// duck-typed (RFC 0012 v1.1): the methods live on the type; a Circle
+// satisfies Shape wherever the shape matches — no impl head
+struct Circle {
+    r: f32;
     fn area(self) -> f32 { return 3.14159265f32 * self.r * self.r; }
     fn name(self) -> str { return "circle"; }
 }
-struct Square { s: f32; }
-impl Shape for Square {
+struct Square {
+    s: f32;
     fn area(self) -> f32 { return self.s * self.s; }
     fn name(self) -> str { return "square"; }
 }
@@ -1378,8 +1380,7 @@ interface Wrap<T> {
 class B {
     v: i32;
     fn new(v: i32) -> Self { return Self { v: v }; }
-}
-impl Wrap<i32> for B {
+    // satisfies Wrap<i32> by shape (RFC 0012 v1.1)
     fn get(self) -> i32 { return self.v; }
 }
 pub fn main() -> unit {

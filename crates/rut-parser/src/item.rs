@@ -483,6 +483,10 @@ impl ImplFrame {
                 "implementation in a declaration file —`impl` blocks live in `.rut` (RFC 0029 §2)",
             );
         }
+        p.err(
+            Span::new(self.lo, self.lo + 4),
+            "`impl Trait for Type` was removed (RFC 0012 v1.1) —interfaces are duck-typed: declare the methods on the type; a value of the type satisfies the interface wherever the shape matches",
+        );
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 

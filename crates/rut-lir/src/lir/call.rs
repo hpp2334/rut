@@ -1018,11 +1018,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((dname, class_args, mnode)) = found {
                 return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, args, expected, sp);
             }
-            for idx in self.ctx.impls_of(rt) {
-                if self.ctx.impls[idx].methods.iter().any(|(n, _)| *n == name) {
-                    return self.compile_trait_call(idx, name, rreg, args, expected, sp);
-                }
-            }
             self.ctx.err(sp, format!("`{}` has no method `{mname}`", self.ctx.types.name(rt)));
             return Err(());
         }
@@ -1047,12 +1042,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// head binding to be `let mut`
     /// RFC 0012 §2: implicit widening — exact > `dyn I` when the exact type
     /// has an impl for I. Same-type always widens.
-    pub(crate) fn widens(&self, from: TypeId, to: TypeId) -> bool {
+    pub(crate) fn widens(&mut self, from: TypeId, to: TypeId) -> bool {
         if from == to {
             return true;
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(to).clone() {
-            return self.ctx.find_impl(trait_id, from).is_some();
+            // duck-typed satisfaction at the coercion (RFC 0012 v1.1)
+            return self.ctx.duck_satisfies(from, trait_id);
         }
         false
     }

@@ -54,9 +54,9 @@ impl<'a> Ctx<'a> {
         // pass 2: impls, fns, lets
         for it in &items {
             match self.ast.item(*it) {
-                ItemKind::Impl { trait_ref, target, methods, .. } => {
-                    self.collect_impl(it.id(), *trait_ref, *target, methods)
-                }
+                // v1.1: `impl` heads are gone — interfaces are duck-typed.
+                // The parser diagnoses the removal; the item is skipped.
+                ItemKind::Impl { .. } => {}
                 ItemKind::Fn(f) => {
                     let is_pub = f.vis == Vis::Pub;
                     let n = self.name(f.name).to_string();
