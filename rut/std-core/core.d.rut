@@ -78,23 +78,8 @@ pub builtin Opaque {
 // `impl` blocks. Library contracts without engine knowledge (std:
 // collection's `Hashable`) stay plain `interface`.
 
-// RFC 0011/0016 — impl blocks for Disposal run `dispose` at rc 0.
-pub builtin interface Disposal {
-    fn dispose(mut self) -> unit;
-}
-
-// RFC 0012 — the compiler-backed random-access contract. `Index` has a
-// length and `get`/`set`; `x[i]` and `x[i] = v` lower through it. The
-// element type is the interface argument. `Array`/`str`/`bytes` are
-// compiler-backed; `Vec<T>` declares one in std:collection.
-pub builtin interface Index<T> {
-    fn len(self) -> i32;
-    fn get(self, i: i32) -> T;
-}
-
-// RFC 0012 — the next()-based cursor contract. `for (x of it)` lowers to
-// `next` until `None`. `Vec<T>` ships a cursor (`VecIter<T>`) in
-// std:collection.
-pub builtin interface Iterator<T> {
-    fn next(mut self) -> Option<T>;
-}
+// v1.1 removals — `Disposal`/`Index`/`Iterator` are gone from the
+// prelude: cleanups attach with `on_drop` (RFC 0016), indexing is
+// builtin over `[T]`/`Vec`/`str`/`bytes`, and iteration is the
+// `__iterate(emit)` protocol (RFC 0012). Library contracts without
+// engine knowledge (`Hashable`) stay plain `interface` in their module.

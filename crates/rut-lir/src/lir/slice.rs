@@ -1,19 +1,18 @@
-//! The `Iter` sequence contract (RFC 0012): `s.len()`, `s[i]`, and
-//! `for (x of s)` lower through the receiver's `Iter` impl. The contract
-//! is read-only — `type Target`, `len`, `get`.
+//! Sequence lowering (RFC 0012 v1.1): `s.len()`, `s[i]`, `s[i] = v`,
+//! and `for (x of s)` lower to the fused element ops — there is no
+//! `Index` interface and no accessor inlining.
 //!
-//! Implementations:
-//! - `Array<T>` — the builtin (native) impl, emitting the fused
-//!   `arrget`/`arrlen` ops (RFC 0032 §1.1 R2).
-//! - `str` / `bytes` — the builtin (native) impls over the primitive
-//!   cells, emitting `strcharat`/`strlen` and `bytesget`/`byteslen`.
-//! - `Vec<T>` — std-lib rut code: `impl Iter for Vec<T> { type Target = T; .. }`
-//!   in `rut/std-collection/vec.rut`; the one-line accessors are inlined
-//!   here under the receiver's concrete class instantiation — no class name
-//!   or field-shape is hardcoded in the compiler.
+//! Recognized sequences:
+//! - `Array<T>` — fused `arrget`/`arrlen`/`arrset` (RFC 0032 §1.1 R2).
+//! - `str` / `bytes` — the primitive cells (`strcharat`/`strlen`,
+//!   `bytesget`/`byteslen`).
+//! - `Vec<T>` — builtin by shape: a record with a `buf: Array<T>` field
+//!   and a `len: i32` field (RFC 0028; the std:collection class). `len`
+//!   reads the live-length field; element ops go through the `buf`
+//!   cell, so they alias the vector.
 //!
-//! `s[i] = v` is not part of `Iter` (which is read-only): mutable element
-//! write stays on the concrete `Array`/`Vec` fused `arrset` path.
+//! `str`/`bytes` are immutable: element assignment traps at compile
+//! time on them.
 
 use super::*;
 
@@ -21,17 +20,13 @@ use super::*;
 pub(crate) enum SliceSource {
     /// builtin `Array<T>` — fused element ops
     Array,
-    /// builtin `str` — `char` elements
+    /// builtin `str` — one-codepoint `str` elements
     Str,
     /// builtin `bytes` — `u8` elements
     Bytes,
-    /// `impl Iter for Class<..>`: accessor bodies inlined at the use
-    /// site under `self_ty`/`subst`
-    Impl {
-        impl_idx: usize,
-        self_ty: TypeId,
-        subst: Vec<(IdentId, TypeId)>,
-    },
+    /// a record with the Vec shape — `buf: Array<T>` + `len: i32`
+    /// (field indices into the record's field list)
+    DataBuf { buf_field: u32, len_field: u32 },
 }
 
 #[derive(Clone)]
@@ -42,10 +37,10 @@ pub(crate) struct SliceInfo {
 
 impl SliceInfo {
     /// The length is loop-invariant: `str`/`bytes` are immutable and
-    /// `Array` is fixed-size, so a `for..of` need only read it once. An
-    /// `impl Iter` accessor may be arbitrary, so its `len` stays live.
+    /// `Array` is fixed-size, so a `for..of` need only read it once. A
+    /// `Vec`'s live length changes with `push`, so it stays live.
     pub(crate) fn fixed_len(&self) -> bool {
-        !matches!(self.source, SliceSource::Impl { .. })
+        !matches!(self.source, SliceSource::DataBuf { .. })
     }
 }
 
@@ -56,30 +51,30 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyKind::Array { elem } => Some(SliceInfo { source: SliceSource::Array, elem }),
             TyKind::Str => Some(SliceInfo { source: SliceSource::Str, elem: TY_STR }),
             TyKind::Bytes => Some(SliceInfo { source: SliceSource::Bytes, elem: TY_U8 }),
-            TyKind::Data { .. } => {
-                let seq_trait = self.ctx.seq_trait;
-                // a source `impl Iter for ..` (concrete target or a generic
-                // `Class<..>` template with the receiver's args substituted)
-                let mut found: Option<(usize, Vec<(IdentId, TypeId)>, NodeHandle<AnyTy>)> = None;
-                for (i, im) in self.ctx.impls.iter().enumerate() {
-                    if Some(im.trait_id) != seq_trait {
-                        continue;
-                    }
-                    let subst: Vec<(IdentId, TypeId)> = match (&im.target_data, self.ctx.inst_data.get(&ty)) {
-                        (Some((d, params)), Some((dname, args))) if d == dname && params.len() == args.len() => {
-                            params.iter().cloned().zip(args.iter().cloned()).collect()
+            TyKind::Data { fields } => {
+                // the Vec shape (RFC 0012 v1.1): a `buf` field holding the
+                // `Array` cell and a `len` field holding the live length
+                let mut buf_field: Option<(u32, TypeId)> = None;
+                let mut len_field: Option<u32> = None;
+                for (i, f) in fields.iter().enumerate() {
+                    match f.name.as_str() {
+                        "buf" if matches!(self.ctx.types.kind(f.ty), TyKind::Array { .. }) => {
+                            buf_field = Some((i as u32, f.ty))
                         }
-                        (None, _) if im.target == ty => Vec::new(),
-                        _ => continue,
-                    };
-                    // the interface ref's first type argument is the element
-                    let Some(ty_node) = im.trait_arg_nodes.first().copied() else { continue };
-                    found = Some((i, subst, ty_node));
-                    break;
+                        "len" if f.ty == TY_I32 => len_field = Some(i as u32),
+                        _ => {}
+                    }
                 }
-                let (impl_idx, subst, ty_node) = found?;
-                let elem = self.ctx.resolve_type(ty_node, &subst);
-                Some(SliceInfo { source: SliceSource::Impl { impl_idx, self_ty: ty, subst }, elem })
+                let (Some((buf_field, buf_ty)), Some(len_field)) = (buf_field, len_field) else {
+                    return None;
+                };
+                let TyKind::Array { elem } = self.ctx.types.kind(buf_ty) else {
+                    unreachable!("buf_field checked above")
+                };
+                Some(SliceInfo {
+                    source: SliceSource::DataBuf { buf_field, len_field },
+                    elem: *elem,
+                })
             }
             _ => None,
         }
@@ -126,9 +121,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(recv), args: vec![], dst: Some(dst) }, sp);
                 Ok(dst)
             }
-            SliceSource::Impl { .. } => {
-                let r = self.inline_slice_accessor(info, "len", recv, &[], Some(TY_I32), sp)?;
-                Ok(r.expect("Iter::len returns a value"))
+            SliceSource::DataBuf { len_field, .. } => {
+                let dst = self.new_reg(TY_I32);
+                self.emit(Op::GetF { dst, obj: recv, field: *len_field, repr: Repr::Prim(PrimTy::I32) }, sp);
+                Ok(dst)
             }
         }
     }
@@ -156,9 +152,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::ArrGet { dst, arr: recv, idx, repr }, sp);
                 Ok(dst)
             }
-            SliceSource::Impl { .. } => {
-                let r = self.inline_slice_accessor(info, "get", recv, &[idx], Some(info.elem), sp)?;
-                Ok(r.expect("Iter::get returns a value"))
+            SliceSource::DataBuf { buf_field, .. } => {
+                let buf_ty = self.ctx.mk_array(info.elem);
+                let buf = self.new_reg(buf_ty);
+                self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
+                let repr = self.ctx.types.repr_of(info.elem);
+                let dst = self.new_reg(info.elem);
+                self.emit(Op::ArrGet { dst, arr: buf, idx, repr }, sp);
+                Ok(dst)
             }
         }
     }
@@ -178,108 +179,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(Span::new(sp, sp + 1), "`str`/`bytes` are immutable — element assignment is not allowed");
                 Err(())
             }
-            SliceSource::Impl { impl_idx, self_ty, .. } => {
-                // the impl itself provides `set` (the class is mutable)
-                if !self.ctx.impls[*impl_idx].methods.iter().any(|(n, _)| self.ctx.name(*n) == "set") {
-                    self.ctx.err(Span::new(sp, sp + 1), format!("`{}` is not mutably indexable", self.ctx.types.name(*self_ty)));
-                    return Err(());
-                }
-                self.inline_slice_accessor(info, "set", recv, &[idx, val], None, sp)?;
+            SliceSource::DataBuf { buf_field, .. } => {
+                let buf_ty = self.ctx.mk_array(info.elem);
+                let buf = self.new_reg(buf_ty);
+                self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
+                let repr = self.ctx.types.repr_of(info.elem);
+                let val = self.clone_arg(val, info.elem, sp);
+                self.emit(Op::ArrSet { arr: buf, idx, val, repr }, sp);
                 Ok(())
             }
         }
-    }
-
-    /// Compile a `Iter` impl accessor body inline at the use site. The body
-    /// must be a single statement — `return <expr>;` (read) or `<expr>;`
-    /// (write) — which is the contract's accessor shape. `self` binds to
-    /// `recv` and the declared params to the pre-compiled `args`.
-    fn inline_slice_accessor(
-        &mut self,
-        info: &SliceInfo,
-        mname: &str,
-        recv: u16,
-        args: &[u16],
-        want: Option<TypeId>,
-        sp: u32,
-    ) -> TcResult<Option<u16>> {
-        let SliceSource::Impl { impl_idx, self_ty, subst } = &info.source else {
-            unreachable!("inline_slice_accessor on a non-impl Slice source")
-        };
-        let (impl_idx, self_ty, subst) = (*impl_idx, *self_ty, subst.clone());
-        let imp = self.ctx.impls[impl_idx].clone();
-        let Some((_, mnode)) = imp.methods.iter().find(|(n, _)| self.ctx.name(*n) == mname).cloned() else {
-            self.ctx.err(Span::new(sp, sp + 1), format!("the `{mname}` Iter impl is missing on `{}`", self.ctx.types.name(self_ty)));
-            return Err(());
-        };
-        let md = self.ctx.ast.method_decl(mnode).clone();
-        let saved_self_ty = self.self_ty;
-        let saved_subst = std::mem::replace(&mut self.subst, subst);
-        let saved_class = self.current_class;
-        let saved_inline_self = self.inline_self;
-        self.self_ty = Some(self_ty);
-        self.current_class = self.ctx.inst_data.get(&self_ty).map(|(d, _)| *d);
-        // `self` resolves to the receiver register with no copy
-        self.inline_self = self.ctx.lookup_name("self").map(|sid| (sid, recv));
-        // resolve declared parameter/return types under the impl substitution
-        let mut ptys: Vec<TypeId> = Vec::new();
-        let mut self_mut = false;
-        for p in &md.params {
-            match self.ctx.ast.param(*p) {
-                MemberKind::SelfParam(SelfParamData { is_mut }) => self_mut = *is_mut,
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
-                _ => ptys.push(TY_I32),
-            }
-        }
-        let ret_ty = md.ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
-        if ptys.len() != args.len() {
-            self.ctx.err(Span::new(sp, sp + 1), format!("Iter::{mname}: {} args for {} params", args.len(), ptys.len()));
-            self.self_ty = saved_self_ty;
-            self.subst = saved_subst;
-            self.current_class = saved_class;
-            self.inline_self = saved_inline_self;
-            return Err(());
-        }
-        // bind `self` + declared params to the already-evaluated registers
-        let base = self.locals.len();
-        if let Some(sid) = self.ctx.lookup_name("self") {
-            self.locals.push(Local { name: sid, reg: recv, ty: self_ty, is_mut: self_mut, loop_var: false });
-        }
-        let mut ai = 0usize;
-        for p in &md.params {
-            if let MemberKind::Param(ParamData { name, is_mut, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *name, reg: args[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false });
-                ai += 1;
-            }
-        }
-        // body: exactly one statement
-        let stmts = match md.body.map(|b| b.id()) {
-            Some(b) => match self.ctx.ast.kind(b) {
-                Kind::Expr(ExprKind::Block { stmts }) => stmts.clone(),
-                _ => Vec::new(),
-            },
-            None => Vec::new(),
-        };
-        let result: TcResult<Option<u16>> = if stmts.len() != 1 {
-            self.ctx.err(Span::new(sp, sp + 1), "an `Iter` impl method body must be a single `return expr;` or `expr;`");
-            Err(())
-        } else {
-            match self.ctx.ast.stmt(stmts[0]).clone() {
-                StmtKind::Return { value: Some(e) } => {
-                    self.compile_expr(e, want.or(Some(ret_ty))).map(|_| Some(self.last_reg))
-                }
-                StmtKind::ExprStmt(e) => self.compile_expr(e, None).map(|_| None),
-                _ => {
-                    self.ctx.err(Span::new(sp, sp + 1), "an `Iter` impl method body must be a single `return expr;` or `expr;`");
-                    Err(())
-                }
-            }
-        };
-        self.locals.truncate(base);
-        self.self_ty = saved_self_ty;
-        self.subst = saved_subst;
-        self.current_class = saved_class;
-        self.inline_self = saved_inline_self;
-        result
     }
 }

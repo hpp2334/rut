@@ -1394,36 +1394,6 @@ pub fn main() -> unit {
 }
 
 #[test]
-fn user_index_contract() {
-    // a user interface implements `Index<i32>`; `r[i]`, `r.len()`, and
-    // `for (x of r)` all lower through it (the element is the type argument)
-    let src = r#"
-interface Index<T> {
-    fn len(self) -> i32;
-    fn get(self, i: i32) -> T;
-}
-class Range {
-    n: i32;
-    fn new(n: i32) -> Self { return Self { n: n }; }
-}
-impl Index<i32> for Range {
-    fn len(self) -> i32 { return self.n; }
-    fn get(self, i: i32) -> i32 { return i * 2; }
-}
-pub fn main() -> unit {
-    let r = Range.new(3);
-    let mut sum = 0;
-    for (let i = 0; i < r.len(); i += 1) { sum += r[i]; }
-    for (let x of r) { sum += x; }
-    Logger.new("app").info(f"{sum} {r[2]}");
-}
-"#;
-    let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(trap, None);
-    assert_eq!(lines, vec!["12 4"]);
-}
-
-#[test]
 fn float_literal_defaults_to_f32() {
     // an uncontextualized float literal is `f32` (RFC 0007 §1); the slot
     // carries f32 precision, so a literal and a computed f32 agree.

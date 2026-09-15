@@ -168,11 +168,7 @@ impl Surface {
                 ("Array".to_string(), NativeTy::Array),
                 ("Opaque".to_string(), NativeTy::Opaque),
             ],
-            native_ifaces: vec![
-                ("Disposal".to_string(), NativeIface::Disposal),
-                ("Index".to_string(), NativeIface::Index),
-                ("Iterator".to_string(), NativeIface::Iterator),
-            ],
+            native_ifaces: vec![],
             native_fns: CORE_FNS.iter().map(|s| s.to_string()).collect(),
             ..Default::default()
         }
@@ -215,6 +211,9 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("Option", "`Option` was removed — absence is `nil` on a pointer type, or a `(T, err)` tuple (v1.1)"),
     ("Result", "`Result` was removed — errors are `(T, err)` tuples; an empty err is success (v1.1)"),
     ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"),
+    ("Index", "`Index` was removed — indexing is builtin over `[T]`/`Vec`/`str`/`bytes`; give the type real `len`/indexing members or a `buf`+`len` shape (RFC 0012 v1.1)"),
+    ("Iterator", "`Iterator` was removed — iteration is the `__iterate(emit)` protocol (RFC 0012 v1.1)"),
+    ("Disposal", "`Disposal` was removed — attach cleanups with `on_drop` (RFC 0016 v1.1)"),
 ];
 
 /// The v1.1 removal message for `name`, if it is a removed `std:core` name.
