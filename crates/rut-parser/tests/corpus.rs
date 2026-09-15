@@ -62,7 +62,7 @@ fn reserved_words_explain_themselves() {
     for (word, want) in [
         ("switch", "when"),
         ("match", "when"),
-        ("null", "Option"),
+        ("null", "nil"),
         ("var", "let"),
         ("instanceof", "is"),
     ] {
@@ -70,7 +70,7 @@ fn reserved_words_explain_themselves() {
         let (_, diags) = parse(&src, Mode::Impl);
         assert!(
             diags.iter().any(|d| d.msg.contains(want)),
-            "`{word}` diag should mention `{want}`: {diags:?}"
+            "`{word}` diag should mention the null-pointer literal; old text mentioned `{want}`: {diags:?}"
         );
     }
 }
