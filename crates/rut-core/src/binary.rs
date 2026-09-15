@@ -168,7 +168,7 @@ impl Surface {
                 ("Array".to_string(), NativeTy::Array),
                 ("Opaque".to_string(), NativeTy::Opaque),
             ],
-            native_ifaces: vec![],
+            native_ifaces: vec![("Iterator".to_string(), NativeIface::Iterator)],
             native_fns: CORE_FNS.iter().map(|s| s.to_string()).collect(),
             ..Default::default()
         }
@@ -212,7 +212,6 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("Result", "`Result` was removed — errors are `(T, err)` tuples; an empty err is success (v1.1)"),
     ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"),
     ("Index", "`Index` was removed — indexing is builtin over `[T]`/`Vec`/`str`/`bytes`; give the type real `len`/indexing members or a `buf`+`len` shape (RFC 0012 v1.1)"),
-    ("Iterator", "`Iterator` was removed — iteration is the `__iterate(emit)` protocol (RFC 0012 v1.1)"),
     ("Disposal", "`Disposal` was removed — attach cleanups with `on_drop` (RFC 0016 v1.1)"),
 ];
 

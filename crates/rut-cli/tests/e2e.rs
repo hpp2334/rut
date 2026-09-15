@@ -1395,6 +1395,56 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn for_of_user_iterate_protocol() {
+    // RFC 0012 §6 — a type is iterable when it declares `__iterate`;
+    // `for (v of it)` desugars to `it.__iterate(emit)` — the loop var is
+    // the emit closure's parameter (fresh per iteration); `break` returns
+    // `false`, `continue` returns `true`; captures are by value, so the
+    // accumulator is a shared cell (`*Acc`)
+    let src = r#"
+import { Logger } from "std:log";
+import { make_ptr } from "std:core";
+
+interface Iterator<E> {
+    fn __iterate(self, emit: fn(E) -> bool);
+}
+
+struct Acc { total: i32 = 0; }
+
+class CountUp {
+    n: i32;
+    fn new(n: i32) -> Self { return Self { n: n }; }
+    fn __iterate(self, emit: fn(i32) -> bool) {
+        for (let i = 1; i <= self.n; i += 1) {
+            if (!emit(i)) { return; }
+        }
+    }
+}
+
+fn total(it: Iterator<i32>) -> i32 {
+    let acc = make_ptr(Acc { });
+    it.__iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
+    return acc.total;
+}
+
+pub fn main() -> unit {
+    let log = Logger.new("it");
+    let acc = make_ptr(Acc { });
+    for (let v of CountUp.new(9)) {
+        if (v % 2 == 0) { continue; }
+        if (v > 6) { break; }
+        acc.total = acc.total + v;
+    }
+    log.info(f"sum={acc.total}");
+    log.info(f"total={total(CountUp.new(4))}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["sum=9", "total=10"]);
+}
+
+#[test]
 fn float_literal_defaults_to_f32() {
     // an uncontextualized float literal is `f32` (RFC 0007 §1); the slot
     // carries f32 precision, so a literal and a computed f32 agree.

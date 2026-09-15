@@ -270,3 +270,35 @@ the missing member.
   `buf`/`len` record shape), `Iterator` (§6, the `__iterate` protocol),
   and `Disposal` (`on_drop`, RFC 0016 v1.1). Library contracts without
   engine knowledge (`Hashable`) stay plain `interface` in their module.
+
+## 6. The iteration protocol — `__iterate`
+
+A type is **iterable** when it declares the protocol member:
+
+```rut
+interface Iterator<E> {
+    fn __iterate(self, emit: fn(E) -> bool);
+}
+```
+
+`Iterator<E>` lives in the `std:core` prelude (engine-woven — the `for`
+desugar lowers to it; satisfaction is the ordinary duck law, so declaring
+the member is all a type does). `for (v of it) { body }` desugars to
+`it.__iterate(emit)` with a synthetic closure: the body runs, then
+`emit` returns `true`; `break` returns `false` (stopping the iteration);
+`continue` returns `true` immediately. Consequences:
+
+- **The loop variable is the closure's parameter** — a fresh binding per
+  iteration by construction (each `emit` call is a fresh frame).
+- **Captures follow the closure law** — enclosing locals are copied by
+  value at the desugar; accumulate through a shared cell (`*T`) or a
+  method (`Vec.push`).
+- `return` inside the body returns from the closure — stopping the
+  iteration, not the enclosing function.
+
+The builtin sequences (`Array<T>`, `Vec<T>`, `str`, `bytes`) keep their
+fused index loops — never a per-element call (RFC 0032 §1.1 R2) — with
+element types `T`, `T`, `str`, and `u8` respectively. Element yields as
+`*T` (a pointer into the sequence's own slot) are the remaining
+refinement; in this build the fused loops yield element values, which
+the fresh-binding law already treats as per-iteration values.

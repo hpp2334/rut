@@ -42,6 +42,7 @@ impl<'a> Ctx<'a> {
                 format!("{}#${}${}", self.traits[tid as usize].name, idx, self.name(name))
             }
             FnKey::Lambda(node) => format!("lambda@{}", node.0),
+            FnKey::ForOfEmit { body, .. } => format!("forof@{}", body.0),
         }
     }
 

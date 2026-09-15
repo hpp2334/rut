@@ -60,6 +60,9 @@ pub struct FnCompiler<'a, 'b> {
     inline_ret: Option<(u16, u32)>,
     /// class methods currently being inlined — a recursion guard
     inline_stack: Vec<(IdentId, IdentId)>,
+    /// inside a desugared `for..of` emit closure (RFC 0012 §6):
+    /// `break` → `return false`, `continue` → `return true`
+    emit_closure: bool,
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
@@ -69,7 +72,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let FnKey::Lambda(lambda_node) = inst.key {
             return Self::compile_lambda_fn(ctx, inst, fid, lambda_node);
         }
+        // a desugared `for..of` emit closure carries its signature in
+        // ctx.for_of_sigs (RFC 0012 §6)
+        if let FnKey::ForOfEmit { body, var } = inst.key {
+            return Self::compile_for_of_emit_fn(ctx, fid, body, var);
+        }
         let (node, self_ty, is_method, class_name) = match &inst.key {
+            // handled by the early return above
+            FnKey::ForOfEmit { .. } => unreachable!(),
             FnKey::Free(name) => {
                 let Some(n) = ctx.fn_nodes.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
                     return Ok(()); // unknown fn —already diagnosed
@@ -163,6 +173,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_self: None,
             inline_ret: None,
             inline_stack: Vec::new(),
+            emit_closure: false,
         };
         // signature: params (self first for methods), resolved under subst
         let mut param_tys: Vec<TypeId> = Vec::new();
@@ -273,6 +284,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_self: None,
             inline_ret: None,
             inline_stack: Vec::new(),
+            emit_closure: false,
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type
@@ -331,6 +343,73 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ret: ret_ty,
             is_method: false,
             n_captures: n_caps,
+            regs,
+            code,
+            spans,
+            host: None,
+        };
+        let f = &mut c.ctx.funcs[fid as usize];
+        *f = fc;
+        Ok(())
+    }
+
+    /// Compile a desugared `for..of` emit closure (RFC 0012 §6): one
+    /// parameter `v: E`, return `bool` — the body runs, then `true`;
+    /// `break`/`continue` were translated to returns at their sites.
+    fn compile_for_of_emit_fn(ctx: &mut Ctx<'a>, fid: u32, body: NodeId, var: IdentId) -> TcResult<()> {
+        let Some((elem_ty, caps)) = ctx.for_of_sigs.get(&body.0).cloned() else {
+            return Ok(()); // creation site already diagnosed
+        };
+        let mut c = FnCompiler {
+            ctx,
+            regs: Vec::new(),
+            code: Vec::new(),
+            spans: Vec::new(),
+            locals: Vec::new(),
+            ret_ty: TY_BOOL,
+            self_ty: None,
+            subst: vec![],
+            current_class: None,
+            depth: 0,
+            loops: Vec::new(),
+            labels: Vec::new(),
+            fixups: Vec::new(),
+            span: 0,
+            last_reg: 0,
+            inline_self: None,
+            inline_ret: None,
+            inline_stack: Vec::new(),
+            emit_closure: true,
+        };
+        // the loop variable: the closure's parameter — a fresh binding
+        // per iteration by construction (each emit call is a fresh frame)
+        let reg = c.new_reg(elem_ty);
+        c.locals.push(Local { name: var, reg, ty: elem_ty, is_mut: false, loop_var: false });
+        for (n, t) in &caps {
+            let reg = c.new_reg(*t);
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: false, loop_var: false });
+        }
+        let block: NodeHandle<BlockNode> = NodeHandle::new(body);
+        if c.compile_block(block).is_err() {
+            return Err(());
+        }
+        let t = c.new_reg(TY_BOOL);
+        c.emit(Op::ConstRaw { dst: t, bits: 1 }, 0);
+        c.emit(Op::Ret { val: Some(t) }, 0);
+        c.resolve_labels();
+        let (code, spans) = sroa::run(c.code, c.spans);
+        let (code, spans) = peephole::run(code, spans);
+        let mut param_tys = vec![elem_ty];
+        for (_, t) in &caps {
+            param_tys.push(*t);
+        }
+        let regs = c.regs;
+        let fc = rut_core::binary::FuncCode {
+            name: format!("forof@{}", body.0),
+            params: param_tys,
+            ret: TY_BOOL,
+            is_method: false,
+            n_captures: caps.len() as u32,
             regs,
             code,
             spans,

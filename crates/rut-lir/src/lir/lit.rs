@@ -503,7 +503,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             Kind::Expr(ExprKind::Path { segs }) => {
-                if segs.len() == 1 && out.len() < 4096 && !out.contains(&segs[0].name) {
+                // the HEAD of any path chain is a name candidate — a
+                // multi-seg chain (`acc.total`) names its head local just
+                // like a bare path does; lookup filters non-locals
+                if !segs.is_empty() && out.len() < 4096 && !out.contains(&segs[0].name) {
                     out.push(segs[0].name);
                 }
             }

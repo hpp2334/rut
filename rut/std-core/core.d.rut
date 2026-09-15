@@ -92,8 +92,15 @@ pub builtin Opaque {
 // `impl` blocks. Library contracts without engine knowledge (std:
 // collection's `Hashable`) stay plain `interface`.
 
-// v1.1 removals — `Disposal`/`Index`/`Iterator` are gone from the
-// prelude: cleanups attach with `on_drop` (RFC 0016), indexing is
-// builtin over `[T]`/`Vec`/`str`/`bytes`, and iteration is the
-// `__iterate(emit)` protocol (RFC 0012). Library contracts without
-// engine knowledge (`Hashable`) stay plain `interface` in their module.
+// v1.1 removals — `Disposal`/`Index` are gone from the prelude:
+// cleanups attach with `on_drop` (RFC 0016) and indexing is builtin
+// over `[T]`/`Vec`/`str`/`bytes`. Library contracts without engine
+// knowledge (`Hashable`) stay plain `interface` in their module.
+
+// RFC 0012 §6 — the iteration protocol. A type is iterable when it
+// declares this member (duck-typed satisfaction); `for (x of it)`
+// desugars to `it.__iterate(emit)` with a fresh per-iteration binding:
+// `emit` returning `false` stops the iteration (a `break`).
+pub builtin interface Iterator<E> {
+    fn __iterate(self, emit: fn(E) -> bool);
+}

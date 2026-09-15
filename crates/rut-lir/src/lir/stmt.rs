@@ -217,6 +217,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             StmtKind::Break => {
+                // inside a desugared `for..of` emit closure (RFC 0012 §6),
+                // stopping the iteration IS returning `false`
+                if self.emit_closure {
+                    let f = self.new_reg(TY_BOOL);
+                    self.emit(Op::ConstRaw { dst: f, bits: 0 }, sp.lo);
+                    self.emit(Op::Ret { val: Some(f) }, sp.lo);
+                    return Ok(());
+                }
                 let Some((_, brk)) = self.loops.last().copied() else {
                     self.ctx.err(sp, "`break` outside a loop");
                     return Ok(());
@@ -225,6 +233,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             StmtKind::Continue => {
+                // skipping to the next element IS returning `true`
+                if self.emit_closure {
+                    let t = self.new_reg(TY_BOOL);
+                    self.emit(Op::ConstRaw { dst: t, bits: 1 }, sp.lo);
+                    self.emit(Op::Ret { val: Some(t) }, sp.lo);
+                    return Ok(());
+                }
                 let Some((cont, _)) = self.loops.last().copied() else {
                     self.ctx.err(sp, "`continue` outside a loop");
                     return Ok(());
@@ -246,16 +261,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let (it, iter_reg) = self.deref_for_use(it, iter_reg, sp.lo);
         // v1.1: str iteration yields str elements (not char)
         let it = if it == rut_core::types::TY_CHAR { rut_core::types::TY_STR } else { it };
-        // the `Iter` sequence contract (Vec, Array, string, bytes, and any
-        // user `impl Iter`); otherwise the `Iterator` contract (`next`)
+        // the builtin sequences (Vec, Array, str, bytes) keep their fused
+        // loops; a user type iterates through the `__iterate` protocol
+        // (RFC 0012 §6)
         let info = match self.slice_info(it) {
             Some(info) => info,
             None => {
-                if let Some((impl_idx, item_ty, subst)) = self.iterator_info(it) {
-                    return self.compile_for_of_next(node, var, iter_reg, it, impl_idx, item_ty, subst, body, sp);
+                if let Some((dname, env, elem_ty)) = self.iterate_method(it) {
+                    return self.compile_for_of_iterate(var, iter_reg, dname, env, elem_ty, body, sp);
                 }
                 self.ctx.err(sp, format!(
-                    "`for (let .. of ..)` needs a sequence — `{}` implements neither `Iter` nor `Iterator` (RFC 0012)",
+                    "`for (let .. of ..)` needs a sequence — `{}` is not one and declares no `__iterate` (RFC 0012 §6)",
                     self.ctx.types.name(it)
                 ));
                 return Err(());
@@ -306,75 +322,103 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(())
     }
 
-    /// `for (x of it)` where `it` implements `Iterator` (RFC 0012): lower to
-    /// a loop over `next()`. The impl's `next` body is inlined at the use
-    /// site (so generic cursors like `VecIter<T>` need no vtable entry);
-    /// a concrete impl too large to inline falls back to `CallI`.
-    #[allow(clippy::too_many_arguments)]
-    fn compile_for_of_next(
+
+    /// The `__iterate` contract on `ty` (RFC 0012 §6): `(class, subst, E)`
+    /// when the type declares `fn __iterate(self, emit: fn(E) -> bool)` —
+    /// duck-typed, like every interface satisfaction.
+    fn iterate_method(&mut self, ty: TypeId) -> Option<(IdentId, Vec<(IdentId, TypeId)>, TypeId)> {
+        if matches!(self.ctx.types.kind(ty), TyKind::TraitObj { .. }) {
+            // interface objects dispatch through their vtable — a concrete
+            // iterable is needed at the call site in this build
+            return None;
+        }
+        let (dname, args): (IdentId, Vec<TypeId>) = match self.ctx.inst_data.get(&ty) {
+            Some((d, a)) => (*d, a.clone()),
+            None => match self.ctx.datas.iter().find(|(_, d)| d.ty == ty) {
+                Some((n, d)) if d.generics.is_empty() => (*n, vec![]),
+                _ => return None,
+            },
+        };
+        let Some((_, d)) = self.ctx.datas.iter().find(|(n, _)| n == &dname) else {
+            return None;
+        };
+        let d = d.clone();
+        let (_, mnode) = d.methods.iter().find(|(n, _)| self.ctx.name(*n) == "__iterate")?;
+        let env: Vec<(IdentId, TypeId)> =
+            d.generics.iter().cloned().zip(args.iter().cloned()).collect();
+        let md = self.ctx.ast.method_decl(*mnode).clone();
+        // the signature after `self`: exactly one `emit: fn(E) -> bool`
+        let mut ptys = Vec::new();
+        for p in md.params.iter().skip(1) {
+            if let MemberKind::Param(ParamData { ty: Some(t), .. }) = self.ctx.ast.param(*p) {
+                ptys.push(self.ctx.resolve_type(*t, &env));
+            }
+        }
+        match ptys.first().map(|t| self.ctx.types.kind(*t).clone()) {
+            Some(TyKind::Fn { params, ret }) if params.len() == 1 && ret == TY_BOOL => {
+                Some((dname, env, params[0]))
+            }
+            _ => None,
+        }
+    }
+
+    /// `for (v of xs)` over a user iterable (RFC 0012 §6) — desugars to
+    /// `xs.__iterate(emit)` where `emit` is a synthetic closure carrying
+    /// the loop body: `break` returns `false`, `continue` and the fall-through
+    /// return `true`. The loop variable is the closure's parameter, so it is
+    /// a fresh binding per iteration by construction.
+    fn compile_for_of_iterate(
         &mut self,
-        _node: NodeId,
         var: IdentId,
-        it_reg: u16,
-        it_ty: TypeId,
-        impl_idx: usize,
-        item_ty: TypeId,
-        subst: Vec<(IdentId, TypeId)>,
+        rreg: u16,
+        dname: IdentId,
+        env: Vec<(IdentId, TypeId)>,
+        elem_ty: TypeId,
         body: NodeHandle<BlockNode>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
-        let opt_ty = self.ctx.mk_option(item_ty);
-        // the impl's `next` method + its target class
-        let im = self.ctx.impls[impl_idx].clone();
-        let Some((next_name, next_node)) = im.methods.iter().find(|(n, _)| self.ctx.name(*n) == "next").copied() else {
-            self.ctx.err(sp, "the `Iterator` impl has no `next`");
-            return Err(());
+        // captures: the body's enclosing locals, copied by value (the
+        // closure law) — accumulate through a `*T` capture
+        let mut referenced = Vec::new();
+        self.scan_names(body.id(), &mut referenced);
+        let mut caps: Vec<(IdentId, TypeId, u16)> = Vec::new();
+        for n in referenced {
+            if n == var {
+                continue;
+            }
+            if let Some(l) = self.lookup(n).copied() {
+                let cap_reg = self.new_reg(l.ty);
+                if self.ctx.types.is_ref(l.ty) {
+                    self.emit(Op::MovRef { dst: cap_reg, src: l.reg }, sp.lo);
+                } else {
+                    self.emit(Op::Mov { dst: cap_reg, src: l.reg }, sp.lo);
+                }
+                caps.push((n, l.ty, cap_reg));
+            }
+        }
+        self.ctx
+            .for_of_sigs
+            .insert(body.id().0, (elem_ty, caps.iter().map(|(n, t, _)| (*n, *t)).collect()));
+        let emit = crate::check::Inst {
+            key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
+            subst: vec![],
         };
-        let dname = im.target_data.as_ref().map(|(d, _)| *d);
-        let mut_self = matches!(
-            self.ctx.ast.method_decl(next_node).params.first().map(|p| self.ctx.ast.param(*p)),
-            Some(MemberKind::SelfParam(SelfParamData { is_mut: true }))
+        let fid = self.ctx.ensure_inst(emit);
+        let fty = self.ctx.mk_fn_ty(vec![elem_ty], TY_BOOL);
+        let clo = self.new_reg(fty);
+        self.emit(
+            Op::MakeClosure { dst: clo, func: fid, captures: caps.iter().map(|(_, _, r)| *r).collect() },
+            sp.lo,
         );
-        let l_head = self.new_label();
-        let l_body = self.new_label();
-        let l_end = self.new_label();
-        let l_cont = self.new_label();
-        self.bind(l_head);
-        self.emit(Op::LoopHead, sp.lo);
-        // inline `next` where possible; else dispatch through the vtable
-        let inlined = dname.is_some_and(|d| {
-            self.try_inline_method(
-                d, &subst, it_ty, next_node, next_name, mut_self, it_reg, &[], &[], opt_ty, sp,
-            )
-        });
-        let o = if inlined {
-            self.last_reg
-        } else {
-            let trait_id = im.trait_id;
-            let midx = self.ctx.traits[trait_id as usize]
-                .methods
-                .iter()
-                .position(|m| m.name == "next")
-                .unwrap_or(0);
-            let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
-            let dst = self.new_reg(opt_ty);
-            self.emit(Op::CallI { slot, recv: it_reg, args: vec![], dst: Some(dst) }, sp.lo);
-            dst
-        };
-        let done = self.new_reg(TY_BOOL);
-        self.emit(Op::SumIs { dst: done, v: o, want_err: true }, sp.lo);
-        self.br(done, l_end, l_body);
-        self.bind(l_body);
-        let x = self.new_reg(item_ty);
-        self.emit(Op::Unwrap { dst: x, v: o, want_err: false }, sp.lo);
-        self.locals.push(Local { name: var, reg: x, ty: item_ty, is_mut: false, loop_var: false });
-        self.loops.push((l_cont, l_end));
-        self.compile_block(body)?;
-        self.loops.pop();
-        self.locals.pop();
-        self.bind(l_cont);
-        self.jmp(l_head);
-        self.bind(l_end);
+        // `xs.__iterate(emit)` — the ordinary method machinery
+        let iterate = self.ctx.lookup_name("__iterate").expect("`__iterate` interned");
+        let mfid = self
+            .ctx
+            .ensure_inst(crate::check::Inst {
+                key: crate::check::FnKey::Method { data: dname, name: iterate },
+                subst: env,
+            });
+        self.emit(Op::CallM { func: mfid, recv: rreg, args: vec![clo], dst: None }, sp.lo);
         Ok(())
     }
 

@@ -11,10 +11,24 @@ impl<'a> Ctx<'a> {
         match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
-                // an imported std:core interface (RFC 0028): `Index`/
-                // `Iterator`/`Disposal` are ordinary names gated on the
-                // import — never ambient
+                // an imported std:core interface (RFC 0028) — the prelude's
+                // only interface is the `Iterator<E>` protocol (RFC 0012 §6)
                 let core_iface = self.extern_ifaces.get(&tname).copied();
+                if core_iface == Some(rut_core::binary::NativeIface::Iterator) {
+                    let args: Vec<TypeId> = segs[0]
+                        .generics
+                        .iter()
+                        .map(|g| self.resolve_type(*g, &[]))
+                        .collect();
+                    if args.len() != 1 {
+                        self.err(self.ast.span(node.id()), format!(
+                            "`Iterator` takes 1 type parameter, {} given — `Iterator<E>` (RFC 0012 §6)",
+                            args.len()
+                        ));
+                        return None;
+                    }
+                    return Some(self.mk_iterator_inst(tname, args[0]));
+                }
                 let id = if let Some(t) = self.find_trait(tname).cloned() {
                     if segs[0].generics.is_empty() {
                         if t.id == u32::MAX {
@@ -43,32 +57,13 @@ impl<'a> Ctx<'a> {
                         }
                     }
                 } else {
-                    match core_iface {
-                        Some(rut_core::binary::NativeIface::Index) => {
-                            Some(self.builtin_contract(tname, true))
-                        }
-                        Some(rut_core::binary::NativeIface::Iterator) => {
-                            Some(self.builtin_contract(tname, false))
-                        }
-                        Some(rut_core::binary::NativeIface::Disposal) => {
-                            Some(self.builtin_disposal(tname))
-                        }
-                        None => {
-                            let n = self.name(tname).to_string();
-                            let msg = self
-                                .not_in_core_scope(&n)
-                                .unwrap_or_else(|| format!("unknown interface `{n}`"));
-                            self.err(self.ast.span(node.id()), msg);
-                            None
-                        }
-                    }
+                    let n = self.name(tname).to_string();
+                    let msg = self
+                        .not_in_core_scope(&n)
+                        .unwrap_or_else(|| format!("unknown interface `{n}`"));
+                    self.err(self.ast.span(node.id()), msg);
+                    None
                 };
-                if core_iface == Some(rut_core::binary::NativeIface::Index) {
-                    self.seq_trait = id;
-                }
-                if core_iface == Some(rut_core::binary::NativeIface::Iterator) {
-                    self.iter_trait = id;
-                }
                 id
             }
             _ => {
@@ -78,61 +73,26 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The builtin sequence (`seq = true` → `Index`: `len`/`get`/`set`) or
-    /// iterator (`seq = false` → `Iterator`: `next`) contract. Undeclarable
-    /// in source, registered on first reference. The element type is carried
-    /// as the impl/interface ref's type argument and resolved at the use
-    /// site.
-    pub fn builtin_contract(&mut self, name: IdentId, seq: bool) -> u32 {
-        if let Some(id) = self.trait_id_of(name) {
+    /// The `Iterator<E>` protocol contract (RFC 0012 §6): one trait per
+    /// type-argument list, its single method `__iterate(emit: fn(E) -> bool)`.
+    /// Duck-typed satisfaction fills its vtable slot from the iterable's own
+    /// member — the contract is engine-woven, not user-declarable.
+    pub fn mk_iterator_inst(&mut self, name: IdentId, arg: TypeId) -> u32 {
+        if let Some(&id) = self.trait_inst.get(&(name, vec![arg])) {
             return id;
         }
         let id = self.traits.len() as u32;
-        use rut_core::binary::TraitMethod;
-        let (desc_name, methods) = if seq {
-            (
-                "Index",
-                vec![
-                    TraitMethod { name: "len".to_string(), params: vec![], ret: TY_I32 },
-                    TraitMethod { name: "get".to_string(), params: vec![TY_I32], ret: TY_I32 },
-                    TraitMethod { name: "set".to_string(), params: vec![TY_I32, TY_I32], ret: TY_UNIT },
-                ],
-            )
-        } else {
-            ("Iterator", vec![TraitMethod { name: "next".to_string(), params: vec![], ret: TY_I32 }])
-        };
-        self.traits.push(TraitDesc { name: desc_name.to_string(), methods });
-        self.trait_decls.push((name, TraitDeclInfo {
-            id,
-            node: rut_ast::ast::NodeId(0),
-            generics: vec![],
-        }));
-        id
-    }
-
-    /// The builtin `Disposal` contract (RFC 0011/0016, declared in
-    /// std:core): `fn dispose(mut self) -> unit`. Registered on first
-    /// reference like the sequence contracts — an ordinary trait with
-    /// ordinary nominal impls; the rc-0 destructor wiring is the host/VM's,
-    /// not a compiler name match.
-    pub fn builtin_disposal(&mut self, name: IdentId) -> u32 {
-        if let Some(id) = self.trait_id_of(name) {
-            return id;
-        }
-        let id = self.traits.len() as u32;
+        let tname = format!("Iterator<{}>", self.types.name(arg));
+        let emit = self.mk_fn_ty(vec![arg], TY_BOOL);
         self.traits.push(TraitDesc {
-            name: "Disposal".to_string(),
+            name: tname,
             methods: vec![rut_core::binary::TraitMethod {
-                name: "dispose".to_string(),
-                params: vec![],
+                name: "__iterate".to_string(),
+                params: vec![emit],
                 ret: TY_UNIT,
             }],
         });
-        self.trait_decls.push((name, TraitDeclInfo {
-            id,
-            node: rut_ast::ast::NodeId(0),
-            generics: vec![],
-        }));
+        self.trait_inst.insert((name, vec![arg]), id);
         id
     }
 
@@ -290,6 +250,27 @@ impl<'a> Ctx<'a> {
                                 .map(|g| self.resolve_type(*g, env))
                                 .collect();
                             return self.mk_data_inst(name, args);
+                        }
+                        // the `Iterator<E>` protocol (RFC 0012 §6):
+                        // engine-woven — its trait is built directly per
+                        // type-argument list, before the AST-decl lookup
+                        if self.extern_ifaces.get(&name).copied()
+                            == Some(rut_core::binary::NativeIface::Iterator)
+                        {
+                            let args: Vec<TypeId> = seg
+                                .generics
+                                .iter()
+                                .map(|g| self.resolve_type(*g, env))
+                                .collect();
+                            if args.len() != 1 {
+                                self.err(sp, format!(
+                                    "`Iterator` takes 1 type parameter, {} given — `Iterator<E>` (RFC 0012 §6)",
+                                    args.len()
+                                ));
+                                return TY_I32;
+                            }
+                            let id = self.mk_iterator_inst(name, args[0]);
+                            return self.mk_dyn(id);
                         }
                         if let Some(t) = self.find_trait(name).cloned() {
                             // an interface name in type position IS the

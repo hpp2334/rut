@@ -79,6 +79,10 @@ pub enum FnKey {
     /// one lambda AST node (its enclosing fn is non-generic in this build,
     /// so one instantiation per node)
     Lambda(NodeId),
+    /// the emit closure of a desugared `for (v of xs)` over the
+    /// `__iterate` protocol (RFC 0012 §6): `body` with `v: E` bound;
+    /// `break` → `return false`, `continue` → `return true`
+    ForOfEmit { body: NodeId, var: IdentId },
 }
 
 /// A monomorphization instantiation: fn key + generic substitution.
@@ -97,10 +101,9 @@ pub struct Ctx<'a> {
     pub trait_decls: Vec<(IdentId, TraitDeclInfo)>,
     /// the sequence-contract trait id once referenced (RFC 0012 `Iter`) —
     /// the sequence-lowering path keys on this, never on the trait's name
-    pub seq_trait: Option<u32>,
+
     /// the iterator-contract trait id once referenced (RFC 0012 `Iterator`)
     /// — `for..of` lowers to `next` when a type implements it and not `Iter`
-    pub iter_trait: Option<u32>,
     pub funcs: Vec<FuncCode>,
     pub consts: Vec<ConstVal>,
     pub exports: Vec<(String, u32)>,
@@ -138,6 +141,10 @@ pub struct Ctx<'a> {
     /// imported std:core builtin interfaces: name -> contract
     /// (`Disposal`/`Index`/`Iterator`)
     pub extern_ifaces: std::collections::HashMap<IdentId, rut_core::binary::NativeIface>,
+    /// the emit-closure signature of each desugared `for..of` (RFC 0012 §6),
+    /// recorded at the creation site and read when the queue compiles the fn:
+    /// body node → (element type, captures)
+    pub for_of_sigs: std::collections::HashMap<u32, (TypeId, Vec<(IdentId, TypeId)>)>,
     /// imported std:core compiler-lowered functions (`own`, `downcast`,
     /// `assert`/`panic`, the `str`/`bytes` natives): the name is callable
     /// only when bound
@@ -185,8 +192,6 @@ impl<'a> Ctx<'a> {
             types: TypeTable::boot_scoped(scope),
             traits: Vec::new(),
             trait_decls: Vec::new(),
-            seq_trait: None,
-            iter_trait: None,
             funcs: Vec::new(),
             consts: Vec::new(),
             exports: Vec::new(),
@@ -205,6 +210,7 @@ impl<'a> Ctx<'a> {
             extern_classes: std::collections::HashSet::new(),
             extern_native_types: std::collections::HashMap::new(),
             extern_ifaces: std::collections::HashMap::new(),
+            for_of_sigs: std::collections::HashMap::new(),
             extern_native_fns: std::collections::HashSet::new(),
             extern_namespaces: std::collections::HashSet::new(),
             inst_data: std::collections::HashMap::new(),

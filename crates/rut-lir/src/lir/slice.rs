@@ -82,27 +82,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// Resolve the `Iterator` impl for `ty`, if any: `(impl index, Item,
     /// target subst)`. The subst resolves the `next` body and its return
-    /// type under the receiver's instantiation.
-    pub(crate) fn iterator_info(&mut self, ty: TypeId) -> Option<(usize, TypeId, Vec<(IdentId, TypeId)>)> {
-        let iter_trait = self.ctx.iter_trait?;
-        for (i, im) in self.ctx.impls.iter().enumerate() {
-            if Some(im.trait_id) != Some(iter_trait) {
-                continue;
-            }
-            let subst: Vec<(IdentId, TypeId)> = match (&im.target_data, self.ctx.inst_data.get(&ty)) {
-                (Some((d, params)), Some((dname, args))) if d == dname && params.len() == args.len() => {
-                    params.iter().cloned().zip(args.iter().cloned()).collect()
-                }
-                (None, _) if im.target == ty => Vec::new(),
-                _ => continue,
-            };
-            let Some(ty_node) = im.trait_arg_nodes.first().copied() else { continue };
-            let item = self.ctx.resolve_type(ty_node, &subst);
-            return Some((i, item, subst));
-        }
-        None
-    }
-
     /// `s.len()` — the element count.
     pub(crate) fn emit_slice_len(&mut self, recv: u16, info: &SliceInfo, sp: u32) -> TcResult<u16> {
         match &info.source {
