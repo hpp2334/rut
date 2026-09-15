@@ -152,3 +152,30 @@ dataclass LoadError {
 `vm.symbolicate(&raw)` restores names/spans from loaded binaries (RFC 0035
 §3, RFC 0036 §3) — and against stripped `--release` binaries, the
 `.rutc.map` sidecar does it offline (RFC 0036 §3).
+
+## The `std:core` prelude, v1.1 — removals diagnosed at the use site
+
+The prelude surface is `downcast`, `assert`/`panic`,
+`make_ptr`/`on_drop`, and the `str`/`bytes` natives
+(`string_len`/`string_encode`/`string_join`,
+`bytes_len`/`bytes_decode`/`bytes_from`/`bytes_zeroed`).
+`Option`/`Result`/`own` are removed (RFC 0005 §10) and `char` is gone
+(RFC 0004 §4): a use site — type position, constructor, or literal —
+diagnoses with the removal and its replacement. **No removed surface
+keeps compatibility routing**: a removed head in an unresolvable
+position is an ordinary unknown-name error.
+
+Two surface mechanisms formalized this revision:
+
+- **Namespace heads.** A native module may declare a namespace
+  (`std:math` → `Math`); the head binds at import exactly like the
+  other prelude names, and `<namespace>.<member>` resolves against the
+  module's functions, constants, and intrinsics. The compiler routes
+  by the bound head — never by a hardcoded module string.
+- **`Vec.pop` contract.** `pop` returns the removed element; an empty
+  pop is a contract breach (trap), guarded by `len() > 0` — not an
+  error value. The `next()`-cursor iterator ships no more; the
+  iteration protocol is RFC 0012's `__iterate` (v1.1).
+
+`std:math`'s `checked_add`/`checked_sub`/`checked_mul` return
+`(value, ok)` tuples (RFC 0005 §10).

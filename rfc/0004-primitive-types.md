@@ -80,6 +80,24 @@ host-side, call-scoped, flag-guarded ones at the FFI (RFC 0023).
 - Mixed-width arithmetic: both operands must have equal width (convert
   first — RFC 0007 §1).
 
+## 4. v1.1 — `char` is gone; codepoints are `u32`; records are `(T, ..)`
+
+`char` is removed — there is no character type, no `'x'` literal (the
+lexer diagnoses the removal), and no `char` in `str` iteration: a
+`str`'s elements are one-codepoint `str`s. Codepoint access is spelled
+with integers:
+
+- `s.code() -> u32` — the FIRST codepoint of `s` (traps on empty).
+- `str.from_code(n: u32) -> str` — the 1-codepoint `str` for `n`
+  (compiler-lowered; UTF-8 encoded at materialization).
+
+Records — the `(a, b, ..)` literal and its `(T0, T1, ..)` type, with
+numeric fields `.0`, `.1`, .. — are the v1.1 error convention:
+**`fn f(..) -> (T, err)` returns a result; an empty/`false`/`nil`
+second element is success** (§5 of RFC 0005 for the `Option`/`Result`
+removal this replaces). `()` is the unit value; a function without a
+result arrow returns it.
+
 ## Open questions
 
 - OQ-1: default type for uncontextualized literals — `i32` for integers and

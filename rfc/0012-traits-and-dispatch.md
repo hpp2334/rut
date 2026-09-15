@@ -217,6 +217,13 @@ identity.** `a != b` is its negation (`!(a == b)`).
 - `bytes`: content comparison (RFC 0004) — the engine lowers it to the
   generic content op `ArrayCmp` because `bytes` is a `u8` array; plain
   `Array<T>` stays identity (below).
+
+  **v1.1:** structs are values (RFC 0009 §7), so they join the value
+  side — `s == t` compares field by field (`ValEq`), recursing through
+  the same law per field. Pointers stay on the identity side: `*T ==
+  *T` is the cell-and-offset test, never a deep comparison. The old
+  `own(x) == x` aliasing example is gone with `own` itself
+  (RFC 0005 §10).
 - **Everything else — class, dataclass, `Vec`, `Array`, enums,
   `Opaque`, `I` — is a handle test**: `a == b` is true exactly when
   both point at the same cell (RFC 0016 §1). Since every non-primitive

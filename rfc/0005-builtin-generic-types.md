@@ -30,6 +30,28 @@ writes through the pointer hit the shared cell.
 `[T]` is the accepted spelling of the heap array `Array<T>` (runtime
 length, non-growable): `let xs: [i32] = [1, 2, 3];`.
 
+## 10. Removals — `Option`, `Result`, `own` (v1.1)
+
+The builtin sums are gone from `std:core` — no `Option<T>`, no
+`Result<T, E>`, no constructors or `unwrap` family. Their jobs moved to
+the language's own shapes:
+
+- **Absence** is `nil` on a pointer type (`*T`): a lookup returns
+  `*V`, and `nil` means "not found" (§8).
+- **Errors** are records: `(T, err)` with a user-chosen `err` type —
+  an empty str / `false` / `nil` second element is success
+  (RFC 0004 §4).
+- **Type-erased recovery** returns `(T, bool)`: `downcast<T>(o)` is a
+  test-plus-unbox, `false` on a mismatch (RFC 0014).
+- `checked_add`/`checked_sub`/`checked_mul` return `(value, ok)` —
+  `false` on overflow, `value` the wrapped result.
+
+`own(x)` is removed with them: under copy-by-value (RFC 0016 §1) every
+binding already owns its cell, so `own` would be the identity. Sharing
+is `make_ptr` (§8); a use site that still spells `own` (or the removed
+sums) diagnoses with the removal and its replacement — nothing else is
+kept for compatibility.
+
 
 `Option<T>`, `Result<T, E>` are **builtin (VM-native)** types — they cannot
 be user-defined because user enums carry no data (RFC 0006). No sugar

@@ -83,8 +83,19 @@ data.
   diverge. Any size is allowed; the compiler warns past a threshold
   (OQ-1).
 
+## 7. v1.1 — the keyword is `struct`; bindings copy by value
+
+The keyword is `struct` (`dataclass` is a removed spelling — the use
+site diagnoses with the rename). The deeper change is the value law
+(RFC 0016 §1): **every binding of a struct owns its own cell.**
+Assignment, parameter passing, and `let` all deep-copy the payload —
+freshly built values cost nothing (freshness elision) — and a mutation
+through one binding never surfaces through another. Sharing a cell is
+explicit: `make_ptr(s)` and a `*S` binding (RFC 0005 §8). Structural
+`==` replaces the old handle test: two structs compare field by field
+(RFC 0012 §4 v1.1).
+
 ## Open questions
 
-- OQ-1: dataclass size warning threshold (compiler warns when a
-  dataclass payload grows past N slots, since `own` clones copy each
-  field).
+- OQ-1: struct size warning threshold (compiler warns when a struct
+  payload grows past N slots, since every binding copies each field).
