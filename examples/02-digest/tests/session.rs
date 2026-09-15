@@ -43,8 +43,8 @@ fn lcg(n: usize, seed: u32) -> Vec<u8> {
 // entry shorthands
 fn rut_hex(vm: &mut rut_vm::interp::Vm, algo: &str, data: &[u8]) -> String {
     match vm.call("digest", &[Value::Str(algo.into()), Value::Bytes(data.to_vec())]).unwrap() {
-        Value::Res(Ok(b)) => match *b {
-            Value::Bytes(v) => hex(&v),
+        Value::Tuple(parts) => match &parts[0] {
+            Value::Bytes(v) => hex(v),
             v => unreachable!("{v:?}"),
         },
         v => unreachable!("{v:?}"),
@@ -127,8 +127,8 @@ fn crate_cross_check_on_padding_edges() {
             };
             assert_eq!(enc, want, "b64 enc url={url} len {n}");
             let dec = match vm.call("b64_dec", &[Value::Str(enc), Value::Bool(url)]).unwrap() {
-                Value::Res(Ok(b)) => match *b {
-                    Value::Bytes(v) => v,
+                Value::Tuple(parts) => match &parts[0] {
+                    Value::Bytes(v) => v.clone(),
                     v => unreachable!("{v:?}"),
                 },
                 v => unreachable!("{v:?}"),
@@ -180,8 +180,8 @@ fn hex_roundtrip_and_errors() {
     let enc = as_str(vm.call("hex_enc", &[Value::Bytes(data.clone())]).unwrap());
     assert_eq!(enc, hex(&data));
     let dec = match vm.call("hex_dec", &[Value::Str(enc)]).unwrap() {
-        Value::Res(Ok(b)) => match *b {
-            Value::Bytes(v) => v,
+        Value::Tuple(parts) => match &parts[0] {
+            Value::Bytes(v) => v.clone(),
             v => unreachable!("{v:?}"),
         },
         v => unreachable!("{v:?}"),
@@ -191,8 +191,8 @@ fn hex_roundtrip_and_errors() {
     let up = as_str(vm.call("hex_enc", &[Value::Bytes(b"\xde\xad\xbe\xef".to_vec())]).unwrap());
     assert_eq!(up, "deadbeef");
     let dec = match vm.call("hex_dec", &[Value::Str("DEADBEEF".into())]).unwrap() {
-        Value::Res(Ok(b)) => match *b {
-            Value::Bytes(v) => v,
+        Value::Tuple(parts) => match &parts[0] {
+            Value::Bytes(v) => v.clone(),
             v => unreachable!("{v:?}"),
         },
         v => unreachable!("{v:?}"),

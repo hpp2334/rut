@@ -1,4 +1,4 @@
-import { Result, Opaque, downcast, string_len, bytes_len } from "std:core";
+import { Opaque, downcast, string_len, bytes_len } from "std:core";
 import { Vec } from "std:collection";
 import { Math } from "std:math";
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
@@ -64,9 +64,9 @@ fn hex_val(c: str) -> i32 {
     return -1;
 }
 
-entry fn hex_dec(s: str) -> Result<bytes, str> {
+entry fn hex_dec(s: str) -> (bytes, str) {
     if (string_len(s) % 2 != 0) {
-        return Result.err("hex: odd-length input");
+        return (bytes_zeroed(0), "hex: odd-length input");
     }
     let mut out: Vec<u8> = Vec.new();
     let mut cur: u32 = 0;
@@ -74,7 +74,7 @@ entry fn hex_dec(s: str) -> Result<bytes, str> {
     for (let c of s) {
         let v = hex_val(f"{c}");
         if (v < 0) {
-            return Result.err(f"hex: invalid character at index {i}");
+            return (bytes_zeroed(0), f"hex: invalid character at index {i}");
         }
         if (i % 2 == 0) {
             cur = v as u32;
@@ -83,7 +83,7 @@ entry fn hex_dec(s: str) -> Result<bytes, str> {
         }
         i = i + 1;
     }
-    return Result.ok(out.freeze());
+    return (out.freeze(), "");
 }
 
 // ------------------------------------------------------------ base64 ---
@@ -126,7 +126,7 @@ entry fn b64_enc(data: bytes, url: bool) -> str {
     return out;
 }
 
-entry fn b64_dec(s: str, url: bool) -> Result<bytes, str> {
+entry fn b64_dec(s: str, url: bool) -> (bytes, str) {
     let t = b64_table(url);
     let mut vals: Vec<u32> = Vec.new();
     let mut pad = 0;
@@ -136,20 +136,20 @@ entry fn b64_dec(s: str, url: bool) -> Result<bytes, str> {
             pad = pad + 1;
         } else {
             if (pad > 0) {
-                return Result.err("base64: data after padding");
+                return (bytes_zeroed(0), "base64: data after padding");
             }
             let mut v: u32 = 256;
             for (let i = 0; i < t.len(); i += 1) {
                 if (t[i] == cs) { v = i as u32; }
             }
             if (v == 256) {
-                return Result.err(f"base64: invalid character `{cs}`");
+                return (bytes_zeroed(0), f"base64: invalid character `{cs}`");
             }
             vals.push(v);
         }
     }
     if (vals.len() % 4 == 1) {
-        return Result.err("base64: impossible length");
+        return (bytes_zeroed(0), "base64: impossible length");
     }
     let mut out: Vec<u8> = Vec.new();
     let n = vals.len();
@@ -163,7 +163,7 @@ entry fn b64_dec(s: str, url: bool) -> Result<bytes, str> {
         if (rem >= 3) { out.push(((w >> 8) & 255) as u8); }
         if (rem == 4) { out.push((w & 255) as u8); }
     }
-    return Result.ok(out.freeze());
+    return (out.freeze(), "");
 }
 
 // ------------------------------------------------- hashmap hash keys ---
@@ -638,13 +638,13 @@ entry fn sha256(data: bytes) -> bytes { return sha256_impl(data); }
 entry fn sha512(data: bytes) -> bytes { return sha512_impl(data); }
 
 /// One name, one call — the 01-sort dispatcher pattern on strings.
-entry fn digest(algo: str, data: bytes) -> Result<bytes, str> {
+entry fn digest(algo: str, data: bytes) -> (bytes, str) {
     return when (algo) {
-        "md5"    -> Result.ok(md5_impl(data)),
-        "sha1"   -> Result.ok(sha1_impl(data)),
-        "sha256" -> Result.ok(sha256_impl(data)),
-        "sha512" -> Result.ok(sha512_impl(data)),
-        else     -> Result.err(f"unknown algorithm: {algo}"),
+        "md5"    -> (md5_impl(data), ""),
+        "sha1"   -> (sha1_impl(data), ""),
+        "sha256" -> (sha256_impl(data), ""),
+        "sha512" -> (sha512_impl(data), ""),
+        else     -> (bytes_zeroed(0), f"unknown algorithm: {algo}"),
     };
 }
 
@@ -665,6 +665,8 @@ struct Json {
     keys: Vec<str>;
     vals: Vec<Opaque>;
 }
+
+fn noopaque() -> Opaque { return Opaque.new(0); }
 
 fn noopaques() -> Vec<Opaque> {
     let v: Vec<Opaque> = Vec.new();
@@ -748,10 +750,10 @@ fn valid_number(cs: Vec<str>) -> bool {
     return i == n;
 }
 
-fn jparse_value(cur: *Cur) -> Result<Opaque, str> {
+fn jparse_value(cur: *Cur) -> (Opaque, str) {
     jskip(cur);
     let c = jpeek(cur);
-    if (c == "") { return Result.err("json: unexpected end of input"); }
+    if (c == "") { return (noopaque(), "json: unexpected end of input"); }
     if (c == "n") { return jparse_lit(cur, "null", jnull()); }
     if (c == "t") { return jparse_lit(cur, "true", jbool(true)); }
     if (c == "f") { return jparse_lit(cur, "false", jbool(false)); }
@@ -759,10 +761,10 @@ fn jparse_value(cur: *Cur) -> Result<Opaque, str> {
     if (c == "-" || is_digit(c)) { return jparse_number(cur); }
     if (c == "[") { return jparse_array(cur); }
     if (c == "{") { return jparse_object(cur); }
-    return Result.err(f"json: unexpected `{c}` at index {cur.pos}");
+    return (noopaque(), f"json: unexpected `{c}` at index {cur.pos}");
 }
 
-fn jparse_lit(cur: *Cur, word: str, v: Json) -> Result<Opaque, str> {
+fn jparse_lit(cur: *Cur, word: str, v: Json) -> (Opaque, str) {
     let start = cur.pos;
     let mut ok = true;
     for (let wch of word) {
@@ -770,12 +772,12 @@ fn jparse_lit(cur: *Cur, word: str, v: Json) -> Result<Opaque, str> {
         cur.pos = cur.pos + 1;
     }
     if (ok == false) {
-        return Result.err(f"json: bad literal at index {start}");
+        return (noopaque(), f"json: bad literal at index {start}");
     }
-    return Result.ok(Opaque.new(v));
+    return (Opaque.new(v), "");
 }
 
-fn jparse_string(cur: *Cur) -> Result<Opaque, str> {
+fn jparse_string(cur: *Cur) -> (Opaque, str) {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
     let out: Vec<str> = Vec.new();
@@ -789,7 +791,7 @@ fn jparse_string(cur: *Cur) -> Result<Opaque, str> {
             open = false;
         } else if (c == "\\") {
             if (cur.pos >= cur.cs.len()) {
-                return Result.err(f"json: unterminated escape at index {cur.pos}");
+                return (noopaque(), f"json: unterminated escape at index {cur.pos}");
             }
             let e = cur.cs[cur.pos];
             cur.pos = cur.pos + 1;
@@ -802,21 +804,21 @@ fn jparse_string(cur: *Cur) -> Result<Opaque, str> {
             else if (e == "\\") { out.push("\\"); }
             else if (e == "/") { out.push("/"); }
             else if (e == "u") {
-                return Result.err("json: \\u escapes are not supported in this build");
+                return (noopaque(), "json: \\u escapes are not supported in this build");
             } else {
-                return Result.err(f"json: bad escape at index {cur.pos - 1}");
+                return (noopaque(), f"json: bad escape at index {cur.pos - 1}");
             }
         } else {
             out.push(c);
         }
     }
     if (closed == false) {
-        return Result.err(f"json: unterminated string starting at index {start}");
+        return (noopaque(), f"json: unterminated string starting at index {start}");
     }
-    return Result.ok(Opaque.new(jstr(join_chars(out))));
+    return (Opaque.new(jstr(join_chars(out))), "");
 }
 
-fn jparse_number(cur: *Cur) -> Result<Opaque, str> {
+fn jparse_number(cur: *Cur) -> (Opaque, str) {
     let start = cur.pos;
     let chars: Vec<str> = Vec.new();
     let mut again = true;
@@ -829,27 +831,27 @@ fn jparse_number(cur: *Cur) -> Result<Opaque, str> {
         }
     }
     if (valid_number(chars) == false) {
-        return Result.err(f"json: malformed number at index {start}");
+        return (noopaque(), f"json: malformed number at index {start}");
     }
-    return Result.ok(Opaque.new(jnum(join_chars(chars))));
+    return (Opaque.new(jnum(join_chars(chars))), "");
 }
 
-fn jparse_array(cur: *Cur) -> Result<Opaque, str> {
+fn jparse_array(cur: *Cur) -> (Opaque, str) {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
-        return Result.err("json: nesting deeper than 64");
+        return (noopaque(), "json: nesting deeper than 64");
     }
     cur.pos = cur.pos + 1;   // '['
     let v = jarr();
     jskip(cur);
     if (jpeek(cur) == "]") {
         cur.pos = cur.pos + 1;
-        return Result.ok(Opaque.new(v));
+        return (Opaque.new(v), "");
     }
     let mut again = true;
     while (again) {
         let item = jparse_value(cur);
-        if (item.is_err()) { return item; }
+        if (item.1 != "") { return (noopaque(), item.1); }
         let boxed = unwrap_box(item);
         v.arr.push(boxed);
         jskip(cur);
@@ -860,42 +862,42 @@ fn jparse_array(cur: *Cur) -> Result<Opaque, str> {
             cur.pos = cur.pos + 1;
             again = false;
         } else {
-            return Result.err(f"json: expected `,` or `]` at index {cur.pos}");
+            return (noopaque(), f"json: expected `,` or `]` at index {cur.pos}");
         }
     }
     cur.depth = cur.depth - 1;
-    return Result.ok(Opaque.new(v));
+    return (Opaque.new(v), "");
 }
 
-fn jparse_object(cur: *Cur) -> Result<Opaque, str> {
+fn jparse_object(cur: *Cur) -> (Opaque, str) {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
-        return Result.err("json: nesting deeper than 64");
+        return (noopaque(), "json: nesting deeper than 64");
     }
     cur.pos = cur.pos + 1;   // '{'
     let v = jobj();
     jskip(cur);
     if (jpeek(cur) == "}") {
         cur.pos = cur.pos + 1;
-        return Result.ok(Opaque.new(v));
+        return (Opaque.new(v), "");
     }
     let mut again = true;
     while (again) {
         jskip(cur);
         if (jpeek(cur) != "\"") {
-            return Result.err(f"json: expected a key string at index {cur.pos}");
+            return (noopaque(), f"json: expected a key string at index {cur.pos}");
         }
         let key = jparse_string(cur);
-        if (key.is_err()) { return key; }
+        if (key.1 != "") { return (noopaque(), key.1); }
         let (kdoc, _) = downcast<Json>(unwrap_box(key));
         let kstr = kdoc.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
-            return Result.err(f"json: expected `:` at index {cur.pos}");
+            return (noopaque(), f"json: expected `:` at index {cur.pos}");
         }
         cur.pos = cur.pos + 1;
         let val = jparse_value(cur);
-        if (val.is_err()) { return val; }
+        if (val.1 != "") { return (noopaque(), val.1); }
         v.keys.push(kstr);
         v.vals.push(unwrap_box(val));
         jskip(cur);
@@ -906,18 +908,18 @@ fn jparse_object(cur: *Cur) -> Result<Opaque, str> {
             cur.pos = cur.pos + 1;
             again = false;
         } else {
-            return Result.err(f"json: expected a comma or close-brace at index {cur.pos}");
+            return (noopaque(), f"json: expected a comma or close-brace at index {cur.pos}");
         }
     }
     cur.depth = cur.depth - 1;
-    return Result.ok(Opaque.new(v));
+    return (Opaque.new(v), "");
 }
 
-/// Unwrap a Result<Opaque, str> that is known-Ok (checked above);
+/// The `Opaque` of a known-Ok `(Opaque, str)` pair (the error string is
 /// the unwrap_or default is unreachable and exists only because there
 /// is no `.unwrap()` in the surface.
-fn unwrap_box(r: Result<Opaque, str>) -> Opaque {
-    return r.unwrap_or(Opaque.new(jnull()));
+fn unwrap_box(r: (Opaque, str)) -> Opaque {
+    return r.0;
 }
 
 /// Encode a tree back to compact JSON.
@@ -969,13 +971,13 @@ fn jquote(s: str) -> str {
     return f"{q}{join_chars(body)}{q}";
 }
 
-entry fn json_dec(s: str) -> Result<Opaque, str> {
+entry fn json_dec(s: str) -> (Opaque, str) {
     let cur = make_ptr(Cur { cs: split_chars(s), pos: 0, depth: 0 });
     let v = jparse_value(cur);
-    if (v.is_err()) { return v; }
+    if (v.1 != "") { return (noopaque(), v.1); }
     jskip(cur);
     if (cur.pos != cur.cs.len()) {
-        return Result.err(f"json: trailing data at index {cur.pos}");
+        return (noopaque(), f"json: trailing data at index {cur.pos}");
     }
     return v;
 }
@@ -984,12 +986,13 @@ entry fn json_enc(o: Opaque) -> str {
     return jencode(downcast<Json>(o).0);
 }
 
-entry fn json_roundtrip(s: str) -> Result<str, str> {
+entry fn json_roundtrip(s: str) -> (str, str) {
     let v = json_dec(s);
-    if (v.is_err()) {
-        return Result.err(v.error);
+    if (v.1 != "") {
+        return ("", v.1);
     }
-    return Result.ok(jencode(downcast<Json>(v.value).0));
+        let (vv, _) = downcast<Json>(v.0);
+    return (jencode(vv), "");
 }
 
 /// A hand-built document for the embedder demo.

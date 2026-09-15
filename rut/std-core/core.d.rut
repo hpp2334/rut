@@ -19,13 +19,9 @@
 
 // ---- engine functions (compiler-lowered) ----
 
-// RFC 0011 §1 — the eager shallow copy: a fresh cell, handle fields
-// shared. The generic parameter is inferred from the argument.
-pub builtin fn own<T>(x: T) -> T;
-
 // RFC 0014 — recover the concrete value from an erasure box: a type
 // test plus a guarded unbox, yielding `Option<T>` (None on a mismatch).
-pub builtin fn downcast<T>(o: Opaque) -> Option<T>;
+pub builtin fn downcast<T>(o: Opaque) -> (T, bool);
 
 // RFC 0034 §2 — `msg` is optional at the call site (1 or 2 arguments).
 pub builtin fn assert(cond: bool, msg: str) -> unit;
@@ -54,24 +50,6 @@ pub builtin fn bytes_zeroed(n: i32) -> bytes;      // n zeroed octets
 
 pub builtin Array<T> {
     fn len(self) -> i32;                    // the heap array's runtime length
-}
-
-pub builtin Option<T> {
-    fn some(v: T) -> Self;
-    fn none() -> Self;                      // element inferred from the binding's annotation
-    fn is_some(self) -> bool;
-    fn is_none(self) -> bool;
-    fn unwrap_or(self, default: T) -> T;
-    fn expect(self, msg: str) -> T;      // panics with `msg` on None
-}
-
-pub builtin Result<T, E> {
-    fn ok(v: T) -> Self;
-    fn err(e: E) -> Self;
-    fn is_ok(self) -> bool;
-    fn is_err(self) -> bool;
-    fn unwrap_or(self, default: T) -> T;
-    fn expect(self, msg: str) -> T;      // panics with `msg` on Err
 }
 
 // RFC 0014 — the erasure box: any non-`dyn` value goes in via `Opaque.new`,
