@@ -85,16 +85,17 @@ is rut code, so it ships its own iterator.
 **`bytes` — the immutable binary primitive** (RFC 0004): at the language
 level a distinct, immutable, content-compared type; **at the engine level
 a `u8` array cell** (`Array<u8>`), so it reuses the array ops — `b[i]` is
-`ArrGet`, `bytes_len(b)` is `ArrLen`, `bytes_zeroed(n)`/`bytes(n)` are
-`ArrNew`, `bytes_from(a)` is an array copy (`Own`), and `==` is the
+`ArrGet`, `b.len()` is `ArrLen`, `bytes.zeroed(n)`/`bytes(n)` are
+`ArrNew`, `bytes.from(a)` is an array copy (`Own`), and `==` is the
 content comparison `ArrayCmp`. Construction: `bytes(n)` (n zeroed
-octets), `bytes_from(a)` (copies an `Array<u8>`), and `freeze()` on a
-mutable `Vec<u8>` builder. Reading: `bytes_len(b): i32`, `b[i]: u8`
-(bounds trap), `for (let b of b)`. `string_encode(s) -> bytes` (UTF-8)
-and `bytes_decode(b) -> str` (UTF-8, lossy) are lowered by the
-compiler as LIR loops (no native). `Vec<u8>` itself is only a mutable
-builder; `bytes` is the binary type that crosses the host boundary
-(RFC 0023 §2).
+octets), `bytes.from(a)` (copies an `Array<u8>`), and `freeze()` on a
+mutable `Vec<u8>` builder. Reading: `b.len(): i32`, `b[i]: u8`
+(bounds trap), `for (let b of b)`. `s.encode() -> bytes` (UTF-8) and
+`b.decode() -> str` (UTF-8, lossy) are lowered by the compiler as LIR
+loops (no native). The retired free-fn spellings (`bytes_len(b)`,
+`string_len(s)`, …) diagnose with the member replacement (RFC 0004 §4).
+`Vec<u8>` itself is only a mutable builder; `bytes` is the binary type
+that crosses the host boundary (RFC 0023 §2).
 
 One more builtin is type syntax plus a member:
 
@@ -118,21 +119,21 @@ Implementations:
 - `str` — the builtin (native) impl, element `char`; iteration and
   indexing use `strcharat`/`strlen`.
 - `bytes` — the builtin (native) impl, element `u8`; `bytesget`.
-- `Vec<T>` — a real `impl Index<T> for Vec<T>` in `std:collection`
-  (`len`/`get`/`set`); the compiler inlines the one-line accessors under
-  the concrete instantiation, so element access is the fused
-  `arrget`/`arrset` on the backing `buf`, not a per-element call.
+- `Vec<T>` — builtin by shape (v1.1, RFC 0012 §5): a record with a
+  `buf: Array<T>` field and a `len: i32` field; `v[i]`, `v[i] = x`,
+  `v.len()`, and `for (x of v)` lower to the fused element ops on those
+  fields — no interface, no accessor inlining.
 
-`str`/`bytes` have **no method syntax** — their operations are
-free functions (`string_len`, `string_encode`, `bytes_len`,
-`bytes_decode`, `bytes_from`, `bytes_zeroed`, RFC 0012); `string_len`
-counts characters, `bytes_len` counts octets.
+`str`/`bytes` carry **member contracts** declared per type in the
+prelude (v1.1, RFC 0004 §4): `s.len()`/`s.code()`/`s.encode()`,
+`b.len()`/`b.decode()`, and the `bytes.zeroed(n)`/`bytes.from(a)`
+type-methods — each lowering to the same fused ops.
 
-**`Iterator<T>` — the cursor contract** (RFC 0012): `next(mut self) ->
-Option<T>` (no `len`). `for (x of it)` lowers to `next` until `None`.
-The compiler inlines small `next` bodies at the use site, so a
-generic cursor (`VecIter<T>`) needs no vtable entry. Indexable
-sequences may also be iterated directly through `Index` (the fast
+**`Iterator<E>` — the iteration protocol** (RFC 0012 §6): a type is
+iterable when it declares
+`fn __iterate(self, emit: fn(E) -> bool)`; `for (x of it)` desugars to
+`it.__iterate(emit)`. The builtin sequences keep their fused index
+loops (the fast
 indexed lowering). Both contracts are resolved statically per receiver
 today; the interface-object form (`Vec<Index<T>>`, `Vec<Iterator<T>>`)
 is the follow-up — an interface name in type position *is* the object

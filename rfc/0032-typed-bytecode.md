@@ -39,7 +39,7 @@ calli   slot, rRecv, args ; trait vtable call (RFC 0015 §6) — the ONLY
  callnat nat, (rRecv,) args -> rD
                           ; VM-internal natives (RFC 0032 §1.1 R2):
                           ; `str`/`concat` (the `f""` desugaring, RFC 0007 §2),
-                          ; `string_len`, `array_len` — a fixed, compiled-in set.
+                          ; `strlen`/`arrlen` — a fixed, compiled-in set.
                           ; HOST FUNCTIONS (RFC 0022/0026) are bodyless
                           ; `FuncCode`s carrying a `host` name; `call` on one
                           ; dispatches to the embedder's registered body
@@ -96,8 +96,8 @@ An op exists for exactly one of three things:
   vtable calls; the backing cell's dispatch-through-owner (RFC 0016 §4)
   is simply its slot target. And things rut spells with a **name** are
   internal natives, never ops: `str`/`concat` (the `f""` desugaring —
-  RFC 0007 §2), `string_len`, and `array_len` — the only entries in the
-  `callnat` table. `Opaque.new(v)` (RFC 0014) is an internal-native call;
+  RFC 0007 §2), `strlen`, `arrlen`, and `strjoin` — the only entries in
+  the `callnat` table. `Opaque.new(v)` (RFC 0014) is an internal-native call;
   a **host function** (RFC 0022/0026) is a bodyless `FuncCode` carrying a
   `host` name, and `Op::Call` dispatches it to the embedder's registered
   body instead of interpreting — so `std:log`'s `create_logger`/

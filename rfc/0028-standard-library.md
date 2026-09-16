@@ -27,7 +27,7 @@ The standard library splits in two:
   compiler-backed impls for the engine's own types) — plus the
   prelude functions `own(x)` (the eager copy, RFC 0011 §1),
   `downcast<T>` (RFC 0014), `assert`/`panic` (RFC 0034 §2), and the
-  `str`/`bytes` natives (`string_len`, `string_encode`, `string_join`,
+  the `str`/`bytes` natives (`string_join`,
   `bytes_len`, `bytes_decode`, `bytes_from`, `bytes_zeroed`); `==` needs
   no trait at all (builtin, RFC 0012 §4). **The prelude is imported,
   never ambient: nothing from `std:core` is in scope until a module
@@ -156,9 +156,10 @@ dataclass LoadError {
 ## The `std:core` prelude, v1.1 — removals diagnosed at the use site
 
 The prelude surface is `downcast`, `assert`/`panic`,
-`make_ptr`/`on_drop`, and the `str`/`bytes` natives
-(`string_len`/`string_encode`/`string_join`,
-`bytes_len`/`bytes_decode`/`bytes_from`/`bytes_zeroed`).
+`make_ptr`/`on_drop`, `string_join`, and the `str`/`bytes` member
+contracts (`s.len()`/`s.code()`/`s.encode()`,
+`b.len()`/`b.decode()`, `bytes.zeroed(n)`/`bytes.from(a)` —
+RFC 0004 §4).
 `Option`/`Result`/`own` are removed (RFC 0005 §10) and `char` is gone
 (RFC 0004 §4): a use site — type position, constructor, or literal —
 diagnoses with the removal and its replacement. **No removed surface

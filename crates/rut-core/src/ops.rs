@@ -53,8 +53,8 @@ pub enum Nat {
     Str,
     /// str.concat(parts...)
     Concat,
-    StrLen,    // `for..of`/`Index::len`/`string_len` — the char count
-    ArrLen,    // Array<T>.len()/bytes_len — the heap sequence's runtime length
+    StrLen,    // s.len() — the codepoint count
+    ArrLen,    // Array<T>.len()/bytes.len() — the heap sequence's runtime length
     /// join every element of an `Array<str>` (one sizing pass, one alloc)
     StrJoin,
 }
