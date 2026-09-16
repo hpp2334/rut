@@ -18,7 +18,7 @@ fn fasta(n: i32) -> str {
         out = f"{out}{letters[idx]}";
         checksum += idx;
     }
-    return f"{checksum}:{string_len(out)}";
+    return f"{checksum}:{out.len()}";
 }
 
 pub fn main() -> unit {

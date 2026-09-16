@@ -277,81 +277,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::CallNat { nat: Nat::StrJoin, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
                 return Ok(TY_STR);
             }
-            "string_encode" if core_fn => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "string_encode(s) takes one `str`");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_STR))?;
-                if t != TY_STR {
-                    self.ctx.err(sp, format!("string_encode takes a `str`, found `{}`", self.ctx.types.name(t)));
-                }
-                let src = self.last_reg;
-                let dst = self.emit_string_encode(src, sp.lo);
-                self.last_reg = dst;
-                return Ok(TY_BYTES);
-            }
-            "bytes_len" if core_fn => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "bytes_len(b) takes one `bytes`");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_BYTES))?;
-                if t != TY_BYTES {
-                    self.ctx.err(sp, format!("bytes_len takes a `bytes`, found `{}`", self.ctx.types.name(t)));
-                }
-                let src = self.last_reg;
-                let dst = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
-                return Ok(TY_I32);
-            }
-            "bytes_decode" if core_fn => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "bytes_decode(b) takes one `bytes`");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_BYTES))?;
-                if t != TY_BYTES {
-                    self.ctx.err(sp, format!("bytes_decode takes a `bytes`, found `{}`", self.ctx.types.name(t)));
-                }
-                let src = self.last_reg;
-                let dst = self.emit_bytes_decode(src, sp.lo);
-                self.last_reg = dst;
-                return Ok(TY_STR);
-            }
-            "bytes_from" if core_fn => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "bytes_from(source) takes one `Array<u8>`");
-                    return Err(());
-                }
-                let hint = Some(self.ctx.mk_array(TY_U8));
-                let at = self.compile_expr(args[0], hint)?;
-                match self.ctx.types.kind(at) {
-                    TyKind::Array { elem } if *elem == TY_U8 => {}
-                    _ => {
-                        self.ctx.err(sp, format!("bytes_from expects `Array<u8>` —found `{}`", self.ctx.types.name(at)));
-                        return Err(());
-                    }
-                }
-                let src = self.last_reg;
-                let dst = self.new_reg(TY_BYTES);
-                self.emit(Op::Own { dst, src, ty: TY_BYTES }, sp.lo);
-                return Ok(TY_BYTES);
-            }
-            "bytes_zeroed" if core_fn => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "bytes_zeroed(n) takes one `i32`");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_I32))?;
-                if t != TY_I32 {
-                    self.ctx.err(sp, "bytes_zeroed takes an `i32`");
-                }
-                let len_reg = self.last_reg;
-                let dst = self.new_reg(TY_BYTES);
-                self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
-                return Ok(TY_BYTES);
-            }
             "type_id" => {
                 // compile-time constant —never executed (RFC 0015 §3, 0033 §3)
                 if generics.len() != 1 || !args.is_empty() {
@@ -916,6 +841,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let dst = self.emit_string_encode(rreg, sp.lo);
                     self.last_reg = dst;
                     return Ok(TY_BYTES);
+                }
+                if mname == "len" && args.is_empty() {
+                    if let Some(info) = self.slice_info(rt) {
+                        self.emit_slice_len(rreg, &info, sp.lo)?;
+                        return Ok(TY_I32);
+                    }
                 }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(

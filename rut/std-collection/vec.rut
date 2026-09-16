@@ -10,7 +10,7 @@
 // fields directly — never a per-element method call (RFC 0032 §1.1).
 // The builtin `Vec` natives are gone; this class is the sequence type.
 
-import { Array, bytes_from } from "std:core";
+import { Array } from "std:core";
 pub class Vec<T> {
     buf: Array<T>;      // capacity == buf.len() == cap
     len: i32;           // live length
@@ -74,7 +74,7 @@ pub class Vec<T> {
         for (let i = 0; i < n; i += 1) {
             a[i] = self.buf[i];
         }
-        return bytes_from(a);
+        return bytes.from(a);
     }
 
     // Copy the live elements into a fresh, exactly-sized `Array<T>`. The

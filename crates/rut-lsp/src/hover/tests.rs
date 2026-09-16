@@ -149,22 +149,22 @@ fn ambiguity_lists_candidates() {
 #[test]
 fn host_fn_surface_favors_own_methods() {
     // std-style surface index ahead of the doc
-    let surf_src = "pub host fn string_len(s: str) -> i32;\n";
+    let surf_src = "pub host fn string_join(s: Array<str>) -> i32;\n";
     let s2 = rut_lexer::lexer::normalize(surf_src);
     let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Decl);
     let mut surf = index(&s2, &sast);
     surf.origin = "std:core".to_string();
 
-    let doc = "fn main() -> i32 { return string_len(\"abc\"); }\n";
+    let doc = "fn main() -> i32 { return string_join([]); }\n";
     let d2 = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&d2);
     let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
     let mut di = index(&d2, &ast);
     di.origin = "main.rut".to_string();
     let idxs = [&di, &surf];
-    let pos = find_ident_pos(&toks, "string_len", 0).unwrap();
+    let pos = find_ident_pos(&toks, "string_join", 0).unwrap();
     let h = hover(&idxs, &d2, &toks, &ast, pos).unwrap();
-    assert!(h.markdown.contains("fn string_len"), "{}", h.markdown);
+    assert!(h.markdown.contains("fn string_join"), "{}", h.markdown);
     assert!(h.markdown.contains("std:core"), "{}", h.markdown);
 }
 

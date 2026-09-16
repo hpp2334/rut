@@ -148,8 +148,7 @@ pub struct Surface {
 pub const CORE_FNS: &[&str] = &[
     "downcast", "assert", "panic",
     "make_ptr", "on_drop",
-    "string_len", "string_encode", "string_join",
-    "bytes_len", "bytes_decode", "bytes_from", "bytes_zeroed",
+    "string_join",
 ];
 
 impl Surface {
@@ -209,6 +208,12 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"),
     ("Index", "`Index` was removed — indexing is builtin over `[T]`/`Vec`/`str`/`bytes`; give the type real `len`/indexing members or a `buf`+`len` shape (RFC 0012 v1.1)"),
     ("Disposal", "`Disposal` was removed — attach cleanups with `on_drop` (RFC 0016 v1.1)"),
+    ("string_len", "`string_len(s)` was removed — use `s.len()` (RFC 0004 v1.1)"),
+    ("string_encode", "`string_encode(s)` was removed — use `s.encode()` (RFC 0004 v1.1)"),
+    ("bytes_len", "`bytes_len(b)` was removed — use `b.len()` (RFC 0004 v1.1)"),
+    ("bytes_decode", "`bytes_decode(b)` was removed — use `b.decode()` (RFC 0004 v1.1)"),
+    ("bytes_from", "`bytes_from(a)` was removed — use `bytes.from(a)` (RFC 0004 v1.1)"),
+    ("bytes_zeroed", "`bytes_zeroed(n)` was removed — use `bytes.zeroed(n)` (RFC 0004 v1.1)"),
 ];
 
 /// The v1.1 removal message for `name`, if it is a removed `std:core` name.

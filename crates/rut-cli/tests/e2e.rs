@@ -762,17 +762,17 @@ fn bytes_are_an_immutable_primitive() {
 import { Vec } from "std:collection";
 pub fn main() -> unit {
     let z = bytes(3);
-    Logger.new("app").info(f"z={bytes_len(z)}");
-    let a = bytes_from([1, 2, 3]);
-    let b = bytes_from([1, 2, 3]);
-    Logger.new("app").info(f"a={bytes_len(a)} eq={a == b} ne={a != z}");
+    Logger.new("app").info(f"z={z.len()}");
+    let a = bytes.from([1, 2, 3]);
+    let b = bytes.from([1, 2, 3]);
+    Logger.new("app").info(f"a={a.len()} eq={a == b} ne={a != z}");
     let mut buf: Vec<u8> = Vec.new();
     buf.push(9);
     buf.push(8);
     let f = buf.freeze();
-    Logger.new("app").info(f"f={bytes_len(f)} f0={f[0]} f1={f[1]}");
-    let enc = string_encode("rut");
-    Logger.new("app").info(f"enc={bytes_len(enc)} dec={bytes_decode(enc)}");
+    Logger.new("app").info(f"f={f.len()} f0={f[0]} f1={f[1]}");
+    let enc = "rut".encode();
+    Logger.new("app").info(f"enc={enc.len()} dec={enc.decode()}");
     let mut sum: u8 = 0u8;
     for (let x of a) { sum = sum + x; }
     Logger.new("app").info(f"sum={sum}");
@@ -790,7 +790,7 @@ pub fn main() -> unit {
 fn bytes_index_out_of_bounds_traps() {
     let src = r#"
 pub fn main() -> unit {
-    let a = bytes_from([1]);
+    let a = bytes.from([1]);
     Logger.new("app").info(f"{a[5]}");
 }
 "#;
@@ -1131,7 +1131,7 @@ pub fn main() -> unit {
     v.push(" ");
     v.push("world");
     let s = string_join(v.as_array());
-    Logger.new("app").info(f"{string_len(s)} {s}");
+    Logger.new("app").info(f"{s.len()} {s}");
 }
 "#
                 .into(),
@@ -1176,7 +1176,7 @@ pub fn main() {
     let t = f"{s}";
     let c = "x";
     let u = f"{c}";
-    Logger.new("app").info(f"{t} {u} {string_len(t)}");
+    Logger.new("app").info(f"{t} {u} {t.len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1202,7 +1202,7 @@ pub fn main() -> unit {
     let mut n = "";
     let mut k = 0;
     while (k < 5) { n = f"{n}{k},"; k += 1; }
-    Logger.new("app").info(f"{string_len(s)} {a} {b} {base} {n}");
+    Logger.new("app").info(f"{s.len()} {a} {b} {base} {n}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 4_000_000);
@@ -1219,7 +1219,7 @@ pub fn main() -> unit {
     let mut v: Vec<str> = Vec.new();
     v.push("x"); v.push("y"); v.push("z");
     let e: Vec<str> = Vec.new();
-    Logger.new("app").info(f"{string_join(v.as_array())} {string_len(string_join(e.as_array()))}");
+    Logger.new("app").info(f"{string_join(v.as_array())} {string_join(e.as_array()).len()}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
