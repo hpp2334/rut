@@ -420,10 +420,31 @@ pub type Handler<M> = extern "rust-preserve-none" fn(
 
 /// The op handler table, built once per `Machine` instantiation. On
 /// non-threaded targets it carries no data.
+/// Owned by value: 85 fn pointers (`Copy`), one memcpy per `Vm` — no
+/// `Rc`, no statics, no lazy init anywhere. `Copy` is manual (a derive
+/// would demand `M: Copy`, which no `Machine` is).
 #[cfg(rut_threaded)]
 pub struct Table<M: Machine> {
     pub(crate) entries: [Handler<M>; NTAGS],
 }
 
+#[cfg(rut_threaded)]
+impl<M: Machine> Clone for Table<M> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+#[cfg(rut_threaded)]
+impl<M: Machine> Copy for Table<M> {}
+
 #[cfg(not(rut_threaded))]
 pub struct Table<M: Machine>(core::marker::PhantomData<fn() -> M>);
+
+#[cfg(not(rut_threaded))]
+impl<M: Machine> Clone for Table<M> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+#[cfg(not(rut_threaded))]
+impl<M: Machine> Copy for Table<M> {}

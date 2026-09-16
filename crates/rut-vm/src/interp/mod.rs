@@ -113,7 +113,7 @@ pub struct Vm {
     /// per-function dispatch tags for `rut-vm-threaded` (one per op)
     op_tags: Vec<Vec<u8>>,
     /// threaded handler table, built once and reused across bails
-    thread_table: Rc<rut_vm_threaded::Table<Vm>>,
+    thread_table: rut_vm_threaded::Table<Vm>,
 }
 
 /// Const-generic op codes for the scalar op bodies — RFC 0032: the opcode is
@@ -204,7 +204,7 @@ impl Vm {
             .iter()
             .map(|f| f.code.iter().map(rut_vm_threaded::tag_of).collect())
             .collect();
-        let thread_table = Rc::new(rut_vm_threaded::build_table::<Vm>());
+        let thread_table = rut_vm_threaded::build_table::<Vm>();
         Ok(Vm {
             prog,
             heap,

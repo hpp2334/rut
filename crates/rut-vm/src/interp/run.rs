@@ -13,7 +13,7 @@ impl Vm {
             let pc = self.cur_pc;
             let len = self.prog.funcs[self.cur_func as usize].code.len() as u32;
             if pc < len {
-                let table = Rc::clone(&self.thread_table);
+                let table = self.thread_table; // Copy — a 680-byte fn-ptr array
                 match rut_vm_threaded::run(self, pc, &table)? {
                     rut_vm_threaded::ThreadOut::Done(v) => return Ok(v),
                     rut_vm_threaded::ThreadOut::Bail => {}
