@@ -178,16 +178,6 @@ pub enum Op {
 
     /// enum member value (immortal singleton cell, RFC 0016 §1)
     EnumNew { dst: Reg, ty: TypeId, member: u32 },
-    OptSome { dst: Reg, ty: TypeId, val: Reg },
-    OptNone { dst: Reg, ty: TypeId },
-    ResOk { dst: Reg, ty: TypeId, val: Reg },
-    ResErr { dst: Reg, ty: TypeId, val: Reg },
-    /// Option.is_some / Result.is_ok (tag 0 check); `want_err` flips
-    SumIs { dst: Reg, v: Reg, want_err: bool },
-    /// `.value` / `.error` — traps on the wrong tag (RFC 0005)
-    Unwrap { dst: Reg, v: Reg, want_err: bool },
-    UnwrapOr { dst: Reg, v: Reg, default: Reg },
-    Expect { dst: Reg, v: Reg, msg: Reg },
 
     /// read a handle's runtime TypeId → u32 (pure load; RFC 0032 §1)
     TidOf { dst: Reg, obj: Reg },

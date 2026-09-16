@@ -252,9 +252,6 @@ impl Heap {
         }
     }
 
-    pub fn alloc_sum(&self, ty: TypeId, tag: u32, payload: Option<Slot>) -> Result<Slot, Trap> {
-        self.mint(ty, CellData::Sum { tag, payload }, 8)
-    }
 
     pub fn alloc_opaque(&self, val: Slot, val_ty: TypeId) -> Result<Slot, Trap> {
         self.mint(rut_core::types::TY_OPAQUE, CellData::OpaqueBox { val, val_ty }, 8)
@@ -412,35 +409,6 @@ impl Heap {
                     self.alloc_record(ty, out)
                 } else {
                     Err(Trap::new(TrapKind::Invalid, "own: not a record"))
-                }
-            }
-            TyKind::Option { elem } => {
-                let Some((tag, payload)) = cell_of(s).as_sum() else {
-                    return Err(Trap::new(TrapKind::Invalid, "own: not a sum"));
-                };
-                match (tag, payload) {
-                    (1, _) => self.alloc_sum(ty, 1, None),
-                    (0, Some(p)) => {
-                        let v = self.clone_slot(p, elem, table)?;
-                        self.alloc_sum(ty, 0, Some(v))
-                    }
-                    _ => Err(Trap::new(TrapKind::Invalid, "own: bad sum")),
-                }
-            }
-            TyKind::Result { ok, err } => {
-                let Some((tag, payload)) = cell_of(s).as_sum() else {
-                    return Err(Trap::new(TrapKind::Invalid, "own: not a sum"));
-                };
-                match (tag, payload) {
-                    (0, Some(p)) => {
-                        let v = self.clone_slot(p, ok, table)?;
-                        self.alloc_sum(ty, 0, Some(v))
-                    }
-                    (1, Some(p)) => {
-                        let v = self.clone_slot(p, err, table)?;
-                        self.alloc_sum(ty, 1, Some(v))
-                    }
-                    _ => Err(Trap::new(TrapKind::Invalid, "own: bad sum")),
                 }
             }
             TyKind::Opaque => {

@@ -956,84 +956,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_I32);
             }
         }
-        // builtin members (RFC 0005 table; Vec's named API —RFC 0032 §1.1 R2)
+        // builtin members (RFC 0005 table): `Opaque` rejects methods
         match self.ctx.types.kind(rt).clone() {
-            TyKind::Option { elem } => match mname.as_str() {
-                "is_some" | "is_none" => {
-                    if !args.is_empty() {
-                        self.ctx.err(sp, format!("{mname}() takes no arguments"));
-                        return Err(());
-                    }
-                    let dst = self.new_reg(TY_BOOL);
-                    self.emit(Op::SumIs { dst, v: rreg, want_err: mname == "is_none" }, sp.lo);
-                    return Ok(TY_BOOL);
-                }
-                "unwrap_or" => {
-                    if args.len() != 1 {
-                        self.ctx.err(sp, "unwrap_or(default) takes one argument");
-                        return Err(());
-                    }
-                    let t = self.compile_expr(args[0], Some(elem))?;
-                    if t != elem {
-                        self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                            "unwrap_or takes `{}`, found `{}`",
-                            self.ctx.types.name(elem), self.ctx.types.name(t)
-                        ));
-                    }
-                    let dflt = self.last_reg;
-                    let dst = self.new_reg(elem);
-                    self.emit(Op::UnwrapOr { dst, v: rreg, default: dflt }, sp.lo);
-                    return Ok(elem);
-                }
-                "expect" => {
-                    if args.len() != 1 {
-                        self.ctx.err(sp, "expect(msg) takes a message");
-                        return Err(());
-                    }
-                    let t = self.compile_expr(args[0], Some(TY_STR))?;
-                    if t != TY_STR {
-                        self.ctx.err(sp, "expect takes a `str`");
-                    }
-                    let msg = self.last_reg;
-                    let dst = self.new_reg(elem);
-                    self.emit(Op::Expect { dst, v: rreg, msg }, sp.lo);
-                    return Ok(elem);
-                }
-                _ => {}
-            },
-            TyKind::Result { ok, .. } => match mname.as_str() {
-                "is_ok" | "is_err" => {
-                    let dst = self.new_reg(TY_BOOL);
-                    self.emit(Op::SumIs { dst, v: rreg, want_err: mname == "is_err" }, sp.lo);
-                    return Ok(TY_BOOL);
-                }
-                "unwrap_or" => {
-                    if args.len() != 1 {
-                        self.ctx.err(sp, "unwrap_or(default) takes one argument");
-                        return Err(());
-                    }
-                    let t = self.compile_expr(args[0], Some(ok))?;
-                    if t != ok {
-                        self.ctx.err(sp, "unwrap_or type mismatch");
-                    }
-                    let dflt = self.last_reg;
-                    let dst = self.new_reg(ok);
-                    self.emit(Op::UnwrapOr { dst, v: rreg, default: dflt }, sp.lo);
-                    return Ok(ok);
-                }
-                "expect" => {
-                    if args.len() != 1 {
-                        self.ctx.err(sp, "expect(msg) takes a message");
-                        return Err(());
-                    }
-                    self.compile_expr(args[0], Some(TY_STR))?;
-                    let msg = self.last_reg;
-                    let dst = self.new_reg(ok);
-                    self.emit(Op::Expect { dst, v: rreg, msg }, sp.lo);
-                    return Ok(ok);
-                }
-                _ => {}
-            },
             TyKind::Opaque => {
                 self.ctx.err(sp, "`Opaque` has no methods in this build —recover with `downcast<T>(o)` (RFC 0014)");
                 return Err(());
@@ -1359,29 +1283,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => (rreg, rt),
         };
-        // Option/Result payload accessors (RFC 0005)
-        match self.ctx.types.kind(rt).clone() {
-            TyKind::Option { elem } => {
-                if fname == "value" {
-                    let dst = self.new_reg(elem);
-                    self.emit(Op::Unwrap { dst, v: rreg, want_err: false }, sp.lo);
-                    return Ok(elem);
-                }
-            }
-            TyKind::Result { ok, err } => {
-                if fname == "value" {
-                    let dst = self.new_reg(ok);
-                    self.emit(Op::Unwrap { dst, v: rreg, want_err: false }, sp.lo);
-                    return Ok(ok);
-                }
-                if fname == "error" {
-                    let dst = self.new_reg(err);
-                    self.emit(Op::Unwrap { dst: dst, v: rreg, want_err: true }, sp.lo);
-                    return Ok(err);
-                }
-            }
-            _ => {}
-        }
         if let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() {
             if let Some(fidx) = fields.iter().position(|f| f.name == fname) {
                 let fty = fields[fidx].ty;

@@ -110,8 +110,6 @@ pub struct Vm {
     /// `type_repr[t]` — the baked representation of type `t` (no runtime
     /// type-table match)
     type_repr: Vec<Repr>,
-    /// `sum_payload_repr[t][tag]` — payload repr for Option/Result types
-    sum_payload_repr: Vec<[Repr; 2]>,
     /// per-function dispatch tags for `rut-vm-threaded` (one per op)
     op_tags: Vec<Vec<u8>>,
     /// threaded handler table, built once and reused across bails
@@ -204,17 +202,7 @@ impl Vm {
             .types
             .types
             .iter()
-            .map(|t| match &t.kind {
-                TyKind::Option { elem } => [
-                    type_repr.get(*elem as usize).copied().unwrap_or(Repr::Any),
-                    Repr::Any,
-                ],
-                TyKind::Result { ok, err } => [
-                    type_repr.get(*ok as usize).copied().unwrap_or(Repr::Any),
-                    type_repr.get(*err as usize).copied().unwrap_or(Repr::Any),
-                ],
-                _ => [Repr::Any, Repr::Any],
-            })
+            .map(|_t| [Repr::Any, Repr::Any])
             .collect();
         // precompute the threaded dispatch tags (one per op)
         let op_tags: Vec<Vec<u8>> = prog
@@ -243,7 +231,6 @@ impl Vm {
             ref_regs,
             data_ref_fields,
             type_repr,
-            sum_payload_repr,
             op_tags,
             thread_table,
         })
@@ -461,19 +448,6 @@ impl Vm {
             }
             (Value::Str(s), TyKind::Str) => self.heap.alloc_str(s.clone()).map_err(|t| t.msg)?,
             (Value::Bytes(b), TyKind::Bytes) => self.heap.alloc_bytes(b.clone()).map_err(|t| t.msg)?,
-            (Value::Opt(None), TyKind::Option { .. }) => self.heap.alloc_sum(ty, 1, None).map_err(|t| t.msg)?,
-            (Value::Opt(Some(inner)), TyKind::Option { elem }) => {
-                let payload = self.value_in(inner, elem)?;
-                self.heap.alloc_sum(ty, 0, Some(payload)).map_err(|t| t.msg)?
-            }
-            (Value::Res(Ok(inner)), TyKind::Result { ok, .. }) => {
-                let payload = self.value_in(inner, ok)?;
-                self.heap.alloc_sum(ty, 0, Some(payload)).map_err(|t| t.msg)?
-            }
-            (Value::Res(Err(inner)), TyKind::Result { err, .. }) => {
-                let payload = self.value_in(inner, err)?;
-                self.heap.alloc_sum(ty, 1, Some(payload)).map_err(|t| t.msg)?
-            }
             (Value::Opaque(h), TyKind::Opaque) => {
                 let s = Slot { r: h.ptr() };
                 if !matches!(cell_of(s).data, CellData::OpaqueBox { .. } | CellData::HostBoxed { .. }) {

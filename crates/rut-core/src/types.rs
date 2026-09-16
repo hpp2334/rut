@@ -112,9 +112,6 @@ pub enum TyKind {
     Array { elem: TypeId },
     /// named-int set (RFC 0006); members are immortal singleton cells
     Enum { members: Vec<(String, i64)> },
-    /// builtin sum (RFC 0005): tag 0 = some/ok, 1 = none/err
-    Option { elem: TypeId },
-    Result { ok: TypeId, err: TypeId },
     /// struct or class record cell — fields stored as one slot each
     /// (RFC 0009/0010); construction rules differ, representation does not
     Data { fields: Vec<FieldInfo> },
@@ -353,8 +350,6 @@ impl TypeTable {
     pub fn crosses_boundary(&self, id: TypeId) -> bool {
         match self.kind(id) {
             TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
-            TyKind::Option { elem } => self.crosses_boundary(*elem),
-            TyKind::Result { ok, err } => self.crosses_boundary(*ok) && self.crosses_boundary(*err),
             // tuples cross field-by-field (RFC 0007 v1.1): `(bytes, str)`
             // is the error convention; named records still do not cross
             TyKind::Data { fields } => fields.iter().all(|f| self.crosses_boundary(f.ty)),

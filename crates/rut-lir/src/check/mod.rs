@@ -484,20 +484,8 @@ impl<'a> Ctx<'a> {
             kind: TyKind::Array { elem },
         })
     }
-    pub fn mk_option(&mut self, elem: TypeId) -> TypeId {
-        let name = format!("Option<{}>", self.types.name(elem));
-        self.types.intern(RutType {
-            name,
-            kind: TyKind::Option { elem },
-        })
-    }
-    pub fn mk_result(&mut self, ok: TypeId, err: TypeId) -> TypeId {
-        let name = format!("Result<{}, {}>", self.types.name(ok), self.types.name(err));
-        self.types.intern(RutType {
-            name,
-            kind: TyKind::Result { ok, err },
-        })
-    }
+    /// `dyn I` — the interface object type: a cell handle whose cell's own
+    /// type reaches the vtable (RFC 0015 §6)
     pub fn mk_dyn(&mut self, trait_id: u32) -> TypeId {
         let name = format!("dyn {}", self.traits[trait_id as usize].name);
         self.types.intern(RutType {

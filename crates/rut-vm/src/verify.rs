@@ -296,16 +296,6 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         return Err(bad("conv operand types do not match the embedded primitives".into()));
                     }
                 }
-                Op::OptSome { ty, .. } | Op::OptNone { ty, .. } => {
-                    if !matches!(prog.types.kind(*ty), TyKind::Option { .. }) {
-                        return Err(bad("Option op over a non-Option type".into()));
-                    }
-                }
-                Op::ResOk { ty, .. } | Op::ResErr { ty, .. } => {
-                    if !matches!(prog.types.kind(*ty), TyKind::Result { .. }) {
-                        return Err(bad("Result op over a non-Result type".into()));
-                    }
-                }
                 _ => {}
             }
         }
@@ -328,7 +318,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
         }
         Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
         | Op::ArrNew { dst, .. } | Op::ArrLit { dst, .. } | Op::EnumNew { dst, .. }
-        | Op::OptNone { dst, .. } | Op::Panic { msg: dst } => push(*dst),
+        | Op::Panic { msg: dst } => push(*dst),
         Op::MakeRecord { dst, vals, .. } => {
             push(*dst);
             for &v in vals {
@@ -382,10 +372,6 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*obj);
             push(*cleanup);
         }
-        Op::OptSome { dst, val, .. } | Op::ResOk { dst, val, .. } | Op::ResErr { dst, val, .. } => {
-            push(*dst);
-            push(*val);
-        }
         Op::SetF { obj, val, .. } => {
             push(*obj);
             push(*val);
@@ -400,23 +386,13 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*idx);
             push(*val);
         }
-        Op::SumIs { dst, v: a, .. } | Op::Unwrap { dst, v: a, .. } | Op::Unbox { dst, box_: a, .. } => {
+        Op::Unbox { dst, box_: a, .. } => {
             push(*dst);
             push(*a);
-        }
-        Op::UnwrapOr { dst, v: a, default: b } => {
-            push(*dst);
-            push(*a);
-            push(*b);
         }
         Op::Box { dst, val, .. } => {
             push(*dst);
             push(*val);
-        }
-        Op::Expect { dst, v: a, msg: b } => {
-            push(*dst);
-            push(*a);
-            push(*b);
         }
         Op::TidOf { dst, obj } | Op::IsType { dst, obj, .. } | Op::IsTrait { dst, obj, .. } => {
             push(*dst);
@@ -474,8 +450,7 @@ fn tys_of(op: &Op) -> Vec<u32> {
     match op {
         Op::NewCell { ty, .. } | Op::Own { ty, .. }
         | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
-        | Op::OptSome { ty, .. } | Op::OptNone { ty, .. } | Op::ResOk { ty, .. }
-        | Op::ResErr { ty, .. } | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
+        | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
         | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakePtr { ty, .. }
         | Op::CloneVal { ty, .. } | Op::ValEq { ty, .. } => vec![*ty],
         _ => Vec::new(),

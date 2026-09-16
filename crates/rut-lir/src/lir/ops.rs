@@ -58,10 +58,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     TyKind::Bytes => {
                         self.emit(Op::ArrayCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
                     }
-                    TyKind::Option { .. } | TyKind::Result { .. } => {
-                        self.ctx.err(sp, "`==` on Option/Result is a compile error —use `when`, `is_some()`, or compare the payload (RFC 0005)");
-                        return Err(());
-                    }
                     TyKind::Data { .. } => {
                         // structural equality on values (RFC 0009/0016 v1.1)
                         self.emit(Op::ValEq { dst, a: lhs_reg, b: rhs_reg, ty, eq }, sp.lo);

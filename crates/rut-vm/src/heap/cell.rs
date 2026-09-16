@@ -375,8 +375,6 @@ pub enum CellData {
     Array { elem: TypeId, items: RefCell<Packed> },
     /// enum member — immortal singleton per (ty, member)
     Enum { member: u32 },
-    /// Option/Result: tag 0 = some/ok, 1 = none/err
-    Sum { tag: u32, payload: Option<Slot> },
     /// struct/class instance — the payload as one slot per field
     Record { fields: RefCell<Slots> },
     /// Opaque box (RFC 0014): the value + its runtime type
@@ -461,12 +459,6 @@ impl CellVal {
         }
     }
     /// Option/Result payload: (tag 0=some/ok 1=none/err, payload)
-    pub fn as_sum(&self) -> Option<(u32, Option<Slot>)> {
-        match &self.data {
-            CellData::Sum { tag, payload } => Some((*tag, *payload)),
-            _ => None,
-        }
-    }
     pub fn as_enum_member(&self) -> Option<u32> {
         match &self.data {
             CellData::Enum { member } => Some(*member),

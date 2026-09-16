@@ -521,14 +521,6 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::ArrGet { dst, .. }
         | Op::ArrGetF { dst, .. }
         | Op::EnumNew { dst, .. }
-        | Op::OptSome { dst, .. }
-        | Op::OptNone { dst, .. }
-        | Op::ResOk { dst, .. }
-        | Op::ResErr { dst, .. }
-        | Op::SumIs { dst, .. }
-        | Op::Unwrap { dst, .. }
-        | Op::UnwrapOr { dst, .. }
-        | Op::Expect { dst, .. }
         | Op::TidOf { dst, .. }
         | Op::IsType { dst, .. }
         | Op::IsTrait { dst, .. }
@@ -573,8 +565,7 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             u.push(*cleanup);
         }
         Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
-        | Op::ArrNew { dst, .. } | Op::EnumNew { dst, .. }
-        | Op::OptNone { dst, .. } => d.push(*dst),
+        | Op::ArrNew { dst, .. } | Op::EnumNew { dst, .. } => d.push(*dst),
         Op::ArrLit { dst, elems, .. } => {
             d.push(*dst);
             u.extend(elems.iter().copied());
@@ -697,24 +688,6 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             u.push(*obj);
             u.push(*idx);
             u.push(*val);
-        }
-        Op::OptSome { dst, val, .. } | Op::ResOk { dst, val, .. } | Op::ResErr { dst, val, .. } => {
-            d.push(*dst);
-            u.push(*val);
-        }
-        Op::SumIs { dst, v, .. } | Op::Unwrap { dst, v, .. } => {
-            d.push(*dst);
-            u.push(*v);
-        }
-        Op::UnwrapOr { dst, v, default } => {
-            d.push(*dst);
-            u.push(*v);
-            u.push(*default);
-        }
-        Op::Expect { dst, v, msg } => {
-            d.push(*dst);
-            u.push(*v);
-            u.push(*msg);
         }
         Op::TidOf { dst, obj } | Op::IsType { dst, obj, .. } | Op::IsTrait { dst, obj, .. } => {
             d.push(*dst);
@@ -849,16 +822,6 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
             f(obj);
             f(idx);
             f(val);
-        }
-        Op::OptSome { val, .. } | Op::ResOk { val, .. } | Op::ResErr { val, .. } => f(val),
-        Op::SumIs { v, .. } | Op::Unwrap { v, .. } => f(v),
-        Op::UnwrapOr { v, default, .. } => {
-            f(v);
-            f(default);
-        }
-        Op::Expect { v, msg, .. } => {
-            f(v);
-            f(msg);
         }
         Op::TidOf { obj, .. } | Op::IsType { obj, .. } | Op::IsTrait { obj, .. } => f(obj),
         Op::Unbox { box_, .. } => f(box_),

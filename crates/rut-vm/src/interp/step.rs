@@ -234,59 +234,6 @@ impl Vm {
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::OptSome { dst, ty, val } => {
-                self.alloc_sum(dst, ty, 0, Some(r!(val)))?;
-            }
-            Op::OptNone { dst, ty } => {
-                self.alloc_sum(dst, ty, 1, None)?;
-            }
-            Op::ResOk { dst, ty, val } => {
-                self.alloc_sum(dst, ty, 0, Some(r!(val)))?;
-            }
-            Op::ResErr { dst, ty, val } => {
-                self.alloc_sum(dst, ty, 1, Some(r!(val)))?;
-            }
-            Op::SumIs { dst, v, want_err } => {
-                let tag = sum_tag(cell_of(r!(v)))?;
-                self.cur_regs[dst as usize] = Slot::bool((tag == 1) == want_err);
-            }
-            Op::Unwrap { dst, v, want_err } => {
-                let cell = cell_of(r!(v));
-                let (tag, payload) = sum_parts(cell)?;
-                if (tag == 1) != want_err {
-                    return Err(Trap::new(
-                        TrapKind::UnwrapNone,
-                        if want_err {
-                            "`.error` on Ok"
-                        } else {
-                            "`.value` on None/Err — the value is absent (RFC 0005)"
-                        },
-                    ));
-                }
-                let val = payload.unwrap_or(Slot::int(0));
-                self.move_sum_val(dst, val, self.sum_payload_ty(cell.ty, want_err));
-            }
-            Op::UnwrapOr { dst, v, default } => {
-                let cell = cell_of(r!(v));
-                let (tag, payload) = sum_parts(cell)?;
-                let val = if tag == 0 {
-                    payload.unwrap_or(Slot::int(0))
-                } else {
-                    r!(default)
-                };
-                self.move_sum_val(dst, val, self.sum_payload_ty(cell.ty, false));
-            }
-            Op::Expect { dst, v, msg } => {
-                let cell = cell_of(r!(v));
-                let (tag, payload) = sum_parts(cell)?;
-                if tag == 1 {
-                    let m = cell_of(r!(msg)).as_str().to_string();
-                    return Err(Trap::new(TrapKind::UnwrapNone, format!("expect failed: {m}")));
-                }
-                let val = payload.unwrap_or(Slot::int(0));
-                self.move_sum_val(dst, val, self.sum_payload_ty(cell.ty, false));
-            }
-
             Op::TidOf { dst, obj } => {
                 let cell = cell_of(r!(obj));
                 // a host payload box has no rut runtime type (RFC 0023):

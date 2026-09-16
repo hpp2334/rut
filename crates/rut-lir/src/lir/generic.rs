@@ -105,15 +105,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let core = self.ctx.extern_native_types.contains_key(&segs[0].name);
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 match (core, head, arg_kind) {
-                    (true, "Option", TyKind::Option { elem }) if segs[0].generics.len() == 1 => {
-                        self.unify_generic(segs[0].generics[0], elem, decl_generics, subst, sp)
-                    }
-                    (true, "Result", TyKind::Result { ok, err })
-                        if segs[0].generics.len() == 2 =>
-                    {
-                        self.unify_generic(segs[0].generics[0], ok, decl_generics, subst, sp)?;
-                        self.unify_generic(segs[0].generics[1], err, decl_generics, subst, sp)
-                    }
                     (true, "Array", TyKind::Array { elem }) if segs[0].generics.len() == 1 => {
                         self.unify_generic(segs[0].generics[0], elem, decl_generics, subst, sp)
                     }

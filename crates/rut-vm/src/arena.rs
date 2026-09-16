@@ -30,7 +30,6 @@ pub(crate) struct ReleasePlan {
     /// per Data type: indices of ref-typed fields
     record_refs: Vec<Vec<u16>>,
     /// per Option/Result type: is the tag-0 / tag-1 payload a cell handle
-    sum_payload_ref: Vec<[bool; 2]>,
     /// per func: are its captured slots cell handles
     closure_capture_ref: Vec<Vec<bool>>,
 }
@@ -62,20 +61,11 @@ impl ReleasePlan {
                 _ => Vec::new(),
             })
             .collect();
-        let sum_payload_ref = types
-            .types
-            .iter()
-            .map(|t| match &t.kind {
-                TyKind::Option { elem } => [of(elem), false],
-                TyKind::Result { ok, err } => [of(ok), of(err)],
-                _ => [false, false],
-            })
-            .collect();
         let closure_capture_ref = funcs
             .iter()
             .map(|f| f.params.iter().map(of).collect())
             .collect();
-        ReleasePlan { is_ref, record_refs, sum_payload_ref, closure_capture_ref }
+        ReleasePlan { is_ref, record_refs, closure_capture_ref }
     }
 }
 
@@ -229,18 +219,6 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
             {
                 if let Some(s) = fb.get(i as usize) {
                     out.push(s);
-                }
-            }
-        }
-        CellData::Sum { tag, payload } => {
-            if let Some(p) = payload {
-                let refs = plan
-                    .sum_payload_ref
-                    .get(c.ty as usize)
-                    .copied()
-                    .unwrap_or([false, false]);
-                if refs[*tag as usize] {
-                    out.push(*p);
                 }
             }
         }

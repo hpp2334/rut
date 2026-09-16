@@ -460,7 +460,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     | Op::ArrNew { .. }
                     | Op::ArrLit { .. }
                     | Op::MakeClosure { .. }
-                    | Op::Unwrap { .. }
                     | Op::Box { .. }
             )
         )

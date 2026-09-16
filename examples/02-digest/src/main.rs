@@ -73,8 +73,12 @@ fn as_str(v: Value) -> String {
     s
 }
 fn as_err(v: Value) -> String {
-    let Value::Res(Err(e)) = v else { unreachable!("{v:?}") };
-    as_str(*e)
+    // v1.1 error convention: `(T, err)` — position 1 carries the message
+    let Value::Tuple(parts) = v else { unreachable!("{v:?}") };
+    match &parts[1] {
+        Value::Str(s) => s.clone(),
+        v => unreachable!("{v:?}"),
+    }
 }
 fn as_u64(v: Value) -> u64 {
     let Value::I64(x) = v else { unreachable!("{v:?}") };
@@ -126,8 +130,8 @@ fn main() {
         ] {
             let before = vm.fuel_used;
             let got = match call(&mut vm, "digest", &[Value::Str(algo.into()), Value::Bytes(data.clone())]) {
-                Value::Res(Ok(b)) => match *b {
-                    Value::Bytes(v) => v,
+                Value::Tuple(parts) => match &parts[0] {
+                    Value::Bytes(v) => v.clone(),
                     v => unreachable!("{v:?}"),
                 },
                 v => unreachable!("{v:?}"),
@@ -165,7 +169,10 @@ fn main() {
     // ---- JSON round-trip --------------------------------------------
     let tricky = r#"{"a":[1,2.5,-3e2],"s":"quote \" back \\ nl \n end","n":null,"t":true,"f":false,"o":{"x":[]}}"#;
     let rt = match call(&mut vm, "json_roundtrip", &[Value::Str(tricky.into())]) {
-        Value::Res(Ok(b)) => as_str(*b),
+        Value::Tuple(parts) => match &parts[0] {
+            Value::Str(s) => s.clone(),
+            v => unreachable!("{v:?}"),
+        },
         v => unreachable!("{v:?}"),
     };
     let equal = serde_json::from_str::<serde_json::Value>(&rt).unwrap() == serde_json::from_str::<serde_json::Value>(tricky).unwrap();
@@ -177,10 +184,7 @@ fn main() {
     println!("hex_dec(\"zz\")   = {:?}", as_err(call(&mut vm, "hex_dec", &[Value::Str("zz".into())])));
     println!("b64_dec(\"!*\")   = {:?}", as_err(call(&mut vm, "b64_dec", &[Value::Str("!*".into()), Value::Bool(false)])));
     println!("json_dec(\"{{,}}\") = {:?}", as_err(call(&mut vm, "json_dec", &[Value::Str("{,}".into())])));
-    println!("digest(\"md4\")   = {:?}", match call(&mut vm, "digest", &[Value::Str("md4".into()), Value::Bytes(b"x".to_vec())]) {
-        Value::Res(Err(e)) => as_str(*e),
-        v => unreachable!("{v:?}"),
-    });
+    println!("digest(\"md4\")   = {:?}", as_err(call(&mut vm, "digest", &[Value::Str("md4".into()), Value::Bytes(b"x".to_vec())])));
 
     println!("every row agrees: {}", verdict(all_ok));
     println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);

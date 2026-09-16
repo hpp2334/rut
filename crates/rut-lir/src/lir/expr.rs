@@ -477,42 +477,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, "generic arguments are not valid on a field");
                         return Err(());
                     }
-                    // Option/Result payload accessors mid-chain (RFC 0005)
-                    // + `p.x` auto-deref through a pointer (RFC 0005)
-                    match self.ctx.types.kind(cur_ty).clone() {
-                        TyKind::Ptr { elem } => {
-                            // deref: load the pointee cell, then read the
-                            // field from it
-                            let dst = self.new_reg(elem);
-                            self.emit(Op::GetF { dst, obj: cur, field: 0, repr: Repr::Ref }, sp.lo);
-                            cur = dst;
-                            cur_ty = elem;
-                        }
-                        TyKind::Option { elem } if self.ctx.name(seg.name) == "value" => {
-                            let dst = self.new_reg(elem);
-                            self.emit(Op::Unwrap { dst, v: cur, want_err: false }, sp.lo);
-                            cur = dst;
-                            cur_ty = elem;
-                            continue;
-                        }
-                        TyKind::Result { ok, err } => {
-                            let sn = self.ctx.name(seg.name);
-                            if sn == "value" {
-                                let dst = self.new_reg(ok);
-                                self.emit(Op::Unwrap { dst, v: cur, want_err: false }, sp.lo);
-                                cur = dst;
-                                cur_ty = ok;
-                                continue;
-                            }
-                            if sn == "error" {
-                                let dst = self.new_reg(err);
-                                self.emit(Op::Unwrap { dst, v: cur, want_err: true }, sp.lo);
-                                cur = dst;
-                                cur_ty = err;
-                                continue;
-                            }
-                        }
-                        _ => {}
+                    // `p.x` auto-deref through a pointer (RFC 0005)
+                    if let TyKind::Ptr { elem } = self.ctx.types.kind(cur_ty).clone() {
+                        // deref: load the pointee cell, then read the
+                        // field from it
+                        let dst = self.new_reg(elem);
+                        self.emit(Op::GetF { dst, obj: cur, field: 0, repr: Repr::Ref }, sp.lo);
+                        cur = dst;
+                        cur_ty = elem;
                     }
                     let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone() else {
                         self.ctx.err(sp, format!(
@@ -553,24 +525,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 self.ctx.err(sp, format!("`{}` is not a member of enum {}", self.ctx.name(member), self.ctx.name(base)));
                 return Err(());
-            }
-            // Option.none / Option.none() without call parens — import-gated
-            // like the type (RFC 0028)
-            if self.ctx.name(base) == "Option"
-                && self.ctx.name(member) == "none"
-                && self.ctx.extern_native_types.get(&base).copied()
-                    == Some(rut_core::binary::NativeTy::Option)
-            {                let elem = match expected.map(|e| self.ctx.types.kind(e).clone()) {
-                    Some(TyKind::Option { elem }) => elem,
-                    _ => {
-                        self.ctx.err(sp, "cannot infer the element type of `Option.none` here —annotate the binding");
-                        return Err(());
-                    }
-                };
-                let oty = self.ctx.mk_option(elem);
-                let reg = self.new_reg(oty);
-                self.emit(Op::OptNone { dst: reg, ty: oty }, sp.lo);
-                return Ok(oty);
             }
         }
         self.ctx.err(

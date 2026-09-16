@@ -197,23 +197,6 @@ impl<'a> Ctx<'a> {
                             self.err(sp, "Array takes one generic argument: Array<T>");
                             TY_I32
                         }
-                        (rut_core::binary::NativeTy::Option, [e]) => {
-                            let t = self.resolve_type(*e, env);
-                            self.mk_option(t)
-                        }
-                        (rut_core::binary::NativeTy::Option, _) => {
-                            self.err(sp, "Option takes one generic argument");
-                            TY_I32
-                        }
-                        (rut_core::binary::NativeTy::Result, [o, e]) => {
-                            let ok = self.resolve_type(*o, env);
-                            let err = self.resolve_type(*e, env);
-                            self.mk_result(ok, err)
-                        }
-                        (rut_core::binary::NativeTy::Result, _) => {
-                            self.err(sp, "Result takes two generic arguments");
-                            TY_I32
-                        }
                         (rut_core::binary::NativeTy::Opaque, []) => TY_OPAQUE,
                         (rut_core::binary::NativeTy::Opaque, _) => {
                             self.err(sp, "`Opaque` takes no generic arguments");

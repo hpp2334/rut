@@ -224,8 +224,6 @@ fn remap_kind(kind: &TyKind, map: &impl Fn(TypeId) -> TypeId) -> TyKind {
         }
         TyKind::Array { elem } => TyKind::Array { elem: map(*elem) },
         TyKind::Enum { members } => TyKind::Enum { members: members.clone() },
-        TyKind::Option { elem } => TyKind::Option { elem: map(*elem) },
-        TyKind::Result { ok, err } => TyKind::Result { ok: map(*ok), err: map(*err) },
         TyKind::Data { fields } => TyKind::Data {
             fields: fields
                 .iter()
@@ -265,10 +263,6 @@ fn remap_op(
         Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst, ty: map(ty), len, repr },
         Op::ArrLit { dst, ty, elems } => Op::ArrLit { dst, ty: map(ty), elems },
         Op::EnumNew { dst, ty, member } => Op::EnumNew { dst, ty: map(ty), member },
-        Op::OptSome { dst, ty, val } => Op::OptSome { dst, ty: map(ty), val },
-        Op::OptNone { dst, ty } => Op::OptNone { dst, ty: map(ty) },
-        Op::ResOk { dst, ty, val } => Op::ResOk { dst, ty: map(ty), val },
-        Op::ResErr { dst, ty, val } => Op::ResErr { dst, ty: map(ty), val },
         Op::IsType { dst, obj, want } => Op::IsType { dst, obj, want: map(want) },
         Op::Unbox { dst, box_, ty } => Op::Unbox { dst, box_, ty: map(ty) },
         Op::Box { dst, val, ty } => Op::Box { dst, val, ty: map(ty) },

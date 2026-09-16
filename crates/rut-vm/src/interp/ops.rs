@@ -2,19 +2,6 @@
 use super::*;
 
 impl Vm {
-    pub(super) fn alloc_sum(&mut self, dst: Reg, ty: TypeId, tag: u32, payload: Option<Slot>) -> Result<(), Trap> {
-        if let Some(v) = payload {
-            if self.sum_payload_repr[ty as usize][tag as usize].is_ref() {
-                self.heap.retain(v);
-            }
-        }
-        let c = self.heap.alloc_sum(ty, tag, payload)?;
-        let old = self.cur_regs[dst as usize];
-        self.cur_regs[dst as usize] = c;
-        self.heap.release(old);
-        Ok(())
-    }
-
     /// move a sum payload into dst with ref discipline
     pub(super) fn move_sum_val(&mut self, dst: Reg, val: Slot, ty: TypeId) {
         let old = self.cur_regs[dst as usize];
@@ -245,25 +232,6 @@ impl Vm {
                 let sb = cell_of(b).as_bytes();
                 Ok(sa == sb)
             }
-            TyKind::Option { elem } => {
-                let (ta, pa) = cell_of(a).as_sum().ok_or_else(|| Trap::new(TrapKind::Invalid, "value compare on a non-sum"))?;
-                let (tb, pb) = cell_of(b).as_sum().ok_or_else(|| Trap::new(TrapKind::Invalid, "value compare on a non-sum"))?;
-                if ta != tb { return Ok(false); }
-                match (pa, pb) {
-                    (Some(x), Some(y)) => self.vals_equal(x, y, elem),
-                    _ => Ok(true),
-                }
-            }
-            TyKind::Result { ok, err } => {
-                let (ta, pa) = cell_of(a).as_sum().ok_or_else(|| Trap::new(TrapKind::Invalid, "value compare on a non-sum"))?;
-                let (tb, pb) = cell_of(b).as_sum().ok_or_else(|| Trap::new(TrapKind::Invalid, "value compare on a non-sum"))?;
-                if ta != tb { return Ok(false); }
-                let ety = if ta == 0 { ok } else { err };
-                match (pa, pb) {
-                    (Some(x), Some(y)) => self.vals_equal(x, y, ety),
-                    _ => Ok(true),
-                }
-            }
             TyKind::Enum { .. } => Ok(Slot::same_ref(a, b)),
             _ => Ok(Slot::same_ref(a, b)),
         }
@@ -431,18 +399,10 @@ impl Vm {
         Ok(())
     }
 
-    pub(super) fn sum_payload_ty(&self, ty: TypeId, want_err: bool) -> TypeId {
-        match self.prog.types.kind(ty) {
-            TyKind::Option { elem } => *elem,
-            TyKind::Result { ok, err } => {
-                if want_err {
-                    *err
-                } else {
-                    *ok
-                }
-            }
-            _ => TY_ANY,
-        }
+    pub(super) fn sum_payload_ty(&self, _ty: TypeId, _want_err: bool) -> TypeId {
+        // v1.1: the builtin sums are gone — no sum payloads remain
+        TY_ANY
+
     }
     pub(super) fn store_result(&mut self, dst: Option<Reg>, v: Slot) -> Result<(), Trap> {
         if let Some(d) = dst {

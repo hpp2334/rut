@@ -12,34 +12,6 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
         TyKind::Str => Value::Str(cell_of(v).as_str().to_string()),
         // bytes is the one sequence that crosses (RFC 0023 §2, RFC 0004)
         TyKind::Bytes => Value::Bytes(cell_of(v).bytes_copy()),
-        TyKind::Option { elem } => {
-            let cell = cell_of(v);
-            match &cell.data {
-                CellData::Sum { tag: 1, .. } => Value::Opt(None),
-                CellData::Sum { tag: _, payload } => Value::Opt(Some(Box::new(
-                    slot_to_value(payload.expect("Some without payload"), *elem, prog, heap),
-                ))),
-                _ => Value::Opt(None),
-            }
-        }
-        TyKind::Result { ok, err } => {
-            let cell = cell_of(v);
-            match &cell.data {
-                CellData::Sum { tag: 1, payload } => Value::Res(Err(Box::new(slot_to_value(
-                    payload.expect("Err without payload"),
-                    *err,
-                    prog,
-                    heap,
-                )))),
-                CellData::Sum { tag: _, payload } => Value::Res(Ok(Box::new(slot_to_value(
-                    payload.expect("Ok without payload"),
-                    *ok,
-                    prog,
-                    heap,
-                )))),
-                _ => Value::Res(Ok(Box::new(Value::Unit))),
-            }
-        }
         // an Opaque box crosses as its handle: the handle owns a fresh
         // arena reference; the pending slot reference is released by do_ret
         TyKind::Opaque => {
@@ -90,19 +62,6 @@ pub(super) fn seq_set(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Result<Sl
         .ok_or_else(|| Trap::new(TrapKind::IndexOutOfBounds, format!("index {i} out of bounds (len {len})")))
 }
 
-pub(super) fn sum_tag(cell: &crate::heap::CellVal) -> Result<u32, Trap> {
-    match &cell.data {
-        crate::heap::CellData::Sum { tag, .. } => Ok(*tag),
-        _ => Err(Trap::new(TrapKind::Invalid, "sum op on non-sum")),
-    }
-}
-
-pub(super) fn sum_parts(cell: &crate::heap::CellVal) -> Result<(u32, Option<Slot>), Trap> {
-    match &cell.data {
-        crate::heap::CellData::Sum { tag, payload } => Ok((*tag, *payload)),
-        _ => Err(Trap::new(TrapKind::Invalid, "sum op on non-sum")),
-    }
-}
 
 /// Zero/default element from a baked repr without a type-table lookup
 /// (used by `ArrNew`'s zero-fill): primitives default to 0, handles null.

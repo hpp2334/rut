@@ -226,9 +226,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(sty)
     }
 
-    /// The zero value of a type (RFC 0007): `0`/`0.0`/`false`/`'\0'`, the
-    /// empty string, `nil` for pointers, `None` for Option, member 0 for
-    /// enums, the all-zero record for dataclasses.
+    /// The zero value of a type (RFC 0007): `0`/`0.0`/`false`, the empty
+    /// string, `nil` for pointers, member 0 for enums, the all-zero record
+    /// for records.
     pub(crate) fn zero_value(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<u16> {
         let reg = self.new_reg(ty);
         match self.ctx.types.kind(ty).clone() {
@@ -238,9 +238,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TyKind::Str => {
                 let k = self.konst(ConstVal::Str(String::new()));
                 self.emit(Op::Const { dst: reg, k: k as u32 }, sp.lo);
-            }
-            TyKind::Option { .. } => {
-                self.emit(Op::OptNone { dst: reg, ty }, sp.lo);
             }
             TyKind::Enum { .. } => {
                 self.emit(Op::EnumNew { dst: reg, ty, member: 0 }, sp.lo);

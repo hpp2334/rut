@@ -14,10 +14,6 @@ pub enum Value {
     Str(String),
     /// `Vec<u8>` buffer crossing (RFC 0023 §2)
     Bytes(Vec<u8>),
-    /// `Option<T>` — payload converted when `Some`
-    Opt(Option<Box<Value>>),
-    /// `Result<T, E>` — payloads converted in both arms
-    Res(Result<Box<Value>, Box<Value>>),
     /// an `Opaque` box (RFC 0014) — the one cell the host may hold and
     /// pass back; the handle owns one arena reference
     Opaque(OpaqueRef),
@@ -35,8 +31,6 @@ impl PartialEq for Value {
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::Bytes(a), Value::Bytes(b)) => a == b,
-            (Value::Opt(a), Value::Opt(b)) => a == b,
-            (Value::Res(a), Value::Res(b)) => a == b,
             // boxes compare by identity — the payload's type is erased
             (Value::Opaque(a), Value::Opaque(b)) => a == b,
             (Value::Tuple(a), Value::Tuple(b)) => a == b,
@@ -55,10 +49,6 @@ impl std::fmt::Debug for Value {
             Value::Char(v) => write!(f, "Char({v:?})"),
             Value::Str(v) => write!(f, "Str({v:?})"),
             Value::Bytes(v) => write!(f, "Bytes(len {})", v.len()),
-            Value::Opt(None) => write!(f, "Opt(None)"),
-            Value::Opt(Some(v)) => write!(f, "Opt(Some({v:?}))"),
-            Value::Res(Ok(v)) => write!(f, "Res(Ok({v:?}))"),
-            Value::Res(Err(v)) => write!(f, "Res(Err({v:?}))"),
             Value::Opaque(_) => write!(f, "Opaque(<cell>)"),
             Value::Tuple(v) => write!(f, "Tuple({v:?})"),
         }
@@ -76,8 +66,6 @@ impl Value {
             Value::Char(_) => "a char",
             Value::Str(_) => "a string",
             Value::Bytes(_) => "bytes",
-            Value::Opt(_) => "an Option",
-            Value::Res(_) => "a Result",
             Value::Opaque(_) => "an Opaque",
             Value::Tuple(_) => "a tuple",
         }

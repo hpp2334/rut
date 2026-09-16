@@ -81,13 +81,13 @@ fn wrong_box_traps_cleanly() {
         Value::Opaque(inner) => {
             // box a plain string instead of a Lists — still a valid Opaque
             drop(inner);
-            Value::Opt(None)
+            Value::Bool(false)
         }
         other => unreachable!("{other:?}"),
     };
     let _ = wrong;
-    // passing None where Opaque is expected is an embedder mistake: a
-    // named trap, not a panic or silent zero
-    let err = vm.call("create", &[Value::Opt(None)]).unwrap_err();
+    // passing a non-Opaque where Opaque is expected is an embedder
+    // mistake: a named trap, not a panic or silent zero
+    let err = vm.call("create", &[Value::Bool(false)]).unwrap_err();
     assert!(err.msg.contains("argument"), "{}", err.msg);
 }

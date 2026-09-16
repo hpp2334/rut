@@ -98,10 +98,6 @@ pub struct SurfaceType {
 pub enum NativeTy {
     /// `Array<T>` — the heap array cell (RFC 0005)
     Array,
-    /// `Option<T>` — the builtin sum (RFC 0005)
-    Option,
-    /// `Result<T, E>` — the builtin sum (RFC 0005)
-    Result,
     /// `Opaque` — the erasure box (RFC 0014); a boot-table type whose name
     /// is import-gated like the containers
     Opaque,
@@ -399,15 +395,6 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
                 e.i64(*v);
             }
         }
-        TyKind::Option { elem } => {
-            e.u8(6);
-            e.u32(*elem);
-        }
-        TyKind::Result { ok, err } => {
-            e.u8(7);
-            e.u32(*ok);
-            e.u32(*err);
-        }
         TyKind::Data { fields } => {
             e.u8(8);
             e.u32(fields.len() as u32);
@@ -556,8 +543,6 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             }
             TyKind::Enum { members }
         }
-        6 => TyKind::Option { elem: d.u32()? },
-        7 => TyKind::Result { ok: d.u32()?, err: d.u32()? },
         8 => {
             let n = d.u32()? as usize;
             let mut fields = Vec::with_capacity(n);
@@ -649,14 +634,6 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::ArrGet { dst, arr, idx, repr } => { e.u8(27); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u8(repr.to_u8()); }
         Op::ArrSet { arr, idx, val, repr } => { e.u8(28); e.u16(*arr); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
         Op::EnumNew { dst, ty, member } => { e.u8(29); e.u16(*dst); e.u32(*ty); e.u32(*member); }
-        Op::OptSome { dst, ty, val } => { e.u8(30); e.u16(*dst); e.u32(*ty); e.u16(*val); }
-        Op::OptNone { dst, ty } => { e.u8(31); e.u16(*dst); e.u32(*ty); }
-        Op::ResOk { dst, ty, val } => { e.u8(32); e.u16(*dst); e.u32(*ty); e.u16(*val); }
-        Op::ResErr { dst, ty, val } => { e.u8(33); e.u16(*dst); e.u32(*ty); e.u16(*val); }
-        Op::SumIs { dst, v, want_err } => { e.u8(34); e.u16(*dst); e.u16(*v); e.u8(*want_err as u8); }
-        Op::Unwrap { dst, v, want_err } => { e.u8(35); e.u16(*dst); e.u16(*v); e.u8(*want_err as u8); }
-        Op::UnwrapOr { dst, v, default } => { e.u8(36); e.u16(*dst); e.u16(*v); e.u16(*default); }
-        Op::Expect { dst, v, msg } => { e.u8(37); e.u16(*dst); e.u16(*v); e.u16(*msg); }
         Op::TidOf { dst, obj } => { e.u8(38); e.u16(*dst); e.u16(*obj); }
         Op::IsType { dst, obj, want } => { e.u8(39); e.u16(*dst); e.u16(*obj); e.u32(*want); }
         Op::IsTrait { dst, obj, want } => { e.u8(40); e.u16(*dst); e.u16(*obj); e.u32(*want); }
@@ -714,14 +691,6 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         27 => Op::ArrGet { dst: d.u16()?, arr: d.u16()?, idx: d.u16()?, repr: repr(d.u8()?)? },
         28 => Op::ArrSet { arr: d.u16()?, idx: d.u16()?, val: d.u16()?, repr: repr(d.u8()?)? },
         29 => Op::EnumNew { dst: d.u16()?, ty: d.u32()?, member: d.u32()? },
-        30 => Op::OptSome { dst: d.u16()?, ty: d.u32()?, val: d.u16()? },
-        31 => Op::OptNone { dst: d.u16()?, ty: d.u32()? },
-        32 => Op::ResOk { dst: d.u16()?, ty: d.u32()?, val: d.u16()? },
-        33 => Op::ResErr { dst: d.u16()?, ty: d.u32()?, val: d.u16()? },
-        34 => Op::SumIs { dst: d.u16()?, v: d.u16()?, want_err: d.u8()? != 0 },
-        35 => Op::Unwrap { dst: d.u16()?, v: d.u16()?, want_err: d.u8()? != 0 },
-        36 => Op::UnwrapOr { dst: d.u16()?, v: d.u16()?, default: d.u16()? },
-        37 => Op::Expect { dst: d.u16()?, v: d.u16()?, msg: d.u16()? },
         38 => Op::TidOf { dst: d.u16()?, obj: d.u16()? },
         39 => Op::IsType { dst: d.u16()?, obj: d.u16()?, want: d.u32()? },
         40 => Op::IsTrait { dst: d.u16()?, obj: d.u16()?, want: d.u32()? },
