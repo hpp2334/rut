@@ -97,182 +97,172 @@ impl Slots {
 }
 
 /// Compact element storage for a sequence cell (RFC 0015 §4: "flat for
-/// primitive elem"). Sub-slot-width primitives are packed to their machine
-/// width — a `Vec<u8>` costs one byte per element instead of eight — while
-/// 8-byte primitives and every reference-typed element keep an 8-byte slot.
-pub enum Packed {
-    Slots(Vec<Slot>),
-    U8(Vec<u8>),
-    I8(Vec<i8>),
-    U16(Vec<u16>),
-    I16(Vec<i16>),
-    U32(Vec<u32>),
-    I32(Vec<i32>),
-    F32(Vec<f32>),
-    Char(Vec<u32>),
-    Bool(Vec<u8>),
+/// primitive elem"). Sub-slot-width primitives pack to their machine
+/// width — a `Vec<u8>` costs one byte per element instead of eight —
+/// while 8-byte primitives and every reference-typed element keep an
+/// 8-byte slot.
+///
+/// The elements live in a VM-owned block (`heap::blocks`, RFC 0039) at
+/// `width`-byte stride; the `kind` says how a stored element reads back
+/// into a `Slot`. One fixed-size cell field replaces the ten typed
+/// `Vec` variants the enum used to have — the kind tag is what varied,
+/// the storage was Rust's.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ArrKind {
+    Slots,
+    U8,
+    I8,
+    U16,
+    I16,
+    U32,
+    I32,
+    F32,
+    Char,
+    Bool,
 }
 
-impl Packed {
+impl ArrKind {
     /// Pick the storage kind for `elem`; unknown/sentinel ids (e.g. the
     /// untyped `TY_ANY`) fall back to slots.
-    pub fn for_elem(elem: TypeId, table: &TypeTable, cap: usize) -> Packed {
+    pub fn of(elem: TypeId, table: &TypeTable) -> ArrKind {
         if (elem as usize) >= table.types.len() {
-            return Packed::Slots(Vec::with_capacity(cap));
+            return ArrKind::Slots;
         }
         match table.kind(elem) {
-            TyKind::Prim(PrimTy::U8) => Packed::U8(Vec::with_capacity(cap)),
-            TyKind::Prim(PrimTy::I8) => Packed::I8(Vec::with_capacity(cap)),
-            TyKind::Prim(PrimTy::U16) => Packed::U16(Vec::with_capacity(cap)),
-            TyKind::Prim(PrimTy::I16) => Packed::I16(Vec::with_capacity(cap)),
-            TyKind::Prim(PrimTy::U32) => Packed::U32(Vec::with_capacity(cap)),
-            TyKind::Prim(PrimTy::I32) => Packed::I32(Vec::with_capacity(cap)),
-            TyKind::Prim(PrimTy::F32) => Packed::F32(Vec::with_capacity(cap)),
-            TyKind::Prim(PrimTy::Char) => Packed::Char(Vec::with_capacity(cap)),
-            TyKind::Prim(PrimTy::Bool) => Packed::Bool(Vec::with_capacity(cap)),
-            _ => Packed::Slots(Vec::with_capacity(cap)),
+            TyKind::Prim(PrimTy::U8) => ArrKind::U8,
+            TyKind::Prim(PrimTy::I8) => ArrKind::I8,
+            TyKind::Prim(PrimTy::U16) => ArrKind::U16,
+            TyKind::Prim(PrimTy::I16) => ArrKind::I16,
+            TyKind::Prim(PrimTy::U32) => ArrKind::U32,
+            TyKind::Prim(PrimTy::I32) => ArrKind::I32,
+            TyKind::Prim(PrimTy::F32) => ArrKind::F32,
+            TyKind::Prim(PrimTy::Char) => ArrKind::Char,
+            TyKind::Prim(PrimTy::Bool) => ArrKind::Bool,
+            _ => ArrKind::Slots,
         }
     }
 
-    pub fn from_slots(elem: TypeId, table: &TypeTable, slots: Vec<Slot>) -> Packed {
-        let mut p = Packed::for_elem(elem, table, slots.len());
-        for s in slots {
-            p.push(s);
-        }
-        p
-    }
-
-    /// Bytes of accounting/actual storage per element.
-    pub fn elem_width(&self) -> u64 {
+    /// Bytes per element.
+    pub fn width(self) -> usize {
         match self {
-            Packed::Slots(_) => 8,
-            Packed::U8(_) | Packed::I8(_) | Packed::Bool(_) => 1,
-            Packed::U16(_) | Packed::I16(_) => 2,
-            Packed::U32(_) | Packed::I32(_) | Packed::F32(_) | Packed::Char(_) => 4,
+            ArrKind::U8 | ArrKind::I8 | ArrKind::Bool => 1,
+            ArrKind::U16 | ArrKind::I16 => 2,
+            ArrKind::U32 | ArrKind::I32 | ArrKind::F32 | ArrKind::Char => 4,
+            ArrKind::Slots => 8,
         }
+    }
+}
+
+/// The element run of one array cell: a block, a length, an element
+/// capacity, and how to read the bytes back. The block is freed by the
+/// release path (never by `Drop` glue — freeing needs the `&Arena` the
+/// release walk already holds); blocks never move, so element reads are
+/// plain offset math off the block pointer.
+pub struct ArrData {
+    pub(crate) block: *mut u8,
+    pub(crate) len: u32,
+    /// element capacity (class-rounded via the block header)
+    pub(crate) cap: u32,
+    pub(crate) kind: ArrKind,
+}
+
+impl ArrData {
+    /// An empty run with room for `cap` elements — the block arrives
+    /// zeroed, which IS the zero-fill for `Array<T>(n)`.
+    pub(crate) fn new(kind: ArrKind, block: *mut u8, cap: u32) -> ArrData {
+        ArrData { block, len: 0, cap, kind }
     }
 
     pub fn len(&self) -> usize {
-        match self {
-            Packed::Slots(v) => v.len(),
-            Packed::U8(v) => v.len(),
-            Packed::I8(v) => v.len(),
-            Packed::U16(v) => v.len(),
-            Packed::I16(v) => v.len(),
-            Packed::U32(v) => v.len(),
-            Packed::I32(v) => v.len(),
-            Packed::F32(v) => v.len(),
-            Packed::Char(v) => v.len(),
-            Packed::Bool(v) => v.len(),
-        }
+        self.len as usize
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.len == 0
     }
 
-    /// Reconstruct a slot (the VM's untagged 8-byte value) from an element.
+    fn width(&self) -> usize {
+        self.kind.width()
+    }
+
+    #[inline]
+    fn slot_at(&self, i: usize) -> Slot {
+        let p = unsafe { self.block.add(i * self.width()) } as *const Slot;
+        match self.kind {
+            ArrKind::Slots => unsafe { std::ptr::read(p) },
+            ArrKind::U8 => Slot::int(unsafe { *(p as *const u8) } as i64),
+            ArrKind::I8 => Slot::int(unsafe { *(p as *const i8) } as i64),
+            ArrKind::U16 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const u16) } as i64),
+            ArrKind::I16 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const i16) } as i64),
+            ArrKind::U32 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const u32) } as i64),
+            ArrKind::I32 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const i32) } as i64),
+            ArrKind::F32 => Slot::float(unsafe { std::ptr::read_unaligned(p as *const f32) } as f64),
+            ArrKind::Char => Slot::ch(char::from_u32(unsafe { std::ptr::read_unaligned(p as *const u32) }).unwrap_or('\0')),
+            ArrKind::Bool => Slot::bool(unsafe { *(p as *const u8) } != 0),
+        }
+    }
+
+    #[inline]
+    fn write_slot(&mut self, i: usize, s: Slot) {
+        let p = unsafe { self.block.add(i * self.width()) } as *mut Slot;
+        unsafe {
+            match self.kind {
+                ArrKind::Slots => std::ptr::write(p, s),
+                ArrKind::U8 => *(p as *mut u8) = unsafe { s.i } as u8,
+                ArrKind::I8 => *(p as *mut i8) = unsafe { s.i } as i8,
+                ArrKind::U16 => std::ptr::write_unaligned(p as *mut u16, unsafe { s.i } as u16),
+                ArrKind::I16 => std::ptr::write_unaligned(p as *mut i16, unsafe { s.i } as i16),
+                ArrKind::U32 => std::ptr::write_unaligned(p as *mut u32, unsafe { s.i } as u32),
+                ArrKind::I32 => std::ptr::write_unaligned(p as *mut i32, unsafe { s.i } as i32),
+                ArrKind::F32 => std::ptr::write_unaligned(p as *mut f32, unsafe { s.f } as f32),
+                ArrKind::Char => std::ptr::write_unaligned(p as *mut u32, s.as_char() as u32),
+                ArrKind::Bool => *(p as *mut u8) = s.as_bool() as u8,
+            }
+        }
+    }
+
     pub fn get(&self, i: usize) -> Option<Slot> {
-        Some(match self {
-            Packed::Slots(v) => *v.get(i)?,
-            Packed::U8(v) => Slot::int(*v.get(i)? as i64),
-            Packed::I8(v) => Slot::int(*v.get(i)? as i64),
-            Packed::U16(v) => Slot::int(*v.get(i)? as i64),
-            Packed::I16(v) => Slot::int(*v.get(i)? as i64),
-            Packed::U32(v) => Slot::int(*v.get(i)? as i64),
-            Packed::I32(v) => Slot::int(*v.get(i)? as i64),
-            Packed::F32(v) => Slot::float(*v.get(i)? as f64),
-            Packed::Char(v) => Slot::ch(char::from_u32(*v.get(i)?).unwrap_or('\0')),
-            Packed::Bool(v) => Slot::bool(*v.get(i)? != 0),
-        })
+        if i < self.len as usize {
+            Some(self.slot_at(i))
+        } else {
+            None
+        }
     }
 
     pub fn set(&mut self, i: usize, s: Slot) -> Option<Slot> {
-        let old = self.get(i)?;
-        match self {
-            Packed::Slots(v) => v[i] = s,
-            Packed::U8(v) => v[i] = unsafe { s.i } as u8,
-            Packed::I8(v) => v[i] = unsafe { s.i } as i8,
-            Packed::U16(v) => v[i] = unsafe { s.i } as u16,
-            Packed::I16(v) => v[i] = unsafe { s.i } as i16,
-            Packed::U32(v) => v[i] = unsafe { s.i } as u32,
-            Packed::I32(v) => v[i] = unsafe { s.i } as i32,
-            Packed::F32(v) => v[i] = unsafe { s.f } as f32,
-            Packed::Char(v) => v[i] = s.as_char() as u32,
-            Packed::Bool(v) => v[i] = s.as_bool() as u8,
+        if i >= self.len as usize {
+            return None;
         }
+        let old = self.slot_at(i);
+        self.write_slot(i, s);
         Some(old)
     }
 
-    pub fn push(&mut self, s: Slot) {
-        match self {
-            Packed::Slots(v) => v.push(s),
-            Packed::U8(v) => v.push(unsafe { s.i } as u8),
-            Packed::I8(v) => v.push(unsafe { s.i } as i8),
-            Packed::U16(v) => v.push(unsafe { s.i } as u16),
-            Packed::I16(v) => v.push(unsafe { s.i } as i16),
-            Packed::U32(v) => v.push(unsafe { s.i } as u32),
-            Packed::I32(v) => v.push(unsafe { s.i } as i32),
-            Packed::F32(v) => v.push(unsafe { s.f } as f32),
-            Packed::Char(v) => v.push(s.as_char() as u32),
-            Packed::Bool(v) => v.push(s.as_bool() as u8),
+    /// Append during construction. Growth needs the block store, which
+    /// construction paths reach through the `Heap`; element capacity is
+    /// exact after `ArrData::new`, so this only fires if callers push
+    /// past their own declared capacity.
+    pub(crate) fn push(&mut self, s: Slot, blocks: &Blocks) {
+        if self.len == self.cap {
+            let old_len = self.len as usize;
+            self.block = blocks.grow(self.block, old_len * self.width(), (old_len + 1) * self.width());
+            self.cap = (blocks.cap_of(self.block) / self.width()) as u32;
         }
+        self.write_slot(self.len as usize, s);
+        self.len += 1;
     }
 
     pub fn pop(&mut self) -> Option<Slot> {
-        let n = self.len();
-        if n == 0 {
+        if self.len == 0 {
             return None;
         }
-        let v = self.get(n - 1);
-        match self {
-            Packed::Slots(v) => {
-                v.pop();
-            }
-            Packed::U8(v) => {
-                v.pop();
-            }
-            Packed::I8(v) => {
-                v.pop();
-            }
-            Packed::U16(v) => {
-                v.pop();
-            }
-            Packed::I16(v) => {
-                v.pop();
-            }
-            Packed::U32(v) => {
-                v.pop();
-            }
-            Packed::I32(v) => {
-                v.pop();
-            }
-            Packed::F32(v) => {
-                v.pop();
-            }
-            Packed::Char(v) => {
-                v.pop();
-            }
-            Packed::Bool(v) => {
-                v.pop();
-            }
-        }
-        v
+        let v = self.slot_at(self.len as usize - 1);
+        self.len -= 1;
+        Some(v)
     }
 
     pub fn to_slots(&self) -> Vec<Slot> {
-        (0..self.len()).map(|i| self.get(i).unwrap()).collect()
-    }
-
-    /// Drain all slots (release-path helper: the release walk reads them
-    /// out before the container dies). Leaves the container empty. Only
-    /// the `Slots` variant stores cell handles; prim-packed variants have
-    /// no children.
-    pub fn take_slots(&mut self) -> Vec<Slot> {
-        match self {
-            Packed::Slots(v) => std::mem::take(v),
-            _ => Vec::new(),
-        }
+        (0..self.len as usize).map(|i| self.slot_at(i)).collect()
     }
 }
 
@@ -326,7 +316,7 @@ impl StrVal {
 
 pub enum CellData {
     Str(StrVal),
-    Array { elem: TypeId, items: RefCell<Packed> },
+    Array { elem: TypeId, items: RefCell<ArrData> },
     /// enum member — immortal singleton per (ty, member)
     Enum { member: u32 },
     /// struct/class instance — the payload as one slot per field
@@ -397,23 +387,23 @@ impl CellVal {
             }
             _ => return false,
         };
-        if a.len() != b.len() {
+        if a.len() != b.len() || a.kind != b.kind {
             return false;
         }
-        match (&*a, &*b) {
-            (Packed::U8(x), Packed::U8(y)) => x == y,
-            (Packed::I8(x), Packed::I8(y)) => x == y,
-            (Packed::U16(x), Packed::U16(y)) => x == y,
-            (Packed::I16(x), Packed::I16(y)) => x == y,
-            (Packed::U32(x), Packed::U32(y)) => x == y,
-            (Packed::I32(x), Packed::I32(y)) => x == y,
-            (Packed::F32(x), Packed::F32(y)) => x == y,
-            (Packed::Char(x), Packed::Char(y)) => x == y,
-            (Packed::Bool(x), Packed::Bool(y)) => x == y,
-            (Packed::Slots(x), Packed::Slots(y)) => {
-                x.iter().zip(y.iter()).all(|(p, q)| Slot::same_ref(*p, *q))
+        match a.kind {
+            // same kind, same width: narrow kinds compare their packed
+            // bytes; the slot kind compares handles/64-bit raw
+            ArrKind::Slots => (0..a.len as usize).all(|i| {
+                let (x, y) = (a.slot_at(i), b.slot_at(i));
+                Slot::same_ref(x, y)
+            }),
+            _ => {
+                let w = a.width();
+                unsafe {
+                    std::slice::from_raw_parts(a.block, a.len as usize * w)
+                        == std::slice::from_raw_parts(b.block, b.len as usize * w)
+                }
             }
-            _ => false,
         }
     }
     /// Option/Result payload: (tag 0=some/ok 1=none/err, payload)
@@ -459,10 +449,12 @@ impl CellVal {
         match &self.data {
             CellData::Array { items, .. } => {
                 let b = items.borrow();
-                Some(match &*b {
-                    Packed::U8(v) => v.clone(),
-                    other => (0..other.len())
-                        .map(|i| other.get(i).map(|s| unsafe { s.i } as u8).unwrap_or(0))
+                Some(match b.kind {
+                    ArrKind::U8 => unsafe {
+                        std::slice::from_raw_parts(b.block, b.len as usize).to_vec()
+                    },
+                    _ => (0..b.len())
+                        .map(|i| b.get(i as usize).map(|s| unsafe { s.i } as u8).unwrap_or(0))
                         .collect(),
                 })
             }

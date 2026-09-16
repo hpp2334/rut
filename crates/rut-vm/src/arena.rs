@@ -172,8 +172,10 @@ impl Drop for Arena {
                     // free the cell's payload block(s) first — freeing needs
                     // the &Arena that Drop glue would not have (same rule as
                     // the release path below)
-                    if let CellData::Str(sv) = unsafe { &(*p).data } {
-                        self.blocks.free(sv.block);
+                    match unsafe { &(*p).data } {
+                        CellData::Str(sv) => self.blocks.free(sv.block),
+                        CellData::Array { items, .. } => self.blocks.free(items.borrow().block),
+                        _ => {}
                     }
                     unsafe { std::ptr::drop_in_place(p) };
                 }
@@ -237,8 +239,11 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
         }
         CellData::Array { elem, items } => {
             // the ELEMENT type decides: a `Vec<str>`'s slots are cell handles
+            // (slot-width elements). Handles are COPIED out — the block is
+            // freed by the caller right after.
             if plan.is_ref.get(*elem as usize).copied().unwrap_or(false) {
-                out.extend(items.borrow_mut().take_slots());
+                let d = items.borrow();
+                out.extend(d.to_slots());
             }
         }
         // a user box stores the inner handle — its release is the box's
@@ -281,9 +286,13 @@ pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
     };
     unsafe {
         // payload blocks die with the cell, explicitly — freeing needs the
-        // &Arena this walk holds (payloads carry no Drop glue)
-        if let CellData::Str(sv) = &(*p).data {
-            arena.blocks.free(sv.block);
+        // &Arena this walk holds (payloads carry no Drop glue). Children
+        // were collected above, so a ref-typed array's handles are already
+        // out before its block goes.
+        match &(*p).data {
+            CellData::Str(sv) => arena.blocks.free(sv.block),
+            CellData::Array { items, .. } => arena.blocks.free(items.borrow().block),
+            _ => {}
         }
         let bytes = (*p).bytes as u64;
         acct.used.set(acct.used.get().saturating_sub(bytes));

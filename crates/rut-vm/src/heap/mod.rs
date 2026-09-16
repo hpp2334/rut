@@ -19,8 +19,9 @@ mod trap;
 mod value;
 
 pub use crate::arena::OpaqueRef;
+pub(crate) use blocks::Blocks;
 
-pub use cell::{cell, cell_of, CellData, CellVal, Packed, Slots, StrVal};
+pub use cell::{cell, cell_of, ArrData, ArrKind, CellData, CellVal, Slots, StrVal};
 pub use hostbox::OpaqueBox;
 pub use trap::{Trap, TrapKind};
 pub use value::{Slot, Value};
@@ -207,25 +208,48 @@ impl Heap {
     /// is an array of octets at the engine level).
     pub fn alloc_bytes(&self, b: Vec<u8>) -> Result<Slot, Trap> {
         let n = b.len() as u64;
-        self.mint(0, CellData::Array { elem: rut_core::types::TY_U8, items: RefCell::new(Packed::U8(b)) }, n)
+        let block = self.arena.blocks.alloc(b.len());
+        let cap = (self.arena.blocks.cap_of(block)) as u32;
+        unsafe { std::ptr::copy_nonoverlapping(b.as_ptr(), block, b.len()) };
+        let mut d = ArrData::new(ArrKind::U8, block, cap);
+        d.len = b.len() as u32;
+        self.mint(
+            0,
+            CellData::Array { elem: rut_core::types::TY_U8, items: RefCell::new(d) },
+            n,
+        )
     }
 
     /// A `CellData::Array` with `n` elements pre-filled with `default` — the
     /// `Array<T>(n)` / `bytes_zeroed` path. Builds the packed store at its
     /// final length in one allocation (no `Vec<Slot>` temporary).
     pub fn alloc_array_filled(&self, elem: TypeId, n: usize, default: Slot, table: &TypeTable) -> Result<Slot, Trap> {
-        let mut p = Packed::for_elem(elem, table, n);
+        let kind = ArrKind::of(elem, table);
+        let w = kind.width();
+        let block = self.arena.blocks.alloc(w * n);
+        let cap = (self.arena.blocks.cap_of(block) / w) as u32;
+        let mut d = ArrData::new(kind, block, cap);
+        // the block arrives zeroed (page-carved or boxed zeroed), which is
+        // the zero-fill; writing `default` covers non-zero defaults
         for _ in 0..n {
-            p.push(default);
+            d.push(default, &self.arena.blocks);
         }
-        let bytes = (n as u64) * p.elem_width();
-        self.mint(0, CellData::Array { elem, items: RefCell::new(p) }, bytes)
+        let bytes = (n as u64) * w as u64;
+        self.mint(0, CellData::Array { elem, items: RefCell::new(d) }, bytes)
     }
 
     pub fn alloc_array(&self, elem: TypeId, items: Vec<Slot>, table: &TypeTable) -> Result<Slot, Trap> {
-        let p = Packed::from_slots(elem, table, items);
-        let bytes = (p.len() as u64) * p.elem_width();
-        self.mint(0, CellData::Array { elem, items: RefCell::new(p) }, bytes)
+        let kind = ArrKind::of(elem, table);
+        let w = kind.width();
+        let n = items.len();
+        let block = self.arena.blocks.alloc(w * n);
+        let cap = (self.arena.blocks.cap_of(block) / w) as u32;
+        let mut d = ArrData::new(kind, block, cap);
+        for s in items {
+            d.push(s, &self.arena.blocks);
+        }
+        let bytes = (n as u64) * w as u64;
+        self.mint(0, CellData::Array { elem, items: RefCell::new(d) }, bytes)
     }
 
     pub fn alloc_record(&self, ty: TypeId, fields: Vec<Slot>) -> Result<Slot, Trap> {
