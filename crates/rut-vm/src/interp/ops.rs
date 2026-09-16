@@ -46,7 +46,10 @@ impl Vm {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
         let v = self.cur_regs[val as usize];
-        let old = seq_set(cell, i, v)?;
+        let old = match window_sets(cell, i, v) {
+            Some(r) => r?,
+            None => seq_set(cell, i, v)?,
+        };
         if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);
@@ -59,17 +62,21 @@ impl Vm {
     #[inline(always)]
     pub(super) fn op_arr_get_f(&mut self, dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
-        let arr = {
-            let obj_cell = cell_of(self.cur_regs[obj as usize]);
-            match &obj_cell.data {
-                CellData::Record { fields } => fields
+        let obj_cell = cell_of(self.cur_regs[obj as usize]);
+        let v = match &obj_cell.data {
+            // the common case: a Vec record — read its backing array
+            CellData::Record { fields } => {
+                let arr = fields
                     .borrow()
                     .get(field as usize)
-                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
-                _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
+                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?;
+                seq_get(cell_of(arr), i)?
             }
+            // a window obj: an ELEMENT read through the window —
+            // parent[off + i], bounds vs the window (RFC 0042 §6)
+            CellData::ArrView { .. } => seq_get(obj_cell, i)?,
+            _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
         };
-        let v = seq_get(cell_of(arr), i)?;
         let old = self.cur_regs[dst as usize];
         self.cur_regs[dst as usize] = v;
         if repr.is_ref() {
@@ -106,6 +113,14 @@ impl Vm {
     #[inline(always)]
     pub(super) fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32, repr: Repr) -> Result<(), Trap> {
         let cell = cell_of(self.nil_checked(self.cur_regs[obj as usize])?);
+        if let Some(v) = window_getf(&self.heap, cell, self.cur_regs[obj as usize], repr) {
+            let old = self.cur_regs[dst as usize];
+            self.cur_regs[dst as usize] = v;
+            if repr.is_ref() {
+                self.heap.release(old);
+            }
+            return Ok(());
+        }
         let v = match &cell.data {
             CellData::Record { fields } => fields
                 .borrow()
@@ -126,6 +141,9 @@ impl Vm {
     #[inline(always)]
     pub(super) fn op_setf(&mut self, obj: Reg, field: u32, val: Reg, repr: Repr) -> Result<(), Trap> {
         let cell = cell_of(self.nil_checked(self.cur_regs[obj as usize])?);
+        if let Some(t) = window_setf_trap(cell) {
+            return Err(t);
+        }
         let v = self.cur_regs[val as usize];
         let old = if let CellData::Record { fields } = &cell.data {
             fields
@@ -152,7 +170,12 @@ impl Vm {
             TyKind::Ptr { elem } => *elem,
             _ => unreachable!("MakePtr on a non-pointer type"),
         };
-        let v = if self.prog.types.is_value(elem) {
+        let v = if matches!(cell_of(raw).data, CellData::ArrView { .. }) {
+            // a window box references its window (RFC 0042 §6) — the
+            // pointer IS the sharing; the view is never deep-copied
+            self.heap.retain(raw);
+            raw
+        } else if self.prog.types.is_value(elem) {
             self.heap.clone_val(raw, elem, &self.prog.types)?
         } else {
             self.heap.retain(raw);

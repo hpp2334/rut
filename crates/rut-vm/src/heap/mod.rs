@@ -136,6 +136,24 @@ impl Heap {
         )
     }
 
+    /// An array window (RFC 0042 §6): `len` elements of `parent`'s run
+    /// at element offset `off`, retained. O(1) — no elements move; the
+    /// view cell charges only its own header. Writes through the window
+    /// hit the parent (the `*T` aliasing law).
+    pub fn alloc_arr_view(&self, parent: Slot, off: u32, len: u32) -> Result<Slot, Trap> {
+        self.retain(parent);
+        let ty = unsafe { cell_of(parent).ty };
+        let r = self.mint(ty, CellData::ArrView { parent, off, len }, CELL_OVERHEAD + 8);
+        match r {
+            Ok(s) => Ok(s),
+            Err(e) => {
+                // the charge failed — give the retain back
+                self.release(parent);
+                Err(e)
+            }
+        }
+    }
+
     /// A one-char `str` cell — the `{c}` f-string hole. UTF-8 encodes
     /// straight into the block; no intermediate `String` ever exists.
     pub fn alloc_char(&self, c: char) -> Result<Slot, Trap> {

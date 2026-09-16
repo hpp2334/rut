@@ -323,6 +323,12 @@ pub enum CellData {
     /// creation, and view-of-view flattens onto the root, so `parent`
     /// is always an owned `Str`.
     StrView { parent: Slot, off: u32, len: u32, ascii: bool },
+    /// array window (RFC 0042 §6): a fixed-length view over a backing
+    /// `Array` cell, retained by `parent`. Element `i` of the window is
+    /// element `off + i` of the parent — WRITES GO THROUGH (the `*T`
+    /// aliasing law): the window is a pointer, not a copy. Fixed-length
+    /// by construction; `push`/`pop` on a window trap.
+    ArrView { parent: Slot, off: u32, len: u32 },
     /// enum member — immortal singleton per (ty, member)
     Enum { member: u32 },
     /// struct/class instance — the payload as one slot per field

@@ -12,6 +12,7 @@ impl Vm {
         match nat {
             Nat::ArrLen => self.nat_arr_len(recv, dst),
             Nat::Str | Nat::Concat | Nat::StrLen | Nat::StrJoin | Nat::StrSlice => self.call_str_nat(nat, recv, args, dst),
+            Nat::ArrSlice => self.nat_arr_slice(recv, args, dst),
         }
     }
 

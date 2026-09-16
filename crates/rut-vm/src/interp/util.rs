@@ -42,26 +42,121 @@ pub(super) fn value_kind_name(v: &Value) -> &'static str {
 }
 
 pub(super) fn seq_get(cell: &crate::heap::CellVal, i: i64) -> Result<Slot, Trap> {
-    let items = match &cell.data {
-        crate::heap::CellData::Array { items, .. } => items.borrow(),
-        _ => return Err(Trap::new(TrapKind::Invalid, "index on non-sequence")),
-    };
-    items
-        .get(i as usize)
-        .ok_or_else(|| Trap::new(TrapKind::IndexOutOfBounds, format!("array index {i} out of bounds (len {})", items.len())))
+    if i < 0 {
+        return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("array index {i} out of bounds")));
+    }
+    match &cell.data {
+        CellData::Array { items, .. } => {
+            let items = items.borrow();
+            items.get(i as usize).ok_or_else(|| {
+                Trap::new(TrapKind::IndexOutOfBounds, format!("array index {i} out of bounds (len {})", items.len()))
+            })
+        }
+        // an array window: element i is parent[off + i], bounds vs the
+        // window (RFC 0042 §6)
+        CellData::ArrView { parent, off, len } => {
+            if i as u32 >= *len {
+                return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})")));
+            }
+            let p = cell_of(*parent);
+            let items = match &p.data {
+                CellData::Array { items, .. } => items.borrow(),
+                _ => return Err(Trap::new(TrapKind::Invalid, "view over a non-array backing")),
+            };
+            items.get(*off as usize + i as usize).ok_or_else(|| {
+                Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})"))
+            })
+        }
+        _ => Err(Trap::new(TrapKind::Invalid, "index on non-sequence")),
+    }
 }
 
 pub(super) fn seq_set(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Result<Slot, Trap> {
-    let mut items = match &cell.data {
-        crate::heap::CellData::Array { items, .. } => items.borrow_mut(),
-        _ => return Err(Trap::new(TrapKind::Invalid, "index-set on non-sequence")),
-    };
-    let len = items.len();
-    items
-        .set(i as usize, v)
-        .ok_or_else(|| Trap::new(TrapKind::IndexOutOfBounds, format!("index {i} out of bounds (len {len})")))
+    if i < 0 {
+        return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("array index {i} out of bounds")));
+    }
+    match &cell.data {
+        CellData::Array { items, .. } => {
+            let mut items = items.borrow_mut();
+            let len = items.len();
+            items.set(i as usize, v).ok_or_else(|| {
+                Trap::new(TrapKind::IndexOutOfBounds, format!("index {i} out of bounds (len {len})"))
+            })
+        }
+        // WRITE-THROUGH: a window write hits the parent (RFC 0042 §6)
+        CellData::ArrView { parent, off, len } => {
+            if i as u32 >= *len {
+                return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})")));
+            }
+            let p = cell_of(*parent);
+            let mut items = match &p.data {
+                CellData::Array { items, .. } => items.borrow_mut(),
+                _ => return Err(Trap::new(TrapKind::Invalid, "view over a non-array backing")),
+            };
+            let idx = *off as usize + i as usize;
+            items.set(idx, v).ok_or_else(|| {
+                Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})"))
+            })
+        }
+        _ => Err(Trap::new(TrapKind::Invalid, "index-set on non-sequence")),
+    }
 }
 
+
+/// The window intercept for `GetF`/`ArrGetF` (RFC 0042 §6): a scalar
+/// field reads the window's own length; a ref field (the `buf` read)
+/// hands out THE WINDOW itself (retained), so the element ops through
+/// it stay window-relative and bounds-checked. `None` = not a window —
+/// the caller proceeds with the record path.
+pub(super) fn window_getf(heap: &Heap, cell: &crate::heap::CellVal, obj: Slot, field_repr: Repr) -> Option<Slot> {
+    if let CellData::ArrView { len, .. } = &cell.data {
+        if field_repr.is_ref() {
+            heap.retain(obj);
+            return Some(obj);
+        }
+        return Some(Slot::int(*len as i64));
+    }
+    None
+}
+
+/// The window intercept for `SetF`: a window is a fixed-length view —
+/// no field of it can be written (`push`/`pop`/re-backing trap here).
+pub(super) fn window_setf_trap(cell: &crate::heap::CellVal) -> Option<Trap> {
+    if matches!(cell.data, CellData::ArrView { .. }) {
+        return Some(Trap::new(
+            TrapKind::Invalid,
+            "an array view is fixed-length — copy the elements out to grow or shrink",
+        ));
+    }
+    None
+}
+
+/// The window intercept for `ArrSetF` (RFC 0042 §6): writes go through —
+/// element `i` of the window is `parent[off + i]`. `None` = not a window.
+pub(super) fn window_sets(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Option<Result<Slot, Trap>> {
+    if let CellData::ArrView { parent, off, len } = &cell.data {
+        if i < 0 || i as u32 >= *len {
+            return Some(Err(Trap::new(
+                TrapKind::IndexOutOfBounds,
+                format!("view index {i} out of bounds (len {len})"),
+            )));
+        }
+        let p = cell_of(*parent);
+        let items = match &p.data {
+            CellData::Array { items, .. } => items,
+            _ => return Some(Err(Trap::new(TrapKind::Invalid, "view over a non-array backing"))),
+        };
+        let idx = *off as usize + i as usize;
+        return Some(match items.borrow_mut().set(idx, v) {
+            Some(old) => Ok(old),
+            None => Err(Trap::new(
+                TrapKind::IndexOutOfBounds,
+                format!("view index {i} out of bounds (len {len})"),
+            )),
+        });
+    }
+    None
+}
 
 /// Zero/default element from a baked repr without a type-table lookup
 /// (used by `ArrNew`'s zero-fill): primitives default to 0, handles null.

@@ -31,6 +31,12 @@ pub class Vec<T> {
         return Self { buf: Array<T>(n), len: n, cap: n };
     }
 
+    // `slice(from, to) -> *Vec<T>` is compiler-lowered (RFC 0042 §6):
+    // an O(1) fixed-length window over this vector's backing array,
+    // boxed as a pointer. Writes through the window hit this vector;
+    // the window is fixed-length and detaches if this vector grows.
+    // (Not a rut method — declared here as the surface contract.)
+
     pub fn push(mut self, v: T) -> unit {
         if (self.len == self.cap) {
             let mut cap = self.cap * 2;

@@ -1847,3 +1847,71 @@ pub fn main() -> unit {
     let (_, trap, _) = run_case(src, 1_000_000);
     assert!(trap.is_some());
 }
+
+#[test]
+fn array_views_are_write_through_pointers() {
+    // RFC 0042 §6 — `v.slice(from, to)` is `*Vec<T>`: an O(1) window
+    // whose writes hit the parent (the `*T` aliasing law). Fixed-length:
+    // parent growth detaches the window's backing (the window pins its
+    // own array via retain); reslicing flattens; for-of walks the window.
+    let src = r#"
+import { Vec } from "std:collection";
+import { Logger } from "std:log";
+pub fn main() -> unit {
+    let log = Logger.new("win");
+    let mut v: Vec<i32> = Vec.new();
+    v.push(1); v.push(2); v.push(3); v.push(4);
+    let w = v.slice(1, 3);
+    log.info(f"[{w[0]} {w[1]}] len={w.len()}");
+    w[0] = 20;
+    log.info(f"v1={v[1]} w0={w[0]}");
+    let w2 = w.slice(0, 1);
+    w2[0] = 99;
+    log.info(f"v1={v[1]}");
+    let mut s = 0;
+    for (let x of w) { s += x; }
+    log.info(f"s={s}");
+    v.push(5);
+    log.info(f"wlen={w.len()} vlen={v.len()} v1={v[1]}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(
+        lines,
+        vec!["[2 3] len=2", "v1=20 w0=20", "v1=99", "s=102", "wlen=2 vlen=5 v1=99"]
+    );
+}
+
+#[test]
+fn array_views_are_fixed_length_and_bounds_checked() {
+    // RFC 0042 §6 — push/pop/re-backing through a view traps; window
+    // bounds are the window's, not the parent's.
+    let src = r#"
+import { Vec } from "std:collection";
+import { Logger } from "std:log";
+pub fn main() -> unit {
+    let mut v: Vec<i32> = Vec.new();
+    v.push(1); v.push(2);
+    let w = v.slice(0, 2);
+    w.push(3);
+    Logger.new("win").info("unreachable");
+}
+"#;
+    let (_, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap.as_deref(), Some("Invalid"));
+
+    let src = r#"
+import { Vec } from "std:collection";
+import { Logger } from "std:log";
+pub fn main() -> unit {
+    let v: Vec<i32> = Vec.new();
+    v.push(1); v.push(2);
+    let w = v.slice(0, 2);
+    let x = w[5];
+    Logger.new("win").info(f"{x}");
+}
+"#;
+    let (_, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap.as_deref(), Some("IndexOutOfBounds"));
+}

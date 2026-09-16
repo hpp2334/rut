@@ -303,7 +303,10 @@ impl Machine for Vm {
         let i = unsafe { (*regs.add(*idx as usize)).i };
         let cell = cell_of(unsafe { *regs.add(*arr as usize) });
         let v = unsafe { *regs.add(*val as usize) };
-        let old = seq_set(cell, i, v)?;
+        let old = match window_sets(cell, i, v) {
+            Some(r) => r?,
+            None => seq_set(cell, i, v)?,
+        };
         if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);
@@ -316,17 +319,21 @@ impl Machine for Vm {
             unreachable_op!("op_arr_get_f: unexpected op")
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
-        let arr = {
-            let obj_cell = cell_of(unsafe { *regs.add(*obj as usize) });
-            match &obj_cell.data {
-                CellData::Record { fields } => fields
+        let obj_cell = cell_of(unsafe { *regs.add(*obj as usize) });
+        let v = match &obj_cell.data {
+            // the common case: a Vec record — read its backing array
+            CellData::Record { fields } => {
+                let arr = fields
                     .borrow()
                     .get(*field as usize)
-                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
-                _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
+                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?;
+                seq_get(cell_of(arr), i)?
             }
+            // a window obj: an ELEMENT read through the window —
+            // parent[off + i], bounds vs the window (RFC 0042 §6)
+            CellData::ArrView { .. } => seq_get(obj_cell, i)?,
+            _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
         };
-        let v = seq_get(cell_of(arr), i)?;
         let old = unsafe { *regs.add(*dst as usize) };
         unsafe { *regs.add(*dst as usize) = v };
         if repr.is_ref() {
@@ -365,17 +372,21 @@ impl Machine for Vm {
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
         let v = unsafe { *regs.add(*val as usize) };
-        let arr = {
-            let obj_cell = cell_of(unsafe { *regs.add(*obj as usize) });
-            match &obj_cell.data {
-                CellData::Record { fields } => fields
+        let obj_cell = cell_of(unsafe { *regs.add(*obj as usize) });
+        let old = match &obj_cell.data {
+            // the common case: a Vec record — write its backing array
+            CellData::Record { fields } => {
+                let arr = fields
                     .borrow()
                     .get(*field as usize)
-                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
-                _ => return Err(Trap::new(TrapKind::Invalid, "field-array set on non-record")),
+                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?;
+                seq_set(cell_of(arr), i, v)?
             }
+            // a window obj: an ELEMENT write through the window —
+            // parent[off + i], bounds vs the window (RFC 0042 §6)
+            CellData::ArrView { .. } => seq_set(obj_cell, i, v)?,
+            _ => return Err(Trap::new(TrapKind::Invalid, "field-array set on non-record")),
         };
-        let old = seq_set(cell_of(arr), i, v)?;
         if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);
@@ -392,6 +403,14 @@ impl Machine for Vm {
             return Err(Trap::new(TrapKind::NilDeref, "nil dereference"));
         }
         let cell = cell_of(s);
+        if let Some(v) = window_getf(&self.heap, cell, s, *repr) {
+            let old = unsafe { *regs.add(*dst as usize) };
+            unsafe { *regs.add(*dst as usize) = v };
+            if repr.is_ref() {
+                self.heap.release(old);
+            }
+            return Ok(Flow::Next(pc + 1));
+        }
         let v = match &cell.data {
             CellData::Record { fields } => fields
                 .borrow()
@@ -413,6 +432,9 @@ impl Machine for Vm {
             unreachable_op!("op_setf: unexpected op")
         };
         let cell = cell_of(unsafe { *regs.add(*obj as usize) });
+        if let Some(t) = window_setf_trap(cell) {
+            return Err(t);
+        }
         let v = unsafe { *regs.add(*val as usize) };
         let old = match &cell.data {
             CellData::Record { fields } => fields

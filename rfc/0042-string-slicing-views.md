@@ -81,15 +81,35 @@ mutate through one.
 Digest-style workloads (splitting, tokenizing, windowing) stop copying
 entirely; `heap_peak` now reports the buffer once instead of per-piece.
 
-## 6. Why arrays are not in this RFC
+## 6. Array windows — shipped in this revision
 
-Array windows share **mutable** storage — writes through them hit the
-parent, which is a *semantic* choice, not an implementation detail. That
-law (write-through views, Go-style, consumed at the use site) is
-deliberately deferred to a follow-up RFC so this one stays purely an
-addition over immutable data.
+`v.slice(from, to)` on a `Vec<T>` (and on `Array<T>`) mints an
+`ArrView` cell — a fixed-length window over the backing array — and
+boxes it as **`*Vec<T>`**: the view IS a pointer, so sharing is the
+spelled semantics and **writes through the window hit the parent**
+(the `*T` aliasing law; RFC 0012 §6).
 
-## 7. Shipped state
+- reads: `w[i]`, `w.len()`, `for (x of w)`, f-string holes — all
+  auto-deref the pointer at the use site and go through the window
+  (element `i` is `parent[off + i]`, bounds are the window's).
+- writes: `w[i] = x` (and compound assignment) hit the parent.
+- **fixed-length**: `push`/`pop`/re-backing through a view trap —
+  copy the elements out to grow (a `for`-push loop does it today).
+- reslicing flattens onto the root backing (`w.slice(a, b)`).
+- parent growth **detaches**: `push` re-backs the `Vec` with a fresh
+  array; the window keeps pinning the old backing via retain — the
+  same aliasing rule Go slices have.
+- element-ref iteration (`for` yields `*T`) boxes parent elements, so
+  writes through the loop variable hit the parent, per RFC 0012 §6.
+
+## 7. Why strings came first
+
+`str`/`bytes` are immutable, so their views carry no mutability law —
+they are purely an optimization plus a nicer parsing surface. Array
+windows change what writes mean, which is why the pointer spelling is
+mandatory for them and optional (invisible) for strings.
+
+## 8. Shipped state
 
 - `Nat::StrSlice` (code 5) — `callnat StrSlice r_s(r_from, r_to) -> r_dst`.
 - `CellData::StrView { parent, off, len, ascii }` in `rut-vm/src/heap/cell.rs`;
@@ -103,4 +123,6 @@ addition over immutable data.
 
 - OQ-1: `s.slice(from)` / `s.slice(..to)` half-open spellings — defer
   until range syntax exists (RFC 0008 has none today).
-- OQ-2: array views (§6) — mutability law + surface spelling.
+- OQ-2: `Array<T, N>`-typed windows currently surface as `*Array<T>`;
+  a `&[T; N]`-style length-typed spelling is unnecessary until const
+  generics meet real code.

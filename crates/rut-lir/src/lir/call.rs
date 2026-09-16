@@ -5,6 +5,7 @@
 use crate::check::TcResult;
 use rut_core::ops::*;
 use rut_core::types::*;
+use super::slice::SliceSource;
 use super::*;
 
 // ============ part 3: calls & members ============
@@ -906,6 +907,74 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some(info) = self.slice_info(rt) {
                 self.emit_slice_len(rreg, &info, sp.lo)?;
                 return Ok(TY_I32);
+            }
+        }
+        // `v.slice(from, to)` — an O(1) array window (RFC 0042 §6): mints
+        // an `ArrView` cell over the backing array and boxes it as
+        // `*Vec<T>`/`*Array<T>`. Reads AND writes through the pointer go
+        // to the parent (the `*T` aliasing law); the window is
+        // fixed-length. str has its own slice (handled above).
+        if mname == "slice" && args.len() == 2 {
+            if let Some(info) = self.slice_info(rt) {
+                match &info.source {
+                    SliceSource::DataBuf { buf_field, len_field } => {
+                        let arr_ty = self.ctx.mk_array(info.elem);
+                        let arr = self.new_reg(arr_ty);
+                        self.emit(Op::GetF { dst: arr, obj: rreg, field: *buf_field, repr: Repr::Ref }, sp.lo);
+                        let live = self.new_reg(TY_I32);
+                        self.emit(Op::GetF { dst: live, obj: rreg, field: *len_field, repr: Repr::Prim(PrimTy::I32) }, sp.lo);
+                        let ft = self.compile_expr(args[0], Some(TY_I32))?;
+                        if ft != TY_I32 {
+                            self.ctx.err(sp, "slice(from, to) takes `i32` bounds");
+                            return Err(());
+                        }
+                        let fr = self.last_reg;
+                        let tt = self.compile_expr(args[1], Some(TY_I32))?;
+                        if tt != TY_I32 {
+                            self.ctx.err(sp, "slice(from, to) takes `i32` bounds");
+                            return Err(());
+                        }
+                        let tr = self.last_reg;
+                        let view = self.new_reg(arr_ty);
+                        self.emit(
+                            Op::CallNat { nat: Nat::ArrSlice, recv: Some(arr), args: vec![fr, tr, live], dst: Some(view) },
+                            sp.lo,
+                        );
+                        let ptr_ty = self.ctx.mk_ptr(rt);
+                        let dst = self.new_reg(ptr_ty);
+                        self.emit(Op::MakePtr { dst, src: view, ty: ptr_ty }, sp.lo);
+                        return Ok(ptr_ty);
+                    }
+                    SliceSource::Array => {
+                        let ft = self.compile_expr(args[0], Some(TY_I32))?;
+                        if ft != TY_I32 {
+                            self.ctx.err(sp, "slice(from, to) takes `i32` bounds");
+                            return Err(());
+                        }
+                        let fr = self.last_reg;
+                        let tt = self.compile_expr(args[1], Some(TY_I32))?;
+                        if tt != TY_I32 {
+                            self.ctx.err(sp, "slice(from, to) takes `i32` bounds");
+                            return Err(());
+                        }
+                        let tr = self.last_reg;
+                        let live = self.new_reg(TY_I32);
+                        self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(rreg), args: vec![], dst: Some(live) }, sp.lo);
+                        let view = self.new_reg(rt);
+                        self.emit(
+                            Op::CallNat { nat: Nat::ArrSlice, recv: Some(rreg), args: vec![fr, tr, live], dst: Some(view) },
+                            sp.lo,
+                        );
+                        let ptr_ty = self.ctx.mk_ptr(rt);
+                        let dst = self.new_reg(ptr_ty);
+                        self.emit(Op::MakePtr { dst, src: view, ty: ptr_ty }, sp.lo);
+                        return Ok(ptr_ty);
+                    }
+                    _ => {
+                        self.ctx.err(sp, "`slice` on this sequence is not supported");
+                        return Err(());
+                    }
+                }
             }
         }
         // builtin members (RFC 0005 table): `Opaque` rejects methods

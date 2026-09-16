@@ -60,6 +60,10 @@ pub enum Nat {
     /// `s.slice(from, to)` — an O(1) view into the string's octets
     /// (RFC 0042): codepoint-indexed bounds, byte offsets inside
     StrSlice,
+    /// `v.slice(from, to)` — an O(1) array window (RFC 0042 §6):
+    /// recv = the backing array, args = [from, to, live_len]; the result
+    /// is an `ArrView` cell the caller boxes as `*Vec<T>`
+    ArrSlice,
 }
 
 #[derive(Clone, Debug, PartialEq)]
