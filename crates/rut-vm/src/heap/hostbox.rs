@@ -5,8 +5,11 @@
 //! `downcast<T>` is `None`, `o is Opaque` is `true` (RFC 0014) — and its
 //! `Drop` runs deterministically when the box's rc hits 0 (RFC 0016 §3).
 
-use super::cell::BORROW_MUT;
 use super::*;
+
+/// Exclusive-borrow sentinel (RFC 0023 §2): 0 = free, `BORROW_MUT` = one
+/// exclusive borrow live, else the shared-borrow count.
+pub(crate) const BORROW_MUT: u32 = u32::MAX;
 
 /// The host's typed handle. `Clone` bumps the box's rc; dropping the
 /// last handle (host or rut side) releases the cell and the payload.
@@ -37,10 +40,13 @@ impl<T: 'static> OpaqueBox<T> {
         Self::from_handle(h)
     }
 
-    /// Same check over a bare handle.
+    /// Same check over a bare handle. The payload's own `Any` vtable
+    /// carries the type token — `is::<T>` is the check, so a wrong-type
+    /// borrow is a checked error, never UB. `type_name` (kept in the
+    /// cell, unrecoverable from the erased box) names what it holds.
     pub fn from_handle(h: &OpaqueRef) -> Result<OpaqueBox<T>, Trap> {
         let cell = unsafe { &*h.ptr() };
-        let CellData::HostBoxed { payload } = &cell.data else {
+        let CellData::HostBoxed { payload, type_name, .. } = &cell.data else {
             return Err(Trap::new(
                 TrapKind::Invalid,
                 "the box holds a rut value, not a host payload — recover it with `downcast<T>` on the rut side (RFC 0014)",
@@ -49,7 +55,7 @@ impl<T: 'static> OpaqueBox<T> {
         if !payload.is::<T>() {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                format!("host box holds `{}`, not `{}`", payload.type_name(), std::any::type_name::<T>()),
+                format!("host box holds `{type_name}`, not `{}`", std::any::type_name::<T>()),
             ));
         }
         Ok(OpaqueBox { handle: h.clone(), _marker: std::marker::PhantomData })
@@ -58,16 +64,18 @@ impl<T: 'static> OpaqueBox<T> {
     /// Shared borrow for the closure's duration. Nested `with`s stack;
     /// an active `with_mut` excludes them.
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> Result<R, Trap> {
-        let payload = self.payload()?;
-        if payload.borrows() == BORROW_MUT {
+        let (payload, borrows) = self.boxed()?;
+        if borrows.get() == BORROW_MUT {
             return Err(Trap::new(
                 TrapKind::Invalid,
                 "host box is `&mut`-borrowed by an outer host call (RFC 0023 §2)",
             ));
         }
-        payload.begin_shared();
-        let out = f(unsafe { payload.deref::<T>() });
-        payload.end_borrow();
+        borrows.set(borrows.get() + 1);
+        let out = f(payload
+            .downcast_ref::<T>()
+            .expect("OpaqueBox<T> holds a T — checked at from_handle/alloc"));
+        borrows.set(borrows.get() - 1);
         Ok(out)
     }
 
@@ -75,23 +83,38 @@ impl<T: 'static> OpaqueBox<T> {
     /// `vm.call` reaching another host fn that borrows the same box
     /// traps `borrowed by host` instead of aliasing (RFC 0023 §2).
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> Result<R, Trap> {
-        let payload = self.payload()?;
-        if payload.borrows() != 0 {
+        let (payload, borrows) = self.boxed_mut()?;
+        if borrows.get() != 0 {
             return Err(Trap::new(
                 TrapKind::Invalid,
                 "host box is borrowed by an outer host call (RFC 0023 §2)",
             ));
         }
-        payload.begin_mut();
-        let out = f(unsafe { payload.deref::<T>() });
-        payload.end_borrow();
+        borrows.set(BORROW_MUT);
+        let out = f(payload
+            .downcast_mut::<T>()
+            .expect("OpaqueBox<T> holds a T — checked at from_handle/alloc"));
+        borrows.set(0);
         Ok(out)
     }
 
-    fn payload(&self) -> Result<&HostPayload, Trap> {
+    /// The erased payload and its borrow guard, checked to be a host box.
+    fn boxed(&self) -> Result<(&Box<dyn std::any::Any>, &Cell<u32>), Trap> {
         let cell = unsafe { &*self.handle.ptr() };
         match &cell.data {
-            CellData::HostBoxed { payload } => Ok(payload),
+            CellData::HostBoxed { payload, borrows, .. } => Ok((payload, borrows)),
+            _ => Err(Trap::new(TrapKind::Invalid, "not a host payload box")),
+        }
+    }
+
+    /// The exclusive variant: reaches the payload mutably through the
+    /// cell pointer. Sound under the guard `with_mut` holds — no other
+    /// borrow of the box is live, and rut-side ops never touch host
+    /// payloads — the same argument the previous raw-payload design made.
+    fn boxed_mut(&self) -> Result<(&mut Box<dyn std::any::Any>, &Cell<u32>), Trap> {
+        let cell = unsafe { &mut *(self.handle.ptr() as *mut CellVal) };
+        match &mut cell.data {
+            CellData::HostBoxed { payload, borrows, .. } => Ok((payload, borrows)),
             _ => Err(Trap::new(TrapKind::Invalid, "not a host payload box")),
         }
     }

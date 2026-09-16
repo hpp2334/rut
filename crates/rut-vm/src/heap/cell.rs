@@ -293,83 +293,6 @@ pub struct StrVal {
 }
 
 /// A type-erased Rust payload behind a host-constructed `Opaque` box
-/// (RFC 0023/0026). The host news the box with any `'static` type
-/// (`OpaqueBox::alloc`) and borrows it back call-scoped
-/// (`OpaqueBox::with`/`with_mut`). Erasure is a one-fn vtable — a drop
-/// pointer plus a `TypeId` token — no `dyn` in the heap; the payload's
-/// `Drop` runs when the cell's rc hits 0 (`release_cell` drops the
-/// `CellVal`, which drops this), and its shallow `size_of::<T>()` is
-/// what the cell accounts against the heap budget (RFC 0040 — interior
-/// allocations a `T` makes are the host's own business).
-pub struct HostPayload {
-    ptr: *mut u8,                      // a leaked `Box<T>`, `T: 'static`
-    drop_fn: unsafe fn(*mut u8),
-    /// the payload's Rust type — `OpaqueBox::from_handle` compares this
-    /// before any pointer moves, so a wrong-type borrow is a checked
-    /// error, never UB
-    ty: std::any::TypeId,
-    /// for diagnostics (`host box holds \`MyMap\`, not \`Canvas\``)
-    type_name: &'static str,
-    /// borrow guard (RFC 0023 §2): 0 = free, `BORROW_MUT` = one exclusive
-    /// borrow live, else the shared-borrow count. Rut-side ops never
-    /// touch the payload, so only the host accessors check it.
-    borrows: Cell<u32>,
-}
-
-pub(crate) const BORROW_MUT: u32 = u32::MAX;
-
-impl HostPayload {
-    pub fn new<T: 'static>(val: T) -> HostPayload {
-        HostPayload {
-            ptr: Box::into_raw(Box::new(val)) as *mut u8,
-            drop_fn: |p: *mut u8| unsafe {
-                drop(Box::from_raw(p as *mut T));
-            },
-            ty: std::any::TypeId::of::<T>(),
-            type_name: std::any::type_name::<T>(),
-            borrows: Cell::new(0),
-        }
-    }
-
-    /// Does this payload hold a `T`? The `TypeId` token compare is what
-    /// makes a wrong-type borrow a checked error instead of UB.
-    pub fn is<T: 'static>(&self) -> bool {
-        self.ty == std::any::TypeId::of::<T>()
-    }
-
-    pub fn type_name(&self) -> &'static str {
-        self.type_name
-    }
-
-    pub(crate) fn borrows(&self) -> u32 {
-        self.borrows.get()
-    }
-
-    pub(crate) fn begin_shared(&self) {
-        self.borrows.set(self.borrows.get() + 1);
-    }
-
-    pub(crate) fn begin_mut(&self) {
-        self.borrows.set(BORROW_MUT);
-    }
-
-    pub(crate) fn end_borrow(&self) {
-        self.borrows.set(if self.borrows.get() == BORROW_MUT { 0 } else { self.borrows.get() - 1 });
-    }
-
-    /// The checked exclusive borrow. `with`/`with_mut` must have
-    /// verified `ty` and taken the guard already — this is the raw deref.
-    pub(crate) unsafe fn deref<T>(&self) -> &mut T {
-        unsafe { &mut *(self.ptr as *mut T) }
-    }
-}
-
-impl Drop for HostPayload {
-    fn drop(&mut self) {
-        unsafe { (self.drop_fn)(self.ptr) };
-    }
-}
-
 pub enum CellData {
     Str(StrVal),
     Array { elem: TypeId, items: RefCell<Packed> },
@@ -382,9 +305,13 @@ pub enum CellData {
     /// host payload box (RFC 0023/0026) — any `'static` Rust value behind
     /// the same `Opaque` surface; rut sees only the box (`downcast<T>` is
     /// `None`, `o is Opaque` is `true`), the host borrows it typed. The
-    /// descriptor is boxed to keep `CellVal` inside its size pin below;
-    /// this is the cold host boundary, not a hot-loop cell.
-    HostBoxed { payload: Box<HostPayload> },
+    /// box is the Rust concept it is: `dyn Any` erases the payload (its
+    /// own vtable drops it when the cell dies), `type_name` survives for
+    /// diagnostics (unrecoverable from the erased box), and the borrow
+    /// guard (RFC 0023 §2) rides in the cell. Boxed to keep `CellVal`
+    /// inside its size pin below; this is the cold host boundary, not a
+    /// hot-loop cell.
+    HostBoxed { payload: Box<dyn std::any::Any>, type_name: &'static str, borrows: Cell<u32> },
     /// closure value (RFC 0013) — v1 captures by value. The callee's
     /// signature (`params`/`ret`/capture types) is static program data in
     /// `prog.funcs[func]`; the cell carries only the function id and the

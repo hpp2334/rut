@@ -177,11 +177,18 @@ struct RutOpaque { h: Header, boxed: *mut HostBoxed }     // host opaques (RFC 0
                                                           // the header TypeId discriminates
                                                           // (shipped: one `OpaqueBox` cell kind
                                                           // with a `val: Slot, val_ty` payload for
-                                                          // user boxes and a boxed `HostPayload` —
-                                                          // erased Rust value, one-fn drop vtable +
-                                                          // `TypeId` token, no `dyn` — for host
-                                                          // boxes; the shallow `size_of::<T>()` is
-                                                          // what the cell accounts, RFC 0040)
+                                                          // user boxes and a boxed host payload —
+                                                          // `Box<dyn Any>`, the Rust concept it is:
+                                                          // the box's own vtable drops it at rc-0,
+                                                          // `type_name: &'static str` survives in
+                                                          // the cell for wrong-type diagnostics,
+                                                          // and the RFC 0023 §2 borrow guard is a
+                                                          // `Cell<u32>` beside it; the shallow
+                                                          // `size_of::<T>()` is what the cell
+                                                          // accounts, RFC 0040. The no-`dyn` rule
+                                                          // governs the VALUE WORLD — hot cells
+                                                          // with fixed reprs; host-boundary cells
+                                                          // may use Rust types.)
 ```
 
 Refcount ops — the compiler emits ref-aware ops only where a reference can

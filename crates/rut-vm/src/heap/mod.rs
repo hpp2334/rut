@@ -19,7 +19,7 @@ mod value;
 
 pub use crate::arena::OpaqueRef;
 
-pub use cell::{cell, cell_of, CellData, CellVal, HostPayload, Packed, Slots, StrVal};
+pub use cell::{cell, cell_of, CellData, CellVal, Packed, Slots, StrVal};
 pub use hostbox::OpaqueBox;
 pub use trap::{Trap, TrapKind};
 pub use value::{Slot, Value};
@@ -258,13 +258,19 @@ impl Heap {
     }
 
     /// A host payload box (RFC 0023/0026): `val` — any `'static` Rust
-    /// value — moves into the arena behind an `Opaque` surface. The cell
-    /// accounts the payload's shallow `size_of::<T>()` (RFC 0040); at
-    /// rc-0 the payload's own `Drop` runs deterministically (RFC 0016 §3).
+    /// value — moves into a `Box<dyn Any>` inside the arena behind an
+    /// `Opaque` surface; the box's own vtable drops it deterministically
+    /// at rc-0 (RFC 0016 §3). The cell accounts the payload's shallow
+    /// `size_of::<T>()` (RFC 0040); interior allocations a `T` makes are
+    /// the host's own business.
     pub fn alloc_host_box<T: 'static>(&self, val: T) -> Result<Slot, Trap> {
-        let payload = Box::new(HostPayload::new(val));
+        let payload = Box::new(val) as Box<dyn std::any::Any>;
         let n = (std::mem::size_of::<T>() as u64).max(8);
-        self.mint(rut_core::types::TY_OPAQUE, CellData::HostBoxed { payload }, n)
+        self.mint(
+            rut_core::types::TY_OPAQUE,
+            CellData::HostBoxed { payload, type_name: std::any::type_name::<T>(), borrows: Cell::new(0) },
+            n,
+        )
     }
 
     pub fn alloc_closure(&self, func: u32, captures: Vec<Slot>) -> Result<Slot, Trap> {
