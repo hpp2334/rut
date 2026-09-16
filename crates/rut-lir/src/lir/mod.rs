@@ -150,7 +150,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if is_suspend {
             ctx.err(
                 ctx.ast.span(node),
-                "`suspend` functions are not supported in this build (RFC 0018 —M3)",
+                "`async` functions are not supported in this build —cold-poll futures land in M3 (RFC 0018)",
             );
             return Err(());
         }

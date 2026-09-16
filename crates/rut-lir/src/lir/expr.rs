@@ -142,7 +142,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.compile_lambda(node.id(), params, ret, body, expected, sp)
             }
             ExprKind::Try { .. } => {
-                self.ctx.err(sp, "the `?` operator is not supported in this build (RFC 0005, M2)");
+                // `?` was Result-syntax: removed with the sums (RFC 0005 §10)
+                self.ctx.err(sp, "`?` was removed — errors are `(T, err)` records; test the second element (RFC 0005 §10)");
                 Err(())
             }
             ExprKind::Await { .. } | ExprKind::Select { .. } => {
