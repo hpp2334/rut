@@ -60,15 +60,26 @@ route through it (check points listed in RFC 0040 §1). Backing store is
 ordinary Rust allocation (std) — the manager owns slabs it carves; the
 discipline is the point, not the allocator.
 
-## 3. Allocation strategy (v1)
+## 3. Allocation strategy (v1, shipped)
 
-- **Size-class freelists for cells**: each payload size class has a
-  freelist; `release`-to-zero pushes the cell back *after*
-  `Disposal.dispose` runs (RFC 0016 §3). Cell reuse is invisible except
-  in `heap_usage`.
-- **Slab-backed buffers**: strings, `Vec` data, and register blocks are
-  carved from slabs the manager owns; buffers freed at
-  release-to-zero return whole slabs when empty.
+- **Fixed-size cell slots in the arena**: cells are one fixed-size record
+  carved from 1024-slot chunks with a free list (the `Arena`); a dead
+  slot is reused by the next mint. Cell reuse is invisible except in
+  `heap_usage`.
+- **The block store (shipped)**: every *variable-size* cell payload —
+  string octets, array element runs — lives in a **block** carved from
+  size-classed pages the VM owns, not in a Rust `Vec`. Blocks are 1:1
+  with their cell (the cell is the RC unit), need no refcount of their
+  own, and never move (RFC 0016 OQ-1), so `&[u8]` into the store stays
+  valid for the cell's life. Small blocks reuse through per-class
+  freelists (plus a single-slot LIFO cache for the churn pattern);
+  in-place geometric growth within a class is what keeps
+  append-accumulation loops linear. The block header carries the
+  class-rounded capacity, so `free` re-derives the class with no side
+  table. Large blocks (> 2 KiB) get dedicated allocations, freed
+  wholesale. The release path frees a cell's blocks explicitly (it is
+  the only code holding the `&Arena` the store needs) — payloads carry
+  no `Drop` glue.
 - **Immortal singletons** (interned literals, dataless enum variants —
   RFC 0016 §1/§4) live in a slab freed only at `Vm` drop; they carry the
   rc==0 sentinel.

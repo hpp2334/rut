@@ -282,17 +282,48 @@ impl Packed {
 /// `s[i]` / `for..of` is O(1) instead of re-decoding the UTF-8 prefix
 /// every step (RFC 0008).
 ///
-/// The engine owns the UTF-8 invariant rather than a type: `bytes` is
+/// The engine owns the UTF-8 invariant rather than a type: the octets are
 /// valid UTF-8 by construction (every source is a `&str`, a literal, or a
 /// `render`), and appending valid UTF-8 to valid UTF-8 stays valid. So
 /// `as_str` asserts the invariant instead of re-checking it, and the
 /// byte-level accessors (`as_bytes`, `char_len`) are the primary path.
+///
+/// The octets live in a VM-owned block (`heap::blocks`, RFC 0039): the
+/// cell's slot in the arena stays fixed-size; the variable part is a
+/// block the release path frees with the cell. Blocks never move
+/// (RFC 0016 OQ-1), so `as_bytes` can hand out `&[u8]` into the store.
 pub struct StrVal {
-    pub bytes: Vec<u8>,
+    /// the payload block — `len` octets valid, `cap` octets usable; freed
+    /// by the release path (never by `Drop` glue: freeing needs the
+    /// `&Arena` the release walk already holds)
+    pub(crate) block: *mut u8,
+    /// valid octets in the block
+    pub(crate) len: u32,
+    /// usable octets — cached from the block header so the append gate
+    /// stays on the cell's cache line (the block may live pages away)
+    pub(crate) cap: u32,
     pub ascii: bool,
 }
 
-/// A type-erased Rust payload behind a host-constructed `Opaque` box
+impl StrVal {
+    /// The valid octets. Blocks never move, so the slice is valid for the
+    /// cell's lifetime (the same contract as the `&'static CellVal` it
+    /// hangs off).
+    pub fn bytes(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.block, self.len as usize) }
+    }
+    /// In-place append — the caller (Heap::append_bytes) has already
+    /// grown the block and owns the accounting.
+    #[inline(always)]
+    pub(crate) unsafe fn append(&mut self, extra: &[u8]) {
+        unsafe {
+            std::ptr::copy_nonoverlapping(extra.as_ptr(), self.block.add(self.len as usize), extra.len());
+        }
+        self.len += extra.len() as u32;
+        self.ascii = self.ascii && extra.is_ascii();
+    }
+}
+
 pub enum CellData {
     Str(StrVal),
     Array { elem: TypeId, items: RefCell<Packed> },
@@ -328,14 +359,14 @@ impl CellVal {
     /// byte-level callers should prefer `as_bytes`.
     pub fn as_str(&self) -> &str {
         match &self.data {
-            CellData::Str(v) => unsafe { std::str::from_utf8_unchecked(&v.bytes) },
+            CellData::Str(v) => unsafe { std::str::from_utf8_unchecked(v.bytes()) },
             _ => "",
         }
     }
     /// The raw UTF-8 octets of a `str` cell — empty for any other shape.
     pub fn as_bytes(&self) -> &[u8] {
         match &self.data {
-            CellData::Str(v) => &v.bytes,
+            CellData::Str(v) => v.bytes(),
             _ => &[],
         }
     }
@@ -343,7 +374,7 @@ impl CellVal {
     /// computed once at allocation), else a UTF-8 scan.
     pub fn char_len(&self) -> usize {
         match &self.data {
-            CellData::Str(v) if v.ascii => v.bytes.len(),
+            CellData::Str(v) if v.ascii => v.len as usize,
             CellData::Str(_) => self.as_str().chars().count(),
             _ => 0,
         }

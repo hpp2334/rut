@@ -9,7 +9,7 @@
 //! `OpaqueRef` is the host-facing handle (RFC 0014): it owns one arena
 //! reference and holds the shared arena, so it can outlive the `Vm`.
 
-use crate::heap::{CellData, CellVal, HeapAcct, Slot};
+use crate::heap::{blocks::Blocks, CellData, CellVal, HeapAcct, Slot};
 use rut_core::binary::FuncCode;
 use rut_core::types::{TypeTable, TyKind};
 use std::cell::{Cell, RefCell};
@@ -85,6 +85,12 @@ pub(crate) struct Arena {
     /// interpreter drains these at call boundaries and releases the pin
     /// after the callback runs.
     pending_drops: RefCell<Vec<(*const CellVal, Slot)>>,
+    /// the VM-owned block store (RFC 0039): variable-size cell payloads.
+    /// Living here — not on `Heap` — because the release path (a free fn
+    /// holding only `&Arena`) is what frees a cell's blocks, and because
+    /// `OpaqueRef` keeps the arena (hence the store) alive for cells that
+    /// outlive the `Vm`.
+    pub(crate) blocks: Blocks,
 }
 
 impl Arena {
@@ -96,6 +102,7 @@ impl Arena {
             plan,
             drop_fns: RefCell::new(HashMap::new()),
             pending_drops: RefCell::new(Vec::new()),
+            blocks: Blocks::new(),
         }
     }
 
@@ -162,6 +169,12 @@ impl Drop for Arena {
                 }
                 let p = unsafe { base.add(i) };
                 if !free.contains(&p) {
+                    // free the cell's payload block(s) first — freeing needs
+                    // the &Arena that Drop glue would not have (same rule as
+                    // the release path below)
+                    if let CellData::Str(sv) = unsafe { &(*p).data } {
+                        self.blocks.free(sv.block);
+                    }
                     unsafe { std::ptr::drop_in_place(p) };
                 }
             }
@@ -267,6 +280,11 @@ pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
         }
     };
     unsafe {
+        // payload blocks die with the cell, explicitly — freeing needs the
+        // &Arena this walk holds (payloads carry no Drop glue)
+        if let CellData::Str(sv) = &(*p).data {
+            arena.blocks.free(sv.block);
+        }
         let bytes = (*p).bytes as u64;
         acct.used.set(acct.used.get().saturating_sub(bytes));
         std::ptr::drop_in_place(p);

@@ -12,6 +12,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
+pub(crate) mod blocks;
 mod cell;
 mod hostbox;
 mod trap;
@@ -122,18 +123,65 @@ impl Heap {
     pub fn alloc_str_bytes(&self, bytes: Vec<u8>) -> Result<Slot, Trap> {
         let n = bytes.len() as u64;
         let ascii = bytes.is_ascii();
-        self.mint(rut_core::types::TY_STR, CellData::Str(StrVal { bytes, ascii }), n)
+        let block = self.arena.blocks.alloc(bytes.len());
+        let cap = self.arena.blocks.cap_of(block) as u32;
+        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), block, bytes.len()) };
+        self.mint(
+            rut_core::types::TY_STR,
+            CellData::Str(StrVal { block, len: bytes.len() as u32, cap, ascii }),
+            n,
+        )
+    }
+
+    /// A one-char `str` cell — the `{c}` f-string hole. UTF-8 encodes
+    /// straight into the block; no intermediate `String` ever exists.
+    pub fn alloc_char(&self, c: char) -> Result<Slot, Trap> {
+        let mut buf = [0u8; 4];
+        let s = c.encode_utf8(&mut buf);
+        let n = s.len() as u64;
+        let block = self.arena.blocks.alloc(s.len());
+        let cap = self.arena.blocks.cap_of(block) as u32;
+        unsafe { std::ptr::copy_nonoverlapping(s.as_ptr(), block, s.len()) };
+        self.mint(
+            rut_core::types::TY_STR,
+            CellData::Str(StrVal { block, len: s.len() as u32, cap, ascii: c.is_ascii() }),
+            n,
+        )
     }
 
     /// Append `extra` to a `Str` cell **in place**. The caller must
     /// guarantee the cell is uniquely owned (`rc == 1`): no other slot
-    /// aliases it, so mutating behind the shared handle is sound. Grows the
-    /// buffer amortized (like any `Vec`) and charges the cell's *capacity*
-    /// rather than its length, so the accounted bytes are the allocation
-    /// the cell actually holds — this is what keeps an accumulator loop
-    /// like `bytes_decode`'s `out = out + c` linear instead of copying the
-    /// whole prefix every step. A failed charge leaves the text untouched
-    /// (only spare capacity was reserved).
+    /// aliases it, so mutating behind the shared handle is sound. Growth
+    /// is geometric and class-rounded inside the block store — appending
+    /// one byte at a time touches the allocator O(log n) times, which is
+    /// what keeps an accumulator loop like `bytes_decode`'s `out = out + c`
+    /// linear instead of copying the whole prefix every step. The charge
+    /// is the capacity the cell actually holds; a failed charge leaves the
+    /// text untouched (only spare capacity was reserved).
+    /// Reserve room for `extra` more octets in a `Str` cell — one growth
+    /// decision covering a whole multi-part append (the concat fast path).
+    #[inline]
+    pub fn reserve_append(&self, s: Slot, extra: usize) -> Result<(), Trap> {
+        let p = unsafe { s.r } as *mut CellVal;
+        if !matches!(unsafe { &(*p).data }, CellData::Str(_)) {
+            return Err(Trap::new(TrapKind::Invalid, "reserve_append on non-str"));
+        }
+        unsafe {
+            let cell = &mut *p;
+            let CellData::Str(v) = &mut cell.data else { unreachable!() };
+            let need = v.len as usize + extra;
+            if need > v.cap as usize {
+                v.block = self.arena.blocks.grow(v.block, v.len as usize, need);
+                v.cap = self.arena.blocks.cap_of(v.block) as u32;
+                let new_bytes = (CELL_OVERHEAD + 8 + v.cap as u64).min(u32::MAX as u64) as u32;
+                self.charge((new_bytes as u64).saturating_sub(cell.bytes as u64))?;
+                cell.bytes = new_bytes;
+            }
+        }
+        Ok(())
+    }
+
+    #[inline]
     pub fn append_bytes(&self, s: Slot, extra: &[u8]) -> Result<(), Trap> {
         let p = unsafe { s.r } as *mut CellVal;
         if !matches!(unsafe { &(*p).data }, CellData::Str(_)) {
@@ -142,14 +190,15 @@ impl Heap {
         unsafe {
             let cell = &mut *p;
             let CellData::Str(v) = &mut cell.data else { unreachable!() };
-            v.bytes.reserve(extra.len());
-            // the growth to charge for is the capacity the extend sits in
-            let new_bytes =
-                (CELL_OVERHEAD + v.bytes.capacity() as u64).min(u32::MAX as u64) as u32;
-            self.charge((new_bytes as u64).saturating_sub(cell.bytes as u64))?;
-            v.ascii = v.ascii && extra.is_ascii();
-            v.bytes.extend_from_slice(extra);
-            cell.bytes = new_bytes;
+            let need = v.len as usize + extra.len();
+            if need > v.cap as usize {
+                v.block = self.arena.blocks.grow(v.block, v.len as usize, need);
+                v.cap = self.arena.blocks.cap_of(v.block) as u32;
+                let new_bytes = (CELL_OVERHEAD + 8 + v.cap as u64).min(u32::MAX as u64) as u32;
+                self.charge((new_bytes as u64).saturating_sub(cell.bytes as u64))?;
+                cell.bytes = new_bytes;
+            }
+            v.append(extra);
         }
         Ok(())
     }

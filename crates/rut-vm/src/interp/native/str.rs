@@ -8,12 +8,22 @@ impl Vm {
         match nat {
             Nat::Str => {
                 let v = self.reg(args[0]);
+                let ty = self.regs_ty(args[0]);
+                // a char renders by encoding straight into a fresh block —
+                // no intermediate `String` (the f-string `{c}` churn path:
+                // string-building loops hit this once per piece)
+                if matches!(self.prog.types.kind(ty), TyKind::Prim(PrimTy::Char)) {
+                    let c = char::from_u32(unsafe { v.i } as u32).unwrap_or('\u{FFFD}');
+                    let c = self.heap.alloc_char(c)?;
+                    self.store_result(dst, c)?;
+                    return Ok(());
+                }
                 // a string already formats to itself — alias the cell instead
                 // of re-rendering a copy (the `f"{s}"` identity; this is the
                 // bulk of the cost in string-churn workloads like fasta).
                 // Gate on the *static* type: the slot of a non-string arg is
                 // not a cell handle, so `cell_of` must not touch it.
-                if matches!(self.prog.types.kind(self.regs_ty(args[0])), TyKind::Str) {
+                if matches!(self.prog.types.kind(ty), TyKind::Str) {
                     if let Some(d) = dst {
                         self.heap.retain(v);
                         let old = self.cur_regs[d as usize];
@@ -52,6 +62,11 @@ impl Vm {
                         && cell_of(target).refs.get() == 1
                         && !args[1..].iter().any(|a| unsafe { self.reg(*a).r } == tref)
                     {
+                        // one growth decision for ALL parts, then cheap
+                        // appends — the amortized O(1) accumulator path
+                        let total: usize =
+                            args[1..].iter().map(|a| cell_of(self.reg(*a)).as_bytes().len()).sum();
+                        self.heap.reserve_append(target, total)?;
                         for a in &args[1..] {
                             let extra = cell_of(self.reg(*a)).as_bytes();
                             self.heap.append_bytes(target, extra)?;
