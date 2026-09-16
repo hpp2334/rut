@@ -57,9 +57,14 @@ impl Vm {
                 if let Some(d) = dst {
                     let target = self.reg(d);
                     let tref = unsafe { target.r };
+                    let target = self.reg(d);
+                    let tref = unsafe { target.r };
                     if d == args[0]
                         && !tref.is_null()
                         && cell_of(target).refs.get() == 1
+                        // an owned cell only: appending through a VIEW
+                        // would write into its parent (RFC 0042)
+                        && matches!(&cell_of(target).data, CellData::Str(_))
                         && !args[1..].iter().any(|a| unsafe { self.reg(*a).r } == tref)
                     {
                         // one growth decision for ALL parts, then cheap
@@ -90,6 +95,57 @@ impl Vm {
                 if let Some(d) = dst {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }
+            }
+            Nat::StrSlice => {
+                // s.slice(from, to) — an O(1) window (RFC 0042): codepoint
+                // bounds here, byte offsets inside. The view retains the
+                // root owned str; view-of-view flattens onto the root.
+                let s = self.reg(recv.unwrap());
+                let from = unsafe { self.reg(args[0]).i };
+                let to = unsafe { self.reg(args[1]).i };
+                let cell = cell_of(s);
+                if !matches!(&cell.data, CellData::Str(_) | CellData::StrView { .. }) {
+                    return Err(Trap::new(TrapKind::Invalid, "slice on non-string"));
+                }
+                let clen = cell.char_len() as i64;
+                if from < 0 || to < from || to > clen {
+                    return Err(Trap::new(
+                        TrapKind::IndexOutOfBounds,
+                        format!("slice {from}..{to} out of bounds (len {clen})"),
+                    ));
+                }
+                // flatten onto the root owned str
+                let mut parent = s;
+                let mut base = 0u32;
+                let root_ascii = loop {
+                    let c = cell_of(parent);
+                    match &c.data {
+                        CellData::StrView { parent: p, off, .. } => {
+                            base += *off;
+                            parent = *p;
+                        }
+                        CellData::Str(v) => break v.ascii,
+                        _ => return Err(Trap::new(TrapKind::Invalid, "slice on non-string")),
+                    }
+                };
+                // codepoint bounds -> byte offsets within the window
+                let vbytes = cell.as_bytes();
+                let (bfrom, bto) = if cell.str_ascii() {
+                    (from as usize, to as usize)
+                } else {
+                    let text = cell.as_str();
+                    (
+                        text.char_indices().nth(from as usize).map(|(k, _)| k).unwrap_or(text.len()),
+                        text.char_indices().nth(to as usize).map(|(k, _)| k).unwrap_or(text.len()),
+                    )
+                };
+                let c = self.heap.alloc_str_view(
+                    parent,
+                    base + bfrom as u32,
+                    (bto - bfrom) as u32,
+                    root_ascii,
+                )?;
+                self.store_result(dst, c)?;
             }
             Nat::StrJoin => {
                 // join every element of an `Array<str>`: one sizing pass,

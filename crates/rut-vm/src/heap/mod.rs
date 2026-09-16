@@ -127,6 +127,8 @@ impl Heap {
         let block = self.arena.blocks.alloc(bytes.len());
         let cap = self.arena.blocks.cap_of(block) as u32;
         unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), block, bytes.len()) };
+        let mut d = ArrData::new(ArrKind::U8, block, cap);
+        d.len = bytes.len() as u32;
         self.mint(
             rut_core::types::TY_STR,
             CellData::Str(StrVal { block, len: bytes.len() as u32, cap, ascii }),
@@ -148,6 +150,27 @@ impl Heap {
             CellData::Str(StrVal { block, len: s.len() as u32, cap, ascii: c.is_ascii() }),
             n,
         )
+    }
+
+    /// A str slice view (RFC 0042): `len` octets of `parent`'s block at
+    /// `off`, retained. O(1) — no octets move. The view cell itself is
+    /// tiny and accounted (`CELL_OVERHEAD` + fields); the parent's bytes
+    /// stay alive as long as any view does.
+    pub fn alloc_str_view(&self, parent: Slot, off: u32, len: u32, ascii: bool) -> Result<Slot, Trap> {
+        self.retain(parent);
+        let r = self.mint(
+            rut_core::types::TY_STR,
+            CellData::StrView { parent, off, len, ascii },
+            CELL_OVERHEAD + 8,
+        );
+        match r {
+            Ok(s) => Ok(s),
+            Err(e) => {
+                // the charge failed — give the retain back
+                self.release(parent);
+                Err(e)
+            }
+        }
     }
 
     /// Append `extra` to a `Str` cell **in place**. The caller must

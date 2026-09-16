@@ -761,7 +761,7 @@ fn repr(b: u8) -> Result<Repr, String> {
 fn nat(b: u8) -> Result<Nat, String> {
     Ok(match b {
         0 => Nat::Str, 1 => Nat::Concat, 2 => Nat::StrLen,
-        3 => Nat::ArrLen, 4 => Nat::StrJoin,
+        3 => Nat::ArrLen, 4 => Nat::StrJoin, 5 => Nat::StrSlice,
         _ => return Err("bad nat tag".into()),
     })
 }

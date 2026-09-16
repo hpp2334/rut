@@ -11,7 +11,7 @@ impl Vm {
     pub(super) fn call_nat(&mut self, nat: Nat, recv: Option<Reg>, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
         match nat {
             Nat::ArrLen => self.nat_arr_len(recv, dst),
-            Nat::Str | Nat::Concat | Nat::StrLen | Nat::StrJoin => self.call_str_nat(nat, recv, args, dst),
+            Nat::Str | Nat::Concat | Nat::StrLen | Nat::StrJoin | Nat::StrSlice => self.call_str_nat(nat, recv, args, dst),
         }
     }
 

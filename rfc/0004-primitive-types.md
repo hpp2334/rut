@@ -22,7 +22,7 @@ deferred.
 | signed int | `i8 i16 i32 i64` | two's complement |
 | float | `f32 f64` | IEEE 754 |
 | misc | `bool`, `char` (Unicode scalar, 4 bytes) | |
-| heap: text | `str` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4) |
+| heap: text | `str` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4); `s.slice(a, b)` is an O(1) view over the same octets (RFC 0042) |
 | heap: binary | `bytes` | immutable, content-compared octet buffer; at the engine level a `u8` array; built with `bytes(n)` (zeroed), `bytes_from(Array<u8>)`, or `Vec<u8>.freeze()` (RFC 0005) |
 | heap: seq | `Vec<T>` | mutable, growable buffer — cell handle, **shared**; flat storage for primitive `T` (RFC 0016 §4) |
 | heap: seq | `Array<T, N>` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |

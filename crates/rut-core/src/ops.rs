@@ -57,6 +57,9 @@ pub enum Nat {
     ArrLen,    // Array<T>.len()/bytes.len() — the heap sequence's runtime length
     /// join every element of an `Array<str>` (one sizing pass, one alloc)
     StrJoin,
+    /// `s.slice(from, to)` — an O(1) view into the string's octets
+    /// (RFC 0042): codepoint-indexed bounds, byte offsets inside
+    StrSlice,
 }
 
 #[derive(Clone, Debug, PartialEq)]

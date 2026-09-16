@@ -25,7 +25,13 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
         interrupt_every: 1024,
     };
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
-    rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
+    rut_std::logger::install_std_log(&mut vm, move |msg| {
+        if std::env::var_os("RUT_E2E_DEBUG").is_some() {
+            let bs: Vec<u32> = msg.bytes().map(|b| b as u32).collect();
+            eprintln!("SINK: {bs:?}");
+        }
+        sink.borrow_mut().push(msg.to_string());
+    });
     rut_std::math::install_std_math(&mut vm);
     let trap = match vm.call("main", &[]) {
         Ok(_) => None,
@@ -1784,4 +1790,60 @@ fn dbg_digest_diags() {
         let line = src[..d.span.lo as usize].bytes().filter(|&b| b == b'\n').count() + 1;
         println!("DIAG line {line}: {}", d.msg);
     }
+}
+
+#[test]
+fn str_slice_views_read_through_and_flatten() {
+    // RFC 0042 — `s.slice(from, to)` is an O(1) view: codepoint bounds,
+    // byte offsets inside; reads go through (len, ==, f-string holes,
+    // for-of); view-of-view flattens onto the root; a view stored in a
+    // Vec keeps its window alive; appending to a view's string copies
+    // out instead of writing through (value semantics win at the
+    // assignment).
+    let src = r#"
+import { Vec } from "std:collection";
+import { Logger } from "std:log";
+pub fn main() -> unit {
+    let log = Logger.new("view");
+    let s = "hello world";
+    let w = s.slice(6, 11);
+    log.info(f"[{w}] len={w.len()}");
+    let orl = w.slice(1, 4);
+    log.info(f"[{orl}]");
+    if (w == "world") { log.info("eq"); }
+    let u = "héllo wörld";
+    log.info(f"[{u.slice(1, 5)}]");
+    let mut parts: Vec<str> = Vec.new();
+    parts.push(s.slice(0, 5));
+    parts.push(u.slice(6, 11));
+    log.info(f"[{parts[0]}][{parts[1]}]");
+    let mut joined = parts[0];
+    joined = f"{joined}!";
+    log.info(f"[{joined}] base=[{parts[0]}]");
+    let mut n = 0;
+    for (let c of w) { n += 1; }
+    log.info(f"n={n}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(
+        lines,
+        vec!["[world] len=5", "[orl]", "eq", "[éllo]", "[hello][wörld]", "[hello!] base=[hello]", "n=5"]
+    );
+}
+
+#[test]
+fn str_slice_bounds_trap() {
+    // RFC 0042 — out-of-bounds slices are traps, reversed ranges are traps
+    let src = r#"
+import { Logger } from "std:log";
+pub fn main() -> unit {
+    let s = "hello";
+    let t = s.slice(3, 1);
+    Logger.new("view").info(t);
+}
+"#;
+    let (_, trap, _) = run_case(src, 1_000_000);
+    assert!(trap.is_some());
 }

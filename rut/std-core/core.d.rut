@@ -57,6 +57,7 @@ pub builtin str {
     fn len(self) -> i32;            // codepoints
     fn code(self) -> u32;           // the FIRST codepoint (traps on empty)
     fn encode(self) -> bytes;       // the UTF-8 octets
+    fn slice(self, from: i32, to: i32) -> str;  // O(1) view [from, to) — codepoint bounds (RFC 0042)
 }
 
 pub builtin bytes {

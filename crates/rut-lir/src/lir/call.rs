@@ -842,6 +842,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.last_reg = dst;
                     return Ok(TY_BYTES);
                 }
+                if mname == "slice" && args.len() == 2 {
+                    // s.slice(from, to) — an O(1) view (RFC 0042)
+                    let ft = self.compile_expr(args[0], Some(TY_I32))?;
+                    if ft != TY_I32 {
+                        self.ctx.err(sp, "slice(from, to) takes `i32` bounds");
+                        return Err(());
+                    }
+                    let fr = self.last_reg;
+                    let tt = self.compile_expr(args[1], Some(TY_I32))?;
+                    if tt != TY_I32 {
+                        self.ctx.err(sp, "slice(from, to) takes `i32` bounds");
+                        return Err(());
+                    }
+                    let tr = self.last_reg;
+                    let dst = self.new_reg(TY_STR);
+                    self.emit(
+                        Op::CallNat { nat: Nat::StrSlice, recv: Some(rreg), args: vec![fr, tr], dst: Some(dst) },
+                        sp.lo,
+                    );
+                    return Ok(TY_STR);
+                }
                 if mname == "len" && args.is_empty() {
                     if let Some(info) = self.slice_info(rt) {
                         self.emit_slice_len(rreg, &info, sp.lo)?;
@@ -850,7 +871,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
-                    "`str` has no method `{mname}` — its members are `len`/`code`/`encode` (`string_len({who})` is the free-fn spelling)"
+                    "`str` has no method `{mname}` — its members are `len`/`slice`/`code`/`encode` (`string_len({who})` is the free-fn spelling)"
                 ));
                 return Err(());
             }

@@ -317,6 +317,12 @@ impl StrVal {
 pub enum CellData {
     Str(StrVal),
     Array { elem: TypeId, items: RefCell<ArrData> },
+    /// str slice view (RFC 0042): a window into an OWNED str cell,
+    /// retained by `parent`. `off`/`len` are byte offsets into the
+    /// parent's block; codepoint bounds were resolved to bytes at
+    /// creation, and view-of-view flattens onto the root, so `parent`
+    /// is always an owned `Str`.
+    StrView { parent: Slot, off: u32, len: u32, ascii: bool },
     /// enum member — immortal singleton per (ty, member)
     Enum { member: u32 },
     /// struct/class instance — the payload as one slot per field
@@ -350,6 +356,13 @@ impl CellVal {
     pub fn as_str(&self) -> &str {
         match &self.data {
             CellData::Str(v) => unsafe { std::str::from_utf8_unchecked(v.bytes()) },
+            CellData::StrView { parent, off, len, .. } => {
+                // the view retains the parent, so the window is live
+                unsafe {
+                    std::str::from_utf8_unchecked(&cell_of(*parent).as_bytes()
+                        [*off as usize..*off as usize + *len as usize])
+                }
+            }
             _ => "",
         }
     }
@@ -357,6 +370,10 @@ impl CellVal {
     pub fn as_bytes(&self) -> &[u8] {
         match &self.data {
             CellData::Str(v) => v.bytes(),
+            CellData::StrView { parent, off, len, .. } => {
+                let p = cell_of(*parent).as_bytes();
+                &p[*off as usize..*off as usize + *len as usize]
+            }
             _ => &[],
         }
     }
@@ -365,13 +382,18 @@ impl CellVal {
     pub fn char_len(&self) -> usize {
         match &self.data {
             CellData::Str(v) if v.ascii => v.len as usize,
-            CellData::Str(_) => self.as_str().chars().count(),
+            CellData::StrView { len, ascii, .. } if *ascii => *len as usize,
+            CellData::Str(_) | CellData::StrView { .. } => self.as_str().chars().count(),
             _ => 0,
         }
     }
     /// True when this `str` is all-ASCII, so a char index is a byte index.
     pub fn str_ascii(&self) -> bool {
-        matches!(&self.data, CellData::Str(v) if v.ascii)
+        match &self.data {
+            CellData::Str(v) => v.ascii,
+            CellData::StrView { ascii, .. } => *ascii,
+            _ => false,
+        }
     }
     /// The raw octets of a `bytes` cell — `bytes` is a `u8` array at the
     /// engine level (RFC 0004); empty for any other shape.

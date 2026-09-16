@@ -253,6 +253,8 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
                 out.push(*val);
             }
         }
+        // a str view retains the window's parent (RFC 0042)
+        CellData::StrView { parent, .. } => out.push(*parent),
         CellData::Closure { func, captures } => {
             if let Some(flags) = plan.closure_capture_ref.get(*func as usize) {
                 for (&cap, &is_ref) in captures.iter().zip(flags.iter()) {
