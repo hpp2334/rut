@@ -303,9 +303,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.br(cond_reg, l_body, l_end);
         self.bind(l_body);
         // var = iter[idx]; the dst register is the loop variable (one reg
-        // reused every iteration, overwritten/released by the element op)
-        let var_reg = self.emit_slice_get(iter_reg, idx, &info, sp.lo)?;
-        self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: false });
+        // reused every iteration, overwritten/released by the element op).
+        // Vec/`[T]` yield `*T` — a fresh element box per iteration
+        // (RFC 0012 §6); `str`/`bytes` keep value yields.
+        let (var_ty, var_reg) = match info.source {
+            super::slice::SliceSource::Str | super::slice::SliceSource::Bytes => {
+                let r = self.emit_slice_get(iter_reg, idx, &info, sp.lo)?;
+                (elem_ty, r)
+            }
+            _ => {
+                let r = self.emit_slice_get_ref(iter_reg, idx, &info, sp.lo)?;
+                (self.ctx.mk_ptr(elem_ty), r)
+            }
+        };
+        self.locals.push(Local { name: var, reg: var_reg, ty: var_ty, is_mut: false, loop_var: false });
         self.loops.push((l_cont, l_end));
         self.compile_block(body)?;
         self.loops.pop();

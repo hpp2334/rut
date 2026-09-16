@@ -494,6 +494,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
+    /// Deref a pointer at a value use site: `v: *T` reads as `T` (RFC
+    /// 0012 §6) — the payload slot at the pointee's own repr. Callers
+    /// decide which positions deref: value-expected positions via the
+    /// compile_expr funnel, arithmetic operands, and `==` against the
+    /// pointee type. `p.f`/`p.m()` deref at their own sites and
+    /// `*T == *T` stays identity (RFC 0012 §4).
+    pub(crate) fn deref_ptr(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
+        if let TyKind::Ptr { elem } = self.ctx.types.kind(ty).clone() {
+            let d = self.new_reg(elem);
+            self.emit(Op::GetF { dst: d, obj: reg, field: 0, repr: self.ctx.types.repr_of(elem) }, sp_lo);
+            return (elem, d);
+        }
+        (ty, reg)
+    }
+
     pub(crate) fn emit(&mut self, op: Op, span_lo: u32) {
         self.spans.push((self.code.len() as u32, span_lo));
         self.code.push(op);

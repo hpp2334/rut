@@ -551,6 +551,11 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*src);
         }
+        Op::ArrGetRef { dst, arr, idx, .. } => {
+            d.push(*dst);
+            u.push(*arr);
+            u.push(*idx);
+        }
         Op::CloneVal { dst, src, .. } => {
             d.push(*dst);
             u.push(*src);

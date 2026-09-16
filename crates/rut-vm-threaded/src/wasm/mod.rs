@@ -51,6 +51,7 @@ pub fn run<M: Machine>(m: &mut M, pc0: u32, _table: &Table<M>) -> Result<ThreadO
             T_ARRGETF => m.op_arr_get_f(op, regs, pc)?,
             T_ARRSETF => m.op_arr_set_f(op, regs, pc)?,
             T_GETF => m.op_getf(op, regs, pc)?,
+            T_ARRGETREF => m.op_arr_get_ref(op, regs, pc)?,
             T_SETF => m.op_setf(op, regs, pc)?,
             T_CALL => m.op_call(op, regs, pc)?,
             T_CALLM => m.op_call_m(op, regs, pc)?,

@@ -176,6 +176,11 @@ pub enum Op {
     ArrGetF { dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr },
     ArrSetF { obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr },
 
+    /// `for (let v of xs)` element reference (RFC 0012 §6): box the element
+    /// at `idx` into a fresh one-slot cell of the pointer type `ty` —
+    /// ref-typed elements alias the stored slot, scalars box a copy
+    ArrGetRef { dst: Reg, arr: Reg, idx: Reg, ty: TypeId },
+
     /// enum member value (immortal singleton cell, RFC 0016 §1)
     EnumNew { dst: Reg, ty: TypeId, member: u32 },
 

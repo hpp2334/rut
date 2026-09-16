@@ -198,12 +198,6 @@ impl Vm {
             TyKind::Unit | TyKind::Fn { .. } => Repr::Any,
             _ => Repr::Ref,
         }).collect();
-        let sum_payload_repr: Vec<[Repr; 2]> = prog
-            .types
-            .types
-            .iter()
-            .map(|_t| [Repr::Any, Repr::Any])
-            .collect();
         // precompute the threaded dispatch tags (one per op)
         let op_tags: Vec<Vec<u8>> = prog
             .funcs

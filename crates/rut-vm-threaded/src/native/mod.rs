@@ -82,6 +82,7 @@ op_handler!(h_arrset, op_arr_set);
 op_handler!(h_arrgetf, op_arr_get_f);
 op_handler!(h_arrsetf, op_arr_set_f);
 op_handler!(h_getf, op_getf);
+op_handler!(h_arr_get_ref, op_arr_get_ref);
 op_handler!(h_setf, op_setf);
 op_handler!(h_call, op_call);
 op_handler!(h_callm, op_call_m);
@@ -166,6 +167,7 @@ fn table<M: Machine>() -> Table<M> {
     t[T_ARRGETF as usize] = h_arrgetf::<M>;
     t[T_ARRSETF as usize] = h_arrsetf::<M>;
     t[T_GETF as usize] = h_getf::<M>;
+    t[T_ARRGETREF as usize] = h_arr_get_ref::<M>;
     t[T_SETF as usize] = h_setf::<M>;
     t[T_CALL as usize] = h_call::<M>;
     t[T_CALLM as usize] = h_callm::<M>;

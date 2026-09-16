@@ -143,6 +143,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
+    /// `for (let v of xs)` element reference (RFC 0012 §6): a fresh
+    /// one-slot box whose field 0 is the element — ref-typed elements
+    /// alias the stored slot (writes through `v.f` hit the sequence);
+    /// scalars box a per-iteration copy. `str`/`bytes` keep value yields.
+    pub(crate) fn emit_slice_get_ref(&mut self, recv: u16, idx: u16, info: &SliceInfo, sp: u32) -> TcResult<u16> {
+        let ptr_ty = self.ctx.mk_ptr(info.elem);
+        let dst = self.new_reg(ptr_ty);
+        match &info.source {
+            SliceSource::Array => {
+                self.emit(Op::ArrGetRef { dst, arr: recv, idx, ty: ptr_ty }, sp);
+            }
+            SliceSource::DataBuf { buf_field, .. } => {
+                let buf_ty = self.ctx.mk_array(info.elem);
+                let buf = self.new_reg(buf_ty);
+                self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
+                self.emit(Op::ArrGetRef { dst, arr: buf, idx, ty: ptr_ty }, sp);
+            }
+            _ => unreachable!("ref yield on an immutable sequence"),
+        }
+        Ok(dst)
+    }
+
     /// `s[i] = val` — element write. Only the concrete `Array`/`Vec` path
     /// has a mutable element; `str`/`bytes` and the read-only `Iter`
     /// contract do not.

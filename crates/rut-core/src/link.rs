@@ -263,6 +263,7 @@ fn remap_op(
         Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst, ty: map(ty), len, repr },
         Op::ArrLit { dst, ty, elems } => Op::ArrLit { dst, ty: map(ty), elems },
         Op::EnumNew { dst, ty, member } => Op::EnumNew { dst, ty: map(ty), member },
+        Op::ArrGetRef { dst, arr, idx, ty } => Op::ArrGetRef { dst, arr, idx, ty: map(ty) },
         Op::IsType { dst, obj, want } => Op::IsType { dst, obj, want: map(want) },
         Op::Unbox { dst, box_, ty } => Op::Unbox { dst, box_, ty: map(ty) },
         Op::Box { dst, val, ty } => Op::Box { dst, val, ty: map(ty) },

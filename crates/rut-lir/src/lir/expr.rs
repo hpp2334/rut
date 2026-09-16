@@ -19,8 +19,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.leave();
             return Err(());
         }
-        let r = self.compile_expr_inner(node, expected);
+        let mut r = self.compile_expr_inner(node, expected);
         self.leave();
+        // pointer deref at value positions (RFC 0012 §6): a `*T` where
+        // `T` is expected reads its pointee — arguments, returns, lets,
+        // assignments. Positions without an expected type (receivers,
+        // `==` operands, `let w = p`) keep the pointer: identity, aliasing
+        // and field/method deref are pointer-native.
+        if let Ok(t) = r {
+            if let Some(e) = expected {
+                if e != t {
+                    if let TyKind::Ptr { elem } = self.ctx.types.kind(t).clone() {
+                        if elem == e {
+                            let lo = self.ctx.ast.span(node.id()).lo;
+                            let src = self.last_reg;
+                            let d = self.new_reg(elem);
+                            self.emit(Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) }, lo);
+                            r = Ok(elem);
+                        }
+                    }
+                }
+            }
+        }
         // copy-by-value boundary (RFC 0009/0016 v1.1): every VALUE-typed
         // expression result is a fresh cell the consumer owns — records and
         // arrays deep-copy here, once, at the expression boundary. Receivers

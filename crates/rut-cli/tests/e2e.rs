@@ -1445,6 +1445,42 @@ pub fn main() -> unit {
 }
 
 #[test]
+fn for_of_vec_yields_element_references() {
+    // RFC 0012 §6 — Vec/`[T]` fused loops yield `*T`: a fresh element box
+    // per iteration. Ref-typed elements alias the stored slot — writes
+    // through the loop var (`row.push`, `r.v = ..`) hit the sequence;
+    // scalar/str uses deref automatically at value positions; `str`
+    // itself keeps value yields.
+    let src = r#"
+import { Vec } from "std:collection";
+import { Logger } from "std:log";
+struct Row { v: i32 }
+pub fn main() -> unit {
+    let log = Logger.new("ref");
+    let xs: Vec<i32> = Vec.new();
+    xs.push(1); xs.push(2); xs.push(3);
+    let mut sum = 0;
+    for (let v of xs) { sum += v; }
+    log.info(f"sum={sum}");
+    let m: Vec<Vec<i32>> = Vec.new();
+    let r0: Vec<i32> = Vec.new(); r0.push(10); m.push(r0);
+    for (let row of m) { row.push(20); }
+    log.info(f"rowlen={m[0].len()}");
+    let rs: Vec<Row> = Vec.new();
+    rs.push(Row { v: 5 });
+    for (let r of rs) { r.v = 7; }
+    log.info(f"v={rs[0].v}");
+    let mut hits = 0;
+    for (let v of xs) { if (v == 2) { hits += 1; } }
+    log.info(f"hits={hits}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["sum=6", "rowlen=2", "v=7", "hits=1"]);
+}
+
+#[test]
 fn float_literal_defaults_to_f32() {
     // an uncontextualized float literal is `f32` (RFC 0007 §1); the slot
     // carries f32 precision, so a literal and a computed f32 agree.

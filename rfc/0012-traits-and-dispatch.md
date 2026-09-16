@@ -297,8 +297,14 @@ the member is all a type does). `for (v of it) { body }` desugars to
   iteration, not the enclosing function.
 
 The builtin sequences (`Array<T>`, `Vec<T>`, `str`, `bytes`) keep their
-fused index loops — never a per-element call (RFC 0032 §1.1 R2) — with
-element types `T`, `T`, `str`, and `u8` respectively. Element yields as
-`*T` (a pointer into the sequence's own slot) are the remaining
-refinement; in this build the fused loops yield element values, which
-the fresh-binding law already treats as per-iteration values.
+fused index loops — never a per-element call (RFC 0032 §1.1 R2). The
+loop variable's type is `*T`, `*T`, `str`, and `u8` respectively: for
+the value sequences each iteration boxes the element into a fresh
+one-slot cell — ref-typed elements alias the stored slot, so writes
+through the loop variable (`row.push(..)`, `r.v = ..`) mutate the
+sequence itself, and the fresh box keeps the per-iteration binding law.
+Scalar uses deref automatically: a `*T` reads as `T` at value-expected
+positions (arguments, returns, lets, assignments, format holes),
+in arithmetic and ordinal operands, and in `==`/`!=` against the
+pointee type. `*T == *T` stays identity, and pointer-vs-pointer is
+untouched everywhere — `p == nil` compares pointers.

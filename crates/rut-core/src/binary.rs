@@ -653,6 +653,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::ArrayCmp { eq, dst, a, b } => { e.u8(85); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::ArrGetF { dst, obj, field, idx, repr } => { e.u8(87); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u8(repr.to_u8()); }
         Op::ArrSetF { obj, field, idx, val, repr } => { e.u8(88); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
+        Op::ArrGetRef { dst, arr, idx, ty } => { e.u8(30); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u32(*ty); }
     }
 }
 
@@ -744,6 +745,7 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         85 => Op::ArrayCmp { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         87 => Op::ArrGetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, idx: d.u16()?, repr: repr(d.u8()?)? },
         88 => Op::ArrSetF { obj: d.u16()?, field: d.u32()?, idx: d.u16()?, val: d.u16()?, repr: repr(d.u8()?)? },
+        30 => Op::ArrGetRef { dst: d.u16()?, arr: d.u16()?, idx: d.u16()?, ty: d.u32()? },
         t => return Err(format!("bad opcode {t}")),
     })
 }

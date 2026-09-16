@@ -122,9 +122,15 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                             }
                         }
                         None => {
-                            // pointer box: the only access is the whole
-                            // payload slot (field 0, always a ref)
-                            if *field != 0 || *repr != Repr::Ref {
+                            // pointer box: the only access is the payload
+                            // slot (field 0) at the pointee's own repr —
+                            // ref pointees share the cell, scalar pointees
+                            // read the boxed copy (RFC 0012 §6)
+                            let elem_repr = match prog.types.kind(ty) {
+                                TyKind::Ptr { elem } => prog.types.repr_of(*elem),
+                                _ => return Err(bad("field access on a non-record".into())),
+                            };
+                            if *field != 0 || elem_repr != *repr {
                                 return Err(bad(
                                     "field access on a pointer must be the payload slot".into(),
                                 ));
@@ -424,6 +430,11 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*dst);
             push(*obj);
         }
+        Op::ArrGetRef { dst, arr, idx, .. } => {
+            push(*dst);
+            push(*arr);
+            push(*idx);
+        }
         Op::MakeClosure { dst, captures, .. } => {
             push(*dst);
             v.extend_from_slice(captures);
@@ -452,7 +463,7 @@ fn tys_of(op: &Op) -> Vec<u32> {
         | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
         | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
         | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakePtr { ty, .. }
-        | Op::CloneVal { ty, .. } | Op::ValEq { ty, .. } => vec![*ty],
+        | Op::CloneVal { ty, .. } | Op::ValEq { ty, .. } | Op::ArrGetRef { ty, .. } => vec![*ty],
         _ => Vec::new(),
     }
 }

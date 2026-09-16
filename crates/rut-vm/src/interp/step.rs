@@ -220,6 +220,7 @@ impl Vm {
             Op::ArrGet { dst, arr, idx, repr } => self.op_arr_get(dst, arr, idx, repr)?,
             Op::ArrSet { arr, idx, val, repr } => self.op_arr_set(arr, idx, val, repr)?,
             Op::ArrGetF { dst, obj, field, idx, repr } => self.op_arr_get_f(dst, obj, field, idx, repr)?,
+            Op::ArrGetRef { dst, arr, idx, ty } => self.op_arr_get_ref(dst, arr, idx, ty)?,
             Op::ArrSetF { obj, field, idx, val, repr } => self.op_arr_set_f(obj, field, idx, val, repr)?,
 
             Op::EnumNew { dst, ty, member } => {

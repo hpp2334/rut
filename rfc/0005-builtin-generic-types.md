@@ -122,7 +122,9 @@ Implementations:
 - `Vec<T>` — builtin by shape (v1.1, RFC 0012 §5): a record with a
   `buf: Array<T>` field and a `len: i32` field; `v[i]`, `v[i] = x`,
   `v.len()`, and `for (x of v)` lower to the fused element ops on those
-  fields — no interface, no accessor inlining.
+  fields — no interface, no accessor inlining. `for (x of v)` yields
+  `*T` — a fresh element box per iteration (RFC 0012 §6); indexed
+  reads keep value yields.
 
 `str`/`bytes` carry **member contracts** declared per type in the
 prelude (v1.1, RFC 0004 §4): `s.len()`/`s.code()`/`s.encode()`,

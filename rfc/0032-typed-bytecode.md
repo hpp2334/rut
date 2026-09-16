@@ -67,7 +67,11 @@ arrget  rD, rO, rI | arrset rO, rI, rV   ; CONCRETE Vec<T> / Array<T, N>
                           ; element access — typed by elem tid, layout
                           ; known (flat inline elements for primitive T,
                            ; handle slots otherwise, RFC 0016 §4),
-                          ; bounds trap. Array<T, N> const-index folds its
+                          ; bounds trap
+arrgetref rD, rO, rI, tid ; for-of element reference (RFC 0012 §6):
+                          ; box the element into a fresh one-slot cell
+                          ; of the pointer type tid — ref elements
+                          ; alias the stored slot, scalars copy Array<T, N> const-index folds its
                           ; bounds check against const N (§1.1 R1); dyn
                           ; Slice<T> get/set/len are `calli` vtable slots
                           ; (§1.1 R2); Vec / Array → dyn Slice widening

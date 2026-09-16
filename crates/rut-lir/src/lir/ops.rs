@@ -30,8 +30,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // `4.0 * pi` would default the lhs to f32 and mismatch.
         let lt = self.compile_expr(lhs, expected)?;
         let lhs_reg = self.last_reg;
+        // arithmetic/ordinal: a scalar-pointee pointer on the left reads
+        // its pointee (RFC 0012 §6); the right side derefs through the
+        // compile_expr funnel. `==`/`!=` keep pointer identity and decide
+        // after both sides are typed.
+        let (lt, lhs_reg) = if !matches!(op, Eq | Ne) {
+            self.deref_ptr(lt, lhs_reg, sp.lo)
+        } else {
+            (lt, lhs_reg)
+        };
+        let mut lt = lt;
+        let mut lhs_reg = lhs_reg;
         let rt_ = self.compile_expr(rhs, Some(lt))?;
         let rhs_reg = self.last_reg;
+        // `==`/`!=`: a pointer against its own pointee type compares the
+        // VALUE (the funnel already deref'd the right-hand side); pointer-
+        // vs-pointer — including `nil` — stays identity (RFC 0012 §4)
+        if matches!(op, Eq | Ne) && rt_ != lt {
+            if let TyKind::Ptr { elem } = self.ctx.types.kind(lt).clone() {
+                if rt_ == elem {
+                    let (t2, r2) = self.deref_ptr(lt, lhs_reg, sp.lo);
+                    lt = t2;
+                    lhs_reg = r2;
+                }
+            }
+        }
         if lt != rt_ {
             self.ctx.err(sp, format!(
                 "operands must have equal width (RFC 0004 §3): `{}` vs `{}` —convert first (RFC 0007 §1)",

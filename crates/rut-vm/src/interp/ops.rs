@@ -170,6 +170,32 @@ impl Vm {
         Ok(())
     }
 
+    /// `ArrGetRef` — `for (let v of xs)` element reference (RFC 0012 §6):
+    /// box the element into a fresh one-slot cell of the pointer type.
+    /// Ref-typed elements alias the stored slot (writes through `v.f` hit
+    /// the sequence); scalars box a per-iteration copy, which a scalar
+    /// cannot be written through anyway.
+    #[inline(always)]
+    pub(super) fn op_arr_get_ref(&mut self, dst: Reg, arr: Reg, idx: Reg, ty: TypeId) -> Result<(), Trap> {
+        let i = unsafe { self.cur_regs[idx as usize].i };
+        let v = seq_get(cell_of(self.cur_regs[arr as usize]), i)?;
+        let elem = match self.prog.types.kind(ty) {
+            TyKind::Ptr { elem } => *elem,
+            _ => unreachable!("ArrGetRef over a non-pointer type"),
+        };
+        let c = self.heap.alloc_record_zeroed(ty, 1)?;
+        if let CellData::Record { fields } = &cell_of(c).data {
+            fields.borrow_mut().set(0, v);
+        }
+        if self.prog.types.repr_of(elem).is_ref() {
+            self.heap.retain(v);
+        }
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = c;
+        self.heap.release(old); // the pointer type is always a ref
+        Ok(())
+    }
+
     /// `OnDrop` — attach a cleanup closure to a cell (RFC 0016 §3).
     #[inline(always)]
     pub(super) fn op_on_drop(&mut self, obj: Reg, cleanup: Reg) -> Result<(), Trap> {
@@ -399,11 +425,6 @@ impl Vm {
         Ok(())
     }
 
-    pub(super) fn sum_payload_ty(&self, _ty: TypeId, _want_err: bool) -> TypeId {
-        // v1.1: the builtin sums are gone — no sum payloads remain
-        TY_ANY
-
-    }
     pub(super) fn store_result(&mut self, dst: Option<Reg>, v: Slot) -> Result<(), Trap> {
         if let Some(d) = dst {
             let old = self.cur_regs[d as usize];

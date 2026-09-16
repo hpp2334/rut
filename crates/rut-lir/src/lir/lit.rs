@@ -99,7 +99,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     part_regs.push(reg);
                 }
                 FPartAst::Hole(e) => {
-                    let t = self.compile_expr(*e, None)?;
+                    let mut t = self.compile_expr(*e, None)?;
+                    // `{p}` formats the pointee (RFC 0012 §6): deref the
+                    // box before formatting — any element type
+                    let lo = self.ctx.ast.span(e.id()).lo;
+                    if let TyKind::Ptr { elem } = self.ctx.types.kind(t).clone() {
+                        let src = self.last_reg;
+                        let d = self.new_reg(elem);
+                        self.emit(Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) }, lo);
+                        t = elem;
+                    }
                     self.check_formattable(t, self.ctx.ast.span(e.id()))?;
                     let src = self.last_reg;
                     if t == TY_STR {
