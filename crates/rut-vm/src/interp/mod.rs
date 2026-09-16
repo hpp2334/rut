@@ -7,7 +7,7 @@
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
 use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
+use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value, ArrKind};
 use rut_core::ops::*;
 use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
 use std::cell::RefCell;
@@ -99,6 +99,9 @@ pub struct Vm {
     pub hooks: HostHooks,
     /// host-function impls by name (RFC 0022/0026)
     host_fns: HashMap<String, HostFn>,
+    /// raw arg slots of the CURRENT host call (RFC 0023 §2 zero-copy
+    /// borrows; empty outside a host call)
+    host_arg_slots: Vec<Slot>,
     const_slots: Vec<Slot>,
     /// recycled per-frame register files (avoids a Vec alloc per call)
     reg_pool: Vec<Vec<Slot>>,
@@ -220,6 +223,7 @@ impl Vm {
             since_check: 0,
             hooks,
             host_fns: HashMap::new(),
+            host_arg_slots: Vec::new(),
             const_slots,
             reg_pool: Vec::new(),
             ref_regs,
@@ -469,6 +473,28 @@ impl Vm {
         self.host_fns.insert(name.to_string(), Rc::new(RefCell::new(f)));
     }
 
+    /// Zero-copy borrow of a `str`/`bytes` argument of the CURRENT host
+    /// call (RFC 0023 §2, RFC 0042): the octets read straight out of the
+    /// VM's block store — no `String`/`Vec` crossing copy. Sound for
+    /// exactly the host call: the arg registers own their references and
+    /// `str`/`bytes` are immutable.
+    pub fn arg_bytes(&self, i: usize) -> Result<&[u8], Trap> {
+        let s = *self.host_arg_slots.get(i).ok_or_else(|| {
+            Trap::new(TrapKind::Invalid, format!("arg_bytes({i}): no such argument"))
+        })?;
+        if unsafe { s.r.is_null() } {
+            return Err(Trap::new(TrapKind::NilDeref, "arg_bytes on nil"));
+        }
+        match &cell_of(s).data {
+            CellData::Str(v) => Ok(v.bytes()),
+            CellData::Array { items, .. } if items.borrow().kind == ArrKind::U8 => {
+                let d = items.borrow();
+                Ok(unsafe { std::slice::from_raw_parts(d.block, d.len as usize) })
+            }
+            _ => Err(Trap::new(TrapKind::Invalid, format!("arg_bytes({i}): not a `str`/`bytes` argument"))),
+        }
+    }
+
     /// Dispatch `Op::Call` to a host function: convert the args to `Value`s,
     /// invoke the embedder's impl, convert the result. The name was bound at
     /// link; an unregistered name traps at the boundary.
@@ -477,6 +503,13 @@ impl Vm {
         let name = fc.host.clone().expect("call_host: not a host function");
         let params = fc.params.clone();
         let ret = fc.ret;
+        // the raw arg slots, stashed for the call's duration: hosts that
+        // want zero-copy borrow through `arg_bytes`/`arg_str` instead of
+        // reading the copied `Value`s (RFC 0023 §2). The arg registers
+        // own their references and `str`/`bytes` are immutable, so the
+        // borrow is sound for exactly the host call.
+        self.host_arg_slots.clear();
+        self.host_arg_slots.extend(args.iter().map(|a| self.cur_regs[*a as usize]));
         let mut vals = Vec::with_capacity(args.len());
         for (i, a) in args.iter().enumerate() {
             let ty = params.get(i).copied().unwrap_or(rut_core::types::TY_I32);

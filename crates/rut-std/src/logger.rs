@@ -29,7 +29,16 @@ where
         // takes over the mint reference (see OpaqueBox::alloc)
         Ok(Value::Opaque(vm.heap.opaque_handle_take(ptr)))
     });
-    vm.register_host_fn("rt:log::logger_log", move |_vm, args| {
+    vm.register_host_fn("rt:log::logger_log", move |vm, args| {
+        // zero-copy: borrow the message straight out of the block store
+        // (RFC 0023 §2) instead of cloning a `String` per log line
+        if let Ok(msg) = vm.arg_bytes(2) {
+            if let Ok(msg) = std::str::from_utf8(msg) {
+                (sink.borrow_mut())(msg);
+                return Ok(Value::Unit);
+            }
+        }
+        // fall back to the copied crossing (non-UTF-8 or missing arg)
         if let Some(Value::Str(msg)) = args.get(2) {
             (sink.borrow_mut())(msg);
         }
