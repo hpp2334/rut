@@ -8,4 +8,8 @@
       "model": "zai-coding-plan/glm-5.3",
     },
   },
+  // Allow everything — batch runs must never pause on permission asks.
+  "permissions": [
+    { "action": "*", "resource": "*", "effect": "allow" },
+  ],
 }

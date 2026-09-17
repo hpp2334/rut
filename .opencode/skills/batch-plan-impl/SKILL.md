@@ -1,26 +1,55 @@
 ---
 name: Batch Plan Implementation
-description: Execute a multi-phase/step plan by dispatching each phase to a fresh headless OpenCode session (via a subagent that dispatches and monitors with 60s polling), verifying the commit, then closing the session and moving to the next phase until the plan is done.
+description: Execute a multi-phase/step plan unattended — the agent itself creates a headless OpenCode session per phase and dispatches its prompt, then a small watch-only subagent polls every 60s, verifies the commit+push, and reports; continue to the next phase until the plan is done. No user interaction: decide autonomously, retry once, never delete sessions.
 ---
 
 # Batch Plan Implementation
 
-Drive an existing multi-phase/step plan to completion. Each phase is implemented
-by a **fresh headless OpenCode session** created through the local API; a
-**subagent** handles the dispatch + monitoring so the orchestrating session
-(this one) stays free. Phases run strictly sequentially, one commit-ish per
-phase.
+Drive an existing multi-phase/step plan to completion — **unattended**. The
+user is usually away, so there is NO confirmation step and NO asking questions:
+follow the autonomous decision policy below, record every decision in a run
+log, and leave a complete report.
+
+For each phase **you** (the session running this skill) create one fresh
+headless OpenCode session and dispatch its prompt. A **watch-only subagent**
+then monitors it (60s polling) and verifies the result. Phases run strictly
+sequentially.
+
+## Division of labor
+
+| Actor | Does | Never does |
+| --- | --- | --- |
+| You (orchestrator) | plan parsing, session create, prompt dispatch, subagent spawn, batch control | implement a phase itself, delete a session |
+| Subagent (one per phase, small prompt) | poll 60s, detect stall/timeout, verify commits + push + clean tree, extract summary, report | create sessions, send prompts, edit files, commit, delete sessions |
 
 ## Rules
 
-- One phase = one dedicated session = one subagent. Never batch phases.
+- **Never ask the user anything.** Decide autonomously per the policy below
+  and record the decision in the run log.
+- **Handle anything that comes up yourself** (stalls, missing pushes, flaky
+  failures) per the decision policy — never wait for the user.
+- **Never delete a session.** "Closing" a phase just means moving on to the
+  next one — every session stays in the session list for later inspection.
+- One phase = one dedicated session = one watch subagent. Never batch phases.
+- The subagent prompt is SMALL: session id + a few context values. The long
+  phase text goes only into the dispatched session prompt, never into the
+  subagent.
 - Never implement a phase in this session. You orchestrate and verify only.
 - Poll status every **60 seconds**. Do not use blocking waits.
-- On any phase failure, timeout, or stall: **stop the batch**, leave that
-  session alive for inspection, and report to the user.
-- Close (delete) a phase session only after its result is verified.
-- If anything requires a decision (unclear plan, dirty tree, permission ask,
-  failing tests), stop and ask the user instead of guessing.
+- Pin the **default model from `opencode.jsonc`** on every dispatch — phase
+  sessions and the watch subagent all use it (see step 2).
+
+## Autonomous decision policy
+
+| Situation | Action |
+| --- | --- |
+| No plan found anywhere | Abort before touching anything; report where you looked. |
+| Ambiguous phase boundaries/ordering | Best-effort split, record assumptions in the run log, proceed. |
+| Dirty working tree | `git stash push --include-untracked -m "batch-plan-impl: auto-stash <date>"`, record in run log, proceed. |
+| Phase FAILED (no commit / not pushed / dirty tree / outcome != succeeded) | Retry the phase ONCE with a fresh session and the same prompt. |
+| Phase STALLED/TIMEOUT | Interrupt the session (`POST /api/session/$SID/interrupt`), then retry ONCE. |
+| Phase fails after retry | **Stop the batch** — later phases likely depend on it. Leave everything for review. |
+| Anything else unexpected | Choose the least destructive option, record it, keep going if safe. |
 
 ## Workflow
 
@@ -30,9 +59,8 @@ Identify the plan to execute, in this order:
 
 1. The plan most recently produced in **this conversation** (e.g. by a plan
    agent or a previous discussion).
-2. A plan file the user names.
-3. Otherwise, look for obvious plan documents (`rfc/`, `docs/`, `plans/`,
-   `*.plan.md`, TODO files) and ask the user to pick one.
+2. The newest obvious plan document (`rfc/`, `docs/`, `plans/`, `*.plan.md`,
+   TODO files) — pick the most recently modified if several.
 
 Extract an ordered list of phases/steps. For each, capture:
 
@@ -41,164 +69,173 @@ Extract an ordered list of phases/steps. For each, capture:
 - `detail` — the FULL text of that phase/step from the plan, verbatim
   (acceptance criteria, file paths, spec excerpts — everything)
 
-If the plan text is ambiguous about phase boundaries or ordering, ask the user
-before continuing.
+If none is found, abort and report. If boundaries/order are ambiguous, split
+best-effort and record your assumptions.
 
-### 1. Confirm with the user
+### 1. Run log
 
-Show the extracted list and get explicit approval before dispatching anything:
-
-```
-Batch plan execution — N phases
-  1. <title> — <one-line summary>
-  2. ...
-Working dir: <abs path>    Base commit: <short hash>
-Each phase: new headless session -> implement + commit -> poll 60s -> close.
-Proceed?
-```
+Create `/tmp/opencode/batch-plan-impl/run.md` and record, as you go: the plan
+source, the parsed phase list, every autonomous decision (with reason), each
+session id, and each phase result. The final report is generated from this.
 
 ### 2. Preconditions
 
 ```sh
-git status --porcelain          # must be empty; if not, ask the user
+git status --porcelain          # if dirty: auto-stash (see policy), record it
 git rev-parse HEAD              # record as $BASE
 pwd                             # record as $PROJECT_DIR (absolute)
+mkdir -p /tmp/opencode/batch-plan-impl   # scratch for payload files + run log
 ```
 
-Store `$BASE` and `$PROJECT_DIR` — every subagent prompt needs them. Also
-prepare a scratch dir for JSON payloads (payloads contain quotes/newlines;
-never inline them into `--data`):
+Read the **default model** (`model` in `opencode.jsonc`). The endpoint is
+location-scoped, so run it with workdir = `$PROJECT_DIR`:
 
 ```sh
-mkdir -p /tmp/opencode/batch-plan-impl
+opencode api get /api/model/default
+#   .data.providerID -> $MODEL_PROVIDER
+#   .data.modelID    -> $MODEL_ID
+#   $MODEL_JSON = {"providerID":"$MODEL_PROVIDER","id":"$MODEL_ID"}
+#   $MODEL_REF  = "$MODEL_PROVIDER/$MODEL_ID"
 ```
 
-### 3. Dispatch each phase (loop for n = 1..N)
+### 3. Per phase (loop n = 1..N)
 
-For phase `n`, spawn ONE subagent (subagent tool, `general` agent, foreground —
-phases are sequential). The subagent prompt must be **fully self-contained**
-(subagents start with no context). Use exactly this template, filling the
-placeholders:
+#### a. Create the session (you)
+
+```sh
+opencode api post /api/session \
+  --data "$(jq -n --arg t "Phase <n>: <title>" --arg d "$PROJECT_DIR" \
+            --arg m "$MODEL_JSON" \
+            '{title:$t, location:{directory:$d}, model:($m|fromjson)}')"
+```
+
+Extract `$SID` via `jq '.data.id'`. `location.directory` is REQUIRED — without
+it the session lands in the wrong directory. `model` pins the project default
+model explicitly; do not rely on inheritance.
+
+#### b. Dispatch the phase prompt (you)
+
+Write the phase prompt to a payload file (never interpolate raw text into
+`--data`), then dispatch and record the admission timestamp:
+
+```sh
+# phase<n>.txt content:
+#   You are implementing phase <n> of an approved plan in this repository.
+#
+#   <detail>
+#
+#   Rules:
+#   - Implement ONLY this phase. Do not start or anticipate other phases.
+#   - Work within this repo. Keep changes minimal and consistent with existing code.
+#   - When done, commit ALL changes with subject: "phase(<n>): <title>"
+#     (plus a short body listing what was done).
+#   - Then PUSH to the remote: git push (add -u <remote> <branch> if the
+#     branch has no upstream yet). A phase is only done once pushed.
+#   - Finish with a summary: what changed, files touched, test/build results.
+
+jq -n --rawfile text /tmp/opencode/batch-plan-impl/phase<n>.txt '{text:$text}' \
+  > /tmp/opencode/batch-plan-impl/phase<n>.json
+
+opencode api post /api/session/$SID/prompt \
+  --data "$(cat /tmp/opencode/batch-plan-impl/phase<n>.json)"
+# record .data.time.created as $SINCE (epoch ms)
+```
+
+#### c. Spawn the watch subagent (you)
+
+One subagent (subagent tool, `general` agent, foreground — phases are
+sequential), spawned with the same pinned model (`model: "$MODEL_REF"` in the
+subagent tool call). Fill only these placeholders: `$PROJECT_DIR`, `$SID`,
+`$SINCE` (number), `$BASE`, `<n>`. Send exactly this small prompt:
 
 ```text
-You are a dispatch-and-monitor worker for phase <n> of a batch plan.
-Work dir: <PROJECT_DIR>. All git commands must use: git -C <PROJECT_DIR> ...
-Scratch dir for payload files: /tmp/opencode/batch-plan-impl
+Watch worker for a headless OpenCode session. Observe and report ONLY — never
+create sessions, send prompts, edit files, or change git state.
 
-Do EXACTLY these steps, in order:
+Context:
+- Project dir: $PROJECT_DIR
+- Session id: $SID   (prompt already dispatched — do not touch it)
+- Prompt admitted at epoch ms: $SINCE
+- Base commit: $BASE ; expected commit subject prefix: "phase(<n>):"
 
-1. CREATE the implementation session:
-   opencode api post /api/session \
-     --data '{"title":"Phase <n>: <title>","location":{"directory":"<PROJECT_DIR>"}}'
-   Extract the session id: jq '.data.id' — call it $SID.
-   (location.directory is REQUIRED; without it the session lands elsewhere.)
+WATCH — repeat until finished (each step is its own shell call):
+  sleep 60
+  opencode api session.message.list \
+    --param sessionID="$SID" --param order=desc --param limit=1 \
+    | jq -e '.data[0].type=="idle" and .data[0].time.created > $SINCE' >/dev/null
+  exit 0 => loop finished (DONE)
+- Newest message `idle` after $SINCE means the agent loop finished.
+- Do NOT use /api/session/active — it does not track headless sessions.
+- STALLED if the newest message id stops changing for 20 consecutive polls
+  while not idle.   TIMEOUT after 240 polls (~4h) with no idle.
 
-2. BUILD the prompt payload file. Write the following verbatim text as the
-   prompt (it is the phase the session must implement):
----8<--- PROMPT BEGIN ---8<---
-You are implementing phase <n> of an approved plan in this repository.
+ON DONE, collect:
+1. Outcome:
+   opencode api session.message.list \
+     --param sessionID="$SID" --param order=desc --param limit=5 \
+     | jq -r '.data[] | select(.type=="idle") | .outcome'     # want: succeeded
+2. Verification:
+   git -C $PROJECT_DIR log --oneline $BASE..HEAD
+   git -C $PROJECT_DIR status -sb        # first line must NOT contain [ahead]
+   git -C $PROJECT_DIR status --porcelain
+3. Final assistant summary:
+   opencode api session.message.list \
+     --param sessionID="$SID" --param order=desc --param limit=15 \
+     | jq -r '[.data[] | select(.type=="assistant")][0]
+              | [.content[] | select(.type=="text") | .text] | join("\n")'
 
-<detail>
-
-Rules:
-- Implement ONLY this phase. Do not start or anticipate other phases.
-- Work within this repo. Keep changes minimal and consistent with existing code.
-- When the phase is done, commit ALL your changes with message:
-  "phase(<n>): <title>"
-  (include a short body listing what was done).
-- Finish with a summary: what you changed, files touched, test/build results.
----8<--- PROMPT END ---8<---
-
-   Write it to a file safely (never interpolate raw text into the command):
-   jq -n --rawfile text /tmp/opencode/batch-plan-impl/phase<n>.txt '{text:$text}' \
-     > /tmp/opencode/batch-plan-impl/phase<n>.json
-   (create the .txt file first with the write tool or a heredoc)
-
-3. DISPATCH it and record the admission timestamp:
-   opencode api post /api/session/$SID/prompt \
-     --data "$(cat /tmp/opencode/batch-plan-impl/phase<n>.json)"
-   jq '.data.time.created'  — call it $SINCE (epoch ms).
-
-4. MONITOR by polling every 60 seconds until done:
-   for i in $(seq 1 240); do          # 240 polls = 4h hard cap
-     sleep 60
-     opencode api session.message.list \
-       --param sessionID="$SID" --param order=desc --param limit=1 \
-       | jq -e --argjson since "$SINCE" \
-         '.data[0].type=="idle" and .data[0].time.created > $since' >/dev/null \
-       && break
-   done
-   - The newest message being `idle` (after our prompt) means the loop finished.
-   - Do NOT use /api/session/active — it does not track headless sessions.
-   - Each `sleep 60` must be its own shell call so it fits command timeouts.
-
-5. COLLECT the result:
-   a) Final assistant summary text:
-      opencode api session.message.list \
-        --param sessionID="$SID" --param order=desc --param limit=15 \
-      | jq -r '[.data[] | select(.type=="assistant")][0]
-               | [.content[] | select(.type=="text") | .text] | join("\n")'
-   b) idle outcome (should be "succeeded"):
-      ... same list call ... | jq -r '.data[] | select(.type=="idle") | .outcome'
-   c) Commit verification:
-      git -C <PROJECT_DIR> log --oneline <BASE>..HEAD
-      git -C <PROJECT_DIR> status --porcelain
-   d) Timeout/stall detection: if the poll loop ends without idle, or no new
-      commit appeared and the newest assistant message has not advanced for
-      ~20 minutes, treat the phase as STALLED.
-
-6. Do NOT delete the session. Do NOT modify the repository yourself.
-
-7. RESPOND with exactly this report and nothing else:
-   STATUS: DONE | FAILED | STALLED
-   SESSION: $SID
-   OUTCOME: <idle outcome or "timeout">
-   COMMITS: <new commit hashes + subjects, or "none">
-   DIRTY: <yes/no — git status --porcelain output>
-   SUMMARY: <the session's final assistant text, max ~30 lines>
+RESPOND with exactly this and nothing else:
+STATUS: DONE | STALLED | TIMEOUT
+OUTCOME: <idle outcome or "n/a">
+COMMITS: <hashes + subjects, or "none">
+PUSHED: <yes/no — no "[ahead" in status -sb>
+DIRTY: <yes/no>
+SUMMARY: <final assistant text, max ~30 lines>
 ```
 
-### 4. Review the subagent report
+#### d. Review and continue (you)
 
-- `STATUS: DONE` + at least one commit + clean tree → phase succeeded:
-  1. Close the session: `opencode api delete /api/session/$SID`
-  2. Continue to the next phase (back to step 3).
-- `STATUS: DONE` but no commit or dirty tree → treat as FAILED (ask the user:
-  have the same session fix it, or stop?).
-- `STATUS: FAILED` / `STALLED` → **stop the batch**. Keep the session alive.
-  Report to the user: phase number, session id, summary, and how to inspect
-  (session is still in the session list). Ask whether to retry the phase
-  (new session, same prompt), skip, or abort the batch.
+Phase succeeded only when ALL hold: `STATUS: DONE`, `OUTCOME: succeeded`,
+at least one commit, `PUSHED: yes`, clean tree. Then leave the session as-is
+and start the next phase (back to 3a).
 
-### 5. Final report
+Otherwise (FAILED / STALLED / TIMEOUT): retry ONCE per policy (fresh session,
+same prompt; interrupt first if stalled). Retry succeeds → continue. Retry
+fails too → **stop the batch** and go to the final report.
 
-After the last phase (or on abort), summarize:
+### 4. Final report
+
+After the last phase (or on abort), summarize from the run log:
 
 ```
 Batch plan complete: <k>/<N> phases done (base <BASE> -> HEAD <short hash>)
-  1. <title>  ✓ <commit>  (session closed)
-  2. <title>  ✓ <commit>  (session closed)
-  3. <title>  ✗ FAILED — session ses_xxx kept for inspection
-Overall diff stat: git -C . diff --stat <BASE>..HEAD
+  1. <title>  ✓ <commit> pushed   ses_xxx
+  2. <title>  ✗ STALLED (retried once, failed)   ses_yyy — left untouched
+Overall: git diff --stat <BASE>..HEAD
+Autonomous decisions: <auto-stash hash, retry counts, assumptions made>
+All sessions were kept (never deleted) — resume any of them from the session list.
 ```
 
 ## Quick command reference
 
-| Action | Command |
-| --- | --- |
-| Create session | `opencode api post /api/session --data '{"title":"...","location":{"directory":"<abs dir>"}}'` |
-| Send prompt | `opencode api post /api/session/$SID/prompt --data "$(cat payload.json)"` |
-| Poll newest message | `opencode api session.message.list --param sessionID=$SID --param order=desc --param limit=1` |
-| Done when | newest msg `type=="idle"` and `time.created` > prompt admission time |
-| Final summary text | list limit=15, first `assistant` msg, join its `content[]` where `type=="text"` |
-| Close session | `opencode api delete /api/session/$SID` |
-| Interrupt (if needed) | `opencode api post /api/session/$SID/interrupt` |
+| Action | Actor | Command |
+| --- | --- | --- |
+| Read default model | you | `opencode api get /api/model/default` (workdir = `$PROJECT_DIR`) |
+| Create session (pinned model) | you | `opencode api post /api/session --data "$(jq -n --arg t "..." --arg d "$PROJECT_DIR" --arg m "$MODEL_JSON" '{title:$t,location:{directory:$d},model:($m\|fromjson)}')"` |
+| Dispatch prompt | you | `opencode api post /api/session/$SID/prompt --data "$(cat payload.json)"` |
+| Poll newest message | subagent | `opencode api session.message.list --param sessionID=$SID --param order=desc --param limit=1` |
+| Done when | subagent | newest msg `type=="idle"` and `time.created > $SINCE` |
+| Verify | subagent | `git log --oneline $BASE..HEAD` + `status -sb` (no `[ahead`) + `status --porcelain` + idle `outcome` |
+| Final summary text | subagent | list limit=15 → first `assistant` msg → join `content[]` where `type=="text"` |
+| Interrupt stalled session | you | `opencode api post /api/session/$SID/interrupt` |
 
 ## Notes
 
-- Sessions inherit the project's default model/agent from `opencode.jsonc`.
-- If the project uses permission prompts, phase sessions may pause on asks;
-  this surfaces as a stall. Handle permission decisions in the user-facing
-  session, not by auto-approving inside the subagent.
+- This project's `opencode.jsonc` allows all permissions
+  (`"action": "*"` / `"effect": "allow"`), so phase sessions never pause on
+  permission asks — no permission handling is needed anywhere in the batch.
+- The default model comes from `opencode.jsonc` (read via
+  `/api/model/default` at the project location) and is pinned explicitly on
+  every phase session AND the watch subagent.
 - Payload JSON must be built with `jq -n --rawfile` / `jq -n --arg` — never
   string-interpolated (phase text contains quotes and newlines).
