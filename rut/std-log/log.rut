@@ -10,7 +10,9 @@ use { create_logger, logger_log } from "rt:log";
 
 pub class Logger {
     internal: Opaque;
+}
 
+impl Logger {
     pub fn new(name: str) -> Self {
         return Self { internal: create_logger(name) };
     }

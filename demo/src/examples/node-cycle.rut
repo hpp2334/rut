@@ -8,6 +8,9 @@ use { Logger } from "std:log";
 class Node {                              // initializer covers `next`
     next: *Node = nil;                    // a pointer slot — recursive types
                                           // are legal (one word, nullable)
+}
+
+impl Node {
     fn new() -> Self { return Self {}; }  // explicit construction — no
                                           // implicit default
     fn link(mut self, other: *Node) {

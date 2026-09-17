@@ -5,9 +5,10 @@
 // receiver; it builds the instance with the class-private `Self { .. }`
 // literal. Instance methods spell `self` explicitly; a method
 // without `self` is a class method — no separate "static" form.
-// Members follow RFC 0003 §2 visibility: unannotated = module-private,
-// `pub` (optionally scoped: `pub(mod)`, `pub(super)`, `pub(self)`)
-// exposes them.
+// Type bodies are FIELDS ONLY (RFC 0012); every method lives in the
+// type's inherent `impl` block. Members follow RFC 0003 §2 visibility:
+// unannotated = module-private, `pub` (optionally scoped: `pub(mod)`,
+// `pub(super)`, `pub(self)`) exposes them.
 
 use { make_ptr, panic } from "std:core";
 use { Logger } from "std:log";
@@ -15,7 +16,9 @@ use { Math } from "std:math";
 
 class Counter {
     n: i32 = 0;             // field initializer — module-private
+}
 
+impl Counter {
     pub fn new() -> Self {                 // the construction surface — a
         return Self { };               // class method (no self); free to
     }                                   // run logic. `new` is a convention,
@@ -31,7 +34,9 @@ class Counter {
 class Rect {
     w: f32;
     h: f32;
+}
 
+impl Rect {
     pub fn new(w: f32, h: f32) -> Self {     // construction VALIDATES — it's
         if (w <= 0 || h <= 0) {        // just a function
             panic("Rect: negative extents");
@@ -50,7 +55,9 @@ class Rect {
 class Version {
     major: i32;
     minor: i32;
+}
 
+impl Version {
     pub fn parse(s: str) -> *Version {
         // ... split "1.2" — on failure:
         return nil;                        // nil = the validation failed

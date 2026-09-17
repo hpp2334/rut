@@ -688,10 +688,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 ));
             }
         }
+        // trait-typed parameters specialize per concrete argument (RFC
+        // 0012 §5): the Inst carries one origin per trait-obj param
+        let mut trait_origins = Vec::new();
+        for (i, _) in args.iter().enumerate() {
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::TraitObj { .. })
+                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::TraitObj { .. })
+            {
+                trait_origins.push(arg_tys[i]);
+            }
+        }
         let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_NIL);
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Free(name),
             subst,
+            trait_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
@@ -743,6 +754,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         let mut aregs = Vec::new();
+        let mut arg_tys = Vec::new();
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             if !self.widens(t, ptys[i]) {
@@ -752,10 +764,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 ));
             }
             aregs.push(self.last_reg);
+            arg_tys.push(t);
+        }
+        // trait-typed parameters specialize per concrete argument (RFC
+        // 0012 §5): the Inst carries one origin per trait-obj param
+        let mut trait_origins = Vec::new();
+        for (i, _) in args.iter().enumerate() {
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::TraitObj { .. })
+                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::TraitObj { .. })
+            {
+                trait_origins.push(arg_tys[i]);
+            }
         }
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst: class_subst,
+            trait_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
@@ -963,15 +987,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         // builtin members (RFC 0005 table): `Opaque` rejects methods
+        // unless the module registered an inherent impl for it
+        // (RFC 0012 §2 — a module-owned `builtin class` takes impls)
         match self.ctx.types.kind(rt).clone() {
             TyKind::Opaque => {
+                if let Some((idx, mname)) = self.ctx.impls.iter().enumerate().find_map(|(idx, im)| {
+                    if !im.inherent || im.target != TY_OPAQUE {
+                        return None;
+                    }
+                    im.methods.iter().find(|(n, _)| *n == name).map(|(n, _)| (idx, *n))
+                }) {
+                    return self.compile_native_static_call(idx, mname, vec![], rreg, args, expected, sp);
+                }
                 self.ctx.err(sp, "`Opaque` has no methods in this build —recover with `downcast<T>(o)` (RFC 0014)");
                 return Err(());
             }
             _ => {}
         }
         // user types: inherent methods first (direct), then trait impls
-        // (vtable —ALWAYS, RFC 0012 §1)
+        // — statically bound for this concrete receiver (nominal, RFC
+        // 0012 §5: an impl is registered for exactly this (trait, type))
         if let TyKind::Data { .. } = self.ctx.types.kind(rt).clone() {
             // the receiver is either an instantiated generic (decl + args in
             // `inst_data`) or a local non-generic record
@@ -998,13 +1033,49 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((dname, class_args, mnode)) = found {
                 return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, args, expected, sp);
             }
-            self.ctx.err(sp, format!("`{}` has no method `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
+            if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
+                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp);
+            }
+            self.no_method_error(rt, name, sp);
             return Err(());
         }
+        // a native builtin class's inherent impl (`impl Array<T> { .. }`,
+        // RFC 0012 §2) — static dispatch through the native shape
+        if let TyKind::Array { elem } = self.ctx.types.kind(rt).clone() {
+            let hit = self.ctx.impls.iter().enumerate().find_map(|(idx, im)| {
+                if !im.inherent {
+                    return None;
+                }
+                match &im.target_data {
+                    Some((d, params))
+                        if self.ctx.extern_native_types.get(d).copied()
+                            == Some(rut_core::binary::NativeTy::Array) =>
+                    {
+                        im.methods.iter().find(|(n, _)| *n == name).map(|(n, _)| (idx, *n, params[0]))
+                    }
+                    _ => None,
+                }
+            });
+            if let Some((idx, mname, param)) = hit {
+                return self.compile_native_static_call(idx, mname, vec![(param, elem)], rreg, args, expected, sp);
+            }
+        }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(rt).clone() {
-            // trait-typed receiver: ONLY that trait's methods (RFC 0012 §2)
+            // trait-typed receiver: ONLY that trait's methods (RFC 0012 §2).
+            // Single concrete origin ⇒ static bind; a merged/loaded/unknown
+            // origin consults the value's descriptor (vtable)
             let tdesc = self.ctx.trait_by_id(trait_id).clone();
             if let Some(midx) = tdesc.methods.iter().position(|m| m.name == name) {
+                if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
+                    if segs.len() == 1 {
+                        let origins = self.origins_of(segs[0].name);
+                        if origins.len() == 1 {
+                            if let Some(idx) = self.ctx.find_impl(trait_id, origins[0]) {
+                                return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp);
+                            }
+                        }
+                    }
+                }
                 let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
                 return self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp);
             }
@@ -1018,17 +1089,185 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Err(())
     }
 
+    /// The diagnostic for a missing method on a user type: when a
+    /// matching impl exists under a trait this call site cannot name,
+    /// the message says which `use` unlocks it (RFC 0012 §6, the
+    /// use-both gate).
+    fn no_method_error(&mut self, rt: TypeId, name: IdentId, sp: rut_lexer::span::Span) {
+        let matches = |_ctx: &Ctx, im: &crate::check::ImplDecl| {
+            !im.inherent && im.methods.iter().any(|(n, _)| *n == name)
+        };
+        let hit = self.ctx.impls.iter().find(|im| {
+            matches(self.ctx, im)
+                && (im.target == rt
+                    || matches!(&im.target_data, Some((d, _)) if self
+                        .ctx
+                        .inst_data
+                        .get(&rt)
+                        .map_or(false, |(rd, _)| rd == d)))
+        });
+        if let Some(im) = hit {
+            let callable = self.ctx.find_trait(im.trait_name).is_some()
+                || self.ctx.extern_traits.contains_key(&im.trait_name);
+            if !callable {
+                let tname = self.ctx.name(self.ctx.trait_by_id(im.trait_id).name);
+                self.ctx.err(sp, format!(
+                    "`{}` has no method `{}` — use `{}` to call its methods on `{}` (RFC 0012 §6)",
+                    self.ctx.type_name(rt),
+                    self.ctx.name(name),
+                    tname,
+                    self.ctx.type_name(rt)
+                ));
+                return;
+            }
+        }
+        self.ctx.err(sp, format!("`{}` has no method `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
+    }
+
+    /// The registered trait impl on `rt` whose method set contains
+    /// `name` — concrete targets by id, generic targets by declaration.
+    fn find_trait_impl_method(&self, rt: TypeId, name: IdentId) -> Option<(usize, usize)> {
+        for (idx, im) in self.ctx.impls.iter().enumerate() {
+            if im.inherent || !im.methods.iter().any(|(n, _)| *n == name) {
+                continue;
+            }
+            let target_matches = im.target == rt
+                || matches!(&im.target_data, Some((d, _)) if self
+                    .ctx
+                    .inst_data
+                    .get(&rt)
+                    .map_or(false, |(rd, _)| rd == d));
+            if !target_matches {
+                continue;
+            }
+            let tdesc = self.ctx.trait_by_id(im.trait_id);
+            if let Some(midx) = tdesc.methods.iter().position(|m| m.name == name) {
+                return Some((idx, midx));
+            }
+        }
+        None
+    }
+
+    /// Static dispatch of a trait method through a registered impl: the
+    /// receiver's concrete type names the impl, so the call binds to the
+    /// impl method directly (`CallM`) — no vtable hop (RFC 0012 §5).
+    /// Arguments type against the trait's declared signature (the impl's
+    /// was checked to match at collection).
+    pub(crate) fn compile_trait_static_call(
+        &mut self,
+        impl_idx: usize,
+        midx: usize,
+        concrete: TypeId,
+        rreg: u16,
+        args: Vec<NodeHandle<AnyExpr>>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let im = self.ctx.impls[impl_idx].clone();
+        let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
+        let tm = tdesc.methods[midx].clone();
+        // generic target: this instantiation's substitution
+        let subst: Vec<(IdentId, TypeId)> = match &im.target_data {
+            Some((_, params)) => match self.ctx.inst_data.get(&concrete).cloned() {
+                Some((_, cargs)) => params.iter().cloned().zip(cargs.into_iter()).collect(),
+                None => vec![],
+            },
+            None => vec![],
+        };
+        let inst = crate::check::Inst {
+            key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: tm.name },
+            subst,
+            trait_origins: vec![],
+        };
+        let fid = self.ctx.ensure_inst(inst);
+        if args.len() != tm.params.len() {
+            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), tm.params.len()));
+            return Err(());
+        }
+        let mut aregs = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            let t = self.compile_expr(*a, Some(tm.params[i]))?;
+            // a `Self`-typed trait parameter accepts the concrete
+            // receiver (nominal widening, RFC 0012 §4)
+            if !self.widens(t, tm.params[i]) {
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                    "argument {} is `{}`, `{}` expected",
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(tm.params[i])
+                ));
+            }
+            aregs.push(self.last_reg);
+        }
+        let dst = if tm.ret == TY_NIL { None } else { Some(self.new_reg(tm.ret)) };
+        { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        Ok(tm.ret)
+    }
+
+    /// Static dispatch of a native builtin class's inherent method
+    /// (`impl Array<T> { .. }`): the native shape supplies the target
+    /// substitution; `params` is the `target_data` binding.
+    pub(crate) fn compile_native_static_call(
+        &mut self,
+        impl_idx: usize,
+        mname: IdentId,
+        subst: Vec<(IdentId, TypeId)>,
+        rreg: u16,
+        args: Vec<NodeHandle<AnyExpr>>,
+        _expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let im = self.ctx.impls[impl_idx].clone();
+        let (_, mnode) = im.methods.iter().find(|(n, _)| *n == mname).cloned().ok_or(())?;
+        let md = self.ctx.ast.method_decl(mnode).clone();
+        let saved_subst = std::mem::replace(&mut self.subst, subst.clone());
+        let saved_self = self.self_ty;
+        self.self_ty = None;
+        let mut ptys = Vec::new();
+        for p in md.params.iter().skip(1) {
+            match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
+                _ => ptys.push(TY_I32),
+            }
+        }
+        let ret_ty = md.ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
+        self.subst = saved_subst;
+        self.self_ty = saved_self;
+        if args.len() != ptys.len() {
+            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+            return Err(());
+        }
+        let mut aregs = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            let t = self.compile_expr(*a, Some(ptys[i]))?;
+            if t != ptys[i] {
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                    "argument {} is `{}`, `{}` expected",
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
+                ));
+            }
+            aregs.push(self.clone_arg(self.last_reg, ptys[i], sp.lo));
+        }
+        let inst = crate::check::Inst {
+            key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: mname },
+            subst,
+            trait_origins: vec![],
+        };
+        let fid = self.ctx.ensure_inst(inst);
+        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+        { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        Ok(ret_ty)
+    }
+
     /// mut-binding law (RFC 0003 §1): writing through a handle requires the
     /// head binding to be `let mut`
-    /// RFC 0012 §2: implicit widening — exact > trait-typed when the exact type
-    /// has an impl for I. Same-type always widens.
+    /// RFC 0012 §4: implicit widening — exact > trait-typed when an impl
+    /// is REGISTERED for the (trait, type) pair. Nominal: no structural
+    /// shape is ever consulted. Same-type always widens.
     pub(crate) fn widens(&mut self, from: TypeId, to: TypeId) -> bool {
         if from == to {
             return true;
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(to).clone() {
-            // duck-typed satisfaction at the coercion (RFC 0012 v1.1)
-            return self.ctx.duck_satisfies(from, trait_id);
+            return self.ctx.find_impl(trait_id, from).is_some();
         }
         false
     }
@@ -1122,6 +1361,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
             subst: class_subst,
+            trait_origins: Vec::new(),
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
@@ -1174,13 +1414,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ret_ty = ret_ty;
         let base = self.locals.len();
         // bind `self` (well-known symbol) for the inlined body
-        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false });
+        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new() });
         self.inline_self = Some((sym::SELF, recv));
         let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
         let mut ai = 0usize;
         for p in &params {
             if let MemberKind::Param(ParamData { name, is_mut, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *name, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false });
+                self.locals.push(Local { name: *name, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
                 ai += 1;
             }
         }
@@ -1206,26 +1446,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         true
     }
 
-    pub(crate) fn compile_trait_call(
-        &mut self,
-        impl_idx: usize,
-        mname: IdentId,
-        rreg: u16,
-        args: Vec<NodeHandle<AnyExpr>>,
-        expected: Option<TypeId>,
-        sp: rut_lexer::span::Span,
-    ) -> TcResult<TypeId> {
-        let im = self.ctx.impls[impl_idx].clone();
-        let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
-        let midx = tdesc
-            .methods
-            .iter()
-            .position(|m| m.name == mname)
-            .unwrap_or(0);
-        let slot = self.ctx.trait_slot(im.trait_id, midx as u32).unwrap();
-        self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp)
-    }
-
     pub(crate) fn finish_trait_call(
         &mut self,
         slot: u32,
@@ -1243,7 +1463,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut aregs = Vec::new();
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(param_tys[i]))?;
-            if t != param_tys[i] {
+            if !self.widens(t, param_tys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1, self.ctx.type_name(t), self.ctx.type_name(param_tys[i])

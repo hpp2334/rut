@@ -310,8 +310,11 @@ pub enum ItemKind {
         requires: Vec<NodeHandle<AnyTy>>, // type nodes — naming position, bare
         methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless MethodDecls
     },
+    /// The two impl forms (RFC 0012): `impl T { .. }` — inherent
+    /// (`trait_ref: None`, the type's module only) — and `impl I for T`
+    /// { .. } — a trait impl (any module). Bodies are braced, methods only.
     Impl {
-        trait_ref: NodeHandle<AnyTy>,
+        trait_ref: Option<NodeHandle<AnyTy>>,
         target: NodeHandle<AnyTy>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },

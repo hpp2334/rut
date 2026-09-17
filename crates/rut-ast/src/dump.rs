@@ -140,7 +140,9 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 "Trait"
             }
             ItemKind::Impl { trait_ref, target, methods } => {
-                fields.push(field("trait", DumpVal::Node(Box::new(node_dump(a, trait_ref.id())))));
+                if let Some(tr) = trait_ref {
+                    fields.push(field("trait", DumpVal::Node(Box::new(node_dump(a, tr.id())))));
+                }
                 fields.push(field("target", DumpVal::Node(Box::new(node_dump(a, target.id())))));
                 fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "Impl"

@@ -20,10 +20,14 @@ struct Todo {
     done: bool = false;      // field initializer — `done` may be omitted
 }
 
+// The type body is FIELDS ONLY (RFC 0012) — methods live in the inherent
+// `impl TodoList` block below.
 pub class TodoList {
     items: Vec<Todo>;         // unannotated members = module-private
     next_id: i32;             // (RFC 0003 §2 — the class's own business)
+}
 
+impl TodoList {
     pub fn new() -> Self {
         return Self { items: Vec.new(), next_id: 1 };
     }

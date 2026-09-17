@@ -56,19 +56,23 @@ pub struct TraitDeclInfo {
 #[derive(Clone, Debug)]
 pub struct ImplDecl {
     pub trait_id: u32,
-    /// the trait's source name (`Iter`, `Iterator`, a user trait)
+    /// the trait's source name (`Iterator`, a user trait); for an inherent
+    /// impl, the target type's name
     pub trait_name: IdentId,
     pub target: TypeId,
     /// `impl Trait<T> for Vec<T>`: the generic class and the target's
-    /// generic parameter idents. The impl's methods are not monomorphized
-    /// as standalone fns — the compiler inlines them at the use site;
-    /// `None` for ordinary concrete impls.
+    /// generic parameter idents. The impl's methods are monomorphized per
+    /// instantiation through the `Inst` substitution; `None` for ordinary
+    /// concrete impls.
     pub target_data: Option<(IdentId, Vec<IdentId>)>,
     /// the trait ref's type arguments, as written (`impl Iter<T>` →
     /// `[T]`, `impl Iterator<char>` → `[char]`). The element type of the
     /// sequence/iterator contracts is argument 0, resolved at the use site
     /// under the target substitution.
     pub trait_arg_nodes: Vec<NodeHandle<AnyTy>>,
+    /// `impl T { .. }` — inherent methods (no trait involved); dispatch is
+    /// always static (the receiver's concrete type names the impl)
+    pub inherent: bool,
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
 }
 
@@ -87,11 +91,17 @@ pub enum FnKey {
 }
 
 /// A monomorphization instantiation: fn key + generic substitution.
+/// `trait_origins` specializes trait-typed parameters per concrete
+/// argument (a trait parameter IS an implicit generic bound, RFC 0012):
+/// one clone of the fn per distinct origin list, each body statically
+/// binding calls on those parameters.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Inst {
     pub key: FnKey,
     /// generic param → concrete type
     pub subst: Vec<(IdentId, TypeId)>,
+    /// concrete origins for the fn's trait-obj parameters, in order
+    pub trait_origins: Vec<TypeId>,
 }
 
 pub struct Ctx<'a> {
@@ -465,58 +475,34 @@ impl<'a> Ctx<'a> {
     pub fn find_impl(&self, trait_id: u32, target: TypeId) -> Option<usize> {
         self.impls
             .iter()
-            .position(|i| i.trait_id == trait_id && i.target == target)
+            .position(|i| !i.inherent && i.trait_id == trait_id && i.target == target)
     }
     pub fn impls_of(&self, target: TypeId) -> Vec<usize> {
         self.impls
             .iter()
             .enumerate()
-            .filter(|(_, i)| i.target == target)
+            .filter(|(_, i)| !i.inherent && i.target == target)
             .map(|(k, _)| k)
             .collect()
     }
 
-    /// Duck-typed satisfaction (RFC 0012 v1.1): `ty` satisfies the
-    /// trait when the type declares a member for every trait
-    /// method — same name, same arity, same resolved signature. No
-    /// `impl` head is involved; vtables synthesize per (type × shape).
-    pub fn duck_satisfies(&mut self, ty: TypeId, trait_id: u32) -> bool {
-        let (dname, args): (IdentId, Vec<TypeId>) = match self.inst_data.get(&ty) {
-            Some((d, a)) => (*d, a.clone()),
-            None => match self.datas.iter().find(|(_, d)| d.ty == ty) {
-                Some((n, d)) if d.generics.is_empty() => (*n, vec![]),
-                _ => return false,
-            },
-        };
-        let Some((_, d)) = self.datas.iter().find(|(n, _)| n == &dname) else {
-            return false;
-        };
-        let d = d.clone();
-        let tdesc = self.trait_by_id(trait_id).clone();
-        // the class substitution: generic parameter -> the receiver's arg
-        let env: Vec<(IdentId, TypeId)> =
-            d.generics.iter().cloned().zip(args.iter().cloned()).collect();
-        let mut ok = true;
-        for tm in &tdesc.methods {
-            let Some((_, mnode)) = d.methods.iter().find(|(n, _)| *n == tm.name) else {
-                ok = false;
-                break;
-            };
-            let md = self.ast.method_decl(*mnode).clone();
-            // the signature after `self`, resolved under the instantiation
-            let mut ptys = Vec::new();
-            for p in &md.params {
-                if let MemberKind::Param(ParamData { ty: Some(t), .. }) = self.ast.param(*p) {
-                    ptys.push(self.resolve_type(*t, &env));
+    /// Resolve a signature type under `env`, with `self_ty` spelling the
+    /// method's `Self` (the impl target inside an impl block). Bare
+    /// `Self` outside an impl is the caller's diagnostic.
+    pub(crate) fn resolve_sig_ty(
+        &mut self,
+        node: NodeHandle<AnyTy>,
+        env: &[(IdentId, TypeId)],
+        self_ty: Option<TypeId>,
+    ) -> TypeId {
+        if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
+            if segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY {
+                if let Some(t) = self_ty {
+                    return t;
                 }
             }
-            let ret = md.ret.map(|r| self.resolve_type(r, &env)).unwrap_or(TY_NIL);
-            if ptys != tm.params || ret != tm.ret {
-                ok = false;
-                break;
-            }
         }
-        ok
+        self.resolve_type(node, env)
     }
 
     /// global trait-method slot id (RFC 0015 §6: assigned per trait

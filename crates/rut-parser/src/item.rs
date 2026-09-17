@@ -445,6 +445,11 @@ impl TraitFrame {
 }
 
 // ---- impl ----
+//
+// The two impl forms (RFC 0012): `impl T { .. }` — inherent, the type's
+// module only — and `impl I for T { .. }` — a trait impl, any module.
+// The first type IS the target unless `for` follows it; bodies are
+// braced, methods only.
 
 pub(crate) struct ImplFrame {
     lo: u32,
@@ -455,14 +460,17 @@ pub(crate) struct ImplFrame {
 
 #[derive(Clone, Copy)]
 enum ImStage {
-    TraitRef,
+    /// the first type — target or trait ref, decided by `for`
+    Head,
+    /// the trait impl's target (after `impl Trait for`)
     Target,
+    /// the braced method body
     Methods,
 }
 
 impl ImplFrame {
     pub(crate) fn new() -> Self {
-        ImplFrame { lo: 0, stage: ImStage::TraitRef, trait_ref: None, target: None }
+        ImplFrame { lo: 0, stage: ImStage::Head, trait_ref: None, target: None }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -473,24 +481,23 @@ impl ImplFrame {
                 "implementation in a declaration file —`impl` blocks live in `.rut` (RFC 0029 §2)",
             );
         }
-        p.err(
-            Span::new(self.lo, self.lo + 4),
-            "`impl Trait for Type` was removed (RFC 0012 v1.1) —traits are duck-typed: declare the methods on the type; a value of the type satisfies the trait wherever the shape matches",
-        );
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match (self.stage, d) {
-            (ImStage::TraitRef, Done::Ty(t)) => {
-                self.trait_ref = Some(t);
-                if !p.at_kw("for") {
-                    p.err_here("expected `for` in `impl Trait for Type`");
-                } else {
+            (ImStage::Head, Done::Ty(t)) => {
+                if p.at_kw("for") {
                     p.bump();
+                    self.trait_ref = Some(t);
+                    self.stage = ImStage::Target;
+                    Step::Push(Frame::Type(TypeFrame::new(p)))
+                } else {
+                    // inherent impl: `impl Type { .. }`
+                    self.target = Some(t);
+                    self.stage = ImStage::Methods;
+                    Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Inherent)))
                 }
-                self.stage = ImStage::Target;
-                Step::Push(Frame::Type(TypeFrame::new(p)))
             }
             (ImStage::Target, Done::Ty(t)) => {
                 self.target = Some(t);
@@ -500,7 +507,7 @@ impl ImplFrame {
             (ImStage::Methods, Done::Body(_, methods)) => {
                 let node = p.item(
                     ItemKind::Impl {
-                        trait_ref: self.trait_ref.take().expect("impl without a trait"),
+                        trait_ref: self.trait_ref.take(),
                         target: self.target.take().expect("impl without a target"),
                         methods,
                     },
@@ -517,15 +524,21 @@ impl ImplFrame {
 // ---- struct/class/trait/impl bodies ----
 
 pub(crate) enum BodyMode {
-    /// struct/class body: fields and methods
+    /// struct/class body: FIELDS ONLY — methods live in `impl` blocks
+    /// (RFC 0012)
     Class { allow_pub: bool, is_dataclass: bool },
     /// `host struct` body: fields only, no initializers — the host
     /// constructs the record (RFC 0025)
     HostDataclass,
-    /// trait body: method signatures only
+    /// trait body: bodiless method signatures (`async` and no-`self`
+    /// signatures legal — no bodies, RFC 0012)
     Trait,
-    /// impl body: trait method implementations
+    /// `impl I for T` body: method implementations — `async` where the
+    /// trait says so; no `pub` (visibility rides the trait); no fields
     Impl,
+    /// `impl T` body: inherent methods — `pub` and `async` legal
+    /// (checker restricts `pub` to classes, RFC 0009); no fields
+    Inherent,
 }
 
 pub(crate) struct TypeBodyFrame {
@@ -571,10 +584,11 @@ impl TypeBodyFrame {
     /// the leading clause for a malformed trait/impl member diagnostic
     fn mode_noun(&self) -> &'static str {
         match self.mode {
-            BodyMode::Trait => "traits declare methods",
+            BodyMode::Trait => "traits declare method signatures",
             BodyMode::Impl => "impl blocks contain trait methods",
+            BodyMode::Inherent => "inherent impl blocks declare methods",
             BodyMode::HostDataclass => "host dataclasses declare fields",
-            BodyMode::Class { .. } => "type bodies declare fields and methods",
+            BodyMode::Class { .. } => "type bodies declare fields —methods live in `impl` blocks",
         }
     }
 
@@ -644,11 +658,12 @@ impl TypeBodyFrame {
                 }
                 BodyMode::Class { allow_pub, is_dataclass } => {
                     let lo = p.span();
-                    // RFC 0003 §2/0010 §2 — members default to module-private
-                    // (like every declaration); `pub` (+ scopes) exposes them
+                    // RFC 0003 §2 — members default to module-private;
+                    // `pub` (+ scopes) exposes them. FIELDS ONLY since the
+                    // impl blocks returned (RFC 0012): a `fn` member
+                    // diagnoses and is parsed (bodiless) to stay in sync.
                     let mut vis: Option<Vis> = None;
                     let mut is_static = false;
-                    let mut is_async = false;
                     while let Tok::Ident(m) = p.tok().clone() {
                         match m.as_str() {
                             "pub" => {
@@ -669,14 +684,18 @@ impl TypeBodyFrame {
                                 }
                             }
                             "async" => {
-                                is_async = true;
                                 p.bump();
+                                p.err(lo, "unexpected `async` —type bodies declare fields only (RFC 0012)");
                             }
                             _ => break,
                         }
                     }
                     match p.tok().clone() {
                         Tok::Ident(kw) if kw == "fn" => {
+                            p.err(
+                                lo,
+                                "methods live in `impl` blocks —type bodies declare fields only (RFC 0012)",
+                            );
                             if is_static {
                                 p.err(
                                     lo,
@@ -684,7 +703,7 @@ impl TypeBodyFrame {
                                 );
                             }
                             self.stage = TbStage::Method;
-                            return Step::Push(Frame::Method(MethodFrame::new(vis, is_async, true)));
+                            return Step::Push(Frame::Method(MethodFrame::new(vis, false, true)));
                         }
                         Tok::Ident(_) => {
                             let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
@@ -698,7 +717,7 @@ impl TypeBodyFrame {
                         }
                         _ => {
                             let found = p.peek(0).describe();
-                            p.err_here(format!("expected a field or method, found {found}"));
+                            p.err_here(format!("expected a field, found {found}"));
                             p.sync_stmt();
                             // sync consumes at least one token (or stops
                             // at `}` / EOF, both caught at the loop top)
@@ -706,10 +725,67 @@ impl TypeBodyFrame {
                     }
                 }
                 BodyMode::Trait | BodyMode::Impl => {
+                    // modifier loop: `pub` rejected here (a trait impl
+                    // rides the trait's visibility); `async` accepted on
+                    // the method (RFC 0018 §2)
+                    let lo = p.span();
+                    let mut is_async = false;
+                    while let Tok::Ident(m) = p.tok().clone() {
+                        match m.as_str() {
+                            "pub" => {
+                                p.bump();
+                                let _ = pub_scope(p);
+                                let why = match self.mode {
+                                    BodyMode::Impl => "trait impl methods carry no `pub` —they are as visible as the trait (RFC 0012)",
+                                    _ => "trait methods carry no `pub` —the trait's visibility rules (RFC 0003 §2)",
+                                };
+                                p.err(lo, why);
+                            }
+                            "async" => {
+                                is_async = true;
+                                p.bump();
+                            }
+                            _ => break,
+                        }
+                    }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
                         let with_body = matches!(self.mode, BodyMode::Impl);
-                        return Step::Push(Frame::Method(MethodFrame::new(None, false, with_body)));
+                        return Step::Push(Frame::Method(MethodFrame::new(None, is_async, with_body)));
+                    }
+                    if is_async {
+                        p.err(lo, "expected `fn` after `async`");
+                    }
+                    let (what, found) = (self.mode_noun(), p.peek(0).describe());
+                    p.err_here(format!("{what} —expected `fn`, found {found}"));
+                    p.sync_stmt();
+                }
+                BodyMode::Inherent => {
+                    // `impl T { .. }` — inherent methods: `pub`/`async`
+                    // legal (the checker restricts `pub` to classes,
+                    // RFC 0009); no fields
+                    let lo = p.span();
+                    let mut vis: Option<Vis> = None;
+                    let mut is_async = false;
+                    while let Tok::Ident(m) = p.tok().clone() {
+                        match m.as_str() {
+                            "pub" => {
+                                p.bump();
+                                vis = Some(pub_scope(p));
+                            }
+                            "async" => {
+                                is_async = true;
+                                p.bump();
+                            }
+                            _ => break,
+                        }
+                    }
+                    if p.at_kw("fn") {
+                        self.stage = TbStage::Method;
+                        return Step::Push(Frame::Method(MethodFrame::new(vis, is_async, true)));
+                    }
+                    if is_async {
+                        p.err(lo, "expected `fn` after `async`");
                     }
                     let (what, found) = (self.mode_noun(), p.peek(0).describe());
                     p.err_here(format!("{what} —expected `fn`, found {found}"));

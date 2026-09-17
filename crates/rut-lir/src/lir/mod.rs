@@ -84,7 +84,7 @@ impl Pools {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Local {
     name: IdentId,
     reg: u16,
@@ -92,6 +92,12 @@ pub(crate) struct Local {
     is_mut: bool,
     /// for-c induction variables are loop-owned (RFC 0008 §1)
     loop_var: bool,
+    /// origin counting (RFC 0012 §5): the concrete types a trait-typed
+    /// binding is known to hold. Single origin ⇒ static dispatch;
+    /// empty ⇒ unknown/multiple ⇒ vtable. Only direct constructions
+    /// (a widening let, a copied binding, a specialized parameter)
+    /// populate it — conservative by construction.
+    origins: Vec<TypeId>,
 }
 
 pub struct FnCompiler<'a, 'b> {
@@ -181,8 +187,41 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let Some(m) = im.methods.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
                     return Ok(());
                 };
-                let cname = ctx.datas.iter().find(|(_, d)| d.ty == im.target).map(|(n, _)| *n);
-                (m.id(), Some(im.target), true, cname)
+                // self: the concrete target — a generic target instantiates
+                // under the Inst substitution; a native builtin target
+                // rebuilds its shape (`Array<T>`)
+                let (self_ty, cname) = match &im.target_data {
+                    Some((dname, params)) if ctx.find_data(*dname).is_some() => {
+                        let args: Vec<TypeId> = params
+                            .iter()
+                            .map(|g| {
+                                inst.subst
+                                    .iter()
+                                    .find(|(n, _)| n == g)
+                                    .map(|(_, t)| *t)
+                                    .unwrap_or(TY_I32)
+                            })
+                            .collect();
+                        (ctx.mk_data_inst(*dname, args), Some(*dname))
+                    }
+                    Some((dname, params))
+                        if ctx.extern_native_types.get(dname).copied()
+                            == Some(rut_core::binary::NativeTy::Array) =>
+                    {
+                        let elem = inst
+                            .subst
+                            .iter()
+                            .find(|(n, _)| n == &params[0])
+                            .map(|(_, t)| *t)
+                            .unwrap_or(TY_I32);
+                        (ctx.mk_array(elem), None)
+                    }
+                    _ => {
+                        let cname = ctx.datas.iter().find(|(_, d)| d.ty == im.target).map(|(n, _)| *n);
+                        (im.target, cname)
+                    }
+                };
+                (m.id(), Some(self_ty), true, cname)
             }
             FnKey::Lambda(_) => unreachable!(),
         };
@@ -260,6 +299,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // ret
         let ret_ty = ret.map(|r| c.resolve_type_now(r)).unwrap_or(TY_NIL);
         c.ret_ty = ret_ty;
+        // this instantiation's concrete origins for the fn's trait-typed
+        // parameters, in declaration order
+        let mut param_origins = inst.trait_origins.clone();
+        let mut param_origins_iter = param_origins.drain(..);
         // bind params as locals
         for (i, p) in params.iter().enumerate() {
             match c.ctx.ast.param(*p) {
@@ -274,16 +317,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         ty: self_ty.unwrap_or(TY_NIL),
                         is_mut: *is_mut,
                         loop_var: false,
+                        origins: Vec::new(),
                     });
                 }
                 MemberKind::Param(ParamData { name, is_mut, .. }) => {
                     let reg = c.new_reg(param_tys[i]);
+                    // trait-typed parameters: the Inst carries this call's
+                    // concrete origin (a trait parameter IS an implicit
+                    // generic bound, RFC 0012 §5) — single origin ⇒ static
+                    let origins = if matches!(c.ctx.types.kind(param_tys[i]), TyKind::TraitObj { .. }) {
+                        param_origins_iter.next().map(|t| vec![t]).unwrap_or_default()
+                    } else {
+                        Vec::new()
+                    };
                     c.locals.push(Local {
                         name: *name,
                         reg,
                         ty: param_tys[i],
                         is_mut: *is_mut,
                         loop_var: false,
+                        origins,
                     });
                 }
                 _ => {}
@@ -372,12 +425,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, p) in params.iter().enumerate() {
             if let MemberKind::Param(ParamData { name, is_mut, .. }) = c.ctx.ast.param(*p) {
                 let reg = c.new_reg(param_tys[i]);
-                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false });
+                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
             }
         }
         for (n, t) in &caps {
             let reg = c.new_reg(*t);
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: false, loop_var: false });
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: false, loop_var: false, origins: Vec::new() });
             // captures are part of the fn's parameter list (after declared)
             param_tys.push(*t);
         }
@@ -453,10 +506,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the loop variable: the closure's parameter — a fresh binding
         // per iteration by construction (each emit call is a fresh frame)
         let reg = c.new_reg(elem_ty);
-        c.locals.push(Local { name: var, reg, ty: elem_ty, is_mut: false, loop_var: false });
+        c.locals.push(Local { name: var, reg, ty: elem_ty, is_mut: false, loop_var: false, origins: Vec::new() });
         for (n, t) in &caps {
             let reg = c.new_reg(*t);
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: false, loop_var: false });
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: false, loop_var: false, origins: Vec::new() });
         }
         let block: NodeHandle<BlockNode> = NodeHandle::new(body);
         if c.compile_block(block).is_err() {
@@ -657,6 +710,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn lookup(&self, name: IdentId) -> Option<&Local> {
         self.locals.iter().rev().find(|l| l.name == name)
+    }
+
+    /// The origin set of a binding (origin counting, RFC 0012 §5): the
+    /// concrete types a trait-typed local is known to hold. Empty =
+    /// unknown/multiple.
+    pub(crate) fn origins_of(&self, name: IdentId) -> Vec<TypeId> {
+        self.locals
+            .iter()
+            .rev()
+            .find(|l| l.name == name)
+            .map(|l| l.origins.clone())
+            .unwrap_or_default()
+    }
+
+    /// Record a binding's origins after a write: a concrete value pins
+    /// the origin; a trait-typed value from an untracked source erases
+    /// it (branch merges, cross-function values — conservative).
+    pub(crate) fn set_origins(&mut self, name: IdentId, origins: Vec<TypeId>) {
+        if let Some(l) = self.locals.iter_mut().rev().find(|l| l.name == name) {
+            l.origins = origins;
+        }
     }
 
     pub(crate) fn konst(&mut self, v: ConstVal) -> u16 {

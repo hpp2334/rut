@@ -240,13 +240,16 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::Impl { trait_ref, target, methods, .. } => {
-                let owner = format!(
-                    "impl {} for {}",
-                    ty_head(ast, *trait_ref),
-                    ty_head(ast, *target)
-                );
+                let trait_head = trait_ref
+                    .map(|tr| ty_head(ast, tr))
+                    .unwrap_or_default();
+                let owner = if trait_ref.is_some() {
+                    format!("impl {} for {}", trait_head, ty_head(ast, *target))
+                } else {
+                    format!("impl {}", ty_head(ast, *target))
+                };
                 idx.impls.push(ImplDef {
-                    trait_name: ty_head(ast, *trait_ref),
+                    trait_name: trait_head,
                     target_name: ty_head(ast, *target),
                 });
                 for m in methods {

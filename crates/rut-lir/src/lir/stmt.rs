@@ -41,6 +41,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
                 let ty = expected.unwrap_or(t);
+                // origin counting (RFC 0012 §5): a trait-typed binding
+                // remembers its concrete origins — a widening let names
+                // the origin; a copy of another trait-typed binding takes
+                // its origins; anything else stays unknown (vtable)
+                let mut origins: Vec<TypeId> = Vec::new();
+                if matches!(self.ctx.types.kind(ty), TyKind::TraitObj { .. }) {
+                    origins = if t != ty && !matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
+                        // a widening let: the initializer's concrete type
+                        // is the single origin
+                        vec![t]
+                    } else if let ExprKind::Path { segs } = self.ctx.ast.expr(init) {
+                        if segs.len() == 1 { self.origins_of(segs[0].name) } else { Vec::new() }
+                    } else {
+                        Vec::new()
+                    };
+                }
                 match destructure {
                     None => {
                         // copy-by-value binding (RFC 0009/0016 v1.1): a
@@ -55,7 +71,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         } else {
                             self.last_reg
                         };
-                        self.locals.push(Local { name, reg, ty, is_mut, loop_var: false });
+                        self.locals.push(Local { name, reg, ty, is_mut, loop_var: false, origins });
                     }
                     Some(names) => {
                         // `let (a, b) = ..` (RFC 0007): each binding takes
@@ -100,6 +116,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 ty: fty,
                                 is_mut,
                                 loop_var: false,
+                                origins: Vec::new(),
                             });
                         }
                     }
@@ -152,7 +169,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // to the initializer's register
                 let t = self.compile_expr(init, None)?;
                 let reg = self.last_reg;
-                self.locals.push(Local { name: var, reg, ty: t, is_mut: true, loop_var: true });
+                self.locals.push(Local { name: var, reg, ty: t, is_mut: true, loop_var: true, origins: Vec::new() });
                 let l_head = self.new_label();
                 let l_body = self.new_label();
                 let l_end = self.new_label();
@@ -177,7 +194,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let Some((dst, l_end)) = self.inline_ret {
                     if let Some(v) = value {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;
-                        if t != self.ret_ty {
+                        if !self.widens(t, self.ret_ty) {
                             self.ctx.err(sp, format!(
                                 "return type mismatch: `{}` expected, `{}` returned",
                                 self.ctx.type_name(self.ret_ty), self.ctx.type_name(t)
@@ -196,7 +213,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match value {
                     Some(v) => {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;
-                        if t != self.ret_ty {
+                        // implicit widening at the return (RFC 0012 §4):
+                        // a concrete value coerces to a trait-typed return
+                        if !self.widens(t, self.ret_ty) {
                             self.ctx.err(sp, format!(
                                 "return type mismatch: `{}` expected, `{}` returned",
                                 self.ctx.type_name(self.ret_ty), self.ctx.type_name(t)
@@ -263,17 +282,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // v1.1: str iteration yields str elements (not char)
         let it = if it == rut_core::types::TY_CHAR { rut_core::types::TY_STR } else { it };
         // the builtin sequences (Vec, Array, str, bytes) keep their fused
-        // loops; a user type iterates through the `__iterate` protocol
-        // (RFC 0012 §6)
+        // loops; a user type iterates through its registered
+        // `impl Iterator<E> for T` (nominal, RFC 0012 §6)
         let info = match self.slice_info(it) {
             Some(info) => info,
             None => {
-                if let Some((dname, env, elem_ty)) = self.iterate_method(it) {
-                    return self.compile_for_of_iterate(var, iter_reg, dname, env, elem_ty, body, sp);
+                if let Some((idx, env, elem_ty)) = self.iterate_impl(it) {
+                    return self.compile_for_of_iterate(var, iter_reg, idx, env, elem_ty, body, sp);
                 }
                 self.ctx.err(sp, format!(
-                    "`for (let .. of ..)` needs a sequence — `{}` is not one and declares no `__iterate` (RFC 0012 §6)",
-                    self.ctx.type_name(it)
+                    "`for (let .. of ..)` needs a sequence — `{}` is not one and registers no `impl Iterator<E> for {}` (RFC 0012 §6)",
+                    self.ctx.type_name(it), self.ctx.type_name(it)
                 ));
                 return Err(());
             }
@@ -317,7 +336,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 (self.ctx.mk_ptr(elem_ty), r)
             }
         };
-        self.locals.push(Local { name: var, reg: var_reg, ty: var_ty, is_mut: false, loop_var: false });
+        self.locals.push(Local { name: var, reg: var_reg, ty: var_ty, is_mut: false, loop_var: false, origins: Vec::new() });
         self.loops.push((l_cont, l_end));
         self.compile_block(body)?;
         self.loops.pop();
@@ -335,55 +354,59 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
 
-    /// The `__iterate` contract on `ty` (RFC 0012 §6): `(class, subst, E)`
-    /// when the type declares `fn __iterate(self, emit: fn(E) -> bool)` —
-    /// duck-typed, like every trait satisfaction.
-    fn iterate_method(&mut self, ty: TypeId) -> Option<(IdentId, Vec<(IdentId, TypeId)>, TypeId)> {
+    /// The registered `impl Iterator<E> for T` on `ty` (nominal, RFC 0012
+    /// §6): `(impl index, target substitution, element type)`. The element
+    /// type is read off the impl's trait instantiation — the `__iterate`
+    /// emit parameter. Built-in sequences never reach here (their fused
+    /// loops lower first).
+    fn iterate_impl(&mut self, ty: TypeId) -> Option<(usize, Vec<(IdentId, TypeId)>, TypeId)> {
         if matches!(self.ctx.types.kind(ty), TyKind::TraitObj { .. }) {
             // trait objects dispatch through their vtable — a concrete
             // iterable is needed at the call site in this build
             return None;
         }
-        let (dname, args): (IdentId, Vec<TypeId>) = match self.ctx.inst_data.get(&ty) {
-            Some((d, a)) => (*d, a.clone()),
-            None => match self.ctx.datas.iter().find(|(_, d)| d.ty == ty) {
-                Some((n, d)) if d.generics.is_empty() => (*n, vec![]),
-                _ => return None,
-            },
-        };
-        let Some((_, d)) = self.ctx.datas.iter().find(|(n, _)| n == &dname) else {
-            return None;
-        };
-        let d = d.clone();
-        let (_, mnode) = d.methods.iter().find(|(n, _)| *n == sym::ITERATE)?;
-        let env: Vec<(IdentId, TypeId)> =
-            d.generics.iter().cloned().zip(args.iter().cloned()).collect();
-        let md = self.ctx.ast.method_decl(*mnode).clone();
-        // the signature after `self`: exactly one `emit: fn(E) -> bool`
-        let mut ptys = Vec::new();
-        for p in md.params.iter().skip(1) {
-            if let MemberKind::Param(ParamData { ty: Some(t), .. }) = self.ctx.ast.param(*p) {
-                ptys.push(self.ctx.resolve_type(*t, &env));
+        for (idx, im) in self.ctx.impls.iter().enumerate() {
+            if im.inherent || im.trait_name != sym::ITERATOR {
+                continue;
             }
-        }
-        match ptys.first().map(|t| self.ctx.types.kind(*t).clone()) {
-            Some(TyKind::Fn { params, ret }) if params.len() == 1 && ret == TY_BOOL => {
-                Some((dname, env, params[0]))
+            // target match + substitution
+            let env: Vec<(IdentId, TypeId)> = match &im.target_data {
+                Some((dname, params)) => {
+                    let Some((d, args)) = self.ctx.inst_data.get(&ty) else {
+                        continue;
+                    };
+                    if d != dname {
+                        continue;
+                    }
+                    params.iter().cloned().zip(args.iter().cloned()).collect()
+                }
+                None if im.target == ty => Vec::new(),
+                None => continue,
+            };
+            let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
+            let Some(tm) = tdesc.methods.first() else { continue };
+            let TyKind::Fn { params: fps, ret } = self.ctx.types.kind(tm.params[0]).clone() else {
+                continue;
+            };
+            if fps.len() != 1 || ret != TY_BOOL {
+                continue;
             }
-            _ => None,
+            return Some((idx, env, fps[0]));
         }
+        None
     }
 
     /// `for (v of xs)` over a user iterable (RFC 0012 §6) — desugars to
-    /// `xs.__iterate(emit)` where `emit` is a synthetic closure carrying
-    /// the loop body: `break` returns `false`, `continue` and the fall-through
-    /// return `true`. The loop variable is the closure's parameter, so it is
-    /// a fresh binding per iteration by construction.
+    /// `xs.__iterate(emit)` on the registered impl, where `emit` is a
+    /// synthetic closure carrying the loop body: `break` returns `false`,
+    /// `continue` and the fall-through return `true`. The loop variable is
+    /// the closure's parameter, so it is a fresh binding per iteration by
+    /// construction.
     fn compile_for_of_iterate(
         &mut self,
         var: IdentId,
         rreg: u16,
-        dname: IdentId,
+        impl_idx: usize,
         env: Vec<(IdentId, TypeId)>,
         elem_ty: TypeId,
         body: NodeHandle<BlockNode>,
@@ -398,7 +421,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if n == var {
                 continue;
             }
-            if let Some(l) = self.lookup(n).copied() {
+            if let Some(l) = self.lookup(n).cloned() {
                 let cap_reg = self.new_reg(l.ty);
                 if self.ctx.types.is_ref(l.ty) {
                     self.emit(Op::MovRef { dst: cap_reg, src: l.reg }, sp.lo);
@@ -414,18 +437,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let emit = crate::check::Inst {
             key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
             subst: vec![],
+            trait_origins: vec![],
         };
         let fid = self.ctx.ensure_inst(emit);
         let fty = self.ctx.mk_fn_ty(vec![elem_ty], TY_BOOL);
         let clo = self.new_reg(fty);
         { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo,); }
-        // `xs.__iterate(emit)` — the ordinary method machinery
-        let iterate = self.ctx.lookup_name("__iterate").expect("`__iterate` interned");
+        // `xs.__iterate(emit)` — the impl's method, statically bound to
+        // this impl (nominal registry, RFC 0012 §4)
         let mfid = self
             .ctx
             .ensure_inst(crate::check::Inst {
-                key: crate::check::FnKey::Method { data: dname, name: iterate },
+                key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: sym::ITERATE },
                 subst: env,
+                trait_origins: vec![],
             });
         { let (argv_off, argc) = self.pool_recv_args(rreg, &(vec![clo])); self.emit(Op::CallM { func: mfid, argv_off, argc, dst: NOREG }, sp.lo); }
         Ok(())

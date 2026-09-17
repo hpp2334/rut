@@ -88,7 +88,10 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
                 .collect();
-            let name = format!("impl {} for {}", ty_text(ast, *trait_ref), ty_text(ast, *target));
+            let name = match trait_ref {
+                Some(tr) => format!("impl {} for {}", ty_text(ast, *tr), ty_text(ast, *target)),
+                None => format!("impl {}", ty_text(ast, *target)),
+            };
             Some(sym(&name, SymKind::Module, None, children))
         }
         ItemKind::SurfaceFn { name, .. } => Some(sym(

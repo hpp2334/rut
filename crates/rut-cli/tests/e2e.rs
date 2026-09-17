@@ -167,22 +167,50 @@ pub fn main() -> nil {
 }
 
 #[test]
-fn case6_dyn_dispatch() {
+fn reassigned_trait_binding_dispatches_as_the_new_type() {
+    // origin counting must re-derive at assignment (RFC 0012 §5): the
+    // call after `w = B { .. }` answers 20 (B's impl) — never 10, which
+    // would mean A's statically-bound callee ran on a B
+    let src = r#"
+trait Get { fn get(self) -> i32; }
+struct A { v: i32 }
+struct B { v: i32 }
+impl Get for A { fn get(self) -> i32 { return 10; } }
+impl Get for B { fn get(self) -> i32 { return 20; } }
+pub fn main() -> nil {
+    let mut w: Get = A { v: 1 };
+    Logger.new("app").info(f"first={w.get()}");
+    w = B { v: 2 };
+    Logger.new("app").info(f"second={w.get()}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["first=10", "second=20"]);
+}
+
+#[test]
+fn case6_trait_dispatch() {
     let src = r#"
 use { Vec } from "std:collection";
 trait Shape {
     fn area(self) -> f32;
     fn name(self) -> str;
 }
-// duck-typed (RFC 0012 v1.1): the methods live on the type; a Circle
-// satisfies Shape wherever the shape matches — no impl head
+// nominal satisfaction (RFC 0012): a Circle IS a Shape because the
+// `impl Shape for Circle` block is registered — not because the
+// shape happens to match
 struct Circle {
     r: f32;
+}
+impl Shape for Circle {
     fn area(self) -> f32 { return 3.14159265f32 * self.r * self.r; }
     fn name(self) -> str { return "circle"; }
 }
 struct Square {
     s: f32;
+}
+impl Shape for Square {
     fn area(self) -> f32 { return self.s * self.s; }
     fn name(self) -> str { return "square"; }
 }
@@ -557,12 +585,16 @@ fn zero_param_class_constructor_and_self_ty() {
     let src = r#"
 class Counter {
     n: i32;
+}
+impl Counter {
     fn new() -> Self { return Self { n: 0 }; }
     fn bump(mut self) -> nil { self.n += 1; }
     fn count(self) -> i32 { return self.n; }
 }
 class Wrapped {
     inner: Counter;
+}
+impl Wrapped {
     fn new() -> Self { return Self { inner: Counter.new() }; }
     fn bump(mut self) -> nil { self.inner.bump(); }
     fn count(self) -> i32 { return self.inner.count(); }
@@ -849,6 +881,8 @@ use { Vec } from "std:collection";
 struct Row { id: i32; }
 pub class Stack {
     items: Vec<Row>;                // unannotated member = module-private
+}
+impl Stack {
     fn new() -> Self { return Self { items: Vec.new() }; }
     fn push(mut self, id: i32) -> nil { self.items.push(Row { id: id }); }
     pub fn len(self) -> i32 { return self.items.len(); }
@@ -873,7 +907,8 @@ fn member_pub_scopes_compile_and_run() {
 pub class Gauge {
     n: i32;                        // unannotated = module-private
     pub w: i32;                    // pub field
-
+}
+impl Gauge {
     pub fn new() -> Self { return Self { n: 0, w: 3 }; }
     pub(mod) fn bump(mut self) -> nil { self.n += self.w; }
     pub(self) fn raw(self) -> i32 { return self.n; }
@@ -968,6 +1003,8 @@ fn recursive_class_field_resolves_and_runs() {
 class Node {
     v: i32 = 0;
     next: *Node = nil;
+}
+impl Node {
     fn new() -> Self { return Self {}; }
     fn val(self) -> i32 { return self.v; }
 }
@@ -990,6 +1027,8 @@ use { Array } from "std:core";
 class Vec<T> {
     buf: Array<T>;
     len: i32;
+}
+impl Vec<T> {
     fn new() -> Self { return Vec.with_capacity(0); }
     fn with_capacity(cap: i32) -> Self { return Self { buf: Array<T>(cap), len: 0 }; }
     fn len(self) -> i32 { return self.len; }
@@ -1382,15 +1421,19 @@ pub fn main() -> nil {
 
 #[test]
 fn generic_trait_dispatch() {
-    // `Wrap<i32>` — one trait id per type-argument list
+    // `Wrap<i32>` — one trait id per type-argument list, implemented
+    // with an ordinary impl block (nominal, RFC 0012)
     let src = r#"
 trait Wrap<T> {
     fn get(self) -> T;
 }
 class B {
     v: i32;
+}
+impl B {
     fn new(v: i32) -> Self { return Self { v: v }; }
-    // satisfies Wrap<i32> by shape (RFC 0012 v1.1)
+}
+impl Wrap<i32> for B {
     fn get(self) -> i32 { return self.v; }
 }
 pub fn main() -> nil {
@@ -1406,24 +1449,26 @@ pub fn main() -> nil {
 
 #[test]
 fn for_of_user_iterate_protocol() {
-    // RFC 0012 §6 — a type is iterable when it declares `__iterate`;
-    // `for (v of it)` desugars to `it.__iterate(emit)` — the loop var is
-    // the emit closure's parameter (fresh per iteration); `break` returns
-    // `false`, `continue` returns `true`; captures are by value, so the
-    // accumulator is a shared cell (`*Acc`)
+    // RFC 0012 §6 — a type is iterable when it registers
+    // `impl Iterator<E> for T`; `for (v of it)` desugars to
+    // `it.__iterate(emit)` — the loop var is the emit closure's parameter
+    // (fresh per iteration); `break` returns `false`, `continue` returns
+    // `true`; captures are by value, so the accumulator is a shared cell
+    // (`*Acc`). `total` takes the trait-typed parameter: it specializes
+    // per concrete argument (RFC 0012 §5), so its call binds statically.
     let src = r#"
 use { Logger } from "std:log";
-use { make_ptr } from "std:core";
-
-trait Iterator<E> {
-    fn __iterate(self, emit: fn(E) -> bool);
-}
+use { Iterator, make_ptr } from "std:core";
 
 struct Acc { total: i32 = 0; }
 
 class CountUp {
     n: i32;
+}
+impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
+}
+impl Iterator<i32> for CountUp {
     fn __iterate(self, emit: fn(i32) -> bool) {
         for (let i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }

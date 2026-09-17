@@ -41,9 +41,15 @@ impl<'a> Ctx<'a> {
             FnKey::Free(n) => self.name(n).to_string(),
             FnKey::Method { data, name } => format!("{}${}", self.name(data), self.name(name)),
             FnKey::ImplMethod { idx, name } => {
-                let tid = self.impls[idx].trait_id;
-                let tname = self.name(self.traits[tid as usize].name);
-                format!("{}#${}${}", tname, idx, self.name(name))
+                let im = &self.impls[idx];
+                if im.inherent {
+                    // inherent impl on a native builtin class: no trait id
+                    format!("{}${}", self.name(im.trait_name), self.name(name))
+                } else {
+                    let tid = im.trait_id;
+                    let tname = self.name(self.traits[tid as usize].name);
+                    format!("{}#${}${}", tname, idx, self.name(name))
+                }
             }
             FnKey::Lambda(node) => format!("lambda@{}", node.0),
             FnKey::ForOfEmit { body, .. } => format!("forof@{}", body.0),
@@ -68,58 +74,68 @@ impl<'a> Ctx<'a> {
         Ok(())
     }
 
-    /// after all instantiations: fill per-type vtables from impl blocks
-    /// vtables synthesize per (type × trait) — the duck-typed law
-    /// (RFC 0012 v1.1): a concrete data type fills the slots whose
-    /// trait methods its OWN methods match by shape. Satisfying
-    /// methods compile here (with their transitive calls) so every
-    /// reachable slot carries a real function id.
+    /// after all instantiations: fill per-(type × trait) vtables from the
+    /// registered impls (nominal satisfaction, RFC 0012 §4 — a slot is
+    /// filled exactly when an impl exists). Engine-named contracts
+    /// (`Iterator`) flow through the same registry. Each slot's method
+    /// compiles here (with its transitive calls) so every reachable slot
+    /// carries a real function id.
     pub fn build_vtables(&mut self) -> Vec<Vec<Option<u32>>> {
-        let mut targets: Vec<TypeId> = self
-            .datas
-            .iter()
-            .filter(|(_, d)| d.generics.is_empty())
-            .map(|(_, d)| d.ty)
-            .collect();
-        targets.extend(self.inst_data.keys().cloned());
-
+        // (type, trait, method slot, inst) — collected first, compiled
+        // after, so queue-driven interning cannot mutate what we walk
         let mut fills: Vec<(TypeId, u32, Inst)> = Vec::new();
-        for ty in &targets {
-            for trait_id in 0..self.traits.len() as u32 {
-                if !self.duck_satisfies(*ty, trait_id) {
-                    continue;
+        for (idx, im) in self.impls.iter().enumerate() {
+            if im.inherent {
+                continue; // inherent methods dispatch statically, never a slot
+            }
+            let tdesc = self.trait_by_id(im.trait_id).clone();
+            match im.target_data.clone() {
+                None => {
+                    for (midx, tm) in tdesc.methods.iter().enumerate() {
+                        let Some(slot) = self.trait_slot(im.trait_id, midx as u32) else {
+                            continue;
+                        };
+                        if !im.methods.iter().any(|(n, _)| *n == tm.name) {
+                            continue;
+                        }
+                        let inst = Inst {
+                            key: FnKey::ImplMethod { idx, name: tm.name },
+                            subst: vec![],
+                            trait_origins: vec![],
+                        };
+                        fills.push((im.target, slot, inst));
+                    }
                 }
-                let (dname, args) = match self.inst_data.get(ty) {
-                    Some((d, a)) => (*d, a.clone()),
-                    None => match self.datas.iter().find(|(_, d)| d.ty == *ty) {
-                        Some((n, d)) => (*n, Vec::new()),
-                        _ => continue,
-                    },
-                };
-                let Some((_, d)) = self.datas.iter().find(|(n, _)| n == &dname) else {
-                    continue;
-                };
-                let d = d.clone();
-                let tdesc = self.trait_by_id(trait_id).clone();
-                let env: Vec<(IdentId, TypeId)> =
-                    d.generics.iter().cloned().zip(args.iter().cloned()).collect();
-                for (midx, tm) in tdesc.methods.iter().enumerate() {
-                    let Some((mname, _)) =
-                        d.methods.iter().find(|(n, _)| *n == tm.name)
-                    else {
-                        continue;
-                    };
-                    let Some(slot) = self.trait_slot(trait_id, midx as u32) else {
-                        continue;
-                    };
-                    let inst = Inst {
-                        key: FnKey::Method { data: dname, name: *mname },
-                        subst: env.clone(),
-                    };
-                    let _ = self.compile_queue(inst.clone());
-                    fills.push((*ty, slot, inst));
+                Some((dname, params)) => {
+                    // generic target: fill every concrete instantiation
+                    // already in the table (`Vec<i32>`, …)
+                    let insts: Vec<(TypeId, Vec<(IdentId, TypeId)>)> = self
+                        .inst_data
+                        .iter()
+                        .filter(|(_, (d, _))| *d == dname)
+                        .map(|(ty, (_, args))| (*ty, params.iter().cloned().zip(args.iter().cloned()).collect()))
+                        .collect();
+                    for (ty, env) in insts {
+                        for (midx, tm) in tdesc.methods.iter().enumerate() {
+                            let Some(slot) = self.trait_slot(im.trait_id, midx as u32) else {
+                                continue;
+                            };
+                            if !im.methods.iter().any(|(n, _)| *n == tm.name) {
+                                continue;
+                            }
+                            let inst = Inst {
+                                key: FnKey::ImplMethod { idx, name: tm.name },
+                                subst: env.clone(),
+                                trait_origins: vec![],
+                            };
+                            fills.push((ty, slot, inst));
+                        }
+                    }
                 }
             }
+        }
+        for (_, _, inst) in &fills {
+            let _ = self.compile_queue(inst.clone());
         }
 
         let total_slots: usize = self.traits.iter().map(|t| t.methods.len()).sum();

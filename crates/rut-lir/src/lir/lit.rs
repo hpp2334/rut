@@ -412,7 +412,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if lambda_param_names.contains(&n) {
                 continue;
             }
-            if let Some(l) = self.lookup(n).copied() {
+            if let Some(l) = self.lookup(n).cloned() {
                 // copy the CURRENT value into a capture register (by value)
                 let cap_reg = self.new_reg(l.ty);
                 if self.ctx.types.is_ref(l.ty) {
@@ -432,7 +432,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // record the resolved signature for the body compilation
         self.ctx.lambda_sigs.insert(lambda_node, (ptys.clone(), ret_ty));
         self.ctx.lambda_info.insert(lambda_node, caps.iter().map(|(n, t, _)| (*n, *t)).collect());
-        let inst = crate::check::Inst { key: crate::check::FnKey::Lambda(lambda_node), subst: vec![] };
+        let inst = crate::check::Inst { key: crate::check::FnKey::Lambda(lambda_node), subst: vec![], trait_origins: vec![] };
         let fid = self.ctx.ensure_inst(inst);
         let fty = self.ctx.mk_fn_ty(ptys.clone(), ret_ty);
         let dst = self.new_reg(fty);

@@ -8,7 +8,9 @@ use { Logger } from "std:log";
 
 class Tile {
     n: i32;
+}
 
+impl Tile {
     fn new(n: i32) -> Self {
         return Self { n: n };
     }

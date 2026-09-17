@@ -173,11 +173,11 @@ pub fn compile_program_resolved(
     // have either, both, or neither (pure library shape).
     let mut roots: Vec<Inst> = Vec::new();
     if ctx.find_free_fn(sym::MAIN) {
-        roots.push(Inst { key: FnKey::Free(sym::MAIN), subst: vec![] });
+        roots.push(Inst { key: FnKey::Free(sym::MAIN), subst: vec![], trait_origins: vec![] });
     }
     for name in ctx.entries.clone() {
         if ctx.find_free_fn(name) {
-            roots.push(Inst { key: FnKey::Free(name), subst: vec![] });
+            roots.push(Inst { key: FnKey::Free(name), subst: vec![], trait_origins: vec![] });
         }
     }
     // library surface: every non-generic `pub fn` is usable, so its body
@@ -190,7 +190,7 @@ pub fn compile_program_resolved(
         if !ctx.ast.fn_decl(node).generics.is_empty() {
             continue;
         }
-        roots.push(Inst { key: FnKey::Free(name), subst: vec![] });
+        roots.push(Inst { key: FnKey::Free(name), subst: vec![], trait_origins: vec![] });
     }
     for root in roots {
         if ctx.compile_queue(root).is_err() {
@@ -218,7 +218,7 @@ pub fn compile_program_resolved(
         names.push(sym::MAIN);
     }
     for n in names {
-        if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(n), subst: vec![] }) {
+        if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(n), subst: vec![], trait_origins: vec![] }) {
             exports.push((n, f));
         }
     }
@@ -227,7 +227,7 @@ pub fn compile_program_resolved(
     // exported surface: every `pub` fn + its signature, for using modules
     let mut surface = rut_core::binary::Surface::default();
     for (name, _) in &ctx.exports {
-        if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(*name), subst: vec![] }) {
+        if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(*name), subst: vec![], trait_origins: vec![] }) {
             if let Some(f) = funcs.get(fid as usize) {
                 surface.funcs.push(rut_core::binary::SurfaceFn {
                     name: *name,

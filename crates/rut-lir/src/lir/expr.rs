@@ -196,9 +196,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 }
                                 exact => {
                                     let _ = exact;
-                                    // exact receiver: fold by duck-typed
-                                    // satisfaction (RFC 0012 v1.1)
-                                    let has = self.ctx.duck_satisfies(rt, tid);
+                                    // exact receiver: fold — the impl is
+                                    // registered or it is not (nominal,
+                                    // RFC 0012 §4)
+                                    let has = self.ctx.find_impl(tid, rt).is_some();
                                     self.emit(Op::ConstRaw { dst, bits: has as u64 }, sp.lo);
                                 }
                             }
@@ -417,7 +418,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // single name: local / module let / enum member of... / builtin value
         if segs.len() == 1 && segs[0].generics.is_empty() {
             let name = segs[0].name;
-            if let Some(l) = self.lookup(name).copied() {
+            if let Some(l) = self.lookup(name).cloned() {
                 // inlined `Slice` accessor: `self` is the receiver register
                 // itself — no copy (RFC 0005 sequence access)
                 if let Some((sid, reg)) = self.inline_self {
@@ -481,7 +482,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // two segments: local field chain `p.x`, `req.value.reply` — locals
         // shadow type names (a local is a value position)
         if segs.len() >= 2 && segs[0].generics.is_empty() {
-            if let Some(l) = self.lookup(segs[0].name).copied() {
+            if let Some(l) = self.lookup(segs[0].name).cloned() {
                 let mut cur = l.reg;
                 let mut cur_ty = l.ty;
                 for seg in &segs[1..] {

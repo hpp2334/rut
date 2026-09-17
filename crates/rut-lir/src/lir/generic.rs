@@ -84,8 +84,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     bind(name, arg_ty, subst);
                     return Ok(());
                 }
-                // non-generic: resolve and compare — a duck-typed
-                // coercion (RFC 0012 v1.1) counts as a match
+                // non-generic: resolve and compare — a registered impl
+                // (nominal widening, RFC 0012 §4) counts as a match
                 let want = self.ctx.resolve_type(param_node, subst);
                 if !self.widens(arg_ty, want) {
                     self.ctx.err(sp, format!(

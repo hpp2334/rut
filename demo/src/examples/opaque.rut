@@ -16,7 +16,9 @@ enum Flavor { Sweet, Sour }
 
 class Session {
     token: str;
+}
 
+impl Session {
     fn new(token: str) -> Self {
         return Self { token: token };
     }

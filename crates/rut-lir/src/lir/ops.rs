@@ -196,7 +196,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `p.x = 4`: the head must be a local; build the GetF chain,
                 // assign the last field
                 if segs[0].generics.is_empty() {
-                    if let Some(l) = self.lookup(segs[0].name).copied() {
+                    if let Some(l) = self.lookup(segs[0].name).cloned() {
                         let head_is_ptr =
                             matches!(self.ctx.types.kind(l.ty).clone(), TyKind::Ptr { .. });
                         // a pointer binding is immutable, its POINTEE is not —
@@ -276,7 +276,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             ExprKind::Path { segs } if segs.len() == 1 => {
                 let name = segs[0].name;
-                let Some(l) = self.lookup(name).copied() else {
+                let Some(l) = self.lookup(name).cloned() else {
                     self.ctx.err(sp, format!("unknown name `{}`", self.ctx.name(name)));
                     return Err(());
                 };
@@ -296,7 +296,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             return Ok(());
                         }
                         let t = self.compile_expr(value, Some(l.ty))?;
-                        if t != l.ty {
+                        // implicit widening at the assignment (RFC 0012 §4):
+                        // a concrete value coerces to a trait-typed binding
+                        if !self.widens(t, l.ty) {
                             self.ctx.err(sp, format!(
                                 "assignment type mismatch: `{}` vs `{}`",
                                 self.ctx.type_name(l.ty), self.ctx.type_name(t)
@@ -305,6 +307,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // copy-by-value (RFC 0009/0016 v1.1): the binding
                         // owns a deep copy of the assigned value
                         self.mov_value(l.reg, self.last_reg, l.ty, sp.lo);
+                        // origin counting (RFC 0012 §5): a concrete value
+                        // re-pins the origin; anything else erases it —
+                        // a stale origin could statically bind the WRONG
+                        // impl, which must be unrepresentable
+                        let origins = if t != l.ty
+                            && !matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })
+                        {
+                            vec![t]
+                        } else {
+                            Vec::new()
+                        };
+                        self.set_origins(name, origins);
                     }
                     Some(bin) => {
                         let cur = self.new_reg(l.ty);

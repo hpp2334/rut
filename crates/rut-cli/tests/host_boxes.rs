@@ -24,6 +24,8 @@ use { store_new, store_set, store_get, store_size } from "plugin:boxes";
 // one host fn call per method — the Rust payload never leaks into rut
 class Store {
     h: Opaque;
+}
+impl Store {
     fn adopt(h: Opaque) -> Self { return Self { h: h }; }
     fn set(mut self, k: str, v: i64) -> nil { store_set(self.h, k, v); }
     fn get(self, k: str) -> i64 { return store_get(self.h, k); }
@@ -224,6 +226,8 @@ class Node {
     name: str;
     tag: Opaque;
     tags: Vec<str>;
+}
+impl Node {
     fn new(name: str) -> Self { return Self { name: name, tag: Opaque.new(0), tags: Vec.new() }; }
 }
 

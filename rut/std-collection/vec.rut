@@ -11,12 +11,17 @@
 // The builtin `Vec` natives are gone; this class is the sequence type.
 
 use { Array } from "std:core";
+
+// The type body is FIELDS ONLY (RFC 0012) — every method lives in the
+// inherent `impl Vec<T>` block below, the type's module only.
 pub class Vec<T> {
     buf: Array<T>;      // capacity == buf.len() == cap
     len: i32;           // live length
     cap: i32;           // capacity mirrored, so `push`'s hot path never
                         // re-reads the `buf` handle (its GetF is an RC op)
+}
 
+impl Vec<T> {
     pub fn new() -> Self {
         return Vec.with_capacity(0);
     }
@@ -95,6 +100,4 @@ pub class Vec<T> {
         }
         return a;
     }
-
 }
-

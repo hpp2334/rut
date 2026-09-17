@@ -6,6 +6,18 @@ use rut_core::binary::TraitDesc;
 use rut_core::types::*;
 use super::*;
 
+/// What a trait requires of an implementing method (RFC 0012 §2):
+/// name, `async`, receiver form, and the resolved signature.
+struct TraitReq {
+    name: IdentId,
+    is_async: bool,
+    /// `Some(is_mut)` — a `self`/`mut self` receiver; `None` — no `self`
+    self_form: Option<bool>,
+    /// parameter types (after `self` when there is one)
+    ptys: Vec<TypeId>,
+    ret: TypeId,
+}
+
 impl<'a> Ctx<'a> {
 
     // ---- collection ----
@@ -54,9 +66,11 @@ impl<'a> Ctx<'a> {
         // pass 2: impls, fns, lets
         for it in &items {
             match self.ast.item(*it) {
-                // v1.1: `impl` heads are gone — traits are duck-typed.
-                // The parser diagnoses the removal; the item is skipped.
-                ItemKind::Impl { .. } => {}
+                // the two impl forms (RFC 0012): inherent + trait impls
+                ItemKind::Impl { trait_ref, target, methods } => {
+                    let methods = methods.clone();
+                    self.collect_impl(it.id(), *trait_ref, *target, &methods)
+                }
                 ItemKind::Fn(f) => {
                     let is_pub = f.vis == Vis::Pub;
                     if self.fn_index.contains(&f.name) {
@@ -246,11 +260,10 @@ impl<'a> Ctx<'a> {
     /// Pass 1b — resolve a declared trait's method signatures.
     pub(crate) fn resolve_trait_sigs(
         &mut self,
-        node: NodeId,
+        _node: NodeId,
         name: IdentId,
         methods: &[NodeHandle<MethodDeclNode>],
     ) {
-        let sp = self.ast.span(node);
         let Some(id) = self.trait_id_of(name) else {
             return;
         };
@@ -258,9 +271,12 @@ impl<'a> Ctx<'a> {
         for m in methods {
             let md = self.ast.method_decl(*m);
             let mut ptys = Vec::new();
-            for p in &md.params {
+            for (i, p) in md.params.iter().enumerate() {
                 match self.ast.param(*p) {
-                    MemberKind::SelfParam(_) => ptys.push(TY_NIL), // placeholder: Self resolved at impl
+                    MemberKind::SelfParam(_) if i == 0 => {} // receiver — resolved at the impl
+                    MemberKind::SelfParam(_) => {
+                        self.err(self.ast.span(p.id()), "`self` must be the first parameter");
+                    }
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
                         ptys.push(self.resolve_trait_sig_ty(*t, id, &[]));
                     }
@@ -274,21 +290,17 @@ impl<'a> Ctx<'a> {
             let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &[]));
             tms.push((md.name, ptys, rty));
         }
-        // first param must be self (RFC 0012 §2: trait methods are
-        // instance methods)
+        // RFC 0012 §2: trait methods take `self` — except engine-contract
+        // members, which may spell plain parameters only (`fn yield(cx: ..)`).
+        // Either way the binary desc's params exclude the receiver: the
+        // compiler passes self as arg0 for receiver methods.
         let mut desc = TraitDesc { name, methods: vec![] };
         for (mname, ptys, rty) in tms {
-            if ptys.first() == Some(&TY_NIL) {
-                // replace the self placeholder: params exclude self in the
-                // binary desc; the compiler passes self as arg0
-                desc.methods.push(rut_core::binary::TraitMethod {
-                    name: mname,
-                    params: ptys[1..].to_vec(),
-                    ret: rty.unwrap_or(TY_NIL),
-                });
-            } else {
-                self.err(sp, format!("trait method `{}` must take `self` (RFC 0012 §2)", self.name(mname)));
-            }
+            desc.methods.push(rut_core::binary::TraitMethod {
+                name: mname,
+                params: ptys,
+                ret: rty.unwrap_or(TY_NIL),
+            });
         }
         self.traits[id as usize] = desc;
     }
@@ -339,106 +351,354 @@ impl<'a> Ctx<'a> {
         for m in &methods {
             let md = self.ast.method_decl(*m);
             let mut ptys = Vec::new();
-            for p in &md.params {
+            for p in md.params.iter() {
                 match self.ast.param(*p) {
-                    MemberKind::SelfParam(_) => ptys.push(TY_NIL),
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
                         ptys.push(self.resolve_trait_sig_ty(*t, id, &subst));
                     }
-                    _ => ptys.push(TY_I32),
+                    _ => {}
                 }
             }
             let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &subst));
-            if ptys.first() == Some(&TY_NIL) {
-                desc.methods.push(rut_core::binary::TraitMethod {
-                    name: md.name,
-                    params: ptys[1..].to_vec(),
-                    ret: rty.unwrap_or(TY_NIL),
-                });
-            }
+            desc.methods.push(rut_core::binary::TraitMethod {
+                name: md.name,
+                params: ptys,
+                ret: rty.unwrap_or(TY_NIL),
+            });
         }
         self.traits[id as usize] = desc;
         id
     }
 
-    pub(crate) fn collect_impl(&mut self, node: NodeId, trait_ref: NodeHandle<AnyTy>, target: NodeHandle<AnyTy>, methods: &[NodeHandle<MethodDeclNode>]) {
+    /// Pass 2 — an `impl` block (RFC 0012): `impl T { .. }` attaches
+    /// inherent methods to the target (the type's module only — a local
+    /// struct/class, or a `builtin class` this module owns through its
+    /// surface); `impl I for T { .. }` registers a trait impl (any
+    /// module) after coverage checks, and its methods enter the
+    /// monomorphization queue eagerly so vtables carry real ids.
+    pub(crate) fn collect_impl(
+        &mut self,
+        node: NodeId,
+        trait_ref: Option<NodeHandle<AnyTy>>,
+        target: NodeHandle<AnyTy>,
+        methods: &[NodeHandle<MethodDeclNode>],
+    ) {
         let sp = self.ast.span(node);
+        // ---- the target (both forms): a local struct/class, or a
+        // module-owned `builtin class` resolved through the native-type
+        // table (the `LaunchedTask<T>` pattern). A generic target
+        // (`impl .. for Vec<T>`) is a template: its methods monomorphize
+        // per instantiation through `target_data`.
+        let (target_ty, target_data, is_local) = match self.ast.ty(target) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
+                let name = segs[0].name;
+                let generics = segs[0].generics.clone();
+                if let Some(d) = self.find_data(name).cloned() {
+                    if d.generics.is_empty() {
+                        (d.ty, None, true)
+                    } else {
+                        let Some(params) = self.ty_generic_idents(&generics) else {
+                            self.err(sp, "a generic impl target must name its type parameters (e.g. `Vec<T>`)");
+                            return;
+                        };
+                        if params.len() != d.generics.len() {
+                            self.err(sp, format!(
+                                "`{}<..>` takes {} type parameter(s), {} given",
+                                self.name(name), d.generics.len(), params.len()
+                            ));
+                            return;
+                        }
+                        (d.ty, Some((name, params)), true)
+                    }
+                } else if let Some(kind) = self.extern_native_types.get(&name).copied() {
+                    match (kind, generics.as_slice()) {
+                        (rut_core::binary::NativeTy::Opaque, []) => (TY_OPAQUE, None, false),
+                        (rut_core::binary::NativeTy::Array, [g]) => {
+                            let Some(params) = self.ty_generic_idents(std::slice::from_ref(g)) else {
+                                self.err(sp, "a generic impl target must name its type parameters (e.g. `Array<T>`)");
+                                return;
+                            };
+                            // a template id standing for the generic array —
+                            // duplicate detection and inst keys only
+                            let ph = self.types.intern(RutType {
+                                name,
+                                kind: TyKind::Data { fields: vec![] },
+                            });
+                            (ph, Some((name, params)), false)
+                        }
+                        (rut_core::binary::NativeTy::Array, _) => {
+                            self.err(sp, "`Array<T>` takes one type parameter");
+                            return;
+                        }
+                        (rut_core::binary::NativeTy::Opaque, _) => {
+                            self.err(sp, "`Opaque` takes no type parameters");
+                            return;
+                        }
+                    }
+                } else {
+                    self.err(
+                        sp,
+                        "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module (RFC 0012 §2)",
+                    );
+                    return;
+                }
+            }
+            _ => {
+                self.err(
+                    sp,
+                    "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module (RFC 0012 §2)",
+                );
+                return;
+            }
+        };
+        let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
+        for m in methods {
+            mths.push((self.ast.method_decl(*m).name, *m));
+        }
+        match trait_ref {
+            None => self.collect_impl_inherent(target, target_ty, target_data, is_local, mths),
+            Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, mths),
+        }
+    }
+
+    /// `impl T { .. }` — inherent methods. Local targets attach into the
+    /// `DataDecl`; native builtin-class targets register an inherent
+    /// `ImplDecl` (dispatch resolves through the native shape). Both
+    /// dispatch statically — the receiver's concrete type names the impl.
+    fn collect_impl_inherent(
+        &mut self,
+        target: NodeHandle<AnyTy>,
+        target_ty: TypeId,
+        target_data: Option<(IdentId, Vec<IdentId>)>,
+        is_local: bool,
+        mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+    ) {
+        let tname = match self.ast.ty(target) {
+            TypeKind::TyPath { segs, .. } if !segs.is_empty() => segs[0].name,
+            _ => return,
+        };
+        if !is_local {
+            // a `builtin class` inherent impl — registered for static
+            // dispatch through the native shape
+            let prev_names: Vec<IdentId> = self
+                .impls
+                .iter()
+                .find(|im| im.inherent && im.target == target_ty)
+                .map(|im| im.methods.iter().map(|(n, _)| *n).collect())
+                .unwrap_or_default();
+            for (n, mnode) in &mths {
+                if prev_names.contains(n) {
+                    self.err(
+                        self.ast.span(mnode.id()),
+                        format!("duplicate method `{}` on `{}`", self.name(*n), self.name(tname)),
+                    );
+                }
+            }
+            let generic = target_data.is_some();
+            self.impls.push(ImplDecl {
+                trait_id: u32::MAX,
+                trait_name: tname,
+                target: target_ty,
+                target_data,
+                trait_arg_nodes: vec![],
+                inherent: true,
+                methods: mths.clone(),
+            });
+            // concrete targets' methods are eagerly queued (no call site
+            // may exist); generic targets monomorphize at their call sites
+            if !generic {
+                let idx = self.impls.len() - 1;
+                for (n, _) in &mths {
+                    self.ensure_inst(Inst {
+                        key: FnKey::ImplMethod { idx, name: *n },
+                        subst: vec![],
+                        trait_origins: vec![],
+                    });
+                }
+            }
+            return;
+        }
+        // local struct/class: methods attach to the decl, where the
+        // ordinary inherent-call machinery finds them
+        if let Some(kind) = self.find_data(tname).map(|d| d.kind) {
+            if kind == DataKind::Dataclass {
+                for (_, mnode) in &mths {
+                    if self.ast.method_decl(*mnode).vis.is_some() {
+                        self.err(
+                            self.ast.span(mnode.id()),
+                            "dataclasses have no member visibility —all members are public (RFC 0009)",
+                        );
+                        break;
+                    }
+                }
+            }
+        }
+        let Some(idx) = self.datas.iter().position(|(n, _)| *n == tname) else {
+            return;
+        };
+        for (n, mnode) in &mths {
+            if self.datas[idx].1.methods.iter().any(|(pn, _)| pn == n) {
+                self.err(
+                    self.ast.span(mnode.id()),
+                    format!("duplicate method `{}` on `{}`", self.name(*n), self.name(tname)),
+                );
+            }
+        }
+        self.datas[idx].1.methods.extend(mths);
+    }
+
+    /// `impl I for T { .. }` — a trait impl (any module): duplicate
+    /// (trait, type) pair, coverage (every trait method implemented;
+    /// signature match incl. `is_async` and receiver form), no extras,
+    /// then registration and eager monomorphization.
+    fn collect_impl_trait(
+        &mut self,
+        sp: rut_lexer::span::Span,
+        trait_ref: NodeHandle<AnyTy>,
+        target_ty: TypeId,
+        target_data: Option<(IdentId, Vec<IdentId>)>,
+        mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+    ) {
         let Some(trait_id) = self.resolve_trait_ref(trait_ref) else {
             return;
         };
-        // the trait's source name and its written type arguments
         let (trait_name, trait_arg_nodes) = match self.ast.ty(trait_ref) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 (segs[0].name, segs[0].generics.clone())
             }
             _ => return,
         };
-        // the target must be a local struct/class (RFC 0012 §2 placement).
-        // A generic target (`impl Iter<T> for Vec<T>`) is kept as a template:
-        // its method bodies are inlined at the use site, never monomorphized
-        // as standalone fns.
-        let (target_ty, target_data) = match self.ast.ty(target) {
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
-                let name = segs[0].name;
-                let generics = segs[0].generics.clone();
-                let Some(d) = self.find_data(name).cloned() else {
-                    self.err(
-                        sp,
-                        "impl target must be a struct or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
-                    );
-                    return;
-                };
-                if d.generics.is_empty() {
-                    (d.ty, None)
-                } else {
-                    let Some(params) = self.ty_generic_idents(&generics) else {
-                        self.err(sp, "a generic impl target must name its type parameters (e.g. `Vec<T>`)");
-                        return;
-                    };
-                    if params.len() != d.generics.len() {
-                        self.err(sp, format!(
-                            "`{}<..>` takes {} type parameter(s), {} given",
-                            self.name(name), d.generics.len(), params.len()
-                        ));
-                        return;
-                    }
-                    (d.ty, Some((name, params)))
-                }
-            }
-            _ => {
-                self.err(
-                    sp,
-                    "impl target must be a struct or class of this module — builtin/foreign impls are registered natively (RFC 0012 §2)",
-                );
-                return;
-            }
-        };
         if let Some(_prev) = self.find_impl(trait_id, target_ty) {
             self.err(sp, "duplicate impl for the same (trait, type) pair (RFC 0012 §2)");
             return;
         }
-        let mut mths = Vec::new();
-        for m in methods {
-            mths.push((self.ast.method_decl(*m).name, *m));
-        }
-        // coverage: every trait methsig covered exactly once, no extras
-        let tdesc = self.traits[trait_id as usize].clone();
-        for tm in &tdesc.methods {
-            if !mths.iter().any(|(n, _)| *n == tm.name) {
-                self.err(sp, format!("impl is missing `{}` from {}", self.name(tm.name), self.name(tdesc.name)));
+        // the trait's required signatures: from the trait's own AST when
+        // it is declared here (async + receiver form live only there),
+        // resolved under the impl's trait-argument substitution; from the
+        // instantiated descriptor otherwise (engine-named contracts)
+        let trait_env: Vec<(IdentId, TypeId)> = match self.find_trait(trait_name).cloned() {
+            Some(info) if !info.generics.is_empty() => {
+                let args: Vec<TypeId> = trait_arg_nodes
+                    .iter()
+                    .map(|g| self.resolve_type(*g, &[]))
+                    .collect();
+                info.generics.iter().cloned().zip(args.into_iter()).collect()
+            }
+            _ => vec![],
+        };
+        let has_ast = self
+            .find_trait(trait_name)
+            .map(|info| matches!(self.ast.item(rut_ast::ast::NodeHandle::new(info.node)), ItemKind::Trait { .. }))
+            .unwrap_or(false);
+        let reqs: Vec<TraitReq> = if has_ast {
+            let info = self.find_trait(trait_name).cloned().unwrap();
+            let methods = match self.ast.item(rut_ast::ast::NodeHandle::new(info.node)) {
+                ItemKind::Trait { methods, .. } => methods.clone(),
+                _ => Vec::new(),
+            };
+            let mut out = Vec::new();
+            for m in &methods {
+                let md = self.ast.method_decl(*m);
+                // the trait side resolves `Self` against the impl's target,
+                // so `fn eq(self, other: Self)` matches `other: Circle`
+                let (self_form, ptys) = self.impl_sig_params(&md.params, trait_env.clone(), Some(target_ty));
+                let ret = md.ret.map(|r| self.resolve_sig_ty(r, &trait_env, Some(target_ty))).unwrap_or(TY_NIL);
+                out.push(TraitReq {
+                    name: md.name,
+                    is_async: md.is_async,
+                    self_form,
+                    ptys,
+                    ret,
+                });
+            }
+            out
+        } else {
+            // engine-named contract (e.g. `Iterator<E>`): signatures from
+            // the instantiated descriptor
+            let tdesc = self.traits[trait_id as usize].clone();
+            let mut out = Vec::new();
+            for tm in &tdesc.methods {
+                out.push(TraitReq {
+                    name: tm.name,
+                    is_async: false,
+                    self_form: Some(false),
+                    ptys: tm.params.clone(),
+                    ret: tm.ret,
+                });
+            }
+            out
+        };
+        // coverage: every trait method implemented — signature, `is_async`
+        // and receiver form matching — and nothing extra. Generic targets
+        // (`impl .. for Vec<T>`) stay structural: their parameters only
+        // become types at instantiation.
+        for req in &reqs {
+            let Some((_, mnode)) = mths.iter().find(|(n, _)| *n == req.name) else {
+                let tname = self.name(self.trait_by_id(trait_id).name);
+                self.err(sp, format!("impl is missing `{}` from {}", self.name(req.name), tname));
+                continue;
+            };
+            let md = self.ast.method_decl(*mnode);
+            let (self_form, ptys) = self.impl_sig_params(
+                &md.params,
+                vec![],
+                Some(target_ty),
+            );
+            let ret = md
+                .ret
+                .map(|r| self.resolve_sig_ty(r, &[], Some(target_ty)))
+                .unwrap_or(TY_NIL);
+            if md.is_async != req.is_async {
+                self.err(
+                    self.ast.span(mnode.id()),
+                    format!(
+                        "`{}` must match the trait's signature — `async` {}",
+                        self.name(req.name),
+                        if req.is_async { "is required here" } else { "is not allowed here" }
+                    ),
+                );
+            }
+            if self_form != req.self_form {
+                let spell = |f: Option<bool>| match f {
+                    Some(true) => "`mut self`".to_string(),
+                    Some(false) => "`self`".to_string(),
+                    None => "no `self`".to_string(),
+                };
+                self.err(
+                    self.ast.span(mnode.id()),
+                    format!(
+                        "`{}` must match the trait's receiver —the trait spells {}, the impl spells {}",
+                        self.name(req.name),
+                        spell(req.self_form),
+                        spell(self_form)
+                    ),
+                );
+            }
+            if target_data.is_none() && (ptys != req.ptys || ret != req.ret) {
+                let fmt = |tys: &[TypeId]| tys.iter().map(|t| self.type_name(*t).to_string()).collect::<Vec<_>>().join(", ");
+                self.err(
+                    self.ast.span(mnode.id()),
+                    format!(
+                        "`{}` does not match the trait's signature — trait: ({}) -> {}, impl: ({}) -> {}",
+                        self.name(req.name),
+                        fmt(&req.ptys),
+                        self.type_name(req.ret),
+                        fmt(&ptys),
+                        self.type_name(ret)
+                    ),
+                );
             }
         }
         for (n, mnode) in &mths {
-            if !tdesc.methods.iter().any(|tm| tm.name == *n) {
-                // mutable indexing is an optional hook on the read-only
-                // `Iter` contract (RFC 0012): `Array`/`Vec` provide `set`,
-                // `str`/`bytes` do not
-                if *n == sym::SET {
-                    continue;
-                }
+            if !reqs.iter().any(|r| r.name == *n) {
                 self.err(
                     self.ast.span(mnode.id()),
-                    format!("`{}` is not a member of {} — put inherent methods in the type body (RFC 0012 §2)", self.name(*n), self.name(tdesc.name)),
+                    format!(
+                        "`{}` is not a member of {} — inherent methods go in an `impl {} {{ .. }}` block (RFC 0012 §2)",
+                        self.name(*n),
+                        self.name(self.trait_by_id(trait_id).name),
+                        self.type_name(target_ty)
+                    ),
                 );
             }
         }
@@ -449,24 +709,48 @@ impl<'a> Ctx<'a> {
             target: target_ty,
             target_data,
             trait_arg_nodes,
-            methods: mths,
+            inherent: false,
+            methods: mths.clone(),
         });
-        // every impl method enters the monomorphization queue — vtables need
-        // their bodies (RFC 0015 §6). Generic-target impls are inlined at the
-        // use site instead.
+        // every impl method enters the monomorphization queue — vtables
+        // need their bodies (RFC 0015 §6). Generic-target impls
+        // monomorphize per instantiation at their call sites instead.
         if is_generic {
             return;
         }
         let idx = self.impls.len() - 1;
-        let method_names: Vec<IdentId> =
-            self.impls[idx].methods.iter().map(|(n, _)| *n).collect();
-        for mname in method_names {
+        for (mname, _) in &mths {
             let inst = Inst {
-                key: FnKey::ImplMethod { idx, name: mname },
+                key: FnKey::ImplMethod { idx, name: *mname },
                 subst: vec![],
+                trait_origins: vec![],
             };
             self.ensure_inst(inst);
         }
+    }
+
+    /// An impl method's receiver form and parameter types (after `self`),
+    /// resolved under `env` with `self_ty` spelling `Self`.
+    fn impl_sig_params(
+        &mut self,
+        params: &[NodeHandle<AnyParam>],
+        env: Vec<(IdentId, TypeId)>,
+        self_ty: Option<TypeId>,
+    ) -> (Option<bool>, Vec<TypeId>) {
+        let mut self_form: Option<bool> = None;
+        let mut ptys = Vec::new();
+        for (i, p) in params.iter().enumerate() {
+            match self.ast.param(*p) {
+                MemberKind::SelfParam(sd) if i == 0 => self_form = Some(sd.is_mut),
+                MemberKind::SelfParam(_) => {}
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                    ptys.push(self.resolve_sig_ty(*t, &env, self_ty))
+                }
+                MemberKind::Param(ParamData { ty: None, .. }) => ptys.push(TY_I32),
+                _ => ptys.push(TY_I32),
+            }
+        }
+        (self_form, ptys)
     }
 
     /// The identifier list of a generic argument list whose entries are all

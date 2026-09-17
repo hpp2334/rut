@@ -11,6 +11,8 @@ use { Opaque, downcast } from "std:core";
 use { Vec } from "std:collection";
 use { subscribe, emit } from "plugin:server";
 
+// The type body is FIELDS ONLY (RFC 0012) — methods live in the inherent
+// `impl Moderator` block below.
 class Moderator {
     bus: Opaque;          // the host's server — held, never inspected
     users: Vec<str>;      // who ever joined (append-only; Vec has no remove)
@@ -20,7 +22,9 @@ class Moderator {
     mutes: i64;
     last_sender: str;
     streak: i32;
+}
 
+impl Moderator {
     pub fn new(bus: Opaque) -> Self {
         return Self { bus: bus, users: Vec.new(), muted: Vec.new(), online: 0,
                       msgs: 0, mutes: 0, last_sender: "", streak: 0 };
