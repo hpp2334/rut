@@ -64,8 +64,8 @@ function rowsOf(n: AstNode, src: string): Row[] {
       return [{ label: "items", list: n.items }];
     case "Use":
       return [
+        { label: "pkg", text: n.pkg },
         { label: "names", items: n.names },
-        { label: "from", text: n.from },
       ];
     case "ModuleLet":
       return [

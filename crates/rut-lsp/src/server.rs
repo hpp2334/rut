@@ -20,25 +20,18 @@ use crate::hover::{self, DefIndex};
 use crate::semantic::TokenType;
 
 /// the toolchain's std surface — embedded, indexed before the workspace
-/// (one directory per module: `rut/std-collection/rut.toml` names
-/// `"std:collection"`)
+/// (one directory per module: `rut/pouch/rut.toml` names `"pouch"`)
 pub mod std_surface {
-    pub const CORE: &str = include_str!("../../../rut/std-core/core.d.rut");
-    pub const MATH: &str = include_str!("../../../rut/std-math/math.d.rut");
-    /// `std:collection` is a directory module: `entry.rut` is the barrel
-    /// and `hash.rut`/`vec.rut` are its parts.
-    pub const COLLECTION_ENTRY: &str = include_str!("../../../rut/std-collection/entry.rut");
-    pub const COLLECTION_HASH: &str = include_str!("../../../rut/std-collection/hash.rut");
-    pub const COLLECTION_VEC: &str = include_str!("../../../rut/std-collection/vec.rut");
+    pub const CORE: &str = include_str!("../../../rut/core/core.d.rut");
+    pub const CALC: &str = include_str!("../../../rut/calc/calc.d.rut");
+    pub const POUCH: &str = include_str!("../../../rut/pouch/pouch.rut");
 }
 
 fn std_indexes() -> Vec<DefIndex> {
     [
         (CORE_LABEL, std_surface::CORE, rut_parser::Mode::Decl),
-        ("std:math", std_surface::MATH, rut_parser::Mode::Decl),
-        ("std:collection", std_surface::COLLECTION_ENTRY, rut_parser::Mode::Impl),
-        ("std:collection", std_surface::COLLECTION_HASH, rut_parser::Mode::Impl),
-        ("std:collection", std_surface::COLLECTION_VEC, rut_parser::Mode::Impl),
+        ("calc", std_surface::CALC, rut_parser::Mode::Decl),
+        ("pouch", std_surface::POUCH, rut_parser::Mode::Impl),
     ]
     .into_iter()
     .map(|(origin, src, mode)| {
@@ -51,7 +44,7 @@ fn std_indexes() -> Vec<DefIndex> {
     .collect()
 }
 
-const CORE_LABEL: &str = "std:core";
+const CORE_LABEL: &str = "core";
 
 #[derive(Debug)]
 pub struct Backend {

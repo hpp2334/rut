@@ -1,6 +1,6 @@
-use { Logger } from "std:log";
+use ink::{ Logger };
 
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 // spectral-norm — the benchmark-game power-iteration norm.
 // Scale: n = 150, 10 iterations. Same fixed-iteration Newton sqrt as the
 // JS twin, so the checksum is exact.

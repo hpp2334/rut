@@ -58,13 +58,13 @@ pub enum CmpOp {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitOp {
     And, Or, Xor, Shl, Shr,
-    /// wrapping `std:math::wrapping_shl` (RFC 0004 §3): left shift
+    /// wrapping `calc::wrapping_shl` (RFC 0004 §3): left shift
     /// truncated to the operand width — never traps, unlike `Shl`
     WrapShl,
 }
 
 /// Compiler-lowered native functions (RFC 0032 §1.1 R2): operations the
-/// frontend expands inline rather than calling. `std:math`'s wrapping,
+/// frontend expands inline rather than calling. `calc`'s wrapping,
 /// saturating and checked integer arithmetic and its `abs`/`min`/`max`/
 /// `signum` helpers. The id travels in the module surface (no `FuncCode`);
 /// `rut-lir` owns the lowering.
@@ -218,7 +218,7 @@ pub enum Op {
     /// `Array<T>` handle, read as a *borrow* (no retire/release): the owner
     /// record keeps it alive for the duration of the access. This is the
     /// `Vec<T>` class's element path (`impl Slice<T>`), so indexing a
-    /// std:collection sequence costs one op, not a field read per element.
+    /// pouch sequence costs one op, not a field read per element.
     ArrGetF { dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr },
     ArrSetF { obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr },
 
@@ -299,7 +299,7 @@ pub fn arith(op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
     }
 }
 
-/// Wrapping arithmetic (`std:math::wrapping_add/sub/mul`) — a no-op for
+/// Wrapping arithmetic (`calc::wrapping_add/sub/mul`) — a no-op for
 /// floats. `&/`/`&%` were never spellable, so there is no wrapping div/rem.
 pub fn wrap_arith(op: ArithOp, prim: PrimTy, dst: Reg, a: Reg, b: Reg) -> Op {
     if prim.is_float() {

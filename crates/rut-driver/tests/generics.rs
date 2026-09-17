@@ -4,7 +4,7 @@
 use rut_parser::Mode;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    // the std:core surface bound as the one use (RFC 0028): these tests
+    // the core surface bound as the one use (RFC 0028): these tests
     // exercise generic monomorphization, not use discipline — the
     // prelude is used, never ambient
     rut_driver::compile_program(
@@ -104,7 +104,7 @@ fn explicit_generic_static_path() {
 #[test]
 fn vec_over_array_compiles() {
     let out = compile(
-        "use { Array } from \"std:core\";\n\
+        "use core::{ Array };\n\
          class Vec<T> {\n\
              buf: Array<T>;\n\
              len: i32;\n\

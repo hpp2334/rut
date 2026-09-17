@@ -1,27 +1,27 @@
 //! Module mounts & resolution — the compile-time half of RFC 0035 §1,
-//! shaped by RFC 0029 §5 (source resolution) and RFC 0003 (§2).
+//! shaped by RFC 0029 §5 and RFC 0003 (§2).
 //!
 //! **One directory is one module.** Its `rut.toml` names the exact
-//! specifier it answers to and how to reach its surface and body:
+//! package it answers to and how to reach its surface and body:
 //!
 //! ```toml
-//! # rut/std-collection/rut.toml
-//! name = "std:collection"
-//! entry.type = "./collection.d.rut"   # the surface (RFC 0029)
-//! entry.lib  = "./collection.rut"     # the body (omitted while surface-only)
+//! # rut/pouch/rut.toml
+//! name = "pouch"
+//! entry.type = "./pouch.d.rut"        # the surface (RFC 0029)
+//! entry.lib  = "./pouch.rut"          # the body (omitted while surface-only)
 //! ```
 //!
-//! A consumer mounts modules by exact specifier → directory:
+//! A consumer mounts modules by exact name → directory:
 //!
 //! ```toml
 //! [deps]
-//! "std:collection" = { path = "rut/std-collection" }
+//! "pouch" = { path = "rut/pouch" }
 //! ```
 //!
-//! Resolution is exact and single-step: a specifier resolves only if a
-//! module with that `name` is mounted — nothing is derived. Since the
-//! specifier is `<scope>:<name>`, a miss is diagnosable by scope
-//! ("package `std` is missing").
+//! Resolution is exact and single-step: a use path resolves only if a
+//! module with that `name` is mounted — nothing is derived. Package
+//! names are bare `[a-zA-Z0-9_]+` identifiers; a miss points at the
+//! consumer manifest (`[deps]`).
 //!
 //! The reader below parses only the TOML subset the format uses
 //! (comments, `key = "string"`, dotted keys, `[section]`, inline tables)
@@ -41,11 +41,11 @@ pub struct Entry {
     pub ir: Option<String>,
 }
 
-/// One mounted module: the specifier it answers to, its entry files, and
-/// (for embedded hosts) in-memory source/surface text.
+/// One mounted module: the bare package name it answers to, its entry
+/// files, and (for embedded hosts) in-memory source/surface text.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Module {
-    /// the exact specifier, `"<scope>:<name>"`
+    /// the exact package name — bare `[a-zA-Z0-9_]+`
     pub spec: String,
     /// The namespace head for qualified member access (`Math.sqrt`) —
     /// `None` when the module has no namespace form (RFC 0028).
@@ -63,21 +63,26 @@ pub struct Module {
     /// the embedder at run time — `(name, params, ret)`. A module with these
     /// and no `source` is a native module.
     pub host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>,
+    /// The host-fn registration scope — the `FuncCode.host` prefix — when
+    /// it must differ from the package name. `rt` stays the logger host
+    /// module's use path while its internal registration naming remains
+    /// `rt:log` (`rt:log::create_logger`), untouched since RFC 0022.
+    pub host_scope: Option<String>,
     /// Compiler-lowered intrinsics (native modules): `(name, id, arity)`.
     /// Bodyless and hostless — `rut-lir` expands the call inline
-    /// (RFC 0032 §1.1 R2); `std:math`'s wrapping/saturating/checked ops.
+    /// (RFC 0032 §1.1 R2); `calc`'s wrapping/saturating/checked ops.
     pub intrinsics: Vec<(String, rut_core::ops::Intrinsic, usize)>,
-    /// Exported constants: `(name, type, raw bits)` — `std:math::PI`.
+    /// Exported constants: `(name, type, raw bits)` — `calc::PI`.
     pub consts: Vec<(String, rut_core::types::TypeId, u64)>,
-    /// Builtin containers published by name (`std:core` only): the type is
+    /// Builtin containers published by name (`core` only): the type is
     /// the compiler's own; the NAME is use-gated (RFC 0028)
     pub native_types: Vec<(String, rut_core::binary::NativeTy)>,
-    /// Builtin traits published by name (`std:core` only)
+    /// Builtin traits published by name (`core` only)
     pub native_traits: Vec<(String, rut_core::binary::NativeTrait)>,
-    /// Compiler-lowered builtin function names (`std:core` only) — no
+    /// Compiler-lowered builtin function names (`core` only) — no
     /// bodies; rut-lir lowers them, reached only through the use
     pub native_fns: Vec<String>,
-    /// Force source-inlining into every consumer (`std:log`): a module whose
+    /// Force source-inlining into every consumer (`ink`): a module whose
     /// class methods must resolve at the call site cannot be linked.
     pub inline: bool,
 }
@@ -110,14 +115,14 @@ impl std::fmt::Display for ManifestError {
 }
 impl std::error::Error for ManifestError {}
 
-/// Why a specifier did not resolve. Each variant names the scope so the
-/// diagnostic can say which package is missing (RFC 0030 §2).
+/// Why a use path did not resolve. A miss points at the consumer
+/// manifest — the `[deps]` table (or the host) decides what exists.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResolveError {
-    /// not `<scope>:<name>`
+    /// not `[a-zA-Z0-9_]+`
     BadSpec { spec: String },
-    /// no module with that exact specifier is mounted
-    NoModule { spec: String, scope: String },
+    /// no module with that exact name is mounted
+    NoModule { spec: String },
 }
 
 impl std::fmt::Display for ResolveError {
@@ -125,11 +130,11 @@ impl std::fmt::Display for ResolveError {
         match self {
             ResolveError::BadSpec { spec } => write!(
                 f,
-                "malformed module specifier `{spec}` — expected `<scope>:<name>`"
+                "malformed package name `{spec}` — package names are bare `[a-zA-Z0-9_]+` identifiers"
             ),
-            ResolveError::NoModule { spec, scope } => write!(
+            ResolveError::NoModule { spec } => write!(
                 f,
-                "cannot resolve `{spec}` — package `{scope}` is not mounted"
+                "cannot resolve `{spec}` — no module with that name is mounted; declare it in your `rut.toml` `[deps]`"
             ),
         }
     }
@@ -150,11 +155,11 @@ impl Session {
         Session::default()
     }
 
-    /// Mount a module. Its `spec` must be `<scope>:<name>`.
+    /// Mount a module. Its `spec` must be a bare package name.
     pub fn mount(&mut self, module: Module) -> Result<(), ManifestError> {
         if !valid_spec(&module.spec) {
             return Err(ManifestError(format!(
-                "`{}` is not a module specifier — expected `<scope>:<name>`",
+                "`{}` is not a package name — expected `[a-zA-Z0-9_]+`",
                 module.spec
             )));
         }
@@ -169,17 +174,14 @@ impl Session {
         self.mount(module)
     }
 
-    /// Exact resolution: the specifier must be mounted as-is.
+    /// Exact resolution: the package name must be mounted as-is.
     pub fn resolve(&self, spec: &str) -> Result<&Module, ResolveError> {
         if !valid_spec(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
         match self.modules.get(spec) {
             Some(m) => Ok(m),
-            None => Err(ResolveError::NoModule {
-                spec: spec.to_string(),
-                scope: scope_of(spec).to_string(),
-            }),
+            None => Err(ResolveError::NoModule { spec: spec.to_string() }),
         }
     }
 
@@ -198,7 +200,7 @@ impl Session {
         for (spec, dep) in &manifest.deps {
             if !valid_spec(spec) {
                 return Err(ManifestError(format!(
-                    "dep `{spec}` is not a module specifier — expected `<scope>:<name>`"
+                    "dep `{spec}` is not a package name — expected `[a-zA-Z0-9_]+`"
                 )));
             }
             self.deps.insert(spec.clone(), dep.clone());
@@ -215,16 +217,10 @@ impl Session {
     }
 }
 
-/// `<scope>:<name>` with a non-empty scope and name.
+/// A bare package name: `[a-zA-Z0-9_]+`, non-empty. The same charset
+/// governs manifest `name` values and `[deps]` keys.
 fn valid_spec(spec: &str) -> bool {
-    match spec.split_once(':') {
-        Some((scope, name)) => !scope.is_empty() && !name.is_empty(),
-        None => false,
-    }
-}
-
-fn scope_of(spec: &str) -> &str {
-    spec.split_once(':').map(|(s, _)| s).unwrap_or(spec)
+    !spec.is_empty() && spec.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Parse the `rut.toml` subset: top-level `name`, `entry.type` /
@@ -260,7 +256,16 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
         let value = value.trim();
         match section {
             Section::Top => match key.as_str() {
-                "name" => m.name = Some(parse_string(value, lineno)?),
+                "name" => {
+                    let name = parse_string(value, lineno)?;
+                    if !valid_spec(&name) {
+                        return Err(ManifestError(format!(
+                            "line {}: module name `{name}` is not a bare package name — expected `[a-zA-Z0-9_]+`",
+                            lineno + 1
+                        )));
+                    }
+                    m.name = Some(name);
+                }
                 // bundle-shaped manifests (RFC 0038 §2)
                 "format" => m.format = Some(parse_string(value, lineno)?),
                 "format_version" => m.format_version = Some(parse_u64(value, lineno)?),
@@ -282,6 +287,12 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 }
             },
             Section::Deps => {
+                if !valid_spec(&key) {
+                    return Err(ManifestError(format!(
+                        "line {}: dep `{key}` is not a bare package name — expected `[a-zA-Z0-9_]+`",
+                        lineno + 1
+                    )));
+                }
                 m.deps.insert(key, parse_inline_table(value, lineno)?);
             }
         }
@@ -392,77 +403,83 @@ fn unquote(s: &str) -> &str {
 mod tests {
     use super::*;
 
-    const COLLECTION: &str = r#"
-# rut/std-collection/rut.toml
-name = "std:collection"
-entry.type = "./collection.d.rut"
+    const POUCH: &str = r#"
+# rut/pouch/rut.toml
+name = "pouch"
+entry.type = "./pouch.d.rut"
 "#;
 
     #[test]
     fn parses_name_and_entry() {
-        let m = parse_manifest(COLLECTION).unwrap();
-        assert_eq!(m.name.as_deref(), Some("std:collection"));
-        assert_eq!(m.entry.type_path.as_deref(), Some("./collection.d.rut"));
+        let m = parse_manifest(POUCH).unwrap();
+        assert_eq!(m.name.as_deref(), Some("pouch"));
+        assert_eq!(m.entry.type_path.as_deref(), Some("./pouch.d.rut"));
     }
 
     #[test]
     fn mount_and_resolve() {
         let mut s = Session::new();
-        s.load_manifest(COLLECTION).unwrap();
-        let m = s.resolve("std:collection").unwrap();
-        assert_eq!(m.entry.type_path.as_deref(), Some("./collection.d.rut"));
+        s.load_manifest(POUCH).unwrap();
+        let m = s.resolve("pouch").unwrap();
+        assert_eq!(m.entry.type_path.as_deref(), Some("./pouch.d.rut"));
     }
 
     #[test]
     fn entry_section_form() {
-        let text = "name = \"std:vec\"\n[entry]\ntype = \"./vec.d.rut\"\nlib = \"./vec.rut\"\n";
+        let text = "name = \"vec\"\n[entry]\ntype = \"./vec.d.rut\"\nlib = \"./vec.rut\"\n";
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.entry.lib.as_deref(), Some("./vec.rut"));
     }
 
     #[test]
     fn bundle_manifest_keys() {
-        let text = "format = \"rutbundle\"\nformat_version = 1\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n";
+        let text = "format = \"rutbundle\"\nformat_version = 1\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
         assert_eq!(m.format_version, Some(1));
     }
 
     #[test]
-    fn missing_module_names_the_scope() {
+    fn missing_module_names_the_manifest() {
         let s = Session::new();
-        let err = s.resolve("std:vec").unwrap_err();
-        assert_eq!(
-            err,
-            ResolveError::NoModule { spec: "std:vec".into(), scope: "std".into() }
-        );
-        assert!(err.to_string().contains("package `std` is not mounted"));
+        let err = s.resolve("missing").unwrap_err();
+        assert_eq!(err, ResolveError::NoModule { spec: "missing".into() });
+        assert!(err.to_string().contains("`rut.toml` `[deps]`"), "{}", err);
     }
 
     #[test]
     fn malformed_specifier() {
         let s = Session::new();
         assert!(matches!(s.resolve("just-a-name"), Err(ResolveError::BadSpec { .. })));
+        assert!(matches!(s.resolve("rt:log"), Err(ResolveError::BadSpec { .. })));
+    }
+
+    #[test]
+    fn manifest_names_must_be_bare_package_names() {
+        // scoped manifest names are retired — the diagnostic is
+        // line-targeted and names the charset
+        let err = parse_manifest("name = \"std:core\"\n").unwrap_err();
+        assert!(err.to_string().contains("line 1"), "{err}");
+        assert!(err.to_string().contains("bare package name"), "{err}");
+        let err = parse_manifest("[deps]\n\"std:math\" = { path = \"rut/calc\" }\n").unwrap_err();
+        assert!(err.to_string().contains("line 2"), "{err}");
     }
 
     #[test]
     fn programmatic_mount_sets_spec() {
         let mut s = Session::new();
         s.register_module(
-            "plugin:my_map",
+            "my_map",
             Module { source: Some("...".into()), ..Default::default() },
         )
         .unwrap();
-        assert_eq!(s.resolve("plugin:my_map").unwrap().source.as_deref(), Some("..."));
+        assert_eq!(s.resolve("my_map").unwrap().source.as_deref(), Some("..."));
     }
 
     #[test]
     fn deps_parse() {
-        let text = "name = \"app\"\n[deps]\n\"std:core\" = { path = \"rut/std-core\" }\n";
+        let text = "name = \"app\"\n[deps]\n\"core\" = { path = \"rut/core\" }\n";
         let m = parse_manifest(text).unwrap();
-        assert_eq!(
-            m.deps.get("std:core").unwrap().get("path").unwrap(),
-            "rut/std-core"
-        );
+        assert_eq!(m.deps.get("core").unwrap().get("path").unwrap(), "rut/core");
     }
 }

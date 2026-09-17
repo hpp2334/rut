@@ -6,7 +6,7 @@ use std::path::Path;
 
 use rut_driver::{load_bundle_session, load_dir_session, load_path_session, pack_dir};
 
-/// A two-file module in a temp dir: `entry.rut` includes `./inc.rut`.
+/// A one-file module in a temp dir (one directory, one entry file).
 fn make_dir(base: &Path) -> std::path::PathBuf {
     let dir = base.join("mod");
     let _ = std::fs::remove_dir_all(&dir);
@@ -15,15 +15,14 @@ fn make_dir(base: &Path) -> std::path::PathBuf {
         dir.join("rut.toml"),
         // bundle-shaped: the keys a `rut pack` needs are already there,
         // and directory loading ignores them (RFC 0038 §2)
-        "format = \"rutbundle\"\nformat_version = 1\nname = \"app:mod\"\nentry.lib = \"./entry.rut\"\n",
+        "format = \"rutbundle\"\nformat_version = 1\nname = \"mod\"\nentry.lib = \"./mod.rut\"\n",
     )
     .unwrap();
     std::fs::write(
-        dir.join("entry.rut"),
-        "use { seven } from \"./inc.rut\";\nfn main() -> i32 { return seven(); }\n",
+        dir.join("mod.rut"),
+        "pub fn seven() -> i32 { return 7; }\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
-    std::fs::write(dir.join("inc.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
     dir
 }
 
@@ -60,16 +59,16 @@ fn bundle_round_trip_matches_the_directory() {
 }
 
 #[test]
-fn packing_is_deterministic_and_multi_file() {
+fn packing_is_deterministic() {
     let base = std::env::temp_dir().join(format!("rut-bundle-det-{}", std::process::id()));
     let dir = make_dir(&base);
     let a = pack_dir(&dir).unwrap();
     let b = pack_dir(&dir).unwrap();
     assert_eq!(a, b, "same dir => byte-identical bundle");
-    // both sources are in the archive, manifest first
+    // the manifest and the entry are in the archive, manifest first
     let entries = rut_driver::parse_bundle(&a).unwrap();
     let names: Vec<&str> = entries.iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(names, vec!["rut.toml", "entry.rut", "inc.rut"]);
+    assert_eq!(names, vec!["rut.toml", "mod.rut"]);
     let _ = std::fs::remove_dir_all(&base);
 }
 
@@ -79,7 +78,7 @@ fn in_memory_bytes_load_without_a_file() {
     let dir = make_dir(&base);
     let bytes = pack_dir(&dir).unwrap();
     let (session, root) = rut_driver::load_bundle_bytes(&bytes, Path::new("mem")).unwrap();
-    assert_eq!(root, "app:mod");
+    assert_eq!(root, "mod");
     assert!(rut_driver::compile_graph(&session, &root).program.is_some());
     let _ = std::fs::remove_dir_all(&base);
 }
@@ -96,7 +95,7 @@ fn refusals() {
     assert!(err.contains("rut.toml"), "{err}");
 
     // unknown format_version — refused before anything else is read
-    let manifest = "format = \"rutbundle\"\nformat_version = 2\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n";
+    let manifest = "format = \"rutbundle\"\nformat_version = 2\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
     let bad_version = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
@@ -106,7 +105,7 @@ fn refusals() {
     assert!(err.contains("format_version"), "{err}");
 
     // missing `format = "rutbundle"`
-    let manifest = "format_version = 1\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n";
+    let manifest = "format_version = 1\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
     let no_format = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
@@ -117,7 +116,7 @@ fn refusals() {
 
     // `[deps]` — one module per bundle in v1
     let manifest =
-        "format = \"rutbundle\"\nformat_version = 1\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n[deps]\n\"lib:m\" = { path = \"../m\" }\n";
+        "format = \"rutbundle\"\nformat_version = 1\nname = \"x\"\nentry.lib = \"./x.rut\"\n[deps]\n\"m\" = { path = \"../m\" }\n";
     let with_deps = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
@@ -128,7 +127,7 @@ fn refusals() {
 
     // surface/ir payloads are a later format_version
     let manifest =
-        "format = \"rutbundle\"\nformat_version = 1\nname = \"app:x\"\nentry.type = \"./x.d.rut\"\n";
+        "format = \"rutbundle\"\nformat_version = 1\nname = \"x\"\nentry.type = \"./x.d.rut\"\n";
     let with_type = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
         ("x.d.rut".into(), src.to_vec()),
@@ -137,33 +136,33 @@ fn refusals() {
     let err = rut_driver::load_bundle_bytes(&with_type, Path::new("e")).unwrap_err();
     assert!(err.contains("sources only"), "{err}");
 
-    // a missing include is a load error naming the entry
-    let manifest = "format = \"rutbundle\"\nformat_version = 1\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n";
-    let missing_inc = rut_driver::write_bundle(&[
+    // an entry.lib reaching outside the archive is refused
+    let manifest = "format = \"rutbundle\"\nformat_version = 1\nname = \"x\"\nentry.lib = \"../evil.rut\"\n";
+    let escape = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
-        ("x.rut".into(), b"use { y } from \"./gone.rut\";\n".to_vec()),
+        ("x.rut".into(), src.to_vec()),
     ])
     .unwrap();
-    let err = rut_driver::load_bundle_bytes(&missing_inc, Path::new("f")).unwrap_err();
+    let err = rut_driver::load_bundle_bytes(&escape, Path::new("f")).unwrap_err();
+    assert!(err.contains("escapes"), "{err}");
+
+    // a missing archive entry is a load error naming the entry
+    let manifest = "format = \"rutbundle\"\nformat_version = 1\nname = \"x\"\nentry.lib = \"./gone.rut\"\n";
+    let missing = rut_driver::write_bundle(&[
+        ("rut.toml".into(), manifest.as_bytes().to_vec()),
+        ("x.rut".into(), src.to_vec()),
+    ])
+    .unwrap();
+    let err = rut_driver::load_bundle_bytes(&missing, Path::new("g")).unwrap_err();
     assert!(err.contains("gone.rut"), "{err}");
 
     // corruption: flip a payload byte, the CRC check fires
     let dir = make_dir(&base);
     let mut bytes = pack_dir(&dir).unwrap();
-    let at = 30 + "name = \"app:mod\"\nentry.lib = \"./entry.rut\"\n".len();
+    let at = 30 + "name = \"mod\"\nentry.lib = \"./mod.rut\"\n".len();
     bytes[at] ^= 0x01;
-    let err = rut_driver::load_bundle_bytes(&bytes, Path::new("g")).unwrap_err();
+    let err = rut_driver::load_bundle_bytes(&bytes, Path::new("h")).unwrap_err();
     assert!(err.contains("CRC"), "{err}");
-
-    // `..` include escapes are refused
-    let manifest = "format = \"rutbundle\"\nformat_version = 1\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n";
-    let escape = rut_driver::write_bundle(&[
-        ("rut.toml".into(), manifest.as_bytes().to_vec()),
-        ("x.rut".into(), b"use { y } from \"../evil.rut\";\n".to_vec()),
-    ])
-    .unwrap();
-    let err = rut_driver::load_bundle_bytes(&escape, Path::new("h")).unwrap_err();
-    assert!(err.contains("escapes"), "{err}");
 
     // a loose .rut file is not a path-form module
     let loose = base.join("loose.rut");
@@ -181,7 +180,7 @@ fn pack_requires_bundle_shaped_manifest() {
     let dir = base.join("mod");
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("rut.toml"), "name = \"app:mod\"\nentry.lib = \"./m.rut\"\n").unwrap();
+    std::fs::write(dir.join("rut.toml"), "name = \"mod\"\nentry.lib = \"./m.rut\"\n").unwrap();
     std::fs::write(dir.join("m.rut"), "pub fn f() -> i32 { return 0; }\n").unwrap();
     let err = pack_dir(&dir).unwrap_err();
     assert!(err.contains("bundle-shaped"), "{err}");
@@ -196,7 +195,7 @@ fn pack_refuses_deps_and_surface_entries() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 1\nname = \"app:main\"\nentry.lib = \"./entry.rut\"\n[deps]\n\"lib:m\" = { path = \"../m\" }\n",
+        "format = \"rutbundle\"\nformat_version = 1\nname = \"main\"\nentry.lib = \"./entry.rut\"\n[deps]\n\"m\" = { path = \"../m\" }\n",
     )
     .unwrap();
     std::fs::write(dir.join("entry.rut"), "fn main() -> i32 { return 0; }\n").unwrap();
@@ -205,7 +204,7 @@ fn pack_refuses_deps_and_surface_entries() {
 
     std::fs::write(
         dir.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 1\nname = \"app:surf\"\nentry.type = \"./surf.d.rut\"\n",
+        "format = \"rutbundle\"\nformat_version = 1\nname = \"surf\"\nentry.type = \"./surf.d.rut\"\n",
     )
     .unwrap();
     std::fs::write(dir.join("surf.d.rut"), "pub fn f() -> i32;\n").unwrap();

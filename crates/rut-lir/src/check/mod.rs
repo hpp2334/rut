@@ -148,28 +148,28 @@ pub struct Ctx<'a> {
     /// used functions, bound before body compilation (RFC 0029 surface):
     /// name -> signature + the exporter's scope-qualified function id
     pub extern_fns: std::collections::HashMap<IdentId, ExternFn>,
-    /// used constants (native modules: `std:math`): name -> (type, bits)
+    /// used constants (native modules: `calc`): name -> (type, bits)
     pub extern_consts: std::collections::HashMap<IdentId, (TypeId, u64)>,
     /// used types: name -> the exporter's scope-qualified type id
     pub extern_types: std::collections::HashMap<IdentId, TypeId>,
     /// used types that are `class` (no outside record literal)
     pub extern_classes: std::collections::HashSet<TypeId>,
-    /// used std:core builtin containers (RFC 0028): name -> constructor.
+    /// used core builtin containers (RFC 0028): name -> constructor.
     /// The prelude is used, never ambient — `Array`/`Opaque` resolve
     /// only through this map
     pub extern_native_types: std::collections::HashMap<IdentId, rut_core::binary::NativeTy>,
-    /// used std:core builtin traits: name -> contract
+    /// used core builtin traits: name -> contract
     /// (`Disposal`/`Index`/`Iterator`)
     pub extern_traits: std::collections::HashMap<IdentId, rut_core::binary::NativeTrait>,
     /// the emit-closure signature of each desugared `for..of` (RFC 0012 §6),
     /// recorded at the creation site and read when the queue compiles the fn:
     /// body node → (element type, captures)
     pub for_of_sigs: std::collections::HashMap<u32, (TypeId, Vec<(IdentId, TypeId)>)>,
-    /// used std:core compiler-lowered functions (`own`, `downcast`,
+    /// used core compiler-lowered functions (`own`, `downcast`,
     /// `assert`/`panic`, the `str`/`bytes` natives): the name is callable
     /// only when bound
     pub extern_native_fns: std::collections::HashSet<IdentId>,
-    /// Bound namespace heads (`Math` for `std:math`) — the qualified
+    /// Bound namespace heads (`Math` for `calc`) — the qualified
     /// access form `<namespace>.<member>` (RFC 0028). Name-generic: the
     /// LIR routes by membership here, never by a hardcoded string.
     pub extern_namespaces: std::collections::HashSet<IdentId>,
@@ -260,7 +260,7 @@ impl<'a> Ctx<'a> {
         self.extern_fns.get(&name)
     }
 
-    /// Bind a used constant (native modules: `std:math::PI`).
+    /// Bind a used constant (native modules: `calc::PI`).
     pub fn add_extern_const(&mut self, name: IdentId, ty: TypeId, bits: u64) {
         self.extern_consts.insert(name, (ty, bits));
     }
@@ -277,27 +277,27 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// Bind a used std:core builtin container (`Array`/`Option`/
+    /// Bind a used core builtin container (`Array`/`Option`/
     /// `Result`/`Opaque` — RFC 0028): the type constructor is the
     /// compiler's own; the binding gates the NAME.
     pub fn add_extern_native_type(&mut self, name: IdentId, kind: rut_core::binary::NativeTy) {
         self.extern_native_types.insert(name, kind);
     }
 
-    /// Bind a used std:core builtin trait (`Disposal`/`Index`/
+    /// Bind a used core builtin trait (`Disposal`/`Index`/
     /// `Iterator`): registered as a trait on first reference, like a
     /// declared one — but only for modules that named it.
     pub fn add_extern_trait(&mut self, name: IdentId, native: rut_core::binary::NativeTrait) {
         self.extern_traits.insert(name, native);
     }
 
-    /// Bind a used std:core compiler-lowered function (`own`,
+    /// Bind a used core compiler-lowered function (`own`,
     /// `downcast`, `assert`/`panic`, the `str`/`bytes` natives).
     pub fn add_extern_native_fn(&mut self, name: IdentId) {
         self.extern_native_fns.insert(name);
     }
 
-    /// Bind a namespace head (RFC 0028): `use { Math } from "std:math"`.
+    /// Bind a namespace head (RFC 0028): `use calc::{Math}`.
     pub fn add_extern_namespace(&mut self, name: IdentId) {
         self.extern_namespaces.insert(name);
     }
@@ -307,7 +307,7 @@ impl<'a> Ctx<'a> {
         self.extern_namespaces.contains(&name)
     }
 
-    /// The `std:core` not-in-scope diagnostic (RFC 0028): the prelude is
+    /// The `core` not-in-scope diagnostic (RFC 0028): the prelude is
     /// used, never ambient. A v1.1-removed name diagnoses with its
     /// replacement instead. `None` when `n` is not a prelude name —
     /// the caller keeps its ordinary message.
@@ -318,7 +318,7 @@ impl<'a> Ctx<'a> {
         }
         rut_core::binary::is_core_name(n).then(|| {
             format!(
-                "`{text}` is not in scope — `use {{ {text} }} from \"std:core\"` (RFC 0028: the prelude is used, never implicit)"
+                "`{text}` is not in scope — `use core::{{{text}}}` (RFC 0028: the prelude is used, never implicit)"
             )
         })
     }

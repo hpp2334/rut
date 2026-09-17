@@ -1,5 +1,5 @@
-use { Opaque, downcast, make_ptr } from "std:core";
-use { Vec } from "std:collection";
+use core::{ Opaque, downcast, make_ptr };
+use pouch::{ Vec };
 // todolist.rut — a todo-list library in rut, called from Rust.
 //
 // The shape: the HOST owns the session. It asks for an opaque container

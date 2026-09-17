@@ -95,7 +95,7 @@ fn bad_bundles_are_refused_at_load() {
 
     // unknown format_version — refused before anything else is read
     let manifest =
-        "format = \"rutbundle\"\nformat_version = 99\nname = \"app:plugin\"\nentry.lib = \"./plugin.rut\"\n";
+        "format = \"rutbundle\"\nformat_version = 99\nname = \"plugin\"\nentry.lib = \"./plugin.rut\"\n";
     let bytes = rut_driver::write_bundle(&[
         ("rut.toml".to_string(), manifest.as_bytes().to_vec()),
         ("plugin.rut".to_string(), b"fn x() {} \n".to_vec()),

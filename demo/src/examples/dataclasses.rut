@@ -6,9 +6,9 @@
 // idiom stays data + free functions. Constructed ONLY by literal,
 // everywhere (module-level let initializers included).
 
-use { make_ptr } from "std:core";
-use { Logger } from "std:log";
-use { sqrt } from "std:math";
+use core::{ make_ptr };
+use ink::{ Logger };
+use calc::{ sqrt };
 
 struct Point {
     x: f32;

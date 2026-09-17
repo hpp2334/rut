@@ -17,8 +17,8 @@ use std::rc::Rc;
 use rut_vm::{OpaqueBox, Trap, Value};
 
 const SRC: &str = r#"
-use { Opaque, downcast } from "std:core";
-use { store_new, store_set, store_get, store_size } from "plugin:boxes";
+use core::{ Opaque, downcast };
+use boxes::{ store_new, store_set, store_get, store_size };
 
 // the wrapper class (the Logger pattern, RFC 0028): one Opaque field,
 // one host fn call per method — the Rust payload never leaks into rut
@@ -76,9 +76,9 @@ fn session() -> rut_vm::interp::Vm {
     let ty = |n: &str| (n.to_string(), Vec::new(), rut_core::types::TY_OPAQUE);
     session
         .register_module(
-            "plugin:boxes",
+            "boxes",
             rut_driver::Module {
-                spec: "plugin:boxes".into(),
+                spec: "boxes".into(),
                 host_funcs: vec![
                     ty("store_new"),
                     ("store_set".into(), vec![rut_core::types::TY_OPAQUE, rut_core::types::TY_STR, rut_core::types::TY_I64], rut_core::types::TY_NIL),
@@ -91,11 +91,11 @@ fn session() -> rut_vm::interp::Vm {
         .unwrap();
     session
         .register_module(
-            "app:boxes",
-            rut_driver::Module { spec: "app:boxes".into(), source: Some(SRC.into()), ..Default::default() },
+            "app_boxes",
+            rut_driver::Module { spec: "app_boxes".into(), source: Some(SRC.into()), ..Default::default() },
         )
         .unwrap();
-    let g = rut_driver::compile_graph(&session, "app:boxes");
+    let g = rut_driver::compile_graph(&session, "app_boxes");
     assert!(
         g.diags.is_empty(),
         "{}",
@@ -111,14 +111,14 @@ fn session() -> rut_vm::interp::Vm {
     rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap()
 }
 
-/// Bind the `plugin:boxes` bodies over a real `HashMap` payload.
+/// Bind the `boxes` bodies over a real `HashMap` payload.
 fn install(vm: &mut rut_vm::interp::Vm, dropped: &Rc<Cell<bool>>) {
     let dropped = dropped.clone();
-    vm.register_host_fn("plugin:boxes::store_new", move |vm, _args| {
+    vm.register_host_fn("boxes::store_new", move |vm, _args| {
         let b = OpaqueBox::alloc(vm, Store { map: HashMap::new(), dropped: dropped.clone() })?;
         Ok(b.into_value())
     });
-    vm.register_host_fn("plugin:boxes::store_set", |_vm, args| {
+    vm.register_host_fn("boxes::store_set", |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
         let Value::I64(v) = args[2] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 2: expected an integer")) };
@@ -127,12 +127,12 @@ fn install(vm: &mut rut_vm::interp::Vm, dropped: &Rc<Cell<bool>>) {
         })?;
         Ok(Value::Nil)
     });
-    vm.register_host_fn("plugin:boxes::store_get", |_vm, args| {
+    vm.register_host_fn("boxes::store_get", |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
         Ok(b.with(|s| s.map.get(k).cloned())?.unwrap_or(Value::I64(-1)))
     });
-    vm.register_host_fn("plugin:boxes::store_size", |_vm, args| {
+    vm.register_host_fn("boxes::store_size", |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|s| s.map.len() as i64)?))
     });
@@ -219,8 +219,8 @@ fn record_fields_release_at_rc0() {
     // references and the heap climbed by ~n cells; now it returns to
     // baseline (plus the run's immortal singletons).
     let src = r#"
-use { Opaque } from "std:core";
-use { Vec } from "std:collection";
+use core::{ Opaque };
+use pouch::{ Vec };
 
 class Node {
     name: str;

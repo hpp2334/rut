@@ -68,14 +68,14 @@ pub struct SurfaceFn {
     pub ret: TypeId,
     /// module-local function id (the exporter's)
     pub local: u32,
-    /// `Some` for a compiler-lowered intrinsic (`std:math` wrapping/
+    /// `Some` for a compiler-lowered intrinsic (`calc` wrapping/
     /// saturating/checked and `abs`/`min`/`max`/`signum`): there is no
     /// `FuncCode`, and the declared signature is a placeholder — `rut-lir`
     /// types the call from its arguments (RFC 0032 §1.1 R2).
     pub intrinsic: Option<crate::ops::Intrinsic>,
 }
 
-/// One exported constant in a module's surface — `std:math::PI` and
+/// One exported constant in a module's surface — `calc::PI` and
 /// friends. `bits` is the raw scalar payload (f64 bits, i64 bits, …) the
 /// using module materializes with `ConstRaw`.
 #[derive(Clone, Debug)]
@@ -98,9 +98,9 @@ pub struct SurfaceType {
     pub is_generic: bool,
 }
 
-/// A builtin container published by `std:core`'s native surface (RFC 0028):
+/// A builtin container published by `core`'s native surface (RFC 0028):
 /// the type constructor is the compiler's own — the NAME resolves only once
-/// the module wrote `use { .. } from "std:core"`. The prelude is
+/// the module wrote `use core::{ .. };`. The prelude is
 /// used, never ambient.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTy {
@@ -111,7 +111,7 @@ pub enum NativeTy {
     Opaque,
 }
 
-/// A builtin trait published by `std:core`'s native surface (RFC 0028):
+/// A builtin trait published by `core`'s native surface (RFC 0028):
 /// registered on first reference, exactly like a declared trait — but only
 /// for modules that named it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -133,13 +133,13 @@ pub struct Surface {
     /// the name context for every name in this surface (including
     /// `types`' descriptors); starts with the well-known table
     pub names: Interner,
-    /// The qualified-access head for a namespace module (`std:math` ->
+    /// The qualified-access head for a namespace module (`calc` ->
     /// `Math`): members are reached as `<namespace>.<member>`. `None`
     /// when the module has no namespace form. Routing is name-generic:
     /// the compiler binds the head only when the module wrote it.
     pub namespace: Option<IdentId>,
     pub funcs: Vec<SurfaceFn>,
-    /// exported constants (native modules: `std:math`)
+    /// exported constants (native modules: `calc`)
     pub consts: Vec<SurfaceConst>,
     /// the exporter's non-boot type descriptors, verbatim; ids inside are
     /// packed with the exporter's scope (RFC 0035 §1)
@@ -148,17 +148,17 @@ pub struct Surface {
     pub scope_blocks: Vec<(crate::id::ScopeId, u32)>,
     /// exported (pub) type names
     pub type_exports: Vec<SurfaceType>,
-    /// builtin container names (`std:core` only): name -> constructor
+    /// builtin container names (`core` only): name -> constructor
     pub native_types: Vec<(IdentId, NativeTy)>,
-    /// builtin trait names (`std:core` only): name -> contract
+    /// builtin trait names (`core` only): name -> contract
     pub native_traits: Vec<(IdentId, NativeTrait)>,
-    /// compiler-lowered builtin function names (`std:core` only) — no
+    /// compiler-lowered builtin function names (`core` only) — no
     /// `FuncCode`; the bodies are rut-lir lowering, reached only through
     /// the use binding
     pub native_fns: Vec<IdentId>,
 }
 
-/// The `std:core` prelude function names (RFC 0028), in surface order —
+/// The core prelude function names (RFC 0028), in surface order —
 /// well-known symbols, so the ids are meaningful in every interner.
 pub const CORE_FNS: &[IdentId] = &[
     sym::DOWNCAST, sym::ASSERT, sym::PANIC,
@@ -167,10 +167,10 @@ pub const CORE_FNS: &[IdentId] = &[
 ];
 
 impl Surface {
-    /// The `std:core` prelude surface (RFC 0028): the builtin containers,
+    /// The core prelude surface (RFC 0028): the builtin containers,
     /// the builtin traits, and the compiler-lowered functions. One
     /// source of truth — the driver mounts it (`mount_std_core`), the
-    /// compiler hints from it, and `rut/std-core/core.d.rut` mirrors it
+    /// compiler hints from it, and `rut/core/core.d.rut` mirrors it
     /// for the LSP (kept true to the implementation by test). Every name
     /// is a well-known symbol — the surface's interner is the table.
     pub fn core() -> Surface {
@@ -184,7 +184,7 @@ impl Surface {
     }
 }
 
-/// A `std:core` builtin container by name, if it is one.
+/// A core builtin container by name, if it is one.
 pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
     match name {
         sym::ARRAY => Some(NativeTy::Array),
@@ -193,7 +193,7 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
     }
 }
 
-/// A `std:core` builtin trait by name, if it is one.
+/// A core builtin trait by name, if it is one.
 pub fn core_native_trait(name: IdentId) -> Option<NativeTrait> {
     match name {
         sym::ITERATOR => Some(NativeTrait::Iterator),
@@ -201,17 +201,17 @@ pub fn core_native_trait(name: IdentId) -> Option<NativeTrait> {
     }
 }
 
-/// Is `name` one of the `std:core` prelude functions?
+/// Is `name` one of the core prelude functions?
 pub fn is_core_fn(name: IdentId) -> bool {
     CORE_FNS.contains(&name)
 }
 
-/// Is `name` any `std:core` prelude name (type, trait, or function)?
+/// Is `name` any core prelude name (type, trait, or function)?
 pub fn is_core_name(name: IdentId) -> bool {
     is_core_fn(name) || core_native_type(name).is_some() || core_native_trait(name).is_some()
 }
 
-/// `std:core` names removed from the surface, each with its replacement.
+/// core names removed from the surface, each with its replacement.
 /// Use sites diagnose with these instead of "unknown" — a removed surface
 /// explains itself (RFC 0028 v1.1; `unit` in v1.2).
 pub const REMOVED_CORE: &[(&str, &str)] = &[
@@ -230,7 +230,7 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("unit", "`unit` was removed — the empty type and its value are spelled `nil` (v1.2)"),
 ];
 
-/// The removal message for `name`, if it is a removed `std:core` name.
+/// The removal message for `name`, if it is a removed `core` name.
 pub fn removed_core(name: &str) -> Option<&'static str> {
     REMOVED_CORE
         .iter()

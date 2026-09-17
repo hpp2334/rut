@@ -1,9 +1,9 @@
-//! `std:math`'s host half (RFC 0028): the native-module functions behind
+//! `calc`'s host half (RFC 0028): the native-module functions behind
 //! the `f64` math surface. The integer intrinsics (`wrapping_*`,
 //! `saturating_*`, `checked_*`, `abs`/`min`/`max`/`signum`) are
 //! compiler-lowered and need no host body.
 //!
-//! The `std:math` module is mounted by the driver (`rut-driver`); a host
+//! The `calc` module is mounted by the driver (`rut-driver`); a host
 //! installs the bodies. An uninstalled sink traps, like any missing host
 //! function.
 
@@ -21,7 +21,7 @@ fn arg(a: &[Value], i: usize) -> f64 {
 
 macro_rules! unary {
     ($vm:expr, $name:literal, $f:ident) => {
-        $vm.register_host_fn(concat!("std:math::", $name), |_vm, a| {
+        $vm.register_host_fn(concat!("calc::", $name), |_vm, a| {
             Ok(Value::F64(arg(a, 0).$f()))
         });
     };
@@ -29,13 +29,13 @@ macro_rules! unary {
 
 macro_rules! binary {
     ($vm:expr, $name:literal, $f:ident) => {
-        $vm.register_host_fn(concat!("std:math::", $name), |_vm, a| {
+        $vm.register_host_fn(concat!("calc::", $name), |_vm, a| {
             Ok(Value::F64(arg(a, 0).$f(arg(a, 1))))
         });
     };
 }
 
-/// Install `std:math`'s `f64` host functions.
+/// Install `calc`'s `f64` host functions.
 pub fn install_std_math(vm: &mut Vm) {
     unary!(vm, "sqrt", sqrt);
     unary!(vm, "floor", floor);
@@ -61,7 +61,7 @@ pub fn install_std_math(vm: &mut Vm) {
     binary!(vm, "hypot", hypot);
     binary!(vm, "copysign", copysign);
 
-    vm.register_host_fn("std:math::fma", |_vm, a| {
+    vm.register_host_fn("calc::fma", |_vm, a| {
         Ok(Value::F64(arg(a, 0).mul_add(arg(a, 1), arg(a, 2))))
     });
 }

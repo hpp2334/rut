@@ -441,14 +441,14 @@ impl Parser {
 /// matched by interner text (RFC 0002 §4/§5). Public: the LSP classifier
 /// and any tooling that needs the keyword set share this one table.
 pub fn is_reserved_kw(s: &str) -> bool {
-    matches!(s, "let" | "mut" | "if" | "else" | "while" | "for" | "of" | "return" | "when" | "enum" | "class" | "struct" | "trait" | "impl" | "requires" | "use" | "pub" | "from" | "static" | "async" | "await" | "extern" | "where" | "is" | "host" | "fn" | "true" | "false" | "nil" | "select")
+    matches!(s, "let" | "mut" | "if" | "else" | "while" | "for" | "of" | "return" | "when" | "enum" | "class" | "struct" | "trait" | "impl" | "requires" | "use" | "pub" | "static" | "async" | "await" | "extern" | "where" | "is" | "host" | "fn" | "true" | "false" | "nil" | "select")
 }
 
 /// The primitive types (RFC 0002 §3) — contextual type names, matched by
 /// interner text. Public and canonical: surface decls (RFC 0029 §2) and
 /// the LSP classifier share this one table. `str` included — it is a
 /// primitive, not a class; its natives are the free `string_len`/
-/// `string_encode` host fns declared in std:core. `bytes` (RFC 0004) is
+/// `string_encode` host fns declared in core. `bytes` (RFC 0004) is
 /// the immutable binary primitive alongside `str`.
 pub fn is_primitive_ty(s: &str) -> bool {
     matches!(

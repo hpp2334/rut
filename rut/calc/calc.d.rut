@@ -1,14 +1,14 @@
-// std/math.d.rut — `std:math`, the `Math` namespace (RFC 0028). The float
+// calc/calc.d.rut — `calc`, the `Math` namespace (RFC 0028). The float
 // members are host functions (`rt:`-backed, `f64`, bodies in `rut-std`);
 // the integer members are compiler-lowered intrinsics, generic over
 // every integer width (RFC 0032 §1.1 R2). No `host class` namespace
 // fiction: these are the module's own functions, reached qualified —
 //
-//   use { Math } from "std:math";
+//   use calc::{ Math };
 //   let d = Math.sqrt(x * x + y * y);
 //   let wrapped = Math.wrapping_mul(x, 1103515245);
 //
-// `builtin` here is the same engine linkage as std:core's own/downcast:
+// `builtin` here is the same engine linkage as core's own/downcast:
 // compiler-lowered, nothing to register — std decl files only, never an
 // embedder surface.
 //

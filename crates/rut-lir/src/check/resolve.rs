@@ -1,5 +1,5 @@
 //! Type resolution: primitives, builtins (Array/Option/Result), user types
-//! (including `std:collection`'s `Vec` class), trait objects, fn types;
+//! (including `pouch`'s `Vec` class), trait objects, fn types;
 //! naming-position resolution.
 
 use rut_core::types::*;
@@ -11,7 +11,7 @@ impl<'a> Ctx<'a> {
         match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
-                // a used std:core trait (RFC 0028) — the prelude's
+                // a used core trait (RFC 0028) — the prelude's
                 // only builtin trait is the `Iterator<E>` protocol (RFC 0012 §6)
                 let core_trait = self.extern_traits.get(&tname).copied();
                 if core_trait == Some(rut_core::binary::NativeTrait::Iterator) {
@@ -161,13 +161,13 @@ impl<'a> Ctx<'a> {
                     self.err(sp, "Weak references are not supported in this build (RFC 0017, M5)");
                     return TY_I32;
                 }
-                // a used std:core builtin container (RFC 0028): the
+                // a used core builtin container (RFC 0028): the
                 // prelude is used, never ambient — `Array`/`Opaque`
-                // resolve only when the name was bound from the std:core
+                // resolve only when the name was bound from the core
                 // surface
                 let core_ty = self.extern_native_types.get(&name).copied();
                 // a declared or used type shadows a builtin name (RFC
-                // 0005: `std:collection`'s `Vec` is an ordinary class, so it
+                // 0005: `pouch`'s `Vec` is an ordinary class, so it
                 // never reaches the builtin table)
                 let shadow = matches!(name, sym::ARRAY | sym::OPAQUE)
                     && (self.find_data(name).is_some() || self.extern_types.contains_key(&name));

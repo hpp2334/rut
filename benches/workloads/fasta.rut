@@ -1,5 +1,5 @@
-use { Logger } from "std:log";
-use { Math } from "std:math";
+use ink::{ Logger };
+use calc::{ Math };
 // fasta — LCG-driven nucleotide string building (the benchmark-game
 // string churn). The result accumulates into one `str`: `out =
 // f"{out}{..}"` lowers to a concat whose destination is the accumulator,

@@ -1,0 +1,2 @@
+name = "pouch"
+entry.lib = "./pouch.rut"

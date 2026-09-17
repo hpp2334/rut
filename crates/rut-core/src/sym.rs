@@ -184,7 +184,7 @@ pub const FROM_CODE: IdentId = IdentId(38);
 pub const BUF: IdentId = IdentId(39);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
-/// host-facing boundaries (e.g. mounting `std:core` into a `Session`).
+/// host-facing boundaries (e.g. mounting `core` into a `Session`).
 pub fn text(id: IdentId) -> Option<&'static str> {
     WELL_KNOWN.get(id.0 as usize).copied()
 }

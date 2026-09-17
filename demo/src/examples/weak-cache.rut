@@ -2,9 +2,9 @@
 // A cache lookup that finds nothing answers `nil` — the pointer's null
 // (RFC 0005) — and a hit answers a pointer that shares the cache's cell.
 
-use { make_ptr } from "std:core";
-use { Vec } from "std:collection";
-use { Logger } from "std:log";
+use core::{ make_ptr };
+use pouch::{ Vec };
+use ink::{ Logger };
 
 class Tile {
     n: i32;

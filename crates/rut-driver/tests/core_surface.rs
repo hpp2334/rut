@@ -1,9 +1,9 @@
-//! The std:core lockstep gate (RFC 0028): `rut/std-core/core.d.rut` is the
+//! The core lockstep gate (RFC 0028): `rut/core/core.d.rut` is the
 //! declarative form of the compiler's prelude surface
 //! (`rut_core::binary::Surface::core`), and the two must agree — same
 //! engine builtin types, same engine-woven traits, same
 //! compiler-lowered functions. The whole prelude is `builtin` (the
-//! engine implements it, RFC 0025 revised): std:core declares NO `host`
+//! engine implements it, RFC 0025 revised): core declares NO `host`
 //! surface — that is exclusively the embedder's. The file's own contract
 //! says the surface is kept TRUE to the implementation; this test makes
 //! it enforced, not aspirational.
@@ -11,7 +11,7 @@
 use rut_ast::ast::{ItemKind, Linkage};
 use rut_parser::{parse, Mode};
 
-const CORE_DECL: &str = include_str!("../../../rut/std-core/core.d.rut");
+const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
 
 /// The names core.d.rut declares: (builtin fns, builtin types, builtin
 /// traits, plain traits).
@@ -44,7 +44,7 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
             ItemKind::Trait { name, .. } => plain_traits.push(ast.name(*name).to_string()),
             // `host fn`/`host struct` are the embedder's surface — a
             // toolchain decl file may not spell them
-            other => panic!("std:core declares an embedder surface item: {other:?}"),
+            other => panic!("core declares an embedder surface item: {other:?}"),
         }
     }
     (builtin_fns, builtin_types, builtin_traits, plain_traits)
@@ -73,7 +73,7 @@ fn core_decl_matches_the_compilers_surface() {
     assert_eq!(decl_traits, surf_traits, "core.d.rut builtin traits == Surface::core native_traits");
     assert!(
         plain_traits.is_empty(),
-        "every engine-woven trait is `builtin trait` (plain `trait` is the library form — Hashable lives in std:collection)"
+        "every engine-woven trait is `builtin trait` (plain `trait` is the library form — Hashable lives in pouch)"
     );
 
     // functions: the decl's builtin fns are exactly the compiler-lowered
@@ -93,7 +93,7 @@ fn the_prelude_is_used_never_ambient() {
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module(
-        "app:main",
+        "app_main",
         rut_driver::Module {
             source: Some(
                 "fn main() -> i32 { let x = Option.some(1); return 0; }\n".into(),
@@ -102,7 +102,7 @@ fn the_prelude_is_used_never_ambient() {
         },
     )
     .unwrap();
-    let out = rut_driver::compile_graph(&s, "app:main");
+    let out = rut_driver::compile_graph(&s, "app_main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("`Option` was removed")),
         "diags: {:?}",
@@ -112,10 +112,10 @@ fn the_prelude_is_used_never_ambient() {
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module(
-        "app:main",
+        "app_main",
         rut_driver::Module {
             source: Some(
-                "use { Option } from \"std:core\";\n\
+                "use core::{ Option };\n\
                  fn main() -> i32 { let x = Option.some(1); return 0; }\n"
                     .into(),
             ),
@@ -123,7 +123,7 @@ fn the_prelude_is_used_never_ambient() {
         },
     )
     .unwrap();
-    let out = rut_driver::compile_graph(&s, "app:main");
+    let out = rut_driver::compile_graph(&s, "app_main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("`Option` was removed")),
         "diags: {:?}",

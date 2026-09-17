@@ -1,6 +1,6 @@
-use { Logger } from "std:log";
+use ink::{ Logger };
 
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 // matrix-mul — dense n x n f64 multiply-add hot loop, flat buffers.
 // Scale: n = 128. Checksum is a float sum (compare with tolerance).
 

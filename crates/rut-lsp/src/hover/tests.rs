@@ -153,7 +153,7 @@ fn host_fn_surface_favors_own_methods() {
     let s2 = rut_lexer::lexer::normalize(surf_src);
     let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Decl);
     let mut surf = index(&s2, &sast);
-    surf.origin = "std:core".to_string();
+    surf.origin = "core".to_string();
 
     let doc = "fn main() -> i32 { return string_join([]); }\n";
     let d2 = rut_lexer::lexer::normalize(doc);
@@ -165,7 +165,7 @@ fn host_fn_surface_favors_own_methods() {
     let pos = find_ident_pos(&toks, "string_join", 0).unwrap();
     let h = hover(&idxs, &d2, &toks, &ast, pos).unwrap();
     assert!(h.markdown.contains("fn string_join"), "{}", h.markdown);
-    assert!(h.markdown.contains("std:core"), "{}", h.markdown);
+    assert!(h.markdown.contains("core"), "{}", h.markdown);
 }
 
 #[test]

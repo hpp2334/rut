@@ -1,17 +1,97 @@
 // plugin.rut — the moderator plugin of a chat-room server (03-plugin).
 //
-// The layering this file teaches: the business logic lives in
-// `./moderator.rut` (inlined here by the loader — one module, one scope);
-// THIS file is the ADAPTER: registration plus one-line forwards, the
-// entire host-visible surface (RFC 0035 §3).
+// One file is one module unit: the business logic (`Moderator`, below)
+// and the ADAPTER (the `entry fn` surface) share one scope. The
+// adapter is the entire host-visible surface (RFC 0035 §3).
 //
 // Callbacks cannot cross the boundary as values (RFC 0023 §2), so
 // registration is BY NAME: the plugin hands the host the export names
 // it wants wired to each topic. The host later fires those exports with
 // the state handle `init` returned.
 
-use { make_ptr } from "std:core";
-use { Moderator } from "./moderator.rut";
+use core::{ make_ptr, Opaque, downcast };
+use pouch::{ Vec };
+use server::{ subscribe, emit };
+
+// The type body is FIELDS ONLY (RFC 0012) — methods live in the inherent
+// `impl Moderator` block below.
+class Moderator {
+    bus: Opaque;          // the host's server — held, never inspected
+    users: Vec<str>;      // who ever joined (append-only; Vec has no remove)
+    muted: Vec<str>;      // flood-control offenders
+    online: i32;          // live count (users.len() would never shrink)
+    msgs: i64;
+    mutes: i64;
+    last_sender: str;
+    streak: i32;
+}
+
+impl Moderator {
+    pub fn new(bus: Opaque) -> Self {
+        return Self { bus: bus, users: Vec.new(), muted: Vec.new(), online: 0,
+                      msgs: 0, mutes: 0, last_sender: "", streak: 0 };
+    }
+
+    // the one bus primitive the business logic ever needs
+    fn say(self, topic: str, payload: str) {
+        emit(self.bus, topic, payload);
+    }
+
+    fn is_muted(self, name: str) -> bool {
+        for (let m of self.muted) {
+            if (m == name) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    pub fn on_msg(mut self, user: str, text: str) {
+        if (self.is_muted(user)) {
+            self.say("muted", user);
+        } else if (text == "!stats") {
+            self.say("direct", f"{user}: {self.stats()}");
+        } else {
+            if (user == self.last_sender) {
+                self.streak += 1;
+            } else {
+                self.last_sender = user;
+                self.streak = 1;
+            }
+            if (self.streak == 3) {
+                self.muted.push(user);
+                self.mutes += 1;
+                self.say("system", f"{user} muted for flooding");
+            } else {
+                self.msgs += 1;
+                self.say("broadcast", f"<{user}> {text}");
+            }
+        }
+    }
+
+    pub fn on_join(mut self, name: str) {
+        if (self.is_muted(name)) {
+            self.say("system", f"{name} tried to rejoin while muted");
+        } else {
+            self.users.push(name);
+            self.online += 1;
+            self.say("system", f"*** {name} joined ({self.online} online)");
+        }
+    }
+
+    pub fn on_leave(mut self, name: str) {
+        self.online -= 1;
+        self.say("system", f"{name} left ({self.online} online)");
+    }
+
+    pub fn on_tick(self, n: i64) {
+        self.say("system", f"[tick {n}] {self.stats()}");
+    }
+
+    pub fn stats(self) -> str {
+        return f"{self.online} online, {self.msgs} msgs, {self.mutes} mutes";
+    }
+}
 
 // ---- the adapter: the ONLY entry fns. Registration + one-line forwards.
 

@@ -53,7 +53,7 @@ pub enum DumpVal {
     Segs(Vec<DumpSeg>),
     PatArgs(Vec<Option<String>>),
     FParts(Vec<DumpFPart>),
-    /// stored strings: interned names, Use `from`
+    /// stored strings: interned names
     Str(String),
     /// only emitted when true (quietness, not fabrication)
     Flag(bool),
@@ -93,9 +93,9 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 ));
                 "Module"
             }
-            ItemKind::Use { names, from } => {
+            ItemKind::Use { pkg, names } => {
+                fields.push(field("pkg", DumpVal::Str(a.name(*pkg).to_string())));
                 fields.push(field("names", DumpVal::Idents(names.iter().map(|&x| a.name(x).to_string()).collect())));
-                fields.push(field("from", DumpVal::Str(from.clone())));
                 "Use"
             }
             ItemKind::ModuleLet { vis, name, ty, init } => {

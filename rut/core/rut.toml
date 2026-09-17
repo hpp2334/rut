@@ -1,2 +1,2 @@
-name = "std:core"
+name = "core"
 entry.type = "./core.d.rut"

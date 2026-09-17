@@ -1,4 +1,4 @@
-use { Logger } from "std:log";
+use ink::{ Logger };
 
 // floatloop — f64 hot loop: multiply-add, loop counter, compare/branch.
 // Scale: 2_000_000 iterations. Canonical reference: 1107013.7297975053.

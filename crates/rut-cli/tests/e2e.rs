@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
     // append the logger use so the original spans stay put
-    let combined = format!("{src}\nuse {{ Logger }} from \"std:log\";\n");
+    let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let out = rut_driver::compile_module(&combined, rut_parser::Mode::Impl, "main");
     assert!(
         out.diags.is_empty(),
@@ -44,7 +44,7 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
 /// Compile a snippet with the logger use appended (the original spans of
 /// `src` are preserved).
 fn compile(src: &str, module: &str) -> rut_driver::CompileOutput {
-    let combined = format!("{src}\nuse {{ Logger }} from \"std:log\";\n");
+    let combined = format!("{src}\nuse ink::{{Logger}};\n");
     rut_driver::compile_module(&combined, rut_parser::Mode::Impl, module)
 }
 
@@ -94,7 +94,7 @@ pub fn main() -> nil {
 #[test]
 fn case3_opaque() {
     let src = r#"
-use { Opaque, downcast } from "std:core";
+use core::{ Opaque, downcast };
 struct Point { x: f32; y: f32 }
 pub fn main() -> nil {
     let box1 = Opaque.new(Point { x: 1, y: 2 });
@@ -115,7 +115,7 @@ pub fn main() -> nil {
 #[test]
 fn case4_sieve() {
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 fn sieve(limit: i32) -> Vec<i32> {
     let mut marks = Vec<u8>.zeroed(limit + 1);
     let primes: Vec<i32> = Vec.new();
@@ -192,7 +192,7 @@ pub fn main() -> nil {
 #[test]
 fn case6_trait_dispatch() {
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 trait Shape {
     fn area(self) -> f32;
     fn name(self) -> str;
@@ -237,7 +237,7 @@ pub fn main() -> nil {
 #[test]
 fn case7_closures_generics() {
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 fn map<T, U>(v: Vec<T>, f: fn(T) -> U) -> Vec<U> {
     let out: Vec<U> = Vec<U>.new();
     for (let x of v) { out.push(f(x)); }
@@ -280,7 +280,7 @@ pub fn main() -> nil {
 #[test]
 fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
-use { Math } from "std:math";
+use calc::{ Math };
 pub fn main() -> nil {
     let mut x = 2147483647;
     x = Math.wrapping_add(x, 1);   // wrapping: fine (RFC 0004 §3)
@@ -342,7 +342,7 @@ fn ne_on_primitives_is_not_eq() {
     // opposite comparison. It flowed everywhere: `while (len % 64 != 56)`
     // never entered its body.
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 pub fn main() -> nil {
     Logger.new("app").info(f"a={1 != 56}");
     Logger.new("app").info(f"b={1 == 56}");
@@ -366,7 +366,7 @@ fn bare_vec_with_length_allocates_zeroed_elements() {
     // ZERO length — the argument was silently dropped, and the first
     // index-assign on it trapped out of bounds.
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 pub fn main() -> nil {
     let mut k: Vec<u32> = Vec.zeroed(4);
     Logger.new("app").info(f"a len={k.len()} k3={k[3]}");
@@ -394,7 +394,7 @@ fn generic_static_receiver_resolves() {
     // Vec — module paths`, order-dependently. The explicit type argument
     // now reaches the static: it plays the annotation's role.
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 pub fn main() -> nil {
     let a: Vec<u32> = Vec<u32>.from([1, 2, 3]);
     let b = Vec<u32>.from([4, 5]);
@@ -408,7 +408,7 @@ pub fn main() -> nil {
     assert_eq!(trap, None);
     // everywhere else, explicit generics on a static head stay a clear error
     // (the prelude use is present, so the static route engages — RFC 0028)
-    let bad = "use { Option } from \"std:core\";\npub fn main() -> nil { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
+    let bad = "use core::{ Option };\npub fn main() -> nil { let x = Option<i32>.some(5); Logger.new(\"app\").info(f\"{x.value}\"); }";
     let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
     // no backward compat: a removed head is an unknown name, full stop
     assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")));
@@ -425,7 +425,7 @@ fn heap_budget_traps_before_the_write() {
     // budget fails the Vec allocation cleanly. `Vec<u8>` packs one byte
     // per element, so it takes 5M elements to exceed the 4 MB budget.
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 pub fn main() -> nil {
     let v = Vec<u8>.zeroed(5000000);
     Logger.new("app").info("allocated");
@@ -702,8 +702,8 @@ fn entry_fns_compile_without_main_and_cross_values() {
     // the host drives it: Opaque container in/out, primitives, bytes,
     // and tuples (the v1.1 error/presence convention) crossing back
     let src = r#"
-use { Vec } from "std:collection";
-use { make_ptr, downcast, Opaque } from "std:core";
+use pouch::{ Vec };
+use core::{ make_ptr, downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 
@@ -757,7 +757,7 @@ fn entry_crossing_rule_is_compile_time() {
     // makes them safe); Vec<T> of non-crossing types still does not.
     // `struct Row { id: i32 }` now crosses fine (all fields are prims).
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 struct Row { id: i32; }
 entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
 "#;
@@ -771,7 +771,7 @@ entry fn bad_ret() -> Vec<Row> { return Vec.new(); }
     // `Vec<u8>` is a mutable builder, not the binary type: it no longer
     // crosses — `bytes` is what does (RFC 0004, RFC 0023 §2)
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 entry fn old_buffer(v: Vec<u8>) -> Vec<u8> { return v; }
 "#;
     let out = compile(src, "m");
@@ -798,7 +798,7 @@ fn bytes_are_an_immutable_primitive() {
     // bytes(n)/bytes.from(..), a Vec<u8> builder freezes into one, and ==
     // compares content. `Vec<u8>` is a mutable builder, not the binary type.
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 pub fn main() -> nil {
     let z = bytes(3);
     Logger.new("app").info(f"z={z.len()}");
@@ -877,7 +877,7 @@ fn plain_pub_stays_unrestricted() {
     // `pub` is use-visibility for rut modules (RFC 0003 §2), NOT
     // the host surface: a Stack crosses fine between rut fns
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 struct Row { id: i32; }
 pub class Stack {
     items: Vec<Row>;                // unannotated member = module-private
@@ -940,7 +940,7 @@ fn recursive_dataclass_tree_runs() {
     // inlined field payloads (infinite recursion). Fields are registered
     // first and laid out as handle slots.
     let src = r#"
-use { make_ptr } from "std:core";
+use core::{ make_ptr };
 struct Node {
     value: i32,
     left: *Node,
@@ -1020,10 +1020,10 @@ pub fn main() -> nil {
 
 #[test]
 fn generic_vec_over_array_runs() {
-    // std:collection's Vec<T> shape: a generic class over the non-growable
+    // pouch's Vec<T> shape: a generic class over the non-growable
     // heap array primitive, monomorphized for i32 (RFC 0013 / RFC 0005).
     let src = r#"
-use { Array } from "std:core";
+use core::{ Array };
 class Vec<T> {
     buf: Array<T>;
     len: i32;
@@ -1077,7 +1077,7 @@ fn vec_class_slice_syntax_runs() {
     // `Vec` is rut std-lib code; `v[i]`, `v[i] = x`, and `for (x of v)`
     // lower through its `impl Slice<T> for Vec<T>` (RFC 0005)
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 pub fn main() -> nil {
     let mut v: Vec<i32> = Vec.new();
     v.push(1); v.push(2); v.push(3);
@@ -1095,29 +1095,29 @@ pub fn main() -> nil {
 }
 
 #[test]
-fn std_collection_vec_via_module_loader_runs() {
-    // the real rut/std-collection source, mounted as a module and used
+fn pouch_vec_via_module_loader_runs() {
+    // the real rut/pouch source, mounted as a module and used
     // by a consumer; generic Vec is inlined and monomorphized, then linked
     // and executed
-    let coll = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../rut/std-collection/entry.rut");
-    let coll_src = rut_driver::expand_module_source(&coll).expect("expand");
+    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../rut/pouch/pouch.rut");
+    let coll_src = rut_driver::load_module_source(&pouch).expect("read");
     let mut s = rut_driver::Session::new();
-    // std:core first: the collection source uses its prelude names
+    // core first: the pouch source uses its prelude names
     rut_driver::mount_std_core(&mut s);
     s.register_module(
-        "std:collection",
+        "pouch",
         rut_driver::Module { source: Some(coll_src), ..Default::default() },
     )
     .unwrap();
-    rut_driver::mount_std_log(&mut s);
+    rut_driver::mount_ink(&mut s);
     s.register_module(
-        "app:main",
+        "app_main",
         rut_driver::Module {
             source: Some(
                 r#"
-use { Vec } from "std:collection";
-use { Logger } from "std:log";
+use pouch::{ Vec };
+use ink::{ Logger };
 pub fn main() -> nil {
     let mut v: Vec<i32> = Vec.new();
     v.push(10);
@@ -1134,7 +1134,7 @@ pub fn main() -> nil {
     )
     .unwrap();
 
-    let out = rut_driver::compile_graph(&s, "app:main");
+    let out = rut_driver::compile_graph(&s, "app_main");
     assert!(
         out.diags.is_empty(),
         "diags: {:?}",
@@ -1160,19 +1160,19 @@ pub fn main() -> nil {
 
 #[test]
 fn std_collection_via_module_loader_runs() {
-    // the real rut/std-collection source, mounted and used by a
+    // the real rut/pouch source, mounted and used by a
     // consumer: `Vec<T>` is rut source over the engine's `Array<T>` cell,
     // so this exercises the rut-source module loader end to end
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
     s.register_module(
-        "app:main",
+        "app_main",
         rut_driver::Module {
             source: Some(
                 r#"
-use { string_join } from "std:core";
-use { Vec } from "std:collection";
-use { Logger } from "std:log";
+use core::{ string_join };
+use pouch::{ Vec };
+use ink::{ Logger };
 pub fn main() -> nil {
     let mut v: Vec<str> = Vec.new();
     v.push("hello");
@@ -1189,7 +1189,7 @@ pub fn main() -> nil {
     )
     .unwrap();
 
-    let out = rut_driver::compile_graph(&s, "app:main");
+    let out = rut_driver::compile_graph(&s, "app_main");
     assert!(
         out.diags.is_empty(),
         "diags: {:?}",
@@ -1262,8 +1262,8 @@ pub fn main() -> nil {
 fn string_join_and_vec_as_array_run() {
     // the builtin `string_join(Array<str>)` and the `Vec<T>.as_array()` bridge
     let src = r#"
-use { string_join } from "std:core";
-use { Vec } from "std:collection";
+use core::{ string_join };
+use pouch::{ Vec };
 pub fn main() -> nil {
     let mut v: Vec<str> = Vec.new();
     v.push("x"); v.push("y"); v.push("z");
@@ -1283,7 +1283,7 @@ fn as_casts_truncate_like_c_and_rust() {
     // truncates toward zero and saturates at the bounds (NaN -> 0). The
     // cast binds tighter than `*` (Rust placement) and chains left.
     let src = r#"
-use { Logger } from "std:log";
+use ink::{ Logger };
 pub fn main() -> nil {
     let a = 300 as u8;
     let b = -1 as u8;
@@ -1360,11 +1360,11 @@ fn unsuffixed_int_literals_must_fit_i32() {
 
 #[test]
 fn math_namespace_intrinsics_run() {
-    // `std:math`'s `Math` namespace: wrapping/saturating/checked integer
+    // `calc`'s `Math` namespace: wrapping/saturating/checked integer
     // arithmetic (compiler-lowered) plus abs/min/max/signum and the f64
     // host functions/constants (RFC 0004 §3, RFC 0028).
     let src = r#"
-use { Math } from "std:math";
+use calc::{ Math };
 pub fn main() -> nil {
     let log = Logger.new("app");
     // i32 wrapping
@@ -1457,8 +1457,8 @@ fn for_of_user_iterate_protocol() {
     // (`*Acc`). `total` takes the trait-typed parameter: it specializes
     // per concrete argument (RFC 0012 §5), so its call binds statically.
     let src = r#"
-use { Logger } from "std:log";
-use { Iterator, make_ptr } from "std:core";
+use ink::{ Logger };
+use core::{ Iterator, make_ptr };
 
 struct Acc { total: i32 = 0; }
 
@@ -1507,8 +1507,8 @@ fn for_of_vec_yields_element_references() {
     // scalar/str uses deref automatically at value positions; `str`
     // itself keeps value yields.
     let src = r#"
-use { Vec } from "std:collection";
-use { Logger } from "std:log";
+use pouch::{ Vec };
+use ink::{ Logger };
 struct Row { v: i32 }
 pub fn main() -> nil {
     let log = Logger.new("ref");
@@ -1558,7 +1558,7 @@ fn float_literal_default_does_not_implicitly_widen() {
     // the default is f32, and there are no implicit numeric conversions:
     // feeding it to `f64` is a width error (RFC 0007 §1)
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 pub fn main() -> nil {
     let a = 0.1;                 // f32 by default
     let v: Vec<f64> = Vec.new();
@@ -1598,7 +1598,7 @@ pub fn main() -> nil {
 #[test]
 fn a1_make_ptr_deref_and_nil() {
     let src = r#"
-use { make_ptr } from "std:core";
+use core::{ make_ptr };
 struct P { x: i32 = 0; }
 pub fn main() -> nil {
     let p = make_ptr(P { x: 5 });
@@ -1628,7 +1628,7 @@ pub fn main() -> nil {
 #[test]
 fn a1_on_drop_runs_at_refcount_zero() {
     let src = r#"
-use { make_ptr, on_drop } from "std:core";
+use core::{ make_ptr, on_drop };
 struct P { x: i32 = 0; }
 pub fn main() -> nil {
     let p = make_ptr(P { x: 9 });
@@ -1699,8 +1699,8 @@ fn dbg_digest() {
 #[test]
 fn dbg_digest_md5() {
     let src = r#"
-use { Vec } from "std:collection";
-use { make_ptr, downcast, Opaque } from "std:core";
+use pouch::{ Vec };
+use core::{ make_ptr, downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
@@ -1733,7 +1733,7 @@ entry fn put(c: Opaque) -> u32 {
 #[test]
 fn dbg_vec_build() {
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 fn table() -> Vec<str> {
     let t: Vec<str> = Vec.new();
     t.push("a");
@@ -1754,8 +1754,8 @@ pub fn main() -> nil {
 #[test]
 fn dbg_put_ir() {
     let src = r#"
-use { Vec } from "std:collection";
-use { make_ptr, downcast, Opaque } from "std:core";
+use pouch::{ Vec };
+use core::{ make_ptr, downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
@@ -1774,7 +1774,7 @@ fn a2_value_semantics_diverge() {
     // copy-by-value: the binding owns a deep copy — mutations of the
     // original never leak into the copy (RFC 0009/0016 v1.1)
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 struct Inner { v: i32 = 0; }
 struct Outer { inner: Inner; nums: Vec<i32>; tag: str; }
 pub fn main() -> nil {
@@ -1802,7 +1802,7 @@ pub fn main() -> nil {
 fn a2_mutating_method_hits_the_original() {
     // receiver aliasing: push on the binding mutates the binding's cell
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 pub fn main() -> nil {
     let t: Vec<str> = Vec.new();
     t.push("a");
@@ -1819,7 +1819,7 @@ pub fn main() -> nil {
 #[test]
 fn dbg_freeze() {
     let src = r#"
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 entry fn f(s: str) -> (bytes, str) {
     let mut out: Vec<u8> = Vec.new();
     out.push(7);
@@ -1850,8 +1850,8 @@ fn str_slice_views_read_through_and_flatten() {
     // out instead of writing through (value semantics win at the
     // assignment).
     let src = r#"
-use { Vec } from "std:collection";
-use { Logger } from "std:log";
+use pouch::{ Vec };
+use ink::{ Logger };
 pub fn main() -> nil {
     let log = Logger.new("view");
     let s = "hello world";
@@ -1886,7 +1886,7 @@ pub fn main() -> nil {
 fn str_slice_bounds_trap() {
     // RFC 0042 — out-of-bounds slices are traps, reversed ranges are traps
     let src = r#"
-use { Logger } from "std:log";
+use ink::{ Logger };
 pub fn main() -> nil {
     let s = "hello";
     let t = s.slice(3, 1);
@@ -1904,8 +1904,8 @@ fn array_views_are_write_through_pointers() {
     // parent growth detaches the window's backing (the window pins its
     // own array via retain); reslicing flattens; for-of walks the window.
     let src = r#"
-use { Vec } from "std:collection";
-use { Logger } from "std:log";
+use pouch::{ Vec };
+use ink::{ Logger };
 pub fn main() -> nil {
     let log = Logger.new("win");
     let mut v: Vec<i32> = Vec.new();
@@ -1937,8 +1937,8 @@ fn array_views_are_fixed_length_and_bounds_checked() {
     // RFC 0042 §6 — push/pop/re-backing through a view traps; window
     // bounds are the window's, not the parent's.
     let src = r#"
-use { Vec } from "std:collection";
-use { Logger } from "std:log";
+use pouch::{ Vec };
+use ink::{ Logger };
 pub fn main() -> nil {
     let mut v: Vec<i32> = Vec.new();
     v.push(1); v.push(2);
@@ -1951,8 +1951,8 @@ pub fn main() -> nil {
     assert_eq!(trap.as_deref(), Some("Invalid"));
 
     let src = r#"
-use { Vec } from "std:collection";
-use { Logger } from "std:log";
+use pouch::{ Vec };
+use ink::{ Logger };
 pub fn main() -> nil {
     let v: Vec<i32> = Vec.new();
     v.push(1); v.push(2);

@@ -94,7 +94,7 @@ impl<'a> GraphCompiler<'a> {
         // a native module (RFC 0022/0026): no rut body — synthesize a
         // placeholder program whose bodyless funcs the embedder implements.
         // Intrinsics (compiler-lowered) and constants ride the same surface.
-        // `std:core` rides it too: no funcs, just the native type/trait/fn
+        // `core` rides it too: no funcs, just the native type/trait/fn
         // names of the prelude (RFC 0028).
         if module.source.is_none()
             && (!module.host_funcs.is_empty()
@@ -105,6 +105,10 @@ impl<'a> GraphCompiler<'a> {
                 || !module.native_fns.is_empty())
         {
             use rut_core::binary::{FuncCode, Program};
+            // the host-fn registration scope defaults to the package
+            // name; `rt` overrides it to keep its internal `rt:log`
+            // registration naming (RFC 0022)
+            let host_scope = module.host_scope.as_deref().unwrap_or(spec);
             // host functions obey the same crossing rule as `entry fn`
             // (RFC 0023 §2 / RFC 0035 §3)
             let boot_tt = rut_core::types::TypeTable::boot();
@@ -115,7 +119,7 @@ impl<'a> GraphCompiler<'a> {
                     self.diags.push(Diag::new(
                         Span::new(0, 0),
                         format!(
-                            "host function `{spec}::{name}`: only primitives, `str`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)"
+                            "host function `{host_scope}::{name}`: only primitives, `str`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)"
                         ),
                     ));
                     return None;
@@ -144,7 +148,7 @@ impl<'a> GraphCompiler<'a> {
                     labels: vec![],
                     code: vec![],
                     spans: vec![],
-                    host: Some(format!("{spec}::{name}")),
+                    host: Some(format!("{host_scope}::{name}")),
                 });
             }
             for (name, id, arity) in &module.intrinsics {
@@ -257,7 +261,7 @@ impl<'a> GraphCompiler<'a> {
         }
         let program = out.program.unwrap();
         let has_generic = program.surface.type_exports.iter().any(|t| t.is_generic);
-        // an explicitly-inlined module (e.g. `std:log`) or a generic export
+        // an explicitly-inlined module (e.g. `ink`) or a generic export
         // cannot be linked — splice its source (and its uses) in
         if as_dep && (module.inline || has_generic) {
             let unit = Unit::Inline { source: combined, bound };
@@ -272,13 +276,14 @@ impl<'a> GraphCompiler<'a> {
     }
 }
 
-/// The exact specifiers a module uses, in source order, deduped.
+/// The exact package names a module uses, in source order, deduped.
 fn uses_of(ast: &Ast) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
-        if let ItemKind::Use { from, .. } = ast.item(it) {
-            if !out.contains(from) {
-                out.push(from.clone());
+        if let ItemKind::Use { pkg, .. } = ast.item(it) {
+            let name = ast.name(*pkg).to_string();
+            if !out.contains(&name) {
+                out.push(name);
             }
         }
     }

@@ -1,4 +1,4 @@
-//! `std:log`'s host half (RFC 0028): the native-module functions
+//! `ink`'s host half (RFC 0028): the native-module functions
 //! `rt:log::create_logger` / `rt:log::logger_log`.
 //!
 //! The logger's state is an `Opaque` handle owning the name string

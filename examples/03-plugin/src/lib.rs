@@ -51,9 +51,9 @@ impl Plugin {
         rut_driver::mount_std(&mut session);
         session
             .register_module(
-                "plugin:server",
+                "server",
                 rut_driver::Module {
-                    spec: "plugin:server".into(),
+                    spec: "server".into(),
                     host_funcs: vec![
                         ("subscribe".into(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL),
                         ("emit".into(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL),
@@ -141,10 +141,10 @@ impl Plugin {
     }
 }
 
-/// Bind the `plugin:server` bodies. Stateless: both fns unwrap the bus
+/// Bind the `server` bodies. Stateless: both fns unwrap the bus
 /// from their receiver argument — the bus IS the state.
 fn install(vm: &mut Vm) {
-    vm.register_host_fn("plugin:server::subscribe", |_vm, args| {
+    vm.register_host_fn("server::subscribe", |_vm, args| {
         let bus = OpaqueBox::<EventBus>::from_value(&args[0])?;
         let Value::Str(topic) = &args[1] else {
             return Err(Trap::new(TrapKind::Invalid, "subscribe: str topic"));
@@ -156,7 +156,7 @@ fn install(vm: &mut Vm) {
         Ok(Value::Nil)
     });
 
-    vm.register_host_fn("plugin:server::emit", |vm, args| {
+    vm.register_host_fn("server::emit", |vm, args| {
         let bus = OpaqueBox::<EventBus>::from_value(&args[0])?;
         // The bus stays MUTABLY BORROWED across the nested vm.call
         // (RFC 0022 §1 re-entrancy + RFC 0023 guard): `render_line` runs

@@ -1,7 +1,0 @@
-// std:collection — the module barrel: the entry file that assembles the
-// module from its parts. The module's surface is the `pub` items across
-// its files; a `pub { .. }` re-export form is not in the grammar yet, so
-// these use statements only pull the parts in.
-
-use { Hashable } from "./hash.rut";
-use { Vec } from "./vec.rut";

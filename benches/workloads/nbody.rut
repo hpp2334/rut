@@ -1,6 +1,6 @@
-use { Logger } from "std:log";
+use ink::{ Logger };
 
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 // nbody — the solar-system integration from the benchmark game.
 // Scale: 1000 steps of dt = 0.01.
 //

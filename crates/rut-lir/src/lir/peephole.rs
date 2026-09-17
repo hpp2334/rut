@@ -197,7 +197,7 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
 /// `f` is a fresh temp read exactly once by that consumer, becomes
 /// `arrgetf d, obj, k, i` / `arrsetf obj, k, i, …`. The field handle is then
 /// borrowed, not retained/released per element — this is the `Vec<T>` class's
-/// index path (RFC 0005 `Slice<T>`), so a std:collection sequence costs one
+/// index path (RFC 0005 `Slice<T>`), so a pouch sequence costs one
 /// op per element, not a field read plus an RC pair.
 fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();

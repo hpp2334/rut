@@ -45,7 +45,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             // cover it.
             "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
             // `builtin` — contextual (a legal identifier everywhere else):
-            // the ENGINE surface, std:core only, compiler-lowered
+            // the ENGINE surface, core only, compiler-lowered
             "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin))),
             "extern" => {
                 p.err(
@@ -114,54 +114,61 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
 
 // ---- use ----
 
+/// `use <pkg>::{A, B};` / `use <pkg>::A;` (RFC 0029 §2): the package is
+/// one bare identifier, the names are one or more idents. There is no
+/// string specifier and no `from` clause — resolution is the driver's
+/// exact-match against mounted module names.
 pub(crate) struct UseFrame {
     lo: u32,
+    pkg: IdentId,
     names: Vec<IdentId>,
 }
 
 impl UseFrame {
     pub(crate) fn new() -> Self {
-        UseFrame { lo: 0, names: Vec::new() }
+        UseFrame { lo: 0, pkg: IdentId(0), names: Vec::new() }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         self.lo = p.bump().span.lo; // use
-        if p.expect(Tok::LBrace).is_none() {
+        let Some(pkg) = p.expect_ident("a package name") else {
+            p.sync_stmt();
+            return Step::Pop(Done::Failed);
+        };
+        self.pkg = pkg;
+        if !p.eat_punct(Tok::Colon) {
+            p.err_here("expected `::` after the package name — use paths spell `use <pkg>::{A, B};`");
+            p.sync_stmt();
             return Step::Pop(Done::Failed);
         }
-        loop {
-            if p.eat_punct(Tok::RBrace) {
-                break;
+        p.expect(Tok::Colon);
+        if p.eat_punct(Tok::LBrace) {
+            loop {
+                if p.eat_punct(Tok::RBrace) {
+                    break;
+                }
+                let Some(n) = p.expect_ident("a used name") else {
+                    p.sync_stmt();
+                    return Step::Pop(Done::Failed);
+                };
+                self.names.push(n);
+                if !p.eat_punct(Tok::Comma) {
+                    p.expect(Tok::RBrace);
+                    break;
+                }
             }
+        } else {
+            // the single-name form: `use <pkg>::A;`
             let Some(n) = p.expect_ident("a used name") else {
                 p.sync_stmt();
                 return Step::Pop(Done::Failed);
             };
             self.names.push(n);
-            if !p.eat_punct(Tok::Comma) {
-                p.expect(Tok::RBrace);
-                break;
-            }
         }
-        if !p.at_kw("from") {
-            p.err_here("expected `from` after the use list");
-        } else {
-            p.bump();
-        }
-        let from = match p.tok().clone() {
-            Tok::Str(s) | Tok::RawStr(s) => {
-                p.bump();
-                s
-            }
-            _ => {
-                p.err_here("expected a module specifier string after `from`");
-                String::new()
-            }
-        };
         p.expect(Tok::Semi);
         let names = std::mem::take(&mut self.names);
         Step::Pop(Done::Item(p.item(
-            ItemKind::Use { names, from },
+            ItemKind::Use { pkg: self.pkg, names },
             Span::new(self.lo, p.span().hi),
         )))
     }
@@ -1109,7 +1116,7 @@ impl FnFrame {
 // ---- host/builtin surface declarations (.d.rut, RFC 0030 §3) ----
 //
 // Two linkages (RFC 0025): `host` — the embedding Rust implements it;
-// `builtin` — the engine itself (compiler-lowered, std:core only). What
+// `builtin` — the engine itself (compiler-lowered, core only). What
 // each may spell:
 //
 //     host fn name(params) -> T;        concrete signature over the

@@ -22,7 +22,7 @@ pub use bundle::{crc32, parse_bundle, write_bundle, BundleError};
 
 pub mod loader;
 pub use loader::{
-    compile_dir, expand_module_source, load_bundle_bytes, load_bundle_session, load_dir_session,
+    compile_dir, load_bundle_bytes, load_bundle_session, load_dir_session, load_module_source,
     load_path_session, pack_dir,
 };
 
@@ -121,9 +121,9 @@ pub fn compile_program_resolved(
                 ctx.add_extern_type(id, rut_core::pack(*dep_scope, t.local), t.is_class);
             }
         }
-        // std:core's native surface (RFC 0028): builtin containers,
+        // core's native surface (RFC 0028): builtin containers,
         // traits, and compiler-lowered fns — bound only when the
-        // module wrote the name: `use { Array } from "std:core"`
+        // module wrote the name: `use core::{Array}`
         // gates `Array`, nothing else. The prelude is used, never
         // ambient.
         for (n, kind) in &surface.native_types {
@@ -291,24 +291,20 @@ pub fn compile_program_resolved(
     ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program) }
 }
 
-/// The `std:collection` body, assembled from its parts (no filesystem): the
-/// relative includes are merged so the module can be mounted in-memory by
-/// wasm hosts and tests alike (RFC 0035 §1).
-pub fn std_collection_source() -> String {
-    format!(
-        "{}\n{}",
-        include_str!("../../../rut/std-collection/hash.rut"),
-        include_str!("../../../rut/std-collection/vec.rut"),
-    )
+/// The `pouch` body (no filesystem): an ordinary rut module over the
+/// engine's builtin `Array`, mountable in-memory by wasm hosts and tests
+/// alike (RFC 0035 §1).
+pub fn pouch_source() -> String {
+    include_str!("../../../rut/pouch/pouch.rut").to_string()
 }
 
-/// The `std:log` body (RFC 0028) — an ordinary rut module over the host
-/// function `rt:log::emit`.
-pub fn std_log_source() -> String {
-    include_str!("../../../rut/std-log/log.rut").to_string()
+/// The `ink` body (RFC 0028) — an ordinary rut module over the host
+/// functions `rt:log::create_logger` / `rt:log::logger_log`.
+pub fn ink_source() -> String {
+    include_str!("../../../rut/ink/ink.rut").to_string()
 }
 
-/// Mount `std:core` — the prelude surface (RFC 0028): the builtin
+/// Mount `core` — the prelude surface (RFC 0028): the builtin
 /// containers (`Array`/`Opaque`), the builtin traits
 /// (`Disposal`/`Index`/`Iterator`), and the compiler-lowered functions
 /// (`downcast`, `assert`/`panic`, `make_ptr`/`on_drop`, the `str`/`bytes`
@@ -316,8 +312,10 @@ pub fn std_log_source() -> String {
 /// with the removal. A
 /// native module with no body: its surface is
 /// [`rut_core::binary::Surface::core`], the single source of truth
-/// (`rut/std-core/core.d.rut` mirrors it for the LSP). Nothing here is
-/// ambient — every name must be used.
+/// (`rut/core/core.d.rut` mirrors it for the LSP). Nothing here is
+/// ambient — every name must be used. `core` needs no `[deps]`
+/// declaration: the driver mounts it unconditionally (§0.14), while
+/// every other package resolves through `[deps]` or host registration.
 pub fn mount_std_core(session: &mut Session) {
     // the surface is symbol-id based; the host-facing mount table is
     // string-based — `sym::text` bridges at this boundary only
@@ -326,7 +324,7 @@ pub fn mount_std_core(session: &mut Session) {
         rut_core::sym::text(id).unwrap_or_default().to_string()
     };
     let _ = session.register_module(
-        "std:core",
+        "core",
         Module {
             native_types: core.native_types.iter().map(|(n, k)| (txt(*n), *k)).collect(),
             native_traits: core.native_traits.iter().map(|(n, k)| (txt(*n), *k)).collect(),
@@ -336,24 +334,25 @@ pub fn mount_std_core(session: &mut Session) {
     );
 }
 
-/// Mount the standard modules every rut program expects: `std:collection`
-/// (rut source), `std:math` (float host fns + constants + compiler
-/// intrinsics), and the `std:log` logger over the `rt:log` native module
-/// (RFC 0022/0026/0028).
+/// Mount the optional in-tree packages a program may reach through
+/// `[deps]` or host registration: `pouch` (rut source), `calc` (float
+/// host fns + constants + compiler intrinsics), and the `ink` logger
+/// over the `rt` host module (RFC 0022/0026/0028). `core` is NOT here —
+/// [`mount_std_core`] mounts it unconditionally.
 pub fn mount_std(session: &mut Session) {
     mount_std_core(session);
     let _ = session.register_module(
-        "std:collection",
-        Module { source: Some(std_collection_source()), ..Default::default() },
+        "pouch",
+        Module { source: Some(pouch_source()), ..Default::default() },
     );
-    mount_std_math(session);
-    mount_std_log(session);
+    mount_calc(session);
+    mount_ink(session);
 }
 
-/// Mount `std:math` — a native module (RFC 0028): `f64` host functions
+/// Mount `calc` — a native module (RFC 0028): `f64` host functions
 /// (bodies in `rut-std`), `f64` constants, and width-polymorphic integer
 /// intrinsics the LIR expands inline (RFC 0032 §1.1 R2).
-pub fn mount_std_math(session: &mut Session) {
+pub fn mount_calc(session: &mut Session) {
     use rut_core::ops::Intrinsic;
     let u = |name: &str| (name.to_string(), vec![TY_F64], TY_F64);
     let b = |name: &str| (name.to_string(), vec![TY_F64, TY_F64], TY_F64);
@@ -405,7 +404,7 @@ pub fn mount_std_math(session: &mut Session) {
     ];
 
     let _ = session.register_module(
-        "std:math",
+        "calc",
         Module {
             namespace: Some("Math".to_string()),
             host_funcs,
@@ -416,11 +415,14 @@ pub fn mount_std_math(session: &mut Session) {
     );
 }
 
-/// Mount `std:log` over its `rt:log` native module (the logger; RFC 0028).
-pub fn mount_std_log(session: &mut Session) {
+/// Mount `ink` over its `rt` host module (the logger; RFC 0028). The
+/// host module's registration scope stays `rt:log` — internal naming,
+/// untouched (§0.16) — while the use path spells `rt`.
+pub fn mount_ink(session: &mut Session) {
     let _ = session.register_module(
-        "rt:log",
+        "rt",
         Module {
+            host_scope: Some("rt:log".to_string()),
             host_funcs: vec![
                 ("create_logger".to_string(), vec![TY_STR], TY_OPAQUE),
                 ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_NIL),
@@ -429,8 +431,8 @@ pub fn mount_std_log(session: &mut Session) {
         },
     );
     let _ = session.register_module(
-        "std:log",
-        Module { source: Some(std_log_source()), inline: true, ..Default::default() },
+        "ink",
+        Module { source: Some(ink_source()), inline: true, ..Default::default() },
     );
 }
 
@@ -446,7 +448,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     }
     let mut session = Session::new();
     mount_std(&mut session);
-    let spec = format!("app:{module_name}");
+    let spec = module_name.to_string();
     if let Err(e) = session.register_module(
         &spec,
         Module { source: Some(src.to_string()), is_decl: mode == Mode::Decl, ..Default::default() },

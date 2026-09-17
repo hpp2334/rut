@@ -22,7 +22,7 @@ fn uses_and_links_a_function() {
 
     // root "app" under scope 2 uses `add`
     let root = rut_driver::compile_program(
-        "use { add } from \"math\";\nfn main() -> i32 { return add(2, 3); }\n",
+        "use math::{add};\nfn main() -> i32 { return add(2, 3); }\n",
         Mode::Impl,
         "app",
         2,
@@ -52,15 +52,16 @@ fn uses_and_links_a_function() {
 
 #[test]
 fn uses_of_an_unmounted_module_error() {
-    // `compile_module` mounts std:collection, but resolution is exact: a
-    // specifier nothing answers to is a load error, never a silent binding
+    // `compile_module` mounts core and the optional packages, but
+    // resolution is exact: a name nothing answers to is a load error,
+    // never a silent binding
     let out = rut_driver::compile_module(
-        "use { add } from \"math\";\nfn main() -> i32 { return add(1, 2); }\n",
+        "use math::{add};\nfn main() -> i32 { return add(1, 2); }\n",
         Mode::Impl,
         "app",
     );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("module specifier") || d.msg.contains("`math`")),
+        out.diags.iter().any(|d| d.msg.contains("`rut.toml` `[deps]`") || d.msg.contains("`math`")),
         "{:?}",
         out.diags
     );
@@ -88,7 +89,7 @@ fn uses_and_links_a_type() {
 
     // root "app" scope 2 constructs the used type and reads its fields
     let root = rut_driver::compile_program(
-        "use { Point, origin } from \"geo\";\n\
+        "use geo::{Point, origin};\n\
          fn mk() -> Point { return Point { x: 1, y: 2 }; }\n\
          fn main() -> i32 {\n\
              let p: Point = mk();\n\
@@ -126,7 +127,7 @@ fn uses_and_links_a_type() {
 fn graph_compiles_and_links_uses_in_order() {
     let mut s = Session::new();
     s.register_module(
-        "std:math",
+        "math",
         Module {
             source: Some(
                 "pub fn seven() -> i32 { return 7; }\n\
@@ -138,10 +139,10 @@ fn graph_compiles_and_links_uses_in_order() {
     )
     .unwrap();
     s.register_module(
-        "app:main",
+        "app_main",
         Module {
             source: Some(
-                "use { seven } from \"std:math\";\n\
+                "use math::{ seven };\n\
                  fn main() -> i32 { return seven(); }\n"
                     .into(),
             ),
@@ -150,10 +151,10 @@ fn graph_compiles_and_links_uses_in_order() {
     )
     .unwrap();
 
-    let out = rut_driver::compile_graph(&s, "app:main");
+    let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("linked program");
-    // std:math: main(0), seven(1); app:main: main(2)
+    // math: main(0), seven(1); app_main: main(2)
     assert_eq!(p.funcs.len(), 3);
     let call = p.funcs[2]
         .code
@@ -172,7 +173,7 @@ fn graph_compiles_and_links_uses_in_order() {
 fn graph_threads_a_type_through_a_chain() {
     let mut s = Session::new();
     s.register_module(
-        "geo:base",
+        "geo_base",
         Module {
             source: Some(
                 "struct Point { x: i32; y: i32; }\n\
@@ -185,10 +186,10 @@ fn graph_threads_a_type_through_a_chain() {
     )
     .unwrap();
     s.register_module(
-        "geo:mid",
+        "geo_mid",
         Module {
             source: Some(
-                "use { Point, origin } from \"geo:base\";\n\
+                "use geo_base::{Point, origin};\n\
                  pub fn shifted() -> Point { return origin(); }\n\
                  fn main() -> i32 { return 0; }\n"
                     .into(),
@@ -198,11 +199,11 @@ fn graph_threads_a_type_through_a_chain() {
     )
     .unwrap();
     s.register_module(
-        "app:main",
+        "app_main",
         Module {
             source: Some(
-                "use { Point } from \"geo:base\";\n\
-                 use { shifted } from \"geo:mid\";\n\
+                "use geo_base::{Point};\n\
+                 use geo_mid::{shifted};\n\
                  fn main() -> i32 { let p: Point = shifted(); return p.x; }\n"
                     .into(),
             ),
@@ -211,7 +212,7 @@ fn graph_threads_a_type_through_a_chain() {
     )
     .unwrap();
 
-    let out = rut_driver::compile_graph(&s, "app:main");
+    let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("linked program");
     let points = (0..p.types.types.len() as u32)
@@ -221,12 +222,12 @@ fn graph_threads_a_type_through_a_chain() {
 }
 
 #[test]
-fn std_collection_barrel_expands_and_compiles() {
-    // entry.rut inlines ./vec.rut + ./hash.rut into one module unit
-    let entry = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../rut/std-collection/entry.rut");
-    let merged = rut_driver::expand_module_source(&entry).expect("expand");
-    assert!(merged.contains("class Vec<T>"), "vec.rut inlined");
+fn pouch_source_compiles() {
+    // rut/pouch/pouch.rut — one file, one module unit
+    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../rut/pouch/pouch.rut");
+    let merged = rut_driver::load_module_source(&pouch).expect("read");
+    assert!(merged.contains("class Vec<T>"), "Vec is here");
     let src = format!(
         "{merged}\nfn main() -> i32 {{\n\
              let mut v: Vec<i32> = Vec.new();\n\
@@ -238,10 +239,10 @@ fn std_collection_barrel_expands_and_compiles() {
     let out = rut_driver::compile_program(
         &src,
         Mode::Impl,
-        "std:collection",
+        "pouch",
         1,
         // the prelude surface as the unit's one use (RFC 0028): the
-        // barrel source itself uses std:core
+        // pouch source itself uses core
         &[(2, rut_core::binary::Surface::core())],
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
@@ -259,17 +260,17 @@ fn loads_a_directory_graph() {
     std::fs::create_dir_all(&lib).unwrap();
     std::fs::write(
         app.join("rut.toml"),
-        "name = \"app:main\"\nentry.lib = \"./entry.rut\"\n[deps]\n\"lib:math\" = { path = \"../lib\" }\n",
+        "name = \"app_main\"\nentry.lib = \"./entry.rut\"\n[deps]\n\"math\" = { path = \"../lib\" }\n",
     )
     .unwrap();
     std::fs::write(
         app.join("entry.rut"),
-        "use { seven } from \"lib:math\";\nfn main() -> i32 { return seven(); }\n",
+        "use math::{seven};\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
     std::fs::write(
         lib.join("rut.toml"),
-        "name = \"lib:math\"\nentry.lib = \"./lib.rut\"\n",
+        "name = \"math\"\nentry.lib = \"./lib.rut\"\n",
     )
     .unwrap();
     std::fs::write(lib.join("lib.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
@@ -277,7 +278,7 @@ fn loads_a_directory_graph() {
     let out = rut_driver::compile_dir(&app).expect("compile_dir");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("linked program");
-    // lib:math::seven called from app:main
+    // math::seven called from app_main
     let call = p
         .funcs
         .iter()
@@ -291,26 +292,26 @@ fn loads_a_directory_graph() {
 }
 
 #[test]
-fn consumer_uses_std_collection_vec() {
+fn consumer_uses_pouch_vec() {
     // a module exporting a generic type is source-inlined into its consumer
     // (RFC 0013 monomorphizes at compile time); the consumer's `Vec<i32>`
     // then instantiates against the inlined class body
-    let coll = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../rut/std-collection/entry.rut");
-    let coll_src = rut_driver::expand_module_source(&coll).expect("expand");
+    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../rut/pouch/pouch.rut");
+    let coll_src = rut_driver::load_module_source(&pouch).expect("read");
     let mut s = Session::new();
-    // std:core first: the collection source uses its prelude names
+    // core first: the pouch source uses its prelude names
     rut_driver::mount_std_core(&mut s);
     s.register_module(
-        "std:collection",
+        "pouch",
         Module { source: Some(coll_src), ..Default::default() },
     )
     .unwrap();
     s.register_module(
-        "app:main",
+        "app_main",
         Module {
             source: Some(
-                "use { Vec } from \"std:collection\";\n\
+                "use pouch::{ Vec };\n\
                  fn main() -> i32 {\n\
                      let mut v: Vec<i32> = Vec.new();\n\
                      v.push(1);\n\
@@ -324,7 +325,7 @@ fn consumer_uses_std_collection_vec() {
     )
     .unwrap();
 
-    let out = rut_driver::compile_graph(&s, "app:main");
+    let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
     assert_eq!(p.funcs.iter().filter(|f| p.name_of(f.name) == "main").count(), 1);
@@ -335,10 +336,10 @@ fn consumer_uses_std_collection_vec() {
 fn graph_reports_a_missing_dependency() {
     let mut s = Session::new();
     s.register_module(
-        "app:main",
+        "app_main",
         Module {
             source: Some(
-                "use { nope } from \"std:missing\";\n\
+                "use missing::{nope};\n\
                  fn main() -> i32 { return 0; }\n"
                     .into(),
             ),
@@ -346,10 +347,10 @@ fn graph_reports_a_missing_dependency() {
         },
     )
     .unwrap();
-    let out = rut_driver::compile_graph(&s, "app:main");
+    let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.program.is_none());
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("package `std` is not mounted")),
+        out.diags.iter().any(|d| d.msg.contains("`rut.toml` `[deps]`")),
         "{:?}",
         out.diags
     );

@@ -10,9 +10,9 @@
 // unannotated = module-private, `pub` (optionally scoped: `pub(mod)`,
 // `pub(super)`, `pub(self)`) exposes them.
 
-use { make_ptr, panic } from "std:core";
-use { Logger } from "std:log";
-use { Math } from "std:math";
+use core::{ make_ptr, panic };
+use ink::{ Logger };
+use calc::{ Math };
 
 class Counter {
     n: i32 = 0;             // field initializer — module-private

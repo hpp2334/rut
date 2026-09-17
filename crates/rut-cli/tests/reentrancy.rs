@@ -12,9 +12,9 @@ use std::rc::Rc;
 use rut_vm::{OpaqueBox, Trap, TrapKind, Value};
 
 const SRC: &str = r#"
-use { Opaque } from "std:core";
-use { Vec } from "std:collection";
-use { boost, borrow_conflict, borrow_read, borrow_try, count_spin, grind, host_boom, widget_new } from "plugin:re";
+use core::{ Opaque };
+use pouch::{ Vec };
+use re::{ boost, borrow_conflict, borrow_read, borrow_try, count_spin, grind, host_boom, widget_new };
 
 // plain rut math the host calls back into
 entry fn inner(x: i64) -> i64 {
@@ -80,9 +80,9 @@ fn session(fuel: Option<u64>) -> rut_vm::interp::Vm {
     use rut_core::types::{TY_I64, TY_OPAQUE};
     session
         .register_module(
-            "plugin:re",
+            "re",
             rut_driver::Module {
-                spec: "plugin:re".into(),
+                spec: "re".into(),
                 host_funcs: vec![
                     f("widget_new", vec![], TY_OPAQUE),
                     f("boost", vec![TY_I64], TY_I64),
@@ -99,11 +99,11 @@ fn session(fuel: Option<u64>) -> rut_vm::interp::Vm {
         .unwrap();
     session
         .register_module(
-            "app:re",
-            rut_driver::Module { spec: "app:re".into(), source: Some(SRC.into()), ..Default::default() },
+            "app_re",
+            rut_driver::Module { spec: "app_re".into(), source: Some(SRC.into()), ..Default::default() },
         )
         .unwrap();
-    let g = rut_driver::compile_graph(&session, "app:re");
+    let g = rut_driver::compile_graph(&session, "app_re");
     assert!(
         g.diags.is_empty(),
         "{}",
@@ -121,25 +121,25 @@ fn session(fuel: Option<u64>) -> rut_vm::interp::Vm {
 
 fn install(vm: &mut rut_vm::interp::Vm, invocations: &Rc<Cell<u32>>) {
     let invocations = invocations.clone();
-    vm.register_host_fn("plugin:re::widget_new", |vm, _args| {
+    vm.register_host_fn("re::widget_new", |vm, _args| {
         let b = OpaqueBox::alloc(vm, Widget { n: 0 })?;
         Ok(b.into_value())
     });
-    vm.register_host_fn("plugin:re::boost", |vm, args| {
+    vm.register_host_fn("re::boost", |vm, args| {
         let Value::I64(x) = args[0] else { panic!("boost: i64 arg") };
         let v = vm.call("inner", &[Value::I64(x)])?;
         let Value::I64(y) = v else { panic!("inner: i64 result") };
         Ok(Value::I64(y + 1))
     });
-    vm.register_host_fn("plugin:re::borrow_try", |_vm, args| {
+    vm.register_host_fn("re::borrow_try", |_vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|w| w.n)?))
     });
-    vm.register_host_fn("plugin:re::borrow_read", |_vm, args| {
+    vm.register_host_fn("re::borrow_read", |_vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|w| w.n)?))
     });
-    vm.register_host_fn("plugin:re::borrow_conflict", |vm, args| {
+    vm.register_host_fn("re::borrow_conflict", |vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         // hold the mutable borrow ACROSS a nested vm.call — rut code that
         // runs inside must not be able to borrow the same box
@@ -157,12 +157,12 @@ fn install(vm: &mut rut_vm::interp::Vm, invocations: &Rc<Cell<u32>>) {
             Err(t) => Err(t),
         }
     });
-    vm.register_host_fn("plugin:re::host_boom", |vm, args| {
+    vm.register_host_fn("re::host_boom", |vm, args| {
         let Value::I64(i) = args[0] else { panic!("host_boom: i64 arg") };
         let v = vm.call("boom", &[Value::I64(i)])?;
         Ok(v)
     });
-    vm.register_host_fn("plugin:re::grind", |vm, args| {
+    vm.register_host_fn("re::grind", |vm, args| {
         let Value::I64(n) = args[0] else { panic!("grind: i64 arg") };
         // the catch-and-refuel pattern for nested budget traps: the host
         // owns the retry, the outer frame never sees the trap
@@ -175,7 +175,7 @@ fn install(vm: &mut rut_vm::interp::Vm, invocations: &Rc<Cell<u32>>) {
             Err(t) => Err(t),
         }
     });
-    vm.register_host_fn("plugin:re::count_spin", move |vm, args| {
+    vm.register_host_fn("re::count_spin", move |vm, args| {
         let Value::I64(n) = args[0] else { panic!("count_spin: i64 arg") };
         invocations.set(invocations.get() + 1);
         vm.call("spin", &[Value::I64(n)])

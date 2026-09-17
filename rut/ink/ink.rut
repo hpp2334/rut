@@ -1,12 +1,12 @@
-// std-log/log.rut — the logger (RFC 0028 §std:log).
+// ink/ink.rut — the logger (RFC 0028).
 //
 // The primitives are the host functions `create_logger`/`logger_log` from
-// the native module `rt:log` (RFC 0022/0026): the host owns the logger's
+// the host module `rt` (RFC 0022/0026): the host owns the logger's
 // layout, so rut only ever holds an `Opaque` handle. `Logger` is an
 // ordinary rut class over that handle; a host or user may mount their own
-// `std:log` in its place.
-use { Opaque } from "std:core";
-use { create_logger, logger_log } from "rt:log";
+// `ink` in its place.
+use core::{ Opaque };
+use rt::{ create_logger, logger_log };
 
 pub class Logger {
     internal: Opaque;

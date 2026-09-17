@@ -6,7 +6,7 @@
 use rut_parser::Mode;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
-    // std:core + std:collection bound as the uses (RFC 0028); these
+    // core + pouch bound as the uses (RFC 0028); these
     // tests exercise impl semantics, not use discipline
     let collection = rut_core::binary::Surface::default();
     rut_driver::compile_program(
@@ -273,7 +273,7 @@ fn builtin_class_inherent_impls_compile() {
     // `LaunchedTask<T>` pattern, RFC 0012 §2): generic through the
     // native-type table, dispatched statically through the shape
     let out = compile(
-        "use { Array } from \"std:core\";\n\
+        "use core::{ Array };\n\
          impl Array<T> {\n\
              fn first(self) -> i32 { return 7; }\n\
          }\n\
@@ -285,7 +285,7 @@ fn builtin_class_inherent_impls_compile() {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     // and the concrete builtin class
     let out = compile(
-        "use { Opaque } from \"std:core\";\n\
+        "use core::{ Opaque };\n\
          impl Opaque {\n\
              fn peek(self) -> i32 { return 1; }\n\
          }\n\

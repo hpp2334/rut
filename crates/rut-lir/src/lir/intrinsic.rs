@@ -1,5 +1,5 @@
 //! Compiler-lowered intrinsics (RFC 0032 §1.1 R2): the operations
-//! `std:math` exposes that the frontend expands inline instead of calling —
+//! `calc` exposes that the frontend expands inline instead of calling —
 //! `wrapping_*`, `saturating_*`, `checked_*` integer arithmetic and the
 //! `abs`/`min`/`max`/`signum` helpers. Each lowering is a fixed sequence of
 //! typed ops (`WAddI`/`WSubI`/`WMulI`/`WrapShlI`, compares, guarded
@@ -75,7 +75,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// `Math.method(..)` — the `std:math` namespace: a host call for the
+    /// `Math.method(..)` — the `calc` namespace: a host call for the
     /// `f64` primitives, or an inline lowering for the integer intrinsics
     /// (RFC 0032 §1.1 R2).
     /// A namespace member call (`Math.sqrt(x)`, `Math.wrapping_add(a, b)`):

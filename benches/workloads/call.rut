@@ -1,4 +1,4 @@
-use { Logger } from "std:log";
+use ink::{ Logger };
 
 // call — recursion / call-frame overhead. Scale: fib(28).
 // Canonical reference: fib(28) = 317811.

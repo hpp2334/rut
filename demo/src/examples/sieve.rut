@@ -1,7 +1,7 @@
-use { Vec } from "std:collection";
+use pouch::{ Vec };
 // Sieve of Eratosthenes — flat Vec<u8>/Vec<i32> primitive buffers.
 
-use { Logger } from "std:log";
+use ink::{ Logger };
 
 fn sieve(limit: i32) -> Vec<i32> {
     let mut marks = Vec<u8>.zeroed(limit + 1);  // zeroed: 0 = candidate, 1 = crossed; `mut` — index writes (RFC 0003 §1)

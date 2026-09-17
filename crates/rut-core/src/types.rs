@@ -109,7 +109,7 @@ pub enum TyKind {
     /// data type); contiguous, content-compared, COW-shared like `Str`
     Bytes,
     /// heap array cell — runtime length, non-growable (RFC 0005). The
-    /// growable `Vec<T>` is a rut class over it (`std:collection`).
+    /// growable `Vec<T>` is a rut class over it (`pouch`).
     Array { elem: TypeId },
     /// named-int set (RFC 0006); members are immortal singleton cells
     Enum { members: Vec<(IdentId, i64)> },

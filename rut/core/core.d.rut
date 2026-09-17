@@ -1,17 +1,17 @@
-// std/core.d.rut — the prelude surface (RFC 0028): what the language
+// core/core.d.rut — the prelude surface (RFC 0028): what the language
 // itself ships — the `str`/`bytes` fns, the engine builtins `Array`/
 // `Option`/`Result`/`Opaque` (RFC 0005, RFC 0014), and the engine-woven
 // traits `Disposal`/`Index`/`Iterator`.
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
-// compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1). std:core
+// compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1). core
 // registers no host bodies at all; `host fn` is exclusively the
 // EMBEDDER'S surface (a registered NativeModule, RFC 0025). The decls
 // exist so users and the LSP see every signature — the lockstep test
 // keeps them true to rut-lir's lowering tables.
 //
 // The prelude is USED, never ambient (RFC 0028): nothing here is in
-// scope until a module writes `use { .. } from "std:core"`. The
+// scope until a module writes `use core::{ .. };`. The
 // compiler's copy of this surface is `rut_core::binary::Surface::core`;
 // a driver test asserts the two stay in lockstep. Type-calls spelled
 // with the type name (`x as i32` casts — RFC 0007) are syntax, not
@@ -84,8 +84,8 @@ pub builtin class Opaque {
 // ---- engine-woven traits ----
 // `builtin trait` = the engine has built-in knowledge: compiler-
 // backed impls and lowering hooks. Users implement them with ordinary
-// `impl` blocks. Library contracts without engine knowledge (std:
-// collection's `Hashable`) stay plain `trait`.
+// `impl` blocks. Library contracts without engine knowledge (pouch:
+// pouch's `Hashable`) stay plain `trait`.
 
 // v1.1 removals — `Disposal`/`Index` are gone from the prelude:
 // cleanups attach with `on_drop` (RFC 0016) and indexing is builtin

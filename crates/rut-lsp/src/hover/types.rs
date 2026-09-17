@@ -10,7 +10,7 @@ pub enum TyForm {
     Dataclass,
     Trait,
     Enum,
-    /// `builtin Name<..>` — an engine builtin's member contract (std:core
+    /// `builtin Name<..>` — an engine builtin's member contract (core
     /// only; members are compiler-lowered)
     Builtin,
     /// `builtin trait Name<..>` — an engine-woven contract (Index,
@@ -80,7 +80,7 @@ pub struct DefIndex {
     pub types: Vec<TyDef>,
     pub fns: Vec<FnDef>,
     pub impls: Vec<ImplDef>,
-    /// label for provenance lines 鈥?the file's path, or `std:core`
+    /// label for provenance lines — the file's path, or `core`
     pub origin: String,
 }
 

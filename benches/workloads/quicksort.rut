@@ -1,7 +1,7 @@
-use { Logger } from "std:log";
+use ink::{ Logger };
 
-use { Vec } from "std:collection";
-use { Math } from "std:math";
+use pouch::{ Vec };
+use calc::{ Math };
 // quicksort — deterministic LCG input, in-place Lomuto quicksort, rolled
 // checksum. Scale: n = 100_000.
 //

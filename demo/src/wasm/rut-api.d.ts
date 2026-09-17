@@ -39,7 +39,7 @@ interface Base { id: number; span: Span2 }
 
 // ---- items ----
 export interface AstModule extends Base { kind: "Module"; items: AstNode[] }
-export interface AstUse extends Base { kind: "Use"; names: string[]; from: string }
+export interface AstUse extends Base { kind: "Use"; pkg: string; names: string[] }
 export interface AstModuleLet extends Base { kind: "ModuleLet"; vis: VisTag; name: string; ty?: AstNode; init: AstNode }
 export interface AstEnum extends Base { kind: "Enum"; vis: VisTag; name: string; members: AstMember[] }
 export interface AstDataclass extends Base { kind: "Dataclass"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }

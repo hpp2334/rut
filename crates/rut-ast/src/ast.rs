@@ -236,7 +236,7 @@ pub enum Vis {
 pub enum Linkage {
     /// `host` — the embedding Rust (a registered `NativeModule`)
     Host,
-    /// `builtin` — the engine itself, compiler-lowered (std:core only;
+    /// `builtin` — the engine itself, compiler-lowered (core only;
     /// nothing to register, the decl is a pure signature contract)
     Builtin,
 }
@@ -286,7 +286,9 @@ pub struct FnData {
 #[derive(Clone, Debug)]
 pub enum ItemKind {
     Module { items: Vec<NodeHandle<AnyItem>> },
-    Use { names: Vec<IdentId>, from: String },
+    /// `use <pkg>::{A, B};` / `use <pkg>::A;` — the package is a single
+    /// bare `[a-zA-Z0-9_]+` name, resolved by the driver (RFC 0029 §2).
+    Use { pkg: IdentId, names: Vec<IdentId> },
     ModuleLet { vis: Vis, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
     Enum { vis: Vis, name: IdentId, members: Vec<(IdentId, Option<i64>)> },
     Dataclass {
@@ -338,7 +340,7 @@ pub enum ItemKind {
         name: IdentId,
         fields: Vec<NodeHandle<FieldDeclNode>>,
     },
-    /// `builtin Name<..>` — .d.rut only, std:core only: an engine builtin
+    /// `builtin Name<..>` — .d.rut only, core only: an engine builtin
     /// type's member contract (`Option`, `Result`, `Opaque`, `Array`).
     /// Members are compiler-lowered (ops, RFC 0032 §1.1) — the decl exists
     /// so users and the LSP see every signature; no impl ever registers.
@@ -348,7 +350,7 @@ pub enum ItemKind {
         generics: Vec<IdentId>,
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
-    /// `builtin trait Name<..>` — .d.rut only, std:core only: a
+    /// `builtin trait Name<..>` — .d.rut only, core only: a
     /// trait the ENGINE is woven into (compiler-backed impls /
     /// lowering hooks — `x[i]` through `Index`, `for (x of it)` through
     /// `Iterator`, rc-0 `Disposal`). Users still implement it with

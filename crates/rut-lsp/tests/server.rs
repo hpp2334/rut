@@ -333,5 +333,5 @@ async fn hover_resolves_std_surface() {
         .await;
     let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
     assert!(md.contains("len"), "string member: {md}");
-    assert!(md.contains("std:core"), "provenance: {md}");
+    assert!(md.contains("core"), "provenance: {md}");
 }

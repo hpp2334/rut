@@ -110,8 +110,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let name = segs[0].name;
         let generics = segs[0].generics.clone();
-        // std:core prelude functions (RFC 0028): compiler-lowered, visible
-        // only when the name was used from the std:core surface — the
+        // core prelude functions (RFC 0028): compiler-lowered, visible
+        // only when the name was used from the core surface — the
         // prelude is used, never ambient. A local fn of the same name
         // wins when the use statement is absent (fallthrough below).
         let core_fn = self.ctx.extern_native_fns.contains(&name);
@@ -122,7 +122,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         if self.ctx.name(name) == "print" {
-            self.ctx.err(sp, "`print` was removed — use a logger (`use { log } from \"std:log\"`)");
+            self.ctx.err(sp, "`print` was removed — use a logger (`use ink::{log}`)");
             return Err(());
         }
         if matches!(self.ctx.name(name), "size_of" | "align_of") {
@@ -346,7 +346,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(ef.ret);
         }
         // builtin type-call: Array<T>(n) — allocate n slots (runtime length,
-        // non-growable, RFC 0005); the storage under `std:collection`'s Vec.
+        // non-growable, RFC 0005); the storage under `pouch`'s Vec.
         // Use-gated like the type itself (RFC 0028)
         if name == sym::ARRAY
             && self.ctx.find_data(name).is_none()
@@ -435,7 +435,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        // std:core builtin statics (RFC 0028): `Opaque.new` and the
+        // core builtin statics (RFC 0028): `Opaque.new` and the
         // `bytes`/`str` constructors — the prelude is used, never
         // ambient, so the arms fire only when the base name was bound from
         // the surface
@@ -805,9 +805,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
             if segs.len() == 1 && self.lookup(segs[0].name).is_none() {
                 let base = segs[0].name;
-                // `Vec` is an ordinary class (std:collection), so it routes
+                // `Vec` is an ordinary class (pouch), so it routes
                 // here through `find_data`, like any other class; the
-                // std:core statics (`Opaque`) route only
+                // core statics (`Opaque`) route only
                 // when used (RFC 0028)
                 let is_type = matches!(base, sym::STR | sym::BYTES)
                     || self.ctx.extern_native_types.contains_key(&base)

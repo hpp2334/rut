@@ -7,7 +7,7 @@
 //! - `str` / `bytes` — the primitive cells (`strcharat`/`strlen`,
 //!   `bytesget`/`byteslen`).
 //! - `Vec<T>` — builtin by shape: a record with a `buf: Array<T>` field
-//!   and a `len: i32` field (RFC 0028; the std:collection class). `len`
+//!   and a `len: i32` field (RFC 0028; the pouch class). `len`
 //!   reads the live-length field; element ops go through the `buf`
 //!   cell, so they alias the vector.
 //!

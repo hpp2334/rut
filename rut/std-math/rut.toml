@@ -1,2 +1,0 @@
-name = "std:math"
-entry.type = "./math.d.rut"

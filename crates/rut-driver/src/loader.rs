@@ -1,146 +1,27 @@
 //! Filesystem loader — read a module directory (`rut.toml`) or a packed
 //! `.rutbundle` (RFC 0038) into a [`Session`].
 //!
-//! One module is one directory. Its entry file may `use { .. } from
-//! "./sibling.rut"`: those are *intra*-module includes (one scope), so the
-//! loader inlines them into a single compilation unit. `use ... from
-//! "scope:name"` stays an inter-module use, resolved by the `Session`.
-//! A `.rutbundle` is the same contract zipped: `rut.toml` plus the rut
-//! sources, includes inlined from archive entries instead of the
-//! filesystem.
+//! One module is one directory with ONE entry file: its `use` statements
+//! are all inter-module paths (`use <pkg>::{A, B};`), resolved by the
+//! `Session` — there is no intra-module include form. A `.rutbundle` is
+//! the same contract zipped: `rut.toml` plus the rut entry source.
 //!
 //! The `Session` itself does no I/O (wasm hosts mount in memory); this
 //! native helper is the counterpart that reads files.
 
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::bundle::{parse_bundle, write_bundle};
 use crate::session::{parse_manifest, Entry, Module, Session};
 
-/// One chunk of a source scan: a plain line, or a use statement
-/// buffered whole (it may span lines — the multi-line form must be
-/// treated exactly like the single-line one).
-enum Chunk<'a> {
-    Line(&'a str),
-    Use(String),
-}
-
-fn chunks(src: &str) -> Vec<Chunk<'_>> {
-    let mut out = Vec::new();
-    let mut lines = src.lines().peekable();
-    while let Some(line) = lines.next() {
-        if line.trim_start().starts_with("use") {
-            let mut stmt = vec![line];
-            while !stmt.last().map(|l| l.trim_end().ends_with(';')).unwrap_or(true) {
-                match lines.next() {
-                    Some(l) => stmt.push(l),
-                    None => break,
-                }
-            }
-            out.push(Chunk::Use(stmt.join("\n")));
-        } else {
-            out.push(Chunk::Line(line));
-        }
-    }
-    out
-}
-
-/// The relative specifier of a `use ... from "./x.rut"` statement, if
-/// any.
-fn relative_use(stmt: &str) -> Option<String> {
-    let t = stmt.trim_start();
-    if !t.starts_with("use") {
-        return None;
-    }
-    let after = t.split_once("from")?.1.trim_start();
-    let spec = after.strip_prefix('"')?.split('"').next()?;
-    if spec.starts_with("./") || spec.starts_with("../") {
-        Some(spec.to_string())
-    } else {
-        None
-    }
-}
-
-/// Expand one source through `resolve`: a relative use is replaced by
-/// its expanded child (`Ok(None)` = already included — dropped, matching
-/// the include-once rule); anything else is kept verbatim.
-fn expand_scan(
-    src: &str,
-    resolve: &mut impl FnMut(&str) -> Result<Option<String>, String>,
-) -> Result<String, String> {
-    let mut out = String::new();
-    for chunk in chunks(src) {
-        match chunk {
-            Chunk::Line(line) => {
-                out.push_str(line);
-                out.push('\n');
-            }
-            Chunk::Use(whole) => {
-                let child = match relative_use(&whole) {
-                    Some(rel) => resolve(&rel)?,
-                    None => None,
-                };
-                match child {
-                    Some(expanded) => out.push_str(&expanded),
-                    None => out.push_str(&whole),
-                }
-                out.push('\n');
-            }
-        }
-    }
-    Ok(out)
-}
-
-/// Filesystem include expansion: read `path`, inline its relative uses
-/// recursively (each file's own directory is the include root, so
-/// `../` reaches sibling directories).
-fn expand_fs(path: &Path, seen: &mut HashSet<PathBuf>) -> Result<String, String> {
-    let src = std::fs::read_to_string(path)
-        .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-    expand_scan(&src, &mut |rel| {
-        let child = dir.join(rel);
-        if !seen.insert(child.clone()) {
-            return Ok(None);
-        }
-        Ok(Some(expand_fs(&child, seen)?))
-    })
-}
-
-/// Read `path` and inline its relative uses (`./x.rut`) recursively, so a
-/// multi-file module becomes one compilation unit (one interner, one scope).
-pub fn expand_module_source(path: &Path) -> Result<String, String> {
-    let mut seen = HashSet::new();
-    seen.insert(path.to_path_buf());
-    expand_fs(path, &mut seen)
-}
-
-/// Bundle include normalization: `./x.rut` → `x.rut`; anything reaching
+/// Bundle entry normalization: `./x.rut` → `x.rut`; anything reaching
 /// outside the archive root is refused (v1 bundles are flat).
 fn bundle_key(rel: &str) -> Result<String, String> {
     let key = rel.strip_prefix("./").unwrap_or(rel);
     if key.starts_with('/') || key.split('/').any(|p| p == "..") {
-        return Err(format!("bundle include `{rel}` escapes the bundle root"));
+        return Err(format!("bundle entry `{rel}` escapes the bundle root"));
     }
     Ok(key.to_string())
-}
-
-/// Bundle include expansion: same include-once rule, but entries come from
-/// the archive, not the filesystem.
-fn expand_bundle(
-    entries: &[(String, Vec<u8>)],
-    key: &str,
-    seen: &mut HashSet<String>,
-) -> Result<String, String> {
-    let src = read_entry(entries, key)?;
-    expand_scan(&src, &mut |rel| {
-        let child = bundle_key(rel)?;
-        if !seen.insert(child.clone()) {
-            return Ok(None);
-        }
-        Ok(Some(expand_bundle(entries, &child, seen)?))
-    })
 }
 
 fn read_entry(entries: &[(String, Vec<u8>)], key: &str) -> Result<String, String> {
@@ -149,6 +30,12 @@ fn read_entry(entries: &[(String, Vec<u8>)], key: &str) -> Result<String, String
             .map_err(|_| format!("bundle entry `{key}` is not UTF-8")),
         None => Err(format!("bundle has no entry `{key}`")),
     }
+}
+
+/// Read one module source file. One file is one module unit — there is
+/// no include form to expand (RFC 0035 §1: use paths are inter-module).
+pub fn load_module_source(path: &Path) -> Result<String, String> {
+    std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))
 }
 
 /// Mount a directory's consumer manifest: its own module (if named) and every
@@ -189,7 +76,7 @@ pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
     Ok((session, root))
 }
 
-/// Mount a `.rutbundle` file (RFC 0038): one module, its sources read from
+/// Mount a `.rutbundle` file (RFC 0038): one module, its source read from
 /// the archive. The manifest's `format`/`format_version` are checked
 /// before anything else is read — an unknown layout is refused, never
 /// guessed at.
@@ -242,9 +129,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         .as_ref()
         .ok_or_else(|| format!("{}: rut.toml has no entry.lib", origin.display()))?;
     let key = bundle_key(rel)?;
-    let mut seen = HashSet::new();
-    seen.insert(key.clone());
-    let src = expand_bundle(&entries, &key, &mut seen)?;
+    let src = read_entry(&entries, &key)?;
 
     let mut session = Session::new();
     session
@@ -273,8 +158,8 @@ pub fn load_path_session(path: &Path) -> Result<(Session, String), String> {
 }
 
 /// Pack a module directory into a deterministic `.rutbundle` (RFC 0038 §3):
-/// `rut.toml` first, then the entry source and every transitive relative
-/// include, in include order. Same input directory ⇒ byte-identical bundle.
+/// `rut.toml` first, then the entry source. Same input directory ⇒
+/// byte-identical bundle.
 pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     let text = std::fs::read_to_string(dir.join("rut.toml")).map_err(|e| e.to_string())?;
     let manifest = parse_manifest(&text).map_err(|e| e.to_string())?;
@@ -307,34 +192,12 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
         .lib
         .as_ref()
         .ok_or_else(|| format!("module in {} has no entry", dir.display()))?;
-    let mut entries: Vec<(String, Vec<u8>)> = vec![("rut.toml".to_string(), text.into_bytes())];
-    collect_includes(dir, rel, &mut HashSet::new(), &mut entries)?;
+    let key = bundle_key(rel)?;
+    let src = std::fs::read_to_string(dir.join(rel))
+        .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
+    let entries: Vec<(String, Vec<u8>)> =
+        vec![("rut.toml".to_string(), text.into_bytes()), (key, src.into_bytes())];
     write_bundle(&entries).map_err(|e| e.to_string())
-}
-
-/// Collect `rel` and its transitive relative includes, include-once, in
-/// include order.
-fn collect_includes(
-    dir: &Path,
-    rel: &str,
-    seen: &mut HashSet<String>,
-    out: &mut Vec<(String, Vec<u8>)>,
-) -> Result<(), String> {
-    if !seen.insert(rel.to_string()) {
-        return Ok(());
-    }
-    let path = dir.join(rel);
-    let src =
-        std::fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    out.push((bundle_key(rel)?, src.clone().into_bytes()));
-    for chunk in chunks(&src) {
-        if let Chunk::Use(stmt) = chunk {
-            if let Some(r) = relative_use(&stmt) {
-                collect_includes(dir, &r, seen, out)?;
-            }
-        }
-    }
-    Ok(())
 }
 
 fn load_entry(dir: &Path, entry: &Entry) -> Result<String, String> {
@@ -344,9 +207,7 @@ fn load_entry(dir: &Path, entry: &Entry) -> Result<String, String> {
         .or(entry.type_path.as_ref())
         .or(entry.ir.as_ref())
         .ok_or_else(|| format!("module in {} has no entry", dir.display()))?;
-    let mut seen = HashSet::new();
-    seen.insert(dir.join(rel));
-    expand_fs(&dir.join(rel), &mut seen)
+    load_module_source(&dir.join(rel))
 }
 
 /// Read a directory's `rut.toml` graph and compile it to one linked program.

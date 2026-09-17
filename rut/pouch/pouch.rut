@@ -1,16 +1,25 @@
-// std:collection::vec — Vec<T>, the growable sequence (RFC 0005/0028),
-// implemented in rut over the non-growable heap array primitive:
+// pouch — the growable sequence package (RFC 0028): `Vec<T>` in rut over
+// the non-growable heap array primitive, plus the `Hashable` contract
+// (RFC 0025/0026) that Map/Set keys must satisfy.
 //
 //   Array<T>(n)      allocate n slots (today's ArrNew)
 //   a[i] get/set     (today's ArrGet / ArrSet)
 //   a.len()          the allocated length — the capacity
 //
 // Sequence syntax (`v[i]`, `v[i] = x`, `for (x of v)`) lowers through the
-// builtin `Iter` contract (RFC 0012), which resolves the `buf`/`len` backing
-// fields directly — never a per-element method call (RFC 0032 §1.1).
+// builtin `Iterator` contract (RFC 0012), which resolves the `buf`/`len`
+// backing fields directly — never a per-element method call (RFC 0032 §1.1).
 // The builtin `Vec` natives are gone; this class is the sequence type.
 
-use { Array } from "std:core";
+use core::{Array};
+
+// ---- Hashable — hashing and key comparison are ONE contract
+// (RFC 0025/0026, RFC 0028): the trait Map/Set keys must satisfy.
+
+pub trait Hashable {
+    fn hash(self) -> u64;
+    fn eq(self, other: Self) -> bool;
+}
 
 // The type body is FIELDS ONLY (RFC 0012) — every method lives in the
 // inherent `impl Vec<T>` block below, the type's module only.

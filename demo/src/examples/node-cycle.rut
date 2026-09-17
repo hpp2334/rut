@@ -2,8 +2,8 @@
 // `a -> b -> a` never reaches refcount 0. Break back-pointers with a
 // pointer field — `next: *Node` — the classic reason `*T` exists.
 
-use { make_ptr } from "std:core";
-use { Logger } from "std:log";
+use core::{ make_ptr };
+use ink::{ Logger };
 
 class Node {                              // initializer covers `next`
     next: *Node = nil;                    // a pointer slot — recursive types

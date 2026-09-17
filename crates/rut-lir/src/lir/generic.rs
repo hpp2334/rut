@@ -97,7 +97,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(())
             }
             TypeKind::TyPath { segs, .. } => {
-                // builtin containers: unify element-wise — the std:core
+                // builtin containers: unify element-wise — the core
                 // names, gated on the use statement like everywhere else (an
                 // unused name falls through to `resolve_type`, which
                 // reports it as not in scope)

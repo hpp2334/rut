@@ -48,12 +48,9 @@ fn usage() {
 }
 
 fn load(path: &str) -> String {
-    // one file is one module: its `use { .. } from "./sibling.rut"`
-    // lines are intra-module includes, inlined exactly as the loader
-    // does for mounted modules (RFC 0035 §1) — so `rut run main.rut`
-    // sees the whole multi-file module
-    let expanded = rut_driver::expand_module_source(std::path::Path::new(path));
-    match expanded {
+    // one file is one module unit — there is no include form (RFC 0035 §1:
+    // use paths are inter-module), so loading is a plain read
+    match rut_driver::load_module_source(std::path::Path::new(path)) {
         Ok(src) => src,
         Err(e) => {
             eprintln!("cannot read {path}: {e}");
@@ -140,9 +137,9 @@ fn run(path: &str, fuel: Option<u64>) {
             std::process::exit(1);
         }
     };
-    // the host half of `std:log` (RFC 0022/0026)
+    // the host half of `ink` (RFC 0022/0026)
     rut_std::logger::install_std_log(&mut vm, |msg| println!("{msg}"));
-    // the host half of `std:math` (RFC 0028)
+    // the host half of `calc` (RFC 0028)
     rut_std::math::install_std_math(&mut vm);
     match vm.call("main", &[]) {
         Ok(_) => {}

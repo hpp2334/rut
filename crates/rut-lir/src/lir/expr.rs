@@ -452,7 +452,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let _reg = self.load_const_let(init, ty, expected, sp)?;
                 return Ok(ty);
             }
-            // used constant (native modules: `std:math::PI`)
+            // used constant (native modules: `calc::PI`)
             if let Some((ty, bits)) = self.ctx.extern_const(name) {
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
