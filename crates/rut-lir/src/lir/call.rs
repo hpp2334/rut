@@ -84,7 +84,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
-        let dst = if ret == TY_UNIT { None } else { Some(self.new_reg(ret)) };
+        let dst = if ret == TY_NIL { None } else { Some(self.new_reg(ret)) };
         self.emit(Op::CallFn { fval: freg, args: aregs, dst }, sp.lo);
         Ok(ret)
     }
@@ -154,7 +154,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let cleanup = self.last_reg;
                 self.emit(Op::OnDrop { obj, cleanup }, sp.lo);
-                return Ok(TY_UNIT);
+                return Ok(TY_NIL);
             }
             "downcast" if core_fn => {
                 // prelude body: tidof + icmp + br + guarded unbox (RFC 0032 §1.1)
@@ -215,7 +215,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, "panic takes a `str`");
                 }
                 self.emit(Op::Panic { msg: self.last_reg }, sp.lo);
-                return Ok(TY_UNIT);
+                return Ok(TY_NIL);
             }
             "assert" if core_fn => {
                 if args.is_empty() || args.len() > 2 {
@@ -237,7 +237,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None
                 };
                 self.emit(Op::Assert { cond, msg }, sp.lo);
-                return Ok(TY_UNIT);
+                return Ok(TY_NIL);
             }
             "print" => {
                 self.ctx.err(sp, "`print` was removed — import a logger (`import { log } from \"std:log\"`)");
@@ -351,7 +351,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 aregs.push(self.clone_arg(self.last_reg, ef.params[i], sp.lo));
             }
-            let dst = if ef.ret == TY_UNIT { None } else { Some(self.new_reg(ef.ret)) };
+            let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
             self.emit(Op::Call { func: ef.func, args: aregs, dst }, sp.lo);
             return Ok(ef.ret);
         }
@@ -694,13 +694,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 ));
             }
         }
-        let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_UNIT);
+        let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_NIL);
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Free(name),
             subst,
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         self.emit(Op::Call { func: fid, args: aregs, dst }, sp.lo);
         Ok(ret_ty)
     }
@@ -741,7 +741,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 _ => ptys.push(TY_I32),
             }
         }
-        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
+        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
         self.self_ty = saved_self;
         self.subst = saved_subst;
         if args.len() != ptys.len() {
@@ -764,7 +764,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             subst: class_subst,
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         // class method: no receiver —plain Call
         self.emit(Op::Call { func: fid, args: aregs, dst }, sp.lo);
         Ok(ret_ty)
@@ -1107,7 +1107,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 _ => ptys.push(TY_I32),
             }
         }
-        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_UNIT);
+        let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
         self.self_ty = saved_self;
         self.subst = saved_subst;
         if args.len() != ptys.len() {
@@ -1139,7 +1139,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             subst: class_subst,
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         self.emit(Op::CallM { func: fid, recv: rreg, args: aregs, dst }, sp.lo);
         Ok(ret_ty)
     }
@@ -1268,7 +1268,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
-        let dst = if ret_ty == TY_UNIT { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         // trait-declared members NEVER devirtualize (RFC 0012 §1)
         self.emit(Op::CallI { slot, recv: rreg, args: aregs, dst }, sp.lo);
         Ok(ret_ty)

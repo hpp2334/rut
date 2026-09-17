@@ -67,9 +67,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `(a, b, ..)` (RFC 0007): a record with numeric fields.
                 // `()` is the unit value.
                 if elems.is_empty() {
-                    let reg = self.new_reg(TY_UNIT);
+                    let reg = self.new_reg(TY_NIL);
                     self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);
-                    return Ok(TY_UNIT);
+                    return Ok(TY_NIL);
                 }
                 let mut etys = Vec::new();
                 let mut vals = Vec::new();
@@ -156,7 +156,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Binary { op, lhs, rhs } => self.compile_binary(node, op, lhs, rhs, expected, sp),
             ExprKind::Assign { op, target, value } => {
                 self.compile_assign(node, op, target, value, sp)?;
-                Ok(TY_UNIT)
+                Ok(TY_NIL)
             }
             ExprKind::Lambda { params, ret, body } => {
                 self.compile_lambda(node.id(), params, ret, body, expected, sp)
@@ -410,7 +410,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // The null slot IS zero bits (Slot::null).
                 let ty = match expected {
                     Some(e) if matches!(self.ctx.types.kind(e), TyKind::Ptr { .. }) => e,
-                    _ => self.ctx.mk_ptr(TY_UNIT),
+                    _ => self.ctx.mk_ptr(TY_NIL),
                 };
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);

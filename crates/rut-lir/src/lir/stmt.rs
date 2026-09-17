@@ -204,7 +204,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.emit(Op::Ret { val: Some(self.last_reg) }, sp.lo);
                     }
                     None => {
-                        if self.ret_ty != TY_UNIT {
+                        if self.ret_ty != TY_NIL {
                             self.ctx.err(sp, "missing return value");
                         }
                         self.emit(Op::Ret { val: None }, sp.lo);
@@ -449,7 +449,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             e
         } else {
             // first expression-arm's type
-            let mut t = TY_UNIT;
+            let mut t = TY_NIL;
             for a in arms {
                 if let ArmKind::WhenArm { body, .. } = self.ctx.ast.arm(*a) {
                     t = self.expr_type_hint(*body);
@@ -458,7 +458,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             t
         };
-        let result_reg = if result_ty != TY_UNIT {
+        let result_reg = if result_ty != TY_NIL {
             Some(self.new_reg(result_ty))
         } else {
             None
@@ -488,13 +488,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // RFC 0008 §1) — blocks aren't value expressions in this
             // build, so compile them as scoped statement blocks
             let body_is_block = matches!(self.ctx.ast.expr(*body), ExprKind::Block { .. });
-            let bt = if body_is_block && result_ty == TY_UNIT {
+            let bt = if body_is_block && result_ty == TY_NIL {
                 self.compile_block(*body)?;
-                TY_UNIT
+                TY_NIL
             } else {
-                self.compile_expr(*body, if result_ty != TY_UNIT { Some(result_ty) } else { None })?
+                self.compile_expr(*body, if result_ty != TY_NIL { Some(result_ty) } else { None })?
             };
-            if result_ty != TY_UNIT {
+            if result_ty != TY_NIL {
                 if bt != result_ty {
                     self.ctx.err(self.ctx.ast.span(body.id()), format!(
                         "`when` arms must agree: `{}` vs `{}`",
@@ -523,7 +523,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             Ok(result_ty)
         } else {
-            Ok(TY_UNIT)
+            Ok(TY_NIL)
         }
     }
 
@@ -535,9 +535,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Lit(Lit::Float(_, s)) => s.map(float_suffix_ty).unwrap_or(TY_F32),
             ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => TY_STR,
             ExprKind::Lit(Lit::Bool(_)) => TY_BOOL,
-            ExprKind::Block { .. } => TY_UNIT,
+            ExprKind::Block { .. } => TY_NIL,
             ExprKind::Struct { ty, .. } => self.resolve_type_now(*ty),
-            _ => TY_UNIT,
+            _ => TY_NIL,
         }
     }
 

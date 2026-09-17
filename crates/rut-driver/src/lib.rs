@@ -8,7 +8,7 @@ use rut_ast::dump;
 use rut_parser::{parse, Mode};
 use rut_core::binary::{encode, Program};
 use rut_core::ops::Op;
-use rut_core::types::{TyKind, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_UNIT};
+use rut_core::types::{TyKind, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_NIL};
 
 pub mod session;
 pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
@@ -403,7 +403,7 @@ pub fn mount_std_log(session: &mut Session) {
         Module {
             host_funcs: vec![
                 ("create_logger".to_string(), vec![TY_STR], TY_OPAQUE),
-                ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_UNIT),
+                ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_NIL),
             ],
             ..Default::default()
         },
@@ -595,5 +595,5 @@ fn op_str(op: &Op) -> String {
 /// Unused-kind helper kept for dump parity.
 #[allow(dead_code)]
 fn is_cell(kind: &TyKind) -> bool {
-    !matches!(kind, TyKind::Unit | TyKind::Prim(_) | TyKind::Fn { .. })
+    !matches!(kind, TyKind::Nil | TyKind::Prim(_) | TyKind::Fn { .. })
 }

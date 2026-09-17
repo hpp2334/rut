@@ -241,7 +241,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn zero_value(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<u16> {
         let reg = self.new_reg(ty);
         match self.ctx.types.kind(ty).clone() {
-            TyKind::Prim(_) | TyKind::Unit | TyKind::Ptr { .. } => {
+            TyKind::Prim(_) | TyKind::Nil | TyKind::Ptr { .. } => {
                 self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);
             }
             TyKind::Str => {
@@ -374,7 +374,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let (eptys, eret) = match expected.map(|e| self.ctx.types.kind(e).clone()) {
             Some(TyKind::Fn { params, ret }) => (params, ret),
-            _ => (Vec::new(), TY_UNIT),
+            _ => (Vec::new(), TY_NIL),
         };
         // param types: annotations first, then the expected fn type
         let mut param_tys = Vec::new();

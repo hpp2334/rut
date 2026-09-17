@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rut_core::types::{TY_OPAQUE, TY_STR, TY_UNIT};
+use rut_core::types::{TY_OPAQUE, TY_STR, TY_NIL};
 use rut_vm::interp::{HostHooks, Limits, Vm};
 use rut_vm::{OpaqueBox, Trap, TrapKind, Value};
 
@@ -55,8 +55,8 @@ impl Plugin {
                 rut_driver::Module {
                     spec: "plugin:server".into(),
                     host_funcs: vec![
-                        ("subscribe".into(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_UNIT),
-                        ("emit".into(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_UNIT),
+                        ("subscribe".into(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL),
+                        ("emit".into(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL),
                     ],
                     ..Default::default()
                 },
@@ -153,7 +153,7 @@ fn install(vm: &mut Vm) {
             return Err(Trap::new(TrapKind::Invalid, "subscribe: str handler"));
         };
         bus.with_mut(|b| b.subscriptions.insert(topic.clone(), handler.clone()))?;
-        Ok(Value::Unit)
+        Ok(Value::Nil)
     });
 
     vm.register_host_fn("plugin:server::emit", |vm, args| {
@@ -173,6 +173,6 @@ fn install(vm: &mut Vm) {
             b.renders += 1;
             Ok(())
         })??;
-        Ok(Value::Unit)
+        Ok(Value::Nil)
     });
 }

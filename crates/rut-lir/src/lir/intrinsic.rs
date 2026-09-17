@@ -114,7 +114,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             aregs.push(self.last_reg);
         }
-        let dst = if ef.ret == TY_UNIT { None } else { Some(self.new_reg(ef.ret)) };
+        let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
         self.emit(Op::Call { func: ef.func, args: aregs, dst }, sp.lo);
         Ok(ef.ret)
     }

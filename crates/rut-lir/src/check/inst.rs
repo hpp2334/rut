@@ -21,7 +21,7 @@ impl<'a> Ctx<'a> {
         self.funcs.push(FuncCode {
             name: self.inst_name(&inst),
             params: vec![],
-            ret: TY_UNIT,
+            ret: TY_NIL,
             is_method: false,
             n_captures: 0,
             regs: vec![],

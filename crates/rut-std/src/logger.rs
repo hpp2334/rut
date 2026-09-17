@@ -35,13 +35,13 @@ where
         if let Ok(msg) = vm.arg_bytes(2) {
             if let Ok(msg) = std::str::from_utf8(msg) {
                 (sink.borrow_mut())(msg);
-                return Ok(Value::Unit);
+                return Ok(Value::Nil);
             }
         }
         // fall back to the copied crossing (non-UTF-8 or missing arg)
         if let Some(Value::Str(msg)) = args.get(2) {
             (sink.borrow_mut())(msg);
         }
-        Ok(Value::Unit)
+        Ok(Value::Nil)
     });
 }

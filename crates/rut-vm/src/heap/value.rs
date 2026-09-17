@@ -6,7 +6,7 @@ use super::*;
 
 #[derive(Clone)]
 pub enum Value {
-    Unit,
+    Nil,
     I64(i64),
     F64(f64),
     Bool(bool),
@@ -24,7 +24,7 @@ pub enum Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Value::Unit, Value::Unit) => true,
+            (Value::Nil, Value::Nil) => true,
             (Value::I64(a), Value::I64(b)) => a == b,
             (Value::F64(a), Value::F64(b)) => a == b,
             (Value::Bool(a), Value::Bool(b)) => a == b,
@@ -42,7 +42,7 @@ impl PartialEq for Value {
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Unit => write!(f, "Unit"),
+            Value::Nil => write!(f, "Nil"),
             Value::I64(v) => write!(f, "I64({v})"),
             Value::F64(v) => write!(f, "F64({v})"),
             Value::Bool(v) => write!(f, "Bool({v})"),
@@ -59,7 +59,7 @@ impl Value {
     /// Boundary diagnostics: what a `Value` is, in words (`an Opaque`, ...).
     pub fn kind_name(&self) -> &'static str {
         match self {
-            Value::Unit => "unit",
+            Value::Nil => "unit",
             Value::I64(_) => "an integer",
             Value::F64(_) => "a float",
             Value::Bool(_) => "a bool",

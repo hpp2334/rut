@@ -79,7 +79,7 @@ fn session() -> rut_vm::interp::Vm {
                 spec: "plugin:boxes".into(),
                 host_funcs: vec![
                     ty("store_new"),
-                    ("store_set".into(), vec![rut_core::types::TY_OPAQUE, rut_core::types::TY_STR, rut_core::types::TY_I64], rut_core::types::TY_UNIT),
+                    ("store_set".into(), vec![rut_core::types::TY_OPAQUE, rut_core::types::TY_STR, rut_core::types::TY_I64], rut_core::types::TY_NIL),
                     ("store_get".into(), vec![rut_core::types::TY_OPAQUE, rut_core::types::TY_STR], rut_core::types::TY_I64),
                     ("store_size".into(), vec![rut_core::types::TY_OPAQUE], rut_core::types::TY_I64),
                 ],
@@ -123,7 +123,7 @@ fn install(vm: &mut rut_vm::interp::Vm, dropped: &Rc<Cell<bool>>) {
         b.with_mut(|s| {
             s.map.insert(k.clone(), Value::I64(v));
         })?;
-        Ok(Value::Unit)
+        Ok(Value::Nil)
     });
     vm.register_host_fn("plugin:boxes::store_get", |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;

@@ -219,7 +219,7 @@ fn boot_len() -> usize {
 /// Remap the `TypeId`s inside a type descriptor.
 fn remap_kind(kind: &TyKind, map: &impl Fn(TypeId) -> TypeId) -> TyKind {
     match kind {
-        TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => {
+        TyKind::Nil | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => {
             kind.clone()
         }
         TyKind::Array { elem } => TyKind::Array { elem: map(*elem) },

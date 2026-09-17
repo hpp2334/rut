@@ -160,7 +160,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             code: Vec::new(),
             spans: Vec::new(),
             locals: Vec::new(),
-            ret_ty: TY_UNIT,
+            ret_ty: TY_NIL,
             self_ty,
             subst: inst.subst.clone(),
             current_class: class_name,
@@ -179,7 +179,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut param_tys: Vec<TypeId> = Vec::new();
         for p in &params {
             let ty = match c.ctx.ast.param(*p) {
-                MemberKind::SelfParam(_) => self_ty.unwrap_or(TY_UNIT),
+                MemberKind::SelfParam(_) => self_ty.unwrap_or(TY_NIL),
                 MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
                 MemberKind::Param(ParamData { ty: None, name, .. }) => {
                     c.ctx.err(
@@ -196,20 +196,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             param_tys.push(ty);
         }
         // ret
-        let ret_ty = ret.map(|r| c.resolve_type_now(r)).unwrap_or(TY_UNIT);
+        let ret_ty = ret.map(|r| c.resolve_type_now(r)).unwrap_or(TY_NIL);
         c.ret_ty = ret_ty;
         // bind params as locals
         for (i, p) in params.iter().enumerate() {
             match c.ctx.ast.param(*p) {
                 MemberKind::SelfParam(SelfParamData { is_mut }) => {
-                    let reg = c.new_reg(self_ty.unwrap_or(TY_UNIT));
+                    let reg = c.new_reg(self_ty.unwrap_or(TY_NIL));
                     // bind `self` —the ident exists iff the body spells it
                     // (the parser interns it on `self` paths)
                     if let Some(sid) = c.ctx.lookup_name("self") {
                         c.locals.push(Local {
                             name: sid,
                             reg,
-                            ty: self_ty.unwrap_or(TY_UNIT),
+                            ty: self_ty.unwrap_or(TY_NIL),
                             is_mut: *is_mut,
                             loop_var: false,
                         });
@@ -271,7 +271,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             code: Vec::new(),
             spans: Vec::new(),
             locals: Vec::new(),
-            ret_ty: TY_UNIT,
+            ret_ty: TY_NIL,
             self_ty: None,
             subst: inst.subst.clone(),
             current_class: None,
@@ -301,7 +301,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             };
             param_tys.push(ty);
         }
-        let ret_ty = ret.map(|r| c.resolve_type_now(r)).or(saved.as_ref().map(|s| s.1)).unwrap_or(TY_UNIT);
+        let ret_ty = ret.map(|r| c.resolve_type_now(r)).or(saved.as_ref().map(|s| s.1)).unwrap_or(TY_NIL);
         c.ret_ty = ret_ty;
         // bind params then captures
         for (i, p) in params.iter().enumerate() {

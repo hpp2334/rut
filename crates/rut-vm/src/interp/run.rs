@@ -31,7 +31,7 @@ impl Vm {
     /// `Some(value)` if this was the root `ret`.
     pub(super) fn step_one(&mut self) -> Result<Option<Value>, Trap> {
         if !self.running {
-            return Ok(Some(Value::Unit));
+            return Ok(Some(Value::Nil));
         }
         let prog = Rc::clone(&self.prog);
         let Some(op) = prog.funcs[self.cur_func as usize]

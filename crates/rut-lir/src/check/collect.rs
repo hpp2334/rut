@@ -256,7 +256,7 @@ impl<'a> Ctx<'a> {
             let mut ptys = Vec::new();
             for p in &md.params {
                 match self.ast.param(*p) {
-                    MemberKind::SelfParam(_) => ptys.push(TY_UNIT), // placeholder: Self resolved at impl
+                    MemberKind::SelfParam(_) => ptys.push(TY_NIL), // placeholder: Self resolved at impl
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
                         ptys.push(self.resolve_trait_sig_ty(*t, id, &[]));
                     }
@@ -274,13 +274,13 @@ impl<'a> Ctx<'a> {
         // instance methods)
         let mut desc = TraitDesc { name: self.name(name).to_string(), methods: vec![] };
         for (mname, ptys, rty) in tms {
-            if ptys.first() == Some(&TY_UNIT) {
+            if ptys.first() == Some(&TY_NIL) {
                 // replace the self placeholder: params exclude self in the
                 // binary desc; the compiler passes self as arg0
                 desc.methods.push(rut_core::binary::TraitMethod {
                     name: mname,
                     params: ptys[1..].to_vec(),
-                    ret: rty.unwrap_or(TY_UNIT),
+                    ret: rty.unwrap_or(TY_NIL),
                 });
             } else {
                 self.err(sp, format!("interface method `{mname}` must take `self` (RFC 0012 §2)"));
@@ -336,7 +336,7 @@ impl<'a> Ctx<'a> {
             let mut ptys = Vec::new();
             for p in &md.params {
                 match self.ast.param(*p) {
-                    MemberKind::SelfParam(_) => ptys.push(TY_UNIT),
+                    MemberKind::SelfParam(_) => ptys.push(TY_NIL),
                     MemberKind::Param(ParamData { ty: Some(t), .. }) => {
                         ptys.push(self.resolve_trait_sig_ty(*t, id, &subst));
                     }
@@ -344,11 +344,11 @@ impl<'a> Ctx<'a> {
                 }
             }
             let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &subst));
-            if ptys.first() == Some(&TY_UNIT) {
+            if ptys.first() == Some(&TY_NIL) {
                 desc.methods.push(rut_core::binary::TraitMethod {
                     name: self.name(md.name).to_string(),
                     params: ptys[1..].to_vec(),
-                    ret: rty.unwrap_or(TY_UNIT),
+                    ret: rty.unwrap_or(TY_NIL),
                 });
             }
         }

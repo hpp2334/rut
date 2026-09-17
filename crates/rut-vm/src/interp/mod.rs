@@ -198,7 +198,7 @@ impl Vm {
             .collect();
         let type_repr: Vec<Repr> = prog.types.types.iter().map(|t| match &t.kind {
             TyKind::Prim(p) => Repr::Prim(*p),
-            TyKind::Unit | TyKind::Fn { .. } => Repr::Any,
+            TyKind::Nil | TyKind::Fn { .. } => Repr::Any,
             _ => Repr::Ref,
         }).collect();
         // precompute the threaded dispatch tags (one per op)
@@ -412,7 +412,7 @@ impl Vm {
             return Err(format!("internal: untyped parameter"));
         };
         Ok(match (v, self.prog.types.kind(ty).clone()) {
-            (Value::Unit, TyKind::Unit) | (Value::Unit, TyKind::Prim(_)) => Slot::int(0),
+            (Value::Nil, TyKind::Nil) | (Value::Nil, TyKind::Prim(_)) => Slot::int(0),
             (Value::I64(n), TyKind::Prim(p)) => {
                 if !fits(*n, p) {
                     return Err(format!("`{n}` does not fit `{}`", self.prog.types.name(ty)));

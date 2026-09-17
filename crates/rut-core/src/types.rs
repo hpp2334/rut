@@ -56,7 +56,7 @@ impl PrimTy {
 /// type at compile time and baked into ops (RFC 0032 "the full table is
 /// mechanical"). `Prim` carries the scalar machine kind, `Ref` marks a cell
 /// handle needing retain/release, and `Any` is the conservative fallback
-/// (untyped registers, unit, fn values).
+/// (untyped registers, nil, fn values).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Repr {
     Prim(PrimTy),
@@ -100,7 +100,7 @@ pub struct FieldInfo {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TyKind {
-    Unit,
+    Nil,
     Prim(PrimTy),
     /// immutable UTF-8 string cell
     Str,
@@ -147,7 +147,7 @@ pub struct TypeTable {
     pub packed: bool,
 }
 
-pub const TY_UNIT: TypeId = 0;
+pub const TY_NIL: TypeId = 0;
 pub const TY_U8: TypeId = 1;
 pub const TY_U16: TypeId = 2;
 pub const TY_U32: TypeId = 3;
@@ -190,7 +190,7 @@ impl TypeTable {
                 kind,
             });
         };
-        push("unit", TyKind::Unit);
+        push("unit", TyKind::Nil);
         push("u8", TyKind::Prim(PrimTy::U8));
         push("u16", TyKind::Prim(PrimTy::U16));
         push("u32", TyKind::Prim(PrimTy::U32));
@@ -317,7 +317,7 @@ impl TypeTable {
     pub fn is_ref(&self, id: TypeId) -> bool {
         !matches!(
             self.kind(id),
-            TyKind::Unit | TyKind::Prim(_) | TyKind::Fn { .. }
+            TyKind::Nil | TyKind::Prim(_) | TyKind::Fn { .. }
         )
     }
 
@@ -336,9 +336,9 @@ impl TypeTable {
     pub fn repr_of(&self, id: TypeId) -> Repr {
         match self.kind(id) {
             TyKind::Prim(p) => Repr::Prim(*p),
-            // unit is a zero slot; fn values are closure cells the compiler
+            // nil is a zero slot; fn values are closure cells the compiler
             // owns (v1 captures by value), so neither takes RC traffic
-            TyKind::Unit | TyKind::Fn { .. } => Repr::Any,
+            TyKind::Nil | TyKind::Fn { .. } => Repr::Any,
             _ => Repr::Ref,
         }
     }
@@ -349,7 +349,7 @@ impl TypeTable {
     /// `bytes`, `Opaque`, and `Option`/`Result` over those.
     pub fn crosses_boundary(&self, id: TypeId) -> bool {
         match self.kind(id) {
-            TyKind::Unit | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
+            TyKind::Nil | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
             // tuples cross field-by-field (RFC 0007 v1.1): `(bytes, str)`
             // is the error convention; named records still do not cross
             TyKind::Data { fields } => fields.iter().all(|f| self.crosses_boundary(f.ty)),

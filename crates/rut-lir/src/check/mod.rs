@@ -451,7 +451,7 @@ impl<'a> Ctx<'a> {
                     ptys.push(self.resolve_type(*t, &env));
                 }
             }
-            let ret = md.ret.map(|r| self.resolve_type(r, &env)).unwrap_or(TY_UNIT);
+            let ret = md.ret.map(|r| self.resolve_type(r, &env)).unwrap_or(TY_NIL);
             if ptys != tm.params || ret != tm.ret {
                 ok = false;
                 break;
