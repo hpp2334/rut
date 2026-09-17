@@ -58,7 +58,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if lt != rt_ {
             self.ctx.err(sp, format!(
                 "operands must have equal width (RFC 0004 §3): `{}` vs `{}` —convert first (RFC 0007 §1)",
-                self.ctx.types.name(lt), self.ctx.types.name(rt_)
+                self.ctx.type_name(lt), self.ctx.type_name(rt_)
             ));
             return Err(());
         }
@@ -94,7 +94,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             Lt | Gt | Le | Ge => {
                 let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
                 let Some(prim) = prim else {
-                    self.ctx.err(sp, format!("ordering comparisons need numbers —`{}` has none", self.ctx.types.name(ty)));
+                    self.ctx.err(sp, format!("ordering comparisons need numbers —`{}` has none", self.ctx.type_name(ty)));
                     return Err(());
                 };
                 let cmp = match op {
@@ -110,7 +110,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             Add | Sub | Mul | Div | Mod => {
                 let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
                 let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
-                    self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.types.name(ty)));
+                    self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.type_name(ty)));
                     return Err(());
                 };
                 let aop = match op {
@@ -127,7 +127,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             BitAnd | BitOr | BitXor | Shl | Shr => {
                 let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
                 let Some(prim) = prim.filter(|p| p.is_int()) else {
-                    self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.types.name(ty)));
+                    self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.type_name(ty)));
                     return Err(());
                 };
                 let bop = match op {
@@ -148,7 +148,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_shortcircuit(&mut self, op: rut_ast::ast::BinOp, lhs: NodeHandle<AnyExpr>, rhs: NodeHandle<AnyExpr>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
         let lt = self.compile_expr(lhs, Some(TY_BOOL))?;
         if lt != TY_BOOL {
-            self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.types.name(lt)));
+            self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.type_name(lt)));
         }
         let lreg = self.last_reg;
         let dst = self.new_reg(TY_BOOL);
@@ -171,7 +171,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.bind(l_rhs);
         let rt_ = self.compile_expr(rhs, Some(TY_BOOL))?;
         if rt_ != TY_BOOL {
-            self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.types.name(rt_)));
+            self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.type_name(rt_)));
         }
         self.emit(Op::Mov { dst, src: self.last_reg }, sp.lo);
         self.bind(l_end);
@@ -226,8 +226,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 self.ctx.err(sp, "field assignment through a non-record");
                                 return Err(());
                             };
-                            let Some(fidx) = fields.iter().position(|f| f.name == self.ctx.name(seg.name)) else {
-                                self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.types.name(cur_ty), self.ctx.name(seg.name)));
+                            let Some(fidx) = fields.iter().position(|f| f.name == seg.name) else {
+                                self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(cur_ty), self.ctx.name(seg.name)));
                                 return Err(());
                             };
                             let fty = fields[fidx].ty;
@@ -241,8 +241,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.err(sp, "field assignment through a non-record");
                             return Err(());
                         };
-                        let Some(fidx) = fields.iter().position(|f| f.name == self.ctx.name(last.name)) else {
-                            self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.types.name(cur_ty), self.ctx.name(last.name)));
+                        let Some(fidx) = fields.iter().position(|f| f.name == last.name) else {
+                            self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(cur_ty), self.ctx.name(last.name)));
                             return Err(());
                         };
                         let fty = fields[fidx].ty;
@@ -299,7 +299,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != l.ty {
                             self.ctx.err(sp, format!(
                                 "assignment type mismatch: `{}` vs `{}`",
-                                self.ctx.types.name(l.ty), self.ctx.types.name(t)
+                                self.ctx.type_name(l.ty), self.ctx.type_name(t)
                             ));
                         }
                         // copy-by-value (RFC 0009/0016 v1.1): the binding
@@ -313,7 +313,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != l.ty {
                             self.ctx.err(sp, format!(
                                 "assignment type mismatch: `{}` vs `{}`",
-                                self.ctx.types.name(l.ty), self.ctx.types.name(t)
+                                self.ctx.type_name(l.ty), self.ctx.type_name(t)
                             ));
                         }
                         let val_reg = self.last_reg;
@@ -338,8 +338,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, "field assignment needs a struct/class receiver");
                     return Err(());
                 };
-                let Some(fidx) = fields.iter().position(|f| f.name == self.ctx.name(name)) else {
-                    self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.types.name(rt), self.ctx.name(name)));
+                let Some(fidx) = fields.iter().position(|f| f.name == name) else {
+                    self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
                     return Err(());
                 };
                 let fty = fields[fidx].ty;
@@ -429,7 +429,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match bin {
             Add | Sub | Mul | Div | Mod => {
                 let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
-                    self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.types.name(ty)));
+                    self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.type_name(ty)));
                     return Err(());
                 };
                 let aop = match bin {
@@ -443,7 +443,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             BitAnd | BitOr | BitXor | Shl | Shr => {
                 let Some(prim) = prim.filter(|p| p.is_int()) else {
-                    self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.types.name(ty)));
+                    self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.type_name(ty)));
                     return Err(());
                 };
                 let bop = match bin {
@@ -470,7 +470,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => {
                 self.ctx.err(sp, format!(
                     "`{}` is not formattable inside f\"...\" —use `debug.str(x)` or a `to_string()` method (RFC 0007 §2)",
-                    self.ctx.types.name(ty)
+                    self.ctx.type_name(ty)
                 ));
                 Err(())
             }

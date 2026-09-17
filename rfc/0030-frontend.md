@@ -331,7 +331,16 @@ after its children exist (the Pratt reductions and frame pops of §4 do
 exactly that) — so drop/clone are flat `Vec` ops: no input can overflow
 the host stack through the tree itself. Spans on every node; no `String`
 keys — names are `IdentId`s into an interner, resolved later (RFC 0031
-§1). Sketch (abbreviated — the full enum is mechanical):
+§1). The interner lives in rut-core (`rut_core::Interner`) so the AST,
+the type table, and the module binary share one representation. It
+**pre-interns a fixed well-known table** (`rut_core::sym`: `self`,
+`Self`, `nil`, `main`, `__iterate`, the builtin members, the
+primitives, …), so ids `0..N` mean the same name in every interner
+instance and special names compare as `IdentId` equality — never by
+text. Ownership flows parser → AST → the checking Ctx (a clone; the Ctx
+interns synthesized instantiation names such as `Array<i32>`) → the
+emitted `Program`, which serializes only the non-well-known tail as the
+binary's name table (RFC 0033 §1). Sketch (abbreviated — the full enum is mechanical):
 
 ```rust
 struct Ast { nodes: Vec<Node>, idents: Vec<IdentData>, root: NodeId }
@@ -558,7 +567,16 @@ after its children exist (the Pratt reductions and frame pops of §4 do
 exactly that) — so drop/clone are flat `Vec` ops: no input can overflow
 the host stack through the tree itself. Spans on every node; no `String`
 keys — names are `IdentId`s into an interner, resolved later (RFC 0031
-§1). Sketch (abbreviated — the full enum is mechanical):
+§1). The interner lives in rut-core (`rut_core::Interner`) so the AST,
+the type table, and the module binary share one representation. It
+**pre-interns a fixed well-known table** (`rut_core::sym`: `self`,
+`Self`, `nil`, `main`, `__iterate`, the builtin members, the
+primitives, …), so ids `0..N` mean the same name in every interner
+instance and special names compare as `IdentId` equality — never by
+text. Ownership flows parser → AST → the checking Ctx (a clone; the Ctx
+interns synthesized instantiation names such as `Array<i32>`) → the
+emitted `Program`, which serializes only the non-well-known tail as the
+binary's name table (RFC 0033 §1). Sketch (abbreviated — the full enum is mechanical):
 
 ```rust
 struct Ast { nodes: Vec<Node>, idents: Vec<IdentData>, root: NodeId }

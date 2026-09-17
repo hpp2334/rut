@@ -204,7 +204,7 @@ impl Vm {
                 let Some(member) = cell_of(v).as_enum_member() else {
                     return Err(Trap::new(TrapKind::Invalid, "render on non-enum"));
                 };
-                Ok(members[member as usize].0.clone())
+                Ok(self.prog.name_of(members[member as usize].0).to_string())
             }
             _ => Err(Trap::new(
                 TrapKind::Invalid,

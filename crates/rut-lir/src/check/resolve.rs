@@ -57,10 +57,9 @@ impl<'a> Ctx<'a> {
                         }
                     }
                 } else {
-                    let n = self.name(tname).to_string();
                     let msg = self
-                        .not_in_core_scope(&n)
-                        .unwrap_or_else(|| format!("unknown interface `{n}`"));
+                        .not_in_core_scope(tname)
+                        .unwrap_or_else(|| format!("unknown interface `{}`", self.name(tname)));
                     self.err(self.ast.span(node.id()), msg);
                     None
                 };
@@ -82,12 +81,12 @@ impl<'a> Ctx<'a> {
             return id;
         }
         let id = self.traits.len() as u32;
-        let tname = format!("Iterator<{}>", self.types.name(arg));
+        let tname = self.intern(&format!("Iterator<{}>", self.type_name(arg)));
         let emit = self.mk_fn_ty(vec![arg], TY_BOOL);
         self.traits.push(TraitDesc {
             name: tname,
             methods: vec![rut_core::binary::TraitMethod {
-                name: "__iterate".to_string(),
+                name: sym::ITERATE,
                 params: vec![emit],
                 ret: TY_NIL,
             }],
@@ -138,53 +137,43 @@ impl<'a> Ctx<'a> {
                 }
                 let seg = &segs[0];
                 let name = seg.name;
-                let n = self.name(name).to_string();
                 // generic param?
                 if seg.generics.is_empty() {
                     if let Some((_, t)) = env.iter().find(|(p, _)| *p == name) {
                         return *t;
                     }
                 }
-                // primitives & builtins
+                // primitives & builtins — names compare as symbols
                 // v1.1 removals first: a removed type explains itself
-                if let Some(msg) = rut_core::binary::removed_core(&n) {
+                if let Some(msg) = rut_core::binary::removed_core(self.name(name)) {
                     self.err(sp, msg);
                     return TY_I32;
                 }
-                let prim = match n.as_str() {
-                    "nil" => Some(TY_NIL),
-                    "u8" => Some(TY_U8), "u16" => Some(TY_U16), "u32" => Some(TY_U32), "u64" => Some(TY_U64),
-                    "i8" => Some(TY_I8), "i16" => Some(TY_I16), "i32" => Some(TY_I32), "i64" => Some(TY_I64),
-                    "f32" => Some(TY_F32), "f64" => Some(TY_F64),
-                    "bool" => Some(TY_BOOL),
-                    "str" => Some(TY_STR),
-                    "bytes" => Some(TY_BYTES),
-                    _ => None,
-                };
+                let prim = sym::primitive_ty(name);
                 if let Some(p) = prim {
                     if !seg.generics.is_empty() {
-                        self.err(sp, format!("`{n}` takes no generic arguments"));
+                        self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
                     }
                     return p;
                 }
                 // Weak<T> — not in this build
-                if n == "Weak" {
+                if self.name(name) == "Weak" {
                     self.err(sp, "Weak references are not supported in this build (RFC 0017, M5)");
                     return TY_I32;
                 }
-                if n == "dyn" {
+                if self.name(name) == "dyn" {
                     self.err(sp, "`dyn` was removed — an interface name in type position is the object type (RFC 0012)");
                     return TY_I32;
                 }
                 // an imported std:core builtin container (RFC 0028): the
-                // prelude is imported, never ambient — `Array`/`Option`/
-                // `Result`/`Opaque` resolve only when the name was bound
-                // from the std:core surface
+                // prelude is imported, never ambient — `Array`/`Opaque`
+                // resolve only when the name was bound from the std:core
+                // surface
                 let core_ty = self.extern_native_types.get(&name).copied();
                 // a declared or imported type shadows a builtin name (RFC
                 // 0005: `std:collection`'s `Vec` is an ordinary class, so it
                 // never reaches the builtin table)
-                let shadow = matches!(n.as_str(), "Array" | "Option" | "Result" | "Opaque")
+                let shadow = matches!(name, sym::ARRAY | sym::OPAQUE)
                     && (self.find_data(name).is_some() || self.extern_types.contains_key(&name));
                 if let Some(kind) = core_ty.filter(|_| !shadow) {
                     let generics = seg.generics.clone();
@@ -208,20 +197,21 @@ impl<'a> Ctx<'a> {
                     // user types
                         if let Some(e) = self.find_enum(name).cloned() {
                             if !seg.generics.is_empty() {
-                                self.err(sp, format!("enum `{n}` takes no generic arguments"));
+                                self.err(sp, format!("enum `{}` takes no generic arguments", self.name(name)));
                             }
                             return e.ty;
                         }
                         if let Some(d) = self.find_data(name).cloned() {
                             if d.generics.is_empty() {
                                 if !seg.generics.is_empty() {
-                                    self.err(sp, format!("`{n}` takes no generic arguments"));
+                                    self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
                                 }
                                 return d.ty;
                             }
                             if seg.generics.len() != d.generics.len() {
                                 self.err(sp, format!(
-                                    "`{n}` takes {} generic argument(s), {} given",
+                                    "`{}` takes {} generic argument(s), {} given",
+                                    self.name(name),
                                     d.generics.len(),
                                     seg.generics.len()
                                 ));
@@ -261,7 +251,9 @@ impl<'a> Ctx<'a> {
                             if seg.generics.is_empty() {
                                 if t.id == u32::MAX {
                                     self.err(sp, format!(
-                                        "generic interface `{n}` needs type arguments (e.g. `{n}<i32>`)"
+                                        "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
+                                        self.name(name),
+                                        self.name(name)
                                     ));
                                     return TY_I32;
                                 }
@@ -269,7 +261,7 @@ impl<'a> Ctx<'a> {
                             }
                             if seg.generics.len() != t.generics.len() {
                                 self.err(sp, format!(
-                                    "`{n}` takes {} type argument(s), {} given",
+                                    "`{}` takes {} type argument(s), {} given", self.name(name),
                                     t.generics.len(), seg.generics.len()
                                 ));
                                 return TY_I32;
@@ -286,17 +278,17 @@ impl<'a> Ctx<'a> {
                         // scope-qualified id; link rebases it
                         if let Some(&t) = self.extern_types.get(&name) {
                             if !seg.generics.is_empty() {
-                                self.err(sp, format!("imported type `{n}` takes no generic arguments"));
+                                self.err(sp, format!("imported type `{}` takes no generic arguments", self.name(name)));
                             }
                             return t;
                         }
-                        if n == "Self" {
+                        if name == sym::SELF_TY {
                             self.err(sp, "`Self` is only valid inside a type body (RFC 0010 §1)");
                             return TY_I32;
                         }
                         let msg = self
-                            .not_in_core_scope(&n)
-                            .unwrap_or_else(|| format!("unknown type `{n}`"));
+                            .not_in_core_scope(name)
+                            .unwrap_or_else(|| format!("unknown type `{}`", self.name(name)));
                         self.err(sp, msg);
                         TY_I32
                     }

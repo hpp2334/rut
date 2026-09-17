@@ -4,6 +4,7 @@
 
 use crate::check::{float_suffix_ty, int_suffix_ty, TcResult};
 use rut_core::ops::*;
+use rut_core::sym;
 use rut_core::types::*;
 use super::*;
 
@@ -35,7 +36,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     if !self.widens(t, e) {
                         self.ctx.err(sp, format!(
                             "let `{}` is `{}` but the initializer is `{}`",
-                            self.ctx.name(name), self.ctx.types.name(e), self.ctx.types.name(t)
+                            self.ctx.name(name), self.ctx.type_name(e), self.ctx.type_name(t)
                         ));
                     }
                 }
@@ -60,7 +61,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // `let (a, b) = ..` (RFC 0007): each binding takes
                         // the matching tuple field
                         let TyKind::Data { fields } = self.ctx.types.kind(ty).clone() else {
-                            self.ctx.err(sp, format!("destructuring needs a tuple —got `{}`", self.ctx.types.name(ty)));
+                            self.ctx.err(sp, format!("destructuring needs a tuple —got `{}`", self.ctx.type_name(ty)));
                             return Err(());
                         };
                         if fields.len() != names.len() {
@@ -179,7 +180,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != self.ret_ty {
                             self.ctx.err(sp, format!(
                                 "return type mismatch: `{}` expected, `{}` returned",
-                                self.ctx.types.name(self.ret_ty), self.ctx.types.name(t)
+                                self.ctx.type_name(self.ret_ty), self.ctx.type_name(t)
                             ));
                         }
                         let src = self.last_reg;
@@ -198,7 +199,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != self.ret_ty {
                             self.ctx.err(sp, format!(
                                 "return type mismatch: `{}` expected, `{}` returned",
-                                self.ctx.types.name(self.ret_ty), self.ctx.types.name(t)
+                                self.ctx.type_name(self.ret_ty), self.ctx.type_name(t)
                             ));
                         }
                         self.emit(Op::Ret { val: Some(self.last_reg) }, sp.lo);
@@ -272,7 +273,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 self.ctx.err(sp, format!(
                     "`for (let .. of ..)` needs a sequence — `{}` is not one and declares no `__iterate` (RFC 0012 §6)",
-                    self.ctx.types.name(it)
+                    self.ctx.type_name(it)
                 ));
                 return Err(());
             }
@@ -354,7 +355,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return None;
         };
         let d = d.clone();
-        let (_, mnode) = d.methods.iter().find(|(n, _)| self.ctx.name(*n) == "__iterate")?;
+        let (_, mnode) = d.methods.iter().find(|(n, _)| *n == sym::ITERATE)?;
         let env: Vec<(IdentId, TypeId)> =
             d.generics.iter().cloned().zip(args.iter().cloned()).collect();
         let md = self.ctx.ast.method_decl(*mnode).clone();
@@ -495,7 +496,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if bt != result_ty {
                     self.ctx.err(self.ctx.ast.span(body.id()), format!(
                         "`when` arms must agree: `{}` vs `{}`",
-                        self.ctx.types.name(result_ty), self.ctx.types.name(bt)
+                        self.ctx.type_name(result_ty), self.ctx.type_name(bt)
                     ));
                 }
                 let rr = result_reg.unwrap();
@@ -572,11 +573,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if !has_else {
             if let TyKind::Enum { members } = self.ctx.types.kind(scrut_ty).clone() {
                 for (m, _v) in &members {
-                    if !seen.iter().any(|s| s.ends_with(&format!(".{m}")) || s == m) {
+                    let mtext = self.ctx.name(*m);
+                    if !seen.iter().any(|s| s.ends_with(&format!(".{mtext}")) || s == mtext) {
                         self.ctx.err(
                             sp,
                             format!(
-                                "`when` over an enum must be exhaustive —`{m}` is not covered and there is no `else` arm (RFC 0008 §2)"
+                                "`when` over an enum must be exhaustive —`{mtext}` is not covered and there is no `else` arm (RFC 0008 §2)"
                             ),
                         );
                         return Err(());
@@ -587,7 +589,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     sp,
                     format!(
                         "`when` over `{}` needs an `else` arm —only enums are enumerable (RFC 0008 §2)",
-                        self.ctx.types.name(scrut_ty)
+                        self.ctx.type_name(scrut_ty)
                     ),
                 );
                 return Err(());
@@ -657,7 +659,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         } else {
                             self.ctx.err(sp, format!(
                                 "`when` pattern `{}` does not match the scrutinee type `{}`",
-                                self.ctx.name(ename), self.ctx.types.name(scrut_ty)
+                                self.ctx.name(ename), self.ctx.type_name(scrut_ty)
                             ));
                         }
                     }
@@ -666,7 +668,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // bare member of the scrutinee's own enum
                     if let TyKind::Enum { members } = self.ctx.types.kind(scrut_ty).clone() {
                         let mname = segs[0].name;
-                        if let Some(i) = members.iter().position(|(m, _)| m == self.ctx.name(mname)) {
+                        if let Some(i) = members.iter().position(|(m, _)| *m == mname) {
                             let mreg = self.new_reg(scrut_ty);
                             self.emit(Op::EnumNew { dst: mreg, ty: scrut_ty, member: i as u32 }, sp.lo);
                             let r = self.new_reg(TY_BOOL);

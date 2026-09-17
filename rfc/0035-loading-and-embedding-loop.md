@@ -50,6 +50,9 @@ struct HostHooks {
   level).
 - `type_id` rebasing: link-time rebase maps module-local type indices into
   the global table (RFC 0033 §1).
+- Name-id rebasing: link merges each module's interner the same way —
+  module-local `IdentId`s re-intern into the linked program's name table;
+  well-known ids pass through unchanged (RFC 0030 §5).
 
 ## 2. Workers hook
 

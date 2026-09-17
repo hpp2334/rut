@@ -15,7 +15,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
             continue;
         }
         let nregs = f.regs.len();
-        let ctx = |m: String| format!("function {} (#{fi}): {m}", f.name);
+        let ctx = |m: String| format!("function {} (#{fi}): {m}", prog.func_name(f));
         for (pc, op) in f.code.iter().enumerate() {
             let bad = |m: String| ctx(format!("op @{pc}: {m}"));
             // every register operand must be in range

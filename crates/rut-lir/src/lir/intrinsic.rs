@@ -109,7 +109,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !self.widens(t, ef.params[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.types.name(t), self.ctx.types.name(ef.params[i])
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ef.params[i])
                 ));
             }
             aregs.push(self.last_reg);
@@ -126,7 +126,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match ctx.types.kind(ty) {
             TyKind::Prim(p) if p.is_int() || p.is_float() => Ok(*p),
             _ => {
-                ctx.err(sp, format!("{who} needs numbers — found `{}`", ctx.types.name(ty)));
+                ctx.err(sp, format!("{who} needs numbers — found `{}`", ctx.type_name(ty)));
                 Err(())
             }
         }
@@ -150,7 +150,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if t2 != ty {
             self.ctx.err(sp, format!(
                 "{who} operands must have the same type (`{}` vs `{}`)",
-                self.ctx.types.name(ty), self.ctx.types.name(t2)
+                self.ctx.type_name(ty), self.ctx.type_name(t2)
             ));
             return Err(());
         }
@@ -167,7 +167,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<(TypeId, PrimTy, u16, u16)> {
         let (ty, prim, a, b) = self.num_binop_args(args, sp, who)?;
         if !prim.is_int() {
-            self.ctx.err(sp, format!("{who} needs integers — found `{}`", self.ctx.types.name(ty)));
+            self.ctx.err(sp, format!("{who} needs integers — found `{}`", self.ctx.type_name(ty)));
             return Err(());
         }
         Ok((ty, prim, a, b))

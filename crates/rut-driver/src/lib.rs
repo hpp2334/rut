@@ -9,6 +9,7 @@ use rut_parser::{parse, Mode};
 use rut_core::binary::{encode, Program};
 use rut_core::ops::{NOREG, Op};
 use rut_core::types::{TyKind, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_NIL};
+use rut_core::{IdentId, sym};
 
 pub mod session;
 pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
@@ -76,23 +77,33 @@ pub fn compile_program_resolved(
     }
     // Intern every imported surface name, so a namespace import (`Math`)
     // resolves its members by name even though the member name is never
-    // written in `import { .. }` (RFC 0029 surface).
+    // written in `import { .. }` (RFC 0029 surface). Surface names are
+    // ids in the exporter's interner (`surface.names`) — re-interned by
+    // text into this module's.
     for (_, surface) in imports {
         for f in &surface.funcs {
-            ast.interner.intern(&f.name);
+            ast.interner.intern(surface.names.name(f.name));
         }
         for c in &surface.consts {
-            ast.interner.intern(&c.name);
+            ast.interner.intern(surface.names.name(c.name));
         }
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
     ctx.allow_imports = allow_imports;
+    // the binding gate: the names this module's `import` statements wrote
+    // (RFC 0028/0029) — read off the AST before any binding runs
+    for it in ast.module_items(ast.root).to_vec() {
+        if let rut_ast::ast::ItemKind::Import { names, .. } = ast.item(it) {
+            ctx.imported.extend(names.iter().copied());
+        }
+    }
     for (dep_scope, surface) in imports {
         // types first: descriptors must be in the table before any own type
-        // is interned (TypeTable::import_block)
-        ctx.import_types(surface.types.clone(), &surface.scope_blocks);
+        // is interned (TypeTable::import_block); names re-intern from the
+        // exporter's interner
+        ctx.import_types(surface.types.clone(), &surface.names, &surface.scope_blocks);
         for f in &surface.funcs {
-            if let Some(id) = ctx.ast.interner.lookup(&f.name) {
+            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
                 if let Some(i) = f.intrinsic {
                     ctx.add_extern_intrinsic(id, i);
                 } else {
@@ -101,40 +112,48 @@ pub fn compile_program_resolved(
             }
         }
         for c in &surface.consts {
-            if let Some(id) = ctx.ast.interner.lookup(&c.name) {
+            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(c.name)) {
                 ctx.add_extern_const(id, c.ty, c.bits);
             }
         }
         for t in &surface.type_exports {
-            if let Some(id) = ctx.ast.interner.lookup(&t.name) {
+            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(t.name)) {
                 ctx.add_extern_type(id, rut_core::pack(*dep_scope, t.local), t.is_class);
             }
         }
         // std:core's native surface (RFC 0028): builtin containers,
-        // interfaces, and compiler-lowered fns — bound BY LOOKUP only (no
-        // interning), so a name resolves exactly when the importer wrote
-        // it: `import { Option } from "std:core"` gates `Option`, nothing
-        // else. The prelude is imported, never ambient.
+        // interfaces, and compiler-lowered fns — bound only when the
+        // importer wrote the name: `import { Array } from "std:core"`
+        // gates `Array`, nothing else. The prelude is imported, never
+        // ambient.
         for (n, kind) in &surface.native_types {
-            if let Some(id) = ctx.ast.interner.lookup(n) {
-                ctx.add_extern_native_type(id, *kind);
+            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
+                if ctx.imported.contains(&id) {
+                    ctx.add_extern_native_type(id, *kind);
+                }
             }
         }
         for (n, iface) in &surface.native_ifaces {
-            if let Some(id) = ctx.ast.interner.lookup(n) {
-                ctx.add_extern_iface(id, *iface);
+            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
+                if ctx.imported.contains(&id) {
+                    ctx.add_extern_iface(id, *iface);
+                }
             }
         }
         for n in &surface.native_fns {
-            if let Some(id) = ctx.ast.interner.lookup(n) {
-                ctx.add_extern_native_fn(id);
+            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
+                if ctx.imported.contains(&id) {
+                    ctx.add_extern_native_fn(id);
+                }
             }
         }
-        // the namespace head (`Math`): bound by lookup like the natives —
-        // resolving exactly when the importer wrote it in `import { .. }`
+        // the namespace head (`Math`): bound like the natives — resolving
+        // exactly when the importer wrote it in `import { .. }`
         if let Some(ns) = &surface.namespace {
-            if let Some(id) = ctx.ast.interner.lookup(ns) {
-                ctx.add_extern_namespace(id);
+            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*ns)) {
+                if ctx.imported.contains(&id) {
+                    ctx.add_extern_namespace(id);
+                }
             }
         }
     }
@@ -153,10 +172,8 @@ pub fn compile_program_resolved(
     // `entry fn` — the host-callable surface (RFC 0035 §3). A module may
     // have either, both, or neither (pure library shape).
     let mut roots: Vec<Inst> = Vec::new();
-    if let Some(m) = ctx.lookup_name("main") {
-        if ctx.find_free_fn(m) {
-            roots.push(Inst { key: FnKey::Free(m), subst: vec![] });
-        }
+    if ctx.find_free_fn(sym::MAIN) {
+        roots.push(Inst { key: FnKey::Free(sym::MAIN), subst: vec![] });
     }
     for name in ctx.entries.clone() {
         if ctx.find_free_fn(name) {
@@ -166,7 +183,7 @@ pub fn compile_program_resolved(
     // library surface: every non-generic `pub fn` is importable, so its body
     // must be compiled even when nothing local calls it (RFC 0029 surface)
     for (name, node) in ctx.fn_nodes.clone() {
-        let is_pub = ctx.exports.iter().any(|(n, _)| *n == ctx.name(name));
+        let is_pub = ctx.exports.iter().any(|(n, _)| *n == name);
         if !is_pub {
             continue;
         }
@@ -195,38 +212,30 @@ pub fn compile_program_resolved(
     let vtables = ctx.build_vtables();
     // finalize the entry table (RFC 0035 §3): `entry fn`s — plus the
     // conventional `main` when it is exported.
-    let mut exports = Vec::new();
-    let mut names: Vec<String> = ctx
-        .entries
-        .iter()
-        .map(|&n| ctx.name(n).to_string())
-        .collect();
-    if ctx.exports.iter().any(|(n, _)| n == "main") && !names.iter().any(|n| n == "main") {
-        names.push("main".to_string());
+    let mut exports: Vec<(IdentId, u32)> = Vec::new();
+    let mut names: Vec<IdentId> = ctx.entries.clone();
+    if ctx.exports.iter().any(|(n, _)| *n == sym::MAIN) && !names.contains(&sym::MAIN) {
+        names.push(sym::MAIN);
     }
     for n in names {
-        if let Some(id) = ctx.lookup_name(&n) {
-            if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(id), subst: vec![] }) {
-                exports.push((n, f));
-            }
+        if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(n), subst: vec![] }) {
+            exports.push((n, f));
         }
     }
     let funcs = std::mem::take(&mut ctx.funcs);
-    let ir_dump = ir_dump_of(&funcs);
+    let ir_dump = ir_dump_of(&funcs, &ctx.interner);
     // exported surface: every `pub` fn + its signature, for importers
     let mut surface = rut_core::binary::Surface::default();
     for (name, _) in &ctx.exports {
-        if let Some(id) = ctx.lookup_name(name) {
-            if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(id), subst: vec![] }) {
-                if let Some(f) = funcs.get(fid as usize) {
-                    surface.funcs.push(rut_core::binary::SurfaceFn {
-                        name: name.clone(),
-                        params: f.params.clone(),
-                        ret: f.ret,
-                        local: fid,
-                        intrinsic: None,
-                    });
-                }
+        if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(*name), subst: vec![] }) {
+            if let Some(f) = funcs.get(fid as usize) {
+                surface.funcs.push(rut_core::binary::SurfaceFn {
+                    name: *name,
+                    params: f.params.clone(),
+                    ret: f.ret,
+                    local: fid,
+                    intrinsic: None,
+                });
             }
         }
     }
@@ -246,7 +255,7 @@ pub fn compile_program_resolved(
         }
         for (name, d) in &ctx.datas {
             surface.type_exports.push(rut_core::binary::SurfaceType {
-                name: ctx.name(*name).to_string(),
+                name: *name,
                 local: rut_core::local_of(d.ty),
                 is_class: d.kind == rut_lir::check::DataKind::Class,
                 is_generic: !d.generics.is_empty(),
@@ -254,16 +263,21 @@ pub fn compile_program_resolved(
         }
         for (name, e) in &ctx.enums {
             surface.type_exports.push(rut_core::binary::SurfaceType {
-                name: ctx.name(*name).to_string(),
+                name: *name,
                 local: rut_core::local_of(e.ty),
                 is_class: false,
                 is_generic: false,
             });
         }
     }
+    // the program's interner moves out of the Ctx; the surface carries a
+    // clone so it stays self-contained when it crosses to an importer
+    let interner = std::mem::take(&mut ctx.interner);
+    surface.names = interner.clone();
     let program = Program {
         name: module_name.to_string(),
         scope,
+        interner,
         surface,
         types: ctx.types,
         traits: ctx.traits,
@@ -305,12 +319,18 @@ pub fn std_log_source() -> String {
 /// (`rut/std-core/core.d.rut` mirrors it for the LSP). Nothing here is
 /// ambient — every name must be imported.
 pub fn mount_std_core(session: &mut Session) {
+    // the surface is symbol-id based; the host-facing mount table is
+    // string-based — `sym::text` bridges at this boundary only
+    let core = rut_core::binary::Surface::core();
+    let txt = |id: rut_core::IdentId| -> String {
+        rut_core::sym::text(id).unwrap_or_default().to_string()
+    };
     let _ = session.register_module(
         "std:core",
         Module {
-            native_types: rut_core::binary::Surface::core().native_types,
-            native_ifaces: rut_core::binary::Surface::core().native_ifaces,
-            native_fns: rut_core::binary::Surface::core().native_fns,
+            native_types: core.native_types.iter().map(|(n, k)| (txt(*n), *k)).collect(),
+            native_ifaces: core.native_ifaces.iter().map(|(n, k)| (txt(*n), *k)).collect(),
+            native_fns: core.native_fns.iter().map(|n| txt(*n)).collect(),
             ..Default::default()
         },
     );
@@ -435,14 +455,15 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
     let g = compile_graph(&session, &spec);
-    let ir_dump = g.program.as_ref().map(|p| ir_dump_of(&p.funcs)).unwrap_or_default();
+    let ir_dump = g.program.as_ref().map(|p| ir_dump_of(&p.funcs, &p.interner)).unwrap_or_default();
     let binary = g.program.map(|p| encode(&p));
     CompileOutput { diags: g.diags, ast_dump, ast_json, ir_dump, binary }
 }
 
 /// irDump — the demo page's IR pane (RFC 0041 §3): per-function typed
-/// register tables and op listings.
-pub fn ir_dump_of(funcs: &[rut_core::binary::FuncCode]) -> String {
+/// register tables and op listings. Names resolve through the program's
+/// interner.
+pub fn ir_dump_of(funcs: &[rut_core::binary::FuncCode], interner: &rut_core::Interner) -> String {
     let mut out = String::new();
     for (i, f) in funcs.iter().enumerate() {
         if f.code.is_empty() {
@@ -451,7 +472,7 @@ pub fn ir_dump_of(funcs: &[rut_core::binary::FuncCode]) -> String {
         out.push_str(&format!(
             "fn #{} {}({}) -> {}\n",
             i,
-            f.name,
+            interner.name(f.name),
             f.params
                 .iter()
                 .map(|&p| f_type_name(funcs, p))

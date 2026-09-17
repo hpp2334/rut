@@ -11,3 +11,4 @@ path = "src/lib.rs"
 
 [dependencies]
 rut-lexer = { path = "../rut-lexer" }
+rut-core = { path = "../rut-core" }

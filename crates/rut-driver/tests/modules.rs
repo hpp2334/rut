@@ -18,7 +18,7 @@ fn imports_and_links_a_function() {
     assert!(dep.diags.is_empty(), "{:?}", dep.diags);
     let dep = dep.program.expect("dep program");
     let surface = dep.surface.clone();
-    assert!(surface.funcs.iter().any(|f| f.name == "add"), "surface has add");
+    assert!(surface.funcs.iter().any(|f| surface.names.name(f.name) == "add"), "surface has add");
 
     // root "app" under scope 2 imports `add`
     let root = rut_driver::compile_program(
@@ -82,7 +82,7 @@ fn imports_and_links_a_type() {
     let dep = dep.program.expect("dep program");
     let surface = dep.surface.clone();
     assert!(
-        surface.type_exports.iter().any(|t| t.name == "Point"),
+        surface.type_exports.iter().any(|t| surface.names.name(t.name) == "Point"),
         "surface exports Point"
     );
 
@@ -107,7 +107,7 @@ fn imports_and_links_a_type() {
     let linked = rut_core::link::link(vec![dep, root]).expect("link");
     // the imported type made it into the global table once
     let point_ids: Vec<u32> = (0..linked.types.types.len() as u32)
-        .filter(|&i| linked.types.name(i) == "Point")
+        .filter(|&i| linked.type_name(i) == "Point")
         .collect();
     assert_eq!(point_ids.len(), 1, "Point appears exactly once");
     let point = point_ids[0];
@@ -215,7 +215,7 @@ fn graph_threads_a_type_through_a_chain() {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("linked program");
     let points = (0..p.types.types.len() as u32)
-        .filter(|&i| p.types.name(i) == "Point")
+        .filter(|&i| p.type_name(i) == "Point")
         .count();
     assert_eq!(points, 1, "Point is shared across the chain, not duplicated");
 }
@@ -246,7 +246,7 @@ fn std_collection_barrel_expands_and_compiles() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.types.types.iter().filter(|t| t.name == "Vec<i32>").count(), 1);
+    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Vec<i32>").count(), 1);
 }
 
 #[test]
@@ -327,8 +327,8 @@ fn consumer_uses_std_collection_vec() {
     let out = rut_driver::compile_graph(&s, "app:main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.funcs.iter().filter(|f| f.name == "main").count(), 1);
-    assert_eq!(p.types.types.iter().filter(|t| t.name == "Vec<i32>").count(), 1);
+    assert_eq!(p.funcs.iter().filter(|f| p.name_of(f.name) == "main").count(), 1);
+    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Vec<i32>").count(), 1);
 }
 
 #[test]

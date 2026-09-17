@@ -6,6 +6,7 @@ use rut_ast::ast::*;
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
+use rut_core::sym;
 use crate::expr::{ExprFrame, ExprMode};
 use crate::frame::{Done, Frame, Step};
 use crate::Parser;
@@ -164,7 +165,7 @@ impl TypeFrame {
     }
 
     fn nil_ty(&mut self, p: &mut Parser) -> NodeHandle<AnyTy> {
-        let nil = p.interner.intern("nil");
+        let nil = sym::NIL;
         p.typ(
             TypeKind::TyPath {
                 segs: vec![PathSeg { name: nil, generics: Vec::new() }],
@@ -182,7 +183,7 @@ impl TypeFrame {
             _ => unreachable!(),
         };
         if !p.eat_punct(Tok::Arrow) {
-            let nil = p.interner.intern("nil");
+            let nil = sym::NIL;
             let ret = p.typ(
                 TypeKind::TyPath {
                     segs: vec![PathSeg { name: nil, generics: Vec::new() }],
@@ -208,7 +209,7 @@ impl TypeFrame {
                 }
                 TyStage::Bracket => {
                     p.expect(Tok::RBracket);
-                    let array = p.interner.intern("Array");
+                    let array = sym::ARRAY;
                     let segs = vec![PathSeg {
                         name: array,
                         generics: vec![t],

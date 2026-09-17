@@ -4,6 +4,7 @@
 
 use crate::check::TcResult;
 use rut_core::ops::*;
+use rut_core::sym;
 use rut_core::types::*;
 use super::slice::SliceSource;
 use super::*;
@@ -30,7 +31,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return self.finish_call_fn(freg, args, expected, sp);
                     }
                     _ => {
-                        self.ctx.err(sp, format!("`{}` is not callable", self.ctx.types.name(ft)));
+                        self.ctx.err(sp, format!("`{}` is not callable", self.ctx.type_name(ft)));
                         return Err(());
                     }
                 }
@@ -47,7 +48,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.finish_call_fn(freg, args, expected, sp)
             }
             _ => {
-                self.ctx.err(sp, format!("`{}` is not callable", self.ctx.types.name(ft)));
+                self.ctx.err(sp, format!("`{}` is not callable", self.ctx.type_name(ft)));
                 Err(())
             }
         }
@@ -79,7 +80,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !self.widens(t, ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.types.name(t), self.ctx.types.name(ptys[i])
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
                 ));
             }
             aregs.push(self.last_reg);
@@ -108,19 +109,33 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         let name = segs[0].name;
-        let n = self.ctx.name(name).to_string();
         let generics = segs[0].generics.clone();
         // std:core prelude functions (RFC 0028): compiler-lowered, visible
         // only when the name was imported from the std:core surface — the
         // prelude is imported, never ambient. A local fn of the same name
         // wins when the import is absent (fallthrough below).
         let core_fn = self.ctx.extern_native_fns.contains(&name);
-        match n.as_str() {
-            "own" => {
-                self.ctx.err(sp, rut_core::binary::removed_core("own").unwrap());
-                return Err(());
-            }
-            "make_ptr" if core_fn => {
+        // removed prelude spellings diagnose themselves — text-compared
+        // against the removal table, they are not well-known symbols
+        if let Some(msg) = rut_core::binary::removed_core(self.ctx.name(name)) {
+            self.ctx.err(sp, msg);
+            return Err(());
+        }
+        if self.ctx.name(name) == "print" {
+            self.ctx.err(sp, "`print` was removed — import a logger (`import { log } from \"std:log\"`)");
+            return Err(());
+        }
+        if matches!(self.ctx.name(name), "size_of" | "align_of") {
+            // the repr-C layout contract was removed: records are slot
+            // arrays, not byte blocks, so there is no value size/alignment
+            self.ctx.err(sp, format!(
+                "`{}` was removed — records are stored as one slot per field, not a repr-C block",
+                self.ctx.name(name)
+            ));
+            return Err(());
+        }
+        match name {
+            sym::MAKE_PTR if core_fn => {
                 // make_ptr(v) (RFC 0005): box v into a fresh one-slot cell;
                 // the result is a nil-able `*T`
                 if args.len() != 1 {
@@ -134,7 +149,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::MakePtr { dst, src, ty: pty }, sp.lo);
                 return Ok(pty);
             }
-            "on_drop" if core_fn => {
+            sym::ON_DROP if core_fn => {
                 // on_drop(p, cleanup) (RFC 0016 §3): cleanup runs when the
                 // cell's refcount reaches zero
                 if args.len() != 2 {
@@ -156,7 +171,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::OnDrop { obj, cleanup }, sp.lo);
                 return Ok(TY_NIL);
             }
-            "downcast" if core_fn => {
+            sym::DOWNCAST if core_fn => {
                 // prelude body: tidof + icmp + br + guarded unbox (RFC 0032 §1.1)
                 if args.len() != 1 || generics.len() != 1 {
                     self.ctx.err(sp, "downcast<T>(o) takes one explicit type argument and one value (RFC 0014)");
@@ -205,7 +220,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::MovRef { dst: out, src: dst }, sp.lo);
                 return Ok(tty);
             }
-            "panic" if core_fn => {
+            sym::PANIC if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "panic(msg) takes a message (RFC 0034 §2)");
                     return Err(());
@@ -217,7 +232,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Panic { msg: self.last_reg }, sp.lo);
                 return Ok(TY_NIL);
             }
-            "assert" if core_fn => {
+            sym::ASSERT if core_fn => {
                 if args.is_empty() || args.len() > 2 {
                     self.ctx.err(sp, "assert(cond, msg?) takes a condition (RFC 0034 §2)");
                     return Err(());
@@ -239,25 +254,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Assert { cond, msg }, sp.lo);
                 return Ok(TY_NIL);
             }
-            "print" => {
-                self.ctx.err(sp, "`print` was removed — import a logger (`import { log } from \"std:log\"`)");
-                return Err(());
-            }
-            "string_len" if core_fn => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "string_len(s) takes one `str`");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_STR))?;
-                if t != TY_STR {
-                    self.ctx.err(sp, format!("string_len takes a `str`, found `{}`", self.ctx.types.name(t)));
-                }
-                let src = self.last_reg;
-                let dst = self.new_reg(TY_I32);
-                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrLen, recv: src, argv_off, argc, dst: dst }, sp.lo); }
-                return Ok(TY_I32);
-            }
-            "string_join" if core_fn => {
+            sym::STRING_JOIN if core_fn => {
                 // join every element of an `Array<str>` in one pass: the
                 // native sizes once and allocates once (RFC 0032 §1.1 R2).
                 if args.len() != 1 {
@@ -269,7 +266,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match self.ctx.types.kind(at) {
                     TyKind::Array { elem } if *elem == TY_STR => {}
                     _ => {
-                        self.ctx.err(sp, format!("string_join expects `Array<str>` —found `{}`", self.ctx.types.name(at)));
+                        self.ctx.err(sp, format!("string_join expects `Array<str>` —found `{}`", self.ctx.type_name(at)));
                         return Err(());
                     }
                 }
@@ -278,10 +275,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 { let (argv_off, argc) = self.pool_args(&(vec![src])); self.emit(Op::CallNat { nat: Nat::StrJoin, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
                 return Ok(TY_STR);
             }
-            "type_id" => {
+            sym::TYPE_ID => {
                 // compile-time constant —never executed (RFC 0015 §3, 0033 §3)
                 if generics.len() != 1 || !args.is_empty() {
-                    self.ctx.err(sp, format!("{n}<T>() takes one explicit type argument"));
+                    self.ctx.err(sp, format!("{}<T>() takes one explicit type argument", self.ctx.name(name)));
                     return Err(());
                 }
                 let t = self.resolve_type_now(generics[0]);
@@ -292,22 +289,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Const { dst, k: k as u32 }, sp.lo);
                 return Ok(TY_U32);
             }
-            "size_of" | "align_of" => {
-                // the repr-C layout contract was removed: records are slot
-                // arrays, not byte blocks, so there is no value size/alignment
-                self.ctx.err(sp, format!(
-                    "`{n}` was removed — records are stored as one slot per field, not a repr-C block"
-                ));
-                return Err(());
-            }
-            "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64" => {
+            sym::I8 | sym::I16 | sym::I32 | sym::I64 | sym::U8 | sym::U16 | sym::U32 | sym::U64
+            | sym::F32 | sym::F64 => {
                 // removed when the `as` cast landed (RFC 0007 §1) — the
                 // conversion family is spelled `x as T` now. The message
                 // mirrors the `size_of` removal above.
-                self.ctx.err(sp, format!("`{n}(x)` was removed — use `x as {n}` (RFC 0007 §1)"));
+                self.ctx.err(sp, format!("`{}(x)` was removed — use `x as {}` (RFC 0007 §1)", self.ctx.name(name), self.ctx.name(name)));
                 return Err(());
             }
-            "str" => {
+            sym::STR => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "str(x) takes one argument");
                     return Err(());
@@ -346,7 +336,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if !self.widens(t, ef.params[i]) {
                     self.ctx.err(self.ctx.ast.span(a.id()), format!(
                         "argument {} is `{}`, `{}` expected",
-                        i + 1, self.ctx.types.name(t), self.ctx.types.name(ef.params[i])
+                        i + 1, self.ctx.type_name(t), self.ctx.type_name(ef.params[i])
                     ));
                 }
                 aregs.push(self.clone_arg(self.last_reg, ef.params[i], sp.lo));
@@ -358,7 +348,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // builtin type-call: Array<T>(n) — allocate n slots (runtime length,
         // non-growable, RFC 0005); the storage under `std:collection`'s Vec.
         // Import-gated like the type itself (RFC 0028)
-        if n == "Array"
+        if name == sym::ARRAY
             && self.ctx.find_data(name).is_none()
             && self.ctx.extern_native_types.get(&name).copied()
                 == Some(rut_core::binary::NativeTy::Array)
@@ -378,7 +368,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 1 => {
                     let t = self.compile_expr(args[0], Some(TY_I32))?;
                     if t != TY_I32 {
-                        self.ctx.err(sp, format!("Array<T>(n) takes an `i32` length, found `{}`", self.ctx.types.name(t)));
+                        self.ctx.err(sp, format!("Array<T>(n) takes an `i32` length, found `{}`", self.ctx.type_name(t)));
                     }
                     self.last_reg
                 }
@@ -392,20 +382,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(aty);
         }
         // builtin bytes type-call: `bytes(n)` zeroed (RFC 0004)
-        if n == "bytes" {
+        if name == sym::BYTES {
             return self.compile_bytes_alloc(args, sp);
         }
         if self.ctx.find_data(name).is_some() {
             self.ctx.err(sp, format!(
                 "construction is a method call, never a type-call —use a class method ({}.new(..)) or a struct literal `{} {{ .. }}` (RFC 0010 §1)",
-                n, n
+                self.ctx.name(name), self.ctx.name(name)
             ));
             return Err(());
         }
         let msg = self
             .ctx
-            .not_in_core_scope(&n)
-            .unwrap_or_else(|| format!("unknown function `{n}`"));
+            .not_in_core_scope(name)
+            .unwrap_or_else(|| format!("unknown function `{}`", self.ctx.name(name)));
         self.ctx.err(sp, msg);
         Err(())
     }
@@ -421,7 +411,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             1 => {
                 let t = self.compile_expr(args[0], Some(TY_I32))?;
                 if t != TY_I32 {
-                    self.ctx.err(sp, format!("bytes(n) takes an `i32` length, found `{}`", self.ctx.types.name(t)));
+                    self.ctx.err(sp, format!("bytes(n) takes an `i32` length, found `{}`", self.ctx.type_name(t)));
                 }
                 self.last_reg
             }
@@ -445,18 +435,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        let bn = self.ctx.name(base).to_string();
-        let mn = self.ctx.name(member).to_string();
-        // std:core builtin statics (RFC 0028): `Option.some`, `Result.ok`,
-        // `Opaque.new` — the prelude is imported, never ambient, so the
-        // arms fire only when the base name was bound from the surface
+        // std:core builtin statics (RFC 0028): `Opaque.new` and the
+        // `bytes`/`str` constructors — the prelude is imported, never
+        // ambient, so the arms fire only when the base name was bound from
+        // the surface
         let core_ty = self.ctx.extern_native_types.get(&base).copied();
         // Explicit type args on a static head are meaningful only where the
         // member can use them (`Vec<u32>.from(..)` — the element type);
         // everywhere else they stay unsupported rather than silently ignored.
         let is_data = self.ctx.find_data(base).is_some();
         if !base_generics.is_empty() && !is_data {
-            self.ctx.err(sp, format!("generic type paths (`{bn}<..>.{mn}`) are not supported in this build"));
+            self.ctx.err(sp, format!(
+                "generic type paths (`{}<..>.{}`) are not supported in this build",
+                self.ctx.name(base), self.ctx.name(member)
+            ));
             return Err(());
         }
         // an imported namespace's members (`Math.sqrt`; RFC 0028) —
@@ -464,8 +456,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.is_extern_namespace(base) {
             return self.compile_namespace_member(base, member, &args, expected, sp);
         }
-        match (bn.as_str(), mn.as_str()) {
-            ("Opaque", "new") if core_ty == Some(rut_core::binary::NativeTy::Opaque) => {
+        match (base, member) {
+            (sym::OPAQUE, sym::NEW) if core_ty == Some(rut_core::binary::NativeTy::Opaque) => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "Opaque.new(v) takes one value");
                     return Err(());
@@ -480,7 +472,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
                 return Ok(TY_OPAQUE);
             }
-            ("bytes", "from") => {
+            (sym::BYTES, sym::FROM) => {
                 // bytes.from(a) — copy an Array<u8> into an immutable
                 // buffer (RFC 0004)
                 if args.len() != 1 {
@@ -492,7 +484,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match self.ctx.types.kind(at) {
                     TyKind::Array { elem } if *elem == TY_U8 => {}
                     _ => {
-                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` —found `{}`", self.ctx.types.name(at)));
+                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` —found `{}`", self.ctx.type_name(at)));
                         return Err(());
                     }
                 }
@@ -501,7 +493,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Own { dst, src, ty: TY_BYTES }, sp.lo);
                 return Ok(TY_BYTES);
             }
-            ("bytes", "zeroed") => {
+            (sym::BYTES, sym::ZEROED) => {
                 // bytes.zeroed(n) — n zeroed octets (RFC 0004)
                 if args.len() != 1 {
                     self.ctx.err(sp, "bytes.zeroed(n) takes one `i32`");
@@ -516,7 +508,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
                 return Ok(TY_BYTES);
             }
-            ("str", "from_code") => {
+            (sym::STR, sym::FROM_CODE) => {
                 // str.from_code(n) -> str — the 1-codepoint str for the
                 // codepoint `n` (RFC 0004 v1.1: `char` is gone)
                 if args.len() != 1 {
@@ -527,7 +519,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if t != TY_U32 {
                     self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
                         "str.from_code takes a `u32`, found `{}`",
-                        self.ctx.types.name(t)
+                        self.ctx.type_name(t)
                     ));
                 }
                 let cp = self.last_reg;
@@ -540,7 +532,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => {}
         }
         // enum helpers: Color.to_int(c) (RFC 0006)
-        if mn == "to_int" {
+        if self.ctx.name(member) == "to_int" {
             if let Some(e) = self.ctx.find_enum(base).cloned() {
                 let _ = e;
                 self.ctx.err(sp, "enum to_int/from_int are not supported in this build (RFC 0006)");
@@ -576,7 +568,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         Some((ed, eargs)) if ed == dname => eargs,
                         _ => {
                             self.ctx.err(sp, format!(
-                                "cannot infer the type arguments for `{bn}` — write `{bn}<..>.{mn}(..)` or annotate the binding"
+                                "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",
+                                b = self.ctx.name(base), m = self.ctx.name(member)
                             ));
                             return Err(());
                         }
@@ -586,7 +579,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 if !d.generics.is_empty() && class_args.len() != d.generics.len() {
                     self.ctx.err(sp, format!(
-                        "`{bn}<..>` takes {} type argument(s), {} given",
+                        "`{}`<..> takes {} type argument(s), {} given",
+                        self.ctx.name(base),
                         d.generics.len(),
                         class_args.len()
                     ));
@@ -601,13 +595,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }        if let Some(e) = self.ctx.find_enum(base) {
             let _ = e;
-            self.ctx.err(sp, format!("enum `{bn}` has no static `{mn}` in this build"));
+            self.ctx.err(sp, format!("enum `{}` has no static `{}` in this build", self.ctx.name(base), self.ctx.name(member)));
             return Err(());
         }
         let msg = self
             .ctx
-            .not_in_core_scope(&bn)
-            .unwrap_or_else(|| format!("unknown name `{bn}.{mn}`"));
+            .not_in_core_scope(base)
+            .unwrap_or_else(|| format!("unknown name `{}.{}`", self.ctx.name(base), self.ctx.name(member)));
         self.ctx.err(sp, msg);
         Err(())
     }
@@ -690,7 +684,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !self.widens(arg_tys[i], ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.types.name(arg_tys[i]), self.ctx.types.name(ptys[i])
+                    i + 1, self.ctx.type_name(arg_tys[i]), self.ctx.type_name(ptys[i])
                 ));
             }
         }
@@ -754,7 +748,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !self.widens(t, ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.types.name(t), self.ctx.types.name(ptys[i])
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
                 ));
             }
             aregs.push(self.last_reg);
@@ -787,12 +781,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
             if segs.len() == 1 && self.lookup(segs[0].name).is_none() {
                 let base = segs[0].name;
-                let bn = self.ctx.name(base).to_string();
                 // `Vec` is an ordinary class (std:collection), so it routes
                 // here through `find_data`, like any other class; the
-                // std:core statics (`Option`, `Result`, `Opaque`) route only
+                // std:core statics (`Opaque`) route only
                 // when imported (RFC 0028)
-                let is_type = matches!(bn.as_str(), "str" | "bytes")
+                let is_type = matches!(base, sym::STR | sym::BYTES)
                     || self.ctx.extern_native_types.contains_key(&base)
                     || self.ctx.is_extern_namespace(base)
                     || self.ctx.find_enum(base).is_some()
@@ -820,14 +813,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.deref_for_use(rt, rreg, sp.lo)
             }
         };
-        let mname = self.ctx.name(name).to_string();
         // primitives have no method syntax (RFC 0004/0012): `str`/`bytes`
         // operations are free functions (`string_len`, `string_encode`,
         // `bytes_len`, `bytes_decode`, `bytes_from`) — except `s.code()`,
         // the v1.1 codepoint reader that replaced `char` (RFC 0004)
         match self.ctx.types.kind(rt) {
             TyKind::Str => {
-                if mname == "code" && args.is_empty() {
+                if name == sym::CODE && args.is_empty() {
                     // s.code() -> u32 — the FIRST codepoint; traps on empty
                     let creg = self.new_reg(TY_CHAR);
                     let zero = self.new_reg(TY_I32);
@@ -837,13 +829,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.emit(Op::Conv { dst, src: creg, from: PrimTy::Char, to: PrimTy::U32 }, sp.lo);
                     return Ok(TY_U32);
                 }
-                if mname == "encode" && args.is_empty() {
+                if name == sym::ENCODE && args.is_empty() {
                     // s.encode() -> bytes — the UTF-8 octets (RFC 0004)
                     let dst = self.emit_string_encode(rreg, sp.lo);
                     self.last_reg = dst;
                     return Ok(TY_BYTES);
                 }
-                if mname == "slice" && args.len() == 2 {
+                if name == sym::SLICE && args.len() == 2 {
                     // s.slice(from, to) — an O(1) view (RFC 0042)
                     let ft = self.compile_expr(args[0], Some(TY_I32))?;
                     if ft != TY_I32 {
@@ -861,7 +853,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     { let (argv_off, argc) = self.pool_args(&(vec![fr, tr])); self.emit(Op::CallNat { nat: Nat::StrSlice, recv: rreg, argv_off, argc, dst: dst }, sp.lo,); }
                     return Ok(TY_STR);
                 }
-                if mname == "len" && args.is_empty() {
+                if name == sym::LEN && args.is_empty() {
                     if let Some(info) = self.slice_info(rt) {
                         self.emit_slice_len(rreg, &info, sp.lo)?;
                         return Ok(TY_I32);
@@ -869,18 +861,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
-                    "`str` has no method `{mname}` — its members are `len`/`slice`/`code`/`encode` (`string_len({who})` is the free-fn spelling)"
+                    "`str` has no method `{}` — its members are `len`/`slice`/`code`/`encode` (`string_len({who})` is the free-fn spelling)",
+                    self.ctx.name(name)
                 ));
                 return Err(());
             }
             TyKind::Bytes => {
-                if mname == "decode" && args.is_empty() {
+                if name == sym::DECODE && args.is_empty() {
                     // b.decode() -> str — UTF-8, lossy (RFC 0004)
                     let dst = self.emit_bytes_decode(rreg, sp.lo);
                     self.last_reg = dst;
                     return Ok(TY_STR);
                 }
-                if mname == "len" && args.is_empty() {
+                if name == sym::LEN && args.is_empty() {
                     if let Some(info) = self.slice_info(rt) {
                         self.emit_slice_len(rreg, &info, sp.lo)?;
                         return Ok(TY_I32);
@@ -888,7 +881,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
-                    "`bytes` has no method `{mname}` — its members are `len`/`decode` (`bytes_len({who})` is the free-fn spelling)"
+                    "`bytes` has no method `{}` — its members are `len`/`decode` (`bytes_len({who})` is the free-fn spelling)",
+                    self.ctx.name(name)
                 ));
                 return Err(());
             }
@@ -900,7 +894,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // `s.len()` — the Slice surface member shared by every sequence;
         // lowered fused (RFC 0032 §1.1 R1), including the `Vec<T>` class
-        if mname == "len" && args.is_empty() {
+        if name == sym::LEN && args.is_empty() {
             if let Some(info) = self.slice_info(rt) {
                 self.emit_slice_len(rreg, &info, sp.lo)?;
                 return Ok(TY_I32);
@@ -911,7 +905,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // `*Vec<T>`/`*Array<T>`. Reads AND writes through the pointer go
         // to the parent (the `*T` aliasing law); the window is
         // fixed-length. str has its own slice (handled above).
-        if mname == "slice" && args.len() == 2 {
+        if name == sym::SLICE && args.len() == 2 {
             if let Some(info) = self.slice_info(rt) {
                 match &info.source {
                     SliceSource::DataBuf { buf_field, len_field } => {
@@ -1004,23 +998,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((dname, class_args, mnode)) = found {
                 return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, args, expected, sp);
             }
-            self.ctx.err(sp, format!("`{}` has no method `{mname}`", self.ctx.types.name(rt)));
+            self.ctx.err(sp, format!("`{}` has no method `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
             return Err(());
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(rt).clone() {
             // dyn receiver: ONLY that trait's methods (RFC 0012 §2)
             let tdesc = self.ctx.trait_by_id(trait_id).clone();
-            if let Some(midx) = tdesc.methods.iter().position(|m| m.name == mname) {
+            if let Some(midx) = tdesc.methods.iter().position(|m| m.name == name) {
                 let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
                 return self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp);
             }
             self.ctx.err(sp, format!(
-                "`dyn {}` reaches only `{}`'s methods —`{mname}` is not one of them (RFC 0012 §2)",
-                tdesc.name, tdesc.name
+                "`dyn {}` reaches only `{}`'s methods —`{}` is not one of them (RFC 0012 §2)",
+                self.ctx.name(tdesc.name), self.ctx.name(tdesc.name), self.ctx.name(name)
             ));
             return Err(());
         }
-        self.ctx.err(sp, format!("`{}` has no method `{mname}` in this build", self.ctx.types.name(rt)));
+        self.ctx.err(sp, format!("`{}` has no method `{}` in this build", self.ctx.type_name(rt), self.ctx.name(name)));
         Err(())
     }
 
@@ -1111,7 +1105,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !self.widens(t, ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.types.name(t), self.ctx.types.name(ptys[i])
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
                 ));
             }
             // ptys here excludes `self` — args align 1:1
@@ -1179,11 +1173,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.current_class = Some(dname);
         self.ret_ty = ret_ty;
         let base = self.locals.len();
-        let self_id = self.ctx.lookup_name("self");
-        if let Some(sid) = self_id {
-            self.locals.push(Local { name: sid, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false });
-            self.inline_self = Some((sid, recv));
-        }
+        // bind `self` (well-known symbol) for the inlined body
+        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false });
+        self.inline_self = Some((sym::SELF, recv));
         let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
         let mut ai = 0usize;
         for p in &params {
@@ -1228,7 +1220,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let midx = tdesc
             .methods
             .iter()
-            .position(|m| m.name == self.ctx.name(mname))
+            .position(|m| m.name == mname)
             .unwrap_or(0);
         let slot = self.ctx.trait_slot(im.trait_id, midx as u32).unwrap();
         self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp)
@@ -1254,7 +1246,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if t != param_tys[i] {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.types.name(t), self.ctx.types.name(param_tys[i])
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(param_tys[i])
                 ));
             }
             aregs.push(self.last_reg);
@@ -1284,7 +1276,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
-        let fname = self.ctx.name(name).to_string();
         // `p.x` auto-derefs (RFC 0005): load the pointee cell first, then
         // the field reads from it
         let (rreg, rt) = match self.ctx.types.kind(rt).clone() {
@@ -1296,20 +1287,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => (rreg, rt),
         };
         if let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() {
-            if let Some(fidx) = fields.iter().position(|f| f.name == fname) {
+            if let Some(fidx) = fields.iter().position(|f| f.name == name) {
                 let fty = fields[fidx].ty;
                 let dst = self.new_reg(fty);
                 self.emit(Op::GetF { dst, obj: rreg, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                 return Ok(fty);
             }
-            self.ctx.err(sp, format!("`{}` has no field `{fname}`", self.ctx.types.name(rt)));
+            self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
             return Err(());
         }
         if matches!(self.ctx.types.kind(rt), TyKind::TraitObj { .. }) {
             self.ctx.err(sp, "trait objects have no fields —`d.x` on `dyn I` is a compile error (RFC 0012 §2)");
             return Err(());
         }
-        self.ctx.err(sp, format!("`{}` has no field `{fname}`", self.ctx.types.name(rt)));
+        self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
         Err(())
     }
 }

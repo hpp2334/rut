@@ -6,6 +6,7 @@
 pub type TypeId = u32;
 
 use crate::id::{local_of, pack, scope_of, ScopeId, BOOT_SCOPE};
+use crate::sym::{self, IdentId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimTy {
@@ -94,7 +95,7 @@ impl Repr {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FieldInfo {
-    pub name: String,
+    pub name: IdentId,
     pub ty: TypeId,
 }
 
@@ -111,7 +112,7 @@ pub enum TyKind {
     /// growable `Vec<T>` is a rut class over it (`std:collection`).
     Array { elem: TypeId },
     /// named-int set (RFC 0006); members are immortal singleton cells
-    Enum { members: Vec<(String, i64)> },
+    Enum { members: Vec<(IdentId, i64)> },
     /// struct or class record cell — fields stored as one slot each
     /// (RFC 0009/0010); construction rules differ, representation does not
     Data { fields: Vec<FieldInfo> },
@@ -128,7 +129,7 @@ pub enum TyKind {
 
 #[derive(Clone, Debug)]
 pub struct RutType {
-    pub name: String,
+    pub name: IdentId,
     pub kind: TyKind,
 }
 
@@ -184,28 +185,26 @@ impl TypeTable {
 
     fn boot_impl(packed: bool, scope: ScopeId) -> TypeTable {
         let mut t = TypeTable { packed, scope, ..Default::default() };
-        let mut push = |name: &str, kind: TyKind| {
-            t.types.push(RutType {
-                name: name.to_string(),
-                kind,
-            });
+        let mut push = |name: IdentId, kind: TyKind| {
+            t.types.push(RutType { name, kind });
         };
-        push("nil", TyKind::Nil);
-        push("u8", TyKind::Prim(PrimTy::U8));
-        push("u16", TyKind::Prim(PrimTy::U16));
-        push("u32", TyKind::Prim(PrimTy::U32));
-        push("u64", TyKind::Prim(PrimTy::U64));
-        push("i8", TyKind::Prim(PrimTy::I8));
-        push("i16", TyKind::Prim(PrimTy::I16));
-        push("i32", TyKind::Prim(PrimTy::I32));
-        push("i64", TyKind::Prim(PrimTy::I64));
-        push("f32", TyKind::Prim(PrimTy::F32));
-        push("f64", TyKind::Prim(PrimTy::F64));
-        push("bool", TyKind::Prim(PrimTy::Bool));
-        push("char", TyKind::Prim(PrimTy::Char));
-        push("str", TyKind::Str);
-        push("Opaque", TyKind::Opaque);
-        push("bytes", TyKind::Bytes);
+        // boot names are well-known symbols — fixed ids, no interner needed
+        push(sym::NIL, TyKind::Nil);
+        push(sym::U8, TyKind::Prim(PrimTy::U8));
+        push(sym::U16, TyKind::Prim(PrimTy::U16));
+        push(sym::U32, TyKind::Prim(PrimTy::U32));
+        push(sym::U64, TyKind::Prim(PrimTy::U64));
+        push(sym::I8, TyKind::Prim(PrimTy::I8));
+        push(sym::I16, TyKind::Prim(PrimTy::I16));
+        push(sym::I32, TyKind::Prim(PrimTy::I32));
+        push(sym::I64, TyKind::Prim(PrimTy::I64));
+        push(sym::F32, TyKind::Prim(PrimTy::F32));
+        push(sym::F64, TyKind::Prim(PrimTy::F64));
+        push(sym::BOOL, TyKind::Prim(PrimTy::Bool));
+        push(sym::CHAR, TyKind::Prim(PrimTy::Char));
+        push(sym::STR, TyKind::Str);
+        push(sym::OPAQUE, TyKind::Opaque);
+        push(sym::BYTES, TyKind::Bytes);
         t.boot_len = t.types.len() as u32;
         t.scope_base = vec![0; scope as usize + 1];
         if packed {
@@ -285,7 +284,8 @@ impl TypeTable {
     }
 
     pub fn intern(&mut self, ty: RutType) -> TypeId {
-        // structural interning for anonymous instantiations (Vec<T>, Option<T>...)
+        // structural interning for anonymous instantiations (Vec<T>, fn(..)...)
+        // — names are IdentIds, so the dedup key compare is an integer compare
         for (i, t) in self.types.iter().enumerate() {
             if t.name == ty.name && t.kind == ty.kind {
                 return self.id_for(i as u32);
@@ -303,9 +303,6 @@ impl TypeTable {
     }
     pub fn kind(&self, id: TypeId) -> &TyKind {
         &self.types[self.dense(id) as usize].kind
-    }
-    pub fn name(&self, id: TypeId) -> &str {
-        &self.types[self.dense(id) as usize].name
     }
     pub fn is_prim(&self, id: TypeId) -> Option<PrimTy> {
         match self.kind(id) {

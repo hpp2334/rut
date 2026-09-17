@@ -292,7 +292,7 @@ impl Vm {
     pub(super) fn op_clone_val(&mut self, dst: Reg, src: Reg, ty: TypeId) -> Result<(), Trap> {
         let v = self.heap.clone_val(self.cur_regs[src as usize], ty, &self.prog.types).map_err(|t| {
             let f = &self.prog.funcs[self.cur_func as usize];
-            Trap::new(t.kind, format!("{} (in {} @ pc {} r{src}, type {}, bits {:#x})", t.msg, f.name, self.cur_pc, self.prog.types.name(ty), unsafe { self.cur_regs[src as usize].i }))
+            Trap::new(t.kind, format!("{} (in {} @ pc {} r{src}, type {}, bits {:#x})", t.msg, self.prog.func_name(f), self.cur_pc, self.prog.type_name(ty), unsafe { self.cur_regs[src as usize].i }))
         })?;
         let old = self.cur_regs[dst as usize];
         self.cur_regs[dst as usize] = v;
@@ -378,7 +378,7 @@ impl Vm {
                     TrapKind::Invalid,
                     format!(
                         "no impl for trait slot {slot} on {} — `is` would have said false",
-                        self.prog.types.name(ty)
+                        self.prog.type_name(ty)
                     ),
                 )
             })?;

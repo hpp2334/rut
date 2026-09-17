@@ -127,14 +127,14 @@ impl<'a> GraphCompiler<'a> {
             let mut funcs = Vec::new();
             for (i, (name, params, ret)) in module.host_funcs.iter().enumerate() {
                 surface.funcs.push(rut_core::binary::SurfaceFn {
-                    name: name.clone(),
+                    name: surface.names.intern(name),
                     params: params.clone(),
                     ret: *ret,
                     local: i as u32,
                     intrinsic: None,
                 });
                 funcs.push(FuncCode {
-                    name: name.clone(),
+                    name: surface.names.intern(name),
                     params: params.clone(),
                     ret: *ret,
                     is_method: false,
@@ -151,7 +151,7 @@ impl<'a> GraphCompiler<'a> {
                 // the declared signature is a placeholder: the LIR types the
                 // call from its arguments (RFC 0032 §1.1 R2)
                 surface.funcs.push(rut_core::binary::SurfaceFn {
-                    name: name.clone(),
+                    name: surface.names.intern(name),
                     params: vec![rut_core::types::TY_I32; *arity],
                     ret: rut_core::types::TY_I32,
                     local: 0,
@@ -160,16 +160,29 @@ impl<'a> GraphCompiler<'a> {
             }
             for (name, ty, bits) in &module.consts {
                 surface.consts.push(rut_core::binary::SurfaceConst {
-                    name: name.clone(),
+                    name: surface.names.intern(name),
                     ty: *ty,
                     bits: *bits,
                 });
             }
-            surface.namespace = module.namespace.clone();
-            surface.native_types = module.native_types.clone();
-            surface.native_ifaces = module.native_ifaces.clone();
-            surface.native_fns = module.native_fns.clone();
-            let program = Program { name: spec.to_string(), scope, surface, funcs, ..Default::default() };
+            surface.namespace = module.namespace.as_deref().map(|n| surface.names.intern(n));
+            surface.native_types = module
+                .native_types
+                .iter()
+                .map(|(n, k)| (surface.names.intern(n), *k))
+                .collect();
+            surface.native_ifaces = module
+                .native_ifaces
+                .iter()
+                .map(|(n, k)| (surface.names.intern(n), *k))
+                .collect();
+            surface.native_fns = module
+                .native_fns
+                .iter()
+                .map(|n| surface.names.intern(n))
+                .collect();
+            let interner = surface.names.clone();
+            let program = Program { name: spec.to_string(), scope, interner, surface, funcs, ..Default::default() };
             let idx = self.programs.len();
             self.programs.push(program);
             let unit = Unit::Linked { idx, scope };

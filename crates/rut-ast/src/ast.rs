@@ -14,13 +14,15 @@
 //! are block-or-expr — which is exactly how the compiler treats them.
 
 use rut_lexer::span::Span;
-use std::collections::HashMap;
 use std::marker::PhantomData;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId(pub u32);
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct IdentId(pub u32);
+
+/// An interned name — re-exported from rut-core (RFC 0030 §5): the AST's
+/// interner and rut-core's are one type, so well-known symbol ids
+/// (`rut_core::sym::SELF` and friends) are valid in the AST's interner.
+pub use rut_core::IdentId;
 
 // ---- typed handles ----
 
@@ -205,30 +207,9 @@ impl Ast {
 }
 
 /// String interner — names are indices, not `String` keys (RFC 0030 §5).
-#[derive(Default)]
-pub struct Interner {
-    names: Vec<String>,
-    map: HashMap<String, IdentId>,
-}
-
-impl Interner {
-    pub fn intern(&mut self, s: &str) -> IdentId {
-        if let Some(id) = self.map.get(s) {
-            return *id;
-        }
-        let id = IdentId(self.names.len() as u32);
-        self.names.push(s.to_string());
-        self.map.insert(s.to_string(), id);
-        id
-    }
-    /// interner lookup — find an existing name's id (no interning)
-    pub fn lookup(&self, s: &str) -> Option<IdentId> {
-        self.map.get(s).copied()
-    }
-    pub fn name(&self, id: IdentId) -> &str {
-        &self.names[id.0 as usize]
-    }
-}
+/// Lives in rut-core so well-known symbols and every compiled artifact
+/// share one representation; re-exported here for the parser and the AST.
+pub use rut_core::Interner;
 
 // ---- visibility (RFC 0003 §2) ----
 

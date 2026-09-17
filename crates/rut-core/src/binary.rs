@@ -4,26 +4,27 @@
 //! with multi-module).
 
 use crate::ops::*;
+use crate::sym::{self, IdentId, Interner};
 use crate::types::{FieldInfo, PrimTy, Repr, RutType, TyKind, TypeId, TypeTable};
 
 // ---- the loaded program ----
 
 #[derive(Clone, Debug)]
 pub struct TraitMethod {
-    pub name: String,
+    pub name: IdentId,
     pub params: Vec<TypeId>,
     pub ret: TypeId,
 }
 
 #[derive(Clone, Debug)]
 pub struct TraitDesc {
-    pub name: String,
+    pub name: IdentId,
     pub methods: Vec<TraitMethod>,
 }
 
 #[derive(Clone, Debug)]
 pub struct FuncCode {
-    pub name: String,
+    pub name: IdentId,
     pub params: Vec<TypeId>,
     pub ret: TypeId,
     /// method receiver type (params[0]) — Some for methods
@@ -57,10 +58,12 @@ pub enum ConstVal {
 }
 
 /// One exported function in a module's surface (RFC 0029 DeclIr sketch):
-/// the importable name, its signature, and its module-local id.
-#[derive(Clone, Debug, Default)]
+/// the importable name, its signature, and its module-local id. Names are
+/// [`IdentId`]s into the surface's own [`Surface::names`] interner — a
+/// surface is self-contained and crosses modules intact.
+#[derive(Clone, Debug)]
 pub struct SurfaceFn {
-    pub name: String,
+    pub name: IdentId,
     pub params: Vec<TypeId>,
     pub ret: TypeId,
     /// module-local function id (the exporter's)
@@ -75,17 +78,17 @@ pub struct SurfaceFn {
 /// One exported constant in a module's surface — `std:math::PI` and
 /// friends. `bits` is the raw scalar payload (f64 bits, i64 bits, …) the
 /// importer materializes with `ConstRaw`.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SurfaceConst {
-    pub name: String,
+    pub name: IdentId,
     pub ty: TypeId,
     pub bits: u64,
 }
 
 /// One exported type: its importable name and module-local id.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SurfaceType {
-    pub name: String,
+    pub name: IdentId,
     /// local id within the exporter's own type block
     pub local: u32,
     /// records: a `class` (no outside literal) vs a `struct`
@@ -122,13 +125,19 @@ pub enum NativeIface {
 }
 
 /// The importable surface a module publishes (traits still to come).
+/// Names are [`IdentId`]s into the surface's own [`Surface::names`]
+/// interner — including the names inside the carried [`RutType`]
+/// descriptors — so a surface crosses modules without a lookup context.
 #[derive(Clone, Debug, Default)]
 pub struct Surface {
+    /// the name context for every name in this surface (including
+    /// `types`' descriptors); starts with the well-known table
+    pub names: Interner,
     /// The qualified-access head for a namespace module (`std:math` ->
     /// `Math`): members are reached as `<namespace>.<member>`. `None`
     /// when the module has no namespace form. Routing is name-generic:
     /// the compiler binds the head only when the importer wrote it.
-    pub namespace: Option<String>,
+    pub namespace: Option<IdentId>,
     pub funcs: Vec<SurfaceFn>,
     /// exported constants (native modules: `std:math`)
     pub consts: Vec<SurfaceConst>,
@@ -140,20 +149,21 @@ pub struct Surface {
     /// exported (pub) type names
     pub type_exports: Vec<SurfaceType>,
     /// builtin container names (`std:core` only): name -> constructor
-    pub native_types: Vec<(String, NativeTy)>,
+    pub native_types: Vec<(IdentId, NativeTy)>,
     /// builtin interface names (`std:core` only): name -> contract
-    pub native_ifaces: Vec<(String, NativeIface)>,
+    pub native_ifaces: Vec<(IdentId, NativeIface)>,
     /// compiler-lowered builtin function names (`std:core` only) — no
     /// `FuncCode`; the bodies are rut-lir lowering, reached only through
     /// the import binding
-    pub native_fns: Vec<String>,
+    pub native_fns: Vec<IdentId>,
 }
 
-/// The `std:core` prelude function names (RFC 0028), in surface order.
-pub const CORE_FNS: &[&str] = &[
-    "downcast", "assert", "panic",
-    "make_ptr", "on_drop",
-    "string_join",
+/// The `std:core` prelude function names (RFC 0028), in surface order —
+/// well-known symbols, so the ids are meaningful in every interner.
+pub const CORE_FNS: &[IdentId] = &[
+    sym::DOWNCAST, sym::ASSERT, sym::PANIC,
+    sym::MAKE_PTR, sym::ON_DROP,
+    sym::STRING_JOIN,
 ];
 
 impl Surface {
@@ -161,45 +171,43 @@ impl Surface {
     /// the builtin interfaces, and the compiler-lowered functions. One
     /// source of truth — the driver mounts it (`mount_std_core`), the
     /// compiler hints from it, and `rut/std-core/core.d.rut` mirrors it
-    /// for the LSP (kept true to the implementation by test).
+    /// for the LSP (kept true to the implementation by test). Every name
+    /// is a well-known symbol — the surface's interner is the table.
     pub fn core() -> Surface {
         Surface {
-            native_types: vec![
-                ("Array".to_string(), NativeTy::Array),
-                ("Opaque".to_string(), NativeTy::Opaque),
-            ],
-            native_ifaces: vec![("Iterator".to_string(), NativeIface::Iterator)],
-            native_fns: CORE_FNS.iter().map(|s| s.to_string()).collect(),
+            names: Interner::new(),
+            native_types: vec![(sym::ARRAY, NativeTy::Array), (sym::OPAQUE, NativeTy::Opaque)],
+            native_ifaces: vec![(sym::ITERATOR, NativeIface::Iterator)],
+            native_fns: CORE_FNS.to_vec(),
             ..Default::default()
         }
     }
 }
 
 /// A `std:core` builtin container by name, if it is one.
-pub fn core_native_type(name: &str) -> Option<NativeTy> {
-    Surface::core()
-        .native_types
-        .iter()
-        .find(|(n, _)| n == name)
-        .map(|(_, k)| *k)
+pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
+    match name {
+        sym::ARRAY => Some(NativeTy::Array),
+        sym::OPAQUE => Some(NativeTy::Opaque),
+        _ => None,
+    }
 }
 
 /// A `std:core` builtin interface by name, if it is one.
-pub fn core_native_iface(name: &str) -> Option<NativeIface> {
-    Surface::core()
-        .native_ifaces
-        .iter()
-        .find(|(n, _)| n == name)
-        .map(|(_, k)| *k)
+pub fn core_native_iface(name: IdentId) -> Option<NativeIface> {
+    match name {
+        sym::ITERATOR => Some(NativeIface::Iterator),
+        _ => None,
+    }
 }
 
 /// Is `name` one of the `std:core` prelude functions?
-pub fn is_core_fn(name: &str) -> bool {
+pub fn is_core_fn(name: IdentId) -> bool {
     CORE_FNS.contains(&name)
 }
 
 /// Is `name` any `std:core` prelude name (type, interface, or function)?
-pub fn is_core_name(name: &str) -> bool {
+pub fn is_core_name(name: IdentId) -> bool {
     is_core_fn(name) || core_native_type(name).is_some() || core_native_iface(name).is_some()
 }
 
@@ -235,6 +243,11 @@ pub struct Program {
     pub name: String,
     /// the module's stable scope (RFC 0035 §1); `0` if unset
     pub scope: crate::id::ScopeId,
+    /// the name context for every [`IdentId`] in this program — type
+    /// names, field names, trait/method names, function names, exports,
+    /// and the in-memory [`Surface`](Surface). Self-contained: a decoded
+    /// program rebuilds it from the binary's name table (RFC 0033 §1).
+    pub interner: Interner,
     /// exported surface, for importers (in-memory; not serialized)
     pub surface: Surface,
     pub types: TypeTable,
@@ -245,12 +258,32 @@ pub struct Program {
     pub vtables: Vec<Vec<Option<u32>>>,
     pub consts: Vec<ConstVal>,
     pub funcs: Vec<FuncCode>,
-    pub exports: Vec<(String, u32)>,
+    pub exports: Vec<(IdentId, u32)>,
 }
 
 impl Program {
+    /// The text of an interned name in this program.
+    pub fn name_of(&self, id: IdentId) -> &str {
+        self.interner.name(id)
+    }
+
+    /// A type's name — the display form of [`RutType::name`](crate::types::RutType).
+    pub fn type_name(&self, id: TypeId) -> &str {
+        self.interner.name(self.types.type_at(id).name)
+    }
+
+    /// A function's name.
+    pub fn func_name(&self, f: &FuncCode) -> &str {
+        self.interner.name(f.name)
+    }
+
+    /// The function a host-facing export name binds, if any. Linear over
+    /// the (few) exports — the host calls by string, the table stores ids.
     pub fn export(&self, name: &str) -> Option<u32> {
-        self.exports.iter().find(|(n, _)| n == name).map(|(_, f)| *f)
+        self.exports
+            .iter()
+            .find(|(n, _)| self.interner.name(*n) == name)
+            .map(|(_, f)| *f)
     }
     pub fn slot_of(&self, trait_id: u32, method: u32) -> Option<u32> {
         self.trait_slots
@@ -263,7 +296,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -271,19 +304,28 @@ pub fn encode(prog: &Program) -> Vec<u8> {
     e.u32(VERSION);
     e.str(&prog.name);
 
+    // the name table: only the instance-local tail of the interner — the
+    // well-known range is implied by the format itself (RFC 0033 §1)
+    let wk = prog.interner.well_known_len() as usize;
+    let tail = &prog.interner.names()[wk..];
+    e.u32(tail.len() as u32);
+    for n in tail {
+        e.str(n);
+    }
+
     // types
     e.u32(prog.types.types.len() as u32);
     for t in &prog.types.types {
-        e.str(&t.name);
+        e.u32(t.name.0);
         encode_kind(&mut e, &t.kind);
     }
     // traits
     e.u32(prog.traits.len() as u32);
     for t in &prog.traits {
-        e.str(&t.name);
+        e.u32(t.name.0);
         e.u32(t.methods.len() as u32);
         for m in &t.methods {
-            e.str(&m.name);
+            e.u32(m.name.0);
             e.tys(&m.params);
             e.u32(m.ret);
         }
@@ -352,7 +394,7 @@ pub fn encode(prog: &Program) -> Vec<u8> {
     // funcs
     e.u32(prog.funcs.len() as u32);
     for f in &prog.funcs {
-        e.str(&f.name);
+        e.u32(f.name.0);
         e.tys(&f.params);
         e.u32(f.ret);
         e.u8(f.is_method as u8);
@@ -377,7 +419,7 @@ pub fn encode(prog: &Program) -> Vec<u8> {
     // exports
     e.u32(prog.exports.len() as u32);
     for (n, f) in &prog.exports {
-        e.str(n);
+        e.u32(n.0);
         e.u32(*f);
     }
     e.out
@@ -404,7 +446,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u8(5);
             e.u32(members.len() as u32);
             for (n, v) in members {
-                e.str(n);
+                e.u32(n.0);
                 e.i64(*v);
             }
         }
@@ -412,7 +454,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u8(8);
             e.u32(fields.len() as u32);
             for f in fields {
-                e.str(&f.name);
+                e.u32(f.name.0);
                 e.u32(f.ty);
             }
         }
@@ -445,22 +487,30 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         return Err(format!("unsupported module binary version {ver}"));
     }
     let name = d.str()?;
+    // the name table: rebuild the interner — well-known range implied,
+    // tail restored verbatim (RFC 0033 §1)
+    let mut interner = Interner::new();
+    let nnames = d.u32()? as usize;
+    for _ in 0..nnames {
+        interner.intern(&d.str()?);
+    }
+    let interned = |d: &mut Dec| -> Result<IdentId, String> { Ok(IdentId(d.u32()?)) };
     let ntypes = d.u32()? as usize;
     let mut types = TypeTable::default();
     types.types.reserve(ntypes);
     for _ in 0..ntypes {
-        let tname = d.str()?;
+        let tname = interned(&mut d)?;
         let kind = decode_kind(&mut d)?;
         types.types.push(RutType { name: tname, kind });
     }
     let ntraits = d.u32()? as usize;
     let mut traits = Vec::with_capacity(ntraits);
     for _ in 0..ntraits {
-        let tname = d.str()?;
+        let tname = interned(&mut d)?;
         let nmethods = d.u32()? as usize;
         let mut methods = Vec::with_capacity(nmethods);
         for _ in 0..nmethods {
-            let mname = d.str()?;
+            let mname = interned(&mut d)?;
             let params = d.tys()?;
             let ret = d.u32()?;
             methods.push(TraitMethod { name: mname, params, ret });
@@ -503,7 +553,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
     let nfuncs = d.u32()? as usize;
     let mut funcs = Vec::with_capacity(nfuncs);
     for _ in 0..nfuncs {
-        let fname = d.str()?;
+        let fname = interned(&mut d)?;
         let params = d.tys()?;
         let ret = d.u32()?;
         let is_method = d.u8()? != 0;
@@ -529,11 +579,11 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
     let nexp = d.u32()? as usize;
     let mut exports = Vec::with_capacity(nexp);
     for _ in 0..nexp {
-        let n = d.str()?;
+        let n = interned(&mut d)?;
         let f = d.u32()?;
         exports.push((n, f));
     }
-    Ok(Program { name, types, traits, trait_slots, vtables, consts, funcs, exports, ..Default::default() })
+    Ok(Program { name, interner, types, traits, trait_slots, vtables, consts, funcs, exports, ..Default::default() })
 }
 
 fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
@@ -552,7 +602,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             let n = d.u32()? as usize;
             let mut members = Vec::with_capacity(n);
             for _ in 0..n {
-                let m = d.str()?;
+                let m = IdentId(d.u32()?);
                 let v = d.i64()?;
                 members.push((m, v));
             }
@@ -562,7 +612,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             let n = d.u32()? as usize;
             let mut fields = Vec::with_capacity(n);
             for _ in 0..n {
-                let name = d.str()?;
+                let name = IdentId(d.u32()?);
                 let ty = d.u32()?;
                 fields.push(FieldInfo { name, ty });
             }
@@ -897,5 +947,87 @@ impl<'a> Dec<'a> {
     }
     fn u8opt(&mut self) -> Result<Option<u16>, String> {
         Ok(if self.u8()? != 0 { Some(self.u16()?) } else { None })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{TY_I32, TY_NIL, TY_STR};
+
+    fn sample() -> Program {
+        let mut p = Program::default();
+        p.name = "app:demo".into();
+        p.scope = 7;
+        let point = p.interner.intern("Point");
+        let x = p.interner.intern("x");
+        let vid = p.interner.intern("Vec");
+        let main = p.interner.intern("main");
+        p.types = TypeTable::boot();
+        p.types.types.push(RutType {
+            name: point,
+            kind: TyKind::Data {
+                fields: vec![
+                    FieldInfo { name: x, ty: TY_I32 },
+                    FieldInfo { name: vid, ty: TY_STR },
+                ],
+            },
+        });
+        p.traits.push(TraitDesc {
+            name: vid,
+            methods: vec![TraitMethod {
+                name: sym::ITERATE,
+                params: vec![],
+                ret: TY_NIL,
+            }],
+        });
+        p.funcs.push(FuncCode {
+            name: main,
+            params: vec![],
+            ret: TY_I32,
+            is_method: false,
+            n_captures: 0,
+            regs: vec![TY_I32],
+            argv: vec![],
+            labels: vec![],
+            code: vec![],
+            spans: vec![],
+            host: None,
+        });
+        p.exports.push((main, 0));
+        p
+    }
+
+    #[test]
+    fn encode_decode_round_trips_names_and_ids() {
+        let p = sample();
+        let bytes = encode(&p);
+        let q = decode(&bytes).expect("decode");
+        assert_eq!(q.funcs.len(), 1);
+        assert_eq!(q.name_of(q.funcs[0].name), "main");
+        assert_eq!(q.name_of(q.exports[0].0), "main");
+        assert_eq!(q.type_name(TY_STR), "str");
+        let data = &q.types.types[q.types.dense(boot_len() as u32) as usize];
+        assert_eq!(q.name_of(data.name), "Point");
+        if let TyKind::Data { fields } = &data.kind {
+            assert_eq!(q.name_of(fields[0].name), "x");
+            assert_eq!(q.name_of(fields[1].name), "Vec");
+        } else {
+            panic!("expected a record");
+        }
+        assert_eq!(q.traits[0].methods[0].name, sym::ITERATE);
+    }
+
+    #[test]
+    fn encoding_is_deterministic() {
+        // RFC 0033 §1: same AST + same dependency versions → byte-identical
+        // binary. Two independent compiles of the same shape must agree.
+        let a = encode(&sample());
+        let b = encode(&sample());
+        assert_eq!(a, b);
+    }
+
+    fn boot_len() -> u32 {
+        TypeTable::boot().types.len() as u32
     }
 }

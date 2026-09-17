@@ -13,6 +13,7 @@ use rut_ast::ast::*;
 use rut_lexer::span::Span;
 use rut_lexer::token::{FPart, FStrTok, Tok, Token};
 
+use rut_core::sym;
 use crate::frame::{Done, Frame, Step};
 use crate::item::ParamsFrame;
 use crate::stmt::{BlockFrame, WhenFrame};
@@ -443,7 +444,7 @@ impl AtomFrame {
                 }
                 if name == "self" {
                     p.bump();
-                    let seg = PathSeg { name: p.interner.intern("self"), generics: Vec::new() };
+                    let seg = PathSeg { name: sym::SELF, generics: Vec::new() };
                     let e = p.expr(ExprKind::Path { segs: vec![seg] }, sp);
                     return self.finish(p, e);
                 }
@@ -451,10 +452,10 @@ impl AtomFrame {
                     p.bump();
                     // `Self { .. }` — the class-private literal (RFC 0010 §1)
                     if matches!(p.tok(), Tok::LBrace) {
-                        let ty_name = p.interner.intern("Self");
+                        let ty_name = sym::SELF_TY;
                         return self.struct_enter(p, ty_name, true);
                     }
-                    let seg = PathSeg { name: p.interner.intern("Self"), generics: Vec::new() };
+                    let seg = PathSeg { name: sym::SELF_TY, generics: Vec::new() };
                     let e = p.expr(ExprKind::Path { segs: vec![seg] }, sp);
                     return self.finish(p, e);
                 }

@@ -5,6 +5,7 @@
 use crate::check::{float_suffix_ty, int_suffix_ty, numeric_prim, TcResult};
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
+use rut_core::sym;
 use rut_core::types::*;
 use super::*;
 
@@ -86,14 +87,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let it = self.compile_expr(idx, Some(TY_I32))?;
                 if it != TY_I32 {
-                    self.ctx.err(sp, format!("index must be `i32`, found `{}`", self.ctx.types.name(it)));
+                    self.ctx.err(sp, format!("index must be `i32`, found `{}`", self.ctx.type_name(it)));
                 }
                 let ireg = self.last_reg;
                 if let Some(info) = self.slice_info(rt) {
                     self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
                     return Ok(info.elem);
                 }
-                self.ctx.err(sp, format!("indexing needs a sequence (Vec, Array, or bytes) —found `{}`", self.ctx.types.name(rt)));
+                self.ctx.err(sp, format!("indexing needs a sequence (Vec, Array, or bytes) —found `{}`", self.ctx.type_name(rt)));
                 Err(())
             }
             ExprKind::Unary { op, expr } => {
@@ -226,7 +227,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if !self.ctx.types.is_ref(want) && want != TY_STR {
                             self.ctx.err(sp, format!(
                                 "`is` needs a concrete (cell) or trait type —`{}` is by-value",
-                                self.ctx.types.name(want)
+                                self.ctx.type_name(want)
                             ));
                         }
                         match self.ctx.types.kind(rt).clone() {
@@ -259,14 +260,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }) else {
                     self.ctx.err(sp, format!(
                         "`as` converts between numeric primitives —`{}` is not one (RFC 0007 §1)",
-                        self.ctx.types.name(want)
+                        self.ctx.type_name(want)
                     ));
                     return Err(());
                 };
                 let TyKind::Prim(from_prim) = self.ctx.types.kind(from).clone() else {
                     self.ctx.err(sp, format!(
                         "`as` converts between numeric primitives —found `{}` (RFC 0007 §1)",
-                        self.ctx.types.name(from)
+                        self.ctx.type_name(from)
                     ));
                     return Err(());
                 };
@@ -348,7 +349,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     if (v as i128) < min || (v as i128) > max {
                         self.ctx.err(sp, format!(
                             "integer literal {v} does not fit `{}` (RFC 0007 §1)",
-                            self.ctx.types.name(ty)
+                            self.ctx.type_name(ty)
                         ));
                     }
                 }
@@ -419,7 +420,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // single name: local / module let / enum member of... / builtin value
         if segs.len() == 1 && segs[0].generics.is_empty() {
             let name = segs[0].name;
-            let n = self.ctx.name(name).to_string();
             if let Some(l) = self.lookup(name).copied() {
                 // inlined `Slice` accessor: `self` is the receiver register
                 // itself — no copy (RFC 0005 sequence access)
@@ -439,16 +439,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 return Ok(l.ty);
             }
-            match n.as_str() {
-                "own" | "downcast" | "panic" | "assert" if self.ctx.extern_native_fns.contains(&name) => {
-                    self.ctx.err(sp, format!("`{n}` is a function —call it: `{n}(..)`"));
-                    return Err(());
-                }
-                "print" | "type_id" => {
-                    self.ctx.err(sp, format!("`{n}` is a function —call it: `{n}(..)`"));
-                    return Err(());
-                }
-                _ => {}
+            // a builtin fn name in value position — point at the call form
+            if (self.ctx.extern_native_fns.contains(&name)
+                && matches!(name, sym::DOWNCAST | sym::PANIC | sym::ASSERT))
+                || matches!(name, sym::TYPE_ID)
+                || self.ctx.name(name) == "print"
+            {
+                self.ctx.err(sp, format!("`{}` is a function —call it: `{}(..)`", self.ctx.name(name), self.ctx.name(name)));
+                return Err(());
             }
             // module let (load-time, M1: literals only)
             if let Some((_, ty_node, init)) = self.ctx.find_let(name).cloned() {
@@ -464,8 +462,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             let msg = self
                 .ctx
-                .not_in_core_scope(&n)
-                .unwrap_or_else(|| format!("unknown name `{n}`"));
+                .not_in_core_scope(name)
+                .unwrap_or_else(|| format!("unknown name `{}`", self.ctx.name(name)));
             self.ctx.err(sp, msg);
             return Err(());
         }
@@ -506,14 +504,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone() else {
                         self.ctx.err(sp, format!(
                             "`{}` has no field `{}` — `{}` is not a record",
-                            self.ctx.types.name(cur_ty), self.ctx.name(seg.name), self.ctx.types.name(cur_ty)
+                            self.ctx.type_name(cur_ty), self.ctx.name(seg.name), self.ctx.type_name(cur_ty)
                         ));
                         return Err(());
                     };
-                    let Some(fidx) = fields.iter().position(|f| f.name == self.ctx.name(seg.name)) else {
+                    let Some(fidx) = fields.iter().position(|f| f.name == seg.name) else {
                         self.ctx.err(sp, format!(
                             "`{}` has no field `{}`",
-                            self.ctx.types.name(cur_ty), self.ctx.name(seg.name)
+                            self.ctx.type_name(cur_ty), self.ctx.name(seg.name)
                         ));
                         return Err(());
                     };

@@ -18,8 +18,9 @@ impl<'a> Ctx<'a> {
         // reserve the slot with a placeholder so recursion terminates
         let fid = self.funcs.len() as u32;
         self.inst_map.insert(inst.clone(), fid);
+        let fname = self.intern(&self.inst_name(&inst));
         self.funcs.push(FuncCode {
-            name: self.inst_name(&inst),
+            name: fname,
             params: vec![],
             ret: TY_NIL,
             is_method: false,
@@ -41,7 +42,8 @@ impl<'a> Ctx<'a> {
             FnKey::Method { data, name } => format!("{}${}", self.name(data), self.name(name)),
             FnKey::ImplMethod { idx, name } => {
                 let tid = self.impls[idx].trait_id;
-                format!("{}#${}${}", self.traits[tid as usize].name, idx, self.name(name))
+                let tname = self.name(self.traits[tid as usize].name);
+                format!("{}#${}${}", tname, idx, self.name(name))
             }
             FnKey::Lambda(node) => format!("lambda@{}", node.0),
             FnKey::ForOfEmit { body, .. } => format!("forof@{}", body.0),
@@ -103,7 +105,7 @@ impl<'a> Ctx<'a> {
                     d.generics.iter().cloned().zip(args.iter().cloned()).collect();
                 for (midx, tm) in tdesc.methods.iter().enumerate() {
                     let Some((mname, _)) =
-                        d.methods.iter().find(|(n, _)| self.name(*n) == tm.name)
+                        d.methods.iter().find(|(n, _)| *n == tm.name)
                     else {
                         continue;
                     };

@@ -193,7 +193,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if t != fty {
                 self.ctx.err(self.ctx.ast.span(v.id()), format!(
                     "field `{}` is `{}`, found `{}`",
-                    self.ctx.name(*fname), self.ctx.types.name(fty), self.ctx.types.name(t)
+                    self.ctx.name(*fname), self.ctx.type_name(fty), self.ctx.type_name(t)
                 ));
             }
             val_regs[fidx] = Some(self.last_reg);
@@ -261,7 +261,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => {
                 self.ctx.err(sp, format!(
                     "a literal must initialize `{}` —it has no zero value (RFC 0009)",
-                    self.ctx.types.name(ty)
+                    self.ctx.type_name(ty)
                 ));
                 return Err(());
             }
@@ -279,23 +279,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let TyKind::Data { fields: desc } = self.ctx.types.kind(sty).clone() else {
-            self.ctx.err(sp, format!("`{}` is not a struct/class of this module", self.ctx.types.name(sty)));
+            self.ctx.err(sp, format!("`{}` is not a struct/class of this module", self.ctx.type_name(sty)));
             return Err(());
         };
         if self.ctx.extern_classes.contains(&sty) {
             self.ctx.err(sp, format!(
                 "classes have no instance literal — construct through a class method (`{}.new(..)`, RFC 0010 §1)",
-                self.ctx.types.name(sty)
+                self.ctx.type_name(sty)
             ));
             return Err(());
         }
         let n = desc.len();
         let mut val_regs: Vec<Option<u16>> = vec![None; n];
         for (fname, v) in &fields {
-            let fs = self.ctx.name(*fname).to_string();
-            let Some(fidx) = desc.iter().position(|f| f.name == fs) else {
+            let Some(fidx) = desc.iter().position(|f| f.name == *fname) else {
                 self.ctx.err(self.ctx.ast.span(v.id()), format!(
-                    "`{}` has no field `{fs}`", self.ctx.types.name(sty)
+                    "`{}` has no field `{}`", self.ctx.type_name(sty), self.ctx.name(*fname)
                 ));
                 return Err(());
             };
@@ -303,8 +302,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(*v, Some(fty))?;
             if t != fty {
                 self.ctx.err(self.ctx.ast.span(v.id()), format!(
-                    "field `{fs}` is `{}`, found `{}`",
-                    self.ctx.types.name(fty), self.ctx.types.name(t)
+                    "field `{}` is `{}`, found `{}`",
+                    self.ctx.name(*fname), self.ctx.type_name(fty), self.ctx.type_name(t)
                 ));
             }
             val_regs[fidx] = Some(self.last_reg);
@@ -313,11 +312,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .iter()
             .zip(&val_regs)
             .find(|(_, r)| r.is_none())
-            .map(|(f, _)| f.name.clone())
+            .map(|(f, _)| f.name)
         {
             self.ctx.err(sp, format!(
-                "imported record `{}` must initialize every field — `{missing}` is missing (imported field defaults are not carried, RFC 0035 §1)",
-                self.ctx.types.name(sty)
+                "imported record `{}` must initialize every field — `{}` is missing (imported field defaults are not carried, RFC 0035 §1)",
+                self.ctx.type_name(sty), self.ctx.name(missing)
             ));
             return Err(());
         }

@@ -13,6 +13,7 @@
 
 use crate::binary::{ConstVal, FuncCode, Program, TraitDesc, TraitMethod};
 use crate::ops::Op;
+use crate::sym::IdentId;
 use crate::types::{RutType, TyKind, TypeId, TypeTable};
 
 /// A link failure — a load error, never a runtime trap.
@@ -55,7 +56,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         .first()
         .map(|m| m.name.clone())
         .unwrap_or_default();
-
     // scope -> global dense base of that scope's type block (boot = 0)
     let mut scope_base: std::collections::HashMap<crate::id::ScopeId, u32> =
         std::collections::HashMap::new();
@@ -91,6 +91,23 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             scope_base.insert(m.types.scope, base);
         }
         func_scope_base.insert(m.scope, func_off);
+
+        // names: merge this module's interner into the output's — the name
+        // rebase mirrors the type rebase (RFC 0035 §1). Well-known ids are
+        // the same in every interner and pass through untouched.
+        let m_interner = m.interner;
+        let wk = m_interner.well_known_len() as usize;
+        let mut name_map: Vec<IdentId> = Vec::with_capacity(m_interner.names().len());
+        for (i, n) in m_interner.names().iter().enumerate() {
+            name_map.push(if i < wk {
+                IdentId(i as u32)
+            } else {
+                out.interner.intern(n)
+            });
+        }
+        let nm = |id: IdentId| -> IdentId {
+            name_map.get(id.0 as usize).copied().unwrap_or(id)
+        };
         // function ids: `0`-scoped are this module's own (dense); other
         // scopes name an imported module's block
         let map_func = |f: u32| -> u32 {
@@ -125,8 +142,8 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
         for t in m.types.types.iter().skip(own_base as usize) {
             out.types.types.push(RutType {
-                name: t.name.clone(),
-                kind: remap_kind(&t.kind, &map),
+                name: nm(t.name),
+                kind: remap_kind(&t.kind, &map, &nm),
             });
         }
         out.vtables.resize(out.types.types.len(), Vec::new());
@@ -135,12 +152,12 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         let trait_off = out.traits.len() as u32;
         for tr in m.traits {
             out.traits.push(TraitDesc {
-                name: tr.name,
+                name: nm(tr.name),
                 methods: tr
                     .methods
                     .into_iter()
                     .map(|tm| TraitMethod {
-                        name: tm.name,
+                        name: nm(tm.name),
                         params: tm.params.into_iter().map(|p| map(p)).collect(),
                         ret: map(tm.ret),
                     })
@@ -183,7 +200,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         // funcs: signatures, register types and every op operand
         for f in m.funcs {
             out.funcs.push(FuncCode {
-                name: f.name,
+                name: nm(f.name),
                 params: f.params.into_iter().map(|p| map(p)).collect(),
                 ret: map(f.ret),
                 is_method: f.is_method,
@@ -204,7 +221,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
         // exports: function ids
         for (n, fid) in m.exports {
-            out.exports.push((n, map_func(fid)));
+            out.exports.push((nm(n), map_func(fid)));
         }
 
         func_off += nfuncs;
@@ -219,19 +236,28 @@ fn boot_len() -> usize {
     TypeTable::boot().types.len()
 }
 
-/// Remap the `TypeId`s inside a type descriptor.
-fn remap_kind(kind: &TyKind, map: &impl Fn(TypeId) -> TypeId) -> TyKind {
+/// Remap the `TypeId`s and names inside a type descriptor.
+fn remap_kind(
+    kind: &TyKind,
+    map: &impl Fn(TypeId) -> TypeId,
+    nm: &impl Fn(IdentId) -> IdentId,
+) -> TyKind {
     match kind {
         TyKind::Nil | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => {
             kind.clone()
         }
         TyKind::Array { elem } => TyKind::Array { elem: map(*elem) },
-        TyKind::Enum { members } => TyKind::Enum { members: members.clone() },
+        TyKind::Enum { members } => TyKind::Enum {
+            members: members
+                .iter()
+                .map(|(n, v)| (nm(*n), *v))
+                .collect(),
+        },
         TyKind::Data { fields } => TyKind::Data {
             fields: fields
                 .iter()
                 .map(|f| crate::types::FieldInfo {
-                    name: f.name.clone(),
+                    name: nm(f.name),
                     ty: map(f.ty),
                 })
                 .collect(),
@@ -293,6 +319,7 @@ mod tests {
     use super::*;
     use crate::binary::FuncCode;
     use crate::ops::Op;
+    use crate::sym::MAIN;
     use crate::types::{FieldInfo, TY_I32};
 
     fn module(name: &str, with_point: bool) -> Program {
@@ -300,17 +327,20 @@ mod tests {
         p.name = name.to_string();
         p.types = TypeTable::boot();
         if with_point {
+            let point = p.interner.intern("Point");
+            let x = p.interner.intern("x");
             p.types.types.push(RutType {
-                name: "Point".into(),
+                name: point,
                 kind: TyKind::Data {
-                    fields: vec![FieldInfo { name: "x".into(), ty: TY_I32 }],
+                    fields: vec![FieldInfo { name: x, ty: TY_I32 }],
                 },
             });
-            let point = (p.types.types.len() - 1) as u32;
-            p.consts.push(ConstVal::TypeId(point));
+            let pid = (p.types.types.len() - 1) as u32;
+            p.consts.push(ConstVal::TypeId(pid));
         }
+        let main = p.interner.intern("main");
         p.funcs.push(FuncCode {
-            name: "main".into(),
+            name: main,
             params: vec![],
             ret: TY_I32,
             is_method: false,
@@ -322,7 +352,7 @@ mod tests {
             spans: vec![],
             host: None,
         });
-        p.exports.push(("main".into(), 0));
+        p.exports.push((main, 0));
         p.vtables = vec![Vec::new(); p.types.types.len()];
         p
     }
@@ -341,10 +371,18 @@ mod tests {
         assert_eq!(out.consts[1], ConstVal::TypeId(boot as u32 + 1));
         // func/const ids offset per module
         assert_eq!(out.funcs.len(), 2);
-        assert_eq!(out.exports, vec![("main".into(), 0), ("main".into(), 1)]);
+        assert_eq!(out.exports, vec![(MAIN, 0), (MAIN, 1)]);
         assert_eq!(out.funcs[1].code[0], Op::Const { dst: 0, k: 1 });
         // boot prefix is not duplicated
-        assert_eq!(out.types.types[TY_I32 as usize].name, "i32");
+        assert_eq!(out.type_name(TY_I32), "i32");
+        // the name rebase merged both interners: both Points resolve,
+        // and each module's "x" field name is one shared symbol
+        assert_eq!(out.type_name(boot as u32), "Point");
+        let fields = match &out.types.types[boot].kind {
+            TyKind::Data { fields } => fields.clone(),
+            _ => panic!("expected a record"),
+        };
+        assert_eq!(out.name_of(fields[0].name), "x");
     }
 
     #[test]

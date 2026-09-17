@@ -415,7 +415,7 @@ impl Vm {
             (Value::Nil, TyKind::Nil) | (Value::Nil, TyKind::Prim(_)) => Slot::int(0),
             (Value::I64(n), TyKind::Prim(p)) => {
                 if !fits(*n, p) {
-                    return Err(format!("`{n}` does not fit `{}`", self.prog.types.name(ty)));
+                    return Err(format!("`{n}` does not fit `{}`", self.prog.type_name(ty)));
                 }
                 Slot::int(*n)
             }
@@ -458,7 +458,7 @@ impl Vm {
                 return Err(format!(
                     "is `{}`, `{}` expected",
                     value_kind_name(v),
-                    self.prog.types.name(ty)
+                    self.prog.type_name(ty)
                 ))
             }
         })

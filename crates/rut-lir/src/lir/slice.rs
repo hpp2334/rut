@@ -57,11 +57,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let mut buf_field: Option<(u32, TypeId)> = None;
                 let mut len_field: Option<u32> = None;
                 for (i, f) in fields.iter().enumerate() {
-                    match f.name.as_str() {
-                        "buf" if matches!(self.ctx.types.kind(f.ty), TyKind::Array { .. }) => {
+                    match f.name {
+                        sym::BUF if matches!(self.ctx.types.kind(f.ty), TyKind::Array { .. }) => {
                             buf_field = Some((i as u32, f.ty))
                         }
-                        "len" if f.ty == TY_I32 => len_field = Some(i as u32),
+                        sym::LEN if f.ty == TY_I32 => len_field = Some(i as u32),
                         _ => {}
                     }
                 }

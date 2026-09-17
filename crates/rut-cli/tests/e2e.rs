@@ -94,6 +94,7 @@ pub fn main() -> nil {
 #[test]
 fn case3_opaque() {
     let src = r#"
+import { Opaque, downcast } from "std:core";
 struct Point { x: f32; y: f32 }
 pub fn main() -> nil {
     let box1 = Opaque.new(Point { x: 1, y: 2 });
@@ -670,7 +671,7 @@ fn entry_fns_compile_without_main_and_cross_values() {
     // and tuples (the v1.1 error/presence convention) crossing back
     let src = r#"
 import { Vec } from "std:collection";
-import { make_ptr } from "std:core";
+import { make_ptr, downcast, Opaque } from "std:core";
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 
@@ -985,6 +986,7 @@ fn generic_vec_over_array_runs() {
     // std:collection's Vec<T> shape: a generic class over the non-growable
     // heap array primitive, monomorphized for i32 (RFC 0013 / RFC 0005).
     let src = r#"
+import { Array } from "std:core";
 class Vec<T> {
     buf: Array<T>;
     len: i32;
@@ -1129,6 +1131,7 @@ fn std_collection_via_module_loader_runs() {
         rut_driver::Module {
             source: Some(
                 r#"
+import { string_join } from "std:core";
 import { Vec } from "std:collection";
 import { Logger } from "std:log";
 pub fn main() -> nil {
@@ -1220,6 +1223,7 @@ pub fn main() -> nil {
 fn string_join_and_vec_as_array_run() {
     // the builtin `string_join(Array<str>)` and the `Vec<T>.as_array()` bridge
     let src = r#"
+import { string_join } from "std:core";
 import { Vec } from "std:collection";
 pub fn main() -> nil {
     let mut v: Vec<str> = Vec.new();
@@ -1651,7 +1655,7 @@ fn dbg_digest() {
 fn dbg_digest_md5() {
     let src = r#"
 import { Vec } from "std:collection";
-import { make_ptr } from "std:core";
+import { make_ptr, downcast, Opaque } from "std:core";
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
@@ -1670,7 +1674,7 @@ entry fn put(c: Opaque) -> u32 {
     let Value::Opaque(c) = vm.call("make", &[]).unwrap() else { unreachable!() };
     for _ in 0..2 {
         for f in prog.funcs.iter() {
-            if f.name == "put" {
+            if prog.name_of(f.name) == "put" {
                 for (jj, op) in f.code.iter().enumerate() {
                     if (40..=45).contains(&jj) { println!("put op {jj}: {op:?}"); }
                 }
@@ -1706,7 +1710,7 @@ pub fn main() -> nil {
 fn dbg_put_ir() {
     let src = r#"
 import { Vec } from "std:collection";
-import { make_ptr } from "std:core";
+import { make_ptr, downcast, Opaque } from "std:core";
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }

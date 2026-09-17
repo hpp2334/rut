@@ -9,6 +9,7 @@ use rut_lexer::span::Span;
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
 use std::collections::HashMap;
+use rut_core::sym;
 use rut_core::types::*;
 
 mod call;
@@ -196,14 +197,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 f.ret,
                 f.generics.clone(),
                 f.body.id(), // Fn bodies are always blocks
-                ctx.name(f.name).to_string(),
+                f.name,
             ),
             Kind::Member(MemberKind::MethodDecl(m)) => (
                 m.params.clone(),
                 m.ret,
                 m.generics.clone(),
                 m.body.map(|b| b.id()).unwrap_or(node), // bodiless shouldn't be queued
-                format!("{}$", ctx.name(m.name)),
+                m.name,
             ),
             _ => return Ok(()),
         };
@@ -264,17 +265,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             match c.ctx.ast.param(*p) {
                 MemberKind::SelfParam(SelfParamData { is_mut }) => {
                     let reg = c.new_reg(self_ty.unwrap_or(TY_NIL));
-                    // bind `self` —the ident exists iff the body spells it
-                    // (the parser interns it on `self` paths)
-                    if let Some(sid) = c.ctx.lookup_name("self") {
-                        c.locals.push(Local {
-                            name: sid,
-                            reg,
-                            ty: self_ty.unwrap_or(TY_NIL),
-                            is_mut: *is_mut,
-                            loop_var: false,
-                        });
-                    }
+                    // bind `self` (well-known symbol): the local is only ever
+                    // FOUND where the body spells `self`, so binding it
+                    // unconditionally is safe
+                    c.locals.push(Local {
+                        name: sym::SELF,
+                        reg,
+                        ty: self_ty.unwrap_or(TY_NIL),
+                        is_mut: *is_mut,
+                        loop_var: false,
+                    });
                 }
                 MemberKind::Param(ParamData { name, is_mut, .. }) => {
                     let reg = c.new_reg(param_tys[i]);
@@ -393,7 +393,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if t != ret_ty {
                 c.ctx.err(c.ctx.ast.span(body.id()), format!(
                     "lambda returns `{}` but is typed `{}`",
-                    c.ctx.types.name(t), c.ctx.types.name(ret_ty)
+                    c.ctx.type_name(t), c.ctx.type_name(ret_ty)
                 ));
             }
             c.emit(Op::Ret { val: Some(c.last_reg) }, 0);
@@ -404,7 +404,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
-            name: format!("lambda@{}", body.id().0),
+            name: c.ctx.intern(&format!("lambda@{}", body.id().0)),
             params: param_tys,
             ret: ret_ty,
             is_method: false,
@@ -475,7 +475,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
-            name: format!("forof@{}", body.0),
+            name: c.ctx.intern(&format!("forof@{}", body.0)),
             params: param_tys,
             ret: TY_BOOL,
             is_method: false,
@@ -643,8 +643,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // `Self` binds to the enclosing type inside method bodies
         if let TypeKind::TyPath { segs, .. } = self.ctx.ast.ty(node) {
             if segs.len() == 1 && segs[0].generics.is_empty() {
-                let n = self.ctx.name(segs[0].name).to_string();
-                if n == "Self" {
+                if segs[0].name == sym::SELF_TY {
                     if let Some(t) = self.self_ty {
                         return t;
                     }

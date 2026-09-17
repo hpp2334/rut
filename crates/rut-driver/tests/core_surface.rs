@@ -59,7 +59,7 @@ fn core_decl_matches_the_compilers_surface() {
     let mut decl_types = builtin_types;
     decl_types.sort();
     let mut surf_types: Vec<String> =
-        surface.native_types.iter().map(|(n, _)| n.clone()).collect();
+        surface.native_types.iter().map(|(n, _)| surface.names.name(*n).to_string()).collect();
     surf_types.sort();
     assert_eq!(decl_types, surf_types, "core.d.rut builtin decls == Surface::core native_types");
 
@@ -68,7 +68,7 @@ fn core_decl_matches_the_compilers_surface() {
     let mut decl_ifaces = builtin_ifaces;
     decl_ifaces.sort();
     let mut surf_ifaces: Vec<String> =
-        surface.native_ifaces.iter().map(|(n, _)| n.clone()).collect();
+        surface.native_ifaces.iter().map(|(n, _)| surface.names.name(*n).to_string()).collect();
     surf_ifaces.sort();
     assert_eq!(decl_ifaces, surf_ifaces, "core.d.rut builtin interfaces == Surface::core native_ifaces");
     assert!(
@@ -80,7 +80,8 @@ fn core_decl_matches_the_compilers_surface() {
     // native fns — all of them (own/downcast/assert/panic/str/bytes)
     let mut decl_fns = builtin_fns;
     decl_fns.sort();
-    let mut surf_fns = surface.native_fns.clone();
+    let mut surf_fns: Vec<String> =
+        surface.native_fns.iter().map(|n| surface.names.name(*n).to_string()).collect();
     surf_fns.sort();
     assert_eq!(decl_fns, surf_fns, "core.d.rut builtin fns == Surface::core native_fns");
 }

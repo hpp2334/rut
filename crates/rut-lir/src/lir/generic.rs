@@ -75,8 +75,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.err(sp, format!(
                                 "generic parameter `{}` binds to both `{}` and `{}`",
                                 self.ctx.name(name),
-                                self.ctx.types.name(prev),
-                                self.ctx.types.name(arg_ty)
+                                self.ctx.type_name(prev),
+                                self.ctx.type_name(arg_ty)
                             ));
                             return Err(());
                         }
@@ -90,7 +90,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if !self.widens(arg_ty, want) {
                     self.ctx.err(sp, format!(
                         "argument is `{}`, `{}` expected",
-                        self.ctx.types.name(arg_ty), self.ctx.types.name(want)
+                        self.ctx.type_name(arg_ty), self.ctx.type_name(want)
                     ));
                     return Err(());
                 }
@@ -113,7 +113,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if !self.widens(arg_ty, want) {
                             self.ctx.err(sp, format!(
                                 "argument is `{}`, `{}` expected",
-                                self.ctx.types.name(arg_ty), self.ctx.types.name(want)
+                                self.ctx.type_name(arg_ty), self.ctx.type_name(want)
                             ));
                             Err(())
                         } else {
@@ -136,7 +136,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.unify_generic(ret, ar, decl_generics, subst, sp)} else {
                     self.ctx.err(sp, format!(
                         "expected an fn type, found `{}`",
-                        self.ctx.types.name(arg_ty)
+                        self.ctx.type_name(arg_ty)
                     ));
                     Err(())
                 }
@@ -146,7 +146,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if want != arg_ty {
                     self.ctx.err(sp, format!(
                         "argument is `{}`, `{}` expected",
-                        self.ctx.types.name(arg_ty), self.ctx.types.name(want)
+                        self.ctx.type_name(arg_ty), self.ctx.type_name(want)
                     ));
                     Err(())
                 } else {

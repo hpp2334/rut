@@ -37,6 +37,14 @@ struct ModuleBinary {                 // serialized, versioned, hash-stable
   `.rutbundle` with the surface artifacts under a `rut.toml` manifest,
   RFC 0038; strip levels and the `.rutc.map` sidecar are unchanged by
   bundling).
+- **Name table (RFC 0030 §5).** Names are `IdentId`s everywhere in the
+  loaded program — type names, field names, enum members, trait/method
+  names, function names, exports. The binary carries one name table (the
+  interner's non-well-known tail; the pre-interned `rut_core::sym` range
+  is implied by the format) and every name slot is an index into it.
+  Decode rebuilds the interner, so a decoded program is self-contained;
+  link merges each module's table (well-known ids pass through), the
+  name rebase mirroring the `type_id` rebase below.
 - `type_id`s are **module-local indices at rest**; link-time rebase maps
   them into the VM's global type table (RFC 0035 §1). `type_id<T>()`
   constants are re-based with everything else.

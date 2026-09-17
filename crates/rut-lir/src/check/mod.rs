@@ -10,6 +10,7 @@ use rut_lexer::span::Span;
 use rut_lexer::token::{FloatSuffix, IntSuffix};
 use rut_core::binary::{ConstVal, FuncCode, TraitDesc};
 use rut_core::types::*;
+use rut_core::{Interner, sym};
 
 mod collect;
 mod inst;
@@ -95,6 +96,15 @@ pub struct Inst {
 
 pub struct Ctx<'a> {
     pub ast: &'a Ast,
+    /// the module's interner: a clone of the AST's at construction (so all
+    /// source ids resolve), extended here with synthesized names — type
+    /// instantiations (`Array<i32>`), trait instantiations. Moves into the
+    /// emitted `Program` (RFC 0030 §5).
+    pub interner: Interner,
+    /// every name the module's `import` statements wrote — the binding
+    /// gate for imported surfaces (RFC 0028: the prelude is imported,
+    /// never ambient)
+    pub imported: std::collections::HashSet<IdentId>,
     pub diags: Vec<Diag>,
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,
@@ -106,7 +116,7 @@ pub struct Ctx<'a> {
     /// — `for..of` lowers to `next` when a type implements it and not `Iter`
     pub funcs: Vec<FuncCode>,
     pub consts: Vec<ConstVal>,
-    pub exports: Vec<(String, u32)>,
+    pub exports: Vec<(IdentId, u32)>,
     // decl tables
     pub enums: Vec<(IdentId, EnumDecl)>,
     pub datas: Vec<(IdentId, DataDecl)>,
@@ -135,8 +145,8 @@ pub struct Ctx<'a> {
     /// imported types that are `class` (no outside record literal)
     pub extern_classes: std::collections::HashSet<TypeId>,
     /// imported std:core builtin containers (RFC 0028): name -> constructor.
-    /// The prelude is imported, never ambient — `Array`/`Option`/`Result`/
-    /// `Opaque` resolve only through this map
+    /// The prelude is imported, never ambient — `Array`/`Opaque` resolve
+    /// only through this map
     pub extern_native_types: std::collections::HashMap<IdentId, rut_core::binary::NativeTy>,
     /// imported std:core builtin interfaces: name -> contract
     /// (`Disposal`/`Index`/`Iterator`)
@@ -188,6 +198,10 @@ impl<'a> Ctx<'a> {
     pub fn new_scoped(ast: &'a Ast, scope: rut_core::ScopeId) -> Ctx<'a> {
         Ctx {
             ast,
+            // the interner clones the AST's — every source id resolves
+            // identically; synthesized names intern here only
+            interner: ast.interner.clone(),
+            imported: std::collections::HashSet::new(),
             diags: Vec::new(),
             types: TypeTable::boot_scoped(scope),
             traits: Vec::new(),
@@ -287,24 +301,56 @@ impl<'a> Ctx<'a> {
     /// imported, never ambient. A v1.1-removed name diagnoses with its
     /// replacement instead. `None` when `n` is not a prelude name —
     /// the caller keeps its ordinary message.
-    pub fn not_in_core_scope(&self, n: &str) -> Option<String> {
-        if let Some(msg) = rut_core::binary::removed_core(n) {
+    pub fn not_in_core_scope(&self, n: IdentId) -> Option<String> {
+        let text = self.interner.name(n);
+        if let Some(msg) = rut_core::binary::removed_core(text) {
             return Some(msg.to_string());
         }
         rut_core::binary::is_core_name(n).then(|| {
             format!(
-                "`{n}` is not in scope — `import {{ {n} }} from \"std:core\"` (RFC 0028: the prelude is imported, never implicit)"
+                "`{text}` is not in scope — `import {{ {text} }} from \"std:core\"` (RFC 0028: the prelude is imported, never implicit)"
             )
         })
     }
 
     /// Import another module's type descriptors so `(scope, local)` ids
-    /// resolve for typechecking and layout (RFC 0035 §1).
+    /// resolve for typechecking and layout (RFC 0035 §1). Descriptor and
+    /// field names re-intern from the exporter's interner into this
+    /// module's — name ids are only comparable within one interner
+    /// (well-known ids pass through: they mean the same name everywhere).
     pub fn import_types(
         &mut self,
         descs: Vec<RutType>,
+        names: &Interner,
         blocks: &[(rut_core::ScopeId, u32)],
     ) {
+        let mut map: std::collections::HashMap<IdentId, IdentId> = std::collections::HashMap::new();
+        let mut re = |interner: &mut Interner, id: IdentId| -> IdentId {
+            if id.0 < names.well_known_len() {
+                return id;
+            }
+            *map.entry(id).or_insert_with(|| interner.intern(names.name(id)))
+        };
+        let descs = descs
+            .into_iter()
+            .map(|mut d| {
+                d.name = re(&mut self.interner, d.name);
+                match &mut d.kind {
+                    TyKind::Data { fields } => {
+                        for f in fields {
+                            f.name = re(&mut self.interner, f.name);
+                        }
+                    }
+                    TyKind::Enum { members } => {
+                        for (n, _) in members.iter_mut() {
+                            *n = re(&mut self.interner, *n);
+                        }
+                    }
+                    _ => {}
+                }
+                d
+            })
+            .collect();
         self.types.import_block(descs, blocks);
     }
 
@@ -352,7 +398,7 @@ impl<'a> Ctx<'a> {
                         format!(
                             "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `str`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
                             self.name(pd.name),
-                            self.types.name(ty)
+                            self.type_name(ty)
                         ),
                     );
                 }
@@ -364,7 +410,7 @@ impl<'a> Ctx<'a> {
                         self.ast.span(r.id()),
                         format!(
                             "`entry fn {fname}` returns `{}` — only primitives, `str`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)",
-                            self.types.name(ty)
+                            self.type_name(ty)
                         ),
                     );
                 }
@@ -373,12 +419,25 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn name(&self, id: IdentId) -> &str {
-        self.ast.name(id)
+        self.interner.name(id)
     }
 
-    /// look a name up in the interner (no interning: the AST is shared)
+    /// A type's display name — synthesized instantiation names resolve
+    /// through the Ctx's interner (the AST's copy predates them).
+    pub fn type_name(&self, id: TypeId) -> &str {
+        self.interner.name(self.types.type_at(id).name)
+    }
+
+    /// Intern a synthesized name (type instantiations, trait shapes).
+    /// Source identifiers are interned by the parser — never call this
+    /// for them.
+    pub fn intern(&mut self, s: &str) -> IdentId {
+        self.interner.intern(s)
+    }
+
+    /// look a name up in the interner
     pub fn lookup_name(&self, s: &str) -> Option<IdentId> {
-        self.ast.interner.lookup(s)
+        self.interner.lookup(s)
     }
 
     pub fn find_enum(&self, name: IdentId) -> Option<&EnumDecl> {
@@ -439,7 +498,7 @@ impl<'a> Ctx<'a> {
             d.generics.iter().cloned().zip(args.iter().cloned()).collect();
         let mut ok = true;
         for tm in &tdesc.methods {
-            let Some((_, mnode)) = d.methods.iter().find(|(n, _)| self.name(*n) == tm.name) else {
+            let Some((_, mnode)) = d.methods.iter().find(|(n, _)| *n == tm.name) else {
                 ok = false;
                 break;
             };
@@ -476,9 +535,12 @@ impl<'a> Ctx<'a> {
     }
 
     // ---- type construction ----
+    // synthesized type names intern into the Ctx's interner — structural
+    // dedup keys on (name id, kind), and equal shapes always intern equal
+    // name text, so the id compare in `TypeTable::intern` stays sound
 
     pub fn mk_array(&mut self, elem: TypeId) -> TypeId {
-        let name = format!("Array<{}>", self.types.name(elem));
+        let name = self.intern(&format!("Array<{}>", self.type_name(elem)));
         self.types.intern(RutType {
             name,
             kind: TyKind::Array { elem },
@@ -487,7 +549,8 @@ impl<'a> Ctx<'a> {
     /// `dyn I` — the interface object type: a cell handle whose cell's own
     /// type reaches the vtable (RFC 0015 §6)
     pub fn mk_dyn(&mut self, trait_id: u32) -> TypeId {
-        let name = format!("dyn {}", self.traits[trait_id as usize].name);
+        let tname = self.interner.name(self.traits[trait_id as usize].name).to_string();
+        let name = self.intern(&format!("dyn {tname}"));
         self.types.intern(RutType {
             name,
             kind: TyKind::TraitObj { trait_id },
@@ -495,7 +558,7 @@ impl<'a> Ctx<'a> {
     }
     /// `*T` (RFC 0005) — nil-able rc-backed pointer
     pub fn mk_ptr(&mut self, elem: TypeId) -> TypeId {
-        let name = format!("*{}", self.types.name(elem));
+        let name = self.intern(&format!("*{}", self.type_name(elem)));
         self.types.intern(RutType {
             name,
             kind: TyKind::Ptr { elem },
@@ -503,14 +566,14 @@ impl<'a> Ctx<'a> {
     }
     /// `(A, B, ..)` (RFC 0007) — a record with numeric field names
     pub fn mk_tuple(&mut self, elems: Vec<TypeId>) -> TypeId {
-        let name = format!(
+        let name = self.intern(&format!(
             "({})",
-            elems.iter().map(|&t| self.types.name(t)).collect::<Vec<_>>().join(", ")
-        );
+            elems.iter().map(|&t| self.type_name(t)).collect::<Vec<_>>().join(", ")
+        ));
         let fields = elems
             .into_iter()
             .enumerate()
-            .map(|(i, ty)| FieldInfo { name: i.to_string(), ty })
+            .map(|(i, ty)| FieldInfo { name: self.intern(&i.to_string()), ty })
             .collect();
         self.types.intern(RutType {
             name,
@@ -518,8 +581,8 @@ impl<'a> Ctx<'a> {
         })
     }
     pub fn mk_fn_ty(&mut self, params: Vec<TypeId>, ret: TypeId) -> TypeId {
-        let ps: Vec<String> = params.iter().map(|&p| self.types.name(p).to_string()).collect();
-        let name = format!("fn({}) -> {}", ps.join(", "), self.types.name(ret));
+        let ps: Vec<String> = params.iter().map(|&p| self.type_name(p).to_string()).collect();
+        let name = self.intern(&format!("fn({}) -> {}", ps.join(", "), self.type_name(ret)));
         self.types.intern(RutType {
             name,
             kind: TyKind::Fn { params, ret },

@@ -31,12 +31,12 @@ fn generic_class_monomorphizes_per_instantiation() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    let boxes = p.types.types.iter().filter(|t| t.name == "Box<i32>").count();
+    let boxes = p.types.types.iter().filter(|t| p.name_of(t.name) == "Box<i32>").count();
     assert_eq!(boxes, 1, "Box<i32> instantiated once");
     // body compiled: `new` (static) + `main`; `get` is a small instance
     // method and inlines at its call site (RFC 0005 sequence lowering)
-    assert!(p.funcs.len() >= 2, "funcs: {:?}", p.funcs.iter().map(|f| &f.name).collect::<Vec<_>>());
-    assert!(p.funcs.iter().any(|f| f.name == "main"));
+    assert!(p.funcs.len() >= 2, "funcs: {:?}", p.funcs.iter().map(|f| p.name_of(f.name)).collect::<Vec<_>>());
+    assert!(p.funcs.iter().any(|f| p.name_of(f.name) == "main"));
 }
 
 #[test]
@@ -56,8 +56,8 @@ fn two_instantiations_are_distinct() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.types.types.iter().filter(|t| t.name == "Pair<i32>").count(), 1);
-    assert_eq!(p.types.types.iter().filter(|t| t.name == "Pair<i64>").count(), 1);
+    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Pair<i32>").count(), 1);
+    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Pair<i64>").count(), 1);
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn recursive_generic_terminates() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.types.types.iter().filter(|t| t.name == "Node<i32>").count(), 1);
+    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Node<i32>").count(), 1);
 }
 
 #[test]
@@ -96,7 +96,8 @@ fn explicit_generic_static_path() {
 #[test]
 fn vec_over_array_compiles() {
     let out = compile(
-        "class Vec<T> {\n\
+        "import { Array } from \"std:core\";\n\
+         class Vec<T> {\n\
              buf: Array<T>;\n\
              len: i32;\n\
              fn new() -> Self { return Vec.with_capacity(0); }\n\
@@ -128,6 +129,6 @@ fn vec_over_array_compiles() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.types.types.iter().filter(|t| t.name == "Vec<i32>").count(), 1);
+    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Vec<i32>").count(), 1);
 }
 

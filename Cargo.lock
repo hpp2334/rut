@@ -368,6 +368,7 @@ dependencies = [
 name = "rut-ast"
 version = "0.1.0"
 dependencies = [
+ "rut-core",
  "rut-lexer",
 ]
 
@@ -441,6 +442,7 @@ name = "rut-parser"
 version = "0.1.0"
 dependencies = [
  "rut-ast",
+ "rut-core",
  "rut-lexer",
 ]
 

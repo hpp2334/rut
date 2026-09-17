@@ -6,6 +6,7 @@
 // idiom stays data + free functions. Constructed ONLY by literal,
 // everywhere (module-level let initializers included).
 
+import { make_ptr } from "std:core";
 import { Logger } from "std:log";
 import { sqrt } from "std:math";
 

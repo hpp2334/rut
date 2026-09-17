@@ -59,9 +59,8 @@ impl<'a> Ctx<'a> {
                 ItemKind::Impl { .. } => {}
                 ItemKind::Fn(f) => {
                     let is_pub = f.vis == Vis::Pub;
-                    let n = self.name(f.name).to_string();
                     if self.fn_index.contains(&f.name) {
-                        self.err(self.ast.span(it.id()), format!("duplicate fn `{n}`"));
+                        self.err(self.ast.span(it.id()), format!("duplicate fn `{}`", self.name(f.name)));
                     }
                     self.fn_index.push(f.name);
                     self.fn_nodes.push((f.name, NodeHandle::new(it.id())));
@@ -72,13 +71,18 @@ impl<'a> Ctx<'a> {
                     }
                     if is_pub {
                         // name recorded; the func id binds at finalize
-                        self.exports.push((n, u32::MAX));
+                        self.exports.push((f.name, u32::MAX));
                     }
                 }
                 ItemKind::ModuleLet { name, ty, init, .. } => {
                     self.lets.push((*name, *ty, *init));
                 }
                 ItemKind::Import { names, .. } => {
+                    // record what the module wrote — the binding gate for
+                    // imported surfaces (RFC 0028: imported, never ambient)
+                    for n in names {
+                        self.imported.insert(*n);
+                    }
                     // module loading is resolved by the driver before body
                     // compilation (RFC 0035 §1); without it, imports are a
                     // compile error only when the names are used
@@ -107,15 +111,15 @@ impl<'a> Ctx<'a> {
             return;
         }
         // member values: sequential from 0 or explicit (RFC 0006)
-        let mut vals: Vec<(String, i64)> = Vec::new();
+        let mut vals: Vec<(IdentId, i64)> = Vec::new();
         let mut next = 0i64;
         for (m, v) in members {
             let val = v.unwrap_or(next);
             next = val + 1;
-            vals.push((self.name(*m).to_string(), val));
+            vals.push((*m, val));
         }
         let ty = self.types.intern(RutType {
-            name: self.name(name).to_string(),
+            name,
             kind: TyKind::Enum { members: vals },
         });
         let member_ids: Vec<IdentId> = members.iter().map(|(m, _)| *m).collect();
@@ -142,7 +146,7 @@ impl<'a> Ctx<'a> {
         // generic records stay a template (empty fields) until instantiated;
         // `Vec<T>` and RFC 0013 monomorphization enter at `mk_data_inst`
         let placeholder = self.types.intern(RutType {
-            name: self.name(name).to_string(),
+            name,
             kind: TyKind::Data { fields: vec![] },
         });
         let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
@@ -184,7 +188,7 @@ impl<'a> Ctx<'a> {
             }
             let fty = self.resolve_type(fd.ty, &[]);
             resolved.push(FieldInfo {
-                name: self.name(fd.name).to_string(),
+                name: fd.name,
                 ty: fty,
             });
         }
@@ -199,7 +203,7 @@ impl<'a> Ctx<'a> {
             let fd = self.ast.field_decl(*f);
             let fty = resolved
                 .iter()
-                .find(|x| x.name == self.name(fd.name))
+                .find(|x| x.name == fd.name)
                 .map(|x| x.ty)
                 .unwrap_or(TY_I32);
             flds.push((fd.name, fty, fd.init, fd.vis));
@@ -224,7 +228,7 @@ impl<'a> Ctx<'a> {
         }
         let id = if generics.is_empty() {
             let id = self.traits.len() as u32;
-            self.traits.push(TraitDesc { name: self.name(name).to_string(), methods: vec![] });
+            self.traits.push(TraitDesc { name, methods: vec![] });
             id
         } else {
             // a generic interface has no single id — `mk_trait_inst` allocates
@@ -268,11 +272,11 @@ impl<'a> Ctx<'a> {
                 }
             }
             let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &[]));
-            tms.push((self.name(md.name).to_string(), ptys, rty));
+            tms.push((md.name, ptys, rty));
         }
         // first param must be self (RFC 0012 §2: interface methods are
         // instance methods)
-        let mut desc = TraitDesc { name: self.name(name).to_string(), methods: vec![] };
+        let mut desc = TraitDesc { name, methods: vec![] };
         for (mname, ptys, rty) in tms {
             if ptys.first() == Some(&TY_NIL) {
                 // replace the self placeholder: params exclude self in the
@@ -283,7 +287,7 @@ impl<'a> Ctx<'a> {
                     ret: rty.unwrap_or(TY_NIL),
                 });
             } else {
-                self.err(sp, format!("interface method `{mname}` must take `self` (RFC 0012 §2)"));
+                self.err(sp, format!("interface method `{}` must take `self` (RFC 0012 §2)", self.name(mname)));
             }
         }
         self.traits[id as usize] = desc;
@@ -298,7 +302,7 @@ impl<'a> Ctx<'a> {
         env: &[(IdentId, TypeId)],
     ) -> TypeId {
         if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
-            if segs.len() == 1 && segs[0].generics.is_empty() && self.name(segs[0].name) == "Self" {
+            if segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY {
                 return self.mk_dyn(trait_id);
             }
         }
@@ -313,14 +317,15 @@ impl<'a> Ctx<'a> {
         }
         let id = self.traits.len() as u32;
         let tname = if args.is_empty() {
-            self.name(name).to_string()
+            self.interner.name(name).to_string()
         } else {
             format!(
                 "{}<{}>",
-                self.name(name),
-                args.iter().map(|a| self.types.name(*a).to_string()).collect::<Vec<_>>().join(", ")
+                self.interner.name(name),
+                args.iter().map(|a| self.type_name(*a).to_string()).collect::<Vec<_>>().join(", ")
             )
         };
+        let tname = self.intern(&tname);
         self.traits.push(TraitDesc { name: tname, methods: vec![] });
         self.trait_inst.insert((name, args.clone()), id);
         let Some(info) = self.find_trait(name).cloned() else { return id };
@@ -330,7 +335,7 @@ impl<'a> Ctx<'a> {
             ItemKind::Trait { methods, .. } => methods.clone(),
             _ => Vec::new(),
         };
-        let mut desc = TraitDesc { name: self.traits[id as usize].name.clone(), methods: vec![] };
+        let mut desc = TraitDesc { name: tname, methods: vec![] };
         for m in &methods {
             let md = self.ast.method_decl(*m);
             let mut ptys = Vec::new();
@@ -346,7 +351,7 @@ impl<'a> Ctx<'a> {
             let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &subst));
             if ptys.first() == Some(&TY_NIL) {
                 desc.methods.push(rut_core::binary::TraitMethod {
-                    name: self.name(md.name).to_string(),
+                    name: md.name,
                     params: ptys[1..].to_vec(),
                     ret: rty.unwrap_or(TY_NIL),
                 });
@@ -419,21 +424,21 @@ impl<'a> Ctx<'a> {
         // coverage: every interface methsig covered exactly once, no extras
         let tdesc = self.traits[trait_id as usize].clone();
         for tm in &tdesc.methods {
-            if !mths.iter().any(|(n, _)| self.name(*n) == tm.name) {
-                self.err(sp, format!("impl is missing `{}` from {}", tm.name, tdesc.name));
+            if !mths.iter().any(|(n, _)| *n == tm.name) {
+                self.err(sp, format!("impl is missing `{}` from {}", self.name(tm.name), self.name(tdesc.name)));
             }
         }
         for (n, mnode) in &mths {
-            if !tdesc.methods.iter().any(|tm| tm.name == self.name(*n)) {
+            if !tdesc.methods.iter().any(|tm| tm.name == *n) {
                 // mutable indexing is an optional hook on the read-only
                 // `Iter` contract (RFC 0012): `Array`/`Vec` provide `set`,
                 // `str`/`bytes` do not
-                if self.name(*n) == "set" {
+                if *n == sym::SET {
                     continue;
                 }
                 self.err(
                     self.ast.span(mnode.id()),
-                    format!("`{}` is not a member of {} — put inherent methods in the type body (RFC 0012 §2)", self.name(*n), tdesc.name),
+                    format!("`{}` is not a member of {} — put inherent methods in the type body (RFC 0012 §2)", self.name(*n), self.name(tdesc.name)),
                 );
             }
         }
@@ -489,14 +494,14 @@ impl<'a> Ctx<'a> {
         let Some(decl) = self.find_data(data).cloned() else {
             return TY_I32;
         };
-        let name = format!(
+        let name = self.intern(&format!(
             "{}<{}>",
             self.name(data),
             args.iter()
-                .map(|a| self.types.name(*a).to_string())
+                .map(|a| self.type_name(*a).to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
-        );
+        ));
         let ty = self.types.intern(RutType {
             name,
             kind: TyKind::Data { fields: vec![] },
@@ -520,7 +525,7 @@ impl<'a> Ctx<'a> {
             }
             let fty = self.resolve_type(fd.ty, &env);
             resolved.push(FieldInfo {
-                name: self.name(fd.name).to_string(),
+                name: fd.name,
                 ty: fty,
             });
         }
