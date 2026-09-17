@@ -13,7 +13,7 @@ fn describe(n: i32) -> str {
 
 enum Light { Green, Yellow, Red }
 
-fn drive(l: Light) {              // statement usage = unit-typed when
+fn drive(l: Light) {              // statement usage = nil-typed when
     when (l) {
         Light.Green  -> { go(); },
         Light.Yellow -> { brake(); },

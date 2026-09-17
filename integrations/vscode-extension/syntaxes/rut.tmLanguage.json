@@ -10,6 +10,7 @@
     { "include": "#char" },
     { "include": "#number" },
     { "include": "#boolean" },
+    { "include": "#null" },
     { "include": "#self-type" },
     { "include": "#primitive-type" },
     { "include": "#control-keyword" },
@@ -103,13 +104,17 @@
       "name": "constant.language.boolean.rut",
       "match": "\\b(true|false)\\b"
     },
+    "null": {
+      "name": "constant.language.null.rut",
+      "match": "\\bnil\\b"
+    },
     "self-type": {
       "name": "entity.name.type.rut",
       "match": "\\bSelf\\b"
     },
     "primitive-type": {
       "name": "storage.type.primitive.rut",
-      "match": "\\b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|bool|string|unit)\\b"
+      "match": "\\b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|bool|string)\\b"
     },
     "control-keyword": {
       "name": "keyword.control.rut",

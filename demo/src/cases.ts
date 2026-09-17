@@ -4,8 +4,9 @@
  * `std:collection`), whose `info` lines stream back as output.
  * `expected` carries the annotated output lines so the page works in
  * static-preview mode before the wasm build exists. Sources reflect
- * the v1.1 surface: copy-by-value structs, `(T, err)` tuples, no
- * `unit`, no `own`, no `dataclass`, no char literals, no arrows.
+ * the v1.2 surface: copy-by-value structs, `(T, err)` tuples, `nil`
+ * as the empty type/value, no `own`, no `dataclass`, no char
+ * literals, no arrows.
  */
 
 export interface RutCase {

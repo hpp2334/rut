@@ -55,7 +55,7 @@ async function run() {
   log(`symbols: ${names.join(' | ')}`);
 
   // 5. diagnostics: a broken document must produce a rut-sourced error
-  const broken = await vscode.workspace.openTextDocument({ language: 'rut', content: 'fn broken(: unit {\n' });
+  const broken = await vscode.workspace.openTextDocument({ language: 'rut', content: 'fn broken(: nil {\n' });
   await vscode.window.showTextDocument(broken, { preview: true });
   const diags = await poll('diagnostics', async () => {
     const d = vscode.languages.getDiagnostics(broken.uri);
