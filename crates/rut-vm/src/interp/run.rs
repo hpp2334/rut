@@ -75,43 +75,45 @@ impl Vm {
                 self.op_setf(*obj, *field, *val, *repr)?;
                 self.cur_pc += 1;
             }
-            Op::MakeRecord { dst, ty, vals } => {
-                self.op_make_record(*dst, *ty, vals)?;
+            Op::MakeRecord { dst, ty, argv_off, argc } => {
+                self.op_make_record(*dst, *ty, *argv_off, *argc)?;
                 self.cur_pc += 1;
             }
-            Op::Call { func, args, dst } => {
+            Op::Call { func, argv_off, argc, dst } => {
                 if self.prog.funcs[*func as usize].host.is_some() {
                     // run with the cursor AT this op: a trap (including a
                     // nested `vm.call` that ran out of fuel) parks here, so
                     // `resume()` re-runs the host fn instead of skipping it
-                    self.call_host(*func, args, *dst)?;
+                    self.call_host(*func, *argv_off, *argc, *dst)?;
                     self.cur_pc += 1;
                 } else {
                     self.cur_pc += 1;
-                    self.op_call(*func, args, *dst);
+                    self.op_call(*func, *argv_off, *argc, *dst);
                 }
             }
-            Op::CallM { func, recv, args, dst } => {
+            Op::CallM { func, argv_off, argc, dst } => {
                 self.cur_pc += 1;
-                self.op_call_m(*func, *recv, args, *dst);
+                self.op_call(*func, *argv_off, *argc, *dst);
             }
-            Op::CallI { slot, recv, args, dst } => {
+            Op::CallI { slot, argv_off, argc, dst } => {
                 self.cur_pc += 1;
-                self.op_call_i(*slot, *recv, args, *dst)?;
+                self.op_call_i(*slot, *argv_off, *argc, *dst)?;
             }
-            Op::CallFn { fval, args, dst } => {
+            Op::CallFn { fval, argv_off, argc, dst } => {
                 self.cur_pc += 1;
-                self.op_call_fn(*fval, args, *dst)?;
+                self.op_call_fn(*fval, *argv_off, *argc, *dst)?;
             }
-            Op::CallNat { nat, recv, args, dst } => {
-                self.call_nat(*nat, *recv, args, *dst)?;
-                self.cur_pc += 1;
-            }
-            Op::ArrLit { dst, ty, elems } => {
-                self.op_arr_lit(*dst, *ty, elems)?;
+            Op::CallNat { nat, recv, argv_off, argc, dst } => {
+                self.call_nat(*nat, *recv, *argv_off, *argc, *dst)?;
                 self.cur_pc += 1;
             }
-            Op::BrTable { idx, table, default } => {
+            Op::ArrLit { dst, ty, argv_off, argc } => {
+                self.op_arr_lit(*dst, *ty, *argv_off, *argc)?;
+                self.cur_pc += 1;
+            }
+            Op::BrTable { idx, table_off, count, default } => {
+                let table = &self.prog.funcs[self.cur_func as usize].labels
+                    [*table_off as usize..*table_off as usize + *count as usize];
                 let m = cell_of(self.cur_regs[*idx as usize])
                     .as_enum_member()
                     .unwrap_or(u32::MAX) as usize;

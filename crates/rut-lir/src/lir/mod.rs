@@ -8,6 +8,7 @@ use crate::check::{Ctx, FnKey, Inst, TcResult};
 use rut_lexer::span::Span;
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
+use std::collections::HashMap;
 use rut_core::types::*;
 
 mod call;
@@ -24,6 +25,64 @@ mod utf8;
 
 const NEST_MAX: u32 = 1024;
 
+/// The per-function operand pools (RFC 0032): ops address their variadic
+/// `Reg` lists and `BrTable` arms by `(off, len)` span into these tables
+/// instead of owning a `Vec` — that is what keeps `Op` at 16 bytes. Lists
+/// are interned (deduplicated) at emission; rewriters that remap registers
+/// re-intern, so sharing stays consistent. The empty list is the span
+/// `(0, 0)` and is never stored.
+pub(crate) struct Pools {
+    pub argv: Vec<Reg>,
+    argv_ix: HashMap<Vec<Reg>, u32>,
+    pub labels: Vec<Label>,
+}
+
+impl Pools {
+    fn new() -> Pools {
+        Pools { argv: Vec::new(), argv_ix: HashMap::new(), labels: Vec::new() }
+    }
+
+    /// Intern an argument list; returns its `(off, argc)` span.
+    pub(crate) fn args(&mut self, a: &[Reg]) -> (u32, u16) {
+        if a.is_empty() {
+            return (0, 0);
+        }
+        debug_assert!(a.len() <= u16::MAX as usize, "operand list longer than the register file");
+        if let Some(&off) = self.argv_ix.get(a) {
+            return (off, a.len() as u16);
+        }
+        let off = self.argv.len() as u32;
+        self.argv.extend_from_slice(a);
+        self.argv_ix.insert(a.to_vec(), off);
+        (off, a.len() as u16)
+    }
+
+    /// `[recv] ++ args` — the callee's whole parameter list in one span
+    /// (`CallM`/`CallI`: the receiver is `argv[0]`).
+    pub(crate) fn recv_args(&mut self, recv: Reg, a: &[Reg]) -> (u32, u16) {
+        let mut l = Vec::with_capacity(a.len() + 1);
+        l.push(recv);
+        l.extend_from_slice(a);
+        self.args(&l)
+    }
+
+    /// Intern a branch table; returns its `(off, count)` span.
+    pub(crate) fn table(&mut self, t: &[Label]) -> (u32, u16) {
+        if t.is_empty() {
+            return (0, 0);
+        }
+        // branch tables are rare (`when` chains); no dedup map for them —
+        // identical tables simply share nothing
+        let off = self.labels.len() as u32;
+        self.labels.extend_from_slice(t);
+        (off, t.len() as u16)
+    }
+
+    pub(crate) fn slice(&self, off: u32, len: u16) -> &[Reg] {
+        &self.argv[off as usize..off as usize + len as usize]
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct Local {
     name: IdentId,
@@ -38,6 +97,7 @@ pub struct FnCompiler<'a, 'b> {
     ctx: &'b mut Ctx<'a>,
     regs: Vec<TypeId>,
     code: Vec<Op>,
+    pools: Pools,
     spans: Vec<(u32, u32)>,
     locals: Vec<Local>,
     ret_ty: TypeId,
@@ -158,6 +218,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ctx,
             regs: Vec::new(),
             code: Vec::new(),
+            pools: Pools::new(),
             spans: Vec::new(),
             locals: Vec::new(),
             ret_ty: TY_NIL,
@@ -237,8 +298,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // paths (checked loosely: a final Ret with default value)
         c.emit(Op::Ret { val: None }, 0);
         c.resolve_labels();
-        let (code, spans) = sroa::run(c.code, c.spans);
-        let (code, spans) = peephole::run(code, spans);
+        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
+        let (code, spans, pools) = peephole::run(code, spans, c.pools);
+        let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
             name: fn_name,
@@ -247,6 +309,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             is_method,
             n_captures: 0,
             regs,
+            argv,
+            labels,
             code,
             spans,
             host: None,
@@ -269,6 +333,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ctx,
             regs: Vec::new(),
             code: Vec::new(),
+            pools: Pools::new(),
             spans: Vec::new(),
             locals: Vec::new(),
             ret_ty: TY_NIL,
@@ -334,8 +399,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             c.emit(Op::Ret { val: Some(c.last_reg) }, 0);
         }
         c.resolve_labels();
-        let (code, spans) = sroa::run(c.code, c.spans);
-        let (code, spans) = peephole::run(code, spans);
+        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
+        let (code, spans, pools) = peephole::run(code, spans, c.pools);
+        let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
             name: format!("lambda@{}", body.id().0),
@@ -344,6 +410,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             is_method: false,
             n_captures: n_caps,
             regs,
+            argv,
+            labels,
             code,
             spans,
             host: None,
@@ -364,6 +432,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ctx,
             regs: Vec::new(),
             code: Vec::new(),
+            pools: Pools::new(),
             spans: Vec::new(),
             locals: Vec::new(),
             ret_ty: TY_BOOL,
@@ -397,8 +466,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         c.emit(Op::ConstRaw { dst: t, bits: 1 }, 0);
         c.emit(Op::Ret { val: Some(t) }, 0);
         c.resolve_labels();
-        let (code, spans) = sroa::run(c.code, c.spans);
-        let (code, spans) = peephole::run(code, spans);
+        let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
+        let (code, spans, pools) = peephole::run(code, spans, c.pools);
+        let Pools { argv, labels, .. } = pools;
         let mut param_tys = vec![elem_ty];
         for (_, t) in &caps {
             param_tys.push(*t);
@@ -411,6 +481,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             is_method: false,
             n_captures: caps.len() as u32,
             regs,
+            argv,
+            labels,
             code,
             spans,
             host: None,
@@ -423,6 +495,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- infrastructure ----
 
     pub(crate) fn new_reg(&mut self, ty: TypeId) -> u16 {
+        // the file must stay below the NOREG sentinel (u16::MAX) — optional
+        // operands use it as "no register" (rut_core::ops::NOREG)
+        assert!(self.regs.len() < NOREG as usize, "register file overflow");
         self.regs.push(ty);
         let r = (self.regs.len() - 1) as u16;
         self.last_reg = r;
@@ -447,22 +522,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// call result, a record/array construction, a clone) — the value is
     /// already owned by the consumer, so a boundary clone is pure waste.
     fn last_reg_is_fresh_value(&self) -> bool {
-        matches!(
-            self.code.last(),
+        match self.code.last() {
+            // calls: fresh only when the result is kept (`dst != NOREG`)
+            Some(Op::Call { dst, .. } | Op::CallM { dst, .. } | Op::CallFn { dst, .. } | Op::CallNat { dst, .. }) => {
+                *dst != NOREG
+            }
             Some(
-                Op::Call { dst: Some(_), .. }
-                    | Op::CallM { dst: Some(_), .. }
-                    | Op::CallFn { dst: Some(_), .. }
-                    | Op::CallNat { dst: Some(_), .. }
-                    | Op::MakeRecord { .. }
+                Op::MakeRecord { .. }
                     | Op::MakePtr { .. }
                     | Op::CloneVal { .. }
                     | Op::ArrNew { .. }
                     | Op::ArrLit { .. }
                     | Op::MakeClosure { .. }
-                    | Op::Box { .. }
-            )
-        )
+                    | Op::Box { .. },
+            ) => true,
+            _ => false,
+        }
     }
 
     /// An argument register for a value-typed parameter: the callee gets
@@ -509,6 +584,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         (ty, reg)
     }
 
+    /// Intern an argument list into the function's operand pool.
+    pub(crate) fn pool_args(&mut self, a: &[Reg]) -> (u32, u16) {
+        self.pools.args(a)
+    }
+
+    /// Intern `[recv] ++ args` (the callee's whole parameter list).
+    pub(crate) fn pool_recv_args(&mut self, recv: Reg, a: &[Reg]) -> (u32, u16) {
+        self.pools.recv_args(recv, a)
+    }
+
     pub(crate) fn emit(&mut self, op: Op, span_lo: u32) {
         self.spans.push((self.code.len() as u32, span_lo));
         self.code.push(op);
@@ -533,11 +618,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         *then_t = target;
                     }
                 }
-                Op::BrTable { table, default, .. } => {
+                Op::BrTable { table_off, count, default, .. } => {
                     if is_else {
                         *default = target;
-                    } else if let Some(first) = table.first_mut() {
-                        *first = target;
+                    } else if *count > 0 {
+                        self.pools.labels[*table_off as usize] = target;
                     }
                 }
                 _ => unreachable!(),

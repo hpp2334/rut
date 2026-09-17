@@ -21,7 +21,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(TY_STR);
         }
         let dst = self.new_reg(TY_STR);
-        self.emit(Op::CallNat { nat: Nat::Concat, recv: None, args: part_regs, dst: Some(dst) }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(part_regs)); self.emit(Op::CallNat { nat: Nat::Concat, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
         Ok(TY_STR)
     }
 
@@ -43,7 +43,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let mut part_regs = vec![acc];
         part_regs.extend(self.compile_fstr_parts(&parts[skip..], sp)?);
-        self.emit(Op::CallNat { nat: Nat::Concat, recv: None, args: part_regs, dst: Some(acc) }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(part_regs)); self.emit(Op::CallNat { nat: Nat::Concat, recv: NOREG, argv_off, argc, dst: acc }, sp.lo); }
         Ok(TY_STR)
     }
 
@@ -117,7 +117,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         part_regs.push(src);
                     } else {
                         let sreg = self.new_reg(TY_STR);
-                        self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![src], dst: Some(sreg) }, sp.lo);
+                        { let (argv_off, argc) = self.pool_args(&(vec![src])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: sreg }, sp.lo); }
                         part_regs.push(sreg);
                     }
                 }
@@ -231,7 +231,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .map(|r| r.expect("checked: every field is initialized"))
             .collect();
         let dst = self.new_reg(sty);
-        self.emit(Op::MakeRecord { dst, ty: sty, vals }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(vals)); self.emit(Op::MakeRecord { dst: dst, ty: sty, argv_off, argc }, sp.lo); }
         Ok(sty)
     }
 
@@ -256,7 +256,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 for f in &fields {
                     vals.push(self.zero_value(f.ty, sp)?);
                 }
-                self.emit(Op::MakeRecord { dst: reg, ty, vals }, sp.lo);
+                { let (argv_off, argc) = self.pool_args(&(vals)); self.emit(Op::MakeRecord { dst: reg, ty: ty, argv_off, argc }, sp.lo); }
             }
             _ => {
                 self.ctx.err(sp, format!(
@@ -323,7 +323,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let vals: Vec<u16> = val_regs.into_iter().map(|r| r.unwrap()).collect();
         let dst = self.new_reg(sty);
-        self.emit(Op::MakeRecord { dst, ty: sty, vals }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(vals)); self.emit(Op::MakeRecord { dst: dst, ty: sty, argv_off, argc }, sp.lo); }
         Ok(sty)
     }
 
@@ -357,7 +357,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let elem = ety.unwrap_or(TY_I32);
         let aty = self.ctx.mk_array(elem);
         let dst = self.new_reg(aty);
-        self.emit(Op::ArrLit { dst, ty: aty, elems: eregs }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(eregs)); self.emit(Op::ArrLit { dst: dst, ty: aty, argv_off, argc }, sp.lo); }
         Ok(aty)
     }
 
@@ -437,10 +437,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let fid = self.ctx.ensure_inst(inst);
         let fty = self.ctx.mk_fn_ty(ptys.clone(), ret_ty);
         let dst = self.new_reg(fty);
-        self.emit(
-            Op::MakeClosure { dst, func: fid, captures: caps.iter().map(|(_, _, r)| *r).collect() },
-            sp.lo,
-        );
+        { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: dst, func: fid, argv_off, argc }, sp.lo,); }
         Ok(fty)
     }
 

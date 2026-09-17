@@ -140,6 +140,8 @@ impl<'a> GraphCompiler<'a> {
                     is_method: false,
                     n_captures: 0,
                     regs: vec![],
+                    argv: vec![],
+                    labels: vec![],
                     code: vec![],
                     spans: vec![],
                     host: Some(format!("{spec}::{name}")),

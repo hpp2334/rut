@@ -17,13 +17,18 @@
 //! disqualifies the record and it is left as a real allocation.
 
 use super::peephole::def_use;
+use super::Pools;
 use rut_core::ops::*;
 use std::collections::HashMap;
 
 /// Run SROA to a fixed point on one function.
-pub(crate) fn run(mut code: Vec<Op>, mut spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>) {
+pub(crate) fn run(
+    mut code: Vec<Op>,
+    mut spans: Vec<(u32, u32)>,
+    pools: &mut Pools,
+) -> (Vec<Op>, Vec<(u32, u32)>) {
     for _ in 0..4 {
-        let (c, s, changed) = one_round(code, spans);
+        let (c, s, changed) = one_round(code, spans, pools);
         code = c;
         spans = s;
         if !changed {
@@ -33,7 +38,11 @@ pub(crate) fn run(mut code: Vec<Op>, mut spans: Vec<(u32, u32)>) -> (Vec<Op>, Ve
     (code, spans)
 }
 
-fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn one_round(
+    code: Vec<Op>,
+    spans: Vec<(u32, u32)>,
+    pools: &mut Pools,
+) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
         return (code, spans, false);
@@ -43,7 +52,7 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
     let mut defs: HashMap<u16, Vec<usize>> = HashMap::new();
     let mut uses: HashMap<u16, Vec<usize>> = HashMap::new();
     for (pc, op) in code.iter().enumerate() {
-        let (d, u) = def_use(op);
+        let (d, u) = def_use(op, &pools.argv);
         for r in d {
             defs.entry(r).or_default().push(pc);
         }
@@ -62,8 +71,9 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table, default, .. } => {
-                for t in table {
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms {
                     mark(&mut is_target, *t, n);
                 }
                 mark(&mut is_target, *default, n);
@@ -77,10 +87,11 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
     let mut replace_getf: HashMap<usize, (u16, u16)> = HashMap::new();
 
     for pc in 0..n {
-        let Op::MakeRecord { dst: p, vals, .. } = &code[pc] else {
+        let Op::MakeRecord { dst: p, argv_off, argc, .. } = &code[pc] else {
             continue;
         };
         let p = *p;
+        let vals: &[Reg] = &pools.argv[*argv_off as usize..*argv_off as usize + *argc as usize];
         if is_target[pc] || defs.get(&p).map_or(true, |d| d.len() != 1) {
             continue;
         }
@@ -173,8 +184,9 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table, default, .. } => {
-                for t in table.iter_mut() {
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
                 *default = old_to_new[(*default as usize).min(n)];

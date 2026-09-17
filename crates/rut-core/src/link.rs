@@ -189,6 +189,9 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 is_method: f.is_method,
                 n_captures: f.n_captures,
                 regs: f.regs.into_iter().map(|r| map(r)).collect(),
+                // pools are function-local: spans move verbatim, untouched
+                argv: f.argv,
+                labels: f.labels,
                 code: f
                     .code
                     .into_iter()
@@ -255,29 +258,30 @@ fn remap_op(
     match op {
         Op::Const { dst, k } => Op::Const { dst, k: k + const_off },
         Op::NewCell { dst, ty } => Op::NewCell { dst, ty: map(ty) },
-        Op::MakeRecord { dst, ty, vals } => Op::MakeRecord { dst, ty: map(ty), vals },
+        Op::MakeRecord { dst, ty, argv_off, argc } => Op::MakeRecord { dst, ty: map(ty), argv_off, argc },
         Op::Own { dst, src, ty } => Op::Own { dst, src, ty: map(ty) },
         Op::MakePtr { dst, src, ty } => Op::MakePtr { dst, src, ty: map(ty) },
         Op::CloneVal { dst, src, ty } => Op::CloneVal { dst, src, ty: map(ty) },
         Op::ValEq { dst, a, b, ty, eq } => Op::ValEq { dst, a, b, ty: map(ty), eq },
         Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst, ty: map(ty), len, repr },
-        Op::ArrLit { dst, ty, elems } => Op::ArrLit { dst, ty: map(ty), elems },
+        Op::ArrLit { dst, ty, argv_off, argc } => Op::ArrLit { dst, ty: map(ty), argv_off, argc },
         Op::EnumNew { dst, ty, member } => Op::EnumNew { dst, ty: map(ty), member },
         Op::ArrGetRef { dst, arr, idx, ty } => Op::ArrGetRef { dst, arr, idx, ty: map(ty) },
         Op::IsType { dst, obj, want } => Op::IsType { dst, obj, want: map(want) },
         Op::Unbox { dst, box_, ty } => Op::Unbox { dst, box_, ty: map(ty) },
         Op::Box { dst, val, ty } => Op::Box { dst, val, ty: map(ty) },
-        Op::Call { func, args, dst } => Op::Call { func: map_func(func), args, dst },
-        Op::CallM { func, recv, args, dst } => {
-            Op::CallM { func: map_func(func), recv, args, dst }
+        Op::Call { func, argv_off, argc, dst } => Op::Call { func: map_func(func), argv_off, argc, dst },
+        Op::CallM { func, argv_off, argc, dst } => {
+            Op::CallM { func: map_func(func), argv_off, argc, dst }
         }
-        Op::CallI { slot, recv, args, dst } => {
-            Op::CallI { slot: slot + slot_off, recv, args, dst }
+        Op::CallI { slot, argv_off, argc, dst } => {
+            Op::CallI { slot: slot + slot_off, argv_off, argc, dst }
         }
-        Op::MakeClosure { dst, func, captures } => Op::MakeClosure {
+        Op::MakeClosure { dst, func, argv_off, argc } => Op::MakeClosure {
             dst,
             func: map_func(func),
-            captures,
+            argv_off,
+            argc,
         },
         Op::IsTrait { dst, obj, want } => Op::IsTrait { dst, obj, want: want + trait_off },
         other => other,
@@ -312,6 +316,8 @@ mod tests {
             is_method: false,
             n_captures: 0,
             regs: vec![TY_I32],
+            argv: vec![],
+            labels: vec![],
             code: vec![Op::Const { dst: 0, k: 0 }, Op::Ret { val: Some(0) }],
             spans: vec![],
             host: None,

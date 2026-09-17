@@ -498,7 +498,9 @@ impl Vm {
     /// Dispatch `Op::Call` to a host function: convert the args to `Value`s,
     /// invoke the embedder's impl, convert the result. The name was bound at
     /// link; an unregistered name traps at the boundary.
-    pub(super) fn call_host(&mut self, func: u32, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn call_host(&mut self, func: u32, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
+        let prog = Rc::clone(&self.prog);
+        let args = self.cur_argv(&prog, argv_off, argc);
         let fc = &self.prog.funcs[func as usize];
         let name = fc.host.clone().expect("call_host: not a host function");
         let params = fc.params.clone();
@@ -522,7 +524,7 @@ impl Vm {
             let mut f = f.borrow_mut();
             f(self, &vals)?
         };
-        if let Some(d) = dst {
+        if let Some(d) = reg_opt(dst) {
             let s = self
                 .value_in(&out, ret)
                 .map_err(|m| Trap::new(TrapKind::Invalid, format!("host `{name}` result: {m}")))?;

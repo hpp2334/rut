@@ -10,6 +10,8 @@ impl Vm {
         }
         match op {
             Op::LoopHead => {}
+            #[allow(unreachable_patterns)]
+            Op::Pad { .. } => unreachable!("layout pin, never constructed"),
             Op::Mov { dst, src } => self.cur_regs[dst as usize] = r!(src),
             Op::MovRef { dst, src } => {
                 let v = r!(src);
@@ -165,17 +167,20 @@ impl Vm {
             Op::Br { cond, then_t, else_t } => {
                 self.cur_pc = if r!(cond).as_bool() { then_t } else { else_t };
             }
-            Op::BrTable { idx, table, default } => {
+            Op::BrTable { idx, table_off, count, default } => {
+                let prog = Rc::clone(&self.prog);
+                let table = &prog.funcs[self.cur_func as usize].labels
+                    [table_off as usize..table_off as usize + count as usize];
                 let cell = cell_of(r!(idx));
                 let m = cell.as_enum_member().unwrap_or(u32::MAX) as usize;
                 self.cur_pc = table.get(m).copied().unwrap_or(default);
             }
 
-            Op::Call { func, args, dst } => self.op_call(func, &args, dst),
-            Op::CallM { func, recv, args, dst } => self.op_call_m(func, recv, &args, dst),
-            Op::CallI { slot, recv, args, dst } => self.op_call_i(slot, recv, &args, dst)?,
-            Op::CallFn { fval, args, dst } => self.op_call_fn(fval, &args, dst)?,
-            Op::CallNat { nat, recv, args, dst } => self.call_nat(nat, recv, &args, dst)?,
+            Op::Call { func, argv_off, argc, dst } => self.op_call(func, argv_off, argc, dst),
+            Op::CallM { func, argv_off, argc, dst } => self.op_call(func, argv_off, argc, dst),
+            Op::CallI { slot, argv_off, argc, dst } => self.op_call_i(slot, argv_off, argc, dst)?,
+            Op::CallFn { fval, argv_off, argc, dst } => self.op_call_fn(fval, argv_off, argc, dst)?,
+            Op::CallNat { nat, recv, argv_off, argc, dst } => self.call_nat(nat, recv, argv_off, argc, dst)?,
             // handled in run_loop (root returns surface the run's value)
             Op::Ret { .. } => unreachable!("Op::Ret is handled by the run loop"),
             Op::NewCell { dst, ty } => {
@@ -188,7 +193,7 @@ impl Vm {
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::MakeRecord { dst, ty, vals } => self.op_make_record(dst, ty, &vals)?,
+            Op::MakeRecord { dst, ty, argv_off, argc } => self.op_make_record(dst, ty, argv_off, argc)?,
             Op::GetF { dst, obj, field, repr } => self.op_getf(dst, obj, field, repr)?,
             Op::SetF { obj, field, val, repr } => self.op_setf(obj, field, val, repr)?,
             Op::Own { dst, src, ty } => {
@@ -216,7 +221,7 @@ impl Vm {
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::ArrLit { dst, ty, elems } => self.op_arr_lit(dst, ty, &elems)?,
+            Op::ArrLit { dst, ty, argv_off, argc } => self.op_arr_lit(dst, ty, argv_off, argc)?,
             Op::ArrGet { dst, arr, idx, repr } => self.op_arr_get(dst, arr, idx, repr)?,
             Op::ArrSet { arr, idx, val, repr } => self.op_arr_set(arr, idx, val, repr)?,
             Op::ArrGetF { dst, obj, field, idx, repr } => self.op_arr_get_f(dst, obj, field, idx, repr)?,
@@ -294,7 +299,9 @@ impl Vm {
                 self.heap.release(old);
             }
 
-            Op::MakeClosure { dst, func, captures } => {
+            Op::MakeClosure { dst, func, argv_off, argc } => {
+                let prog = Rc::clone(&self.prog);
+                let captures = self.cur_argv(&prog, argv_off, argc);
                 let caps: Vec<Slot> = captures.iter().map(|&c| r!(c)).collect();
                 // capture types are the tail of the callee's params; read them
                 // from the function table so the cell need not store them

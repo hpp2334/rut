@@ -409,7 +409,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         self.ctx
             .for_of_sigs
-            .insert(body.id().0, (elem_ty, caps.iter().map(|(n, t, _)| (*n, *t)).collect()));
+            .insert(body.id().0, (elem_ty, caps.iter().map(|(n, t, _)| (*n, *t)).collect::<Vec<_>>()));
         let emit = crate::check::Inst {
             key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
             subst: vec![],
@@ -417,10 +417,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let fid = self.ctx.ensure_inst(emit);
         let fty = self.ctx.mk_fn_ty(vec![elem_ty], TY_BOOL);
         let clo = self.new_reg(fty);
-        self.emit(
-            Op::MakeClosure { dst: clo, func: fid, captures: caps.iter().map(|(_, _, r)| *r).collect() },
-            sp.lo,
-        );
+        { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo,); }
         // `xs.__iterate(emit)` — the ordinary method machinery
         let iterate = self.ctx.lookup_name("__iterate").expect("`__iterate` interned");
         let mfid = self
@@ -429,7 +426,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 key: crate::check::FnKey::Method { data: dname, name: iterate },
                 subst: env,
             });
-        self.emit(Op::CallM { func: mfid, recv: rreg, args: vec![clo], dst: None }, sp.lo);
+        { let (argv_off, argc) = self.pool_recv_args(rreg, &(vec![clo])); self.emit(Op::CallM { func: mfid, argv_off, argc, dst: NOREG }, sp.lo); }
         Ok(())
     }
 

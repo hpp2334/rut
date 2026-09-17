@@ -3,8 +3,8 @@
 //! jump targets in range, call arities vs callee signatures, native/type
 //! operands present. A failure is a load error naming the function.
 
-use rut_core::binary::Program;
-use rut_core::ops::Op;
+use rut_core::binary::{FuncCode, Program};
+use rut_core::ops::{reg_opt, Op};
 use rut_core::types::{Repr, TY_U8, TyKind};
 
 pub fn verify(prog: &Program) -> Result<(), String> {
@@ -19,9 +19,20 @@ pub fn verify(prog: &Program) -> Result<(), String> {
         for (pc, op) in f.code.iter().enumerate() {
             let bad = |m: String| ctx(format!("op @{pc}: {m}"));
             // every register operand must be in range
-            for r in regs_of(op) {
+            for r in regs_of(op, f) {
                 if r as usize >= nregs {
                     return Err(bad(format!("register r{r} out of range ({nregs} regs)")));
+                }
+            }
+            // pooled operand spans must be in range (RFC 0032)
+            if let Some((off, argc)) = op.argv_span() {
+                if off as usize + argc as usize > f.argv.len() {
+                    return Err(bad(format!("argv span {off}+{argc} out of range ({} entries)", f.argv.len())));
+                }
+            }
+            if let Some((off, count)) = op.label_span() {
+                if off as usize + count as usize > f.labels.len() {
+                    return Err(bad(format!("label span {off}+{count} out of range ({} entries)", f.labels.len())));
                 }
             }
             // type operands must be in the table
@@ -43,41 +54,32 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         }
                     }
                 }
-                Op::BrTable { table, default, .. } => {
-                    for t in table.iter().chain(std::iter::once(default)) {
+                Op::BrTable { table_off, count, default, .. } => {
+                    let arms = &f.labels[*table_off as usize..*table_off as usize + *count as usize];
+                    for t in arms.iter().chain(std::iter::once(default)) {
                         if *t as usize >= f.code.len() {
                             return Err(bad(format!("brtable target {t} out of range")));
                         }
                     }
                 }
-                Op::Call { func, args, .. } => {
+                Op::Call { func, argv_off, argc, .. } | Op::CallM { func, argv_off, argc, .. } => {
                     let callee = prog
                         .funcs
                         .get(*func as usize)
                         .ok_or_else(|| bad(format!("call target #{func} out of range")))?;
-                    if args.len() != callee.params.len() {
-                        return Err(bad(format!(
-                            "call arity: {} args for {} params",
-                            args.len(),
-                            callee.params.len()
-                        )));
-                    }
-                }
-                Op::CallM { func, args, .. } => {
-                    let callee = prog
-                        .funcs
-                        .get(*func as usize)
-                        .ok_or_else(|| bad(format!("call target #{func} out of range")))?;
-                    if !callee.is_method {
+                    if matches!(op, Op::CallM { .. }) && !callee.is_method {
                         return Err(bad("CallM to a non-method".into()));
                     }
-                    if args.len() + 1 != callee.params.len() {
+                    // the pool span is the callee's whole parameter list
+                    // (`CallM` folds the receiver into `argv[0]`)
+                    let n = *argc as usize;
+                    if n != callee.params.len() {
                         return Err(bad(format!(
-                            "method arity: {} args + self for {} params",
-                            args.len(),
+                            "call arity: {n} args for {} params",
                             callee.params.len()
                         )));
                     }
+                    let _ = (argv_off, n);
                 }
                 Op::CallI { slot, .. } => {
                     if *slot as usize >= prog.trait_slots.len() {
@@ -173,7 +175,9 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         return Err(bad("field-array op repr does not match the element type".into()));
                     }
                 }
-                Op::MakeRecord { ty, vals, .. } => match prog.types.kind(*ty) {
+                Op::MakeRecord { ty, argv_off, argc, .. } => {
+                    let vals = &f.argv[*argv_off as usize..*argv_off as usize + *argc as usize];
+                    match prog.types.kind(*ty) {
                     TyKind::Data { fields } => {
                         if vals.len() != fields.len() {
                             return Err(bad(
@@ -189,7 +193,8 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         }
                     }
                     _ => return Err(bad("MakeRecord over a non-record type".into())),
-                },
+                    }
+                }
                 Op::IsTrait { want, .. } => {
                     if *want as usize >= prog.traits.len() {
                         return Err(bad("IsTrait want not in the trait table".into()));
@@ -313,8 +318,12 @@ pub fn verify(prog: &Program) -> Result<(), String> {
     Ok(())
 }
 
-fn regs_of(op: &Op) -> Vec<u16> {
+fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
     let mut v = Vec::new();
+    // pooled operand lists first (the span covers every list-carrying op)
+    if let Some((off, argc)) = op.argv_span() {
+        v.extend_from_slice(&f.argv[off as usize..off as usize + argc as usize]);
+    }
     let mut push = |r: u16| v.push(r);
     match op {
         // single-dst ops
@@ -325,12 +334,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
         Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
         | Op::ArrNew { dst, .. } | Op::ArrLit { dst, .. } | Op::EnumNew { dst, .. }
         | Op::Panic { msg: dst } => push(*dst),
-        Op::MakeRecord { dst, vals, .. } => {
-            push(*dst);
-            for &v in vals {
-                push(v);
-            }
-        }
+        Op::MakeRecord { dst, .. } => push(*dst),
         // two-operand scalar ops
         Op::Not { dst, a } | Op::NegF { dst, a, .. }
         | Op::NegI { dst, a, .. } => {
@@ -406,24 +410,18 @@ fn regs_of(op: &Op) -> Vec<u16> {
         }
         Op::Br { cond, .. } => push(*cond),
         Op::BrTable { idx, .. } => push(*idx),
-        Op::Call { args, dst, .. } => {
-            v.extend_from_slice(args);
-            dst.into_iter().for_each(|d| v.push(*d));
+        Op::Call { dst, .. } | Op::CallM { dst, .. } | Op::CallI { dst, .. } | Op::CallFn { dst, .. } => {
+            if *dst != rut_core::ops::NOREG {
+                v.push(*dst);
+            }
         }
-        Op::CallM { recv, args, dst, .. } | Op::CallI { recv, args, dst, .. } => {
-            push(*recv);
-            v.extend_from_slice(args);
-            dst.into_iter().for_each(|d| v.push(*d));
-        }
-        Op::CallNat { recv, args, dst, .. } => {
-            recv.into_iter().for_each(|r| v.push(*r));
-            v.extend_from_slice(args);
-            dst.into_iter().for_each(|d| v.push(*d));
-        }
-        Op::CallFn { fval, args, dst } => {
-            push(*fval);
-            v.extend_from_slice(args);
-            dst.into_iter().for_each(|d| v.push(*d));
+        Op::CallNat { recv, dst, .. } => {
+            if *recv != rut_core::ops::NOREG {
+                v.push(*recv);
+            }
+            if *dst != rut_core::ops::NOREG {
+                v.push(*dst);
+            }
         }
         Op::Ret { val } => val.into_iter().for_each(|r| v.push(*r)),
         Op::GetF { dst, obj, .. } => {
@@ -435,10 +433,7 @@ fn regs_of(op: &Op) -> Vec<u16> {
             push(*arr);
             push(*idx);
         }
-        Op::MakeClosure { dst, captures, .. } => {
-            push(*dst);
-            v.extend_from_slice(captures);
-        }
+        Op::MakeClosure { dst, .. } => push(*dst),
         Op::Conv { dst, src, .. } => {
             push(*dst);
             push(*src);
@@ -453,6 +448,8 @@ fn regs_of(op: &Op) -> Vec<u16> {
             msg.into_iter().for_each(|m| v.push(*m));
         }
         Op::Jmp { .. } | Op::LoopHead => {}
+        #[allow(unreachable_patterns)]
+        Op::Pad { .. } => unreachable!("layout pin, never constructed"),
     }
     v
 }

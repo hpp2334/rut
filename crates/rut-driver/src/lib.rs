@@ -7,7 +7,7 @@ use rut_lexer::diag::Diag;
 use rut_ast::dump;
 use rut_parser::{parse, Mode};
 use rut_core::binary::{encode, Program};
-use rut_core::ops::Op;
+use rut_core::ops::{NOREG, Op};
 use rut_core::types::{TyKind, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_NIL};
 
 pub mod session;
@@ -467,7 +467,7 @@ pub fn ir_dump_of(funcs: &[rut_core::binary::FuncCode]) -> String {
                 .join(" ")
         ));
         for (pc, op) in f.code.iter().enumerate() {
-            out.push_str(&format!("  {:4} {}\n", pc, op_str(op)));
+            out.push_str(&format!("  {:4} {}\n", pc, op_str(op, f)));
         }
     }
     out
@@ -477,7 +477,11 @@ fn f_type_name(_funcs: &[rut_core::binary::FuncCode], ty: u32) -> String {
     ty.to_string()
 }
 
-fn op_str(op: &Op) -> String {
+fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
+    // resolver-aware: pooled spans print as the lists they address
+    let argv = |off: u32, argc: u16| {
+        &f.argv[off as usize..off as usize + argc as usize]
+    };
     match op {
         Op::MakePtr { dst, src, .. } => format!("makeptr r{dst}, r{src}"),
         Op::CloneVal { dst, src, .. } => format!("cloneval r{dst}, r{src}"),
@@ -526,48 +530,48 @@ fn op_str(op: &Op) -> String {
         Op::RefEq { eq, dst, a, b } => format!("refeq {eq} r{dst}, r{a}, r{b}"),
         Op::Jmp { target } => format!("jmp L{target}"),
         Op::Br { cond, then_t, else_t } => format!("br r{cond}, L{then_t}, L{else_t}"),
-        Op::BrTable { idx, table, default } => {
-            format!("brtable r{idx}, [{}] default L{default}", table.iter().map(|t| format!("L{t}")).collect::<Vec<_>>().join(", "))
+        Op::BrTable { idx, table_off, count, default } => {
+            format!("brtable r{idx}, [{}] default L{default}", f.labels[*table_off as usize..*table_off as usize + *count as usize].iter().map(|t| format!("L{t}")).collect::<Vec<_>>().join(", "))
         }
-        Op::Call { func, args, dst } => format!(
+        Op::Call { func, argv_off, argc, dst } => format!(
             "call f{func}({}) -> {}",
-            args.iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
-            dst.map(|d| format!("r{d}")).unwrap_or("_".into())
+            argv(*argv_off, *argc).iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
+            if *dst != NOREG { format!("r{dst}") } else { "_".into() }
         ),
-        Op::CallM { func, recv, args, dst } => format!(
-            "callm f{func} r{recv}({}) -> {}",
-            args.iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
-            dst.map(|d| format!("r{d}")).unwrap_or("_".into())
+        Op::CallM { func, argv_off, argc, dst } => format!(
+            "callm f{func}({}) -> {}",
+            argv(*argv_off, *argc).iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
+            if *dst != NOREG { format!("r{dst}") } else { "_".into() }
         ),
-        Op::CallI { slot, recv, args, dst } => format!(
-            "calli slot{slot} r{recv}({}) -> {}",
-            args.iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
-            dst.map(|d| format!("r{d}")).unwrap_or("_".into())
+        Op::CallI { slot, argv_off, argc, dst } => format!(
+            "calli slot{slot}({}) -> {}",
+            argv(*argv_off, *argc).iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
+            if *dst != NOREG { format!("r{dst}") } else { "_".into() }
         ),
-        Op::CallNat { nat, recv, args, dst } => format!(
+        Op::CallNat { nat, recv, argv_off, argc, dst } => format!(
             "callnat {nat:?} {}({}) -> {}",
-            recv.map(|r| format!("r{r}")).unwrap_or("_".into()),
-            args.iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
-            dst.map(|d| format!("r{d}")).unwrap_or("_".into())
+            if *recv != NOREG { format!("r{recv}") } else { "_".into() },
+            argv(*argv_off, *argc).iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
+            if *dst != NOREG { format!("r{dst}") } else { "_".into() }
         ),
-        Op::CallFn { fval, args, dst } => format!(
+        Op::CallFn { fval, argv_off, argc, dst } => format!(
             "callfn r{fval}({}) -> {}",
-            args.iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
-            dst.map(|d| format!("r{d}")).unwrap_or("_".into())
+            argv(*argv_off, *argc).iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", "),
+            if *dst != NOREG { format!("r{dst}") } else { "_".into() }
         ),
         Op::Ret { val } => format!("ret {}", val.map(|r| format!("r{r}")).unwrap_or("_".into())),
         Op::NewCell { dst, ty } => format!("newcell r{dst}, t{ty}"),
-        Op::MakeRecord { dst, ty, vals } => format!(
+        Op::MakeRecord { dst, ty, argv_off, argc } => format!(
             "makerecord r{dst}, t{ty}, [{}]",
-            vals.iter().map(|v| format!("r{v}")).collect::<Vec<_>>().join(", ")
+            argv(*argv_off, *argc).iter().map(|v| format!("r{v}")).collect::<Vec<_>>().join(", ")
         ),
         Op::GetF { dst, obj, field, repr } => format!("getf r{dst}, r{obj}, f{field} :{}", repr.to_u8()),
         Op::SetF { obj, field, val, repr } => format!("setf r{obj}, f{field}, r{val} :{}", repr.to_u8()),
         Op::Own { dst, src, ty } => format!("own r{dst}, r{src}, t{ty}"),
         Op::ArrNew { dst, ty, len, .. } => format!("arrnew r{dst}, t{ty}, r{len}"),
-        Op::ArrLit { dst, ty, elems } => format!(
+        Op::ArrLit { dst, ty, argv_off, argc } => format!(
             "arrlit r{dst}, t{ty}, [{}]",
-            elems.iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", ")
+            argv(*argv_off, *argc).iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", ")
         ),
         Op::ArrGet { dst, arr, idx, repr } => format!("arrget r{dst}, r{arr}, r{idx} :{}", repr.to_u8()),
         Op::ArrSet { arr, idx, val, repr } => format!("arrset r{arr}, r{idx}, r{val} :{}", repr.to_u8()),
@@ -580,13 +584,15 @@ fn op_str(op: &Op) -> String {
         Op::IsTrait { dst, obj, want } => format!("istrait r{dst}, r{obj}, trait{want}"),
         Op::Unbox { dst, box_, ty } => format!("unbox r{dst}, r{box_}, t{ty}"),
         Op::Box { dst, val, ty } => format!("box r{dst}, r{val}, t{ty}"),
-        Op::MakeClosure { dst, func, captures } => format!(
+        Op::MakeClosure { dst, func, argv_off, argc } => format!(
             "closure r{dst}, f{func}({})",
-            captures.iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", ")
+            argv(*argv_off, *argc).iter().map(|r| format!("r{r}")).collect::<Vec<_>>().join(", ")
         ),
         Op::Panic { msg } => format!("panic r{msg}"),
         Op::Assert { cond, msg } => format!("assert r{cond}, {:?}", msg.map(|m| format!("r{m}"))),
         Op::LoopHead => "loophead".to_string(),
+        #[allow(unreachable_patterns)]
+        Op::Pad { .. } => unreachable!("layout pin, never constructed"),
         Op::Conv { dst, src, from, to } => format!("conv r{dst}, r{src}, {} -> {}", from.name(), to.name()),
         Op::StrCharAt { dst, s, idx } => format!("strcharat r{dst}, r{s}, r{idx}"),
     }

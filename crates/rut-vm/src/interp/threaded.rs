@@ -453,7 +453,7 @@ impl Machine for Vm {
     // ---- calls / ret (frame change => Redispatch) ----
 
     fn op_call(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Call { func, args, dst } = op else {
+        let Op::Call { func, argv_off, argc, dst } = op else {
             unreachable_op!("op_call: unexpected op")
         };
         if self.prog.funcs[*func as usize].host.is_some() {
@@ -461,47 +461,49 @@ impl Machine for Vm {
             // (including any nested `vm.call` it makes) rather than
             // skipping the call and losing its result
             self.cur_pc = pc;
-            self.call_host(*func, args, *dst)?;
+            self.call_host(*func, *argv_off, *argc, *dst)?;
             Ok(Flow::Next(pc + 1))
         } else {
             self.cur_pc = pc + 1;
-            self.op_call(*func, args, *dst);
+            self.op_call(*func, *argv_off, *argc, *dst);
             Ok(Flow::Redispatch)
         }
     }
 
     fn op_call_m(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::CallM { func, recv, args, dst } = op else {
+        let Op::CallM { func, argv_off, argc, dst } = op else {
             unreachable_op!("op_call_m: unexpected op")
         };
         self.cur_pc = pc + 1;
-        self.op_call_m(*func, *recv, args, *dst);
+        // the receiver is `argv[0]`: the span is the callee's parameter
+        // list, so `CallM` runs the `Call` path
+        self.op_call(*func, *argv_off, *argc, *dst);
         Ok(Flow::Redispatch)
     }
 
     fn op_call_i(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::CallI { slot, recv, args, dst } = op else {
+        let Op::CallI { slot, argv_off, argc, dst } = op else {
             unreachable_op!("op_call_i: unexpected op")
         };
         self.cur_pc = pc + 1;
-        self.op_call_i(*slot, *recv, args, *dst)?;
+        self.op_call_i(*slot, *argv_off, *argc, *dst)?;
         Ok(Flow::Redispatch)
     }
 
     fn op_call_fn(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::CallFn { fval, args, dst } = op else {
+        let Op::CallFn { fval, argv_off, argc, dst } = op else {
             unreachable_op!("op_call_fn: unexpected op")
         };
         self.cur_pc = pc + 1;
-        self.op_call_fn(*fval, args, *dst)?;
+        self.op_call_fn(*fval, *argv_off, *argc, *dst)?;
         Ok(Flow::Redispatch)
     }
 
     fn op_call_nat(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::CallNat { nat, recv, args, dst } = op else {
+        let Op::CallNat { nat, recv, argv_off, argc, dst } = op else {
             unreachable_op!("op_call_nat: unexpected op")
         };
-        self.call_nat(*nat, *recv, args, *dst)?;
+        self.call_nat(*nat, *recv, *argv_off, *argc, *dst)?;
         Ok(Flow::Next(pc + 1))
     }
 
@@ -575,9 +577,12 @@ impl Machine for Vm {
     }
 
     fn op_brtable(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::BrTable { idx, table, default } = op else {
+        let Op::BrTable { idx, table_off, count, default } = op else {
             unreachable_op!("op_brtable: unexpected op")
         };
+        let prog = Rc::clone(&self.prog);
+        let table = &prog.funcs[self.cur_func as usize].labels
+            [*table_off as usize..*table_off as usize + *count as usize];
         let m = cell_of(unsafe { *regs.add(*idx as usize) })
             .as_enum_member()
             .unwrap_or(u32::MAX) as usize;
@@ -598,10 +603,10 @@ impl Machine for Vm {
     }
 
     fn op_makerecord(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::MakeRecord { dst, ty, vals } = op else {
+        let Op::MakeRecord { dst, ty, argv_off, argc } = op else {
             unreachable_op!("op_makerecord: unexpected op")
         };
-        self.op_make_record(*dst, *ty, vals)?;
+        self.op_make_record(*dst, *ty, *argv_off, *argc)?;
         Ok(Flow::Next(pc + 1))
     }
 
@@ -638,10 +643,10 @@ impl Machine for Vm {
     }
 
     fn op_arrlit(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::ArrLit { dst, ty, elems } = op else {
+        let Op::ArrLit { dst, ty, argv_off, argc } = op else {
             unreachable_op!("op_arrlit: unexpected op")
         };
-        self.op_arr_lit(*dst, *ty, elems)?;
+        self.op_arr_lit(*dst, *ty, *argv_off, *argc)?;
         Ok(Flow::Next(pc + 1))
     }
 
@@ -733,9 +738,11 @@ impl Machine for Vm {
     }
 
     fn op_makeclosure(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::MakeClosure { dst, func, captures } = op else {
+        let Op::MakeClosure { dst, func, argv_off, argc } = op else {
             unreachable_op!("op_makeclosure: unexpected op")
         };
+        let prog = Rc::clone(&self.prog);
+        let captures = self.cur_argv(&prog, *argv_off, *argc);
         let caps: Vec<Slot> = captures
             .iter()
             .map(|&c| unsafe { *regs.add(c as usize) })

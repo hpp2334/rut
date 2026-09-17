@@ -312,9 +312,18 @@ impl Vm {
         Ok(s)
     }
 
+    /// The op's operand span, sliced from the CURRENT function's pool —
+    /// ops address their argument lists by `(off, argc)` (RFC 0032).
+    #[inline(always)]
+    pub(super) fn cur_argv<'p>(&self, prog: &'p Program, off: u32, argc: u16) -> &'p [Reg] {
+        &prog.funcs[self.cur_func as usize].argv[off as usize..off as usize + argc as usize]
+    }
+
     /// `MakeRecord` — fused record literal (one alloc, all fields written).
     #[inline(always)]
-    pub(super) fn op_make_record(&mut self, dst: Reg, ty: TypeId, vals: &[Reg]) -> Result<(), Trap> {
+    pub(super) fn op_make_record(&mut self, dst: Reg, ty: TypeId, argv_off: u32, argc: u16) -> Result<(), Trap> {
+        let prog = Rc::clone(&self.prog);
+        let vals = self.cur_argv(&prog, argv_off, argc);
         let c = self.heap.alloc_record_zeroed(ty, vals.len())?;
         if let CellData::Record { fields } = &cell_of(c).data {
             let mut fb = fields.borrow_mut();
@@ -332,10 +341,13 @@ impl Vm {
         Ok(())
     }
 
-    /// `Call` — shared by `step` and the `run_loop` fast path (avoids
-    /// cloning the `args` vector per call).
+    /// `Call`/`CallM` — shared by `step` and the `run_loop` fast path.
+    /// The pool span IS the callee's parameter list (for `CallM` the
+    /// receiver is `argv[0]`), so one uniform copy loop covers both.
     #[inline(always)]
-    pub(super) fn op_call(&mut self, func: u32, args: &[Reg], dst: Option<Reg>) {
+    pub(super) fn op_call(&mut self, func: u32, argv_off: u32, argc: u16, dst: Reg) {
+        let prog = Rc::clone(&self.prog);
+        let args = self.cur_argv(&prog, argv_off, argc);
         let nregs = self.prog.funcs[func as usize].regs.len();
         let mut regs = self.take_regs(nregs);
         for (i, &a) in args.iter().enumerate() {
@@ -344,30 +356,16 @@ impl Vm {
                 self.heap.retain(regs[i]);
             }
         }
-        self.enter(func, regs, dst);
+        self.enter(func, regs, reg_opt(dst));
     }
 
-    /// `CallM` — shared by `step` and the `run_loop` fast path.
+    /// `CallI` — shared by `step` and the `run_loop` fast path; the
+    /// receiver is `argv[0]`.
     #[inline(always)]
-    pub(super) fn op_call_m(&mut self, func: u32, recv: Reg, args: &[Reg], dst: Option<Reg>) {
-        let nregs = self.prog.funcs[func as usize].regs.len();
-        let mut regs = self.take_regs(nregs);
-        regs[0] = self.cur_regs[recv as usize];
-        if self.is_ref(self.param_ty(func, 0)) {
-            self.heap.retain(regs[0]);
-        }
-        for (i, &a) in args.iter().enumerate() {
-            regs[i + 1] = self.cur_regs[a as usize];
-            if self.is_ref(self.param_ty(func, i + 1)) {
-                self.heap.retain(regs[i + 1]);
-            }
-        }
-        self.enter(func, regs, dst);
-    }
-
-    /// `CallI` — shared by `step` and the `run_loop` fast path.
-    #[inline(always)]
-    pub(super) fn op_call_i(&mut self, slot: u32, recv: Reg, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn op_call_i(&mut self, slot: u32, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
+        let prog = Rc::clone(&self.prog);
+        let args = self.cur_argv(&prog, argv_off, argc);
+        let recv = args[0];
         let ty = cell_of(self.cur_regs[recv as usize]).ty;
         let fid = self
             .prog
@@ -386,24 +384,22 @@ impl Vm {
             })?;
         let nregs = self.prog.funcs[fid as usize].regs.len();
         let mut regs = self.take_regs(nregs);
-        regs[0] = self.cur_regs[recv as usize];
-        if self.is_ref(self.param_ty(fid, 0)) {
-            self.heap.retain(regs[0]);
-        }
         for (i, &a) in args.iter().enumerate() {
-            regs[i + 1] = self.cur_regs[a as usize];
-            if self.is_ref(self.param_ty(fid, i + 1)) {
-                self.heap.retain(regs[i + 1]);
+            regs[i] = self.cur_regs[a as usize];
+            if self.is_ref(self.param_ty(fid, i)) {
+                self.heap.retain(regs[i]);
             }
         }
-        self.enter(fid, regs, dst);
+        self.enter(fid, regs, reg_opt(dst));
         Ok(())
     }
 
     /// `CallFn` — shared by `step` and the `run_loop` fast path. Reads the
     /// captures by reference (no per-call `Vec` clone).
     #[inline(always)]
-    pub(super) fn op_call_fn(&mut self, fval: Reg, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn op_call_fn(&mut self, fval: Reg, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
+        let prog = Rc::clone(&self.prog);
+        let args = self.cur_argv(&prog, argv_off, argc);
         let cell = cell_of(self.cur_regs[fval as usize]);
         let (fid, captures): (u32, &[Slot]) = match &cell.data {
             CellData::Closure { func, captures } => (*func, captures.as_slice()),
@@ -429,13 +425,15 @@ impl Vm {
                 }
             }
         }
-        self.enter(fid, regs, dst);
+        self.enter(fid, regs, reg_opt(dst));
         Ok(())
     }
 
     /// `ArrLit` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
-    pub(super) fn op_arr_lit(&mut self, dst: Reg, ty: TypeId, elems: &[Reg]) -> Result<(), Trap> {
+    pub(super) fn op_arr_lit(&mut self, dst: Reg, ty: TypeId, argv_off: u32, argc: u16) -> Result<(), Trap> {
+        let prog = Rc::clone(&self.prog);
+        let elems = self.cur_argv(&prog, argv_off, argc);
         let elem = match self.prog.types.kind(ty) {
             TyKind::Array { elem } => *elem,
             _ => TY_ANY,

@@ -2,6 +2,21 @@
 //! per-frame `Vec<Slot>`; every register has a static type in the function
 //! signature; the verifier re-checks at load (RFC 0033 §2).
 //!
+//! ## Operand pools (RFC 0032 §"narrow ops")
+//!
+//! Ops are exactly 24 bytes (a deliberate pin — see `Op::Pad`): no
+//! variant owns a heap allocation, and the stride stays off the pow2
+//! collision path in the dispatch loop. The
+//! variadic operand lists — call arguments, record/array/capture element
+//! registers, branch tables — live in **per-function pools**
+//! (`FuncCode::argv` for `Reg` lists, `FuncCode::labels` for `Label`
+//! tables); the op carries an `(off, argc)` span into its owning
+//! function's pool. Pools are append-only and deduplicated at build
+//! time, so repeated argument shapes share one entry, and the empty
+//! list is always the span `(0, 0)` (never stored). `argc` is u16
+//! because a list can name at most as many registers as the u16
+//! register file holds; the emitter rejects literals beyond that.
+//!
 //! Scalar operations are one opcode *per operation*, with the kind (int vs
 //! float) in the opcode and the width in the `prim` operand — `addf`/`addi`,
 //! not a generic `arith{op, ty}` the VM has to switch on. The frontend
@@ -12,6 +27,23 @@ use crate::types::{PrimTy, Repr, TypeId};
 
 pub type Reg = u16;
 pub type Label = u32;
+
+/// Sentinel for "no register" in optional operands (call `dst`, native
+/// `recv`): a function's register file can never reach index u16::MAX
+/// (the emitter caps it), so the value is unambiguous. Mandatory
+/// operands never carry it — the load verifier rejects any register
+/// index ≥ the file size, which `NOREG` always is.
+pub const NOREG: Reg = u16::MAX;
+
+/// `Option<Reg>` → sentinel (for building ops).
+pub fn opt_reg(o: Option<Reg>) -> Reg {
+    o.unwrap_or(NOREG)
+}
+
+/// Sentinel → `Option<Reg>` (for consuming ops).
+pub fn reg_opt(r: Reg) -> Option<Reg> {
+    if r == NOREG { None } else { Some(r) }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArithOp {
@@ -67,6 +99,7 @@ pub enum Nat {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+
 pub enum Op {
     /// untyped move (verifier: non-ref type)
     Mov { dst: Reg, src: Reg },
@@ -126,30 +159,36 @@ pub enum Op {
 
     Jmp { target: Label },
     Br { cond: Reg, then_t: Label, else_t: Label },
-    /// `when` on enums / downcast chains (RFC 0032 §1)
-    BrTable { idx: Reg, table: Vec<Label>, default: Label },
+    /// `when` on enums / downcast chains (RFC 0032 §1) — arms in the
+    /// function's `labels` pool: `labels[table_off..table_off + count]`
+    BrTable { idx: Reg, table_off: u32, count: u16, default: Label },
 
     /// direct call (free fns + class methods + closure-entry direct calls)
-    Call { func: u32, args: Vec<Reg>, dst: Option<Reg> },
-    /// direct method call — recv arrives as the callee's param 0
-    CallM { func: u32, recv: Reg, args: Vec<Reg>, dst: Option<Reg> },
+    /// — argument registers in the function's `argv` pool; `dst == NOREG`
+    /// discards
+    Call { func: u32, argv_off: u32, argc: u16, dst: Reg },
+    /// direct method call — the receiver is `argv[0]`: it arrives as the
+    /// callee's param 0, so the pool entry is exactly the callee's
+    /// parameter list (a uniform copy loop, no special-cased slot)
+    CallM { func: u32, argv_off: u32, argc: u16, dst: Reg },
     /// trait vtable call — ALWAYS dynamic for trait-declared members
     /// (RFC 0012 §1: no devirtualization); `slot` is a global trait-method
-    /// slot id (RFC 0015 §6)
-    CallI { slot: u32, recv: Reg, args: Vec<Reg>, dst: Option<Reg> },
-    /// native module call (RFC 0032 §1.1 R2)
-    CallNat { nat: Nat, recv: Option<Reg>, args: Vec<Reg>, dst: Option<Reg> },
+    /// slot id (RFC 0015 §6); the receiver is `argv[0]`
+    CallI { slot: u32, argv_off: u32, argc: u16, dst: Reg },
+    /// native module call (RFC 0032 §1.1 R2) — `recv == NOREG` for free
+    /// functions
+    CallNat { nat: Nat, recv: Reg, argv_off: u32, argc: u16, dst: Reg },
     /// call through an fn-typed value (closures — RFC 0013)
-    CallFn { fval: Reg, args: Vec<Reg>, dst: Option<Reg> },
+    CallFn { fval: Reg, argv_off: u32, argc: u16, dst: Reg },
     Ret { val: Option<Reg> },
 
     /// mint a value cell (the `Self { .. }` / struct literal;
     /// RFC 0032 §1) — fields follow via SetF
     NewCell { dst: Reg, ty: TypeId },
     /// fused record literal: allocate and initialize every field in one op
-    /// (`vals[i]` is field `i`, in declaration order). Replaces the
-    /// `NewCell` + N×`SetF` + `MovRef` sequence (RFC 0009).
-    MakeRecord { dst: Reg, ty: TypeId, vals: Vec<Reg> },
+    /// (`argv[argv_off + i]` is field `i`, in declaration order). Replaces
+    /// the `NewCell` + N×`SetF` + `MovRef` sequence (RFC 0009).
+    MakeRecord { dst: Reg, ty: TypeId, argv_off: u32, argc: u16 },
     /// `repr` is the field's baked representation (removes the runtime
     /// field-type lookup + `is_ref`); `field` is the declaration index.
     GetF { dst: Reg, obj: Reg, field: u32, repr: Repr },
@@ -172,7 +211,7 @@ pub enum Op {
     ValEq { dst: Reg, a: Reg, b: Reg, ty: TypeId, eq: bool },
 
     ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Array<T>(n) zeroed
-    ArrLit { dst: Reg, ty: TypeId, elems: Vec<Reg> }, // fixed Array<T, N>
+    ArrLit { dst: Reg, ty: TypeId, argv_off: u32, argc: u16 }, // fixed Array<T, N>
     ArrGet { dst: Reg, arr: Reg, idx: Reg, repr: Repr },       // bounds trap
     ArrSet { arr: Reg, idx: Reg, val: Reg, repr: Repr },
     /// fused `obj.field[idx]` / `obj.field[idx] = val` — `field` is a known
@@ -205,8 +244,9 @@ pub enum Op {
     Box { dst: Reg, val: Reg, ty: TypeId },
 
     /// closure literal: { func, captures } (RFC 0013 §1 — v1 captures by
-    /// value; by-ref capture lands with coroutine frames, RFC 0018 §4)
-    MakeClosure { dst: Reg, func: u32, captures: Vec<Reg> },
+    /// value; by-ref capture lands with coroutine frames, RFC 0018 §4) —
+    /// capture registers in the function's `argv` pool
+    MakeClosure { dst: Reg, func: u32, argv_off: u32, argc: u16 },
 
     /// panic(msg) / assert(cond, msg?) — RFC 0034 §2
     Panic { msg: Reg },
@@ -221,6 +261,15 @@ pub enum Op {
     /// fuel-check no-op back-edge marker (RFC 0040 §2: loop back-edges are
     /// natural checkpoints) — emitted at loop heads
     LoopHead,
+    /// Layout pin — never constructed. The enum is deliberately 24 bytes,
+    /// not the natural 16: in the threaded dispatch loop the op-stream
+    /// loads alias against the register-file stores when the op stride is
+    /// a small power of two (measured on this µarch: 16/32-byte ops cost
+    /// intloop +13%; 24/40/64 are clean). 24 keeps the pooled form 40%
+    /// narrower than the Vec-carrying layout it replaces while staying
+    /// off the collision stride. The size assert below pins it.
+    #[allow(dead_code)]
+    Pad { p: [u32; 5] },
 }
 
 // ---- specialized scalar-op constructors (RFC 0032) ----
@@ -306,3 +355,53 @@ pub fn negop(prim: PrimTy, dst: Reg, a: Reg) -> Op {
         Op::NegI { prim, dst, a }
     }
 }
+
+// ---- operand-pool spans ----
+
+impl Op {
+    /// The `(off, argc)` span this op reads from its function's `argv`
+    /// pool, if it has one.
+    pub fn argv_span(&self) -> Option<(u32, u16)> {
+        Some(match self {
+            Op::Call { argv_off, argc, .. }
+            | Op::CallM { argv_off, argc, .. }
+            | Op::CallI { argv_off, argc, .. }
+            | Op::CallNat { argv_off, argc, .. }
+            | Op::CallFn { argv_off, argc, .. }
+            | Op::MakeRecord { argv_off, argc, .. }
+            | Op::ArrLit { argv_off, argc, .. }
+            | Op::MakeClosure { argv_off, argc, .. } => (*argv_off, *argc),
+            _ => return None,
+        })
+    }
+
+    /// Mutable span — for the rewriter that re-interns a remapped list.
+    pub fn argv_span_mut(&mut self) -> Option<(&mut u32, &mut u16)> {
+        Some(match self {
+            Op::Call { argv_off, argc, .. }
+            | Op::CallM { argv_off, argc, .. }
+            | Op::CallI { argv_off, argc, .. }
+            | Op::CallNat { argv_off, argc, .. }
+            | Op::CallFn { argv_off, argc, .. }
+            | Op::MakeRecord { argv_off, argc, .. }
+            | Op::ArrLit { argv_off, argc, .. }
+            | Op::MakeClosure { argv_off, argc, .. } => (argv_off, argc),
+            _ => return None,
+        })
+    }
+
+    /// The `(off, count)` span this op reads from its function's `labels`
+    /// pool (`BrTable` only).
+    pub fn label_span(&self) -> Option<(u32, u16)> {
+        match self {
+            Op::BrTable { table_off, count, .. } => Some((*table_off, *count)),
+            _ => None,
+        }
+    }
+}
+
+/// The narrow-op law: no variant owns a heap allocation, so the dispatch
+/// stream stays dense (RFC 0032).
+/// The narrow-op law: pooled operands, no per-op heap allocation, and a
+/// stride that measures clean in the dispatch loop (see `Op::Pad`).
+const _: () = assert!(std::mem::size_of::<Op>() == 24, "Op must stay 24 bytes");

@@ -85,7 +85,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             aregs.push(self.last_reg);
         }
         let dst = if ret == TY_NIL { None } else { Some(self.new_reg(ret)) };
-        self.emit(Op::CallFn { fval: freg, args: aregs, dst }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::CallFn { fval: freg, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret)
     }
 
@@ -191,14 +191,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.bind(l_some);
                 let un = self.new_reg(want);
                 self.emit(Op::Unbox { dst: un, box_: orecv, ty: want }, sp.lo);
-                self.emit(Op::MakeRecord { dst, ty: tty, vals: vec![un, eq] }, sp.lo);
+                { let (argv_off, argc) = self.pool_args(&(vec![un, eq])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
                 self.jmp(l_end);
                 self.bind(l_none);
                 let zero = self.new_reg(want);
                 self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
                 let no = self.new_reg(TY_BOOL);
                 self.emit(Op::ConstRaw { dst: no, bits: 0 }, sp.lo);
-                self.emit(Op::MakeRecord { dst, ty: tty, vals: vec![zero, no] }, sp.lo);
+                { let (argv_off, argc) = self.pool_args(&(vec![zero, no])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
                 self.bind(l_end);
                 // the value lives in `dst`; move it out so last_reg holds it
                 let out = self.new_reg(tty);
@@ -254,7 +254,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(src), args: vec![], dst: Some(dst) }, sp.lo);
+                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrLen, recv: src, argv_off, argc, dst: dst }, sp.lo); }
                 return Ok(TY_I32);
             }
             "string_join" if core_fn => {
@@ -275,7 +275,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_STR);
-                self.emit(Op::CallNat { nat: Nat::StrJoin, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
+                { let (argv_off, argc) = self.pool_args(&(vec![src])); self.emit(Op::CallNat { nat: Nat::StrJoin, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
                 return Ok(TY_STR);
             }
             "type_id" => {
@@ -316,7 +316,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.check_formattable(t, self.ctx.ast.span(args[0].id()))?;
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_STR);
-                self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![src], dst: Some(dst) }, sp.lo);
+                { let (argv_off, argc) = self.pool_args(&(vec![src])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
                 return Ok(TY_STR);
             }
             _ => {}
@@ -352,7 +352,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 aregs.push(self.clone_arg(self.last_reg, ef.params[i], sp.lo));
             }
             let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
-            self.emit(Op::Call { func: ef.func, args: aregs, dst }, sp.lo);
+            { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
             return Ok(ef.ret);
         }
         // builtin type-call: Array<T>(n) — allocate n slots (runtime length,
@@ -534,7 +534,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let c = self.new_reg(TY_CHAR);
                 self.emit(Op::Conv { dst: c, src: cp, from: PrimTy::U32, to: PrimTy::Char }, sp.lo);
                 let dst = self.new_reg(TY_STR);
-                self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![c], dst: Some(dst) }, sp.lo);
+                { let (argv_off, argc) = self.pool_args(&(vec![c])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
                 return Ok(TY_STR);
             }
             _ => {}
@@ -701,7 +701,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        self.emit(Op::Call { func: fid, args: aregs, dst }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret_ty)
     }
 
@@ -766,7 +766,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         // class method: no receiver —plain Call
-        self.emit(Op::Call { func: fid, args: aregs, dst }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret_ty)
     }
 
@@ -858,10 +858,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     let tr = self.last_reg;
                     let dst = self.new_reg(TY_STR);
-                    self.emit(
-                        Op::CallNat { nat: Nat::StrSlice, recv: Some(rreg), args: vec![fr, tr], dst: Some(dst) },
-                        sp.lo,
-                    );
+                    { let (argv_off, argc) = self.pool_args(&(vec![fr, tr])); self.emit(Op::CallNat { nat: Nat::StrSlice, recv: rreg, argv_off, argc, dst: dst }, sp.lo,); }
                     return Ok(TY_STR);
                 }
                 if mname == "len" && args.is_empty() {
@@ -936,10 +933,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let tr = self.last_reg;
                         let view = self.new_reg(arr_ty);
-                        self.emit(
-                            Op::CallNat { nat: Nat::ArrSlice, recv: Some(arr), args: vec![fr, tr, live], dst: Some(view) },
-                            sp.lo,
-                        );
+                        { let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live])); self.emit(Op::CallNat { nat: Nat::ArrSlice, recv: arr, argv_off, argc, dst: view }, sp.lo,); }
                         let ptr_ty = self.ctx.mk_ptr(rt);
                         let dst = self.new_reg(ptr_ty);
                         self.emit(Op::MakePtr { dst, src: view, ty: ptr_ty }, sp.lo);
@@ -959,12 +953,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let tr = self.last_reg;
                         let live = self.new_reg(TY_I32);
-                        self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(rreg), args: vec![], dst: Some(live) }, sp.lo);
+                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::ArrLen, recv: rreg, argv_off, argc, dst: live }, sp.lo); }
                         let view = self.new_reg(rt);
-                        self.emit(
-                            Op::CallNat { nat: Nat::ArrSlice, recv: Some(rreg), args: vec![fr, tr, live], dst: Some(view) },
-                            sp.lo,
-                        );
+                        { let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live])); self.emit(Op::CallNat { nat: Nat::ArrSlice, recv: rreg, argv_off, argc, dst: view }, sp.lo,); }
                         let ptr_ty = self.ctx.mk_ptr(rt);
                         let dst = self.new_reg(ptr_ty);
                         self.emit(Op::MakePtr { dst, src: view, ty: ptr_ty }, sp.lo);
@@ -1140,7 +1131,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        self.emit(Op::CallM { func: fid, recv: rreg, args: aregs, dst }, sp.lo);
+        { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret_ty)
     }
 
@@ -1270,7 +1261,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         // trait-declared members NEVER devirtualize (RFC 0012 §1)
-        self.emit(Op::CallI { slot, recv: rreg, args: aregs, dst }, sp.lo);
+        { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallI { slot: slot, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret_ty)
     }
 

@@ -19,6 +19,38 @@ fields by index with compiler-emitted ref-field retain/release.
 
 ## 1. Ops
 
+### 1.0 Operand pools (shipped)
+
+No op owns a heap allocation. The variadic operand lists — call
+arguments, record/array/capture element registers, `brtable` arms —
+live in **per-function pools** (`FuncCode::argv` for `Reg` lists,
+`FuncCode::labels` for branch tables); the op carries an
+`(off, argc)` span into its own function's pool. Consequences:
+
+- `Op` is a fixed 24 bytes — pinned, not accidental: the natural 16
+  measured +13% on the intloop gate (the op-stream loads alias against
+  the register-file stores when the stride is a small power of two;
+  24/40/64 measure clean), and 24 stays 40% narrower than the
+  `Vec`-carrying layout it replaces. `Op::Pad` is the never-constructed
+  variant that holds the pin, with the numbers.
+- Pools are append-only and **deduplicated at emission** — repeated
+  argument shapes share one entry; the empty list is the span `(0, 0)`
+  and is never stored. The rewriters (peephole/SROA) re-intern on
+  register remap, so sharing stays consistent; deleted ops orphan
+  their entries, which is dead weight, not corruption.
+- `argc` is `u16` because a list can name at most as many registers as
+  the `u16` register file holds (the emitter rejects literals beyond
+  that bound).
+- `CallM`/`CallI` fold the receiver into the pool as `argv[0]`, so the
+  span IS the callee's parameter list and one uniform copy loop
+  transfers a frame — no special-cased slot zero.
+- Optional single-register operands (call `dst`, native `recv`) carry
+  the `NOREG` sentinel (`u16::MAX`) instead of an `Option` wrapper; a
+  register file can never reach that index, and the load verifier
+  rejects it anywhere else.
+- Binary format v2 serializes the pools ahead of the code; the load
+  verifier bounds-checks every span before execution.
+
 Representative ops (abbreviated; the full table is mechanical and lives
 with the VM crate):
 

@@ -76,7 +76,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let ty = self.ctx.mk_tuple(etys);
                 let dst = self.new_reg(ty);
-                self.emit(Op::MakeRecord { dst, ty, vals }, sp.lo);
+                { let (argv_off, argc) = self.pool_args(&(vals)); self.emit(Op::MakeRecord { dst: dst, ty: ty, argv_off, argc }, sp.lo); }
                 Ok(ty)
             }
             ExprKind::Index { recv, idx } => {

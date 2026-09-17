@@ -87,17 +87,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match &info.source {
             SliceSource::Array => {
                 let dst = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(recv), args: vec![], dst: Some(dst) }, sp);
+                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::ArrLen, recv: recv, argv_off, argc, dst: dst }, sp); }
                 Ok(dst)
             }
             SliceSource::Str => {
                 let dst = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::StrLen, recv: Some(recv), args: vec![], dst: Some(dst) }, sp);
+                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrLen, recv: recv, argv_off, argc, dst: dst }, sp); }
                 Ok(dst)
             }
             SliceSource::Bytes => {
                 let dst = self.new_reg(TY_I32);
-                self.emit(Op::CallNat { nat: Nat::ArrLen, recv: Some(recv), args: vec![], dst: Some(dst) }, sp);
+                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::ArrLen, recv: recv, argv_off, argc, dst: dst }, sp); }
                 Ok(dst)
             }
             SliceSource::DataBuf { len_field, .. } => {
@@ -122,7 +122,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let creg = self.new_reg(TY_CHAR);
                 self.emit(Op::StrCharAt { dst: creg, s: recv, idx }, sp);
                 let dst = self.new_reg(TY_STR);
-                self.emit(Op::CallNat { nat: Nat::Str, recv: None, args: vec![creg], dst: Some(dst) }, sp);
+                { let (argv_off, argc) = self.pool_args(&(vec![creg])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: dst }, sp); }
                 Ok(dst)
             }
             SliceSource::Bytes => {

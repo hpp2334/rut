@@ -13,34 +13,39 @@
 //! labels and spans so the code stays consistent. Ref moves (`movref`)
 //! are left alone — their retain/release is not yet provably removable.
 
+use super::Pools;
 use rut_core::ops::*;
 use std::collections::HashMap;
 
 /// Run the peephole to a fixed point on one function.
-pub(crate) fn run(mut code: Vec<Op>, mut spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>) {
+pub(crate) fn run(
+    mut code: Vec<Op>,
+    mut spans: Vec<(u32, u32)>,
+    mut pools: Pools,
+) -> (Vec<Op>, Vec<(u32, u32)>, Pools) {
     // a handful of rounds catches chains (a copy feeding a copy)
     for _ in 0..6 {
-        let (c, s, changed) = one_round(code, spans);
+        let (c, s, changed) = one_round(code, spans, &mut pools);
         code = c;
         spans = s;
-        let (c, s, changed2) = forward_once(code, spans);
+        let (c, s, changed2) = forward_once(code, spans, &mut pools);
         code = c;
         spans = s;
-        let (c, s, changed3) = fuse_once(code, spans);
+        let (c, s, changed3) = fuse_once(code, spans, &mut pools);
         code = c;
         spans = s;
         if !changed && !changed2 && !changed3 {
             break;
         }
     }
-    (code, spans)
+    (code, spans, pools)
 }
 
 /// Producer forwarding: `OP d, ...; mov y, d` where `d` is defined only by
 /// `OP` and read only by the `mov` becomes `OP y, ...` with the `mov`
 /// deleted. This is the assignment shape the tree-walking emitter produces
 /// for `x = <op>(...)` (the op writes a temp, then a copy lands it in `x`).
-fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
         return (code, spans, false);
@@ -48,7 +53,7 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u3
     let mut reads: HashMap<u16, Vec<usize>> = HashMap::new();
     let mut writes: HashMap<u16, Vec<usize>> = HashMap::new();
     for (pc, op) in code.iter().enumerate() {
-        let (d, u) = def_use(op);
+        let (d, u) = def_use(op, &pools.argv);
         for r in d {
             writes.entry(r).or_default().push(pc);
         }
@@ -64,8 +69,9 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u3
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table, default, .. } => {
-                for t in table {
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms {
                     mark(&mut is_target, *t, n);
                 }
                 mark(&mut is_target, *default, n);
@@ -167,8 +173,9 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u3
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table, default, .. } => {
-                for t in table.iter_mut() {
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
                 *default = old_to_new[(*default as usize).min(n)];
@@ -192,7 +199,7 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u3
 /// borrowed, not retained/released per element — this is the `Vec<T>` class's
 /// index path (RFC 0005 `Slice<T>`), so a std:collection sequence costs one
 /// op per element, not a field read plus an RC pair.
-fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n < 2 {
         return (code, spans, false);
@@ -200,7 +207,7 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
     let mut reads: HashMap<u16, Vec<usize>> = HashMap::new();
     let mut writes: HashMap<u16, Vec<usize>> = HashMap::new();
     for (pc, op) in code.iter().enumerate() {
-        let (d, u) = def_use(op);
+        let (d, u) = def_use(op, &pools.argv);
         for r in d {
             writes.entry(r).or_default().push(pc);
         }
@@ -216,8 +223,9 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table, default, .. } => {
-                for t in table {
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms {
                     mark(&mut is_target, *t, n);
                 }
                 mark(&mut is_target, *default, n);
@@ -283,8 +291,9 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table, default, .. } => {
-                for t in table.iter_mut() {
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
                 *default = old_to_new[(*default as usize).min(n)];
@@ -302,7 +311,7 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
     (new_code, new_spans, true)
 }
 
-fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
         return (code, spans, false);
@@ -312,7 +321,7 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
     let mut reads: HashMap<u16, Vec<usize>> = HashMap::new();
     let mut writes: HashMap<u16, Vec<usize>> = HashMap::new();
     for (pc, op) in code.iter().enumerate() {
-        let (d, u) = def_use(op);
+        let (d, u) = def_use(op, &pools.argv);
         for r in d {
             writes.entry(r).or_default().push(pc);
         }
@@ -330,8 +339,9 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table, default, .. } => {
-                for t in table {
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms {
                     mark(&mut is_target, *t, n);
                 }
                 mark(&mut is_target, *default, n);
@@ -415,7 +425,7 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
         let mut op = op.clone();
         if let Some(pairs) = replace_at.get(&pc) {
             for &(from, to) in pairs {
-                replace_reads(&mut op, from, to);
+                replace_reads(&mut op, pools, from, to);
             }
         }
         kept[pc] = true;
@@ -440,8 +450,9 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>) -> (Vec<Op>, Vec<(u32, u32)>
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table, default, .. } => {
-                for t in table.iter_mut() {
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
                 *default = old_to_new[(*default as usize).min(n)];
@@ -533,14 +544,24 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::CallM { dst, .. }
         | Op::CallI { dst, .. }
         | Op::CallNat { dst, .. }
-        | Op::CallFn { dst, .. } => dst.as_mut(),
+        | Op::CallFn { dst, .. } => {
+            if *dst != NOREG {
+                Some(dst)
+            } else {
+                None
+            }
+        }
         _ => None,
     }
 }
 
-pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
+pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
     let mut d = Vec::new();
     let mut u = Vec::new();
+    // pooled operand lists first (the span covers every list-carrying op)
+    if let Some((off, argc)) = op.argv_span() {
+        u.extend(argv[off as usize..off as usize + argc as usize].iter().copied());
+    }
     match op {
         Op::Mov { dst, src } | Op::MovRef { dst, src } => {
             d.push(*dst);
@@ -571,14 +592,7 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
         }
         Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
         | Op::ArrNew { dst, .. } | Op::EnumNew { dst, .. } => d.push(*dst),
-        Op::ArrLit { dst, elems, .. } => {
-            d.push(*dst);
-            u.extend(elems.iter().copied());
-        }
-        Op::MakeRecord { dst, vals, .. } => {
-            d.push(*dst);
-            u.extend(vals.iter().copied());
-        }
+        Op::ArrLit { dst, .. } | Op::MakeRecord { dst, .. } => d.push(*dst),
         Op::StrCmp { dst, a, b, .. }
         | Op::ArrayCmp { dst, a, b, .. }
         | Op::RefEq { dst, a, b, .. }
@@ -624,33 +638,17 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
         }
         Op::Br { cond, .. } => u.push(*cond),
         Op::BrTable { idx, .. } => u.push(*idx),
-        Op::Call { args, dst, .. } => {
-            u.extend(args.iter().copied());
-            if let Some(x) = dst {
-                d.push(*x);
+        Op::Call { dst, .. } | Op::CallM { dst, .. } | Op::CallI { dst, .. } | Op::CallFn { dst, .. } => {
+            if *dst != NOREG {
+                d.push(*dst);
             }
         }
-        Op::CallM { recv, args, dst, .. } | Op::CallI { recv, args, dst, .. } => {
-            u.push(*recv);
-            u.extend(args.iter().copied());
-            if let Some(x) = dst {
-                d.push(*x);
+        Op::CallNat { recv, dst, .. } => {
+            if *recv != NOREG {
+                u.push(*recv);
             }
-        }
-        Op::CallNat { recv, args, dst, .. } => {
-            if let Some(x) = recv {
-                u.push(*x);
-            }
-            u.extend(args.iter().copied());
-            if let Some(x) = dst {
-                d.push(*x);
-            }
-        }
-        Op::CallFn { fval, args, dst } => {
-            u.push(*fval);
-            u.extend(args.iter().copied());
-            if let Some(x) = dst {
-                d.push(*x);
+            if *dst != NOREG {
+                d.push(*dst);
             }
         }
         Op::Ret { val } => {
@@ -706,10 +704,7 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*val);
         }
-        Op::MakeClosure { dst, captures, .. } => {
-            d.push(*dst);
-            u.extend(captures.iter().copied());
-        }
+        Op::MakeClosure { dst, .. } => d.push(*dst),
         Op::Panic { msg } => u.push(*msg),
         Op::Assert { cond, msg } => {
             u.push(*cond);
@@ -727,18 +722,31 @@ pub(crate) fn def_use(op: &Op) -> (Vec<u16>, Vec<u16>) {
             u.push(*idx);
         }
         Op::Jmp { .. } | Op::LoopHead => {}
+        #[allow(unreachable_patterns)]
+        Op::Pad { .. } => unreachable!("layout pin, never constructed"),
     }
     (d, u)
 }
 
 /// Replace exactly the read operands equal to `from` with `to` (defs are
 /// never touched).
-fn replace_reads(op: &mut Op, from: u16, to: u16) {
+fn replace_reads(op: &mut Op, pools: &mut Pools, from: u16, to: u16) {
     let f = |r: &mut u16| {
         if *r == from {
             *r = to;
         }
     };
+    // pooled lists are cloned, remapped, and re-interned — a shared entry
+    // remapped to itself re-interns to the same span, so sharing survives
+    if let Some((off, argc)) = op.argv_span() {
+        let mut v = pools.argv[off as usize..off as usize + argc as usize].to_vec();
+        v.iter_mut().for_each(f);
+        let (o2, c2) = pools.args(&v);
+        if let Some((dst_off, dst_argc)) = op.argv_span_mut() {
+            *dst_off = o2;
+            *dst_argc = c2;
+        }
+    }
     match op {
         Op::StrCmp { a, b, .. }
         | Op::ArrayCmp { a, b, .. }
@@ -781,21 +789,8 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         Op::Mov { src, .. } | Op::MovRef { src, .. } => f(src),
         Op::Br { cond, .. } => f(cond),
         Op::BrTable { idx, .. } => f(idx),
-        Op::Call { args, .. } => args.iter_mut().for_each(f),
-        Op::CallM { recv, args, .. } | Op::CallI { recv, args, .. } => {
-            f(recv);
-            args.iter_mut().for_each(f);
-        }
-        Op::CallNat { recv, args, .. } => {
-            if let Some(x) = recv {
-                f(x);
-            }
-            args.iter_mut().for_each(f);
-        }
-        Op::CallFn { fval, args, .. } => {
-            f(fval);
-            args.iter_mut().for_each(f);
-        }
+        Op::CallNat { recv, .. } => f(recv),
+        Op::CallFn { fval, .. } => f(fval),
         Op::Ret { val } => {
             if let Some(x) = val {
                 f(x);
@@ -808,8 +803,7 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         }
         Op::Own { src, .. } => f(src),
         Op::ArrNew { len, .. } => f(len),
-        Op::ArrLit { elems, .. } => elems.iter_mut().for_each(f),
-        Op::MakeRecord { vals, .. } => vals.iter_mut().for_each(f),
+
         Op::ArrGet { arr, idx, .. } => {
             f(arr);
             f(idx);
@@ -831,7 +825,7 @@ fn replace_reads(op: &mut Op, from: u16, to: u16) {
         Op::TidOf { obj, .. } | Op::IsType { obj, .. } | Op::IsTrait { obj, .. } => f(obj),
         Op::Unbox { box_, .. } => f(box_),
         Op::Box { val, .. } => f(val),
-        Op::MakeClosure { captures, .. } => captures.iter_mut().for_each(f),
+
         Op::Panic { msg } => f(msg),
         Op::Assert { cond, msg, .. } => {
             f(cond);

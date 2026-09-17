@@ -30,6 +30,11 @@ pub struct FuncCode {
     pub is_method: bool,
     pub n_captures: u32,
     pub regs: Vec<TypeId>,
+    /// operand pool (RFC 0032): the variadic `Reg` lists the ops address
+    /// by `(off, argc)` span — append-only, build-time deduplicated
+    pub argv: Vec<Reg>,
+    /// branch-table pool: `BrTable` arms, addressed by `(off, count)`
+    pub labels: Vec<Label>,
     pub code: Vec<Op>,
     /// pc → source byte offset (RFC 0036 — symbolication data)
     pub spans: Vec<(u32, u32)>,
@@ -258,7 +263,7 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -353,6 +358,8 @@ pub fn encode(prog: &Program) -> Vec<u8> {
         e.u8(f.is_method as u8);
         e.u32(f.n_captures);
         e.tys(&f.regs);
+        e.u16s(&f.argv);
+        e.u32s(&f.labels);
         e.u32(f.code.len() as u32);
         for op in &f.code {
             encode_op(&mut e, op);
@@ -502,6 +509,8 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         let is_method = d.u8()? != 0;
         let n_captures = d.u32()?;
         let regs = d.tys()?;
+        let argv = d.u16s()?;
+        let labels = d.u32s()?;
         let ncode = d.u32()? as usize;
         let mut code = Vec::with_capacity(ncode);
         for _ in 0..ncode {
@@ -515,7 +524,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             spans.push((pc, lo));
         }
         let host = if d.u8()? != 0 { Some(d.str()?) } else { None };
-        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, code, spans, host });
+        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, argv, labels, code, spans, host });
     }
     let nexp = d.u32()? as usize;
     let mut exports = Vec::with_capacity(nexp);
@@ -615,19 +624,17 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::RefEq { eq, dst, a, b } => { e.u8(11); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::Jmp { target } => { e.u8(12); e.u32(*target); }
         Op::Br { cond, then_t, else_t } => { e.u8(13); e.u16(*cond); e.u32(*then_t); e.u32(*else_t); }
-        Op::BrTable { idx, table, default } => {
-            e.u8(14); e.u16(*idx); e.u32(table.len() as u32);
-            for t in table { e.u32(*t); }
-            e.u32(*default);
+        Op::BrTable { idx, table_off, count, default } => {
+            e.u8(14); e.u16(*idx); e.u32(*table_off); e.u16(*count); e.u32(*default);
         }
-        Op::Call { func, args, dst } => { e.u8(15); e.u32(*func); e.u16s(args); e.u8opt(dst); }
-        Op::CallM { func, recv, args, dst } => { e.u8(16); e.u32(*func); e.u16(*recv); e.u16s(args); e.u8opt(dst); }
-        Op::CallI { slot, recv, args, dst } => { e.u8(17); e.u32(*slot); e.u16(*recv); e.u16s(args); e.u8opt(dst); }
-        Op::CallNat { nat, recv, args, dst } => { e.u8(18); e.u8(*nat as u8); e.u8opt(recv); e.u16s(args); e.u8opt(dst); }
-        Op::CallFn { fval, args, dst } => { e.u8(19); e.u16(*fval); e.u16s(args); e.u8opt(dst); }
+        Op::Call { func, argv_off, argc, dst } => { e.u8(15); e.u32(*func); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
+        Op::CallM { func, argv_off, argc, dst } => { e.u8(16); e.u32(*func); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
+        Op::CallI { slot, argv_off, argc, dst } => { e.u8(17); e.u32(*slot); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
+        Op::CallNat { nat, recv, argv_off, argc, dst } => { e.u8(18); e.u8(*nat as u8); e.u16(*recv); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
+        Op::CallFn { fval, argv_off, argc, dst } => { e.u8(19); e.u16(*fval); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
         Op::Ret { val } => { e.u8(20); e.u8opt(val); }
         Op::NewCell { dst, ty } => { e.u8(21); e.u16(*dst); e.u32(*ty); }
-        Op::MakeRecord { dst, ty, vals } => { e.u8(49); e.u16(*dst); e.u32(*ty); e.u16s(vals); }
+        Op::MakeRecord { dst, ty, argv_off, argc } => { e.u8(49); e.u16(*dst); e.u32(*ty); e.u32(*argv_off); e.u16(*argc); }
         Op::GetF { dst, obj, field, repr } => { e.u8(22); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u8(repr.to_u8()); }
         Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
@@ -636,7 +643,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::ValEq { dst, a, b, ty, eq } => { e.u8(92); e.u16(*dst); e.u16(*a); e.u16(*b); e.u32(*ty); e.u8(*eq as u8); }
         Op::OnDrop { obj, cleanup } => { e.u8(90); e.u16(*obj); e.u16(*cleanup); }
         Op::ArrNew { dst, ty, len, repr } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); e.u8(repr.to_u8()); }
-        Op::ArrLit { dst, ty, elems } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u16s(elems); }
+        Op::ArrLit { dst, ty, argv_off, argc } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u32(*argv_off); e.u16(*argc); }
         Op::ArrGet { dst, arr, idx, repr } => { e.u8(27); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u8(repr.to_u8()); }
         Op::ArrSet { arr, idx, val, repr } => { e.u8(28); e.u16(*arr); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
         Op::EnumNew { dst, ty, member } => { e.u8(29); e.u16(*dst); e.u32(*ty); e.u32(*member); }
@@ -645,7 +652,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::IsTrait { dst, obj, want } => { e.u8(40); e.u16(*dst); e.u16(*obj); e.u32(*want); }
         Op::Unbox { dst, box_, ty } => { e.u8(41); e.u16(*dst); e.u16(*box_); e.u32(*ty); }
         Op::Box { dst, val, ty } => { e.u8(42); e.u16(*dst); e.u16(*val); e.u32(*ty); }
-        Op::MakeClosure { dst, func, captures } => { e.u8(43); e.u16(*dst); e.u32(*func); e.u16s(captures); }
+        Op::MakeClosure { dst, func, argv_off, argc } => { e.u8(43); e.u16(*dst); e.u32(*func); e.u32(*argv_off); e.u16(*argc); }
         Op::Panic { msg } => { e.u8(44); e.u16(*msg); }
         Op::Assert { cond, msg } => { e.u8(45); e.u16(*cond); e.u8opt(msg); }
         Op::LoopHead => e.u8(46),
@@ -655,6 +662,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::ArrGetF { dst, obj, field, idx, repr } => { e.u8(87); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u8(repr.to_u8()); }
         Op::ArrSetF { obj, field, idx, val, repr } => { e.u8(88); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
         Op::ArrGetRef { dst, arr, idx, ty } => { e.u8(30); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u32(*ty); }
+        Op::Pad { .. } => unreachable!("diagnostic-only variant"),
     }
 }
 
@@ -669,21 +677,12 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         11 => Op::RefEq { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         12 => Op::Jmp { target: d.u32()? },
         13 => Op::Br { cond: d.u16()?, then_t: d.u32()?, else_t: d.u32()? },
-        14 => {
-            let idx = d.u16()?;
-            let n = d.u32()? as usize;
-            let mut table = Vec::with_capacity(n);
-            for _ in 0..n {
-                table.push(d.u32()?);
-            }
-            let default = d.u32()?;
-            Op::BrTable { idx, table, default }
-        }
-        15 => Op::Call { func: d.u32()?, args: d.u16s()?, dst: d.u8opt()? },
-        16 => Op::CallM { func: d.u32()?, recv: d.u16()?, args: d.u16s()?, dst: d.u8opt()? },
-        17 => Op::CallI { slot: d.u32()?, recv: d.u16()?, args: d.u16s()?, dst: d.u8opt()? },
-        18 => Op::CallNat { nat: nat(d.u8()?)?, recv: d.u8opt()?, args: d.u16s()?, dst: d.u8opt()? },
-        19 => Op::CallFn { fval: d.u16()?, args: d.u16s()?, dst: d.u8opt()? },
+        14 => Op::BrTable { idx: d.u16()?, table_off: d.u32()?, count: d.u16()?, default: d.u32()? },
+        15 => Op::Call { func: d.u32()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
+        16 => Op::CallM { func: d.u32()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
+        17 => Op::CallI { slot: d.u32()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
+        18 => Op::CallNat { nat: nat(d.u8()?)?, recv: d.u16()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
+        19 => Op::CallFn { fval: d.u16()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
         20 => Op::Ret { val: d.u8opt()? },
         21 => Op::NewCell { dst: d.u16()?, ty: d.u32()? },
         22 => Op::GetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, repr: repr(d.u8()?)? },
@@ -694,7 +693,7 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         92 => Op::ValEq { dst: d.u16()?, a: d.u16()?, b: d.u16()?, ty: d.u32()?, eq: d.u8()? != 0 },
         90 => Op::OnDrop { obj: d.u16()?, cleanup: d.u16()? },
         25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()?, repr: repr(d.u8()?)? },
-        26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, elems: d.u16s()? },
+        26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
         27 => Op::ArrGet { dst: d.u16()?, arr: d.u16()?, idx: d.u16()?, repr: repr(d.u8()?)? },
         28 => Op::ArrSet { arr: d.u16()?, idx: d.u16()?, val: d.u16()?, repr: repr(d.u8()?)? },
         29 => Op::EnumNew { dst: d.u16()?, ty: d.u32()?, member: d.u32()? },
@@ -703,13 +702,13 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         40 => Op::IsTrait { dst: d.u16()?, obj: d.u16()?, want: d.u32()? },
         41 => Op::Unbox { dst: d.u16()?, box_: d.u16()?, ty: d.u32()? },
         42 => Op::Box { dst: d.u16()?, val: d.u16()?, ty: d.u32()? },
-        43 => Op::MakeClosure { dst: d.u16()?, func: d.u32()?, captures: d.u16s()? },
+        43 => Op::MakeClosure { dst: d.u16()?, func: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
         44 => Op::Panic { msg: d.u16()? },
         45 => Op::Assert { cond: d.u16()?, msg: d.u8opt()? },
         46 => Op::LoopHead,
         47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: prim(d.u8()?)?, to: prim(d.u8()?)? },
         48 => Op::StrCharAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
-        49 => Op::MakeRecord { dst: d.u16()?, ty: d.u32()?, vals: d.u16s()? },
+        49 => Op::MakeRecord { dst: d.u16()?, ty: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
         50 => Op::AddF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         51 => Op::SubF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         52 => Op::MulF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
@@ -812,6 +811,12 @@ impl Enc {
             self.u16(*x);
         }
     }
+    fn u32s(&mut self, v: &[u32]) {
+        self.u32(v.len() as u32);
+        for x in v {
+            self.u32(*x);
+        }
+    }
     fn u8opt(&mut self, v: &Option<u16>) {
         match v {
             Some(x) => {
@@ -879,6 +884,14 @@ impl<'a> Dec<'a> {
         let mut v = Vec::with_capacity(n);
         for _ in 0..n {
             v.push(self.u16()?);
+        }
+        Ok(v)
+    }
+    fn u32s(&mut self) -> Result<Vec<u32>, String> {
+        let n = self.u32()? as usize;
+        let mut v = Vec::with_capacity(n);
+        for _ in 0..n {
+            v.push(self.u32()?);
         }
         Ok(v)
     }

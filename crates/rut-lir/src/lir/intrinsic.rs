@@ -115,7 +115,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             aregs.push(self.last_reg);
         }
         let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
-        self.emit(Op::Call { func: ef.func, args: aregs, dst }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ef.ret)
     }
 
@@ -403,7 +403,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ok = self.cmp(CmpOp::Eq, PrimTy::Bool, ovf, no, sp.lo);
         let tty = self.ctx.mk_tuple(vec![ty, TY_BOOL]);
         let dst = self.new_reg(tty);
-        self.emit(Op::MakeRecord { dst, ty: tty, vals: vec![r, ok] }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(vec![r, ok])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
         self.last_reg = dst;
         Ok(tty)
     }
