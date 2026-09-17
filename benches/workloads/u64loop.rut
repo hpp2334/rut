@@ -1,0 +1,20 @@
+import { Logger } from "std:log";
+import { Math } from "std:math";
+
+// u64loop — the i64/u64 pair gate (RFC 0039 narrowing prep): u64
+// wrapping arithmetic and shifts in a hot loop. When slots narrow to
+// 32 bits, every op here becomes a register-pair combine/split — this
+// workload is the regression gate for that change. i64 pairing must
+// keep it within noise of its 32-bit sibling (intloop).
+// Scale: 1_000_000 iterations. Canonical reference: 7216000035.
+
+pub fn main() -> unit {
+    let mut h: u64 = 14695981039346656037u64;
+    for (let i = 0; i < 1000000; i += 1) {
+        h = Math.wrapping_mul(h, 1099511628211u64);
+        h = Math.wrapping_add(h, i as u64);
+        h = h ^ (h >> 31);
+        h = Math.wrapping_mul(h, 2654435761u64);
+    }
+    Logger.new("app").info(f"CHECKSUM {h}");
+}
