@@ -25,10 +25,10 @@ One linkage keyword, one implementer:
 
 | keyword | implementation lives in | bound at link against |
 |---|---|---|
-| `host fn` / `host dataclass` | the **embedding Rust** — a registered `NativeModule` | the fn-table reflection |
-| `builtin` / `builtin fn` / `builtin interface` | **the engine itself** — compiler-lowered (ops / intrinsics / lowering hooks); the toolchain's std decl files only | nothing to bind; the decl is a pure signature contract |
+| `host fn` / `host struct` | the **embedding Rust** — a registered `NativeModule` | the fn-table reflection |
+| `builtin class` / `builtin trait` / `builtin fn` | **the engine itself** — compiler-lowered (ops / intrinsics / lowering hooks); the toolchain's std decl files only | nothing to bind; the decl is a pure signature contract |
 
-`extern` is gone: rut→rut imports resolve through the module loader
+`extern` is gone: rut→rut names resolve through use paths (RFC 0028) and the module loader
 (RFC 0029 §5) and host→rut entry points are `entry fn` (RFC 0035 §3) —
 `host` is the one foreign-body case left.
 
@@ -75,7 +75,7 @@ single crossing a host-class method would have paid.
   keeping data out of the native surface is the performance rule.
 - **One nominal fiction fewer.** `host class` was a second class system
   (slots, ClassTables, instantiation builders, erased-storage generics)
-  duplicating what rut classes + `Opaque` already do; `std:math`'s
+  duplicating what rut classes + `Opaque` already do; `calc`'s
   `Math` was a namespace fiction over it. The wrapper class gives back
   the name, the methods, and the impl blocks with zero new machinery.
 - **What is honestly lost:** admission-only bounds on native
@@ -83,7 +83,7 @@ single crossing a host-class method would have paid.
   `Opaque` fits and `downcast` yields `None` on mismatch — checked,
   never a trap), per-instantiation type identity across the boundary,
   and native trait-object keys (`Hashable` vtable re-entry). Str keys
-  hash host-side by content (a registered builtin impl); dataclass keys
+  hash host-side by content (a registered builtin impl); struct keys
   are the rut-side wrapper's business.
 
 ## The surface grammar (RFC 0030 §3)
@@ -92,35 +92,34 @@ single crossing a host-class method would have paid.
 host fn name(params) -> T;          // concrete signature; generics are a
                                     // compile error — a generic parameter
                                     // has no shape the boundary checks
-host dataclass Name { fields }      // flat record; every field a
+host struct Name { fields }         // flat record; every field a
                                     // crossing type; no methods, no
                                     // field initializers — the host
                                     // constructs and reads it through
                                     // the field table (the shape IS the
                                     // whole surface)
 builtin fn name<T>(params) -> T;    // engine fn, compiler-lowered
-builtin Name<T> { methods }         // engine type member contract
-builtin interface Name<T> { .. }    // engine-woven contract
+builtin class Name<T> { .. }        // engine type member contract
+builtin trait Name<T> { .. }        // engine-woven contract
 ```
 
 - **`host fn` signatures are concrete** over the crossing set: nil,
   primitives, `str`, `bytes`, `Option`/`Result` over crossable types,
-  `Opaque` — and `host dataclass` records whose fields are all
-  crossable. Everything else (dataclass cells, user classes, `Vec`,
-  `dyn`, closures) stays inside the VM; violating shapes are compile
+  `Opaque` — and `host struct` records whose fields are all
+  crossable. Everything else (struct cells, user classes, `Vec`,
+  trait-typed values, closures) stays inside the VM; violating shapes are compile
   errors on the declaration.
 - **`builtin` is the engine's own surface**, spelled in the toolchain's
-  decl files only (`std:core`, `std:math`): the builtin containers
+  decl files only (`core`, `calc`): the builtin containers
   (`Array`/`Option`/`Result`/`Opaque`), the engine-lowered prelude fns
   (`own`, `downcast`, `assert`, `panic`, the `str`/`bytes` natives —
-  all of `std:core`'s functions; the prelude registers **no** host
-  bodies), and the **engine-woven interfaces** (`Disposal`, `Index`,
-  `Iterator`) — contracts the engine has built-in knowledge of
+  all of `core`'s functions; the prelude registers **no** host
+  bodies), and the **engine-woven traits** (`Iterator`; v1.1 removed `Disposal`/`Index` — `on_drop` and builtin indexing replaced them — and the async plan adds `Task` plus its run contexts) — contracts the engine has built-in knowledge of
   (compiler-backed impls, lowering hooks for `x[i]`, `for (x of it)`,
   rc-0 disposal). Users implement those with ordinary `impl` blocks:
-  `builtin interface` is the engine's reservation, not an access rule.
-  Library contracts without engine knowledge (`Hashable`,
-  `std:collection`) stay plain `interface`. No embedder decl may spell
+  `builtin trait` is the engine's reservation, not an access rule.
+  Library contracts without engine knowledge (`pouch`'s
+  `Hashable`) stay plain `trait`. No embedder decl may spell
   `builtin` — a `builtin` outside the mounted std surface is a compile
   error. The decl is a pure signature contract (users and the LSP see
   every member); there is nothing to register and no slots.

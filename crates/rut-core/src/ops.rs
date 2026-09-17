@@ -171,8 +171,9 @@ pub enum Op {
     /// callee's param 0, so the pool entry is exactly the callee's
     /// parameter list (a uniform copy loop, no special-cased slot)
     CallM { func: u32, argv_off: u32, argc: u16, dst: Reg },
-    /// trait vtable call — ALWAYS dynamic for trait-declared members
-    /// (RFC 0012 §1: no devirtualization); `slot` is a global trait-method
+    /// trait vtable call — the vtable form of the two-rule dispatch law
+    /// (RFC 0012 §1): origins multiple, the call consults the value's
+    /// descriptor; `slot` is a global trait-method
     /// slot id (RFC 0015 §6); the receiver is `argv[0]`
     CallI { slot: u32, argv_off: u32, argc: u16, dst: Reg },
     /// native module call (RFC 0032 §1.1 R2) — `recv == NOREG` for free

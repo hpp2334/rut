@@ -16,6 +16,7 @@ use tower_lsp_server::ls_types::*;
 use tower_lsp_server::{Client, LanguageServer};
 
 use crate::analysis::{self, Analysis};
+use crate::completion::{self, CompletionKind, CompletionOut};
 use crate::hover::{self, DefIndex};
 use crate::semantic::TokenType;
 
@@ -172,6 +173,10 @@ impl LanguageServer for Backend {
                 )),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                completion_provider: Some(CompletionOptions {
+                    trigger_characters: Some(vec![".".to_string()]),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
             server_info: Some(ServerInfo {
@@ -256,5 +261,51 @@ impl LanguageServer for Backend {
             }),
             range: Some(analysis::range_of(&crate::line_index::LineIndex::new(&src), &src, h.span)),
         }))
+    }
+
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let uri = params.text_document_position.text_document.uri;
+        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let mode = analysis::mode_of(uri.as_str());
+        let src = rut_lexer::lexer::normalize(&text);
+        let (toks, _) = rut_lexer::lexer::lex(&src);
+        let (ast, _) = rut_parser::parse(&src, mode);
+        let mut doc = hover::index(&src, &ast);
+        doc.origin = uri.as_str().to_string();
+        let std_ws = self.defs.read().unwrap();
+        let idxs: Vec<&DefIndex> = std::iter::once(&doc).chain(std_ws.iter()).collect();
+        let pos = {
+            let p = params.text_document_position.position;
+            let index = crate::line_index::LineIndex::new(&src);
+            index.byte(&src, p.line, p.character)
+        };
+        let items = completion::complete(&idxs, &src, &toks, &ast, pos);
+        Ok(Some(CompletionResponse::Array(
+            items.into_iter().map(lsp_item).collect(),
+        )))
+    }
+}
+
+/// plain completion data → the LSP item (kind icons, detail, docs)
+fn lsp_item(c: CompletionOut) -> CompletionItem {
+    CompletionItem {
+        label: c.label,
+        kind: Some(match c.kind {
+            CompletionKind::Keyword => CompletionItemKind::KEYWORD,
+            CompletionKind::Type => CompletionItemKind::CLASS,
+            // the LSP protocol's closest kind for a rut trait
+            CompletionKind::Trait => CompletionItemKind::INTERFACE,
+            CompletionKind::Fn => CompletionItemKind::FUNCTION,
+            CompletionKind::Method => CompletionItemKind::METHOD,
+            CompletionKind::Field => CompletionItemKind::FIELD,
+        }),
+        detail: (!c.detail.is_empty()).then_some(c.detail),
+        documentation: (!c.doc.is_empty()).then(|| {
+            Documentation::MarkupContent(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: c.doc.join("\n\n"),
+            })
+        }),
+        ..Default::default()
     }
 }

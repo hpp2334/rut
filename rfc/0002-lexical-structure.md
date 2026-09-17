@@ -44,15 +44,15 @@ compiler gives it no meaning; greppability is enforced by style.
   `Opaque`
   (the erasure-box builtin, RFC 0014),
   `Slice<T>` (builtin trait —
-  object type `dyn Slice<T>`, RFC 0005),
-  `Future<T>`, `Task<T>`, `Sender<T>`, `Receiver<T>`, `Point`, `Color`,
-  `Drawable` (object type `dyn Drawable`, RFC 0012 §2).
+  trait-typed values spell the bare name, RFC 0005),
+  `Task<T>`, `Sender<T>`, `Receiver<T>`, `Point`, `Color`,
+  `Drawable` (trait-typed values spell `Drawable`, RFC 0012 §2).
 - Scalars and simple buffers stay lowercase, C-style: `i32`, `u8`, `f32`,
   `bool`, `char`, `str`.
 - **Construction is a method call, never a type-call** (RFC 0010):
   classes construct through their own class methods — `Rect.new(3, 4)`,
   `Rect.from(other)`, `Version.parse(s)` (`await Socket.connect(..)`
-  when the class method is `suspend`); rut wrapper classes over host fns
+  when the class method is `async`); rut wrapper classes over host fns
   likewise (`MyMap.new(cap)` — the wrapper, RFC 0025). Only builtin types keep call forms —
   allocation forms like `Vec<f32>(1024)`, `Weak(b)`, `Channel<Job>()`
   are builtin syntax, not class construction. **Erasure is a class
@@ -82,16 +82,21 @@ compiler gives it no meaning; greppability is enforced by style.
 - Keywords are matched against the pre-interned well-known symbol table
   (`rut_core::sym` — `IdentId` equality, never text at use sites;
   RFC 0030 §5); `nil` (the
-  null-pointer literal, RFC 0005) and `async` (the `suspend fn`
-  spelling, RFC 0018 §2) are grammar keywords in v1.1.
+  null-pointer literal, RFC 0005) and `async` (the one suspension
+  spelling — `async fn`, RFC 0018 §2) are grammar keywords in v1.1.
 - Reserved (parse error with explanation): `switch`, `case`,
   `default`, `extends`, `super`, `as` (no casts at all — erasure is
   the `Opaque.new(v)` class method, RFC 0014), `type` (type alias — future),
-  `struct`, `match`, `void` (the empty type is spelled `nil`), `null`,
+  `match`, `void` (the empty type is spelled `nil`), `null`,
   `undefined`, `any`, `typeof`,
   `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`,
   `const` (bindings spell `let` / `let mut` — RFC 0003 §1), `private`
   (members are private by default; visibility spells `pub` — RFC 0003 §2).
+  Retired spellings are gone from the grammar: the old trait keyword is a
+  reserved word whose diagnostic names the rut replacement ("rut spells
+  this `trait`"); the old module-, suspension-, and object-type spellings
+  retired to ordinary identifiers — no keyword, no diagnostic, no
+  meaning.
 - `new` is **not** reserved — it is an ordinary identifier and the
   conventional construction method name (`Rect.new(..)`, RFC 0010);
   there is no `new` expression anywhere.
@@ -102,19 +107,21 @@ compiler gives it no meaning; greppability is enforced by style.
   instance method (`fn add(self, x, y)` — RFC 0010 §2) and the name it
   binds in the body; a method without `self` is a class method. There is
   no `this` keyword. `Self` is a normal identifier
-  bound to the enclosing class inside its body (RFC 0010 §1); `fn`,
+  bound to the enclosing class inside its body (RFC 0010 §1).
+  The keyword set is exactly: `fn`,
   `let`, `mut`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
-  `enum`, `class`, `dataclass`, `trait`, `impl`,
-  `requires`, `import`, `pub`, `from`, `static`, `suspend`,
-  `await`, `true`, `false`, `extern`, `where`
-  (admission-only generic-fn bounds, RFC 0013 §2), `dyn`
-  (RFC 0012 §2), and `is` (the type-test operator, `expr is Type` —
-  RFC 0012 §3) are keywords. `panic(msg: str)` and
+  `enum`, `struct`, `class`, `trait`, `impl`,
+  `requires`, `use`, `pub`, `static`, `async`,
+  `await`, `extern`, `where`
+  (admission-only generic-fn bounds, RFC 0013 §2), `select`,
+  `host`, `is` (the type-test operator, `expr is Type` —
+  RFC 0012 §3), and the literals
+  `true`, `false`, `nil`. `panic(msg: str)` and
   `assert(cond, msg?)` are prelude functions, not keywords (RFC 0034 §2)
-  — and like every prelude name they are **imported, never ambient**
-  (`import { assert, panic } from "std:core"`, RFC 0028). `dyn` prefixes any **trait path** — a
-  user `I` or the builtin `Slice<T>` — one rule, no syntax branch
-  (RFC 0005, RFC 0012 §2).
+  — and like every prelude name they are **used, never ambient**
+  (`use core::{ assert, panic };`, RFC 0028). A trait-typed value
+  spells the bare trait name in type position — `d: Drawable` — one
+  rule, no syntax branch (RFC 0005, RFC 0012 §2).
 
 Each reserved word's error message names the rut replacement ("rut does not
 have `switch`; use `when`") — the full diagnostic model is RFC 0030 §6.

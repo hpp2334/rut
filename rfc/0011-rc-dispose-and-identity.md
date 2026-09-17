@@ -18,20 +18,20 @@ in action.
 ## 1. Reference semantics — and the `own` escape hatch
 
 - Every non-primitive value (dataclass, class, `str`, `Vec`, `Array`,
-  enums, `Opaque`, `dyn I`) is a heap cell handle: assignment, passing,
+  enums, `Opaque`, trait-typed values) is a heap cell handle: assignment, passing,
   and returning copy the handle (`rc++`), and **mutation is visible
-  through every alias**. Two handles are equal (`==`, RFC 0012 §4)
+  through every alias**. Two handles are equal (`==`, RFC 0012 §8)
   exactly when they point at the same cell — identity is the default
   comparison for composites; field-wise comparison goes
   through `Hashable.eq` (RFC 0028) when a type opts in. Copying is always
   explicit — a program never depends on when a copy happens.
-- **`own(x) -> T`** — a std:core function, the eager **shallow** copy: a fresh
+- **`own(x) -> T`** — a core function, the eager **shallow** copy: a fresh
   cell with `x`'s payload cloned (primitive fields copied, handle-typed
   fields still shared — divergence is one level deep; `own` it again for
   deeper cuts). `own` is the only copy in the language. Over a buffer it
   clones the buffer but shares composite element cells. Over a primitive
   it is a no-op (lint). New identity by definition: `own(x) == x` is
-  `false`. Imported from `"std:core"` like every prelude name (RFC 0028)
+  `false`. Used from `core` like every prelude name (RFC 0028)
   — never ambient.
 
 ## 2. `Disposal` — destructors for classes
@@ -41,14 +41,14 @@ in action.
   0, `Disposal.dispose(mut self)` runs, then fields are released in
   order — deterministic destruction (RFC 0016 §3).
 
-## 3. Trait objects share, never copy
+## 3. Trait-typed values share, never copy
 
-- A trait object is a **fat ref** — the cell handle plus the impl
-  vtable (RFC 0015 §6). Widening a composite to `dyn I` **attaches the
+- A trait-typed value is a **fat ref** — the cell handle plus the impl
+  vtable (RFC 0015 §6). Widening a composite to a trait `I` **attaches the
   vtable and keeps the handle** — no allocation, no copy: the
-  trait-object ref aliases the same object, and mutations through it are visible to
-  every other handle. `Vec<Circle>`, `Vec<dyn Drawable>`, and
-  `dyn Slice<T>` all store cell pointers (RFC 0016 §4).
+  trait-typed ref aliases the same object, and mutations through it are visible to
+  every other handle. `Vec<Circle>`, `Vec<Drawable>`, and
+  `Slice<T>` views all store cell pointers (RFC 0016 §4).
 
 ## 4. Weak references
 

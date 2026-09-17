@@ -57,14 +57,13 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 ## 3. Deterministic destructors
 
 A class may implement the
-`std:core` trait `Disposal` (`fn dispose(mut self) -> nil`, RFC 0028) via
+`core` trait `Disposal` (`fn dispose(mut self) -> nil`, RFC 0028) via
 `impl Disposal for T` — a Disposal class is just a class. Alongside it,
 v1.1 adds the builtin `on_drop<T>(p: *T, cleanup: fn(*T))` (RFC 0005):
 attach a cleanup to a pointer and it runs when the cell's refcount
 reaches zero — one callback per pointer (a second attach is an error),
 callbacks drain at call boundaries. `Disposal` is
-imported like every prelude name (`import { Disposal } from
-"std:core"`).
+used like every prelude name (`use core::{ Disposal };`).
 Ordering guarantees:
 
 1. `Disposal.dispose(mut self)` runs first — dispatched through the
@@ -105,22 +104,22 @@ table + func signatures.
   of the type's identity (RFC 0005). Fixed-array literals that fold at
   compile time (RFC 0033 §3) become immortal constant-pool cells
   (rc==0 sentinel), like interned strings.
-- **`dyn Slice<T>` cells** — one kind: the **view cell**
+- **`Slice<T>` view cells** — one kind: the **view cell**
   (`RutSliceRef`: holds a *cell handle* to the owner Vec or Array cell
   plus `off`/`len`, **never a pointer into the data block**). View cells
   dispatch through the owner cell, so growth (a Vec's buffer may move)
-  keeps existing `dyn Slice<T>` values valid; indexing bounds-checks
+  keeps existing `Slice<T>` view values valid; indexing bounds-checks
   len ∩ owner len — an out-of-range index traps, never reads garbage.
   View cells carry the builtin `Slice<T>` slots —
-  dyn-slice `x[i]` get/set, `.len()`, `for..of` lower to `calli`
+  slice-view `x[i]` get/set, `.len()`, `for..of` lower to `calli`
   (RFC 0032 §1.1 R2), and dispatch-through-owner is simply the slot
   target. They are not
   nameable or constructible in script: there is no `as_slice()`; slices
   are born only from implicit widening at the widening site (RFC 0011
   §3). This *refines* the no-interior-pointer rule rather than breaking
   it: the heap walk still sees only typed cell handles.
-- Any slot typed with a **`dyn` type stores a cell handle** — `dyn I` and
-  `dyn Slice<T>` alike (RFC 0031 §4); unsized payloads always sit behind
+- Any slot typed with a **trait or an unsized builtin contract stores a cell handle** — `I` and
+  `Slice<T>` views alike (RFC 0031 §4); unsized payloads always sit behind
   a cell boundary.
 - `str` is immutable → interned literals live in the module's constant
   pool (immortal, rc==0 sentinel); runtime-built strings are ordinary
@@ -185,7 +184,7 @@ struct RutOpaque { h: Header, boxed: *mut HostBoxed }     // host opaques (RFC 0
                                                           // and the RFC 0023 §2 borrow guard is a
                                                           // `Cell<u32>` beside it; the shallow
                                                           // `size_of::<T>()` is what the cell
-                                                          // accounts, RFC 0040. The no-`dyn` rule
+                                                          // accounts, RFC 0040. The no-erasure rule
                                                           // governs the VALUE WORLD — hot cells
                                                           // with fixed reprs; host-boundary cells
                                                           // may use Rust types.)

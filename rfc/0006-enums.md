@@ -22,7 +22,7 @@ and why heterogeneous data goes through traits (RFC 0012).
 - Enums cross the host boundary as their runtime identity + `i32`
   (RFC 0022 §2); the host can register its own enum types.
 - Where TS would use a union of literals (`"left" | "right"`), rut uses an
-  enum; where TS would use a union of *shapes*, rut uses a `dyn` trait
+  enum; where TS would use a union of *shapes*, rut uses a trait-typed
   ref (RFC 0012 §2).
 - Enum ↔ `i32` goes through per-enum builtins — `Color.to_int(c) -> i32` and
   `Color.from_int(i: i32) -> Option<Color>` (`None` on unknown values) — not a

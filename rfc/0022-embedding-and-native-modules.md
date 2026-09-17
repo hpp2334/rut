@@ -27,7 +27,7 @@ let mut vm = Vm::new(HostHooks { .. });            // RFC 0035 §1
 vm.register_module("app:gfx", gfx_module())?;      // bodies, bound against
 vm.register_module("plugin:my_map", my_map_module())?;  // declaration files (RFC 0025)
 vm.load("widgets")?;                               // verify + link, run nothing
-let t = vm.spawn("main", &[])?;                    // suspend entry
+let t = vm.spawn("main", &[])?;                    // async entry
 vm.run_until_idle()?;                              // host owns the loop
 ```
 

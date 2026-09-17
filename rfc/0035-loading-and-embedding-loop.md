@@ -23,18 +23,18 @@ struct HostHooks {
     now_ms:      fn(&Vm) -> i64,             // monotonic; virtualizable
     set_timer:   fn(&mut Vm, TaskId, i64),   // sleep → timer wheel
     interrupt:   fn(&mut Vm) -> bool,        // RFC 0034 §4 — cooperative stop
-    log: Option<fn(&Vm, name: &str, level: Level, msg: &str)>,  // std:log
+    log: Option<fn(&Vm, name: &str, level: Level, msg: &str)>,  // ink
 }                                           // sink; None = silent no-op
 ```
 
 - **Loading executes nothing**: `load` verifies and links a binary; the
   host then calls an entry explicitly (`vm.call(name, ..)`, sync or
-  suspend). Callable names are the module's **`entry fn`s** (plus the
+  async). Callable names are the module's **`entry fn`s** (plus the
   conventional `main`); their signatures were checked against the host
   crossing rule at compile time (RFC 0023 §1), so a bad surface never
   reaches the embedder as a runtime surprise.
-- Import specifiers (`"std:fs"`, `"imaging"`, `"./state"`) are resolved
-  entirely by `load_module` — the VM has no filesystem access and no
+- Use paths (bare package names — `fs`, `imaging`, `state`; RFC 0002 §4)
+  are resolved entirely by `load_module` — the VM has no filesystem access and no
   builtin loader policy (RFC 0003 OQ-2 stays a host decision).
 - **Native specifiers resolve through the surface pipeline** (RFC 0029
   §5): source → mounted `.rutbundle` (RFC 0038 §5) → `.d.ir`
@@ -74,7 +74,7 @@ RFC 0032 §1); when no value is ready, `chrecv` parks the frame like
 | `vm.set_heap_limit(n)` / `vm.set_fuel(n)` / `vm.add_fuel(n)` / `vm.fuel_remaining()` / `vm.heap_usage()` | live limit control & telemetry (RFC 0040) |
 | `vm.load(spec) / vm.load_binary(bytes)` | verify + link (§1, RFC 0033 §2) |
 | `vm.call(name, &[Value]) -> Result<Value, Trap>` | sync entry |
-| `vm.spawn(name, args) -> TaskHandle` | suspend entry; poll via RFC 0034 §4 |
+| `vm.spawn(name, args) -> TaskHandle` | async entry; poll via RFC 0034 §4 |
 | `vm.run_until_idle() / vm.poll(deadline) / vm.resume()` | stepping |
 | `vm.register_module(name, native)` | native bodies (RFC 0022 §2) |
 | `vm.heap_stats()` | live per-type object counts (RFC 0017 §3) |

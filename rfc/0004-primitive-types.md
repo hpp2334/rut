@@ -26,7 +26,7 @@ deferred.
 | heap: binary | `bytes` | immutable, content-compared octet buffer; at the engine level a `u8` array; built with `bytes(n)` (zeroed), `bytes_from(Array<u8>)`, or `Vec<u8>.freeze()` (RFC 0005) |
 | heap: seq | `Vec<T>` | mutable, growable buffer — cell handle, **shared**; flat storage for primitive `T` (RFC 0016 §4) |
 | heap: seq | `Array<T, N>` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |
-| heap: slice | `Slice<T>` | builtin trait — object type `dyn Slice<T>` only (RFC 0005, RFC 0012 §2) |
+| heap: slice | `Slice<T>` | builtin trait — trait-typed values spell the bare name (RFC 0005, RFC 0012 §2) |
 | user: value | `dataclass D { .. }` | open record — **cell handle, shared** (reference semantics; `own` for copies), methods & impl blocks allowed (RFC 0009); payload a slot array (RFC 0015 §4) |
 | user: value | `class C { .. }` | sealed record — also a cell handle, shared (RFC 0010), payload a slot array (RFC 0015 §4) |
 
@@ -57,7 +57,7 @@ Primitives (`u8..u64`, `i8..i64`, `u/isize`, `f32`/`f64`, `bool`,
 other type is a refcounted heap cell handle** (RFC 0016 §1):
 assignment shares, and mutation through any alias is visible through
 all of them — dataclass and class instances, `str`, `Vec`, `Array`,
-enums, `Opaque`, `dyn I` alike. Writing is gated by the `mut`-binding
+enums, `Opaque`, trait-typed values alike. Writing is gated by the `mut`-binding
 law (RFC 0003 §1), never by the sharing. The **eager copy is the
 `own(x)` builtin** (RFC 0011 §1): shallow — primitive fields copied,
 handle fields still shared. `Weak(x)` demotes any handle to a
@@ -73,7 +73,7 @@ host-side, call-scoped, flag-guarded ones at the FFI (RFC 0023).
 
 - Overflow in `+ - * <<` **traps** in debug and release by default.
   Wrapping escapes: `Math.wrapping_add`/`wrapping_sub`/`wrapping_mul`/
-  `wrapping_shl` (`std:math`, RFC 0028); saturating:
+  `wrapping_shl` (`calc`, RFC 0028); saturating:
   `Math.saturating_add`/`saturating_sub`/`saturating_mul`; checked:
   `Math.checked_add`/`checked_sub`/`checked_mul` → `Option<T>`.
 - Division by zero traps; `int / int` is integer division.

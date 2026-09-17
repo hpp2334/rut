@@ -51,13 +51,13 @@ functions enter the **monomorphization queue** — HIR contains no generic
 code (RFC 0013 §2). Surface declarations are concrete (RFC 0025,
 revised — no generic host types), so instantiation admission applies
 only to user-generic `where` clauses (RFC 0013 §2) here.
-Typecheck also applies the **`==` law** (RFC 0012 §4): primitives and
+Typecheck also applies the **`==` law** (RFC 0012 §8): primitives and
 `str` always legal, every other cell type legal as an
 identity compare, and `Option`/`Result` operands a compile error
 ("pattern-match instead"); the identity-compare lint flags `==` between
 two obviously fresh composites. `is`-expressions whose answer the
 receiver's static type
-already determines (concrete receivers, `d: dyn I is I`) fold to
+already determines (concrete receivers, `d: I is I`) fold to
 constants with an always-true/false lint (RFC 0012 §3).
 
 ## 3. HIR (typed, SSA-ish)
@@ -90,20 +90,21 @@ there is no speculation and no deopt to recover what the type checker
 doesn't prove. The IR therefore tracks a per-SSA-value **type lattice**:
 
 ```
-exact concrete  >  dyn I (satisfies I)
+exact concrete  >  I (trait-typed, satisfies I)
 ```
 
 (Erasure sits off the lattice: the engine builtin `Opaque`,
 reached only by the explicit `Opaque.new(v)` class method — RFC 0014.)
 
-Every `dyn` type is **unsized** — `dyn I` and `dyn Slice<T>` alike: the
-payload lives in a heap cell and a `dyn`-typed slot stores the cell
-handle. There is no `dyn`-specific sizedness error; every type position
-admits every `dyn` type (RFC 0012 §2). The slice tier has its own boxing
-edge, parallel to trait-object widening:
+Every trait-typed type is **unsized** — a user trait `I` and the builtin
+`Slice<T>` view alike: the
+payload lives in a heap cell and a trait-typed slot stores the cell
+handle. There is no sizedness special case; every type position
+admits every trait-typed type (RFC 0012 §2). The slice tier has its own boxing
+edge, parallel to trait widening:
 
 ```
-Array<T, N> | Vec<T> (concrete)   >  dyn Slice<T> (unsized object)
+Array<T, N> | Vec<T> (concrete)   >  Slice<T> view (unsized)
 ```
 
 `N` is a constant expression, part of the type's identity
@@ -115,14 +116,14 @@ satisfy no trait bound — the same family as `Vec`/`Option`/`Result`
 
 Rules that bound the cost of the two lattice-lowering features:
 
-1. **Trait objects** (`dyn I`, RFC 0012): one indirect call per use;
+1. **Trait-typed values** (`I`, RFC 0012): one indirect call per multi-origin use;
    fields inaccessible; callee unknown (no inlining without evidence). Cost is
    per-call, never per-field — the vtable makes it a single load+jump.
 2. **`Opaque` + `downcast`** (RFC 0014): erasure is a hole in the
    lattice, but a *scoped* one:
    - the `downcast` check is the refinement — the `is_some()` branch
      re-enters the **exact** lattice position (strictly more information
-     than a `dyn I` value carries), so downstream code optimizes as if
+     than a trait-typed value carries), so downstream code optimizes as if
      nothing was erased;
    - boxes are never re-sealed ⇒ downcast is pure ⇒ **CSE** repeated checks,
      **LICM** invariant ones, cache results forever;
@@ -136,7 +137,7 @@ Rules that bound the cost of the two lattice-lowering features:
    default regime, RFC 0016 §1); lints flag `downcast` in loop bodies and
    `Opaque` crossing
    non-storage function boundaries. The intended shape of a rut program:
-   exact types on the hot path, `dyn I` where polymorphism is real,
+   exact types on the hot path, trait-typed values where polymorphism is real,
    `Opaque` only inside heterogeneous storage.
 
 ## 5. Optimization policy

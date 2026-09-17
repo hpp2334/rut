@@ -28,10 +28,10 @@ pc→span data, and never participates in trace restoration.
 
 ## 1. The three tiers
 
-- `std:debug.here() -> Location` — the source position of the call. The
+- `debug.here() -> Location` — the source position of the call. The
   compiler folds it to a constant from the span table, exactly like
   `type_id<T>()` (RFC 0015 §3, RFC 0033 §3). Free.
-- `std:debug.capture_stack_trace() -> Opaque` — explicit capture (the
+- `debug.capture_stack_trace() -> Opaque` — explicit capture (the
   JS `Error.captureStackTrace` role): a host fn that **skips its own
   frame** (the `constructorOpt` behavior, automatic).
 - `?` stays zero-cost — no auto-capture on propagation (RFC 0018's
@@ -42,7 +42,7 @@ pc→span data, and never participates in trace restoration.
 ```rust
 struct RawTrace { frames: Vec<RawFrame> }          // innermost first
 enum RawFrame {
-    Rut    { module: ModuleId, func: u32, pc: u32, state: u8 }, // state = suspend resume point
+    Rut    { module: ModuleId, func: u32, pc: u32, state: u8 }, // state = async resume point
     Native { module: ModuleId, slot: u32 },        // boundary marker
 }
 ```
@@ -56,7 +56,7 @@ enum RawFrame {
   bugs are `RUST_BACKTRACE` territory; rut traces cover rut frames plus
   the native boundary.
 - `StackTrace` — the value rut code holds — is a **rut wrapper class**
-  (`std:debug` source, RFC 0025 revised) over an `Opaque` handle
+  (`debug` source, RFC 0025 revised) over an `Opaque` handle
   around a `RawTrace`: the handle is an rc-managed boxed host value
   (RFC 0016 §3), immutable, safe to store in error dataclasses.
 - `Trap` (RFC 0034 §2) carries `trace: RawTrace` captured at unwind;
@@ -110,7 +110,7 @@ struct FuncSym {
 ## 5. Error handling integration (rut side)
 
 ```rut
-import { here, capture_stack_trace, Location, StackTrace } from "std:debug";
+use debug::{ here, capture_stack_trace, Location, StackTrace };
 
 dataclass LoadError {
     msg: str,
@@ -124,9 +124,9 @@ dataclass LoadError {
 - `Location` is a plain dataclass `{ file: str, line: i32, col: i32 }`
   — printable, no host state; crosses the `Value` boundary
   like any dataclass (RFC 0023). `==` on it is cell identity, like every
-  composite (RFC 0012 §4) — compare fields if equality matters.
+  composite (RFC 0012 §8) — compare fields if equality matters.
 
-## 6. `std:debug` module shape
+## 6. The `debug` package shape
 
 Same declaration-file machinery as `plugin:my_map` (RFC 0025/0026/0029):
 
@@ -142,11 +142,11 @@ pub host fn stack_trace_depth(t: Opaque) -> i32;  // identity `==`, like
 ```                                              // every composite (RFC 0012 §4)
 
 No `host class` (RFC 0025, revised): the trace is an `Opaque` handle
-and `std:debug`'s rut source wraps it — `pub class StackTrace { h:
+and `debug`'s rut source wraps it — `pub class StackTrace { h:
 Opaque; .. }` whose `render`/`depth` forward to the host fns; `Location`
 is a `host dataclass` (flat crossing data the host constructs).
 
-Rust bodies live in the rut crate's std module (RFC 0028, `std:debug`);
+Rust bodies live in the toolchain's std crate (RFC 0028, `debug`);
 `VmCtx` gains `capture_trace()` (native API, RFC 0022 §3), and the
 embedder surface gains `vm.symbolicate(&raw)` for hosts that log traces
 themselves (RFC 0035 §3) — tur, for instance, forwards them to devtools.

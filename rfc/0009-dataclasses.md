@@ -29,16 +29,20 @@ data.
 - Dataclass literals must initialize **every** field (any order, by name);
   fields may declare initializers (`x: f32 = 0`), which the literal may then
   omit.
-- **Methods and impl blocks are allowed** — a dataclass is data
-  *plus* behavior. Its body may contain fns: inherent methods,
-  declared and dispatched exactly like class methods (explicit
-  `self` receiver included — RFC 0010 §2); trait members live in
-  separate impl blocks (RFC 0012 §2):
+- **Methods live in impl blocks; bodies are fields only.** A dataclass
+  is data *plus* behavior — but the behavior is never in the body: a
+  `fn` member in a `struct`/`class` body is a hard parse error. Inherent
+  methods live in `impl Point { .. }` (the type's module only), trait
+  impls in `impl I for Point { .. }` (any module — RFC 0012 §4):
 
   ```rut
-  dataclass Point {
+  struct Point {
       x: f32;
       y: f32;
+  }
+
+  impl Point {
+      fn dist(self, other: Point) -> f32 { .. }   // inherent — the type's module
   }
 
   impl Hashable for Point {
@@ -47,8 +51,8 @@ data.
   }
   ```
 
-  `hash`/`eq` are trait-declared members — calls dispatch through
-  the vtable per RFC 0012 §1. The limits on a dataclass, exhaustively:
+  `hash`/`eq` are trait-declared members — calls dispatch per the
+  two-rule law (RFC 0012 §1). The limits on a dataclass, exhaustively:
   **no member visibility** (above), **no
   class methods** (the literal is the only construction — open literal
   vs class-method-gated *is* the dataclass/class distinction), and **no
@@ -58,12 +62,12 @@ data.
   class-shaped is allowed. Free functions over data remain the default
   idiom; methods are for tight helpers, impl blocks for trait contracts.
 - **Equality is identity, comparison is `Hashable`.** `==` on two
-  dataclass values is a cell-identity test (RFC 0012 §4) — `own(p) == p`
+  dataclass values is a cell-identity test (RFC 0012 §8) — `own(p) == p`
   is false, two literals are never equal. Field-wise comparison is the
   `eq` method of an opted-in `Hashable` impl (RFC 0028) — the mechanism
   `Map`/`Set` keys use.
-- **Trait-object refs share, never box.** A dataclass value is already a
-  cell; widening to `dyn I` **attaches the impl vtable to the same
+- **Trait-typed refs share, never box.** A dataclass value is already a
+  cell; widening to a trait `I` **attaches the impl vtable to the same
   handle** (RFC 0011 §3, RFC 0015 §6) — no allocation, no copy: the
   trait-object ref aliases the value. Representation never changes: methods
   and impl tables add **nothing** to the payload.

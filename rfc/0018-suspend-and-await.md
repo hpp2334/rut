@@ -1,4 +1,4 @@
-# RFC 0018: `suspend` & `await` — Poll-Based Coroutines
+# RFC 0018: `async` & `await` — Poll-Based Coroutines
 
 - **Status:** Draft
 - **Date:** 2026-08-22
@@ -9,10 +9,10 @@
 
 ## Summary
 
-rut's concurrency is **pull-based**: a suspend fn compiles to a
+rut's concurrency is **pull-based**: an async fn compiles to a
 resumable state machine (a *cold future*) that only progresses when polled —
-Rust semantics with Kotlin ergonomics (the modifier is literally `suspend`,
-like Kotlin; `await`/`spawn` read like Kotlin/JS). There are no promises, no
+Rust semantics with Kotlin ergonomics (the modifier is literally `async`,
+like Kotlin's modifier; `await`/`spawn` read like Kotlin/JS). There are no promises, no
 microtask queue, and no implicit scheduling: **the host owns time**, exactly
 like tur's frame-driven flush loop.
 
@@ -29,17 +29,17 @@ like tur's frame-driven flush loop.
 Cancellation-by-drop is the property tur currently emulates by aborting the
 driver future (`TaskHandle::abort`); in rut it falls out of the model for free.
 
-## 2. `suspend fn` and `await`
+## 2. `async fn` and `await`
 
-A `suspend fn` returns a **cold** `Future<T>` — calling it runs nothing;
+An `async fn` returns a **cold** `Future<T>` — calling it runs nothing;
 `await` is the only suspension point:
 
 ```rut
-suspend fn countdown(n: u32) -> nil {
+async fn countdown(n: u32) -> nil {
     let log = Logger.new("countdown");
     for (let i = n; i > 0; i -= 1) {
         log.info(f"{i}");
-        await sleep(1000);             // <- the ONLY way to suspend
+        await sleep(1000);             // <- the ONLY suspension point
     }
     log.info("done");
 }
@@ -47,10 +47,10 @@ suspend fn countdown(n: u32) -> nil {
 
 Rules:
 
-- `suspend fn f(..) -> T` describes a function returning `Future<T>`.
+- `async fn f(..) -> T` describes a function returning `Future<T>`.
   Calling it **does not run it** (cold). It runs when the future is `await`ed
   or `spawn`ed (RFC 0019).
-- `await` is only legal inside `suspend fn`. There is no implicit yield
+- `await` is only legal inside `async fn`. There is no implicit yield
   anywhere else — no function is ever preempted mid-expression.
 - `?` composes: `let body = await fs.read(path)?;` awaits, then propagates
   `Err` in one expression.
@@ -65,7 +65,7 @@ heap object (refcounted, RFC 0016). This `fetch_page` — `await` and `?`
 composing in one expression —
 
 ```rut
-suspend fn fetch_page(url: str) -> Result<bytes, HttpError> {
+async fn fetch_page(url: str) -> Result<bytes, HttpError> {
     let raw = await get(url)?;       // await + `?` propagate in one expr
     let html = decode(raw)?;         // stays in the resumed state
     return Result.ok(html);
@@ -75,10 +75,10 @@ suspend fn fetch_page(url: str) -> Result<bytes, HttpError> {
 becomes (illustrative pseudo-bytecode):
 
 ```text
-fetch_page$suspend(frame) ->
+fetch_page$async(frame) ->
 entry:
     call    http$get frame.url           -> f0
-    await   f0                           -> raw      ; suspend: state=1
+    await   f0                           -> raw      ; wait: state=1
     chk     raw                          -> raw  ?   ; `?` propagates Err
 state1:                                             ; resume jumps here
     call    decode raw                   -> t1  ?
@@ -88,10 +88,10 @@ state1:                                             ; resume jumps here
 ## 4. Internals: the coroutine frame & the `Await` opcode
 
 ```rust
-/// One resumable suspend invocation. The register file persists across
+/// One resumable async invocation. The register file persists across
 /// suspensions, so `state` only selects the resume block.
 pub struct CoroutineFrame {
-    pub func: Rc<RutFunction>,   // the monomorphized suspend instance
+    pub func: Rc<RutFunction>,   // the monomorphized async instance
     pub state: u8,               // resume index (set at each suspension)
     pub regs: Box<[Slot]>,       // typed per FnType (RFC 0015 §5)
     pub stack_base: u32,
@@ -100,12 +100,12 @@ pub struct CoroutineFrame {
 /// Result of running a frame to its next stop.
 pub enum Flow {
     Ret,       // returned; value in ret slot
-    Suspend,   // hit `await` on Pending; frame saved on the task
+    Wait,      // hit `await` on Pending; frame saved on the task
     Trap(Trap),
 }
 ```
 
-The `await` opcode — poll the inner future once, suspend on Pending:
+The `await` opcode — poll the inner future once, wait on Pending:
 
 ```rust
 Op::Await { fut, dst } => {
@@ -117,7 +117,7 @@ Op::Await { fut, dst } => {
         }
         Poll::Pending => {
             f.set_waker(self.current_task_waker()); // wake => resume this task
-            return Ok(Flow::Suspend);
+            return Ok(Flow::Wait);
         }
     }
 }

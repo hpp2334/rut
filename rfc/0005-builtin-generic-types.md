@@ -35,7 +35,7 @@ length, non-growable): `let xs: [i32] = [1, 2, 3];`.
 
 ## 10. Removals — `Option`, `Result`, `own` (v1.1)
 
-The builtin sums are gone from `std:core` — no `Option<T>`, no
+The builtin sums are gone from `core` — no `Option<T>`, no
 `Result<T, E>`, no constructors or `unwrap` family. Their jobs moved to
 the language's own shapes:
 
@@ -59,9 +59,9 @@ kept for compatibility.
 `Option<T>`, `Result<T, E>` are **builtin (VM-native)** types — they cannot
 be user-defined because user enums carry no data (RFC 0006). No sugar
 operators (`?.`, `??`); the API is explicit snake_case methods plus the `?`
-propagation operator. Their NAMES live in `std:core` like every prelude
-name: `import { Option, Result } from "std:core"` (RFC 0028) — the types
-are builtin, the names are imported, never ambient.
+propagation operator. Their NAMES live in `core` like every prelude
+name: `use core::{ Option, Result };` (RFC 0028) — the types
+are builtin, the names are used, never ambient.
 
 | `Option<T>` | `Result<T, E>` |
 |---|---|
@@ -71,7 +71,7 @@ are builtin, the names are imported, never ambient.
 | `expect(msg: str) -> T` | `unwrap_or(d: T) -> T` |
 
 `Vec<T>` is **std-lib rut code**, not a VM builtin: a `pub class` in
-`std:collection` over the non-growable `Array<T>`, with the mutable,
+`pouch` over the non-growable `Array<T>`, with the mutable,
 growable, handle-shared sequence API — `push`/`pop`, indexing, `.len()`
 (RFC 0016 §4). Construction is the class's own methods —
 `Vec.new()` (empty), `Vec.with_capacity(n)` (reserve), `Vec.zeroed(n)`
@@ -112,7 +112,7 @@ One more builtin is type syntax plus a member:
   `Index` impl.
 
 **`Index<T>` — the random-access contract** (RFC 0012): a `len` +
-`get`/`set` interface whose element is the interface's **type argument**
+`get`/`set` trait whose element is the trait's **type argument**
 (`Index<T>`, not an associated type). `x[i]`, `x[i] = v`, `.len()`, and
 `for (x of s)` lower through the receiver's `Index` impl.
 Implementations:
@@ -122,10 +122,10 @@ Implementations:
 - `str` — the builtin (native) impl, element `char`; iteration and
   indexing use `strcharat`/`strlen`.
 - `bytes` — the builtin (native) impl, element `u8`; `bytesget`.
-- `Vec<T>` — builtin by shape (v1.1, RFC 0012 §5): a record with a
+- `Vec<T>` — the `pouch` class (RFC 0028), a record with a
   `buf: Array<T>` field and a `len: i32` field; `v[i]`, `v[i] = x`,
   `v.len()`, and `for (x of v)` lower to the fused element ops on those
-  fields — no interface, no accessor inlining. `for (x of v)` yields
+  fields — no trait call, no accessor inlining. `for (x of v)` yields
   `*T` — a fresh element box per iteration (RFC 0012 §6); indexed
   reads keep value yields.
 
@@ -139,23 +139,23 @@ iterable when it declares
 `fn __iterate(self, emit: fn(E) -> bool)`; `for (x of it)` desugars to
 `it.__iterate(emit)`. The builtin sequences keep their fused index
 loops (the fast
-indexed lowering). Both contracts are resolved statically per receiver
-today; the interface-object form (`Vec<Index<T>>`, `Vec<Iterator<T>>`)
-is the follow-up — an interface name in type position *is* the object
-type (there is no `dyn`).
+indexed lowering). Both contracts resolve through the impl registry per
+the two-rule law (RFC 0012 §1) — static for single-origin receivers;
+the trait-typed forms (`Vec<Index<T>>`, `Vec<Iterator<T>>`) spell the
+bare trait name in type position.
 
-`Vec<T>` and `Array<T>` implement `std:reflect`'s `Reflectable` and
+`Vec<T>` and `Array<T>` implement `reflect`'s `Reflectable` and
 `Deserializable` for **every instantiation** via the builtin-impl
 registry (RFC 0037) — sequences are data: reflectable like records.
 
 `Map<K, V>` / `Set<T>` are
 deliberately absent from it: containers are **library types**, provided by
-`std:collection` as a declaration file + Rust bodies (RFC 0025, RFC 0026, RFC
+`pouch` as a declaration file + Rust bodies (RFC 0025, RFC 0026, RFC
 0028) — the `my_map` declaration is inlined in RFC 0026 §1, and the
 consumer-side wrapper class is the `Logger` pattern (RFC 0028).
 
 `==` on `Option<T>` / `Result<T, E>` is a **compile error**: there is no
-element-wise equality in v1 (no `Equal` interface — RFC 0012 §4; `==`
+element-wise equality in v1 (no `Equal` trait — RFC 0012 §8; `==`
 compares primitives by value and everything else by cell identity, which
 is almost never what an Option comparison wants). Compare structurally:
 `when`, `.is_some()` / `.is_ok()`, or the payload (`.value == d`).

@@ -1569,7 +1569,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             aregs.push(self.last_reg);
         }
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        // trait-declared members NEVER devirtualize (RFC 0012 §1)
+        // the vtable form is final — origins multiple, the call consults
+        // the descriptor (RFC 0012 §1, the two-rule dispatch law)
         { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallI { slot: slot, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret_ty)
     }

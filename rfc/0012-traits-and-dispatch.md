@@ -1,7 +1,8 @@
-# RFC 0012: Traits & Dispatch — the Sole Dynamic Mechanism
+# RFC 0012: Traits & Dispatch — Nominal Impls, Two-Rule Dispatch
 
-- **Status:** Draft
-- **Date:** 2026-08-23
+- **Status:** Draft (v2 — the nominal rewrite; supersedes the v1.1
+  duck-typed design in its entirety)
+- **Date:** 2026-09-18
 - **Author:** hpp2334
 - **Depends on:** RFC 0009 (dataclass implementors), RFC 0010 (classes),
   RFC 0011 (reference semantics), RFC 0014 (`Opaque` — read after)
@@ -10,283 +11,279 @@
 
 ## Summary
 
-`trait I` interfaces: methods only, `impl Trait for Type` blocks, `dyn I`
-object types, `requires` bounds, multiple `impl` blocks per type, composed
-interfaces, `is` capability probes.
+`trait I` — methods only, no bodies, no defaults. Satisfaction is
+**nominal**: the admission is the impl block, and nothing else. Two impl
+forms: **`impl T { .. }`** (inherent methods, the type's module only) and
+**`impl I for T { .. }`** (trait impls, any module; duplicate
+`(trait, type)` pairs are a link error). Dispatch follows two positive
+rules — **static** when the call site names exactly one concrete type,
+**vtable** when the receiver's concrete origins are multiple. Trait-typed
+values spell the bare trait name (`d: Shape`) — there is no object-type
+keyword. `requires` bounds, multiple impl blocks per type, and `is`
+capability probes survive the rewrite; structural ("duck") satisfaction
+does not.
 
-## 1. Dispatch: direct by default, vtable at traits
+## 1. Dispatch — the two-rule law
 
-Dispatch splits on **where the method is declared**:
+Every method call compiles under one of exactly two rules. There is no
+"fallback" form, no best-effort mode, no hybrid: the rule is a property
+of the call site, fixed at compile time.
 
-```text
-length(p)    // free fn                   ->  call length$Point    (direct)
-c.area()     // c: Circle, inherent fn    ->  call Circle$area     (direct)
-b.area()     // b: Circle (aliased handle ->  call Circle$area     (direct)
-               //  — the type is still exact)
-d.draw(g)    // draw declared in Drawable ->  calli d, slot=3      (vtable, ALWAYS)
-```
+- **Static dispatch — the call site names exactly one concrete type.**
+  The receiver's concrete type is known and single; the call binds
+  directly to the impl's method (a plain `CallM`), no vtable hop:
+  - a **concrete receiver** — `c.area()` on `c: Circle`, including
+    aliased handles (the type is still exact, RFC 0010 §3);
+  - a **trait-typed local of single concrete origin** — `let d: Shape =
+    Point { .. }; d.area()` binds straight to `Point`'s impl;
+  - a **trait-typed parameter** — `fn blit_all(g: Canvas, s: Shape)`
+    specializes per concrete argument at monomorphization (one clone per
+    argument type — finite, terminating), so the body's `s.area()` calls
+    are static; a trait parameter *is* an implicit generic bound;
+  - a **monomorphized generic** — inside `fn first<T: Clone>(..)`, `T`'s
+    members are static per instantiation.
+- **Vtable dispatch — the receiver is trait-typed with multiple possible
+  concrete origins.** The call consults the value's descriptor (RFC
+  0015) and its per-(type × trait) method table (`CallI`, one global
+  trait-method slot id per (trait, method), RFC 0015 §6):
+  - **heterogeneous container elements** — `for (s of shapes)` over a
+    `Vec<Shape>`;
+  - **trait-typed field/element loads** — a `Shape`-typed field read out
+    of a cell may hold any implementor;
+  - **branch-merged origins** — `let s = if (c) { a } else { b };` where
+    the arms carry different concretes into one trait-typed binding.
 
-Free functions, constructors, and methods declared in a class/dataclass body
-itself dispatch directly — the exact type is statically known and can
-never change (no inheritance, RFC 0010 §3). Every method **declared in a
-interface** — and defined in an `impl` block — dispatches dynamically through
-the vtable — unconditionally, even when the receiver's exact class is
-statically known: a `Circle` calling its own `Drawable.draw` still emits
-`calli`. Trait members are dynamic by charter (one uniform rule, no
-devirtualization); static dispatch lives in monomorphized generics and
-inherent methods. `final` is meaningless in v1 (nothing can override).
+Origins are tracked per binding at compile time (the compiler's origin
+counting is conservative by construction: any merge, any indirection
+load, any cross-function flow of trait-typed values counts as multiple).
+Mis-analysis cannot produce wrong code — an uncertain origin costs a
+vtable hop, never a wrong static bind. The same descriptor that answers
+vtable calls answers `is` probes (§3); there is one runtime truth per
+value.
 
 ## 2. Traits
 
-- **`dyn` — the object-type spelling.** A interface name in **type
-  position** — parameter/return/local/field types, generic arguments — is
-  written `I`: `d: Drawable`, `Vec<Widget>`,
-  `Vec<Hashable>`, and `Wrap<i32>` for a generic interface
-  instantiation (RFC 0012 §2.1);
-  `dyn` composes wherever a type does. Positions that merely
-  **name** a interface stay bare: the `interface` declaration itself,
-  `impl` heads and `requires` lists, and generic bounds (`K requires
-  Hashable` —
-  admission-only syntax, RFC 0013 §2) — none of them denote a interface
-  *object*. Every `dyn` in the source marks a vtable-dispatch use site:
-  greppable dynamic dispatch (Rust's rule, adopted verbatim). A bare
-  interface name where a type is expected is a compile error with an
-  "insert `dyn`" suggestion. Every interface object type is **unsized**
-  — `I` and `Iter` alike: the payload lives in a heap cell,
-  and the `dyn`-typed slot stores the cell handle (RFC 0031 §4).
-- Traits declare **plain methods only** — no fields, no properties of
-  any kind (there is no `get`/`set` syntax in rut at all, RFC 0010 §2).
-  Anything that reads like a property becomes a method: `x.count()` in the
-  interface, defined in the type's impl block. Trait methods are
-  instance methods and spell the `self` receiver like every other
-  (`fn draw(self, g: Canvas) -> nil;` — RFC 0010 §2); a class method (no
-  `self`) is not declarable in a interface. Rationale: fields have
-  no single offset rule under multiple impls, and a interface slot
-  is always a code pointer invoked with an explicit `(...)` — one member
-  kind, no call-vs-load ambiguity at the vtable boundary. (`d.x` where `d`
-  is interface-typed is a compile error.)
-- **No top interface.** The erased-storage type is the concrete host
-  class `Opaque` (RFC 0014) — reached by the explicit type-call
-  `Opaque(v)`, never by widening, and never nameable in an
-  `impl`/`requires` list (it is a class, not a interface). The
-  interface tier is simply `exact concrete > I` (RFC 0031 §4);
-  the universal type test is `x is Opaque` (§3).
-- **Intersection types (`A & B`) are never supported** — not deferred, not
-  planned: heterogeneous needs compose a interface that declares both
-  method sets (`interface Widget` in the example). This is a design
-  principle, not a v1 limitation.
-- **`impl Trait for Type` — nominal and declared.** Structural ("duck")
-  conformity does not satisfy a interface: the admission is the impl block
-  itself. This keeps runtime type identity exact (RFC 0015) and casts
-  cheap.
-  - **Placement:** an impl block lives in the **module that declares
-    `Type`** — anywhere else is a compile error ("impl for a foreign
-    type"). Builtin types (`Vec`, `Option`, `str`, …) are not
-    declarable as impl targets either: their interface admissions are
-    registered natively (RFC 0026 registry). One impl per (interface, type)
-    pair per program — a duplicate (two modules, or two blocks in one) is
-    a link error.
-  - **Bodies:** each method in an impl block matches a interface `methsig`
-    exactly — receiver form (`self`/`mut self`), params, and return type;
-    a missing signature is a compile error, and so is any extra or
-    inherent method inside the block (put those in the class/dataclass
-    body). Member visibility, `suspend`, and constructors are not
-    declarable in impl blocks. An **empty** impl block is legal and is
-    the opt-in marker: `impl Serializable for User {}` (RFC 0037).
-  - **Generic targets:** `impl Hashable for Pair<A, B>` — the generic
-    args of the target bind as the impl's type parameters; no impl-level
-    `where` in v1 (bounds come from the interface's own `requires`, RFC 0013 §2).
-- **`requires` — an admission constraint, not subtyping.** A interface
-  may require others: `interface Serializable requires Reflectable`
-  (RFC 0037). To implement `Serializable`, the module must **also**
-  contain `impl Reflectable for T` (transitively closed at link);
-  requiring a generic instantiation binds `Self` to the implementor.
-  Requirements are transitive (`A
-  requires B`, `B requires C` ⇒ `A` needs `C` too), cycles in the
-  requires-graph are a link error,
-  and registered builtin impls satisfy requirements like any other impl
-  (RFC 0026). std:reflect's auto-impls (dataclass/enum) and registry
-  impls (`Option`/`Result`/`Vec`/`Array<T, N>`'s `Reflectable`/
-  `Deserializable`) enter the graph the
-  same way — auto-fills satisfy the `requires` edges of contract layers
-  built on top (`impl Serializable for User {}` costs zero
-  methods, RFC 0037). What `requires` deliberately is **not** (this is why
-  interface `extends` was rejected): no member inheritance —
-  `Hashable` declares both `hash` and `eq` itself (RFC 0028), and
-  nothing else is reachable through it; no subtyping — a `Serializable`
-  ref does not widen to a `Reflectable` ref; **vtables stay flat** — one
-  interface, one vtable,
-  the type test stays a single scan (RFC 0015 §6). The requires-graph is
-  a compile-time walk over the module's impl blocks, never a runtime dispatch.
-- Traits are implemented **for classes and dataclasses** (RFC 0009)
-  via impl blocks. A interface type is never a value's exact type; every interface
-  object is a fat ref over a cell whose exact class or dataclass it
-  carries (RFC 0015 §6). **Generic interfaces** are supported — `interface Wrap<T>`
-  — and each type-argument list is its own instantiation with its own
-  interface id and vtable slots (`Wrap<i32>` ≠ `Wrap<str>`, RFC 0015 §6).
-  A generic instantiation is spelled in type position as `Wrap<i32>`.
-  Interface object
-  types are the **only** dynamic dispatch in rut: a
-  reference plus a vtable lookup per call — every one spelled `I` at
-  the use site (there is no `dyn`; the engine knows what is an
-  interface). No `any`, no dynamic field access, no `this` at all (the
-  receiver is the explicit `self` parameter, RFC 0010 §2).
-- **The element is a type argument, not an associated type.** An interface
-  may be generic (`Index<T>`, `Iterator<T>`) and each impl names the
-  element: `impl Iterator<char> for str`, `impl Index<T> for Vec<T>`.
-  There are no associated `type` members. The element type is resolved at
-  the use site from the impl's argument and stays reified in the type
-  table. Two builtin contracts: `Index<T>` (`len`/`get`/`set`) drives
-  `x[i]` and the indexed `for..of`; `Iterator<T>` (`next`, no `len`) drives
-  cursor `for..of`. Both are std:core imports like every prelude name
-  (RFC 0028) — the builtin `Array`/`str`/`bytes` index themselves without
-  the trait; user types reach the contracts through
-  `import { Index, Iterator } from "std:core"`. A type may have more
-  than one element choice; the use
-  site selects it. `Vec` (rut code) declares `impl Index<T> for Vec<T>` and
-  ships `VecIter<T>` for `v.iter()`.
-- Heterogeneous collections are interface-typed vecs:
-  `Vec<Drawable>` — the replacement for both TS unions and the data-enums
-  rut deliberately dropped (RFC 0006).
+```rut
+trait Shape {                           // keyword `trait`
+    fn area(self) -> f64;               // bodiless signatures; async legal;
+    fn scale(v: f64);                   //   no-self methods legal (engine contracts)
+}
+
+impl Shape for Point {                  // ANY module
+    fn area(self) -> f64 { self.x as f64 }  // no `pub` — rides the trait's visibility
+}
+
+let d: Shape = Point { .. };            // bare trait name in type position
+d.area();                               // static (single origin)
+let mixed: Vec<Shape> = …;
+for (s of mixed) { s.area(); }          // vtable (multiple origins)
+```
+
+- **`trait` is the kind word, and builtins spell theirs.** A user
+  contract declares `trait Name`; an engine-woven contract declares
+  `builtin trait Name` (§7) — the kind is always spelled, never implied
+  (RFC 0029 §2). There is no object-type keyword anywhere in rut: a
+  trait name in **type position** — parameter/return/local/field types,
+  generic arguments — is the bare name (`d: Drawable`, `Vec<Widget>`,
+  `Wrap<i32>` for a generic trait instantiation). Positions that merely
+  **name** a trait stay bare too: the declaration, impl heads and
+  `requires` lists, generic bounds (`K requires Hashable`, RFC 0013 §2).
+- **Methods only, no bodies.** Traits declare **plain method
+  signatures** — no fields, no properties of any kind (there is no
+  `get`/`set` syntax in rut at all, RFC 0010 §2), and **no method
+  bodies**: no default implementations, ever. One member kind, one
+  dispatch candidate per call — a default body would be a second
+  candidate and a law of its own. Anything that reads like a property is
+  a method: `x.count()` in the trait, defined in the type's impl block.
+  Methods are instance methods and spell the `self` receiver like every
+  other (`fn draw(self, g: Canvas) -> nil;`), **except** where an engine
+  contract declares a no-`self` method (§7): a `Task` resumption takes
+  the run context as its parameter, not a receiver. `async fn` signatures
+  are legal in traits; a trait impl's method must match the trait's
+  `async` spelling exactly (RFC 0018 §2).
+- **Satisfaction is nominal — the impl block is the admission.**
+  Structural ("duck") conformity does not satisfy a trait: a type that
+  declares every member by shape is still not an `I` until some module
+  writes `impl I for T`. This keeps runtime type identity exact (RFC
+  0015) and casts cheap, and it makes the registry the single source of
+  truth for "who implements what". There is no orphan rule beyond
+  placement (§4).
+- **One impl per `(trait, type)` pair, program-wide.** A duplicate —
+  two modules, or two blocks in one — is a **link error** (RFC 0038 §4
+  merges the registries; the pair, not the block, is the unit).
+- **Generic traits and generic targets.** `trait Wrap<T>` gives each
+  type-argument list its own instantiation with its own trait id and
+  vtable slots (`Wrap<i32>` ≠ `Wrap<str>`, RFC 0015 §6); `impl
+  Hashable for Pair<A, B>` binds the target's generic args as the impl's
+  type parameters. No impl-level `where` in v1 (bounds come from the
+  trait's own `requires`, RFC 0013 §2).
+- **The element is a type argument, not an associated type.** `impl
+  Iterator<char> for str`, `impl Index<T> for Vec<T>` — there are no
+  associated `type` members. The element type resolves at the use site
+  from the impl's argument and stays reified in the type table. Two
+  builtin contracts: `Index<T>` (`len`/`get`/`set`) drives `x[i]` and the
+  indexed `for..of`; `Iterator<E>` (`__iterate`) drives cursor
+  `for..of` (§6). Both are core decls like every prelude name (RFC
+  0028) — the builtin `Array`/`str`/`bytes` index themselves without the
+  trait; user types reach the contracts through `use core::{ Index,
+  Iterator };`. A type may have more than one element choice; the use
+  site selects it.
+- **Traits are implemented for classes and dataclasses** (RFC 0009).
+  A trait-typed value is never exactly typed: every trait-typed slot is
+  a fat ref over a cell whose exact class or dataclass it carries (RFC
+  0015 §6). A trait type is **unsized** — the payload lives in a heap
+  cell and the slot stores the cell handle (RFC 0031 §4).
+- **No top trait.** The erased-storage type is the concrete host class
+  `Opaque` (RFC 0014) — reached by the explicit type-call `Opaque(v)`,
+  never by widening, and never nameable in an `impl`/`requires` list (it
+  is a class, not a trait). The tier is simply `exact concrete > I`
+  (RFC 0031 §4); the universal type test is `x is Opaque` (§3).
+- **Intersection types (`A & B`) are never supported** — not deferred,
+  not planned: heterogeneous needs compose a trait that declares both
+  method sets. This is a design principle, not a v1 limitation.
 
 ## 3. Type tests — the `is` keyword
 
-`as` is now the numeric cast and nothing else — `expr as T`,
-truncating, RHS a naming position restricted to the numeric primitives
-(RFC 0007 §1) — but type tests are the **`is` keyword**: `expr is Type`
-→ `bool`.
+`as` is the numeric cast and nothing else — `expr as T`, truncating,
+RHS a naming position restricted to the numeric primitives (RFC 0007
+§1) — but type tests are the **`is` keyword**: `expr is Type` → `bool`.
 
 - **Grammar:** `expr is Type` at relational precedence,
   non-associative (RFC 0030 §2/§3). The RHS is a **naming position**
-  like `impl`/`requires` lists (§2): a bare interface name or
-  instantiation (`x is Hashable`, `x is Wrap<i32>`) or a concrete type
-  (`d is Circle`) — never `dyn`-prefixed. Every type test spells `is` —
-  there is no `is<T>()` builtin.
-- **Two probes, one keyword.** Concrete RHS — exact-type test:
-  true when `x`'s exact class (or dataclass — RFC 0009) *is* `T`;
-  with no inheritance this is a single descriptor lookup — exact
-  `TypeId` compare (RFC 0015 §6). Trait RHS — **capability
-  probe**: true when the value's exact type has an impl for that interface
-  — the `is_a` descriptor/registry scan of RFC 0015 §6,
-  user-reachable (`k is Hashable`, `x is Drawable`). `is` is
-  total: never traps, never recovers, yields only `bool`.
+  like `impl`/`requires` lists (§2): a bare trait name or instantiation
+  (`x is Hashable`, `x is Wrap<i32>`) or a concrete type (`d is Circle`).
+  Every type test spells `is` — there is no `is<T>()` builtin.
+- **Two probes, one keyword.** Concrete RHS — exact-type test: true when
+  `x`'s exact class (or dataclass — RFC 0009) *is* `T`; with no
+  inheritance this is a single descriptor lookup — exact `TypeId`
+  compare (RFC 0015 §6). Trait RHS — **capability probe**: true when the
+  value's exact type has a registered impl for that trait — the
+  descriptor/registry scan of RFC 0015 §6, user-reachable (`k is
+  Hashable`, `x is Drawable`). `is` is total: never traps, never
+  recovers, yields only `bool`. The same descriptor answers the vtable
+  (§1) and the probe — one runtime truth per value.
 - **`x is Opaque` is legal** — a plain concrete test ("is this value an
-  `Opaque` handle?"), folding to `true` on `Opaque`-typed receivers
-  with the usual lint. On an `Opaque` receiver, `o is T` / `o is I`
-  **see through the box**: they test the boxed value's type (RFC 0014).
-- **No flow sensitivity:** `if (x is Hashable) { .. }` grants nothing
-  — no narrowing, no widening of `x` to `I` (a bound proves
-  widening, RFC 0037 §3 rule 5). The keyword answers; it does not
-  admit.
+  `Opaque` handle?"), folding to `true` on `Opaque`-typed receivers with
+  the usual lint. On an `Opaque` receiver, `o is T` / `o is I` **see
+  through the box**: they test the boxed value's type (RFC 0014).
+- **No flow sensitivity:** `if (x is Hashable) { .. }` grants nothing —
+  no narrowing, no widening of `x` to `I` (a bound proves widening, RFC
+  0037 §3 rule 5). The keyword answers; it does not admit.
 - **Static folds:** when the receiver's static type already answers
   (concrete `x`, a monomorphized `T`, `d: I is I`) the result is a
   compile-time constant — folded, with an always-true/false lint
   (assertion use is legitimate).
 - **No `upcast` builtin.** Widening to `I` is implicit on
   assignment/argument passing (`blit_all(g, [c])` passes a `Circle` as
-  `Drawable`); the explicit, greppable form is the `dyn` annotation
-  at the receiving position (`let d: Drawable = s;`); there is no
-  `upcast` builtin — the keyword does the marking.
-- **Trait objects cannot be downcast.** A interface object is used
-  through its interface methods — if you need `Circle`-specific behavior
-  behind a `Drawable`, put that behavior in the interface. Recovery
-  of an erased value exists only through `Opaque` + `downcast<T>`
-  (RFC 0014): erasure is explicit, so nothing dynamic ever flows through
-  interface types. The capability probe is not a recovery path: it
-  answers whether dispatch is possible, never hands back a narrower ref.
-- Numeric conversions are the one cast: `expr as T` (RFC 0007 §1) —
-  its RHS is a naming position, so types stay out of operand position
+  `Drawable`) — nominal admission is the only gate it consults (§4);
+  the explicit, greppable form is the trait annotation at the receiving
+  position (`let d: Drawable = s;`). There is no `upcast` builtin — the
+  annotation does the marking.
+- **Trait-typed values cannot be downcast.** A trait-typed value is used
+  through its trait's methods — if you need `Circle`-specific behavior
+  behind a `Drawable`, put that behavior in the trait. Recovery of an
+  erased value exists only through `Opaque` + `downcast<T>` (RFC 0014):
+  erasure is explicit, so nothing dynamic ever flows through trait
+  types. The capability probe is not a recovery path: it answers whether
+  dispatch is possible, never hands back a narrower ref.
+- Numeric conversions are the one cast: `expr as T` (RFC 0007 §1) — its
+  RHS is a naming position, so types stay out of operand position
   otherwise. Enum and erasure conversions remain named type-calls:
-  **`Opaque(v): Opaque`** (RFC 0014), the erasure builtin's class
-  method — there is
-  no `as` for anything but the numeric primitives.
+  **`Opaque(v): Opaque`** (RFC 0014), the erasure builtin's class method
+  — there is no `as` for anything but the numeric primitives.
 
-## 4. Equality — `==` is builtin: value for primitives, identity for cells
+## 4. Impl blocks — inherent and trait forms
 
-`a == b` is a
-builtin operator with no vtable dispatch, no opting in, no
-element-wise story. The law is one sentence: **primitives compare by
-value; `str` compares by content; everything else compares by cell
-identity.** `a != b` is its negation (`!(a == b)`).
+Methods live in impl blocks. Type bodies are **fields only** (RFC
+0009/0010): a `fn` member in a `struct`/`class` body is a hard parse
+error — no compatibility mode, the migration is total.
 
-- Primitives: `icmp`/`fcmp` value comparison; floats follow IEEE 754
-  (`NaN != NaN`, `-0.0 == 0.0`).
-- `str`: content comparison (immutable; interned literals make
-  identity accidentally work sometimes — content is the law, not the
-  accident).
-- `bytes`: content comparison (RFC 0004) — the engine lowers it to the
-  generic content op `ArrayCmp` because `bytes` is a `u8` array; plain
-  `Array<T>` stays identity (below).
-
-  **v1.1:** structs are values (RFC 0009 §7), so they join the value
-  side — `s == t` compares field by field (`ValEq`), recursing through
-  the same law per field. Pointers stay on the identity side: `*T ==
-  *T` is the cell-and-offset test, never a deep comparison. The old
-  `own(x) == x` aliasing example is gone with `own` itself
-  (RFC 0005 §10).
-- **Everything else — class, dataclass, `Vec`, `Array`, enums,
-  `Opaque`, `I` — is a handle test**: `a == b` is true exactly when
-  both point at the same cell (RFC 0016 §1). Since every non-primitive
-  is shared, this is aliasing made observable: `own(x) == x` is always
-  `false`, two structurally identical literals are never equal, and a
-  mutation does not change identity. Enum dataless variants are
-  immortal singleton cells (RFC 0016 §1), so `Flavor.Sweet ==
-  Flavor.Sweet` is `true` — the one place identity quietly behaves as
-  value.
-- **`==` on `Option<T>` / `Result<T, E>` is a compile error** (RFC 0005)
-  — identity on freshly built sum cells is almost never the intent;
-  compare with `when`, `.is_some()`, or the payload (`.value == d`).
-- An **identity-compare lint** flags `==` between two obviously
-  fresh composites (`Vec.from([..]) == Vec.from([..])`,
-  `Point{..} == Point{..}`): "always false — compare fields, or
-  `impl Hashable`" (assertion of distinctness is legitimate and
-  suppressible).
-- **Field-wise comparison is `Hashable.eq`** (RFC 0028): the interface
-  declares `hash` + `eq` together — the value-keyed contract
-  `Map`/`Set` keys ride (RFC 0026). It is not connected to `==`; a type
-  may be `Hashable` (maps) while `==` stays identity.
-- `when` literal patterns are unaffected: arms match compile-time values,
-  never runtime `==`.
-
-## 5. v1.1 — duck-typed interfaces
-
-`impl Trait for Type` heads are removed. **Satisfaction is structural
-and evaluated at the use site**: a type satisfies an interface when the
-type itself declares a member for every interface method — same name,
-same arity, same resolved signature under the instantiation. There is
-nothing to opt into and no orphan rule; a value of the type flows into
-an interface-typed slot wherever the shape matches, and a mismatch names
-the missing member.
-
-- **Vtables synthesize per (type × interface).** After the module
-  compiles, every concrete data type (and every generic instantiation)
-  that structurally satisfies an interface gets its slots filled from
-  its own methods, which compile at that point with their transitive
-  calls. Dead satisfactions cost a slot fill, nothing more.
-- **Interface members are not overridable hooks** — the type's method
-  IS the implementation, used by both direct and vtable dispatch.
-- The engine contracts are gone from the prelude: `Index` (indexing is
-  builtin over `[T]`/`Vec`/`str`/`bytes`; a `Vec` is recognized by its
-  `buf`/`len` record shape), `Iterator` (§6, the `__iterate` protocol),
-  and `Disposal` (`on_drop`, RFC 0016 v1.1). Library contracts without
-  engine knowledge (`Hashable`) stay plain `interface` in their module.
-
-## 6. The iteration protocol — `__iterate`
-
-A type is **iterable** when it declares the protocol member:
+| | `impl T { … }` | `impl I for T { … }` |
+|---|---|---|
+| Lives in | `.rut`, **T's module only** | `.rut`, **any module** |
+| Valid targets | local `struct`/`class`, or a `builtin class` this module declares (RFC 0029 §2) | any nominal type — foreign trait for foreign type is legal |
+| `pub(..)` | ✅ classes only (RFC 0009; structs are all-public) | ❌ — trait impl methods are as visible as the trait |
+| `async` | ✅ | ✅ — must match the trait's signature |
+| no-`self` methods | ✅ (constructors, `on_finish`) | ✅ (declared by the trait, §7) |
+| fields / empty body | ❌ / legal | ❌ / legal (empty = the opt-in marker, RFC 0037) |
 
 ```rut
-interface Iterator<E> {
-    fn __iterate(self, emit: fn(E) -> bool);
+impl Point {                            // inherent — Point's module only
+    fn new(x: i32, y: i32) -> Point { .. }      // class methods (no self)
+    pub async fn save(mut self) -> nil { .. }   // pub: classes only (RFC 0009)
 }
 ```
 
-`Iterator<E>` lives in the `std:core` prelude (engine-woven — the `for`
-desugar lowers to it; satisfaction is the ordinary duck law, so declaring
-the member is all a type does). `for (v of it) { body }` desugars to
-`it.__iterate(emit)` with a synthetic closure: the body runs, then
-`emit` returns `true`; `break` returns `false` (stopping the iteration);
-`continue` returns `true` immediately. Consequences:
+- **Inherent placement.** `impl T { .. }` compiles only in the module
+  that declares `T` — anywhere else is a compile error. The target may
+  be a local type **or a `builtin class` this module's `.d.rut` declares**
+  (the `LaunchedTask<T>` pattern, RFC 0028): the module owns the type,
+  so it owns the methods.
+- **Trait-impl placement is free.** `impl I for T` may live in any
+  module — a module may adapt a foreign trait to a foreign type. The
+  registry merges at link time and the duplicate-`(trait, type)` rule
+  (§2) is the only constraint.
+- **Bodies match the trait exactly.** Each method in a trait impl block
+  matches the trait's signature — receiver form (`self`/`mut self`),
+  params, return type, `async` spelling; a missing signature is a
+  compile error, and so is any extra method inside the block (put those
+  in an inherent block). Trait impl methods carry no `pub` — they are as
+  visible as the trait. An **empty** trait impl block is legal and is
+  the opt-in marker: `impl Serializable for User {}` (RFC 0037).
+- **Widening is nominal.** A value of `T` widens to `I` exactly when the
+  registry holds an `impl I for T` visible to the call site (§6) — and
+  never otherwise. `S` with the right member shapes but no impl does not
+  widen, and `s is I` folds false.
+- **`Self` in impl signatures.** Inside an impl block, `Self` names the
+  impl's target under the impl's substitution — `-> Self` returns,
+  `Self { .. }` constructs (RFC 0010 §1).
+
+## 5. Cross-module registry — link-time merge
+
+- **Module surfaces export impl registrations**: trait decls (name,
+  generics, method signatures), inherent-method signatures on
+  `type_exports`, and `(trait, target, [method → fn ref])` triples.
+- **The link merges the registries** (RFC 0038 §4): global trait ids and
+  slot layout, cross-scope vtable fill, and the duplicate-pair check —
+  two modules registering `(I, T)` is a link error naming both.
+- **Trait-typed parameters specialize at link time** — one clone of the
+  callee per concrete argument type (finite, terminating), which is what
+  keeps §1's static rule honest across module boundaries.
+- **`requires` closure is compile-time for local impls, link-time
+  cross-module**: to register `impl Serializable for T`, the registering
+  module must also hold (or the link must find) `impl Reflectable for T`
+  — transitively closed (RFC 0037).
+
+## 6. The use-both gate; the iteration protocol
+
+**The gate.** `x.trait_method()` requires **both** the type and the
+trait to be named at the call site's module: the type by declaration or
+`use`, the trait by `use`. Inherent methods follow the type alone. The
+impl block is the "hint" that names where methods come from — a call
+that matches a registered impl whose trait no `use` names is an error:
+"use `I` to call its methods on `T`". (The engine's prelude is used,
+never ambient — RFC 0028: nothing is in scope until a module writes
+`use core::{ .. };`.)
+
+**The iteration protocol.** A type is iterable when it registers
+`impl Iterator<E> for T` (nominal — §4):
+
+```rut
+use core::{ Iterator, make_ptr };
+
+impl Iterator<i32> for CountUp {
+    fn __iterate(self, emit: fn(i32) -> bool) {
+        for (let i = 1; i <= self.n; i += 1) {
+            if (!emit(i)) { return; }
+        }
+    }
+}
+```
+
+`for (v of it) { body }` desugars to `it.__iterate(emit)` with a
+synthetic closure: the body runs, then `emit` returns `true`; `break`
+returns `false` (stopping the iteration); `continue` returns `true`
+immediately. Consequences:
 
 - **The loop variable is the closure's parameter** — a fresh binding per
   iteration by construction (each `emit` call is a fresh frame).
@@ -297,14 +294,90 @@ the member is all a type does). `for (v of it) { body }` desugars to
   iteration, not the enclosing function.
 
 The builtin sequences (`Array<T>`, `Vec<T>`, `str`, `bytes`) keep their
-fused index loops — never a per-element call (RFC 0032 §1.1 R2). The
-loop variable's type is `*T`, `*T`, `str`, and `u8` respectively: for
-the value sequences each iteration boxes the element into a fresh
-one-slot cell — ref-typed elements alias the stored slot, so writes
-through the loop variable (`row.push(..)`, `r.v = ..`) mutate the
-sequence itself, and the fresh box keeps the per-iteration binding law.
-Scalar uses deref automatically: a `*T` reads as `T` at value-expected
-positions (arguments, returns, lets, assignments, format holes),
-in arithmetic and ordinal operands, and in `==`/`!=` against the
+fused index loops — never a per-element call (RFC 0032 §1.1 R2); they
+index themselves without the trait. The loop variable's type is `*T`,
+`*T`, `str`, and `u8` respectively: for the value sequences each
+iteration boxes the element into a fresh one-slot cell — ref-typed
+elements alias the stored slot, so writes through the loop variable
+mutate the sequence itself, and the fresh box keeps the per-iteration
+binding law. Scalars deref automatically: a `*T` reads as `T` at
+value-expected positions (arguments, returns, lets, assignments, format
+holes), in arithmetic and ordinal operands, and in `==`/`!=` against the
 pointee type. `*T == *T` stays identity, and pointer-vs-pointer is
 untouched everywhere — `p == nil` compares pointers.
+
+## 7. Engine contracts — `Task` and the run contexts
+
+The engine names builtin traits; it does not close them. A `builtin
+trait` (RFC 0029 §2) is compiler-backed — the engine auto-implements it
+for desugared frames — but **users implement it through the ordinary
+nominal path**: `impl Task<T> for CustomTask<T>` registers in the same
+registry as any other impl. Builtin traits are engine-*named*, not
+engine-*closed*.
+
+The async plan freezes the final member set; the shape it freezes to:
+
+```rut
+// core — engine-woven async surface (illustrative; no async module exists)
+pub builtin trait Task<T> { fn yield(cx: TaskRunContext); }
+pub builtin trait TaskRunContext {
+    fn checkpoint(self) -> u32;
+    fn next_checkpoint(mut self, v: u32) -> nil;   // mut receiver: it writes
+    fn cancelled(self) -> bool;
+}
+pub builtin fn launch_task<T>(t: Task<T>) -> LaunchedTask<T>;
+pub builtin class LaunchedTask<T> { }
+impl LaunchedTask<T> { fn on_finish(v: T) -> Self { .. } }
+```
+
+All members are **methods** — one member kind, no call-vs-load ambiguity
+at the vtable boundary; non-`self` parameters are legal (§2) and are how
+engine contracts spell frame entry points. Cancellation is the
+**context probe**: the desugared frame checks `cx.cancelled()` after
+each resumption and runs its drop path (RFC 0018). `async fn(cx:
+TaskRunContext, …)` takes the context as its explicit first parameter.
+`launch_task` lives in **core** (there is no async module — RFC 0028);
+users may write their own launchers over the same `Task` surface —
+`examples/04-custom-async` is that user launcher, and doubles as the
+user-impl-of-a-builtin-trait test.
+
+## 8. Equality — `==` is builtin: value for primitives, identity for cells
+
+`a == b` is a builtin operator with no vtable dispatch, no opting in,
+no element-wise story. The law is one sentence: **primitives compare by
+value; `str` compares by content; everything else compares by cell
+identity.** `a != b` is its negation (`!(a == b)`).
+
+- Primitives: `icmp`/`fcmp` value comparison; floats follow IEEE 754
+  (`NaN != NaN`, `-0.0 == 0.0`).
+- `str`: content comparison (immutable; interned literals make identity
+  accidentally work sometimes — content is the law, not the accident).
+- `bytes`: content comparison (RFC 0004) — the engine lowers it to the
+  generic content op `ArrayCmp` because `bytes` is a `u8` array; plain
+  `Array<T>` stays identity (below).
+
+  Structs are values (RFC 0009 §7), so they join the value side —
+  `s == t` compares field by field (`ValEq`), recursing through the same
+  law per field. Pointers stay on the identity side: `*T == *T` is the
+  cell-and-offset test, never a deep comparison.
+- **Everything else — class, dataclass, `Vec`, `Array`, enums,
+  `Opaque`, `I` — is a handle test**: `a == b` is true exactly when both
+  point at the same cell (RFC 0016 §1). Since every non-primitive is
+  shared, this is aliasing made observable: two structurally identical
+  literals are never equal, and a mutation does not change identity.
+  Enum dataless variants are immortal singleton cells (RFC 0016 §1), so
+  `Flavor.Sweet == Flavor.Sweet` is `true` — the one place identity
+  quietly behaves as value.
+- **`==` on `Option<T>` / `Result<T, E>` is a compile error** (RFC 0005)
+  — identity on freshly built sum cells is almost never the intent;
+  compare with `when`, `.is_some()`, or the payload (`.value == d`).
+- An **identity-compare lint** flags `==` between two obviously fresh
+  composites (`Vec.from([..]) == Vec.from([..])`, `Point{..} ==
+  Point{..}`): "always false — compare fields, or `impl Hashable`"
+  (assertion of distinctness is legitimate and suppressible).
+- **Field-wise comparison is `Hashable.eq`** (RFC 0028): the trait
+  declares `hash` + `eq` together — the value-keyed contract `Map`/`Set`
+  keys ride (RFC 0026). It is not connected to `==`; a type may be
+  `Hashable` (maps) while `==` stays identity.
+- `when` literal patterns are unaffected: arms match compile-time
+  values, never runtime `==`.

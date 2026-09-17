@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-22
 - **Author:** hpp2334
-- **Depends on:** RFC 0018 (suspend & await), RFC 0019 (tasks)
+- **Depends on:** RFC 0018 (async & await), RFC 0019 (tasks)
 - **Supersedes:** RFC 0003 §4 + RFC 5003 §4 (pre-restructure)
 - **Part:** D — Concurrency
 
@@ -18,7 +18,7 @@ Consequences for the embedder:
 
 - `sleep(ms)` is a native fn returning a future whose waker posts into
   the timer wheel — no promise objects, no job executor to drain.
-- IO written with plain `suspend`/`await` Rust plugs in unchanged.
+- IO written with plain `async`/`await` Rust plugs in unchanged.
 - Tests can virtualize time by faking the timer wheel (tur's test clock).
 
 ## Internals
@@ -37,7 +37,7 @@ impl std::future::Future for RutFuture {
         vm.wake_queue.register(cx.waker().clone(), self.task); // host wake -> task
         match vm.resume(self.task)? {
             Flow::Ret     => Poll::Ready(Ok(vm.take_ret(self.task))),
-            Flow::Suspend => Poll::Pending,
+            Flow::Wait => Poll::Pending,
             Flow::Trap(t) => Poll::Ready(Err(t)),
         }
     }
@@ -52,6 +52,6 @@ impl std::task::Wake for TaskWaker {
 
 ## Open questions
 
-- OQ-1: host-side suspend construction (a native fn like `newCanvas`
+- OQ-1: host-side async construction (a native fn like `newCanvas`
   returning a future of a handle — RFC 0025) — just a future resolving to a
   `Host` value; needs an example.

@@ -28,25 +28,25 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   typed opcodes (`arr.get<f32>` vs `arr.get<Handle>`). Instantiations whose
   bodies are descriptor-independent share one generic body at load time
   (RFC 0001 §Execution model); the compiler reports instantiation counts.
-  The kind-specialization already covers **unsized `dyn` arguments**: a
-  `T`-typed slot instantiated at any `dyn` type (`Vec<dyn Widget>`,
-  `MyCow<dyn Slice<T>>`, RFC 0005) becomes a handle slot — `dyn` args are
-  ordinary trait-object arguments, satisfying no bound.
+  The kind-specialization already covers **unsized trait-typed arguments**: a
+  `T`-typed slot instantiated at any trait type (`Vec<Widget>`,
+  `MyCow<Slice<T>>`, RFC 0005) becomes a handle slot — trait-typed args are
+  ordinary fat-ref arguments, satisfying no bound.
 - **Const-generic parameters exist only on the builtin `Array<T, N>`** in
   v1 (RFC 0005); user generics stay type-only — `N` is a constant
   expression, part of the instantiation identity (`Array<i32, 3> ≠
   Array<i32, 4>`, RFC 0015 §3).
 - Generic parameters are **unconstrained by default** — no `T requires Trait`
   bounds in the parameter list of user generics (OQ-1): you cannot call
-  trait methods on a bare `T`. Pass values in, or take a `dyn I`
+  trait methods on a bare `T`. Pass values in, or take an `I`-typed
   parameter instead of a generic. One **admission-only** form ships —
   it gates which instantiations compile (closing over `requires`),
   grants no method calls on bare type params, and adds no IR:
   a trailing **`where` clause on user generic fns** (RFC 0037 §3) —
   the serde motivating pair: producers that return `T` cannot take a
-  `dyn I` parameter instead, so the contract rides the call site:
+  `I`-typed parameter instead, so the contract rides the call site:
   `deserialize<T>(v: str): Result<T, JsonError> where T requires
-  Deserializable`. A body may widen a `T`-typed *value* to `dyn I`
+  Deserializable`. A body may widen a `T`-typed *value* to an `I`-typed slot
   (the bound proves the widening valid) but gains no class-method
   calls on bare `T`. (A user-class bound would be pure forwarding
   anyway — deferred with OQ-1. The old inline bounds on `host class`
@@ -55,6 +55,6 @@ block), and a generic `first<T>` monomorphized to two instantiations.
 ## Open questions
 
 - OQ-1: generic bounds `T requires Trait` with **static dispatch** on bare `T`
-  (would unlock it without `dyn I` refs) — deferred; the
+  (would unlock it without trait-typed refs) — deferred; the
   admission-only form (user-fn `where` clauses, RFC 0037 §3) needs no dispatch
   and adds no IR.

@@ -113,39 +113,49 @@ runnable examples (`examples/00–03` projects, `demo/src/examples`
 classics);
 
 ```
-module     := (import | pub? decl)*
-import     := 'import' '{' name (',' name)* '}' 'from' Str ';'
-decl       := letdecl | enumdecl | dataclassdecl | classdecl | traitdecl | impldecl | fndecl
+module     := (usedecl | pub? decl)*
+usedecl    := 'use' Ident '::' (Ident | '{' name (',' name)* '}' ) ';'
+                                              // Rust-like use path; the head is a
+                                              // bare package name — [a-zA-Z0-9_]+
+                                              // only, no string specifiers (RFC 0002 §4)
+decl       := letdecl | enumdecl | structdecl | classdecl | traitdecl | impldecl | fndecl
 letdecl    := 'let' Ident ':' Type '=' expr ';'   // module binding — load-time
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
-dataclass  := 'dataclass' Ident genericparams? '{' (field | meth)* '}'
-class      := 'class' Ident genericparams? '{' (field | meth)* '}'
+structdecl := 'struct' Ident genericparams? '{' field* '}'
+classdecl  := 'class' Ident genericparams? '{' field* '}'
+                                              // type bodies are FIELDS ONLY (RFC
+                                              // 0012 §4) — methods live in impl
+                                              // blocks; a `fn` in a body is a hard
+                                              // parse error
 field      := membervis? 'static'? Ident ':' Type ('=' expr)?
 membervis  := 'pub' ('(' ('mod' | 'super' | 'self') ')')?
                                                // RFC 0003 §2 — the same forms
                                                // items take; unannotated =
                                                // module-private. Class members
-                                               // only: dataclass members are
+                                               // only: struct members are
                                                // always public (RFC 0009)
-meth       := membervis? 'suspend'? 'fn' Ident '(' 'mut'? 'self'? params ')' (':' Type)? block
+impldecl   := 'impl' tyref '{' meth* '}'
+                                              // inherent — the target type's
+                                              // module only (RFC 0012 §4)
+             | 'impl' tyref 'for' tyref '{' meth* '}'
+                                              // trait impl — any module; the
+                                              // (trait, type) pair registers once
+                                              // program-wide; duplicates are a
+                                              // link error (RFC 0012 §4)
+meth       := membervis? 'async'? 'fn' Ident '(' 'mut'? 'self'? params ')' (':' Type)? block
                                               // 'self' first param => instance
                                               // method; no 'self' => class
                                               // method — the construction surface
                                               // (RFC 0010 §1); no 'static fn')
+methsig    := 'async'? 'fn' Ident '(' 'mut'? 'self'? params ')' (':' Type)? ';'
+                                              // bodiless; no-self signatures legal
+                                              // (engine contracts — RFC 0012 §7)
 trait      := 'trait' Ident genericparams? ('requires' TraitList)? '{' methsig* '}'
-methsig    := 'fn' Ident '(' 'mut'? 'self' ',' params ')' (':' Type)? ';'
-                                               // trait methods are always
-                                               // instance methods (RFC 0012 §2);
-                                               // 'mut' self for destructors —
-                                               // the old class-member `dispose`
-                                               // is gone: Disposal is an impl
-                                               // (RFC 0016 §3)
-impl       := 'impl' Ident 'for' Ident genericargs? '{' meth* '}'
-                                               // admission + bodies (RFC 0012
-                                               // §2): same module as the
-                                               // target type; every trait
-                                               // methsig covered exactly
-fndecl     := 'entry'? modifiers? ('suspend')? 'fn' Ident genericparams? '(' params ')' (':' Type)? whereclause? block
+                                               // methods-only, no bodies, no
+                                               // defaults (RFC 0012 §2); the old
+                                               // class-member `dispose` is gone:
+                                               // Disposal is an impl (RFC 0016 §3)
+fndecl     := 'entry'? modifiers? 'async'? 'fn' Ident genericparams? '(' params ')' (':' Type)? whereclause? block
                                                // 'entry' — the host-callable
                                                // surface (RFC 0035 §3); does
                                                // not combine with pub
@@ -172,17 +182,17 @@ isexpr     := expr 'is' Type                              // type test — relat
 ```
 
 `Type` in **value positions** (params, returns, locals, fields, generic
-arguments) may spell a trait object type with the `dyn` prefix —
-`d: dyn Drawable`, `Vec<dyn Widget>`, `Vec<Opaque>`, `Array<dyn Slice<i32>, 4>`
-(the builtin slice trait, RFC 0005); a bare trait
-name there is a type error with an "insert `dyn`" suggestion (RFC 0012 §2).
+arguments) spells a trait-typed value with the bare trait name —
+`d: Drawable`, `Vec<Widget>`, `Vec<Opaque>`, `Array<Slice<i32>, 4>`
+(the builtin slice trait, RFC 0005). There is no object-type keyword:
+the trait name IS the type spelling (RFC 0012 §2).
 `TraitList` — `requires` lists and extparam bounds (§3) — stays
-**bare**: those positions name a trait, they do not form a trait
-object (RFC 0013 §2). Impl heads (`impl I for T`) are naming positions
+**bare**: those positions name a trait, they do not form a trait-typed
+value (RFC 0013 §2). Impl heads (`impl I for T`) are naming positions
 too. The `is` RHS is a **naming position** as well — bare
-trait/instantiation or concrete type, never `dyn`-prefixed — but
-resolved to a `TypeId` rather than a value type (RFC 0012 §3). `dyn` and
-`is` are keywords
+trait/instantiation or concrete type — but
+resolved to a `TypeId` rather than a value type (RFC 0012 §3). `is` is a
+keyword
 (RFC 0002 §4); `as` remains
 reserved and always errors (erasure is the `Opaque.new(v)` class method,
 RFC 0014).
@@ -201,17 +211,20 @@ surfacedecl := 'host' 'fn' Ident '(' params ')' (':' Type)? ';'
                                                 // concrete signature over
                                                 // the crossing set — a
                                                 // generic host fn errors
-             | 'host' 'dataclass' Ident '{' field* '}'
+             | 'host' 'struct' Ident '{' field* '}'
                                                 // flat record; every field
                                                 // a crossing type; no
                                                 // methods, no initializers
              | 'builtin' 'fn' Ident genericparams? '(' params ')' (':' Type)? ';'
-             | 'builtin' Ident genericparams? '{' extmember* '}'
-             | 'builtin' 'interface' Ident genericparams? '{' extmember* '}'
+             | 'builtin' 'class' Ident genericparams? '{' extmember* '}'
+                                                // the kind is spelled — bare
+                                                // `builtin Name {` errors
+             | 'builtin' 'trait' Ident genericparams? '{' extmember* '}'
                                                 // engine-woven contract:
-                                                // Disposal/Index/Iterator
+                                                // Iterator; the async plan
+                                                // adds Task + contexts
 extmember   := 'fn' Ident '(' 'self' ',' params ')' (':' Type)? ';'
-               | ('suspend')? 'fn' Ident '(' params ')' (':' Type)? ';'
+               | 'async'? 'fn' Ident '(' params ')' (':' Type)? ';'
                                              // builtin type members: instance
                                               // methods spell `self`; no-`self`
                                               // class methods are the
@@ -267,11 +280,11 @@ are `.`-dotted.
 
 | decision | mechanism |
 |---|---|
-| item dispatch | peek 1 (`import` `let` `enum` `dataclass` `class` `trait` `impl` `fn`) |
+| item dispatch | peek 1 (`use` `let` `enum` `struct` `class` `trait` `impl` `fn`) |
 | stmt vs expr-stmt | peek 1 (leading keyword: `let` `if` `while` `for` `return` `when`) |
 | `for`-of vs `for`-c | peek 4: `for ( let Ident <of or =>` |
 | instance vs class method | peek 4: `fn Ident ( <mut? self? …>` |
-| dataclass literal vs path expr | peek 2: `Ident {` ⇒ Struct literal (classes have no instance literal, RFC 0009) |
+| struct literal vs path expr | peek 2: `Ident {` ⇒ Struct literal (classes have no instance literal, RFC 0009) |
 | `when`-arm body form | peek 1 after `->` (`{` ⇒ block arm, else expr arm) |
 | postfix loop step | peek 1 (`.` `(` `[` `?`) |
 | assignment target | no lookahead — parse the expression, then validate (path/index) |
@@ -350,18 +363,21 @@ struct Node { span: Span, kind: NodeKind }
 
 enum NodeKind {
     // Items (§2) — children as NodeId / Vec<NodeId>:
-    Import  { names: Vec<IdentId>, from: LitId },
+    Use     { pkg: IdentId, names: Vec<IdentId> },   // `use pkg::{ a, b };`
     Let     { vis, name: IdentId, ty: Option<NodeId>, init: NodeId },  // module-level
     Enum    { vis, name: IdentId, members: Vec<IdentId> },
     Dataclass{ vis, name, generics: Vec<IdentId>,
-               fields: Vec<NodeId>, methods: Vec<NodeId> },            // RFC 0009
+               fields: Vec<NodeId> },            // spelled `struct`; FIELDS
+                                                 // ONLY (RFC 0012 §4)
     Class   { vis, name, generics,
-              members: Vec<NodeId> },
+              fields: Vec<NodeId> },   // FIELDS ONLY — methods live in impls
     Trait   { vis, name, generics, requires: Vec<NodeId>,  // RFC 0012 §2
                methods: Vec<NodeId> },
-    Impl    { trait_ref: NodeId, target: NodeId,           // RFC 0012 §2
-               methods: Vec<NodeId> },  // same module as target — the
-                                         // admission itself; covers every
+    Impl    { trait_ref: Option<NodeId>, target: NodeId,   // RFC 0012 §2:
+                                         // Some = trait impl (any module),
+                                         // None = inherent (the target's
+                                         // module only); the admission
+                                         // itself; covers every
                                          // trait methsig exactly
     Fn      { vis, is_suspend, name, generics,
               params: Vec<NodeId>, ret: Option<NodeId>, body: NodeId },
@@ -503,11 +519,11 @@ are `.`-dotted.
 
 | decision | mechanism |
 |---|---|
-| item dispatch | peek 1 (`import` `let` `enum` `dataclass` `class` `trait` `impl` `fn`) |
+| item dispatch | peek 1 (`use` `let` `enum` `struct` `class` `trait` `impl` `fn`) |
 | stmt vs expr-stmt | peek 1 (leading keyword: `let` `if` `while` `for` `return` `when`) |
 | `for`-of vs `for`-c | peek 4: `for ( let Ident <of or =>` |
 | instance vs class method | peek 4: `fn Ident ( <mut? self? …>` |
-| dataclass literal vs path expr | peek 2: `Ident {` ⇒ Struct literal (classes have no instance literal, RFC 0009) |
+| struct literal vs path expr | peek 2: `Ident {` ⇒ Struct literal (classes have no instance literal, RFC 0009) |
 | `when`-arm body form | peek 1 after `->` (`{` ⇒ block arm, else expr arm) |
 | postfix loop step | peek 1 (`.` `(` `[` `?`) |
 | assignment target | no lookahead — parse the expression, then validate (path/index) |
@@ -586,18 +602,21 @@ struct Node { span: Span, kind: NodeKind }
 
 enum NodeKind {
     // Items (§2) — children as NodeId / Vec<NodeId>:
-    Import  { names: Vec<IdentId>, from: LitId },
+    Use     { pkg: IdentId, names: Vec<IdentId> },   // `use pkg::{ a, b };`
     Let     { vis, name: IdentId, ty: Option<NodeId>, init: NodeId },  // module-level
     Enum    { vis, name: IdentId, members: Vec<IdentId> },
     Dataclass{ vis, name, generics: Vec<IdentId>,
-               fields: Vec<NodeId>, methods: Vec<NodeId> },            // RFC 0009
+               fields: Vec<NodeId> },            // spelled `struct`; FIELDS
+                                                 // ONLY (RFC 0012 §4)
     Class   { vis, name, generics,
-              members: Vec<NodeId> },
+              fields: Vec<NodeId> },   // FIELDS ONLY — methods live in impls
     Trait   { vis, name, generics, requires: Vec<NodeId>,  // RFC 0012 §2
                methods: Vec<NodeId> },
-    Impl    { trait_ref: NodeId, target: NodeId,           // RFC 0012 §2
-               methods: Vec<NodeId> },  // same module as target — the
-                                         // admission itself; covers every
+    Impl    { trait_ref: Option<NodeId>, target: NodeId,   // RFC 0012 §2:
+                                         // Some = trait impl (any module),
+                                         // None = inherent (the target's
+                                         // module only); the admission
+                                         // itself; covers every
                                          // trait methsig exactly
     Fn      { vis, is_suspend, name, generics,
               params: Vec<NodeId>, ret: Option<NodeId>, body: NodeId },

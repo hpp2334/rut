@@ -4,7 +4,7 @@
 - **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0031 (HIR), RFC 0015 (slots, inline values),
-  RFC 0018 (suspend), RFC 0025–0026 (native calls)
+  RFC 0018 (async), RFC 0025–0026 (native calls)
 - **Supersedes:** RFC 0007 §4 (pre-restructure)
 - **Implementation side:** the VM that executes this code is RFC 0034.
 - **Part:** F — Toolchain & artifacts
@@ -87,7 +87,7 @@ newcell cid -> rD         ; mint a value cell (the `Self { .. }` / dataclass
 getf    rD, rO, fidx      ; field load (cell — payload slot array)
 setf    rO, fidx, rV      ; field store (+retain/release where typed)
 tidof   rD, rO            ; read an object handle's runtime TypeId → u32
-                          ; (Opaque box, dyn I object, slice cell — the
+                          ; (Opaque box, trait-typed fat ref, slice cell — the
                           ; vtable ty load, RFC 0015 §6); a pure load
 unbox   rD, rO, tid       ; extract an Opaque box's payload as the
                           ; statically known T (RFC 0014); traps on TypeId
@@ -104,13 +104,13 @@ arrgetref rD, rO, rI, tid ; for-of element reference (RFC 0012 §6):
                           ; box the element into a fresh one-slot cell
                           ; of the pointer type tid — ref elements
                           ; alias the stored slot, scalars copy Array<T, N> const-index folds its
-                          ; bounds check against const N (§1.1 R1); dyn
+                          ; bounds check against const N (§1.1 R1); slice-view
                           ; Slice<T> get/set/len are `calli` vtable slots
-                          ; (§1.1 R2); Vec / Array → dyn Slice widening
+                          ; (§1.1 R2); Vec / Array → Slice view widening
                           ; lowers to the view-cell mint op
                           ; (RFC 0016 §4)
 optsome rD, rV | optnone rD, tid | optis rD, rO ...
-await   rD, rF            ; suspend point — state N (RFC 0018 §3)
+await   rD, rF            ; suspension point — state N (RFC 0018 §3)
 spawn   rD, rF | cancel rT                  ; RFC 0019
 chsend  rCh, rV | chrecv rD, rCh | chselect ...   ; RFC 0021
 panic   code, rMsg
@@ -125,8 +125,8 @@ An op exists for exactly one of three things:
   (RFC 0015 §3, RFC 0033 §3);
   `Array<T, N>.len()` is the const `N` — `N` is part of the type's
   identity (RFC 0005). Hence no `typeid`, no `arrlen`.
-- **R2 — nothing polymorphic, nothing named.** A `dyn` receiver gets
-  exactly one op: `calli` through its vtable. `dyn Slice<T>`'s `x[i]`
+- **R2 — nothing polymorphic, nothing named.** A trait-typed receiver gets
+  exactly one op: `calli` through its vtable. A `Slice<T>` view's `x[i]`
   get/set, `.len()`, `for..of` are the builtin `Index<T>` impl's slots
   (RFC 0005; registered like any builtin impl, RFC 0022 §2) — ordinary
   vtable calls; the backing cell's dispatch-through-owner (RFC 0016 §4)
@@ -169,9 +169,9 @@ The named type operations lower to R3 primitives:
   Both names are imported from `"std:core"` (RFC 0028): the prelude is
   compiler-lowered but never ambient.
 
-## 2. Suspend lowering
+## 2. Async lowering
 
-`suspend fn` compiles to a **state machine**: each `await` gets a state
+`async fn` compiles to a **state machine**: each `await` gets a state
 number; the resume table maps state → block; locals live across suspension
 points are promoted to frame slots that survive (RFC 0018 §4 sketches
 `CoroutineFrame`). `spawn` wraps the machine in a `Task`; `cancel` drops

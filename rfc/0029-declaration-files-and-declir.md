@@ -16,7 +16,7 @@ Three file kinds, one rule each:
 | Kind | Contents | Role |
 |---|---|---|
 | `.rut` | implementation source | what authors write; **may not declare `host`/`extern`** — a compile error: "belongs in a `.d.rut`" |
-| `.d.rut` | declarations only — the surface | publishable, human-readable, hand-writable; **the only place `host fn`/`host dataclass` and `builtin`/`builtin fn` may appear** |
+| `.d.rut` | declarations only — the surface | publishable, human-readable, hand-writable; **the only place `host fn`/`host struct` and `builtin class`/`builtin trait`/`builtin fn` may appear** |
 | `.d.ir` | compiled **DeclIr** of a `.d.rut` — the declaration surface | cache; version-locked (see §4) |
 
 Plus the runtime artifact `.rutc` — the compiled module binary (RFC 0033)
@@ -29,10 +29,10 @@ revised):
 
 | keyword | implementation lives in | link check compares against |
 |---|---|---|
-| `host fn` / `host dataclass` | the **embedding Rust** — a registered `NativeModule` | the fn-table reflection (RFC 0026 §1) |
-| `builtin` / `builtin fn` | **the engine itself** — compiler-lowered; the toolchain's std decl files only | nothing — the decl is a pure signature contract |
+| `host fn` / `host struct` | the **embedding Rust** — a registered `NativeModule` | the fn-table reflection (RFC 0026 §1) |
+| `builtin class` / `builtin trait` / `builtin fn` | **the engine itself** — compiler-lowered; the toolchain's decl files only | nothing — the decl is a pure signature contract |
 
-(`extern` is removed: rut→rut imports resolve through the module loader
+(`extern` is removed: rut→rut names resolve through use paths and the module loader
 below, §5; host→rut entry points are `entry fn`, RFC 0035 §3.)
 
 ## 1. Why declaration files exist
@@ -40,12 +40,12 @@ below, §5; host→rut entry points are `entry fn`, RFC 0035 §3.)
 - **Publishing without source.** Package authors likely want to hide
   variable names and logic. Publishing compiled binaries (`.rutc`) does that:
   bodies are compiled; local names are compiled away (§6).
-- **Cheap third-party typechecking.** To compile module `M` importing
-  `"pkg:mod"`, the compiler needs only `pkg:mod`'s *surface* — names,
+- **Cheap third-party typechecking.** To compile module `M` using package
+  `p`, the compiler needs only `p`'s *surface* — names,
   signatures, bounds, slots. Bodies are needed at link/run, not compile
   (§5).
 - **Host surfaces in-language.** The embedder's Rust modules
-  (`app:gfx`, `plugin:my_map`, `std:collection`) declare themselves the
+  (`gfx`, `my_map`, `pouch`) declare themselves the
   same way — the tur `index.d.ts` role, but type-checked in rut itself
   (RFC 0025).
 
@@ -55,33 +55,35 @@ A `.d.rut` is parsed in **declaration mode** (RFC 0030 §3): declarations
 only, and — beyond RFC 0003's module scope — every declaration must be
 *complete as a surface*. Allowed:
 
-- `import` / `pub` — visibility applies exactly as in RFC 0003 §2
+- `use` / `pub` — visibility applies exactly as in RFC 0003 §2
   (non-exported decls are known inside the file, nameable nowhere else);
 - `let` — with load-time expression initializers (RFC 0033 §3);
 - `enum` — a member list *is* the whole definition;
 - `trait` — method signatures (+ `requires`) *are* the whole
-  definition (`std:collection`'s `Hashable` lives this way,
+  definition (`pouch`'s `Hashable` lives this way,
   RFC 0028);
-- `dataclass` — **fields only** (with load-time expression field initializers). Field
+- `struct` — **fields only** (with load-time expression field initializers). Field
   names and types are the published surface (RFC 0015 §4), so a published
   value type is sound. No method bodies, no impl blocks in v1 (OQ-2);
-- `host fn` / `host dataclass` — signatures only, **concrete** over the
+- `host fn` / `host struct` — signatures only, **concrete** over the
   crossing set (RFC 0023 §1: a generic host fn is a compile error — a
-  generic parameter has no shape the boundary checks); `host dataclass`
+  generic parameter has no shape the boundary checks); `host struct`
   declares a flat record whose every field is a crossing type — the
   shape is the whole surface, no methods, no field initializers
   (RFC 0025);
-- `builtin` / `builtin fn` / `builtin interface` — **the engine's own
-  surface**, spelled in the toolchain's decl files only (`std:core`,
-  `std:math`): the builtin containers (`Array`/`Option`/`Result`/
+- `builtin class` / `builtin trait` / `builtin fn` — **the engine's own
+  surface**, spelled in the toolchain's decl files only (`core`,
+  `calc`): the builtin containers (`Array`/`Option`/`Result`/
   `Opaque` — class-shaped, generic, members compiler-lowered to ops,
-  RFC 0032 §1.1), the engine-lowered fns (all of `std:core`'s — `own`,
+  RFC 0032 §1.1), the engine-lowered fns (all of `core`'s — `own`,
   `downcast`, `assert`, `panic`, the `str`/`bytes` natives; the prelude
-  registers no host bodies), and the engine-woven interfaces
-  (`Disposal`/`Index`/`Iterator` — compiler-backed impls and lowering
-  hooks; users implement them with ordinary `impl` blocks, while plain
-  `interface` remains the library form — `Hashable` in
-  `std:collection`). The decls exist so users and the LSP see every
+  registers no host bodies), and the engine-woven traits
+  (`Iterator` — compiler-backed impls and lowering hooks; v1.1 removed
+  `Disposal`/`Index` in favor of `on_drop` and builtin indexing, and
+  the async plan adds `Task` plus its run contexts here; users
+  implement them with ordinary `impl` blocks, while plain
+  `trait` remains the library form — `Hashable` in
+  `pouch`). The decls exist so users and the LSP see every
   signature; no impl ever registers, and an embedder decl that spells
   `builtin` is a compile error. `builtin` is a contextual keyword,
   `.d.rut`-only — it stays a legal identifier everywhere else.
@@ -134,22 +136,25 @@ tables inside `.rutc` (and their `.rutc.map` sidecar) that stack traces
 symbolicate against (RFC 0036). A DeclIr has no function symbols and
 never participates in trace restoration.
 
-## 5. Import resolution during compilation
+## 5. Use resolution during compilation
 
-When module `M` imports `"pkg:mod"` and rutc needs its surface to typecheck
-`M`, resolution is (first hit wins):
+When module `M` uses package `p` (bare names at the use site — `use p::{
+.. };`, RFC 0002 §4; the manifest names `p`'s entry file, RFC 0041 §3)
+and rutc needs its surface to typecheck `M`, resolution is (first hit
+wins):
 
-1. **source**: `pkg/mod.rut` present on the source path → compile it
-   normally (development mode; its exported surface *is* the DeclIr);
-2. **bundle**: a mounted `.rutbundle` answering to `pkg:mod` → the
+1. **source**: the package's rut source present on the source path →
+   compile it normally (development mode; its exported surface *is* the
+   DeclIr);
+2. **bundle**: a mounted `.rutbundle` answering to `p` → the
    surface is its bundled `.d.ir` (or, regenerated from the bundled
    `.d.rut` when version-stale) — RFC 0038 §5; explicit mount outranks
    stray caches, never dev source;
-3. **cache**: `pkg/mod.d.ir` with a matching compiler version → load the
-   DeclIr directly — no parse, the fast path;
-4. **decl**: `pkg/mod.d.rut` → compile to a DeclIr (and write the
+3. **cache**: the package's `.d.ir` with a matching compiler version →
+   load the DeclIr directly — no parse, the fast path;
+4. **decl**: the package's `.d.rut` → compile to a DeclIr (and write the
    `.d.ir` cache next to it);
-5. **host registry**: for `host`-linked modules the embedder ships the
+5. **host registry**: for `host`-linked packages the embedder ships the
    `.d.rut` alongside the registered implementation (RFC 0022 §1).
 
 Bodies are resolved only at link/run: registered Rust for `host` decls

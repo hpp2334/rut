@@ -39,7 +39,7 @@ fn`'s parameters and return must be built from: primitives, `str`,
 `bytes` (the immutable binary buffer, RFC 0004), `nil`, `Option`/`Result`
 over crossable types, and `Opaque` (RFC 0014 — the one cell an embedder
 may hold and pass back). Every other cell — dataclasses, classes,
-`Vec<T>` of cells, `Vec<u8>` itself, `dyn` — stays inside the VM;
+`Vec<T>` of cells, `Vec<u8>` itself, trait-typed values — stays inside the VM;
 violating shapes are **compile errors on the `entry fn` declaration**,
 not call-time failures. Plain `pub` carries no such restriction: rut
 modules exchange cells freely between themselves (RFC 0003 §2).

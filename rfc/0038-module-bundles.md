@@ -19,7 +19,7 @@ sources together:
 
 | Entry | What | Source RFC |
 |---|---|---|
-| `rut.toml` | manifest — format, layout version, module specifier | §2 here |
+| `rut.toml` | manifest — format, layout version, package name | §2 here |
 | `*.rut` | the entry source and every transitive relative include | 0035 §1 |
 
 A v1 bundle is the **source** contract: the loader mounts it exactly like
@@ -32,8 +32,9 @@ only v1.
 
 ## 1. Layout rules
 
-- One module per bundle in v1: the manifest's `name` names the specifier
-  (e.g. `"pkg:imaging"`) the bundle answers to, and `[deps]` is refused —
+- One module per bundle in v1: the manifest's `name` names the package
+  (e.g. `"imaging"` — a bare `[a-zA-Z0-9_]+` name, RFC 0041 §5) the bundle
+  answers to, and `[deps]` is refused —
   a consumer directory with dependencies is a *project*, not a module
   (package trees = OQ-3, rides RFC 0029 OQ-3).
 - Entry names are the source paths relative to the module root
@@ -51,7 +52,7 @@ directory form uses, so a bundle-shaped directory packs unchanged:
 ```toml
 format = "rutbundle"
 format_version = 1          # bundle LAYOUT version — independent of rutc
-name = "pkg:imaging"        # specifier this bundle answers to
+name = "imaging"            # the package name this bundle answers to
 entry.lib = "./imaging.rut" # the entry source, relative to the root
 ```
 
@@ -101,7 +102,7 @@ let (session, root) = rut_driver::load_path_session("vendor/imaging.rutbundle")?
 let (session, root) = rut_driver::load_bundle_bytes(&bytes, Path::new("mem"))?;
 ```
 
-- After mounting, the specifier resolves through the bundled sources
+- After mounting, the package name resolves through the bundled sources
   exactly as the directory form does: the entry source is expanded
   (relative includes inlined, include-once) into one compilation unit and
   compiled under the manifest's `name`.

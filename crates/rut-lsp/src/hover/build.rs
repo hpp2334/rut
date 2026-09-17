@@ -1,4 +1,4 @@
-//! Building the index — one pass over a document's module items,
+//! Building the index —one pass over a document's module items,
 //! recovering verbatim signatures and doc comments from the source.
 
 use rut_ast::ast::*;
@@ -12,8 +12,8 @@ fn line_of(src: &str, lo: u32) -> u32 {
 }
 
 /// doc comment lines directly above `lo`: consecutive `//` lines with no
-/// blank line between them and the decl (comments are not tokens 鈥?the
-/// lexer skips them 鈥?so this scans the source itself)
+/// blank line between them and the decl (comments are not tokens — the
+/// lexer skips them, so this scans the source itself)
 fn doc_before(src: &str, lo: u32) -> Vec<String> {
     let mut out = Vec::new();
     // walk whole lines upward from the line containing `lo`
@@ -64,7 +64,7 @@ fn members_of(src: &str, ast: &Ast, methods: &[NodeHandle<MethodDeclNode>]) -> V
         .map(|m| {
             let d = ast.method_decl(*m);
             let sp = ast.span(m.id());
-            // `pub(..)`/`async` sit before `fn` — outside the decl span;
+            // `pub(..)`/`async` sit before `fn` —outside the decl span;
             // restore them from the flags (truthful to intent)
             let mut pre = String::new();
             if let Some(v) = d.vis {
@@ -115,7 +115,7 @@ fn strip_member_mods(mut s: &str) -> &str {
 }
 
 /// field member list: the decl slice carries the modifiers (the field
-/// span starts before them) — strip, then re-render from the flags
+/// span starts before them) —strip, then re-render from the flags
 fn field_members(src: &str, ast: &Ast, fields: &[NodeHandle<FieldDeclNode>]) -> Vec<MemberSrc> {
     fields
         .iter()
@@ -217,7 +217,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::Enum { name, members, .. } => {
-                // member list renders from names 鈥?spans would need token
+                // member list renders from names — spans would need token
                 // recovery; names are the hover's content
                 let ms = members
                     .iter()

@@ -36,7 +36,7 @@ struct Frame {
     func: &'static FuncCode,        // linked code (RFC 0033 §1)
     pc: u32,
     regs: Vec<Slot>,                 // typed per the signature; verified
-    state: u8,                       // suspend resume state (RFC 0018 §4)
+    state: u8,                       // async resume state (RFC 0018 §4)
     task: Option<TaskId>,            // frames may belong to a coroutine
 }
 ```
@@ -70,7 +70,7 @@ one. Coroutine frames are dropped on the way out — destructors run
 
 ## 3. Coroutines & scheduling
 
-- Every suspend entry runs as a `Task`: a root `CoroutineFrame` parked when
+- Every async entry runs as a `Task`: a root `CoroutineFrame` parked when
   `await` returns `Pending`. Wakers push `TaskId`s into `ready` (RFC 0020)
   — there is no microtask queue and no job executor.
 - `spawn` creates a task; `cancel` marks it and drops the frame at its

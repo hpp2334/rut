@@ -18,7 +18,7 @@ struct ModuleBinary {                 // serialized, versioned, hash-stable
                                        (RFC 0015 §6)
     consts: Vec<Const>,              // strings, byte blobs, i64/f64, tids
     funcs: Vec<FuncCode>,           // name, signature (typed regs), code,
-                                       // state tables (suspend), host slots
+                                       // state tables (async), host slots
     symbols: SymbolTable,            // function symbols + pc→span — RFC 0036;
 }                                     // strippable (below + RFC 0036 §4)
 ```
@@ -65,7 +65,7 @@ The verifier re-checks, per function: register types vs op signature,
 def-before-use, jump targets in-range and to block heads, `brtable`
 density, `Self { .. }` literal completeness inside class methods
 (every uninitialized field
-covered — RFC 0010 §1), suspend state tables closed under resume edges,
+covered — RFC 0010 §1), async state tables closed under resume edges,
 native-slot signatures vs the DeclIrs the module compiled against
 (RFC 0029 — concrete types over the crossing set, so a non-crossing
 shape is a load error), `callnat` slots present in the native table, `IsTrait` `want`

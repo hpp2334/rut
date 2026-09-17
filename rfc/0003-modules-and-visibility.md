@@ -15,18 +15,19 @@ is safe by default (`pub(self)`) with package-scoped forms for libraries.
 
 ## 1. Module structure — declarations only
 
-- Allowed at module scope: `import`/`pub`, `let`, `enum`, `dataclass`,
+- Allowed at module scope: `use`/`pub`, `let`, `enum`, `struct`,
   `trait`, `impl`, `class`, `fn`. Anything else — calls, any
-  statement — is a compile error. (`host fn`/`host dataclass` and
-  `builtin`/`builtin fn` — signature-only native/engine surfaces —
+  statement — is a compile error. (`host fn`/`host struct` and
+  `builtin class`/`builtin trait`/`builtin fn` — signature-only
+  native/engine surfaces —
   exist **only in declaration files** (`.d.rut`), never in `.rut`;
   RFC 0029 §2.)
-- **Imports have no `type` marker** (`import { Canvas, newCanvas } from
-  "app:gfx"` — not `import { type Canvas }`). rut is fully statically
-  typed: the compiler resolves every imported name and knows from usage
+- **Uses are Rust-like paths, with no `type` marker** (`use app::gfx::{
+  Canvas, newCanvas };`). rut is fully statically
+  typed: the compiler resolves every used name and knows from usage
   whether it lands in type position (`Canvas` in an annotation) or value
   position (`newCanvas()`), so there is nothing for the user to annotate.
-  (Unreferenced imports are a lint, not an error.)
+  (Unreferenced use names are a lint, not an error.)
 - Module-level `let` initializers must be **load-time expressions**:
   literals, enum members, builtin operators over load-time expressions, dataclass
   literals whose fields are load-time expressions, fixed-array literals
@@ -52,10 +53,10 @@ is safe by default (`pub(self)`) with package-scoped forms for libraries.
   `Opaque` container pattern (RFC 0014, RFC 0023 §2) — **no user code runs
   at load**.
 - **Loading a module executes nothing.** The embedder loads, then explicitly
-  calls an entry function (conventionally `main`, sync or suspend; worker
-  entry points receive transferred args — RFC 0021). Consequences: no
-  import side-effect ordering, no load-order bugs, deterministic and cheap
-  loads — unlike JS/TS modules.
+   calls an entry function (conventionally `main`, sync or async; worker
+   entry points receive transferred args — RFC 0021). Consequences: no
+   use side-effect ordering, no load-order bugs, deterministic and cheap
+   loads — unlike JS/TS modules.
 
 ## 2. Visibility — `pub`, `pub(mod)`, `pub(super)`, `pub(self)`
 
@@ -64,14 +65,14 @@ is the root module). Every declaration carries a visibility:
 
 | Form | Meaning |
 |---|---|
-| `pub fn ..` | **public** — importable by any rut module (other packages included) |
+| `pub fn ..` | **public** — nameable by any rut module (other packages included) |
 | `pub(mod) fn ..` | visible everywhere inside this **package's module tree** |
 | `pub(super) fn ..` | visible to the **parent module** only |
 | `pub(self) fn ..` | module-private — **the default** for unannotated declarations |
 
 - Unannotated = `pub(self)`: safe-by-default privacy; nothing leaks
   unless it says `pub`.
-- Applies to all module-scope declarations: `let`, `enum`, `dataclass`,
+- Applies to all module-scope declarations: `let`, `enum`, `struct`,
   `trait`, `impl` (an impl exports with its target type), `class`, `fn`,
   extern declarations included (on `class`, it
   means the *type name* is visible).
@@ -88,7 +89,7 @@ is the root module). Every declaration carries a visibility:
   at compile time. `entry` does not combine with `pub` modifiers.
 - Visibility is checked at compile time; it has no runtime representation.
 - Visibility applies uniformly to every declaration, extern included: only
-  `pub` names enter a module's import table, and only `entry` fns
+  `pub` names enter a module's export table, and only `entry` fns
   (plus the conventional `main`) enter the binary's host-entry table. A
   non-exported decl is
   *known* inside its module (callable, type-checkable) but *nameable*
@@ -100,6 +101,6 @@ is the root module). Every declaration carries a visibility:
 - OQ-1: load-time expression scope: do module-scope `let` initializers
   ever allow calls to user functions (computed constants)?
   Proposed: no — literal folding and builtin zero-allocs only.
-- OQ-2: module/system semantics — URL-like specifiers (`tur:core` today) vs
-  paths; how the host intercepts loads (RFC 0001 open question; loader
-  policy lives in RFC 0035 §1).
+- OQ-2: module/system semantics — bare package names at the use site
+  (`use core::{ .. };`) vs richer paths; how the host intercepts loads
+  (RFC 0001 open question; loader policy lives in RFC 0035 §1).

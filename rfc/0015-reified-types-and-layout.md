@@ -32,12 +32,12 @@ recovery (RFC 0014), and the host boundary checks (RFC 0023).
    shape rut-side (RFC 0025, revised).
 3. **Type tests** — the `is` keyword (RFC 0012 §3), concrete and
    trait RHS alike;
-   host fns declaring `dyn I` parameters get their arguments checked by
+   host fns declaring trait-typed parameters get their arguments checked by
    the same machinery.
 4. **Heterogeneous collections** — vtable dispatch (RFC 0012) needs the exact type
    reachable from every object header.
 5. **Debugging** — `debug.type_name(x)`, stack traces (RFC 0036), formatter output.
-6. **Serialization** — `std:reflect` walkers traverse `RutType`
+6. **Serialization** — `reflect` walkers traverse `RutType`
    descriptors (RFC 0037).
 7. **`Opaque` recovery** — `downcast<T>` (RFC 0014) checks the boxed cell's
    `TypeId`; `Opaque.new(v)` stamps it. Erasure without reification would be
@@ -146,19 +146,19 @@ Trait method ids are assigned **globally per trait instantiation**
 at compile time (`Slice<Point>` ≠ `Slice<str>`, RFC 0012 §2); a
 class's — or a dataclass's (RFC 0009) — vtable fills every slot of
 every trait instantiation it has an impl for — **user impl blocks,
-auto-fills** (std:reflect's protocols — RFC 0037; registry entries
+auto-fills** (reflect's protocols — RFC 0037; registry entries
 for the builtin generics likewise, RFC 0022 §2). Every value cell is
 minted at construction — the `Self { .. }` literal inside a class
   method (RFC 0010 §1) — with its vtable
 already attached; widening a composite to
-`dyn I` **reuses the same cell and vtable** — the trait-object ref is the
+a trait `I` **reuses the same cell and vtable** — the trait-typed ref is the
 handle plus the vtable pointer, no allocation, no copy (RFC 0011 §3). A
 call through a
 trait object is two loads and an
 indirect jump:
 
 ```rust
-// d.draw(g)  where d: dyn Drawable, draw has global slot 3
+// d.draw(g)  where d: Drawable, draw has global slot 3
 Op::CallTrait { recv, slot: 3, args } => {
     let obj = unsafe { regs[recv].r.unwrap().as_ref() as &RutCell };
     let f = unsafe { (*obj.vt).slots[3] };
@@ -194,8 +194,8 @@ lowered `tidof` + `icmp` (RFC 0032 §1.1; the `Op::IsTrait` op exists
 only for the trait-RHS capability probe — `tidof` → descriptor →
 impls scan — never for concrete tests; `downcast`'s check is
 `tidof` + `br` + guarded `unbox`, RFC 0014). The widening
-itself — a composite to `dyn I` — needs no dispatch
-machinery and no allocation: a trait object already *is* the object
+itself — a composite to a trait `I` — needs no dispatch
+machinery and no allocation: a trait-typed value already *is* the object
 ref whose header reaches the vtable; `Opaque.new(v)` is the only box mint
 in the language (RFC 0014).
 

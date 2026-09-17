@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0018 (suspend & await)
+- **Depends on:** RFC 0018 (async & await)
 - **Supersedes:** RFC 0003 §3 (pre-restructure)
 - **Part:** D — Concurrency
 

@@ -440,8 +440,15 @@ impl Parser {
 /// Reserved words of the grammar (RFC 0002 §4) — keywords are `Ident`s
 /// matched by interner text (RFC 0002 §4/§5). Public: the LSP classifier
 /// and any tooling that needs the keyword set share this one table.
+pub const RESERVED_KW: &[&str] = &[
+    "let", "mut", "if", "else", "while", "for", "of", "return", "when",
+    "enum", "class", "struct", "trait", "impl", "requires", "use", "pub",
+    "static", "async", "await", "extern", "where", "is", "host", "fn",
+    "true", "false", "nil", "select",
+];
+
 pub fn is_reserved_kw(s: &str) -> bool {
-    matches!(s, "let" | "mut" | "if" | "else" | "while" | "for" | "of" | "return" | "when" | "enum" | "class" | "struct" | "trait" | "impl" | "requires" | "use" | "pub" | "static" | "async" | "await" | "extern" | "where" | "is" | "host" | "fn" | "true" | "false" | "nil" | "select")
+    RESERVED_KW.contains(&s)
 }
 
 /// The primitive types (RFC 0002 §3) — contextual type names, matched by

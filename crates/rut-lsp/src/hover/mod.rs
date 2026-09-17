@@ -1,9 +1,11 @@
-//! Hover 鈥?a definition index over the parsed document, plus lookup and
+//! Hover — a definition index over the parsed document, plus lookup and
 //! markdown rendering. One rule for method lookup (mirrors the
 //! compiler's): **methods on type `T` = T's own surface (class body,
-//! `builtin`) 鈭?trait methods from impls targeting `T`.** Heuristic, like the classifier: a miss is an empty hover,
-//! never wrong text. Signatures render as verbatim source slices 鈥?no
-//! pretty-printer, truthful to what was written.
+//! `builtin`) ∪ inherent `impl T { .. }` methods ∪ use-gated trait
+//! methods from impls targeting `T`.** Heuristic, like the classifier: a
+//! miss is an empty hover, never wrong text. Signatures render as
+//! verbatim source slices — no pretty-printer, truthful to what was
+//! written.
 
 //!
 //! Layout: `types` (the index data) → `build` (the index pass over a
@@ -12,9 +14,9 @@
 
 mod build;
 mod infer;
-mod lookup;
+pub(crate) mod lookup;
 mod render;
-mod types;
+pub(crate) mod types;
 
 pub use build::index;
 pub use lookup::{hover, HoverOut};

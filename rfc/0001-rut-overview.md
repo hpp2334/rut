@@ -3,7 +3,10 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Revised:** 2026-08-22 — RFC set restructured into a gradual series of
-  small, single-topic RFCs (this file is the index).
+  small, single-topic RFCs (this file is the index). 2026-09 — v2
+  vocabulary and impl blocks: nominal traits (`impl T {}` inherent,
+  `impl I for T {}` trait impls), `use pkg::{item}` paths, `async` the
+  only suspension spelling.
 - **Author:** hpp2334
 
 ## Summary
@@ -16,8 +19,8 @@ bytecode specialization, and make the host boundary fully checked.
 
 Syntax feels like TypeScript (simple `enum`, the `class`/`struct` shape,
 `fn (params) -> T { .. }` anonymous functions) with a Rust-flavored
-interface surface (`interface I` + duck-typed satisfaction — a type
-satisfies an interface by declaring its members, no `impl` head); the
+trait surface (`trait I` + nominal satisfaction — the admission is the
+`impl I for T` block, nothing else); the
 concurrency model feels like Kotlin coroutines implemented with Rust's
 poll-based future semantics; the runtime is a bytecode VM with **no JIT**.
 
@@ -25,11 +28,15 @@ poll-based future semantics; the runtime is a bytecode VM with **no JIT**.
 > changed: every type has a zero value and copy-on-assignment semantics
 > (fresh values cost nothing — freshness elision); sharing is explicit
 > through `*T` cells (`make_ptr`) and closure capture. `dataclass` is
-> `struct`; `own`, `Option`, `Result`, `char`, and `impl Trait for Type`
-> are removed — errors are `(T, err)` records, absence is `nil` on a
-> pointer, and interfaces are duck-typed with vtables synthesized per
-> (type × interface) at the use site (RFC 0004 §4, 0005 §8–10, 0009 §7,
-> 0012 §5–6, 0016 §1).`
+> `struct`; `own`, `Option`, `Result`, and `char` are removed — errors
+> are `(T, err)` records, absence is `nil` on a pointer (RFC 0004 §4,
+> 0005 §8–10, 0009 §7, 0016 §1).
+>
+> **Revised (v2) — impl blocks and nominal traits.** Type bodies are
+> fields only; every method lives in an impl block — inherent
+> (`impl T { .. }`, the type's module) or trait (`impl I for T { .. }`,
+> any module). Satisfaction is nominal: the registry, not member shapes
+> (RFC 0012 §2–6).
 
 ## Motivation
 
@@ -40,7 +47,7 @@ that motivate rut:
    interfaces; `T` exists only in `.d.ts` and is "recovered at the call site" by
    convention. Nothing at runtime prevents misuse; every bridge manually
    re-parses and re-coerces arguments (`as number`, `require_props_object`).
-2. **Push-based suspend.** tur emulates poll-based cancellation on top of
+2. **Push-based cancellation.** tur emulates poll-based cancellation on top of
    promises/generators (`launch` + `sleep` with driver-future drop). The
    emulation is correct but the substrate fights it: promise settlements,
    microtask queues, and downlevelled generators (tslib) add overhead and edge
@@ -83,8 +90,9 @@ a structural answer in rut:
    of magnitude slower — a JS engine's speed *is* its JIT. rut's no-JIT
    pillar (G7) is viable only because the language is statically typed:
    the bytecode is typed (G2), generics monomorphize, `Vec<f32>` is a
-   flat `f32` buffer, and calls are direct by default — vtable dispatch
-   exists only where a trait is named (RFC 0012 §1). The code shape a
+   flat `f32` buffer, and calls bind statically whenever the call site
+   names one concrete type — vtable dispatch only for multi-origin
+   trait-typed receivers (RFC 0012 §1). The code shape a
    JS JIT exists to speculate on — polymorphic property loads — does not
    exist in rut.
 4. **Too much memory.** JS values are boxes: per-object headers, tagged or
@@ -106,8 +114,8 @@ a structural answer in rut:
   `char`, plus `str`, `Vec<T>`/`Array<T, N>`, and user
   `trait`/`dataclass`/`class`/`enum` — everything beyond the
   primitives is a shared refcounted cell (RFC 0016 §1).
-- G4 — Kotlin-style coroutine suspend built on Rust-style poll semantics
-  (cold futures, state machines, cancellation-by-drop). Not promise push.
+- G4 — Kotlin-style coroutines built on Rust-style poll semantics
+  (cold state machines, cancellation-by-drop). Not promise push.
 - G5 — Multi-threading via isolate workers (separate heaps, message passing).
 - G6 — Simple memory management: reference counting and NO collector:
   Deterministic destruction for host resources.
@@ -118,7 +126,8 @@ a structural answer in rut:
 ## Non-goals
 
 - No dynamic typing, no `any`, no gradual typing. Erasure is explicit and
-  spelled out: `dyn I` trait objects (RFC 0012) for polymorphism,
+  spelled out: trait-typed values — bare trait names in type position
+  (RFC 0012) — for polymorphism,
   `Opaque` boxes via `Opaque.new(v)`/`downcast` (RFC 0014) for storage —
   checked, recoverable, never silent.
 - No structural ("duck") typing, no object literals — traits are
@@ -154,15 +163,15 @@ final sections of the RFC they implement).
 - 0003 — modules & visibility: declarations-only scope, `pub` forms
 - 0004 — primitive types & integer semantics: the by-value regime
 - 0005 — builtin generic types: `Option`, `Result`, `Vec` (+ `Array<T, N>`
-  fixed arrays, `dyn Slice<T>` slices)
+   fixed arrays, `Slice<T>` views)
 - 0006 — enums: simple named-int sets
 - 0007 — literals & inference: suffixes, conversions, plain/raw/format strings
 - 0008 — control flow & `when`: exhaustive pattern expressions
 - 0009 — dataclasses: open value records (methods + impl blocks)
 - 0010 — classes: sealed value records, class-method construction
 - 0011 — reference semantics, `own`, `Weak` & disposal
-- 0012 — traits & dispatch: the sole dynamic mechanism; `dyn I` object
-  types; type tests
+- 0012 — traits & dispatch: nominal impls (`impl T {}`, `impl I for T {}`),
+  the two-rule dispatch law; type tests
 - 0013 — functions, closures & generics
 - 0014 — `Opaque`: explicit erasure with checked recovery
 - 0015 — reified types: `RutType`, slots & vtables
@@ -174,7 +183,7 @@ final sections of the RFC they implement).
 
 **Part D — Concurrency**
 
-- 0018 — `suspend` & `await`: poll-based coroutines
+- 0018 — `async` & `await`: poll-based coroutines
 - 0019 — tasks: `spawn`, `cancel`, `select`
 - 0020 — the host-futures bridge
 - 0021 — workers & channels: isolate concurrency
@@ -187,7 +196,8 @@ final sections of the RFC they implement).
 - 0025 — host fns & declaration files
 - 0026 — native containers: a user-defined map (fn surface)
 - 0027 — templates: `f"..."` across the boundary
-- 0028 — the standard library: `rt:*`, `std:*`, `std:log`, `std:debug`
+- 0028 — the standard library: `core` plus the swappable in-tree packages
+  `pouch`/`calc`/`ink`
 
 **Part F — Toolchain & artifacts**
 
@@ -217,7 +227,7 @@ final sections of the RFC they implement).
 | P2 | Isolate workers with typed channels and transferable buffers | 0021 |
 | P3 | Reference counting; deterministic destructors; cycles leak by design (`Weak<T>`) | 0016–0017 |
 | P4 | Errors are values: `(T, err)` records — an empty/`false`/`nil` second element is success; traps (panics) catchable only at the host boundary (v1.1: `Result` + `?` removed) | 0005 §10, 0034 |
-| P5 | TS-like data model (v1.1): `struct`/`class` — **every binding owns its cell** (copy-on-assignment; fresh values are free); sharing is explicit `*T` via `make_ptr`; classes construct through their own class methods — `Rect.new(..)`, no `constructor` keyword, no `new` expression. Interfaces are duck-typed: satisfaction at the use site, vtables synthesized per (type × interface) — the sole dynamic-dispatch mechanism; iteration is the `__iterate` protocol (§6). No object literals, no data-enums, no intersections | 0009 §7, 0012 §5–6, 0016 §1 |
+| P5 | TS-like data model (v1.1): `struct`/`class` — **every binding owns its cell** (copy-on-assignment; fresh values are free); sharing is explicit `*T` via `make_ptr`; classes construct through their own class methods — `Rect.new(..)`, no `constructor` keyword, no `new` expression. Type bodies are **fields only** — every method lives in an impl block (`impl T { .. }` inherent, `impl I for T { .. }` trait impls); satisfaction is **nominal** — the registry, not member shapes. Dispatch is the two-rule law (static when the call site names one concrete type; vtable when origins are multiple); `for (x of it)` over user types registers `impl Iterator<E> for T`, builtin sequences keep fused loops. No object literals, no data-enums, no intersections | 0009 §7, 0012 §1–6, 0016 §1 |
 | P6 | Cold poll-based futures; `await` is the only suspension; cancellation drops the state machine at its suspension point | 0018–0020 |
 | P7 | Register-based typed bytecode VM, no JIT; frontend lowers through an SSA-ish IR for folding/inlining before bytecode emission | 0029–0033 |
 | P8 | Both user types (`dataclass` **and** `class`) are cells whose payload is one slot per field; identity builtin `type_id<T>()`; `box<T>` **rejected** — no borrow checker exists to make loans sound | 0015 |
@@ -226,8 +236,8 @@ final sections of the RFC they implement).
 
 Without `any`, JSON-shaped data becomes a small class set behind a
 trait (`trait JsonValue` implemented by `JString`/`JNum`/`JArr`/…,
-held as `dyn JsonValue` refs),
-heterogeneous collections are `Vec<dyn I>` vecs, and host APIs that were
+held as `JsonValue` refs),
+heterogeneous collections are `Vec<I>` vecs, and host APIs that were
 `any`-shaped in JS become generics or `Opaque` handles over host fns. The one
 dynamic mechanism kept is **trait dispatch** — a checked vtable call on a
 value whose exact class is still known at runtime. What we keep from "types
@@ -249,13 +259,13 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
   exact register types; the verifier re-checks them at load time.
 - **Type stability is the optimization currency**: with no JIT there is no
   speculation or deopt — what the type checker proves is all the IR gets.
-  The IR keeps a per-value type lattice (exact > `dyn I`) and
-  the lattice-lowering features (`dyn I` refs, `Opaque` boxes) are explicit,
+  The IR keeps a per-value type lattice (exact > trait-typed) and
+  the lattice-lowering features (trait-typed refs, `Opaque` boxes) are explicit,
   boundary-local, and carry their own optimization rules (RFC 0031 §4).
 - **No JIT**: all optimization happens at compile time. The VM may keep cheap
   inline caches for field access on host opaques, but nothing is ever compiled
   to machine code.
-  - **Trait members never devirtualize** (RFC 0012 §1): a method declared in a trait dispatches through the vtable even when the receiver's exact class is statically known; inherent methods stay direct.
+  - **Dispatch follows the two-rule law** (RFC 0012 §1): a call binds statically when the call site names exactly one concrete type; it goes through the vtable when a trait-typed receiver's concrete origins are multiple.
 - **Single-threaded VM**: a `Vm` instance runs on one thread; workers are
   separate `Vm`s (RFC 0021). No atomics inside the heap.
 - **Host stepping**: the host owns time. `vm.run_until_idle()`,
@@ -266,13 +276,13 @@ source ─► lexer/parser ─► AST ─► resolver/typecheck ─► IR (SSA-i
 
 - **M0** — Lexer, parser, AST, pretty errors (RFC 0002, 0030).
 - **M1** — Type checker + inference; bytecode + VM for the static core
-  (no suspend, single module) (RFC 0029, 0031–0034).
+  (no async, single module) (RFC 0029, 0031–0034).
 - **M2** — Rust embedding API: modules, typed native fns, opaque types,
   `Result` mapping, interrupts/budgets
   (RFC 0022–0028; includes the builtin-impl registry that RFC 0037's auto/registry impls ride).
   (repr-C struct registration was withdrawn — RFC 0024.)
-- **M3** — Coroutines: `suspend`/`await` state machines, host-driven executor,
-  cancellation (RFC 0018–0020).
+- **M3** — Coroutines: `async`/`await` state machines, host-driven executor,
+   cancellation (RFC 0018–0020).
 - **M4** — Workers, channels, transferables (RFC 0021).
 - **M5** — Weak refs, shutdown leak reporting, finalization polish (RFC 0017).
 - **M6** — Tooling: CLI runner, formatter, LSP, debugger protocol;

@@ -35,7 +35,10 @@ rut/
 │   ├── 00-todolist/               # entry-fn surface over a rut class (CRUD)
 │   ├── 01-sort/                   # sorting library behind one dispatcher entry
 │   ├── 02-digest/                 # byte-level codecs + hashes, host is the oracle
-│   └── 03-plugin/                 # module directory + .rutbundle chat moderator
+│   ├── 03-plugin/                 # module directory + .rutbundle chat moderator
+│   └── 04-custom-async/           # parse-only corpus: a user impl of the
+│                                   #   builtin `Task<T>` trait + a user launcher
+│                                   #   (runnable when the async plan lands)
 ├── benches/                       # rut vs QuickJS-ng vs V8 (README)
 │   ├── README.md                  #   method, fairness rules, workloads
 │   ├── run.mjs                    #   cross-runtime runner (wall + peak RSS)
@@ -73,8 +76,8 @@ rut/
 Partially built — the crate split below (rut-lexer / rut-ast /
 rut-parser, rut-lir / rut-driver, rut-core / rut-vm) exists as of v1;
 `rut-lsp` + `integrations/` land the M6 LSP slice early (RFC 0001 M6:
-semantic tokens, diagnostics, document symbols — hover/completion/
-formatting stay with M6). It is also the workspace's first external
+semantic tokens, diagnostics, document symbols — hover and
+completion have landed; formatting stays with M6). It is also the workspace's first external
 dependency (tower-lsp-server + tokio). Leaves marked "planned" (hir/, regalloc, decl/, session, pack,
 rut-host-std) are not yet written. Every leaf names the RFC that
 specifies it:
@@ -136,7 +139,7 @@ rut/
 │   │       │   ├── collect.rs      #       type/trait/impl collection
 │   │       │   ├── inst.rs         #       monomorphization queue (0013 §2)
 │   │       │   ├── infer.rs        #       bidirectional literals (0007 §1) — planned
-│   │       │   ├── coerce.rs       #       dyn widening, own/Weak sites — planned
+│   │       │   ├── coerce.rs       #       trait widening, own/Weak sites — planned
 │   │       │   └── admission.rs    #       generic bounds, requires closure — planned
 │   │       ├── hir/                #     SSA-ish typed IR — RFC 0031 §3 — planned
 │   │       │   ├── lower.rs        #       ast -> hir
@@ -146,7 +149,7 @@ rut/
 │   │       │   ├── mod.rs          #       FnCompiler, typed registers
 │   │       │   ├── expr.rs  stmt.rs  ops.rs  lit.rs  call.rs  generic.rs
 │   │       │   ├── regalloc.rs     #       typed register assignment — planned
-│   │       │   └── suspend.rs      #       state splitting at await (0032 §3) — planned
+│   │       │   └── async.rs        #       state splitting at await (0032 §3) — planned
 │   │       └── decl/               #     declaration surfaces — RFC 0029 — planned
 │   │           ├── parse.rs        #       .d.rut parsing (in rut-parser today)
 │   │           └── declir.rs       #       .d.ir emit + decl digest
@@ -190,31 +193,50 @@ rut/
 │   │       │   ├── types.rs        #       hover: verbatim signatures,
 │   │       │   │                   #       doc comments, the unified
 │   │       │   │                   #       method rule (own surface ∪
-│   │       │   │                   #       trait impls targeting T)
+│   │       │   │                   #       inherent impl methods ∪
+│   │       │   │                   #       use-gated trait impls)
 │   │       │   ├── build.rs        #       the index pass
 │   │       │   ├── lookup.rs       #       what's under the cursor
 │   │       │   ├── infer.rs        #       local receiver inference
 │   │       │   └── render.rs       #       markdown rendering
+│   │       ├── completion.rs        #     member + bare completion over the
+│   │       │                       #       same index (impl-block methods,
+│   │       │                       #       the use-both gate, keywords)
 │   │       ├── server.rs           #     Backend — full sync, semantic
 │   │       │                       #       tokens, documentSymbol, hover,
-│   │       │                       #       publishDiagnostics; embeds
-│   │       │                       #       std/*.d.rut, scans the
-│   │       │                       #       workspace for cross-file defs
+│   │       │                       #       completion, publishDiagnostics;
+│   │       │                       #       embeds the std surface, scans
+│   │       │                       #       the workspace for cross-file defs
 │   │       └── main.rs             #     the `rut-lsp` stdio binary
 │   └── rut-cli/                    # the `rut` binary
 │       └── src/main.rs
-├── std/                            # the toolchain's std surface —
-│   ├── core.d.rut                  #   prelude: uniformly `builtin` —
-│   │                               #   fns (own/downcast/assert/panic/
-│   │                               #   str/bytes natives), types
-│   │                               #   (Option/Result/Opaque/Array),
-│   │                               #   interfaces (Disposal/Index/
-│   │                               #   Iterator) (0028; RFC 0025
-│   │                               #   revised) — imported, never
-│   │                               #   ambient
-│   ├── math.d.rut                  #   host fns + builtin intrinsics (0028)
-│   └── collection.d.rut            #   Hashable + Map/Set host fns;
-│                                   #   wrappers in rut source (0025/0026)
+├── rut/                            # the in-tree packages (RFC 0028) —
+│   │                               #   `core` is the only STANDARD; pouch/
+│   │                               #   calc/ink are swappable defaults a
+│   │                               #   host may replace wholesale
+│   ├── core/
+│   │   ├── core.d.rut              #   prelude: uniformly `builtin class`/
+│   │   │                           #   `builtin trait`/`builtin fn` — fns
+│   │   │                           #   (own/downcast/assert/panic/str/bytes
+│   │   │                           #   natives), types (Option/Result/
+│   │   │                           #   Opaque/Array), the engine-woven
+│   │   │                           #   traits (Iterator; the async plan
+│   │   │                           #   adds Task + contexts + launch_task/
+│   │   │                           #   LaunchedTask as core builtin decls)
+│   │   │                           #   (0028; RFC 0025 revised) — used,
+│   │   │                           #   never ambient
+│   │   └── rut.toml                #   core needs NO [deps] — the driver
+│   │                               #   mounts it unconditionally
+│   ├── pouch/
+│   │   ├── pouch.rut               #   one .rut per package — the entry
+│   │   └── rut.toml                #   the manifest names: [deps] + entry
+│   ├── calc/
+│   │   ├── calc.d.rut              #   host fns + builtin intrinsics (0028)
+│   │   └── rut.toml
+│   └── ink/
+│       ├── ink.rut                 #   the Logger (0028), over the host's
+│       │                           #   `rt` module
+│       └── rut.toml
 ├── integrations/                   # editor integrations
 │   ├── README.md                   #   nvim/helix/zed/emacs/sublime
 │   │                               #   configs over the rut-lsp binary
@@ -228,9 +250,10 @@ rut/
 │       └── README.md
 ├── demo/                           # ships in-repo — §3
 ├── benches/                        # cross-runtime benchmarks — rut/QuickJS/V8
-├── examples/                       # the 00–03 runnable projects (§1); the
-│                                  #   parse corpus is those + the demo
-│                                  #   classics (0030 §7)
+├── examples/                       # the 00–03 runnable projects + 04
+│                                  #   parse-only corpus (§1); the parse
+│                                  #   corpus is those + the demo classics
+│                                  #   (0030 §7)
 └── rfc/                            # unchanged
 ```
 
@@ -285,3 +308,21 @@ line numbers; a CodeMirror upgrade is noted but not taken).
   payloads — plain base64 proposed.
 - OQ-2: embedding runnable demo panes inside rendered RFC pages —
   iframe of the same app vs. a minimal `demo-lite` build.
+
+## 5. Package manifests
+
+Every in-tree or user package carries a `rut.toml` at its root (§2's
+tree). The rules are small on purpose:
+
+- **`name`** — the package's use-path name: bare `[a-zA-Z0-9_]+` only
+  (RFC 0002 §4). A scoped or quoted spelling is a manifest error whose
+  diagnostic points here.
+- **`[deps]`** — the packages this one uses. `core` needs **no** `[deps]`
+  entry: the driver mounts it unconditionally (resolution-ambient,
+  name-explicit — every name still requires `use core::{ .. };`, RFC
+  0028). Every other specifier — `pouch`, `calc`, `ink`, app packages,
+  bundles — is declared here or host-provided; an undeclared specifier's
+  diagnostic names the manifest.
+- **entry** — the package's file: one `.rut` (or `.d.rut`) per package;
+  the manifest names it (`entry.lib` for a rut-source package,
+  `entry.type` for a declaration surface).

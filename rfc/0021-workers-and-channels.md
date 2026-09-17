@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0018 (suspend), RFC 0019 (tasks), RFC 0016 (heaps),
+- **Depends on:** RFC 0018 (async), RFC 0019 (tasks), RFC 0016 (heaps),
   RFC 0025 (host types `send`)
 - **Supersedes:** RFC 0003 §5 + RFC 5003 §3 (pre-restructure)
 - **Part:** D — Concurrency
@@ -18,7 +18,7 @@ Workers are **separate VMs on separate threads** with separate heaps (RFC
 - `Channel<T>()` returns a channel value with two endpoints, `sender` and
   `receiver` (unbounded, MPSC). `send(v)` is sync and cheap;
   `recv() -> Future<Option<T>>` suspends until a message arrives, resolves
-  `None` when every sender is gone. (Bounded/suspend-send and MPMC are OQ-1.)
+  `None` when every sender is gone. (Bounded/blocking-send and MPMC are OQ-1.)
 - Channel endpoints are **transferable** values: pass one to a worker through
   `spawn_worker` args or through another channel.
 
@@ -29,7 +29,7 @@ Workers are **separate VMs on separate threads** with separate heaps (RFC
 | primitives (ints/floats/bool/char) | copy |
 | `str` | copy (immutable) |
 | **every other cell** — `Vec<T>`, `Array<T, N>`, class/dataclass instances, builtin `Option`/`Result`, enums | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case); every element/field must itself be crossable |
-| `dyn Slice<T>` | transfer if refcount == 1, else deep copy — same rule as its owner cell; provenance (which Vec/Array cell it views) is invisible across the boundary |
+| `Slice<T>` view | transfer if refcount == 1, else deep copy — same rule as its owner cell; provenance (which Vec/Array cell it views) is invisible across the boundary |
 | `Sender` / `Receiver` | transfer |
 | closures | **not transferable** in v1 — compile-time error at the send/`spawn_worker` site |
 | host opaque types | transfer **only** if registered `send` by the host (RFC 0025) — checked at the transfer, by `TypeId` |

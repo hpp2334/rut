@@ -173,3 +173,55 @@ fn miss_is_none() {
     let src = "fn main() -> nil { let z = unknown_thing; }\n";
     assert!(hover_at(src, "unknown_thing").is_none());
 }
+
+#[test]
+fn inherent_impl_block_method_hover() {
+    // methods live in `impl` blocks (RFC 0012 §4) — the call resolves
+    // through the block's owner, not a type body
+    let src = "\
+struct Counter {
+n: i32;
+}
+impl Counter {
+// add one
+fn bump(mut self) -> i32 { self.n += 1; return self.n; }
+}
+fn use_it(c: Counter) -> i32 {
+return c.bump();
+}
+";
+    let md = hover_nth(src, "bump", 1).unwrap();
+    assert!(md.contains("fn bump(mut self) -> i32"), "{md}");
+    assert!(md.contains("in `impl Counter`"), "{md}");
+    assert!(md.contains("add one"), "doc: {md}");
+}
+
+#[test]
+fn foreign_trait_method_requires_use() {
+    // the use-both gate (RFC 0012 §6): the trait lives in another module,
+    // so the call resolves only once the document `use`s it
+    let surf_src = "trait Greeter {\nfn greet(self) -> nil;\n}\n";
+    let s2 = rut_lexer::lexer::normalize(surf_src);
+    let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Impl);
+    let mut surf = index(&s2, &sast);
+    surf.origin = "greets.rut".to_string();
+
+    let mk = |doc: &str| {
+        let d2 = rut_lexer::lexer::normalize(doc);
+        let (toks, _) = rut_lexer::lexer::lex(&d2);
+        let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
+        let mut di = index(&d2, &ast);
+        di.origin = "main.rut".to_string();
+        let idxs = [&di, &surf];
+        let pos = find_ident_pos(&toks, "greet", 1).unwrap();
+        hover(&idxs, &d2, &toks, &ast, pos).map(|h| h.markdown)
+    };
+
+    let gated = "class Robot { }\nimpl Greeter for Robot { fn greet(self) -> nil { } }\nfn go(r: Robot) -> nil { r.greet(); }\n";
+    assert!(mk(gated).is_none(), "unused foreign trait must not resolve");
+
+    let used = "use greets::{ Greeter };\nclass Robot { }\nimpl Greeter for Robot { fn greet(self) -> nil { } }\nfn go(r: Robot) -> nil { r.greet(); }\n";
+    let md = mk(used).unwrap();
+    assert!(md.contains("fn greet(self) -> nil"), "{md}");
+    assert!(md.contains("from `impl Greeter for Robot`"), "{md}");
+}

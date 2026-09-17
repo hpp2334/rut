@@ -1,9 +1,9 @@
-# RFC 0037: Reflection — `Reflectable`, `Deserializable`, `std:reflect`
+# RFC 0037: Reflection — `Reflectable`, `Deserializable`, `reflect`
 
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0005 (Vec, `Array<T, N>`), RFC 0012 (`dyn I`,
+- **Depends on:** RFC 0005 (Vec, `Array<T, N>`), RFC 0012 (traits,
   `requires`, vtables, no-recovery), RFC 0013 (generics — extended §3),
   RFC 0014 (`Opaque`, `downcast`), RFC 0015 (descriptors,
   `is_a`, boxing), RFC 0006/0009/0010, RFC 0022/0028 (builtin-impl
@@ -19,7 +19,7 @@ builtin-impl registry entries (`Option`/`Result`/`Vec`/`Array<T, N>`)
 fill it for the data world; classes opt in by hand with a **curated**
 view. Libraries layer contracts on top (`trait Serializable
 requires Reflectable {}`) and take **trait-object-typed consumers**
-(`stringify(v: dyn Serializable)`) or **bounded producers**
+(`stringify(v: Serializable)`) or **bounded producers**
 (`deserialize<T>(..) where T requires Deserializable`). Nothing in the
 language names a builtin; no strings are matched; nothing changes
 under `--release` stripping. The proving example is user-defined JSON
@@ -67,7 +67,7 @@ pub trait Deserializable requires Reflectable { }
   says, not a walker-side law. They serialize **positionally**
   (`[...]`); they cannot deserialize.
 
-## 2. `std:reflect` — the surface
+## 2. `reflect` — the surface
 
 ```rut
 pub trait ReflectEngine { }            // module capability: implement
@@ -85,7 +85,7 @@ pub host fn type_of(a: Opaque) -> Opaque;  // content descriptor, boxed
 ```
 
 No `host class` (RFC 0025, revised): a `TypeInfo` **is** an `Opaque`
-handle, and the surface is host fns over it — `std:reflect`'s rut source
+handle, and the surface is host fns over it — `reflect`'s rut source
 wraps the handle in `pub class TypeInfo { d: Opaque; .. }` whose methods
 forward to the fns below. (Ordinals stand in for the `TypeKind`/
 `LeafKind` enums; `FieldInfo`/`SumVariant` are boxed descriptors reached
@@ -94,7 +94,7 @@ by index, since containers do not cross.)
 ```rut
 // the fn surface the wrapper forwards to (sketch — the container-
 // carrying shapes are re-specified under the crossing rule, RFC 0023
-// §1, when std:reflect lands):
+// §1, when reflect lands):
 pub host fn type_kind(t: Opaque) -> i32;          // TypeKind ordinal
 pub host fn type_leaf(t: Opaque) -> i32;          // LeafKind ordinal
 pub host fn type_name(t: Opaque) -> str;
@@ -143,7 +143,7 @@ first-class type value (RFC 0015 OQ-1 stays closed).
 1. **Engine admission** (resolver, RFC 0031): the structural symbols
    (`reflect<T>`, `type_of`, `TypeInfo`, `FieldInfo`, `SumVariant`)
    resolve only in modules declaring ≥1 `impl ReflectEngine for T`;
-   violation is a compile error naming the fix. std:reflect and the
+   violation is a compile error naming the fix. reflect and the
    host are exempt. *Calling* `stringify`/`deserialize` needs no
    engine — the arg type / bound carries the contract. The `is`
    keyword (RFC 0012 §3) is likewise ungated: it answers the
@@ -151,7 +151,7 @@ first-class type value (RFC 0015 OQ-1 stays closed).
    *walking* — stays behind the admission; walking and probing are
    different powers.
 2. **Walkability = implements the protocol** — auto, registry, or
-   manual. Entries may demand a contract (`dyn Serializable`) or a
+   manual. Entries may demand a contract (`Serializable`) or a
    capability (`where T requires Deserializable`). Nested nodes are
    gated by the descriptor `is_a(Reflectable)` query; misses are
    **values-shaped errors**, never traps.
@@ -168,7 +168,7 @@ first-class type value (RFC 0015 OQ-1 stays closed).
    admission against the requires graph at the call site — compile
    error naming the trait. It grants **no method calls on bare
    `T`** (host-decl param-bound semantics, RFC 0025 §1); bodies may
-   still widen a `T`-typed *value* to `dyn I` — the bound proves the
+   still widen a `T`-typed *value* to an `I`-typed slot — the bound proves the
    widening valid.
 6. Accessors are total; `Option`/`i32` results signal mismatch. No
    `field_set`: a composite child's `Opaque` **aliases** its source cell
@@ -180,7 +180,7 @@ first-class type value (RFC 0015 OQ-1 stays closed).
 Every call below exists in §2 — this trace is the API's test:
 
 ```rut
-pub fn stringify(v: dyn Serializable) -> Result<str, str> {
+pub fn stringify(v: Serializable) -> Result<str, str> {
     return write_val(v.reflect(), v);   // vtable reflect(); v descends
 }                                       // to Opaque (erased storage)
 
@@ -208,7 +208,7 @@ field; `construct(vals)`. Sums → `construct_variant(i, [])` /
 ## 5. The example
 
 User-defined JSON end to end: an engine (`JsonEngine` over
-`std:reflect`) and a consumer — opt-in `impl Serializable for T {}`,
+`reflect`) and a consumer — opt-in `impl Serializable for T {}`,
 manual `impl Reflectable + Serializable for Tree` (curated,
 positional),
 `deserialize<Vec<Address>>` (registry instantiation), wire-dataclass
@@ -238,10 +238,10 @@ example names its assumed helpers in a header comment.
 - OQ-10: auto-impl for user wrappers of reflectable types.
 - OQ-11: bound + widening interplay (v1: admission only).
 - OQ-12: unify `where` bounds with host/extern inline param bounds.
-- OQ-13: stringify over `dyn Reflectable` sans opt-in (debug
+- OQ-13: stringify over `Reflectable` sans opt-in (debug
   printers)? v1 no — contract is the discipline; debuggers use
   std:debug (RFC 0036).
-- OQ-14: `dyn Slice<T>`-typed fields — Seq view over lending cells
+- OQ-14: `Slice<T>`-typed fields — Seq view over lending cells
   (RFC 0023 §2 borrows)? v1: unsupported `Leaf+Trait`.
 - OQ-15: `Array<T, N>` mint — `construct` for const-generic shapes;
   v1 deserialize targets `Vec<T>`.

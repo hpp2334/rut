@@ -1,7 +1,9 @@
 //! Lookup — what's under the cursor: the receiver of a member access,
 //! a capitalized type name, or a unique fn name.
 
-use rut_ast::ast::Ast;
+use std::collections::HashSet;
+
+use rut_ast::ast::{Ast, ItemKind};
 use rut_lexer::span::Span;
 use rut_lexer::token::{Tok, Token};
 
@@ -39,12 +41,16 @@ pub fn hover(
         return None;
     }
 
-    // member position: `recv.member`
+    // member position: `recv.member`. A resolved receiver never falls
+    // through to the name search: a miss there is a use-gated trait
+    // method (RFC 0012 §6) or a genuine miss — either way the member
+    // answer is final.
     if let Some(recv) = member_context(toks, t) {
-        if let Some(out) = member_hover(idxs, src, ast, pos, name, recv) {
-            return Some(HoverOut { markdown: out, span: t.span });
+        match member_hover(idxs, src, ast, pos, name, recv) {
+            MemberHit::Found(out) => return Some(HoverOut { markdown: out, span: t.span }),
+            MemberHit::None => return None,
+            MemberHit::UnknownReceiver => {} // fall through to the name search
         }
-        // unresolved receiver falls through to the name search below
     }
 
     // type position: capitalized or primitive names
@@ -67,13 +73,13 @@ pub fn hover(
 }
 
 /// token under (or immediately before) `pos`
-fn tok_at<'t>(toks: &'t [Token], pos: u32) -> Option<&'t Token> {
+pub(crate) fn tok_at<'t>(toks: &'t [Token], pos: u32) -> Option<&'t Token> {
     toks.iter().rev().find(|t| t.span.lo <= pos && pos <= t.span.hi)
 }
 
 /// when the hovered token follows a dot: the receiver's source text —
 /// an identifier, or the `str` primitive for string literals
-fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String> {
+pub(crate) fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String> {
     let i = toks.iter().position(|x| x.span.lo == t.span.lo)?;
     if i < 2 || toks[i - 1].tok != Tok::Dot {
         return None;
@@ -85,12 +91,25 @@ fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String> {
     }
 }
 
+/// trait names this document `use`s — the use-both gate's document side
+/// (RFC 0012 §6). A foreign trait's methods dispatch only when its name
+/// appears here; a trait declared in this document is in scope natively.
+pub(crate) fn used_traits(ast: &Ast) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for h in ast.module_items(ast.root) {
+        if let ItemKind::Use { names, .. } = ast.item(*h) {
+            out.extend(names.iter().map(|n| ast.name(*n).to_string()));
+        }
+    }
+    out
+}
+
 fn is_cap(s: &str) -> bool {
     s.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false)
 }
 
 /// resolve the receiver's type name
-fn recv_type(idxs: &[&DefIndex], src: &str, ast: &Ast, pos: u32, recv: &str) -> Option<String> {
+pub(crate) fn recv_type(idxs: &[&DefIndex], src: &str, ast: &Ast, pos: u32, recv: &str) -> Option<String> {
     match recv {
         "self" | "Self" => enclosing_type(idxs, pos).map(|(_, t)| t.name.clone()),
         _ if is_cap(recv) => Some(recv.to_string()),
@@ -127,8 +146,17 @@ fn enclosing_type<'a>(idxs: &'a [&'a DefIndex], pos: u32) -> Option<(&'a DefInde
     best.map(|(_, i, t)| (i, t))
 }
 
-fn find_ty<'a>(idxs: &'a [&DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
+pub(crate) fn find_ty<'a>(idxs: &'a [&DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
     idxs.iter().find_map(|i| i.ty(name).map(|t| (*i, t)))
+}
+
+/// The member-lookup verdict: found text, a final miss (the receiver's
+/// type is known — the gate or a genuine miss), or an unknown receiver
+/// (the caller may fall through to the bare-name search).
+enum MemberHit {
+    Found(String),
+    None,
+    UnknownReceiver,
 }
 
 fn member_hover(
@@ -138,39 +166,66 @@ fn member_hover(
     pos: u32,
     member: &str,
     recv: String,
-) -> Option<String> {
-    let ty_name = recv_type(idxs, src, ast, pos, &recv)?;
-    let (ti, ty) = find_ty(idxs, &ty_name)?;
+) -> MemberHit {
+    let Some(ty_name) = recv_type(idxs, src, ast, pos, &recv) else {
+        return MemberHit::UnknownReceiver;
+    };
+    let Some((ti, ty)) = find_ty(idxs, &ty_name) else {
+        return MemberHit::UnknownReceiver;
+    };
     // own surface first
     if let Some(m) = ty.methods.iter().find(|m| m.name == member) {
-        return Some(render_member(ti, ty, m, None));
+        return MemberHit::Found(render_member(ti, ty, m, None));
     }
     if let Some(f) = ty.fields.iter().find(|f| f.name == member) {
-        return Some(render_member(ti, ty, f, None));
+        return MemberHit::Found(render_member(ti, ty, f, None));
     }
     if ty.form == TyForm::Enum {
         // `Color.Red` — the member IS an enum member; show the enum
         if ty.fields.iter().any(|f| f.name == member) {
-            return Some(render_ty(ti, ty));
+            return MemberHit::Found(render_ty(ti, ty));
         }
-        return None;
+        return MemberHit::None;
     }
-    // trait methods from impls targeting this type (the unified rule)
+    // inherent impl-block methods — where methods live since type bodies
+    // went fields-only (RFC 0012 §4); one fn per `impl T { .. }` member
+    let owner = format!("impl {ty_name}");
     for i in idxs {
-        for im in &i.impls {
-            if im.target_name == ty_name {
-                if let Some(t) = i.ty(&im.trait_name) {
-                    if let Some(m) = t.methods.iter().find(|m| m.name == member) {
-                        return Some(render_member(
-                            i,
-                            t,
-                            m,
-                            Some(format!("impl {} for {}", im.trait_name, im.target_name)),
-                        ));
-                    }
-                }
+        for f in &i.fns {
+            if f.name == member && f.owner.as_deref() == Some(owner.as_str()) {
+                return MemberHit::Found(render_fn_hits(&[(*i, f)], f));
             }
         }
     }
-    None
+    // trait methods from impls targeting this type (the unified rule).
+    // The use-both gate rides the trait's HOME module, wherever the impl
+    // block lives: a trait declared in another module dispatches only
+    // when this document names it in a `use` (RFC 0012 §6)
+    let used = used_traits(ast);
+    for i in idxs {
+        for im in &i.impls {
+            if im.target_name != ty_name || im.trait_name.is_empty() {
+                continue;
+            }
+            let Some((home, t)) = trait_decl(idxs, &im.trait_name) else { continue };
+            if !std::ptr::eq(home, idxs[0]) && !used.contains(&im.trait_name) {
+                continue;
+            }
+            if let Some(m) = t.methods.iter().find(|m| m.name == member) {
+                return MemberHit::Found(render_member(
+                    home,
+                    t,
+                    m,
+                    Some(format!("impl {} for {}", im.trait_name, im.target_name)),
+                ));
+            }
+        }
+    }
+    MemberHit::None
+}
+
+/// the index declaring trait `name` — its home module; the declaration
+/// and the impl block may live in different indexes
+pub(crate) fn trait_decl<'a>(idxs: &'a [&'a DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
+    find_ty(idxs, name).filter(|(_, t)| matches!(t.form, TyForm::Trait | TyForm::BuiltinTrait))
 }
