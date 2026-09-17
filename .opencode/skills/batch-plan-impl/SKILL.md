@@ -1,6 +1,6 @@
 ---
 name: Batch Plan Implementation
-description: Execute a multi-phase/step plan unattended — the agent itself creates a headless OpenCode session per phase and dispatches its prompt, then a small watch-only subagent polls every 60s, verifies the commit+push, and reports; continue to the next phase until the plan is done. No user interaction: decide autonomously, retry once, never delete sessions.
+description: Execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the smarter plan model from opencode.jsonc, then creates a headless OpenCode session per phase and dispatches its prompt, while a small watch-only subagent polls every 60s, verifies the commit+push, and reports; continue to the next phase until the plan is done. No user interaction: decide autonomously, retry once, never delete sessions.
 ---
 
 # Batch Plan Implementation
@@ -37,7 +37,10 @@ sequentially.
 - Never implement a phase in this session. You orchestrate and verify only.
 - Poll status every **60 seconds**. Do not use blocking waits.
 - Pin the **default model from `opencode.jsonc`** on every dispatch — phase
-  sessions and the watch subagent all use it (see step 2).
+  sessions and the watch subagent all use it (see step 3).
+- **Switch your session's MODEL to the plan model first** (`agents.plan.model`
+  in `opencode.jsonc` — the smarter model), **keeping the `build` agent/mode**,
+  so all orchestration reasoning runs on it (see step 0).
 
 ## Autonomous decision policy
 
@@ -53,7 +56,40 @@ sequentially.
 
 ## Workflow
 
-### 0. Collect the plan
+### 0. Switch this session's MODEL to the plan model (keep build mode)
+
+Before any batch work, switch **your own session's model** to the smarter plan
+model (`agents.plan.model` in `opencode.jsonc`, e.g. `zai-coding-plan/glm-5.3`)
+so all orchestration reasoning runs on it.
+
+**Model only — the session's agent/mode stays `build`.** Never switch the
+agent to `plan`: that is a different thing (the read-only plan mode) and would
+make this session unable to run tools. `POST /api/session/{id}/model` changes
+only the model, so the agent is untouched. The switch applies to subsequent
+turns.
+
+```sh
+cd "$(git rev-parse --show-toplevel)"   # config + sessions are location-scoped
+
+# Your own session id: the most recently updated session RIGHT NOW —
+# this very turn is updating it:
+opencode api get /api/session \
+  | jq -r '.data | sort_by(.time.updated) | reverse | .[0] | .id'   # -> $SELF
+
+# The plan model from opencode.jsonc (strip // comments, then parse):
+sed 's://.*$::' opencode.jsonc | jq -r '.agents.plan.model'   # -> $PLAN_REF
+
+opencode api post /api/session/$SELF/model \
+  --data "$(jq -n --arg ref "$PLAN_REF" \
+    '{model:{providerID:($ref|split("/")[0]), id:($ref|split("/")[1])}}')"
+```
+
+Sanity-check `$SELF` against the session list if several sessions were touched
+in the same second. If `agents.plan.model` is unset or the switch fails,
+record it in the run log and continue on the current model — do not block the
+batch on this.
+
+### 1. Collect the plan
 
 Identify the plan to execute, in this order:
 
@@ -72,13 +108,13 @@ Extract an ordered list of phases/steps. For each, capture:
 If none is found, abort and report. If boundaries/order are ambiguous, split
 best-effort and record your assumptions.
 
-### 1. Run log
+### 2. Run log
 
 Create `/tmp/opencode/batch-plan-impl/run.md` and record, as you go: the plan
 source, the parsed phase list, every autonomous decision (with reason), each
 session id, and each phase result. The final report is generated from this.
 
-### 2. Preconditions
+### 3. Preconditions
 
 ```sh
 git status --porcelain          # if dirty: auto-stash (see policy), record it
@@ -98,7 +134,7 @@ opencode api get /api/model/default
 #   $MODEL_REF  = "$MODEL_PROVIDER/$MODEL_ID"
 ```
 
-### 3. Per phase (loop n = 1..N)
+### 4. Per phase (loop n = 1..N)
 
 #### a. Create the session (you)
 
@@ -197,13 +233,13 @@ SUMMARY: <final assistant text, max ~30 lines>
 
 Phase succeeded only when ALL hold: `STATUS: DONE`, `OUTCOME: succeeded`,
 at least one commit, `PUSHED: yes`, clean tree. Then leave the session as-is
-and start the next phase (back to 3a).
+and start the next phase (back to 4a).
 
 Otherwise (FAILED / STALLED / TIMEOUT): retry ONCE per policy (fresh session,
 same prompt; interrupt first if stalled). Retry succeeds → continue. Retry
 fails too → **stop the batch** and go to the final report.
 
-### 4. Final report
+### 5. Final report
 
 After the last phase (or on abort), summarize from the run log:
 
@@ -220,6 +256,7 @@ All sessions were kept (never deleted) — resume any of them from the session l
 
 | Action | Actor | Command |
 | --- | --- | --- |
+| Switch own model to plan model | you | `opencode api post /api/session/$SELF/model --data '{"model":{"providerID":"<p>","id":"<m>"}}'` (agent stays `build`) |
 | Read default model | you | `opencode api get /api/model/default` (workdir = `$PROJECT_DIR`) |
 | Create session (pinned model) | you | `opencode api post /api/session --data "$(jq -n --arg t "..." --arg d "$PROJECT_DIR" --arg m "$MODEL_JSON" '{title:$t,location:{directory:$d},model:($m\|fromjson)}')"` |
 | Dispatch prompt | you | `opencode api post /api/session/$SID/prompt --data "$(cat payload.json)"` |
