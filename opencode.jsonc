@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Default model for sessions.
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "agents": {
+    // Plan agent uses the full GLM 5.3 model.
+    "plan": {
+      "model": "zai-coding-plan/glm-5.3",
+    },
+  },
+}
