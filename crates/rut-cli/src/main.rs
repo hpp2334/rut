@@ -48,7 +48,7 @@ fn usage() {
 }
 
 fn load(path: &str) -> String {
-    // one file is one module: its `import { .. } from "./sibling.rut"`
+    // one file is one module: its `use { .. } from "./sibling.rut"`
     // lines are intra-module includes, inlined exactly as the loader
     // does for mounted modules (RFC 0035 §1) — so `rut run main.rut`
     // sees the whole multi-file module

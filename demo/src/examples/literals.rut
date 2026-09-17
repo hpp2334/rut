@@ -1,4 +1,4 @@
-import { Vec } from "std:collection";
+use { Vec } from "std:collection";
 // RFC 0007 — literals & inference. Construction is a TYPE-CALL
 // (`Vec<f32>.zeroed(1024)`).
 // Arrays `[a, b, c]` are shared heap cells (`Array<T>`, non-growable);
@@ -6,7 +6,7 @@ import { Vec } from "std:collection";
 // `a.len()` and `for (x of a)` lower through the same contract. The
 // `Iter<Target = T>` object form is a follow-up.
 
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
 struct Point { x: f32; y: f32 }
 

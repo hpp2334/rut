@@ -215,7 +215,7 @@ pub use rut_core::Interner;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Vis {
-    /// `pub` — importable from anywhere
+    /// `pub` — usable from anywhere
     Pub,
     /// `pub(mod)`
     Mod,
@@ -229,7 +229,7 @@ pub enum Vis {
 // ---- linkage (.d.rut surface decls, RFC 0029 §2 / RFC 0030 §3) ----
 
 /// Who implements a surface declaration. The `extern` kind (a linked rut
-/// package) is gone: rut→rut imports go through the module loader and
+/// package) is gone: rut→rut use statements go through the module loader and
 /// host→rut entry points are `entry fn` — `host` is the one foreign-body
 /// case left (embedding Rust).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -269,7 +269,7 @@ pub struct Node {
 #[derive(Clone, Debug)]
 pub struct FnData {
     pub vis: Vis,
-    pub is_suspend: bool,
+    pub is_async: bool,
     /// `entry fn` — host-callable (RFC 0035 §3): lands in the binary's
     /// entry table; its signature must satisfy the crossing rule
     /// (RFC 0023 §2), checked at compile time
@@ -286,7 +286,7 @@ pub struct FnData {
 #[derive(Clone, Debug)]
 pub enum ItemKind {
     Module { items: Vec<NodeHandle<AnyItem>> },
-    Import { names: Vec<IdentId>, from: String },
+    Use { names: Vec<IdentId>, from: String },
     ModuleLet { vis: Vis, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
     Enum { vis: Vis, name: IdentId, members: Vec<(IdentId, Option<i64>)> },
     Dataclass {
@@ -345,14 +345,14 @@ pub enum ItemKind {
         generics: Vec<IdentId>,
         members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
-    /// `builtin interface Name<..>` — .d.rut only, std:core only: an
-    /// interface the ENGINE is woven into (compiler-backed impls /
+    /// `builtin trait Name<..>` — .d.rut only, std:core only: a
+    /// trait the ENGINE is woven into (compiler-backed impls /
     /// lowering hooks — `x[i]` through `Index`, `for (x of it)` through
     /// `Iterator`, rc-0 `Disposal`). Users still implement it with
     /// ordinary `impl` blocks; the `builtin` marker is the engine's
     /// reservation, not an access rule. Library contracts without
-    /// engine knowledge (`Hashable`) stay plain `interface`.
-    BuiltinIface {
+    /// engine knowledge (`Hashable`) stay plain `trait`.
+    BuiltinTrait {
         vis: Vis,
         name: IdentId,
         generics: Vec<IdentId>,
@@ -374,12 +374,12 @@ pub struct FieldDeclData {
     pub init: Option<NodeHandle<AnyExpr>>,
 }
 
-/// `pub(..)`? `suspend`? fn name<..>(self, ..) -> T { .. }
+/// `pub(..)`? `async`? fn name<..>(self, ..) -> T { .. }
 /// `vis: None` = unannotated — module-private, the RFC 0003 §2 default
 #[derive(Clone, Debug)]
 pub struct MethodDeclData {
     pub vis: Option<Vis>,
-    pub is_suspend: bool,
+    pub is_async: bool,
     pub name: IdentId,
     pub generics: Vec<IdentId>,
     pub params: Vec<NodeHandle<AnyParam>>, // Param / SelfParam
@@ -461,8 +461,9 @@ pub enum PatKind {
 /// `TypeKind` (not `TyKind`) — rut-core's type-table kind owns that name
 #[derive(Clone, Debug)]
 pub enum TypeKind {
-    /// path type, optionally `dyn`-prefixed in value positions (RFC 0030 §2)
-    TyPath { segs: Vec<PathSeg>, is_dyn: bool },
+    /// path type — a trait name in type position is the object type
+    /// (RFC 0030 §2); the bare name spells it
+    TyPath { segs: Vec<PathSeg> },
     /// fn type: `fn(Store, P) -> R` — params are bare types (RFC 0013 §1)
     TyFn { params: Vec<NodeHandle<AnyTy>>, ret: NodeHandle<AnyTy> },
     /// pointer type `*T` (RFC 0005) — nil-able, rc-backed reference

@@ -116,7 +116,7 @@ pub enum TyKind {
     /// struct or class record cell — fields stored as one slot each
     /// (RFC 0009/0010); construction rules differ, representation does not
     Data { fields: Vec<FieldInfo> },
-    /// `dyn I` — unsized object; the slot stores the cell handle and the
+    /// trait object (`i: I`) — unsized object; the slot stores the cell handle and the
     /// cell's own type reaches the vtable (RFC 0015 §6)
     TraitObj { trait_id: u32 },
     /// erasure box (RFC 0014)
@@ -224,7 +224,7 @@ impl TypeTable {
     }
 
     /// Pack a dense index into this table's id space. Handles multi-scope
-    /// tables: imported blocks keep the scope they were declared under.
+    /// tables: used blocks keep the scope they were declared under.
     #[inline]
     fn id_for(&self, dense: u32) -> TypeId {
         if !self.packed {
@@ -259,11 +259,11 @@ impl TypeTable {
         best
     }
 
-    /// Import another module's type descriptors. `blocks` gives each scope's
+    /// Use another module's type descriptors. `blocks` gives each scope's
     /// block start as a local offset inside `descs`; the own block is moved to
-    /// the end so later [`TypeTable::intern`] calls append after the imports.
+    /// the end so later [`TypeTable::intern`] calls append after the uses.
     /// Must run before any own type is interned.
-    pub fn import_block(&mut self, descs: Vec<crate::types::RutType>, blocks: &[(ScopeId, u32)]) {
+    pub fn use_block(&mut self, descs: Vec<crate::types::RutType>, blocks: &[(ScopeId, u32)]) {
         if !self.packed {
             return;
         }
@@ -323,7 +323,7 @@ impl TypeTable {
     /// bindings never alias. Everything else that is a cell shares it —
     /// `str`/`bytes` are immutable, `*T` is the explicit shared pointer,
     /// enums/`Option`/`Result` cells are immutable after construction,
-    /// closures capture by reference, and `Opaque`/`dyn` are boundary
+    /// closures capture by reference, and `Opaque`/trait objects are boundary
     /// objects.
     pub fn is_value(&self, id: TypeId) -> bool {
         matches!(self.kind(id), TyKind::Data { .. } | TyKind::Array { .. })

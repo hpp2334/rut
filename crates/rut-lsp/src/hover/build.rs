@@ -64,15 +64,15 @@ fn members_of(src: &str, ast: &Ast, methods: &[NodeHandle<MethodDeclNode>]) -> V
         .map(|m| {
             let d = ast.method_decl(*m);
             let sp = ast.span(m.id());
-            // `pub(..)`/`suspend` sit before `fn` — outside the decl span;
+            // `pub(..)`/`async` sit before `fn` — outside the decl span;
             // restore them from the flags (truthful to intent)
             let mut pre = String::new();
             if let Some(v) = d.vis {
                 pre.push_str(&member_vis_str(v));
                 pre.push(' ');
             }
-            if d.is_suspend {
-                pre.push_str("suspend ");
+            if d.is_async {
+                pre.push_str("async ");
             }
             let sig = format!("{pre}{}", sig_src(src, ast, sp, d.body));
             member(src, ast.name(d.name), sig, sp)
@@ -308,20 +308,20 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     span,
                 ));
             }
-            ItemKind::BuiltinIface { name, generics, methods, .. } => {
+            ItemKind::BuiltinTrait { name, generics, methods, .. } => {
                 let ms = members_of(src, ast, methods);
                 idx.types.push(ty_def(
                     src,
                     ast,
                     ast.name(*name),
-                    TyForm::BuiltinIface,
+                    TyForm::BuiltinTrait,
                     generics_of(ast, generics),
                     Vec::new(),
                     ms,
                     span,
                 ));
             }
-            ItemKind::ModuleLet { .. } | ItemKind::Import { .. } | ItemKind::Module { .. } => {}
+            ItemKind::ModuleLet { .. } | ItemKind::Use { .. } | ItemKind::Module { .. } => {}
         }
     }
     idx

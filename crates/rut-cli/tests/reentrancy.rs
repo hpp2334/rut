@@ -12,9 +12,9 @@ use std::rc::Rc;
 use rut_vm::{OpaqueBox, Trap, TrapKind, Value};
 
 const SRC: &str = r#"
-import { Opaque } from "std:core";
-import { Vec } from "std:collection";
-import { boost, borrow_conflict, borrow_read, borrow_try, count_spin, grind, host_boom, widget_new } from "plugin:re";
+use { Opaque } from "std:core";
+use { Vec } from "std:collection";
+use { boost, borrow_conflict, borrow_read, borrow_try, count_spin, grind, host_boom, widget_new } from "plugin:re";
 
 // plain rut math the host calls back into
 entry fn inner(x: i64) -> i64 {

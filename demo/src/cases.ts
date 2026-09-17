@@ -26,7 +26,7 @@ export const CASES: RutCase[] = [
     blurb: "f-strings, escapes, when on enums",
     rfcs: "0007 §2, 0008",
     source: [
-      "import { Logger } from \"std:log\";",
+      "use { Logger } from \"std:log\";",
       "",
       "enum Flavor { Sweet, Sour }",
       "",
@@ -56,8 +56,8 @@ export const CASES: RutCase[] = [
     blurb: "copy-by-value bindings, structural ==, sharing via make_ptr",
     rfcs: "0016 §1, 0011 §3, 0005",
     source: [
-      "import { Logger } from \"std:log\";",
-      "import { make_ptr } from \"std:core\";",
+      "use { Logger } from \"std:log\";",
+      "use { make_ptr } from \"std:core\";",
       "",
       "struct Point { x: f32; y: f32; }",
       "",
@@ -89,8 +89,8 @@ export const CASES: RutCase[] = [
     blurb: "explicit erasure with checked recovery — downcast returns (T, bool)",
     rfcs: "0014",
     source: [
-      "import { Logger } from \"std:log\";",
-      "import { Opaque, downcast } from \"std:core\";",
+      "use { Logger } from \"std:log\";",
+      "use { Opaque, downcast } from \"std:core\";",
       "",
       "struct Point { x: f32; y: f32; }",
       "",
@@ -118,8 +118,8 @@ export const CASES: RutCase[] = [
     blurb: "flat Vec<u8>/Vec<i32> primitive buffers, for loops",
     rfcs: "0016 §4",
     source: [
-      "import { Vec } from \"std:collection\";",
-      "import { Logger } from \"std:log\";",
+      "use { Vec } from \"std:collection\";",
+      "use { Logger } from \"std:log\";",
       "",
       "fn sieve(limit: i32) -> Vec<i32> {",
       "    let mut marks = Vec<u8>.zeroed(limit + 1);   // 0 = candidate, 1 = crossed",
@@ -153,7 +153,7 @@ export const CASES: RutCase[] = [
     blurb: "exhaustive pattern expressions over simple enums",
     rfcs: "0006, 0008",
     source: [
-      "import { Logger } from \"std:log\";",
+      "use { Logger } from \"std:log\";",
       "",
       "enum Color { Red, Green, Blue }",
       "",
@@ -186,7 +186,7 @@ export const CASES: RutCase[] = [
     blurb: "the (T, err) convention — an empty err string is success",
     rfcs: "0004",
     source: [
-      "import { Logger } from \"std:log\";",
+      "use { Logger } from \"std:log\";",
       "",
       "// v1.1 error convention: `(T, err)` — an empty err string is success.",
       "fn parse_u8(s: str) -> (i32, str) {",
@@ -240,8 +240,8 @@ export const CASES: RutCase[] = [
     blurb: "monomorphized generics, anonymous fns, capture",
     rfcs: "0013",
     source: [
-      "import { Vec } from \"std:collection\";",
-      "import { Logger } from \"std:log\";",
+      "use { Vec } from \"std:collection\";",
+      "use { Logger } from \"std:log\";",
       "",
       "fn map<T, U>(v: Vec<T>, f: fn(T) -> U) -> Vec<U> {",
       "    let out: Vec<U> = Vec.new();",
@@ -267,7 +267,7 @@ export const CASES: RutCase[] = [
     blurb: "budgets bite: while(true) hits Trap::OutOfFuel — then resume",
     rfcs: "0040 §2",
     source: [
-      "import { Logger } from \"std:log\";",
+      "use { Logger } from \"std:log\";",
       "",
       "pub fn main() {",
       "    let log = Logger.new(\"case\");",

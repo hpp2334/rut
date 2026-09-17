@@ -144,7 +144,7 @@ fn bracket_array_and_async_parse() {
     let src = "fn f(xs: [i32]) -> i32 { return xs.len(); }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
-    // `async fn` — the `suspend fn` spelling (RFC 0018 §2)
+    // `async fn` — the async spelling (RFC 0018 §2)
     let src = "async fn tick() -> nil { }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");

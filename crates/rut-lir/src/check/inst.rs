@@ -69,9 +69,9 @@ impl<'a> Ctx<'a> {
     }
 
     /// after all instantiations: fill per-type vtables from impl blocks
-    /// vtables synthesize per (type × interface) — the duck-typed law
+    /// vtables synthesize per (type × trait) — the duck-typed law
     /// (RFC 0012 v1.1): a concrete data type fills the slots whose
-    /// interface methods its OWN methods match by shape. Satisfying
+    /// trait methods its OWN methods match by shape. Satisfying
     /// methods compile here (with their transitive calls) so every
     /// reachable slot carries a real function id.
     pub fn build_vtables(&mut self) -> Vec<Vec<Option<u32>>> {

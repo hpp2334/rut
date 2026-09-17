@@ -1,8 +1,8 @@
-import { Vec } from "std:collection";
+use { Vec } from "std:collection";
 // Flat f32 matrix multiply — Vec<f32> is a flat unboxed buffer; this is
 // the loop shape the typed-VM design targets (no per-element refcounts).
 
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
 fn gemm(n: i32, a: Vec<f32>, b: Vec<f32>, mut out: Vec<f32>) {
     for (let i = 0; i < n; i += 1) {

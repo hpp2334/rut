@@ -50,7 +50,7 @@ fn member_pub_combines_with_modifiers() {
     let src = "\
 class Sink {
     pub static CAP: i32 = 4;
-    pub suspend fn later(self) -> nil { }
+    pub async fn later(self) -> nil { }
 }
 ";
     let (ast, diags) = parse(src, Mode::Impl);
@@ -64,7 +64,7 @@ class Sink {
     assert!(fd.is_static);
     let md = ast.method_decl(methods[0]);
     assert_eq!(md.vis, Some(Vis::Pub));
-    assert!(md.is_suspend);
+    assert!(md.is_async);
 }
 
 #[test]

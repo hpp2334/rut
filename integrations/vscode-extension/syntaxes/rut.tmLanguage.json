@@ -118,11 +118,11 @@
     },
     "control-keyword": {
       "name": "keyword.control.rut",
-      "match": "\\b(if|else|while|for|of|return|when|break|continue|select|await|suspend)\\b"
+      "match": "\\b(if|else|while|for|of|return|when|break|continue|select|await|async)\\b"
     },
     "keyword": {
       "name": "keyword.other.rut",
-      "match": "\\b(let|mut|enum|dataclass|class|trait|impl|requires|import|pub|from|static|extern|where|dyn|is|host|fn|as|super|default|self)\\b"
+      "match": "\\b(let|mut|enum|dataclass|class|trait|impl|requires|use|pub|from|static|extern|where|is|host|fn|as|super|default|self)\\b"
     },
     "operator": {
       "name": "keyword.operator.rut",

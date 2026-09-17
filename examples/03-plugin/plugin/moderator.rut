@@ -3,13 +3,13 @@
 // the server is the `bus` handle — a host-constructed `Opaque` box
 // (RFC 0014/0023) whose `subscribe` and `emit` fns are its callbacks.
 //
-// This file carries the unit's imports: the loader inlines it into
+// This file carries the unit's use statements: the loader inlines it into
 // `plugin.rut` (one scope), so these names are visible there too — the
 // std-collection barrel pattern.
 
-import { Opaque, downcast } from "std:core";
-import { Vec } from "std:collection";
-import { subscribe, emit } from "plugin:server";
+use { Opaque, downcast } from "std:core";
+use { Vec } from "std:collection";
+use { subscribe, emit } from "plugin:server";
 
 class Moderator {
     bus: Opaque;          // the host's server — held, never inspected

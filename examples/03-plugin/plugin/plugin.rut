@@ -10,8 +10,8 @@
 // it wants wired to each topic. The host later fires those exports with
 // the state handle `init` returned.
 
-import { make_ptr } from "std:core";
-import { Moderator } from "./moderator.rut";
+use { make_ptr } from "std:core";
+use { Moderator } from "./moderator.rut";
 
 // ---- the adapter: the ONLY entry fns. Registration + one-line forwards.
 

@@ -30,9 +30,9 @@ enum TyStage {
     /// `fn(...) ->`: waiting for the return type
     FnRet { params: Vec<NodeHandle<AnyTy>> },
     /// a path type, possibly mid-dot-chain
-    Path { is_dyn: bool, segs: Vec<PathSeg> },
+    Path { segs: Vec<PathSeg> },
     /// inside a `<..>` after a segment name
-    GenArgs { is_dyn: bool, segs: Vec<PathSeg>, seg_name: IdentId, args: Vec<NodeHandle<AnyTy>> },
+    GenArgs { segs: Vec<PathSeg>, seg_name: IdentId, args: Vec<NodeHandle<AnyTy>> },
 }
 
 impl TypeFrame {
@@ -66,17 +66,16 @@ impl TypeFrame {
                     self.stage = TyStage::FnParams { params: Vec::new() };
                     return self.fnparams_top(p);
                 }
-                // an interface name in type position is the object type —
-                // the engine decides dispatch, so there is no `dyn` prefix
-                let is_dyn = false;
-                self.stage = TyStage::Path { is_dyn, segs: Vec::new() };
+                // a trait name in type position is the object type —
+                // the engine decides dispatch (RFC 0012 §3)
+                self.stage = TyStage::Path { segs: Vec::new() };
                 self.path_run(p)
             }
             _ => unreachable!("stepped a suspended type frame"),
         }
     }
 
-    /// dotted path segments; generic args suspend to a child frame and
+    /// dotted path segments; generic args pause at a child frame and
     /// resume through `genargs_done` — the loop is iterative (C2)
     fn path_run(&mut self, p: &mut Parser) -> Step {
         loop {
@@ -86,11 +85,11 @@ impl TypeFrame {
             if matches!(p.tok(), Tok::Lt) {
                 // type position: `<` is always generic args — no ambiguity
                 p.bump();
-                let (is_dyn, segs) = match &mut self.stage {
-                    TyStage::Path { is_dyn, segs } => (*is_dyn, std::mem::take(segs)),
+                let segs = match &mut self.stage {
+                    TyStage::Path { segs } => std::mem::take(segs),
                     _ => unreachable!(),
                 };
-                self.stage = TyStage::GenArgs { is_dyn, segs, seg_name: name, args: Vec::new() };
+                self.stage = TyStage::GenArgs { segs, seg_name: name, args: Vec::new() };
                 return self.genargs_top(p);
             }
             if let TyStage::Path { segs, .. } = &mut self.stage {
@@ -112,11 +111,11 @@ impl TypeFrame {
     }
 
     fn path_pop(&mut self, p: &mut Parser) -> Step {
-        let (is_dyn, segs) = match &mut self.stage {
-            TyStage::Path { is_dyn, segs } => (*is_dyn, std::mem::take(segs)),
+        let segs = match &mut self.stage {
+            TyStage::Path { segs } => std::mem::take(segs),
             _ => unreachable!(),
         };
-        Step::Pop(Done::Ty(p.typ(TypeKind::TyPath { segs, is_dyn }, self.lo.to(p.span()))))
+        Step::Pop(Done::Ty(p.typ(TypeKind::TyPath { segs }, self.lo.to(p.span()))))
     }
 
     fn genargs_top(&mut self, p: &mut Parser) -> Step {
@@ -134,13 +133,13 @@ impl TypeFrame {
     }
 
     fn genargs_done(&mut self, p: &mut Parser) -> Step {
-        let (is_dyn, segs, seg_name, args) = match &mut self.stage {
-            TyStage::GenArgs { is_dyn, segs, seg_name, args } => {
-                (*is_dyn, std::mem::take(segs), *seg_name, std::mem::take(args))
+        let (segs, seg_name, args) = match &mut self.stage {
+            TyStage::GenArgs { segs, seg_name, args } => {
+                (std::mem::take(segs), *seg_name, std::mem::take(args))
             }
             _ => unreachable!(),
         };
-        self.stage = TyStage::Path { is_dyn, segs };
+        self.stage = TyStage::Path { segs };
         if let TyStage::Path { segs, .. } = &mut self.stage {
             segs.push(PathSeg { name: seg_name, generics: args });
         }
@@ -169,7 +168,6 @@ impl TypeFrame {
         p.typ(
             TypeKind::TyPath {
                 segs: vec![PathSeg { name: nil, generics: Vec::new() }],
-                is_dyn: false,
             },
             self.lo.to(p.span()),
         )
@@ -187,7 +185,6 @@ impl TypeFrame {
             let ret = p.typ(
                 TypeKind::TyPath {
                     segs: vec![PathSeg { name: nil, generics: Vec::new() }],
-                    is_dyn: false,
                 },
                 self.lo.to(p.span()),
             );
@@ -215,7 +212,7 @@ impl TypeFrame {
                         generics: vec![t],
                     }];
                     Step::Pop(Done::Ty(p.typ(
-                        TypeKind::TyPath { segs, is_dyn: false },
+                        TypeKind::TyPath { segs },
                         self.lo.to(p.span()),
                     )))
                 }

@@ -54,7 +54,7 @@ impl<'a> Ctx<'a> {
         // pass 2: impls, fns, lets
         for it in &items {
             match self.ast.item(*it) {
-                // v1.1: `impl` heads are gone — interfaces are duck-typed.
+                // v1.1: `impl` heads are gone — traits are duck-typed.
                 // The parser diagnoses the removal; the item is skipped.
                 ItemKind::Impl { .. } => {}
                 ItemKind::Fn(f) => {
@@ -77,22 +77,22 @@ impl<'a> Ctx<'a> {
                 ItemKind::ModuleLet { name, ty, init, .. } => {
                     self.lets.push((*name, *ty, *init));
                 }
-                ItemKind::Import { names, .. } => {
+                ItemKind::Use { names, .. } => {
                     // record what the module wrote — the binding gate for
-                    // imported surfaces (RFC 0028: imported, never ambient)
+                    // used surfaces (RFC 0028: used, never ambient)
                     for n in names {
-                        self.imported.insert(*n);
+                        self.used.insert(*n);
                     }
                     // module loading is resolved by the driver before body
-                    // compilation (RFC 0035 §1); without it, imports are a
-                    // compile error only when the names are used
-                    if !self.allow_imports {
+                    // compilation (RFC 0035 §1); without it, use statements
+                    // are a compile error only when the names are used
+                    if !self.allow_uses {
                         let sp = self.ast.span(it.id());
                         for n in names {
                             self.err(
                                 sp,
                                 format!(
-                                    "module loading is not available in this build (RFC 0035, M2) — cannot import `{}`",
+                                    "module loading is not available in this build (RFC 0035, M2) — cannot use `{}`",
                                     self.name(*n)
                                 ),
                             );
@@ -211,7 +211,7 @@ impl<'a> Ctx<'a> {
         self.datas[idx].1.fields = flds;
     }
 
-    /// Pass 1a — reserve the interface's id and register its name; signatures
+    /// Pass 1a — reserve the trait's id and register its name; signatures
     /// are resolved in pass 1b, once every type name is in scope.
     pub(crate) fn declare_trait(
         &mut self,
@@ -231,7 +231,7 @@ impl<'a> Ctx<'a> {
             self.traits.push(TraitDesc { name, methods: vec![] });
             id
         } else {
-            // a generic interface has no single id — `mk_trait_inst` allocates
+            // a generic trait has no single id — `mk_trait_inst` allocates
             // one per type-argument list (RFC 0013 monomorphization)
             u32::MAX
         };
@@ -265,7 +265,7 @@ impl<'a> Ctx<'a> {
                         ptys.push(self.resolve_trait_sig_ty(*t, id, &[]));
                     }
                     MemberKind::Param(ParamData { ty: None, .. }) => {
-                        self.err(self.ast.span(p.id()), "interface method parameters need types");
+                        self.err(self.ast.span(p.id()), "trait method parameters need types");
                         ptys.push(TY_I32);
                     }
                     _ => ptys.push(TY_I32),
@@ -274,7 +274,7 @@ impl<'a> Ctx<'a> {
             let rty = md.ret.map(|r| self.resolve_trait_sig_ty(r, id, &[]));
             tms.push((md.name, ptys, rty));
         }
-        // first param must be self (RFC 0012 §2: interface methods are
+        // first param must be self (RFC 0012 §2: trait methods are
         // instance methods)
         let mut desc = TraitDesc { name, methods: vec![] };
         for (mname, ptys, rty) in tms {
@@ -287,14 +287,14 @@ impl<'a> Ctx<'a> {
                     ret: rty.unwrap_or(TY_NIL),
                 });
             } else {
-                self.err(sp, format!("interface method `{}` must take `self` (RFC 0012 §2)", self.name(mname)));
+                self.err(sp, format!("trait method `{}` must take `self` (RFC 0012 §2)", self.name(mname)));
             }
         }
         self.traits[id as usize] = desc;
     }
 
-    /// Resolve an interface-method signature type under `env`: a bare
-    /// `Self` is the interface's object type.
+    /// Resolve a trait-method signature type under `env`: a bare
+    /// `Self` is the trait's object type.
     fn resolve_trait_sig_ty(
         &mut self,
         node: NodeHandle<AnyTy>,
@@ -303,7 +303,7 @@ impl<'a> Ctx<'a> {
     ) -> TypeId {
         if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
             if segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY {
-                return self.mk_dyn(trait_id);
+                return self.mk_trait_obj(trait_id);
             }
         }
         self.resolve_type(node, env)
@@ -366,7 +366,7 @@ impl<'a> Ctx<'a> {
         let Some(trait_id) = self.resolve_trait_ref(trait_ref) else {
             return;
         };
-        // the interface's source name and its written type arguments
+        // the trait's source name and its written type arguments
         let (trait_name, trait_arg_nodes) = match self.ast.ty(trait_ref) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 (segs[0].name, segs[0].generics.clone())
@@ -414,14 +414,14 @@ impl<'a> Ctx<'a> {
             }
         };
         if let Some(_prev) = self.find_impl(trait_id, target_ty) {
-            self.err(sp, "duplicate impl for the same (interface, type) pair (RFC 0012 §2)");
+            self.err(sp, "duplicate impl for the same (trait, type) pair (RFC 0012 §2)");
             return;
         }
         let mut mths = Vec::new();
         for m in methods {
             mths.push((self.ast.method_decl(*m).name, *m));
         }
-        // coverage: every interface methsig covered exactly once, no extras
+        // coverage: every trait methsig covered exactly once, no extras
         let tdesc = self.traits[trait_id as usize].clone();
         for tm in &tdesc.methods {
             if !mths.iter().any(|(n, _)| *n == tm.name) {

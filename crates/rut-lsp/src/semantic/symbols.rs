@@ -16,7 +16,7 @@ pub enum SymKind {
     Class,
     Field,
     Method,
-    Interface,
+    Trait,
     Module,
 }
 
@@ -81,7 +81,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
                 .collect();
-            Some(sym(ast.name(*name), SymKind::Interface, find_name(toks, span, ast.name(*name), false), children))
+            Some(sym(ast.name(*name), SymKind::Trait, find_name(toks, span, ast.name(*name), false), children))
         }
         ItemKind::Impl { trait_ref, target, methods, .. } => {
             let children = methods
@@ -101,18 +101,18 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }
-        ItemKind::BuiltinIface { name, methods, .. } => {
+        ItemKind::BuiltinTrait { name, methods, .. } => {
             let children = methods
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
                 .collect();
-            Some(sym(ast.name(*name), SymKind::Interface, find_name(toks, span, ast.name(*name), false), children))
+            Some(sym(ast.name(*name), SymKind::Trait, find_name(toks, span, ast.name(*name), false), children))
         }
         ItemKind::SurfaceDataclass { name, fields, .. } => {
             let children = member_symbols(toks, ast, fields, &[]);
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }
-        ItemKind::Import { .. } | ItemKind::Module { .. } => None,
+        ItemKind::Use { .. } | ItemKind::Module { .. } => None,
     }
 }
 
@@ -155,13 +155,9 @@ fn method_symbol(toks: &[Token], ast: &Ast, m: NodeHandle<MethodDeclNode>) -> Ra
 /// Best-effort type text for impl headers (`impl Drawable for Circle`).
 fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
     match ast.ty(h) {
-        TypeKind::TyPath { segs, is_dyn } => {
+        TypeKind::TyPath { segs } => {
             let names: Vec<&str> = segs.iter().map(|s| ast.name(s.name)).collect();
-            if *is_dyn {
-                names.join(".")
-            } else {
-                names.join(".")
-            }
+            names.join(".")
         }
         TypeKind::TyFn { .. } => "fn(..)".to_string(),
         TypeKind::TyPtr { .. } => "*T".to_string(),

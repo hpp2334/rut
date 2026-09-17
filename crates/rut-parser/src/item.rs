@@ -1,4 +1,4 @@
-//! Declarations (RFC 0030 §2): items, pub visibility, imports, type
+//! Declarations (RFC 0030 §2): items, pub visibility, use statements, type
 //! bodies,
 //! fn/method signatures, surface stubs — as frames. `classify_item` is
 //! v1's `parse_item` dispatch (peek 1, keyword-led); the frames carry
@@ -20,21 +20,15 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
     let sp = p.span();
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
-            "import" => Some(Frame::Import(ImportFrame::new())),
+            "use" => Some(Frame::Use(UseFrame::new())),
             "pub" => Some(Frame::Pub(PubFrame::new())),
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(Vis::Self_))),
             "enum" => Some(Frame::Enum(EnumFrame::new(Vis::Self_))),
             "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, Vis::Self_))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, Vis::Self_))),
-            "interface" => Some(Frame::Trait(TraitFrame::new(Vis::Self_))),
+            "trait" => Some(Frame::Trait(TraitFrame::new(Vis::Self_))),
             "impl" => Some(Frame::Impl(ImplFrame::new())),
-            "suspend" if p.at_kw2("fn") => {
-                // RFC 0030 §2: `suspend fn` — M1 parses it; the compiler
-                // rejects with a targeted M3 message
-                p.bump();
-                Some(Frame::Fn(FnFrame::new(Vis::Self_, true, false)))
-            }
-            // `async fn` — the new spelling of `suspend fn` (RFC 0018 §2)
+            // `async fn` — the async declaration (RFC 0018 §2)
             "async" if p.at_kw2("fn") => {
                 p.bump();
                 Some(Frame::Fn(FnFrame::new(Vis::Self_, true, false)))
@@ -56,7 +50,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             "extern" => {
                 p.err(
                     sp,
-                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages import through the module loader (RFC 0029 §2)",
+                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader (RFC 0029 §2)",
                 );
                 None
             }
@@ -90,12 +84,8 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "enum" => Some(Frame::Enum(EnumFrame::new(vis))),
             "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, vis))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, vis))),
-            "interface" => Some(Frame::Trait(TraitFrame::new(vis))),
-            "suspend" if p.at_kw2("fn") => {
-                p.bump();
-                Some(Frame::Fn(FnFrame::new(vis, true, false)))
-            }
-            // `async fn` — the new spelling of `suspend fn` (RFC 0018 §2)
+            "trait" => Some(Frame::Trait(TraitFrame::new(vis))),
+            // `async fn` — the async declaration (RFC 0018 §2)
             "async" if p.at_kw2("fn") => {
                 p.bump();
                 Some(Frame::Fn(FnFrame::new(vis, true, false)))
@@ -105,7 +95,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin))),
             "extern" => {
                 p.err_here(
-                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages import through the module loader (RFC 0029 §2)",
+                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader (RFC 0029 §2)",
                 );
                 None
             }
@@ -122,20 +112,20 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
     }
 }
 
-// ---- import ----
+// ---- use ----
 
-pub(crate) struct ImportFrame {
+pub(crate) struct UseFrame {
     lo: u32,
     names: Vec<IdentId>,
 }
 
-impl ImportFrame {
+impl UseFrame {
     pub(crate) fn new() -> Self {
-        ImportFrame { lo: 0, names: Vec::new() }
+        UseFrame { lo: 0, names: Vec::new() }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // import
+        self.lo = p.bump().span.lo; // use
         if p.expect(Tok::LBrace).is_none() {
             return Step::Pop(Done::Failed);
         }
@@ -143,7 +133,7 @@ impl ImportFrame {
             if p.eat_punct(Tok::RBrace) {
                 break;
             }
-            let Some(n) = p.expect_ident("an imported name") else {
+            let Some(n) = p.expect_ident("a used name") else {
                 p.sync_stmt();
                 return Step::Pop(Done::Failed);
             };
@@ -154,7 +144,7 @@ impl ImportFrame {
             }
         }
         if !p.at_kw("from") {
-            p.err_here("expected `from` after the import list");
+            p.err_here("expected `from` after the use list");
         } else {
             p.bump();
         }
@@ -171,13 +161,13 @@ impl ImportFrame {
         p.expect(Tok::Semi);
         let names = std::mem::take(&mut self.names);
         Step::Pop(Done::Item(p.item(
-            ItemKind::Import { names, from },
+            ItemKind::Use { names, from },
             Span::new(self.lo, p.span().hi),
         )))
     }
 
     pub(crate) fn absorb(&mut self, _p: &mut Parser, _d: Done) -> Step {
-        unreachable!("import frame pushes no children")
+        unreachable!("use frame pushes no children")
     }
 }
 
@@ -485,7 +475,7 @@ impl ImplFrame {
         }
         p.err(
             Span::new(self.lo, self.lo + 4),
-            "`impl Trait for Type` was removed (RFC 0012 v1.1) —interfaces are duck-typed: declare the methods on the type; a value of the type satisfies the interface wherever the shape matches",
+            "`impl Trait for Type` was removed (RFC 0012 v1.1) —traits are duck-typed: declare the methods on the type; a value of the type satisfies the trait wherever the shape matches",
         );
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
@@ -578,11 +568,11 @@ impl TypeBodyFrame {
         }
     }
 
-    /// the leading clause for a malformed interface/impl member diagnostic
+    /// the leading clause for a malformed trait/impl member diagnostic
     fn mode_noun(&self) -> &'static str {
         match self.mode {
-            BodyMode::Trait => "interfaces declare methods",
-            BodyMode::Impl => "impl blocks contain interface methods",
+            BodyMode::Trait => "traits declare methods",
+            BodyMode::Impl => "impl blocks contain trait methods",
             BodyMode::HostDataclass => "host dataclasses declare fields",
             BodyMode::Class { .. } => "type bodies declare fields and methods",
         }
@@ -620,7 +610,7 @@ impl TypeBodyFrame {
                                 let _ = pub_scope(p);
                                 p.err(lo, "host struct fields carry no visibility —all fields are public (RFC 0025)");
                             }
-                            "static" | "suspend" | "async" => {
+                            "static" | "async" => {
                                 p.bump();
                                 p.err(lo, format!("host struct fields carry no modifiers —`{m}` is not declarable here (RFC 0025)"));
                             }
@@ -658,7 +648,7 @@ impl TypeBodyFrame {
                     // (like every declaration); `pub` (+ scopes) exposes them
                     let mut vis: Option<Vis> = None;
                     let mut is_static = false;
-                    let mut is_suspend = false;
+                    let mut is_async = false;
                     while let Tok::Ident(m) = p.tok().clone() {
                         match m.as_str() {
                             "pub" => {
@@ -678,8 +668,8 @@ impl TypeBodyFrame {
                                     p.err(lo, "dataclasses have no `static` members (RFC 0009)");
                                 }
                             }
-                            "suspend" | "async" => {
-                                is_suspend = true;
+                            "async" => {
+                                is_async = true;
                                 p.bump();
                             }
                             _ => break,
@@ -694,7 +684,7 @@ impl TypeBodyFrame {
                                 );
                             }
                             self.stage = TbStage::Method;
-                            return Step::Push(Frame::Method(MethodFrame::new(vis, is_suspend, true)));
+                            return Step::Push(Frame::Method(MethodFrame::new(vis, is_async, true)));
                         }
                         Tok::Ident(_) => {
                             let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
@@ -800,7 +790,7 @@ impl TypeBodyFrame {
 pub(crate) struct MethodFrame {
     lo: u32,
     vis: Option<Vis>,
-    is_suspend: bool,
+    is_async: bool,
     with_body: bool,
     stage: MeStage,
     name: IdentId,
@@ -817,11 +807,11 @@ enum MeStage {
 }
 
 impl MethodFrame {
-    pub(crate) fn new(vis: Option<Vis>, is_suspend: bool, with_body: bool) -> Self {
+    pub(crate) fn new(vis: Option<Vis>, is_async: bool, with_body: bool) -> Self {
         MethodFrame {
             lo: 0,
             vis,
-            is_suspend,
+            is_async,
             with_body,
             stage: MeStage::Params,
             name: IdentId(0),
@@ -864,7 +854,7 @@ impl MethodFrame {
     fn pop(&mut self, p: &mut Parser, body: Option<NodeHandle<BlockNode>>) -> Step {
         let d = MethodDeclData {
             vis: self.vis,
-            is_suspend: self.is_suspend,
+            is_async: self.is_async,
             name: self.name,
             generics: std::mem::take(&mut self.generics),
             params: self.params.take().expect("method without params"),
@@ -897,11 +887,11 @@ impl MethodFrame {
 
 pub(crate) struct FnFrame {
     vis: Vis,
-    pre_suspend: bool,
+    pre_async: bool,
     entry: bool,
     lo: u32,
     stage: FnSStage,
-    is_suspend: bool,
+    is_async: bool,
     name: IdentId,
     generics: Vec<IdentId>,
     params: Option<Vec<NodeHandle<AnyParam>>>,
@@ -919,14 +909,14 @@ enum FnSStage {
 }
 
 impl FnFrame {
-    pub(crate) fn new(vis: Vis, pre_suspend: bool, entry: bool) -> Self {
+    pub(crate) fn new(vis: Vis, pre_async: bool, entry: bool) -> Self {
         FnFrame {
             vis,
-            pre_suspend,
+            pre_async,
             entry,
             lo: 0,
             stage: FnSStage::Params,
-            is_suspend: false,
+            is_async: false,
             name: IdentId(0),
             generics: Vec::new(),
             params: None,
@@ -938,8 +928,8 @@ impl FnFrame {
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         self.lo = p.bump().span.lo; // fn
-        self.is_suspend = self.pre_suspend || {
-            let s = p.at_kw("suspend");
+        self.is_async = self.pre_async || {
+            let s = p.at_kw("async");
             if s {
                 p.bump();
             }
@@ -1021,7 +1011,7 @@ impl FnFrame {
                 let f = p.fn_decl(
                     FnData {
                         vis: self.vis,
-                        is_suspend: self.is_suspend,
+                        is_async: self.is_async,
                         entry: self.entry,
                         name: self.name,
                         generics: std::mem::take(&mut self.generics),
@@ -1052,8 +1042,8 @@ impl FnFrame {
 //                                       crossing type; host-constructed
 //     builtin fn name<T>(params) -> T;  engine fn (generics fine —
 //                                       nothing crosses)
-//     builtin Name<T> { methods }       engine type's member contract
-//     builtin interface Name<T> { .. }  engine-woven contract (Index,
+//     builtin class Name<T> { methods } engine type's member contract
+//     builtin trait Name<T> { .. }      engine-woven contract (Index,
 //                                       Iterator, Disposal)
 //
 // `host class` and `extern` are gone: native state crosses as `Opaque`
@@ -1063,9 +1053,9 @@ pub(crate) struct SurfaceFrame {
     linkage: Linkage,
     lo: u32,
     stage: SuStage,
-    /// `builtin interface Name { .. }` — collects members like BuiltinTy
-    /// but emits the interface node
-    is_iface: bool,
+    /// `builtin trait Name { .. }` — collects members like BuiltinTy
+    /// but emits the trait node
+    is_trait: bool,
     name: IdentId,
     generics: Vec<IdentId>,
     methods: Vec<NodeHandle<MethodDeclNode>>,
@@ -1086,7 +1076,7 @@ impl SurfaceFrame {
             linkage,
             lo: 0,
             stage: SuStage::Params,
-            is_iface: false,
+            is_trait: false,
             name: IdentId(0),
             generics: Vec::new(),
             methods: Vec::new(),
@@ -1171,21 +1161,18 @@ impl SurfaceFrame {
                 self.stage = SuStage::Params;
                 Step::Push(Frame::Params(ParamsFrame::new()))
             }
-            Tok::Ident(_) => {
-                // `builtin interface Name<T> { .. }` — an engine-woven
-                // contract (RFC 0025); plain `interface` stays the
-                // library/user form
-                let is_iface = if p.at_kw("interface") {
-                    p.bump();
-                    true
-                } else {
-                    false
-                };
+            Tok::Ident(k) if k == "class" || k == "trait" => {
+                // `builtin class Name<T> { .. }` — an engine builtin type's
+                // member contract; `builtin trait Name<T> { .. }` — an
+                // engine-woven contract (RFC 0025). Builtin decls spell
+                // their kind: a bare `builtin Name { .. }` is an error.
+                let is_trait = k == "trait";
+                p.bump();
                 let Some(name) = p.expect_ident("a builtin type name") else {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
-                self.is_iface = is_iface;
+                self.is_trait = is_trait;
                 if matches!(p.tok(), Tok::Lt) {
                     self.generics = generic_params(p);
                 }
@@ -1193,9 +1180,15 @@ impl SurfaceFrame {
                 p.expect(Tok::LBrace);
                 self.members_top(p)
             }
+            Tok::Ident(_) => {
+                p.err_here(
+                    "`builtin` spells its kind — `builtin class Name { .. }` or `builtin trait Name { .. }` (RFC 0025)",
+                );
+                Step::Pop(Done::Failed)
+            }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!("expected `fn`, `interface`, or a type name after `builtin`, found {found}"));
+                p.err_here(format!("expected `fn`, `class`, or `trait` after `builtin`, found {found}"));
                 Step::Pop(Done::Failed)
             }
         }
@@ -1204,9 +1197,9 @@ impl SurfaceFrame {
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
-                let node = if self.is_iface {
+                let node = if self.is_trait {
                     p.item(
-                        ItemKind::BuiltinIface {
+                        ItemKind::BuiltinTrait {
                             vis: Vis::Self_,
                             name: self.name,
                             generics: std::mem::take(&mut self.generics),
@@ -1227,7 +1220,7 @@ impl SurfaceFrame {
                 };
                 return Step::Pop(Done::Item(node));
             }
-            let is_suspend = if p.at_kw("suspend") {
+            let is_async = if p.at_kw("async") {
                 p.bump();
                 true
             } else {
@@ -1235,7 +1228,7 @@ impl SurfaceFrame {
             };
             if p.at_kw("fn") {
                 self.stage = SuStage::Members;
-                return Step::Push(Frame::Method(MethodFrame::new(None, is_suspend, false)));
+                return Step::Push(Frame::Method(MethodFrame::new(None, is_async, false)));
             }
             let found = p.peek(0).describe();
             p.err_here(format!("expected a method declaration, found {found}"));

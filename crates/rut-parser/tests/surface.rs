@@ -32,21 +32,21 @@ fn host_fn_parses() {
     assert_eq!(generics.len(), 1, "builtin fn keeps its generics");
 }
 
-const BUILTIN_IFACE: &str = "\
-pub builtin interface Index<T> {
+const BUILTIN_TRAIT: &str = "\
+pub builtin trait Index<T> {
     fn len(self) -> i32;
     fn get(self, i: i32) -> T;
 }
 ";
 
 #[test]
-fn builtin_interface_parses() {
-    let (ast, diags) = parse(BUILTIN_IFACE, Mode::Decl);
+fn builtin_trait_parses() {
+    let (ast, diags) = parse(BUILTIN_TRAIT, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinIface { name, generics, methods, .. } = ast.item(items[0]) else {
-        panic!("expected a BuiltinIface item, got {:?}", ast.item(items[0]));
+    let ItemKind::BuiltinTrait { name, generics, methods, .. } = ast.item(items[0]) else {
+        panic!("expected a BuiltinTrait item, got {:?}", ast.item(items[0]));
     };
     assert_eq!(ast.name(*name), "Index");
     assert_eq!(generics.len(), 1);
@@ -54,7 +54,7 @@ fn builtin_interface_parses() {
 }
 
 const BUILTIN_SURFACE: &str = "\
-pub builtin Option<T> {
+pub builtin class Option<T> {
     fn some(v: T) -> Self;
     fn is_some(self) -> bool;
 }
@@ -72,6 +72,40 @@ fn builtin_ty_parses() {
     assert_eq!(ast.name(*name), "Option");
     assert_eq!(generics.len(), 1);
     assert_eq!(members.len(), 2);
+}
+
+#[test]
+fn builtin_requires_a_kind_word() {
+    // builtin decls spell their kind — `builtin class` / `builtin trait`
+    // (RFC 0025); a bare `builtin Name { .. }` is diagnosed
+    let (_, diags) = parse("pub builtin Option<T> { fn some(v: T) -> Self; }", Mode::Decl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("spells its kind")),
+        "a bare `builtin` decl must be diagnosed: {diags:?}"
+    );
+}
+
+#[test]
+fn zero_member_builtin_bodies_parse() {
+    // an empty member contract is legal — e.g. a marker trait or a type
+    // whose members are entirely compiler-lowered and invisible
+    let (ast, diags) = parse("pub builtin class Mark<T> { }", Mode::Decl);
+    assert!(diags.is_empty(), "zero-member builtin class must parse clean: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 1);
+    let ItemKind::BuiltinTy { members, .. } = ast.item(items[0]) else {
+        panic!("expected a BuiltinTy item, got {:?}", ast.item(items[0]));
+    };
+    assert!(members.is_empty());
+
+    let (ast, diags) = parse("pub builtin trait Mark { }", Mode::Decl);
+    assert!(diags.is_empty(), "zero-member builtin trait must parse clean: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 1);
+    let ItemKind::BuiltinTrait { methods, .. } = ast.item(items[0]) else {
+        panic!("expected a BuiltinTrait item, got {:?}", ast.item(items[0]));
+    };
+    assert!(methods.is_empty());
 }
 
 const HOST_DATACLASS: &str = "\
@@ -169,7 +203,7 @@ fn host_fn_terminates_on_malformed() {
         "host struct L { x",
         "builtin Option<T> {",
         "builtin fn f(",
-        "builtin interface I {",
+        "builtin trait I {",
         "extern fn f();",
     ] {
         let (_, diags) = parse(src, Mode::Decl);

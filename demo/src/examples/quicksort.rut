@@ -1,8 +1,8 @@
-import { Vec } from "std:collection";
+use { Vec } from "std:collection";
 // Quicksort — in-place Vec<i32> mutation (vecs are handles: the
 // mutation is shared with the caller), recursion, explicit conversions.
 
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
 fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
     let t = xs[a];

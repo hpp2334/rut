@@ -1,7 +1,7 @@
 //! The std:core lockstep gate (RFC 0028): `rut/std-core/core.d.rut` is the
 //! declarative form of the compiler's prelude surface
 //! (`rut_core::binary::Surface::core`), and the two must agree — same
-//! engine builtin types, same engine-woven interfaces, same
+//! engine builtin types, same engine-woven traits, same
 //! compiler-lowered functions. The whole prelude is `builtin` (the
 //! engine implements it, RFC 0025 revised): std:core declares NO `host`
 //! surface — that is exclusively the embedder's. The file's own contract
@@ -14,14 +14,14 @@ use rut_parser::{parse, Mode};
 const CORE_DECL: &str = include_str!("../../../rut/std-core/core.d.rut");
 
 /// The names core.d.rut declares: (builtin fns, builtin types, builtin
-/// interfaces, plain interfaces).
+/// traits, plain traits).
 fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
     let (ast, diags) = parse(CORE_DECL, Mode::Decl);
     assert!(diags.is_empty(), "core.d.rut must parse cleanly: {diags:?}");
     let mut builtin_fns = Vec::new();
     let mut builtin_types = Vec::new();
-    let mut builtin_ifaces = Vec::new();
-    let mut plain_ifaces = Vec::new();
+    let mut builtin_traits = Vec::new();
+    let mut plain_traits = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         match ast.item(it) {
             ItemKind::SurfaceFn { name, linkage, generics, .. } => {
@@ -40,20 +40,20 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
                     builtin_types.push(n);
                 }
             }
-            ItemKind::BuiltinIface { name, .. } => builtin_ifaces.push(ast.name(*name).to_string()),
-            ItemKind::Trait { name, .. } => plain_ifaces.push(ast.name(*name).to_string()),
+            ItemKind::BuiltinTrait { name, .. } => builtin_traits.push(ast.name(*name).to_string()),
+            ItemKind::Trait { name, .. } => plain_traits.push(ast.name(*name).to_string()),
             // `host fn`/`host struct` are the embedder's surface — a
             // toolchain decl file may not spell them
             other => panic!("std:core declares an embedder surface item: {other:?}"),
         }
     }
-    (builtin_fns, builtin_types, builtin_ifaces, plain_ifaces)
+    (builtin_fns, builtin_types, builtin_traits, plain_traits)
 }
 
 #[test]
 fn core_decl_matches_the_compilers_surface() {
     let surface = rut_core::binary::Surface::core();
-    let (builtin_fns, builtin_types, builtin_ifaces, plain_ifaces) = declared_names();
+    let (builtin_fns, builtin_types, builtin_traits, plain_traits) = declared_names();
 
     // builtin types: the decl's `builtin` decls are exactly the native types
     let mut decl_types = builtin_types;
@@ -63,17 +63,17 @@ fn core_decl_matches_the_compilers_surface() {
     surf_types.sort();
     assert_eq!(decl_types, surf_types, "core.d.rut builtin decls == Surface::core native_types");
 
-    // interfaces: the decl's builtin interfaces are exactly the native
-    // ifaces — and nothing in the prelude is a plain library interface
-    let mut decl_ifaces = builtin_ifaces;
-    decl_ifaces.sort();
-    let mut surf_ifaces: Vec<String> =
-        surface.native_ifaces.iter().map(|(n, _)| surface.names.name(*n).to_string()).collect();
-    surf_ifaces.sort();
-    assert_eq!(decl_ifaces, surf_ifaces, "core.d.rut builtin interfaces == Surface::core native_ifaces");
+    // traits: the decl's builtin traits are exactly the native
+    // traits — and nothing in the prelude is a plain library trait
+    let mut decl_traits = builtin_traits;
+    decl_traits.sort();
+    let mut surf_traits: Vec<String> =
+        surface.native_traits.iter().map(|(n, _)| surface.names.name(*n).to_string()).collect();
+    surf_traits.sort();
+    assert_eq!(decl_traits, surf_traits, "core.d.rut builtin traits == Surface::core native_traits");
     assert!(
-        plain_ifaces.is_empty(),
-        "every engine-woven interface is `builtin interface` (plain `interface` is the library form — Hashable lives in std:collection)"
+        plain_traits.is_empty(),
+        "every engine-woven trait is `builtin trait` (plain `trait` is the library form — Hashable lives in std:collection)"
     );
 
     // functions: the decl's builtin fns are exactly the compiler-lowered
@@ -87,9 +87,9 @@ fn core_decl_matches_the_compilers_surface() {
 }
 
 #[test]
-fn the_prelude_is_imported_never_ambient() {
+fn the_prelude_is_used_never_ambient() {
     // `Option` is a v1.1 removal: use-sites diagnose with the removal and
-    // its replacement — with or without the import (RFC 0028 v1.1).
+    // its replacement — with or without the use statement (RFC 0028 v1.1).
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module(
@@ -115,7 +115,7 @@ fn the_prelude_is_imported_never_ambient() {
         "app:main",
         rut_driver::Module {
             source: Some(
-                "import { Option } from \"std:core\";\n\
+                "use { Option } from \"std:core\";\n\
                  fn main() -> i32 { let x = Option.some(1); return 0; }\n"
                     .into(),
             ),

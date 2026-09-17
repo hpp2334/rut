@@ -94,11 +94,11 @@ fn malformed_input_terminates() {
         "fn f() -> nil ",
         "class C {",
         "class C { fn m(",
-        "interface T { fn m",
+        "trait T { fn m",
         "when (x) {",
         "fn f() { when (x) { 1 -> } }",
         "impl T for C {",
-        "import {",
+        "use {",
         "struct D { x",
         "enum E {",
         "fn f() -> nil { let ",
@@ -119,7 +119,7 @@ fn malformed_input_terminates() {
         let _ = diags.len();
     }
     // a few known shapes must produce diags
-    for src in ["enum E {", "import {", "when (x) {", "fn f() -> nil { let "] {
+    for src in ["enum E {", "use {", "when (x) {", "fn f() -> nil { let "] {
         let (_, diags) = parse(src, Mode::Impl);
         assert!(!diags.is_empty(), "`{src}` should produce diags");
     }

@@ -53,7 +53,7 @@ pub enum DumpVal {
     Segs(Vec<DumpSeg>),
     PatArgs(Vec<Option<String>>),
     FParts(Vec<DumpFPart>),
-    /// stored strings: interned names, Import `from`
+    /// stored strings: interned names, Use `from`
     Str(String),
     /// only emitted when true (quietness, not fabrication)
     Flag(bool),
@@ -93,10 +93,10 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 ));
                 "Module"
             }
-            ItemKind::Import { names, from } => {
+            ItemKind::Use { names, from } => {
                 fields.push(field("names", DumpVal::Idents(names.iter().map(|&x| a.name(x).to_string()).collect())));
                 fields.push(field("from", DumpVal::Str(from.clone())));
-                "Import"
+                "Use"
             }
             ItemKind::ModuleLet { vis, name, ty, init } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
@@ -147,8 +147,8 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             }
             ItemKind::Fn(f) => {
                 fields.push(field("vis", DumpVal::Vis(f.vis)));
-                if f.is_suspend {
-                    fields.push(field("suspend", DumpVal::Flag(true)));
+                if f.is_async {
+                    fields.push(field("async", DumpVal::Flag(true)));
                 }
                 fields.push(field("name", DumpVal::Str(a.name(f.name).to_string())));
                 if !f.generics.is_empty() {
@@ -203,14 +203,14 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("members", DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "BuiltinTy"
             }
-            ItemKind::BuiltinIface { vis, name, generics, methods } => {
+            ItemKind::BuiltinTrait { vis, name, generics, methods } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
                 if !generics.is_empty() {
                     fields.push(field("generics", DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect())));
                 }
                 fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
-                "BuiltinIface"
+                "BuiltinTrait"
             }
         },
         Kind::Member(k) => match k {
@@ -232,8 +232,8 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 if let Some(v) = d.vis {
                     fields.push(field("vis", DumpVal::OptVis(Some(v))));
                 }
-                if d.is_suspend {
-                    fields.push(field("suspend", DumpVal::Flag(true)));
+                if d.is_async {
+                    fields.push(field("async", DumpVal::Flag(true)));
                 }
                 fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
                 if !d.generics.is_empty() {
@@ -367,10 +367,7 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             PatKind::PatElse => "PatElse",
         },
         Kind::Type(k) => match k {
-            TypeKind::TyPath { segs, is_dyn } => {
-                if *is_dyn {
-                    fields.push(field("dyn", DumpVal::Flag(true)));
-                }
+            TypeKind::TyPath { segs } => {
                 fields.push(field("segs", DumpVal::Segs(segs_dump(a, segs))));
                 "TyPath"
             }

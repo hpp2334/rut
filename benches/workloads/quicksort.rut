@@ -1,7 +1,7 @@
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
-import { Vec } from "std:collection";
-import { Math } from "std:math";
+use { Vec } from "std:collection";
+use { Math } from "std:math";
 // quicksort — deterministic LCG input, in-place Lomuto quicksort, rolled
 // checksum. Scale: n = 100_000.
 //

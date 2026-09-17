@@ -132,7 +132,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // `Self` binds inside class bodies (RFC 0010 §1)
         let sty = self.resolve_type_now(ty);
         // resolve the record: a local generic instantiation, a local record,
-        // or an imported one
+        // or a used one
         let inst = self.ctx.inst_data.get(&sty).cloned();
         let local = self.ctx.datas.iter().find(|(_, d)| d.ty == sty).map(|(n, d)| (*n, d.clone()));
         let (dname, kind, field_list, class_subst): (
@@ -269,9 +269,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(reg)
     }
 
-    /// Record literal for an IMPORTED struct (RFC 0035 §1): the layout is
+    /// Record literal for a USED struct (RFC 0035 §1): the layout is
     /// the copied type descriptor; field names compare by string (separate
-    /// ASTs intern separately), and imported field defaults are not carried.
+    /// ASTs intern separately), and field defaults from other modules are not carried.
     fn compile_struct_extern(
         &mut self,
         sty: TypeId,
@@ -315,7 +315,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .map(|(f, _)| f.name)
         {
             self.ctx.err(sp, format!(
-                "imported record `{}` must initialize every field — `{}` is missing (imported field defaults are not carried, RFC 0035 §1)",
+                "record `{}` from another module must initialize every field — `{}` is missing (cross-module field defaults are not carried, RFC 0035 §1)",
                 self.ctx.type_name(sty), self.ctx.name(missing)
             ));
             return Err(());
@@ -344,7 +344,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => Some(t),
                 };
             } else if let Some(u) = ety {
-                // RFC 0012 §2: heterogeneous elements unify through `dyn`
+                // RFC 0012 §2: heterogeneous elements unify through trait objects
                 if self.widens(u, t) {
                     ety = Some(t);
                 } else if !self.widens(t, u) {

@@ -58,7 +58,7 @@ pub enum ConstVal {
 }
 
 /// One exported function in a module's surface (RFC 0029 DeclIr sketch):
-/// the importable name, its signature, and its module-local id. Names are
+/// the usable name, its signature, and its module-local id. Names are
 /// [`IdentId`]s into the surface's own [`Surface::names`] interner — a
 /// surface is self-contained and crosses modules intact.
 #[derive(Clone, Debug)]
@@ -77,7 +77,7 @@ pub struct SurfaceFn {
 
 /// One exported constant in a module's surface — `std:math::PI` and
 /// friends. `bits` is the raw scalar payload (f64 bits, i64 bits, …) the
-/// importer materializes with `ConstRaw`.
+/// using module materializes with `ConstRaw`.
 #[derive(Clone, Debug)]
 pub struct SurfaceConst {
     pub name: IdentId,
@@ -85,7 +85,7 @@ pub struct SurfaceConst {
     pub bits: u64,
 }
 
-/// One exported type: its importable name and module-local id.
+/// One exported type: its usable name and module-local id.
 #[derive(Clone, Debug)]
 pub struct SurfaceType {
     pub name: IdentId,
@@ -100,22 +100,22 @@ pub struct SurfaceType {
 
 /// A builtin container published by `std:core`'s native surface (RFC 0028):
 /// the type constructor is the compiler's own — the NAME resolves only once
-/// the importer wrote `import { .. } from "std:core"`. The prelude is
-/// imported, never ambient.
+/// the module wrote `use { .. } from "std:core"`. The prelude is
+/// used, never ambient.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTy {
     /// `Array<T>` — the heap array cell (RFC 0005)
     Array,
     /// `Opaque` — the erasure box (RFC 0014); a boot-table type whose name
-    /// is import-gated like the containers
+    /// is use-gated like the containers
     Opaque,
 }
 
-/// A builtin interface published by `std:core`'s native surface (RFC 0028):
+/// A builtin trait published by `std:core`'s native surface (RFC 0028):
 /// registered on first reference, exactly like a declared trait — but only
-/// for importers that named it.
+/// for modules that named it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeIface {
+pub enum NativeTrait {
     /// `Disposal { fn dispose(mut self) -> nil }` (RFC 0011/0016)
     Disposal,
     /// `Index<T>` — the random-access contract (RFC 0012)
@@ -124,7 +124,7 @@ pub enum NativeIface {
     Iterator,
 }
 
-/// The importable surface a module publishes (traits still to come).
+/// The usable surface a module publishes (traits still to come).
 /// Names are [`IdentId`]s into the surface's own [`Surface::names`]
 /// interner — including the names inside the carried [`RutType`]
 /// descriptors — so a surface crosses modules without a lookup context.
@@ -136,7 +136,7 @@ pub struct Surface {
     /// The qualified-access head for a namespace module (`std:math` ->
     /// `Math`): members are reached as `<namespace>.<member>`. `None`
     /// when the module has no namespace form. Routing is name-generic:
-    /// the compiler binds the head only when the importer wrote it.
+    /// the compiler binds the head only when the module wrote it.
     pub namespace: Option<IdentId>,
     pub funcs: Vec<SurfaceFn>,
     /// exported constants (native modules: `std:math`)
@@ -150,11 +150,11 @@ pub struct Surface {
     pub type_exports: Vec<SurfaceType>,
     /// builtin container names (`std:core` only): name -> constructor
     pub native_types: Vec<(IdentId, NativeTy)>,
-    /// builtin interface names (`std:core` only): name -> contract
-    pub native_ifaces: Vec<(IdentId, NativeIface)>,
+    /// builtin trait names (`std:core` only): name -> contract
+    pub native_traits: Vec<(IdentId, NativeTrait)>,
     /// compiler-lowered builtin function names (`std:core` only) — no
     /// `FuncCode`; the bodies are rut-lir lowering, reached only through
-    /// the import binding
+    /// the use binding
     pub native_fns: Vec<IdentId>,
 }
 
@@ -168,7 +168,7 @@ pub const CORE_FNS: &[IdentId] = &[
 
 impl Surface {
     /// The `std:core` prelude surface (RFC 0028): the builtin containers,
-    /// the builtin interfaces, and the compiler-lowered functions. One
+    /// the builtin traits, and the compiler-lowered functions. One
     /// source of truth — the driver mounts it (`mount_std_core`), the
     /// compiler hints from it, and `rut/std-core/core.d.rut` mirrors it
     /// for the LSP (kept true to the implementation by test). Every name
@@ -177,7 +177,7 @@ impl Surface {
         Surface {
             names: Interner::new(),
             native_types: vec![(sym::ARRAY, NativeTy::Array), (sym::OPAQUE, NativeTy::Opaque)],
-            native_ifaces: vec![(sym::ITERATOR, NativeIface::Iterator)],
+            native_traits: vec![(sym::ITERATOR, NativeTrait::Iterator)],
             native_fns: CORE_FNS.to_vec(),
             ..Default::default()
         }
@@ -193,10 +193,10 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
     }
 }
 
-/// A `std:core` builtin interface by name, if it is one.
-pub fn core_native_iface(name: IdentId) -> Option<NativeIface> {
+/// A `std:core` builtin trait by name, if it is one.
+pub fn core_native_trait(name: IdentId) -> Option<NativeTrait> {
     match name {
-        sym::ITERATOR => Some(NativeIface::Iterator),
+        sym::ITERATOR => Some(NativeTrait::Iterator),
         _ => None,
     }
 }
@@ -206,9 +206,9 @@ pub fn is_core_fn(name: IdentId) -> bool {
     CORE_FNS.contains(&name)
 }
 
-/// Is `name` any `std:core` prelude name (type, interface, or function)?
+/// Is `name` any `std:core` prelude name (type, trait, or function)?
 pub fn is_core_name(name: IdentId) -> bool {
-    is_core_fn(name) || core_native_type(name).is_some() || core_native_iface(name).is_some()
+    is_core_fn(name) || core_native_type(name).is_some() || core_native_trait(name).is_some()
 }
 
 /// `std:core` names removed from the surface, each with its replacement.
@@ -248,7 +248,7 @@ pub struct Program {
     /// and the in-memory [`Surface`](Surface). Self-contained: a decoded
     /// program rebuilds it from the binary's name table (RFC 0033 §1).
     pub interner: Interner,
-    /// exported surface, for importers (in-memory; not serialized)
+    /// exported surface, for using modules (in-memory; not serialized)
     pub surface: Surface,
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,

@@ -1,6 +1,6 @@
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
-import { Vec } from "std:collection";
+use { Vec } from "std:collection";
 // fannkuch-redux — pancake flips over all permutations. Scale: n = 7.
 // Canonical checksum: sum over all n! permutations of (+/- flips), sign
 // toggling every permutation (benchmarks-game definition). The value is

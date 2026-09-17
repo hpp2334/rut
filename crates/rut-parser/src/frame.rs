@@ -12,7 +12,7 @@ use rut_lexer::token::Tok;
 
 use crate::expr::{AtomFrame, ExprFrame, ExprMode, FStrFrame, LambdaFrame, SelectFrame};
 use crate::item::{
-    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, ImportFrame, MethodFrame,
+    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, UseFrame, MethodFrame,
     ModuleLetFrame, ParamsFrame, SurfaceFrame, TraitFrame, TyDeclFrame, TypeBodyFrame,
 };
 use crate::stmt::{BlockFrame, IfFrame, PatternFrame, StmtFrame, WhenFrame};
@@ -48,7 +48,7 @@ pub(crate) enum Step {
 pub(crate) enum Frame {
     Module(ModuleFrame),
     Pub(PubFrame),
-    Import(ImportFrame),
+    Use(UseFrame),
     ModuleLet(ModuleLetFrame),
     Enum(EnumFrame),
     Dataclass(TyDeclFrame),
@@ -79,7 +79,7 @@ impl Frame {
             None => match self {
                 Frame::Module(f) => f.step(p),
                 Frame::Pub(f) => f.step(p),
-                Frame::Import(f) => f.step(p),
+                Frame::Use(f) => f.step(p),
                 Frame::ModuleLet(f) => f.step(p),
                 Frame::Enum(f) => f.step(p),
                 Frame::Dataclass(f) => f.step(p),
@@ -106,7 +106,7 @@ impl Frame {
             Some(d) => match self {
                 Frame::Module(f) => f.absorb(p, d),
                 Frame::Pub(f) => f.absorb(p, d),
-                Frame::Import(f) => f.absorb(p, d),
+                Frame::Use(f) => f.absorb(p, d),
                 Frame::ModuleLet(f) => f.absorb(p, d),
                 Frame::Enum(f) => f.absorb(p, d),
                 Frame::Dataclass(f) => f.absorb(p, d),

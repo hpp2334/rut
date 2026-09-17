@@ -1,6 +1,6 @@
 //! Playground classics gate (RFC 0041 §3) — every `demo/src/examples/*.rut`
 //! compiles AND runs through the full pipeline, and its output matches the
-//! `.expected` sidecar next to it. The demo imports those same files raw, so
+//! `.expected` sidecar next to it. The demo reads those same files raw, so
 //! the playground's static-preview promises are exactly what the pipeline
 //! produces — never a hand-written guess.
 

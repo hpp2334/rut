@@ -5,8 +5,8 @@
 // layout, so rut only ever holds an `Opaque` handle. `Logger` is an
 // ordinary rut class over that handle; a host or user may mount their own
 // `std:log` in its place.
-import { Opaque } from "std:core";
-import { create_logger, logger_log } from "rt:log";
+use { Opaque } from "std:core";
+use { create_logger, logger_log } from "rt:log";
 
 pub class Logger {
     internal: Opaque;

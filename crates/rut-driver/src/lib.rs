@@ -45,28 +45,28 @@ pub struct ProgramOutput {
     pub program: Option<Program>,
 }
 
-/// Compile one module under `scope`, binding imported function surfaces
+/// Compile one module under `scope`, binding used function surfaces
 /// (RFC 0029 surface / RFC 0035 §1). Does not flatten or encode.
 pub fn compile_program(
     src: &str,
     mode: Mode,
     module_name: &str,
     scope: rut_core::ScopeId,
-    imports: &[(rut_core::ScopeId, rut_core::binary::Surface)],
+    uses: &[(rut_core::ScopeId, rut_core::binary::Surface)],
 ) -> ProgramOutput {
-    compile_program_resolved(src, mode, module_name, scope, imports, !imports.is_empty())
+    compile_program_resolved(src, mode, module_name, scope, uses, !uses.is_empty())
 }
 
-/// As [`compile_program`] but with an explicit `allow_imports` flag — the
+/// As [`compile_program`] but with an explicit `allow_uses` flag — the
 /// graph compiler resolves every specifier itself (or inlines it), so it
-/// passes `true` even when a module's only imports were source-inlined.
+/// passes `true` even when a module's only uses were source-inlined.
 pub fn compile_program_resolved(
     src: &str,
     mode: Mode,
     module_name: &str,
     scope: rut_core::ScopeId,
-    imports: &[(rut_core::ScopeId, rut_core::binary::Surface)],
-    allow_imports: bool,
+    uses: &[(rut_core::ScopeId, rut_core::binary::Surface)],
+    allow_uses: bool,
 ) -> ProgramOutput {
     let (mut ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
@@ -75,12 +75,12 @@ pub fn compile_program_resolved(
     if !diags.is_empty() {
         return ProgramOutput { diags, ast_dump, ast_json, ir_dump: String::new(), program: None };
     }
-    // Intern every imported surface name, so a namespace import (`Math`)
+    // Intern every used surface name, so a namespace use (`Math`)
     // resolves its members by name even though the member name is never
-    // written in `import { .. }` (RFC 0029 surface). Surface names are
+    // written in `use { .. }` (RFC 0029 surface). Surface names are
     // ids in the exporter's interner (`surface.names`) — re-interned by
     // text into this module's.
-    for (_, surface) in imports {
+    for (_, surface) in uses {
         for f in &surface.funcs {
             ast.interner.intern(surface.names.name(f.name));
         }
@@ -89,19 +89,19 @@ pub fn compile_program_resolved(
         }
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
-    ctx.allow_imports = allow_imports;
-    // the binding gate: the names this module's `import` statements wrote
+    ctx.allow_uses = allow_uses;
+    // the binding gate: the names this module's `use` statements wrote
     // (RFC 0028/0029) — read off the AST before any binding runs
     for it in ast.module_items(ast.root).to_vec() {
-        if let rut_ast::ast::ItemKind::Import { names, .. } = ast.item(it) {
-            ctx.imported.extend(names.iter().copied());
+        if let rut_ast::ast::ItemKind::Use { names, .. } = ast.item(it) {
+            ctx.used.extend(names.iter().copied());
         }
     }
-    for (dep_scope, surface) in imports {
+    for (dep_scope, surface) in uses {
         // types first: descriptors must be in the table before any own type
-        // is interned (TypeTable::import_block); names re-intern from the
+        // is interned (TypeTable::use_block); names re-intern from the
         // exporter's interner
-        ctx.import_types(surface.types.clone(), &surface.names, &surface.scope_blocks);
+        ctx.use_types(surface.types.clone(), &surface.names, &surface.scope_blocks);
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
                 if let Some(i) = f.intrinsic {
@@ -122,36 +122,36 @@ pub fn compile_program_resolved(
             }
         }
         // std:core's native surface (RFC 0028): builtin containers,
-        // interfaces, and compiler-lowered fns — bound only when the
-        // importer wrote the name: `import { Array } from "std:core"`
-        // gates `Array`, nothing else. The prelude is imported, never
+        // traits, and compiler-lowered fns — bound only when the
+        // module wrote the name: `use { Array } from "std:core"`
+        // gates `Array`, nothing else. The prelude is used, never
         // ambient.
         for (n, kind) in &surface.native_types {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                if ctx.imported.contains(&id) {
+                if ctx.used.contains(&id) {
                     ctx.add_extern_native_type(id, *kind);
                 }
             }
         }
-        for (n, iface) in &surface.native_ifaces {
+        for (n, native) in &surface.native_traits {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                if ctx.imported.contains(&id) {
-                    ctx.add_extern_iface(id, *iface);
+                if ctx.used.contains(&id) {
+                    ctx.add_extern_trait(id, *native);
                 }
             }
         }
         for n in &surface.native_fns {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                if ctx.imported.contains(&id) {
+                if ctx.used.contains(&id) {
                     ctx.add_extern_native_fn(id);
                 }
             }
         }
         // the namespace head (`Math`): bound like the natives — resolving
-        // exactly when the importer wrote it in `import { .. }`
+        // exactly when the module wrote it in `use { .. }`
         if let Some(ns) = &surface.namespace {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*ns)) {
-                if ctx.imported.contains(&id) {
+                if ctx.used.contains(&id) {
                     ctx.add_extern_namespace(id);
                 }
             }
@@ -180,7 +180,7 @@ pub fn compile_program_resolved(
             roots.push(Inst { key: FnKey::Free(name), subst: vec![] });
         }
     }
-    // library surface: every non-generic `pub fn` is importable, so its body
+    // library surface: every non-generic `pub fn` is usable, so its body
     // must be compiled even when nothing local calls it (RFC 0029 surface)
     for (name, node) in ctx.fn_nodes.clone() {
         let is_pub = ctx.exports.iter().any(|(n, _)| *n == name);
@@ -224,7 +224,7 @@ pub fn compile_program_resolved(
     }
     let funcs = std::mem::take(&mut ctx.funcs);
     let ir_dump = ir_dump_of(&funcs, &ctx.interner);
-    // exported surface: every `pub` fn + its signature, for importers
+    // exported surface: every `pub` fn + its signature, for using modules
     let mut surface = rut_core::binary::Surface::default();
     for (name, _) in &ctx.exports {
         if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(*name), subst: vec![] }) {
@@ -240,7 +240,7 @@ pub fn compile_program_resolved(
         }
     }
     // type surface: the whole non-boot block (so `(scope, local)` ids and
-    // field layouts resolve in an importer) + the exported names
+    // field layouts resolve in a using module) + the exported names
     {
         let boot_len = ctx.types.boot_len as usize;
         surface.types = ctx.types.types[boot_len..].to_vec();
@@ -271,7 +271,7 @@ pub fn compile_program_resolved(
         }
     }
     // the program's interner moves out of the Ctx; the surface carries a
-    // clone so it stays self-contained when it crosses to an importer
+    // clone so it stays self-contained when it crosses to a using module
     let interner = std::mem::take(&mut ctx.interner);
     surface.names = interner.clone();
     let program = Program {
@@ -309,7 +309,7 @@ pub fn std_log_source() -> String {
 }
 
 /// Mount `std:core` — the prelude surface (RFC 0028): the builtin
-/// containers (`Array`/`Opaque`), the builtin interfaces
+/// containers (`Array`/`Opaque`), the builtin traits
 /// (`Disposal`/`Index`/`Iterator`), and the compiler-lowered functions
 /// (`downcast`, `assert`/`panic`, `make_ptr`/`on_drop`, the `str`/`bytes`
 /// natives). v1.1 removed `Option`/`Result`/`own` — use sites diagnose
@@ -317,7 +317,7 @@ pub fn std_log_source() -> String {
 /// native module with no body: its surface is
 /// [`rut_core::binary::Surface::core`], the single source of truth
 /// (`rut/std-core/core.d.rut` mirrors it for the LSP). Nothing here is
-/// ambient — every name must be imported.
+/// ambient — every name must be used.
 pub fn mount_std_core(session: &mut Session) {
     // the surface is symbol-id based; the host-facing mount table is
     // string-based — `sym::text` bridges at this boundary only
@@ -329,7 +329,7 @@ pub fn mount_std_core(session: &mut Session) {
         "std:core",
         Module {
             native_types: core.native_types.iter().map(|(n, k)| (txt(*n), *k)).collect(),
-            native_ifaces: core.native_ifaces.iter().map(|(n, k)| (txt(*n), *k)).collect(),
+            native_traits: core.native_traits.iter().map(|(n, k)| (txt(*n), *k)).collect(),
             native_fns: core.native_fns.iter().map(|n| txt(*n)).collect(),
             ..Default::default()
         },
@@ -434,7 +434,7 @@ pub fn mount_std_log(session: &mut Session) {
     );
 }
 
-/// Full pipeline over one module: resolve its `import` statements against a
+/// Full pipeline over one module: resolve its `use` statements against a
 /// session with the standard modules mounted, then link, flatten, encode.
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
     let (ast, mut diags) = parse(src, mode);

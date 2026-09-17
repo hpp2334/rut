@@ -186,9 +186,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             FnKey::Lambda(_) => unreachable!(),
         };
-        let is_suspend = match ctx.ast.kind(node) {
-            Kind::Item(ItemKind::Fn(f)) => f.is_suspend,
-            Kind::Member(MemberKind::MethodDecl(m)) => m.is_suspend,
+        let is_async = match ctx.ast.kind(node) {
+            Kind::Item(ItemKind::Fn(f)) => f.is_async,
+            Kind::Member(MemberKind::MethodDecl(m)) => m.is_async,
             _ => return Ok(()),
         };
         let (params, ret, generics, body, fn_name) = match ctx.ast.kind(node) {
@@ -208,7 +208,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ),
             _ => return Ok(()),
         };
-        if is_suspend {
+        if is_async {
             ctx.err(
                 ctx.ast.span(node),
                 "`async` functions are not supported in this build —cold-poll futures land in M3 (RFC 0018)",

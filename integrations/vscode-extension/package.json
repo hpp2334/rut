@@ -80,8 +80,8 @@
           "class": [
             "entity.name.type.class"
           ],
-          "interface": [
-            "entity.name.type.interface"
+          "trait": [
+            "entity.name.type.trait"
           ],
           "operator": [
             "keyword.operator"

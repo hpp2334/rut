@@ -337,10 +337,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// The `__iterate` contract on `ty` (RFC 0012 §6): `(class, subst, E)`
     /// when the type declares `fn __iterate(self, emit: fn(E) -> bool)` —
-    /// duck-typed, like every interface satisfaction.
+    /// duck-typed, like every trait satisfaction.
     fn iterate_method(&mut self, ty: TypeId) -> Option<(IdentId, Vec<(IdentId, TypeId)>, TypeId)> {
         if matches!(self.ctx.types.kind(ty), TyKind::TraitObj { .. }) {
-            // interface objects dispatch through their vtable — a concrete
+            // trait objects dispatch through their vtable — a concrete
             // iterable is needed at the call site in this build
             return None;
         }

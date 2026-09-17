@@ -1,5 +1,5 @@
-import { Opaque, downcast, make_ptr } from "std:core";
-import { Vec } from "std:collection";
+use { Opaque, downcast, make_ptr } from "std:core";
+use { Vec } from "std:collection";
 // todolist.rut — a todo-list library in rut, called from Rust.
 //
 // The shape: the HOST owns the session. It asks for an opaque container
@@ -11,7 +11,7 @@ import { Vec } from "std:collection";
 //
 // `entry fn` marks the host-callable surface (RFC 0035 §3); the checker
 // enforces the crossing rule on those signatures at compile time. Plain
-// `pub` is import-visibility for other rut modules (RFC 0003 §2) and
+// `pub` is use-visibility for other rut modules (RFC 0003 §2) and
 // carries no such limit — `pub class TodoList` stays fully typed.
 
 struct Todo {

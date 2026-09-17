@@ -1,5 +1,5 @@
-import { Array, Opaque, downcast, make_ptr } from "std:core";
-import { Vec } from "std:collection";
+use { Array, Opaque, downcast, make_ptr } from "std:core";
+use { Vec } from "std:collection";
 // RFC 0014 — Opaque: explicit type erasure with checked recovery.
 // Opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the
 // runtime type; downcast<T> recovers it or yields None. `Opaque` is the
@@ -9,7 +9,7 @@ import { Vec } from "std:collection";
 // the box shares identity with the original. The only any-shaped value
 // in rut — and it can do nothing until recovered.
 
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
 struct Point { x: f32; y: f32 }
 enum Flavor { Sweet, Sour }

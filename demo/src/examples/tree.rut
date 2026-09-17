@@ -2,8 +2,8 @@
 // through a POINTER field: `*Node` is one word, `nil` when absent (RFC
 // 0005). A binary tree is the canonical recursive shape.
 
-import { make_ptr } from "std:core";
-import { Logger } from "std:log";
+use { make_ptr } from "std:core";
+use { Logger } from "std:log";
 struct Node {
     value: i32,
     left: *Node,

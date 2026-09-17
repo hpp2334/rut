@@ -1,6 +1,6 @@
 //! Sequence lowering (RFC 0012 v1.1): `s.len()`, `s[i]`, `s[i] = v`,
 //! and `for (x of s)` lower to the fused element ops — there is no
-//! `Index` interface and no accessor inlining.
+//! `Index` trait and no accessor inlining.
 //!
 //! Recognized sequences:
 //! - `Array<T>` — fused `arrget`/`arrlen`/`arrset` (RFC 0032 §1.1 R2).

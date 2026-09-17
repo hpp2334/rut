@@ -98,8 +98,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             TypeKind::TyPath { segs, .. } => {
                 // builtin containers: unify element-wise — the std:core
-                // names, gated on the import like everywhere else (an
-                // unimported name falls through to `resolve_type`, which
+                // names, gated on the use statement like everywhere else (an
+                // unused name falls through to `resolve_type`, which
                 // reports it as not in scope)
                 let head = self.ctx.name(segs[0].name);
                 let core = self.ctx.extern_native_types.contains_key(&segs[0].name);

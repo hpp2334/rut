@@ -79,7 +79,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `f64` primitives, or an inline lowering for the integer intrinsics
     /// (RFC 0032 §1.1 R2).
     /// A namespace member call (`Math.sqrt(x)`, `Math.wrapping_add(a, b)`):
-    /// an extern fn or intrinsic of the imported module (RFC 0028). The
+    /// an extern fn or intrinsic of the used module (RFC 0028). The
     /// namespace head is passed only for diagnostics — routing is the
     /// caller's bound-namespace check, name-generic.
     pub(crate) fn compile_namespace_member(

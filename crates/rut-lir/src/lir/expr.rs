@@ -179,12 +179,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let recv = self.last_reg;
                 let dst = self.new_reg(TY_BOOL);
                 // resolve the RHS (naming position, RFC 0012 §3)
-                if let TypeKind::TyPath { segs, is_dyn } = self.ctx.ast.ty(ty) {
+                if let TypeKind::TyPath { segs } = self.ctx.ast.ty(ty) {
                     if segs.len() == 1 && segs[0].generics.is_empty() {
                         let n = self.ctx.name(segs[0].name).to_string();
-                        if *is_dyn {
-                            self.ctx.err(sp, "the `is` RHS must not be `dyn`-prefixed (RFC 0012 §3)");
-                        }
                         // trait RHS —capability probe (or fold)
                         if let Some(tid) = self.ctx.trait_id_of(segs[0].name) {
                             match self.ctx.types.kind(rt).clone() {
@@ -207,7 +204,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             }
                             return Ok(TY_BOOL);
                         }
-                        // Opaque RHS — import-gated like the type (RFC 0028)
+                        // Opaque RHS — use-gated like the type (RFC 0028)
                         if n == "Opaque"
                             && self.ctx.extern_native_types.get(&segs[0].name).copied()
                                 == Some(rut_core::binary::NativeTy::Opaque)
@@ -454,7 +451,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let _reg = self.load_const_let(init, ty, expected, sp)?;
                 return Ok(ty);
             }
-            // imported constant (native modules: `std:math::PI`)
+            // used constant (native modules: `std:math::PI`)
             if let Some((ty, bits)) = self.ctx.extern_const(name) {
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
@@ -467,7 +464,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, msg);
             return Err(());
         }
-        // `<namespace>.CONST` — an imported namespace's constants
+        // `<namespace>.CONST` — a used namespace's constants
         // (`Math.PI`; RFC 0028). Name-generic: routed by the bound
         // namespace head, never by a hardcoded string.
         if segs.len() == 2 && self.ctx.is_extern_namespace(segs[0].name) {
@@ -545,7 +542,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ctx.err(
             sp,
             format!(
-                "unknown name `{}` —module paths need imports, which are not available in this build (RFC 0035)",
+                "unknown name `{}` —module paths need use statements, which are not available in this build (RFC 0035)",
                 segs.iter().map(|s| self.ctx.name(s.name).to_string()).collect::<Vec<_>>().join(".")
             ),
         );

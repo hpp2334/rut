@@ -66,17 +66,17 @@ fn classify_item(
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
         ItemKind::Trait { name, .. } => {
-            push_name(toks, span, ast.name(*name), TokenType::Interface, out, false)
+            push_name(toks, span, ast.name(*name), TokenType::Trait, out, false)
         }
-        ItemKind::BuiltinIface { name, .. } => {
-            push_name(toks, span, ast.name(*name), TokenType::Interface, out, false)
+        ItemKind::BuiltinTrait { name, .. } => {
+            push_name(toks, span, ast.name(*name), TokenType::Trait, out, false)
         }
         ItemKind::BuiltinTy { name, .. } | ItemKind::SurfaceDataclass { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
-        // methods classify via their own Member nodes; import names need
+        // methods classify via their own Member nodes; use names need
         // resolution (M2) — left unclassified
-        ItemKind::Impl { .. } | ItemKind::Import { .. } | ItemKind::Module { .. } => {}
+        ItemKind::Impl { .. } | ItemKind::Use { .. } | ItemKind::Module { .. } => {}
     }
 }
 

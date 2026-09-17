@@ -17,8 +17,8 @@ use std::rc::Rc;
 use rut_vm::{OpaqueBox, Trap, Value};
 
 const SRC: &str = r#"
-import { Opaque, downcast } from "std:core";
-import { store_new, store_set, store_get, store_size } from "plugin:boxes";
+use { Opaque, downcast } from "std:core";
+use { store_new, store_set, store_get, store_size } from "plugin:boxes";
 
 // the wrapper class (the Logger pattern, RFC 0028): one Opaque field,
 // one host fn call per method — the Rust payload never leaks into rut
@@ -217,8 +217,8 @@ fn record_fields_release_at_rc0() {
     // references and the heap climbed by ~n cells; now it returns to
     // baseline (plus the run's immortal singletons).
     let src = r#"
-import { Opaque } from "std:core";
-import { Vec } from "std:collection";
+use { Opaque } from "std:core";
+use { Vec } from "std:collection";
 
 class Node {
     name: str;

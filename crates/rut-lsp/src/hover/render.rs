@@ -28,7 +28,7 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 members.join(", ")
             )));
         }
-        TyForm::Trait | TyForm::Builtin | TyForm::BuiltinIface => {
+        TyForm::Trait | TyForm::Builtin | TyForm::BuiltinTrait => {
             let mut body = String::new();
             for m in &ty.methods {
                 body.push_str("    ");

@@ -1,8 +1,8 @@
-import { Vec } from "std:collection";
+use { Vec } from "std:collection";
 // RFC 0013 — functions, anonymous closures, generics (monomorphized at
 // compile time; each instantiation emits its own typed opcodes).
 
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
 fn first<T>(xs: [T], fallback: T) -> T {   // builtin container: `T` infers
     if (xs.len() == 0) {                  // from the argument's element

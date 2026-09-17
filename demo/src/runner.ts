@@ -110,7 +110,7 @@ export class Runner {
         return new Runner(
           {
             mode: "wasm",
-            banner: "live — rut.wasm (M1 vertical slice: static core, no suspend/host modules)",
+            banner: "live — rut.wasm (M1 vertical slice: static core, no host modules)",
           },
           api,
         );

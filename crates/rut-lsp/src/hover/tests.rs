@@ -88,7 +88,7 @@ return c.area();
 #[test]
 fn trait_method_via_impl() {
     let src = "\
-interface Drawable {
+trait Drawable {
 fn draw(self) -> nil;
 }
 class Circle {

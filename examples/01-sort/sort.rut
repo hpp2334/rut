@@ -1,6 +1,6 @@
-import { Opaque, downcast, make_ptr } from "std:core";
-import { Vec } from "std:collection";
-import { Math } from "std:math";
+use { Opaque, downcast, make_ptr } from "std:core";
+use { Vec } from "std:collection";
+use { Math } from "std:math";
 // sort.rut — a sorting library in rut, called from Rust.
 //
 // The shape: the HOST owns the session. It asks for a bank (`create`),

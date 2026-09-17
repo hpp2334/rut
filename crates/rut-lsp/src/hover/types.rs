@@ -13,9 +13,9 @@ pub enum TyForm {
     /// `builtin Name<..>` — an engine builtin's member contract (std:core
     /// only; members are compiler-lowered)
     Builtin,
-    /// `builtin interface Name<..>` — an engine-woven contract (Index,
+    /// `builtin trait Name<..>` — an engine-woven contract (Index,
     /// Iterator, Disposal); users implement it with ordinary impl blocks
-    BuiltinIface,
+    BuiltinTrait,
     /// `host struct Name { fields }` — a flat host-constructed record
     HostDataclass,
 }
@@ -28,7 +28,7 @@ impl TyForm {
             TyForm::Trait => "trait",
             TyForm::Enum => "enum",
             TyForm::Builtin => "builtin",
-            TyForm::BuiltinIface => "builtin interface",
+            TyForm::BuiltinTrait => "builtin trait",
             TyForm::HostDataclass => "host struct",
         }
     }

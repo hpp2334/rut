@@ -156,13 +156,13 @@ fn bare_calls_color_their_callee_as_function() {
 
 #[test]
 fn symbols_outline() {
-    let src = "interface Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\npub fn main() -> nil {}\n";
+    let src = "trait Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\npub fn main() -> nil {}\n";
     let (toks, _) = rut_lexer::lexer::lex(src);
     let (ast, _) = parse(src, Mode::Impl);
     let syms = symbols(&toks, &ast);
     let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, vec!["Drawable", "impl Drawable for Circle", "Color", "main"]);
-    assert_eq!(syms[0].kind, SymKind::Interface);
+    assert_eq!(syms[0].kind, SymKind::Trait);
     assert_eq!(syms[0].children.len(), 1);
     assert_eq!(syms[1].kind, SymKind::Module);
     assert_eq!(syms[1].children.len(), 1);

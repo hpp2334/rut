@@ -1,11 +1,11 @@
-//! Module loading: compile a library, import one of its functions, link
+//! Module loading: compile a library, use one of its functions, link
 //! (RFC 0029 surface / RFC 0035 §1).
 
 use rut_parser::Mode;
 use rut_driver::{Module, Session};
 
 #[test]
-fn imports_and_links_a_function() {
+fn uses_and_links_a_function() {
     // dependency "math" under scope 1 (main keeps `add` monomorphized)
     let dep = rut_driver::compile_program(
         "pub fn add(a: i32, b: i32) -> i32 { return a + b; }\n\
@@ -20,9 +20,9 @@ fn imports_and_links_a_function() {
     let surface = dep.surface.clone();
     assert!(surface.funcs.iter().any(|f| surface.names.name(f.name) == "add"), "surface has add");
 
-    // root "app" under scope 2 imports `add`
+    // root "app" under scope 2 uses `add`
     let root = rut_driver::compile_program(
-        "import { add } from \"math\";\nfn main() -> i32 { return add(2, 3); }\n",
+        "use { add } from \"math\";\nfn main() -> i32 { return add(2, 3); }\n",
         Mode::Impl,
         "app",
         2,
@@ -51,11 +51,11 @@ fn imports_and_links_a_function() {
 }
 
 #[test]
-fn imports_of_an_unmounted_module_error() {
+fn uses_of_an_unmounted_module_error() {
     // `compile_module` mounts std:collection, but resolution is exact: a
     // specifier nothing answers to is a load error, never a silent binding
     let out = rut_driver::compile_module(
-        "import { add } from \"math\";\nfn main() -> i32 { return add(1, 2); }\n",
+        "use { add } from \"math\";\nfn main() -> i32 { return add(1, 2); }\n",
         Mode::Impl,
         "app",
     );
@@ -67,7 +67,7 @@ fn imports_of_an_unmounted_module_error() {
 }
 
 #[test]
-fn imports_and_links_a_type() {
+fn uses_and_links_a_type() {
     // dependency "geo" scope 1 exports a record + a fn returning it
     let dep = rut_driver::compile_program(
         "struct Point { x: i32; y: i32; }\n\
@@ -86,9 +86,9 @@ fn imports_and_links_a_type() {
         "surface exports Point"
     );
 
-    // root "app" scope 2 constructs the imported type and reads its fields
+    // root "app" scope 2 constructs the used type and reads its fields
     let root = rut_driver::compile_program(
-        "import { Point, origin } from \"geo\";\n\
+        "use { Point, origin } from \"geo\";\n\
          fn mk() -> Point { return Point { x: 1, y: 2 }; }\n\
          fn main() -> i32 {\n\
              let p: Point = mk();\n\
@@ -105,7 +105,7 @@ fn imports_and_links_a_type() {
     let root = root.program.expect("root program");
 
     let linked = rut_core::link::link(vec![dep, root]).expect("link");
-    // the imported type made it into the global table once
+    // the used type made it into the global table once
     let point_ids: Vec<u32> = (0..linked.types.types.len() as u32)
         .filter(|&i| linked.type_name(i) == "Point")
         .collect();
@@ -118,12 +118,12 @@ fn imports_and_links_a_type() {
         rut_core::ops::Op::MakeRecord { ty, .. } if *ty == point
     ));
     let read = app.iter().flat_map(|f| &f.code).any(|op| matches!(op, rut_core::ops::Op::GetF { .. }));
-    assert!(made, "app constructs the imported Point\n{app_ir}");
-    assert!(read, "app reads an imported field\n{app_ir}");
+    assert!(made, "app constructs the used Point\n{app_ir}");
+    assert!(read, "app reads a used field\n{app_ir}");
 }
 
 #[test]
-fn graph_compiles_and_links_imports_in_order() {
+fn graph_compiles_and_links_uses_in_order() {
     let mut s = Session::new();
     s.register_module(
         "std:math",
@@ -141,7 +141,7 @@ fn graph_compiles_and_links_imports_in_order() {
         "app:main",
         Module {
             source: Some(
-                "import { seven } from \"std:math\";\n\
+                "use { seven } from \"std:math\";\n\
                  fn main() -> i32 { return seven(); }\n"
                     .into(),
             ),
@@ -188,7 +188,7 @@ fn graph_threads_a_type_through_a_chain() {
         "geo:mid",
         Module {
             source: Some(
-                "import { Point, origin } from \"geo:base\";\n\
+                "use { Point, origin } from \"geo:base\";\n\
                  pub fn shifted() -> Point { return origin(); }\n\
                  fn main() -> i32 { return 0; }\n"
                     .into(),
@@ -201,8 +201,8 @@ fn graph_threads_a_type_through_a_chain() {
         "app:main",
         Module {
             source: Some(
-                "import { Point } from \"geo:base\";\n\
-                 import { shifted } from \"geo:mid\";\n\
+                "use { Point } from \"geo:base\";\n\
+                 use { shifted } from \"geo:mid\";\n\
                  fn main() -> i32 { let p: Point = shifted(); return p.x; }\n"
                     .into(),
             ),
@@ -240,8 +240,8 @@ fn std_collection_barrel_expands_and_compiles() {
         Mode::Impl,
         "std:collection",
         1,
-        // the prelude surface as the unit's one import (RFC 0028): the
-        // barrel source itself imports std:core
+        // the prelude surface as the unit's one use (RFC 0028): the
+        // barrel source itself uses std:core
         &[(2, rut_core::binary::Surface::core())],
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
@@ -264,7 +264,7 @@ fn loads_a_directory_graph() {
     .unwrap();
     std::fs::write(
         app.join("entry.rut"),
-        "import { seven } from \"lib:math\";\nfn main() -> i32 { return seven(); }\n",
+        "use { seven } from \"lib:math\";\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
     std::fs::write(
@@ -299,7 +299,7 @@ fn consumer_uses_std_collection_vec() {
         .join("../../rut/std-collection/entry.rut");
     let coll_src = rut_driver::expand_module_source(&coll).expect("expand");
     let mut s = Session::new();
-    // std:core first: the collection source imports its prelude names
+    // std:core first: the collection source uses its prelude names
     rut_driver::mount_std_core(&mut s);
     s.register_module(
         "std:collection",
@@ -310,7 +310,7 @@ fn consumer_uses_std_collection_vec() {
         "app:main",
         Module {
             source: Some(
-                "import { Vec } from \"std:collection\";\n\
+                "use { Vec } from \"std:collection\";\n\
                  fn main() -> i32 {\n\
                      let mut v: Vec<i32> = Vec.new();\n\
                      v.push(1);\n\
@@ -338,7 +338,7 @@ fn graph_reports_a_missing_dependency() {
         "app:main",
         Module {
             source: Some(
-                "import { nope } from \"std:missing\";\n\
+                "use { nope } from \"std:missing\";\n\
                  fn main() -> i32 { return 0; }\n"
                     .into(),
             ),

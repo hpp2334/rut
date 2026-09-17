@@ -51,7 +51,7 @@ fuel used: 680 of Some(1000000)
 ## What it demonstrates
 
 - **`entry fn`** — the host-callable surface (RFC 0035 §3), distinct from
-  `pub` (import visibility for rut modules, RFC 0003 §2 — no type
+  `pub` (use visibility for rut modules, RFC 0003 §2 — no type
   limits there). An entry's signature is checked against the crossing
   rule **at compile time**: a `TodoList` parameter on an entry is a
   source diagnostic, never a call-time failure.

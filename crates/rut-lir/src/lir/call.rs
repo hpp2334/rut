@@ -1,6 +1,6 @@
 //! Calls and member resolution: builtin/free-fn/method/static dispatch,
 //! generic instantiation by unification (RFC 0013 SS2), the RFC 0012
-//! vtable-always rule for trait members, dyn receivers, and field reads.
+//! vtable-always rule for trait members, trait-typed receivers, and field reads.
 
 use crate::check::TcResult;
 use rut_core::ops::*;
@@ -105,15 +105,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return self.compile_static_call(base, base_generics, member, member_generics, args, expected, sp);
         }
         if segs.len() != 1 {
-            self.ctx.err(sp, "unsupported call path (imports are not available in this build, RFC 0035)");
+            self.ctx.err(sp, "unsupported call path (module loading is not available in this build, RFC 0035)");
             return Err(());
         }
         let name = segs[0].name;
         let generics = segs[0].generics.clone();
         // std:core prelude functions (RFC 0028): compiler-lowered, visible
-        // only when the name was imported from the std:core surface — the
-        // prelude is imported, never ambient. A local fn of the same name
-        // wins when the import is absent (fallthrough below).
+        // only when the name was used from the std:core surface — the
+        // prelude is used, never ambient. A local fn of the same name
+        // wins when the use statement is absent (fallthrough below).
         let core_fn = self.ctx.extern_native_fns.contains(&name);
         // removed prelude spellings diagnose themselves — text-compared
         // against the removal table, they are not well-known symbols
@@ -122,7 +122,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         if self.ctx.name(name) == "print" {
-            self.ctx.err(sp, "`print` was removed — import a logger (`import { log } from \"std:log\"`)");
+            self.ctx.err(sp, "`print` was removed — use a logger (`use { log } from \"std:log\"`)");
             return Err(());
         }
         if matches!(self.ctx.name(name), "size_of" | "align_of") {
@@ -315,7 +315,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.find_free_fn(name) {
             return self.compile_free_fn_call(name, generics, args, expected, sp);
         }
-        // imported function: signature from the surface, a direct call to the
+        // used function: signature from the surface, a direct call to the
         // exporter's scope-qualified id (RFC 0029 surface / RFC 0035 §1)
         if let Some(ef) = self.ctx.extern_fn(name).cloned() {
             if let Some(i) = ef.intrinsic {
@@ -323,7 +323,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return self.compile_intrinsic(i, &args, expected, sp);
             }
             if !generics.is_empty() {
-                self.ctx.err(sp, format!("`{}` is an imported fn and takes no type arguments", self.ctx.name(name)));
+                self.ctx.err(sp, format!("`{}` is a used fn and takes no type arguments", self.ctx.name(name)));
                 return Err(());
             }
             if args.len() != ef.params.len() {
@@ -347,7 +347,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // builtin type-call: Array<T>(n) — allocate n slots (runtime length,
         // non-growable, RFC 0005); the storage under `std:collection`'s Vec.
-        // Import-gated like the type itself (RFC 0028)
+        // Use-gated like the type itself (RFC 0028)
         if name == sym::ARRAY
             && self.ctx.find_data(name).is_none()
             && self.ctx.extern_native_types.get(&name).copied()
@@ -436,7 +436,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         // std:core builtin statics (RFC 0028): `Opaque.new` and the
-        // `bytes`/`str` constructors — the prelude is imported, never
+        // `bytes`/`str` constructors — the prelude is used, never
         // ambient, so the arms fire only when the base name was bound from
         // the surface
         let core_ty = self.ctx.extern_native_types.get(&base).copied();
@@ -451,7 +451,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ));
             return Err(());
         }
-        // an imported namespace's members (`Math.sqrt`; RFC 0028) —
+        // a used namespace's members (`Math.sqrt`; RFC 0028) —
         // routed by the bound head, name-generic
         if self.ctx.is_extern_namespace(base) {
             return self.compile_namespace_member(base, member, &args, expected, sp);
@@ -464,7 +464,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let t = self.compile_expr(args[0], None)?;
                 if matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
-                    self.ctx.err(sp, "`Opaque.new` rejects `dyn` values —trait objects are never boxed (RFC 0014)");
+                    self.ctx.err(sp, "`Opaque.new` rejects trait objects —they are never boxed (RFC 0014)");
                     return Err(());
                 }
                 let src = self.last_reg;
@@ -784,7 +784,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `Vec` is an ordinary class (std:collection), so it routes
                 // here through `find_data`, like any other class; the
                 // std:core statics (`Opaque`) route only
-                // when imported (RFC 0028)
+                // when used (RFC 0028)
                 let is_type = matches!(base, sym::STR | sym::BYTES)
                     || self.ctx.extern_native_types.contains_key(&base)
                     || self.ctx.is_extern_namespace(base)
@@ -1002,14 +1002,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(rt).clone() {
-            // dyn receiver: ONLY that trait's methods (RFC 0012 §2)
+            // trait-typed receiver: ONLY that trait's methods (RFC 0012 §2)
             let tdesc = self.ctx.trait_by_id(trait_id).clone();
             if let Some(midx) = tdesc.methods.iter().position(|m| m.name == name) {
                 let slot = self.ctx.trait_slot(trait_id, midx as u32).unwrap();
                 return self.finish_trait_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp);
             }
             self.ctx.err(sp, format!(
-                "`dyn {}` reaches only `{}`'s methods —`{}` is not one of them (RFC 0012 §2)",
+                "`{}` values reach only `{}`'s methods —`{}` is not one of them (RFC 0012 §2)",
                 self.ctx.name(tdesc.name), self.ctx.name(tdesc.name), self.ctx.name(name)
             ));
             return Err(());
@@ -1020,7 +1020,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// mut-binding law (RFC 0003 §1): writing through a handle requires the
     /// head binding to be `let mut`
-    /// RFC 0012 §2: implicit widening — exact > `dyn I` when the exact type
+    /// RFC 0012 §2: implicit widening — exact > trait-typed when the exact type
     /// has an impl for I. Same-type always widens.
     pub(crate) fn widens(&mut self, from: TypeId, to: TypeId) -> bool {
         if from == to {
@@ -1152,8 +1152,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return false;
         }
         let md = self.ctx.ast.method_decl(mnode).clone();
-        if md.is_suspend {
-            return false; // `suspend` is diagnosed when the body is compiled
+        if md.is_async {
+            return false; // `async` is diagnosed when the body is compiled
         }
         let Some(body) = md.body else { return false };
         let stmts = match self.ctx.ast.kind(body.id()) {
@@ -1258,7 +1258,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     pub(crate) fn compile_field(&mut self, recv: NodeHandle<AnyExpr>, name: IdentId, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        // `<namespace>.CONST` — an imported namespace's constant (checked
+        // `<namespace>.CONST` — a used namespace's constant (checked
         // before the receiver is compiled, since the head is not a value;
         // RFC 0028). Name-generic: routed by the bound head.
         if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
@@ -1297,7 +1297,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         if matches!(self.ctx.types.kind(rt), TyKind::TraitObj { .. }) {
-            self.ctx.err(sp, "trait objects have no fields —`d.x` on `dyn I` is a compile error (RFC 0012 §2)");
+            self.ctx.err(sp, "trait objects have no fields —`d.x` on a trait-typed value is a compile error (RFC 0012 §2)");
             return Err(());
         }
         self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));

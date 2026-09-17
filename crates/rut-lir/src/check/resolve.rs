@@ -1,5 +1,5 @@
 //! Type resolution: primitives, builtins (Array/Option/Result), user types
-//! (including `std:collection`'s `Vec` class), dyn I, fn types;
+//! (including `std:collection`'s `Vec` class), trait objects, fn types;
 //! naming-position resolution.
 
 use rut_core::types::*;
@@ -11,10 +11,10 @@ impl<'a> Ctx<'a> {
         match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
-                // an imported std:core interface (RFC 0028) — the prelude's
-                // only interface is the `Iterator<E>` protocol (RFC 0012 §6)
-                let core_iface = self.extern_ifaces.get(&tname).copied();
-                if core_iface == Some(rut_core::binary::NativeIface::Iterator) {
+                // a used std:core trait (RFC 0028) — the prelude's
+                // only builtin trait is the `Iterator<E>` protocol (RFC 0012 §6)
+                let core_trait = self.extern_traits.get(&tname).copied();
+                if core_trait == Some(rut_core::binary::NativeTrait::Iterator) {
                     let args: Vec<TypeId> = segs[0]
                         .generics
                         .iter()
@@ -33,7 +33,7 @@ impl<'a> Ctx<'a> {
                     if segs[0].generics.is_empty() {
                         if t.id == u32::MAX {
                             self.err(self.ast.span(node.id()), format!(
-                                "generic interface `{}` needs type arguments in an impl head (e.g. `impl {}<i32> for ..`)",
+                                "generic trait `{}` needs type arguments in an impl head (e.g. `impl {}<i32> for ..`)",
                                 self.name(tname), self.name(tname)
                             ));
                             None
@@ -59,14 +59,14 @@ impl<'a> Ctx<'a> {
                 } else {
                     let msg = self
                         .not_in_core_scope(tname)
-                        .unwrap_or_else(|| format!("unknown interface `{}`", self.name(tname)));
+                        .unwrap_or_else(|| format!("unknown trait `{}`", self.name(tname)));
                     self.err(self.ast.span(node.id()), msg);
                     None
                 };
                 id
             }
             _ => {
-                self.err(self.ast.span(node.id()), "expected an interface name");
+                self.err(self.ast.span(node.id()), "expected a trait name");
                 None
             }
         }
@@ -96,7 +96,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// A type in a NAMING position (impl heads, requires lists, is RHS) —
-    /// bare trait name → the trait's dyn-obj type here means the TYPE;
+    /// bare trait name → the trait's object type here means the TYPE;
     /// for `is` RHS we keep trait vs concrete distinction in the compiler.
     pub fn resolve_naming_type(&mut self, node: NodeHandle<AnyTy>) -> TypeId {
         self.resolve_type(node, &[])
@@ -161,16 +161,12 @@ impl<'a> Ctx<'a> {
                     self.err(sp, "Weak references are not supported in this build (RFC 0017, M5)");
                     return TY_I32;
                 }
-                if self.name(name) == "dyn" {
-                    self.err(sp, "`dyn` was removed — an interface name in type position is the object type (RFC 0012)");
-                    return TY_I32;
-                }
-                // an imported std:core builtin container (RFC 0028): the
-                // prelude is imported, never ambient — `Array`/`Opaque`
+                // a used std:core builtin container (RFC 0028): the
+                // prelude is used, never ambient — `Array`/`Opaque`
                 // resolve only when the name was bound from the std:core
                 // surface
                 let core_ty = self.extern_native_types.get(&name).copied();
-                // a declared or imported type shadows a builtin name (RFC
+                // a declared or used type shadows a builtin name (RFC
                 // 0005: `std:collection`'s `Vec` is an ordinary class, so it
                 // never reaches the builtin table)
                 let shadow = matches!(name, sym::ARRAY | sym::OPAQUE)
@@ -227,8 +223,8 @@ impl<'a> Ctx<'a> {
                         // the `Iterator<E>` protocol (RFC 0012 §6):
                         // engine-woven — its trait is built directly per
                         // type-argument list, before the AST-decl lookup
-                        if self.extern_ifaces.get(&name).copied()
-                            == Some(rut_core::binary::NativeIface::Iterator)
+                        if self.extern_traits.get(&name).copied()
+                            == Some(rut_core::binary::NativeTrait::Iterator)
                         {
                             let args: Vec<TypeId> = seg
                                 .generics
@@ -243,21 +239,21 @@ impl<'a> Ctx<'a> {
                                 return TY_I32;
                             }
                             let id = self.mk_iterator_inst(name, args[0]);
-                            return self.mk_dyn(id);
+                            return self.mk_trait_obj(id);
                         }
                         if let Some(t) = self.find_trait(name).cloned() {
-                            // an interface name in type position IS the
-                            // object type (RFC 0012) — no `dyn` prefix
+                            // a trait name in type position IS the
+                            // object type (RFC 0012) — the bare name spells it
                             if seg.generics.is_empty() {
                                 if t.id == u32::MAX {
                                     self.err(sp, format!(
-                                        "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
+                                        "generic trait `{}` needs type arguments (e.g. `{}<i32>`)",
                                         self.name(name),
                                         self.name(name)
                                     ));
                                     return TY_I32;
                                 }
-                                return self.mk_dyn(t.id);
+                                return self.mk_trait_obj(t.id);
                             }
                             if seg.generics.len() != t.generics.len() {
                                 self.err(sp, format!(
@@ -272,13 +268,13 @@ impl<'a> Ctx<'a> {
                                 .map(|g| self.resolve_type(*g, env))
                                 .collect();
                             let id = self.mk_trait_inst(name, args);
-                            return self.mk_dyn(id);
+                            return self.mk_trait_obj(id);
                         }
-                        // imported type (RFC 0035 §1): the exporter's
+                        // used type (RFC 0035 §1): the exporter's
                         // scope-qualified id; link rebases it
                         if let Some(&t) = self.extern_types.get(&name) {
                             if !seg.generics.is_empty() {
-                                self.err(sp, format!("imported type `{}` takes no generic arguments", self.name(name)));
+                                self.err(sp, format!("used type `{}` takes no generic arguments", self.name(name)));
                             }
                             return t;
                         }

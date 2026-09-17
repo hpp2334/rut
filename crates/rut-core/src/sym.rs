@@ -138,7 +138,7 @@ pub const WELL_KNOWN: &[&str] = &[
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
-/// every interner instance. Removed names (`Option`, `Result`, `dyn`,
+/// every interner instance. Removed names (`Option`, `Result`,
 /// `Weak`) are deliberately absent: their diagnostics stay text-based.
 ///
 /// Used as `rut_core::SELF` etc.

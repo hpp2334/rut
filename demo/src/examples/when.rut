@@ -1,7 +1,7 @@
 // RFC 0008 — `when` is the ONLY match construct: an exhaustive
 // pattern EXPRESSION. switch/case/default do not exist.
 
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
 fn describe(n: i32) -> str {
     return when (n) {

@@ -1,6 +1,6 @@
-import { Opaque, downcast, make_ptr } from "std:core";
-import { Vec } from "std:collection";
-import { Math } from "std:math";
+use { Opaque, downcast, make_ptr } from "std:core";
+use { Vec } from "std:collection";
+use { Math } from "std:math";
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
 //
 // The second algorithmic example: everything here operates on `bytes`

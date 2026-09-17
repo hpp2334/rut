@@ -127,7 +127,7 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 
 ## Known limitations / deliberate choices
 
-- Workloads are still single files, but they import `std:collection`,
+- Workloads are still single files, but they use `std:collection`,
   `std:math` and `std:log` through the module loader
   (RFC 0035); the probe and the `rut` driver install the host halves.
 - Missing language/std features exclude `pidigits` (no bigint),

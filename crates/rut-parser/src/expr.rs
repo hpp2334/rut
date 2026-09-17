@@ -271,10 +271,6 @@ impl ExprFrame {
                     p.bump(); // the `is` keyword
                     self.reduce_while(p, 6);
                     self.last_level = 6;
-                    if p.at_kw("dyn") {
-                        p.err_here("the `is` right-hand side is a naming position —no `dyn` prefix (RFC 0012 §3)");
-                        p.bump();
-                    }
                     self.stage = ExprStage::IsTy;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
@@ -630,7 +626,7 @@ impl AtomFrame {
         }
         p.bump(); // {
         let ty = p.typ(
-            TypeKind::TyPath { segs: vec![PathSeg { name: ty_name, generics: Vec::new() }], is_dyn: false },
+            TypeKind::TyPath { segs: vec![PathSeg { name: ty_name, generics: Vec::new() }] },
             self.lo,
         );
         self.stage = AtomStage::Struct { ty, fields: Vec::new() };

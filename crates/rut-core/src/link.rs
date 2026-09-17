@@ -9,7 +9,7 @@
 //! (RFC 0033 §1: "type_id<T>() constants are re-based with everything else").
 //!
 //! This pass is pure data — nothing runs — and is the compile/link half of
-//! RFC 0035 §1; cyclic imports stay the loader's concern.
+//! RFC 0035 §1; cyclic uses stay the loader's concern.
 
 use crate::binary::{ConstVal, FuncCode, Program, TraitDesc, TraitMethod};
 use crate::ops::Op;
@@ -34,7 +34,7 @@ pub fn flatten(prog: Program) -> Program {
     link(vec![prog]).expect("flatten: single-module link cannot fail")
 }
 
-/// Merge `modules` (in import order) into one [`Program`].
+/// Merge `modules` (in use order) into one [`Program`].
 pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     if modules.is_empty() {
         return Err(LinkError("link: no modules".into()));
@@ -76,7 +76,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         let base = out.types.types.len() as u32;
         let m_boot = if m.types.packed { m.types.boot_len } else { boot as u32 };
         let packed = m.types.packed;
-        // imported blocks carried in the table belong to their own scopes and
+        // used blocks carried in the table belong to their own scopes and
         // were appended by those modules — link only this module's own block
         let own_base = if packed {
             m.types
@@ -109,7 +109,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             name_map.get(id.0 as usize).copied().unwrap_or(id)
         };
         // function ids: `0`-scoped are this module's own (dense); other
-        // scopes name an imported module's block
+        // scopes name a used module's block
         let map_func = |f: u32| -> u32 {
             if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
                 f + func_off

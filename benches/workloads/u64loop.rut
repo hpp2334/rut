@@ -1,5 +1,5 @@
-import { Logger } from "std:log";
-import { Math } from "std:math";
+use { Logger } from "std:log";
+use { Math } from "std:math";
 
 // u64loop — the u64 arithmetic gate: 64-bit wrapping mul/add and a
 // shift-xor mix in a hot loop, the widest-width math the VM ships.

@@ -1,7 +1,7 @@
 // std/core.d.rut — the prelude surface (RFC 0028): what the language
 // itself ships — the `str`/`bytes` fns, the engine builtins `Array`/
 // `Option`/`Result`/`Opaque` (RFC 0005, RFC 0014), and the engine-woven
-// interfaces `Disposal`/`Index`/`Iterator`.
+// traits `Disposal`/`Index`/`Iterator`.
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
 // compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1). std:core
@@ -10,8 +10,8 @@
 // exist so users and the LSP see every signature — the lockstep test
 // keeps them true to rut-lir's lowering tables.
 //
-// The prelude is IMPORTED, never ambient (RFC 0028): nothing here is in
-// scope until a module writes `import { .. } from "std:core"`. The
+// The prelude is USED, never ambient (RFC 0028): nothing here is in
+// scope until a module writes `use { .. } from "std:core"`. The
 // compiler's copy of this surface is `rut_core::binary::Surface::core`;
 // a driver test asserts the two stay in lockstep. Type-calls spelled
 // with the type name (`x as i32` casts — RFC 0007) are syntax, not
@@ -40,7 +40,7 @@ pub builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> nil;
 
 // v1.1 codepoint access (RFC 0004 — `char` is gone): `s.code()` reads
 // the FIRST codepoint as a `u32` (traps on empty); `str.from_code(n)`
-// builds the 1-codepoint str. Compiler-lowered, no import needed for
+// builds the 1-codepoint str. Compiler-lowered, no use needed for
 // the method form; the type-method spells `str.from_code(..)`.
 //
 // pub method  s.code() -> u32
@@ -53,14 +53,14 @@ pub builtin fn string_join(parts: Array<str>) -> str;  // join in one pass (RFC 
 // v1.1: the primitive members are declared per type — `str`/`bytes`
 // carry their own member contracts (RFC 0004 v1.1); `len` is the
 // sequence member shared by every sequence.
-pub builtin str {
+pub builtin class str {
     fn len(self) -> i32;            // codepoints
     fn code(self) -> u32;           // the FIRST codepoint (traps on empty)
     fn encode(self) -> bytes;       // the UTF-8 octets
     fn slice(self, from: i32, to: i32) -> str;  // O(1) view [from, to) — codepoint bounds (RFC 0042)
 }
 
-pub builtin bytes {
+pub builtin class bytes {
     fn len(self) -> i32;            // octets
     fn decode(self) -> str;         // UTF-8 (lossy)
 }
@@ -69,33 +69,33 @@ pub builtin bytes {
 // `nil` on a pointer type or a `(T, err)` tuple; use sites diagnose
 // with the removal and its replacement.
 
-pub builtin Array<T> {
+pub builtin class Array<T> {
     fn len(self) -> i32;                    // the heap array's runtime length
 }
 
-// RFC 0014 — the erasure box: any non-`dyn` value goes in via `Opaque.new`,
+// RFC 0014 — the erasure box: any value goes in via `Opaque.new`,
 // `downcast<T>(o)` recovers it (and `x is T` probes it). A boot-table type
-// whose NAME is import-gated exactly like the containers above; `new`'s
+// whose NAME is use-gated exactly like the containers above; `new`'s
 // parameter is any value — the method spells that with its own `<T>`.
-pub builtin Opaque {
+pub builtin class Opaque {
     fn new<T>(v: T) -> Self;
 }
 
-// ---- engine-woven interfaces ----
-// `builtin interface` = the engine has built-in knowledge: compiler-
+// ---- engine-woven traits ----
+// `builtin trait` = the engine has built-in knowledge: compiler-
 // backed impls and lowering hooks. Users implement them with ordinary
 // `impl` blocks. Library contracts without engine knowledge (std:
-// collection's `Hashable`) stay plain `interface`.
+// collection's `Hashable`) stay plain `trait`.
 
 // v1.1 removals — `Disposal`/`Index` are gone from the prelude:
 // cleanups attach with `on_drop` (RFC 0016) and indexing is builtin
 // over `[T]`/`Vec`/`str`/`bytes`. Library contracts without engine
-// knowledge (`Hashable`) stay plain `interface` in their module.
+// knowledge (`Hashable`) stay plain `trait` in their module.
 
 // RFC 0012 §6 — the iteration protocol. A type is iterable when it
 // declares this member (duck-typed satisfaction); `for (x of it)`
 // desugars to `it.__iterate(emit)` with a fresh per-iteration binding:
 // `emit` returning `false` stops the iteration (a `break`).
-pub builtin interface Iterator<E> {
+pub builtin trait Iterator<E> {
     fn __iterate(self, emit: fn(E) -> bool);
 }

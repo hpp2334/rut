@@ -1,5 +1,5 @@
-import { Option } from "std:core";
-import { Logger } from "std:log";
+use { Option } from "std:core";
+use { Logger } from "std:log";
 
 // binary-trees — allocation churn. Nodes are recursive dataclasses
 // (RFC 0009 recursive shapes): `make` builds the tree bottom-up with

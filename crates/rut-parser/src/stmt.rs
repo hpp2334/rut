@@ -599,7 +599,7 @@ impl PatternFrame {
         }
     }
 
-    /// dotted path segments; generic args suspend to a child frame and
+    /// dotted path segments; generic args pause at a child frame and
     /// resume through `genargs_done` — the loops are iterative (C2).
     /// `self.sp` extends as segments land so the node span covers the
     /// whole path (RFC 0030 C1 — spans on every node).

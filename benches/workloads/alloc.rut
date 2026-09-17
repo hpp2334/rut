@@ -1,5 +1,5 @@
-import { Logger } from "std:log";
-import { Math } from "std:math";
+use { Logger } from "std:log";
+use { Math } from "std:math";
 
 // alloc — record allocation/drop churn (RC heap). Scale: 2_000_000 records.
 // Canonical reference: 2_000_000^2 wrapped = 1385447424.

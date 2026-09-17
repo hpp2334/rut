@@ -1,6 +1,6 @@
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
-import { Vec } from "std:collection";
+use { Vec } from "std:collection";
 // sieve — Sieve of Eratosthenes over a flat Vec<u8>.
 // Classic benchmark-game style: fixed scale, one checksum line.
 // Scale: limit = 500_000 (41538 primes).

@@ -1,4 +1,4 @@
-import { Logger } from "std:log";
+use { Logger } from "std:log";
 
 // mandelbrot — escape-time iteration count over a grid.
 // Scale: 400 x 300, max_iter = 500. Integer checksum (exact for f64).

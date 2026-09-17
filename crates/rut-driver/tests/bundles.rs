@@ -20,7 +20,7 @@ fn make_dir(base: &Path) -> std::path::PathBuf {
     .unwrap();
     std::fs::write(
         dir.join("entry.rut"),
-        "import { seven } from \"./inc.rut\";\nfn main() -> i32 { return seven(); }\n",
+        "use { seven } from \"./inc.rut\";\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
     std::fs::write(dir.join("inc.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
@@ -141,7 +141,7 @@ fn refusals() {
     let manifest = "format = \"rutbundle\"\nformat_version = 1\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n";
     let missing_inc = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
-        ("x.rut".into(), b"import { y } from \"./gone.rut\";\n".to_vec()),
+        ("x.rut".into(), b"use { y } from \"./gone.rut\";\n".to_vec()),
     ])
     .unwrap();
     let err = rut_driver::load_bundle_bytes(&missing_inc, Path::new("f")).unwrap_err();
@@ -159,7 +159,7 @@ fn refusals() {
     let manifest = "format = \"rutbundle\"\nformat_version = 1\nname = \"app:x\"\nentry.lib = \"./x.rut\"\n";
     let escape = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
-        ("x.rut".into(), b"import { y } from \"../evil.rut\";\n".to_vec()),
+        ("x.rut".into(), b"use { y } from \"../evil.rut\";\n".to_vec()),
     ])
     .unwrap();
     let err = rut_driver::load_bundle_bytes(&escape, Path::new("h")).unwrap_err();

@@ -4,7 +4,7 @@
 // every integer width (RFC 0032 §1.1 R2). No `host class` namespace
 // fiction: these are the module's own functions, reached qualified —
 //
-//   import { Math } from "std:math";
+//   use { Math } from "std:math";
 //   let d = Math.sqrt(x * x + y * y);
 //   let wrapped = Math.wrapping_mul(x, 1103515245);
 //

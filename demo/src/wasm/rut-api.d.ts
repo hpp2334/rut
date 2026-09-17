@@ -13,7 +13,7 @@ export interface Diag {
   msg: string;
 }
 
-// ---- the AST tree (one interface per Rust `Kind` variant, 1:1) ----
+// ---- the AST tree (one TS shape per Rust `Kind` variant, 1:1) ----
 
 export type Span2 = [number, number];
 export type VisTag = "pub" | "mod" | "super" | "self";
@@ -39,20 +39,20 @@ interface Base { id: number; span: Span2 }
 
 // ---- items ----
 export interface AstModule extends Base { kind: "Module"; items: AstNode[] }
-export interface AstImport extends Base { kind: "Import"; names: string[]; from: string }
+export interface AstUse extends Base { kind: "Use"; names: string[]; from: string }
 export interface AstModuleLet extends Base { kind: "ModuleLet"; vis: VisTag; name: string; ty?: AstNode; init: AstNode }
 export interface AstEnum extends Base { kind: "Enum"; vis: VisTag; name: string; members: AstMember[] }
 export interface AstDataclass extends Base { kind: "Dataclass"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }
 export interface AstClass extends Base { kind: "Class"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }
 export interface AstTrait extends Base { kind: "Trait"; vis: VisTag; name: string; generics?: string[]; requires: AstNode[]; methods: AstNode[] }
 export interface AstImpl extends Base { kind: "Impl"; trait: AstNode; target: AstNode; methods: AstNode[] }
-export interface AstFn extends Base { kind: "Fn"; vis: VisTag; suspend?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; wheres?: AstWhere[]; body: AstNode }
+export interface AstFn extends Base { kind: "Fn"; vis: VisTag; async?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; wheres?: AstWhere[]; body: AstNode }
 export interface AstSurfaceFn extends Base { kind: "SurfaceFn"; vis: VisTag; linkage: LinkageTag; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode }
 export interface AstSurfaceClass extends Base { kind: "SurfaceClass"; vis: VisTag; linkage: LinkageTag; name: string; extparams: AstExtParam[]; members: AstNode[] }
 
 // ---- members & statements ----
 export interface AstFieldDecl extends Base { kind: "FieldDecl"; vis?: VisTag; static?: true; name: string; ty: AstNode; init?: AstNode }
-export interface AstMethodDecl extends Base { kind: "MethodDecl"; vis?: VisTag; suspend?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; body?: AstNode }
+export interface AstMethodDecl extends Base { kind: "MethodDecl"; vis?: VisTag; async?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; body?: AstNode }
 export interface AstParam extends Base { kind: "Param"; mut?: true; name: string; ty?: AstNode }
 export interface AstSelfParam extends Base { kind: "SelfParam"; mut?: true }
 export interface AstBlock extends Base { kind: "Block"; stmts: AstNode[] }
@@ -77,7 +77,7 @@ export interface AstPatWild extends Base { kind: "PatWild" }
 export interface AstPatElse extends Base { kind: "PatElse" }
 
 // ---- types ----
-export interface AstTyPath extends Base { kind: "TyPath"; dyn?: true; segs: AstSeg[] }
+export interface AstTyPath extends Base { kind: "TyPath"; segs: AstSeg[] }
 export interface AstTyFn extends Base { kind: "TyFn"; params: AstNode[]; ret: AstNode }
 export interface AstTyConst extends Base { kind: "TyConst"; expr: AstNode }
 
@@ -102,7 +102,7 @@ export interface AstSelect extends Base { kind: "Select"; arms: AstNode[] }
 export interface AstIs extends Base { kind: "Is"; expr: AstNode; ty: AstNode }
 
 export type AstNode =
-  | AstModule | AstImport | AstModuleLet | AstEnum | AstDataclass | AstClass
+  | AstModule | AstUse | AstModuleLet | AstEnum | AstDataclass | AstClass
   | AstTrait | AstImpl | AstFn | AstSurfaceFn | AstSurfaceClass
   | AstFieldDecl | AstMethodDecl | AstParam | AstSelfParam | AstBlock
   | AstLetStmt | AstIf | AstWhile | AstForOf | AstForC | AstReturn | AstBreak

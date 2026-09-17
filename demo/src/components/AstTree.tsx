@@ -62,7 +62,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
   switch (n.kind) {
     case "Module":
       return [{ label: "items", list: n.items }];
-    case "Import":
+    case "Use":
       return [
         { label: "names", items: n.names },
         { label: "from", text: n.from },
@@ -106,7 +106,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
     case "Fn":
       return [
         { label: "vis", text: VIS_LABEL[n.vis] },
-        ...(n.suspend ? [{ label: "suspend", text: "true" }] : []),
+        ...(n.async ? [{ label: "async", text: "true" }] : []),
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "params", list: n.params },
@@ -142,7 +142,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
     case "MethodDecl":
       return [
         ...(n.vis ? [{ label: "vis", text: VIS_LABEL[n.vis] }] : []),
-        ...(n.suspend ? [{ label: "suspend", text: "true" }] : []),
+        ...(n.async ? [{ label: "async", text: "true" }] : []),
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "params", list: n.params },
@@ -227,7 +227,6 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "TyPath":
       return [
-        ...(n.dyn ? [{ label: "dyn", text: "true" }] : []),
         { label: "segs", items: [textOfSegs(n.segs)] },
       ];
     case "TyFn":

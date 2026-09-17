@@ -1,7 +1,7 @@
 /**
  * The classics (RFC 0041 §3): real, runnable rut programs — the exact
  * files the repo's gate test compiles and runs (`crates/rut-cli/tests/
- * playground.rs`), raw-imported so the playground edits live sources,
+ * playground.rs`), read raw so the playground edits live sources,
  * not string copies. Each `NAME.expected` sidecar is the program's
  * actual output, not a hand-written promise.
  *

@@ -1,8 +1,8 @@
 //! Module-graph compilation — the driver half of RFC 0035 §1.
 //!
-//! Walks a root module's `import` statements through a [`Session`]. A module
+//! Walks a root module's `use` statements through a [`Session`]. A module
 //! that only exports concrete items is compiled under its own scope and
-//! linked (its `Surface` is bound into each importer). A module that exports
+//! linked (its `Surface` is bound into each using module). A module that exports
 //! a *generic* type (`Vec<T>`) cannot be linked — RFC 0013 monomorphizes at
 //! compile time, and the instantiation must happen where the class body
 //! lives — so its source is inlined into the consumer instead (its own
@@ -29,7 +29,7 @@ pub struct GraphOutput {
     pub program: Option<Program>,
 }
 
-/// Compile `root_spec` and its transitive imports from `session`.
+/// Compile `root_spec` and its transitive uses from `session`.
 pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
     let mut c = GraphCompiler {
         session,
@@ -55,7 +55,7 @@ pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
 #[derive(Clone)]
 enum Unit {
     Linked { idx: usize, scope: rut_core::ScopeId },
-    /// source to splice into the consumer, plus the imports its own source
+    /// source to splice into the consumer, plus the uses its own source
     /// names (so the consumer binds them too)
     Inline { source: String, bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> },
 }
@@ -63,7 +63,7 @@ enum Unit {
 struct GraphCompiler<'a> {
     session: &'a Session,
     next_scope: rut_core::ScopeId,
-    /// post-order: dependencies precede importers
+    /// post-order: dependencies precede their users
     programs: Vec<Program>,
     done: HashMap<String, Unit>,
     visiting: HashSet<String>,
@@ -80,7 +80,7 @@ impl<'a> GraphCompiler<'a> {
         if !self.visiting.insert(spec.to_string()) {
             self.diags.push(Diag::new(
                 Span::new(0, 0),
-                format!("cyclic import: `{spec}` is already being compiled"),
+                format!("cyclic use: `{spec}` is already being compiled"),
             ));
             return None;
         }
@@ -94,14 +94,14 @@ impl<'a> GraphCompiler<'a> {
         // a native module (RFC 0022/0026): no rut body — synthesize a
         // placeholder program whose bodyless funcs the embedder implements.
         // Intrinsics (compiler-lowered) and constants ride the same surface.
-        // `std:core` rides it too: no funcs, just the native type/iface/fn
+        // `std:core` rides it too: no funcs, just the native type/trait/fn
         // names of the prelude (RFC 0028).
         if module.source.is_none()
             && (!module.host_funcs.is_empty()
                 || !module.intrinsics.is_empty()
                 || !module.consts.is_empty()
                 || !module.native_types.is_empty()
-                || !module.native_ifaces.is_empty()
+                || !module.native_traits.is_empty()
                 || !module.native_fns.is_empty())
         {
             use rut_core::binary::{FuncCode, Program};
@@ -171,8 +171,8 @@ impl<'a> GraphCompiler<'a> {
                 .iter()
                 .map(|(n, k)| (surface.names.intern(n), *k))
                 .collect();
-            surface.native_ifaces = module
-                .native_ifaces
+            surface.native_traits = module
+                .native_traits
                 .iter()
                 .map(|(n, k)| (surface.names.intern(n), *k))
                 .collect();
@@ -202,12 +202,12 @@ impl<'a> GraphCompiler<'a> {
             self.diags.extend(d);
             return None;
         }
-        let imports = imports_of(&ast);
+        let uses = uses_of(&ast);
 
         let mut extra = String::new();
         let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> = Vec::new();
         let mut bound_scopes = HashSet::new();
-        for dep in &imports {
+        for dep in &uses {
             match self.ensure(dep, true)? {
                 Unit::Inline { source, bound: b } => {
                     extra.push_str(&source);
@@ -228,7 +228,7 @@ impl<'a> GraphCompiler<'a> {
 
         // the compilation unit: inlined generic deps, then this module.
         // A declaration unit (`.d.rut`) takes no spliced bodies — its
-        // imports bind surfaces only; a decl file is pure surface
+        // use statements bind surfaces only; a decl file is pure surface
         // (RFC 0029), and Decl mode rejects implementations.
         let combined = if extra.is_empty() || module.is_decl {
             src
@@ -258,7 +258,7 @@ impl<'a> GraphCompiler<'a> {
         let program = out.program.unwrap();
         let has_generic = program.surface.type_exports.iter().any(|t| t.is_generic);
         // an explicitly-inlined module (e.g. `std:log`) or a generic export
-        // cannot be linked — splice its source (and its imports) in
+        // cannot be linked — splice its source (and its uses) in
         if as_dep && (module.inline || has_generic) {
             let unit = Unit::Inline { source: combined, bound };
             self.done.insert(spec.to_string(), unit.clone());
@@ -272,11 +272,11 @@ impl<'a> GraphCompiler<'a> {
     }
 }
 
-/// The exact specifiers a module imports, in source order, deduped.
-fn imports_of(ast: &Ast) -> Vec<String> {
+/// The exact specifiers a module uses, in source order, deduped.
+fn uses_of(ast: &Ast) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
-        if let ItemKind::Import { from, .. } = ast.item(it) {
+        if let ItemKind::Use { from, .. } = ast.item(it) {
             if !out.contains(from) {
                 out.push(from.clone());
             }

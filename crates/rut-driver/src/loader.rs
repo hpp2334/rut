@@ -1,10 +1,10 @@
 //! Filesystem loader — read a module directory (`rut.toml`) or a packed
 //! `.rutbundle` (RFC 0038) into a [`Session`].
 //!
-//! One module is one directory. Its entry file may `import { .. } from
+//! One module is one directory. Its entry file may `use { .. } from
 //! "./sibling.rut"`: those are *intra*-module includes (one scope), so the
-//! loader inlines them into a single compilation unit. `import ... from
-//! "scope:name"` stays an inter-module import, resolved by the `Session`.
+//! loader inlines them into a single compilation unit. `use ... from
+//! "scope:name"` stays an inter-module use, resolved by the `Session`.
 //! A `.rutbundle` is the same contract zipped: `rut.toml` plus the rut
 //! sources, includes inlined from archive entries instead of the
 //! filesystem.
@@ -18,19 +18,19 @@ use std::path::{Path, PathBuf};
 use crate::bundle::{parse_bundle, write_bundle};
 use crate::session::{parse_manifest, Entry, Module, Session};
 
-/// One chunk of a source scan: a plain line, or an import statement
+/// One chunk of a source scan: a plain line, or a use statement
 /// buffered whole (it may span lines — the multi-line form must be
 /// treated exactly like the single-line one).
 enum Chunk<'a> {
     Line(&'a str),
-    Import(String),
+    Use(String),
 }
 
 fn chunks(src: &str) -> Vec<Chunk<'_>> {
     let mut out = Vec::new();
     let mut lines = src.lines().peekable();
     while let Some(line) = lines.next() {
-        if line.trim_start().starts_with("import") {
+        if line.trim_start().starts_with("use") {
             let mut stmt = vec![line];
             while !stmt.last().map(|l| l.trim_end().ends_with(';')).unwrap_or(true) {
                 match lines.next() {
@@ -38,7 +38,7 @@ fn chunks(src: &str) -> Vec<Chunk<'_>> {
                     None => break,
                 }
             }
-            out.push(Chunk::Import(stmt.join("\n")));
+            out.push(Chunk::Use(stmt.join("\n")));
         } else {
             out.push(Chunk::Line(line));
         }
@@ -46,11 +46,11 @@ fn chunks(src: &str) -> Vec<Chunk<'_>> {
     out
 }
 
-/// The relative specifier of an `import ... from "./x.rut"` statement, if
+/// The relative specifier of a `use ... from "./x.rut"` statement, if
 /// any.
-fn relative_import(stmt: &str) -> Option<String> {
+fn relative_use(stmt: &str) -> Option<String> {
     let t = stmt.trim_start();
-    if !t.starts_with("import") {
+    if !t.starts_with("use") {
         return None;
     }
     let after = t.split_once("from")?.1.trim_start();
@@ -62,7 +62,7 @@ fn relative_import(stmt: &str) -> Option<String> {
     }
 }
 
-/// Expand one source through `resolve`: a relative import is replaced by
+/// Expand one source through `resolve`: a relative use is replaced by
 /// its expanded child (`Ok(None)` = already included — dropped, matching
 /// the include-once rule); anything else is kept verbatim.
 fn expand_scan(
@@ -76,8 +76,8 @@ fn expand_scan(
                 out.push_str(line);
                 out.push('\n');
             }
-            Chunk::Import(whole) => {
-                let child = match relative_import(&whole) {
+            Chunk::Use(whole) => {
+                let child = match relative_use(&whole) {
                     Some(rel) => resolve(&rel)?,
                     None => None,
                 };
@@ -92,7 +92,7 @@ fn expand_scan(
     Ok(out)
 }
 
-/// Filesystem include expansion: read `path`, inline its relative imports
+/// Filesystem include expansion: read `path`, inline its relative uses
 /// recursively (each file's own directory is the include root, so
 /// `../` reaches sibling directories).
 fn expand_fs(path: &Path, seen: &mut HashSet<PathBuf>) -> Result<String, String> {
@@ -108,7 +108,7 @@ fn expand_fs(path: &Path, seen: &mut HashSet<PathBuf>) -> Result<String, String>
     })
 }
 
-/// Read `path` and inline its relative imports (`./x.rut`) recursively, so a
+/// Read `path` and inline its relative uses (`./x.rut`) recursively, so a
 /// multi-file module becomes one compilation unit (one interner, one scope).
 pub fn expand_module_source(path: &Path) -> Result<String, String> {
     let mut seen = HashSet::new();
@@ -328,8 +328,8 @@ fn collect_includes(
         std::fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     out.push((bundle_key(rel)?, src.clone().into_bytes()));
     for chunk in chunks(&src) {
-        if let Chunk::Import(stmt) = chunk {
-            if let Some(r) = relative_import(&stmt) {
+        if let Chunk::Use(stmt) = chunk {
+            if let Some(r) = relative_use(&stmt) {
                 collect_includes(dir, &r, seen, out)?;
             }
         }
