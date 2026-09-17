@@ -100,13 +100,14 @@ hot paths carry no tags:
 ```rust
 #[derive(Clone, Copy)]
 pub union Slot {
-    pub i: i64,                       // all int widths, sign/zero-extended
-    pub f: f64,                       // f32 payloads widened
-    pub b: bool,
-    pub c: char,
-    pub r: Option<NonNull<Header>>,   // every non-primitive: value cells,
+    pub i: i64,                       // ints and bool/char as i64 (RFC 0007):
+    pub f: f64,                       //   the canonical scalar width
+    pub b: bool,                      // (constructors write the full 8
+    pub c: char,                      //   bytes — untagged discipline)
+    pub r: *const CellVal,            // every non-primitive: value cells,
 }                                     // vecs/slices, strings, enums,
-                                      // trait-object fat-refs, Opaque boxes
+                                      // Opaque boxes — a stable raw
+                                      // pointer (RFC 0039 §3)
 ```
 
 Every non-primitive register holds a cell handle (RFC 0016 §1) —

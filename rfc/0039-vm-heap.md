@@ -85,6 +85,17 @@ discipline is the point, not the allocator.
   rc==0 sentinel.
 - **No compaction in v1** (RFC 0016 OQ-1): non-moving keeps host `&mut`
   borrows sound (RFC 0023 §2) and freelists trivial.
+- **Cell addressing: the slot holds the stable raw pointer** (`Slot.r`,
+  RFC 0015 §5). A 32-bit handle design — `(chunk << 10) | index`,
+  resolved through the minting arena — was prototyped against this
+  milestone and **reverted on its gate**: chunk bases never move, but
+  every ref-slot read pays a decode chain where the pointer design pays
+  none, and ref-heavy workloads measured +8-15% (quicksort, fasta)
+  against flat pure-arithmetic loops (intloop, u64loop). The handle's
+  original consumer — 4-byte slots for the narrowing plan — was
+  cancelled, leaving cost with no buyer; integer identity compare and
+  stale-handle non-aliasing remain available to a future revision that
+  actually needs small slots.
 
 ## 4. Deterministic teardown
 
