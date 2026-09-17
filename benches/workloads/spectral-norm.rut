@@ -22,7 +22,7 @@ fn a(i: i32, j: i32) -> f64 {
     return 1.0 / ((i + j) * (i + j + 1) / 2 + i + 1) as f64;
 }
 
-fn mul_av(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {
+fn mul_av(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> nil {
     for (let i = 0; i < n; i += 1) {
         let mut s: f64 = 0.0;
         for (let j = 0; j < n; j += 1) {
@@ -32,7 +32,7 @@ fn mul_av(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {
     }
 }
 
-fn mul_atv(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {
+fn mul_atv(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> nil {
     for (let i = 0; i < n; i += 1) {
         let mut s: f64 = 0.0;
         for (let j = 0; j < n; j += 1) {
@@ -42,7 +42,7 @@ fn mul_atv(v: Vec<f64>, mut out: Vec<f64>, n: i32) -> unit {
     }
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     let n = 150;
     let mut u = Vec<f64>.zeroed(n);
     let v = Vec<f64>.zeroed(n);

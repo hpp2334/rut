@@ -72,7 +72,7 @@ fn members_fields_and_locals() {
 
 #[test]
 fn f_string_tiles_and_lexes_holes() {
-    let src = "fn f() -> unit { log.info(f\"{color_name(Color.Red)} area={c.area()}\"); }";
+    let src = "fn f() -> nil { log.info(f\"{color_name(Color.Red)} area={c.area()}\"); }";
     let spans = classify_src(src);
     // the whole literal tiles with strings + hole tokens, no overlap
     let lit = src.find("f\"").unwrap() as u32;
@@ -124,11 +124,12 @@ fn recovery_miss_skips_instead_of_guessing() {
 
 #[test]
 fn ast_wins_over_token_layer_at_equal_start() {
-    // a field named `unit` would be token-classified `type`; the AST
-    // pass must replace it with `property`
-    let src = "struct T { unit: i32; }\n";
+    // a field named `str` would be token-classified `type`; the AST
+    // pass must replace it with `property`. (`nil` cannot be used — it
+    // is a reserved word, unlike the contextual primitive names.)
+    let src = "struct T { str: i32; }\n";
     let spans = classify_src(src);
-    assert_eq!(find(src, &spans, "unit"), vec![TokenType::Property]);
+    assert_eq!(find(src, &spans, "str"), vec![TokenType::Property]);
 }
 
 #[test]
@@ -145,7 +146,7 @@ fn cast_types_keep_their_type_color() {
 fn bare_calls_color_their_callee_as_function() {
     // `length(pt)` / `newCanvas()` — the callee gets the function
     // color, overriding the single-seg path's variable class
-    let src = "fn go() -> unit { let p = newCanvas(); blit_all(length(p), p); }\n";
+    let src = "fn go() -> nil { let p = newCanvas(); blit_all(length(p), p); }\n";
     let spans = classify_src(src);
     assert_eq!(find(src, &spans, "newCanvas"), vec![TokenType::Function]);
     assert_eq!(find(src, &spans, "blit_all"), vec![TokenType::Function]);
@@ -155,7 +156,7 @@ fn bare_calls_color_their_callee_as_function() {
 
 #[test]
 fn symbols_outline() {
-    let src = "interface Drawable { fn draw(self, g: Canvas) -> unit; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> unit {} }\nenum Color { Red }\npub fn main() -> unit {}\n";
+    let src = "interface Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Drawable for Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\npub fn main() -> nil {}\n";
     let (toks, _) = rut_lexer::lexer::lex(src);
     let (ast, _) = parse(src, Mode::Impl);
     let syms = symbols(&toks, &ast);

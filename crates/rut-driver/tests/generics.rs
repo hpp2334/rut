@@ -102,7 +102,7 @@ fn vec_over_array_compiles() {
              fn new() -> Self { return Vec.with_capacity(0); }\n\
              fn with_capacity(cap: i32) -> Self { return Self { buf: Array<T>(cap), len: 0 }; }\n\
              fn len(self) -> i32 { return self.len; }\n\
-             fn push(mut self, v: T) -> unit {\n\
+             fn push(mut self, v: T) -> nil {\n\
                  if (self.len == self.buf.len()) {\n\
                      let mut cap = self.buf.len() * 2;\n\
                      if (cap == 0) { cap = 4; }\n\

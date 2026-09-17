@@ -10,6 +10,6 @@ fn fib(n: i32) -> i32 {
     return fib(n - 1) + fib(n - 2);
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     Logger.new("app").info(f"CHECKSUM {fib(28)}");
 }

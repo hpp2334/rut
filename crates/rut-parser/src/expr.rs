@@ -429,7 +429,8 @@ impl AtomFrame {
                 if name == "when" && matches!(p.peek(1).tok, Tok::LParen) {
                     return Step::Push(Frame::When(WhenFrame::new()));
                 }
-                // `nil` — the null pointer literal (RFC 0005)
+                // `nil` — the empty value (RFC 0005 pointer null; v1.2:
+                // the `nil` type's own value as well)
                 if name == "nil" {
                     p.bump();
                     let e = p.expr(ExprKind::Lit(Lit::Nil), sp);
@@ -562,13 +563,17 @@ impl AtomFrame {
                     AtomStage::Paren { e, elems, .. } => (e.take(), std::mem::take(elems)),
                     _ => unreachable!(),
                 };
-                // `(a)` groups; `()` and `(a, b)` are tuples (RFC 0007)
+                // `(a)` groups; `(a, b)` are tuples (RFC 0007); `()` is
+                // the nil value and must be spelled `nil` (v1.2)
                 if elems.is_empty() {
                     return match e {
                         Some(v) => self.finish(p, v),
-                        None => Step::Pop(Done::Expr(
-                            p.expr(ExprKind::Tuple { elems: Vec::new() }, self.lo.to(p.span())),
-                        )),
+                        None => {
+                            p.err_here("`()` is not a value — the empty value is spelled `nil` (v1.2)");
+                            Step::Pop(Done::Expr(
+                                p.expr(ExprKind::Lit(Lit::Nil), self.lo.to(p.span())),
+                            ))
+                        }
                     };
                 }
                 let mut elems = elems;

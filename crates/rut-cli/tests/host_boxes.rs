@@ -25,15 +25,15 @@ import { store_new, store_set, store_get, store_size } from "plugin:boxes";
 class Store {
     h: Opaque;
     fn adopt(h: Opaque) -> Self { return Self { h: h }; }
-    fn set(mut self, k: str, v: i64) -> unit { store_set(self.h, k, v); }
+    fn set(mut self, k: str, v: i64) -> nil { store_set(self.h, k, v); }
     fn get(self, k: str) -> i64 { return store_get(self.h, k); }
 }
 
 entry fn make() -> Opaque { return store_new(); }
-entry fn put(c: Opaque, k: str, v: i64) -> unit { store_set(c, k, v); }
+entry fn put(c: Opaque, k: str, v: i64) -> nil { store_set(c, k, v); }
 entry fn get(c: Opaque, k: str) -> i64 { return store_get(c, k); }
 entry fn size(c: Opaque) -> i64 { return store_size(c); }
-entry fn wrap_put(c: Opaque, k: str, v: i64) -> unit {
+entry fn wrap_put(c: Opaque, k: str, v: i64) -> nil {
     let s = Store.adopt(c);
     s.set(k, v);
 }
@@ -227,7 +227,7 @@ class Node {
     fn new(name: str) -> Self { return Self { name: name, tag: Opaque.new(0), tags: Vec.new() }; }
 }
 
-entry fn churn(n: i64) -> unit {
+entry fn churn(n: i64) -> nil {
     for (let i = 0i64; i < n; i += 1) {
         let node = Node.new(f"n{i}");
         node.tags.push(f"t{i}");

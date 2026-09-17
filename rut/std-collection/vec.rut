@@ -37,7 +37,7 @@ pub class Vec<T> {
     // the window is fixed-length and detaches if this vector grows.
     // (Not a rut method — declared here as the surface contract.)
 
-    pub fn push(mut self, v: T) -> unit {
+    pub fn push(mut self, v: T) -> nil {
         if (self.len == self.cap) {
             let mut cap = self.cap * 2;
             if (cap == 0) {

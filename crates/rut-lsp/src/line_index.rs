@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn ascii_round_trip() {
-        let src = "fn main() -> unit {\n    let x = 1;\n}\n";
+        let src = "fn main() -> nil {\n    let x = 1;\n}\n";
         let ix = LineIndex::new(src);
         assert_eq!(ix.line_count(), 4);
         for (byte, _) in src.bytes().enumerate() {

@@ -108,7 +108,7 @@ pub enum NativeTy {
 /// for importers that named it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeIface {
-    /// `Disposal { fn dispose(mut self) -> unit }` (RFC 0011/0016)
+    /// `Disposal { fn dispose(mut self) -> nil }` (RFC 0011/0016)
     Disposal,
     /// `Index<T>` — the random-access contract (RFC 0012)
     Index,
@@ -198,9 +198,9 @@ pub fn is_core_name(name: &str) -> bool {
     is_core_fn(name) || core_native_type(name).is_some() || core_native_iface(name).is_some()
 }
 
-/// `std:core` names removed in v1.1, each with its replacement. Use
-/// sites diagnose with these instead of "unknown" — a removed surface
-/// explains itself (RFC 0028 v1.1).
+/// `std:core` names removed from the surface, each with its replacement.
+/// Use sites diagnose with these instead of "unknown" — a removed surface
+/// explains itself (RFC 0028 v1.1; `unit` in v1.2).
 pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("own", "`own` was removed — values copy on assignment (RFC 0016 §1); share a cell via `make_ptr`"),
     ("Option", "`Option` was removed — absence is `nil` on a pointer type, or a `(T, err)` tuple (v1.1)"),
@@ -214,9 +214,10 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("bytes_decode", "`bytes_decode(b)` was removed — use `b.decode()` (RFC 0004 v1.1)"),
     ("bytes_from", "`bytes_from(a)` was removed — use `bytes.from(a)` (RFC 0004 v1.1)"),
     ("bytes_zeroed", "`bytes_zeroed(n)` was removed — use `bytes.zeroed(n)` (RFC 0004 v1.1)"),
+    ("unit", "`unit` was removed — the empty type and its value are spelled `nil` (v1.2)"),
 ];
 
-/// The v1.1 removal message for `name`, if it is a removed `std:core` name.
+/// The removal message for `name`, if it is a removed `std:core` name.
 pub fn removed_core(name: &str) -> Option<&'static str> {
     REMOVED_CORE
         .iter()

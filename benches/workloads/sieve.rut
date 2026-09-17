@@ -24,7 +24,7 @@ fn sieve(limit: i32) -> Vec<i32> {
     return primes;
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     let primes = sieve(500000);
     Logger.new("app").info(f"CHECKSUM {primes.len()}");
 }

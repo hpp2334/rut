@@ -65,12 +65,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Field { recv, name } => self.compile_field(recv, name, sp),
             ExprKind::Tuple { elems } => {
                 // `(a, b, ..)` (RFC 0007): a record with numeric fields.
-                // `()` is the unit value.
-                if elems.is_empty() {
-                    let reg = self.new_reg(TY_NIL);
-                    self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);
-                    return Ok(TY_NIL);
-                }
+                // `()` no longer reaches here — the parser rejects it and
+                // points at `nil` (v1.2).
                 let mut etys = Vec::new();
                 let mut vals = Vec::new();
                 for e in &elems {
@@ -405,12 +401,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok((TY_BOOL, reg))
             }
             Lit::Nil => {
-                // `nil` (RFC 0005): typed by the expected position —
-                // `let p: *T = nil`, `p == nil` — or the default `*unit`.
-                // The null slot IS zero bits (Slot::null).
+                // `nil` (RFC 0005; v1.2): typed by the expected position —
+                // `let p: *T = nil`, `p == nil` — and otherwise the `nil`
+                // type's own value. The null slot IS zero bits (Slot::null).
                 let ty = match expected {
                     Some(e) if matches!(self.ctx.types.kind(e), TyKind::Ptr { .. }) => e,
-                    _ => self.ctx.mk_ptr(TY_NIL),
+                    _ => TY_NIL,
                 };
                 let reg = self.new_reg(ty);
                 self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);

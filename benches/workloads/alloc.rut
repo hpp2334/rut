@@ -9,7 +9,7 @@ dataclass Point {
     y: i32,
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     let mut s: i32 = 0;
     for (let i = 0; i < 2000000; i += 1) {
         let p = Point { x: i, y: Math.wrapping_add(i, 1) };

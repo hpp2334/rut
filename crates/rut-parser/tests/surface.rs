@@ -131,7 +131,7 @@ fn removed_forms_are_rejected() {
         "`host primitive` must be diagnosed: {diags:?}"
     );
     // `host class` — removed: wrap native state in a rut class over Opaque
-    let (_, diags) = parse("pub host class Canvas { fn flush(self) -> unit; }", Mode::Decl);
+    let (_, diags) = parse("pub host class Canvas { fn flush(self) -> nil; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("`host class` is removed")),
         "`host class` must be diagnosed: {diags:?}"

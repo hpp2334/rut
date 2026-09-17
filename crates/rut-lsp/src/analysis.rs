@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn analyze_end_to_end() {
-        let a = analyze("fn main() -> unit {\n    let x = ;\n}\n", Mode::Impl);
+        let a = analyze("fn main() -> nil {\n    let x = ;\n}\n", Mode::Impl);
         assert!(!a.diags.is_empty(), "parse error must surface");
         assert!(a.diags[0].severity == Some(DiagnosticSeverity::ERROR));
         assert_eq!(a.diags[0].source.as_deref(), Some("rut"));
@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn encode_is_delta_correct() {
-        let src = "enum Color { Red }\nfn f(x: i32) -> unit {}\n";
+        let src = "enum Color { Red }\nfn f(x: i32) -> nil {}\n";
         let a = analyze(src, Mode::Impl);
         // decode back: every token's absolute (line, char, len) must land
         // on the exact text it classified

@@ -453,7 +453,7 @@ pub fn is_reserved_kw(s: &str) -> bool {
 pub fn is_primitive_ty(s: &str) -> bool {
     matches!(
         s,
-        "bool" | "str" | "bytes" | "unit" | "f32" | "f64"
+        "bool" | "str" | "bytes" | "nil" | "f32" | "f64"
             | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
     )
 }

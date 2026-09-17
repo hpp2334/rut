@@ -21,6 +21,6 @@ fn fasta(n: i32) -> str {
     return f"{checksum}:{out.len()}";
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     Logger.new("app").info(f"CHECKSUM {fasta(10000)}");
 }

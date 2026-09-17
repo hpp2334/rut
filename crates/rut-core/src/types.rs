@@ -190,7 +190,7 @@ impl TypeTable {
                 kind,
             });
         };
-        push("unit", TyKind::Nil);
+        push("nil", TyKind::Nil);
         push("u8", TyKind::Prim(PrimTy::U8));
         push("u16", TyKind::Prim(PrimTy::U16));
         push("u32", TyKind::Prim(PrimTy::U32));

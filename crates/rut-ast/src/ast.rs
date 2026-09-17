@@ -497,7 +497,7 @@ pub enum TypeKind {
 #[derive(Clone, Debug)]
 pub enum ExprKind {
     /// block expression — fn bodies, loop bodies, block arms/lambda bodies;
-    /// its value is the last statement's (unit if none)
+    /// its value is the last statement's (nil if none)
     Block { stmts: Vec<NodeHandle<AnyStmt>> },
     Lit(Lit),
     /// dotted path, possibly with generic args on any segment:
@@ -515,8 +515,8 @@ pub enum ExprKind {
     FStr { parts: Vec<FPartAst> },
     /// struct / `Self { .. }` literal — classes have no instance literal
     Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
-    /// tuple expression `(a, b, ..)` / `()` — a record with numeric fields
-    /// (RFC 0007; `()` is the unit value)
+    /// tuple expression `(a, b, ..)` — a record with numeric fields
+    /// (RFC 0007; `()` is rejected — the empty value is `nil`, v1.2)
     Tuple { elems: Vec<NodeHandle<AnyExpr>> },
     /// `[e1, .., en] : Array<T, n>` (RFC 0007 §1)
     ArrayLit { elems: Vec<NodeHandle<AnyExpr>> },

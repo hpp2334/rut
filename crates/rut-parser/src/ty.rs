@@ -21,7 +21,8 @@ enum TyStage {
     Ptr,
     /// `[T]` — the array type (RFC 0005)
     Bracket,
-    /// `(A, B)` / `(T)` / `()` — tuple, grouping, unit (RFC 0007)
+    /// `(A, B)` / `(T)` — tuple, grouping (RFC 0007); `()` is rejected —
+    /// the empty type is spelled `nil` (v1.2)
     Tuple { elems: Vec<NodeHandle<AnyTy>> },
     /// `fn(...)`: collecting parameter types
     FnParams { params: Vec<NodeHandle<AnyTy>> },
@@ -51,7 +52,8 @@ impl TypeFrame {
                     self.stage = TyStage::Bracket;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
-                // tuple type `(A, B)` / grouping `(T)` / unit `()` (RFC 0007)
+                // tuple type `(A, B)` / grouping `(T)` (RFC 0007); `()`
+                // is the nil type and must be spelled `nil` (v1.2)
                 if p.eat_punct(Tok::LParen) {
                     self.stage = TyStage::Tuple { elems: Vec::new() };
                     return self.tuple_top(p);
@@ -151,20 +153,21 @@ impl TypeFrame {
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
-    /// tuple type element list: `()` closes as unit; elements separate on
-    /// commas, one-element `(T)` is a grouping
+    /// tuple type element list: elements separate on commas, one-element
+    /// `(T)` is a grouping; `()` is the nil type — spelled `nil`, not `()`
     fn tuple_top(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::RParen) {
-            return Step::Pop(Done::Ty(self.unit_ty(p)));
+            p.err_here("`()` is not a type — the empty type is spelled `nil` (v1.2)");
+            return Step::Pop(Done::Ty(self.nil_ty(p)));
         }
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
-    fn unit_ty(&mut self, p: &mut Parser) -> NodeHandle<AnyTy> {
-        let unit = p.interner.intern("unit");
+    fn nil_ty(&mut self, p: &mut Parser) -> NodeHandle<AnyTy> {
+        let nil = p.interner.intern("nil");
         p.typ(
             TypeKind::TyPath {
-                segs: vec![PathSeg { name: unit, generics: Vec::new() }],
+                segs: vec![PathSeg { name: nil, generics: Vec::new() }],
                 is_dyn: false,
             },
             self.lo.to(p.span()),
@@ -172,17 +175,17 @@ impl TypeFrame {
     }
 
     /// the parameter list closed (or failed): optional `->` then the
-    /// return type — an omitted return is `unit` (RFC 0013 §1)
+    /// return type — an omitted return is `nil` (RFC 0013 §1, v1.2)
     fn to_fn_ret(&mut self, p: &mut Parser) -> Step {
         let params = match &mut self.stage {
             TyStage::FnParams { params } => std::mem::take(params),
             _ => unreachable!(),
         };
         if !p.eat_punct(Tok::Arrow) {
-            let unit = p.interner.intern("unit");
+            let nil = p.interner.intern("nil");
             let ret = p.typ(
                 TypeKind::TyPath {
-                    segs: vec![PathSeg { name: unit, generics: Vec::new() }],
+                    segs: vec![PathSeg { name: nil, generics: Vec::new() }],
                     is_dyn: false,
                 },
                 self.lo.to(p.span()),

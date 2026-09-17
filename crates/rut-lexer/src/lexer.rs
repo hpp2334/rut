@@ -635,7 +635,7 @@ fn reserved_word_msg(w: &str) -> Option<String> {
     let repl: &str = match w {
         "switch" => "rut does not have `switch`; use `when`",
         "case" => "rut does not have `case`; `when` arms are `pattern -> body`",
-        "void" => "rut spells the unit type `unit`",
+        "void" => "rut spells the empty type `nil`",
         "extends" => "rut has no inheritance (`extends`); compose instead (RFC 0010 §3)",
         "trait" => "rut spells this `interface`",
         "type" => "`type` members are not available — the element is a type argument (`interface Iter<T>`, RFC 0012)",

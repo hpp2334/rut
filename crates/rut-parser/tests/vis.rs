@@ -18,7 +18,7 @@ class Widget {
 
     pub fn new() -> Self { return Self { w: 0, h: 0, inner: 0, spare: 0, plain: 0 }; }
     pub fn size(self) -> f32 { return self.w * self.h; }
-    pub(mod) fn reset(mut self) -> unit { self.inner = 0; }
+    pub(mod) fn reset(mut self) -> nil { self.inner = 0; }
     pub(self) fn helper(self) -> i32 { return self.inner; }
     fn secret(self) -> i32 { return self.plain; }
 }
@@ -50,7 +50,7 @@ fn member_pub_combines_with_modifiers() {
     let src = "\
 class Sink {
     pub static CAP: i32 = 4;
-    pub suspend fn later(self) -> unit { }
+    pub suspend fn later(self) -> nil { }
 }
 ";
     let (ast, diags) = parse(src, Mode::Impl);
@@ -89,7 +89,7 @@ fn private_is_a_dropped_word() {
 
 #[test]
 fn pub_scope_rejects_unknown_scope() {
-    let (_, diags) = parse("class C { pub(crate) fn m(self) -> unit { } }", Mode::Impl);
+    let (_, diags) = parse("class C { pub(crate) fn m(self) -> nil { } }", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("expected `mod`, `super`, or `self` in pub")),
         "unknown scope must be diagnosed: {diags:?}"

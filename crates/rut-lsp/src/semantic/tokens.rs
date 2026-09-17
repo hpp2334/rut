@@ -15,10 +15,12 @@ pub fn token_type(tok: &Tok) -> Option<TokenType> {
         Tok::Int(..) | Tok::Float(..) => Some(TokenType::Number),
         Tok::Str(_) | Tok::RawStr(_) => Some(TokenType::String),
         Tok::Ident(s) => {
-            if s == "Self" || is_primitive_ty(s) {
-                Some(TokenType::Type)
-            } else if is_keyword(s) {
+            // keyword first: `nil` is reserved AND a type spelling — the
+            // literal reads as a keyword constant, like `true`/`false`
+            if is_keyword(s) {
                 Some(TokenType::Keyword)
+            } else if s == "Self" || is_primitive_ty(s) {
+                Some(TokenType::Type)
             } else {
                 None
             }

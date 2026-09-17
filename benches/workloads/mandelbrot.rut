@@ -36,7 +36,7 @@ fn mandelbrot(
     return checksum;
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     let checksum = mandelbrot(-2.0, -1.2, 0.8, 1.2, 100, 75, 200);
     Logger.new("app").info(f"CHECKSUM {checksum}");
 }

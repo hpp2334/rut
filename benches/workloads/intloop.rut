@@ -4,7 +4,7 @@ import { Math } from "std:math";
 // intloop — integer hot loop: wrapping add/mul, loop counter, compare/branch.
 // Scale: 5_000_000 iterations. Canonical reference: 628038624.
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     let mut s: i32 = 0;
     for (let i = 0; i < 5000000; i += 1) {
         s = Math.wrapping_sub(Math.wrapping_add(s, Math.wrapping_mul(i, 3)), 1);

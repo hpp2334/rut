@@ -59,7 +59,7 @@ impl Value {
     /// Boundary diagnostics: what a `Value` is, in words (`an Opaque`, ...).
     pub fn kind_name(&self) -> &'static str {
         match self {
-            Value::Nil => "unit",
+            Value::Nil => "nil",
             Value::I64(_) => "an integer",
             Value::F64(_) => "a float",
             Value::Bool(_) => "a bool",

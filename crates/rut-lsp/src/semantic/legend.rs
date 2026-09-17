@@ -82,9 +82,10 @@ pub fn is_primitive_ty(s: &str) -> bool {
 }
 
 /// A word the token layer already owns by text (keywords, `Self`) — never
-/// a name position. Primitives (`unit`, `str`, …) are contextual type
+/// a name position. Primitives (`str`, `bytes`, …) are contextual type
 /// names, NOT reserved: a field or param may legally carry one, and the
-/// AST pass then overrides the token layer's `type` class.
+/// AST pass then overrides the token layer's `type` class. (`nil` is
+/// reserved, so it never needs that rescue.)
 pub(crate) fn owned_by_tokens(s: &str) -> bool {
     is_keyword(s) || s == "Self"
 }

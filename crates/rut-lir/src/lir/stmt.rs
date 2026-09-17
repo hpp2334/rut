@@ -444,7 +444,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let st = self.compile_expr(scrut, None)?;
         let scrut_reg = self.last_reg;
-        // arm type unification (statement-when: unit)
+        // arm type unification (statement-when: nil)
         let result_ty = if let Some(e) = expected {
             e
         } else {
@@ -484,7 +484,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             self.bind(l_arm);
-            // unit arms may be statement blocks (`-> { a(); b(); }`,
+            // nil arms may be statement blocks (`-> { a(); b(); }`,
             // RFC 0008 §1) — blocks aren't value expressions in this
             // build, so compile them as scoped statement blocks
             let body_is_block = matches!(self.ctx.ast.expr(*body), ExprKind::Block { .. });

@@ -69,6 +69,6 @@ fn fannkuch(n: i32) -> i32 {
     return checksum * 1000 + max_flips;
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     Logger.new("app").info(f"CHECKSUM {fannkuch(7)}");
 }

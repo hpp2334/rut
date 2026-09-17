@@ -233,7 +233,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if c.compile_block(body).is_err() {
             return Err(());
         }
-        // implicit `return` for unit fns; non-unit fns must return on all
+        // implicit `return` for nil fns; non-nil fns must return on all
         // paths (checked loosely: a final Ret with default value)
         c.emit(Op::Ret { val: None }, 0);
         c.resolve_labels();

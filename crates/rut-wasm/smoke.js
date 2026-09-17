@@ -32,7 +32,7 @@ fn describe(f: Flavor): string {
         Flavor.Sour  -> "sour",
     };
 }
-pub fn main(): unit {
+pub fn main(): nil {
     let name = "rut";
     let n = 41 + 1;
     print(f"hi {name}! n={n} tab:\\t'c'={'c'}");

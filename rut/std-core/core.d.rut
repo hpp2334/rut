@@ -25,10 +25,10 @@
 pub builtin fn downcast<T>(o: Opaque) -> (T, bool);
 
 // RFC 0034 §2 — `msg` is optional at the call site (1 or 2 arguments).
-pub builtin fn assert(cond: bool, msg: str) -> unit;
+pub builtin fn assert(cond: bool, msg: str) -> nil;
 
 // RFC 0034 §2 — abort with the message.
-pub builtin fn panic(msg: str) -> unit;
+pub builtin fn panic(msg: str) -> nil;
 
 // RFC 0005 — box `v` into a fresh one-slot cell; the result is a
 // nil-able `*T` (`nil` is the null pointer; dereferencing it traps).
@@ -36,7 +36,7 @@ pub builtin fn make_ptr<T>(v: T) -> *T;
 
 // RFC 0016 §3 — run `cleanup(p)` when `p`'s cell refcount reaches zero.
 // One callback per pointer; a second attach is a compile error.
-pub builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> unit;
+pub builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> nil;
 
 // v1.1 codepoint access (RFC 0004 — `char` is gone): `s.code()` reads
 // the FIRST codepoint as a `u32` (traps on empty); `str.from_code(n)`

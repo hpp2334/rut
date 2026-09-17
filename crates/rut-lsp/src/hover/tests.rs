@@ -71,7 +71,7 @@ fn method_via_inference_and_self() {
 class Circle {
 r: f64;
 fn area(self) -> f64 { return 3.14; }
-fn grow(self, k: f64) -> unit { self.r = self.r * k; }
+fn grow(self, k: f64) -> nil { self.r = self.r * k; }
 }
 fn use_it() -> f64 {
 let c = Circle.new(1.0);
@@ -89,22 +89,22 @@ return c.area();
 fn trait_method_via_impl() {
     let src = "\
 interface Drawable {
-fn draw(self) -> unit;
+fn draw(self) -> nil;
 }
 class Circle {
 r: f64;
 }
 impl Drawable for Circle {
-fn draw(self) -> unit { }
+fn draw(self) -> nil { }
 }
-fn render(d: Circle) -> unit {
+fn render(d: Circle) -> nil {
 d.draw();
 }
 ";
     // 3rd occurrence: the call `d.draw()` — param-typed receiver,
     // resolved through the impl (the unified rule)
     let md = hover_nth(src, "draw", 2).unwrap();
-    assert!(md.contains("fn draw(self) -> unit"), "{md}");
+    assert!(md.contains("fn draw(self) -> nil"), "{md}");
     assert!(md.contains("from `impl Drawable for Circle`"), "{md}");
 }
 
@@ -113,7 +113,7 @@ fn free_fn_unique_match() {
     let src = "\
 // euclidean length
 fn length(p: i32) -> f64 { return 1.0; }
-fn main() -> unit { let x = length(3); }
+fn main() -> nil { let x = length(3); }
 ";
     let md = hover_at(src, "length").unwrap();
     assert!(md.contains("fn length(p: i32) -> f64"), "{md}");
@@ -124,7 +124,7 @@ fn main() -> unit { let x = length(3); }
 fn ambiguity_lists_candidates() {
     // two workspace files each defining `helper`
     let mk = |origin: &str| {
-        let f = rut_lexer::lexer::normalize("fn helper() -> unit { }\n");
+        let f = rut_lexer::lexer::normalize("fn helper() -> nil { }\n");
         let (fa, _) = rut_parser::parse(&f, rut_parser::Mode::Impl);
         let mut i = index(&f, &fa);
         i.origin = origin.to_string();
@@ -133,7 +133,7 @@ fn ambiguity_lists_candidates() {
     let a = mk("a.rut");
     let b = mk("b.rut");
 
-    let src = "fn go() -> unit { let h = helper(); }\n";
+    let src = "fn go() -> nil { let h = helper(); }\n";
     let s = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
@@ -170,6 +170,6 @@ fn host_fn_surface_favors_own_methods() {
 
 #[test]
 fn miss_is_none() {
-    let src = "fn main() -> unit { let z = unknown_thing; }\n";
+    let src = "fn main() -> nil { let z = unknown_thing; }\n";
     assert!(hover_at(src, "unknown_thing").is_none());
 }

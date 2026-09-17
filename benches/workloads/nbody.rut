@@ -40,7 +40,7 @@ fn energy(pos: Vec<f64>, vel: Vec<f64>, mass: Vec<f64>) -> f64 {
     return e;
 }
 
-fn advance(mut pos: Vec<f64>, mut vel: Vec<f64>, mass: Vec<f64>, dt: f64) -> unit {
+fn advance(mut pos: Vec<f64>, mut vel: Vec<f64>, mass: Vec<f64>, dt: f64) -> nil {
     for (let i = 0; i < 5; i += 1) {
         for (let j = i + 1; j < 5; j += 1) {
             let dx = pos[i * 3] - pos[j * 3];
@@ -63,7 +63,7 @@ fn advance(mut pos: Vec<f64>, mut vel: Vec<f64>, mass: Vec<f64>, dt: f64) -> uni
     }
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     let pi: f64 = 3.141592653589793;
     let solar_mass: f64 = 4.0 * pi * pi;
     let days_per_year: f64 = 365.24;

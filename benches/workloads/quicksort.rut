@@ -8,7 +8,7 @@ import { Math } from "std:math";
 // The LCG and the checksum use `Math.wrapping_*` (RFC 0004 §3) so the i32
 // math matches JavaScript's `Math.imul(...) | 0` exactly.
 
-fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> unit {
+fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> nil {
     if (lo >= hi) {
         return;
     }
@@ -30,7 +30,7 @@ fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> unit {
     quicksort(xs, p + 1, hi);
 }
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     let n = 10000;
     let xs: Vec<i32> = Vec.new();
     let mut x: i32 = 42;

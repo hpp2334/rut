@@ -7,7 +7,7 @@ import { Math } from "std:math";
 // sign/zero extension against regressions; intloop is the i32 sibling.
 // Scale: 1_000_000 iterations. Canonical reference: 7216000035.
 
-pub fn main() -> unit {
+pub fn main() -> nil {
     let mut h: u64 = 14695981039346656037u64;
     for (let i = 0; i < 1000000; i += 1) {
         h = Math.wrapping_mul(h, 1099511628211u64);
