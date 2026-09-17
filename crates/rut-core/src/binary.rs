@@ -98,6 +98,40 @@ pub struct SurfaceType {
     pub is_generic: bool,
 }
 
+/// One exported trait declaration (RFC 0012 §5 — trait impls may live in
+/// any module, so every module publishes the traits it declares): the
+/// name, its generic parameter count, and the resolved method signatures.
+/// `local` is the trait's index in the exporter's own trait table — the
+/// key `TyKind::TraitObj` ids inside carried type descriptors resolve
+/// under (RFC 0015 §6).
+#[derive(Clone, Debug)]
+pub struct SurfaceTrait {
+    /// the exporter's trait-table index
+    pub local: u32,
+    pub name: IdentId,
+    /// generic parameters (`trait Foo<T>`) — the trait's signatures are
+    /// only meaningful per instantiation, so a generic trait's methods
+    /// are empty here and it cannot be implemented across modules (v1)
+    pub generics: usize,
+    pub methods: Vec<TraitMethod>,
+}
+
+/// One exported trait impl registration (RFC 0012 §2): `(trait, target)`
+/// with each trait method bound to the exporter's module-local fn id.
+/// Duplicate `(trait, type)` pairs are detectable only at LINK time —
+/// per-module compiles cannot see each other (RFC 0012 §2).
+#[derive(Clone, Debug)]
+pub struct SurfaceImpl {
+    /// the trait's source name (an index into [`Surface::traits`] by name)
+    pub trait_name: IdentId,
+    /// the target type id, as packed in the exporter's table — foreign
+    /// targets (`impl ForeignTrait for ForeignType`) keep the scope they
+    /// were declared under (RFC 0035 §1)
+    pub target: TypeId,
+    /// trait method name → the exporter's module-local fn id
+    pub methods: Vec<(IdentId, u32)>,
+}
+
 /// A builtin container published by `core`'s native surface (RFC 0028):
 /// the type constructor is the compiler's own — the NAME resolves only once
 /// the module wrote `use core::{ .. };`. The prelude is
@@ -124,7 +158,7 @@ pub enum NativeTrait {
     Iterator,
 }
 
-/// The usable surface a module publishes (traits still to come).
+/// The usable surface a module publishes.
 /// Names are [`IdentId`]s into the surface's own [`Surface::names`]
 /// interner — including the names inside the carried [`RutType`]
 /// descriptors — so a surface crosses modules without a lookup context.
@@ -148,6 +182,11 @@ pub struct Surface {
     pub scope_blocks: Vec<(crate::id::ScopeId, u32)>,
     /// exported (pub) type names
     pub type_exports: Vec<SurfaceType>,
+    /// declared trait declarations (non-generic, RFC 0012 §5)
+    pub traits: Vec<SurfaceTrait>,
+    /// trait impl registrations `(trait, target, [method → fn ref])`
+    /// (RFC 0012 §2) — merged at link, where duplicate pairs error
+    pub impls: Vec<SurfaceImpl>,
     /// builtin container names (`core` only): name -> constructor
     pub native_types: Vec<(IdentId, NativeTy)>,
     /// builtin trait names (`core` only): name -> contract

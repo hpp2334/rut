@@ -87,6 +87,9 @@ pub fn compile_program_resolved(
         for c in &surface.consts {
             ast.interner.intern(surface.names.name(c.name));
         }
+        for t in &surface.traits {
+            ast.interner.intern(surface.names.name(t.name));
+        }
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
     ctx.allow_uses = allow_uses;
@@ -97,17 +100,56 @@ pub fn compile_program_resolved(
             ctx.used.extend(names.iter().copied());
         }
     }
+    // trait names resolve across ALL uses (an impl may live in a
+    // different module than the trait it implements, RFC 0012 §2):
+    // trait text -> this module's registered trait id
+    let mut ext_trait: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    let mut trait_maps: Vec<(
+        rut_core::ScopeId,
+        &rut_core::binary::Surface,
+        std::collections::HashMap<u32, u32>,
+    )> = Vec::new();
     for (dep_scope, surface) in uses {
-        // types first: descriptors must be in the table before any own type
-        // is interned (TypeTable::use_block); names re-intern from the
-        // exporter's interner
-        ctx.use_types(surface.types.clone(), &surface.names, &surface.scope_blocks);
+        // ---- pass 1: trait declarations from every surface (RFC 0012
+        // §5). A descriptor registers when its name was used, or when
+        // any bound impl names it (an unused trait's impl must stay
+        // visible to the use-gate diagnostic, RFC 0012 §6).
+        let impl_trait_texts: std::collections::HashSet<&str> = surface
+            .impls
+            .iter()
+            .map(|im| surface.names.name(im.trait_name))
+            .collect();
+        let mut tmap: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        for t in &surface.traits {
+            let text = surface.names.name(t.name);
+            let used_name = ast
+                .interner
+                .lookup(text)
+                .filter(|id| ctx.used.contains(id));
+            if used_name.is_none() && !impl_trait_texts.contains(text) {
+                continue;
+            }
+            let cid = ctx.add_extern_trait_decl(used_name, t, &surface.names);
+            tmap.insert(t.local, cid);
+            ext_trait.insert(text.to_string(), cid);
+        }
+        trait_maps.push((*dep_scope, surface, tmap));
+    }
+    // ---- pass 2: type descriptors (types first: descriptors must be in
+    // the table before any own type is interned — TypeTable::use_block;
+    // names re-intern from the exporter's interner)
+    for (_, surface, tmap) in &trait_maps {
+        ctx.use_types(surface.types.clone(), &surface.names, &surface.scope_blocks, tmap);
+    }
+    // ---- pass 3: fns, consts, types, impls, natives
+    for (dep_scope, surface, _) in trait_maps.iter() {
+        let dep_scope = *dep_scope;
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
                 if let Some(i) = f.intrinsic {
                     ctx.add_extern_intrinsic(id, i);
                 } else {
-                    ctx.add_extern_fn(id, rut_core::pack(*dep_scope, f.local), f.params.clone(), f.ret);
+                    ctx.add_extern_fn(id, rut_core::pack(dep_scope, f.local), f.params.clone(), f.ret);
                 }
             }
         }
@@ -118,8 +160,27 @@ pub fn compile_program_resolved(
         }
         for t in &surface.type_exports {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(t.name)) {
-                ctx.add_extern_type(id, rut_core::pack(*dep_scope, t.local), t.is_class);
+                ctx.add_extern_type(id, rut_core::pack(dep_scope, t.local), t.is_class);
             }
+        }
+        // impl registrations (RFC 0012 §2): `(trait, target, method → fn)`,
+        // the fns scope-qualified with the exporter's scope. A trait the
+        // module never used still binds its impls — dispatch stays gated
+        // on the trait's name (`extern_trait_decls`), the diagnostic
+        // ("use `I` ..") reads the registration.
+        for im in &surface.impls {
+            let text = surface.names.name(im.trait_name);
+            // an impl of a native trait (`Iterator`) stays in its
+            // declaring module — the consumer instantiates its own
+            // trait per element type (v1)
+            let Some(&tid) = ext_trait.get(text) else { continue };
+            let tname = ctx.intern(text);
+            let methods = im
+                .methods
+                .iter()
+                .map(|(n, f)| (ctx.intern(surface.names.name(*n)), rut_core::pack(dep_scope, *f)))
+                .collect();
+            ctx.add_extern_impl(tname, tid, im.target, methods);
         }
         // core's native surface (RFC 0028): builtin containers,
         // traits, and compiler-lowered fns — bound only when the
@@ -267,6 +328,47 @@ pub fn compile_program_resolved(
                 local: rut_core::local_of(e.ty),
                 is_class: false,
                 is_generic: false,
+            });
+        }
+        // trait surface (RFC 0012 §5): declared non-generic traits with
+        // their resolved signatures, keyed by the exporter's trait-table
+        // index (`local`) — the key the carried `[trait] ..` descriptors
+        // reference. Generic traits instantiate per argument list where
+        // they are declared and stay module-local (v1).
+        for (name, info) in &ctx.trait_decls {
+            if info.id == u32::MAX || info.id as usize >= ctx.traits.len() {
+                continue;
+            }
+            surface.traits.push(rut_core::binary::SurfaceTrait {
+                local: info.id,
+                name: *name,
+                generics: info.generics.len(),
+                methods: ctx.traits[info.id as usize].methods.clone(),
+            });
+        }
+        // impl registrations (RFC 0012 §2): `(trait, target, method → fn
+        // ref)` — link merges them and errors on a duplicate pair.
+        // Generic-target impls (`impl I for Vec<T>`) monomorphize where
+        // their targets instantiate and stay module-local.
+        for (idx, im) in ctx.impls.iter().enumerate() {
+            if im.inherent || im.target_data.is_some() {
+                continue;
+            }
+            let mut methods = Vec::new();
+            for (mname, _) in &im.methods {
+                let key = Inst {
+                    key: FnKey::ImplMethod { idx, name: *mname },
+                    subst: vec![],
+                    trait_origins: vec![],
+                };
+                if let Some(&fid) = ctx.inst_map.get(&key) {
+                    methods.push((*mname, fid));
+                }
+            }
+            surface.impls.push(rut_core::binary::SurfaceImpl {
+                trait_name: im.trait_name,
+                target: im.target,
+                methods,
             });
         }
     }

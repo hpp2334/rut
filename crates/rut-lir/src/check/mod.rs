@@ -161,6 +161,12 @@ pub struct Ctx<'a> {
     /// used core builtin traits: name -> contract
     /// (`Disposal`/`Index`/`Iterator`)
     pub extern_traits: std::collections::HashMap<IdentId, rut_core::binary::NativeTrait>,
+    /// traits exported by used modules' surfaces (RFC 0012 §5):
+    /// name -> the descriptor registered in this module's table. The
+    /// name binds only when the module used it — the use-both gate.
+    pub extern_trait_decls: std::collections::HashMap<IdentId, ExternTrait>,
+    /// trait impls registered by used modules' surfaces (RFC 0012 §2)
+    pub extern_impls: Vec<ExternImpl>,
     /// the emit-closure signature of each desugared `for..of` (RFC 0012 §6),
     /// recorded at the creation site and read when the queue compiles the fn:
     /// body node → (element type, captures)
@@ -195,6 +201,41 @@ pub struct ExternFn {
     /// `Some` for a compiler-lowered intrinsic (RFC 0032 §1.1 R2): no
     /// `FuncCode` — `rut-lir` expands the call inline.
     pub intrinsic: Option<rut_core::ops::Intrinsic>,
+}
+
+/// A trait exported by a used module's surface (RFC 0012 §5): the id of
+/// the descriptor registered in THIS module's trait table, and the
+/// trait's generic parameter count. The NAME resolves only when the
+/// module used it — the gate is the use-both rule's enforcement point
+/// (RFC 0012 §6), so an impl whose trait was never `use`d stays
+/// invisible to dispatch but visible to the "use `I` .." diagnostic.
+#[derive(Clone, Debug)]
+pub struct ExternTrait {
+    pub id: u32,
+    pub generics: usize,
+}
+
+/// A trait impl registered by another module's surface (RFC 0012 §2:
+/// trait impls may live in any module). Dispatch and widening consult
+/// these exactly like local impls; the methods are the exporter's
+/// scope-qualified fn ids, called directly (static dispatch) and
+/// carried into vtable fills (link merges the rows).
+#[derive(Clone, Debug)]
+pub struct ExternImpl {
+    pub trait_id: u32,
+    pub trait_name: IdentId,
+    pub target: TypeId,
+    /// trait method name → the exporter's scope-qualified fn id
+    pub methods: Vec<(IdentId, u32)>,
+}
+
+/// Where a satisfying impl was found (RFC 0012 §4): a local impl block
+/// (its methods monomorphize here) or another module's registration
+/// (its compiled fns are called through scope-qualified ids).
+#[derive(Clone, Copy, Debug)]
+pub enum ImplHit {
+    Local(usize),
+    Extern(usize),
 }
 
 pub type TcResult<T> = Result<T, ()>;
@@ -234,6 +275,8 @@ impl<'a> Ctx<'a> {
             extern_classes: std::collections::HashSet::new(),
             extern_native_types: std::collections::HashMap::new(),
             extern_traits: std::collections::HashMap::new(),
+            extern_trait_decls: std::collections::HashMap::new(),
+            extern_impls: Vec::new(),
             for_of_sigs: std::collections::HashMap::new(),
             extern_native_fns: std::collections::HashSet::new(),
             extern_namespaces: std::collections::HashSet::new(),
@@ -291,6 +334,61 @@ impl<'a> Ctx<'a> {
         self.extern_traits.insert(name, native);
     }
 
+    /// Bind a trait from a used module's surface (RFC 0012 §5): the
+    /// descriptor joins THIS module's trait table (so slot numbering,
+    /// widening and vtables treat it like a declared trait). The name
+    /// resolves only when the module used it — the use-both gate's
+    /// enforcement point (RFC 0012 §6). Method names re-intern from the
+    /// surface's interner; parameter/ret ids pass through verbatim —
+    /// they are packed with the scopes the surface's type blocks were
+    /// registered under (`use_types`).
+    ///
+    /// `name` is the consumer-side name (already looked up); `None`
+    /// registers the descriptor without a name binding (an impl's trait
+    /// the module never named — visible to the use-gate diagnostic,
+    /// invisible to resolution).
+    pub fn add_extern_trait_decl(
+        &mut self,
+        name: Option<IdentId>,
+        desc: &rut_core::binary::SurfaceTrait,
+        surface_names: &Interner,
+    ) -> u32 {
+        let tname = self.intern(surface_names.name(desc.name));
+        let mut methods = Vec::with_capacity(desc.methods.len());
+        for m in &desc.methods {
+            methods.push(rut_core::binary::TraitMethod {
+                name: self.intern(surface_names.name(m.name)),
+                params: m.params.clone(),
+                ret: m.ret,
+            });
+        }
+        let id = self.traits.len() as u32;
+        self.traits.push(TraitDesc { name: tname, methods });
+        if let Some(n) = name {
+            self.extern_trait_decls.insert(n, ExternTrait { id, generics: desc.generics });
+        }
+        id
+    }
+
+    /// Bind a trait impl registered by a used module's surface
+    /// (RFC 0012 §2 — the impl may live in any module). `methods` pair
+    /// each trait method with the exporter's scope-qualified fn id.
+    pub fn add_extern_impl(
+        &mut self,
+        trait_name: IdentId,
+        trait_id: u32,
+        target: TypeId,
+        methods: Vec<(IdentId, u32)>,
+    ) {
+        self.extern_impls.push(ExternImpl { trait_id, trait_name, target, methods });
+    }
+
+    /// The id of a used module's exported trait, if the module used the
+    /// name (the use-both gate).
+    pub fn extern_trait(&self, name: IdentId) -> Option<&ExternTrait> {
+        self.extern_trait_decls.get(&name)
+    }
+
     /// Bind a used core compiler-lowered function (`own`,
     /// `downcast`, `assert`/`panic`, the `str`/`bytes` natives).
     pub fn add_extern_native_fn(&mut self, name: IdentId) {
@@ -328,11 +426,15 @@ impl<'a> Ctx<'a> {
     /// field names re-intern from the exporter's interner into this
     /// module's — name ids are only comparable within one interner
     /// (well-known ids pass through: they mean the same name everywhere).
+    /// `tmap` maps the exporter's trait-table indices to THIS module's
+    /// trait ids: trait-typed descriptors (`[trait] Shape`) carried
+    /// across must name the trait here (RFC 0015 §6).
     pub fn use_types(
         &mut self,
         descs: Vec<RutType>,
         names: &Interner,
         blocks: &[(rut_core::ScopeId, u32)],
+        tmap: &std::collections::HashMap<u32, u32>,
     ) {
         let mut map: std::collections::HashMap<IdentId, IdentId> = std::collections::HashMap::new();
         let mut re = |interner: &mut Interner, id: IdentId| -> IdentId {
@@ -354,6 +456,11 @@ impl<'a> Ctx<'a> {
                     TyKind::Enum { members } => {
                         for (n, _) in members.iter_mut() {
                             *n = re(&mut self.interner, *n);
+                        }
+                    }
+                    TyKind::TraitObj { trait_id } => {
+                        if let Some(&g) = tmap.get(trait_id) {
+                            *trait_id = g;
                         }
                     }
                     _ => {}
@@ -467,7 +574,12 @@ impl<'a> Ctx<'a> {
     }
     pub fn trait_id_of(&self, name: IdentId) -> Option<u32> {
         // a generic trait has no uninstantiated id (`u32::MAX` sentinel)
-        self.find_trait(name).and_then(|t| (t.id != u32::MAX).then_some(t.id))
+        if let Some(t) = self.find_trait(name) {
+            return (t.id != u32::MAX).then_some(t.id);
+        }
+        // a used module's exported trait (RFC 0012 §5) — the name is
+        // bound only when the module used it (the gate)
+        self.extern_trait_decls.get(&name).map(|t| t.id)
     }
     pub fn trait_by_id(&self, id: u32) -> &TraitDesc {
         &self.traits[id as usize]
@@ -476,6 +588,30 @@ impl<'a> Ctx<'a> {
         self.impls
             .iter()
             .position(|i| !i.inherent && i.trait_id == trait_id && i.target == target)
+    }
+
+    /// The impl satisfying `(trait, target)` wherever it lives: a local
+    /// impl block, or another module's surface registration (RFC 0012
+    /// §2/§5). Extern impls are gated on the trait's name having been
+    /// used — an unused trait's impl is invisible to dispatch.
+    pub fn find_impl_ex(&self, trait_id: u32, target: TypeId) -> Option<ImplHit> {
+        if let Some(idx) = self.find_impl(trait_id, target) {
+            return Some(ImplHit::Local(idx));
+        }
+        self.extern_impls.iter().position(|im| {
+            im.trait_id == trait_id
+                && im.target == target
+                && self.extern_trait_decls.contains_key(&im.trait_name)
+        }).map(ImplHit::Extern)
+    }
+
+    /// Extern impls on `target` whose method set contains `name`
+    /// (registered by any module, RFC 0012 §2) — the use-gate diagnostic
+    /// reads these even when the trait's name was never used.
+    pub fn extern_impl_method(&self, target: TypeId, name: IdentId) -> Option<usize> {
+        self.extern_impls.iter().position(|im| {
+            im.target == target && im.methods.iter().any(|(n, _)| *n == name)
+        })
     }
     pub fn impls_of(&self, target: TypeId) -> Vec<usize> {
         self.impls

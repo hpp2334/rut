@@ -197,9 +197,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 exact => {
                                     let _ = exact;
                                     // exact receiver: fold — the impl is
-                                    // registered or it is not (nominal,
-                                    // RFC 0012 §4)
-                                    let has = self.ctx.find_impl(tid, rt).is_some();
+                                    // registered or it is not, wherever it
+                                    // lives (nominal, RFC 0012 §4)
+                                    let has = self.ctx.find_impl_ex(tid, rt).is_some();
                                     self.emit(Op::ConstRaw { dst, bits: has as u64 }, sp.lo);
                                 }
                             }

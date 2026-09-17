@@ -2,7 +2,7 @@
 //! generic instantiation by unification (RFC 0013 SS2), the RFC 0012
 //! vtable-always rule for trait members, trait-typed receivers, and field reads.
 
-use crate::check::TcResult;
+use crate::check::{ImplHit, TcResult};
 use rut_core::ops::*;
 use rut_core::sym;
 use rut_core::types::*;
@@ -1036,6 +1036,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
                 return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp);
             }
+            // another module's registration (RFC 0012 §2/§5): static
+            // dispatch through the exporter's compiled fn — the gate
+            // (the trait's name was used here) is part of the lookup
+            if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
+                return self.compile_extern_trait_static_call(eidx, midx, rreg, args, expected, sp);
+            }
             self.no_method_error(rt, name, sp);
             return Err(());
         }
@@ -1070,8 +1076,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     if segs.len() == 1 {
                         let origins = self.origins_of(segs[0].name);
                         if origins.len() == 1 {
-                            if let Some(idx) = self.ctx.find_impl(trait_id, origins[0]) {
-                                return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp);
+                            // the impl may live in any module (RFC 0012 §2):
+                            // a local block binds here, another module's
+                            // registration binds to its compiled fn
+                            match self.ctx.find_impl_ex(trait_id, origins[0]) {
+                                Some(ImplHit::Local(idx)) => {
+                                    return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp);
+                                }
+                                Some(ImplHit::Extern(eidx)) => {
+                                    return self.compile_extern_trait_static_call(eidx, midx, rreg, args, expected, sp);
+                                }
+                                None => {}
                             }
                         }
                     }
@@ -1092,30 +1107,44 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// The diagnostic for a missing method on a user type: when a
     /// matching impl exists under a trait this call site cannot name,
     /// the message says which `use` unlocks it (RFC 0012 §6, the
-    /// use-both gate).
+    /// use-both gate). Both local impls and other modules'
+    /// registrations (RFC 0012 §2) count as "exists".
     fn no_method_error(&mut self, rt: TypeId, name: IdentId, sp: rut_lexer::span::Span) {
-        let matches = |_ctx: &Ctx, im: &crate::check::ImplDecl| {
-            !im.inherent && im.methods.iter().any(|(n, _)| *n == name)
+        let target_matches = |ctx: &Ctx, im: &crate::check::ImplDecl| {
+            im.target == rt
+                || matches!(&im.target_data, Some((d, _)) if ctx
+                    .inst_data
+                    .get(&rt)
+                    .map_or(false, |(rd, _)| rd == d))
         };
         let hit = self.ctx.impls.iter().find(|im| {
-            matches(self.ctx, im)
-                && (im.target == rt
-                    || matches!(&im.target_data, Some((d, _)) if self
-                        .ctx
-                        .inst_data
-                        .get(&rt)
-                        .map_or(false, |(rd, _)| rd == d)))
+            !im.inherent
+                && im.methods.iter().any(|(n, _)| *n == name)
+                && target_matches(self.ctx, im)
         });
-        if let Some(im) = hit {
-            let callable = self.ctx.find_trait(im.trait_name).is_some()
-                || self.ctx.extern_traits.contains_key(&im.trait_name);
+        let ext_hit = hit.is_none().then(|| {
+            self.ctx
+                .extern_impls
+                .iter()
+                .position(|im| im.target == rt && im.methods.iter().any(|(n, _)| *n == name))
+        }).flatten();
+        let trait_name = hit.map(|im| im.trait_name).or_else(|| {
+            ext_hit.map(|e| self.ctx.extern_impls[e].trait_name)
+        });
+        if let Some(tname) = trait_name {
+            let callable = self.ctx.find_trait(tname).is_some()
+                || self.ctx.extern_traits.contains_key(&tname)
+                || self.ctx.extern_trait_decls.contains_key(&tname);
             if !callable {
-                let tname = self.ctx.name(self.ctx.trait_by_id(im.trait_id).name);
+                let tid = hit.map(|im| im.trait_id).unwrap_or_else(|| {
+                    self.ctx.extern_impls[ext_hit.unwrap()].trait_id
+                });
+                let spelled = self.ctx.name(self.ctx.trait_by_id(tid).name);
                 self.ctx.err(sp, format!(
                     "`{}` has no method `{}` — use `{}` to call its methods on `{}` (RFC 0012 §6)",
                     self.ctx.type_name(rt),
                     self.ctx.name(name),
-                    tname,
+                    spelled,
                     self.ctx.type_name(rt)
                 ));
                 return;
@@ -1202,6 +1231,74 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(tm.ret)
     }
 
+    /// Another module's registration of the `(trait, type)` impl
+    /// (RFC 0012 §2/§5): the method is already compiled in the exporter,
+    /// so the call binds to its scope-qualified fn id directly (`CallM`)
+    /// — link rebases it. The signature comes from the trait's
+    /// descriptor as registered from the surface.
+    pub(crate) fn compile_extern_trait_static_call(
+        &mut self,
+        ext_idx: usize,
+        midx: usize,
+        rreg: u16,
+        args: Vec<NodeHandle<AnyExpr>>,
+        _expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let (fid, tm) = {
+            let im = &self.ctx.extern_impls[ext_idx];
+            let tdesc = self.ctx.trait_by_id(im.trait_id);
+            let tm = tdesc.methods[midx].clone();
+            match im.methods.iter().find(|(n, _)| *n == tm.name) {
+                Some(&(_, f)) => (f, tm),
+                None => {
+                    let t = self.ctx.name(tdesc.name);
+                    self.ctx.err(sp, format!("impl `{t}` is missing `{}`", self.ctx.name(tm.name)));
+                    return Err(());
+                }
+            }
+        };
+        if args.len() != tm.params.len() {
+            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), tm.params.len()));
+            return Err(());
+        }
+        let mut aregs = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            let t = self.compile_expr(*a, Some(tm.params[i]))?;
+            if !self.widens(t, tm.params[i]) {
+                self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                    "argument {} is `{}`, `{}` expected",
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(tm.params[i])
+                ));
+            }
+            aregs.push(self.last_reg);
+        }
+        let dst = if tm.ret == TY_NIL { None } else { Some(self.new_reg(tm.ret)) };
+        { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        Ok(tm.ret)
+    }
+
+    /// The extern registration of `(trait, type)` whose method set
+    /// contains `name` — `(extern impl index, trait method index)`. The
+    /// use-both gate lives here: an impl whose trait's name was never
+    /// used does not dispatch (RFC 0012 §6); `no_method_error` still
+    /// sees it for the "use `I` .." diagnostic.
+    fn find_extern_trait_impl_method(&self, rt: TypeId, name: IdentId) -> Option<(usize, usize)> {
+        for (eidx, im) in self.ctx.extern_impls.iter().enumerate() {
+            if !self.ctx.extern_trait_decls.contains_key(&im.trait_name) {
+                continue;
+            }
+            if im.target != rt || !im.methods.iter().any(|(n, _)| *n == name) {
+                continue;
+            }
+            let tdesc = self.ctx.trait_by_id(im.trait_id);
+            if let Some(midx) = tdesc.methods.iter().position(|m| m.name == name) {
+                return Some((eidx, midx));
+            }
+        }
+        None
+    }
+
     /// Static dispatch of a native builtin class's inherent method
     /// (`impl Array<T> { .. }`): the native shape supplies the target
     /// substitution; `params` is the `target_data` binding.
@@ -1267,7 +1364,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return true;
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(to).clone() {
-            return self.ctx.find_impl(trait_id, from).is_some();
+            return self.ctx.find_impl_ex(trait_id, from).is_some();
         }
         false
     }

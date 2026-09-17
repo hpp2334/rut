@@ -261,9 +261,20 @@ impl<'a> GraphCompiler<'a> {
         }
         let program = out.program.unwrap();
         let has_generic = program.surface.type_exports.iter().any(|t| t.is_generic);
-        // an explicitly-inlined module (e.g. `ink`) or a generic export
-        // cannot be linked — splice its source (and its uses) in
-        if as_dep && (module.inline || has_generic) {
+        // a dep whose exported fns take trait-typed PARAMETERS cannot be
+        // linked either: a trait parameter is an implicit generic bound
+        // (RFC 0012 §5) — it specializes per concrete argument, one clone
+        // per argument type (finite, terminating via the Inst cache), and
+        // that must happen where the arguments are. Splice its source in.
+        let has_trait_param = program.surface.funcs.iter().any(|f| {
+            f.params
+                .iter()
+                .any(|&p| matches!(program.types.kind(p), rut_core::types::TyKind::TraitObj { .. }))
+        });
+        // an explicitly-inlined module (e.g. `ink`), a generic export,
+        // or a trait-param export cannot be linked — splice the source
+        // (and the uses) in
+        if as_dep && (module.inline || has_generic || has_trait_param) {
             let unit = Unit::Inline { source: combined, bound };
             self.done.insert(spec.to_string(), unit.clone());
             return Some(unit);

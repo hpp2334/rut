@@ -384,18 +384,20 @@ impl<'a> Ctx<'a> {
         methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
-        // ---- the target (both forms): a local struct/class, or a
+        // ---- the target (both forms): a local struct/class, a
         // module-owned `builtin class` resolved through the native-type
-        // table (the `LaunchedTask<T>` pattern). A generic target
-        // (`impl .. for Vec<T>`) is a template: its methods monomorphize
-        // per instantiation through `target_data`.
-        let (target_ty, target_data, is_local) = match self.ast.ty(target) {
+        // table (the `LaunchedTask<T>` pattern), or — trait impls only —
+        // a type this module USES (RFC 0012 §2: `impl ForeignTrait for
+        // ForeignType` is legal; the pair's uniqueness is a link check).
+        // A generic target (`impl .. for Vec<T>`) is a template: its
+        // methods monomorphize per instantiation through `target_data`.
+        let (target_ty, target_data, is_local, is_used) = match self.ast.ty(target) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let name = segs[0].name;
                 let generics = segs[0].generics.clone();
                 if let Some(d) = self.find_data(name).cloned() {
                     if d.generics.is_empty() {
-                        (d.ty, None, true)
+                        (d.ty, None, true, false)
                     } else {
                         let Some(params) = self.ty_generic_idents(&generics) else {
                             self.err(sp, "a generic impl target must name its type parameters (e.g. `Vec<T>`)");
@@ -408,11 +410,11 @@ impl<'a> Ctx<'a> {
                             ));
                             return;
                         }
-                        (d.ty, Some((name, params)), true)
+                        (d.ty, Some((name, params)), true, false)
                     }
                 } else if let Some(kind) = self.extern_native_types.get(&name).copied() {
                     match (kind, generics.as_slice()) {
-                        (rut_core::binary::NativeTy::Opaque, []) => (TY_OPAQUE, None, false),
+                        (rut_core::binary::NativeTy::Opaque, []) => (TY_OPAQUE, None, false, false),
                         (rut_core::binary::NativeTy::Array, [g]) => {
                             let Some(params) = self.ty_generic_idents(std::slice::from_ref(g)) else {
                                 self.err(sp, "a generic impl target must name its type parameters (e.g. `Array<T>`)");
@@ -424,7 +426,7 @@ impl<'a> Ctx<'a> {
                                 name,
                                 kind: TyKind::Data { fields: vec![] },
                             });
-                            (ph, Some((name, params)), false)
+                            (ph, Some((name, params)), false, false)
                         }
                         (rut_core::binary::NativeTy::Array, _) => {
                             self.err(sp, "`Array<T>` takes one type parameter");
@@ -435,6 +437,12 @@ impl<'a> Ctx<'a> {
                             return;
                         }
                     }
+                } else if segs[0].generics.is_empty() && self.extern_types.contains_key(&name) {
+                    // a USED type (RFC 0035 §1): legal as a TRAIT-impl
+                    // target only — inherent impls stay in the type's
+                    // module (RFC 0012 §2). The id is the exporter's
+                    // scope-qualified one; link rebases it.
+                    (self.extern_types[&name], None, false, true)
                 } else {
                     self.err(
                         sp,
@@ -456,7 +464,16 @@ impl<'a> Ctx<'a> {
             mths.push((self.ast.method_decl(*m).name, *m));
         }
         match trait_ref {
-            None => self.collect_impl_inherent(target, target_ty, target_data, is_local, mths),
+            None => {
+                if is_used {
+                    self.err(
+                        sp,
+                        "inherent impls live in the type's module — only `impl Trait for UsedType` may name a used type (RFC 0012 §2)",
+                    );
+                    return;
+                }
+                self.collect_impl_inherent(target, target_ty, target_data, is_local, mths)
+            }
             Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, mths),
         }
     }
@@ -658,7 +675,9 @@ impl<'a> Ctx<'a> {
                     ),
                 );
             }
-            if self_form != req.self_form {
+            // a descriptor-derived contract (engine/extern trait) spells
+            // no receiver form — the impl's own spelling stands (RFC 0012 §2)
+            if has_ast && self_form != req.self_form {
                 let spell = |f: Option<bool>| match f {
                     Some(true) => "`mut self`".to_string(),
                     Some(false) => "`self`".to_string(),
@@ -675,18 +694,31 @@ impl<'a> Ctx<'a> {
                 );
             }
             if target_data.is_none() && (ptys != req.ptys || ret != req.ret) {
-                let fmt = |tys: &[TypeId]| tys.iter().map(|t| self.type_name(*t).to_string()).collect::<Vec<_>>().join(", ");
-                self.err(
-                    self.ast.span(mnode.id()),
-                    format!(
-                        "`{}` does not match the trait's signature — trait: ({}) -> {}, impl: ({}) -> {}",
-                        self.name(req.name),
-                        fmt(&req.ptys),
-                        self.type_name(req.ret),
-                        fmt(&ptys),
-                        self.type_name(ret)
-                    ),
-                );
+                // `Self`-spelled trait parameters reach the descriptor as
+                // this trait's object type — the impl spells the concrete
+                // receiver, and any concrete type satisfies it there
+                // (RFC 0012 §4). Extern traits' descriptors are the only
+                // source of such reqs (local traits resolve `Self` to the
+                // target at the AST).
+                let self_obj = |t: &TypeId| {
+                    matches!(self.types.kind(*t), TyKind::TraitObj { trait_id: tid } if *tid == trait_id)
+                };
+                let ptys_match = ptys.len() == req.ptys.len()
+                    && ptys.iter().zip(req.ptys.iter()).all(|(a, b)| a == b || self_obj(b));
+                if !ptys_match || ret != req.ret {
+                    let fmt = |tys: &[TypeId]| tys.iter().map(|t| self.type_name(*t).to_string()).collect::<Vec<_>>().join(", ");
+                    self.err(
+                        self.ast.span(mnode.id()),
+                        format!(
+                            "`{}` does not match the trait's signature — trait: ({}) -> {}, impl: ({}) -> {}",
+                            self.name(req.name),
+                            fmt(&req.ptys),
+                            self.type_name(req.ret),
+                            fmt(&ptys),
+                            self.type_name(ret)
+                        ),
+                    );
+                }
             }
         }
         for (n, mnode) in &mths {

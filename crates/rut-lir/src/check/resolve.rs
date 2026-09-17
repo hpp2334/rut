@@ -56,6 +56,17 @@ impl<'a> Ctx<'a> {
                             Some(self.mk_trait_inst(tname, args))
                         }
                     }
+                } else if let Some(ext) = self.extern_trait(tname).cloned() {
+                    // a used module's exported trait (RFC 0012 §5)
+                    if !segs[0].generics.is_empty() || ext.generics > 0 {
+                        self.err(self.ast.span(node.id()), format!(
+                            "generic trait `{}` cannot be implemented across modules — implement it in its declaring module (v1)",
+                            self.name(tname)
+                        ));
+                        None
+                    } else {
+                        Some(ext.id)
+                    }
                 } else {
                     let msg = self
                         .not_in_core_scope(tname)
@@ -269,6 +280,18 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             let id = self.mk_trait_inst(name, args);
                             return self.mk_trait_obj(id);
+                        }
+                        // a used module's exported trait (RFC 0012 §5):
+                        // the object type here, exactly like a declared one
+                        if let Some(ext) = self.extern_trait(name).cloned() {
+                            if !seg.generics.is_empty() || ext.generics > 0 {
+                                self.err(sp, format!(
+                                    "generic trait `{}` cannot be spelled across modules — use it in its declaring module (v1)",
+                                    self.name(name)
+                                ));
+                                return TY_I32;
+                            }
+                            return self.mk_trait_obj(ext.id);
                         }
                         // used type (RFC 0035 §1): the exporter's
                         // scope-qualified id; link rebases it
