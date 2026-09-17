@@ -95,8 +95,11 @@ Records — the `(a, b, ..)` literal and its `(T0, T1, ..)` type, with
 numeric fields `.0`, `.1`, .. — are the v1.1 error convention:
 **`fn f(..) -> (T, err)` returns a result; an empty/`false`/`nil`
 second element is success** (§5 of RFC 0005 for the `Option`/`Result`
-removal this replaces). `()` is the unit value; a function without a
-result arrow returns it.
+removal this replaces). `nil` is the empty type and its one value; a
+function without a result arrow returns it, and a context-free `nil`
+has type `nil` — pointer positions (`let p: *T = nil`, `p == nil`,
+`left: nil` in a literal) type it as `*T` through expected-type
+propagation (RFC 0005).
 
 ## Open questions
 

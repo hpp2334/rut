@@ -68,11 +68,11 @@ compiler gives it no meaning; greppability is enforced by style.
   `is` keyword (`x is Circle`, RFC 0012 §3).
 - **A trailing `$` marks dispatch-inverted members** (tur convention,
   extended uniformly): anything a *runtime* fires or owns, rather than you
-  calling it — event props (`on_click$: Mutation<ClickEvent, unit>` or a
+  calling it — event props (`on_click$: Mutation<ClickEvent, nil>` or a
   closure prop), lifecycle hooks (`on_mount$`, `before_destroy$`),
   subscription updates (`on_update$`), watch controls (`start$`, `stop$`),
   engine atoms (`viewport_size$`), and `Mutation` handles generally
-  (`set_tab$: Mutation<Tab, unit>`). Never on functions *you* call, widget
+  (`set_tab$: Mutation<Tab, nil>`). Never on functions *you* call, widget
   builders (`click`, not `click$`), or types. `$` is an ordinary identifier
   character (§2), so the suffix is advisory — the style rule is what keeps it
   meaningful.
@@ -85,7 +85,7 @@ compiler gives it no meaning; greppability is enforced by style.
 - Reserved (parse error with explanation): `switch`, `case`,
   `default`, `extends`, `super`, `as` (no casts at all — erasure is
   the `Opaque.new(v)` class method, RFC 0014), `type` (type alias — future),
-  `struct`, `match`, `void` (the unit type is spelled `unit`), `null`,
+  `struct`, `match`, `void` (the empty type is spelled `nil`), `null`,
   `undefined`, `any`, `typeof`,
   `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`,
   `const` (bindings spell `let` / `let mut` — RFC 0003 §1), `private`

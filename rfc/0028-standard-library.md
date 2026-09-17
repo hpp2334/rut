@@ -22,7 +22,7 @@ The standard library splits in two:
   registers **no** host bodies, RFC 0025 revised): the builtin
   containers `Array<T>`/`Option<T>`/`Result<T,E>` (RFC 0005) and
   `Opaque` (RFC 0014), the engine-woven interfaces — `Disposal`
-  (`fn dispose(mut self) -> unit`, RFC 0011/0016), `Index<T>` and
+  (`fn dispose(mut self) -> nil`, RFC 0011/0016), `Index<T>` and
   `Iterator<T>` (RFC 0012; ordinary nominal impls for users,
   compiler-backed impls for the engine's own types) — plus the
   prelude functions `own(x)` (the eager copy, RFC 0011 §1),
@@ -75,7 +75,7 @@ logging goes through an imported logger:
 import { Logger } from "std:log";
 import { now_ms } from "std:time";
 
-fn work() -> unit {
+fn work() -> nil {
     let log = Logger.new("app");        // class method -> construction; a bare
     log.info(f"started at {now_ms()}"); // value class, so construction is free
 }
@@ -92,16 +92,16 @@ pub class Logger {
 
     pub fn new(name: str) -> Self { return Self { internal: create_logger(name) }; }
 
-    pub fn debug(self, msg: str) -> unit { logger_log(self.internal, 0, msg); }
-    pub fn info(self, msg: str) -> unit  { logger_log(self.internal, 1, msg); }
-    pub fn warn(self, msg: str) -> unit  { logger_log(self.internal, 2, msg); }
-    pub fn error(self, msg: str) -> unit { logger_log(self.internal, 3, msg); }
+    pub fn debug(self, msg: str) -> nil { logger_log(self.internal, 0, msg); }
+    pub fn info(self, msg: str) -> nil  { logger_log(self.internal, 1, msg); }
+    pub fn warn(self, msg: str) -> nil  { logger_log(self.internal, 2, msg); }
+    pub fn error(self, msg: str) -> nil { logger_log(self.internal, 3, msg); }
 }
 ```
 
 `rt:log` is a **native module** (RFC 0022/0026): the host functions
 `create_logger(name: str) -> Opaque` and `logger_log(logger: Opaque,
-level: i32, msg: str) -> unit`. The host owns the logger's layout; rut
+level: i32, msg: str) -> nil`. The host owns the logger's layout; rut
 only ever holds an `Opaque` handle (RFC 0014) and never inspects it. The
 embedder half ships as `rut-std::logger::install_std_log`
 (`create_logger` boxes the name; `logger_log` routes to the sink). An

@@ -13,7 +13,7 @@ rut has the classic structured statements — `if`/`else`, `while`, `for..of`,
 indexed `for` — and **one** match construct: `when`, an exhaustive pattern
 *expression*. `switch`/`case`/`default` do not exist. See
 **`demo/src/examples/when.rut`** — `when` as an expression (with `else`
-required for non-enum scrutinees) and as a statement (unit arms).
+required for non-enum scrutinees) and as a statement (nil arms).
 
 ## 1. Statements
 
@@ -24,7 +24,7 @@ required for non-enum scrutinees) and as a statement (unit arms).
 - `for (let i = 0; i < n; i += 1) { .. }` — indexed form. The induction
   variable is **loop-owned**: the update clause (and the body) may assign
   it without `mut` — it is not a normal binding.
-- `return expr?;` — `expr` required unless the fn returns `unit`.
+- `return expr?;` — `expr` required unless the fn returns `nil`.
 - No `break`/`continue` labels in v1 (plain `break`/`continue` exist for
   loops); no `do..while`.
 
@@ -41,7 +41,7 @@ required for non-enum scrutinees) and as a statement (unit arms).
   compile error. Any other type: `else` is mandatory (integers can't be
   enumerated).
 - All arms must agree on one type — that is the `when`'s type. Used as a
-  statement, that type must be `unit`.
+  statement, that type must be `nil`.
 - Duplicate patterns and arms made unreachable by earlier ones are compile
   errors.
 - Arms use `->` like nothing else except `select` (RFC 0019); expression

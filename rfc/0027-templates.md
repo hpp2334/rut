@@ -40,7 +40,7 @@ literals, chosen by expected type:
 ```rust
 .fn_("label", |ctx, t: Tmpl| {                    // host side
     let s = ctx.localize(t.parts(), t.args())?;   // ICU-style formatting
-    Ok(Value::Unit)
+    Ok(Value::Nil)
 })
 ```
 

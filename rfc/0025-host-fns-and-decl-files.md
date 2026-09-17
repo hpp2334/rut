@@ -35,9 +35,9 @@ One linkage keyword, one implementer:
 ```rut
 // app/gfx.d.rut — declaration file for "app:gfx"
 pub host fn newCanvas() -> Opaque;            // the handle mints the box
-pub host fn canvas_circle(c: Opaque, x: f32, y: f32, r: f32) -> unit;
+pub host fn canvas_circle(c: Opaque, x: f32, y: f32, r: f32) -> nil;
 pub host fn canvas_hits(c: Opaque) -> i32;
-pub host fn canvas_flush(c: Opaque) -> unit;
+pub host fn canvas_flush(c: Opaque) -> nil;
 pub host fn hit_test(c: Opaque, x: f32, y: f32) -> Option<f32>;
 ```
 
@@ -49,9 +49,9 @@ pub host fn hit_test(c: Opaque, x: f32, y: f32) -> Option<f32>;
 // app side (or the consumer's own module): ordinary rut source
 class Canvas {
     h: Opaque;
-    fn circle(mut self, x: f32, y: f32, r: f32) -> unit { canvas_circle(self.h, x, y, r); }
+    fn circle(mut self, x: f32, y: f32, r: f32) -> nil { canvas_circle(self.h, x, y, r); }
     fn hits(self) -> i32 { return canvas_hits(self.h); }
-    fn flush(mut self) -> unit { canvas_flush(self.h); }
+    fn flush(mut self) -> nil { canvas_flush(self.h); }
 }
 ```
 
@@ -103,7 +103,7 @@ builtin Name<T> { methods }         // engine type member contract
 builtin interface Name<T> { .. }    // engine-woven contract
 ```
 
-- **`host fn` signatures are concrete** over the crossing set: unit,
+- **`host fn` signatures are concrete** over the crossing set: nil,
   primitives, `str`, `bytes`, `Option`/`Result` over crossable types,
   `Opaque` — and `host dataclass` records whose fields are all
   crossable. Everything else (dataclass cells, user classes, `Vec`,

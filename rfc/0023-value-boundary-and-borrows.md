@@ -17,7 +17,7 @@ a `Value<'v>` — call-scoped, checked, and borrow-guarded.
 
 ```rust
 pub enum Value<'v> {
-    Unit, Bool(bool), Char(char),
+    Nil, Bool(bool), Char(char),
     I8(i8) /* .. */ I64(i64), U8(u8) /* .. */ U64(u64), F32(f32), F64(f64),
     Str(StrRef<'v>),                       // immutable, may point into heap
     Bytes(BytesRef<'v>),                   // immutable octets (RFC 0004)
@@ -36,7 +36,7 @@ pub enum Value<'v> {
 
 **What may cross is a compile-time property of the surface.** An `entry
 fn`'s parameters and return must be built from: primitives, `str`,
-`bytes` (the immutable binary buffer, RFC 0004), `unit`, `Option`/`Result`
+`bytes` (the immutable binary buffer, RFC 0004), `nil`, `Option`/`Result`
 over crossable types, and `Opaque` (RFC 0014 — the one cell an embedder
 may hold and pass back). Every other cell — dataclasses, classes,
 `Vec<T>` of cells, `Vec<u8>` itself, `dyn` — stays inside the VM;

@@ -35,7 +35,7 @@ A `suspend fn` returns a **cold** `Future<T>` — calling it runs nothing;
 `await` is the only suspension point:
 
 ```rut
-suspend fn countdown(n: u32) -> unit {
+suspend fn countdown(n: u32) -> nil {
     let log = Logger.new("countdown");
     for (let i = n; i > 0; i -= 1) {
         log.info(f"{i}");

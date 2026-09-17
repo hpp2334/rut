@@ -23,7 +23,7 @@ consumer side.
 ```rut
 // plugin/my_map.d.rut — the declaration file for "plugin:my_map"
 pub host fn my_map_new(cap: i32) -> Opaque;
-pub host fn my_map_set(m: Opaque, k: str, v: Opaque) -> unit;
+pub host fn my_map_set(m: Opaque, k: str, v: Opaque) -> nil;
 pub host fn my_map_get(m: Opaque, k: str) -> Option<Opaque>;
 pub host fn my_map_size(m: Opaque) -> i32;
 ```
