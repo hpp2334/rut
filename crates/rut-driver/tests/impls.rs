@@ -516,3 +516,37 @@ fn prim_vtable_fill_survives_the_link() {
     .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 105);
 }
+
+#[test]
+fn widened_scalar_slots_survive_calls_and_vtable_dispatch() {
+    // the slot ABI (RFC 0012 §4/§6): a widened scalar is a BOXED slot —
+    // it survives ref copies and call boundaries, a `Self`-spelled
+    // parameter unboxes at the callee, and a merged-origin calli reads
+    // the box cell's own type. Pre-slot-ABI, a scalar slot crashed on
+    // its first ref op (MovRef retained the raw bits).
+    let src = "trait K { fn key(self) -> u64; fn same(self, other: Self) -> bool; }\n\
+               impl K for i32 {\n\
+               \x20   fn key(self) -> u64 { return (self as u64).wrapping_mul(7); }\n\
+               \x20   fn same(self, other: Self) -> bool { return self == other; }\n\
+               }\n\
+               impl K for u8 {\n\
+               \x20   fn key(self) -> u64 { return self as u64; }\n\
+               \x20   fn same(self, other: Self) -> bool { return self == other; }\n\
+               }\n\
+               fn probe(k: K, h: u64) -> bool {\n\
+               \x20   return k.key() == h && k.same(k);\n\
+               }\n\
+               fn pick(k: bool) -> K {\n\
+               \x20   if (k) { return 5; }\n\
+               \x20   return 9u8;\n\
+               }\n\
+               pub fn main() -> i32 {\n\
+               \x20   let w: K = 5;\n\
+               \x20   if (!probe(w, 35)) { return -1; }\n\
+               \x20   let v: K = pick(true);\n\
+               \x20   if (!v.same(v)) { return -2; }\n\
+               \x20   if (v.key() != 35) { return -3; }\n\
+               \x20   return 5;\n\
+               }\n";
+    assert_eq!(run_main(src), 5);
+}

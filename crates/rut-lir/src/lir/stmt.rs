@@ -39,6 +39,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.name(name), self.ctx.type_name(e), self.ctx.type_name(t)
                         ));
                     }
+                    // concrete → slot widening boxes scalars (the slot
+                    // ABI, RFC 0012 §4): the binding always holds a cell
+                    self.widen_to_slot(t, e, sp.lo);
                 }
                 let ty = expected.unwrap_or(t);
                 // origin counting (RFC 0012 §5): a trait-typed binding
@@ -200,6 +203,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 self.ctx.type_name(self.ret_ty), self.ctx.type_name(t)
                             ));
                         }
+                        self.widen_to_slot(t, self.ret_ty, sp.lo);
                         let src = self.last_reg;
                         if self.ctx.types.is_ref(self.ret_ty) {
                             self.emit(Op::MovRef { dst, src }, sp.lo);
@@ -221,6 +225,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 self.ctx.type_name(self.ret_ty), self.ctx.type_name(t)
                             ));
                         }
+                        self.widen_to_slot(t, self.ret_ty, sp.lo);
                         self.emit(Op::Ret { val: Some(self.last_reg) }, sp.lo);
                     }
                     None => {

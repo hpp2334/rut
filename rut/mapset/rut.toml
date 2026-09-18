@@ -1,0 +1,2 @@
+name = "mapset"
+entry.lib = "./mapset.rut"

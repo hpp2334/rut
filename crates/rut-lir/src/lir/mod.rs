@@ -144,14 +144,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let FnKey::ForOfEmit { body, var } = inst.key {
             return Self::compile_for_of_emit_fn(ctx, fid, body, var);
         }
-        let (node, self_ty, is_method, class_name) = match &inst.key {
+        let (node, self_ty, is_method, class_name, slot_self) = match &inst.key {
             // handled by the early return above
             FnKey::ForOfEmit { .. } => unreachable!(),
             FnKey::Free(name) => {
                 let Some(n) = ctx.fn_nodes.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
                     return Ok(()); // unknown fn —already diagnosed
                 };
-                (n.id(), None, false, None)
+                (n.id(), None, false, None, None)
             }
             FnKey::Method { data, name } => {
                 let Some((_, d)) = ctx.datas.iter().find(|(n, _)| n == data) else {
@@ -180,7 +180,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         .collect();
                     ctx.mk_data_inst(*data, args, ctx.ast.span(m.id()))
                 };
-                (m.id(), Some(self_ty), true, Some(*data))
+                (m.id(), Some(self_ty), true, Some(*data), None)
             }
             FnKey::ImplMethod { idx, name } => {
                 let im = ctx.impls[*idx].clone();
@@ -220,7 +220,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         (im.target, cname)
                     }
                 };
-                (m.id(), Some(self_ty), true, cname)
+                // a PRIMITIVE target compiles with the SLOT ABI: `self` and
+                // every `Self`-spelled parameter cross as the trait-object
+                // slot (concrete scalars arrive boxed — `widen_to_slot`),
+                // and the prologue unboxes into the concrete working
+                // registers the body is typed against. Ref targets
+                // (records/`str`/`bytes`) already are cell handles — their
+                // signature stays the concrete type.
+                let slot_self = if !im.inherent && matches!(ctx.types.kind(im.target), TyKind::Prim(_)) {
+                    Some(ctx.mk_trait_obj(im.trait_id))
+                } else {
+                    None
+                };
+                (m.id(), Some(self_ty), true, cname, slot_self)
             }
             FnKey::Lambda(_) => unreachable!(),
         };
@@ -275,12 +287,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_stack: Vec::new(),
             emit_closure: false,
         };
-        // signature: params (self first for methods), resolved under subst
+        // signature: params (self first for methods), resolved under subst.
+        // Under the slot ABI (`slot_self`, a prim-target impl method) the
+        // receiver and every `Self`-spelled parameter cross as the slot.
+        let spells_self = |c: &FnCompiler, t: &NodeHandle<AnyTy>| matches!(
+            c.ctx.ast.ty(*t),
+            TypeKind::TyPath { ref segs, .. }
+                if segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY
+        );
         let mut param_tys: Vec<TypeId> = Vec::new();
+        let mut param_is_slot: Vec<bool> = Vec::new();
         for p in &params {
-            let ty = match c.ctx.ast.param(*p) {
-                MemberKind::SelfParam(_) => self_ty.unwrap_or(TY_NIL),
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
+            let (ty, is_slot) = match c.ctx.ast.param(*p) {
+                MemberKind::SelfParam(_) => (
+                    slot_self.unwrap_or(self_ty.unwrap_or(TY_NIL)),
+                    slot_self.is_some(),
+                ),
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                    let ty = c.resolve_type_now(*t);
+                    let is_slot = slot_self.is_some() && spells_self(&c, t);
+                    (if is_slot { slot_self.unwrap() } else { ty }, is_slot)
+                }
                 MemberKind::Param(ParamData { ty: None, name, .. }) => {
                     c.ctx.err(
                         c.ctx.ast.span(p.id()),
@@ -289,11 +316,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             c.ctx.name(*name)
                         ),
                     );
-                    TY_I32
+                    (TY_I32, false)
                 }
-                _ => TY_I32,
+                _ => (TY_I32, false),
             };
             param_tys.push(ty);
+            param_is_slot.push(is_slot);
         }
         // ret
         let ret_ty = ret.map(|r| c.resolve_type_now(r)).unwrap_or(TY_NIL);
@@ -302,18 +330,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // parameters, in declaration order
         let mut param_origins = inst.trait_origins.clone();
         let mut param_origins_iter = param_origins.drain(..);
-        // bind params as locals
+        // bind params as locals — argv maps positionally onto the callee's
+        // registers, so the parameter registers stay contiguous here; the
+        // slot-ABI unboxes run in a second pass below
         for (i, p) in params.iter().enumerate() {
             match c.ctx.ast.param(*p) {
                 MemberKind::SelfParam(SelfParamData { is_mut }) => {
-                    let reg = c.new_reg(self_ty.unwrap_or(TY_NIL));
+                    let reg = c.new_reg(param_tys[i]);
                     // bind `self` (well-known symbol): the local is only ever
                     // FOUND where the body spells `self`, so binding it
                     // unconditionally is safe
                     c.locals.push(Local {
                         name: sym::SELF,
                         reg,
-                        ty: self_ty.unwrap_or(TY_NIL),
+                        ty: param_tys[i],
                         is_mut: *is_mut,
                         loop_var: false,
                         origins: Vec::new(),
@@ -339,6 +369,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     });
                 }
                 _ => {}
+            }
+        }
+        // slot-ABI prologue (prim-target impl methods): each slot
+        // parameter unboxes into the concrete working register the body
+        // was typed against — the box cell's own type reaches the vtable
+        // (RFC 0015 §6), the payload is the body's value
+        if slot_self.is_some() {
+            let concrete = self_ty.unwrap_or(TY_NIL);
+            for (i, p) in params.iter().enumerate() {
+                if !param_is_slot[i] {
+                    continue;
+                }
+                let name = match c.ctx.ast.param(*p) {
+                    MemberKind::SelfParam(_) => sym::SELF,
+                    MemberKind::Param(ParamData { name, .. }) => *name,
+                    _ => continue,
+                };
+                let li = c.locals.iter().position(|l| l.name == name).expect("param local");
+                let preg = c.locals[li].reg;
+                let u = c.new_reg(concrete);
+                c.emit(Op::Unbox { dst: u, box_: preg, ty: concrete }, 0);
+                c.locals[li].reg = u;
+                c.locals[li].ty = concrete;
             }
         }
         let _ = generics; // user generic methods unsupported (diag at call)
@@ -605,6 +658,39 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         } else {
             reg
         }
+    }
+
+    /// Concrete → trait-slot widening at a value boundary (RFC 0012 §4).
+    /// A by-value concrete (a scalar — records/`str`/`bytes` already are
+    /// cell handles) is BOXED: `Op::Box` carries the concrete type, so the
+    /// slot always holds a cell handle — every ref op on the slot is safe
+    /// and the vtable dispatch reads the cell's own type. The mirror is
+    /// the prim-target impl method's prologue unbox (the slot ABI). A
+    /// no-op for slot-typed and ref-typed values.
+    pub(crate) fn widen_to_slot(&mut self, t: TypeId, to: TypeId, sp_lo: u32) {
+        if t != to
+            && matches!(self.ctx.types.kind(to), TyKind::TraitObj { .. })
+            && !matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })
+            && !self.ctx.types.is_ref(t)
+        {
+            let src = self.last_reg;
+            let dst = self.new_reg(to);
+            self.emit(Op::Box { dst, val: src, ty: t }, sp_lo);
+        }
+    }
+
+    /// A BARE concrete receiver of a trait method (`p.area()`): when the
+    /// impl carries the slot ABI (a prim target — the prologue unboxes),
+    /// the receiver crosses BOXED; ref concretes already are cell handles
+    /// and cross as-is (RFC 0012 §4/§5).
+    pub(crate) fn box_bare_receiver(&mut self, trait_id: u32, concrete: TypeId, reg: u16, sp_lo: u32) -> u16 {
+        if self.ctx.types.is_ref(concrete) {
+            return reg;
+        }
+        let slot = self.ctx.mk_trait_obj(trait_id);
+        let dst = self.new_reg(slot);
+        self.emit(Op::Box { dst, val: reg, ty: concrete }, sp_lo);
+        dst
     }
 
     /// `p.m(..)` / `p[i]` auto-deref (RFC 0005): a pointer used as a

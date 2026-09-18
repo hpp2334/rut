@@ -601,6 +601,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 _ => None,
             };
             let t = self.compile_expr(*a, expected)?;
+            if let Some(e) = expected {
+                self.widen_to_slot(t, e, sp.lo);
+            }
             arg_tys.push(t);
             aregs.push(self.last_reg);
         }
@@ -1002,12 +1005,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, args, expected, sp);
             }
             if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
+                // a bare concrete receiver boxes when its impl carries the
+                // slot ABI (prim targets — the prologue unboxes)
+                let rreg = self.box_bare_receiver(self.ctx.impls[idx].trait_id, rt, rreg, sp.lo);
                 return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp);
             }
             // another module's registration (RFC 0012 §2/§5): static
             // dispatch through the exporter's compiled fn — the gate
             // (the trait's name was used here) is part of the lookup
             if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
+                let rreg = self.box_bare_receiver(self.ctx.extern_impls[eidx].trait_id, rt, rreg, sp.lo);
                 return self.compile_extern_trait_static_call(eidx, midx, rreg, args, expected, sp);
             }
             self.no_method_error(rt, name, sp);
@@ -1195,6 +1202,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     i + 1, self.ctx.type_name(t), self.ctx.type_name(tm.params[i])
                 ));
             }
+            self.widen_to_slot(t, tm.params[i], sp.lo);
             aregs.push(self.last_reg);
         }
         let dst = if tm.ret == TY_NIL { None } else { Some(self.new_reg(tm.ret)) };
@@ -1242,6 +1250,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     i + 1, self.ctx.type_name(t), self.ctx.type_name(tm.params[i])
                 ));
             }
+            self.widen_to_slot(t, tm.params[i], sp.lo);
             aregs.push(self.last_reg);
         }
         let dst = if tm.ret == TY_NIL { None } else { Some(self.new_reg(tm.ret)) };
@@ -1446,6 +1455,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
                 ));
             }
+            self.widen_to_slot(t, ptys[i], sp.lo);
             // ptys here excludes `self` — args align 1:1
             aregs.push(self.clone_arg(self.last_reg, ptys[i], sp.lo));
         }
@@ -1568,6 +1578,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     i + 1, self.ctx.type_name(t), self.ctx.type_name(param_tys[i])
                 ));
             }
+            self.widen_to_slot(t, param_tys[i], sp.lo);
             aregs.push(self.last_reg);
         }
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };

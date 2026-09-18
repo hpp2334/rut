@@ -380,7 +380,7 @@ impl Vm {
         let recv = args[0];
         let ty = self
             .scalar_recv_ty(recv)
-            .unwrap_or_else(|| cell_of(self.cur_regs[recv as usize]).ty);
+            .unwrap_or_else(|| self.effective_ty(cell_of(self.cur_regs[recv as usize])));
         let fid = self
             .prog
             .vtables

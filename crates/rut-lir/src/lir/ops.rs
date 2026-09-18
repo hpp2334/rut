@@ -304,6 +304,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 self.ctx.type_name(l.ty), self.ctx.type_name(t)
                             ));
                         }
+                        // concrete → slot widening boxes scalars (the slot
+                        // ABI, RFC 0012 §4): the binding always holds a cell
+                        self.widen_to_slot(t, l.ty, sp.lo);
                         // copy-by-value (RFC 0009/0016 v1.1): the binding
                         // owns a deep copy of the assigned value
                         self.mov_value(l.reg, self.last_reg, l.ty, sp.lo);
