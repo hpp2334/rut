@@ -131,8 +131,19 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
                 "Dataclass"
             }
-            ItemKind::Class { vis, name, generics, fields: fs, methods } => {
+            ItemKind::Class { vis, name, generics, requires, fields: fs, methods } => {
                 item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
+                if !requires.is_empty() {
+                    fields.push(field(
+                        "bounds",
+                        DumpVal::Bounds(
+                            requires
+                                .iter()
+                                .map(|(n, t)| DumpBound { ident: a.name(*n).to_string(), ty: node_dump(a, t.id()) })
+                                .collect(),
+                        ),
+                    ));
+                }
                 "Class"
             }
             ItemKind::Trait { vis, name, generics, requires, methods } => {

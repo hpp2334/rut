@@ -585,7 +585,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let self_ty = if d.generics.is_empty() {
                     d.ty
                 } else {
-                    self.ctx.mk_data_inst(dname, class_args.clone())
+                    self.ctx.mk_data_inst(dname, class_args.clone(), sp)
                 };
                 return self.compile_direct_method(dname, class_args, self_ty, mnode, args, sp);
             }
@@ -1383,12 +1383,41 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// RFC 0012 §4: implicit widening — exact > trait-typed when an impl
     /// is REGISTERED for the (trait, type) pair. Nominal: no structural
     /// shape is ever consulted. Same-type always widens.
+    /// RFC 0043 §A5: a value of the enclosing class's generic parameter
+    /// also widens through its recorded `requires` bound — the registry
+    /// hit normally answers first (admission proved the impl at the
+    /// instantiation), so this only carries a body whose impl is not
+    /// (yet) registered.
     pub(crate) fn widens(&mut self, from: TypeId, to: TypeId) -> bool {
         if from == to {
             return true;
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(to).clone() {
-            return self.ctx.find_impl_ex(trait_id, from).is_some();
+            if self.ctx.find_impl_ex(trait_id, from).is_some() {
+                return true;
+            }
+            let Some(dname) = self.current_class else {
+                return false;
+            };
+            let Some(d) = self.ctx.find_data(dname).cloned() else {
+                return false;
+            };
+            for (g, bnode) in &d.requires {
+                let Some(&conc) = self.subst.iter().find(|(n, _)| n == g).map(|(_, t)| t) else {
+                    continue;
+                };
+                if conc != from {
+                    continue;
+                }
+                let members = self.ctx.resolve_bound_members(*bnode, &self.subst);
+                if members
+                    .iter()
+                    .any(|m| matches!(m, crate::check::BoundMember::Trait(tid) if *tid == trait_id))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
         false
     }

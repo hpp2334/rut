@@ -323,6 +323,12 @@ pub enum ItemKind {
         vis: Vis,
         name: IdentId,
         generics: Vec<IdentId>,
+        /// RFC 0043 §A5 — admission-only bounds on the class's own
+        /// generics: `class HashMap<K requires Hashable, V>` (the class
+        /// extension of the fn/method `requires` grammar; structs take
+        /// none). Gates which instantiations compile — no method calls
+        /// on the bare parameter.
+        requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
         fields: Vec<NodeHandle<FieldDeclNode>>,
         methods: Vec<NodeHandle<MethodDeclNode>>,
     },

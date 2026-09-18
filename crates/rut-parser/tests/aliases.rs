@@ -137,10 +137,10 @@ fn stray_where_diagnoses_with_inline_replacement() {
 
 #[test]
 fn misplaced_bounds_are_rejected() {
-    // struct / class / trait / builtin generics reject `requires`
+    // struct / trait / builtin generics reject `requires` — class
+    // generics TAKE them (RFC 0043 §A5)
     let cases = [
         ("struct S<T requires D> { v: T }", "`struct` generic parameters take no `requires` bounds"),
-        ("class C<T requires D> { v: T }", "`class` generic parameters take no `requires` bounds"),
         ("trait Tr<T requires D> { }", "`trait` generic parameters take no `requires` bounds"),
         (
             "trait D { fn d(self) -> u64; }\nbuiltin trait Bt<T requires D> { }",
@@ -155,6 +155,61 @@ fn misplaced_bounds_are_rejected() {
             "expected `{want}` for `{src}`: {diags:?}"
         );
     }
+}
+
+#[test]
+fn class_requires_parses_into_the_class_frame() {
+    // RFC 0043 §A5: the bounded-gparam grammar extends to classes —
+    // bounds land on the class frame, the body still parses
+    let src = "\
+trait D { fn d(self) -> u64; }
+class Box<K requires D, V> {
+    k: K;
+    v: V;
+}
+";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    let ItemKind::Class { generics, requires, .. } = ast.item(items[1]) else {
+        panic!("expected a class");
+    };
+    assert_eq!(generics.len(), 2, "K, V both collected: {:?}", generics);
+    assert_eq!(requires.len(), 1);
+    assert_eq!(ast.name(requires[0].0), "K");
+    let TypeKind::TyPath { segs } = ast.ty(requires[0].1) else {
+        panic!("expected a path bound");
+    };
+    assert_eq!(ast.name(segs[0].name), "D");
+}
+
+#[test]
+fn class_union_bound_and_unbounded_params_parse() {
+    // a union bound on one param, an unbounded param after it — the
+    // list continues through the absorbed bounds like the fn grammar
+    let src = "class C<A, T requires i32 | str, B> { v: T; }\n";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    let ItemKind::Class { generics, requires, .. } = ast.item(items[0]) else {
+        panic!("expected a class");
+    };
+    assert_eq!(generics.len(), 3, "A, T, B all collected: {:?}", generics);
+    assert_eq!(requires.len(), 1);
+    let TypeKind::TyUnion { elems } = ast.ty(requires[0].1) else {
+        panic!("expected a union bound");
+    };
+    assert_eq!(elems.len(), 2);
+}
+
+#[test]
+fn dumper_renders_class_requires() {
+    let src = "trait D { fn d(self) -> u64; }\nclass Box<K requires D, V> { k: K; v: V; }\n";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let text = dump::render_text(&dump::to_dump_tree(&ast), src);
+    assert!(text.contains("Class"), "class node in the dump: {text}");
+    assert!(text.contains("bounds:"), "requires field in the dump: {text}");
 }
 
 #[test]

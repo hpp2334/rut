@@ -78,7 +78,7 @@ bound      := Type ('|' Type)*
 ## 3. Inline `requires` — the admission-only bound
 
 ```
-gparam := Ident ('requires' bound)?     // fns and methods
+gparam := Ident ('requires' bound)?     // fns, methods, and classes (§A5)
 ```
 
 - `fn f<T requires A | B>(x: T) -> i32` — the bound hangs off the
@@ -110,11 +110,14 @@ gparam := Ident ('requires' bound)?     // fns and methods
   "`where` clauses are removed — write the bound inline:
   `fn f<T requires B>(..)` (RFC 0043)" and the parse recovers into the
   body.
-- Misplaced bounds are a targeted error: struct/class/trait/surface
-  generic parameters reject `requires` ("inline bounds bind fn/method
-  generics only"). Generic-CLASS bounds are the deliberate next step
-  (the mapset plan §A5: `pub class HashMap<K requires Hashable, V>`),
-  admitted at class instantiation through the same helper.
+- Misplaced bounds are a targeted error: struct/trait/surface generic
+  parameters reject `requires` ("inline bounds bind fn/method/class
+  generics only"). Generic-CLASS parameters TAKE them (the mapset plan
+  §A5: `pub class HashMap<K requires Hashable, V>`) — the bounds record
+  on the class descriptor and admit every instantiation through the
+  same helper (`Foo` does not satisfy `K` requires `Hashable` — no impl
+  `Hashable` for `Foo` is registered). The bound is admission-only and
+  grants no method calls on the bare parameter (OQ-1 stays deferred).
 
 ## 4. Semantics the engine sees
 

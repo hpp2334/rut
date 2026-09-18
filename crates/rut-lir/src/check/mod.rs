@@ -43,6 +43,10 @@ pub struct DataDecl {
     /// inherent methods (name → MethodDecl node)
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     pub generics: Vec<IdentId>,
+    /// RFC 0043 §A5 — the class's admission bounds
+    /// (`class HashMap<K requires Hashable, V>`); checked at every
+    /// `mk_data_inst`. Empty for structs and for classes without bounds.
+    pub requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -840,15 +844,26 @@ impl<'a> Ctx<'a> {
                     BoundMember::Concrete(t) => t == concrete,
                 });
             if !ok {
-                self.err(
-                    sp,
-                    format!(
+                // the single-trait bound names the missing impl — the
+                // class/fn shape the plan diagnoses ("no impl `Hashable`
+                // for `Foo`"); unions keep the generic wording
+                let msg = match members.as_slice() {
+                    [BoundMember::Trait(tid)] => {
+                        let tname = self.name(self.traits[*tid as usize].name).to_string();
+                        let ty = self.type_name(concrete).to_string();
+                        format!(
+                            "`{ty}` does not satisfy `{g}` requires `{tname}` — no impl `{tname}` for `{ty}` is registered (RFC 0043)",
+                            g = self.name(*g),
+                        )
+                    }
+                    _ => format!(
                         "`{}` does not satisfy `{}` requires `{}` — no matching type or impl is registered (RFC 0043)",
                         self.type_name(concrete),
                         self.name(*g),
                         bound_ty_str(self, *bnode),
                     ),
-                );
+                };
+                self.err(sp, msg);
             }
         }
     }

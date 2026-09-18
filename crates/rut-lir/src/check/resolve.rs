@@ -237,7 +237,7 @@ impl<'a> Ctx<'a> {
                                 .iter()
                                 .map(|g| self.resolve_type(*g, env))
                                 .collect();
-                            return self.mk_data_inst(name, args);
+                            return self.mk_data_inst(name, args, sp);
                         }
                         // the `Iterator<E>` protocol (RFC 0012 §6):
                         // engine-woven — its trait is built directly per

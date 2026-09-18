@@ -31,10 +31,10 @@ impl<'a> Ctx<'a> {
             match self.ast.item(*it) {
             ItemKind::Enum { vis, name, members } => self.collect_enum(it.id(), *vis, *name, members),
             ItemKind::Dataclass { vis, name, generics, methods, .. } => {
-                self.declare_data(it.id(), DataKind::Dataclass, *vis, *name, generics, methods);
+                self.declare_data(it.id(), DataKind::Dataclass, *vis, *name, generics, &[], methods);
             }
-            ItemKind::Class { vis, name, generics, methods, .. } => {
-                self.declare_data(it.id(), DataKind::Class, *vis, *name, generics, methods);
+            ItemKind::Class { vis, name, generics, requires, methods, .. } => {
+                self.declare_data(it.id(), DataKind::Class, *vis, *name, generics, requires, methods);
             }
             ItemKind::Trait { vis, name, generics, methods, .. } => {
                 self.declare_trait(it.id(), *vis, *name, generics, methods)
@@ -159,6 +159,7 @@ impl<'a> Ctx<'a> {
         _vis: Vis,
         name: IdentId,
         generics: &[IdentId],
+        requires: &[(IdentId, NodeHandle<AnyTy>)],
         methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
@@ -185,6 +186,7 @@ impl<'a> Ctx<'a> {
                 fields: vec![],
                 methods: mths,
                 generics: generics.to_vec(),
+                requires: requires.to_vec(),
             },
         ));
     }
@@ -858,7 +860,10 @@ impl<'a> Ctx<'a> {
     /// Instantiate a generic record for concrete type arguments (RFC 0013
     /// monomorphization). The id is interned and cached before fields resolve
     /// so recursive shapes (`Node<T> { next: Option<Node<T>> }`) terminate.
-    pub fn mk_data_inst(&mut self, data: IdentId, args: Vec<TypeId>) -> TypeId {
+    /// The class's inline bounds gate the substitution here (RFC 0043 §A5,
+    /// admission-only) — once per concrete argument list, at the spelling
+    /// that created it.
+    pub fn mk_data_inst(&mut self, data: IdentId, args: Vec<TypeId>, sp: Span) -> TypeId {
         if let Some(&t) = self.type_inst.get(&(data, args.clone())) {
             return t;
         }
@@ -881,6 +886,10 @@ impl<'a> Ctx<'a> {
         self.inst_data.insert(ty, (data, args.clone()));
         let env: Vec<(IdentId, TypeId)> =
             decl.generics.iter().cloned().zip(args.iter().cloned()).collect();
+        // inline bounds gate the completed substitution (RFC 0043 §A5) —
+        // the cache insert above keeps a bound-triggering instantiation of
+        // the same record from recursing
+        self.admit_bounds(&decl.requires, &env, sp);
         let field_nodes: Vec<NodeHandle<FieldDeclNode>> = match self.ast.item(decl.node) {
             ItemKind::Dataclass { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
             _ => Vec::new(),

@@ -178,7 +178,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 .unwrap_or(TY_I32)
                         })
                         .collect();
-                    ctx.mk_data_inst(*data, args)
+                    ctx.mk_data_inst(*data, args, ctx.ast.span(m.id()))
                 };
                 (m.id(), Some(self_ty), true, Some(*data))
             }
@@ -202,7 +202,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                     .unwrap_or(TY_I32)
                             })
                             .collect();
-                        (ctx.mk_data_inst(*dname, args), Some(*dname))
+                        (ctx.mk_data_inst(*dname, args, ctx.ast.span(m.id())), Some(*dname))
                     }
                     Some((dname, params))
                         if ctx.extern_native_types.get(dname).copied()

@@ -348,10 +348,12 @@ impl EnumFrame {
 // ---- generic parameter list ----
 //
 // RFC 0043: fn/method generic parameters may carry inline admission
-// bounds (`<T requires A | B>`); struct/class/trait/surface generics
-// reject them. A bound suspends the enclosing frame at a GenBound stage
-// — the bound itself is a child Type frame — and `generic_params_more`
-// hands back the generic whose bound is being parsed (`Some`).
+// bounds (`<T requires A | B>`), and so do CLASS generics (§A5 —
+// `class HashMap<K requires Hashable, V>`); struct/trait/surface
+// generics reject them. A bound suspends the enclosing frame at a
+// GenBound stage — the bound itself is a child Type frame — and
+// `generic_params_more` hands back the generic whose bound is being
+// parsed (`Some`).
 
 fn generic_params(p: &mut Parser, allow_bounds: bool, owner: &str) -> (Vec<IdentId>, Option<IdentId>) {
     p.bump(); // < (the caller checked)
@@ -378,7 +380,7 @@ fn generic_params_more(p: &mut Parser, allow_bounds: bool, owner: &str, out: &mu
                 return Some(n);
             }
             p.err_here(format!(
-                "`{owner}` generic parameters take no `requires` bounds — inline bounds bind fn/method generics only (RFC 0043)"
+                "`{owner}` generic parameters take no `requires` bounds — inline bounds bind fn/method/class generics only (RFC 0043)"
             ));
             // skip the rejected bound so the list continues cleanly
             while !matches!(
@@ -396,18 +398,45 @@ fn generic_params_more(p: &mut Parser, allow_bounds: bool, owner: &str, out: &mu
 }
 
 // ---- struct / class ----
+//
+// RFC 0043 §A5: class generics take inline admission bounds
+// (`class HashMap<K requires Hashable, V>`); struct generics reject
+// them. A bound suspends the frame at a GenBound stage — the bound
+// itself is a child Type frame — exactly like the fn/method frames;
+// the body frame only pushes once the `<..>` list is fully consumed.
 
 pub(crate) struct TyDeclFrame {
     is_class: bool,
     vis: Vis,
     lo: u32,
+    stage: TdStage,
     name: IdentId,
     generics: Vec<IdentId>,
+    /// the class's admission bounds, in `requires` order (empty for
+    /// structs — their generics never carry bounds)
+    requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
+    /// the generic whose `requires` bound is being parsed (GenBound stage)
+    pending: Option<IdentId>,
+}
+
+#[derive(Clone, Copy)]
+enum TdStage {
+    GenBound,
+    Body,
 }
 
 impl TyDeclFrame {
     pub(crate) fn new(is_class: bool, vis: Vis) -> Self {
-        TyDeclFrame { is_class, vis, lo: 0, name: IdentId(0), generics: Vec::new() }
+        TyDeclFrame {
+            is_class,
+            vis,
+            lo: 0,
+            stage: TdStage::Body,
+            name: IdentId(0),
+            generics: Vec::new(),
+            requires: Vec::new(),
+            pending: None,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -419,10 +448,19 @@ impl TyDeclFrame {
         self.name = name;
         if matches!(p.tok(), Tok::Lt) {
             let owner = if self.is_class { "class" } else { "struct" };
-            let (gens, pending) = generic_params(p, false, owner);
+            let (gens, pending) = generic_params(p, self.is_class, owner);
             self.generics = gens;
-            debug_assert!(pending.is_none(), "rejected bounds never suspend");
+            if let Some(g) = pending {
+                self.pending = Some(g);
+                self.stage = TdStage::GenBound;
+                return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
+            }
         }
+        self.push_body()
+    }
+
+    fn push_body(&mut self) -> Step {
+        self.stage = TdStage::Body;
         Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Class {
             allow_pub: self.is_class,
             is_dataclass: !self.is_class,
@@ -430,17 +468,36 @@ impl TyDeclFrame {
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
-        match d {
-            Done::Body(fields, methods) => {
+        match (self.stage, d) {
+            (TdStage::GenBound, Done::Ty(t)) => {
+                let g = self.pending.take().expect("bound without a parameter");
+                self.requires.push((g, t));
+                let owner = if self.is_class { "class" } else { "struct" };
+                let pending = generic_params_more(p, self.is_class, owner, &mut self.generics);
+                if let Some(g) = pending {
+                    self.pending = Some(g);
+                    return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
+                }
+                self.push_body()
+            }
+            (TdStage::GenBound, Done::Failed) => Step::Pop(Done::Failed),
+            (TdStage::Body, Done::Body(fields, methods)) => {
                 let (vis, name, generics) = (self.vis, self.name, std::mem::take(&mut self.generics));
                 let kind = if self.is_class {
-                    ItemKind::Class { vis, name, generics, fields, methods }
+                    ItemKind::Class {
+                        vis,
+                        name,
+                        generics,
+                        requires: std::mem::take(&mut self.requires),
+                        fields,
+                        methods,
+                    }
                 } else {
                     ItemKind::Dataclass { vis, name, generics, fields, methods }
                 };
                 Step::Pop(Done::Item(p.item(kind, Span::new(self.lo, p.span().hi))))
             }
-            Done::Failed => Step::Pop(Done::Failed),
+            (TdStage::Body, Done::Failed) => Step::Pop(Done::Failed),
             _ => unreachable!("type declarations receive a body"),
         }
     }
