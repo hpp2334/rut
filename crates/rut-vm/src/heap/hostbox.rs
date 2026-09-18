@@ -27,19 +27,6 @@ impl<T: 'static> OpaqueBox<T> {
         Ok(OpaqueBox { handle, _marker: std::marker::PhantomData })
     }
 
-    /// The checked view over a crossing value (`Value::Opaque` from an
-    /// entry return or an args slice). The wrong shape or the wrong
-    /// payload type is a `Trap` naming both sides — never UB.
-    pub fn from_value(v: &Value) -> Result<OpaqueBox<T>, Trap> {
-        let Value::Opaque(h) = v else {
-            return Err(Trap::new(
-                TrapKind::Invalid,
-                format!("expected an Opaque handle, got {}", v.kind_name()),
-            ));
-        };
-        Self::from_handle(h)
-    }
-
     /// Same check over a bare handle. The payload's own `Any` vtable
     /// carries the type token — `is::<T>` is the check, so a wrong-type
     /// borrow is a checked error, never UB. `type_name` (kept in the
@@ -125,17 +112,6 @@ impl<T: 'static> OpaqueBox<T> {
         }
     }
 
-    /// Transfer this reference into a crossing `Value` (the handle
-    /// moves; the rc count is unchanged).
-    pub fn into_value(self) -> Value {
-        Value::Opaque(self.handle)
-    }
-
-    /// The plain handle, +1 rc — for storing the box inside other
-    /// host state or passing it in an args slice.
-    pub fn value(&self) -> Value {
-        Value::Opaque(self.handle.clone())
-    }
 }
 
 impl<T: 'static> Clone for OpaqueBox<T> {

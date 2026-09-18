@@ -77,7 +77,7 @@ impl Plugin {
             &mut vm,
             EventBus { subscriptions: HashMap::new(), lines: Vec::new(), emits: 0, renders: 0 },
         )?;
-        let state: OpaqueRef = vm.call_typed("init", (bus.handle().clone(),))?;
+        let state: OpaqueRef = vm.call("init", (bus.handle().clone(),))?;
         let table = bus.with(|b| b.subscriptions.clone())?;
         Ok(Plugin { vm, bus, state, table })
     }
@@ -88,7 +88,7 @@ impl Plugin {
     /// per-arity typed dispatchers — the plan's one dynamic call site.)
     fn dispatch(&mut self, topic: &str) -> Result<(), Trap> {
         match self.table.get(topic).cloned() {
-            Some(handler) => self.vm.call_typed::<_, ()>(&handler, (self.state.clone(),)),
+            Some(handler) => self.vm.call::<_, ()>(&handler, (self.state.clone(),)),
             None => {
                 println!("[server] no handler for `{topic}` — dropped");
                 Ok(())
@@ -99,7 +99,7 @@ impl Plugin {
         match self.table.get(topic).cloned() {
             Some(handler) => {
                 self.vm
-                    .call_typed::<_, ()>(&handler, (self.state.clone(), arg))
+                    .call::<_, ()>(&handler, (self.state.clone(), arg))
             }
             None => {
                 println!("[server] no handler for `{topic}` — dropped");
@@ -116,7 +116,7 @@ impl Plugin {
         match self.table.get(topic).cloned() {
             Some(handler) => self
                 .vm
-                .call_typed::<_, ()>(&handler, (self.state.clone(), a1, a2)),
+                .call::<_, ()>(&handler, (self.state.clone(), a1, a2)),
             None => {
                 println!("[server] no handler for `{topic}` — dropped");
                 Ok(())
@@ -150,7 +150,7 @@ impl Plugin {
 
     /// Final stats emit; returns the plugin's total message count.
     pub fn shutdown(&mut self) -> Result<i64, Trap> {
-        self.vm.call_typed("shutdown", (self.state.clone(),))
+        self.vm.call("shutdown", (self.state.clone(),))
     }
 
     /// Everything the plugin emitted, in order.
@@ -191,7 +191,7 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry) {
             // would trap on the guard instead of racing.
             bus.with_mut(|b| -> Result<(), Trap> {
                 let line: String =
-                    vm.call_typed("render_line", (topic.to_string(), handler.to_string()))?;
+                    vm.call("render_line", (topic.to_string(), handler.to_string()))?;
                 b.lines.push(line);
                 b.emits += 1;
                 b.renders += 1;

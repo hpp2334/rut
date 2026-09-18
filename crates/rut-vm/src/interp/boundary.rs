@@ -310,7 +310,7 @@ tuple_ret!(A1, A2, A3, A4, A5, A6);
 tuple_ret!(A1, A2, A3, A4, A5, A6, A7);
 tuple_ret!(A1, A2, A3, A4, A5, A6, A7, A8);
 
-/// A Rust → rut argument for `Vm::call_typed` (owned values; `&str`/`&[u8]`
+/// A Rust → rut argument for `Vm::call` (owned values; `&str`/`&[u8]`
 /// copy — the embedder's data, an explicit copy is the honest shape).
 /// Nameable so embedders can write their own typed dispatch helpers.
 pub trait CallArg {
@@ -677,7 +677,7 @@ handler_infallible!(A1, A2, A3, A4, A5, A6, A7, A8);
 /// ```ignore
 /// rut_vm::register!(hosts, "calc::hypot", (f64, f64) -> f64, |vm, a, b| a.hypot(b));
 /// rut_vm::register!(hosts, "re::boost", (i64,) -> i64, |vm, x| {
-///     let y: i64 = vm.call_typed("inner", (x,))?;
+///     let y: i64 = vm.call("inner", (x,))?;
 ///     Ok(y + 1)
 /// });
 /// ```

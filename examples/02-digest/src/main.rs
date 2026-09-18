@@ -68,31 +68,31 @@ fn sdbm(b: &[u8]) -> u64 {
 
 // entry shorthands (the session pattern from 00-todolist / 01-sort)
 fn rut_hex_enc(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> String {
-    vm.call_typed("hex_enc", (data.to_vec(),)).unwrap()
+    vm.call("hex_enc", (data.to_vec(),)).unwrap()
 }
 
 fn rut_b64_enc(vm: &mut rut_vm::interp::Vm, data: &[u8], url: bool) -> String {
-    vm.call_typed("b64_enc", (data.to_vec(), url)).unwrap()
+    vm.call("b64_enc", (data.to_vec(), url)).unwrap()
 }
 
 fn rut_crc32(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u32 {
-    vm.call_typed("crc32", (data.to_vec(),)).unwrap()
+    vm.call("crc32", (data.to_vec(),)).unwrap()
 }
 
 fn rut_fnv1a32(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u32 {
-    vm.call_typed("fnv1a32", (data.to_vec(),)).unwrap()
+    vm.call("fnv1a32", (data.to_vec(),)).unwrap()
 }
 
 fn rut_fnv1a64(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
-    vm.call_typed("fnv1a64", (data.to_vec(),)).unwrap()
+    vm.call("fnv1a64", (data.to_vec(),)).unwrap()
 }
 
 fn rut_djb2(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
-    vm.call_typed("djb2", (data.to_vec(),)).unwrap()
+    vm.call("djb2", (data.to_vec(),)).unwrap()
 }
 
 fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
-    vm.call_typed("sdbm", (data.to_vec(),)).unwrap()
+    vm.call("sdbm", (data.to_vec(),)).unwrap()
 }
 
 fn main() {
@@ -151,7 +151,7 @@ fn main() {
         ] {
             let before = vm.fuel_used;
             // v1.1 error convention: `(T, err)` — the tuple crosses typed
-            let (got, _err): (Vec<u8>, String) = vm.call_typed("digest", (algo, data.clone())).unwrap();
+            let (got, _err): (Vec<u8>, String) = vm.call("digest", (algo, data.clone())).unwrap();
             let ok = hex(&got) == want;
             all_ok &= ok;
             println!("  {algo:<7} {label:<13} fuel {:>7}  {}  {}", vm.fuel_used - before, hex(&got), verdict(ok));
@@ -159,8 +159,8 @@ fn main() {
     }
 
     // ---- hash keys over real data: a JSON document ------------------
-    let doc: rut_vm::OpaqueRef = vm.call_typed("sample_doc", ()).unwrap();
-    let json_text: String = vm.call_typed("json_enc", (doc,)).unwrap();
+    let doc: rut_vm::OpaqueRef = vm.call("sample_doc", ()).unwrap();
+    let json_text: String = vm.call("json_enc", (doc,)).unwrap();
     println!("sample_doc -> {json_text}");
     println!("serde_json parses it: {}", verdict(serde_json::from_str::<serde_json::Value>(&json_text).is_ok()));
     let data = json_text.as_bytes();
@@ -181,18 +181,18 @@ fn main() {
 
     // ---- JSON round-trip --------------------------------------------
     let tricky = r#"{"a":[1,2.5,-3e2],"s":"quote \" back \\ nl \n end","n":null,"t":true,"f":false,"o":{"x":[]}}"#;
-    let (rt, _err): (String, String) = vm.call_typed("json_roundtrip", (tricky,)).unwrap();
+    let (rt, _err): (String, String) = vm.call("json_roundtrip", (tricky,)).unwrap();
     let equal = serde_json::from_str::<serde_json::Value>(&rt).unwrap() == serde_json::from_str::<serde_json::Value>(tricky).unwrap();
     all_ok &= equal;
     println!("json_roundtrip(tricky) = {rt}");
     println!("  semantically equal to serde_json: {}", verdict(equal));
 
     // ---- error paths are values, not traps --------------------------
-    let (_v, err): (Vec<u8>, String) = vm.call_typed("hex_dec", ("zz",)).unwrap();
+    let (_v, err): (Vec<u8>, String) = vm.call("hex_dec", ("zz",)).unwrap();
     println!("hex_dec(\"zz\")   = {err:?}");
-    let (_v, err): (Vec<u8>, String) = vm.call_typed("b64_dec", ("!*", false)).unwrap();
+    let (_v, err): (Vec<u8>, String) = vm.call("b64_dec", ("!*", false)).unwrap();
     println!("b64_dec(\"!*\")   = {err:?}");
-    let (_o, err): (rut_vm::OpaqueRef, String) = vm.call_typed("json_dec", ("{,}",)).unwrap();
+    let (_o, err): (rut_vm::OpaqueRef, String) = vm.call("json_dec", ("{,}",)).unwrap();
     println!("json_dec(\"{{,}}\") = {err:?}");
 
     println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);

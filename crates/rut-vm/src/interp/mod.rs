@@ -8,6 +8,7 @@
 
 use rut_core::binary::{ConstVal, Program};
 use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
+use crate::arena::OpaqueRef;
 use rut_core::ops::*;
 use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
 use std::rc::Rc;
@@ -83,7 +84,7 @@ struct InterpCursor {
 
 pub struct Vm {
     pub prog: Rc<Program>,
-    pub heap: Heap,
+    pub(crate) heap: Heap,
     frames: Vec<SavedFrame>,
     // active frame
     cur_func: u32,
@@ -346,7 +347,7 @@ impl Vm {
     /// the outer cursor is restored whether the callee returns or traps
     /// (a propagated nested trap keeps the outer frame resumable; resuming
     /// re-runs the host fn from its op, the standing host-fn-trap rule).
-    pub fn call(&mut self, export: &str, args: &[Value]) -> Result<Value, Trap> {
+    pub(crate) fn call_raw(&mut self, export: &str, args: &[Value]) -> Result<Value, Trap> {
         let Some(func) = self.prog.export(export) else {
             return Err(Trap::new(TrapKind::Invalid, format!("no export `{export}`")));
         };
@@ -581,7 +582,7 @@ impl Vm {
     }
 
     /// Resume after a budget trap (RFC 0034 §4: the frame IS the loop state).
-    pub fn resume(&mut self) -> Result<Value, Trap> {
+    pub(crate) fn resume_raw(&mut self) -> Result<Value, Trap> {
         if !self.running {
             return Err(Trap::new(TrapKind::Invalid, "nothing to resume"));
         }
@@ -592,9 +593,9 @@ impl Vm {
     /// Rust values, get a Rust value back — `Value`/`Slot` are internal
     /// marshaling formats, never seen by the embedder. Re-entrancy,
     /// budgets, and trap semantics are exactly `call`'s.
-    pub fn call_typed<A: CallArgs, R: Ret>(&mut self, export: &str, args: A) -> Result<R, Trap> {
+    pub fn call<A: CallArgs, R: Ret>(&mut self, export: &str, args: A) -> Result<R, Trap> {
         let values = args.into_values();
-        let v = self.call(export, &values)?;
+        let v = self.call_raw(export, &values)?;
         let ty = self.export_ret_ty(export)?;
         let slot = self
             .value_in(&v, ty)
@@ -606,9 +607,9 @@ impl Vm {
         Ok(out)
     }
 
-    /// Typed `resume`: same shape, the active frame's declared return.
-    pub fn resume_typed<R: Ret>(&mut self) -> Result<R, Trap> {
-        let v = self.resume()?;
+    /// Resume a budget-parked call, in Rust types.
+    pub fn resume<R: Ret>(&mut self) -> Result<R, Trap> {
+        let v = self.resume_raw()?;
         let ty = self.prog.funcs[self.cur_func as usize].ret;
         let slot = self
             .value_in(&v, ty)
@@ -618,6 +619,15 @@ impl Vm {
             self.heap.release(slot);
         }
         Ok(out)
+    }
+
+    /// Mint an `Opaque` box owning a rut `str` — `Opaque.new(str)` for
+    /// hosts that hand rut a handle over host-built text (the logger's
+    /// named logger; RFC 0014/0026). The handle owns one reference.
+    pub fn alloc_opaque_str(&mut self, s: String) -> Result<OpaqueRef, Trap> {
+        let slot = self.heap.alloc_str(s)?;
+        let p = self.heap.alloc_opaque(slot, rut_core::types::TY_STR)?;
+        Ok(self.heap.opaque_handle_take(unsafe { p.r }))
     }
 
     pub(crate) fn export_ret_ty(&self, export: &str) -> Result<TypeId, Trap> {

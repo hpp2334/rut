@@ -60,7 +60,7 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
     rut_std::math::install_std_math(&mut hosts);
     hosts.verify_against(&expected_case_fns());
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
-    let trap = match vm.call("main", &[]) {
+    let trap = match vm.call::<_, ()>("main", ()) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
     };
@@ -756,25 +756,25 @@ entry fn checked(v: i32) -> (i32, str) {
 }
 "#;
     let mut vm = entry_vm(src);
-    let c: rut_vm::OpaqueRef = vm.call_typed("make", ()).unwrap();
-    assert_eq!(vm.call_typed::<_, u32>("put", (c.clone(),)).unwrap(), 1);
-    assert_eq!(vm.call_typed::<_, u32>("put", (c.clone(),)).unwrap(), 2);
+    let c: rut_vm::OpaqueRef = vm.call("make", ()).unwrap();
+    assert_eq!(vm.call::<_, u32>("put", (c.clone(),)).unwrap(), 1);
+    assert_eq!(vm.call::<_, u32>("put", (c.clone(),)).unwrap(), 2);
     assert_eq!(
-        vm.call_typed::<_, Vec<u8>>("echo_bytes", (vec![1u8, 2, 250],)).unwrap(),
+        vm.call::<_, Vec<u8>>("echo_bytes", (vec![1u8, 2, 250],)).unwrap(),
         vec![1, 2, 250]
     );
-    assert_eq!(vm.call_typed::<_, (i32, bool)>("maybe", (7i32,)).unwrap(), (7, true));
-    assert_eq!(vm.call_typed::<_, (i32, bool)>("maybe", (-1i32,)).unwrap(), (0, false));
+    assert_eq!(vm.call::<_, (i32, bool)>("maybe", (7i32,)).unwrap(), (7, true));
+    assert_eq!(vm.call::<_, (i32, bool)>("maybe", (-1i32,)).unwrap(), (0, false));
     assert_eq!(
-        vm.call_typed::<_, (i32, String)>("checked", (3i32,)).unwrap(),
+        vm.call::<_, (i32, String)>("checked", (3i32,)).unwrap(),
         (3, "".to_string())
     );
     assert_eq!(
-        vm.call_typed::<_, (i32, String)>("checked", (-3i32,)).unwrap(),
+        vm.call::<_, (i32, String)>("checked", (-3i32,)).unwrap(),
         (0, "negative".to_string())
     );
     // embedder mistakes are named traps, never silent zeros
-    let err = vm.call_typed::<_, (i32, bool)>("maybe", ("x",)).unwrap_err();
+    let err = vm.call::<_, (i32, bool)>("maybe", ("x",)).unwrap_err();
     assert!(err.msg.contains("argument"), "{}", err.msg);
 }
 
@@ -1175,7 +1175,7 @@ pub fn main() -> nil {
     rut_std::math::install_std_math(&mut hosts);
     hosts.verify_against(&s.expected_host_fns()); // the load-time contract
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
-    let trap = vm.call("main", &[]).err().map(|t| t.name());
+    let trap = vm.call::<_, ()>("main", ()).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["2 30"]);
 }
@@ -1233,7 +1233,7 @@ pub fn main() -> nil {
     rut_std::math::install_std_math(&mut hosts);
     hosts.verify_against(&s.expected_host_fns()); // the load-time contract
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
-    let trap = vm.call("main", &[]).err().map(|t| t.name());
+    let trap = vm.call::<_, ()>("main", ()).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["11 hello world"]);
 }
@@ -1780,7 +1780,7 @@ entry fn put(c: Opaque) -> u32 {
     rut_std::logger::install_std_log(&mut hosts0, |_msg| {});
     rut_std::math::install_std_math(&mut hosts0);
     let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog.clone()), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
-    let c: rut_vm::OpaqueRef = vm.call_typed("make", ()).unwrap();
+    let c: rut_vm::OpaqueRef = vm.call("make", ()).unwrap();
     for _ in 0..2 {
         for f in prog.funcs.iter() {
             if prog.name_of(f.name) == "put" {
@@ -1789,7 +1789,7 @@ entry fn put(c: Opaque) -> u32 {
                 }
             }
         }
-        let r = vm.call_typed::<_, u32>("put", (c.clone(),));
+        let r = vm.call::<_, u32>("put", (c.clone(),));
         println!("PUT RESULT {r:?}");
     }
 }

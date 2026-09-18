@@ -61,51 +61,51 @@ fn lcg(n: usize, seed: u32) -> Vec<u8> {
 
 // entry shorthands — typed crossings (RFC 0023 revised)
 fn rut_digest(vm: &mut rut_vm::interp::Vm, algo: &str, data: &[u8]) -> String {
-    let (v, _e): (Vec<u8>, String) = vm.call_typed("digest", (algo, data.to_vec())).unwrap();
+    let (v, _e): (Vec<u8>, String) = vm.call("digest", (algo, data.to_vec())).unwrap();
     hex(&v)
 }
 fn rut_b64_enc(vm: &mut rut_vm::interp::Vm, data: &[u8], url: bool) -> String {
-    vm.call_typed("b64_enc", (data.to_vec(), url)).unwrap()
+    vm.call("b64_enc", (data.to_vec(), url)).unwrap()
 }
 fn rut_b64_dec(vm: &mut rut_vm::interp::Vm, s: &str, url: bool) -> Vec<u8> {
-    let (v, _e): (Vec<u8>, String) = vm.call_typed("b64_dec", (s, url)).unwrap();
+    let (v, _e): (Vec<u8>, String) = vm.call("b64_dec", (s, url)).unwrap();
     v
 }
 fn rut_hex_enc(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> String {
-    vm.call_typed("hex_enc", (data.to_vec(),)).unwrap()
+    vm.call("hex_enc", (data.to_vec(),)).unwrap()
 }
 fn rut_hex_dec(vm: &mut rut_vm::interp::Vm, s: &str) -> Vec<u8> {
-    let (v, _e): (Vec<u8>, String) = vm.call_typed("hex_dec", (s,)).unwrap();
+    let (v, _e): (Vec<u8>, String) = vm.call("hex_dec", (s,)).unwrap();
     v
 }
 fn rut_crc32(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u32 {
-    vm.call_typed("crc32", (data.to_vec(),)).unwrap()
+    vm.call("crc32", (data.to_vec(),)).unwrap()
 }
 fn rut_fnv1a32(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u32 {
-    vm.call_typed("fnv1a32", (data.to_vec(),)).unwrap()
+    vm.call("fnv1a32", (data.to_vec(),)).unwrap()
 }
 fn rut_fnv1a64(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
-    vm.call_typed("fnv1a64", (data.to_vec(),)).unwrap()
+    vm.call("fnv1a64", (data.to_vec(),)).unwrap()
 }
 fn rut_djb2(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
-    vm.call_typed("djb2", (data.to_vec(),)).unwrap()
+    vm.call("djb2", (data.to_vec(),)).unwrap()
 }
 fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
-    vm.call_typed("sdbm", (data.to_vec(),)).unwrap()
+    vm.call("sdbm", (data.to_vec(),)).unwrap()
 }
 fn rut_json_roundtrip(vm: &mut rut_vm::interp::Vm, s: &str) -> Result<String, String> {
     // v1.1 error convention: `(T, err)` — position 1 carries the message
-    let (out, e): (String, String) = vm.call_typed("json_roundtrip", (s,)).unwrap();
+    let (out, e): (String, String) = vm.call("json_roundtrip", (s,)).unwrap();
     if e.is_empty() { Ok(out) } else { Err(e) }
 }
 fn rut_sample_doc(vm: &mut rut_vm::interp::Vm) -> OpaqueRef {
-    vm.call_typed("sample_doc", ()).unwrap()
+    vm.call("sample_doc", ()).unwrap()
 }
 fn rut_json_enc(vm: &mut rut_vm::interp::Vm, o: OpaqueRef) -> String {
-    vm.call_typed("json_enc", (o,)).unwrap()
+    vm.call("json_enc", (o,)).unwrap()
 }
 fn rut_direct(vm: &mut rut_vm::interp::Vm, algo: &str, data: &[u8]) -> String {
-    let v: Vec<u8> = vm.call_typed(algo, (data.to_vec(),)).unwrap();
+    let v: Vec<u8> = vm.call(algo, (data.to_vec(),)).unwrap();
     hex(&v)
 }
 
@@ -203,9 +203,9 @@ fn base64_rfc4648_and_errors() {
     assert_eq!(url, base64::engine::general_purpose::URL_SAFE.encode(hi));
     assert_ne!(std, url);
     // errors
-    let (_v, e): (Vec<u8>, String) = vm.call_typed("b64_dec", ("!*", false)).unwrap();
+    let (_v, e): (Vec<u8>, String) = vm.call("b64_dec", ("!*", false)).unwrap();
     assert!(e.contains("invalid"));
-        let (_v, e): (Vec<u8>, String) = vm.call_typed("b64_dec", ("Zg==Zg==", false)).unwrap();
+        let (_v, e): (Vec<u8>, String) = vm.call("b64_dec", ("Zg==Zg==", false)).unwrap();
     assert!(e.contains("after padding"));
 }
 
@@ -222,9 +222,9 @@ fn hex_roundtrip_and_errors() {
     assert_eq!(up, "deadbeef");
     let dec = rut_hex_dec(&mut vm, "DEADBEEF");
     assert_eq!(dec, b"\xde\xad\xbe\xef".to_vec());
-        let (_v, e): (Vec<u8>, String) = vm.call_typed("hex_dec", ("zz",)).unwrap();
+        let (_v, e): (Vec<u8>, String) = vm.call("hex_dec", ("zz",)).unwrap();
     assert!(e.contains("invalid"));
-        let (_v, e): (Vec<u8>, String) = vm.call_typed("hex_dec", ("abc",)).unwrap();
+        let (_v, e): (Vec<u8>, String) = vm.call("hex_dec", ("abc",)).unwrap();
     assert!(e.contains("odd"));
 }
 
@@ -289,7 +289,7 @@ fn hash_key_vectors_and_cross_check() {
 fn json_codec_against_serde() {
     let mut vm = session(200_000_000, 32 * 1024 * 1024);
     let roundtrip = |vm: &mut rut_vm::interp::Vm, s: &str| -> Result<String, String> {
-        let (out, e): (String, String) = vm.call_typed("json_roundtrip", (s,)).unwrap();
+        let (out, e): (String, String) = vm.call("json_roundtrip", (s,)).unwrap();
         if e.is_empty() { Ok(out) } else { Err(e) }
     };
     let docs = [
@@ -327,8 +327,8 @@ fn json_codec_against_serde() {
     assert_eq!(roundtrip(&mut vm, " [ 1 , 2 ] ").unwrap(), "[1,2]");
     assert_eq!(roundtrip(&mut vm, r#""""#).unwrap(), r#""""#);
     // sample_doc encodes to valid JSON
-    let doc: OpaqueRef = vm.call_typed("sample_doc", ()).unwrap();
-    let enc: String = vm.call_typed("json_enc", (doc,)).unwrap();
+    let doc: OpaqueRef = vm.call("sample_doc", ()).unwrap();
+    let enc: String = vm.call("json_enc", (doc,)).unwrap();
     assert_eq!(enc, r#"{"name":"rut","version":0.2,"tags":["tiny","fast","verified"],"meta":{"ok":true,"lines":607}}"#);
     serde_json::from_str::<serde_json::Value>(&enc).unwrap();
     // error paths
@@ -364,10 +364,10 @@ fn dispatcher_matches_direct_entries() {
     let data = lcg(150, 11);
     for algo in ["md5", "sha1", "sha256", "sha512"] {
         let via_disp = rut_digest(&mut vm, algo, &data);
-        let v: Vec<u8> = vm.call_typed(algo, (data.clone(),)).unwrap();
+        let v: Vec<u8> = vm.call(algo, (data.clone(),)).unwrap();
         assert_eq!(via_disp, hex(&v), "{algo}");
     }
-    let (_v, err): (Vec<u8>, String) = vm.call_typed("digest", ("md4", b"x".to_vec())).unwrap();
+    let (_v, err): (Vec<u8>, String) = vm.call("digest", ("md4", b"x".to_vec())).unwrap();
     assert_eq!(err, "unknown algorithm: md4");
 }
 
@@ -388,8 +388,8 @@ fn stress_8k_under_raised_budgets() {
 #[test]
 fn wrong_kind_arguments_trap_cleanly() {
     let mut vm = session(1_000_000, 8 * 1024 * 1024);
-    let err = vm.call_typed::<_, u32>("crc32", ("not bytes",)).unwrap_err();
+    let err = vm.call::<_, u32>("crc32", ("not bytes",)).unwrap_err();
     assert!(err.msg.contains("argument"), "{err:?}");
-    let err = vm.call_typed::<_, (Vec<u8>, String)>("hex_dec", (vec![1u8],)).unwrap_err();
+    let err = vm.call::<_, (Vec<u8>, String)>("hex_dec", (vec![1u8],)).unwrap_err();
     assert!(err.msg.contains("argument"), "{err:?}");
 }

@@ -96,7 +96,7 @@ fn classics_run_and_match_their_expected_sidecars() {
                 continue;
             }
         };
-        if let Err(t) = vm.call("main", &[]) {
+        if let Err(t) = vm.call::<_, ()>("main", ()) {
             failures.push(format!("{name}: trap: {} — {}", t.name(), t.msg));
             continue;
         }

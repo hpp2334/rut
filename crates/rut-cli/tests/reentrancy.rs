@@ -129,7 +129,7 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>
         Ok(b.handle().clone())
     });
     rut_vm::register!(hosts, "re::boost", (i64,) -> i64, |vm: &mut Vm, x: i64| -> Result<i64, Trap> {
-        let y: i64 = vm.call_typed("inner", (x,))?;
+        let y: i64 = vm.call("inner", (x,))?;
         Ok(y + 1)
     });
     rut_vm::register!(hosts, "re::borrow_try", (OpaqueBox<Widget>,) -> i64, |_vm: &mut Vm, b: OpaqueBox<Widget>| b.with(|w| w.n));
@@ -139,7 +139,7 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>
         // runs inside must not be able to borrow the same box
         let r = b.with_mut(|w| {
             w.n += 1;
-            vm.call_typed::<_, i64>("poke", (b.handle().clone(),))
+            vm.call::<_, i64>("poke", (b.handle().clone(),))
         });
         match r {
             // poke ran without touching the box (not this program's shape)
@@ -151,22 +151,22 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>
             Err(t) => Err(t),
         }
     });
-    rut_vm::register!(hosts, "re::host_boom", (i64,) -> i64, |vm: &mut Vm, i: i64| vm.call_typed::<_, i64>("boom", (i,)));
+    rut_vm::register!(hosts, "re::host_boom", (i64,) -> i64, |vm: &mut Vm, i: i64| vm.call::<_, i64>("boom", (i,)));
     rut_vm::register!(hosts, "re::grind", (i64,) -> i64, |vm: &mut Vm, n: i64| -> Result<i64, Trap> {
         // the catch-and-refuel pattern for nested budget traps: the host
         // owns the retry, the outer frame never sees the trap
-        match vm.call_typed::<_, i64>("spin", (n,)) {
+        match vm.call::<_, i64>("spin", (n,)) {
             Ok(v) => Ok(v),
             Err(t) if t.kind == TrapKind::OutOfFuel => {
                 vm.add_fuel(2_000_000);
-                vm.call_typed::<_, i64>("spin", (n,))
+                vm.call::<_, i64>("spin", (n,))
             }
             Err(t) => Err(t),
         }
     });
     rut_vm::register!(hosts, "re::count_spin", (i64,) -> i64, move |vm: &mut Vm, n: i64| -> Result<i64, Trap> {
         invocations.set(invocations.get() + 1);
-        vm.call_typed::<_, i64>("spin", (n,))
+        vm.call::<_, i64>("spin", (n,))
     });
 }
 
@@ -177,7 +177,7 @@ fn nested_call_returns_and_outer_locals_survive() {
     
     // boost nested-calls inner(x)=x+1 and adds 1; outer computes y*2+x
     // with its OWN x — 7*2+5
-    assert_eq!(vm.call_typed::<_, i64>("outer", (5,)).unwrap(), 19);
+    assert_eq!(vm.call::<_, i64>("outer", (5,)).unwrap(), 19);
 }
 
 #[test]
@@ -185,10 +185,10 @@ fn borrow_guard_blocks_rut_running_inside_with_mut() {
     let invocations = Rc::new(Cell::new(0));
     let mut vm = session(Some(1_000_000), &invocations);
     
-    let b: OpaqueRef = vm.call_typed("new_widget", ()).unwrap();
+    let b: OpaqueRef = vm.call("new_widget", ()).unwrap();
     // borrow_conflict: with_mut(+1) -> nested `poke` -> borrow_try's
     // `with` fails on the guard (-100 marker) and the mutation stands (n=1)
-    assert_eq!(vm.call_typed::<_, i64>("outer_borrow", (b,)).unwrap(), -99);
+    assert_eq!(vm.call::<_, i64>("outer_borrow", (b,)).unwrap(), -99);
 }
 
 #[test]
@@ -198,11 +198,11 @@ fn nested_trap_propagates_and_vm_stays_usable() {
     
     // boom index-OOBs inside the nested call; the trap unwinds the nested
     // frame only and surfaces at the embedder with its kind intact
-    let err = vm.call_typed::<_, i64>("trigger_boom", (0,)).unwrap_err();
+    let err = vm.call::<_, i64>("trigger_boom", (0,)).unwrap_err();
     assert_eq!(err.kind, TrapKind::IndexOutOfBounds, "got: {}", err.msg);
     // the parked outer frame does not block later calls — a fresh entry
     // nests over it cleanly
-    assert_eq!(vm.call_typed::<_, i64>("inner", (41,)).unwrap(), 42);
+    assert_eq!(vm.call::<_, i64>("inner", (41,)).unwrap(), 42);
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn nested_budget_trap_catch_add_fuel_retry() {
     
     let n = 60_000i64;
     let want = n * (n - 1) / 2;
-    assert_eq!(vm.call_typed::<_, i64>("grind_caller", (n,)).unwrap(), want);
+    assert_eq!(vm.call::<_, i64>("grind_caller", (n,)).unwrap(), want);
 }
 
 #[test]
@@ -228,10 +228,10 @@ fn resume_reruns_the_host_op_after_propagated_out_of_fuel() {
     
     let n = 50_000i64;
     let want = n * (n - 1) / 2;
-    let err = vm.call_typed::<_, i64>("watchdog", (n,)).unwrap_err();
+    let err = vm.call::<_, i64>("watchdog", (n,)).unwrap_err();
     assert_eq!(err.kind, TrapKind::OutOfFuel);
     assert_eq!(invocations.get(), 1);
     vm.add_fuel(2_000_000);
-    assert_eq!(vm.resume_typed::<i64>().unwrap(), want);
+    assert_eq!(vm.resume::<i64>().unwrap(), want);
     assert_eq!(invocations.get(), 2);
 }

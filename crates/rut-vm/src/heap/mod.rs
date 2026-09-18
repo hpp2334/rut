@@ -24,7 +24,7 @@ pub(crate) use blocks::Blocks;
 pub use cell::{cell, cell_of, ArrData, ArrKind, CellData, CellVal, Slots, StrVal};
 pub use hostbox::OpaqueBox;
 pub use trap::{Trap, TrapKind};
-pub use value::{Slot, Value};
+pub(crate) use value::{Slot, Value};
 
 // ---- accounting (RFC 0040 §1: check BEFORE any write) ----
 

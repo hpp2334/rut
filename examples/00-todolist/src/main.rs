@@ -32,32 +32,32 @@ fn main() {
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new()).unwrap();
 
     // the session: container in, handles out, values back — typed
-    let c: rut_vm::OpaqueRef = vm.call_typed("createContainer", ()).unwrap();
-    let list: u32 = vm.call_typed("create", (c.clone(),)).unwrap();
+    let c: rut_vm::OpaqueRef = vm.call("createContainer", ()).unwrap();
+    let list: u32 = vm.call("create", (c.clone(),)).unwrap();
 
     let mut add = |title: &str| -> i32 {
-        vm.call_typed::<_, i32>("add", (c.clone(), list, title)).unwrap()
+        vm.call::<_, i32>("add", (c.clone(), list, title)).unwrap()
     };
     let rfc = add("write the RFC");
     let vmf = add("implement the VM");
     let demo = add("ship the demo");
     println!("added: #{rfc}, #{vmf}, #{demo}");
 
-    vm.call_typed::<_, bool>("set_done", (c.clone(), list, vmf, true)).unwrap();
+    vm.call::<_, bool>("set_done", (c.clone(), list, vmf, true)).unwrap();
     println!("set_done(#{vmf}, true)");
 
-    println!("title_of(#{vmf}) = {:?}", vm.call_typed::<_, String>("title_of", (c.clone(), list, vmf)).unwrap());
-    println!("title_of(42) = {:?}", vm.call_typed::<_, String>("title_of", (c.clone(), list, 42)).unwrap());
+    println!("title_of(#{vmf}) = {:?}", vm.call::<_, String>("title_of", (c.clone(), list, vmf)).unwrap());
+    println!("title_of(42) = {:?}", vm.call::<_, String>("title_of", (c.clone(), list, 42)).unwrap());
 
-    println!("remove(#{rfc}) = {:?}", vm.call_typed::<_, bool>("remove", (c.clone(), list, rfc)).unwrap());
-    println!("remove(#{rfc}) again = {:?}", vm.call_typed::<_, bool>("remove", (c.clone(), list, rfc)).unwrap());
+    println!("remove(#{rfc}) = {:?}", vm.call::<_, bool>("remove", (c.clone(), list, rfc)).unwrap());
+    println!("remove(#{rfc}) again = {:?}", vm.call::<_, bool>("remove", (c.clone(), list, rfc)).unwrap());
 
-    let text: String = vm.call_typed("render", (c.clone(), list)).unwrap();
+    let text: String = vm.call("render", (c.clone(), list)).unwrap();
     println!("{text}");
 
     // a second list in the same container — handles are independent
-    let other: u32 = vm.call_typed("create", (c.clone(),)).unwrap();
-    let n: i32 = vm.call_typed("len", (c.clone(), other)).unwrap();
+    let other: u32 = vm.call("create", (c.clone(),)).unwrap();
+    let n: i32 = vm.call("len", (c.clone(), other)).unwrap();
     println!("second list #{other}: {n} todos");
 
     println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);

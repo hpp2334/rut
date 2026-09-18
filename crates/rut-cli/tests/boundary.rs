@@ -1,4 +1,4 @@
-//! The typed host boundary (RFC 0023, revised): `Vm::call_typed` in Rust
+//! The typed host boundary (RFC 0023, revised): `Vm::call` in Rust
 //! types — `Value`/`Slot` never leave the crate. Mirrors e2e's
 //! entry-driven shape but through the typed API.
 
@@ -75,13 +75,13 @@ entry fn put(c: Opaque) -> u32 {
 #[test]
 fn typed_prims_and_tuples() {
     let mut vm = entry_vm(SRC);
-    assert_eq!(vm.call_typed::<_, i64>("num", ()).unwrap(), 42);
-    assert_eq!(vm.call_typed::<_, f64>("half", ()).unwrap(), 1.5);
-    assert_eq!(vm.call_typed::<_, bool>("flag", ()).unwrap(), true);
-    assert_eq!(vm.call_typed::<_, ()>("nothing", ()).unwrap(), ());
-    assert_eq!(vm.call_typed::<_, (i32, bool)>("pair", (7i32,)).unwrap(), (7, true));
-    assert_eq!(vm.call_typed::<_, (i32, bool)>("pair", (-1i32,)).unwrap(), (0, false));
-    let (a, b, c) = vm.call_typed::<_, (i64, f64, String)>("triple", ()).unwrap();
+    assert_eq!(vm.call::<_, i64>("num", ()).unwrap(), 42);
+    assert_eq!(vm.call::<_, f64>("half", ()).unwrap(), 1.5);
+    assert_eq!(vm.call::<_, bool>("flag", ()).unwrap(), true);
+    assert_eq!(vm.call::<_, ()>("nothing", ()).unwrap(), ());
+    assert_eq!(vm.call::<_, (i32, bool)>("pair", (7i32,)).unwrap(), (7, true));
+    assert_eq!(vm.call::<_, (i32, bool)>("pair", (-1i32,)).unwrap(), (0, false));
+    let (a, b, c) = vm.call::<_, (i64, f64, String)>("triple", ()).unwrap();
     assert_eq!((a, b, c.as_str()), (1, 2.5, "three"));
 }
 
@@ -89,9 +89,9 @@ fn typed_prims_and_tuples() {
 fn typed_str_and_bytes() {
     let mut vm = entry_vm(SRC);
     // an owned copy — the explicit "I keep this data" shape (RFC 0023 §2)
-    assert_eq!(vm.call_typed::<_, String>("greet", ()).unwrap(), "hey");
+    assert_eq!(vm.call::<_, String>("greet", ()).unwrap(), "hey");
     let back = vm
-        .call_typed::<_, Vec<u8>>("echo_bytes", (vec![1u8, 2, 250],))
+        .call::<_, Vec<u8>>("echo_bytes", (vec![1u8, 2, 250],))
         .unwrap();
     assert_eq!(back, vec![1, 2, 250]);
 }
@@ -99,10 +99,10 @@ fn typed_str_and_bytes() {
 #[test]
 fn typed_opaque_roundtrip() {
     let mut vm = entry_vm(SRC);
-    let c: rut_vm::OpaqueRef = vm.call_typed::<_, rut_vm::OpaqueRef>("make", ()).unwrap();
-    let n: u32 = vm.call_typed("put", (c.clone(),)).unwrap();
+    let c: rut_vm::OpaqueRef = vm.call::<_, rut_vm::OpaqueRef>("make", ()).unwrap();
+    let n: u32 = vm.call("put", (c.clone(),)).unwrap();
     assert_eq!(n, 1);
-    let n: u32 = vm.call_typed("put", (c,)).unwrap();
+    let n: u32 = vm.call("put", (c,)).unwrap();
     assert_eq!(n, 2); // the same box, mutated through the boundary
 }
 
@@ -110,11 +110,11 @@ fn typed_opaque_roundtrip() {
 fn typed_wrong_shape_is_a_named_trap() {
     let mut vm = entry_vm(SRC);
     // rut says `str`, the embedder asked for i64 — the trap names both
-    let err = vm.call_typed::<_, i64>("greet", ()).unwrap_err();
+    let err = vm.call::<_, i64>("greet", ()).unwrap_err();
     assert!(err.msg.contains("boundary:"), "{}", err.msg);
     assert!(err.msg.contains("`str`") && err.msg.contains("`i64`"), "{}", err.msg);
     // arity: the raw call's check still guards the typed wrapper
-    let err = vm.call_typed::<_, (i32, bool)>("pair", ()).unwrap_err();
+    let err = vm.call::<_, (i32, bool)>("pair", ()).unwrap_err();
     assert!(err.msg.contains("args"), "{}", err.msg);
 }
 
@@ -132,9 +132,9 @@ entry fn ident(o: Opaque) -> Opaque { return o; }
     let boxed = rut_vm::OpaqueBox::alloc(&mut vm, vec!["a".to_string(), "b".to_string()])
         .expect("alloc host box");
     let back: rut_vm::OpaqueBox<Vec<String>> =
-        vm.call_typed("ident", (boxed,)).expect("typed crossing");
+        vm.call("ident", (boxed,)).expect("typed crossing");
     assert_eq!(back.with(|v| v.clone()).unwrap(), vec!["a".to_string(), "b".to_string()]);
     // the payload type token is checked, never UB
-    let wrong: Result<rut_vm::OpaqueBox<u64>, _> = vm.call_typed("ident", (back,));
+    let wrong: Result<rut_vm::OpaqueBox<u64>, _> = vm.call("ident", (back,));
     assert!(wrong.is_err(), "a `Vec<String>` box must not read as `u64`");
 }

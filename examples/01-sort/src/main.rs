@@ -36,32 +36,32 @@ fn main() {
 
 
     // the session: one bank, exact values in, JSON out — typed
-    let c: rut_vm::OpaqueRef = vm.call_typed("create", ()).unwrap();
+    let c: rut_vm::OpaqueRef = vm.call("create", ()).unwrap();
     let ser = |vm: &mut rut_vm::interp::Vm| -> String {
-        vm.call_typed::<_, String>("serialize", (c.clone(),)).unwrap()
+        vm.call::<_, String>("serialize", (c.clone(),)).unwrap()
     };
 
     // an exact host-supplied input, sorted by hand-picked algorithms
     for x in [5i32, 2, 9, 2] {
-        vm.call_typed::<_, ()>("push", (c.clone(), x)).unwrap();
+        vm.call::<_, ()>("push", (c.clone(), x)).unwrap();
     }
     println!("pushed: {}", ser(&mut vm));
-    vm.call_typed::<_, String>("sort", (c.clone(), "insertion")).unwrap();
+    vm.call::<_, String>("sort", (c.clone(), "insertion")).unwrap();
     println!("after insertion: {}", ser(&mut vm));
 
     // the full sweep: same deterministic input, every algorithm, fuel
     // per call (RFC 0040 — the session runs under budgets)
     println!("fill(16, seed=42), each algorithm:");
     for algo in ["insertion", "bubble", "selection", "quick", "merge"] {
-        vm.call_typed::<_, ()>("fill", (c.clone(), 16u32, 42u32)).unwrap();
+        vm.call::<_, ()>("fill", (c.clone(), 16u32, 42u32)).unwrap();
         let before = vm.fuel_used;
-        vm.call_typed::<_, String>("sort", (c.clone(), algo)).unwrap();
-        let sorted: bool = vm.call_typed("is_sorted", (c.clone(),)).unwrap();
+        vm.call::<_, String>("sort", (c.clone(), algo)).unwrap();
+        let sorted: bool = vm.call("is_sorted", (c.clone(),)).unwrap();
         println!("  {algo:<9} {sorted}  fuel {:>6}  {}", vm.fuel_used - before, ser(&mut vm));
     }
 
     // unknown names are values, not traps
-    println!("sort(bogus) = {:?}", vm.call_typed::<_, String>("sort", (c.clone(), "bogus")).unwrap());
+    println!("sort(bogus) = {:?}", vm.call::<_, String>("sort", (c.clone(), "bogus")).unwrap());
 
     println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);
 }

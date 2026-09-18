@@ -159,28 +159,28 @@ fn host_boxes_hold_any_rust_type() {
     
     // news from the host, hold the handle across calls — the data lives
     // in the VM heap as long as either side holds a reference
-    let held: OpaqueRef = vm.call_typed("make", ()).unwrap();
+    let held: OpaqueRef = vm.call("make", ()).unwrap();
 
     // drive it from rut, both through the wrapper class and direct — the
     // wrapper's records release the box's field retain when they die, so
     // this is the flow that needs the recursive field release to hold
-    vm.call_typed::<_, ()>("wrap_put", (held.clone(), "via-wrapper", 1i64)).unwrap();
-    assert_eq!(vm.call_typed::<_, i64>("wrap_get", (held.clone(), "via-wrapper")).unwrap(), 1);
-    vm.call_typed::<_, ()>("put", (held.clone(), "key-3", 41i64)).unwrap();
-    vm.call_typed::<_, ()>("put", (held.clone(), "key-7", 7i64)).unwrap();
-    assert_eq!(vm.call_typed::<_, i64>("get", (held.clone(), "key-3")).unwrap(), 41);
-    assert_eq!(vm.call_typed::<_, i64>("size", (held.clone(),)).unwrap(), 3);
-    assert_eq!(vm.call_typed::<_, i64>("get", (held.clone(), "missing")).unwrap(), -1);
+    vm.call::<_, ()>("wrap_put", (held.clone(), "via-wrapper", 1i64)).unwrap();
+    assert_eq!(vm.call::<_, i64>("wrap_get", (held.clone(), "via-wrapper")).unwrap(), 1);
+    vm.call::<_, ()>("put", (held.clone(), "key-3", 41i64)).unwrap();
+    vm.call::<_, ()>("put", (held.clone(), "key-7", 7i64)).unwrap();
+    assert_eq!(vm.call::<_, i64>("get", (held.clone(), "key-3")).unwrap(), 41);
+    assert_eq!(vm.call::<_, i64>("size", (held.clone(),)).unwrap(), 3);
+    assert_eq!(vm.call::<_, i64>("get", (held.clone(), "missing")).unwrap(), -1);
 
     // RFC 0014 erasure laws on the rut side
-    let erased: bool = vm.call_typed("erase_laws", (held.clone(),)).unwrap();
+    let erased: bool = vm.call("erase_laws", (held.clone(),)).unwrap();
     assert!(erased, "erase_laws");
 
     // own shares identity: writes through the copy are visible through
     // the original, and the handles are `==`
-    let shared: OpaqueRef = vm.call_typed("share", (held.clone(),)).unwrap();
-    vm.call_typed::<_, ()>("put", (shared.clone(), "via-own", 9i64)).unwrap();
-    assert_eq!(vm.call_typed::<_, i64>("get", (held.clone(), "via-own")).unwrap(), 9);
+    let shared: OpaqueRef = vm.call("share", (held.clone(),)).unwrap();
+    vm.call::<_, ()>("put", (shared.clone(), "via-own", 9i64)).unwrap();
+    assert_eq!(vm.call::<_, i64>("get", (held.clone(), "via-own")).unwrap(), 9);
     assert_eq!(shared, held);
 
     // a wrong-type borrow is a checked error naming both sides
@@ -267,10 +267,10 @@ entry fn churn(n: i64) -> nil {
     let mut vm =
         rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
 
-    vm.call_typed::<_, ()>("churn", (1i64,)).unwrap();
-    let base = vm.heap.used_bytes();
-    vm.call_typed::<_, ()>("churn", (2000i64,)).unwrap();
-    let after = vm.heap.used_bytes();
+    vm.call::<_, ()>("churn", (1i64,)).unwrap();
+    let base = vm.heap_usage();
+    vm.call::<_, ()>("churn", (2000i64,)).unwrap();
+    let after = vm.heap_usage();
     assert!(
         after <= base + 4096,
         "records must release their fields at rc-0: baseline {base}, after churn(2000): {after}"

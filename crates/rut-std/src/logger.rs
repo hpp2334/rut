@@ -27,14 +27,7 @@ where
     let sink2 = sink.clone();
     hosts.register::<_, (&str,), OpaqueRef, _>(
         "rt:log::create_logger",
-        |vm: &mut Vm, name: &str| -> Result<OpaqueRef, Trap> {
-            let s = vm.heap.alloc_str(name.to_string())?;
-            let p = vm.heap.alloc_opaque(s, rut_core::types::TY_STR)?;
-            let ptr = unsafe { p.r };
-            // owning handle: the box was minted this instant, so the return
-            // takes over the mint reference (see OpaqueBox::alloc)
-            Ok(vm.heap.opaque_handle_take(ptr))
-        },
+        |vm: &mut Vm, name: &str| vm.alloc_opaque_str(name.to_string()),
     );
     hosts.register::<_, (OpaqueRef, i32, &str), (), _>(
         "rt:log::logger_log",
