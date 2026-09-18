@@ -1,6 +1,9 @@
 # RFC 0022: Embedding Model & Native Modules
 
-- **Status:** Draft
+- **Status:** Draft (IMPLEMENTED 2026-09-18: registration is PRE-VM
+  on `HostRegistry` — build the table, `verify_against` the session's
+  `.d.rut` rows, hand it to `Vm::new`; embedders drive rut with typed
+  `vm.call::<_, T>(name, args)` per RFC 0023's revision)
 - **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** Part D (RFC 0018–0021); RFC 0001 (G8)

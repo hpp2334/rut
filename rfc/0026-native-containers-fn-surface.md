@@ -1,7 +1,13 @@
 # RFC 0026: Native Containers — a User-Defined Map (fn surface)
 
 - **Status:** Draft (revised — **supersedes the generic `host class`
-  design**; see RFC 0025's decision record)
+  design**; see RFC 0025's decision record. **IMPLEMENTED 2026-09-18**:
+  the container ABI is one dispatch-table row — `{code: fn ptr, ctx:
+  state word, ret}` dense by func idx, built by the `Vm::new` join from
+  the pre-VM `HostRegistry`; the body state rides the ctx word (boxed,
+  owned by the Vm, single thread per RFC 0034) and host traps travel
+  the `vm.trap` channel. `OpaqueBox<T>`'s typed surface is `alloc` /
+  `from_handle` / `with` / `with_mut` / `handle`.)
 - **Date:** 2026-09-13
 - **Author:** hpp2334
 - **Depends on:** RFC 0025 (revised — host fns & declaration files),

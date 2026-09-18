@@ -1,6 +1,8 @@
 # RFC 0023: The `Value` Boundary & Borrow Guards
 
-- **Status:** Draft
+- **Status:** Draft — **REVISED & IMPLEMENTED (2026-09-18)**: the
+  boundary currency is typed Rust; the enum below is the crate-internal
+  marshaling format. See "Revision — implemented design" after §1.
 - **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0022 (native modules), RFC 0016 (heap)
@@ -33,6 +35,35 @@ pub enum Value<'v> {
     Template(Tmpl<'v>),                    // RFC 0027
 }
 ```
+
+## Revision — implemented design (2026-09-18)
+
+The boundary shipped **typed-Rust-first**, superseding the lifetime-
+carrying enum above in API terms (`Value`/`Slot` are `pub(crate)`
+marshaling formats inside `rut-vm`; nothing outside the crate names
+them):
+
+- **Marshaling traits** (`rut-vm/src/interp/boundary.rs`): `Arg<'a>` /
+  `Ret` — each Rust type declares the rut `TypeId` it binds against
+  (`i32` ⇒ `TY_I32`, `OpaqueBox<T>` ⇒ `TY_OPAQUE`, …) and converts
+  checked, with kind-mismatch traps naming both sides.
+- **Zero-copy borrows** (§2's law, made visible in the signature):
+  `&'a str` / `&'a [u8]` host-fn params read the block store directly;
+  the handler's bound is HRTB over `'a`, so a borrowed param cannot
+  outlive its call — smuggling is a type error, not a runtime check.
+  Owned `String` / `Vec<u8>` params are the explicit "I keep this data"
+  copy.
+- **No `Opt`/`Res` variants** — the enum never grew them; optionals
+  cross as the v1.1 tuples (`(T, err)`, RFC 0007 §7) they were always
+  spelled as at the surface. Option/Result cross fine, but the
+  host-side spelling is the tuple.
+- **Host fns are typed callables**: the registered closure/fn's Rust
+  parameter types ARE the `.d.rut` row (RFC 0025 revised); a param type
+  with no `Arg` impl is a compile error at the register site.
+- **The dispatch entry** is one table row — a fn pointer, a state word,
+  the declared return (RFC 0026 revised §ABI) — and host traps travel
+  an explicit channel (`vm.trap` + one check per call) instead of a
+  `Result` in the ABI.
 
 **What may cross is a compile-time property of the surface.** An `entry
 fn`'s parameters and return must be built from: primitives, `str`,

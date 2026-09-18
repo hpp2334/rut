@@ -1,6 +1,13 @@
 # RFC 0025: Host Fns, Host Dataclasses & Declaration Files
 
-- **Status:** Draft (revised — **supersedes the `host class` design**)
+- **Status:** Draft (revised — **supersedes the `host class` design**;
+  **IMPLEMENTED 2026-09-18**: signatures are DERIVED from the host
+  callable's Rust shape — `HostHandler::SIG`, a fixed `[TypeId; 8]` —
+  never hand-written; the load-time `.d.rut` check still runs, and a
+  non-crossing Rust param type is now a COMPILE ERROR at the binding,
+  not a load-time panic. A dynamic `fire(&[Value])` shape needs the
+  `register_raw` escape hatch, expected unused. See also RFC 0023's
+  revision note.)
 - **Date:** 2026-09-13
 - **Author:** hpp2334
 - **Depends on:** RFC 0022 (embedding), RFC 0023 §1 (the crossing rule),
