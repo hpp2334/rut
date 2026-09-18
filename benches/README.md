@@ -22,6 +22,9 @@ benches/
 ├── workloads/
 │   ├── NAME.rut            # the rut program (`std:*` imports; logs CHECKSUM)
 │   ├── NAME.js             # the identical program for node + qjs
+│   ├── NAME/               # dir-shaped rut side: `rut.toml` + `main.rut`,
+│   │                       # used when the workload mounts its own deps
+│   │                       # (the `mapset` workloads); runs as `rut run <dir>`
 │   └── expected.json       # canonical reference checksums (verified)
 └── results/                # generated reports (gitignored)
 ```
@@ -84,11 +87,24 @@ against the reference in `workloads/expected.json`.
 | `floatloop` | f64 mul/add + loop dispatch | 2M iters | `1107013.7297975053` |
 | `call` | call/return/frame overhead | fib(28) | `317811` |
 | `alloc` | record allocation/RC churn | 2M records | `1385447424` |
+| `hashmap-int` | `HashMap<i32, i32>` churn (mapset): put/replace/hit-and-miss get/remove/re-scan | n = 100 000 | checksum `734932704` |
+| `hashmap-str` | str-keyed `HashMap<str, i32>` (mapset): generated keys, removals, re-adds | n = 50 000 | checksum `1264308351` |
+| `hashset` | `HashSet<i32>` (mapset): adds, dup adds, probes, removals, intersection count | n = 100 000 | checksum `21500055` |
+| `knucleotide` | k-mer counting over `HashMap<str, i32>` (mapset): 12-mer fill + fragment probes | seq = 200 000 | checksum `2198604` |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
 benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
-— see the limitations below.
+— see the limitations below. The four `mapset` workloads
+(`hashmap-int`, `hashmap-str`, `hashset`, `knucleotide`) stress the
+`rut/mapset` package: the rut sides ship as module dirs
+(`NAME/{rut.toml, main.rut}` with `[deps] mapset = …`) and run as
+`rut run <dir>` — the CLI's single-file auto-mount list stays untouched.
+Honest framing: V8's `Map`/`Set` are inline-cache-optimized and QuickJS
+has its own fast paths — these rows are not expected to be a win. The
+point is rut's number for the RC-heap fat-ref slots and the vtable
+dispatch its keyed collections actually pay, as a before/after anchor
+for future work.
 
 ## Method (and what "fair" means here)
 
@@ -127,12 +143,25 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 
 ## Known limitations / deliberate choices
 
-- Workloads are still single files, but they use `std:collection`,
-  `std:math` and `std:log` through the module loader
-  (RFC 0035); the probe and the `rut` driver install the host halves.
+- Workloads are still single files for node + qjs, but the rut side may
+  be a module dir (`NAME/{rut.toml, main.rut}`): the runner spawns
+  `rut run <dir>` and the dir's `[deps]` resolve through the module
+  loader (RFC 0035) — currently the `mapset` workloads
+  (`hashmap-int`, `hashmap-str`, `hashset`, `knucleotide`). The
+  bench runtimes install the host halves (math + the logger) as usual.
+- The `mapset` workloads' JS twins carry small adaptations: JS
+  `Map`/`Set` have no insert-or-replace primitive, so the add-vs-
+  replace split costs one extra `has` probe per put compared with
+  rut's `put -> bool` (it biases JS against itself, which the framing
+  below already expects).
 - Missing language/std features exclude `pidigits` (no bigint),
-  `regex-redux` (no regex), and `k-nucleotide` / `reverse-complement`
-  (bytes/hashmap/stdin) from the benchmark-game set.
+  `regex-redux` (no regex), and `reverse-complement` (stdin/bytes
+  transform) from the benchmark-game set. `k-nucleotide` is no longer
+  excluded — the `mapset` package provides the hashmap.
+- **`knucleotide`** is an *adaptation*: the sequence is generated with
+  fasta's LCG (the harness takes no stdin) and built identically on
+  both sides; 12-mer get-or-insert churn fills a `HashMap<str, i32>`,
+  plus 1-/2-mer maps and 100 generated 12-mer fragment probes.
 - `binary-trees` is an *adaptation*: it builds recursive dataclasses
   directly (`left/right: Option<Node>`, RFC 0009 recursive shapes) and
   counts them, rather than the benchmark-game's varying-depth trees. Each
@@ -150,9 +179,12 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 ## Adding a workload
 
 1. Add `benches/workloads/NAME.rut` (`pub fn main`, log `CHECKSUM
-   <value>` via `std:log`) and `NAME.js` (`console.log("CHECKSUM " + v)`),
+   <value>` via the logger) and `NAME.js` (`console.log("CHECKSUM " + v)`),
    computing identical results with the same integer widths / float
-   order.
+   order. If the rut side needs a tree package beyond the CLI's
+   single-file auto-mount (`ink`, `pouch`) — e.g. `mapset` — ship it as
+   a module dir `NAME/{rut.toml, main.rut}` with `[deps]` instead; the
+   runner then spawns `rut run <dir>`.
 2. Keep the scale as a named constant in both files.
 3. Verify against an independent implementation and add the value to
    `workloads/expected.json`.

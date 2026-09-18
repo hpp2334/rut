@@ -1,39 +1,36 @@
-use core::{ Option };
 use ink::{ Logger };
 
-// binary-trees — allocation churn. Nodes are recursive dataclasses
-// (RFC 0009 recursive shapes): `make` builds the tree bottom-up with
-// children held as shared handles (RFC 0011 §1), and the whole tree drops
-// at scope exit — the RC allocation/drop path this benchmark stresses.
-// Scale: depth = 14 (32767 nodes).
+// binary-trees — allocation churn. Nodes are recursive structs naming
+// themselves through POINTER fields (`*Node`, `nil` when absent — RFC
+// 0005 §10; `Option` is gone): `make` builds the tree bottom-up, and
+// the whole tree drops at scope exit — the RC allocation/drop path this
+// benchmark stresses. Scale: depth = 14 (32767 nodes).
 
-dataclass Node {
+struct Node {
     value: i32,
-    left: Option<Node>,
-    right: Option<Node>,
+    left: *Node,
+    right: *Node,
 }
 
 fn make(depth: i32, v: i32) -> Node {
     if (depth <= 0) {
-        return Node { value: v, left: Option.none(), right: Option.none() };
+        return Node { value: v, left: nil, right: nil };
     }
-    let l = make(depth - 1, v * 2);
-    let r = make(depth - 1, v * 2 + 1);
-    return Node { value: v, left: Option.some(l), right: Option.some(r) };
+    return Node {
+        value: v,
+        left: &make(depth - 1, v * 2),
+        right: &make(depth - 1, v * 2 + 1),
+    };
 }
 
-fn count(n: Node) -> i32 {
+fn count(n: *Node) -> i32 {
     let mut c = 1;
-    if (n.left.is_some()) {
-        c += count(n.left.value);
-    }
-    if (n.right.is_some()) {
-        c += count(n.right.value);
-    }
+    if (n.left != nil) { c += count(n.left); }
+    if (n.right != nil) { c += count(n.right); }
     return c;
 }
 
 pub fn main() -> nil {
-    let root = make(14, 1);
+    let root = &make(14, 1);
     Logger.new("app").info(f"CHECKSUM {count(root)}");
 }

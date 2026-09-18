@@ -1,0 +1,8 @@
+# hashset/ — the rut half of the `hashset` bench workload: a module dir
+# because it mounts `mapset` (see hashmap-int/rut.toml).
+name = "hashset"
+entry.lib = "./main.rut"
+
+[deps]
+mapset = { path = "../../../rut/mapset" }
+ink = { path = "../../../rut/ink" }

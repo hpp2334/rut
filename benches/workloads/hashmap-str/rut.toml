@@ -1,0 +1,8 @@
+# hashmap-str/ — the rut half of the `hashmap-str` bench workload: a
+# module dir because it mounts `mapset` (see hashmap-int/rut.toml).
+name = "hashmap_str"
+entry.lib = "./main.rut"
+
+[deps]
+mapset = { path = "../../../rut/mapset" }
+ink = { path = "../../../rut/ink" }

@@ -16,10 +16,16 @@
 // values. Probe/index temporaries stay `i32` (`len()` and indexing are
 // i32) with a single `as i32` at the index boundary; the load-factor
 // compare widens to `u64` (u32 `×10` would overflow near 429M entries).
-// Hot loops hoist `states`/`cap` field reads into locals first — a
-// field read is an RC op (pouch's `cap`-mirror precedent); the hoisted
-// binding shares the array handle, so element stores through it hit the
-// same backing store (safe: no field reassignment happens mid-loop).
+//
+// HOT-LOOP LAW (bench-verified): hoist SCALAR field reads (`cap`, the
+// counters) into locals — that is pouch's `cap`-mirror precedent — but
+// NEVER bind an array field to a local inside a per-call method:
+// materializing a binding from an array value deep-copies the buffer
+// (the engine's copy law), so `let states = self.states` in `probe`
+// made every put/get O(cap). Hot methods index the fields directly —
+// `self.states[at]` is an in-place element access (no copy); the only
+// array bindings here live in `rehash`, which runs O(log n) times and
+// NEEDS the old arrays held across the `self.*` reassignment.
 
 // The ONE key contract (RFC 0028): hashing and key comparison are a
 // single trait — `hash_eq` must be CONSISTENT with `hash` (equal keys
@@ -163,22 +169,19 @@ impl RawHashTable {
     // DEAD slot on the sequence wins). Callers grow past the load
     // factor first, so an EMPTY slot always exists and the pass ends.
     pub fn probe(self, hk: Hashable, h: u64) -> i32 {
-        let states = self.states;
-        let hashes = self.hashes;
-        let keys = self.keys;
         let mask = (self.cap - 1) as i32;
         let mut at = ((h as u32) & (self.cap - 1)) as i32;
         let mut dead = -1;
         while (true) {
-            let st = states[at];
+            let st = self.states[at];
             if (st == 0) {
                 if (dead >= 0) {
                     return -(dead + 1);
                 }
                 return -(at + 1);
             }
-            if (st == 1 && hashes[at] == h) {
-                let k = *keys[at];
+            if (st == 1 && self.hashes[at] == h) {
+                let k = *(self.keys[at]);
                 if (k.hash_eq(hk)) {
                     return at;
                 }
@@ -251,10 +254,9 @@ impl RawHashTable {
     // The first EMPTY slot on `h`'s probe sequence — fresh-table
     // insertion (a new or just-rehashed table has no DEAD slots).
     pub fn first_free(self, h: u64) -> i32 {
-        let states = self.states;
         let mask = (self.cap - 1) as i32;
         let mut at = ((h as u32) & (self.cap - 1)) as i32;
-        while (states[at] != 0) {
+        while (self.states[at] != 0) {
             at = (at + 1) & mask;
         }
         return at;

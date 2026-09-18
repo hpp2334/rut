@@ -153,10 +153,19 @@ function usage() {
 // ------------------------------------------------------------- workloads
 
 function discoverWorkloads() {
-  return readdirSync(WORKLOADS_DIR)
-    .filter((f) => f.endsWith(".rut"))
-    .map((f) => basename(f, ".rut"))
-    .sort();
+  const names = [];
+  for (const f of readdirSync(WORKLOADS_DIR).sort()) {
+    if (f.endsWith(".rut")) {
+      const name = basename(f, ".rut");
+      if (!names.includes(name)) names.push(name);
+    } else if (existsSync(join(WORKLOADS_DIR, f, "rut.toml"))) {
+      // dir-shaped workload: one module dir (rut.toml + main.rut) per
+      // name — the rut side runs as `rut run <dir>` (the deps graph
+      // resolves its packages, e.g. mapset)
+      names.push(f);
+    }
+  }
+  return names.sort();
 }
 
 // ------------------------------------------------------------ processes
@@ -498,7 +507,9 @@ if (existsSync(EXPECTED_FILE)) {
 const baselines = measureBaselines(runtimes, opt);
 
 for (const name of workloadNames) {
-  const rutFile = join(WORKLOADS_DIR, `${name}.rut`);
+  const moduleDir = join(WORKLOADS_DIR, name);
+  const isModuleDir = existsSync(join(moduleDir, "rut.toml"));
+  const rutFile = isModuleDir ? moduleDir : join(WORKLOADS_DIR, `${name}.rut`);
   const jsFile = join(WORKLOADS_DIR, `${name}.js`);
   const entry = { workload: name, runtimes: [], checksums: {} };
   const checked = [];

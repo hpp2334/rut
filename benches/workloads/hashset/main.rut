@@ -1,0 +1,77 @@
+use ink::{ Logger };
+
+use mapset::{ HashSet };
+
+// hashset — HashSet<i32>: adds over scattered keys, duplicate adds,
+// membership probes (present and absent), removals, then
+// intersection-style counting against a second set. The JS twin
+// (../hashset.js) runs the identical algorithm on `new Set()`.
+// Scale: n = 100000 keys.
+
+fn churn(n: i32) -> i32 {
+    let mut s: HashSet<i32> = HashSet.new();
+    // add — every key is new
+    let mut added = 0;
+    for (let i = 0; i < n; i += 1) {
+        if (s.put(i.wrapping_mul(-1640531535))) {
+            added += 1;
+        }
+    }
+    // duplicate adds — the lower half again
+    let mut dups = 0;
+    for (let i = 0; i < n / 2; i += 1) {
+        if (s.put(i.wrapping_mul(-1640531535)) == false) {
+            dups += 1;
+        }
+    }
+    // membership: the whole key space is present
+    let mut present = 0;
+    for (let i = 0; i < n; i += 1) {
+        if (s.has(i.wrapping_mul(-1640531535))) {
+            present += 1;
+        }
+    }
+    // membership: the second half of the space is absent
+    let mut absent = 0;
+    for (let i = 0; i < n; i += 1) {
+        if (s.has((i + n).wrapping_mul(-1640531535)) == false) {
+            absent += 1;
+        }
+    }
+    // remove the even keys
+    let mut removed = 0;
+    for (let i = 0; i < n; i += 2) {
+        if (s.remove(i.wrapping_mul(-1640531535))) {
+            removed += 1;
+        }
+    }
+    // a second set over the multiples of three, counted against the
+    // survivors (the odd keys) of the first — intersection-style
+    let mut s2: HashSet<i32> = HashSet.new();
+    let mut s2added = 0;
+    for (let i = 0; i < n; i += 3) {
+        if (s2.put(i.wrapping_mul(-1640531535))) {
+            s2added += 1;
+        }
+    }
+    let mut inter = 0;
+    for (let i = 0; i < n; i += 1) {
+        if (s.has(i.wrapping_mul(-1640531535)) && s2.has(i.wrapping_mul(-1640531535))) {
+            inter += 1;
+        }
+    }
+    let mut c = 0;
+    c = c.wrapping_add(added.wrapping_mul(31));
+    c = c.wrapping_add(dups.wrapping_mul(37));
+    c = c.wrapping_add(present.wrapping_mul(41));
+    c = c.wrapping_add(absent.wrapping_mul(43));
+    c = c.wrapping_add(removed.wrapping_mul(47));
+    c = c.wrapping_add(s2added.wrapping_mul(53));
+    c = c.wrapping_add(inter.wrapping_mul(59));
+    c = c.wrapping_add(s.len().wrapping_mul(61));
+    return c;
+}
+
+pub fn main() -> nil {
+    Logger.new("app").info(f"CHECKSUM {churn(100000)}");
+}

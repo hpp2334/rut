@@ -16,8 +16,8 @@
 //!  "fuel":123456,"heap_peak_bytes":4096,"trapped":null}
 //! ```
 //!
-//! Usage: `rut-bench-probe --workload <file.rut> [--iters N] [--fuel N]
-//! [--heap-bytes N]`.
+//! Usage: `rut-bench-probe --workload <file.rut | module-dir> [--iters N]
+//! [--fuel N] [--heap-bytes N]`.
 
 use std::rc::Rc;
 use std::time::Instant;
@@ -35,7 +35,7 @@ struct Args {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: rut-bench-probe --workload <file.rut> [--iters N] \
+        "usage: rut-bench-probe --workload <file.rut | module-dir> [--iters N] \
          [--fuel N] [--heap-bytes N]"
     );
     std::process::exit(2);
@@ -117,29 +117,49 @@ fn fail(msg: impl std::fmt::Display) -> ! {
 fn main() {
     let args = parse_args();
 
-    let src = std::fs::read_to_string(&args.workload)
-        .unwrap_or_else(|e| fail(format!("cannot read {}: {e}", args.workload)));
+    let path = std::path::Path::new(&args.workload);
 
     // ---- compile (frontend + LIR + binary emit) ----
-    // the workloads use the toolchain libs (`ink`+`rt`, `pouch`) —
-    // third-party pkgs mounted from the tree, plus the engine's core/calc
+    // A loose `.rut` workload uses the toolchain libs (`ink`+`rt`,
+    // `pouch`) — third-party pkgs mounted from the tree, plus the
+    // engine's core/calc. A module-DIR workload (`rut.toml`, the
+    // mapset bench dirs) loads its own `[deps]` graph instead and
+    // yields an already-linked program.
     let t0 = Instant::now();
-    let mut session = rut_driver::Session::new();
-    rut_driver::mount_std(&mut session);
-    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    rut_driver::mount_dir(&mut session, &tree.join("rut/ink")).expect("mount ink (+rt)");
-    rut_driver::mount_dir(&mut session, &tree.join("rut/pouch")).expect("mount pouch");
-    let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "bench");
+    let (session, prog) = if path.is_dir() {
+        let (mut session, root) = rut_driver::load_path_session(path)
+            .unwrap_or_else(|e| fail(format!("load {}: {e}", path.display())));
+        rut_driver::mount_std(&mut session);
+        let out = rut_driver::compile_graph(&session, &root);
+        if !out.diags.is_empty() {
+            for d in &out.diags {
+                eprintln!("{}", d.msg);
+            }
+            fail("compile failed");
+        }
+        let prog = out.program.unwrap_or_else(|| fail("no program emitted"));
+        (session, prog)
+    } else {
+        let src = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| fail(format!("cannot read {}: {e}", path.display())));
+        let mut session = rut_driver::Session::new();
+        rut_driver::mount_std(&mut session);
+        let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        rut_driver::mount_dir(&mut session, &tree.join("rut/ink")).expect("mount ink (+rt)");
+        rut_driver::mount_dir(&mut session, &tree.join("rut/pouch")).expect("mount pouch");
+        let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "bench");
+        if !out.diags.is_empty() {
+            print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
+            fail("compile failed");
+        }
+        let binary = out.binary.unwrap_or_else(|| fail("no binary emitted"));
+        let prog = decode(&binary).unwrap_or_else(|e| fail(format!("decode: {e}")));
+        (session, prog)
+    };
     let compile_ms = t0.elapsed().as_secs_f64() * 1e3;
-    if !out.diags.is_empty() {
-        print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
-        fail("compile failed");
-    }
-    let binary = out.binary.unwrap_or_else(|| fail("no binary emitted"));
 
     // ---- decode + verify (load) ----
     let t1 = Instant::now();
-    let prog = decode(&binary).unwrap_or_else(|e| fail(format!("decode: {e}")));
     rut_vm::verify::verify(&prog).unwrap_or_else(|e| fail(format!("verify: {e}")));
     let verify_ms = t1.elapsed().as_secs_f64() * 1e3;
 

@@ -1,0 +1,10 @@
+# hashmap-int/ — the rut half of the `hashmap-int` bench workload: a
+# module dir (not a loose file) because it mounts `mapset`, and the
+# CLI's single-file auto-mount list stays untouched (the deps graph
+# resolves this the pouch/ink way). `ink` is declared for the logger.
+name = "hashmap_int"
+entry.lib = "./main.rut"
+
+[deps]
+mapset = { path = "../../../rut/mapset" }
+ink = { path = "../../../rut/ink" }

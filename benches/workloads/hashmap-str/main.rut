@@ -1,0 +1,79 @@
+use ink::{ Logger };
+
+use mapset::{ HashMap };
+
+// hashmap-str — str-keyed HashMap<str, i32>: generated keys ("k<i>"),
+// hit/miss lookups, every third key removed then re-added. The JS twin
+// (../hashmap-str.js) runs the identical algorithm on `new Map()` with
+// string keys; checksum = the wrapped value sum plus the phase counts.
+// Scale: n = 50000 entries.
+
+fn churn(n: i32) -> i32 {
+    let mut m: HashMap<str, i32> = HashMap.new();
+    // build — every key is new
+    let mut added = 0;
+    for (let i = 0; i < n; i += 1) {
+        if (m.put(f"k{i}", i)) {
+            added += 1;
+        }
+    }
+    // replace — every key is present
+    let mut replaced = 0;
+    for (let i = 0; i < n; i += 1) {
+        if (m.put(f"k{i}", i + 3) == false) {
+            replaced += 1;
+        }
+    }
+    // hit lookups — sum the stored values
+    let mut sum = 0;
+    let mut hits = 0;
+    for (let i = 0; i < n; i += 1) {
+        let p = m.get(f"k{i}");
+        if (p != nil) {
+            hits += 1;
+            sum = sum.wrapping_add(*p);
+        }
+    }
+    // miss lookups — the "m" prefix is never inserted
+    let mut misses = 0;
+    for (let i = 0; i < n; i += 1) {
+        if (m.get(f"m{i}") == nil) {
+            misses += 1;
+        }
+    }
+    // remove every third key
+    let mut removed = 0;
+    for (let i = 0; i < n; i += 3) {
+        if (m.remove(f"k{i}")) {
+            removed += 1;
+        }
+    }
+    // full re-scan: two thirds survive
+    let mut present = 0;
+    for (let i = 0; i < n; i += 1) {
+        if (m.has(f"k{i}")) {
+            present += 1;
+        }
+    }
+    // re-add the removed keys under negated values
+    let mut added2 = 0;
+    for (let i = 0; i < n; i += 3) {
+        if (m.put(f"k{i}", -i)) {
+            added2 += 1;
+        }
+    }
+    let mut c = sum;
+    c = c.wrapping_add(added.wrapping_mul(31));
+    c = c.wrapping_add(replaced.wrapping_mul(37));
+    c = c.wrapping_add(hits.wrapping_mul(41));
+    c = c.wrapping_add(misses.wrapping_mul(43));
+    c = c.wrapping_add(removed.wrapping_mul(47));
+    c = c.wrapping_add(present.wrapping_mul(53));
+    c = c.wrapping_add(added2.wrapping_mul(59));
+    c = c.wrapping_add(m.len().wrapping_mul(61));
+    return c;
+}
+
+pub fn main() -> nil {
+    Logger.new("app").info(f"CHECKSUM {churn(50000)}");
+}

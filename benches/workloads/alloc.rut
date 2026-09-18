@@ -4,7 +4,7 @@ use calc::{ Math };
 // alloc — record allocation/drop churn (RC heap). Scale: 2_000_000 records.
 // Canonical reference: 2_000_000^2 wrapped = 1385447424.
 
-dataclass Point {
+struct Point {
     x: i32,
     y: i32,
 }

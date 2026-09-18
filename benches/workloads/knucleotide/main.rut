@@ -1,0 +1,105 @@
+use ink::{ Logger };
+
+use mapset::{ HashMap };
+
+// knucleotide — k-mer counting over HashMap<str, i32>: the benchmark-
+// game workload the README used to exclude for "no hashmap". The
+// harness workloads take no stdin, so this is the fasta-style
+// ADAPTATION: the sequence is generated with fasta's LCG (identically
+// on both sides), then 12-mers fill the map (get-or-insert churn over
+// long str keys), 1-/2-mers fill two small maps, and 100 generated
+// 12-mer fragments are probed. Checksum = distinct 12-mers + the
+// fragment-count sum + the 1-/2-mer totals + the 12-mer total, all in
+// i32. Scale: seq = 200000 letters.
+
+fn lcg_seq(n: i32) -> str {
+    let letters = "ACGT";
+    let mut x: u32 = 42;
+    let mut seq = "";
+    for (let i = 0; i < n; i += 1) {
+        x = x.wrapping_mul(1103515245).wrapping_add(12345);
+        let idx = ((x >> 16) % 4) as i32;
+        seq = f"{seq}{letters[idx]}";
+    }
+    return seq;
+}
+
+// get-or-insert one k-mer count — a miss hashes the key twice (get +
+// put), a hit three times (put rehashes nothing but re-probes); the
+// str hashing/box churn is what this workload measures.
+fn count12(m: HashMap<str, i32>, seq: str, n: i32) -> i32 {
+    for (let i = 0; i < n - 11; i += 1) {
+        let kmer = seq.slice(i, i + 12);
+        let p = m.get(kmer);
+        if (p != nil) {
+            m.put(kmer, *p + 1);
+        } else {
+            m.put(kmer, 1);
+        }
+    }
+    // 100 generated fragment probes — positions stride the sequence
+    let mut frag_sum = 0;
+    for (let j = 0; j < 100; j += 1) {
+        let pos = (j * 2497) % (n - 12);
+        let p = m.get(seq.slice(pos, pos + 12));
+        if (p != nil) {
+            frag_sum = frag_sum.wrapping_add(*p);
+        }
+    }
+    return frag_sum;
+}
+
+fn main_checksum(n: i32) -> i32 {
+    let seq = lcg_seq(n);
+    let mut m: HashMap<str, i32> = HashMap.new();
+    let frag_sum = count12(m, seq, n);
+    // 1-mers: four keys, total n
+    let mut m1: HashMap<str, i32> = HashMap.new();
+    for (let i = 0; i < n; i += 1) {
+        let kmer = seq.slice(i, i + 1);
+        let p = m1.get(kmer);
+        if (p != nil) {
+            m1.put(kmer, *p + 1);
+        } else {
+            m1.put(kmer, 1);
+        }
+    }
+    // 2-mers: sixteen keys, total n - 1
+    let mut m2: HashMap<str, i32> = HashMap.new();
+    for (let i = 0; i < n - 1; i += 1) {
+        let kmer = seq.slice(i, i + 2);
+        let p = m2.get(kmer);
+        if (p != nil) {
+            m2.put(kmer, *p + 1);
+        } else {
+            m2.put(kmer, 1);
+        }
+    }
+    let letters = "ACGT";
+    let mut sum1 = 0;
+    let mut sum2 = 0;
+    for (let a = 0; a < 4; a += 1) {
+        let ca = letters.slice(a, a + 1);
+        let p = m1.get(ca);
+        if (p != nil) {
+            sum1 += *p;
+        }
+        for (let b = 0; b < 4; b += 1) {
+            let cb = letters.slice(b, b + 1);
+            let q = m2.get(f"{ca}{cb}");
+            if (q != nil) {
+                sum2 += *q;
+            }
+        }
+    }
+    let mut c = m.len();
+    c = c.wrapping_add(frag_sum);
+    c = c.wrapping_add(sum1.wrapping_mul(2));
+    c = c.wrapping_add(sum2.wrapping_mul(3));
+    c = c.wrapping_add((n - 11).wrapping_mul(5));
+    return c;
+}
+
+pub fn main() -> nil {
+    Logger.new("app").info(f"CHECKSUM {main_checksum(200000)}");
+}
