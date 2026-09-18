@@ -205,8 +205,8 @@ pub builtin impl u64 {
 // ---- engine-woven traits ----
 // `builtin trait` = the engine has built-in knowledge: compiler-
 // backed impls and lowering hooks. Users implement them with ordinary
-// `impl` blocks. Library contracts without engine knowledge (pouch:
-// pouch's `Hashable`) stay plain `trait`.
+// `impl` blocks. Library contracts without engine knowledge (mapset:
+// mapset's `Hashable`) stay plain `trait`.
 
 // v1.1 removals — `Disposal`/`Index` are gone from the prelude:
 // cleanups attach with `on_drop` (RFC 0016) and indexing is builtin
