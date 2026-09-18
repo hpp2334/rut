@@ -98,6 +98,12 @@ impl<T: 'static> OpaqueBox<T> {
         Ok(out)
     }
 
+    /// The erased handle (RFC 0023): the box's `Opaque` identity, for
+    /// passing the box through typed `call`/host-fn boundaries.
+    pub fn handle(&self) -> &OpaqueRef {
+        &self.handle
+    }
+
     /// The erased payload and its borrow guard, checked to be a host box.
     fn boxed(&self) -> Result<(&Box<dyn std::any::Any>, &Cell<u32>), Trap> {
         let cell = unsafe { &*self.handle.ptr() };

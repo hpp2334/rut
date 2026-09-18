@@ -108,6 +108,12 @@ impl Slot {
     pub fn as_char(&self) -> char {
         char::from_u32(unsafe { self.i } as u32).unwrap_or('\0')
     }
+    /// Safe float read: sound whenever the slot holds an f64 — the
+    /// verifier guarantees registers hold their declared types (RFC 0015
+    /// §5), the same trust the float ops run on.
+    pub fn as_f64(&self) -> f64 {
+        unsafe { self.f }
+    }
     pub fn null() -> Slot {
         Slot { r: std::ptr::null() }
     }

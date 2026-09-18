@@ -12,6 +12,7 @@ use rut_core::ops::*;
 use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
 use std::rc::Rc;
 
+mod boundary;
 mod host;
 mod native;
 mod ops;
@@ -23,6 +24,7 @@ mod util;
 
 pub use host::{ExpectedHostFns, HostFn, HostRegistry};
 use host::HostEntry;
+use boundary::{CallArgs, Ret};
 
 // free helpers live in the submodules; pull them into `interp` so the
 // sibling modules reach them through `use super::*`
@@ -451,7 +453,9 @@ impl Vm {
             return Err(format!("internal: untyped parameter"));
         };
         Ok(match (v, self.prog.types.kind(ty).clone()) {
-            (Value::Nil, TyKind::Nil) | (Value::Nil, TyKind::Prim(_)) => Slot::int(0),
+            (Value::Nil, TyKind::Nil)
+            | (Value::I64(0), TyKind::Nil) // `return;` crosses as a zero word
+            | (Value::Nil, TyKind::Prim(_)) => Slot::int(0),
             (Value::I64(n), TyKind::Prim(p)) => {
                 if !fits(*n, p) {
                     return Err(format!("`{n}` does not fit `{}`", self.prog.type_name(ty)));
@@ -609,6 +613,48 @@ impl Vm {
             return Err(Trap::new(TrapKind::Invalid, "nothing to resume"));
         }
         self.run_loop()
+    }
+
+    /// The typed host boundary (RFC 0023, revised): call an export with
+    /// Rust values, get a Rust value back — `Value`/`Slot` are internal
+    /// marshaling formats, never seen by the embedder. Re-entrancy,
+    /// budgets, and trap semantics are exactly `call`'s.
+    #[allow(private_bounds)]
+    pub fn call_typed<A: CallArgs, R: Ret>(&mut self, export: &str, args: A) -> Result<R, Trap> {
+        let values = args.into_values();
+        let v = self.call(export, &values)?;
+        let ty = self.export_ret_ty(export)?;
+        let slot = self
+            .value_in(&v, ty)
+            .map_err(|m| Trap::new(TrapKind::Invalid, format!("`{export}` result: {m}")))?;
+        let out = R::from_slot(self, slot, ty)?;
+        if self.is_ref(ty) {
+            self.heap.release(slot); // from_slot cloned its own handle/copy
+        }
+        Ok(out)
+    }
+
+    /// Typed `resume`: same shape, the active frame's declared return.
+    #[allow(private_bounds)]
+    pub fn resume_typed<R: Ret>(&mut self) -> Result<R, Trap> {
+        let v = self.resume()?;
+        let ty = self.prog.funcs[self.cur_func as usize].ret;
+        let slot = self
+            .value_in(&v, ty)
+            .map_err(|m| Trap::new(TrapKind::Invalid, format!("resume result: {m}")))?;
+        let out = R::from_slot(self, slot, ty)?;
+        if self.is_ref(ty) {
+            self.heap.release(slot);
+        }
+        Ok(out)
+    }
+
+    pub(crate) fn export_ret_ty(&self, export: &str) -> Result<TypeId, Trap> {
+        let f = self
+            .prog
+            .export(export)
+            .ok_or_else(|| Trap::new(TrapKind::Invalid, format!("no export `{export}`")))?;
+        Ok(self.prog.funcs[f as usize].ret)
     }
 
     fn regs_ty(&self, r: Reg) -> TypeId {
