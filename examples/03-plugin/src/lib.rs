@@ -65,11 +65,12 @@ impl Plugin {
             .program
             .ok_or_else(|| Trap::new(TrapKind::Invalid, "compile produced no program"))?;
         rut_vm::verify::verify(&prog).map_err(|m| Trap::new(TrapKind::Invalid, m))?;
-        let mut vm = Vm::new(Rc::new(prog), limits, HostHooks::default())?;
-        install(&mut vm);
-        // the load-time contract (RFC 0025): the .d.rut surface and the
+        // bindings BEFORE the Vm (RFC 0025): the .d.rut surface and the
         // bound bodies must agree — a mismatch panics HERE, never mid-run
-        vm.verify_host_fns(&session.expected_host_fns());
+        let mut hosts = rut_vm::interp::HostRegistry::new();
+        install(&mut hosts);
+        hosts.verify_against(&session.expected_host_fns());
+        let mut vm = Vm::new(Rc::new(prog), limits, HostHooks::default(), hosts)?;
 
         // the handshake: bus in, state out
         let bus = OpaqueBox::alloc(
@@ -139,9 +140,9 @@ impl Plugin {
 /// Bind the `server` bodies. Stateless: both fns unwrap the bus
 /// from their receiver argument — the bus IS the state. Typed per
 /// server/server.d.rut; `Plugin::load` verifies the contract.
-fn install(vm: &mut Vm) {
+fn install(hosts: &mut rut_vm::interp::HostRegistry) {
     use rut_core::types::{TY_NIL, TY_OPAQUE, TY_STR};
-    vm.register_host_fn_sig(
+    hosts.register(
         "server::subscribe",
         vec![TY_OPAQUE, TY_STR, TY_STR],
         TY_NIL,
@@ -158,7 +159,7 @@ fn install(vm: &mut Vm) {
         },
     );
 
-    vm.register_host_fn_sig(
+    hosts.register(
         "server::emit",
         vec![TY_OPAQUE, TY_STR, TY_STR],
         TY_NIL,

@@ -30,7 +30,7 @@ fn main() {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new()).unwrap();
 
     // the session: container in, handles out, values back
     let Value::Opaque(c) = vm.call("createContainer", &[]).unwrap() else { unreachable!() };

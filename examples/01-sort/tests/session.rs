@@ -24,9 +24,11 @@ fn vm() -> (rut_vm::interp::Vm, Value) {
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
-    rut_std::math::install_std_math(&mut vm);
-    vm.verify_host_fns(&s.expected_host_fns()); // calc: .d.rut ↔ bodies
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::math::install_std_math(&mut hosts);
+    hosts.verify_against(&s.expected_host_fns()); // calc: .d.rut ↔ bodies
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
+
     let Value::Opaque(c) = vm.call("create", &[]).unwrap() else { unreachable!() };
     (vm, Value::Opaque(c))
 }

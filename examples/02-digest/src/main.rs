@@ -105,9 +105,11 @@ fn main() {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
-    rut_std::math::install_std_math(&mut vm);
-    vm.verify_host_fns(&session.expected_host_fns()); // calc: .d.rut ↔ bodies
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::math::install_std_math(&mut hosts);
+    hosts.verify_against(&session.expected_host_fns()); // calc: .d.rut ↔ bodies
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
+
     let call = |vm: &mut rut_vm::interp::Vm, name: &str, args: &[Value]| vm.call(name, args).unwrap();
 
     // ---- hex + base64 read-back -------------------------------------

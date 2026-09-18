@@ -124,103 +124,114 @@ fn non_crossing_signatures_refuse_at_load() {
 }
 
 // ---- the load-time binding contract (RFC 0025): .d.rut ↔ host impl ----
+// Registration is PRE-VM now: the registry is built, checked against the
+// session's declared surface, and handed to `Vm::new`, which joins it
+// against the program's host thunks.
 
-fn booted_vm() -> rut_vm::interp::Vm {
-    let limits = rut_vm::interp::Limits::default();
-    rut_vm::interp::Vm::new(
-        std::rc::Rc::new(rut_core::binary::Program::default()),
-        &limits,
-        rut_vm::interp::HostHooks::default(),
-    )
-    .expect("boot")
-}
-
-#[test]
-fn a_matching_binding_table_verifies() {
-    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
-    let expected = session.expected_host_fns();
-    assert_eq!(expected.len(), 2, "exactly the two server fns: {expected:?}");
-    assert!(expected.contains_key("server::subscribe"));
-    let mut vm = booted_vm();
-    vm.register_host_fn_sig(
+fn server_registry(extra: &[(&str, rut_core::types::TypeId)]) -> rut_vm::interp::HostRegistry {
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    hosts.register(
         "server::subscribe",
         vec![TY_OPAQUE, TY_STR, TY_STR],
         TY_NIL,
         |_vm, _a| Ok(rut_vm::Value::Nil),
     );
-    vm.register_host_fn_sig(
-        "server::emit",
-        vec![TY_OPAQUE, TY_STR, TY_STR],
-        TY_NIL,
-        |_vm, _a| Ok(rut_vm::Value::Nil),
-    );
-    vm.verify_host_fns(&expected); // no panic — the contract holds
+    for (name, second) in extra {
+        hosts.register(
+            name,
+            vec![TY_OPAQUE, *second, TY_STR],
+            TY_NIL,
+            |_vm, _a| Ok(rut_vm::Value::Nil),
+        );
+    }
+    hosts
+}
+
+fn server_expected() -> rut_vm::interp::ExpectedHostFns {
+    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
+    session.expected_host_fns()
+}
+
+#[test]
+fn a_matching_binding_table_verifies() {
+    let expected = server_expected();
+    assert_eq!(expected.len(), 2, "exactly the two server fns: {expected:?}");
+    assert!(expected.contains_key("server::subscribe"));
+    let hosts = server_registry(&[("server::emit", TY_STR)]);
+    hosts.verify_against(&expected); // no panic — the contract holds
 }
 
 #[test]
 #[should_panic(expected = "declared by a mounted package but never bound")]
 fn a_missing_body_panics_early() {
-    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
-    let expected = session.expected_host_fns();
-    let mut vm = booted_vm();
-    vm.register_host_fn_sig(
-        "server::subscribe",
-        vec![TY_OPAQUE, TY_STR, TY_STR],
-        TY_NIL,
-        |_vm, _a| Ok(rut_vm::Value::Nil),
-    );
-    // `emit` never bound — the panic names it, before any rut code runs
-    vm.verify_host_fns(&expected);
+    let expected = server_expected();
+    // `emit` never registered — the panic names it, before the Vm exists
+    let hosts = server_registry(&[]);
+    hosts.verify_against(&expected);
 }
 
 #[test]
 #[should_panic(expected = "signature drift")]
 fn a_drifted_signature_panics_early() {
     use rut_core::types::TY_I64;
-    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
-    let expected = session.expected_host_fns();
-    let mut vm = booted_vm();
-    vm.register_host_fn_sig(
-        "server::subscribe",
-        vec![TY_OPAQUE, TY_STR, TY_STR],
-        TY_NIL,
-        |_vm, _a| Ok(rut_vm::Value::Nil),
-    );
+    let expected = server_expected();
     // the binding took an i64 where the surface declares a str
-    vm.register_host_fn_sig(
-        "server::emit",
-        vec![TY_OPAQUE, TY_I64, TY_STR],
-        TY_NIL,
-        |_vm, _a| Ok(rut_vm::Value::Nil),
-    );
-    vm.verify_host_fns(&expected);
+    let hosts = server_registry(&[("server::emit", TY_I64)]);
+    hosts.verify_against(&expected);
 }
 
 #[test]
 #[should_panic(expected = "declared by no mounted package")]
 fn an_undeclared_binding_panics_early() {
-    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
-    let expected = session.expected_host_fns();
-    let mut vm = booted_vm();
-    vm.register_host_fn_sig(
-        "server::subscribe",
-        vec![TY_OPAQUE, TY_STR, TY_STR],
-        TY_NIL,
-        |_vm, _a| Ok(rut_vm::Value::Nil),
-    );
-    vm.register_host_fn_sig(
-        "server::emit",
-        vec![TY_OPAQUE, TY_STR, TY_STR],
-        TY_NIL,
-        |_vm, _a| Ok(rut_vm::Value::Nil),
-    );
+    let expected = server_expected();
     // a body for a fn no .d.rut declares — a typo'd binding caught here
     // instead of trapping mid-run
-    vm.register_host_fn_sig(
-        "server::emits",
-        vec![TY_OPAQUE, TY_STR, TY_STR],
-        TY_NIL,
-        |_vm, _a| Ok(rut_vm::Value::Nil),
+    let hosts = server_registry(&[("server::emit", TY_STR), ("server::emits", TY_STR)]);
+    hosts.verify_against(&expected);
+}
+
+#[test]
+fn the_vm_new_join_refuses_an_unbound_thunk() {
+    // a program with ONE host thunk; an empty registry cannot boot it —
+    // the error names the fn (RFC 0025: declared ⊆ bound, at boot)
+    let mut prog = rut_core::binary::Program::default();
+    let fname = prog.interner.intern("probe");
+    prog.funcs.push(rut_core::binary::FuncCode {
+        name: fname,
+        params: vec![TY_STR],
+        ret: TY_NIL,
+        is_method: false,
+        n_captures: 0,
+        regs: vec![],
+        argv: vec![],
+        labels: vec![],
+        code: vec![],
+        spans: vec![],
+        host: Some("server::probe".to_string()),
+    });
+    let limits = rut_vm::interp::Limits::default();
+    let err = match rut_vm::interp::Vm::new(
+        std::rc::Rc::new(prog.clone()),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    ) {
+        Err(t) => t,
+        Ok(_) => panic!("an empty registry must not boot a program with host thunks"),
+    };
+    assert!(
+        err.msg.contains("server::probe") && err.msg.contains("never bound"),
+        "the boot error names the unbound thunk: {}",
+        err.msg
     );
-    vm.verify_host_fns(&expected);
+    // with the body registered, the same program boots
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    hosts.register("server::probe", vec![TY_STR], TY_NIL, |_vm, _a| Ok(rut_vm::Value::Nil));
+    assert!(rut_vm::interp::Vm::new(
+        std::rc::Rc::new(prog),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        hosts
+    )
+    .is_ok());
 }

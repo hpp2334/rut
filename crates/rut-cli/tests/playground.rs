@@ -77,10 +77,18 @@ fn classics_run_and_match_their_expected_sidecars() {
             heap_limit_bytes: Some(4 * 1024 * 1024),
             interrupt_every: 1024,
         };
+        // the bindings BEFORE the Vm (RFC 0025): the compiled program
+        // carries calc's and rt:log's thunks (mount = declare = bind)
+        let mut hosts = rut_vm::interp::HostRegistry::new();
+        rut_std::logger::install_std_log(&mut hosts, move |msg| {
+            sink.borrow_mut().push(msg.to_string())
+        });
+        rut_std::math::install_std_math(&mut hosts);
         let mut vm = match rut_vm::interp::Vm::new(
             Rc::new(prog),
             &limits,
             rut_vm::interp::HostHooks::default(),
+            hosts,
         ) {
             Ok(vm) => vm,
             Err(t) => {
@@ -88,10 +96,6 @@ fn classics_run_and_match_their_expected_sidecars() {
                 continue;
             }
         };
-        rut_std::logger::install_std_log(&mut vm, move |msg| {
-            sink.borrow_mut().push(msg.to_string())
-        });
-        rut_std::math::install_std_math(&mut vm);
         if let Err(t) = vm.call("main", &[]) {
             failures.push(format!("{name}: trap: {} — {}", t.name(), t.msg));
             continue;

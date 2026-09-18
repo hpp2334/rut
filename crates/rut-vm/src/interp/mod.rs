@@ -10,10 +10,9 @@ use rut_core::binary::{ConstVal, Program};
 use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value, ArrKind};
 use rut_core::ops::*;
 use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
+mod host;
 mod native;
 mod ops;
 mod run;
@@ -21,6 +20,9 @@ mod scalar;
 mod step;
 mod threaded;
 mod util;
+
+pub use host::{ExpectedHostFns, HostFn, HostRegistry};
+use host::HostEntry;
 
 // free helpers live in the submodules; pull them into `interp` so the
 // sibling modules reach them through `use super::*`
@@ -57,18 +59,6 @@ impl Default for Limits {
 #[derive(Default, Clone)]
 pub struct HostHooks {}
 
-/// An embedder implementation for a bodyless host function
-/// (RFC 0022/0026): registered by name against `FuncCode.host`. It gets the
-/// VM so it can allocate/inspect `Opaque` handles (RFC 0014).
-pub type HostFn = Rc<RefCell<dyn FnMut(&mut Vm, &[Value]) -> Result<Value, Trap>>>;
-
-/// A host pkg's expected binding table (RFC 0025): `<scope>::<name>` →
-/// `(params, ret)` — the `.d.rut` declarations a mounting session holds,
-/// checked against the VM's typed bindings by
-/// [`Vm::verify_host_fns`].
-pub type ExpectedHostFns =
-    std::collections::BTreeMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>;
-
 struct SavedFrame {
     func: u32,
     pc: u32,
@@ -104,12 +94,17 @@ pub struct Vm {
     interrupt_every: u32,
     since_check: u32,
     pub hooks: HostHooks,
-    /// host-function impls by name (RFC 0022/0026)
-    host_fns: HashMap<String, HostFn>,
-    /// typed bindings only (register_host_fn_sig) — the verify table
-    host_sigs: HashMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>,    /// raw arg slots of the CURRENT host call (RFC 0023 §2 zero-copy
-    /// borrows; empty outside a host call)
+    /// resolved host thunks, dense by func idx — the `Vm::new` join
+    /// (RFC 0025) built these once; the hot path dispatches through
+    /// them with no name work and no allocation
+    host_slots: Vec<Option<Rc<HostEntry>>>,
+    /// raw arg slots of the CURRENT host call (RFC 0023 §2 zero-copy
+    /// borrows; empty outside a host call) — pre-sized to the program's
+    /// max host arity at the join
     host_arg_slots: Vec<Slot>,
+    /// reused crossing-args buffer for host arities past `INLINE_ARITY`
+    /// (never taken in practice; the stack covers the common case)
+    value_scratch: Vec<Value>,
     const_slots: Vec<Slot>,
     /// recycled per-frame register files (avoids a Vec alloc per call)
     reg_pool: Vec<Vec<Slot>>,
@@ -162,7 +157,41 @@ const FOP_MOD: i32 = 4;
 const TY_ANY: TypeId = u32::MAX;
 
 impl Vm {
-    pub fn new(prog: Rc<Program>, limits: &Limits, hooks: HostHooks) -> Result<Vm, Trap> {
+    /// Boot the machine. `registry` is the embedder's host-fn binding
+    /// table (RFC 0022/0025) — built BEFORE the Vm (an embedder depends
+    /// on nothing else) and consumed here: every host thunk the program
+    /// declares is resolved against it, so a declared-but-unbound fn is
+    /// a construction error, never a mid-run trap. Call
+    /// `HostRegistry::verify_against` first for the full RFC 0025
+    /// contract (it also checks the bound-but-undeclared direction).
+    pub fn new(
+        prog: Rc<Program>,
+        limits: &Limits,
+        hooks: HostHooks,
+        mut registry: HostRegistry,
+    ) -> Result<Vm, Trap> {
+        // ---- the host join (RFC 0025) ----
+        // Resolve every host thunk's binding NOW; slots are dense by
+        // func idx, params stay in the FuncCode (borrowed at call time).
+        let mut host_slots: Vec<Option<Rc<HostEntry>>> = Vec::with_capacity(prog.funcs.len());
+        let mut max_host_argc = 0usize;
+        for fc in prog.funcs.iter() {
+            if let Some(name) = &fc.host {
+                let f = registry.take(name).ok_or_else(|| {
+                    Trap::new(
+                        TrapKind::Invalid,
+                        format!(
+                            "host fn `{name}` is declared by the program but never bound — \
+                             register the body in the HostRegistry before Vm::new (RFC 0025)"
+                        ),
+                    )
+                })?;
+                max_host_argc = max_host_argc.max(fc.params.len());
+                host_slots.push(Some(Rc::new(HostEntry { f, ret: fc.ret })));
+            } else {
+                host_slots.push(None);
+            }
+        }
         let heap =
             Heap::new(limits.heap_limit_bytes, crate::arena::ReleasePlan::build(&prog.types, &prog.funcs));
         let mut const_slots = Vec::with_capacity(prog.consts.len());
@@ -230,9 +259,9 @@ impl Vm {
             interrupt_every: limits.interrupt_every.max(1),
             since_check: 0,
             hooks,
-            host_fns: HashMap::new(),
-            host_sigs: HashMap::new(),
-            host_arg_slots: Vec::new(),
+            host_slots,
+            host_arg_slots: Vec::with_capacity(max_host_argc),
+            value_scratch: Vec::new(),
             const_slots,
             reg_pool: Vec::new(),
             ref_regs,
@@ -473,88 +502,6 @@ impl Vm {
         })
     }
 
-    /// Register an embedder implementation for a bodyless host function
-    /// (RFC 0022/0026), bound by the `FuncCode.host` name — WITH its
-    /// declared signature, so the load-time contract check
-    /// ([`Vm::verify_host_fns`]) can catch a drifted binding before the
-    /// first run. The signature is the pkg `.d.rut`'s (RFC 0025).
-    pub fn register_host_fn_sig<F>(
-        &mut self,
-        name: &str,
-        params: Vec<rut_core::types::TypeId>,
-        ret: rut_core::types::TypeId,
-        f: F,
-    ) where
-        F: FnMut(&mut Vm, &[Value]) -> Result<Value, Trap> + 'static,
-    {
-        self.host_sigs
-            .insert(name.to_string(), (params, ret));
-        self.host_fns.insert(name.to_string(), Rc::new(RefCell::new(f)));
-    }
-
-    /// The typed host bindings, for the load-time contract check.
-    pub fn host_fn_sigs(&self) -> &HashMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)> {
-        &self.host_sigs
-    }
-
-    /// The `.d.rut` ↔ host-impl contract check (RFC 0025), PANICKING
-    /// early — at load time, before any rut code runs — on three
-    /// mismatch classes:
-    ///
-    /// - declared but unbound — a rut call would trap mid-run
-    /// - bound but undeclared — the pkg's surface lies about what exists
-    /// - signature drift — the crossing values would be misinterpreted
-    ///
-    /// `expected` is the mounting session's table
-    /// (`rut_driver::expected_host_fns`). An embedder wiring bug is a
-    /// panic, never a rut diagnostic.
-    pub fn verify_host_fns(&self, expected: &ExpectedHostFns) {
-        let bound = &self.host_sigs;
-        let ty = |t: rut_core::types::TypeId| -> String {
-            // boot-table ids are stable — name them for the panic message
-            use rut_core::types::*;
-            match t {
-                TY_NIL => "nil", TY_BOOL => "bool", TY_STR => "str", TY_BYTES => "bytes",
-                TY_F32 => "f32", TY_F64 => "f64",
-                TY_I8 => "i8", TY_I16 => "i16", TY_I32 => "i32", TY_I64 => "i64",
-                TY_U8 => "u8", TY_U16 => "u16", TY_U32 => "u32", TY_U64 => "u64",
-                TY_OPAQUE => "Opaque",
-                _ => return format!("#{t:?}"),
-            }
-            .to_string()
-        };
-        let sig = |p: &Vec<rut_core::types::TypeId>, r: rut_core::types::TypeId| -> String {
-            format!(
-                "({}) -> {}",
-                p.iter().map(|&t| ty(t)).collect::<Vec<_>>().join(", "),
-                ty(r)
-            )
-        };
-        for (name, (params, ret)) in expected {
-            match bound.get(name) {
-                None => panic!(
-                    "host fn `{name}` is declared by a mounted package but never bound — install the body before the first run (RFC 0025)"
-                ),
-                Some((bparams, bret)) => {
-                    if bparams != params || bret != ret {
-                        panic!(
-                            "host fn `{name}` signature drift: the pkg declares {}, the binding is {} (RFC 0025)",
-                            sig(params, *ret),
-                            sig(bparams, *bret)
-                        );
-                    }
-                }
-            }
-        }
-        for name in bound.keys() {
-            if !expected.contains_key(name) {
-                panic!(
-                    "host fn `{name}` is bound but declared by no mounted package — the surface is missing (RFC 0025)"
-                );
-            }
-        }
-    }
-
     /// Zero-copy borrow of a `str`/`bytes` argument of the CURRENT host
     /// call (RFC 0023 §2, RFC 0042): the octets read straight out of the
     /// VM's block store — no `String`/`Vec` crossing copy. Sound for
@@ -578,15 +525,20 @@ impl Vm {
     }
 
     /// Dispatch `Op::Call` to a host function: convert the args to `Value`s,
-    /// invoke the embedder's impl, convert the result. The name was bound at
-    /// link; an unregistered name traps at the boundary.
+    /// invoke the embedder's impl, convert the result. The binding was
+    /// resolved at the `Vm::new` join (`host_slots`); per call there is no
+    /// name work, no allocation for the typical arity, and no clone —
+    /// params are borrowed from the local `Rc<Program>`.
     pub(super) fn call_host(&mut self, func: u32, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
         let prog = Rc::clone(&self.prog);
+        // borrowed from the LOCAL Rc — outlives the `&mut self` call below,
+        // so unlike the old shape there is nothing to clone
+        let fc = &prog.funcs[func as usize];
+        let entry = self.host_slots[func as usize]
+            .clone()
+            .expect("call_host: resolved at the Vm::new join");
+        let ret = entry.ret;
         let args = self.cur_argv(&prog, argv_off, argc);
-        let fc = &self.prog.funcs[func as usize];
-        let name = fc.host.clone().expect("call_host: not a host function");
-        let params = fc.params.clone();
-        let ret = fc.ret;
         // the raw arg slots, stashed for the call's duration: hosts that
         // want zero-copy borrow through `arg_bytes`/`arg_str` instead of
         // reading the copied `Value`s (RFC 0023 §2). The arg registers
@@ -594,22 +546,39 @@ impl Vm {
         // borrow is sound for exactly the host call.
         self.host_arg_slots.clear();
         self.host_arg_slots.extend(args.iter().map(|a| self.cur_regs[*a as usize]));
-        let mut vals = Vec::with_capacity(args.len());
-        for (i, a) in args.iter().enumerate() {
-            let ty = params.get(i).copied().unwrap_or(rut_core::types::TY_I32);
-            vals.push(slot_to_value(self.cur_regs[*a as usize], ty, &self.prog, &self.heap));
-        }
-        let Some(f) = self.host_fns.get(&name).cloned() else {
-            return Err(Trap::new(TrapKind::Invalid, format!("host function `{name}` is not registered")));
+        // the crossing args: stack storage for the common arity (max
+        // in-tree host fn takes 3), spill to a reused buffer past that —
+        // zero system allocation either way
+        const INLINE_ARITY: usize = 8;
+        let mut inline: [Value; INLINE_ARITY] = std::array::from_fn(|_| Value::Nil);
+        let mut spill: Vec<Value> = Vec::new();
+        let vals: &[Value] = if argc as usize <= INLINE_ARITY {
+            for (i, a) in args.iter().enumerate() {
+                let ty = fc.params.get(i).copied().unwrap_or(rut_core::types::TY_I32);
+                inline[i] = slot_to_value(self.cur_regs[*a as usize], ty, &self.prog, &self.heap);
+            }
+            &inline[..args.len()]
+        } else {
+            spill = self.take_value_scratch(args.len());
+            for (i, a) in args.iter().enumerate() {
+                let ty = fc.params.get(i).copied().unwrap_or(rut_core::types::TY_I32);
+                spill.push(slot_to_value(self.cur_regs[*a as usize], ty, &self.prog, &self.heap));
+            }
+            &spill
         };
         let out = {
-            let mut f = f.borrow_mut();
-            f(self, &vals)?
+            let mut f = entry.f.borrow_mut();
+            f(self, vals)?
         };
+        // return the spill buffer (no-op when unused); stale `Value`s are
+        // dropped here — owned crossing values, released by plain drop
+        if argc as usize > INLINE_ARITY {
+            self.put_value_scratch(spill);
+        }
         if let Some(d) = reg_opt(dst) {
             let s = self
                 .value_in(&out, ret)
-                .map_err(|m| Trap::new(TrapKind::Invalid, format!("host `{name}` result: {m}")))?;
+                .map_err(|m| Trap::new(TrapKind::Invalid, format!("host result: {m}")))?;
             if self.is_ref(ret) {
                 let old = self.cur_regs[d as usize];
                 self.heap.release(old);
@@ -617,6 +586,20 @@ impl Vm {
             self.cur_regs[d as usize] = s;
         }
         Ok(())
+    }
+
+    /// Take the reused crossing-args buffer (arity > `INLINE_ARITY`).
+    fn take_value_scratch(&mut self, cap: usize) -> Vec<Value> {
+        let mut v = std::mem::take(&mut self.value_scratch);
+        v.clear();
+        if v.capacity() < cap {
+            v.reserve(cap - v.capacity());
+        }
+        v
+    }
+
+    fn put_value_scratch(&mut self, v: Vec<Value>) {
+        self.value_scratch = v;
     }
 
     /// Resume after a budget trap (RFC 0034 §4: the frame IS the loop state).

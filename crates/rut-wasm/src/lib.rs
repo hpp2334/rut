@@ -219,7 +219,23 @@ pub extern "C" fn rut_run(
         heap_limit_bytes: if heap_bytes == 0 { None } else { Some(heap_bytes) },
         interrupt_every: 1024,
     };
-    let mut vm = match rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()) {
+    // the playground host's bindings, BEFORE the Vm (RFC 0025): the
+    // logger routes into the OUTPUT cell; calc's float fns ride rut-std
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::logger::install_std_log(&mut hosts, |s| {
+        if let Ok(mut g) = OUTPUT.lock() {
+            if let Some(v) = g.as_mut() {
+                v.push(s.to_string());
+            }
+        }
+    });
+    rut_std::math::install_std_math(&mut hosts);
+    let mut vm = match rut_vm::interp::Vm::new(
+        Rc::new(prog),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        hosts,
+    ) {
         Ok(vm) => vm,
         Err(t) => {
             json.push_str("{\"output\":[],\"trap\":");
@@ -228,13 +244,6 @@ pub extern "C" fn rut_run(
             return envelope(json.as_bytes());
         }
     };
-    rut_std::logger::install_std_log(&mut vm, |s| {
-        if let Ok(mut g) = OUTPUT.lock() {
-            if let Some(v) = g.as_mut() {
-                v.push(s.to_string());
-            }
-        }
-    });
     let (trap, fuel_used) = match vm.call("main", &[]) {
         Ok(_) => (None, vm.fuel_used),
         Err(t) => (Some(t.name()), vm.fuel_used),

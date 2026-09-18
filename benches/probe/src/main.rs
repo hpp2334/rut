@@ -156,20 +156,20 @@ fn main() {
     let mut trapped: Option<String> = None;
 
     for _ in 0..args.iters {
+        let mut hosts = rut_vm::interp::HostRegistry::new();
+        install_std_log(&mut hosts, |_msg| {});
+        rut_std::math::install_std_math(&mut hosts);
+        hosts.verify_against(&session.expected_host_fns());
         let mut vm = Vm::new(
             Rc::clone(&prog),
             &limits,
             HostHooks::default(),
+            hosts,
         )
         .unwrap_or_else(|t| fail(format!("boot: {}", t.msg)));
-        // the workloads log their final checksum through `std:log`; the
+        // the workloads log their final checksum through `rt:log`; the
         // probe discards it (like the old `print: None`) so stdout stays a
-        // single JSON object — the embedder's half of the native module.
-        install_std_log(&mut vm, |_msg| {});
-        // the host half of `std:math` (RFC 0028)
-        rut_std::math::install_std_math(&mut vm);
-        // the load-time contract (RFC 0025): the .d.rut surfaces ↔ installs
-        vm.verify_host_fns(&session.expected_host_fns());
+        // single JSON object. Bindings + contract happened pre-Vm above.
         let t = Instant::now();
         let res = vm.call("main", &[]);
         exec_ms.push(t.elapsed().as_secs_f64() * 1e3);

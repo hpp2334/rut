@@ -75,7 +75,7 @@ type ExpectedHostFns = std::collections::BTreeMap<
     (Vec<rut_core::types::TypeId>, rut_core::types::TypeId),
 >;
 
-fn session() -> (rut_vm::interp::Vm, ExpectedHostFns) {
+fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
     let mut session = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut session);
     // the sources use `pouch` — a third-party pkg, mounted from the tree
@@ -110,20 +110,23 @@ fn session() -> (rut_vm::interp::Vm, ExpectedHostFns) {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
-    (vm, expected)
+    // bindings BEFORE the Vm (RFC 0025): install + contract + boot
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    install(&mut hosts, dropped);
+    hosts.verify_against(&expected); // tests/data/boxes/boxes.d.rut ↔ the bodies
+    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap()
 }
 
 /// Bind the `boxes` bodies over a real `HashMap` payload. Typed per
-/// data/boxes/boxes.d.rut; the contract verifies at the end.
-fn install(vm: &mut rut_vm::interp::Vm, dropped: &Rc<Cell<bool>>, expected: &ExpectedHostFns) {
+/// tests/data/boxes/boxes.d.rut; the contract verifies in `session`.
+fn install(hosts: &mut rut_vm::interp::HostRegistry, dropped: &Rc<Cell<bool>>) {
     use rut_core::types::{TY_I64, TY_NIL, TY_OPAQUE, TY_STR};
     let dropped = dropped.clone();
-    vm.register_host_fn_sig("boxes::store_new", vec![], TY_OPAQUE, move |vm, _args| {
+    hosts.register("boxes::store_new", vec![], TY_OPAQUE, move |vm, _args| {
         let b = OpaqueBox::alloc(vm, Store { map: HashMap::new(), dropped: dropped.clone() })?;
         Ok(b.into_value())
     });
-    vm.register_host_fn_sig(
+    hosts.register(
         "boxes::store_set",
         vec![TY_OPAQUE, TY_STR, TY_I64],
         TY_NIL,
@@ -137,17 +140,15 @@ fn install(vm: &mut rut_vm::interp::Vm, dropped: &Rc<Cell<bool>>, expected: &Exp
             Ok(Value::Nil)
         },
     );
-    vm.register_host_fn_sig("boxes::store_get", vec![TY_OPAQUE, TY_STR], TY_I64, |_vm, args| {
+    hosts.register("boxes::store_get", vec![TY_OPAQUE, TY_STR], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
         Ok(b.with(|s| s.map.get(k).cloned())?.unwrap_or(Value::I64(-1)))
     });
-    vm.register_host_fn_sig("boxes::store_size", vec![TY_OPAQUE], TY_I64, |_vm, args| {
+    hosts.register("boxes::store_size", vec![TY_OPAQUE], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|s| s.map.len() as i64)?))
     });
-    // the load-time contract (RFC 0025): tests/data/boxes/boxes.d.rut ↔ these bodies
-    vm.verify_host_fns(expected);
 }
 
 fn as_i64(v: Value) -> i64 {
@@ -158,9 +159,8 @@ fn as_i64(v: Value) -> i64 {
 #[test]
 fn host_boxes_hold_any_rust_type() {
     let dropped = Rc::new(Cell::new(false));
-    let (mut vm, expected) = session();
-    install(&mut vm, &dropped, &expected);
-
+    let mut vm = session(&dropped);
+    
     // news from the host, hold the handle across calls — the data lives
     // in the VM heap as long as either side holds a reference
     let held = vm.call("make", &[]).unwrap();
@@ -270,7 +270,11 @@ entry fn churn(n: i64) -> nil {
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+    let mut hosts0 = rut_vm::interp::HostRegistry::new();
+    rut_std::logger::install_std_log(&mut hosts0, |_msg| {});
+    rut_std::math::install_std_math(&mut hosts0);
+    let mut vm =
+        rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
 
     vm.call("churn", &[Value::I64(1)]).unwrap();
     let base = vm.heap.used_bytes();

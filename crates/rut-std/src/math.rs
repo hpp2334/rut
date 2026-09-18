@@ -10,7 +10,7 @@
 //! time.
 
 use rut_core::types::TY_F64;
-use rut_vm::interp::Vm;
+use rut_vm::interp::HostRegistry;
 use rut_vm::Value;
 
 /// Read the `i`-th `f64` argument; a non-float is `NaN` (the signature is
@@ -23,8 +23,8 @@ fn arg(a: &[Value], i: usize) -> f64 {
 }
 
 macro_rules! unary {
-    ($vm:expr, $name:literal, $f:ident) => {
-        $vm.register_host_fn_sig(
+    ($hosts:expr, $name:literal, $f:ident) => {
+        $hosts.register(
             concat!("calc::", $name),
             vec![rut_core::types::TY_F64],
             rut_core::types::TY_F64,
@@ -34,8 +34,8 @@ macro_rules! unary {
 }
 
 macro_rules! binary {
-    ($vm:expr, $name:literal, $f:ident) => {
-        $vm.register_host_fn_sig(
+    ($hosts:expr, $name:literal, $f:ident) => {
+        $hosts.register(
             concat!("calc::", $name),
             vec![rut_core::types::TY_F64, rut_core::types::TY_F64],
             rut_core::types::TY_F64,
@@ -45,41 +45,41 @@ macro_rules! binary {
 }
 
 /// Install `calc`'s `f64` host functions.
-pub fn install_std_math(vm: &mut Vm) {
-    unary!(vm, "sqrt", sqrt);
-    unary!(vm, "floor", floor);
-    unary!(vm, "ceil", ceil);
-    unary!(vm, "round", round);
-    unary!(vm, "trunc", trunc);
-    unary!(vm, "exp", exp);
-    unary!(vm, "ln", ln);
-    unary!(vm, "log2", log2);
-    unary!(vm, "log10", log10);
-    unary!(vm, "sin", sin);
-    unary!(vm, "cos", cos);
-    unary!(vm, "tan", tan);
-    unary!(vm, "asin", asin);
-    unary!(vm, "acos", acos);
-    unary!(vm, "atan", atan);
-    unary!(vm, "sinh", sinh);
-    unary!(vm, "cosh", cosh);
-    unary!(vm, "tanh", tanh);
+pub fn install_std_math(hosts: &mut HostRegistry) {
+    unary!(hosts, "sqrt", sqrt);
+    unary!(hosts, "floor", floor);
+    unary!(hosts, "ceil", ceil);
+    unary!(hosts, "round", round);
+    unary!(hosts, "trunc", trunc);
+    unary!(hosts, "exp", exp);
+    unary!(hosts, "ln", ln);
+    unary!(hosts, "log2", log2);
+    unary!(hosts, "log10", log10);
+    unary!(hosts, "sin", sin);
+    unary!(hosts, "cos", cos);
+    unary!(hosts, "tan", tan);
+    unary!(hosts, "asin", asin);
+    unary!(hosts, "acos", acos);
+    unary!(hosts, "atan", atan);
+    unary!(hosts, "sinh", sinh);
+    unary!(hosts, "cosh", cosh);
+    unary!(hosts, "tanh", tanh);
 
-    binary!(vm, "pow", powf);
-    binary!(vm, "atan2", atan2);
-    binary!(vm, "hypot", hypot);
-    binary!(vm, "copysign", copysign);
+    binary!(hosts, "pow", powf);
+    binary!(hosts, "atan2", atan2);
+    binary!(hosts, "hypot", hypot);
+    binary!(hosts, "copysign", copysign);
 
     // the float helpers — ordinary host fns (the int forms are core's
     // `builtin impl` methods now); NaN comparisons are false, so
     // `min`/`max` keep the operand `b` on NaN
-    unary!(vm, "abs", abs);
-    binary!(vm, "min", min);
-    binary!(vm, "max", max);
+    unary!(hosts, "abs", abs);
+    binary!(hosts, "min", min);
+    binary!(hosts, "max", max);
     // JS `Math.sign` semantics (the old intrinsic's law): ±0 stay 0,
     // NaN passes through as itself — Rust's `f64::signum` would map
     // +0.0 to 1.0
-    vm.register_host_fn_sig("calc::signum", vec![TY_F64], TY_F64, |_vm, a| {        let x = arg(a, 0);
+    hosts.register("calc::signum", vec![TY_F64], TY_F64, |_vm, a| {        let x = arg(a, 0);
         let v = if x > 0.0 {
             1.0
         } else if x < 0.0 {
@@ -92,7 +92,7 @@ pub fn install_std_math(vm: &mut Vm) {
         Ok(Value::F64(v))
     });
 
-    vm.register_host_fn_sig("calc::fma", vec![TY_F64, TY_F64, TY_F64], TY_F64, |_vm, a| {
+    hosts.register("calc::fma", vec![TY_F64, TY_F64, TY_F64], TY_F64, |_vm, a| {
         Ok(Value::F64(arg(a, 0).mul_add(arg(a, 1), arg(a, 2))))
     });
 }

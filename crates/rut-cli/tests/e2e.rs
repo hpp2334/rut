@@ -47,18 +47,19 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
-    rut_std::logger::install_std_log(&mut vm, move |msg| {
+    // the bindings, BEFORE the Vm (RFC 0025); the contract check panics
+    // before any rut code runs
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::logger::install_std_log(&mut hosts, move |msg| {
         if std::env::var_os("RUT_E2E_DEBUG").is_some() {
             let bs: Vec<u32> = msg.bytes().map(|b| b as u32).collect();
             eprintln!("SINK: {bs:?}");
         }
         sink.borrow_mut().push(msg.to_string());
     });
-    rut_std::math::install_std_math(&mut vm);
-    // the load-time contract (RFC 0025): the .d.rut surfaces and the
-    // installs agree — a mismatch panics before any rut code runs
-    vm.verify_host_fns(&expected_case_fns());
+    rut_std::math::install_std_math(&mut hosts);
+    hosts.verify_against(&expected_case_fns());
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
     let trap = match vm.call("main", &[]) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -721,7 +722,12 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm")
+    // the compiled program carries calc's and rt:log's thunks (mount =
+    // declare, RFC 0025) — bind them, sink discarded
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::logger::install_std_log(&mut hosts, |_msg| {});
+    rut_std::math::install_std_math(&mut hosts);
+    rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm")
 }
 
 #[test]
@@ -1171,10 +1177,11 @@ pub fn main() -> nil {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
-    rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
-    rut_std::math::install_std_math(&mut vm);
-    vm.verify_host_fns(&s.expected_host_fns()); // the load-time contract
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::logger::install_std_log(&mut hosts, move |msg| sink.borrow_mut().push(msg.to_string()));
+    rut_std::math::install_std_math(&mut hosts);
+    hosts.verify_against(&s.expected_host_fns()); // the load-time contract
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
     let trap = vm.call("main", &[]).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["2 30"]);
@@ -1228,10 +1235,11 @@ pub fn main() -> nil {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
-    rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
-    rut_std::math::install_std_math(&mut vm);
-    vm.verify_host_fns(&s.expected_host_fns()); // the load-time contract
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::logger::install_std_log(&mut hosts, move |msg| sink.borrow_mut().push(msg.to_string()));
+    rut_std::math::install_std_math(&mut hosts);
+    hosts.verify_against(&s.expected_host_fns()); // the load-time contract
+    let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
     let trap = vm.call("main", &[]).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["11 hello world"]);
@@ -1775,7 +1783,10 @@ entry fn put(c: Opaque) -> u32 {
     let binary = out.binary.expect("binary");
     let prog = rut_core::binary::decode(&binary).expect("decode");
     let limits = rut_vm::interp::Limits { fuel: Some(1_000_000), heap_limit_bytes: Some(8*1024*1024), interrupt_every: 1024 };
-    let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog.clone()), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+    let mut hosts0 = rut_vm::interp::HostRegistry::new();
+    rut_std::logger::install_std_log(&mut hosts0, |_msg| {});
+    rut_std::math::install_std_math(&mut hosts0);
+    let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog.clone()), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
     use rut_vm::heap::Value;
     let Value::Opaque(c) = vm.call("make", &[]).unwrap() else { unreachable!() };
     for _ in 0..2 {

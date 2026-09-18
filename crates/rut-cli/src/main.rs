@@ -130,17 +130,19 @@ fn run(path: &str, fuel: Option<u64>) {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = match rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks) {
+    // the CLI is a host: it mounts core+calc (mount_std) and binds their
+    // bodies — math always, the logger to stdout when a program uses ink
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::math::install_std_math(&mut hosts);
+    rut_std::logger::install_std_log(&mut hosts, |s| println!("{s}"));
+    let mut vm = match rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks, hosts) {
         Ok(vm) => vm,
         Err(t) => {
             eprintln!("boot: {}", t.msg);
             std::process::exit(1);
         }
     };
-    // the host half of `ink` (RFC 0022/0026)
-    rut_std::logger::install_std_log(&mut vm, |msg| println!("{msg}"));
-    // the host half of `calc` (RFC 0028)
-    rut_std::math::install_std_math(&mut vm);
+    // (bindings were installed into the registry before `Vm::new` above)
     match vm.call("main", &[]) {
         Ok(_) => {}
         Err(t) => {
