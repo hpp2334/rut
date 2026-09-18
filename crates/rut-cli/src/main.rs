@@ -103,7 +103,19 @@ fn run(path: &str, fuel: Option<u64>) {
         }
     } else {
         let src = load(path);
-        let out = rut_driver::compile_module(&src, mode_of(path), "main");
+        // single-file convenience: a `use ink::` / `use pouch::` pulls the
+        // toolchain's tree pkg — the driver does not know these names, and
+        // the demo cases + `benches/workloads` rely on the CLI being a
+        // full host (it binds math + the logger below)
+        let mut s = rut_driver::Session::new();
+        rut_driver::mount_std(&mut s);
+        let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for (name, dir) in [("ink", "rut/ink"), ("pouch", "rut/pouch")] {
+            if src.contains(&format!("use {name}::")) {
+                rut_driver::mount_dir(&mut s, &tree.join(dir)).expect("mount tree pkg");
+            }
+        }
+        let out = rut_driver::compile_module_in(&mut s, &src, mode_of(path), "main");
         if !out.diags.is_empty() {
             print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
             std::process::exit(1);
