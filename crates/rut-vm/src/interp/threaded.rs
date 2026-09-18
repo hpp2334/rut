@@ -456,7 +456,7 @@ impl Machine for Vm {
         let Op::Call { func, argv_off, argc, dst } = op else {
             unreachable_op!("op_call: unexpected op")
         };
-        if self.prog.funcs[*func as usize].host.is_some() {
+        if self.prog.funcs[*func as usize].host_id.is_some() {
             // park at this op on a trap — `resume()` re-runs the host fn
             // (including any nested `vm.call` it makes) rather than
             // skipping the call and losing its result

@@ -135,7 +135,10 @@ An op exists for exactly one of three things:
   RFC 0007 §2), `strlen`, `arrlen`, and `strjoin` — the only entries in
   the `callnat` table. `Opaque.new(v)` (RFC 0014) is an internal-native call;
   a **host function** (RFC 0022/0026) is a bodyless `FuncCode` carrying a
-  `host` name, and `Op::Call` dispatches it to the embedder's registered
+  `host_id: Option<IdentId>` — the ONE name kind that is an interner id
+  like every other name in the program (the wire carries the u32, not a
+  string; the `Option` is the body-vs-thunk discriminant), and
+  `Op::Call` dispatches it to the embedder's registered
   body instead of interpreting — so `std:log`'s `create_logger`/
   `logger_log` are host functions, not natives. `Vec<T>` is rut code:
   its `len`/`push`/`pop` are ordinary methods, not natives. Hence no

@@ -176,7 +176,8 @@ impl Vm {
         let mut host_slots: Vec<Option<Rc<HostEntry>>> = Vec::with_capacity(prog.funcs.len());
         let mut max_host_argc = 0usize;
         for fc in prog.funcs.iter() {
-            if let Some(name) = &fc.host {
+            if let Some(hid) = fc.host_id {
+                let name = prog.interner.name(hid);
                 let f = registry.take(name).ok_or_else(|| {
                     Trap::new(
                         TrapKind::Invalid,

@@ -196,6 +196,7 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
     // the error names the fn (RFC 0025: declared ⊆ bound, at boot)
     let mut prog = rut_core::binary::Program::default();
     let fname = prog.interner.intern("probe");
+    let host_key = prog.interner.intern("server::probe");
     prog.funcs.push(rut_core::binary::FuncCode {
         name: fname,
         params: vec![TY_STR],
@@ -207,7 +208,7 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
         labels: vec![],
         code: vec![],
         spans: vec![],
-        host: Some("server::probe".to_string()),
+        host_id: Some(host_key),
     });
     let limits = rut_vm::interp::Limits::default();
     let err = match rut_vm::interp::Vm::new(

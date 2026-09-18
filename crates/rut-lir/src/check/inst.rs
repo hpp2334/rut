@@ -30,7 +30,7 @@ impl<'a> Ctx<'a> {
             labels: vec![],
             code: vec![],
             spans: vec![],
-            host: None,
+            host_id: None,
         });
         self.queue.push(inst);
         fid

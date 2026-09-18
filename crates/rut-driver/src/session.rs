@@ -63,7 +63,7 @@ pub struct Module {
     /// the embedder at run time — `(name, params, ret)`. A module with these
     /// and no `source` is a native module.
     pub host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>,
-    /// The host-fn registration scope — the `FuncCode.host` prefix — when
+    /// The host-fn registration scope — the `FuncCode` host-id prefix — when
     /// it must differ from the package name. `rt` stays the logger host
     /// module's use path while its internal registration naming remains
     /// `rt:log` (`rt:log::create_logger`), untouched since RFC 0022.
@@ -217,7 +217,6 @@ impl Session {
     /// are recorded for the host. Use [`parse_manifest`] directly when the
     /// parsed `Manifest` itself is needed.
     pub fn load_manifest(&mut self, text: &str) -> Result<(), ManifestError> {
-        let manifest = parse_manifest(text)?;
         let manifest = parse_manifest(text)?;
         if let Some(name) = &manifest.name {
             self.mount(Module {

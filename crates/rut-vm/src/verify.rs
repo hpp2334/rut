@@ -11,7 +11,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
     let ntypes = prog.types.types.len() as u32;
     for (fi, f) in prog.funcs.iter().enumerate() {
         // bodyless host functions (RFC 0022/0026) have no code to verify
-        if f.host.is_some() {
+        if f.host_id.is_some() {
             continue;
         }
         let nregs = f.regs.len();

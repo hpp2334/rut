@@ -147,7 +147,7 @@ impl<'a> GraphCompiler<'a> {
                     labels: vec![],
                     code: vec![],
                     spans: vec![],
-                    host: Some(format!("{host_scope}::{name}")),
+                    host_id: Some(surface.names.intern(&format!("{host_scope}::{name}"))),
                 });
             }
             for (name, ty, bits) in &module.consts {

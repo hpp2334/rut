@@ -39,10 +39,12 @@ pub struct FuncCode {
     pub code: Vec<Op>,
     /// pc → source byte offset (RFC 0036 — symbolication data)
     pub spans: Vec<(u32, u32)>,
-    /// host-function binding (RFC 0022/0026/0029): `Some(name)` when the
+    /// host-function binding (RFC 0022/0026/0029): `Some(id)` when the
     /// function has no rut body — `Op::Call` dispatches to the embedder's
-    /// impl registered under `name`.
-    pub host: Option<String>,
+    /// impl registered under `interner.name(id)` (the ONE name kind that
+    /// is an id, like every other name in the program; the `Option` is
+    /// the body-vs-thunk discriminant, not optional data).
+    pub host_id: Option<IdentId>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -477,9 +479,9 @@ pub fn encode(prog: &Program) -> Vec<u8> {
             e.u32(*pc);
             e.u32(*lo);
         }
-        e.u8(f.host.is_some() as u8);
-        if let Some(h) = &f.host {
-            e.str(h);
+        e.u8(f.host_id.is_some() as u8);
+        if let Some(h) = f.host_id {
+            e.u32(h.0);
         }
     }
     // exports
@@ -639,8 +641,8 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             let lo = d.u32()?;
             spans.push((pc, lo));
         }
-        let host = if d.u8()? != 0 { Some(d.str()?) } else { None };
-        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, argv, labels, code, spans, host });
+        let host_id = if d.u8()? != 0 { Some(IdentId(d.u32()?)) } else { None };
+        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, argv, labels, code, spans, host_id });
     }
     let nexp = d.u32()? as usize;
     let mut exports = Vec::with_capacity(nexp);
@@ -1058,7 +1060,7 @@ mod tests {
             labels: vec![],
             code: vec![],
             spans: vec![],
-            host: None,
+            host_id: None,
         });
         p.exports.push((main, 0));
         p

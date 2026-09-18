@@ -80,7 +80,7 @@ impl Vm {
                 self.cur_pc += 1;
             }
             Op::Call { func, argv_off, argc, dst } => {
-                if self.prog.funcs[*func as usize].host.is_some() {
+                if self.prog.funcs[*func as usize].host_id.is_some() {
                     // run with the cursor AT this op: a trap (including a
                     // nested `vm.call` that ran out of fuel) parks here, so
                     // `resume()` re-runs the host fn instead of skipping it
