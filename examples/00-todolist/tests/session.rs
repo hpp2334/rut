@@ -6,7 +6,14 @@ use rut_vm::heap::Value;
 
 fn vm() -> (rut_vm::interp::Vm, Value) {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/todolist.rut")).unwrap();
-    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "todolist");
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    rut_driver::mount_dir(
+        &mut s,
+        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch")),
+    )
+    .expect("mount pouch");
+    let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "todolist");
     assert!(out.diags.is_empty());
     let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
     rut_vm::verify::verify(&prog).unwrap();

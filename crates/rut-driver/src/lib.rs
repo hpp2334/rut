@@ -26,7 +26,7 @@ pub use bundle::{crc32, parse_bundle, write_bundle, BundleError};
 pub mod loader;
 pub use loader::{
     compile_dir, load_bundle_bytes, load_bundle_session, load_dir_session, load_module_source,
-    load_path_session, pack_dir,
+    load_path_session, mount_dir, pack_dir,
 };
 
 pub struct CompileOutput {
@@ -399,18 +399,10 @@ pub fn compile_program_resolved(
     ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program) }
 }
 
-/// The `pouch` body (no filesystem): an ordinary rut module over the
-/// engine's builtin `Array`, mountable in-memory by wasm hosts and tests
-/// alike (RFC 0035 §1).
-pub fn pouch_source() -> String {
-    include_str!("../../../rut/pouch/pouch.rut").to_string()
-}
-
-/// The `ink` body (RFC 0028) — an ordinary rut module over the host
-/// functions `rt:log::create_logger` / `rt:log::logger_log`.
-pub fn ink_source() -> String {
-    include_str!("../../../rut/ink/ink.rut").to_string()
-}
+/// The `calc` body mount note: `calc` is engine-mounted for now (the
+/// float `Math` surface — host fns in `rut-std`, consts); the
+/// host-pkgs plan moves it to a declared package and its rut-able
+/// helpers to source (deferred with the numeric-methods phase).
 
 /// Mount `core` — the prelude surface (RFC 0028): the builtin
 /// containers (`Array`/`Opaque`), the builtin traits
@@ -448,19 +440,16 @@ pub fn mount_std_core(session: &mut Session) {
     );
 }
 
-/// Mount the optional in-tree packages a program may reach through
-/// `[deps]` or host registration: `pouch` (rut source), `calc` (float
-/// host fns + constants + compiler intrinsics), and the `ink` logger
-/// over the `rt` host module (RFC 0022/0026/0028). `core` is NOT here —
-/// [`mount_std_core`] mounts it unconditionally.
+/// Mount the engine's own packages: `core` (the prelude — always;
+/// nothing else is ambient) and `calc` (the `Math` float surface).
+/// `pouch` and `ink` are third-party libraries in the toolchain tree
+/// (`rut/pouch/`, `rut/ink/`) — a consumer declares them in its
+/// manifest `[deps]`, or a native host mounts them with
+/// [`mount_dir`]; nothing in the engine knows their names (the
+/// host-pkgs plan §2).
 pub fn mount_std(session: &mut Session) {
     mount_std_core(session);
-    let _ = session.register_module(
-        "pouch",
-        Module { source: Some(pouch_source()), ..Default::default() },
-    );
     mount_calc(session);
-    mount_ink(session);
 }
 
 /// Mount `calc` — a native module (RFC 0028): `f64` host functions
@@ -512,30 +501,24 @@ pub fn mount_calc(session: &mut Session) {
     );
 }
 
-/// Mount `ink` over its `rt` host module (the logger; RFC 0028). The
-/// host module's registration scope stays `rt:log` — internal naming,
-/// untouched (§0.16) — while the use path spells `rt`.
-pub fn mount_ink(session: &mut Session) {
-    let _ = session.register_module(
-        "rt",
-        Module {
-            host_scope: Some("rt:log".to_string()),
-            host_funcs: vec![
-                ("create_logger".to_string(), vec![TY_STR], TY_OPAQUE),
-                ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_NIL),
-            ],
-            ..Default::default()
-        },
-    );
-    let _ = session.register_module(
-        "ink",
-        Module { source: Some(ink_source()), inline: true, ..Default::default() },
-    );
+/// Full pipeline over one module: resolve its `use` statements against a
+/// session with the engine's packages mounted (`core`, `calc`), then
+/// link, flatten, encode.
+pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
+    let mut session = Session::new();
+    mount_std(&mut session);
+    compile_module_in(&mut session, src, mode, module_name)
 }
 
-/// Full pipeline over one module: resolve its `use` statements against a
-/// session with the standard modules mounted, then link, flatten, encode.
-pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
+/// [`compile_module`] against a caller-built session — hosts and tests
+/// that mount their own libraries (the third-party pkgs are NOT in
+/// [`mount_std`]; mount them with [`crate::mount_dir`]).
+pub fn compile_module_in(
+    session: &mut Session,
+    src: &str,
+    mode: Mode,
+    module_name: &str,
+) -> CompileOutput {
     let (ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
     let ast_dump = dump::render_text(&tree, src);
@@ -543,8 +526,6 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     if !diags.is_empty() {
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
-    let mut session = Session::new();
-    mount_std(&mut session);
     let spec = module_name.to_string();
     if let Err(e) = session.register_module(
         &spec,
@@ -553,7 +534,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         diags.push(Diag::new(rut_lexer::span::Span::new(0, 0), e.to_string()));
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
-    let g = compile_graph(&session, &spec);
+    let g = compile_graph(session, &spec);
     let ir_dump = g.program.as_ref().map(|p| ir_dump_of(&p.funcs, &p.interner)).unwrap_or_default();
     let binary = g.program.map(|p| encode(&p));
     CompileOutput { diags: g.diags, ast_dump, ast_json, ir_dump, binary }

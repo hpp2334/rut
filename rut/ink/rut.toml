@@ -1,0 +1,10 @@
+# ink/ — the logger package (RFC 0028): rut source wrapping the `rt`
+# host surface in the `Logger` class. `inline` keeps its class methods
+# resolvable at every consumer's call site (a class-method module
+# cannot be linked).
+name = "ink"
+entry.lib = "./ink.rut"
+inline = true
+
+[deps]
+rt = { path = "../rt" }

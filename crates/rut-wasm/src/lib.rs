@@ -90,10 +90,47 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 
 // ---- compile ----
 
+/// The playground's library mounts (§0.9 of the host-pkgs plan): wasm
+/// has no filesystem, so the toolchain libs this host ships are
+/// EMBEDDED — `rt`'s host surface lowered from its `.d.rut`, `ink` and
+/// `pouch` as in-memory source. This host's choice, not the engine's:
+/// the driver knows none of these names.
+fn compile_playground(src: &str) -> rut_driver::CompileOutput {
+    let mut session = rut_driver::Session::new();
+    rut_driver::mount_std(&mut session); // core + calc
+    let mut rt = rut_driver::lower_decl_module(
+        include_str!("../../../rut/rt/rt.d.rut"),
+        "rt.d.rut",
+    )
+    .expect("the rt surface is valid");
+    rt.host_scope = Some("rt:log".to_string()); // rut-std's registration prefix
+    session.register_module("rt", rt).expect("mount rt");
+    session
+        .register_module(
+            "ink",
+            rut_driver::Module {
+                source: Some(include_str!("../../../rut/ink/ink.rut").to_string()),
+                inline: true,
+                ..Default::default()
+            },
+        )
+        .expect("mount ink");
+    session
+        .register_module(
+            "pouch",
+            rut_driver::Module {
+                source: Some(include_str!("../../../rut/pouch/pouch.rut").to_string()),
+                ..Default::default()
+            },
+        )
+        .expect("mount pouch");
+    rut_driver::compile_module_in(&mut session, src, rut_parser::Mode::Impl, "main")
+}
+
 #[no_mangle]
 pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
     let src = unsafe { read_str(src_ptr, src_len) };
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "main");
+    let out = compile_playground(src);
     let mut json = String::from("{\"diags\":[");
     for (i, d) in out.diags.iter().enumerate() {
         if i > 0 {

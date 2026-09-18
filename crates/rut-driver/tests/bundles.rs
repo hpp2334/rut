@@ -14,8 +14,8 @@ fn make_dir(base: &Path) -> std::path::PathBuf {
     std::fs::write(
         dir.join("rut.toml"),
         // bundle-shaped: the keys a `rut pack` needs are already there,
-        // and directory loading ignores them (RFC 0038 §2)
-        "format = \"rutbundle\"\nformat_version = 1\nname = \"mod\"\nentry.lib = \"./mod.rut\"\n",
+        // and directory loading ignores them (RFC 0038 §2, layout v2)
+        "format = \"rutbundle\"\nformat_version = 2\nname = \"mod\"\nentry.lib = \"./mod.rut\"\n",
     )
     .unwrap();
     std::fs::write(
@@ -95,7 +95,7 @@ fn refusals() {
     assert!(err.contains("rut.toml"), "{err}");
 
     // unknown format_version — refused before anything else is read
-    let manifest = "format = \"rutbundle\"\nformat_version = 2\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
+    let manifest = "format = \"rutbundle\"\nformat_version = 3\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
     let bad_version = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
@@ -188,28 +188,85 @@ fn pack_requires_bundle_shaped_manifest() {
 }
 
 #[test]
-fn pack_refuses_deps_and_surface_entries() {
-    let base = std::env::temp_dir().join(format!("rut-bundle-packref-{}", std::process::id()));
-    let dir = base.join("consumer");
+fn packs_the_dep_graph_and_loads_it_by_name() {
+    // RFC 0038 OQ-3 answered: a v2 bundle embeds the whole `[deps]`
+    // graph — source deps AND host-pkg (`.d.rut`) deps — each under its
+    // own `<pkg>/` group; the loader resolves groups by NAME (the deps'
+    // `path` keys are directory-time only)
+    let base = std::env::temp_dir().join(format!("rut-bundle-deps-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 1\nname = \"main\"\nentry.lib = \"./entry.rut\"\n[deps]\n\"m\" = { path = \"../m\" }\n",
-    )
-    .unwrap();
-    std::fs::write(dir.join("entry.rut"), "fn main() -> i32 { return 0; }\n").unwrap();
-    let err = pack_dir(&dir).unwrap_err();
-    assert!(err.contains("one module"), "{err}");
 
+    // the dep: a source pkg
+    let m = base.join("m");
+    std::fs::create_dir_all(&m).unwrap();
+    std::fs::write(m.join("rut.toml"), "name = \"m\"\nentry.lib = \"./m.rut\"\n").unwrap();
+    std::fs::write(m.join("m.rut"), "pub fn four() -> i32 { return 4; }\n").unwrap();
+    // the dep's dep: a host pkg (declaration-only surface)
+    let s = base.join("s");
+    std::fs::create_dir_all(&s).unwrap();
     std::fs::write(
-        dir.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 1\nname = \"surf\"\nentry.type = \"./surf.d.rut\"\n",
+        s.join("rut.toml"),
+        "name = \"s\"\nentry.type = \"./s.d.rut\"\nhost_scope = \"s\"\n",
     )
     .unwrap();
-    std::fs::write(dir.join("surf.d.rut"), "pub fn f() -> i32;\n").unwrap();
-    let err = pack_dir(&dir).unwrap_err();
-    assert!(err.contains("sources only"), "{err}");
+    std::fs::write(s.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
+    // m uses s
+    std::fs::write(
+        m.join("rut.toml"),
+        "name = \"m\"\nentry.lib = \"./m.rut\"\n[deps]\ns = { path = \"../s\" }\n",
+    )
+    .unwrap();
+
+    // the consumer: m (+ transitively s)
+    let main = base.join("consumer");
+    std::fs::create_dir_all(&main).unwrap();
+    std::fs::write(
+        main.join("rut.toml"),
+        "format = \"rutbundle\"\nformat_version = 2\nname = \"main\"\nentry.lib = \"./entry.rut\"\n[deps]\nm = { path = \"../m\" }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        main.join("entry.rut"),
+        "use m::{ four };\npub fn main() -> i32 { return four(); }\n",
+    )
+    .unwrap();
+
+    let bytes = pack_dir(&main).unwrap();
+    let entries = rut_driver::parse_bundle(&bytes).unwrap();
+    let mut names: Vec<&str> = entries.iter().map(|(n, _)| n.as_str()).collect();
+    names.sort();
+    assert_eq!(
+        names,
+        vec!["entry.rut", "m/m.rut", "m/rut.toml", "rut.toml", "s/rut.toml", "s/s.d.rut"],
+        "the dep graph rides the bundle, recursively"
+    );
+
+    // determinism with deps too
+    assert_eq!(bytes, pack_dir(&main).unwrap(), "same dir => byte-identical bundle");
+
+    // the packed form compiles like the directory form
+    let bundle = base.join("main.rutbundle");
+    std::fs::write(&bundle, &bytes).unwrap();
+    let (mut session, root) = load_path_session(&bundle).unwrap();
+    assert_eq!(root, "main");
+    let mf = session.resolve("m").expect("m mounted");
+    assert!(mf.source.is_some());
+    let sf = session.resolve("s").expect("s mounted (transitively)");
+    assert!(sf.is_decl, "the host pkg rode along as a decl surface");
+    assert_eq!(sf.host_scope.as_deref(), Some("s"));
+    let g = rut_driver::compile_graph(&session, "main");
+    assert!(g.diags.is_empty(), "{:?}", g.diags);
+    assert!(g.program.is_some());
+
+    // a v2 bundle missing a declared dep group is a load error naming it
+    let stripped: Vec<(String, Vec<u8>)> = entries
+        .iter()
+        .filter(|(n, _)| !n.starts_with("m/"))
+        .cloned()
+        .collect();
+    let bytes = rut_driver::write_bundle(&stripped).unwrap();
+    let err = rut_driver::load_bundle_bytes(&bytes, Path::new("stripped")).unwrap_err();
+    assert!(err.contains("missing its `m` dependency group"), "{err}");
 
     let _ = std::fs::remove_dir_all(&base);
 }

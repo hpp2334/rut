@@ -76,6 +76,12 @@ struct Widget {
 fn session(fuel: Option<u64>) -> rut_vm::interp::Vm {
     let mut session = rut_driver::Session::new();
     rut_driver::mount_std(&mut session);
+    // the source uses `pouch` — a third-party pkg, mounted from the tree
+    rut_driver::mount_dir(
+        &mut session,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
+    )
+    .expect("mount pouch");
     let f = |n: &str, ps: Vec<u32>, r: u32| (n.to_string(), ps, r);
     use rut_core::types::{TY_I64, TY_OPAQUE};
     session

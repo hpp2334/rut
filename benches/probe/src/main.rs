@@ -121,8 +121,15 @@ fn main() {
         .unwrap_or_else(|e| fail(format!("cannot read {}: {e}", args.workload)));
 
     // ---- compile (frontend + LIR + binary emit) ----
+    // the workloads use the toolchain libs (`ink`+`rt`, `pouch`) —
+    // third-party pkgs mounted from the tree, plus the engine's core/calc
     let t0 = Instant::now();
-    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "bench");
+    let mut session = rut_driver::Session::new();
+    rut_driver::mount_std(&mut session);
+    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    rut_driver::mount_dir(&mut session, &tree.join("rut/ink")).expect("mount ink (+rt)");
+    rut_driver::mount_dir(&mut session, &tree.join("rut/pouch")).expect("mount pouch");
+    let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "bench");
     let compile_ms = t0.elapsed().as_secs_f64() * 1e3;
     if !out.diags.is_empty() {
         print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));

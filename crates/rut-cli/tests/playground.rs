@@ -39,7 +39,15 @@ fn classics_run_and_match_their_expected_sidecars() {
             .map(str::to_string)
             .collect();
 
-        let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "main");
+        // the classics use the toolchain libs (`ink`+`rt`, `pouch`) —
+        // third-party pkgs mounted from the tree (the driver doesn't
+        // know them)
+        let mut s = rut_driver::Session::new();
+        rut_driver::mount_std(&mut s);
+        let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        rut_driver::mount_dir(&mut s, &tree.join("rut/ink")).expect("mount ink (+rt)");
+        rut_driver::mount_dir(&mut s, &tree.join("rut/pouch")).expect("mount pouch");
+        let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "main");
         if !out.diags.is_empty() {
             failures.push(format!(
                 "{name}: diags:\n{}",

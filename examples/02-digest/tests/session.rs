@@ -15,7 +15,14 @@ use rut_vm::heap::Value;
 const SRC: &str = include_str!("../digest.rut");
 
 fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
-    let out = rut_driver::compile_module(SRC, rut_parser::Mode::Impl, "digests");
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    rut_driver::mount_dir(
+        &mut s,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
+    )
+    .expect("mount pouch");
+    let out = rut_driver::compile_module_in(&mut s, SRC, rut_parser::Mode::Impl, "digests");
     assert!(out.diags.is_empty(), "{}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
     let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
     rut_vm::verify::verify(&prog).unwrap();

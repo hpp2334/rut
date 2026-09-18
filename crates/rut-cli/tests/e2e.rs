@@ -5,10 +5,19 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// The toolchain libs a single-file case declares by use (`ink`,
+/// `pouch`) — mounted from the tree as real packages (the driver does
+/// not know their names): mounting `ink` pulls its `rt` dep along.
+fn mount_case_libs(s: &mut rut_driver::Session) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."); // repo root
+    rut_driver::mount_dir(s, &root.join("rut/ink")).expect("mount ink (+rt)");
+    rut_driver::mount_dir(s, &root.join("rut/pouch")).expect("mount pouch");
+}
+
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
     // append the logger use so the original spans stay put
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
-    let out = rut_driver::compile_module(&combined, rut_parser::Mode::Impl, "main");
+    let out = compile(&combined, "main");
     assert!(
         out.diags.is_empty(),
         "unexpected diags:\n{}",
@@ -45,7 +54,10 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
 /// `src` are preserved).
 fn compile(src: &str, module: &str) -> rut_driver::CompileOutput {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
-    rut_driver::compile_module(&combined, rut_parser::Mode::Impl, module)
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    mount_case_libs(&mut s);
+    rut_driver::compile_module_in(&mut s, &combined, rut_parser::Mode::Impl, module)
 }
 
 #[test]
@@ -1095,21 +1107,12 @@ pub fn main() -> nil {
 
 #[test]
 fn pouch_vec_via_module_loader_runs() {
-    // the real rut/pouch source, mounted as a module and used
-    // by a consumer; generic Vec is inlined and monomorphized, then linked
-    // and executed
-    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../rut/pouch/pouch.rut");
-    let coll_src = rut_driver::load_module_source(&pouch).expect("read");
+    // the real rut/pouch source, mounted as a package (manifest + deps)
+    // and used by a consumer; generic Vec is inlined and monomorphized,
+    // then linked and executed — ink rides the same mount (with its rt)
     let mut s = rut_driver::Session::new();
-    // core first: the pouch source uses its prelude names
     rut_driver::mount_std_core(&mut s);
-    s.register_module(
-        "pouch",
-        rut_driver::Module { source: Some(coll_src), ..Default::default() },
-    )
-    .unwrap();
-    rut_driver::mount_ink(&mut s);
+    mount_case_libs(&mut s); // ink (+rt) and pouch, from the tree
     s.register_module(
         "app_main",
         rut_driver::Module {
@@ -1164,6 +1167,7 @@ fn std_collection_via_module_loader_runs() {
     // so this exercises the rut-source module loader end to end
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
+    mount_case_libs(&mut s); // pouch + ink (+rt), from the tree
     s.register_module(
         "app_main",
         rut_driver::Module {
@@ -1720,7 +1724,14 @@ pub fn main() -> nil {
 #[test]
 fn dbg_digest() {
     let src = std::fs::read_to_string("../../examples/02-digest/digest.rut").expect("digest.rut");
-    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "digests");
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    rut_driver::mount_dir(
+        &mut s,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
+    )
+    .expect("mount pouch");
+    let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "digests");
     assert!(out.diags.is_empty(), "{:?}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
     println!("{}", out.ir_dump);
 }

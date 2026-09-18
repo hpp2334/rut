@@ -73,6 +73,12 @@ struct Widget {
 fn session() -> rut_vm::interp::Vm {
     let mut session = rut_driver::Session::new();
     rut_driver::mount_std(&mut session);
+    // the sources use `pouch` — a third-party pkg, mounted from the tree
+    rut_driver::mount_dir(
+        &mut session,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
+    )
+    .expect("mount pouch");
     let ty = |n: &str| (n.to_string(), Vec::new(), rut_core::types::TY_OPAQUE);
     session
         .register_module(
@@ -238,7 +244,14 @@ entry fn churn(n: i64) -> nil {
     }
 }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "churn");
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    rut_driver::mount_dir(
+        &mut s,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
+    )
+    .expect("mount pouch");
+    let out = rut_driver::compile_module_in(&mut s, src, rut_parser::Mode::Impl, "churn");
     assert!(
         out.diags.is_empty(),
         "{}",

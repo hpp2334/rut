@@ -87,7 +87,16 @@ fn as_u64(v: Value) -> u64 {
 
 fn main() {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/digest.rut")).unwrap();
-    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "digests");
+    // the app's libs: core+calc (engine) and `pouch` — a third-party pkg
+    // the app declares, mounted from the toolchain tree
+    let mut session = rut_driver::Session::new();
+    rut_driver::mount_std(&mut session);
+    rut_driver::mount_dir(
+        &mut session,
+        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch")),
+    )
+    .expect("mount pouch");
+    let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "digests");
     assert!(out.diags.is_empty());
     let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
     rut_vm::verify::verify(&prog).unwrap();

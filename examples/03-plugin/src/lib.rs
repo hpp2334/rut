@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rut_core::types::{TY_OPAQUE, TY_STR, TY_NIL};
 use rut_vm::interp::{HostHooks, Limits, Vm};
 use rut_vm::{OpaqueBox, Trap, TrapKind, Value};
 
@@ -48,20 +47,10 @@ impl Plugin {
     pub fn load(path: &std::path::Path, limits: &Limits) -> Result<Plugin, Trap> {
         let (mut session, root) =
             rut_driver::load_path_session(path).map_err(|e| Trap::new(TrapKind::Invalid, e))?;
+        // core+calc (the embedder's mount); `server` and `pouch` resolved
+        // from the plugin manifest's `[deps]` — the server surface is
+        // server/server.d.rut, no hand-written Rust surface
         rut_driver::mount_std(&mut session);
-        session
-            .register_module(
-                "server",
-                rut_driver::Module {
-                    spec: "server".into(),
-                    host_funcs: vec![
-                        ("subscribe".into(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL),
-                        ("emit".into(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL),
-                    ],
-                    ..Default::default()
-                },
-            )
-            .map_err(|e| Trap::new(TrapKind::Invalid, e.to_string()))?;
         let g = rut_driver::compile_graph(&session, &root);
         if !g.diags.is_empty() {
             return Err(Trap::new(
