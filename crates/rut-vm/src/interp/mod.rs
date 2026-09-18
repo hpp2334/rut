@@ -62,6 +62,13 @@ pub struct HostHooks {}
 /// VM so it can allocate/inspect `Opaque` handles (RFC 0014).
 pub type HostFn = Rc<RefCell<dyn FnMut(&mut Vm, &[Value]) -> Result<Value, Trap>>>;
 
+/// A host pkg's expected binding table (RFC 0025): `<scope>::<name>` →
+/// `(params, ret)` — the `.d.rut` declarations a mounting session holds,
+/// checked against the VM's typed bindings by
+/// [`Vm::verify_host_fns`].
+pub type ExpectedHostFns =
+    std::collections::BTreeMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>;
+
 struct SavedFrame {
     func: u32,
     pc: u32,
@@ -99,7 +106,8 @@ pub struct Vm {
     pub hooks: HostHooks,
     /// host-function impls by name (RFC 0022/0026)
     host_fns: HashMap<String, HostFn>,
-    /// raw arg slots of the CURRENT host call (RFC 0023 §2 zero-copy
+    /// typed bindings only (register_host_fn_sig) — the verify table
+    host_sigs: HashMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>,    /// raw arg slots of the CURRENT host call (RFC 0023 §2 zero-copy
     /// borrows; empty outside a host call)
     host_arg_slots: Vec<Slot>,
     const_slots: Vec<Slot>,
@@ -223,6 +231,7 @@ impl Vm {
             since_check: 0,
             hooks,
             host_fns: HashMap::new(),
+            host_sigs: HashMap::new(),
             host_arg_slots: Vec::new(),
             const_slots,
             reg_pool: Vec::new(),
@@ -465,12 +474,85 @@ impl Vm {
     }
 
     /// Register an embedder implementation for a bodyless host function
-    /// (RFC 0022/0026), bound by the `FuncCode.host` name.
-    pub fn register_host_fn<F>(&mut self, name: &str, f: F)
-    where
+    /// (RFC 0022/0026), bound by the `FuncCode.host` name — WITH its
+    /// declared signature, so the load-time contract check
+    /// ([`Vm::verify_host_fns`]) can catch a drifted binding before the
+    /// first run. The signature is the pkg `.d.rut`'s (RFC 0025).
+    pub fn register_host_fn_sig<F>(
+        &mut self,
+        name: &str,
+        params: Vec<rut_core::types::TypeId>,
+        ret: rut_core::types::TypeId,
+        f: F,
+    ) where
         F: FnMut(&mut Vm, &[Value]) -> Result<Value, Trap> + 'static,
     {
+        self.host_sigs
+            .insert(name.to_string(), (params, ret));
         self.host_fns.insert(name.to_string(), Rc::new(RefCell::new(f)));
+    }
+
+    /// The typed host bindings, for the load-time contract check.
+    pub fn host_fn_sigs(&self) -> &HashMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)> {
+        &self.host_sigs
+    }
+
+    /// The `.d.rut` ↔ host-impl contract check (RFC 0025), PANICKING
+    /// early — at load time, before any rut code runs — on three
+    /// mismatch classes:
+    ///
+    /// - declared but unbound — a rut call would trap mid-run
+    /// - bound but undeclared — the pkg's surface lies about what exists
+    /// - signature drift — the crossing values would be misinterpreted
+    ///
+    /// `expected` is the mounting session's table
+    /// (`rut_driver::expected_host_fns`). An embedder wiring bug is a
+    /// panic, never a rut diagnostic.
+    pub fn verify_host_fns(&self, expected: &ExpectedHostFns) {
+        let bound = &self.host_sigs;
+        let ty = |t: rut_core::types::TypeId| -> String {
+            // boot-table ids are stable — name them for the panic message
+            use rut_core::types::*;
+            match t {
+                TY_NIL => "nil", TY_BOOL => "bool", TY_STR => "str", TY_BYTES => "bytes",
+                TY_F32 => "f32", TY_F64 => "f64",
+                TY_I8 => "i8", TY_I16 => "i16", TY_I32 => "i32", TY_I64 => "i64",
+                TY_U8 => "u8", TY_U16 => "u16", TY_U32 => "u32", TY_U64 => "u64",
+                TY_OPAQUE => "Opaque",
+                _ => return format!("#{t:?}"),
+            }
+            .to_string()
+        };
+        let sig = |p: &Vec<rut_core::types::TypeId>, r: rut_core::types::TypeId| -> String {
+            format!(
+                "({}) -> {}",
+                p.iter().map(|&t| ty(t)).collect::<Vec<_>>().join(", "),
+                ty(r)
+            )
+        };
+        for (name, (params, ret)) in expected {
+            match bound.get(name) {
+                None => panic!(
+                    "host fn `{name}` is declared by a mounted package but never bound — install the body before the first run (RFC 0025)"
+                ),
+                Some((bparams, bret)) => {
+                    if bparams != params || bret != ret {
+                        panic!(
+                            "host fn `{name}` signature drift: the pkg declares {}, the binding is {} (RFC 0025)",
+                            sig(params, *ret),
+                            sig(bparams, *bret)
+                        );
+                    }
+                }
+            }
+        }
+        for name in bound.keys() {
+            if !expected.contains_key(name) {
+                panic!(
+                    "host fn `{name}` is bound but declared by no mounted package — the surface is missing (RFC 0025)"
+                );
+            }
+        }
     }
 
     /// Zero-copy borrow of a `str`/`bytes` argument of the CURRENT host

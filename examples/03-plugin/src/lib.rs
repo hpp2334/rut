@@ -47,10 +47,13 @@ impl Plugin {
     pub fn load(path: &std::path::Path, limits: &Limits) -> Result<Plugin, Trap> {
         let (mut session, root) =
             rut_driver::load_path_session(path).map_err(|e| Trap::new(TrapKind::Invalid, e))?;
-        // core+calc (the embedder's mount); `server` and `pouch` resolved
-        // from the plugin manifest's `[deps]` — the server surface is
-        // server/server.d.rut, no hand-written Rust surface
-        rut_driver::mount_std(&mut session);
+        // the embedder mounts what the plugin uses: `core` only —
+        // `server` and `pouch` resolved from the plugin manifest's
+        // `[deps]` (the server surface is server/server.d.rut, no
+        // hand-written Rust surface). Mounting `calc` would DECLARE its
+        // host fns, and the load-time contract (below) would rightly
+        // demand their bodies.
+        rut_driver::mount_std_core(&mut session);
         let g = rut_driver::compile_graph(&session, &root);
         if !g.diags.is_empty() {
             return Err(Trap::new(
@@ -64,6 +67,9 @@ impl Plugin {
         rut_vm::verify::verify(&prog).map_err(|m| Trap::new(TrapKind::Invalid, m))?;
         let mut vm = Vm::new(Rc::new(prog), limits, HostHooks::default())?;
         install(&mut vm);
+        // the load-time contract (RFC 0025): the .d.rut surface and the
+        // bound bodies must agree — a mismatch panics HERE, never mid-run
+        vm.verify_host_fns(&session.expected_host_fns());
 
         // the handshake: bus in, state out
         let bus = OpaqueBox::alloc(
@@ -131,37 +137,49 @@ impl Plugin {
 }
 
 /// Bind the `server` bodies. Stateless: both fns unwrap the bus
-/// from their receiver argument — the bus IS the state.
+/// from their receiver argument — the bus IS the state. Typed per
+/// server/server.d.rut; `Plugin::load` verifies the contract.
 fn install(vm: &mut Vm) {
-    vm.register_host_fn("server::subscribe", |_vm, args| {
-        let bus = OpaqueBox::<EventBus>::from_value(&args[0])?;
-        let Value::Str(topic) = &args[1] else {
-            return Err(Trap::new(TrapKind::Invalid, "subscribe: str topic"));
-        };
-        let Value::Str(handler) = &args[2] else {
-            return Err(Trap::new(TrapKind::Invalid, "subscribe: str handler"));
-        };
-        bus.with_mut(|b| b.subscriptions.insert(topic.clone(), handler.clone()))?;
-        Ok(Value::Nil)
-    });
-
-    vm.register_host_fn("server::emit", |vm, args| {
-        let bus = OpaqueBox::<EventBus>::from_value(&args[0])?;
-        // The bus stays MUTABLY BORROWED across the nested vm.call
-        // (RFC 0022 §1 re-entrancy + RFC 0023 guard): `render_line` runs
-        // on a fresh frame stack while the emitting handler is parked
-        // mid-op, and a second `emit` fired from inside `render_line`
-        // would trap on the guard instead of racing.
-        bus.with_mut(|b| -> Result<(), Trap> {
-            let Value::Str(line) = vm.call("render_line", &[args[1].clone(), args[2].clone()])?
-            else {
-                return Err(Trap::new(TrapKind::Invalid, "render_line must return str"));
+    use rut_core::types::{TY_NIL, TY_OPAQUE, TY_STR};
+    vm.register_host_fn_sig(
+        "server::subscribe",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |_vm, args| {
+            let bus = OpaqueBox::<EventBus>::from_value(&args[0])?;
+            let Value::Str(topic) = &args[1] else {
+                return Err(Trap::new(TrapKind::Invalid, "subscribe: str topic"));
             };
-            b.lines.push(line);
-            b.emits += 1;
-            b.renders += 1;
-            Ok(())
-        })??;
-        Ok(Value::Nil)
-    });
+            let Value::Str(handler) = &args[2] else {
+                return Err(Trap::new(TrapKind::Invalid, "subscribe: str handler"));
+            };
+            bus.with_mut(|b| b.subscriptions.insert(topic.clone(), handler.clone()))?;
+            Ok(Value::Nil)
+        },
+    );
+
+    vm.register_host_fn_sig(
+        "server::emit",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |vm, args| {
+            let bus = OpaqueBox::<EventBus>::from_value(&args[0])?;
+            // The bus stays MUTABLY BORROWED across the nested vm.call
+            // (RFC 0022 §1 re-entrancy + RFC 0023 guard): `render_line` runs
+            // on a fresh frame stack while the emitting handler is parked
+            // mid-op, and a second `emit` fired from inside `render_line`
+            // would trap on the guard instead of racing.
+            bus.with_mut(|b| -> Result<(), Trap> {
+                let Value::Str(line) = vm.call("render_line", &[args[1].clone(), args[2].clone()])?
+                else {
+                    return Err(Trap::new(TrapKind::Invalid, "render_line must return str"));
+                };
+                b.lines.push(line);
+                b.emits += 1;
+                b.renders += 1;
+                Ok(())
+            })??;
+            Ok(Value::Nil)
+        },
+    );
 }

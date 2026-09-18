@@ -122,3 +122,105 @@ fn non_crossing_signatures_refuse_at_load() {
     let err = lower_decl_module("pub host fn broken(;", "test.d.rut").unwrap_err();
     assert!(err.contains("does not parse"), "parse failures refuse: {err}");
 }
+
+// ---- the load-time binding contract (RFC 0025): .d.rut ↔ host impl ----
+
+fn booted_vm() -> rut_vm::interp::Vm {
+    let limits = rut_vm::interp::Limits::default();
+    rut_vm::interp::Vm::new(
+        std::rc::Rc::new(rut_core::binary::Program::default()),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+    )
+    .expect("boot")
+}
+
+#[test]
+fn a_matching_binding_table_verifies() {
+    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
+    let expected = session.expected_host_fns();
+    assert_eq!(expected.len(), 2, "exactly the two server fns: {expected:?}");
+    assert!(expected.contains_key("server::subscribe"));
+    let mut vm = booted_vm();
+    vm.register_host_fn_sig(
+        "server::subscribe",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |_vm, _a| Ok(rut_vm::Value::Nil),
+    );
+    vm.register_host_fn_sig(
+        "server::emit",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |_vm, _a| Ok(rut_vm::Value::Nil),
+    );
+    vm.verify_host_fns(&expected); // no panic — the contract holds
+}
+
+#[test]
+#[should_panic(expected = "declared by a mounted package but never bound")]
+fn a_missing_body_panics_early() {
+    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
+    let expected = session.expected_host_fns();
+    let mut vm = booted_vm();
+    vm.register_host_fn_sig(
+        "server::subscribe",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |_vm, _a| Ok(rut_vm::Value::Nil),
+    );
+    // `emit` never bound — the panic names it, before any rut code runs
+    vm.verify_host_fns(&expected);
+}
+
+#[test]
+#[should_panic(expected = "signature drift")]
+fn a_drifted_signature_panics_early() {
+    use rut_core::types::TY_I64;
+    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
+    let expected = session.expected_host_fns();
+    let mut vm = booted_vm();
+    vm.register_host_fn_sig(
+        "server::subscribe",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |_vm, _a| Ok(rut_vm::Value::Nil),
+    );
+    // the binding took an i64 where the surface declares a str
+    vm.register_host_fn_sig(
+        "server::emit",
+        vec![TY_OPAQUE, TY_I64, TY_STR],
+        TY_NIL,
+        |_vm, _a| Ok(rut_vm::Value::Nil),
+    );
+    vm.verify_host_fns(&expected);
+}
+
+#[test]
+#[should_panic(expected = "declared by no mounted package")]
+fn an_undeclared_binding_panics_early() {
+    let (session, _) = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
+    let expected = session.expected_host_fns();
+    let mut vm = booted_vm();
+    vm.register_host_fn_sig(
+        "server::subscribe",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |_vm, _a| Ok(rut_vm::Value::Nil),
+    );
+    vm.register_host_fn_sig(
+        "server::emit",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |_vm, _a| Ok(rut_vm::Value::Nil),
+    );
+    // a body for a fn no .d.rut declares — a typo'd binding caught here
+    // instead of trapping mid-run
+    vm.register_host_fn_sig(
+        "server::emits",
+        vec![TY_OPAQUE, TY_STR, TY_STR],
+        TY_NIL,
+        |_vm, _a| Ok(rut_vm::Value::Nil),
+    );
+    vm.verify_host_fns(&expected);
+}

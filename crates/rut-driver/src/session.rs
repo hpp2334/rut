@@ -194,10 +194,30 @@ impl Session {
         }
     }
 
+    /// The host-fn table the mounted host pkgs declare (RFC 0025):
+    /// `<scope>::<name>` → signature. The scope is the module's
+    /// `host_scope` override when set (`rt` → `rt:log`, RFC 0022), else
+    /// the package name. The table feeds `Vm::verify_host_fns` — the
+    /// load-time half of the `.d.rut` ↔ host-impl contract (a mismatch
+    /// panics before any rut code runs).
+    pub fn expected_host_fns(
+        &self,
+    ) -> std::collections::BTreeMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)> {
+        let mut out = std::collections::BTreeMap::new();
+        for (spec, m) in &self.modules {
+            let scope = m.host_scope.as_deref().unwrap_or(spec);
+            for (name, params, ret) in &m.host_funcs {
+                out.insert(format!("{scope}::{name}"), (params.clone(), *ret));
+            }
+        }
+        out
+    }
+
     /// Parse and mount a module manifest; a consumer manifest's `[deps]`
     /// are recorded for the host. Use [`parse_manifest`] directly when the
     /// parsed `Manifest` itself is needed.
     pub fn load_manifest(&mut self, text: &str) -> Result<(), ManifestError> {
+        let manifest = parse_manifest(text)?;
         let manifest = parse_manifest(text)?;
         if let Some(name) = &manifest.name {
             self.mount(Module {

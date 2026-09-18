@@ -73,36 +73,27 @@ struct Widget {
     n: i64,
 }
 
-fn session(fuel: Option<u64>) -> rut_vm::interp::Vm {
+type ExpectedHostFns = std::collections::BTreeMap<
+    String,
+    (Vec<rut_core::types::TypeId>, rut_core::types::TypeId),
+>;
+
+fn session(fuel: Option<u64>) -> (rut_vm::interp::Vm, ExpectedHostFns) {
     let mut session = rut_driver::Session::new();
-    rut_driver::mount_std(&mut session);
+    rut_driver::mount_std_core(&mut session);
     // the source uses `pouch` — a third-party pkg, mounted from the tree
     rut_driver::mount_dir(
         &mut session,
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
     .expect("mount pouch");
-    let f = |n: &str, ps: Vec<u32>, r: u32| (n.to_string(), ps, r);
-    use rut_core::types::{TY_I64, TY_OPAQUE};
-    session
-        .register_module(
-            "re",
-            rut_driver::Module {
-                spec: "re".into(),
-                host_funcs: vec![
-                    f("widget_new", vec![], TY_OPAQUE),
-                    f("boost", vec![TY_I64], TY_I64),
-                    f("borrow_try", vec![TY_OPAQUE], TY_I64),
-                    f("borrow_conflict", vec![TY_OPAQUE], TY_I64),
-                    f("borrow_read", vec![TY_OPAQUE], TY_I64),
-                    f("host_boom", vec![TY_I64], TY_I64),
-                    f("grind", vec![TY_I64], TY_I64),
-                    f("count_spin", vec![TY_I64], TY_I64),
-                ],
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    // `re` — this test's own host pkg, declared in tests/data/re
+    rut_driver::mount_dir(
+        &mut session,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/re"),
+    )
+    .expect("mount re");
+    let expected = session.expected_host_fns();
     session
         .register_module(
             "app_re",
@@ -122,30 +113,32 @@ fn session(fuel: Option<u64>) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap()
+    let vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+    (vm, expected)
 }
 
-fn install(vm: &mut rut_vm::interp::Vm, invocations: &Rc<Cell<u32>>) {
+fn install(vm: &mut rut_vm::interp::Vm, invocations: &Rc<Cell<u32>>, expected: &ExpectedHostFns) {
+    use rut_core::types::{TY_I64, TY_OPAQUE};
     let invocations = invocations.clone();
-    vm.register_host_fn("re::widget_new", |vm, _args| {
+    vm.register_host_fn_sig("re::widget_new", vec![], TY_OPAQUE, |vm, _args| {
         let b = OpaqueBox::alloc(vm, Widget { n: 0 })?;
         Ok(b.into_value())
     });
-    vm.register_host_fn("re::boost", |vm, args| {
+    vm.register_host_fn_sig("re::boost", vec![TY_I64], TY_I64, |vm, args| {
         let Value::I64(x) = args[0] else { panic!("boost: i64 arg") };
         let v = vm.call("inner", &[Value::I64(x)])?;
         let Value::I64(y) = v else { panic!("inner: i64 result") };
         Ok(Value::I64(y + 1))
     });
-    vm.register_host_fn("re::borrow_try", |_vm, args| {
+    vm.register_host_fn_sig("re::borrow_try", vec![TY_OPAQUE], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|w| w.n)?))
     });
-    vm.register_host_fn("re::borrow_read", |_vm, args| {
+    vm.register_host_fn_sig("re::borrow_read", vec![TY_OPAQUE], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|w| w.n)?))
     });
-    vm.register_host_fn("re::borrow_conflict", |vm, args| {
+    vm.register_host_fn_sig("re::borrow_conflict", vec![TY_OPAQUE], TY_I64, |vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         // hold the mutable borrow ACROSS a nested vm.call — rut code that
         // runs inside must not be able to borrow the same box
@@ -163,12 +156,12 @@ fn install(vm: &mut rut_vm::interp::Vm, invocations: &Rc<Cell<u32>>) {
             Err(t) => Err(t),
         }
     });
-    vm.register_host_fn("re::host_boom", |vm, args| {
+    vm.register_host_fn_sig("re::host_boom", vec![TY_I64], TY_I64, |vm, args| {
         let Value::I64(i) = args[0] else { panic!("host_boom: i64 arg") };
         let v = vm.call("boom", &[Value::I64(i)])?;
         Ok(v)
     });
-    vm.register_host_fn("re::grind", |vm, args| {
+    vm.register_host_fn_sig("re::grind", vec![TY_I64], TY_I64, |vm, args| {
         let Value::I64(n) = args[0] else { panic!("grind: i64 arg") };
         // the catch-and-refuel pattern for nested budget traps: the host
         // owns the retry, the outer frame never sees the trap
@@ -181,11 +174,13 @@ fn install(vm: &mut rut_vm::interp::Vm, invocations: &Rc<Cell<u32>>) {
             Err(t) => Err(t),
         }
     });
-    vm.register_host_fn("re::count_spin", move |vm, args| {
+    vm.register_host_fn_sig("re::count_spin", vec![TY_I64], TY_I64, move |vm, args| {
         let Value::I64(n) = args[0] else { panic!("count_spin: i64 arg") };
         invocations.set(invocations.get() + 1);
         vm.call("spin", &[Value::I64(n)])
     });
+    // the load-time contract (RFC 0025): tests/data/re/re.d.rut ↔ these bodies
+    vm.verify_host_fns(expected);
 }
 
 fn as_i64(v: Value) -> i64 {
@@ -196,8 +191,8 @@ fn as_i64(v: Value) -> i64 {
 #[test]
 fn nested_call_returns_and_outer_locals_survive() {
     let invocations = Rc::new(Cell::new(0));
-    let mut vm = session(Some(1_000_000));
-    install(&mut vm, &invocations);
+    let (mut vm, expected) = session(Some(1_000_000));
+    install(&mut vm, &invocations, &expected);
     // boost nested-calls inner(x)=x+1 and adds 1; outer computes y*2+x
     // with its OWN x — 7*2+5
     assert_eq!(as_i64(vm.call("outer", &[Value::I64(5)]).unwrap()), 19);
@@ -206,8 +201,8 @@ fn nested_call_returns_and_outer_locals_survive() {
 #[test]
 fn borrow_guard_blocks_rut_running_inside_with_mut() {
     let invocations = Rc::new(Cell::new(0));
-    let mut vm = session(Some(1_000_000));
-    install(&mut vm, &invocations);
+    let (mut vm, expected) = session(Some(1_000_000));
+    install(&mut vm, &invocations, &expected);
     let b = vm.call("new_widget", &[]).unwrap();
     // borrow_conflict: with_mut(+1) -> nested `poke` -> borrow_try's
     // `with` fails on the guard (-100 marker) and the mutation stands (n=1)
@@ -217,8 +212,8 @@ fn borrow_guard_blocks_rut_running_inside_with_mut() {
 #[test]
 fn nested_trap_propagates_and_vm_stays_usable() {
     let invocations = Rc::new(Cell::new(0));
-    let mut vm = session(Some(1_000_000));
-    install(&mut vm, &invocations);
+    let (mut vm, expected) = session(Some(1_000_000));
+    install(&mut vm, &invocations, &expected);
     // boom index-OOBs inside the nested call; the trap unwinds the nested
     // frame only and surfaces at the embedder with its kind intact
     let err = vm.call("trigger_boom", &[Value::I64(0)]).unwrap_err();
@@ -234,8 +229,8 @@ fn nested_budget_trap_catch_add_fuel_retry() {
     // spin(60_000) needs far more than 30k fuel; grind catches the
     // nested OutOfFuel, refuels, and retries — the outer frame never
     // learns the budget tripped
-    let mut vm = session(Some(30_000));
-    install(&mut vm, &invocations);
+    let (mut vm, expected) = session(Some(30_000));
+    install(&mut vm, &invocations, &expected);
     let n = 60_000i64;
     let want = n * (n - 1) / 2;
     assert_eq!(as_i64(vm.call("grind_caller", &[Value::I64(n)]).unwrap()), want);
@@ -247,8 +242,8 @@ fn resume_reruns_the_host_op_after_propagated_out_of_fuel() {
     // the nested OutOfFuel propagates past count_spin to the embedder;
     // the vm parks AT the host op, so resume() re-runs count_spin (its
     // invocation count proves the re-run) rather than skipping the call
-    let mut vm = session(Some(20_000));
-    install(&mut vm, &invocations);
+    let (mut vm, expected) = session(Some(20_000));
+    install(&mut vm, &invocations, &expected);
     let n = 50_000i64;
     let want = n * (n - 1) / 2;
     let err = vm.call("watchdog", &[Value::I64(n)]).unwrap_err();

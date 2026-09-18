@@ -15,7 +15,7 @@ fn main() {
     // the app declares, mounted from the toolchain tree (the driver
     // does not know its name)
     let mut session = rut_driver::Session::new();
-    rut_driver::mount_std(&mut session);
+    rut_driver::mount_std_core(&mut session);
     rut_driver::mount_dir(
         &mut session,
         std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch")),

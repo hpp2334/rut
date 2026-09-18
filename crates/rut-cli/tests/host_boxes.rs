@@ -70,31 +70,27 @@ struct Widget {
     _x: i64,
 }
 
-fn session() -> rut_vm::interp::Vm {
+type ExpectedHostFns = std::collections::BTreeMap<
+    String,
+    (Vec<rut_core::types::TypeId>, rut_core::types::TypeId),
+>;
+
+fn session() -> (rut_vm::interp::Vm, ExpectedHostFns) {
     let mut session = rut_driver::Session::new();
-    rut_driver::mount_std(&mut session);
+    rut_driver::mount_std_core(&mut session);
     // the sources use `pouch` — a third-party pkg, mounted from the tree
     rut_driver::mount_dir(
         &mut session,
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
     .expect("mount pouch");
-    let ty = |n: &str| (n.to_string(), Vec::new(), rut_core::types::TY_OPAQUE);
-    session
-        .register_module(
-            "boxes",
-            rut_driver::Module {
-                spec: "boxes".into(),
-                host_funcs: vec![
-                    ty("store_new"),
-                    ("store_set".into(), vec![rut_core::types::TY_OPAQUE, rut_core::types::TY_STR, rut_core::types::TY_I64], rut_core::types::TY_NIL),
-                    ("store_get".into(), vec![rut_core::types::TY_OPAQUE, rut_core::types::TY_STR], rut_core::types::TY_I64),
-                    ("store_size".into(), vec![rut_core::types::TY_OPAQUE], rut_core::types::TY_I64),
-                ],
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    // `boxes` — this test's own host pkg, declared in tests/data/boxes
+    rut_driver::mount_dir(
+        &mut session,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/boxes"),
+    )
+    .expect("mount boxes");
+    let expected = session.expected_host_fns();
     session
         .register_module(
             "app_boxes",
@@ -114,34 +110,44 @@ fn session() -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap()
+    let vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+    (vm, expected)
 }
 
-/// Bind the `boxes` bodies over a real `HashMap` payload.
-fn install(vm: &mut rut_vm::interp::Vm, dropped: &Rc<Cell<bool>>) {
+/// Bind the `boxes` bodies over a real `HashMap` payload. Typed per
+/// data/boxes/boxes.d.rut; the contract verifies at the end.
+fn install(vm: &mut rut_vm::interp::Vm, dropped: &Rc<Cell<bool>>, expected: &ExpectedHostFns) {
+    use rut_core::types::{TY_I64, TY_NIL, TY_OPAQUE, TY_STR};
     let dropped = dropped.clone();
-    vm.register_host_fn("boxes::store_new", move |vm, _args| {
+    vm.register_host_fn_sig("boxes::store_new", vec![], TY_OPAQUE, move |vm, _args| {
         let b = OpaqueBox::alloc(vm, Store { map: HashMap::new(), dropped: dropped.clone() })?;
         Ok(b.into_value())
     });
-    vm.register_host_fn("boxes::store_set", |_vm, args| {
-        let b = OpaqueBox::<Store>::from_value(&args[0])?;
-        let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
-        let Value::I64(v) = args[2] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 2: expected an integer")) };
-        b.with_mut(|s| {
-            s.map.insert(k.clone(), Value::I64(v));
-        })?;
-        Ok(Value::Nil)
-    });
-    vm.register_host_fn("boxes::store_get", |_vm, args| {
+    vm.register_host_fn_sig(
+        "boxes::store_set",
+        vec![TY_OPAQUE, TY_STR, TY_I64],
+        TY_NIL,
+        |_vm, args| {
+            let b = OpaqueBox::<Store>::from_value(&args[0])?;
+            let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
+            let Value::I64(v) = args[2] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 2: expected an integer")) };
+            b.with_mut(|s| {
+                s.map.insert(k.clone(), Value::I64(v));
+            })?;
+            Ok(Value::Nil)
+        },
+    );
+    vm.register_host_fn_sig("boxes::store_get", vec![TY_OPAQUE, TY_STR], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
         Ok(b.with(|s| s.map.get(k).cloned())?.unwrap_or(Value::I64(-1)))
     });
-    vm.register_host_fn("boxes::store_size", |_vm, args| {
+    vm.register_host_fn_sig("boxes::store_size", vec![TY_OPAQUE], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|s| s.map.len() as i64)?))
     });
+    // the load-time contract (RFC 0025): tests/data/boxes/boxes.d.rut ↔ these bodies
+    vm.verify_host_fns(expected);
 }
 
 fn as_i64(v: Value) -> i64 {
@@ -152,8 +158,8 @@ fn as_i64(v: Value) -> i64 {
 #[test]
 fn host_boxes_hold_any_rust_type() {
     let dropped = Rc::new(Cell::new(false));
-    let mut vm = session();
-    install(&mut vm, &dropped);
+    let (mut vm, expected) = session();
+    install(&mut vm, &dropped, &expected);
 
     // news from the host, hold the handle across calls — the data lives
     // in the VM heap as long as either side holds a reference
@@ -245,7 +251,7 @@ entry fn churn(n: i64) -> nil {
 }
 "#;
     let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
+    rut_driver::mount_std_core(&mut s);
     rut_driver::mount_dir(
         &mut s,
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),

@@ -31,7 +31,13 @@ fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(heap),
         interrupt_every: 1024,
     };
-    rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap()
+    {
+        let mut vm =
+            rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+        rut_std::math::install_std_math(&mut vm);
+        vm.verify_host_fns(&s.expected_host_fns()); // calc: .d.rut ↔ bodies
+        vm
+    }
 }
 
 fn hex(b: &[u8]) -> String {

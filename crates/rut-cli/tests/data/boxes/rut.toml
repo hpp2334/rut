@@ -1,0 +1,4 @@
+# boxes/ — the host-box test pkg: a pure declaration surface; the test
+# binds the bodies (host_boxes.rs) and verifies the contract.
+name = "boxes"
+entry.type = "./boxes.d.rut"

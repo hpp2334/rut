@@ -31,6 +31,8 @@ fn main() {
         interrupt_every: 1024,
     };
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).unwrap();
+    rut_std::math::install_std_math(&mut vm);
+    vm.verify_host_fns(&session.expected_host_fns()); // calc: .d.rut ↔ bodies
 
     // the session: one bank, exact values in, JSON out
     let Value::Opaque(c) = vm.call("create", &[]).unwrap() else { unreachable!() };

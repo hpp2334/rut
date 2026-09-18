@@ -1,0 +1,16 @@
+// re/re.d.rut — the re-entrancy + borrow-guard surface (RFC 0022 §1 /
+// RFC 0023): a widget box, its boost op, the borrow probes, and the
+// spin/grind drivers.
+
+pub host fn widget_new() -> Opaque;
+
+pub host fn boost(x: i64) -> i64;
+
+/// borrow probes over the widget box (RFC 0023 §2 guards)
+pub host fn borrow_try(w: Opaque) -> i64;
+pub host fn borrow_read(w: Opaque) -> i64;
+pub host fn borrow_conflict(w: Opaque) -> i64;
+
+pub host fn host_boom(x: i64) -> i64;
+pub host fn grind(x: i64) -> i64;
+pub host fn count_spin(x: i64) -> i64;

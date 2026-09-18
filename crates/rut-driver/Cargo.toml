@@ -15,3 +15,6 @@ rut-lexer = { path = "../rut-lexer" }
 rut-ast = { path = "../rut-ast" }
 rut-parser = { path = "../rut-parser" }
 rut-lir = { path = "../rut-lir" }
+
+[dev-dependencies]
+rut-vm = { path = "../rut-vm" }

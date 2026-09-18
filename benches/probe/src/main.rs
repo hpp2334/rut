@@ -168,6 +168,8 @@ fn main() {
         install_std_log(&mut vm, |_msg| {});
         // the host half of `std:math` (RFC 0028)
         rut_std::math::install_std_math(&mut vm);
+        // the load-time contract (RFC 0025): the .d.rut surfaces ↔ installs
+        vm.verify_host_fns(&session.expected_host_fns());
         let t = Instant::now();
         let res = vm.call("main", &[]);
         exec_ms.push(t.elapsed().as_secs_f64() * 1e3);

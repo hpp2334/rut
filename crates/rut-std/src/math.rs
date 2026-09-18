@@ -5,8 +5,11 @@
 //!
 //! The `calc` module is mounted by the driver (`rut-driver`); a host
 //! installs the bodies. An uninstalled sink traps, like any missing host
-//! function.
+//! function. Bindings are TYPED (RFC 0025): the signatures match
+//! `calc.d.rut`, and `Vm::verify_host_fns` checks the contract at load
+//! time.
 
+use rut_core::types::TY_F64;
 use rut_vm::interp::Vm;
 use rut_vm::Value;
 
@@ -21,17 +24,23 @@ fn arg(a: &[Value], i: usize) -> f64 {
 
 macro_rules! unary {
     ($vm:expr, $name:literal, $f:ident) => {
-        $vm.register_host_fn(concat!("calc::", $name), |_vm, a| {
-            Ok(Value::F64(arg(a, 0).$f()))
-        });
+        $vm.register_host_fn_sig(
+            concat!("calc::", $name),
+            vec![rut_core::types::TY_F64],
+            rut_core::types::TY_F64,
+            |_vm, a| Ok(Value::F64(arg(a, 0).$f())),
+        );
     };
 }
 
 macro_rules! binary {
     ($vm:expr, $name:literal, $f:ident) => {
-        $vm.register_host_fn(concat!("calc::", $name), |_vm, a| {
-            Ok(Value::F64(arg(a, 0).$f(arg(a, 1))))
-        });
+        $vm.register_host_fn_sig(
+            concat!("calc::", $name),
+            vec![rut_core::types::TY_F64, rut_core::types::TY_F64],
+            rut_core::types::TY_F64,
+            |_vm, a| Ok(Value::F64(arg(a, 0).$f(arg(a, 1)))),
+        );
     };
 }
 
@@ -70,8 +79,7 @@ pub fn install_std_math(vm: &mut Vm) {
     // JS `Math.sign` semantics (the old intrinsic's law): ±0 stay 0,
     // NaN passes through as itself — Rust's `f64::signum` would map
     // +0.0 to 1.0
-    vm.register_host_fn("calc::signum", |_vm, a| {
-        let x = arg(a, 0);
+    vm.register_host_fn_sig("calc::signum", vec![TY_F64], TY_F64, |_vm, a| {        let x = arg(a, 0);
         let v = if x > 0.0 {
             1.0
         } else if x < 0.0 {
@@ -84,7 +92,7 @@ pub fn install_std_math(vm: &mut Vm) {
         Ok(Value::F64(v))
     });
 
-    vm.register_host_fn("calc::fma", |_vm, a| {
+    vm.register_host_fn_sig("calc::fma", vec![TY_F64, TY_F64, TY_F64], TY_F64, |_vm, a| {
         Ok(Value::F64(arg(a, 0).mul_add(arg(a, 1), arg(a, 2))))
     });
 }

@@ -11,6 +11,7 @@ rut-lexer = { path = "../../crates/rut-lexer" }
 rut-parser = { path = "../../crates/rut-parser" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-vm = { path = "../../crates/rut-vm" }
+rut-std = { path = "../../crates/rut-std" }
 md-5 = "0.10"
 sha1 = "0.10"
 sha2 = "0.10"

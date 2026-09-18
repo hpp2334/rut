@@ -7,7 +7,7 @@ use rut_vm::heap::Value;
 fn vm() -> (rut_vm::interp::Vm, Value) {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/todolist.rut")).unwrap();
     let mut s = rut_driver::Session::new();
-    rut_driver::mount_std(&mut s);
+    rut_driver::mount_std_core(&mut s);
     rut_driver::mount_dir(
         &mut s,
         std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch")),

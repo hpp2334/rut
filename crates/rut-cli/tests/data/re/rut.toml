@@ -1,0 +1,4 @@
+# re/ — the reentrancy test host pkg: a pure declaration surface; the
+# test binds the bodies (reentrancy.rs) and verifies the contract.
+name = "re"
+entry.type = "./re.d.rut"

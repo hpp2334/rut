@@ -14,6 +14,20 @@ fn mount_case_libs(s: &mut rut_driver::Session) {
     rut_driver::mount_dir(s, &root.join("rut/pouch")).expect("mount pouch");
 }
 
+type ExpectedHostFns = std::collections::BTreeMap<
+    String,
+    (Vec<rut_core::types::TypeId>, rut_core::types::TypeId),
+>;
+
+/// The expected host-fn table for a case session (core+calc+libs) —
+/// what `Vm::verify_host_fns` checks the installs against.
+fn expected_case_fns() -> ExpectedHostFns {
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    mount_case_libs(&mut s);
+    s.expected_host_fns()
+}
+
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
     // append the logger use so the original spans stay put
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
@@ -42,6 +56,9 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
         sink.borrow_mut().push(msg.to_string());
     });
     rut_std::math::install_std_math(&mut vm);
+    // the load-time contract (RFC 0025): the .d.rut surfaces and the
+    // installs agree — a mismatch panics before any rut code runs
+    vm.verify_host_fns(&expected_case_fns());
     let trap = match vm.call("main", &[]) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -1109,9 +1126,11 @@ pub fn main() -> nil {
 fn pouch_vec_via_module_loader_runs() {
     // the real rut/pouch source, mounted as a package (manifest + deps)
     // and used by a consumer; generic Vec is inlined and monomorphized,
-    // then linked and executed — ink rides the same mount (with its rt)
+    // then linked and executed — ink rides the same mount (with its rt).
+    // mount_std (not just core): the run installs calc's bodies too, and
+    // the load-time contract requires mount ↔ bindings to agree
     let mut s = rut_driver::Session::new();
-    rut_driver::mount_std_core(&mut s);
+    rut_driver::mount_std(&mut s);
     mount_case_libs(&mut s); // ink (+rt) and pouch, from the tree
     s.register_module(
         "app_main",
@@ -1155,6 +1174,7 @@ pub fn main() -> nil {
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
     rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
     rut_std::math::install_std_math(&mut vm);
+    vm.verify_host_fns(&s.expected_host_fns()); // the load-time contract
     let trap = vm.call("main", &[]).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["2 30"]);
@@ -1211,6 +1231,7 @@ pub fn main() -> nil {
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default()).expect("vm");
     rut_std::logger::install_std_log(&mut vm, move |msg| sink.borrow_mut().push(msg.to_string()));
     rut_std::math::install_std_math(&mut vm);
+    vm.verify_host_fns(&s.expected_host_fns()); // the load-time contract
     let trap = vm.call("main", &[]).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["11 hello world"]);

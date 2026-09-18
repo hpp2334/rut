@@ -110,6 +110,7 @@ dependencies = [
  "rut-driver",
  "rut-lexer",
  "rut-parser",
+ "rut-std",
  "rut-vm",
  "serde_json",
  "sha1",
@@ -409,6 +410,7 @@ dependencies = [
  "rut-lexer",
  "rut-lir",
  "rut-parser",
+ "rut-vm",
 ]
 
 [[package]]
@@ -571,6 +573,7 @@ dependencies = [
  "rut-driver",
  "rut-lexer",
  "rut-parser",
+ "rut-std",
  "rut-vm",
 ]
 
