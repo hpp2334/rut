@@ -1445,6 +1445,37 @@ pub fn main() -> nil {
 }
 
 #[test]
+fn case_f32_math_surface() {
+    // the f32 twins of the calc surface (RFC 0028): same magic-lane
+    // host fns with `f32` params/returns — the derived sigs bind TY_F32,
+    // and the `_f` suffix carries the width (rut has no overloading)
+    let src = r#"
+use calc::{ Math };
+pub fn main() -> nil {
+    Logger.new("f32").info(f"{Math.sqrt_f(2.0)} {Math.abs_f(-2.5)} {Math.min_f(1.0, 2.0)} {Math.max_f(1.0, 2.0)}");
+    Logger.new("f32").info(f"{Math.signum_f(-3.5)} {Math.signum_f(0.0)} {Math.signum_f(4.5)} {Math.copysign_f(3.0, -1.0)}");
+    Logger.new("f32").info(f"{Math.fma_f(2.0, 3.0, 4.0)} {Math.pow_f(2.0, 10.0)} {Math.floor_f(2.7)} {Math.hypot_f(3.0, 4.0)}");
+    // the width survives the boundary: 0.1f32 rounds differently from
+    // 0.1f64, and sqrt_f(x*x) comes back f32-rounded
+    let x: f32 = 0.1;
+    let r: f32 = Math.sqrt_f(x * x);
+    Logger.new("f32").info(f"{x} {r}");
+    // a wrong-width arg cannot reach the boundary at all: the checker's
+    // widening rule is f32 -> f64 only, so `Math.sqrt_f(f64var)` is a
+    // compile error, and f64 literals infer down to the f32 param
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec![
+        "1.4142135 2.5 1 2",
+        "-1 0 1 -3",
+        "10 1024 2 5",
+        "0.1 0.1",
+    ]);
+}
+
+#[test]
 fn core_nan_const_is_name_explicit() {
     // `NAN` is core's one const (RFC 0028): name-explicit — `use
     // core::{NAN}` — f64 bits materialized with `ConstRaw`; NaN

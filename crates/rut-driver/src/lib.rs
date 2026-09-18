@@ -8,7 +8,7 @@ use rut_ast::dump;
 use rut_parser::{parse, Mode};
 use rut_core::binary::{encode, Program};
 use rut_core::ops::{NOREG, Op};
-use rut_core::types::{TyKind, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_NIL};
+use rut_core::types::{TyKind, TY_F32, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_NIL};
 use rut_core::{IdentId, sym};
 
 pub mod session;
@@ -454,11 +454,15 @@ pub fn mount_std(session: &mut Session) {
 
 /// Mount `calc` — a native module (RFC 0028): `f64` host functions
 /// (bodies in `rut-std`, including the float `abs`/`min`/`max`/`signum`)
-/// and `f64` constants. The integer intrinsics live in `core` now —
-/// `builtin impl` methods on the primitives (RFC 0032 §1.1 R2).
+/// plus their `f32` twins (`Math.sqrt_f(x: f32) -> f32` — the `_f`
+/// suffix carries the width; rut has no overloading) and the `f64`
+/// constants. The integer intrinsics live in `core` now — `builtin
+/// impl` methods on the primitives (RFC 0032 §1.1 R2).
 pub fn mount_calc(session: &mut Session) {
     let u = |name: &str| (name.to_string(), vec![TY_F64], TY_F64);
     let b = |name: &str| (name.to_string(), vec![TY_F64, TY_F64], TY_F64);
+    let uf = |name: &str| (name.to_string(), vec![TY_F32], TY_F32);
+    let bf = |name: &str| (name.to_string(), vec![TY_F32, TY_F32], TY_F32);
     let host_funcs = vec![
         u("sqrt"), u("floor"), u("ceil"), u("round"), u("trunc"),
         u("exp"), u("ln"), u("log2"), u("log10"),
@@ -469,6 +473,14 @@ pub fn mount_calc(session: &mut Session) {
         // the former float intrinsics — ordinary host fns now (the
         // integer intrinsics moved to core's `builtin impl` methods)
         u("abs"), b("min"), b("max"), u("signum"),
+        // the f32 twins — same libm bodies in rut-std, `_f` names
+        uf("sqrt_f"), uf("floor_f"), uf("ceil_f"), uf("round_f"), uf("trunc_f"),
+        uf("exp_f"), uf("ln_f"), uf("log2_f"), uf("log10_f"),
+        uf("sin_f"), uf("cos_f"), uf("tan_f"), uf("asin_f"), uf("acos_f"), uf("atan_f"),
+        uf("sinh_f"), uf("cosh_f"), uf("tanh_f"),
+        bf("pow_f"), bf("atan2_f"), bf("hypot_f"), bf("copysign_f"),
+        ("fma_f".to_string(), vec![TY_F32, TY_F32, TY_F32], TY_F32),
+        uf("abs_f"), bf("min_f"), bf("max_f"), uf("signum_f"),
     ];
 
     let c = |name: &str, v: f64| (name.to_string(), TY_F64, v.to_bits());

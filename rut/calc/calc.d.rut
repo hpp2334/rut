@@ -1,11 +1,14 @@
 // calc/calc.d.rut — `calc`, the `Math` namespace (RFC 0028): the float
-// members are host functions (f64, bodies in `rut-std`). No `host
-// class` namespace fiction: these are the module's own functions,
-// reached qualified —
+// members are host functions (f64 bodies in `rut-std`, each with an
+// f32 twin under a `_f` suffix — `Math.sqrt_f(x: f32) -> f32`; rut has
+// no overloading, so the width is in the name). No `host class`
+// namespace fiction: these are the module's own functions, reached
+// qualified —
 //
 //   use calc::{ Math };
 //   let d = Math.sqrt(x * x + y * y);
 //   let a = Math.abs(x);
+//   let hf = Math.sqrt_f(2.0); // f32
 //
 // The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
 // `checked_*`) moved to core — `builtin impl` methods on the
@@ -55,3 +58,34 @@ pub host fn abs(x: f64) -> f64;
 pub host fn min(x: f64, y: f64) -> f64;
 pub host fn max(x: f64, y: f64) -> f64;
 pub host fn signum(x: f64) -> f64;
+
+// ---- f32 twins (same libm bodies on `f32`; the `_f` suffix carries
+// the width — RFC 0028's surface is kept true per-type) ----
+
+pub host fn sqrt_f(x: f32) -> f32;
+pub host fn floor_f(x: f32) -> f32;
+pub host fn ceil_f(x: f32) -> f32;
+pub host fn round_f(x: f32) -> f32;
+pub host fn trunc_f(x: f32) -> f32;
+pub host fn exp_f(x: f32) -> f32;
+pub host fn ln_f(x: f32) -> f32;
+pub host fn log2_f(x: f32) -> f32;
+pub host fn log10_f(x: f32) -> f32;
+pub host fn sin_f(x: f32) -> f32;
+pub host fn cos_f(x: f32) -> f32;
+pub host fn tan_f(x: f32) -> f32;
+pub host fn asin_f(x: f32) -> f32;
+pub host fn acos_f(x: f32) -> f32;
+pub host fn atan_f(x: f32) -> f32;
+pub host fn sinh_f(x: f32) -> f32;
+pub host fn cosh_f(x: f32) -> f32;
+pub host fn tanh_f(x: f32) -> f32;
+pub host fn pow_f(x: f32, y: f32) -> f32;
+pub host fn atan2_f(y: f32, x: f32) -> f32;
+pub host fn hypot_f(x: f32, y: f32) -> f32;
+pub host fn copysign_f(x: f32, y: f32) -> f32;
+pub host fn fma_f(x: f32, y: f32, z: f32) -> f32;
+pub host fn abs_f(x: f32) -> f32;
+pub host fn min_f(x: f32, y: f32) -> f32;
+pub host fn max_f(x: f32, y: f32) -> f32;
+pub host fn signum_f(x: f32) -> f32;

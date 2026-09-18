@@ -63,7 +63,9 @@ Containers are library types, not VM builtins (RFC 0005). **`ink`**
 is the logger package (below). **`calc`** is the float math package:
 the `Math` namespace of `f64` host functions (`sqrt`..`fma`, plus the
 float helpers `abs`/`min`/`max`/`signum` — platform libm, RFC 0025)
-and the f64 constants (`PI`, `E`, `INFINITY`, …). The integer numeric
+each with an **f32 twin under a `_f` suffix** (`Math.sqrt_f(x: f32)
+-> f32` — native f32 libm; the width is in the name, rut has no
+overloading) and the f64 constants (`PI`, `E`, `INFINITY`, …). The integer numeric
 methods (`wrapping_*`/`saturating_*`/`checked_*`) are **`core`'s** —
 `builtin impl` methods on the primitives (RFC 0004 §3, RFC 0032 §1.1
 R2) — and `NAN` is core's one const (`use core::{NAN}`). **`debug`**
