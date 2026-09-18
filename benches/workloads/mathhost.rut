@@ -1,0 +1,25 @@
+use ink::{ Logger };
+use calc::{ Math };
+
+// mathhost — calc's host-fn helpers (Math.abs/min/max/signum) in a hot
+// loop: every call crosses the FFI (arg Values in, dyn dispatch, body,
+// result back). The host-fn hot-path canary (the hotpath plan): re-bench
+// after any change to call_host / HostRegistry / the join.
+// Scale: 1_000_000 iterations x 4 calls. Canonical reference: 3500000.
+
+pub fn main() -> nil {
+    let mut acc: f64 = 0.0;
+    let mut x: f64 = 1.5;
+    let mut y: f64 = 0.25;
+    for (let i = 0; i < 1000000; i += 1) {
+        x = x * 0.9999998 + 0.0000003;
+        y = y * 0.9999999 + 0.0000002;
+        if (x < 0.25) { x = x + 2.75; }
+        if (y < 0.10) { y = y + 1.50; }
+        acc = acc + Math.abs(x - y);
+        acc = acc + Math.min(x, y);
+        acc = acc + Math.max(x, y);
+        acc = acc + Math.signum(x - y) * 0.5;
+    }
+    Logger.new("app").info(f"CHECKSUM {acc}");
+}
