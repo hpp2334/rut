@@ -193,7 +193,7 @@ isexpr     := expr 'is' Type                              // type test — relat
 
 `Type` in **value positions** (params, returns, locals, fields, generic
 arguments) spells a trait-typed value with the bare trait name —
-`d: Drawable`, `Vec<Widget>`, `Vec<Opaque>`, `Array<Slice<i32>, 4>`
+`d: Drawable`, `Vec<Widget>`, `Vec<Opaque>`, `[Slice<i32>]`
 (the builtin slice trait, RFC 0005). There is no object-type keyword:
 the trait name IS the type spelling (RFC 0012 §2).
 `TraitList` — `requires` lists and extparam bounds (§3) — stays
@@ -361,7 +361,7 @@ the type table, and the module binary share one representation. It
 primitives, …), so ids `0..N` mean the same name in every interner
 instance and special names compare as `IdentId` equality — never by
 text. Ownership flows parser → AST → the checking Ctx (a clone; the Ctx
-interns synthesized instantiation names such as `Array<i32>`) → the
+interns synthesized instantiation names such as `[i32]`) → the
 emitted `Program`, which serializes only the non-well-known tail as the
 binary's name table (RFC 0033 §1). Sketch (abbreviated — the full enum is mechanical):
 
@@ -600,7 +600,7 @@ the type table, and the module binary share one representation. It
 primitives, …), so ids `0..N` mean the same name in every interner
 instance and special names compare as `IdentId` equality — never by
 text. Ownership flows parser → AST → the checking Ctx (a clone; the Ctx
-interns synthesized instantiation names such as `Array<i32>`) → the
+interns synthesized instantiation names such as `[i32]`) → the
 emitted `Program`, which serializes only the non-well-known tail as the
 binary's name table (RFC 0033 §1). Sketch (abbreviated — the full enum is mechanical):
 

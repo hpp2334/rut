@@ -32,7 +32,7 @@ Why not just let values be ordinary Rust objects:
 | Managed by the VM heap | The host's business |
 |---|---|
 | every cell (dataclass, class, enum, `Opaque` — RFC 0016 §5) | module binaries and maps (RFC 0033/0038) |
-| buffer blocks (`Vec`/`Array` data, string `StrBuf`s) | the type table (shared, RFC 0015) |
+| buffer blocks (`Vec`/`[T]` data, string `StrBuf`s) | the type table (shared, RFC 0015) |
 | coroutine frames & register blocks (RFC 0018 §4) | native-module state (RFC 0022) |
 | the ready ring, frame pool, weak boxes (RFC 0017) | host-side handles, caches, futures (RFC 0020) |
 

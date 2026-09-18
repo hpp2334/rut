@@ -1,4 +1,4 @@
-use core::{ Opaque, downcast, make_ptr };
+use core::{ Opaque, downcast };
 use pouch::{ Vec };
 use calc::{ Math };
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
@@ -373,7 +373,7 @@ fn sha_tail(m: *Vec<u8>, msg_len: i32) {
 
 fn sha1_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
-    let mp = make_ptr(m);
+    let mp = &m;
     sha_tail(mp, msg.len());
     m = *mp;
     let mut h0: u32 = 0x67452301;
@@ -461,7 +461,7 @@ fn sha256_k() -> Vec<u32> {
 
 fn sha256_impl(msg: bytes) -> bytes {
     let mut m = copy_bytes(msg);
-    let mp = make_ptr(m);
+    let mp = &m;
     sha_tail(mp, msg.len());
     m = *mp;
     let h = sha256_h();
@@ -972,7 +972,7 @@ fn jquote(s: str) -> str {
 }
 
 entry fn json_dec(s: str) -> (Opaque, str) {
-    let cur = make_ptr(Cur { cs: split_chars(s), pos: 0, depth: 0 });
+    let cur = &Cur { cs: split_chars(s), pos: 0, depth: 0 };
     let v = jparse_value(cur);
     if (v.1 != "") { return (noopaque(), v.1); }
     jskip(cur);

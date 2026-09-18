@@ -16,9 +16,10 @@ and the empty type's one value (RFC 0004 §4): a context-free `nil` has
 type `nil`, while pointer positions (`let p: *T = nil`, `p == nil`,
 `left: nil` in a literal) type it as `*T`. Dereferencing `nil` (field
 access through it) is the `NilDeref` trap —
-never a silent read. Sharing is explicit: `make_ptr(v)` boxes `v` into a
-fresh one-slot cell (the literal-forwarding case costs nothing), and
-writes through the pointer hit the shared cell.
+never a silent read. Sharing is explicit: `&v` is the address-of — the
+operand's cell as a `*T`, a fresh one-slot box whose payload shares the
+operand's object (RFC 0016 §2) — and writes through the pointer hit the
+shared cell.
 
 - `p.x` / `p.m(..)` auto-deref: field and method access through a
   pointer reads the pointee.
@@ -28,10 +29,25 @@ writes through the pointer hit the shared cell.
   that runs when the cell's refcount reaches zero — one callback per
   pointer, a second attach is an error.
 
-## 9. The bracket spelling — `[T]` (v1.1)
+## 9. The bracket spelling — `[T]`, the repeat `[v; n]` (v1.1)
 
-`[T]` is the accepted spelling of the heap array `Array<T>` (runtime
-length, non-growable): `let xs: [i32] = [1, 2, 3];`.
+`[T]` is the spelling of the heap array (runtime length, non-growable):
+`let xs: [i32] = [1, 2, 3];` — the literal allocates the cell. The type
+is grammar, resolved directly: no surface name carries it, and a module
+needs no `use` to spell it.
+
+Construction is the **repeat expression** `[v; n]` — a VALUE and a
+count (`[nil; n]`, `[0u8; cap]`); there is no type-in-expression form (a
+type is not a value). A scalar/nil fill is the memset-class op (a nil
+fill is exactly the zero-fill); a ref fill copies the cell handle n
+times — every slot aliases the one cell. Generic zero-initialized
+storage is structural: pointer arrays `[*T]` with `[nil; n]` — `nil` is
+the slot's zero.
+
+The `Array` NAME is removed: the `builtin class Array<T>` decl is gone
+(`a[i]`, `a.len()` are compiler-lowered — no decl needed), and a use
+site that still spells `[T]` / `[T](n)` diagnoses with the
+removal and its replacement (`[T]` / `[v; n]`).
 
 ## 10. Removals — `Option`, `Result`, `own` (v1.1)
 
@@ -51,7 +67,7 @@ the language's own shapes:
 
 `own(x)` is removed with them: under copy-by-value (RFC 0016 §1) every
 binding already owns its cell, so `own` would be the identity. Sharing
-is `make_ptr` (§8); a use site that still spells `own` (or the removed
+is `&x` (§8); a use site that still spells `own` (or the removed
 sums) diagnoses with the removal and its replacement — nothing else is
 kept for compatibility.
 
@@ -71,11 +87,12 @@ are builtin, the names are used, never ambient.
 | `expect(msg: str) -> T` | `unwrap_or(d: T) -> T` |
 
 `Vec<T>` is **std-lib rut code**, not a VM builtin: a `pub class` in
-`pouch` over the non-growable `Array<T>`, with the mutable,
+`pouch` over the non-growable `[T]`, with the mutable,
 growable, handle-shared sequence API — `push`/`pop`, indexing, `.len()`
 (RFC 0016 §4). Construction is the class's own methods —
-`Vec.new()` (empty), `Vec.with_capacity(n)` (reserve), `Vec.zeroed(n)`
-(n zeroed live elements), `Vec.from(arr)` (copy an `Array<T>`). There is
+`Vec.new()` (empty), `Vec.with_capacity(n)` (reserve), `Vec.filled(v, n)`
+(n slots of `v` — the repeat `[v; n]` boxed for the caller),
+`Vec.from(arr)` (copy a `[T]`). There is
 no `Vec<T>(..)` type-call: class construction is always a method call
 (RFC 0010 §1). Element access (`v[i]`, `v[i] = x`, `.len()`) and
 `for (x of v)` lower through its `impl Index<T> for Vec<T>` (below) to
@@ -87,11 +104,11 @@ is rut code, so it ships its own iterator.
 
 **`bytes` — the immutable binary primitive** (RFC 0004): at the language
 level a distinct, immutable, content-compared type; **at the engine level
-a `u8` array cell** (`Array<u8>`), so it reuses the array ops — `b[i]` is
+a `u8` array cell** (`[u8]`), so it reuses the array ops — `b[i]` is
 `ArrGet`, `b.len()` is `ArrLen`, `bytes.zeroed(n)`/`bytes(n)` are
 `ArrNew`, `bytes.from(a)` is an array copy (`Own`), and `==` is the
 content comparison `ArrayCmp`. Construction: `bytes(n)` (n zeroed
-octets), `bytes.from(a)` (copies an `Array<u8>`), and `freeze()` on a
+octets), `bytes.from(a)` (copies a `[u8]`), and `freeze()` on a
 mutable `Vec<u8>` builder. Reading: `b.len(): i32`, `b[i]: u8`
 (bounds trap), `for (let b of b)`. `s.encode() -> bytes` (UTF-8) and
 `b.decode() -> str` (UTF-8, lossy) are lowered by the compiler as LIR
@@ -102,13 +119,14 @@ that crosses the host boundary (RFC 0023 §2).
 
 One more builtin is type syntax plus a member:
 
-- **`Array<T>` — the heap array**: runtime length, non-growable (the
-  backing `Vec<T>` grows). A **cell handle — shared like every
+- **`[T]` — the heap array**: runtime length, non-growable (the
+  backing `Vec<T>` grows); construction is the repeat `[v; n]` (§9).
+  A **cell handle — shared like every
   non-primitive** (RFC 0016 §4): assignment aliases, mutation is
   visible through every handle. The literal is pure data:
-  `[a, b, c] : Array<T>` (RFC 0007 §1) — it allocates the cell.
+  `[a, b, c] : [T]` (RFC 0007 §1) — it allocates the cell.
   Indexing, `for..of`, `.len()` (the runtime length via `arrlen`,
-  RFC 0032 §1.1 R2); OOB traps. `Array<T>` has the builtin (native)
+  RFC 0032 §1.1 R2); OOB traps. `[T]` has the builtin (native)
   `Index` impl.
 
 **`Index<T>` — the random-access contract** (RFC 0012): a `len` +
@@ -117,16 +135,17 @@ One more builtin is type syntax plus a member:
 `for (x of s)` lower through the receiver's `Index` impl.
 Implementations:
 
-- `Array<T>` — the builtin (native) impl, lowering to the fused
+- `[T]` — the builtin (native) impl, lowering to the fused
   `arrget`/`arrset`/`arrlen` ops (RFC 0032 §1.1 R2), element `T`.
 - `str` — the builtin (native) impl, element `char`; iteration and
   indexing use `strcharat`/`strlen`.
 - `bytes` — the builtin (native) impl, element `u8`; `bytesget`.
 - `Vec<T>` — the `pouch` class (RFC 0028), a record with a
-  `buf: Array<T>` field and a `len: i32` field; `v[i]`, `v[i] = x`,
-  `v.len()`, and `for (x of v)` lower to the fused element ops on those
-  fields — no trait call, no accessor inlining. `for (x of v)` yields
-  `*T` — a fresh element box per iteration (RFC 0012 §6); indexed
+  `buf: [*T]` field (the pointer-array backing: `[nil; cap]` is the
+  only generic zero, stores keep `&v`) and a `len: i32` field; `v[i]`,
+  `v[i] = x`, `v.len()`, and `for (x of v)` lower to the fused element
+  ops on those fields, loads derefing the stored `&v` — no trait call,
+  no accessor inlining. `for (x of v)` yields the stored `*T`; indexed
   reads keep value yields.
 
 `str`/`bytes` carry **member contracts** declared per type in the
@@ -144,7 +163,7 @@ the two-rule law (RFC 0012 §1) — static for single-origin receivers;
 the trait-typed forms (`Vec<Index<T>>`, `Vec<Iterator<T>>`) spell the
 bare trait name in type position.
 
-`Vec<T>` and `Array<T>` implement `reflect`'s `Reflectable` and
+`Vec<T>` and `[T]` implement `reflect`'s `Reflectable` and
 `Deserializable` for **every instantiation** via the builtin-impl
 registry (RFC 0037) — sequences are data: reflectable like records.
 

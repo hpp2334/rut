@@ -787,6 +787,20 @@ fn replace_reads(op: &mut Op, pools: &mut Pools, from: u16, to: u16) {
         }
         Op::Not { a, .. } | Op::NegF { a, .. } | Op::NegI { a, .. } => f(a),
         Op::Mov { src, .. } | Op::MovRef { src, .. } => f(src),
+        Op::MakePtr { src, .. } => f(src),
+        Op::CloneVal { src, .. } => f(src),
+        Op::ArrGetRef { arr, idx, .. } => {
+            f(arr);
+            f(idx);
+        }
+        Op::ValEq { a, b, .. } => {
+            f(a);
+            f(b);
+        }
+        Op::OnDrop { obj, cleanup } => {
+            f(obj);
+            f(cleanup);
+        }
         Op::Br { cond, .. } => f(cond),
         Op::BrTable { idx, .. } => f(idx),
         Op::CallNat { recv, .. } => f(recv),

@@ -8,9 +8,9 @@ use pouch::{ Vec };
 // n=7 canonical: checksum 228, max_flips 16.
 
 fn fannkuch(n: i32) -> i32 {
-    let mut perm = Vec<i32>.zeroed(n);
-    let mut perm1 = Vec<i32>.zeroed(n);
-    let mut count = Vec<i32>.zeroed(n);
+    let mut perm = Vec<i32>.filled(0, n);
+    let mut perm1 = Vec<i32>.filled(0, n);
+    let mut count = Vec<i32>.filled(0, n);
     for (let i = 0; i < n; i += 1) {
         perm1[i] = i;
     }

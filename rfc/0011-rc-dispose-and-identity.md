@@ -17,7 +17,7 @@ in action.
 
 ## 1. Reference semantics — and the `own` escape hatch
 
-- Every non-primitive value (dataclass, class, `str`, `Vec`, `Array`,
+- Every non-primitive value (dataclass, class, `str`, `Vec`, `[T]`,
   enums, `Opaque`, trait-typed values) is a heap cell handle: assignment, passing,
   and returning copy the handle (`rc++`), and **mutation is visible
   through every alias**. Two handles are equal (`==`, RFC 0012 §8)

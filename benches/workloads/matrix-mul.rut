@@ -17,9 +17,9 @@ fn gemm(n: i32, a: Vec<f64>, b: Vec<f64>, mut out: Vec<f64>) -> nil {
 
 pub fn main() -> nil {
     let n = 64;
-    let mut a = Vec<f64>.zeroed(n * n);
-    let mut b = Vec<f64>.zeroed(n * n);
-    let mut out = Vec<f64>.zeroed(n * n);
+    let mut a = Vec<f64>.filled(0.0, n * n);
+    let mut b = Vec<f64>.filled(0.0, n * n);
+    let mut out = Vec<f64>.filled(0.0, n * n);
     for (let i = 0; i < n * n; i += 1) {
         a[i] = i as f64;
         b[i] = (i % 7) as f64;

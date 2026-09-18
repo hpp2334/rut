@@ -125,7 +125,7 @@ for (s of mixed) { s.area(); }          // vtable (multiple origins)
   builtin contracts: `Index<T>` (`len`/`get`/`set`) drives `x[i]` and the
   indexed `for..of`; `Iterator<E>` (`__iterate`) drives cursor
   `for..of` (§6). Both are core decls like every prelude name (RFC
-  0028) — the builtin `Array`/`str`/`bytes` index themselves without the
+  0028) — the builtin `[T]`/`str`/`bytes` index themselves without the
   trait; user types reach the contracts through `use core::{ Index,
   Iterator };`. A type may have more than one element choice; the use
   site selects it.
@@ -302,7 +302,7 @@ immediately. Consequences:
 - `return` inside the body returns from the closure — stopping the
   iteration, not the enclosing function.
 
-The builtin sequences (`Array<T>`, `Vec<T>`, `str`, `bytes`) keep their
+The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) keep their
 fused index loops — never a per-element call (RFC 0032 §1.1 R2); they
 index themselves without the trait. The loop variable's type is `*T`,
 `*T`, `str`, and `u8` respectively: for the value sequences each
@@ -363,13 +363,13 @@ identity.** `a != b` is its negation (`!(a == b)`).
   accidentally work sometimes — content is the law, not the accident).
 - `bytes`: content comparison (RFC 0004) — the engine lowers it to the
   generic content op `ArrayCmp` because `bytes` is a `u8` array; plain
-  `Array<T>` stays identity (below).
+  `[T]` stays identity (below).
 
   Structs are values (RFC 0009 §7), so they join the value side —
   `s == t` compares field by field (`ValEq`), recursing through the same
   law per field. Pointers stay on the identity side: `*T == *T` is the
   cell-and-offset test, never a deep comparison.
-- **Everything else — class, dataclass, `Vec`, `Array`, enums,
+- **Everything else — class, dataclass, `Vec`, `[T]`, enums,
   `Opaque`, `I` — is a handle test**: `a == b` is true exactly when both
   point at the same cell (RFC 0016 §1). Since every non-primitive is
   shared, this is aliasing made observable: two structurally identical

@@ -1,30 +1,25 @@
 // pouch — the growable sequence package (RFC 0028): `Vec<T>` in rut over
-// the non-growable heap array primitive, plus the `Hashable` contract
-// (RFC 0025/0026) that Map/Set keys must satisfy.
+// the non-growable heap array `[T]` (RFC 0005 §9).
 //
-//   Array<T>(n)      allocate n slots (today's ArrNew)
-//   a[i] get/set     (today's ArrGet / ArrSet)
+//   [v; n]           the repeat construction — n slots filled with v
+//   a[i] get/set     (ArrGet / ArrSet)
 //   a.len()          the allocated length — the capacity
+//
+// The backing is a POINTER array (`buf: [*T]`, `[nil; cap]`): the repeat
+// needs a VALUE and a generic `T` has none — `nil` is the slot's zero,
+// and `push`/element stores keep `&v`. The fused `v[i]`/`for (x of v)`
+// lowering derefs pointer elements on load (RFC 0032 §1.1), so reads and
+// writes keep value semantics.
 //
 // Sequence syntax (`v[i]`, `v[i] = x`, `for (x of v)`) lowers through the
 // builtin `Iterator` contract (RFC 0012), which resolves the `buf`/`len`
 // backing fields directly — never a per-element method call (RFC 0032 §1.1).
 // The builtin `Vec` natives are gone; this class is the sequence type.
 
-use core::{Array};
-
-// ---- Hashable — hashing and key comparison are ONE contract
-// (RFC 0025/0026, RFC 0028): the trait Map/Set keys must satisfy.
-
-pub trait Hashable {
-    fn hash(self) -> u64;
-    fn eq(self, other: Self) -> bool;
-}
-
 // The type body is FIELDS ONLY (RFC 0012) — every method lives in the
 // inherent `impl Vec<T>` block below, the type's module only.
 pub class Vec<T> {
-    buf: Array<T>;      // capacity == buf.len() == cap
+    buf: [*T];          // capacity == buf.len() == cap; nil = the slot's zero
     len: i32;           // live length
     cap: i32;           // capacity mirrored, so `push`'s hot path never
                         // re-reads the `buf` handle (its GetF is an RC op)
@@ -36,13 +31,19 @@ impl Vec<T> {
     }
 
     pub fn with_capacity(cap: i32) -> Self {
-        return Self { buf: Array<T>(cap), len: 0, cap: cap };
+        return Self { buf: [nil; cap], len: 0, cap: cap };
     }
 
-    // `Vec<T>(n)` — n zeroed live elements (RFC 0005); the backing is
-    // exactly `n` slots, so length == capacity.
-    pub fn zeroed(n: i32) -> Self {
-        return Self { buf: Array<T>(n), len: n, cap: n };
+    // `filled(v, n)` — n slots of `v` (RFC 0005 §9's repeat, boxed for
+    // the caller): the value-carrying construction. A scalar fill is the
+    // memset-class op; the old `zeroed(n)` cannot exist generically — a
+    // generic `T` has no zero value to fill with.
+    pub fn filled(v: T, n: i32) -> Self {
+        let mut buf: [*T] = [nil; n];
+        for (let i = 0; i < n; i += 1) {
+            buf[i] = &v;
+        }
+        return Self { buf: buf, len: n, cap: n };
     }
 
     // `slice(from, to) -> *Vec<T>` is compiler-lowered (RFC 0042 §6):
@@ -57,14 +58,14 @@ impl Vec<T> {
             if (cap == 0) {
                 cap = 4;
             }
-            let mut next = Array<T>(cap);
+            let mut next: [*T] = [nil; cap];
             for (let i = 0; i < self.len; i += 1) {
                 next[i] = self.buf[i];
             }
             self.buf = next;
             self.cap = cap;
         }
-        self.buf[self.len] = v;
+        self.buf[self.len] = &v;
         self.len += 1;
     }
 
@@ -74,14 +75,14 @@ impl Vec<T> {
     /// error value).
     pub fn pop(mut self) -> T {
         self.len -= 1;
-        return self.buf[self.len];
+        return *self.buf[self.len];
     }
 
-    pub fn from(arr: Array<T>) -> Self {
+    pub fn from(arr: [T]) -> Self {
         let n = arr.len();
-        let mut v = Self { buf: Array<T>(n), len: n, cap: n };
+        let mut v = Self { buf: [nil; n], len: n, cap: n };
         for (let i = 0; i < n; i += 1) {
-            v.buf[i] = arr[i];
+            v.buf[i] = &arr[i];
         }
         return v;
     }
@@ -90,22 +91,29 @@ impl Vec<T> {
     // live length (not the capacity) into the immutable `bytes` (RFC 0004).
     pub fn freeze(self) -> bytes {
         let n = self.len;
-        let mut a = Array<u8>(n);
+        let mut a: [u8] = [0u8; n];
         for (let i = 0; i < n; i += 1) {
-            a[i] = self.buf[i];
+            a[i] = *self.buf[i];
         }
         return bytes.from(a);
     }
 
-    // Copy the live elements into a fresh, exactly-sized `Array<T>`. The
-    // backing `buf` may have spare capacity, so `buf.len()` is not the live
-    // length — this is the bridge from the growable `Vec` to the builtin
-    // array (`string_join` consumes the chunks of a `Vec<str>` this way).
-    pub fn as_array(self) -> Array<T> {
+    // Copy the live elements into a fresh, exactly-sized `[T]`. The
+    // backing `buf` may have spare capacity, so `buf.len()` is not the
+    // live length — this is the bridge from the growable `Vec` to the
+    // fixed array (`string_join` consumes the chunks of a `Vec<str>`
+    // this way). The seed-fill exists because a `[T]` can only be born
+    // from a value: the first live element seeds the allocation, the
+    // loop overwrites every slot with its own element.
+    pub fn as_array(self) -> [T] {
         let n = self.len;
-        let mut a = Array<T>(n);
+        if (n == 0) {
+            let empty: [T] = [];
+            return empty;
+        }
+        let mut a: [T] = [*self.buf[0]; n];
         for (let i = 0; i < n; i += 1) {
-            a[i] = self.buf[i];
+            a[i] = *self.buf[i];
         }
         return a;
     }

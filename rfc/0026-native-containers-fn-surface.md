@@ -120,7 +120,7 @@ it is rut source — the wrapper class is exactly that place.
   host ships a dedicated surface. No `Hashable` contract crosses.
 - Builtin types flow back natively — a fn may return `Option<V>` built
   host-side; rut cannot tell it wasn't written in rut. Containers
-  (`Vec`, `Array`) do not cross; iterate via per-element fns or keep
+  (`Vec`, `[T]`) do not cross; iterate via per-element fns or keep
   the index rut-side.
 - Re-entrancy guard stays for the fns that need it: while a host fn
   holds a box's `&mut` borrow, the borrow flag is set and a re-entrant

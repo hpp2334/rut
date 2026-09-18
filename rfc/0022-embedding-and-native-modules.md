@@ -71,7 +71,7 @@ fn gfx_module() -> NativeModule {
   files (`std:collection`'s `Hashable` + its builtin impls are
   the canonical case, RFC 0028). std:reflect adds the reflection
   protocols to the same registry — `Reflectable`/`Deserializable` for
-  `Option`/`Result`/`Vec`/`Array<T, N>` (RFC 0037).
+  `Option`/`Result`/`Vec`/`[T]` (RFC 0037).
 - **Internal natives**: the VM boots with native modules of its own in
   this same registry — `str`/`concat` (the `f""` desugaring, RFC 0007
   §2), `Opaque` construction (RFC 0014), Template construction (RFC 0027), and

@@ -142,7 +142,7 @@ builtin trait Name<T> { .. }        // engine-woven contract
   errors on the declaration.
 - **`builtin` is the engine's own surface**, spelled in the toolchain's
   decl files only (`core`, `calc`): the builtin containers
-  (`Array`/`Option`/`Result`/`Opaque`), the engine-lowered prelude fns
+  (`[T]`/`Option`/`Result`/`Opaque`), the engine-lowered prelude fns
   (`own`, `downcast`, `assert`, `panic`, the `str`/`bytes` natives —
   all of `core`'s functions; the prelude registers **no** host
   bodies), and the **engine-woven traits** (`Iterator`; v1.1 removed `Disposal`/`Index` — `on_drop` and builtin indexing replaced them — and the async plan adds `Task` plus its run contexts) — contracts the engine has built-in knowledge of

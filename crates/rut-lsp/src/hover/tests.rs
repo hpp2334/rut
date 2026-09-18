@@ -149,7 +149,7 @@ fn ambiguity_lists_candidates() {
 #[test]
 fn host_fn_surface_favors_own_methods() {
     // std-style surface index ahead of the doc
-    let surf_src = "pub host fn string_join(s: Array<str>) -> i32;\n";
+    let surf_src = "pub host fn string_join(s: [str]) -> i32;\n";
     let s2 = rut_lexer::lexer::normalize(surf_src);
     let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Decl);
     let mut surf = index(&s2, &sast);

@@ -46,6 +46,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 self.collect_free(*ret, decl_generics, subst, out);
             }
+            TypeKind::TyArray { elem } => {
+                self.collect_free(*elem, decl_generics, subst, out);
+            }
             _ => {}
         }
     }
@@ -96,30 +99,34 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            TypeKind::TyPath { segs, .. } => {
-                // builtin containers: unify element-wise — the core
-                // names, gated on the use statement like everywhere else (an
-                // unused name falls through to `resolve_type`, which
-                // reports it as not in scope)
-                let head = self.ctx.name(segs[0].name);
-                let core = self.ctx.extern_native_types.contains_key(&segs[0].name);
+            TypeKind::TyArray { elem } => {
+                // `[T]` against an array argument — unify element-wise
+                // (RFC 0005 §9): `fn f<T>(xs: [T])`
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
-                match (core, head, arg_kind) {
-                    (true, "Array", TyKind::Array { elem }) if segs[0].generics.len() == 1 => {
-                        self.unify_generic(segs[0].generics[0], elem, decl_generics, subst, sp)
-                    }
-                    _ => {
-                        let want = self.ctx.resolve_type(param_node, subst);
-                        if !self.widens(arg_ty, want) {
-                            self.ctx.err(sp, format!(
-                                "argument is `{}`, `{}` expected",
-                                self.ctx.type_name(arg_ty), self.ctx.type_name(want)
-                            ));
-                            Err(())
-                        } else {
-                            Ok(())
-                        }
-                    }
+                if let TyKind::Array { elem: arg_elem } = arg_kind {
+                    self.unify_generic(elem, arg_elem, decl_generics, subst, sp)
+                } else {
+                    self.ctx.err(sp, format!(
+                        "argument is `{}`, an array `[..]` expected",
+                        self.ctx.type_name(arg_ty)
+                    ));
+                    Err(())
+                }
+            }
+            TypeKind::TyPath { .. } => {
+                // builtin containers (`Opaque`): resolve and compare — the
+                // core names, gated on the use statement like everywhere
+                // else (an unused name falls through to `resolve_type`,
+                // which reports it as not in scope)
+                let want = self.ctx.resolve_type(param_node, subst);
+                if !self.widens(arg_ty, want) {
+                    self.ctx.err(sp, format!(
+                        "argument is `{}`, `{}` expected",
+                        self.ctx.type_name(arg_ty), self.ctx.type_name(want)
+                    ));
+                    Err(())
+                } else {
+                    Ok(())
                 }
             }
             TypeKind::TyFn { params, ret } => {

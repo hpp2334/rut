@@ -127,8 +127,8 @@ impl ExprFrame {
         self.fetch_operand(p)
     }
 
-    /// sweep prefix operators (`-` `!` `~` `await`), then fetch an atom.
-    /// `await select {..}` is the one prefix form that replaces its
+    /// sweep prefix operators (`-` `!` `~` `*` `&` `await`), then fetch an
+    /// atom. `await select {..}` is the one prefix form that replaces its
     /// operand outright (RFC 0019 §3).
     fn fetch_operand(&mut self, p: &mut Parser) -> Step {
         self.stage = ExprStage::Operand;
@@ -145,6 +145,11 @@ impl ExprFrame {
                 Tok::Bang => Some(Pfx::Un(UnOp::Not)),
                 Tok::Tilde => Some(Pfx::Un(UnOp::BitNot)),
                 Tok::Star => Some(Pfx::Un(UnOp::Deref)),
+                // `&e` — address-of (RFC 0005 §9). Positionally
+                // unambiguous with binary `&`: the prefix form is
+                // fetched only at operand starts (the binary operator
+                // shifts in the oploop, never here).
+                Tok::Amp => Some(Pfx::Un(UnOp::AddrOf)),
                 _ if p.at_kw("await") => {
                     let is_select = matches!(&p.peek(1).tok, Tok::Ident(s) if s == "select")
                         && matches!(p.peek(2).tok, Tok::LBrace);
@@ -362,6 +367,8 @@ enum AtomStage {
     Primary,
     Paren { first: bool, e: Option<NodeHandle<AnyExpr>>, elems: Vec<NodeHandle<AnyExpr>> },
     Array { elems: Vec<NodeHandle<AnyExpr>> },
+    /// `[v; n]` — the value was parsed, the count is being fetched
+    Repeat { value: NodeHandle<AnyExpr> },
     Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
     PathDots { segs: Vec<PathSeg> },
     PathGen { segs: Vec<PathSeg>, args: Vec<NodeHandle<AnyTy>> },
@@ -605,7 +612,7 @@ impl AtomFrame {
         }
     }
 
-    // -- array literal: `[ e1, .., en ]` --
+    // -- array literals: `[ e1, .., en ]` and the repeat `[ v; n ]` --
 
     fn array_top(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::RBracket) {
@@ -845,6 +852,13 @@ impl AtomFrame {
                 }
                 AtomStage::Array { elems } => {
                     elems.push(e);
+                    // `;` switches to the repeat form `[ v; n ]` (RFC
+                    // 0005 §9): the parsed element IS the fill value
+                    if p.eat_punct(Tok::Semi) {
+                        let value = elems.pop().expect("repeat value");
+                        self.stage = AtomStage::Repeat { value };
+                        return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
+                    }
                     if p.eat_punct(Tok::Comma) {
                         self.array_top(p)
                     } else {
@@ -852,6 +866,14 @@ impl AtomFrame {
                         let elems = std::mem::take(elems);
                         Step::Pop(Done::Expr(p.expr(ExprKind::ArrayLit { elems }, self.lo.to(p.span()))))
                     }
+                }
+                AtomStage::Repeat { value } => {
+                    let value = *value;
+                    p.expect(Tok::RBracket);
+                    Step::Pop(Done::Expr(p.expr(
+                        ExprKind::ArrayRepeat { value, count: e },
+                        self.lo.to(p.span()),
+                    )))
                 }
                 AtomStage::Struct { fields, .. } => {
                     let f = self.cur_field.take().expect("struct field without a name");

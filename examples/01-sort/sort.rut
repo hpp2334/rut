@@ -1,4 +1,4 @@
-use core::{ Opaque, downcast, make_ptr };
+use core::{ Opaque, downcast };
 use pouch::{ Vec };
 use calc::{ Math };
 // sort.rut — a sorting library in rut, called from Rust.
@@ -111,8 +111,8 @@ fn merge_sort(xs: *Vec<i32>) {
         return;
     }
     let mid = n / 2;
-    let left: *Vec<i32> = make_ptr(Vec<i32>.new());
-    let right: *Vec<i32> = make_ptr(Vec<i32>.new());
+    let left: *Vec<i32> = &Vec<i32>.new();
+    let right: *Vec<i32> = &Vec<i32>.new();
     for (let i = 0; i < mid; i += 1) {
         left.push(xs[i]);
     }
@@ -158,7 +158,7 @@ struct Bank {
 // ---- the host surface (entry = callable by the embedder) ----
 
 entry fn create() -> Opaque {
-    return Opaque.new(make_ptr(Bank { data: make_ptr(Vec<i32>.new()) }));
+    return Opaque.new(&Bank { data: &Vec<i32>.new() });
 }
 
 /// Host-supplied data, one element per call — exact inputs.
@@ -181,7 +181,7 @@ entry fn fill(c: Opaque, n: u32, seed: u32) {
         x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);
         fresh.push((x % 1000) as i32);
     }
-    b.data = make_ptr(fresh);
+    b.data = &fresh;
 }
 
 /// Sort the bank in place. Unknown names come back as `Result.err` —

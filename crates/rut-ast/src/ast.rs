@@ -515,9 +515,12 @@ pub enum TypeKind {
     TyFn { params: Vec<NodeHandle<AnyTy>>, ret: NodeHandle<AnyTy> },
     /// pointer type `*T` (RFC 0005) — nil-able, rc-backed reference
     TyPtr { inner: NodeHandle<AnyTy> },
+    /// array type `[T]` (RFC 0005 §9) — the fixed-length heap array;
+    /// grammar-spelled, resolved directly (the `Array` name is gone)
+    TyArray { elem: NodeHandle<AnyTy> },
     /// tuple type `(A, B, ..)` — a record with numeric fields (RFC 0007)
     TyTuple { elems: Vec<NodeHandle<AnyTy>> },
-    /// const-generic argument (the `N` in `Array<T, N>`) — an expression
+    /// const-generic argument (the `N` in a const-generic param) — an expression
     TyConst(NodeHandle<AnyExpr>),
     /// `A | B` — a bound-only union (RFC 0043): legal only in `requires`
     /// bounds and union aliases; a value position is a compile error
@@ -550,8 +553,12 @@ pub enum ExprKind {
     /// tuple expression `(a, b, ..)` — a record with numeric fields
     /// (RFC 0007; `()` is rejected — the empty value is `nil`, v1.2)
     Tuple { elems: Vec<NodeHandle<AnyExpr>> },
-    /// `[e1, .., en] : Array<T, n>` (RFC 0007 §1)
+    /// `[e1, .., en] : [T]` (RFC 0005 §9, RFC 0007 §1)
     ArrayLit { elems: Vec<NodeHandle<AnyExpr>> },
+    /// `[v; n] : [T]` — the repeat construction (RFC 0005 §9): `n` slots
+    /// filled with the VALUE `v`. There is no type-in-expression form — a
+    /// type is not a value.
+    ArrayRepeat { value: NodeHandle<AnyExpr>, count: NodeHandle<AnyExpr> },
     WhenExpr { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
     Await { expr: NodeHandle<AnyExpr> },
     /// `select { ... }` — only reachable as `await select { .. }` (RFC 0019 §3)
@@ -588,6 +595,10 @@ pub enum UnOp {
     BitNot,
     /// `*p` — pointer dereference, copies the pointee out (RFC 0005)
     Deref,
+    /// `&e` — address-of: the operand's cell as a `*T` (RFC 0005 §9).
+    /// Positionally unambiguous with binary `&`; a ref payload shares the
+    /// operand's object (RFC 0016 §2) — `&temp` ≡ the old `make_ptr`.
+    AddrOf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

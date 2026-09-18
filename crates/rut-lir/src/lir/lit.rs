@@ -327,7 +327,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     pub(crate) fn compile_array_lit(&mut self, elems: Vec<NodeHandle<AnyExpr>>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        // `[e1, .., en] : Array<T>` (RFC 0007 §1); T from expected or the
+        // `[e1, .., en] : [T]` (RFC 0005 §9, RFC 0007 §1); T from expected or the
         // first element; uncontextualized int elements default to i32
         let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
             Some(TyKind::Array { elem }) => Some(elem),
@@ -357,6 +357,69 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let aty = self.ctx.mk_array(elem);
         let dst = self.new_reg(aty);
         { let (argv_off, argc) = self.pool_args(&(eregs)); self.emit(Op::ArrLit { dst: dst, ty: aty, argv_off, argc }, sp.lo); }
+        Ok(aty)
+    }
+
+    /// `[v; n]` — the repeat construction (RFC 0005 §9): `ArrNew` for n
+    /// slots, then a fill loop storing `v` into each. A scalar/nil fill is
+    /// the memset-class op (the store is a plain slot move); a ref fill
+    /// copies the cell handle n times — every slot aliases the one cell.
+    pub(crate) fn compile_array_repeat(
+        &mut self,
+        value: NodeHandle<AnyExpr>,
+        count: NodeHandle<AnyExpr>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
+            Some(TyKind::Array { elem }) => Some(elem),
+            _ => None,
+        };
+        // the value first (its type names the element; the hint flows in
+        // from the annotation — `[nil; cap]` over a `[*T]`), then the count
+        let vt = self.compile_expr(value, elem_hint)?;
+        let elem = match elem_hint {
+            Some(u) if self.widens(vt, u) => u,
+            _ => vt,
+        };
+        let val = self.last_reg;
+        let ct = self.compile_expr(count, Some(TY_I32))?;
+        if ct != TY_I32 {
+            self.ctx.err(sp, format!("the repeat count must be `i32`, found `{}`", self.ctx.type_name(ct)));
+        }
+        let len = self.last_reg;
+        let aty = self.ctx.mk_array(elem);
+        let dst = self.new_reg(aty);
+        self.emit(Op::ArrNew { dst, ty: aty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
+        // a `nil` fill IS the zero-fill — ArrNew alone is the memset
+        if matches!(self.ctx.ast.expr(value), ExprKind::Lit(Lit::Nil)) {
+            self.last_reg = dst;
+            return Ok(aty);
+        }
+        // fill: `for i in 0..len { dst[i] = val }`
+        let zero = self.new_reg(TY_I32);
+        self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
+        let idx = self.new_reg(TY_I32);
+        self.emit(Op::Mov { dst: idx, src: zero }, sp.lo);
+        let one = self.new_reg(TY_I32);
+        self.emit(Op::ConstRaw { dst: one, bits: 1 }, sp.lo);
+        let l_head = self.new_label();
+        let l_body = self.new_label();
+        let l_end = self.new_label();
+        self.bind(l_head);
+        self.emit(Op::LoopHead, sp.lo);
+        let more = self.new_reg(TY_BOOL);
+        self.emit(cmpop(CmpOp::Lt, PrimTy::I32, more, idx, len), sp.lo);
+        self.br(more, l_body, l_end);
+        self.bind(l_body);
+        let repr = self.ctx.types.repr_of(elem);
+        self.emit(Op::ArrSet { arr: dst, idx, val, repr }, sp.lo);
+        let next = self.new_reg(TY_I32);
+        self.emit(arith(ArithOp::Add, PrimTy::I32, next, idx, one), sp.lo);
+        self.emit(Op::Mov { dst: idx, src: next }, sp.lo);
+        self.jmp(l_head);
+        self.bind(l_end);
+        self.last_reg = dst;
         Ok(aty)
     }
 
@@ -564,6 +627,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 for e in elems {
                     kids(e.id(), out, self);
                 }
+            }
+            Kind::Expr(ExprKind::ArrayRepeat { value, count }) => {
+                kids(value.id(), out, self);
+                kids(count.id(), out, self);
             }
             Kind::Expr(ExprKind::Tuple { elems }) => {
                 for e in elems {

@@ -28,8 +28,8 @@ Workers are **separate VMs on separate threads** with separate heaps (RFC
 |---|---|
 | primitives (ints/floats/bool/char) | copy |
 | `str` | copy (immutable) |
-| **every other cell** — `Vec<T>`, `Array<T, N>`, class/dataclass instances, builtin `Option`/`Result`, enums | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case); every element/field must itself be crossable |
-| `Slice<T>` view | transfer if refcount == 1, else deep copy — same rule as its owner cell; provenance (which Vec/Array cell it views) is invisible across the boundary |
+| **every other cell** — `Vec<T>`, `[T]`, class/dataclass instances, builtin `Option`/`Result`, enums | **transfer** if refcount == 1, else deep copy (zero-copy fast path is the common case); every element/field must itself be crossable |
+| `Slice<T>` view | transfer if refcount == 1, else deep copy — same rule as its owner cell; provenance (which Vec/[T] cell it views) is invisible across the boundary |
 | `Sender` / `Receiver` | transfer |
 | closures | **not transferable** in v1 — compile-time error at the send/`spawn_worker` site |
 | host opaque types | transfer **only** if registered `send` by the host (RFC 0025) — checked at the transfer, by `TypeId` |

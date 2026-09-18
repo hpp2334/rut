@@ -270,16 +270,15 @@ fn reassignment_invalidates_a_stale_origin() {
 
 #[test]
 fn builtin_class_inherent_impls_compile() {
-    // a module-owned `builtin class` takes an inherent impl (the
+    // the array type `[T]` takes an inherent impl (the
     // `LaunchedTask<T>` pattern, RFC 0012 §2): generic through the
-    // native-type table, dispatched statically through the shape
+    // element parameter, dispatched statically through the shape
     let out = compile(
-        "use core::{ Array };\n\
-         impl Array<T> {\n\
+        "impl [T] {\n\
              fn first(self) -> i32 { return 7; }\n\
          }\n\
          fn main() -> i32 {\n\
-             let a = Array<i32>(2);\n\
+             let a = [0; 2];\n\
              return a.first();\n\
          }\n",
     );

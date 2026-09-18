@@ -187,29 +187,27 @@ fn trait_object_satisfies_nothing() {
 
 #[test]
 fn bound_may_reference_another_generic() {
-    // `U requires Array<T>` — resolved under the call-site substitution
+    // `U requires [T]` — resolved under the call-site substitution
     let out = compile(
-        "use core::{ Array };\n\
-         fn hold<T, U requires Array<T>>(x: U) -> i32 { return 0; }\n\
+        "         fn hold<T, U requires [T]>(x: U) -> i32 { return 0; }\n\
          fn main() -> i32 {\n\
-             let a = Array<i32>(2);\n\
-             return hold<i32, Array<i32>>(a);\n\
+             let a = [0; 2];\n\
+             return hold<i32, [i32]>(a);\n\
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 
-    // U = Array<str> does not satisfy `U requires Array<i32>`
+    // U = [str] does not satisfy `U requires [i32]`
     let ds = diags_of(
-        "use core::{ Array };\n\
-         fn hold<T, U requires Array<T>>(x: U) -> i32 { return 0; }\n\
+        "         fn hold<T, U requires [T]>(x: U) -> i32 { return 0; }\n\
          fn main() -> i32 {\n\
-             let s = Array<str>(2);\n\
-             return hold<i32, Array<str>>(s);\n\
+             let s = [\"\", \"\"];\n\
+             return hold<i32, [str]>(s);\n\
          }\n",
     );
     assert!(
         ds.iter().any(|d| d.contains("does not satisfy")),
-        "Array<str> ≠ Array<i32>: {ds:?}"
+        "[str] ≠ [i32]: {ds:?}"
     );
 }
 

@@ -24,7 +24,7 @@ pub struct Limits {
 ## 1. Heap budget
 
 - **What counts**: everything the self-managed heap tracks (RFC 0039
-  §1) — cell headers + payloads, buffer blocks (Vec/Array data),
+  §1) — cell headers + payloads, buffer blocks (Vec/[T] data),
   string blocks, frames and register blocks. What does not: module
   binaries, the shared type table, and host-side structures.
 - **Check points**: `Heap::alloc` (RFC 0039 §2) — cell mint

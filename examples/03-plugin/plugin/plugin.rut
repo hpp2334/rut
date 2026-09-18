@@ -9,7 +9,7 @@
 // it wants wired to each topic. The host later fires those exports with
 // the state handle `init` returned.
 
-use core::{ make_ptr, Opaque, downcast };
+use core::{ Opaque, downcast };
 use pouch::{ Vec };
 use server::{ subscribe, emit };
 
@@ -102,7 +102,7 @@ entry fn init(bus: Opaque) -> Opaque {
     subscribe(bus, "msg", "on_msg");
     subscribe(bus, "leave", "on_leave");
     subscribe(bus, "tick", "on_tick");
-    return Opaque.new(make_ptr(Moderator.new(bus)));
+    return Opaque.new(&Moderator.new(bus));
 }
 
 entry fn on_join(c: Opaque, name: str) {

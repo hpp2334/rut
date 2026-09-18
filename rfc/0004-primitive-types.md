@@ -23,9 +23,9 @@ deferred.
 | float | `f32 f64` | IEEE 754 |
 | misc | `bool`, `char` (Unicode scalar, 4 bytes) | |
 | heap: text | `str` | immutable, UTF-8, length-prefixed; format literals `f"a={x}"` (RFC 0007 §2), raw literals `r"..."`; compared by content; internally COW-shared (RFC 0016 §4); `s.slice(a, b)` is an O(1) view over the same octets (RFC 0042) |
-| heap: binary | `bytes` | immutable, content-compared octet buffer; at the engine level a `u8` array; built with `bytes(n)` (zeroed), `bytes_from(Array<u8>)`, or `Vec<u8>.freeze()` (RFC 0005) |
+| heap: binary | `bytes` | immutable, content-compared octet buffer; at the engine level a `u8` array; built with `bytes(n)` (zeroed), `bytes_from([u8])`, or `Vec<u8>.freeze()` (RFC 0005) |
 | heap: seq | `Vec<T>` | mutable, growable buffer — cell handle, **shared**; flat storage for primitive `T` (RFC 0016 §4) |
-| heap: seq | `Array<T, N>` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |
+| heap: seq | `[T]` | fixed array — cell handle, **shared**; `N` const, part of identity (RFC 0005) |
 | heap: slice | `Slice<T>` | builtin trait — trait-typed values spell the bare name (RFC 0005, RFC 0012 §2) |
 | user: value | `dataclass D { .. }` | open record — **cell handle, shared** (reference semantics; `own` for copies), methods & impl blocks allowed (RFC 0009); payload a slot array (RFC 0015 §4) |
 | user: value | `class C { .. }` | sealed record — also a cell handle, shared (RFC 0010), payload a slot array (RFC 0015 §4) |
@@ -33,11 +33,11 @@ deferred.
 - `Vec<f32>` is a flat `f32` buffer behind a header — no per-element boxing,
   no per-element refcount traffic (RFC 0016 §4). `Vec<Point>` (dataclass or
   class element) is likewise flat: values stored inline, no headers, no
-  refcounts — and `Array<Point, N>` has no header at all: it *is* the
+  refcounts — and `[Point]` has no header at all: it *is* the
   N-slot inline block, copied whole.
 - `Vec<f32>` is a flat `f32` buffer behind a header — no per-element
   handles, no per-element refcount traffic (RFC 0016 §4). `Vec<Point>`
-  (composite elements) stores one cell pointer per element; `Array<T, N>`
+  (composite elements) stores one cell pointer per element; `[T]`
   is the same shape with the length frozen at `N`.
 - **Binary data is `bytes`**: an immutable, content-compared octet buffer
   (`Vec<u8>` remains the mutable builder; `freeze()` turns one into a
@@ -45,7 +45,7 @@ deferred.
   `for (let b of b)`, and cross the host boundary directly (RFC 0023 §2).
   At the engine level `bytes` is a `u8` array (RFC 0005).
 - No `null`, no `undefined`. Absence is `Option<T>` (RFC 0005).
-- **Size accessor**: `.len()` on `Vec<T>`/`Array<T>` (and any `Index<T>`
+- **Size accessor**: `.len()` on `Vec<T>`/`[T]` (and any `Index<T>`
   object); `str`/`bytes` have no method syntax, so their size is the
   free functions `string_len(s)` / `bytes_len(b)` (RFC 0012). There is no
   `.length` property or `.count()` variant anywhere in the language.
@@ -56,7 +56,7 @@ Primitives (`u8..u64`, `i8..i64`, `u/isize`, `f32`/`f64`, `bool`,
 `char`) copy on assignment/passing/return — plain slot moves. **Every
 other type is a refcounted heap cell handle** (RFC 0016 §1):
 assignment shares, and mutation through any alias is visible through
-all of them — dataclass and class instances, `str`, `Vec`, `Array`,
+all of them — dataclass and class instances, `str`, `Vec`, `[T]`,
 enums, `Opaque`, trait-typed values alike. Writing is gated by the `mut`-binding
 law (RFC 0003 §1), never by the sharing. The **eager copy is the
 `own(x)` builtin** (RFC 0011 §1): shallow — primitive fields copied,

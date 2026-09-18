@@ -97,7 +97,7 @@ gparam := Ident ('requires' bound)?     // fns, methods, and classes (§A5)
   a trait-object type fails any bound — only a concrete type with a
   registered impl admits.
 - **Bounds may reference the item's other generics**
-  (`fn hold<T, U requires Array<T>>(x: U)`) — members resolve under the
+  (`fn hold<T, U requires [T]>(x: U)`) — members resolve under the
   call-site substitution.
 - **Admission-only**: the bound grants NO method calls on bare `T`
   (OQ-1 stays deferred). What it proves is the WIDENING: a body may

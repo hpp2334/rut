@@ -248,12 +248,9 @@ impl TypeFrame {
                 }
                 TyStage::Bracket => {
                     p.expect(Tok::RBracket);
-                    let array = sym::ARRAY;
-                    let segs = vec![PathSeg {
-                        name: array,
-                        generics: vec![t],
-                    }];
-                    let t = p.typ(TypeKind::TyPath { segs }, self.lo.to(p.span()));
+                    // `[T]` — the array type (RFC 0005 §9); resolved
+                    // directly, with no surface name behind it
+                    let t = p.typ(TypeKind::TyArray { elem: t }, self.lo.to(p.span()));
                     self.pop_or_union(p, t)
                 }
                 TyStage::Tuple { elems } => {
@@ -385,7 +382,16 @@ impl Parser {
                 Tok::Shl => depth += 2,
                 Tok::Gt => depth -= 1,
                 Tok::Shr => depth -= 2,
-                Tok::Semi | Tok::Eof | Tok::RParen | Tok::RBrace | Tok::RBracket => return false,
+                // a `[T]` argument nests — an unmatched `]` (depth underflow)
+                // still means this was never a generic list
+                Tok::LBracket => depth += 1,
+                Tok::RBracket => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        return false;
+                    }
+                }
+                Tok::Semi | Tok::Eof | Tok::RParen | Tok::RBrace => return false,
                 _ => {}
             }
             i += 1;

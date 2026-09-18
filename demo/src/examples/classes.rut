@@ -10,7 +10,7 @@
 // unannotated = module-private, `pub` (optionally scoped: `pub(mod)`,
 // `pub(super)`, `pub(self)`) exposes them.
 
-use core::{ make_ptr, panic };
+use core::{ panic };
 use ink::{ Logger };
 
 class Counter {

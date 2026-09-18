@@ -205,8 +205,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         (ctx.mk_data_inst(*dname, args, ctx.ast.span(m.id())), Some(*dname))
                     }
                     Some((dname, params))
-                        if ctx.extern_native_types.get(dname).copied()
-                            == Some(rut_core::binary::NativeTy::Array) =>
+                        if dname == &sym::ARRAY && params.len() == 1 =>
                     {
                         let elem = inst
                             .subst

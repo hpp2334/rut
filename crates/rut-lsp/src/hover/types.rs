@@ -125,6 +125,7 @@ pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
             }
             s
         }
+        TypeKind::TyArray { elem } => format!("[{}]", ty_src(ast, *elem)),
         TypeKind::TyUnion { elems } => elems
             .iter()
             .map(|&e| ty_src(ast, e))

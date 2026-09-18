@@ -2,7 +2,6 @@
 // through a POINTER field: `*Node` is one word, `nil` when absent (RFC
 // 0005). A binary tree is the canonical recursive shape.
 
-use core::{ make_ptr };
 use ink::{ Logger };
 struct Node {
     value: i32,
@@ -16,8 +15,8 @@ fn make(depth: i32, v: i32) -> Node {
     }
     return Node {
         value: v,
-        left: make_ptr(make(depth - 1, v * 2)),
-        right: make_ptr(make(depth - 1, v * 2 + 1)),
+        left: &make(depth - 1, v * 2),
+        right: &make(depth - 1, v * 2 + 1),
     };
 }
 
@@ -30,6 +29,6 @@ fn count(n: *Node) -> i32 {
 
 pub fn main() {
     let log = Logger.new("tree");
-    let root = make_ptr(make(3, 1));
+    let root = &make(3, 1);
     log.info(f"nodes={count(root)}");
 }

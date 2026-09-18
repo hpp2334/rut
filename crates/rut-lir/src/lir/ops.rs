@@ -348,6 +348,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
+                // `p.f = ..` through a pointer auto-derefs (RFC 0005) —
+                // so does `arr[i].f = ..` when the elements are `*T`
+                let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() else {
                     self.ctx.err(sp, "field assignment needs a struct/class receiver");
                     return Err(());

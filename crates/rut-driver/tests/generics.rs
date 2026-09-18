@@ -102,32 +102,33 @@ fn explicit_generic_static_path() {
 }
 
 #[test]
-fn vec_over_array_compiles() {
+fn vec_over_pointer_array_compiles() {
+    // the Vec shape over the pointer-array backing (RFC 0005 §9):
+    // `[nil; cap]` is the only generic zero; stores keep `&v`, and the
+    // fused loads deref (RFC 0032 §1.1)
     let out = compile(
-        "use core::{ Array };\n\
-         class Vec<T> {\n\
-             buf: Array<T>;\n\
+        "class Vec<T> {\n\
+             buf: [*T];\n\
              len: i32;\n\
          }\n\
          impl Vec<T> {\n\
              fn new() -> Self { return Vec.with_capacity(0); }\n\
-             fn with_capacity(cap: i32) -> Self { return Self { buf: Array<T>(cap), len: 0 }; }\n\
+             fn with_capacity(cap: i32) -> Self { return Self { buf: [nil; cap], len: 0 }; }\n\
              fn len(self) -> i32 { return self.len; }\n\
              fn push(mut self, v: T) -> nil {\n\
                  if (self.len == self.buf.len()) {\n\
                      let mut cap = self.buf.len() * 2;\n\
                      if (cap == 0) { cap = 4; }\n\
-                     let mut next = Array<T>(cap);\n\
+                     let mut next: [*T] = [nil; cap];\n\
                      for (let i = 0; i < self.len; i += 1) { next[i] = self.buf[i]; }\n\
                      self.buf = next;\n\
                  }\n\
-                 self.buf[self.len] = v;\n\
+                 self.buf[self.len] = &v;\n\
                  self.len += 1;\n\
              }\n\
-             fn pop(mut self) -> Option<T> {\n\
-                 if (self.len == 0) { return Option.none(); }\n\
+             fn pop(mut self) -> T {\n\
                  self.len -= 1;\n\
-                 return Option.some(self.buf[self.len]);\n\
+                 return *self.buf[self.len];\n\
              }\n\
          }\n\
          fn main() -> i32 {\n\

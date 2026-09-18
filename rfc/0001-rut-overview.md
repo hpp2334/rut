@@ -109,9 +109,9 @@ a structural answer in rut:
 - G1 — Types are held at runtime (reified), not erased like TypeScript.
 - G2 — Types make code faster: typed bytecode, typed register slots,
   monomorphized generics, flat primitive buffers
-  (`Vec<T>`/`Array<T, N>`).
+  (`Vec<T>`/`[T]`).
 - G3 — Primitive types: `u8/u16/u32/u64`, `i8/i16/i32/i64`, `f32/f64`, `bool`,
-  `char`, plus `str`, `Vec<T>`/`Array<T, N>`, and user
+  `char`, plus `str`, `Vec<T>`/`[T]`, and user
   `trait`/`dataclass`/`class`/`enum` — everything beyond the
   primitives is a shared refcounted cell (RFC 0016 §1).
 - G4 — Kotlin-style coroutines built on Rust-style poll semantics
@@ -164,7 +164,7 @@ final sections of the RFC they implement).
 - 0002 — lexical structure: source model, identifiers (`$`), naming rules
 - 0003 — modules & visibility: declarations-only scope, `pub` forms
 - 0004 — primitive types & integer semantics: the by-value regime
-- 0005 — builtin generic types: `Option`, `Result`, `Vec` (+ `Array<T, N>`
+- 0005 — builtin generic types: `Option`, `Result`, `Vec` (+ `[T]`
    fixed arrays, `Slice<T>` views)
 - 0006 — enums: simple named-int sets
 - 0007 — literals & inference: suffixes, conversions, plain/raw/format strings

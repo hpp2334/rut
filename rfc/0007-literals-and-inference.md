@@ -40,7 +40,7 @@ builtin allocation calls (`Vec<f32>(1024)`).
   `as` binds tighter than `*`, left-associative, and its RHS is a naming
   position restricted to the numeric primitives. There are no implicit
   numeric conversions at all in v1.
-- **Fixed-array literal**: `[e1, .., en]` has type `Array<T, n>` — an
+- **Fixed-array literal**: `[e1, .., en]` has type `[T]` — an
   inline **value**, pure data, no allocation (RFC 0005). It infers `T`
   bidirectionally like any literal; at module scope it is a
   load-time expression when every element is (RFC 0003 §1). A growable needs

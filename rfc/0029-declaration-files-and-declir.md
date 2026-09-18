@@ -74,7 +74,7 @@ only, and — beyond RFC 0003's module scope — every declaration must be
 - `builtin class` / `builtin trait` / `builtin fn` / `builtin impl` —
   **the engine's own
   surface**, spelled in the toolchain's decl files only (`core`):
-  the builtin containers (`Array`/`Option`/`Result`/
+  the builtin containers (`[T]`/`Option`/`Result`/
   `Opaque` — class-shaped, generic, members compiler-lowered to ops,
   RFC 0032 §1.1), the engine-lowered fns (all of `core`'s — `own`,
   `downcast`, `assert`, `panic`, the `str`/`bytes` natives; the prelude

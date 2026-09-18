@@ -25,7 +25,7 @@ The standard library splits in two:
 **`core` is the only standard.** It is the prelude surface — uniformly
 `builtin class`/`builtin trait`/`builtin fn` (the engine implements it,
 compiler-lowered; the prelude registers **no** host bodies, RFC 0025
-revised): the builtin containers `Array<T>`/`Option<T>`/`Result<T,E>`
+revised): the builtin containers `[T]`/`Option<T>`/`Result<T,E>`
 (RFC 0005) and `Opaque` (RFC 0014), the engine-woven traits —
 `Iterator<T>` (RFC 0012; ordinary nominal impls for users,
 compiler-backed impls for the engine's own types; v1.1 removed
@@ -41,7 +41,7 @@ nothing from `core` is in scope until a module writes `use core::{
 .. };`** — a missing use is a source diagnostic naming the fix.
 (Primitive types and their conversion syntax — `i32`, `str`, `bytes(n)`,
 `i32(x)` — are grammar, RFC 0007, not uses; so are the engine builtins
-`Array`/`Option`/`Result`/`Opaque`, the engine-woven traits, and the
+`[T]`/`Option`/`Result`/`Opaque`, the engine-woven traits, and the
 engine fns — the whole prelude, spelled in `core`'s `.d.rut` as
 `builtin` decls so users and the LSP see their contracts, RFC 0025
 revised.)

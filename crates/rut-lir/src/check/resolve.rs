@@ -130,6 +130,12 @@ impl<'a> Ctx<'a> {
                 let elem = self.resolve_type(*inner, env);
                 self.mk_ptr(elem)
             }
+            TypeKind::TyArray { elem } => {
+                // `[T]` — the array type (RFC 0005 §9): grammar-spelled,
+                // resolved directly, no surface name behind it
+                let elem = self.resolve_type(*elem, env);
+                self.mk_array(elem)
+            }
             TypeKind::TyTuple { elems } => {
                 let mut etys = Vec::new();
                 for e in elems {
@@ -181,26 +187,18 @@ impl<'a> Ctx<'a> {
                     return TY_I32;
                 }
                 // a used core builtin container (RFC 0028): the
-                // prelude is used, never ambient — `Array`/`Opaque`
-                // resolve only when the name was bound from the core
-                // surface
+                // prelude is used, never ambient — `Opaque`
+                // resolves only when the name was bound from the core
+                // surface (`[T]` never reaches here — it is `TyArray`)
                 let core_ty = self.extern_native_types.get(&name).copied();
                 // a declared or used type shadows a builtin name (RFC
                 // 0005: `pouch`'s `Vec` is an ordinary class, so it
                 // never reaches the builtin table)
-                let shadow = matches!(name, sym::ARRAY | sym::OPAQUE)
+                let shadow = name == sym::OPAQUE
                     && (self.find_data(name).is_some() || self.extern_types.contains_key(&name));
                 if let Some(kind) = core_ty.filter(|_| !shadow) {
                     let generics = seg.generics.clone();
                     return match (kind, generics.as_slice()) {
-                        (rut_core::binary::NativeTy::Array, [e]) => {
-                            let t = self.resolve_type(*e, env);
-                            self.mk_array(t)
-                        }
-                        (rut_core::binary::NativeTy::Array, _) => {
-                            self.err(sp, "Array takes one generic argument: Array<T>");
-                            TY_I32
-                        }
                         (rut_core::binary::NativeTy::Opaque, []) => TY_OPAQUE,
                         (rut_core::binary::NativeTy::Opaque, _) => {
                             self.err(sp, "`Opaque` takes no generic arguments");

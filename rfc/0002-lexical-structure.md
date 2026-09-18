@@ -39,7 +39,7 @@ compiler gives it no meaning; greppability is enforced by style.
 ## 3. Naming conventions (enforced)
 
 - **Types are PascalCase** — user types and parameterized builtins:
-  `Vec<T>`, `Array<T, N>` (const-generic), `Option<T>`, `Result<T,E>`,
+  `Vec<T>`, `[T]`, `Option<T>`, `Result<T,E>`,
   `Weak<T>`,
   `Opaque`
   (the erasure-box builtin, RFC 0014),

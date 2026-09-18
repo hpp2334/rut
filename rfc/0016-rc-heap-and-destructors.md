@@ -20,7 +20,7 @@ between isolates (RFC 0021), so all counters are plain `Cell`s — no atomics.
 **Everything except primitives is a heap cell.** The numeric types
 (`u8..u64`, `i8..i64`, `u/isize`), `f32`/`f64`, `bool`, and `char` are
 inline `Slot` values moved by plain `Mov`. Every other value — `str`,
-`Vec<T>`, `Array<T, N>`, builtin `Option`/`Result`, user enums,
+`Vec<T>`, `[T]`, builtin `Option`/`Result`, user enums,
 dataclass and class instances, `Opaque` boxes (RFC 0014), and host
 opaques (RFC 0025) — **is a heap cell handle**: assignment, passing, and
 returning copy the handle (`MovRef`, rc++), and mutation is visible
@@ -88,24 +88,24 @@ table + func signatures.
 
 ## 4. Vecs, arrays, slices & strings: where flatness survives
 
-- **Primitive-element buffers stay flat.** `Vec<T>` and `Array<T, N>` for
+- **Primitive-element buffers stay flat.** `Vec<T>` and `[T]` for
   numeric/bool/char `T` store raw elements inline (a flat `f32` buffer
   behind the header). Only the header is refcounted; element copies in/out
   are plain `Slot` moves, no inc/dec. This is the one place the
   everything-is-a-cell law does not reach: primitive `Slot`s have no
   identity to share.
 - **Composite-element buffers store handles.** `Vec<Point>` /
-  `Array<Point, N>` hold one cell pointer per element; the scanner sees
+  `[Point]` hold one cell pointer per element; the scanner sees
   element pointers, RC sees one count for the buffer itself.
   `push`/`pop`/`set` emit the right inc/dec ops. `own(v)` over such a
   buffer clones the buffer but shares the element cells (shallow).
-- `Array<T, N>` is a fixed-length cell — the same shape as `RutVec` with
+- `[T]` is a fixed-length cell — the same shape as `RutVec` with
   `len == cap == N` frozen; `N` remains a compile-time constant and part
   of the type's identity (RFC 0005). Fixed-array literals that fold at
   compile time (RFC 0033 §3) become immortal constant-pool cells
   (rc==0 sentinel), like interned strings.
 - **`Slice<T>` view cells** — one kind: the **view cell**
-  (`RutSliceRef`: holds a *cell handle* to the owner Vec or Array cell
+  (`RutSliceRef`: holds a *cell handle* to the owner Vec or [T] cell
   plus `off`/`len`, **never a pointer into the data block**). View cells
   dispatch through the owner cell, so growth (a Vec's buffer may move)
   keeps existing `Slice<T>` view values valid; indexing bounds-checks

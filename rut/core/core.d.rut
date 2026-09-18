@@ -1,7 +1,8 @@
 // core/core.d.rut — the prelude surface (RFC 0028): what the language
-// itself ships — the `str`/`bytes` fns, the engine builtins `Array`/
-// `Option`/`Result`/`Opaque` (RFC 0005, RFC 0014), and the engine-woven
-// traits `Disposal`/`Index`/`Iterator`.
+// itself ships — the `str`/`bytes` fns, the engine builtin `Opaque`
+// (RFC 0005, RFC 0014), and the engine-woven traits
+// `Iterator` (the `Disposal`/`Index` contracts are gone, v1.1). The
+// array `[T]` is pure grammar — no decl carries it (RFC 0005 §9).
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
 // compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1): the
@@ -31,10 +32,10 @@ pub builtin fn assert(cond: bool, msg: str) -> nil;
 // RFC 0034 §2 — abort with the message.
 pub builtin fn panic(msg: str) -> nil;
 
-// RFC 0005 — box `v` into a fresh one-slot cell; the result is a
-// nil-able `*T` (`nil` is the null pointer; dereferencing it traps).
-pub builtin fn make_ptr<T>(v: T) -> *T;
-
+// RFC 0005 §9 — the address-of: `&v` boxes the operand's cell into a
+// fresh one-slot cell; the result is a nil-able `*T` (`nil` is the null
+// pointer; dereferencing it traps). No decl — `&` is grammar.
+//
 // RFC 0016 §3 — run `cleanup(p)` when `p`'s cell refcount reaches zero.
 // One callback per pointer; a second attach is a compile error.
 pub builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> nil;
@@ -47,7 +48,7 @@ pub builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> nil;
 // pub method  s.code() -> u32
 // pub type-method  str.from_code(n: u32) -> str
 
-pub builtin fn string_join(parts: Array<str>) -> str;  // join in one pass (RFC 0007)
+pub builtin fn string_join(parts: [str]) -> str;  // join in one pass (RFC 0007)
 
 
 // ---- engine builtin types (compiler-lowered members) ----
@@ -65,14 +66,16 @@ pub builtin class bytes {
     fn len(self) -> i32;            // octets
     fn decode(self) -> str;         // UTF-8 (lossy)
 }
-// type-methods: bytes.zeroed(n) -> bytes, bytes.from(a: Array<u8>) -> bytes
+// type-methods: bytes.zeroed(n) -> bytes, bytes.from(a: [u8]) -> bytes
 // NOTE: `Option`/`Result`/`own` were removed in v1.1 — absence is
 // `nil` on a pointer type or a `(T, err)` tuple; use sites diagnose
 // with the removal and its replacement.
 
-pub builtin class Array<T> {
-    fn len(self) -> i32;                    // the heap array's runtime length
-}
+// The array `[T]` (RFC 0005 §9) declares NOTHING here: the type is
+// grammar (`[T]`), construction is the repeat `[v; n]` — a VALUE and a
+// count — and `a[i]`/`a.len()` are compiler-lowered (RFC 0032 §1.1).
+// The `Array` name itself is removed: use sites diagnose with the
+// removal and its replacement.
 
 // RFC 0014 — the erasure box: any value goes in via `Opaque.new`,
 // `downcast<T>(o)` recovers it (and `x is T` probes it). A boot-table type

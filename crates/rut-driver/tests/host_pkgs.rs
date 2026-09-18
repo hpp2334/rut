@@ -103,7 +103,7 @@ fn non_crossing_signatures_refuse_at_load() {
     // signature over anything but the crossing set refuses, naming the
     // offender
     let err = lower_decl_module(
-        "pub host fn bad(v: Array<str>) -> str;",
+        "pub host fn bad(v: [str]) -> str;",
         "test.d.rut",
     )
     .unwrap_err();

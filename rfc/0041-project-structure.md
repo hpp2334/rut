@@ -219,7 +219,7 @@ rut/
 │   │   │                           #   `builtin trait`/`builtin fn` — fns
 │   │   │                           #   (own/downcast/assert/panic/str/bytes
 │   │   │                           #   natives), types (Option/Result/
-│   │   │                           #   Opaque/Array), the engine-woven
+│   │   │                           #   Opaque/[T]), the engine-woven
 │   │   │                           #   traits (Iterator; the async plan
 │   │   │                           #   adds Task + contexts + launch_task/
 │   │   │                           #   LaunchedTask as core builtin decls)

@@ -118,6 +118,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Ok(elem);
                     }
                     Not => self.compile_expr(expr, Some(TY_BOOL))?,
+                    AddrOf => {
+                        // `&e` (RFC 0005 §9): the operand's cell as a
+                        // `*T` — a fresh one-slot box whose payload
+                        // shares the operand's object (RFC 0016 §2,
+                        // reference semantics). `&temp` ≡ the old
+                        // `make_ptr(v)`.
+                        let t = self.compile_expr(expr, None)?;
+                        let src = self.last_reg;
+                        let pty = self.ctx.mk_ptr(t);
+                        let dst = self.new_reg(pty);
+                        self.emit(Op::MakePtr { dst, src, ty: pty }, sp.lo);
+                        return Ok(pty);
+                    }
                     // `-lit` in a typed position still adapts the literal
                     // (`-2.0` passed to an `f64` param), so forward `expected`
                     _ => self.compile_expr(expr, expected)?,
@@ -145,8 +158,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, "`~` is not supported in this build");
                         return Err(());
                     }
-                    // `*p` returned early — the pointee load is the value
-                    Deref => {}
+                    // `*p`/`&e` returned early — the pointee load and the
+                    // box are the values
+                    Deref | AddrOf => {}
                 }
                 Ok(t)
             }
@@ -172,6 +186,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::ArrayLit { elems } => {
                 let arr_ty = self.compile_array_lit(elems, expected, sp)?;
                 Ok(arr_ty)
+            }
+            ExprKind::ArrayRepeat { value, count } => {
+                self.compile_array_repeat(value, count, expected, sp)
             }
             ExprKind::WhenExpr { scrut, arms } => self.compile_when(scrut, &arms, expected, sp),
             ExprKind::Is { expr, ty } => {

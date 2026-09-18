@@ -94,8 +94,8 @@ unbox   rD, rO, tid       ; extract an Opaque box's payload as the
                           ; mismatch — the compiler always guards (br on
                           ; tidof == tid first); the trap is the safety
                           ; net, like OOB
-arrnew  rD, tid, rLen     ; Vec<T>(n) zeroed
-arrget  rD, rO, rI | arrset rO, rI, rV   ; CONCRETE Vec<T> / Array<T, N>
+arrnew  rD, tid, rLen     ; zero-fill ([v; n] nil/scalar fill, bytes(n))
+arrget  rD, rO, rI | arrset rO, rI, rV   ; CONCRETE Vec<T> / [T]
                           ; element access — typed by elem tid, layout
                           ; known (flat inline elements for primitive T,
                            ; handle slots otherwise, RFC 0016 §4),
@@ -106,7 +106,7 @@ arrgetref rD, rO, rI, tid ; for-of element reference (RFC 0012 §6):
                           ; alias the stored slot, scalars copy Array<T, N> const-index folds its
                           ; bounds check against const N (§1.1 R1); slice-view
                           ; Slice<T> get/set/len are `calli` vtable slots
-                          ; (§1.1 R2); Vec / Array → Slice view widening
+                          ; (§1.1 R2); Vec / [T] → Slice view widening
                           ; lowers to the view-cell mint op
                           ; (RFC 0016 §4)
 optsome rD, rV | optnone rD, tid | optis rD, rO ...

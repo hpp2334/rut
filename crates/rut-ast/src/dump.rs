@@ -416,6 +416,10 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("inner", DumpVal::Node(Box::new(node_dump(a, inner.id())))));
                 "TyPtr"
             }
+            TypeKind::TyArray { elem } => {
+                fields.push(field("elem", DumpVal::Node(Box::new(node_dump(a, elem.id())))));
+                "TyArray"
+            }
             TypeKind::TyTuple { elems } => {
                 fields.push(field("elems", DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect())));
                 "TyTuple"
@@ -528,6 +532,11 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             ExprKind::ArrayLit { elems } => {
                 fields.push(field("elems", DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect())));
                 "ArrayLit"
+            }
+            ExprKind::ArrayRepeat { value, count } => {
+                fields.push(field("value", DumpVal::Node(Box::new(node_dump(a, value.id())))));
+                fields.push(field("count", DumpVal::Node(Box::new(node_dump(a, count.id())))));
+                "ArrayRepeat"
             }
             ExprKind::WhenExpr { scrut, arms } => {
                 fields.push(field("scrut", DumpVal::Node(Box::new(node_dump(a, scrut.id())))));
@@ -791,6 +800,7 @@ fn unop_str(op: UnOp) -> &'static str {
         UnOp::Not => "!",
         UnOp::BitNot => "~",
         UnOp::Deref => "*",
+        UnOp::AddrOf => "&",
     }
 }
 

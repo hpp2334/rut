@@ -50,7 +50,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
 
 const SRC: &str = r#"
 use pouch::{ Vec };
-use core::{ make_ptr, downcast, Opaque };
+use core::{ downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 
@@ -64,7 +64,7 @@ entry fn pair(v: i32) -> (i32, bool) {
 }
 entry fn triple() -> (i64, f64, str) { let a: i64 = 1; let b: f64 = 2.5; return (a, b, "three"); }
 entry fn nothing() -> nil { return; }
-entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
+entry fn make() -> Opaque { return Opaque.new(&Box { rows: Vec.new() }); }
 entry fn put(c: Opaque) -> u32 {
     let (b, _) = downcast<*Box>(c);
     b.rows.push(Row { id: 1 });

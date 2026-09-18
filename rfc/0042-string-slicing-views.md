@@ -81,9 +81,9 @@ mutate through one.
 Digest-style workloads (splitting, tokenizing, windowing) stop copying
 entirely; `heap_peak` now reports the buffer once instead of per-piece.
 
-## 6. Array windows — shipped in this revision
+## 6. `[T]` windows — shipped in this revision
 
-`v.slice(from, to)` on a `Vec<T>` (and on `Array<T>`) mints an
+`v.slice(from, to)` on a `Vec<T>` (and on `[T]`) mints an
 `ArrView` cell — a fixed-length window over the backing array — and
 boxes it as **`*Vec<T>`**: the view IS a pointer, so sharing is the
 spelled semantics and **writes through the window hit the parent**
@@ -105,7 +105,7 @@ spelled semantics and **writes through the window hit the parent**
 ## 7. Why strings came first
 
 `str`/`bytes` are immutable, so their views carry no mutability law —
-they are purely an optimization plus a nicer parsing surface. Array
+they are purely an optimization plus a nicer parsing surface. [T]
 windows change what writes mean, which is why the pointer spelling is
 mandatory for them and optional (invisible) for strings.
 

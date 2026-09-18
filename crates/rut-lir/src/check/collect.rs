@@ -451,23 +451,6 @@ impl<'a> Ctx<'a> {
                 } else if let Some(kind) = self.extern_native_types.get(&name).copied() {
                     match (kind, generics.as_slice()) {
                         (rut_core::binary::NativeTy::Opaque, []) => (TY_OPAQUE, None, false, false, false),
-                        (rut_core::binary::NativeTy::Array, [g]) => {
-                            let Some(params) = self.ty_generic_idents(std::slice::from_ref(g)) else {
-                                self.err(sp, "a generic impl target must name its type parameters (e.g. `Array<T>`)");
-                                return;
-                            };
-                            // a template id standing for the generic array —
-                            // duplicate detection and inst keys only
-                            let ph = self.types.intern(RutType {
-                                name,
-                                kind: TyKind::Data { fields: vec![] },
-                            });
-                            (ph, Some((name, params)), false, false, false)
-                        }
-                        (rut_core::binary::NativeTy::Array, _) => {
-                            self.err(sp, "`Array<T>` takes one type parameter");
-                            return;
-                        }
                         (rut_core::binary::NativeTy::Opaque, _) => {
                             self.err(sp, "`Opaque` takes no type parameters");
                             return;
@@ -497,6 +480,25 @@ impl<'a> Ctx<'a> {
                     );
                     return;
                 }
+            }
+            TypeKind::TyArray { elem } => {
+                // `impl [T] { .. }` — an inherent impl over the array
+                // type (RFC 0012 §2's `LaunchedTask<T>` pattern):
+                // generic through the element parameter, a template
+                // id for duplicate detection and inst keys
+                let Some(params) = self.ty_generic_idents(std::slice::from_ref(elem)) else {
+                    self.err(sp, "a generic impl target must name its type parameters (e.g. `[T]`)");
+                    return;
+                };
+                if params.len() != 1 {
+                    self.err(sp, "`[T]` takes one type parameter");
+                    return;
+                }
+                let ph = self.types.intern(RutType {
+                    name: sym::ARRAY,
+                    kind: TyKind::Data { fields: vec![] },
+                });
+                (ph, Some((sym::ARRAY, params)), false, false, false)
             }
             _ => {
                 self.err(
@@ -549,6 +551,7 @@ impl<'a> Ctx<'a> {
     ) {
         let tname = match self.ast.ty(target) {
             TypeKind::TyPath { segs, .. } if !segs.is_empty() => segs[0].name,
+            TypeKind::TyArray { .. } => sym::ARRAY,
             _ => return,
         };
         if !is_local {

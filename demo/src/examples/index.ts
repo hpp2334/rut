@@ -94,7 +94,7 @@ export const EXAMPLES: RutCase[] = [
   {
     id: "ex-literals",
     name: "literals",
-    blurb: "numeric suffixes, plain/raw/format strings, fixed Array<T, N>",
+    blurb: "numeric suffixes, plain/raw/format strings, fixed [T]",
     rfcs: "0005, 0007",
     source: literalsSrc,
     expected: lines(literalsExpected),

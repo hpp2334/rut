@@ -147,7 +147,7 @@ fn case4_sieve() {
     let src = r#"
 use pouch::{ Vec };
 fn sieve(limit: i32) -> Vec<i32> {
-    let mut marks = Vec<u8>.zeroed(limit + 1);
+    let mut marks = Vec<u8>.filled(0, limit + 1);
     let primes: Vec<i32> = Vec.new();
     for (let i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
@@ -389,23 +389,25 @@ pub fn main() -> nil {
 }
 
 #[test]
-fn bare_vec_with_length_allocates_zeroed_elements() {
-    // RFC 0005 §3: `Vec<f32>(1024)` — n zeroed elements. The bare form
-    // (element from the annotation) used to emit ArrNew with a hardcoded
-    // ZERO length — the argument was silently dropped, and the first
-    // index-assign on it trapped out of bounds.
+fn bare_vec_filled_with_a_value_reads_back() {
+    // RFC 0005 §9: `Vec<T>.filled(v, n)` — n slots of the repeat value
+    // `[v; n]`. (The old `zeroed(n)` has no generic shape: the repeat
+    // construction needs a VALUE, and a generic `T` has none. The form
+    // used to emit ArrNew with a hardcoded ZERO length — the argument
+    // was silently dropped, and the first index-assign on it trapped
+    // out of bounds.)
     let src = r#"
 use pouch::{ Vec };
 pub fn main() -> nil {
-    let mut k: Vec<u32> = Vec.zeroed(4);
+    let mut k: Vec<u32> = Vec.filled(0, 4);
     Logger.new("app").info(f"a len={k.len()} k3={k[3]}");
     k[0] = 7;
     k[3] = 9;
     Logger.new("app").info(f"b k0={k[0]} k3={k[3]} len={k.len()}");
-    let mut j: Vec<u8> = Vec.zeroed(3);
+    let mut j: Vec<u8> = Vec.filled(0, 3);
     j.push(1);
     Logger.new("app").info(f"c len={j.len()} j0={j[0]} j3={j[3]}");
-    let e: Vec<u32> = Vec.zeroed(0);
+    let e: Vec<u32> = Vec.filled(0, 0);
     let b: Vec<u32> = Vec.new();
     Logger.new("app").info(f"d {e.len()} {b.len()}");
 }
@@ -456,7 +458,7 @@ fn heap_budget_traps_before_the_write() {
     let src = r#"
 use pouch::{ Vec };
 pub fn main() -> nil {
-    let v = Vec<u8>.zeroed(5000000);
+    let v = Vec<u8>.filled(0, 5000000);
     Logger.new("app").info("allocated");
 }
 "#;
@@ -737,11 +739,11 @@ fn entry_fns_compile_without_main_and_cross_values() {
     // and tuples (the v1.1 error/presence convention) crossing back
     let src = r#"
 use pouch::{ Vec };
-use core::{ make_ptr, downcast, Opaque };
+use core::{ downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 
-entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
+entry fn make() -> Opaque { return Opaque.new(&Box { rows: Vec.new() }); }
 entry fn put(c: Opaque) -> u32 {
     let (b, _) = downcast<*Box>(c);
     b.rows.push(Row { id: 1 });
@@ -868,7 +870,7 @@ pub fn main() -> nil {
 fn str_index_ascii_and_utf8_and_for_of_array() {
     // `str` is a `char` sequence: the ASCII fast path makes `s[i]`/`for..of`
     // O(1), while a non-ASCII string still decodes the UTF-8 prefix. The
-    // `for..of` over the fixed `Array` also exercises the hoisted length.
+    // `for..of` over the fixed `[T]` also exercises the hoisted length.
     let src = r#"
 pub fn main() -> nil {
     let a = "ACGT";
@@ -967,7 +969,6 @@ fn recursive_dataclass_tree_runs() {
     // inlined field payloads (infinite recursion). Fields are registered
     // first and laid out as handle slots.
     let src = r#"
-use core::{ make_ptr };
 struct Node {
     value: i32,
     left: *Node,
@@ -979,7 +980,7 @@ fn make(depth: i32, v: i32) -> Node {
     }
     let l = make(depth - 1, v * 2);
     let r = make(depth - 1, v * 2 + 1);
-    return Node { value: v, left: make_ptr(l), right: make_ptr(r) };
+    return Node { value: v, left: &l, right: &r };
 }
 fn count(n: Node) -> i32 {
     let mut c = 1;
@@ -1046,18 +1047,20 @@ pub fn main() -> nil {
 }
 
 #[test]
-fn generic_vec_over_array_runs() {
-    // pouch's Vec<T> shape: a generic class over the non-growable
-    // heap array primitive, monomorphized for i32 (RFC 0013 / RFC 0005).
+fn generic_vec_over_pointer_array_runs() {
+    // pouch's Vec<T> shape: a generic class over the non-growable heap
+    // array `[T]`, monomorphized for i32 (RFC 0013 / RFC 0005 §9). The
+    // backing is a POINTER array — `[nil; cap]` is the only generic
+    // zero — so the fused `v[i]`/`pop` loads deref the stored `&v`
+    // (RFC 0032 §1.1 over `[*T]`).
     let src = r#"
-use core::{ Array };
 class Vec<T> {
-    buf: Array<T>;
+    buf: [*T];
     len: i32;
 }
 impl Vec<T> {
     fn new() -> Self { return Vec.with_capacity(0); }
-    fn with_capacity(cap: i32) -> Self { return Self { buf: Array<T>(cap), len: 0 }; }
+    fn with_capacity(cap: i32) -> Self { return Self { buf: [nil; cap], len: 0 }; }
     fn len(self) -> i32 { return self.len; }
     fn push(mut self, v: T) -> nil {
         if (self.len == self.buf.len()) {
@@ -1065,21 +1068,21 @@ impl Vec<T> {
             if (cap == 0) {
                 cap = 4;
             }
-            let mut next = Array<T>(cap);
+            let mut next: [*T] = [nil; cap];
             for (let i = 0; i < self.len; i += 1) {
                 next[i] = self.buf[i];
             }
             self.buf = next;
         }
-        self.buf[self.len] = v;
+        self.buf[self.len] = &v;
         self.len += 1;
     }
-    fn get(self, i: i32) -> T { return self.buf[i]; }
+    fn get(self, i: i32) -> T { return *self.buf[i]; }
     // v1.1: pop returns the value; an empty pop is the caller's contract
     // breach (guard with `len()`), not an error value
     fn pop(mut self) -> T {
         self.len -= 1;
-        return self.buf[self.len];
+        return *self.buf[self.len];
     }
 }
 pub fn main() -> nil {
@@ -1112,7 +1115,7 @@ pub fn main() -> nil {
     let mut sum = 0;
     for (let x of v) { sum += x; }
     let w: Vec<i32> = Vec.from([7, 8]);
-    let z: Vec<u8> = Vec.zeroed(3);
+    let z: Vec<u8> = Vec.filled(0, 3);
     Logger.new("app").info(f"{v[0]} {v.len()} {sum} {w[1]} {z.len()}");
 }
 "#;
@@ -1183,7 +1186,7 @@ pub fn main() -> nil {
 #[test]
 fn std_collection_via_module_loader_runs() {
     // the real rut/pouch source, mounted and used by a
-    // consumer: `Vec<T>` is rut source over the engine's `Array<T>` cell,
+    // consumer: `Vec<T>` is rut source over the engine's `[T]` cell,
     // so this exercises the rut-source module loader end to end
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
@@ -1285,7 +1288,7 @@ pub fn main() -> nil {
 
 #[test]
 fn string_join_and_vec_as_array_run() {
-    // the builtin `string_join(Array<str>)` and the `Vec<T>.as_array()` bridge
+    // the builtin `string_join([str])` and the `Vec<T>.as_array()` bridge
     let src = r#"
 use core::{ string_join };
 use pouch::{ Vec };
@@ -1544,7 +1547,7 @@ fn for_of_user_iterate_protocol() {
     // per concrete argument (RFC 0012 §5), so its call binds statically.
     let src = r#"
 use ink::{ Logger };
-use core::{ Iterator, make_ptr };
+use core::{ Iterator };
 
 struct Acc { total: i32 = 0; }
 
@@ -1563,14 +1566,14 @@ impl Iterator<i32> for CountUp {
 }
 
 fn total(it: Iterator<i32>) -> i32 {
-    let acc = make_ptr(Acc { });
+    let acc = &Acc { };
     it.__iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
     return acc.total;
 }
 
 pub fn main() -> nil {
     let log = Logger.new("it");
-    let acc = make_ptr(Acc { });
+    let acc = &Acc { };
     for (let v of CountUp.new(9)) {
         if (v % 2 == 0) { continue; }
         if (v > 6) { break; }
@@ -1678,16 +1681,56 @@ pub fn main() -> nil {
     assert_eq!(lines, vec!["-1.5 0.25"]);
 }
 
-// ---- A1 surface (RFC 0005/0007/0013/0016): nil + *T, make_ptr, on_drop,
+// ---- A1 surface (RFC 0005/0007/0013/0016): nil + *T, &x, on_drop,
 // tuples, anonymous closures, zero-value field defaults ----
 
 #[test]
-fn a1_make_ptr_deref_and_nil() {
+fn a9_repeat_fill_and_addr_of_roundtrip() {
+    // RFC 0005 §9 — `[v; n]` fills n slots with the value (scalars copy,
+    // refs share the cell); `&x`/`*p` round-trip; `[*T]` slots read nil
+    // before a store
     let src = r#"
-use core::{ make_ptr };
+use pouch::{ Vec };
+struct P { x: i32 = 0 }
+pub fn main() -> nil {
+    let mut a: [i32] = [0; 8];
+    a[3] = 33;
+    Logger.new("t").info(f"a3={a[3]} len={a.len()}");
+    let mut ps: [*P] = [nil; 2];
+    let p0 = &P { x: 4 };
+    ps[0] = p0;
+    Logger.new("t").info(f"p0={ps[0].x} p1nil={ps[1] == nil}");
+    let all: Vec<i32> = Vec.filled(9, 3);
+    Logger.new("t").info(f"all={all[0]} {all[1]} {all[2]}");
+    let shared = &P { x: 5 };
+    let mut both: [*P] = [shared; 2];
+    both[1].x = 6;
+    Logger.new("t").info(f"shared={both[0].x}");
+    let n: i32 = 3;
+    let sized: [i32] = [2; n * 2];
+    Logger.new("t").info(f"sized={sized.len()} last={sized[5]}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(
+        lines,
+        vec![
+            "a3=33 len=8",
+            "p0=4 p1nil=true",
+            "all=9 9 9",
+            "shared=6",
+            "sized=6 last=2",
+        ]
+    );
+}
+
+#[test]
+fn a1_addr_of_deref_and_nil() {
+    let src = r#"
 struct P { x: i32 = 0; }
 pub fn main() -> nil {
-    let p = make_ptr(P { x: 5 });
+    let p = &P { x: 5 };
     Logger.new("t").info(f"x={p.x} nil={p == nil}");
     let n: *P = nil;
     Logger.new("t").info(f"n nil={n == nil}");
@@ -1714,10 +1757,10 @@ pub fn main() -> nil {
 #[test]
 fn a1_on_drop_runs_at_refcount_zero() {
     let src = r#"
-use core::{ make_ptr, on_drop };
+use core::{ on_drop };
 struct P { x: i32 = 0; }
 pub fn main() -> nil {
-    let p = make_ptr(P { x: 9 });
+    let p = &P { x: 9 };
     on_drop(p, fn (p: *P) { Logger.new("t").info(f"dropped {p.x}"); });
     Logger.new("t").info("body done");
 }
@@ -1793,10 +1836,10 @@ fn dbg_digest() {
 fn dbg_digest_md5() {
     let src = r#"
 use pouch::{ Vec };
-use core::{ make_ptr, downcast, Opaque };
+use core::{ downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
-entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
+entry fn make() -> Opaque { return Opaque.new(&Box { rows: Vec.new() }); }
 entry fn put(c: Opaque) -> u32 {
     let (b, _) = downcast<*Box>(c);
     b.rows.push(Row { id: 1 });
@@ -1850,10 +1893,10 @@ pub fn main() -> nil {
 fn dbg_put_ir() {
     let src = r#"
 use pouch::{ Vec };
-use core::{ make_ptr, downcast, Opaque };
+use core::{ downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
-entry fn make() -> Opaque { return Opaque.new(make_ptr(Box { rows: Vec.new() })); }
+entry fn make() -> Opaque { return Opaque.new(&Box { rows: Vec.new() }); }
 entry fn put(c: Opaque) -> u32 {
     let (b, _) = downcast<*Box>(c);
     b.rows.push(Row { id: 1 });

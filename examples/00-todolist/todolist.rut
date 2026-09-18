@@ -1,4 +1,4 @@
-use core::{ Opaque, downcast, make_ptr };
+use core::{ Opaque, downcast };
 use pouch::{ Vec };
 // todolist.rut — a todo-list library in rut, called from Rust.
 //
@@ -122,7 +122,7 @@ fn at(c: Opaque, h: u32) -> TodoList {
 // ---- the host surface (entry = callable by the embedder) ----
 
 entry fn createContainer() -> Opaque {
-    return Opaque.new(make_ptr(Lists { lists: Vec.new() }));
+    return Opaque.new(&Lists { lists: Vec.new() });
 }
 
 entry fn create(c: Opaque) -> u32 {

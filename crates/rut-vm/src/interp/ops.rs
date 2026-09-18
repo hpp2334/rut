@@ -160,9 +160,10 @@ impl Vm {
         Ok(())
     }
 
-    /// `MakePtr` — box `v` into a fresh one-slot cell (RFC 0005). A value
-    /// payload deep-copies (RFC 0009/0016 v1.1); ref payloads (str/bytes/
-    /// `*T`/closures) share. `ty` is the pointer's own type.
+    /// `MakePtr` — box `v` into a fresh one-slot cell (RFC 0005 §9, the
+    /// `&v` address-of). A value payload deep-copies (RFC 0009/0016
+    /// v1.1); ref payloads (str/bytes/`*T`/closures) share. `ty` is the
+    /// pointer's own type.
     #[inline(always)]
     pub(super) fn op_make_ptr(&mut self, dst: Reg, src: Reg, ty: TypeId) -> Result<(), Trap> {
         let raw = self.cur_regs[src as usize];
@@ -170,9 +171,20 @@ impl Vm {
             TyKind::Ptr { elem } => *elem,
             _ => unreachable!("MakePtr on a non-pointer type"),
         };
-        let v = if matches!(cell_of(raw).data, CellData::ArrView { .. }) {
-            // a window box references its window (RFC 0042 §6) — the
-            // pointer IS the sharing; the view is never deep-copied
+        // A window box references its window (RFC 0042 §6) — the pointer
+        // IS the sharing, the view is never deep-copied (even though its
+        // static type is a value class). Otherwise: Data/Array payloads
+        // deep-copy (value semantics, RFC 0009/0016 v1.1); ref payloads
+        // share; closures are cells too (the `Any` repr still retains);
+        // primitives/`nil` copy the bits.
+        let is_fn = matches!(self.prog.types.kind(elem), TyKind::Fn { .. });
+        let is_cell_repr = self.prog.types.repr_of(elem).is_ref() || is_fn;
+        let raw_null = unsafe { raw.r.is_null() };
+        let v = if !is_cell_repr {
+            raw
+        } else if raw_null {
+            raw
+        } else if matches!(cell_of(raw).data, CellData::ArrView { .. }) {
             self.heap.retain(raw);
             raw
         } else if self.prog.types.is_value(elem) {

@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Date:** 2026-08-23
 - **Author:** hpp2334
-- **Depends on:** RFC 0005 (Vec, `Array<T, N>`), RFC 0012 (traits,
+- **Depends on:** RFC 0005 (Vec, `[T]`), RFC 0012 (traits,
   `requires`, vtables, no-recovery), RFC 0013 (generics — extended §3),
   RFC 0014 (`Opaque`, `downcast`), RFC 0015 (descriptors,
   `is_a`, boxing), RFC 0006/0009/0010, RFC 0022/0028 (builtin-impl
@@ -15,7 +15,7 @@
 
 Reflection is a **trait**, not a keyword privilege. `Reflectable`
 is the mechanism protocol; auto-implementations (dataclass, enum) and
-builtin-impl registry entries (`Option`/`Result`/`Vec`/`Array<T, N>`)
+builtin-impl registry entries (`Option`/`Result`/`Vec`/`[T]`)
 fill it for the data world; classes opt in by hand with a **curated**
 view. Libraries layer contracts on top (`trait Serializable
 requires Reflectable {}`) and take **trait-object-typed consumers**
@@ -197,7 +197,7 @@ pub fn deserialize<T requires Deserializable>(v: str) -> Result<T, JsonError> {
 ```
 
 `write_val`: Record → `fields()` + `child` (`f"{quote(f.name())}:{..}"`,
-joined); Seq → `arity`/`child` loop (`[...]`, Vec and `Array<T, N>`
+joined); Seq → `arity`/`child` loop (`[...]`, Vec and `[T]`
 alike); Sum → all-payloadless: variant name; `{0,1}`: `null`/recurse
 payload; else `Err` ("unwrap first"); Leaf → `downcast` scalars
 (boxing-widened), `Leaf+Class` → `is_a(Reflectable)` query →

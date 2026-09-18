@@ -82,7 +82,7 @@ field access is by index (`GetF`/`SetF`), `own(x)` clones slot by slot
 
 - Visibility, generic parameters, and out-of-body impl blocks add
   **nothing** — the payload depends only on the field list.
-- Buffers of primitive elements (`Vec<f32>`, `Array<i32, N>`) stay flat
+- Buffers of primitive elements (`Vec<f32>`, `[i32]`) stay flat
   and packed to the element's machine width (RFC 0016 §4); composite
   elements are one handle slot each.
 - Builtin `Option`/`Result` and user enums are tagged cells (RFC 0016 §5),

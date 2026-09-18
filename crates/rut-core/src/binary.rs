@@ -140,8 +140,6 @@ pub struct SurfaceImpl {
 /// used, never ambient.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTy {
-    /// `Array<T>` — the heap array cell (RFC 0005)
-    Array,
     /// `Opaque` — the erasure box (RFC 0014); a boot-table type whose name
     /// is use-gated like the containers
     Opaque,
@@ -209,7 +207,7 @@ pub struct Surface {
 /// well-known symbols, so the ids are meaningful in every interner.
 pub const CORE_FNS: &[IdentId] = &[
     sym::DOWNCAST, sym::ASSERT, sym::PANIC,
-    sym::MAKE_PTR, sym::ON_DROP,
+    sym::ON_DROP,
     sym::STRING_JOIN,
 ];
 
@@ -245,7 +243,7 @@ impl Surface {
             .collect();
         Surface {
             names: Interner::new(),
-            native_types: vec![(sym::ARRAY, NativeTy::Array), (sym::OPAQUE, NativeTy::Opaque)],
+            native_types: vec![(sym::OPAQUE, NativeTy::Opaque)],
             native_traits: vec![(sym::ITERATOR, NativeTrait::Iterator)],
             native_fns: CORE_FNS.to_vec(),
             // core's one const: `use core::{NAN}` — the unwritable float
@@ -260,7 +258,6 @@ impl Surface {
 /// A core builtin container by name, if it is one.
 pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
     match name {
-        sym::ARRAY => Some(NativeTy::Array),
         sym::OPAQUE => Some(NativeTy::Opaque),
         _ => None,
     }
@@ -288,7 +285,7 @@ pub fn is_core_name(name: IdentId) -> bool {
 /// Use sites diagnose with these instead of "unknown" — a removed surface
 /// explains itself (RFC 0028 v1.1; `unit` in v1.2).
 pub const REMOVED_CORE: &[(&str, &str)] = &[
-    ("own", "`own` was removed — values copy on assignment (RFC 0016 §1); share a cell via `make_ptr`"),
+    ("own", "`own` was removed — values copy on assignment (RFC 0016 §1); share a cell via `&x`"),
     ("Option", "`Option` was removed — absence is `nil` on a pointer type, or a `(T, err)` tuple (v1.1)"),
     ("Result", "`Result` was removed — errors are `(T, err)` tuples; an empty err is success (v1.1)"),
     ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"),
@@ -301,6 +298,8 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("bytes_from", "`bytes_from(a)` was removed — use `bytes.from(a)` (RFC 0004 v1.1)"),
     ("bytes_zeroed", "`bytes_zeroed(n)` was removed — use `bytes.zeroed(n)` (RFC 0004 v1.1)"),
     ("unit", "`unit` was removed — the empty type and its value are spelled `nil` (v1.2)"),
+    ("Array", "`Array` was removed — the array type is spelled `[T]`, construction is the repeat `[v; n]` (RFC 0005 §9)"),
+    ("make_ptr", "`make_ptr(v)` was removed — `&v` is the address-of (RFC 0005 §9)"),
 ];
 
 /// The removal message for `name`, if it is a removed `core` name.

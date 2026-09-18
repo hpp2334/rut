@@ -99,8 +99,9 @@ fn tuples_parse_and_destructure() {
 
 #[test]
 fn pointers_and_nil_parse() {
-    // RFC 0005: `*T` types, the `nil` literal, `make_ptr`/`on_drop` decls
-    let src = "fn f() -> nil { let p: *i32 = make_ptr(7); if (p != nil) { } }";
+    // RFC 0005 §9: `*T` types, the `nil` literal, the `&` address-of,
+    // the `on_drop` decl
+    let src = "fn f() -> nil { let p: *i32 = &7; if (p != nil) { } }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
     // anonymous closures: `fn (params) { .. }` — no arrow
@@ -140,7 +141,7 @@ fn empty_parens_are_rejected_with_nil_hint() {
 
 #[test]
 fn bracket_array_and_async_parse() {
-    // `[T]` is the accepted spelling of `Array<T>` (RFC 0005)
+    // `[T]` is the array type spelling (RFC 0005 §9)
     let src = "fn f(xs: [i32]) -> i32 { return xs.len(); }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
@@ -150,6 +151,39 @@ fn bracket_array_and_async_parse() {
     assert!(diags.is_empty(), "{diags:?}");
     // the fn type with an omitted return is `nil` (RFC 0013 §1, v1.2)
     let src = "fn run(f: fn(i32)) -> nil { f(1); }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn repeat_and_address_of_parse() {
+    // RFC 0005 §9: `[v; n]` — a VALUE and a count; no type-in-expression form
+    let src = "fn f() -> nil { let a: [i32] = [0; 8]; let b: [*i32] = [nil; 8]; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    // the count is a full expression
+    let src = "fn f(n: i32) -> nil { let a: [f64] = [1.5; n * 2 + 1]; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    // `&v` — the address-of (prefix `&`, positionally unambiguous with
+    // binary `&`); `*p` deref unchanged
+    let src = "fn f() -> nil { let p: *i32 = &7; let q: *Point = &Point { x: 1 }; let y: i32 = *p; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    // binary `&` still parses — `a & b`, and `a & &b` mixes both
+    let src = "fn f(a: i32, b: i32) -> i32 { return a & b; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    let src = "fn f(a: i32, b: i32) -> i32 { return a & &b; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn the_array_name_is_gone_from_the_grammar() {
+    // the `Array` name is removed — the type is `[T]`, construction is
+    // `[v; n]` (RFC 0005 §9); `[]` stays the empty list literal
+    let src = "fn f() -> nil { let a: [i32] = []; }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
 }

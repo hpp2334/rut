@@ -135,20 +135,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         match name {
-            sym::MAKE_PTR if core_fn => {
-                // make_ptr(v) (RFC 0005): box v into a fresh one-slot cell;
-                // the result is a nil-able `*T`
-                if args.len() != 1 {
-                    self.ctx.err(sp, "make_ptr(v) takes one argument (RFC 0005)");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], None)?;
-                let src = self.last_reg;
-                let pty = self.ctx.mk_ptr(t);
-                let dst = self.new_reg(pty);
-                self.emit(Op::MakePtr { dst, src, ty: pty }, sp.lo);
-                return Ok(pty);
-            }
             sym::ON_DROP if core_fn => {
                 // on_drop(p, cleanup) (RFC 0016 §3): cleanup runs when the
                 // cell's refcount reaches zero
@@ -158,7 +144,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let pt = self.compile_expr(args[0], None)?;
                 if !matches!(self.ctx.types.kind(pt), TyKind::Ptr { .. }) {
-                    self.ctx.err(sp, "on_drop needs a pointer —`*T` from `make_ptr` (RFC 0016 §3)");
+                    self.ctx.err(sp, "on_drop needs a pointer —`*T` from `&v` (RFC 0016 §3)");
                     return Err(());
                 }
                 let obj = self.last_reg;
@@ -340,42 +326,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
             { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
             return Ok(ef.ret);
-        }
-        // builtin type-call: Array<T>(n) — allocate n slots (runtime length,
-        // non-growable, RFC 0005); the storage under `pouch`'s Vec.
-        // Use-gated like the type itself (RFC 0028)
-        if name == sym::ARRAY
-            && self.ctx.find_data(name).is_none()
-            && self.ctx.extern_native_types.get(&name).copied()
-                == Some(rut_core::binary::NativeTy::Array)
-        {
-            if generics.len() != 1 {
-                self.ctx.err(sp, "Array<T>(n) takes one type argument");
-                return Err(());
-            }
-            let elem = self.resolve_type_now(generics[0]);
-            let aty = self.ctx.mk_array(elem);
-            let len = match args.len() {
-                0 => {
-                    let z = self.new_reg(TY_I32);
-                    self.emit(Op::ConstRaw { dst: z, bits: 0 }, sp.lo);
-                    z
-                }
-                1 => {
-                    let t = self.compile_expr(args[0], Some(TY_I32))?;
-                    if t != TY_I32 {
-                        self.ctx.err(sp, format!("Array<T>(n) takes an `i32` length, found `{}`", self.ctx.type_name(t)));
-                    }
-                    self.last_reg
-                }
-                _ => {
-                    self.ctx.err(sp, "Array<T>() or Array<T>(n)");
-                    return Err(());
-                }
-            };
-            let dst = self.new_reg(aty);
-            self.emit(Op::ArrNew { dst, ty: aty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
-            return Ok(aty);
         }
         // builtin bytes type-call: `bytes(n)` zeroed (RFC 0004)
         if name == sym::BYTES {
@@ -951,7 +901,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some(info) = self.slice_info(rt) {
                 match &info.source {
                     SliceSource::DataBuf { buf_field, len_field } => {
-                        let arr_ty = self.ctx.mk_array(info.elem);
+                        let arr_ty = info.array_ty(self.ctx);
                         let arr = self.new_reg(arr_ty);
                         self.emit(Op::GetF { dst: arr, obj: rreg, field: *buf_field, repr: Repr::Ref }, sp.lo);
                         let live = self.new_reg(TY_I32);
@@ -1063,18 +1013,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.no_method_error(rt, name, sp);
             return Err(());
         }
-        // a native builtin class's inherent impl (`impl Array<T> { .. }`,
-        // RFC 0012 §2) — static dispatch through the native shape
+        // the array type's inherent impl (`impl [T] { .. }`, RFC 0012 §2)
+        // — static dispatch through the native shape
         if let TyKind::Array { elem } = self.ctx.types.kind(rt).clone() {
             let hit = self.ctx.impls.iter().enumerate().find_map(|(idx, im)| {
                 if !im.inherent {
                     return None;
                 }
                 match &im.target_data {
-                    Some((d, params))
-                        if self.ctx.extern_native_types.get(d).copied()
-                            == Some(rut_core::binary::NativeTy::Array) =>
-                    {
+                    Some((d, params)) if d == &sym::ARRAY && params.len() == 1 => {
                         im.methods.iter().find(|(n, _)| *n == name).map(|(n, _)| (idx, *n, params[0]))
                     }
                     _ => None,

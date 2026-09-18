@@ -2,7 +2,6 @@
 // `a -> b -> a` never reaches refcount 0. Break back-pointers with a
 // pointer field — `next: *Node` — the classic reason `*T` exists.
 
-use core::{ make_ptr };
 use ink::{ Logger };
 
 class Node {                              // initializer covers `next`
@@ -19,8 +18,8 @@ impl Node {
 }
 
 fn make_cycle() -> *Node {                  // a -> b -> a : strong cycle
-    let a = make_ptr(Node.new());
-    let b = make_ptr(Node.new());
+    let a = &Node.new();
+    let b = &Node.new();
     a.link(b);
     b.link(a);
     return a;
