@@ -2,9 +2,9 @@
 //! assert the full CRUD session — `cargo test --workspace` runs it.
 
 use std::rc::Rc;
-use rut_vm::heap::Value;
+use rut_vm::OpaqueRef;
 
-fn vm() -> (rut_vm::interp::Vm, Value) {
+fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/todolist.rut")).unwrap();
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut s);
@@ -23,78 +23,65 @@ fn vm() -> (rut_vm::interp::Vm, Value) {
         interrupt_every: 1024,
     };
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new()).unwrap();
-    let Value::Opaque(c) = vm.call("createContainer", &[]).unwrap() else { unreachable!() };
-    (vm, Value::Opaque(c))
-}
-
-fn i(v: Value) -> i64 {
-    match v {
-        Value::I64(n) => n,
-        other => panic!("{other:?}"),
-    }
+    let c: OpaqueRef = vm.call_typed("createContainer", ()).unwrap();
+    (vm, c)
 }
 
 #[test]
 fn crud_session() {
     let (mut vm, c) = vm();
-    let Value::I64(h) = vm.call("create", &[c.clone()]).unwrap() else { unreachable!() };
-    let list = Value::I64(h);
-    let args = |extra: &[Value]| {
-        let mut a = vec![c.clone(), list.clone()];
-        a.extend_from_slice(extra);
-        a
-    };
-
-    assert_eq!(i(vm.call("add", &args(&[Value::Str("write the RFC".into())])).unwrap()), 1);
-    assert_eq!(i(vm.call("add", &args(&[Value::Str("implement the VM".into())])).unwrap()), 2);
-    assert_eq!(i(vm.call("add", &args(&[Value::Str("ship the demo".into())])).unwrap()), 3);
-    assert_eq!(i(vm.call("len", &args(&[])).unwrap()), 3);
-
-    assert_eq!(vm.call("set_done", &args(&[Value::I64(2), Value::Bool(true)])).unwrap(), Value::Bool(true));
-    assert_eq!(
-        vm.call("title_of", &args(&[Value::I64(2)])).unwrap(),
-        Value::Str("implement the VM".into())
-    );
-    assert_eq!(vm.call("title_of", &args(&[Value::I64(42)])).unwrap(), Value::Str("".into()));
-    assert_eq!(vm.call("has_title", &args(&[Value::I64(2)])).unwrap(), Value::Bool(true));
-    assert_eq!(vm.call("has_title", &args(&[Value::I64(42)])).unwrap(), Value::Bool(false));
+    let list: u32 = vm.call_typed("create", (c.clone(),)).unwrap();
 
     assert_eq!(
-        vm.call("remove", &args(&[Value::I64(1)])).unwrap(),
-        Value::Bool(true)
+        vm.call_typed::<_, i32>("add", (c.clone(), list, "write the RFC")).unwrap(),
+        1
     );
     assert_eq!(
-        vm.call("remove", &args(&[Value::I64(1)])).unwrap(),
-        Value::Bool(false)
+        vm.call_typed::<_, i32>("add", (c.clone(), list, "implement the VM")).unwrap(),
+        2
     );
-    assert_eq!(i(vm.call("len", &args(&[])).unwrap()), 2);
+    assert_eq!(
+        vm.call_typed::<_, i32>("add", (c.clone(), list, "ship the demo")).unwrap(),
+        3
+    );
+    assert_eq!(vm.call_typed::<_, i32>("len", (c.clone(), list)).unwrap(), 3);
 
     assert_eq!(
-        vm.call("render", &args(&[])).unwrap(),
-        Value::Str("TodoList[2]\n  #2 [x] implement the VM\n  #3 [ ] ship the demo".into())
+        vm.call_typed::<_, bool>("set_done", (c.clone(), list, 2i32, true)).unwrap(),
+        true
+    );
+    assert_eq!(
+        vm.call_typed::<_, String>("title_of", (c.clone(), list, 2i32)).unwrap(),
+        "implement the VM"
+    );
+    assert_eq!(
+        vm.call_typed::<_, String>("title_of", (c.clone(), list, 42i32)).unwrap(),
+        ""
+    );
+    assert_eq!(vm.call_typed::<_, bool>("has_title", (c.clone(), list, 2i32)).unwrap(), true);
+    assert_eq!(vm.call_typed::<_, bool>("has_title", (c.clone(), list, 42i32)).unwrap(), false);
+
+    assert_eq!(vm.call_typed::<_, bool>("remove", (c.clone(), list, 1i32)).unwrap(), true);
+    assert_eq!(vm.call_typed::<_, bool>("remove", (c.clone(), list, 1i32)).unwrap(), false);
+    assert_eq!(vm.call_typed::<_, i32>("len", (c.clone(), list)).unwrap(), 2);
+
+    assert_eq!(
+        vm.call_typed::<_, String>("render", (c.clone(), list)).unwrap(),
+        "TodoList[2]\n  #2 [x] implement the VM\n  #3 [ ] ship the demo"
     );
 
     // a second list in the same container is independent
-    let Value::I64(h2) = vm.call("create", &[c.clone()]).unwrap() else { unreachable!() };
-    assert_eq!(i(vm.call("len", &[c.clone(), Value::I64(h2)]).unwrap()), 0);
-    assert_eq!(i(vm.call("len", &args(&[])).unwrap()), 2);
+    let h2: u32 = vm.call_typed("create", (c.clone(),)).unwrap();
+    assert_eq!(vm.call_typed::<_, i32>("len", (c.clone(), h2)).unwrap(), 0);
+    assert_eq!(vm.call_typed::<_, i32>("len", (c.clone(), list)).unwrap(), 2);
 }
 
 #[test]
 fn wrong_box_traps_cleanly() {
     let (mut vm, c) = vm();
-    // an Opaque that isn't the container: downcast traps, nothing corrupts
-    let wrong = match vm.call("createContainer", &[]).unwrap() {
-        Value::Opaque(inner) => {
-            // box a plain string instead of a Lists — still a valid Opaque
-            drop(inner);
-            Value::Bool(false)
-        }
-        other => unreachable!("{other:?}"),
-    };
-    let _ = wrong;
-    // passing a non-Opaque where Opaque is expected is an embedder
-    // mistake: a named trap, not a panic or silent zero
-    let err = vm.call("create", &[Value::Bool(false)]).unwrap_err();
+    let _ = c;
+    // passing a bool where the Opaque container is expected is an
+    // embedder mistake: a named trap, not a panic or silent zero
+    let err = vm.call_typed::<_, u32>("create", (false,)).unwrap_err();
     assert!(err.msg.contains("argument"), "{}", err.msg);
 }

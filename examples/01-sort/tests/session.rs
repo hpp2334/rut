@@ -4,9 +4,9 @@
 //! `cargo test --workspace`.
 
 use std::rc::Rc;
-use rut_vm::heap::Value;
+use rut_vm::OpaqueRef;
 
-fn vm() -> (rut_vm::interp::Vm, Value) {
+fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/sort.rut")).unwrap();
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
@@ -29,37 +29,39 @@ fn vm() -> (rut_vm::interp::Vm, Value) {
     hosts.verify_against(&s.expected_host_fns()); // calc: .d.rut ↔ bodies
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
 
-    let Value::Opaque(c) = vm.call("create", &[]).unwrap() else { unreachable!() };
-    (vm, Value::Opaque(c))
+    let c: OpaqueRef = vm.call_typed("create", ()).unwrap();
+    (vm, c)
 }
 
 const ALGOS: [&str; 5] = ["insertion", "bubble", "selection", "quick", "merge"];
 
-fn s(v: Value) -> String {
-    match v {
-        Value::Str(s) => s,
-        other => panic!("{other:?}"),
-    }
-}
-
-fn b(v: Value) -> bool {
-    match v {
-        Value::Bool(b) => b,
-        other => panic!("{other:?}"),
-    }
-}
-
-fn push_all(vm: &mut rut_vm::interp::Vm, c: &Value, xs: &[i64]) {
+fn push_all(vm: &mut rut_vm::interp::Vm, c: &OpaqueRef, xs: &[i32]) {
     for x in xs {
-        vm.call("push", &[c.clone(), Value::I64(*x)]).unwrap();
+        vm.call_typed::<_, ()>("push", (c.clone(), *x)).unwrap();
     }
 }
 
-fn sort(vm: &mut rut_vm::interp::Vm, c: &Value, algo: &str) -> Value {
-    vm.call("sort", &[c.clone(), Value::Str(algo.into())]).unwrap()
+fn serialize(vm: &mut rut_vm::interp::Vm, c: &OpaqueRef) -> String {
+    vm.call_typed("serialize", (c.clone(),)).unwrap()
 }
 
-fn json(xs: &[i64]) -> String {
+fn is_sorted(vm: &mut rut_vm::interp::Vm, c: &OpaqueRef) -> bool {
+    vm.call_typed("is_sorted", (c.clone(),)).unwrap()
+}
+
+fn has(vm: &mut rut_vm::interp::Vm, c: &OpaqueRef, i: i32) -> bool {
+    vm.call_typed("has", (c.clone(), i)).unwrap()
+}
+
+fn get(vm: &mut rut_vm::interp::Vm, c: &OpaqueRef, i: i32) -> i32 {
+    vm.call_typed("get", (c.clone(), i)).unwrap()
+}
+
+fn sort(vm: &mut rut_vm::interp::Vm, c: &OpaqueRef, algo: &str) -> String {
+    vm.call_typed("sort", (c.clone(), algo)).unwrap()
+}
+
+fn json(xs: &[i32]) -> String {
     format!("[{}]", xs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
 }
 
@@ -68,19 +70,19 @@ fn every_algorithm_sorts_a_known_input() {
     for algo in ALGOS {
         let (mut vm, c) = vm();
         push_all(&mut vm, &c, &[9, -3, 5, 5, 0, 42, -7, 3]);
-        assert_eq!(sort(&mut vm, &c, algo), Value::Str("".into()), "{algo}");
+        assert_eq!(sort(&mut vm, &c, algo), "", "{algo}");
         assert_eq!(
-            s(vm.call("serialize", &[c.clone()]).unwrap()),
+            serialize(&mut vm, &c),
             "[-7, -3, 0, 3, 5, 5, 9, 42]",
             "{algo}",
         );
-        assert!(b(vm.call("is_sorted", &[c.clone()]).unwrap()), "{algo}");
+        assert!(is_sorted(&mut vm, &c), "{algo}");
     }
 }
 
 #[test]
 fn edge_cases_for_every_algorithm() {
-    let cases: &[(&str, &[i64])] = &[
+    let cases: &[(&str, &[i32])] = &[
         ("empty", &[]),
         ("single", &[7]),
         ("duplicates", &[4, 4, 4, 1, 1]),
@@ -96,11 +98,11 @@ fn edge_cases_for_every_algorithm() {
             let mut want = input.to_vec();
             want.sort_unstable();
             assert_eq!(
-                s(vm.call("serialize", &[c.clone()]).unwrap()),
+                serialize(&mut vm, &c),
                 json(&want),
                 "{algo} / {name}",
             );
-            assert!(b(vm.call("is_sorted", &[c.clone()]).unwrap()), "{algo} / {name}");
+            assert!(is_sorted(&mut vm, &c), "{algo} / {name}");
         }
     }
 }
@@ -111,11 +113,11 @@ fn all_algorithms_agree_on_pseudo_random_input() {
     let mut expected: Option<String> = None;
     for algo in ALGOS {
         let (mut vm, c) = vm();
-        vm.call("fill", &[c.clone(), Value::I64(500), Value::I64(7)]).unwrap();
-        assert_eq!(vm.call("len", &[c.clone()]).unwrap(), Value::I64(500));
+        vm.call_typed::<_, ()>("fill", (c.clone(), 500u32, 7u32)).unwrap();
+        assert_eq!(vm.call_typed::<_, i32>("len", (c.clone(),)).unwrap(), 500);
         sort(&mut vm, &c, algo);
-        assert!(b(vm.call("is_sorted", &[c.clone()]).unwrap()), "{algo}");
-        let got = s(vm.call("serialize", &[c.clone()]).unwrap());
+        assert!(is_sorted(&mut vm, &c), "{algo}");
+        let got = serialize(&mut vm, &c);
         match &expected {
             None => expected = Some(got),
             Some(want) => assert_eq!(&got, want, "{algo} disagrees with the others"),
@@ -126,33 +128,28 @@ fn all_algorithms_agree_on_pseudo_random_input() {
 #[test]
 fn large_input_is_monotonic_through_get() {
     let (mut vm, c) = vm();
-    vm.call("fill", &[c.clone(), Value::I64(500), Value::I64(1234)]).unwrap();
+    vm.call_typed::<_, ()>("fill", (c.clone(), 500u32, 1234u32)).unwrap();
     sort(&mut vm, &c, "quick");
-    let mut prev = i64::MIN;
+    let mut prev = i32::MIN;
     for i in 0..500 {
-        assert!(b(vm.call("has", &[c.clone(), Value::I64(i)]).unwrap()), "has({i})");
-        let Value::I64(x) = vm.call("get", &[c.clone(), Value::I64(i)]).unwrap() else {
-            panic!("get({i}) was not an i64");
-        };
+        assert!(has(&mut vm, &c, i), "has({i})");
+        let x: i32 = get(&mut vm, &c, i);
         assert!(x >= prev, "not monotonic at {i}: {x} < {prev}");
         prev = x;
     }
     // out of range reads 0, and `has` says false — no trap
-    assert_eq!(vm.call("get", &[c.clone(), Value::I64(500)]).unwrap(), Value::I64(0));
-    assert_eq!(vm.call("has", &[c.clone(), Value::I64(500)]).unwrap(), Value::Bool(false));
-    assert_eq!(vm.call("has", &[c.clone(), Value::I64(-1)]).unwrap(), Value::Bool(false));
+    assert_eq!(vm.call_typed::<_, i32>("get", (c.clone(), 500i32)).unwrap(), 0);
+    assert_eq!(vm.call_typed::<_, bool>("has", (c.clone(), 500i32)).unwrap(), false);
+    assert_eq!(vm.call_typed::<_, bool>("has", (c.clone(), -1i32)).unwrap(), false);
 }
 
 #[test]
 fn unknown_algorithm_is_an_error_string() {
     let (mut vm, c) = vm();
     push_all(&mut vm, &c, &[1]);
-    assert_eq!(
-        sort(&mut vm, &c, "bogus"),
-        Value::Str("unknown algorithm: bogus".into()),
-    );
+    assert_eq!(sort(&mut vm, &c, "bogus"), "unknown algorithm: bogus");
     // a failed dispatch leaves the data untouched
-    assert_eq!(s(vm.call("serialize", &[c.clone()]).unwrap()), "[1]");
+    assert_eq!(serialize(&mut vm, &c), "[1]");
 }
 
 #[test]
@@ -161,6 +158,6 @@ fn wrong_container_traps_cleanly() {
     drop(c);
     // passing an integer where the Opaque bank is expected is an embedder
     // mistake: a named trap, not a panic or silent zero
-    let err = vm.call("sort", &[Value::I64(0), Value::Str("quick".into())]).unwrap_err();
+    let err = vm.call_typed::<_, String>("sort", (0i64, "quick")).unwrap_err();
     assert!(err.msg.contains("argument"), "{}", err.msg);
 }

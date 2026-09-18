@@ -123,7 +123,20 @@ int_ret!(i64, "i64", TY_I64);
 int_ret!(u8, "u8", TY_U8);
 int_ret!(u16, "u16", TY_U16);
 int_ret!(u32, "u32", TY_U32);
-int_ret!(u64, "u64", TY_U64);
+
+/// raw-bit read: a rut `u64` lives in the slot as its own bit pattern —
+/// no i64 narrowing applies
+impl Ret for u64 {
+    const TY: TypeId = TY_U64;
+    fn rust_name() -> &'static str { "u64" }
+    fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
+        expect_kind(vm, slot, declared, "u64")?;
+        Ok(unsafe { slot.i } as u64)
+    }
+    fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
+        Ok(Slot::int(self as i64))
+    }
+}
 
 impl Ret for f64 {
     const TY: TypeId = TY_F64;
