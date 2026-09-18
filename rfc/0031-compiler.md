@@ -50,7 +50,8 @@ decorated with a `TyId` (index into the module's type table) and generic
 functions enter the **monomorphization queue** — HIR contains no generic
 code (RFC 0013 §2). Surface declarations are concrete (RFC 0025,
 revised — no generic host types), so instantiation admission applies
-only to user-generic `where` clauses (RFC 0013 §2) here.
+only to user-generic inline `requires` bounds (RFC 0013 §2, RFC 0043)
+here, checked at every substitution-completing site.
 Typecheck also applies the **`==` law** (RFC 0012 §8): primitives and
 `str` always legal, every other cell type legal as an
 identity compare, and `Option`/`Result` operands a compile error

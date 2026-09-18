@@ -638,7 +638,6 @@ fn reserved_word_msg(w: &str) -> Option<String> {
         "void" => "rut spells the empty type `nil`",
         "extends" => "rut has no inheritance (`extends`); compose instead (RFC 0010 §3)",
         "interface" => "rut spells this `trait`",
-        "type" => "`type` members are not available — the element is a type argument (`trait Iter<T>`, RFC 0012)",
         "dataclass" => "`dataclass` was removed —spell it `struct` (RFC 0009 v1.1)",
         "match" => "rut does not have `match`; use `when`",
         "null" => "rut has no `null`; absence is `nil` with pointer types `*T` (RFC 0005)",

@@ -133,8 +133,10 @@ a structural answer in rut:
 - No structural ("duck") typing, no object literals — traits are
   nominal and declared (RFC 0012).
 - No pattern matching beyond `when` literals/enums (RFC 0008), no
-  data-carrying enums (RFC 0006), no union or intersection types;
-  heterogeneous data goes through traits (RFC 0012).
+  data-carrying enums (RFC 0006), no union or intersection VALUE types;
+  heterogeneous data goes through traits (RFC 0012). Unions exist only
+  as `requires` bounds and alias sugar — bound-only, never a runtime
+  kind (RFC 0043).
 - No JIT, no tiering, no runtime specialization beyond compile-time
   monomorphization and cheap VM-level caches.
 - No shared-memory threads in the language. Workers communicate by message

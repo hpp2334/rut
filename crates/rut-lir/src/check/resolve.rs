@@ -141,6 +141,14 @@ impl<'a> Ctx<'a> {
                 self.err(sp, "a const expression is not a type here");
                 TY_I32
             }
+            TypeKind::TyUnion { .. } => {
+                // a union in a value position (RFC 0043: bound-only)
+                self.err(
+                    sp,
+                    "a union type is bound-only — unions are legal only in `requires` bounds and union aliases (RFC 0043)",
+                );
+                TY_I32
+            }
             TypeKind::TyPath { segs, .. } => {
                 if segs.len() > 1 {
                     self.err(sp, format!("unknown type `{}`", seg_str(self, segs)));
@@ -300,6 +308,27 @@ impl<'a> Ctx<'a> {
                                 self.err(sp, format!("used type `{}` takes no generic arguments", self.name(name)));
                             }
                             return t;
+                        }
+                        // a local type alias (RFC 0043): transparent — the
+                        // name binds the target's id. A union alias errors
+                        // here: unions are bound-only.
+                        if self.find_alias(name).is_some() {
+                            self.validate_alias(name);
+                            let idx = self.aliases.iter().position(|a| a.name == name).unwrap();
+                            if !seg.generics.is_empty() {
+                                self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic (RFC 0043)", self.name(name)));
+                            }
+                            return match self.aliases[idx].resolved {
+                                Some(AliasTarget::Ty(t)) => t,
+                                Some(AliasTarget::Union) => {
+                                    self.err(sp, format!(
+                                        "`{}` is a union alias — unions are bound-only, legal only in `requires` bounds (RFC 0043)",
+                                        self.name(name)
+                                    ));
+                                    TY_I32
+                                }
+                                _ => TY_I32,
+                            };
                         }
                         if name == sym::SELF_TY {
                             self.err(sp, "`Self` is only valid inside a type body (RFC 0010 §1)");

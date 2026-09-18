@@ -440,10 +440,12 @@ impl Parser {
 /// Reserved words of the grammar (RFC 0002 §4) — keywords are `Ident`s
 /// matched by interner text (RFC 0002 §4/§5). Public: the LSP classifier
 /// and any tooling that needs the keyword set share this one table.
+/// `where` is gone (RFC 0043: bounds are inline); `type` is the
+/// contextual alias introducer — an ordinary identifier elsewhere.
 pub const RESERVED_KW: &[&str] = &[
     "let", "mut", "if", "else", "while", "for", "of", "return", "when",
     "enum", "class", "struct", "trait", "impl", "requires", "use", "pub",
-    "static", "async", "await", "extern", "where", "is", "host", "fn",
+    "static", "async", "await", "extern", "is", "host", "fn",
     "true", "false", "nil", "select",
 ];
 

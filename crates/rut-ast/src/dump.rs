@@ -34,7 +34,7 @@ pub struct DumpStructField {
     pub ident: String,
     pub node: DumpNode,
 }
-pub struct DumpWhere {
+pub struct DumpBound {
     pub ident: String,
     pub ty: DumpNode,
 }
@@ -49,7 +49,7 @@ pub enum DumpVal {
     Idents(Vec<String>),
     Members(Vec<DumpMember>),
     StructFields(Vec<DumpStructField>),
-    Wheres(Vec<DumpWhere>),
+    Bounds(Vec<DumpBound>),
     Segs(Vec<DumpSeg>),
     PatArgs(Vec<Option<String>>),
     FParts(Vec<DumpFPart>),
@@ -97,6 +97,12 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("pkg", DumpVal::Str(a.name(*pkg).to_string())));
                 fields.push(field("names", DumpVal::Idents(names.iter().map(|&x| a.name(x).to_string()).collect())));
                 "Use"
+            }
+            ItemKind::Alias(d) => {
+                fields.push(field("vis", DumpVal::Vis(d.vis)));
+                fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+                fields.push(field("target", DumpVal::Node(Box::new(node_dump(a, d.target.id())))));
+                "Alias"
             }
             ItemKind::ModuleLet { vis, name, ty, init } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
@@ -160,13 +166,13 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 if let Some(r) = f.ret {
                     fields.push(field("ret", DumpVal::Node(Box::new(node_dump(a, r.id())))));
                 }
-                if !f.where_bounds.is_empty() {
+                if !f.bounds.is_empty() {
                     fields.push(field(
-                        "wheres",
-                        DumpVal::Wheres(
-                            f.where_bounds
+                        "bounds",
+                        DumpVal::Bounds(
+                            f.bounds
                                 .iter()
-                                .map(|(n, t)| DumpWhere { ident: a.name(*n).to_string(), ty: node_dump(a, t.id()) })
+                                .map(|(n, t)| DumpBound { ident: a.name(*n).to_string(), ty: node_dump(a, t.id()) })
                                 .collect(),
                         ),
                     ));
@@ -250,6 +256,17 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("params", DumpVal::Nodes(d.params.iter().map(|&p| node_dump(a, p.id())).collect())));
                 if let Some(r) = d.ret {
                     fields.push(field("ret", DumpVal::Node(Box::new(node_dump(a, r.id())))));
+                }
+                if !d.bounds.is_empty() {
+                    fields.push(field(
+                        "bounds",
+                        DumpVal::Bounds(
+                            d.bounds
+                                .iter()
+                                .map(|(n, t)| DumpBound { ident: a.name(*n).to_string(), ty: node_dump(a, t.id()) })
+                                .collect(),
+                        ),
+                    ));
                 }
                 if let Some(b) = d.body {
                     fields.push(field("body", DumpVal::Node(Box::new(node_dump(a, b.id())))));
@@ -395,6 +412,10 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             TypeKind::TyConst(e) => {
                 fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, e.id())))));
                 "TyConst"
+            }
+            TypeKind::TyUnion { elems } => {
+                fields.push(field("elems", DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect())));
+                "TyUnion"
             }
         },
         Kind::Expr(k) => match k {
@@ -644,7 +665,7 @@ fn val_json(v: &DumpVal, out: &mut String) {
             }
             out.push(']');
         }
-        DumpVal::Wheres(ws) => {
+        DumpVal::Bounds(ws) => {
             out.push('[');
             for (i, w) in ws.iter().enumerate() {
                 if i > 0 {
@@ -828,7 +849,7 @@ fn val_text(label: &str, v: &DumpVal, d: usize, src: &str, out: &mut String) {
                 node_text(&f.node, d + 2, src, out);
             }
         }
-        DumpVal::Wheres(ws) => {
+        DumpVal::Bounds(ws) => {
             out.push_str(&format!("{i}{label}:\n"));
             for w in ws {
                 out.push_str(&format!("{}- {} requires\n", ind(d + 1), w.ident));

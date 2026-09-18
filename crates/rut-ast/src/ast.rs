@@ -172,6 +172,13 @@ impl Ast {
             _ => unreachable!("fn handle into a non-fn node"),
         }
     }
+    /// `type X = A;` — checked narrowing for the alias item
+    pub fn alias(&self, h: NodeHandle<AnyItem>) -> &AliasData {
+        match self.item(h) {
+            ItemKind::Alias(d) => d,
+            _ => unreachable!("alias handle into a non-alias item"),
+        }
+    }
     pub fn field_decl(&self, h: NodeHandle<FieldDeclNode>) -> &FieldDeclData {
         match &self.node(h.id()).kind {
             Kind::Member(MemberKind::FieldDecl(d)) => d,
@@ -278,9 +285,20 @@ pub struct FnData {
     pub generics: Vec<IdentId>,
     pub params: Vec<NodeHandle<AnyParam>>,
     pub ret: Option<NodeHandle<AnyTy>>,
-    /// RFC 0013 §2 — admission-only
-    pub where_bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
+    /// RFC 0043 — inline admission-only bounds: `fn f<T requires A | B>(..)`
+    /// (the `where` clause is gone; bounds hang off the generic list)
+    pub bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
     pub body: NodeHandle<BlockNode>,
+}
+
+/// `pub(..)? type Name = Target;` — a transparent type alias (RFC 0043).
+/// `Target` may be a plain type (the name binds the target's id) or a
+/// `TyUnion` (`A | B` — a bound-only union alias, never a value type).
+#[derive(Clone, Debug)]
+pub struct AliasData {
+    pub vis: Vis,
+    pub name: IdentId,
+    pub target: NodeHandle<AnyTy>,
 }
 
 #[derive(Clone, Debug)]
@@ -289,6 +307,9 @@ pub enum ItemKind {
     /// `use <pkg>::{A, B};` / `use <pkg>::A;` — the package is a single
     /// bare `[a-zA-Z0-9_]+` name, resolved by the driver (RFC 0029 §2).
     Use { pkg: IdentId, names: Vec<IdentId> },
+    /// `type X = A;` / `type X = A | B;` — transparent alias / bound-only
+    /// union alias (RFC 0043)
+    Alias(AliasData),
     ModuleLet { vis: Vis, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
     Enum { vis: Vis, name: IdentId, members: Vec<(IdentId, Option<i64>)> },
     Dataclass {
@@ -401,6 +422,9 @@ pub struct MethodDeclData {
     pub generics: Vec<IdentId>,
     pub params: Vec<NodeHandle<AnyParam>>, // Param / SelfParam
     pub ret: Option<NodeHandle<AnyTy>>,
+    /// RFC 0043 — inline admission-only bounds on the method's own
+    /// generic parameters (`fn m<T requires A>(self, x: T)`)
+    pub bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
     pub body: Option<NodeHandle<BlockNode>>, // None in traits / surface classes
 }
 
@@ -489,6 +513,9 @@ pub enum TypeKind {
     TyTuple { elems: Vec<NodeHandle<AnyTy>> },
     /// const-generic argument (the `N` in `Array<T, N>`) — an expression
     TyConst(NodeHandle<AnyExpr>),
+    /// `A | B` — a bound-only union (RFC 0043): legal only in `requires`
+    /// bounds and union aliases; a value position is a compile error
+    TyUnion { elems: Vec<NodeHandle<AnyTy>> },
 }
 
 // ---- expressions ----

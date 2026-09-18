@@ -19,6 +19,14 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
         format!("<{}>", ty.generics.join(", "))
     };
     match ty.form {
+        TyForm::Alias => {
+            // `type X = A;` / `type X = A | B;` (RFC 0043)
+            out.push_str(&code_block(&format!(
+                "type {} = {};",
+                ty.name,
+                ty.alias_target.clone().unwrap_or_default()
+            )));
+        }
         TyForm::Enum => {
             let members: Vec<&str> = ty.fields.iter().map(|f| f.name.as_str()).collect();
             out.push_str(&code_block(&format!(

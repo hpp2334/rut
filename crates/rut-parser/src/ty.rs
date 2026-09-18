@@ -13,6 +13,10 @@ use crate::Parser;
 
 pub(crate) struct TypeFrame {
     lo: Span,
+    /// RFC 0043: a completed type continues on `|` as a union bound —
+    /// only where unions are legal (the alias target and `requires`
+    /// bounds); elsewhere `|` stays the binary operator (`x as u32 | y`)
+    allow_union: bool,
     stage: TyStage,
 }
 
@@ -33,11 +37,20 @@ enum TyStage {
     Path { segs: Vec<PathSeg> },
     /// inside a `<..>` after a segment name
     GenArgs { segs: Vec<PathSeg>, seg_name: IdentId, args: Vec<NodeHandle<AnyTy>> },
+    /// `A | B` — a union bound (RFC 0043): members collected after a
+    /// completed type saw a `|`
+    Union { elems: Vec<NodeHandle<AnyTy>> },
 }
 
 impl TypeFrame {
     pub(crate) fn new(p: &Parser) -> Self {
-        TypeFrame { lo: p.span(), stage: TyStage::Init }
+        TypeFrame { lo: p.span(), allow_union: false, stage: TyStage::Init }
+    }
+
+    /// A position where a union is legal (RFC 0043): the alias target
+    /// (`type U = A | B;`) and a `requires` bound (`T requires A | B`).
+    pub(crate) fn new_bound(p: &Parser) -> Self {
+        TypeFrame { lo: p.span(), allow_union: true, stage: TyStage::Init }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -115,7 +128,33 @@ impl TypeFrame {
             TyStage::Path { segs } => std::mem::take(segs),
             _ => unreachable!(),
         };
-        Step::Pop(Done::Ty(p.typ(TypeKind::TyPath { segs }, self.lo.to(p.span()))))
+        let t = p.typ(TypeKind::TyPath { segs }, self.lo.to(p.span()));
+        self.pop_or_union(p, t)
+    }
+
+    /// The type just completed either pops — or a `|` follows and it
+    /// continues as a union bound (`type U = A | B;`, `T requires A | B`,
+    /// RFC 0043). A single member never becomes a `TyUnion` node.
+    fn pop_or_union(&mut self, p: &mut Parser, t: NodeHandle<AnyTy>) -> Step {
+        if self.allow_union && p.eat_punct(Tok::Pipe) {
+            self.stage = TyStage::Union { elems: vec![t] };
+            return Step::Push(Frame::Type(TypeFrame::new(p)));
+        }
+        Step::Pop(Done::Ty(t))
+    }
+
+    /// a union member completed: continue on `|`, else build the node
+    fn union_absorb(&mut self, p: &mut Parser, t: NodeHandle<AnyTy>) -> Step {
+        let elems = match &mut self.stage {
+            TyStage::Union { elems } => elems,
+            _ => unreachable!("union absorb at the wrong stage"),
+        };
+        elems.push(t);
+        if p.eat_punct(Tok::Pipe) {
+            return Step::Push(Frame::Type(TypeFrame::new(p)));
+        }
+        let elems = std::mem::take(elems);
+        Step::Pop(Done::Ty(p.typ(TypeKind::TyUnion { elems }, self.lo.to(p.span()))))
     }
 
     fn genargs_top(&mut self, p: &mut Parser) -> Step {
@@ -189,10 +228,11 @@ impl TypeFrame {
                 self.lo.to(p.span()),
             );
             self.stage = TyStage::Init;
-            return Step::Pop(Done::Ty(p.typ(
+            let t = p.typ(
                 TypeKind::TyFn { params, ret },
                 self.lo.to(p.span()),
-            )));
+            );
+            return self.pop_or_union(p, t);
         }
         self.stage = TyStage::FnRet { params };
         Step::Push(Frame::Type(TypeFrame::new(p)))
@@ -201,8 +241,10 @@ impl TypeFrame {
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
             Done::Ty(t) => match &mut self.stage {
+                TyStage::Union { .. } => self.union_absorb(p, t),
                 TyStage::Ptr => {
-                    Step::Pop(Done::Ty(p.typ(TypeKind::TyPtr { inner: t }, self.lo.to(p.span()))))
+                    let t = p.typ(TypeKind::TyPtr { inner: t }, self.lo.to(p.span()));
+                    self.pop_or_union(p, t)
                 }
                 TyStage::Bracket => {
                     p.expect(Tok::RBracket);
@@ -211,10 +253,8 @@ impl TypeFrame {
                         name: array,
                         generics: vec![t],
                     }];
-                    Step::Pop(Done::Ty(p.typ(
-                        TypeKind::TyPath { segs },
-                        self.lo.to(p.span()),
-                    )))
+                    let t = p.typ(TypeKind::TyPath { segs }, self.lo.to(p.span()));
+                    self.pop_or_union(p, t)
                 }
                 TyStage::Tuple { elems } => {
                     elems.push(t);
@@ -225,9 +265,11 @@ impl TypeFrame {
                     let elems = std::mem::take(elems);
                     if elems.len() == 1 {
                         // `(T)` is a grouping — the type itself
-                        return Step::Pop(Done::Ty(elems.into_iter().next().unwrap()));
+                        let t = elems.into_iter().next().unwrap();
+                        return self.pop_or_union(p, t);
                     }
-                    Step::Pop(Done::Ty(p.typ(TypeKind::TyTuple { elems }, self.lo.to(p.span()))))
+                    let t = p.typ(TypeKind::TyTuple { elems }, self.lo.to(p.span()));
+                    self.pop_or_union(p, t)
                 }
                 TyStage::FnParams { params } => {
                     params.push(t);
@@ -240,7 +282,8 @@ impl TypeFrame {
                 }
                 TyStage::FnRet { params } => {
                     let params = std::mem::take(params);
-                    Step::Pop(Done::Ty(p.typ(TypeKind::TyFn { params, ret: t }, self.lo.to(p.span()))))
+                    let t = p.typ(TypeKind::TyFn { params, ret: t }, self.lo.to(p.span()));
+                    self.pop_or_union(p, t)
                 }
                 TyStage::GenArgs { args, .. } => {
                     args.push(t);

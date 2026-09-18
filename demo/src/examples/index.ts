@@ -35,6 +35,8 @@ import treeSrc from "./tree.rut";
 import treeExpected from "./tree.expected";
 import weakCacheSrc from "./weak-cache.rut";
 import weakCacheExpected from "./weak-cache.expected";
+import typeAliasesSrc from "./type-aliases.rut";
+import typeAliasesExpected from "./type-aliases.expected";
 
 function lines(expected: string): string[] {
   return expected.replace(/\n+$/, "").split("\n");
@@ -136,5 +138,13 @@ export const EXAMPLES: RutCase[] = [
     rfcs: "0017 §1",
     source: weakCacheSrc,
     expected: lines(weakCacheExpected),
+  },
+  {
+    id: "ex-type-aliases",
+    name: "type aliases",
+    blurb: "transparent aliases, bound-only unions, inline `requires` at the call site",
+    rfcs: "0043",
+    source: typeAliasesSrc,
+    expected: lines(typeAliasesExpected),
   },
 ];

@@ -115,8 +115,9 @@ for (s of mixed) { s.area(); }          // vtable (multiple origins)
   type-argument list its own instantiation with its own trait id and
   vtable slots (`Wrap<i32>` ≠ `Wrap<str>`, RFC 0015 §6); `impl
   Hashable for Pair<A, B>` binds the target's generic args as the impl's
-  type parameters. No impl-level `where` in v1 (bounds come from the
-  trait's own `requires`, RFC 0013 §2).
+  type parameters. No impl-level `where` in v1 — bounds live inline on
+  the fn/method's generic parameters (RFC 0013 §2, RFC 0043) and the
+  trait's own `requires`.
 - **The element is a type argument, not an associated type.** `impl
   Iterator<char> for str`, `impl Index<T> for Vec<T>` — there are no
   associated `type` members. The element type resolves at the use site

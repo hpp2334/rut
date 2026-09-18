@@ -668,6 +668,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
         }
+        // inline bounds gate the completed substitution (RFC 0043,
+        // admission-only)
+        self.ctx.admit_bounds(&fd.bounds, &subst, sp);
         // final param types under the completed substitution
         let ptys: Vec<TypeId> = params
             .iter()
@@ -730,6 +733,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, "instance methods are called on a value, not the class");
             return Err(());
         }
+        // inline bounds gate the completed substitution (RFC 0043)
+        self.ctx.admit_bounds(&md.bounds, &class_subst, sp);
         let mut ptys = Vec::new();
         // the callee's signature may spell `Self`/`T` — resolve under the
         // CALLEE's class instantiation (the caller's context is irrelevant)
@@ -1216,6 +1221,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             },
             None => vec![],
         };
+        // inline bounds gate the completed substitution (RFC 0043):
+        // the impl method's own bounds under the target substitution
+        if let Some((_, mnode)) = im.methods.iter().find(|(n, _)| *n == tm.name) {
+            let bounds = self.ctx.ast.method_decl(*mnode).bounds.clone();
+            self.ctx.admit_bounds(&bounds, &subst, sp);
+        }
         let inst = crate::check::Inst {
             key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: tm.name },
             subst,
@@ -1429,6 +1440,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         );
         let (params, ret, mname) = (md.params, md.ret, md.name);
         let _ = mut_self;
+        // inline bounds gate the completed substitution (RFC 0043)
+        self.ctx.admit_bounds(&md.bounds, &class_subst, sp);
         let mut ptys = Vec::new();
         // the callee's signature may spell `Self`/`T` — resolve under the
         // CALLEE's class instantiation (the caller's context is irrelevant)

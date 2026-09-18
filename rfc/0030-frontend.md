@@ -118,9 +118,13 @@ usedecl    := 'use' Ident '::' (Ident | '{' name (',' name)* '}' ) ';'
                                               // Rust-like use path; the head is a
                                               // bare package name — [a-zA-Z0-9_]+
                                               // only, no string specifiers (RFC 0002 §4)
-decl       := letdecl | enumdecl | structdecl | classdecl | traitdecl | impldecl | fndecl
+decl       := letdecl | enumdecl | typealias | structdecl | classdecl | traitdecl | impldecl | fndecl
 letdecl    := 'let' Ident ':' Type '=' expr ';'   // module binding — load-time
 enumdecl   := 'enum' Ident '{' Ident (',' Ident)* ','? '}'
+typealias  := 'pub'?('(' vis ')')? 'type' Ident '=' Type ';'
+                                              // transparent alias; a union
+                                              // alias when Type spells
+                                              // `A | B` — bound-only (RFC 0043)
 structdecl := 'struct' Ident genericparams? '{' field* '}'
 classdecl  := 'class' Ident genericparams? '{' field* '}'
                                               // type bodies are FIELDS ONLY (RFC
@@ -155,13 +159,19 @@ trait      := 'trait' Ident genericparams? ('requires' TraitList)? '{' methsig* 
                                                // defaults (RFC 0012 §2); the old
                                                // class-member `dispose` is gone:
                                                // Disposal is an impl (RFC 0016 §3)
-fndecl     := 'entry'? modifiers? 'async'? 'fn' Ident genericparams? '(' params ')' (':' Type)? whereclause? block
+fndecl     := 'entry'? modifiers? 'async'? 'fn' Ident genericparams? '(' params ')' (':' Type)? block
                                                // 'entry' — the host-callable
                                                // surface (RFC 0035 §3); does
                                                // not combine with pub
                                                // modifiers (RFC 0003 §2)
-whereclause := 'where' Ident 'requires' TraitList  // admission-only bounds
-                                               // (RFC 0013 §2, RFC 0037 §3)
+genericparams := '<' gparam (',' gparam)* ','? '>'   // fn/method params take
+                                               // inline admission bounds
+                                               // (RFC 0043); struct/class/
+                                               // trait/surface params reject
+                                               // `requires`
+gparam     := Ident ('requires' bound)?        // bound := Type ('|' Type)* —
+                                               // union of concrete types,
+                                               // traits, aliases (RFC 0043)
 block      := '{' stmt* '}'
 stmt       := 'let' 'mut'? Ident (':' Type)? '=' expr ';'
              | 'if' '(' expr ')' block ('else' 'if' … | 'else' block)?

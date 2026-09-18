@@ -1,0 +1,65 @@
+// RFC 0043 — type aliases & inline `requires`: `type X = A;` is
+// transparent — the alias name binds the TARGET's id everywhere (params,
+// fields, lets), chains expand, and there is no runtime union kind.
+// `type U = A | B;` unions are BOUND-ONLY: legal in `requires` bounds,
+// never a value type. `fn f<T requires B>(..)` is admission-only — it
+// gates which instantiations compile (checked at the call site), proves
+// the widening of a `T`-typed value into a `B`-typed slot, and grants no
+// method calls on bare `T`.
+
+use ink::{ Logger };
+
+// one type, three names: Km expands to Meters expands to i64
+type Meters = i64;
+type Km = Meters;
+
+// the bound the generic fns name — any type with a registered impl
+trait Labeled {
+    fn label(self) -> str;
+}
+
+struct Ridge { h: i32 }
+struct Trench { d: i32 }
+
+impl Labeled for Ridge {
+    fn label(self) -> str { return "ridge"; }
+}
+
+impl Labeled for Trench {
+    fn label(self) -> str { return "trench"; }
+}
+
+// a trait bound: the concrete type must have a registered impl —
+// the widening `let w: Labeled = x` compiles BECAUSE the bound holds
+fn name<T requires Labeled>(x: T) -> str {
+    let w: Labeled = x;
+    return w.label();
+}
+
+// a union bound: EITHER member admits the call (`Ridge | Trench`)
+fn kind<T requires Ridge | Trench>(x: T) -> str {
+    let w: Labeled = x;
+    return w.label();
+}
+
+fn aliases() {
+    let log = Logger.new("aliases");
+
+    let trip: Km = 1500;          // Km is Meters is i64 — all one type
+    let plain: Meters = trip;     // no conversion: the alias IS the target
+
+    let r: Ridge = Ridge { h: 900 };
+    let t: Trench = Trench { d: 400 };
+
+    // name(r) and name(t) are two admitted instantiations of one generic
+    log.info(f"trip={trip} plain={plain} {name(r)}/{name(t)} kind={kind(t)}");
+
+    // let n: i32 = name(t);        // ERROR: i32 has no impl Labeled —
+    //                              // the bound names itself at the call
+    // let u: Ridge = Ridge { h: 1 };
+    // let bad: Meters = u;         // ERROR: a struct is not i64
+}
+
+pub fn main() {
+    aliases();
+}

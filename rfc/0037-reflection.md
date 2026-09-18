@@ -7,8 +7,8 @@
   `requires`, vtables, no-recovery), RFC 0013 (generics — extended §3),
   RFC 0014 (`Opaque`, `downcast`), RFC 0015 (descriptors,
   `is_a`, boxing), RFC 0006/0009/0010, RFC 0022/0028 (builtin-impl
-  registry), RFC 0025/0026, RFC 0030 (grammar — `where`), RFC 0031,
-  RFC 0033
+  registry), RFC 0025/0026, RFC 0030 (grammar), RFC 0031, RFC 0033,
+  RFC 0043 (inline `requires` — the `where` spelling is gone)
 - **Part:** G — Reflection & serialization
 
 ## Summary
@@ -20,7 +20,7 @@ fill it for the data world; classes opt in by hand with a **curated**
 view. Libraries layer contracts on top (`trait Serializable
 requires Reflectable {}`) and take **trait-object-typed consumers**
 (`stringify(v: Serializable)`) or **bounded producers**
-(`deserialize<T>(..) where T requires Deserializable`). Nothing in the
+(`deserialize<T requires Deserializable>(..)`). Nothing in the
 language names a builtin; no strings are matched; nothing changes
 under `--release` stripping. The proving example is user-defined JSON
 (§5) — serialization stays **userland** (RFC 0001 "Why
@@ -152,7 +152,8 @@ first-class type value (RFC 0015 OQ-1 stays closed).
    different powers.
 2. **Walkability = implements the protocol** — auto, registry, or
    manual. Entries may demand a contract (`Serializable`) or a
-   capability (`where T requires Deserializable`). Nested nodes are
+   capability (an inline `requires Deserializable` bound, RFC 0043).
+   Nested nodes are
    gated by the descriptor `is_a(Reflectable)` query; misses are
    **values-shaped errors**, never traps.
 3. **Boxing widens** (normative; cross-noted RFC 0015 §3): `Opaque`
@@ -163,10 +164,11 @@ first-class type value (RFC 0015 OQ-1 stays closed).
    (layout tables, RFC 0015 §6), not symbols — `--strip-native-names`
    / `--release` never touches them. Sum policy dispatches on
    **payload structure**, never on variant-name matching.
-5. **Admission-only `where` bounds on user generic fns** (RFC 0013
-   extension): a trailing `where T requires I` gates instantiation
+5. **Admission-only inline `requires` bounds on user generic fns**
+   (RFC 0013 §2, RFC 0043 — the `where` clause is removed): a
+   `T requires Deserializable` parameter bound gates instantiation
    admission against the requires graph at the call site — compile
-   error naming the trait. It grants **no method calls on bare
+   error naming the bound. It grants **no method calls on bare
    `T`** (host-decl param-bound semantics, RFC 0025 §1); bodies may
    still widen a `T`-typed *value* to an `I`-typed slot — the bound proves the
    widening valid.
@@ -184,8 +186,7 @@ pub fn stringify(v: Serializable) -> Result<str, str> {
     return write_val(v.reflect(), v);   // vtable reflect(); v descends
 }                                       // to Opaque (erased storage)
 
-pub fn deserialize<T>(v: str) -> Result<T, JsonError>
-        where T requires Deserializable {
+pub fn deserialize<T requires Deserializable>(v: str) -> Result<T, JsonError> {
     let t = reflect<T>();             // guaranteed descriptor-backed
     let tree = parse_tree(v)?;        // by the bound — no runtime
     let built = build(t, tree)?;      // pre-check
@@ -237,7 +238,10 @@ example names its assumed helpers in a header comment.
   i64/f64); `char`'s Leaf classification.
 - OQ-10: auto-impl for user wrappers of reflectable types.
 - OQ-11: bound + widening interplay (v1: admission only).
-- OQ-12: unify `where` bounds with host/extern inline param bounds.
+- OQ-12: (closed) the `where` spelling is gone — bounds are inline on
+  the generic parameter list (RFC 0043), the same shape the host/extern
+  param bounds always had; what remains is unifying admission
+  bookkeeping, not syntax.
 - OQ-13: stringify over `Reflectable` sans opt-in (debug
   printers)? v1 no — contract is the discipline; debuggers use
   std:debug (RFC 0036).

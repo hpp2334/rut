@@ -22,6 +22,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
         Tok::Ident(kw) => match kw.as_str() {
             "use" => Some(Frame::Use(UseFrame::new())),
             "pub" => Some(Frame::Pub(PubFrame::new())),
+            "type" => Some(Frame::Alias(TypeAliasFrame::new(Vis::Self_))),
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(Vis::Self_))),
             "enum" => Some(Frame::Enum(EnumFrame::new(Vis::Self_))),
             "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, Vis::Self_))),
@@ -81,6 +82,7 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(vis))),
+            "type" => Some(Frame::Alias(TypeAliasFrame::new(vis))),
             "enum" => Some(Frame::Enum(EnumFrame::new(vis))),
             "struct" => Some(Frame::Dataclass(TyDeclFrame::new(false, vis))),
             "class" => Some(Frame::Class(TyDeclFrame::new(true, vis))),
@@ -175,6 +177,48 @@ impl UseFrame {
 
     pub(crate) fn absorb(&mut self, _p: &mut Parser, _d: Done) -> Step {
         unreachable!("use frame pushes no children")
+    }
+}
+
+// ---- type alias ----
+
+/// `pub(..)? type Name = Target;` (RFC 0043): a transparent alias, or a
+/// `Target` spelled `A | B` for the bound-only union. `vis` rides the
+/// item like `TyDeclFrame`'s; the `use`-both rule stays the binding gate.
+pub(crate) struct TypeAliasFrame {
+    vis: Vis,
+    lo: u32,
+    name: IdentId,
+}
+
+impl TypeAliasFrame {
+    pub(crate) fn new(vis: Vis) -> Self {
+        TypeAliasFrame { vis, lo: 0, name: IdentId(0) }
+    }
+
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        self.lo = p.bump().span.lo; // type
+        let Some(name) = p.expect_ident("a type alias name") else {
+            return Step::Pop(Done::Failed);
+        };
+        self.name = name;
+        p.expect(Tok::Eq);
+        Step::Push(Frame::Type(TypeFrame::new_bound(p)))
+    }
+
+    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
+        match d {
+            Done::Ty(target) => {
+                p.expect(Tok::Semi);
+                let node = p.item(
+                    ItemKind::Alias(AliasData { vis: self.vis, name: self.name, target }),
+                    Span::new(self.lo, p.span().hi),
+                );
+                Step::Pop(Done::Item(node))
+            }
+            Done::Failed => Step::Pop(Done::Failed),
+            _ => unreachable!("type alias frame receives a type"),
+        }
     }
 }
 
@@ -301,25 +345,54 @@ impl EnumFrame {
     }
 }
 
-// ---- generic parameter list (inline — no child frames) ----
+// ---- generic parameter list ----
+//
+// RFC 0043: fn/method generic parameters may carry inline admission
+// bounds (`<T requires A | B>`); struct/class/trait/surface generics
+// reject them. A bound suspends the enclosing frame at a GenBound stage
+// — the bound itself is a child Type frame — and `generic_params_more`
+// hands back the generic whose bound is being parsed (`Some`).
 
-fn generic_params(p: &mut Parser) -> Vec<IdentId> {
+fn generic_params(p: &mut Parser, allow_bounds: bool, owner: &str) -> (Vec<IdentId>, Option<IdentId>) {
     p.bump(); // < (the caller checked)
     let mut out = Vec::new();
+    let pending = generic_params_more(p, allow_bounds, owner, &mut out);
+    (out, pending)
+}
+
+/// Continue the list at a parameter name — after `<`, a comma, or an
+/// absorbed bound. `Some(g)` when `g requires` suspends the list.
+fn generic_params_more(p: &mut Parser, allow_bounds: bool, owner: &str, out: &mut Vec<IdentId>) -> Option<IdentId> {
+    p.eat_punct(Tok::Comma); // after an absorbed bound the separator is still ahead
     loop {
         if p.eat_punct(Tok::Gt) {
-            break;
+            return None;
         }
         let Some(n) = p.expect_ident("a generic parameter") else {
-            return out;
+            return None;
         };
         out.push(n);
+        if p.at_kw("requires") {
+            p.bump();
+            if allow_bounds {
+                return Some(n);
+            }
+            p.err_here(format!(
+                "`{owner}` generic parameters take no `requires` bounds — inline bounds bind fn/method generics only (RFC 0043)"
+            ));
+            // skip the rejected bound so the list continues cleanly
+            while !matches!(
+                p.tok(),
+                Tok::Comma | Tok::Gt | Tok::Shr | Tok::LParen | Tok::LBrace | Tok::Eof
+            ) {
+                p.bump();
+            }
+        }
         if !p.eat_punct(Tok::Comma) {
             p.expect_gt();
-            break;
+            return None;
         }
     }
-    out
 }
 
 // ---- struct / class ----
@@ -345,7 +418,10 @@ impl TyDeclFrame {
         };
         self.name = name;
         if matches!(p.tok(), Tok::Lt) {
-            self.generics = generic_params(p);
+            let owner = if self.is_class { "class" } else { "struct" };
+            let (gens, pending) = generic_params(p, false, owner);
+            self.generics = gens;
+            debug_assert!(pending.is_none(), "rejected bounds never suspend");
         }
         Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Class {
             allow_pub: self.is_class,
@@ -406,7 +482,9 @@ impl TraitFrame {
         };
         self.name = name;
         if matches!(p.tok(), Tok::Lt) {
-            self.generics = generic_params(p);
+            let (gens, pending) = generic_params(p, false, "trait");
+            self.generics = gens;
+            debug_assert!(pending.is_none(), "rejected bounds never suspend");
         }
         if p.at_kw("requires") {
             p.bump();
@@ -644,7 +722,7 @@ impl TypeBodyFrame {
                         Tok::Ident(kw) if kw == "fn" => {
                             p.err(lo, "host dataclasses declare fields only —methods live in rut wrapper classes (RFC 0025)");
                             self.stage = TbStage::Method;
-                            return Step::Push(Frame::Method(MethodFrame::new(None, false, false)));
+                            return Step::Push(Frame::Method(MethodFrame::new(None, false, false, false)));
                         }
                         Tok::Ident(_) => {
                             let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
@@ -710,7 +788,7 @@ impl TypeBodyFrame {
                                 );
                             }
                             self.stage = TbStage::Method;
-                            return Step::Push(Frame::Method(MethodFrame::new(vis, false, true)));
+                            return Step::Push(Frame::Method(MethodFrame::new(vis, false, true, true)));
                         }
                         Tok::Ident(_) => {
                             let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
@@ -758,7 +836,7 @@ impl TypeBodyFrame {
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
                         let with_body = matches!(self.mode, BodyMode::Impl);
-                        return Step::Push(Frame::Method(MethodFrame::new(None, is_async, with_body)));
+                        return Step::Push(Frame::Method(MethodFrame::new(None, is_async, with_body, true)));
                     }
                     if is_async {
                         p.err(lo, "expected `fn` after `async`");
@@ -789,7 +867,7 @@ impl TypeBodyFrame {
                     }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
-                        return Step::Push(Frame::Method(MethodFrame::new(vis, is_async, true)));
+                        return Step::Push(Frame::Method(MethodFrame::new(vis, is_async, true, true)));
                     }
                     if is_async {
                         p.err(lo, "expected `fn` after `async`");
@@ -875,30 +953,40 @@ pub(crate) struct MethodFrame {
     vis: Option<Vis>,
     is_async: bool,
     with_body: bool,
+    /// RFC 0043: rut methods take inline bounds; surface (.d.rut) members
+    /// do not
+    allow_bounds: bool,
     stage: MeStage,
     name: IdentId,
     generics: Vec<IdentId>,
+    /// the generic whose `requires` bound is being parsed (GenBound stage)
+    pending: Option<IdentId>,
+    bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
     params: Option<Vec<NodeHandle<AnyParam>>>,
     ret: Option<NodeHandle<AnyTy>>,
 }
 
 #[derive(Clone, Copy)]
 enum MeStage {
+    GenBound,
     Params,
     Ret,
     Body,
 }
 
 impl MethodFrame {
-    pub(crate) fn new(vis: Option<Vis>, is_async: bool, with_body: bool) -> Self {
+    pub(crate) fn new(vis: Option<Vis>, is_async: bool, with_body: bool, allow_bounds: bool) -> Self {
         MethodFrame {
             lo: 0,
             vis,
             is_async,
             with_body,
+            allow_bounds,
             stage: MeStage::Params,
             name: IdentId(0),
             generics: Vec::new(),
+            pending: None,
+            bounds: Vec::new(),
             params: None,
             ret: None,
         }
@@ -911,7 +999,13 @@ impl MethodFrame {
         };
         self.name = name;
         if matches!(p.tok(), Tok::Lt) {
-            self.generics = generic_params(p);
+            let (gens, pending) = generic_params(p, self.allow_bounds, "method");
+            self.generics = gens;
+            if let Some(g) = pending {
+                self.pending = Some(g);
+                self.stage = MeStage::GenBound;
+                return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
+            }
         }
         Step::Push(Frame::Params(ParamsFrame::new()))
     }
@@ -925,6 +1019,7 @@ impl MethodFrame {
     }
 
     fn finish_sig(&mut self, p: &mut Parser) -> Step {
+        self.stray_where(p);
         if self.with_body && p.mode == Mode::Impl {
             self.stage = MeStage::Body;
             Step::Push(Frame::Block(BlockFrame::lax(p, self.lo)))
@@ -934,12 +1029,27 @@ impl MethodFrame {
         }
     }
 
+    /// A `where` clause is gone (RFC 0043): diagnose with the inline
+    /// replacement and skip past the stray clause so the signature's
+    /// tail (`;` or the body) still parses.
+    fn stray_where(&mut self, p: &mut Parser) {
+        if p.at_kw("where") {
+            p.err_here(
+                "`where` clauses are removed — write the bound inline: `fn m<T requires B>(..)` (RFC 0043)",
+            );
+            while !matches!(p.tok(), Tok::LBrace | Tok::Semi | Tok::Eof) {
+                p.bump();
+            }
+        }
+    }
+
     fn pop(&mut self, p: &mut Parser, body: Option<NodeHandle<BlockNode>>) -> Step {
         let d = MethodDeclData {
             vis: self.vis,
             is_async: self.is_async,
             name: self.name,
             generics: std::mem::take(&mut self.generics),
+            bounds: std::mem::take(&mut self.bounds),
             params: self.params.take().expect("method without params"),
             ret: self.ret.take(),
             body,
@@ -949,6 +1059,18 @@ impl MethodFrame {
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match (self.stage, d) {
+            (MeStage::GenBound, Done::Ty(t)) => {
+                let g = self.pending.take().expect("bound without a parameter");
+                self.bounds.push((g, t));
+                let pending = generic_params_more(p, self.allow_bounds, "method", &mut self.generics);
+                if let Some(g) = pending {
+                    self.pending = Some(g);
+                    return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
+                }
+                self.stage = MeStage::Params;
+                Step::Push(Frame::Params(ParamsFrame::new()))
+            }
+            (MeStage::GenBound, Done::Failed) => Step::Pop(Done::Failed),
             (MeStage::Params, Done::Members(ps)) => {
                 self.params = Some(ps);
                 self.after_params(p)
@@ -977,17 +1099,18 @@ pub(crate) struct FnFrame {
     is_async: bool,
     name: IdentId,
     generics: Vec<IdentId>,
+    /// the generic whose `requires` bound is being parsed (GenBound stage)
+    pending: Option<IdentId>,
+    bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
     params: Option<Vec<NodeHandle<AnyParam>>>,
     ret: Option<NodeHandle<AnyTy>>,
-    where_bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-    where_name: Option<IdentId>,
 }
 
 #[derive(Clone, Copy)]
 enum FnSStage {
+    GenBound,
     Params,
     Ret,
-    WhereBound,
     Body,
 }
 
@@ -1002,10 +1125,10 @@ impl FnFrame {
             is_async: false,
             name: IdentId(0),
             generics: Vec::new(),
+            pending: None,
+            bounds: Vec::new(),
             params: None,
             ret: None,
-            where_bounds: Vec::new(),
-            where_name: None,
         }
     }
 
@@ -1026,7 +1149,13 @@ impl FnFrame {
         };
         self.name = name;
         if matches!(p.tok(), Tok::Lt) {
-            self.generics = generic_params(p);
+            let (gens, pending) = generic_params(p, true, "fn");
+            self.generics = gens;
+            if let Some(g) = pending {
+                self.pending = Some(g);
+                self.stage = FnSStage::GenBound;
+                return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
+            }
         }
         Step::Push(Frame::Params(ParamsFrame::new()))
     }
@@ -1036,39 +1165,38 @@ impl FnFrame {
             self.stage = FnSStage::Ret;
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
-        self.where_entry(p)
-    }
-
-    /// the where-clause, if any (RFC 0013 §2)
-    fn where_entry(&mut self, p: &mut Parser) -> Step {
-        if p.at_kw("where") {
-            p.bump();
-            return self.where_top(p);
-        }
         self.body(p)
     }
 
-    fn where_top(&mut self, p: &mut Parser) -> Step {
-        let Some(t) = p.expect_ident("a generic parameter name") else {
-            return self.body(p);
-        };
-        if !p.at_kw("requires") {
-            p.err_here("expected `requires` in a where clause (RFC 0013 §2)");
-            return self.body(p);
-        }
-        p.bump();
-        self.where_name = Some(t);
-        self.stage = FnSStage::WhereBound;
-        Step::Push(Frame::Type(TypeFrame::new(p)))
-    }
-
+    /// The fn body — a stray `where` clause (removed, RFC 0043) diagnoses
+    /// with the inline replacement and is skipped so the `{` still parses.
     fn body(&mut self, p: &mut Parser) -> Step {
+        if p.at_kw("where") {
+            p.err_here(
+                "`where` clauses are removed — write the bound inline: `fn f<T requires B>(..)` (RFC 0043)",
+            );
+            while !matches!(p.tok(), Tok::LBrace | Tok::Eof) {
+                p.bump();
+            }
+        }
         self.stage = FnSStage::Body;
         Step::Push(Frame::Block(BlockFrame::lax(p, self.lo)))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match (self.stage, d) {
+            (FnSStage::GenBound, Done::Ty(t)) => {
+                let g = self.pending.take().expect("bound without a parameter");
+                self.bounds.push((g, t));
+                let pending = generic_params_more(p, true, "fn", &mut self.generics);
+                if let Some(g) = pending {
+                    self.pending = Some(g);
+                    return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
+                }
+                self.stage = FnSStage::Params;
+                Step::Push(Frame::Params(ParamsFrame::new()))
+            }
+            (FnSStage::GenBound, Done::Failed) => Step::Pop(Done::Failed),
             (FnSStage::Params, Done::Members(ps)) => {
                 self.params = Some(ps);
                 self.after_params(p)
@@ -1076,20 +1204,9 @@ impl FnFrame {
             (FnSStage::Params, Done::Failed) => Step::Pop(Done::Failed),
             (FnSStage::Ret, Done::Ty(t)) => {
                 self.ret = Some(t);
-                self.where_entry(p)
+                self.body(p)
             }
             (FnSStage::Ret, Done::Failed) => Step::Pop(Done::Failed),
-            (FnSStage::WhereBound, Done::Ty(tr)) => {
-                let t = self.where_name.take().expect("where bound without a name");
-                self.where_bounds.push((t, tr));
-                if p.eat_punct(Tok::Comma) {
-                    self.where_top(p)
-                } else {
-                    self.body(p)
-                }
-            }
-            // v1: a failed bound breaks to the body
-            (FnSStage::WhereBound, Done::Failed) => self.body(p),
             (FnSStage::Body, Done::Block(body)) => {
                 let f = p.fn_decl(
                     FnData {
@@ -1100,7 +1217,7 @@ impl FnFrame {
                         generics: std::mem::take(&mut self.generics),
                         params: self.params.take().expect("fn without params"),
                         ret: self.ret.take(),
-                        where_bounds: std::mem::take(&mut self.where_bounds),
+                        bounds: std::mem::take(&mut self.bounds),
                         body,
                     },
                     Span::new(self.lo, p.span().hi),
@@ -1203,7 +1320,9 @@ impl SurfaceFrame {
                         p.span(),
                         "host fn signatures are concrete —generic parameters cannot cross the boundary (RFC 0023 §1)",
                     );
-                    self.generics = generic_params(p);
+                    let (gens, pending) = generic_params(p, false, "host fn");
+                    self.generics = gens;
+                    debug_assert!(pending.is_none(), "rejected bounds never suspend");
                 }
                 self.stage = SuStage::Params;
                 Step::Push(Frame::Params(ParamsFrame::new()))
@@ -1243,7 +1362,9 @@ impl SurfaceFrame {
                 // engine fns are compiler-lowered (own<T>, downcast<T>) —
                 // generics are fine: nothing crosses a boundary
                 if matches!(p.tok(), Tok::Lt) {
-                    self.generics = generic_params(p);
+                    let (gens, pending) = generic_params(p, false, "builtin fn");
+                    self.generics = gens;
+                    debug_assert!(pending.is_none(), "rejected bounds never suspend");
                 }
                 self.stage = SuStage::Params;
                 Step::Push(Frame::Params(ParamsFrame::new()))
@@ -1261,7 +1382,10 @@ impl SurfaceFrame {
                 self.name = name;
                 self.is_trait = is_trait;
                 if matches!(p.tok(), Tok::Lt) {
-                    self.generics = generic_params(p);
+                    let owner = if is_trait { "builtin trait" } else { "builtin class" };
+                    let (gens, pending) = generic_params(p, false, owner);
+                    self.generics = gens;
+                    debug_assert!(pending.is_none(), "rejected bounds never suspend");
                 }
                 self.stage = SuStage::Members;
                 p.expect(Tok::LBrace);
@@ -1339,7 +1463,7 @@ impl SurfaceFrame {
             };
             if p.at_kw("fn") {
                 self.stage = SuStage::Members;
-                return Step::Push(Frame::Method(MethodFrame::new(None, is_async, false)));
+                return Step::Push(Frame::Method(MethodFrame::new(None, is_async, false, false)));
             }
             let found = p.peek(0).describe();
             p.err_here(format!("expected a method declaration, found {found}"));

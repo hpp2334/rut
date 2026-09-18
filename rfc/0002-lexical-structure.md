@@ -86,7 +86,7 @@ compiler gives it no meaning; greppability is enforced by style.
   spelling — `async fn`, RFC 0018 §2) are grammar keywords in v1.1.
 - Reserved (parse error with explanation): `switch`, `case`,
   `default`, `extends`, `super`, `as` (no casts at all — erasure is
-  the `Opaque.new(v)` class method, RFC 0014), `type` (type alias — future),
+  the `Opaque.new(v)` class method, RFC 0014),
   `match`, `void` (the empty type is spelled `nil`), `null`,
   `undefined`, `any`, `typeof`,
   `instanceof`, `delete`, `in` (only `for..of`), `with`, `var`,
@@ -96,7 +96,9 @@ compiler gives it no meaning; greppability is enforced by style.
   reserved word whose diagnostic names the rut replacement ("rut spells
   this `trait`"); the old module-, suspension-, and object-type spellings
   retired to ordinary identifiers — no keyword, no diagnostic, no
-  meaning.
+  meaning. `type` left the reserved table when type aliases landed — it
+  is the contextual alias introducer (RFC 0043), an ordinary identifier
+  everywhere else.
 - `new` is **not** reserved — it is an ordinary identifier and the
   conventional construction method name (`Rect.new(..)`, RFC 0010);
   there is no `new` expression anywhere.
@@ -112,12 +114,14 @@ compiler gives it no meaning; greppability is enforced by style.
   `let`, `mut`, `if`, `else`, `while`, `for`, `of`, `return`, `when`,
   `enum`, `struct`, `class`, `trait`, `impl`,
   `requires`, `use`, `pub`, `static`, `async`,
-  `await`, `extern`, `where`
-  (admission-only generic-fn bounds, RFC 0013 §2), `select`,
+  `await`, `extern`, `select`,
   `host`, `is` (the type-test operator, `expr is Type` —
   RFC 0012 §3), and the literals
   `true`, `false`, `nil`. `panic(msg: str)` and
-  `assert(cond, msg?)` are prelude functions, not keywords (RFC 0034 §2)
+  `assert(cond, msg?)` are prelude functions, not keywords (RFC 0034 §2).
+  `where` left the keyword set when bounds moved inline
+  (RFC 0013 §2, RFC 0043) — it is an ordinary identifier again; a stray
+  clause diagnoses with the inline replacement.
   — and like every prelude name they are **used, never ambient**
   (`use core::{ assert, panic };`, RFC 0028). A trait-typed value
   spells the bare trait name in type position — `d: Drawable` — one

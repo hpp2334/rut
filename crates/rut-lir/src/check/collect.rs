@@ -24,8 +24,9 @@ impl<'a> Ctx<'a> {
 
     pub fn collect(&mut self) {
         let items = self.ast.module_items(self.ast.root).to_vec();
-        // pass 1a: declare types (enums, dataclasses, classes, traits) so
-        // every name is in scope before any field/signature is resolved
+        // pass 1a: declare types (enums, dataclasses, classes, traits,
+        // aliases) so every name is in scope before any field/signature
+        // is resolved
         for it in &items {
             match self.ast.item(*it) {
             ItemKind::Enum { vis, name, members } => self.collect_enum(it.id(), *vis, *name, members),
@@ -38,12 +39,20 @@ impl<'a> Ctx<'a> {
             ItemKind::Trait { vis, name, generics, methods, .. } => {
                 self.declare_trait(it.id(), *vis, *name, generics, methods)
             }
+            ItemKind::Alias(d) => self.declare_alias(it.id(), d),
                 _ => {}
             }
         }
-        // pass 1b: resolve field types & trait signatures — with the names
-        // declared, self/forward/mutual references are legal (RFC 0009
-        // recursive shapes)
+        // pass 1b: validate alias targets first (each member resolves as
+        // type or trait — forward refs legal, cycles error), then resolve
+        // field types & trait signatures — with the names declared,
+        // self/forward/mutual references are legal (RFC 0009 recursive
+        // shapes)
+        for it in &items {
+            if let ItemKind::Alias(d) = self.ast.item(*it) {
+                self.validate_alias(d.name);
+            }
+        }
         for it in &items {
             match self.ast.item(*it) {
                 ItemKind::Dataclass { name, fields, .. } | ItemKind::Class { name, fields, .. } => {
@@ -120,7 +129,7 @@ impl<'a> Ctx<'a> {
 
     pub(crate) fn collect_enum(&mut self, node: NodeId, _vis: Vis, name: IdentId, members: &[(IdentId, Option<i64>)]) {
         let sp = self.ast.node(node).span;
-        if self.find_enum(name).is_some() || self.find_data(name).is_some() || self.find_trait(name).is_some() {
+        if self.find_enum(name).is_some() || self.find_data(name).is_some() || self.find_trait(name).is_some() || self.find_alias(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
@@ -153,7 +162,7 @@ impl<'a> Ctx<'a> {
         methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
-        if self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_trait(name).is_some() {
+        if self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_trait(name).is_some() || self.find_alias(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }
@@ -225,6 +234,28 @@ impl<'a> Ctx<'a> {
         self.datas[idx].1.fields = flds;
     }
 
+    /// Pass 1a — register a `type X = A;` / `type X = A | B;` alias
+    /// (RFC 0043). The target validates in pass 1b (`validate_alias`), so
+    /// forward references are legal; the name shares the duplicate-type-
+    /// name check with enums/records/traits.
+    pub(crate) fn declare_alias(&mut self, node: NodeId, d: &AliasData) {
+        let sp = self.ast.span(node);
+        if self.find_alias(d.name).is_some()
+            || self.find_data(d.name).is_some()
+            || self.find_enum(d.name).is_some()
+            || self.find_trait(d.name).is_some()
+        {
+            self.err(sp, format!("duplicate type name `{}`", self.name(d.name)));
+            return;
+        }
+        self.aliases.push(AliasDecl {
+            name: d.name,
+            node,
+            target: d.target,
+            resolved: None,
+        });
+    }
+
     /// Pass 1a — reserve the trait's id and register its name; signatures
     /// are resolved in pass 1b, once every type name is in scope.
     pub(crate) fn declare_trait(
@@ -236,7 +267,7 @@ impl<'a> Ctx<'a> {
         _methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
-        if self.find_trait(name).is_some() || self.find_data(name).is_some() || self.find_enum(name).is_some() {
+        if self.find_trait(name).is_some() || self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_alias(name).is_some() {
             self.err(sp, format!("duplicate type name `{}`", self.name(name)));
             return;
         }

@@ -93,6 +93,11 @@ pub struct SurfaceType {
     /// a generic template (`Vec<T>`): a consumer must monomorphize it, so
     /// the graph compiler source-inlines the module rather than linking it
     pub is_generic: bool,
+    /// the id's scope: `None` — the exporter's own scope (ordinary rows);
+    /// `Some(s)` — an explicit one. A transparent alias to a BOOT type
+    /// (`pub type Meters = i64;`, RFC 0043) points at the shared boot
+    /// table: its id needs no rebase, so the row spells scope 0.
+    pub scope: Option<crate::id::ScopeId>,
 }
 
 /// One exported trait declaration (RFC 0012 §5 — trait impls may live in

@@ -167,7 +167,11 @@ pub fn compile_program_resolved(
         }
         for t in &surface.type_exports {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(t.name)) {
-                ctx.add_extern_type(id, rut_core::pack(dep_scope, t.local), t.is_class);
+                // `scope: None` — the exporter's own scope (ordinary rows);
+                // `Some(s)` — an explicit one (a boot-targeted alias,
+                // RFC 0043: the shared boot table needs no rebase)
+                let scope = t.scope.unwrap_or(dep_scope);
+                ctx.add_extern_type(id, rut_core::pack(scope, t.local), t.is_class);
             }
         }
         // impl registrations (RFC 0012 §2): `(trait, target, method → fn)`,
@@ -326,6 +330,7 @@ pub fn compile_program_resolved(
                 local: rut_core::local_of(d.ty),
                 is_class: d.kind == rut_lir::check::DataKind::Class,
                 is_generic: !d.generics.is_empty(),
+                scope: None,
             });
         }
         for (name, e) in &ctx.enums {
@@ -334,6 +339,23 @@ pub fn compile_program_resolved(
                 local: rut_core::local_of(e.ty),
                 is_class: false,
                 is_generic: false,
+                scope: None,
+            });
+        }
+        // type aliases (RFC 0043): a single-target alias adds a row keyed
+        // by the TARGET's id — importers need zero changes, cross-module
+        // transparency by construction; `is_class`/`is_generic` false
+        // (aliases are non-generic). Union aliases stay module-local.
+        // A boot target (`pub type Meters = i64;`) keeps the shared boot
+        // scope — its id needs no rebase.
+        for (name, ty) in ctx.alias_exports() {
+            let scope = rut_core::scope_of(ty);
+            surface.type_exports.push(rut_core::binary::SurfaceType {
+                name,
+                local: rut_core::local_of(ty),
+                is_class: false,
+                is_generic: false,
+                scope: (scope == rut_core::BOOT_SCOPE).then_some(scope),
             });
         }
         // trait surface (RFC 0012 §5): declared non-generic traits with

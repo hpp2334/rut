@@ -53,6 +53,30 @@ pub struct TraitDeclInfo {
     pub generics: Vec<IdentId>,
 }
 
+/// What a validated type alias resolves to (RFC 0043). A single target
+/// binds the target's `TypeId`; a union alias is bound-only and never
+/// becomes a value type. `Pending` marks an alias mid-validation —
+/// re-entering it is a cycle.
+#[derive(Clone, Copy, Debug)]
+pub enum AliasTarget {
+    Ty(TypeId),
+    Union,
+    Pending,
+    Error,
+}
+
+/// `type X = A;` / `type X = A | B;` (RFC 0043) — declared in pass 1a,
+/// target validated in pass 1b (each member resolves as a type or trait;
+/// forward refs legal, cycles error).
+#[derive(Clone, Debug)]
+pub struct AliasDecl {
+    pub name: IdentId,
+    pub node: NodeId,
+    /// the target as written
+    pub target: NodeHandle<AnyTy>,
+    pub resolved: Option<AliasTarget>,
+}
+
 #[derive(Clone, Debug)]
 pub struct ImplDecl {
     pub trait_id: u32,
@@ -119,6 +143,8 @@ pub struct Ctx<'a> {
     pub types: TypeTable,
     pub traits: Vec<TraitDesc>,
     pub trait_decls: Vec<(IdentId, TraitDeclInfo)>,
+    /// type aliases (RFC 0043): `type X = A;` / `type X = A | B;`
+    pub aliases: Vec<AliasDecl>,
     /// the sequence-contract trait id once referenced (RFC 0012 `Iter`) —
     /// the sequence-lowering path keys on this, never on the trait's name
 
@@ -238,6 +264,43 @@ pub enum ImplHit {
     Extern(usize),
 }
 
+/// One `requires` member (RFC 0043): a concrete type (exact `TypeId`
+/// equality) or a trait (any registered impl satisfies, via the
+/// RFC 0012 registry).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum BoundMember {
+    Concrete(TypeId),
+    Trait(u32),
+}
+
+/// Display text of a bound/target type node — `A`, `A | B`, `Array<T>`
+/// (diagnostics name the bound, RFC 0043).
+pub(crate) fn bound_ty_str(ctx: &Ctx, node: NodeHandle<AnyTy>) -> String {
+    match ctx.ast.ty(node) {
+        TypeKind::TyPath { segs } => {
+            let mut s = segs
+                .iter()
+                .map(|sg| ctx.name(sg.name).to_string())
+                .collect::<Vec<_>>()
+                .join(".");
+            let last = segs.last().expect("path has a segment");
+            if !last.generics.is_empty() {
+                s.push_str(&format!(
+                    "<{}>",
+                    last.generics.iter().map(|&g| bound_ty_str(ctx, g)).collect::<Vec<_>>().join(", ")
+                ));
+            }
+            s
+        }
+        TypeKind::TyUnion { elems } => elems
+            .iter()
+            .map(|&e| bound_ty_str(ctx, e))
+            .collect::<Vec<_>>()
+            .join(" | "),
+        _ => String::new(),
+    }
+}
+
 pub type TcResult<T> = Result<T, ()>;
 
 impl<'a> Ctx<'a> {
@@ -257,6 +320,7 @@ impl<'a> Ctx<'a> {
             types: TypeTable::boot_scoped(scope),
             traits: Vec::new(),
             trait_decls: Vec::new(),
+            aliases: Vec::new(),
             funcs: Vec::new(),
             consts: Vec::new(),
             exports: Vec::new(),
@@ -585,6 +649,71 @@ impl<'a> Ctx<'a> {
     pub fn find_trait(&self, name: IdentId) -> Option<&TraitDeclInfo> {
         self.trait_decls.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
     }
+    pub fn find_alias(&self, name: IdentId) -> Option<&AliasDecl> {
+        self.aliases.iter().find(|a| a.name == name)
+    }
+
+    /// Settle an alias's target (RFC 0043 pass 1b): each member must
+    /// resolve as a type or trait — located early errors; forward refs
+    /// are legal, a cycle (`type A = B; type B = A;`) diagnoses at the
+    /// re-entered alias. Idempotent; `resolve_type` calls it on expansion.
+    pub(crate) fn validate_alias(&mut self, name: IdentId) {
+        let Some(idx) = self.aliases.iter().position(|a| a.name == name) else {
+            return;
+        };
+        match self.aliases[idx].resolved {
+            Some(AliasTarget::Pending) => {
+                let sp = self.ast.span(self.aliases[idx].node);
+                let n = self.aliases[idx].name;
+                self.err(
+                    sp,
+                    format!(
+                        "recursive type alias `{}` — an alias chain must end at a real type (RFC 0043)",
+                        self.name(n)
+                    ),
+                );
+                self.aliases[idx].resolved = Some(AliasTarget::Error);
+                return;
+            }
+            Some(_) => return,
+            None => {}
+        }
+        self.aliases[idx].resolved = Some(AliasTarget::Pending);
+        let target = self.aliases[idx].target;
+        match self.ast.ty(target) {
+            TypeKind::TyUnion { elems } => {
+                // a union alias: every member must resolve (as a type or
+                // trait); the union itself never becomes a value type
+                for e in elems.clone() {
+                    self.resolve_type(e, &[]);
+                }
+                if matches!(self.aliases[idx].resolved, Some(AliasTarget::Pending)) {
+                    self.aliases[idx].resolved = Some(AliasTarget::Union);
+                }
+            }
+            _ => {
+                let t = self.resolve_type(target, &[]);
+                if matches!(self.aliases[idx].resolved, Some(AliasTarget::Pending)) {
+                    self.aliases[idx].resolved = Some(AliasTarget::Ty(t));
+                }
+            }
+        }
+    }
+
+    /// Single-target aliases as export rows (RFC 0043): the alias name
+    /// binds the TARGET's id, so importers need zero changes —
+    /// cross-module transparency by construction. Union aliases are
+    /// module-local, never exported.
+    pub fn alias_exports(&self) -> Vec<(IdentId, TypeId)> {
+        self.aliases
+            .iter()
+            .filter_map(|a| match a.resolved {
+                Some(AliasTarget::Ty(t)) => Some((a.name, t)),
+                _ => None,
+            })
+            .collect()
+    }
+
     pub fn find_let(&self, name: IdentId) -> Option<&(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)> {
         self.lets.iter().find(|(n, _, _)| *n == name)
     }
@@ -632,6 +761,98 @@ impl<'a> Ctx<'a> {
             im.target == target && im.methods.iter().any(|(n, _)| *n == name)
         })
     }
+
+    // ---- inline generic bounds (RFC 0043, admission-only) ----
+
+    /// Resolve one bound member — a `TyUnion` fans out; an alias expands
+    /// (validated in pass 1b) before trait-vs-concrete detection.
+    pub(crate) fn resolve_bound_members(
+        &mut self,
+        node: NodeHandle<AnyTy>,
+        subst: &[(IdentId, TypeId)],
+    ) -> Vec<BoundMember> {
+        match self.ast.ty(node) {
+            TypeKind::TyUnion { elems } => {
+                let mut out = Vec::new();
+                for e in elems.clone() {
+                    out.extend(self.resolve_bound_members(e, subst));
+                }
+                out
+            }
+            TypeKind::TyPath { segs, .. }
+                if segs.len() == 1 && segs[0].generics.is_empty()
+                    && self.find_alias(segs[0].name).is_some() =>
+            {
+                let name = segs[0].name;
+                self.validate_alias(name);
+                let idx = self.aliases.iter().position(|a| a.name == name).unwrap();
+                match self.aliases[idx].resolved {
+                    Some(AliasTarget::Union) => {
+                        let target = self.aliases[idx].target;
+                        self.resolve_bound_members(target, subst)
+                    }
+                    _ => {
+                        let t = self.resolve_type(node, subst);
+                        vec![self.bound_member_of(t)]
+                    }
+                }
+            }
+            _ => {
+                let t = self.resolve_type(node, subst);
+                vec![self.bound_member_of(t)]
+            }
+        }
+    }
+
+    fn bound_member_of(&self, t: TypeId) -> BoundMember {
+        match self.types.kind(t) {
+            TyKind::TraitObj { trait_id } => BoundMember::Trait(*trait_id),
+            _ => BoundMember::Concrete(t),
+        }
+    }
+
+    /// Gate a completed substitution against the item's inline bounds
+    /// (RFC 0043): the concrete type must satisfy ANY union member —
+    /// a concrete member by `TypeId` equality, a trait member via the
+    /// impl registry. Trait-object instantiations satisfy nothing
+    /// (RFC 0013 §2). Admission-only: no IR, no dispatch change.
+    pub(crate) fn admit_bounds(
+        &mut self,
+        bounds: &[(IdentId, NodeHandle<AnyTy>)],
+        subst: &[(IdentId, TypeId)],
+        sp: Span,
+    ) {
+        if bounds.is_empty() {
+            return;
+        }
+        for (g, bnode) in bounds {
+            let Some(&concrete) = subst.iter().find(|(n, _)| n == g).map(|(_, t)| t) else {
+                continue; // the generic was never substituted — earlier errors
+            };
+            let members = self.resolve_bound_members(*bnode, subst);
+            if members.is_empty() {
+                continue; // unresolvable bound — already diagnosed
+            }
+            let satisfiable = !matches!(self.types.kind(concrete), TyKind::TraitObj { .. });
+            let ok = satisfiable
+                && members.iter().any(|m| match *m {
+                    BoundMember::Trait(tid) => self.find_impl_ex(tid, concrete).is_some(),
+                    BoundMember::Concrete(t) => t == concrete,
+                });
+            if !ok {
+                self.err(
+                    sp,
+                    format!(
+                        "`{}` does not satisfy `{}` requires `{}` — no matching type or impl is registered (RFC 0043)",
+                        self.type_name(concrete),
+                        self.name(*g),
+                        bound_ty_str(self, *bnode),
+                    ),
+                );
+            }
+        }
+    }
+
     pub fn impls_of(&self, target: TypeId) -> Vec<usize> {
         self.impls
             .iter()

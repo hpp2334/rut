@@ -36,25 +36,32 @@ block), and a generic `first<T>` monomorphized to two instantiations.
   v1 (RFC 0005); user generics stay type-only — `N` is a constant
   expression, part of the instantiation identity (`Array<i32, 3> ≠
   Array<i32, 4>`, RFC 0015 §3).
-- Generic parameters are **unconstrained by default** — no `T requires Trait`
-  bounds in the parameter list of user generics (OQ-1): you cannot call
-  trait methods on a bare `T`. Pass values in, or take an `I`-typed
-  parameter instead of a generic. One **admission-only** form ships —
-  it gates which instantiations compile (closing over `requires`),
-  grants no method calls on bare type params, and adds no IR:
-  a trailing **`where` clause on user generic fns** (RFC 0037 §3) —
-  the serde motivating pair: producers that return `T` cannot take a
-  `I`-typed parameter instead, so the contract rides the call site:
-  `deserialize<T>(v: str): Result<T, JsonError> where T requires
-  Deserializable`. A body may widen a `T`-typed *value* to an `I`-typed slot
-  (the bound proves the widening valid) but gains no class-method
-  calls on bare `T`. (A user-class bound would be pure forwarding
-  anyway — deferred with OQ-1. The old inline bounds on `host class`
-  declarations went with `host class` itself — RFC 0025, revised.)
+- Generic parameters are **unconstrained by default** — no method calls
+  on a bare `T` (OQ-1): you cannot call trait methods on a bare type
+  parameter. Pass values in, or take an `I`-typed parameter instead of a
+  generic. One **admission-only** form ships — it gates which
+  instantiations compile, grants no method calls on bare type params,
+  and adds no IR: **inline `requires` bounds on fn/method generic
+  parameters** (RFC 0043 — the trailing `where` clause is removed):
+  `fn f<T requires A | B>(x: T)`. The serde motivating pair: producers
+  that return `T` cannot take a `I`-typed parameter instead, so the
+  contract rides the call site: `deserialize<T requires
+  Deserializable>(v: str): Result<T, JsonError>`. Enforcement is at
+  instantiation — every substitution-completing site checks the bound:
+  concrete members by `TypeId` equality, trait members via the RFC 0012
+  registry, trait objects satisfying nothing, and a failure diagnoses
+  naming the bound. A body may widen a `T`-typed *value* to a
+  bound-member-typed slot (the bound proves the widening valid) but
+  gains no class-method calls on bare `T`. (A user-class bound is the
+  deliberate class-frame extension — generic-class bounds
+  `pub class HashMap<K requires Hashable, V>` land with the mapset work;
+  the old inline bounds on `host class` declarations went with
+  `host class` itself — RFC 0025, revised.)
 
 ## Open questions
 
-- OQ-1: generic bounds `T requires Trait` with **static dispatch** on bare `T`
-  (would unlock it without trait-typed refs) — deferred; the
-  admission-only form (user-fn `where` clauses, RFC 0037 §3) needs no dispatch
-  and adds no IR.
+- OQ-1: generic bounds `T requires Trait` with **static dispatch** on
+  bare `T` (would unlock it without trait-typed refs) — deferred; the
+  admission-only inline bound (RFC 0013 §2, RFC 0043) needs no dispatch
+  and adds no IR. The bound proves widening; calls still go through a
+  trait-typed slot.

@@ -38,6 +38,9 @@ fn classify_item(
 ) {
     match item {
         ItemKind::Fn(d) => push_name(toks, span, ast.name(d.name), TokenType::Function, out, false),
+        ItemKind::Alias(d) => {
+            push_name(toks, span, ast.name(d.name), TokenType::Type, out, false)
+        }
         ItemKind::SurfaceFn { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Function, out, false)
         }
@@ -140,6 +143,8 @@ fn classify_type(
         // `*T` / `(A, B)` — the puncts carry no classification; the
         // element types classify themselves
         TypeKind::TyPtr { .. } | TypeKind::TyTuple { .. } => {}
+        // a union bound's members classify themselves as Type nodes
+        TypeKind::TyUnion { .. } => {}
     }
 }
 

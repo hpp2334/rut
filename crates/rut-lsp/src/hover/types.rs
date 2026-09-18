@@ -18,6 +18,8 @@ pub enum TyForm {
     BuiltinTrait,
     /// `host struct Name { fields }` — a flat host-constructed record
     HostDataclass,
+    /// `type X = A;` — a transparent alias (RFC 0043)
+    Alias,
 }
 
 impl TyForm {
@@ -30,6 +32,7 @@ impl TyForm {
             TyForm::Builtin => "builtin",
             TyForm::BuiltinTrait => "builtin trait",
             TyForm::HostDataclass => "host struct",
+            TyForm::Alias => "type",
         }
     }
 }
@@ -51,6 +54,8 @@ pub struct TyDef {
     pub generics: Vec<String>,
     pub fields: Vec<MemberSrc>,
     pub methods: Vec<MemberSrc>,
+    /// `type X = A;` (RFC 0043) — the target as written; `None` otherwise
+    pub alias_target: Option<String>,
     pub doc: Vec<String>,
     pub span: Span,
     pub line: u32,
@@ -97,6 +102,34 @@ pub(crate) fn ty_head(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
             .first()
             .map(|s| ast.name(s.name).to_string())
             .unwrap_or_default(),
+        _ => String::new(),
+    }
+}
+
+/// display text of a type node — the alias hover's `type X = <target>`
+pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
+    match ast.ty(h) {
+        TypeKind::TyPath { segs } => {
+            let mut s = segs
+                .iter()
+                .map(|sg| ast.name(sg.name).to_string())
+                .collect::<Vec<_>>()
+                .join(".");
+            if let Some(last) = segs.last() {
+                if !last.generics.is_empty() {
+                    s.push_str(&format!(
+                        "<{}>",
+                        last.generics.iter().map(|&g| ty_src(ast, g)).collect::<Vec<_>>().join(", ")
+                    ));
+                }
+            }
+            s
+        }
+        TypeKind::TyUnion { elems } => elems
+            .iter()
+            .map(|&e| ty_src(ast, e))
+            .collect::<Vec<_>>()
+            .join(" | "),
         _ => String::new(),
     }
 }

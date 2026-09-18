@@ -55,6 +55,12 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             find_name(toks, span, ast.name(d.name), false),
             vec![],
         )),
+        ItemKind::Alias(d) => Some(sym(
+            ast.name(d.name),
+            SymKind::Class,
+            find_name(toks, span, ast.name(d.name), false),
+            vec![],
+        )),
         ItemKind::ModuleLet { name, .. } => Some(sym(
             ast.name(*name),
             SymKind::Variable,
@@ -175,5 +181,12 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         TypeKind::TyPtr { .. } => "*T".to_string(),
         TypeKind::TyTuple { .. } => "(..)".to_string(),
         TypeKind::TyConst(_) => "const".to_string(),
+        TypeKind::TyUnion { elems } => {
+            elems
+                .iter()
+                .map(|&e| ty_text(ast, e))
+                .collect::<Vec<_>>()
+                .join(" | ")
+        }
     }
 }

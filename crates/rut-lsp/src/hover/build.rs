@@ -4,7 +4,7 @@
 use rut_ast::ast::*;
 use rut_lexer::span::Span;
 
-use super::types::{ty_head, DefIndex, FnDef, ImplDef, MemberSrc, TyDef, TyForm};
+use super::types::{ty_head, ty_src, DefIndex, FnDef, ImplDef, MemberSrc, TyDef, TyForm};
 
 /// `line` of a byte offset, 1-based
 fn line_of(src: &str, lo: u32) -> u32 {
@@ -159,6 +159,7 @@ fn ty_def(
         generics,
         fields,
         methods,
+        alias_target: None,
         doc: doc_before(src, span.lo),
         span,
         line: line_of(src, span.lo),
@@ -327,6 +328,21 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
             ItemKind::BuiltinImpl { .. } => {
                 // core's `builtin impl i32 { .. }` — no new type; the
                 // methods surface through core's own hover data
+            }
+            ItemKind::Alias(d) => {
+                // `type X = A;` / `type X = A | B;` (RFC 0043) — the
+                // target renders as written
+                idx.types.push(TyDef {
+                    name: ast.name(d.name).to_string(),
+                    form: TyForm::Alias,
+                    generics: Vec::new(),
+                    fields: Vec::new(),
+                    methods: Vec::new(),
+                    doc: doc_before(src, span.lo),
+                    span,
+                    line: line_of(src, span.lo),
+                    alias_target: Some(ty_src(ast, d.target)),
+                });
             }
             ItemKind::ModuleLet { .. } | ItemKind::Use { .. } | ItemKind::Module { .. } => {}
         }

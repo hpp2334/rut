@@ -10,7 +10,7 @@
 
 import { memo, useEffect, useState } from "react";
 import type {
-  AstFPart, AstMember, AstNode, AstSeg, AstStructField, AstWhere,
+  AstBound, AstFPart, AstMember, AstNode, AstSeg, AstStructField,
   BinOpTag, Span2, UnOpTag, VisTag,
 } from "../wasm/rut-api";
 
@@ -43,7 +43,7 @@ const textOfSegs = (segs: AstSeg[]): string =>
 const textOfMember = (m: AstMember): string =>
   m.int === undefined ? m.ident : `${m.ident} = ${m.int}`;
 
-const textOfWhere = (w: AstWhere): string => `${w.ident} requires`;
+const textOfBound = (w: AstBound): string => `${w.ident} requires`;
 
 const textOfFPart = (p: AstFPart): string =>
   "str" in p ? JSON.stringify(p.str) : `{expr}`;
@@ -66,6 +66,12 @@ function rowsOf(n: AstNode, src: string): Row[] {
       return [
         { label: "pkg", text: n.pkg },
         { label: "names", items: n.names },
+      ];
+    case "Alias":
+      return [
+        { label: "vis", text: VIS_LABEL[n.vis] },
+        { label: "name", text: n.name },
+        { label: "target", node: n.target },
       ];
     case "ModuleLet":
       return [
@@ -111,7 +117,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "params", list: n.params },
         ...(n.ret ? [{ label: "ret", node: n.ret }] : []),
-        ...(n.wheres ? [{ label: "wheres", items: n.wheres.map(textOfWhere) }] : []),
+        ...(n.bounds ? [{ label: "bounds", items: n.bounds.map(textOfBound) }] : []),
         { label: "body", node: n.body },
       ];
     case "SurfaceFn":
@@ -147,6 +153,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "params", list: n.params },
         ...(n.ret ? [{ label: "ret", node: n.ret }] : []),
+        ...(n.bounds ? [{ label: "bounds", items: n.bounds.map(textOfBound) }] : []),
         ...(n.body ? [{ label: "body", node: n.body }] : []),
       ];
     case "Param":
@@ -236,6 +243,8 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "TyConst":
       return [{ label: "expr", node: n.expr }];
+    case "TyUnion":
+      return [{ label: "elems", list: n.elems }];
     case "Lit":
       // the literal's own span slices back the exact source text
       return [{ label: "value", text: textOfSpan(n.span, src) }];
