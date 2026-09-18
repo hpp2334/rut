@@ -13,7 +13,7 @@ fn fasta(n: i32) -> str {
     let mut x: u32 = 42;
     let mut checksum = 0;
     for (let i = 0; i < n; i += 1) {
-        x = Math.wrapping_add(Math.wrapping_mul(x, 1103515245), 12345);
+        x = (x.wrapping_mul(1103515245)).wrapping_add(12345);
         let idx = ((x >> 16) % 4) as i32;
         out = f"{out}{letters[idx]}";
         checksum += idx;

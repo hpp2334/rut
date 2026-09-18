@@ -170,7 +170,7 @@ entry fn push(c: Opaque, x: i32) {
 /// Replace the bank with `n` deterministic pseudo-random values — a
 /// Numerical-Recipes LCG over `seed`, folded into 0..1000 — so one call
 /// sizes the whole input; no host round-trip per element. The wrapping
-/// `Math.wrapping_mul`/`wrapping_add` forms keep the u32 math in range
+/// `x.wrapping_mul(y)`/`wrapping_add` methods keep the u32 math in range
 /// (RFC 0004 §3: plain `*`
 /// traps; plain `<<` would too — xorshift is out).
 entry fn fill(c: Opaque, n: u32, seed: u32) {
@@ -178,7 +178,7 @@ entry fn fill(c: Opaque, n: u32, seed: u32) {
     let fresh: Vec<i32> = Vec.new();
     let mut x = seed | 1;         // the LCG needs an odd state
     for (let i = 0; i < n as i32; i += 1) {
-        x = Math.wrapping_add(Math.wrapping_mul(x, 1664525), 1013904223);
+        x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);
         fresh.push((x % 1000) as i32);
     }
     b.data = make_ptr(fresh);

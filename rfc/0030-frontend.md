@@ -72,11 +72,11 @@ enum Tok {
 struct Token { tok: Tok, span: Span }
 ```
 
-- **Wrapping arithmetic** (RFC 0004 §3) is no longer grammar: the surface
-  spells it `Math.wrapping_add`/`wrapping_sub`/`wrapping_mul`/
-  `wrapping_shl` (`std:math`, RFC 0028), and the frontend lowers those
-  calls inline to the `wrap` opcodes (RFC 0032 §1.1 R2). Assignment
-  operators are one token each — no maximal-munch ambiguity.
+- **Wrapping arithmetic** (RFC 0004 §3) is no longer grammar: the
+  integer primitives carry it as `builtin impl` methods
+  (`x.wrapping_add(y)` — `core.d.rut`, RFC 0032 §1.1 R2), and the
+  frontend lowers those method calls inline to the `wrap` opcodes.
+  Assignment operators are one token each — no maximal-munch ambiguity.
 - **Maximal munch** with an explicit longest-match table; `/` vs `//` vs
   `/*` resolved by one lookahead.
 - Numeric literals: per RFC 0007 §1 (`0x`/`0b`/`0o`, `_` separators,

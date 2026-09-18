@@ -1139,6 +1139,9 @@ pub(crate) struct SurfaceFrame {
     /// `builtin trait Name { .. }` — collects members like BuiltinTy
     /// but emits the trait node
     is_trait: bool,
+    /// `builtin impl i32 { .. }` — collects bodiless methods like
+    /// BuiltinTy but emits the builtin-impl node (RFC 0032 §1.1 R2)
+    is_impl: bool,
     name: IdentId,
     generics: Vec<IdentId>,
     methods: Vec<NodeHandle<MethodDeclNode>>,
@@ -1160,6 +1163,7 @@ impl SurfaceFrame {
             lo: 0,
             stage: SuStage::Params,
             is_trait: false,
+            is_impl: false,
             name: IdentId(0),
             generics: Vec::new(),
             methods: Vec::new(),
@@ -1263,15 +1267,29 @@ impl SurfaceFrame {
                 p.expect(Tok::LBrace);
                 self.members_top(p)
             }
+            Tok::Ident(k) if k == "impl" => {
+                // `builtin impl i32 { fn wrapping_add(self, y: i32) -> i32; .. }`
+                // — numeric methods ON a primitive type (RFC 0032 §1.1 R2):
+                // lowered inline at the method call, ambient on the prim
+                p.bump();
+                let Some(prim) = p.expect_ident("a primitive type name") else {
+                    return Step::Pop(Done::Failed);
+                };
+                self.name = prim;
+                self.is_impl = true;
+                self.stage = SuStage::Members;
+                p.expect(Tok::LBrace);
+                self.members_top(p)
+            }
             Tok::Ident(_) => {
                 p.err_here(
-                    "`builtin` spells its kind — `builtin class Name { .. }` or `builtin trait Name { .. }` (RFC 0025)",
+                    "`builtin` spells its kind — `builtin class Name { .. }`, `builtin trait Name { .. }`, or `builtin impl <prim> { .. }` (RFC 0025/0032)",
                 );
                 Step::Pop(Done::Failed)
             }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!("expected `fn`, `class`, or `trait` after `builtin`, found {found}"));
+                p.err_here(format!("expected `fn`, `class`, `trait`, or `impl` after `builtin`, found {found}"));
                 Step::Pop(Done::Failed)
             }
         }
@@ -1280,6 +1298,7 @@ impl SurfaceFrame {
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
+                let span = Span::new(self.lo, p.span().hi);
                 let node = if self.is_trait {
                     p.item(
                         ItemKind::BuiltinTrait {
@@ -1288,7 +1307,16 @@ impl SurfaceFrame {
                             generics: std::mem::take(&mut self.generics),
                             methods: std::mem::take(&mut self.methods),
                         },
-                        Span::new(self.lo, p.span().hi),
+                        span,
+                    )
+                } else if self.is_impl {
+                    p.item(
+                        ItemKind::BuiltinImpl {
+                            vis: Vis::Self_,
+                            prim: self.name,
+                            methods: std::mem::take(&mut self.methods),
+                        },
+                        span,
                     )
                 } else {
                     p.item(
@@ -1298,7 +1326,7 @@ impl SurfaceFrame {
                             generics: std::mem::take(&mut self.generics),
                             members: std::mem::take(&mut self.methods),
                         },
-                        Span::new(self.lo, p.span().hi),
+                        span,
                     )
                 };
                 return Step::Pop(Done::Item(node));

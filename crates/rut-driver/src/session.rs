@@ -68,10 +68,11 @@ pub struct Module {
     /// module's use path while its internal registration naming remains
     /// `rt:log` (`rt:log::create_logger`), untouched since RFC 0022.
     pub host_scope: Option<String>,
-    /// Compiler-lowered intrinsics (native modules): `(name, id, arity)`.
-    /// Bodyless and hostless — `rut-lir` expands the call inline
-    /// (RFC 0032 §1.1 R2); `calc`'s wrapping/saturating/checked ops.
-    pub intrinsics: Vec<(String, rut_core::ops::Intrinsic, usize)>,
+    /// Builtin-impl methods (`core` only, RFC 0032 §1.1 R2): the integer
+    /// primitives' numeric methods — `(receiver prim, name, lowering id)`.
+    /// Bodyless and hostless — `rut-lir` expands the method call
+    /// (`x.wrapping_add(y)`) inline, ambient on the primitive.
+    pub native_impls: Vec<(rut_core::types::TypeId, String, rut_core::ops::Intrinsic)>,
     /// Exported constants: `(name, type, raw bits)` — `calc::PI`.
     pub consts: Vec<(String, rut_core::types::TypeId, u64)>,
     /// Builtin containers published by name (`core` only): the type is

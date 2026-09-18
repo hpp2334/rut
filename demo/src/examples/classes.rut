@@ -12,7 +12,6 @@
 
 use core::{ make_ptr, panic };
 use ink::{ Logger };
-use calc::{ Math };
 
 class Counter {
     n: i32 = 0;             // field initializer — module-private
@@ -25,7 +24,7 @@ impl Counter {
                                         // not syntax (RFC 0002 §4)
 
     pub fn press(mut self) {         // instance method: explicit receiver,
-        self.n = Math.wrapping_add(self.n, 1);                // wrapping add (§8) — or `+=` to trap
+        self.n = self.n.wrapping_add(1);                // wrapping add (§8) — or `+=` to trap
     }
 
     pub fn count(self) -> i32 { return self.n; }  // plain method; no get/set syntax

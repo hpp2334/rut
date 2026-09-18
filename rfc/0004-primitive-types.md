@@ -72,10 +72,15 @@ host-side, call-scoped, flag-guarded ones at the FFI (RFC 0023).
 ## 3. Integer semantics
 
 - Overflow in `+ - * <<` **traps** in debug and release by default.
-  Wrapping escapes: `Math.wrapping_add`/`wrapping_sub`/`wrapping_mul`/
-  `wrapping_shl` (`calc`, RFC 0028); saturating:
-  `Math.saturating_add`/`saturating_sub`/`saturating_mul`; checked:
-  `Math.checked_add`/`checked_sub`/`checked_mul` → `Option<T>`.
+  Wrapping escapes: `x.wrapping_add(y)`/`wrapping_sub`/`wrapping_mul`/
+  `wrapping_shl` — `builtin impl` methods on every integer primitive
+  (`core`, RFC 0032 §1.1 R2): ambient on the primitive (no `use`,
+  the primitives have none), lowered inline off the receiver's width.
+  Saturating: `x.saturating_add(y)`/`saturating_sub`/`saturating_mul`;
+  checked: `x.checked_add(y)`/`checked_sub`/`checked_mul` → the
+  `(T, bool)` tuple (v1.1 convention). The float `abs`/`min`/`max`/
+  `signum` helpers are `calc`'s (f64 host fns); the integer helper
+  forms are gone — the comparisons are one line of rut.
 - Division by zero traps; `int / int` is integer division.
 - Mixed-width arithmetic: both operands must have equal width (convert
   first — RFC 0007 §1).

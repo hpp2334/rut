@@ -135,6 +135,17 @@ pub const WELL_KNOWN: &[&str] = &[
     "zeroed",     // ZEROED
     "from_code",  // FROM_CODE
     "buf",        // BUF
+    "wrapping_add",     // WRAPPING_ADD
+    "wrapping_sub",     // WRAPPING_SUB
+    "wrapping_mul",     // WRAPPING_MUL
+    "wrapping_shl",     // WRAPPING_SHL
+    "saturating_add",   // SATURATING_ADD
+    "saturating_sub",   // SATURATING_SUB
+    "saturating_mul",   // SATURATING_MUL
+    "checked_add",      // CHECKED_ADD
+    "checked_sub",      // CHECKED_SUB
+    "checked_mul",      // CHECKED_MUL
+    "NAN",        // NAN
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -182,6 +193,20 @@ pub const FROM: IdentId = IdentId(36);
 pub const ZEROED: IdentId = IdentId(37);
 pub const FROM_CODE: IdentId = IdentId(38);
 pub const BUF: IdentId = IdentId(39);
+// core's builtin-impl method names (`builtin impl i32 { .. }`, RFC 0032
+// §1.1 R2) + `NAN`, core's first const — well-known so every interner
+// agrees on the method-table keys
+pub const WRAPPING_ADD: IdentId = IdentId(40);
+pub const WRAPPING_SUB: IdentId = IdentId(41);
+pub const WRAPPING_MUL: IdentId = IdentId(42);
+pub const WRAPPING_SHL: IdentId = IdentId(43);
+pub const SATURATING_ADD: IdentId = IdentId(44);
+pub const SATURATING_SUB: IdentId = IdentId(45);
+pub const SATURATING_MUL: IdentId = IdentId(46);
+pub const CHECKED_ADD: IdentId = IdentId(47);
+pub const CHECKED_SUB: IdentId = IdentId(48);
+pub const CHECKED_MUL: IdentId = IdentId(49);
+pub const NAN: IdentId = IdentId(50);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -261,6 +286,17 @@ mod tests {
             ("zeroed", ZEROED),
             ("from_code", FROM_CODE),
             ("buf", BUF),
+            ("wrapping_add", WRAPPING_ADD),
+            ("wrapping_sub", WRAPPING_SUB),
+            ("wrapping_mul", WRAPPING_MUL),
+            ("wrapping_shl", WRAPPING_SHL),
+            ("saturating_add", SATURATING_ADD),
+            ("saturating_sub", SATURATING_SUB),
+            ("saturating_mul", SATURATING_MUL),
+            ("checked_add", CHECKED_ADD),
+            ("checked_sub", CHECKED_SUB),
+            ("checked_mul", CHECKED_MUL),
+            ("NAN", NAN),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

@@ -324,6 +324,10 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     span,
                 ));
             }
+            ItemKind::BuiltinImpl { .. } => {
+                // core's `builtin impl i32 { .. }` — no new type; the
+                // methods surface through core's own hover data
+            }
             ItemKind::ModuleLet { .. } | ItemKind::Use { .. } | ItemKind::Module { .. } => {}
         }
     }

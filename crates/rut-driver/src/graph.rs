@@ -98,11 +98,11 @@ impl<'a> GraphCompiler<'a> {
         // names of the prelude (RFC 0028).
         if module.source.is_none()
             && (!module.host_funcs.is_empty()
-                || !module.intrinsics.is_empty()
                 || !module.consts.is_empty()
                 || !module.native_types.is_empty()
                 || !module.native_traits.is_empty()
-                || !module.native_fns.is_empty())
+                || !module.native_fns.is_empty()
+                || !module.native_impls.is_empty())
         {
             use rut_core::binary::{FuncCode, Program};
             // the host-fn registration scope defaults to the package
@@ -135,7 +135,6 @@ impl<'a> GraphCompiler<'a> {
                     params: params.clone(),
                     ret: *ret,
                     local: i as u32,
-                    intrinsic: None,
                 });
                 funcs.push(FuncCode {
                     name: surface.names.intern(name),
@@ -149,17 +148,6 @@ impl<'a> GraphCompiler<'a> {
                     code: vec![],
                     spans: vec![],
                     host: Some(format!("{host_scope}::{name}")),
-                });
-            }
-            for (name, id, arity) in &module.intrinsics {
-                // the declared signature is a placeholder: the LIR types the
-                // call from its arguments (RFC 0032 §1.1 R2)
-                surface.funcs.push(rut_core::binary::SurfaceFn {
-                    name: surface.names.intern(name),
-                    params: vec![rut_core::types::TY_I32; *arity],
-                    ret: rut_core::types::TY_I32,
-                    local: 0,
-                    intrinsic: Some(*id),
                 });
             }
             for (name, ty, bits) in &module.consts {
@@ -184,6 +172,13 @@ impl<'a> GraphCompiler<'a> {
                 .native_fns
                 .iter()
                 .map(|n| surface.names.intern(n))
+                .collect();
+            // the integer prims' numeric methods (RFC 0032 §1.1 R2) —
+            // bound ambient on the receiver primitive, no use gate
+            surface.native_impls = module
+                .native_impls
+                .iter()
+                .map(|(t, n, i)| (*t, surface.names.intern(n), *i))
                 .collect();
             let interner = surface.names.clone();
             let program = Program { name: spec.to_string(), scope, interner, surface, funcs, ..Default::default() };
@@ -260,6 +255,11 @@ impl<'a> GraphCompiler<'a> {
             return None;
         }
         let program = out.program.unwrap();
+        // NOTE (deferred): a MIXED module — a compiled body plus a host
+        // surface (calc.rut helpers alongside `sqrt`..`fma`) — is
+        // deliberately NOT built in this phase; `Math` stays wholly on
+        // the Rust side (rut-std bodies + mount_calc). It lands with the
+        // host-pkgs plan, where calc becomes a declared package.
         let has_generic = program.surface.type_exports.iter().any(|t| t.is_generic);
         // a dep whose exported fns take trait-typed PARAMETERS cannot be
         // linked either: a trait parameter is an implicit generic bound

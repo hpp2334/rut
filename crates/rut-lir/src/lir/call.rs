@@ -318,10 +318,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // used function: signature from the surface, a direct call to the
         // exporter's scope-qualified id (RFC 0029 surface / RFC 0035 §1)
         if let Some(ef) = self.ctx.extern_fn(name).cloned() {
-            if let Some(i) = ef.intrinsic {
-                // a compiler-lowered intrinsic (RFC 0032 §1.1 R2): no call
-                return self.compile_intrinsic(i, &args, expected, sp);
-            }
             if !generics.is_empty() {
                 self.ctx.err(sp, format!("`{}` is a used fn and takes no type arguments", self.ctx.name(name)));
                 return Err(());
@@ -837,6 +833,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.deref_for_use(rt, rreg, sp.lo)
             }
         };
+        // core's builtin-impl numeric methods (RFC 0032 §1.1 R2):
+        // `x.wrapping_add(y)` on an integer receiver — ambient on the
+        // primitive (no `use`), lowered inline off the receiver's width.
+        // The receiver compiled once above; its register is reused, so a
+        // side-effecting receiver still evaluates exactly once.
+        if let Some(i) = self.ctx.builtin_impl(name, rt) {
+            let [rhs, ..] = &args[..] else {
+                self.ctx.err(sp, format!(
+                    "`{}.{}` takes one argument — `x.{}(y)`",
+                    self.ctx.type_name(rt),
+                    self.ctx.name(name),
+                    self.ctx.name(name)
+                ));
+                return Err(());
+            };
+            return self.compile_intrinsic_method(i, rt, rreg, *rhs, sp);
+        }
         // primitives have no method syntax (RFC 0004/0012): `str`/`bytes`
         // operations are free functions (`string_len`, `string_encode`,
         // `bytes_len`, `bytes_decode`, `bytes_from`) — except `s.code()`,

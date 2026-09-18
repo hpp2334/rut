@@ -60,9 +60,13 @@ and container **host fns over `Opaque` handles**; the containers
 themselves (`pub class Map<K, V>`, `Set<T>`) are rut wrapper classes
 in `pouch` source, and `Vec<T>` is the growable sequence class.
 Containers are library types, not VM builtins (RFC 0005). **`ink`**
-is the logger package (below). **`calc`** is the math helpers
-(`checked_add`/`checked_sub`/`checked_mul`, the `Math` namespace).
-**`debug`** (RFC 0036) rides the same mechanism: `Location`, `here()`,
+is the logger package (below). **`calc`** is the float math package:
+the `Math` namespace of `f64` host functions (`sqrt`..`fma`, plus the
+float helpers `abs`/`min`/`max`/`signum` — platform libm, RFC 0025)
+and the f64 constants (`PI`, `E`, `INFINITY`, …). The integer numeric
+methods (`wrapping_*`/`saturating_*`/`checked_*`) are **`core`'s** —
+`builtin impl` methods on the primitives (RFC 0004 §3, RFC 0032 §1.1
+R2) — and `NAN` is core's one const (`use core::{NAN}`). **`debug`**
 `capture_stack_trace()`, and the `StackTrace` class. **`reflect`**
 (RFC 0037) too: the `Reflectable`/`Deserializable` protocols,
 `TypeInfo`, and engine admission — reflection for userland serde
@@ -188,12 +192,12 @@ Two surface mechanisms formalized this revision:
 - **Namespace heads.** A native module may declare a namespace
   (`calc` → `Math`); the head binds at use exactly like the
   other prelude names, and `<namespace>.<member>` resolves against the
-  module's functions, constants, and intrinsics. The compiler routes
+  module's functions and constants. The compiler routes
   by the bound head — never by a hardcoded module string.
 - **`Vec.pop` contract.** `pop` returns the removed element; an empty
   pop is a contract breach (trap), guarded by `len() > 0` — not an
   error value. The `next()`-cursor iterator ships no more; iteration is
   the nominal `impl Iterator<E> for T` (RFC 0012 §6).
 
-`calc`'s `checked_add`/`checked_sub`/`checked_mul` return
-`(value, ok)` tuples (RFC 0005 §10).
+The integer `checked_add`/`checked_sub`/`checked_mul` — now `core`'s
+`builtin impl` methods — return `(value, ok)` tuples (RFC 0005 §10).

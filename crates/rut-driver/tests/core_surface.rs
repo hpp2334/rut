@@ -14,14 +14,16 @@ use rut_parser::{parse, Mode};
 const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
 
 /// The names core.d.rut declares: (builtin fns, builtin types, builtin
-/// traits, plain traits).
-fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
+/// traits, plain traits) + the `builtin impl` method table
+/// (prim → method names).
+fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<(String, Vec<String>)>) {
     let (ast, diags) = parse(CORE_DECL, Mode::Decl);
     assert!(diags.is_empty(), "core.d.rut must parse cleanly: {diags:?}");
     let mut builtin_fns = Vec::new();
     let mut builtin_types = Vec::new();
     let mut builtin_traits = Vec::new();
     let mut plain_traits = Vec::new();
+    let mut builtin_impls = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         match ast.item(it) {
             ItemKind::SurfaceFn { name, linkage, generics, .. } => {
@@ -42,18 +44,25 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
             }
             ItemKind::BuiltinTrait { name, .. } => builtin_traits.push(ast.name(*name).to_string()),
             ItemKind::Trait { name, .. } => plain_traits.push(ast.name(*name).to_string()),
+            ItemKind::BuiltinImpl { prim, methods, .. } => {
+                let names = methods
+                    .iter()
+                    .map(|&m| ast.name(ast.method_decl(m).name).to_string())
+                    .collect();
+                builtin_impls.push((ast.name(*prim).to_string(), names));
+            }
             // `host fn`/`host struct` are the embedder's surface — a
             // toolchain decl file may not spell them
             other => panic!("core declares an embedder surface item: {other:?}"),
         }
     }
-    (builtin_fns, builtin_types, builtin_traits, plain_traits)
+    (builtin_fns, builtin_types, builtin_traits, plain_traits, builtin_impls)
 }
 
 #[test]
 fn core_decl_matches_the_compilers_surface() {
     let surface = rut_core::binary::Surface::core();
-    let (builtin_fns, builtin_types, builtin_traits, plain_traits) = declared_names();
+    let (builtin_fns, builtin_types, builtin_traits, plain_traits, builtin_impls) = declared_names();
 
     // builtin types: the decl's `builtin` decls are exactly the native types
     let mut decl_types = builtin_types;
@@ -84,6 +93,48 @@ fn core_decl_matches_the_compilers_surface() {
         surface.native_fns.iter().map(|n| surface.names.name(*n).to_string()).collect();
     surf_fns.sort();
     assert_eq!(decl_fns, surf_fns, "core.d.rut builtin fns == Surface::core native_fns");
+
+    // builtin impls: the decl's `builtin impl <prim>` blocks are exactly
+    // the numeric-method table — same prims, same method names per prim
+    // (RFC 0032 §1.1 R2)
+    let prim_name = |t: rut_core::types::TypeId| -> String {
+        use rut_core::types::*;
+        match t {
+            TY_I8 => "i8", TY_I16 => "i16", TY_I32 => "i32", TY_I64 => "i64",
+            TY_U8 => "u8", TY_U16 => "u16", TY_U32 => "u32", TY_U64 => "u64",
+            _ => panic!("non-int prim in native_impls: {t:?}"),
+        }
+        .to_string()
+    };
+    let mut decl_impls: Vec<(String, Vec<String>)> = builtin_impls;
+    for (_, ms) in &mut decl_impls {
+        ms.sort();
+    }
+    decl_impls.sort();
+    let mut by_prim: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for (t, n, _) in &surface.native_impls {
+        by_prim
+            .entry(prim_name(*t))
+            .or_default()
+            .push(surface.names.name(*n).to_string());
+    }
+    let mut surf_impls: Vec<(String, Vec<String>)> = by_prim
+        .into_iter()
+        .map(|(p, mut ms)| {
+            ms.sort();
+            (p, ms)
+        })
+        .collect();
+    assert_eq!(
+        decl_impls, surf_impls,
+        "core.d.rut builtin impl blocks == Surface::core native_impls"
+    );
+
+    // consts: `NAN` is core's one const — f64, name-explicit
+    let surf_consts: Vec<String> =
+        surface.consts.iter().map(|c| surface.names.name(c.name).to_string()).collect();
+    assert_eq!(surf_consts, vec!["NAN"], "core's consts are exactly [NAN]");
+    assert_eq!(surface.consts[0].bits, f64::NAN.to_bits());
 }
 
 #[test]

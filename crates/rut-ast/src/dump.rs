@@ -214,6 +214,12 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "BuiltinTrait"
             }
+            ItemKind::BuiltinImpl { vis, prim, methods } => {
+                fields.push(field("vis", DumpVal::Vis(*vis)));
+                fields.push(field("prim", DumpVal::Str(a.name(*prim).to_string())));
+                fields.push(field("methods", DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect())));
+                "BuiltinImpl"
+            }
         },
         Kind::Member(k) => match k {
             MemberKind::FieldDecl(d) => {

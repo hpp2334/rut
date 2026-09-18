@@ -157,6 +157,32 @@ fn host_fn_generics_are_rejected() {
 }
 
 #[test]
+fn builtin_impl_decl() {
+    // RFC 0032 §1.1 R2: `builtin impl <prim> { .. }` — the integer
+    // primitives' numeric methods, bodiless `self` receivers, tuple
+    // returns allowed (`checked_*`)
+    let src = "pub builtin impl i32 {\n\
+               \x20   fn wrapping_add(self, y: i32) -> i32;\n\
+               \x20   fn wrapping_shl(self, n: i32) -> i32;\n\
+               \x20   fn checked_add(self, y: i32) -> (i32, bool);\n\
+               }";
+    let (ast, diags) = parse(src, Mode::Decl);
+    assert!(diags.is_empty(), "builtin impl must parse cleanly: {diags:?}");
+    let items = ast.module_items(ast.root).to_vec();
+    let ItemKind::BuiltinImpl { prim, methods, .. } = ast.item(items[0]) else {
+        panic!("expected a BuiltinImpl item, got {:?}", ast.item(items[0]));
+    };
+    assert_eq!(ast.name(*prim), "i32");
+    assert_eq!(methods.len(), 3);
+    // it is a declaration form: an implementation file rejects it
+    let (_, diags) = parse("builtin impl i32 { fn abs(self) -> i32; }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("belong in a `.d.rut`")),
+        "builtin impl in a .rut must be diagnosed: {diags:?}"
+    );
+}
+
+#[test]
 fn removed_forms_are_rejected() {
     // `host primitive` — the removed member-surface grammar
     let (_, diags) = parse("pub host primitive string { fn len(self) -> i32; }", Mode::Decl);

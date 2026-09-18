@@ -363,6 +363,18 @@ pub enum ItemKind {
         generics: Vec<IdentId>,
         methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
+    /// `builtin impl i32 { fn wrapping_add(self, y: i32) -> i32; .. }` —
+    /// .d.rut only, core only (RFC 0032 §1.1 R2): numeric methods ON a
+    /// primitive type, lowered inline at the call site
+    /// (`x.wrapping_add(y)`). No impl ever registers — the decl is the
+    /// signature contract the lockstep test keeps true to rut-lir's
+    /// lowering table; the methods are ambient on the primitive.
+    BuiltinImpl {
+        vis: Vis,
+        /// the receiver primitive's name (`i32` — a `sym::I32` well-known)
+        prim: IdentId,
+        methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless, `self` receivers
+    },
     Fn(FnData),
 }
 

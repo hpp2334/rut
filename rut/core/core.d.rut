@@ -4,11 +4,12 @@
 // traits `Disposal`/`Index`/`Iterator`.
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
-// compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1). core
-// registers no host bodies at all; `host fn` is exclusively the
-// EMBEDDER'S surface (a registered NativeModule, RFC 0025). The decls
-// exist so users and the LSP see every signature — the lockstep test
-// keeps them true to rut-lir's lowering tables.
+// compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1): the
+// classes/traits/fns above, and the `builtin impl <prim>` numeric
+// methods below. core registers no host bodies at all; `host fn` is
+// exclusively the EMBEDDER'S surface (a registered NativeModule, RFC
+// 0025). The decls exist so users and the LSP see every signature — the
+// lockstep test keeps them true to rut-lir's lowering tables.
 //
 // The prelude is USED, never ambient (RFC 0028): nothing here is in
 // scope until a module writes `use core::{ .. };`. The
@@ -80,6 +81,123 @@ pub builtin class Array<T> {
 pub builtin class Opaque {
     fn new<T>(v: T) -> Self;
 }
+
+// ---- numeric methods on the integer primitives (RFC 0032 §1.1 R2) ----
+// `builtin impl <prim>` — compiler-lowered methods ON the primitive,
+// ambient like the primitive itself: `x.wrapping_add(y)` needs no `use`
+// (primitives have none). One block per width; the wrapping/saturating/
+// checked ops replace the trap-on-overflow `+`/`-`/`*`/`<<` (RFC 0004
+// §3); `checked_*` answers the v1.1 tuple `(T, bool)` — `ok` is false
+// exactly when the mathematical result escaped the width.
+
+pub builtin impl i8 {
+    fn wrapping_add(self, y: i8) -> i8;
+    fn wrapping_sub(self, y: i8) -> i8;
+    fn wrapping_mul(self, y: i8) -> i8;
+    fn wrapping_shl(self, n: i8) -> i8;
+    fn saturating_add(self, y: i8) -> i8;
+    fn saturating_sub(self, y: i8) -> i8;
+    fn saturating_mul(self, y: i8) -> i8;
+    fn checked_add(self, y: i8) -> (i8, bool);
+    fn checked_sub(self, y: i8) -> (i8, bool);
+    fn checked_mul(self, y: i8) -> (i8, bool);
+}
+
+pub builtin impl i16 {
+    fn wrapping_add(self, y: i16) -> i16;
+    fn wrapping_sub(self, y: i16) -> i16;
+    fn wrapping_mul(self, y: i16) -> i16;
+    fn wrapping_shl(self, n: i16) -> i16;
+    fn saturating_add(self, y: i16) -> i16;
+    fn saturating_sub(self, y: i16) -> i16;
+    fn saturating_mul(self, y: i16) -> i16;
+    fn checked_add(self, y: i16) -> (i16, bool);
+    fn checked_sub(self, y: i16) -> (i16, bool);
+    fn checked_mul(self, y: i16) -> (i16, bool);
+}
+
+pub builtin impl i32 {
+    fn wrapping_add(self, y: i32) -> i32;
+    fn wrapping_sub(self, y: i32) -> i32;
+    fn wrapping_mul(self, y: i32) -> i32;
+    fn wrapping_shl(self, n: i32) -> i32;
+    fn saturating_add(self, y: i32) -> i32;
+    fn saturating_sub(self, y: i32) -> i32;
+    fn saturating_mul(self, y: i32) -> i32;
+    fn checked_add(self, y: i32) -> (i32, bool);
+    fn checked_sub(self, y: i32) -> (i32, bool);
+    fn checked_mul(self, y: i32) -> (i32, bool);
+}
+
+pub builtin impl i64 {
+    fn wrapping_add(self, y: i64) -> i64;
+    fn wrapping_sub(self, y: i64) -> i64;
+    fn wrapping_mul(self, y: i64) -> i64;
+    fn wrapping_shl(self, n: i64) -> i64;
+    fn saturating_add(self, y: i64) -> i64;
+    fn saturating_sub(self, y: i64) -> i64;
+    fn saturating_mul(self, y: i64) -> i64;
+    fn checked_add(self, y: i64) -> (i64, bool);
+    fn checked_sub(self, y: i64) -> (i64, bool);
+    fn checked_mul(self, y: i64) -> (i64, bool);
+}
+
+pub builtin impl u8 {
+    fn wrapping_add(self, y: u8) -> u8;
+    fn wrapping_sub(self, y: u8) -> u8;
+    fn wrapping_mul(self, y: u8) -> u8;
+    fn wrapping_shl(self, n: u8) -> u8;
+    fn saturating_add(self, y: u8) -> u8;
+    fn saturating_sub(self, y: u8) -> u8;
+    fn saturating_mul(self, y: u8) -> u8;
+    fn checked_add(self, y: u8) -> (u8, bool);
+    fn checked_sub(self, y: u8) -> (u8, bool);
+    fn checked_mul(self, y: u8) -> (u8, bool);
+}
+
+pub builtin impl u16 {
+    fn wrapping_add(self, y: u16) -> u16;
+    fn wrapping_sub(self, y: u16) -> u16;
+    fn wrapping_mul(self, y: u16) -> u16;
+    fn wrapping_shl(self, n: u16) -> u16;
+    fn saturating_add(self, y: u16) -> u16;
+    fn saturating_sub(self, y: u16) -> u16;
+    fn saturating_mul(self, y: u16) -> u16;
+    fn checked_add(self, y: u16) -> (u16, bool);
+    fn checked_sub(self, y: u16) -> (u16, bool);
+    fn checked_mul(self, y: u16) -> (u16, bool);
+}
+
+pub builtin impl u32 {
+    fn wrapping_add(self, y: u32) -> u32;
+    fn wrapping_sub(self, y: u32) -> u32;
+    fn wrapping_mul(self, y: u32) -> u32;
+    fn wrapping_shl(self, n: u32) -> u32;
+    fn saturating_add(self, y: u32) -> u32;
+    fn saturating_sub(self, y: u32) -> u32;
+    fn saturating_mul(self, y: u32) -> u32;
+    fn checked_add(self, y: u32) -> (u32, bool);
+    fn checked_sub(self, y: u32) -> (u32, bool);
+    fn checked_mul(self, y: u32) -> (u32, bool);
+}
+
+pub builtin impl u64 {
+    fn wrapping_add(self, y: u64) -> u64;
+    fn wrapping_sub(self, y: u64) -> u64;
+    fn wrapping_mul(self, y: u64) -> u64;
+    fn wrapping_shl(self, n: u64) -> u64;
+    fn saturating_add(self, y: u64) -> u64;
+    fn saturating_sub(self, y: u64) -> u64;
+    fn saturating_mul(self, y: u64) -> u64;
+    fn checked_add(self, y: u64) -> (u64, bool);
+    fn checked_sub(self, y: u64) -> (u64, bool);
+    fn checked_mul(self, y: u64) -> (u64, bool);
+}
+
+// Constants: `NAN` — core's one const (f64 bits, materialized with
+// `ConstRaw`), name-explicit like every other prelude name:
+// `use core::{NAN}`. The float constants (`PI`, `E`, `INFINITY`, …)
+// stay `calc`'s.
 
 // ---- engine-woven traits ----
 // `builtin trait` = the engine has built-in knowledge: compiler-

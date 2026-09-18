@@ -280,18 +280,17 @@ pub fn main() -> nil {
 #[test]
 fn overflow_traps_and_wrapping_escapes() {
     let src = r#"
-use calc::{ Math };
 pub fn main() -> nil {
     let mut x = 2147483647;
-    x = Math.wrapping_add(x, 1);   // wrapping: fine (RFC 0004 §3)
+    x = x.wrapping_add(1);   // wrapping: fine (RFC 0004 §3)
     Logger.new("app").info(f"x={x}");
     let mut s = 1073741824;  // 1 << 30
-    s = Math.wrapping_shl(s, 1);   // wrapping shl: bits shifted out are gone
+    s = s.wrapping_shl(1);   // wrapping shl: bits shifted out are gone
     Logger.new("app").info(f"s={s}");
-    s = Math.wrapping_shl(s, 1);   // same law
+    s = s.wrapping_shl(1);   // same law
     Logger.new("app").info(f"s={s}");
     let u: u32 = 3221225472u32; // 0xC000_0000
-    Logger.new("app").info(f"u={Math.wrapping_shl(u, 1)}");
+    Logger.new("app").info(f"u={u.wrapping_shl(1)}");
     let y = 2147483647 + 1;  // trapping: overflow
     Logger.new("app").info(f"y={y}");
 }
@@ -303,8 +302,8 @@ pub fn main() -> nil {
 
 #[test]
 fn plain_shl_traps_when_bits_leave_the_width() {
-    // RFC 0004 §3: `<<` traps; only `Math.wrapping_shl` wraps. This was silently a
-    // RIGHT shift before BitOp::WrapShl existed.
+    // RFC 0004 §3: `<<` traps; only `x.wrapping_shl(n)` wraps. This was
+    // silently a RIGHT shift before BitOp::WrapShl existed.
     let src = r#"
 pub fn main() -> nil {
     Logger.new("app").info("before");
@@ -1359,44 +1358,45 @@ fn unsuffixed_int_literals_must_fit_i32() {
 }
 
 #[test]
-fn math_namespace_intrinsics_run() {
-    // `calc`'s `Math` namespace: wrapping/saturating/checked integer
-    // arithmetic (compiler-lowered) plus abs/min/max/signum and the f64
-    // host functions/constants (RFC 0004 §3, RFC 0028).
+fn builtin_impl_numeric_methods_run() {
+    // core's `builtin impl <int>` methods (ambient on the primitives,
+    // compiler-lowered) + `calc`'s `Math` namespace: the float helpers
+    // and the f64 host functions/constants (RFC 0004 §3, RFC 0028,
+    // RFC 0032 §1.1 R2). The integer abs/min/max/signum forms are gone —
+    // the float helpers are host fns now.
     let src = r#"
 use calc::{ Math };
 pub fn main() -> nil {
     let log = Logger.new("app");
     // i32 wrapping
-    log.info(f"{Math.wrapping_add(2147483647, 1)} {Math.wrapping_sub(-2147483647 - 1, 1)} {Math.wrapping_mul(65536, 65536)}");
+    log.info(f"{2147483647.wrapping_add(1)} {(-2147483647 - 1).wrapping_sub(1)} {65536.wrapping_mul(65536)}");
     // i32 saturating
-    log.info(f"{Math.saturating_add(2147483647, 1)} {Math.saturating_sub(-2147483647 - 1, 1)} {Math.saturating_mul(65536, 65536)} {Math.saturating_mul(-65536, 65536)}");
+    log.info(f"{2147483647.saturating_add(1)} {(-2147483647 - 1).saturating_sub(1)} {65536.saturating_mul(65536)} {(-65536).saturating_mul(65536)}");
     // i32 checked -> (value, ok) — the v1.1 tuple convention
-    let a = Math.checked_add(2147483647, 1);
-    let b = Math.checked_add(1, 2);
-    let c = Math.checked_mul(65536, 65536);
-    let d = Math.checked_mul(-65536, 65536);
+    let a = 2147483647.checked_add(1);
+    let b = 1.checked_add(2);
+    let c = 65536.checked_mul(65536);
+    let d = (-65536).checked_mul(65536);
     log.info(f"{a.1} {b.1} {b.0} {c.1} {d.1}");
     log.info(f"{a.0} {c.0}");
     // u8 edges
     let u: u8 = 255;
     let z: u8 = 0;
-    let cu = Math.checked_add(u, 1u8);
-    let cs = Math.checked_sub(z, 1u8);
-    log.info(f"{Math.wrapping_add(u, 1u8)} {Math.saturating_add(u, 1u8)} {cu.1}");
-    log.info(f"{Math.wrapping_sub(z, 1u8)} {Math.saturating_sub(z, 1u8)} {cs.1}");
+    let cu = u.checked_add(1u8);
+    let cs = z.checked_sub(1u8);
+    log.info(f"{u.wrapping_add(1u8)} {u.saturating_add(1u8)} {cu.1}");
+    log.info(f"{z.wrapping_sub(1u8)} {z.saturating_sub(1u8)} {cs.1}");
     // i8 edges
     let lo: i8 = -127 - 1;
     let hi: i8 = 127;
-    log.info(f"{Math.wrapping_add(hi, 1i8)} {Math.saturating_add(hi, 1i8)} {Math.wrapping_sub(lo, 1i8)} {Math.saturating_sub(lo, 1i8)}");
+    log.info(f"{hi.wrapping_add(1i8)} {hi.saturating_add(1i8)} {lo.wrapping_sub(1i8)} {lo.saturating_sub(1i8)}");
     // u64 edge
     let w: u64 = 18446744073709551615u64;
-    let cw = Math.checked_add(w, 1u64);
-    log.info(f"{Math.wrapping_add(w, 1u64)} {Math.saturating_add(w, 1u64)} {cw.1}");
-    // wrapping shift + int helpers
-    log.info(f"{Math.wrapping_shl(1073741824, 1)}");
-    log.info(f"{Math.abs(-5)} {Math.abs(-2147483647 - 1)} {Math.min(3, 9)} {Math.max(3, 9)} {Math.signum(-7)} {Math.signum(0)} {Math.signum(7)}");
-    // float helpers + constants
+    let cw = w.checked_add(1u64);
+    log.info(f"{w.wrapping_add(1u64)} {w.saturating_add(1u64)} {cw.1}");
+    // wrapping shift
+    log.info(f"{1073741824.wrapping_shl(1)}");
+    // float helpers (host fns) + constants
     log.info(f"{Math.abs(-2.5)} {Math.min(1.0, 2.0)} {Math.max(1.0, 2.0)} {Math.signum(-3.5)} {Math.signum(0.0)} {Math.signum(4.5)}");
     log.info(f"{Math.sqrt(2.0)} {Math.PI}");
 }
@@ -1413,10 +1413,39 @@ pub fn main() -> nil {
         "-128 127 127 -128",
         "0 18446744073709551615 false",
         "-2147483648",
-        "5 -2147483648 3 9 -1 0 1",
         "2.5 1 2 -1 0 1",
         "1.4142135623730951 3.141592653589793",
     ]);
+}
+
+#[test]
+fn core_nan_const_is_name_explicit() {
+    // `NAN` is core's one const (RFC 0028): name-explicit — `use
+    // core::{NAN}` — f64 bits materialized with `ConstRaw`; NaN
+    // semantics hold (compares false against itself)
+    let with = r#"
+use core::{NAN};
+pub fn main() -> nil {
+    Logger.new("app").info(f"{NAN} {NAN == NAN} {NAN < 1.0}");
+}
+"#;
+    let (lines, trap, _) = run_case(with, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["NaN false false"]);
+
+    // without the use, the name does not resolve — the prelude is
+    // never ambient
+    let without = r#"
+pub fn main() -> nil {
+    let x = NAN;
+}
+"#;
+    let out = rut_driver::compile_module(without, rut_parser::Mode::Impl, "main");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("NAN")),
+        "the bare name must be diagnosed: {:?}",
+        out.diags
+    );
 }
 
 #[test]

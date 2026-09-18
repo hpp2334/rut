@@ -7,7 +7,7 @@ use calc::{ Math };
 pub fn main() -> nil {
     let mut s: i32 = 0;
     for (let i = 0; i < 5000000; i += 1) {
-        s = Math.wrapping_sub(Math.wrapping_add(s, Math.wrapping_mul(i, 3)), 1);
+        s = (s.wrapping_add(i.wrapping_mul(3))).wrapping_sub(1);
     }
     Logger.new("app").info(f"CHECKSUM {s}");
 }

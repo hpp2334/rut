@@ -7,7 +7,7 @@ use calc::{ Math };
 // (the immutable binary primitive, which crosses the host boundary
 // directly, RFC 0023 §2 / RFC 0004) and proves
 // that the language's integer surface — hex literals, `u32`/`u64`,
-// `Math.wrapping_add`/`wrapping_mul`/`wrapping_shl` (RFC 0004 §3), and
+// `x.wrapping_add(y)`/`wrapping_mul`/`wrapping_shl` (RFC 0004 §3), and
 // the signedness rules for `>>` — is enough to write real, verifiable
 // algorithms:
 //
@@ -22,7 +22,7 @@ use calc::{ Math };
 //
 // SHA-512 is the u64-heavy one: its rotations lean on `>>` being a
 // LOGICAL shift for unsigned types (fixed in this repo) and
-// `Math.wrapping_shl` truncating to the operand width.
+// `x.wrapping_shl(n)` truncating to the operand width.
 
 // ---------------------------------------------------------------- hex ---
 
@@ -188,17 +188,17 @@ entry fn crc32(data: bytes) -> u32 {
 entry fn fnv1a32(data: bytes) -> u32 {
     let mut h: u32 = 2166136261u32;
     for (let b of data) {
-        h = Math.wrapping_mul(h ^ b as u32, 16777619);
+        h = (h ^ b as u32).wrapping_mul(16777619);
     }
     return h;
 }
 
-/// FNV-1a 64: only `Math.wrapping_mul` and `^` — no 64-bit shifts needed, so the u64
+/// FNV-1a 64: only `x.wrapping_mul(y)` and `^` — no 64-bit shifts needed, so the u64
 /// words never even exercise the shift path.
 entry fn fnv1a64(data: bytes) -> u64 {
     let mut h: u64 = 14695981039346656037u64;
     for (let b of data) {
-        h = Math.wrapping_mul(h ^ b as u64, 1099511628211u64);
+        h = (h ^ b as u64).wrapping_mul(1099511628211u64);
     }
     return h;
 }
@@ -206,7 +206,7 @@ entry fn fnv1a64(data: bytes) -> u64 {
 entry fn djb2(data: bytes) -> u64 {
     let mut h: u64 = 5381;
     for (let b of data) {
-        h = Math.wrapping_add(Math.wrapping_mul(h, 33), b as u64);
+        h = (h.wrapping_mul(33)).wrapping_add(b as u64);
     }
     return h;
 }
@@ -215,29 +215,29 @@ entry fn djb2(data: bytes) -> u64 {
 entry fn sdbm(data: bytes) -> u64 {
     let mut h: u64 = 0;
     for (let b of data) {
-        h = Math.wrapping_add(b as u64, Math.wrapping_mul(h, 65599));
+        h = (b as u64).wrapping_add(h.wrapping_mul(65599));
     }
     return h;
 }
 
 // ------------------------------------------------------ crypto core ---
 
-/// rotate left, 32-bit: `Math.wrapping_shl` truncates, `>>` on u32 is logical.
+/// rotate left, 32-bit: `x.wrapping_shl(n)` truncates, `>>` on u32 is logical.
 fn rotl32(x: u32, n: u32) -> u32 {
     let bits = 32 as u32;
-    return Math.wrapping_shl(x, n) | (x >> (bits - n));
+    return x.wrapping_shl(n) | (x >> (bits - n));
 }
 
 fn rotr32(x: u32, n: u32) -> u32 {
     let bits = 32 as u32;
-    return (x >> n) | Math.wrapping_shl(x, bits - n);
+    return (x >> n) | x.wrapping_shl(bits - n);
 }
 
 /// rotate right, 64-bit — THE `u64 >>` dogfood: SHA-512 words regularly
 /// carry bit 63, so an arithmetic `>>` would corrupt every one of them.
 fn rotr64(x: u64, n: u64) -> u64 {
     let bits = 64 as u64;
-    return (x >> n) | Math.wrapping_shl(x, bits - n);
+    return (x >> n) | x.wrapping_shl(bits - n);
 }
 
 fn copy_bytes(msg: bytes) -> Vec<u8> {
@@ -334,14 +334,14 @@ fn md5_impl(msg: bytes) -> bytes {
             let tmp = d;
             d = c;
             c = b;
-            let sum = Math.wrapping_add(Math.wrapping_add(a, f), Math.wrapping_add(k[i], x[g]));
-            b = Math.wrapping_add(b, rotl32(sum, s[i]));
+            let sum = (a.wrapping_add(f)).wrapping_add((k[i]).wrapping_add(x[g]));
+            b = b.wrapping_add(rotl32(sum, s[i]));
             a = tmp;
         }
-        a0 = Math.wrapping_add(a0, a);
-        b0 = Math.wrapping_add(b0, b);
-        c0 = Math.wrapping_add(c0, c);
-        d0 = Math.wrapping_add(d0, d);
+        a0 = a0.wrapping_add(a);
+        b0 = b0.wrapping_add(b);
+        c0 = c0.wrapping_add(c);
+        d0 = d0.wrapping_add(d);
     }
     let mut out: Vec<u8> = Vec.new();
     let mut w = a0;
@@ -412,18 +412,18 @@ fn sha1_impl(msg: bytes) -> bytes {
                 f = b ^ c ^ d;
                 kk = 0xCA62C1D6u32;
             }
-            let tmp = Math.wrapping_add(Math.wrapping_add(rotl32(a, 5), Math.wrapping_add(f, e)), Math.wrapping_add(kk, w[i]));
+            let tmp = ((rotl32(a, 5)).wrapping_add(f.wrapping_add(e))).wrapping_add(kk.wrapping_add(w[i]));
             e = d;
             d = c;
             c = rotl32(b, 30);
             b = a;
             a = tmp;
         }
-        h0 = Math.wrapping_add(h0, a);
-        h1 = Math.wrapping_add(h1, b);
-        h2 = Math.wrapping_add(h2, c);
-        h3 = Math.wrapping_add(h3, d);
-        h4 = Math.wrapping_add(h4, e);
+        h0 = h0.wrapping_add(a);
+        h1 = h1.wrapping_add(b);
+        h2 = h2.wrapping_add(c);
+        h3 = h3.wrapping_add(d);
+        h4 = h4.wrapping_add(e);
     }
     let mut out: Vec<u8> = Vec.new();
     let ws: Vec<u32> = Vec.new();
@@ -478,7 +478,7 @@ fn sha256_impl(msg: bytes) -> bytes {
         for (let i = 16; i < 64; i += 1) {
             let s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >> 3);
             let s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ (w[i - 2] >> 10);
-            w.push(Math.wrapping_add(Math.wrapping_add(Math.wrapping_add(w[i - 16], s0), w[i - 7]), s1));
+            w.push((((w[i - 16]).wrapping_add(s0)).wrapping_add(w[i - 7])).wrapping_add(s1));
         }
         let mut a = st[0];
         let mut b = st[1];
@@ -491,27 +491,27 @@ fn sha256_impl(msg: bytes) -> bytes {
         for (let i = 0; i < 64; i += 1) {
             let big1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
             let ch = (e & f) ^ ((e ^ 4294967295u32) & g);
-            let t1 = Math.wrapping_add(Math.wrapping_add(hh, big1), Math.wrapping_add(ch, Math.wrapping_add(k[i], w[i])));
+            let t1 = (hh.wrapping_add(big1)).wrapping_add(ch.wrapping_add((k[i]).wrapping_add(w[i])));
             let big0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
             let maj = (a & b) ^ (a & c) ^ (b & c);
-            let t2 = Math.wrapping_add(big0, maj);
+            let t2 = big0.wrapping_add(maj);
             hh = g;
             g = f;
             f = e;
-            e = Math.wrapping_add(d, t1);
+            e = d.wrapping_add(t1);
             d = c;
             c = b;
             b = a;
-            a = Math.wrapping_add(t1, t2);
+            a = t1.wrapping_add(t2);
         }
-        st[0] = Math.wrapping_add(st[0], a);
-        st[1] = Math.wrapping_add(st[1], b);
-        st[2] = Math.wrapping_add(st[2], c);
-        st[3] = Math.wrapping_add(st[3], d);
-        st[4] = Math.wrapping_add(st[4], e);
-        st[5] = Math.wrapping_add(st[5], f);
-        st[6] = Math.wrapping_add(st[6], g);
-        st[7] = Math.wrapping_add(st[7], hh);
+        st[0] = (st[0]).wrapping_add(a);
+        st[1] = (st[1]).wrapping_add(b);
+        st[2] = (st[2]).wrapping_add(c);
+        st[3] = (st[3]).wrapping_add(d);
+        st[4] = (st[4]).wrapping_add(e);
+        st[5] = (st[5]).wrapping_add(f);
+        st[6] = (st[6]).wrapping_add(g);
+        st[7] = (st[7]).wrapping_add(hh);
     }
     let mut out: Vec<u8> = Vec.new();
     for (let j = 0; j < 8; j += 1) {
@@ -583,7 +583,7 @@ fn sha512_impl(msg: bytes) -> bytes {
         for (let i = 16; i < 80; i += 1) {
             let s0 = rotr64(w[i - 15], 1) ^ rotr64(w[i - 15], 8) ^ (w[i - 15] >> 7);
             let s1 = rotr64(w[i - 2], 19) ^ rotr64(w[i - 2], 61) ^ (w[i - 2] >> 6);
-            w.push(Math.wrapping_add(Math.wrapping_add(Math.wrapping_add(w[i - 16], s0), w[i - 7]), s1));
+            w.push((((w[i - 16]).wrapping_add(s0)).wrapping_add(w[i - 7])).wrapping_add(s1));
         }
         let mut a = st[0];
         let mut b = st[1];
@@ -596,27 +596,27 @@ fn sha512_impl(msg: bytes) -> bytes {
         for (let i = 0; i < 80; i += 1) {
             let big1 = rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41);
             let ch = (e & f) ^ ((e ^ 18446744073709551615u64) & g);
-            let t1 = Math.wrapping_add(Math.wrapping_add(hh, big1), Math.wrapping_add(ch, Math.wrapping_add(k[i], w[i])));
+            let t1 = (hh.wrapping_add(big1)).wrapping_add(ch.wrapping_add((k[i]).wrapping_add(w[i])));
             let big0 = rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39);
             let maj = (a & b) ^ (a & c) ^ (b & c);
-            let t2 = Math.wrapping_add(big0, maj);
+            let t2 = big0.wrapping_add(maj);
             hh = g;
             g = f;
             f = e;
-            e = Math.wrapping_add(d, t1);
+            e = d.wrapping_add(t1);
             d = c;
             c = b;
             b = a;
-            a = Math.wrapping_add(t1, t2);
+            a = t1.wrapping_add(t2);
         }
-        st[0] = Math.wrapping_add(st[0], a);
-        st[1] = Math.wrapping_add(st[1], b);
-        st[2] = Math.wrapping_add(st[2], c);
-        st[3] = Math.wrapping_add(st[3], d);
-        st[4] = Math.wrapping_add(st[4], e);
-        st[5] = Math.wrapping_add(st[5], f);
-        st[6] = Math.wrapping_add(st[6], g);
-        st[7] = Math.wrapping_add(st[7], hh);
+        st[0] = (st[0]).wrapping_add(a);
+        st[1] = (st[1]).wrapping_add(b);
+        st[2] = (st[2]).wrapping_add(c);
+        st[3] = (st[3]).wrapping_add(d);
+        st[4] = (st[4]).wrapping_add(e);
+        st[5] = (st[5]).wrapping_add(f);
+        st[6] = (st[6]).wrapping_add(g);
+        st[7] = (st[7]).wrapping_add(hh);
     }
     let mut out: Vec<u8> = Vec.new();
     for (let j = 0; j < 8; j += 1) {

@@ -146,12 +146,16 @@ pub fn compile_program_resolved(
         let dep_scope = *dep_scope;
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
-                if let Some(i) = f.intrinsic {
-                    ctx.add_extern_intrinsic(id, i);
-                } else {
-                    ctx.add_extern_fn(id, rut_core::pack(dep_scope, f.local), f.params.clone(), f.ret);
-                }
+                ctx.add_extern_fn(id, rut_core::pack(dep_scope, f.local), f.params.clone(), f.ret);
             }
+        }
+        // the integer prims' numeric methods (core's `builtin impl`
+        // blocks, RFC 0032 §1.1 R2): bound AMBIENT — the method call
+        // `x.wrapping_add(y)` needs no `use`, the primitives themselves
+        // have none
+        for (prim, n, i) in &surface.native_impls {
+            let name = ctx.intern(surface.names.name(*n));
+            ctx.add_builtin_impl(name, *prim, *i);
         }
         for c in &surface.consts {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(c.name)) {
@@ -295,7 +299,6 @@ pub fn compile_program_resolved(
                     params: f.params.clone(),
                     ret: f.ret,
                     local: fid,
-                    intrinsic: None,
                 });
             }
         }
@@ -431,6 +434,12 @@ pub fn mount_std_core(session: &mut Session) {
             native_types: core.native_types.iter().map(|(n, k)| (txt(*n), *k)).collect(),
             native_traits: core.native_traits.iter().map(|(n, k)| (txt(*n), *k)).collect(),
             native_fns: core.native_fns.iter().map(|n| txt(*n)).collect(),
+            consts: core.consts.iter().map(|c| (txt(c.name), c.ty, c.bits)).collect(),
+            native_impls: core
+                .native_impls
+                .iter()
+                .map(|(t, n, i)| (*t, txt(*n), *i))
+                .collect(),
             ..Default::default()
         },
     );
@@ -452,10 +461,10 @@ pub fn mount_std(session: &mut Session) {
 }
 
 /// Mount `calc` — a native module (RFC 0028): `f64` host functions
-/// (bodies in `rut-std`), `f64` constants, and width-polymorphic integer
-/// intrinsics the LIR expands inline (RFC 0032 §1.1 R2).
+/// (bodies in `rut-std`, including the float `abs`/`min`/`max`/`signum`)
+/// and `f64` constants. The integer intrinsics live in `core` now —
+/// `builtin impl` methods on the primitives (RFC 0032 §1.1 R2).
 pub fn mount_calc(session: &mut Session) {
-    use rut_core::ops::Intrinsic;
     let u = |name: &str| (name.to_string(), vec![TY_F64], TY_F64);
     let b = |name: &str| (name.to_string(), vec![TY_F64, TY_F64], TY_F64);
     let host_funcs = vec![
@@ -465,6 +474,9 @@ pub fn mount_calc(session: &mut Session) {
         u("sinh"), u("cosh"), u("tanh"),
         b("pow"), b("atan2"), b("hypot"), b("copysign"),
         ("fma".to_string(), vec![TY_F64, TY_F64, TY_F64], TY_F64),
+        // the former float intrinsics — ordinary host fns now (the
+        // integer intrinsics moved to core's `builtin impl` methods)
+        u("abs"), b("min"), b("max"), u("signum"),
     ];
 
     let c = |name: &str, v: f64| (name.to_string(), TY_F64, v.to_bits());
@@ -479,30 +491,11 @@ pub fn mount_calc(session: &mut Session) {
         c("LOG10_E", std::f64::consts::LOG10_E),
         c("INFINITY", f64::INFINITY),
         c("NEG_INFINITY", f64::NEG_INFINITY),
-        c("NAN", f64::NAN),
+        // `NAN` moved to core (`use core::{NAN}`)
         c("EPSILON", f64::EPSILON),
         c("MAX", f64::MAX),
         c("MIN", f64::MIN),
         c("MIN_POSITIVE", f64::MIN_POSITIVE),
-    ];
-
-    let i2 = |name: &str, id: Intrinsic| (name.to_string(), id, 2usize);
-    let i1 = |name: &str, id: Intrinsic| (name.to_string(), id, 1usize);
-    let intrinsics = vec![
-        i2("wrapping_add", Intrinsic::WrappingAdd),
-        i2("wrapping_sub", Intrinsic::WrappingSub),
-        i2("wrapping_mul", Intrinsic::WrappingMul),
-        i2("wrapping_shl", Intrinsic::WrappingShl),
-        i2("saturating_add", Intrinsic::SaturatingAdd),
-        i2("saturating_sub", Intrinsic::SaturatingSub),
-        i2("saturating_mul", Intrinsic::SaturatingMul),
-        i2("checked_add", Intrinsic::CheckedAdd),
-        i2("checked_sub", Intrinsic::CheckedSub),
-        i2("checked_mul", Intrinsic::CheckedMul),
-        i1("abs", Intrinsic::Abs),
-        i2("min", Intrinsic::Min),
-        i2("max", Intrinsic::Max),
-        i1("signum", Intrinsic::Signum),
     ];
 
     let _ = session.register_module(
@@ -511,7 +504,6 @@ pub fn mount_calc(session: &mut Session) {
             namespace: Some("Math".to_string()),
             host_funcs,
             consts,
-            intrinsics,
             ..Default::default()
         },
     );

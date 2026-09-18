@@ -1,11 +1,14 @@
-//! Compiler-lowered intrinsics (RFC 0032 §1.1 R2): the operations
-//! `calc` exposes that the frontend expands inline instead of calling —
-//! `wrapping_*`, `saturating_*`, `checked_*` integer arithmetic and the
-//! `abs`/`min`/`max`/`signum` helpers. Each lowering is a fixed sequence of
-//! typed ops (`WAddI`/`WSubI`/`WMulI`/`WrapShlI`, compares, guarded
-//! division, `OptSome`/`OptNone`), monomorphic per primitive width, so the
-//! VM needs no new opcodes. `saturating_*`/`checked_*` run on the *wrapping*
-//! result plus a branchless overflow test.
+//! Compiler-lowered numeric methods (RFC 0032 §1.1 R2): the operations
+//! `core`'s `builtin impl <int>` blocks declare and the frontend expands
+//! inline at the METHOD call — `x.wrapping_add(y)` — instead of calling:
+//! `wrapping_*`, `saturating_*`, `checked_*` integer arithmetic. Each
+//! lowering is a fixed sequence of typed ops (`WAddI`/`WSubI`/`WMulI`/
+//! `WrapShlI`, compares, guarded division, `OptSome`/`OptNone`),
+//! monomorphic per primitive width, so the VM needs no new opcodes. The
+//! width comes from the RECEIVER's primitive type — the method table is
+//! core's surface (`Surface::core().native_impls`), ambient on the
+//! primitives (no `use`). `saturating_*`/`checked_*` run on the
+//! *wrapping* result plus a branchless overflow test.
 
 use super::*;
 
@@ -35,7 +38,8 @@ fn int_bits(p: PrimTy) -> i128 {
     }
 }
 
-fn intrinsic_name(i: Intrinsic) -> &'static str {
+pub(crate) fn intrinsic_name(i: Intrinsic) -> &'static str {
+    // the method spelling (`x.<name>(y)`) — kept for diagnostics/tests
     use Intrinsic::*;
     match i {
         WrappingAdd => "wrapping_add",
@@ -48,46 +52,90 @@ fn intrinsic_name(i: Intrinsic) -> &'static str {
         CheckedAdd => "checked_add",
         CheckedSub => "checked_sub",
         CheckedMul => "checked_mul",
-        Abs => "abs",
-        Min => "min",
-        Max => "max",
-        Signum => "signum",
     }
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-    pub(crate) fn compile_intrinsic(
+    /// `x.wrapping_add(y)` — a builtin-impl method call on a primitive
+    /// receiver (core's `builtin impl i32 { .. }` table, RFC 0032 §1.1
+    /// R2). The receiver is ALREADY compiled (its register reused — a
+    /// side-effecting receiver evaluates exactly once); the width comes
+    /// from its primitive type.
+    pub(crate) fn compile_intrinsic_method(
         &mut self,
         i: Intrinsic,
-        args: &[NodeHandle<AnyExpr>],
-        _expected: Option<TypeId>,
+        recv_ty: TypeId,
+        recv_reg: u16,
+        rhs: NodeHandle<AnyExpr>,
         sp: Span,
     ) -> TcResult<TypeId> {
-        use Intrinsic::*;
+        let who = intrinsic_name(i);
+        let (ty, prim, a, b) = self.int_method_operands(recv_ty, recv_reg, rhs, sp, who)?;
         match i {
-            WrappingAdd | WrappingSub | WrappingMul => self.wrapping_arith(i, args, sp),
-            WrappingShl => self.wrapping_shl(args, sp),
-            SaturatingAdd | SaturatingSub | SaturatingMul => self.saturating_arith(i, args, sp),
-            CheckedAdd | CheckedSub | CheckedMul => self.checked_arith(i, args, sp),
-            Abs => self.intrinsic_abs(args, sp),
-            Min | Max => self.intrinsic_minmax(i, args, sp),
-            Signum => self.intrinsic_signum(args, sp),
+            Intrinsic::WrappingAdd | Intrinsic::WrappingSub | Intrinsic::WrappingMul => {
+                let op = Self::arith_of(i);
+                let dst = self.new_reg(ty);
+                self.emit(wrap_arith(op, prim, dst, a, b), sp.lo);
+                Ok(ty)
+            }
+            Intrinsic::WrappingShl => {
+                let dst = self.new_reg(ty);
+                self.emit(bitop(BitOp::WrapShl, prim, dst, a, b), sp.lo);
+                Ok(ty)
+            }
+            Intrinsic::SaturatingAdd | Intrinsic::SaturatingSub | Intrinsic::SaturatingMul => {
+                self.saturating_arith(i, ty, prim, a, b, sp)
+            }
+            Intrinsic::CheckedAdd | Intrinsic::CheckedSub | Intrinsic::CheckedMul => {
+                self.checked_arith(i, ty, prim, a, b, sp)
+            }
         }
     }
 
+    /// `(ty, prim, lhs, rhs)` for a method call: the receiver arrives
+    /// pre-compiled; the one argument must land on the same integer type.
+    fn int_method_operands(
+        &mut self,
+        recv_ty: TypeId,
+        recv_reg: u16,
+        rhs: NodeHandle<AnyExpr>,
+        sp: Span,
+        who: &str,
+    ) -> TcResult<(TypeId, PrimTy, u16, u16)> {
+        let prim = match self.ctx.types.kind(recv_ty) {
+            TyKind::Prim(p) if p.is_int() => *p,
+            _ => {
+                self.ctx.err(
+                    sp,
+                    format!("{who} needs an integer receiver — found `{}`", self.ctx.type_name(recv_ty)),
+                );
+                return Err(());
+            }
+        };
+        let t2 = self.compile_expr(rhs, Some(recv_ty))?;
+        if t2 != recv_ty {
+            self.ctx.err(sp, format!(
+                "{who} operands must have the same type (`{}` vs `{}`)",
+                self.ctx.type_name(recv_ty),
+                self.ctx.type_name(t2)
+            ));
+            return Err(());
+        }
+        Ok((recv_ty, prim, recv_reg, self.last_reg))
+    }
+
     /// `Math.method(..)` — the `calc` namespace: a host call for the
-    /// `f64` primitives, or an inline lowering for the integer intrinsics
-    /// (RFC 0032 §1.1 R2).
-    /// A namespace member call (`Math.sqrt(x)`, `Math.wrapping_add(a, b)`):
-    /// an extern fn or intrinsic of the used module (RFC 0028). The
-    /// namespace head is passed only for diagnostics — routing is the
-    /// caller's bound-namespace check, name-generic.
+    /// `f64` primitives (`Math.sqrt(x)`, `Math.abs(x)` — the float
+    /// helpers are ordinary host fns).
+    /// A namespace member call: an extern fn of the used module
+    /// (RFC 0028). The namespace head is passed only for diagnostics —
+    /// routing is the caller's bound-namespace check, name-generic.
     pub(crate) fn compile_namespace_member(
         &mut self,
         ns: IdentId,
         member: IdentId,
         args: &[NodeHandle<AnyExpr>],
-        expected: Option<TypeId>,
+        _expected: Option<TypeId>,
         sp: Span,
     ) -> TcResult<TypeId> {
         let Some(ef) = self.ctx.extern_fn(member).cloned() else {
@@ -96,9 +144,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, format!("`{head}.{name}` is not a namespace member"));
             return Err(());
         };
-        if let Some(i) = ef.intrinsic {
-            return self.compile_intrinsic(i, args, expected, sp);
-        }
         if args.len() != ef.params.len() {
             self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ef.params.len()));
             return Err(());
@@ -121,58 +166,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     // ---- shared helpers ----
 
-    /// The primitive of a *numeric* (int or float) argument type.
-    fn num_prim(ty: TypeId, sp: Span, who: &str, ctx: &mut Ctx) -> TcResult<PrimTy> {
-        match ctx.types.kind(ty) {
-            TyKind::Prim(p) if p.is_int() || p.is_float() => Ok(*p),
-            _ => {
-                ctx.err(sp, format!("{who} needs numbers — found `{}`", ctx.type_name(ty)));
-                Err(())
-            }
-        }
-    }
-
-    /// Compile `name(a, b)` with both operands the same numeric type.
-    fn num_binop_args(
-        &mut self,
-        args: &[NodeHandle<AnyExpr>],
-        sp: Span,
-        who: &str,
-    ) -> TcResult<(TypeId, PrimTy, u16, u16)> {
-        if args.len() != 2 {
-            self.ctx.err(sp, format!("{who}(a, b) takes two arguments"));
-            return Err(());
-        }
-        let ty = self.compile_expr(args[0], None)?;
-        let prim = Self::num_prim(ty, sp, who, self.ctx)?;
-        let a = self.last_reg;
-        let t2 = self.compile_expr(args[1], Some(ty))?;
-        if t2 != ty {
-            self.ctx.err(sp, format!(
-                "{who} operands must have the same type (`{}` vs `{}`)",
-                self.ctx.type_name(ty), self.ctx.type_name(t2)
-            ));
-            return Err(());
-        }
-        let b = self.last_reg;
-        Ok((ty, prim, a, b))
-    }
-
-    /// Compile `name(a, b)` with both operands the same *integer* type.
-    fn int_binop_args(
-        &mut self,
-        args: &[NodeHandle<AnyExpr>],
-        sp: Span,
-        who: &str,
-    ) -> TcResult<(TypeId, PrimTy, u16, u16)> {
-        let (ty, prim, a, b) = self.num_binop_args(args, sp, who)?;
-        if !prim.is_int() {
-            self.ctx.err(sp, format!("{who} needs integers — found `{}`", self.ctx.type_name(ty)));
-            return Err(());
-        }
-        Ok((ty, prim, a, b))
-    }
-
     /// A fresh register holding the raw scalar `v` of an integer primitive.
     fn int_const(&mut self, ty: TypeId, prim: PrimTy, v: i128, sp: u32) -> u16 {
         let bits = if prim.is_unsigned() { v as u64 } else { (v as i64) as u64 };
@@ -181,16 +174,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         r
     }
 
-    /// A fresh register holding the float `v` (rounded to the register width).
-    fn float_const(&mut self, ty: TypeId, v: f64, sp: u32) -> u16 {
-        let bits = if ty == TY_F32 { ((v as f32) as f64).to_bits() } else { v.to_bits() };
-        let r = self.new_reg(ty);
-        self.emit(Op::ConstRaw { dst: r, bits }, sp);
-        r
-    }
-
     /// `x >> (bits-1)` — the sign mask (all ones when negative, zero when
-    /// not), used branchlessly for `abs` and saturating clamps.
+    /// not), used branchlessly for saturating clamps.
     fn sign_mask(&mut self, ty: TypeId, prim: PrimTy, x: u16, sp: u32) -> u16 {
         let sh = self.int_const(ty, prim, int_bits(prim) - 1, sp);
         let r = self.new_reg(ty);
@@ -202,29 +187,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let r = self.new_reg(TY_BOOL);
         self.emit(cmpop(op, prim, r, a, b), sp);
         r
-    }
-
-    // ---- wrapping ----
-
-    fn wrapping_arith(&mut self, i: Intrinsic, args: &[NodeHandle<AnyExpr>], sp: Span) -> TcResult<TypeId> {
-        let who = intrinsic_name(i);
-        let (ty, prim, a, b) = self.int_binop_args(args, sp, who)?;
-        let op = match i {
-            Intrinsic::WrappingAdd => ArithOp::Add,
-            Intrinsic::WrappingSub => ArithOp::Sub,
-            _ => ArithOp::Mul,
-        };
-        let dst = self.new_reg(ty);
-        self.emit(wrap_arith(op, prim, dst, a, b), sp.lo);
-        Ok(ty)
-    }
-
-    fn wrapping_shl(&mut self, args: &[NodeHandle<AnyExpr>], sp: Span) -> TcResult<TypeId> {
-        let who = "wrapping_shl";
-        let (ty, prim, a, b) = self.int_binop_args(args, sp, who)?;
-        let dst = self.new_reg(ty);
-        self.emit(bitop(BitOp::WrapShl, prim, dst, a, b), sp.lo);
-        Ok(ty)
     }
 
     // ---- overflow test on the wrapping result ----
@@ -371,9 +333,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    fn saturating_arith(&mut self, i: Intrinsic, args: &[NodeHandle<AnyExpr>], sp: Span) -> TcResult<TypeId> {
-        let who = intrinsic_name(i);
-        let (ty, prim, a, b) = self.int_binop_args(args, sp, who)?;
+    fn saturating_arith(
+        &mut self,
+        i: Intrinsic,
+        ty: TypeId,
+        prim: PrimTy,
+        a: u16,
+        b: u16,
+        sp: Span,
+    ) -> TcResult<TypeId> {
         let op = Self::arith_of(i);
         let (r, ovf) = self.wrap_and_overflow(op, prim, ty, a, b, sp.lo);
         let clamp = self.saturating_clamp(op, prim, ty, a, b, sp.lo);
@@ -392,9 +360,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(ty)
     }
 
-    fn checked_arith(&mut self, i: Intrinsic, args: &[NodeHandle<AnyExpr>], sp: Span) -> TcResult<TypeId> {
-        let who = intrinsic_name(i);
-        let (ty, prim, a, b) = self.int_binop_args(args, sp, who)?;
+    fn checked_arith(
+        &mut self,
+        i: Intrinsic,
+        ty: TypeId,
+        prim: PrimTy,
+        a: u16,
+        b: u16,
+        sp: Span,
+    ) -> TcResult<TypeId> {
         let op = Self::arith_of(i);
         let (r, ovf) = self.wrap_and_overflow(op, prim, ty, a, b, sp.lo);
         // v1.1: the tuple convention — `(wrapped, ok)`, false on overflow
@@ -406,123 +380,5 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         { let (argv_off, argc) = self.pool_args(&(vec![r, ok])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
         self.last_reg = dst;
         Ok(tty)
-    }
-
-    // ---- abs / min / max / signum (int and float) ----
-
-    fn intrinsic_abs(&mut self, args: &[NodeHandle<AnyExpr>], sp: Span) -> TcResult<TypeId> {
-        if args.len() != 1 {
-            self.ctx.err(sp, "abs(x) takes one argument");
-            return Err(());
-        }
-        let ty = self.compile_expr(args[0], None)?;
-        let prim = Self::num_prim(ty, sp, "abs", self.ctx)?;
-        let a = self.last_reg;
-        if prim.is_int() {
-            if prim.is_unsigned() {
-                // identity — an unsigned value is already non-negative
-                let dst = self.new_reg(ty);
-                self.emit(Op::Mov { dst, src: a }, sp.lo);
-                Ok(ty)
-            } else {
-                // (a ^ mask) - mask, wrapping: MIN stays MIN (RFC 0004 §3)
-                let mask = self.sign_mask(ty, prim, a, sp.lo);
-                let t = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: t, a, b: mask }, sp.lo);
-                let dst = self.new_reg(ty);
-                self.emit(wrap_arith(ArithOp::Sub, prim, dst, t, mask), sp.lo);
-                Ok(ty)
-            }
-        } else {
-            // r = a < 0 ? -a : a  (NaN stays NaN, ±0 stay themselves)
-            let zero = self.float_const(ty, 0.0, sp.lo);
-            let neg = self.cmp(CmpOp::Lt, prim, a, zero, sp.lo);
-            let dst = self.new_reg(ty);
-            self.emit(Op::Mov { dst, src: a }, sp.lo);
-            let l_neg = self.new_label();
-            let l_end = self.new_label();
-            self.br(neg, l_neg, l_end);
-            self.bind(l_neg);
-            let n = self.new_reg(ty);
-            self.emit(Op::NegF { prim, dst: n, a }, sp.lo);
-            self.emit(Op::Mov { dst, src: n }, sp.lo);
-            self.bind(l_end);
-            self.last_reg = dst;
-            Ok(ty)
-        }
-    }
-
-    fn intrinsic_minmax(&mut self, i: Intrinsic, args: &[NodeHandle<AnyExpr>], sp: Span) -> TcResult<TypeId> {
-        let who = intrinsic_name(i);
-        let (ty, prim, a, b) = self.num_binop_args(args, sp, who)?;
-        // default the result to `b`, then take `a` when the comparison holds
-        // (min: a < b; max: a > b). For floats this is the `a < b ? a : b`
-        // rule; `NaN` comparisons are false, so `b` is returned.
-        let cmp = if i == Intrinsic::Min { CmpOp::Lt } else { CmpOp::Gt };
-        let cond = self.cmp(cmp, prim, a, b, sp.lo);
-        let dst = self.new_reg(ty);
-        self.emit(Op::Mov { dst, src: b }, sp.lo);
-        let l_take = self.new_label();
-        let l_end = self.new_label();
-        self.br(cond, l_take, l_end);
-        self.bind(l_take);
-        self.emit(Op::Mov { dst, src: a }, sp.lo);
-        self.bind(l_end);
-        self.last_reg = dst;
-        Ok(ty)
-    }
-
-    fn intrinsic_signum(&mut self, args: &[NodeHandle<AnyExpr>], sp: Span) -> TcResult<TypeId> {
-        if args.len() != 1 {
-            self.ctx.err(sp, "signum(x) takes one argument");
-            return Err(());
-        }
-        let ty = self.compile_expr(args[0], None)?;
-        let prim = Self::num_prim(ty, sp, "signum", self.ctx)?;
-        let a = self.last_reg;
-
-        // `0` is the default result; `1`/`-1` overwrite it. Float `signum`
-        // defaults to `a` so NaN and ±0 pass through (JS `Math.sign`).
-        let dst = self.new_reg(ty);
-        let default = if prim.is_float() { a } else { self.int_const(ty, prim, 0, sp.lo) };
-        self.emit(Op::Mov { dst, src: default }, sp.lo);
-
-        let zero = if prim.is_float() {
-            self.float_const(ty, 0.0, sp.lo)
-        } else {
-            self.int_const(ty, prim, 0, sp.lo)
-        };
-        let one = if prim.is_float() {
-            self.float_const(ty, 1.0, sp.lo)
-        } else {
-            self.int_const(ty, prim, 1, sp.lo)
-        };
-        let minus_one = if prim.is_float() {
-            self.float_const(ty, -1.0, sp.lo)
-        } else {
-            self.int_const(ty, prim, -1, sp.lo)
-        };
-
-        let pos = self.cmp(CmpOp::Gt, prim, a, zero, sp.lo);
-        let l_pos = self.new_label();
-        let l_check_neg = self.new_label();
-        let l_neg = self.new_label();
-        let l_end = self.new_label();
-        self.br(pos, l_pos, l_check_neg);
-        self.bind(l_pos);
-        self.emit(Op::Mov { dst, src: one }, sp.lo);
-        self.jmp(l_end);
-        self.bind(l_check_neg);
-        if prim.is_unsigned() {
-            self.jmp(l_end);
-        } else {
-            let neg = self.cmp(CmpOp::Lt, prim, a, zero, sp.lo);
-            self.br(neg, l_neg, l_end);
-            self.bind(l_neg);
-            self.emit(Op::Mov { dst, src: minus_one }, sp.lo);
-        }
-        self.bind(l_end);
-        self.last_reg = dst;
-        Ok(ty)
     }
 }

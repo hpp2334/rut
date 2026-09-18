@@ -12,8 +12,8 @@ dataclass Point {
 pub fn main() -> nil {
     let mut s: i32 = 0;
     for (let i = 0; i < 2000000; i += 1) {
-        let p = Point { x: i, y: Math.wrapping_add(i, 1) };
-        s = Math.wrapping_add(Math.wrapping_add(s, p.x), p.y);
+        let p = Point { x: i, y: i.wrapping_add(1) };
+        s = (s.wrapping_add(p.x)).wrapping_add(p.y);
     }
     Logger.new("app").info(f"CHECKSUM {s}");
 }

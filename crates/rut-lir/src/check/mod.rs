@@ -148,6 +148,9 @@ pub struct Ctx<'a> {
     /// used functions, bound before body compilation (RFC 0029 surface):
     /// name -> signature + the exporter's scope-qualified function id
     pub extern_fns: std::collections::HashMap<IdentId, ExternFn>,
+    /// core's `builtin impl` numeric methods (RFC 0032 §1.1 R2): method
+    /// name → `(receiver prim, lowering id)` — ambient on primitives
+    pub builtin_impls: std::collections::HashMap<IdentId, Vec<(TypeId, rut_core::ops::Intrinsic)>>,
     /// used constants (native modules: `calc`): name -> (type, bits)
     pub extern_consts: std::collections::HashMap<IdentId, (TypeId, u64)>,
     /// used types: name -> the exporter's scope-qualified type id
@@ -198,9 +201,6 @@ pub struct ExternFn {
     pub func: u32,
     pub params: Vec<TypeId>,
     pub ret: TypeId,
-    /// `Some` for a compiler-lowered intrinsic (RFC 0032 §1.1 R2): no
-    /// `FuncCode` — `rut-lir` expands the call inline.
-    pub intrinsic: Option<rut_core::ops::Intrinsic>,
 }
 
 /// A trait exported by a used module's surface (RFC 0012 §5): the id of
@@ -270,6 +270,7 @@ impl<'a> Ctx<'a> {
             lambda_sigs: std::collections::HashMap::new(),
             entries: Vec::new(),
             extern_fns: std::collections::HashMap::new(),
+            builtin_impls: std::collections::HashMap::new(),
             extern_consts: std::collections::HashMap::new(),
             extern_types: std::collections::HashMap::new(),
             extern_classes: std::collections::HashSet::new(),
@@ -291,12 +292,30 @@ impl<'a> Ctx<'a> {
 
     /// Bind a used function before body compilation.
     pub fn add_extern_fn(&mut self, name: IdentId, func: u32, params: Vec<TypeId>, ret: TypeId) {
-        self.extern_fns.insert(name, ExternFn { func, params, ret, intrinsic: None });
+        self.extern_fns.insert(name, ExternFn { func, params, ret });
     }
 
-    /// Bind a used compiler-lowered intrinsic (no `FuncCode`).
-    pub fn add_extern_intrinsic(&mut self, name: IdentId, intrinsic: rut_core::ops::Intrinsic) {
-        self.extern_fns.insert(name, ExternFn { func: 0, params: vec![], ret: TY_I32, intrinsic: Some(intrinsic) });
+    /// Bind a `builtin impl` numeric method of a primitive (core only,
+    /// RFC 0032 §1.1 R2): `(method name → receiver prim, lowering id)`.
+    /// AMBIENT — primitive receivers resolve their methods without a
+    /// `use`; rut-lir expands the call inline.
+    pub fn add_builtin_impl(
+        &mut self,
+        name: IdentId,
+        prim: TypeId,
+        intrinsic: rut_core::ops::Intrinsic,
+    ) {
+        self.builtin_impls.entry(name).or_default().push((prim, intrinsic));
+    }
+
+    /// The lowering of `name` on a receiver of primitive type `recv`, if
+    /// core's `builtin impl` table declares it.
+    pub fn builtin_impl(&self, name: IdentId, recv: TypeId) -> Option<rut_core::ops::Intrinsic> {
+        self.builtin_impls
+            .get(&name)?
+            .iter()
+            .find(|(p, _)| *p == recv)
+            .map(|(_, i)| *i)
     }
 
     pub fn extern_fn(&self, name: IdentId) -> Option<&ExternFn> {

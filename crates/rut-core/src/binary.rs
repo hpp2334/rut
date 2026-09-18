@@ -68,11 +68,6 @@ pub struct SurfaceFn {
     pub ret: TypeId,
     /// module-local function id (the exporter's)
     pub local: u32,
-    /// `Some` for a compiler-lowered intrinsic (`calc` wrapping/
-    /// saturating/checked and `abs`/`min`/`max`/`signum`): there is no
-    /// `FuncCode`, and the declared signature is a placeholder — `rut-lir`
-    /// types the call from its arguments (RFC 0032 §1.1 R2).
-    pub intrinsic: Option<crate::ops::Intrinsic>,
 }
 
 /// One exported constant in a module's surface — `calc::PI` and
@@ -195,6 +190,12 @@ pub struct Surface {
     /// `FuncCode`; the bodies are rut-lir lowering, reached only through
     /// the use binding
     pub native_fns: Vec<IdentId>,
+    /// builtin-impl methods (`core` only, RFC 0032 §1.1 R2): the integer
+    /// primitives' `builtin impl` blocks — `(receiver prim, method name,
+    /// lowering id)`. No `FuncCode`; rut-lir expands the method call
+    /// inline. AMBIENT like the primitives themselves: a method call
+    /// `x.wrapping_add(y)` needs no `use`.
+    pub native_impls: Vec<(crate::types::TypeId, IdentId, crate::ops::Intrinsic)>,
 }
 
 /// The core prelude function names (RFC 0028), in surface order —
@@ -207,17 +208,43 @@ pub const CORE_FNS: &[IdentId] = &[
 
 impl Surface {
     /// The core prelude surface (RFC 0028): the builtin containers,
-    /// the builtin traits, and the compiler-lowered functions. One
+    /// the builtin traits, the compiler-lowered functions, the integer
+    /// primitives' `builtin impl` methods, and `NAN`. One
     /// source of truth — the driver mounts it (`mount_std_core`), the
     /// compiler hints from it, and `rut/core/core.d.rut` mirrors it
     /// for the LSP (kept true to the implementation by test). Every name
     /// is a well-known symbol — the surface's interner is the table.
     pub fn core() -> Surface {
+        // the integer primitives' numeric-method table (RFC 0032 §1.1
+        // R2): one row per (prim × op); the method is ambient on the
+        // primitive and lowers inline off the receiver's width
+        use crate::ops::Intrinsic::*;
+        use crate::types::{TY_I16, TY_I32, TY_I64, TY_I8, TY_U16, TY_U32, TY_U64, TY_U8};
+        const OPS: &[(IdentId, Intrinsic)] = &[
+            (sym::WRAPPING_ADD, WrappingAdd),
+            (sym::WRAPPING_SUB, WrappingSub),
+            (sym::WRAPPING_MUL, WrappingMul),
+            (sym::WRAPPING_SHL, WrappingShl),
+            (sym::SATURATING_ADD, SaturatingAdd),
+            (sym::SATURATING_SUB, SaturatingSub),
+            (sym::SATURATING_MUL, SaturatingMul),
+            (sym::CHECKED_ADD, CheckedAdd),
+            (sym::CHECKED_SUB, CheckedSub),
+            (sym::CHECKED_MUL, CheckedMul),
+        ];
+        let native_impls = [TY_I8, TY_I16, TY_I32, TY_I64, TY_U8, TY_U16, TY_U32, TY_U64]
+            .iter()
+            .flat_map(|&prim| OPS.iter().map(move |&(name, i)| (prim, name, i)))
+            .collect();
         Surface {
             names: Interner::new(),
             native_types: vec![(sym::ARRAY, NativeTy::Array), (sym::OPAQUE, NativeTy::Opaque)],
             native_traits: vec![(sym::ITERATOR, NativeTrait::Iterator)],
             native_fns: CORE_FNS.to_vec(),
+            // core's one const: `use core::{NAN}` — the unwritable float
+            // (f64 bits materialized with `ConstRaw`)
+            consts: vec![SurfaceConst { name: sym::NAN, ty: crate::types::TY_F64, bits: f64::NAN.to_bits() }],
+            native_impls,
             ..Default::default()
         }
     }

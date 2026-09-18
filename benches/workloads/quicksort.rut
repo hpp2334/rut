@@ -5,7 +5,7 @@ use calc::{ Math };
 // quicksort — deterministic LCG input, in-place Lomuto quicksort, rolled
 // checksum. Scale: n = 100_000.
 //
-// The LCG and the checksum use `Math.wrapping_*` (RFC 0004 §3) so the i32
+// The LCG and the checksum use the `wrapping_*` methods (RFC 0004 §3) so the i32
 // math matches JavaScript's `Math.imul(...) | 0` exactly.
 
 fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> nil {
@@ -35,13 +35,13 @@ pub fn main() -> nil {
     let xs: Vec<i32> = Vec.new();
     let mut x: i32 = 42;
     for (let i = 0; i < n; i += 1) {
-        x = Math.wrapping_add(Math.wrapping_mul(x, 1664525), 1013904223);
+        x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);
         xs.push(x % 1000);
     }
     quicksort(xs, 0, n - 1);
     let mut h: i32 = 0;
     for (let i = 0; i < n; i += 1) {
-        h = Math.wrapping_add(Math.wrapping_mul(h, 31), xs[i]);
+        h = (h.wrapping_mul(31)).wrapping_add(xs[i]);
     }
     Logger.new("app").info(f"CHECKSUM {h}");
 }

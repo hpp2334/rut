@@ -58,7 +58,7 @@ with the VM crate):
 mov     rD, rS            ; untyped move (verifier: non-ref type)
 movref  rD, rS            ; ref move: retain new, release old
 i32add  rD, rA, rB        ; i32sub i32mul i64.. f32add f64.. (typed arith)
-i32wrap rD, rA, rB        ; Math.wrapping_* family (RFC 0004 §3); plain `+=` traps
+i32wrap rD, rA, rB        ; x.wrapping_add(y) family (RFC 0004 §3); plain `+=` traps
 icmp    rD, rA, rB, cond  ; int/float compares → bool
 jmp     L | br rC, L1, L2
 brtable rIdx, table, n    ; `when` on enums, downcast chains

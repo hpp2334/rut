@@ -36,7 +36,7 @@ impl Vm {
         if !WRAP && (o || !fits(r, p)) {
             return Err(Trap::new(
                 TrapKind::Overflow,
-                "arithmetic overflow — use `Math.wrapping_add`/`wrapping_sub`/`wrapping_mul` (RFC 0004 §3)",
+                "arithmetic overflow — use `x.wrapping_add(y)`/`wrapping_sub`/`wrapping_mul` (RFC 0004 §3)",
             ));
         }
         Ok(Slot::int(trunc_to(r, p)))
@@ -107,7 +107,7 @@ impl Vm {
                 },
                 false,
             ),
-            // wrapping `Math.wrapping_shl` (RFC 0004 §3): the shifted-out bits are simply
+            // wrapping `x.wrapping_shl(y)` (RFC 0004 §3): the shifted-out bits are simply
             // gone — truncate to the operand width, never trap
             BOP_WRAPSHL => return Ok(Slot::int(trunc_to(a.wrapping_shl((b & 63) as u32), p))),
             _ => unreachable!("bad bitop code"),

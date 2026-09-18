@@ -1,7 +1,7 @@
 //! `calc`'s host half (RFC 0028): the native-module functions behind
-//! the `f64` math surface. The integer intrinsics (`wrapping_*`,
-//! `saturating_*`, `checked_*`, `abs`/`min`/`max`/`signum`) are
-//! compiler-lowered and need no host body.
+//! the `f64` math surface — the float primitives and the float
+//! `abs`/`min`/`max`/`signum` helpers (the integer numeric methods are
+//! core's `builtin impl` methods, compiler-lowered — no host body).
 //!
 //! The `calc` module is mounted by the driver (`rut-driver`); a host
 //! installs the bodies. An uninstalled sink traps, like any missing host
@@ -60,6 +60,29 @@ pub fn install_std_math(vm: &mut Vm) {
     binary!(vm, "atan2", atan2);
     binary!(vm, "hypot", hypot);
     binary!(vm, "copysign", copysign);
+
+    // the float helpers — ordinary host fns (the int forms are core's
+    // `builtin impl` methods now); NaN comparisons are false, so
+    // `min`/`max` keep the operand `b` on NaN
+    unary!(vm, "abs", abs);
+    binary!(vm, "min", min);
+    binary!(vm, "max", max);
+    // JS `Math.sign` semantics (the old intrinsic's law): ±0 stay 0,
+    // NaN passes through as itself — Rust's `f64::signum` would map
+    // +0.0 to 1.0
+    vm.register_host_fn("calc::signum", |_vm, a| {
+        let x = arg(a, 0);
+        let v = if x > 0.0 {
+            1.0
+        } else if x < 0.0 {
+            -1.0
+        } else if x == 0.0 {
+            0.0
+        } else {
+            x // NaN
+        };
+        Ok(Value::F64(v))
+    });
 
     vm.register_host_fn("calc::fma", |_vm, a| {
         Ok(Value::F64(arg(a, 0).mul_add(arg(a, 1), arg(a, 2))))

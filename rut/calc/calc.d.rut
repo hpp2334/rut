@@ -1,26 +1,26 @@
-// calc/calc.d.rut — `calc`, the `Math` namespace (RFC 0028). The float
-// members are host functions (`rt:`-backed, `f64`, bodies in `rut-std`);
-// the integer members are compiler-lowered intrinsics, generic over
-// every integer width (RFC 0032 §1.1 R2). No `host class` namespace
-// fiction: these are the module's own functions, reached qualified —
+// calc/calc.d.rut — `calc`, the `Math` namespace (RFC 0028): the float
+// members are host functions (f64, bodies in `rut-std`). No `host
+// class` namespace fiction: these are the module's own functions,
+// reached qualified —
 //
 //   use calc::{ Math };
 //   let d = Math.sqrt(x * x + y * y);
-//   let wrapped = Math.wrapping_mul(x, 1103515245);
+//   let a = Math.abs(x);
 //
-// `builtin` here is the same engine linkage as core's own/downcast:
-// compiler-lowered, nothing to register — std decl files only, never an
-// embedder surface.
+// The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
+// `checked_*`) moved to core — `builtin impl` methods on the
+// primitives, ambient at the method call (`x.wrapping_add(y)`,
+// std/core.d.rut, RFC 0032 §1.1 R2). `NAN` is core's too
+// (`use core::{NAN}`).
 //
 // Constants (f64, compiler-materialized — the surface grammar has no
 // `static` field form):
 //   Math.PI  Math.TAU  Math.E  Math.SQRT_2  Math.LN_2  Math.LN_10
 //   Math.LOG2_E  Math.LOG10_E  Math.INFINITY  Math.NEG_INFINITY
-//   Math.NAN  Math.EPSILON  Math.MAX  Math.MIN  Math.MIN_POSITIVE
+//   Math.EPSILON  Math.MAX  Math.MIN  Math.MIN_POSITIVE
 //
-// Contract (std/core.d.rut): the surface is kept TRUE to the implementation
-// — signatures match rut-lir's lowering tables, never aspirational. The
-// integer members are shown at `i32`; the implementation is width-generic.
+// Contract (std/core.d.rut): the surface is kept TRUE to the
+// implementation — signatures match the mount tables, never aspirational.
 
 // ---- f64 host functions (the embedding Rust implements them) ----
 
@@ -48,19 +48,10 @@ pub host fn hypot(x: f64, y: f64) -> f64;
 pub host fn copysign(x: f64, y: f64) -> f64;
 pub host fn fma(x: f64, y: f64, z: f64) -> f64;
 
-// ---- integer intrinsics (compiler-lowered; width-generic) ----
+// ---- float helpers (ordinary host fns; the int forms are core's
+// `builtin impl` methods) ----
 
-pub builtin fn wrapping_add(x: i32, y: i32) -> i32;
-pub builtin fn wrapping_sub(x: i32, y: i32) -> i32;
-pub builtin fn wrapping_mul(x: i32, y: i32) -> i32;
-pub builtin fn wrapping_shl(x: i32, n: i32) -> i32;
-pub builtin fn saturating_add(x: i32, y: i32) -> i32;
-pub builtin fn saturating_sub(x: i32, y: i32) -> i32;
-pub builtin fn saturating_mul(x: i32, y: i32) -> i32;
-pub builtin fn checked_add(x: i32, y: i32) -> (i32, bool);
-pub builtin fn checked_sub(x: i32, y: i32) -> (i32, bool);
-pub builtin fn checked_mul(x: i32, y: i32) -> (i32, bool);
-pub builtin fn abs(x: i32) -> i32;
-pub builtin fn min(x: i32, y: i32) -> i32;
-pub builtin fn max(x: i32, y: i32) -> i32;
-pub builtin fn signum(x: i32) -> i32;
+pub host fn abs(x: f64) -> f64;
+pub host fn min(x: f64, y: f64) -> f64;
+pub host fn max(x: f64, y: f64) -> f64;
+pub host fn signum(x: f64) -> f64;

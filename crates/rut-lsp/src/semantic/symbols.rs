@@ -111,6 +111,15 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .collect();
             Some(sym(ast.name(*name), SymKind::Trait, find_name(toks, span, ast.name(*name), false), children))
         }
+        ItemKind::BuiltinImpl { prim, methods, .. } => {
+            // core's `builtin impl i32 { .. }` — a method group on a
+            // primitive; symbolized as `builtin impl <prim>`
+            let children = methods
+                .iter()
+                .map(|m| method_symbol(toks, ast, *m))
+                .collect();
+            Some(sym(ast.name(*prim), SymKind::Class, find_name(toks, span, ast.name(*prim), false), children))
+        }
         ItemKind::SurfaceDataclass { name, fields, .. } => {
             let children = member_symbols(toks, ast, fields, &[]);
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))

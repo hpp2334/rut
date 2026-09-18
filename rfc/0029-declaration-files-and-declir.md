@@ -71,19 +71,25 @@ only, and — beyond RFC 0003's module scope — every declaration must be
   declares a flat record whose every field is a crossing type — the
   shape is the whole surface, no methods, no field initializers
   (RFC 0025);
-- `builtin class` / `builtin trait` / `builtin fn` — **the engine's own
-  surface**, spelled in the toolchain's decl files only (`core`,
-  `calc`): the builtin containers (`Array`/`Option`/`Result`/
+- `builtin class` / `builtin trait` / `builtin fn` / `builtin impl` —
+  **the engine's own
+  surface**, spelled in the toolchain's decl files only (`core`):
+  the builtin containers (`Array`/`Option`/`Result`/
   `Opaque` — class-shaped, generic, members compiler-lowered to ops,
   RFC 0032 §1.1), the engine-lowered fns (all of `core`'s — `own`,
   `downcast`, `assert`, `panic`, the `str`/`bytes` natives; the prelude
-  registers no host bodies), and the engine-woven traits
+  registers no host bodies), the engine-woven traits
   (`Iterator` — compiler-backed impls and lowering hooks; v1.1 removed
   `Disposal`/`Index` in favor of `on_drop` and builtin indexing, and
   the async plan adds `Task` plus its run contexts here; users
   implement them with ordinary `impl` blocks, while plain
   `trait` remains the library form — `Hashable` in
-  `pouch`). The decls exist so users and the LSP see every
+  `pouch`), and — new with the numeric-methods revision —
+  `builtin impl <prim> { .. }`: the integer primitives' numeric
+  methods (`x.wrapping_add(y)` and kin, RFC 0004 §3 / RFC 0032 §1.1
+  R2), bodiless `self` receivers, ambient on the primitive (no use),
+  lowered inline off the receiver's width. The decls exist so users
+  and the LSP see every
   signature; no impl ever registers, and an embedder decl that spells
   `builtin` is a compile error. `builtin` is a contextual keyword,
   `.d.rut`-only — it stays a legal identifier everywhere else.

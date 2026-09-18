@@ -3,17 +3,17 @@ use calc::{ Math };
 
 // u64loop — the u64 arithmetic gate: 64-bit wrapping mul/add and a
 // shift-xor mix in a hot loop, the widest-width math the VM ships.
-// Guards the `Math.wrapping_*` u64 paths and the value-boundary
+// Guards the the `wrapping_*` u64 method and the value-boundary
 // sign/zero extension against regressions; intloop is the i32 sibling.
 // Scale: 1_000_000 iterations. Canonical reference: 7216000035.
 
 pub fn main() -> nil {
     let mut h: u64 = 14695981039346656037u64;
     for (let i = 0; i < 1000000; i += 1) {
-        h = Math.wrapping_mul(h, 1099511628211u64);
-        h = Math.wrapping_add(h, i as u64);
+        h = h.wrapping_mul(1099511628211u64);
+        h = h.wrapping_add(i as u64);
         h = h ^ (h >> 31);
-        h = Math.wrapping_mul(h, 2654435761u64);
+        h = h.wrapping_mul(2654435761u64);
     }
     Logger.new("app").info(f"CHECKSUM {h}");
 }

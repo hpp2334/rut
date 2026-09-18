@@ -74,6 +74,9 @@ fn classify_item(
         ItemKind::BuiltinTy { name, .. } | ItemKind::SurfaceDataclass { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
+        // `builtin impl i32 { .. }` declares no new name — the primitive
+        // is already in scope; only its methods classify (via Member nodes)
+        ItemKind::BuiltinImpl { .. } => {}
         // methods classify via their own Member nodes; use names need
         // resolution (M2) — left unclassified
         ItemKind::Impl { .. } | ItemKind::Use { .. } | ItemKind::Module { .. } => {}

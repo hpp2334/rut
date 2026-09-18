@@ -63,17 +63,17 @@ pub enum BitOp {
     WrapShl,
 }
 
-/// Compiler-lowered native functions (RFC 0032 §1.1 R2): operations the
-/// frontend expands inline rather than calling. `calc`'s wrapping,
-/// saturating and checked integer arithmetic and its `abs`/`min`/`max`/
-/// `signum` helpers. The id travels in the module surface (no `FuncCode`);
-/// `rut-lir` owns the lowering.
+/// Compiler-lowered native methods (RFC 0032 §1.1 R2): the operations
+/// `core`'s `builtin impl <int>` blocks declare and the frontend expands
+/// inline at the method call (`x.wrapping_add(y)`) instead of calling —
+/// wrapping, saturating and checked integer arithmetic. The id travels in
+/// the module surface (no `FuncCode`); `rut-lir` owns the lowering,
+/// keyed off the receiver's primitive width.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Intrinsic {
     WrappingAdd, WrappingSub, WrappingMul, WrappingShl,
     SaturatingAdd, SaturatingSub, SaturatingMul,
     CheckedAdd, CheckedSub, CheckedMul,
-    Abs, Min, Max, Signum,
 }
 
 /// Internal natives reached via `CallNat` — RFC 0032 §1.1 R2: things rut
