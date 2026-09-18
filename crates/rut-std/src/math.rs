@@ -4,43 +4,23 @@
 //! core's `builtin impl` methods, compiler-lowered — no host body).
 //!
 //! The `calc` module is mounted by the driver (`rut-driver`); a host
-//! installs the bodies. An uninstalled sink traps, like any missing host
-//! function. Bindings are TYPED (RFC 0025): the signatures match
-//! `calc.d.rut`, and `Vm::verify_host_fns` checks the contract at load
-//! time.
+//! installs the bodies. Bindings are the MAGIC shape (RFC 0023/0025):
+//! the closure's Rust parameter types ARE the `.d.rut` row — the
+//! signature is derived and checked against `calc.d.rut` at load time.
+//! These are the crossing-hot bindings: the adapter inlines to one
+//! indirect call, the body reads its `f64`s straight out of the slots.
 
-use rut_core::types::TY_F64;
-use rut_vm::interp::HostRegistry;
-use rut_vm::Value;
-
-/// Read the `i`-th `f64` argument; a non-float is `NaN` (the signature is
-/// enforced by the verifier, so this is defensive).
-fn arg(a: &[Value], i: usize) -> f64 {
-    match a.get(i) {
-        Some(Value::F64(x)) => *x,
-        _ => f64::NAN,
-    }
-}
+use rut_vm::interp::{HostRegistry, Vm};
 
 macro_rules! unary {
     ($hosts:expr, $name:literal, $f:ident) => {
-        $hosts.register(
-            concat!("calc::", $name),
-            vec![rut_core::types::TY_F64],
-            rut_core::types::TY_F64,
-            |_vm, a| Ok(Value::F64(arg(a, 0).$f())),
-        );
+        $hosts.register::<_, (f64,), f64, _>(concat!("calc::", $name), |_vm: &mut Vm, x: f64| x.$f());
     };
 }
 
 macro_rules! binary {
     ($hosts:expr, $name:literal, $f:ident) => {
-        $hosts.register(
-            concat!("calc::", $name),
-            vec![rut_core::types::TY_F64, rut_core::types::TY_F64],
-            rut_core::types::TY_F64,
-            |_vm, a| Ok(Value::F64(arg(a, 0).$f(arg(a, 1)))),
-        );
+        $hosts.register::<_, (f64, f64), f64, _>(concat!("calc::", $name), |_vm: &mut Vm, a: f64, b: f64| a.$f(b));
     };
 }
 
@@ -70,29 +50,25 @@ pub fn install_std_math(hosts: &mut HostRegistry) {
     binary!(hosts, "hypot", hypot);
     binary!(hosts, "copysign", copysign);
 
-    // the float helpers — ordinary host fns (the int forms are core's
-    // `builtin impl` methods now); NaN comparisons are false, so
-    // `min`/`max` keep the operand `b` on NaN
     unary!(hosts, "abs", abs);
     binary!(hosts, "min", min);
     binary!(hosts, "max", max);
+
     // JS `Math.sign` semantics (the old intrinsic's law): ±0 stay 0,
     // NaN passes through as itself — Rust's `f64::signum` would map
     // +0.0 to 1.0
-    hosts.register("calc::signum", vec![TY_F64], TY_F64, |_vm, a| {        let x = arg(a, 0);
-        let v = if x > 0.0 {
-            1.0
-        } else if x < 0.0 {
-            -1.0
-        } else if x == 0.0 {
-            0.0
-        } else {
-            x // NaN
-        };
-        Ok(Value::F64(v))
+    hosts.register::<_, (f64,), f64, _>("calc::signum", |_vm: &mut Vm, x: f64| if x > 0.0 {
+        1.0
+    } else if x < 0.0 {
+        -1.0
+    } else if x == 0.0 {
+        0.0
+    } else {
+        x // NaN
     });
 
-    hosts.register("calc::fma", vec![TY_F64, TY_F64, TY_F64], TY_F64, |_vm, a| {
-        Ok(Value::F64(arg(a, 0).mul_add(arg(a, 1), arg(a, 2))))
-    });
+    hosts.register::<_, (f64, f64, f64), f64, _>(
+        "calc::fma",
+        |_vm: &mut Vm, a: f64, b: f64, c: f64| a.mul_add(b, c),
+    );
 }

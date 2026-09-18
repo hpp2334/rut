@@ -1,7 +1,7 @@
 //! The embedder's host-fn binding table (RFC 0022/0025/0026) — built
 //! BEFORE the `Vm` exists. An embedder is a host: its bindings depend on
 //! nothing but itself (the closures capture their own state; the `&mut Vm`
-//! in `HostFn`'s type is a call-time argument), so registration happens up
+//! in the body's type is a call-time argument), so registration happens up
 //! front and [`Vm::new`](super::Vm::new) joins the table against the
 //! program's host thunks eagerly — a declared-but-unbound fn is a
 //! construction error, never a mid-run trap.
@@ -10,56 +10,133 @@
 //! pre-VM: the session's declared `.d.rut` surface vs the registry,
 //! panicking on the three mismatch classes before any rut code runs.
 
-use std::cell::RefCell;
+use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
-use std::rc::Rc;
 
-use rut_core::types::TypeId;
+use rut_core::types::{TypeId, TY_I32};
 
-use super::{Trap, Vm};
-use crate::heap::Value;
+use super::boundary::HostHandler;
+use super::util::slot_to_value;
+use crate::heap::{Slot, Trap, TrapKind, Value};
+use super::Vm;
 
-/// An embedder implementation for a bodyless host function
-/// (RFC 0022/0026): registered by name against `FuncCode.host`. It gets
-/// the VM so it can allocate/inspect `Opaque` handles (RFC 0014).
-pub type HostFn = Rc<RefCell<dyn FnMut(&mut Vm, &[Value]) -> Result<Value, Trap>>>;
+/// A host fn is one dispatch-table entry — the same unit every other
+/// table in the VM trades in (threaded op handlers, vtables): a code
+/// pointer, a state word, and the declared return for the refcount law.
+pub type Ctx = *const ();
+pub type HostCode = fn(&mut Vm, &[Slot], Ctx) -> Slot;
+
+/// A binding's signature — a fixed array, no heap: max host arity 8 is
+/// the boundary's own law (tuples cap at arity 8). DERIVED from the
+/// callable's Rust shape (`HostHandler::SIG`), never written.
+#[derive(Clone, Copy)]
+pub(crate) struct HostSig {
+    pub tys: [TypeId; 8],
+    pub ret: TypeId,
+    pub n: u8,
+}
+
+impl HostSig {
+    pub const fn new(tys: &[TypeId], ret: TypeId) -> HostSig {
+        let mut a = [0; 8];
+        let mut i = 0;
+        while i < tys.len() && i < 8 {
+            a[i] = tys[i];
+            i += 1;
+        }
+        HostSig { tys: a, ret, n: tys.len() as u8 }
+    }
+
+    pub fn slice(&self) -> &[TypeId] {
+        &self.tys[..self.n as usize]
+    }
+}
+
+/// What [`HostRegistry::register`] produced: the table entry plus the
+/// owner of its state word. `keep` moves into the Vm at the join and
+/// pins the boxed body for the machine's lifetime (single thread,
+/// RFC 0034 — the same trust the threaded loop's raw pointers run on).
+pub(crate) struct HostBinding {
+    pub code: HostCode,
+    pub ctx: Ctx,
+    pub sigs: HostSig,
+    pub keep: Option<Box<dyn Any>>,
+}
+
+/// The dispatch-table row, dense by func idx after the join. Copy: the
+/// hot path copies one 16-byte entry out and dispatches.
+#[derive(Clone, Copy)]
+pub(crate) struct HostSlot {
+    pub code: HostCode,
+    pub ctx: Ctx,
+    pub ret: TypeId,
+}
+
+impl HostSlot {
+    /// filler for non-host funcs — never dispatched (the `host_id`
+    /// discriminant in the `FuncCode` routes, as in `hotpath(2)`)
+    fn never(_vm: &mut Vm, _slots: &[Slot], _ctx: Ctx) -> Slot {
+        debug_assert!(false, "non-host funcs never dispatch through host_slots");
+        Slot::int(0)
+    }
+    pub const NEVER: HostSlot = HostSlot { code: Self::never, ctx: std::ptr::null(), ret: 0 };
+}
 
 /// A host pkg's expected binding table (RFC 0025): `<scope>::<name>` →
 /// `(params, ret)` — the `.d.rut` declarations a mounting session holds,
 /// checked against a registry by [`HostRegistry::verify_against`].
 pub type ExpectedHostFns = BTreeMap<String, (Vec<TypeId>, TypeId)>;
 
-/// The resolved half of a host thunk — what the hot path dispatches
-/// through, built once at the `Vm::new` join. Params are deliberately
-/// NOT here: they are borrowed from the program's own `FuncCode` at
-/// call time (the program is `Rc`-cloned into the call anyway).
-pub(crate) struct HostEntry {
-    pub(crate) f: HostFn,
-    pub(crate) ret: TypeId,
-}
-
 /// The embedder's binding table, handed to `Vm::new` (fourth argument).
-#[derive(Default)]
 pub struct HostRegistry {
-    fns: HashMap<String, HostFn>,
-    sigs: HashMap<String, (Vec<TypeId>, TypeId)>,
+    fns: HashMap<String, HostBinding>,
 }
 
 impl HostRegistry {
     pub fn new() -> HostRegistry {
-        HostRegistry::default()
+        HostRegistry { fns: HashMap::new() }
     }
 
-    /// Register an embedder implementation for a bodyless host function,
-    /// WITH its declared signature — the pkg `.d.rut`'s (RFC 0025). The
-    /// signature feeds the load-time contract check; the body feeds the
-    /// `Vm::new` join.
-    pub fn register<F>(&mut self, name: &str, params: Vec<TypeId>, ret: TypeId, f: F)
+    /// The magic: the callable's Rust shape IS the `.d.rut` row —
+    /// `hosts.register("calc::abs", |_vm, x: f64| x.abs())`. The
+    /// signature is DERIVED (`F::SIG`, a fixed array, no heap); the
+    /// adapter `F::entry` IS the table entry. Infallible `-> R` and
+    /// fallible `-> Result<R, Trap>` bodies both fit — `K` is solved by
+    /// whichever impl the body's return type matches, and never written.
+    /// A param type with no `Arg` impl is a compile error here.
+    pub fn register<F, A, R, K>(&mut self, name: &str, f: F)
     where
+        F: HostHandler<A, R, K> + 'static,
+    {
+        let boxed = Box::new(f);
+        // the heap pointee is stable for the box's life; the Box handle
+        // itself moves into `keep`
+        let ctx = &*boxed as *const F as Ctx;
+        self.fns.insert(
+            name.to_string(),
+            HostBinding { code: F::entry, ctx, sigs: F::SIG, keep: Some(boxed) },
+        );
+    }
+
+    /// The pre-magic bridge (RFC 0022 bodies over `&[Value]`). Kept only
+    /// until every consumer migrates, then deleted — new bindings use
+    /// [`HostRegistry::register`].
+    pub fn register_legacy<F>(
+        &mut self,
+        name: &str,
+        params: Vec<TypeId>,
+        ret: TypeId,
+        f: F,
+    ) where
         F: FnMut(&mut Vm, &[Value]) -> Result<Value, Trap> + 'static,
     {
-        self.sigs.insert(name.to_string(), (params, ret));
-        self.fns.insert(name.to_string(), Rc::new(RefCell::new(f)));
+        let sigs = HostSig::from_vec(&params, ret);
+        let boxed = Box::new(Legacy { f, params, ret });
+        let ctx = &*boxed as *const Legacy<F> as Ctx;
+        self.fns.insert(
+            name.to_string(),
+            HostBinding { code: legacy_entry::<F>, ctx, sigs, keep: Some(boxed) },
+        );
     }
 
     /// The `.d.rut` ↔ host-impl contract check (RFC 0025), PANICKING
@@ -96,26 +173,26 @@ impl HostRegistry {
             }
             .to_string()
         };
-        let sig = |p: &Vec<TypeId>, r: TypeId| -> String {
+        let sig = |p: &[TypeId], r: TypeId| -> String {
             format!("({}) -> {}", p.iter().map(|&t| ty(t)).collect::<Vec<_>>().join(", "), ty(r))
         };
         for (name, (params, ret)) in expected {
-            match self.sigs.get(name) {
+            match self.fns.get(name) {
                 None => panic!(
                     "host fn `{name}` is declared by a mounted package but never bound — register the body before Vm::new (RFC 0025)"
                 ),
-                Some((bparams, bret)) => {
-                    if bparams != params || bret != ret {
+                Some(b) => {
+                    if b.sigs.slice() != params.as_slice() || b.sigs.ret != *ret {
                         panic!(
                             "host fn `{name}` signature drift: the pkg declares {}, the binding is {} (RFC 0025)",
                             sig(params, *ret),
-                            sig(bparams, *bret)
+                            sig(b.sigs.slice(), b.sigs.ret)
                         );
                     }
                 }
             }
         }
-        for name in self.sigs.keys() {
+        for name in self.fns.keys() {
             if !expected.contains_key(name) {
                 panic!(
                     "host fn `{name}` is bound but declared by no mounted package — the surface is missing (RFC 0025)"
@@ -127,7 +204,48 @@ impl HostRegistry {
     /// Take one binding out (the `Vm::new` join consumes the table; the
     /// leftover entries are the embedder's business — `verify_against`
     /// is the check that they were all declared).
-    pub(crate) fn take(&mut self, name: &str) -> Option<HostFn> {
+    pub(crate) fn take_binding(&mut self, name: &str) -> Option<HostBinding> {
         self.fns.remove(name)
+    }
+}
+
+impl HostSig {
+    /// non-const variant for the legacy bridge (params arrive as a Vec)
+    pub fn from_vec(tys: &[TypeId], ret: TypeId) -> HostSig {
+        HostSig::new(tys, ret)
+    }
+}
+
+/// The legacy bridge's state: the RFC 0022 body + the declared sig it
+/// converts the arg slots against.
+struct Legacy<F> {
+    f: F,
+    params: Vec<TypeId>,
+    ret: TypeId,
+}
+
+/// The legacy adapter: slots → `Value`s via the declared sig, body,
+/// result back through `value_in`. One instantiation per migrated-not-yet
+/// body type; dies with `register_legacy`.
+fn legacy_entry<F>(vm: &mut Vm, slots: &[Slot], ctx: Ctx) -> Slot
+where
+    F: FnMut(&mut Vm, &[Value]) -> Result<Value, Trap> + 'static,
+{
+    // SAFETY: ctx is Box<Legacy<F>>, owned by vm.host_keep (RFC 0034)
+    let lg = unsafe { &mut *(ctx as *mut Legacy<F>) };
+    let vals: Vec<Value> = slots
+        .iter()
+        .enumerate()
+        .map(|(i, &s)| {
+            let ty = lg.params.get(i).copied().unwrap_or(TY_I32);
+            slot_to_value(s, ty, &vm.prog, &vm.heap)
+        })
+        .collect();
+    match (lg.f)(vm, &vals) {
+        Ok(out) => match vm.value_in(&out, lg.ret) {
+            Ok(s) => s,
+            Err(m) => vm.trap_taken(Trap::new(TrapKind::Invalid, format!("host result: {m}"))),
+        },
+        Err(t) => vm.trap_taken(t),
     }
 }

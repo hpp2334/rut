@@ -8,8 +8,8 @@
 
 use rut_core::types::{PrimTy, TypeId, TyKind};
 use rut_core::types::{
-    TY_BOOL, TY_CHAR, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
-    TY_U16, TY_U32, TY_U8,
+    TY_BOOL, TY_BYTES, TY_CHAR, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
+    TY_STR, TY_U16, TY_U32, TY_U8,
 };
 
 use super::*;
@@ -80,6 +80,20 @@ fn expect_kind(vm: &Vm, slot: Slot, declared: TypeId, rust: &str) -> Result<(), 
     }
 }
 
+/// the `&[u8]` view over a `bytes` cell — the block store's own octets
+fn bytes_view<'a>(slot: Slot) -> &'a [u8] {
+    use crate::heap::ArrKind;
+    match &cell_of(slot).data {
+        CellData::Str(v) => v.bytes(),
+        CellData::Array { items, .. } if items.borrow().kind == ArrKind::U8 => {
+            let d = items.borrow();
+            // SAFETY: the block lives as long as the cell (arg retention)
+            unsafe { std::slice::from_raw_parts(d.block, d.len as usize) }
+        }
+        _ => &[],
+    }
+}
+
 fn narrow_i64<T: TryFrom<i64>>(n: i64, rust: &str) -> Result<T, Trap> {
     T::try_from(n).map_err(|_| {
         Trap::new(TrapKind::Invalid, format!("boundary: `{n}` does not fit `{rust}`"))
@@ -94,6 +108,9 @@ macro_rules! int_ret {
             fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
                 expect_kind(vm, slot, declared, $name)?;
                 Ok(narrow_i64::<$t>(unsafe { slot.i }, $name)?)
+            }
+            fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
+                Ok(Slot::int(self as i64))
             }
         }
     };
@@ -114,6 +131,9 @@ impl Ret for f64 {
         expect_kind(vm, slot, declared, "f64")?;
         Ok(slot.as_f64())
     }
+    fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
+        Ok(Slot::float(self))
+    }
 }
 
 impl Ret for f32 {
@@ -122,6 +142,9 @@ impl Ret for f32 {
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "f32")?;
         Ok(slot.as_f64() as f32)
+    }
+    fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
+        Ok(Slot::float(self as f64))
     }
 }
 
@@ -132,6 +155,9 @@ impl Ret for bool {
         expect_kind(vm, slot, declared, "bool")?;
         Ok(slot.as_bool())
     }
+    fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
+        Ok(Slot::bool(self))
+    }
 }
 
 impl Ret for char {
@@ -140,6 +166,9 @@ impl Ret for char {
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "char")?;
         Ok(slot.as_char())
+    }
+    fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
+        Ok(Slot::ch(self))
     }
 }
 
@@ -151,6 +180,9 @@ impl Ret for () {
         let _ = slot;
         Ok(())
     }
+    fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
+        Ok(Slot::int(0)) // nil is the zero word (RFC 0015 §5)
+    }
 }
 
 /// owned copy — the explicit "I keep this data" (RFC 0023 §2)
@@ -160,6 +192,9 @@ impl Ret for String {
         expect_kind(vm, slot, declared, "String")?;
         Ok(cell_of(slot).as_str().to_string())
     }
+    fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
+        vm.heap.alloc_str(self).map_err(|t| t)
+    }
 }
 
 /// owned copy — the explicit "I keep this data" (RFC 0023 §2)
@@ -168,6 +203,9 @@ impl Ret for Vec<u8> {
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "Vec<u8>")?;
         Ok(cell_of(slot).bytes_copy())
+    }
+    fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
+        vm.heap.alloc_bytes(self)
     }
 }
 
@@ -361,3 +399,230 @@ call_args!(A1, A2, A3, A4, A5);
 call_args!(A1, A2, A3, A4, A5, A6);
 call_args!(A1, A2, A3, A4, A5, A6, A7);
 call_args!(A1, A2, A3, A4, A5, A6, A7, A8);
+
+// ---- the magic handler (RFC 0023 revised §3): the fn's Rust shape IS
+// the .d.rut row — params/ret derive the signature, the adapter IS the
+// dispatch-table entry ----
+
+/// A host-fn parameter: the Rust type knows its rut type and how to read
+/// itself out of a slot. `Repr<'a>` is what the registered callable's
+/// parameter IS — the type itself for Copy values and handles, `&'a str`
+/// for borrows — and the handler bound is HRTB over `'a`, so a borrowed
+/// param cannot outlive its call: the type system blocks smuggling
+/// (RFC 0023 §2).
+pub(crate) trait HostParam {
+    const TY: TypeId;
+    type Repr<'a>;
+    /// SAFETY (per impl): the returned value is valid for the whole
+    /// host-call scope — the snapshot slots are copies of the call's arg
+    /// registers (which own their references), the arena never moves
+    /// cells (RFC 0016 OQ-1), and the borrowable crossing types are
+    /// immutable. Nothing else may outlive the call.
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap>;
+}
+
+macro_rules! param_prim {
+    ($t:ty, $name:literal, $ty:ident) => {
+        impl HostParam for $t {
+            const TY: TypeId = $ty;
+            type Repr<'a> = $t;
+            unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+                expect_kind(vm, slot, $ty, $name)?;
+                Ok(narrow_i64::<$t>(unsafe { slot.i }, $name)?)
+            }
+        }
+    };
+}
+
+param_prim!(i8, "i8", TY_I8);
+param_prim!(i16, "i16", TY_I16);
+param_prim!(i32, "i32", TY_I32);
+param_prim!(i64, "i64", TY_I64);
+param_prim!(u8, "u8", TY_U8);
+param_prim!(u16, "u16", TY_U16);
+param_prim!(u32, "u32", TY_U32);
+
+impl HostParam for f64 {
+    const TY: TypeId = TY_F64;
+    type Repr<'a> = f64;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_F64, "f64")?;
+        Ok(slot.as_f64())
+    }
+}
+
+impl HostParam for f32 {
+    const TY: TypeId = TY_F32;
+    type Repr<'a> = f32;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_F32, "f32")?;
+        Ok(slot.as_f64() as f32)
+    }
+}
+
+impl HostParam for bool {
+    const TY: TypeId = TY_BOOL;
+    type Repr<'a> = bool;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_BOOL, "bool")?;
+        Ok(slot.as_bool())
+    }
+}
+
+impl HostParam for char {
+    const TY: TypeId = TY_CHAR;
+    type Repr<'a> = char;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_CHAR, "char")?;
+        Ok(slot.as_char())
+    }
+}
+
+impl HostParam for OpaqueRef {
+    const TY: TypeId = TY_OPAQUE;
+    type Repr<'a> = OpaqueRef;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_OPAQUE, "OpaqueRef")?;
+        let p = unsafe { slot.r };
+        if p.is_null() {
+            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueRef`"));
+        }
+        Ok(vm.heap.opaque_handle(p)) // the bump is the handle's own count
+    }
+}
+
+/// zero-copy borrow: the octets read straight out of the block store —
+/// the `'a` the closure receives is the call's scope (trait doc)
+impl HostParam for &str {
+    const TY: TypeId = TY_STR;
+    type Repr<'a> = &'a str;
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        let s = cell_of(slot).as_str();
+        // SAFETY: arg-register retention + non-moving arena + immutability
+        Ok(unsafe { std::mem::transmute::<&str, &'a str>(s) })
+    }
+}
+
+/// zero-copy borrow (RFC 0004 bytes)
+impl HostParam for &[u8] {
+    const TY: TypeId = TY_BYTES;
+    type Repr<'a> = &'a [u8];
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        let b = bytes_view(slot);
+        // SAFETY: as `&str` — the bytes block outlives the call
+        Ok(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(b) })
+    }
+}
+
+/// owned copy — the explicit "I keep this data" shape
+impl HostParam for String {
+    const TY: TypeId = TY_STR;
+    type Repr<'a> = String;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_STR, "String")?;
+        Ok(cell_of(slot).as_str().to_string())
+    }
+}
+
+/// owned copy — the explicit "I keep this data" shape
+impl HostParam for Vec<u8> {
+    const TY: TypeId = TY_BYTES;
+    type Repr<'a> = Vec<u8>;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_BYTES, "Vec<u8>")?;
+        Ok(cell_of(slot).bytes_copy())
+    }
+}
+
+/// The body-return kind marker, solved by which impl the callable's
+/// return type matches — never written by the embedder (only named by
+/// the turbofish's `_`).
+pub enum Infallible {}
+pub enum Fallible {}
+
+/// The magic: one blanket family (macro, arities 0..=8, both body
+/// shapes) whose `entry` adapter IS the `HostSlot` code pointer. The
+/// table stays uniform — `call_host` never learns what shape produced
+/// the entry (plan §3.3/§3.6).
+pub(crate) trait HostHandler<A, R, K>: 'static {
+    /// the derived `.d.rut` row — a fixed array, no heap
+    const SIG: crate::interp::host::HostSig;
+    fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot;
+}
+
+macro_rules! handler_fallible {
+    ($($n:ident),*) => {
+        impl<F, $($n: HostParam,)* R: Ret> HostHandler<($($n,)*), R, Fallible> for F
+        where
+            F: for<'a> FnMut(&mut Vm, $($n::Repr<'a>,)*) -> Result<R, Trap> + 'static,
+        {
+            const SIG: crate::interp::host::HostSig =
+                crate::interp::host::HostSig::new(&[$($n::TY,)*], R::TY);
+            fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot {
+                // SAFETY: ctx is Box<F>, owned by vm.host_keep for the
+                // machine's lifetime; single thread (RFC 0034)
+                let f = unsafe { &mut *(ctx as *mut F) };
+                let mut run = || -> Result<R, Trap> {
+                    let mut i = 0usize;
+                    $( let $n = unsafe { $n::read(vm, slots[i]) }?; i += 1; )*
+                    f(vm, $($n,)*)
+                };
+                match run() {
+                    Ok(out) => match out.into_slot(vm) {
+                        Ok(s) => s,
+                        Err(t) => vm.trap_taken(t),
+                    },
+                    Err(t) => vm.trap_taken(t),
+                }
+            }
+        }
+    };
+}
+
+macro_rules! handler_infallible {
+    ($($n:ident),*) => {
+        impl<F, $($n: HostParam,)* R: Ret> HostHandler<($($n,)*), R, Infallible> for F
+        where
+            F: for<'a> FnMut(&mut Vm, $($n::Repr<'a>,)*) -> R + 'static,
+        {
+            const SIG: crate::interp::host::HostSig =
+                crate::interp::host::HostSig::new(&[$($n::TY,)*], R::TY);
+            fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot {
+                // SAFETY: as the fallible impl — Box<F> via host_keep
+                let f = unsafe { &mut *(ctx as *mut F) };
+                let out = {
+                    let mut i = 0usize;
+                    $( let $n = match unsafe { $n::read(vm, slots[i]) } {
+                        Ok(a) => a,
+                        Err(t) => return vm.trap_taken(t),
+                    }; i += 1; )*
+                    f(vm, $($n,)*)
+                };
+                match out.into_slot(vm) {
+                    Ok(s) => s,
+                    Err(t) => vm.trap_taken(t),
+                }
+            }
+        }
+    };
+}
+
+handler_fallible!();
+handler_fallible!(A1);
+handler_fallible!(A1, A2);
+handler_fallible!(A1, A2, A3);
+handler_fallible!(A1, A2, A3, A4);
+handler_fallible!(A1, A2, A3, A4, A5);
+handler_fallible!(A1, A2, A3, A4, A5, A6);
+handler_fallible!(A1, A2, A3, A4, A5, A6, A7);
+handler_fallible!(A1, A2, A3, A4, A5, A6, A7, A8);
+
+handler_infallible!();
+handler_infallible!(A1);
+handler_infallible!(A1, A2);
+handler_infallible!(A1, A2, A3);
+handler_infallible!(A1, A2, A3, A4);
+handler_infallible!(A1, A2, A3, A4, A5);
+handler_infallible!(A1, A2, A3, A4, A5, A6);
+handler_infallible!(A1, A2, A3, A4, A5, A6, A7);
+handler_infallible!(A1, A2, A3, A4, A5, A6, A7, A8);

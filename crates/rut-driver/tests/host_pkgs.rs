@@ -130,14 +130,14 @@ fn non_crossing_signatures_refuse_at_load() {
 
 fn server_registry(extra: &[(&str, rut_core::types::TypeId)]) -> rut_vm::interp::HostRegistry {
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.register(
+    hosts.register_legacy(
         "server::subscribe",
         vec![TY_OPAQUE, TY_STR, TY_STR],
         TY_NIL,
         |_vm, _a| Ok(rut_vm::Value::Nil),
     );
     for (name, second) in extra {
-        hosts.register(
+        hosts.register_legacy(
             name,
             vec![TY_OPAQUE, *second, TY_STR],
             TY_NIL,
@@ -227,7 +227,7 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
     );
     // with the body registered, the same program boots
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.register("server::probe", vec![TY_STR], TY_NIL, |_vm, _a| Ok(rut_vm::Value::Nil));
+    hosts.register_legacy("server::probe", vec![TY_STR], TY_NIL, |_vm, _a| Ok(rut_vm::Value::Nil));
     assert!(rut_vm::interp::Vm::new(
         std::rc::Rc::new(prog),
         &limits,

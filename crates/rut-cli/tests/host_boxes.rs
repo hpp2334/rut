@@ -122,11 +122,11 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
 fn install(hosts: &mut rut_vm::interp::HostRegistry, dropped: &Rc<Cell<bool>>) {
     use rut_core::types::{TY_I64, TY_NIL, TY_OPAQUE, TY_STR};
     let dropped = dropped.clone();
-    hosts.register("boxes::store_new", vec![], TY_OPAQUE, move |vm, _args| {
+    hosts.register_legacy("boxes::store_new", vec![], TY_OPAQUE, move |vm, _args| {
         let b = OpaqueBox::alloc(vm, Store { map: HashMap::new(), dropped: dropped.clone() })?;
         Ok(b.into_value())
     });
-    hosts.register(
+    hosts.register_legacy(
         "boxes::store_set",
         vec![TY_OPAQUE, TY_STR, TY_I64],
         TY_NIL,
@@ -140,12 +140,12 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, dropped: &Rc<Cell<bool>>) {
             Ok(Value::Nil)
         },
     );
-    hosts.register("boxes::store_get", vec![TY_OPAQUE, TY_STR], TY_I64, |_vm, args| {
+    hosts.register_legacy("boxes::store_get", vec![TY_OPAQUE, TY_STR], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
         Ok(b.with(|s| s.map.get(k).cloned())?.unwrap_or(Value::I64(-1)))
     });
-    hosts.register("boxes::store_size", vec![TY_OPAQUE], TY_I64, |_vm, args| {
+    hosts.register_legacy("boxes::store_size", vec![TY_OPAQUE], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Store>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|s| s.map.len() as i64)?))
     });

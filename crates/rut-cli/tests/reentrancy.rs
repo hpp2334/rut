@@ -124,25 +124,25 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
 fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>) {
     use rut_core::types::{TY_I64, TY_OPAQUE};
     let invocations = invocations.clone();
-    hosts.register("re::widget_new", vec![], TY_OPAQUE, |vm, _args| {
+    hosts.register_legacy("re::widget_new", vec![], TY_OPAQUE, |vm, _args| {
         let b = OpaqueBox::alloc(vm, Widget { n: 0 })?;
         Ok(b.into_value())
     });
-    hosts.register("re::boost", vec![TY_I64], TY_I64, |vm, args| {
+    hosts.register_legacy("re::boost", vec![TY_I64], TY_I64, |vm, args| {
         let Value::I64(x) = args[0] else { panic!("boost: i64 arg") };
         let v = vm.call("inner", &[Value::I64(x)])?;
         let Value::I64(y) = v else { panic!("inner: i64 result") };
         Ok(Value::I64(y + 1))
     });
-    hosts.register("re::borrow_try", vec![TY_OPAQUE], TY_I64, |_vm, args| {
+    hosts.register_legacy("re::borrow_try", vec![TY_OPAQUE], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|w| w.n)?))
     });
-    hosts.register("re::borrow_read", vec![TY_OPAQUE], TY_I64, |_vm, args| {
+    hosts.register_legacy("re::borrow_read", vec![TY_OPAQUE], TY_I64, |_vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         Ok(Value::I64(b.with(|w| w.n)?))
     });
-    hosts.register("re::borrow_conflict", vec![TY_OPAQUE], TY_I64, |vm, args| {
+    hosts.register_legacy("re::borrow_conflict", vec![TY_OPAQUE], TY_I64, |vm, args| {
         let b = OpaqueBox::<Widget>::from_value(&args[0])?;
         // hold the mutable borrow ACROSS a nested vm.call — rut code that
         // runs inside must not be able to borrow the same box
@@ -160,12 +160,12 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>
             Err(t) => Err(t),
         }
     });
-    hosts.register("re::host_boom", vec![TY_I64], TY_I64, |vm, args| {
+    hosts.register_legacy("re::host_boom", vec![TY_I64], TY_I64, |vm, args| {
         let Value::I64(i) = args[0] else { panic!("host_boom: i64 arg") };
         let v = vm.call("boom", &[Value::I64(i)])?;
         Ok(v)
     });
-    hosts.register("re::grind", vec![TY_I64], TY_I64, |vm, args| {
+    hosts.register_legacy("re::grind", vec![TY_I64], TY_I64, |vm, args| {
         let Value::I64(n) = args[0] else { panic!("grind: i64 arg") };
         // the catch-and-refuel pattern for nested budget traps: the host
         // owns the retry, the outer frame never sees the trap
@@ -178,7 +178,7 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>
             Err(t) => Err(t),
         }
     });
-    hosts.register("re::count_spin", vec![TY_I64], TY_I64, move |vm, args| {
+    hosts.register_legacy("re::count_spin", vec![TY_I64], TY_I64, move |vm, args| {
         let Value::I64(n) = args[0] else { panic!("count_spin: i64 arg") };
         invocations.set(invocations.get() + 1);
         vm.call("spin", &[Value::I64(n)])

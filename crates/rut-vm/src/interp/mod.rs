@@ -7,7 +7,7 @@
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
 use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value, ArrKind};
+use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
 use rut_core::ops::*;
 use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
 use std::rc::Rc;
@@ -22,8 +22,8 @@ mod step;
 mod threaded;
 mod util;
 
-pub use host::{ExpectedHostFns, HostFn, HostRegistry};
-use host::HostEntry;
+pub use host::{ExpectedHostFns, HostRegistry};
+use host::HostSlot;
 use boundary::{CallArgs, Ret};
 
 // free helpers live in the submodules; pull them into `interp` so the
@@ -96,17 +96,22 @@ pub struct Vm {
     interrupt_every: u32,
     since_check: u32,
     pub hooks: HostHooks,
-    /// resolved host thunks, dense by func idx — the `Vm::new` join
-    /// (RFC 0025) built these once; the hot path dispatches through
-    /// them with no name work and no allocation
-    host_slots: Vec<Option<Rc<HostEntry>>>,
-    /// raw arg slots of the CURRENT host call (RFC 0023 §2 zero-copy
-    /// borrows; empty outside a host call) — pre-sized to the program's
-    /// max host arity at the join
-    host_arg_slots: Vec<Slot>,
-    /// reused crossing-args buffer for host arities past `INLINE_ARITY`
+    /// the dispatch table, dense by func idx — the `Vm::new` join
+    /// (RFC 0025) built it from the registry; the hot path copies one
+    /// `HostSlot` (a code pointer, a state word, the declared return)
+    /// and dispatches. No Rc, no name work, no allocation.
+    host_slots: Vec<HostSlot>,
+    /// the boxed host bodies — `host_slots[i].ctx` points into these;
+    /// owning them keeps every ctx word valid for the machine's lifetime
+    /// (single thread, RFC 0034)
+    host_keep: Vec<Box<dyn std::any::Any>>,
+    /// the trap channel: a host body records its trap here instead of
+    /// returning `Result`; `call_host` checks the flag the moment the
+    /// body returns — the trap fires before the dst write
+    host_trap: Option<Trap>,
+    /// reused arg-snapshot spill for host arities past `INLINE_ARITY`
     /// (never taken in practice; the stack covers the common case)
-    value_scratch: Vec<Value>,
+    slot_scratch: Vec<Slot>,
     const_slots: Vec<Slot>,
     /// recycled per-frame register files (avoids a Vec alloc per call)
     reg_pool: Vec<Vec<Slot>>,
@@ -174,25 +179,29 @@ impl Vm {
     ) -> Result<Vm, Trap> {
         // ---- the host join (RFC 0025) ----
         // Resolve every host thunk's binding NOW; slots are dense by
-        // func idx, params stay in the FuncCode (borrowed at call time).
-        let mut host_slots: Vec<Option<Rc<HostEntry>>> = Vec::with_capacity(prog.funcs.len());
-        let mut max_host_argc = 0usize;
+        // func idx, one row each: the adapter code pointer, the boxed
+        // body's ctx word, and the declared return for the refcount law.
+        let mut host_slots: Vec<HostSlot> = Vec::with_capacity(prog.funcs.len());
+        let mut host_keep: Vec<Box<dyn std::any::Any>> = Vec::new();
         for fc in prog.funcs.iter() {
-            if let Some(hid) = fc.host_id {
-                let name = prog.interner.name(hid);
-                let f = registry.take(name).ok_or_else(|| {
-                    Trap::new(
-                        TrapKind::Invalid,
-                        format!(
-                            "host fn `{name}` is declared by the program but never bound — \
-                             register the body in the HostRegistry before Vm::new (RFC 0025)"
-                        ),
-                    )
-                })?;
-                max_host_argc = max_host_argc.max(fc.params.len());
-                host_slots.push(Some(Rc::new(HostEntry { f, ret: fc.ret })));
-            } else {
-                host_slots.push(None);
+            match fc.host_id {
+                Some(hid) => {
+                    let name = prog.interner.name(hid);
+                    let b = registry.take_binding(name).ok_or_else(|| {
+                        Trap::new(
+                            TrapKind::Invalid,
+                            format!(
+                                "host fn `{name}` is declared by the program but never bound — \
+                                 register the body in the HostRegistry before Vm::new (RFC 0025)"
+                            ),
+                        )
+                    })?;
+                    if let Some(k) = b.keep {
+                        host_keep.push(k);
+                    }
+                    host_slots.push(HostSlot { code: b.code, ctx: b.ctx, ret: fc.ret });
+                }
+                None => host_slots.push(HostSlot::NEVER),
             }
         }
         let heap =
@@ -263,8 +272,9 @@ impl Vm {
             since_check: 0,
             hooks,
             host_slots,
-            host_arg_slots: Vec::with_capacity(max_host_argc),
-            value_scratch: Vec::new(),
+            host_keep,
+            host_trap: None,
+            slot_scratch: Vec::new(),
             const_slots,
             reg_pool: Vec::new(),
             ref_regs,
@@ -447,7 +457,7 @@ impl Vm {
     /// mismatch is a trap naming both sides — the rut module's signatures
     /// were already checked against the crossing rule at compile time, so
     /// this only fires when the EMBEDDER passes the wrong shape.
-    fn value_in(&mut self, v: &Value, ty: TypeId) -> Result<Slot, String> {
+    pub(crate) fn value_in(&mut self, v: &Value, ty: TypeId) -> Result<Slot, String> {
         use rut_core::types::{PrimTy, TyKind};
         let ty = if ty != u32::MAX { ty } else {
             return Err(format!("internal: untyped parameter"));
@@ -507,104 +517,67 @@ impl Vm {
         })
     }
 
-    /// Zero-copy borrow of a `str`/`bytes` argument of the CURRENT host
-    /// call (RFC 0023 §2, RFC 0042): the octets read straight out of the
-    /// VM's block store — no `String`/`Vec` crossing copy. Sound for
-    /// exactly the host call: the arg registers own their references and
-    /// `str`/`bytes` are immutable.
-    pub fn arg_bytes(&self, i: usize) -> Result<&[u8], Trap> {
-        let s = *self.host_arg_slots.get(i).ok_or_else(|| {
-            Trap::new(TrapKind::Invalid, format!("arg_bytes({i}): no such argument"))
-        })?;
-        if unsafe { s.r.is_null() } {
-            return Err(Trap::new(TrapKind::NilDeref, "arg_bytes on nil"));
-        }
-        match &cell_of(s).data {
-            CellData::Str(v) => Ok(v.bytes()),
-            CellData::Array { items, .. } if items.borrow().kind == ArrKind::U8 => {
-                let d = items.borrow();
-                Ok(unsafe { std::slice::from_raw_parts(d.block, d.len as usize) })
-            }
-            _ => Err(Trap::new(TrapKind::Invalid, format!("arg_bytes({i}): not a `str`/`bytes` argument"))),
-        }
-    }
-
-    /// Dispatch `Op::Call` to a host function: convert the args to `Value`s,
-    /// invoke the embedder's impl, convert the result. The binding was
-    /// resolved at the `Vm::new` join (`host_slots`); per call there is no
-    /// name work, no allocation for the typical arity, and no clone —
-    /// params are borrowed from the local `Rc<Program>`.
+    /// Dispatch `Op::Call` to a host function. The binding was resolved
+    /// at the `Vm::new` join: one `HostSlot` copy, one arg snapshot, one
+    /// indirect call — no Rc, no name work, no `Value` enum, no envelope.
+    /// The adapter (`HostHandler::entry`) reads the typed args itself and
+    /// reports traps through the channel (§3.7 of the boundary plan).
     pub(super) fn call_host(&mut self, func: u32, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
+        // the join resolved the binding; the entry is a code pointer, a
+        // word, and a TypeId — copied out in one move, no Rc traffic
+        let slot = self.host_slots[func as usize];
         let prog = Rc::clone(&self.prog);
-        // borrowed from the LOCAL Rc — outlives the `&mut self` call below,
-        // so unlike the old shape there is nothing to clone
-        let fc = &prog.funcs[func as usize];
-        let entry = self.host_slots[func as usize]
-            .clone()
-            .expect("call_host: resolved at the Vm::new join");
-        let ret = entry.ret;
-        let args = self.cur_argv(&prog, argv_off, argc);
-        // the raw arg slots, stashed for the call's duration: hosts that
-        // want zero-copy borrow through `arg_bytes`/`arg_str` instead of
-        // reading the copied `Value`s (RFC 0023 §2). The arg registers
-        // own their references and `str`/`bytes` are immutable, so the
-        // borrow is sound for exactly the host call.
-        self.host_arg_slots.clear();
-        self.host_arg_slots.extend(args.iter().map(|a| self.cur_regs[*a as usize]));
-        // the crossing args: stack storage for the common arity (max
-        // in-tree host fn takes 3), spill to a reused buffer past that —
-        // zero system allocation either way
+        let args = self.cur_argv(&prog, argv_off, argc); // &[Reg], borrows the local Rc
+        // snapshot the args: the register file may swap inside the body
+        // (nested calls). `Slot` is Copy (one machine word, RFC 0015 §5).
         const INLINE_ARITY: usize = 8;
-        let mut inline: [Value; INLINE_ARITY] = std::array::from_fn(|_| Value::Nil);
-        let mut spill: Vec<Value> = Vec::new();
-        let vals: &[Value] = if argc as usize <= INLINE_ARITY {
+        let mut inline = [Slot::null(); INLINE_ARITY];
+        let mut spill: Vec<Slot> = Vec::new();
+        let snapshot: &[Slot] = if args.len() <= INLINE_ARITY {
             for (i, a) in args.iter().enumerate() {
-                let ty = fc.params.get(i).copied().unwrap_or(rut_core::types::TY_I32);
-                inline[i] = slot_to_value(self.cur_regs[*a as usize], ty, &self.prog, &self.heap);
+                inline[i] = self.cur_regs[*a as usize];
             }
             &inline[..args.len()]
         } else {
-            spill = self.take_value_scratch(args.len());
-            for (i, a) in args.iter().enumerate() {
-                let ty = fc.params.get(i).copied().unwrap_or(rut_core::types::TY_I32);
-                spill.push(slot_to_value(self.cur_regs[*a as usize], ty, &self.prog, &self.heap));
-            }
+            spill = std::mem::take(&mut self.slot_scratch); // reused, never in practice
+            spill.extend(args.iter().map(|a| self.cur_regs[*a as usize]));
             &spill
         };
-        let out = {
-            let mut f = entry.f.borrow_mut();
-            f(self, vals)?
-        };
-        // return the spill buffer (no-op when unused); stale `Value`s are
-        // dropped here — owned crossing values, released by plain drop
-        if argc as usize > INLINE_ARITY {
-            self.put_value_scratch(spill);
+        // ONE indirect call — the same unit an op dispatch pays. The
+        // adapter converts, invokes the body, and reports traps through
+        // the channel.
+        let out = (slot.code)(self, snapshot, slot.ctx);
+        if args.len() > INLINE_ARITY {
+            self.slot_scratch = spill;
         }
+        if let Some(t) = self.host_trap.take() {
+            return Err(t);
+        }
+        // the returned slot's reference count IS the register's —
+        // transfer, not borrow (crossing-ownership law, RFC 0023 §2)
         if let Some(d) = reg_opt(dst) {
-            let s = self
-                .value_in(&out, ret)
-                .map_err(|m| Trap::new(TrapKind::Invalid, format!("host result: {m}")))?;
-            if self.is_ref(ret) {
-                let old = self.cur_regs[d as usize];
+            if self.is_ref(slot.ret) {
+                let old = std::mem::replace(&mut self.cur_regs[d as usize], out);
                 self.heap.release(old);
+            } else {
+                self.cur_regs[d as usize] = out;
             }
-            self.cur_regs[d as usize] = s;
         }
         Ok(())
     }
 
-    /// Take the reused crossing-args buffer (arity > `INLINE_ARITY`).
-    fn take_value_scratch(&mut self, cap: usize) -> Vec<Value> {
-        let mut v = std::mem::take(&mut self.value_scratch);
-        v.clear();
-        if v.capacity() < cap {
-            v.reserve(cap - v.capacity());
-        }
-        v
+    /// The trap channel (host-fn ABI): record the trap and return a
+    /// placeholder slot. `call_host` checks the flag the moment the body
+    /// returns — the trap fires before the dst write. Return the
+    /// placeholder (or anything); the pending flag wins.
+    pub fn trap(&mut self, kind: TrapKind, msg: impl Into<String>) -> Slot {
+        self.host_trap = Some(Trap::new(kind, msg.into()));
+        Slot::int(0)
     }
 
-    fn put_value_scratch(&mut self, v: Vec<Value>) {
-        self.value_scratch = v;
+    pub(crate) fn trap_taken(&mut self, t: Trap) -> Slot {
+        self.host_trap = Some(t);
+        Slot::int(0)
     }
 
     /// Resume after a budget trap (RFC 0034 §4: the frame IS the loop state).

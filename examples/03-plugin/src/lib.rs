@@ -142,7 +142,7 @@ impl Plugin {
 /// server/server.d.rut; `Plugin::load` verifies the contract.
 fn install(hosts: &mut rut_vm::interp::HostRegistry) {
     use rut_core::types::{TY_NIL, TY_OPAQUE, TY_STR};
-    hosts.register(
+    hosts.register_legacy(
         "server::subscribe",
         vec![TY_OPAQUE, TY_STR, TY_STR],
         TY_NIL,
@@ -159,7 +159,7 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry) {
         },
     );
 
-    hosts.register(
+    hosts.register_legacy(
         "server::emit",
         vec![TY_OPAQUE, TY_STR, TY_STR],
         TY_NIL,
