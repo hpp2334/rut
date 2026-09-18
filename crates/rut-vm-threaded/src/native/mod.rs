@@ -50,7 +50,13 @@ macro_rules! op_handler {
                     let h = unsafe { *(table as *const Handler<M>).add(tag) };
                     become h(m, table, code, tags, regs, n, next_fuel, used)
                 }
-                Flow::Done(o) => return Ok(ThreadOut::Done(o)),
+                // the root `Ret`: the LAST writeback of the run — without
+                // it a clean exit drops the register-resident fuel
+                // counters and `fuel_used` reads 0 (RFC 0040)
+                Flow::Done(o) => {
+                    unsafe { (*m).sync_fuel(next_fuel, used) };
+                    return Ok(ThreadOut::Done(o));
+                }
                 Flow::Redispatch => {
                     let (c, t, r, p) = unsafe { (*m).frame_ptrs() };
                     let tag = unsafe { *t.add(p as usize) } as usize;

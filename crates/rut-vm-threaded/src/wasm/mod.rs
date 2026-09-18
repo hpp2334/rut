@@ -117,7 +117,12 @@ pub fn run<M: Machine>(m: &mut M, pc0: u32, _table: &Table<M>) -> Result<ThreadO
         };
         match flow {
             Flow::Next(n) => pc = n,
-            Flow::Done(o) => return Ok(ThreadOut::Done(o)),
+            // the root `Ret`: the LAST writeback of the run — without it
+            // a clean exit drops the locals and `fuel_used` reads 0
+            Flow::Done(o) => {
+                m.sync_fuel(fuel, used);
+                return Ok(ThreadOut::Done(o));
+            }
             Flow::Redispatch => {
                 let (c, t, r, p) = m.frame_ptrs();
                 code = c;
