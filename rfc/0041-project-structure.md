@@ -317,12 +317,30 @@ tree). The rules are small on purpose:
 - **`name`** — the package's use-path name: bare `[a-zA-Z0-9_]+` only
   (RFC 0002 §4). A scoped or quoted spelling is a manifest error whose
   diagnostic points here.
-- **`[deps]`** — the packages this one uses. `core` needs **no** `[deps]`
+- **`[deps]`** — the packages this one uses: `pkg = { path = "..." }`,
+  relative to this manifest. `core` needs **no** `[deps]`
   entry: the driver mounts it unconditionally (resolution-ambient,
   name-explicit — every name still requires `use core::{ .. };`, RFC
-  0028). Every other specifier — `pouch`, `calc`, `ink`, app packages,
-  bundles — is declared here or host-provided; an undeclared specifier's
-  diagnostic names the manifest.
+  0028). Every other specifier — `pouch`, `ink`, app packages,
+  host pkgs — is declared here or mounted by the embedder
+  (`mount_dir`); an undeclared specifier's diagnostic names the
+  manifest. Resolution walks the graph **recursively**, with a cycle
+  guard, and **first mount wins**: an already-mounted name (the
+  embedder's, the root's, or an earlier dep's) is never overwritten; a
+  dep whose manifest `name` disagrees with its key is an error naming
+  both.
 - **entry** — the package's file: one `.rut` (or `.d.rut`) per package;
   the manifest names it (`entry.lib` for a rut-source package,
-  `entry.type` for a declaration surface).
+  `entry.type` alone for a **host pkg** — a pure declaration surface
+  whose `host fn`s lower into the mounted surface at load time,
+  RFC 0025).
+- **`host_scope`** — optional: the host-fn registration prefix when it
+  must differ from the package name (`rt` keeps its historical `rt:log`
+  scope, RFC 0022).
+- **`inline`** — optional `true`: force source-inlining into every
+  consumer (`ink` — a module whose class methods must resolve at the
+  call site cannot be linked).
+
+The engine's own mounts are `core` and `calc` (`mount_std`); `pouch`
+and `ink` are third-party libraries in the toolchain tree — nothing in
+the engine knows their names.

@@ -222,7 +222,7 @@ fn graph_threads_a_type_through_a_chain() {
 }
 
 #[test]
-fn pouch_source_compiles() {
+fn pouch_module_source_compiles() {
     // rut/pouch/pouch.rut — one file, one module unit
     let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../rut/pouch/pouch.rut");

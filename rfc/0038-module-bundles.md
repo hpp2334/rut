@@ -127,8 +127,15 @@ compile to identical programs (tested: the linked binaries are equal).
 - OQ-1: binary cross-version policy — inherits RFC 0033 OQ-1; v1 refuses.
 - OQ-2: per-entry content hashes and/or bundle signatures (provenance) —
   deferred by decision; the manifest is the natural home.
-- OQ-3: multi-module / package-tree bundles — one `.rutbundle` per module
-  in v1; a package-level bundle re-exporting a tree rides RFC 0029 OQ-3.
+- OQ-3: multi-module / package-tree bundles — **ANSWERED (layout v2)**:
+  a bundle embeds the whole `[deps]` graph, each package under its own
+  `<pkg>/` group (its `rut.toml` + entry, recursively and
+  deduplicated — `pack_dir` writes it deterministically), and the
+  loader resolves groups by NAME (the deps' `path` keys are
+  directory-time only). Host-pkg deps ride too — an `entry.type`-only
+  package's `.d.rut` is its entry. A v1 bundle remains the one-module
+  special case. A v2 bundle missing a declared dep group is a load
+  error naming it; `format_version = 2` is required to pack one.
 - OQ-4: compression — STORE for determinism in v1; pinned DEFLATE for
   large payloads is a layout change (bumps `format_version`).
 - OQ-5: does `rut pack` also accept a `.d.rut`-only input (a surface

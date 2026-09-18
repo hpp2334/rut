@@ -163,6 +163,16 @@ wins):
 5. **host registry**: for `host`-linked packages the embedder ships the
    `.d.rut` alongside the registered implementation (RFC 0022 §1).
 
+**Implemented today (the driver's loader):** a session holds the mounts;
+the manifest walker resolves `[deps]` recursively — relative `path`s,
+a cycle guard, and **first mount wins** (an embedder's `mount_dir` /
+`register_module` outranks a manifest dep with the same name; among
+deps, the earlier mount outranks the later; a dep whose manifest `name`
+disagrees with its key is an error naming both). An `entry.type`-only
+package is a **host pkg**: its `host fn`s lower into the mounted surface
+at load time (RFC 0025), and the bindings are contract-checked before
+the first run (RFC 0025 §"the load-time contract").
+
 Bodies are resolved only at link/run: registered Rust for `host` decls
 (`builtin` decls need none — the engine lowers them); rut bodies come
 from source or bundle, per the resolution order above. Compiling `M`

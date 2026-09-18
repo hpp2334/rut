@@ -13,32 +13,35 @@
 
 ## Summary
 
-Native surfaces are declared **in rut source** — *declaration files*
-(`.d.rut`) whose declarations are pure surface (signatures, no bodies).
-The specifier maps to a declaration file (`"app:gfx"` → `app/gfx.d.rut`,
-`"plugin:my_map"` → `plugin/my_map.d.rut`): compiled and verified like
-any module, generating no code of its own. rutc, the LSP, and AOT binary
-builds see the surface with **zero Rust linked** — the role tur's
-`index.d.ts` plays today, but in-language and type-checked.
+Native surfaces are declared **in rut source** — *host pkgs*: package
+directories whose `rut.toml` names a declaration file (`entry.type`,
+no `entry.lib`) whose declarations are pure surface (signatures, no
+bodies). `rut/rt/` (the logger host) and `examples/03-plugin/server/`
+are the in-tree shapes: `name = "server"` + `entry.type =
+"./server.d.rut"`. Consumers reach them two ways: declared in the
+manifest's `[deps]` (`server = { path = "../server" }` — resolved
+recursively, first mount wins, RFC 0041 §3), or mounted programmatically
+by the embedder (`Session::mount_dir` / `register_module`). A host pkg
+is a real package — the loader lowers its `host fn` signatures into the
+mounted surface at load time, and the compiler typechecks calls against
+them: the role tur's `index.d.ts` plays today, but in-language,
+type-checked, and packed into `.rutbundle`s like any dep (RFC 0038 v2).
 
 One linkage keyword, one implementer:
 
 | keyword | implementation lives in | bound at link against |
 |---|---|---|
-| `host fn` / `host struct` | the **embedding Rust** — a registered `NativeModule` | the fn-table reflection |
-| `builtin class` / `builtin trait` / `builtin fn` | **the engine itself** — compiler-lowered (ops / intrinsics / lowering hooks); the toolchain's std decl files only | nothing to bind; the decl is a pure signature contract |
+| `host fn` / `host struct` | the **embedding Rust** — typed bindings (`Vm::register_host_fn_sig`) | the load-time contract (below) |
+| `builtin class` / `builtin trait` / `builtin fn` / `builtin impl` | **the engine itself** — compiler-lowered (ops / intrinsics / lowering hooks); the toolchain's std decl files only | nothing to bind; the decl is a pure signature contract |
 
 `extern` is gone: rut→rut names resolve through use paths (RFC 0028) and the module loader
 (RFC 0029 §5) and host→rut entry points are `entry fn` (RFC 0035 §3) —
 `host` is the one foreign-body case left.
 
 ```rut
-// app/gfx.d.rut — declaration file for "app:gfx"
-pub host fn newCanvas() -> Opaque;            // the handle mints the box
-pub host fn canvas_circle(c: Opaque, x: f32, y: f32, r: f32) -> nil;
-pub host fn canvas_hits(c: Opaque) -> i32;
-pub host fn canvas_flush(c: Opaque) -> nil;
-pub host fn hit_test(c: Opaque, x: f32, y: f32) -> Option<f32>;
+// server/server.d.rut — the chat-bus host pkg of 03-plugin
+pub host fn subscribe(bus: Opaque, topic: str, handler: str);
+pub host fn emit(bus: Opaque, topic: str, payload: str);
 ```
 
 **There is no `host class`.** Native state crosses as an `Opaque` box
@@ -60,6 +63,27 @@ The wrapper is ordinary rut: methods and impl blocks live there
 RFC 0012 §2), bodies are auditable source the compiler can optimize
 *around*, and every method costs exactly one host fn call — the same
 single crossing a host-class method would have paid.
+
+## The load-time contract (`.d.rut` ↔ host impl)
+
+Mounting a host pkg *declares* its functions; the embedding Rust *binds*
+bodies — **typed**, per the `.d.rut`: `Vm::register_host_fn_sig(name,
+params, ret, body)`. The two sides are checked against each other at
+load time, before any rut code runs (`Vm::verify_host_fns` against the
+session's `expected_host_fns()` table, host-scope-aware: `rt` binds
+`rt:log::*`). A mismatch is an embedder wiring bug — a **panic**, never
+a rut diagnostic — on exactly three classes:
+
+1. **declared but unbound** — a rut call would trap mid-run;
+2. **bound but undeclared** — no surface declares what the host
+   installed (a typo'd binding);
+3. **signature drift** — the pkg declares `(Opaque, str, str) -> nil`,
+   the binding took `(Opaque, i64, str)`; the crossing values would be
+   misinterpreted.
+
+The law follows the mount: an embedder that mounts `calc` declares its
+26 float fns and must bind them (`install_std_math`); an embedder that
+needs only `core` mounts only `core`. Mount what you bind.
 
 ## Why `host class` went (the decision record)
 

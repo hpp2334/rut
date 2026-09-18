@@ -120,14 +120,20 @@ impl Logger {
 }
 ```
 
-`rt`'s logger surface is a **native module** (RFC 0022/0026): the host
-functions `create_logger(name: str) -> Opaque` and `logger_log(logger:
-Opaque, level: i32, msg: str) -> nil`. The host owns the logger's
-layout; rut only ever holds an `Opaque` handle (RFC 0014) and never
-inspects it. The embedder half ships as `rut-std::logger::install_std_log`
-(`create_logger` boxes the name; `logger_log` routes to the sink). An
+`rt`'s logger surface is a **host pkg** (RFC 0022/0025/0026): the
+package directory `rut/rt/` — `name = "rt"`, `host_scope = "rt:log"`,
+`entry.type = "./rt.d.rut"` declaring `create_logger(name: str) ->
+Opaque` and `logger_log(logger: Opaque, level: i32, msg: str) -> nil`.
+The host owns the logger's layout; rut only ever holds an `Opaque`
+handle (RFC 0014) and never inspects it. The embedder half ships as
+`rut-std::logger::install_std_log` — TYPED bindings; mounting `rt`
+declares the surface and `Vm::verify_host_fns` checks the two against
+each other before the first run (RFC 0025's load-time contract).
+(`create_logger` boxes the name; `logger_log` routes to the sink.) An
 uninstalled sink is a **silent no-op** — a script cannot accidentally spam
 an embedded host's stdout; the host opts into logging explicitly.
+`ink`'s manifest carries the dependency explicitly:
+`[deps] rt = { path = "../rt" }` — mounting `ink` pulls `rt` along.
 
 ## `debug` — `Location` & `StackTrace`
 
