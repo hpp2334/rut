@@ -50,12 +50,9 @@ pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
         .name
         .clone()
         .ok_or_else(|| format!("{} has no `name`", dir.join("rut.toml").display()))?;
-    let src = load_entry(dir, &manifest.entry)?;
+    let root_module = load_entry_module(dir, &manifest)?;
     session
-        .register_module(
-            &root,
-            Module { source: Some(src), entry: manifest.entry.clone(), ..Default::default() },
-        )
+        .register_module(&root, root_module)
         .map_err(|e| e.to_string())?;
 
     for (spec, desc) in &manifest.deps {
@@ -65,12 +62,9 @@ pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
         let dep_dir = dir.join(rel);
         let dt = std::fs::read_to_string(dep_dir.join("rut.toml")).map_err(|e| e.to_string())?;
         let dm = parse_manifest(&dt).map_err(|e| e.to_string())?;
-        let src = load_entry(&dep_dir, &dm.entry)?;
+        let dep_module = load_entry_module(&dep_dir, &dm)?;
         session
-            .register_module(
-                spec,
-                Module { source: Some(src), entry: dm.entry, ..Default::default() },
-            )
+            .register_module(spec, dep_module)
             .map_err(|e| e.to_string())?;
     }
     Ok((session, root))
@@ -198,6 +192,30 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     let entries: Vec<(String, Vec<u8>)> =
         vec![("rut.toml".to_string(), text.into_bytes()), (key, src.into_bytes())];
     write_bundle(&entries).map_err(|e| e.to_string())
+}
+
+/// Build a directory's entry [`Module`] from its manifest (RFC 0029 §5):
+///
+/// - `entry.lib` (with or without `entry.type`) — a SOURCE module: the
+///   body compiles; the surface derives from its exports.
+/// - `entry.type` ALONE — a **host pkg**: a pure declaration surface.
+///   The `.d.rut` parses in declaration mode and lowers into the
+///   module's host fns (RFC 0025); `host_scope`/`inline` ride the
+///   manifest. No body exists — the embedding Rust binds it at run
+///   time.
+fn load_entry_module(dir: &Path, manifest: &crate::session::Manifest) -> Result<Module, String> {
+    if manifest.entry.lib.is_none() && manifest.entry.type_path.is_some() {
+        let rel = manifest.entry.type_path.as_ref().unwrap();
+        let origin = format!("{}/{}", dir.display(), rel);
+        let src = load_module_source(&dir.join(rel))?;
+        let mut m = crate::decl::lower_decl_module(&src, &origin)?;
+        m.host_scope = manifest.host_scope.clone();
+        m.inline = manifest.inline;
+        m.entry = manifest.entry.clone();
+        return Ok(m);
+    }
+    let src = load_entry(dir, &manifest.entry)?;
+    Ok(Module { source: Some(src), entry: manifest.entry.clone(), ..Default::default() })
 }
 
 fn load_entry(dir: &Path, entry: &Entry) -> Result<String, String> {

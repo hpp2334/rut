@@ -1,0 +1,10 @@
+# rt/ — the logger host pkg (RFC 0022 §1 / RFC 0028): a pure
+# declaration surface. The embedding Rust binds the bodies
+# (`rut_std::logger::install` → `rt:log::create_logger` /
+# `rt:log::logger_log`); `ink` wraps them in the `Logger` class.
+#
+# `host_scope` keeps the historical registration prefix while the use
+# path spells the bare package name (`use rt::{create_logger}`).
+name = "rt"
+entry.type = "./rt.d.rut"
+host_scope = "rt:log"

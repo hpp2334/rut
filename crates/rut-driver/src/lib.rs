@@ -14,6 +14,9 @@ use rut_core::{IdentId, sym};
 pub mod session;
 pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
 
+pub mod decl;
+pub use decl::lower_decl_module;
+
 pub mod graph;
 pub use graph::{compile_graph, GraphOutput};
 

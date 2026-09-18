@@ -103,6 +103,14 @@ pub struct Manifest {
     /// `[deps]` — exact specifier → descriptor (`path = "..."`). Kept for
     /// the host to resolve; the Session does not read the filesystem.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
+    /// `host_scope` — the host-fn registration prefix when it must differ
+    /// from the package name (`rt` keeps its historical `rt:log` scope,
+    /// RFC 0022)
+    pub host_scope: Option<String>,
+    /// `inline = true` — force source-inlining into every consumer
+    /// (`ink`: a module whose class methods must resolve at the call
+    /// site cannot be linked)
+    pub inline: bool,
 }
 
 /// A malformed manifest — a load error, never a runtime trap.
@@ -270,6 +278,10 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 // bundle-shaped manifests (RFC 0038 §2)
                 "format" => m.format = Some(parse_string(value, lineno)?),
                 "format_version" => m.format_version = Some(parse_u64(value, lineno)?),
+                // the host-fn registration prefix override (`rt` → `rt:log`)
+                "host_scope" => m.host_scope = Some(parse_string(value, lineno)?),
+                // force source-inlining into every consumer (`ink`)
+                "inline" => m.inline = parse_bool(value, lineno)?,
                 // dotted entry keys: `entry.type = "..."` etc.
                 "entry.type" => m.entry.type_path = Some(parse_string(value, lineno)?),
                 "entry.lib" => m.entry.lib = Some(parse_string(value, lineno)?),
@@ -321,6 +333,19 @@ fn parse_u64(value: &str, lineno: usize) -> Result<u64, ManifestError> {
     let v = value.trim();
     v.parse::<u64>()
         .map_err(|_| ManifestError(format!("line {}: expected an integer, found `{v}`", lineno + 1)))
+}
+
+/// Parse `true` / `false`.
+fn parse_bool(value: &str, lineno: usize) -> Result<bool, ManifestError> {
+    let v = value.trim();
+    match v {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(ManifestError(format!(
+            "line {}: expected `true` or `false`, found `{v}`",
+            lineno + 1
+        ))),
+    }
 }
 
 /// Parse `{ k = "v", k2 = "v2" }` (single-line, string values only).
@@ -482,5 +507,24 @@ entry.type = "./pouch.d.rut"
         let text = "name = \"app\"\n[deps]\n\"core\" = { path = \"rut/core\" }\n";
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.deps.get("core").unwrap().get("path").unwrap(), "rut/core");
+    }
+
+    #[test]
+    fn host_scope_and_inline_parse() {
+        // the host pkg's manifest keys (RFC 0022 / the host-pkgs plan):
+        // `host_scope` overrides the registration prefix, `inline`
+        // forces source-inlining into every consumer
+        let m = parse_manifest(
+            "name = \"rt\"\nentry.type = \"./rt.d.rut\"\nhost_scope = \"rt:log\"\n",
+        )
+        .unwrap();
+        assert_eq!(m.host_scope.as_deref(), Some("rt:log"));
+        assert!(!m.inline);
+        let m = parse_manifest("name = \"ink\"\nentry.lib = \"./ink.rut\"\ninline = true\n")
+            .unwrap();
+        assert!(m.inline);
+        assert_eq!(m.host_scope, None);
+        // a non-bool `inline` is a load error
+        assert!(parse_manifest("inline = yes\n").is_err());
     }
 }
