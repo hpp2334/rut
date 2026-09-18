@@ -286,22 +286,27 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         for (i, vt) in m.vtables.into_iter().enumerate() {
             let gi: u32 = if (i as u32) < own_base {
                 if (i as u32) < m_boot {
-                    continue; // boot prefix: never a user impl target
-                }
-                // a used block's dense index -> its scope -> global base
-                let mut owner: Option<(crate::id::ScopeId, u32)> = None;
-                for (s, &b) in m.types.scope_base.iter().enumerate() {
-                    if s == crate::id::BOOT_SCOPE as usize || b < m_boot || b > i as u32 {
-                        continue;
+                    // boot prefix: ids are global by construction (a boot
+                    // id packs to itself, RFC 0035 §1) — a primitive
+                    // trait-impl target's fill merges into the global
+                    // boot row (RFC 0012 §2)
+                    i as u32
+                } else {
+                    // a used block's dense index -> its scope -> global base
+                    let mut owner: Option<(crate::id::ScopeId, u32)> = None;
+                    for (s, &b) in m.types.scope_base.iter().enumerate() {
+                        if s == crate::id::BOOT_SCOPE as usize || b < m_boot || b > i as u32 {
+                            continue;
+                        }
+                        match owner {
+                            Some((_, best)) if best > b => {}
+                            _ => owner = Some((s as crate::id::ScopeId, b)),
+                        }
                     }
-                    match owner {
-                        Some((_, best)) if best > b => {}
-                        _ => owner = Some((s as crate::id::ScopeId, b)),
-                    }
+                    let Some((s, b)) = owner else { continue };
+                    let Some(&gb) = scope_base.get(&s) else { continue };
+                    gb + (i as u32 - b)
                 }
-                let Some((s, b)) = owner else { continue };
-                let Some(&gb) = scope_base.get(&s) else { continue };
-                gb + (i as u32 - b)
             } else {
                 base + (i as u32 - own_base)
             };

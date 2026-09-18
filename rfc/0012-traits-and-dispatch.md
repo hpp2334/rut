@@ -129,11 +129,19 @@ for (s of mixed) { s.area(); }          // vtable (multiple origins)
   trait; user types reach the contracts through `use core::{ Index,
   Iterator };`. A type may have more than one element choice; the use
   site selects it.
-- **Traits are implemented for classes and dataclasses** (RFC 0009).
-  A trait-typed value is never exactly typed: every trait-typed slot is
-  a fat ref over a cell whose exact class or dataclass it carries (RFC
-  0015 §6). A trait type is **unsized** — the payload lives in a heap
-  cell and the slot stores the cell handle (RFC 0031 §4).
+- **Traits are implemented for classes, dataclasses** (RFC 0009), **and
+  primitives**: `impl Hashable for i32` registers like any trait impl —
+  any module may write it, and the duplicate rule is the §5 link check
+  — while an inherent `impl i32 { .. }` diagnoses: a primitive's
+  inherent surface is core's `builtin impl` (RFC 0032 §1.1). A
+  primitive widens to `I` through the same nominal gate; its
+  single-origin dispatch binds statically, the scalar receiver crossing
+  as an ordinary argument.
+- **A trait-typed value is never exactly typed**: every trait-typed
+  slot is a fat ref over a cell whose exact class or dataclass it
+  carries (RFC 0015 §6). A trait type is **unsized** — the payload
+  lives in a heap cell and the slot stores the cell handle (RFC 0031
+  §4).
 - **No top trait.** The erased-storage type is the concrete host class
   `Opaque` (RFC 0014) — reached by the explicit type-call `Opaque(v)`,
   never by widening, and never nameable in an `impl`/`requires` list (it

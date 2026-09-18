@@ -646,6 +646,17 @@ impl Vm {
             .unwrap_or(TY_ANY)
     }
 
+    /// A scalar-repr vtable receiver's static type, if it is one
+    /// (RFC 0012 §2). A primitive trait-impl target widens as a raw
+    /// word — the slot names no cell, so the static register type (the
+    /// verifier enforces registers hold their declared types, RFC 0015
+    /// §5) is the dispatch key. `None` = a ref-repr register: the cell
+    /// handle's own type reaches the vtable (RFC 0015 §6).
+    pub(crate) fn scalar_recv_ty(&self, recv: Reg) -> Option<TypeId> {
+        let rty = self.regs_ty(recv);
+        (rty != TY_ANY && !self.is_ref(rty)).then_some(rty)
+    }
+
     fn param_ty(&self, func: u32, i: usize) -> TypeId {
         self.prog.funcs[func as usize]
             .params

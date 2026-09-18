@@ -4,6 +4,7 @@
 //! concrete receiver type, vtable when origins merge.
 
 use rut_parser::Mode;
+use rut_core::types::TY_I32;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
     // core + pouch bound as the uses (RFC 0028); these
@@ -295,4 +296,224 @@ fn builtin_class_inherent_impls_compile() {
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
+}
+
+// ---- primitive trait-impl targets (RFC 0012 §2; the inherent surface
+// stays core's `builtin impl`, RFC 0032 §1.1) ----
+
+/// Compile, flatten (RFC 0035 §1), verify, and run a single-module
+/// `main` returning i32.
+fn run_main(src: &str) -> i32 {
+    let out = compile(src);
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let prog = rut_core::link::flatten(out.program.expect("program"));
+    rut_vm::verify::verify(&prog).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(1_000_000),
+        heap_limit_bytes: Some(4 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(
+        std::rc::Rc::new(prog),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    )
+    .expect("vm");
+    vm.call::<_, i32>("main", ()).expect("run")
+}
+
+#[test]
+fn prim_trait_impl_compiles_and_dispatches_statically() {
+    // `impl T for i32` compiles; `let w: T = 5` widens nominally once
+    // the impl registers, and the single-origin call binds statically —
+    // the scalar receiver crosses as an ordinary argument
+    let src = "trait T { fn m(self) -> i32; }\n\
+               impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n\
+               pub fn main() -> i32 {\n\
+                   let w: T = 5;\n\
+                   return w.m();\n\
+               }\n";
+    assert_eq!(run_main(src), 105);
+    let out = compile(src);
+    let p = out.program.expect("program");
+    let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
+    assert!(!ir.contains("calli"), "single origin must bind statically:\n{ir}");
+}
+
+#[test]
+fn prim_is_probe_answers_the_registered_impl() {
+    // `is` folds at the exact receiver (RFC 0012 §4 nominal): true where
+    // the impl is registered, false where it is not
+    let src = "trait T { fn m(self) -> i32; }\n\
+               trait U { fn n(self) -> i32; }\n\
+               impl T for i32 { fn m(self) -> i32 { return 1; } }\n\
+               pub fn main() -> i32 {\n\
+                   let mut acc = 0;\n\
+                   if (5 is T) { acc = acc + 1; }\n\
+                   if (5 is U) { acc = acc + 10; }\n\
+                   return acc;\n\
+               }\n";
+    assert_eq!(run_main(src), 1);
+}
+
+#[test]
+fn merged_origins_prim_and_struct_emit_calli() {
+    // i32 and a struct both implement T: the merged-origin call consults
+    // the vtable (IR-level — the prim fills the same slot as the record)
+    let out = compile(
+        "trait T { fn m(self) -> i32; }\n\
+         struct S { v: i32 }\n\
+         impl T for i32 { fn m(self) -> i32 { return self + 1; } }\n\
+         impl T for S { fn m(self) -> i32 { return self.v; } }\n\
+         pub fn pick(k: bool) -> T {\n\
+             if (k) { return 5; }\n\
+             return S { v: 1 };\n\
+         }\n\
+         fn main() -> i32 {\n\
+             let w: T = pick(true);\n\
+             let v = w.m();\n\
+             return 0;\n\
+         }\n",
+    );
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let p = out.program.expect("program");
+    let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
+    assert!(ir.contains("calli"), "merged origins must go through the vtable:\n{ir}");
+}
+
+#[test]
+fn inherent_impl_on_a_primitive_diagnoses() {
+    let ds = diags_of(
+        "impl i32 { fn f(self) -> i32 { return self; } }\n\
+         fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("a primitive takes trait impls only")
+            && d.contains("`builtin impl`")),
+        "inherent impl on a prim must diagnose: {ds:?}"
+    );
+}
+
+#[test]
+fn prim_target_admission_is_module_agnostic() {
+    // `impl ForeignTrait for i32` in a module that declares neither —
+    // RFC 0012 §2's admission pattern covers primitives too
+    let dep = rut_driver::compile_program(
+        "trait T { fn m(self) -> i32; }\n\
+         impl T for str { fn m(self) -> i32 { return 7; } }\n",
+        Mode::Impl,
+        "dep",
+        1,
+        &[],
+    );
+    assert!(dep.diags.is_empty(), "{:?}", dep.diags);
+    let dep = dep.program.expect("dep program");
+    let surface = dep.surface.clone();
+
+    let app = rut_driver::compile_program(
+        "use dep::{T};\n\
+         impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n\
+         pub fn main() -> i32 { return 0; }\n",
+        Mode::Impl,
+        "app",
+        2,
+        &[(1, surface)],
+    );
+    assert!(app.diags.is_empty(), "{:?}", app.diags);
+}
+
+#[test]
+fn cross_module_duplicate_prim_pair_is_a_link_error() {
+    let dep = rut_driver::compile_program(
+        "trait T { fn m(self) -> i32; }\n\
+         impl T for i32 { fn m(self) -> i32 { return 1; } }\n",
+        Mode::Impl,
+        "dep",
+        1,
+        &[],
+    );
+    assert!(dep.diags.is_empty(), "{:?}", dep.diags);
+    let dep = dep.program.expect("dep program");
+
+    let app = rut_driver::compile_program(
+        "use dep::{T};\n\
+         impl T for i32 { fn m(self) -> i32 { return 2; } }\n\
+         fn main() -> i32 { return 0; }\n",
+        Mode::Impl,
+        "app",
+        2,
+        &[(1, dep.surface.clone())],
+    );
+    assert!(app.diags.is_empty(), "admission is per-module; the pair collides at link: {:?}", app.diags);
+    let err = rut_core::link::link(vec![dep, app.program.expect("app program")])
+        .expect_err("duplicate (T, i32) must refuse to link");
+    assert!(
+        err.0.contains("duplicate impl") && err.0.contains("(T, i32)"),
+        "{err}"
+    );
+}
+
+#[test]
+fn prim_vtable_fill_survives_the_link() {
+    // regression (link boot-row merge): the dep module's fill of the
+    // GLOBAL i32 row must not be dropped when its module merges —
+    // pre-fix, rows below the boot prefix hit `continue` and the fill
+    // was silently lost. The cross-module call then runs end-to-end
+    // (the app's single-origin call binds statically to the dep's
+    // compiled method through the extern registration).
+    let dep = rut_driver::compile_program(
+        "trait T { fn m(self) -> i32; }\n\
+         impl T for i32 { fn m(self) -> i32 { return self + 100; } }\n",
+        Mode::Impl,
+        "dep",
+        1,
+        &[],
+    );
+    assert!(dep.diags.is_empty(), "{:?}", dep.diags);
+    let dep = dep.program.expect("dep program");
+    let surface = dep.surface.clone();
+
+    let app = rut_driver::compile_program(
+        "use dep::{T};\n\
+         pub fn main() -> i32 {\n\
+             let mut w: T = 5;\n\
+             return w.m();\n\
+         }\n",
+        Mode::Impl,
+        "app",
+        2,
+        &[(1, surface)],
+    );
+    assert!(app.diags.is_empty(), "{:?}", app.diags);
+    let linked = rut_core::link::link(vec![dep, app.program.expect("app program")]).expect("link");
+
+    // the fill survived: the global i32 row carries the dep's impl method
+    let gid = linked
+        .traits
+        .iter()
+        .position(|t| linked.name_of(t.name) == "T")
+        .expect("one global T") as u32;
+    let slot = linked.slot_of(gid, 0).expect("global slot");
+    let fill = linked.vtables[TY_I32 as usize][slot as usize];
+    assert!(fill.is_some(), "i32's vtable row must carry the dep's impl: {:?}", linked.vtables[TY_I32 as usize]);
+    let fname = linked.name_of(linked.funcs[fill.unwrap() as usize].name);
+    assert!(fname.contains("m"), "the fill names the impl method: {fname}");
+
+    // and the cross-module call runs end-to-end: the receiver crosses
+    // as a scalar argument into the dep's compiled method
+    rut_vm::verify::verify(&linked).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(1_000_000),
+        heap_limit_bytes: Some(4 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(
+        std::rc::Rc::new(linked),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    )
+    .expect("vm");
+    assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 105);
 }

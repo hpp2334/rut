@@ -258,8 +258,10 @@ impl Vm {
                 self.cur_regs[dst as usize] = Slot::bool(ty == want);
             }
             Op::IsTrait { dst, obj, want } => {
-                let cell = cell_of(r!(obj));
-                let ty = self.effective_ty(cell);
+                let ty = match self.scalar_recv_ty(obj) {
+                    Some(t) => t,
+                    None => self.effective_ty(cell_of(r!(obj))),
+                };
                 let has = self
                     .prog
                     .trait_slots

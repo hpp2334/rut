@@ -422,13 +422,16 @@ impl<'a> Ctx<'a> {
         // ForeignType` is legal; the pair's uniqueness is a link check).
         // A generic target (`impl .. for Vec<T>`) is a template: its
         // methods monomorphize per instantiation through `target_data`.
-        let (target_ty, target_data, is_local, is_used) = match self.ast.ty(target) {
+        // A bare primitive name (`impl T for i32`) is a trait-impl
+        // target too — trait impls only: a primitive's inherent surface
+        // stays core's `builtin impl` (RFC 0012 §2 / RFC 0032 §1.1).
+        let (target_ty, target_data, is_local, is_used, is_prim) = match self.ast.ty(target) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let name = segs[0].name;
                 let generics = segs[0].generics.clone();
                 if let Some(d) = self.find_data(name).cloned() {
                     if d.generics.is_empty() {
-                        (d.ty, None, true, false)
+                        (d.ty, None, true, false, false)
                     } else {
                         let Some(params) = self.ty_generic_idents(&generics) else {
                             self.err(sp, "a generic impl target must name its type parameters (e.g. `Vec<T>`)");
@@ -441,11 +444,11 @@ impl<'a> Ctx<'a> {
                             ));
                             return;
                         }
-                        (d.ty, Some((name, params)), true, false)
+                        (d.ty, Some((name, params)), true, false, false)
                     }
                 } else if let Some(kind) = self.extern_native_types.get(&name).copied() {
                     match (kind, generics.as_slice()) {
-                        (rut_core::binary::NativeTy::Opaque, []) => (TY_OPAQUE, None, false, false),
+                        (rut_core::binary::NativeTy::Opaque, []) => (TY_OPAQUE, None, false, false, false),
                         (rut_core::binary::NativeTy::Array, [g]) => {
                             let Some(params) = self.ty_generic_idents(std::slice::from_ref(g)) else {
                                 self.err(sp, "a generic impl target must name its type parameters (e.g. `Array<T>`)");
@@ -457,7 +460,7 @@ impl<'a> Ctx<'a> {
                                 name,
                                 kind: TyKind::Data { fields: vec![] },
                             });
-                            (ph, Some((name, params)), false, false)
+                            (ph, Some((name, params)), false, false, false)
                         }
                         (rut_core::binary::NativeTy::Array, _) => {
                             self.err(sp, "`Array<T>` takes one type parameter");
@@ -473,7 +476,18 @@ impl<'a> Ctx<'a> {
                     // target only — inherent impls stay in the type's
                     // module (RFC 0012 §2). The id is the exporter's
                     // scope-qualified one; link rebases it.
-                    (self.extern_types[&name], None, false, true)
+                    (self.extern_types[&name], None, false, true, false)
+                } else if let Some(prim) = sym::primitive_ty(name) {
+                    // a primitive (integers, bool, str, bytes, …): trait
+                    // impls only, any module (RFC 0012 §2's
+                    // `impl ForeignTrait for ForeignType` pattern) — the
+                    // pair's uniqueness is a link check. Boot ids are
+                    // global, no rebase needed.
+                    if !generics.is_empty() {
+                        self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
+                        return;
+                    }
+                    (prim, None, false, false, true)
                 } else {
                     self.err(
                         sp,
@@ -496,6 +510,16 @@ impl<'a> Ctx<'a> {
         }
         match trait_ref {
             None => {
+                if is_prim {
+                    let pname = self.type_name(target_ty).to_string();
+                    self.err(
+                        sp,
+                        format!(
+                            "a primitive takes trait impls only — `{pname}`'s inherent surface is core's `builtin impl` (RFC 0032 §1.1)"
+                        ),
+                    );
+                    return;
+                }
                 if is_used {
                     self.err(
                         sp,

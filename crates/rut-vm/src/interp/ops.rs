@@ -366,7 +366,9 @@ impl Vm {
         let prog = Rc::clone(&self.prog);
         let args = self.cur_argv(&prog, argv_off, argc);
         let recv = args[0];
-        let ty = cell_of(self.cur_regs[recv as usize]).ty;
+        let ty = self
+            .scalar_recv_ty(recv)
+            .unwrap_or_else(|| cell_of(self.cur_regs[recv as usize]).ty);
         let fid = self
             .prog
             .vtables

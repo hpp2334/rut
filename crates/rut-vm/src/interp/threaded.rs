@@ -689,8 +689,10 @@ impl Machine for Vm {
         let Op::IsTrait { dst, obj, want } = op else {
             unreachable_op!("op_istrait: unexpected op")
         };
-        let cell = cell_of(unsafe { *regs.add(*obj as usize) });
-        let ty = self.effective_ty(cell);
+        let ty = match self.scalar_recv_ty(*obj) {
+            Some(t) => t,
+            None => self.effective_ty(cell_of(unsafe { *regs.add(*obj as usize) })),
+        };
         let has = self
             .prog
             .trait_slots
