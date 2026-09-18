@@ -24,7 +24,7 @@ mod util;
 
 pub use host::{ExpectedHostFns, HostRegistry};
 use host::HostSlot;
-use boundary::{CallArgs, Ret};
+pub use boundary::{CallArg, CallArgs, Ret};
 
 // free helpers live in the submodules; pull them into `interp` so the
 // sibling modules reach them through `use super::*`
@@ -592,7 +592,6 @@ impl Vm {
     /// Rust values, get a Rust value back — `Value`/`Slot` are internal
     /// marshaling formats, never seen by the embedder. Re-entrancy,
     /// budgets, and trap semantics are exactly `call`'s.
-    #[allow(private_bounds)]
     pub fn call_typed<A: CallArgs, R: Ret>(&mut self, export: &str, args: A) -> Result<R, Trap> {
         let values = args.into_values();
         let v = self.call(export, &values)?;
@@ -608,7 +607,6 @@ impl Vm {
     }
 
     /// Typed `resume`: same shape, the active frame's declared return.
-    #[allow(private_bounds)]
     pub fn resume_typed<R: Ret>(&mut self) -> Result<R, Trap> {
         let v = self.resume()?;
         let ty = self.prog.funcs[self.cur_func as usize].ret;

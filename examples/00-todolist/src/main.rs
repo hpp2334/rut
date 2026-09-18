@@ -7,7 +7,6 @@
 //! plain values only (RFC 0023 §2).
 
 use std::rc::Rc;
-use rut_vm::heap::Value;
 
 fn main() {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/todolist.rut")).unwrap();
@@ -32,36 +31,33 @@ fn main() {
     };
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new()).unwrap();
 
-    // the session: container in, handles out, values back
-    let Value::Opaque(c) = vm.call("createContainer", &[]).unwrap() else { unreachable!() };
-    let Value::I64(list) = vm.call("create", &[Value::Opaque(c.clone())]).unwrap() else { unreachable!() };
+    // the session: container in, handles out, values back — typed
+    let c: rut_vm::OpaqueRef = vm.call_typed("createContainer", ()).unwrap();
+    let list: u32 = vm.call_typed("create", (c.clone(),)).unwrap();
 
-    let mut add = |title: &str| -> i64 {
-        match vm.call("add", &[Value::Opaque(c.clone()), Value::I64(list), Value::Str(title.into())]).unwrap() {
-            Value::I64(id) => id,
-            v => unreachable!("{v:?}"),
-        }
+    let mut add = |title: &str| -> i32 {
+        vm.call_typed::<_, i32>("add", (c.clone(), list, title)).unwrap()
     };
     let rfc = add("write the RFC");
     let vmf = add("implement the VM");
     let demo = add("ship the demo");
     println!("added: #{rfc}, #{vmf}, #{demo}");
 
-    vm.call("set_done", &[Value::Opaque(c.clone()), Value::I64(list), Value::I64(vmf), Value::Bool(true)]).unwrap();
+    vm.call_typed::<_, bool>("set_done", (c.clone(), list, vmf, true)).unwrap();
     println!("set_done(#{vmf}, true)");
 
-    println!("title_of(#{vmf}) = {:?}", vm.call("title_of", &[Value::Opaque(c.clone()), Value::I64(list), Value::I64(vmf)]).unwrap());
-    println!("title_of(42) = {:?}", vm.call("title_of", &[Value::Opaque(c.clone()), Value::I64(list), Value::I64(42)]).unwrap());
+    println!("title_of(#{vmf}) = {:?}", vm.call_typed::<_, String>("title_of", (c.clone(), list, vmf)).unwrap());
+    println!("title_of(42) = {:?}", vm.call_typed::<_, String>("title_of", (c.clone(), list, 42)).unwrap());
 
-    println!("remove(#{rfc}) = {:?}", vm.call("remove", &[Value::Opaque(c.clone()), Value::I64(list), Value::I64(rfc)]).unwrap());
-    println!("remove(#{rfc}) again = {:?}", vm.call("remove", &[Value::Opaque(c.clone()), Value::I64(list), Value::I64(rfc)]).unwrap());
+    println!("remove(#{rfc}) = {:?}", vm.call_typed::<_, bool>("remove", (c.clone(), list, rfc)).unwrap());
+    println!("remove(#{rfc}) again = {:?}", vm.call_typed::<_, bool>("remove", (c.clone(), list, rfc)).unwrap());
 
-    let Value::Str(text) = vm.call("render", &[Value::Opaque(c.clone()), Value::I64(list)]).unwrap() else { unreachable!() };
+    let text: String = vm.call_typed("render", (c.clone(), list)).unwrap();
     println!("{text}");
 
     // a second list in the same container — handles are independent
-    let Value::I64(other) = vm.call("create", &[Value::Opaque(c.clone())]).unwrap() else { unreachable!() };
-    let Value::I64(n) = vm.call("len", &[Value::Opaque(c.clone()), Value::I64(other)]).unwrap() else { unreachable!() };
+    let other: u32 = vm.call_typed("create", (c.clone(),)).unwrap();
+    let n: i32 = vm.call_typed("len", (c.clone(), other)).unwrap();
     println!("second list #{other}: {n} todos");
 
     println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);

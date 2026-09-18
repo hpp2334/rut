@@ -8,7 +8,6 @@
 //! `Vec<i32>` itself never crosses (RFC 0023 §2).
 
 use std::rc::Rc;
-use rut_vm::heap::Value;
 
 fn main() {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/sort.rut")).unwrap();
@@ -36,39 +35,33 @@ fn main() {
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
 
 
-    // the session: one bank, exact values in, JSON out
-    let Value::Opaque(c) = vm.call("create", &[]).unwrap() else { unreachable!() };
+    // the session: one bank, exact values in, JSON out — typed
+    let c: rut_vm::OpaqueRef = vm.call_typed("create", ()).unwrap();
     let ser = |vm: &mut rut_vm::interp::Vm| -> String {
-        match vm.call("serialize", &[Value::Opaque(c.clone())]).unwrap() {
-            Value::Str(s) => s,
-            v => unreachable!("{v:?}"),
-        }
+        vm.call_typed::<_, String>("serialize", (c.clone(),)).unwrap()
     };
 
     // an exact host-supplied input, sorted by hand-picked algorithms
-    for x in [5, 2, 9, 2] {
-        vm.call("push", &[Value::Opaque(c.clone()), Value::I64(x)]).unwrap();
+    for x in [5i32, 2, 9, 2] {
+        vm.call_typed::<_, ()>("push", (c.clone(), x)).unwrap();
     }
     println!("pushed: {}", ser(&mut vm));
-    vm.call("sort", &[Value::Opaque(c.clone()), Value::Str("insertion".into())]).unwrap();
+    vm.call_typed::<_, String>("sort", (c.clone(), "insertion")).unwrap();
     println!("after insertion: {}", ser(&mut vm));
 
     // the full sweep: same deterministic input, every algorithm, fuel
     // per call (RFC 0040 — the session runs under budgets)
     println!("fill(16, seed=42), each algorithm:");
     for algo in ["insertion", "bubble", "selection", "quick", "merge"] {
-        vm.call("fill", &[Value::Opaque(c.clone()), Value::I64(16), Value::I64(42)]).unwrap();
+        vm.call_typed::<_, ()>("fill", (c.clone(), 16u32, 42u32)).unwrap();
         let before = vm.fuel_used;
-        vm.call("sort", &[Value::Opaque(c.clone()), Value::Str(algo.into())]).unwrap();
-        let sorted = match vm.call("is_sorted", &[Value::Opaque(c.clone())]).unwrap() {
-            Value::Bool(b) => b,
-            v => unreachable!("{v:?}"),
-        };
+        vm.call_typed::<_, String>("sort", (c.clone(), algo)).unwrap();
+        let sorted: bool = vm.call_typed("is_sorted", (c.clone(),)).unwrap();
         println!("  {algo:<9} {sorted}  fuel {:>6}  {}", vm.fuel_used - before, ser(&mut vm));
     }
 
     // unknown names are values, not traps
-    println!("sort(bogus) = {:?}", vm.call("sort", &[Value::Opaque(c.clone()), Value::Str("bogus".into())]).unwrap());
+    println!("sort(bogus) = {:?}", vm.call_typed::<_, String>("sort", (c.clone(), "bogus")).unwrap());
 
     println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);
 }

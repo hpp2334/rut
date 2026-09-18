@@ -143,7 +143,7 @@ fn run(path: &str, fuel: Option<u64>) {
         }
     };
     // (bindings were installed into the registry before `Vm::new` above)
-    match vm.call("main", &[]) {
+    match vm.call_typed::<_, ()>("main", ()) {
         Ok(_) => {}
         Err(t) => {
             eprintln!("trap: {} — {}", t.name(), t.msg);

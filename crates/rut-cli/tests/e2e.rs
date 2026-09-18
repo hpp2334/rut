@@ -756,32 +756,25 @@ entry fn checked(v: i32) -> (i32, str) {
 }
 "#;
     let mut vm = entry_vm(src);
-    use rut_vm::heap::Value;
-    let Value::Opaque(c) = vm.call("make", &[]).unwrap() else { unreachable!() };
-    assert_eq!(vm.call("put", &[Value::Opaque(c.clone())]).unwrap(), Value::I64(1));
-    assert_eq!(vm.call("put", &[Value::Opaque(c.clone())]).unwrap(), Value::I64(2));
+    let c: rut_vm::OpaqueRef = vm.call_typed("make", ()).unwrap();
+    assert_eq!(vm.call_typed::<_, u32>("put", (c.clone(),)).unwrap(), 1);
+    assert_eq!(vm.call_typed::<_, u32>("put", (c.clone(),)).unwrap(), 2);
     assert_eq!(
-        vm.call("echo_bytes", &[Value::Bytes(vec![1, 2, 250])]).unwrap(),
-        Value::Bytes(vec![1, 2, 250])
+        vm.call_typed::<_, Vec<u8>>("echo_bytes", (vec![1u8, 2, 250],)).unwrap(),
+        vec![1, 2, 250]
+    );
+    assert_eq!(vm.call_typed::<_, (i32, bool)>("maybe", (7i32,)).unwrap(), (7, true));
+    assert_eq!(vm.call_typed::<_, (i32, bool)>("maybe", (-1i32,)).unwrap(), (0, false));
+    assert_eq!(
+        vm.call_typed::<_, (i32, String)>("checked", (3i32,)).unwrap(),
+        (3, "".to_string())
     );
     assert_eq!(
-        vm.call("maybe", &[Value::I64(7)]).unwrap(),
-        Value::Tuple(vec![Value::I64(7), Value::Bool(true)])
-    );
-    assert_eq!(
-        vm.call("maybe", &[Value::I64(-1)]).unwrap(),
-        Value::Tuple(vec![Value::I64(0), Value::Bool(false)])
-    );
-    assert_eq!(
-        vm.call("checked", &[Value::I64(3)]).unwrap(),
-        Value::Tuple(vec![Value::I64(3), Value::Str("".into())])
-    );
-    assert_eq!(
-        vm.call("checked", &[Value::I64(-3)]).unwrap(),
-        Value::Tuple(vec![Value::I64(0), Value::Str("negative".into())])
+        vm.call_typed::<_, (i32, String)>("checked", (-3i32,)).unwrap(),
+        (0, "negative".to_string())
     );
     // embedder mistakes are named traps, never silent zeros
-    let err = vm.call("maybe", &[Value::Str("x".into())]).unwrap_err();
+    let err = vm.call_typed::<_, (i32, bool)>("maybe", ("x",)).unwrap_err();
     assert!(err.msg.contains("argument"), "{}", err.msg);
 }
 
@@ -1787,8 +1780,7 @@ entry fn put(c: Opaque) -> u32 {
     rut_std::logger::install_std_log(&mut hosts0, |_msg| {});
     rut_std::math::install_std_math(&mut hosts0);
     let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog.clone()), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
-    use rut_vm::heap::Value;
-    let Value::Opaque(c) = vm.call("make", &[]).unwrap() else { unreachable!() };
+    let c: rut_vm::OpaqueRef = vm.call_typed("make", ()).unwrap();
     for _ in 0..2 {
         for f in prog.funcs.iter() {
             if prog.name_of(f.name) == "put" {
@@ -1797,7 +1789,7 @@ entry fn put(c: Opaque) -> u32 {
                 }
             }
         }
-        let r = vm.call("put", &[Value::Opaque(c.clone())]);
+        let r = vm.call_typed::<_, u32>("put", (c.clone(),));
         println!("PUT RESULT {r:?}");
     }
 }

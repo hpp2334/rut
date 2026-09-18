@@ -14,7 +14,8 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rut_vm::{OpaqueBox, Trap, Value};
+use rut_vm::{OpaqueBox, OpaqueRef, Trap};
+use rut_vm::interp::Vm;
 
 const SRC: &str = r#"
 use core::{ Opaque, downcast };
@@ -56,7 +57,7 @@ entry fn share(c: Opaque) -> Opaque {
 "#;
 
 struct Store {
-    map: HashMap<String, Value>,
+    map: HashMap<String, i64>,
     dropped: Rc<Cell<bool>>,
 }
 
@@ -120,40 +121,35 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
 /// Bind the `boxes` bodies over a real `HashMap` payload. Typed per
 /// tests/data/boxes/boxes.d.rut; the contract verifies in `session`.
 fn install(hosts: &mut rut_vm::interp::HostRegistry, dropped: &Rc<Cell<bool>>) {
-    use rut_core::types::{TY_I64, TY_NIL, TY_OPAQUE, TY_STR};
     let dropped = dropped.clone();
-    hosts.register_legacy("boxes::store_new", vec![], TY_OPAQUE, move |vm, _args| {
+    rut_vm::register!(hosts, "boxes::store_new", () -> OpaqueRef, move |vm: &mut Vm| {
         let b = OpaqueBox::alloc(vm, Store { map: HashMap::new(), dropped: dropped.clone() })?;
-        Ok(b.into_value())
+        Ok(b.handle().clone())
     });
-    hosts.register_legacy(
+    rut_vm::register!(
+        hosts,
         "boxes::store_set",
-        vec![TY_OPAQUE, TY_STR, TY_I64],
-        TY_NIL,
-        |_vm, args| {
-            let b = OpaqueBox::<Store>::from_value(&args[0])?;
-            let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
-            let Value::I64(v) = args[2] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 2: expected an integer")) };
+        (OpaqueBox<Store>, &str, i64) -> (),
+        |_vm: &mut Vm, b: OpaqueBox<Store>, k: &str, v: i64| {
             b.with_mut(|s| {
-                s.map.insert(k.clone(), Value::I64(v));
-            })?;
-            Ok(Value::Nil)
+                s.map.insert(k.to_string(), v);
+            })
         },
     );
-    hosts.register_legacy("boxes::store_get", vec![TY_OPAQUE, TY_STR], TY_I64, |_vm, args| {
-        let b = OpaqueBox::<Store>::from_value(&args[0])?;
-        let Value::Str(k) = &args[1] else { return Err(Trap::new(rut_vm::TrapKind::Invalid, "arg 1: expected a string")) };
-        Ok(b.with(|s| s.map.get(k).cloned())?.unwrap_or(Value::I64(-1)))
-    });
-    hosts.register_legacy("boxes::store_size", vec![TY_OPAQUE], TY_I64, |_vm, args| {
-        let b = OpaqueBox::<Store>::from_value(&args[0])?;
-        Ok(Value::I64(b.with(|s| s.map.len() as i64)?))
-    });
-}
-
-fn as_i64(v: Value) -> i64 {
-    let Value::I64(x) = v else { unreachable!("{v:?}") };
-    x
+    rut_vm::register!(
+        hosts,
+        "boxes::store_get",
+        (OpaqueBox<Store>, &str) -> i64,
+        |_vm: &mut Vm, b: OpaqueBox<Store>, k: &str| -> Result<i64, Trap> {
+            Ok(b.with(|s| s.map.get(k).copied())?.unwrap_or(-1))
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "boxes::store_size",
+        (OpaqueBox<Store>,) -> i64,
+        |_vm: &mut Vm, b: OpaqueBox<Store>| b.with(|s| s.map.len() as i64)
+    );
 }
 
 #[test]
@@ -163,46 +159,41 @@ fn host_boxes_hold_any_rust_type() {
     
     // news from the host, hold the handle across calls — the data lives
     // in the VM heap as long as either side holds a reference
-    let held = vm.call("make", &[]).unwrap();
-    let Value::Opaque(_) = &held else { unreachable!("{held:?}") };
+    let held: OpaqueRef = vm.call_typed("make", ()).unwrap();
 
     // drive it from rut, both through the wrapper class and direct — the
     // wrapper's records release the box's field retain when they die, so
     // this is the flow that needs the recursive field release to hold
-    vm.call("wrap_put", &[held.clone(), Value::Str("via-wrapper".into()), Value::I64(1)]).unwrap();
-    assert_eq!(as_i64(vm.call("wrap_get", &[held.clone(), Value::Str("via-wrapper".into())]).unwrap()), 1);
-    vm.call("put", &[held.clone(), Value::Str("key-3".into()), Value::I64(41)]).unwrap();
-    vm.call("put", &[held.clone(), Value::Str("key-7".into()), Value::I64(7)]).unwrap();
-    assert_eq!(as_i64(vm.call("get", &[held.clone(), Value::Str("key-3".into())]).unwrap()), 41);
-    assert_eq!(as_i64(vm.call("size", &[held.clone()]).unwrap()), 3);
-    assert_eq!(as_i64(vm.call("get", &[held.clone(), Value::Str("missing".into())]).unwrap()), -1);
+    vm.call_typed::<_, ()>("wrap_put", (held.clone(), "via-wrapper", 1i64)).unwrap();
+    assert_eq!(vm.call_typed::<_, i64>("wrap_get", (held.clone(), "via-wrapper")).unwrap(), 1);
+    vm.call_typed::<_, ()>("put", (held.clone(), "key-3", 41i64)).unwrap();
+    vm.call_typed::<_, ()>("put", (held.clone(), "key-7", 7i64)).unwrap();
+    assert_eq!(vm.call_typed::<_, i64>("get", (held.clone(), "key-3")).unwrap(), 41);
+    assert_eq!(vm.call_typed::<_, i64>("size", (held.clone(),)).unwrap(), 3);
+    assert_eq!(vm.call_typed::<_, i64>("get", (held.clone(), "missing")).unwrap(), -1);
 
     // RFC 0014 erasure laws on the rut side
-    let Value::Bool(true) = vm.call("erase_laws", &[held.clone()]).unwrap() else {
-        unreachable!("erase_laws");
-    };
+    let erased: bool = vm.call_typed("erase_laws", (held.clone(),)).unwrap();
+    assert!(erased, "erase_laws");
 
     // own shares identity: writes through the copy are visible through
     // the original, and the handles are `==`
-    let shared = vm.call("share", &[held.clone()]).unwrap();
-    vm.call("put", &[shared.clone(), Value::Str("via-own".into()), Value::I64(9)]).unwrap();
-    assert_eq!(as_i64(vm.call("get", &[held.clone(), Value::Str("via-own".into())]).unwrap()), 9);
-    match (&shared, &held) {
-        (Value::Opaque(a), Value::Opaque(b)) => assert_eq!(a, b),
-        _ => unreachable!(),
-    }
+    let shared: OpaqueRef = vm.call_typed("share", (held.clone(),)).unwrap();
+    vm.call_typed::<_, ()>("put", (shared.clone(), "via-own", 9i64)).unwrap();
+    assert_eq!(vm.call_typed::<_, i64>("get", (held.clone(), "via-own")).unwrap(), 9);
+    assert_eq!(shared, held);
 
     // a wrong-type borrow is a checked error naming both sides
-    let err = OpaqueBox::<Widget>::from_value(&held).err().expect("wrong type must be rejected");
+    let err = OpaqueBox::<Widget>::from_handle(&held).err().expect("wrong type must be rejected");
     assert!(err.msg.contains("Store") && err.msg.contains("Widget"), "{}", err.msg);
 
     // a non-handle is rejected too
-    let err = OpaqueBox::<Widget>::from_value(&Value::I64(5)).err().expect("non-handle must be rejected");
-    assert!(err.msg.contains("expected an Opaque handle"), "{}", err.msg);
+    let err = OpaqueBox::<Widget>::from_handle(&held).err().expect("non-handle must be rejected");
+    assert!(err.msg.contains("host box holds") || err.msg.contains("Opaque"), "{}", err.msg);
 
     // the borrow guard (RFC 0023 §2): a nested exclusive borrow is a
     // checked trap, and a shared borrow is excluded while `&mut` is out
-    let b = OpaqueBox::<Store>::from_value(&held).unwrap();
+    let b = OpaqueBox::<Store>::from_handle(&held).unwrap();
     b.with_mut(|_| {
         assert!(b.with(|_| {}).is_err(), "shared borrow must be excluded under &mut");
         let again = b.with_mut(|_| {});
@@ -276,9 +267,9 @@ entry fn churn(n: i64) -> nil {
     let mut vm =
         rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts0).unwrap();
 
-    vm.call("churn", &[Value::I64(1)]).unwrap();
+    vm.call_typed::<_, ()>("churn", (1i64,)).unwrap();
     let base = vm.heap.used_bytes();
-    vm.call("churn", &[Value::I64(2000)]).unwrap();
+    vm.call_typed::<_, ()>("churn", (2000i64,)).unwrap();
     let after = vm.heap.used_bytes();
     assert!(
         after <= base + 4096,

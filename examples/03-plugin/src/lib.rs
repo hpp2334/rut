@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rut_vm::interp::{HostHooks, Limits, Vm};
-use rut_vm::{OpaqueBox, Trap, TrapKind, Value};
+use rut_vm::interp::{CallArg, HostHooks, Limits, Vm};
+use rut_vm::{OpaqueBox, OpaqueRef, Trap, TrapKind};
 
 /// The host's server object — handed to rut as an Opaque box. All host
 /// state lives here; the host fns reach it only through the `with`/
@@ -34,7 +34,7 @@ struct EventBus {
 pub struct Plugin {
     vm: Vm,
     bus: OpaqueBox<EventBus>,
-    state: Value, // rut's `Moderator`, opaque to us
+    state: OpaqueRef, // rut's `Moderator`, opaque to us
     table: HashMap<String, String>, // subscription snapshot from `init`
 }
 
@@ -77,52 +77,80 @@ impl Plugin {
             &mut vm,
             EventBus { subscriptions: HashMap::new(), lines: Vec::new(), emits: 0, renders: 0 },
         )?;
-        let bus_val = bus.clone().into_value();
-        let Value::Opaque(state) = vm.call("init", &[bus_val])? else {
-            return Err(Trap::new(TrapKind::Invalid, "init must return the plugin state handle"));
-        };
+        let state: OpaqueRef = vm.call_typed("init", (bus.handle().clone(),))?;
         let table = bus.with(|b| b.subscriptions.clone())?;
-        Ok(Plugin { vm, bus, state: Value::Opaque(state), table })
+        Ok(Plugin { vm, bus, state, table })
     }
 
-    /// Dispatch one event to its subscribed rut handler. The only
-    /// `vm.call` site for events; unknown topics are dropped, not
-    /// trapped — a server keeps running when a plugin didn't subscribe.
-    pub fn fire(&mut self, topic: &str, event_args: &[Value]) -> Result<(), Trap> {
-        let Some(handler) = self.table.get(topic).cloned() else {
-            println!("[server] no handler for `{topic}` — dropped");
-            return Ok(());
-        };
-        let mut args = vec![self.state.clone()];
-        args.extend_from_slice(event_args);
-        self.vm.call(&handler, &args)?;
-        Ok(())
+    /// Dispatch one event to its subscribed rut handler. Unknown topics
+    /// are dropped, not trapped — a server keeps running when a plugin
+    /// didn't subscribe. (The old dynamic `fire(&[Value])` became these
+    /// per-arity typed dispatchers — the plan's one dynamic call site.)
+    fn dispatch(&mut self, topic: &str) -> Result<(), Trap> {
+        match self.table.get(topic).cloned() {
+            Some(handler) => self.vm.call_typed::<_, ()>(&handler, (self.state.clone(),)),
+            None => {
+                println!("[server] no handler for `{topic}` — dropped");
+                Ok(())
+            }
+        }
+    }
+    fn dispatch1<A: CallArg>(&mut self, topic: &str, arg: A) -> Result<(), Trap> {
+        match self.table.get(topic).cloned() {
+            Some(handler) => {
+                self.vm
+                    .call_typed::<_, ()>(&handler, (self.state.clone(), arg))
+            }
+            None => {
+                println!("[server] no handler for `{topic}` — dropped");
+                Ok(())
+            }
+        }
+    }
+    fn dispatch2<A1: CallArg, A2: CallArg>(
+        &mut self,
+        topic: &str,
+        a1: A1,
+        a2: A2,
+    ) -> Result<(), Trap> {
+        match self.table.get(topic).cloned() {
+            Some(handler) => self
+                .vm
+                .call_typed::<_, ()>(&handler, (self.state.clone(), a1, a2)),
+            None => {
+                println!("[server] no handler for `{topic}` — dropped");
+                Ok(())
+            }
+        }
     }
 
     // ---- the typed surface: what a driver or test actually uses ----
 
     pub fn join(&mut self, name: &str) -> Result<(), Trap> {
-        self.fire("join", &[Value::Str(name.into())])
+        self.dispatch1("join", name)
     }
 
     pub fn leave(&mut self, name: &str) -> Result<(), Trap> {
-        self.fire("leave", &[Value::Str(name.into())])
+        self.dispatch1("leave", name)
     }
 
     pub fn msg(&mut self, user: &str, text: &str) -> Result<(), Trap> {
-        self.fire("msg", &[Value::Str(user.into()), Value::Str(text.into())])
+        self.dispatch2("msg", user, text)
     }
 
     pub fn tick(&mut self, n: i64) -> Result<(), Trap> {
-        self.fire("tick", &[Value::I64(n)])
+        self.dispatch1("tick", n)
+    }
+
+    /// no handler: logged, no trap — the server survives a plugin that
+    /// didn't subscribe (kept as its own entry point for the demo)
+    pub fn unknown(&mut self) -> Result<(), Trap> {
+        self.dispatch("bogus")
     }
 
     /// Final stats emit; returns the plugin's total message count.
     pub fn shutdown(&mut self) -> Result<i64, Trap> {
-        match self.vm.call("shutdown", &[self.state.clone()])? {
-            Value::I64(n) => Ok(n),
-            v => Err(Trap::new(TrapKind::Invalid, format!("shutdown: {v:?}"))),
-        }
+        self.vm.call_typed("shutdown", (self.state.clone(),))
     }
 
     /// Everything the plugin emitted, in order.
@@ -141,46 +169,34 @@ impl Plugin {
 /// from their receiver argument — the bus IS the state. Typed per
 /// server/server.d.rut; `Plugin::load` verifies the contract.
 fn install(hosts: &mut rut_vm::interp::HostRegistry) {
-    use rut_core::types::{TY_NIL, TY_OPAQUE, TY_STR};
-    hosts.register_legacy(
+    rut_vm::register!(
+        hosts,
         "server::subscribe",
-        vec![TY_OPAQUE, TY_STR, TY_STR],
-        TY_NIL,
-        |_vm, args| {
-            let bus = OpaqueBox::<EventBus>::from_value(&args[0])?;
-            let Value::Str(topic) = &args[1] else {
-                return Err(Trap::new(TrapKind::Invalid, "subscribe: str topic"));
-            };
-            let Value::Str(handler) = &args[2] else {
-                return Err(Trap::new(TrapKind::Invalid, "subscribe: str handler"));
-            };
-            bus.with_mut(|b| b.subscriptions.insert(topic.clone(), handler.clone()))?;
-            Ok(Value::Nil)
+        (OpaqueBox<EventBus>, &str, &str) -> (),
+        |_vm: &mut Vm, bus: OpaqueBox<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
+            bus.with_mut(|b| b.subscriptions.insert(topic.to_string(), handler.to_string()))?;
+            Ok(())
         },
     );
 
-    hosts.register_legacy(
+    rut_vm::register!(
+        hosts,
         "server::emit",
-        vec![TY_OPAQUE, TY_STR, TY_STR],
-        TY_NIL,
-        |vm, args| {
-            let bus = OpaqueBox::<EventBus>::from_value(&args[0])?;
+        (OpaqueBox<EventBus>, &str, &str) -> (),
+        |vm: &mut Vm, bus: OpaqueBox<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
             // The bus stays MUTABLY BORROWED across the nested vm.call
             // (RFC 0022 §1 re-entrancy + RFC 0023 guard): `render_line` runs
             // on a fresh frame stack while the emitting handler is parked
             // mid-op, and a second `emit` fired from inside `render_line`
             // would trap on the guard instead of racing.
             bus.with_mut(|b| -> Result<(), Trap> {
-                let Value::Str(line) = vm.call("render_line", &[args[1].clone(), args[2].clone()])?
-                else {
-                    return Err(Trap::new(TrapKind::Invalid, "render_line must return str"));
-                };
+                let line: String =
+                    vm.call_typed("render_line", (topic.to_string(), handler.to_string()))?;
                 b.lines.push(line);
                 b.emits += 1;
                 b.renders += 1;
                 Ok(())
-            })??;
-            Ok(Value::Nil)
+            })?
         },
     );
 }

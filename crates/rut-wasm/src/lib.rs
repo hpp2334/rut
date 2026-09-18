@@ -244,7 +244,7 @@ pub extern "C" fn rut_run(
             return envelope(json.as_bytes());
         }
     };
-    let (trap, fuel_used) = match vm.call("main", &[]) {
+    let (trap, fuel_used) = match vm.call_typed::<_, ()>("main", ()) {
         Ok(_) => (None, vm.fuel_used),
         Err(t) => (Some(t.name()), vm.fuel_used),
     };

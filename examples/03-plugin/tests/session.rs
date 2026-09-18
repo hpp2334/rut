@@ -127,7 +127,7 @@ fn bad_bundles_are_refused_at_load() {
 #[test]
 fn unknown_topic_is_dropped_not_trapped() {
     let mut p = load_dir();
-    p.fire("bogus", &[]).unwrap();
+    p.unknown().unwrap();
     assert!(p.transcript().is_empty());
     // the server keeps running after the drop
     p.join("ada").unwrap();

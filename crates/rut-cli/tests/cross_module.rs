@@ -27,10 +27,8 @@ fn run_graph(modules: &[(&str, &str)]) -> i32 {
     };
     let mut vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), rut_vm::interp::HostRegistry::new())
         .expect("vm");
-    match vm.call("main", &[]).expect("main runs") {
-        rut_vm::heap::Value::I64(n) => n as i32,
-        other => panic!("expected an i32 result, got {other:?}"),
-    }
+    let n: i32 = vm.call_typed("main", ()).expect("main runs");
+    n
 }
 
 const SHAPES: &str = "\

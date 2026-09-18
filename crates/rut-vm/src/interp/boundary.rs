@@ -9,7 +9,7 @@
 use rut_core::types::{PrimTy, TypeId, TyKind};
 use rut_core::types::{
     TY_BOOL, TY_BYTES, TY_CHAR, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
-    TY_STR, TY_U16, TY_U32, TY_U8,
+    TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
 };
 
 use super::*;
@@ -20,7 +20,7 @@ use crate::heap::OpaqueBox;
 /// `declared` is program-relative (the export's/field's own id), so the
 /// check catches an embedder passing the wrong Rust shape — a trap naming
 /// both sides, never UB.
-pub(crate) trait Ret: Sized {
+pub trait Ret: Sized {
     /// the fixed boot type this Rust type binds against (`u32::MAX` when
     /// the id is program-relative — tuples)
     const TY: TypeId = u32::MAX;
@@ -123,6 +123,7 @@ int_ret!(i64, "i64", TY_I64);
 int_ret!(u8, "u8", TY_U8);
 int_ret!(u16, "u16", TY_U16);
 int_ret!(u32, "u32", TY_U32);
+int_ret!(u64, "u64", TY_U64);
 
 impl Ret for f64 {
     const TY: TypeId = TY_F64;
@@ -298,7 +299,8 @@ tuple_ret!(A1, A2, A3, A4, A5, A6, A7, A8);
 
 /// A Rust → rut argument for `Vm::call_typed` (owned values; `&str`/`&[u8]`
 /// copy — the embedder's data, an explicit copy is the honest shape).
-pub(crate) trait CallArg {
+/// Nameable so embedders can write their own typed dispatch helpers.
+pub trait CallArg {
     const NAME: &'static str;
     fn into_value(self) -> Value;
 }
@@ -319,6 +321,7 @@ call_arg_int!(i64, "i64");
 call_arg_int!(u8, "u8");
 call_arg_int!(u16, "u16");
 call_arg_int!(u32, "u32");
+call_arg_int!(u64, "u64");
 
 impl CallArg for f64 {
     const NAME: &'static str = "f64";
@@ -371,7 +374,7 @@ impl<T: 'static> CallArg for OpaqueBox<T> {
 }
 
 /// the argument bundle of a typed `call` — tuples up to arity 8
-pub(crate) trait CallArgs {
+pub trait CallArgs {
     fn into_values(self) -> Vec<Value>;
 }
 
@@ -488,6 +491,21 @@ impl HostParam for OpaqueRef {
             return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueRef`"));
         }
         Ok(vm.heap.opaque_handle(p)) // the bump is the handle's own count
+    }
+}
+
+/// the typed payload view as a parameter — the payload type token is
+/// checked on the way in (`from_handle`), a wrong `T` is a trap
+impl<T: 'static> HostParam for OpaqueBox<T> {
+    const TY: TypeId = TY_OPAQUE;
+    type Repr<'a> = OpaqueBox<T>;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_OPAQUE, "OpaqueBox")?;
+        let p = unsafe { slot.r };
+        if p.is_null() {
+            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueBox`"));
+        }
+        OpaqueBox::from_handle(&vm.heap.opaque_handle(p))
     }
 }
 
@@ -626,3 +644,36 @@ handler_infallible!(A1, A2, A3, A4, A5);
 handler_infallible!(A1, A2, A3, A4, A5, A6);
 handler_infallible!(A1, A2, A3, A4, A5, A6, A7);
 handler_infallible!(A1, A2, A3, A4, A5, A6, A7, A8);
+
+/// The registration sugar: writes the name and the callable, nothing
+/// else — the marker tuple comes from the closure's own param types.
+/// The plain `register` method infers single-param closures on its own;
+/// from two params on, the compiler needs the marker spelled, and this
+/// macro spells it from the shape you already wrote:
+///
+/// ```ignore
+/// rut_vm::register!(hosts, "calc::hypot", |vm: &mut Vm, a: f64, b: f64| -> Result<f64, Trap> {
+///     Ok(a.hypot(b))
+/// });
+/// ```
+/// The registration sugar for shapes the compiler cannot infer on its
+/// own (two params and up): spell the marker tuple once and the closure
+/// stays plain — no turbofish, no param annotations, the expected
+/// signature does the typing.
+///
+/// ```ignore
+/// rut_vm::register!(hosts, "calc::hypot", (f64, f64) -> f64, |vm, a, b| a.hypot(b));
+/// rut_vm::register!(hosts, "re::boost", (i64,) -> i64, |vm, x| {
+///     let y: i64 = vm.call_typed("inner", (x,))?;
+///     Ok(y + 1)
+/// });
+/// ```
+#[macro_export]
+macro_rules! register {
+    ($hosts:expr, $name:literal, ($($t:ty),* $(,)?) -> $ret:ty, $closure:expr $(,)?) => {
+        $hosts.register::<_, ($($t,)*), $ret, _>($name, $closure)
+    };
+    ($hosts:expr, $name:literal, ($($t:ty),* $(,)?), $closure:expr $(,)?) => {
+        $hosts.register::<_, ($($t,)*), _, _>($name, $closure)
+    };
+}

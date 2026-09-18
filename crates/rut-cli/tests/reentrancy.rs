@@ -9,7 +9,8 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use rut_vm::{OpaqueBox, Trap, TrapKind, Value};
+use rut_vm::{OpaqueBox, OpaqueRef, Trap, TrapKind};
+use rut_vm::interp::Vm;
 
 const SRC: &str = r#"
 use core::{ Opaque };
@@ -122,72 +123,51 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
 }
 
 fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>) {
-    use rut_core::types::{TY_I64, TY_OPAQUE};
     let invocations = invocations.clone();
-    hosts.register_legacy("re::widget_new", vec![], TY_OPAQUE, |vm, _args| {
+    rut_vm::register!(hosts, "re::widget_new", () -> OpaqueRef, |vm: &mut Vm| -> Result<OpaqueRef, Trap> {
         let b = OpaqueBox::alloc(vm, Widget { n: 0 })?;
-        Ok(b.into_value())
+        Ok(b.handle().clone())
     });
-    hosts.register_legacy("re::boost", vec![TY_I64], TY_I64, |vm, args| {
-        let Value::I64(x) = args[0] else { panic!("boost: i64 arg") };
-        let v = vm.call("inner", &[Value::I64(x)])?;
-        let Value::I64(y) = v else { panic!("inner: i64 result") };
-        Ok(Value::I64(y + 1))
+    rut_vm::register!(hosts, "re::boost", (i64,) -> i64, |vm: &mut Vm, x: i64| -> Result<i64, Trap> {
+        let y: i64 = vm.call_typed("inner", (x,))?;
+        Ok(y + 1)
     });
-    hosts.register_legacy("re::borrow_try", vec![TY_OPAQUE], TY_I64, |_vm, args| {
-        let b = OpaqueBox::<Widget>::from_value(&args[0])?;
-        Ok(Value::I64(b.with(|w| w.n)?))
-    });
-    hosts.register_legacy("re::borrow_read", vec![TY_OPAQUE], TY_I64, |_vm, args| {
-        let b = OpaqueBox::<Widget>::from_value(&args[0])?;
-        Ok(Value::I64(b.with(|w| w.n)?))
-    });
-    hosts.register_legacy("re::borrow_conflict", vec![TY_OPAQUE], TY_I64, |vm, args| {
-        let b = OpaqueBox::<Widget>::from_value(&args[0])?;
+    rut_vm::register!(hosts, "re::borrow_try", (OpaqueBox<Widget>,) -> i64, |_vm: &mut Vm, b: OpaqueBox<Widget>| b.with(|w| w.n));
+    rut_vm::register!(hosts, "re::borrow_read", (OpaqueBox<Widget>,) -> i64, |_vm: &mut Vm, b: OpaqueBox<Widget>| b.with(|w| w.n));
+    rut_vm::register!(hosts, "re::borrow_conflict", (OpaqueBox<Widget>,) -> i64, |vm: &mut Vm, b: OpaqueBox<Widget>| -> Result<i64, Trap> {
         // hold the mutable borrow ACROSS a nested vm.call — rut code that
         // runs inside must not be able to borrow the same box
         let r = b.with_mut(|w| {
             w.n += 1;
-            vm.call("poke", &[args[0].clone()])
+            vm.call_typed::<_, i64>("poke", (b.handle().clone(),))
         });
         match r {
             // poke ran without touching the box (not this program's shape)
             Ok(Ok(v)) => Ok(v),
             // poke trapped on the guard — caught here, the outer rut frame
             // keeps going (marker -100)
-            Ok(Err(_t)) => Ok(Value::I64(-100)),
+            Ok(Err(_t)) => Ok(-100),
             // the with_mut itself failed
             Err(t) => Err(t),
         }
     });
-    hosts.register_legacy("re::host_boom", vec![TY_I64], TY_I64, |vm, args| {
-        let Value::I64(i) = args[0] else { panic!("host_boom: i64 arg") };
-        let v = vm.call("boom", &[Value::I64(i)])?;
-        Ok(v)
-    });
-    hosts.register_legacy("re::grind", vec![TY_I64], TY_I64, |vm, args| {
-        let Value::I64(n) = args[0] else { panic!("grind: i64 arg") };
+    rut_vm::register!(hosts, "re::host_boom", (i64,) -> i64, |vm: &mut Vm, i: i64| vm.call_typed::<_, i64>("boom", (i,)));
+    rut_vm::register!(hosts, "re::grind", (i64,) -> i64, |vm: &mut Vm, n: i64| -> Result<i64, Trap> {
         // the catch-and-refuel pattern for nested budget traps: the host
         // owns the retry, the outer frame never sees the trap
-        match vm.call("spin", &[Value::I64(n)]) {
+        match vm.call_typed::<_, i64>("spin", (n,)) {
             Ok(v) => Ok(v),
             Err(t) if t.kind == TrapKind::OutOfFuel => {
                 vm.add_fuel(2_000_000);
-                vm.call("spin", &[Value::I64(n)])
+                vm.call_typed::<_, i64>("spin", (n,))
             }
             Err(t) => Err(t),
         }
     });
-    hosts.register_legacy("re::count_spin", vec![TY_I64], TY_I64, move |vm, args| {
-        let Value::I64(n) = args[0] else { panic!("count_spin: i64 arg") };
+    rut_vm::register!(hosts, "re::count_spin", (i64,) -> i64, move |vm: &mut Vm, n: i64| -> Result<i64, Trap> {
         invocations.set(invocations.get() + 1);
-        vm.call("spin", &[Value::I64(n)])
+        vm.call_typed::<_, i64>("spin", (n,))
     });
-}
-
-fn as_i64(v: Value) -> i64 {
-    let Value::I64(x) = v else { unreachable!("{v:?}") };
-    x
 }
 
 #[test]
@@ -197,7 +177,7 @@ fn nested_call_returns_and_outer_locals_survive() {
     
     // boost nested-calls inner(x)=x+1 and adds 1; outer computes y*2+x
     // with its OWN x — 7*2+5
-    assert_eq!(as_i64(vm.call("outer", &[Value::I64(5)]).unwrap()), 19);
+    assert_eq!(vm.call_typed::<_, i64>("outer", (5,)).unwrap(), 19);
 }
 
 #[test]
@@ -205,10 +185,10 @@ fn borrow_guard_blocks_rut_running_inside_with_mut() {
     let invocations = Rc::new(Cell::new(0));
     let mut vm = session(Some(1_000_000), &invocations);
     
-    let b = vm.call("new_widget", &[]).unwrap();
+    let b: OpaqueRef = vm.call_typed("new_widget", ()).unwrap();
     // borrow_conflict: with_mut(+1) -> nested `poke` -> borrow_try's
     // `with` fails on the guard (-100 marker) and the mutation stands (n=1)
-    assert_eq!(as_i64(vm.call("outer_borrow", &[b]).unwrap()), -99);
+    assert_eq!(vm.call_typed::<_, i64>("outer_borrow", (b,)).unwrap(), -99);
 }
 
 #[test]
@@ -218,11 +198,11 @@ fn nested_trap_propagates_and_vm_stays_usable() {
     
     // boom index-OOBs inside the nested call; the trap unwinds the nested
     // frame only and surfaces at the embedder with its kind intact
-    let err = vm.call("trigger_boom", &[Value::I64(0)]).unwrap_err();
+    let err = vm.call_typed::<_, i64>("trigger_boom", (0,)).unwrap_err();
     assert_eq!(err.kind, TrapKind::IndexOutOfBounds, "got: {}", err.msg);
     // the parked outer frame does not block later calls — a fresh entry
     // nests over it cleanly
-    assert_eq!(as_i64(vm.call("inner", &[Value::I64(41)]).unwrap()), 42);
+    assert_eq!(vm.call_typed::<_, i64>("inner", (41,)).unwrap(), 42);
 }
 
 #[test]
@@ -235,7 +215,7 @@ fn nested_budget_trap_catch_add_fuel_retry() {
     
     let n = 60_000i64;
     let want = n * (n - 1) / 2;
-    assert_eq!(as_i64(vm.call("grind_caller", &[Value::I64(n)]).unwrap()), want);
+    assert_eq!(vm.call_typed::<_, i64>("grind_caller", (n,)).unwrap(), want);
 }
 
 #[test]
@@ -248,10 +228,10 @@ fn resume_reruns_the_host_op_after_propagated_out_of_fuel() {
     
     let n = 50_000i64;
     let want = n * (n - 1) / 2;
-    let err = vm.call("watchdog", &[Value::I64(n)]).unwrap_err();
+    let err = vm.call_typed::<_, i64>("watchdog", (n,)).unwrap_err();
     assert_eq!(err.kind, TrapKind::OutOfFuel);
     assert_eq!(invocations.get(), 1);
     vm.add_fuel(2_000_000);
-    assert_eq!(as_i64(vm.resume().unwrap()), want);
+    assert_eq!(vm.resume_typed::<i64>().unwrap(), want);
     assert_eq!(invocations.get(), 2);
 }

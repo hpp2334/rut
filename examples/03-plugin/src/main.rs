@@ -34,7 +34,7 @@ fn session(p: &mut plugin::Plugin) -> i64 {
     p.msg("bob", "let me back in").unwrap(); // -> the muted sink
     p.tick(1).unwrap();
     p.leave("ada").unwrap();
-    p.fire("bogus", &[]).unwrap(); // no handler: logged, no trap
+    p.unknown().unwrap(); // no handler: logged, no trap
     p.shutdown().unwrap()
 }
 

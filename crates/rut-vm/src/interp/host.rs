@@ -13,12 +13,11 @@
 use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
 
-use rut_core::types::{TypeId, TY_I32};
+use rut_core::types::TypeId;
 
 use super::boundary::HostHandler;
-use super::util::slot_to_value;
-use crate::heap::{Slot, Trap, TrapKind, Value};
 use super::Vm;
+use crate::heap::Slot;
 
 /// A host fn is one dispatch-table entry — the same unit every other
 /// table in the VM trades in (threaded op handlers, vtables): a code
@@ -103,7 +102,9 @@ impl HostRegistry {
     /// adapter `F::entry` IS the table entry. Infallible `-> R` and
     /// fallible `-> Result<R, Trap>` bodies both fit — `K` is solved by
     /// whichever impl the body's return type matches, and never written.
-    /// A param type with no `Arg` impl is a compile error here.
+    /// A param type with no `Arg` impl is a compile error here. For
+    /// two-plus params the compiler needs the marker spelled — use the
+    /// [`register!`](crate::register) sugar and the closure stays plain.
     pub fn register<F, A, R, K>(&mut self, name: &str, f: F)
     where
         F: HostHandler<A, R, K> + 'static,
@@ -115,27 +116,6 @@ impl HostRegistry {
         self.fns.insert(
             name.to_string(),
             HostBinding { code: F::entry, ctx, sigs: F::SIG, keep: Some(boxed) },
-        );
-    }
-
-    /// The pre-magic bridge (RFC 0022 bodies over `&[Value]`). Kept only
-    /// until every consumer migrates, then deleted — new bindings use
-    /// [`HostRegistry::register`].
-    pub fn register_legacy<F>(
-        &mut self,
-        name: &str,
-        params: Vec<TypeId>,
-        ret: TypeId,
-        f: F,
-    ) where
-        F: FnMut(&mut Vm, &[Value]) -> Result<Value, Trap> + 'static,
-    {
-        let sigs = HostSig::from_vec(&params, ret);
-        let boxed = Box::new(Legacy { f, params, ret });
-        let ctx = &*boxed as *const Legacy<F> as Ctx;
-        self.fns.insert(
-            name.to_string(),
-            HostBinding { code: legacy_entry::<F>, ctx, sigs, keep: Some(boxed) },
         );
     }
 
@@ -206,46 +186,5 @@ impl HostRegistry {
     /// is the check that they were all declared).
     pub(crate) fn take_binding(&mut self, name: &str) -> Option<HostBinding> {
         self.fns.remove(name)
-    }
-}
-
-impl HostSig {
-    /// non-const variant for the legacy bridge (params arrive as a Vec)
-    pub fn from_vec(tys: &[TypeId], ret: TypeId) -> HostSig {
-        HostSig::new(tys, ret)
-    }
-}
-
-/// The legacy bridge's state: the RFC 0022 body + the declared sig it
-/// converts the arg slots against.
-struct Legacy<F> {
-    f: F,
-    params: Vec<TypeId>,
-    ret: TypeId,
-}
-
-/// The legacy adapter: slots → `Value`s via the declared sig, body,
-/// result back through `value_in`. One instantiation per migrated-not-yet
-/// body type; dies with `register_legacy`.
-fn legacy_entry<F>(vm: &mut Vm, slots: &[Slot], ctx: Ctx) -> Slot
-where
-    F: FnMut(&mut Vm, &[Value]) -> Result<Value, Trap> + 'static,
-{
-    // SAFETY: ctx is Box<Legacy<F>>, owned by vm.host_keep (RFC 0034)
-    let lg = unsafe { &mut *(ctx as *mut Legacy<F>) };
-    let vals: Vec<Value> = slots
-        .iter()
-        .enumerate()
-        .map(|(i, &s)| {
-            let ty = lg.params.get(i).copied().unwrap_or(TY_I32);
-            slot_to_value(s, ty, &vm.prog, &vm.heap)
-        })
-        .collect();
-    match (lg.f)(vm, &vals) {
-        Ok(out) => match vm.value_in(&out, lg.ret) {
-            Ok(s) => s,
-            Err(m) => vm.trap_taken(Trap::new(TrapKind::Invalid, format!("host result: {m}"))),
-        },
-        Err(t) => vm.trap_taken(t),
     }
 }
