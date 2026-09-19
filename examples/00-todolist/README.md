@@ -38,8 +38,9 @@ fuel used: 680 of Some(1000000)
 
 **The host owns the session; rut owns the data.**
 
-1. `createContainer()` → `Opaque` — rut boxes a fresh container and the
-   host holds the handle (`Value::Opaque`). Opaque is the one cell an
+1. `createContainer()` → `opaque` — rut boxes a fresh container and the
+   host holds the handle (`Value::Opaque`, the Rust-side handle —
+   internal names keep theirs). `opaque` is the one cell an
    embedder may keep (RFC 0014).
 2. `create(container)` → `u32` — a new list inside the container; the
    host keeps the handle and passes it (plus the container) to every
@@ -64,4 +65,4 @@ fuel used: 680 of Some(1000000)
 - the executable M1 surface — classes (`Self {}` construction,
   zero-param `new`, `-> Self`), dataclasses with field initializers,
   `Vec<T>`/`Option<T>`/`Result<T,E>`, `if/else`, `&&`/`||`, `when` with
-  block arms, f-strings, `Opaque.new`/`downcast`
+  block arms, f-strings, `opaque.new`/`opaque.downcast`

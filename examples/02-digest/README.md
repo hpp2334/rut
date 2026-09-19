@@ -5,7 +5,7 @@ A Rust app embedding rut, in the shape of [00-todolist](../00-todolist) and
 embedder — and this time the embedder is also the **oracle**.
 
 The rut side is a byte-level library, everything flowing over `bytes`
-(the immutable binary primitive, RFC 0004), `str`, and `Opaque` —
+(the immutable binary primitive, RFC 0004), `str`, and `opaque` —
 the shapes RFC 0023 §2 lets cross the host boundary:
 
 - **encodings** — hex (encode/decode, case-insensitive) and base64
@@ -14,7 +14,7 @@ the shapes RFC 0023 §2 lets cross the host boundary:
   `when`-on-string dispatcher (`digest("sha256", data)`)
 - **hashmap hash keys** — CRC-32 (reflected, bitwise, table-free),
   FNV-1a 32/64, djb2, sdbm
-- **JSON** — decode to an `Opaque` tree, encode back, round-trip;
+- **JSON** — decode to an `opaque` tree, encode back, round-trip;
   numbers are stored as verbatim lexemes so round-trips are exact
 
 The host verifies everything two independent ways:
@@ -74,10 +74,10 @@ fuel used: 1007145 of Some(50000000)
   this repo right before this example) and `&<<` to truncate to the
   operand width
 - **`bytes` crosses directly** (RFC 0023 §2, RFC 0004) — no opaque
-  wrapper needed for byte payloads; `Opaque` appears exactly once,
+  wrapper needed for byte payloads; `opaque` appears exactly once,
   boxing the recursive JSON tree
 - **payloadless enums + dataclasses build a tagged union** (RFC 0006):
-  `JTag` + `Json` with children as `Vec<Opaque>` — recursion through
+  `JTag` + `Json` with children as `Vec<opaque>` — recursion through
   RFC 0014's escape hatch
 - **errors are values** — malformed hex/base64/JSON and unknown
   algorithm names come back as `Result.err` strings, not traps

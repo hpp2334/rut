@@ -9,10 +9,10 @@ embedder SDK, and `src/main.rs` drives a scripted session through **both
 load forms** — the directory and a `.rutbundle` packed from it at runtime
 (RFC 0038). This is the first
 example built on **re-entrant `vm.call`** (RFC 0022 §1) — and the first
-where **both Opaque directions** meet:
+where **both opaque directions** meet:
 
-- rut's moderator state lives rut-side behind a rut-constructed `Opaque`
-  (`Opaque.new(Moderator.new(bus))`, RFC 0014) — the host holds the
+- rut's moderator state lives rut-side behind a rut-constructed `opaque`
+  (`opaque.new(Moderator.new(bus))`, RFC 0014) — the host holds the
   handle and hands it back on every event.
 - the host's event bus lives Rust-side behind a **host-constructed**
   `OpaqueBox<EventBus>` (RFC 0023/0026) — handed to `init` as the plugin's

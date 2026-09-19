@@ -125,7 +125,7 @@ The four `nmapset` workloads (`nmapset-int`, `nmapset-str`,
 `nmap-hashset`, `nmap-knucleotide`) are line-for-line clones of the
 mapset workloads over `rut/nmapset` — the **host-implemented** key
 table experiment (the "C builtin" architecture qjs itself uses): keys
-live as owned Rust data behind one `Opaque` box per table, values stay
+live as owned Rust data behind one `opaque` box per table, values stay
 rut-side in a parallel `[*V]` array, and every map op crosses the host
 boundary (one key box mint + one or two host calls). The nmapset pkg
 ships mapset's exact mix64/FNV-1a constants, so every key hashes to the
@@ -183,7 +183,7 @@ algorithms: the map's key table is **Rust** (`crates/rut-std`'s
 of-two cap, tombstones, load 0.7, recorded hashes), reached through a
 generic rut wrapper (`rut/nmapset`) that keeps only the value array
 rut-side. Per map op the wrapper hashes the key (inlined mix64/FNV —
-the same values as mapset), mints one `Opaque` key box, and crosses the
+the same values as mapset), mints one `opaque` key box, and crosses the
 host boundary once or twice (`map_needs_grow` + `map_entry`/`map_find`/
 `map_remove`); growth relocates `vals` by draining a native relocation
 iterator. Full-suite cross-runtime numbers (net medians, same-day run,
@@ -220,7 +220,7 @@ remains dominated by k-mer materialization (`seq.slice` per position),
 which the map swap cannot touch. The int rows' residual decomposes per
 map op into the wrapper's interpreter work (generic call frame, hash,
 `vals` traffic — nmapset-int is 24.8 M ops) plus the crossing package:
-one `Opaque.new` mint and one or two host calls (~17 ns/call, the
+one `opaque.new` mint and one or two host calls (~17 ns/call, the
 mathhost floor). The mint alone is small — a 600 k escaped-mint loop
 measures ~27 ns/mint, ~15% of nmapset-int's exec — so no single term
 dominates; the residual is the per-op package itself. The known

@@ -87,9 +87,9 @@ newcell cid -> rD         ; mint a value cell (the `Self { .. }` / dataclass
 getf    rD, rO, fidx      ; field load (cell — payload slot array)
 setf    rO, fidx, rV      ; field store (+retain/release where typed)
 tidof   rD, rO            ; read an object handle's runtime TypeId → u32
-                          ; (Opaque box, trait-typed fat ref, slice cell — the
+                          ; (opaque box, trait-typed fat ref, slice cell — the
                           ; vtable ty load, RFC 0015 §6); a pure load
-unbox   rD, rO, tid       ; extract an Opaque box's payload as the
+unbox   rD, rO, tid       ; extract an opaque box's payload as the
                           ; statically known T (RFC 0014); traps on TypeId
                           ; mismatch — the compiler always guards (br on
                           ; tidof == tid first); the trap is the safety
@@ -130,10 +130,14 @@ An op exists for exactly one of three things:
   get/set, `.len()`, `for..of` are the builtin `Index<T>` impl's slots
   (RFC 0005; registered like any builtin impl, RFC 0022 §2) — ordinary
   vtable calls; the backing cell's dispatch-through-owner (RFC 0016 §4)
-  is simply its slot target. And things rut spells with a **name** are
+  is simply its slot target. (Surface note, builtin-surface 2026-09:
+  every builtin decl drops `pub` — `builtin impl <prim>` blocks (RFC
+  0004 §3) and the `builtin primitive` headers (`str`/`bytes`/`opaque`,
+  RFC 0014 revised) declare with no visibility; builtin names are
+  AMBIENT, RFC 0028 revised.) And things rut spells with a **name** are
   internal natives, never ops: `str`/`concat` (the `f""` desugaring —
   RFC 0007 §2), `strlen`, `arrlen`, and `strjoin` — the only entries in
-  the `callnat` table. `Opaque.new(v)` (RFC 0014) is an internal-native call;
+  the `callnat` table. `opaque.new(v)` (RFC 0014) is an internal-native call;
   a **host function** (RFC 0022/0026) is a bodyless `FuncCode` carrying a
   `host_id: Option<IdentId>` — the ONE name kind that is an interner id
   like every other name in the program (the wire carries the u32, not a
@@ -160,17 +164,19 @@ The named type operations lower to R3 primitives:
   (RFC 0015 §6); pure in `(recv, want)`, so repeated probes CSE and
   invariant ones hoist like `tidof` itself. Statically-answered
   receivers never emit an op — typecheck folded them (RFC 0031 §2).
-- `downcast<T>(a) -> Option<T>` (RFC 0014) is a **generic prelude
-  function**: `tidof`; `br` on `icmp == TID_T`; `optsome(unbox)` on one
+- `opaque.downcast<T>(o) -> (T, bool)` (RFC 0014 revised) is a **member
+  static on the erasure primitive**: `tidof`; `br` on `icmp == TID_T`;
+  `optsome(unbox)` on one
   arm, `optnone` on the other. The check is visible dataflow: `tidof`
   is a pure load, so repeated checks CSE and invariant ones hoist
   (LICM), and a chain of downcasts over one cell folds to one `tidof`
   + `brtable` (RFC 0031 §3) — RFC 0014's IR contract falls out of the
   primitives instead of being blocked by an opaque `downc` op. The
-  symmetry is deliberate: `Opaque.new(v)` (erasure) is an internal-native
-  call and `downcast` (recovery) is prelude code — neither is magic.
-  Both names are imported from `"std:core"` (RFC 0028): the prelude is
-  compiler-lowered but never ambient.
+  symmetry is deliberate: `opaque.new(v)` (erasure) is an internal-native
+  call and `opaque.downcast` (recovery) is prelude code — neither is
+  magic. Both names are AMBIENT (RFC 0028 revised, builtin-surface):
+  the prelude is compiler-lowered and binds in every compilation unit —
+  no `use` gates them.
 
 ## 2. Async lowering
 

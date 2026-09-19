@@ -37,7 +37,7 @@ fuel used: 21142 of Some(5000000)
 
 **One opaque bank; the data never leaves rut.** `Vec<i32>` cannot cross
 the host boundary (RFC 0023 §2 — enforced on `entry fn` signatures at
-compile time), so `create()` boxes a `Bank` in an `Opaque` (RFC 0014)
+compile time), so `create()` boxes a `Bank` in an `opaque` (RFC 0014)
 and the host holds the handle. Results come back three ways:
 
 - `serialize(c) -> str` — a JSON array, `[1, 2, 3]`: one string
@@ -62,5 +62,5 @@ and the host holds the handle. Results come back three ways:
 - **budgets** (RFC 0040) — the session runs under fuel + heap limits,
   and `main.rs` prints fuel per algorithm: quick < insertion <
   selection < bubble, as it should be
-- the executable M1 surface — dataclasses, `Opaque.new`/`downcast`,
+- the executable M1 surface — dataclasses, `opaque.new`/`opaque.downcast`,
   `Option`/`Result`, `for`/`while`, short-circuit `&&`, f-strings

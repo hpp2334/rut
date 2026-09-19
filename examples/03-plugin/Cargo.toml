@@ -3,7 +3,7 @@ name = "plugin"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "03-plugin — a Rust chat-room server with a rut moderator plugin: the host fires events into subscribed rut exports and rut emits data back through a host Opaque box; every emit re-enters rut to format its line (RFC 0022 §1)"
+description = "03-plugin — a Rust chat-room server with a rut moderator plugin: the host fires events into subscribed rut exports and rut emits data back through a host opaque box; every emit re-enters rut to format its line (RFC 0022 §1)"
 
 [dependencies]
 rut-core = { path = "../../crates/rut-core" }

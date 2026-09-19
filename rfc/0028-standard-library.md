@@ -5,6 +5,11 @@
 - **Revised:** 2026-09 — the package reframe: `core` is the only standard;
   every other in-tree package is a swappable default; use paths are bare
   package names (RFC 0002 §4).
+- **Revised:** 2026-09 (builtin-surface) — **builtin names are AMBIENT**:
+  `pub builtin` is gone (plain `builtin` declares, no visibility), the
+  erasure type is the primitive `opaque` (RFC 0014 revised), and the
+  prelude binds in every compilation unit — the use-gate below is
+  superseded.
 - **Author:** hpp2334
 - **Depends on:** RFC 0022–0027 (host & FFI), RFC 0029 (declaration files)
 - **Supersedes:** RFC 0005 §8 (pre-restructure)
@@ -23,27 +28,35 @@ The standard library splits in two:
   mechanism (syscalls, sinks) in Rust.
 
 **`core` is the only standard.** It is the prelude surface — uniformly
-`builtin class`/`builtin trait`/`builtin fn` (the engine implements it,
+`builtin` decls with **no `pub`**: `builtin primitive`/`builtin fn`/
+`builtin impl`/`builtin trait` (the engine implements it,
 compiler-lowered; the prelude registers **no** host bodies, RFC 0025
-revised): the builtin containers `[T]`/`Option<T>`/`Result<T,E>`
-(RFC 0005) and `Opaque` (RFC 0014), the engine-woven traits —
+revised): the array grammar `[T]` (RFC 0005 §9), the engine primitives
+`str`/`bytes`/`opaque` (RFC 0014 revised), the engine-woven trait —
 `Iterator<T>` (RFC 0012; ordinary nominal impls for users,
 compiler-backed impls for the engine's own types; v1.1 removed
 `Disposal`/`Index` — `on_drop` and builtin indexing replaced them), and
 — when the async plan lands — `Task<T>` and its run contexts, plus
 `launch_task`/`LaunchedTask` as core builtin decls (RFC 0012 §7; there
-is **no async module**) — plus the prelude functions `own(x)` (the eager
-copy, RFC 0011 §1), `downcast<T>` (RFC 0014), `assert`/`panic` (RFC
-0034 §2), and the `str`/`bytes` natives (`string_join`, `bytes_len`,
-`bytes_decode`, `bytes_from`, `bytes_zeroed`); `==` needs no trait at
-all (builtin, RFC 0012 §4). **The prelude is used, never ambient:
-nothing from `core` is in scope until a module writes `use core::{
-.. };`** — a missing use is a source diagnostic naming the fix.
+is **no async module**) — plus the prelude functions `assert`/`panic`
+(RFC 0034 §2), `on_drop` (RFC 0016 §3), `string_join` (RFC 0007), and
+the primitive member contracts — `str`/`bytes` members, the `builtin
+impl i8..u64` numeric methods (RFC 0004 §3, RFC 0032 §1.1 R2), and the
+erasure statics `opaque.new`/`opaque.downcast<T>` (RFC 0014);
+`==` needs no trait at
+all (builtin, RFC 0012 §4). **The prelude is AMBIENT (builtin-surface,
+2026-09 — this supersedes the use-gate earlier revisions shipped):
+every builtin name is in scope in every compilation unit, no `use` is
+needed.** A `use core::{ .. };` statement stays legal but is redundant,
+and the driver's `compile_graph` binds core's prelude to every unit —
+previously core's surface bound only when a module spelled `use
+core::{…}`. The one exception is core's const: **`NAN` keeps its
+use-gate by contract** — `use core::{NAN}` is explicit.
 (Primitive types and their conversion syntax — `i32`, `str`, `bytes(n)`,
 `i32(x)` — are grammar, RFC 0007, not uses; so are the engine builtins
-`[T]`/`Option`/`Result`/`Opaque`, the engine-woven traits, and the
-engine fns — the whole prelude, spelled in `core`'s `.d.rut` as
-`builtin` decls so users and the LSP see their contracts, RFC 0025
+`[T]`/`opaque`, the engine-woven trait, and the engine fns — the whole prelude, spelled in
+`core`'s `.d.rut` as `builtin` decls so users and the LSP see their
+contracts, RFC 0025
 revised.)
 
 **`pouch`, `calc`, `ink` are optional in-tree packages — swappable
@@ -56,7 +69,7 @@ replace any of them wholesale — nothing in the engine knows their names.
 `Hashable { fn hash(self) -> u64; fn eq(self, other: Self) -> bool }` —
 hashing and key comparison are one contract, satisfied by rut impls
 and builtin registry entries (string content, numerics/enum value) —
-and container **host fns over `Opaque` handles**; the containers
+and container **host fns over `opaque` handles**; the containers
 themselves (`pub class Map<K, V>`, `Set<T>`) are rut wrapper classes
 in `pouch` source, and `Vec<T>` is the growable sequence class.
 Containers are library types, not VM builtins (RFC 0005). **`ink`**
@@ -80,8 +93,8 @@ R2) — and `NAN` is core's one const (`use core::{NAN}`). **`debug`**
   `load_module` (RFC 0035 §1).
 
 `pouch`'s native half (RFC 0025/0026, revised) is a **host fn
-surface over `Opaque` handles** — `Map`/`Set` instances are boxes, and
-the rut-side wrappers (`pub class Map<K, V> { h: Opaque; .. }`) live in
+surface over `opaque` handles** — `Map`/`Set` instances are boxes, and
+the rut-side wrappers (`pub class Map<K, V> { h: opaque; .. }`) live in
 `pouch` source: containers are library types, not VM builtins
 (RFC 0005). Keys hash by content (`str`) or through wrapper-defined
 strategies; no `Hashable` contract crosses the boundary.
@@ -105,11 +118,10 @@ fn work() -> nil {
 resolve at the call site, RFC 0035 §1):
 
 ```rut
-use core::{ Opaque };
 use rt::{ create_logger, logger_log };   // native module (host-registered)
 
 pub class Logger {
-    internal: Opaque;                  // the host owns the layout
+    internal: opaque;                  // the host owns the layout
 }
 
 impl Logger {
@@ -125,8 +137,8 @@ impl Logger {
 `rt`'s logger surface is a **host pkg** (RFC 0022/0025/0026): the
 package directory `rut/rt/` — `name = "rt"`, `host_scope = "rt:log"`,
 `entry.type = "./rt.d.rut"` declaring `create_logger(name: str) ->
-Opaque` and `logger_log(logger: Opaque, level: i32, msg: str) -> nil`.
-The host owns the logger's layout; rut only ever holds an `Opaque`
+opaque` and `logger_log(logger: opaque, level: i32, msg: str) -> nil`.
+The host owns the logger's layout; rut only ever holds an `opaque`
 handle (RFC 0014) and never inspects it. The embedder half ships as
 `rut-std::logger::install_std_log` — TYPED bindings; mounting `rt`
 declares the surface and `Vm::verify_host_fns` checks the two against
@@ -147,15 +159,15 @@ traps carry. `debug` is a declaration file + Rust bodies, like
 // debug/debug.d.rut (excerpt — RFC 0036 §6)
 pub host struct Location { file: str, line: i32, col: i32 }
 pub host fn here() -> Location;                  // folded at compile time (RFC 0033 §3)
-pub host fn str(v: Opaque) -> str;           // developer rendering (RFC 0007 §2)
-pub host fn type_name(v: Opaque) -> str;  // debug type name
-pub host fn capture_stack_trace() -> Opaque;       // skips its own frame —
-pub host fn stack_trace_render(t: Opaque) -> str;  // the raw-pc walk, an
-pub host fn stack_trace_depth(t: Opaque) -> i32;   // Opaque handle
+pub host fn str(v: opaque) -> str;           // developer rendering (RFC 0007 §2)
+pub host fn type_name(v: opaque) -> str;  // debug type name
+pub host fn capture_stack_trace() -> opaque;       // skips its own frame —
+pub host fn stack_trace_render(t: opaque) -> str;  // the raw-pc walk, an
+pub host fn stack_trace_depth(t: opaque) -> i32;   // opaque handle
 ```
 
-No `host class`: the trace is an `Opaque` handle and `debug`'s rut
-source wraps it — `pub class StackTrace { h: Opaque; .. }` whose
+No `host class`: the trace is an `opaque` handle and `debug`'s rut
+source wraps it — `pub class StackTrace { h: opaque; .. }` whose
 `render`/`depth` forward to the host fns (rendering is lazy, via loaded
 binaries' SymbolTables — degraded when stripped); `Location` is a `host
 struct` — flat crossing data the host constructs (RFC 0025, revised).
@@ -184,14 +196,21 @@ struct LoadError {
 
 ## The `core` prelude, v1.1 — removals diagnosed at the use site
 
-The prelude surface is `downcast`, `assert`/`panic`,
-`make_ptr`/`on_drop`, `string_join`, and the `str`/`bytes` member
+The prelude surface is `assert`/`panic`, `on_drop`, `string_join`, the
+`str`/`bytes` member
 contracts (`s.len()`/`s.code()`/`s.encode()`,
 `b.len()`/`b.decode()`, `bytes.zeroed(n)`/`bytes.from(a)` —
-RFC 0004 §4).
-`Option`/`Result`/`own` are removed (RFC 0005 §10) and `char` is gone
-(RFC 0004 §4): a use site — type position, constructor, or literal —
-diagnoses with the removal and its replacement. **No removed surface
+RFC 0004 §4), the `builtin impl i8..u64` numeric methods, and the
+erasure statics `opaque.new`/`opaque.downcast<T>` (RFC 0014 revised —
+builtin-surface: both are members of the `builtin primitive opaque`,
+and the names are ambient).
+`Option`/`Result`/`own` are removed (RFC 0005 §10), `char` is gone
+(RFC 0004 §4), and the free fn spellings `downcast<T>(o)`/`make_ptr(v)`
+are gone with them (builtin-surface): a use site — type position,
+constructor, or literal —
+diagnoses with the removal and its replacement (`downcast<T>(o)` names
+`opaque.downcast<T>(o)`; the table lives in
+`rut_core::binary::REMOVED_CORE`). **No removed surface
 keeps compatibility routing**: a removed head in an unresolvable
 position is an ordinary unknown-name error.
 
