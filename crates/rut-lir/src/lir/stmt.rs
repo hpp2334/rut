@@ -30,6 +30,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.span = sp.lo;
         match self.ctx.ast.stmt(node).clone() {
             StmtKind::LetStmt { is_mut, name, destructure, ty, init } => {
+                let ty_node = ty; // the annotation node (shadowed below)
                 let expected = ty.map(|t| self.resolve_type_now(t));
                 let t = self.compile_expr(init, expected)?;
                 if let Some(e) = expected {
@@ -66,6 +67,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // initializer's cell handle — a share, never a copy
                         let reg = self.last_reg;
                         self.locals.push(Local { name, reg, ty, is_mut, loop_var: false, origins });
+                        // union provenance (RFC 0043 §3, native-fastpath
+                        // phase 1): an annotation spelling a union-bounded
+                        // generic carries it; a copy takes its
+                        // initializer's; anything else clears
+                        if let Some(tn) = ty_node {
+                            self.note_union_binding(name, Some(tn));
+                        } else {
+                            let copied = match self.ctx.ast.expr(init) {
+                                ExprKind::Path { segs } if segs.len() == 1 => self
+                                    .union_syms
+                                    .get(&segs[0].name)
+                                    .copied(),
+                                _ => self.union_provenance(init).map(|(g, _)| g),
+                            };
+                            match copied {
+                                Some(g) => {
+                                    self.union_syms.insert(name, g);
+                                }
+                                None => {
+                                    self.union_syms.remove(&name);
+                                }
+                            }
+                        }
                     }
                     Some(names) => {
                         // `let (a, b) = ..` (RFC 0007): each binding takes
@@ -102,6 +126,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 loop_var: false,
                                 origins: Vec::new(),
                             });
+                            // a fresh binding from a tuple field carries no
+                            // union provenance
+                            self.union_syms.remove(n);
                         }
                     }
                 }

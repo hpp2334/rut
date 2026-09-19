@@ -824,11 +824,28 @@ impl<'a> Ctx<'a> {
         node: NodeHandle<AnyTy>,
         subst: &[(IdentId, TypeId)],
     ) -> Vec<BoundMember> {
+        self.resolve_bound_members_in(node, subst, false)
+    }
+
+    /// The recursive resolver. `in_union` marks members resolved THROUGH a
+    /// union spelling — a `TyUnion` bound node, or a union alias in bound
+    /// position. Type-union bounds (RFC 0043 §3, native-fastpath phase 1):
+    /// a union bound takes type NAMES only — a trait member diagnoses and
+    /// drops out. A trait bound must stand alone (`K requires Enc`), where
+    /// satisfaction is the one-trait fact the RFC 0012 registry answers;
+    /// inside a union it would quietly turn capability resolution
+    /// ("every named member has the method") into an any-impl fact.
+    fn resolve_bound_members_in(
+        &mut self,
+        node: NodeHandle<AnyTy>,
+        subst: &[(IdentId, TypeId)],
+        in_union: bool,
+    ) -> Vec<BoundMember> {
         match self.ast.ty(node) {
             TypeKind::TyUnion { elems } => {
                 let mut out = Vec::new();
                 for e in elems.clone() {
-                    out.extend(self.resolve_bound_members(e, subst));
+                    out.extend(self.resolve_bound_members_in(e, subst, true));
                 }
                 out
             }
@@ -842,19 +859,37 @@ impl<'a> Ctx<'a> {
                 match self.aliases[idx].resolved {
                     Some(AliasTarget::Union) => {
                         let target = self.aliases[idx].target;
-                        self.resolve_bound_members(target, subst)
+                        self.resolve_bound_members_in(target, subst, true)
                     }
-                    _ => {
-                        let t = self.resolve_type(node, subst);
-                        vec![self.bound_member_of(t)]
-                    }
+                    _ => self.one_bound_member(node, subst, in_union),
                 }
             }
-            _ => {
-                let t = self.resolve_type(node, subst);
-                vec![self.bound_member_of(t)]
-            }
+            _ => self.one_bound_member(node, subst, in_union),
         }
+    }
+
+    /// One bound member at a leaf type node; under a union spelling a
+    /// trait member diagnoses and is dropped (the bound stays malformed —
+    /// the diagnostics speak; admission sees only what survived).
+    fn one_bound_member(
+        &mut self,
+        node: NodeHandle<AnyTy>,
+        subst: &[(IdentId, TypeId)],
+        in_union: bool,
+    ) -> Vec<BoundMember> {
+        let t = self.resolve_type(node, subst);
+        let m = self.bound_member_of(t);
+        if let (true, BoundMember::Trait(tid)) = (in_union, m) {
+            let tname = self.name(self.traits[tid as usize].name).to_string();
+            self.err(
+                self.ast.span(node.id()),
+                format!(
+                    "`{tname}` is a trait — a union bound takes type names only; a trait bound must stand alone (RFC 0043)"
+                ),
+            );
+            return vec![];
+        }
+        vec![m]
     }
 
     fn bound_member_of(&self, t: TypeId) -> BoundMember {
@@ -862,6 +897,97 @@ impl<'a> Ctx<'a> {
             TyKind::TraitObj { trait_id } => BoundMember::Trait(*trait_id),
             _ => BoundMember::Concrete(t),
         }
+    }
+
+    /// Does the bound node SPELL a union — a `TyUnion`, or an alias
+    /// resolving to a union target? pure shape question; alias
+    /// validation is the admission path's business.
+    pub(crate) fn bound_is_union(&self, node: NodeHandle<AnyTy>) -> bool {
+        match self.ast.ty(node) {
+            TypeKind::TyUnion { .. } => true,
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
+                self.find_alias(segs[0].name)
+                    .map_or(false, |a| matches!(a.resolved, Some(AliasTarget::Union)))
+            }
+            _ => false,
+        }
+    }
+
+    /// The capability probe behind union bounds (RFC 0043 §3,
+    /// native-fastpath phase 1): does `ty` provide `name` as a method?
+    /// Surfaces scanned: the str/bytes members, prim `builtin impl`s,
+    /// inherent data methods (declared or `impl T` blocks), the `[T]`
+    /// and `opaque` inherent impls, and trait impls — local and other
+    /// modules' registrations (RFC 0012 §2). Arity/signature stay the
+    /// call's business: this answers "a member can be called this way".
+    pub(crate) fn member_has_method(&self, ty: TypeId, name: IdentId) -> bool {
+        match self.types.kind(ty) {
+            TyKind::Str => {
+                matches!(name, sym::LEN | sym::SLICE | sym::CODE | sym::ENCODE)
+                    || self.has_trait_impl_method(ty, name)
+            }
+            TyKind::Bytes => {
+                matches!(name, sym::LEN | sym::DECODE | sym::CLONE)
+                    || self.has_trait_impl_method(ty, name)
+            }
+            TyKind::Prim(_) => self.builtin_impl(name, ty).is_some() || self.has_trait_impl_method(ty, name),
+            TyKind::Data { .. } => {
+                // inherent: the declaring class/struct's inline methods or
+                // an `impl T { .. }` block
+                let inherent = match self.inst_data.get(&ty).cloned() {
+                    Some((dname, _)) => self
+                        .find_data(dname)
+                        .map_or(false, |d| d.methods.iter().any(|(n, _)| *n == name)),
+                    None => self
+                        .datas
+                        .iter()
+                        .find(|(_, d)| matches!(self.types.kind(d.ty), TyKind::Data { .. }) && self.types.dense(d.ty) == self.types.dense(ty))
+                        .map_or(false, |(_, d)| d.methods.iter().any(|(n, _)| *n == name)),
+                } || self
+                    .impls
+                    .iter()
+                    .any(|im| im.inherent && self.impl_target_is(im, ty) && im.methods.iter().any(|(n, _)| *n == name));
+                inherent || self.has_trait_impl_method(ty, name)
+            }
+            TyKind::Array { .. } => self
+                .impls
+                .iter()
+                .any(|im| {
+                    im.inherent
+                        && matches!(&im.target_data, Some((d, _)) if *d == sym::ARRAY)
+                        && im.methods.iter().any(|(n, _)| *n == name)
+                })
+                || self.has_trait_impl_method(ty, name),
+            TyKind::Opaque => self
+                .impls
+                .iter()
+                .any(|im| im.inherent && im.target == TY_OPAQUE && im.methods.iter().any(|(n, _)| *n == name)),
+            _ => false,
+        }
+    }
+
+    /// Is the impl registered for `target` (exactly, or by the target's
+    /// generic class name when `target` is an instantiation)?
+    fn impl_target_is(&self, im: &ImplDecl, target: TypeId) -> bool {
+        im.target == target
+            || matches!(&im.target_data, Some((d, _)) if self
+                .inst_data
+                .get(&target)
+                .map_or(false, |(rd, _)| rd == d))
+    }
+
+    /// A trait impl (local, or another module's registration — RFC 0012 §2)
+    /// providing `name` on `target`.
+    pub(crate) fn has_trait_impl_method(&self, target: TypeId, name: IdentId) -> bool {
+        self.impls.iter().any(|im| {
+            !im.inherent
+                && self.impl_target_is(im, target)
+                && im.methods.iter().any(|(n, _)| *n == name)
+                && self.trait_by_id(im.trait_id).methods.iter().any(|m| m.name == name)
+        }) || self
+            .extern_impls
+            .iter()
+            .any(|im| im.target == target && im.methods.iter().any(|(n, _)| *n == name))
     }
 
     /// Gate a completed substitution against the item's inline bounds

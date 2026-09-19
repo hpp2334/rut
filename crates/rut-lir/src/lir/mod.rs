@@ -130,6 +130,15 @@ pub struct FnCompiler<'a, 'b> {
     /// inside a desugared `for..of` emit closure (RFC 0012 §6):
     /// `break` → `return false`, `continue` → `return true`
     emit_closure: bool,
+    /// Type-union bounds in scope for THIS instantiation (RFC 0043 §3,
+    /// native-fastpath phase 1): fn/method bounds plus — for methods of a
+    /// generic class — the class's own `requires`, filtered to
+    /// union-SPELLED bounds (trait bounds stay admission-only). Read by
+    /// the method-call capability gate.
+    union_bounds: HashMap<IdentId, NodeHandle<AnyTy>>,
+    /// locals bound from a union-bounded generic (param/let/field-copy
+    /// provenance): local name → the bounded generic
+    union_syms: HashMap<IdentId, IdentId>,
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
@@ -275,6 +284,45 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             );
             return Err(());
         }
+        // Type-union bounds in scope for THIS instantiation (RFC 0043 §3,
+        // native-fastpath phase 1): the item's own bounds plus — for a
+        // class method — the class's `requires`. Only union-SPELLED
+        // bounds register: a trait bound stays admission-only, and its
+        // method calls keep resolving per instantiation (mapset's
+        // `K requires Hashable` law is untouched).
+        let mut union_bounds: std::collections::HashMap<IdentId, NodeHandle<AnyTy>> =
+            std::collections::HashMap::new();
+        match ctx.ast.kind(node) {
+            Kind::Item(ItemKind::Fn(f)) => {
+                let bounds = f.bounds.clone();
+                for (g, b) in bounds {
+                    if ctx.bound_is_union(b) {
+                        union_bounds.insert(g, b);
+                    }
+                }
+            }
+            Kind::Member(MemberKind::MethodDecl(m)) => {
+                let mbounds = m.bounds.clone();
+                for (g, b) in mbounds {
+                    if ctx.bound_is_union(b) {
+                        union_bounds.insert(g, b);
+                    }
+                }
+            }
+            _ => {}
+        }
+        // the class's own bounds when this method is one of a generic
+        // class's (its methods or a trait impl over the class)
+        if let Some(cn) = class_name {
+            let crequires = ctx.find_data(cn).map(|d| d.requires.clone());
+            if let Some(rs) = crequires {
+                for (g, b) in rs {
+                    if ctx.bound_is_union(b) {
+                        union_bounds.insert(g, b);
+                    }
+                }
+            }
+        }
         let mut c = FnCompiler {
             ctx,
             regs: Vec::new(),
@@ -296,6 +344,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_ret: None,
             inline_stack: Vec::new(),
             emit_closure: false,
+            union_bounds,
+            union_syms: std::collections::HashMap::new(),
         };
         // signature: params (self first for methods), resolved under subst.
         // Under the slot ABI (`slot_self`, a prim-target impl method) the
@@ -369,6 +419,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     } else {
                         Vec::new()
                     };
+                    // union-bound provenance (RFC 0043 §3): a param whose
+                    // declared type NODE spells a union-bounded generic
+                    // records that generic — method calls on it gate on
+                    // every member of the bound
+                    if let MemberKind::Param(ParamData { ty: Some(tn), .. }) = c.ctx.ast.param(*p) {
+                        c.note_union_binding(*name, Some(*tn));
+                    }
                     c.locals.push(Local {
                         name: *name,
                         reg,
@@ -465,6 +522,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_ret: None,
             inline_stack: Vec::new(),
             emit_closure: false,
+            union_bounds: std::collections::HashMap::new(),
+            union_syms: std::collections::HashMap::new(),
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type
@@ -564,6 +623,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             inline_ret: None,
             inline_stack: Vec::new(),
             emit_closure: true,
+            union_bounds: std::collections::HashMap::new(),
+            union_syms: std::collections::HashMap::new(),
         };
         // the loop variable: the closure's parameter — a fresh binding
         // per iteration by construction (each emit call is a fresh frame);

@@ -826,6 +826,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.deref_for_use(rt, rreg, sp.lo)
             }
         };
+        // capability resolution through a union bound (RFC 0043 §3,
+        // native-fastpath phase 1): a method call on a value whose
+        // declared type is a union-bounded `K` requires EVERY member of
+        // the bound to provide the method — the union admits all of its
+        // members at once, so each instantiation must typecheck. Dispatch
+        // below stays per-instantiation (the concrete member's impl).
+        self.check_union_capability(recv, name, sp);
         // core's builtin-impl numeric methods (RFC 0032 §1.1 R2):
         // `x.wrapping_add(y)` on an integer receiver — ambient on the
         // primitive (no `use`), lowered inline off the receiver's width.
@@ -1692,6 +1699,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let saved_ret = self.ret_ty;
         let saved_inline_ret = self.inline_ret;
         let saved_inline_self = self.inline_self;
+        let saved_ub = std::mem::take(&mut self.union_bounds);
+        let saved_us = std::mem::take(&mut self.union_syms);
+        self.arm_union_bounds(&md.bounds, Some(dname));
         self.self_ty = Some(self_ty);
         self.current_class = Some(dname);
         self.ret_ty = ret_ty;
@@ -1702,8 +1712,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
         let mut ai = 0usize;
         for p in &params {
-            if let MemberKind::Param(ParamData { name, is_mut, .. }) = self.ctx.ast.param(*p) {
+            if let MemberKind::Param(ParamData { name, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
                 self.locals.push(Local { name: *name, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                self.note_union_binding(*name, *ty);
                 ai += 1;
             }
         }
@@ -1721,6 +1732,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ret_ty = saved_ret;
         self.inline_ret = saved_inline_ret;
         self.inline_self = saved_inline_self;
+        self.union_bounds = saved_ub;
+        self.union_syms = saved_us;
         let _ = sp;
         if !ok {
             return false;
@@ -1778,6 +1791,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let saved_ret = self.ret_ty;
         let saved_inline_ret = self.inline_ret;
         let saved_inline_self = self.inline_self;
+        let saved_ub = std::mem::take(&mut self.union_bounds);
+        let saved_us = std::mem::take(&mut self.union_syms);
+        // the callee's union-spelled bounds gate the spliced body (RFC
+        // 0043 §3) — a free fn has no class
+        self.arm_union_bounds(&fd.bounds, None);
         self.self_ty = None;
         self.current_class = None;
         self.ret_ty = ret_ty;
@@ -1785,8 +1803,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let params: Vec<NodeHandle<AnyParam>> = fd.params.clone();
         let mut ai = 0usize;
         for p in &params {
-            if let MemberKind::Param(ParamData { name: pname, is_mut, .. }) = self.ctx.ast.param(*p) {
+            if let MemberKind::Param(ParamData { name: pname, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
                 self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                self.note_union_binding(*pname, *ty);
                 ai += 1;
             }
         }
@@ -1804,6 +1823,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ret_ty = saved_ret;
         self.inline_ret = saved_inline_ret;
         self.inline_self = saved_inline_self;
+        self.union_bounds = saved_ub;
+        self.union_syms = saved_us;
         let _ = sp;
         if !ok {
             return false;
@@ -1870,6 +1891,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let saved_ret = self.ret_ty;
         let saved_inline_ret = self.inline_ret;
         let saved_inline_self = self.inline_self;
+        let saved_ub = std::mem::take(&mut self.union_bounds);
+        let saved_us = std::mem::take(&mut self.union_syms);
+        self.arm_union_bounds(&md.bounds, current_class);
         self.self_ty = Some(self_ty);
         self.current_class = current_class;
         self.ret_ty = ret_ty;
@@ -1881,8 +1905,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
         let mut ai = 0usize;
         for p in &params {
-            if let MemberKind::Param(ParamData { name: pname, is_mut, .. }) = self.ctx.ast.param(*p) {
+            if let MemberKind::Param(ParamData { name: pname, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
                 self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                self.note_union_binding(*pname, *ty);
                 ai += 1;
             }
         }
@@ -1900,6 +1925,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ret_ty = saved_ret;
         self.inline_ret = saved_inline_ret;
         self.inline_self = saved_inline_self;
+        self.union_bounds = saved_ub;
+        self.union_syms = saved_us;
         let _ = sp;
         if !ok {
             return false;
@@ -1986,6 +2013,136 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
         Err(())
+    }
+
+    /// The (generic, bound node) when a receiver expression's static type
+    /// is spelled from a union-bounded generic of this frame (RFC 0043
+    /// §3): a bare path bound from one (param, annotated let, a copy of
+    /// either), or a direct data field whose declared type node spells
+    /// the generic (`self.k` in a class body). Pure AST + declared-shape
+    /// question — the receiver does not need compiling twice.
+    pub(crate) fn union_provenance(&mut self, recv: NodeHandle<AnyExpr>) -> Option<(IdentId, NodeHandle<AnyTy>)> {
+        match self.ctx.ast.expr(recv).clone() {
+            ExprKind::Path { segs } if segs.len() == 1 => {
+                let g = *self.union_syms.get(&segs[0].name)?;
+                self.union_bounds.get(&g).map(|&b| (g, b))
+            }
+            ExprKind::Field { recv: base, name } => {
+                let ExprKind::Path { segs } = self.ctx.ast.expr(base) else {
+                    return None;
+                };
+                if segs.len() != 1 || !segs[0].generics.is_empty() {
+                    return None;
+                }
+                let base_ty = self.lookup(segs[0].name)?.ty;
+                let field_ty_node = self.declared_field_ty_node(base_ty, name)?;
+                match self.ctx.ast.ty(field_ty_node) {
+                    TypeKind::TyPath { segs, .. }
+                        if segs.len() == 1 && segs[0].generics.is_empty() =>
+                    {
+                        let g = segs[0].name;
+                        self.union_bounds.get(&g).map(|&b| (g, b))
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// The declared type NODE of field `name` on a data value of `ty` —
+    /// the instantiation's substitute types are concrete, but the
+    /// capability gate spells the GENERIC through the original decl.
+    fn declared_field_ty_node(&self, base_ty: TypeId, name: IdentId) -> Option<NodeHandle<AnyTy>> {
+        let decl_node: NodeHandle<AnyItem> = match self.ctx.inst_data.get(&base_ty).cloned() {
+            Some((dname, _)) => self.ctx.find_data(dname)?.node,
+            None => self
+                .ctx
+                .datas
+                .iter()
+                .find(|(_, d)| self.ctx.types.dense(d.ty) == self.ctx.types.dense(base_ty))?
+                .1
+                .node,
+        };
+        let fields = match self.ctx.ast.item(decl_node) {
+            ItemKind::Class { fields, .. } | ItemKind::Dataclass { fields, .. } => fields.clone(),
+            _ => return None,
+        };
+        fields.iter().find_map(|&f| {
+            let fd = self.ctx.ast.field_decl(f);
+            (fd.name == name).then_some(fd.ty)
+        })
+    }
+
+    /// Record (or clear) the union provenance of a freshly bound local:
+    /// the declared type NODE spells a union-bounded generic of this
+    /// frame — otherwise the name binds without one.
+    pub(crate) fn note_union_binding(&mut self, name: IdentId, ty: Option<NodeHandle<AnyTy>>) {
+        match ty {
+            Some(tn) => match self.ctx.ast.ty(tn) {
+                TypeKind::TyPath { segs, .. }
+                    if segs.len() == 1 && segs[0].generics.is_empty()
+                        && self.union_bounds.contains_key(&segs[0].name) =>
+                {
+                    self.union_syms.insert(name, segs[0].name);
+                }
+                _ => {
+                    self.union_syms.remove(&name);
+                }
+            },
+            None => {
+                self.union_syms.remove(&name);
+            }
+        }
+    }
+
+    /// Register the union-spelled bounds of a decl being spliced inline
+    /// (its own bounds plus its class's `requires`). The standalone
+    /// instantiation compiles the same body, so the capability gate
+    /// applies inside inlines too — a small body is not exempt from the
+    /// union law.
+    fn arm_union_bounds(&mut self, bounds: &[(IdentId, NodeHandle<AnyTy>)], class_name: Option<IdentId>) {
+        for (g, b) in bounds {
+            if self.ctx.bound_is_union(*b) {
+                self.union_bounds.insert(*g, *b);
+            }
+        }
+        if let Some(cn) = class_name {
+            if let Some(d) = self.ctx.find_data(cn) {
+                let rs = d.requires.clone();
+                for (g, b) in rs {
+                    if self.ctx.bound_is_union(b) {
+                        self.union_bounds.insert(g, b);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The capability gate itself (RFC 0043 §3, native-fastpath phase 1):
+    /// a call `recv.name(..)` where the receiver is spelled from a
+    /// union-bounded generic requires EVERY member of the bound to
+    /// provide `name`. The union admits all its members at once, so a
+    /// body written against `K` must typecheck for each — diagnosing now
+    /// (naming the offending member and the bound) where per-instantiation
+    /// implicit checking would only surface it if that member were ever
+    /// actually instantiated. Dispatch is unaffected: the concrete member
+    /// still binds its own impl below.
+    fn check_union_capability(&mut self, recv: NodeHandle<AnyExpr>, name: IdentId, sp: rut_lexer::span::Span) {
+        let Some((g, bnode)) = self.union_provenance(recv) else { return };
+        let members = self.ctx.resolve_bound_members(bnode, &self.subst);
+        for m in members {
+            let crate::check::BoundMember::Concrete(c) = m else { continue };
+            if !self.ctx.member_has_method(c, name) {
+                let ty = self.ctx.type_name(c).to_string();
+                let union = crate::check::bound_ty_str(self.ctx, bnode);
+                self.ctx.err(sp, format!(
+                    "`{ty}` does not provide `{}` — `{}` requires `{union}` and a call on `{}` needs every member of the union to provide it (RFC 0043)",
+                    self.ctx.name(name), self.ctx.name(g), self.ctx.name(g)
+                ));
+                return;
+            }
+        }
     }
 }
 
