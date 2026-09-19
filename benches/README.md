@@ -109,24 +109,24 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 Honest framing: V8's `Map`/`Set` are inline-cache-optimized and QuickJS
 has its own fast paths — these rows are not expected to be a win. The
 point is rut's number for the RC-heap slots its keyed collections pay.
-Allocation profile (mapset v1.1): one `*K` cell per key — shared, not
-copied, for ref keys — plus one `*V` cell per value and the
-`hashes`/`states` scalar arrays; there are **no** `Hashable` boxes and
-no vtable dispatch on the map path (`RawHashTable<K>` monomorphizes per
-key type, so `hash`/`hash_eq` are static, origin-pinned calls — inlined
-for tiny bodies). The copy law still applies: binding an array value to
-a local deep-copies the buffer, unless the source is provably dead, in
-which case the engine move-elides the copy — mapset's hot loops index
-fields directly (`self.states[at]`) and only `rehash` holds old-array
-bindings, the blessed O(1) case. See the performance log below for the
-before/after these profiles bought.
+Allocation profile (mapset v1.1, byref spelling — RFC 0044): one `?K`
+handle per key — a share of the key's cell, never a copy — plus one
+`?V` handle per value and the `hashes`/`states` scalar arrays; there
+are **no** `Hashable` boxes and no vtable dispatch on the map path
+(`RawHashTable<K>` monomorphizes per key type, so `hash`/`hash_eq` are
+static, origin-pinned calls — inlined for tiny bodies). Bindings never
+copy (RFC 0044): `let b = a` is an O(1) share of the array cell, so
+`rehash`'s old-array bindings make the swap O(1) by construction — the
+old move-elision pass and its copy law are gone. mapset's hot loops
+still index fields directly (`self.states[at]`): it reads clearly and
+skips the handle traffic. See the performance log below.
 
 The four `nmapset` workloads (`nmapset-int`, `nmapset-str`,
 `nmap-hashset`, `nmap-knucleotide`) are line-for-line clones of the
 mapset workloads over `rut/nmapset` — the **host-implemented** key
 table experiment (the "C builtin" architecture qjs itself uses): keys
 live as owned Rust data behind one `opaque` box per table, values stay
-rut-side in a parallel `[*V]` array, and every map op crosses the host
+rut-side in a parallel `[?V]` array, and every map op crosses the host
 boundary (one key box mint + one or two host calls). The nmapset pkg
 ships mapset's exact mix64/FNV-1a constants, so every key hashes to the
 same bits and the checksums MUST equal the mapset rows' — a mismatch is
@@ -232,6 +232,100 @@ a host table buys −20-46% over pure-rut mapset and closes to 1.3-1.7x
 qjs on integer keys, but the crossing tax per op keeps generic-rut
 callers from reaching the C-builtin floor.
 
+## Performance log — the byref flip: pass-by-reference + `?T` (Sep 2026)
+
+The byref-nullable batch (RFC 0044) replaced the copy law with
+pass-by-reference sharing: records and arrays — previously **value**
+types, memcpy'd on binding and on store — are now shared cells (one
+handle retain/release), the `CloneVal`/`MoveVal`/`ArrGetRef`/`ValEq`
+ops and the move-elision liveness pass are deleted, `?T` (the renamed
+pointer) is the one nullable, and `bytes.clone()` is the only copy.
+Full suite, same-day runs, 3 reps + 1 warmup: before = the mapset-host
+batch HEAD (the binary the log above ends on), after = the byref batch
+HEAD. **All 23 checksums equal `expected.json` on all three runtimes**
+— the regime change is behavior-neutral by construction (identity `==`
+and aliasing are the flagged semantics, and no workload depends on
+them). VM-heap peaks are unchanged to the kilobyte on every row
+(`array` 38.52 MB, `hashmap-int` 16.38 MB, `sieve` 20.84 MB,
+`knucleotide` 41.50 MB, `binary-trees` 2.50 MB) — sharing changes
+handle traffic, not the live set.
+
+In-process probe, exec median (the clean same-host signal):
+
+| workload         | exec before | exec after | Δ        | fuel before → after |
+|------------------|-------------|------------|----------|---------------------|
+| fannkuch         | 10.0 ms     | 4.6 ms     | **−54%** | 2.37 M → 2.01 M     |
+| quicksort        | 18.0 ms     | 10.4 ms    | **−42%** | 4.20 M → 4.05 M     |
+| binary-trees     | 9.1 ms      | 7.6 ms     | **−17%** | 1.049 M → 1.049 M   |
+| nmapset-int      | 111.2 ms    | 98.1 ms    | **−12%** | 24.80 M → 24.80 M   |
+| hashmap-int      | 177.4 ms    | 167.7 ms   | −5%      | 64.76 M → 64.76 M   |
+| nmap-hashset     | 60.7 ms     | 58.9 ms    | −3%      | 16.98 M → 16.98 M   |
+| hashset          | 119.7 ms    | 117.8 ms   | −2%      | 56.23 M → 56.23 M   |
+| knucleotide      | 958.7 ms    | 936.1 ms   | −2%      | 418.77 M → 418.77 M |
+| hashmap-str      | 250.9 ms    | 251.2 ms   | 0%       | 111.49 M → 111.49 M |
+| nmap-knucleotide | 744.3 ms    | 756.6 ms   | +2%      | 323.66 M → 323.66 M |
+| nmapset-str      | 197.3 ms    | 207.4 ms   | +5%      | 86.41 M → 86.41 M   |
+| alloc            | 17.4 ms     | 18.2 ms    | +5%      | 22.00 M → 22.00 M   |
+| sieve            | 160.2 ms    | 170.8 ms   | +7%      | 22.20 M → 21.17 M   |
+| array            | 224.1 ms    | 270.6 ms   | **+21%** | 60.49 M → 63.49 M   |
+
+(The scalar-loop rows — `intloop`, `floatloop`, `mandelbrot`, `call`,
+`mathhost`, `nbody`, `spectral-norm`, `matrix-mul`, `u64loop`,
+`fasta` — are flat within noise, ±3%, as the law predicts: primitives
+and `fn` values still copy by slot.)
+
+Where the wins came from: the old regime copied WHOLE records and
+arrays on binding and on store. fannkuch and quicksort churn arrays
+through calls and swaps — every argument binding was a memcpy unless
+the liveness pass proved the source dead — and binary-trees stored
+every child node into its parent slot by value. Sharing turns all of
+it into one handle retain, and the fuel column shows it: fannkuch
+runs 15% fewer ops (copies the elision pass could not prove dead are
+simply gone), quicksort 4%. The map rows moved least: their `rehash`
+copies were already the move-elision pass's blessed case, so deleting
+the machinery changes little — the fuel column is byte-identical on
+every map row. nmapset-int's −12% is the wrapper profiting from `?V`
+being the absence type (`get` returns the stored cell directly).
+
+Where the cost showed up — honest regressions: a growable `Vec<T>`'s
+backing is `buf: [?T]` under the sharing law (RFC 0044 §5), so every
+PRIMITIVE element store boxes into a one-slot cell (`MakeOpt` +
+retain) and every load derefs. The `array` workload (1M-element
+`Vec<i32>` push/index/iterate churn) pays **+21% exec on +5% fuel** —
+the new ops cost more per op than the raw slot moves they replaced —
+and `sieve` +7% exec despite −5% fuel (its marks stores elide a copy,
+its primes pushes box). `alloc` +5%: allocation churn pays
+retain/release where a memcpy used to be. Flat `[T]` buffers are
+untouched (`matrix-mul` and the numeric rows are flat). The known
+lever — a flat primitive backing for growable sequences under a
+boxed-only-when-shared scheme (RFC 0044 OQ-1) — is deferred.
+
+Cross-runtime net medians for the flagged rows (rut, wall − startup):
+
+| workload     | net before | net after | Δ        | qjs net after     |
+|--------------|------------|-----------|----------|-------------------|
+| fannkuch     | 11.7 ms    | 6.3 ms    | **−46%** | 8.6 ms (rut leads)|
+| quicksort    | 20.3 ms    | 12.2 ms   | **−40%** | 11.9 ms (even)    |
+| binary-trees | 10.3 ms    | 7.7 ms    | **−25%** | 8.7 ms (rut leads)|
+| nmap-hashset | 70.7 ms    | 67.1 ms   | −5%      | 55.5 ms           |
+| hashmap-str  | 269.8 ms   | 261.1 ms  | −3%      | 39.0 ms           |
+| sieve        | 172.3 ms   | 165.0 ms  | −4%      | 53.1 ms           |
+| hashmap-int  | 184.9 ms   | 184.6 ms  | 0%       | 62.5 ms           |
+| hashset      | 131.5 ms   | 132.3 ms  | 0%       | 54.6 ms           |
+| knucleotide  | 979.6 ms   | 968.5 ms  | −1%      | 143.5 ms          |
+| nmapset-int  | 118.5 ms   | 116.7 ms  | −1.5%    | 62.5 ms           |
+| nmapset-str  | 211.6 ms   | 209.9 ms  | −1%      | 40.4 ms           |
+| nmap-knucleotide | 785.3 ms | 781.5 ms | 0%      | 142.8 ms          |
+| array        | 210.5 ms   | 287.6 ms  | **+37%** | 117.2 ms          |
+
+Position vs the field: rut goes AHEAD of QuickJS on fannkuch (6.3 vs
+8.6 ms net) and binary-trees (7.7 vs 8.7 ms) for the first time on
+this suite, and quicksort is now even (12.2 vs 11.9 ms) — all three
+were the workloads the old regime copied hardest. The `array`
+regression widens that one gap (2.45x qjs net, from 1.78x). The str
+map rows stay where they always were — `encode()`-per-hash bound, not
+copy bound.
+
 ## Method (and what "fair" means here)
 
 - Each runtime is invoked the way it is normally used: `rut run
@@ -295,9 +389,10 @@ callers from reaching the C-builtin floor.
   fasta's LCG (the harness takes no stdin) and built identically on
   both sides; 12-mer get-or-insert churn fills a `HashMap<str, i32>`,
   plus 1-/2-mer maps and 100 generated 12-mer fragment probes.
-- `binary-trees` is an *adaptation*: it builds recursive dataclasses
-  directly (`left/right: Option<Node>`, RFC 0009 recursive shapes) and
-  counts them, rather than the benchmark-game's varying-depth trees. Each
+- `binary-trees` is an *adaptation*: it builds recursive structs
+  directly (`left/right: ?Node`, `nil` when absent — RFC 0005 §8,
+  RFC 0044) and counts them, rather than the benchmark-game's
+  varying-depth trees. Each
   node is one RC cell, so the drop at scope exit is still the RC
   allocation/drop path this workload measures.
 - **`fasta`** is likewise an adaptation: LCG-driven ACGT building into one

@@ -2,6 +2,11 @@
 
 - **Status:** Draft
 - **Date:** 2026-08-23
+- **Revised:** 2026-09 — the byref-nullable amendment (RFC 0044): the
+  regime is pass-by-reference sharing (bindings share cells; only
+  primitives and `fn` values copy), the eager copy is `bytes.clone()`
+  (`own` is removed), `==` on cells is identity, and absence is the
+  nullable `?T` (the old `*T` spelling).
 - **Author:** hpp2334
 - **Depends on:** RFC 0003 (modules)
 - **Supersedes:** RFC 0002 §2, §8 (pre-restructure)
@@ -30,15 +35,12 @@ deferred.
 | user: value | `dataclass D { .. }` | open record — **cell handle, shared** (reference semantics; `own` for copies), methods & impl blocks allowed (RFC 0009); payload a slot array (RFC 0015 §4) |
 | user: value | `class C { .. }` | sealed record — also a cell handle, shared (RFC 0010), payload a slot array (RFC 0015 §4) |
 
-- `Vec<f32>` is a flat `f32` buffer behind a header — no per-element boxing,
-  no per-element refcount traffic (RFC 0016 §4). `Vec<Point>` (dataclass or
-  class element) is likewise flat: values stored inline, no headers, no
-  refcounts — and `[Point]` has no header at all: it *is* the
-  N-slot inline block, copied whole.
 - `Vec<f32>` is a flat `f32` buffer behind a header — no per-element
   handles, no per-element refcount traffic (RFC 0016 §4). `Vec<Point>`
   (composite elements) stores one cell pointer per element; `[T]`
-  is the same shape with the length frozen at `N`.
+  is the same shape with the length frozen at `N` — and binding a
+  `[T]` (any `[T]`) shares the cell; nothing is ever copied whole
+  (RFC 0044).
 - **Binary data is `bytes`**: an immutable, content-compared octet buffer
   (`Vec<u8>` remains the mutable builder; `freeze()` turns one into a
   `bytes`). Compare it with `==`, index it as `b[i]: u8`, iterate it with
@@ -52,16 +54,19 @@ deferred.
 
 ## 2. One regime: primitives by value, everything else shared
 
-Primitives (`u8..u64`, `i8..i64`, `u/isize`, `f32`/`f64`, `bool`,
-`char`) copy on assignment/passing/return — plain slot moves. **Every
-other type is a refcounted heap cell handle** (RFC 0016 §1):
+Primitives (`u8..u64`, `i8..i64`, `u/isize`, `f32`/`f64`, `bool`) and
+`fn` values copy on assignment/passing/return — plain slot moves.
+**Every other type is a refcounted heap cell handle** (RFC 0016 §1):
 assignment shares, and mutation through any alias is visible through
-all of them — dataclass and class instances, `str`, `Vec`, `[T]`,
-enums, `Opaque`, trait-typed values alike. Writing is gated by the `mut`-binding
-law (RFC 0003 §1), never by the sharing. The **eager copy is the
-`own(x)` builtin** (RFC 0011 §1): shallow — primitive fields copied,
-handle fields still shared. `Weak(x)` demotes any handle to a
-non-keeping ref (RFC 0017). There is no `&`/`*` syntax anywhere.
+all of them — struct and class instances, `str`, `bytes`, `Vec`, `[T]`,
+enums, `opaque` boxes, trait-typed values, `?T` boxes alike (RFC 0044).
+Writing is gated by the `mut`-binding law (RFC 0003 §1), never by the
+sharing. There is no eager copy: `own` is removed — **`bytes.clone()`
+is the one copy escape hatch** (RFC 0044 §4). `==` on cells is
+**identity** (the raw slot compare); `str`/`bytes` compare by content
+(RFC 0044 §3). `Weak(x)` demotes any handle to a
+non-keeping ref (RFC 0017). There is no `&`/`*` syntax anywhere;
+absence is the nullable `?T` (RFC 0005 §8).
 
 **No `box<T>`, no loans.** A loan needs an exclusivity proof; rut has no
 compile-time borrow checker and no runtime aliasing control over
@@ -102,9 +107,9 @@ numeric fields `.0`, `.1`, .. — are the v1.1 error convention:
 second element is success** (§5 of RFC 0005 for the `Option`/`Result`
 removal this replaces). `nil` is the empty type and its one value; a
 function without a result arrow returns it, and a context-free `nil`
-has type `nil` — pointer positions (`let p: *T = nil`, `p == nil`,
-`left: nil` in a literal) type it as `*T` through expected-type
-propagation (RFC 0005).
+has type `nil` — nullable positions (`let p: ?T = nil`, `p == nil`,
+`left: nil` in a literal) type it as `?T` through expected-type
+propagation (RFC 0005 §8, RFC 0044).
 
 ## Open questions
 

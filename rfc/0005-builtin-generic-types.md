@@ -2,6 +2,12 @@
 
 - **Status:** Draft
 - **Date:** 2026-08-23
+- **Revised:** 2026-09 — the byref-nullable amendment (RFC 0044): §8's
+  pointer surface `*T`/`&v` is REMOVED and replaced by the nullable
+  `?T` (prefix-only, `nil` the null, auto-deref at every use); §9's
+  generic zero storage moves from `[*T]` to `[?T]`; §10's `own` removal
+  reason becomes the sharing law (`bytes.clone()` is the one copy
+  escape hatch); the `Vec` backing is a `buf: [?T]`.
 - **Author:** hpp2334
 - **Depends on:** RFC 0004 (primitives)
 - **Supersedes:** RFC 0002 §3 (pre-restructure)
@@ -9,25 +15,37 @@
 
 ## Summary
 
-## 8. Pointers — `*T` and `nil` (v1.1)
+## 8. The nullable — `?T` and `nil` (RFC 0044)
 
-`*T` is a nil-able, rc-backed pointer. `nil` is its null literal —
+`?T` is a nil-able cell — the same one-slot rc-backed box the old `*T`
+pointer was, spelled to say what it means. `nil` is its null literal —
 and the empty type's one value (RFC 0004 §4): a context-free `nil` has
-type `nil`, while pointer positions (`let p: *T = nil`, `p == nil`,
-`left: nil` in a literal) type it as `*T`. Dereferencing `nil` (field
-access through it) is the `NilDeref` trap —
-never a silent read. Sharing is explicit: `&v` is the address-of — the
-operand's cell as a `*T`, a fresh one-slot box whose payload shares the
-operand's object (RFC 0016 §2) — and writes through the pointer hit the
-shared cell.
+type `nil`, while nullable positions (`let p: ?T = nil`, `p == nil`,
+`left: nil` in a literal) type it as `?T`. Dereferencing `nil` (any
+value use through it) is the `NilDeref` trap — never a silent read.
+Sharing needs no spelling: **every binding shares its cell**
+(RFC 0044 §1) — a `?T` binding IS the cell reference, and writes
+through it hit the shared cell.
 
-- `p.x` / `p.m(..)` auto-deref: field and method access through a
-  pointer reads the pointee.
-- `p == nil` / `p != nil` compare against the null pointer; `*T == *T`
-  is cell identity.
-- `on_drop<T>(p: *T, cleanup: fn(*T))` (RFC 0016 §3) attaches a cleanup
+The spelling is **prefix-only and binds tightest**: `?` applies to the
+type term that follows — `[?T]` is `[T | nil]` (nullable elements),
+`?[T]` is `[T] | nil` (a nullable array), `??T` chains (the same
+runtime box, unwrapped transitively at use sites). The removed
+spellings diagnose: `*T` and postfix `T?` point at `?T`; expression
+`*x`/`&x` point at the sharing law ("pass `x` directly").
+
+- Coercions: **`T → ?T` boxes** (the `MakeOpt` one-slot cell — the box
+  ALIASES the payload's cell, a share; primitives copy bits), **`?T →
+  T` derefs** (a field-0 read + nil check). Both are implicit at the
+  expected-type position; the funnel is transitive through `??T`.
+- `p.x` / `p.m(..)` / `p[i]` / `for (x of p)` auto-deref: every value
+  position reads the payload.
+- `p == nil` / `p != nil` compare against the null slot; `?T == ?T` is
+  slot identity, like every cell (RFC 0044 §3).
+- `?T` does not cross the host boundary — the rule `*T` had (RFC 0023).
+- `on_drop<T>(p: ?T, cleanup: fn(?T))` (RFC 0016 §3) attaches a cleanup
   that runs when the cell's refcount reaches zero — one callback per
-  pointer, a second attach is an error.
+  nullable, a second attach is an error.
 
 ## 9. The bracket spelling — `[T]`, the repeat `[v; n]` (v1.1)
 
@@ -39,10 +57,10 @@ needs no `use` to spell it.
 Construction is the **repeat expression** `[v; n]` — a VALUE and a
 count (`[nil; n]`, `[0u8; cap]`); there is no type-in-expression form (a
 type is not a value). A scalar/nil fill is the memset-class op (a nil
-fill is exactly the zero-fill); a ref fill copies the cell handle n
-times — every slot aliases the one cell. Generic zero-initialized
-storage is structural: pointer arrays `[*T]` with `[nil; n]` — `nil` is
-the slot's zero.
+fill is exactly the zero-fill); a ref fill retains the cell handle n
+times — every slot aliases the one cell (RFC 0044's sharing law: the
+repeat never copies). Generic zero-initialized storage is structural:
+nullable arrays `[?T]` with `[nil; n]` — `nil` is the slot's zero.
 
 The `Array` NAME is removed: the `builtin class Array<T>` decl is gone
 (`a[i]`, `a.len()` are compiler-lowered — no decl needed), and a use
@@ -55,8 +73,8 @@ The builtin sums are gone from `core` — no `Option<T>`, no
 `Result<T, E>`, no constructors or `unwrap` family. Their jobs moved to
 the language's own shapes:
 
-- **Absence** is `nil` on a pointer type (`*T`): a lookup returns
-  `*V`, and `nil` means "not found" (§8).
+- **Absence** is `nil` on a nullable (`?T`): a lookup returns
+  `?V`, and `nil` means "not found" (§8).
 - **Errors** are records: `(T, err)` with a user-chosen `err` type —
   an empty str / `false` / `nil` second element is success
   (RFC 0004 §4).
@@ -65,9 +83,11 @@ the language's own shapes:
 - `checked_add`/`checked_sub`/`checked_mul` return `(value, ok)` —
   `false` on overflow, `value` the wrapped result.
 
-`own(x)` is removed with them: under copy-by-value (RFC 0016 §1) every
-binding already owns its cell, so `own` would be the identity. Sharing
-is `&x` (§8); a use site that still spells `own` (or the removed
+`own(x)` is removed with them: under the sharing law (RFC 0044 §1)
+every binding shares its cell — there is no eager copy for `own` to be
+the inverse of, and no spelling to force one. `bytes.clone()` is the
+one copy escape hatch (RFC 0044 §4); a use site that still spells
+`own` (or the removed
 sums) diagnoses with the removal and its replacement — nothing else is
 kept for compatibility.
 
@@ -141,12 +161,14 @@ Implementations:
   indexing use `strcharat`/`strlen`.
 - `bytes` — the builtin (native) impl, element `u8`; `bytesget`.
 - `Vec<T>` — the `pouch` class (RFC 0028), a record with a
-  `buf: [*T]` field (the pointer-array backing: `[nil; cap]` is the
-  only generic zero, stores keep `&v`) and a `len: i32` field; `v[i]`,
+  `buf: [?T]` field (the nullable-handle backing: `[nil; cap]` is the
+  only generic zero, stores take the `T → ?T`-boxed handle) and a
+  `len: i32` field; `v[i]`,
   `v[i] = x`, `v.len()`, and `for (x of v)` lower to the fused element
-  ops on those fields, loads derefing the stored `&v` — no trait call,
-  no accessor inlining. `for (x of v)` yields the stored `*T`; indexed
-  reads keep value yields.
+  ops on those fields, loads yielding the `?T` (uses auto-deref) — no
+  trait call,
+  no accessor inlining. `for (x of v)` yields the shared element as
+  the binding (RFC 0044 §1); indexed reads compute at `T`.
 
 `str`/`bytes` carry **member contracts** declared per type in the
 prelude (v1.1, RFC 0004 §4): `s.len()`/`s.code()`/`s.encode()`,
@@ -175,7 +197,8 @@ consumer-side wrapper class is the `Logger` pattern (RFC 0028).
 
 `==` on `Option<T>` / `Result<T, E>` is a **compile error**: there is no
 element-wise equality in v1 (no `Equal` trait — RFC 0012 §8; `==`
-compares primitives by value and everything else by cell identity, which
+compares primitives by value and everything else by cell identity —
+RFC 0044 §3 — which
 is almost never what an Option comparison wants). Compare structurally:
 `when`, `.is_some()` / `.is_ok()`, or the payload (`.value == d`).
 

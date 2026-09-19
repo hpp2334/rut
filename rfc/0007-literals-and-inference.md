@@ -2,6 +2,10 @@
 
 - **Status:** Draft
 - **Date:** 2026-08-23
+- **Revised:** 2026-09 — the byref-nullable amendment (RFC 0044): `nil`
+  is the nullable's null literal (the `*T` pointer spelling is gone),
+  and the fixed-array literal allocates its cell under the sharing law
+  (binding shares — nothing copies).
 - **Author:** hpp2334
 - **Depends on:** RFC 0004 (primitives), RFC 0006 (enums)
 - **Supersedes:** RFC 0002 §4, §4.1 (pre-restructure)
@@ -9,7 +13,8 @@
 
 ## Summary
 
-`nil` is the pointer literal (RFC 0005) and the empty type's one
+`nil` is the nullable's null literal (RFC 0005 §8, RFC 0044) and the
+empty type's one
 value (RFC 0004 §4). Tuples are first-class values: type `(A, B)`,
 value `(a, b)`, destructuring `let (a, b) = ..`, numeric field access
 `.0`/`.1`. Every type has a zero value (RFC 0007 §1.1): `0`, `0.0`,
@@ -40,8 +45,10 @@ builtin allocation calls (`Vec<f32>(1024)`).
   `as` binds tighter than `*`, left-associative, and its RHS is a naming
   position restricted to the numeric primitives. There are no implicit
   numeric conversions at all in v1.
-- **Fixed-array literal**: `[e1, .., en]` has type `[T]` — an
-  inline **value**, pure data, no allocation (RFC 0005). It infers `T`
+- **Fixed-array literal**: `[e1, .., en]` has type `[T]` — pure data
+  whose literal allocates the array cell (RFC 0005 §9); binding the
+  value shares the cell — nothing is copied (RFC 0044 §1). It infers
+  `T`
   bidirectionally like any literal; at module scope it is a
   load-time expression when every element is (RFC 0003 §1). A growable needs
   its builtin allocation forms: `Vec<T>()`, `Vec<T>(n)` (zeroed), or

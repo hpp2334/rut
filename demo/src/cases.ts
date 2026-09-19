@@ -53,8 +53,8 @@ export const CASES: RutCase[] = [
   {
     id: "values-and-pointers",
     name: "values & pointers",
-    blurb: "copy-by-value bindings, structural ==, sharing via &x",
-    rfcs: "0016 §1, 0011 §3, 0005",
+    blurb: "bindings share by reference — identity == for cells, absence as ?T",
+    rfcs: "0016 §1, 0044, 0005 §8",
     source: [
       "use ink::{Logger};",
       "",

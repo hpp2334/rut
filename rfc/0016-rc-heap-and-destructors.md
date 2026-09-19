@@ -2,6 +2,11 @@
 
 - **Status:** Draft
 - **Date:** 2026-08-23
+- **Revised:** 2026-09 — the byref-nullable amendment (RFC 0044): the
+  handle/shared list includes `bytes` and `?T` boxes (and drops the
+  removed `Option`/`Result`), `own` is removed (`bytes.clone()` is the
+  one copy escape hatch), and `on_drop`'s signature is the nullable
+  (`on_drop<T>(p: ?T, cleanup: fn(?T))`).
 - **Author:** hpp2334
 - **Depends on:** RFC 0011 (reference semantics/dispose), RFC 0015 (layout, slots)
 - **Supersedes:** RFC 0004 §1–3, §6 + RFC 5004 §1–2 (pre-restructure)
@@ -17,15 +22,20 @@ between isolates (RFC 0021), so all counters are plain `Cell`s — no atomics.
 
 ## 1. Heap object model
 
-**Everything except primitives is a heap cell.** The numeric types
-(`u8..u64`, `i8..i64`, `u/isize`), `f32`/`f64`, `bool`, and `char` are
-inline `Slot` values moved by plain `Mov`. Every other value — `str`,
-`Vec<T>`, `[T]`, builtin `Option`/`Result`, user enums,
-dataclass and class instances, `Opaque` boxes (RFC 0014), and host
-opaques (RFC 0025) — **is a heap cell handle**: assignment, passing, and
-returning copy the handle (`MovRef`, rc++), and mutation is visible
+**Everything except primitives and `fn` values is a heap cell.** The
+numeric types
+(`u8..u64`, `i8..i64`, `u/isize`), `f32`/`f64`, and `bool` are
+inline `Slot` values moved by plain `Mov` (a `fn` value's
+`{func, captures}` slot moves the same way). Every other value — `str`,
+`bytes`, `Vec<T>`, `[T]`, user enums,
+struct and class instances, trait objects, `opaque` boxes (RFC 0014),
+host opaques (RFC 0025), and `?T` boxes (RFC 0044) — **is a heap cell
+handle**: assignment,
+passing, and returning copy the handle (`MovRef`, rc++), and mutation
+is visible
 through every alias. Reference semantics is the one default regime
-(RFC 0004 §2); the eager copy is the `own(x)` builtin (RFC 0011 §1).
+(RFC 0004 §2, RFC 0044 §1); there is no eager copy — `bytes.clone()`
+is the one copy escape hatch (§4).
 Each cell starts with a
 header (rc count, type id, flags); the exact layout is §5. Composite
 fields and composite elements store **cell handles** (pointer slots);
@@ -50,7 +60,9 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
   lifetimes; a handle simply keeps the referent alive, so nothing dangles.
   The `mut`-binding law (RFC 0003 §1) is what gates *writing* through a
   handle, never the sharing. Value divergence — a private copy that
-  aliases nothing — is the `own(x)` builtin (RFC 0011 §1).
+  aliases nothing — has no spelling: `own` is removed, and
+  `bytes.clone()` (bytes only) is the one copy escape hatch
+  (RFC 0044 §4).
   Uniqueness matters only for buffer *transfer* across isolates (RFC 0021
   §3), detected via rc==1 at runtime — never via static proofs.
 
@@ -59,9 +71,11 @@ ops only where a reference can flow (`Mov` for scalars, `MovRef` for refs —
 A class may implement the
 `core` trait `Disposal` (`fn dispose(mut self) -> nil`, RFC 0028) via
 `impl Disposal for T` — a Disposal class is just a class. Alongside it,
-v1.1 adds the builtin `on_drop<T>(p: *T, cleanup: fn(*T))` (RFC 0005):
-attach a cleanup to a pointer and it runs when the cell's refcount
-reaches zero — one callback per pointer (a second attach is an error),
+v1.1 adds the builtin `on_drop<T>(p: ?T, cleanup: fn(?T))` (RFC 0005
+§8, RFC 0044):
+attach a cleanup to a `?T` binding — the cell reference itself — and it
+runs when the cell's refcount
+reaches zero — one callback per nullable (a second attach is an error),
 callbacks drain at call boundaries. `Disposal` is
 used like every prelude name (`use core::{ Disposal };`).
 Ordering guarantees:
@@ -88,17 +102,22 @@ table + func signatures.
 
 ## 4. Vecs, arrays, slices & strings: where flatness survives
 
-- **Primitive-element buffers stay flat.** `Vec<T>` and `[T]` for
-  numeric/bool/char `T` store raw elements inline (a flat `f32` buffer
-  behind the header). Only the header is refcounted; element copies in/out
-  are plain `Slot` moves, no inc/dec. This is the one place the
+- **Primitive-element `[T]` buffers stay flat.** `[T]` for
+  numeric/bool `T` stores raw elements inline (a flat `f32` buffer
+  behind the header). Only the header is refcounted; element copies
+  in/out are plain `Slot` moves, no inc/dec. This is the one place the
   everything-is-a-cell law does not reach: primitive `Slot`s have no
-  identity to share.
+  identity to share. (The growable `Vec<T>` is deliberately NOT flat:
+  its backing is `buf: [?T]` — the only generic zero is `[nil; cap]`,
+  RFC 0005 §9 — so element traffic crosses nullable handles,
+  RFC 0044 §5.)
 - **Composite-element buffers store handles.** `Vec<Point>` /
   `[Point]` hold one cell pointer per element; the scanner sees
   element pointers, RC sees one count for the buffer itself.
-  `push`/`pop`/`set` emit the right inc/dec ops. `own(v)` over such a
-  buffer clones the buffer but shares the element cells (shallow).
+  `push`/`pop`/`set` emit the right inc/dec ops. `own(v)` is removed
+  (RFC 0044): binding such a buffer shares the buffer cell, and
+  element stores retain handles — no buffer is ever cloned implicitly
+  (`bytes.clone()` is the one copy escape hatch, for `bytes` alone).
 - `[T]` is a fixed-length cell — the same shape as `RutVec` with
   `len == cap == N` frozen; `N` remains a compile-time constant and part
   of the type's identity (RFC 0005). Fixed-array literals that fold at

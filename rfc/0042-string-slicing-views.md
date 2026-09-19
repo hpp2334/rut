@@ -2,6 +2,10 @@
 
 - **Status:** Draft
 - **Date:** 2026-09-17
+- **Revised:** 2026-09 — the byref-nullable amendment (RFC 0044): §6's
+  array windows box as `?Vec<T>` (the `T → ?T` coercion, not a `*T`
+  pointer), `own` is removed so §1's copy clause becomes the sharing
+  law, and `for` over a window yields the shared element.
 - **Author:** hpp2334
 - **Depends on:** RFC 0004 (primitives), RFC 0015 (layout), RFC 0016 (RC heap), RFC 0039 (VM heap — the block store)
 - **Part:** B — Language surface
@@ -32,9 +36,10 @@ let w = s.slice(6, 11);        // "world" — no copy
   (`==`), iterates (`for (c of w)`), renders in f-strings, and `len()`
   counts its own codepoints. There is no separate view type on the
   surface — a slice of a `str` *is* a `str` (invisible backing).
-- `own(slice)` (and any deep copy) materializes an owned copy — value
-  semantics win wherever a copy is requested, exactly like every other
-  ref-repr value.
+- Binding the slice shares it like every cell (RFC 0044 §1); `own` is
+  removed and `str` has no clone — a materializing copy happens only
+  where an operation needs one (§4's append fast path, the host
+  crossing).
 
 ## 2. The view cell
 
@@ -75,7 +80,7 @@ mutate through one.
 |---|---|
 | `s.slice(a, b)` | O(1) — one small cell + one retain (UTF-8 walk only for non-ASCII bounds) |
 | read/compare/render a view | O(window) — same as any str |
-| `own(view)` / concat out | O(window) — the materializing copy |
+| concat out / the host crossing | O(window) — the materializing copy (`own` is gone — RFC 0044 §4; a binding of the view is a share) |
 | parsing a 1 KiB line out of a 1 MiB buffer | one 32-byte cell, zero copies |
 
 Digest-style workloads (splitting, tokenizing, windowing) stop copying
@@ -85,12 +90,12 @@ entirely; `heap_peak` now reports the buffer once instead of per-piece.
 
 `v.slice(from, to)` on a `Vec<T>` (and on `[T]`) mints an
 `ArrView` cell — a fixed-length window over the backing array — and
-boxes it as **`*Vec<T>`**: the view IS a pointer, so sharing is the
-spelled semantics and **writes through the window hit the parent**
-(the `*T` aliasing law; RFC 0012 §6).
+boxes it as **`?Vec<T>`** via the `T → ?T` coercion (RFC 0044 §2): the
+window IS the shared cell, so **writes through the window hit the
+parent** (the aliasing law; RFC 0012 §6).
 
 - reads: `w[i]`, `w.len()`, `for (x of w)`, f-string holes — all
-  auto-deref the pointer at the use site and go through the window
+  auto-deref the nullable at the use site and go through the window
   (element `i` is `parent[off + i]`, bounds are the window's).
 - writes: `w[i] = x` (and compound assignment) hit the parent.
 - **fixed-length**: `push`/`pop`/re-backing through a view trap —
@@ -99,8 +104,10 @@ spelled semantics and **writes through the window hit the parent**
 - parent growth **detaches**: `push` re-backs the `Vec` with a fresh
   array; the window keeps pinning the old backing via retain — the
   same aliasing rule Go slices have.
-- element-ref iteration (`for` yields `*T`) boxes parent elements, so
-  writes through the loop variable hit the parent, per RFC 0012 §6.
+- iteration (`for (x of w)`) yields the stored elements as-is under
+  the sharing law (RFC 0044 §1): a cell element (a record, a `?T`)
+  shares its cell, so a write through the loop variable hits the
+  parent; primitive elements copy out as slots always do.
 
 ## 7. Why strings came first
 
@@ -114,6 +121,9 @@ mandatory for them and optional (invisible) for strings.
 - `Nat::StrSlice` (code 5) — `callnat StrSlice r_s(r_from, r_to) -> r_dst`.
 - `CellData::StrView { parent, off, len, ascii }` in `rut-vm/src/heap/cell.rs`;
   reads through `CellVal::{as_str, as_bytes, char_len, str_ascii}`.
+- Array windows (§6): the `ArrView` lowering is unchanged; the window
+  boxes with `MakeOpt` as `?Vec<T>` (RFC 0044) — the window cell is
+  the nullable's one payload slot.
 - The block store (RFC 0039) backs the parent octets; the release walk
   releases the parent as the view's one ref-typed child.
 - Declared in `core.d.rut` (str members) — lockstep-tested against the
@@ -123,6 +133,6 @@ mandatory for them and optional (invisible) for strings.
 
 - OQ-1: `s.slice(from)` / `s.slice(..to)` half-open spellings — defer
   until range syntax exists (RFC 0008 has none today).
-- OQ-2: `Array<T, N>`-typed windows currently surface as `*Array<T>`;
-  a `&[T; N]`-style length-typed spelling is unnecessary until const
+- OQ-2: fixed-array (`[T; N]`) windows currently surface boxed as
+  `?Vec<T>` too; a length-typed spelling is unnecessary until const
   generics meet real code.

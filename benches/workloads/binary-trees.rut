@@ -1,8 +1,9 @@
 use ink::{ Logger };
 
 // binary-trees — allocation churn. Nodes are recursive structs naming
-// themselves through POINTER fields (`*Node`, `nil` when absent — RFC
-// 0005 §10; `Option` is gone): `make` builds the tree bottom-up, and
+// themselves through nullable fields (`?Node`, `nil` when absent — RFC
+// 0005 §8 + RFC 0044; `Option` is gone): `make` builds the tree
+// bottom-up, and
 // the whole tree drops at scope exit — the RC allocation/drop path this
 // benchmark stresses. Scale: depth = 14 (32767 nodes).
 
