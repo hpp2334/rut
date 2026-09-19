@@ -4,9 +4,11 @@
 //! checksums (the wrapper's `Hashable` uses mapset's exact mix64/FNV
 //! constants, so slot behavior and value-derived checksums match);
 //! adapted where the surface differs (`with_capacity` sizes through
-//! the host's `map_cap`). PLUS the two host-experiment specifics: a
-//! user-defined key type compiles but traps at the crossing (the loud
-//! "use mapset" message), and `get` parity — the same staleness
+//! the host's `map_cap`). PLUS the two host-experiment specifics
+//! (phase 3): a user-defined key type is refused AT COMPILE TIME with
+//! the union-bound diagnostic (the class bound is the visible contract
+//! — escape hatches: encode to `bytes`, or use `mapset`), and `get`
+//! parity — the same staleness
 //! scenario run against BOTH packages must answer identically (the
 //! native keys never change the `*V` aliasing law).
 
@@ -215,42 +217,34 @@ fn str_key_remove_readd_get_tombstone_round_trip() {
 
 // ---- the host experiment's own edges ----
 
-/// A user-defined key type COMPILES (admission is `Hashable`, as in
-/// mapset) but traps at the host crossing — the loud trap names the type
-/// and points at `mapset`. No re-entrant `hash_eq` callbacks exist; the
-/// closed native key set is the honest experiment scope.
+/// A user-defined key type is refused AT COMPILE TIME now (phase 3):
+/// the class bound is the literal union, `Pt` names no member, and the
+/// diagnostic names the offending type and the whole union (`mapset`
+/// remains the general-key implementation; a native crossing can no
+/// longer be reached to trap). The old `Hashable` trait is gone, so
+/// the honest port drops the import too.
 #[test]
-fn a_user_record_key_traps_loudly_pointing_at_mapset() {
-    let src = "\
-         use core::{ assert };\n\
-         use nmapset::{ HashMap, Hashable };\n\
+fn a_user_record_key_fails_at_compile_time_naming_the_union() {
+    let ds = diags_of(
+        "nmapset",
+        "use core::{ assert };\n\
+         use nmapset::{ HashMap };\n\
          struct Pt { x: i32; y: i32 }\n\
-         impl Hashable for Pt {\n\
-         \x20   fn hash(self) -> u64 {\n\
-         \x20       let a = (14695981039346656037u64 ^ self.x as u64).wrapping_mul(1099511628211u64);\n\
-         \x20       return (a ^ self.y as u64).wrapping_mul(1099511628211u64);\n\
-         \x20   }\n\
-         \x20   fn hash_eq(self, other: Self) -> bool {\n\
-         \x20       return self.x == other.x && self.y == other.y;\n\
-         \x20   }\n\
-         }\n\
          pub fn main() -> i32 {\n\
          \x20   let mut pm: HashMap<Pt, i32> = HashMap.new();\n\
          \x20   assert(pm.put(Pt { x: 1, y: 2 }, 10), \"record map: first put\");\n\
          \x20   return pm.len();\n\
-         }\n";
-    let err = vm_for("nmapset", src).call::<_, i32>("main", ()).unwrap_err();
-    assert!(
-        err.msg.contains("nmap") && err.msg.contains("not natively supported") && err.msg.contains("mapset"),
-        "the trap must point at mapset: {}",
-        err.msg
+         }\n",
     );
-    assert!(err.msg.contains("Pt"), "the trap names the offending key type: {}", err.msg);
+    assert!(
+        ds.iter().any(|d| d.contains("`Pt` does not satisfy `K` requires `i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes`")),
+        "the diagnostic names the offending type and the union: {ds:?}"
+    );
 }
 
-/// The admission half still works wrapper-side: a key type with NO
-/// `Hashable` impl is refused at the instantiation (the A5 diagnostic,
-/// identical to mapset's).
+/// A key type outside the closed set is refused at the instantiation —
+/// the union bound's A5 diagnostic names the offending type and the
+/// whole allowed set (phase 3: admission IS the union).
 #[test]
 fn an_unhashable_key_type_is_refused_at_the_instantiation() {
     let ds = diags_of(
@@ -263,7 +257,7 @@ fn an_unhashable_key_type_is_refused_at_the_instantiation() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`Boxy` does not satisfy `K` requires `Hashable`")),
+        ds.iter().any(|d| d.contains("`Boxy` does not satisfy `K` requires `i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes`")),
         "admission names the missing impl: {ds:?}"
     );
 }

@@ -5,13 +5,15 @@
 # ink — a generic-class module is source-inlined into its consumer, and
 # the flag keeps that explicit.
 #
-# The `Hashable` key contract ships IN this pkg (same trait shape, same
-# mix64/FNV constants as `mapset` — hashes and checksums are bit-
-# identical). DEVIATION from plan §0.3's `[deps] mapset`, forced by the
-# engine: a source dep's full source splices into the consumer's one
-# compilation unit, and mapset declares same-named `HashMap`/`HashSet`
-# classes — the splice collides ("duplicate type name"). See the header
-# of nmapset.rut. `rut/mapset` stays untouched.
+# The key contract is a COMPILE-TIME union bound now (`K requires
+# i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes`,
+# phase 3): keys cross DIRECTLY on the typed lanes (no Opaque mint), the
+# host hashes with mapset's exact mix64/FNV constants — checksums are
+# bit-identical to `mapset`'s. DEVIATION from plan §0.3's
+# `[deps] mapset`, forced by the engine: a source dep's full source
+# splices into the consumer's one compilation unit, and mapset declares
+# same-named `HashMap`/`HashSet` classes — the splice collides
+# ("duplicate type name"). See the header of nmapset.rut. `rut/mapset` stays untouched.
 name = "nmapset"
 entry.lib = "./nmapset.rut"
 inline = true
