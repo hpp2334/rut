@@ -229,6 +229,23 @@ impl ArrData {
         }
     }
 
+    /// Direct element read with no bounds check — the caller guarantees
+    /// `i < len` (the `seq_get` fast path folds negative + overflow into
+    /// ONE unsigned compare before calling this).
+    #[inline]
+    pub(crate) unsafe fn read_unchecked(&self, i: usize) -> Slot {
+        self.slot_at(i)
+    }
+
+    /// Direct element write with no bounds check — same contract as
+    /// `read_unchecked`; returns the displaced element.
+    #[inline]
+    pub(crate) unsafe fn write_unchecked(&mut self, i: usize, s: Slot) -> Slot {
+        let old = self.slot_at(i);
+        self.write_slot(i, s);
+        old
+    }
+
     pub fn set(&mut self, i: usize, s: Slot) -> Option<Slot> {
         if i >= self.len as usize {
             return None;

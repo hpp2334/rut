@@ -42,16 +42,20 @@ pub(super) fn value_kind_name(v: &Value) -> &'static str {
 }
 
 pub(super) fn seq_get(cell: &crate::heap::CellVal, i: i64) -> Result<Slot, Trap> {
-    if i < 0 {
-        return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("array index {i} out of bounds")));
+    // the hot path first: a plain array — ONE unsigned compare folds the
+    // negative and overflow checks, then a direct element read
+    if let CellData::Array { items, .. } = &cell.data {
+        let d = items.borrow();
+        if (i as u64) < d.len as u64 {
+            // covers i < 0 AND i >= len
+            return Ok(unsafe { d.read_unchecked(i as usize) });
+        }
+        return Err(Trap::new(
+            TrapKind::IndexOutOfBounds,
+            format!("array index {i} out of bounds (len {})", d.len),
+        ));
     }
     match &cell.data {
-        CellData::Array { items, .. } => {
-            let items = items.borrow();
-            items.get(i as usize).ok_or_else(|| {
-                Trap::new(TrapKind::IndexOutOfBounds, format!("array index {i} out of bounds (len {})", items.len()))
-            })
-        }
         // an array window: element i is parent[off + i], bounds vs the
         // window (RFC 0042 §6)
         CellData::ArrView { parent, off, len } => {
@@ -72,17 +76,20 @@ pub(super) fn seq_get(cell: &crate::heap::CellVal, i: i64) -> Result<Slot, Trap>
 }
 
 pub(super) fn seq_set(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Result<Slot, Trap> {
-    if i < 0 {
-        return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("array index {i} out of bounds")));
+    // the hot path first: a plain array — ONE unsigned compare folds the
+    // negative and overflow checks, then a direct element write
+    if let CellData::Array { items, .. } = &cell.data {
+        let mut d = items.borrow_mut();
+        if (i as u64) < d.len as u64 {
+            // covers i < 0 AND i >= len
+            return Ok(unsafe { d.write_unchecked(i as usize, v) });
+        }
+        return Err(Trap::new(
+            TrapKind::IndexOutOfBounds,
+            format!("index {i} out of bounds (len {})", d.len),
+        ));
     }
     match &cell.data {
-        CellData::Array { items, .. } => {
-            let mut items = items.borrow_mut();
-            let len = items.len();
-            items.set(i as usize, v).ok_or_else(|| {
-                Trap::new(TrapKind::IndexOutOfBounds, format!("index {i} out of bounds (len {len})"))
-            })
-        }
         // WRITE-THROUGH: a window write hits the parent (RFC 0042 §6)
         CellData::ArrView { parent, off, len } => {
             if i as u32 >= *len {
