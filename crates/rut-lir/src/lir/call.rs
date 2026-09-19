@@ -115,17 +115,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // prelude is used, never ambient. A local fn of the same name
         // wins when the use statement is absent (fallthrough below).
         let core_fn = self.ctx.extern_native_fns.contains(&name);
-        // removed prelude spellings diagnose themselves — text-compared
-        // against the removal table, they are not well-known symbols
-        if let Some(msg) = rut_core::binary::removed_core(self.ctx.name(name)) {
+        // removed prelude spellings diagnose themselves — compared as
+        // symbols against the interned removal table, they are not
+        // well-known symbols
+        if let Some(msg) = self.ctx.removed_core(name) {
             self.ctx.err(sp, msg);
             return Err(());
         }
-        if self.ctx.name(name) == "print" {
+        if name == sym::PRINT {
             self.ctx.err(sp, "`print` was removed — use a logger (`use ink::{log}`)");
             return Err(());
         }
-        if matches!(self.ctx.name(name), "size_of" | "align_of") {
+        if matches!(name, sym::SIZE_OF | sym::ALIGN_OF) {
             // the repr-C layout contract was removed: records are slot
             // arrays, not byte blocks, so there is no value size/alignment
             self.ctx.err(sp, format!(
@@ -651,6 +652,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_NIL);
+        // a small, non-recursive body inlines at the call site (P1.3):
+        // `mix64`-shaped helpers flatten into the caller, every hash pays
+        // no frame. Runs after all checks, so diagnostics stay put.
+        if self.try_inline_free_fn(name, fnode, &subst, &aregs, &ptys, ret_ty, sp) {
+            return Ok(ret_ty);
+        }
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Free(name),
             subst,
@@ -1005,17 +1012,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, args, expected, sp);
             }
             if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
-                // a bare concrete receiver boxes when its impl carries the
-                // slot ABI (prim targets — the prologue unboxes)
-                let rreg = self.box_bare_receiver(self.ctx.impls[idx].trait_id, rt, rreg, sp.lo);
-                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp);
+                // a bare concrete receiver calls the CONCRETE-ABI variant:
+                // the receiver register stays raw and the args cross
+                // concretely — no box is minted (P1.2); a tiny body inlines
+                // at the site (P1.3)
+                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
             }
             // another module's registration (RFC 0012 §2/§5): static
             // dispatch through the exporter's compiled fn — the gate
             // (the trait's name was used here) is part of the lookup
             if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
-                let rreg = self.box_bare_receiver(self.ctx.extern_impls[eidx].trait_id, rt, rreg, sp.lo);
-                return self.compile_extern_trait_static_call(eidx, midx, rreg, args, expected, sp);
+                return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
+            }
+            self.no_method_error(rt, name, sp);
+            return Err(());
+        }
+        // primitives take trait impls only (RFC 0012 §2; the inherent
+        // surface is core's `builtin impl`, RFC 0032 §1.1): a bare
+        // concrete receiver dispatches the impl's CONCRETE-ABI variant —
+        // the scalar crosses as an ordinary argument, no slot box (P1.2)
+        if matches!(self.ctx.types.kind(rt), TyKind::Prim(_)) {
+            if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
+                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
+            }
+            if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
+                return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
             }
             self.no_method_error(rt, name, sp);
             return Err(());
@@ -1053,10 +1074,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             // registration binds to its compiled fn
                             match self.ctx.find_impl_ex(trait_id, origins[0]) {
                                 Some(ImplHit::Local(idx)) => {
-                                    return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp);
+                                    // origin-pinned trait-object receiver: the box
+                                    // is already materialized — call the SLOT
+                                    // variant (no new boxes, RFC 0012 §5)
+                                    return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp, true);
                                 }
                                 Some(ImplHit::Extern(eidx)) => {
-                                    return self.compile_extern_trait_static_call(eidx, midx, rreg, args, expected, sp);
+                                    return self.compile_extern_trait_static_call(eidx, midx, origins[0], rreg, args, expected, sp, true);
                                 }
                                 None => {}
                             }
@@ -1154,6 +1178,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// impl method directly (`CallM`) — no vtable hop (RFC 0012 §5).
     /// Arguments type against the trait's declared signature (the impl's
     /// was checked to match at collection).
+    ///
+    /// The `slot_abi` switch picks the callee variant (P1.1/P1.2): a
+    /// trait-object receiver (box already materialized) calls the SLOT
+    /// variant — the trait's declared signature crosses, scalars arrive
+    /// boxed and the prologue unboxes; a BARE concrete receiver calls the
+    /// CONCRETE variant — the receiver stays raw, `Self`-spelled params
+    /// cross as the concrete type, no box is minted. At concrete sites a
+    /// small body inlines at the call site (P1.3).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn compile_trait_static_call(
         &mut self,
         impl_idx: usize,
@@ -1163,6 +1196,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         args: Vec<NodeHandle<AnyExpr>>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
+        slot_abi: bool,
     ) -> TcResult<TypeId> {
         let im = self.ctx.impls[impl_idx].clone();
         let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
@@ -1181,33 +1215,83 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let bounds = self.ctx.ast.method_decl(*mnode).bounds.clone();
             self.ctx.admit_bounds(&bounds, &subst, sp);
         }
-        let inst = crate::check::Inst {
-            key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: tm.name },
-            subst,
-            trait_origins: vec![],
+        // the impl method's own AST (present for local impls)
+        let mnode = im.methods.iter().find(|(n, _)| *n == tm.name).map(|(_, n)| *n);
+        // param/ret types for the chosen ABI: the slot ABI crosses the
+        // trait's declared signature; the concrete ABI crosses the impl
+        // method's own signature resolved under the target substitution
+        // (`Self` spells the concrete target)
+        let (ptys, ret_ty) = if slot_abi {
+            (tm.params.clone(), tm.ret)
+        } else {
+            match mnode {
+                Some(mn) => {
+                    let md = self.ctx.ast.method_decl(mn).clone();
+                    let mut ps = Vec::new();
+                    for p in md.params.iter().skip(1) {
+                        match self.ctx.ast.param(*p) {
+                            MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                                ps.push(self.ctx.resolve_sig_ty(*t, &subst, Some(concrete)))
+                            }
+                            _ => ps.push(TY_I32),
+                        }
+                    }
+                    let ret = md.ret.map(|r| self.ctx.resolve_sig_ty(r, &subst, Some(concrete))).unwrap_or(TY_NIL);
+                    (ps, ret)
+                }
+                None => (tm.params.clone(), tm.ret),
+            }
         };
-        let fid = self.ctx.ensure_inst(inst);
-        if args.len() != tm.params.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), tm.params.len()));
+        if args.len() != ptys.len() {
+            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
             return Err(());
         }
         let mut aregs = Vec::new();
         for (i, a) in args.iter().enumerate() {
-            let t = self.compile_expr(*a, Some(tm.params[i]))?;
+            let t = self.compile_expr(*a, Some(ptys[i]))?;
             // a `Self`-typed trait parameter accepts the concrete
-            // receiver (nominal widening, RFC 0012 §4)
-            if !self.widens(t, tm.params[i]) {
+            // receiver (nominal widening, RFC 0012 §4); under the
+            // concrete ABI the types already match, so the check is
+            // exact and NO box is emitted
+            if !self.widens(t, ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(t), self.ctx.type_name(tm.params[i])
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
                 ));
             }
-            self.widen_to_slot(t, tm.params[i], sp.lo);
+            if slot_abi {
+                self.widen_to_slot(t, ptys[i], sp.lo);
+            }
             aregs.push(self.last_reg);
         }
-        let dst = if tm.ret == TY_NIL { None } else { Some(self.new_reg(tm.ret)) };
+        // tiny concrete-ABI bodies inline at the site; box sites fall
+        // back to the slot-variant CallM (P1.3)
+        if !slot_abi {
+            if let Some(mn) = mnode {
+                // the enclosing class for `Self`-ish statics in the body
+                let cname = self
+                    .ctx
+                    .inst_data
+                    .get(&concrete)
+                    .map(|(d, _)| *d)
+                    .or_else(|| self.ctx.datas.iter().find(|(_, d)| d.ty == concrete).map(|(n, _)| *n));
+                if self.try_inline_impl_call(
+                    impl_idx, mn, tm.name, concrete, &subst, cname, rreg, &aregs, &ptys, ret_ty, sp,
+                ) {
+                    return Ok(ret_ty);
+                }
+            }
+        }
+        let key = self.ctx.impl_method_key(impl_idx, tm.name, slot_abi);
+        let inst = crate::check::Inst {
+            key,
+            subst,
+            trait_origins: vec![],
+        };
+        let fid = self.ctx.ensure_inst(inst);
+        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
-        Ok(tm.ret)
+        Ok(ret_ty)
     }
 
     /// Another module's registration of the `(trait, type)` impl
@@ -1215,47 +1299,81 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// so the call binds to its scope-qualified fn id directly (`CallM`)
     /// — link rebases it. The signature comes from the trait's
     /// descriptor as registered from the surface.
+    ///
+    /// `slot_abi` picks the bound variant (P1.2): the slot id for a
+    /// trait-object receiver, the concrete id for a bare receiver
+    /// (`Self`-spelled params cross as the concrete target — the trait
+    /// descriptor spells them as trait objects, so the concrete ABI maps
+    /// this trait's trait-object params onto `concrete`).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn compile_extern_trait_static_call(
         &mut self,
         ext_idx: usize,
         midx: usize,
+        concrete: TypeId,
         rreg: u16,
         args: Vec<NodeHandle<AnyExpr>>,
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
+        slot_abi: bool,
     ) -> TcResult<TypeId> {
-        let (fid, tm) = {
+        let (fid, tm, trait_id) = {
             let im = &self.ctx.extern_impls[ext_idx];
             let tdesc = self.ctx.trait_by_id(im.trait_id);
             let tm = tdesc.methods[midx].clone();
-            match im.methods.iter().find(|(n, _)| *n == tm.name) {
-                Some(&(_, f)) => (f, tm),
-                None => {
-                    let t = self.ctx.name(tdesc.name);
-                    self.ctx.err(sp, format!("impl `{t}` is missing `{}`", self.ctx.name(tm.name)));
-                    return Err(());
-                }
+            let list = if slot_abi {
+                None
+            } else {
+                im.methods_concrete.iter().find(|(n, _)| *n == tm.name)
+            };
+            match list {
+                Some(&(_, f)) => (f, tm, im.trait_id),
+                // no concrete twin registered (single-ABI exporter):
+                // the slot variant IS the concrete one there
+                None => match im.methods.iter().find(|(n, _)| *n == tm.name) {
+                    Some(&(_, f)) => (f, tm, im.trait_id),
+                    None => {
+                        let t = self.ctx.name(tdesc.name);
+                        self.ctx.err(sp, format!("impl `{t}` is missing `{}`", self.ctx.name(tm.name)));
+                        return Err(());
+                    }
+                },
             }
         };
-        if args.len() != tm.params.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), tm.params.len()));
+        // param types for the chosen ABI
+        let ptys: Vec<TypeId> = if slot_abi {
+            tm.params.clone()
+        } else {
+            tm.params
+                .iter()
+                .map(|&p| match self.ctx.types.kind(p) {
+                    TyKind::TraitObj { trait_id: t } if *t == trait_id => concrete,
+                    _ => p,
+                })
+                .collect()
+        };
+        let ret_ty = tm.ret;
+        if args.len() != ptys.len() {
+            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
             return Err(());
         }
         let mut aregs = Vec::new();
         for (i, a) in args.iter().enumerate() {
-            let t = self.compile_expr(*a, Some(tm.params[i]))?;
-            if !self.widens(t, tm.params[i]) {
+            let t = self.compile_expr(*a, Some(ptys[i]))?;
+            if !self.widens(t, ptys[i]) {
                 self.ctx.err(self.ctx.ast.span(a.id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(t), self.ctx.type_name(tm.params[i])
+                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
                 ));
             }
-            self.widen_to_slot(t, tm.params[i], sp.lo);
+            if slot_abi {
+                self.widen_to_slot(t, ptys[i], sp.lo);
+            }
             aregs.push(self.last_reg);
         }
-        let dst = if tm.ret == TY_NIL { None } else { Some(self.new_reg(tm.ret)) };
+        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
-        Ok(tm.ret)
+        Ok(ret_ty)
     }
 
     /// The extern registration of `(trait, type)` whose method set
@@ -1324,7 +1442,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             aregs.push(self.clone_arg(self.last_reg, ptys[i], sp.lo));
         }
         let inst = crate::check::Inst {
-            key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: mname },
+            key: self.ctx.impl_method_key(impl_idx, mname, false),
             subst,
             trait_origins: vec![],
         };
@@ -1537,6 +1655,185 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let l_end = self.new_label();
         self.inline_ret = Some((res, l_end));
         self.inline_stack.push((dname, mname));
+        let ok = self.compile_block(body.id()).is_ok();
+        self.inline_stack.pop();
+        self.bind(l_end);
+        self.locals.truncate(base);
+        self.self_ty = saved_self_ty;
+        self.subst = saved_subst;
+        self.current_class = saved_class;
+        self.ret_ty = saved_ret;
+        self.inline_ret = saved_inline_ret;
+        self.inline_self = saved_inline_self;
+        let _ = sp;
+        if !ok {
+            return false;
+        }
+        self.last_reg = res;
+        true
+    }
+
+    /// Inline a small, non-recursive free-fn body at the call site.
+    /// Returns `true` when it compiled the body; `false` to emit `Call`.
+    /// Params bind to the argument registers directly — `Op::Call` copies
+    /// slots without deep-copying value args, so the inline keeps the
+    /// exact aliasing behavior of the call it replaces. Trait-obj params
+    /// bind without origins (vtable dispatch inside the body —
+    /// conservative, like [`Self::try_inline_method`]'s params).
+    #[allow(clippy::too_many_arguments)]
+    fn try_inline_free_fn(
+        &mut self,
+        name: IdentId,
+        fnode: NodeHandle<FnNode>,
+        subst: &[(IdentId, TypeId)],
+        aregs: &[u16],
+        ptys: &[TypeId],
+        ret_ty: TypeId,
+        sp: rut_lexer::span::Span,
+    ) -> bool {
+        const MAX_STMTS: usize = 24;
+        const MAX_DEPTH: usize = 4;
+        // the inline stack keys (owner, method) — free fns have no owner
+        if self.inline_stack.len() >= MAX_DEPTH || self.inline_stack.contains(&(name, name)) {
+            return false;
+        }
+        // a trait-obj parameter loses its per-call origin specialization
+        // in an inline (RFC 0012 §5: one clone per concrete argument,
+        // each binding statically) — that boundary can't splice, so the
+        // call stays a call
+        if ptys.iter().any(|&t| matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })) {
+            return false;
+        }
+        let fd = self.ctx.ast.fn_decl(fnode).clone();
+        if fd.is_async {
+            return false; // `async` is diagnosed when the body is compiled
+        }
+        let body = fd.body;
+        let stmts = match self.ctx.ast.kind(body.id()) {
+            Kind::Expr(ExprKind::Block { stmts }) => stmts.clone(),
+            _ => return false,
+        };
+        if stmts.len() > MAX_STMTS {
+            return false;
+        }
+        let saved_self_ty = self.self_ty;
+        let saved_subst = std::mem::replace(&mut self.subst, subst.to_vec());
+        let saved_class = self.current_class;
+        let saved_ret = self.ret_ty;
+        let saved_inline_ret = self.inline_ret;
+        let saved_inline_self = self.inline_self;
+        self.self_ty = None;
+        self.current_class = None;
+        self.ret_ty = ret_ty;
+        let base = self.locals.len();
+        let params: Vec<NodeHandle<AnyParam>> = fd.params.clone();
+        let mut ai = 0usize;
+        for p in &params {
+            if let MemberKind::Param(ParamData { name: pname, is_mut, .. }) = self.ctx.ast.param(*p) {
+                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                ai += 1;
+            }
+        }
+        let res = self.new_reg(ret_ty);
+        let l_end = self.new_label();
+        self.inline_ret = Some((res, l_end));
+        self.inline_stack.push((name, name));
+        let ok = self.compile_block(body.id()).is_ok();
+        self.inline_stack.pop();
+        self.bind(l_end);
+        self.locals.truncate(base);
+        self.self_ty = saved_self_ty;
+        self.subst = saved_subst;
+        self.current_class = saved_class;
+        self.ret_ty = saved_ret;
+        self.inline_ret = saved_inline_ret;
+        self.inline_self = saved_inline_self;
+        let _ = sp;
+        if !ok {
+            return false;
+        }
+        self.last_reg = res;
+        true
+    }
+
+    /// Inline a small, non-recursive trait-impl method body at a
+    /// bare-receiver static call site (P1.3). Mirrors
+    /// [`Self::try_inline_method`]: `self` (and the `Self`-spelled
+    /// params) bind to the concrete registers the call carries — the
+    /// receiver register is already bare concrete at these sites.
+    /// Returns `true` when it compiled the body; `false` to emit the
+    /// concrete-variant `CallM`.
+    #[allow(clippy::too_many_arguments)]
+    fn try_inline_impl_call(
+        &mut self,
+        impl_idx: usize,
+        mnode: NodeHandle<MethodDeclNode>,
+        mname: IdentId,
+        self_ty: TypeId,
+        subst: &[(IdentId, TypeId)],
+        current_class: Option<IdentId>,
+        recv: u16,
+        aregs: &[u16],
+        ptys: &[TypeId],
+        ret_ty: TypeId,
+        sp: rut_lexer::span::Span,
+    ) -> bool {
+        const MAX_STMTS: usize = 24;
+        const MAX_DEPTH: usize = 4;
+        // the inline stack keys (owner, method) — the trait names the
+        // impl body (one impl per (trait, type) pair; two impls of one
+        // trait share the key and just decline the second inline)
+        let trait_name = self.ctx.impls[impl_idx].trait_name;
+        if self.inline_stack.len() >= MAX_DEPTH || self.inline_stack.contains(&(trait_name, mname)) {
+            return false;
+        }
+        // a trait-obj parameter loses its per-call origin specialization
+        // in an inline (RFC 0012 §5) — that boundary can't splice
+        if ptys.iter().any(|&t| matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. })) {
+            return false;
+        }
+        let md = self.ctx.ast.method_decl(mnode).clone();
+        if md.is_async {
+            return false; // `async` is diagnosed when the body is compiled
+        }
+        let Some(body) = md.body else { return false };
+        let stmts = match self.ctx.ast.kind(body.id()) {
+            Kind::Expr(ExprKind::Block { stmts }) => stmts.clone(),
+            _ => return false,
+        };
+        if stmts.len() > MAX_STMTS {
+            return false;
+        }
+        let mut_self = matches!(
+            md.params.first().map(|p| self.ctx.ast.param(*p)),
+            Some(MemberKind::SelfParam(SelfParamData { is_mut: true }))
+        );
+        let saved_self_ty = self.self_ty;
+        let saved_subst = std::mem::replace(&mut self.subst, subst.to_vec());
+        let saved_class = self.current_class;
+        let saved_ret = self.ret_ty;
+        let saved_inline_ret = self.inline_ret;
+        let saved_inline_self = self.inline_self;
+        self.self_ty = Some(self_ty);
+        self.current_class = current_class;
+        self.ret_ty = ret_ty;
+        let base = self.locals.len();
+        // bind `self` (well-known symbol) for the inlined body — reads
+        // alias the receiver register (no copy, RFC 0005 accessor rule)
+        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new() });
+        self.inline_self = Some((sym::SELF, recv));
+        let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
+        let mut ai = 0usize;
+        for p in &params {
+            if let MemberKind::Param(ParamData { name: pname, is_mut, .. }) = self.ctx.ast.param(*p) {
+                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                ai += 1;
+            }
+        }
+        let res = self.new_reg(ret_ty);
+        let l_end = self.new_label();
+        self.inline_ret = Some((res, l_end));
+        self.inline_stack.push((trait_name, mname));
         let ok = self.compile_block(body.id()).is_ok();
         self.inline_stack.pop();
         self.bind(l_end);

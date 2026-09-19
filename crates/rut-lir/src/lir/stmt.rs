@@ -453,7 +453,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mfid = self
             .ctx
             .ensure_inst(crate::check::Inst {
-                key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: sym::ITERATE },
+                key: crate::check::FnKey::ImplMethod { idx: impl_idx, name: sym::ITERATE, slot_abi: false },
                 subst: env,
                 trait_origins: vec![],
             });

@@ -182,7 +182,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 (m.id(), Some(self_ty), true, Some(*data), None)
             }
-            FnKey::ImplMethod { idx, name } => {
+            FnKey::ImplMethod { idx, name, slot_abi } => {
                 let im = ctx.impls[*idx].clone();
                 let Some(m) = im.methods.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
                     return Ok(());
@@ -220,14 +220,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         (im.target, cname)
                     }
                 };
-                // a PRIMITIVE target compiles with the SLOT ABI: `self` and
+                // a PRIMITIVE target compiles in one of two ABIs (P1,
+                // mapset perf plan). SLOT ABI (`slot_abi`): `self` and
                 // every `Self`-spelled parameter cross as the trait-object
                 // slot (concrete scalars arrive boxed — `widen_to_slot`),
                 // and the prologue unboxes into the concrete working
-                // registers the body is typed against. Ref targets
-                // (records/`str`/`bytes`) already are cell handles — their
-                // signature stays the concrete type.
-                let slot_self = if !im.inherent && matches!(ctx.types.kind(im.target), TyKind::Prim(_)) {
+                // registers the body is typed against — this is the
+                // variant vtable rows bind (the box cell's own type
+                // reaches the vtable, RFC 0015 §6). CONCRETE ABI: params
+                // cross raw and there is no prologue — body codegen
+                // identical to an inherent fn; bare-receiver static
+                // calls bind this variant. Ref targets
+                // (records/`str`/`bytes`) compile one variant — their
+                // signature stays the concrete type (already cell
+                // handles).
+                let slot_self = if *slot_abi
+                    && !im.inherent
+                    && matches!(ctx.types.kind(im.target), TyKind::Prim(_))
+                {
                     Some(ctx.mk_trait_obj(im.trait_id))
                 } else {
                     None
@@ -677,20 +687,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let dst = self.new_reg(to);
             self.emit(Op::Box { dst, val: src, ty: t }, sp_lo);
         }
-    }
-
-    /// A BARE concrete receiver of a trait method (`p.area()`): when the
-    /// impl carries the slot ABI (a prim target — the prologue unboxes),
-    /// the receiver crosses BOXED; ref concretes already are cell handles
-    /// and cross as-is (RFC 0012 §4/§5).
-    pub(crate) fn box_bare_receiver(&mut self, trait_id: u32, concrete: TypeId, reg: u16, sp_lo: u32) -> u16 {
-        if self.ctx.types.is_ref(concrete) {
-            return reg;
-        }
-        let slot = self.ctx.mk_trait_obj(trait_id);
-        let dst = self.new_reg(slot);
-        self.emit(Op::Box { dst, val: reg, ty: concrete }, sp_lo);
-        dst
     }
 
     /// `p.m(..)` / `p[i]` auto-deref (RFC 0005): a pointer used as a

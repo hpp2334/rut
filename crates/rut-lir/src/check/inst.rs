@@ -40,7 +40,7 @@ impl<'a> Ctx<'a> {
         match inst.key {
             FnKey::Free(n) => self.name(n).to_string(),
             FnKey::Method { data, name } => format!("{}${}", self.name(data), self.name(name)),
-            FnKey::ImplMethod { idx, name } => {
+            FnKey::ImplMethod { idx, name, .. } => {
                 let im = &self.impls[idx];
                 if im.inherent {
                     // inherent impl on a native builtin class: no trait id
@@ -82,12 +82,18 @@ impl<'a> Ctx<'a> {
     /// carries a real function id.
     pub fn build_vtables(&mut self) -> Vec<Vec<Option<u32>>> {
         // (type, trait, method slot, inst) — collected first, compiled
-        // after, so queue-driven interning cannot mutate what we walk
+        // after, so queue-driven interning cannot mutate what we walk.
+        // Prim-target impl methods also queue their concrete-ABI twin
+        // (`extra`) — vtable rows bind the SLOT variant only, but a
+        // bare-receiver static call (and the exported surface) needs
+        // the concrete one compiled too.
         let mut fills: Vec<(TypeId, u32, Inst)> = Vec::new();
+        let mut extra: Vec<Inst> = Vec::new();
         for (idx, im) in self.impls.iter().enumerate() {
             if im.inherent {
                 continue; // inherent methods dispatch statically, never a slot
             }
+            let dual = self.impl_is_dual_abi(idx);
             let tdesc = self.trait_by_id(im.trait_id).clone();
             match im.target_data.clone() {
                 None => {
@@ -98,12 +104,18 @@ impl<'a> Ctx<'a> {
                         if !im.methods.iter().any(|(n, _)| *n == tm.name) {
                             continue;
                         }
-                        let inst = Inst {
-                            key: FnKey::ImplMethod { idx, name: tm.name },
+                        fills.push((im.target, slot, Inst {
+                            key: self.impl_method_key(idx, tm.name, true),
                             subst: vec![],
                             trait_origins: vec![],
-                        };
-                        fills.push((im.target, slot, inst));
+                        }));
+                        if dual {
+                            extra.push(Inst {
+                                key: self.impl_method_key(idx, tm.name, false),
+                                subst: vec![],
+                                trait_origins: vec![],
+                            });
+                        }
                     }
                 }
                 Some((dname, params)) => {
@@ -123,12 +135,11 @@ impl<'a> Ctx<'a> {
                             if !im.methods.iter().any(|(n, _)| *n == tm.name) {
                                 continue;
                             }
-                            let inst = Inst {
-                                key: FnKey::ImplMethod { idx, name: tm.name },
+                            fills.push((ty, slot, Inst {
+                                key: self.impl_method_key(idx, tm.name, true),
                                 subst: env.clone(),
                                 trait_origins: vec![],
-                            };
-                            fills.push((ty, slot, inst));
+                            }));
                         }
                     }
                 }
@@ -136,6 +147,9 @@ impl<'a> Ctx<'a> {
         }
         for (_, _, inst) in &fills {
             let _ = self.compile_queue(inst.clone());
+        }
+        for inst in extra {
+            let _ = self.compile_queue(inst);
         }
 
         let total_slots: usize = self.traits.iter().map(|t| t.methods.len()).sum();

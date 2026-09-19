@@ -170,7 +170,7 @@ impl<'a> Ctx<'a> {
                 }
                 // primitives & builtins — names compare as symbols
                 // v1.1 removals first: a removed type explains itself
-                if let Some(msg) = rut_core::binary::removed_core(self.name(name)) {
+                if let Some(msg) = self.removed_core(name) {
                     self.err(sp, msg);
                     return TY_I32;
                 }

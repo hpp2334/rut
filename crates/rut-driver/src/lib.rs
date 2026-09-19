@@ -178,7 +178,8 @@ pub fn compile_program_resolved(
         // the fns scope-qualified with the exporter's scope. A trait the
         // module never used still binds its impls — dispatch stays gated
         // on the trait's name (`extern_trait_decls`), the diagnostic
-        // ("use `I` ..") reads the registration.
+        // ("use `I` ..") reads the registration. Both ABI lists bind;
+        // a missing concrete list falls back at the call site.
         for im in &surface.impls {
             let text = surface.names.name(im.trait_name);
             // an impl of a native trait (`Iterator`) stays in its
@@ -191,7 +192,12 @@ pub fn compile_program_resolved(
                 .iter()
                 .map(|(n, f)| (ctx.intern(surface.names.name(*n)), rut_core::pack(dep_scope, *f)))
                 .collect();
-            ctx.add_extern_impl(tname, tid, im.target, methods);
+            let methods_concrete = im
+                .methods_concrete
+                .iter()
+                .map(|(n, f)| (ctx.intern(surface.names.name(*n)), rut_core::pack(dep_scope, *f)))
+                .collect();
+            ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete);
         }
         // core's native surface (RFC 0028): builtin containers,
         // traits, and compiler-lowered fns — bound only when the
@@ -377,26 +383,38 @@ pub fn compile_program_resolved(
         // impl registrations (RFC 0012 §2): `(trait, target, method → fn
         // ref)` — link merges them and errors on a duplicate pair.
         // Generic-target impls (`impl I for Vec<T>`) monomorphize where
-        // their targets instantiate and stay module-local.
+        // their targets instantiate and stay module-local. Both ABI
+        // variants bind (identical ids for single-ABI impls — see
+        // `SurfaceImpl`).
         for (idx, im) in ctx.impls.iter().enumerate() {
             if im.inherent || im.target_data.is_some() {
                 continue;
             }
             let mut methods = Vec::new();
+            let mut methods_concrete = Vec::new();
             for (mname, _) in &im.methods {
-                let key = Inst {
-                    key: FnKey::ImplMethod { idx, name: *mname },
+                let slot_key = Inst {
+                    key: ctx.impl_method_key(idx, *mname, true),
                     subst: vec![],
                     trait_origins: vec![],
                 };
-                if let Some(&fid) = ctx.inst_map.get(&key) {
+                let concrete_key = Inst {
+                    key: ctx.impl_method_key(idx, *mname, false),
+                    subst: vec![],
+                    trait_origins: vec![],
+                };
+                if let Some(&fid) = ctx.inst_map.get(&slot_key) {
                     methods.push((*mname, fid));
+                }
+                if let Some(&fid) = ctx.inst_map.get(&concrete_key) {
+                    methods_concrete.push((*mname, fid));
                 }
             }
             surface.impls.push(rut_core::binary::SurfaceImpl {
                 trait_name: im.trait_name,
                 target: im.target,
                 methods,
+                methods_concrete,
             });
         }
     }

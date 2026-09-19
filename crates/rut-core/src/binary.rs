@@ -122,6 +122,13 @@ pub struct SurfaceTrait {
 /// with each trait method bound to the exporter's module-local fn id.
 /// Duplicate `(trait, type)` pairs are detectable only at LINK time —
 /// per-module compiles cannot see each other (RFC 0012 §2).
+///
+/// Prim-target impls compile TWO ABI variants per method (the slot ABI
+/// for vtable rows, the concrete ABI for bare-receiver static calls):
+/// `methods` binds the slot variant (the one vtable fills and links
+/// carry), `methods_concrete` the concrete one. Ref-repr targets
+/// (`str`/`bytes`/records) compile one variant — both lists bind the
+/// same fn id, the ABIs coincide.
 #[derive(Clone, Debug)]
 pub struct SurfaceImpl {
     /// the trait's source name (an index into [`Surface::traits`] by name)
@@ -130,8 +137,11 @@ pub struct SurfaceImpl {
     /// targets (`impl ForeignTrait for ForeignType`) keep the scope they
     /// were declared under (RFC 0035 §1)
     pub target: TypeId,
-    /// trait method name → the exporter's module-local fn id
+    /// trait method name → the exporter's module-local fn id (slot ABI)
     pub methods: Vec<(IdentId, u32)>,
+    /// trait method name → the exporter's module-local fn id (concrete
+    /// ABI); empty when the exporter predates the dual ABI
+    pub methods_concrete: Vec<(IdentId, u32)>,
 }
 
 /// A builtin container published by `core`'s native surface (RFC 0028):
@@ -302,12 +312,14 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("make_ptr", "`make_ptr(v)` was removed — `&v` is the address-of (RFC 0005 §9)"),
 ];
 
-/// The removal message for `name`, if it is a removed `core` name.
-pub fn removed_core(name: &str) -> Option<&'static str> {
+/// The removal table keyed by [`IdentId`] — interned once per compiler
+/// context (`Ctx::new_scoped`), so call sites compare symbols, never
+/// `&str` (this table stays the text-level source of truth).
+pub fn removed_core_map(interner: &mut Interner) -> std::collections::HashMap<IdentId, &'static str> {
     REMOVED_CORE
         .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, msg)| *msg)
+        .map(|(n, msg)| (interner.intern(n), *msg))
+        .collect()
 }
 
 #[derive(Clone, Debug, Default)]

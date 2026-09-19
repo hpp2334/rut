@@ -576,6 +576,7 @@ mod tests {
             trait_name: a.interner.intern("Shape"),
             target: 0, // irrelevant here
             methods: vec![],
+            methods_concrete: vec![],
         });
         let b = trait_module("b");
         let out = link(vec![a, b]).expect("link");
@@ -615,6 +616,7 @@ mod tests {
                 trait_name: p.interner.intern("Shape"),
                 target,
                 methods: vec![],
+                methods_concrete: vec![],
             });
             p
         };

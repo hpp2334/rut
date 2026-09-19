@@ -587,7 +587,7 @@ impl<'a> Ctx<'a> {
                 let idx = self.impls.len() - 1;
                 for (n, _) in &mths {
                     self.ensure_inst(Inst {
-                        key: FnKey::ImplMethod { idx, name: *n },
+                        key: self.impl_method_key(idx, *n, false),
                         subst: vec![],
                         trait_origins: vec![],
                     });
@@ -813,7 +813,7 @@ impl<'a> Ctx<'a> {
         let idx = self.impls.len() - 1;
         for (mname, _) in &mths {
             let inst = Inst {
-                key: FnKey::ImplMethod { idx, name: *mname },
+                key: self.impl_method_key(idx, *mname, true),
                 subst: vec![],
                 trait_origins: vec![],
             };

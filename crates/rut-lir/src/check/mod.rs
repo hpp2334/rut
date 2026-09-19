@@ -108,7 +108,14 @@ pub struct ImplDecl {
 pub enum FnKey {
     Free(IdentId),
     Method { data: IdentId, name: IdentId },
-    ImplMethod { idx: usize, name: IdentId },
+    /// `slot_abi` — which ABI variant this is. A prim-target trait-impl
+    /// method interns TWO variants: the slot ABI (vtable rows; `self`
+    /// and `Self`-spelled params cross boxed, prologue unboxes) and the
+    /// concrete ABI (bare-receiver static calls; params cross raw —
+    /// P1 of the mapset perf plan). Ref-repr targets compile ONE
+    /// variant (`slot_abi: false`): the ABIs coincide, the receiver
+    /// already is a cell handle.
+    ImplMethod { idx: usize, name: IdentId, slot_abi: bool },
     /// one lambda AST node (its enclosing fn is non-generic in this build,
     /// so one instantiation per node)
     Lambda(NodeId),
@@ -220,6 +227,9 @@ pub struct Ctx<'a> {
     pub trait_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), u32>,
     /// whether `use` is resolved by the driver (module loading on)
     pub allow_uses: bool,
+    /// core's removed-name table, keyed by IdentId — interned once at
+    /// construction, so removal diagnostics compare symbols, never text
+    pub removed: std::collections::HashMap<IdentId, &'static str>,
     // instantiation queue
     pub inst_map: std::collections::HashMap<Inst, u32>,
     queue: Vec<Inst>,
@@ -249,7 +259,9 @@ pub struct ExternTrait {
 /// trait impls may live in any module). Dispatch and widening consult
 /// these exactly like local impls; the methods are the exporter's
 /// scope-qualified fn ids, called directly (static dispatch) and
-/// carried into vtable fills (link merges the rows).
+/// carried into vtable fills (link merges the rows). `methods` binds
+/// the slot-ABI variant, `methods_concrete` the concrete one (identical
+/// ids for single-ABI impls — see [`SurfaceImpl`]).
 #[derive(Clone, Debug)]
 pub struct ExternImpl {
     pub trait_id: u32,
@@ -257,6 +269,9 @@ pub struct ExternImpl {
     pub target: TypeId,
     /// trait method name → the exporter's scope-qualified fn id
     pub methods: Vec<(IdentId, u32)>,
+    /// trait method name → the exporter's scope-qualified fn id
+    /// (concrete-ABI variant; falls back to `methods` when absent)
+    pub methods_concrete: Vec<(IdentId, u32)>,
 }
 
 /// Where a satisfying impl was found (RFC 0012 §4): a local impl block
@@ -314,11 +329,14 @@ impl<'a> Ctx<'a> {
 
     /// A module compiled under its own scope (RFC 0035 §1).
     pub fn new_scoped(ast: &'a Ast, scope: rut_core::ScopeId) -> Ctx<'a> {
+        // the interner clones the AST's — every source id resolves
+        // identically; synthesized names intern here only. The removed-
+        // name table interns into the same interner (one copy per Ctx).
+        let mut interner = ast.interner.clone();
+        let removed = rut_core::binary::removed_core_map(&mut interner);
         Ctx {
             ast,
-            // the interner clones the AST's — every source id resolves
-            // identically; synthesized names intern here only
-            interner: ast.interner.clone(),
+            interner,
             used: std::collections::HashSet::new(),
             diags: Vec::new(),
             types: TypeTable::boot_scoped(scope),
@@ -353,6 +371,7 @@ impl<'a> Ctx<'a> {
             type_inst: std::collections::HashMap::new(),
             trait_inst: std::collections::HashMap::new(),
             allow_uses: false,
+            removed,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
         }
@@ -459,15 +478,17 @@ impl<'a> Ctx<'a> {
 
     /// Bind a trait impl registered by a used module's surface
     /// (RFC 0012 §2 — the impl may live in any module). `methods` pair
-    /// each trait method with the exporter's scope-qualified fn id.
+    /// each trait method with the exporter's scope-qualified fn id
+    /// (slot ABI); `methods_concrete` the concrete-ABI twin.
     pub fn add_extern_impl(
         &mut self,
         trait_name: IdentId,
         trait_id: u32,
         target: TypeId,
         methods: Vec<(IdentId, u32)>,
+        methods_concrete: Vec<(IdentId, u32)>,
     ) {
-        self.extern_impls.push(ExternImpl { trait_id, trait_name, target, methods });
+        self.extern_impls.push(ExternImpl { trait_id, trait_name, target, methods, methods_concrete });
     }
 
     /// The id of a used module's exported trait, if the module used the
@@ -498,7 +519,7 @@ impl<'a> Ctx<'a> {
     /// the caller keeps its ordinary message.
     pub fn not_in_core_scope(&self, n: IdentId) -> Option<String> {
         let text = self.interner.name(n);
-        if let Some(msg) = rut_core::binary::removed_core(text) {
+        if let Some(msg) = self.removed_core(n) {
             return Some(msg.to_string());
         }
         rut_core::binary::is_core_name(n).then(|| {
@@ -506,6 +527,34 @@ impl<'a> Ctx<'a> {
                 "`{text}` is not in scope — `use core::{{{text}}}` (RFC 0028: the prelude is used, never implicit)"
             )
         })
+    }
+
+    /// The removal message for a removed `core` name, by symbol — the
+    /// table was interned once at construction (`removed_core_map`).
+    pub fn removed_core(&self, n: IdentId) -> Option<&'static str> {
+        self.removed.get(&n).copied()
+    }
+
+    // ---- impl-method ABI variants (P1, mapset perf plan) ----
+
+    /// True when the impl's methods compile in TWO ABI variants: a
+    /// prim-target trait impl (the prologue unboxes; a bare receiver
+    /// wants the concrete variant). Ref-repr targets (`str`/`bytes`/
+    /// records) keep one — the ABIs coincide.
+    pub fn impl_is_dual_abi(&self, idx: usize) -> bool {
+        let im = &self.impls[idx];
+        !im.inherent && matches!(self.types.kind(im.target), TyKind::Prim(_))
+    }
+
+    /// The [`FnKey`] for an impl method under the requested ABI. `slot`
+    /// collapses to the concrete variant for single-ABI impls — the
+    /// vtable binding and a bare-receiver call then intern one fn.
+    pub fn impl_method_key(&self, idx: usize, name: IdentId, slot: bool) -> FnKey {
+        FnKey::ImplMethod {
+            idx,
+            name,
+            slot_abi: slot && self.impl_is_dual_abi(idx),
+        }
     }
 
     /// Use another module's type descriptors so `(scope, local)` ids

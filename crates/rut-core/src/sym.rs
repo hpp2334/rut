@@ -146,6 +146,9 @@ pub const WELL_KNOWN: &[&str] = &[
     "checked_sub",      // CHECKED_SUB
     "checked_mul",      // CHECKED_MUL
     "NAN",        // NAN
+    "print",      // PRINT
+    "size_of",    // SIZE_OF
+    "align_of",   // ALIGN_OF
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -207,6 +210,11 @@ pub const CHECKED_ADD: IdentId = IdentId(47);
 pub const CHECKED_SUB: IdentId = IdentId(48);
 pub const CHECKED_MUL: IdentId = IdentId(49);
 pub const NAN: IdentId = IdentId(50);
+// removed-surface names the compiler diagnoses by id — the removal
+// diagnostics compare symbols, never text (RFC 0028 v1.1)
+pub const PRINT: IdentId = IdentId(51);
+pub const SIZE_OF: IdentId = IdentId(52);
+pub const ALIGN_OF: IdentId = IdentId(53);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -297,6 +305,9 @@ mod tests {
             ("checked_sub", CHECKED_SUB),
             ("checked_mul", CHECKED_MUL),
             ("NAN", NAN),
+            ("print", PRINT),
+            ("size_of", SIZE_OF),
+            ("align_of", ALIGN_OF),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");
