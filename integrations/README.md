@@ -8,6 +8,11 @@ cargo build -p rut-lsp --release
 # binary: target/release/rut-lsp[.exe]
 ```
 
+VS Code skips the server process entirely: its extension runs the same
+language core as an in-process wasm module (`crates/rut-lsp-wasm` — see
+[`vscode-extension/README.md`](vscode-extension/README.md)). Both faces
+share one implementation, so features match.
+
 What it provides (M1, the RFC 0001 M6 LSP slice landed early):
 
 - **semantic tokens** — grammar highlighting: keywords, literals,

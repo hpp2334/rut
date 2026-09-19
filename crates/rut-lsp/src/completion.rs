@@ -222,6 +222,35 @@ fn gens(t: &TyDef) -> String {
     }
 }
 
+// ---- the LSP mapping ----
+
+use ls_types::{CompletionItem, CompletionItemKind, Documentation, MarkupContent, MarkupKind};
+
+/// plain completion data → the LSP item (kind icons, detail, docs) —
+/// shared by the stdio server and the wasm shim
+pub fn lsp_item(c: CompletionOut) -> CompletionItem {
+    CompletionItem {
+        label: c.label,
+        kind: Some(match c.kind {
+            CompletionKind::Keyword => CompletionItemKind::KEYWORD,
+            CompletionKind::Type => CompletionItemKind::CLASS,
+            // the LSP protocol's closest kind for a rut trait
+            CompletionKind::Trait => CompletionItemKind::INTERFACE,
+            CompletionKind::Fn => CompletionItemKind::FUNCTION,
+            CompletionKind::Method => CompletionItemKind::METHOD,
+            CompletionKind::Field => CompletionItemKind::FIELD,
+        }),
+        detail: (!c.detail.is_empty()).then_some(c.detail),
+        documentation: (!c.doc.is_empty()).then(|| {
+            Documentation::MarkupContent(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: c.doc.join("\n\n"),
+            })
+        }),
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

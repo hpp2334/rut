@@ -2,50 +2,25 @@
 //! semantic tokens (full), document symbols, hover, pushed diagnostics.
 //! One server, every editor that speaks LSP (VS Code via
 //! `integrations/vscode-extension`; Neovim / Helix / Zed / Emacs / Sublime
-//! configs in `integrations/README.md`). Hover resolves against the open
-//! document first, then the embedded std surface (`std/*.d.rut`,
-//! RFC 0028/0029), then a scan of the workspace's rut files.
+//! configs in `integrations/README.md`). Hover/completion resolve against
+//! the open document first, then the embedded std surface
+//! (`std_surface`, RFC 0028/0029), then the workspace's rut files. The
+//! wasm shim (`rut-lsp-wasm`) drives the same queries without this
+//! process.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
+use ls_types::*;
 use tower_lsp_server::jsonrpc::Result;
-use tower_lsp_server::ls_types::*;
 use tower_lsp_server::{Client, LanguageServer};
 
 use crate::analysis::{self, Analysis};
-use crate::completion::{self, CompletionKind, CompletionOut};
-use crate::hover::{self, DefIndex};
+use crate::hover::DefIndex;
 use crate::semantic::TokenType;
-
-/// the toolchain's std surface — embedded, indexed before the workspace
-/// (one directory per module: `rut/pouch/rut.toml` names `"pouch"`)
-pub mod std_surface {
-    pub const CORE: &str = include_str!("../../../rut/core/core.d.rut");
-    pub const CALC: &str = include_str!("../../../rut/calc/calc.d.rut");
-    pub const POUCH: &str = include_str!("../../../rut/pouch/pouch.rut");
-}
-
-fn std_indexes() -> Vec<DefIndex> {
-    [
-        (CORE_LABEL, std_surface::CORE, rut_parser::Mode::Decl),
-        ("calc", std_surface::CALC, rut_parser::Mode::Decl),
-        ("pouch", std_surface::POUCH, rut_parser::Mode::Impl),
-    ]
-    .into_iter()
-    .map(|(origin, src, mode)| {
-        let src = rut_lexer::lexer::normalize(src);
-        let (ast, _) = rut_parser::parse(&src, mode);
-        let mut idx = hover::index(&src, &ast);
-        idx.origin = origin.to_string();
-        idx
-    })
-    .collect()
-}
-
-const CORE_LABEL: &str = "core";
+use crate::std_surface;
 
 #[derive(Debug)]
 pub struct Backend {
@@ -88,12 +63,8 @@ fn collect_rut_files(root: &Path) -> Vec<PathBuf> {
 
 fn index_file(path: &Path) -> Option<DefIndex> {
     let src = std::fs::read_to_string(path).ok()?;
-    let mode = analysis::mode_of(path.to_str().unwrap_or(""));
-    let src = rut_lexer::lexer::normalize(&src);
-    let (ast, _) = rut_parser::parse(&src, mode);
-    let mut idx = hover::index(&src, &ast);
-    idx.origin = path.display().to_string();
-    Some(idx)
+    let uri = path.to_str()?;
+    Some(analysis::index_at(uri, &src))
 }
 
 impl Backend {
@@ -101,7 +72,7 @@ impl Backend {
         Backend {
             client,
             documents: Arc::new(RwLock::new(HashMap::new())),
-            defs: Arc::new(RwLock::new(std_indexes())),
+            defs: Arc::new(RwLock::new(std_surface::indexes())),
         }
     }
 
@@ -240,72 +211,22 @@ impl LanguageServer for Backend {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
         let Some(text) = self.get(&uri) else { return Ok(None) };
-        let mode = analysis::mode_of(uri.as_str());
-        let src = rut_lexer::lexer::normalize(&text);
-        let (toks, _) = rut_lexer::lexer::lex(&src);
-        let (ast, _) = rut_parser::parse(&src, mode);
-        let mut doc = hover::index(&src, &ast);
-        doc.origin = uri.as_str().to_string();
-        let std_ws = self.defs.read().unwrap();
-        let idxs: Vec<&DefIndex> = std::iter::once(&doc).chain(std_ws.iter()).collect();
-        let pos = {
-            let p = params.text_document_position_params.position;
-            let index = crate::line_index::LineIndex::new(&src);
-            index.byte(&src, p.line, p.character)
+        let p = params.text_document_position_params.position;
+        let out = {
+            let defs = self.defs.read().unwrap();
+            analysis::hover_at(uri.as_str(), &text, &defs, p.line, p.character)
         };
-        let out = hover::hover(&idxs, &src, &toks, &ast, pos);
-        Ok(out.map(|h| Hover {
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: h.markdown,
-            }),
-            range: Some(analysis::range_of(&crate::line_index::LineIndex::new(&src), &src, h.span)),
-        }))
+        Ok(out)
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let Some(text) = self.get(&uri) else { return Ok(None) };
-        let mode = analysis::mode_of(uri.as_str());
-        let src = rut_lexer::lexer::normalize(&text);
-        let (toks, _) = rut_lexer::lexer::lex(&src);
-        let (ast, _) = rut_parser::parse(&src, mode);
-        let mut doc = hover::index(&src, &ast);
-        doc.origin = uri.as_str().to_string();
-        let std_ws = self.defs.read().unwrap();
-        let idxs: Vec<&DefIndex> = std::iter::once(&doc).chain(std_ws.iter()).collect();
-        let pos = {
-            let p = params.text_document_position.position;
-            let index = crate::line_index::LineIndex::new(&src);
-            index.byte(&src, p.line, p.character)
+        let p = params.text_document_position.position;
+        let items = {
+            let defs = self.defs.read().unwrap();
+            analysis::complete_at(uri.as_str(), &text, &defs, p.line, p.character)
         };
-        let items = completion::complete(&idxs, &src, &toks, &ast, pos);
-        Ok(Some(CompletionResponse::Array(
-            items.into_iter().map(lsp_item).collect(),
-        )))
-    }
-}
-
-/// plain completion data → the LSP item (kind icons, detail, docs)
-fn lsp_item(c: CompletionOut) -> CompletionItem {
-    CompletionItem {
-        label: c.label,
-        kind: Some(match c.kind {
-            CompletionKind::Keyword => CompletionItemKind::KEYWORD,
-            CompletionKind::Type => CompletionItemKind::CLASS,
-            // the LSP protocol's closest kind for a rut trait
-            CompletionKind::Trait => CompletionItemKind::INTERFACE,
-            CompletionKind::Fn => CompletionItemKind::FUNCTION,
-            CompletionKind::Method => CompletionItemKind::METHOD,
-            CompletionKind::Field => CompletionItemKind::FIELD,
-        }),
-        detail: (!c.detail.is_empty()).then_some(c.detail),
-        documentation: (!c.doc.is_empty()).then(|| {
-            Documentation::MarkupContent(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: c.doc.join("\n\n"),
-            })
-        }),
-        ..Default::default()
+        Ok(Some(CompletionResponse::Array(items)))
     }
 }

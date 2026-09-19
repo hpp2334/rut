@@ -208,6 +208,17 @@ rut/
 │   │       │                       #       embeds the std surface, scans
 │   │       │                       #       the workspace for cross-file defs
 │   │       └── main.rs             #     the `rut-lsp` stdio binary
+│   ├── rut-lsp-wasm/                 # the language core as an in-process
+│   │   │                             #   wasm module (the VS Code face) —
+│   │   │                             #   rut-wasm's envelope ABI over the
+│   │   │                             #   SAME queries (no server process);
+│   │   │                             #   `rut_begin` starts each request
+│   │   │                             #   (arena reset — an editing session
+│   │   │                             #   is long-lived, unlike rut-wasm's
+│   │   │                             #   one-shot runs); serde_json
+│   │   │                             #   serializes the ls-types values
+│   │   └── src/lib.rs                #     legend/analyze/forget/hover/
+│   │                                 #       complete/add_def + smoke.js
 │   └── rut-cli/                    # the `rut` binary
 │       └── src/main.rs
 ├── rut/                            # the in-tree packages (RFC 0028) —
@@ -240,13 +251,17 @@ rut/
 ├── integrations/                   # editor integrations
 │   ├── README.md                   #   nvim/helix/zed/emacs/sublime
 │   │                               #   configs over the rut-lsp binary
-│   └── vscode-extension/           # `rut-vscode` — TM grammar + LSP
-│       ├── package.json            #   client; semanticTokenScopes,
-│       │                           #   rut.serverPath, build:server
+│   └── vscode-extension/           # `rut-vscode` — TM grammar + the
+│       ├── package.json            #   language core as in-process wasm;
+│       │                           #   semanticTokenScopes, build:wasm
 │       ├── language-configuration.json
 │       ├── syntaxes/rut.tmLanguage.json  # fallback coloring (0002/0007)
-│       ├── src/extension.ts        #   vscode-languageclient wiring
-│       ├── esbuild.mjs  scripts/copy-server.mjs
+│       ├── bin/rut-lsp.wasm        #   the whole language core — one
+│       │                           #   artifact, every platform
+│       ├── src/extension.ts        #   providers over vscode.languages —
+│       │                           #   no server process, no client lib
+│       ├── src/wasm.ts             #   the rut-lsp-wasm raw ABI binding
+│       ├── esbuild.mjs  scripts/copy-wasm.mjs
 │       └── README.md
 ├── demo/                           # ships in-repo — §3
 ├── benches/                        # cross-runtime benchmarks — rut/QuickJS/V8
@@ -261,8 +276,14 @@ Dependency graph, one line: `rut-lexer ← rut-ast ← rut-parser ←
 rut-driver → rut-lir ─emits binaries via→ rut-core ← rut-vm ←hosts─
 rut-host-std / rut-wasm`; `rut-cli` and `demo/` sit on top, and
 `rut-lsp` sits on `rut-lexer`/`rut-ast`/`rut-parser` (no driver dep —
-tokens and diags come from the frontend); `integrations/vscode-extension`
-launches it.
+tokens and diags come from the frontend; `ls-types` for the LSP value
+types). The language core has **two faces over one implementation**: the
+`rut-lsp` stdio server (feature `server`: tower-lsp-server + tokio) for
+every editor that speaks LSP, and `rut-lsp-wasm` — the same queries over
+a raw in-process ABI that the VS Code extension registers as providers
+directly (no JSON-RPC, no process, one platform-independent .wasm in the
+VSIX). Both share `analysis`'s document queries and `std_surface`'s
+index, so they cannot drift.
 
 ## 3. The demo page
 

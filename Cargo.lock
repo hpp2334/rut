@@ -430,6 +430,7 @@ dependencies = [
 name = "rut-lsp"
 version = "0.1.0"
 dependencies = [
+ "ls-types",
  "rut-ast",
  "rut-lexer",
  "rut-parser",
@@ -437,6 +438,15 @@ dependencies = [
  "tokio",
  "tower",
  "tower-lsp-server",
+]
+
+[[package]]
+name = "rut-lsp-wasm"
+version = "0.1.0"
+dependencies = [
+ "ls-types",
+ "rut-lsp",
+ "serde_json",
 ]
 
 [[package]]

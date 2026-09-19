@@ -1,0 +1,21 @@
+// fixture for test/runTest.js — the symbol set the test asserts:
+// Color, Point, Circle, Drawable, main
+enum Color { Red, Green, Blue }
+
+class Point {
+    x: i32;
+    y: i32;
+}
+
+class Circle {
+    center: Point;
+    radius: i32;
+    color: Color;
+}
+
+trait Drawable {
+    fn draw(self) -> nil;
+}
+
+fn main() -> nil {
+}

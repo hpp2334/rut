@@ -1,7 +1,7 @@
 {
   "name": "rut-vscode",
   "displayName": "rut",
-  "description": "rut language support — grammar highlighting via rut-lsp semantic tokens, TextMate fallback, diagnostics, document symbols",
+  "description": "rut language support — semantic tokens, diagnostics, document symbols, hover and completions via an in-process wasm module (no server process)",
   "version": "0.2.0",
   "publisher": "rut",
   "license": "MIT OR Apache-2.0",
@@ -88,38 +88,15 @@
           ]
         }
       }
-    ],
-    "configuration": {
-      "title": "rut",
-      "properties": {
-        "rut.serverPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to the rut-lsp binary. Empty: use the bundled bin/rut-lsp(.exe) produced by `npm run build:server`."
-        },
-        "rut.trace.server": {
-          "type": "string",
-          "enum": [
-            "off",
-            "messages",
-            "verbose"
-          ],
-          "default": "off",
-          "description": "Trace rut-lsp communication (output channel `rut`)."
-        }
-      }
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
-    "build:server": "cargo build -p rut-lsp --release && node scripts/copy-server.mjs",
+    "build:wasm": "cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs",
     "test": "node scripts/run-vscode-test.mjs",
     "package": "npm run compile && vsce package"
-  },
-  "dependencies": {
-    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

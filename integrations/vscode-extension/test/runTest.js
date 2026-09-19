@@ -4,9 +4,12 @@
 'use strict';
 
 const assert = require('node:assert');
+const { join } = require('node:path');
 
 const EXT_ID = 'rut.rut-vscode';
-const TOUR = 'E:/Project/rut/examples/basic/grammar-tour.rut';
+// the symbol fixture the test asserts on (relative to the extension, so
+// the test runs on every machine)
+const FIXTURE = join(__dirname, 'fixtures', 'symbols.rut');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function poll(what, fn, tries = 100, gap = 100) {
@@ -23,7 +26,7 @@ async function run() {
   const log = (...a) => console.log('[rut-test]', ...a);
 
   // 1. the extension activates (opening a .rut doc fires onLanguage:rut)
-  const uri = vscode.Uri.file(TOUR);
+  const uri = vscode.Uri.file(FIXTURE);
   const doc = await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(doc);
   const ext = vscode.extensions.getExtension(EXT_ID);

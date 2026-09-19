@@ -2,13 +2,16 @@
 //! lex (token source) → parse (AST + diags) → classify / symbols → LSP
 //! values. The server layer only routes URIs and publishes.
 
+use ls_types::*;
+use rut_ast::ast::Ast;
 use rut_lexer::diag::Diag;
 use rut_lexer::lexer::{lex, normalize};
 use rut_lexer::span::Span;
+use rut_lexer::token::Token;
 use rut_parser::{parse, Mode};
 use std::str::FromStr;
-use tower_lsp_server::ls_types::*;
 
+use crate::completion;
 use crate::hover;
 use crate::line_index::LineIndex;
 use crate::semantic::{self, RawSymbol, SymKind, TokenType};
@@ -139,6 +142,77 @@ pub fn analyze_at(uri: &Uri, src: &str, mode: Mode) -> Analysis {
     set_related_uri(&mut a.diags, uri);
     a.index.origin = uri.as_str().to_string();
     a
+}
+
+// ---- document-level queries (shared by both faces) ----
+//
+// The stdio server and the wasm shim run the *same* hover / completion
+// queries over the same indexes — defined here once so the two faces
+// can't drift.
+
+/// per-query pipeline: normalize → lex → parse → the document's index
+/// (origin stamped). The queries below only add position + lookup.
+fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
+    let normalized = normalize(src);
+    let (toks, _) = lex(&normalized);
+    let (ast, _) = parse(&normalized, mode_of(uri));
+    let doc = index_at(uri, src);
+    (normalized, toks, ast, doc)
+}
+
+/// the definition index for one document (origin stamped with `uri`)
+pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
+    let normalized = normalize(src);
+    let (ast, _) = parse(&normalized, mode_of(uri));
+    let mut idx = hover::index(&normalized, &ast);
+    idx.origin = uri.to_string();
+    idx
+}
+
+/// the lookup chain — the open document first, then `extra` (the std
+/// surface + the workspace)
+fn doc_idxs<'a>(
+    doc: &'a hover::DefIndex,
+    extra: &'a [hover::DefIndex],
+) -> Vec<&'a hover::DefIndex> {
+    std::iter::once(doc).chain(extra.iter()).collect()
+}
+
+/// byte offset of an LSP position over the normalized source
+fn byte_at(normalized: &str, line: u32, ch: u32) -> u32 {
+    LineIndex::new(normalized).byte(normalized, line, ch)
+}
+
+/// hover at an LSP position: the document's index first, then `extra`.
+/// Returns the full LSP value — both faces hand it to their client as-is.
+pub fn hover_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Option<Hover> {
+    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let idxs = doc_idxs(&doc, extra);
+    let h = hover::hover(&idxs, &normalized, &toks, &ast, byte_at(&normalized, line, ch))?;
+    Some(Hover {
+        contents: HoverContents::Markup(MarkupContent {
+            kind: MarkupKind::Markdown,
+            value: h.markdown,
+        }),
+        range: Some(range_of(&LineIndex::new(&normalized), &normalized, h.span)),
+    })
+}
+
+/// completions at an LSP position: the document's index first, then
+/// `extra`. Returns full LSP items.
+pub fn complete_at(
+    uri: &str,
+    src: &str,
+    extra: &[hover::DefIndex],
+    line: u32,
+    ch: u32,
+) -> Vec<CompletionItem> {
+    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let idxs = doc_idxs(&doc, extra);
+    completion::complete(&idxs, &normalized, &toks, &ast, byte_at(&normalized, line, ch))
+        .into_iter()
+        .map(completion::lsp_item)
+        .collect()
 }
 
 // ---- symbols ----

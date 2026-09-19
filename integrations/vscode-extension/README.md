@@ -1,27 +1,44 @@
 # rut-vscode
 
 VS Code support for the [rut](../../README.md) language: grammar
-highlighting (TextMate + `rut-lsp` semantic tokens), diagnostics, and the
-document-symbol outline.
+highlighting (TextMate + semantic tokens), diagnostics, the
+document-symbol outline, hover, and completions — powered by the
+language core running **as an in-process wasm module**. No server
+process, no per-platform binaries: one `rut-lsp.wasm` serves every
+platform.
 
 ## Try it
 
 ```sh
 cd integrations/vscode-extension
 npm install
-npm run build:server   # cargo build -p rut-lsp --release + copy into bin/
-npm run compile        # esbuild bundle -> out/extension.js
+npm run build:wasm    # cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release
+npm run compile       # esbuild bundle -> out/extension.js
 ```
 
 Then open this folder in VS Code and press **F5** (*Run Extension*) — or
-copy the folder into `~/.vscode/extensions`. Open any `.rut` file (try
-`examples/basic/grammar-tour.rut`).
+copy the folder into `~/.vscode/extensions`. Open any `.rut` file.
 
-- Without the server binary the TextMate grammar still colors comments,
+- Without the wasm module the TextMate grammar still colors comments,
   strings, numbers, and keywords; an info message explains how to build
-  the server.
-- `rut.serverPath` overrides the bundled binary; `rut.trace.server`
-  traces LSP traffic into the `rut` output channel.
+  it (`npm run build:wasm`).
+
+## How it runs
+
+`crates/rut-lsp-wasm` exposes the language core over a raw wasm ABI (the
+same envelope pattern as `rut-wasm` — no wasm-bindgen). `src/wasm.ts`
+binds that ABI; `src/extension.ts` registers semantic tokens,
+diagnostics, symbols, hover, and completion providers directly against
+`vscode.languages`. There is no JSON-RPC and no language-client
+dependency — the module's results are already LSP values, serialized by
+serde_json. The workspace is indexed with `workspace.findFiles` and
+pushed into the module (`rut_add_def`), mirroring the native server's
+fs walk.
+
+The **native `rut-lsp` binary remains the face for other editors**
+(Neovim / Helix / Zed / Emacs / Sublime — see
+[`../README.md`](../README.md)); both faces run the same queries from
+`crates/rut-lsp`, so they cannot drift.
 
 ## Packaging
 
@@ -34,14 +51,19 @@ code --install-extension rut-vscode-<version>.vsix
 
 | Layer | What | Where |
 |---|---|---|
-| TextMate | comments, strings (incl. `r"…"`/`f"…"`), numbers + suffixes, keywords, operators — instant, no server | `syntaxes/rut.tmLanguage.json` |
-| Semantic tokens | identifier classes: functions, methods, types, primitives, params, fields, enum members — exact, incl. f-string holes | `crates/rut-lsp` (`semantic.rs`) |
+| TextMate | comments, strings (incl. `r"…"`/`f"…"`), numbers + suffixes, keywords, operators — instant, no analysis | `syntaxes/rut.tmLanguage.json` |
+| Semantic tokens | identifier classes: functions, methods, types, primitives, params, fields, enum members — exact, incl. f-string holes | `crates/rut-lsp` (`semantic/`) |
 
 VS Code merges both: semantic tokens override the grammar inside their
 ranges. The `semanticTokenScopes` contribution maps the legend onto theme
 scopes so stock themes color everything out of the box.
 
-## Other editors
+## Tests
 
-The same server serves Neovim, Helix, Zed, Emacs, Sublime — config
-snippets in [`../README.md`](../README.md).
+```sh
+npm run test           # the real gate: an Extension Host run (scripts/run-vscode-test.mjs)
+```
+
+The wasm module itself is gated by `crates/rut-lsp-wasm/smoke.js`
+(`node crates/rut-lsp-wasm/smoke.js` from the repo root after
+`npm run build:wasm`).

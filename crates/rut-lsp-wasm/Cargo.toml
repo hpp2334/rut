@@ -1,0 +1,18 @@
+[package]
+name = "rut-lsp-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "wasm shim exposing the language core over a raw ABI (RFC 0041 §2) — the VS Code extension runs it in-process, no server process"
+
+[lib]
+name = "rut_lsp_wasm"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+# The pure language core only — the stdio face (tower-lsp-server + tokio)
+# stays out of the module.
+[dependencies]
+rut-lsp = { path = "../rut-lsp", default-features = false }
+ls-types = "0.0.6"
+serde_json = "1" # user-approved: serializes the ls-types values over the ABI

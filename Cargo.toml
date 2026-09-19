@@ -11,6 +11,7 @@ members = [
     "crates/rut-lir",
     "crates/rut-driver",
     "crates/rut-wasm",
+    "crates/rut-lsp-wasm",
     "crates/rut-cli",
     "crates/rut-lsp",
     "examples/00-todolist",
