@@ -222,8 +222,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             }
                             return Ok(TY_BOOL);
                         }
-                        // Opaque RHS — use-gated like the type (RFC 0028)
-                        if n == "Opaque"
+                        // Opaque RHS — ambient like the primitive (RFC 0028
+                        // revised); the lowercase `opaque` spelling aliases
+                        // the boot name until the phase-2 interner rename
+                        if (n == "Opaque" || n == "opaque")
                             && self.ctx.extern_native_types.get(&segs[0].name).copied()
                                 == Some(rut_core::binary::NativeTy::Opaque)
                         {

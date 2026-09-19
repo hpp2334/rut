@@ -199,30 +199,33 @@ pub fn compile_program_resolved(
                 .collect();
             ctx.add_extern_impl(tname, tid, im.target, methods, methods_concrete);
         }
-        // core's native surface (RFC 0028): builtin containers,
-        // traits, and compiler-lowered fns — bound only when the
-        // module wrote the name: `use core::{Array}`
-        // gates `Array`, nothing else. The prelude is used, never
-        // ambient.
+        // core's native surface (RFC 0028): builtin containers, traits,
+        // and compiler-lowered fns — bound AMBIENT now (RFC 0028 revised,
+        // builtin-surface): no `use` needed, the `use` statement itself
+        // is redundant-but-legal for these names. Pkg mounting (ink/
+        // pouch/calc fns, consts, namespace heads) stays use-gated.
         for (n, kind) in &surface.native_types {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                if ctx.used.contains(&id) {
-                    ctx.add_extern_native_type(id, *kind);
+                ctx.add_extern_native_type(id, *kind);
+                // builtin-surface phase 1: the erasure primitive's NEW
+                // surface spelling (`opaque`) names the same boot type
+                // whose interner name is still `Opaque` — bind the alias
+                // so both spellings resolve; the phase-2 interner rename
+                // removes the need
+                if *kind == rut_core::binary::NativeTy::Opaque {
+                    let alias = ctx.intern("opaque");
+                    ctx.add_extern_native_type(alias, *kind);
                 }
             }
         }
         for (n, native) in &surface.native_traits {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                if ctx.used.contains(&id) {
-                    ctx.add_extern_trait(id, *native);
-                }
+                ctx.add_extern_trait(id, *native);
             }
         }
         for n in &surface.native_fns {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                if ctx.used.contains(&id) {
-                    ctx.add_extern_native_fn(id);
-                }
+                ctx.add_extern_native_fn(id);
             }
         }
         // the namespace head (`Math`): bound like the natives — resolving
@@ -445,15 +448,16 @@ pub fn compile_program_resolved(
 /// helpers to source (deferred with the numeric-methods phase).
 
 /// Mount `core` — the prelude surface (RFC 0028): the builtin
-/// containers (`Array`/`Opaque`), the builtin traits
-/// (`Disposal`/`Index`/`Iterator`), and the compiler-lowered functions
-/// (`downcast`, `assert`/`panic`, `make_ptr`/`on_drop`, the `str`/`bytes`
-/// natives). v1.1 removed `Option`/`Result`/`own` — use sites diagnose
-/// with the removal. A
+/// primitive (`Opaque`, aliased to its `opaque` surface spelling until
+/// the phase-2 interner rename), the builtin trait (`Iterator`), and
+/// the compiler-lowered functions (`assert`/`panic`, `on_drop`, the
+/// `str`/`bytes` natives). v1.1 removed `Option`/`Result`/`own` — use
+/// sites diagnose with the removal. A
 /// native module with no body: its surface is
 /// [`rut_core::binary::Surface::core`], the single source of truth
-/// (`rut/core/core.d.rut` mirrors it for the LSP). Nothing here is
-/// ambient — every name must be used. `core` needs no `[deps]`
+/// (`rut/core/core.d.rut` mirrors it for the LSP). Builtin names are
+/// AMBIENT (RFC 0028 revised, builtin-surface): no `use` needed.
+/// `core` needs no `[deps]`
 /// declaration: the driver mounts it unconditionally (§0.14), while
 /// every other package resolves through `[deps]` or host registration.
 pub fn mount_std_core(session: &mut Session) {

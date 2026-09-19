@@ -145,13 +145,14 @@ pub struct SurfaceImpl {
 }
 
 /// A builtin container published by `core`'s native surface (RFC 0028):
-/// the type constructor is the compiler's own — the NAME resolves only once
-/// the module wrote `use core::{ .. };`. The prelude is
-/// used, never ambient.
+/// the type constructor is the compiler's own. Builtin names are
+/// AMBIENT (RFC 0028 revised, builtin-surface): they resolve without a
+/// `use`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTy {
-    /// `Opaque` — the erasure box (RFC 0014); a boot-table type whose name
-    /// is use-gated like the containers
+    /// `Opaque` — the erasure box (RFC 0014); a boot-table type whose
+    /// name is ambient like the other builtins (the `opaque` surface
+    /// spelling aliases it until the phase-2 interner rename)
     Opaque,
 }
 
@@ -202,8 +203,8 @@ pub struct Surface {
     /// builtin trait names (`core` only): name -> contract
     pub native_traits: Vec<(IdentId, NativeTrait)>,
     /// compiler-lowered builtin function names (`core` only) — no
-    /// `FuncCode`; the bodies are rut-lir lowering, reached only through
-    /// the use binding
+    /// `FuncCode`; the bodies are rut-lir lowering, AMBIENT like every
+    /// builtin name (RFC 0028 revised, builtin-surface)
     pub native_fns: Vec<IdentId>,
     /// builtin-impl methods (`core` only, RFC 0032 §1.1 R2): the integer
     /// primitives' `builtin impl` blocks — `(receiver prim, method name,
@@ -215,8 +216,12 @@ pub struct Surface {
 
 /// The core prelude function names (RFC 0028), in surface order —
 /// well-known symbols, so the ids are meaningful in every interner.
+/// (`downcast` is no longer a declared prelude fn — builtin-surface
+/// phase 1 folded it into the `opaque` primitive's `downcast` member;
+/// rut-lir still lowers the free spelling as a phase-1 alias until the
+/// phase-2 sweep retires the call sites.)
 pub const CORE_FNS: &[IdentId] = &[
-    sym::DOWNCAST, sym::ASSERT, sym::PANIC,
+    sym::ASSERT, sym::PANIC,
     sym::ON_DROP,
     sym::STRING_JOIN,
 ];

@@ -42,6 +42,19 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<
                     builtin_types.push(n);
                 }
             }
+            ItemKind::BuiltinPrimitive { name, .. } => {
+                let n = ast.name(*name).to_string();
+                // `str`/`bytes` are language primitives (RFC 0004) — their
+                // member contracts are doc surface, not registered natives
+                if rut_parser::is_primitive_ty(&n) {
+                    continue;
+                }
+                // builtin-surface phase 1: the decl already spells the
+                // erasure primitive's target name (`opaque`) while the
+                // interner/boot name is still `Opaque` — bridge the two
+                // so the lockstep holds until the phase-2 rename
+                builtin_types.push(if n == "opaque" { "Opaque".to_string() } else { n });
+            }
             ItemKind::BuiltinTrait { name, .. } => builtin_traits.push(ast.name(*name).to_string()),
             ItemKind::Trait { name, .. } => plain_traits.push(ast.name(*name).to_string()),
             ItemKind::BuiltinImpl { prim, methods, .. } => {
@@ -138,9 +151,12 @@ fn core_decl_matches_the_compilers_surface() {
 }
 
 #[test]
-fn the_prelude_is_used_never_ambient() {
+fn removed_names_self_diagnose_with_or_without_use() {
     // `Option` is a v1.1 removal: use-sites diagnose with the removal and
-    // its replacement — with or without the use statement (RFC 0028 v1.1).
+    // its replacement — with or without the use statement (RFC 0028
+    // v1.1). (The LIVE builtin names are ambient now — RFC 0028 revised,
+    // builtin-surface — so the removals are the only names a `use` still
+    // has anything to say about; see tests/ambient.rs.)
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module(

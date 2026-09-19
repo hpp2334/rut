@@ -222,6 +222,11 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("members", DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect())));
                 "BuiltinTy"
             }
+            ItemKind::BuiltinPrimitive { name, members } => {
+                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
+                fields.push(field("members", DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect())));
+                "BuiltinPrimitive"
+            }
             ItemKind::BuiltinTrait { vis, name, generics, methods } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));

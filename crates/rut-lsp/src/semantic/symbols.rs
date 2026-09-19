@@ -110,6 +110,10 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
             Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
         }
+        ItemKind::BuiltinPrimitive { name, members } => {
+            let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
+            Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
+        }
         ItemKind::BuiltinTrait { name, methods, .. } => {
             let children = methods
                 .iter()

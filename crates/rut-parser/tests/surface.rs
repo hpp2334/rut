@@ -1,8 +1,9 @@
 //! `host`/`builtin` surface decls (RFC 0029 §2): `.d.rut` declares the
 //! host functions/dataclasses the runtime binds and the engine builtin
-//! contracts — `pub host fn string_len(s: str) -> i32;`, `pub builtin
-//! Option<T> { .. }`. Parses in declaration mode only; the removed forms
-//! (`host primitive`, `host class`, `extern`) are rejected.
+//! contracts — `host fn string_len(s: str) -> i32;`, `builtin primitive
+//! opaque { .. }`. Parses in declaration mode only; the removed forms
+//! (`host primitive`, `host class`, `extern`, `pub builtin`) are
+//! rejected.
 
 use rut_ast::ast::*;
 use rut_parser::{parse, Mode};
@@ -10,7 +11,7 @@ use rut_parser::{parse, Mode};
 const FN_SURFACE: &str = "\
 // the string natives, declared where the host binds them
 pub host fn string_len(s: str) -> i32;
-pub builtin fn own<T>(x: T) -> T;
+builtin fn own<T>(x: T) -> T;
 ";
 
 #[test]
@@ -33,7 +34,7 @@ fn host_fn_parses() {
 }
 
 const BUILTIN_TRAIT: &str = "\
-pub builtin trait Index<T> {
+builtin trait Index<T> {
     fn len(self) -> i32;
     fn get(self, i: i32) -> T;
 }
@@ -54,7 +55,7 @@ fn builtin_trait_parses() {
 }
 
 const BUILTIN_SURFACE: &str = "\
-pub builtin class Option<T> {
+builtin class Option<T> {
     fn some(v: T) -> Self;
     fn is_some(self) -> bool;
 }
@@ -76,9 +77,10 @@ fn builtin_ty_parses() {
 
 #[test]
 fn builtin_requires_a_kind_word() {
-    // builtin decls spell their kind — `builtin class` / `builtin trait`
-    // (RFC 0025); a bare `builtin Name { .. }` is diagnosed
-    let (_, diags) = parse("pub builtin Option<T> { fn some(v: T) -> Self; }", Mode::Decl);
+    // builtin decls spell their kind — `builtin primitive` / `builtin
+    // class` / `builtin trait` (RFC 0025); a bare `builtin Name { .. }`
+    // is diagnosed
+    let (_, diags) = parse("builtin Option<T> { fn some(v: T) -> Self; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("spells its kind")),
         "a bare `builtin` decl must be diagnosed: {diags:?}"
@@ -89,7 +91,7 @@ fn builtin_requires_a_kind_word() {
 fn zero_member_builtin_bodies_parse() {
     // an empty member contract is legal — e.g. a marker trait or a type
     // whose members are entirely compiler-lowered and invisible
-    let (ast, diags) = parse("pub builtin class Mark<T> { }", Mode::Decl);
+    let (ast, diags) = parse("builtin class Mark<T> { }", Mode::Decl);
     assert!(diags.is_empty(), "zero-member builtin class must parse clean: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
@@ -98,7 +100,7 @@ fn zero_member_builtin_bodies_parse() {
     };
     assert!(members.is_empty());
 
-    let (ast, diags) = parse("pub builtin trait Mark { }", Mode::Decl);
+    let (ast, diags) = parse("builtin trait Mark { }", Mode::Decl);
     assert!(diags.is_empty(), "zero-member builtin trait must parse clean: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
@@ -161,7 +163,7 @@ fn builtin_impl_decl() {
     // RFC 0032 §1.1 R2: `builtin impl <prim> { .. }` — the integer
     // primitives' numeric methods, bodiless `self` receivers, tuple
     // returns allowed (`checked_*`)
-    let src = "pub builtin impl i32 {\n\
+    let src = "builtin impl i32 {\n\
                \x20   fn wrapping_add(self, y: i32) -> i32;\n\
                \x20   fn wrapping_shl(self, n: i32) -> i32;\n\
                \x20   fn checked_add(self, y: i32) -> (i32, bool);\n\
@@ -180,6 +182,59 @@ fn builtin_impl_decl() {
         diags.iter().any(|d| d.msg.contains("belong in a `.d.rut`")),
         "builtin impl in a .rut must be diagnosed: {diags:?}"
     );
+}
+
+const BUILTIN_PRIMITIVE: &str = "\
+builtin primitive opaque {
+    fn new<T>(v: T) -> Self;
+    fn downcast<T>(o: Self) -> (T, bool);
+}
+";
+
+#[test]
+fn builtin_primitive_parses() {
+    // builtin-surface phase 1: the boot primitives' surface statement —
+    // `builtin primitive <name> { .. }`, never a class. BOTH statics on
+    // the erasure primitive live on it (RFC 0014).
+    let (ast, diags) = parse(BUILTIN_PRIMITIVE, Mode::Decl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 1);
+    let ItemKind::BuiltinPrimitive { name, members } = ast.item(items[0]) else {
+        panic!("expected a BuiltinPrimitive item, got {:?}", ast.item(items[0]));
+    };
+    assert_eq!(ast.name(*name), "opaque");
+    assert_eq!(members.len(), 2, "`new` and `downcast` are both on the primitive");
+}
+
+#[test]
+fn builtin_primitive_takes_no_generics() {
+    let (_, diags) = parse("builtin primitive str<T> { fn len(self) -> i32; }", Mode::Decl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("no generic arguments")),
+        "a primitive takes no generic arguments: {diags:?}"
+    );
+}
+
+#[test]
+fn pub_builtin_is_removed() {
+    // builtin-surface phase 1: builtin names are AMBIENT — the old
+    // `pub builtin` spelling diagnoses (no deprecation tolerance)
+    let (_, diags) = parse("pub builtin fn own<T>(x: T) -> T;", Mode::Decl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("`pub builtin` is removed")),
+        "`pub builtin` must be diagnosed: {diags:?}"
+    );
+    let (_, diags) = parse("pub builtin class Opaque { fn new<T>(v: T) -> Self; }", Mode::Decl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("`pub builtin` is removed")),
+        "`pub builtin class` must be diagnosed: {diags:?}"
+    );
+    // the bare spelling stays clean — every builtin decl drops `pub`
+    let (ast, diags) = parse("builtin fn assert(cond: bool, msg: str) -> nil;", Mode::Decl);
+    assert!(diags.is_empty(), "no-pub builtin fn must parse clean: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 1);
 }
 
 #[test]

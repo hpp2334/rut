@@ -337,7 +337,7 @@ return c.;
     fn string_receiver_completes_str_surface() {
         // std index ahead of the doc: `str`'s builtin contract supplies
         // the member list
-        let core_src = "pub builtin class str {\nfn len(self) -> i32;\n}\n";
+        let core_src = "builtin primitive str {\nfn len(self) -> i32;\n}\n";
         let c2 = rut_lexer::lexer::normalize(core_src);
         let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
         let core = crate::hover::index(&c2, &cast);

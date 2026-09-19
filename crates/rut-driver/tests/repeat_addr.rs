@@ -117,14 +117,16 @@ fn the_array_name_diagnoses_with_the_removal() {
 
 #[test]
 fn bracket_types_need_no_use_statement() {
-    // `[T]` is grammar — a module that never named `Array` still spells it
+    // `[T]` is grammar — a module that never named `Array` still spells it.
+    // Builtin fns are AMBIENT now (RFC 0028 revised, builtin-surface):
+    // `string_join` resolves without a `use` too.
     let out = compile(
         "pub fn join_all(parts: [str]) -> str { return string_join(parts); }\n\
          fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("string_join")),
-        "string_join itself stays use-gated: {:?}",
+        out.diags.is_empty(),
+        "builtin fns are ambient — `string_join` needs no `use`: {:?}",
         out.diags
     );
     let out = compile(

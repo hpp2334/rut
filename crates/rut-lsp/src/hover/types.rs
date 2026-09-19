@@ -13,6 +13,9 @@ pub enum TyForm {
     /// `builtin Name<..>` — an engine builtin's member contract (core
     /// only; members are compiler-lowered)
     Builtin,
+    /// `builtin primitive <name>` — a boot primitive's surface statement
+    /// (`str`/`bytes`/`opaque`); members are compiler-lowered
+    Primitive,
     /// `builtin trait Name<..>` — an engine-woven contract (Index,
     /// Iterator, Disposal); users implement it with ordinary impl blocks
     BuiltinTrait,
@@ -30,6 +33,7 @@ impl TyForm {
             TyForm::Trait => "trait",
             TyForm::Enum => "enum",
             TyForm::Builtin => "builtin",
+            TyForm::Primitive => "primitive",
             TyForm::BuiltinTrait => "builtin trait",
             TyForm::HostDataclass => "host struct",
             TyForm::Alias => "type",

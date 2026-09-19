@@ -1,36 +1,32 @@
 // core/core.d.rut — the prelude surface (RFC 0028): what the language
-// itself ships — the `str`/`bytes` fns, the engine builtin `Opaque`
-// (RFC 0005, RFC 0014), and the engine-woven traits
-// `Iterator` (the `Disposal`/`Index` contracts are gone, v1.1). The
-// array `[T]` is pure grammar — no decl carries it (RFC 0005 §9).
+// itself ships — the `str`/`bytes`/`opaque` primitives, the compiler-
+// lowered fns, and the engine-woven trait `Iterator` (the
+// `Disposal`/`Index` contracts are gone, v1.1). The array `[T]` is pure
+// grammar — no decl carries it (RFC 0005 §9).
 //
 // One surface kind in this file: `builtin` — the ENGINE implements it,
 // compiler-lowered (ops and rut-lir lowering, RFC 0032 §1.1): the
-// classes/traits/fns above, and the `builtin impl <prim>` numeric
-// methods below. core registers no host bodies at all; `host fn` is
+// primitives/fns below, and the `builtin impl <prim>` numeric
+// methods. core registers no host bodies at all; `host fn` is
 // exclusively the EMBEDDER'S surface (a registered NativeModule, RFC
 // 0025). The decls exist so users and the LSP see every signature — the
 // lockstep test keeps them true to rut-lir's lowering tables.
 //
-// The prelude is USED, never ambient (RFC 0028): nothing here is in
-// scope until a module writes `use core::{ .. };`. The
-// compiler's copy of this surface is `rut_core::binary::Surface::core`;
-// a driver test asserts the two stay in lockstep. Type-calls spelled
-// with the type name (`x as i32` casts — RFC 0007) are syntax, not
-// members.
+// Builtin names are AMBIENT (RFC 0028 revised, builtin-surface): no
+// `use` is needed — `pub builtin` is gone, `builtin` declares with no
+// visibility at all. (Pkg mounting by `use` — ink/pouch/calc — is a
+// different mechanism and unaffected.) The compiler's copy of this
+// surface is `rut_core::binary::Surface::core`; a driver test asserts
+// the two stay in lockstep. Type-calls spelled with the type name
+// (`x as i32` casts — RFC 0007) are syntax, not members.
 
 // ---- engine functions (compiler-lowered) ----
 
-// RFC 0014 — recover the concrete value from an erasure box: a type
-// test plus a guarded unbox. v1.1: the result is `(T, ok)` — a false
-// `ok` is a failed test (the tuple convention replaced `Option`).
-pub builtin fn downcast<T>(o: Opaque) -> (T, bool);
-
 // RFC 0034 §2 — `msg` is optional at the call site (1 or 2 arguments).
-pub builtin fn assert(cond: bool, msg: str) -> nil;
+builtin fn assert(cond: bool, msg: str) -> nil;
 
 // RFC 0034 §2 — abort with the message.
-pub builtin fn panic(msg: str) -> nil;
+builtin fn panic(msg: str) -> nil;
 
 // RFC 0005 §9 — the address-of: `&v` boxes the operand's cell into a
 // fresh one-slot cell; the result is a nil-able `*T` (`nil` is the null
@@ -38,7 +34,7 @@ pub builtin fn panic(msg: str) -> nil;
 //
 // RFC 0016 §3 — run `cleanup(p)` when `p`'s cell refcount reaches zero.
 // One callback per pointer; a second attach is a compile error.
-pub builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> nil;
+builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> nil;
 
 // v1.1 codepoint access (RFC 0004 — `char` is gone): `s.code()` reads
 // the FIRST codepoint as a `u32` (traps on empty); `str.from_code(n)`
@@ -48,21 +44,24 @@ pub builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> nil;
 // pub method  s.code() -> u32
 // pub type-method  str.from_code(n: u32) -> str
 
-pub builtin fn string_join(parts: [str]) -> str;  // join in one pass (RFC 0007)
+builtin fn string_join(parts: [str]) -> str;  // join in one pass (RFC 0007)
 
 
-// ---- engine builtin types (compiler-lowered members) ----
-// v1.1: the primitive members are declared per type — `str`/`bytes`
-// carry their own member contracts (RFC 0004 v1.1); `len` is the
-// sequence member shared by every sequence.
-pub builtin class str {
+// ---- engine builtin primitives (compiler-lowered members) ----
+// The boot primitives declare their surface here — `builtin primitive`,
+// never a class (RFC 0002 §3, builtin-surface): the Rust-side
+// representation is the boot table's, unchanged. v1.1: the primitive
+// members are declared per type — `str`/`bytes` carry their own member
+// contracts (RFC 0004 v1.1); `len` is the sequence member shared by
+// every sequence.
+builtin primitive str {
     fn len(self) -> i32;            // codepoints
     fn code(self) -> u32;           // the FIRST codepoint (traps on empty)
     fn encode(self) -> bytes;       // the UTF-8 octets
     fn slice(self, from: i32, to: i32) -> str;  // O(1) view [from, to) — codepoint bounds (RFC 0042)
 }
 
-pub builtin class bytes {
+builtin primitive bytes {
     fn len(self) -> i32;            // octets
     fn decode(self) -> str;         // UTF-8 (lossy)
 }
@@ -77,12 +76,18 @@ pub builtin class bytes {
 // The `Array` name itself is removed: use sites diagnose with the
 // removal and its replacement.
 
-// RFC 0014 — the erasure box: any value goes in via `Opaque.new`,
-// `downcast<T>(o)` recovers it (and `x is T` probes it). A boot-table type
-// whose NAME is use-gated exactly like the containers above; `new`'s
-// parameter is any value — the method spells that with its own `<T>`.
-pub builtin class Opaque {
+// RFC 0014 — the erasure box: any value goes in via `opaque.new(v)`,
+// `opaque.downcast<T>(o)` recovers it (and `x is T` probes it). A
+// boot-table type whose members are BOTH statics on the primitive; the
+// free `downcast<T>` fn is gone — the member form is the one surface.
+// `new`'s parameter is any value — the method spells that with its own
+// `<T>`; a false `.1` from `downcast` leaves `.0` at the type's zero
+// value. (builtin-surface phase 1: the interner/boot name is still
+// spelled `Opaque` until the phase-2 rename — both call spellings
+// resolve.)
+builtin primitive opaque {
     fn new<T>(v: T) -> Self;
+    fn downcast<T>(o: Self) -> (T, bool);
 }
 
 // ---- numeric methods on the integer primitives (RFC 0032 §1.1 R2) ----
@@ -93,7 +98,7 @@ pub builtin class Opaque {
 // §3); `checked_*` answers the v1.1 tuple `(T, bool)` — `ok` is false
 // exactly when the mathematical result escaped the width.
 
-pub builtin impl i8 {
+builtin impl i8 {
     fn wrapping_add(self, y: i8) -> i8;
     fn wrapping_sub(self, y: i8) -> i8;
     fn wrapping_mul(self, y: i8) -> i8;
@@ -106,7 +111,7 @@ pub builtin impl i8 {
     fn checked_mul(self, y: i8) -> (i8, bool);
 }
 
-pub builtin impl i16 {
+builtin impl i16 {
     fn wrapping_add(self, y: i16) -> i16;
     fn wrapping_sub(self, y: i16) -> i16;
     fn wrapping_mul(self, y: i16) -> i16;
@@ -119,7 +124,7 @@ pub builtin impl i16 {
     fn checked_mul(self, y: i16) -> (i16, bool);
 }
 
-pub builtin impl i32 {
+builtin impl i32 {
     fn wrapping_add(self, y: i32) -> i32;
     fn wrapping_sub(self, y: i32) -> i32;
     fn wrapping_mul(self, y: i32) -> i32;
@@ -132,7 +137,7 @@ pub builtin impl i32 {
     fn checked_mul(self, y: i32) -> (i32, bool);
 }
 
-pub builtin impl i64 {
+builtin impl i64 {
     fn wrapping_add(self, y: i64) -> i64;
     fn wrapping_sub(self, y: i64) -> i64;
     fn wrapping_mul(self, y: i64) -> i64;
@@ -145,7 +150,7 @@ pub builtin impl i64 {
     fn checked_mul(self, y: i64) -> (i64, bool);
 }
 
-pub builtin impl u8 {
+builtin impl u8 {
     fn wrapping_add(self, y: u8) -> u8;
     fn wrapping_sub(self, y: u8) -> u8;
     fn wrapping_mul(self, y: u8) -> u8;
@@ -158,7 +163,7 @@ pub builtin impl u8 {
     fn checked_mul(self, y: u8) -> (u8, bool);
 }
 
-pub builtin impl u16 {
+builtin impl u16 {
     fn wrapping_add(self, y: u16) -> u16;
     fn wrapping_sub(self, y: u16) -> u16;
     fn wrapping_mul(self, y: u16) -> u16;
@@ -171,7 +176,7 @@ pub builtin impl u16 {
     fn checked_mul(self, y: u16) -> (u16, bool);
 }
 
-pub builtin impl u32 {
+builtin impl u32 {
     fn wrapping_add(self, y: u32) -> u32;
     fn wrapping_sub(self, y: u32) -> u32;
     fn wrapping_mul(self, y: u32) -> u32;
@@ -184,7 +189,7 @@ pub builtin impl u32 {
     fn checked_mul(self, y: u32) -> (u32, bool);
 }
 
-pub builtin impl u64 {
+builtin impl u64 {
     fn wrapping_add(self, y: u64) -> u64;
     fn wrapping_sub(self, y: u64) -> u64;
     fn wrapping_mul(self, y: u64) -> u64;
@@ -217,6 +222,6 @@ pub builtin impl u64 {
 // declares this member (duck-typed satisfaction); `for (x of it)`
 // desugars to `it.__iterate(emit)` with a fresh per-iteration binding:
 // `emit` returning `false` stops the iteration (a `break`).
-pub builtin trait Iterator<E> {
+builtin trait Iterator<E> {
     fn __iterate(self, emit: fn(E) -> bool);
 }

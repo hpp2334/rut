@@ -158,7 +158,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::OnDrop { obj, cleanup }, sp.lo);
                 return Ok(TY_NIL);
             }
-            sym::DOWNCAST if core_fn => {
+            sym::DOWNCAST => {
+                // builtin-surface phase 1: the free `downcast<T>(o)` is no
+                // longer a DECLARED prelude fn (the surface spells
+                // `opaque.downcast<T>(o)`) — the engine keeps lowering the
+                // free spelling as a cheap alias until the phase-2 sweep
+                // retires the call sites.
                 // prelude body: tidof + icmp + br + guarded unbox (RFC 0032 §1.1)
                 if args.len() != 1 || generics.len() != 1 {
                     self.ctx.err(sp, "downcast<T>(o) takes one explicit type argument and one value (RFC 0014)");
@@ -174,38 +179,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, "downcast takes an `Opaque` box (RFC 0014)");
                     return Err(());
                 }
-                // v1.1: downcast yields a TUPLE `(T, bool)` — the value and
-                // a success flag; no Option in the language anymore
-                let tty = self.ctx.mk_tuple([want, TY_BOOL].to_vec());
                 let orecv = self.last_reg;
-                let tid_reg = self.new_reg(TY_U32);
-                self.emit(Op::TidOf { dst: tid_reg, obj: orecv }, sp.lo);
-                let want_reg = self.new_reg(TY_U32);
-                let wk = self.konst(ConstVal::TypeId(want));
-                self.emit(Op::Const { dst: want_reg, k: wk as u32 }, sp.lo);
-                let eq = self.new_reg(TY_BOOL);
-                self.emit(cmpop(CmpOp::Eq, PrimTy::U32, eq, tid_reg, want_reg), sp.lo);
-                let dst = self.new_reg(tty);
-                let l_some = self.new_label();
-                let l_none = self.new_label();
-                let l_end = self.new_label();
-                self.br(eq, l_some, l_none);
-                self.bind(l_some);
-                let un = self.new_reg(want);
-                self.emit(Op::Unbox { dst: un, box_: orecv, ty: want }, sp.lo);
-                { let (argv_off, argc) = self.pool_args(&(vec![un, eq])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
-                self.jmp(l_end);
-                self.bind(l_none);
-                let zero = self.new_reg(want);
-                self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
-                let no = self.new_reg(TY_BOOL);
-                self.emit(Op::ConstRaw { dst: no, bits: 0 }, sp.lo);
-                { let (argv_off, argc) = self.pool_args(&(vec![zero, no])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
-                self.bind(l_end);
-                // the value lives in `dst`; move it out so last_reg holds it
-                let out = self.new_reg(tty);
-                self.emit(Op::MovRef { dst: out, src: dst }, sp.lo);
-                return Ok(tty);
+                return self.emit_opaque_downcast(want, orecv, sp);
             }
             sym::PANIC if core_fn => {
                 if args.len() != 1 {
@@ -372,20 +347,59 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(TY_BYTES)
     }
 
+    /// The `(T, bool)` erasure-box recovery, shared by the free
+    /// `downcast<T>(o)` alias and the `opaque.downcast<T>(o)` member
+    /// (RFC 0014): tidof + icmp + br + guarded unbox (RFC 0032 §1.1).
+    /// The box is in `orecv`; a false `.1` leaves `.0` at the type's
+    /// zero value.
+    pub(crate) fn emit_opaque_downcast(&mut self, want: TypeId, orecv: u16, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+        // v1.1: downcast yields a TUPLE `(T, bool)` — the value and
+        // a success flag; no Option in the language anymore
+        let tty = self.ctx.mk_tuple([want, TY_BOOL].to_vec());
+        let tid_reg = self.new_reg(TY_U32);
+        self.emit(Op::TidOf { dst: tid_reg, obj: orecv }, sp.lo);
+        let want_reg = self.new_reg(TY_U32);
+        let wk = self.konst(ConstVal::TypeId(want));
+        self.emit(Op::Const { dst: want_reg, k: wk as u32 }, sp.lo);
+        let eq = self.new_reg(TY_BOOL);
+        self.emit(cmpop(CmpOp::Eq, PrimTy::U32, eq, tid_reg, want_reg), sp.lo);
+        let dst = self.new_reg(tty);
+        let l_some = self.new_label();
+        let l_none = self.new_label();
+        let l_end = self.new_label();
+        self.br(eq, l_some, l_none);
+        self.bind(l_some);
+        let un = self.new_reg(want);
+        self.emit(Op::Unbox { dst: un, box_: orecv, ty: want }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(vec![un, eq])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
+        self.jmp(l_end);
+        self.bind(l_none);
+        let zero = self.new_reg(want);
+        self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
+        let no = self.new_reg(TY_BOOL);
+        self.emit(Op::ConstRaw { dst: no, bits: 0 }, sp.lo);
+        { let (argv_off, argc) = self.pool_args(&(vec![zero, no])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
+        self.bind(l_end);
+        // the value lives in `dst`; move it out so last_reg holds it
+        let out = self.new_reg(tty);
+        self.emit(Op::MovRef { dst: out, src: dst }, sp.lo);
+        Ok(tty)
+    }
+
     pub(crate) fn compile_static_call(
         &mut self,
         base: IdentId,
         base_generics: Vec<NodeHandle<AnyTy>>,
         member: IdentId,
-        _member_generics: Vec<NodeHandle<AnyTy>>,
+        member_generics: Vec<NodeHandle<AnyTy>>,
         args: Vec<NodeHandle<AnyExpr>>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        // core builtin statics (RFC 0028): `Opaque.new` and the
-        // `bytes`/`str` constructors — the prelude is used, never
-        // ambient, so the arms fire only when the base name was bound from
-        // the surface
+        // core builtin statics (RFC 0028): the erasure primitive's
+        // `new`/`downcast` statics and the `bytes`/`str` constructors —
+        // AMBIENT now (RFC 0028 revised, builtin-surface): the arms fire
+        // whenever core is mounted, no `use` required
         let core_ty = self.ctx.extern_native_types.get(&base).copied();
         // Explicit type args on a static head are meaningful only where the
         // member can use them (`Vec<u32>.from(..)` — the element type);
@@ -477,6 +491,57 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(TY_STR);
             }
             _ => {}
+        }
+        // the erasure primitive's member statics (RFC 0014, builtin-
+        // surface phase 1): `opaque.new(v)` / `opaque.downcast<T>(o)` —
+        // the phase-2 rename will make the lowercase spelling the
+        // interner's own; until then BOTH base spellings resolve to the
+        // one boot type (the driver binds the alias)
+        if core_ty == Some(rut_core::binary::NativeTy::Opaque)
+            && (base == sym::OPAQUE || self.ctx.name(base) == "opaque")
+        {
+            match member {
+                sym::NEW => {
+                    if args.len() != 1 {
+                        self.ctx.err(sp, "opaque.new(v) takes one value");
+                        return Err(());
+                    }
+                    let t = self.compile_expr(args[0], None)?;
+                    if matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
+                        self.ctx.err(sp, "`opaque.new` rejects trait objects —they are never boxed (RFC 0014)");
+                        return Err(());
+                    }
+                    let src = self.last_reg;
+                    let dst = self.new_reg(TY_OPAQUE);
+                    self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
+                    return Ok(TY_OPAQUE);
+                }
+                sym::DOWNCAST => {
+                    if args.len() != 1 || member_generics.len() != 1 {
+                        self.ctx.err(sp, "opaque.downcast<T>(o) takes one explicit type argument and one value (RFC 0014)");
+                        return Err(());
+                    }
+                    let want = self.resolve_type_now(member_generics[0]);
+                    if matches!(self.ctx.types.kind(want), TyKind::TraitObj { .. }) {
+                        self.ctx.err(sp, "downcast needs a CONCRETE type —trait objects have no recovery path (RFC 0014)");
+                        return Err(());
+                    }
+                    let t = self.compile_expr(args[0], Some(TY_OPAQUE))?;
+                    if t != TY_OPAQUE {
+                        self.ctx.err(sp, "downcast takes an `Opaque` box (RFC 0014)");
+                        return Err(());
+                    }
+                    let orecv = self.last_reg;
+                    return self.emit_opaque_downcast(want, orecv, sp);
+                }
+                _ => {
+                    self.ctx.err(sp, format!(
+                        "`opaque` has no static `{}` — the primitive's members are `new` and `downcast<T>` (RFC 0014)",
+                        self.ctx.name(member)
+                    ));
+                    return Err(());
+                }
+            }
         }
         // enum helpers: Color.to_int(c) (RFC 0006)
         if self.ctx.name(member) == "to_int" {

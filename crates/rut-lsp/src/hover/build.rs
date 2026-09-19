@@ -299,6 +299,19 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     span,
                 ));
             }
+            ItemKind::BuiltinPrimitive { name, members } => {
+                let ms = members_of(src, ast, members);
+                idx.types.push(ty_def(
+                    src,
+                    ast,
+                    ast.name(*name),
+                    TyForm::Primitive,
+                    Vec::new(),
+                    Vec::new(),
+                    ms,
+                    span,
+                ));
+            }
             ItemKind::SurfaceDataclass { name, fields, .. } => {
                 let fs = field_members(src, ast, fields);
                 idx.types.push(ty_def(

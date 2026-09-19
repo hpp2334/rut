@@ -390,6 +390,16 @@ pub enum ItemKind {
         generics: Vec<IdentId>,
         methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless
     },
+    /// `builtin primitive <name> { .. }` — .d.rut only, core only: the
+    /// surface statement for a boot primitive (`str`/`bytes`/`opaque`).
+    /// NOT a class — no construction literal, no fields; the members are
+    /// the compiler-lowered contracts users and the LSP see (statics
+    /// like `opaque.new` / `opaque.downcast<T>`). The Rust-side
+    /// representation is the boot table's, unchanged.
+    BuiltinPrimitive {
+        name: IdentId,
+        members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
+    },
     /// `builtin impl i32 { fn wrapping_add(self, y: i32) -> i32; .. }` —
     /// .d.rut only, core only (RFC 0032 §1.1 R2): numeric methods ON a
     /// primitive type, lowered inline at the call site

@@ -94,7 +94,15 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             }
             "fn" => Some(Frame::Fn(FnFrame::new(vis, false, false))),
             "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
-            "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin))),
+            // `builtin` dropped `pub` (builtin-surface phase 1): builtin
+            // names are AMBIENT — the engine's surface carries no
+            // visibility, so the old `pub builtin` spelling diagnoses
+            "builtin" => {
+                p.err_here(
+                    "`pub builtin` is removed —builtin names are ambient (no `use`, no visibility): write `builtin fn` / `builtin primitive` / `builtin impl` / `builtin trait` without `pub`",
+                );
+                None
+            }
             "extern" => {
                 p.err_here(
                     "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader (RFC 0029 §2)",
@@ -1299,6 +1307,9 @@ impl FnFrame {
 //                                       crossing type; host-constructed
 //     builtin fn name<T>(params) -> T;  engine fn (generics fine —
 //                                       nothing crosses)
+//     builtin primitive <name> { .. }   a boot primitive's surface
+//                                       statement (`str`/`bytes`/
+//                                       `opaque`) — never a class
 //     builtin class Name<T> { methods } engine type's member contract
 //     builtin trait Name<T> { .. }      engine-woven contract (Index,
 //                                       Iterator, Disposal)
@@ -1316,6 +1327,10 @@ pub(crate) struct SurfaceFrame {
     /// `builtin impl i32 { .. }` — collects bodiless methods like
     /// BuiltinTy but emits the builtin-impl node (RFC 0032 §1.1 R2)
     is_impl: bool,
+    /// `builtin primitive opaque { .. }` — collects bodiless methods
+    /// like BuiltinTy but emits the builtin-primitive node (the boot
+    /// primitives' surface statement, builtin-surface phase 1)
+    is_primitive: bool,
     name: IdentId,
     generics: Vec<IdentId>,
     methods: Vec<NodeHandle<MethodDeclNode>>,
@@ -1338,6 +1353,7 @@ impl SurfaceFrame {
             stage: SuStage::Params,
             is_trait: false,
             is_impl: false,
+            is_primitive: false,
             name: IdentId(0),
             generics: Vec::new(),
             methods: Vec::new(),
@@ -1448,6 +1464,28 @@ impl SurfaceFrame {
                 p.expect(Tok::LBrace);
                 self.members_top(p)
             }
+            Tok::Ident(k) if k == "primitive" => {
+                // `builtin primitive <name> { .. }` — the boot primitives'
+                // surface statement (`str`/`bytes`/`opaque`): NOT a class —
+                // no construction literal, no fields; the members are the
+                // compiler-lowered contracts users and the LSP see
+                p.bump();
+                let Some(name) = p.expect_ident("a primitive name") else {
+                    return Step::Pop(Done::Failed);
+                };
+                self.name = name;
+                self.is_primitive = true;
+                if matches!(p.tok(), Tok::Lt) {
+                    p.err(p.span(), "a primitive takes no generic arguments");
+                    // skip the rejected list so parsing stays in sync
+                    while !matches!(p.tok(), Tok::LBrace | Tok::Semi | Tok::Eof) {
+                        p.bump();
+                    }
+                }
+                self.stage = SuStage::Members;
+                p.expect(Tok::LBrace);
+                self.members_top(p)
+            }
             Tok::Ident(k) if k == "impl" => {
                 // `builtin impl i32 { fn wrapping_add(self, y: i32) -> i32; .. }`
                 // — numeric methods ON a primitive type (RFC 0032 §1.1 R2):
@@ -1464,13 +1502,13 @@ impl SurfaceFrame {
             }
             Tok::Ident(_) => {
                 p.err_here(
-                    "`builtin` spells its kind — `builtin class Name { .. }`, `builtin trait Name { .. }`, or `builtin impl <prim> { .. }` (RFC 0025/0032)",
+                    "`builtin` spells its kind — `builtin primitive <name> { .. }`, `builtin class Name { .. }`, `builtin trait Name { .. }`, or `builtin impl <prim> { .. }` (RFC 0025/0032)",
                 );
                 Step::Pop(Done::Failed)
             }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!("expected `fn`, `class`, `trait`, or `impl` after `builtin`, found {found}"));
+                p.err_here(format!("expected `fn`, `primitive`, `class`, `trait`, or `impl` after `builtin`, found {found}"));
                 Step::Pop(Done::Failed)
             }
         }
@@ -1496,6 +1534,14 @@ impl SurfaceFrame {
                             vis: Vis::Self_,
                             prim: self.name,
                             methods: std::mem::take(&mut self.methods),
+                        },
+                        span,
+                    )
+                } else if self.is_primitive {
+                    p.item(
+                        ItemKind::BuiltinPrimitive {
+                            name: self.name,
+                            members: std::mem::take(&mut self.methods),
                         },
                         span,
                     )
