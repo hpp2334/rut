@@ -10,3 +10,5 @@
 
 pub mod check;
 pub mod lir;
+
+pub use lir::move_srcs_are_dead;

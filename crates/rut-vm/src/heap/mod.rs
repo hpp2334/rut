@@ -270,10 +270,18 @@ impl Heap {
         let block = self.arena.blocks.alloc(w * n);
         let cap = (self.arena.blocks.cap_of(block) / w) as u32;
         let mut d = ArrData::new(kind, block, cap);
-        // the block arrives zeroed (page-carved or boxed zeroed), which is
-        // the zero-fill; writing `default` covers non-zero defaults
-        for _ in 0..n {
-            d.push(default, &self.arena.blocks);
+        // An all-zero default (nil, 0, 0.0, false, '\0') needs no
+        // per-element push loop — but the block may be RECYCLED (the
+        // free lists hand back dirty memory, blocks.rs), so the payload
+        // is zeroed with one memset instead of trusted. Non-zero
+        // defaults keep the push loop.
+        if unsafe { default.i } == 0 {
+            unsafe { std::ptr::write_bytes(block, 0, w * n) };
+            d.len = n as u32;
+        } else {
+            for _ in 0..n {
+                d.push(default, &self.arena.blocks);
+            }
         }
         let bytes = (n as u64) * w as u64;
         self.mint(0, CellData::Array { elem, items: RefCell::new(d) }, bytes)
@@ -317,6 +325,24 @@ impl Heap {
                 let cell = cell_of(s);
                 if let CellData::Array { items, .. } = &cell.data {
                     let src = items.borrow();
+                    // scalar-elem store (packed, no cell children): one
+                    // block-to-block memcpy — no Vec<Slot>, no
+                    // per-element decode/re-encode loop
+                    if src.kind != ArrKind::Slots {
+                        let kind = src.kind;
+                        let slen = src.len;
+                        let sblock = src.block;
+                        drop(src);
+                        let n = slen as usize;
+                        let w = kind.width();
+                        let block = self.arena.blocks.alloc(w * n);
+                        let cap = (self.arena.blocks.cap_of(block) / w) as u32;
+                        let mut d = ArrData::new(kind, block, cap);
+                        d.len = slen;
+                        unsafe { std::ptr::copy_nonoverlapping(sblock, block, n * w) };
+                        let bytes = (n as u64) * w as u64;
+                        return self.mint(0, CellData::Array { elem, items: RefCell::new(d) }, bytes);
+                    }
                     let mut out = Vec::with_capacity(src.len());
                     for i in 0..src.len() {
                         if let Some(it) = src.get(i) {

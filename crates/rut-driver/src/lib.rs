@@ -638,6 +638,7 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
     match op {
         Op::MakePtr { dst, src, .. } => format!("makeptr r{dst}, r{src}"),
         Op::CloneVal { dst, src, .. } => format!("cloneval r{dst}, r{src}"),
+        Op::MoveVal { dst, src } => format!("moveval r{dst}, r{src}"),
         Op::ValEq { dst, a, b, .. } => format!("valeq r{dst}, r{a}, r{b}"),
         Op::OnDrop { obj, cleanup } => format!("ondrop r{obj}, r{cleanup}"),
         Op::Mov { dst, src } => format!("mov r{dst}, r{src}"),

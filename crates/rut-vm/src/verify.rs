@@ -373,6 +373,10 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*dst);
             push(*src);
         }
+        Op::MoveVal { dst, src } => {
+            push(*dst);
+            push(*src);
+        }
         Op::ValEq { dst, a, b, .. } => {
             push(*dst);
             push(*a);

@@ -208,6 +208,15 @@ impl Vm {
             Op::MakePtr { dst, src, ty } => self.op_make_ptr(dst, src, ty)?,
             Op::OnDrop { obj, cleanup } => self.op_on_drop(obj, cleanup)?,
             Op::CloneVal { dst, src, ty } => self.op_clone_val(dst, src, ty)?,
+            Op::MoveVal { dst, src } => {
+                // ownership transfer: dst takes over src's reference, src
+                // is KILLED so the frame-exit release no-ops (P2.1)
+                let v = r!(src);
+                let old = self.cur_regs[dst as usize];
+                self.cur_regs[dst as usize] = v;
+                self.cur_regs[src as usize] = Slot::null();
+                self.heap.release(old);
+            }
 
             Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {

@@ -533,6 +533,25 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
+    /// `MoveVal` — ownership transfer (the move-elided `CloneVal`): dst
+    /// takes over src's reference, src is KILLED so the frame-exit
+    /// release of its own reference no-ops. One fused op — a separate
+    /// kill store would look like a dead store and DCE would delete it,
+    /// reintroducing the double release.
+    fn op_move_val(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+        let Op::MoveVal { dst, src } = op else { unreachable_op!("op_move_val: unexpected op") };
+        unsafe {
+            let v = *regs.add(*src as usize); // the one owning reference moves
+            let old = *regs.add(*dst as usize);
+            *regs.add(*dst as usize) = v;
+            *regs.add(*src as usize) = Slot::null(); // kill: exit-release no-ops
+            if !unsafe { old.r.is_null() } {
+                self.heap.release(old);
+            }
+        }
+        Ok(Flow::Next(pc + 1))
+    }
+
     fn op_const(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Const { dst, k } = op else { unreachable_op!("op_const: unexpected op") };
         let s = self.const_slots[*k as usize];

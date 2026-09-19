@@ -104,8 +104,9 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
         if pc >= use_pc {
             continue;
         }
-        // skip copy chains (handled by `one_round`)
-        if matches!(code[pc], Op::Mov { .. } | Op::MovRef { .. }) {
+        // skip copy chains (handled by `one_round`); ref moves and moves
+        // with a kill side effect must not have their dst retargeted
+        if matches!(code[pc], Op::Mov { .. } | Op::MovRef { .. } | Op::MoveVal { .. }) {
             continue;
         }
         // straight-line (pc, use_pc]: no jump target or control transfer
@@ -370,8 +371,12 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
             continue;
         }
         // don't chain copies: rewriting another `mov`'s source would change
-        // that op's own removal analysis below
-        if matches!(&code[use_pc], Op::Mov { src, .. } | Op::MovRef { src, .. } if *src == dst) {
+        // that op's own removal analysis below; rewriting a MoveVal's source
+        // would move the kill onto a register that may still be read
+        if matches!(
+            &code[use_pc],
+            Op::Mov { src, .. } | Op::MovRef { src, .. } | Op::MoveVal { src, .. } if *src == dst
+        ) {
             continue;
         }
         // straight-line only: no branch/ret/loophead and no jump target
@@ -579,6 +584,13 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
         }
         Op::CloneVal { dst, src, .. } => {
             d.push(*dst);
+            u.push(*src);
+        }
+        // MoveVal reads src and then KILLS it (dst takes the reference):
+        // both registers are defined, src alone is used
+        Op::MoveVal { dst, src } => {
+            d.push(*dst);
+            d.push(*src);
             u.push(*src);
         }
         Op::ValEq { dst, a, b, .. } => {

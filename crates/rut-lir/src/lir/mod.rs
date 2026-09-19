@@ -17,12 +17,16 @@ mod expr;
 mod generic;
 mod intrinsic;
 mod lit;
+mod moveval;
 mod ops;
 mod peephole;
 mod slice;
 mod sroa;
 mod stmt;
 mod utf8;
+
+/// the P2 move-elision checker — public for the driver dump tests
+pub use moveval::move_srcs_are_dead;
 
 const NEST_MAX: u32 = 1024;
 
@@ -414,7 +418,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         c.emit(Op::Ret { val: None }, 0);
         c.resolve_labels();
         let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
-        let (code, spans, pools) = peephole::run(code, spans, c.pools);
+        let (mut code, spans, pools) = peephole::run(code, spans, c.pools);
+        // move elision (P2): a CloneVal whose source is a provably
+        // unobservable move becomes MoveVal — runs last, on the settled
+        // op list
+        moveval::elide(&mut code, &pools.argv, &pools.labels, param_tys.len());
         let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
@@ -515,7 +523,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         c.resolve_labels();
         let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
-        let (code, spans, pools) = peephole::run(code, spans, c.pools);
+        let (mut code, spans, pools) = peephole::run(code, spans, c.pools);
+        // move elision (P2): a CloneVal whose source is a provably
+        // unobservable move becomes MoveVal — runs last, on the settled
+        // op list
+        moveval::elide(&mut code, &pools.argv, &pools.labels, param_tys.len());
         let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
@@ -582,7 +594,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         c.emit(Op::Ret { val: Some(t) }, 0);
         c.resolve_labels();
         let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
-        let (code, spans, pools) = peephole::run(code, spans, c.pools);
+        let (mut code, spans, pools) = peephole::run(code, spans, c.pools);
+        // move elision (P2): a CloneVal whose source is a provably
+        // unobservable move becomes MoveVal — runs last, on the settled
+        // op list
+        moveval::elide(&mut code, &pools.argv, &pools.labels, 1 + caps.len());
         let Pools { argv, labels, .. } = pools;
         let mut param_tys = vec![elem_ty];
         for (_, t) in &caps {

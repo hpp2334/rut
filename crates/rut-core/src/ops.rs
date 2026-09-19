@@ -201,6 +201,14 @@ pub enum Op {
     /// `src` into a fresh cell — nested value fields clone recursively,
     /// `str`/`bytes`/`*T`/closure children share. `ty` is the value type.
     CloneVal { dst: Reg, src: Reg, ty: TypeId },
+    /// ownership transfer (the move-elided `CloneVal`): `dst` takes over
+    /// `src`'s reference (MovRef semantics — release dst's old cell) and
+    /// `src` is KILLED (nulled) so the frame-exit release of its own
+    /// reference no-ops. The compiler emits this only where the move is
+    /// provably unobservable (rut-lir `moveval`: dead source + sole
+    /// ownership, or the field-rebind discipline) — the v1.1 copy law
+    /// (two bindings never alias observably) holds at every fired site.
+    MoveVal { dst: Reg, src: Reg },
     /// `make_ptr(v)` (RFC 0005): box `v` into a fresh one-slot cell —
     /// the result is a nil-able `*T` (`ty` is the pointer type)
     MakePtr { dst: Reg, src: Reg, ty: TypeId },

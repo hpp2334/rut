@@ -4,10 +4,26 @@
 //! scan).
 
 use crate::check::TcResult;
+use rut_ast::ast::{ExprKind, Lit};
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
 use rut_core::types::*;
 use super::*;
+
+/// A `[v; n]` fill whose value is a compile-time all-zero literal —
+/// `nil`, `0` (any int suffix), `0.0`, `false`. The array block arrives
+/// zeroed, so these constructions need no fill loop. `-0.0` (a `Neg` of
+/// a literal) does NOT match: its bits are not zero.
+fn is_zero_fill(e: &ExprKind) -> bool {
+    match e {
+        ExprKind::Lit(Lit::Nil) => true,
+        ExprKind::Lit(Lit::Int(0, _)) => true,
+        // f64-bit form of 0.0/0f32 — all-zero bits
+        ExprKind::Lit(Lit::Float(0, _)) => true,
+        ExprKind::Lit(Lit::Bool(false)) => true,
+        _ => false,
+    }
+}
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- f-strings: the concat desugaring (RFC 0007 §2) ----
@@ -391,8 +407,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let aty = self.ctx.mk_array(elem);
         let dst = self.new_reg(aty);
         self.emit(Op::ArrNew { dst, ty: aty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
-        // a `nil` fill IS the zero-fill — ArrNew alone is the memset
-        if matches!(self.ctx.ast.expr(value), ExprKind::Lit(Lit::Nil)) {
+        // a `nil` fill IS the zero-fill — ArrNew alone is the memset. Any
+        // all-zero literal is too (0, 0u64, 0u8, false, 0.0): the block
+        // arrives zeroed, so the fill loop would rewrite zero with zero
+        if is_zero_fill(&self.ctx.ast.expr(value)) {
             self.last_reg = dst;
             return Ok(aty);
         }

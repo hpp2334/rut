@@ -104,11 +104,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 sp.lo,
                             );
                             if self.ctx.types.is_value(fty) {
-                                let c = self.new_reg(fty);
-                                self.emit(Op::CloneVal { dst: c, src: reg, ty: fty }, sp.lo);
-                                reg = c;
-                            }
-                            if self.ctx.types.is_value(fty) {
+                                // ONE deep copy — the value-typed field
+                                // must not alias the tuple's cell (the
+                                // second identical block here used to
+                                // deep-copy every element twice)
                                 let c = self.new_reg(fty);
                                 self.emit(Op::CloneVal { dst: c, src: reg, ty: fty }, sp.lo);
                                 reg = c;

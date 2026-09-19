@@ -101,7 +101,8 @@ pub const T_ASSERT: u8 = 81;
 pub const T_CONV: u8 = 82;
 pub const T_STRCHARAT: u8 = 83;
 pub const T_ARRGETREF: u8 = 84;
-pub const NTAGS: usize = 85;
+pub const T_MOVEVAL: u8 = 85;
+pub const NTAGS: usize = 86;
 
 pub fn tag_of(op: &Op) -> u8 {
     match op {
@@ -126,6 +127,7 @@ pub fn tag_of(op: &Op) -> u8 {
         Op::ArrSetF { .. } => T_ARRSETF,
         Op::GetF { .. } => T_GETF,
         Op::ArrGetRef { .. } => T_ARRGETREF,
+        Op::MoveVal { .. } => T_MOVEVAL,
         Op::SetF { .. } => T_SETF,
         Op::Call { .. } => T_CALL,
         Op::CallM { .. } => T_CALLM,
@@ -402,6 +404,7 @@ pub trait Machine {
     fn op_assert(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_conv(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_strcharat(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_move_val(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
 }
 
 /// A threaded handler: same ABI, arguments, and return type for every op (a
