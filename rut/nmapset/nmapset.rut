@@ -1,0 +1,258 @@
+// nmapset/nmapset.rut — the native-key map/set EXPERIMENT (the
+// mapset-host plan): generic wrapper classes over the `nmap` host
+// table. The pure-rut `mapset` package stays untouched as the reference
+// and the general-key implementation; this module is the host-backed
+// twin, and its bench rows must checksum identically.
+//
+// DEVIATION (H3, engine-forced, recorded here instead of §0.3's
+// `[deps] mapset`): the graph compiler splices a source dep's FULL
+// source into its consumer's ONE compilation unit (`graph.rs`
+// `Unit::Inline` — there is no namespaced splice; the mixed-module
+// note at graph.rs:258 is deferred). `mapset.rut` declares `HashMap` /
+// `HashSet`, so a `[deps] mapset` use splices those declarations into
+// this pkg's unit and collides with THIS pkg's same-named classes
+// ("duplicate type name `HashMap`") before any consumer is reached.
+// The ONE key contract therefore ships in this pkg: the same trait
+// shape, the same prim impls, the SAME mix64/FNV-1a constants — every
+// key hashes to mapset's exact bits, so admission, probe behavior, and
+// value-derived checksums are identical (pinned by the driver test
+// that runs the same scenario against both pkgs). Nothing forks at
+// runtime; `rut/mapset` is untouched.
+//
+// DIVISION OF LABOR (plan §0.4/§0.5): the native table owns KEYS only —
+// owned Rust data behind the `Opaque` payload box — while `vals` stay
+// rut-side in a `[*V]` parallel array. That preserves mapset's `get ->
+// *V` aliasing/nil semantics EXACTLY (no Opaque values, no downcast, no
+// fresh-cell drift) and keeps the box free of rut cells. The key set is
+// CLOSED (integer primitives, `bool`, `str`, `bytes` — everything
+// `Opaque.new` can hand the host as bits/bytes): keys hash WRAPPER-side
+// and cross as `i64` bits plus one key box per call. A user-defined key
+// type compiles (admission is `Hashable`, as in mapset) but traps at
+// the crossing — loudly, pointing at mapset. No re-entrant `hash_eq`
+// callbacks exist (RFC 0023 §2); the closed set is the honest
+// experiment scope.
+//
+// GROWTH (plan §0.6): the native table rehashes its own keys from the
+// recorded hashes; the wrapper relocates `vals` by draining the
+// relocation iterator — `map_take_reloc` answers `(old << 32) | new`
+// per moved slot until `-1` (drained). ~2n tiny host calls per grow,
+// amortized. `HashSet` runs the same grow with no vals machinery at
+// all — the undrained queue is cleared by the next grow and freed with
+// the table (the host side's documented drain-after-every-grow law).
+
+use core::{ Opaque };
+use nmap::{ map_new, map_entry, map_find, map_remove, map_needs_grow, map_grow, map_take_reloc, map_cap, map_len };
+
+// ---- the ONE key contract (mapset.rut's, constants bit-identical) ----
+
+// Hashing and key comparison are a single trait — `hash_eq` must be
+// CONSISTENT with `hash` (equal keys answer equal hashes), or a map
+// loses entries. The native path calls `hash` only; `hash_eq` is the
+// contract's consistency half (and what a user key type implements).
+pub trait Hashable {
+    fn hash(self) -> u64;
+    fn hash_eq(self, other: Self) -> bool;
+}
+
+// FNV-1a 64 over the bytes (mapset.rut verbatim).
+fn fnv1a64(data: bytes) -> u64 {
+    let mut h: u64 = 14695981039346656037u64;
+    for (let b of data) {
+        h = (h ^ b as u64).wrapping_mul(1099511628211u64);
+    }
+    return h;
+}
+
+// One FNV-1a-style fold of a u64 word — the integer/bool `hash` shape
+// (mapset.rut verbatim: these constants ARE the checksum law).
+fn mix64(bits: u64) -> u64 {
+    return (14695981039346656037u64 ^ bits).wrapping_mul(1099511628211u64);
+}
+
+// No `f32`/`f64` impl — float keys have no stable equality contract
+// here, exactly as in mapset (and they are outside the native key set
+// besides: the host traps on them).
+
+impl Hashable for i8 {
+    fn hash(self) -> u64 { return mix64(self as u64); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for i16 {
+    fn hash(self) -> u64 { return mix64(self as u64); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for i32 {
+    fn hash(self) -> u64 { return mix64(self as u64); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for i64 {
+    fn hash(self) -> u64 { return mix64(self as u64); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for u8 {
+    fn hash(self) -> u64 { return mix64(self as u64); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for u16 {
+    fn hash(self) -> u64 { return mix64(self as u64); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for u32 {
+    fn hash(self) -> u64 { return mix64(self as u64); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for u64 {
+    fn hash(self) -> u64 { return mix64(self); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for bool {
+    fn hash(self) -> u64 {
+        if (self) { return mix64(1); }
+        return mix64(0);
+    }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+// `==` on `str`/`bytes` is CONTENT equality (RFC 0012 §4) — exactly the
+// key equality a hash table means, and consistent with the byte-wise
+// `hash`.
+impl Hashable for str {
+    fn hash(self) -> u64 { return fnv1a64(self.encode()); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+impl Hashable for bytes {
+    fn hash(self) -> u64 { return fnv1a64(self); }
+    fn hash_eq(self, other: Self) -> bool { return self == other; }
+}
+
+// ---------------------------------------------------- the owners ----
+
+// `HashMap<K, V>` — the host table behind one `Opaque` handle plus the
+// parallel value array. The admission-only bound (`K requires
+// Hashable`, RFC 0043 §A5) gates which instantiations compile, exactly
+// as in mapset; `k.hash()` is a static, inlined call on the bare K.
+pub class HashMap<K requires Hashable, V> {
+    t: Opaque;    // HostBoxed<NativeTable> — keys, recorded hashes, states
+    vals: [*V];   // `[nil; cap]` — nil is the empty slot's zero
+}
+
+impl HashMap<K, V> {
+    pub fn new() -> Self {
+        return HashMap.with_capacity(8);
+    }
+
+    // `map_new` takes the requested capacity in the crossing (`i64`) and
+    // rounds it to a power of two, never below 4 — read back through
+    // `map_cap` to size `vals` in one construction.
+    pub fn with_capacity(n: i32) -> Self {
+        let t: Opaque = map_new(n as i64);
+        return Self { t: t, vals: [nil; map_cap(t)] };
+    }
+
+    // `put` — answers `true` when the key was newly added, `false` when
+    // an existing key's value was replaced. Grow (the native rehash plus
+    // the `vals` relocation) comes before the entry call, mapset's put
+    // shape. The key is hashed once, boxed once, and crossed once.
+    pub fn put(mut self, k: K, v: V) -> bool {
+        let h = k.hash();
+        if (map_needs_grow(self.t)) {
+            let new_cap = map_grow(self.t);
+            let mut next: [*V] = [nil; new_cap];
+            while (true) {
+                let packed = map_take_reloc(self.t);
+                if (packed < 0) {
+                    break;
+                }
+                let old = (packed >> 32) as i32;
+                let new = (packed & 4294967295i64) as i32;
+                next[new] = self.vals[old];
+            }
+            self.vals = next;
+        }
+        let at = map_entry(self.t, Opaque.new(k), h as i64);
+        if (at >= 0) {
+            self.vals[at] = &v;
+            return false;
+        }
+        let slot = -(at + 1);
+        self.vals[slot] = &v;
+        return true;
+    }
+
+    // `get` — `nil` = absent (RFC 0005 §10). The stored cell comes back,
+    // not a copy: two gets of one key name ONE cell until a replace
+    // re-stores (the aliasing law the parity test pins).
+    pub fn get(self, k: K) -> *V {
+        let at = map_find(self.t, Opaque.new(k), k.hash() as i64);
+        if (at < 0) {
+            return nil;
+        }
+        return self.vals[at];
+    }
+
+    pub fn has(self, k: K) -> bool {
+        return map_find(self.t, Opaque.new(k), k.hash() as i64) >= 0;
+    }
+
+    // `remove` — the host tombstones the slot and answers the freed
+    // index (or `-1`); the wrapper nils the value cell.
+    pub fn remove(mut self, k: K) -> bool {
+        let at = map_remove(self.t, Opaque.new(k), k.hash() as i64);
+        if (at < 0) {
+            return false;
+        }
+        self.vals[at] = nil;
+        return true;
+    }
+
+    pub fn len(self) -> i32 {
+        return map_len(self.t);
+    }
+}
+
+// `HashSet<T>` — the host table alone, zero value machinery: map_new /
+// map_entry / map_find / map_remove / map_len only. The grow needs no
+// relocation drain (nothing rides the slots but the keys themselves).
+pub class HashSet<T requires Hashable> {
+    t: Opaque;
+}
+
+impl HashSet<T> {
+    pub fn new() -> Self {
+        return HashSet.with_capacity(8);
+    }
+
+    pub fn with_capacity(n: i32) -> Self {
+        return Self { t: map_new(n as i64) };
+    }
+
+    // `put` — answers `true` when the element was newly added.
+    pub fn put(mut self, t: T) -> bool {
+        let h = t.hash();
+        if (map_needs_grow(self.t)) {
+            map_grow(self.t);
+        }
+        return map_entry(self.t, Opaque.new(t), h as i64) < 0;
+    }
+
+    pub fn has(self, t: T) -> bool {
+        return map_find(self.t, Opaque.new(t), t.hash() as i64) >= 0;
+    }
+
+    pub fn remove(self, t: T) -> bool {
+        return map_remove(self.t, Opaque.new(t), t.hash() as i64) >= 0;
+    }
+
+    pub fn len(self) -> i32 {
+        return map_len(self.t);
+    }
+}

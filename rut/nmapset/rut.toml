@@ -1,0 +1,20 @@
+# nmapset/ — the native-key map/set EXPERIMENT (the mapset-host plan):
+# generic wrapper classes over the `nmap` host table. The native side
+# owns keys only; `vals` stay rut-side (`[*V]` parallel array), so `get
+# -> *V` aliasing semantics match `mapset` exactly. `inline = true` like
+# ink — a generic-class module is source-inlined into its consumer, and
+# the flag keeps that explicit.
+#
+# The `Hashable` key contract ships IN this pkg (same trait shape, same
+# mix64/FNV constants as `mapset` — hashes and checksums are bit-
+# identical). DEVIATION from plan §0.3's `[deps] mapset`, forced by the
+# engine: a source dep's full source splices into the consumer's one
+# compilation unit, and mapset declares same-named `HashMap`/`HashSet`
+# classes — the splice collides ("duplicate type name"). See the header
+# of nmapset.rut. `rut/mapset` stays untouched.
+name = "nmapset"
+entry.lib = "./nmapset.rut"
+inline = true
+
+[deps]
+nmap = { path = "../nmap" }

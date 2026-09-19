@@ -410,6 +410,7 @@ dependencies = [
  "rut-lexer",
  "rut-lir",
  "rut-parser",
+ "rut-std",
  "rut-vm",
 ]
 

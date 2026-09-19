@@ -18,3 +18,4 @@ rut-lir = { path = "../rut-lir" }
 
 [dev-dependencies]
 rut-vm = { path = "../rut-vm" }
+rut-std = { path = "../rut-std" }

@@ -1,0 +1,2 @@
+name = "nmap"
+entry.type = "./nmap.d.rut"
