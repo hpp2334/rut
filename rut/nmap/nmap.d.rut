@@ -29,3 +29,51 @@ pub host fn map_take_reloc(m: opaque) -> i64;
 pub host fn map_cap(m: opaque) -> i32;
 
 pub host fn map_len(m: opaque) -> i32;
+
+// ---- the typed lanes (the mapset-host plan, phase 2) ---------------
+// 15 fns `map_{entry,find,remove}_{i,u,b,s,y}` over the closed key set:
+// the key crosses DIRECTLY — no `opaque(..)` mint, no wrapper-hash `h`
+// — and the table records the hash the HOST computed (mix64 / FNV-1a
+// 64 with mapset's exact constants, bit-for-bit). The `i` lane takes
+// `i64` — the wrapper casts i8..i64 into it (sign-extension is the
+// `KeyPayload::Bits` law, so the recorded bits match the Opaque lane's);
+// the `u` lane takes `u64` raw bits; `b` takes `bool` (0/1 bits);
+// `s`/`y` borrow `str`/`bytes` zero-copy.
+//
+// Answers, per op:
+// - `map_find_*`: `>= 0` = the found slot; `-1` = absent.
+// - `map_remove_*`: `>= 0` = removed, the freed slot; `-1` = absent.
+// - `map_entry_*`: fused grow-first — when inserting would breach the
+//   load factor it answers `i32::MIN` (a fresh insert is `-(slot + 1)
+//   >= -2^30`, so the encoding is collision-free) and the caller grows
+//   + drains + retries; otherwise the found slot or the fresh slot.
+
+pub host fn map_entry_i(m: opaque, k: i64) -> i32;
+
+pub host fn map_entry_u(m: opaque, k: u64) -> i32;
+
+pub host fn map_entry_b(m: opaque, k: bool) -> i32;
+
+pub host fn map_entry_s(m: opaque, k: str) -> i32;
+
+pub host fn map_entry_y(m: opaque, k: bytes) -> i32;
+
+pub host fn map_find_i(m: opaque, k: i64) -> i32;
+
+pub host fn map_find_u(m: opaque, k: u64) -> i32;
+
+pub host fn map_find_b(m: opaque, k: bool) -> i32;
+
+pub host fn map_find_s(m: opaque, k: str) -> i32;
+
+pub host fn map_find_y(m: opaque, k: bytes) -> i32;
+
+pub host fn map_remove_i(m: opaque, k: i64) -> i32;
+
+pub host fn map_remove_u(m: opaque, k: u64) -> i32;
+
+pub host fn map_remove_b(m: opaque, k: bool) -> i32;
+
+pub host fn map_remove_s(m: opaque, k: str) -> i32;
+
+pub host fn map_remove_y(m: opaque, k: bytes) -> i32;

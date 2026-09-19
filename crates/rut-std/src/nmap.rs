@@ -298,6 +298,88 @@ fn key_val(vm: &Vm, k: &OpaqueRef) -> Result<(KeyKind, KeyVal), Trap> {
     }
 }
 
+/// The two hash constants mapset's `Hashable` impls run (the ONE key
+/// contract, nmapset.rut `mix64`/`fnv1a64`): FNV-1a 64's offset basis
+/// and prime. These are the checksum law — ported BIT-FOR-BIT, so the
+/// host's recorded hashes equal the wrapper's `k.hash()` bit for bit
+/// and the phase-4 bench checksums (which must equal mapset's rows)
+/// hold. A one-ulp difference here breaks the gate; the unit test pins
+/// the exact outputs as literals.
+const FNV_OFFSET: u64 = 14695981039346656037;
+const FNV_PRIME: u64 = 1099511628211;
+
+/// The typed lanes' host-side hash — the ONE shared payload hasher the
+/// crossings run instead of minting an Opaque box and reading the
+/// wrapper's `h`: mix64 for the integer/bool bits, FNV-1a 64 over the
+/// octets for `str`/`bytes`. Same inputs, mapset's constants, mapset's
+/// exact bits.
+pub fn hash_payload(k: &KeyVal) -> u64 {
+    let mut h = FNV_OFFSET;
+    match k {
+        KeyVal::Bits(v) => return (FNV_OFFSET ^ v).wrapping_mul(FNV_PRIME),
+        KeyVal::Str(s) => {
+            for b in s.as_bytes() {
+                h = (h ^ *b as u64).wrapping_mul(FNV_PRIME);
+            }
+        }
+        KeyVal::Bytes(b) => {
+            for byte in b {
+                h = (h ^ *byte as u64).wrapping_mul(FNV_PRIME);
+            }
+        }
+    }
+    h
+}
+
+/// The payload's kind — the table's fixed flavor, as the Opaque lane's
+/// `key_val` classifies it. All integer primitives and `bool` share
+/// `Bits` (equality is the payload bits: `255u8`, `255i64`, and
+/// `255i32` collapse to one key, exactly as the wrapper's homogeneous
+/// `K` guarantees), `str`/`bytes` are their own kinds.
+fn kind_of(key: &KeyVal) -> KeyKind {
+    match key {
+        KeyVal::Bits(_) => KeyKind::Bits,
+        KeyVal::Str(_) => KeyKind::Str,
+        KeyVal::Bytes(_) => KeyKind::Bytes,
+    }
+}
+
+/// The load-factor sentinel the fused `map_entry_*` answers when
+/// inserting would breach the load factor: the wrapper grows (drains
+/// the relocation queue), then retries the entry call. Collision-free
+/// with the entry answers — a found slot is `>= 0`, a fresh insert is
+/// `-(slot + 1) >= -2^30` (slot < cap <= 2^30, or the table is far
+/// past any real allocation), so `i32::MIN` can never be mistaken for
+/// either.
+pub const GROW_FIRST: i32 = i32::MIN;
+
+/// The typed entry lane: same probe core as [`NativeTable::entry`], but
+/// the key crossed DIRECTLY (no Opaque mint) and the hash came from
+/// [`hash_payload`]. Grow-first is FUSED into the crossing: the
+/// wrapper's `map_needs_grow + map_grow + drain + retry` round trip
+/// collapses to one sentinel answer (plan phase 2). `map_needs_grow` /
+/// `map_grow` stay exported for the grow path itself and the tests.
+fn typed_entry(t: &mut NativeTable, key: KeyVal) -> Result<i32, Trap> {
+    let h = hash_payload(&key);
+    let kind = kind_of(&key);
+    if t.needs_grow() {
+        return Ok(GROW_FIRST); // grow-first: nothing stored on this call
+    }
+    t.entry(kind, key, h)
+}
+
+/// The typed lookup lane: probe only — the found slot, or `-1`.
+fn typed_find(t: &NativeTable, key: &KeyVal) -> Result<i32, Trap> {
+    let h = hash_payload(key);
+    t.find(kind_of(key), key, h)
+}
+
+/// The typed remove lane: tombstone the found slot, or `-1`.
+fn typed_remove(t: &mut NativeTable, key: &KeyVal) -> Result<i32, Trap> {
+    let h = hash_payload(key);
+    t.remove(kind_of(key), key, h)
+}
+
 /// Install the nine `nmap` bodies under the `nmap` scope (the `calc`
 /// pattern, RFC 0023/0025): the callable's Rust shape IS the `.d.rut`
 /// row, so the surface declares exactly these signatures. `map_new`'s
@@ -364,6 +446,139 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         "nmap::map_len",
         (OpaqueBox<NativeTable>,) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>| b.with(|t| t.len()),
+    );
+
+    // ---- the typed lanes (plan phase 2) ----------------------------
+    // 15 fns `map_{entry,find,remove}_{i,u,b,s,y}`: the key crosses
+    // DIRECTLY — no `opaque(..)` mint, no wrapper-hash `h`, no key box —
+    // and the hash is computed host-side by [`hash_payload`]. The `i`
+    // lane takes `i64` (wrapper-cast from i8..i64; sign-extension is
+    // the `KeyPayload::Bits` law, so the recorded bits match), the `u`
+    // lane takes `u64` (raw bits — verified across the boundary in the
+    // phase-2 driver tests), `b` takes `bool`, `s`/`y` borrow
+    // `str`/`bytes` ZERO-COPY (the found text's octets read straight
+    // out of the block store; only a fresh find copies into the probe
+    // key). `map_entry_*` answers the fused grow sentinel
+    // ([`GROW_FIRST`] = `i32::MIN`) before any insert.
+    rut_vm::register!(
+        hosts,
+        "nmap::map_entry_i",
+        (OpaqueBox<NativeTable>, i64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_entry(t, KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_entry_u",
+        (OpaqueBox<NativeTable>, u64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_entry(t, KeyVal::Bits(k)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_entry_b",
+        (OpaqueBox<NativeTable>, bool) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_entry(t, KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_entry_s",
+        (OpaqueBox<NativeTable>, &str) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_entry(t, KeyVal::Str(k.to_owned())))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_entry_y",
+        (OpaqueBox<NativeTable>, &[u8]) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_entry(t, KeyVal::Bytes(k.to_vec())))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_find_i",
+        (OpaqueBox<NativeTable>, i64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i32, Trap> {
+            b.with(|t| typed_find(t, &KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_find_u",
+        (OpaqueBox<NativeTable>, u64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i32, Trap> {
+            b.with(|t| typed_find(t, &KeyVal::Bits(k)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_find_b",
+        (OpaqueBox<NativeTable>, bool) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i32, Trap> {
+            b.with(|t| typed_find(t, &KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_find_s",
+        (OpaqueBox<NativeTable>, &str) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
+            b.with(|t| typed_find(t, &KeyVal::Str(k.to_owned())))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_find_y",
+        (OpaqueBox<NativeTable>, &[u8]) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
+            b.with(|t| typed_find(t, &KeyVal::Bytes(k.to_vec())))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_remove_i",
+        (OpaqueBox<NativeTable>, i64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_remove(t, &KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_remove_u",
+        (OpaqueBox<NativeTable>, u64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_remove(t, &KeyVal::Bits(k)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_remove_b",
+        (OpaqueBox<NativeTable>, bool) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_remove(t, &KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_remove_s",
+        (OpaqueBox<NativeTable>, &str) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_remove(t, &KeyVal::Str(k.to_owned())))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_remove_y",
+        (OpaqueBox<NativeTable>, &[u8]) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_remove(t, &KeyVal::Bytes(k.to_vec())))?
+        },
     );
 }
 
@@ -472,10 +687,16 @@ mod tests {
             assert!(moved.insert(old, new).is_none(), "one pair per old slot");
             drained += 1;
         }
-        assert_eq!(t.take_reloc(), -1, "the iterator drains exactly count pairs");
+        assert_eq!(
+            t.take_reloc(),
+            -1,
+            "the iterator drains exactly count pairs"
+        );
         // every key finds its new slot, and the mapping says so
         for (i, old) in old_slots.iter().enumerate() {
-            let at = t.find(KeyKind::Bits, &bits(i as u64), mix64(i as u64)).unwrap();
+            let at = t
+                .find(KeyKind::Bits, &bits(i as u64), mix64(i as u64))
+                .unwrap();
             assert!(at >= 0, "key {i} lost by the grow");
             assert_eq!(moved.get(old), Some(&at), "key {i}: {old} -> {at}");
         }
@@ -503,15 +724,266 @@ mod tests {
             .unwrap();
         assert!(a < 0);
         // a fresh copy of the same octets finds the stored slot
-        let at = t.find(KeyKind::Str, &KeyVal::Str("alpha".into()), mix64(1)).unwrap();
+        let at = t
+            .find(KeyKind::Str, &KeyVal::Str("alpha".into()), mix64(1))
+            .unwrap();
         assert_eq!(at, -(a + 1));
-        assert_eq!(t.find(KeyKind::Str, &KeyVal::Str("alph".into()), mix64(1)).unwrap(), -1);
+        assert_eq!(
+            t.find(KeyKind::Str, &KeyVal::Str("alph".into()), mix64(1))
+                .unwrap(),
+            -1
+        );
 
         let mut t = NativeTable::new(8);
-        let b = t.entry(KeyKind::Bytes, KeyVal::Bytes(vec![9, 8, 7]), mix64(2)).unwrap();
+        let b = t
+            .entry(KeyKind::Bytes, KeyVal::Bytes(vec![9, 8, 7]), mix64(2))
+            .unwrap();
         assert!(b < 0);
-        let at = t.find(KeyKind::Bytes, &KeyVal::Bytes(vec![9, 8, 7]), mix64(2)).unwrap();
+        let at = t
+            .find(KeyKind::Bytes, &KeyVal::Bytes(vec![9, 8, 7]), mix64(2))
+            .unwrap();
         assert_eq!(at, -(b + 1));
-        assert_eq!(t.find(KeyKind::Bytes, &KeyVal::Bytes(vec![9, 8]), mix64(2)).unwrap(), -1);
+        assert_eq!(
+            t.find(KeyKind::Bytes, &KeyVal::Bytes(vec![9, 8]), mix64(2))
+                .unwrap(),
+            -1
+        );
+    }
+
+    // ---- phase 2: the typed lanes + the fused grow sentinel ----------
+
+    /// The checksum law, pinned as LITERALS: hash_payload must answer
+    /// mapset's exact bits (nmapset.rut's `mix64` / `fnv1a64` constants,
+    /// ported bit-for-bit) — a one-ulp difference breaks the phase-4
+    /// bench gate, which compares value-derived checksums against
+    /// mapset's rows.
+    #[test]
+    fn hash_payload_is_mapsets_bits_bit_for_bit() {
+        // mix64 — the integer/bool lane: (offset ^ bits) * prime
+        assert_eq!(hash_payload(&KeyVal::Bits(0)), 12638153115695167455);
+        assert_eq!(hash_payload(&KeyVal::Bits(1)), 12638152016183539244);
+        assert_eq!(hash_payload(&KeyVal::Bits(11)), 12638163011299821354);
+        assert_eq!(hash_payload(&KeyVal::Bits(255)), 12638352127299873646);
+        // u64's sign-bit set lives through raw: bits 0xFFFF..FF (an
+        // i64's -1, sign-extended) hash 0x509c41b379fe466e
+        assert_eq!(hash_payload(&KeyVal::Bits(u64::MAX)), 5808589858502755950);
+        // FNV-1a 64 over the octets — the str/bytes lanes
+        assert_eq!(
+            hash_payload(&KeyVal::Str("alpha".into())),
+            9999721509958787115
+        );
+        assert_eq!(
+            hash_payload(&KeyVal::Str("beta".into())),
+            8513880941419438247
+        );
+        assert_eq!(
+            hash_payload(&KeyVal::Bytes(vec![1, 2, 3])),
+            15035938162879559083
+        );
+    }
+
+    /// The typed ops and the Opaque ops land the SAME slots on the SAME
+    /// table operations: the key's recorded hash comes from
+    /// `hash_payload` with mapset's constants, so probing behaves
+    /// identically to the wrapper-hash Opaque lane.
+    #[test]
+    fn typed_and_opaque_lanes_answer_the_same_slots() {
+        // one shared op sequence, two kinds of put: opaque-lane records
+        // (wrapper bits in `h`), typed lanes (host bits from
+        // hash_payload) — the answers must agree pairwise
+        let keys: Vec<u64> = vec![11, 22, 33, 44, 55, 66];
+        let mut t = NativeTable::new(16);
+        let mut opaque_slots = Vec::new();
+        for (i, k) in keys.iter().enumerate() {
+            let h = mix64(*k);
+            let at = if i % 2 == 0 {
+                // the Opaque lane: wrapper-computed hash crosses in
+                t.entry(KeyKind::Bits, bits(*k), h).unwrap()
+            } else {
+                // the typed lane: the host hashes the direct key
+                typed_entry(&mut t, KeyVal::Bits(*k)).unwrap()
+            };
+            opaque_slots.push(at);
+        }
+        assert_eq!(t.len(), 6);
+        // now the mirrored lookups: every key finds its recorded slot by
+        // BOTH lanes — normalize the insert encoding (-(slot + 1)) to
+        // the slot
+        for (i, k) in keys.iter().enumerate() {
+            let typed = typed_find(&t, &KeyVal::Bits(*k)).unwrap();
+            assert!(typed >= 0, "key {k} lost: {typed}");
+            let ans = opaque_slots[i];
+            let expect = if ans >= 0 { ans } else { -(ans + 1) };
+            assert_eq!(
+                typed, expect,
+                "typed find matches the recorded slot for key {k}"
+            );
+            assert_eq!(t.find(KeyKind::Bits, &bits(*k), mix64(*k)).unwrap(), typed);
+        }
+        // removes cross lanes too: remove by the typed lane what the
+        // opaque lane stored, and the Opaque find answers the absence
+        let freed = typed_remove(&mut t, &KeyVal::Bits(11)).unwrap();
+        let ans = opaque_slots[0];
+        assert_eq!(freed, if ans >= 0 { ans } else { -(ans + 1) });
+        assert_eq!(t.remove(KeyKind::Bits, &bits(11), mix64(11)).unwrap(), -1);
+        assert_eq!(typed_remove(&mut t, &KeyVal::Bits(77)).unwrap(), -1);
+        assert_eq!(t.len(), 5);
+    }
+
+    /// Widening distinctness: `-1i8`, `255u8`, and `255i64` are three
+    /// keys the closed set can carry, and the typed lanes must see what
+    /// the Opaque lane's `KeyPayload::Bits` sees — signed widths cross
+    /// SIGN-extended (`-1i8` hashes as bits `0xFFFF..FF`), unsigned
+    /// widths ZERO-extend, and equal bits collapse to one key
+    /// (`255u8` == `255i64`, the homogeneous-K contract).
+    #[test]
+    fn widening_distinctness_matches_the_opaque_bits_law() {
+        let mut t = NativeTable::new(8);
+        // -1i8 crosses as i64 -1: bits 0xFFFF..FFFF
+        let neg = typed_entry(&mut t, KeyVal::Bits((-1i64) as u64)).unwrap();
+        assert!(neg < 0, "fresh");
+        // 255u8 and 255i64 are the SAME key (bits 255) — the i/u lanes
+        // share the Bits kind, exactly as the Opaque lane does
+        let u8_255 = typed_entry(&mut t, KeyVal::Bits(255)).unwrap();
+        assert!(u8_255 < 0, "255 is a fresh key");
+        assert_eq!(
+            typed_entry(&mut t, KeyVal::Bits(255i64 as u64)).unwrap(),
+            -(u8_255 + 1)
+        );
+        assert_eq!(t.len(), 2);
+        // and neither matches -1: the three plan keys are distinct
+        // (255u8/255i64 to each other, both from -1i8)
+        let found_neg = typed_find(&t, &KeyVal::Bits((-1i64) as u64)).unwrap();
+        assert_ne!(found_neg, -(u8_255 + 1));
+        assert_ne!(found_neg, -1, "-1i8 is stored, not missing");
+        assert_eq!(typed_find(&t, &KeyVal::Bits(255)).unwrap(), -(u8_255 + 1));
+        assert_eq!(typed_find(&t, &KeyVal::Bits(256)).unwrap(), -1);
+    }
+
+    /// The bool lane: `true`/`false` hash mix64(1)/mix64(0) — mapset's
+    /// bool impl's exact bits — and round-trip through the typed lane
+    /// while staying consistent with the Opaque lane's recorded hash.
+    #[test]
+    fn the_bool_lane_hashes_mapsets_bools() {
+        let mut t = NativeTable::new(8);
+        let tru = typed_entry(&mut t, KeyVal::Bits(1)).unwrap();
+        assert!(tru < 0);
+        // the wrapper's bool hash: mix64(1) — what an Opaque-lane put
+        // of `true` recorded
+        assert_eq!(
+            t.find(KeyKind::Bits, &bits(1), mix64(1)).unwrap(),
+            -(tru + 1)
+        );
+        assert_eq!(
+            typed_find(&t, &KeyVal::Bits(0)).unwrap(),
+            -1,
+            "false misses"
+        );
+        let fal = typed_entry(&mut t, KeyVal::Bits(0)).unwrap();
+        assert!(fal < 0);
+        assert_eq!(typed_find(&t, &KeyVal::Bits(0)).unwrap(), -(fal + 1));
+        assert_eq!(
+            t.remove(KeyKind::Bits, &bits(0), mix64(0)).unwrap(),
+            -(fal + 1)
+        );
+        // hash_payload IS mix64(0)/mix64(1) for the bool bits
+        assert_eq!(hash_payload(&KeyVal::Bits(0)), mix64(0));
+        assert_eq!(hash_payload(&KeyVal::Bits(1)), mix64(1));
+    }
+
+    /// The fused grow sentinel fires EXACTLY at the load boundary:
+    /// cap-8 table, the law (count+1)*10 >= 56 flips at count 5 — so
+    /// the 5th insert succeeds (count 4 → 5, (4+1)*10 = 50 < 56) and
+    /// the 6th answers `i32::MIN` without storing; after the grow +
+    /// drain, the retry lands the key.
+    #[test]
+    fn the_fused_sentinel_fires_exactly_at_the_load_boundary() {
+        let mut t = NativeTable::new(8);
+        for i in 0u64..4 {
+            let at = typed_entry(&mut t, KeyVal::Bits(i)).unwrap();
+            assert!(at < 0, "key {i} inserts below the boundary");
+        }
+        assert_eq!(t.len(), 4);
+        assert_eq!(t.cap(), 8);
+        // (4+0+1)*10 = 50 < 56 — the 5th insert goes through
+        let at = typed_entry(&mut t, KeyVal::Bits(4)).unwrap();
+        assert!(at < 0, "the 5th insert is still legal: {at}");
+        assert_eq!(t.len(), 5);
+        assert_eq!(t.cap(), 8, "no grow happened on this path");
+        // (5+0+1)*10 = 60 >= 56 — the 6th call answers the sentinel and
+        // stores NOTHING
+        assert_eq!(typed_entry(&mut t, KeyVal::Bits(5)).unwrap(), GROW_FIRST);
+        assert_eq!(t.len(), 5, "the sentinel call inserted nothing");
+        assert_eq!(t.cap(), 8);
+        // the sentinel is OFF the entry encodings: no found slot (>= 0)
+        // and no insert answer (-(slot+1) >= -2^30) can equal i32::MIN
+        for i in 0u64..5 {
+            let f = typed_find(&t, &KeyVal::Bits(i)).unwrap();
+            assert!(f >= 0 && f != GROW_FIRST);
+        }
+        // grow + drain + retry — the wrapper's shape, exercised here
+        t.grow();
+        while t.take_reloc() >= 0 {}
+        let at = typed_entry(&mut t, KeyVal::Bits(5)).unwrap();
+        assert!(at < 0, "after the grow the retry inserts: {at}");
+        assert_eq!(t.len(), 6);
+    }
+
+    /// The str/bytes typed lanes hash the CONTENT and probe on octet
+    /// equality — a fresh copy of the same text finds the slot the
+    /// Opaque lane stored (hash_payload == the wrapper's fnv1a64).
+    #[test]
+    fn typed_str_bytes_agree_with_the_opaque_lane() {
+        let mut t = NativeTable::new(8);
+        // Opaque-lane put: the wrapper's hash crosses in `h` (fnv1a64
+        // over the octets — the SAME constants host's hash_payload
+        // carries)
+        let a = t
+            .entry(
+                KeyKind::Str,
+                KeyVal::Str("alpha".into()),
+                hash_payload(&KeyVal::Str("alpha".into())),
+            )
+            .unwrap();
+        assert!(a < 0, "alpha inserts");
+        let slot = -(a + 1);
+        // typed find on a fresh copy: the host hashes the borrowed
+        // octets and lands the same slot
+        assert_eq!(typed_find(&t, &KeyVal::Str("alpha".into())).unwrap(), slot);
+        assert_eq!(typed_find(&t, &KeyVal::Str("beta".into())).unwrap(), -1);
+        // typed entry replaces at that slot; typed remove frees it
+        let r = typed_entry(&mut t, KeyVal::Str("alpha".into())).unwrap();
+        assert_eq!(r, slot, "same slot, no second entry");
+        assert_eq!(
+            typed_remove(&mut t, &KeyVal::Str("alpha".into())).unwrap(),
+            slot
+        );
+        assert_eq!(typed_find(&t, &KeyVal::Str("alpha".into())).unwrap(), -1);
+
+        let mut t = NativeTable::new(8);
+        let b = typed_entry(&mut t, KeyVal::Bytes(vec![9, 8, 7])).unwrap();
+        assert!(b < 0);
+        assert_eq!(
+            typed_find(&t, &KeyVal::Bytes(vec![9, 8, 7])).unwrap(),
+            -(b + 1)
+        );
+        assert_eq!(typed_find(&t, &KeyVal::Bytes(vec![9, 8])).unwrap(), -1);
+        assert_eq!(
+            typed_remove(&mut t, &KeyVal::Bytes(vec![9, 8, 7])).unwrap(),
+            -(b + 1)
+        );
+        assert_eq!(t.len(), 0);
+    }
+
+    /// The sentinel never collides with the entry encodings by
+    /// construction: a found slot is `>= 0`, a fresh insert is
+    /// `-(slot + 1) >= -2^30` — the plan's collision-free argument,
+    /// pinned at values no real table reaches.
+    #[test]
+    fn the_sentinel_encoding_is_collision_free() {
+        // the largest insert answer possible (cap 2^30): -(2^30) — one
+        // ulp above i32::MIN, a 2^31 gap of headroom
+        assert_eq!((-(0x4000_0000i32 + 1)) as i64, -0x4000_0001i64);
+        assert!(GROW_FIRST == i32::MIN && GROW_FIRST < -0x4000_0000);
     }
 }

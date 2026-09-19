@@ -458,6 +458,18 @@ param_prim!(u8, "u8", TY_U8);
 param_prim!(u16, "u16", TY_U16);
 param_prim!(u32, "u32", TY_U32);
 
+/// raw-bit read — a rut `u64` lives in the slot as its own bit pattern
+/// (the [`Ret`] twin below), so no i64 narrowing applies: `2^63` and up
+/// arrive with the sign bit set in `slot.i` and keep their bits.
+impl HostParam for u64 {
+    const TY: TypeId = TY_U64;
+    type Repr<'a> = u64;
+    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_U64, "u64")?;
+        Ok(unsafe { slot.i } as u64)
+    }
+}
+
 impl HostParam for f64 {
     const TY: TypeId = TY_F64;
     type Repr<'a> = f64;
