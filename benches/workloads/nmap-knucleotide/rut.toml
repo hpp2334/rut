@@ -1,0 +1,12 @@
+# nmap-knucleotide/ — the HOST-backed twin of `knucleotide`: the
+# identical k-mer counting over `nmapset::HashMap<str, i32>` (the
+# native-key experiment pkg) instead of pure-rut `mapset`. Module dir
+# because it mounts `nmapset` (which pulls the `nmap` host pkg); see
+# nmapset-int/rut.toml. The checksum must EQUAL `knucleotide`'s (same
+# FNV-1a values — the nmapset pkg ships mapset's exact constants).
+name = "nmap_knucleotide"
+entry.lib = "./main.rut"
+
+[deps]
+nmapset = { path = "../../../rut/nmapset" }
+ink = { path = "../../../rut/ink" }

@@ -1,0 +1,14 @@
+# nmapset-int/ — the HOST-backed twin of `hashmap-int`: the identical
+# i32 churn over `nmapset::HashMap` (the native-key experiment pkg, the
+# mapset-host plan) instead of pure-rut `mapset`. A module dir (not a
+# loose file) because it mounts `nmapset`, which pulls the `nmap` host
+# pkg through its own `[deps]`; the CLI registers `install_std_nmap`
+# alongside math/logger. `ink` is declared for the logger. The
+# checksum must EQUAL `hashmap-int`'s (same hash values — the nmapset
+# pkg ships mapset's exact mix64 constants).
+name = "nmapset_int"
+entry.lib = "./main.rut"
+
+[deps]
+nmapset = { path = "../../../rut/nmapset" }
+ink = { path = "../../../rut/ink" }

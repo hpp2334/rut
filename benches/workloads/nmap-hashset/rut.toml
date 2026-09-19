@@ -1,0 +1,12 @@
+# nmap-hashset/ — the HOST-backed twin of `hashset`: the identical
+# HashSet<i32> churn over `nmapset::HashSet` (the native-key experiment
+# pkg) instead of pure-rut `mapset`. Module dir because it mounts
+# `nmapset` (which pulls the `nmap` host pkg); see
+# nmapset-int/rut.toml. The checksum must EQUAL `hashset`'s (same hash
+# values — the nmapset pkg ships mapset's exact mix64 constants).
+name = "nmap_hashset"
+entry.lib = "./main.rut"
+
+[deps]
+nmapset = { path = "../../../rut/nmapset" }
+ink = { path = "../../../rut/ink" }

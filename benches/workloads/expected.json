@@ -18,5 +18,9 @@
   "hashmap-int": "734932704",
   "hashmap-str": "1264308351",
   "hashset": "21500055",
-  "knucleotide": "2198604"
+  "knucleotide": "2198604",
+  "nmapset-int": "734932704",
+  "nmapset-str": "1264308351",
+  "nmap-hashset": "21500055",
+  "nmap-knucleotide": "2198604"
 }

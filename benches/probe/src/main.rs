@@ -179,6 +179,18 @@ fn main() {
         let mut hosts = rut_vm::interp::HostRegistry::new();
         install_std_log(&mut hosts, |_msg| {});
         rut_std::math::install_std_math(&mut hosts);
+        // the nmap experiment's native key table (the mapset-host plan) —
+        // bound only when the program's dep graph declares `nmap::` (the
+        // engine's `calc` is expected of every workload; `nmap` is a tree
+        // pkg like any other, and `verify_against` is exact in BOTH
+        // directions — bound-but-undeclared is an embedder bug, RFC 0025)
+        if session
+            .expected_host_fns()
+            .keys()
+            .any(|name| name.starts_with("nmap::"))
+        {
+            rut_std::nmap::install_std_nmap(&mut hosts);
+        }
         hosts.verify_against(&session.expected_host_fns());
         let mut vm = Vm::new(
             Rc::clone(&prog),
