@@ -97,12 +97,12 @@ against the reference in `workloads/expected.json`.
 | `nmapset-str` | str-keyed `HashMap<str, i32>` (**nmapset**): line-for-line clone of `hashmap-str` | n = 50 000 | checksum `1264308351` (=`hashmap-str`) |
 | `nmap-hashset` | `HashSet<i32>` (**nmapset**): line-for-line clone of `hashset` | n = 100 000 | checksum `21500055` (=`hashset`) |
 | `nmap-knucleotide` | k-mer counting over `HashMap<str, i32>` (**nmapset**): line-for-line clone of `knucleotide` | seq = 200 000 | checksum `2198604` (=`knucleotide`) |
+| `json-decode` | the digest JSON decode: char-split + parser minting one `opaque` box per JSON value (and per object key), plus a downcast fold over the tree — REPS reps of a large generated document (1 200 rows; ~34k boxes minted per rep, ~100k total) | doc ~204 KB, reps 3 | checksum `4502015958359127277` |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
-benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
-— see the limitations below. The four `mapset` workloads
-(`hashmap-int`, `hashmap-str`, `hashset`, `knucleotide`) stress the
+benchmarks-game definitions); `binary-trees` and `fasta` are
+**adaptations**. `json-decode` is too — see below. The four `mapset` workloads (`hashmap-int`, `hashmap-str`, `hashset`, `knucleotide`) stress the
 `rut/mapset` package: the rut sides ship as module dirs
 (`NAME/{rut.toml, main.rut}` with `[deps] mapset = …`) and run as
 `rut run <dir>` — the CLI's single-file auto-mount list stays untouched.
@@ -390,7 +390,41 @@ baseline, afters were taken days later on the drifted host (±8-13%
 between days on identical code); every row wins by far more than that
 drift.
 
+## Performance log — json-decode: the opaque-mint baseline (Sep 2026)
 
+New row for the native-fastpath batch's phase B. `json-decode` ports
+the `02-digest` JSON decoder verbatim (tagged-union tree, children
+boxed in `opaque`), generates a large LCG document, and reparses +
+rewalks (downcast fold) it REPS times: each rep builds the whole tree
+through `opaque(v)` — one box per JSON value, one per object key
+(the key's tree node is parsed, downcast, then dropped) — then folds
+it and drops it. The JS twin runs the SAME generated text through the
+engine's own `JSON.parse`, so the row places rut's decode against the
+mature JSON paths. This entry is the **baseline only** — the phases
+it measures against (OpaqueBox pooling, then inline small payloads)
+have NOT landed; no optimization numbers belong here yet.
+
+All three runtimes agree on the checksum (twin gate, `expected.json`
+pins it): `4502015958359127277`. Full row (net medians, same-day run,
+3 reps + 1 warmup, probe over 3 fresh-VM iters):
+
+| workload    | rut net | qjs net | node net | rut exec | fuel      | VM heap peak |
+|-------------|---------|---------|----------|----------|-----------|--------------|
+| json-decode | 675.2 ms| 62.3 ms | 24.3 ms  | 662.4 ms | 111.33 M  | 32.78 MB     |
+
+Placement: rut is ~10.8x qjs net and ~27.8x node net on the identical
+document — the row measures the interpreter's box churn (the per-value
+`opaque` mint + the churning `Json` records and `Vec` pushes), not the
+string handling alone. Honest notes on what this row is NOT: the
+document is sized so the rut CLI's 64 MiB VM-heap budget holds the
+split char array plus one live tree (32.78 MB peak); a larger document
+would OOM. The doc generation and its char-split are paid once and
+shared across the reps (fresh cursor per rep), so the per-rep cost is
+the decode + fold — the churn phases 6-7 will attack. Box counts:
+~34k boxes minted per rep (19 values + 9 keys per row), ~100k across
+the 3 reps; ~37 M fuel per rep (`111.33 M` per main incl. gen+split).
+Repeated times are stable; treat the x-runtime gap as the baseline
+shape, not as saturation.
 
 - Each runtime is invoked the way it is normally used: `rut run
   file.rut`, `node file.js`, `qjs file.js`. Wall time therefore
@@ -434,8 +468,9 @@ drift.
   (`hashmap-int`, `hashmap-str`, `hashset`, `knucleotide`) and their
   `nmapset` twins (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
   `nmap-knucleotide`, which pull the `nmap` host pkg through the
-  pkg's own `[deps]`). The bench runtimes install the host halves
-  (math + the logger) as usual; `rut-bench-probe` additionally binds
+  pkg's own `[deps]`) and `json-decode` (it mounts `pouch` for the
+  row chunks the document generator joins). The bench runtimes
+  install the host halves (math + the logger) as usual; `rut-bench-probe` additionally binds
   the nmap hosts only when the program's dep graph declares them (the
   host-surface check is exact in both directions, RFC 0025).
 - The `mapset` workloads' JS twins carry small adaptations: JS

@@ -1,0 +1,8 @@
+# json-decode/ — the rut half of the `json-decode` bench workload: a
+# module dir because it mounts `pouch` (see knucleotide/rut.toml).
+name = "json_decode"
+entry.lib = "./main.rut"
+
+[deps]
+pouch = { path = "../../../rut/pouch" }
+ink = { path = "../../../rut/ink" }

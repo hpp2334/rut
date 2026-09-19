@@ -1,0 +1,483 @@
+use pouch::{ Vec };
+use ink::{ Logger };
+
+// json-decode — opaque-mint churn: the digest JSON decoder ported
+// verbatim (tree = tagged union by hand — JTag + Json — children boxed
+// in `opaque`, RFC 0014, to break recursion), driven over a LARGE
+// generated document N times so each rep mints one box per JSON value
+// and one per object key, plus a downcast fold over the tree. This row
+// is the BASELINE the native-fastpath opaque phases (6-7: OpaqueBox
+// pooling, then inline small payloads) measure against — recorded
+// pre-pooling, pre-inline.
+//
+// The JS twin generates the identical document (the knucleotide LCG,
+// seed 42 — same draws, same order, same text), runs it through the
+// engine's own JSON.parse, and walks the parsed value with the same
+// fold. Checksum: i64-wrapped integer ops mirrored bit-for-bit
+// (BigInt.asIntN on the JS side); every rep asserts against the first.
+//
+// Scale (both files): ROWS rows x VALS values per row x REPS reps.
+// The char-split (split_chars) is paid ONCE and the reps repurpose the
+// shared char array into fresh cursors — the per-rep cost is the
+// decode + downcast fold, exactly the churn phases 6-7 attack.
+
+// ------------------------------------------------------------------ LCG ---
+
+fn lcg(x: u32) -> u32 {
+    return x.wrapping_mul(1103515245).wrapping_add(12345);
+}
+
+fn alpha_vec() -> Vec<str> {
+    let a: Vec<str> = Vec.new();
+    for (let c of "abcdefghijklmnopqrstuvwx") {
+        a.push(f"{c}");
+    }
+    return a;
+}
+
+fn b2s(b: bool) -> str {
+    if (b) { return "true"; }
+    return "false";
+}
+
+// sign+magnitude draw -> JSON number text (never "-0"; both sides emit
+// the same digits for the same draw)
+fn val_text(sign: u32, mag: u32) -> str {
+    if (sign == 1 && mag != 0) {
+        return f"-{mag}";
+    }
+    return f"{mag}";
+}
+
+// ------------------------------------------------------------------ gen ---
+
+// The generated document: a top-level array of ROWS records, each
+// {"id":I,"name":"mm-AB","active":B,"score":IIII.FFFF,
+//  "vals":[v0..v5],"tags":["ab","cd","ef"],"note":null,
+//  "meta":{"rev":R,"kind":"kl"}}
+// every record draws in the fixed order: id, name, active, score, six
+// vals, tags, meta (rev + kind).
+fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
+    let parts: Vec<str> = Vec.new();
+    let mut x: u32 = 42;
+    for (let i = 0; i < rows; i += 1) {
+        if (i > 0) { parts.push(","); }
+        x = lcg(x);
+        let id = (((x >> 5) % 899998) as i32) + 100000;
+        x = lcg(x);
+        let na = ((x >> 3) % 24) as i32;
+        let nb = ((x >> 9) % 24) as i32;
+        x = lcg(x);
+        let ok = ((x >> 7) % 2) == 0;
+        x = lcg(x);
+        let si = (((x >> 11) % 9000) as i32) + 1000;
+        let sf = (((x >> 17) % 9000) as i32) + 1000;
+        x = lcg(x);
+        let v0 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v1 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v2 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v3 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v4 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v5 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let ta1 = ((x >> 3) % 24) as i32;
+        let tb1 = ((x >> 9) % 24) as i32;
+        let ta2 = ((x >> 13) % 24) as i32;
+        let tb2 = ((x >> 21) % 24) as i32;
+        let ta3 = ((x >> 25) % 24) as i32;
+        let tb3 = ((x >> 1) % 24) as i32;
+        x = lcg(x);
+        let rev = (((x >> 7) % 9000) as i32) + 1000;
+        let ka = ((x >> 3) % 24) as i32;
+        let kb = ((x >> 9) % 24) as i32;
+        let row = f"{{\"id\":{id},\"name\":\"mm-{alpha[na]}{alpha[nb]}\",\"active\":{b2s(ok)},\"score\":{si}.{sf},\"vals\":[{v0},{v1},{v2},{v3},{v4},{v5}],\"tags\":[\"{alpha[ta1]}{alpha[tb1]}\",\"{alpha[ta2]}{alpha[tb2]}\",\"{alpha[ta3]}{alpha[tb3]}\"],\"note\":null,\"meta\":{{\"rev\":{rev},\"kind\":\"{alpha[ka]}{alpha[kb]}\"}}}}";
+        parts.push(row);
+    }
+    return f"[{string_join(parts.as_array())}]";
+}
+
+// ------------------------------------------------------------------ JSON ---
+//
+// RFC 0006: enums carry no data, and recursive dataclasses are not
+// expressible — so the tree is a tagged union by hand (JTag + Json),
+// with children boxed in `opaque` (RFC 0014) to break the recursion:
+// `Json` contains `Vec<opaque>`, each opaque boxes another `Json`.
+// (Ported verbatim from examples/02-digest/digest.rut.)
+
+enum JTag { Null, False, True, Num, Str, Arr, Obj }
+
+struct Json {
+    tag:  JTag;
+    num: str;          // verbatim lexeme — exact round-trips, no
+    str: str;          // float formatting anywhere in this file
+    arr:  Vec<opaque>;
+    keys: Vec<str>;
+    vals: Vec<opaque>;
+}
+
+fn noopaque() -> opaque { return opaque(0); }
+
+fn noopaques() -> Vec<opaque> {
+    let v: Vec<opaque> = Vec.new();
+    return v;
+}
+fn nostrings() -> Vec<str> {
+    let v: Vec<str> = Vec.new();
+    return v;
+}
+
+fn jnull() -> Json { return Json { tag: JTag.Null, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jbool(b: bool) -> Json {
+    if (b) { return Json { tag: JTag.True, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+    return Json { tag: JTag.False, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() };
+}
+fn jnum(n: str) -> Json { return Json { tag: JTag.Num, num: n, str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jstr(s: str) -> Json { return Json { tag: JTag.Str, num: "", str: s, arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jarr() -> Json { return Json { tag: JTag.Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+fn jobj() -> Json { return Json { tag: JTag.Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
+
+/// The parser cursor. Strings iterate as `char`s, so the source is
+/// split once into single-char strings and walked by index.
+struct Cur { cs: Vec<str>; pos: i32; depth: i32; }
+
+fn split_chars(s: str) -> Vec<str> {
+    let cs: Vec<str> = Vec.new();
+    for (let c of s) { cs.push(f"{c}"); }
+    return cs;
+}
+
+fn jpeek(cur: ?Cur) -> str {
+    if (cur.pos < cur.cs.len()) { return cur.cs[cur.pos]; }
+    return "";
+}
+
+fn jskip(mut cur: ?Cur) {
+    let mut again = true;
+    while (again) {
+        let c = jpeek(cur);
+        again = c == " " || c == "\t" || c == "\n" || c == "\r";
+        if (again) { cur.pos = cur.pos + 1; }
+    }
+}
+
+fn is_digit(c: str) -> bool {
+    return c == "0" || c == "1" || c == "2" || c == "3" || c == "4"
+        || c == "5" || c == "6" || c == "7" || c == "8" || c == "9";
+}
+
+fn join_chars(cs: Vec<str>) -> str {
+    let mut out = "";
+    for (let i = 0; i < cs.len(); i += 1) {
+        out = f"{out}{cs[i]}";
+    }
+    return out;
+}
+
+/// JSON number grammar: -?int (.int)? ([eE][+-]?int)? — validated as a
+/// lexeme, stored verbatim.
+fn valid_number(cs: Vec<str>) -> bool {
+    let n = cs.len();
+    if (n == 0) { return false; }
+    let mut i = 0;
+    if (cs[0] == "-") { i = 1; }
+    let mut intd = 0;
+    while (i < n && is_digit(cs[i])) { i = i + 1; intd = intd + 1; }
+    if (intd == 0) { return false; }
+    if (i < n && cs[i] == ".") {
+        i = i + 1;
+        let mut fracd = 0;
+        while (i < n && is_digit(cs[i])) { i = i + 1; fracd = fracd + 1; }
+        if (fracd == 0) { return false; }
+    }
+    if (i < n && (cs[i] == "e" || cs[i] == "E")) {
+        i = i + 1;
+        if (i < n && (cs[i] == "+" || cs[i] == "-")) { i = i + 1; }
+        let mut exd = 0;
+        while (i < n && is_digit(cs[i])) { i = i + 1; exd = exd + 1; }
+        if (exd == 0) { return false; }
+    }
+    return i == n;
+}
+
+fn jparse_value(mut cur: ?Cur) -> (opaque, str) {
+    jskip(cur);
+    let c = jpeek(cur);
+    if (c == "") { return (noopaque(), "json: unexpected end of input"); }
+    if (c == "n") { return jparse_lit(cur, "null", jnull()); }
+    if (c == "t") { return jparse_lit(cur, "true", jbool(true)); }
+    if (c == "f") { return jparse_lit(cur, "false", jbool(false)); }
+    if (c == "\"") { return jparse_string(cur); }
+    if (c == "-" || is_digit(c)) { return jparse_number(cur); }
+    if (c == "[") { return jparse_array(cur); }
+    if (c == "{") { return jparse_object(cur); }
+    return (noopaque(), f"json: unexpected `{c}` at index {cur.pos}");
+}
+
+fn jparse_lit(mut cur: ?Cur, word: str, v: Json) -> (opaque, str) {
+    let start = cur.pos;
+    let mut ok = true;
+    for (let wch of word) {
+        if (jpeek(cur) != f"{wch}") { ok = false; }
+        cur.pos = cur.pos + 1;
+    }
+    if (ok == false) {
+        return (noopaque(), f"json: bad literal at index {start}");
+    }
+    return (opaque(v), "");
+}
+
+fn jparse_string(mut cur: ?Cur) -> (opaque, str) {
+    let start = cur.pos;
+    cur.pos = cur.pos + 1;   // opening quote
+    let out: Vec<str> = Vec.new();
+    let mut closed = false;
+    let mut open = true;
+    while (open && cur.pos < cur.cs.len()) {
+        let c = cur.cs[cur.pos];
+        cur.pos = cur.pos + 1;
+        if (c == "\"") {
+            closed = true;
+            open = false;
+        } else if (c == "\\") {
+            if (cur.pos >= cur.cs.len()) {
+                return (noopaque(), f"json: unterminated escape at index {cur.pos}");
+            }
+            let e = cur.cs[cur.pos];
+            cur.pos = cur.pos + 1;
+            if (e == "n") { out.push("\n"); }
+            else if (e == "t") { out.push("\t"); }
+            else if (e == "r") { out.push("\r"); }
+            else if (e == "b") { out.push("\b"); }
+            else if (e == "f") { out.push("\f"); }
+            else if (e == "\"") { out.push("\""); }
+            else if (e == "\\") { out.push("\\"); }
+            else if (e == "/") { out.push("/"); }
+            else if (e == "u") {
+                return (noopaque(), "json: \\u escapes are not supported in this build");
+            } else {
+                return (noopaque(), f"json: bad escape at index {cur.pos - 1}");
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    if (closed == false) {
+        return (noopaque(), f"json: unterminated string starting at index {start}");
+    }
+    return (opaque(jstr(join_chars(out))), "");
+}
+
+fn jparse_number(mut cur: ?Cur) -> (opaque, str) {
+    let start = cur.pos;
+    let chars: Vec<str> = Vec.new();
+    let mut again = true;
+    while (again) {
+        let c = jpeek(cur);
+        again = is_digit(c) || c == "-" || c == "+" || c == "." || c == "e" || c == "E";
+        if (again) {
+            chars.push(c);
+            cur.pos = cur.pos + 1;
+        }
+    }
+    if (valid_number(chars) == false) {
+        return (noopaque(), f"json: malformed number at index {start}");
+    }
+    return (opaque(jnum(join_chars(chars))), "");
+}
+
+fn jparse_array(mut cur: ?Cur) -> (opaque, str) {
+    cur.depth = cur.depth + 1;
+    if (cur.depth > 64) {
+        return (noopaque(), "json: nesting deeper than 64");
+    }
+    cur.pos = cur.pos + 1;   // '['
+    let v = jarr();
+    jskip(cur);
+    if (jpeek(cur) == "]") {
+        cur.pos = cur.pos + 1;
+        return (opaque(v), "");
+    }
+    let mut again = true;
+    while (again) {
+        let item = jparse_value(cur);
+        if (item.1 != "") { return (noopaque(), item.1); }
+        let boxed = unwrap_box(item);
+        v.arr.push(boxed);
+        jskip(cur);
+        let c = jpeek(cur);
+        if (c == ",") {
+            cur.pos = cur.pos + 1;
+        } else if (c == "]") {
+            cur.pos = cur.pos + 1;
+            again = false;
+        } else {
+            return (noopaque(), f"json: expected `,` or `]` at index {cur.pos}");
+        }
+    }
+    cur.depth = cur.depth - 1;
+    return (opaque(v), "");
+}
+
+fn jparse_object(mut cur: ?Cur) -> (opaque, str) {
+    cur.depth = cur.depth + 1;
+    if (cur.depth > 64) {
+        return (noopaque(), "json: nesting deeper than 64");
+    }
+    cur.pos = cur.pos + 1;   // '{'
+    let v = jobj();
+    jskip(cur);
+    if (jpeek(cur) == "}") {
+        cur.pos = cur.pos + 1;
+        return (opaque(v), "");
+    }
+    let mut again = true;
+    while (again) {
+        jskip(cur);
+        if (jpeek(cur) != "\"") {
+            return (noopaque(), f"json: expected a key string at index {cur.pos}");
+        }
+        let key = jparse_string(cur);
+        if (key.1 != "") { return (noopaque(), key.1); }
+        let (kdoc, _) = opaque.downcast<Json>(unwrap_box(key));
+        let kstr = kdoc.str;
+        jskip(cur);
+        if (jpeek(cur) != ":") {
+            return (noopaque(), f"json: expected `:` at index {cur.pos}");
+        }
+        cur.pos = cur.pos + 1;
+        let val = jparse_value(cur);
+        if (val.1 != "") { return (noopaque(), val.1); }
+        v.keys.push(kstr);
+        v.vals.push(unwrap_box(val));
+        jskip(cur);
+        let c = jpeek(cur);
+        if (c == ",") {
+            cur.pos = cur.pos + 1;
+        } else if (c == "}") {
+            cur.pos = cur.pos + 1;
+            again = false;
+        } else {
+            return (noopaque(), f"json: expected a comma or close-brace at index {cur.pos}");
+        }
+    }
+    cur.depth = cur.depth - 1;
+    return (opaque(v), "");
+}
+
+/// The `opaque` of a known-Ok `(opaque, str)` pair (the error string is
+/// the unwrap_or default is unreachable and exists only because there
+/// is no `.unwrap()` in the surface).
+fn unwrap_box(r: (opaque, str)) -> opaque {
+    return r.0;
+}
+
+// ----------------------------------------------------------------- fold ---
+
+/// Sum the codepoints of `s` into `h` (wrapping i64 ops).
+fn fold_str(mut h: i64, s: str) -> i64 {
+    for (let c of s) {
+        h = h.wrapping_mul(31 as i64).wrapping_add(c.code() as i64);
+    }
+    return h;
+}
+
+/// A number lexeme -> its integer prefix, truncated to i64 (the JS twin
+/// folds BigInt(Math.trunc(v)) to the same signed-64 two's-complement).
+/// This document has no exponents; '.' (or anything non-digit after the
+/// integer part) ends the scan; '-' only leads.
+fn lex_int(s: str) -> i64 {
+    let mut acc: i64 = 0;
+    let mut neg = false;
+    let mut digits = true;
+    for (let c of s) {
+        if (digits) {
+            if (c == "-" && acc == 0 && neg == false) {
+                neg = true;
+            } else if (is_digit(c)) {
+                let d = ((c.code() - 48) as i32) as i64;
+                acc = acc.wrapping_mul(10 as i64).wrapping_add(d);
+            } else {
+                digits = false;
+            }
+        }
+    }
+    if (neg) { return (0 as i64).wrapping_sub(acc); }
+    return acc;
+}
+
+/// Downcast fold over the decoded tree: string/key codepoint sums,
+/// number lexemes via lex_int, fixed constants for the scalar tags —
+/// wrapped i64, mirrored bit-for-bit on the JS side.
+fn jdoc_sum(o: opaque) -> i64 {
+    let (j, ok) = opaque.downcast<Json>(o);
+    assert(ok == true, "json-decode: downcast failed in the fold pass");
+    let mut s: i64 = 0;
+    when (j.tag) {
+        JTag.Null -> { s = 1; },
+        JTag.False -> { s = 2; },
+        JTag.True -> { s = 3; },
+        JTag.Num -> { s = lex_int(j.num); },
+        JTag.Str -> {
+            let mut t: i64 = 4;
+            t = fold_str(t, j.str);
+            s = t;
+        },
+        JTag.Arr -> {
+            let mut t: i64 = 5;
+            for (let i = 0; i < j.arr.len(); i += 1) {
+                t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.arr[i]));
+            }
+            s = t;
+        },
+        JTag.Obj -> {
+            let mut t: i64 = 6;
+            for (let i = 0; i < j.keys.len(); i += 1) {
+                t = fold_str(t, j.keys[i]);
+                t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.vals[i]));
+            }
+            s = t;
+        },
+    }
+    return s;
+}
+
+// ----------------------------------------------------------------- main ---
+
+// Scale constants (keep rut and JS in lockstep): ROWS x VALS values per
+// row, REPS reps of document + downcast fold.
+fn rows_n() -> i32 { return 1200; }
+fn vals_n() -> i32 { return 6; }
+fn reps_n() -> i32 { return 3; }
+
+pub fn main() -> nil {
+    let rows = rows_n();
+    let vals = vals_n();
+    let reps = reps_n();
+    let alpha = alpha_vec();
+    let doc = gen_doc(rows, vals, alpha);
+    // the split is setup — shared across reps, fresh cursor per rep
+    let chars = split_chars(doc);
+    let mut total: i64 = 0;
+    let mut first: i64 = 0;
+    for (let r = 0; r < reps; r += 1) {
+        let cur: ?Cur = Cur { cs: chars, pos: 0, depth: 0 };
+        let v = jparse_value(cur);
+        if (v.1 != "") { panic(v.1); }
+        jskip(cur);
+        if (cur.pos != cur.cs.len()) { panic("json: trailing data"); }
+        let s = jdoc_sum(v.0);
+        if (r == 0) {
+            first = s;
+        } else {
+            assert(s == first, "json-decode: rep diverged");
+        }
+        total = total.wrapping_mul(31 as i64).wrapping_add(s);
+    }
+    let final_c = total.wrapping_mul(31 as i64).wrapping_add(reps as i64);
+    Logger.new("app").info(f"CHECKSUM {final_c}");
+}

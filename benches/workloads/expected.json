@@ -22,5 +22,6 @@
   "nmapset-int": "734932704",
   "nmapset-str": "1264308351",
   "nmap-hashset": "21500055",
-  "nmap-knucleotide": "2198604"
+  "nmap-knucleotide": "2198604",
+  "json-decode": "4502015958359127277"
 }
