@@ -9,20 +9,40 @@
 // The package spells no `use`: `[T]` (RFC 0005 §9), `&x`, the
 // primitives, and the ambient primitive members (`str.encode()`,
 // `a.len()`) cover everything written here. Storage is pointer arrays —
-// `keys: [*Hashable]`, `vals: [*V]` — born from the repeat `[nil; n]`
-// (`nil` is the slot's zero, RFC 0005 §10); element stores keep `&v`.
+// `keys: [*K]` (one `*K` cell per key, v1.1) and `vals: [*V]` — born
+// from the repeat `[nil; n]` (`nil` is the slot's zero, RFC 0005 §10);
+// element stores keep `&v`.
 //
 // Counters (`count`/`tomb`/`cap`) are `u32` — non-negative domain
 // values. Probe/index temporaries stay `i32` (`len()` and indexing are
 // i32) with a single `as i32` at the index boundary; the load-factor
 // compare widens to `u64` (u32 `×10` would overflow near 429M entries).
 //
+// KEY REPRESENTATION (v1.1): `keys: [*K]` — the element IS a pointer,
+// so the `[nil; cap]` filler and `mark_dead`'s nil-store are legal
+// (nil stays pointer-only, RFC 0005 §10). Per stored key:
+// - scalar K (i32/u64/bool/…): one `*K` cell minted over the scalar
+//   (`&key` — a MakePtr with scalar payload);
+// - ref K (str/bytes): the `*K` cell SHARES the key's cell (retain, no
+//   copy) — the nil-store in `mark_dead` releases it with the last
+//   reference;
+// - record K: the call argument may still clone per the value-param
+//   law (records are `is_value`) — rare, accepted.
+// `RawHashTable<K>` monomorphizes with its owner, so `probe`'s
+// `k.hash_eq(key)` and the owners' `k.hash()` are bare concrete-
+// receiver calls: static dispatch, inlined — no box, no vtable anywhere
+// on the hot path (the engine's boxless static trait dispatch).
+//
 // HOT-LOOP LAW (bench-verified): hoist SCALAR field reads (`cap`, the
 // counters) into locals — that is pouch's `cap`-mirror precedent — but
 // NEVER bind an array field to a local inside a per-call method:
 // materializing a binding from an array value deep-copies the buffer
 // (the engine's copy law), so `let states = self.states` in `probe`
-// made every put/get O(cap). Hot methods index the fields directly —
+// made every put/get O(cap). (v1.1: a source that is dead afterward is
+// move-elided by the engine, so a binding whose source dies can be
+// O(1) — `rehash`'s `let old_*` bindings are exactly that blessed
+// case — but keep the direct `self.states[at]` style in hot loops
+// regardless.) Hot methods index the fields directly —
 // `self.states[at]` is an in-place element access (no copy); the only
 // array bindings here live in `rehash`, which runs O(log n) times and
 // NEEDS the old arrays held across the `self.*` reassignment.
@@ -124,13 +144,13 @@ impl Hashable for bytes {
 // not `pub`: consumers meet it only through `HashMap`/`HashSet`.
 //
 // `hashes` records each stored key's hash: the probe's u64 pre-filter
-// before the vtable `hash_eq` (most probe steps never dispatch), and
+// before the K-typed `hash_eq` (most probe steps never compare), and
 // the rehash re-slots from it — a stored key is hashed exactly once per
 // lifetime. `states` is one byte per slot: 0 EMPTY · 1 FULL · 2 DEAD
 // (a tombstone — the probe steps through it, insertion may reuse it).
 // `cap` is a power of two, so the index mask is `cap - 1`.
-class RawHashTable {
-    keys: [*Hashable];
+class RawHashTable<K requires Hashable> {
+    keys: [*K];   // one `*K` cell per stored key (see KEY REPRESENTATION)
     hashes: [u64];
     states: [u8];
     count: u32;   // FULL slots
@@ -138,7 +158,7 @@ class RawHashTable {
     cap: u32;     // power of two, >= 4
 }
 
-impl RawHashTable {
+impl RawHashTable<K> {
     pub fn with_capacity(n: i32) -> Self {
         let mut cap: u32 = 4;
         if (n > 0) {
@@ -163,12 +183,14 @@ impl RawHashTable {
     }
 
     // The ONE three-stage probe pass: state byte, recorded hash, then
-    // the vtable `hash_eq` (only on a FULL slot whose recorded hash
-    // matches). `i >= 0` — FULL match at `i`; `i < 0` — the insertion
-    // slot, encoded `-(at+1)`, with DEAD reuse folded in (the first
-    // DEAD slot on the sequence wins). Callers grow past the load
-    // factor first, so an EMPTY slot always exists and the pass ends.
-    pub fn probe(self, hk: Hashable, h: u64) -> i32 {
+    // the K-typed `hash_eq` (only on a FULL slot whose recorded hash
+    // matches; K is concrete here, so the compare is a static, inlined
+    // call — no box, no vtable). `i >= 0` — FULL match at `i`; `i < 0` —
+    // the insertion slot, encoded `-(at+1)`, with DEAD reuse folded in
+    // (the first DEAD slot on the sequence wins). Callers grow past the
+    // load factor first, so an EMPTY slot always exists and the pass
+    // ends.
+    pub fn probe(self, key: K, h: u64) -> i32 {
         let mask = (self.cap - 1) as i32;
         let mut at = ((h as u32) & (self.cap - 1)) as i32;
         let mut dead = -1;
@@ -181,8 +203,8 @@ impl RawHashTable {
                 return -(at + 1);
             }
             if (st == 1 && self.hashes[at] == h) {
-                let k = *(self.keys[at]);
-                if (k.hash_eq(hk)) {
+                let k: K = *(self.keys[at]);   // ptr cell -> K register
+                if (k.hash_eq(key)) {
                     return at;
                 }
             }
@@ -193,20 +215,21 @@ impl RawHashTable {
         }
     }
 
-    // Take a slot found by `probe`: key cell, recorded hash, FULL. A
-    // DEAD slot reused drops out of the tomb count.
-    pub fn occupy(mut self, at: i32, hk: Hashable, h: u64) {
+    // Take a slot found by `probe`: one `*K` key cell (`&key` — no box
+    // anywhere), the recorded hash, FULL. A DEAD slot reused drops out
+    // of the tomb count.
+    pub fn occupy(mut self, at: i32, key: K, h: u64) {
         if (self.states[at] == 2) {
             self.tomb -= 1;
         }
         self.states[at] = 1;
-        self.keys[at] = &hk;
+        self.keys[at] = &key;
         self.hashes[at] = h;
         self.count += 1;
     }
 
-    // Tombstone a FULL slot (the key cell releases with the store of
-    // `nil`); the entry leaves `count` but stays on the probe path.
+    // Tombstone a FULL slot (the `*K` key cell releases with the store
+    // of `nil`); the entry leaves `count` but stays on the probe path.
     pub fn mark_dead(mut self, i: i32) {
         self.keys[i] = nil;
         self.states[i] = 2;
@@ -271,12 +294,13 @@ impl RawHashTable {
 
 // `HashMap<K, V>` — a thin owner: the core plus the parallel value
 // array. The admission-only bound (`K requires Hashable`, RFC 0043
-// §A5) gates which instantiations compile and proves the K-value →
-// `Hashable`-slot widening in the body; key ops go through the slot
-// (vtable dispatch), never on bare `K`. Keys are homogeneous per map
-// by construction — `hash_eq` never sees a mixed pair.
+// §A5) gates which instantiations compile; the core is `RawHashTable<K>`
+// and K is monomorphized per map, so every key op — `k.hash()`,
+// `probe`'s `hash_eq` — is a static, inlined call on the bare K (no
+// box, no slot, no vtable). Keys are homogeneous per map by
+// construction — `hash_eq` never sees a mixed pair.
 pub class HashMap<K requires Hashable, V> {
-    t: RawHashTable;
+    t: RawHashTable<K>;
     vals: [*V];   // `[nil; cap]` — nil is the empty slot's zero
 }
 
@@ -286,16 +310,17 @@ impl HashMap<K, V> {
     }
 
     pub fn with_capacity(n: i32) -> Self {
-        let t = RawHashTable.with_capacity(n);
+        let t: RawHashTable<K> = RawHashTable.with_capacity(n);
         return Self { t: t, vals: [nil; t.cap()] };
     }
 
     // `put` — answers `true` when the key was newly added, `false when
     // an existing key's value was replaced. Grow (re-slot the core,
-    // relocate `vals` by the old→new map) comes before the probe.
+    // relocate `vals` by the old→new map) comes before the probe. The
+    // key stays a bare K the whole way — hashed, probed, and occupied
+    // as the concrete type; no `Hashable` slot is ever minted.
     pub fn put(mut self, k: K, v: V) -> bool {
-        let hk: Hashable = k;
-        let h = hk.hash();
+        let h = k.hash();
         if (self.t.needs_grow()) {
             let map = self.t.rehash();
             let mut next: [*V] = [nil; self.t.cap()];
@@ -308,13 +333,13 @@ impl HashMap<K, V> {
             }
             self.vals = next;
         }
-        let at = self.t.probe(hk, h);
+        let at = self.t.probe(k, h);
         if (at >= 0) {
             self.vals[at] = &v;
             return false;
         }
         let slot = -(at + 1);
-        self.t.occupy(slot, hk, h);
+        self.t.occupy(slot, k, h);
         self.vals[slot] = &v;
         return true;
     }
@@ -322,8 +347,7 @@ impl HashMap<K, V> {
     // `get` — `nil` = absent (RFC 0005 §10). A `(V, bool)` pair is
     // impossible without a default `V` — the pointer is the answer.
     pub fn get(self, k: K) -> *V {
-        let hk: Hashable = k;
-        let at = self.t.probe(hk, hk.hash());
+        let at = self.t.probe(k, k.hash());
         if (at < 0) {
             return nil;
         }
@@ -331,14 +355,12 @@ impl HashMap<K, V> {
     }
 
     pub fn has(self, k: K) -> bool {
-        let hk: Hashable = k;
-        return self.t.probe(hk, hk.hash()) >= 0;
+        return self.t.probe(k, k.hash()) >= 0;
     }
 
     pub fn remove(mut self, k: K) -> bool {
-        let hk: Hashable = k;
-        let h = hk.hash();
-        let at = self.t.probe(hk, h);
+        let h = k.hash();
+        let at = self.t.probe(k, h);
         if (at < 0) {
             return false;
         }
@@ -352,9 +374,10 @@ impl HashMap<K, V> {
     }
 }
 
-// `HashSet<T>` — the core alone, zero value machinery.
+// `HashSet<T>` — the core alone, zero value machinery. Keys/elements
+// flow as bare T exactly as in `HashMap` (see the owner note above).
 pub class HashSet<T requires Hashable> {
-    t: RawHashTable;
+    t: RawHashTable<T>;
 }
 
 impl HashSet<T> {
@@ -368,27 +391,24 @@ impl HashSet<T> {
 
     // `put` — answers `true` when the element was newly added.
     pub fn put(mut self, t: T) -> bool {
-        let ht: Hashable = t;
-        let h = ht.hash();
+        let h = t.hash();
         if (self.t.needs_grow()) {
             self.t.rehash();
         }
-        let at = self.t.probe(ht, h);
+        let at = self.t.probe(t, h);
         if (at >= 0) {
             return false;
         }
-        self.t.occupy(-(at + 1), ht, h);
+        self.t.occupy(-(at + 1), t, h);
         return true;
     }
 
     pub fn has(self, t: T) -> bool {
-        let ht: Hashable = t;
-        return self.t.probe(ht, ht.hash()) >= 0;
+        return self.t.probe(t, t.hash()) >= 0;
     }
 
     pub fn remove(mut self, t: T) -> bool {
-        let ht: Hashable = t;
-        let at = self.t.probe(ht, ht.hash());
+        let at = self.t.probe(t, t.hash());
         if (at < 0) {
             return false;
         }

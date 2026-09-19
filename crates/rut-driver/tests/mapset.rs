@@ -7,6 +7,7 @@
 // relocation) paths, DEAD-slot reuse, str keys, and a user struct key
 //! with its own `impl Hashable`.
 
+use rut_core::ops::Op;
 use rut_driver::{Module, Session};
 
 const MAPSET_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/mapset/mapset.rut");
@@ -231,11 +232,116 @@ fn mapset_source_compiles_standalone() {
     );
     let src = std::fs::read_to_string(std::path::Path::new(MAPSET_PATH)).expect("read mapset.rut");
     assert!(
-        src.contains("\nclass RawHashTable {"),
+        src.contains("\nclass RawHashTable<K requires Hashable> {"),
         "the open-addressing core is module-internal (spelled without `pub`)"
     );
     assert!(
         !src.contains("pub class RawHashTable"),
         "the open-addressing core is never spelled `pub`"
     );
+}
+
+/// P4 (mapset perf plan): the v1.1 storage — `keys: [*K]`, K-typed
+/// probe. With K monomorphized to i32 the whole map path compiles on
+/// the bare K: `put`/`get`/`has`/`remove` inline into the caller (P1.3)
+/// and mint no `box` (the `Hashable` slot is never built) and dispatch
+/// no `calli` (no trait-object receiver exists). Asserted over every
+/// FuncCode in the program — the app is map ops only, so that IS the
+/// put/get code.
+#[test]
+fn hashmap_i32_put_get_code_is_boxless_and_calli_free() {
+    let out = compile_app(
+        "use core::{ assert };\n\
+         use mapset::{ HashMap };\n\
+         pub fn main() -> i32 {\n\
+         \x20   let mut m: HashMap<i32, i32> = HashMap.new();\n\
+         \x20   for (let i = 0; i < 32; i += 1) {\n\
+         \x20       assert(m.put(i, i * 3), \"first put adds\");\n\
+         \x20   }\n\
+         \x20   let mut acc = 0;\n\
+         \x20   for (let i = 0; i < 32; i += 1) {\n\
+         \x20       if (m.has(i)) {\n\
+         \x20           let p = m.get(i);\n\
+         \x20           acc = acc + *p;\n\
+         \x20       }\n\
+         \x20   }\n\
+         \x20   assert(m.remove(7), \"remove answers true\");\n\
+         \x20   assert(m.get(7) == nil, \"removed key gets nil\");\n\
+         \x20   return acc + m.len();\n\
+         }\n",
+    );
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let p = out.program.expect("program");
+    // the (K,V) instantiation exists, monomorphized with a K-keyed core
+    assert!(
+        p.types
+            .types
+            .iter()
+            .any(|t| p.name_of(t.name) == "HashMap<i32, i32>"),
+        "HashMap<i32, i32> instantiated:\n{}",
+        rut_driver::ir_dump_of(&p.funcs, &p.interner)
+    );
+    assert!(
+        p.types
+            .types
+            .iter()
+            .any(|t| p.name_of(t.name) == "RawHashTable<i32>"),
+        "the core instantiates per K:\n{}",
+        rut_driver::ir_dump_of(&p.funcs, &p.interner)
+    );
+    // op-level: no box mints and no interface dispatch anywhere
+    for f in &p.funcs {
+        assert!(
+            f.code
+                .iter()
+                .all(|op| !matches!(op, Op::Box { .. } | Op::CallI { .. })),
+            "`box`/`calli` in fn `{}`:\n{}",
+            p.name_of(f.name),
+            rut_driver::ir_dump_of(&p.funcs, &p.interner)
+        );
+    }
+    // dump-level, on the code holding the inlined put/get (guarded —
+    // `unbox` in the slot-ABI variants must not count as a box hit)
+    let main_idx = p
+        .funcs
+        .iter()
+        .position(|f| p.name_of(f.name) == "main")
+        .expect("main compiled");
+    let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
+    let main_text = ir
+        .split("fn #")
+        .find(|s| s.starts_with(&format!("{main_idx} main")))
+        .expect("main in the dump");
+    assert!(!main_text.contains(" box "), "no box op in main:\n{ir}");
+    assert!(!main_text.contains("calli"), "no calli in main:\n{ir}");
+    // and the map still answers identically (checksums are the law)
+    let flat = rut_core::link::flatten(p);
+    rut_vm::verify::verify(&flat).expect("verify");
+}
+
+/// P4: the str-key tombstone round trip — `remove` writes
+/// `keys[i] = nil` (releasing the shared `*K` cell, the ref-K law), the
+/// re-add occupies the DEAD slot with a fresh cell (and a new value),
+/// and `get` reads it back through content equality.
+#[test]
+fn str_key_remove_readd_get_tombstone_round_trip() {
+    let checksum = run_main(
+        "use core::{ assert };\n\
+         use mapset::{ HashMap };\n\
+         pub fn main() -> i32 {\n\
+         \x20   let mut m: HashMap<str, str> = HashMap.new();\n\
+         \x20   assert(m.put(\"alpha\", \"one\"), \"first put adds\");\n\
+         \x20   assert(*(m.get(\"alpha\")) == \"one\", \"value round-trips\");\n\
+         \x20   assert(m.remove(\"alpha\"), \"remove answers true\");\n\
+         \x20   assert(m.has(\"alpha\") == false, \"removed key is absent\");\n\
+         \x20   assert(m.get(\"alpha\") == nil, \"removed key gets nil\");\n\
+         \x20   assert(m.put(\"alpha\", \"two\"), \"re-add after remove adds (DEAD reuse)\");\n\
+         \x20   assert(m.len() == 1, \"len back to one\");\n\
+         \x20   let p = m.get(\"alpha\");\n\
+         \x20   assert(p != nil, \"re-added key found\");\n\
+         \x20   assert(*p == \"two\", \"re-added value is the fresh cell's\");\n\
+         \x20   return 7;\n\
+         }\n",
+    );
+    assert_eq!(checksum, 7, "str-key remove → re-add → get round trip");
 }

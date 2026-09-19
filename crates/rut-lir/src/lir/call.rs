@@ -861,6 +861,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Ok(TY_I32);
                     }
                 }
+                // a registered trait impl on the ref target dispatches
+                // statically on the bare receiver (RFC 0012 §2/§5) — the
+                // concrete and slot ABIs coincide for ref targets (P1.1),
+                // so the raw register crosses as-is (`k.hash()` /
+                // `k.hash_eq(..)` in a monomorphized map body, P4)
+                if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
+                    return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
+                }
+                if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
+                    return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
+                }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
                     "`str` has no method `{}` — its members are `len`/`slice`/`code`/`encode` (`string_len({who})` is the free-fn spelling)",
@@ -880,6 +891,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.emit_slice_len(rreg, &info, sp.lo)?;
                         return Ok(TY_I32);
                     }
+                }
+                // a registered trait impl on the ref target dispatches
+                // statically on the bare receiver (same law as `str`
+                // above — one ABI variant, the raw register crosses)
+                if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
+                    return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
+                }
+                if let Some((eidx, midx)) = self.find_extern_trait_impl_method(rt, name) {
+                    return self.compile_extern_trait_static_call(eidx, midx, rt, rreg, args, expected, sp, false);
                 }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
