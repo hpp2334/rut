@@ -87,6 +87,7 @@ against the reference in `workloads/expected.json`.
 | `floatloop` | f64 mul/add + loop dispatch | 2M iters | `1107013.7297975053` |
 | `call` | call/return/frame overhead | fib(28) | `317811` |
 | `alloc` | record allocation/RC churn | 2M records | `1385447424` |
+| `array` | growable-sequence churn (`Vec<i32>` vs a plain JS `Array`): push through the grow path, indexed read+write, full iteration | n = 1 000 000 | checksum `1000000000000` |
 | `hashmap-int` | `HashMap<i32, i32>` churn (mapset): put/replace/hit-and-miss get/remove/re-scan | n = 100 000 | checksum `734932704` |
 | `hashmap-str` | str-keyed `HashMap<str, i32>` (mapset): generated keys, removals, re-adds | n = 50 000 | checksum `1264308351` |
 | `hashset` | `HashSet<i32>` (mapset): adds, dup adds, probes, removals, intersection count | n = 100 000 | checksum `21500055` |
@@ -102,9 +103,61 @@ benchmarks-game definitions); `binary-trees` and `fasta` are **adaptations**
 `rut run <dir>` — the CLI's single-file auto-mount list stays untouched.
 Honest framing: V8's `Map`/`Set` are inline-cache-optimized and QuickJS
 has its own fast paths — these rows are not expected to be a win. The
-point is rut's number for the RC-heap fat-ref slots and the vtable
-dispatch its keyed collections actually pay, as a before/after anchor
-for future work.
+point is rut's number for the RC-heap slots its keyed collections pay.
+Allocation profile (mapset v1.1): one `*K` cell per key — shared, not
+copied, for ref keys — plus one `*V` cell per value and the
+`hashes`/`states` scalar arrays; there are **no** `Hashable` boxes and
+no vtable dispatch on the map path (`RawHashTable<K>` monomorphizes per
+key type, so `hash`/`hash_eq` are static, origin-pinned calls — inlined
+for tiny bodies). The copy law still applies: binding an array value to
+a local deep-copies the buffer, unless the source is provably dead, in
+which case the engine move-elides the copy — mapset's hot loops index
+fields directly (`self.states[at]`) and only `rehash` holds old-array
+bindings, the blessed O(1) case. See the performance log below for the
+before/after these profiles bought.
+
+## Performance log — mapset-perf engine phases (Sep 2026)
+
+Four engine phases landed against these rows: boxless static trait
+dispatch + trait-impl/free-fn inlining, `MoveVal` last-use move
+elision + clone/alloc fast paths, the array element access fast path,
+and mapset's `[*K]` key storage with K-typed probes. Full-suite
+cross-runtime numbers (net medians, peak RSS; `results/` is gitignored,
+so this table is the durable record):
+
+| workload    | net before | net after | peak RSS before | peak RSS after |
+|-------------|------------|-----------|-----------------|----------------|
+| hashmap-int | 288.7 ms   | 221.3 ms  | 61.0 MB         | 33.9 MB        |
+| hashset     | 223.9 ms   | 152.7 ms  | 44.1 MB         | 26.5 MB        |
+| hashmap-str | 304.1 ms   | 304.8 ms  | 33.2 MB         | 25.4 MB        |
+| knucleotide | 1.11 s     | 1.03 s    | 97.4 MB         | 69.1 MB        |
+| array       | —          | 236.2 ms  | —               | 97.3 MB        |
+
+(`array` is new — the row above has no predecessor.)
+
+This host drifts ±8-13% between days on identical code (the same
+baseline binary measured sieve probe-exec 164.8 ms one day and
+173-181 ms on others; qjs is stable), and the two full-suite runs were
+taken on different days. A same-day control — the baseline commit and
+HEAD re-benched minutes apart, 5 reps — gives the cleaner apples-to-
+apples probe-exec deltas: hashmap-int **−43%** (319.4 → 183.2 ms),
+hashset **−43%** (227.1 → 129.5 ms), hashmap-str **−13%** (310.0 →
+270.1 ms), knucleotide **−12%** (1.14 s → 999.4 ms). The probe
+decomposes the int-keyed wins into ~12-16% fewer executed ops (no
+box/unbox, no trait frames, move-elided rehash copies) and ~18-21%
+lower per-op cost (fused element access, block clones). VM
+self-accounted heap peaks fell further: hashmap-int 33.0 → 16.4 MB,
+hashset 25.1 → 12.6 MB, hashmap-str 15.9 → 9.8 MB, knucleotide
+59.8 → 41.5 MB. All checksums unchanged.
+
+Where the rest goes: the two str-keyed rows moved least because their
+dominant per-op cost was never the map — every `hash()` of a `str` key
+copies it through `encode()` before mixing, and re-probes re-hash. A
+zero-copy `str.bytes()` view is the known next lever, deliberately out
+of scope here. The int-keyed rows are left at the interpreter floor —
+dispatch plus RC traffic on the field reads a probe chain needs — at
+~2.6-3.3x QuickJS net (from 4.1-4.6x), with no box, frame, vtable call,
+or redundant copy left on the path.
 
 ## Method (and what "fair" means here)
 
@@ -199,29 +252,29 @@ for future work.
 
 workload       runtime   checksum         wall median   startup  net median  wall min  peak RSS  ref   ok
 -------------  -------  ---------------  -----------  --------  ----------  --------  --------  ---  ---
-binary-trees   rut              32767      31.9 ms  3.048 ms     28.9 ms   29.7 ms   20.9 MB  yes  yes
-binary-trees   node             32767      44.5 ms   19.5 ms     25.0 ms   43.8 ms   54.8 MB  yes  yes
-binary-trees   qjs              32767      13.0 ms  3.637 ms    9.357 ms   12.3 ms    7.3 MB  yes  yes
-fannkuch       rut             228016      20.5 ms  3.048 ms     17.5 ms   20.0 ms    3.1 MB  yes  yes
-fannkuch       node            228016      21.1 ms   19.5 ms    1.563 ms   20.8 ms   52.8 MB  yes  yes
-fannkuch       qjs             228016      11.8 ms  3.637 ms    8.150 ms   11.4 ms    3.7 MB  yes  yes
-sieve          rut              41538     135.3 ms  3.048 ms    132.3 ms  134.2 ms   11.4 MB  yes  yes
-sieve          node             41538      25.9 ms   19.5 ms    6.386 ms   24.6 ms   55.0 MB  yes  yes
-sieve          qjs              41538      57.8 ms  3.637 ms     54.2 ms   56.5 ms    4.9 MB  yes  yes
+binary-trees   rut              32767      15.4 ms  3.327 ms     12.1 ms   14.0 ms    9.7 MB  yes  yes
+binary-trees   node             32767      43.4 ms   18.2 ms     25.2 ms   23.2 ms   54.9 MB  yes  yes
+binary-trees   qjs              32767      12.5 ms  2.974 ms     9.524 ms  12.3 ms    7.4 MB  yes  yes
+fannkuch       rut             228016      15.5 ms  3.327 ms     12.2 ms   15.3 ms    5.1 MB  yes  yes
+fannkuch       node            228016      22.8 ms   18.2 ms     4.592 ms  20.7 ms   52.9 MB  yes  yes
+fannkuch       qjs             228016      11.3 ms  2.974 ms     8.316 ms  11.0 ms    3.5 MB  yes  yes
+sieve          rut             41538      197.0 ms  3.327 ms    193.7 ms  190.8 ms   53.7 MB  yes  yes
+sieve          node            41538       29.2 ms   18.2 ms    11.0 ms   25.7 ms   55.2 MB  yes  yes
+sieve          qjs             41538       60.0 ms  2.974 ms    57.0 ms   59.8 ms    4.9 MB  yes  yes
 
 === startup floor (empty program) ===
 
 runtime  startup wall  startup RSS
 -------  ------------  -----------
-rut          3.048 ms       3.0 MB
-node          19.5 ms      43.6 MB
-qjs          3.637 ms       3.6 MB
+rut          3.327 ms       4.3 MB
+node          18.2 ms      43.6 MB
+qjs          2.974 ms       3.5 MB
 
 === rut in-process (rut-bench-probe) ===
 
 workload        compile    verify  exec median      fuel  VM heap peak  trap
 -------------  --------  --------  -----------  --------  ------------  ----
-binary-trees   0.300 ms  0.010 ms      28.4 ms   1605577       4.50 MB     —
-fannkuch       0.430 ms  0.013 ms      17.0 ms   2828979         273 B     —
-sieve          0.248 ms  0.009 ms     130.4 ms  22891359       4.13 MB     —
+binary-trees   1.335 ms  0.010 ms     10.2 ms    1048552       2.50 MB     —
+fannkuch       2.567 ms  0.330 ms     10.6 ms    2365060        1.5 KB     —
+sieve          2.483 ms  0.009 ms    181.1 ms   22201598      20.84 MB     —
 ```
