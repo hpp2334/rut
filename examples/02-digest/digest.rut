@@ -701,7 +701,7 @@ fn jpeek(cur: ?Cur) -> str {
     return "";
 }
 
-fn jskip(cur: ?Cur) {
+fn jskip(mut cur: ?Cur) {
     let mut again = true;
     while (again) {
         let c = jpeek(cur);
@@ -749,7 +749,7 @@ fn valid_number(cs: Vec<str>) -> bool {
     return i == n;
 }
 
-fn jparse_value(cur: ?Cur) -> (opaque, str) {
+fn jparse_value(mut cur: ?Cur) -> (opaque, str) {
     jskip(cur);
     let c = jpeek(cur);
     if (c == "") { return (noopaque(), "json: unexpected end of input"); }
@@ -763,7 +763,7 @@ fn jparse_value(cur: ?Cur) -> (opaque, str) {
     return (noopaque(), f"json: unexpected `{c}` at index {cur.pos}");
 }
 
-fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
+fn jparse_lit(mut cur: ?Cur, word: str, v: Json) -> (opaque, str) {
     let start = cur.pos;
     let mut ok = true;
     for (let wch of word) {
@@ -776,7 +776,7 @@ fn jparse_lit(cur: ?Cur, word: str, v: Json) -> (opaque, str) {
     return (opaque(v), "");
 }
 
-fn jparse_string(cur: ?Cur) -> (opaque, str) {
+fn jparse_string(mut cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
     let out: Vec<str> = Vec.new();
@@ -817,7 +817,7 @@ fn jparse_string(cur: ?Cur) -> (opaque, str) {
     return (opaque(jstr(join_chars(out))), "");
 }
 
-fn jparse_number(cur: ?Cur) -> (opaque, str) {
+fn jparse_number(mut cur: ?Cur) -> (opaque, str) {
     let start = cur.pos;
     let chars: Vec<str> = Vec.new();
     let mut again = true;
@@ -835,7 +835,7 @@ fn jparse_number(cur: ?Cur) -> (opaque, str) {
     return (opaque(jnum(join_chars(chars))), "");
 }
 
-fn jparse_array(cur: ?Cur) -> (opaque, str) {
+fn jparse_array(mut cur: ?Cur) -> (opaque, str) {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
@@ -868,7 +868,7 @@ fn jparse_array(cur: ?Cur) -> (opaque, str) {
     return (opaque(v), "");
 }
 
-fn jparse_object(cur: ?Cur) -> (opaque, str) {
+fn jparse_object(mut cur: ?Cur) -> (opaque, str) {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");

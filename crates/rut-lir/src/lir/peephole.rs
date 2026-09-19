@@ -104,9 +104,9 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
         if pc >= use_pc {
             continue;
         }
-        // skip copy chains (handled by `one_round`); ref moves and moves
-        // with a kill side effect must not have their dst retargeted
-        if matches!(code[pc], Op::Mov { .. } | Op::MovRef { .. } | Op::MoveVal { .. }) {
+        // skip copy chains (handled by `one_round`); ref moves must not
+        // have their dst retargeted
+        if matches!(code[pc], Op::Mov { .. } | Op::MovRef { .. }) {
             continue;
         }
         // straight-line (pc, use_pc]: no jump target or control transfer
@@ -371,11 +371,10 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
             continue;
         }
         // don't chain copies: rewriting another `mov`'s source would change
-        // that op's own removal analysis below; rewriting a MoveVal's source
-        // would move the kill onto a register that may still be read
+        // that op's own removal analysis below
         if matches!(
             &code[use_pc],
-            Op::Mov { src, .. } | Op::MovRef { src, .. } | Op::MoveVal { src, .. } if *src == dst
+            Op::Mov { src, .. } | Op::MovRef { src, .. } if *src == dst
         ) {
             continue;
         }
@@ -530,8 +529,7 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::MakeRecord { dst, .. }
         | Op::GetF { dst, .. }
         | Op::Own { dst, .. }
-        | Op::MakePtr { dst, .. }
-        | Op::CloneVal { dst, .. }
+        | Op::MakeOpt { dst, .. }
         | Op::ArrNew { dst, .. }
         | Op::ArrLit { dst, .. }
         | Op::ArrGet { dst, .. }
@@ -572,31 +570,10 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*src);
         }
-        // MakePtr defs a fresh pointer; OnDrop reads both and defs nothing
-        Op::MakePtr { dst, src, .. } => {
+        // MakeOpt defs a fresh box; OnDrop reads both and defs nothing
+        Op::MakeOpt { dst, src, .. } => {
             d.push(*dst);
             u.push(*src);
-        }
-        Op::ArrGetRef { dst, arr, idx, .. } => {
-            d.push(*dst);
-            u.push(*arr);
-            u.push(*idx);
-        }
-        Op::CloneVal { dst, src, .. } => {
-            d.push(*dst);
-            u.push(*src);
-        }
-        // MoveVal reads src and then KILLS it (dst takes the reference):
-        // both registers are defined, src alone is used
-        Op::MoveVal { dst, src } => {
-            d.push(*dst);
-            d.push(*src);
-            u.push(*src);
-        }
-        Op::ValEq { dst, a, b, .. } => {
-            d.push(*dst);
-            u.push(*a);
-            u.push(*b);
         }
         Op::OnDrop { obj, cleanup } => {
             u.push(*obj);
@@ -799,16 +776,7 @@ fn replace_reads(op: &mut Op, pools: &mut Pools, from: u16, to: u16) {
         }
         Op::Not { a, .. } | Op::NegF { a, .. } | Op::NegI { a, .. } => f(a),
         Op::Mov { src, .. } | Op::MovRef { src, .. } => f(src),
-        Op::MakePtr { src, .. } => f(src),
-        Op::CloneVal { src, .. } => f(src),
-        Op::ArrGetRef { arr, idx, .. } => {
-            f(arr);
-            f(idx);
-        }
-        Op::ValEq { a, b, .. } => {
-            f(a);
-            f(b);
-        }
+        Op::MakeOpt { src, .. } => f(src),
         Op::OnDrop { obj, cleanup } => {
             f(obj);
             f(cleanup);

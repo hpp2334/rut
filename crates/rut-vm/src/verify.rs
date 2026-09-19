@@ -365,22 +365,9 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*dst);
             push(*src);
         }
-        Op::MakePtr { dst, src, .. } => {
+        Op::MakeOpt { dst, src, .. } => {
             push(*dst);
             push(*src);
-        }
-        Op::CloneVal { dst, src, .. } => {
-            push(*dst);
-            push(*src);
-        }
-        Op::MoveVal { dst, src } => {
-            push(*dst);
-            push(*src);
-        }
-        Op::ValEq { dst, a, b, .. } => {
-            push(*dst);
-            push(*a);
-            push(*b);
         }
         Op::OnDrop { obj, cleanup } => {
             push(*obj);
@@ -432,11 +419,6 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*dst);
             push(*obj);
         }
-        Op::ArrGetRef { dst, arr, idx, .. } => {
-            push(*dst);
-            push(*arr);
-            push(*idx);
-        }
         Op::MakeClosure { dst, .. } => push(*dst),
         Op::Conv { dst, src, .. } => {
             push(*dst);
@@ -463,8 +445,7 @@ fn tys_of(op: &Op) -> Vec<u32> {
         Op::NewCell { ty, .. } | Op::Own { ty, .. }
         | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
         | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
-        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakePtr { ty, .. }
-        | Op::CloneVal { ty, .. } | Op::ValEq { ty, .. } | Op::ArrGetRef { ty, .. } => vec![*ty],
+        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakeOpt { ty, .. } => vec![*ty],
         _ => Vec::new(),
     }
 }

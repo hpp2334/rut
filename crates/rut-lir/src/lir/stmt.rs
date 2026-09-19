@@ -62,18 +62,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 match destructure {
                     None => {
-                        // copy-by-value binding (RFC 0009/0016 v1.1): a
-                        // value-typed initializer that is not a fresh
-                        // construction deep-copies into the binding's own
-                        // cell — the two never alias
-                        let reg = if self.ctx.types.is_value(ty) && !self.last_reg_is_fresh_value() {
-                            let src = self.last_reg;
-                            let r = self.new_reg(ty);
-                            self.emit(Op::CloneVal { dst: r, src, ty }, sp.lo);
-                            r
-                        } else {
-                            self.last_reg
-                        };
+                        // the sharing law (RFC 0044): the binding takes the
+                        // initializer's cell handle — a share, never a copy
+                        let reg = self.last_reg;
                         self.locals.push(Local { name, reg, ty, is_mut, loop_var: false, origins });
                     }
                     Some(names) => {
@@ -93,7 +84,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let tuple_reg = self.last_reg;
                         for (i, n) in names.iter().enumerate() {
                             let fty = fields[i].ty;
-                            let mut reg = self.new_reg(fty);
+                            let reg = self.new_reg(fty);
                             self.emit(
                                 Op::GetF {
                                     dst: reg,
@@ -103,15 +94,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 },
                                 sp.lo,
                             );
-                            if self.ctx.types.is_value(fty) {
-                                // ONE deep copy — the value-typed field
-                                // must not alias the tuple's cell (the
-                                // second identical block here used to
-                                // deep-copy every element twice)
-                                let c = self.new_reg(fty);
-                                self.emit(Op::CloneVal { dst: c, src: reg, ty: fty }, sp.lo);
-                                reg = c;
-                            }
                             self.locals.push(Local {
                                 name: *n,
                                 reg,
@@ -328,19 +310,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.bind(l_body);
         // var = iter[idx]; the dst register is the loop variable (one reg
         // reused every iteration, overwritten/released by the element op).
-        // Vec/`[T]` yield `*T` — a fresh element box per iteration
-        // (RFC 0012 §6); `str`/`bytes` keep value yields.
-        let (var_ty, var_reg) = match info.source {
-            super::slice::SliceSource::Str | super::slice::SliceSource::Bytes => {
-                let r = self.emit_slice_get(iter_reg, idx, &info, sp.lo)?;
-                (elem_ty, r)
-            }
-            _ => {
-                let r = self.emit_slice_get_ref(iter_reg, idx, &info, sp.lo)?;
-                (self.ctx.mk_opt(elem_ty), r)
-            }
-        };
-        self.locals.push(Local { name: var, reg: var_reg, ty: var_ty, is_mut: false, loop_var: false, origins: Vec::new() });
+        // The shared element yields as-is (RFC 0044): a `?T` element
+        // (`Vec<T>`'s `[?T]` backing, `[?T]` arrays) binds its handle and
+        // every use auto-derefs; scalars copy their slot.
+        let var_reg = self.emit_slice_get(iter_reg, idx, &info, sp.lo)?;
+        self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new() });
         self.loops.push((l_cont, l_end));
         self.compile_block(body)?;
         self.loops.pop();
@@ -417,10 +391,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
         // captures: the body's enclosing locals, copied by value (the
-        // closure law) — accumulate through a `*T` capture
+        // closure law); the capture inherits the binding's mutability
+        // (RFC 0044 — writes through a captured `let mut` stay legal)
         let mut referenced = Vec::new();
         self.scan_names(body.id(), &mut referenced);
-        let mut caps: Vec<(IdentId, TypeId, u16)> = Vec::new();
+        let mut caps: Vec<(IdentId, TypeId, bool, u16)> = Vec::new();
         for n in referenced {
             if n == var {
                 continue;
@@ -432,12 +407,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 } else {
                     self.emit(Op::Mov { dst: cap_reg, src: l.reg }, sp.lo);
                 }
-                caps.push((n, l.ty, cap_reg));
+                caps.push((n, l.ty, l.is_mut, cap_reg));
             }
         }
         self.ctx
             .for_of_sigs
-            .insert(body.id().0, (elem_ty, caps.iter().map(|(n, t, _)| (*n, *t)).collect::<Vec<_>>()));
+            .insert(body.id().0, (elem_ty, caps.iter().map(|(n, t, m, _)| (*n, *t, *m)).collect::<Vec<_>>()));
         let emit = crate::check::Inst {
             key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
             subst: vec![],
@@ -446,7 +421,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let fid = self.ctx.ensure_inst(emit);
         let fty = self.ctx.mk_fn_ty(vec![elem_ty], TY_BOOL);
         let clo = self.new_reg(fty);
-        { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo,); }
+        { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo,); }
         // `xs.__iterate(emit)` — the impl's method, statically bound to
         // this impl (nominal registry, RFC 0012 §4)
         let mfid = self

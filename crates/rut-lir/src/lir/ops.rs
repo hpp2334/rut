@@ -43,12 +43,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut lhs_reg = lhs_reg;
         // the rhs hint: an expected `?T` boxes values at let/arg/return/
         // field-store positions, but a `==` operand is NOT such a position
-        // (RFC 0012 §4 — pointer-vs-pointee compares stay). Only the `nil`
-        // literal takes the nullable hint, typing as `?T` for the identity
-        // null-slot compare.
+        // (RFC 0012 §4 — pointer-vs-pointee compares stay). Against a
+        // nullable lhs the rhs takes the PAYLEE type (the lhs derefs in
+        // the mirror below); only the `nil` literal takes the nullable
+        // hint, typing as `?T` for the identity null-slot compare.
         let rhs_hint = match (op, self.ctx.types.kind(lt).clone()) {
-            (Eq | Ne, TyKind::Opt { .. }) => {
-                if matches!(self.ctx.ast.expr(rhs), ExprKind::Lit(Lit::Nil)) { Some(lt) } else { None }
+            (Eq | Ne, TyKind::Opt { elem }) => {
+                if matches!(self.ctx.ast.expr(rhs), ExprKind::Lit(Lit::Nil)) { Some(lt) } else { Some(elem) }
             }
             _ => Some(lt),
         };
@@ -76,9 +77,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ty = lt;
         match op {
             Eq | Ne => {
-                // the `==` law (RFC 0012 §4): primitives by value, string and
-                // bytes by content, everything else cell identity;
-                // Option/Result is a compile error
+                // the `==` law (RFC 0044): primitives by value, string and
+                // bytes by content, everything else CELL IDENTITY (the raw
+                // slot compare — by-reference sharing makes structural
+                // equality unobservable); Option/Result is a compile error
                 let eq = op == Eq;
                 let dst = self.new_reg(TY_BOOL);
                 match self.ctx.types.kind(ty).clone() {
@@ -91,10 +93,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     TyKind::Bytes => {
                         self.emit(Op::ArrayCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
-                    }
-                    TyKind::Data { .. } => {
-                        // structural equality on values (RFC 0009/0016 v1.1)
-                        self.emit(Op::ValEq { dst, a: lhs_reg, b: rhs_reg, ty, eq }, sp.lo);
                     }
                     _ => {
                         self.emit(Op::RefEq { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
@@ -208,11 +206,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // assign the last field
                 if segs[0].generics.is_empty() {
                     if let Some(l) = self.lookup(segs[0].name).cloned() {
-                        let head_is_ptr =
-                            matches!(self.ctx.types.kind(l.ty).clone(), TyKind::Opt { .. });
-                        // a pointer binding is immutable, its POINTEE is not —
-                        // stores through `p.x` are legal on a plain `let p`
-                        if !l.is_mut && !l.loop_var && !head_is_ptr {
+                        // the mut-binding law (RFC 0003 §1) is uniform under
+                        // the by-reference regime (RFC 0044): a `?T` head
+                        // derefs, then writes through the shared cell — the
+                        // head binding itself must be `let mut`
+                        if !l.is_mut && !l.loop_var {
                             self.ctx.err(sp, format!(
                                 "assignment through `{}` requires a `let mut` binding (the mut-binding law, RFC 0003 §1)",
                                 self.ctx.name(segs[0].name)
@@ -221,7 +219,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let mut cur = l.reg;
                         let mut cur_ty = l.ty;
-                        if head_is_ptr {
+                        if matches!(self.ctx.types.kind(cur_ty).clone(), TyKind::Opt { .. }) {
                             let (t, d) = self.deref_for_use(cur_ty, cur, sp.lo);
                             cur = d;
                             cur_ty = t;
@@ -263,19 +261,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 if t != fty {
                                     self.ctx.err(sp, "field assignment type mismatch");
                                 }
-                                let sval = self.clone_arg(self.last_reg, fty, sp.lo);
-                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: sval, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                             }
                             Some(bin) => {
                                 let cur_v = self.new_reg(fty);
                                 self.emit(Op::GetF { dst: cur_v, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
-                                let t = self.compile_expr(value, Some(fty))?;
-                                if t != fty {
+                                // a `?T` field computes at T (RFC 0044): the
+                                // accumulator derefs, the result re-boxes
+                                let (cty, cur_v) = self.deref_for_use(fty, cur_v, sp.lo);
+                                let t = self.compile_expr(value, Some(cty))?;
+                                if t != cty {
                                     self.ctx.err(sp, "assignment type mismatch");
                                 }
                                 let val_reg = self.last_reg;
-                                let res = self.new_reg(fty);
-                                self.emit_compound(bin, fty, cur_v, val_reg, res, sp)?;
+                                let res = self.new_reg(cty);
+                                self.emit_compound(bin, cty, cur_v, val_reg, res, sp)?;
+                                let res = self.coerce_to(cty, fty, res, sp.lo);
                                 self.emit(Op::SetF { obj: cur, field: fidx as u32, val: res, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                             }
                         }
@@ -318,9 +319,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // concrete → slot widening boxes scalars (the slot
                         // ABI, RFC 0012 §4): the binding always holds a cell
                         self.widen_to_slot(t, l.ty, sp.lo);
-                        // copy-by-value (RFC 0009/0016 v1.1): the binding
-                        // owns a deep copy of the assigned value
-                        self.mov_value(l.reg, self.last_reg, l.ty, sp.lo);
+                        // the sharing law (RFC 0044): the binding takes the
+                        // value's cell handle — a share, never a copy
+                        self.mov_slot(l.reg, self.last_reg, l.ty, sp.lo);
                         // origin counting (RFC 0012 §5): a concrete value
                         // re-pins the origin; anything else erases it —
                         // a stale origin could statically bind the WRONG
@@ -336,7 +337,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     Some(bin) => {
                         let cur = self.new_reg(l.ty);
-                        self.mov_value(cur, l.reg, l.ty, sp.lo);
+                        self.mov_slot(cur, l.reg, l.ty, sp.lo);
                         let t = self.compile_expr(value, Some(l.ty))?;
                         if t != l.ty {
                             self.ctx.err(sp, format!(
@@ -380,19 +381,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if t != fty {
                             self.ctx.err(sp, "field assignment type mismatch");
                         }
-                        let sval = self.clone_arg(self.last_reg, fty, sp.lo);
-                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: sval, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                     }
                     Some(bin) => {
                         let cur = self.new_reg(fty);
                         self.emit(Op::GetF { dst: cur, obj: rreg, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
-                        let t = self.compile_expr(value, Some(fty))?;
-                        if t != fty {
+                        // a `?T` field computes at T (RFC 0044): the
+                        // accumulator derefs, the result re-boxes
+                        let (cty, cur) = self.deref_for_use(fty, cur, sp.lo);
+                        let t = self.compile_expr(value, Some(cty))?;
+                        if t != cty {
                             self.ctx.err(sp, "assignment type mismatch");
                         }
                         let val_reg = self.last_reg;
-                        let res = self.new_reg(fty);
-                        self.emit_compound(bin, fty, cur, val_reg, res, sp)?;
+                        let res = self.new_reg(cty);
+                        self.emit_compound(bin, cty, cur, val_reg, res, sp)?;
+                        let res = self.coerce_to(cty, fty, res, sp.lo);
                         self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: res, repr: self.ctx.types.repr_of(fty) }, sp.lo);
                     }
                 }
@@ -427,13 +431,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     Some(bin) => {
                         let cur = self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
-                        let t = self.compile_expr(value, Some(elem))?;
-                        if t != elem {
+                        // a `?T` element computes at T (RFC 0044): the
+                        // accumulator derefs, the result re-boxes
+                        let (cty, cur) = self.deref_for_use(elem, cur, sp.lo);
+                        let t = self.compile_expr(value, Some(cty))?;
+                        if t != cty {
                             self.ctx.err(sp, "element assignment type mismatch");
                         }
                         let val_reg = self.last_reg;
-                        let res = self.new_reg(elem);
-                        self.emit_compound(bin, elem, cur, val_reg, res, sp)?;
+                        let res = self.new_reg(cty);
+                        self.emit_compound(bin, cty, cur, val_reg, res, sp)?;
+                        let res = self.coerce_to(cty, elem, res, sp.lo);
                         self.emit_slice_set(rreg, ireg, res, &info, sp.lo)?;
                     }
                 }

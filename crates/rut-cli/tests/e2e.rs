@@ -101,9 +101,10 @@ pub fn main() -> nil {
 }
 
 #[test]
-fn case2_values_diverge() {
-    // copy-by-value (RFC 0009/0016 v1.1): every binding owns its own cell —
-    // `own` is gone, sharing is spelled with pointers (`*T`)
+fn case2_sharing() {
+    // the by-reference law (RFC 0044): every binding shares its cell —
+    // `let q = p` aliases p, so writes through either are visible through
+    // both, and `==` is CELL IDENTITY (two aliases of one cell are equal)
     let src = r#"
 struct Point { x: f32; y: f32 }
 pub fn main() -> nil {
@@ -118,7 +119,7 @@ pub fn main() -> nil {
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["q.x=1 p.x=4 r.x=9", "q==p false, r==p false"]);
+    assert_eq!(lines, vec!["q.x=9 p.x=9 r.x=9", "q==p true, r==p true"]);
 }
 
 #[test]
@@ -1564,14 +1565,14 @@ impl Iterator<i32> for CountUp {
 }
 
 fn total(it: Iterator<i32>) -> i32 {
-    let acc: ?Acc = Acc { };
+    let mut acc: ?Acc = Acc { };
     it.__iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
     return acc.total;
 }
 
 pub fn main() -> nil {
     let log = Logger.new("it");
-    let acc: ?Acc = Acc { };
+    let mut acc: ?Acc = Acc { };
     for (let v of CountUp.new(9)) {
         if (v % 2 == 0) { continue; }
         if (v > 6) { break; }
@@ -1886,27 +1887,11 @@ pub fn main() -> nil {
     println!("LINES {lines:?} TRAP {trap:?}");
 }
 
-#[test]
-fn dbg_put_ir() {
-    let src = r#"
-use pouch::{ Vec };
-struct Row { id: i32; }
-struct Box { rows: Vec<Row>; }
-entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
-entry fn put(c: opaque) -> u32 {
-    let (b, _) = opaque.downcast<?Box>(c);
-    b.rows.push(Row { id: 1 });
-    return b.rows.len() as u32;
-}
-"#;
-    let out = compile(src, "m");
-    println!("IR:\n{}", out.ir_dump);
-}
 
 #[test]
-fn a2_value_semantics_diverge() {
-    // copy-by-value: the binding owns a deep copy — mutations of the
-    // original never leak into the copy (RFC 0009/0016 v1.1)
+fn a2_sharing_semantics() {
+    // the by-reference law (RFC 0044): `let snap = o` shares o's cell —
+    // mutations through either binding are visible through both
     let src = r#"
 use pouch::{ Vec };
 struct Inner { v: i32 = 0; }
@@ -1926,9 +1911,9 @@ pub fn main() -> nil {
     let (lines, trap, _) = run_case(src, 200_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec![
-        "snap inner=1 tag=[x]",
+        "snap inner=99 tag=[y]",
         "o inner=99 tag=[y] n0=7 n1=8",
-        "snap n=1",
+        "snap n=2",
     ]);
 }
 
@@ -2044,11 +2029,11 @@ pub fn main() -> nil {
     let log = Logger.new("win");
     let mut v: Vec<i32> = Vec.new();
     v.push(1); v.push(2); v.push(3); v.push(4);
-    let w = v.slice(1, 3);
+    let mut w = v.slice(1, 3);
     log.info(f"[{w[0]} {w[1]}] len={w.len()}");
     w[0] = 20;
     log.info(f"v1={v[1]} w0={w[0]}");
-    let w2 = w.slice(0, 1);
+    let mut w2 = w.slice(0, 1);
     w2[0] = 99;
     log.info(f"v1={v[1]}");
     let mut s = 0;

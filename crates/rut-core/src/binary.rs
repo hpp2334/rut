@@ -386,10 +386,10 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-/// v4: the `?T` surface swap (RFC 0044) — `TyKind::Ptr` is now `Opt`
-/// (kind code 13 reused), `mk_opt` names intern as `"?T"`; stale v3
-/// caches are invalidated
-pub const VERSION: u32 = 4;
+/// v5: the by-reference flip (RFC 0044) — `CloneVal`/`MoveVal`/`ValEq`/
+/// `ArrGetRef` are gone, `MakePtr` is renamed `MakeOpt` (wire code 89
+/// unchanged); stale v4 caches are invalidated
+pub const VERSION: u32 = 5;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -781,10 +781,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::GetF { dst, obj, field, repr } => { e.u8(22); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u8(repr.to_u8()); }
         Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
-        Op::MakePtr { dst, src, ty } => { e.u8(89); e.u16(*dst); e.u16(*src); e.u32(*ty); }
-        Op::CloneVal { dst, src, ty } => { e.u8(91); e.u16(*dst); e.u16(*src); e.u32(*ty); }
-        Op::MoveVal { dst, src } => { e.u8(93); e.u16(*dst); e.u16(*src); }
-        Op::ValEq { dst, a, b, ty, eq } => { e.u8(92); e.u16(*dst); e.u16(*a); e.u16(*b); e.u32(*ty); e.u8(*eq as u8); }
+        Op::MakeOpt { dst, src, ty } => { e.u8(89); e.u16(*dst); e.u16(*src); e.u32(*ty); }
         Op::OnDrop { obj, cleanup } => { e.u8(90); e.u16(*obj); e.u16(*cleanup); }
         Op::ArrNew { dst, ty, len, repr } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); e.u8(repr.to_u8()); }
         Op::ArrLit { dst, ty, argv_off, argc } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u32(*argv_off); e.u16(*argc); }
@@ -805,7 +802,6 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::ArrayCmp { eq, dst, a, b } => { e.u8(85); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::ArrGetF { dst, obj, field, idx, repr } => { e.u8(87); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u8(repr.to_u8()); }
         Op::ArrSetF { obj, field, idx, val, repr } => { e.u8(88); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
-        Op::ArrGetRef { dst, arr, idx, ty } => { e.u8(30); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u32(*ty); }
         Op::Pad { .. } => unreachable!("diagnostic-only variant"),
     }
 }
@@ -832,10 +828,7 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         22 => Op::GetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, repr: repr(d.u8()?)? },
         23 => Op::SetF { obj: d.u16()?, field: d.u32()?, val: d.u16()?, repr: repr(d.u8()?)? },
         24 => Op::Own { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
-        89 => Op::MakePtr { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
-        91 => Op::CloneVal { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
-        93 => Op::MoveVal { dst: d.u16()?, src: d.u16()? },
-        92 => Op::ValEq { dst: d.u16()?, a: d.u16()?, b: d.u16()?, ty: d.u32()?, eq: d.u8()? != 0 },
+        89 => Op::MakeOpt { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
         90 => Op::OnDrop { obj: d.u16()?, cleanup: d.u16()? },
         25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()?, repr: repr(d.u8()?)? },
         26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
@@ -890,7 +883,6 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         85 => Op::ArrayCmp { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         87 => Op::ArrGetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, idx: d.u16()?, repr: repr(d.u8()?)? },
         88 => Op::ArrSetF { obj: d.u16()?, field: d.u32()?, idx: d.u16()?, val: d.u16()?, repr: repr(d.u8()?)? },
-        30 => Op::ArrGetRef { dst: d.u16()?, arr: d.u16()?, idx: d.u16()?, ty: d.u32()? },
         t => return Err(format!("bad opcode {t}")),
     })
 }

@@ -488,20 +488,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 _ => None,
             })
             .collect();
-        let mut caps: Vec<(IdentId, TypeId, u16)> = Vec::new();
+        let mut caps: Vec<(IdentId, TypeId, bool, u16)> = Vec::new();
         for n in referenced {
             if lambda_param_names.contains(&n) {
                 continue;
             }
             if let Some(l) = self.lookup(n).cloned() {
-                // copy the CURRENT value into a capture register (by value)
+                // copy the CURRENT value into a capture register (by value);
+                // the capture inherits the binding's mutability so writes
+                // through a captured `let mut` stay legal (RFC 0044 — the
+                // old pointer exception is gone)
                 let cap_reg = self.new_reg(l.ty);
                 if self.ctx.types.is_ref(l.ty) {
                     self.emit(Op::MovRef { dst: cap_reg, src: l.reg }, sp.lo);
                 } else {
                     self.emit(Op::Mov { dst: cap_reg, src: l.reg }, sp.lo);
                 }
-                caps.push((n, l.ty, cap_reg));
+                caps.push((n, l.ty, l.is_mut, cap_reg));
             }
         }
         // register the synthetic fn: params = declared ++ captures
@@ -512,12 +515,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // body node; FnKey::Lambda uses the body node id (unique).
         // record the resolved signature for the body compilation
         self.ctx.lambda_sigs.insert(lambda_node, (ptys.clone(), ret_ty));
-        self.ctx.lambda_info.insert(lambda_node, caps.iter().map(|(n, t, _)| (*n, *t)).collect());
+        self.ctx.lambda_info.insert(lambda_node, caps.iter().map(|(n, t, m, _)| (*n, *t, *m)).collect());
         let inst = crate::check::Inst { key: crate::check::FnKey::Lambda(lambda_node), subst: vec![], trait_origins: vec![] };
         let fid = self.ctx.ensure_inst(inst);
         let fty = self.ctx.mk_fn_ty(ptys.clone(), ret_ty);
         let dst = self.new_reg(fty);
-        { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: dst, func: fid, argv_off, argc }, sp.lo,); }
+        { let (argv_off, argc) = self.pool_args(&(caps.iter().map(|(_, _, _, r)| *r).collect::<Vec<_>>())); self.emit(Op::MakeClosure { dst: dst, func: fid, argv_off, argc }, sp.lo,); }
         Ok(fty)
     }
 

@@ -78,7 +78,7 @@ fn address_of_boxes_the_operand() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let ir = out.ir_dump;
-    assert!(ir.contains("makeptr"), "the box op must be there: {ir}");
+    assert!(ir.contains("makeopt"), "the box op must be there: {ir}");
 }
 
 #[test]
@@ -141,9 +141,10 @@ fn bracket_types_need_no_use_statement() {
 }
 
 #[test]
-fn pointer_backed_vec_shape_fuses_through_the_deref() {
-    // the DataBuf shape over `[?T]`: the fused index read/write derefs
-    // and boxes (RFC 0032 §1.1 over the nullable-array backing)
+fn nullable_backed_vec_shape_is_an_ordinary_ref_elem_array() {
+    // the DataBuf shape over `[?T]`: the fused index read/write treat the
+    // nullable handles as ordinary slots (RFC 0044) — loads yield the
+    // `?T` (uses auto-deref), stores take the coerced box
     let out = compile(
         "class Box2<T> {\n\
              buf: [?T];\n\
@@ -184,7 +185,7 @@ fn nullable_widen_narrow_and_nil_typing() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let ir = out.ir_dump;
-    assert!(ir.contains("makeptr"), "the T → ?T widen must box: {ir}");
+    assert!(ir.contains("makeopt"), "the T → ?T widen must box: {ir}");
     // a nil literal against a primitive annotation is a type mismatch
     let ds = diags_of(
         "fn main() -> i32 {\n\

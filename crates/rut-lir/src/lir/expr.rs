@@ -25,29 +25,39 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // nullable coercion (RFC 0044): the mirror pair at value positions —
         // a `?T` where `T` is expected reads its payload (field 0, the old
         // `*p` deref), a `T` where `?T` is expected boxes into a fresh
-        // one-slot cell (the old `&v`). Arguments, returns, lets,
-        // assignments all flow through here. Positions without an
-        // expected type (receivers, `==` operands, `let w = p`) keep the
-        // nullable: identity, aliasing and field/method deref are native.
-        if let Ok(t) = r {
+        // one-slot cell (the old `&v`). The pair is TRANSITIVE: nesting is
+        // a real type (`??T` is spellable, and a `Vec<?T>`'s backing slot
+        // is `??T`), so the funnel steps until the expected type is met.
+        // Arguments, returns, lets, assignments all flow through here.
+        // Positions without an expected type (receivers, `==` operands,
+        // `let w = p`) keep the nullable: identity, aliasing and field/
+        // method deref are native.
+        if let Ok(mut t) = r {
             if let Some(e) = expected {
                 if e != t {
                     let lo = self.ctx.ast.span(node.id()).lo;
-                    match (self.ctx.types.kind(t).clone(), self.ctx.types.kind(e).clone()) {
-                        (TyKind::Opt { elem }, _) if elem == e => {
-                            let src = self.last_reg;
-                            let d = self.new_reg(elem);
-                            self.emit(Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) }, lo);
-                            r = Ok(elem);
+                    while t != e {
+                        let step = match (self.ctx.types.kind(t).clone(), self.ctx.types.kind(e).clone()) {
+                            (TyKind::Opt { elem }, _) if elem == e => {
+                                let src = self.last_reg;
+                                let d = self.new_reg(elem);
+                                self.emit(Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) }, lo);
+                                Some(elem)
+                            }
+                            (_, TyKind::Opt { elem }) if elem == t => {
+                                let src = self.last_reg;
+                                let dst = self.new_reg(e);
+                                self.emit(Op::MakeOpt { dst, src, ty: e }, lo);
+                                Some(e)
+                            }
+                            _ => None,
+                        };
+                        match step {
+                            Some(nt) => t = nt,
+                            None => break,
                         }
-                        (_, TyKind::Opt { elem }) if elem == t => {
-                            let src = self.last_reg;
-                            let dst = self.new_reg(e);
-                            self.emit(Op::MakePtr { dst, src, ty: e }, lo);
-                            r = Ok(e);
-                        }
-                        _ => {}
                     }
+                    r = Ok(t);
                 }
             }
         }
@@ -115,8 +125,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // reads the payload, `T → ?T` boxes).
                     Not => self.compile_expr(expr, Some(TY_BOOL))?,
                     // `-lit` in a typed position still adapts the literal
-                    // (`-2.0` passed to an `f64` param), so forward `expected`
-                    _ => self.compile_expr(expr, expected)?,
+                    // (`-2.0` passed to an `f64` param), so forward
+                    // `expected` — but see through one nullable layer
+                    // (RFC 0044): negation computes at the payload type,
+                    // the funnel re-boxes the result
+                    _ => self.compile_expr(expr, self.numeric_hint(expected))?,
                 };
                 // capture the operand's register BEFORE new_reg — it
                 // overwrites last_reg with the destination
@@ -297,6 +310,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     // last register allocated (the value produced by compile_expr)
     // NOTE: maintained by every producing helper via self.new_reg
 
+    /// Bidirectional inference (RFC 0007 §1) sees through one nullable
+    /// layer: in an expected `?T` position an unsuffixed numeric literal
+    /// adapts to `T`, and the funnel's `T → ?T` coercion boxes it
+    /// (RFC 0044).
+    fn numeric_hint(&self, expected: Option<TypeId>) -> Option<TypeId> {
+        match expected {
+            Some(e) => match self.ctx.types.kind(e).clone() {
+                TyKind::Opt { elem } if matches!(self.ctx.types.kind(elem), TyKind::Prim(_)) => Some(elem),
+                _ => Some(e),
+            },
+            None => None,
+        }
+    }
+
     pub(crate) fn load_lit(&mut self, lit: Lit, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<(TypeId, u16)> {
         match lit {
             Lit::Int(v, sfx) => {
@@ -321,7 +348,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 "integer literal {v} exceeds the `i32` default —add an explicit suffix like `u64`{hint} (RFC 0007 §1)"
                             ));
                         }
-                        match expected {
+                        match self.numeric_hint(expected) {
                             // bidirectional inference (RFC 0007 §1): an int
                             // literal adapts to the expected numeric type — int
                             // widths AND float positions (`x: f32 = 1`)
@@ -384,7 +411,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let ty = match sfx {
                     Some(s) => float_suffix_ty(s),
-                    None => match expected {
+                    None => match self.numeric_hint(expected) {
                         Some(e) if matches!(self.ctx.types.kind(e), TyKind::Prim(p) if p.is_float()) => e,
                         _ => TY_F32,
                     },
@@ -503,15 +530,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, "generic arguments are not valid on a field");
                         return Err(());
                     }
-                    // `p.x` auto-deref through a pointer (RFC 0005)
-                    if let TyKind::Opt { elem } = self.ctx.types.kind(cur_ty).clone() {
-                        // deref: load the pointee cell, then read the
-                        // field from it
-                        let dst = self.new_reg(elem);
-                        self.emit(Op::GetF { dst, obj: cur, field: 0, repr: Repr::Ref }, sp.lo);
-                        cur = dst;
-                        cur_ty = elem;
-                    }
+                    // `p.x` auto-deref through a nullable (RFC 0005): the
+                    // payload slot at the payload's own repr, transitively
+                    // for `??T` (RFC 0044)
+                    let (dty, dreg) = self.deref_for_use(cur_ty, cur, sp.lo);
+                    cur = dreg;
+                    cur_ty = dty;
                     let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone() else {
                         self.ctx.err(sp, format!(
                             "`{}` has no field `{}` — `{}` is not a record",

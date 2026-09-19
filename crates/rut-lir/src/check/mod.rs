@@ -176,7 +176,7 @@ pub struct Ctx<'a> {
     /// lambda capture lists, filled when the lambda is created:
     /// lambda node → (name, ty) per capture (by value — v1 deviation
     /// from RFC 0013 §1's by-reference capture, documented)
-    pub lambda_info: std::collections::HashMap<NodeId, Vec<(IdentId, TypeId)>>,
+    pub lambda_info: std::collections::HashMap<NodeId, Vec<(IdentId, TypeId, bool)>>,
     /// lambda signatures: body node → (resolved param types incl.
     /// expected-type inference, ret type)
     pub lambda_sigs: std::collections::HashMap<NodeId, (Vec<TypeId>, TypeId)>,
@@ -210,7 +210,7 @@ pub struct Ctx<'a> {
     /// the emit-closure signature of each desugared `for..of` (RFC 0012 §6),
     /// recorded at the creation site and read when the queue compiles the fn:
     /// body node → (element type, captures)
-    pub for_of_sigs: std::collections::HashMap<u32, (TypeId, Vec<(IdentId, TypeId)>)>,
+    pub for_of_sigs: std::collections::HashMap<u32, (TypeId, Vec<(IdentId, TypeId, bool)>)>,
     /// used core compiler-lowered functions (`own`, `downcast`,
     /// `assert`/`panic`, the `str`/`bytes` natives): the name is callable
     /// only when bound

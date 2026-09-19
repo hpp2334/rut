@@ -1,10 +1,10 @@
 // RFC 0009 — structs: open data records (v1.1 spells the keyword
-// `struct`; this classic predates the rename). Copy-by-value (RFC 0016
-// §1): every binding owns its own cell — assignment deep-copies, and
-// mutations never leak between bindings. All fields public. Methods
-// and impl blocks ARE allowed (see traits.rut for impls); here the
-// idiom stays data + free functions. Constructed ONLY by literal,
-// everywhere (module-level let initializers included).
+// `struct`; this classic predates the rename). By reference (RFC 0044):
+// every binding SHARES its cell — assignment is an O(1) handle move, and
+// a mutation through any binding is visible through all of them. All
+// fields public. Methods and impl blocks ARE allowed (see traits.rut for
+// impls); here the idiom stays data + free functions. Constructed ONLY
+// by literal, everywhere (module-level let initializers included).
 
 use ink::{ Logger };
 use calc::{ sqrt };
@@ -15,8 +15,8 @@ struct Point {
 }
 
 struct Rect {
-    min: Point;                 // value fields: the record owns them
-    max: Point;                 // (RFC 0016 §1) — copies are deep
+    min: Point;                 // the field holds a shared handle too —
+    max: Point;                 // `r.max` can be the very cell `p` names
 }
 
 struct Style {
@@ -24,12 +24,13 @@ struct Style {
     width: f32 = 1;
 }
 
-fn nudge(pt: ?Point) {     // nullable param: mutation is shared —
+fn nudge(mut pt: ?Point) {     // nullable param: mutation is shared —
     pt.x += 1;                     // writes through hit the caller's Point
+                                // (`mut` on the binding: RFC 0003 §1)
 }
 
-fn nudged(pt: Point) -> Point {    // value param: the caller keeps its own
-    return Point { x: pt.x + 1, y: pt.y };  // copy — build a NEW one instead
+fn nudged(pt: Point) -> Point {    // no mutation: builds a NEW record
+    return Point { x: pt.x + 1, y: pt.y };  // and returns its handle
 }
 
 fn length(pt: Point) -> f64 {     // free function instead of a method
@@ -40,25 +41,25 @@ fn dataclasses() {
     let log = Logger.new("dataclasses");
     let mut p = Point { x: 1, y: 2 };   // literal — the only construction
     p.x = 3;                            // needs the `mut` binding (RFC 0003 §1)
-    let q = p;                          // COPY: q owns a deep copy of p
-    p.x = 4;                            // q.x is still 3 — value semantics
+    let q = p;                          // SHARE: q and p name one cell (O(1))
+    p.x = 4;                            // q.x is 4 now — sharing is the law
 
-    // nullable `?T` shares (RFC 0044): a `T` widening into `?T` boxes
-    // the value's cell and writes through it hit every holder of the box
-    let rp: ?Point = p;                   // rp: ?Point — shares p's cell
-    rp.x = 9;                             // p.x is now 9 too
+    // a write through a `?T` head needs `mut` on the binding (RFC 0044):
+    let mut rp: ?Point = p;             // rp: ?Point — shares p's cell
+    rp.x = 9;                           // p.x is now 9 too
 
-    // `==` on values is STRUCTURAL, field by field (RFC 0012 §4):
-    // two separately-built records with equal fields ARE equal
-    let same_fields = q == Point { x: 3, y: 2 };   // true — equal contents
-    let diverged = q == p;                    // false — the copy diverged
+    // `==` on records is CELL IDENTITY (RFC 0044): bindings of one cell
+    // are equal; separately-built records are not, whatever their fields
+    let same_cell = q == p;                    // true — one shared cell
+    let distinct = q == Point { x: 9, y: 2 };  // false — a different cell
 
-    let r = Rect { min: p, max: q };    // min and max are p's and q's COPIES
+    let mut r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares p
     let s = Style {};              // zero-value defaults fill the fields
-    nudge(p);             // shared write: p.x += 1 for real
-    nudged(p);                     // value param: builds a new Point, p kept
+    r.max.x = 5;                   // a write THROUGH r: p.x is now 5
+    nudge(p);                      // shared write through `?Point`: p.x = 6
+    let fresh = nudged(p);         // builds a new Point; p is untouched
     log.info(f"len={length(p)} color={s.color} area={r.max.x - r.min.x}");
-    log.info(f"same={same_fields} diverged={diverged} rp.x={rp.x}");
+    log.info(f"same={same_cell} distinct={distinct} fresh.x={fresh.x}");
 }
 
 pub fn main() {

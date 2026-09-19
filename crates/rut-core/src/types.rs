@@ -320,15 +320,14 @@ impl TypeTable {
         )
     }
 
-    /// True when the type is a MUTABLE VALUE (v1.1 copy-by-value,
-    /// RFC 0009/0016): records and arrays deep-copy on move, so two
-    /// bindings never alias. Everything else that is a cell shares it —
-    /// `str`/`bytes` are immutable, `*T` is the explicit shared pointer,
-    /// enums/`Option`/`Result` cells are immutable after construction,
-    /// closures capture by reference, and `Opaque`/trait objects are boundary
-    /// objects.
-    pub fn is_value(&self, id: TypeId) -> bool {
-        matches!(self.kind(id), TyKind::Data { .. } | TyKind::Array { .. })
+    /// True when the type is a MUTABLE VALUE. Nothing is (RFC 0044, the
+    /// by-reference regime): every cell type — records, arrays, enums,
+    /// `str`/`bytes`, closures, `?T` — shares its cell on assignment and
+    /// parameter passing; only primitives and `fn` values copy (immediate
+    /// slots). Kept as a predicate because the VM's deep-copy paths
+    /// (`own`) still branch on it, and the answer is now uniformly "no".
+    pub fn is_value(&self, _id: TypeId) -> bool {
+        false
     }
 
     /// The baked runtime representation of a type (see [`Repr`]).

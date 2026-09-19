@@ -197,27 +197,13 @@ pub enum Op {
     /// `own(x)` payload copy (RFC 0011 §1): data payload memcpy with
     /// handle-field retains; buffers clone; strings clone
     Own { dst: Reg, src: Reg, ty: TypeId },
-    /// copy-by-value (RFC 0009/0016 v1.1): deep-copy the record/array in
-    /// `src` into a fresh cell — nested value fields clone recursively,
-    /// `str`/`bytes`/`*T`/closure children share. `ty` is the value type.
-    CloneVal { dst: Reg, src: Reg, ty: TypeId },
-    /// ownership transfer (the move-elided `CloneVal`): `dst` takes over
-    /// `src`'s reference (MovRef semantics — release dst's old cell) and
-    /// `src` is KILLED (nulled) so the frame-exit release of its own
-    /// reference no-ops. The compiler emits this only where the move is
-    /// provably unobservable (rut-lir `moveval`: dead source + sole
-    /// ownership, or the field-rebind discipline) — the v1.1 copy law
-    /// (two bindings never alias observably) holds at every fired site.
-    MoveVal { dst: Reg, src: Reg },
-    /// `make_ptr(v)` (RFC 0005): box `v` into a fresh one-slot cell —
-    /// the result is a nil-able `*T` (`ty` is the pointer type)
-    MakePtr { dst: Reg, src: Reg, ty: TypeId },
+    /// `T → ?T` (RFC 0044): box `v` into a fresh one-slot cell — the
+    /// result is a nil-able `?T` (`ty` is the nullable's own type). The
+    /// box ALIASES `v`'s cell (share, never copy); primitives copy bits.
+    MakeOpt { dst: Reg, src: Reg, ty: TypeId },
     /// `on_drop(p, cleanup)` (RFC 0016 §3): run `cleanup(p)` when p's
     /// cell refcount reaches zero
     OnDrop { obj: Reg, cleanup: Reg },
-    /// structural `==`/`!=` on values (RFC 0009/0016 v1.1): recursive,
-    /// field-by-field; `str`/`bytes` by content; `*T` by identity
-    ValEq { dst: Reg, a: Reg, b: Reg, ty: TypeId, eq: bool },
 
     ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Array<T>(n) zeroed
     ArrLit { dst: Reg, ty: TypeId, argv_off: u32, argc: u16 }, // fixed Array<T, N>
@@ -230,11 +216,6 @@ pub enum Op {
     /// pouch sequence costs one op, not a field read per element.
     ArrGetF { dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr },
     ArrSetF { obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr },
-
-    /// `for (let v of xs)` element reference (RFC 0012 §6): box the element
-    /// at `idx` into a fresh one-slot cell of the pointer type `ty` —
-    /// ref-typed elements alias the stored slot, scalars box a copy
-    ArrGetRef { dst: Reg, arr: Reg, idx: Reg, ty: TypeId },
 
     /// enum member value (immortal singleton cell, RFC 0016 §1)
     EnumNew { dst: Reg, ty: TypeId, member: u32 },

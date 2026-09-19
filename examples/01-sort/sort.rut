@@ -18,7 +18,7 @@ use calc::{ Math };
 
 // ---- shared helpers ----
 
-fn swap(xs: ?Vec<i32>, a: i32, b: i32) {
+fn swap(mut xs: ?Vec<i32>, a: i32, b: i32) {
     let t = xs[a];
     xs[a] = xs[b];
     xs[b] = t;
@@ -36,7 +36,7 @@ fn sorted_up(xs: ?Vec<i32>) -> bool {
 // ---- the algorithms ----
 
 /// Classic shifting loop: grow a sorted prefix one element at a time.
-fn insertion_sort(xs: ?Vec<i32>) {
+fn insertion_sort(mut xs: ?Vec<i32>) {
     for (let i = 1; i < xs.len(); i += 1) {
         let key = xs[i];
         let mut j = i - 1;
@@ -49,7 +49,7 @@ fn insertion_sort(xs: ?Vec<i32>) {
 }
 
 /// Adjacent swaps, bailing out as soon as a pass swaps nothing.
-fn bubble_sort(xs: ?Vec<i32>) {
+fn bubble_sort(mut xs: ?Vec<i32>) {
     let mut n = xs.len();
     let mut swapped = true;
     while (swapped) {
@@ -65,7 +65,7 @@ fn bubble_sort(xs: ?Vec<i32>) {
 }
 
 /// Select the minimum of the suffix, swap it into place.
-fn selection_sort(xs: ?Vec<i32>) {
+fn selection_sort(mut xs: ?Vec<i32>) {
     for (let i = 0; i < xs.len(); i += 1) {
         let mut m = i;
         for (let j = i + 1; j < xs.len(); j += 1) {
@@ -78,7 +78,7 @@ fn selection_sort(xs: ?Vec<i32>) {
 }
 
 /// Lomuto partition around the last element.
-fn partition(xs: ?Vec<i32>, lo: i32, hi: i32) -> i32 {
+fn partition(mut xs: ?Vec<i32>, lo: i32, hi: i32) -> i32 {
     let pivot = xs[hi];
     let mut i = lo - 1;
     for (let j = lo; j < hi; j += 1) {
@@ -92,7 +92,7 @@ fn partition(xs: ?Vec<i32>, lo: i32, hi: i32) -> i32 {
 }
 
 /// In-place recursion: partition, then sort each side.
-fn quicksort(xs: ?Vec<i32>, lo: i32, hi: i32) {
+fn quicksort(mut xs: ?Vec<i32>, lo: i32, hi: i32) {
     if (lo >= hi) {
         return;
     }
@@ -104,7 +104,7 @@ fn quicksort(xs: ?Vec<i32>, lo: i32, hi: i32) {
 /// Out-of-place recursion: sort both halves into fresh vecs, merge
 /// back into the original — `push` builds the halves, indexing writes
 /// the result through the shared handle.
-fn merge_sort(xs: ?Vec<i32>) {
+fn merge_sort(mut xs: ?Vec<i32>) {
     let n = xs.len();
     if (n <= 1) {
         return;
@@ -174,7 +174,7 @@ entry fn push(c: opaque, x: i32) {
 /// (RFC 0004 §3: plain `*`
 /// traps; plain `<<` would too — xorshift is out).
 entry fn fill(c: opaque, n: u32, seed: u32) {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let mut (b, _) = opaque.downcast<?Bank>(c);
     let fresh: Vec<i32> = Vec.new();
     let mut x = seed | 1;         // the LCG needs an odd state
     for (let i = 0; i < n as i32; i += 1) {

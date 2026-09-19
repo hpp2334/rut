@@ -293,7 +293,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         i + 1, self.ctx.type_name(t), self.ctx.type_name(ef.params[i])
                     ));
                 }
-                aregs.push(self.clone_arg(self.last_reg, ef.params[i], sp.lo));
+                aregs.push(self.last_reg);
             }
             let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
             { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
@@ -980,7 +980,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         { let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live])); self.emit(Op::CallNat { nat: Nat::ArrSlice, recv: arr, argv_off, argc, dst: view }, sp.lo,); }
                         let ptr_ty = self.ctx.mk_opt(rt);
                         let dst = self.new_reg(ptr_ty);
-                        self.emit(Op::MakePtr { dst, src: view, ty: ptr_ty }, sp.lo);
+                        self.emit(Op::MakeOpt { dst, src: view, ty: ptr_ty }, sp.lo);
                         return Ok(ptr_ty);
                     }
                     SliceSource::Array => {
@@ -1002,7 +1002,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         { let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live])); self.emit(Op::CallNat { nat: Nat::ArrSlice, recv: rreg, argv_off, argc, dst: view }, sp.lo,); }
                         let ptr_ty = self.ctx.mk_opt(rt);
                         let dst = self.new_reg(ptr_ty);
-                        self.emit(Op::MakePtr { dst, src: view, ty: ptr_ty }, sp.lo);
+                        self.emit(Op::MakeOpt { dst, src: view, ty: ptr_ty }, sp.lo);
                         return Ok(ptr_ty);
                     }
                     _ => {
@@ -1487,7 +1487,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
                 ));
             }
-            aregs.push(self.clone_arg(self.last_reg, ptys[i], sp.lo));
+            aregs.push(self.last_reg);
         }
         let inst = crate::check::Inst {
             key: self.ctx.impl_method_key(impl_idx, mname, false),
@@ -1548,13 +1548,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match self.ctx.ast.expr(recv).clone() {
             ExprKind::Path { segs } if segs.len() == 1 => {
                 if let Some(l) = self.lookup(segs[0].name) {
-                    // a pointer binding is immutable, its POINTEE is not —
-                    // element stores through `xs: *Vec<i32>` are legal
-                    let head_is_ptr = matches!(
-                        self.ctx.types.kind(l.ty).clone(),
-                        TyKind::Opt { .. }
-                    );
-                    if !l.is_mut && !l.loop_var && !head_is_ptr {
+                    // the mut-binding law is uniform under the by-reference
+                    // regime (RFC 0044): every binding shares its cell, so
+                    // ANY store through the binding — including through a
+                    // `?T` head that derefs first — requires `let mut`
+                    // (the old pointer exception is gone)
+                    if !l.is_mut && !l.loop_var {
                         self.ctx.err(sp, format!(
                             "{what} requires a `let mut` binding (the mut-binding law, RFC 0003 §1)"
                         ));
@@ -1623,7 +1622,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             self.widen_to_slot(t, ptys[i], sp.lo);
             // ptys here excludes `self` — args align 1:1
-            aregs.push(self.clone_arg(self.last_reg, ptys[i], sp.lo));
+            aregs.push(self.last_reg);
         }
         // small instance methods inline at the call site: the class's
         // `push`/`pop`/`freeze` are rut code (RFC 0005), so an interpreted

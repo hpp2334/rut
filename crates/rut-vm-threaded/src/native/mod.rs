@@ -88,7 +88,6 @@ op_handler!(h_arrset, op_arr_set);
 op_handler!(h_arrgetf, op_arr_get_f);
 op_handler!(h_arrsetf, op_arr_set_f);
 op_handler!(h_getf, op_getf);
-op_handler!(h_arr_get_ref, op_arr_get_ref);
 op_handler!(h_setf, op_setf);
 op_handler!(h_call, op_call);
 op_handler!(h_callm, op_call_m);
@@ -150,7 +149,6 @@ op_handler!(h_panic, op_panic);
 op_handler!(h_assert, op_assert);
 op_handler!(h_conv, op_conv);
 op_handler!(h_strcharat, op_strcharat);
-op_handler!(h_moveval, op_move_val);
 
 fn table<M: Machine>() -> Table<M> {
     let mut t: [Handler<M>; NTAGS] = [h_slow::<M>; NTAGS];
@@ -174,7 +172,6 @@ fn table<M: Machine>() -> Table<M> {
     t[T_ARRGETF as usize] = h_arrgetf::<M>;
     t[T_ARRSETF as usize] = h_arrsetf::<M>;
     t[T_GETF as usize] = h_getf::<M>;
-    t[T_ARRGETREF as usize] = h_arr_get_ref::<M>;
     t[T_SETF as usize] = h_setf::<M>;
     t[T_CALL as usize] = h_call::<M>;
     t[T_CALLM as usize] = h_callm::<M>;
@@ -236,7 +233,6 @@ fn table<M: Machine>() -> Table<M> {
     t[T_ASSERT as usize] = h_assert::<M>;
     t[T_CONV as usize] = h_conv::<M>;
     t[T_STRCHARAT as usize] = h_strcharat::<M>;
-    t[T_MOVEVAL as usize] = h_moveval::<M>;
     Table { entries: t }
 }
 

@@ -11,6 +11,11 @@
 //!   reads the live-length field; element ops go through the `buf`
 //!   cell, so they alias the vector.
 //!
+//! Elements are ordinary slots (RFC 0044): a `[?T]` backing stores the
+//! nullable handles directly — loads yield the `?T` (uses auto-deref),
+//! stores take the boxed handle the `T → ?T` coercion minted. There is
+//! no deref-on-load/box-on-store special case.
+//!
 //! `str`/`bytes` are immutable: element assignment traps at compile
 //! time on them.
 
@@ -33,9 +38,6 @@ pub(crate) enum SliceSource {
 pub(crate) struct SliceInfo {
     pub source: SliceSource,
     pub elem: TypeId,
-    /// the `buf` field holds `*elem` cells (the pointer-array backing,
-    /// RFC 0005 §9) — loads deref, stores box
-    pub boxed: bool,
 }
 
 impl SliceInfo {
@@ -46,11 +48,10 @@ impl SliceInfo {
         !matches!(self.source, SliceSource::DataBuf { .. })
     }
 
-    /// The backing array's own type: `[elem]`, or `[*elem]` when the
-    /// buffer is pointer-backed.
+    /// The backing array's own type: `[elem]` (a `?T` element stays a
+    /// first-class nullable element — RFC 0044).
     pub(crate) fn array_ty(&self, ctx: &mut Ctx) -> TypeId {
-        let elem = if self.boxed { ctx.mk_opt(self.elem) } else { self.elem };
-        ctx.mk_array(elem)
+        ctx.mk_array(self.elem)
     }
 }
 
@@ -58,15 +59,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Resolve the `Iter` impl for `ty`, if any.
     pub(crate) fn slice_info(&mut self, ty: TypeId) -> Option<SliceInfo> {
         match self.ctx.types.kind(ty).clone() {
-            TyKind::Array { elem } => Some(SliceInfo { source: SliceSource::Array, elem, boxed: false }),
-            TyKind::Str => Some(SliceInfo { source: SliceSource::Str, elem: TY_STR, boxed: false }),
-            TyKind::Bytes => Some(SliceInfo { source: SliceSource::Bytes, elem: TY_U8, boxed: false }),
+            TyKind::Array { elem } => Some(SliceInfo { source: SliceSource::Array, elem }),
+            TyKind::Str => Some(SliceInfo { source: SliceSource::Str, elem: TY_STR }),
+            TyKind::Bytes => Some(SliceInfo { source: SliceSource::Bytes, elem: TY_U8 }),
             TyKind::Data { fields } => {
                 // the Vec shape (RFC 0012 v1.1): a `buf` field holding the
                 // array cell and a `len` field holding the live length.
-                // A pointer-array backing (`buf: [*T]`, RFC 0005 §9 —
-                // `[nil; cap]` is the only generic zero) boxes the
-                // elements: loads deref, stores box.
+                // A nullable-element backing (`buf: [?T]`, RFC 0044 —
+                // `[nil; cap]` is the only generic zero) is an ordinary
+                // ref-elem array: loads yield the `?T`, uses auto-deref.
                 let mut buf_field: Option<(u32, TypeId)> = None;
                 let mut len_field: Option<u32> = None;
                 for (i, f) in fields.iter().enumerate() {
@@ -84,14 +85,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let TyKind::Array { elem } = self.ctx.types.kind(buf_ty) else {
                     unreachable!("buf_field checked above")
                 };
-                let (boxed, elem) = match self.ctx.types.kind(*elem) {
-                    TyKind::Opt { elem } => (true, *elem),
-                    _ => (false, *elem),
-                };
                 Some(SliceInfo {
                     source: SliceSource::DataBuf { buf_field, len_field },
-                    elem,
-                    boxed,
+                    elem: *elem,
                 })
             }
             _ => None,
@@ -126,7 +122,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// `s[i]` — element read; the VM bounds-traps.
+    /// `s[i]` — element read; the VM bounds-traps. The shared slot comes
+    /// out as-is (RFC 0044): a `?T` element yields its handle, and every
+    /// use auto-derefs.
     pub(crate) fn emit_slice_get(&mut self, recv: u16, idx: u16, info: &SliceInfo, sp: u32) -> TcResult<u16> {
         match &info.source {
             SliceSource::Array => {
@@ -153,54 +151,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let buf_ty = info.array_ty(self.ctx);
                 let buf = self.new_reg(buf_ty);
                 self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
-                if info.boxed {
-                    // the slot holds `*elem` — load the pointer, then
-                    // deref (the value is the box's payload slot)
-                    let pty = self.ctx.mk_opt(info.elem);
-                    let p = self.new_reg(pty);
-                    self.emit(Op::ArrGet { dst: p, arr: buf, idx, repr: Repr::Ref }, sp);
-                    let dst = self.new_reg(info.elem);
-                    self.emit(
-                        Op::GetF { dst, obj: p, field: 0, repr: self.ctx.types.repr_of(info.elem) },
-                        sp,
-                    );
-                    return Ok(dst);
-                }
                 let repr = self.ctx.types.repr_of(info.elem);
                 let dst = self.new_reg(info.elem);
                 self.emit(Op::ArrGet { dst, arr: buf, idx, repr }, sp);
                 Ok(dst)
             }
         }
-    }
-
-    /// `for (let v of xs)` element reference (RFC 0012 §6): a fresh
-    /// one-slot box whose field 0 is the element — ref-typed elements
-    /// alias the stored slot (writes through `v.f` hit the sequence);
-    /// scalars box a per-iteration copy. `str`/`bytes` keep value yields.
-    pub(crate) fn emit_slice_get_ref(&mut self, recv: u16, idx: u16, info: &SliceInfo, sp: u32) -> TcResult<u16> {
-        let ptr_ty = self.ctx.mk_opt(info.elem);
-        let dst = self.new_reg(ptr_ty);
-        match &info.source {
-            SliceSource::Array => {
-                self.emit(Op::ArrGetRef { dst, arr: recv, idx, ty: ptr_ty }, sp);
-            }
-            SliceSource::DataBuf { buf_field, .. } => {
-                let buf_ty = info.array_ty(self.ctx);
-                let buf = self.new_reg(buf_ty);
-                self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
-                if info.boxed {
-                    // the stored `*elem` IS the element box — no fresh
-                    // box per iteration over a pointer-backed Vec
-                    let dst = self.new_reg(ptr_ty);
-                    self.emit(Op::ArrGet { dst, arr: buf, idx, repr: Repr::Ref }, sp);
-                    return Ok(dst);
-                }
-                self.emit(Op::ArrGetRef { dst, arr: buf, idx, ty: ptr_ty }, sp);
-            }
-            _ => unreachable!("ref yield on an immutable sequence"),
-        }
-        Ok(dst)
     }
 
     /// `s[i] = val` — element write. Only the concrete `Array`/`Vec` path
@@ -210,7 +166,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match &info.source {
             SliceSource::Array => {
                 let repr = self.ctx.types.repr_of(info.elem);
-                let val = self.clone_arg(val, info.elem, sp);
                 self.emit(Op::ArrSet { arr: recv, idx, val, repr }, sp);
                 Ok(())
             }
@@ -222,18 +177,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let buf_ty = info.array_ty(self.ctx);
                 let buf = self.new_reg(buf_ty);
                 self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
-                if info.boxed {
-                    // the slot holds `*elem` — box the value (a fresh
-                    // one-slot cell, value semantics) and store the
-                    // handle (RFC 0005 §9)
-                    let pty = self.ctx.mk_opt(info.elem);
-                    let boxed = self.new_reg(pty);
-                    self.emit(Op::MakePtr { dst: boxed, src: val, ty: pty }, sp);
-                    self.emit(Op::ArrSet { arr: buf, idx, val: boxed, repr: Repr::Ref }, sp);
-                    return Ok(());
-                }
                 let repr = self.ctx.types.repr_of(info.elem);
-                let val = self.clone_arg(val, info.elem, sp);
                 self.emit(Op::ArrSet { arr: buf, idx, val, repr }, sp);
                 Ok(())
             }

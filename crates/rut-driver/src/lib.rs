@@ -638,10 +638,7 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
         &f.argv[off as usize..off as usize + argc as usize]
     };
     match op {
-        Op::MakePtr { dst, src, .. } => format!("makeptr r{dst}, r{src}"),
-        Op::CloneVal { dst, src, .. } => format!("cloneval r{dst}, r{src}"),
-        Op::MoveVal { dst, src } => format!("moveval r{dst}, r{src}"),
-        Op::ValEq { dst, a, b, .. } => format!("valeq r{dst}, r{a}, r{b}"),
+        Op::MakeOpt { dst, src, .. } => format!("makeopt r{dst}, r{src}"),
         Op::OnDrop { obj, cleanup } => format!("ondrop r{obj}, r{cleanup}"),
         Op::Mov { dst, src } => format!("mov r{dst}, r{src}"),
         Op::MovRef { dst, src } => format!("movref r{dst}, r{src}"),
@@ -732,7 +729,6 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
         Op::ArrGet { dst, arr, idx, repr } => format!("arrget r{dst}, r{arr}, r{idx} :{}", repr.to_u8()),
         Op::ArrSet { arr, idx, val, repr } => format!("arrset r{arr}, r{idx}, r{val} :{}", repr.to_u8()),
         Op::ArrGetF { dst, obj, field, idx, repr } => format!("arrgetf r{dst}, r{obj}, f{field}, r{idx} :{}", repr.to_u8()),
-        Op::ArrGetRef { dst, arr, idx, ty } => format!("arrgetref r{dst}, r{arr}, r{idx} t{ty}"),
         Op::ArrSetF { obj, field, idx, val, repr } => format!("arrsetf r{obj}, f{field}, r{idx}, r{val} :{}", repr.to_u8()),
         Op::EnumNew { dst, ty, member } => format!("enumnew r{dst}, t{ty}, m{member}"),
         Op::TidOf { dst, obj } => format!("tidof r{dst}, r{obj}"),

@@ -16,7 +16,11 @@ fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     )
     .expect("mount pouch");
     let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "sort");
-    assert!(out.diags.is_empty());
+assert!(
+        out.diags.is_empty(),
+        "{}",
+        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    );
     let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
     rut_vm::verify::verify(&prog).unwrap();
     let limits = rut_vm::interp::Limits {

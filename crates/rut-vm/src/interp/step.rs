@@ -157,12 +157,6 @@ impl Vm {
                 self.cur_regs[dst as usize] = Slot::bool(v);
             }
 
-            Op::ValEq { dst, a, b, ty, eq } => {
-                let same = self.vals_equal(r!(a), r!(b), ty)?;
-                self.cur_regs[dst as usize] = Slot::bool(same == eq);
-            }
-
-
             Op::Jmp { target } => self.cur_pc = target,
             Op::Br { cond, then_t, else_t } => {
                 self.cur_pc = if r!(cond).as_bool() { then_t } else { else_t };
@@ -205,18 +199,8 @@ impl Vm {
                 }
             }
 
-            Op::MakePtr { dst, src, ty } => self.op_make_ptr(dst, src, ty)?,
+            Op::MakeOpt { dst, src, ty } => self.op_make_opt(dst, src, ty)?,
             Op::OnDrop { obj, cleanup } => self.op_on_drop(obj, cleanup)?,
-            Op::CloneVal { dst, src, ty } => self.op_clone_val(dst, src, ty)?,
-            Op::MoveVal { dst, src } => {
-                // ownership transfer: dst takes over src's reference, src
-                // is KILLED so the frame-exit release no-ops (P2.1)
-                let v = r!(src);
-                let old = self.cur_regs[dst as usize];
-                self.cur_regs[dst as usize] = v;
-                self.cur_regs[src as usize] = Slot::null();
-                self.heap.release(old);
-            }
 
             Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {
@@ -234,7 +218,6 @@ impl Vm {
             Op::ArrGet { dst, arr, idx, repr } => self.op_arr_get(dst, arr, idx, repr)?,
             Op::ArrSet { arr, idx, val, repr } => self.op_arr_set(arr, idx, val, repr)?,
             Op::ArrGetF { dst, obj, field, idx, repr } => self.op_arr_get_f(dst, obj, field, idx, repr)?,
-            Op::ArrGetRef { dst, arr, idx, ty } => self.op_arr_get_ref(dst, arr, idx, ty)?,
             Op::ArrSetF { obj, field, idx, val, repr } => self.op_arr_set_f(obj, field, idx, val, repr)?,
 
             Op::EnumNew { dst, ty, member } => {

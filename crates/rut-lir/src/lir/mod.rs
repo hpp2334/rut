@@ -17,16 +17,12 @@ mod expr;
 mod generic;
 mod intrinsic;
 mod lit;
-mod moveval;
 mod ops;
 mod peephole;
 mod slice;
 mod sroa;
 mod stmt;
 mod utf8;
-
-/// the P2 move-elision checker — public for the driver dump tests
-pub use moveval::move_srcs_are_dead;
 
 const NEST_MAX: u32 = 1024;
 
@@ -418,11 +414,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         c.emit(Op::Ret { val: None }, 0);
         c.resolve_labels();
         let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
-        let (mut code, spans, pools) = peephole::run(code, spans, c.pools);
-        // move elision (P2): a CloneVal whose source is a provably
-        // unobservable move becomes MoveVal — runs last, on the settled
-        // op list
-        moveval::elide(&mut code, &pools.argv, &pools.labels, param_tys.len());
+        let (code, spans, pools) = peephole::run(code, spans, c.pools);
         let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
@@ -498,9 +490,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
             }
         }
-        for (n, t) in &caps {
+        for (n, t, m) in &caps {
             let reg = c.new_reg(*t);
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: false, loop_var: false, origins: Vec::new() });
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: Vec::new() });
             // captures are part of the fn's parameter list (after declared)
             param_tys.push(*t);
         }
@@ -523,11 +515,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         c.resolve_labels();
         let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
-        let (mut code, spans, pools) = peephole::run(code, spans, c.pools);
-        // move elision (P2): a CloneVal whose source is a provably
-        // unobservable move becomes MoveVal — runs last, on the settled
-        // op list
-        moveval::elide(&mut code, &pools.argv, &pools.labels, param_tys.len());
+        let (code, spans, pools) = peephole::run(code, spans, c.pools);
         let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
@@ -578,12 +566,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             emit_closure: true,
         };
         // the loop variable: the closure's parameter — a fresh binding
-        // per iteration by construction (each emit call is a fresh frame)
+        // per iteration by construction (each emit call is a fresh frame);
+        // loop-owned, so writes through it (the shared element) are legal
         let reg = c.new_reg(elem_ty);
-        c.locals.push(Local { name: var, reg, ty: elem_ty, is_mut: false, loop_var: false, origins: Vec::new() });
-        for (n, t) in &caps {
+        c.locals.push(Local { name: var, reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new() });
+        for (n, t, m) in &caps {
             let reg = c.new_reg(*t);
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: false, loop_var: false, origins: Vec::new() });
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: Vec::new() });
         }
         let block: NodeHandle<BlockNode> = NodeHandle::new(body);
         if c.compile_block(block).is_err() {
@@ -594,14 +583,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         c.emit(Op::Ret { val: Some(t) }, 0);
         c.resolve_labels();
         let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools);
-        let (mut code, spans, pools) = peephole::run(code, spans, c.pools);
-        // move elision (P2): a CloneVal whose source is a provably
-        // unobservable move becomes MoveVal — runs last, on the settled
-        // op list
-        moveval::elide(&mut code, &pools.argv, &pools.labels, 1 + caps.len());
+        let (code, spans, pools) = peephole::run(code, spans, c.pools);
         let Pools { argv, labels, .. } = pools;
         let mut param_tys = vec![elem_ty];
-        for (_, t) in &caps {
+        for (_, t, _) in &caps {
             param_tys.push(*t);
         }
         let regs = c.regs;
@@ -635,54 +620,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         r
     }
 
-    /// Move a value into `dst` under v1.1 copy-by-value (RFC 0009/0016):
-    /// value types (records, arrays) deep-copy — two bindings never alias;
-    /// immutable sequences (`str`/`bytes`), pointers, enums, `Option`/
-    /// `Result`, closures and boundary objects share the cell.
-    pub(crate) fn mov_value(&mut self, dst: u16, src: u16, ty: TypeId, sp_lo: u32) {
-        if self.ctx.types.is_value(ty) && !self.last_reg_is_fresh_value() {
-            self.emit(Op::CloneVal { dst, src, ty }, sp_lo);
-        } else if self.ctx.types.is_ref(ty) {
+    /// Coerce a computed register into a slot's type (RFC 0044): a `?T`
+    /// slot takes the boxed handle — the mirror of the read-side deref.
+    /// The register is returned unchanged when no coercion applies.
+    pub(crate) fn coerce_to(&mut self, t: TypeId, to: TypeId, reg: u16, sp_lo: u32) -> u16 {
+        if t != to {
+            if let TyKind::Opt { elem } = self.ctx.types.kind(to).clone() {
+                if elem == t {
+                    let dst = self.new_reg(to);
+                    self.emit(Op::MakeOpt { dst, src: reg, ty: to }, sp_lo);
+                    return dst;
+                }
+            }
+        }
+        reg
+    }
+
+    /// Move a value into `dst` under the sharing law (RFC 0044): every
+    /// cell type binds a reference (MovRef — retain new, release old);
+    /// primitives and `fn` values copy their immediate slot (Mov).
+    /// Binding is O(1) for records, arrays, `str`, `?T` — a share, never
+    /// a copy.
+    pub(crate) fn mov_slot(&mut self, dst: u16, src: u16, ty: TypeId, sp_lo: u32) {
+        if self.ctx.types.is_ref(ty) {
             self.emit(Op::MovRef { dst, src }, sp_lo);
         } else {
             self.emit(Op::Mov { dst, src }, sp_lo);
-        }
-    }
-
-    /// True when `last_reg` was just written by a fresh-producing op (a
-    /// call result, a record/array construction, a clone) — the value is
-    /// already owned by the consumer, so a boundary clone is pure waste.
-    fn last_reg_is_fresh_value(&self) -> bool {
-        match self.code.last() {
-            // calls: fresh only when the result is kept (`dst != NOREG`)
-            Some(Op::Call { dst, .. } | Op::CallM { dst, .. } | Op::CallFn { dst, .. } | Op::CallNat { dst, .. }) => {
-                *dst != NOREG
-            }
-            Some(
-                Op::MakeRecord { .. }
-                    | Op::MakePtr { .. }
-                    | Op::CloneVal { .. }
-                    | Op::ArrNew { .. }
-                    | Op::ArrLit { .. }
-                    | Op::MakeClosure { .. }
-                    | Op::Box { .. },
-            ) => true,
-            _ => false,
-        }
-    }
-
-    /// An argument register for a value-typed parameter: the callee gets
-    /// its own deep copy (RFC 0009/0016 v1.1). Saves/restores `last_reg` —
-    /// the convention must survive the clone's temporary.
-    pub(crate) fn clone_arg(&mut self, reg: u16, pty: TypeId, sp_lo: u32) -> u16 {
-        if self.ctx.types.is_value(pty) {
-            let keep = self.last_reg;
-            let tmp = self.new_reg(pty);
-            self.emit(Op::CloneVal { dst: tmp, src: reg, ty: pty }, sp_lo);
-            self.last_reg = keep;
-            tmp
-        } else {
-            reg
         }
     }
 
@@ -705,33 +668,41 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// `p.m(..)` / `p[i]` auto-deref (RFC 0005): a pointer used as a
-    /// receiver or indexee loads its pointee cell first. Returns the
-    /// (type, register) to continue from.
+    /// `p.m(..)` / `p[i]` auto-deref (RFC 0005): a nullable used as a
+    /// receiver or indexee loads its payload cell first — at the
+    /// payload's OWN repr (a scalar payload reads its bits, a cell
+    /// payload retains; RFC 0044). TRANSITIVE: a `??T` receiver derefs
+    /// twice. Returns the (type, register) to continue from.
     pub(crate) fn deref_for_use(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
-        match self.ctx.types.kind(ty).clone() {
-            TyKind::Opt { elem } => {
-                let d = self.new_reg(elem);
-                self.emit(Op::GetF { dst: d, obj: reg, field: 0, repr: Repr::Ref }, sp_lo);
-                (elem, d)
-            }
-            _ => (ty, reg),
+        let mut ty = ty;
+        let mut cur = reg;
+        while let TyKind::Opt { elem } = self.ctx.types.kind(ty).clone() {
+            let d = self.new_reg(elem);
+            let repr = self.ctx.types.repr_of(elem);
+            self.emit(Op::GetF { dst: d, obj: cur, field: 0, repr }, sp_lo);
+            ty = elem;
+            cur = d;
         }
+        (ty, cur)
     }
 
-    /// Deref a pointer at a value use site: `v: *T` reads as `T` (RFC
-    /// 0012 §6) — the payload slot at the pointee's own repr. Callers
-    /// decide which positions deref: value-expected positions via the
-    /// compile_expr funnel, arithmetic operands, and `==` against the
-    /// pointee type. `p.f`/`p.m()` deref at their own sites and
-    /// `*T == *T` stays identity (RFC 0012 §4).
+    /// Deref a nullable at a value use site: `v: ?T` reads as `T` (RFC
+    /// 0012 §6) — the payload slot at the pointee's own repr, transitively
+    /// for `??T`. Callers decide which positions deref: value-expected
+    /// positions via the compile_expr funnel, arithmetic operands, and
+    /// `==` against the pointee type. `p.f`/`p.m()` deref at their own
+    /// sites and `?T == ?T` compares payloads at the shared cell.
     pub(crate) fn deref_ptr(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
-        if let TyKind::Opt { elem } = self.ctx.types.kind(ty).clone() {
+        let mut ty = ty;
+        let mut cur = reg;
+        while let TyKind::Opt { elem } = self.ctx.types.kind(ty).clone() {
             let d = self.new_reg(elem);
-            self.emit(Op::GetF { dst: d, obj: reg, field: 0, repr: self.ctx.types.repr_of(elem) }, sp_lo);
-            return (elem, d);
+            let repr = self.ctx.types.repr_of(elem);
+            self.emit(Op::GetF { dst: d, obj: cur, field: 0, repr }, sp_lo);
+            ty = elem;
+            cur = d;
         }
-        (ty, reg)
+        (ty, cur)
     }
 
     /// Intern an argument list into the function's operand pool.

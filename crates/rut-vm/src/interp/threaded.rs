@@ -344,28 +344,6 @@ impl Machine for Vm {
     }
 
 
-    fn op_arr_get_ref(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::ArrGetRef { dst, arr, idx, ty } = op else {
-            unreachable_op!("op_arr_get_ref: unexpected op")
-        };
-        let i = unsafe { (*regs.add(*idx as usize)).i };
-        let v = seq_get(cell_of(unsafe { *regs.add(*arr as usize) }), i)?;
-        let elem = match self.prog.types.kind(*ty) {
-            TyKind::Opt { elem } => *elem,
-            _ => unreachable!("ArrGetRef over a non-pointer type"),
-        };
-        let c = self.heap.alloc_record_zeroed(*ty, 1)?;
-        if let CellData::Record { fields } = &cell_of(c).data {
-            fields.borrow_mut().set(0, v);
-        }
-        if self.prog.types.repr_of(elem).is_ref() {
-            self.heap.retain(v);
-        }
-        let old = unsafe { *regs.add(*dst as usize) };
-        unsafe { *regs.add(*dst as usize) = c };
-        self.heap.release(old);
-        Ok(Flow::Next(pc + 1))
-    }
     fn op_arr_set_f(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::ArrSetF { obj, field, idx, val, repr } = op else {
             unreachable_op!("op_arr_set_f: unexpected op")
@@ -530,25 +508,6 @@ impl Machine for Vm {
         let old = self.cur_regs[*dst as usize];
         self.cur_regs[*dst as usize] = v;
         self.heap.release(old);
-        Ok(Flow::Next(pc + 1))
-    }
-
-    /// `MoveVal` — ownership transfer (the move-elided `CloneVal`): dst
-    /// takes over src's reference, src is KILLED so the frame-exit
-    /// release of its own reference no-ops. One fused op — a separate
-    /// kill store would look like a dead store and DCE would delete it,
-    /// reintroducing the double release.
-    fn op_move_val(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::MoveVal { dst, src } = op else { unreachable_op!("op_move_val: unexpected op") };
-        unsafe {
-            let v = *regs.add(*src as usize); // the one owning reference moves
-            let old = *regs.add(*dst as usize);
-            *regs.add(*dst as usize) = v;
-            *regs.add(*src as usize) = Slot::null(); // kill: exit-release no-ops
-            if !unsafe { old.r.is_null() } {
-                self.heap.release(old);
-            }
-        }
         Ok(Flow::Next(pc + 1))
     }
 
