@@ -1,6 +1,6 @@
 //! Builtin names are AMBIENT (RFC 0028 revised, builtin-surface): no
 //! `use` is needed for the engine's names — the erasure primitive's
-//! statics are `opaque.new` / `opaque.downcast<T>`. The type-name
+//! statics are `opaque(..)` / `opaque.downcast<T>`. The type-name
 //! string itself is `opaque` since phase 2 (interner/boot/crossing in
 //! lockstep); the old boot/free call spellings are gone (their removal
 //! is pinned in `the_old_spellings_are_gone` below).
@@ -47,10 +47,10 @@ fn builtins_resolve_with_no_use_statement() {
     let v = run_main(
         "struct Point { x: i32; y: i32 }\n\
          pub fn main() -> i32 {\n\
-             let b = opaque.new(Point { x: 3, y: 4 });\n\
+             let b = opaque(Point { x: 3, y: 4 });\n\
              let (p, ok) = opaque.downcast<Point>(b);\n\
              assert(ok);\n\
-             let b2 = opaque.new(7);\n\
+             let b2 = opaque(7);\n\
              let (n, ok2) = opaque.downcast<i32>(b2);\n\
              assert(ok2);\n\
              return p.x + p.y + n;\n\
@@ -65,7 +65,7 @@ fn opaque_downcast_member_carries_the_tuple_contract() {
     // `.1` leaves `.0` at the type's zero value (RFC 0014)
     let v = run_main(
         "pub fn main() -> i32 {\n\
-             let b = opaque.new(\"hello\");\n\
+             let b = opaque(\"hello\");\n\
              let (miss, ok) = opaque.downcast<i64>(b);\n\
              if (ok) { return 1; }\n\
              if (miss != 0) { return 2; }\n\
@@ -98,7 +98,7 @@ fn the_old_spellings_are_gone() {
 
     let out = compile(
         "pub fn main() -> i32 {\n\
-             let b = opaque.new(9);\n\
+             let b = opaque(9);\n\
              let (n, ok) = downcast<i32>(b);\n\
              if (!ok) { return 0; }\n\
              return n;\n\
@@ -117,7 +117,7 @@ fn opaque_type_position_resolves_under_both_spellings() {
         "fn keep(o: opaque) -> opaque { return o; }\n\
          fn keep2(o: opaque) -> opaque { return o; }\n\
          pub fn main() -> i32 {\n\
-             let b = keep(opaque.new(4));\n\
+             let b = keep(opaque(4));\n\
              let b2 = keep2(b);\n\
              let (n, ok) = opaque.downcast<i32>(b2);\n\
              if (!ok) { return 0; }\n\

@@ -19,7 +19,7 @@
 // The type body is FIELDS ONLY (RFC 0012) — every method lives in the
 // inherent `impl Vec<T>` block below, the type's module only.
 pub class Vec<T> {
-    buf: [*T];          // capacity == buf.len() == cap; nil = the slot's zero
+    buf: [?T];          // capacity == buf.len() == cap; nil = the slot's zero
     len: i32;           // live length
     cap: i32;           // capacity mirrored, so `push`'s hot path never
                         // re-reads the `buf` handle (its GetF is an RC op)
@@ -39,9 +39,9 @@ impl Vec<T> {
     // memset-class op; the old `zeroed(n)` cannot exist generically — a
     // generic `T` has no zero value to fill with.
     pub fn filled(v: T, n: i32) -> Self {
-        let mut buf: [*T] = [nil; n];
+        let mut buf: [?T] = [nil; n];
         for (let i = 0; i < n; i += 1) {
-            buf[i] = &v;
+            buf[i] = v;
         }
         return Self { buf: buf, len: n, cap: n };
     }
@@ -58,14 +58,14 @@ impl Vec<T> {
             if (cap == 0) {
                 cap = 4;
             }
-            let mut next: [*T] = [nil; cap];
+            let mut next: [?T] = [nil; cap];
             for (let i = 0; i < self.len; i += 1) {
                 next[i] = self.buf[i];
             }
             self.buf = next;
             self.cap = cap;
         }
-        self.buf[self.len] = &v;
+        self.buf[self.len] = v;
         self.len += 1;
     }
 
@@ -75,14 +75,14 @@ impl Vec<T> {
     /// error value).
     pub fn pop(mut self) -> T {
         self.len -= 1;
-        return *self.buf[self.len];
+        return self.buf[self.len];
     }
 
     pub fn from(arr: [T]) -> Self {
         let n = arr.len();
         let mut v = Self { buf: [nil; n], len: n, cap: n };
         for (let i = 0; i < n; i += 1) {
-            v.buf[i] = &arr[i];
+            v.buf[i] = arr[i];
         }
         return v;
     }
@@ -93,7 +93,7 @@ impl Vec<T> {
         let n = self.len;
         let mut a: [u8] = [0u8; n];
         for (let i = 0; i < n; i += 1) {
-            a[i] = *self.buf[i];
+            a[i] = self.buf[i];
         }
         return bytes.from(a);
     }
@@ -111,9 +111,9 @@ impl Vec<T> {
             let empty: [T] = [];
             return empty;
         }
-        let mut a: [T] = [*self.buf[0]; n];
+        let mut a: [T] = [self.buf[0]; n];
         for (let i = 0; i < n; i += 1) {
-            a[i] = *self.buf[i];
+            a[i] = self.buf[i];
         }
         return a;
     }

@@ -49,7 +49,7 @@ impl SliceInfo {
     /// The backing array's own type: `[elem]`, or `[*elem]` when the
     /// buffer is pointer-backed.
     pub(crate) fn array_ty(&self, ctx: &mut Ctx) -> TypeId {
-        let elem = if self.boxed { ctx.mk_ptr(self.elem) } else { self.elem };
+        let elem = if self.boxed { ctx.mk_opt(self.elem) } else { self.elem };
         ctx.mk_array(elem)
     }
 }
@@ -85,7 +85,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     unreachable!("buf_field checked above")
                 };
                 let (boxed, elem) = match self.ctx.types.kind(*elem) {
-                    TyKind::Ptr { elem } => (true, *elem),
+                    TyKind::Opt { elem } => (true, *elem),
                     _ => (false, *elem),
                 };
                 Some(SliceInfo {
@@ -156,7 +156,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if info.boxed {
                     // the slot holds `*elem` — load the pointer, then
                     // deref (the value is the box's payload slot)
-                    let pty = self.ctx.mk_ptr(info.elem);
+                    let pty = self.ctx.mk_opt(info.elem);
                     let p = self.new_reg(pty);
                     self.emit(Op::ArrGet { dst: p, arr: buf, idx, repr: Repr::Ref }, sp);
                     let dst = self.new_reg(info.elem);
@@ -179,7 +179,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// alias the stored slot (writes through `v.f` hit the sequence);
     /// scalars box a per-iteration copy. `str`/`bytes` keep value yields.
     pub(crate) fn emit_slice_get_ref(&mut self, recv: u16, idx: u16, info: &SliceInfo, sp: u32) -> TcResult<u16> {
-        let ptr_ty = self.ctx.mk_ptr(info.elem);
+        let ptr_ty = self.ctx.mk_opt(info.elem);
         let dst = self.new_reg(ptr_ty);
         match &info.source {
             SliceSource::Array => {
@@ -226,7 +226,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // the slot holds `*elem` — box the value (a fresh
                     // one-slot cell, value semantics) and store the
                     // handle (RFC 0005 §9)
-                    let pty = self.ctx.mk_ptr(info.elem);
+                    let pty = self.ctx.mk_opt(info.elem);
                     let boxed = self.new_reg(pty);
                     self.emit(Op::MakePtr { dst: boxed, src: val, ty: pty }, sp);
                     self.emit(Op::ArrSet { arr: buf, idx, val: boxed, repr: Repr::Ref }, sp);

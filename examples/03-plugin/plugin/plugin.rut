@@ -101,26 +101,27 @@ entry fn init(bus: opaque) -> opaque {
     subscribe(bus, "msg", "on_msg");
     subscribe(bus, "leave", "on_leave");
     subscribe(bus, "tick", "on_tick");
-    return opaque.new(&Moderator.new(bus));
+    let mod_: ?Moderator = Moderator.new(bus);
+    return opaque(mod_);
 }
 
 entry fn on_join(c: opaque, name: str) {
-    let (mod, _) = opaque.downcast<*Moderator>(c);
+    let (mod, _) = opaque.downcast<?Moderator>(c);
     mod.on_join(name);
 }
 
 entry fn on_msg(c: opaque, user: str, text: str) {
-    let (mod, _) = opaque.downcast<*Moderator>(c);
+    let (mod, _) = opaque.downcast<?Moderator>(c);
     mod.on_msg(user, text);
 }
 
 entry fn on_leave(c: opaque, name: str) {
-    let (mod, _) = opaque.downcast<*Moderator>(c);
+    let (mod, _) = opaque.downcast<?Moderator>(c);
     mod.on_leave(name);
 }
 
 entry fn on_tick(c: opaque, n: i64) {
-    let (mod, _) = opaque.downcast<*Moderator>(c);
+    let (mod, _) = opaque.downcast<?Moderator>(c);
     mod.on_tick(n);
 }
 
@@ -131,7 +132,7 @@ entry fn render_line(topic: str, payload: str) -> str {
 }
 
 entry fn shutdown(c: opaque) -> i64 {
-    let (m, _) = opaque.downcast<*Moderator>(c);
+    let (m, _) = opaque.downcast<?Moderator>(c);
     m.say("system", f"shutdown: {m.stats()}");
     return m.msgs;
 }

@@ -516,7 +516,7 @@ impl Heap {
     /// primitive fields copied, handle fields shared.
     pub fn own(&self, s: Slot, ty: TypeId, table: &TypeTable) -> Result<Slot, Trap> {
         match table.kind(ty).clone() {
-            TyKind::Prim(_) | TyKind::Nil | TyKind::Fn { .. } | TyKind::Ptr { .. } => Ok(s),
+            TyKind::Prim(_) | TyKind::Nil | TyKind::Fn { .. } | TyKind::Opt { .. } => Ok(s),
             TyKind::Str => {
                 let cell = cell_of(s);
                 self.alloc_str_bytes(cell.as_bytes().to_vec())

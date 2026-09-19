@@ -32,7 +32,7 @@ fn count12(m: HashMap<str, i32>, seq: str, n: i32) -> i32 {
         let kmer = seq.slice(i, i + 12);
         let p = m.get(kmer);
         if (p != nil) {
-            m.put(kmer, *p + 1);
+            m.put(kmer, p + 1);
         } else {
             m.put(kmer, 1);
         }
@@ -43,7 +43,7 @@ fn count12(m: HashMap<str, i32>, seq: str, n: i32) -> i32 {
         let pos = (j * 2497) % (n - 12);
         let p = m.get(seq.slice(pos, pos + 12));
         if (p != nil) {
-            frag_sum = frag_sum.wrapping_add(*p);
+            frag_sum = frag_sum.wrapping_add(p);
         }
     }
     return frag_sum;
@@ -59,7 +59,7 @@ fn main_checksum(n: i32) -> i32 {
         let kmer = seq.slice(i, i + 1);
         let p = m1.get(kmer);
         if (p != nil) {
-            m1.put(kmer, *p + 1);
+            m1.put(kmer, p + 1);
         } else {
             m1.put(kmer, 1);
         }
@@ -70,7 +70,7 @@ fn main_checksum(n: i32) -> i32 {
         let kmer = seq.slice(i, i + 2);
         let p = m2.get(kmer);
         if (p != nil) {
-            m2.put(kmer, *p + 1);
+            m2.put(kmer, p + 1);
         } else {
             m2.put(kmer, 1);
         }
@@ -82,13 +82,13 @@ fn main_checksum(n: i32) -> i32 {
         let ca = letters.slice(a, a + 1);
         let p = m1.get(ca);
         if (p != nil) {
-            sum1 += *p;
+            sum1 += p;
         }
         for (let b = 0; b < 4; b += 1) {
             let cb = letters.slice(b, b + 1);
             let q = m2.get(f"{ca}{cb}");
             if (q != nil) {
-                sum2 += *q;
+                sum2 += q;
             }
         }
     }

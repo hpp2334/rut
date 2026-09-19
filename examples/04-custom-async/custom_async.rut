@@ -149,12 +149,12 @@ impl Task<T> for CustomTask<T> {
 
 struct CustomLaunched<T> {
     task: Task<T>;     // trait-typed: the registered impl drives it
-    log: *AuditLog;    // shared with the embedder — the stats survive
+    log: ?AuditLog;    // shared with the embedder — the stats survive
     alive: bool;       // false once the audit saw the run end
 }
 
 impl CustomLaunched<T> {
-    fn new(t: Task<T>, log: *AuditLog) -> Self {
+    fn new(t: Task<T>, log: ?AuditLog) -> Self {
         return Self { task: t, log: log, alive: true };
     }
 }
@@ -164,7 +164,7 @@ impl CustomLaunched<T> {
 /// audit. This is the same division the engine's `launch_task` keeps
 /// (RFC 0028), over the same `Task` surface, so the machine never knows
 /// which one started it.
-fn custom_launch_task<T>(t: Task<T>, log: *AuditLog) -> CustomLaunched<T> {
+fn custom_launch_task<T>(t: Task<T>, log: ?AuditLog) -> CustomLaunched<T> {
     log.note_launch();
     return CustomLaunched.new(t, log);
 }

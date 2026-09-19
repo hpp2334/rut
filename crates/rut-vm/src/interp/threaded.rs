@@ -351,7 +351,7 @@ impl Machine for Vm {
         let i = unsafe { (*regs.add(*idx as usize)).i };
         let v = seq_get(cell_of(unsafe { *regs.add(*arr as usize) }), i)?;
         let elem = match self.prog.types.kind(*ty) {
-            TyKind::Ptr { elem } => *elem,
+            TyKind::Opt { elem } => *elem,
             _ => unreachable!("ArrGetRef over a non-pointer type"),
         };
         let c = self.heap.alloc_record_zeroed(*ty, 1)?;

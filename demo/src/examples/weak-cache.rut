@@ -19,7 +19,7 @@ impl Tile {
 
 // the cache's whole job today: hold entries, evict on demand.
 // The hit returns a pointer that shares the cache's element.
-fn evict(cache: *Vec<*Tile>, id: i32) -> *Tile {
+fn evict(cache: ?Vec<?Tile>, id: i32) -> ?Tile {
     for (let i = 0; i < cache.len(); i += 1) {
         if (cache[i].id() == id) {
             return cache[i];
@@ -30,17 +30,17 @@ fn evict(cache: *Vec<*Tile>, id: i32) -> *Tile {
 
 pub fn main() {
     let log = Logger.new("weak");
-    let cache: Vec<*Tile> = Vec.new();
+    let cache: Vec<?Tile> = Vec.new();
 
     let alive = Tile.new(1);
-    cache.push(&alive);   // the cache now keeps the cell alive too
-    let got = evict(&cache, 1);
+    cache.push(alive);   // the cache now keeps the cell alive too
+    let got = evict(cache, 1);
     log.info(f"held: {got != nil} id={got.id()}");
     // `alive` is still a strong handle: dropping the cache entry later
     // would NOT free the cell — that coupling is what Weak<T> breaks
     // (RFC 0017 M5: `let w = Weak(alive); .. w.upgrade().is_some()`)
 
     // and a lookup that finds nothing is just None — no trap
-    let miss = evict(&cache, 99);
+    let miss = evict(cache, 99);
     log.info(f"miss: {miss != nil}");
 }

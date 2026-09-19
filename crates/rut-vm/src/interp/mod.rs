@@ -259,7 +259,7 @@ impl Vm {
                     .map(|(i, _)| i as u16)
                     .collect(),
                 // `*T` (RFC 0005): a one-slot pointer box retains its payload
-                TyKind::Ptr { elem } => {
+                TyKind::Opt { elem } => {
                     if prog.types.repr_of(*elem).is_ref() {
                         vec![0]
                     } else {
@@ -644,7 +644,7 @@ impl Vm {
         Ok(out)
     }
 
-    /// Mint an `opaque` box owning a rut `str` — `opaque.new(str)` for
+    /// Mint an `opaque` box owning a rut `str` — `opaque(str)` for
     /// hosts that hand rut a handle over host-built text (the logger's
     /// named logger; RFC 0014/0026). The handle owns one reference.
     pub fn alloc_opaque_str(&mut self, s: String) -> Result<OpaqueRef, Trap> {
@@ -767,7 +767,7 @@ mod tests {
         .unwrap()
     }
 
-    /// Box `val` as an `Opaque` of static type `ty` — the `opaque.new(k)`
+    /// Box `val` as an `Opaque` of static type `ty` — the `opaque(k)`
     /// shape. The handle takes over the mint reference (the same
     /// ownership `alloc_opaque_str` hands back).
     fn boxed(vm: &Vm, val: Slot, ty: TypeId) -> OpaqueRef {

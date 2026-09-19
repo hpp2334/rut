@@ -710,7 +710,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// (type, register) to continue from.
     pub(crate) fn deref_for_use(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
         match self.ctx.types.kind(ty).clone() {
-            TyKind::Ptr { elem } => {
+            TyKind::Opt { elem } => {
                 let d = self.new_reg(elem);
                 self.emit(Op::GetF { dst: d, obj: reg, field: 0, repr: Repr::Ref }, sp_lo);
                 (elem, d)
@@ -726,7 +726,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// pointee type. `p.f`/`p.m()` deref at their own sites and
     /// `*T == *T` stays identity (RFC 0012 §4).
     pub(crate) fn deref_ptr(&mut self, ty: TypeId, reg: u16, sp_lo: u32) -> (TypeId, u16) {
-        if let TyKind::Ptr { elem } = self.ctx.types.kind(ty).clone() {
+        if let TyKind::Opt { elem } = self.ctx.types.kind(ty).clone() {
             let d = self.new_reg(elem);
             self.emit(Op::GetF { dst: d, obj: reg, field: 0, repr: self.ctx.types.repr_of(elem) }, sp_lo);
             return (elem, d);

@@ -119,7 +119,7 @@ const POINT: &str = "struct Point { x: i32; y: i32; ys: [i32] }\n";
 #[test]
 fn move_fires_on_dead_source_rehash_shape() {
     let src = "\
-class Table { keys: [*i32]; }
+class Table { keys: [?i32]; }
 impl Table {
     pub fn new() -> Table {
         return Table { keys: [nil; 2] };
@@ -130,14 +130,14 @@ impl Table {
         let mut n = 0;
         for (let i = 0; i < 2; i += 1) {
             let k = old[i];
-            if (k != nil) { n += *k; }
+            if (k != nil) { n += k; }
         }
         return n;
     }
 }
 pub fn main() -> i32 {
     let t = Table.new();
-    t.keys[0] = &4;
+    t.keys[0] = 4;
     return t.rehash(4);
 }
 ";
@@ -355,7 +355,7 @@ pub fn main() -> i32 {
     let zb: [u8] = [0; n];
     let zw: [u64] = [0; n];
     let zf: [bool] = [false; n];
-    let zp: [*i32] = [nil; n];
+    let zp: [?i32] = [nil; n];
     let nz: [i32] = [-1; n];
     let mut h: u64 = 14695981039346656037u64;
     for (let i = 0; i < n; i += 1) {

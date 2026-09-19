@@ -5,8 +5,8 @@
 use ink::{ Logger };
 struct Node {
     value: i32,
-    left: *Node,
-    right: *Node,
+    left: ?Node,
+    right: ?Node,
 }
 
 fn make(depth: i32, v: i32) -> Node {
@@ -15,12 +15,12 @@ fn make(depth: i32, v: i32) -> Node {
     }
     return Node {
         value: v,
-        left: &make(depth - 1, v * 2),
-        right: &make(depth - 1, v * 2 + 1),
+        left: make(depth - 1, v * 2),
+        right: make(depth - 1, v * 2 + 1),
     };
 }
 
-fn count(n: *Node) -> i32 {
+fn count(n: ?Node) -> i32 {
     let mut c = 1;
     if (n.left != nil) { c += count(n.left); }
     if (n.right != nil) { c += count(n.right); }
@@ -29,6 +29,6 @@ fn count(n: *Node) -> i32 {
 
 pub fn main() {
     let log = Logger.new("tree");
-    let root = &make(3, 1);
+    let root = make(3, 1);
     log.info(f"nodes={count(root)}");
 }

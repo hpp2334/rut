@@ -406,7 +406,7 @@ fn remap_kind(
             params: params.iter().map(|&p| map(p)).collect(),
             ret: map(*ret),
         },
-        TyKind::Ptr { elem } => TyKind::Ptr { elem: map(*elem) },
+        TyKind::Opt { elem } => TyKind::Opt { elem: map(*elem) },
     }
 }
 

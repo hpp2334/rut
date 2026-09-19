@@ -150,7 +150,7 @@ impl Hashable for bytes {
 // (a tombstone — the probe steps through it, insertion may reuse it).
 // `cap` is a power of two, so the index mask is `cap - 1`.
 class RawHashTable<K requires Hashable> {
-    keys: [*K];   // one `*K` cell per stored key (see KEY REPRESENTATION)
+    keys: [?K];   // one `*K` cell per stored key (see KEY REPRESENTATION)
     hashes: [u64];
     states: [u8];
     count: u32;   // FULL slots
@@ -203,7 +203,7 @@ impl RawHashTable<K> {
                 return -(at + 1);
             }
             if (st == 1 && self.hashes[at] == h) {
-                let k: K = *(self.keys[at]);   // ptr cell -> K register
+                let k: K = self.keys[at];   // ptr cell -> K register
                 if (k.hash_eq(key)) {
                     return at;
                 }
@@ -223,7 +223,7 @@ impl RawHashTable<K> {
             self.tomb -= 1;
         }
         self.states[at] = 1;
-        self.keys[at] = &key;
+        self.keys[at] = key;
         self.hashes[at] = h;
         self.count += 1;
     }
@@ -301,7 +301,7 @@ impl RawHashTable<K> {
 // construction — `hash_eq` never sees a mixed pair.
 pub class HashMap<K requires Hashable, V> {
     t: RawHashTable<K>;
-    vals: [*V];   // `[nil; cap]` — nil is the empty slot's zero
+    vals: [?V];   // `[nil; cap]` — nil is the empty slot's zero
 }
 
 impl HashMap<K, V> {
@@ -323,7 +323,7 @@ impl HashMap<K, V> {
         let h = k.hash();
         if (self.t.needs_grow()) {
             let map = self.t.rehash();
-            let mut next: [*V] = [nil; self.t.cap()];
+            let mut next: [?V] = [nil; self.t.cap()];
             let n = map.len();
             for (let i = 0; i < n; i += 1) {
                 let at = map[i];
@@ -335,18 +335,18 @@ impl HashMap<K, V> {
         }
         let at = self.t.probe(k, h);
         if (at >= 0) {
-            self.vals[at] = &v;
+            self.vals[at] = v;
             return false;
         }
         let slot = -(at + 1);
         self.t.occupy(slot, k, h);
-        self.vals[slot] = &v;
+        self.vals[slot] = v;
         return true;
     }
 
     // `get` — `nil` = absent (RFC 0005 §10). A `(V, bool)` pair is
     // impossible without a default `V` — the pointer is the answer.
-    pub fn get(self, k: K) -> *V {
+    pub fn get(self, k: K) -> ?V {
         let at = self.t.probe(k, k.hash());
         if (at < 0) {
             return nil;

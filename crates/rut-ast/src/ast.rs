@@ -396,7 +396,7 @@ pub enum ItemKind {
     /// surface statement for a boot primitive (`str`/`bytes`/`opaque`).
     /// NOT a class — no construction literal, no fields; the members are
     /// the compiler-lowered contracts users and the LSP see (statics
-    /// like `opaque.new` / `opaque.downcast<T>`). The Rust-side
+    /// like `opaque(..)` / `opaque.downcast<T>`). The Rust-side
     /// representation is the boot table's, unchanged.
     BuiltinPrimitive {
         name: IdentId,
@@ -525,8 +525,9 @@ pub enum TypeKind {
     TyPath { segs: Vec<PathSeg> },
     /// fn type: `fn(Store, P) -> R` — params are bare types (RFC 0013 §1)
     TyFn { params: Vec<NodeHandle<AnyTy>>, ret: NodeHandle<AnyTy> },
-    /// pointer type `*T` (RFC 0005) — nil-able, rc-backed reference
-    TyPtr { inner: NodeHandle<AnyTy> },
+    /// nullable type `?T` (RFC 0005, RFC 0044) — postfix `?`, binds
+    /// tightest: `[?T]` is an array of nullables, `[T]?` a nullable array
+    TyOpt { inner: NodeHandle<AnyTy> },
     /// array type `[T]` (RFC 0005 §9) — the fixed-length heap array;
     /// grammar-spelled, resolved directly (the `Array` name is gone)
     TyArray { elem: NodeHandle<AnyTy> },
@@ -605,12 +606,6 @@ pub enum UnOp {
     Neg,
     Not,
     BitNot,
-    /// `*p` — pointer dereference, copies the pointee out (RFC 0005)
-    Deref,
-    /// `&e` — address-of: the operand's cell as a `*T` (RFC 0005 §9).
-    /// Positionally unambiguous with binary `&`; a ref payload shares the
-    /// operand's object (RFC 0016 §2) — `&temp` ≡ the old `make_ptr`.
-    AddrOf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

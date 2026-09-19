@@ -25,7 +25,7 @@
 // *V` aliasing/nil semantics EXACTLY (no opaque values, no downcast, no
 // fresh-cell drift) and keeps the box free of rut cells. The key set is
 // CLOSED (integer primitives, `bool`, `str`, `bytes` — everything
-// `opaque.new` can hand the host as bits/bytes): keys hash WRAPPER-side
+// `opaque(..)` can hand the host as bits/bytes): keys hash WRAPPER-side
 // and cross as `i64` bits plus one key box per call. A user-defined key
 // type compiles (admission is `Hashable`, as in mapset) but traps at
 // the crossing — loudly, pointing at mapset. No re-entrant `hash_eq`
@@ -141,7 +141,7 @@ impl Hashable for bytes {
 // as in mapset; `k.hash()` is a static, inlined call on the bare K.
 pub class HashMap<K requires Hashable, V> {
     t: opaque;    // HostBoxed<NativeTable> — keys, recorded hashes, states
-    vals: [*V];   // `[nil; cap]` — nil is the empty slot's zero
+    vals: [?V];   // `[nil; cap]` — nil is the empty slot's zero
 }
 
 impl HashMap<K, V> {
@@ -165,7 +165,7 @@ impl HashMap<K, V> {
         let h = k.hash();
         if (map_needs_grow(self.t)) {
             let new_cap = map_grow(self.t);
-            let mut next: [*V] = [nil; new_cap];
+            let mut next: [?V] = [nil; new_cap];
             while (true) {
                 let packed = map_take_reloc(self.t);
                 if (packed < 0) {
@@ -177,21 +177,21 @@ impl HashMap<K, V> {
             }
             self.vals = next;
         }
-        let at = map_entry(self.t, opaque.new(k), h as i64);
+        let at = map_entry(self.t, opaque(k), h as i64);
         if (at >= 0) {
-            self.vals[at] = &v;
+            self.vals[at] = v;
             return false;
         }
         let slot = -(at + 1);
-        self.vals[slot] = &v;
+        self.vals[slot] = v;
         return true;
     }
 
     // `get` — `nil` = absent (RFC 0005 §10). The stored cell comes back,
     // not a copy: two gets of one key name ONE cell until a replace
     // re-stores (the aliasing law the parity test pins).
-    pub fn get(self, k: K) -> *V {
-        let at = map_find(self.t, opaque.new(k), k.hash() as i64);
+    pub fn get(self, k: K) -> ?V {
+        let at = map_find(self.t, opaque(k), k.hash() as i64);
         if (at < 0) {
             return nil;
         }
@@ -199,13 +199,13 @@ impl HashMap<K, V> {
     }
 
     pub fn has(self, k: K) -> bool {
-        return map_find(self.t, opaque.new(k), k.hash() as i64) >= 0;
+        return map_find(self.t, opaque(k), k.hash() as i64) >= 0;
     }
 
     // `remove` — the host tombstones the slot and answers the freed
     // index (or `-1`); the wrapper nils the value cell.
     pub fn remove(mut self, k: K) -> bool {
-        let at = map_remove(self.t, opaque.new(k), k.hash() as i64);
+        let at = map_remove(self.t, opaque(k), k.hash() as i64);
         if (at < 0) {
             return false;
         }
@@ -240,15 +240,15 @@ impl HashSet<T> {
         if (map_needs_grow(self.t)) {
             map_grow(self.t);
         }
-        return map_entry(self.t, opaque.new(t), h as i64) < 0;
+        return map_entry(self.t, opaque(t), h as i64) < 0;
     }
 
     pub fn has(self, t: T) -> bool {
-        return map_find(self.t, opaque.new(t), t.hash() as i64) >= 0;
+        return map_find(self.t, opaque(t), t.hash() as i64) >= 0;
     }
 
     pub fn remove(self, t: T) -> bool {
-        return map_remove(self.t, opaque.new(t), t.hash() as i64) >= 0;
+        return map_remove(self.t, opaque(t), t.hash() as i64) >= 0;
     }
 
     pub fn len(self) -> i32 {

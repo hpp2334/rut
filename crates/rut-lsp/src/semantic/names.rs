@@ -142,7 +142,7 @@ fn classify_type(
         TypeKind::TyFn { .. } | TypeKind::TyConst(_) => {}
         // `*T` / `[T]` / `(A, B)` — the puncts carry no classification;
         // the element types classify themselves
-        TypeKind::TyPtr { .. } | TypeKind::TyArray { .. } | TypeKind::TyTuple { .. } => {}
+        TypeKind::TyOpt { .. } | TypeKind::TyArray { .. } | TypeKind::TyTuple { .. } => {}
         // a union bound's members classify themselves as Type nodes
         TypeKind::TyUnion { .. } => {}
     }

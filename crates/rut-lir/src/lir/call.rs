@@ -136,6 +136,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         }
         match name {
+            sym::OPAQUE => {
+                // `opaque(v)` (RFC 0014; the RFC 0044 surface swap renamed
+                // `opaque(v)`): the erasure box. The payload IS `v` —
+                // a record/str/bytes binding shares its cell, a primitive
+                // is copied, and a `?T` binding stores the nullable box
+                // (the old `&v`-then-box shape, one spelling shorter).
+                if args.len() != 1 {
+                    self.ctx.err(sp, "opaque(v) takes one value");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], None)?;
+                if matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
+                    self.ctx.err(sp, "`opaque` rejects trait objects —they are never boxed (RFC 0014)");
+                    return Err(());
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_OPAQUE);
+                self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
+                return Ok(TY_OPAQUE);
+            }
             sym::ON_DROP if core_fn => {
                 // on_drop(p, cleanup) (RFC 0016 §3): cleanup runs when the
                 // cell's refcount reaches zero
@@ -144,7 +164,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 }
                 let pt = self.compile_expr(args[0], None)?;
-                if !matches!(self.ctx.types.kind(pt), TyKind::Ptr { .. }) {
+                if !matches!(self.ctx.types.kind(pt), TyKind::Opt { .. }) {
                     self.ctx.err(sp, "on_drop needs a pointer —`*T` from `&v` (RFC 0016 §3)");
                     return Err(());
                 }
@@ -394,21 +414,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return self.compile_namespace_member(base, member, &args, expected, sp);
         }
         match (base, member) {
-            (sym::OPAQUE, sym::NEW) if core_ty == Some(rut_core::binary::NativeTy::Opaque) => {
-                if args.len() != 1 {
-                    self.ctx.err(sp, "opaque.new(v) takes one value");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], None)?;
-                if matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
-                    self.ctx.err(sp, "`opaque.new` rejects trait objects —they are never boxed (RFC 0014)");
-                    return Err(());
-                }
-                let src = self.last_reg;
-                let dst = self.new_reg(TY_OPAQUE);
-                self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
-                return Ok(TY_OPAQUE);
-            }
             (sym::BYTES, sym::FROM) => {
                 // bytes.from(a) — copy an Array<u8> into an immutable
                 // buffer (RFC 0004)
@@ -468,26 +473,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => {}
         }
-        // the erasure primitive's member statics (RFC 0014, builtin-
-        // surface phase 2): `opaque.new(v)` / `opaque.downcast<T>(o)` —
-        // the lowercase spelling IS the interner's own (`sym::OPAQUE`)
+        // the erasure primitive's member static (RFC 0014, builtin-
+        // surface phase 2): `opaque.downcast<T>(o)` — construction moved
+        // to the call form `opaque(v)` (RFC 0044 sweep). The lowercase
+        // spelling IS the interner's own (`sym::OPAQUE`)
         if core_ty == Some(rut_core::binary::NativeTy::Opaque) && base == sym::OPAQUE {
             match member {
-                sym::NEW => {
-                    if args.len() != 1 {
-                        self.ctx.err(sp, "opaque.new(v) takes one value");
-                        return Err(());
-                    }
-                    let t = self.compile_expr(args[0], None)?;
-                    if matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
-                        self.ctx.err(sp, "`opaque.new` rejects trait objects —they are never boxed (RFC 0014)");
-                        return Err(());
-                    }
-                    let src = self.last_reg;
-                    let dst = self.new_reg(TY_OPAQUE);
-                    self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
-                    return Ok(TY_OPAQUE);
-                }
                 sym::DOWNCAST => {
                     if args.len() != 1 || member_generics.len() != 1 {
                         self.ctx.err(sp, "opaque.downcast<T>(o) takes one explicit type argument and one value (RFC 0014)");
@@ -508,7 +499,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 _ => {
                     self.ctx.err(sp, format!(
-                        "`opaque` has no static `{}` — the primitive's members are `new` and `downcast<T>` (RFC 0014)",
+                        "`opaque` has no static `{}` — the primitive's member is `downcast<T>`; construct with `opaque(v)` (RFC 0014)",
                         self.ctx.name(member)
                     ));
                     return Err(());
@@ -987,7 +978,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let tr = self.last_reg;
                         let view = self.new_reg(arr_ty);
                         { let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live])); self.emit(Op::CallNat { nat: Nat::ArrSlice, recv: arr, argv_off, argc, dst: view }, sp.lo,); }
-                        let ptr_ty = self.ctx.mk_ptr(rt);
+                        let ptr_ty = self.ctx.mk_opt(rt);
                         let dst = self.new_reg(ptr_ty);
                         self.emit(Op::MakePtr { dst, src: view, ty: ptr_ty }, sp.lo);
                         return Ok(ptr_ty);
@@ -1009,7 +1000,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::ArrLen, recv: rreg, argv_off, argc, dst: live }, sp.lo); }
                         let view = self.new_reg(rt);
                         { let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live])); self.emit(Op::CallNat { nat: Nat::ArrSlice, recv: rreg, argv_off, argc, dst: view }, sp.lo,); }
-                        let ptr_ty = self.ctx.mk_ptr(rt);
+                        let ptr_ty = self.ctx.mk_opt(rt);
                         let dst = self.new_reg(ptr_ty);
                         self.emit(Op::MakePtr { dst, src: view, ty: ptr_ty }, sp.lo);
                         return Ok(ptr_ty);
@@ -1561,7 +1552,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // element stores through `xs: *Vec<i32>` are legal
                     let head_is_ptr = matches!(
                         self.ctx.types.kind(l.ty).clone(),
-                        TyKind::Ptr { .. }
+                        TyKind::Opt { .. }
                     );
                     if !l.is_mut && !l.loop_var && !head_is_ptr {
                         self.ctx.err(sp, format!(
@@ -1964,7 +1955,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // `p.x` auto-derefs (RFC 0005): load the pointee cell first, then
         // the field reads from it
         let (rreg, rt) = match self.ctx.types.kind(rt).clone() {
-            TyKind::Ptr { elem } if matches!(self.ctx.types.kind(elem), TyKind::Data { .. }) => {
+            TyKind::Opt { elem } if matches!(self.ctx.types.kind(elem), TyKind::Data { .. }) => {
                 let dreg = self.new_reg(elem);
                 self.emit(Op::GetF { dst: dreg, obj: rreg, field: 0, repr: Repr::Ref }, sp.lo);
                 (dreg, elem)

@@ -28,15 +28,15 @@ fn diags_of(src: &str) -> Vec<String> {
 
 #[test]
 fn repeat_compiles_scalar_nil_and_ref_fills() {
-    // a scalar fill, a nil fill over a pointer array, and a ref fill
+    // a scalar fill, a nil fill over a nullable array, and a ref fill
     // (the cell handle shared by every slot)
     let out = compile(
         "struct P { x: i32 = 0 }\n\
          fn main() -> i32 {\n\
              let a: [i32] = [0; 8];\n\
-             let b: [*i32] = [nil; 4];\n\
-             let p = &P { x: 1 };\n\
-             let c: [*P] = [p; 3];\n\
+             let b: [?i32] = [nil; 4];\n\
+             let p = P { x: 1 };\n\
+             let c: [?P] = [p; 3];\n\
              let n: i32 = 5;\n\
              let d: [f64] = [1.5; n * 2];\n\
              return a.len() + b.len() + c.len() + d.len();\n\
@@ -50,7 +50,7 @@ fn nil_fill_lowers_to_arrnew_alone() {
     // the nil fill IS the zero-fill: the memset-class op needs no loop
     let out = compile(
         "fn main() -> i32 {\n\
-             let b: [*i32] = [nil; 4];\n\
+             let b: [?i32] = [nil; 4];\n\
              return b.len();\n\
          }\n",
     );
@@ -64,15 +64,16 @@ fn nil_fill_lowers_to_arrnew_alone() {
 
 #[test]
 fn address_of_boxes_the_operand() {
-    // `&v` ≡ the old `make_ptr(v)`: a `*T` the deref reads back
+    // RFC 0044: a `T` widening into `?T` boxes (the old `make_ptr(v)`):
+    // the box the deref-position read consumes
     let out = compile(
         "struct P { x: i32 = 0 }\n\
-         fn poke(p: *P) -> i32 { return p.x; }\n\
+         fn poke(p: ?P) -> i32 { return p.x; }\n\
          fn main() -> i32 {\n\
              let v = P { x: 9 };\n\
-             let p = &v;\n\
-             let q: *i32 = &7;\n\
-             return poke(p) + *q;\n\
+             let p: ?P = v;\n\
+             let q: ?i32 = 7;\n\
+             return poke(p) + q;\n\
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
@@ -106,7 +107,7 @@ fn the_array_name_diagnoses_with_the_removal() {
     let ds = diags_of(
         "fn main() -> i32 {\n\
              let p = make_ptr(7);\n\
-             return *p;\n\
+             return p;\n\
          }\n",
     );
     assert!(
@@ -130,7 +131,7 @@ fn bracket_types_need_no_use_statement() {
         out.diags
     );
     let out = compile(
-        "fn len3(xs: [*i32]) -> i32 { return xs.len(); }\n\
+        "fn len3(xs: [?i32]) -> i32 { return xs.len(); }\n\
          fn main() -> i32 {\n\
              let a: [i32] = [0; 3];\n\
              return a.len() + len3([nil; 1]);\n\
@@ -141,17 +142,17 @@ fn bracket_types_need_no_use_statement() {
 
 #[test]
 fn pointer_backed_vec_shape_fuses_through_the_deref() {
-    // the DataBuf shape over `[*T]`: the fused index read/write derefs
-    // and boxes (RFC 0032 §1.1 over the pointer-array backing)
+    // the DataBuf shape over `[?T]`: the fused index read/write derefs
+    // and boxes (RFC 0032 §1.1 over the nullable-array backing)
     let out = compile(
         "class Box2<T> {\n\
-             buf: [*T];\n\
+             buf: [?T];\n\
              len: i32;\n\
          }\n\
          impl Box2<T> {\n\
              fn new() -> Self { return Self { buf: [nil; 4], len: 0 }; }\n\
-             fn push(mut self, v: T) -> nil { self.buf[self.len] = &v; self.len += 1; }\n\
-             fn get(self, i: i32) -> T { return *self.buf[i]; }\n\
+             fn push(mut self, v: T) -> nil { self.buf[self.len] = v; self.len += 1; }\n\
+             fn get(self, i: i32) -> T { return self.buf[i]; }\n\
          }\n\
          fn main() -> i32 {\n\
              let mut b: Box2<i32> = Box2.new();\n\
@@ -162,6 +163,39 @@ fn pointer_backed_vec_shape_fuses_through_the_deref() {
          }\n",
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
+}
+
+#[test]
+fn nullable_widen_narrow_and_nil_typing() {
+    // RFC 0044 coercions: `T → ?T` boxes (the old `&v`), `?T → T` reads
+    // the payload (the old `*p`) — at let, argument, and return positions;
+    // `nil` types as the expected `?T`, and a nil-vs-primitive let is the
+    // mismatch diagnostic
+    let out = compile(
+        "struct P { x: i32 = 0 }\n\
+         fn poke(p: ?P) -> i32 { return p.x; }\n\
+         fn main() -> i32 {\n\
+             let v = P { x: 8 };\n\
+             let p: ?P = v;\n\
+             let q: ?i32 = nil;\n\
+             let n: i32 = q;\n\
+             return poke(v) + n * 0 + p.x * 0 + (q == nil) as i32;\n\
+         }\n",
+    );
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let ir = out.ir_dump;
+    assert!(ir.contains("makeptr"), "the T → ?T widen must box: {ir}");
+    // a nil literal against a primitive annotation is a type mismatch
+    let ds = diags_of(
+        "fn main() -> i32 {\n\
+             let x: i32 = nil;\n\
+             return x;\n\
+         }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("`i32`") && d.contains("`nil`")),
+        "nil against `i32` must diagnose: {ds:?}"
+    );
 }
 
 #[test]

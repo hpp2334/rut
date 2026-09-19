@@ -121,8 +121,10 @@ pub enum TyKind {
     TraitObj { trait_id: u32 },
     /// erasure box (RFC 0014)
     Opaque,
-    /// `*T` (RFC 0005) — a nil-able rc-backed pointer; `nil` is the null slot
-    Ptr { elem: TypeId },
+    /// `?T` (RFC 0005, RFC 0044) — a nil-able cell; `nil` is the null slot.
+    /// Same one-slot box the old `*T` pointer was: `T → ?T` boxes, `?T → T`
+    /// reads field 0 (nil check on use)
+    Opt { elem: TypeId },
     /// fn(P..) -> R — a closure value { func, captures } in one slot
     Fn { params: Vec<TypeId>, ret: TypeId },
 }

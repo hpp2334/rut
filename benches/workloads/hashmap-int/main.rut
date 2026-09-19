@@ -32,7 +32,7 @@ fn churn(n: i32) -> i32 {
         let p = m.get(i.wrapping_mul(-1640531535));
         if (p != nil) {
             hits += 1;
-            sum = sum.wrapping_add(*p);
+            sum = sum.wrapping_add(p);
         }
     }
     // miss lookups — the second half of the key space is absent

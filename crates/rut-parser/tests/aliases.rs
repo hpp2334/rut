@@ -48,10 +48,10 @@ fn union_alias_parses_ty_union() {
 
 #[test]
 fn alias_target_kinds_parse() {
-    // a pointer target, a generic target, a chain — all single targets
+    // a nullable target, a generic target, a chain — all single targets
     let src = "\
 type Box = Vec;
-type Row = [*i32];
+type Row = [?i32];
 ";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");

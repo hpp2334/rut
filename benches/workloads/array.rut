@@ -28,7 +28,7 @@ fn churn(n: i32, m: i32) -> i64 {
     // iterate the whole sequence (Vec for-of yields *T — RFC 0012 §6)
     let mut total: i64 = 0;
     for (let x of v) {
-        total += (*x) as i64;
+        total += x as i64;
     }
     return acc + total;
 }

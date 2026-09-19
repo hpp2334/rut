@@ -982,12 +982,12 @@ impl<'a> Ctx<'a> {
             kind: TyKind::TraitObj { trait_id },
         })
     }
-    /// `*T` (RFC 0005) — nil-able rc-backed pointer
-    pub fn mk_ptr(&mut self, elem: TypeId) -> TypeId {
-        let name = self.intern(&format!("*{}", self.type_name(elem)));
+    /// `?T` (RFC 0005, RFC 0044) — nil-able cell (the old `*T` pointer)
+    pub fn mk_opt(&mut self, elem: TypeId) -> TypeId {
+        let name = self.intern(&format!("?{}", self.type_name(elem)));
         self.types.intern(RutType {
             name,
-            kind: TyKind::Ptr { elem },
+            kind: TyKind::Opt { elem },
         })
     }
     /// `(A, B, ..)` (RFC 0007) — a record with numeric field names

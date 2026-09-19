@@ -140,16 +140,22 @@ impl ExprFrame {
 
     fn sweep(&mut self, p: &mut Parser) -> Option<Frame> {
         loop {
+            // the removed `*x` / `&x` prefix forms diagnose themselves and
+            // are skipped (the Diag fails the compile; binary `*`/`&` are
+            // unaffected — they shift in the oploop, never at operand
+            // starts). RFC 0044: bindings share by reference now.
+            match p.tok() {
+                Tok::Star | Tok::Amp => {
+                    p.err_here("`*x` / `&x` were removed — bindings share by reference now — pass `x` directly (RFC 0044)");
+                    p.bump();
+                    continue;
+                }
+                _ => {}
+            }
             let pfx = match p.tok() {
                 Tok::Minus => Some(Pfx::Un(UnOp::Neg)),
                 Tok::Bang => Some(Pfx::Un(UnOp::Not)),
                 Tok::Tilde => Some(Pfx::Un(UnOp::BitNot)),
-                Tok::Star => Some(Pfx::Un(UnOp::Deref)),
-                // `&e` — address-of (RFC 0005 §9). Positionally
-                // unambiguous with binary `&`: the prefix form is
-                // fetched only at operand starts (the binary operator
-                // shifts in the oploop, never here).
-                Tok::Amp => Some(Pfx::Un(UnOp::AddrOf)),
                 _ if p.at_kw("await") => {
                     let is_select = matches!(&p.peek(1).tok, Tok::Ident(s) if s == "select")
                         && matches!(p.peek(2).tok, Tok::LBrace);

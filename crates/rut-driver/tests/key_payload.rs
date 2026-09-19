@@ -18,11 +18,11 @@ const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/keypayloa
 const SRC: &str = r#"
 use keypayload::{ key_class };
 
-entry fn box_i32(k: i32) -> opaque { return opaque.new(k); }
-entry fn box_bool(k: bool) -> opaque { return opaque.new(k); }
-entry fn box_str(k: str) -> opaque { return opaque.new(k); }
-entry fn box_bytes() -> opaque { return opaque.new(bytes.from([1, 2, 3])); }
-entry fn box_f64(k: f64) -> opaque { return opaque.new(k); }
+entry fn box_i32(k: i32) -> opaque { return opaque(k); }
+entry fn box_bool(k: bool) -> opaque { return opaque(k); }
+entry fn box_str(k: str) -> opaque { return opaque(k); }
+entry fn box_bytes() -> opaque { return opaque(bytes.from([1, 2, 3])); }
+entry fn box_f64(k: f64) -> opaque { return opaque(k); }
 
 struct Pt { x: i32; y: i32 }
 
@@ -30,7 +30,7 @@ struct Pt { x: i32; y: i32 }
 // key — the reader must report Unsupported, never re-enter rut
 entry fn box_record() -> opaque {
     let p = Pt { x: 3, y: 4 };
-    return opaque.new(p);
+    return opaque(p);
 }
 
 // the host crossing: rut hands the key box to the host fn, the host
@@ -116,12 +116,12 @@ fn key_payload_classifies_through_the_host_crossing() {
 
 #[test]
 fn distinct_boxes_of_the_same_key_stay_distinct_handles() {
-    // opaque.new mints a fresh box per call — two boxes of the equal
+    // opaque(..) mints a fresh box per call — two boxes of the equal
     // keys are different handles, and each classifies on its own
     let mut vm = vm_with_host();
     let a: OpaqueRef = vm.call("box_i32", (7i32,)).unwrap();
     let b: OpaqueRef = vm.call("box_i32", (7i32,)).unwrap();
-    assert_ne!(a, b, "opaque.new mints a fresh box per call");
+    assert_ne!(a, b, "opaque(..) mints a fresh box per call");
     let tag = |vm: &mut Vm, h: &OpaqueRef| -> i64 { vm.call::<_, i64>("classify", (h.clone(),)).unwrap() };
     assert_eq!(tag(&mut vm, &a), BITS);
     assert_eq!(tag(&mut vm, &b), BITS);

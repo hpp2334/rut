@@ -119,7 +119,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // `{p}` formats the pointee (RFC 0012 §6): deref the
                     // box before formatting — any element type
                     let lo = self.ctx.ast.span(e.id()).lo;
-                    if let TyKind::Ptr { elem } = self.ctx.types.kind(t).clone() {
+                    if let TyKind::Opt { elem } = self.ctx.types.kind(t).clone() {
                         let src = self.last_reg;
                         let d = self.new_reg(elem);
                         self.emit(Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) }, lo);
@@ -257,7 +257,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn zero_value(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<u16> {
         let reg = self.new_reg(ty);
         match self.ctx.types.kind(ty).clone() {
-            TyKind::Prim(_) | TyKind::Nil | TyKind::Ptr { .. } => {
+            TyKind::Prim(_) | TyKind::Nil | TyKind::Opt { .. } => {
                 self.emit(Op::ConstRaw { dst: reg, bits: 0 }, sp.lo);
             }
             TyKind::Str => {

@@ -66,12 +66,12 @@ fn two_instantiations_are_distinct() {
 
 #[test]
 fn recursive_generic_terminates() {
-    // Node<T> { next: *Node<T> } (v1.1: the recursive edge is a pointer,
+    // Node<T> { next: ?Node<T> } (v1.1: the recursive edge is a nullable,
     // nil = end) — the cache must break the cycle
     let out = compile(
         "class Node<T> {\n\
              value: T;\n\
-             next: *Node<T>;\n\
+             next: ?Node<T>;\n\
          }\n\
          impl Node<T> {\n\
              fn new(v: T) -> Self { return Self { value: v, next: nil }; }\n\
@@ -103,12 +103,12 @@ fn explicit_generic_static_path() {
 
 #[test]
 fn vec_over_pointer_array_compiles() {
-    // the Vec shape over the pointer-array backing (RFC 0005 §9):
-    // `[nil; cap]` is the only generic zero; stores keep `&v`, and the
+    // the Vec shape over the nullable-array backing (RFC 0005 §9 + RFC 0044):
+    // `[nil; cap]` is the only generic zero; stores share `v`, and the
     // fused loads deref (RFC 0032 §1.1)
     let out = compile(
         "class Vec<T> {\n\
-             buf: [*T];\n\
+             buf: [?T];\n\
              len: i32;\n\
          }\n\
          impl Vec<T> {\n\
@@ -119,16 +119,16 @@ fn vec_over_pointer_array_compiles() {
                  if (self.len == self.buf.len()) {\n\
                      let mut cap = self.buf.len() * 2;\n\
                      if (cap == 0) { cap = 4; }\n\
-                     let mut next: [*T] = [nil; cap];\n\
+                     let mut next: [?T] = [nil; cap];\n\
                      for (let i = 0; i < self.len; i += 1) { next[i] = self.buf[i]; }\n\
                      self.buf = next;\n\
                  }\n\
-                 self.buf[self.len] = &v;\n\
+                 self.buf[self.len] = v;\n\
                  self.len += 1;\n\
              }\n\
              fn pop(mut self) -> T {\n\
                  self.len -= 1;\n\
-                 return *self.buf[self.len];\n\
+                 return self.buf[self.len];\n\
              }\n\
          }\n\
          fn main() -> i32 {\n\

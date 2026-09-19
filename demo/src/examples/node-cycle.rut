@@ -5,21 +5,21 @@
 use ink::{ Logger };
 
 class Node {                              // initializer covers `next`
-    next: *Node = nil;                    // a pointer slot — recursive types
+    next: ?Node = nil;                    // a nullable slot — recursive types
                                           // are legal (one word, nullable)
 }
 
 impl Node {
     fn new() -> Self { return Self {}; }  // explicit construction — no
                                           // implicit default
-    fn link(mut self, other: *Node) {
+    fn link(mut self, other: ?Node) {
         self.next = other;
     }
 }
 
-fn make_cycle() -> *Node {                  // a -> b -> a : strong cycle
-    let a = &Node.new();
-    let b = &Node.new();
+fn make_cycle() -> ?Node {                  // a -> b -> a : strong cycle
+    let a: ?Node = Node.new();
+    let b: ?Node = Node.new();
     a.link(b);
     b.link(a);
     return a;

@@ -126,8 +126,8 @@ fn case3_opaque() {
     let src = r#"
 struct Point { x: f32; y: f32 }
 pub fn main() -> nil {
-    let box1 = opaque.new(Point { x: 1, y: 2 });
-    let box2 = opaque.new("hello");
+    let box1 = opaque(Point { x: 1, y: 2 });
+    let box2 = opaque("hello");
     Logger.new("app").info(f"box1 is Point: {box1 is Point}");
     Logger.new("app").info(f"box2 is Point: {box2 is Point}");
     let (p, ok) = opaque.downcast<Point>(box1);
@@ -741,9 +741,9 @@ use pouch::{ Vec };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 
-entry fn make() -> opaque { return opaque.new(&Box { rows: Vec.new() }); }
+entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let (b, _) = opaque.downcast<*Box>(c);
+    let (b, _) = opaque.downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -969,8 +969,8 @@ fn recursive_dataclass_tree_runs() {
     let src = r#"
 struct Node {
     value: i32,
-    left: *Node,
-    right: *Node,
+    left: ?Node,
+    right: ?Node,
 }
 fn make(depth: i32, v: i32) -> Node {
     if (depth <= 0) {
@@ -978,12 +978,12 @@ fn make(depth: i32, v: i32) -> Node {
     }
     let l = make(depth - 1, v * 2);
     let r = make(depth - 1, v * 2 + 1);
-    return Node { value: v, left: &l, right: &r };
+    return Node { value: v, left: l, right: r };
 }
 fn count(n: Node) -> i32 {
     let mut c = 1;
-    if (n.left != nil) { c += count(*n.left); }
-    if (n.right != nil) { c += count(*n.right); }
+    if (n.left != nil) { c += count(n.left); }
+    if (n.right != nil) { c += count(n.right); }
     return c;
 }
 pub fn main() -> nil {
@@ -1005,7 +1005,7 @@ struct Early {
     tag: i32,
 }
 struct Later {
-    back: *Early,
+    back: ?Early,
     x: i32,
 }
 fn make_early() -> Early {
@@ -1028,7 +1028,7 @@ fn recursive_class_field_resolves_and_runs() {
     let src = r#"
 class Node {
     v: i32 = 0;
-    next: *Node = nil;
+    next: ?Node = nil;
 }
 impl Node {
     fn new() -> Self { return Self {}; }
@@ -1053,7 +1053,7 @@ fn generic_vec_over_pointer_array_runs() {
     // (RFC 0032 §1.1 over `[*T]`).
     let src = r#"
 class Vec<T> {
-    buf: [*T];
+    buf: [?T];
     len: i32;
 }
 impl Vec<T> {
@@ -1066,21 +1066,21 @@ impl Vec<T> {
             if (cap == 0) {
                 cap = 4;
             }
-            let mut next: [*T] = [nil; cap];
+            let mut next: [?T] = [nil; cap];
             for (let i = 0; i < self.len; i += 1) {
                 next[i] = self.buf[i];
             }
             self.buf = next;
         }
-        self.buf[self.len] = &v;
+        self.buf[self.len] = v;
         self.len += 1;
     }
-    fn get(self, i: i32) -> T { return *self.buf[i]; }
+    fn get(self, i: i32) -> T { return self.buf[i]; }
     // v1.1: pop returns the value; an empty pop is the caller's contract
     // breach (guard with `len()`), not an error value
     fn pop(mut self) -> T {
         self.len -= 1;
-        return *self.buf[self.len];
+        return self.buf[self.len];
     }
 }
 pub fn main() -> nil {
@@ -1564,14 +1564,14 @@ impl Iterator<i32> for CountUp {
 }
 
 fn total(it: Iterator<i32>) -> i32 {
-    let acc = &Acc { };
+    let acc: ?Acc = Acc { };
     it.__iterate(fn (v: i32) -> bool { acc.total = acc.total + v; return true; });
     return acc.total;
 }
 
 pub fn main() -> nil {
     let log = Logger.new("it");
-    let acc = &Acc { };
+    let acc: ?Acc = Acc { };
     for (let v of CountUp.new(9)) {
         if (v % 2 == 0) { continue; }
         if (v > 6) { break; }
@@ -1694,14 +1694,14 @@ pub fn main() -> nil {
     let mut a: [i32] = [0; 8];
     a[3] = 33;
     Logger.new("t").info(f"a3={a[3]} len={a.len()}");
-    let mut ps: [*P] = [nil; 2];
-    let p0 = &P { x: 4 };
+    let mut ps: [?P] = [nil; 2];
+    let p0 = P { x: 4 };
     ps[0] = p0;
     Logger.new("t").info(f"p0={ps[0].x} p1nil={ps[1] == nil}");
     let all: Vec<i32> = Vec.filled(9, 3);
     Logger.new("t").info(f"all={all[0]} {all[1]} {all[2]}");
-    let shared = &P { x: 5 };
-    let mut both: [*P] = [shared; 2];
+    let shared = P { x: 5 };
+    let mut both: [?P] = [shared; 2];
     both[1].x = 6;
     Logger.new("t").info(f"shared={both[0].x}");
     let n: i32 = 3;
@@ -1728,9 +1728,9 @@ fn a1_addr_of_deref_and_nil() {
     let src = r#"
 struct P { x: i32 = 0; }
 pub fn main() -> nil {
-    let p = &P { x: 5 };
+    let p: ?P = P { x: 5 };
     Logger.new("t").info(f"x={p.x} nil={p == nil}");
-    let n: *P = nil;
+    let n: ?P = nil;
     Logger.new("t").info(f"n nil={n == nil}");
 }
 "#;
@@ -1744,7 +1744,7 @@ fn a1_nil_deref_traps() {
     let src = r#"
 struct P { x: i32 = 0; }
 pub fn main() -> nil {
-    let n: *P = nil;
+    let n: ?P = nil;
     let _ = n.x;
 }
 "#;
@@ -1758,8 +1758,8 @@ fn a1_on_drop_runs_at_refcount_zero() {
 use core::{ on_drop };
 struct P { x: i32 = 0; }
 pub fn main() -> nil {
-    let p = &P { x: 9 };
-    on_drop(p, fn (p: *P) { Logger.new("t").info(f"dropped {p.x}"); });
+    let p: ?P = P { x: 9 };
+    on_drop(p, fn (p: ?P) { Logger.new("t").info(f"dropped {p.x}"); });
     Logger.new("t").info("body done");
 }
 "#;
@@ -1836,9 +1836,9 @@ fn dbg_digest_md5() {
 use pouch::{ Vec };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
-entry fn make() -> opaque { return opaque.new(&Box { rows: Vec.new() }); }
+entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let (b, _) = opaque.downcast<*Box>(c);
+    let (b, _) = opaque.downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -1892,9 +1892,9 @@ fn dbg_put_ir() {
 use pouch::{ Vec };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
-entry fn make() -> opaque { return opaque.new(&Box { rows: Vec.new() }); }
+entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let (b, _) = opaque.downcast<*Box>(c);
+    let (b, _) = opaque.downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -2108,7 +2108,7 @@ struct Node { v: i32 }
 pub fn noop() -> nil { return; }
 pub fn main() -> nil {
     let u: nil = nil;
-    let p: *Node = nil;
+    let p: ?Node = nil;
     Logger.new("app").info(f"nil={p == nil} u={u == nil}");
     noop();
 }

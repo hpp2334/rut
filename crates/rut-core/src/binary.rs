@@ -386,7 +386,10 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-pub const VERSION: u32 = 3;
+/// v4: the `?T` surface swap (RFC 0044) — `TyKind::Ptr` is now `Opt`
+/// (kind code 13 reused), `mk_opt` names intern as `"?T"`; stale v3
+/// caches are invalidated
+pub const VERSION: u32 = 4;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -558,7 +561,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.tys(params);
             e.u32(*ret);
         }
-        TyKind::Ptr { elem } => {
+        TyKind::Opt { elem } => {
             e.u8(13);
             e.u32(*elem);
         }
@@ -715,7 +718,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             let ret = d.u32()?;
             TyKind::Fn { params, ret }
         }
-        13 => TyKind::Ptr { elem: d.u32()? },
+        13 => TyKind::Opt { elem: d.u32()? },
         t => return Err(format!("bad type kind tag {t}")),
     })
 }

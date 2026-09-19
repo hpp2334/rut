@@ -1,6 +1,6 @@
 use pouch::{ Vec };
 // RFC 0014 — opaque: explicit type erasure with checked recovery.
-// opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the
+// opaque(v) (the host class's construction method) forgets the static type, KEEPS the
 // runtime type; opaque.downcast<T> recovers it or yields None. `opaque` is the
 // erased-storage CONCRETE type — it composes like any class (`Vec<opaque>`,
 // fixed `[opaque]`, fields, returns). Under the all-cells regime
@@ -25,9 +25,9 @@ impl Session {
 
 fn erase_and_recover() {
     let log = Logger.new("opaque");
-    let box1 = opaque.new(Point { x: 1, y: 2 });    // erasure = type-call;
-    let box2 = opaque.new(Flavor.Sour);             // zero-copy (shares the cell)
-    let box3 = opaque.new("hello");
+    let box1 = opaque(Point { x: 1, y: 2 });    // erasure = type-call;
+    let box2 = opaque(Flavor.Sour);             // zero-copy (shares the cell)
+    let box3 = opaque("hello");
 
     let (p, ok) = opaque.downcast<Point>(box1);        // (Point, bool)
     if (ok) {
@@ -41,9 +41,9 @@ fn erase_and_recover() {
 fn share_vs_copy() {
     let log = Logger.new("opaque");
     let s = Session.new("abc");
-    let o = opaque.new(s);            // SHARES the Session cell (zero-copy):
+    let o = opaque(s);            // SHARES the Session cell (zero-copy):
                                   // mutation through s is visible in o
-    let o2 = opaque.new(*&s);    // a private copy, new identity
+    let o2 = opaque(s);    // a private copy, new identity
 
     log.info(f"same session: {opaque.downcast<Session>(o).1}");
     log.info(f"distinct boxes: {o == o2}");     // false — two cells (RFC 0012 §4)
@@ -53,9 +53,9 @@ fn nested() {
     let log = Logger.new("opaque");
     // heterogeneous FIXED array — pure data, one shared cell per slot
     // (RFC 0016 §1)
-    let boxes: [opaque] = [opaque.new(Point { x: 3, y: 4 }), opaque.new("two"), opaque.new(Point { x: 5, y: 6 })];
+    let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two"), opaque(Point { x: 5, y: 6 })];
     log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS — primitives recover via `opaque.downcast<T>`
-    let vec: Vec<opaque> = Vec.from([opaque.new(5)]);
+    let vec: Vec<opaque> = Vec.from([opaque(5)]);
     log.info(f"vec {vec.len()}");
 }
 

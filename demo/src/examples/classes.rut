@@ -57,7 +57,7 @@ class Version {
 }
 
 impl Version {
-    pub fn parse(s: str) -> *Version {
+    pub fn parse(s: str) -> ?Version {
         // ... split "1.2" — on failure:
         return nil;                        // nil = the validation failed
     }
@@ -71,7 +71,7 @@ fn classes() {
     c.press();
     c.press();
     let r = Rect.new(3, 4);
-    let v = Version.parse("1.2");  // *Version — nil on failure
+    let v = Version.parse("1.2");  // ?Version — nil on failure
     log.info(f"count={c.count()} area={r.area()}");
     // let bad = Rect.new(3);       // ERROR: arity — the class's construction
                                      // contract is whatever its methods say

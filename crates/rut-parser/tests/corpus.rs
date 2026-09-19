@@ -99,9 +99,9 @@ fn tuples_parse_and_destructure() {
 
 #[test]
 fn pointers_and_nil_parse() {
-    // RFC 0005 §9: `*T` types, the `nil` literal, the `&` address-of,
-    // the `on_drop` decl
-    let src = "fn f() -> nil { let p: *i32 = &7; if (p != nil) { } }";
+    // RFC 0005 §9 + RFC 0044: `?T` types, the `nil` literal, the
+    // `on_drop` decl
+    let src = "fn f() -> nil { let p: ?i32 = 7; if (p != nil) { } }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
     // anonymous closures: `fn (params) { .. }` — no arrow
@@ -158,25 +158,68 @@ fn bracket_array_and_async_parse() {
 #[test]
 fn repeat_and_address_of_parse() {
     // RFC 0005 §9: `[v; n]` — a VALUE and a count; no type-in-expression form
-    let src = "fn f() -> nil { let a: [i32] = [0; 8]; let b: [*i32] = [nil; 8]; }";
+    let src = "fn f() -> nil { let a: [i32] = [0; 8]; let b: [?i32] = [nil; 8]; }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
     // the count is a full expression
     let src = "fn f(n: i32) -> nil { let a: [f64] = [1.5; n * 2 + 1]; }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
-    // `&v` — the address-of (prefix `&`, positionally unambiguous with
-    // binary `&`); `*p` deref unchanged
-    let src = "fn f() -> nil { let p: *i32 = &7; let q: *Point = &Point { x: 1 }; let y: i32 = *p; }";
+    // RFC 0044: bindings share — a `T` widens into `?T`, no `&` needed
+    let src = "fn f() -> nil { let p: ?i32 = 7; let q: ?Point = Point { x: 1 }; let y: i32 = p; }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
-    // binary `&` still parses — `a & b`, and `a & &b` mixes both
+    // binary `&` and `*` still parse
     let src = "fn f(a: i32, b: i32) -> i32 { return a & b; }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
-    let src = "fn f(a: i32, b: i32) -> i32 { return a & &b; }";
+    let src = "fn f(a: i32, b: i32) -> i32 { return a * b; }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn nullable_types_parse() {
+    // RFC 0044: postfix `?` binds tightest — `[?T]` is an array of
+    // nullables, `[T]?` a nullable array, `??T` chains
+    let src = "fn f(xs: [?i32]) -> ?i32 { return xs[0]; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    let src = "fn f(xs: [i32]?) -> [i32]? { return xs; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    let src = "fn f() -> nil { let p: ??i32 = nil; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    // `?` composes with generics and fn types
+    let src = "fn f(v: Vec<?Point>) -> fn(?i32) -> ?str { panic(\"\"); }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    // each union member carries its own `?`
+    let src = "type U = i32? | str?;";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn removed_pointer_spellings_diagnose() {
+    // the `*T` type spelling points at `?T`...
+    let (_, diags) = parse("fn f(p: *i32) -> nil { }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("`?T`")),
+        "`*T` should diagnose `?T`: {diags:?}"
+    );
+    // ...and the `&x` / `*x` prefix forms point at direct passing
+    let (_, diags) = parse("fn f() -> nil { let p: ?i32 = &7; }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("share by reference")),
+        "`&x` should diagnose the sharing law: {diags:?}"
+    );
+    let (_, diags) = parse("fn f() -> nil { let p: ?i32 = 7; let y: i32 = *p; }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("share by reference")),
+        "`*x` should diagnose the sharing law: {diags:?}"
+    );
 }
 
 #[test]

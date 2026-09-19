@@ -22,22 +22,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let mut r = self.compile_expr_inner(node, expected);
         self.leave();
-        // pointer deref at value positions (RFC 0012 §6): a `*T` where
-        // `T` is expected reads its pointee — arguments, returns, lets,
-        // assignments. Positions without an expected type (receivers,
-        // `==` operands, `let w = p`) keep the pointer: identity, aliasing
-        // and field/method deref are pointer-native.
+        // nullable coercion (RFC 0044): the mirror pair at value positions —
+        // a `?T` where `T` is expected reads its payload (field 0, the old
+        // `*p` deref), a `T` where `?T` is expected boxes into a fresh
+        // one-slot cell (the old `&v`). Arguments, returns, lets,
+        // assignments all flow through here. Positions without an
+        // expected type (receivers, `==` operands, `let w = p`) keep the
+        // nullable: identity, aliasing and field/method deref are native.
         if let Ok(t) = r {
             if let Some(e) = expected {
                 if e != t {
-                    if let TyKind::Ptr { elem } = self.ctx.types.kind(t).clone() {
-                        if elem == e {
-                            let lo = self.ctx.ast.span(node.id()).lo;
+                    let lo = self.ctx.ast.span(node.id()).lo;
+                    match (self.ctx.types.kind(t).clone(), self.ctx.types.kind(e).clone()) {
+                        (TyKind::Opt { elem }, _) if elem == e => {
                             let src = self.last_reg;
                             let d = self.new_reg(elem);
                             self.emit(Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) }, lo);
                             r = Ok(elem);
                         }
+                        (_, TyKind::Opt { elem }) if elem == t => {
+                            let src = self.last_reg;
+                            let dst = self.new_reg(e);
+                            self.emit(Op::MakePtr { dst, src, ty: e }, lo);
+                            r = Ok(e);
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -100,37 +109,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Unary { op, expr } => {
                 use rut_ast::ast::UnOp::*;
                 let t = match op {
-                    Deref => {
-                        // `*p` (RFC 0005): load the pointee — a copy out of
-                        // the box (the box's payload slot, repr = the
-                        // pointee's own repr)
-                        let pt = self.compile_expr(expr, None)?;
-                        let src = self.last_reg;
-                        let TyKind::Ptr { elem } = self.ctx.types.kind(pt).clone() else {
-                            self.ctx.err(sp, "`*` dereferences a pointer —the operand is not `*T`");
-                            return Err(());
-                        };
-                        let dst = self.new_reg(elem);
-                        self.emit(
-                            Op::GetF { dst, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) },
-                            sp.lo,
-                        );
-                        return Ok(elem);
-                    }
+                    // RFC 0044: `*p`/`&v` are gone — the parser diagnoses
+                    // them; the coercions they performed are implicit at
+                    // value positions (the compile_expr wrapper: `?T → T`
+                    // reads the payload, `T → ?T` boxes).
                     Not => self.compile_expr(expr, Some(TY_BOOL))?,
-                    AddrOf => {
-                        // `&e` (RFC 0005 §9): the operand's cell as a
-                        // `*T` — a fresh one-slot box whose payload
-                        // shares the operand's object (RFC 0016 §2,
-                        // reference semantics). `&temp` ≡ the old
-                        // `make_ptr(v)`.
-                        let t = self.compile_expr(expr, None)?;
-                        let src = self.last_reg;
-                        let pty = self.ctx.mk_ptr(t);
-                        let dst = self.new_reg(pty);
-                        self.emit(Op::MakePtr { dst, src, ty: pty }, sp.lo);
-                        return Ok(pty);
-                    }
                     // `-lit` in a typed position still adapts the literal
                     // (`-2.0` passed to an `f64` param), so forward `expected`
                     _ => self.compile_expr(expr, expected)?,
@@ -158,9 +141,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, "`~` is not supported in this build");
                         return Err(());
                     }
-                    // `*p`/`&e` returned early — the pointee load and the
-                    // box are the values
-                    Deref | AddrOf => {}
                 }
                 Ok(t)
             }
@@ -267,8 +247,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `expr as T` (RFC 0007 §1): the numeric cast — truncating,
                 // C/Rust semantics, one `Op::Conv`. The RHS is a naming
                 // position restricted to the numeric primitives.
-                let from = self.compile_expr(expr, None)?;
-                let src = self.last_reg;
+                let mut from = self.compile_expr(expr, None)?;
+                let mut src = self.last_reg;
+                // a `?T` operand reads its payload first (RFC 0044 — the
+                // old `*x` deref, now implicit at this value position)
+                if let TyKind::Opt { elem } = self.ctx.types.kind(from).clone() {
+                    if let TyKind::Prim(p) = self.ctx.types.kind(elem) {
+                        if numeric_prim(*p) {
+                            let d = self.new_reg(elem);
+                            self.emit(
+                                Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) },
+                                sp.lo,
+                            );
+                            src = d;
+                            from = elem;
+                        }
+                    }
+                }
                 let want = self.resolve_type_now(ty);
                 let Some(to) = (if let TyKind::Prim(p) = self.ctx.types.kind(want) {
                     numeric_prim(*p).then_some(*p)
@@ -423,7 +418,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `let p: *T = nil`, `p == nil` — and otherwise the `nil`
                 // type's own value. The null slot IS zero bits (Slot::null).
                 let ty = match expected {
-                    Some(e) if matches!(self.ctx.types.kind(e), TyKind::Ptr { .. }) => e,
+                    Some(e) if matches!(self.ctx.types.kind(e), TyKind::Opt { .. }) => e,
                     _ => TY_NIL,
                 };
                 let reg = self.new_reg(ty);
@@ -509,7 +504,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Err(());
                     }
                     // `p.x` auto-deref through a pointer (RFC 0005)
-                    if let TyKind::Ptr { elem } = self.ctx.types.kind(cur_ty).clone() {
+                    if let TyKind::Opt { elem } = self.ctx.types.kind(cur_ty).clone() {
                         // deref: load the pointee cell, then read the
                         // field from it
                         let dst = self.new_reg(elem);

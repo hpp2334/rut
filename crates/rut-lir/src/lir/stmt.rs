@@ -337,7 +337,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => {
                 let r = self.emit_slice_get_ref(iter_reg, idx, &info, sp.lo)?;
-                (self.ctx.mk_ptr(elem_ty), r)
+                (self.ctx.mk_opt(elem_ty), r)
             }
         };
         self.locals.push(Local { name: var, reg: var_reg, ty: var_ty, is_mut: false, loop_var: false, origins: Vec::new() });

@@ -417,9 +417,9 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("ret", DumpVal::Node(Box::new(node_dump(a, ret.id())))));
                 "TyFn"
             }
-            TypeKind::TyPtr { inner } => {
+            TypeKind::TyOpt { inner } => {
                 fields.push(field("inner", DumpVal::Node(Box::new(node_dump(a, inner.id())))));
-                "TyPtr"
+                "TyOpt"
             }
             TypeKind::TyArray { elem } => {
                 fields.push(field("elem", DumpVal::Node(Box::new(node_dump(a, elem.id())))));
@@ -804,8 +804,6 @@ fn unop_str(op: UnOp) -> &'static str {
         UnOp::Neg => "-",
         UnOp::Not => "!",
         UnOp::BitNot => "~",
-        UnOp::Deref => "*",
-        UnOp::AddrOf => "&",
     }
 }
 

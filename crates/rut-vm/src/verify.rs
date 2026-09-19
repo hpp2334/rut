@@ -107,7 +107,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     // against a Data register index the record's fields
                     let fields = match prog.types.kind(ty) {
                         TyKind::Data { fields } => Some(fields),
-                        TyKind::Ptr { .. } => None,
+                        TyKind::Opt { .. } => None,
                         _ => None,
                     };
                     match fields {
@@ -129,7 +129,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                             // ref pointees share the cell, scalar pointees
                             // read the boxed copy (RFC 0012 §6)
                             let elem_repr = match prog.types.kind(ty) {
-                                TyKind::Ptr { elem } => prog.types.repr_of(*elem),
+                                TyKind::Opt { elem } => prog.types.repr_of(*elem),
                                 _ => return Err(bad("field access on a non-record".into())),
                             };
                             if *field != 0 || elem_repr != *repr {

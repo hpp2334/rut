@@ -168,7 +168,7 @@ impl Vm {
     pub(super) fn op_make_ptr(&mut self, dst: Reg, src: Reg, ty: TypeId) -> Result<(), Trap> {
         let raw = self.cur_regs[src as usize];
         let elem = match self.prog.types.kind(ty) {
-            TyKind::Ptr { elem } => *elem,
+            TyKind::Opt { elem } => *elem,
             _ => unreachable!("MakePtr on a non-pointer type"),
         };
         // A window box references its window (RFC 0042 §6) — the pointer
@@ -215,7 +215,7 @@ impl Vm {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let v = seq_get(cell_of(self.cur_regs[arr as usize]), i)?;
         let elem = match self.prog.types.kind(ty) {
-            TyKind::Ptr { elem } => *elem,
+            TyKind::Opt { elem } => *elem,
             _ => unreachable!("ArrGetRef over a non-pointer type"),
         };
         let c = self.heap.alloc_record_zeroed(ty, 1)?;

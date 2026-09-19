@@ -24,7 +24,7 @@ struct Style {
     width: f32 = 1;
 }
 
-fn nudge(pt: *Point) {     // pointer param: mutation is shared —
+fn nudge(pt: ?Point) {     // nullable param: mutation is shared —
     pt.x += 1;                     // writes through hit the caller's Point
 }
 
@@ -43,9 +43,9 @@ fn dataclasses() {
     let q = p;                          // COPY: q owns a deep copy of p
     p.x = 4;                            // q.x is still 3 — value semantics
 
-    // pointers share, explicitly (RFC 0005): `&x` boxes the value
-    // and writes through the pointer hit every holder of the box
-    let rp = &p;                 // rp: *Point — shares p's cell
+    // nullable `?T` shares (RFC 0044): a `T` widening into `?T` boxes
+    // the value's cell and writes through it hit every holder of the box
+    let rp: ?Point = p;                   // rp: ?Point — shares p's cell
     rp.x = 9;                             // p.x is now 9 too
 
     // `==` on values is STRUCTURAL, field by field (RFC 0012 §4):
@@ -55,7 +55,7 @@ fn dataclasses() {
 
     let r = Rect { min: p, max: q };    // min and max are p's and q's COPIES
     let s = Style {};              // zero-value defaults fill the fields
-    nudge(&p);            // shared write: p.x += 1 for real
+    nudge(p);             // shared write: p.x += 1 for real
     nudged(p);                     // value param: builds a new Point, p kept
     log.info(f"len={length(p)} color={s.color} area={r.max.x - r.min.x}");
     log.info(f"same={same_fields} diverged={diverged} rp.x={rp.x}");

@@ -114,11 +114,11 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
          \x20       assert(m.has(i), \"i32 map: has after put\");\n\
          \x20       let p = m.get(i);\n\
          \x20       assert(p != nil, \"i32 map: get after put\");\n\
-         \x20       assert(*p == f\"v{i}\", \"i32 map: value round-trips\");\n\
+         \x20       assert(p == f\"v{i}\", \"i32 map: value round-trips\");\n\
          \x20   }\n\
          \x20   acc = acc + m.len();\n\
          \x20   assert(m.put(5, \"new\") == false, \"i32 map: replace answers false\");\n\
-         \x20   assert(*(m.get(5)) == \"new\", \"i32 map: replace took\");\n\
+         \x20   assert(m.get(5) == \"new\", \"i32 map: replace took\");\n\
          \x20   assert(m.len() == 64, \"i32 map: replace keeps len\");\n\
          \x20   acc = acc + 1;\n\
          \x20   assert(m.remove(6), \"i32 map: remove answers true\");\n\
@@ -127,11 +127,11 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
          \x20   assert(m.get(6) == nil, \"i32 map: removed key gets nil\");\n\
          \x20   assert(m.len() == 63, \"i32 map: len after remove\");\n\
          \x20   assert(m.put(6, \"again\"), \"i32 map: re-insert adds (DEAD reuse)\");\n\
-         \x20   assert(*(m.get(6)) == \"again\", \"i32 map: re-insert value\");\n\
+         \x20   assert(m.get(6) == \"again\", \"i32 map: re-insert value\");\n\
          \x20   acc = acc + 2;\n\
          \x20   assert(m.get(1000) == nil, \"i32 map: never-key gets nil\");\n\
          \x20   assert(m.put(-7, \"neg\"), \"i32 map: negative key adds\");\n\
-         \x20   assert(*(m.get(-7)) == \"neg\", \"i32 map: negative key round-trips\");\n\
+         \x20   assert(m.get(-7) == \"neg\", \"i32 map: negative key round-trips\");\n\
          \x20   acc = acc + m.len();\n\
          \x20   return acc;\n\
          }\n");
@@ -155,11 +155,11 @@ fn hashmap_str_keys_and_hashset() {
          \x20   for (let i = 0; i < 48; i += 1) {\n\
          \x20       let p = sm.get(f\"k{i}\");\n\
          \x20       assert(p != nil, \"str map: hit found\");\n\
-         \x20       assert(*p == i * 2, \"str map: hit round-trips\");\n\
+         \x20       assert(p == i * 2, \"str map: hit round-trips\");\n\
          \x20   }\n\
          \x20   assert(sm.get(\"nope\") == nil, \"str map: miss\");\n\
          \x20   assert(sm.put(f\"k10\", 999) == false, \"str map: replace answers false\");\n\
-         \x20   assert(*(sm.get(f\"k10\")) == 999, \"str map: replace took\");\n\
+         \x20   assert(sm.get(f\"k10\") == 999, \"str map: replace took\");\n\
          \x20   assert(sm.remove(f\"k3\"), \"str map: remove\");\n\
          \x20   assert(sm.has(f\"k3\") == false, \"str map: removed is absent\");\n\
          \x20   acc = acc + sm.len();\n\
@@ -199,7 +199,7 @@ fn str_key_remove_readd_get_tombstone_round_trip() {
          pub fn main() -> i32 {\n\
          \x20   let mut m: HashMap<str, str> = HashMap.new();\n\
          \x20   assert(m.put(\"alpha\", \"one\"), \"first put adds\");\n\
-         \x20   assert(*(m.get(\"alpha\")) == \"one\", \"value round-trips\");\n\
+         \x20   assert(m.get(\"alpha\") == \"one\", \"value round-trips\");\n\
          \x20   assert(m.remove(\"alpha\"), \"remove answers true\");\n\
          \x20   assert(m.has(\"alpha\") == false, \"removed key is absent\");\n\
          \x20   assert(m.get(\"alpha\") == nil, \"removed key gets nil\");\n\
@@ -207,7 +207,7 @@ fn str_key_remove_readd_get_tombstone_round_trip() {
          \x20   assert(m.len() == 1, \"len back to one\");\n\
          \x20   let p = m.get(\"alpha\");\n\
          \x20   assert(p != nil, \"re-added key found\");\n\
-         \x20   assert(*p == \"two\", \"re-added value is the fresh cell's\");\n\
+         \x20   assert(p == \"two\", \"re-added value is the fresh cell's\");\n\
          \x20   return 7;\n\
          }\n");
     assert_eq!(checksum, 7, "must equal the mapset scenario's checksum");
@@ -312,17 +312,17 @@ const PARITY_BODY: &str = "\
          \x20   let p1 = m.get(\"k\");\n\
          \x20   let p2 = m.get(\"k\");\n\
          \x20   assert(p1 != nil && p2 != nil, \"both gets found\");\n\
-         \x20   assert(*p1 == \"old\" && *p2 == \"old\", \"both reads see the stored cell\");\n\
+         \x20   assert(p1 == \"old\" && p2 == \"old\", \"both reads see the stored cell\");\n\
          \x20   assert(m.put(\"k\", \"new\") == false, \"replace answers false\");\n\
-         \x20   assert(*p1 == \"old\" && *p2 == \"old\", \"held pointers keep the pre-replace cell\");\n\
-         \x20   assert(*(m.get(\"k\")) == \"new\", \"a fresh get reads the replacement\");\n\
+         \x20   assert(p1 == \"old\" && p2 == \"old\", \"held pointers keep the pre-replace cell\");\n\
+         \x20   assert(m.get(\"k\") == \"new\", \"a fresh get reads the replacement\");\n\
          \x20   assert(m.len() == 1, \"replace keeps len\");\n\
          \x20   fails = fails + 1;\n\
          \x20   assert(m.get(\"nope\") == nil, \"miss gets nil\");\n\
          \x20   assert(m.has(\"k\"), \"has after put\");\n\
          \x20   assert(m.remove(\"k\"), \"remove answers true\");\n\
          \x20   assert(m.get(\"k\") == nil, \"removed key gets nil\");\n\
-         \x20   assert(*p1 == \"old\", \"the held pointer survives the slot's nil-store\");\n\
+         \x20   assert(p1 == \"old\", \"the held pointer survives the slot's nil-store\");\n\
          \x20   fails = fails + m.len();\n\
          \x20   return 40 + fails;\n\
          }\n";

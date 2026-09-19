@@ -114,18 +114,19 @@ struct Lists {
 /// Recover list `h` out of the container. Internal — an ordinary fn,
 /// unrestricted types.
 fn at(c: opaque, h: u32) -> TodoList {
-    let (lists, _) = opaque.downcast<*Lists>(c);
+    let (lists, _) = opaque.downcast<?Lists>(c);
     return lists.lists[h as i32];
 }
 
 // ---- the host surface (entry = callable by the embedder) ----
 
 entry fn createContainer() -> opaque {
-    return opaque.new(&Lists { lists: Vec.new() });
+    let ls: ?Lists = Lists { lists: Vec.new() };
+    return opaque(ls);
 }
 
 entry fn create(c: opaque) -> u32 {
-    let (k, _) = opaque.downcast<*Lists>(c);
+    let (k, _) = opaque.downcast<?Lists>(c);
     k.lists.push(TodoList.new());
     return (k.lists.len() - 1) as u32;
 }

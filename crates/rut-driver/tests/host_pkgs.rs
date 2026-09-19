@@ -58,7 +58,7 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
                     "\n\
                      use server::{ subscribe, emit };\n\
                      pub fn main() -> nil {\n\
-                     \x20   let bus: opaque = opaque.new(0);\n\
+                     \x20   let bus: opaque = opaque(0);\n\
                      \x20   subscribe(bus, \"join\", \"on_join\");\n\
                      \x20   emit(bus, \"join\", \"ada\");\n\
                      }\n"
@@ -112,7 +112,7 @@ fn non_crossing_signatures_refuse_at_load() {
         "the load error names the offender: {err}"
     );
 
-    let err = lower_decl_module("pub host fn takes_ptr(p: *i32);", "test.d.rut").unwrap_err();
+    let err = lower_decl_module("pub host fn takes_ptr(p: ?i32);", "test.d.rut").unwrap_err();
     assert!(err.contains("not a crossing type"), "pointer params refuse: {err}");
 
     // a `self` receiver cannot cross

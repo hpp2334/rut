@@ -22,8 +22,14 @@ pub(crate) struct TypeFrame {
 
 enum TyStage {
     Init,
-    /// `*T` — pointer (RFC 0005)
-    Ptr,
+    /// `?T` — the nullable (RFC 0044): prefix spelling, binds tightest
+    /// (`[?T]` is an array of nullables, `??T` chains); postfix `?`
+    /// composes in `postfix_opt` (`[T]?` is a nullable array)
+    Opt,
+    /// `*T` — the removed pointer spelling: parsed for the friendly
+    /// diagnostic, the element type is the recovered result (the Diag
+    /// already fails the compile)
+    LegacyPtr,
     /// `[T]` — the array type (RFC 0005)
     Bracket,
     /// `(A, B)` / `(T)` — tuple, grouping (RFC 0007); `()` is rejected —
@@ -56,9 +62,19 @@ impl TypeFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         match self.stage {
             TyStage::Init => {
-                // pointer type `*T` (RFC 0005)
-                if p.eat_punct(Tok::Star) {
-                    self.stage = TyStage::Ptr;
+                // `?T` — the nullable type (RFC 0044): prefix, binds
+                // tightest (replaces the old `*T` stage)
+                if p.eat_punct(Tok::Question) {
+                    self.stage = TyStage::Opt;
+                    return Step::Push(Frame::Type(TypeFrame::new(p)));
+                }
+                // the removed pointer spelling `*T`: diagnose and recover
+                // with the element type — the parser no longer ACCEPTS it
+                // (the Diag fails the compile), the sweep points at `?T`
+                if matches!(p.tok(), Tok::Star) {
+                    p.err_here("the pointer spelling `*T` was renamed — write `?T` (RFC 0044)");
+                    p.bump();
+                    self.stage = TyStage::LegacyPtr;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
                 // `[T]` — the array type (RFC 0005)
@@ -132,15 +148,28 @@ impl TypeFrame {
         self.pop_or_union(p, t)
     }
 
-    /// The type just completed either pops — or a `|` follows and it
-    /// continues as a union bound (`type U = A | B;`, `T requires A | B`,
+    /// A completed type is wrapped by any postfix `?`s (RFC 0044: the
+    /// nullable binds tightest — `[T]?` is a nullable array, `??T`
+    /// chains) and then either pops — or a `|` follows and it continues
+    /// as a union bound (`type U = A | B;`, `T requires A | B`,
     /// RFC 0043). A single member never becomes a `TyUnion` node.
     fn pop_or_union(&mut self, p: &mut Parser, t: NodeHandle<AnyTy>) -> Step {
+        let t = self.postfix_opt(p, t);
         if self.allow_union && p.eat_punct(Tok::Pipe) {
             self.stage = TyStage::Union { elems: vec![t] };
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
         Step::Pop(Done::Ty(t))
+    }
+
+    /// postfix `?`s on a completed type: `T?` → `?T`, `T??` chains
+    fn postfix_opt(&mut self, p: &mut Parser, mut t: NodeHandle<AnyTy>) -> NodeHandle<AnyTy> {
+        while matches!(p.tok(), Tok::Question) {
+            let lo = self.lo;
+            t = p.typ(TypeKind::TyOpt { inner: t }, lo.to(p.span()));
+            p.bump();
+        }
+        t
     }
 
     /// a union member completed: continue on `|`, else build the node
@@ -242,9 +271,14 @@ impl TypeFrame {
         match d {
             Done::Ty(t) => match &mut self.stage {
                 TyStage::Union { .. } => self.union_absorb(p, t),
-                TyStage::Ptr => {
-                    let t = p.typ(TypeKind::TyPtr { inner: t }, self.lo.to(p.span()));
+                TyStage::Opt => {
+                    let t = p.typ(TypeKind::TyOpt { inner: t }, self.lo.to(p.span()));
                     self.pop_or_union(p, t)
+                }
+                TyStage::LegacyPtr => {
+                    // `*T` recovery: the element type IS the result — the
+                    // diagnostic emitted at the `*` already fails the compile
+                    Step::Pop(Done::Ty(t))
                 }
                 TyStage::Bracket => {
                     p.expect(Tok::RBracket);

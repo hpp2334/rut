@@ -126,9 +126,9 @@ impl<'a> Ctx<'a> {
                 let rty = self.resolve_type(*ret, env);
                 self.mk_fn_ty(ptys, rty)
             }
-            TypeKind::TyPtr { inner } => {
+            TypeKind::TyOpt { inner } => {
                 let elem = self.resolve_type(*inner, env);
-                self.mk_ptr(elem)
+                self.mk_opt(elem)
             }
             TypeKind::TyArray { elem } => {
                 // `[T]` — the array type (RFC 0005 §9): grammar-spelled,

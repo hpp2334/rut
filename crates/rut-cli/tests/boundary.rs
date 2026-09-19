@@ -63,9 +63,9 @@ entry fn pair(v: i32) -> (i32, bool) {
 }
 entry fn triple() -> (i64, f64, str) { let a: i64 = 1; let b: f64 = 2.5; return (a, b, "three"); }
 entry fn nothing() -> nil { return; }
-entry fn make() -> opaque { return opaque.new(&Box { rows: Vec.new() }); }
+entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let (b, _) = opaque.downcast<*Box>(c);
+    let (b, _) = opaque.downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }

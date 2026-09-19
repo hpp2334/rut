@@ -28,13 +28,11 @@ builtin fn assert(cond: bool, msg: str) -> nil;
 // RFC 0034 §2 — abort with the message.
 builtin fn panic(msg: str) -> nil;
 
-// RFC 0005 §9 — the address-of: `&v` boxes the operand's cell into a
-// fresh one-slot cell; the result is a nil-able `*T` (`nil` is the null
-// pointer; dereferencing it traps). No decl — `&` is grammar.
-//
 // RFC 0016 §3 — run `cleanup(p)` when `p`'s cell refcount reaches zero.
 // One callback per pointer; a second attach is a compile error.
-builtin fn on_drop<T>(p: *T, cleanup: fn(*T)) -> nil;
+// (RFC 0044: the old `&v`/`*T` surface is now the nullable `?T` — a
+// `?T` binding IS the cell reference.)
+builtin fn on_drop<T>(p: ?T, cleanup: fn(?T)) -> nil;
 
 // v1.1 codepoint access (RFC 0004 — `char` is gone): `s.code()` reads
 // the FIRST codepoint as a `u32` (traps on empty); `str.from_code(n)`
@@ -76,18 +74,18 @@ builtin primitive bytes {
 // The `Array` name itself is removed: use sites diagnose with the
 // removal and its replacement.
 
-// RFC 0014 — the erasure box: any value goes in via `opaque.new(v)`,
+// RFC 0014 — the erasure box: any value goes in via `opaque(v)`,
 // `opaque.downcast<T>(o)` recovers it (and `x is T` probes it). A
-// boot-table type whose members are BOTH statics on the primitive; the
-// free `downcast<T>` fn is gone — the member form is the one surface
+// boot-table type whose member is the static on the primitive; the free
+// `downcast<T>` fn is gone — the member form is the one surface
 // (builtin-surface phase 2 deleted the engine alias too: a bare
-// `downcast<T>(o)` call diagnoses with the removal).
-// `new`'s parameter is any value — the method spells that with its own
-// `<T>`; a false `.1` from `downcast` leaves `.0` at the type's zero
-// value. (builtin-surface phase 2: the interner/boot name is spelled
+// `downcast<T>(o)` call diagnoses with the removal). Construction is a
+// CALL of the type name itself — `opaque.new(v)` was folded into
+// `opaque(v)` in the `?T` sweep (RFC 0044), there is no `new` static.
+// A false `.1` from `downcast` leaves `.0` at the type's zero value.
+// (builtin-surface phase 2: the interner/boot name is spelled
 // `opaque` — the type name is part of every host `.d.rut` crossing.)
 builtin primitive opaque {
-    fn new<T>(v: T) -> Self;
     fn downcast<T>(o: Self) -> (T, bool);
 }
 

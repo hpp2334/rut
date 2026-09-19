@@ -41,13 +41,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         let mut lt = lt;
         let mut lhs_reg = lhs_reg;
-        let rt_ = self.compile_expr(rhs, Some(lt))?;
+        // the rhs hint: an expected `?T` boxes values at let/arg/return/
+        // field-store positions, but a `==` operand is NOT such a position
+        // (RFC 0012 §4 — pointer-vs-pointee compares stay). Only the `nil`
+        // literal takes the nullable hint, typing as `?T` for the identity
+        // null-slot compare.
+        let rhs_hint = match (op, self.ctx.types.kind(lt).clone()) {
+            (Eq | Ne, TyKind::Opt { .. }) => {
+                if matches!(self.ctx.ast.expr(rhs), ExprKind::Lit(Lit::Nil)) { Some(lt) } else { None }
+            }
+            _ => Some(lt),
+        };
+        let rt_ = self.compile_expr(rhs, rhs_hint)?;
         let rhs_reg = self.last_reg;
         // `==`/`!=`: a pointer against its own pointee type compares the
         // VALUE (the funnel already deref'd the right-hand side); pointer-
         // vs-pointer — including `nil` — stays identity (RFC 0012 §4)
         if matches!(op, Eq | Ne) && rt_ != lt {
-            if let TyKind::Ptr { elem } = self.ctx.types.kind(lt).clone() {
+            if let TyKind::Opt { elem } = self.ctx.types.kind(lt).clone() {
                 if rt_ == elem {
                     let (t2, r2) = self.deref_ptr(lt, lhs_reg, sp.lo);
                     lt = t2;
@@ -198,7 +209,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if segs[0].generics.is_empty() {
                     if let Some(l) = self.lookup(segs[0].name).cloned() {
                         let head_is_ptr =
-                            matches!(self.ctx.types.kind(l.ty).clone(), TyKind::Ptr { .. });
+                            matches!(self.ctx.types.kind(l.ty).clone(), TyKind::Opt { .. });
                         // a pointer binding is immutable, its POINTEE is not —
                         // stores through `p.x` are legal on a plain `let p`
                         if !l.is_mut && !l.loop_var && !head_is_ptr {
@@ -217,7 +228,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         for seg in &segs[1..segs.len() - 1] {
                             // a pointer mid-chain derefs before the next field
-                            if matches!(self.ctx.types.kind(cur_ty).clone(), TyKind::Ptr { .. }) {
+                            if matches!(self.ctx.types.kind(cur_ty).clone(), TyKind::Opt { .. }) {
                                 let (t, d) = self.deref_for_use(cur_ty, cur, sp.lo);
                                 cur = d;
                                 cur_ty = t;

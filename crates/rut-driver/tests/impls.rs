@@ -290,7 +290,7 @@ fn builtin_class_inherent_impls_compile() {
              fn peek(self) -> i32 { return 1; }\n\
          }\n\
          fn main() -> i32 {\n\
-             let o = opaque.new(5);\n\
+             let o = opaque(5);\n\
              return o.peek();\n\
          }\n",
     );

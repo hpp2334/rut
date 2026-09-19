@@ -182,7 +182,7 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
             names.join(".")
         }
         TypeKind::TyFn { .. } => "fn(..)".to_string(),
-        TypeKind::TyPtr { .. } => "*T".to_string(),
+        TypeKind::TyOpt { .. } => "?T".to_string(),
         TypeKind::TyArray { .. } => "[..]".to_string(),
         TypeKind::TyTuple { .. } => "(..)".to_string(),
         TypeKind::TyConst(_) => "const".to_string(),

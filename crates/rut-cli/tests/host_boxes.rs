@@ -229,7 +229,7 @@ class Node {
     tags: Vec<str>;
 }
 impl Node {
-    fn new(name: str) -> Self { return Self { name: name, tag: opaque.new(0), tags: Vec.new() }; }
+    fn new(name: str) -> Self { return Self { name: name, tag: opaque(0), tags: Vec.new() }; }
 }
 
 entry fn churn(n: i64) -> nil {

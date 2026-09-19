@@ -179,14 +179,14 @@ fn pointer_array_get_set_matches_reference() {
     let src = "\
 pub fn main() -> i32 {
     let n = 64;
-    let mut p: [*i32] = [nil; n];
+    let mut p: [?i32] = [nil; n];
     for (let i = 0; i < n; i += 1) {
-        p[i] = &(i * 10 + 3);
+        p[i] = i * 10 + 3;
     }
     let mut s = 0;
     for (let i = 0; i < n; i += 1) {
         let q = p[i];
-        if (q != nil) { s += *q; }
+        if (q != nil) { s += q; }
     }
     p[5] = nil;
     let mut t = 0;

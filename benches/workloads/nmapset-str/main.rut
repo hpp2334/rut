@@ -32,7 +32,7 @@ fn churn(n: i32) -> i32 {
         let p = m.get(f"k{i}");
         if (p != nil) {
             hits += 1;
-            sum = sum.wrapping_add(*p);
+            sum = sum.wrapping_add(p);
         }
     }
     // miss lookups — the "m" prefix is never inserted
