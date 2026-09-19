@@ -1,0 +1,27 @@
+// nmap/nmap.d.rut — the native key-table experiment's host surface (the
+// mapset-host plan): `pub host fn` decls only — the bodies live in
+// rut-std's `install_std_nmap` (RFC 0023 §2). Signatures are concrete
+// over the crossing set.
+//
+// The two pair-shaped answers travel packed in one scalar because the
+// decl crossing set has no tuples:
+// - `map_remove`: `>= 0` = removed, the freed slot; `-1` = absent.
+// - `map_take_reloc`: `-1` = drained; else `(old << 32) | new`.
+
+pub host fn map_new(cap: i64) -> Opaque;
+
+pub host fn map_entry(m: Opaque, k: Opaque, h: i64) -> i32;
+
+pub host fn map_find(m: Opaque, k: Opaque, h: i64) -> i32;
+
+pub host fn map_remove(m: Opaque, k: Opaque, h: i64) -> i32;
+
+pub host fn map_needs_grow(m: Opaque) -> bool;
+
+pub host fn map_grow(m: Opaque) -> i32;
+
+pub host fn map_take_reloc(m: Opaque) -> i64;
+
+pub host fn map_cap(m: Opaque) -> i32;
+
+pub host fn map_len(m: Opaque) -> i32;
