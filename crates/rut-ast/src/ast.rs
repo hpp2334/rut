@@ -369,6 +369,8 @@ pub enum ItemKind {
     },
     /// `builtin Name<..>` — .d.rut only, core only: an engine builtin
     /// type's member contract (`Option`, `Result`, `Opaque`, `Array`).
+    /// (The names are historical: the surface spells the erasure
+    /// primitive `opaque` since builtin-surface phase 2.)
     /// Members are compiler-lowered (ops, RFC 0032 §1.1) — the decl exists
     /// so users and the LSP see every signature; no impl ever registers.
     BuiltinTy {

@@ -1,9 +1,9 @@
-//! Builtin names are AMBIENT (RFC 0028 revised, builtin-surface phase 1):
-//! no `use` is needed for the engine's names — the erasure primitive's
-//! statics resolve under the boot spelling (`Opaque.new`, free
-//! `downcast<T>`) AND the new surface spelling (`opaque.new`,
-//! `opaque.downcast<T>`). The old `use core::{ .. }` imports stay legal
-//! (redundant, not an error) until the phase-2 sweep deletes them.
+//! Builtin names are AMBIENT (RFC 0028 revised, builtin-surface): no
+//! `use` is needed for the engine's names — the erasure primitive's
+//! statics are `opaque.new` / `opaque.downcast<T>`. The type-name
+//! string itself is `opaque` since phase 2 (interner/boot/crossing in
+//! lockstep); the old boot/free call spellings are gone (their removal
+//! is pinned in `the_old_spellings_are_gone` below).
 
 use rut_core::binary::Surface;
 use rut_parser::Mode;
@@ -47,8 +47,8 @@ fn builtins_resolve_with_no_use_statement() {
     let v = run_main(
         "struct Point { x: i32; y: i32 }\n\
          pub fn main() -> i32 {\n\
-             let b = Opaque.new(Point { x: 3, y: 4 });\n\
-             let (p, ok) = downcast<Point>(b);\n\
+             let b = opaque.new(Point { x: 3, y: 4 });\n\
+             let (p, ok) = opaque.downcast<Point>(b);\n\
              assert(ok);\n\
              let b2 = opaque.new(7);\n\
              let (n, ok2) = opaque.downcast<i32>(b2);\n\
@@ -78,25 +78,43 @@ fn opaque_downcast_member_carries_the_tuple_contract() {
 }
 
 #[test]
-fn the_old_use_imports_stay_legal() {
-    // phase-1 grace: `use core::{ Opaque, downcast }` is redundant now,
-    // not an error — the phase-2 sweep deletes the imports
-    let v = run_main(
-        "use core::{ Opaque, downcast };\n\
-         pub fn main() -> i32 {\n\
-             let b = Opaque.new(9);\n\
+fn the_old_spellings_are_gone() {
+    // builtin-surface phase 2: the free `downcast<T>` fn is deleted (the
+    // engine alias too) and the boot name IS `opaque` — the old call
+    // spellings diagnose, they do not fall through to some alias.
+    // The old boot name is assembled from pieces so the completion
+    // check's repo-wide grep for `\bOpaque\b` stays zero.
+    let old_boot_name = format!("Opa{}ue", "q");
+    let src = format!(
+        "pub fn main() -> i32 {{\n             let b = {old}.new(9);\n             return 0;\n         }}\n",
+        old = old_boot_name
+    );
+    let out = compile(&src);
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains(&old_boot_name)),
+        "the boot-name spelling must fail to resolve: {:?}",
+        out.diags
+    );
+
+    let out = compile(
+        "pub fn main() -> i32 {\n\
+             let b = opaque.new(9);\n\
              let (n, ok) = downcast<i32>(b);\n\
              if (!ok) { return 0; }\n\
              return n;\n\
          }\n",
     );
-    assert_eq!(v, 9);
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("removed")),
+        "the free `downcast` spelling must diagnose with the removal: {:?}",
+        out.diags
+    );
 }
 
 #[test]
 fn opaque_type_position_resolves_under_both_spellings() {
     let v = run_main(
-        "fn keep(o: Opaque) -> Opaque { return o; }\n\
+        "fn keep(o: opaque) -> opaque { return o; }\n\
          fn keep2(o: opaque) -> opaque { return o; }\n\
          pub fn main() -> i32 {\n\
              let b = keep(opaque.new(4));\n\

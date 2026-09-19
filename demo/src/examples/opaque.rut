@@ -1,10 +1,9 @@
-use core::{ Opaque, downcast };
 use pouch::{ Vec };
-// RFC 0014 — Opaque: explicit type erasure with checked recovery.
-// Opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the
-// runtime type; downcast<T> recovers it or yields None. `Opaque` is the
-// erased-storage CONCRETE type — it composes like any class (`Vec<Opaque>`,
-// fixed `[Opaque]`, fields, returns). Under the all-cells regime
+// RFC 0014 — opaque: explicit type erasure with checked recovery.
+// opaque.new(v) (the host class's construction method) forgets the static type, KEEPS the
+// runtime type; opaque.downcast<T> recovers it or yields None. `opaque` is the
+// erased-storage CONCRETE type — it composes like any class (`Vec<opaque>`,
+// fixed `[opaque]`, fields, returns). Under the all-cells regime
 // (RFC 0016 §1) boxing is ZERO-COPY: the box stores the cell handle, so
 // the box shares identity with the original. The only any-shaped value
 // in rut — and it can do nothing until recovered.
@@ -26,27 +25,27 @@ impl Session {
 
 fn erase_and_recover() {
     let log = Logger.new("opaque");
-    let box1 = Opaque.new(Point { x: 1, y: 2 });    // erasure = type-call;
-    let box2 = Opaque.new(Flavor.Sour);             // zero-copy (shares the cell)
-    let box3 = Opaque.new("hello");
+    let box1 = opaque.new(Point { x: 1, y: 2 });    // erasure = type-call;
+    let box2 = opaque.new(Flavor.Sour);             // zero-copy (shares the cell)
+    let box3 = opaque.new("hello");
 
-    let (p, ok) = downcast<Point>(box1);        // (Point, bool)
+    let (p, ok) = opaque.downcast<Point>(box1);        // (Point, bool)
     if (ok) {
         log.info(f"point {p.x} {p.y}");
     }
-    let (wrong, wrong_ok) = downcast<i32>(box2); // wrong type: false, no trap
-    log.info(f"sour? {downcast<Flavor>(box2).1} wrong? {wrong_ok}");
+    let (wrong, wrong_ok) = opaque.downcast<i32>(box2); // wrong type: false, no trap
+    log.info(f"sour? {opaque.downcast<Flavor>(box2).1} wrong? {wrong_ok}");
     log.info(f"is str: {box3 is str}");   // `is` sees through the box
 }
 
 fn share_vs_copy() {
     let log = Logger.new("opaque");
     let s = Session.new("abc");
-    let o = Opaque.new(s);            // SHARES the Session cell (zero-copy):
+    let o = opaque.new(s);            // SHARES the Session cell (zero-copy):
                                   // mutation through s is visible in o
-    let o2 = Opaque.new(*&s);    // a private copy, new identity
+    let o2 = opaque.new(*&s);    // a private copy, new identity
 
-    log.info(f"same session: {downcast<Session>(o).1}");
+    log.info(f"same session: {opaque.downcast<Session>(o).1}");
     log.info(f"distinct boxes: {o == o2}");     // false — two cells (RFC 0012 §4)
 }
 
@@ -54,9 +53,9 @@ fn nested() {
     let log = Logger.new("opaque");
     // heterogeneous FIXED array — pure data, one shared cell per slot
     // (RFC 0016 §1)
-    let boxes: [Opaque] = [Opaque.new(Point { x: 3, y: 4 }), Opaque.new("two"), Opaque.new(Point { x: 5, y: 6 })];
-    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS — primitives recover via downcast
-    let vec: Vec<Opaque> = Vec.from([Opaque.new(5)]);
+    let boxes: [opaque] = [opaque.new(Point { x: 3, y: 4 }), opaque.new("two"), opaque.new(Point { x: 5, y: 6 })];
+    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS — primitives recover via `opaque.downcast<T>`
+    let vec: Vec<opaque> = Vec.from([opaque.new(5)]);
     log.info(f"vec {vec.len()}");
 }
 

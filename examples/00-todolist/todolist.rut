@@ -1,10 +1,9 @@
-use core::{ Opaque, downcast };
 use pouch::{ Vec };
 // todolist.rut — a todo-list library in rut, called from Rust.
 //
 // The shape: the HOST owns the session. It asks for an opaque container
 // (`createContainer`), gets back a handle it can hold and pass around
-// (an `Opaque` box — RFC 0014, the one cell an embedder may keep), and
+// (an `opaque` box — RFC 0014, the one cell an embedder may keep), and
 // drives CRUD through the `entry fn` surface below. All data — the
 // container, the lists, every row — lives in rut; only primitives,
 // `str`/`bytes`, and the container handle cross (RFC 0023 §2).
@@ -107,54 +106,54 @@ impl TodoList {
 
 /// The host-held container: one opaque box around all live lists.
 /// `createContainer` boxes it; every entry takes it back as its first
-/// argument and recovers it with `downcast` (a wrong box traps cleanly).
+/// argument and recovers it with `opaque.downcast<T>` (a wrong box traps cleanly).
 struct Lists {
     lists: Vec<TodoList>;    // handle = index; handles stay stable while held
 }
 
 /// Recover list `h` out of the container. Internal — an ordinary fn,
 /// unrestricted types.
-fn at(c: Opaque, h: u32) -> TodoList {
-    let (lists, _) = downcast<*Lists>(c);
+fn at(c: opaque, h: u32) -> TodoList {
+    let (lists, _) = opaque.downcast<*Lists>(c);
     return lists.lists[h as i32];
 }
 
 // ---- the host surface (entry = callable by the embedder) ----
 
-entry fn createContainer() -> Opaque {
-    return Opaque.new(&Lists { lists: Vec.new() });
+entry fn createContainer() -> opaque {
+    return opaque.new(&Lists { lists: Vec.new() });
 }
 
-entry fn create(c: Opaque) -> u32 {
-    let (k, _) = downcast<*Lists>(c);
+entry fn create(c: opaque) -> u32 {
+    let (k, _) = opaque.downcast<*Lists>(c);
     k.lists.push(TodoList.new());
     return (k.lists.len() - 1) as u32;
 }
 
-entry fn add(c: Opaque, h: u32, title: str) -> i32 {
+entry fn add(c: opaque, h: u32, title: str) -> i32 {
     return at(c, h).add(title);
 }
 
-entry fn set_done(c: Opaque, h: u32, id: i32, done: bool) -> bool {
+entry fn set_done(c: opaque, h: u32, id: i32, done: bool) -> bool {
     return at(c, h).set_done(id, done);
 }
 
-entry fn remove(c: Opaque, h: u32, id: i32) -> bool {
+entry fn remove(c: opaque, h: u32, id: i32) -> bool {
     return at(c, h).remove(id);
 }
 
-entry fn len(c: Opaque, h: u32) -> i32 {
+entry fn len(c: opaque, h: u32) -> i32 {
     return at(c, h).len();
 }
 
-entry fn title_of(c: Opaque, h: u32, id: i32) -> str {
+entry fn title_of(c: opaque, h: u32, id: i32) -> str {
     return at(c, h).title_of(id);
 }
 
-entry fn has_title(c: Opaque, h: u32, id: i32) -> bool {
+entry fn has_title(c: opaque, h: u32, id: i32) -> bool {
     return at(c, h).has_title(id);
 }
 
-entry fn render(c: Opaque, h: u32) -> str {
+entry fn render(c: opaque, h: u32) -> str {
     return at(c, h).render();
 }

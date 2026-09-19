@@ -80,7 +80,7 @@ fn crud_session() {
 fn wrong_box_traps_cleanly() {
     let (mut vm, c) = vm();
     let _ = c;
-    // passing a bool where the Opaque container is expected is an
+    // passing a bool where the opaque container is expected is an
     // embedder mistake: a named trap, not a panic or silent zero
     let err = vm.call::<_, u32>("create", (false,)).unwrap_err();
     assert!(err.msg.contains("argument"), "{}", err.msg);

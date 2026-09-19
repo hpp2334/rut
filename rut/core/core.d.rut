@@ -79,12 +79,13 @@ builtin primitive bytes {
 // RFC 0014 — the erasure box: any value goes in via `opaque.new(v)`,
 // `opaque.downcast<T>(o)` recovers it (and `x is T` probes it). A
 // boot-table type whose members are BOTH statics on the primitive; the
-// free `downcast<T>` fn is gone — the member form is the one surface.
+// free `downcast<T>` fn is gone — the member form is the one surface
+// (builtin-surface phase 2 deleted the engine alias too: a bare
+// `downcast<T>(o)` call diagnoses with the removal).
 // `new`'s parameter is any value — the method spells that with its own
 // `<T>`; a false `.1` from `downcast` leaves `.0` at the type's zero
-// value. (builtin-surface phase 1: the interner/boot name is still
-// spelled `Opaque` until the phase-2 rename — both call spellings
-// resolve.)
+// value. (builtin-surface phase 2: the interner/boot name is spelled
+// `opaque` — the type name is part of every host `.d.rut` crossing.)
 builtin primitive opaque {
     fn new<T>(v: T) -> Self;
     fn downcast<T>(o: Self) -> (T, bool);

@@ -119,7 +119,7 @@ impl<'a> GraphCompiler<'a> {
                     self.diags.push(Diag::new(
                         Span::new(0, 0),
                         format!(
-                            "host function `{host_scope}::{name}`: only primitives, `str`, `bytes`, `Opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)"
+                            "host function `{host_scope}::{name}`: only primitives, `str`, `bytes`, `opaque`, and `Option`/`Result` over those cross the host boundary (RFC 0023 §2)"
                         ),
                     ));
                     return None;
@@ -202,6 +202,15 @@ impl<'a> GraphCompiler<'a> {
             return None;
         }
         let uses = uses_of(&ast);
+        // builtin names are AMBIENT (RFC 0028 revised, builtin-surface):
+        // the mounted prelude rides every compilation unit — no `use`
+        // is needed for its names. A `use core::{ .. }` statement stays
+        // legal but is redundant; the surface binds either way.
+        let mut uses = uses;
+        if spec != "core" && self.session.resolve("core").is_ok() && !uses.iter().any(|u| u == "core")
+        {
+            uses.push("core".to_string());
+        }
 
         let mut extra = String::new();
         let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> = Vec::new();

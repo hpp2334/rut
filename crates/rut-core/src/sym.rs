@@ -122,7 +122,7 @@ pub const WELL_KNOWN: &[&str] = &[
     "u32",        // U32
     "u64",        // U64
     "Array",      // ARRAY
-    "Opaque",     // OPAQUE
+    "opaque",     // OPAQUE
     "Iterator",   // ITERATOR
     "downcast",   // DOWNCAST
     "assert",     // ASSERT
@@ -281,7 +281,7 @@ mod tests {
             ("u32", U32),
             ("u64", U64),
             ("Array", ARRAY),
-            ("Opaque", OPAQUE),
+            ("opaque", OPAQUE),
             ("Iterator", ITERATOR),
             ("downcast", DOWNCAST),
             ("assert", ASSERT),

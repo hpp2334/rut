@@ -1,14 +1,14 @@
 //! The `nmap` host experiment (the mapset-host plan, H2): the native
-//! key table behind `Opaque` payload boxes, driven end to end the way
+//! key table behind `opaque` payload boxes, driven end to end the way
 //! the H3 wrapper will drive it — rut code computes the hash, boxes the
-//! key with `Opaque.new`, and calls the host surface; the payload lives
+//! key with `opaque.new`, and calls the host surface; the payload lives
 //! Rust-side in `OpaqueBox<NativeTable>` (RFC 0023/0026).
 //!
 //! Covered per the phase: insert / replace / find / miss / remove,
 //! tombstone reuse, the load-factor law, grow with the relocation
 //! iterator, the str/bytes key flavors, the closed-set trap (floats and
 //! user records — the loud "use mapset" message), and the payload Drop
-//! law at rc-0, including through a wrapper record's `Opaque` field.
+//! law at rc-0, including through a wrapper record's `opaque` field.
 
 use std::rc::Rc;
 
@@ -19,7 +19,6 @@ use rut_vm::interp::Vm;
 const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/nmap");
 
 const SRC: &str = r#"
-use core::{ Opaque };
 use nmap::{ map_new, map_entry, map_find, map_remove, map_needs_grow, map_grow, map_take_reloc, map_cap, map_len };
 
 // the wrapper-side hash vocabulary (mapset.rut verbatim): mix64 for the
@@ -48,19 +47,19 @@ fn bhash(data: bytes) -> i64 {
     return fnv1a64(data) as i64;
 }
 
-entry fn new_map(cap: i64) -> Opaque { return map_new(cap); }
+entry fn new_map(cap: i64) -> opaque { return map_new(cap); }
 
-entry fn put_i32(t: Opaque, k: i32) -> i32 {
-    return map_entry(t, Opaque.new(k), ihash(k as u64));
+entry fn put_i32(t: opaque, k: i32) -> i32 {
+    return map_entry(t, opaque.new(k), ihash(k as u64));
 }
 
-entry fn find_i32(t: Opaque, k: i32) -> i32 {
-    return map_find(t, Opaque.new(k), ihash(k as u64));
+entry fn find_i32(t: opaque, k: i32) -> i32 {
+    return map_find(t, opaque.new(k), ihash(k as u64));
 }
 
-entry fn count(t: Opaque) -> i32 { return map_len(t); }
+entry fn count(t: opaque) -> i32 { return map_len(t); }
 
-entry fn capacity(t: Opaque) -> i32 { return map_cap(t); }
+entry fn capacity(t: opaque) -> i32 { return map_cap(t); }
 
 // insert / replace / find / miss / remove — a fails accumulator the
 // test asserts at zero. The grow check runs before the probe, exactly
@@ -73,24 +72,24 @@ entry fn basic_lifecycle() -> i64 {
         if (map_needs_grow(t)) {
             if (map_grow(t) < 4) { fails += 100000; }
         }
-        let at = map_entry(t, Opaque.new(i), ihash(i as u64));
+        let at = map_entry(t, opaque.new(i), ihash(i as u64));
         if (at >= 0) { fails += 100; }   // fresh keys must insert
         i += 1;
     }
     if (map_len(t) != 10) { fails += 1; }
     // replace: the found slot back, no new entry
-    let at = map_entry(t, Opaque.new(3), ihash(3));
+    let at = map_entry(t, opaque.new(3), ihash(3));
     if (at < 0) { fails += 10; }
     if (map_len(t) != 10) { fails += 20; }
     // hit and miss
-    if (map_find(t, Opaque.new(7), ihash(7)) < 0) { fails += 100; }
-    if (map_find(t, Opaque.new(99), ihash(99)) >= 0) { fails += 200; }
+    if (map_find(t, opaque.new(7), ihash(7)) < 0) { fails += 100; }
+    if (map_find(t, opaque.new(99), ihash(99)) >= 0) { fails += 200; }
     // remove: the freed slot back, then a miss, then a remove-miss
-    let rm = map_remove(t, Opaque.new(7), ihash(7));
+    let rm = map_remove(t, opaque.new(7), ihash(7));
     if (rm < 0) { fails += 1000; }
     if (map_len(t) != 9) { fails += 2000; }
-    if (map_find(t, Opaque.new(7), ihash(7)) >= 0) { fails += 4000; }
-    if (map_remove(t, Opaque.new(7), ihash(7)) >= 0) { fails += 8000; }
+    if (map_find(t, opaque.new(7), ihash(7)) >= 0) { fails += 4000; }
+    if (map_remove(t, opaque.new(7), ihash(7)) >= 0) { fails += 8000; }
     if (map_len(t) != 9) { fails += 16000; }
     return fails;
 }
@@ -102,7 +101,7 @@ entry fn load_law() -> i64 {
     if (map_needs_grow(t)) { return -1; }
     let mut i = 0;
     while (!map_needs_grow(t)) {
-        map_entry(t, Opaque.new(i), ihash(i as u64));
+        map_entry(t, opaque.new(i), ihash(i as u64));
         i += 1;
     }
     if (map_len(t) != 11) { return -2; }
@@ -114,19 +113,19 @@ entry fn load_law() -> i64 {
 entry fn tombstone_reuse() -> i64 {
     let t = map_new(8);
     // three sparse keys: no grow ((3+0+1)*10 = 40 < 56)
-    if (map_entry(t, Opaque.new(11), ihash(11)) >= 0) { return -1; }
-    if (map_entry(t, Opaque.new(22), ihash(22)) >= 0) { return -1; }
-    if (map_entry(t, Opaque.new(33), ihash(33)) >= 0) { return -1; }
-    let before = map_find(t, Opaque.new(11), ihash(11));
+    if (map_entry(t, opaque.new(11), ihash(11)) >= 0) { return -1; }
+    if (map_entry(t, opaque.new(22), ihash(22)) >= 0) { return -1; }
+    if (map_entry(t, opaque.new(33), ihash(33)) >= 0) { return -1; }
+    let before = map_find(t, opaque.new(11), ihash(11));
     if (before < 0) { return -2; }
-    if (map_remove(t, Opaque.new(11), ihash(11)) < 0) { return -3; }
+    if (map_remove(t, opaque.new(11), ihash(11)) < 0) { return -3; }
     if (map_len(t) != 2) { return -4; }
-    let again = map_entry(t, Opaque.new(11), ihash(11));
+    let again = map_entry(t, opaque.new(11), ihash(11));
     if (again >= 0) { return -5; }
     if (-(again + 1) != before) { return -6; }   // same slot: DEAD reuse
     // the untouched keys still find their slots
-    if (map_find(t, Opaque.new(22), ihash(22)) < 0) { return -7; }
-    if (map_find(t, Opaque.new(33), ihash(33)) < 0) { return -8; }
+    if (map_find(t, opaque.new(22), ihash(22)) < 0) { return -7; }
+    if (map_find(t, opaque.new(33), ihash(33)) < 0) { return -8; }
     return 0;
 }
 
@@ -152,7 +151,7 @@ entry fn grow_relocate(n: i32) -> i64 {
             vals = next;
         }
         let k = i * 37 - 1000;   // spans negative keys too
-        let at = map_entry(t, Opaque.new(k), ihash(k as u64));
+        let at = map_entry(t, opaque.new(k), ihash(k as u64));
         let mut slot: i32 = at;
         if (at < 0) { slot = -(at + 1); }
         vals[slot] = k as i64 * 7 + 1;
@@ -163,7 +162,7 @@ entry fn grow_relocate(n: i32) -> i64 {
     let mut j = 0;
     while (j < n) {
         let k = j * 37 - 1000;
-        let at = map_find(t, Opaque.new(k), ihash(k as u64));
+        let at = map_find(t, opaque.new(k), ihash(k as u64));
         if (at < 0) { return -3000000 - j as i64; }
         acc = acc + (vals[at] - (k as i64 * 7 + 1));
         j += 1;
@@ -178,19 +177,19 @@ entry fn str_keys() -> i64 {
     let a: str = "alpha";
     let b: str = "beta";
     let c: str = "gamma";
-    if (map_entry(t, Opaque.new(a), bhash(a.encode())) >= 0) { fails += 1; }
-    if (map_entry(t, Opaque.new(b), bhash(b.encode())) >= 0) { fails += 1; }
-    if (map_entry(t, Opaque.new(c), bhash(c.encode())) >= 0) { fails += 1; }
+    if (map_entry(t, opaque.new(a), bhash(a.encode())) >= 0) { fails += 1; }
+    if (map_entry(t, opaque.new(b), bhash(b.encode())) >= 0) { fails += 1; }
+    if (map_entry(t, opaque.new(c), bhash(c.encode())) >= 0) { fails += 1; }
     if (map_len(t) != 3) { fails += 2; }
     // content equality: a fresh instance of the same text finds the slot
     let again: str = "beta";
-    if (map_find(t, Opaque.new(again), bhash(again.encode())) < 0) { fails += 4; }
+    if (map_find(t, opaque.new(again), bhash(again.encode())) < 0) { fails += 4; }
     let miss: str = "delta";
-    if (map_find(t, Opaque.new(miss), bhash(miss.encode())) >= 0) { fails += 8; }
+    if (map_find(t, opaque.new(miss), bhash(miss.encode())) >= 0) { fails += 8; }
     // replace: the found slot back, no new entry
-    if (map_entry(t, Opaque.new(a), bhash(a.encode())) < 0) { fails += 16; }
+    if (map_entry(t, opaque.new(a), bhash(a.encode())) < 0) { fails += 16; }
     if (map_len(t) != 3) { fails += 32; }
-    if (map_remove(t, Opaque.new(c), bhash(c.encode())) < 0) { fails += 64; }
+    if (map_remove(t, opaque.new(c), bhash(c.encode())) < 0) { fails += 64; }
     if (map_len(t) != 2) { fails += 128; }
     return fails;
 }
@@ -200,15 +199,15 @@ entry fn bytes_keys() -> i64 {
     let mut fails: i64 = 0;
     let b1 = bytes.from([1, 2, 3]);
     let b2 = bytes.from([9, 9]);
-    if (map_entry(t, Opaque.new(b1), bhash(b1)) >= 0) { fails += 1; }
-    if (map_entry(t, Opaque.new(b2), bhash(b2)) >= 0) { fails += 1; }
+    if (map_entry(t, opaque.new(b1), bhash(b1)) >= 0) { fails += 1; }
+    if (map_entry(t, opaque.new(b2), bhash(b2)) >= 0) { fails += 1; }
     if (map_len(t) != 2) { fails += 2; }
     // octet equality on a fresh copy
     let again = bytes.from([1, 2, 3]);
-    if (map_find(t, Opaque.new(again), bhash(again)) < 0) { fails += 4; }
+    if (map_find(t, opaque.new(again), bhash(again)) < 0) { fails += 4; }
     let miss = bytes.from([4, 5]);
-    if (map_find(t, Opaque.new(miss), bhash(miss)) >= 0) { fails += 8; }
-    if (map_remove(t, Opaque.new(b2), bhash(b2)) < 0) { fails += 16; }
+    if (map_find(t, opaque.new(miss), bhash(miss)) >= 0) { fails += 8; }
+    if (map_remove(t, opaque.new(b2), bhash(b2)) < 0) { fails += 16; }
     if (map_len(t) != 1) { fails += 32; }
     return fails;
 }
@@ -216,36 +215,36 @@ entry fn bytes_keys() -> i64 {
 struct Pt { x: i32; y: i32 }
 
 // outside the closed key set — the HOST traps, loud, pointing at mapset
-entry fn float_key(t: Opaque, k: f64) -> nil {
-    map_entry(t, Opaque.new(k), ihash(0));
+entry fn float_key(t: opaque, k: f64) -> nil {
+    map_entry(t, opaque.new(k), ihash(0));
 }
 
 // the f32 twin (no overloading — the `_32` suffix carries the width)
-entry fn float_key_32(t: Opaque, k: f32) -> nil {
-    map_entry(t, Opaque.new(k), ihash(0));
+entry fn float_key_32(t: opaque, k: f32) -> nil {
+    map_entry(t, opaque.new(k), ihash(0));
 }
 
 // a user-defined key type: the honest experiment scope's loud edge
-entry fn record_key(t: Opaque) -> nil {
+entry fn record_key(t: opaque) -> nil {
     let p = Pt { x: 3, y: 4 };
-    map_find(t, Opaque.new(p), ihash(0));
+    map_find(t, opaque.new(p), ihash(0));
 }
 
 // the wrapper-record shape: each iteration mints a table behind an
-// Opaque field and lets both die — the payload must Drop through the
+// opaque field and lets both die — the payload must Drop through the
 // record's field release (RFC 0016 §3)
 class Bag {
-    t: Opaque;
+    t: opaque;
 }
 impl Bag {
-    fn adopt(t: Opaque) -> Self { return Self { t: t }; }
+    fn adopt(t: opaque) -> Self { return Self { t: t }; }
 }
 
 entry fn churn_tables(n: i64) -> nil {
     let mut i: i64 = 0;
     while (i < n) {
         let b = Bag.adopt(map_new(16));
-        map_entry(b.t, Opaque.new(i as i32), ihash(i as u64));
+        map_entry(b.t, opaque.new(i as i32), ihash(i as u64));
         i += 1;
     }
 }
@@ -375,7 +374,7 @@ fn tables_release_at_rc0_including_through_wrapper_records() {
     assert!(after <= base + 4096, "tables must free at rc-0: base {base}, after {after}");
 
     // the wrapper-record path: each iteration's Bag record releases its
-    // Opaque field at rc-0, which drops the box and its payload
+    // opaque field at rc-0, which drops the box and its payload
     vm.call::<_, ()>("churn_tables", (2000i64,)).unwrap();
     let after_churn = vm.heap_usage();
     assert!(

@@ -124,14 +124,13 @@ pub fn main() -> nil {
 #[test]
 fn case3_opaque() {
     let src = r#"
-use core::{ Opaque, downcast };
 struct Point { x: f32; y: f32 }
 pub fn main() -> nil {
-    let box1 = Opaque.new(Point { x: 1, y: 2 });
-    let box2 = Opaque.new("hello");
+    let box1 = opaque.new(Point { x: 1, y: 2 });
+    let box2 = opaque.new("hello");
     Logger.new("app").info(f"box1 is Point: {box1 is Point}");
     Logger.new("app").info(f"box2 is Point: {box2 is Point}");
-    let (p, ok) = downcast<Point>(box1);
+    let (p, ok) = opaque.downcast<Point>(box1);
     if (ok) {
         Logger.new("app").info(f"recovered {p.x} {p.y}");
     }
@@ -735,17 +734,16 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
 #[test]
 fn entry_fns_compile_without_main_and_cross_values() {
     // a module with entries and NO main compiles (entries are roots) and
-    // the host drives it: Opaque container in/out, primitives, bytes,
+    // the host drives it: opaque container in/out, primitives, bytes,
     // and tuples (the v1.1 error/presence convention) crossing back
     let src = r#"
 use pouch::{ Vec };
-use core::{ downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 
-entry fn make() -> Opaque { return Opaque.new(&Box { rows: Vec.new() }); }
-entry fn put(c: Opaque) -> u32 {
-    let (b, _) = downcast<*Box>(c);
+entry fn make() -> opaque { return opaque.new(&Box { rows: Vec.new() }); }
+entry fn put(c: opaque) -> u32 {
+    let (b, _) = opaque.downcast<*Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -1836,12 +1834,11 @@ fn dbg_digest() {
 fn dbg_digest_md5() {
     let src = r#"
 use pouch::{ Vec };
-use core::{ downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
-entry fn make() -> Opaque { return Opaque.new(&Box { rows: Vec.new() }); }
-entry fn put(c: Opaque) -> u32 {
-    let (b, _) = downcast<*Box>(c);
+entry fn make() -> opaque { return opaque.new(&Box { rows: Vec.new() }); }
+entry fn put(c: opaque) -> u32 {
+    let (b, _) = opaque.downcast<*Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -1893,12 +1890,11 @@ pub fn main() -> nil {
 fn dbg_put_ir() {
     let src = r#"
 use pouch::{ Vec };
-use core::{ downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
-entry fn make() -> Opaque { return Opaque.new(&Box { rows: Vec.new() }); }
-entry fn put(c: Opaque) -> u32 {
-    let (b, _) = downcast<*Box>(c);
+entry fn make() -> opaque { return opaque.new(&Box { rows: Vec.new() }); }
+entry fn put(c: opaque) -> u32 {
+    let (b, _) = opaque.downcast<*Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }

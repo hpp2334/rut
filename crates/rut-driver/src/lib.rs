@@ -160,9 +160,17 @@ pub fn compile_program_resolved(
             let name = ctx.intern(surface.names.name(*n));
             ctx.add_builtin_impl(name, *prim, *i);
         }
+        // the prelude's const stays USE-GATED (RFC 0028): the builtin
+        // names ride ambient (builtin-surface phase 2 — `core` is bound
+        // into every unit), its const does not — `NAN` is
+        // `use core::{NAN}` explicit. Other pkgs' consts bind with their
+        // surface (they arrive only via that pkg's use anyway).
+        let is_prelude = !surface.native_types.is_empty();
         for c in &surface.consts {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(c.name)) {
-                ctx.add_extern_const(id, c.ty, c.bits);
+                if !is_prelude || ctx.used.contains(&id) {
+                    ctx.add_extern_const(id, c.ty, c.bits);
+                }
             }
         }
         for t in &surface.type_exports {
@@ -207,15 +215,6 @@ pub fn compile_program_resolved(
         for (n, kind) in &surface.native_types {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
                 ctx.add_extern_native_type(id, *kind);
-                // builtin-surface phase 1: the erasure primitive's NEW
-                // surface spelling (`opaque`) names the same boot type
-                // whose interner name is still `Opaque` — bind the alias
-                // so both spellings resolve; the phase-2 interner rename
-                // removes the need
-                if *kind == rut_core::binary::NativeTy::Opaque {
-                    let alias = ctx.intern("opaque");
-                    ctx.add_extern_native_type(alias, *kind);
-                }
             }
         }
         for (n, native) in &surface.native_traits {
@@ -447,9 +446,8 @@ pub fn compile_program_resolved(
 /// host-pkgs plan moves it to a declared package and its rut-able
 /// helpers to source (deferred with the numeric-methods phase).
 
-/// Mount `core` — the prelude surface (RFC 0028): the builtin
-/// primitive (`Opaque`, aliased to its `opaque` surface spelling until
-/// the phase-2 interner rename), the builtin trait (`Iterator`), and
+/// Mount `core` — the prelude surface (RFC 0028): the erasure
+/// primitive (`opaque`), the builtin trait (`Iterator`), and
 /// the compiler-lowered functions (`assert`/`panic`, `on_drop`, the
 /// `str`/`bytes` natives). v1.1 removed `Option`/`Result`/`own` — use
 /// sites diagnose with the removal. A

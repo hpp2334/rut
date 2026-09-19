@@ -315,6 +315,7 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("unit", "`unit` was removed — the empty type and its value are spelled `nil` (v1.2)"),
     ("Array", "`Array` was removed — the array type is spelled `[T]`, construction is the repeat `[v; n]` (RFC 0005 §9)"),
     ("make_ptr", "`make_ptr(v)` was removed — `&v` is the address-of (RFC 0005 §9)"),
+    ("downcast", "`downcast<T>(o)` was removed — the erasure primitive carries it: `opaque.downcast<T>(o)` (builtin-surface)"),
 ];
 
 /// The removal table keyed by [`IdentId`] — interned once per compiler

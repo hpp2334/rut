@@ -4,6 +4,6 @@
 // per topic; `emit` reaches every subscriber of a topic, re-entering
 // rut (nested `vm.call`, RFC 0022 §1) to render the wire line.
 
-pub host fn subscribe(bus: Opaque, topic: str, handler: str);
+pub host fn subscribe(bus: opaque, topic: str, handler: str);
 
-pub host fn emit(bus: Opaque, topic: str, payload: str);
+pub host fn emit(bus: opaque, topic: str, payload: str);

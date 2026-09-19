@@ -6,8 +6,8 @@
 //! surface; `vm.call` happens in exactly one place (`Plugin::fire`),
 //! plus the `emit` host fn's nested render call (RFC 0022 §1).
 //!
-//! Both Opaque directions meet here: rut's `Moderator` state comes back
-//! as a rut-constructed `Opaque` (RFC 0014), the host's event bus goes
+//! Both opaque directions meet here: rut's `Moderator` state comes back
+//! as a rut-constructed `opaque` (RFC 0014), the host's event bus goes
 //! in as a host-constructed [`OpaqueBox`]`<EventBus>` — `subscribe` and
 //! `emit` are that box's callbacks, reached only through the RFC 0023
 //! borrow guards.
@@ -18,7 +18,7 @@ use std::rc::Rc;
 use rut_vm::interp::{CallArg, HostHooks, Limits, Vm};
 use rut_vm::{OpaqueBox, OpaqueRef, Trap, TrapKind};
 
-/// The host's server object — handed to rut as an Opaque box. All host
+/// The host's server object — handed to rut as an opaque box. All host
 /// state lives here; the host fns reach it only through the `with`/
 /// `with_mut` guards, so no host state is captured in closures at all.
 struct EventBus {

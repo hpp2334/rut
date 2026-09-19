@@ -1,5 +1,5 @@
 //! H1 (the nmap host experiment's reader): `Vm::opaque_key_payload`
-//! classifies an `Opaque` box's payload against the closed native-key
+//! classifies an `opaque` box's payload against the closed native-key
 //! set — integers and `bool` cross as raw bits, `str`/`bytes` as owned
 //! copies, and anything else (floats, user records) reports
 //! `Unsupported` naming the type. This test drives it the way the `nmap`
@@ -16,27 +16,26 @@ use rut_vm::interp::{KeyPayload, Vm};
 const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/keypayload");
 
 const SRC: &str = r#"
-use core::{ Opaque };
 use keypayload::{ key_class };
 
-entry fn box_i32(k: i32) -> Opaque { return Opaque.new(k); }
-entry fn box_bool(k: bool) -> Opaque { return Opaque.new(k); }
-entry fn box_str(k: str) -> Opaque { return Opaque.new(k); }
-entry fn box_bytes() -> Opaque { return Opaque.new(bytes.from([1, 2, 3])); }
-entry fn box_f64(k: f64) -> Opaque { return Opaque.new(k); }
+entry fn box_i32(k: i32) -> opaque { return opaque.new(k); }
+entry fn box_bool(k: bool) -> opaque { return opaque.new(k); }
+entry fn box_str(k: str) -> opaque { return opaque.new(k); }
+entry fn box_bytes() -> opaque { return opaque.new(bytes.from([1, 2, 3])); }
+entry fn box_f64(k: f64) -> opaque { return opaque.new(k); }
 
 struct Pt { x: i32; y: i32 }
 
 // the user-defined-key case: a record is a rut value but not a native
 // key — the reader must report Unsupported, never re-enter rut
-entry fn box_record() -> Opaque {
+entry fn box_record() -> opaque {
     let p = Pt { x: 3, y: 4 };
-    return Opaque.new(p);
+    return opaque.new(p);
 }
 
 // the host crossing: rut hands the key box to the host fn, the host
 // classifies the payload and reports the kind tag
-entry fn classify(c: Opaque) -> i64 { return key_class(c); }
+entry fn classify(c: opaque) -> i64 { return key_class(c); }
 "#;
 
 /// kind tags the registered `key_class` body returns (mirrors KeyPayload)
@@ -117,12 +116,12 @@ fn key_payload_classifies_through_the_host_crossing() {
 
 #[test]
 fn distinct_boxes_of_the_same_key_stay_distinct_handles() {
-    // Opaque.new mints a fresh box per call — two boxes of the equal
+    // opaque.new mints a fresh box per call — two boxes of the equal
     // keys are different handles, and each classifies on its own
     let mut vm = vm_with_host();
     let a: OpaqueRef = vm.call("box_i32", (7i32,)).unwrap();
     let b: OpaqueRef = vm.call("box_i32", (7i32,)).unwrap();
-    assert_ne!(a, b, "Opaque.new mints a fresh box per call");
+    assert_ne!(a, b, "opaque.new mints a fresh box per call");
     let tag = |vm: &mut Vm, h: &OpaqueRef| -> i64 { vm.call::<_, i64>("classify", (h.clone(),)).unwrap() };
     assert_eq!(tag(&mut vm, &a), BITS);
     assert_eq!(tag(&mut vm, &b), BITS);

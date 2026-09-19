@@ -1,4 +1,3 @@
-use core::{ Opaque, downcast };
 use pouch::{ Vec };
 use calc::{ Math };
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
@@ -14,7 +13,7 @@ use calc::{ Math };
 //   encodings : hex, base64 (standard + URL-safe)
 //   digests   : MD5, SHA-1, SHA-256, SHA-512
 //   hash keys : CRC-32, FNV-1a 32/64, djb2, sdbm
-//   JSON      : decode -> Opaque tree, encode, round-trip
+//   JSON      : decode -> opaque tree, encode, round-trip
 //
 // The Rust host (src/main.rs, tests/session.rs) verifies every result
 // against the md-5 / sha1 / sha2 / base64 / serde_json / crc32fast
@@ -652,8 +651,8 @@ entry fn digest(algo: str, data: bytes) -> (bytes, str) {
 //
 // RFC 0006: enums carry no data, and recursive dataclasses are not
 // expressible — so the tree is a tagged union by hand (JTag + Json),
-// with children boxed in `Opaque` (RFC 0014) to break the recursion:
-// `Json` contains `Vec<Opaque>`, each Opaque boxes another `Json`.
+// with children boxed in `opaque` (RFC 0014) to break the recursion:
+// `Json` contains `Vec<opaque>`, each opaque boxes another `Json`.
 
 enum JTag { Null, False, True, Num, Str, Arr, Obj }
 
@@ -661,15 +660,15 @@ struct Json {
     tag:  JTag;
     num: str;          // verbatim lexeme — exact round-trips, no
     str: str;          // float formatting anywhere in this file
-    arr:  Vec<Opaque>;
+    arr:  Vec<opaque>;
     keys: Vec<str>;
-    vals: Vec<Opaque>;
+    vals: Vec<opaque>;
 }
 
-fn noopaque() -> Opaque { return Opaque.new(0); }
+fn noopaque() -> opaque { return opaque.new(0); }
 
-fn noopaques() -> Vec<Opaque> {
-    let v: Vec<Opaque> = Vec.new();
+fn noopaques() -> Vec<opaque> {
+    let v: Vec<opaque> = Vec.new();
     return v;
 }
 fn nostrings() -> Vec<str> {
@@ -750,7 +749,7 @@ fn valid_number(cs: Vec<str>) -> bool {
     return i == n;
 }
 
-fn jparse_value(cur: *Cur) -> (Opaque, str) {
+fn jparse_value(cur: *Cur) -> (opaque, str) {
     jskip(cur);
     let c = jpeek(cur);
     if (c == "") { return (noopaque(), "json: unexpected end of input"); }
@@ -764,7 +763,7 @@ fn jparse_value(cur: *Cur) -> (Opaque, str) {
     return (noopaque(), f"json: unexpected `{c}` at index {cur.pos}");
 }
 
-fn jparse_lit(cur: *Cur, word: str, v: Json) -> (Opaque, str) {
+fn jparse_lit(cur: *Cur, word: str, v: Json) -> (opaque, str) {
     let start = cur.pos;
     let mut ok = true;
     for (let wch of word) {
@@ -774,10 +773,10 @@ fn jparse_lit(cur: *Cur, word: str, v: Json) -> (Opaque, str) {
     if (ok == false) {
         return (noopaque(), f"json: bad literal at index {start}");
     }
-    return (Opaque.new(v), "");
+    return (opaque.new(v), "");
 }
 
-fn jparse_string(cur: *Cur) -> (Opaque, str) {
+fn jparse_string(cur: *Cur) -> (opaque, str) {
     let start = cur.pos;
     cur.pos = cur.pos + 1;   // opening quote
     let out: Vec<str> = Vec.new();
@@ -815,10 +814,10 @@ fn jparse_string(cur: *Cur) -> (Opaque, str) {
     if (closed == false) {
         return (noopaque(), f"json: unterminated string starting at index {start}");
     }
-    return (Opaque.new(jstr(join_chars(out))), "");
+    return (opaque.new(jstr(join_chars(out))), "");
 }
 
-fn jparse_number(cur: *Cur) -> (Opaque, str) {
+fn jparse_number(cur: *Cur) -> (opaque, str) {
     let start = cur.pos;
     let chars: Vec<str> = Vec.new();
     let mut again = true;
@@ -833,10 +832,10 @@ fn jparse_number(cur: *Cur) -> (Opaque, str) {
     if (valid_number(chars) == false) {
         return (noopaque(), f"json: malformed number at index {start}");
     }
-    return (Opaque.new(jnum(join_chars(chars))), "");
+    return (opaque.new(jnum(join_chars(chars))), "");
 }
 
-fn jparse_array(cur: *Cur) -> (Opaque, str) {
+fn jparse_array(cur: *Cur) -> (opaque, str) {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
@@ -846,7 +845,7 @@ fn jparse_array(cur: *Cur) -> (Opaque, str) {
     jskip(cur);
     if (jpeek(cur) == "]") {
         cur.pos = cur.pos + 1;
-        return (Opaque.new(v), "");
+        return (opaque.new(v), "");
     }
     let mut again = true;
     while (again) {
@@ -866,10 +865,10 @@ fn jparse_array(cur: *Cur) -> (Opaque, str) {
         }
     }
     cur.depth = cur.depth - 1;
-    return (Opaque.new(v), "");
+    return (opaque.new(v), "");
 }
 
-fn jparse_object(cur: *Cur) -> (Opaque, str) {
+fn jparse_object(cur: *Cur) -> (opaque, str) {
     cur.depth = cur.depth + 1;
     if (cur.depth > 64) {
         return (noopaque(), "json: nesting deeper than 64");
@@ -879,7 +878,7 @@ fn jparse_object(cur: *Cur) -> (Opaque, str) {
     jskip(cur);
     if (jpeek(cur) == "}") {
         cur.pos = cur.pos + 1;
-        return (Opaque.new(v), "");
+        return (opaque.new(v), "");
     }
     let mut again = true;
     while (again) {
@@ -889,7 +888,7 @@ fn jparse_object(cur: *Cur) -> (Opaque, str) {
         }
         let key = jparse_string(cur);
         if (key.1 != "") { return (noopaque(), key.1); }
-        let (kdoc, _) = downcast<Json>(unwrap_box(key));
+        let (kdoc, _) = opaque.downcast<Json>(unwrap_box(key));
         let kstr = kdoc.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
@@ -912,13 +911,13 @@ fn jparse_object(cur: *Cur) -> (Opaque, str) {
         }
     }
     cur.depth = cur.depth - 1;
-    return (Opaque.new(v), "");
+    return (opaque.new(v), "");
 }
 
-/// The `Opaque` of a known-Ok `(Opaque, str)` pair (the error string is
+/// The `opaque` of a known-Ok `(opaque, str)` pair (the error string is
 /// the unwrap_or default is unreachable and exists only because there
 /// is no `.unwrap()` in the surface.
-fn unwrap_box(r: (Opaque, str)) -> Opaque {
+fn unwrap_box(r: (opaque, str)) -> opaque {
     return r.0;
 }
 
@@ -935,7 +934,7 @@ fn jencode(j: Json) -> str {
             let mut s = "[";
             for (let i = 0; i < j.arr.len(); i += 1) {
                 if (i > 0) { s = f"{s},"; }
-                let ae = downcast<Json>(j.arr[i]).0;
+                let ae = opaque.downcast<Json>(j.arr[i]).0;
                 s = f"{s}{jencode(ae)}";
             }
             out = f"{s}]";
@@ -945,7 +944,7 @@ fn jencode(j: Json) -> str {
             let mut s = "{";
             for (let i = 0; i < j.keys.len(); i += 1) {
                 if (i > 0) { s = f"{s},"; }
-                let vs = jencode(downcast<Json>(j.vals[i]).0);
+                let vs = jencode(opaque.downcast<Json>(j.vals[i]).0);
                 s = f"{s}{jquote(j.keys[i])}:{vs}";
             }
             out = f"{s}{rb}";
@@ -971,7 +970,7 @@ fn jquote(s: str) -> str {
     return f"{q}{join_chars(body)}{q}";
 }
 
-entry fn json_dec(s: str) -> (Opaque, str) {
+entry fn json_dec(s: str) -> (opaque, str) {
     let cur = &Cur { cs: split_chars(s), pos: 0, depth: 0 };
     let v = jparse_value(cur);
     if (v.1 != "") { return (noopaque(), v.1); }
@@ -982,8 +981,8 @@ entry fn json_dec(s: str) -> (Opaque, str) {
     return v;
 }
 
-entry fn json_enc(o: Opaque) -> str {
-    return jencode(downcast<Json>(o).0);
+entry fn json_enc(o: opaque) -> str {
+    return jencode(opaque.downcast<Json>(o).0);
 }
 
 entry fn json_roundtrip(s: str) -> (str, str) {
@@ -991,31 +990,31 @@ entry fn json_roundtrip(s: str) -> (str, str) {
     if (v.1 != "") {
         return ("", v.1);
     }
-        let (vv, _) = downcast<Json>(v.0);
+        let (vv, _) = opaque.downcast<Json>(v.0);
     return (jencode(vv), "");
 }
 
 /// A hand-built document for the embedder demo.
-entry fn sample_doc() -> Opaque {
+entry fn sample_doc() -> opaque {
     let tags = jarr();
-    tags.arr.push(Opaque.new(jstr("tiny")));
-    tags.arr.push(Opaque.new(jstr("fast")));
-    tags.arr.push(Opaque.new(jstr("verified")));
+    tags.arr.push(opaque.new(jstr("tiny")));
+    tags.arr.push(opaque.new(jstr("fast")));
+    tags.arr.push(opaque.new(jstr("verified")));
     let meta = jobj();
     meta.keys.push("ok");
-    meta.vals.push(Opaque.new(jbool(true)));
+    meta.vals.push(opaque.new(jbool(true)));
     meta.keys.push("lines");
-    meta.vals.push(Opaque.new(jnum("607")));
+    meta.vals.push(opaque.new(jnum("607")));
     let root = jobj();
     root.keys.push("name");
-    root.vals.push(Opaque.new(jstr("rut")));
+    root.vals.push(opaque.new(jstr("rut")));
     root.keys.push("version");
-    root.vals.push(Opaque.new(jnum("0.2")));
+    root.vals.push(opaque.new(jnum("0.2")));
     root.keys.push("tags");
-    root.vals.push(Opaque.new(tags));
+    root.vals.push(opaque.new(tags));
     root.keys.push("meta");
-    root.vals.push(Opaque.new(meta));
-    return Opaque.new(root);
+    root.vals.push(opaque.new(meta));
+    return opaque.new(root);
 }
 
 fn sha256_h() -> Vec<u32> {

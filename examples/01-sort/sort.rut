@@ -1,10 +1,9 @@
-use core::{ Opaque, downcast };
 use pouch::{ Vec };
 use calc::{ Math };
 // sort.rut — a sorting library in rut, called from Rust.
 //
 // The shape: the HOST owns the session. It asks for a bank (`create`),
-// gets back a handle it can hold and pass around (an `Opaque` box —
+// gets back a handle it can hold and pass around (an `opaque` box —
 // RFC 0014, the one cell an embedder may keep), and drives FIVE
 // sorting algorithms through one `entry fn` dispatcher. The data never
 // leaves rut: `Vec<i32>` cannot cross the host boundary (RFC 0023 §2),
@@ -150,20 +149,20 @@ fn merge_sort(xs: *Vec<i32>) {
 
 /// The host-held bank: one opaque box around the data being sorted.
 /// `create` boxes it; every entry takes it back as its first argument
-/// and recovers it with `downcast` (a wrong box traps cleanly).
+/// and recovers it with `opaque.downcast<T>` (a wrong box traps cleanly).
 struct Bank {
     data: *Vec<i32>;
 }
 
 // ---- the host surface (entry = callable by the embedder) ----
 
-entry fn create() -> Opaque {
-    return Opaque.new(&Bank { data: &Vec<i32>.new() });
+entry fn create() -> opaque {
+    return opaque.new(&Bank { data: &Vec<i32>.new() });
 }
 
 /// Host-supplied data, one element per call — exact inputs.
-entry fn push(c: Opaque, x: i32) {
-    let (b, _) = downcast<*Bank>(c);
+entry fn push(c: opaque, x: i32) {
+    let (b, _) = opaque.downcast<*Bank>(c);
     b.data.push(x);
 }
 
@@ -173,8 +172,8 @@ entry fn push(c: Opaque, x: i32) {
 /// `x.wrapping_mul(y)`/`wrapping_add` methods keep the u32 math in range
 /// (RFC 0004 §3: plain `*`
 /// traps; plain `<<` would too — xorshift is out).
-entry fn fill(c: Opaque, n: u32, seed: u32) {
-    let (b, _) = downcast<*Bank>(c);
+entry fn fill(c: opaque, n: u32, seed: u32) {
+    let (b, _) = opaque.downcast<*Bank>(c);
     let fresh: Vec<i32> = Vec.new();
     let mut x = seed | 1;         // the LCG needs an odd state
     for (let i = 0; i < n as i32; i += 1) {
@@ -187,8 +186,8 @@ entry fn fill(c: Opaque, n: u32, seed: u32) {
 /// Sort the bank in place. Unknown names come back as `Result.err` —
 /// an ordinary value, not a trap.
 // errors are values: an empty string means success
-entry fn sort(c: Opaque, algo: str) -> str {
-    let (b, _) = downcast<*Bank>(c);
+entry fn sort(c: opaque, algo: str) -> str {
+    let (b, _) = opaque.downcast<*Bank>(c);
     let mut unknown = false;
     when (algo) {
         "insertion" -> { insertion_sort(b.data); },
@@ -204,29 +203,29 @@ entry fn sort(c: Opaque, algo: str) -> str {
     return "";
 }
 
-entry fn len(c: Opaque) -> i32 {
-    let (b, _) = downcast<*Bank>(c);
+entry fn len(c: opaque) -> i32 {
+    let (b, _) = opaque.downcast<*Bank>(c);
     return b.data.len();
 }
 
 /// Element `i`, or `0` past the end — pair with `has` (RFC 0005).
-entry fn get(c: Opaque, i: i32) -> i32 {
-    let (b, _) = downcast<*Bank>(c);
+entry fn get(c: opaque, i: i32) -> i32 {
+    let (b, _) = opaque.downcast<*Bank>(c);
     if (i < 0 || i >= b.data.len()) {
         return 0;
     }
     return b.data[i];
 }
 
-entry fn has(c: Opaque, i: i32) -> bool {
-    let (b, _) = downcast<*Bank>(c);
+entry fn has(c: opaque, i: i32) -> bool {
+    let (b, _) = opaque.downcast<*Bank>(c);
     return i >= 0 && i < b.data.len();
 }
 
 /// The machine-checkable form: a JSON array — `[1, 2, 3]`. One string
 /// crosses, so the host can assert a whole result in one compare.
-entry fn serialize(c: Opaque) -> str {
-    let (b, _) = downcast<*Bank>(c);
+entry fn serialize(c: opaque) -> str {
+    let (b, _) = opaque.downcast<*Bank>(c);
     let xs = b.data;
     let mut out = "[";
     for (let i = 0; i < xs.len(); i += 1) {
@@ -239,8 +238,8 @@ entry fn serialize(c: Opaque) -> str {
 }
 
 /// The human listing the embedder prints.
-entry fn render(c: Opaque) -> str {
-    let (b, _) = downcast<*Bank>(c);
+entry fn render(c: opaque) -> str {
+    let (b, _) = opaque.downcast<*Bank>(c);
     let xs = b.data;
     let mut out = f"Bank[{xs.len()}]";
     for (let v of xs) {
@@ -249,7 +248,7 @@ entry fn render(c: Opaque) -> str {
     return out;
 }
 
-entry fn is_sorted(c: Opaque) -> bool {
-    let (b, _) = downcast<*Bank>(c);
+entry fn is_sorted(c: opaque) -> bool {
+    let (b, _) = opaque.downcast<*Bank>(c);
     return sorted_up(b.data);
 }

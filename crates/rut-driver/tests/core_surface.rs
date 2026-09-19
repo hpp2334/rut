@@ -49,11 +49,7 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<
                 if rut_parser::is_primitive_ty(&n) {
                     continue;
                 }
-                // builtin-surface phase 1: the decl already spells the
-                // erasure primitive's target name (`opaque`) while the
-                // interner/boot name is still `Opaque` — bridge the two
-                // so the lockstep holds until the phase-2 rename
-                builtin_types.push(if n == "opaque" { "Opaque".to_string() } else { n });
+                builtin_types.push(n);
             }
             ItemKind::BuiltinTrait { name, .. } => builtin_traits.push(ast.name(*name).to_string()),
             ItemKind::Trait { name, .. } => plain_traits.push(ast.name(*name).to_string()),

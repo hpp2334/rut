@@ -1,7 +1,7 @@
 //! `ink`'s host half (RFC 0028): the native-module functions
 //! `rt:log::create_logger` / `rt:log::logger_log`.
 //!
-//! The logger's state is an `Opaque` handle owning the name string
+//! The logger's state is an `opaque` handle owning the name string
 //! (RFC 0014) — rut never sees the host's layout. The `rt:log` module is
 //! mounted by the driver (`rut-driver`); a host installs the bodies.
 //! Bindings are the MAGIC shape (RFC 0023/0025): the `&str` params are

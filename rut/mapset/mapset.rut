@@ -2,7 +2,7 @@
 // intent, realized as pure rut source): `Hashable` (the ONE key
 // contract — hashing and hash-consistent equality), the open-addressing
 // `RawHashTable` core, and the two owners, `HashMap<K, V>` and
-// `HashSet<T>`. No host surface anywhere — no host fns, no `Opaque`
+// `HashSet<T>`. No host surface anywhere — no host fns, no `opaque`
 // handles; consumers mount this package like any tree pkg
 // (`pouch`/`ink` pattern).
 //

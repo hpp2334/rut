@@ -201,7 +201,7 @@ impl<'a> Ctx<'a> {
                     return match (kind, generics.as_slice()) {
                         (rut_core::binary::NativeTy::Opaque, []) => TY_OPAQUE,
                         (rut_core::binary::NativeTy::Opaque, _) => {
-                            self.err(sp, "`Opaque` takes no generic arguments");
+                            self.err(sp, "`opaque` takes no generic arguments");
                             TY_I32
                         }
                     };

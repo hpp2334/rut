@@ -12,7 +12,7 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
         TyKind::Str => Value::Str(cell_of(v).as_str().to_string()),
         // bytes is the one sequence that crosses (RFC 0023 §2, RFC 0004)
         TyKind::Bytes => Value::Bytes(cell_of(v).bytes_copy()),
-        // an Opaque box crosses as its handle: the handle owns a fresh
+        // an `opaque` box crosses as its handle: the handle owns a fresh
         // arena reference; the pending slot reference is released by do_ret
         TyKind::Opaque => {
             let p = unsafe { v.r };

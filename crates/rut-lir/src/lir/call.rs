@@ -158,30 +158,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::OnDrop { obj, cleanup }, sp.lo);
                 return Ok(TY_NIL);
             }
-            sym::DOWNCAST => {
-                // builtin-surface phase 1: the free `downcast<T>(o)` is no
-                // longer a DECLARED prelude fn (the surface spells
-                // `opaque.downcast<T>(o)`) — the engine keeps lowering the
-                // free spelling as a cheap alias until the phase-2 sweep
-                // retires the call sites.
-                // prelude body: tidof + icmp + br + guarded unbox (RFC 0032 §1.1)
-                if args.len() != 1 || generics.len() != 1 {
-                    self.ctx.err(sp, "downcast<T>(o) takes one explicit type argument and one value (RFC 0014)");
-                    return Err(());
-                }
-                let want = self.resolve_type_now(generics[0]);
-                if matches!(self.ctx.types.kind(want), TyKind::TraitObj { .. }) {
-                    self.ctx.err(sp, "downcast needs a CONCRETE type —trait objects have no recovery path (RFC 0014)");
-                    return Err(());
-                }
-                let t = self.compile_expr(args[0], Some(TY_OPAQUE))?;
-                if t != TY_OPAQUE {
-                    self.ctx.err(sp, "downcast takes an `Opaque` box (RFC 0014)");
-                    return Err(());
-                }
-                let orecv = self.last_reg;
-                return self.emit_opaque_downcast(want, orecv, sp);
-            }
             sym::PANIC if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "panic(msg) takes a message (RFC 0034 §2)");
@@ -420,12 +396,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match (base, member) {
             (sym::OPAQUE, sym::NEW) if core_ty == Some(rut_core::binary::NativeTy::Opaque) => {
                 if args.len() != 1 {
-                    self.ctx.err(sp, "Opaque.new(v) takes one value");
+                    self.ctx.err(sp, "opaque.new(v) takes one value");
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], None)?;
                 if matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
-                    self.ctx.err(sp, "`Opaque.new` rejects trait objects —they are never boxed (RFC 0014)");
+                    self.ctx.err(sp, "`opaque.new` rejects trait objects —they are never boxed (RFC 0014)");
                     return Err(());
                 }
                 let src = self.last_reg;
@@ -493,13 +469,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => {}
         }
         // the erasure primitive's member statics (RFC 0014, builtin-
-        // surface phase 1): `opaque.new(v)` / `opaque.downcast<T>(o)` —
-        // the phase-2 rename will make the lowercase spelling the
-        // interner's own; until then BOTH base spellings resolve to the
-        // one boot type (the driver binds the alias)
-        if core_ty == Some(rut_core::binary::NativeTy::Opaque)
-            && (base == sym::OPAQUE || self.ctx.name(base) == "opaque")
-        {
+        // surface phase 2): `opaque.new(v)` / `opaque.downcast<T>(o)` —
+        // the lowercase spelling IS the interner's own (`sym::OPAQUE`)
+        if core_ty == Some(rut_core::binary::NativeTy::Opaque) && base == sym::OPAQUE {
             match member {
                 sym::NEW => {
                     if args.len() != 1 {
@@ -528,7 +500,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     let t = self.compile_expr(args[0], Some(TY_OPAQUE))?;
                     if t != TY_OPAQUE {
-                        self.ctx.err(sp, "downcast takes an `Opaque` box (RFC 0014)");
+                        self.ctx.err(sp, "downcast takes an `opaque` box (RFC 0014)");
                         return Err(());
                     }
                     let orecv = self.last_reg;
@@ -833,7 +805,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let base = segs[0].name;
                 // `Vec` is an ordinary class (pouch), so it routes
                 // here through `find_data`, like any other class; the
-                // core statics (`Opaque`) route only
+                // core statics (`opaque`) route only
                 // when used (RFC 0028)
                 let is_type = matches!(base, sym::STR | sym::BYTES)
                     || self.ctx.extern_native_types.contains_key(&base)
@@ -1049,7 +1021,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        // builtin members (RFC 0005 table): `Opaque` rejects methods
+        // builtin members (RFC 0005 table): `opaque` rejects methods
         // unless the module registered an inherent impl for it
         // (RFC 0012 §2 — a module-owned `builtin class` takes impls)
         match self.ctx.types.kind(rt).clone() {
@@ -1062,7 +1034,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }) {
                     return self.compile_native_static_call(idx, mname, vec![], rreg, args, expected, sp);
                 }
-                self.ctx.err(sp, "`Opaque` has no methods in this build —recover with `downcast<T>(o)` (RFC 0014)");
+                self.ctx.err(sp, "`opaque` has no methods in this build —recover with `opaque.downcast<T>(o)` (RFC 0014)");
                 return Err(());
             }
             _ => {}

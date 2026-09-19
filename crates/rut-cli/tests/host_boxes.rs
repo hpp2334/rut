@@ -1,7 +1,7 @@
-//! Host-constructed `Opaque` boxes (RFC 0023/0026): the embedder news any
-//! `'static` Rust value behind an `Opaque`, borrows it back typed, and rut
+//! Host-constructed `opaque` boxes (RFC 0023/0026): the embedder news any
+//! `'static` Rust value behind an `opaque`, borrows it back typed, and rut
 //! sees only the box. RFC 0014 semantics must hold on the rut side —
-//! `o is Opaque` is `true`, `downcast<T>` is `None` for every `T` (never a
+//! `o is opaque` is `true`, `opaque.downcast<T>` is `None` for every `T` (never a
 //! trap), `own` shares identity — and the payload's `Drop` runs when the
 //! box's rc hits 0 (RFC 0016 §3).
 //!
@@ -18,39 +18,38 @@ use rut_vm::{OpaqueBox, OpaqueRef, Trap};
 use rut_vm::interp::Vm;
 
 const SRC: &str = r#"
-use core::{ Opaque, downcast };
 use boxes::{ store_new, store_set, store_get, store_size };
 
-// the wrapper class (the Logger pattern, RFC 0028): one Opaque field,
+// the wrapper class (the Logger pattern, RFC 0028): one opaque field,
 // one host fn call per method — the Rust payload never leaks into rut
 class Store {
-    h: Opaque;
+    h: opaque;
 }
 impl Store {
-    fn adopt(h: Opaque) -> Self { return Self { h: h }; }
+    fn adopt(h: opaque) -> Self { return Self { h: h }; }
     fn set(mut self, k: str, v: i64) -> nil { store_set(self.h, k, v); }
     fn get(self, k: str) -> i64 { return store_get(self.h, k); }
 }
 
-entry fn make() -> Opaque { return store_new(); }
-entry fn put(c: Opaque, k: str, v: i64) -> nil { store_set(c, k, v); }
-entry fn get(c: Opaque, k: str) -> i64 { return store_get(c, k); }
-entry fn size(c: Opaque) -> i64 { return store_size(c); }
-entry fn wrap_put(c: Opaque, k: str, v: i64) -> nil {
+entry fn make() -> opaque { return store_new(); }
+entry fn put(c: opaque, k: str, v: i64) -> nil { store_set(c, k, v); }
+entry fn get(c: opaque, k: str) -> i64 { return store_get(c, k); }
+entry fn size(c: opaque) -> i64 { return store_size(c); }
+entry fn wrap_put(c: opaque, k: str, v: i64) -> nil {
     let s = Store.adopt(c);
     s.set(k, v);
 }
-entry fn wrap_get(c: Opaque, k: str) -> i64 {
+entry fn wrap_get(c: opaque, k: str) -> i64 {
     return Store.adopt(c).get(k);
 }
-entry fn erase_laws(c: Opaque) -> bool {
-    // RFC 0014 on a host payload box: it is an Opaque and nothing more
+entry fn erase_laws(c: opaque) -> bool {
+    // RFC 0014 on a host payload box: it is an opaque and nothing more
     // specific — no rut type recovers from it, checked, never a trap
-    let (_, i64_ok) = downcast<i64>(c);
-    let (_, str_ok) = downcast<str>(c);
-    return c is Opaque && !i64_ok && !str_ok;
+    let (_, i64_ok) = opaque.downcast<i64>(c);
+    let (_, str_ok) = opaque.downcast<str>(c);
+    return c is opaque && !i64_ok && !str_ok;
 }
-entry fn share(c: Opaque) -> Opaque {
+entry fn share(c: opaque) -> opaque {
     // a host box IS a handle — returning it shares identity (v1.1)
     return c;
 }
@@ -189,7 +188,7 @@ fn host_boxes_hold_any_rust_type() {
 
     // a non-handle is rejected too
     let err = OpaqueBox::<Widget>::from_handle(&held).err().expect("non-handle must be rejected");
-    assert!(err.msg.contains("host box holds") || err.msg.contains("Opaque"), "{}", err.msg);
+    assert!(err.msg.contains("host box holds") || err.msg.contains("opaque"), "{}", err.msg);
 
     // the borrow guard (RFC 0023 §2): a nested exclusive borrow is a
     // checked trap, and a shared borrow is excluded while `&mut` is out
@@ -217,21 +216,20 @@ fn host_boxes_hold_any_rust_type() {
 #[test]
 fn record_fields_release_at_rc0() {
     // the direct proof of the recursive field release: pure rut, class
-    // instances with `str` / `Opaque` / `Vec<str>` fields created and
+    // instances with `str` / `opaque` / `Vec<str>` fields created and
     // dropped in a loop — before the fix every record leaked its fields'
     // references and the heap climbed by ~n cells; now it returns to
     // baseline (plus the run's immortal singletons).
     let src = r#"
-use core::{ Opaque };
 use pouch::{ Vec };
 
 class Node {
     name: str;
-    tag: Opaque;
+    tag: opaque;
     tags: Vec<str>;
 }
 impl Node {
-    fn new(name: str) -> Self { return Self { name: name, tag: Opaque.new(0), tags: Vec.new() }; }
+    fn new(name: str) -> Self { return Self { name: name, tag: opaque.new(0), tags: Vec.new() }; }
 }
 
 entry fn churn(n: i64) -> nil {

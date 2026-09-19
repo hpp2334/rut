@@ -526,7 +526,7 @@ impl Vm {
             (Value::Opaque(h), TyKind::Opaque) => {
                 let s = Slot { r: h.ptr() };
                 if !matches!(cell_of(s).data, CellData::OpaqueBox { .. } | CellData::HostBoxed { .. }) {
-                    return Err("not an Opaque box".to_string());
+                    return Err("not an opaque box".to_string());
                 }
                 self.heap.retain(s); // the parameter register owns its reference
                 s
@@ -644,7 +644,7 @@ impl Vm {
         Ok(out)
     }
 
-    /// Mint an `Opaque` box owning a rut `str` — `Opaque.new(str)` for
+    /// Mint an `opaque` box owning a rut `str` — `opaque.new(str)` for
     /// hosts that hand rut a handle over host-built text (the logger's
     /// named logger; RFC 0014/0026). The handle owns one reference.
     pub fn alloc_opaque_str(&mut self, s: String) -> Result<OpaqueRef, Trap> {
@@ -692,7 +692,7 @@ impl Vm {
             // a reachable state
             _ => Err(Trap::new(
                 TrapKind::Invalid,
-                "opaque_key_payload: not an Opaque box",
+                "opaque_key_payload: not an opaque box",
             )),
         }
     }
@@ -767,7 +767,7 @@ mod tests {
         .unwrap()
     }
 
-    /// Box `val` as an `Opaque` of static type `ty` — the `Opaque.new(k)`
+    /// Box `val` as an `Opaque` of static type `ty` — the `opaque.new(k)`
     /// shape. The handle takes over the mint reference (the same
     /// ownership `alloc_opaque_str` hands back).
     fn boxed(vm: &Vm, val: Slot, ty: TypeId) -> OpaqueRef {

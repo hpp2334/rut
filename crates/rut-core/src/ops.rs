@@ -248,7 +248,7 @@ pub enum Op {
     /// extract an Opaque box's payload as the statically known T — traps
     /// on TypeId mismatch; the compiler guards (RFC 0032 §1.1)
     Unbox { dst: Reg, box_: Reg, ty: TypeId },
-    /// Opaque.new(v) — box mint (internal native in RFC terms; an op here
+    /// opaque.new(v) — box mint (internal native in RFC terms; an op here
     /// because it needs no name resolution)
     Box { dst: Reg, val: Reg, ty: TypeId },
 

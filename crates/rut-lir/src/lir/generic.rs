@@ -114,7 +114,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             TypeKind::TyPath { .. } => {
-                // builtin containers (`Opaque`): resolve and compare — the
+                // builtin containers (`opaque`): resolve and compare — the
                 // core names, gated on the use statement like everywhere
                 // else (an unused name falls through to `resolve_type`,
                 // which reports it as not in scope)

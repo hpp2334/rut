@@ -13,7 +13,6 @@ use rut_vm::{OpaqueBox, OpaqueRef, Trap, TrapKind};
 use rut_vm::interp::Vm;
 
 const SRC: &str = r#"
-use core::{ Opaque };
 use pouch::{ Vec };
 use re::{ boost, borrow_conflict, borrow_read, borrow_try, count_spin, grind, host_boom, widget_new };
 
@@ -31,16 +30,16 @@ entry fn outer(x: i64) -> i64 {
 
 // called from INSIDE a host `with_mut` — its `borrow_try` must see the
 // guard and fail
-entry fn poke(b: Opaque) -> i64 {
+entry fn poke(b: opaque) -> i64 {
     return borrow_try(b);
 }
 
-entry fn outer_borrow(b: Opaque) -> i64 {
+entry fn outer_borrow(b: opaque) -> i64 {
     let r = borrow_conflict(b);
     return r + borrow_read(b);
 }
 
-entry fn new_widget() -> Opaque {
+entry fn new_widget() -> opaque {
     return widget_new();
 }
 

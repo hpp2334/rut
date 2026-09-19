@@ -2,7 +2,7 @@
 //! 0023/0026): news any `'static` Rust value into the arena (`alloc`),
 //! borrows it back call-scoped (`with`/`with_mut`), and hands the plain
 //! `Value::Opaque` handle to rut. The payload is invisible to rut —
-//! `downcast<T>` is `None`, `o is Opaque` is `true` (RFC 0014) — and its
+//! `opaque.downcast<T>` misses, `o is opaque` is `true` (RFC 0014) — and its
 //! `Drop` runs deterministically when the box's rc hits 0 (RFC 0016 §3).
 
 use super::*;

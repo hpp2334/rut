@@ -208,7 +208,7 @@ impl<'a> Ctx<'a> {
             if fd.is_static {
                 self.err(
                     self.ast.span(f.id()),
-                    "`static` fields do not exist — there is no mutable module state (RFC 0003 §1); thread state explicitly or hold it in an `Opaque` container the host passes back (RFC 0014)",
+                    "`static` fields do not exist — there is no mutable module state (RFC 0003 §1); thread state explicitly or hold it in an `opaque` container the host passes back (RFC 0014)",
                 );
             }
             let fty = self.resolve_type(fd.ty, &[]);
@@ -452,7 +452,7 @@ impl<'a> Ctx<'a> {
                     match (kind, generics.as_slice()) {
                         (rut_core::binary::NativeTy::Opaque, []) => (TY_OPAQUE, None, false, false, false),
                         (rut_core::binary::NativeTy::Opaque, _) => {
-                            self.err(sp, "`Opaque` takes no type parameters");
+                            self.err(sp, "`opaque` takes no type parameters");
                             return;
                         }
                     }
@@ -903,7 +903,7 @@ impl<'a> Ctx<'a> {
             if fd.is_static {
                 self.err(
                     self.ast.span(f.id()),
-                    "`static` fields do not exist — there is no mutable module state (RFC 0003 §1); thread state explicitly or hold it in an `Opaque` container the host passes back (RFC 0014)",
+                    "`static` fields do not exist — there is no mutable module state (RFC 0003 §1); thread state explicitly or hold it in an `opaque` container the host passes back (RFC 0014)",
                 );
             }
             let fty = self.resolve_type(fd.ty, &env);

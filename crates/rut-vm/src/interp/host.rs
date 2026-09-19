@@ -148,7 +148,7 @@ impl HostRegistry {
                 TY_U16 => "u16",
                 TY_U32 => "u32",
                 TY_U64 => "u64",
-                TY_OPAQUE => "Opaque",
+                TY_OPAQUE => "opaque",
                 _ => return format!("#{t:?}"),
             }
             .to_string()

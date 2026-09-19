@@ -1,6 +1,6 @@
 //! `nmap` — the native key-table experiment (the mapset-host plan, H2):
 //! an open-addressing hash table whose state lives Rust-side behind an
-//! `Opaque` payload box (RFC 0023), so rut meets it only through the
+//! `opaque` payload box (RFC 0023), so rut meets it only through the
 //! `pub host fn` surface bound by [`install_std_nmap`]. This is the HOST
 //! half of the experiment; the pure-rut `mapset` package stays untouched
 //! as the reference and the general-key implementation.
@@ -278,7 +278,7 @@ impl NativeTable {
     }
 }
 
-/// The crossing-side key read: the `Opaque` box's payload classified
+/// The crossing-side key read: the `opaque` box's payload classified
 /// against the closed native key set (the H1 accessor), as the table's
 /// owned [`KeyVal`]. An `Unsupported` payload is the loud trap — the
 /// message names the type and points at `mapset`, which admits any

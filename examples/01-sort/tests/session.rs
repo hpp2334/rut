@@ -156,7 +156,7 @@ fn unknown_algorithm_is_an_error_string() {
 fn wrong_container_traps_cleanly() {
     let (mut vm, c) = vm();
     drop(c);
-    // passing an integer where the Opaque bank is expected is an embedder
+    // passing an integer where the opaque bank is expected is an embedder
     // mistake: a named trap, not a panic or silent zero
     let err = vm.call::<_, String>("sort", (0i64, "quick")).unwrap_err();
     assert!(err.msg.contains("argument"), "{}", err.msg);

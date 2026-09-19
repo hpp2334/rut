@@ -642,7 +642,7 @@ fn reserved_word_msg(w: &str) -> Option<String> {
         "match" => "rut does not have `match`; use `when`",
         "null" => "rut has no `null`; absence is `nil` with pointer types `*T` (RFC 0005)",
         "undefined" => "rut has no `undefined`; absence is `nil` (RFC 0005)",
-        "any" => "rut has no `any`; use a trait type or `Opaque` (RFC 0012, RFC 0014)",
+        "any" => "rut has no `any`; use a trait type or `opaque` (RFC 0012, RFC 0014)",
         "typeof" => "rut has no `typeof`; types are static — `x is T` tests at runtime",
         "instanceof" => "rut has no `instanceof`; use `is`",
         "delete" => "rut has no `delete`; there are no dynamic properties",

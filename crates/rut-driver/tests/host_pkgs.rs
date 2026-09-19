@@ -55,10 +55,10 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
             "app",
             rut_driver::Module {
                 source: Some(
-                    "use core::{ Opaque };\n\
+                    "\n\
                      use server::{ subscribe, emit };\n\
                      pub fn main() -> nil {\n\
-                     \x20   let bus: Opaque = Opaque.new(0);\n\
+                     \x20   let bus: opaque = opaque.new(0);\n\
                      \x20   subscribe(bus, \"join\", \"on_join\");\n\
                      \x20   emit(bus, \"join\", \"ada\");\n\
                      }\n"
@@ -78,7 +78,7 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
             "app",
             rut_driver::Module {
                 source: Some(
-                    "use core::{ Opaque };\n\
+                    "\n\
                      use server::{ subscribe };\n\
                      pub fn main() -> nil {\n\
                      \x20   subscribe(\"not a bus\", \"join\", \"on_join\");\n\
@@ -91,7 +91,7 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
         .unwrap();
     let out = rut_driver::compile_graph(&session, "app");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`Opaque`") || d.msg.contains("argument")),
+        out.diags.iter().any(|d| d.msg.contains("`opaque`") || d.msg.contains("argument")),
         "the mistyped call must be diagnosed: {:?}",
         out.diags
     );

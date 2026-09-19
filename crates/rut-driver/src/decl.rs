@@ -6,7 +6,7 @@
 //! over the crossing set, or the load refuses naming the offender.
 //!
 //! What is NOT lowered (yet): `host struct` records and `builtin` decls
-//! stay parse-only surface — `Opaque` covers host boxes, and `builtin`
+//! stay parse-only surface — `opaque` covers host boxes, and `builtin`
 //! is the engine's (core's d.rut is mounted from `Surface::core`, not
 //! read from disk).
 
@@ -20,7 +20,7 @@ use rut_parser::{parse, Mode};
 use crate::session::Module;
 
 /// A crossing-set type name → its boot `TypeId` (RFC 0023 §1): the
-/// primitives, `str`/`bytes`, and `Opaque`. Everything else a host
+/// primitives, `str`/`bytes`, and `opaque`. Everything else a host
 /// signature may spell is a load error.
 fn crossing_ty(name: &str) -> Option<TypeId> {
     Some(match name {
@@ -38,7 +38,7 @@ fn crossing_ty(name: &str) -> Option<TypeId> {
         "u16" => TY_U16,
         "u32" => TY_U32,
         "u64" => TY_U64,
-        "Opaque" => TY_OPAQUE,
+        "opaque" => TY_OPAQUE,
         _ => return None,
     })
 }
@@ -90,7 +90,7 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
             let tyname = ty_text(&ast, th);
             let Some(t) = crossing_ty(&tyname) else {
                 return Err(format!(
-                    "{origin}: host fn `{fname}`: `{tyname}` is not a crossing type — host signatures are concrete over primitives, `str`, `bytes`, and `Opaque` (RFC 0023 §1)"
+                    "{origin}: host fn `{fname}`: `{tyname}` is not a crossing type — host signatures are concrete over primitives, `str`, `bytes`, and `opaque` (RFC 0023 §1)"
                 ));
             };
             ptys.push(t);

@@ -1,11 +1,11 @@
 // rt/rt.d.rut — the logger host surface (RFC 0022 §1 / RFC 0028): two
 // host fns the embedding Rust implements; `ink`'s `Logger` class is the
-// rut wrapper over the returned `Opaque` handle. Signatures are
+// rut wrapper over the returned `opaque` handle. Signatures are
 // concrete over the crossing set (RFC 0023 §1) — a host pkg declares
 // nothing else.
 
-pub host fn create_logger(name: str) -> Opaque;
+pub host fn create_logger(name: str) -> opaque;
 
 /// `level` follows RFC 0022 §1's `LogLevel` numeric layout: 0 trace,
 /// 1 debug, 2 info (the default), 3 warn, 4 error, 5 silent.
-pub host fn logger_log(log: Opaque, level: i32, msg: str);
+pub host fn logger_log(log: opaque, level: i32, msg: str);

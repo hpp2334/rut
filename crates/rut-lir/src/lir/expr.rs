@@ -223,9 +223,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             return Ok(TY_BOOL);
                         }
                         // Opaque RHS — ambient like the primitive (RFC 0028
-                        // revised); the lowercase `opaque` spelling aliases
-                        // the boot name until the phase-2 interner rename
-                        if (n == "Opaque" || n == "opaque")
+                        // revised, builtin-surface phase 2): the surface
+                        // spelling IS the boot name (`sym::OPAQUE`)
+                        if n == "opaque"
                             && self.ctx.extern_native_types.get(&segs[0].name).copied()
                                 == Some(rut_core::binary::NativeTy::Opaque)
                         {
@@ -458,7 +458,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             // a builtin fn name in value position — point at the call form
             if (self.ctx.extern_native_fns.contains(&name)
-                && matches!(name, sym::DOWNCAST | sym::PANIC | sym::ASSERT))
+                && matches!(name, sym::PANIC | sym::ASSERT))
                 || matches!(name, sym::TYPE_ID | sym::PRINT)
             {
                 self.ctx.err(sp, format!("`{}` is a function —call it: `{}(..)`", self.ctx.name(name), self.ctx.name(name)));

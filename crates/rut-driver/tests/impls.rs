@@ -285,12 +285,12 @@ fn builtin_class_inherent_impls_compile() {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     // and the concrete builtin class
     let out = compile(
-        "use core::{ Opaque };\n\
-         impl Opaque {\n\
+        "\n\
+         impl opaque {\n\
              fn peek(self) -> i32 { return 1; }\n\
          }\n\
          fn main() -> i32 {\n\
-             let o = Opaque.new(5);\n\
+             let o = opaque.new(5);\n\
              return o.peek();\n\
          }\n",
     );

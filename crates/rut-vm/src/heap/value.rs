@@ -56,7 +56,7 @@ impl std::fmt::Debug for Value {
 }
 
 impl Value {
-    /// Boundary diagnostics: what a `Value` is, in words (`an Opaque`, ...).
+    /// Boundary diagnostics: what a `Value` is, in words (`an opaque`, ...).
     pub fn kind_name(&self) -> &'static str {
         match self {
             Value::Nil => "nil",
@@ -66,7 +66,7 @@ impl Value {
             Value::Char(_) => "a char",
             Value::Str(_) => "a string",
             Value::Bytes(_) => "bytes",
-            Value::Opaque(_) => "an Opaque",
+            Value::Opaque(_) => "an opaque",
             Value::Tuple(_) => "a tuple",
         }
     }

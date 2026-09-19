@@ -8,20 +8,20 @@
 // - `map_remove`: `>= 0` = removed, the freed slot; `-1` = absent.
 // - `map_take_reloc`: `-1` = drained; else `(old << 32) | new`.
 
-pub host fn map_new(cap: i64) -> Opaque;
+pub host fn map_new(cap: i64) -> opaque;
 
-pub host fn map_entry(m: Opaque, k: Opaque, h: i64) -> i32;
+pub host fn map_entry(m: opaque, k: opaque, h: i64) -> i32;
 
-pub host fn map_find(m: Opaque, k: Opaque, h: i64) -> i32;
+pub host fn map_find(m: opaque, k: opaque, h: i64) -> i32;
 
-pub host fn map_remove(m: Opaque, k: Opaque, h: i64) -> i32;
+pub host fn map_remove(m: opaque, k: opaque, h: i64) -> i32;
 
-pub host fn map_needs_grow(m: Opaque) -> bool;
+pub host fn map_needs_grow(m: opaque) -> bool;
 
-pub host fn map_grow(m: Opaque) -> i32;
+pub host fn map_grow(m: opaque) -> i32;
 
-pub host fn map_take_reloc(m: Opaque) -> i64;
+pub host fn map_take_reloc(m: opaque) -> i64;
 
-pub host fn map_cap(m: Opaque) -> i32;
+pub host fn map_cap(m: opaque) -> i32;
 
-pub host fn map_len(m: Opaque) -> i32;
+pub host fn map_len(m: opaque) -> i32;

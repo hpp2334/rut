@@ -12,7 +12,7 @@
 //! version as a fact.
 //!
 //! Conservative by construction: anything that could observe identity
-//! (a call argument, `RefEq`, `is`, `TidOf`, `Opaque.new`, a store, a
+//! (a call argument, `RefEq`, `is`, `TidOf`, `opaque.new`, a store, a
 //! return), a ref-typed field read, or a redefined field value register
 //! disqualifies the record and it is left as a real allocation.
 

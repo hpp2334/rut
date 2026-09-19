@@ -9,14 +9,13 @@
 // it wants wired to each topic. The host later fires those exports with
 // the state handle `init` returned.
 
-use core::{ Opaque, downcast };
 use pouch::{ Vec };
 use server::{ subscribe, emit };
 
 // The type body is FIELDS ONLY (RFC 0012) — methods live in the inherent
 // `impl Moderator` block below.
 class Moderator {
-    bus: Opaque;          // the host's server — held, never inspected
+    bus: opaque;          // the host's server — held, never inspected
     users: Vec<str>;      // who ever joined (append-only; Vec has no remove)
     muted: Vec<str>;      // flood-control offenders
     online: i32;          // live count (users.len() would never shrink)
@@ -27,7 +26,7 @@ class Moderator {
 }
 
 impl Moderator {
-    pub fn new(bus: Opaque) -> Self {
+    pub fn new(bus: opaque) -> Self {
         return Self { bus: bus, users: Vec.new(), muted: Vec.new(), online: 0,
                       msgs: 0, mutes: 0, last_sender: "", streak: 0 };
     }
@@ -97,31 +96,31 @@ impl Moderator {
 
 /// The host calls this once with its bus box; the plugin registers its
 /// callback names and returns the handle to its own state.
-entry fn init(bus: Opaque) -> Opaque {
+entry fn init(bus: opaque) -> opaque {
     subscribe(bus, "join", "on_join");
     subscribe(bus, "msg", "on_msg");
     subscribe(bus, "leave", "on_leave");
     subscribe(bus, "tick", "on_tick");
-    return Opaque.new(&Moderator.new(bus));
+    return opaque.new(&Moderator.new(bus));
 }
 
-entry fn on_join(c: Opaque, name: str) {
-    let (mod, _) = downcast<*Moderator>(c);
+entry fn on_join(c: opaque, name: str) {
+    let (mod, _) = opaque.downcast<*Moderator>(c);
     mod.on_join(name);
 }
 
-entry fn on_msg(c: Opaque, user: str, text: str) {
-    let (mod, _) = downcast<*Moderator>(c);
+entry fn on_msg(c: opaque, user: str, text: str) {
+    let (mod, _) = opaque.downcast<*Moderator>(c);
     mod.on_msg(user, text);
 }
 
-entry fn on_leave(c: Opaque, name: str) {
-    let (mod, _) = downcast<*Moderator>(c);
+entry fn on_leave(c: opaque, name: str) {
+    let (mod, _) = opaque.downcast<*Moderator>(c);
     mod.on_leave(name);
 }
 
-entry fn on_tick(c: Opaque, n: i64) {
-    let (mod, _) = downcast<*Moderator>(c);
+entry fn on_tick(c: opaque, n: i64) {
+    let (mod, _) = opaque.downcast<*Moderator>(c);
     mod.on_tick(n);
 }
 
@@ -131,8 +130,8 @@ entry fn render_line(topic: str, payload: str) -> str {
     return f"[{topic}] {payload}";
 }
 
-entry fn shutdown(c: Opaque) -> i64 {
-    let (m, _) = downcast<*Moderator>(c);
+entry fn shutdown(c: opaque) -> i64 {
+    let (m, _) = opaque.downcast<*Moderator>(c);
     m.say("system", f"shutdown: {m.stats()}");
     return m.msgs;
 }

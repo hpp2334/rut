@@ -50,7 +50,6 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
 
 const SRC: &str = r#"
 use pouch::{ Vec };
-use core::{ downcast, Opaque };
 struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 
@@ -64,9 +63,9 @@ entry fn pair(v: i32) -> (i32, bool) {
 }
 entry fn triple() -> (i64, f64, str) { let a: i64 = 1; let b: f64 = 2.5; return (a, b, "three"); }
 entry fn nothing() -> nil { return; }
-entry fn make() -> Opaque { return Opaque.new(&Box { rows: Vec.new() }); }
-entry fn put(c: Opaque) -> u32 {
-    let (b, _) = downcast<*Box>(c);
+entry fn make() -> opaque { return opaque.new(&Box { rows: Vec.new() }); }
+entry fn put(c: opaque) -> u32 {
+    let (b, _) = opaque.downcast<*Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -122,11 +121,10 @@ fn typed_wrong_shape_is_a_named_trap() {
 
 #[test]
 fn typed_host_box_roundtrip() {
-    // the host boxes a Rust payload, hands it in as `Opaque`, reads the
+    // the host boxes a Rust payload, hands it in as `opaque`, reads the
     // SAME box back — the payload never crosses as data
     let src = r#"
-use core::{ Opaque };
-entry fn ident(o: Opaque) -> Opaque { return o; }
+entry fn ident(o: opaque) -> opaque { return o; }
 "#;
     let mut vm = entry_vm(src);
     let boxed = rut_vm::OpaqueBox::alloc(&mut vm, vec!["a".to_string(), "b".to_string()])

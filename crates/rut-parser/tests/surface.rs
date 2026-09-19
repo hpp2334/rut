@@ -151,7 +151,7 @@ fn host_dataclass_members_are_fields_only() {
 fn host_fn_generics_are_rejected() {
     // RFC 0023 §1: host fn signatures are concrete — a generic parameter
     // has no shape the boundary could check
-    let (_, diags) = parse("pub host fn downcast<T>(o: Opaque) -> Option<T>;", Mode::Decl);
+    let (_, diags) = parse("pub host fn downcast<T>(o: opaque) -> Option<T>;", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("concrete")),
         "generic host fn must be diagnosed: {diags:?}"
@@ -225,7 +225,7 @@ fn pub_builtin_is_removed() {
         diags.iter().any(|d| d.msg.contains("`pub builtin` is removed")),
         "`pub builtin` must be diagnosed: {diags:?}"
     );
-    let (_, diags) = parse("pub builtin class Opaque { fn new<T>(v: T) -> Self; }", Mode::Decl);
+    let (_, diags) = parse("pub builtin class opaque { fn new<T>(v: T) -> Self; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("`pub builtin` is removed")),
         "`pub builtin class` must be diagnosed: {diags:?}"
@@ -245,7 +245,7 @@ fn removed_forms_are_rejected() {
         diags.iter().any(|d| d.msg.contains("expected `fn` or `struct` after `host`")),
         "`host primitive` must be diagnosed: {diags:?}"
     );
-    // `host class` — removed: wrap native state in a rut class over Opaque
+    // `host class` — removed: wrap native state in a rut class over opaque
     let (_, diags) = parse("pub host class Canvas { fn flush(self) -> nil; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("`host class` is removed")),

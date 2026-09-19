@@ -1314,7 +1314,7 @@ impl FnFrame {
 //     builtin trait Name<T> { .. }      engine-woven contract (Index,
 //                                       Iterator, Disposal)
 //
-// `host class` and `extern` are gone: native state crosses as `Opaque`
+// `host class` and `extern` are gone: native state crosses as `opaque`
 // and rut wraps it in a class (the `Logger` pattern, RFC 0028).
 
 pub(crate) struct SurfaceFrame {
@@ -1412,7 +1412,7 @@ impl SurfaceFrame {
             Tok::Ident(k) if k == "class" => {
                 p.err(
                     p.span(),
-                    "`host class` is removed —declare `host fn`s and wrap native state in a rut `class` over `Opaque` (RFC 0025)",
+                    "`host class` is removed —declare `host fn`s and wrap native state in a rut `class` over `opaque` (RFC 0025)",
                 );
                 Step::Pop(Done::Failed)
             }
@@ -1432,7 +1432,7 @@ impl SurfaceFrame {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
-                // engine fns are compiler-lowered (own<T>, downcast<T>) —
+                // engine fns are compiler-lowered (assert/panic, on_drop) —
                 // generics are fine: nothing crosses a boundary
                 if matches!(p.tok(), Tok::Lt) {
                     let (gens, pending) = generic_params(p, false, "builtin fn");

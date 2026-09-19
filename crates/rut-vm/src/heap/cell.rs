@@ -353,8 +353,8 @@ pub enum CellData {
     /// Opaque box (RFC 0014): the value + its runtime type
     OpaqueBox { val: Slot, val_ty: TypeId },
     /// host payload box (RFC 0023/0026) — any `'static` Rust value behind
-    /// the same `Opaque` surface; rut sees only the box (`downcast<T>` is
-    /// `None`, `o is Opaque` is `true`), the host borrows it typed. The
+    /// the same `opaque` surface; rut sees only the box (`opaque.downcast<T>`
+    /// misses, `o is opaque` is `true`), the host borrows it typed. The
     /// box is the Rust concept it is: `dyn Any` erases the payload (its
     /// own vtable drops it when the cell dies), `type_name` survives for
     /// diagnostics (unrecoverable from the erased box), and the borrow
