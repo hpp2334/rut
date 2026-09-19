@@ -50,7 +50,7 @@ impl ReleasePlan {
                     .filter(|(_, f)| of(&f.ty))
                     .map(|(i, _)| i as u16)
                     .collect(),
-                // `*T` (RFC 0005): the one payload slot dies with the pointee
+                // `?T` (RFC 0044): the one payload slot dies with the nullable
                 TyKind::Opt { elem } => {
                     if of(elem) {
                         vec![0]

@@ -140,7 +140,7 @@ fn classify_type(
             classify_path_segs(toks, ast, span, segs, out, TypeRule::Type);
         }
         TypeKind::TyFn { .. } | TypeKind::TyConst(_) => {}
-        // `*T` / `[T]` / `(A, B)` — the puncts carry no classification;
+        // `?T` / `[T]` / `(A, B)` — the puncts carry no classification;
         // the element types classify themselves
         TypeKind::TyOpt { .. } | TypeKind::TyArray { .. } | TypeKind::TyTuple { .. } => {}
         // a union bound's members classify themselves as Type nodes

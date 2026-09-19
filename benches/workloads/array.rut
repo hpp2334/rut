@@ -4,10 +4,10 @@ use pouch::{ Vec };
 // array — growable-sequence churn over Vec<i32>: push through the grow
 // path, indexed read+write, then a full iteration. The JS twin (array.js)
 // drives a plain JS Array with the same op order and scale; the point of
-// the row is rut's RC-heap fat-ref slots (one *i32 cell per element)
+// the row is rut's RC-heap cell slots (one shared cell per element)
 // against the engines' packed arrays. Scale is bounded by rut's 64 MiB
-// VM heap budget (RFC 0039): n elements cost a *T slot plus a boxed
-// i32 cell each — measured VM heap peak 38.5 MB at n = 1M.
+// VM heap budget (RFC 0039): n elements cost a `?T` handle slot plus a
+// boxed i32 cell each — measured VM heap peak 38.5 MB at n = 1M.
 // Scale: n = 1_000_000. Canonical reference (closed form, both twins;
 // n < m so no mod wrap): acc = n(n-1)/2, total = acc + n,
 // checksum = 1000000000000.
@@ -25,7 +25,8 @@ fn churn(n: i32, m: i32) -> i64 {
         v[i] = (x + 1) % m;
         acc += x as i64;
     }
-    // iterate the whole sequence (Vec for-of yields *T — RFC 0012 §6)
+    // iterate the whole sequence (Vec for-of yields the shared ?T —
+    // RFC 0012 §6 + RFC 0044)
     let mut total: i64 = 0;
     for (let x of v) {
         total += x as i64;

@@ -22,9 +22,9 @@ pub(crate) struct TypeFrame {
 
 enum TyStage {
     Init,
-    /// `?T` — the nullable (RFC 0044): prefix spelling, binds tightest
-    /// (`[?T]` is an array of nullables, `??T` chains); postfix `?`
-    /// composes in `postfix_opt` (`[T]?` is a nullable array)
+    /// `?T` — the nullable (RFC 0044): the ONE spelling, prefix-only,
+    /// binding the following type term (`[?T]` is an array of
+    /// nullables, `??T` chains, `?[T]` a nullable array)
     Opt,
     /// `*T` — the removed pointer spelling: parsed for the friendly
     /// diagnostic, the element type is the recovered result (the Diag
@@ -148,28 +148,21 @@ impl TypeFrame {
         self.pop_or_union(p, t)
     }
 
-    /// A completed type is wrapped by any postfix `?`s (RFC 0044: the
-    /// nullable binds tightest — `[T]?` is a nullable array, `??T`
-    /// chains) and then either pops — or a `|` follows and it continues
-    /// as a union bound (`type U = A | B;`, `T requires A | B`,
-    /// RFC 0043). A single member never becomes a `TyUnion` node.
+    /// A completed type either pops — or a `|` follows and it continues
+    /// as a union bound (`type U = A | B;`, `T requires A | B`, RFC
+    /// 0043). A single member never becomes a `TyUnion` node. A trailing
+    /// postfix `?` is the removed spelling: diagnosed, then recovered
+    /// with the bare type (the Diag already fails the compile).
     fn pop_or_union(&mut self, p: &mut Parser, t: NodeHandle<AnyTy>) -> Step {
-        let t = self.postfix_opt(p, t);
+        while matches!(p.tok(), Tok::Question) {
+            p.err_here("the postfix spelling `T?` was removed — write `?T` (RFC 0044)");
+            p.bump();
+        }
         if self.allow_union && p.eat_punct(Tok::Pipe) {
             self.stage = TyStage::Union { elems: vec![t] };
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
         Step::Pop(Done::Ty(t))
-    }
-
-    /// postfix `?`s on a completed type: `T?` → `?T`, `T??` chains
-    fn postfix_opt(&mut self, p: &mut Parser, mut t: NodeHandle<AnyTy>) -> NodeHandle<AnyTy> {
-        while matches!(p.tok(), Tok::Question) {
-            let lo = self.lo;
-            t = p.typ(TypeKind::TyOpt { inner: t }, lo.to(p.span()));
-            p.bump();
-        }
-        t
     }
 
     /// a union member completed: continue on `|`, else build the node

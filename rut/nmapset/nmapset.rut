@@ -21,8 +21,8 @@
 //
 // DIVISION OF LABOR (plan §0.4/§0.5): the native table owns KEYS only —
 // owned Rust data behind the `opaque` payload box — while `vals` stay
-// rut-side in a `[*V]` parallel array. That preserves mapset's `get ->
-// *V` aliasing/nil semantics EXACTLY (no opaque values, no downcast, no
+// rut-side in a `[?V]` parallel array. That preserves mapset's `get ->
+// ?V` aliasing/nil semantics EXACTLY (no opaque values, no downcast, no
 // fresh-cell drift) and keeps the box free of rut cells. The key set is
 // CLOSED (integer primitives, `bool`, `str`, `bytes` — everything
 // `opaque(..)` can hand the host as bits/bytes): keys hash WRAPPER-side

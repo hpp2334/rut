@@ -1589,8 +1589,8 @@ pub fn main() -> nil {
 
 #[test]
 fn for_of_vec_yields_element_references() {
-    // RFC 0012 §6 — Vec/`[T]` fused loops yield `*T`: a fresh element box
-    // per iteration. Ref-typed elements alias the stored slot — writes
+    // RFC 0012 §6 — Vec/`[T]` fused loops yield the shared `?T` element
+    // (RFC 0044). Ref-typed elements alias the stored slot — writes
     // through the loop var (`row.push`, `r.v = ..`) hit the sequence;
     // scalar/str uses deref automatically at value positions; `str`
     // itself keeps value yields.

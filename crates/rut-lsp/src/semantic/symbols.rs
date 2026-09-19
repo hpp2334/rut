@@ -182,8 +182,9 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
             names.join(".")
         }
         TypeKind::TyFn { .. } => "fn(..)".to_string(),
-        TypeKind::TyOpt { .. } => "?T".to_string(),
-        TypeKind::TyArray { .. } => "[..]".to_string(),
+        // the prefix spelling renders with its payload: `?i32`, `??str`
+        TypeKind::TyOpt { inner } => format!("?{}", ty_text(ast, *inner)),
+        TypeKind::TyArray { elem } => format!("[{}]", ty_text(ast, *elem)),
         TypeKind::TyTuple { .. } => "(..)".to_string(),
         TypeKind::TyConst(_) => "const".to_string(),
         TypeKind::TyUnion { elems } => {

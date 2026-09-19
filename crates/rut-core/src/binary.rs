@@ -300,8 +300,8 @@ pub fn is_core_name(name: IdentId) -> bool {
 /// Use sites diagnose with these instead of "unknown" — a removed surface
 /// explains itself (RFC 0028 v1.1; `unit` in v1.2).
 pub const REMOVED_CORE: &[(&str, &str)] = &[
-    ("own", "`own` was removed — values copy on assignment (RFC 0016 §1); share a cell via `&x`"),
-    ("Option", "`Option` was removed — absence is `nil` on a pointer type, or a `(T, err)` tuple (v1.1)"),
+    ("own", "`own` was removed — bindings share by reference now (RFC 0044); `bytes.clone()` is the one copy escape hatch"),
+    ("Option", "`Option` was removed — absence is `nil` on a `?T`, or a `(T, err)` tuple (v1.1)"),
     ("Result", "`Result` was removed — errors are `(T, err)` tuples; an empty err is success (v1.1)"),
     ("char", "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"),
     ("Index", "`Index` was removed — indexing is builtin over `[T]`/`Vec`/`str`/`bytes`; give the type real `len`/indexing members or a `buf`+`len` shape (RFC 0012 v1.1)"),
@@ -314,7 +314,7 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("bytes_zeroed", "`bytes_zeroed(n)` was removed — use `bytes.zeroed(n)` (RFC 0004 v1.1)"),
     ("unit", "`unit` was removed — the empty type and its value are spelled `nil` (v1.2)"),
     ("Array", "`Array` was removed — the array type is spelled `[T]`, construction is the repeat `[v; n]` (RFC 0005 §9)"),
-    ("make_ptr", "`make_ptr(v)` was removed — `&v` is the address-of (RFC 0005 §9)"),
+    ("make_ptr", "`make_ptr(v)` was removed — write `?T`: a `T` widens into `?T` on assignment, `nil` is the null (RFC 0044)"),
     ("downcast", "`downcast<T>(o)` was removed — the erasure primitive carries it: `opaque.downcast<T>(o)` (builtin-surface)"),
 ];
 
@@ -899,7 +899,7 @@ fn nat(b: u8) -> Result<Nat, String> {
     Ok(match b {
         0 => Nat::Str, 1 => Nat::Concat, 2 => Nat::StrLen,
         3 => Nat::ArrLen, 4 => Nat::StrJoin, 5 => Nat::StrSlice,
-        6 => Nat::ArrSlice,
+        6 => Nat::ArrSlice, 7 => Nat::BytesClone,
         _ => return Err("bad nat tag".into()),
     })
 }

@@ -4,6 +4,7 @@
 //! are the parser's conformance suite. Also: depth budgets fire as one
 //! clean Diag (C3).
 
+use rut_ast::ast::*;
 use rut_parser::{parse, Mode};
 
 fn corpus() -> Vec<std::path::PathBuf> {
@@ -180,25 +181,75 @@ fn repeat_and_address_of_parse() {
 
 #[test]
 fn nullable_types_parse() {
-    // RFC 0044: postfix `?` binds tightest — `[?T]` is an array of
-    // nullables, `[T]?` a nullable array, `??T` chains
-    let src = "fn f(xs: [?i32]) -> ?i32 { return xs[0]; }";
-    let (_, diags) = parse(src, Mode::Impl);
+    // RFC 0044 (user ruling): `?` is the ONE nullable spelling — prefix,
+    // binding the following type TERM. `[?T]` is `[T | nil]` (nullable
+    // ELEMENT — TyArray(TyOpt)), while `?[T]` is `[T] | nil` (nullable
+    // ARRAY — TyOpt(TyArray)); `??T` chains, `?[?T]` nests the other way.
+    let src = "fn f(a: [?i32], b: ?[i32], c: ??i32, d: ?[?i32]) -> ?i32 { return a[0]; }";
+    let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
-    let src = "fn f(xs: [i32]?) -> [i32]? { return xs; }";
-    let (_, diags) = parse(src, Mode::Impl);
-    assert!(diags.is_empty(), "{diags:?}");
-    let src = "fn f() -> nil { let p: ??i32 = nil; }";
-    let (_, diags) = parse(src, Mode::Impl);
-    assert!(diags.is_empty(), "{diags:?}");
+    let items = ast.module_items(ast.root);
+    let f = items.iter().find(|i| matches!(ast.item(**i), ItemKind::Fn(_))).expect("fn");
+    let ItemKind::Fn(d) = ast.item(*f) else { unreachable!() };
+    let param_ty = |i: usize| ast.param(d.params[i]).clone();
+    let MemberKind::Param(p0) = param_ty(0) else { panic!("param 0") };
+    let MemberKind::Param(p1) = param_ty(1) else { panic!("param 1") };
+    let MemberKind::Param(p2) = param_ty(2) else { panic!("param 2") };
+    let MemberKind::Param(p3) = param_ty(3) else { panic!("param 3") };
+    // `[?i32]` — the array OUTSIDE, the nullable on the ELEMENT
+    let TypeKind::TyArray { elem } = ast.ty(p0.ty.unwrap()) else {
+        panic!("`[?i32]` must be TyArray(TyOpt), got {:?}", ast.ty(p0.ty.unwrap()));
+    };
+    assert!(matches!(ast.ty(*elem), TypeKind::TyOpt { .. }), "the element carries the `?`");
+    // `?[i32]` — the nullable OUTSIDE, the array inside
+    let TypeKind::TyOpt { inner } = ast.ty(p1.ty.unwrap()) else {
+        panic!("`?[i32]` must be TyOpt(TyArray), got {:?}", ast.ty(p1.ty.unwrap()));
+    };
+    assert!(matches!(ast.ty(*inner), TypeKind::TyArray { .. }), "the array is the payload");
+    // `??i32` chains — Opt(Opt(path))
+    let TypeKind::TyOpt { inner } = ast.ty(p2.ty.unwrap()) else {
+        panic!("`??i32` must be TyOpt, got {:?}", ast.ty(p2.ty.unwrap()));
+    };
+    assert!(matches!(ast.ty(*inner), TypeKind::TyOpt { .. }), "the chain nests");
+    // `?[?i32]` — both at once: Opt(Array(Opt))
+    let TypeKind::TyOpt { inner } = ast.ty(p3.ty.unwrap()) else {
+        panic!("`?[?i32]` must be TyOpt, got {:?}", ast.ty(p3.ty.unwrap()));
+    };
+    let TypeKind::TyArray { elem } = ast.ty(*inner) else {
+        panic!("the payload is the array, got {:?}", ast.ty(*inner));
+    };
+    assert!(matches!(ast.ty(*elem), TypeKind::TyOpt { .. }), "the element is nullable");
+    // the return keeps the same rule
+    let TypeKind::TyOpt { .. } = ast.ty(d.ret.unwrap()) else {
+        panic!("`-> ?i32` must be TyOpt");
+    };
     // `?` composes with generics and fn types
     let src = "fn f(v: Vec<?Point>) -> fn(?i32) -> ?str { panic(\"\"); }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
-    // each union member carries its own `?`
-    let src = "type U = i32? | str?;";
+    // each union member carries its own `?` — prefix, before the member
+    let src = "type U = ?i32 | ?str;";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn the_postfix_nullable_spelling_is_removed() {
+    // the user ruling: `T?` / `[T]?` no longer parse — each trailing `?`
+    // diagnoses pointing at the prefix spelling, and the bare type is
+    // the recovery result (the Diag fails the compile either way)
+    for src in [
+        "fn f(p: i32?) -> nil { }",
+        "fn f(p: [i32]?) -> nil { }",
+        "fn f() -> [i32]? { return nil; }",
+        "type U = i32? | str?;",
+    ] {
+        let (_, diags) = parse(src, Mode::Impl);
+        assert!(
+            diags.iter().any(|d| d.msg.contains("the postfix spelling `T?` was removed") && d.msg.contains("`?T`")),
+            "`{src}` must diagnose the removed postfix spelling: {diags:?}"
+        );
+    }
 }
 
 #[test]

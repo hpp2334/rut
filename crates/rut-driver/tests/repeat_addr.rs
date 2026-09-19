@@ -111,8 +111,8 @@ fn the_array_name_diagnoses_with_the_removal() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`make_ptr(v)` was removed") && d.contains("`&v`")),
-        "make_ptr must point at `&v`: {ds:?}"
+        ds.iter().any(|d| d.contains("`make_ptr(v)` was removed") && d.contains("`?T`")),
+        "make_ptr must point at `?T`: {ds:?}"
     );
 }
 
@@ -196,6 +196,55 @@ fn nullable_widen_narrow_and_nil_typing() {
     assert!(
         ds.iter().any(|d| d.contains("`i32`") && d.contains("`nil`")),
         "nil against `i32` must diagnose: {ds:?}"
+    );
+}
+
+#[test]
+fn prefix_question_binds_the_following_type_term() {
+    // RFC 0044 pin (user ruling): `?` applies to the following type
+    // TERM — `[?i32]` is `[i32 | nil]` (the ELEMENT is nullable) while
+    // `?[i32]` is `[i32] | nil` (the ARRAY is). The checker agrees with
+    // the parser shapes: a nil ELEMENT stores into `[?i32]`, nil itself
+    // types as `?[i32]`, `T → ?T` boxes the plain array, and the two
+    // shapes are not interchangeable.
+    let out = compile(
+        "fn count(xs: [?i32]) -> i32 { return xs.len(); }\n\
+         fn main() -> i32 {\n\
+             let mut a: [?i32] = [7; 3];\n\
+             a[1] = nil;\n\
+             let e: ?i32 = a[0];\n\
+             let plain: [i32] = [1; 2];\n\
+             let b: ?[i32] = plain;\n\
+             let n: ?[i32] = nil;\n\
+             return count(a) + (b == nil) as i32 + (n == nil) as i32 + e;\n\
+         }\n",
+    );
+    assert!(out.diags.is_empty(), "{:?}", out.diags);
+    let ir = out.ir_dump;
+    assert!(ir.contains("makeopt"), "the `[i32] -> ?[i32]` widen must box: {ir}");
+
+    // `[?i32]` is NOT itself nullable — nil against it is a mismatch
+    let ds = diags_of(
+        "fn main() -> i32 {\n\
+             let bad: [?i32] = nil;\n\
+             return 0;\n\
+         }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("`nil`") && (d.contains("`[?i32]`") || d.contains("`Array<?i32>`"))),
+        "nil against `[?i32]` must diagnose — the array itself is not nullable: {ds:?}"
+    );
+    // an element of `[?i32]` is `?i32`, never `?[i32]`
+    let ds = diags_of(
+        "fn main() -> i32 {\n\
+             let a: [?i32] = [7; 3];\n\
+             let wrong: ?[i32] = a[0];\n\
+             return wrong.len();\n\
+         }\n",
+    );
+    assert!(
+        !ds.is_empty(),
+        "an element of `[?i32]` must not check as `?[i32]`: {ds:?}"
     );
 }
 

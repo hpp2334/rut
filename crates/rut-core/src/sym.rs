@@ -149,6 +149,7 @@ pub const WELL_KNOWN: &[&str] = &[
     "print",      // PRINT
     "size_of",    // SIZE_OF
     "align_of",   // ALIGN_OF
+    "clone",      // CLONE
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -215,6 +216,9 @@ pub const NAN: IdentId = IdentId(50);
 pub const PRINT: IdentId = IdentId(51);
 pub const SIZE_OF: IdentId = IdentId(52);
 pub const ALIGN_OF: IdentId = IdentId(53);
+// the one copy escape hatch — `bytes.clone()` (RFC 0044; every other
+// binding shares its cell)
+pub const CLONE: IdentId = IdentId(54);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -308,6 +312,7 @@ mod tests {
             ("print", PRINT),
             ("size_of", SIZE_OF),
             ("align_of", ALIGN_OF),
+            ("clone", CLONE),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

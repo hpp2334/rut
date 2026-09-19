@@ -6,46 +6,42 @@
 // handles; consumers mount this package like any tree pkg
 // (`pouch`/`ink` pattern).
 //
-// The package spells no `use`: `[T]` (RFC 0005 §9), `&x`, the
-// primitives, and the ambient primitive members (`str.encode()`,
-// `a.len()`) cover everything written here. Storage is pointer arrays —
-// `keys: [*K]` (one `*K` cell per key, v1.1) and `vals: [*V]` — born
-// from the repeat `[nil; n]` (`nil` is the slot's zero, RFC 0005 §10);
-// element stores keep `&v`.
+// The package spells no `use`: `[T]` (RFC 0005 §9), the primitives,
+// and the ambient primitive members (`str.encode()`, `a.len()`) cover
+// everything written here. Storage is nullable-handle arrays —
+// `keys: [?K]` (one `?K` handle per key, RFC 0044) and `vals: [?V]` —
+// born from the repeat `[nil; n]` (`nil` is the slot's zero, RFC 0005
+// §10); element stores take the value's handle.
 //
 // Counters (`count`/`tomb`/`cap`) are `u32` — non-negative domain
 // values. Probe/index temporaries stay `i32` (`len()` and indexing are
 // i32) with a single `as i32` at the index boundary; the load-factor
 // compare widens to `u64` (u32 `×10` would overflow near 429M entries).
 //
-// KEY REPRESENTATION (v1.1): `keys: [*K]` — the element IS a pointer,
-// so the `[nil; cap]` filler and `mark_dead`'s nil-store are legal
-// (nil stays pointer-only, RFC 0005 §10). Per stored key:
-// - scalar K (i32/u64/bool/…): one `*K` cell minted over the scalar
-//   (`&key` — a MakePtr with scalar payload);
-// - ref K (str/bytes): the `*K` cell SHARES the key's cell (retain, no
-//   copy) — the nil-store in `mark_dead` releases it with the last
-//   reference;
-// - record K: the call argument may still clone per the value-param
-//   law (records are `is_value`) — rare, accepted.
+// KEY REPRESENTATION (v1.1, RFC 0044): `keys: [?K]` — the element IS a
+// nullable handle, so the `[nil; cap]` filler and `mark_dead`'s
+// nil-store are legal (nil is the `?K` slot's zero). Per stored key:
+// - scalar K (i32/u64/bool/…): the store boxes the scalar into the
+//   slot's `?K` (the `T → ?T` widen);
+// - every K (str/bytes/records alike): the `?K` handle SHARES the
+//   key's cell (bindings share by reference, RFC 0044) — the nil-store
+//   in `mark_dead` releases it with the last reference. No key is ever
+//   copied: `bytes.clone()` is the one copy escape hatch, and nothing
+//   here needs it.
 // `RawHashTable<K>` monomorphizes with its owner, so `probe`'s
 // `k.hash_eq(key)` and the owners' `k.hash()` are bare concrete-
 // receiver calls: static dispatch, inlined — no box, no vtable anywhere
 // on the hot path (the engine's boxless static trait dispatch).
 //
-// HOT-LOOP LAW (bench-verified): hoist SCALAR field reads (`cap`, the
-// counters) into locals — that is pouch's `cap`-mirror precedent — but
-// NEVER bind an array field to a local inside a per-call method:
-// materializing a binding from an array value deep-copies the buffer
-// (the engine's copy law), so `let states = self.states` in `probe`
-// made every put/get O(cap). (v1.1: a source that is dead afterward is
-// move-elided by the engine, so a binding whose source dies can be
-// O(1) — `rehash`'s `let old_*` bindings are exactly that blessed
-// case — but keep the direct `self.states[at]` style in hot loops
-// regardless.) Hot methods index the fields directly —
-// `self.states[at]` is an in-place element access (no copy); the only
-// array bindings here live in `rehash`, which runs O(log n) times and
-// NEEDS the old arrays held across the `self.*` reassignment.
+// HOT-LOOP LAW (the sharing law, RFC 0044): hoist SCALAR field reads
+// (`cap`, the counters) into locals — that is pouch's `cap`-mirror
+// precedent. Bindings no longer copy: `let states = self.states` is an
+// O(1) share of the array cell (v1.1's copy law is gone — no binding
+// can ever be O(cap)), so a local array binding is legal anywhere. Keep
+// the direct `self.states[at]` style in hot loops regardless: it reads
+// clearly and skips the handle traffic. `rehash`'s `let old_*` bindings
+// hold the old arrays across the `self.*` reassignment — they are
+// shares, so the swap itself is O(1).
 
 // The ONE key contract (RFC 0028): hashing and key comparison are a
 // single trait — `hash_eq` must be CONSISTENT with `hash` (equal keys
@@ -150,7 +146,7 @@ impl Hashable for bytes {
 // (a tombstone — the probe steps through it, insertion may reuse it).
 // `cap` is a power of two, so the index mask is `cap - 1`.
 class RawHashTable<K requires Hashable> {
-    keys: [?K];   // one `*K` cell per stored key (see KEY REPRESENTATION)
+    keys: [?K];   // one `?K` handle per stored key (see KEY REPRESENTATION)
     hashes: [u64];
     states: [u8];
     count: u32;   // FULL slots
@@ -203,7 +199,7 @@ impl RawHashTable<K> {
                 return -(at + 1);
             }
             if (st == 1 && self.hashes[at] == h) {
-                let k: K = self.keys[at];   // ptr cell -> K register
+                let k: K = self.keys[at];   // the ?K handle reads as K (auto-deref)
                 if (k.hash_eq(key)) {
                     return at;
                 }
@@ -215,9 +211,10 @@ impl RawHashTable<K> {
         }
     }
 
-    // Take a slot found by `probe`: one `*K` key cell (`&key` — no box
-    // anywhere), the recorded hash, FULL. A DEAD slot reused drops out
-    // of the tomb count.
+    // Take a slot found by `probe`: the `?K` key handle (the store
+    // shares/boxes per KEY REPRESENTATION — no copy anywhere), the
+    // recorded hash, FULL. A DEAD slot reused drops out of the tomb
+    // count.
     pub fn occupy(mut self, at: i32, key: K, h: u64) {
         if (self.states[at] == 2) {
             self.tomb -= 1;
@@ -228,8 +225,9 @@ impl RawHashTable<K> {
         self.count += 1;
     }
 
-    // Tombstone a FULL slot (the `*K` key cell releases with the store
-    // of `nil`); the entry leaves `count` but stays on the probe path.
+    // Tombstone a FULL slot (the `?K` key handle releases with the
+    // store of `nil`); the entry leaves `count` but stays on the probe
+    // path.
     pub fn mark_dead(mut self, i: i32) {
         self.keys[i] = nil;
         self.states[i] = 2;
@@ -345,7 +343,8 @@ impl HashMap<K, V> {
     }
 
     // `get` — `nil` = absent (RFC 0005 §10). A `(V, bool)` pair is
-    // impossible without a default `V` — the pointer is the answer.
+    // impossible without a default `V` — the `?V` is the answer: the
+    // stored cell comes back shared, absence is `nil`.
     pub fn get(self, k: K) -> ?V {
         let at = self.t.probe(k, k.hash());
         if (at < 0) {

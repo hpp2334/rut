@@ -1,8 +1,10 @@
 //! `CallNat` natives (RFC 0032 §1.1 R2), split by domain: `str.rs` holds
-//! the string/formatting natives, `array.rs` the sequence length.
+//! the string/formatting natives, `array.rs` the sequence length/window,
+//! `bytes.rs` the buffer copy.
 use super::*;
 
 mod array;
+mod bytes;
 mod str;
 
 impl Vm {
@@ -16,6 +18,7 @@ impl Vm {
             Nat::ArrLen => self.nat_arr_len(recv, dst),
             Nat::Str | Nat::Concat | Nat::StrLen | Nat::StrJoin | Nat::StrSlice => self.call_str_nat(nat, recv, args, dst),
             Nat::ArrSlice => self.nat_arr_slice(recv, args, dst),
+            Nat::BytesClone => self.nat_bytes_clone(recv, dst),
         }
     }
 

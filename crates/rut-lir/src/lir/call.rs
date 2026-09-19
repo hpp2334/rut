@@ -165,13 +165,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let pt = self.compile_expr(args[0], None)?;
                 if !matches!(self.ctx.types.kind(pt), TyKind::Opt { .. }) {
-                    self.ctx.err(sp, "on_drop needs a pointer —`*T` from `&v` (RFC 0016 §3)");
+                    self.ctx.err(sp, "on_drop needs a nullable — `?T` (RFC 0016 §3 + RFC 0044)");
                     return Err(());
                 }
                 let obj = self.last_reg;
                 let ct = self.compile_expr(args[1], None)?;
                 if !matches!(self.ctx.types.kind(ct), TyKind::Fn { .. }) {
-                    self.ctx.err(sp, "on_drop's cleanup must be a function value —`fn(*T)` (RFC 0016 §3)");
+                    self.ctx.err(sp, "on_drop's cleanup must be a function value — `fn(?T)` (RFC 0016 §3)");
                     return Err(());
                 }
                 let cleanup = self.last_reg;
@@ -920,6 +920,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Ok(TY_I32);
                     }
                 }
+                if name == sym::CLONE && args.is_empty() {
+                    // b.clone() -> bytes — a one-shot buffer copy (RFC
+                    // 0044): the ONLY copy escape hatch. Every binding
+                    // shares its cell; this member mints a fresh one.
+                    let dst = self.new_reg(TY_BYTES);
+                    { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::BytesClone, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                    self.last_reg = dst;
+                    return Ok(TY_BYTES);
+                }
                 // a registered trait impl on the ref target dispatches
                 // statically on the bare receiver (same law as `str`
                 // above — one ABI variant, the raw register crosses)
@@ -931,7 +940,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
-                    "`bytes` has no method `{}` — its members are `len`/`decode` (`bytes_len({who})` is the free-fn spelling)",
+                    "`bytes` has no method `{}` — its members are `len`/`decode`/`clone` (`bytes_len({who})` is the free-fn spelling)",
                     self.ctx.name(name)
                 ));
                 return Err(());

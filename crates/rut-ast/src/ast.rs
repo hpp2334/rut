@@ -525,8 +525,10 @@ pub enum TypeKind {
     TyPath { segs: Vec<PathSeg> },
     /// fn type: `fn(Store, P) -> R` — params are bare types (RFC 0013 §1)
     TyFn { params: Vec<NodeHandle<AnyTy>>, ret: NodeHandle<AnyTy> },
-    /// nullable type `?T` (RFC 0005, RFC 0044) — postfix `?`, binds
-    /// tightest: `[?T]` is an array of nullables, `[T]?` a nullable array
+    /// nullable type `?T` (RFC 0005, RFC 0044) — the prefix `?` binds
+    /// the following type term: `[?T]` is an array of nullables,
+    /// `?[T]` a nullable array, `??T` chains. The postfix `T?` spelling
+    /// is removed (diagnosed at the parse).
     TyOpt { inner: NodeHandle<AnyTy> },
     /// array type `[T]` (RFC 0005 §9) — the fixed-length heap array;
     /// grammar-spelled, resolved directly (the `Array` name is gone)

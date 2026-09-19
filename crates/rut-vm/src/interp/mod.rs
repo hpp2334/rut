@@ -258,7 +258,7 @@ impl Vm {
                     .filter(|(_, fd)| prog.types.repr_of(fd.ty).is_ref())
                     .map(|(i, _)| i as u16)
                     .collect(),
-                // `*T` (RFC 0005): a one-slot pointer box retains its payload
+                // `?T` (RFC 0044): a one-slot nullable box retains its payload
                 TyKind::Opt { elem } => {
                     if prog.types.repr_of(*elem).is_ref() {
                         vec![0]
@@ -848,5 +848,90 @@ mod tests {
         let h = boxed(&vm, Slot::null(), TY_STR);
         let err = vm.opaque_key_payload(&h).unwrap_err();
         assert_eq!(err.kind, TrapKind::NilDeref, "{}", err.msg);
+    }
+
+    /// A VM whose program carries ONE dummy func declaring four
+    /// registers — `store_result` answers the destination register's
+    /// type from the current function's table, so the native path needs
+    /// a func to answer from.
+    fn vm_with_regs() -> Vm {
+        let mut vm = empty_vm();
+        let mut prog = (*vm.prog).clone();
+        prog.funcs.push(rut_core::binary::FuncCode {
+            name: rut_core::sym::MAIN,
+            params: vec![],
+            ret: TY_I32,
+            is_method: false,
+            n_captures: 0,
+            regs: vec![TY_ANY, TY_BYTES, TY_ANY, TY_ANY],
+            argv: vec![],
+            labels: vec![],
+            code: vec![],
+            spans: vec![],
+            host_id: None,
+        });
+        vm.prog = Rc::new(prog);
+        vm
+    }
+
+    /// Set up `regs` slots and run the bytes-clone native over reg 0.
+    /// (The native directly — `call_nat` slices the current function's
+    /// argv pool, which this minimal program does not carry.)
+    fn clone_reg0_of(vm: &mut Vm, src: Slot) -> Slot {
+        vm.cur_regs = vec![Slot::null(); 4];
+        vm.cur_regs[0] = src;
+        vm.nat_bytes_clone(Some(0), Some(1)).expect("clone native");
+        vm.cur_regs[1]
+    }
+
+    #[test]
+    fn bytes_clone_mints_a_fresh_equal_buffer() {
+        let mut vm = vm_with_regs();
+        let b = vm.heap.alloc_bytes(vec![7, 8, 9]).unwrap();
+        let c = clone_reg0_of(&mut vm, b);
+        // equal content, DIFFERENT cell — the copy escape hatch, not an
+        // alias (the one `bytes.clone()` law, RFC 0044)
+        assert_ne!(unsafe { b.r }, unsafe { c.r }, "the clone must be a fresh cell");
+        assert_eq!(cell_of(c).bytes_copy(), vec![7, 8, 9]);
+        assert_eq!(cell_of(b).bytes_copy(), vec![7, 8, 9], "the original is untouched");
+    }
+
+    #[test]
+    fn bytes_clone_isolates_mutations_in_both_directions() {
+        // bytes are immutable in the language, so the isolation law is
+        // proven engine-side: rewrite the original's storage (the way a
+        // host boundary or future surface would) and check the clone
+        // does not observe it — nor the reverse.
+        let mut vm = vm_with_regs();
+        let b = vm.heap.alloc_bytes(vec![1, 2, 3]).unwrap();
+        let c = clone_reg0_of(&mut vm, b);
+
+        let CellData::Array { items, .. } = &cell_of(b).data else { panic!("not bytes") };
+        items.borrow_mut().set(0, Slot::int(255));
+        assert_eq!(
+            cell_of(c).bytes_copy(),
+            vec![1, 2, 3],
+            "the clone must not observe the original's mutation"
+        );
+
+        let CellData::Array { items, .. } = &cell_of(c).data else { panic!("not bytes") };
+        items.borrow_mut().set(1, Slot::int(254));
+        assert_eq!(
+            cell_of(b).bytes_copy(),
+            vec![255, 2, 3],
+            "the original must not observe the clone's mutation"
+        );
+    }
+
+    #[test]
+    fn bytes_clone_traps_on_a_non_bytes_receiver() {
+        // defensive: the lowering only emits the native on a `bytes`
+        // receiver; a stray cell still traps, never silently copies
+        let mut vm = empty_vm();
+        let s = vm.heap.alloc_str("nope".into()).unwrap();
+        vm.cur_regs = vec![Slot::null(); 4];
+        vm.cur_regs[0] = s;
+        let err = vm.nat_bytes_clone(Some(0), Some(1)).unwrap_err();
+        assert_eq!(err.kind, TrapKind::Invalid, "{}", err.msg);
     }
 }

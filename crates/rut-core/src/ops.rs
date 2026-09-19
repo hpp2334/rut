@@ -94,8 +94,11 @@ pub enum Nat {
     StrSlice,
     /// `v.slice(from, to)` — an O(1) array window (RFC 0042 §6):
     /// recv = the backing array, args = [from, to, live_len]; the result
-    /// is an `ArrView` cell the caller boxes as `*Vec<T>`
+    /// is an `ArrView` cell the caller boxes as the `?Vec<T>` (RFC 0044)
     ArrSlice,
+    /// `b.clone()` — a one-shot buffer copy (RFC 0044): the ONLY copy
+    /// escape hatch; recv = the bytes, no args, dst = the fresh buffer
+    BytesClone,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -62,10 +62,14 @@ builtin primitive str {
 builtin primitive bytes {
     fn len(self) -> i32;            // octets
     fn decode(self) -> str;         // UTF-8 (lossy)
+    fn clone(self) -> bytes;        // a one-shot buffer copy — the ONLY
+                                    // copy escape hatch (RFC 0044):
+                                    // every binding shares its cell,
+                                    // this member mints a fresh one
 }
 // type-methods: bytes.zeroed(n) -> bytes, bytes.from(a: [u8]) -> bytes
 // NOTE: `Option`/`Result`/`own` were removed in v1.1 — absence is
-// `nil` on a pointer type or a `(T, err)` tuple; use sites diagnose
+// `nil` on a `?T` or a `(T, err)` tuple; use sites diagnose
 // with the removal and its replacement.
 
 // The array `[T]` (RFC 0005 §9) declares NOTHING here: the type is

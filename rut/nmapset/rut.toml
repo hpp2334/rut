@@ -1,7 +1,7 @@
 # nmapset/ — the native-key map/set EXPERIMENT (the mapset-host plan):
 # generic wrapper classes over the `nmap` host table. The native side
-# owns keys only; `vals` stay rut-side (`[*V]` parallel array), so `get
-# -> *V` aliasing semantics match `mapset` exactly. `inline = true` like
+# owns keys only; `vals` stay rut-side (`[?V]` parallel array), so `get
+# -> ?V` aliasing semantics match `mapset` exactly. `inline = true` like
 # ink — a generic-class module is source-inlined into its consumer, and
 # the flag keeps that explicit.
 #
