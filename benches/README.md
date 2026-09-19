@@ -127,7 +127,10 @@ mapset workloads over `rut/nmapset` — the **host-implemented** key
 table experiment (the "C builtin" architecture qjs itself uses): keys
 live as owned Rust data behind one `opaque` box per table, values stay
 rut-side in a parallel `[?V]` array, and every map op crosses the host
-boundary (one key box mint + one or two host calls). The nmapset pkg
+boundary once through a typed crossing (`map_{entry,find,remove}_{i,u,b,s,y}`
+— the key crosses directly as its own type, hashed host-side by
+`hash_payload`, which ports the same mix64/FNV-1a constants; `map_entry_*`
+answers `i32::MIN` grow-first, so put is one crossing even on growth). The nmapset pkg
 ships mapset's exact mix64/FNV-1a constants, so every key hashes to the
 same bits and the checksums MUST equal the mapset rows' — a mismatch is
 a bug, and `expected.json` pins it. See the performance log below.
@@ -326,7 +329,68 @@ regression widens that one gap (2.45x qjs net, from 1.78x). The str
 map rows stay where they always were — `encode()`-per-hash bound, not
 copy bound.
 
-## Method (and what "fair" means here)
+## Performance log — nmapset typed crossings: union bounds + host hashing (Sep 2026)
+
+The typed-lane batch (checker union bounds, phase 1; 15 typed host
+crossings + host-side `hash_payload`, phase 2; the nmapset rewrite on
+ONE crossing per op with a fused `i32::MIN` grow sentinel, phase 3)
+erased most of the per-op package: no `opaque` key mint, no wrapper
+hash frames, no rut-side probe arithmetic, no per-put grow check —
+`put` = one `nentry`, `get`/`has` = one `nfind`, `remove` = one
+`nremove`, `K requires i8 | … | bytes` makes the closed key set the
+compile-time contract (user-defined keys fail at compile time; the
+runtime Hashable-box trap is gone). Probe exec medians + fuel
+(befores = the pre-optimization same-day run on the byref-flip HEAD;
+afters = today's full-suite run, `rut-bench-probe`, 3 fresh-VM iters;
+all 23 rows equal `expected.json` on rut, qjs and node — the nmapset
+checksums stay bit-for-bit identical to the mapset rows,
+734932704 / 1264308351 / 21500055 / 2198604):
+
+| workload         | exec before | exec after | Δ       | fuel before → after        |
+|------------------|-------------|------------|---------|----------------------------|
+| nmapset-str      | 207.4 ms    | 54.9 ms    | **−74%**| 86.41 M → 9.74 M (**−89%**)|
+| nmap-knucleotide | 756.6 ms    | 216.1 ms   | **−71%**| 323.66 M → 39.61 M (−88%)  |
+| nmap-hashset     | 58.9 ms     | 40.4 ms    | **−31%**| 16.98 M → 13.27 M (−22%)   |
+| nmapset-int      | 98.1 ms     | 81.7 ms    | **−17%**| 24.80 M → 21.10 M (−15%)   |
+
+Cross-runtime net medians (wall − startup, same run; qjs before
+values are from the mapset-host log's same-day run, qjs is stable
+day to day):
+
+| workload         | rut net before | rut net after | Δ        | qjs net | rut vs qjs after |
+|------------------|----------------|---------------|----------|---------|------------------|
+| nmapset-str      | 209.9 ms       | 71.8 ms       | **−66%** | 38.6 ms | 1.9x             |
+| nmap-knucleotide | 781.5 ms       | 227.0 ms      | **−71%** | 139.2 ms| 1.6x             |
+| nmap-hashset     | 67.1 ms        | 47.2 ms       | **−30%** | 55.3 ms | **0.85x (ahead)**|
+| nmapset-int      | 116.7 ms       | 92.6 ms       | −21%     | 61.3 ms | 1.5x             |
+
+Where the wins came from. The fuel column is the story: the whole
+wrapper package per op was interpreter ops. For string keys the FNV-1a
+byte loop ran scalar VM ops per byte — nmapset-str's 86.4 M fuel was
+mostly hashing, and it is now `hash_payload` in the host (9.74 M
+remaining is the workload's own loops) — which is why knucleotide,
+a k-mer hash storm, collapses too. For int keys the residual package
+(mint + wrapper hash + `map_needs_grow` + entry call) collapsed into
+one `nentry` crossing: −15% fuel, −17% exec. `nmap-hashset` now runs
+rut **ahead of qjs on net** (47.2 vs 55.3 ms) for the first time on a
+map row.
+
+Against the batch's honest targets: `nmapset-int` 98.1 → 60–75 ms net —
+**missed** (92.6 ms net net-of-startup, −21% vs the −25–40% hoped);
+`nmapset-str` 207.4 → ~140–160 ms — **beaten** (71.8 ms, ~2× the
+target); `nmap-hashset` 58.9 → ~50 ms — **met** (47.2 ms);
+`nmap-knucleotide` −10–15% — **beaten** (−71%). The int rows' residual
+is interpreter dispatch on the wrapper's remaining cell traffic
+(`vals` reads/stores per op — 21.1 M ops for nmapset-int), not the
+crossing; no further host-side lever is obvious without native-owned
+values (rejected by design). Stop-points (decision 9): **none
+triggered** — no typed lane measured slower than its pre-optimization
+baseline. Method note: befores are the pre-optimization same-day
+baseline, afters were taken days later on the drifted host (±8-13%
+between days on identical code); every row wins by far more than that
+drift.
+
+
 
 - Each runtime is invoked the way it is normally used: `rut run
   file.rut`, `node file.js`, `qjs file.js`. Wall time therefore
