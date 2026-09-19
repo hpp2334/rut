@@ -10,7 +10,10 @@ use rut_core::binary::{ConstVal, Program};
 use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
 use crate::arena::OpaqueRef;
 use rut_core::ops::*;
-use rut_core::types::{PrimTy, Repr, TypeId, TyKind};
+use rut_core::types::{
+    PrimTy, Repr, TypeId, TyKind, TY_BOOL, TY_BYTES, TY_I16, TY_I32, TY_I64, TY_I8, TY_STR, TY_U16,
+    TY_U32, TY_U64, TY_U8,
+};
 use std::rc::Rc;
 
 mod boundary;
@@ -61,6 +64,26 @@ impl Default for Limits {
 
 #[derive(Default, Clone)]
 pub struct HostHooks {}
+
+/// The payload of an `Opaque` box classified against the closed
+/// native-key set (the nmap host experiment): the integer primitives and
+/// `bool` cross as raw bits, `str`/`bytes` cross as owned copies (short;
+/// once per call), and everything else — floats, chars, user records,
+/// host payload boxes — comes back [`KeyPayload::Unsupported`] with the
+/// type id naming it, so the caller can trap pointing at `mapset`
+/// instead of guessing at a key it cannot store.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum KeyPayload {
+    /// an integer primitive or `bool`: the slot's raw 64 bits and the
+    /// static type they belong to (`u64::MAX` is `-1i64` as bits)
+    Bits { val: u64, ty: TypeId },
+    /// a `str` key — the UTF-8 octets copied out
+    Str(String),
+    /// a `bytes` key — the octets copied out
+    Bytes(Vec<u8>),
+    /// not a natively supported key type; the id names it for the trap
+    Unsupported(TypeId),
+}
 
 struct SavedFrame {
     func: u32,
@@ -630,6 +653,50 @@ impl Vm {
         Ok(self.heap.opaque_handle_take(unsafe { p.r }))
     }
 
+    /// The key payload inside an `Opaque` box, classified against the
+    /// closed native-key set (the nmap host experiment). Host code cannot
+    /// read a rut-side box itself — `Slot` is crate-private — so this is
+    /// the one pub reader: the box's `CellData::OpaqueBox { val, val_ty }`
+    /// classifies by `val_ty` (ints/bool as raw bits, `str`/`bytes` as
+    /// owned copies), a host payload box (`CellData::HostBoxed`, RFC 0023)
+    /// has no rut value inside and is `Unsupported`, and any other
+    /// `val_ty` — a user-defined key — is `Unsupported` naming the type.
+    pub fn opaque_key_payload(&self, h: &OpaqueRef) -> Result<KeyPayload, Trap> {
+        let cell = cell_of(Slot { r: h.ptr() });
+        match &cell.data {
+            CellData::OpaqueBox { val, val_ty } => match *val_ty {
+                TY_I8 | TY_I16 | TY_I32 | TY_I64 | TY_U8 | TY_U16 | TY_U32 | TY_U64 | TY_BOOL => {
+                    Ok(KeyPayload::Bits { val: unsafe { val.i } as u64, ty: *val_ty })
+                }
+                TY_STR | TY_BYTES => {
+                    // defensive: a `str`/`bytes` payload is a cell handle;
+                    // a null there would deref below
+                    if unsafe { val.r }.is_null() {
+                        return Err(Trap::new(
+                            TrapKind::NilDeref,
+                            "opaque_key_payload: nil key payload",
+                        ));
+                    }
+                    let inner = cell_of(*val);
+                    Ok(match *val_ty {
+                        TY_STR => KeyPayload::Str(inner.as_str().to_string()),
+                        _ => KeyPayload::Bytes(inner.bytes_copy()),
+                    })
+                }
+                other => Ok(KeyPayload::Unsupported(other)),
+            },
+            // a host payload box: the payload is the host's own Rust
+            // data (RFC 0023) — never a native key
+            CellData::HostBoxed { .. } => Ok(KeyPayload::Unsupported(cell.ty)),
+            // an `OpaqueRef` always names an opaque cell — defense, not
+            // a reachable state
+            _ => Err(Trap::new(
+                TrapKind::Invalid,
+                "opaque_key_payload: not an Opaque box",
+            )),
+        }
+    }
+
     pub(crate) fn export_ret_ty(&self, export: &str) -> Result<TypeId, Trap> {
         let f = self
             .prog
@@ -667,5 +734,119 @@ impl Vm {
 
     fn is_ref(&self, ty: TypeId) -> bool {
         ty != TY_ANY && self.type_repr[ty as usize].is_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rut_core::binary::Program;
+    use rut_core::types::{TypeTable, TY_CHAR, TY_F64};
+
+    /// An empty program — no funcs, no consts, just the boot type table.
+    fn empty_vm() -> Vm {
+        let prog = Program {
+            name: "keypayload".into(),
+            scope: 0,
+            interner: Default::default(),
+            surface: Default::default(),
+            types: TypeTable::boot(),
+            traits: Vec::new(),
+            trait_slots: Vec::new(),
+            vtables: Vec::new(),
+            consts: Vec::new(),
+            funcs: Vec::new(),
+            exports: Vec::new(),
+        };
+        Vm::new(
+            Rc::new(prog),
+            &Limits::default(),
+            HostHooks::default(),
+            HostRegistry::new(),
+        )
+        .unwrap()
+    }
+
+    /// Box `val` as an `Opaque` of static type `ty` — the `Opaque.new(k)`
+    /// shape. The handle takes over the mint reference (the same
+    /// ownership `alloc_opaque_str` hands back).
+    fn boxed(vm: &Vm, val: Slot, ty: TypeId) -> OpaqueRef {
+        let b = vm.heap.alloc_opaque(val, ty).unwrap();
+        vm.heap.opaque_handle_take(unsafe { b.r })
+    }
+
+    #[test]
+    fn integer_and_bool_keys_cross_as_bits() {
+        let vm = empty_vm();
+        for (ty, v) in [
+            (TY_I8, -5i64),
+            (TY_I16, -300),
+            (TY_I32, -70_000),
+            (TY_I64, i64::MIN),
+            (TY_U8, 255),
+            (TY_U16, 65_535),
+            (TY_U32, 4_000_000_000),
+            (TY_U64, -1), // u64::MAX as raw bits
+            (TY_BOOL, 1), // true — the slot's 0/1 word
+        ] {
+            let h = boxed(&vm, Slot::int(v), ty);
+            match vm.opaque_key_payload(&h).unwrap() {
+                KeyPayload::Bits { val, ty: t } => {
+                    assert_eq!(t, ty, "type id must survive the read");
+                    assert_eq!(val, v as u64, "raw bits for ty {ty}");
+                }
+                other => panic!("ty {ty}: expected Bits, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn str_and_bytes_keys_copy_their_octets() {
+        let vm = empty_vm();
+        let s = vm.heap.alloc_str("hello".into()).unwrap();
+        let h = boxed(&vm, s, TY_STR);
+        assert_eq!(
+            vm.opaque_key_payload(&h).unwrap(),
+            KeyPayload::Str("hello".into())
+        );
+
+        let b = vm.heap.alloc_bytes(vec![9, 8, 7]).unwrap();
+        let h = boxed(&vm, b, TY_BYTES);
+        assert_eq!(
+            vm.opaque_key_payload(&h).unwrap(),
+            KeyPayload::Bytes(vec![9, 8, 7])
+        );
+    }
+
+    #[test]
+    fn unsupported_key_kinds_name_their_type() {
+        let vm = empty_vm();
+        // floats and chars are rut values but not native keys — the
+        // user-defined-key trap's raw material
+        let f = boxed(&vm, Slot::float(1.5), TY_F64);
+        assert_eq!(vm.opaque_key_payload(&f).unwrap(), KeyPayload::Unsupported(TY_F64));
+        let c = boxed(&vm, Slot::ch('x'), TY_CHAR);
+        assert_eq!(vm.opaque_key_payload(&c).unwrap(), KeyPayload::Unsupported(TY_CHAR));
+    }
+
+    #[test]
+    fn a_host_payload_box_is_unsupported() {
+        let mut vm = empty_vm();
+        // the box's payload is Rust, not a rut value (RFC 0023) — there
+        // is no key to read, and the cell's own type (Opaque) names it
+        let b = crate::heap::OpaqueBox::alloc(&mut vm, 42i64).unwrap();
+        assert_eq!(
+            vm.opaque_key_payload(b.handle()).unwrap(),
+            KeyPayload::Unsupported(rut_core::types::TY_OPAQUE)
+        );
+    }
+
+    #[test]
+    fn a_nil_str_payload_is_a_trap_not_a_deref() {
+        let vm = empty_vm();
+        // defensive contract: a null payload under a ref key type traps
+        let h = boxed(&vm, Slot::null(), TY_STR);
+        let err = vm.opaque_key_payload(&h).unwrap_err();
+        assert_eq!(err.kind, TrapKind::NilDeref, "{}", err.msg);
     }
 }

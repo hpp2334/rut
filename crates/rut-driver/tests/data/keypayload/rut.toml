@@ -1,0 +1,5 @@
+# keypayload/ — the H1 probe pkg (the nmap host experiment): a pure
+# declaration surface; the driver test binds the body and drives
+# `Vm::opaque_key_payload` through a real host-fn crossing.
+name = "keypayload"
+entry.type = "./keypayload.d.rut"

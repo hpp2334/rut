@@ -1,0 +1,5 @@
+// keypayload.d.rut — the H1 probe surface (RFC 0026): the host
+// classifies an `Opaque` box's payload against the closed native-key
+// set (ints/bool, str, bytes — everything else reports Unsupported so
+// the caller can trap naming the type).
+pub host fn key_class(k: Opaque) -> i64;
