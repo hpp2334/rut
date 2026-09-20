@@ -751,6 +751,94 @@ the fast/checked split demonstrated on one slot — 300 crosses as
 (`tests/data/fastlane`): end-to-end round-trips, borrow/owned shapes,
 and the embedder wrong-shape traps unchanged.
 
+## Performance log — call-frame trims: the fixed per-call work (Sep 2026)
+
+Phase 2 of the crossing-fastpath batch, on top of the fast lane. Three
+trims to the crossing's fixed frame, both engines at once (the threaded
+engine's `Op::Call` delegates to the SAME `Vm::call_host` — one
+implementation, so one edit covers both; lock-step by construction):
+
+- **the per-call `Rc::clone(&self.prog)` is gone**
+  (`crates/rut-vm/src/interp/mod.rs` `call_host`): it existed only to
+  split borrows — the argv slice had to outlive the `&mut self` the arg
+  snapshot takes. The slice is now carried by a raw pointer derived
+  from the `Rc` (`Rc::as_ptr` + deref, SAFETY case in-source: `prog`
+  is assigned once at construction, never reassigned; only immutable
+  argv-table words are read — the same trust the threaded loop's raw
+  pointers run on, RFC 0034). No refcount traffic, no new field.
+- **`ret_is_ref: bool` precomputed into `HostSlot` at the join**
+  (`crates/rut-vm/src/interp/host.rs`): the write-back refcount law
+  used to re-derive `is_ref(slot.ret)` per call (a `type_repr` lookup);
+  the join now freezes the exact `Vm::is_ref` predicate as a bit. The
+  bool packs into the struct's existing padding hole — `HostSlot` stays
+  24 bytes and `Copy` (measured, not assumed).
+- **`#[inline]` on the hot `HostParam::read` / `Ret::into_slot` impls**
+  (`crates/rut-vm/src/interp/boundary.rs`) — the fast lane and the
+  slot-builders are single-instruction bodies; the checked twins stay
+  unannotated (deliberately cold).
+
+No adapter semantics, `HostParam`, or phase-1 surface changed; fuel
+(104,000,032), VM heap (236 B), and checksum `20000014000000` are
+bit-identical (pure host-side work; the op stream cannot move).
+
+Same-day interleaved A/B on the segment clones (phase-1 commit 2f362f9's
+binary vs the trim build — **both built from the SAME directory**, one
+checkout, before-source then after-source, so the embedded build path —
+and therefore codegen layout — is identical between the pair; 5 rounds
+× 7 fresh-VM probe iters per binary per segment, order alternated per
+round, median of the round medians):
+
+| segment           | exec before | exec after | Δ         | per call        |
+|-------------------|-------------|------------|-----------|-----------------|
+| A  — host nop     | 19.60 ms    | 18.13 ms   | **−7.5%** | 9.8 → 9.1 ns    |
+| B  — inline nop   | 18.27 ms    | 18.18 ms   | −0.5%     | 9.1 ns (floor)  |
+| A4 — host nop4    | 32.33 ms    | 31.24 ms   | **−3.4%** | 16.2 → 15.6 ns  |
+| B4 — inline nop4  | 27.56 ms    | 27.48 ms   | −0.3%     | 13.7 ns (floor) |
+
+The crossing reads, before → after: **(A−B) @1 param**: +0.66 →
+**+0.00 ns/crossing** — the 1-param crossing is now AT the inline
+floor, within measurement noise. **(A4−B4) @4 params**: +2.39 →
++1.88 ns/crossing. **per-param slope**: ~0.57 → ~0.64 ns/param —
+unchanged within noise (the slope is arg-snapshot + adapter-shape work,
+not the frame; that is the honest residual and it is not this phase's).
+Phase 0 put the fixed intercept at ~0.3 ns; the trims recovered about
+that plus layout goodwill: the headline is **A −7.5% / A4 −3.4% with
+the no-crossing floors flat (−0.5%/−0.3%)** — the win is real but
+small, exactly the size the phase-0 decomposition predicted.
+
+Method note (a trap for the next batch): cross-directory A/B builds are
+NOT layout-safe on this host. The first measurement pass compared a
+worktree-built baseline against a shared-tree-built after-binary — the
+two builds embed different path strings, shifting constant-pool layout,
+and the floors read B +18% / B4 +33% (while the host segments read
+faster). Rebuilding BOTH sides from one directory reproduced the floors
+at parity, exposing the first reading as a build-placement artifact.
+Same-path pairs are the house method from here on.
+
+Downstream rows, same-path interleaved probe A/B (3 rounds × 3 iters;
+json-decode powered to 5 × 3 after a first-pass +4.2% flag):
+
+| workload     | exec before | exec after | Δ                        |
+|--------------|-------------|------------|--------------------------|
+| crossing-nop | 97.51 ms    | 95.25 ms   | **−2.3%**                |
+| nmapset-int  | 99.65 ms    | 97.76 ms   | −1.9% (noisy hour)       |
+| nmapset-str  | 61.17 ms    | 60.47 ms   | −1.1%                    |
+| nmap-hashset | 43.22 ms    | 40.61 ms   | **−6.0%**                |
+| json-decode  | 676.5 ms    | 679.2 ms   | +0.4% — parity (neutral) |
+
+Honest note on json-decode: the 3×3 pass flagged +4.2%; a dedicated
+5-round pass read +0.4% (round medians before 660.9-680.2 vs after
+676.3-688.2, overlapping; fuel 111,330,118 and heap bit-identical both
+directions) — recorded as NEUTRAL, not a win and not a regression. No
+committed row regressed on its powered measurement — **stop-point
+(§0.5) not triggered**; the flat floors rule out a global codegen cost
+of the trim itself.
+
+Full suite after: all 26 rows checksum-equal to `expected.json` on
+rut/qjs/node (exit 0). Workspace tests green with the phase-1
+fast-lane suites untouched and passing (`fast_lane_tests` 8/8,
+`fastlane` driver 4/4).
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may

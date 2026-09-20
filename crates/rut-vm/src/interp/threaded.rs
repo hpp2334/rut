@@ -437,7 +437,12 @@ impl Machine for Vm {
         if self.prog.funcs[*func as usize].host_id.is_some() {
             // park at this op on a trap — `resume()` re-runs the host fn
             // (including any nested `vm.call` it makes) rather than
-            // skipping the call and losing its result
+            // skipping the call and losing its result.
+            // The crossing itself is `Vm::call_host` — ONE
+            // implementation shared by both engines, so every
+            // call-frame trim there lands here too (crossing-fastpath
+            // phase 2: the Rc::clone borrow split and the write-back
+            // `type_repr` lookup both live below that call).
             self.cur_pc = pc;
             self.call_host(*func, *argv_off, *argc, *dst)?;
             Ok(Flow::Next(pc + 1))

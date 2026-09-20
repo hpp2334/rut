@@ -109,6 +109,7 @@ macro_rules! int_ret {
                 expect_kind(vm, slot, declared, $name)?;
                 Ok(narrow_i64::<$t>(unsafe { slot.i }, $name)?)
             }
+            #[inline] // crossing-fastpath phase 2: hot read/into_slot impls
             fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
                 Ok(Slot::int(self as i64))
             }
@@ -133,6 +134,7 @@ impl Ret for u64 {
         expect_kind(vm, slot, declared, "u64")?;
         Ok(unsafe { slot.i } as u64)
     }
+    #[inline] // hot lane
     fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
         Ok(Slot::int(self as i64))
     }
@@ -145,6 +147,7 @@ impl Ret for f64 {
         expect_kind(vm, slot, declared, "f64")?;
         Ok(slot.as_f64())
     }
+    #[inline] // hot lane
     fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
         Ok(Slot::float(self))
     }
@@ -157,6 +160,7 @@ impl Ret for f32 {
         expect_kind(vm, slot, declared, "f32")?;
         Ok(slot.as_f64() as f32)
     }
+    #[inline] // hot lane
     fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
         Ok(Slot::float(self as f64))
     }
@@ -169,6 +173,7 @@ impl Ret for bool {
         expect_kind(vm, slot, declared, "bool")?;
         Ok(slot.as_bool())
     }
+    #[inline] // hot lane
     fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
         Ok(Slot::bool(self))
     }
@@ -181,6 +186,7 @@ impl Ret for char {
         expect_kind(vm, slot, declared, "char")?;
         Ok(slot.as_char())
     }
+    #[inline] // hot lane
     fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
         Ok(Slot::ch(self))
     }
@@ -194,6 +200,7 @@ impl Ret for () {
         let _ = slot;
         Ok(())
     }
+    #[inline] // hot lane
     fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
         Ok(Slot::int(0)) // nil is the zero word (RFC 0015 §5)
     }
@@ -206,6 +213,7 @@ impl Ret for String {
         expect_kind(vm, slot, declared, "String")?;
         Ok(cell_of(slot).as_str().to_string())
     }
+    #[inline] // hot lane
     fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
         vm.heap.alloc_str(self).map_err(|t| t)
     }
@@ -218,6 +226,7 @@ impl Ret for Vec<u8> {
         expect_kind(vm, slot, declared, "Vec<u8>")?;
         Ok(cell_of(slot).bytes_copy())
     }
+    #[inline] // hot lane
     fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
         vm.heap.alloc_bytes(self)
     }
@@ -234,6 +243,7 @@ impl Ret for OpaqueRef {
         }
         Ok(vm.heap.opaque_handle(p))
     }
+    #[inline] // hot lane
     fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
         let _ = vm;
         // TRANSFER: the handle's reference count becomes the slot's —
@@ -254,6 +264,7 @@ impl<T: 'static> Ret for OpaqueBox<T> {
         }
         OpaqueBox::from_handle(&vm.heap.opaque_handle(p))
     }
+    #[inline] // hot lane
     fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
         self.handle().clone().into_slot(vm)
     }
@@ -490,6 +501,7 @@ macro_rules! param_prim {
             // the join proved the row matches at boot) and `narrow_i64`
             // re-proved what the checker already proved at the call site;
             // `as` reinterprets the raw word, it never ranges-traps.
+            #[inline] // crossing-fastpath phase 2: hot read/into_slot impls
             unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
                 Ok(unsafe { slot.i } as $t)
             }
@@ -515,6 +527,7 @@ param_prim!(u32, "u32", TY_U32);
 impl HostParam for u64 {
     const TY: TypeId = TY_U64;
     type Repr<'a> = u64;
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(unsafe { slot.i } as u64)
     }
@@ -527,6 +540,7 @@ impl HostParam for u64 {
 impl HostParam for f64 {
     const TY: TypeId = TY_F64;
     type Repr<'a> = f64;
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(slot.as_f64()) // the raw union read (RFC 0015 §5 trust)
     }
@@ -539,6 +553,7 @@ impl HostParam for f64 {
 impl HostParam for f32 {
     const TY: TypeId = TY_F32;
     type Repr<'a> = f32;
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(slot.as_f64() as f32)
     }
@@ -551,6 +566,7 @@ impl HostParam for f32 {
 impl HostParam for bool {
     const TY: TypeId = TY_BOOL;
     type Repr<'a> = bool;
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(slot.as_bool()) // the slot's 0/1 word
     }
@@ -563,6 +579,7 @@ impl HostParam for bool {
 impl HostParam for char {
     const TY: TypeId = TY_CHAR;
     type Repr<'a> = char;
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(slot.as_char())
     }
@@ -579,6 +596,7 @@ impl HostParam for OpaqueRef {
     // check STAYS — the transitive `??T` coercion funnel leaves "nil
     // cannot reach here" unproven. `expect_kind` (the Opaque-kind
     // lookup) is gone: the join pinned TY_OPAQUE to the row at boot.
+    #[inline] // hot lane
     unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let p = unsafe { slot.r };
         if p.is_null() {
@@ -600,6 +618,7 @@ impl<T: 'static> HostParam for OpaqueBox<T> {
     // FAST LANE + nil check (as `OpaqueRef`); `from_handle`'s payload
     // type token stays — it guards the Rust-side `T`, which no .d.rut
     // row can speak for.
+    #[inline] // hot lane
     unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let p = unsafe { slot.r };
         if p.is_null() {
@@ -621,6 +640,7 @@ impl HostParam for &str {
     // FAST LANE unchanged by phase 1: this read never had `expect_kind`
     // — the `as_str` cell-kind match IS the read (the dynamic fact, plan
     // §0.3), and a wrong-shaped cell degrades to the empty view, never UB.
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let s = cell_of(slot).as_str();
         // SAFETY: arg-register retention + non-moving arena + immutability
@@ -637,6 +657,7 @@ impl HostParam for &[u8] {
     type Repr<'a> = &'a [u8];
     // FAST LANE unchanged by phase 1 — as `&str`: the `bytes_view`
     // cell-kind match IS the read.
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let b = bytes_view(slot);
         // SAFETY: as `&str` — the bytes block outlives the call
@@ -654,6 +675,7 @@ impl HostParam for String {
     // FAST LANE: the copy IS the read (plan §0.3 keeps the copy); the
     // `expect_kind` string-compare in front of it is gone — the join +
     // checker guarantee the cell, and `as_str` is kind-matched anyway.
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(cell_of(slot).as_str().to_string())
     }
@@ -668,6 +690,7 @@ impl HostParam for Vec<u8> {
     const TY: TypeId = TY_BYTES;
     type Repr<'a> = Vec<u8>;
     // FAST LANE: as `String` — the copy stays, the kind re-check leaves.
+    #[inline] // hot lane
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(cell_of(slot).bytes_copy())
     }

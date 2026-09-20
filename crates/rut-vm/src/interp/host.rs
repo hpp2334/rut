@@ -63,12 +63,19 @@ pub(crate) struct HostBinding {
 }
 
 /// The dispatch-table row, dense by func idx after the join. Copy: the
-/// hot path copies one 16-byte entry out and dispatches.
+/// hot path copies one entry out and dispatches.
 #[derive(Clone, Copy)]
 pub(crate) struct HostSlot {
     pub code: HostCode,
     pub ctx: Ctx,
     pub ret: TypeId,
+    /// the join's verdict on `ret` — the `Vm::is_ref` predicate frozen
+    /// once per binding (crossing-fastpath phase 2): the write-back
+    /// refcount law in `call_host` reads this bit instead of doing a
+    /// per-call `type_repr` lookup. The bool packs into the struct's
+    /// existing 4-byte padding hole after `ret` — the entry stays
+    /// 24 bytes (code + ctx + id), still `Copy`.
+    pub ret_is_ref: bool,
 }
 
 impl HostSlot {
@@ -78,7 +85,8 @@ impl HostSlot {
         debug_assert!(false, "non-host funcs never dispatch through host_slots");
         Slot::int(0)
     }
-    pub const NEVER: HostSlot = HostSlot { code: Self::never, ctx: std::ptr::null(), ret: 0 };
+    pub const NEVER: HostSlot =
+        HostSlot { code: Self::never, ctx: std::ptr::null(), ret: 0, ret_is_ref: false };
 }
 
 /// A host pkg's expected binding table (RFC 0025): `<scope>::<name>` →

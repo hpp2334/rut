@@ -204,7 +204,14 @@ impl Vm {
         // ---- the host join (RFC 0025) ----
         // Resolve every host thunk's binding NOW; slots are dense by
         // func idx, one row each: the adapter code pointer, the boxed
-        // body's ctx word, and the declared return for the refcount law.
+        // body's ctx word, the declared return for the refcount law,
+        // and the return's is-ref verdict frozen as a bit (phase 2 —
+        // the write-back used to re-derive it per call).
+        let type_repr: Vec<Repr> = prog.types.types.iter().map(|t| match &t.kind {
+            TyKind::Prim(p) => Repr::Prim(*p),
+            TyKind::Nil | TyKind::Fn { .. } => Repr::Any,
+            _ => Repr::Ref,
+        }).collect();
         let mut host_slots: Vec<HostSlot> = Vec::with_capacity(prog.funcs.len());
         let mut host_keep: Vec<Box<dyn std::any::Any>> = Vec::new();
         for fc in prog.funcs.iter() {
@@ -223,7 +230,13 @@ impl Vm {
                     if let Some(k) = b.keep {
                         host_keep.push(k);
                     }
-                    host_slots.push(HostSlot { code: b.code, ctx: b.ctx, ret: fc.ret });
+                    // the exact `Vm::is_ref` predicate, evaluated once
+                    // here; a degenerate program (ret id missing from
+                    // the table — the unbound-thunk check below is the
+                    // error that matters) reads Any, never a panic
+                    let ret_is_ref = fc.ret != TY_ANY
+                        && type_repr.get(fc.ret as usize).copied().unwrap_or(Repr::Any).is_ref();
+                    host_slots.push(HostSlot { code: b.code, ctx: b.ctx, ret: fc.ret, ret_is_ref });
                 }
                 None => host_slots.push(HostSlot::NEVER),
             }
@@ -269,11 +282,6 @@ impl Vm {
                 _ => Vec::new(),
             })
             .collect();
-        let type_repr: Vec<Repr> = prog.types.types.iter().map(|t| match &t.kind {
-            TyKind::Prim(p) => Repr::Prim(*p),
-            TyKind::Nil | TyKind::Fn { .. } => Repr::Any,
-            _ => Repr::Ref,
-        }).collect();
         // precompute the threaded dispatch tags (one per op)
         let op_tags: Vec<Vec<u8>> = prog
             .funcs
@@ -548,10 +556,24 @@ impl Vm {
     /// reports traps through the channel (§3.7 of the boundary plan).
     pub(super) fn call_host(&mut self, func: u32, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
         // the join resolved the binding; the entry is a code pointer, a
-        // word, and a TypeId — copied out in one move, no Rc traffic
+        // word, a TypeId, and the ret-is-ref bit — copied out in one
+        // move, no Rc traffic
         let slot = self.host_slots[func as usize];
-        let prog = Rc::clone(&self.prog);
-        let args = self.cur_argv(&prog, argv_off, argc); // &[Reg], borrows the local Rc
+        // the operand span, sliced from the program's argv table. The
+        // old shape paid an `Rc::clone` (+ drop) per call purely to
+        // split borrows: the slice had to outlive the `&mut self` the
+        // snapshot below takes. The raw pointer carries it instead.
+        // SAFETY: `self.prog` is assigned once, in `Vm::new`, and never
+        // reassigned — the `Rc` holds its pointee for the Vm's whole
+        // life, so the slice stays valid through the end of this call;
+        // only immutable argv-table words are read through it (the
+        // program is frozen after construction — the same trust the
+        // threaded loop's raw pointers run on, RFC 0034).
+        let args: &[Reg] = unsafe {
+            let prog = &*Rc::as_ptr(&self.prog);
+            let f = self.cur_func as usize;
+            &prog.funcs[f].argv[argv_off as usize..argv_off as usize + argc as usize]
+        };
         // snapshot the args: the register file may swap inside the body
         // (nested calls). `Slot` is Copy (one machine word, RFC 0015 §5).
         const INLINE_ARITY: usize = 8;
@@ -578,9 +600,11 @@ impl Vm {
             return Err(t);
         }
         // the returned slot's reference count IS the register's —
-        // transfer, not borrow (crossing-ownership law, RFC 0023 §2)
+        // transfer, not borrow (crossing-ownership law, RFC 0023 §2).
+        // The is-ref verdict is the join's bit (phase 2) — no
+        // `type_repr` lookup on the hot path.
         if let Some(d) = reg_opt(dst) {
-            if self.is_ref(slot.ret) {
+            if slot.ret_is_ref {
                 let old = std::mem::replace(&mut self.cur_regs[d as usize], out);
                 self.heap.release(old);
             } else {
