@@ -400,9 +400,10 @@ through `opaque(v)` — one box per JSON value, one per object key
 (the key's tree node is parsed, downcast, then dropped) — then folds
 it and drops it. The JS twin runs the SAME generated text through the
 engine's own `JSON.parse`, so the row places rut's decode against the
-mature JSON paths. This entry is the **baseline only** — the phases
-it measures against (OpaqueBox pooling, then inline small payloads)
-have NOT landed; no optimization numbers belong here yet.
+mature JSON paths. This entry recorded the **baseline only** — written
+before the phases it measures against landed (OpaqueBox pooling in
+phase 6; the planned inline-small-payloads phase was dropped — see the
+close-out); no optimization numbers belong here.
 
 All three runtimes agree on the checksum (twin gate, `expected.json`
 pins it): `4502015958359127277`. Full row (net medians, same-day run,
@@ -420,7 +421,8 @@ document is sized so the rut CLI's 64 MiB VM-heap budget holds the
 split char array plus one live tree (32.78 MB peak); a larger document
 would OOM. The doc generation and its char-split are paid once and
 shared across the reps (fresh cursor per rep), so the per-rep cost is
-the decode + fold — the churn phases 6-7 will attack. Box counts:
+the decode + fold — the churn the pooling phase (6) measured itself
+against (it held parity; see the close-out). Box counts:
 ~34k boxes minted per rep (19 values + 9 keys per row), ~100k across
 the 3 reps; ~37 M fuel per rep (`111.33 M` per main incl. gen+split).
 Repeated times are stable; treat the x-runtime gap as the baseline
@@ -479,8 +481,9 @@ One honest scoping note: the plan expected this row's churn to be
 `Op::Box` → `CellData::OpaqueBox { val: Slot }`, a slot INLINE in the cell
 with no Rust block behind it; the cell itself is already recycled by the
 arena free list. The json-decode row therefore cannot show pooling GAINS —
-it can only surface overhead — and the pool tiers exactly the host payloads
-phase 7 keeps boxed when small payloads go inline.
+it can only surface overhead — and the pool tiers exactly the host
+payloads that stay boxed (NativeTable, host structs; the close-out
+below records where the batch ended).
 
 Deltas vs the phase-5 baseline (same row, the day-of-record numbers; full
 suite run, 3 reps + 1 warmup, probe over 3 fresh-VM iters; every checksum
@@ -521,8 +524,67 @@ Stop-point (decision 9): **not triggered** — the json row does not regress
 against the 675.2/662.4/111.33 baseline beyond noise (fuel and heap
 bit-identical, exec/net within ±1.1%). The pool's wins sit in host-box
 churn (`OpaqueBox::alloc` mint/free pairs — `map_new`, plugin state), which
-current rows don't stress in hot loops; it is the tier phase 7 builds on,
-and the guard rows confirm the map behavior is unchanged.
+current rows don't stress in hot loops; the tier stays for host payloads,
+and the guard rows confirm the map behavior is unchanged. (The planned
+phase 7 — inline small payloads — was DROPPED by the re-scope: see the
+close-out below.)
+
+## Performance log — native-fastpath batch close-out (Sep 2026)
+
+The batch's final record. Track A killed the per-op package in nmapset
+(phases 1–4): checker type-union bounds (phase 1), 15 typed host
+crossings with host-side `hash_payload` and the fused `i32::MIN` grow
+sentinel (phase 2), the nmapset rewrite to ONE crossing per op with
+`K requires i8 | … | bytes` as the compile-time key contract (phase 3),
+and the map-row verification (phase 4). Track B attacked `opaque` mint
+churn for everyone (phases 5–7): the json-decode baseline row
+(phase 5), the OpaqueBox pool for host payloads (phase 6) — and the
+planned inline-small-payloads repr change was DROPPED (phase 7
+re-scope): rut `opaque(v)` already lowers to an inline
+`CellData::OpaqueBox { val: Slot }` — arena-recycled, no Rust
+allocation — so that optimization targets a cost that does not exist
+(RFC 0014's repr notes record the lowering). Phase 7 is documentation
+only: the RFC 0043 union-bounds amendment (type unions only,
+whole-bound capability resolution, the provenance holes), the RFC 0014
+repr notes, and this section.
+
+The rows the batch set out to move, at the numbers of record (typed
+lanes from the phase-4 run; the json row from the phase-6 pooled run —
+pooling held it at parity; the close-out verification re-run reproduced
+every checksum):
+
+| workload         | rut net before → after  | Δ          | qjs net after       | fuel before → after |
+|------------------|-------------------------|------------|---------------------|---------------------|
+| nmapset-str      | 209.9 → 71.8 ms         | **−66%**   | 38.6 ms             | 86.41 M → 9.74 M    |
+| nmap-knucleotide | 781.5 → 227.0 ms        | **−71%**   | 139.2 ms            | 323.66 M → 39.61 M  |
+| nmap-hashset     | 67.1 → 47.2 ms          | **−30%**   | 55.3 ms (**rut ahead**)| 16.98 M → 13.27 M |
+| nmapset-int      | 116.7 → 92.6 ms         | −21%       | 61.3 ms             | 24.80 M → 21.10 M   |
+| json-decode      | 675.2 → 676.2 ms        | ~0 (parity)| 62.3 ms            | 111.33 M (=)        |
+
+(`=` bit-identical. Exec medians for the typed lanes: nmapset-str
+54.9 ms −74%, nmap-knucleotide 216.1 ms −71%, nmap-hashset 40.4 ms
+−31%, nmapset-int 81.7 ms −17% — the phase-4 log has the full
+decomposition. Close-out verification re-run: full suite, all three
+runtimes, exit 0 — every row equals `expected.json`; the probe's fuel
+and VM-heap peaks are bit-identical on every nmap/json row (json
+665.0 ms / 111.33 M / 32.78 MB; nmapset-str 57.1 ms; nmap-knucleotide
+207.9 ms; nmap-hashset 42.8 ms / 503 B; nmapset-int 82.8 ms), and the
+str rows' drift (nmapset-str net 63.9 ms this run) is the host's
+known day drift, not a code change — nothing has moved since phase 6.)
+
+Behavior deltas for the whole batch: none beyond performance, plus ONE
+admission change — user-defined nmapset keys now fail at COMPILE time
+(the union-bound diagnostic names the offending type and the allowed
+set) where nmapset's deleted `Hashable` used to trap at runtime;
+mapset is untouched. Checksum law held throughout: every map row stays
+bit-for-bit equal to its mapset twin (`734932704` / `1264308351` /
+`21500055` / `2198604`), json-decode stays `4502015958359127277`, and
+`expected.json` was never touched. Stop-points (decision 9): never
+triggered — no typed lane measured slower than its baseline, pooling
+held the json row at parity (fuel and heap bit-identical, exec within
+±1.1%). Deferred, not forgotten: borrowed crossings (their own
+RFC-level proposal), the str `encode()`-per-hash cost in mapset's own
+rows, and closing the union-provenance holes (RFC 0043 §3).
 
 ## Known limitations / deliberate choices
 
