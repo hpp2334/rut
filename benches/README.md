@@ -1254,6 +1254,147 @@ surviving follow-up alongside the native val column. `expected.json`
 untouched; workspace green (74 committed suites + the new 11-test
 `opt_prim_store` driver suite); tree clean.
 
+## Performance log — nmapset-round2 close-out: the verdict (Sep 2026)
+
+The batch's final record. Two gated phases followed the phase-0
+evidence: devirt was SKIPPED (phase 1 — finding 0a showed `KeyLane`
+dispatch already direct) and the primitive-optional store landed
+(phase 2 — `ArrKind::Opt(PrimTy)`: raw payload + one-byte nil tag,
+compile-time repr-keyed element ops + two peephole folds, module
+VERSION 5 → 6). Phase 3 measured and reported only — no engine file
+changed after phase 2; this section is the verdict.
+
+**Checksum gate (§0.1):** full suite from one checkout — both runtime
+binaries (`rut`, `rut-bench-probe`) rebuilt in place from the batch
+HEAD (8230973) — all **79 rows × rut/qjs/node, exit 0, every checksum
+equal to `expected.json`** (the nmapset rows bit-identical to their
+mapset twins `734932704` / `1264308351` / `21500055` / `2198604`; json
+`4502015958359127277`; crossing-nop `20000014000000`). `expected.json`
+was never touched all batch. The verdict run's probe columns confirm
+the phase-2 table byte-for-byte where the op stream is concerned:
+**fuel is bit-exact to the phase-2 after-side on every row that moved**
+(int 20,703,284; str 9,551,761; nmap-knucleotide 38,814,389;
+hashmap-int 63,758,210; hashset 55,696,689; array 60,486,108; sieve
+19,592,209; hashmap-str 111,306,605; knucleotide 417,970,983) **and
+bit-identical to the pre-batch records on every row that could not
+move** (json-decode 111,330,118 / 32.78 MB; alloc 22,000,020 / 228 B;
+nmap-hashset 13,267,176 / 503 B; crossing-nop 104,000,032 / 236 B).
+
+**Cumulative vs the batch baseline** (probe exec medians; before =
+b5ff868 — the phase-0 engine under docs-only commits; phase-0's own row
+baselines reproduce it within noise: int 77.84 recorded vs 77.59 in the
+phase-2 matched pair; after = the phase-2 interleaved A/B, the batch's
+recorded deltas; last column = today's verdict run):
+
+| workload         | before    | after (phase-2 A/B) | Δ             | verdict run | fuel before → after       | VM heap before → after    |
+|------------------|-----------|---------------------|---------------|-------------|---------------------------|---------------------------|
+| sieve            | 155.97 ms | 43.10 ms            | **−72.4%**    | 42.5 ms     | 21,167,665 → 19,592,209   | 21.85 MB → 1.49 MB (−93%) |
+| hashmap-int      | 172.35 ms | 134.86 ms           | **−21.7%**    | 134.8 ms    | 64,758,210 → 63,758,210   | 17.17 MB → 8.26 MB (−52%) |
+| array            | 267.56 ms | 210.01 ms           | **−21.5%**    | 213.5 ms    | 63,486,108 → 60,486,108   | 40.39 MB → 7.86 MB (−81%) |
+| nmapset-int      | 77.84 ms  | 63.19 ms            | **−18.8%**    | 63.6 ms     | 21,103,284 → 20,703,284   | 6.08 MB → 1.97 MB (−68%)  |
+| nmap-knucleotide | 202.53 ms | 177.00 ms           | **−12.6%**    | 172.9 ms    | 39,612,955 → 38,814,389   | 12.43 MB → 4.20 MB (−66%) |
+| hashset          | 121.58 ms | 113.22 ms           | −6.9%         | 109.9 ms    | 56,230,024 → 55,696,689   | 13.16 MB → 7.83 MB (−40%) |
+| nmapset-str      | 56.68 ms  | 53.08 ms            | −6.4%         | 53.6 ms     | 9,735,095 → 9,551,761     | 3.04 MB → 0.98 MB (−68%)  |
+| knucleotide      | 952.18 ms | 925.88 ms           | −2.8%         | 910.9 ms    | 418,769,549 → 417,970,983 | 43.52 MB → 35.29 MB (−19%)|
+| hashmap-str      | 251.18 ms | 249.97 ms           | −0.5%         | 249.2 ms    | 111,489,939 → 111,306,605 | 10.29 MB → 8.29 MB (−19%) |
+| alloc            | 17.46 ms  | 17.31 ms            | −0.9% — parity| 17.4 ms     | 22,000,020 (identical)    | 228 B (identical)         |
+| json-decode      | 671.5 ms  | 677.9 ms            | +0.9% — parity| 662.9 ms    | 111,330,118 (identical)   | 34.38 MB (identical)      |
+| nmap-hashset     | 38.9 ms   | neutral — below     | —             | 38.0 ms     | 13,267,176 (identical)    | 503 B (identical)         |
+
+(nmapset-int is −18.6% on the matched pair and −18.8% against the
+recorded 77.84 baseline — both true, both stated; the batch's captured
+number is −18.6%.) The verdict run reproduces the phase-2 after-side
+within ±3% on every row (int +0.6%, sieve −1.4%, array +1.7%,
+hashmap-int −0.0%, nmap-knucleotide −2.3%, str +1.0%, hashset −2.9%,
+knucleotide −1.6%, hashmap-str −0.3%, json −2.2%, alloc +0.5%) —
+same-day parity, no post-commit drift.
+
+**The qjs scoreboard** (net medians, this run — the established
+cross-runtime comparator; qjs is stable day to day):
+
+| workload         | rut net  | qjs net | rut/qjs           | was (pre-batch record)          |
+|------------------|----------|---------|-------------------|---------------------------------|
+| sieve            | 43.1 ms  | 55.0 ms | **0.78× — ahead** | ~3.1× (rut behind)              |
+| nmap-hashset     | 46.6 ms  | 54.8 ms | **0.85× — ahead** | 0.85× (holds)                   |
+| nmapset-int      | 70.7 ms  | 63.3 ms | 1.12×             | ~1.4× (1.5× at the typed lanes) |
+| nmap-knucleotide | 181.8 ms | 142.6 ms| 1.27×             | 1.6×                            |
+| nmapset-str      | 56.8 ms  | 39.9 ms | 1.42×             | 1.9×                            |
+| array            | 212.6 ms | 118.6 ms| 1.79×             | 2.45× byref / 1.78× pre-byref   |
+| json-decode      | 693.5 ms | 59.6 ms | ~11× (11.6×)      | ~11× (unchanged all batch)      |
+
+The plan's headline question, answered honestly: **nmapset-int is NOT
+ahead of its qjs twin** — 70.7 vs 63.3 ms net (1.12×), down from ~1.4×.
+The probe sharpens it: rut's pure execution on the row is 63.6 ms —
+parity with qjs's whole NET (63.3 ms, parse included); the CLI net
+carries ~7 ms of compile/mount the probe does not. The scoreboard's
+other facts: **sieve goes ahead of qjs for the first time on this
+suite** (43.1 vs 55.0 ms net — the −72.4% win's cross-runtime payoff),
+nmap-hashset holds its ahead position (0.85×), and the `array` row's
+byref-flip regression is fully recovered (1.79× vs its 1.78× pre-byref
+placement).
+
+**The neutrals, stated honestly:**
+
+- **alloc** −0.9% (bit-identical fuel 22,000,020 / heap 228 B): parity.
+  The row allocates RECORDS — reference payloads keep the cell backing
+  by design (§0.3 scope), so there was nothing for the primitive store
+  to remove; the byref-flip +5% is not recovered here, it is inherited
+  unchanged.
+- **json-decode** +0.9% on the matched pair (this run read 662.9 ms,
+  below the matched 671.5 before; bit-identical fuel/heap): the tree is
+  `?record`/`?str` values — structurally untouched. The phase-0 table's
+  727.9 ms read was a drifted hour (its fuel was already bit-identical);
+  time comparisons on this row use the matched pair.
+- **nmap-hashset** — the phase-2 +3-6% reads closed out in the batch's
+  favor: the jitter attribution (build placement, not source — the
+  rebuild-of-same-source read was +0.3%) is CONFIRMED by this verdict
+  run, itself a fresh rebuild, reading **38.0 ms, below the 38.9
+  phase-0 baseline** (−2.3%). The row keeps no `vals` at all (`HashSet`
+  has none), executes zero element ops, and its fuel (13,267,176) and
+  heap (503 B) were bit-identical in every pass all batch. NEUTRAL.
+
+**Ceiling accounting — the batch's central question.** Phase 0 proved
+the whole `[?V]` sidecar costs 45.3% of the int row (35.3 of 77.84 ms;
+the stub floor is 42.57 ms). The primitive store captured **−18.6% =
+~41% of the ceiling**. The remaining 20.6 ms above the stub floor
+(63.19 − 42.57) is exactly the sidecar work the repr keeps by law and
+by design: (1) every hit-`get` must still MINT the fresh `?i32` it
+returns (100k hits — value semantics; §0.3's unobservable-law scope is
+what legitimizes the raw store, but a read still produces a real opt
+value); (2) growth still relocates `vals` — now raw stride-w+1 copies,
+cheaper per element but still traffic (the stub dropped the drains
+entirely); (3) the remaining `arrset`/`arrget` stream — fuel fell only
+−400k ops (−1.9%): the −18.6% was host-side mint/retain/release and
+allocator work fuel never counts. Below that sits the phase-0 budget's
+untouched floor: ~37% host-table body, ~16% VM stream, ≤2% crossing.
+
+**The surviving follow-up menu, re-baselined** (each entry records the
+number a future batch starts from):
+
+- **(a) native val column for primitive V** — the int row's residual is
+  the hit-`get` opt mint (term 1 above); a value-typed return for
+  primitive `V` (or a val-typed lane) attacks it. Baseline: nmapset-int
+  63.19/63.6 ms exec, 70.7 ms net (1.12× qjs), fuel 20,703,284, heap
+  1.97 MB; the 42.57 ms stub floor sizes the whole residual at 20.6 ms.
+- **(b) borrowed str slices** — the string churn the plan deferred.
+  Baselines: nmapset-str 53.08/53.6 ms (1.42× qjs), nmap-knucleotide
+  177.0/172.9 ms (1.27× qjs), json-decode 677.9/662.9 ms (11.6× qjs;
+  its fuel never moved all batch — the row is box churn, and its boxes
+  are cells by design).
+- **(c) get-into-set copy fold** (the phase-2 deferral) — a composite
+  element-copy op for the relocation drains and `Vec` grow loops: term
+  (2) of the ceiling residual above.
+- **(d) dead KeyLane impl bodies cleanup** (phase-0 artifact, cosmetic)
+  — the 33 compiled `nentry`/`nfind`/`nremove` bodies (11 key types ×
+  3) remain unreferenced under instantiation (0% of any row's fuel,
+  findings 0a/0c); deleting them is hygiene only — no number will move.
+
+Method note: phase 3 ran no A/B of its own — phase 2's interleaved
+pairs (both binaries from this checkout, same day) are the batch's
+deltas; the verdict run is the gate and the confirmation. Workspace
+green (75 suites, 450 tests, zero failures). Tree clean; this section
+is the entire commit.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
