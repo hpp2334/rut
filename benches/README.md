@@ -459,6 +459,71 @@ shape, not as saturation.
   bit-for-bit; the runner still tolerates a 1e-9
   relative difference when comparing numeric checksums.
 
+## Performance log — OpaqueBox pooling: the host-payload pool tier (Sep 2026)
+
+Phase 6 of the native-fastpath batch: a size-classed Rust-side free list
+(`crates/rut-vm/src/heap/pool.rs`) for the erased `Box<dyn Any>` payload
+blocks behind `CellData::HostBoxed` — `OpaqueBox::alloc` mints (`map_new`'s
+`NativeTable`, plugin state, host-fn returns) pop a parked block of the
+payload's exact `(size, align)` when one is free; every rc-0 host-box death
+(`release_cell`) and every still-live box at arena teardown runs the stored
+payload's destructor in place, exactly once, then parks the block. Bounded:
+payloads ≥ 256 B (and ZSTs) bypass, the pool trims at 512 parked blocks
+(~128 KiB worst case), and a dead arena's pool deallocates its remainder
+with the arena. NO repr change, NO surface change, NO module version bump —
+`opaque(v)`/`downcast`/`OpaqueBox<T>` are untouched, and the heap
+accounting (RFC 0040) still charges `size_of::<T>()` per mint.
+
+One honest scoping note: the plan expected this row's churn to be
+`OpaqueBox::alloc` mints. It is not — rut-minted `opaque(v)` lowers to
+`Op::Box` → `CellData::OpaqueBox { val: Slot }`, a slot INLINE in the cell
+with no Rust block behind it; the cell itself is already recycled by the
+arena free list. The json-decode row therefore cannot show pooling GAINS —
+it can only surface overhead — and the pool tiers exactly the host payloads
+phase 7 keeps boxed when small payloads go inline.
+
+Deltas vs the phase-5 baseline (same row, the day-of-record numbers; full
+suite run, 3 reps + 1 warmup, probe over 3 fresh-VM iters; every checksum
+equals `expected.json` on rut, qjs and node — json `4502015958359127277`,
+nmapset/hashset `734932704` / `1264308351` / `21500055` / `2198604`):
+
+| workload         | rut net before → after  | rut exec before → after | fuel         | VM heap peak |
+|------------------|-------------------------|-------------------------|--------------|--------------|
+| json-decode      | 675.2 → 676.2 ms (~0)   | 662.4 → 670.0 ms (+1.1%)| 111.33 M (=) | 32.78 MB (=) |
+| nmapset-int      | 92.6 → 94.6 ms (+2.2%)  | 81.7 → 84.5 ms (+3.4%)  | 21.10 M (=)  | 5.80 MB (=)  |
+| nmapset-str      | 71.8 → 64.4 ms (−10%)   | 54.9 → 58.4 ms (+6.4%)  | 9.74 M (=)   | 2.90 MB (=)  |
+| nmap-hashset     | 47.2 → 48.7 ms (+3.2%)  | 40.4 → 44.7 ms (+10.6%) | 13.27 M (=)  | 503 B (=)    |
+| nmap-knucleotide | 227.0 → 226.0 ms (−0.4%)| 216.1 → 210.1 ms (−2.8%)| 39.61 M (=)  | 11.85 MB (=) |
+
+(`=` = bit-identical to the recorded value; fuel is a pure op count and
+the heap peak is pure accounting, so equality is the expected, verified
+outcome — repr and op stream unchanged.)
+
+Honest reading. Fuel and heap are bit-identical on every row; the wall/exec
+columns move within this host's day drift (±8-13% between days was already
+the phase-4 method note; the nmapset-str NET win, for instance, is the same
+day-drift the exec column shows upward). To separate drift from the patch,
+an interleaved same-host A/B (baseline worktree at c7c4702 vs pooled build,
+5 rounds × 5 fresh-VM iters) measured: **nmapset-int at parity-to-faster
+pooled** (~−2%), **nmap-hashset at parity**, **json-decode at +1.2-2.9%**
+(medians 660-670 vs base 648-661 the same hour — above the recorded 662.4
+by at most 1.1%, i.e. absolute parity with the baseline). Three structural
+suspects were engineered out while chasing that residual (a second
+discriminant dispatch in `release_cell` — folded into the existing match;
+the `pool` field shifting hot `Arena` offsets — moved last; the pool
+machinery inlined into the always-inlined release web — now
+`#[inline(never)]`); the remainder is per-loop codegen layout, and the map
+rows sharing the same release web landing at parity-or-faster rules out any
+global cost. The added semantic work per death is one discriminant compare
+on a cell kind this row barely mints.
+
+Stop-point (decision 9): **not triggered** — the json row does not regress
+against the 675.2/662.4/111.33 baseline beyond noise (fuel and heap
+bit-identical, exec/net within ±1.1%). The pool's wins sit in host-box
+churn (`OpaqueBox::alloc` mint/free pairs — `map_new`, plugin state), which
+current rows don't stress in hot loops; it is the tier phase 7 builds on,
+and the guard rows confirm the map behavior is unchanged.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may

@@ -15,6 +15,7 @@ use std::rc::Rc;
 pub(crate) mod blocks;
 mod cell;
 mod hostbox;
+pub(crate) mod pool;
 mod trap;
 mod value;
 
@@ -323,7 +324,10 @@ impl Heap {
     /// `size_of::<T>()` (RFC 0040); interior allocations a `T` makes are
     /// the host's own business.
     pub fn alloc_host_box<T: 'static>(&self, val: T) -> Result<Slot, Trap> {
-        let payload = Box::new(val) as Box<dyn std::any::Any>;
+        // the block comes from the OpaqueBox pool (phase 6) when a
+        // previously-died payload of the same (size, align) parked one —
+        // `pool::host_box` keeps the surface a plain `Box<T>` either way
+        let payload = pool::host_box(&self.arena, val) as Box<dyn std::any::Any>;
         let n = (std::mem::size_of::<T>() as u64).max(8);
         self.mint(
             rut_core::types::TY_OPAQUE,

@@ -9,7 +9,7 @@
 //! `OpaqueRef` is the host-facing handle (RFC 0014): it owns one arena
 //! reference and holds the shared arena, so it can outlive the `Vm`.
 
-use crate::heap::{blocks::Blocks, CellData, CellVal, HeapAcct, Slot};
+use crate::heap::{blocks::Blocks, pool::{self, Pool}, CellData, CellVal, HeapAcct, Slot};
 use rut_core::binary::FuncCode;
 use rut_core::types::{TypeTable, TyKind};
 use std::cell::{Cell, RefCell};
@@ -91,6 +91,12 @@ pub(crate) struct Arena {
     /// `OpaqueRef` keeps the arena (hence the store) alive for cells that
     /// outlive the `Vm`.
     pub(crate) blocks: Blocks,
+    /// Opaque pool (native-fastpath phase 6): parked `Box<dyn Any>` payload
+    /// blocks awaiting reuse by the next same-layout host mint
+    /// (see `heap/pool.rs`). LAST on purpose: adding a field ahead of the
+    /// others shifts their offsets inside the Arena allocation, and the
+    /// hot paths (`free`, `blocks`, `bump`, `plan`) measured the shift.
+    pub(crate) pool: RefCell<Pool>,
 }
 
 impl Arena {
@@ -103,6 +109,7 @@ impl Arena {
             drop_fns: RefCell::new(HashMap::new()),
             pending_drops: RefCell::new(Vec::new()),
             blocks: Blocks::new(),
+            pool: RefCell::new(Pool::new()),
         }
     }
 
@@ -171,8 +178,17 @@ impl Drop for Arena {
                 if !free.contains(&p) {
                     // free the cell's payload block(s) first — freeing needs
                     // the &Arena that Drop glue would not have (same rule as
-                    // the release path below)
-                    match unsafe { &(*p).data } {
+                    // the release path below). ONE dispatch: host payloads
+                    // ride the same match as the block frees.
+                    let cell = unsafe { &mut *p };
+                    match &mut cell.data {
+                        // the live teardown: park (or free) the payload
+                        // block exactly as the rc-0 path does — the box's
+                        // own drop glue must not touch the pooled block
+                        CellData::HostBoxed { payload, .. } => {
+                            let taken = std::mem::replace(payload, Box::new(()));
+                            pool::retire(self, taken);
+                        }
                         CellData::Str(sv) => self.blocks.free(sv.block),
                         CellData::Array { items, .. } => self.blocks.free(items.borrow().block),
                         _ => {}
@@ -292,10 +308,21 @@ pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
         // payload blocks die with the cell, explicitly — freeing needs the
         // &Arena this walk holds (payloads carry no Drop glue). Children
         // were collected above, so a ref-typed array's handles are already
-        // out before its block goes.
-        match &(*p).data {
+        // out before its block goes. ONE dispatch per death: the host
+        // payload rides the same match as the block frees (a second
+        // discriminant check here measured +4% on the json-decode churn).
+        match &mut (*p).data {
             CellData::Str(sv) => arena.blocks.free(sv.block),
             CellData::Array { items, .. } => arena.blocks.free(items.borrow().block),
+            // host payload blocks park instead of deallocating (phase 6):
+            // the dtor runs here, in place, exactly once; the block goes
+            // back to the size-classed free list for the next same-layout
+            // mint. A dummy takes the cell's Box field so drop_in_place
+            // below cannot re-drop (or re-free) what the pool now owns.
+            CellData::HostBoxed { payload, .. } => {
+                let taken = std::mem::replace(payload, Box::new(()));
+                pool::retire(arena, taken);
+            }
             _ => {}
         }
         let bytes = (*p).bytes as u64;
