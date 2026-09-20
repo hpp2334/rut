@@ -151,6 +151,10 @@ fn run(path: &str, fuel: Option<u64>) {
     // program only reaches it when it declares `use nmap::{...}` or a
     // pkg that does (`nmapset`)
     rut_std::nmap::install_std_nmap(&mut hosts);
+    // the crossing-tax benchmark's nops (the crossing-fastpath plan,
+    // phase 0) — reached only by a program that declares
+    // `use bench_cross::{...}` (the bench row)
+    rut_std::bench_cross::install_std_bench_cross(&mut hosts);
     let mut vm = match rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks, hosts) {
         Ok(vm) => vm,
         Err(t) => {

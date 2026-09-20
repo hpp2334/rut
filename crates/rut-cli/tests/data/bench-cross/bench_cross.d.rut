@@ -1,0 +1,13 @@
+// bench-cross/bench_cross.d.rut — the crossing-tax benchmark's host
+// surface (the crossing-fastpath plan, phase 0): `pub host fn` decls
+// only — the bodies live in rut-std's `install_std_bench_cross`.
+//
+// This fixture mirrors the committed `rut/bench-cross` surface
+// byte-for-byte in content: update BOTH when the surface changes.
+//
+// The bodies are deliberately empty (identity / four-way sum) so the
+// bench row that mounts the pkg measures the crossing, not the work.
+
+pub host fn nop(x: i64) -> i64;
+
+pub host fn nop4(a: i64, b: i64, c: i64, d: i64) -> i64;

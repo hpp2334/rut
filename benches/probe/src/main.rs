@@ -191,6 +191,16 @@ fn main() {
         {
             rut_std::nmap::install_std_nmap(&mut hosts);
         }
+        // the crossing-tax benchmark's nops (the crossing-fastpath plan,
+        // phase 0) — same exactness law: bound only when the program's
+        // dep graph declares `bench_cross::`
+        if session
+            .expected_host_fns()
+            .keys()
+            .any(|name| name.starts_with("bench_cross::"))
+        {
+            rut_std::bench_cross::install_std_bench_cross(&mut hosts);
+        }
         hosts.verify_against(&session.expected_host_fns());
         let mut vm = Vm::new(
             Rc::clone(&prog),

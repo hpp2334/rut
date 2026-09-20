@@ -1,0 +1,14 @@
+// bench-cross/bench_cross.d.rut — the crossing-tax benchmark's host
+// surface (the crossing-fastpath plan, phase 0): `pub host fn` decls
+// only — the bodies live in rut-std's `install_std_bench_cross`.
+//
+// The bodies are the identity and a four-way sum — deliberately empty
+// so the difference between a host call and the same-shaped inline rut
+// fn call is the CROSSING, not the work. All-`i64` signatures: one
+// scalar per param, the prim path phases 1-2 optimize. Infallible by
+// construction (the bodies cannot trap), so the direct adapter shape
+// is what gets measured.
+
+pub host fn nop(x: i64) -> i64;
+
+pub host fn nop4(a: i64, b: i64, c: i64, d: i64) -> i64;

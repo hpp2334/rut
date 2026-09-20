@@ -1,0 +1,10 @@
+# bench-cross/ — the crossing-tax benchmark's host pkg (the
+# crossing-fastpath plan, phase 0): `pub host fn` decls only — the
+# bodies live in rut-std's `install_std_bench_cross` (RFC 0023 §2's
+# mounting shape). Deliberately EMPTY bodies: whatever a call costs
+# beyond the callee's own work IS the crossing, so the bench row that
+# mounts this pkg (benches/workloads/crossing-nop) measures exactly
+# that. Mounted via `[deps]` like any tree pkg.
+
+name = "bench_cross"
+entry.type = "./bench_cross.d.rut"

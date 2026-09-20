@@ -1,0 +1,8 @@
+# bench-cross/ — the crossing-tax benchmark's test fixture (the
+# crossing-fastpath plan, phase 0): a pure declaration surface; the
+# tests bind the bodies (`install_std_bench_cross`) and verify the
+# contract. The committed `rut/bench-cross` package (phase 0) carries
+# the same surface.
+
+name = "bench_cross"
+entry.type = "./bench_cross.d.rut"

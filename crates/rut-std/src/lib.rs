@@ -2,6 +2,7 @@
 //! native modules. `rut-vm` deliberately knows nothing about any package;
 //! the implementations an embedder installs live here.
 
+pub mod bench_cross;
 pub mod logger;
 pub mod math;
 pub mod nmap;

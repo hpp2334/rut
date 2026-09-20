@@ -1,0 +1,55 @@
+use bench_cross::{ nop, nop4 };
+use ink::{ Logger };
+
+// crossing-nop — the crossing tax, isolated (the crossing-fastpath
+// plan, phase 0). Loop A calls the host `nop` (the identity), loop B
+// calls an inline rut fn with the SAME body; the `4` pair repeats both
+// over a 4-arg sum. Every call does no work beyond its own signature,
+// so (A−B) is the total cost of crossing the rut→host boundary and
+// (nop4−nop) is the per-param slope — the pre-optimization baseline
+// phases 1-2 measure themselves against.
+//
+// The twins' bodies stay textually identical to the host bodies'
+// arithmetic on purpose. The checksum only proves both sides computed
+// the same sums (it must be identical across rut/qjs/node, see
+// expected.json); the TAX lives in the timing, which the perf log in
+// benches/README.md records.
+// Scale: 2_000_000 iterations per loop, 4 loops.
+
+fn nop_rut(x: i64) -> i64 {
+    return x;
+}
+
+fn nop4_rut(a: i64, b: i64, c: i64, d: i64) -> i64 {
+    return a + b + c + d;
+}
+
+pub fn main() -> nil {
+    let n: i64 = 2000000;
+    let mut acc: i64 = 0;
+    // A: the host nop — one crossing per call
+    let mut i: i64 = 0;
+    while (i < n) {
+        acc = acc + nop(i);
+        i += 1;
+    }
+    // B: the inline twin — same body, no crossing
+    i = 0;
+    while (i < n) {
+        acc = acc + nop_rut(i);
+        i += 1;
+    }
+    // A4: the 4-param host nop — the per-param slope
+    i = 0;
+    while (i < n) {
+        acc = acc + nop4(i, i + 1, i + 2, i + 3);
+        i += 1;
+    }
+    // B4: the 4-param inline twin
+    i = 0;
+    while (i < n) {
+        acc = acc + nop4_rut(i, i + 1, i + 2, i + 3);
+        i += 1;
+    }
+    Logger.new("app").info(f"CHECKSUM {acc}");
+}

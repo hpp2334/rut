@@ -23,5 +23,6 @@
   "nmapset-str": "1264308351",
   "nmap-hashset": "21500055",
   "nmap-knucleotide": "2198604",
-  "json-decode": "4502015958359127277"
+  "json-decode": "4502015958359127277",
+  "crossing-nop": "20000014000000"
 }

@@ -1,0 +1,10 @@
+# crossing-nop/ — the crossing-tax bench workload's rut half (the
+# crossing-fastpath plan, phase 0): a module dir because it mounts
+# `bench_cross` (the nops' host pkg; see nmap-hashset/rut.toml for the
+# pattern). The JS twin is ../crossing-nop.js.
+name = "crossing_nop"
+entry.lib = "./main.rut"
+
+[deps]
+bench_cross = { path = "../../../rut/bench-cross" }
+ink = { path = "../../../rut/ink" }

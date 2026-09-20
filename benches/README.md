@@ -98,6 +98,7 @@ against the reference in `workloads/expected.json`.
 | `nmap-hashset` | `HashSet<i32>` (**nmapset**): line-for-line clone of `hashset` | n = 100 000 | checksum `21500055` (=`hashset`) |
 | `nmap-knucleotide` | k-mer counting over `HashMap<str, i32>` (**nmapset**): line-for-line clone of `knucleotide` | seq = 200 000 | checksum `2198604` (=`knucleotide`) |
 | `json-decode` | the digest JSON decode: char-split + parser minting one `opaque` box per JSON value (and per object key), plus a downcast fold over the tree — REPS reps of a large generated document (1 200 rows; ~34k boxes minted per rep, ~100k total) | doc ~204 KB, reps 3 | checksum `4502015958359127277` |
+| `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
@@ -586,6 +587,80 @@ held the json row at parity (fuel and heap bit-identical, exec within
 RFC-level proposal), the str `encode()`-per-hash cost in mapset's own
 rows, and closing the union-provenance holes (RFC 0043 §3).
 
+## Performance log — crossing-nop: the crossing-tax baseline (Sep 2026)
+
+New row for the crossing-fastpath batch, phase 0. `crossing-nop` mounts
+`rut/bench-cross` (host pkg: `nop(x: i64) -> i64`, the identity, and
+`nop4(a..d: i64) -> i64`, the sum — bodies deliberately EMPTY, bound
+infallibly in rut-std's `install_std_bench_cross`) and runs four loops
+of 2M iterations each: **A** = N host `nop` calls, **B** = N calls of an
+inline rut fn with the SAME body, **A4**/**B4** = the same pair over the
+4-arg sum. Every call does no work beyond its own signature, so the
+host-minus-inline delta is the rut→host **crossing** — the per-call
+package (arg snapshot, adapter, dispatch, write-back) the batch's
+phases 1-2 mean to shrink.
+
+**This entry is the pre-optimization baseline** — recorded before
+phases 1-2 landed, exactly like the json-decode entry before it; the
+phase 1/2 comparisons read their before columns HERE. No optimization
+numbers belong in this section.
+
+All three runtimes agree on the checksum (twin gate, `expected.json`
+pins it): `20000014000000`. Full row (net medians, same-day run, 3 reps
++ 1 warmup, probe over 3 fresh-VM iters):
+
+| workload     | rut net  | qjs net  | node net | rut exec  | fuel     | VM heap peak |
+|--------------|----------|----------|----------|-----------|----------|--------------|
+| crossing-nop | 121.3 ms | 521.1 ms | 4.5 ms   | 118.0 ms  | 104.00 M | 236 B        |
+
+Placement: the JS twins are plain fn-call loops — JS has no host
+boundary, so both loops of each pair measure the same plain-call work.
+qjs, an interpreter with no call inlining, is the slowest runtime on
+the row by far (521.1 ms for the identical 8M calls, ~115x node);
+node's JIT inlines the nops to nothing (4.5 ms net). rut's 121.3 ms net
+is the crossing package on top of its interpreter loop — and it beats
+qjs on a call-shaped row for the first time, which is the honest shape
+of "an interpreter that dispatches one host op per call" vs "an
+interpreter that interprets every call". The 236 B heap peak is the
+point: the row holds no allocation at all — it is call machinery only.
+
+The decomposition (the numbers the phases compare against): the
+committed row runs all four loops, so the segments were timed as
+single-loop clones of it (same body, same deps, fresh process, 5
+interleaved rounds × 7-9 fresh-VM probe iters, median of the round
+medians; fuel counts are exact):
+
+| segment        | exec median | per call | fuel/iter | what it is                       |
+|----------------|-------------|----------|-----------|----------------------------------|
+| A  — host nop  | 23.98 ms    | 12.0 ns  | 8 ops     | one crossing per call            |
+| B  — inline nop| 18.24 ms    | 9.1 ns   | 12 ops    | same body, no crossing           |
+| A4 — host nop4 | 48.88 ms    | 24.4 ns  | 14 ops    | one crossing + 3 extra params    |
+| B4 — inline n4 | 27.42 ms    | 13.7 ns  | 18 ops    | same body, no crossing           |
+
+Baseline readings, per the plan's model:
+
+- **(A−B) = total crossing overhead**: +2.9 ns/call at one param
+  (5.74 ms per 2M) and **+10.7 ns/call at four params** (21.47 ms per
+  2M). The 4-param shape is where the tax lives — that is the shape
+  nmapset's one-crossing-per-op ops pay.
+- **(nop4−nop) = per-param slope**: host-side +12.4 ns/call for the 3
+  extra params (~4.1 ns/param); crossing-only (A4−B4 minus A−B)
+  ~+2.6 ns per extra param. The per-param marshalling
+  (`expect_kind` + `narrow_i64` per param, boundary.rs) is exactly
+  what phase 1 removes.
+- Fuel facts: the host loops run FEWER VM ops than the spliced twins
+  (8 vs 12, 14 vs 18 per iter) — the inline twin bodies splice into
+  the caller (P1.3 free-fn inlining), so B/B4 are the no-crossing
+  floors and A−B is net of that op-stream difference. The four
+  segments' fuel sums exactly to the row's 104,000,032.
+- Method note: segment times are single-loop clones probed in fresh
+  processes and interleaved across rounds; the committed row runs the
+  four loops back to back (its probe exec 118.0 ms ≈ the segments'
+  118.5 ms sum, cross-checked exactly in fuel: 16+24+28+36 M =
+  104,000,032). Day drift on this host is ±8-13% (see the mapset-perf
+  log) — phases 1-2 should re-run the same clones same-day when they
+  claim their deltas.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
@@ -595,10 +670,12 @@ rows, and closing the union-provenance holes (RFC 0043 §3).
   (`hashmap-int`, `hashmap-str`, `hashset`, `knucleotide`) and their
   `nmapset` twins (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
   `nmap-knucleotide`, which pull the `nmap` host pkg through the
-  pkg's own `[deps]`) and `json-decode` (it mounts `pouch` for the
-  row chunks the document generator joins). The bench runtimes
-  install the host halves (math + the logger) as usual; `rut-bench-probe` additionally binds
-  the nmap hosts only when the program's dep graph declares them (the
+  pkg's own `[deps]`), `json-decode` (it mounts `pouch` for the
+  row chunks the document generator joins), and `crossing-nop` (it
+  mounts `bench-cross`, the phase-0 crossing-tax pkg). The bench
+  runtimes install the host halves (math + the logger) as usual;
+  `rut-bench-probe` additionally binds the nmap and bench-cross hosts
+  only when the program's dep graph declares them (the
   host-surface check is exact in both directions, RFC 0025).
 - The `mapset` workloads' JS twins carry small adaptations: JS
   `Map`/`Set` have no insert-or-replace primitive, so the add-vs-
