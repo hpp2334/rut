@@ -938,6 +938,174 @@ That is memory movement, not checking — irreducible without a repr
 change (registers across the boundary, or the host reading caller
 slots in place), which §0.1 takes off the table for this batch.
 
+## Performance log — nmapset-round2 phase 0: dispatch shape + sidecar ceiling (Sep 2026)
+
+Evidence phase for the wrapper-residual batch: three findings, no engine
+change, nothing committed but this section. The nmapset-int row sits
+~1.3× its qjs twin after crossing-fastpath; the two candidate levers are
+wrapper-side — the `KeyLane` trait dispatch at the instantiated body,
+and the boxed `[?V]` sidecar store/load. This phase measures both and
+states the per-op budget. Row baselines re-measured for this batch
+(probe, fresh-VM iters, same day, one binary; fuel and VM-heap peaks
+**bit-identical** to the close-out records — nothing has moved):
+
+| workload         | exec median      | fuel          | VM heap peak     |
+|------------------|------------------|---------------|------------------|
+| nmapset-int      | 77.8 ms (A/B below) | 21,103,284 | 6,082,111 B (5.80 MiB) |
+| nmap-hashset     | 38.9 ms          | 13,267,176    | 503 B            |
+| json-decode      | 727.9 ms         | 111,330,118   | 34,377,147 B (32.78 MiB) |
+| crossing-nop     | 97.9 ms          | 104,000,032   | 236 B            |
+
+### Finding 0a — KeyLane dispatch is already DIRECT (spliced to the lane crossing)
+
+Method: the crossing-fastpath phase-0 dump facility (`ir_dump_of` over
+the linked graph program), used from a throwaway driver test (scratch
+file, deleted after capture — dumps preserved in the batch run dir):
+instantiate `HashMap<i64, i64>` (and `<i32, i32>`, the row's shape), and
+dump the actual bench dir's program. What the binary contains:
+
+- The wrapper does not survive as functions. `HashMap.put/get/has/remove`
+  are **fully spliced into the instantiated consumer body** (the pkg is
+  `inline = true` — source-inlined into the consumer's one compilation
+  unit — then monomorphized per instantiation, then the tiny-body
+  splicer inlines the `KeyLane` impl bodies). The bench row's `churn`
+  is one 389-op function containing all seven loops.
+- `k.nentry(self.t)` lowers to `call f9` — a **direct** call to f9,
+  which is the host lane slot `map_entry_i` (an empty-code
+  host-declared func; the engines route `Op::Call` on `host_id` through
+  `Vm::call_host` — the exact crossing crossing-nop calibrates). Same
+  shape everywhere: `get`/`has` → `call f14 map_find_i`, `remove` →
+  `call f19 map_remove_i`.
+- **Zero `CallI` (trait-vtable) ops in the entire program** — both the
+  scratch instantiations and the bench row. The 33 compiled
+  `nentry/nfind/nremove` impl bodies (11 key types × 3) are dead code
+  in the instantiation: nothing references them.
+
+Excerpt (the bench row's `churn`, build loop — key arithmetic, the
+crossing, the grow-sentinel check, the `vals` store; no dispatch, no
+wrapper frame):
+
+```
+ 8 wmuli.i32 r9, r3, r8          ; key = i * -1640531535
+10 getf r12, r1, f0 :12          ; self.t (the opaque table)
+12 conv r15, r9, i32 -> i64
+13 call f11(r14, r15) -> r13     ; map_entry_i(t, k) — DIRECT, the crossing
+15 loophead                      ; grow-sentinel retry head
+18 lei.i32 r20, r13, r19         ; at <= i32::MIN ?
+56 getf r54, r1, f1 :12          ; self.vals
+57 makeopt r57, r10              ; box the i32 into a one-slot cell
+58 arrset r54, r13, r57 :12      ; vals[at] = v
+```
+
+**Verdict (§0.5 gate for phase 1): SKIP devirt.** The trait call never
+reaches the binary — the sealed-private-trait + inline-pkg + splice
+pipeline already resolves it per-instantiation, one step past what a
+devirtualization pass would produce (it removes not just the vtable hop
+but the whole wrapper frame). A devirt phase would have nothing to do;
+this finding is its record.
+
+### Finding 0b — the sidecar ceiling: 45.3% of the row (≥ 10% → phase 2 runs)
+
+Method: a throwaway stub of `rut/nmapset/nmapset.rut` (NEVER committed —
+restored with `git checkout --`, tree verified clean, row checksum
+re-verified `734932704` after restore): `put` drops the `vals` stores
+and the whole grow-relocation drain (the `HashSet` shape — `map_grow` +
+retry, no vals machinery); `get` returns `nil` after the `nfind`
+(hit/miss control flow kept); `remove` drops the nil store. Checksum
+integrity under the stub: every counter (added/replaced/hits/misses/
+removed/present/added2/len) is unchanged except `sum = 0, hits = 0` —
+deterministic `25150000` on every run, and it reconciles bit-exact:
+25,150,000 + Σ(i+7) 705,682,704 + hits·41 4,100,000 = **734,932,704**.
+Control: `nmap-hashset` still checksums `21500055` under the stub
+(HashSet never touches vals — the stub provably moves only the sidecar).
+
+A/B mechanics, and a method simplification the measurement exposed:
+pkg sources (`rut/nmapset`) are **runtime-mounted, not compiled into
+the binaries** — the probe binary never rebuilds when the wrapper
+changes. The A/B therefore ran as ONE fixed binary with the wrapper
+source flipped between interleaved rounds (`git checkout --` restores
+A, a saved copy applies B): 5 rounds × 7 fresh-VM iters per side, order
+alternated per round. Same-day, one tree, zero build-placement risk —
+the house rule's intent with even less layout confound than the
+two-binary method.
+
+| side             | round medians (ms)                  | median of medians | fuel       | heap peak  |
+|------------------|-------------------------------------|-------------------|------------|------------|
+| A — unstubbed    | 82.1, 77.8, 75.2, 78.0, 74.4        | **77.84 ms**      | 21,103,284 | 6,082,111 B|
+| B — vals-stubbed | 42.6, 42.4, 43.3, 42.4, 43.7        | **42.57 ms**      | 15,650,305 | 423 B      |
+
+Round ranges do not overlap (A 74.4–82.1 vs B 42.4–43.7): the sidecar
+package — the `MakeOpt` cell mint + retain per put store, the release on
+overwrite, the random-access `arrget` + cell deref per get, the grow-time
+relocation drains — costs **35.3 ms of the 77.8 ms row = 45.3%**. Fuel
+drops 5,452,979 ops (−25.8%) and the VM heap high-water collapses
+6.08 MB → 423 B: the cells behind the `[?i32]` sidecar are the entire
+live heap of the row.
+
+Honest scoping: 45.3% is the CEILING — it removes ALL vals work,
+including the relocation drains and the deref on read. Phase 2's
+primitive-store keeps raw element traffic (raw slot stores/loads plus
+relocation copies), so its realizable win is strictly less than the
+ceiling; the gate asks only whether the lever is ≥ 10%, and it clears
+that with 4.5× margin.
+
+**Verdict (§0.5 gate for phase 2): RUN primitive-store.**
+
+### Finding 0c — the per-op budget: where a 130 ns map op goes
+
+Calibration, re-read today with this binary (the segment clones from
+crossing-nop phase 0): segment A (2M host `nop` calls) 20.98 ms →
+**10.5 ns/call**, 8 fuel-ops/iter; segment B (inline twin) 18.46 ms →
+9.2 ns/call, 12 ops/iter — **0.77 ns per VM op**. The row crosses the
+boundary exactly once per map op (600k crossings for n = 100k: 2.5
+puts, 2 gets, 1 has, 0.5 remove per key), each a direct `Op::Call` on a
+host slot — fuel-wise that is exactly 1 op of the stream; time-wise the
+crossing frame's marginal cost over an inline call is the crossing-nop
+A−B delta (recorded −0.07…+2.9 ns; today's read +1.3), so ≤ ~1.7 ms of
+the row, under 2.5%.
+
+Fuel per op shape, from the spliced `churn` dump (steady-state dynamic
+paths): **put ≈ 35 ops** (loop control 6, key arithmetic 4, arg prep 4,
+crossing 1, sentinel check 4, insert path + counter 15, grows
+amortized ~2); **get ≈ 30 hit / 24 miss** (hit adds the `vals` load:
+`getf` + `arrget` + the cell `getf` deref); **has ≈ 24**; **remove ≈ 28**
+(minus the nil store under the stub's accounting). Measured total
+21,103,284 / 600k = 35.2 avg ✓; the stubbed side's 15,650,305
+(−5.45 M) reconciles with those sidecar op counts (put stores ~4-5 ops
+each, get loads ~5-6, relocation drains ~2.3 M across 14 grows).
+
+Where the fuel goes: of 21.1 M ops, **25.8% is sidecar traffic**
+(measured by the stub), **0% is trait dispatch** (finding 0a — spliced
+away), and the remaining ~74% is loop control, key arithmetic
+(`wmuli`), branch traffic and arg prep — the irreducible shape of a
+generic rut loop calling a host table.
+
+Where the TIME goes (77.8 ms row, ~130 ns per map op; the residual
+terms are estimates against the calibration — honesty over precision):
+
+| component                                    | time        | share |
+|----------------------------------------------|-------------|-------|
+| the `[?V]` sidecar package (measured, 0b)    | 35.3 ms     | **45%** |
+| VM interpreter stream ex-sidecar (15.65 M ops × 0.77 ns) | ~12.1 ms | ~16% |
+| the host table body itself (mix64 + open-addressing probe over multi-MB keys/hashes/states — cache-miss bound, invisible to fuel) | ~29 ms | ~37% |
+| the crossing frame (600k × ≤ 2.9 ns)         | ≤ 1.7 ms    | ≤ 2%  |
+
+The budget's headline: the wrapper is already optimal-shaped (one
+direct crossing per op, no dispatch, no frame), but the values still
+live in boxed cells — the single largest cost in the row is the
+sidecar's boxing and cell traffic, and the second largest is host-side
+probing that no wrapper change can touch.
+
+Deviations, recorded: (1) the stub removed the relocation drain
+entirely instead of draining-without-copy — the drain exists only
+because `vals` exists, and the plan's own `HashSet` precedent calls
+that shape "no vals machinery at all"; (2) the A/B used one fixed
+binary with runtime source flips instead of two binaries from one
+checkout — possible only because pkg sources are runtime-mounted, and
+strictly stronger on layout isolation; (3) the IR dumps came from a
+scratch driver test, deleted after capture (untracked; the committed
+tree is this README section only).
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
