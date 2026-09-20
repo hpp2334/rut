@@ -839,6 +839,105 @@ rut/qjs/node (exit 0). Workspace tests green with the phase-1
 fast-lane suites untouched and passing (`fast_lane_tests` 8/8,
 `fastlane` driver 4/4).
 
+## Performance log — crossing-fastpath batch close-out: the verdict (Sep 2026)
+
+The batch's final record. Two phases landed against the crossing-nop
+row: the host-param fast lane (phase 1 — the per-param `expect_kind`,
+`narrow_i64` and string compares dropped from the rut→host hot lane in
+favor of raw slot-bit reads; genuinely dynamic checks stayed) and the
+call-frame trims (phase 2 — the per-call `Rc::clone(&self.prog)`, the
+per-call `is_ref(slot.ret)` write-back lookup, `#[inline]` on the hot
+slot builders). Phase 3 measured and reported only — no engine file
+changed after phase 2; this section is the verdict.
+
+**Checksum gate (§0.4):** full suite from one checkout, all 26 rows ×
+rut/qjs/node, exit 0 — every checksum equal to `expected.json`
+(crossing-nop `20000014000000`, json-decode `4502015958359127277`, the
+map rows `734932704` / `1264308351` / `21500055` / `2198604`).
+`expected.json` was never touched all batch.
+
+**crossing-nop before/after vs the phase-0 baseline.** Segment A/B
+(the phase-0 commit ae6ceb4's binary vs batch-HEAD c40edf8 — **both
+built from ONE checkout directory**, 5 interleaved rounds × 7 fresh-VM
+probe iters per binary per segment, order alternated per round, median
+of the round medians; the before-side reproduces the recorded phase-0
+numbers within 2.3%: 23.95/18.24/47.75/27.42 vs 23.98/18.24/48.88/
+27.42):
+
+| segment           | exec before | exec after | Δ          | per call        |
+|-------------------|-------------|------------|------------|-----------------|
+| A  — host nop     | 23.95 ms    | 18.22 ms   | **−23.9%** | 12.0 → 9.1 ns   |
+| B  — inline nop   | 18.24 ms    | 18.36 ms   | +0.6%      | 9.1 ns (floor)  |
+| A4 — host nop4    | 47.75 ms    | 31.33 ms   | **−34.4%** | 23.9 → 15.7 ns  |
+| B4 — inline nop4  | 27.42 ms    | 27.15 ms   | −1.0%      | 13.7 ns (floor) |
+
+The crossing reads, before → after:
+
+- **(A−B) @1 param**: +2.86 → **−0.07 ns/crossing** — the 1-param
+  crossing is AT the inline floor (the sign flips inside noise; phase
+  2's same-day pair read +0.00).
+- **(A4−B4) @4 params**: +10.17 → **+2.09 ns/crossing**.
+- **per-param slope**: +2.44 → **+0.72 ns/param** (phase 2 read ~0.64
+  the same way — call it ~0.6-0.7).
+
+Against the phase-0 record (A 23.98 / A4 48.88 ms per 2M): cumulative
+**A −24% / A4 −36%**. The plan's ~10-15 ns/crossing re-verification
+estimate was, in the end, mostly recovered at 4 params (+10.7 →
++2.1 ns) and entirely at 1 param (at the floor).
+
+The committed row (all four loops): rut exec 118.0 → 96.3 ms (−18%),
+net 121.3 → 96.2 ms (−21%), and — as the law demands for host-side-only
+work — **fuel 104,000,032 and VM heap peak 236 B are bit-identical** to
+the phase-0 record (the op stream cannot move; the verdict run read
+both exact).
+
+**Downstream rows, cumulative vs the phase-0 baseline** (same-day
+interleaved probe A/B, 5 rounds × 3 fresh-VM iters, order alternated;
+the crossing pays once per host op, so every nmap/json row inherits
+both phases):
+
+| workload         | exec before | exec after | Δ                        |
+|------------------|-------------|------------|--------------------------|
+| nmapset-int      | 90.35 ms    | 85.74 ms   | **−5.1%**                |
+| nmap-hashset     | 42.29 ms    | 40.32 ms   | **−4.7%**                |
+| json-decode      | 672.4 ms    | 665.9 ms   | −1.0%                    |
+| nmap-knucleotide | 209.7 ms    | 208.5 ms   | −0.5% — NEUTRAL          |
+| nmapset-str      | 57.31 ms    | 57.75 ms   | +0.8% — NEUTRAL (noise)  |
+
+Honest notes. This hour read the str row NEUTRAL where phase 1's
+same-day pass had −3.7% and phase 2's −1.1%: the round medians overlap
+(after 55.6-60.8 vs before 57.1-59.4 ms) and the row's own history in
+this log (jitter on ±2 ms segments) says noise — recorded as neutral,
+not a win. nmap-knucleotide was never tier-measured in phases 1-2; its
+~1.7 M crossings × a few ns recovered predicts −1-2% and it reads
+−0.5% — consistent with a row dominated by k-mer materialization, not
+the map op. json-decode's −1.0% is within the parity band its phase-2
+entry already recorded (+0.4%); call it parity-to-slightly-better. Fuel
+and VM-heap peaks were **bit-identical before/after on every row**
+(13,267,176 / 21,103,284 / 9,735,095 / 39,612,955 / 111,330,118 ops;
+503 B / 5.80 MB / 2.90 MB / 11.85 MB / 32.78 MB). **Stop-point (§0.5):
+never triggered** — no row regressed beyond noise on its interleaved
+measurement, and the flat floors (B +0.6% / B4 −1.0%) rule out a
+global codegen effect of the batch.
+
+Method note (the house rule this batch leaves behind): both binaries
+of every A/B pair above were built from ONE checkout directory
+(before-source, then after-source, in place). Cross-directory builds
+embed different path strings, shift constant-pool layout, and are NOT
+layout-safe — phase 2's trap note records a worktree-vs-tree pair
+reading the no-crossing floors +18%/+33% before the same-path rebuild
+exposed it as a build-placement artifact.
+
+The residual, stated honestly: the 1-param crossing sits AT the inline
+floor — A and B are the same speed within noise, i.e. the fixed
+per-call package (frame, arg snapshot, indirect call, write-back) now
+costs no more than the rut-side call it replaces. What remains is the
+per-param slope, ~0.6-0.7 ns/param: each parameter's slot copy through
+the snapshot plus the adapter's raw-bit read and the return write.
+That is memory movement, not checking — irreducible without a repr
+change (registers across the boundary, or the host reading caller
+slots in place), which §0.1 takes off the table for this batch.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
