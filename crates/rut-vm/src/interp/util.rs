@@ -173,3 +173,175 @@ pub(super) fn default_slot_repr(repr: Repr) -> Slot {
         _ => Slot::null(),
     }
 }
+
+// ---- the primitive-optional element store (RFC 0044 §5) ----------------
+//
+// A `[?prim]` backing (`ArrKind::Opt`) holds each element as a raw payload
+// plus a nil tag — never a cell. The element ops route here by their baked
+// `Repr::OptPrim*`, so the hot path pays no runtime kind check and the
+// generic `seq_get`/`seq_set` never see an opt store (debug-asserted in
+// `read_unchecked`/`write_unchecked`). Both engines call these helpers, so
+// they execute identical code (lock-step by construction).
+//
+// The rc law of the raw store: no element is a handle — writes retain
+// nothing and the displaced value is raw bits (nothing released); reads
+// mint a fresh opt VALUE (value semantics) whose reference passes to the
+// destination register, so the caller releases the displaced dst value but
+// does NOT retain the mint.
+
+/// One element access resolved against the backing: the items run and the
+/// absolute element index, bounds-checked per shape (direct array: one
+/// unsigned compare folding negative + overflow, the `seq_get` shape;
+/// window: bounds vs the window, RFC 0042 §6). `None` = `cell` is not an
+/// array/window at all (a miscompiled op — the caller traps).
+fn opt_lookup<'a>(cell: &'a CellVal, i: i64) -> Option<Result<(std::cell::Ref<'a, crate::heap::ArrData>, usize), Trap>> {
+    match &cell.data {
+        CellData::Array { items, .. } => {
+            let d = items.borrow();
+            if i as u64 >= d.len as u64 {
+                return Some(Err(Trap::new(
+                    TrapKind::IndexOutOfBounds,
+                    format!("array index {i} out of bounds (len {})", d.len),
+                )));
+            }
+            Some(Ok((d, i as usize)))
+        }
+        CellData::ArrView { parent, off, len } => {
+            let p = cell_of(*parent);
+            let CellData::Array { items, .. } = &p.data else {
+                return Some(Err(Trap::new(TrapKind::Invalid, "view over a non-array backing")));
+            };
+            let d = items.borrow();
+            if i < 0 || i as u32 >= *len {
+                return Some(Err(Trap::new(
+                    TrapKind::IndexOutOfBounds,
+                    format!("view index {i} out of bounds (len {len})"),
+                )));
+            }
+            Some(Ok((d, *off as usize + i as usize)))
+        }
+        _ => None,
+    }
+}
+
+/// `ArrGet{repr: OptPrim}` — decode element `i`, minting a fresh opt value
+/// for non-nil (the mint's rc=1 IS the destination's reference).
+#[inline]
+pub(super) fn opt_elem_get(heap: &Heap, cell: &CellVal, i: i64, elem: TypeId) -> Result<Slot, Trap> {
+    match opt_lookup(cell, i) {
+        Some(Ok((d, at))) => match d.opt_raw(at) {
+            Some(raw) => heap.alloc_opt_value(elem, raw),
+            None => Ok(Slot::null()),
+        },
+        Some(Err(t)) => Err(t),
+        None => Err(Trap::new(TrapKind::Invalid, "element get on non-sequence")),
+    }
+}
+
+/// `ArrGet{repr: OptPrimLoad}` (the deref-folded form) — the RAW payload;
+/// a nil tag is the `NilDeref` trap, exactly the `ArrGet + GetF{0}` pair's
+/// behavior minus the mint.
+#[inline]
+pub(super) fn opt_elem_get_load(cell: &CellVal, i: i64) -> Result<Slot, Trap> {
+    match opt_lookup(cell, i) {
+        Some(Ok((d, at))) => match d.opt_raw(at) {
+            Some(raw) => Ok(raw),
+            None => Err(Trap::new(TrapKind::NilDeref, "nil dereference")),
+        },
+        Some(Err(t)) => Err(t),
+        None => Err(Trap::new(TrapKind::Invalid, "element get on non-sequence")),
+    }
+}
+
+/// `ArrSet{repr: OptPrim}` — encode a proper `?prim` value (cell or null)
+/// into the store. Nothing retained; the displaced element is raw bits.
+#[inline]
+pub(super) fn opt_elem_set(cell: &CellVal, i: i64, v: Slot) -> Result<(), Trap> {
+    match opt_lookup_mut(cell, i) {
+        Some(Ok((mut d, at))) => {
+            d.write_opt(at, v);
+            Ok(())
+        }
+        Some(Err(t)) => Err(t),
+        None => Err(Trap::new(TrapKind::Invalid, "element set on non-sequence")),
+    }
+}
+
+/// `ArrSet{repr: OptPrimRaw}` (the MakeOpt-elided form) — store the RAW
+/// payload, some-tag implied. Nothing retained; nothing released.
+#[inline]
+pub(super) fn opt_elem_set_raw(cell: &CellVal, i: i64, raw: Slot) -> Result<(), Trap> {
+    match opt_lookup_mut(cell, i) {
+        Some(Ok((mut d, at))) => {
+            d.write_opt_raw(at, raw);
+            Ok(())
+        }
+        Some(Err(t)) => Err(t),
+        None => Err(Trap::new(TrapKind::Invalid, "element set on non-sequence")),
+    }
+}
+
+/// The write-side resolver: the items run (exclusively borrowed) plus the
+/// absolute element index — same shapes and bounds as [`opt_lookup`].
+fn opt_lookup_mut<'a>(
+    cell: &'a CellVal,
+    i: i64,
+) -> Option<Result<(std::cell::RefMut<'a, crate::heap::ArrData>, usize), Trap>> {
+    match &cell.data {
+        CellData::Array { items, .. } => {
+            let d = items.borrow_mut();
+            if i as u64 >= d.len as u64 {
+                return Some(Err(Trap::new(
+                    TrapKind::IndexOutOfBounds,
+                    format!("array index {i} out of bounds (len {})", d.len),
+                )));
+            }
+            Some(Ok((d, i as usize)))
+        }
+        CellData::ArrView { parent, off, len } => {
+            let p = cell_of(*parent);
+            let CellData::Array { items, .. } = &p.data else {
+                return Some(Err(Trap::new(TrapKind::Invalid, "view over a non-array backing")));
+            };
+            let mut d = items.borrow_mut();
+            if i < 0 || i as u32 >= *len {
+                return Some(Err(Trap::new(
+                    TrapKind::IndexOutOfBounds,
+                    format!("view index {i} out of bounds (len {len})"),
+                )));
+            }
+            Some(Ok((d, *off as usize + i as usize)))
+        }
+        _ => None,
+    }
+}
+
+/// The elem TypeId of the opt-prim backing an element op targets — direct
+/// array (its own elem) or window (the parent's). The mint needs the `?p`
+/// type id to build the fresh opt value.
+pub(super) fn opt_elem_ty(cell: &CellVal) -> Option<TypeId> {
+    match &cell.data {
+        CellData::Array { elem, .. } => Some(*elem),
+        CellData::ArrView { parent, .. } => match &cell_of(*parent).data {
+            CellData::Array { elem, .. } => Some(*elem),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The backing-array cell of a fused field-array access: the record's
+/// array field, or the window object itself (RFC 0042 §6).
+pub(super) fn f_arr_cell(obj_cell: &CellVal, field: u32) -> Result<&CellVal, Trap> {
+    match &obj_cell.data {
+        CellData::Record { fields } => {
+            let arr = fields
+                .borrow()
+                .get(field as usize)
+                .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?;
+            Ok(cell_of(arr))
+        }
+        CellData::ArrView { .. } => Ok(obj_cell),
+        _ => Err(Trap::new(TrapKind::Invalid, "field-array op on non-record")),
+    }
+}

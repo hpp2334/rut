@@ -286,6 +286,23 @@ impl Machine for Vm {
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
         let cell = cell_of(unsafe { *regs.add(*arr as usize) });
+        // the primitive-optional store (RFC 0044 §5): decode; non-nil mints
+        // a fresh opt VALUE whose reference dst takes over
+        if let Repr::OptPrim(_) = repr {
+            let Some(elem) = opt_elem_ty(cell) else {
+                return Err(Trap::new(TrapKind::Invalid, "element get on non-sequence"));
+            };
+            let v = opt_elem_get(&self.heap, cell, i, elem)?;
+            let old = unsafe { *regs.add(*dst as usize) };
+            unsafe { *regs.add(*dst as usize) = v };
+            self.heap.release(old); // no retain — the mint's rc is dst's
+            return Ok(Flow::Next(pc + 1));
+        }
+        if let Repr::OptPrimLoad(_) = repr {
+            let v = opt_elem_get_load(cell, i)?;
+            unsafe { *regs.add(*dst as usize) = v }; // prim dst — no rc
+            return Ok(Flow::Next(pc + 1));
+        }
         let v = seq_get(cell, i)?;
         let old = unsafe { *regs.add(*dst as usize) };
         unsafe { *regs.add(*dst as usize) = v };
@@ -303,6 +320,13 @@ impl Machine for Vm {
         let i = unsafe { (*regs.add(*idx as usize)).i };
         let cell = cell_of(unsafe { *regs.add(*arr as usize) });
         let v = unsafe { *regs.add(*val as usize) };
+        // the primitive-optional store: encode; no rc on either side
+        if let Repr::OptPrim(_) = repr {
+            return opt_elem_set(cell, i, v).map(|_| Flow::Next(pc + 1));
+        }
+        if let Repr::OptPrimRaw(_) = repr {
+            return opt_elem_set_raw(cell, i, v).map(|_| Flow::Next(pc + 1));
+        }
         let old = match window_sets(cell, i, v) {
             Some(r) => r?,
             None => seq_set(cell, i, v)?,
@@ -320,6 +344,24 @@ impl Machine for Vm {
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
         let obj_cell = cell_of(unsafe { *regs.add(*obj as usize) });
+        // the primitive-optional store: resolve the backing, decode/mint
+        if let Repr::OptPrim(_) = repr {
+            let arr_cell = f_arr_cell(obj_cell, *field)?;
+            let Some(elem) = opt_elem_ty(arr_cell) else {
+                return Err(Trap::new(TrapKind::Invalid, "element get on non-sequence"));
+            };
+            let v = opt_elem_get(&self.heap, arr_cell, i, elem)?;
+            let old = unsafe { *regs.add(*dst as usize) };
+            unsafe { *regs.add(*dst as usize) = v };
+            self.heap.release(old);
+            return Ok(Flow::Next(pc + 1));
+        }
+        if let Repr::OptPrimLoad(_) = repr {
+            let arr_cell = f_arr_cell(obj_cell, *field)?;
+            let v = opt_elem_get_load(arr_cell, i)?;
+            unsafe { *regs.add(*dst as usize) = v };
+            return Ok(Flow::Next(pc + 1));
+        }
         let v = match &obj_cell.data {
             // the common case: a Vec record — read its backing array
             CellData::Record { fields } => {
@@ -343,7 +385,6 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-
     fn op_arr_set_f(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::ArrSetF { obj, field, idx, val, repr } = op else {
             unreachable_op!("op_arr_set_f: unexpected op")
@@ -351,6 +392,15 @@ impl Machine for Vm {
         let i = unsafe { (*regs.add(*idx as usize)).i };
         let v = unsafe { *regs.add(*val as usize) };
         let obj_cell = cell_of(unsafe { *regs.add(*obj as usize) });
+        // the primitive-optional store: encode; no rc on either side
+        if let Repr::OptPrim(_) = repr {
+            let arr_cell = f_arr_cell(obj_cell, *field)?;
+            return opt_elem_set(arr_cell, i, v).map(|_| Flow::Next(pc + 1));
+        }
+        if let Repr::OptPrimRaw(_) = repr {
+            let arr_cell = f_arr_cell(obj_cell, *field)?;
+            return opt_elem_set_raw(arr_cell, i, v).map(|_| Flow::Next(pc + 1));
+        }
         let old = match &obj_cell.data {
             // the common case: a Vec record — write its backing array
             CellData::Record { fields } => {

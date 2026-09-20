@@ -146,7 +146,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         TyKind::Bytes => TY_U8,
                         _ => return Err(bad("array op on a non-sequence register".into())),
                     };
-                    if prog.types.repr_of(ety) != *repr {
+                    if !elem_repr_ok(&prog.types, ety, *repr, matches!(op, Op::ArrSet { .. })) {
                         return Err(bad("array op repr does not match the element type".into()));
                     }
                 }
@@ -156,7 +156,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         TyKind::Bytes => TY_U8,
                         _ => return Err(bad("arrnew over a non-array type".into())),
                     };
-                    if prog.types.repr_of(ety) != *repr {
+                    if rut_core::types::arr_elem_repr(&prog.types, ety) != *repr {
                         return Err(bad("arrnew repr does not match the element type".into()));
                     }
                 }
@@ -171,7 +171,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         },
                         _ => return Err(bad("field-array op on a non-record register".into())),
                     };
-                    if prog.types.repr_of(ety) != *repr {
+                    if !elem_repr_ok(&prog.types, ety, *repr, matches!(op, Op::ArrSetF { .. })) {
                         return Err(bad("field-array op repr does not match the element type".into()));
                     }
                 }
@@ -316,6 +316,30 @@ pub fn verify(prog: &Program) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Is `repr` a legal baked element representation for an array op over
+/// elements of type `ety`? Either the plain resolution
+/// (`arr_elem_repr` — the emit sites' choice) or, post-peephole, the
+/// refinement forms with the SAME payload prim: `OptPrimRaw` on stores
+/// (the MakeOpt elision) and `OptPrimLoad` on reads (the deref fold).
+/// A refinement onto a non-`?prim` element, or a payload-prim mismatch,
+/// is a miscompile and must fail verification.
+fn elem_repr_ok(types: &rut_core::types::TypeTable, ety: u32, repr: Repr, is_store: bool) -> bool {
+    if rut_core::types::arr_elem_repr(types, ety) == repr {
+        return true;
+    }
+    let Some(p) = repr.opt_prim() else { return false };
+    let TyKind::Opt { elem } = types.kind(ety) else { return false };
+    let TyKind::Prim(q) = types.kind(*elem) else { return false };
+    if p != *q {
+        return false;
+    }
+    match repr {
+        Repr::OptPrimRaw(_) => is_store,
+        Repr::OptPrimLoad(_) => !is_store,
+        _ => false,
+    }
 }
 
 fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {

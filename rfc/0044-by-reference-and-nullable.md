@@ -167,6 +167,24 @@ The tree packages resyntaxed mechanically; their shapes are now:
   law (hoist scalar field reads; array bindings are O(1) shares).
 - **`nmapset`** (the host-table wrapper): the wrapper got simpler —
   `?V` IS the absence type, so `get` returns the stored cell directly.
+- **The primitive-optional element store** (nmapset-round2 phase 2): a
+  `[?prim]` backing — `pouch`'s `buf: [?T]` for primitive `T` included —
+  stores each element as the raw payload plus a one-byte nil tag
+  (stride `width + 1`, tag last; a zeroed block is all-nil, the
+  RFC 0015 §5 zero word), never as a boxed cell. Element ops bake the
+  new `OptPrim` repr family: the `T → ?T` box at a store is elided
+  (a raw payload write) when the box feeds only the store — sound
+  because a primitive box's identity is unobservable, §3's payload
+  compare — and a read builds a FRESH opt VALUE (value semantics). The
+  release walk collects no children from the raw store: it holds no
+  handles. Reference payloads (`?str`, `?record`, `??T`) keep the cell
+  backing and every law above unchanged. The aliasing scope this
+  creates is explicit, not silent: nmapset's `get -> ?V` one-cell law
+  holds by construction for reference `V` (the stored handle comes
+  back, staleness parity test pins it); for primitive `V` the law is
+  unobservable — values cannot alias, so a read's fresh box is the
+  law's value-semantics reading, and no program can tell the
+  difference.
 
 RFC 0042 §6's array windows lower unchanged, boxed as **`?Vec<T>`**
 via the same `T → ?T` coercion — the window IS the shared cell, so
@@ -196,7 +214,11 @@ under the old law); and the price is visible where primitive elements
 cross a growable sequence's `[?T]` backing per store/load — the
 `array` workload +21% exec, `sieve` +7%. Flat primitive buffers
 (`[i32]`) are untouched; the known lever for the growable case is
-deferred (OQ-1).
+deferred (OQ-1) — and has since PARTIALLY LANDED: the
+primitive-optional element store (nmapset-round2 phase 2, §5) removed
+the per-store box and the stored cells outright, recovering the
+`array` regression (−21.5% same-day A/B) and far exceeding it on
+`sieve` (−72%).
 
 ## 8. Shipped state
 
@@ -206,11 +228,19 @@ deferred (OQ-1).
 - Ops: `MakeOpt` (wire code 89 — the old `MakePtr`'s, unchanged).
   Deleted: `MakePtr` (renamed), `CloneVal`, `MoveVal`, `ArrGetRef`,
   `ValEq`, the `moveval.rs` liveness pass and its peephole rules, the
-  boxed-pointer-array path in slice lowering (`SliceInfo::boxed`).
-- `RefEq` for identity, `StrCmp`/`ArrayCmp` for text content, `NilDeref`
+  boxed-pointer-array path in slice lowering (`SliceInfo::boxed`).- `RefEq` for identity, `StrCmp`/`ArrayCmp` for text content, `NilDeref`
   for the null use, `Nat::BytesClone` for §4.
 - `types.rs` `is_value` answers `false` uniformly — kept as a predicate
   because the VM's deep-copy paths branch on it.
+- **The primitive-optional element store (nmapset-round2 phase 2):**
+  `ArrKind::Opt(PrimTy)` — the raw payload + nil-tag backing, stride
+  `width + 1`, tag byte last; array element ops bake the
+  `Repr::OptPrim` / `OptPrimRaw` (store, post-elision) / `OptPrimLoad`
+  (read, post-deref-fold) forms, wire codes 14–49; the `opt_prim_once`
+  peephole pass performs the store elision and the deref fold; the
+  release walk collects no children from the raw store. Module format
+  **VERSION 6** invalidates v5 caches (stale artifacts carry Ref-repr
+  element ops the new engines must not run on raw stores).
 - Parser: prefix `?` stage only; the `*T`, postfix `T?`, `*x`, `&x`
   arms diagnose and recover as §2.1 quotes.
 - `REMOVED_CORE` rows: `own`, `make_ptr`, `downcast` (moved to the
@@ -225,6 +255,14 @@ deferred (OQ-1).
   regression). A copy-on-write or boxed-only-when-shared element scheme
   is the known lever; deferred — it complicates the release walk for a
   measured, bounded cost.
+  **Partially landed (nmapset-round2 phase 2, §5):** `[?prim]` backings
+  now store raw payloads + nil tags, so the per-STORE box is elided and
+  no stored cell exists; the release walk collects nothing. What
+  remains per-access is the read-side fresh opt value (value semantics
+  requires it); the surviving levers are a native val column
+  (registers holding raw payloads for `?prim`, which would also remove
+  the read mint) and a get-into-set copy fold for rehash/grow
+  relocation loops.
 - OQ-2: `?T` across the host boundary — follow-up if ever needed
   (a non-goal here, §2.4).
 - OQ-3: a content-equality request channel (a user-land `equals`

@@ -1136,6 +1136,124 @@ path.
 No engine, no stdlib, no bench change; `expected.json` untouched;
 tree clean.
 
+## Performance log — nmapset-round2 phase 2: the primitive-optional store (Sep 2026)
+
+The `[?V]` sidecar's raw repr: an array whose element type is `?prim`
+stores each element as the raw payload plus a one-byte nil tag instead
+of a boxed one-slot cell, element ops become repr-keyed raw
+reads/writes, and the module binary VERSION bumps 5 → 6. This is the
+tier the phase-0 ceiling measurement gated on (45.3% ≥ 10%).
+
+**Design, and why it changed shape from the plan's default.** The plan
+offered "interpreter-level branch on store kind OR compile-time
+kind-specialized ops — your judgment per the codebase's op lowering;
+measure if in doubt." Measurement reasoning settled it before a line of
+bench code existed: a read of a `?prim` element MUST build a proper opt
+value in a register (nil is the null slot; raw bits cannot also encode
+nil), so the pure runtime-branch design mints a fresh cell on every
+read (~15-20 ns vs today's ~6 ns retain/release pair). The `array` row
+alone reads `[?i32]` elements ~3 M times — the runtime-branch design
+regresses that row by roughly the very regression this phase is the
+recovery target for, tripping its own stop-point. The compile-time form
+was landed instead: array element ops bake a new `Repr::OptPrim`
+family, and one new fixed-point peephole pass performs two local folds
+that remove the box from the hot path entirely —
+
+- **store elision**: `makeopt d, v` feeding only the adjacent
+  `arrset{repr: optprim}` is folded to `arrset{repr: optprimraw, val:
+  v}` — the store writes the raw payload; the box never exists (sound
+  because a primitive box's identity is unobservable, RFC 0044 §3's
+  payload-compare law). The phase-0 dump's `makeopt r57, r10; arrset
+  r54, r13, r57 :12` sequence is now a single `arrset .. :33`.
+- **deref fold**: `arrget{repr: optprim}` feeding only the adjacent
+  `getf d, r, f0` (the exact pair the RFC 0044 auto-deref emits)
+  becomes one `arrget{repr: optprimload}` — the payload comes straight
+  out of the raw store, a nil tag still traps `NilDeref`, and the
+  fresh opt value is never minted.
+
+**Repr + heap repr.** `ArrKind::Opt(PrimTy)`: stride `payload width +
+1`, tag byte LAST, one fixed-stride region — every block-size
+computation rides `width()` unchanged, payload and tag share a cache
+line for ≤7-byte payloads, and a zeroed block is all-nil (the
+`[nil; cap]` memset law, RFC 0015 §5). A nil store also zeroes the
+payload, so raw-byte views of the block stay deterministic. The
+release walk collects no children from these arrays (the plan's
+"drop/release skips slot release" — this is where the heap high-water
+collapses), `own` copies the raw block, and `array_eq` falls into the
+raw-byte compare (value equality — the determinism rule makes it
+meaningful). Reference payloads (`?str`, `?record`, `??T`) keep the
+cell backing and the `Ref` repr — json/knuc/str-key paths execute
+identical ops (their fuel/heap parity is checked below). Both engines
+route the element ops through shared helpers, and the churn runs the
+threaded dispatch, so the qjs-parity law holds by construction.
+
+| workload         | exec before | exec after | Δ          | fuel before → after     | VM heap before → after    |
+|------------------|-------------|------------|------------|-------------------------|---------------------------|
+| nmapset-int      | 77.59 ms    | 63.19 ms   | **−18.6%** | 21,103,284 → 20,703,284 | 6,082,111 → 1,966,527 B   |
+| nmapset-str      | 56.68 ms    | 53.08 ms   | **−6.4%**  | 9,735,095 → 9,551,761   | 3,041,356 → 983,596 B     |
+| nmap-knucleotide | 202.53 ms   | 177.00 ms  | **−12.6%** | 39,612,955 → 38,814,389 | 12,430,420 → 4,195,060 B  |
+| hashmap-int      | 172.35 ms   | 134.86 ms  | **−21.7%** | 64,758,210 → 63,758,210 | 17,174,663 → 8,258,103 B  |
+| hashmap-str      | 251.18 ms   | 249.97 ms  | −0.5%      | 111,489,939 → 111,306,605 | 10,287,538 → 8,294,322 B |
+| hashset          | 121.58 ms   | 113.22 ms  | **−6.9%**  | 56,230,024 → 55,696,689 | 13,158,071 → 7,832,407 B  |
+| knucleotide      | 952.18 ms   | 925.88 ms  | **−2.8%**  | 418,769,549 → 417,970,983 | 43,516,672 → 35,285,408 B |
+| array            | 267.56 ms   | 210.01 ms  | **−21.5%** | 63,486,108 → 60,486,108 | 40,389,042 → 7,864,540 B  |
+| sieve            | 155.97 ms   | 43.10 ms   | **−72.4%** | 21,167,665 → 19,592,209 | 21,853,906 → 1,491,846 B  |
+| alloc            | 17.46 ms    | 17.31 ms   | −0.9%      | 22,000,020 (identical)  | 228 B (identical)         |
+| json-decode      | 671.5 ms    | 677.9 ms   | +0.9%      | 111,330,118 (identical) | 34,377,147 B (identical)  |
+
+Method: interleaved A/B, both probe binaries built from THIS checkout
+directory (before-source = b5ff868 rebuilt in place, then after-source
+in place; the after binary re-verified byte-identical after a second
+rebuild), nmapset-int at 5 rounds × 7 fresh-VM iters, the rest 5 × 3,
+order alternated per round, medians of round medians. The headline:
+**nmapset-int 77.84 → 63.19 ms against the batch baseline (−18.8%),
+with the sidecar heap collapsing 6.08 MB → 1.97 MB (−68%)** — the
+phase-0 floor (42.57 ms) stays unreachable because a hit-`get` must
+still mint the fresh `?i32` it returns; the win is the box and the
+stored-cell traffic, exactly where finding 0c placed the sidecar cost
+(the fuel delta is only −400 k ops = the deleted `makeopt`s and folded
+loads; the −18.6% is host-side mint/RC/release work fuel never
+counted).
+
+Honest neutrals and the stop-point sweep:
+
+- **nmap-hashset** read +3.0% then +5.9% on consecutive 5×3 passes —
+  the stop-point investigation, in order: the row's fuel AND heap are
+  **bit-identical** (13,267,176 / 503 B — `HashSet` has no `vals` at
+  all, the churn executes zero element ops); a powered 7×9 pass read
+  +3.2%; and a **rebuild of the same after source read +0.3%** — the
+  delta tracks the BUILD, not the source, the same build-placement
+  artifact the crossing-fastpath close-out documented. Recorded as
+  NEUTRAL with layout jitter (±2-3% on a cache-miss-bound host row);
+  not a regression the change can own.
+- **json-decode** +0.9% with bit-identical fuel/heap — inside the ±1%
+  parity band this row's history already established (+0.4% phase 2,
+  −1.0% close-out). **alloc** −0.9%, likewise bit-identical — parity.
+- Every row whose fuel/heap MOVED moved in the direction the change
+  predicts (raw stores delete `makeopt`s and cell traffic exactly where
+  `[?prim]` backings exist — including the pure-rut `mapset` twins,
+  which inherit the store for free through `pouch`/`mapset`'s own
+  `vals: [?V]` / `Vec<T>.buf`). `hashmap-str`'s −0.5% time with a −2 MB
+  heap reads honestly as: the row is str-key dominated, the sidecar win
+  is real but small.
+
+Stop-point (§0.5): **not triggered** — the only candidate (nmap-hashset)
+was investigated and attributed to build placement by the rebuild test;
+no row regressed beyond noise on its measurement with an op-stream
+delta that could own it.
+
+Deviations, recorded: (1) the design is the plan's compile-time option
+(repr-keyed ops + two peephole folds), not the default runtime-branch —
+rationale above, and the shape change is recorded in the commit body
+per the batch rules; (2) `[T]` non-optional primitives did NOT ride the
+new store — their existing packed kinds already store raw payloads with
+no nil tag to represent, and nothing fell out naturally; (3) the
+get-into-set copy fold (relocation drains, `Vec` grow loops) was NOT
+attempted — it needs a composite element-copy op; recorded as the
+surviving follow-up alongside the native val column. `expected.json`
+untouched; workspace green (74 committed suites + the new 11-test
+`opt_prim_store` driver suite); tree clean.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may

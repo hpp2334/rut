@@ -15,6 +15,7 @@
 
 use super::Pools;
 use rut_core::ops::*;
+use rut_core::types::Repr;
 use std::collections::HashMap;
 
 /// Run the peephole to a fixed point on one function.
@@ -34,7 +35,10 @@ pub(crate) fn run(
         let (c, s, changed3) = fuse_once(code, spans, &mut pools);
         code = c;
         spans = s;
-        if !changed && !changed2 && !changed3 {
+        let (c, s, changed4) = opt_prim_once(code, spans, &mut pools);
+        code = c;
+        spans = s;
+        if !changed && !changed2 && !changed3 && !changed4 {
             break;
         }
     }
@@ -263,6 +267,173 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
             removed[pc] = true;
             replace.insert(pc + 1, op);
         }
+    }
+    if !removed.iter().any(|&b| b) {
+        return (code, spans, false);
+    }
+    let mut kept = vec![false; n];
+    let mut new_code = Vec::with_capacity(n);
+    for (pc, op) in code.iter().enumerate() {
+        if removed[pc] {
+            continue;
+        }
+        kept[pc] = true;
+        new_code.push(replace.remove(&pc).unwrap_or_else(|| op.clone()));
+    }
+    let mut old_to_new = vec![0u32; n + 1];
+    let mut c = 0u32;
+    for pc in 0..n {
+        old_to_new[pc] = c;
+        if kept[pc] {
+            c += 1;
+        }
+    }
+    old_to_new[n] = c;
+    for op in new_code.iter_mut() {
+        match op {
+            Op::Jmp { target } => *target = old_to_new[(*target as usize).min(n)],
+            Op::Br { then_t, else_t, .. } => {
+                *then_t = old_to_new[(*then_t as usize).min(n)];
+                *else_t = old_to_new[(*else_t as usize).min(n)];
+            }
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms.iter_mut() {
+                    *t = old_to_new[(*t as usize).min(n)];
+                }
+                *default = old_to_new[(*default as usize).min(n)];
+            }
+            _ => {}
+        }
+    }
+    let mut new_spans = Vec::with_capacity(spans.len());
+    for (pc, lo) in spans {
+        let pc = pc as usize;
+        if pc < n && kept[pc] {
+            new_spans.push((old_to_new[pc], lo));
+        }
+    }
+    (new_code, new_spans, true)
+}
+
+/// The primitive-optional element folds (RFC 0044 §5, the primitive-store
+/// tier): local rewrites on `[?prim]` backing stores that remove the box the
+/// `T → ?T` coercion and the auto-deref would otherwise mint per element
+/// access. Both folds are two-op local windows with the same safety shape as
+/// `fuse_once`/`forward_once` (single-use temp, same straight-line run, no
+/// jump targets), so control flow never crosses a rewritten pair.
+///
+/// 1. store elision — `makeopt d, v; arrset[a/f] .., d ..optprim` where `d`
+///    feeds only the store becomes `arrset[a/f] .., v ..optprimraw`: the
+///    store writes the raw payload, the box never exists. Sound because a
+///    primitive-optional box's identity is unobservable (RFC 0044 §3: `?T ==
+///    ?T` compares payloads, and the raw store is value semantics by law).
+/// 2. deref fold — `arrget[a/f] d, .. ..optprim; getf u, d, 0 ..prim` (the
+///    exact pair the auto-deref emits) becomes one
+///    `arrget[a/f] u, .. ..optprimload`: the payload is read straight out of
+///    the raw store, a nil tag still traps `NilDeref`, and the fresh opt
+///    value is never minted.
+fn opt_prim_once(mut code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+    let n = code.len();
+    if n < 2 {
+        return (code, spans, false);
+    }
+    let mut reads: HashMap<u16, Vec<usize>> = HashMap::new();
+    let mut writes: HashMap<u16, Vec<usize>> = HashMap::new();
+    for (pc, op) in code.iter().enumerate() {
+        let (d, u) = def_use(op, &pools.argv);
+        for r in d {
+            writes.entry(r).or_default().push(pc);
+        }
+        for r in u {
+            reads.entry(r).or_default().push(pc);
+        }
+    }
+    let mut is_target = vec![false; n + 1];
+    for op in &code {
+        match op {
+            Op::Jmp { target } => mark(&mut is_target, *target, n),
+            Op::Br { then_t, else_t, .. } => {
+                mark(&mut is_target, *then_t, n);
+                mark(&mut is_target, *else_t, n);
+            }
+            Op::BrTable { table_off, count, default, .. } => {
+                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+                for t in arms {
+                    mark(&mut is_target, *t, n);
+                }
+                mark(&mut is_target, *default, n);
+            }
+            _ => {}
+        }
+    }
+    let mut removed = vec![false; n];
+    let mut replace: HashMap<usize, Op> = HashMap::new();
+    for pc in 0..n - 1 {
+        if is_target[pc] || is_target[pc + 1] {
+            continue;
+        }
+        // 1. store elision: makeopt + adjacent optprim store
+        if let Op::MakeOpt { dst, src, .. } = &code[pc] {
+            let (d, s) = (*dst, *src);
+            if writes.get(&d).map_or(true, |w| w.len() != 1 || w[0] != pc) {
+                continue;
+            }
+            if reads.get(&d).map_or(true, |r| r.len() != 1 || r[0] != pc + 1) {
+                continue;
+            }
+            let folded = match &code[pc + 1] {
+                Op::ArrSet { arr, idx, val, repr: Repr::OptPrim(p) } if *val == d => {
+                    Some(Op::ArrSet { arr: *arr, idx: *idx, val: s, repr: Repr::OptPrimRaw(*p) })
+                }
+                Op::ArrSetF { obj, field, idx, val, repr: Repr::OptPrim(p) } if *val == d => {
+                    Some(Op::ArrSetF { obj: *obj, field: *field, idx: *idx, val: s, repr: Repr::OptPrimRaw(*p) })
+                }
+                _ => None,
+            };
+            if let Some(op) = folded {
+                removed[pc] = true;
+                replace.insert(pc + 1, op);
+            }
+            continue;
+        }
+        // 2. deref fold: optprim element read + adjacent field-0 payload read
+        let (t, p) = match &code[pc] {
+            Op::ArrGet { dst: t, repr: Repr::OptPrim(p), .. } => (*t, *p),
+            Op::ArrGetF { dst: t, repr: Repr::OptPrim(p), .. } => (*t, *p),
+            _ => continue,
+        };
+        if writes.get(&t).map_or(true, |w| w.len() != 1 || w[0] != pc) {
+            continue;
+        }
+        if reads.get(&t).map_or(true, |r| r.len() != 1 || r[0] != pc + 1) {
+            continue;
+        }
+        // the consumer must be the payload read (field 0, at the payload's
+        // own prim repr) — the RFC 0044 auto-deref shape
+        let ok = match &code[pc + 1] {
+            Op::GetF { dst: _, obj, field: 0, repr: Repr::Prim(q) } => *obj == t && *q == p,
+            _ => false,
+        };
+        if !ok {
+            continue;
+        }
+        let Op::GetF { dst: u, .. } = code[pc + 1] else { unreachable!() };
+        // the producer becomes the load form, pointing at the deref's dst:
+        // the raw payload comes straight out of the store, a nil tag still
+        // traps NilDeref, and the fresh opt value is never minted
+        match &mut code[pc] {
+            Op::ArrGet { dst, repr, .. } => {
+                *dst = u;
+                *repr = Repr::OptPrimLoad(p);
+            }
+            Op::ArrGetF { dst, repr, .. } => {
+                *dst = u;
+                *repr = Repr::OptPrimLoad(p);
+            }
+            _ => unreachable!("shape checked above"),
+        }
+        removed[pc + 1] = true;
     }
     if !removed.iter().any(|&b| b) {
         return (code, spans, false);

@@ -51,6 +51,18 @@ impl PrimTy {
             _ => return None,
         })
     }
+
+    /// Machine payload width in bytes — the primitive-optional element
+    /// store's payload region rides this (RFC 0044 §5), as does the
+    /// packed-array kind table in the VM heap.
+    pub fn width(self) -> usize {
+        match self {
+            PrimTy::U8 | PrimTy::I8 | PrimTy::Bool => 1,
+            PrimTy::U16 | PrimTy::I16 => 2,
+            PrimTy::U32 | PrimTy::I32 | PrimTy::F32 | PrimTy::Char => 4,
+            PrimTy::U64 | PrimTy::I64 | PrimTy::F64 => 8,
+        }
+    }
 }
 
 /// Compact runtime representation of a value, resolved from its static
@@ -63,19 +75,44 @@ pub enum Repr {
     Prim(PrimTy),
     Ref,
     Any,
+    /// Array-element representation of a `[?prim]` backing (the
+    /// primitive-optional store): the element lives in the block as a raw
+    /// payload plus a nil tag — never as a cell. `ArrGet` yields a FRESH opt
+    /// value (a minted one-slot cell the destination register owns);
+    /// `ArrSet` takes a proper `?prim` value (cell or null) and encodes it
+    /// into the raw store. No slot of this repr is retained or released by
+    /// the element ops (RFC 0044 §5, the primitive-store tier).
+    OptPrim(PrimTy),
+    /// `ArrSet` form after the MakeOpt elision: `val` holds the RAW payload
+    /// (the some-tag is implied by the op). The peephole folds
+    /// `MakeOpt + ArrSet{OptPrim}` into this when the box feeds only the
+    /// store — the box's identity is unobservable for a primitive payload
+    /// (RFC 0044 §3: `?T == ?T` compares payloads).
+    OptPrimRaw(PrimTy),
+    /// `ArrGet` form after the deref fold: yields the RAW payload directly,
+    /// with the nil tag trapping `NilDeref` — exactly the behavior of the
+    /// `ArrGet + GetF{field 0}` pair it replaces, minus the mint.
+    OptPrimLoad(PrimTy),
 }
 
+/// Wire-code bases for the opt-prim element forms: `base + PrimTy::to_u8`.
 impl Repr {
     /// Wire codes for the non-primitive variants (primitive codes come from
     /// `PrimTy::to_u8`).
     pub const REF_CODE: u8 = 12;
     pub const ANY_CODE: u8 = 13;
+    const OPT_PRIM_BASE: u8 = 14;
+    const OPT_PRIM_RAW_BASE: u8 = 26;
+    const OPT_PRIM_LOAD_BASE: u8 = 38;
 
     pub fn to_u8(self) -> u8 {
         match self {
             Repr::Prim(p) => p.to_u8(),
             Repr::Ref => Self::REF_CODE,
             Repr::Any => Self::ANY_CODE,
+            Repr::OptPrim(p) => Self::OPT_PRIM_BASE + p.to_u8(),
+            Repr::OptPrimRaw(p) => Self::OPT_PRIM_RAW_BASE + p.to_u8(),
+            Repr::OptPrimLoad(p) => Self::OPT_PRIM_LOAD_BASE + p.to_u8(),
         }
     }
 
@@ -83,14 +120,51 @@ impl Repr {
         match b {
             Self::REF_CODE => Some(Repr::Ref),
             Self::ANY_CODE => Some(Repr::Any),
+            _ if (Self::OPT_PRIM_BASE..Self::OPT_PRIM_RAW_BASE).contains(&b) => {
+                PrimTy::from_u8(b - Self::OPT_PRIM_BASE).map(Repr::OptPrim)
+            }
+            _ if (Self::OPT_PRIM_RAW_BASE..Self::OPT_PRIM_LOAD_BASE).contains(&b) => {
+                PrimTy::from_u8(b - Self::OPT_PRIM_RAW_BASE).map(Repr::OptPrimRaw)
+            }
+            _ if b >= Self::OPT_PRIM_LOAD_BASE => {
+                PrimTy::from_u8(b - Self::OPT_PRIM_LOAD_BASE).map(Repr::OptPrimLoad)
+            }
             _ => PrimTy::from_u8(b).map(Repr::Prim),
         }
     }
 
     /// True when a slot of this representation is a retained cell handle.
+    /// The opt-prim element forms are NOT: the raw store holds payloads and
+    /// tags, and the ops that carry these reprs own their (non-)rc discipline
+    /// explicitly.
     pub fn is_ref(self) -> bool {
         matches!(self, Repr::Ref)
     }
+
+    /// The primitive payload of an opt-prim element form, if this is one.
+    pub fn opt_prim(self) -> Option<PrimTy> {
+        match self {
+            Repr::OptPrim(p) | Repr::OptPrimRaw(p) | Repr::OptPrimLoad(p) => Some(p),
+            _ => None,
+        }
+    }
+}
+
+/// The element representation an ARRAY op bakes for `elem` (RFC 0044 §5,
+/// the primitive-store tier): a `[?prim]` backing stores raw payloads + nil
+/// tags, so its element ops carry the `OptPrim` form; every other element
+/// keeps the plain `repr_of` (reference payloads stay cell-backed slots).
+/// The verifier checks array-op reprs against THIS resolution, and the
+/// deref-fold/elision peepholes may further refine GETs to `OptPrimLoad` and
+/// SETs to `OptPrimRaw` (same payload prim — the verifier accepts the
+/// refinement, never a payload change).
+pub fn arr_elem_repr(table: &TypeTable, elem: TypeId) -> Repr {
+    if let TyKind::Opt { elem: inner } = table.kind(elem) {
+        if let TyKind::Prim(p) = table.kind(*inner) {
+            return Repr::OptPrim(*p);
+        }
+    }
+    table.repr_of(elem)
 }
 
 #[derive(Clone, Debug, PartialEq)]

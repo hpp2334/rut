@@ -406,7 +406,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let len = self.last_reg;
         let aty = self.ctx.mk_array(elem);
         let dst = self.new_reg(aty);
-        self.emit(Op::ArrNew { dst, ty: aty, len, repr: self.ctx.types.repr_of(elem) }, sp.lo);
+        self.emit(Op::ArrNew { dst, ty: aty, len, repr: rut_core::types::arr_elem_repr(&self.ctx.types, elem) }, sp.lo);
         // a `nil` fill IS the zero-fill — ArrNew alone is the memset. Any
         // all-zero literal is too (0, 0u64, 0u8, false, 0.0): the block
         // arrives zeroed, so the fill loop would rewrite zero with zero
@@ -430,7 +430,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.emit(cmpop(CmpOp::Lt, PrimTy::I32, more, idx, len), sp.lo);
         self.br(more, l_body, l_end);
         self.bind(l_body);
-        let repr = self.ctx.types.repr_of(elem);
+        let repr = rut_core::types::arr_elem_repr(&self.ctx.types, elem);
         self.emit(Op::ArrSet { arr: dst, idx, val, repr }, sp.lo);
         let next = self.new_reg(TY_I32);
         self.emit(arith(ArithOp::Add, PrimTy::I32, next, idx, one), sp.lo);

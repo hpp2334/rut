@@ -124,11 +124,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// `s[i]` — element read; the VM bounds-traps. The shared slot comes
     /// out as-is (RFC 0044): a `?T` element yields its handle, and every
-    /// use auto-derefs.
+    /// use auto-derefs. A `[?prim]` backing carries the primitive-optional
+    /// element repr (the raw payload + nil-tag store): the read mints a
+    /// fresh opt value (value semantics), and the deref-fold peephole may
+    /// refine it to `OptPrimLoad` when the only use is the payload read.
     pub(crate) fn emit_slice_get(&mut self, recv: u16, idx: u16, info: &SliceInfo, sp: u32) -> TcResult<u16> {
         match &info.source {
             SliceSource::Array => {
-                let repr = self.ctx.types.repr_of(info.elem);
+                let repr = rut_core::types::arr_elem_repr(&self.ctx.types, info.elem);
                 let dst = self.new_reg(info.elem);
                 self.emit(Op::ArrGet { dst, arr: recv, idx, repr }, sp);
                 Ok(dst)
@@ -151,7 +154,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let buf_ty = info.array_ty(self.ctx);
                 let buf = self.new_reg(buf_ty);
                 self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
-                let repr = self.ctx.types.repr_of(info.elem);
+                let repr = rut_core::types::arr_elem_repr(&self.ctx.types, info.elem);
                 let dst = self.new_reg(info.elem);
                 self.emit(Op::ArrGet { dst, arr: buf, idx, repr }, sp);
                 Ok(dst)
@@ -161,11 +164,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// `s[i] = val` — element write. Only the concrete `Array`/`Vec` path
     /// has a mutable element; `str`/`bytes` and the read-only `Iter`
-    /// contract do not.
+    /// contract do not. A `[?prim]` backing encodes the stored `?prim`
+    /// value into the raw payload + nil tag (no rc on either side).
     pub(crate) fn emit_slice_set(&mut self, recv: u16, idx: u16, val: u16, info: &SliceInfo, sp: u32) -> TcResult<()> {
         match &info.source {
             SliceSource::Array => {
-                let repr = self.ctx.types.repr_of(info.elem);
+                let repr = rut_core::types::arr_elem_repr(&self.ctx.types, info.elem);
                 self.emit(Op::ArrSet { arr: recv, idx, val, repr }, sp);
                 Ok(())
             }
@@ -177,7 +181,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let buf_ty = info.array_ty(self.ctx);
                 let buf = self.new_reg(buf_ty);
                 self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
-                let repr = self.ctx.types.repr_of(info.elem);
+                let repr = rut_core::types::arr_elem_repr(&self.ctx.types, info.elem);
                 self.emit(Op::ArrSet { arr: buf, idx, val, repr }, sp);
                 Ok(())
             }

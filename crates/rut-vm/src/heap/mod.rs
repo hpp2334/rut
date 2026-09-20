@@ -295,11 +295,32 @@ impl Heap {
         let block = self.arena.blocks.alloc(w * n);
         let cap = (self.arena.blocks.cap_of(block) / w) as u32;
         let mut d = ArrData::new(kind, block, cap);
-        for s in items {
-            d.push(s, &self.arena.blocks);
+        if matches!(kind, ArrKind::Opt(_)) {
+            // the primitive-optional store DECLINES the incoming references:
+            // each element is encoded to raw payload + tag and the box it
+            // arrived as is released (the literal's argv slots transferred
+            // their reference to the array — the raw store cannot hold it)
+            for s in items {
+                d.push(s, &self.arena.blocks);
+                if !unsafe { s.r.is_null() } {
+                    self.release(s);
+                }
+            }
+        } else {
+            for s in items {
+                d.push(s, &self.arena.blocks);
+            }
         }
         let bytes = (n as u64) * w as u64;
         self.mint(0, CellData::Array { elem, items: RefCell::new(d) }, bytes)
+    }
+
+    pub fn alloc_opt_value(&self, opt_ty: TypeId, raw: Slot) -> Result<Slot, Trap> {
+        let c = self.alloc_record_zeroed(opt_ty, 1)?;
+        if let CellData::Record { fields } = &cell_of(c).data {
+            fields.borrow_mut().set(0, raw);
+        }
+        Ok(c)
     }
 
     pub fn alloc_record(&self, ty: TypeId, fields: Vec<Slot>) -> Result<Slot, Trap> {
@@ -452,6 +473,25 @@ impl Heap {
                 let cell = cell_of(s);
                 if let CellData::Array { items, .. } = &cell.data {
                     let src = items.borrow();
+                    // the primitive-optional store copies as raw bytes
+                    // (payload + nil tags): it holds no handles, so the
+                    // copy is a block memcpy — value semantics by law.
+                    if let Some(p) = src.opt_kind() {
+                        let n = src.len();
+                        let src_block = src.block;
+                        let w = p.width() + 1;
+                        drop(src);
+                        let dst = self.alloc_array_filled(elem, n, Slot::null(), table)?;
+                        if let CellData::Array { items: dout, .. } = &cell_of(dst).data {
+                            let db = dout.borrow_mut();
+                            if n > 0 {
+                                unsafe {
+                                    std::ptr::copy_nonoverlapping(src_block, db.block, n * w);
+                                }
+                            }
+                        }
+                        return Ok(dst);
+                    }
                     let mut out = Vec::with_capacity(src.len());
                     for i in 0..src.len() {
                         if let Some(it) = src.get(i) {

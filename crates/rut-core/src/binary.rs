@@ -386,10 +386,12 @@ impl Program {
 // ---- encoding ----
 
 pub const MAGIC: &[u8; 4] = b"RUTC";
-/// v5: the by-reference flip (RFC 0044) — `CloneVal`/`MoveVal`/`ValEq`/
-/// `ArrGetRef` are gone, `MakePtr` is renamed `MakeOpt` (wire code 89
-/// unchanged); stale v4 caches are invalidated
-pub const VERSION: u32 = 5;
+/// v6: the primitive-optional element store (`[?prim]` arrays hold raw
+/// payloads + nil tags, RFC 0044 §5) — array element ops bake the new
+/// `OptPrim`/`OptPrimRaw`/`OptPrimLoad` repr codes; stale v5 artifacts carry
+/// Ref-repr element ops the new engines must not run on raw stores, and are
+/// rejected with the standard version error
+pub const VERSION: u32 = 6;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();

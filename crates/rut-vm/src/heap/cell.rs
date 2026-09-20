@@ -107,6 +107,17 @@ impl Slots {
 /// into a `Slot`. One fixed-size cell field replaces the ten typed
 /// `Vec` variants the enum used to have — the kind tag is what varied,
 /// the storage was Rust's.
+///
+/// `Opt(p)` is the primitive-optional store (RFC 0044 §5): a `[?p]`
+/// backing holds each element as the raw `p` payload plus a one-byte nil
+/// tag — stride `p.width() + 1`, the tag byte last, so one fixed-stride
+/// region serves payload and tags and every block-size computation rides
+/// `width()` unchanged. No element is a cell handle: nil is the tag (a
+/// zeroed block is all-nil, cohering with RFC 0015 §5's nil-is-the-zero
+/// word), and a nil store also zeroes the payload so raw-byte views of
+/// the block stay deterministic. The release walk contributes no
+/// children for these arrays, and reads mint a fresh opt VALUE
+/// (value semantics — see `Heap::alloc_opt_value`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ArrKind {
     Slots,
@@ -119,6 +130,7 @@ pub enum ArrKind {
     F32,
     Char,
     Bool,
+    Opt(PrimTy),
 }
 
 impl ArrKind {
@@ -138,17 +150,24 @@ impl ArrKind {
             TyKind::Prim(PrimTy::F32) => ArrKind::F32,
             TyKind::Prim(PrimTy::Char) => ArrKind::Char,
             TyKind::Prim(PrimTy::Bool) => ArrKind::Bool,
+            // the primitive-optional store: `?prim` elements ride the raw
+            // payload + nil tag; `?str`/`?record`/`??T` keep cell slots
+            TyKind::Opt { elem } => match table.kind(*elem) {
+                TyKind::Prim(p) => ArrKind::Opt(*p),
+                _ => ArrKind::Slots,
+            },
             _ => ArrKind::Slots,
         }
     }
 
-    /// Bytes per element.
+    /// Bytes per element. The opt store strides payload + tag.
     pub fn width(self) -> usize {
         match self {
             ArrKind::U8 | ArrKind::I8 | ArrKind::Bool => 1,
             ArrKind::U16 | ArrKind::I16 => 2,
             ArrKind::U32 | ArrKind::I32 | ArrKind::F32 | ArrKind::Char => 4,
             ArrKind::Slots => 8,
+            ArrKind::Opt(p) => p.width() + 1,
         }
     }
 }
@@ -199,7 +218,56 @@ impl ArrData {
             ArrKind::F32 => Slot::float(unsafe { std::ptr::read_unaligned(p as *const f32) } as f64),
             ArrKind::Char => Slot::ch(char::from_u32(unsafe { std::ptr::read_unaligned(p as *const u32) }).unwrap_or('\0')),
             ArrKind::Bool => Slot::bool(unsafe { *(p as *const u8) } != 0),
+            // the primitive-optional store: the generic slot decode yields
+            // the null slot for nil, the RAW payload for some. This raw form
+            // serves the block-level paths (raw copies, raw compares); the
+            // interpreter's element ops decode through `read_opt_raw` +
+            // `Heap::alloc_opt_value` instead, so a proper `?prim` value
+            // (a cell) is minted per read and the raw bits never masquerade
+            // as a cell handle in a ref-typed register.
+            ArrKind::Opt(p) => {
+                let w = p.width();
+                let e = unsafe { self.block.add(i * self.width()) };
+                if unsafe { *e.add(w) } == 0 {
+                    Slot::null()
+                } else {
+                    Self::prim_payload(e, p)
+                }
+            }
         }
+    }
+
+    /// The RAW payload of an `Opt(p)` element at `e` (the element's stride
+    /// base), decoded as its prim slot.
+    #[inline]
+    fn prim_payload(e: *const u8, p: PrimTy) -> Slot {
+        let q = e as *const Slot;
+        unsafe {
+            match p {
+                PrimTy::U8 => Slot::int(*e as i64),
+                PrimTy::I8 => Slot::int(*(e as *const i8) as i64),
+                PrimTy::U16 => Slot::int(std::ptr::read_unaligned(e as *const u16) as i64),
+                PrimTy::I16 => Slot::int(std::ptr::read_unaligned(e as *const i16) as i64),
+                PrimTy::U32 => Slot::int(std::ptr::read_unaligned(e as *const u32) as i64),
+                PrimTy::I32 => Slot::int(std::ptr::read_unaligned(e as *const i32) as i64),
+                PrimTy::U64 | PrimTy::I64 => Slot::int(std::ptr::read_unaligned(q as *const i64)),
+                PrimTy::F32 => Slot::float(std::ptr::read_unaligned(e as *const f32) as f64),
+                PrimTy::F64 => Slot::float(std::ptr::read_unaligned(q as *const f64)),
+                PrimTy::Bool => Slot::bool(*e != 0),
+                PrimTy::Char => Slot::ch(char::from_u32(std::ptr::read_unaligned(e as *const u32)).unwrap_or('\0')),
+            }
+        }
+    }
+
+    /// The nil tag of element `i` of the primitive-optional store.
+    #[inline]
+    fn opt_tag(&self, i: usize) -> bool {
+        debug_assert!(matches!(self.kind, ArrKind::Opt(_)));
+        let w = match self.kind {
+            ArrKind::Opt(p) => p.width(),
+            _ => 0,
+        };
+        unsafe { *self.block.add(i * self.width() + w) != 0 }
     }
 
     #[inline]
@@ -217,6 +285,35 @@ impl ArrData {
                 ArrKind::F32 => std::ptr::write_unaligned(p as *mut f32, unsafe { s.f } as f32),
                 ArrKind::Char => std::ptr::write_unaligned(p as *mut u32, s.as_char() as u32),
                 ArrKind::Bool => *(p as *mut u8) = s.as_bool() as u8,
+                // the primitive-optional store ENCODES the incoming proper
+                // `?prim` value (cell or null): nil stores tag 0 (payload
+                // zeroed — determinism for raw-byte views), some stores the
+                // payload's bits plus tag 1. The box itself is never stored;
+                // nothing here retains or releases.
+                ArrKind::Opt(pt) => {
+                    let w = pt.width();
+                    let e = self.block.add(i * self.width());
+                    if unsafe { s.r.is_null() } {
+                        std::ptr::write_bytes(e, 0, w + 1);
+                    } else {
+                        let raw = cell_of(s).record_get(0).unwrap_or(Slot::int(0));
+                        let q = e as *mut Slot;
+                        match pt {
+                            PrimTy::U8 => *(e) = unsafe { raw.i } as u8,
+                            PrimTy::I8 => *(e as *mut i8) = unsafe { raw.i } as i8,
+                            PrimTy::U16 => std::ptr::write_unaligned(e as *mut u16, unsafe { raw.i } as u16),
+                            PrimTy::I16 => std::ptr::write_unaligned(e as *mut i16, unsafe { raw.i } as i16),
+                            PrimTy::U32 => std::ptr::write_unaligned(e as *mut u32, unsafe { raw.i } as u32),
+                            PrimTy::I32 => std::ptr::write_unaligned(e as *mut i32, unsafe { raw.i } as i32),
+                            PrimTy::U64 | PrimTy::I64 => std::ptr::write_unaligned(q as *mut i64, unsafe { raw.i }),
+                            PrimTy::F32 => std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32),
+                            PrimTy::F64 => std::ptr::write_unaligned(q as *mut f64, raw.as_f64()),
+                            PrimTy::Bool => *e = raw.as_bool() as u8,
+                            PrimTy::Char => std::ptr::write_unaligned(e as *mut u32, raw.as_char() as u32),
+                        }
+                        *e.add(w) = 1;
+                    }
+                }
             }
         }
     }
@@ -231,16 +328,22 @@ impl ArrData {
 
     /// Direct element read with no bounds check — the caller guarantees
     /// `i < len` (the `seq_get` fast path folds negative + overflow into
-    /// ONE unsigned compare before calling this).
+    /// ONE unsigned compare before calling this). Never routed for a
+    /// primitive-optional store: its raw payload must not masquerade as a
+    /// `?prim` value in a register (the element ops decode through
+    /// `opt_raw` + `Heap::alloc_opt_value`).
     #[inline]
     pub(crate) unsafe fn read_unchecked(&self, i: usize) -> Slot {
+        debug_assert!(!matches!(self.kind, ArrKind::Opt(_)), "read_unchecked on the opt store — decode through opt_raw");
         self.slot_at(i)
     }
 
     /// Direct element write with no bounds check — same contract as
-    /// `read_unchecked`; returns the displaced element.
+    /// `read_unchecked`; returns the displaced element. Never routed for a
+    /// primitive-optional store (`write_opt`/`write_opt_raw` encode there).
     #[inline]
     pub(crate) unsafe fn write_unchecked(&mut self, i: usize, s: Slot) -> Slot {
+        debug_assert!(!matches!(self.kind, ArrKind::Opt(_)), "write_unchecked on the opt store — encode through write_opt");
         let old = self.slot_at(i);
         self.write_slot(i, s);
         old
@@ -253,6 +356,71 @@ impl ArrData {
         let old = self.slot_at(i);
         self.write_slot(i, s);
         Some(old)
+    }
+
+    // ---- the primitive-optional store (`ArrKind::Opt`, RFC 0044 §5) ----
+    //
+    // The element ops decode/encode through these; the displaced value of a
+    // write is raw bits and is intentionally NOT returned as a Slot — a raw
+    // store holds no handles, so there is nothing to release.
+
+    /// Raw payload decode: `None` = the element is nil.
+    #[inline]
+    pub fn opt_raw(&self, i: usize) -> Option<Slot> {
+        let p = match self.kind {
+            ArrKind::Opt(p) => p,
+            _ => return None,
+        };
+        if !self.opt_tag(i) {
+            return None;
+        }
+        let e = unsafe { self.block.add(i * self.width()) };
+        Some(ArrData::prim_payload(e, p))
+    }
+
+    /// Encode a proper `?prim` value (cell or null) into element `i`.
+    #[inline]
+    pub fn write_opt(&mut self, i: usize, v: Slot) {
+        debug_assert!(matches!(self.kind, ArrKind::Opt(_)));
+        self.write_slot(i, v);
+    }
+
+    /// Store a RAW payload into element `i` — the some-tag implied form the
+    /// MakeOpt elision bakes into `ArrSet{repr: OptPrimRaw}`.
+    #[inline]
+    pub fn write_opt_raw(&mut self, i: usize, raw: Slot) {
+        let (w, e) = match self.kind {
+            ArrKind::Opt(p) => (p.width(), unsafe { self.block.add(i * self.width()) }),
+            _ => return,
+        };
+        let q = e as *mut Slot;
+        unsafe {
+            match self.kind {
+                ArrKind::Opt(PrimTy::U8) => *e = unsafe { raw.i } as u8,
+                ArrKind::Opt(PrimTy::I8) => *(e as *mut i8) = unsafe { raw.i } as i8,
+                ArrKind::Opt(PrimTy::U16) => std::ptr::write_unaligned(e as *mut u16, unsafe { raw.i } as u16),
+                ArrKind::Opt(PrimTy::I16) => std::ptr::write_unaligned(e as *mut i16, unsafe { raw.i } as i16),
+                ArrKind::Opt(PrimTy::U32) => std::ptr::write_unaligned(e as *mut u32, unsafe { raw.i } as u32),
+                ArrKind::Opt(PrimTy::I32) => std::ptr::write_unaligned(e as *mut i32, unsafe { raw.i } as i32),
+                ArrKind::Opt(PrimTy::U64) | ArrKind::Opt(PrimTy::I64) => {
+                    std::ptr::write_unaligned(q as *mut i64, unsafe { raw.i })
+                }
+                ArrKind::Opt(PrimTy::F32) => std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32),
+                ArrKind::Opt(PrimTy::F64) => std::ptr::write_unaligned(q as *mut f64, raw.as_f64()),
+                ArrKind::Opt(PrimTy::Bool) => *e = raw.as_bool() as u8,
+                ArrKind::Opt(PrimTy::Char) => std::ptr::write_unaligned(e as *mut u32, raw.as_char() as u32),
+                _ => {}
+            }
+            *e.add(w) = 1;
+        }
+    }
+
+    /// The array's prim-optional element kind, if it has one.
+    pub fn opt_kind(&self) -> Option<PrimTy> {
+        match self.kind {
+            ArrKind::Opt(p) => Some(p),
+            _ => None,
+        }
     }
 
     /// Append during construction. Growth needs the block store, which

@@ -30,6 +30,23 @@ impl Vm {
     pub(super) fn op_arr_get(&mut self, dst: Reg, arr: Reg, idx: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
+        // the primitive-optional store (RFC 0044 §5): decode the raw
+        // element; non-nil mints a fresh opt VALUE whose reference passes
+        // to dst — release the displaced value, retain nothing.
+        if let Repr::OptPrim(_) = repr {
+            let Some(elem) = opt_elem_ty(cell) else {
+                return Err(Trap::new(TrapKind::Invalid, "element get on non-sequence"));
+            };
+            let v = opt_elem_get(&self.heap, cell, i, elem)?;
+            return self.store_dst_ref(dst, v, true);
+        }
+        // the deref-folded load form: the RAW payload out, nil tag traps
+        if let Repr::OptPrimLoad(_) = repr {
+            let v = opt_elem_get_load(cell, i)?;
+            // dst is a prim register (the payload's own type) — no rc
+            self.cur_regs[dst as usize] = v;
+            return Ok(());
+        }
         let v = seq_get(cell, i)?;
         let old = self.cur_regs[dst as usize];
         self.cur_regs[dst as usize] = v;
@@ -40,12 +57,35 @@ impl Vm {
         Ok(())
     }
 
+    /// Store `v` into a ref-typed dst register. `owned = true` marks a value
+    /// whose reference the dst TAKES OVER (the fresh opt mint) — only the
+    /// displaced value releases; `owned = false` retains first (the shared
+    /// handle law).
+    #[inline(always)]
+    fn store_dst_ref(&mut self, dst: Reg, v: Slot, owned: bool) -> Result<(), Trap> {
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = v;
+        if !owned {
+            self.heap.retain(v);
+        }
+        self.heap.release(old);
+        Ok(())
+    }
+
     /// `ArrSet` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
     pub(super) fn op_arr_set(&mut self, arr: Reg, idx: Reg, val: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
         let v = self.cur_regs[val as usize];
+        // the primitive-optional store: encode into the raw element; no rc
+        // on either side (the displaced element is raw bits)
+        if let Repr::OptPrim(_) = repr {
+            return opt_elem_set(cell, i, v);
+        }
+        if let Repr::OptPrimRaw(_) = repr {
+            return opt_elem_set_raw(cell, i, v);
+        }
         let old = match window_sets(cell, i, v) {
             Some(r) => r?,
             None => seq_set(cell, i, v)?,
@@ -63,6 +103,23 @@ impl Vm {
     pub(super) fn op_arr_get_f(&mut self, dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let obj_cell = cell_of(self.cur_regs[obj as usize]);
+        // the primitive-optional store: resolve the backing (the record's
+        // array field, or the window itself), then the same decode/mint law
+        // as `op_arr_get`
+        if let Repr::OptPrim(_) = repr {
+            let arr_cell = f_arr_cell(obj_cell, field)?;
+            let Some(elem) = opt_elem_ty(arr_cell) else {
+                return Err(Trap::new(TrapKind::Invalid, "element get on non-sequence"));
+            };
+            let v = opt_elem_get(&self.heap, arr_cell, i, elem)?;
+            return self.store_dst_ref(dst, v, true);
+        }
+        if let Repr::OptPrimLoad(_) = repr {
+            let arr_cell = f_arr_cell(obj_cell, field)?;
+            let v = opt_elem_get_load(arr_cell, i)?;
+            self.cur_regs[dst as usize] = v; // prim dst — no rc
+            return Ok(());
+        }
         let v = match &obj_cell.data {
             // the common case: a Vec record — read its backing array
             CellData::Record { fields } => {
@@ -91,17 +148,27 @@ impl Vm {
     pub(super) fn op_arr_set_f(&mut self, obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let v = self.cur_regs[val as usize];
-        let arr = {
-            let obj_cell = cell_of(self.cur_regs[obj as usize]);
-            match &obj_cell.data {
-                CellData::Record { fields } => fields
+        let obj_cell = cell_of(self.cur_regs[obj as usize]);
+        // the primitive-optional store: encode; no rc on either side
+        if let Repr::OptPrim(_) = repr {
+            let arr_cell = f_arr_cell(obj_cell, field)?;
+            return opt_elem_set(arr_cell, i, v);
+        }
+        if let Repr::OptPrimRaw(_) = repr {
+            let arr_cell = f_arr_cell(obj_cell, field)?;
+            return opt_elem_set_raw(arr_cell, i, v);
+        }
+        let old = match &obj_cell.data {
+            // the common case: a Vec record — write its backing array
+            CellData::Record { fields } => {
+                let arr = fields
                     .borrow()
                     .get(field as usize)
-                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
-                _ => return Err(Trap::new(TrapKind::Invalid, "field-array set on non-record")),
+                    .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?;
+                seq_set(cell_of(arr), i, v)?
             }
+            _ => return Err(Trap::new(TrapKind::Invalid, "field-array set on non-record")),
         };
-        let old = seq_set(cell_of(arr), i, v)?;
         if repr.is_ref() {
             self.heap.retain(v);
             self.heap.release(old);

@@ -7,7 +7,7 @@
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
 use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, CellData, Heap, Slot, Trap, TrapKind, Value};
+use crate::heap::{cell_of, CellData, CellVal, Heap, Slot, Trap, TrapKind, Value};
 use crate::arena::OpaqueRef;
 use rut_core::ops::*;
 use rut_core::types::{

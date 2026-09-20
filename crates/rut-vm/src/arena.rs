@@ -256,9 +256,14 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
         CellData::Array { elem, items } => {
             // the ELEMENT type decides: a `Vec<str>`'s slots are cell handles
             // (slot-width elements). Handles are COPIED out — the block is
-            // freed by the caller right after.
-            if plan.is_ref.get(*elem as usize).copied().unwrap_or(false) {
-                let d = items.borrow();
+            // freed by the caller right after. The primitive-optional store
+            // (`ArrKind::Opt`) holds raw payloads + nil tags — no handles —
+            // so it contributes no children (reading its bytes as slots
+            // would hand raw payload bits to the release walk).
+            let d = items.borrow();
+            if !matches!(d.kind, crate::heap::ArrKind::Opt(_))
+                && plan.is_ref.get(*elem as usize).copied().unwrap_or(false)
+            {
                 out.extend(d.to_slots());
             }
         }
