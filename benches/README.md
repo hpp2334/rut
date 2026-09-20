@@ -1106,6 +1106,36 @@ strictly stronger on layout isolation; (3) the IR dumps came from a
 scratch driver test, deleted after capture (untracked; the committed
 tree is this README section only).
 
+## Performance log — nmapset-round2 phase 1: devirt skipped (Sep 2026)
+
+Docs-only record of a skip, per the batch's one-commit-per-phase rule.
+Phase 1 (devirtualize sealed trait impls) was conditional on finding 0a
+showing indirect dispatch at instantiated body-compile; it shows the
+opposite, so there is nothing to build — this note plus an observation
+line in RFC 0031 is the entire phase.
+
+Why the lever is dead: the wrapper never reaches the binary as a
+dispatch point. `HashMap.put/get/has/remove` are source-inlined (the
+pkg is `inline = true`) and monomorphized per instantiation, the
+tiny-body splicer then inlines the `KeyLane` impl bodies, and the
+bench row's churn is one 389-op function whose `k.nentry(self.t)` is a
+direct `call` onto the host lane slot (`map_entry_i`; `get`/`has` →
+`map_find_i`, `remove` → `map_remove_i`). Zero `CallI` trait-vtable
+ops in the program; trait dispatch is **0% of the row's fuel**
+(finding 0c). Per-instantiation compilation (RFC 0031 §2) already
+devirtualizes private-trait calls — one step past what a
+devirtualization pass would produce, since the wrapper frame is gone
+along with the vtable hop.
+
+Observed artifact, recorded and deliberately left alone (out of
+scope): the 33 compiled `nentry/nfind/nremove` impl bodies
+(11 key types × 3) are dead code under instantiation — nothing
+references them; they serve the general, non-instantiated compile
+path.
+
+No engine, no stdlib, no bench change; `expected.json` untouched;
+tree clean.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may

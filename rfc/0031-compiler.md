@@ -120,6 +120,14 @@ Rules that bound the cost of the two lattice-lowering features:
 1. **Trait-typed values** (`I`, RFC 0012): one indirect call per multi-origin use;
    fields inaccessible; callee unknown (no inlining without evidence). Cost is
    per-call, never per-field — the vtable makes it a single load+jump.
+   Measured consequence (nmapset-round2 phase 0, commit b015720): rule 1's
+   cost is paid only where the receiver stays trait-typed. A private-trait
+   (sealed impl set — impls can only live in the defining module) method
+   call on a receiver whose concrete type is known inlines/monomorphizes
+   at instantiated body-compile; dispatch overhead is zero. IR dump of a
+   `HashMap<i64, i64>` bench consumer: the `KeyLane` wrapper spliced
+   fully into the instantiated body (one 389-op function), every lane
+   call a direct call — zero indirect trait-vtable ops in the program.
 2. **`Opaque` + `downcast`** (RFC 0014): erasure is a hole in the
    lattice, but a *scoped* one:
    - the `downcast` check is the refinement — the `is_some()` branch
