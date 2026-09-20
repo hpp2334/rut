@@ -426,6 +426,40 @@ call_args!(A1, A2, A3, A4, A5, A6, A7, A8);
 /// for borrows — and the handler bound is HRTB over `'a`, so a borrowed
 /// param cannot outlive its call: the type system blocks smuggling
 /// (RFC 0023 §2).
+///
+/// The read is SPLIT (the crossing-fastpath plan, phase 1):
+///
+/// - [`HostParam::read`] is the **unchecked fast lane** — raw slot-bit
+///   reads for prims, no `expect_kind`, no `narrow_i64`, no string
+///   compare. It is what the host-fn entry adapters
+///   ([`handler_fallible!`]/[`handler_infallible!`], the `HostSlot` code
+///   pointers — the rut→host hot lane) call, and its only callers.
+/// - [`HostParam::read_checked`] is the historical **checked read** —
+///   `expect_kind` (the declared type's kind lookup + string-compare
+///   match) plus the `narrow_i64` range check, then the same read. It is
+///   off the hot path; it stays for embedder-path / debug verification
+///   where the caller cannot claim the guarantees below.
+///
+/// SAFETY (`read`): calling it with a slot that does not hold the
+/// declared repr is undefined (a prim read reinterprets the bits). The
+/// adapters may skip the re-verification because the shape was CHECKED
+/// ONCE, upstream of every call:
+///
+/// - the join verified the binding's `TY` against the mounted `.d.rut`
+///   row before the Vm boots (`HostRegistry::verify_against`, RFC 0025 —
+///   a panic, so a host fn can only be dispatched under the row its own
+///   Rust shape derived);
+/// - the checker typed every rut call site against that same row, so
+///   each argument slot holds the declared repr — the same trust
+///   `Slot::as_f64` runs on (RFC 0015 §5, "the verifier guarantees
+///   registers hold their declared types");
+/// - embedder-shaped input never reaches the slots unchecked: `Vm::call`
+///   runs `value_in` (kind + range) before the slots exist.
+///
+/// What `read` KEEPS guards genuinely dynamic facts only (plan §0.3):
+/// the nil check on ref params (the transitive `??T` coercion funnel
+/// leaves "nil cannot reach here" unproven), the cell-kind match on
+/// borrows (that IS the read), and the owned `String`/`Vec<u8>` copy.
 pub(crate) trait HostParam {
     const TY: TypeId;
     type Repr<'a>;
@@ -433,8 +467,17 @@ pub(crate) trait HostParam {
     /// host-call scope — the snapshot slots are copies of the call's arg
     /// registers (which own their references), the arena never moves
     /// cells (RFC 0016 OQ-1), and the borrowable crossing types are
-    /// immutable. Nothing else may outlive the call.
+    /// immutable. Nothing else may outlive the call. See the trait doc
+    /// for the checked-once contract that lets the adapters skip
+    /// re-verification.
     unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap>;
+    /// The checked twin: the pre-phase-1 read, semantics and trap
+    /// messages preserved (`expect_kind` + `narrow_i64` + read). Not on
+    /// the rut→host hot path — the adapters read through [`HostParam::read`].
+    /// Deliberately kept OFF the hot path (the fast_lane_tests exercise
+    /// it as the debug verifier); embedder marshalling is `Ret::from_slot`.
+    #[allow(dead_code)] // the debug/embedder-verification twin — see doc
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap>;
 }
 
 macro_rules! param_prim {
@@ -442,7 +485,15 @@ macro_rules! param_prim {
         impl HostParam for $t {
             const TY: TypeId = $ty;
             type Repr<'a> = $t;
-            unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+            // FAST LANE: the slot's bits ARE the value. `expect_kind` was
+            // a tautology here (boot type $ty always has kind Prim($ty) —
+            // the join proved the row matches at boot) and `narrow_i64`
+            // re-proved what the checker already proved at the call site;
+            // `as` reinterprets the raw word, it never ranges-traps.
+            unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+                Ok(unsafe { slot.i } as $t)
+            }
+            unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
                 expect_kind(vm, slot, $ty, $name)?;
                 Ok(narrow_i64::<$t>(unsafe { slot.i }, $name)?)
             }
@@ -464,7 +515,10 @@ param_prim!(u32, "u32", TY_U32);
 impl HostParam for u64 {
     const TY: TypeId = TY_U64;
     type Repr<'a> = u64;
-    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        Ok(unsafe { slot.i } as u64)
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         expect_kind(vm, slot, TY_U64, "u64")?;
         Ok(unsafe { slot.i } as u64)
     }
@@ -473,7 +527,10 @@ impl HostParam for u64 {
 impl HostParam for f64 {
     const TY: TypeId = TY_F64;
     type Repr<'a> = f64;
-    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        Ok(slot.as_f64()) // the raw union read (RFC 0015 §5 trust)
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         expect_kind(vm, slot, TY_F64, "f64")?;
         Ok(slot.as_f64())
     }
@@ -482,7 +539,10 @@ impl HostParam for f64 {
 impl HostParam for f32 {
     const TY: TypeId = TY_F32;
     type Repr<'a> = f32;
-    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        Ok(slot.as_f64() as f32)
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         expect_kind(vm, slot, TY_F32, "f32")?;
         Ok(slot.as_f64() as f32)
     }
@@ -491,7 +551,10 @@ impl HostParam for f32 {
 impl HostParam for bool {
     const TY: TypeId = TY_BOOL;
     type Repr<'a> = bool;
-    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        Ok(slot.as_bool()) // the slot's 0/1 word
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         expect_kind(vm, slot, TY_BOOL, "bool")?;
         Ok(slot.as_bool())
     }
@@ -500,7 +563,10 @@ impl HostParam for bool {
 impl HostParam for char {
     const TY: TypeId = TY_CHAR;
     type Repr<'a> = char;
-    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        Ok(slot.as_char())
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         expect_kind(vm, slot, TY_CHAR, "char")?;
         Ok(slot.as_char())
     }
@@ -509,13 +575,20 @@ impl HostParam for char {
 impl HostParam for OpaqueRef {
     const TY: TypeId = TY_OPAQUE;
     type Repr<'a> = OpaqueRef;
+    // FAST LANE + the one genuinely dynamic fact (plan §0.3): the nil
+    // check STAYS — the transitive `??T` coercion funnel leaves "nil
+    // cannot reach here" unproven. `expect_kind` (the Opaque-kind
+    // lookup) is gone: the join pinned TY_OPAQUE to the row at boot.
     unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        expect_kind(vm, slot, TY_OPAQUE, "OpaqueRef")?;
         let p = unsafe { slot.r };
         if p.is_null() {
             return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueRef`"));
         }
         Ok(vm.heap.opaque_handle(p)) // the bump is the handle's own count
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_OPAQUE, "OpaqueRef")?;
+        Self::read(vm, slot)
     }
 }
 
@@ -524,13 +597,19 @@ impl HostParam for OpaqueRef {
 impl<T: 'static> HostParam for OpaqueBox<T> {
     const TY: TypeId = TY_OPAQUE;
     type Repr<'a> = OpaqueBox<T>;
+    // FAST LANE + nil check (as `OpaqueRef`); `from_handle`'s payload
+    // type token stays — it guards the Rust-side `T`, which no .d.rut
+    // row can speak for.
     unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        expect_kind(vm, slot, TY_OPAQUE, "OpaqueBox")?;
         let p = unsafe { slot.r };
         if p.is_null() {
             return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueBox`"));
         }
         OpaqueBox::from_handle(&vm.heap.opaque_handle(p))
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_OPAQUE, "OpaqueBox")?;
+        Self::read(vm, slot)
     }
 }
 
@@ -539,10 +618,16 @@ impl<T: 'static> HostParam for OpaqueBox<T> {
 impl HostParam for &str {
     const TY: TypeId = TY_STR;
     type Repr<'a> = &'a str;
+    // FAST LANE unchanged by phase 1: this read never had `expect_kind`
+    // — the `as_str` cell-kind match IS the read (the dynamic fact, plan
+    // §0.3), and a wrong-shaped cell degrades to the empty view, never UB.
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let s = cell_of(slot).as_str();
         // SAFETY: arg-register retention + non-moving arena + immutability
         Ok(unsafe { std::mem::transmute::<&str, &'a str>(s) })
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        Self::read(vm, slot) // the historical read: the cell-kind match, nothing more
     }
 }
 
@@ -550,10 +635,15 @@ impl HostParam for &str {
 impl HostParam for &[u8] {
     const TY: TypeId = TY_BYTES;
     type Repr<'a> = &'a [u8];
+    // FAST LANE unchanged by phase 1 — as `&str`: the `bytes_view`
+    // cell-kind match IS the read.
     unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let b = bytes_view(slot);
         // SAFETY: as `&str` — the bytes block outlives the call
         Ok(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(b) })
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        Self::read(vm, slot)
     }
 }
 
@@ -561,9 +651,15 @@ impl HostParam for &[u8] {
 impl HostParam for String {
     const TY: TypeId = TY_STR;
     type Repr<'a> = String;
-    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        expect_kind(vm, slot, TY_STR, "String")?;
+    // FAST LANE: the copy IS the read (plan §0.3 keeps the copy); the
+    // `expect_kind` string-compare in front of it is gone — the join +
+    // checker guarantee the cell, and `as_str` is kind-matched anyway.
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(cell_of(slot).as_str().to_string())
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_STR, "String")?;
+        Self::read(vm, slot)
     }
 }
 
@@ -571,9 +667,13 @@ impl HostParam for String {
 impl HostParam for Vec<u8> {
     const TY: TypeId = TY_BYTES;
     type Repr<'a> = Vec<u8>;
-    unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        expect_kind(vm, slot, TY_BYTES, "Vec<u8>")?;
+    // FAST LANE: as `String` — the copy stays, the kind re-check leaves.
+    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         Ok(cell_of(slot).bytes_copy())
+    }
+    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
+        expect_kind(vm, slot, TY_BYTES, "Vec<u8>")?;
+        Self::read(vm, slot)
     }
 }
 
@@ -607,6 +707,9 @@ macro_rules! handler_fallible {
                 let f = unsafe { &mut *(ctx as *mut F) };
                 let mut run = || -> Result<R, Trap> {
                     let mut i = 0usize;
+                    // params through the unchecked fast lane (`read`):
+                    // the join verified the sig (RFC 0025), the checker
+                    // typed the site — no per-call re-verification
                     $( let $n = unsafe { $n::read(vm, slots[i]) }?; i += 1; )*
                     f(vm, $($n,)*)
                 };
@@ -635,6 +738,8 @@ macro_rules! handler_infallible {
                 let f = unsafe { &mut *(ctx as *mut F) };
                 let out = {
                     let mut i = 0usize;
+                    // params through the unchecked fast lane (`read`) —
+                    // as the fallible impl above
                     $( let $n = match unsafe { $n::read(vm, slots[i]) } {
                         Ok(a) => a,
                         Err(t) => return vm.trap_taken(t),
@@ -701,4 +806,183 @@ macro_rules! register {
     ($hosts:expr, $name:literal, ($($t:ty),* $(,)?), $closure:expr $(,)?) => {
         $hosts.register::<_, ($($t,)*), _, _>($name, $closure)
     };
+}
+
+// ---- the fast lane's own tests (the crossing-fastpath plan, phase 1):
+// the adapters' `read` drops the static re-verification, so these pin
+// what REMAINS — nil ref traps, the borrows' cell-kind match, the owned
+// copies, the prim bit-fidelity — and the fast/checked split itself ----
+
+#[cfg(test)]
+mod fast_lane_tests {
+    use super::*;
+    use std::rc::Rc;
+
+    /// A bare Vm: the fast `read` never touches the program tables (that
+    /// is the point), so an empty program serves every test here. The
+    /// boot types table is installed anyway — the CHECKED twin resolves
+    /// `expect_kind` through it, which is exactly the work the fast lane
+    /// skips.
+    fn bare_vm() -> Vm {
+        let mut prog = rut_core::binary::Program::default();
+        prog.types = rut_core::types::TypeTable::boot();
+        Vm::new(Rc::new(prog), &Limits::default(), HostHooks::default(), HostRegistry::new())
+            .expect("bare vm")
+    }
+
+    /// Drive the adapter itself (the HostSlot code pointer shape): box
+    /// the body, call its `entry` with the given snapshot. `F` solves
+    /// the fallibility marker, so both adapter families get exercised.
+    fn entry_of<F, P, R, K>(vm: &mut Vm, f: F, slots: &[Slot]) -> Slot
+    where
+        F: HostHandler<(P,), R, K>,
+    {
+        let boxed = Box::new(f);
+        let ctx = &*boxed as *const F as crate::interp::host::Ctx;
+        std::mem::forget(boxed); // test-scoped leak: ctx must stay live
+        F::entry(vm, slots, ctx)
+    }
+
+    #[test]
+    fn prim_params_round_trip_their_bits_through_the_fast_lane() {
+        let vm = bare_vm();
+        // every int width, at its extremes — `as` reinterpret, no narrow
+        unsafe {
+            assert_eq!(<i8 as HostParam>::read(&vm, Slot::int(i8::MIN as i64)).unwrap(), i8::MIN);
+            assert_eq!(<u8 as HostParam>::read(&vm, Slot::int(255)).unwrap(), 255u8);
+            assert_eq!(<u32 as HostParam>::read(&vm, Slot::int(u32::MAX as i64)).unwrap(), u32::MAX);
+            // u64: the raw-bit read — 2^63..2^64-1 keep their bits
+            for bits in [1i64 << 63, (1i64 << 63) + 12345, -2, -1] {
+                assert_eq!(<u64 as HostParam>::read(&vm, Slot::int(bits)).unwrap(), bits as u64);
+            }
+            assert_eq!(<u64 as HostParam>::read(&vm, Slot::int(-1)).unwrap(), u64::MAX);
+            // floats/bool/char: the raw union reads
+            assert_eq!(<f64 as HostParam>::read(&vm, Slot::float(-0.5)).unwrap(), -0.5);
+            assert_eq!(<bool as HostParam>::read(&vm, Slot::bool(true)).unwrap(), true);
+            assert_eq!(<char as HostParam>::read(&vm, Slot::ch('λ')).unwrap(), 'λ');
+        }
+    }
+
+    #[test]
+    fn the_checked_twin_still_range_checks_where_the_fast_lane_reinterprets() {
+        let vm = bare_vm();
+        // 300 does not fit i8: the fast lane reinterprets (the join +
+        // checker make that sound on the hot path), the checked twin
+        // traps — the split, demonstrated on one slot
+        let s = Slot::int(300);
+        unsafe {
+            assert_eq!(<i8 as HostParam>::read(&vm, s).unwrap(), 44i8);
+            let err = <i8 as HostParam>::read_checked(&vm, s).unwrap_err();
+            assert!(err.msg.contains("does not fit"), "{}", err.msg);
+            // the checked twin preserves the historical semantics where
+            // they differed from nothing: u64 never narrows
+            assert_eq!(<u64 as HostParam>::read_checked(&vm, Slot::int(-1)).unwrap(), u64::MAX);
+        }
+    }
+
+    /// `unwrap_err` for `Repr`s without `Debug` (the handle/box shapes)
+    fn err_of<T>(r: Result<T, Trap>) -> Trap {
+        match r {
+            Ok(_) => panic!("expected a trap, got Ok"),
+            Err(t) => t,
+        }
+    }
+
+    #[test]
+    fn a_nil_ref_param_still_traps() {
+        let vm = bare_vm();
+        unsafe {
+            let err = err_of(<OpaqueRef as HostParam>::read(&vm, Slot::null()));
+            assert_eq!(err.kind, TrapKind::NilDeref, "{}", err.msg);
+            assert!(err.msg.contains("nil does not bind `OpaqueRef`"), "{}", err.msg);
+            let err = err_of(<OpaqueBox<u64> as HostParam>::read(&vm, Slot::null()));
+            assert_eq!(err.kind, TrapKind::NilDeref, "{}", err.msg);
+        }
+    }
+
+    #[test]
+    fn the_nil_trap_fires_through_both_adapters() {
+        // the full entry shape: fallible AND infallible bodies, one nil
+        // snapshot slot — the macro plumbing reports the fast read's Err
+        fn fallible_body(_vm: &mut Vm, _b: OpaqueRef) -> Result<i64, Trap> {
+            Ok(1)
+        }
+        fn infallible_body(_vm: &mut Vm, _b: OpaqueRef) -> i64 {
+            1
+        }
+        let mut vm = bare_vm();
+        let out = entry_of::<_, OpaqueRef, i64, Fallible>(&mut vm, fallible_body, &[Slot::null()]);
+        let t = vm.host_trap.take().expect("fallible adapter reports the nil");
+        assert_eq!(t.kind, TrapKind::NilDeref, "{}", t.msg);
+        let _ = out;
+        let out = entry_of::<_, OpaqueRef, i64, Infallible>(&mut vm, infallible_body, &[Slot::null()]);
+        let t = vm.host_trap.take().expect("infallible adapter reports the nil");
+        assert_eq!(t.kind, TrapKind::NilDeref, "{}", t.msg);
+        let _ = out;
+    }
+
+    #[test]
+    fn the_adapters_cross_a_prim_through_the_fast_lane() {
+        fn fallible_id(_vm: &mut Vm, x: i64) -> Result<i64, Trap> {
+            Ok(x)
+        }
+        fn infallible_id(_vm: &mut Vm, x: i64) -> i64 {
+            x
+        }
+        let mut vm = bare_vm();
+        let out = entry_of::<_, i64, i64, Fallible>(&mut vm, fallible_id, &[Slot::int(-404)]);
+        assert!(vm.host_trap.is_none());
+        assert_eq!(unsafe { out.i }, -404);
+        let out = entry_of::<_, i64, i64, Infallible>(&mut vm, infallible_id, &[Slot::int(i64::MIN)]);
+        assert!(vm.host_trap.is_none());
+        assert_eq!(unsafe { out.i }, i64::MIN);
+    }
+
+    #[test]
+    fn borrow_reads_keep_their_cell_kind_match() {
+        let mut vm = bare_vm();
+        // &[u8] over a str cell: `bytes_view`'s Str branch — the octets,
+        // not UB, not a reinterpret
+        let s = vm.heap.alloc_str("hello".into()).unwrap();
+        unsafe {
+            let b = <&[u8] as HostParam>::read(&vm, s).unwrap();
+            assert_eq!(b, b"hello");
+        }
+        // &str over a bytes cell: `as_str` degrades to the empty view —
+        // the kind match IS the guard, exactly the pre-phase-1 behavior
+        let bytes = vm.heap.alloc_bytes(vec![9u8, 8, 7]).unwrap();
+        unsafe {
+            let v = <&str as HostParam>::read(&vm, bytes).unwrap();
+            assert_eq!(v, "");
+            let b = <&[u8] as HostParam>::read(&vm, bytes).unwrap();
+            assert_eq!(b, &[9u8, 8, 7]);
+        }
+    }
+
+    #[test]
+    fn owned_params_keep_their_copies() {
+        let mut vm = bare_vm();
+        let s = vm.heap.alloc_str("ada".into()).unwrap();
+        let bytes = vm.heap.alloc_bytes(vec![9u8, 8, 7]).unwrap();
+        unsafe {
+            // the copy IS the read: str → String, bytes → Vec<u8>
+            assert_eq!(<String as HostParam>::read(&vm, s).unwrap(), "ada");
+            assert_eq!(<Vec<u8> as HostParam>::read(&vm, bytes).unwrap(), vec![9u8, 8, 7]);
+        }
+    }
+
+    #[test]
+    fn the_box_payload_token_still_traps_on_a_wrong_t() {
+        let mut vm = bare_vm();
+        let boxed = crate::heap::OpaqueBox::alloc(&mut vm, 7i64).expect("alloc");
+        let slot = Slot { r: boxed.handle().ptr() };
+        // the fast read keeps `from_handle`'s type-token check — a wrong
+        // `T` is a trap, never a reinterpret
+        unsafe {
+            let err = err_of(<OpaqueBox<u64> as HostParam>::read(&vm, slot));
+            assert!(err.msg.contains("not `u64`"), "{}", err.msg);
+            let ok = <OpaqueBox<i64> as HostParam>::read(&vm, slot).unwrap();
+            assert_eq!(ok.with(|v| *v).unwrap(), 7i64);
+        }
+    }
 }

@@ -661,6 +661,96 @@ Baseline readings, per the plan's model:
   log) — phases 1-2 should re-run the same clones same-day when they
   claim their deltas.
 
+## Performance log — the host-param fast lane: checked-once reads (Sep 2026)
+
+Phase 1 of the crossing-fastpath batch. The host-fn entry adapters (the
+`HostSlot` code pointers — the rut→host hot lane, shared by both interp
+engines) now read params through an **unchecked fast lane**
+(`HostParam::read`, `crates/rut-vm/src/interp/boundary.rs`): prim
+params are raw slot-bit reads — `slot.i` reinterpret + cast, u64 keeps
+its raw-bit read, floats/bool/char the raw union reads — and the
+per-param `expect_kind` (a `types.kind()` lookup + string-compare match
+chain re-verifying that boot type TY_U8 has kind Prim(U8), a tautology
+the join already proved), the `narrow_i64` range check (the checker
+already proved the fit at the call site), and the string compares are
+GONE. What stayed guards genuinely dynamic facts only: the nil check on
+`OpaqueRef`/`OpaqueBox<T>` params (the transitive `??T` coercion funnel
+leaves "nil cannot reach here" unproven), the cell-kind match on
+`&str`/`&[u8]` (that IS the read), and the owned `String`/`Vec<u8>`
+copies. The historical checked read stays in-source as
+`HostParam::read_checked` (semantics and trap messages preserved) for
+debug verification; embedder marshalling (`Vm::call`, `value_in`,
+`Ret::from_slot`) keeps every check — that input is Rust-shaped and
+`value_in` checks it before slots exist. The SAFETY case is in-source:
+the join verified the binding against the mounted `.d.rut` row
+(`verify_against`, RFC 0025, pre-boot panic) and the checker typed the
+call site against the same row, so the shape was **checked once**,
+upstream of every call. No `.d.rut` surface change, no repr change, no
+version bump.
+
+Same-day interleaved A/B on the segment clones (baseline commit
+ae6ceb4's binary vs the fast-lane build, 5 rounds × 9 fresh-VM probe
+iters per binary per segment, median of round medians — the method the
+baseline section prescribes; the recorded phase-0 befores reproduce
+within 0.6 ms: A 23.98→23.83, B 18.24→18.36, A4 48.88→48.60, B4
+27.42→27.39):
+
+| segment           | exec before | exec after | Δ         | per call        |
+|-------------------|-------------|------------|-----------|-----------------|
+| A  — host nop     | 23.83 ms    | 19.19 ms   | **−19.7%**| 12.0 → 9.6 ns   |
+| B  — inline nop   | 18.36 ms    | 18.27 ms   | −0.5%     | 9.1 ns (floor)  |
+| A4 — host nop4    | 48.60 ms    | 31.80 ms   | **−34.7%**| 24.4 → 15.9 ns  |
+| B4 — inline nop4  | 27.39 ms    | 27.38 ms   | −0.04%    | 13.7 ns (floor) |
+
+The crossing reads (A−B, and the per-param slope), before → after:
+
+- **(A−B) @1 param**: +2.73 → **+0.46 ns/crossing** (5.47 → 0.92 ms
+  per 2M calls).
+- **(A4−B4) @4 params**: +10.61 → **+2.21 ns/crossing** (21.21 → 4.42
+  ms per 2M).
+- **per-param slope**: +2.62 → **+0.58 ns/param** — the
+  `expect_kind`+`narrow_i64` package the plan targeted is gone; what
+  remains is the `call_host` frame package (the `Rc::clone` borrow
+  split and the `is_ref(slot.ret)` write-back lookup), which is phase
+  2's.
+
+The committed row (all four loops; B/B4 are half of it, so NET is
+nearly flat and exec is the honest comparator): rut exec 118.0 →
+96.8 ms (−18%), net 121.3 → 121.1 ms, fuel 104,000,032 and VM heap
+236 B **bit-identical** (pure host-side work; the op stream cannot
+move). Checksum `20000014000000` equal on rut/qjs/node.
+
+Downstream rows, same-day interleaved probe A/B (base binary vs
+fast-lane build, 3 rounds × 5 iters; the crossing pays once per host
+op, so these should all be same-or-faster):
+
+| workload    | exec before | exec after | Δ      |
+|-------------|-------------|------------|--------|
+| nmapset-int | 95.2 ms     | 89.6 ms    | −5.8%  |
+| nmapset-str | 60.7 ms     | 58.4 ms    | −3.7%  |
+| json-decode | 674.6 ms    | 657.2 ms   | −2.6%  |
+| nmap-hashset| 42.9 ms     | 39.7 ms    | **−7.5%**|
+
+Honest note on nmap-hashset: a first 3-round pass measured it +3.7%
+(43.6 vs 42.0) — a dedicated 5-round × 7-iter pass flipped it to −7.5%
+(39.7 vs 43.0, round medians 38.8-39.9 vs 42.3-45.3, fuel
+13,267,176 bit-identical both directions); the +3.7% was jitter on a
+±2 ms row, and the powered run is the record. No row regressed on its
+powered measurement — **stop-point (§0.5) not triggered**, and the
+inline floors B/B4 moving −0.5%/−0.04% rules out a global codegen
+layout effect.
+
+Full suite after: all 26 rows checksum-equal to `expected.json` on
+rut/qjs/node (exit 0, every row `yes yes`). Tests: the boundary suite
+gained `fast_lane_tests` (prim bit-fidelity incl. the u64 high half
+through `entry`, the nil trap through BOTH adapter families, the
+box payload-token trap, the borrow kind match, the owned copies, and
+the fast/checked split demonstrated on one slot — 300 crosses as
+`44i8` unchecked and traps "does not fit" checked), plus the
+`rut-cli` `fastlane` driver tests over a real `.d.rut` pkg
+(`tests/data/fastlane`): end-to-end round-trips, borrow/owned shapes,
+and the embedder wrong-shape traps unchanged.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may

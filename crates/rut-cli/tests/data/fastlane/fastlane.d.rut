@@ -1,0 +1,20 @@
+// fastlane/fastlane.d.rut — the fast-lane test surface (the
+// crossing-fastpath plan, phase 1): one identity per prim width so the
+// driver round-trips bits through the UNCHECKED host-param read, plus
+// the borrow/owned/ref shapes whose dynamic checks must survive the
+// fast lane. Bodies live in the fastlane.rs test (decl-only pkg, the
+// bench-cross mounting shape).
+
+pub host fn id_i8(x: i8) -> i8;
+pub host fn id_i64(x: i64) -> i64;
+pub host fn id_u64(x: u64) -> u64;
+pub host fn id_f64(x: f64) -> f64;
+pub host fn id_bool(b: bool) -> bool;
+// the borrow — the cell-kind match IS the read
+pub host fn len_str(s: str) -> i64;
+pub host fn sum_bytes(b: bytes) -> i64;
+// the owned copy — "I keep this data"
+pub host fn keep_str(s: str) -> i64;
+pub host fn keep_bytes(b: bytes) -> i64;
+// the return side: the embedder's CHECKED read (Ret::from_slot, untouched)
+pub host fn make_ref() -> opaque;

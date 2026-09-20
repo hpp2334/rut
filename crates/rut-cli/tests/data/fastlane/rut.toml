@@ -1,0 +1,6 @@
+# fastlane/ — the crossing-fastpath phase-1 test fixture: a pure
+# declaration surface; the tests bind the bodies and drive the fast
+# lane end to end. (The bench-cross fixture is the mounting pattern.)
+
+name = "fastlane"
+entry.type = "./fastlane.d.rut"
