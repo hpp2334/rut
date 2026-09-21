@@ -1,0 +1,15 @@
+# refcolumn/ — the refval-exp batch's phase-1 row: the EXPERIMENT. It
+# runs refvals' EXACT op sequence — same keys, same values, same
+# counters, same checksum formula — over the experimental `RefMap` class
+# (the host table's opaque val column) instead of the `HashMap` `[?V]`
+# sidecar. The checksum MUST equal refvals' 140052990000: the one-cell
+# aliasing law carries by construction (the column stores the put-minted
+# box; `get` unwraps it to the live cell; `p.x += 1` writes through), so
+# the row proves the law on the new path before phase 2 measures it.
+# Additive row, reverted with the experiment (plan §0.1/§0.6).
+name = "refcolumn"
+entry.lib = "./main.rut"
+
+[deps]
+nmapset = { path = "../../../rut/nmapset" }
+ink = { path = "../../../rut/ink" }

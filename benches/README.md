@@ -98,6 +98,7 @@ against the reference in `workloads/expected.json`.
 | `kmer-view` | the `nmap-knucleotide` k-mer counting keyed through `nmapset::HashMap`'s **range methods** (strings-round1 phase 2 — the sv lanes: keys cross as borrowed byte windows of the sequence, no key cell minted; see the performance log) | seq = 200 000 | checksum `2198604` — the `nmap-knucleotide` pin; parity is the gate, no separate line |
 | `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
 | `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells, RFC 0044): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the `[?V]` relocation drain). K = i64 holds the hash term constant so the row isolates VALUE-side costs; the refval-exp batch's phase-1 `refcolumn` row re-spells this exact op stream over the host val column | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
+| `refcolumn` | the refval-exp **EXPERIMENT**: refvals' exact op stream over the experimental `nmapset::RefMap<i64, Pt>` — the host table's opaque val column (`map_val_set_o`/`map_val_get_o`): one `opaque(v)` box minted per put and stored behind a self-releasing host-side owner, gets re-hand the SAME box and unwrap it with `opaque.downcast<V>` to the LIVE cell (the one-cell law carries — the checksum depends on it), growth needs no relocation drain (the column moves with the keys host-side). Known terms for phase-2 attribution: the per-put box mint, the per-get downcast, +32 B accounted per live value (the box cell) | identical to `refvals` | checksum `140052990000` — disclosed: the SAME value as the `refvals` pin, because the op stream and the value stream are identical; the storage differs |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
@@ -2642,6 +2643,85 @@ nmapset pins' checksums `734932704` / `1264308351` / `21500055` /
 section. Scratch (stubs, phase clones, pair JSONLs, guard runs):
 `/tmp/opencode/batch-refval-exp/p0/`.
 
+## Performance log — refcolumn phase 1: the experimental surface (Sep 2026)
+
+The experiment itself, additive only (plan §0.1): ONE class, TWO
+crossings, ONE row — revert is one commit deleting the three.
+
+- **The crossings** `map_val_set_o(m, slot, v: opaque)` /
+  `map_val_get_o(m, slot) -> opaque` (decls in `nmap.d.rut` + the CLI
+  fixture mirror, update-BOTH): the val column through reference
+  values. `NativeTable` gains a LAZY second column (`meta`) holding one
+  self-releasing `OpaqueRef` owner per stored val box — allocated at
+  the first opaque store, cap-aligned, moved with the keys inside
+  `grow`'s existing walk (no drain for this path, round3's law),
+  dropped slot-wise by the tombstone and wholesale by the table's
+  `Drop`. The rc discipline (plan §0.4, the phase-6 playbook,
+  documented in-source): retain on insert (one map-owned handle),
+  release on overwrite (the replaced owner drops) and on remove
+  (tombstone drops the owner), full release at table teardown incl.
+  arena-teardown-with-live-cells (the owners carry the arena), no
+  double-release path. Traps: out-of-range slots (the val lanes' shared
+  law) and FOREIGN opaques — a host payload box crossed as the val is
+  rejected at the store, loud.
+- **The layout deviation, disclosed** (the only touch to existing
+  machinery, fuel/heap/behavior identical): fitting the owner-column
+  pointer inside `size_of::<NativeTable>() = 144` — the shallow size
+  `OpaqueBox::alloc` charges at every `map_new`, so ANY growth moves
+  every map row's heap pin (the batch's bit-identical gate) — required
+  shrinking the relocation queue from a `VecDeque<(i32, i32)>` (32 B)
+  to a packed `Vec<u64>` (24 B), drained from the end. The contract is
+  the drained SET of independent pairs, never an order; same pairs,
+  same `-1` drain end, same op count. A new unit test pins
+  `size_of::<NativeTable>() == 144` as the tripwire.
+- **The class** `nmapset::RefMap<K requires <the closed key union>, V>`
+  — the PrimMap precedent's third family, keys on the same typed lanes
+  (per-instantiation monomorphization), values in the column. Header
+  documents: for REFERENCE V; prim V belongs on PrimMap (V is
+  unboundable — no ref-type union exists, so admission cannot branch,
+  round3 0c; a prim V would run but pay the box for nothing). The
+  LEANER crossing shape, taken and documented: the wrap happens ONCE at
+  put (`opaque(v)` — the box IS the stored unit), a get re-hands the
+  SAME box — no per-get wrap — and unwraps with `opaque.downcast<V>`
+  to the LIVE inner cell (the one-cell law). Known terms recorded for
+  phase-2 attribution: the per-put box mint, the per-get downcast, and
+  the +32 B accounted box cell per live value — which is why raw heap
+  parity with the sidecar row is NOT the honest expectation (the
+  phase-0 pre-registration assumed the column would retain the records
+  directly; the crossing shape cannot take a record as `opaque`
+  without the box, and an engine change to allow that is out of the
+  experiment's scope).
+- **The row** `refcolumn`: refvals' exact op stream over `RefMap<i64,
+  Pt>`, checksum `140052990000` on rut/qjs/node bit-exactly — the
+  one-cell law carries (the RMW-through-alias phase depends on it), and
+  `expected.json` gained exactly one line. The `.js` twin is refvals'
+  computation unchanged (JS has no sidecar to swap).
+- **Tests** (9 new driver tests, `crates/rut-driver/tests/
+  nmap_refmap.rs`): the one-cell law both directions + multiple
+  holders; the replace law (held aliases keep the pre-replace cell);
+  remove with a held alias surviving; 500-key sentinel-growth sweep
+  with no drain; the rc discipline BYTE-ACCOUNTED at checkpoints
+  (overwrite: 45 mints − 45 released big pairs = −720 B, distinguishable
+  from a skipped release's +2880; remove: 15 small + 15 big; teardown
+  with 60 live cells: exactly 30·64 + 30·80 + 24 + 144; everything
+  refunded to the pre-build mark); the arena-teardown smoke (the table
+  box crosses into Rust with 50 live cells, Vm dropped); the trap
+  matrix (both bounds directions, foreign host box, unstored slot); the
+  checksum law (RefMap == HashMap<i64, Pt> bit for bit at n = 2000,
+  pinned `57059800`, hand-reconciled from the exact counters); a
+  str-keyed instantiation on the s lane.
+- **Gates at commit**: all 12 pinned probe rows fuel/heap
+  bit-identical to their committed records (incl. refvals 56 899 541 /
+  28 801 340 and the four nmapset rows); full suite rut/qjs/node exit
+  0, every checksum equal `expected.json` (82 cross rows); workspace
+  535 tests, 0 failures; no VERSION bump; expected.json new lines only.
+  First-read probe numbers for the record, NOT a verdict (phase 2 runs
+  the matched pairs): refcolumn 55 390 560 fuel / 21 600 999 B heap /
+  443.9 ms cold median vs refvals 56 899 541 / 28 801 340 / 338.0 ms
+  in the same run — fuel −1.5 M (the drain and sidecar spells gone),
+  heap −7.2 MB ≈ the box cells replacing the sidecar arrays, time
+  reads slower cold and is phase 2's question.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
@@ -2651,7 +2731,8 @@ section. Scratch (stubs, phase clones, pair JSONLs, guard runs):
   workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
   `nmap-knucleotide`, which pull the `nmap` host pkg through the
   pkg's own `[deps]`; also the dir twins `kmer-view`, `strview`, and
-  the record-valued `refvals` row, the same way),
+  the record-valued `refvals` row plus its experimental twin
+  `refcolumn`, the same way),
   `json-decode` (it mounts `pouch` for the
   row chunks the document generator joins), and `crossing-nop` (it
   mounts `bench-cross`, the phase-0 crossing-tax pkg). The bench
