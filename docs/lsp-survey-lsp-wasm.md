@@ -368,3 +368,95 @@ non-commit state. Nothing was stashed, reverted, or touched.
   1–2 budget accordingly.
 - Gate: `cargo test --workspace` → 77 suite results, 474 passed, 0
   failed, exit 0 (PIPESTATUS-verified) immediately before the commit.
+
+---
+
+## 9. Phase-1 fix log (`rut-lsp-align` task 1, 2026-09-22)
+
+Every M-item above that phase 1 owns is closed; tree was `c066fbf`
+(post-rename: `nmap_host`), one commit, rust+docs+tests only.
+
+### M1 + M2 + §4 — the shipped wasm: REBUILT, REPACKAGED
+
+`npm run build:wasm` (cargo `--release` → `copy-wasm.mjs`) and
+`npm run package` re-issued `bin/rut-lsp.wasm` (568,271 B, was
+531,964 B at `e41915d` era) and `rut-vscode-0.2.0.vsix`. Acceptance
+(`/tmp/opencode/rut-lsp-align/acceptance.js`, the survey §2 method):
+**corpus 53/53 clean through the shipped `bin/rut-lsp.wasm`** (was
+15 flagged / 1,796 diags); `fn f(p: ?i32)` clean (M1); `fn f(p: i32?)`
+→ exactly one dedicated RFC 0044 diag (M2); `primitive str` hover;
+`opaque.downcast` + `bytes.clone` complete; `node smoke.js` — ALL
+CHECKS PASSED. ABI untouched (`wasm.ts` calls the same 8 exports).
+
+### M4 — TyOpt hover arm: CLOSED (both missing renderers)
+
+- `hover/types.rs` `ty_src`: `TyOpt { inner } => format!("?{}", …)` —
+  `type Maybe = ?i32;` hovers `type Maybe = ?i32;` (was
+  `type Maybe = ;`).
+- `hover/types.rs` `ty_head`: recurses into the payload — `let c: ?Circle`
+  now resolves member hover on `c.` (was `""`). The third renderer
+  (`symbols.rs` `ty_text`) already had the memo; all three now agree.
+- Regression tests in `hover/tests.rs` (`nullable_alias_hover_renders_
+  the_target`, `nullable_let_binding_resolves_members`). The honest
+  collapse-into-one-renderer refactor stays backlog (no behavior left
+  on the table).
+
+### M3 — std surface: ALL EIGHT packages embedded
+
+`std_surface.rs` now embeds `core`, `calc`, `nmap_host`, `rt`,
+`bench_cross` (Decl mode) + `pouch`, `nmapset`, `ink` (Impl mode,
+`entry.lib` shape) — labels are the `rut.toml` `name` fields, i.e. what
+`use` paths spell. Unit tests pin the count and the M3 acceptance
+exactly: bare completion (no workspace index) offers `HashMap`,
+`HashSet`, `PrimMapI64/U64/F64`, and `nmap_host`'s `map_entry`.
+
+### §5 — the wasm32 workspace check: PASSES (two blockers, not one)
+
+- The surveyed E0423: `api.rs`'s `cfg(not(rut_threaded))` `Table`
+  tuple field is now `pub(crate)` — the one-liner, wasm32-target-only
+  (the host never compiles that arm; bench guard below).
+- One the survey missed (probably shadowed by the E0423 abort):
+  **tokio 1.53.1 `compile_error!`s on wasm32** for any feature outside
+  `sync,macros,io-util,rt,time` — rut-lsp's default `server` face
+  requests `io-std`, so `cargo check --workspace --target
+  wasm32-unknown-unknown` still died after the one-liner. Fix: the
+  server face's crates (`tower-lsp-server`, `tokio`) moved under
+  `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`, the
+  `server` module gated `all(feature = "server", not(target_arch =
+  "wasm32"))`, and `main.rs` grows a wasm32 stub `main` (the stdio
+  server is meaningless there — no stdin; wasm users get `rut-lsp-wasm`).
+  Host builds/tests unchanged (same deps, same features, native).
+- Gate: `cargo check --workspace --target wasm32-unknown-unknown` →
+  Finished, exit 0 (only the known cosmetic warnings).
+
+### §6 — the corpus gate: WIDENED as proposed
+
+- `rut-parser/tests/corpus.rs::corpus_parses_clean`: roots now the four
+  trees (`examples/`, `demo/src/examples/`, `rut/`,
+  `benches/workloads/`), floor `>= 50`.
+- `rut-lsp/tests/corpus.rs`: same roots/floor, plus the missing honest
+  assertion — new `corpus_parses_clean_lsp` (the old `analyzed` helper
+  discards diags) asserts ZERO parse diagnostics per file, `.d.rut` →
+  Decl mode. No new infrastructure; 53 files ride the standard suite.
+- Workspace gate: `cargo test --workspace` → 77 suites, **479 passed**
+  (474 + 5 new), 0 failed, exit 0.
+
+### Bench guard (the E0423 fix is wasm32-only — proven)
+
+`benches/run.mjs --runtime rut` over five pinned rows; fuel and
+VM-heap high-water **bit-identical** to the phase-2/3 records
+(`crossing-nop` 104000032/236, `json-decode` 111330118/34377147,
+`kmer-view` 37614177/4194916, `nmapset-int` 20703284/1966551,
+`sieve` 19592209); checksums agree with `expected.json` (`refOk` on
+every row that carries one; kmer-view has none by design — its
+2198604 parity with knuc holds). The host never compiles the patched
+arm, and the pins prove it.
+
+### Scope notes
+
+- `vscode-extension/` tracked sources untouched by task 1 — only the
+  gitignored artifacts (`bin/`, `out/`, `.vsix`) were rebuilt via the
+  sanctioned npm scripts (task 2 owns the lane; its in-flight edits
+  were present and left alone).
+- M5 (checker-level diags) and M7 (primitive hovers) remain open by
+  design — phase-2 candidates, unchanged.

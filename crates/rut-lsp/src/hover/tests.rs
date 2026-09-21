@@ -169,6 +169,40 @@ fn host_fn_surface_favors_own_methods() {
 }
 
 #[test]
+fn nullable_alias_hover_renders_the_target() {
+    // M4 (lsp-align survey): `ty_src` had no TyOpt arm, so a nullable
+    // alias hovered as `type Maybe = ;` — the target silently vanished
+    let src = "\
+// maybe an i32
+type Maybe = ?i32;
+fn f(m: Maybe) -> nil { }
+";
+    let md = hover_at(src, "Maybe").unwrap();
+    assert!(md.contains("type Maybe = ?i32;"), "{md}");
+}
+
+#[test]
+fn nullable_let_binding_resolves_members() {
+    // M4 (lsp-align survey): `ty_head` had no TyOpt arm, so a
+    // `let x: ?Circle = …` binding inferred "" and the receiver hover
+    // on `c.` missed
+    let src = "\
+class Circle {
+r: f64;
+// the area
+fn area(self) -> f64 { return 3.14; }
+}
+fn go() -> f64 {
+let c: ?Circle = Circle.new(1.0);
+return c.area();
+}
+";
+    let md = hover_nth(src, "area", 1).unwrap();
+    assert!(md.contains("fn area(self) -> f64"), "{md}");
+    assert!(md.contains("in `Circle`"), "{md}");
+}
+
+#[test]
 fn miss_is_none() {
     let src = "fn main() -> nil { let z = unknown_thing; }\n";
     assert!(hover_at(src, "unknown_thing").is_none());

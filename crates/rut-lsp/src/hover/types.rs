@@ -106,6 +106,10 @@ pub(crate) fn ty_head(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
             .first()
             .map(|s| ast.name(s.name).to_string())
             .unwrap_or_default(),
+        // `?Circle` binds like `Circle` for member lookup (RFC 0044) —
+        // without this arm a nullable let-binding infers "" and its
+        // receiver hover misses
+        TypeKind::TyOpt { inner } => ty_head(ast, *inner),
         _ => String::new(),
     }
 }
@@ -129,6 +133,10 @@ pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
             }
             s
         }
+        // the prefix spelling renders with its payload: `?i32`, `??str`
+        // (matches symbols.rs's `ty_text` — the memo all three renderers
+        // must carry)
+        TypeKind::TyOpt { inner } => format!("?{}", ty_src(ast, *inner)),
         TypeKind::TyArray { elem } => format!("[{}]", ty_src(ast, *elem)),
         TypeKind::TyUnion { elems } => elems
             .iter()

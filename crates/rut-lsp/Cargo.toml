@@ -28,11 +28,19 @@ server = ["dep:tower-lsp-server", "dep:tokio"]
 # re-exports). serde_json (user-approved) serializes them for the wasm ABI.
 [dependencies]
 ls-types = "0.0.6"
-tower-lsp-server = { version = "0.23", optional = true }
-tokio = { version = "1", features = ["macros", "rt", "io-std", "io-util", "time"], optional = true }
 rut-lexer = { path = "../rut-lexer" }
 rut-ast = { path = "../rut-ast" }
 rut-parser = { path = "../rut-parser" }
+
+# The stdio face's crates — native only, so they live under a target
+# table: on wasm32 tokio rejects `io-std` with a compile_error! ("Only
+# features sync,macros,io-util,rt,time are supported on wasm") and there
+# is no stdin to serve anyway. Declared outside `[dependencies]` so the
+# whole-workspace wasm32 check compiles this crate with default features
+# (feature `server` on, both deps resolved out per-target, no-op).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tower-lsp-server = { version = "0.23", optional = true }
+tokio = { version = "1", features = ["macros", "rt", "io-std", "io-util", "time"], optional = true }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

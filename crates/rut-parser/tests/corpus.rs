@@ -9,9 +9,14 @@ use rut_parser::{parse, Mode};
 
 fn corpus() -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
+    // the four corpus trees (RFC 0030 §7 as widened by the lsp-align
+    // survey §6): the runnable examples, the playground classics, the
+    // stdlib itself, and the bench workloads — every `*.rut` in the repo
     let roots = [
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples"),
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demo/src/examples"),
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rut"),
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benches/workloads"),
     ];
     let mut stack = roots.to_vec();
     while let Some(dir) = stack.pop() {
@@ -32,7 +37,7 @@ fn corpus() -> Vec<std::path::PathBuf> {
 #[test]
 fn corpus_parses_clean() {
     let files = corpus();
-    assert!(files.len() >= 15, "expected the full corpus, found {}", files.len());
+    assert!(files.len() >= 50, "expected the full corpus, found {}", files.len());
     let mut failures = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();

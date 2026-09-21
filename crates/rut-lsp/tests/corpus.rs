@@ -9,9 +9,13 @@ use rut_lsp::semantic::{classify, symbols, TokenType};
 use rut_parser::{is_reserved_kw, Mode};
 
 fn corpus() -> Vec<std::path::PathBuf> {
+    // the four corpus trees (the lsp-align survey §6): examples, the
+    // playground classics, the stdlib itself, and the bench workloads
     let roots = [
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples"),
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demo/src/examples"),
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rut"),
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benches/workloads"),
     ];
     let mut out = Vec::new();
     fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
@@ -41,7 +45,7 @@ fn analyzed(src: &str, mode: Mode) -> (Vec<rut_lexer::token::Token>, rut_ast::as
 #[test]
 fn corpus_classifies() {
     let files = corpus();
-    assert!(files.len() >= 15, "corpus shrank: {}", files.len());
+    assert!(files.len() >= 50, "corpus shrank: {}", files.len());
     for path in &files {
         let raw = std::fs::read_to_string(path).unwrap();
         let src = rut_lexer::lexer::normalize(&raw);
@@ -86,6 +90,38 @@ fn corpus_classifies() {
             }
         }
     }
+}
+
+#[test]
+fn corpus_parses_clean_lsp() {
+    // the honest gate `corpus_classifies` lacks: it discards parse
+    // diagnostics (`analyzed` drops them), so classification invariants
+    // could pass over a corpus full of red squiggles. Mirrors
+    // rut-parser's `corpus_parses_clean` (RFC 0030 §7, lsp-align survey
+    // §6): every corpus file parses with ZERO diagnostics through the
+    // same lex → parse(mode) pipeline the LSP serves.
+    let files = corpus();
+    assert!(files.len() >= 50, "corpus shrank: {}", files.len());
+    let mut failures = Vec::new();
+    for path in &files {
+        let raw = std::fs::read_to_string(path).unwrap();
+        let src = rut_lexer::lexer::normalize(&raw);
+        let mode = if path.to_string_lossy().ends_with(".d.rut") {
+            Mode::Decl
+        } else {
+            Mode::Impl
+        };
+        let (_, diags) = rut_parser::parse(&src, mode);
+        if !diags.is_empty() {
+            failures.push(format!(
+                "{}: {} diag(s): first = {}",
+                path.display(),
+                diags.len(),
+                diags[0].msg
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "LSP corpus regressions:\n{}", failures.join("\n"));
 }
 
 #[test]

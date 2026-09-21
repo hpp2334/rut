@@ -432,7 +432,7 @@ impl<M: Machine> Clone for Table<M> {
 impl<M: Machine> Copy for Table<M> {}
 
 #[cfg(not(rut_threaded))]
-pub struct Table<M: Machine>(core::marker::PhantomData<fn() -> M>);
+pub struct Table<M: Machine>(pub(crate) core::marker::PhantomData<fn() -> M>);
 
 #[cfg(not(rut_threaded))]
 impl<M: Machine> Clone for Table<M> {

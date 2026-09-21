@@ -24,5 +24,8 @@ pub mod hover;
 pub mod line_index;
 pub mod semantic;
 pub mod std_surface;
-#[cfg(feature = "server")]
+// feature `server` AND native — the deps are target-gated to
+// `cfg(not(target_arch = "wasm32"))` (tokio rejects `io-std` on wasm),
+// so on wasm32 the feature resolves to an empty set
+#[cfg(all(feature = "server", not(target_arch = "wasm32")))]
 pub mod server;
