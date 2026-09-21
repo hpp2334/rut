@@ -1944,6 +1944,243 @@ Files this phase: `benches/README.md` only. Scratch:
 `/tmp/opencode/batch-nmapset-round3/p3/` (verdict.json/.csv/.md +
 runner stdout/stderr). Tree clean apart from this section.
 
+## Performance log — strings-round1 phase 0: the str-term evidence + view-shape spike (Sep 2026)
+
+Evidence phase for the cheap-strings batch (`views over str`): five
+findings, no engine change, nothing committed but this section. The
+batch's premise — written into the plan's Why — was that k-mer rows
+MINT a fresh str cell per slice (alloc + copy). **The premise is stale
+and this section re-bases the batch on measured terms**: RFC 0042's
+`b2` commit (Sep 17, in the base) already made `s.slice()` an O(1)
+`CellData::StrView` — `{parent, off, len, ascii}` over the block
+store, no copy — and the block store (`b1a`) made small str mints a
+bump + flag. What remains on the string rows are smaller, different
+terms, and they decide the shape gate (§0.5) differently than the plan
+expected. Rows re-measured today for the batch (one probe binary, one
+session, calm box load ~0.2; fuel and VM-heap **bit-identical** to the
+pinned records on every row):
+
+| row          | exec today (probe) | fuel        | VM heap peak |
+|--------------|--------------------|-------------|--------------|
+| nmap-knuc    | 174–208 ms (day range across passes) | 38,814,389 | 4,195,084 B |
+| nmapset-str  | 53–63 ms           | 9,551,761   | 983,620 B    |
+| json-decode  | 708–950 ms         | 111,330,118 | 34,377,147 B |
+| nmapset-int  | 62–71 ms           | 20,703,284  | 1,966,551 B  |
+| nmap-primmap | 62–65 ms           | 17,950,301  | 324 B        |
+| fasta        | 0.49–0.53 ms       | 200,029     | 16,806 B     |
+
+Check controls (CLI): nmap-knuc `2198604`, nmapset-str `1264308351`,
+json `4502015958359127277` — all hold. Honest heap note: json's heap
+peak reads 34.38 MB today vs round2's 32.78 MB note, with fuel
+bit-identical — the delta is post-`b1a` block-store accounting, not a
+workload change (no pin involves json heap).
+
+### Finding 0a — the slice-mint term is already gone; what's left is the host copy
+
+The k-mer row slices exactly **600,088** times per run (199,989
+12-mer fill + 100 fragment probes + 200,000 1-mer + 199,999 2-mer).
+Post-RFC-0042 each slice mints a ~32-byte view cell (one block-store
+bump + one parent retain) — no copy. Sizing, two independent ways:
+
+- **Stub bounds (both spellings SLOWER — the mint is cheaper than any
+  surface alternative).** Pre-materializing every k-mer ONCE (checksum
+  unchanged, `2198604`) and replacing the per-iter slice with an index
+  read made the row dramatically worse: `Vec<str>` spelling
+  **+96.2 ms** (+22.5M fuel, +55%); fixed `[?str]` array spelling
+  **+65.2 ms** (+11.6M fuel, +32%). Reconciliation: a `callnat
+  StrSlice` is ~4–5 VM ops; an index read of a str collection plus its
+  nil-narrowing is ~10–37 ops. **Deleting the slice in favor of
+  anything the surface can spell today is a pessimization.** The whole
+  slice-call+mint share is bounded at ~10 ms ≈ **5–6% of the row**
+  (~600k × ~15–20 ns).
+- **The host `to_owned` term (the borrowed-probe stub).** The s-lane
+  shims copy the key into an owned `String` on EVERY crossing —
+  `map_find_s` included, where the copy is dropped unused after the
+  probe (`KeyVal::Str(k.to_owned())` feeds a compare-only path). A
+  throwaway `nmap.rs` stub (NEVER committed — `git checkout --`
+  restored, md5 re-verified, both row checksums re-verified) rewired
+  the three s-lane shims to a borrowed probe: hash + compare over the
+  `&str` the crossing already borrows, copy only on fresh insert.
+  Fuel bit-identical (host-side), behavior bit-identical, ONE fixed
+  pair of probe binaries interleaved 5×7, three passes:
+
+| pass | knuc deltas per round (ms)              | knuc median | str deltas per round (ms)         | str median |
+|------|-----------------------------------------|-------------|-----------------------------------|------------|
+| 1    | +17.3, −1.6, +4.0, −1.5, +4.5           | **+3.6 ms** | +1.7, +2.3, +8.9, +0.1, +2.8      | **+2.8 ms** |
+| 2    | +12.6, +12.1, +5.6, +9.3, +3.9          | **+9.3 ms** | +5.7, −3.3, −0.4, −2.3, +0.9      | **−0.4 ms** |
+| 3    | +17.2, +7.0, +9.3, +13.6, +2.2          | **+9.3 ms** | +9.7, +0.5, −3.5, −1.9, +6.5      | **+0.5 ms** |
+
+  nmap-knuc: **13/15 rounds positive, ≈ 4–9 ms ≈ 2–5% of the row**
+  (1.2M s-lane crossings × ~4–8 ns malloc+memcpy+free). nmapset-str:
+  10/15 positive at **≈ 0–3 ms — at the noise floor** (300k
+  crossings; ~4.6% best case). Real terms, small ones.
+- **Unchanged by any of this**: the `?V` sidecar mint on hit-gets
+  (round3's measured ~27 ns/hit; knuc's 1-/2-mer maps take ~400k
+  mostly-hit gets ≈ ~11 ms ≈ 6%) and the FNV+probe table body.
+
+**nmapset-str has no slices at all** — its keys are BUILT per op
+(`f"k{i}"`: render + 2-part concat + fresh cell). The same two stub
+spellings (pre-built keys, checksum unchanged `1264308351`) came out
+SLOWER by 9.6 ms (`Vec<str>`) and 6.8 ms (fixed `[?str]`), so the
+per-op build is also CHEAPER than the cheapest indexing alternative —
+roughly ~10% of the row, and **not deletable by views on this row's
+op stream** (the keys are minted, not carved from a parent). A str
+twin whose keys ARE ranges of one generated parent is the shape where
+the view lever applies (0e).
+
+### Finding 0b — the json census: dispatch-bound; views alone buy ~12%
+
+The decoder walks the doc char-by-char over a shared `Vec<str>` of
+1-char cells (split once in setup), dispatches with str `==` chains
+(`is_digit` alone is up to 10 one-char compares per digit), and builds
+every token by the per-char accumulator (`out = f"{out}{cs[i]}"` — the
+in-place append path). Per rep: ~204k chars walked, 10,800 numbers,
+6,000 strings, 2,400 literals; the fold then RE-walks every number and
+string (`lex_int`, `fold_str`) with the same str compares. Measured
+census — three checksum-preserving scratch rewrites of the workload
+(all hold `4502015958359127277`, never committed, one probe binary,
+4-way interleaved 5×7):
+
+| variant (what it changes)                 | median      | vs base          | fuel delta |
+|-------------------------------------------|-------------|------------------|------------|
+| base `json-decode`                        | 779.8 ms    | —                | —          |
+| `string_join` instead of the accumulator  | 808.0 ms    | **+3.6% SLOWER** | +3.2M (+2.9%) |
+| token = ONE `doc.slice` (scan unchanged)  | 687.8 ms    | **−11.8%**       | −14.8M (−13.3%) |
+| int-code cursor + `slice` tokens          | 499.1 ms    | **−36.0%**       | −37.0M (−33.3%) |
+
+Read: the **build-per-token term is ~92 ms ≈ 12%** (the slice-token
+variant deletes exactly the per-char pushes + join); the one-pass
+`string_join` is SLOWER than the accumulator it replaced — the rc==1
+in-place append path is already the optimal build spelling, worth
+knowing on its own. The **per-char str dispatch is ~189 ms ≈ 24%** —
+twice the build term and invisible to views (it is str-cell compares,
+not token construction; the int-code variant turns `is_digit` into two
+int compares and the char cells into `u32` slots). The remaining ~64%
+is the mint machinery (Json records, 3 empty `Vec`s + an opaque box
+per value node) and the fold. **Verdict for phase 2: honest NO to
+token-slicing-only** — it pays ~12% while the term views cannot touch
+is 2× bigger. The measured -36% belongs to the **int-codes cursor**
+(a parser rewrite — cursor over `Vec<u32>` codepoints, `slice` per
+token), which is a different, non-additive lever; recorded for the
+menu.
+
+### Finding 0c — the bytes audit: immutability is provable, bytes views are SOUND
+
+`bytes` carries exactly four members (`len`, `decode`, `clone` — the
+one copy escape, RFC 0044 — and the `zeroed(n)`/`from([u8])`
+type-methods; `Vec<u8>.freeze()` mints). Element assignment is a
+**compile-time diagnostic** ("`str`/`bytes` are immutable — element
+assignment is not allowed", `rut-lir/src/lir/slice.rs`), not a trap;
+there is no push/set/truncate/resize anywhere on the type. **§0.3's
+gate is CLEARED in the strong direction: bytes views would be sound**
+by the same immutability argument str views lean on. The batch still
+defers them (k-mer and json are str; no consumer needs a bytes view
+today) — recorded as a menu item with the audit as its evidence.
+
+### Finding 0d — the shape spike: (A) wins, and smaller than planned
+
+First, the premise correction that reframes the gate: **shape B is
+already shipped — internally.** `CellData::StrView` exists (RFC 0042);
+`as_str`/`as_bytes`/`char_len`/`str_ascii` read through it; equality,
+iteration, f-strings and the host boundary (`HostParam for &str`)
+cross it zero-copy; `m.get(seq.slice(i, i+12))` works TODAY as a
+range key. The cell repr is off-wire (module binaries never carry
+heap cells). What WOULD be new in B is only the named surface type —
+and a new builtin type id IS wire-visible (`ConstVal::TypeId` crosses
+module surfaces, rebased at link), so the surface-type step is a
+VERSION 7 event. The two shapes, honestly costed per use on the
+k-mer hot path:
+
+| | (A) sv-range lanes | (B) engine view as a surface type |
+|---|---|---|
+| key construction | **none** — the caller passes `(parent, off, len)` ints (slots) | one slice-cell mint per key (~15–25 ns) — `slice()` already exists |
+| per map-op crossing | 1 crossing, 4 params (t, parent: str, off, len) ≈ +1.4 ns vs today's 2 (crossing-nop slope 0.72 ns/param) | unchanged 2-param `map_find_s` |
+| host body | borrowed probe (fnv + compare over the range), copy ONLY on fresh insert — needs the same `nmap.rs` core either way | borrowed probe for the copy term (orthogonal), slice cell stays |
+| deleted terms (knuc, measured) | slice-mint ~5–6% + to_owned ~2–5% ≈ **−7 to −12% projected** | to_owned only ≈ **−2 to −5%** |
+| surface cost | 3 additive crossings (`nmap.d.rut` + CLI fixture mirror, update-BOTH), no engine repr change, **no VERSION bump** | type-system surface (boot-table type, checker admission into the key union, decls, RFC 0004 amendment), **VERSION 7 risk** |
+| the `StrView` record part of A | `view()` ctor = one record mint ≈ today's slice cell (no win); eq/index/materialize need NEW crossings; a record is not a str cell — general `&str` acceptance FAILS under A without engine work | reads-as-str acceptance is free (the cell kind is the engine's) |
+
+**Recommendation: (A), reduced to its minimal surface — the three sv
+lanes and nothing else.** §0.7's condition for preferring B ("only if
+A measures a real tax that a cell kind would remove") is not met: the
+lanes add ~1.4 ns of crossing args against ~25–35 ns of deleted
+per-key work, and the cell kind B would add is the one the engine
+ALREADY has. The named-view surface (A's record or B's type) has **no
+measured consumer need** — its construction costs what today's slice
+costs — so both record and type are DEFERRED, and the plan's
+"crossing acceptance" law lands as: the sv lanes accept any `str` as
+the parent, including a slice view (flattens to the root — tested).
+
+**§0.6 answered: no view-keyed twin class is needed.** The keys stay
+`str`-kind; the sv lanes are an s-lane overload — the wrapper
+`HashMap<str, V>` gains range-taking methods (`get_range`/
+`put_range`/`has_range`/`remove_range` or the phase-2 naming) over
+the same host table. The PrimMap precedent does not apply: PrimMap
+split classes over the VAL kind (a get has no V value to dispatch
+through); here nothing splits — the key type is unchanged and the
+stored key remains an owned host copy, so "stored view keys pin their
+parents" is satisfied trivially (nothing rut-side is stored) and the
+documented law costs nothing.
+
+**The minimal surface (phase 1's spec):**
+1. `map_find_sv(t: opaque, parent: str, off: i64, len: i64) -> i32` —
+   the `find_s` answer encoding; hashes (FNV-1a 64) and compares over
+   the parent's borrowed byte range; NO copy.
+2. `map_entry_sv(...same...) -> i32` — the `entry_s` encoding incl.
+   the fused grow-first sentinel; the owned copy is taken only on the
+   fresh-insert path.
+3. `map_remove_sv(...same...) -> i32` — tombstone the range-match,
+   `-1` absent.
+4. Host: a borrowed-probe core (`probe_str_borrowed` + `fnv_bytes` —
+   measured bit-identical in 0a's stub) inside `NativeTable`; offsets
+   are BYTE offsets with a host-side UTF-8 boundary check (trap on a
+   split codepoint) so ASCII callers get byte==codepoint for free.
+5. Decls in `rut/nmap/nmap.d.rut` + the CLI fixture mirror
+   (update-BOTH); wrapper methods on `HashMap<str, V>`; tests: the
+   parity law (a range key and the equal-content str key answer the
+   same slot and the same iteration position), parent-is-a-view
+   acceptance, boundary/off/len traps, insert-copies-once behavior.
+No engine repr change, no VERSION bump, no existing surface touched.
+
+### Finding 0e — the workload plan
+
+- **`kmer-view`** (dir twin of `nmap-knucleotide`): the identical
+  k-mer counting with the 12-mer fill, fragment probes and 1-/2-mer
+  maps keyed through the sv lanes (`m.get_range(seq, i, 12)` shape).
+  **Checksum provenance: equals the pinned `2198604`** — same keys,
+  same values, same formula; the .js twin is UNCHANGED (it already
+  computes the same answer — the parity IS the gate). No new
+  expected.json line.
+- **`strview`** (twin of `nmapset-str`): the same six-phase churn with
+  keys carved as ranges of ONE generated parent string — the shape
+  where range keys apply (0a showed built keys gain nothing). Same
+  counter formula → a NEW checksum, verified on rut/qjs/node, ADDED to
+  `expected.json` as one disclosed line (the nmap-primmap precedent).
+  The .js twin is the same materialized computation over
+  `substring` — a few lines.
+- **json: no view row.** The 0b census verdict is dispatch-bound;
+  token-slicing alone measured −11.8% against a 2× bigger term views
+  cannot touch. The int-codes cursor (−36.0% measured) stays on the
+  menu as its own lever.
+- Gates carried into phase 2: every existing row fuel+heap
+  bit-identical (the lanes are additive crossings — nothing existing
+  can move), the four nmap checksum pins hold, `expected.json` gains
+  exactly one line (the `strview` pin).
+
+House-keeping notes for the record: every stub this phase lived under
+`/tmp/opencode/batch-strings-round1/p0/` (scratch workloads with
+absolute dep paths) EXCEPT the one `nmap.rs` window — patched, both
+checksums re-verified, binaries banked, restored in the same command
+breath, md5-verified (`git checkout --`), pristine rebuild — matching
+the round3 phase-0 restore discipline. One probe binary per
+experiment; all deltas same-session interleaved; the nmapset-str
+to_owned row was re-run twice more when the first pass's ranges
+overlapped (three passes recorded above, honestly split).
+
+Files this phase: `benches/README.md` only. Scratch:
+`/tmp/opencode/batch-strings-round1/p0/` (stub workloads, pair JSONLs,
+probe binaries, bytes-audit repro). Tree clean apart from this section.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
