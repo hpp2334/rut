@@ -1,4 +1,4 @@
-//! The `nmap` typed lanes (the mapset-host plan, phase 2): 15
+//! The `nmap_host` typed lanes (the mapset-host plan, phase 2): 15
 //! `map_{entry,find,remove}_{i,u,b,s,y}` crossings where the key crosses
 //! DIRECTLY — no `opaque(..)` mint, no wrapper-hash `h` — with the hash
 //! computed host-side by the shared `hash_payload` (mapset's mix64 /
@@ -16,10 +16,10 @@ use std::rc::Rc;
 
 use rut_driver::{Module, Session};
 
-const NMAP_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmap");
+const NMAP_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmap_host");
 
 const SRC: &str = r#"
-use nmap::{ map_new, map_entry, map_find, map_remove, map_len, map_needs_grow, map_grow,
+use nmap_host::{ map_new, map_entry, map_find, map_remove, map_len, map_needs_grow, map_grow,
             map_take_reloc, map_cap,
             map_entry_i, map_entry_u, map_entry_b, map_entry_s, map_entry_y,
             map_find_i, map_find_u, map_find_b, map_find_s, map_find_y,
@@ -304,9 +304,9 @@ entry fn grow_retry_through_sentinel(n: i64) -> i64 {
 fn vm_with_nmap(src_extra: &str) -> Vm {
     let mut session = Session::new();
     rut_driver::mount_std_core(&mut session);
-    // `nmap` — this test's host pkg, mounted under the same name the
-    // committed rut/nmap package mounts (not a test copy)
-    rut_driver::mount_dir(&mut session, std::path::Path::new(NMAP_DIR)).expect("mount nmap");
+    // `nmap_host` — this test's host pkg, mounted under the same name the
+    // committed rut/nmap_host package mounts (not a test copy)
+    rut_driver::mount_dir(&mut session, std::path::Path::new(NMAP_DIR)).expect("mount nmap_host");
     let expected = session.expected_host_fns();
     session
         .register_module(
@@ -338,7 +338,7 @@ fn vm_with_nmap(src_extra: &str) -> Vm {
     // bindings BEFORE the Vm (RFC 0025): install + contract + boot
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected); // rut/nmap/nmap.d.rut ↔ the bodies
+    hosts.verify_against(&expected); // rut/nmap_host/nmap.d.rut ↔ the bodies
     rut_vm::interp::Vm::new(
         Rc::new(prog),
         &limits,
@@ -419,7 +419,7 @@ fn the_fused_put_shape_grows_and_retries_through_the_sentinel() {
 fn the_test_fixture_surface_matches_the_committed_pkg() {
     let fixture_dir = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../crates/rut-cli/tests/data/nmap"
+        "/../../crates/rut-cli/tests/data/nmap_host"
     );
     let mut session = Session::new();
     rut_driver::mount_std_core(&mut session);

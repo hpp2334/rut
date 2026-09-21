@@ -427,14 +427,14 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
         }
     "#;
     let mut session = session_with(src);
-    // nmapset pulls the `nmap` host pkg through its own [deps]
+    // nmapset pulls the `nmap_host` host pkg through its own [deps]
     rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
         .expect("mount nmapset");
     let expected = session.expected_host_fns();
     for f in ["map_new", "map_entry", "map_find", "map_remove", "map_grow", "map_take_reloc", "map_cap", "map_len"] {
         assert!(
-            expected.contains_key(&format!("nmap::{f}")),
-            "the nmap surface must cross through the [deps] mount: {expected:?}"
+            expected.contains_key(&format!("nmap_host::{f}")),
+            "the nmap_host surface must cross through the [deps] mount: {expected:?}"
         );
     }
     let out = rut_driver::compile_graph(&session, "app_main");

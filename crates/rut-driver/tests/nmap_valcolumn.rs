@@ -1,4 +1,4 @@
-//! The `nmap` val column (nmapset-round3, phase 1): two raw crossings
+//! The `nmap_host` val column (nmapset-round3, phase 1): two raw crossings
 //! — `map_val_set_u(t, slot, v: u64)` / `map_val_get_u(t, slot) ->
 //! u64` — over the host table's cap-aligned u64 column. Presence is
 //! BY-KEY (a val is valid iff its key slot is occupied; no nil tags),
@@ -19,12 +19,12 @@ use std::rc::Rc;
 
 use rut_driver::{Module, Session};
 
-const NMAP_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmap");
+const NMAP_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmap_host");
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
 
-// mounted over rut/nmap alone: the raw crossings and the column laws
+// mounted over rut/nmap_host alone: the raw crossings and the column laws
 const COLUMN_SRC: &str = r#"
-use nmap::{ map_new, map_grow, map_entry_i, map_find_i, map_remove_i, map_len,
+use nmap_host::{ map_new, map_grow, map_entry_i, map_find_i, map_remove_i, map_len,
             map_val_set_u, map_val_get_u };
 
 fn is_grow_first(at: i32) -> bool { return at < -1610612736; }
@@ -128,13 +128,13 @@ entry fn val_grow_sweep(n: i64) -> i64 {
 }
 "#;
 
-// mounted over rut/nmap + rut/nmapset: THE CHECKSUM LAW — the bench
+// mounted over rut/nmap_host + rut/nmapset: THE CHECKSUM LAW — the bench
 // workload's op sequence (nmapset-int/main.rut's `churn`, keyed i64)
 // through today's `[?V]` sidecar wrapper vs the same sequence through
 // the raw crossings + the column. Identical checksum or the column is
 // broken.
 const LAW_SRC: &str = r#"
-use nmap::{ map_new, map_grow, map_entry_i, map_find_i, map_remove_i, map_len,
+use nmap_host::{ map_new, map_grow, map_entry_i, map_find_i, map_remove_i, map_len,
             map_val_set_u, map_val_get_u };
 use nmapset::{ HashMap };
 

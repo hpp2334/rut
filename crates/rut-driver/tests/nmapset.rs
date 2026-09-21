@@ -1,5 +1,5 @@
 //! The `nmapset` package (the mapset-host plan, H3): generic wrapper
-//! classes over the `nmap` host table — now the tree's ONLY keyed-map
+//! classes over the `nmap_host` host table — now the tree's ONLY keyed-map
 //! package (the pure-rut `mapset` twin was removed in Sep 2026; these
 //! scenarios were ported from it and keep its pinned checksums — the
 //! old twin law lives in git history). Adapted where the surface
@@ -19,7 +19,7 @@ use rut_driver::{Module, Session};
 
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
 
-/// Mount the `nmapset` pkg (it pulls `nmap` through its `[deps]`) and
+/// Mount the `nmapset` pkg (it pulls `nmap_host` through its `[deps]`) and
 /// register `app_src` as the root.
 fn session_with(app_src: &str) -> Session {
     let mut session = Session::new();
@@ -57,8 +57,8 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
               "map_grow", "map_take_reloc", "map_cap", "map_len"]
     {
         assert!(
-            expected.contains_key(&format!("nmap::{f}")),
-            "the nmap surface must cross through the [deps] mount: {expected:?}"
+            expected.contains_key(&format!("nmap_host::{f}")),
+            "the nmap_host surface must cross through the [deps] mount: {expected:?}"
         );
     }
     let out = rut_driver::compile_graph(&session, "app_main");
@@ -76,7 +76,7 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected); // rut/nmap/nmap.d.rut ↔ the bodies
+    hosts.verify_against(&expected); // rut/nmap_host/nmap.d.rut ↔ the bodies
     rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .expect("vm")
 }

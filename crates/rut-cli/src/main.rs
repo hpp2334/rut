@@ -148,7 +148,7 @@ fn run(path: &str, fuel: Option<u64>) {
     rut_std::math::install_std_math(&mut hosts);
     rut_std::logger::install_std_log(&mut hosts, |s| println!("{s}"));
     // the nmap experiment's native key table (the mapset-host plan) — a
-    // program only reaches it when it declares `use nmap::{...}` or a
+    // program only reaches it when it declares `use nmap_host::{...}` or a
     // pkg that does (`nmapset`)
     rut_std::nmap::install_std_nmap(&mut hosts);
     // the crossing-tax benchmark's nops (the crossing-fastpath plan,

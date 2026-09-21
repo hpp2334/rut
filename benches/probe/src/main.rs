@@ -180,14 +180,14 @@ fn main() {
         install_std_log(&mut hosts, |_msg| {});
         rut_std::math::install_std_math(&mut hosts);
         // the nmap experiment's native key table (the mapset-host plan) —
-        // bound only when the program's dep graph declares `nmap::` (the
-        // engine's `calc` is expected of every workload; `nmap` is a tree
+        // bound only when the program's dep graph declares `nmap_host::` (the
+        // engine's `calc` is expected of every workload; `nmap_host` is a tree
         // pkg like any other, and `verify_against` is exact in BOTH
         // directions — bound-but-undeclared is an embedder bug, RFC 0025)
         if session
             .expected_host_fns()
             .keys()
-            .any(|name| name.starts_with("nmap::"))
+            .any(|name| name.starts_with("nmap_host::"))
         {
             rut_std::nmap::install_std_nmap(&mut hosts);
         }

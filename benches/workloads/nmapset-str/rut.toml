@@ -3,7 +3,7 @@
 # str-keyed churn over `nmapset::HashMap` (the native-key experiment
 # pkg) instead of the removed pure-rut `mapset`. Module dir because it
 # mounts
-# `nmapset` (which pulls the `nmap` host pkg); see
+# `nmapset` (which pulls the `nmap_host` host pkg); see
 # nmapset-int/rut.toml. The checksum must equal the pinned 1264308351
 # (same FNV-1a values — the nmapset pkg ships the mapset-exact
 # constants).

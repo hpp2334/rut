@@ -1,7 +1,7 @@
-# nmap/ — the native key-table experiment's test fixture (the
+# nmap_host/ — the native key-table experiment's test fixture (the
 # mapset-host plan): a pure declaration surface; the tests bind the
 # bodies (`install_std_nmap`) and verify the contract. The committed
-# `rut/nmap` package (H3) carries the same surface.
+# `rut/nmap_host` package (H3) carries the same surface.
 
-name = "nmap"
+name = "nmap_host"
 entry.type = "./nmap.d.rut"

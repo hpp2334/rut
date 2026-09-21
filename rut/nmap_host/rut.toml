@@ -1,2 +1,2 @@
-name = "nmap"
+name = "nmap_host"
 entry.type = "./nmap.d.rut"

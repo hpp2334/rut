@@ -3,7 +3,7 @@
 # identical k-mer counting over `nmapset::HashMap<str, i32>` (the
 # native-key experiment pkg) instead of the removed pure-rut `mapset`.
 # Module dir
-# because it mounts `nmapset` (which pulls the `nmap` host pkg); see
+# because it mounts `nmapset` (which pulls the `nmap_host` host pkg); see
 # nmapset-int/rut.toml. The checksum must equal the pinned 2198604
 # (same FNV-1a values — the nmapset pkg ships the mapset-exact
 # constants).

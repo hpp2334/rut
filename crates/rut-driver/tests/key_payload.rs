@@ -2,7 +2,7 @@
 //! classifies an `opaque` box's payload against the closed native-key
 //! set — integers and `bool` cross as raw bits, `str`/`bytes` as owned
 //! copies, and anything else (floats, user records) reports
-//! `Unsupported` naming the type. This test drives it the way the `nmap`
+//! `Unsupported` naming the type. This test drives it the way the `nmap_host`
 //! host fns will: the key box crosses as an `OpaqueRef` param of a
 //! registered host fn (the `boxes` pattern, RFC 0023/0026), the body
 //! reads the payload through the accessor, and rut sees only the tag.

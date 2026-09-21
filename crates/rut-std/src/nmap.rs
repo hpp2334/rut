@@ -1,4 +1,4 @@
-//! `nmap` — the native key-table experiment (the mapset-host plan, H2):
+//! `nmap_host` — the native key-table experiment (the mapset-host plan, H2):
 //! an open-addressing hash table whose state lives Rust-side behind an
 //! `opaque` payload box (RFC 0023), so rut meets it only through the
 //! `pub host fn` surface bound by [`install_std_nmap`]. This is the HOST
@@ -672,19 +672,19 @@ fn typed_remove_sv(t: &mut NativeTable, parent: &str, off: i32, len: i32) -> Res
     t.remove_str_range(range, h)
 }
 
-/// Install the nine `nmap` bodies under the `nmap` scope (the `calc`
+/// Install the nine `nmap_host` bodies under the `nmap_host` scope (the `calc`
 /// pattern, RFC 0023/0025): the callable's Rust shape IS the `.d.rut`
 /// row, so the surface declares exactly these signatures. `map_new`'s
 /// box carries the table; every other fn's first param borrows it typed
 /// (`OpaqueBox<NativeTable>` — a wrong payload is a checked trap).
 pub fn install_std_nmap(hosts: &mut HostRegistry) {
-    rut_vm::register!(hosts, "nmap::map_new", (i64,) -> OpaqueRef, |vm: &mut Vm, cap: i64| {
+    rut_vm::register!(hosts, "nmap_host::map_new", (i64,) -> OpaqueRef, |vm: &mut Vm, cap: i64| {
         let b = OpaqueBox::alloc(vm, NativeTable::new(cap))?;
         Ok(b.handle().clone())
     });
     rut_vm::register!(
         hosts,
-        "nmap::map_entry",
+        "nmap_host::map_entry",
         (OpaqueBox<NativeTable>, OpaqueRef, i64) -> i32,
         |vm: &mut Vm, b: OpaqueBox<NativeTable>, k: OpaqueRef, h: i64| -> Result<i32, Trap> {
             let (kind, key) = key_val(vm, &k)?;
@@ -693,7 +693,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_find",
+        "nmap_host::map_find",
         (OpaqueBox<NativeTable>, OpaqueRef, i64) -> i32,
         |vm: &mut Vm, b: OpaqueBox<NativeTable>, k: OpaqueRef, h: i64| -> Result<i32, Trap> {
             let (kind, key) = key_val(vm, &k)?;
@@ -702,7 +702,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_remove",
+        "nmap_host::map_remove",
         (OpaqueBox<NativeTable>, OpaqueRef, i64) -> i32,
         |vm: &mut Vm, b: OpaqueBox<NativeTable>, k: OpaqueRef, h: i64| -> Result<i32, Trap> {
             let (kind, key) = key_val(vm, &k)?;
@@ -711,31 +711,31 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_needs_grow",
+        "nmap_host::map_needs_grow",
         (OpaqueBox<NativeTable>,) -> bool,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>| b.with(|t| t.needs_grow()),
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_grow",
+        "nmap_host::map_grow",
         (OpaqueBox<NativeTable>,) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>| b.with_mut(|t| t.grow()),
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_take_reloc",
+        "nmap_host::map_take_reloc",
         (OpaqueBox<NativeTable>,) -> i64,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>| b.with_mut(|t| t.take_reloc()),
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_cap",
+        "nmap_host::map_cap",
         (OpaqueBox<NativeTable>,) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>| b.with(|t| t.cap()),
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_len",
+        "nmap_host::map_len",
         (OpaqueBox<NativeTable>,) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>| b.with(|t| t.len()),
     );
@@ -755,7 +755,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // sentinel ([`GROW_FIRST`] = `i32::MIN`) before any insert.
     rut_vm::register!(
         hosts,
-        "nmap::map_entry_i",
+        "nmap_host::map_entry_i",
         (OpaqueBox<NativeTable>, i64) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i32, Trap> {
             b.with_mut(|t| typed_entry(t, KeyVal::Bits(k as u64)))?
@@ -763,7 +763,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_entry_u",
+        "nmap_host::map_entry_u",
         (OpaqueBox<NativeTable>, u64) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i32, Trap> {
             b.with_mut(|t| typed_entry(t, KeyVal::Bits(k)))?
@@ -771,7 +771,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_entry_b",
+        "nmap_host::map_entry_b",
         (OpaqueBox<NativeTable>, bool) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i32, Trap> {
             b.with_mut(|t| typed_entry(t, KeyVal::Bits(k as u64)))?
@@ -779,7 +779,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_entry_s",
+        "nmap_host::map_entry_s",
         (OpaqueBox<NativeTable>, &str) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
             // strings-round1 phase 1: the key probes OVER the crossed
@@ -790,7 +790,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_entry_y",
+        "nmap_host::map_entry_y",
         (OpaqueBox<NativeTable>, &[u8]) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
             b.with_mut(|t| typed_entry(t, KeyVal::Bytes(k.to_vec())))?
@@ -798,7 +798,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_find_i",
+        "nmap_host::map_find_i",
         (OpaqueBox<NativeTable>, i64) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i32, Trap> {
             b.with(|t| typed_find(t, &KeyVal::Bits(k as u64)))?
@@ -806,7 +806,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_find_u",
+        "nmap_host::map_find_u",
         (OpaqueBox<NativeTable>, u64) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i32, Trap> {
             b.with(|t| typed_find(t, &KeyVal::Bits(k)))?
@@ -814,7 +814,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_find_b",
+        "nmap_host::map_find_b",
         (OpaqueBox<NativeTable>, bool) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i32, Trap> {
             b.with(|t| typed_find(t, &KeyVal::Bits(k as u64)))?
@@ -822,7 +822,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_find_s",
+        "nmap_host::map_find_s",
         (OpaqueBox<NativeTable>, &str) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
             b.with(|t| typed_find_s(t, k))?
@@ -830,7 +830,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_find_y",
+        "nmap_host::map_find_y",
         (OpaqueBox<NativeTable>, &[u8]) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
             b.with(|t| typed_find(t, &KeyVal::Bytes(k.to_vec())))?
@@ -838,7 +838,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_remove_i",
+        "nmap_host::map_remove_i",
         (OpaqueBox<NativeTable>, i64) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i32, Trap> {
             b.with_mut(|t| typed_remove(t, &KeyVal::Bits(k as u64)))?
@@ -846,7 +846,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_remove_u",
+        "nmap_host::map_remove_u",
         (OpaqueBox<NativeTable>, u64) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i32, Trap> {
             b.with_mut(|t| typed_remove(t, &KeyVal::Bits(k)))?
@@ -854,7 +854,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_remove_b",
+        "nmap_host::map_remove_b",
         (OpaqueBox<NativeTable>, bool) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i32, Trap> {
             b.with_mut(|t| typed_remove(t, &KeyVal::Bits(k as u64)))?
@@ -862,7 +862,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_remove_s",
+        "nmap_host::map_remove_s",
         (OpaqueBox<NativeTable>, &str) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
             b.with_mut(|t| typed_remove_s(t, k))?
@@ -870,7 +870,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_remove_y",
+        "nmap_host::map_remove_y",
         (OpaqueBox<NativeTable>, &[u8]) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
             b.with_mut(|t| typed_remove(t, &KeyVal::Bytes(k.to_vec())))?
@@ -896,7 +896,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // the fused grow-first `i32::MIN`, else the found/fresh slot).
     rut_vm::register!(
         hosts,
-        "nmap::map_entry_sv",
+        "nmap_host::map_entry_sv",
         (OpaqueBox<NativeTable>, &str, i32, i32) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             b.with_mut(|t| typed_entry_sv(t, parent, off, len))?
@@ -904,7 +904,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_find_sv",
+        "nmap_host::map_find_sv",
         (OpaqueBox<NativeTable>, &str, i32, i32) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             b.with(|t| typed_find_sv(t, parent, off, len))?
@@ -912,7 +912,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_remove_sv",
+        "nmap_host::map_remove_sv",
         (OpaqueBox<NativeTable>, &str, i32, i32) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             b.with_mut(|t| typed_remove_sv(t, parent, off, len))?
@@ -934,7 +934,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // this path.
     rut_vm::register!(
         hosts,
-        "nmap::map_val_set_u",
+        "nmap_host::map_val_set_u",
         (OpaqueBox<NativeTable>, i32, u64) -> (),
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32, raw: u64| -> Result<(), Trap> {
             b.with_mut(|t| t.val_set(slot, raw))?
@@ -942,7 +942,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_val_get_u",
+        "nmap_host::map_val_get_u",
         (OpaqueBox<NativeTable>, i32) -> u64,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32| -> Result<u64, Trap> {
             b.with(|t| t.val_get(slot))?
@@ -962,7 +962,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // relocates host-side).
     rut_vm::register!(
         hosts,
-        "nmap::map_val_set_f",
+        "nmap_host::map_val_set_f",
         (OpaqueBox<NativeTable>, i32, f64) -> (),
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32, v: f64| -> Result<(), Trap> {
             b.with_mut(|t| t.val_set(slot, v.to_bits()))?
@@ -970,7 +970,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     );
     rut_vm::register!(
         hosts,
-        "nmap::map_val_get_f",
+        "nmap_host::map_val_get_f",
         (OpaqueBox<NativeTable>, i32) -> f64,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32| -> Result<f64, Trap> {
             b.with(|t| t.val_get(slot).map(f64::from_bits))?

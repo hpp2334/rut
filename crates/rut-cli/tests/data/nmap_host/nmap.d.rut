@@ -1,20 +1,20 @@
-// nmap/nmap.d.rut — the native key-table experiment's host surface (the
+// nmap_host/nmap.d.rut — the native key-table experiment's host surface (the
 // mapset-host plan): `pub host fn` decls only — the bodies live in
 // rut-std's `install_std_nmap` (RFC 0023 §2). Signatures are concrete
-// over the crossing set (no tuples), so the two pair-shaped answers
-// travel packed in one scalar:
+// over the crossing set.
+//
+// The native side owns KEYS and their RECORDED HASHES (closed set:
+// the integer primitives, `bool`, `str`, `bytes`) plus — since round3
+// phase 1 — the raw val column below; reference values stay rut-side
+// in `nmapset`'s parallel array.
+//
+// This fixture mirrors the committed `rut/nmap_host` surface byte-for-byte
+// in content: update BOTH when the surface changes.
+//
+// The two pair-shaped answers travel packed in one scalar because the
+// decl crossing set has no tuples:
 // - `map_remove`: `>= 0` = removed, the freed slot; `-1` = absent.
 // - `map_take_reloc`: `-1` = drained; else `(old << 32) | new`.
-//
-// The native side owns KEYS and their RECORDED HASHES (closed set: the
-// integer primitives, `bool`, `str`, `bytes`) plus — since round3
-// phase 1 — the raw val column below; reference values stay rut-side in
-// `nmapset`'s parallel array. Anything outside the closed set traps
-// loudly, pointing at the escape hatches (encode the key canonically
-// to `bytes`, or use `nmapset`). This is the experiment's HOST half,
-// mounted via `[deps]` like any tree pkg. (The pure-rut `mapset`
-// package this experiment was pinned against was removed in Sep 2026 —
-// the source lives in git history.)
 
 pub host fn map_new(cap: i64) -> opaque;
 

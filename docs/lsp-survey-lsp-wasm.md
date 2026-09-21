@@ -197,7 +197,7 @@ Explicitly checked because the premise listed them:
 - `opaque`: fresh hover renders the current `primitive str/bytes/opaque`
   form; shipped renders the old `builtin str` form; shipped completion on
   `o: opaque.` is empty vs fresh's `downcast`. Corpus use:
-  `rut/nmap/nmap.d.rut:21` (`pub host fn map_entry(m: opaque, …)`).
+  `rut/nmap_host/nmap.d.rut:21` (`pub host fn map_entry(m: opaque, …)`).
 
 ### M7 — primitive type names don't hover (pre-existing, both binaries)
 

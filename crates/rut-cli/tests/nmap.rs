@@ -1,4 +1,4 @@
-//! The `nmap` host experiment (the mapset-host plan, H2): the native
+//! The `nmap_host` host experiment (the mapset-host plan, H2): the native
 //! key table behind `opaque` payload boxes, driven end to end the way
 //! the H3 wrapper will drive it — rut code computes the hash, boxes the
 //! key with `opaque(..)`, and calls the host surface; the payload lives
@@ -17,11 +17,11 @@ use rut_driver::{Module, Session};
 use rut_vm::OpaqueRef;
 use rut_vm::interp::Vm;
 
-const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/nmap");
+const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/nmap_host");
 
 const SRC: &str = r#"
-use nmap::{ map_new, map_entry, map_find, map_remove, map_needs_grow, map_grow, map_take_reloc, map_cap, map_len };
-use nmap::{ map_entry_sv, map_find_sv, map_remove_sv };
+use nmap_host::{ map_new, map_entry, map_find, map_remove, map_needs_grow, map_grow, map_take_reloc, map_cap, map_len };
+use nmap_host::{ map_entry_sv, map_find_sv, map_remove_sv };
 
 // the wrapper-side hash vocabulary (mapset.rut verbatim): mix64 for the
 // integer keys, FNV-1a 64 for str/bytes. nmap never recomputes a hash —
@@ -334,8 +334,8 @@ entry fn sv_put_ok(t: opaque) -> i32 {
 fn vm_with_nmap() -> Vm {
     let mut session = Session::new();
     rut_driver::mount_std_core(&mut session);
-    // `nmap` — this test's host pkg, declared in tests/data/nmap
-    rut_driver::mount_dir(&mut session, std::path::Path::new(PKG_DIR)).expect("mount nmap");
+    // `nmap_host` — this test's host pkg, declared in tests/data/nmap_host
+    rut_driver::mount_dir(&mut session, std::path::Path::new(PKG_DIR)).expect("mount nmap_host");
     let expected = session.expected_host_fns();
     session
         .register_module(
@@ -359,7 +359,7 @@ fn vm_with_nmap() -> Vm {
     // bindings BEFORE the Vm (RFC 0025): install + contract + boot
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::nmap::install_std_nmap(&mut hosts);
-    hosts.verify_against(&expected); // tests/data/nmap/nmap.d.rut ↔ the bodies
+    hosts.verify_against(&expected); // tests/data/nmap_host/nmap.d.rut ↔ the bodies
     rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .unwrap()
 }

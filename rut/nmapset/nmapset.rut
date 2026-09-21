@@ -1,5 +1,5 @@
 // nmapset/nmapset.rut — the native-key map/set EXPERIMENT (the
-// mapset-host plan): generic wrapper classes over the `nmap` host
+// mapset-host plan): generic wrapper classes over the `nmap_host` host
 // table. Origin: the host-backed twin of the pure-rut `mapset`
 // package, checksum-pinned to it row for row — `mapset` was REMOVED
 // from the tree in Sep 2026 (stdlib slim-down; the source lives in git
@@ -79,7 +79,7 @@
 // these byte offsets only on ASCII parents), and the loud `Invalid`
 // trap on a bad window leaves the table intact.
 
-use nmap::{ map_new, map_grow, map_take_reloc, map_cap, map_len,
+use nmap_host::{ map_new, map_grow, map_take_reloc, map_cap, map_len,
             map_entry_i, map_entry_u, map_entry_b, map_entry_s, map_entry_y,
             map_find_i, map_find_u, map_find_b, map_find_s, map_find_y,
             map_remove_i, map_remove_u, map_remove_b, map_remove_s, map_remove_y,

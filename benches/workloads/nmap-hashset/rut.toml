@@ -3,7 +3,7 @@
 # HashSet<i32> churn over `nmapset::HashSet` (the native-key experiment
 # pkg) instead of the removed pure-rut `mapset`. Module dir because it
 # mounts
-# `nmapset` (which pulls the `nmap` host pkg); see
+# `nmapset` (which pulls the `nmap_host` host pkg); see
 # nmapset-int/rut.toml. The checksum must equal the pinned 21500055
 # (same hash values — the nmapset pkg ships the mapset-exact mix64
 # constants).

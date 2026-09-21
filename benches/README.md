@@ -1683,7 +1683,7 @@ passes) — informational only, fuel proves the stream unchanged.
 Workspace green (76 suite runs, 460 tests, zero failures; was 75/450).
 No consumer changes, no VERSION bump, `expected.json` untouched. Files:
 `crates/rut-std/src/nmap.rs` (column + crossings + unit tests),
-`rut/nmap/nmap.d.rut` + the CLI fixture mirror (the two decls),
+`rut/nmap_host/nmap.d.rut` + the CLI fixture mirror (the two decls),
 `crates/rut-driver/tests/nmap_valcolumn.rs` (new), this section. Tree
 clean apart from those; scratch under
 `/tmp/opencode/batch-nmapset-round3/p1/`.
@@ -1733,7 +1733,7 @@ not reinterpret, and no builtin exists. `map_val_set_f(m, slot, v:
 f64)` / `map_val_get_f(m, slot) -> f64` read/write the SAME u64 column
 through `f64::to_bits`/`from_bits` — raw bits byte-for-byte both
 directions, the u lane's slot law (out-of-range traps), zero wrapper
-reinterpretation. Declared in `rut/nmap/nmap.d.rut` + the CLI fixture
+reinterpretation. Declared in `rut/nmap_host/nmap.d.rut` + the CLI fixture
 mirror (update-BOTH). The integer/bool-free client-side reinterprets
 that DID spell (`as u64` / `as i64` raw wraps) stay client-side.
 
@@ -1800,7 +1800,7 @@ unchanged); HashMap + HashSet + PrimMap coexistence in one program
 with a str-keyed PrimMap riding the s lane. Workspace green (77 suite
 runs, 468 tests, zero failures; was 76/460). Files:
 `crates/rut-std/src/nmap.rs` (the f64 crossings + bit-pattern test),
-`rut/nmap/nmap.d.rut` + the CLI fixture mirror (+2 decls),
+`rut/nmap_host/nmap.d.rut` + the CLI fixture mirror (+2 decls),
 `rut/nmapset/nmapset.rut` (the three classes + the header story),
 `crates/rut-driver/tests/nmap_primmap.rs` (new), the three
 `nmap-primmap` bench files + the expected.json line, this section.
@@ -2141,7 +2141,7 @@ documented law costs nothing.
    measured bit-identical in 0a's stub) inside `NativeTable`; offsets
    are BYTE offsets with a host-side UTF-8 boundary check (trap on a
    split codepoint) so ASCII callers get byte==codepoint for free.
-5. Decls in `rut/nmap/nmap.d.rut` + the CLI fixture mirror
+5. Decls in `rut/nmap_host/nmap.d.rut` + the CLI fixture mirror
    (update-BOTH); wrapper methods on `HashMap<str, V>`; tests: the
    parity law (a range key and the equal-content str key answer the
    same slot and the same iteration position), parent-is-a-view
@@ -2193,7 +2193,7 @@ Phase 0d's minimal surface lands as a CONSUMER: the phase-1 sv
 crossings (`map_{entry,find,remove}_sv`) become reachable from
 `nmapset` users, and the two disclosed view rows exercise them
 end-to-end. No engine change, no VERSION bump, **no new crossings** —
-`rut/nmap/nmap.d.rut` is untouched this phase (both copies: the CLI
+`rut/nmap_host/nmap.d.rut` is untouched this phase (both copies: the CLI
 fixture mirror already carries the sv decls), `expected.json` gains
 exactly one line.
 

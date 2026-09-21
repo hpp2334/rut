@@ -3,7 +3,7 @@
 # i32 churn over `nmapset::HashMap` (the native-key experiment pkg, the
 # mapset-host plan) instead of the removed pure-rut `mapset`. A module
 # dir (not a
-# loose file) because it mounts `nmapset`, which pulls the `nmap` host
+# loose file) because it mounts `nmapset`, which pulls the `nmap_host` host
 # pkg through its own `[deps]`; the CLI registers `install_std_nmap`
 # alongside math/logger. `ink` is declared for the logger. The
 # checksum must equal the pinned 734932704 (same hash values — the

@@ -90,7 +90,7 @@ fns — `\b` keeps those from matching, so the rule only misfires on a bare
 identifier named `string`). `str` and `bytes` are primitives
 (`is_primitive_ty`, RFC 0004); `opaque` is the boot primitive (RFC 0014,
 the renamed `any`).
-- Corpus: `rut/nmap/nmap.d.rut:61` `pub host fn map_entry_s(m: opaque,
+- Corpus: `rut/nmap_host/nmap.d.rut:61` `pub host fn map_entry_s(m: opaque,
   k: str) -> i32;` — `opaque` and `str` render as plain identifiers;
   `rut/core/core.d.rut:59` `fn slice(self, from: i32, to: i32) -> str;`;
   `demo/src/examples/opaque.rut:28` `let box1 = opaque(Point { x: 1, y: 2 });`.

@@ -1,5 +1,5 @@
 # nmapset/ — the native-key map/set EXPERIMENT (the mapset-host plan):
-# generic wrapper classes over the `nmap` host table. The native side
+# generic wrapper classes over the `nmap_host` host table. The native side
 # owns keys (and — since round3 — prim vals); reference values stay
 # rut-side (the `[?V]` parallel array), so the `get -> ?V` aliasing
 # semantics are the law. `inline = true` like
@@ -21,4 +21,4 @@ entry.lib = "./nmapset.rut"
 inline = true
 
 [deps]
-nmap = { path = "../nmap" }
+nmap_host = { path = "../nmap_host" }

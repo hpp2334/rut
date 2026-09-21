@@ -2,7 +2,7 @@
 # nmap-knucleotide keyed through `nmapset::HashMap`'s RANGE methods
 # (put_range/get_range — the sv lanes; the key crosses as a borrowed
 # byte window of the parent, no key cell minted). A module dir (not a
-# loose file) because it mounts `nmapset` (which pulls the `nmap` host
+# loose file) because it mounts `nmapset` (which pulls the `nmap_host` host
 # pkg); see nmapset-int/rut.toml. `ink` is declared for the logger.
 # The op sequence, keys, values, and checksum formula are
 # nmap-knucleotide's EXACTLY, so the checksum must EQUAL the pinned

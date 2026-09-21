@@ -2,7 +2,7 @@
 # churn over `nmapset::HashMap`'s RANGE methods (put_range/get_range/
 # has_range/remove_range — the sv lanes), keys carved as fixed-width
 # 6-char windows of ONE generated parent string (no per-op key mint).
-# A module dir because it mounts `nmapset` (which pulls the `nmap`
+# A module dir because it mounts `nmapset` (which pulls the `nmap_host`
 # host pkg); see nmapset-int/rut.toml. `ink` is declared for the
 # logger. The counter formula is nmapset-str's, but the keys differ
 # from the twin's `f"k{i}"`, so this row carries a NEW checksum pin:
