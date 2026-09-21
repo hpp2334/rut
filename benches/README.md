@@ -2887,6 +2887,236 @@ ref-V must attack the READ-BACK (the tuple-minting downcast), not the
 storage — a direct-ref lane is an engine repr change, out of the
 experiment's scope by design.
 
+## Performance log — fasthash phase 0: the fork decided NO — evidence + verdict (Sep 2026)
+
+Phase 0 of the fasthash batch (word-bundled str/bytes hashing, 8 u8 ->
+u64 per step): the profile, the path-A algebra, the order-sensitivity
+census, and THE DECISION. Nothing was committed but this section — the
+entire experimental surface was a ~20-line `hash_bytes` stub flipped in
+`crates/rut-std/src/nmap.rs` (NEVER committed; restored +
+md5-verified — `15b7a511b7a122a9564909ae67513997` — after every flip),
+built into fixed scratch binaries, and interleaved. **The verdict, up
+front: NEITHER fork path fires. The byte-serial FNV chain is
+ILP-hidden on every row we have; the only word-bundled spelling that
+keeps slots usable is 0 to +5.5% SLOWER; and path A is algebraically
+closed anyway.** Phase 1's hash work is cancelled; this section is the
+record (the refval-exp precedent: reversible no, analysis kept).
+
+### Today's baselines (pristine v0, house probe, this session)
+
+| row          | exec med (7–9 rounds) | fuel        | VM heap peak |
+|--------------|-----------------------|-------------|--------------|
+| nmapset-str  | 52.5–52.8 ms          | 9,551,761   | 983,620 B    |
+| nmap-knuc    | 171.7–172.7 ms        | 38,814,389  | 4,195,084 B  |
+| kmer-view    | 151.5–151.6 ms        | 37,614,177  | 4,194,916 B  |
+| strview      | 39.0–39.8 ms          | 10,801,744  | 2,032,173 B  |
+| nmap-hashset | 42.3 ms               | 13,267,176  | 551 B        |
+| json-decode  | 670.9 ms              | 111,330,118 | 34,377,147 B |
+| refvals      | 340.5 ms              | 56,899,541  | 28,801,340 B |
+| nmapset-int  | 68.2 ms               | 20,703,284  | 1,966,551 B  |
+| nmap-primmap | 60.1 ms               | 17,950,301  | 324 B        |
+
+Fuel and heap are BIT-IDENTICAL to the committed pins on every row and
+in every variant below — `hash_bytes` is host-side and off the fuel
+meter, so fuel equality proves the op streams never moved and the
+deltas are pure host-side time.
+
+### The profile — the hash term is hidden, and the stubs prove it three ways
+
+Three scratch hashes replaced the byte-serial FNV-1a body (same
+function, same callers, same probing; only the value/cost changed):
+
+- **v1 — the ceiling stub**: O(1) — first+last LE word ⊕ len through a
+  splitmix finalizer. Not a real hash; the upper bound of "the hash
+  term costs nothing", slots well-formed.
+- **v2 — the viable path-B candidate**: word-FNV-1a over LE u64 words
+  (same FNV constants), zero-extended LE tail word, PLUS a splitmix64
+  finisher mixing len. Any word-bundled hash MUST look like this — v3
+  shows why.
+- **v3 — the naive plan-literal**: word-FNV-1a, LE words, NO finisher
+  ("same structure, u64 chunks"). Measured because it had to be
+  falsified.
+
+Interleaved order-rotated rounds (run 1: 7 rounds × 9 rows, v0/v1/v2;
+run 2: 9 rounds × 4 hash-active rows, v0/v2/v3; probe `--iters 3`,
+fresh VMs):
+
+| row (v0 med) | v1 delta      | v2 delta      | v3 delta        |
+|--------------|---------------|---------------|-----------------|
+| nmapset-str  | +1.9 (+3.7%)  | +1.8 / +1.7 (+3.4/3.3%) | +446.8 (+850%) |
+| nmap-knuc    | +2.1 (+1.2%)  | −0.3 / −1.1 (−0.2/0.6%) | +104.3 (+60.8%) |
+| kmer-view    | +4.2 (+2.8%)  | +2.6 / +1.7 (+1.7/1.1%) | +108.2 (+71.4%) |
+| strview      | +2.2 (+5.4%)  | +1.3 / +2.1 (+3.3/5.5%) | +457.2 (+1171%) |
+| nmap-hashset | +0.3 (+0.6%)  | −2.8 (−6.6%)  | not run (0 calls) |
+| json-decode  | −10.0 (−1.5%) | +2.4 (+0.4%)  | not run (0 calls) |
+| refvals      | +1.5 (+0.4%)  | −8.1 (−2.4%)  | not run (0 calls) |
+| nmapset-int  | −1.7 (−2.5%)  | −3.8 (−5.6%)  | not run (0 calls) |
+| nmap-primmap | −1.1 (−1.9%)  | −3.8 (−6.4%)  | not run (0 calls) |
+
+Read it in three steps:
+
+1. **The noise floor is measured, not assumed.** json-decode contains
+   NO nmap table at all (its object keys live in `Vec<str>`, the fold
+   is hand-written), and refvals/nmapset-int/nmap-primmap/nmap-hashset
+   ride the `Bits` arm of `hash_payload` (mix64) — v1/v2 never execute
+   `hash_bytes` on those rows, BY CONSTRUCTION. Their deltas: −8.1 to
+   +2.4 ms (−6.6% to +2.4%). That is binary code-layout jitter and box
+   drift, and it is the yardstick: every "win" below it is meaningless.
+2. **The ceiling stub wins nowhere.** v1 deletes the hash term
+   entirely and still cannot beat v0 beyond that floor on any row. The
+   byte-multiply chain is real latency (~4 cy/byte serial) but it is
+   NOT on any critical path: the out-of-order window around each op
+   (string mints, crossings, probe memory traffic) covers it. The
+   batch's thesis — a multiply-latency chain per byte worth ~8x —
+   is falsified at the row level: the chain costs ~0 wall time here.
+3. **The "viable" candidate is a net loss.** v2 recovers nothing
+   (knuc −0.2/−0.6% is inside the floor) and is SLOWER on the
+   short-key rows: +3.3–5.5%. The mechanism closes exactly: the
+   finisher's 3 multiplies + shifts cost ~5–7 ns/op, and for ≤8-byte
+   keys ("k{i}", 1-/2-mers) the byte chain it replaces is only 2–7 ×
+   4 cy. nmapset-str runs 283,334 hash calls; +1.8 ms / 283k ≈ +6.4
+   ns/op = the finalizer. On this suite's key lengths the fix costs
+   more than the disease.
+
+**The v3 catastrophe — the finding phase 1 needed.** v3 (word-FNV
+without a finisher) is +60% to +1171% SLOWER. Slot demo on the actual
+key set (`k0`..`k49999`, cap 2^17): v0 uses **41,356** slots (worst
+bucket 6); v3 uses **19** (worst bucket 5,556); v2 uses 41,697 (worst
+7). Why: multiplication never carries DOWNWARD — the low k bits of a
+product depend only on the low k bits of the operands. Byte-FNV feeds
+every byte through the low bits (each round XORs the byte in before
+the multiply); word-FNV lets only each word's LOW BYTES reach the
+probe-index bits. For keys ≤ 8 bytes with a constant first byte
+(`'k'`) the low bits of the hash are CONSTANT across the whole key
+set — 19 slots for 50k keys, linear probing into five ~5.5k-slot
+runs. The RFC 0033 LE law makes this platform-independent fact, not
+an accident: a finisher is not optional in any word-bundled design.
+
+### Path A — same-result batching: closed, with the algebra pinned
+
+The round is h' = (h ⊕ b)·P. Multiply-by-P is linear over
+(Z/2^64, +), but the round ALTERNATES XOR with multiply, and XOR does
+not distribute over ·P — pinned numerically: (2⊕1)·P = 3P =
+3,298,534,884,633 while (2·P)⊕(1·P) = 2,199,023,256,423. So the
+Horner-style parallel form that polynomial hashing admits
+(Σ b_i·P^(n-i) with precomputed powers) does NOT exist here: each
+byte's XOR must land BETWEEN two multiplies, and the multiply of
+round i consumes all 64 bits of round i−1's state. Consequences,
+each checked:
+
+- **Table tricks cannot shorten the chain.** A T[b] entry would have
+  to precompute (h ⊕ b)·P for all h — the table IS the computation.
+  No FNV block-composition is published or possible under this round
+  function (the state is the whole 64-bit accumulator, not a
+  shift-then-OR like CRC).
+- **Parallel lanes cannot recombine.** Even/odd-byte lanes each need
+  as their seed the previous lane's full 64-bit output — the lanes are
+  not independent; SIMD SWAR buys nothing for the same reason.
+- **A same-result scheme must replay the chain** (or memoize it — see
+  the menu note below), so the latency is the algorithm.
+
+**Verdict: path A is infeasible at bit-identity — and moot**: the
+unconstrained ceiling (v1, ANY values at O(1) cost) already showed
+there is nothing to recover.
+
+### The census — order-sensitivity: clean, and proven the hard way
+
+Which checksums depend on table iteration order (path B's re-pin
+risk)? **None.** Two independent proofs:
+
+- **Structural**: every row's checksum is counters
+  (added/replaced/hits/misses/removed/present) plus reads at FIXED
+  keys in fixed order (the knuc readout walks ACGT nested loops; the
+  str rows sum stored values by ascending i). No workload iterates a
+  table into its checksum (grep-verified: no `keys()`/`entries()`/
+  iteration over any nmap table in any workload).
+- **Empirical**: all 9 rows ran under FOUR different hash designs —
+  v0, v1, v2, v3 — i.e. every str/bytes hash value changed wholesale
+  (and v3 catastrophically degraded slot assignment), and every
+  checksum stayed BIT-IDENTICAL: 36/36 equal `expected.json` (kmer-view
+  has no expected.json entry; it equals the knuc pin 2198604 by the
+  parity law, under all four). The strongest single datapoint: the
+  stale-binary accident (see Deviations) put the FULL 27-workload
+  gate through v3 — a hash that collapses nmapset-str to 19 slots —
+  and all 27 checksums still passed.
+
+**The .js twins**: none replicate rut's hash or table order. Every
+twin (nmapset-str/hashset/knucleotide/int/primmap, kmer-view, strview,
+refvals, json-decode) computes on native JS `Map`/`Set` with JS's own
+hashing, and none iterates a map into its checksum (grep: zero FNV
+constants in `benches/workloads/*.js`; the lone "slot" hit is prose in
+strview.js:46).
+
+**Path B's re-pin cost list, HAD it won** (recorded because the fork
+asked for it exactly): (1) `crates/rut-std/src/nmap.rs` — the
+hash-pin test literals (~lines 1727–1743: `alpha`/`beta`/empty-basis +
+the payload-parity asserts) and the two doc-comment sites naming FNV
+as the law (`FNV_OFFSET`'s block ~485–494, `hash_bytes`'s ~496–501);
+(2) prose comments naming FNV-1a in `nmapset-str/{main.rut,rut.toml}`,
+`nmapset.rut`'s header, `kmer-view/main.rut`, `nmap-knucleotide`'s
+docs; (3) `expected.json`: ZERO lines; (4) `.js` twins: ZERO files.
+The one-time re-pin would have been six test literals + comments —
+the cheapest re-pin imaginable. The census was path B's precondition,
+and it PASSED; what fails path B is the benefit (the profile).
+
+### THE DECISION — neither path; the hash does not change
+
+The plan's own fork conditions: path A only if feasible at net win —
+infeasible algebraically, moot empirically; path B only if the census
+is clean AND the profile justifies a semantic-visible re-pin — the
+census is clean, but the profile does not justify: the only viable
+spelling is 0 to +5.5% slower, and the ceiling proves ~0 is
+recoverable. **So: no hash change ships. Phase 1 is cancelled; the
+constants stay the checksum law; every pin holds untouched.** The
+honest no is the deliverable, per the refval-exp precedent.
+
+What a future attempt must know (the menu, not this batch):
+
+- Any word-bundled design MUST end in a strong avalanche finisher
+  (v3's 19-slot demo), and the finisher costs ~5–7 ns/op — more than
+  the byte chain on keys < ~16 bytes. The suite's longest str keys are
+  12-byte k-mers; the thesis only pays on ≥16-byte keys that no
+  current row has. A row with long-keys-per-op dominance would have
+  to be BUILT first (e.g. a wide-record or long-URL-shaped churn).
+- A same-result follow-up that does NOT touch semantics: the range
+  lanes hash the same window twice on the get→put miss path (knuc/
+  kmer: ~2 hashes/op, the second identical). A one-entry (ptr,len)-keyed
+  memo in `typed_entry_sv`/`typed_find_sv` is bit-identical and saves
+  ~1 hash of 12 bytes ≈ 1–2 ms on the k-mer rows — inside today's
+  floor, recorded for honesty, not pursued.
+
+### Method + gates
+
+Four fixed release binaries (v0/v1/v2/v3) built from ONE checkout by
+flipping only the `hash_bytes` body; binaries copied to
+`/tmp/opencode/batch-fasthash/p0/bin-*/` before each rebuild so no
+rebuild raced the interleave; source restored + md5 re-verified after
+every flip; runs interleaved order-rotated (v0→v1→v2 rotations; run 2
+v0/v2/v3) so drift lands in all columns equally. Gates at commit:
+tree clean at base c72ddb9 + this section; `cargo test --workspace`
+525 passed / 0 failed; full-suite rut gate exit 0, 0 checksum
+mismatches, every fuel/heap pin BIT-IDENTICAL (nmapset-str
+9,551,761/983,620; nmap-knuc 38,814,389/4,195,084; kmer-view
+37,614,177/4,194,916; strview 10,801,744/2,032,173; nmap-hashset
+13,267,176/551; nmap-primmap 17,950,301/324; nmapset-int
+20,703,284/1,966,551; json-decode 111,330,118/34,377,147; refvals
+56,899,541/28,801,340; crossing-nop 104,000,032/236; alloc
+22,000,020/228; sieve 19,592,209/1,491,846; array 60,486,108/7,864,540;
+fasta 200,029/16,806; binary-trees 1,048,552); staged by explicit
+path; no parallel-session files touched (rut-lsp/vscode-extension/
+rfc/wasm untouched).
+
+**Deviations (both recorded, neither silent):** (1) the FIRST
+full-suite gate ran against a stale scratch binary — v3 still sitting
+in `target/release` after the last stub flip (source was restored but
+not rebuilt). Caught by the exec columns (nmapset-str 502 ms vs the
+52.5 ms v0 median), re-run clean on rebuilt v0 (md5-verified against
+the v0 scratch copy). The accident was KEPT as evidence: it is the
+full-gate form of the census proof (27/27 checksums survive even a
+19-slot hash). (2) None. Scratch lives under
+`/tmp/opencode/batch-fasthash/p0/` (binaries, harnesses, raw JSON);
+this section is the only committed artifact.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
