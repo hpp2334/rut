@@ -3,6 +3,11 @@
 // rut-std's `install_std_nmap` (RFC 0023 §2). Signatures are concrete
 // over the crossing set.
 //
+// The native side owns KEYS and their RECORDED HASHES (closed set:
+// the integer primitives, `bool`, `str`, `bytes`) plus — since round3
+// phase 1 — the raw val column below; reference values stay rut-side
+// in `nmapset`'s parallel array.
+//
 // This fixture mirrors the committed `rut/nmap` surface byte-for-byte
 // in content: update BOTH when the surface changes.
 //
@@ -76,3 +81,17 @@ pub host fn map_remove_b(m: opaque, k: bool) -> i32;
 pub host fn map_remove_s(m: opaque, k: str) -> i32;
 
 pub host fn map_remove_y(m: opaque, k: bytes) -> i32;
+
+// ---- the val column (nmapset-round3, phase 1) -----------------------
+// Raw u64 bits in/out, ONE pair for every primitive val kind
+// (i64/u64/f64/bool — the wrapper reinterprets client-side). `slot` is
+// the index a previous `map_entry_*` / `map_find_*` / `map_remove_*`
+// call answered, valid while that key's slot stays occupied
+// (presence-by-key: the column has no nil tags; `map_remove_*` writes
+// nothing and the slot's next put stores a fresh val). Out-of-range
+// slots trap. Growth relocates the column host-side with the keys, so
+// this path needs no relocation drain.
+
+pub host fn map_val_set_u(m: opaque, slot: i32, v: u64);
+
+pub host fn map_val_get_u(m: opaque, slot: i32) -> u64;

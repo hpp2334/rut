@@ -41,6 +41,19 @@
 //! vecs fold into one `Vec<KeyVal>` — the key kind fixes on the table's
 //! first insert and never mixes, so per-slot variants are the same data
 //! with one allocation per grow instead of three.
+//!
+//! The val column (nmapset-round3 phase 1): alongside the keys the
+//! table carries `vals: Vec<u64>` — raw bits, one column for every
+//! primitive val kind (the monomorphized wrapper reinterprets
+//! i64/u64/f64/bool client-side; no lane explosion). Presence is
+//! BY-KEY (plan §0.3): a val is valid iff its key slot is FULL, so the
+//! column has no nil tags and `remove` writes nothing — a put always
+//! stores the val at the slot its crossing answered, and a get only
+//! reads a found slot. `grow` relocates vals WITH the keys (the same
+//! slot walk, one mapping — the wrapper-side relocation drain that
+//! phase 2 deletes never touches this column). Slots cross as caller-
+//! supplied indices and are validated like any host lane: out of
+//! range is a trap, not a read.
 
 use std::collections::VecDeque;
 
@@ -88,6 +101,24 @@ pub struct NativeTable {
     keys: Vec<KeyVal>,
     /// one byte per slot: 0 EMPTY · 1 FULL · 2 DEAD (tombstone)
     states: Vec<u8>,
+    /// the val column: one raw u64 per slot, valid iff the key slot is
+    /// FULL (presence-by-key — no nil tags, no writes on remove). Eager,
+    /// cap-aligned: allocated zeroed at creation and reallocated by
+    /// `grow`, so `vals.len() == cap` holds at every observation point
+    /// and the set/get crossings are a bounds check + an index — no
+    /// per-op "is it allocated" branch on the phase-2 consumer's hot
+    /// path. The zero fill is the initial state only; a val under a
+    /// DEAD slot stays stale by design (unreachable through the map
+    /// protocol, overwritten by the next insert at that slot).
+    ///
+    /// Accounting note (measured, phase-1 sanity pass): the Vec header
+    /// grows `size_of::<NativeTable>()` 120 → 144, and `OpaqueBox::
+    /// alloc` charges that shallow size to the RFC 0040 heap budget at
+    /// every `map_new` — so the VM-heap high-water reads +24 B per
+    /// table box alive at peak. No rut-visible allocation changes: the
+    /// column's backing memory is plain Rust, invisible to cell
+    /// accounting, and every row's checksum and fuel are untouched.
+    vals: Vec<u64>,
     count: u32,
     tomb: u32,
     /// power of two, >= 4 — the index mask is `cap - 1`
@@ -112,6 +143,7 @@ impl NativeTable {
             hashes: vec![0; c as usize],
             keys: vec![KeyVal::Bits(0); c as usize],
             states: vec![0; c as usize],
+            vals: vec![0; c as usize],
             count: 0,
             tomb: 0,
             cap: c,
@@ -156,7 +188,10 @@ impl NativeTable {
     }
 
     /// The remove crossing: tombstone the found slot (the owned key
-    /// drops with the store) and answer it, or `-1` when absent.
+    /// drops with the store) and answer it, or `-1` when absent. The
+    /// val column is NOT written: presence-by-key (plan §0.3) makes the
+    /// stale bits unreachable, and the slot's next insert stores a fresh
+    /// val before anything can observe the old one.
     pub fn remove(&mut self, kind: KeyKind, key: &KeyVal, h: u64) -> Result<i32, Trap> {
         self.admit(kind)?;
         let at = self.probe(key, h);
@@ -181,14 +216,23 @@ impl NativeTable {
     /// resets, `count` is unchanged) and the old→new slot pairs queue in
     /// `reloc` for the wrapper's value-array relocation. Answers the new
     /// capacity so the wrapper sizes its parallel array in one crossing.
+    ///
+    /// The val column moves WITH the keys, inside the same slot walk:
+    /// each FULL slot's u64 lands on its key's new slot (round3 phase
+    /// 1), so a column-backed wrapper needs no drain pass at all — the
+    /// `reloc` queue stays for the `[?V]` sidecar path, unchanged.
+    /// Slot assignment is untouched by the column, so iteration order
+    /// and every existing checksum hold by construction.
     pub fn grow(&mut self) -> i32 {
         let mut old_keys = std::mem::take(&mut self.keys);
         let old_hashes = std::mem::take(&mut self.hashes);
         let old_states = std::mem::take(&mut self.states);
+        let old_vals = std::mem::take(&mut self.vals);
         let new_cap = self.cap * 2;
         self.keys = vec![KeyVal::Bits(0); new_cap as usize];
         self.hashes = vec![0; new_cap as usize];
         self.states = vec![0; new_cap as usize];
+        self.vals = vec![0; new_cap as usize];
         self.cap = new_cap;
         self.tomb = 0;
         self.reloc.clear();
@@ -201,6 +245,7 @@ impl NativeTable {
             self.keys[at as usize] = std::mem::replace(&mut old_keys[i], KeyVal::Bits(0));
             self.hashes[at as usize] = h;
             self.states[at as usize] = 1;
+            self.vals[at as usize] = old_vals[i];
             self.reloc.push_back((i as i32, at));
         }
         new_cap as i32
@@ -215,6 +260,41 @@ impl NativeTable {
             None => -1,
             Some((old, new)) => ((old as i64) << 32) | (new as i64),
         }
+    }
+
+    /// The val column's write crossing (round3 phase 1): store `raw` at
+    /// `slot`. The slot is caller-supplied (the wrapper holds it from
+    /// its entry/find/remove crossing) and validated like any host
+    /// lane — negative or `>= cap` is a trap, never a read/write. Raw
+    /// bits only: every primitive val kind rides the one u64 lane, the
+    /// wrapper reinterprets client-side.
+    pub fn val_set(&mut self, slot: i32, raw: u64) -> Result<(), Trap> {
+        let at = self.val_slot(slot)?;
+        self.vals[at] = raw;
+        Ok(())
+    }
+
+    /// The val column's read crossing: the raw u64 at `slot` (same
+    /// bounds law). Validity is the map invariant — a val is whatever
+    /// the last put at this key's slot stored; reading a slot whose key
+    /// is absent is a caller bug the bounds check cannot name (no nil
+    /// tags by design), so this answers the stored bits.
+    pub fn val_get(&self, slot: i32) -> Result<u64, Trap> {
+        let at = self.val_slot(slot)?;
+        Ok(self.vals[at])
+    }
+
+    /// The caller-supplied slot's bounds check: `[0, cap)`, trapping
+    /// with the lane house shape (`Invalid` + "out of range") on
+    /// anything else.
+    fn val_slot(&self, slot: i32) -> Result<usize, Trap> {
+        if slot < 0 || slot >= self.cap as i32 {
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                format!("nmap: val slot {slot} out of range (cap {})", self.cap),
+            ));
+        }
+        Ok(slot as usize)
     }
 
     /// The capacity, at the i32 boundary (`len()` and indexing are i32).
@@ -578,6 +658,36 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (OpaqueBox<NativeTable>, &[u8]) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
             b.with_mut(|t| typed_remove(t, &KeyVal::Bytes(k.to_vec())))?
+        },
+    );
+
+    // ---- the val column (nmapset-round3, phase 1) ----------------------
+    // Two crossings, raw u64 bits in/out, ONE pair serving every
+    // primitive val kind (i64/u64/f64/bool — the monomorphized wrapper
+    // reinterprets client-side; no lane explosion). Slots cross as
+    // caller-supplied `i32` indices — the wrapper holds the slot its
+    // `map_entry_*`/`map_find_*`/`map_remove_*` call answered — and are
+    // bounds-checked host-side (out of range traps). The u64 lane is
+    // raw-bit at the boundary in BOTH directions (the `u64` param/ret
+    // read/write the slot's bit pattern, verified in the phase-2
+    // driver tests), so no sign rules apply to payload bits.
+    // `map_val_set_u` answers nothing (a put always stores); growth
+    // relocates the column host-side, so no wrapper drain exists for
+    // this path.
+    rut_vm::register!(
+        hosts,
+        "nmap::map_val_set_u",
+        (OpaqueBox<NativeTable>, i32, u64) -> (),
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32, raw: u64| -> Result<(), Trap> {
+            b.with_mut(|t| t.val_set(slot, raw))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_val_get_u",
+        (OpaqueBox<NativeTable>, i32) -> u64,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32| -> Result<u64, Trap> {
+            b.with(|t| t.val_get(slot))?
         },
     );
 }
@@ -985,5 +1095,308 @@ mod tests {
         // ulp above i32::MIN, a 2^31 gap of headroom
         assert_eq!((-(0x4000_0000i32 + 1)) as i64, -0x4000_0001i64);
         assert!(GROW_FIRST == i32::MIN && GROW_FIRST < -0x4000_0000);
+    }
+
+    // ---- the val column (nmapset-round3, phase 1) ----------------------
+
+    /// Raw-bit round-trips through the column: the full u64 sign range
+    /// (2^63..2^64-1 cross with their bits — the u64 lane is raw in both
+    /// directions) and f64 bit patterns (`to_bits`), replace at the same
+    /// slot, and the presence-by-key laws — no write on remove (the
+    /// stale bits stay, unreachable), and a re-insert at the reused DEAD
+    /// slot stores a fresh val.
+    #[test]
+    fn vals_round_trip_raw_bits_through_set_and_get() {
+        let mut t = NativeTable::new(8);
+        // a fresh column reads zero everywhere (the zero-fill initial
+        // state — there are no nil tags, the zeros are just init)
+        for s in 0..8 {
+            assert_eq!(t.val_get(s).unwrap(), 0);
+        }
+        assert_eq!(t.vals.len(), 8, "the column is cap-aligned at creation");
+        // five keys at known slots
+        let mut slots = Vec::new();
+        for k in 0u64..5 {
+            let a = t.entry(KeyKind::Bits, bits(k), mix64(k)).unwrap();
+            slots.push(-(a + 1));
+        }
+        // the u64 sign range + f64 bit patterns, one per key
+        let payloads: [u64; 5] = [
+            u64::MAX,
+            1u64 << 63,
+            (1u64 << 63) + 12345,
+            (-1.5f64).to_bits(),
+            f64::INFINITY.to_bits(),
+        ];
+        for (i, s) in slots.iter().enumerate() {
+            t.val_set(*s, payloads[i]).unwrap();
+        }
+        for (i, s) in slots.iter().enumerate() {
+            assert_eq!(t.val_get(*s).unwrap(), payloads[i], "slot {s}");
+        }
+        // replace at the same slot: the found-path put overwrites
+        t.val_set(slots[2], 42).unwrap();
+        assert_eq!(t.val_get(slots[2]).unwrap(), 42);
+        assert_eq!(t.val_get(slots[3]).unwrap(), payloads[3], "neighbors untouched");
+        // remove writes NOTHING (presence-by-key): the stale bits stay
+        let freed = t.remove(KeyKind::Bits, &bits(2), mix64(2)).unwrap();
+        assert_eq!(freed, slots[2]);
+        assert_eq!(t.val_get(slots[2]).unwrap(), 42, "no val write on remove");
+        // re-insert: the DEAD slot wins the probe (the same slot), and
+        // the next put stores a fresh val over the stale one
+        let a = t.entry(KeyKind::Bits, bits(2), mix64(2)).unwrap();
+        assert_eq!(a, -(freed + 1), "the reused DEAD slot is the fresh insert");
+        t.val_set(slots[2], 7).unwrap();
+        assert_eq!(t.val_get(slots[2]).unwrap(), 7);
+        assert_eq!(t.vals.len(), t.cap() as usize, "cap alignment holds");
+    }
+
+    /// Grow relocates vals WITH the keys — pinned literally: the exact
+    /// old→new slot mapping for keys 1..4 across cap 4→8, each val read
+    /// back at its key's NEW slot, the column cap-aligned after the
+    /// grow, and the drained queue matching the pairs the column moved.
+    #[test]
+    fn grow_moves_vals_with_the_keys_and_pins_the_mapping() {
+        let mut t = NativeTable::new(4);
+        let mut old_slots = Vec::new();
+        for i in 1u64..4 {
+            let a = t.entry(KeyKind::Bits, bits(i), mix64(i)).unwrap();
+            let slot = -(a + 1);
+            old_slots.push(slot);
+            t.val_set(slot, i * 100).unwrap();
+        }
+        assert_eq!(t.grow(), 8);
+        assert_eq!(t.vals.len(), 8, "the column doubles with the table");
+        // pin the mapping (deterministic: recorded hashes, mapset's
+        // constants) and the vals riding it
+        let mut moved = std::collections::BTreeMap::new();
+        loop {
+            let packed = t.take_reloc();
+            if packed < 0 {
+                break;
+            }
+            let old = (packed >> 32) as i32;
+            let new = (packed & 0xFFFF_FFFF) as i32;
+            moved.insert(old, new);
+        }
+        assert_eq!(moved.len(), 3, "one pair per FULL slot");
+        for (i, old) in old_slots.iter().enumerate() {
+            let k = i as u64 + 1;
+            let at = t.find(KeyKind::Bits, &bits(k), mix64(k)).unwrap();
+            assert_eq!(moved.get(old), Some(&at), "key {k}: {old} -> {at}");
+            assert_eq!(
+                t.val_get(at).unwrap(),
+                k * 100,
+                "key {k}'s val followed its slot {old} -> {at}"
+            );
+        }
+        // the drained queue is a second read of nothing
+        assert_eq!(t.take_reloc(), -1);
+    }
+
+    /// Multi-grow sweep, the wrapper's fused shape: sentinel-driven
+    /// grows with NO drain (the column path needs none), removes and
+    /// DEAD-slot re-inserts interleaved, f64 bit patterns in the mix —
+    /// every surviving key's val is exact after 4 grows (cap 4 → 64).
+    #[test]
+    fn vals_survive_multi_grow_sweeps_without_a_drain() {
+        let mut t = NativeTable::new(4);
+        // val bits: ints for most keys, f64 bit patterns every 5th
+        let val_of = |k: u64| -> u64 {
+            if k % 5 == 0 {
+                (k as f64 + 0.25).to_bits()
+            } else {
+                k.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            }
+        };
+        let put = |t: &mut NativeTable, k: u64| -> i32 {
+            let mut at = typed_entry(t, KeyVal::Bits(k)).unwrap();
+            while at == GROW_FIRST {
+                t.grow(); // no drain: the column moved with the keys
+                at = typed_entry(t, KeyVal::Bits(k)).unwrap();
+            }
+            let slot = if at >= 0 { at } else { -(at + 1) };
+            t.val_set(slot, val_of(k)).unwrap();
+            slot
+        };
+        for k in 0u64..150 {
+            put(&mut t, k);
+        }
+        // the load law's exact stops: (count + 1)·10 >= cap·7 flips at
+        // count 2 on cap 4, 5 on cap 8, 11 on 16, 22 on 32, 44 on 64,
+        // 89 on 128 — so 150 puts land on cap 256
+        assert_eq!(t.cap(), 256, "cap 4 grew to 256 across 150 puts");
+        // removes + re-inserts churn the tombstone/reuse paths
+        for k in (0u64..150).step_by(3) {
+            assert!(typed_remove(&mut t, &KeyVal::Bits(k)).unwrap() >= 0);
+        }
+        for k in (0u64..150).step_by(3) {
+            put(&mut t, k);
+        }
+        // every val exact, at the slot find answers now
+        for k in 0u64..150 {
+            let at = typed_find(&t, &KeyVal::Bits(k)).unwrap();
+            assert!(at >= 0, "key {k} lost");
+            assert_eq!(t.val_get(at).unwrap(), val_of(k), "key {k}");
+        }
+        assert_eq!(t.vals.len(), t.cap() as usize);
+    }
+
+    /// Caller-supplied slots are validated like any host lane: negative
+    /// and `>= cap` trap (`Invalid` + "out of range"), `cap - 1` is the
+    /// legal edge.
+    #[test]
+    fn val_slot_addressing_traps_out_of_range() {
+        let mut t = NativeTable::new(4);
+        t.val_set(3, 9).unwrap();
+        assert_eq!(t.val_get(3).unwrap(), 9, "cap - 1 is the legal edge");
+        for slot in [-1, 4, 5, i32::MAX] {
+            let err = t.val_set(slot, 1).unwrap_err();
+            assert_eq!(err.kind, TrapKind::Invalid);
+            assert!(err.msg.contains("out of range"), "{}", err.msg);
+            assert!(err.msg.contains("cap 4"), "{}", err.msg);
+            let err = t.val_get(slot).unwrap_err();
+            assert_eq!(err.kind, TrapKind::Invalid);
+            assert!(err.msg.contains("out of range"), "{}", err.msg);
+        }
+        // an empty table traps identically (the check is the cap, not
+        // occupancy — presence-by-key has no tags to consult)
+        let e = NativeTable::new(4);
+        assert_eq!(e.val_get(0).unwrap(), 0, "in range reads the zero init");
+        let err = e.val_get(4).unwrap_err();
+        assert!(err.msg.contains("out of range"));
+    }
+
+    /// The column sits on the PINNED hash slots: keys whose mix64 bits
+    /// the hash-pin test above freezes land where those bits say
+    /// (`h & mask`), including a probe collision (two pinned keys share
+    /// the cap-8 home slot; linear probing separates them and the vals
+    /// follow the keys, not the home slot).
+    #[test]
+    fn the_val_column_sits_on_the_pinned_hash_slots() {
+        // hash_payload's pinned bits (the test above): key 11 ->
+        // 12638163011299821354, u64::MAX -> 5808589858502755950,
+        // key 255 -> 12638352127299873646
+        let h11 = hash_payload(&KeyVal::Bits(11));
+        let hmax = hash_payload(&KeyVal::Bits(u64::MAX));
+        assert_eq!((h11 & 7) as i32, 2, "key 11's cap-8 home slot");
+        assert_eq!((hmax & 7) as i32, 6, "u64::MAX's cap-8 home slot");
+        let mut t = NativeTable::new(8);
+        let a = t.entry(KeyKind::Bits, bits(11), h11).unwrap();
+        assert_eq!(2, -(a + 1), "key 11 landed on its home slot");
+        t.val_set(2, 0xDEAD_BEEF).unwrap();
+        // key 255's pinned bits are 12638352127299873646 -> home 6 (the
+        // same home as u64::MAX, unoccupied here): insert, then the
+        // collision key u64::MAX probes onward
+        let h255 = hash_payload(&KeyVal::Bits(255));
+        let b = t.entry(KeyKind::Bits, bits(255), h255).unwrap();
+        assert_eq!(6, -(b + 1), "key 255 landed on its home slot");
+        t.val_set(6, 111).unwrap();
+        let c = t.entry(KeyKind::Bits, bits(u64::MAX), hmax).unwrap();
+        assert!(c < 0);
+        let max_slot = -(c + 1);
+        assert_ne!(max_slot, 6, "the shared home slot is taken: probe moves on");
+        t.val_set(max_slot, u64::MAX).unwrap();
+        // every val is at ITS key's slot — the vals followed the keys
+        assert_eq!(t.val_get(2).unwrap(), 0xDEAD_BEEF);
+        assert_eq!(t.val_get(6).unwrap(), 111);
+        assert_eq!(t.val_get(max_slot).unwrap(), u64::MAX);
+        // and the pins hold through a grow
+        t.grow();
+        let f11 = t.find(KeyKind::Bits, &bits(11), h11).unwrap();
+        let f255 = t.find(KeyKind::Bits, &bits(255), h255).unwrap();
+        let fmax = t.find(KeyKind::Bits, &bits(u64::MAX), hmax).unwrap();
+        assert_eq!(t.val_get(f11).unwrap(), 0xDEAD_BEEF);
+        assert_eq!(t.val_get(f255).unwrap(), 111);
+        assert_eq!(t.val_get(fmax).unwrap(), u64::MAX);
+    }
+
+    /// THE CHECKSUM LAW (plan phase 1): one wrapper-shaped op sequence —
+    /// fused-sentinel puts with replaces, grows, removes, hits — driven
+    /// through BOTH val storages: today's `[?V]` sidecar (a `Vec`
+    /// relocated by draining `take_reloc`, exactly what nmapset.rut's
+    /// wrapper does) and the native column (no drain). Identical slots
+    /// per key, identical checksum, pinned as a literal.
+    #[test]
+    fn the_column_matches_the_sidecar_path_wrapper_shaped() {
+        // the shared op sequence, parameterized by the val storage
+        fn run(column: bool) -> (u64, Vec<(u64, i32)>) {
+            let mut t = NativeTable::new(4);
+            // the sidecar's nil is 0; the column's init is 0 too
+            let mut vals: Vec<u64> = Vec::new();
+            let val_of = |k: u64| -> u64 {
+                if k % 7 == 0 {
+                    (-(k as f64)).to_bits()
+                } else {
+                    k * 7 + 1
+                }
+            };
+            // the wrapper's put: fused sentinel -> grow (+ the sidecar's
+            // drain) -> retry -> store the val at the answered slot
+            let mut put = |t: &mut NativeTable, vals: &mut Vec<u64>, k: u64, v: u64| {
+                let mut at = typed_entry(t, KeyVal::Bits(k)).unwrap();
+                while at == GROW_FIRST {
+                    let new_cap = t.grow();
+                    if !column {
+                        let mut next: Vec<u64> = vec![0; new_cap as usize];
+                        loop {
+                            let packed = t.take_reloc();
+                            if packed < 0 {
+                                break;
+                            }
+                            let old = (packed >> 32) as usize;
+                            let new = (packed & 0xFFFF_FFFF) as usize;
+                            next[new] = vals[old];
+                        }
+                        *vals = next;
+                    }
+                    at = typed_entry(t, KeyVal::Bits(k)).unwrap();
+                }
+                let slot = if at >= 0 { at } else { -(at + 1) };
+                if column {
+                    t.val_set(slot, v).unwrap();
+                } else {
+                    vals.resize(t.cap() as usize, 0);
+                    vals[slot as usize] = v;
+                }
+            };
+            // churn: 300 puts (cap 4 -> 128), replaces on the % 4 keys,
+            // removes on the % 3 keys
+            for k in 0u64..300 {
+                put(&mut t, &mut vals, k, val_of(k));
+            }
+            for k in (0u64..300).step_by(4) {
+                put(&mut t, &mut vals, k, val_of(k).wrapping_add(1));
+            }
+            for k in (0u64..300).step_by(3) {
+                let at = typed_remove(&mut t, &KeyVal::Bits(k)).unwrap();
+                if at >= 0 && !column {
+                    vals[at as usize] = 0; // the wrapper nils the cell
+                }
+            }
+            // the hit phase: every key, checksum over the found vals
+            let mut acc: u64 = 0;
+            let mut hits: u64 = 0;
+            let mut slots = Vec::new();
+            for k in 0u64..300 {
+                let at = typed_find(&t, &KeyVal::Bits(k)).unwrap();
+                if at < 0 {
+                    continue;
+                }
+                let v = if column { t.val_get(at).unwrap() } else { vals[at as usize] };
+                acc = acc.wrapping_add(v).rotate_left(17) ^ (k as u64);
+                hits += 1;
+                slots.push((k, at));
+            }
+            (acc ^ hits.wrapping_mul(41), slots)
+        }
+        let (side_sum, side_slots) = run(false);
+        let (col_sum, col_slots) = run(true);
+        // identical slot assignment (iteration order cannot move) and
+        // an identical checksum
+        assert_eq!(side_slots, col_slots, "same keys, same slots");
+        assert_eq!(side_sum, col_sum, "the two storages agree bit for bit");
+        // the pinned literal: the checksum this exact sequence produces
+        assert_eq!(col_sum, 5344915641404318251);
     }
 }

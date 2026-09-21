@@ -1587,6 +1587,89 @@ ladder dirs, raw JSON) lives under `/tmp/opencode/batch-nmapset-round3/p0/`;
 `expected.json` untouched; workspace green (75 suites, 450 tests, zero
 failures); tree clean — this section is the entire commit.
 
+## Performance log — nmapset-round3 phase 1: the host val column + crossings (Sep 2026)
+
+The native value column lands behind the existing surface: `NativeTable`
+gains `vals: Vec<u64>` — one raw u64 per slot, **presence-by-key**
+(plan §0.3: a val is valid iff its key slot is FULL; no nil tags) — and
+two additive crossings, `map_val_set_u(t, slot, v: u64)` /
+`map_val_get_u(t, slot) -> u64`, raw bits in/out, ONE pair for every
+primitive val kind (the phase-2 `PrimMap` wrapper reinterprets
+i64/u64/f64/bool client-side; no lane explosion). Slots cross as
+caller-supplied `i32` and are bounds-checked host-side (negative or
+`>= cap` traps, the house `Invalid` + "out of range" shape). `grow`
+relocates vals WITH the keys inside the same re-slot walk — the term
+that deletes the wrapper's 16.7 ms drain pass (finding 0a) for the
+column-backed consumer. `remove` writes nothing (presence-by-key makes
+the stale bits unreachable; the slot's next put stores a fresh val).
+
+Design decisions, recorded:
+
+- **Allocation: eager at creation** (zeroed `vec![0; cap]` in `new`,
+  reallocated by `grow`). Cap is known at construction and §0.3 pins
+  column cap == table cap, so eager keeps `vals.len() == cap` true at
+  every observation point and the phase-2 hot path is a bounds check +
+  an index — no per-op "is it allocated" branch. Cost for val-less
+  tables (`HashSet`): one 8 B/slot zero-fill host-side, invisible to
+  fuel and to cell accounting.
+- **Layout: separate Vec** (the plan's phase-1 default). Interleaving
+  stays on the menu: with no consumer wired, a separate-vs-interleaved
+  A/B on any bench row measures nothing (both are bit-identical — the
+  column is never called), and a host-only micro-bench would not
+  reflect the op stream. Phase 2's `PrimMap` consumer makes the row-level
+  A/B real; the phase-0b model is the predicted check (~20 ns/op, the
+  sidecar's share of the +46.4 ns DRAM miss term).
+
+Tests (all new, 10 host-side + 4 VM-side): raw-bit round-trips through
+the u64 sign range (2^63..2^64-1) and f64 `to_bits` patterns; replace
+on the found path; the remove/re-insert staleness law; sentinel-driven
+multi-grow sweeps (cap 4 → 256) with tombstone churn and NO drain —
+every val exact at its key's CURRENT slot; the exact old→new
+relocation mapping pinned with the vals riding it; out-of-range slot
+traps; the column sitting on the PINNED `hash_payload` home slots incl.
+a linear-probe collision; and THE CHECKSUM LAW two ways — a
+wrapper-shaped op sequence through column vs sidecar in one Rust test
+(identical slots per key, identical checksum, pinned literal
+`5344915641404318251`), and the nmapset-int `churn` shape at n = 2000
+driven through the VM twice (`map_*` + column vs today's
+`nmapset.HashMap` sidecar wrapper) answering the same `2598000`.
+
+Sanity pass (house method: one probe binary per side, all 27 workloads,
+rut only — no consumer uses the column yet): **checksums bit-identical
+on every row** (incl. the four nmapset pins 734932704 / 1264308351 /
+21500055 / 2198604) and **fuel bit-identical on every row** (nmapset-int
+20,703,284; nmapset-str 9,551,761; hashmap-int 63,758,210;
+crossing-nop 104,000,032; nmap-hashset 13,267,176 — the op stream did
+not move). **Heap moved +24 B per table box** on the four rows that
+build nmap tables (nmapset-int 1,966,527 → 1,966,551; nmapset-str
+983,596 → 983,620; nmap-knucleotide 4,195,060 → 4,195,084;
+nmap-hashset 503 → 551, two sets alive at peak); the other 23 rows are
+bit-identical including heap. DEVIATION, recorded with the mechanism:
+`OpaqueBox::alloc` charges the payload's shallow `size_of::<T>()` to
+the RFC 0040 heap budget (`heap/mod.rs` `alloc_host_box`), and the
+mandated `vals: Vec<u64>` column grows `size_of::<NativeTable>()`
+120 → 144 — exactly one Vec header, charged once per `map_new`. No
+rut-visible allocation changes (the column's backing memory is plain
+Rust, invisible to cell accounting), and no layout within the plan's
+letter avoids it: any column state in the struct is charged, and the
+separate-Vec-first mandate rules out the one heap-neutral alternative
+(interleaving the val into the existing `keys` allocation), which the
+plan defers behind A/B numbers this phase cannot honestly produce.
+Fuel/heap/checksum reconciliation for phase 2's gate should therefore
+re-pin the four heap rows at these +24 B-per-live-table values; a
+revert lever exists (the column is isolated to `nmap.rs` + the two
+`.d.rut` decls). Exec medians wobbled with the box load (parallel
+session; nmapset-int read 79.9 before / 70.0 after on single quick
+passes) — informational only, fuel proves the stream unchanged.
+
+Workspace green (76 suite runs, 460 tests, zero failures; was 75/450).
+No consumer changes, no VERSION bump, `expected.json` untouched. Files:
+`crates/rut-std/src/nmap.rs` (column + crossings + unit tests),
+`rut/nmap/nmap.d.rut` + the CLI fixture mirror (the two decls),
+`crates/rut-driver/tests/nmap_valcolumn.rs` (new), this section. Tree
+clean apart from those; scratch under
+`/tmp/opencode/batch-nmapset-round3/p1/`.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may

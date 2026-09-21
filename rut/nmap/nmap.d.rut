@@ -6,11 +6,13 @@
 // - `map_remove`: `>= 0` = removed, the freed slot; `-1` = absent.
 // - `map_take_reloc`: `-1` = drained; else `(old << 32) | new`.
 //
-// The native side owns KEYS only (closed set: the integer primitives,
-// `bool`, `str`, `bytes`); values stay rut-side in `nmapset`'s parallel
-// array. Anything outside the closed set traps loudly, pointing at
-// `mapset`. The pure-rut `mapset` package is untouched — this is the
-// experiment's HOST half, mounted via `[deps]` like any tree pkg.
+// The native side owns KEYS and their RECORDED HASHES (closed set: the
+// integer primitives, `bool`, `str`, `bytes`) plus — since round3
+// phase 1 — the raw val column below; reference values stay rut-side in
+// `nmapset`'s parallel array. Anything outside the closed set traps
+// loudly, pointing at `mapset`. The pure-rut `mapset` package is
+// untouched — this is the experiment's HOST half, mounted via `[deps]`
+// like any tree pkg.
 
 pub host fn map_new(cap: i64) -> opaque;
 
@@ -77,3 +79,17 @@ pub host fn map_remove_b(m: opaque, k: bool) -> i32;
 pub host fn map_remove_s(m: opaque, k: str) -> i32;
 
 pub host fn map_remove_y(m: opaque, k: bytes) -> i32;
+
+// ---- the val column (nmapset-round3, phase 1) -----------------------
+// Raw u64 bits in/out, ONE pair for every primitive val kind
+// (i64/u64/f64/bool — the wrapper reinterprets client-side). `slot` is
+// the index a previous `map_entry_*` / `map_find_*` / `map_remove_*`
+// call answered, valid while that key's slot stays occupied
+// (presence-by-key: the column has no nil tags; `map_remove_*` writes
+// nothing and the slot's next put stores a fresh val). Out-of-range
+// slots trap. Growth relocates the column host-side with the keys, so
+// this path needs no relocation drain.
+
+pub host fn map_val_set_u(m: opaque, slot: i32, v: u64);
+
+pub host fn map_val_get_u(m: opaque, slot: i32) -> u64;
