@@ -97,6 +97,7 @@ against the reference in `workloads/expected.json`.
 | `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
 | `kmer-view` | the `nmap-knucleotide` k-mer counting keyed through `nmapset::HashMap`'s **range methods** (strings-round1 phase 2 — the sv lanes: keys cross as borrowed byte windows of the sequence, no key cell minted; see the performance log) | seq = 200 000 | checksum `2198604` — the `nmap-knucleotide` pin; parity is the gate, no separate line |
 | `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
+| `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells, RFC 0044): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the `[?V]` relocation drain). K = i64 holds the hash term constant so the row isolates VALUE-side costs; the refval-exp batch's phase-1 `refcolumn` row re-spells this exact op stream over the host val column | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
@@ -2466,6 +2467,181 @@ Files this phase: `benches/README.md` only. Scratch:
 `/tmp/opencode/batch-strings-round1/p3/` (verdict.json/.md/.csv/.log,
 pairs script + JSONL + load log).
 
+## Performance log — refvals phase 0: the ref-V baseline, PRE-EXPERIMENT (Sep 2026)
+
+The refval-exp batch's measuring stick. The batch (plan: an opaque val
+column for reference V, read back via downcast) is gated on this row:
+**no bench row today exercised reference values at all** — every map row
+stores primitive/str vals — so phase 0 lands `refvals`, a record-valued
+`HashMap<i64, Pt>` over the `[?V]` sidecar, and measures the baseline
+the experimental `refcolumn` row must beat. The row is a keeper
+regardless of the verdict (permanent ref-V coverage). This section is
+the pre-experiment record; phase-2 comparisons read their before
+columns HERE. No engine change, no pkg change, one expected.json line.
+
+### The row's shape, and why
+
+`HashMap<i64, Pt>` (`Pt = { x: i32, y: i32 }`) — **K = i64
+deliberately**: the key lane (`map_entry_i`/`map_find_i`, one mix64 per
+op, the nmapset-int precedent) is held constant so the row isolates the
+VALUE-side costs; str keys would confound every term with the
+encode()-per-hash cost the strings-round1 rows already price. The churn
+runs the shapes that matter, in order:
+
+1. **insert/overwrite churn** (2 × 100 k puts, a fresh `Pt` cell minted
+   per put — the overwrite pass re-stores every key, so the sidecar
+   releases the replaced cell and stores the new one);
+2. **hit-heavy gets** (100 k hit gets reading both fields + 20 k
+   misses, 5:1);
+3. **read-modify-write through the alias** — the one-cell law in the
+   hot loop: `p.x += 1` through the get-returned `?Pt`, no put, no set;
+   a fresh-get read-back pass (`hits2`/`sum_after`) then observes every
+   write-through. **The checksum depends on the write-through**:
+   `sum_after = Σ(i+7) + n` only if the writes landed in the stored
+   cells — a copy-on-get engine answers a different number (by exactly
+   2 n) and fails the row loudly.
+4. **grow-heavy sweep** — a fresh 200 k-entry map from cap 8 through
+   every load-factor boundary (15-16 grows, the relocation drains
+   moving ~460 k cells, largest last), then an overwrite pass and a
+   full read-back.
+
+Total: 1,320,002 map ops (one crossing each), ~650 k record mints.
+Checksum discipline is the nmap-primmap precedent, adapted: i64
+throughout, printed once, never narrowed — every term an exact integer
+below 2^53, so the JS twin's doubles compute the same number
+bit-exactly. **Twin gate: `140052990000` equal on rut / qjs / node**
+(the `.js` twin uses JS objects as values — property mutation through a
+retrieved reference IS JS's own semantics, the natural twin shape).
+The pin is new work (independent construction; it reconciles bit-exact
+against the counter formula: `sum_before` 10,014,000,000 = Σ(2i+15),
+`sum_g` 39,999,800,000 = Σ2i, counters 100 k/100 k/20 k/200 k/200 k/
+50 k/50 k/50 k at weights 7…59).
+
+One property is disclosed IN-SOURCE because the stub A/B below relies
+on it: **every value the checksum reads is written after its map's
+last grow** (both overwrite passes), so deleting the relocation drain
+in a scratch wrapper stub leaves the checksum bit-identical — the stub
+provably moves only drain traffic.
+
+### The numbers of record (house method, one checkout, release build)
+
+Cross-runtime (net medians, wall − startup; two same-day runs, the
+guard run second): rut net **376.8 / 373.4 ms**, qjs **304.5 / 302.8**
+(rut/qjs ≈ **1.24×**), node **105.0 / 96.0** (~3.6×). Probe: compile
+~7 ms, **exec median 337-341 ms**, **fuel 56,899,541**,
+**VM-heap peak 28,801,340 B (27.47 MiB)**. Per map op: ~258 ns exec,
+43.1 fuel-ops.
+
+Per-phase fuel (exact, additive — single-phase clones of the churn,
+same probe binary, interleaved rounds; nets are clone-minus-build
+control):
+
+| phase (ops each)                      | fuel/op | exec/op (noisy) |
+|---------------------------------------|---------|-----------------|
+| fresh put, m build (100 k, 15 grows)  | 72.0    | ~490 ns         |
+| fresh put, g build (200 k, 16 grows)  | 74.0    | ~605 ns         |
+| overwrite put (flat table)            | 40.0    | ~215 ns         |
+| hit-get, 2 fields read                | 32.0    | ~156 ns         |
+| hit-get, 1 field read                 | 29.0    | ~143 ns         |
+| miss-get                              | 12.0    | (noise floor)   |
+| rmw (get + field write)               | 30.0    | ~120 ns         |
+| remove / has / re-add (avg over 200 k)| 24.8    | ~131 ns         |
+
+(The exec column carries ±ms clone noise — the fuel column is the exact
+instrument; time attribution below uses the row-level stub pairs.)
+
+### The sidecar terms isolated — the numbers phase 2 is judged against
+
+House method: throwaway stubs of `rut/nmapset/nmapset.rut` (NEVER
+committed — one fixed probe binary with the wrapper source flipped
+between interleaved rounds, the round2/round3 phase-0 method; pkg
+sources are runtime-mounted; `git checkout --` restore + md5 verified
+before/after every pass; tree verified clean). Two stub shapes:
+
+- **NOVALS** — `put` drops the vals stores AND the drain walk (the
+  `HashSet` shape: one crossing + grow + retry); `get` returns `nil`
+  after the `nfind` (hit/miss control flow kept); `remove` drops the
+  nil store. Checksum becomes deterministic **`37790000`** and
+  reconciles BIT-EXACT: every value-reading counter is zero (`hits`,
+  `rmw`, `hits2`, `hits_g` = 0; all sums 0), every key-only counter
+  unchanged (100 k/100 k/20 k/200 k/200 k/50 k/50 k/50 k/100 k/200 k
+  at weights 7…59) — 37,790,000 exactly, on every run.
+- **DRAIN** — ONLY the relocation walk deleted (`next` still
+  allocated, walk gone). Checksum **bit-identical `140052990000`** —
+  the in-source invariant above, verified.
+
+Full row, interleaved 5 rounds × 5 fresh-VM iters per side, order
+rotated (round ranges: A 334.5-345.9, B 139.8-149.0, C 323.8-332.4 —
+A/B non-overlapping by 185 ms):
+
+| side        | median of medians | fuel       | heap peak  |
+|-------------|-------------------|------------|------------|
+| A — the row | **341.13 ms**     | 56,899,541 | 28,801,340 B |
+| B — NOVALS  | **147.18 ms**     | 38,040,570 | **892 B**  |
+| C — DRAIN   | **329.48 ms**     | 46,990,694 | 27,892,124 B |
+
+The split:
+
+| term | isolated by | time | share |
+|------|-------------|------|-------|
+| **the whole value-sidecar package** (store + load + drain + alias-write) | A−B | **193.95 ms** | **56.9%** |
+| **store + load + alias-write** | C−B | 182.30 ms | 53.4% |
+| **the relocation drain** | A−C | 3.6-11.7 ms (two passes; see note) | 1.1-3.4% |
+| the floor (host table body + ex-sidecar VM stream + record mints) | B | 147.18 ms | 43.1% |
+
+Drain honesty: the first pass read A−C = **11.65 ms** (ranges
+non-overlapping, barely); a dedicated powered 7-round × 5-iter pass
+read **3.63 ms** with overlapping round ranges (A 332.0-344.6 vs C
+324.8-340.8). Recorded as a band, not a point: the drain is
+fuel-heavy but time-light — its fuel is EXACT
+(**9,908,847 ops = 17.4% of the row's fuel**, ~460 k moved slots at
+~21 ops/slot: the `map_take_reloc` crossing + unpack + the scattered
+`next[new] = vals[old]` moves), but the walk is sequential
+cache-friendly copying, cheap per op next to the random-access probe
+path.
+
+Store vs load (per-phase clone pairs, both wrapper sides, interleaved
+3 rounds × 3 iters — deltas are clone-minus-clone, setup cancels):
+the **store** term is ~**107 ns** per overwrite-put (fuel +5/put:
+the `MakeOpt` one-slot cell mint + the sidecar slot store; the
+replaced cell's release is host-side, fuel-free) and the **load** term
+~**65 ns** per hit-get (fuel +8-11/get: the `arrget` + cell deref the
+field reads go through). Scaled over the row's 650 k puts and 500 k
+value-reading gets, store ≈ 3.25 M and load ≈ 3.5 M fuel of the exact
+18,858,971-op A−B delta; the remainder is the get-escape/nil-test
+stream — no single hidden term.
+
+Per-op budget, stated the way phase 2 should read it (A = 341.13 ms,
+~258 ns over 1.32 M map ops): **value-sidecar package 56.9%** (measured
+above), **VM interpreter stream ~10%** (43.1 fuel-ops/op × the
+0.77 ns/op crossing-nop calibration ≈ 33 ms), **the crossing ≤ ~1%**
+(exactly one direct host call per map op; ≤ 2.9 ns bound), and the
+**~32% residual is the NOVALS floor's host side** — the key probe over
+a ~28 MB working set (DRAM-miss bound, the round3 0b ladder's
+signature) plus the 650 k record mints and their rc, which the stub
+keeps (the put argument is still minted; only its storage is stubbed).
+
+Heap, and a pre-registration for phase 2: the 27.47 MiB peak is **the
+stored record cells themselves** (~300 k live records at peak,
+~96 B/record) — the `[?V]` sidecar arrays are plain host memory,
+invisible to cell accounting, and the NOVALS control collapses the cell
+heap to **892 B** while answering its checksum. `refcolumn` will hold
+the SAME records (retained in the val column), so **heap parity is the
+expected outcome**; the experiment's delta should show up in
+time/fuel (store/load spellings, the drain deleted by construction),
+not in the cell heap. Any existing row moving is a bug (§0.5).
+
+Gates at commit: all 27 probed rows fuel/heap bit-identical to their
+committed records (16 pinned rows checked exactly, incl. the four
+nmapset pins' checksums `734932704` / `1264308351` / `21500055` /
+`2198604`); full suite rut/qjs/node exit 0, every checksum equal
+`expected.json`; `expected.json` gained exactly one line
+(`refvals`); workspace 525 tests, 0 failures. Files:
+`benches/workloads/refvals/{rut.toml,main.rut}`,
+`benches/workloads/refvals.js`, the `expected.json` line, this
+section. Scratch (stubs, phase clones, pair JSONLs, guard runs):
+`/tmp/opencode/batch-refval-exp/p0/`.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
@@ -2474,7 +2650,9 @@ pairs script + JSONL + load log).
    loader (RFC 0035) — currently the `nmapset`
   workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
   `nmap-knucleotide`, which pull the `nmap` host pkg through the
-  pkg's own `[deps]`), `json-decode` (it mounts `pouch` for the
+  pkg's own `[deps]`; also the dir twins `kmer-view`, `strview`, and
+  the record-valued `refvals` row, the same way),
+  `json-decode` (it mounts `pouch` for the
   row chunks the document generator joins), and `crossing-nop` (it
   mounts `bench-cross`, the phase-0 crossing-tax pkg). The bench
   runtimes install the host halves (math + the logger) as usual;

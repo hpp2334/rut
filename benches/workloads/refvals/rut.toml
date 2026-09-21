@@ -1,0 +1,15 @@
+# refvals/ — the refval-exp batch's phase-0 row: a RECORD-VALUED map,
+# `HashMap<i64, Pt>` — the suite's first bench row whose values are
+# REFERENCE values (rut records are shared cells, RFC 0044). It runs the
+# `[?V]` sidecar path (ArrKind::Opt cells for ref V) — the path the
+# experiment's `refcolumn` row (phase 1) will re-spell over the host val
+# column, so this row is the baseline the verdict is judged against and
+# permanent coverage either way. A module dir (not a loose file) because
+# it mounts `nmapset`, which pulls the `nmap_host` host pkg through its
+# own `[deps]`. `ink` is declared for the logger.
+name = "refvals"
+entry.lib = "./main.rut"
+
+[deps]
+nmapset = { path = "../../../rut/nmapset" }
+ink = { path = "../../../rut/ink" }
