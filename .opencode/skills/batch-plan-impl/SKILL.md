@@ -1,6 +1,6 @@
 ---
 name: Batch Plan Implementation
-description: Execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the smarter plan model from opencode.jsonc, then creates a headless OpenCode session per phase and dispatches its prompt, while a small watch-only subagent polls every 60s, verifies the commit+push, and reports; continue to the next phase until the plan is done. No user interaction: decide autonomously, retry once, never delete sessions.
+description: Execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the smarter plan model from opencode.jsonc, then creates one headless OpenCode session per task (a phase has one task, or several PARALLEL tasks when the plan splits it so) and dispatches their prompts, while a small watch-only subagent polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; continue phase by phase until the plan is done. No user interaction: decide autonomously, retry once, never delete sessions.
 ---
 
 # Batch Plan Implementation
@@ -11,16 +11,20 @@ follow the autonomous decision policy below, record every decision in a run
 log, and leave a complete report.
 
 For each phase **you** (the session running this skill) create one fresh
-headless OpenCode session and dispatch its prompt. A **watch-only subagent**
-then monitors it (60s polling) and verifies the result. Phases run strictly
-sequentially.
+headless OpenCode session per task and dispatch its prompt. A phase has
+ONE task by default, or SEVERAL tasks run in PARALLEL when the plan
+splits it that way (encouraged — see "Writing parallel-friendly plans"
+below). A **watch-only subagent** monitors every session of the phase
+(60s polling each), relays context between tasks when triggered (4p),
+and verifies the results. Phases run strictly sequentially —
+parallelism lives INSIDE a phase, never across phases.
 
 ## Division of labor
 
 | Actor | Does | Never does |
 | --- | --- | --- |
-| You (orchestrator) | plan parsing, session create, prompt dispatch, subagent spawn, batch control | implement a phase itself, delete a session |
-| Subagent (one per phase, small prompt) | poll 60s, detect stall/timeout, verify commits + push + clean tree, extract summary, report | create sessions, send prompts, edit files, commit, delete sessions |
+| You (orchestrator) | plan parsing, session create, prompt dispatch, subagent spawn, batch control, authoring relay notes (4p) | implement a phase itself, delete a session |
+| Subagent (one per phase, small prompt) | poll 60s across ALL the phase's sessions, detect stall/timeout, relay orchestrator-authored context notes between task sessions when their trigger fires, verify commits + push + clean tree, extract summaries, report | create sessions, author task instructions or relay notes, edit files, commit, delete sessions |
 
 ## Rules
 
@@ -30,10 +34,19 @@ sequentially.
   failures) per the decision policy — never wait for the user.
 - **Never delete a session.** "Closing" a phase just means moving on to the
   next one — every session stays in the session list for later inspection.
-- One phase = one dedicated session = one watch subagent. Never batch phases.
-- The subagent prompt is SMALL: session id + a few context values. The long
-  phase text goes only into the dispatched session prompt, never into the
-  subagent.
+- One phase = 1..N task sessions = ONE watch subagent for all of them.
+  Never batch phases.
+- **Parallel tasks must declare disjoint file scopes** (the plan states
+  each task's scope; each task prompt repeats it). If two tasks must
+  touch the same file, the plan serializes them as separate phases or
+  splits at a clean file boundary — the orchestrator rejects fan-out
+  with overlapping scopes.
+- **Pushes serialize naturally**: each task commits only its own scope
+  and pushes; on rejection it rebases ONLY its own commit and retries
+  once. Sibling commits are expected cargo, never failures.
+- The subagent prompt stays SMALL: session ids + a few context values.
+  The long task text goes only into the dispatched session prompts,
+  never into the subagent.
 - Never implement a phase in this session. You orchestrate and verify only.
 - Poll status every **60 seconds**. Do not use blocking waits.
 - Pin the **default model from `opencode.jsonc`** on every dispatch — phase
@@ -50,6 +63,9 @@ sequentially.
 | Ambiguous phase boundaries/ordering | Best-effort split, record assumptions in the run log, proceed. |
 | Dirty working tree | `git stash push --include-untracked -m "batch-plan-impl: auto-stash <date>"`, record in run log, proceed. |
 | Phase FAILED (no commit / not pushed / dirty tree / outcome != succeeded) | Retry the phase ONCE with a fresh session and the same prompt. |
+| PARALLEL: one task failed, siblings fine | Retry ONLY the failed task once (fresh session, same prompt + updated landed-state); siblings proceed untouched. |
+| PARALLEL: a task's scope collides with a sibling's landed files | The orchestrator dispatches a reconcile prompt to the affected task (rebase onto sibling, adapt); if that fails once too, stop the batch. |
+| PARALLEL: a task needs a sibling's landed facts mid-flight | The watcher fires the pre-arranged relay (4p); if none was arranged, the watcher reports and the orchestrator authors one. |
 | Phase STALLED/TIMEOUT | Interrupt the session (`POST /api/session/$SID/interrupt`), then retry ONCE. |
 | Phase fails after retry | **Stop the batch** — later phases likely depend on it. Leave everything for review. |
 | Anything else unexpected | Choose the least destructive option, record it, keep going if safe. |
@@ -237,7 +253,50 @@ and start the next phase (back to 4a).
 
 Otherwise (FAILED / STALLED / TIMEOUT): retry ONCE per policy (fresh session,
 same prompt; interrupt first if stalled). Retry succeeds → continue. Retry
-fails too → **stop the batch** and go to the final report.
+fails too → **stop the batch** and go to the final report. In a parallel
+phase, retry only the failed TASK; the phase completes when ALL tasks are
+DONE + succeeded + pushed + clean.
+
+### 4p. Parallel task phases (a phase with several tasks)
+
+When the plan splits a phase into tasks T1..Tn:
+
+1. **Fan out**: create one session per task (4a, same pinning), each prompt
+   carrying: the task's full text, its DECLARED FILE SCOPE, the list of
+   sibling scopes (so a task recognizes expected foreign commits), and the
+   phase's shared gates. Dispatch all prompts.
+2. **One watcher for all**: spawn a single subagent that polls every task
+   session each cycle (sleep 60 → check each newest message) and completes
+   when ALL are idle after their SINCE timestamps. Its report is
+   per-task: STATUS/OUTCOME/COMMITS/PUSHED/DIRTY/SUMMARY.
+3. **Relay protocol (the information swap)**: at spawn time the
+   orchestrator may arm the watcher with relay notes — each note =
+   trigger (task X finished) + payload (an ORCHESTRATOR-AUTHORED context
+   note for task Y, e.g. the names/numbers X was to land). The watcher
+   forwards the payload verbatim to Y's session via the prompt API the
+   moment the trigger fires. The watcher never authors note content —
+   it is a courier, not an instructor. If no note was armed and Y needs
+   X's facts, the watcher says so in its report and the orchestrator
+   authors the follow-up.
+4. **Completion**: all tasks green → next phase. A failed task retries
+   alone (policy table). Sibling pushes may land mid-flight — expected.
+
+### Writing parallel-friendly plans
+
+When authoring or amending a plan, PREFER phases split into independent
+parallel tasks — independence first:
+
+- measure vs implement vs document split naturally (evidence phases,
+  README/report tasks, bench rows vs engine code);
+- disjoint modules/files split naturally (a host crate vs a rut pkg vs
+  an rfc; a new workload vs engine internals);
+- tasks must not need each other's OUTPUTS mid-flight — if B consumes
+  what A lands, that is two phases, not two tasks;
+- when a task plausibly needs a sibling's FACTS (names, pinned numbers,
+  landed interfaces), the plan names the fact and the orchestrator bakes
+  it into a relay note (4p) instead of coupling the tasks;
+- 2–4 tasks per phase is the sweet spot; more needs explicit
+  justification in the plan.
 
 ### 5. Final report
 
