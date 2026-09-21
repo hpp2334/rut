@@ -102,3 +102,25 @@ across modules — identity is assigned at link).
 - OQ-1: binary compatibility across VM versions — `version` field exists;
   policy (refuse, recompile, or migration shims) undecided. (`.d.ir` has
   no such question — it is a cache, never a contract, RFC 0029 §4.)
+
+---
+
+## Amendment (Sep 2026): byte order is a law — little-endian, everywhere
+
+The project is little-endian, full stop. The module format has always
+encoded little-endian (the `rut-core/src/binary.rs`
+encoder/decoder), and every target we ship (x86_64, aarch64-linux,
+wasm32) is little-endian.
+
+The rule for ALL new code that reads multi-byte words over
+externalized or hash-relevant data (serialized words, hash input
+bundling such as 8 u8 -> u64 word reads, checksum inputs): the read is
+DEFINED little-endian — `u64::from_le_bytes`-shaped chunk reads,
+never native-order transmutes. Rut-visible values (hash results,
+serialized words) are platform-independent BY CONSTRUCTION; a
+native-order read would make them an accident of the host, not a law.
+
+When bundling bytes into words, the FIRST byte of the range/stream is
+the LEAST significant byte of word 0; tail bytes extend the same way.
+Implementations must pin this in unit tests (word 0 of a known 8-byte
+range, plus a length sweep).

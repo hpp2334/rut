@@ -365,3 +365,21 @@ tree). The rules are small on purpose:
 The engine's own mounts are `core` and `calc` (`mount_std`); `pouch`
 and `ink` are third-party libraries in the toolchain tree — nothing in
 the engine knows their names.
+
+---
+
+## Amendment (Sep 2026): working conventions for the shared tree
+
+- A PARALLEL SESSION may share this working tree (lsp, extension,
+  docs, wasm lanes). Never stash, revert, or commit files that are not
+  yours; foreign unpushed commits are expected push cargo (rebase only
+  your own).
+- `benches/workloads/expected.json` checksums are gates, not targets:
+  a mismatch is a bug. The only sanctioned edits are loud, disclosed,
+  single-purpose ones — row removal for deleted workloads, or a
+  deliberate re-pin for a deliberate semantic change (old values
+  preserved verbatim in the commit body).
+- Bench method: same-day interleaved matched pairs, both runtime
+  binaries rebuilt from ONE checkout (cross-directory A/B builds are
+  not layout-safe), fresh-VM iterations, honest neutrals recorded as
+  neutral.
