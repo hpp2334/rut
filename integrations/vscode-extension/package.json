@@ -2,7 +2,7 @@
   "name": "rut-vscode",
   "displayName": "rut",
   "description": "rut language support — semantic tokens, diagnostics, document symbols, hover and completions via an in-process wasm module (no server process)",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "rut",
   "license": "MIT OR Apache-2.0",
   "repository": {
@@ -95,7 +95,9 @@
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "build:wasm": "cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs",
-    "test": "node scripts/run-vscode-test.mjs",
+    "test": "npm run test:grammar && npm run test:host",
+    "test:grammar": "node test/grammar-corpus.js",
+    "test:host": "node scripts/run-vscode-test.mjs",
     "package": "npm run compile && vsce package"
   },
   "devDependencies": {
@@ -103,6 +105,8 @@
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.25.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.2.0"
   }
 }

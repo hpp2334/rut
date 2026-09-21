@@ -271,3 +271,88 @@ durable "cannot drift" lock for the grammar.
   surface lives there; `rut/**` alone cites for M3/M4/M7/M8. (b)
   `cargo test --workspace` was run once before the commit and is green
   (exit 0) — this task's change is this docs file only.
+
+---
+
+## 7. Phase 2 fix log — grammar alignment (IMPLEMENTED)
+
+Batch `rut-lsp-align`, phase 2, extension task. Scope: `syntaxes/rut.tmLanguage.json`
++ the new standalone corpus gate + runner wiring. `language-configuration.json`
+was re-verified per §3.3 and **not churned** (brackets/auto-close/indent/folding
+all still correct for `?T`/`[?T]`/when-arm syntax); `src/` untouched
+(grammar-agnostic per §1); `package.json` `semanticTokenScopes` untouched
+(14/14 exact per §1). Version bumped 0.2.0 → 0.2.1 (the §3.2 phase-2
+release decision).
+
+### 7.1 Dispositions M1–M8 (all fixes in `syntaxes/rut.tmLanguage.json`)
+
+| # | Fix | Rule |
+|---|---|---|
+| M1 | `dataclass` removed, `struct` added | `#keyword` |
+| M2 | `where` removed | `#keyword` |
+| M3 | `string` removed; `str`/`bytes` added; `opaque` added as a **sibling** `#builtin-type` (`storage.type.builtin.rut`) — keeps call-shaped `opaque(v)` readable while type positions still color | `#primitive-type`, `#builtin-type` |
+| M4 | new `#nullable-type`: `?`/`??` followed by `[A-Za-z_[<]` → `storage.type.nullable.rut` (TextMate approximation; exact classification stays with semantic tokens; must sit **before** `#operator` in the include order to win the tie on `?`) | `#nullable-type` |
+| M5 | new `#type-alias`: anchored `^\s*(type)(?=\s+[A-Za-z_<])` → `keyword.other.rut` — contextual, never blanket (an identifier named `type` stays plain) | `#type-alias` |
+| M6 | `..` added to the operator alternation (before `.` falls through to punctuation; single `.` stays `punctuation.separator`) | `#operator` |
+| M7 | no dedicated surface — fixed transitively by M3 (the PrimMap bound lists were the `str`/`bytes` misrender) | — |
+| M8 | new `#builtin-keyword`: `\b(builtin)(?=\s+(?:fn|primitive|impl|trait)\b)` → `keyword.other.rut` (decl-head contextual; the corpus's comment prose "builtin container"/"builtin traits" stays comment-scoped) | `#builtin-keyword` |
+
+Corpus-sourced before/after spans (HEAD grammar vs fixed grammar, same
+tokenizeLine, spans as `[text]→scope`; unchanged tokens elided):
+
+| Site | Before → After |
+|---|---|
+| M1 `demo/src/examples/dataclasses.rut:12` `struct Point {` | `[struct Point ]→(none)` → `[struct]→keyword.other.rut` (also todolist.rut:16; 12 files use `struct`) |
+| M2 `let where = 1;` (synthetic — `where` occurs only in comments; it is a legal identifier now) | `[where]→keyword.other.rut` → `[ where ]→(none)` |
+| M3 `rut/nmap_host/nmap.d.rut:61` `pub host fn map_entry_s(m: opaque, k: str) -> i32;` | `[ opaque]→(none)`, `[ str]→(none)` → `[opaque]→storage.type.builtin.rut`, `[str]→storage.type.primitive.rut` |
+| M4 `rut/pouch/pouch.rut:44` `let mut buf: [?T] = [nil; n];` | `[?]→keyword.operator.rut` → `[?]→storage.type.nullable.rut` (`T` stays plain at first paint; semantic tokens classify it once loaded) |
+| M5 `demo/src/examples/type-aliases.rut:13` `type Meters = i64;` | `[type Meters ]→(none)` → `[type]→keyword.other.rut` |
+| M6 `let r = 0..10;` (synthetic — the corpus's only `..` sits inside a comment, nmapset.rut:474) | `[.]→punctuation.separator.rut [.]→punctuation.separator.rut` → `[..]→keyword.operator.rut`; single `.` keeps `punctuation.separator.rut` |
+| M7 `rut/nmapset/nmapset.rut:390` `PrimMapI64<K requires … \| str \| bytes>` | `[str]→(none) [bytes]→(none)` (inside the plain bound run) → `[str]→storage.type.primitive.rut [bytes]→storage.type.primitive.rut` |
+| M8 `rut/core/core.d.rut:35` `builtin fn on_drop<T>(p: ?T, cleanup: fn(?T)) -> nil;` | `[builtin ]→(none)`, `[?]→keyword.operator.rut ×2` → `[builtin]→keyword.other.rut`, `[?]→storage.type.nullable.rut ×2` (also core.d.rut:92 `builtin primitive opaque {` → `[builtin]→keyword.other.rut [opaque]→storage.type.builtin.rut`) |
+
+### 7.2 The standalone corpus gate — `test/grammar-corpus.js`
+
+Per the phase-2 scope decision, the gate asserts the **TextMate grammar
+directly** (vscode-textmate 9.2 + vscode-oniguruma 2.0.1, the same engine
+VS Code embeds, added as devDependencies) — it does **not** go through
+`rut-lsp.wasm` (that binary is being rebuilt by the parallel task; the
+through-wasm e2e gate is phase 3 per §3.6). Plain `node`, no VS Code host.
+
+- Corpus: `rut/` + `examples/` + `demo/src/examples/` + `benches/workloads/`
+  — the same roots as `crates/rut-lsp/tests/corpus.rs` (**53 files**,
+  49,053 tokens asserted per run; the walk asserts ≥ 50 files so it cannot
+  fail open).
+- Corpus-wide invariants: `dataclass`/`where` never keyword-scoped;
+  `string` never type-scoped; every code-position `struct` →
+  `keyword.other.rut`, `str`/`bytes` → `storage.type.primitive.rut`,
+  `opaque` → `storage.type.builtin.rut`, `builtin` → `keyword.other.rut`,
+  `?` → `storage.type.nullable.rut`; every `^\s*type\s+` line has its
+  introducer keyword-scoped. Comments/strings (incl. f-string walls) are
+  excluded from the positive checks and included in the negative ones.
+  Bite counts prove non-vacuity: struct×20, str×200, bytes×49,
+  opaque×206, builtin×16, `?`×85, type-alias lines×2, dead words×0.
+- 17 smoke assertions pin what the corpus cannot exercise (dead-word
+  identifiers, `?[T]`, `0..10`, single `.` stays punctuation, `type` as
+  identifier, comment-wins rule order, f-string hole re-enters
+  `source.rut`).
+- Runner wiring: `npm test` = `test:grammar` (this gate) + `test:host`
+  (`scripts/run-vscode-test.mjs`); the host launcher now **skips loudly**
+  (exit 0) when no `code` executable exists instead of crashing — the
+  five host checks themselves are unchanged.
+
+### 7.3 Phase-2 deviations
+
+- §3.4's recommended `test/fixtures/symbols.rut` extension is **deferred
+  to phase 3** with the through-wasm gate: it only pays off through the
+  wasm symbol/semantic path, which is task A's mid-flight lane; the old
+  assertions keep passing as-is.
+- §3.5's option of running the grammar smoke inside the host was replaced
+  by the standalone runner (scope decision above); `test/runTest.js` is
+  untouched.
+- §3.7 README polish applied to the two stale claims: the "How
+  highlighting splits" TextMate row now names the new keyword/primitive/
+  nullable surface, and the Tests section documents the two-tier gate.
+- The host-suite portion of `npm test` **skips** on machines without a
+  `code` binary (this run included) — environment limitation, not a pass;
+  the grammar gate (the phase-2 deliverable) ran and passed.

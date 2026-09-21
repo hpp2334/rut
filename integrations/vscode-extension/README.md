@@ -51,7 +51,7 @@ code --install-extension rut-vscode-<version>.vsix
 
 | Layer | What | Where |
 |---|---|---|
-| TextMate | comments, strings (incl. `r"…"`/`f"…"`), numbers + suffixes, keywords, operators — instant, no analysis | `syntaxes/rut.tmLanguage.json` |
+| TextMate | comments, strings (incl. `r"…"`/`f"…"`), numbers + suffixes, keywords (incl. contextual `type`/`builtin`), primitives (`str`/`bytes`), `opaque`, nullable `?`, operators — instant, no analysis | `syntaxes/rut.tmLanguage.json` |
 | Semantic tokens | identifier classes: functions, methods, types, primitives, params, fields, enum members — exact, incl. f-string holes | `crates/rut-lsp` (`semantic/`) |
 
 VS Code merges both: semantic tokens override the grammar inside their
@@ -61,7 +61,14 @@ scopes so stock themes color everything out of the box.
 ## Tests
 
 ```sh
-npm run test           # the real gate: an Extension Host run (scripts/run-vscode-test.mjs)
+npm test               # grammar corpus gate + Extension Host run
+npm run test:grammar   # standalone TextMate gate: the grammar asserted over
+                       # the repo corpus (rut/ + examples/ + demo/ +
+                       # benches/workloads/) via vscode-textmate/oniguruma —
+                       # no wasm, no VS Code needed (M1-M8 lock,
+                       # docs/lsp-survey-extension.md §7)
+npm run test:host      # the Extension Host run (needs `code` on PATH and
+                       # bin/rut-lsp.wasm built)
 ```
 
 The wasm module itself is gated by `crates/rut-lsp-wasm/smoke.js`

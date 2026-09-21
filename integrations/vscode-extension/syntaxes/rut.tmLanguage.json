@@ -13,8 +13,12 @@
     { "include": "#null" },
     { "include": "#self-type" },
     { "include": "#primitive-type" },
+    { "include": "#builtin-type" },
+    { "include": "#type-alias" },
     { "include": "#control-keyword" },
     { "include": "#keyword" },
+    { "include": "#builtin-keyword" },
+    { "include": "#nullable-type" },
     { "include": "#operator" },
     { "include": "#punctuation" }
   ],
@@ -114,7 +118,17 @@
     },
     "primitive-type": {
       "name": "storage.type.primitive.rut",
-      "match": "\\b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|bool|string)\\b"
+      "match": "\\b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|bool|str|bytes)\\b"
+    },
+    "builtin-type": {
+      "name": "storage.type.builtin.rut",
+      "match": "\\bopaque\\b"
+    },
+    "type-alias": {
+      "match": "^\\s*(type)(?=\\s+[A-Za-z_<])",
+      "captures": {
+        "1": { "name": "keyword.other.rut" }
+      }
     },
     "control-keyword": {
       "name": "keyword.control.rut",
@@ -122,11 +136,21 @@
     },
     "keyword": {
       "name": "keyword.other.rut",
-      "match": "\\b(let|mut|enum|dataclass|class|trait|impl|requires|use|pub|static|extern|where|is|host|fn|as|super|default|self)\\b"
+      "match": "\\b(let|mut|enum|class|struct|trait|impl|requires|use|pub|static|extern|is|host|fn|as|super|default|self)\\b"
+    },
+    "builtin-keyword": {
+      "match": "\\b(builtin)(?=\\s+(?:fn|primitive|impl|trait)\\b)",
+      "captures": {
+        "1": { "name": "keyword.other.rut" }
+      }
+    },
+    "nullable-type": {
+      "name": "storage.type.nullable.rut",
+      "match": "\\?\\??(?=[A-Za-z_\\[<])"
     },
     "operator": {
       "name": "keyword.operator.rut",
-      "match": "<<=|>>=|&&=|\\|\\|=|&\\+=|&-=|&\\*=|&<<=|&<<|&\\+|&-|&\\*|<<|>>|<=|>=|==|!=|&&|\\|\\||->|=>|[+\\-*/%&|^!~=?@]"
+      "match": "<<=|>>=|&&=|\\|\\|=|&\\+=|&-=|&\\*=|&<<=|&<<|&\\+|&-|&\\*|<<|>>|<=|>=|==|!=|&&|\\|\\||->|=>|\\.\\.|[+\\-*/%&|^!~=?@]"
     },
     "punctuation": {
       "patterns": [
