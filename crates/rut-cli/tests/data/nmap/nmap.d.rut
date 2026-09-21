@@ -82,6 +82,30 @@ pub host fn map_remove_s(m: opaque, k: str) -> i32;
 
 pub host fn map_remove_y(m: opaque, k: bytes) -> i32;
 
+// ---- the sv lanes (strings-round1, phase 1) -------------------------
+// str keys cross as a BORROWED RANGE: `parent` is any str value (an
+// owned `str` cell or a slice view over one — both read as their range
+// through the RFC 0042 zero-copy boundary) and `off`/`len` carve the
+// probe range out of it in BYTES. The host hashes and compares OVER
+// THE RANGE — the parent's octets never copy on a probe; only a fresh
+// `map_entry_sv` insert stores an owned copy of the range, so stored
+// keys stay owned (the stored-key/iteration law unchanged). Both
+// offsets must sit on UTF-8 codepoint boundaries with `0 <= off`,
+// `0 <= len`, `off + len <= parent byte length` — anything else is the
+// loud `Invalid` trap. The hash constants are the s lanes' exact
+// FNV-1a 64, so an sv key and an s key of the same content are the
+// SAME key: same recorded hash, same slot, same iteration position —
+// either lane finds what the other stored. Answers = the typed lanes'
+// (`map_find_sv` / `map_remove_sv`: `>= 0` the slot, `-1` absent;
+// `map_entry_sv`: the fused grow-first `i32::MIN`, else the
+// found/fresh slot).
+
+pub host fn map_entry_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
+
+pub host fn map_find_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
+
+pub host fn map_remove_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
+
 // ---- the val column (nmapset-round3, phase 1) -----------------------
 // Raw u64 bits in/out, ONE pair for every primitive val kind
 // (i64/u64/f64/bool — the wrapper reinterprets client-side). `slot` is

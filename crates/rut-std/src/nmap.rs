@@ -13,7 +13,11 @@
 //!   `String` / `Vec<u8>` copies). Values stay rut-side in the wrapper's
 //!   parallel array, so `get -> *V` aliasing semantics match mapset
 //!   exactly and the payload box stays free of rut cells (no release
-//!   hazards — the rc-0 `Drop` is plain Rust, RFC 0016 §3);
+//!   hazards — the rc-0 `Drop` is plain Rust, RFC 0016 §3). PROBING
+//!   (strings-round1 phase 1) is borrowed: the `s` lanes hash and
+//!   compare OVER the crossed octets — a whole owned `str` block or a
+//!   slice view's window, zero-copy — and only a fresh insert
+//!   materializes the owned stored form;
 //! - the key set is CLOSED (i8..i64, u8..u64, bool, str, bytes). Keys
 //!   hash wrapper-side and cross in `h` — the table only RECORDS hashes;
 //!   the payload box crosses once per call and is read through the H1
@@ -168,18 +172,7 @@ impl NativeTable {
         if at >= 0 {
             return Ok(at); // found — replace in place, nothing stored
         }
-        if self.kind == KeyKind::Unset {
-            self.kind = kind;
-        }
-        let slot = -(at + 1);
-        if self.states[slot as usize] == 2 {
-            self.tomb -= 1; // the DEAD slot leaves the tomb count
-        }
-        self.states[slot as usize] = 1;
-        self.keys[slot as usize] = key;
-        self.hashes[slot as usize] = h;
-        self.count += 1;
-        Ok(-(slot + 1))
+        Ok(self.insert_at(kind, at, key, h))
     }
 
     /// The lookup crossing: probe only. The found slot, or `-1` — the
@@ -203,11 +196,79 @@ impl NativeTable {
         if at < 0 {
             return Ok(-1);
         }
+        Ok(self.tombstone_at(at))
+    }
+
+    /// The s lane's borrowed put (strings-round1 phase 1): probe OVER
+    /// the borrowed range; a hit answers its slot with nothing stored
+    /// and NO copy — the per-crossing `to_owned()` the phase-0 stub
+    /// deleted lives only on the fresh insert now. The stored form is
+    /// still an owned copy of the range (one copy, at insert), so the
+    /// stored-key law is unchanged: same content, same slot, same
+    /// recorded hash as the owned `entry` on the same op stream.
+    pub fn entry_str_range(&mut self, range: &str, h: u64) -> Result<i32, Trap> {
+        self.admit(KeyKind::Str)?;
+        let at = self.probe_str(range, h);
+        if at >= 0 {
+            return Ok(at); // found — replace in place, nothing stored
+        }
+        Ok(self.insert_at(KeyKind::Str, at, KeyVal::Str(range.to_owned()), h))
+    }
+
+    /// The s lane's borrowed lookup: probe only, never a copy. Same
+    /// answers as the owned `find` for the same content.
+    pub fn find_str_range(&self, range: &str, h: u64) -> Result<i32, Trap> {
+        self.admit(KeyKind::Str)?;
+        Ok(match self.probe_str(range, h) {
+            at if at >= 0 => at,
+            _ => -1,
+        })
+    }
+
+    /// The s lane's borrowed remove: probe, tombstone the found slot,
+    /// never a copy. Same answers as the owned `remove`.
+    pub fn remove_str_range(&mut self, range: &str, h: u64) -> Result<i32, Trap> {
+        self.admit(KeyKind::Str)?;
+        let at = self.probe_str(range, h);
+        if at < 0 {
+            return Ok(-1);
+        }
+        Ok(self.tombstone_at(at))
+    }
+
+    /// The shared post-miss insert (every entry lane's tail): the probe
+    /// already said MISS at `at` (the insertion slot, encoded
+    /// `-(at + 1)`); take the tomb count, mark FULL, store the owned
+    /// key and its recorded hash. On the borrowed path the owned key
+    /// materializes BEFORE this runs — after the probe said miss — so
+    /// the copy is the insert's, once, never per-probe. (`#[inline]`:
+    /// shared by the entry lanes, but it must melt into each caller —
+    /// a real call here cost the probe-dense rows ~3%.)
+    #[inline]
+    fn insert_at(&mut self, kind: KeyKind, at: i32, owned: KeyVal, h: u64) -> i32 {
+        if self.kind == KeyKind::Unset {
+            self.kind = kind;
+        }
+        let slot = -(at + 1);
+        if self.states[slot as usize] == 2 {
+            self.tomb -= 1; // the DEAD slot leaves the tomb count
+        }
+        self.states[slot as usize] = 1;
+        self.keys[slot as usize] = owned;
+        self.hashes[slot as usize] = h;
+        self.count += 1;
+        -(slot + 1)
+    }
+
+    /// The shared remove tail: tombstone the found slot (the stored key
+    /// drops with the store) and answer it.
+    #[inline]
+    fn tombstone_at(&mut self, at: i32) -> i32 {
         self.keys[at as usize] = KeyVal::Bits(0);
         self.states[at as usize] = 2;
         self.count -= 1;
         self.tomb += 1;
-        Ok(at)
+        at
     }
 
     /// The load-factor law, mapset's constants: `(count + tomb + 1) / cap
@@ -317,6 +378,8 @@ impl NativeTable {
     /// whose recorded hash matches — most steps never compare). `>= 0` —
     /// FULL match at that slot; `< 0` — the insertion slot encoded
     /// `-(at + 1)`, with the first DEAD slot on the sequence winning.
+    /// This is the OWNED-key probe — the Opaque and i/u/b/y lanes'
+    /// machine path, byte-for-byte what it has always been.
     fn probe(&self, key: &KeyVal, h: u64) -> i32 {
         let mask = (self.cap - 1) as i32;
         let mut at = ((h as u32) & (self.cap - 1)) as i32;
@@ -331,6 +394,42 @@ impl NativeTable {
             }
             if st == 1 && self.hashes[at as usize] == h && self.keys[at as usize] == *key {
                 return at;
+            }
+            if st == 2 && dead < 0 {
+                dead = at;
+            }
+            at = (at + 1) & mask;
+        }
+    }
+
+    /// The BORROWED-probe pass (strings-round1 phase 1) — the s lanes'
+    /// stages: state byte, recorded hash, then the octet compare OVER
+    /// THE RANGE. `range` covers both key shapes with one borrowed
+    /// `&str`: a whole owned `str` cell's block (the `s` lane's key), or
+    /// a slice view's window into its parent block — parent + off + len
+    /// flattened by the RFC 0042 read and carved to bytes by `sv_range`
+    /// (the `sv` lanes' key). No copy on any step; only a fresh insert
+    /// materializes. Same answers as [`Self::probe`] on the same
+    /// content: the stored keys are the same `KeyVal::Str`s and the
+    /// recorded hashes are [`hash_bytes`]' bits either way.
+    fn probe_str(&self, range: &str, h: u64) -> i32 {
+        let mask = (self.cap - 1) as i32;
+        let mut at = ((h as u32) & (self.cap - 1)) as i32;
+        let mut dead = -1;
+        loop {
+            let st = self.states[at as usize];
+            if st == 0 {
+                if dead >= 0 {
+                    return -(dead + 1);
+                }
+                return -(at + 1);
+            }
+            if st == 1 && self.hashes[at as usize] == h {
+                if let KeyVal::Str(s) = &self.keys[at as usize] {
+                    if s.as_bytes() == range.as_bytes() {
+                        return at;
+                    }
+                }
             }
             if st == 2 && dead < 0 {
                 dead = at;
@@ -394,27 +493,31 @@ fn key_val(vm: &Vm, k: &OpaqueRef) -> Result<(KeyKind, KeyVal), Trap> {
 const FNV_OFFSET: u64 = 14695981039346656037;
 const FNV_PRIME: u64 = 1099511628211;
 
+/// FNV-1a 64 over an octet range — the ONE str/bytes hasher, shared by
+/// every lane that hashes octets. The constants are the checksum law
+/// (see [`FNV_OFFSET`]); the borrowed-probe core (strings-round1 phase
+/// 1) runs this OVER a borrowed range — no copy — and it answers the
+/// same bits [`hash_payload`] answers for the same octets, by
+/// construction (the s lanes route through here).
+pub fn hash_bytes(bytes: &[u8]) -> u64 {
+    let mut h = FNV_OFFSET;
+    for b in bytes {
+        h = (h ^ *b as u64).wrapping_mul(FNV_PRIME);
+    }
+    h
+}
+
 /// The typed lanes' host-side hash — the ONE shared payload hasher the
 /// crossings run instead of minting an Opaque box and reading the
 /// wrapper's `h`: mix64 for the integer/bool bits, FNV-1a 64 over the
 /// octets for `str`/`bytes`. Same inputs, nmapset.rut's constants,
 /// bit-exact.
 pub fn hash_payload(k: &KeyVal) -> u64 {
-    let mut h = FNV_OFFSET;
     match k {
-        KeyVal::Bits(v) => return (FNV_OFFSET ^ v).wrapping_mul(FNV_PRIME),
-        KeyVal::Str(s) => {
-            for b in s.as_bytes() {
-                h = (h ^ *b as u64).wrapping_mul(FNV_PRIME);
-            }
-        }
-        KeyVal::Bytes(b) => {
-            for byte in b {
-                h = (h ^ *byte as u64).wrapping_mul(FNV_PRIME);
-            }
-        }
+        KeyVal::Bits(v) => (FNV_OFFSET ^ v).wrapping_mul(FNV_PRIME),
+        KeyVal::Str(s) => hash_bytes(s.as_bytes()),
+        KeyVal::Bytes(b) => hash_bytes(b),
     }
-    h
 }
 
 /// The payload's kind — the table's fixed flavor, as the Opaque lane's
@@ -464,6 +567,109 @@ fn typed_find(t: &NativeTable, key: &KeyVal) -> Result<i32, Trap> {
 fn typed_remove(t: &mut NativeTable, key: &KeyVal) -> Result<i32, Trap> {
     let h = hash_payload(key);
     t.remove(kind_of(key), key, h)
+}
+
+/// The sv lanes' range check (strings-round1 phase 1): `off`/`len` are
+/// BYTE offsets into the parent's octets — `0 <= off`, `0 <= len`,
+/// `off + len <= parent.len()` (usize math, so the i32 corners cannot
+/// overflow the check), and BOTH ends must sit on UTF-8 codepoint
+/// boundaries — a mid-codepoint window is a caller bug, trapped with
+/// the house `Invalid` shape, never a silent mis-read. The answers are
+/// the table's `str`-lane lanes: [`NativeTable::entry_str_range`] /
+/// `find_str_range` / `remove_str_range` hash and compare over the
+/// range zero-copy.
+fn sv_range<'a>(parent: &'a str, off: i32, len: i32) -> Result<&'a str, Trap> {
+    // the end offset in i64 — the trap messages name it, so the i32
+    // corners must not overflow the naming arithmetic
+    let end = off as i64 + len as i64;
+    if off < 0 || len < 0 {
+        return Err(Trap::new(
+            TrapKind::Invalid,
+            format!(
+                "nmap: sv range off {off} len {len} out of range (parent {} bytes)",
+                parent.len()
+            ),
+        ));
+    }
+    let (o, l) = (off as usize, len as usize);
+    if o + l > parent.len() {
+        return Err(Trap::new(
+            TrapKind::Invalid,
+            format!(
+                "nmap: sv range [{off}..{end}] out of range (parent {} bytes)",
+                parent.len()
+            ),
+        ));
+    }
+    if !parent.is_char_boundary(o) {
+        return Err(Trap::new(
+            TrapKind::Invalid,
+            format!("nmap: sv offset {off} is not a UTF-8 boundary (parent {} bytes)", parent.len()),
+        ));
+    }
+    if !parent.is_char_boundary(o + l) {
+        return Err(Trap::new(
+            TrapKind::Invalid,
+            format!(
+                "nmap: sv end offset {end} is not a UTF-8 boundary (parent {} bytes)",
+                parent.len()
+            ),
+        ));
+    }
+    Ok(&parent[o..o + l])
+}
+
+/// The s lane's borrowed put — the hash is [`hash_bytes`] over the
+/// crossed octets (the crossed `&str` borrows its home block: an owned
+/// `str` cell's, or a slice view's parent window), then the fused
+/// grow-first sentinel, then the borrowed entry. The per-crossing
+/// `to_owned()` is GONE: the only copy left is the fresh insert's.
+fn typed_entry_s(t: &mut NativeTable, k: &str) -> Result<i32, Trap> {
+    let h = hash_bytes(k.as_bytes());
+    if t.needs_grow() {
+        return Ok(GROW_FIRST); // grow-first: nothing stored on this call
+    }
+    t.entry_str_range(k, h)
+}
+
+/// The s lane's borrowed lookup — probe over the octets, never a copy.
+fn typed_find_s(t: &NativeTable, k: &str) -> Result<i32, Trap> {
+    let h = hash_bytes(k.as_bytes());
+    t.find_str_range(k, h)
+}
+
+/// The s lane's borrowed remove — probe over the octets, never a copy.
+fn typed_remove_s(t: &mut NativeTable, k: &str) -> Result<i32, Trap> {
+    let h = hash_bytes(k.as_bytes());
+    t.remove_str_range(k, h)
+}
+
+/// The sv entry lane (strings-round1 phase 1): validate the byte range,
+/// hash over it, then the fused grow-first sentinel + the borrowed
+/// entry — a fresh insert stores ONE owned copy of the range. Same
+/// recorded hash, same slot, same answers as the `s` lane on the same
+/// content (the parity law, by construction).
+fn typed_entry_sv(t: &mut NativeTable, parent: &str, off: i32, len: i32) -> Result<i32, Trap> {
+    let range = sv_range(parent, off, len)?;
+    let h = hash_bytes(range.as_bytes());
+    if t.needs_grow() {
+        return Ok(GROW_FIRST); // grow-first: nothing stored on this call
+    }
+    t.entry_str_range(range, h)
+}
+
+/// The sv lookup lane: validate, hash, probe — never a copy.
+fn typed_find_sv(t: &NativeTable, parent: &str, off: i32, len: i32) -> Result<i32, Trap> {
+    let range = sv_range(parent, off, len)?;
+    let h = hash_bytes(range.as_bytes());
+    t.find_str_range(range, h)
+}
+
+/// The sv remove lane: validate, hash, probe, tombstone — never a copy.
+fn typed_remove_sv(t: &mut NativeTable, parent: &str, off: i32, len: i32) -> Result<i32, Trap> {
+    let range = sv_range(parent, off, len)?;
+    let h = hash_bytes(range.as_bytes());
+    t.remove_str_range(range, h)
 }
 
 /// Install the nine `nmap` bodies under the `nmap` scope (the `calc`
@@ -542,10 +748,11 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
     // the `KeyPayload::Bits` law, so the recorded bits match), the `u`
     // lane takes `u64` (raw bits — verified across the boundary in the
     // phase-2 driver tests), `b` takes `bool`, `s`/`y` borrow
-    // `str`/`bytes` ZERO-COPY (the found text's octets read straight
-    // out of the block store; only a fresh find copies into the probe
-    // key). `map_entry_*` answers the fused grow sentinel
-    // ([`GROW_FIRST`] = `i32::MIN`) before any insert.
+    // `str`/`bytes` ZERO-COPY (strings-round1 phase 1: the str key
+    // probes OVER the crossed octets — the per-crossing `to_owned()` is
+    // gone, only a fresh entry stores an owned copy; the bytes lane
+    // keeps its owned probe key). `map_entry_*` answers the fused grow
+    // sentinel ([`GROW_FIRST`] = `i32::MIN`) before any insert.
     rut_vm::register!(
         hosts,
         "nmap::map_entry_i",
@@ -575,7 +782,10 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         "nmap::map_entry_s",
         (OpaqueBox<NativeTable>, &str) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
-            b.with_mut(|t| typed_entry(t, KeyVal::Str(k.to_owned())))?
+            // strings-round1 phase 1: the key probes OVER the crossed
+            // octets — no per-crossing `to_owned()`; only a fresh
+            // insert stores an owned copy (the stored-key law unchanged)
+            b.with_mut(|t| typed_entry_s(t, k))?
         },
     );
     rut_vm::register!(
@@ -615,7 +825,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         "nmap::map_find_s",
         (OpaqueBox<NativeTable>, &str) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
-            b.with(|t| typed_find(t, &KeyVal::Str(k.to_owned())))?
+            b.with(|t| typed_find_s(t, k))?
         },
     );
     rut_vm::register!(
@@ -655,7 +865,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         "nmap::map_remove_s",
         (OpaqueBox<NativeTable>, &str) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
-            b.with_mut(|t| typed_remove(t, &KeyVal::Str(k.to_owned())))?
+            b.with_mut(|t| typed_remove_s(t, k))?
         },
     );
     rut_vm::register!(
@@ -664,6 +874,48 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (OpaqueBox<NativeTable>, &[u8]) -> i32,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
             b.with_mut(|t| typed_remove(t, &KeyVal::Bytes(k.to_vec())))?
+        },
+    );
+
+    // ---- the sv lanes (strings-round1, phase 1) ------------------------
+    // str keys cross as a BORROWED RANGE: `parent` is any str value (an
+    // owned `str` cell or a slice view over one — both read as their
+    // range through the RFC 0042 zero-copy boundary) and `off`/`len`
+    // carve the probe range out of it in BYTES. The host hashes and
+    // compares OVER THE RANGE — the parent's octets never copy on a
+    // probe; only a fresh `map_entry_sv` insert stores an owned copy of
+    // the range, so stored keys stay owned (the stored-key/iteration
+    // law unchanged). Both offsets must sit on UTF-8 codepoint
+    // boundaries with `0 <= off`, `0 <= len`, `off + len <= parent
+    // byte length` — anything else is the house `Invalid` trap. The
+    // hash constants are the s lanes' exact FNV-1a 64, so an sv key and
+    // an s key of the same content are the SAME key: same recorded
+    // hash, same slot, same iteration position — either lane finds what
+    // the other stored. Answers = the typed lanes' (`map_find_sv` /
+    // `map_remove_sv`: `>= 0` the slot, `-1` absent; `map_entry_sv`:
+    // the fused grow-first `i32::MIN`, else the found/fresh slot).
+    rut_vm::register!(
+        hosts,
+        "nmap::map_entry_sv",
+        (OpaqueBox<NativeTable>, &str, i32, i32) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_entry_sv(t, parent, off, len))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_find_sv",
+        (OpaqueBox<NativeTable>, &str, i32, i32) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
+            b.with(|t| typed_find_sv(t, parent, off, len))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_remove_sv",
+        (OpaqueBox<NativeTable>, &str, i32, i32) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
+            b.with_mut(|t| typed_remove_sv(t, parent, off, len))?
         },
     );
 
@@ -1462,5 +1714,297 @@ mod tests {
         assert_eq!(side_sum, col_sum, "the two storages agree bit for bit");
         // the pinned literal: the checksum this exact sequence produces
         assert_eq!(col_sum, 5344915641404318251);
+    }
+
+    // ---- the sv lanes (strings-round1, phase 1) ------------------------
+
+    /// Hash-pin for the range hasher: `hash_bytes` is FNV-1a 64 with
+    /// the ONE constants — bit-for-bit what `hash_payload` answers for
+    /// the same octets (the Str/Bytes arms route through it), the empty
+    /// range is the bare offset basis, and a carved window of a longer
+    /// parent hashes exactly like the whole text.
+    #[test]
+    fn hash_bytes_is_bit_for_bit_the_payload_hasher() {
+        // the s-lane pins from the hash test above, over raw ranges
+        assert_eq!(hash_bytes(b"alpha"), 9999721509958787115);
+        assert_eq!(hash_bytes(b"beta"), 8513880941419438247);
+        assert_eq!(hash_bytes(b""), 14695981039346656037, "the bare offset basis");
+        assert_eq!(hash_bytes(b"alpha"), hash_payload(&KeyVal::Str("alpha".into())));
+        assert_eq!(hash_bytes(b"beta"), hash_payload(&KeyVal::Str("beta".into())));
+        // multi-byte content: the range hash runs over the OCTETS
+        let s = "héllo→";
+        assert_eq!(hash_bytes(s.as_bytes()), hash_payload(&KeyVal::Str(s.into())));
+        // the bytes lane rides the same hasher
+        assert_eq!(hash_bytes(&[1, 2, 3]), hash_payload(&KeyVal::Bytes(vec![1, 2, 3])));
+        // a carved window of a longer parent = the whole text's bits
+        let parent = "alpha-beta";
+        assert_eq!(hash_bytes(&parent.as_bytes()[0..5]), hash_bytes(b"alpha"));
+        assert_eq!(
+            hash_bytes(&parent.as_bytes()[6..10]),
+            hash_payload(&KeyVal::Str("beta".into()))
+        );
+    }
+
+    /// The sv range check: byte offsets over the parent's octets, both
+    /// ends on UTF-8 codepoint boundaries; negative, out-of-range, and
+    /// mid-codepoint windows are the house `Invalid` trap (named, never
+    /// a silent mis-read). The empty range is legal at every boundary.
+    #[test]
+    fn sv_range_traps_mid_codepoint_and_out_of_range() {
+        let ascii = "abcdef";
+        assert_eq!(sv_range(ascii, 0, 6).unwrap(), "abcdef", "the full range");
+        assert_eq!(sv_range(ascii, 2, 3).unwrap(), "cde", "a middle window");
+        assert_eq!(sv_range(ascii, 6, 0).unwrap(), "", "the empty tail window");
+        assert_eq!(sv_range(ascii, 0, 0).unwrap(), "", "the empty head window");
+
+        // h(1) é(2) l(1) l(1) o(1) = 6 bytes; é spans bytes 1..3
+        let utf8 = "héllo";
+        assert_eq!(sv_range(utf8, 0, 3).unwrap(), "hé");
+        assert_eq!(sv_range(utf8, 3, 3).unwrap(), "llo");
+        assert_eq!(sv_range(utf8, 0, 6).unwrap(), utf8);
+        // a window STARTING mid-codepoint traps
+        let err = sv_range(utf8, 2, 2).unwrap_err();
+        assert_eq!(err.kind, TrapKind::Invalid);
+        assert!(err.msg.contains("not a UTF-8 boundary"), "{}", err.msg);
+        assert!(err.msg.contains("offset 2"), "{}", err.msg);
+        // a window ENDING mid-codepoint traps the same way
+        let err = sv_range(utf8, 0, 2).unwrap_err();
+        assert!(
+            err.msg.contains("end offset 2") && err.msg.contains("not a UTF-8 boundary"),
+            "{}",
+            err.msg
+        );
+
+        // negative offsets and lengths
+        for (off, len) in [(-1, 2), (2, -1), (i32::MIN, 0), (0, i32::MIN)] {
+            let err = sv_range(utf8, off, len).unwrap_err();
+            assert_eq!(err.kind, TrapKind::Invalid);
+            assert!(err.msg.contains("out of range"), "{off}/{len}: {}", err.msg);
+        }
+        // past the end — usize math, so the i32 corners cannot overflow
+        // the check
+        let err = sv_range(utf8, 0, 7).unwrap_err();
+        assert!(err.msg.contains("out of range"), "{}", err.msg);
+        let err = sv_range(utf8, i32::MAX, 1).unwrap_err();
+        assert!(err.msg.contains("out of range"), "{}", err.msg);
+        let err = sv_range("", 0, 1).unwrap_err();
+        assert!(err.msg.contains("out of range"), "{}", err.msg);
+        // but the empty range on an empty parent is fine
+        assert_eq!(sv_range("", 0, 0).unwrap(), "");
+    }
+
+    /// The parity law (strings-round1 phase 1): the sv lanes and the s
+    /// lanes on the SAME content build the SAME table — same kind,
+    /// same slot assignment (the recorded hashes are the pinned
+    /// constants either way), same stored owned keys, same iteration
+    /// order (slot order) — and every lane finds what any other lane
+    /// stored, both directions, with replaces and removes crossing
+    /// lanes too.
+    #[test]
+    fn sv_and_s_lanes_assign_identical_tables_both_directions() {
+        // the sv side's parent; the windows are BYTE ranges carved out
+        // of it, and the texts are what they carve (the test's ground
+        // truth — checked below)
+        let parent = "alpha-beta-gamma-delta";
+        let windows: [(i32, i32); 8] = [
+            (0, 5),  // alpha
+            (6, 4),  // beta
+            (11, 5), // gamma
+            (17, 5), // delta
+            (0, 4),  // alph — a prefix of alpha, distinct content
+            (5, 5),  // -beta
+            (10, 6), // -gamma
+            (16, 6), // -delta
+        ];
+        let texts: [String; 8] = [
+            "alpha".into(),
+            "beta".into(),
+            "gamma".into(),
+            "delta".into(),
+            "alph".into(),
+            "-beta".into(),
+            "-gamma".into(),
+            "-delta".into(),
+        ];
+        for ((off, len), text) in windows.iter().zip(texts.iter()) {
+            assert_eq!(&parent[*off as usize..(off + len) as usize], text);
+        }
+
+        // one op stream, three builds: all-sv, all-s, mixed lanes —
+        // sentinel-driven grows, exactly the wrapper's put shape
+        let build = |mode: u8| -> NativeTable {
+            let mut t = NativeTable::new(4);
+            for i in 0..8 {
+                let put = |t: &mut NativeTable| {
+                    match mode {
+                        0 => typed_entry_sv(t, parent, windows[i].0, windows[i].1),
+                        1 => typed_entry_s(t, &texts[i]),
+                        _ => {
+                            if i % 2 == 0 {
+                                typed_entry_sv(t, parent, windows[i].0, windows[i].1)
+                            } else {
+                                typed_entry_s(t, &texts[i])
+                            }
+                        }
+                    }
+                    .unwrap()
+                };
+                let mut at = put(&mut t);
+                while at == GROW_FIRST {
+                    t.grow(); // no drain needed: no sidecar on this path
+                    at = put(&mut t);
+                }
+                assert!(at < 0, "key {i} inserts fresh");
+            }
+            t
+        };
+        let a = build(0);
+        let b = build(1);
+        let c = build(2);
+        assert_eq!(a.len(), 8);
+        assert_eq!(b.len(), 8);
+        assert_eq!(c.len(), 8);
+        assert_eq!(a.kind, KeyKind::Str);
+        // the three builds are THE SAME TABLE: same capacity after the
+        // same grows, same state bytes, same recorded hashes, same
+        // owned stored keys
+        assert_eq!(a.cap, b.cap);
+        assert_eq!(a.states, b.states);
+        assert_eq!(a.hashes, b.hashes);
+        assert_eq!(a.keys, b.keys, "stored keys are owned copies either way");
+        assert_eq!(a.states, c.states);
+        assert_eq!(a.hashes, c.hashes);
+        assert_eq!(a.keys, c.keys, "the mixed-lane build is indistinguishable");
+        // iteration order is slot order, and the slots agree
+        let walk = |t: &NativeTable| -> Vec<(u64, String)> {
+            (0..t.cap as usize)
+                .filter(|&i| t.states[i] == 1)
+                .map(|i| match &t.keys[i] {
+                    KeyVal::Str(s) => (t.hashes[i], s.clone()),
+                    other => panic!("str table holds {other:?}"),
+                })
+                .collect()
+        };
+        assert_eq!(walk(&a), walk(&b), "same slots, same order");
+        assert_eq!(walk(&a), walk(&c));
+
+        // every key findable by BOTH lanes on BOTH builds — sv-stored
+        // probed by the owned lane, s-stored probed by the range lane
+        for i in 0..8 {
+            let (off, len) = windows[i];
+            let on_a = typed_find_sv(&a, parent, off, len).unwrap();
+            assert!(on_a >= 0, "key {i} lost on the sv build");
+            assert_eq!(on_a, typed_find_s(&a, &texts[i]).unwrap());
+            assert_eq!(on_a, typed_find_sv(&b, parent, off, len).unwrap());
+            assert_eq!(on_a, typed_find_s(&b, &texts[i]).unwrap());
+        }
+
+        // replaces cross lanes: a put through the OPPOSITE lane answers
+        // the found slot and stores no second entry
+        let mut a = a;
+        let alpha = typed_find_sv(&a, parent, 0, 5).unwrap();
+        assert_eq!(typed_entry_s(&mut a, "alpha").unwrap(), alpha);
+        assert_eq!(a.len(), 8);
+        let beta = typed_find_s(&a, "beta").unwrap();
+        assert_eq!(typed_entry_sv(&mut a, parent, 6, 4).unwrap(), beta);
+        assert_eq!(a.len(), 8);
+
+        // removes cross lanes: sv remove of the s-replaced key answers
+        // its slot; the owned lane then misses too; the DEAD slot
+        // re-lands the same key through the s lane
+        assert_eq!(typed_remove_sv(&mut a, parent, 0, 5).unwrap(), alpha);
+        assert_eq!(typed_remove_s(&mut a, "alpha").unwrap(), -1);
+        assert_eq!(typed_find_sv(&a, parent, 0, 5).unwrap(), -1);
+        assert_eq!(typed_find_s(&a, "alpha").unwrap(), -1);
+        assert_eq!(a.len(), 7);
+        let at = typed_entry_s(&mut a, "alpha").unwrap();
+        assert_eq!(at, -(alpha + 1), "the DEAD slot wins the probe");
+        assert_eq!(a.tomb, 0, "the DEAD slot left the tomb count");
+    }
+
+    /// The sv lanes admit like the s lanes: a Str table takes them, a
+    /// Bits table traps mixed kinds BEFORE probing (never a silent
+    /// absent), and a fresh table's first sv put fixes its kind.
+    #[test]
+    fn sv_lanes_admit_and_trap_like_the_s_lanes() {
+        let mut t = NativeTable::new(8);
+        t.entry(KeyKind::Bits, KeyVal::Bits(1), mix64(1)).unwrap();
+        let err = typed_find_sv(&t, "ab", 0, 2).unwrap_err();
+        assert!(err.msg.contains("mixed key kinds"), "{}", err.msg);
+        let err = typed_entry_sv(&mut t, "ab", 0, 2).unwrap_err();
+        assert!(err.msg.contains("mixed key kinds"), "{}", err.msg);
+        let err = typed_remove_sv(&mut t, "ab", 0, 2).unwrap_err();
+        assert!(err.msg.contains("mixed key kinds"), "{}", err.msg);
+        let err = typed_entry_s(&mut t, "ab").unwrap_err();
+        assert!(err.msg.contains("mixed key kinds"), "{}", err.msg);
+        assert_eq!(t.len(), 1, "the rejected keys stored nothing");
+        // a fresh table admits the sv lanes (Unset -> Str)
+        let mut t = NativeTable::new(8);
+        let at = typed_entry_sv(&mut t, "xy", 0, 2).unwrap();
+        assert!(at < 0);
+        assert_eq!(t.kind, KeyKind::Str);
+        assert_eq!(t.keys[-(at + 1) as usize], KeyVal::Str("xy".into()));
+    }
+
+    /// Multi-grow sweep through the sv path, the k-mer shape: 150
+    /// distinct 3-byte windows carved from ONE generated parent,
+    /// sentinel-driven grows (cap 4 -> 256), remove/re-add churn across
+    /// lanes — every key findable at the end, both lanes agreeing on
+    /// every slot.
+    #[test]
+    fn sv_lanes_survive_multi_grow_sweeps() {
+        // a marker parent: window i (bytes 3i..3i+3) spells
+        // ('A'+i%26)('a'+i/26)('0'+i%10) — unique per i BY CONSTRUCTION
+        // (the first two bytes determine i for i < 156), so no periodic
+        // collision can sneak into the sweep
+        let mut parent = String::new();
+        for i in 0..150usize {
+            parent.push((b'A' + (i % 26) as u8) as char);
+            parent.push((b'a' + (i / 26) as u8) as char);
+            parent.push((b'0' + (i % 10) as u8) as char);
+        }
+        let off_of = |i: usize| (3 * i) as i32;
+        let text_of = |i: usize| parent[3 * i..3 * i + 3].to_string();
+
+        let mut t = NativeTable::new(4);
+        let mut distinct = std::collections::HashSet::new();
+        for i in 0..150usize {
+            let mut at = typed_entry_sv(&mut t, &parent, off_of(i), 3).unwrap();
+            while at == GROW_FIRST {
+                t.grow(); // no drain: no sidecar on this path
+                at = typed_entry_sv(&mut t, &parent, off_of(i), 3).unwrap();
+            }
+            assert!(at < 0, "window {i} inserts fresh");
+            distinct.insert(text_of(i));
+        }
+        assert_eq!(distinct.len(), 150, "the sweep's keys are distinct");
+        assert_eq!(t.len(), 150);
+        // the load law's exact stops: (count + 1)·10 >= cap·7 flips at
+        // count 89 on cap 128 — so 150 puts land on cap 256
+        assert_eq!(t.cap(), 256, "cap 4 grew to 256 across 150 sv puts");
+
+        // churn: remove every 3rd key through the sv lane, re-add
+        // through the s lane (mixed-lane churn over the same table)
+        for i in (0..150).step_by(3) {
+            assert!(typed_remove_sv(&mut t, &parent, off_of(i), 3).unwrap() >= 0);
+        }
+        assert_eq!(t.len(), 100);
+        assert_eq!(t.tomb, 50);
+        for i in (0..150).step_by(3) {
+            let text = text_of(i);
+            let mut at = typed_entry_s(&mut t, &text).unwrap();
+            while at == GROW_FIRST {
+                t.grow();
+                at = typed_entry_s(&mut t, &text).unwrap();
+            }
+        }
+        assert_eq!(t.len(), 150);
+        assert_eq!(t.tomb, 0, "the re-adds reused every DEAD slot");
+        // every key findable at the end, BOTH lanes agreeing per slot
+        for i in 0..150usize {
+            let via_sv = typed_find_sv(&t, &parent, off_of(i), 3).unwrap();
+            assert!(via_sv >= 0, "key {i} lost");
+            assert_eq!(via_sv, typed_find_s(&t, &text_of(i)).unwrap(), "key {i}");
+        }
     }
 }

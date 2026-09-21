@@ -21,6 +21,7 @@ const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/nmap");
 
 const SRC: &str = r#"
 use nmap::{ map_new, map_entry, map_find, map_remove, map_needs_grow, map_grow, map_take_reloc, map_cap, map_len };
+use nmap::{ map_entry_sv, map_find_sv, map_remove_sv };
 
 // the wrapper-side hash vocabulary (mapset.rut verbatim): mix64 for the
 // integer keys, FNV-1a 64 for str/bytes. nmap never recomputes a hash —
@@ -251,6 +252,83 @@ entry fn churn_tables(n: i64) -> nil {
         i += 1;
     }
 }
+
+// ---- the sv lanes (strings-round1, phase 1) -------------------------
+// keys carve BYTE ranges out of a str parent; the host hashes/compares
+// over the range, and the answers + slots are the s lanes'.
+
+// the parity law end to end: sv keys and s keys of the same content
+// are THE SAME key — same slots, replaces/removes cross lanes, and a
+// slice VIEW (RFC 0042) reads as its range through the s lane
+entry fn sv_parity() -> i64 {
+    let t1 = map_new(8);
+    let t2 = map_new(8);
+    let parent: str = "alpha-beta-gamma-delta";
+    let mut fails: i64 = 0;
+    // sv inserts into t1; s inserts of the same texts into t2
+    if (map_entry_sv(t1, parent, 0, 5) >= 0) { fails += 1; }    // alpha
+    if (map_entry_sv(t1, parent, 6, 4) >= 0) { fails += 1; }    // beta
+    if (map_entry_sv(t1, parent, 11, 5) >= 0) { fails += 1; }   // gamma
+    let a: str = "alpha";
+    let b: str = "beta";
+    let g: str = "gamma";
+    if (map_entry_s(t2, a) >= 0) { fails += 2; }
+    if (map_entry_s(t2, b) >= 0) { fails += 2; }
+    if (map_entry_s(t2, g) >= 0) { fails += 2; }
+    if (map_len(t1) != 3 || map_len(t2) != 3) { fails += 4; }
+    // same recorded hash either way: the slots agree, and each lane
+    // finds what the other stored
+    let s1 = map_find_sv(t1, parent, 0, 5);
+    let s2 = map_find_s(t2, a);
+    if (s1 < 0 || s1 != s2) { fails += 8; }
+    if (map_find_s(t1, a) != s1) { fails += 16; }
+    if (map_find_sv(t2, parent, 0, 5) != s2) { fails += 32; }
+    // a slice VIEW crosses the s lane as its range (zero-copy read)
+    let view = parent.slice(6, 10);
+    if (map_find_s(t1, view) < 0) { fails += 64; }
+    if (map_find_s(t1, view) != map_find_sv(t1, parent, 6, 4)) { fails += 128; }
+    // replace through the opposite lane: the found slot back
+    if (map_entry_s(t1, b) != map_find_sv(t1, parent, 6, 4)) { fails += 256; }
+    if (map_len(t1) != 3) { fails += 512; }
+    // remove through the sv lane
+    let rm = map_remove_sv(t1, parent, 0, 5);
+    if (rm < 0 || rm != s1) { fails += 1024; }
+    if (map_len(t1) != 2) { fails += 2048; }
+    if (map_find_sv(t1, parent, 0, 5) >= 0) { fails += 4096; }
+    if (map_find_s(t2, g) != map_find_sv(t2, parent, 11, 5)) { fails += 8192; }
+    return fails;
+}
+
+// the empty range is a legal key at every boundary, and the owned ""
+// key finds it
+entry fn sv_empty_range() -> i64 {
+    let t = map_new(8);
+    let s: str = "abc";
+    if (map_entry_sv(t, s, 0, 0) >= 0) { return 1; }
+    if (map_len(t) != 1) { return 2; }
+    if (map_find_sv(t, s, 3, 0) < 0) { return 3; }
+    let e: str = "";
+    if (map_find_s(t, e) < 0) { return 4; }
+    return 0;
+}
+
+// a mid-codepoint window: the host's UTF-8 boundary trap
+entry fn sv_boundary_trap(t: opaque) -> i32 {
+    let utf8: str = "héllo";
+    return map_find_sv(t, utf8, 0, 2);
+}
+
+// off+len past the parent's octets: the range trap
+entry fn sv_range_trap(t: opaque) -> i32 {
+    let s: str = "abc";
+    return map_find_sv(t, s, 1, 3);
+}
+
+// a legal sv put, for the after-trap intactness check
+entry fn sv_put_ok(t: opaque) -> i32 {
+    let s: str = "abc";
+    return map_entry_sv(t, s, 0, 3);
+}
 "#;
 
 fn vm_with_nmap() -> Vm {
@@ -385,4 +463,42 @@ fn tables_release_at_rc0_including_through_wrapper_records() {
         after_churn <= base + 4096,
         "wrapper records must release table boxes at rc-0: base {base}, after {after_churn}"
     );
+}
+
+// ---- the sv lanes (strings-round1, phase 1) -------------------------
+
+/// The parity law end to end: sv keys and s keys of the same content
+/// land the same slots and each lane finds what the other stored —
+/// including a slice VIEW crossing the s lane as its range.
+#[test]
+fn sv_lanes_parity_with_the_s_lanes_end_to_end() {
+    let mut vm = vm_with_nmap();
+    assert_eq!(vm.call::<_, i64>("sv_parity", ()).unwrap(), 0);
+    assert_eq!(vm.call::<_, i64>("sv_empty_range", ()).unwrap(), 0);
+}
+
+/// The sv range check traps with the house `Invalid` shape through the
+/// VM — a mid-codepoint window and an out-of-range window are loud,
+/// and neither stores anything.
+#[test]
+fn sv_lanes_trap_mid_codepoint_and_out_of_range() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    let err = vm.call::<_, i32>("sv_boundary_trap", (t.clone(),)).unwrap_err();
+    assert_eq!(err.kind, rut_vm::TrapKind::Invalid);
+    assert!(
+        err.msg.contains("nmap") && err.msg.contains("not a UTF-8 boundary"),
+        "{}",
+        err.msg
+    );
+    let err = vm.call::<_, i32>("sv_range_trap", (t.clone(),)).unwrap_err();
+    assert!(
+        err.msg.contains("nmap") && err.msg.contains("out of range"),
+        "{}",
+        err.msg
+    );
+    // the traps stored nothing and the table still works
+    assert_eq!(vm.call::<_, i32>("count", (t.clone(),)).unwrap(), 0);
+    assert!(vm.call::<_, i32>("sv_put_ok", (t.clone(),)).unwrap() < 0);
+    assert_eq!(vm.call::<_, i32>("count", (t.clone(),)).unwrap(), 1);
 }
