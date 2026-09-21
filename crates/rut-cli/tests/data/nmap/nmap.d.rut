@@ -95,3 +95,14 @@ pub host fn map_remove_y(m: opaque, k: bytes) -> i32;
 pub host fn map_val_set_u(m: opaque, slot: i32, v: u64);
 
 pub host fn map_val_get_u(m: opaque, slot: i32) -> u64;
+
+// ---- the f64 val lane (nmapset-round3, phase 2) ----------------------
+// The same column through an `f64`-typed crossing: `to_bits`/`from_bits`
+// at the boundary, raw bits byte-for-byte both directions. The wrapper
+// cannot spell the float reinterpret itself (rut's numeric `as` is a
+// value conversion, not a bitcast — RFC 0007 §1), so this pair is the
+// float lane's whole story. Slot law = the u lane's.
+
+pub host fn map_val_set_f(m: opaque, slot: i32, v: f64);
+
+pub host fn map_val_get_f(m: opaque, slot: i32) -> f64;

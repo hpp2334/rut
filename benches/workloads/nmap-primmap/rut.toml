@@ -1,0 +1,15 @@
+# nmap-primmap/ — the nmapset-round3 phase-2 row: the identical i32-key
+# churn over `nmapset::PrimMapI64` (the prim-val map class — keys AND
+# values live in the native table's u64 val column, no `[?V]` sidecar,
+# no relocation drain) instead of `nmapset::HashMap`. A module dir (not
+# a loose file) because it mounts `nmapset`, which pulls the `nmap`
+# host pkg through its own `[deps]`. `ink` is declared for the logger.
+# The op sequence is nmapset-int's EXACTLY (same keys, same values, same
+# counters — the checksum accumulates in i64 and narrows once at the
+# return), so the checksum must EQUAL the pinned 734932704.
+name = "nmap_primmap"
+entry.lib = "./main.rut"
+
+[deps]
+nmapset = { path = "../../../rut/nmapset" }
+ink = { path = "../../../rut/ink" }

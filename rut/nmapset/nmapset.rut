@@ -43,11 +43,21 @@
 // machinery at all — the undrained queue is cleared by the next grow
 // and freed with the table (the host side's documented
 // drain-after-every-grow law).
+//
+// ROUND3 PHASE 2 (the nmapset-round3 plan): the host table also owns
+// VALUES now — a raw u64 column relocated with the keys inside the
+// same grow walk. The `PrimMap*` classes below are its consumers:
+// primitive-V maps with no `[?V]` sidecar and no drain pass. `HashMap`
+// keeps the sidecar for REFERENCE `V` — cells stay cells, the
+// `get -> ?V` aliasing law is untouched — and stays the general
+// wrapper; the prim-val story ("users choose", the mapset/nmap
+// precedent) is the three lane classes.
 
 use nmap::{ map_new, map_grow, map_take_reloc, map_cap, map_len,
             map_entry_i, map_entry_u, map_entry_b, map_entry_s, map_entry_y,
             map_find_i, map_find_u, map_find_b, map_find_s, map_find_y,
-            map_remove_i, map_remove_u, map_remove_b, map_remove_s, map_remove_y };
+            map_remove_i, map_remove_u, map_remove_b, map_remove_s, map_remove_y,
+            map_val_set_u, map_val_get_u, map_val_set_f, map_val_get_f };
 
 // ---- the private key lane (the typed crossings, phase 2) -----------
 
@@ -231,6 +241,205 @@ impl HashMap<K, V> {
 // relocation drain (nothing rides the slots but the keys themselves).
 pub class HashSet<T requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
     t: opaque;
+}
+
+// ---- the prim-val maps (nmapset-round3, phase 2) ---------------------
+
+// `PrimMapI64` / `PrimMapU64` / `PrimMapF64` — the phase-2 consumers of
+// the host table's NATIVE val column: keys AND values both live Rust-
+// side, so a hit-get is ONE cache line of probing and a put is one
+// crossing plus the val store — the wrapper's `[?V]` sidecar, its
+// relocation drain (the round3 phase-0 residual's dominant term), and
+// its per-grow re-allocation are all GONE by construction (the host
+// relocates vals with the keys inside the same re-slot walk; §0.3
+// presence-by-key: a val is valid iff its key slot is FULL, so remove
+// writes nothing and a get only reads a found slot).
+//
+// WHY THREE CLASSES, NOT ONE `PrimMap<K, V>`: the plan's single class
+// assumed the V reinterpret is spellable client-side per instantiation.
+// It is — for the SET direction, where a `v: V` value carries the lane
+// dispatch exactly like a KeyLane key. The GET direction has no `V`
+// value to dispatch through, and the language offers no other spelling:
+// no-self trait methods have no call syntax on primitives (type names /
+// type params are not expressions — `V.dec(raw)` / `i64.dec(raw)` both
+// diagnose "unknown name"), there is no `as V` cast to a type param,
+// and the union bound grants admission only, never per-member
+// divergence (the phase-0c verdict). So the class splits over the val
+// kind — the mapset/nmap precedent: users choose the lane — and each
+// body spells its two concrete reinterprets (`as u64` / `as i64` raw
+// wrap; f64 through the `map_val_set_f` / `map_val_get_f` crossings,
+// `to_bits`/`from_bits` at the boundary, because rut has NO float
+// bitcast: the numeric `as` is a value conversion, RFC 0007 §1).
+//
+// THE BOOL LANE IS DEFERRED, not dropped silently: `?bool` cannot serve
+// the `get -> ?V` nil law in today's checker — a `?bool` value unboxes
+// to `bool` at value reads, so `p == nil` / `p != nil` diagnose
+// "operands must have equal width (RFC 0004 §3): `bool` vs `nil`"
+// (verified: the same compares compile and run for `?i64` / `?u64` /
+// `?f64` / `?str`). A bool-val map needs that checker fix first; today
+// a bool val encodes as `0u64` / `1u64` in `PrimMapU64`.
+//
+// `get` keeps the get -> ?V law's prim semantics (round 2): a FRESH opt
+// value per hit — prim vals are plain bits, so there is no cell to
+// alias and no staleness beyond a held copy of the pre-replace value,
+// exactly like today's `[?V]` sidecar of prim vals. Iteration order is
+// unchanged by construction (the probe algorithm and slot assignment
+// never moved — the phase-1 suite pins the relocation mapping), but
+// neither this class nor `HashMap` ships an iteration surface, so the
+// parity law holds where order is observable: identical slots, identical
+// per-key answers, identical checksums.
+pub class PrimMapI64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
+    t: opaque;    // HostBoxed<NativeTable> — keys, recorded hashes, states, vals
+}
+
+impl PrimMapI64<K> {
+    pub fn new() -> Self {
+        return PrimMapI64.with_capacity(8);
+    }
+
+    pub fn with_capacity(n: i32) -> Self {
+        return Self { t: map_new(n as i64) };
+    }
+
+    // `put` — `true` when the key was newly added. ONE lane call with
+    // the grow check fused in, then grow + RETRY — no relocation drain,
+    // the column moved with the keys inside `map_grow` — then the val
+    // store at the answered slot.
+    pub fn put(mut self, k: K, v: i64) -> bool {
+        let mut at = k.nentry(self.t);
+        while (at <= -2147483647) {
+            map_grow(self.t);
+            at = k.nentry(self.t);
+        }
+        if (at >= 0) {
+            map_val_set_u(self.t, at, v as u64);
+            return false;
+        }
+        map_val_set_u(self.t, -(at + 1), v as u64);
+        return true;
+    }
+
+    // `get` — `nil` = absent (RFC 0005 §10); a hit mints a fresh opt
+    // from the column's raw bits (`as i64` wrap, the i lane's inverse).
+    pub fn get(self, k: K) -> ?i64 {
+        let at = k.nfind(self.t);
+        if (at < 0) {
+            return nil;
+        }
+        return map_val_get_u(self.t, at) as i64;
+    }
+
+    pub fn has(self, k: K) -> bool {
+        return k.nfind(self.t) >= 0;
+    }
+
+    // `remove` — the host tombstones the slot; presence-by-key means no
+    // val write (the stale bits are unreachable, the slot's next put
+    // stores a fresh val).
+    pub fn remove(self, k: K) -> bool {
+        return k.nremove(self.t) >= 0;
+    }
+
+    pub fn len(self) -> i32 {
+        return map_len(self.t);
+    }
+}
+
+pub class PrimMapU64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
+    t: opaque;
+}
+
+impl PrimMapU64<K> {
+    pub fn new() -> Self {
+        return PrimMapU64.with_capacity(8);
+    }
+
+    pub fn with_capacity(n: i32) -> Self {
+        return Self { t: map_new(n as i64) };
+    }
+
+    pub fn put(mut self, k: K, v: u64) -> bool {
+        let mut at = k.nentry(self.t);
+        while (at <= -2147483647) {
+            map_grow(self.t);
+            at = k.nentry(self.t);
+        }
+        if (at >= 0) {
+            map_val_set_u(self.t, at, v);
+            return false;
+        }
+        map_val_set_u(self.t, -(at + 1), v);
+        return true;
+    }
+
+    // raw bits both directions — 2^63..2^64-1 ride untouched
+    pub fn get(self, k: K) -> ?u64 {
+        let at = k.nfind(self.t);
+        if (at < 0) {
+            return nil;
+        }
+        return map_val_get_u(self.t, at);
+    }
+
+    pub fn has(self, k: K) -> bool {
+        return k.nfind(self.t) >= 0;
+    }
+
+    pub fn remove(self, k: K) -> bool {
+        return k.nremove(self.t) >= 0;
+    }
+
+    pub fn len(self) -> i32 {
+        return map_len(self.t);
+    }
+}
+
+pub class PrimMapF64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
+    t: opaque;
+}
+
+impl PrimMapF64<K> {
+    pub fn new() -> Self {
+        return PrimMapF64.with_capacity(8);
+    }
+
+    pub fn with_capacity(n: i32) -> Self {
+        return Self { t: map_new(n as i64) };
+    }
+
+    pub fn put(mut self, k: K, v: f64) -> bool {
+        let mut at = k.nentry(self.t);
+        while (at <= -2147483647) {
+            map_grow(self.t);
+            at = k.nentry(self.t);
+        }
+        if (at >= 0) {
+            map_val_set_f(self.t, at, v);
+            return false;
+        }
+        map_val_set_f(self.t, -(at + 1), v);
+        return true;
+    }
+
+    pub fn get(self, k: K) -> ?f64 {
+        let at = k.nfind(self.t);
+        if (at < 0) {
+            return nil;
+        }
+        return map_val_get_f(self.t, at);
+    }
+
+    pub fn has(self, k: K) -> bool {
+        return k.nfind(self.t) >= 0;
+    }
+
+    pub fn remove(self, k: K) -> bool {
+        return k.nremove(self.t) >= 0;
+    }
+
+    pub fn len(self) -> i32 {
+        return map_len(self.t);
+    }
 }
 
 impl HashSet<T> {

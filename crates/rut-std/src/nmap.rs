@@ -690,6 +690,34 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
             b.with(|t| t.val_get(slot))?
         },
     );
+
+    // ---- the f64 val lane (nmapset-round3, phase 2) ---------------------
+    // The same column, read/written through an `f64`-typed crossing:
+    // `f64::to_bits`/`from_bits` at the boundary, nothing else. This is
+    // the plan's "minimal honest surface" for the prim-val map's float
+    // lane — rut has no `f64 <-> u64` bitcast (the numeric `as` is a
+    // VALUE conversion, RFC 0007 §1, and `bool` is excluded from `as`
+    // entirely), so the wrapper cannot spell the reinterpret client-side
+    // the way the integer lanes do with `as u64`. Raw bits in the
+    // column, byte-for-byte, both directions; the slot law is the u
+    // lane's (caller-supplied index, out of range traps, growth
+    // relocates host-side).
+    rut_vm::register!(
+        hosts,
+        "nmap::map_val_set_f",
+        (OpaqueBox<NativeTable>, i32, f64) -> (),
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32, v: f64| -> Result<(), Trap> {
+            b.with_mut(|t| t.val_set(slot, v.to_bits()))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap::map_val_get_f",
+        (OpaqueBox<NativeTable>, i32) -> f64,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32| -> Result<f64, Trap> {
+            b.with(|t| t.val_get(slot).map(f64::from_bits))?
+        },
+    );
 }
 
 #[cfg(test)]
@@ -1267,7 +1295,36 @@ mod tests {
         assert!(err.msg.contains("out of range"));
     }
 
+    /// The f64 val lane (phase 2): the crossing pair stores
+    /// `v.to_bits()` and loads `f64::from_bits`, so float payloads ride
+    /// the same u64 column byte-for-byte — bit patterns, not numeric
+    /// conversions (the wrapper-facing law the `as`-cast integer lanes
+    /// can't spell for floats: rut has no float bitcast, RFC 0007 §1).
+    #[test]
+    fn val_f64_lane_round_trips_bit_patterns() {
+        let mut t = NativeTable::new(8);
+        let vals = [
+            1.5f64,
+            -2.25,
+            0.0,
+            -0.0, // the sign bit is the payload — not "equal" to 0.0's bits
+            f64::MIN_POSITIVE,
+            f64::MAX,
+            f64::MIN,
+        ];
+        for (i, v) in vals.iter().enumerate() {
+            t.val_set(i as i32, v.to_bits()).unwrap();
+        }
+        for (i, v) in vals.iter().enumerate() {
+            assert_eq!(t.val_get(i as i32).unwrap(), v.to_bits(), "val {i}");
+            assert_eq!(f64::from_bits(t.val_get(i as i32).unwrap()), *v);
+        }
+        // -0.0 vs 0.0: distinct bit patterns in ONE column
+        assert_ne!(t.val_get(2).unwrap(), t.val_get(3).unwrap());
+    }
+
     /// The column sits on the PINNED hash slots: keys whose mix64 bits
+
     /// the hash-pin test above freezes land where those bits say
     /// (`h & mask`), including a probe collision (two pinned keys share
     /// the cap-8 home slot; linear probing separates them and the vals

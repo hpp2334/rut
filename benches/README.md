@@ -1670,6 +1670,124 @@ No consumer changes, no VERSION bump, `expected.json` untouched. Files:
 clean apart from those; scratch under
 `/tmp/opencode/batch-nmapset-round3/p1/`.
 
+## Performance log — nmapset-round3 phase 2: the prim-val consumers (Sep 2026)
+
+Phase 0c's verdict runs the §0.5 fallback: a PUBLIC prim-val map over
+the phase-1 column, `HashMap` untouched. The consumer shape is three
+classes in `nmapset` — `PrimMapI64<K>` / `PrimMapU64<K>` /
+`PrimMapF64<K>` (each generic over the SAME closed key union, vals
+fixed by the class) — not the plan-letter single `PrimMap<K, V>`, and
+not the four-lane V union: two language facts, verified empirically
+and recorded in the class header comment:
+
+- **The get-side reinterpret has no spelling in a V-generic body.** The
+  set direction is value-carried (a `v: V` would dispatch a lane method
+  exactly like a KeyLane key); get has no `V` value to dispatch
+  through. Rut's no-self trait methods (RFC 0012 §2, "engine
+  contracts") have no call syntax on primitives — type names and type
+  params are not expressions (`V.dec(raw)` / `i64.dec(raw)` both
+  diagnose "unknown name"; there is no `::` path syntax), there is no
+  `as V` cast to a type param, and the union bound is admission only,
+  never per-member divergence (the phase-0c finding). Each class body
+  therefore spells its two concrete reinterprets.
+- **The bool lane is deferred, not dropped silently.** `?bool` cannot
+  serve the `get -> ?V` nil law in today's checker: a `?bool` value
+  unboxes to `bool` at value reads, so `p == nil` / `p != nil` diagnose
+  "operands must have equal width (RFC 0004 §3): `bool` vs `nil`" —
+  verified for direct-call, annotated-local, and inferred-local shapes,
+  while the same compares compile and run for `?i64` / `?u64` / `?f64`
+  / `?str`. A bool-val map needs that checker fix first; today a bool
+  val encodes as `0u64` / `1u64` in `PrimMapU64`.
+
+Per op the wrapper is: `put` = one lane call (`nentry`, the fused grow
+sentinel) → grow + RETRY — **no relocation drain, the column moved
+with the keys** — then the val store at the answered slot
+(`map_val_set_u`, or the new `map_val_set_f` for floats); `get`/`has` =
+one `nfind`, and a hit reads the column (`map_val_get_u` /
+`map_val_get_f`) into a FRESH opt — the get -> ?V law's prim semantics,
+round-2 style; `remove` = `nremove` only (presence-by-key: no val
+write); `with_capacity` via `map_new`, `len` via `map_len`.
+
+**The f64 lane needed the plan's "minimal honest surface": two
+additive crossings.** Rut has no `f64 <-> u64` bitcast — the numeric
+`as` is a VALUE conversion (RFC 0007 §1), so `raw as f64` would round,
+not reinterpret, and no builtin exists. `map_val_set_f(m, slot, v:
+f64)` / `map_val_get_f(m, slot) -> f64` read/write the SAME u64 column
+through `f64::to_bits`/`from_bits` — raw bits byte-for-byte both
+directions, the u lane's slot law (out-of-range traps), zero wrapper
+reinterpretation. Declared in `rut/nmap/nmap.d.rut` + the CLI fixture
+mirror (update-BOTH). The integer/bool-free client-side reinterprets
+that DID spell (`as u64` / `as i64` raw wraps) stay client-side.
+
+**Rider correction (recorded, nothing deleted):** the plan's phase-2
+rider called 33 KeyLane impl bodies "dead" — they are NOT dead code in
+the unreachable sense: the bench never calls them, but other K
+instantiations (u8/u16/str/bytes keys, every non-bench program)
+monomorphize exactly those impls. The cleanup rider is VOID; all impls
+stay.
+
+**New bench row `nmap-primmap`** (the recommended shape — `HashMap`'s
+regression coverage stays AND the new path gets a row): a clone of
+nmapset-int with `PrimMapI64<i32>` — identical keys, values (i64 lane),
+op sequence, and scale; the churn accumulates in i64 and narrows once
+at the return, bit-identical to the i32 wrapping arithmetic
+(two's-complement addition is the same mod 2^32). Files:
+`benches/workloads/nmap-primmap/{rut.toml,main.rut}`,
+`benches/workloads/nmap-primmap.js` (the qjs/node twin, algorithm
+unchanged), and ONE expected.json line — `"nmap-primmap":
+"734932704"`, the sequence's pinned value. Nothing else in
+expected.json moved; no VERSION bump anywhere.
+
+### The numbers (house method, one checkout, release build)
+
+- **Parity law through the wrapper**: the nmapset-int churn shape at
+  n = 2000 through `PrimMapI64<i32>` vs `HashMap<i32, i64>` in one
+  program answers the same `2598000` (the phase-1 column-law number);
+  the prim get semantics (fresh opt per hit, held copies keep
+  pre-replace bits, remove doesn't touch held copies) are identical on
+  both classes, both directions.
+- **Headline, same-session interleaved 10 rounds × 7 fresh-VM iters,
+  order alternated**: nmap-primmap **61.40 ms** exec (60.7–65.1) vs
+  nmapset-int **68.93 ms** (67.5–71.4) — round ranges non-overlapping,
+  **−10.9 % matched-pair** (fuel 20,703,284 → 17,950,301, −13.4 %;
+  ~−12.5 ns per map op). The phase-0b model predicted the column's
+  one-line-per-op win at ≤ ~20 ns/op; the measured net lands at ~60 %
+  of the naive drain+sidecar model, the honest residual being the
+  added val crossing per op (~10 ns class) and the column's own cache
+  line. Heap: **1,966,551 → 324 B** — the `[?V]` sidecar is GONE (the
+  column is plain Rust, invisible to cell accounting; the residue is
+  the logger + the +24 B table box). For absolute placement: the box
+  runs ~+9 % over the round2 close-out (nmapset-int read 63.19 there,
+  68.93 in this session — the matched pair is the number); the phase-0
+  stub floor 42.57 remains the ceiling marker, and qjs: primmap net
+  70.4 (rut CLI) vs 62.6 (qjs) = 1.13× — on probe-exec terms 61.4 vs
+  qjs's whole 62.6 net, i.e. AT parity, the round2 placement held.
+- **Guards**: full-suite sanity pass, all 28 workloads × rut/qjs/node,
+  exit 0 — every checksum equal expected.json (the four nmapset pins
+  734932704 / 1264308351 / 21500055 / 2198604 hold; the NEW row reads
+  734932704 on all three runtimes), **fuel bit-identical on every
+  pre-existing row**, and the four nmap heap re-pins hold exactly
+  (nmapset-int 1,966,551; nmapset-str 983,620; nmap-knucleotide
+  4,195,084; nmap-hashset 551).
+
+Tests (7 new driver tests in `nmap_primmap.rs` + 1 Rust-side): the
+parity law; prim get semantics mirrored against the sidecar; a
+500-key multi-grow sweep from cap 4 under colliding keys (step 37)
+with remove/re-add churn — every val exact, no drain; u64 raw-bit
+round-trips through the wrapper (2^63, 2^64-1, replace, remove/
+re-insert staleness); f64 round-trips incl. the −0.0 SIGN bit
+(1/−0.0 < 0 — value equality can't see it, the column carries it);
+K admission (the union diagnostic names `Pt` and the closed union,
+unchanged); HashMap + HashSet + PrimMap coexistence in one program
+with a str-keyed PrimMap riding the s lane. Workspace green (77 suite
+runs, 468 tests, zero failures; was 76/460). Files:
+`crates/rut-std/src/nmap.rs` (the f64 crossings + bit-pattern test),
+`rut/nmap/nmap.d.rut` + the CLI fixture mirror (+2 decls),
+`rut/nmapset/nmapset.rut` (the three classes + the header story),
+`crates/rut-driver/tests/nmap_primmap.rs` (new), the three
+`nmap-primmap` bench files + the expected.json line, this section.
+Scratch under `/tmp/opencode/batch-nmapset-round3/p2/`.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
