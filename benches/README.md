@@ -97,8 +97,7 @@ against the reference in `workloads/expected.json`.
 | `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
 | `kmer-view` | the `nmap-knucleotide` k-mer counting keyed through `nmapset::HashMap`'s **range methods** (strings-round1 phase 2 — the sv lanes: keys cross as borrowed byte windows of the sequence, no key cell minted; see the performance log) | seq = 200 000 | checksum `2198604` — the `nmap-knucleotide` pin; parity is the gate, no separate line |
 | `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
-| `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells, RFC 0044): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the `[?V]` relocation drain). K = i64 holds the hash term constant so the row isolates VALUE-side costs; the refval-exp batch's phase-1 `refcolumn` row re-spells this exact op stream over the host val column | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
-| `refcolumn` | the refval-exp **EXPERIMENT**: refvals' exact op stream over the experimental `nmapset::RefMap<i64, Pt>` — the host table's opaque val column (`map_val_set_o`/`map_val_get_o`): one `opaque(v)` box minted per put and stored behind a self-releasing host-side owner, gets re-hand the SAME box and unwrap it with `opaque.downcast<V>` to the LIVE cell (the one-cell law carries — the checksum depends on it), growth needs no relocation drain (the column moves with the keys host-side). Known terms for phase-2 attribution: the per-put box mint, the per-get downcast, +32 B accounted per live value (the box cell) | identical to `refvals` | checksum `140052990000` — disclosed: the SAME value as the `refvals` pin, because the op stream and the value stream are identical; the storage differs |
+| `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells, RFC 0044): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the `[?V]` relocation drain). K = i64 holds the hash term constant so the row isolates VALUE-side costs. (The refval-exp batch's phase-1 `refcolumn` twin re-spelled this exact op stream over the experimental host val column; phase 2 measured it SLOWER and the experiment was REVERTED — see the verdict log. The `refvals` row and its analysis are permanent.) | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
@@ -2722,6 +2721,172 @@ crossings, ONE row — revert is one commit deleting the three.
   heap −7.2 MB ≈ the box cells replacing the sidecar arrays, time
   reads slower cold and is phase 2's question.
 
+## Performance log — refcolumn phase 2: the verdict — the column REVERTED (Sep 2026)
+
+The pre-registered decision (plan §0.6), now applied: **refcolumn is
+SLOWER than refvals beyond noise, so the experimental surface is
+REVERTED** — one commit deleting `RefMap` + the two `map_val_set_o`/
+`map_val_get_o` crossings + the `refcolumn` row, keeping `refvals` and
+the analysis (phases 0-1's sections above stay as the experiment's
+record). This section records the verdict and WHERE the cost landed.
+
+### The matched pair (house method)
+
+Both rows of ONE checkout, one release build, interleaved 7 rounds ×
+7 fresh-VM probe iters per side, order alternated per round, median of
+the round medians (fuel and heap are pure counts — single-valued in
+every round of every side, deterministic):
+
+| side        | exec median of medians | round-median range | per map op | fuel        | VM heap peak |
+|-------------|------------------------|--------------------|------------|-------------|--------------|
+| refvals     | **337.68 ms**          | 330.7 – 341.7      | 255.8 ns   | 56,899,541  | 28,801,340 B |
+| refcolumn   | **383.93 ms**          | 380.3 – 398.3      | 290.9 ns   | 55,390,560  | 21,600,999 B |
+| **delta**   | **+46.26 ms (+13.7%)** | ranges NON-overlapping | **+35.1 ns/op** | −1,508,981 (−2.7%) | −7,200,341 B |
+
+refvals reproduces its phase-0 record (334.5-345.9 round range then,
+330.7-341.7 now; 255.8 vs ~258 ns/op) — the baseline did not move.
+The verdict signal is unambiguous: every refcolumn round-median is at
+least 38.6 ms ABOVE every refvals round-median. The phase-1 cold
+first-read (443.9 ms) was the same verdict, cold-box inflated.
+
+The qjs scoreboard (same session, 5 reps + 1 warmup, net medians; qjs
+is stable day to day — the two rows' JS twins are the same program):
+
+| row        | rut net   | qjs net  | node net | rut/qjs |
+|------------|-----------|----------|----------|---------|
+| refvals    | 366.8 ms  | 302.9 ms | 112.2 ms | 1.21×   |
+| refcolumn  | 420.9 ms  | 303.8 ms | 118.8 ms | 1.39×   |
+
+The experiment would have moved rut from 1.21× to 1.39× AGAINST qjs on
+the suite's only ref-V shape. (Checksums `140052990000` equal on
+rut/qjs/node for both rows throughout — the one-cell law carried
+perfectly; the experiment failed on SPEED only.)
+
+### The fuel ledger — exact (per-phase clone pairs, interleaved)
+
+Ten single-phase clones of the churn (the phase-0 ledger's method, a
+`RefMap` twin of each), 5 rounds × 3 fresh-VM iters per side. Fuel is
+exact, and the per-op deltas reconcile the row's −1,508,981
+BIT-EXACTLY (each clone's shared build setup cancels):
+
+| phase (ops)                              | Δ fuel                  | per-op delta | what it is |
+|------------------------------------------|-------------------------|--------------|------------|
+| fresh put w/ growth (100k ×15g / 200k ×16g) | −3,202,984 / −6,405,997 | **−32.03/put** | the relocation drain deleted + the store re-spelled |
+| overwrite put (flat, 300k)               | +300,000                | **+1.0/put** | box mint + `set_o` crossing replace `makeopt`+`arrset` |
+| hit get, 2 fields (100k)                 | +1,600,000              | **+16.0/get** | `get_o` crossing + the downcast stream |
+| hit get, 1 field (300k)                  | +4,800,000              | **+16.0/get** | same (field count is irrelevant) |
+| miss get (20k)                           | 0                       | **0.0**      | the val lanes never touched |
+| rmw through the alias (100k)             | +1,600,000              | **+16.0**    | the same downcast package |
+| remove (50k) / has (100k) / re-add (50k) | −200,000                | **−5.0/remove**, 0/has, +1/re-add | the nil store gone; the owner drop is host-side |
+| **row total**                            | **−1,508,981**          |              | **= measured exactly** |
+
+The drain story, verified: the deleted growth-path fuel is
+−3,302,984 (m) − 6,605,997 (g) = 9,908,981 ops — phase-0's DRAIN stub
+measured 9,908,847; the column relocates vals with the keys host-side
+and the wrapper's `map_take_reloc` stream is GONE (−33.03 ops/put on
+every growth build vs +1.0 on flat puts — the difference IS the
+drain). The one predicted win is real. It is just not big enough.
+
+### Where the TIME went — the honest attribution
+
+Fuel fell 2.7% while time ROSE 13.7% — the deleted ops were the
+cheapest in the stream (the drain's sequential moves, ~9.9 M ×
+~0.77 ns ≈ 7.6 ms) and the added work is the most expensive kind
+(crossings + per-get cell traffic). The row-level composition that
+closes, both halves measured same-session:
+
+- **The build/put side WINS −40.4 ms**: a diagnostic clone running
+  BOTH map builds in one VM (the row's actual structure) reads
+  refcolumn 125.53 ms vs refvals 165.92 ms (ranges non-overlapping;
+  fuel 10,800,453 vs 20,409,434). This is the drain deletion realized
+  in time, plus the cheaper growth build.
+- **The get side LOSES ≈ +87 ms**: the four value-reading phases'
+  op-only deltas (clone delta minus that clone's build delta) read
+  +172 / +182 / +187 / +166 ns per value-get — call it ~+175 ns over
+  the row's 500 k value-reading gets. −40.4 + 87 ≈ +46.6 vs the
+  measured +46.26. ✓
+- The flat-table overwrite put reads +59…+100 ns/put in the phase
+  clones (box mint + `set_o` frame + owner release vs the sidecar's
+  `makeopt`+`arrset`) — inside the build/put aggregate above; not
+  separately resolvable at row level.
+
+The ~+175 ns/get is the downcast package, term by term: the second
+crossing (`map_val_get_o` — a host frame the sidecar row never pays),
+`TidOf` + const-compare + branch + `Unbox` (+16 fuel ops ≈ 12-16 ns at
+the crossing-nop calibration), and the dominant unpriced term —
+**`opaque.downcast<V>` yields a `(V, bool)` TUPLE, and that tuple is a
+real record cell**: the lowering is `Op::MakeRecord` (RFC 0014 v1.1),
+so every hit-get mints a tuple cell and releases it a few ops later
+(RFC 0040 accounting both ways). Phase-0 priced the sidecar LOAD at
+~65 ns/get; the column's answer costs ~240 ns/get. That is where the
+experiment died: not the storage — the READ-BACK spelling.
+
+Method honesty: the ten per-phase clones' raw time deltas do NOT sum
+to the row (−74.6 vs +46.26) — each clone re-runs its build in a fresh
+VM under different memory pressure than the row's phases ever see, so
+clone-time is not additive across phases. The composition above uses
+the two-builds diagnostic (the build side, measured in the row's own
+shape) plus the clones' op-only get deltas (consistent across four
+independent phases, +166-187 ns/get); miss-get read +4 ms on
+IDENTICAL fuel and is recorded as clone noise.
+
+### The heap terms — measured and reconciled
+
+The phase-0 pre-registration expected heap PARITY ("the peak IS the
+records; refcolumn holds the same records"). Both of its assumptions
+were falsified, and the isolation probes (same binary, deterministic
+RFC 0040 accounting) pin the true cell economics:
+
+- record cell `Pt` = **40 B** (24 B `CELL_OVERHEAD` + 2 × 8 B fields —
+  `mint` charges 24 + payload); a 4-field record = 56 B (probes:
+  4.80 MB / 100 k bare `[Pt]`; 8.80 MB / 100 k through the column).
+- the sidecar store's `MakeOpt` one-slot cell = **32 B** (24 + 8).
+- the column's `Op::Box` = **32 B** (24 + 8 — `alloc_opaque` charges
+  exactly this; boxed prims read exactly 32.0 B/value in isolation).
+- **the `[?V]` sidecar arrays are CHARGED rut Array cells** — 8 B per
+  table slot (`alloc_array`, `n × w`): m's 262,144-slot block = 2.1 MB,
+  g's 524,288-slot block = 4.2 MB. The phase-0/1 note "plain host
+  memory, invisible to cell accounting" was WRONG (the NOVALS control
+  collapsed to 892 B because the stub deletes the array, not because
+  nil blocks are free).
+
+So: refvals = **96.0 B per live value** (record 40 + MakeOpt 32 +
+sidecar block ~21 + grow-time transients ~3 → 28,801,340 B over
+300 k live values, the peak catching g's last drain); refcolumn =
+**72.0 B per live value** (record 40 + box 32; the column is a host
+`Vec`, invisible → 21,600,999 = 300 k × 72 + base, EXACT). The
+phase-1 "+32 B/box" term is measured exactly right — but it REPLACES
+the sidecar's 32-B store cell one-for-one and deletes 6.3 MB of
+charged blocks, so the column's heap came out 7.2 MB LOWER, not
+higher. The experiment's heap outcome was a WIN (−25%), just not on
+the axis the verdict needed.
+
+### The decision, applied
+
+§0.6's pre-registered rule reads: slower beyond noise → REVERT; the
+round ranges here do not overlap at all. Applied in this commit:
+`nmapset::RefMap` deleted, the two opaque-val crossings deleted (both
+`nmap.d.rut` copies), the `refcolumn` row + twin + `expected.json`
+line deleted, `nmap.rs` restored to its phase-0 state (the size-144
+layout discipline reverts with it), the phase-1 driver suite deleted.
+KEPT: the `refvals` row (permanent ref-V coverage), its checksum pin
+`140052990000`, and the batch's analysis (these three sections).
+Gates at commit: full suite 27 workloads × rut/qjs/node, exit 0,
+every checksum equal `expected.json` (79 cross rows); the
+exactly-committed fuel/heap pins hold BIT-IDENTICALLY post-revert —
+refvals 56,899,541/28,801,340, nmapset-int 20,703,284/1,966,551,
+nmapset-str 9,551,761/983,620, nmap-knucleotide 38,814,389/4,195,084,
+nmap-hashset 13,267,176/551, nmap-primmap 17,950,301/324, kmer-view
+37,614,177/4,194,916, strview 10,801,744/2,032,173, json-decode
+111,330,118/34,377,147, crossing-nop 104,000,032/236, alloc
+22,000,020/228, sieve 19,592,209/1,491,846, array 60,486,108/7,864,540,
+fasta 200,029/16,806, binary-trees 1,048,552; workspace 525 tests,
+0 failures, 82 suites (the pre-experiment counts). What the batch
+keeps beyond the row: the measured knowledge that a val column for
+ref-V must attack the READ-BACK (the tuple-minting downcast), not the
+storage — a direct-ref lane is an engine repr change, out of the
+experiment's scope by design.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
@@ -2731,8 +2896,8 @@ crossings, ONE row — revert is one commit deleting the three.
   workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
   `nmap-knucleotide`, which pull the `nmap` host pkg through the
   pkg's own `[deps]`; also the dir twins `kmer-view`, `strview`, and
-  the record-valued `refvals` row plus its experimental twin
-  `refcolumn`, the same way),
+  the record-valued `refvals` row, the same way — the experimental
+  `refcolumn` twin was reverted with its batch's verdict),
   `json-decode` (it mounts `pouch` for the
   row chunks the document generator joins), and `crossing-nop` (it
   mounts `bench-cross`, the phase-0 crossing-tax pkg). The bench

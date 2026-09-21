@@ -84,8 +84,7 @@ use nmap_host::{ map_new, map_grow, map_take_reloc, map_cap, map_len,
             map_find_i, map_find_u, map_find_b, map_find_s, map_find_y,
             map_remove_i, map_remove_u, map_remove_b, map_remove_s, map_remove_y,
             map_entry_sv, map_find_sv, map_remove_sv,
-            map_val_set_u, map_val_get_u, map_val_set_f, map_val_get_f,
-            map_val_set_o, map_val_get_o };
+            map_val_set_u, map_val_get_u, map_val_set_f, map_val_get_f };
 
 // ---- the private key lane (the typed crossings, phase 2) -----------
 
@@ -569,123 +568,6 @@ impl HashSet<T> {
 
     pub fn remove(self, t: T) -> bool {
         return t.nremove(self.t) >= 0;
-    }
-
-    pub fn len(self) -> i32 {
-        return map_len(self.t);
-    }
-}
-
-// ---- the EXPERIMENTAL ref-val map (refval-exp, phase 1) --------------
-//
-// `RefMap<K, V>` — the PrimMap precedent's THIRD family: keys ride the
-// same typed lanes as every class above, but the VALUES live in the
-// host table too, as the `opaque(v)` box the put mints (the two
-// `map_val_set_o` / `map_val_get_o` crossings over the experimental
-// opaque-val column). This class IS the refval-exp experiment's
-// surface: additive, and reverted with the experiment (plan §0.1) —
-// `HashMap` / `HashSet` / the PrimMap lanes are untouched.
-//
-// FOR REFERENCE V; PRIM V BELONGS ON PRIMMAP. V carries NO bound: a
-// reference-type union does not exist in the language (round3 phase-0c
-// — the union bound is admission-only, and there is no ref-type union
-// to admit with), so admission cannot branch and a prim V would RUN
-// (the box wraps it) while paying the box for nothing. The contract is
-// documentation, not a check.
-//
-// THE ONE-CELL LAW (RFC 0044, pinned by the phase-1 tests): `get`
-// unwraps the stored box with `opaque.downcast<V>`, which answers the
-// LIVE inner cell — the result of a get IS the map's stored value:
-// mutation through it is visible to the next get and to every other
-// holder; a replace re-points future gets at the new value while held
-// aliases keep the pre-replace cell (mapset's law, unchanged).
-//
-// THE SHAPE (the leaner crossing form, disclosed for phase-2
-// attribution): the wrap happens ONCE, at put — `opaque(v)` mints the
-// box, the crossing stores THE BOX behind one self-releasing host-side
-// owner. A get crosses to `map_val_get_o` and re-hands the SAME box (a
-// fresh reference — no per-get wrap); the unwrap is the
-// `opaque.downcast<V>` (a tid-check + unbox) and it is the lane's
-// known per-get term. The box itself is the known HEAP term: +1 cell
-// (32 B accounted) per live value, which is why heap parity with the
-// `[?V]` sidecar row is NOT the honest expectation despite the
-// column's plain-Rust backing — phase 2 attributes.
-//
-// THE RC DISCIPLINE (plan §0.4, the phase-6 playbook, documented
-// in-source on the Rust side): retain on insert (one map-owned handle
-// per stored box); release on overwrite (the replaced owner drops) and
-// on remove (the tombstone drops the owner); FULL release at table
-// teardown incl. arena-teardown-with-live-cells (the owners carry the
-// arena, so the table payload's Drop releases every stored cell —
-// accounting refunded — wherever the box dies); no double-release path
-// (one owner per box at any instant: moved by value on grow, replaced
-// on overwrite, dropped once on remove/teardown).
-//
-// TRAPS (house `Invalid`, table left intact): out-of-range slots (the
-// val lanes' shared law) and FOREIGN opaques — a host payload box is
-// not a rut value and cannot be a map val (loud at the store). Growth
-// needs no relocation drain (the column moves with the keys host-side,
-// round3 phase 1), so `put` is the PrimMap shape: the fused grow-first
-// sentinel, grow, retry.
-pub class RefMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes, V> {
-    t: opaque;    // HostBoxed<NativeTable> — keys AND the opaque val column
-}
-
-impl RefMap<K, V> {
-    pub fn new() -> Self {
-        return RefMap.with_capacity(8);
-    }
-
-    pub fn with_capacity(n: i32) -> Self {
-        return Self { t: map_new(n as i64) };
-    }
-
-    // `put` — answers `true` when the key was newly added. ONE box
-    // mint per call (the stored unit), one lane call with the grow
-    // check fused in, then grow + RETRY with no relocation drain, then
-    // the store at the answered slot (insert or overwrite — the host
-    // releases the replaced value's owner on the overwrite path).
-    pub fn put(mut self, k: K, v: V) -> bool {
-        let b: opaque = opaque(v);
-        let mut at = k.nentry(self.t);
-        while (at <= -2147483647) {
-            map_grow(self.t);
-            at = k.nentry(self.t);
-        }
-        if (at >= 0) {
-            map_val_set_o(self.t, at, b);
-            return false;
-        }
-        map_val_set_o(self.t, -(at + 1), b);
-        return true;
-    }
-
-    // `get` — `nil` = absent (RFC 0005 §10). A hit re-hands the stored
-    // box and unwraps it to the LIVE V cell — the one-cell law above.
-    // A false downcast is a wiring bug (a foreign box under the key) —
-    // loud, never a silent zero value.
-    pub fn get(self, k: K) -> ?V {
-        let at = k.nfind(self.t);
-        if (at < 0) {
-            return nil;
-        }
-        let b: opaque = map_val_get_o(self.t, at);
-        let (v, ok) = opaque.downcast<V>(b);
-        if (ok == false) {
-            panic("refmap: the stored value is not the map's V");
-        }
-        return v;
-    }
-
-    pub fn has(self, k: K) -> bool {
-        return k.nfind(self.t) >= 0;
-    }
-
-    // `remove` — the host tombstones the slot and drops the stored
-    // box's owner (release on remove); a held `get` alias keeps the
-    // value alive past the remove (the mapset law).
-    pub fn remove(self, k: K) -> bool {
-        return k.nremove(self.t) >= 0;
     }
 
     pub fn len(self) -> i32 {
