@@ -1,8 +1,8 @@
 # rut examples — the runnable projects
 
-Five Cargo projects, five workspace members — four runnable end to end,
-plus the web host surface (whose todolist app is the next landing), plus
-one parse-only corpus example:
+Five Cargo projects, five workspace members — five runnable end to end
+(four on the console, one in a browser), plus one parse-only corpus
+example:
 
 | Project | Run | Demonstrates |
 |---|---|---|
@@ -11,7 +11,7 @@ one parse-only corpus example:
 | [`02-digest/`](02-digest/) | `cargo run -p digests` | byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV), the host as test oracle |
 | [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + `.rutbundle` (RFC 0038) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions |
 | [`04-custom-async/`](04-custom-async/) | parse-only — runnable at M3 | a hand-written `impl Task<T> for CustomTask<T>` plus a user launcher with per-checkpoint stats and cancellation audits; the user-impl-of-builtin-trait test. Becomes runnable when the async plan lands (the engine context is runtime-provided) |
-| [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` (host surface — the app follows) | the example-local `web` pkg: ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin on host, one `on_event` re-entry point (survey: `docs/todolist-web-survey.md`) |
+| [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless (survey: `docs/todolist-web-survey.md`) |
 
 Short, self-contained programs — the classics — live in
 [`demo/src/examples/`](../demo/src/examples/): the playground imports
