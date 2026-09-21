@@ -29,6 +29,7 @@ use std::rc::{Rc, Weak};
 use wasm_bindgen::prelude::{Closure, JsCast, JsValue};
 
 use rut_vm::interp::{HostHooks, HostRegistry, Vm};
+use rut_vm::OpaqueRef;
 
 use crate::backend::DomBackend;
 use crate::state::{bind_weak_sink, drain_queue, Ev, EvSink, WebState};
@@ -213,13 +214,18 @@ fn page_state() -> Result<StateRc, String> {
 /// page is purely event-driven — the host owns the loop.
 fn boot_page(src: &str) -> Result<(), String> {
     let mut session = rut_driver::Session::new();
-    crate::mount::mount_host_session(&mut session)?;
+    // the APP session (phase 2): core + pouch + nmap_host + nmapset +
+    // store + web — the loader hands over todolist.rut's source
+    crate::mount::mount_app_session(&mut session)?;
     let prog = crate::mount::compile_app(&mut session, src)?;
     let expected = session.expected_host_fns();
 
     let state = page_state()?;
     let mut hosts = HostRegistry::new();
     crate::hosts::install_web_hosts(&mut hosts, &state);
+    // the app session mounts `nmap_host` (the listener table's
+    // PrimMapI64) — its bodies bind here, same join, before verify
+    rut_std::nmap::install_std_nmap(&mut hosts);
     hosts.verify_against(&expected);
 
     let mut vm = Vm::new(
@@ -229,7 +235,12 @@ fn boot_page(src: &str) -> Result<(), String> {
         hosts,
     )
     .map_err(|t| format!("vm boot: {}", t.msg))?;
-    vm.call::<_, ()>("main", ()).map_err(|t| format!("the boot turn trapped: {}", t.msg))?;
+    // the boot turn returns the app container; the pump re-passes it on
+    // every on_event turn (RFC 0003 §1 — no mutable module state)
+    let app: OpaqueRef = vm
+        .call::<_, OpaqueRef>("main", ())
+        .map_err(|t| format!("the boot turn trapped: {}", t.msg))?;
+    state.borrow_mut().app = Some(app);
     VM.with(|c| *c.borrow_mut() = Some(vm));
     Ok(())
 }

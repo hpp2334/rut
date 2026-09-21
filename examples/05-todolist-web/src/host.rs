@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rut_vm::interp::{CallArgs, Ret, Vm};
-use rut_vm::Trap;
+use rut_vm::{OpaqueRef, Trap};
 
 use crate::backend::DomBackend;
 use crate::fake_dom::FakeDom;
@@ -30,10 +30,14 @@ impl<D: DomBackend> WebHost<D> {
         self.vm.call(export, args)
     }
 
-    /// The boot turn: `main` builds the static DOM and registers the
-    /// listeners; afterwards the page is purely event-driven.
-    pub fn boot(&mut self) -> Result<(), Trap> {
-        self.vm.call::<_, ()>("main", ())
+    /// The boot turn: `main` builds the static DOM, registers the
+    /// listeners, and RETURNS the app container — the pump hands it back
+    /// on every turn (RFC 0003 §1: the state crosses). Afterwards the
+    /// page is purely event-driven.
+    pub fn boot(&mut self) -> Result<OpaqueRef, Trap> {
+        let app: OpaqueRef = self.vm.call::<_, OpaqueRef>("main", ())?;
+        self.state.borrow_mut().app = Some(app.clone());
+        Ok(app)
     }
 
     /// Drain the queue (the pump): one turn per row, guard up around

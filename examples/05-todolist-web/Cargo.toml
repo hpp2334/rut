@@ -3,7 +3,7 @@ name = "todolist-web"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "05-todolist-web — the web host surface (phase 1 of the batch): the example-local `web` pkg (web.d.rut, ten crossings) bound over web_sys on wasm32 and over a fake-DOM twin on host, one on_event re-entry point, tim_after's turn-based queue"
+description = "05-todolist-web — the todolist APP (phase 2 of the batch): the page program (todolist.rut over the linked store.rut server) on the phase-1 `web` pkg — ten crossings, one on_event entry that hands the app its container back, tim_after-simulated latency, the fake-DOM twin as the gate"
 
 [lib]
 # cdylib for the page; rlib so the twin gate (tests/) links the host half
@@ -14,6 +14,9 @@ rut-core = { path = "../../crates/rut-core" }
 rut-parser = { path = "../../crates/rut-parser" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-vm = { path = "../../crates/rut-vm" }
+# nmap_host's bodies — the app's listener table is a PrimMapI64 (nmapset),
+# so the page boot binds the native key table next to the web crossings
+rut-std = { path = "../../crates/rut-std" }
 
 # The workspace's FIRST wasm-bindgen-family dependency — example-local
 # and target-gated so host builds never see it (survey §3). The feature

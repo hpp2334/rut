@@ -1,21 +1,26 @@
 // web.d.rut — the DOM crossing for one page app (the `web` host pkg,
-// example-local by the phase-0 survey's decision: `docs/todolist-web-survey.md`
-// §4, mounted per the `rt` precedent — `Session::register_module` with
-// `host_scope = "web"`). Every signature is concrete over the crossing
-// set (RFC 0023 §1): str, i32, i64, bool, opaque. Elements cross as
-// opaque handles (RFC 0014) — the one cell shape an embedder may hand
-// out; rut holds them across turns and the release at rc 0 is the
-// handle's `Drop` (RFC 0016 §3).
+// example-local by the phase-0 survey's decision:
+// `docs/todolist-web-survey.md` §4, mounted per the `rt` precedent —
+// `Session::register_module` with `host_scope = "web"`). Every signature
+// is concrete over the crossing set (RFC 0023 §1): str, i32, i64, bool,
+// opaque. Elements cross as opaque handles (RFC 0014) — the one cell
+// shape an embedder may hand out; rut holds them across turns and the
+// release at rc 0 is the handle's `Drop` (RFC 0016 §3).
 //
 // The closure law (RFC 0025): closures never cross. Listeners register
 // by id (`ui_listen` returns one) and every asynchronous fact re-enters
 // rut through the ONE entry fn the app declares:
 //
-//   entry fn on_event(kind: i32, subject: str, detail: str);
-//     kind 1 = EV_DOM   (subject = listener id as str; detail = the
+//   entry fn on_event(c: opaque, kind: i32, subject: str, detail: str);
+//     c       = the app container — the ONE opaque `main` returned at
+//               boot; the pump re-passes it on every turn (phase 2's
+//               shape: RFC 0003 §1's own law — rut has no mutable
+//               module state, so the state lives in the container the
+//               host holds and passes back, the 00-todolist pattern)
+//     kind 1  = EV_DOM   (subject = listener id as str; detail = the
 //                        listened input's current value when the
 //                        listened element IS an input, "" otherwise)
-//     kind 2 = EV_TIMER (subject = the tim_after tag, detail = "")
+//     kind 2  = EV_TIMER (subject = the tim_after tag, detail = "")
 //
 // Ten rows, not the survey's eleven: `ui_input_value(el) -> str` is
 // ABSENT — the engine's verified-return table cannot bind a `-> str`

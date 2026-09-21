@@ -137,9 +137,7 @@ impl FakeDom {
             Ok(None) => Err(rut_vm::Trap::new(rut_vm::TrapKind::Invalid, "no such node")),
             Err(e) => Err(e),
         }
-    }
-
-    /// The element's text content, through a real rut-held handle.
+    }    /// The element's text content, through a real rut-held handle.
     pub fn text_of(&self, el: &OpaqueRef) -> Result<String, Trap> {
         self.view(el, |n| n.text.clone().unwrap_or_default())
     }
@@ -173,6 +171,69 @@ impl FakeDom {
                 .collect()
         })
     }
+
+    // ---- reads the phase-2 tests make by ELEMENT ID -------------------
+    // The app program is clean (no probe entries), so the twin's
+    // test-drive readers work by the ids the page itself set — the same
+    // contract `ui_get` searches under. The snapshot is a clone: no
+    // rut handle is involved at all.
+
+    /// The tree search `get` runs, yielding a node id.
+    fn find_id(&self, id: &str) -> Option<u32> {
+        let mut stack: Vec<u32> = self.roots.clone();
+        while let Some(id_num) = stack.pop() {
+            let node = self.nodes.get(&id_num)?;
+            if node.id_attr() == Some(id) {
+                return Some(id_num);
+            }
+            stack.extend(node.children.iter().rev().copied());
+        }
+        None
+    }
+
+    /// The user typing: the field's value changes; the next `fire` of
+    /// its listener carries it as the event detail (the event-carried
+    /// law — the twin never hands rut a read).
+    pub fn set_value_by_id(&mut self, id: &str, value: &str) -> bool {
+        match self.find_id(id) {
+            Some(n) => {
+                self.nodes
+                    .get_mut(&n)
+                    .expect("find_id yielded a live node")
+                    .attrs
+                    .insert("value".to_string(), value.to_string());
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// One element's snapshot: tag, text, attributes, and the direct
+    /// children's tags and texts, in order.
+    pub fn snapshot_by_id(&self, id: &str) -> Option<Snapshot> {
+        let n = self.nodes.get(&self.find_id(id)?)?;
+        Some(Snapshot {
+            tag: n.tag.clone(),
+            text: n.text.clone(),
+            attrs: n.attrs.clone(),
+            child_tags: n.children.iter().filter_map(|c| self.nodes.get(c).map(|c| c.tag.clone())).collect(),
+            child_texts: n
+                .children
+                .iter()
+                .filter_map(|c| self.nodes.get(c).and_then(|c| c.text.clone()))
+                .collect(),
+        })
+    }
+}
+
+/// The phase-2 test reader's answer — one element's shape, cloned.
+#[derive(Clone, Debug)]
+pub struct Snapshot {
+    pub tag: String,
+    pub text: Option<String>,
+    pub attrs: HashMap<String, String>,
+    pub child_tags: Vec<String>,
+    pub child_texts: Vec<String>,
 }
 
 fn valid_tag(tag: &str) -> bool {

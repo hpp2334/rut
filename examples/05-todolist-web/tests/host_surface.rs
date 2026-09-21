@@ -252,11 +252,14 @@ fn mounted_session() -> Session {
 }
 
 #[test]
-fn the_page_shell_demo_compiles() {
-    // demo.rut is loader-only — this is its compile gate
-    let mut session = mounted_session();
-    mount::compile_app(&mut session, include_str!("../demo.rut"))
-        .expect("the page shell demo compiles");
+fn the_app_compiles() {
+    // the phase-2 app (todolist.rut + the linked store.rut) is this
+    // example's page program — its compile gate rides the app session
+    // (the phase-1 shell demo grew into it; loader.js fetches it)
+    let mut session = Session::new();
+    mount::mount_app_session(&mut session).expect("the app session mounts");
+    mount::compile_app(&mut session, include_str!("../todolist.rut"))
+        .expect("the app compiles");
 }
 
 #[test]

@@ -2,11 +2,15 @@
 // minimal page program that exercises every `web::` crossing through
 // REAL rut calls — build the DOM, register listeners, book a timer, and
 // echo every event back as a log row the twin reads. NOT the todolist
-// app (phase 2's program replaces this file's role); the probes below
-// are the ordinary surface the tests drive trap shapes through.
+// app (`todolist.rut` is); the probes below are the ordinary surface
+// the tests drive trap shapes through.
 //
 // Event kinds are the frozen numbers from web.d.rut: 1 = EV_DOM,
-// 2 = EV_TIMER.
+// 2 = EV_TIMER. The entry shape is phase 2's: `main` RETURNS the app
+// container and `on_event` takes it back FIRST — rut has no mutable
+// module state (RFC 0003 §1), so the state crosses and the pump
+// re-passes it every turn. The harness keeps no state; its container is
+// the empty box.
 
 use web::{
     ui_get, ui_create, ui_set_text, ui_attr, ui_append, ui_remove, ui_clear,
@@ -14,8 +18,8 @@ use web::{
 };
 
 // The boot turn: build the static DOM under the seeded `#app` root and
-// register the listeners; afterwards the page is purely event-driven.
-entry fn main() {
+// register the listeners; return the app container.
+entry fn main() -> opaque {
     let app = ui_get("app");
 
     let input = ui_create("input");
@@ -40,12 +44,19 @@ entry fn main() {
 
     // the simulated server: one booked request
     tim_after(400, "boot");
+
+    let state: ?Harness = Harness { };
+    return opaque(state);
 }
 
+/// The harness keeps no state — the container exists to make the entry
+/// shape honest (the state crosses, every turn).
+struct Harness { }
+
 // The ONE re-entry point: every asynchronous fact arrives as an event
-// row and is echoed into the log element the tests read back through
-// the twin. One entry, one shape.
-entry fn on_event(kind: i32, subject: str, detail: str) {
+// row, the pump re-passing the container `main` returned. One entry,
+// one shape.
+entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
     let log = ui_get("log");
     let row = ui_create("li");
     if (kind == 1) {
@@ -61,6 +72,7 @@ entry fn on_event(kind: i32, subject: str, detail: str) {
         }
     }
     ui_append(log, row);
+    let _ = c; // the harness keeps no state — the shape is the point
 }
 
 // ---- probes: plain entry fns the tests call; each is the ordinary

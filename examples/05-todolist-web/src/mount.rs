@@ -57,3 +57,61 @@ pub fn limits() -> rut_vm::interp::Limits {
         interrupt_every: 1024,
     }
 }
+
+// ---- the phase-2 app mounts -------------------------------------------------
+// `mount_host_session` above stays app-blind (the phase-1 contract). The
+// app's session adds three packages, all embedded — wasm32 has no
+// filesystem, so everything rides `include_str!` (the rut-wasm +
+// ink/pouch precedent, one code path for both lanes):
+//
+//   * `nmap_host` — the native key-table surface (RFC 0025 decl), its
+//     bodies bound per lane by `rut_std::nmap::install_std_nmap`;
+//   * `nmapset` — the keyed-collection pkg, source-inlined (`inline`,
+//     the ink treatment: a generic-class module splices into its
+//     consumer);
+//   * `store` — the app's "server" half (`store.rut`), a linked source
+//     module, the pouch treatment. DOM-FREE by construction: it never
+//     names a crossing.
+
+pub const NMAP_HOST_D_RUT: &str = include_str!("../../../rut/nmap_host/nmap.d.rut");
+pub const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/nmapset.rut");
+pub const STORE_RUT: &str = include_str!("../store.rut");
+
+/// core + pouch ONLY — the store's own session: `tests/store.rs` drives
+/// the "server" half with no web surface and no clock mounted at all.
+pub fn mount_store_session(session: &mut rut_driver::Session) -> Result<(), String> {
+    rut_driver::mount_std_core(session);
+    session
+        .register_module(
+            "pouch",
+            Module { source: Some(POUCH_RUT.to_string()), ..Default::default() },
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// The app session: everything [`mount_host_session`] mounts, plus the
+/// keyed-collection pkg and the store module. Bind `nmap_host`'s bodies
+/// with `rut_std::nmap::install_std_nmap` next to [`crate::hosts::install_web_hosts`].
+pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String> {
+    mount_host_session(session)?;
+    let nmap = rut_driver::lower_decl_module(NMAP_HOST_D_RUT, "nmap.d.rut")?;
+    session.register_module("nmap_host", nmap).map_err(|e| e.to_string())?;
+    session
+        .register_module(
+            "nmapset",
+            Module { source: Some(NMAPSET_RUT.to_string()), inline: true, ..Default::default() },
+        )
+        .map_err(|e| e.to_string())?;
+    session
+        .register_module(
+            "store",
+            // inline: the store's own source splices into the app unit
+            // WITH the pouch source it names — one Vec definition, no
+            // duplicate (a linked store would carry its spliced Vec as
+            // a second export at link time)
+            Module { source: Some(STORE_RUT.to_string()), inline: true, ..Default::default() },
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}

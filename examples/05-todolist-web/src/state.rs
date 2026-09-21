@@ -44,12 +44,17 @@ pub struct ListenerRow<El> {
 }
 
 /// The host's whole page state: the backend, the queue, the listener
-/// registry, and the re-entrancy guard. Single thread (RFC 0034) — the
-/// guard is a plain bool.
+/// registry, the re-entrancy guard, and the app container. Single thread
+/// (RFC 0034) — the guard is a plain bool.
 pub struct WebState<D: DomBackend> {
     pub dom: D,
     pub queue: VecDeque<WebEvent>,
     pub listeners: HashMap<i64, ListenerRow<D::El>>,
+    /// The app container: the ONE opaque the boot turn returned, handed
+    /// back on every `on_event` turn (phase 2's shape — RFC 0003 §1's
+    /// own law: rut has no mutable module state, so the store lives in
+    /// the container the host passes back, the 00-todolist pattern).
+    pub app: Option<OpaqueRef>,
     next_listener: i64,
     pub in_turn: bool,
 }
@@ -60,6 +65,7 @@ impl<D: DomBackend> WebState<D> {
             dom,
             queue: VecDeque::new(),
             listeners: HashMap::new(),
+            app: None,
             next_listener: 1, // listener ids are from 1 (the spec)
             in_turn: false,
         }
@@ -126,6 +132,11 @@ impl<D: DomBackend> WebState<D> {
 /// page: drain the queue one turn at a time, guard up around every
 /// `vm.call`, FIFO across turns. An event pushed mid-turn is absorbed by
 /// the queue and runs as the NEXT turn — sequential, never stacked.
+///
+/// Every turn hands the app ITS container back (phase 2's entry shape,
+/// `on_event(c, kind, subject, detail)`): rut has no mutable module
+/// state (RFC 0003 §1), so the state crosses — the host holds the one
+/// opaque `main` returned and re-passes it each turn.
 pub fn drain_queue<D: DomBackend>(
     state: &Rc<RefCell<WebState<D>>>,
     vm: &mut Vm,
@@ -134,8 +145,14 @@ pub fn drain_queue<D: DomBackend>(
         let Some(ev) = state.borrow_mut().next_event() else {
             return Ok(());
         };
+        let app = state.borrow().app.clone().ok_or_else(|| {
+            Trap::new(
+                TrapKind::Invalid,
+                "web: no app container — the boot turn must return one (RFC 0003 §1: the state crosses, the host re-passes it)",
+            )
+        })?;
         state.borrow_mut().begin_turn();
-        let r = vm.call::<_, ()>("on_event", (ev.kind, ev.subject, ev.detail));
+        let r = vm.call::<_, ()>("on_event", (app, ev.kind, ev.subject, ev.detail));
         state.borrow_mut().end_turn();
         r?;
     }

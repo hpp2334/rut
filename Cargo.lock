@@ -658,6 +658,7 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-parser",
+ "rut-std",
  "rut-vm",
  "wasm-bindgen",
  "web-sys",

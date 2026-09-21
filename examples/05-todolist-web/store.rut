@@ -1,0 +1,391 @@
+// store.rut — the "server" half of the todolist: the in-memory list and
+// the request table (the survey §5.2 design, the hand-written async
+// machine spelled for real — the M3 migration road is recorded in the
+// survey §5.6, not faked as language async).
+//
+// PURE rut: no `web::` crossings in this module. It compiles against
+// core+pouch alone and its host-test surface below is driven DOM-FREE by
+// `tests/store.rs` — the store's laws are checked without a page. The
+// app (`todolist.rut`) links this module and books the timers; the store
+// never touches the clock itself.
+//
+// The honest semantics:
+//
+//   * a request NEVER touches the list. `request_add` books a `Req` row
+//     — the explicit continuation table (RFC 0003 §1: state lives in
+//     this container, which the host passes back every turn) — and the
+//     UI books one `tim_after` per row. The list changes when the timer
+//     answers, as its own turn.
+//   * `answer(tag)` is the server's one commit point. An unknown tag is
+//     a LOUD trap (the answer names no booked row — wiring drift); a
+//     rejected title and a lost id are ANSWERS, data the turn reads
+//     (RFC 0018 §4's cancellation-as-data law, at app scale).
+//
+// Per-kind latency: three clocks, so the twin can prove commits land in
+// deadline order across kinds at the app level (removes are fast, adds
+// are slow).
+
+use pouch::{ Vec };
+
+// the request kinds (the Req rows' `kind`)
+let KIND_ADD: i64 = 1;
+let KIND_TOGGLE: i64 = 2;
+let KIND_REMOVE: i64 = 3;
+
+// the per-kind simulated latency, in ms
+let LATENCY_ADD: i64 = 400;
+let LATENCY_TOGGLE: i64 = 250;
+let LATENCY_REMOVE: i64 = 120;
+
+pub struct Todo {
+    id: i64;
+    title: str;
+    done: bool = false;
+}
+
+/// One booked request — a row of the continuation table. The UI reads
+/// `tag`/`latency` to book the timer; the store reads the rest at
+/// answer time.
+pub struct Req {
+    id: i64;
+    tag: str;
+    kind: i64;
+    todo: i64; // TOGGLE/REMOVE target; ADD books 0
+    title: str;
+    latency: i64;
+}
+
+pub class Store {
+    items: Vec<Todo>;
+    reqs: Vec<Req>;
+    next_todo: i64;
+    next_req: i64;
+    last: str; // the last answer line, verbatim for the status element
+}
+
+impl Store {
+    pub fn new() -> Self {
+        return Self { items: Vec.new(), reqs: Vec.new(), next_todo: 1, next_req: 1, last: "" };
+    }
+
+    // ---- book: the request table grows, the list does not ----
+
+    pub fn request_add(mut self, title: str) -> Req {
+        let id = self.next_req;
+        self.next_req += 1;
+        let req = Req {
+            id: id,
+            tag: f"req:{id}",
+            kind: KIND_ADD,
+            todo: 0,
+            title: title,
+            latency: LATENCY_ADD,
+        };
+        self.reqs.push(req);
+        return req;
+    }
+
+    /// nil when the todo id is unknown — the caller (the UI) turns that
+    /// into its loud listener-drift trap.
+    pub fn request_toggle(mut self, todo: i64) -> ?Req {
+        if (self.find(todo) < 0) {
+            return nil;
+        }
+        return self.book(KIND_TOGGLE, todo, "");
+    }
+
+    pub fn request_remove(mut self, todo: i64) -> ?Req {
+        if (self.find(todo) < 0) {
+            return nil;
+        }
+        return self.book(KIND_REMOVE, todo, "");
+    }
+
+    fn book(mut self, kind: i64, todo: i64, title: str) -> Req {
+        let id = self.next_req;
+        self.next_req += 1;
+        let mut latency = LATENCY_ADD;
+        if (kind == KIND_TOGGLE) {
+            latency = LATENCY_TOGGLE;
+        }
+        if (kind == KIND_REMOVE) {
+            latency = LATENCY_REMOVE;
+        }
+        let req = Req {
+            id: id,
+            tag: f"req:{id}",
+            kind: kind,
+            todo: todo,
+            title: title,
+            latency: latency,
+        };
+        self.reqs.push(req);
+        return req;
+    }
+
+    // ---- answer: the timer fired; find the row, apply or reject ----
+
+    /// The server's one commit point. An unknown tag is a loud trap; a
+    /// rejected title or a lost id is an ANSWER (data, not a trap).
+    pub fn answer(mut self, tag: str) -> str {
+        let at = self.find_req(tag);
+        if (at < 0) {
+            panic(f"server: no request '{tag}' — the answer names no booked row");
+        }
+        let req = self.reqs[at];
+        let kept: Vec<Req> = Vec.new();
+        for (let r of self.reqs) {
+            when (r.tag == tag) {
+                true -> {},            // consume the answered row
+                else -> { kept.push(r); },
+            }
+        }
+        self.reqs = kept;
+        if (req.kind == KIND_ADD) {
+            return self.commit_add(req);
+        }
+        if (req.kind == KIND_TOGGLE) {
+            return self.commit_toggle(req);
+        }
+        return self.commit_remove(req);
+    }
+
+    fn commit_add(mut self, req: Req) -> str {
+        let title = req.title;
+        if (title == "") {
+            let line = "rejected '' — the title is empty";
+            self.last = line;
+            return line;
+        }
+        if (self.find_by_title(title) >= 0) {
+            let line = f"rejected '{title}' — already on the list";
+            self.last = line;
+            return line;
+        }
+        let id = self.next_todo;
+        self.next_todo += 1;
+        self.items.push(Todo { id: id, title: title });
+        let line = f"added '{title}' as #{id}";
+        self.last = line;
+        return line;
+    }
+
+    fn commit_toggle(mut self, req: Req) -> str {
+        let at = self.find(req.todo);
+        if (at < 0) {
+            // the survey's lost-id shape, through the table: a remove
+            // landed first — the answer says so, the turn moves on
+            let line = f"skipped toggle #{req.todo} — the row is gone";
+            self.last = line;
+            return line;
+        }
+        self.items[at].done = self.items[at].done == false;
+        let mut to = "open";
+        if (self.items[at].done) {
+            to = "done";
+        }
+        let line = f"toggled #{req.todo} to {to}";
+        self.last = line;
+        return line;
+    }
+
+    fn commit_remove(mut self, req: Req) -> str {
+        let at = self.find(req.todo);
+        if (at < 0) {
+            let line = f"skipped remove #{req.todo} — the row is gone";
+            self.last = line;
+            return line;
+        }
+        let title = self.items[at].title;
+        let kept: Vec<Todo> = Vec.new();
+        for (let t of self.items) {
+            when (t.id == req.todo) {
+                true -> {}, // drop the row
+                else -> { kept.push(t); },
+            }
+        }
+        self.items = kept;
+        let line = f"removed '{title}' (#{req.todo})";
+        self.last = line;
+        return line;
+    }
+
+    // ---- reads ----
+
+    /// The committed list, in order (shared — no copy).
+    pub fn todos(self) -> Vec<Todo> {
+        return self.items;
+    }
+
+    pub fn open_count(self) -> i32 {
+        let mut n = 0;
+        for (let t of self.items) {
+            if (t.done == false) {
+                n += 1;
+            }
+        }
+        return n;
+    }
+
+    pub fn done_count(self) -> i32 {
+        return self.items.len() - self.open_count();
+    }
+
+    /// Outstanding requests — the in-flight count the status shows.
+    pub fn pending_count(self) -> i32 {
+        return self.reqs.len();
+    }
+
+    /// The booked rows, book order, with latencies — the store tests'
+        /// deadline-order oracle (and `tests/todolist_app.rs` asserts the
+    /// clock against the twin's timer queue).
+    pub fn fly(self) -> Vec<Req> {
+        return self.reqs;
+    }
+
+    /// The pending ADD titles, book order — the app's visible round
+    /// trip (a dimmed row per outstanding add).
+    pub fn pending_add_titles(self) -> Vec<str> {
+        let mut titles: Vec<str> = Vec.new();
+        for (let r of self.reqs) {
+            if (r.kind == KIND_ADD) {
+                titles.push(r.title);
+            }
+        }
+        return titles;
+    }
+
+    /// Any toggle/remove in flight for this todo — the row paints its
+    /// "..." while the answer travels.
+    pub fn has_pending_for(self, todo: i64) -> bool {
+        for (let r of self.reqs) {
+            if (r.todo == todo) {
+                if (r.kind == KIND_TOGGLE) {
+                    return true;
+                }
+                if (r.kind == KIND_REMOVE) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    pub fn last_answer(self) -> str {
+        return self.last;
+    }
+
+    // ---- scans (private) ----
+
+    fn find(self, todo: i64) -> i32 {
+        for (let i = 0; i < self.items.len(); i += 1) {
+            if (self.items[i].id == todo) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    fn find_req(self, tag: str) -> i32 {
+        for (let i = 0; i < self.reqs.len(); i += 1) {
+            if (self.reqs[i].tag == tag) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    fn find_by_title(self, title: str) -> i32 {
+        for (let i = 0; i < self.items.len(); i += 1) {
+            if (self.items[i].title == title) {
+                return i;
+            }
+        }
+        return -1;
+    }
+}
+
+// ---- the host-test surface (the 00-todolist shape): the container is
+// an opaque the host holds and passes back; entries are concrete over
+// the crossing set. Driven DOM-FREE by tests/store.rs. ----
+
+entry fn store_new() -> opaque {
+    let s: ?Store = Store.new();
+    return opaque(s);
+}
+
+fn at(c: opaque) -> ?Store {
+    let (s, _) = opaque.downcast<?Store>(c);
+    return s;
+}
+
+/// Books an add; answers the tag to hand `tim_after`.
+entry fn store_request_add(c: opaque, title: str) -> str {
+    return at(c).request_add(title).tag;
+}
+
+/// Books a toggle; "" when the todo id is unknown.
+entry fn store_request_toggle(c: opaque, todo: i64) -> str {
+    let req = at(c).request_toggle(todo);
+    if (req == nil) {
+        return "";
+    }
+    return req.tag;
+}
+
+/// Books a remove; "" when the todo id is unknown.
+entry fn store_request_remove(c: opaque, todo: i64) -> str {
+    let req = at(c).request_remove(todo);
+    if (req == nil) {
+        return "";
+    }
+    return req.tag;
+}
+
+/// The timer fired: commit (or reject). Unknown tag = loud trap.
+entry fn store_answer(c: opaque, tag: str) -> str {
+    return at(c).answer(tag);
+}
+
+/// The committed list as `#1 [x] milk|#2 [ ] tea` — the DOM-free board.
+entry fn store_board(c: opaque) -> str {
+    let mut out = "";
+    for (let t of at(c).todos()) {
+        let mut mark = "[ ]";
+        if (t.done) {
+            mark = "[x]";
+        }
+        if (out != "") {
+            out = f"{out}|#{t.id} {mark} {t.title}";
+        } else {
+            out = f"#{t.id} {mark} {t.title}";
+        }
+    }
+    return out;
+}
+
+/// The booked rows as `req:1@400|req:2@250` — book order, latency per
+/// kind. The deadline-order oracle.
+entry fn store_fly(c: opaque) -> str {
+    let mut out = "";
+    for (let r of at(c).fly()) {
+        let row = f"{r.tag}@{r.latency}";
+        if (out != "") {
+            out = f"{out}|{row}";
+        } else {
+            out = row;
+        }
+    }
+    return out;
+}
+
+/// `open=1 done=1 fly=2` — the counts line.
+entry fn store_counts(c: opaque) -> str {
+    let s = at(c);
+    return f"open={s.open_count()} done={s.done_count()} fly={s.pending_count()}";
+}
+
+/// The last answer line, verbatim.
+entry fn store_last(c: opaque) -> str {
+    return at(c).last_answer();
+}
