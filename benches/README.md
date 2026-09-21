@@ -2328,6 +2328,144 @@ section + the two Workloads-table lines), and
 `/tmp/opencode/batch-strings-round1/p2/` (smoke dirs, perturbation
 run, guard JSON, pair script + JSONL).
 
+## Performance log — strings-round1 close-out: the verdict (Sep 2026)
+
+The batch's gate run, measurement only — no engine, stdlib, or
+workload change. Both runtime binaries (`rut` CLI + `rut-bench-probe`)
+rebuilt from THIS checkout at HEAD `a2f9d35` (tree clean; cargo
+fingerprints Fresh — a second build pass is a no-op), then the full
+suite in one pass: **26 workloads × rut/qjs/node from one checkout,
+exit 0, every checksum equal `expected.json`** — 76 cross rows, 73 of
+them checksum-carrying (`empty` carries none; `kmer-view` carries its
+checksum on all three runtimes but deliberately has no `expected.json`
+line — parity with knuc's pin IS its gate), zero mismatches. The pins
+hold bit-identically on every runtime: **kmer-view = nmap-knucleotide
+= `2198604`; strview = nmapset-str = `1264308351`; json-decode
+`4502015958359127277`; nmapset-int = nmap-primmap = `734932704`;
+nmap-hashset `21500055`**. **Fuel and VM-heap are bit-identical to the
+phase-2 records on all 26 probe rows** (26/26 diff = 0, including the
+two new view rows: knuc 38,814,389/4,195,084; kmer-view
+37,614,177/4,194,916; str 9,551,761/983,620; strview
+10,801,744/2,032,173; json 111,330,118/34,377,147 — the post-b1a
+accounting; int 20,703,284/1,966,551; primmap 17,950,301/324;
+hashset 13,267,176/551; crossing-nop 104,000,032/236; hashmap-int
+63,758,210; alloc 22,000,020/228; sieve 19,592,209). Workspace green
+(77 suites, 474 tests, zero failures).
+
+Box state, recorded up front: the verdict run started at load ~1.5
+(this close-out's own release build had just finished) decaying to
+~0.3–0.5 — absolute medians run warm, which is why every verdict below
+is a same-run matched pair, and the qjs ratios are cross-checked
+against phase 2's own guard run.
+
+### The cumulative story (matched pairs)
+
+The batch's two instruments: phase 1 improved the EXISTING rows'
+s-lane host path (fuel/heap provably identical — the win is
+host-side); phase 2 added view twins that re-spell the key stream
+(new rows, existing rows untouched). Both landed:
+
+| pair | phase-1 banked (existing rows, 6/6 rounds) | phase-2 view twin (captured, 10/10) | verdict-day same-run (10/10) |
+|---|---|---|---|
+| kmer: nmap-knucleotide → kmer-view | −7.8 ms ≈ −4.3 % (borrowed probe deletes the per-crossing `to_owned`) | **−19.59 ms = −11.4 %** (154.47 vs 172.53; −32.6 ns per deleted slice+recross ×600,088) | **−19.58 ms = −10.6 %** (165.57 vs 185.15) |
+| str: nmapset-str → strview | −2.15 ms ≈ −3.9 % (same deletion) | **−13.66 ms = −25.9 %** (38.95 vs 52.84; −48.2 ns over 283,334 range-keyed ops) | **−15.63 ms = −26.7 %** (42.89 vs 58.53) |
+
+The verdict-day pairs reproduce both captured numbers in direction
+and magnitude (10/10 rounds positive each, ranges non-overlapping);
+the batch's captured numbers stay phase 2's powered runs. Fuel/heap
+were single-valued in every round of every row and equal the pins —
+the wins are time-only on knuc's side (fuel −3.1 % is the deleted
+slice callnat) and bought-with-fuel on strview's (the honest +13.1 %
+parent-build inversion, +1.05 MB parent-retention heap — both
+disclosed in phase 2, unchanged).
+
+### The qjs scoreboard (where twins exist)
+
+Whole-net ratios (rut net / qjs net, wall − startup), verdict run,
+with phase-2's guard run in parens — the placements reproduce across
+sessions:
+
+- **strview 0.88× (0.87×) — the batch's headline: the first
+  str-shaped row AHEAD of its qjs twin whole-net** (50.18 vs 57.20 ms
+  this run; 47.19 vs 54.14 in phase 2's). The carved-key churn shape
+  is exactly where borrowed range keys win, and it is enough to close
+  a 1.49× gap to negative.
+- kmer-view 1.13× (1.16×) vs the twin row nmap-knucleotide 1.23×
+  (1.28×) — the view spelling moved the row most of the way to qjs;
+  the remainder is the readout tail + fill pattern, not keying.
+- nmapset-str 1.40× (1.49×) — the phase-1 borrowed-probe half shows
+  here without the view re-spelling.
+- json-decode 11.99× (11.30×) — unchanged by this batch (below).
+- nmapset-int 1.29× / nmap-primmap 1.20× — round3's rows, unmoved.
+
+### Disclosures that ride the view rows (standing, from phase 2)
+
+- **strview's same-pin disclosure**: its checksum `1264308351` EQUALS
+  nmapset-str's line by structure — the formula reads counters + the
+  value sum only, and the twin's counters/value stream were kept
+  identical (the nmap-primmap precedent). Two provenance checks
+  recorded: 3-runtime agreement, and a perturbation run (replace value
+  `i+3` → `i+7`) moving the checksum by exactly the predicted
+  `+200000`. The row computes its own answer; it is not an echo.
+- **Byte-vs-codepoint offsets**: the range methods take BYTE
+  windows; `str.slice` is codepoint-offset. The two spellings agree
+  numerically only on ASCII parents — both view rows are ASCII, and
+  the contract is documented in the `nmapset` pkg header (UTF-8
+  boundary/past-end windows trap house `Invalid` host-side).
+
+### json's honest NO (re-affirmed by the verdict)
+
+No view row, per phase 0b's census: the row is DISPATCH-bound.
+Per-char str dispatch ≈ 24 % of the row vs the build-per-token term
+≈ 12 % — token-slicing via views measured −11.8 %, a real but
+second-order lever against a 2× bigger term views cannot touch
+(rewriting the char cursor is a decoder rewrite, not a key spelling).
+The **int-codes cursor (−36.0 %, −37.0 M fuel) stays recorded as a
+WORKLOAD-LEVEL lever** — it is a different decoder shape, not claimed
+by this batch's view mechanism. `string_join` replacing the f-string
+accumulator measured +3.6 % (the rc==1 in-place append path is
+already the optimal build spelling). The row is untouched: fuel
+111,330,118 / heap 34,377,147, checksum `4502015958359127277`,
+bit-identical everywhere.
+
+### Honest neutrals
+
+Every row outside the two view twins is a NEUTRAL: this verdict's
+26-row fuel/heap sweep diffs ZERO against phase-2's guard (and phase
+2's guard diffed zero against the pre-batch pins on the 24 inherited
+rows) — the op streams provably did not move. Exec medians differ
+only by box state (warm verdict vs calm/loaded earlier sessions).
+No performance claim is made for any row without a same-run pair
+behind it. Phase 1's layout lesson stands recorded: a probe-dense
+row can read a reproducible ±4 % from codegen layout alone — which
+is why every batch here measured interleaved before believing a
+number.
+
+### Re-baselined follow-up menu
+
+- **(a) Bytes views** — SOUND per phase 0c (bytes has NO in-place
+  mutation op; element assignment is a compile-time diagnostic), and
+  now cheap to add: the borrowed-probe core + one FNV-1a range
+  hasher (`hash_bytes`) are type-agnostic over bytes. Needs a
+  bytes-keyed consumer row before it earns the surface.
+- **(b) json int-codes cursor** — the measured −36.0 % workload-level
+  lever (phase 0b), the honest path at json-decode's 12× gap. A
+  different decoder shape (Vec<u32> codepoints, int compares,
+  slice tokens), i.e. next batch's row, not a view claim.
+- **(c) PrimMapBool's `?bool` checker fix** — value reads unbox, so
+  `p == nil` diagnoses a width mismatch (RFC 0004 §3); the fix gates
+  the fourth prim lane, design already prices it (bool vals as 0/1
+  in the u64 column).
+- **(d) Interleaved column layout** — round3's menu item, still open
+  with the nmap-primmap harness live (predicted check ≤ ~20 ns/op
+  against 102.6 ns/op).
+- **(e) SIMD str builtins** — only if a future census points there;
+  phase 0b's census pointed at VM dispatch, not builtin bodies.
+
+Files this phase: `benches/README.md` only. Scratch:
+`/tmp/opencode/batch-strings-round1/p3/` (verdict.json/.md/.csv/.log,
+pairs script + JSONL + load log).
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
