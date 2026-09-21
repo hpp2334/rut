@@ -335,3 +335,21 @@ All sessions were kept (never deleted) — resume any of them from the session l
   every phase session AND the watch subagent.
 - Payload JSON must be built with `jq -n --rawfile` / `jq -n --arg` — never
   string-interpolated (phase text contains quotes and newlines).
+
+#### Shared-index hazard (one tree, one git index)
+
+Parallel task sessions share ONE working tree and therefore ONE git
+index. A task that commits staged state can sweep a sibling's staged
+files into its own commit. Rules:
+
+- Stage by EXPLICIT PATH only (`git add <own files>`), never `git add .`
+  / `git add -A` / bare `git commit -a`.
+- Before committing, a task verifies its staged set contains ONLY its
+  declared scope; discovering foreign paths staged is expected (a
+  sibling is mid-flight) — commit around them, never include them.
+- Repair protocol if a commit nevertheless swept sibling files AND is
+  still unpushed: split the commit (`git reset HEAD^ -- <foreign paths>`
+  then re-commit own paths), rebase only your own commit onto the
+  sibling's pushed version when it lands, content-verify, then push.
+  If already pushed: report to the orchestrator immediately — the
+  watcher flags it as DIRTY/failure for the affected sibling to resolve.
