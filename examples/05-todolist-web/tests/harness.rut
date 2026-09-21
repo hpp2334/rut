@@ -1,0 +1,113 @@
+// harness.rut — phase 1's crossing harness (the survey §5.4 shape): a
+// minimal page program that exercises every `web::` crossing through
+// REAL rut calls — build the DOM, register listeners, book a timer, and
+// echo every event back as a log row the twin reads. NOT the todolist
+// app (phase 2's program replaces this file's role); the probes below
+// are the ordinary surface the tests drive trap shapes through.
+//
+// Event kinds are the frozen numbers from web.d.rut: 1 = EV_DOM,
+// 2 = EV_TIMER.
+
+use web::{
+    ui_get, ui_create, ui_set_text, ui_attr, ui_append, ui_remove, ui_clear,
+    ui_set_input_value, ui_listen, tim_after,
+};
+
+// The boot turn: build the static DOM under the seeded `#app` root and
+// register the listeners; afterwards the page is purely event-driven.
+entry fn main() {
+    let app = ui_get("app");
+
+    let input = ui_create("input");
+    ui_attr(input, "id", "new-todo");
+    ui_attr(input, "placeholder", "What needs doing?");
+    ui_append(app, input);
+
+    let add = ui_create("button");
+    ui_attr(add, "id", "add-btn");
+    ui_set_text(add, "Add");
+    ui_append(app, add);
+
+    let log = ui_create("ul");
+    ui_attr(log, "id", "log");
+    ui_append(app, log);
+
+    // listener ids are deterministic, from 1:
+    //   1 = add-btn "click", 2 = input "input", 3 = input "keydown"
+    let click = ui_listen(add, "click");
+    let change = ui_listen(input, "input");
+    let key = ui_listen(input, "keydown");
+
+    // the simulated server: one booked request
+    tim_after(400, "boot");
+}
+
+// The ONE re-entry point: every asynchronous fact arrives as an event
+// row and is echoed into the log element the tests read back through
+// the twin. One entry, one shape.
+entry fn on_event(kind: i32, subject: str, detail: str) {
+    let log = ui_get("log");
+    let row = ui_create("li");
+    if (kind == 1) {
+        // EV_DOM — subject is the listener id; detail is the listened
+        // input's current value when the element IS an input, "" otherwise
+        ui_set_text(row, f"dom {subject} {detail}");
+    } else {
+        if (kind == 2) {
+            // EV_TIMER — subject is the tim_after tag
+            ui_set_text(row, f"timer {subject}");
+        } else {
+            ui_set_text(row, f"event {kind} {subject} {detail}");
+        }
+    }
+    ui_append(log, row);
+}
+
+// ---- probes: plain entry fns the tests call; each is the ordinary
+// crossing surface, nothing test-only ----
+
+entry fn probe_get(id: str) -> opaque {
+    return ui_get(id);
+}
+
+entry fn probe_create(tag: str) -> opaque {
+    return ui_create(tag);
+}
+
+entry fn probe_listen(el: opaque, event: str) -> i64 {
+    return ui_listen(el, event);
+}
+
+entry fn probe_set_input_value(el: opaque, v: str) {
+    ui_set_input_value(el, v);
+}
+
+entry fn probe_set_text(el: opaque, text: str) {
+    ui_set_text(el, text);
+}
+
+entry fn probe_attr(el: opaque, name: str, value: str) {
+    ui_attr(el, name, value);
+}
+
+entry fn probe_append(parent: opaque, child: opaque) {
+    ui_append(parent, child);
+}
+
+entry fn probe_remove(parent: opaque, child: opaque) -> bool {
+    return ui_remove(parent, child);
+}
+
+entry fn probe_clear(el: opaque) {
+    ui_clear(el);
+}
+
+entry fn probe_after(ms: i64, tag: str) {
+    tim_after(ms, tag);
+}
+
+/// A foreign opaque — a rut `i32` boxed, no element payload — for the
+/// not-an-element-handle trap.
+entry fn probe_box_int() -> opaque {
+    return opaque(42);
+}

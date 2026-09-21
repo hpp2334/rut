@@ -1,0 +1,34 @@
+// demo.rut — the page shell's smoke program. NOT the todolist app (that
+// is phase 2's landing): one listener and one timer, enough to prove
+// the loop — a click or the timer fires, the event re-enters through
+// the ONE entry fn, and the answer lands in the DOM via the crossings.
+//
+// The static page (index.html) seeds `#app` and this program hangs the
+// output row under it.
+
+use web::{ ui_get, ui_create, ui_set_text, ui_listen, ui_append, tim_after };
+
+entry fn main() {
+    let app = ui_get("app");
+
+    let out = ui_create("p");
+    ui_attr(out, "id", "out");
+    ui_set_text(out, "booted — click anywhere on #app");
+    ui_append(app, out);
+
+    let click = ui_listen(app, "click");
+
+    // the simulated-latency primitive: the "server" answers in a moment
+    tim_after(1200, "hello");
+}
+
+entry fn on_event(kind: i32, subject: str, detail: str) {
+    let out = ui_get("out");
+    if (kind == 1) {
+        ui_set_text(out, f"click #{subject} {detail}");
+    } else {
+        if (kind == 2) {
+            ui_set_text(out, f"timer {subject} fired — the turn law holds");
+        }
+    }
+}

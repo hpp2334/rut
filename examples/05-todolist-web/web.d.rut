@@ -1,0 +1,60 @@
+// web.d.rut — the DOM crossing for one page app (the `web` host pkg,
+// example-local by the phase-0 survey's decision: `docs/todolist-web-survey.md`
+// §4, mounted per the `rt` precedent — `Session::register_module` with
+// `host_scope = "web"`). Every signature is concrete over the crossing
+// set (RFC 0023 §1): str, i32, i64, bool, opaque. Elements cross as
+// opaque handles (RFC 0014) — the one cell shape an embedder may hand
+// out; rut holds them across turns and the release at rc 0 is the
+// handle's `Drop` (RFC 0016 §3).
+//
+// The closure law (RFC 0025): closures never cross. Listeners register
+// by id (`ui_listen` returns one) and every asynchronous fact re-enters
+// rut through the ONE entry fn the app declares:
+//
+//   entry fn on_event(kind: i32, subject: str, detail: str);
+//     kind 1 = EV_DOM   (subject = listener id as str; detail = the
+//                        listened input's current value when the
+//                        listened element IS an input, "" otherwise)
+//     kind 2 = EV_TIMER (subject = the tim_after tag, detail = "")
+//
+// Ten rows, not the survey's eleven: `ui_input_value(el) -> str` is
+// ABSENT — the engine's verified-return table cannot bind a `-> str`
+// host fn today (`Ret for String` reports the program-relative
+// `TY_ANY`, `verify_against` reads it as signature drift, and `Ret`
+// cannot be implemented outside rut-vm — `Slot` is crate-private).
+// Fixing that is an engine change, out of this phase's scope; the
+// event-carried detail above covers the read (recorded as a phase-1
+// deviation in the survey's terms).
+//
+// Thinness law: no app names, no data shipping, no scheduler — the host
+// knows nothing about todos (survey §4.5).
+
+pub host fn ui_get(id: str) -> opaque;
+
+/// Missing id is a trap (`web::ui_get: no element '#x'`) — a wiring bug
+/// is loud, never a rut-side optional.
+pub host fn ui_create(tag: str) -> opaque;
+
+pub host fn ui_set_text(el: opaque, text: str);
+
+pub host fn ui_attr(el: opaque, name: str, value: str);
+
+pub host fn ui_append(parent: opaque, child: opaque);
+
+/// `false` when `child` is not `parent`'s — a real DOM negative, not an
+/// error; no trap.
+pub host fn ui_remove(parent: opaque, child: opaque) -> bool;
+
+pub host fn ui_clear(el: opaque);
+
+/// A non-input element traps naming both sides: `boundary: got 'div'
+/// where HtmlInputElement binds` (the expect_kind law).
+pub host fn ui_set_input_value(el: opaque, v: str);
+
+/// Returns a listener id (`i64`, from 1). The host keeps the registry;
+/// its Closure pushes one event row per fire into the host's queue.
+pub host fn ui_listen(el: opaque, event: str) -> i64;
+
+/// The simulated-latency primitive — the host owns time (RFC 0018's own
+/// law); the "server" answers after `ms` as an EV_TIMER turn.
+pub host fn tim_after(ms: i64, tag: str);
