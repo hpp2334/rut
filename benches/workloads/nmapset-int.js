@@ -1,6 +1,8 @@
 // nmapset-int.js — the JS twin of nmapset-int/main.rut (and the same
-// algorithm as hashmap-int.js): the identical i32 churn on `new Map()`
-// with integer keys. The rut side swaps `mapset` for the native-key
+// algorithm as the removed hashmap-int.js mapset twin): the identical
+// i32 churn on `new Map()`
+// with integer keys. The rut side swaps the removed pure-rut `mapset`
+// for the native-key
 // `nmapset` pkg; the JS side is unchanged — same work, same checksum.
 // Scale: n = 100000 entries.
 // Adaptation: JS Map has no insert-or-replace primitive, so the

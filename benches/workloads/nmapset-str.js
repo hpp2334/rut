@@ -1,6 +1,8 @@
 // nmapset-str.js — the JS twin of nmapset-str/main.rut (and the same
-// algorithm as hashmap-str.js): the identical str-keyed churn on
-// `new Map()` with string keys. The rut side swaps `mapset` for the
+// algorithm as the removed hashmap-str.js mapset twin): the identical
+// str-keyed churn on
+// `new Map()` with string keys. The rut side swaps the removed
+// pure-rut `mapset` for the
 // native-key `nmapset` pkg; the JS side is unchanged — same work, same
 // checksum. Scale: n = 50000 entries.
 // Adaptation: JS Map has no insert-or-replace primitive, so the

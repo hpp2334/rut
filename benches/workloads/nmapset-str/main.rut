@@ -2,12 +2,14 @@ use ink::{ Logger };
 
 use nmapset::{ HashMap };
 
-// nmapset-str — the HOST-backed twin of `hashmap-str`: the identical
+// nmapset-str — the HOST-backed twin of the removed `hashmap-str`
+// mapset row: the identical
 // str-keyed HashMap<str, i32> churn over `nmapset::HashMap` (the
-// native-key experiment pkg) instead of pure-rut `mapset`. The JS twin
+// native-key experiment pkg) instead of the removed pure-rut `mapset`.
+// The JS twin
 // (../nmapset-str.js) runs the identical algorithm on `new Map()` with
-// string keys; the checksum must EQUAL `hashmap-str`'s (same FNV-1a
-// hash values, same value-derived sum). Scale: n = 50000 entries.
+// string keys; the checksum must equal the pinned 1264308351 (same
+// FNV-1a hash values, same value-derived sum). Scale: n = 50000 entries.
 
 fn churn(n: i32) -> i32 {
     let mut m: HashMap<str, i32> = HashMap.new();

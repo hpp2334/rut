@@ -103,7 +103,8 @@ fn key_payload_classifies_through_the_host_crossing() {
     assert_eq!(tag(&mut vm, &bytes), BYTES);
 
     // outside the closed set: floats and user records report Unsupported —
-    // the nmap trap's raw material ("not natively supported — use mapset")
+    // the nmap trap's raw material ("not natively supported — encode the
+    // key to `bytes`, or use `nmapset`")
     let f: OpaqueRef = vm.call("box_f64", (1.5f64,)).unwrap();
     assert_eq!(tag(&mut vm, &f), UNSUPPORTED);
     let r: OpaqueRef = vm.call("box_record", ()).unwrap();

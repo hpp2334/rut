@@ -70,7 +70,8 @@ pub struct HostHooks {}
 /// `bool` cross as raw bits, `str`/`bytes` cross as owned copies (short;
 /// once per call), and everything else — floats, chars, user records,
 /// host payload boxes — comes back [`KeyPayload::Unsupported`] with the
-/// type id naming it, so the caller can trap pointing at `mapset`
+/// type id naming it, so the caller's trap can point at the escape
+/// hatches (encode the key canonically to `bytes`, or use `nmapset`)
 /// instead of guessing at a key it cannot store.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum KeyPayload {

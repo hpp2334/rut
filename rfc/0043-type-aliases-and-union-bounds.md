@@ -167,6 +167,15 @@ gparam := Ident ('requires' bound)?     // fns, methods, and classes (§A5)
   own `requires` — a method call on `self.k` gates on every member.
   A non-union bound is admission-only and grants no method calls on
   the bare parameter (OQ-1 stays deferred).
+- **Removal note (Sep 2026, the stdlib slim-down):** the pure-rut
+  `mapset` package — the original `K requires Hashable` example this
+  section cites — left the tree, and user-defined-key maps left the
+  stdlib with it. The escape is the same contract with a closed union:
+  encode the key canonically to `bytes` and key the union-bounded
+  `nmapset` classes (`HashMap`/`HashSet`/`PrimMap*`), or vendor the
+  old mapset source from git history. The BOUND LAW is untouched — a
+  single-trait class bound stays legal, and nmapset's closed union
+  remains the working example of admission at every instantiation.
 
 ## 4. Semantics the engine sees
 

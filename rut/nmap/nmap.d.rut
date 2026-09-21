@@ -10,9 +10,11 @@
 // integer primitives, `bool`, `str`, `bytes`) plus — since round3
 // phase 1 — the raw val column below; reference values stay rut-side in
 // `nmapset`'s parallel array. Anything outside the closed set traps
-// loudly, pointing at `mapset`. The pure-rut `mapset` package is
-// untouched — this is the experiment's HOST half, mounted via `[deps]`
-// like any tree pkg.
+// loudly, pointing at the escape hatches (encode the key canonically
+// to `bytes`, or use `nmapset`). This is the experiment's HOST half,
+// mounted via `[deps]` like any tree pkg. (The pure-rut `mapset`
+// package this experiment was pinned against was removed in Sep 2026 —
+// the source lives in git history.)
 
 pub host fn map_new(cap: i64) -> opaque;
 

@@ -1,8 +1,0 @@
-# knucleotide/ — the rut half of the `knucleotide` bench workload: a
-# module dir because it mounts `mapset` (see hashmap-int/rut.toml).
-name = "knucleotide"
-entry.lib = "./main.rut"
-
-[deps]
-mapset = { path = "../../../rut/mapset" }
-ink = { path = "../../../rut/ink" }

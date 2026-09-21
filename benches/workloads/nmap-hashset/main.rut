@@ -2,12 +2,14 @@ use ink::{ Logger };
 
 use nmapset::{ HashSet };
 
-// nmap-hashset — the HOST-backed twin of `hashset`: the identical
+// nmap-hashset — the HOST-backed twin of the removed `hashset` mapset
+// row: the identical
 // HashSet<i32> churn over `nmapset::HashSet` (the native-key
 // experiment pkg — keys live in Rust, no value machinery at all)
-// instead of pure-rut `mapset`. The JS twin (../nmap-hashset.js) runs
-// the identical algorithm on `new Set()`; the checksum must EQUAL
-// `hashset`'s (same mix64 hash values, same phase counts).
+// instead of the removed pure-rut `mapset`. The JS twin
+// (../nmap-hashset.js) runs
+// the identical algorithm on `new Set()`; the checksum must equal the
+// pinned 21500055 (same mix64 hash values, same phase counts).
 // Scale: n = 100000 keys.
 
 fn churn(n: i32) -> i32 {

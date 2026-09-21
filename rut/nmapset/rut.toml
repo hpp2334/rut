@@ -1,19 +1,21 @@
 # nmapset/ — the native-key map/set EXPERIMENT (the mapset-host plan):
 # generic wrapper classes over the `nmap` host table. The native side
-# owns keys only; `vals` stay rut-side (`[?V]` parallel array), so `get
-# -> ?V` aliasing semantics match `mapset` exactly. `inline = true` like
+# owns keys (and — since round3 — prim vals); reference values stay
+# rut-side (the `[?V]` parallel array), so the `get -> ?V` aliasing
+# semantics are the law. `inline = true` like
 # ink — a generic-class module is source-inlined into its consumer, and
 # the flag keeps that explicit.
 #
 # The key contract is a COMPILE-TIME union bound now (`K requires
-# i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes`,
-# phase 3): keys cross DIRECTLY on the typed lanes (no Opaque mint), the
-# host hashes with mapset's exact mix64/FNV constants — checksums are
-# bit-identical to `mapset`'s. DEVIATION from plan §0.3's
-# `[deps] mapset`, forced by the engine: a source dep's full source
-# splices into the consumer's one compilation unit, and mapset declares
-# same-named `HashMap`/`HashSet` classes — the splice collides
-# ("duplicate type name"). See the header of nmapset.rut. `rut/mapset` stays untouched.
+# i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes`):
+# keys cross DIRECTLY on the typed lanes (no Opaque mint), the
+# host hashes with the pinned mix64/FNV constants — originally
+# mapset's, ported bit-for-bit, so the bench pins `734932704` /
+# `1264308351` / `21500055` / `2198604` are the old mapset rows'
+# values. The pure-rut `mapset` pkg itself left the tree in Sep 2026
+# (stdlib slim-down — a user-defined key escape-hatches to a `bytes`
+# encoding, or vendors the old source from git history; the historical
+# `[deps] mapset` splice-collision note lives in nmapset.rut's header).
 name = "nmapset"
 entry.lib = "./nmapset.rut"
 inline = true

@@ -1,9 +1,12 @@
-# nmapset-str/ — the HOST-backed twin of `hashmap-str`: the identical
+# nmapset-str/ — the HOST-backed twin of the removed `hashmap-str`
+# mapset row: the identical
 # str-keyed churn over `nmapset::HashMap` (the native-key experiment
-# pkg) instead of pure-rut `mapset`. Module dir because it mounts
+# pkg) instead of the removed pure-rut `mapset`. Module dir because it
+# mounts
 # `nmapset` (which pulls the `nmap` host pkg); see
-# nmapset-int/rut.toml. The checksum must EQUAL `hashmap-str`'s (same
-# FNV-1a values — the nmapset pkg ships mapset's exact constants).
+# nmapset-int/rut.toml. The checksum must equal the pinned 1264308351
+# (same FNV-1a values — the nmapset pkg ships the mapset-exact
+# constants).
 name = "nmapset_str"
 entry.lib = "./main.rut"
 

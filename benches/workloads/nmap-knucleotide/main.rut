@@ -2,9 +2,11 @@ use ink::{ Logger };
 
 use nmapset::{ HashMap };
 
-// nmap-knucleotide — the HOST-backed twin of `knucleotide`: the
+// nmap-knucleotide — the HOST-backed twin of the removed `knucleotide`
+// mapset row: the
 // identical k-mer counting over `nmapset::HashMap<str, i32>` (the
-// native-key experiment pkg) instead of pure-rut `mapset`. The
+// native-key experiment pkg) instead of the removed pure-rut `mapset`.
+// The
 // benchmark-game workload the README used to exclude for "no
 // hashmap". The harness workloads take no stdin, so this is the
 // fasta-style ADAPTATION: the sequence is generated with fasta's LCG
@@ -12,8 +14,8 @@ use nmapset::{ HashMap };
 // insert churn over long str keys), 1-/2-mers fill two small maps, and
 // 100 generated 12-mer fragments are probed. Checksum = distinct
 // 12-mers + the fragment-count sum + the 1-/2-mer totals + the 12-mer
-// total, all in i32 — it must EQUAL `knucleotide`'s (same FNV-1a hash
-// values). Scale: seq = 200000 letters.
+// total, all in i32 — it must equal the pinned 2198604 (same FNV-1a
+// hash values). Scale: seq = 200000 letters.
 
 fn lcg_seq(n: i32) -> str {
     let letters = "ACGT";

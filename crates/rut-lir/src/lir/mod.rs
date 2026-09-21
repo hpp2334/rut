@@ -288,8 +288,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // native-fastpath phase 1): the item's own bounds plus — for a
         // class method — the class's `requires`. Only union-SPELLED
         // bounds register: a trait bound stays admission-only, and its
-        // method calls keep resolving per instantiation (mapset's
-        // `K requires Hashable` law is untouched).
+        // method calls keep resolving per instantiation (the
+        // single-trait `K requires Trait` law).
         let mut union_bounds: std::collections::HashMap<IdentId, NodeHandle<AnyTy>> =
             std::collections::HashMap::new();
         match ctx.ast.kind(node) {

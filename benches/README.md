@@ -24,7 +24,7 @@ benches/
 │   ├── NAME.js             # the identical program for node + qjs
 │   ├── NAME/               # dir-shaped rut side: `rut.toml` + `main.rut`,
 │   │                       # used when the workload mounts its own deps
-│   │                       # (the `mapset`/`nmapset` workloads); runs as
+│   │                       # (the `nmapset` workloads); runs as
 │   │                       # `rut run <dir>`
 │   └── expected.json       # canonical reference checksums (verified)
 └── results/                # generated reports (gitignored)
@@ -89,42 +89,28 @@ against the reference in `workloads/expected.json`.
 | `call` | call/return/frame overhead | fib(28) | `317811` |
 | `alloc` | record allocation/RC churn | 2M records | `1385447424` |
 | `array` | growable-sequence churn (`Vec<i32>` vs a plain JS `Array`): push through the grow path, indexed read+write, full iteration | n = 1 000 000 | checksum `1000000000000` |
-| `hashmap-int` | `HashMap<i32, i32>` churn (mapset): put/replace/hit-and-miss get/remove/re-scan | n = 100 000 | checksum `734932704` |
-| `hashmap-str` | str-keyed `HashMap<str, i32>` (mapset): generated keys, removals, re-adds | n = 50 000 | checksum `1264308351` |
-| `hashset` | `HashSet<i32>` (mapset): adds, dup adds, probes, removals, intersection count | n = 100 000 | checksum `21500055` |
-| `knucleotide` | k-mer counting over `HashMap<str, i32>` (mapset): 12-mer fill + fragment probes | seq = 200 000 | checksum `2198604` |
-| `nmapset-int` | `HashMap<i32, i32>` churn (**nmapset**, the host-implemented map experiment): line-for-line clone of `hashmap-int` | n = 100 000 | checksum `734932704` (=`hashmap-int`) |
-| `nmapset-str` | str-keyed `HashMap<str, i32>` (**nmapset**): line-for-line clone of `hashmap-str` | n = 50 000 | checksum `1264308351` (=`hashmap-str`) |
-| `nmap-hashset` | `HashSet<i32>` (**nmapset**): line-for-line clone of `hashset` | n = 100 000 | checksum `21500055` (=`hashset`) |
-| `nmap-knucleotide` | k-mer counting over `HashMap<str, i32>` (**nmapset**): line-for-line clone of `knucleotide` | seq = 200 000 | checksum `2198604` (=`knucleotide`) |
+| `nmapset-int` | `HashMap<i32, i32>` churn (**nmapset**, the host-implemented map experiment): put/replace/hit-and-miss get/remove/re-scan — the op stream of the removed `hashmap-int` mapset row | n = 100 000 | checksum `734932704` |
+| `nmapset-str` | str-keyed `HashMap<str, i32>` (**nmapset**): generated keys, removals, re-adds — the op stream of the removed `hashmap-str` mapset row | n = 50 000 | checksum `1264308351` |
+| `nmap-hashset` | `HashSet<i32>` (**nmapset**): adds, dup adds, probes, removals, intersection count — the op stream of the removed `hashset` mapset row | n = 100 000 | checksum `21500055` |
+| `nmap-knucleotide` | k-mer counting over `HashMap<str, i32>` (**nmapset**): 12-mer fill + fragment probes — the op stream of the removed `knucleotide` mapset row | seq = 200 000 | checksum `2198604` |
 | `json-decode` | the digest JSON decode: char-split + parser minting one `opaque` box per JSON value (and per object key), plus a downcast fold over the tree — REPS reps of a large generated document (1 200 rows; ~34k boxes minted per rep, ~100k total) | doc ~204 KB, reps 3 | checksum `4502015958359127277` |
 | `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
 benchmarks-game definitions); `binary-trees` and `fasta` are
-**adaptations**. `json-decode` is too — see below. The four `mapset` workloads (`hashmap-int`, `hashmap-str`, `hashset`, `knucleotide`) stress the
-`rut/mapset` package: the rut sides ship as module dirs
-(`NAME/{rut.toml, main.rut}` with `[deps] mapset = …`) and run as
+**adaptations**. `json-decode` is too — see below. The four `nmapset`
+workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
+`nmap-knucleotide`) stress the keyed collections — once over the removed
+pure-rut `mapset` pkg (see the removal note below), now over
+`rut/nmapset` alone: the rut sides ship as module dirs
+(`NAME/{rut.toml, main.rut}` with `[deps] nmapset = …`) and run as
 `rut run <dir>` — the CLI's single-file auto-mount list stays untouched.
 Honest framing: V8's `Map`/`Set` are inline-cache-optimized and QuickJS
 has its own fast paths — these rows are not expected to be a win. The
 point is rut's number for the RC-heap slots its keyed collections pay.
-Allocation profile (mapset v1.1, byref spelling — RFC 0044): one `?K`
-handle per key — a share of the key's cell, never a copy — plus one
-`?V` handle per value and the `hashes`/`states` scalar arrays; there
-are **no** `Hashable` boxes and no vtable dispatch on the map path
-(`RawHashTable<K>` monomorphizes per key type, so `hash`/`hash_eq` are
-static, origin-pinned calls — inlined for tiny bodies). Bindings never
-copy (RFC 0044): `let b = a` is an O(1) share of the array cell, so
-`rehash`'s old-array bindings make the swap O(1) by construction — the
-old move-elision pass and its copy law are gone. mapset's hot loops
-still index fields directly (`self.states[at]`): it reads clearly and
-skips the handle traffic. See the performance log below.
-
-The four `nmapset` workloads (`nmapset-int`, `nmapset-str`,
-`nmap-hashset`, `nmap-knucleotide`) are line-for-line clones of the
-mapset workloads over `rut/nmapset` — the **host-implemented** key
+The four `nmapset` workloads are line-for-line ports of the removed
+`mapset` workloads over `rut/nmapset` — the **host-implemented** key
 table experiment (the "C builtin" architecture qjs itself uses): keys
 live as owned Rust data behind one `opaque` box per table, values stay
 rut-side in a parallel `[?V]` array, and every map op crosses the host
@@ -132,9 +118,35 @@ boundary once through a typed crossing (`map_{entry,find,remove}_{i,u,b,s,y}`
 — the key crosses directly as its own type, hashed host-side by
 `hash_payload`, which ports the same mix64/FNV-1a constants; `map_entry_*`
 answers `i32::MIN` grow-first, so put is one crossing even on growth). The nmapset pkg
-ships mapset's exact mix64/FNV-1a constants, so every key hashes to the
-same bits and the checksums MUST equal the mapset rows' — a mismatch is
-a bug, and `expected.json` pins it. See the performance log below.
+ships the mapset-exact mix64/FNV-1a constants, so every key hashes to the
+same bits the original mapset rows produced — the pins in `expected.json`
+(`734932704` / `1264308351` / `21500055` / `2198604`) ARE those values,
+and a mismatch is a bug. See the performance log below.
+
+## Removed — the four `mapset` workloads (Sep 2026)
+
+The pure-rut `mapset` package left the tree (stdlib slim-down, the
+`remove mapset` commit), and the four workloads that mounted it were
+deleted with it: **`hashmap-int`**, **`hashmap-str`**, **`hashset`**,
+**`knucleotide`** (workload dirs + `.js` twins). Their **rows were
+removed from `workloads/expected.json`** — the only sanctioned kind of
+`expected.json` edit here: row removal for deleted workloads, never a
+touch to any surviving row.
+
+- The history stays in the performance log below: the mapset-vs-nmapset
+  comparisons, the phase tables, and round2's `hashmap-int` −21.7%
+  evidence all live on in the log (the engine wins they measured were
+  rut-side and are re-measured by the surviving `nmapset` twins, whose
+  op streams are identical).
+- Migration for user-defined-key maps (the one thing only `mapset`
+  admitted): encode the key canonically to `bytes` and key the
+  union-bounded `nmapset` classes (`HashMap`/`HashSet`/`PrimMap*`),
+  or vendor the old `mapset` source from git history. The nmap
+  runtime trap and the union-bound diagnostic now say the same.
+- The `nmapset` rows keep the deleted twins' exact checksums
+  (`734932704` / `1264308351` / `21500055` / `2198604`) — they were
+  pinned equal row-for-row while both pkg existed, so the pins did not
+  move.
 
 ## Performance log — mapset-perf engine phases (Sep 2026)
 
@@ -1937,9 +1949,8 @@ runner stdout/stderr). Tree clean apart from this section.
 - Workloads are still single files for node + qjs, but the rut side may
   be a module dir (`NAME/{rut.toml, main.rut}`): the runner spawns
   `rut run <dir>` and the dir's `[deps]` resolve through the module
-  loader (RFC 0035) — currently the `mapset` workloads
-  (`hashmap-int`, `hashmap-str`, `hashset`, `knucleotide`) and their
-  `nmapset` twins (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
+   loader (RFC 0035) — currently the `nmapset`
+  workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
   `nmap-knucleotide`, which pull the `nmap` host pkg through the
   pkg's own `[deps]`), `json-decode` (it mounts `pouch` for the
   row chunks the document generator joins), and `crossing-nop` (it
@@ -1948,17 +1959,16 @@ runner stdout/stderr). Tree clean apart from this section.
   `rut-bench-probe` additionally binds the nmap and bench-cross hosts
   only when the program's dep graph declares them (the
   host-surface check is exact in both directions, RFC 0025).
-- The `mapset` workloads' JS twins carry small adaptations: JS
+- The map rows' JS twins carry small adaptations: JS
   `Map`/`Set` have no insert-or-replace primitive, so the add-vs-
   replace split costs one extra `has` probe per put compared with
   rut's `put -> bool` (it biases JS against itself, which the framing
-  below already expects). The `nmapset` workloads' JS twins are the
-  same programs (the JS side has no notion of which rut pkg backs the
-  map — the comparison rows measure the identical JS work).
+  below already expects). The adaptation predates the `mapset`
+  removal — the same JS programs served the deleted `mapset` twins.
 - Missing language/std features exclude `pidigits` (no bigint),
   `regex-redux` (no regex), and `reverse-complement` (stdin/bytes
   transform) from the benchmark-game set. `k-nucleotide` is no longer
-  excluded — the `mapset` package provides the hashmap.
+  excluded — `nmapset` provides the hashmap.
 - **`knucleotide`** is an *adaptation*: the sequence is generated with
   fasta's LCG (the harness takes no stdin) and built identically on
   both sides; 12-mer get-or-insert churn fills a `HashMap<str, i32>`,
@@ -1984,7 +1994,7 @@ runner stdout/stderr). Tree clean apart from this section.
    <value>` via the logger) and `NAME.js` (`console.log("CHECKSUM " + v)`),
    computing identical results with the same integer widths / float
    order. If the rut side needs a tree package beyond the CLI's
-   single-file auto-mount (`ink`, `pouch`) — e.g. `mapset` — ship it as
+   single-file auto-mount (`ink`, `pouch`) — e.g. `nmapset` — ship it as
    a module dir `NAME/{rut.toml, main.rut}` with `[deps]` instead; the
    runner then spawns `rut run <dir>`.
 2. Keep the scale as a named constant in both files.

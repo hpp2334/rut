@@ -116,8 +116,8 @@ entry fn widen_lanes() -> i64 {
     return fails;
 }
 
-// the bool lane: mix64(1) / mix64(0) — mapset's bool impl's exact bits,
-// and consistent with an Opaque-lane put of `true`
+// the bool lane: mix64(1) / mix64(0) — the wrapper bool hash's exact
+// bits, and consistent with an Opaque-lane put of `true`
 entry fn bool_lane() -> i64 {
     let t = map_new(8);
     let mut fails: i64 = 0;
@@ -367,7 +367,7 @@ fn widening_distinctness_and_bits_collapse() {
 }
 
 #[test]
-fn the_bool_lane_is_consistent_with_mapsets_bool_hash() {
+fn the_bool_lane_is_consistent_with_the_wrappers_bool_hash() {
     let mut vm = vm();
     assert_eq!(vm.call::<_, i64>("bool_lane", ()).unwrap(), 0);
 }

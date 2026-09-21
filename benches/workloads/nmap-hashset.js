@@ -1,6 +1,8 @@
 // nmap-hashset.js — the JS twin of nmap-hashset/main.rut (and the same
-// algorithm as hashset.js): the identical HashSet<i32> churn on
-// `new Set()`. The rut side swaps `mapset` for the native-key
+// algorithm as the removed hashset.js mapset twin): the identical
+// HashSet<i32> churn on
+// `new Set()`. The rut side swaps the removed pure-rut `mapset` for
+// the native-key
 // `nmapset` pkg; the JS side is unchanged — same work, same checksum.
 // Scale: n = 100000 keys. Adaptation: JS Set.add
 // does not report whether the element was new, so the add/dup split

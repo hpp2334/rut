@@ -3,7 +3,7 @@
 //! Three behaviors the phase pins down:
 //! - **type unions only** — a union bound takes type NAMES; a trait
 //!   member inside a union (all-trait or mixed) diagnoses, while a
-//!   single-trait bound (`K requires Hashable`, mapset's law) stays
+//!   single-trait bound (`K requires Enc`) stays
 //!   legal;
 //! - **admission per member** — each named member instantiates; a
 //!   record and a user class do not, and the failure names the type and
@@ -156,7 +156,7 @@ fn trait_union_through_an_alias_diagnoses_in_bound_position() {
 #[test]
 fn single_trait_bound_stays_legal() {
     // the regression guard: `K requires Enc` (one trait, no union) is the
-    // mapset law — admission via the impl registry, untouched
+    // single-trait law — admission via the impl registry, untouched
     let out = compile_app(
         "trait Enc { fn enc(self) -> bytes; }\n\
          struct Token { v: i32 }\n\

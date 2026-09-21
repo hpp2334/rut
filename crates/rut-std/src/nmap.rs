@@ -2,8 +2,11 @@
 //! an open-addressing hash table whose state lives Rust-side behind an
 //! `opaque` payload box (RFC 0023), so rut meets it only through the
 //! `pub host fn` surface bound by [`install_std_nmap`]. This is the HOST
-//! half of the experiment; the pure-rut `mapset` package stays untouched
-//! as the reference and the general-key implementation.
+//! half of the experiment. (The pure-rut `mapset` package — the original
+//! reference and general-key implementation — was REMOVED from the tree
+//! in Sep 2026, stdlib slim-down: general keys now mean a `bytes`
+//! encoding or the `nmapset` wrapper; the old source lives in git
+//! history.)
 //!
 //! Design (plan §0/§1):
 //! - the native side owns KEYS only — owned Rust data (integer bits /
@@ -15,7 +18,9 @@
 //!   hash wrapper-side and cross in `h` — the table only RECORDS hashes;
 //!   the payload box crosses once per call and is read through the H1
 //!   accessor (`Vm::opaque_key_payload`). Anything else — floats, chars,
-//!   user records, host boxes — traps loudly, pointing at `mapset`. No
+//!   user records, host boxes — traps loudly, pointing at the escape
+//!   hatches (encode the key canonically to `bytes`, or use
+//!   `nmapset`). No
 //!   re-entrant `hash_eq` callbacks (RFC 0023 §2: callbacks cross by
 //!   name and cannot reach impl methods);
 //! - probe semantics are mapset.rut transplanted verbatim: open
@@ -361,8 +366,8 @@ impl NativeTable {
 /// The crossing-side key read: the `opaque` box's payload classified
 /// against the closed native key set (the H1 accessor), as the table's
 /// owned [`KeyVal`]. An `Unsupported` payload is the loud trap — the
-/// message names the type and points at `mapset`, which admits any
-/// `Hashable` key.
+/// message names the type and points at the escape hatches (encode the
+/// key canonically to `bytes`, or use the `nmapset` wrapper).
 fn key_val(vm: &Vm, k: &OpaqueRef) -> Result<(KeyKind, KeyVal), Trap> {
     match vm.opaque_key_payload(k)? {
         KeyPayload::Bits { val, .. } => Ok((KeyKind::Bits, KeyVal::Bits(val))),
@@ -371,19 +376,20 @@ fn key_val(vm: &Vm, k: &OpaqueRef) -> Result<(KeyKind, KeyVal), Trap> {
         KeyPayload::Unsupported(ty) => Err(Trap::new(
             TrapKind::Invalid,
             format!(
-                "nmap: key type `{}` is not natively supported — use mapset (the native key set is the integer primitives, `bool`, `str`, and `bytes`)",
+                "nmap: key type `{}` is not natively supported — encode the key canonically to `bytes`, or use `nmapset` (the native key set is the integer primitives, `bool`, `str`, and `bytes`)",
                 vm.prog.type_name(ty)
             ),
         )),
     }
 }
 
-/// The two hash constants mapset's `Hashable` impls run (the ONE key
-/// contract, nmapset.rut `mix64`/`fnv1a64`): FNV-1a 64's offset basis
+/// The two hash constants the removed pure-rut `mapset` pkg's
+/// `Hashable` impls ran (the ONE key contract, now nmapset.rut's
+/// `mix64`/`fnv1a64` alone): FNV-1a 64's offset basis
 /// and prime. These are the checksum law — ported BIT-FOR-BIT, so the
 /// host's recorded hashes equal the wrapper's `k.hash()` bit for bit
-/// and the phase-4 bench checksums (which must equal mapset's rows)
-/// hold. A one-ulp difference here breaks the gate; the unit test pins
+/// and the bench checksums pinned in `expected.json` hold. A one-ulp
+/// difference here breaks the gate; the unit test pins
 /// the exact outputs as literals.
 const FNV_OFFSET: u64 = 14695981039346656037;
 const FNV_PRIME: u64 = 1099511628211;
@@ -391,8 +397,8 @@ const FNV_PRIME: u64 = 1099511628211;
 /// The typed lanes' host-side hash — the ONE shared payload hasher the
 /// crossings run instead of minting an Opaque box and reading the
 /// wrapper's `h`: mix64 for the integer/bool bits, FNV-1a 64 over the
-/// octets for `str`/`bytes`. Same inputs, mapset's constants, mapset's
-/// exact bits.
+/// octets for `str`/`bytes`. Same inputs, nmapset.rut's constants,
+/// bit-exact.
 pub fn hash_payload(k: &KeyVal) -> u64 {
     let mut h = FNV_OFFSET;
     match k {
@@ -781,7 +787,7 @@ mod tests {
     }
 
     #[test]
-    fn the_load_factor_law_is_mapsets_constants() {
+    fn the_load_factor_law_is_the_pinned_constants() {
         let mut t = NativeTable::new(16);
         assert!(!t.needs_grow(), "empty: (0+0+1)*10 < 112");
         for i in 0u64..11 {
@@ -891,12 +897,12 @@ mod tests {
     // ---- phase 2: the typed lanes + the fused grow sentinel ----------
 
     /// The checksum law, pinned as LITERALS: hash_payload must answer
-    /// mapset's exact bits (nmapset.rut's `mix64` / `fnv1a64` constants,
-    /// ported bit-for-bit) — a one-ulp difference breaks the phase-4
-    /// bench gate, which compares value-derived checksums against
-    /// mapset's rows.
+    /// nmapset.rut's exact bits (the `mix64` / `fnv1a64` constants,
+    /// originally ported bit-for-bit from the removed mapset pkg) — a
+    /// one-ulp difference breaks the bench gate, which pins the
+    /// value-derived checksums in `expected.json`.
     #[test]
-    fn hash_payload_is_mapsets_bits_bit_for_bit() {
+    fn hash_payload_bits_are_pinned_bit_for_bit() {
         // mix64 — the integer/bool lane: (offset ^ bits) * prime
         assert_eq!(hash_payload(&KeyVal::Bits(0)), 12638153115695167455);
         assert_eq!(hash_payload(&KeyVal::Bits(1)), 12638152016183539244);
@@ -922,7 +928,7 @@ mod tests {
 
     /// The typed ops and the Opaque ops land the SAME slots on the SAME
     /// table operations: the key's recorded hash comes from
-    /// `hash_payload` with mapset's constants, so probing behaves
+    /// `hash_payload` with the wrapper's constants, so probing behaves
     /// identically to the wrapper-hash Opaque lane.
     #[test]
     fn typed_and_opaque_lanes_answer_the_same_slots() {
@@ -998,11 +1004,12 @@ mod tests {
         assert_eq!(typed_find(&t, &KeyVal::Bits(256)).unwrap(), -1);
     }
 
-    /// The bool lane: `true`/`false` hash mix64(1)/mix64(0) — mapset's
-    /// bool impl's exact bits — and round-trip through the typed lane
-    /// while staying consistent with the Opaque lane's recorded hash.
+    /// The bool lane: `true`/`false` hash mix64(1)/mix64(0) — the
+    /// wrapper's bool hash's exact bits — and round-trip through the
+    /// typed lane while staying consistent with the Opaque lane's
+    /// recorded hash.
     #[test]
-    fn the_bool_lane_hashes_mapsets_bools() {
+    fn the_bool_lane_hashes_the_wrappers_bools() {
         let mut t = NativeTable::new(8);
         let tru = typed_entry(&mut t, KeyVal::Bits(1)).unwrap();
         assert!(tru < 0);

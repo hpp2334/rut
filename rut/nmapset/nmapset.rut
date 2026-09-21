@@ -1,17 +1,21 @@
 // nmapset/nmapset.rut — the native-key map/set EXPERIMENT (the
 // mapset-host plan): generic wrapper classes over the `nmap` host
-// table. The pure-rut `mapset` package stays untouched as the reference
-// and the general-key implementation; this module is the host-backed
-// twin, and its bench rows must checksum identically.
+// table. Origin: the host-backed twin of the pure-rut `mapset`
+// package, checksum-pinned to it row for row — `mapset` was REMOVED
+// from the tree in Sep 2026 (stdlib slim-down; the source lives in git
+// history) and this pkg is the tree's keyed-collection story. The
+// bench pins `734932704` / `1264308351` / `21500055` / `2198604` are
+// still the original mapset rows' values.
 //
 // DEVIATION (H3, engine-forced, recorded here instead of §0.3's
 // `[deps] mapset`): the graph compiler splices a source dep's FULL
 // source into its consumer's ONE compilation unit (`graph.rs`
 // `Unit::Inline` — there is no namespaced splice; the mixed-module
-// note at graph.rs:258 is deferred). `mapset.rut` declares `HashMap` /
-// `HashSet`, so a `[deps] mapset` use splices those declarations into
-// this pkg's unit and collides with THIS pkg's same-named classes
-// ("duplicate type name `HashMap`"). `rut/mapset` stays untouched.
+// note at graph.rs:258 is deferred). `mapset.rut` declared `HashMap` /
+// `HashSet`, so a `[deps] mapset` use would have spliced those
+// declarations into this pkg's unit and collided with THIS pkg's
+// same-named classes ("duplicate type name `HashMap`"). Moot since the
+// `mapset` removal — recorded for the history.
 //
 // DIVISION OF LABOR (plan §0.4/§0.5): the native table owns KEYS AND
 // THEIR HASHES — the key crosses DIRECTLY on one of the typed lanes
@@ -24,8 +28,9 @@
 // fresh-cell drift). The key set is CLOSED, and it is now the VISIBLE,
 // COMPILE-TIME-ENFORCED contract: the class bounds are a type union —
 // `K requires i8 | ... | bytes` — so a user-defined key type fails at
-// the instantiation with the union diagnostic (its escape hatches:
-// encode the key canonically to `bytes`, or use `mapset`), NOT at the
+// the instantiation with the union diagnostic (escape hatches: encode
+// the key canonically to `bytes`, or vendor the removed mapset source
+// from git history), NOT at the
 // crossing. The host-side nmap.rs runtime trap stays as
 // belt-and-braces.
 //

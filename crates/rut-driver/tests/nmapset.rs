@@ -1,35 +1,30 @@
 //! The `nmapset` package (the mapset-host plan, H3): generic wrapper
-//! classes over the `nmap` host table — the host-backed twin of the
-//! pure-rut `mapset`. The mapset scenarios port over with the SAME
-//! checksums (the wrapper's `Hashable` uses mapset's exact mix64/FNV
-//! constants, so slot behavior and value-derived checksums match);
-//! adapted where the surface differs (`with_capacity` sizes through
-//! the host's `map_cap`). PLUS the two host-experiment specifics
-//! (phase 3): a user-defined key type is refused AT COMPILE TIME with
-//! the union-bound diagnostic (the class bound is the visible contract
-//! — escape hatches: encode to `bytes`, or use `mapset`), and `get`
-//! parity — the same staleness
-//! scenario run against BOTH packages must answer identically (the
-//! native keys never change the `*V` aliasing law).
+//! classes over the `nmap` host table — now the tree's ONLY keyed-map
+//! package (the pure-rut `mapset` twin was removed in Sep 2026; these
+//! scenarios were ported from it and keep its pinned checksums — the
+//! old twin law lives in git history). Adapted where the surface
+//! differs (`with_capacity` sizes through the host's `map_cap`). PLUS
+//! the two host-experiment specifics (phase 3): a user-defined key type
+//! is refused AT COMPILE TIME with the union-bound diagnostic (the
+//! class bound is the visible contract — escape hatches: encode the
+//! key canonically to `bytes`, or vendor the removed mapset source),
+//! and `get` staleness — held `*V`s keep reading the pre-replace cell
+//! while a fresh get reads the replacement (the aliasing law the
+//! `nmapset.rs` port pinned; see also the prim-map twin in
+//! `nmap_primmap.rs`).
 
 use std::rc::Rc;
 
 use rut_driver::{Module, Session};
 
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
-const MAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/mapset");
 
-/// Mount `pkg` ("mapset" or "nmapset" — the latter pulls `nmap` +
-/// `mapset` through its `[deps]`) and register `app_src` as the root.
-fn session_with(pkg: &str, app_src: &str) -> Session {
+/// Mount the `nmapset` pkg (it pulls `nmap` through its `[deps]`) and
+/// register `app_src` as the root.
+fn session_with(app_src: &str) -> Session {
     let mut session = Session::new();
     rut_driver::mount_std_core(&mut session);
-    let dir = match pkg {
-        "mapset" => MAPSET_DIR,
-        "nmapset" => NMAPSET_DIR,
-        other => panic!("unknown pkg {other}"),
-    };
-    rut_driver::mount_dir(&mut session, std::path::Path::new(dir))
+    rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
         .expect("mount pkg");
     session
         .register_module(
@@ -40,12 +35,12 @@ fn session_with(pkg: &str, app_src: &str) -> Session {
     session
 }
 
-fn compile_pkg_app(pkg: &str, app_src: &str) -> rut_driver::GraphOutput {
-    rut_driver::compile_graph(&session_with(pkg, app_src), "app_main")
+fn compile_pkg_app(app_src: &str) -> rut_driver::GraphOutput {
+    rut_driver::compile_graph(&session_with(app_src), "app_main")
 }
 
-fn diags_of(pkg: &str, app_src: &str) -> Vec<String> {
-    compile_pkg_app(pkg, app_src)
+fn diags_of(app_src: &str) -> Vec<String> {
+    compile_pkg_app(app_src)
         .diags
         .iter()
         .map(|d| d.msg.clone())
@@ -53,20 +48,18 @@ fn diags_of(pkg: &str, app_src: &str) -> Vec<String> {
 }
 
 /// Compile, verify, and build the Vm with the host bindings the graph
-/// declares — `install_std_nmap` for the nmapset side, checked against
-/// the mounted `rut/nmap` surface (the RFC 0025 contract).
-fn vm_for(pkg: &str, app_src: &str) -> rut_vm::interp::Vm {
-    let session = session_with(pkg, app_src);
+/// declares — `install_std_nmap`, checked against the mounted `rut/nmap`
+/// surface (the RFC 0025 contract).
+fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
+    let session = session_with(app_src);
     let expected = session.expected_host_fns();
-    if pkg == "nmapset" {
-        for f in ["map_new", "map_entry", "map_find", "map_remove", "map_needs_grow",
-                  "map_grow", "map_take_reloc", "map_cap", "map_len"]
-        {
-            assert!(
-                expected.contains_key(&format!("nmap::{f}")),
-                "the nmap surface must cross through the [deps] mount: {expected:?}"
-            );
-        }
+    for f in ["map_new", "map_entry", "map_find", "map_remove", "map_needs_grow",
+              "map_grow", "map_take_reloc", "map_cap", "map_len"]
+    {
+        assert!(
+            expected.contains_key(&format!("nmap::{f}")),
+            "the nmap surface must cross through the [deps] mount: {expected:?}"
+        );
     }
     let out = rut_driver::compile_graph(&session, "app_main");
     assert!(
@@ -82,28 +75,28 @@ fn vm_for(pkg: &str, app_src: &str) -> rut_vm::interp::Vm {
         interrupt_every: 1024,
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    if pkg == "nmapset" {
-        rut_std::nmap::install_std_nmap(&mut hosts);
-        hosts.verify_against(&expected); // rut/nmap/nmap.d.rut ↔ the bodies
-    }
+    rut_std::nmap::install_std_nmap(&mut hosts);
+    hosts.verify_against(&expected); // rut/nmap/nmap.d.rut ↔ the bodies
     rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .expect("vm")
 }
 
 /// Compile the app, flatten, verify, and run `main` — the i32 checksum.
-fn run_main(pkg: &str, app_src: &str) -> i32 {
-    vm_for(pkg, app_src).call::<_, i32>("main", ()).expect("run")
+fn run_main(app_src: &str) -> i32 {
+    vm_for(app_src).call::<_, i32>("main", ()).expect("run")
 }
 
-// ---- the ported mapset scenarios (checksums must match mapset's) ----
+// ---- the ported scenarios (checksums pinned; originally the mapset
+// ---- twins — the pkg is gone, the pins stay) ----
 
-/// mapset's i32-key scenario verbatim (minus its unused Pt prelude):
+/// The i32-key scenario (ported from mapset, minus its unused Pt
+/// prelude):
 /// 64 puts across the grow (cap 8 → 128), gets, replace, remove,
 /// DEAD-slot reuse, a negative key. `vals` must survive every
 /// relocation the native grow drives.
 #[test]
 fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
-    let checksum = run_main("nmapset", "use core::{ assert };\n\
+    let checksum = run_main("use core::{ assert };\n\
          use nmapset::{ HashMap };\n\
          pub fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
@@ -137,15 +130,16 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
          \x20   acc = acc + m.len();\n\
          \x20   return acc;\n\
          }\n");
-    assert_eq!(checksum, 132, "must equal the mapset scenario's checksum");
+    assert_eq!(checksum, 132, "the scenario's pinned checksum (the ported mapset twin's)");
 }
 
-/// mapset's str-key + HashSet scenario verbatim: content-equal str keys
+/// The str-key + HashSet scenario (ported from mapset): content-equal
+/// str keys
 /// (the host stores owned copies; equality is octet equality), the set
 /// with no value machinery, duplicate adds, removes.
 #[test]
 fn hashmap_str_keys_and_hashset() {
-    let checksum = run_main("nmapset", "use core::{ assert };\n\
+    let checksum = run_main("use core::{ assert };\n\
          use nmapset::{ HashMap, HashSet };\n\
          pub fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
@@ -189,14 +183,15 @@ fn hashmap_str_keys_and_hashset() {
          \x20   acc = acc + ss.len();\n\
          \x20   return acc;\n\
          }\n");
-    assert_eq!(checksum, 47 + 49 + 19, "must equal the mapset scenario's live counts");
+    assert_eq!(checksum, 47 + 49 + 19, "the scenario's pinned live counts");
 }
 
-/// mapset's str-key tombstone round trip: remove → re-add lands the key
+/// The str-key tombstone round trip (ported from mapset): remove →
+/// re-add lands the key
 /// on its DEAD slot, and the re-added value is the fresh cell's.
 #[test]
 fn str_key_remove_readd_get_tombstone_round_trip() {
-    let checksum = run_main("nmapset", "use core::{ assert };\n\
+    let checksum = run_main("use core::{ assert };\n\
          use nmapset::{ HashMap };\n\
          pub fn main() -> i32 {\n\
          \x20   let mut m: HashMap<str, str> = HashMap.new();\n\
@@ -212,21 +207,21 @@ fn str_key_remove_readd_get_tombstone_round_trip() {
          \x20   assert(p == \"two\", \"re-added value is the fresh cell's\");\n\
          \x20   return 7;\n\
          }\n");
-    assert_eq!(checksum, 7, "must equal the mapset scenario's checksum");
+    assert_eq!(checksum, 7, "the scenario's pinned checksum");
 }
 
 // ---- the host experiment's own edges ----
 
 /// A user-defined key type is refused AT COMPILE TIME now (phase 3):
 /// the class bound is the literal union, `Pt` names no member, and the
-/// diagnostic names the offending type and the whole union (`mapset`
-/// remains the general-key implementation; a native crossing can no
-/// longer be reached to trap). The old `Hashable` trait is gone, so
+/// diagnostic names the offending type and the whole union (escape
+/// hatches: encode the key canonically to `bytes`, or vendor the
+/// removed mapset source — a native crossing can no longer be reached
+/// to trap). The old `Hashable` trait is gone, so
 /// the honest port drops the import too.
 #[test]
 fn a_user_record_key_fails_at_compile_time_naming_the_union() {
     let ds = diags_of(
-        "nmapset",
         "use core::{ assert };\n\
          use nmapset::{ HashMap };\n\
          struct Pt { x: i32; y: i32 }\n\
@@ -248,7 +243,6 @@ fn a_user_record_key_fails_at_compile_time_naming_the_union() {
 #[test]
 fn an_unhashable_key_type_is_refused_at_the_instantiation() {
     let ds = diags_of(
-        "nmapset",
         "struct Boxy { v: i32 }\n\
          use nmapset::{ HashMap };\n\
          pub fn main() -> i32 {\n\
@@ -268,7 +262,6 @@ fn an_unhashable_key_type_is_refused_at_the_instantiation() {
 #[test]
 fn nmapset_instantiates_the_wrapper_classes() {
     let out = compile_pkg_app(
-        "nmapset",
         "use nmapset::{ HashMap, HashSet };\n\
          pub fn main() -> i32 {\n\
          \x20   let mut m: HashMap<i32, i32> = HashMap.new();\n\
@@ -289,14 +282,16 @@ fn nmapset_instantiates_the_wrapper_classes() {
     }
 }
 
-// ---- the get parity law ----
+// ---- the get staleness law ----
 
-/// `get` parity between the twins, the SAME source against BOTH
-/// packages: two gets of one key name the SAME stored cell until a
-/// replace re-stores — held `*V`s go stale (they keep reading the
-/// pre-replace cell), a fresh get reads the replacement, remove nils
-/// the slot but not an independently held pointer. Identical answers,
-/// identical checksum.
+/// `get` staleness on the wrapper: two gets of one key name the SAME
+/// stored cell until a replace re-stores — held `*V`s go stale (they
+/// keep reading the pre-replace cell), a fresh get reads the
+/// replacement, remove nils the slot but not an independently held
+/// pointer. (The cross-package parity form of this scenario — the same
+/// source answering identically on the removed `mapset` twin — retired
+/// with the pkg; the scenario and its checksum pin remain the
+/// wrapper's own semantics law. History: git.)
 const PARITY_BODY: &str = "\
          use core::{ assert };\n\
          pub fn main() -> i32 {\n\
@@ -322,9 +317,7 @@ const PARITY_BODY: &str = "\
          }\n";
 
 #[test]
-fn get_staleness_parity_between_nmapset_and_mapset() {
-    let mapset_r = run_main("mapset", &format!("use mapset::{{ HashMap }};\n{PARITY_BODY}"));
-    let nmapset_r = run_main("nmapset", &format!("use nmapset::{{ HashMap }};\n{PARITY_BODY}"));
-    assert_eq!(mapset_r, 41, "mapset: the staleness scenario's checksum");
-    assert_eq!(nmapset_r, mapset_r, "nmapset must match mapset exactly");
+fn get_staleness_law_on_the_wrapper() {
+    let r = run_main(&format!("use nmapset::{{ HashMap }};\n{PARITY_BODY}"));
+    assert_eq!(r, 41, "the staleness scenario's pinned checksum");
 }

@@ -161,7 +161,7 @@ function discoverWorkloads() {
     } else if (existsSync(join(WORKLOADS_DIR, f, "rut.toml"))) {
       // dir-shaped workload: one module dir (rut.toml + main.rut) per
       // name — the rut side runs as `rut run <dir>` (the deps graph
-      // resolves its packages, e.g. mapset)
+      // resolves its packages, e.g. `nmapset` pulling `nmap`)
       names.push(f);
     }
   }

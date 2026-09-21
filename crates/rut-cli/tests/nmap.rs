@@ -7,7 +7,8 @@
 //! Covered per the phase: insert / replace / find / miss / remove,
 //! tombstone reuse, the load-factor law, grow with the relocation
 //! iterator, the str/bytes key flavors, the closed-set trap (floats and
-//! user records — the loud "use mapset" message), and the payload Drop
+//! user records — the loud "encode the key to `bytes` or use `nmapset`"
+//! message), and the payload Drop
 //! law at rc-0, including through a wrapper record's `opaque` field.
 
 use std::rc::Rc;
@@ -94,7 +95,8 @@ entry fn basic_lifecycle() -> i64 {
     return fails;
 }
 
-// the load-factor law with mapset's constants, observed on a table the
+// the load-factor law with the pinned constants (mapset's originally),
+// observed on a table the
 // test never grows: (11+0+1)*10 = 120 >= 16*7 = 112 flips first
 entry fn load_law() -> i64 {
     let t = map_new(16);
@@ -214,7 +216,8 @@ entry fn bytes_keys() -> i64 {
 
 struct Pt { x: i32; y: i32 }
 
-// outside the closed key set — the HOST traps, loud, pointing at mapset
+// outside the closed key set — the HOST traps, loud, pointing at the
+// escape hatches (encode the key to `bytes`, or use `nmapset`)
 entry fn float_key(t: opaque, k: f64) -> nil {
     map_entry(t, opaque(k), ihash(0));
 }
@@ -290,7 +293,7 @@ fn insert_replace_find_miss_remove_lifecycle() {
 }
 
 #[test]
-fn the_load_factor_law_is_mapsets_constants() {
+fn the_load_factor_law_is_the_pinned_constants() {
     let mut vm = vm_with_nmap();
     assert_eq!(vm.call::<_, i64>("load_law", ()).unwrap(), 0);
 }
@@ -325,10 +328,11 @@ fn unsupported_key_types_trap_loudly_and_leave_the_table_intact() {
     let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
     vm.call::<_, i32>("put_i32", (t.clone(), 5i32)).unwrap();
 
-    // a float key: the closed-set trap names the type and points at mapset
+    // a float key: the closed-set trap names the type and points at the
+    // escape hatches (`bytes` encoding or `nmapset`)
     let err = vm.call::<_, ()>("float_key", (t.clone(), 1.5f64)).unwrap_err();
     assert!(
-        err.msg.contains("nmap") && err.msg.contains("not natively supported") && err.msg.contains("mapset"),
+        err.msg.contains("nmap") && err.msg.contains("not natively supported") && err.msg.contains("nmapset") && err.msg.contains("bytes"),
         "{}",
         err.msg
     );
@@ -340,7 +344,7 @@ fn unsupported_key_types_trap_loudly_and_leave_the_table_intact() {
     // a user-defined key type: same trap
     let err = vm.call::<_, ()>("record_key", (t.clone(),)).unwrap_err();
     assert!(
-        err.msg.contains("not natively supported") && err.msg.contains("mapset"),
+        err.msg.contains("not natively supported") && err.msg.contains("nmapset") && err.msg.contains("bytes"),
         "{}",
         err.msg
     );

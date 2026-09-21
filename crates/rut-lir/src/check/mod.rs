@@ -44,7 +44,8 @@ pub struct DataDecl {
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     pub generics: Vec<IdentId>,
     /// RFC 0043 §A5 — the class's admission bounds
-    /// (`class HashMap<K requires Hashable, V>`); checked at every
+    /// (`class HashMap<K requires i8 | … | bytes, V>`, the nmapset key
+    /// union); checked at every
     /// `mk_data_inst`. Empty for structs and for classes without bounds.
     pub requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
 }
@@ -1020,7 +1021,7 @@ impl<'a> Ctx<'a> {
                 });
             if !ok {
                 // the single-trait bound names the missing impl — the
-                // class/fn shape the plan diagnoses ("no impl `Hashable`
+                // class/fn shape the plan diagnoses ("no impl `Enc`
                 // for `Foo`"); unions keep the generic wording
                 let msg = match members.as_slice() {
                     [BoundMember::Trait(tid)] => {

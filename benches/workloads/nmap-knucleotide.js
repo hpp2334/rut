@@ -1,6 +1,8 @@
 // nmap-knucleotide.js — the JS twin of nmap-knucleotide/main.rut (and
-// the same algorithm as knucleotide.js): the identical k-mer counting
-// on `new Map()` with string keys. The rut side swaps `mapset` for the
+// the same algorithm as the removed knucleotide.js mapset twin): the
+// identical k-mer counting
+// on `new Map()` with string keys. The rut side swaps the removed
+// pure-rut `mapset` for the
 // native-key `nmapset` pkg; the JS side is unchanged — same work, same
 // checksum. The sequence is generated with fasta's LCG (the harness
 // takes no stdin — the same adaptation both sides). Scale: seq =

@@ -123,7 +123,7 @@ fn main() {
     // A loose `.rut` workload uses the toolchain libs (`ink`+`rt`,
     // `pouch`) — third-party pkgs mounted from the tree, plus the
     // engine's core/calc. A module-DIR workload (`rut.toml`, the
-    // mapset bench dirs) loads its own `[deps]` graph instead and
+    // `nmapset` bench dirs) loads its own `[deps]` graph instead and
     // yields an already-linked program.
     let t0 = Instant::now();
     let (session, prog) = if path.is_dir() {
