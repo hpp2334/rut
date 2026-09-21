@@ -1,8 +1,13 @@
-// fixture for test/runTest.js — the symbol set the test asserts:
-// Color, Point, Circle, Drawable, main
+// fixture for the extension suites — the CURRENT language surface.
+// The five names the host test asserts (Color, Point, Circle, Drawable,
+// main) keep their spellings; everything else exercises the post-0043/44
+// grammar through the shipped wasm: test/e2e-wasm.js analyzes this file
+// (zero diagnostics), hovers the RFC 0043 alias and the RFC 0004
+// primitives, and the host suite (test/runTest.js, machines with `code`)
+// reads the same symbols and semantic tokens.
 enum Color { Red, Green, Blue }
 
-class Point {
+struct Point {
     x: i32;
     y: i32;
 }
@@ -13,9 +18,48 @@ class Circle {
     color: Color;
 }
 
+impl Circle {
+    fn area(self) -> f64 {
+        return 3.14;
+    }
+}
+
 trait Drawable {
     fn draw(self) -> nil;
 }
 
+// RFC 0043: a transparent alias to a nullable (RFC 0044) — the e2e
+// gate hovers `Maybe` and expects the target to render (`type
+// Maybe = ?i32;`, the pre-align builds printed `type Maybe = ;`).
+type Maybe = ?i32;
+
+// RFC 0009 v1.1 struct + RFC 0044 nullable field
+struct Slot {
+    item: ?Circle;
+}
+
+// RFC 0004 v1.1: str and bytes are primitives (the dead `string` is not)
+fn tag(s: str, b: bytes) -> str {
+    return s;
+}
+
+// RFC 0043: inline union bound (admission-only)
+fn kind<T requires Circle | Point>(x: T) -> i32 {
+    return 0;
+}
+
+// RFC 0014: the boot primitive — erase into opaque, recover with
+// opaque.downcast (the call-shaped erasure form)
+fn widen(o: opaque) -> ?Circle {
+    let (c, ok) = opaque.downcast<Circle>(o);
+    if (ok) {
+        return c;
+    }
+    return nil;
+}
+
 fn main() -> nil {
+    let m: Maybe = nil;
+    let slot: Slot = Slot { item: nil };
+    let c: ?Circle = slot.item;
 }

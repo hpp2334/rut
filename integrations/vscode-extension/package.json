@@ -95,8 +95,9 @@
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "build:wasm": "cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs",
-    "test": "npm run test:grammar && npm run test:host",
+    "test": "npm run test:grammar && npm run compile && npm run test:e2e && npm run test:host",
     "test:grammar": "node test/grammar-corpus.js",
+    "test:e2e": "node test/e2e-wasm.js",
     "test:host": "node scripts/run-vscode-test.mjs",
     "package": "npm run compile && vsce package"
   },

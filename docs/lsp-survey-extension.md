@@ -356,3 +356,108 @@ through-wasm e2e gate is phase 3 per §3.6). Plain `node`, no VS Code host.
 - The host-suite portion of `npm test` **skips** on machines without a
   `code` binary (this run included) — environment limitation, not a pass;
   the grammar gate (the phase-2 deliverable) ran and passed.
+
+---
+
+## 8. Phase 3 fix log — the through-wasm e2e gate + fixtures (IMPLEMENTED)
+
+Batch `rut-lsp-align`, phase 3, extension task. Scope: the gate deferred
+by §7.2 (§3.6's design), the fixture refresh deferred by §7.3 (§3.4's
+design), the npm wiring, and the README's Tests claims. No grammar or
+`src/` provider changes — the gate drives the already-aligned shipped
+artifact; it adds no new code paths to the extension itself.
+
+### 8.1 The gate — `test/e2e-wasm.js`
+
+Exactly §3.6's corpus-pass design, realized against the rebuilt binary:
+
+- **The real binding, not a copy.** `esbuild.mjs` grew a second entry:
+  `src/wasm.ts` is bundled standalone to `out/wasm.js` next to
+  `out/extension.js`, and the gate `require`s it and drives the SHIPPED
+  `bin/rut-lsp.wasm` (the phase-1 rebuild, 568,271 B) through
+  `RutWasm.load` — the same class `src/extension.ts` activates. A copy
+  of the ABI would let binding drift hide; this cannot.
+- **Corpus walk**: `rut/` + `examples/` + `demo/src/examples/` +
+  `benches/workloads/` (53 files, floor ≥ 50, same roots as
+  `crates/rut-lsp/tests/corpus.rs`). Per file: `rut_analyze` yields ZERO
+  diagnostics; non-empty token stream; every Impl-mode file yields
+  document symbols. URIs are the absolute paths — the `.d.rut` suffix
+  survives, so `mode_of` picks Decl for the decl surfaces (a mode mistake
+  would light them up as diagnostics — the zero-diag assertion locks it).
+- **Result through the shipped artifact: 53/53 clean, 303 document
+  symbols, 0 false diagnostics.** (The artifact this batch started with
+  — frozen at `e41915d` — flagged 15/53 files with 1,796 false diags;
+  see the companion survey §2/§4.)
+- **Hover/completion smoke** (7 assertion groups, all against the
+  shipped wasm): the 14-type legend (incl. `enumMember`); the fixture
+  (§8.2) analyzes with zero diagnostics and yields its symbols; the
+  RFC 0043 alias hover renders its nullable target — hovering `Maybe`
+  on `type Maybe = ?i32;` returns `type Maybe = ?i32;` (M4's `ty_src`
+  arm; the pre-align builds printed `type Maybe = ;`); `str` hovers its
+  current `primitive str { … }` form (the stale binary said
+  `builtin str`); member hover AND completion resolve through a
+  `?Circle` let-binding — hover on `c.area()` returns
+  `fn area(self) -> f64` in `impl Circle`, completion after `c.` offers
+  `area` + `r` (M4's `ty_head` arm, mirroring `crates/rut-lsp`'s
+  `nullable_let_binding_resolves_members` regression through the binary
+  users actually run); bare completion (a user project with no workspace
+  index) offers nmapset's `HashMap`/`HashSet`/`PrimMapI64` and
+  nmap_host's `map_entry` (M3's acceptance, the std-surface 8/8 fix);
+  and the RFC 0044 law — `fn f(p: i32?)` gives exactly ONE dedicated
+  diagnostic naming RFC 0044, `fn g(p: ?i32)` analyzes clean (M1/M2).
+- **Failure is loud, never a skip.** Missing `bin/rut-lsp.wasm` exits 1
+  with `npm run build:wasm`; a missing `out/wasm.js` exits 1 with
+  `npm run compile`. The gate's whole point is the shipped artifact —
+  silently skipping on a stale/absent binary would re-create the exact
+  rot this batch fixed.
+- **Headless by design**: plain node, no VS Code host. Where `code`
+  exists, `test:host` still runs its five UI-provider checks on top; on
+  headless boxes it skips loudly (exit 0) as before — the e2e gate is
+  what makes `npm test` an honest wasm gate everywhere.
+
+### 8.2 The fixture — `test/fixtures/symbols.rut` refreshed
+
+The §3.4 design, landed: the five host-asserted symbols keep their
+names (`Color`, `Point`, `Circle`, `Drawable`, `main` — `test/runTest.js`
+assertions unchanged), and the file grows the current surface: `impl
+Circle` with a method (methods live in impl blocks — RFC 0012), the
+`type Maybe = ?i32;` alias (the e2e gate's `?T` hover target), `struct
+Slot { item: ?Circle; }` (RFC 0009 v1.1 `struct` + RFC 0044 nullable
+field), `fn tag(s: str, b: bytes)` (RFC 0004 v1.1 primitives),
+`fn kind<T requires Circle | Point>` (RFC 0043 inline union bound),
+`fn widen(o: opaque) -> ?Circle` with `opaque.downcast<Circle>` (RFC
+0014), and nullable locals in `main`. The fixture analyzes clean through
+the shipped wasm (the e2e gate asserts it), so both suites now exercise
+post-0043/44 language on every run.
+
+### 8.3 Wiring and README
+
+- `npm test` = `test:grammar` → `compile` → `test:e2e` → `test:host`:
+  the TextMate lock, a fresh bundle (both entries), the through-wasm
+  gate, then the host suite (loud-skip without `code`). No new
+  dependencies; `package-lock.json` untouched.
+- README Tests section documents the three-tier gate, the fixture's
+  role, and the honest skip semantics.
+
+### 8.4 Verification and deviations
+
+- `npm test` on this box: grammar-corpus PASS (53 files / 49,053
+  tokens / 17 smoke assertions / 0 violations), e2e-wasm PASS (53 files,
+  0 false diagnostics, 303 symbols, 7 smoke assertions), host skipped
+  loudly (no `code` binary — environment limitation, per §7.3; the five
+  host checks are unchanged and their subject — the wasm module — is
+  fully covered by the e2e gate driving the same artifact).
+- Repo gates at the phase-3 commit: `cargo test --workspace` green (77
+  suites, 479 tests), `cargo check --workspace --target
+  wasm32-unknown-unknown` Finished/exit 0, and the full bench sanity
+  pass — every row's checksum equal to `expected.json` on all three
+  runtimes, fuel + VM-heap BIT-IDENTICAL to the standing pins (phases
+  1+2 touched build cfg; the host paths did not move). Recorded in the
+  batch report (`docs/lsp-align-report.md`).
+- Deviation from §3.6's letter: the corpus gate runs headless through
+  `RutWasm` directly instead of inside the Extension Host (opening 53
+  documents through the UI). The assertions are the same and the module
+  is the same binary; the host-side checks stay `test:host`'s five.
+- `src/extension.ts`, `src/wasm.ts`, `syntaxes/rut.tmLanguage.json`,
+  `language-configuration.json`, `package.json`'s
+  `semanticTokenScopes`: untouched.

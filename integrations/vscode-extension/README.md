@@ -61,15 +61,33 @@ scopes so stock themes color everything out of the box.
 ## Tests
 
 ```sh
-npm test               # grammar corpus gate + Extension Host run
+npm test               # grammar corpus gate + through-wasm e2e gate + Extension Host run
 npm run test:grammar   # standalone TextMate gate: the grammar asserted over
                        # the repo corpus (rut/ + examples/ + demo/ +
                        # benches/workloads/) via vscode-textmate/oniguruma —
                        # no wasm, no VS Code needed (M1-M8 lock,
                        # docs/lsp-survey-extension.md §7)
+npm run test:e2e       # through-wasm e2e gate: the SHIPPED bin/rut-lsp.wasm
+                       # driven through the extension's own ABI binding
+                       # (src/wasm.ts, bundled to out/wasm.js) over the full
+                       # corpus — zero false diagnostics — plus hover/
+                       # completion smoke (?T alias hover, member resolution
+                       # through a ?Circle binding, bare nmapset/nmap_host
+                       # completion, the RFC 0044 dedicated diagnostic).
+                       # Needs bin/rut-lsp.wasm (npm run build:wasm); runs
+                       # headless in plain node (§8,
+                       # docs/lsp-survey-extension.md)
 npm run test:host      # the Extension Host run (needs `code` on PATH and
-                       # bin/rut-lsp.wasm built)
+                       # bin/rut-lsp.wasm built); SKIPS LOUDLY (exit 0) on
+                       # machines without VS Code — a skip is a skip, the
+                       # two other gates still ran
 ```
+
+`test/fixtures/symbols.rut` is a current-grammar sample (RFC 0009 v1.1
+`struct`, RFC 0043 `type` alias + `requires` bound, RFC 0044 `?T`,
+primitive `str`/`bytes`, RFC 0014 `opaque`): the e2e gate analyzes it
+through the shipped wasm and hovers its alias; the host suite reads the
+same symbols and semantic tokens on machines with `code`.
 
 The wasm module itself is gated by `crates/rut-lsp-wasm/smoke.js`
 (`node crates/rut-lsp-wasm/smoke.js` from the repo root after
