@@ -1,0 +1,16 @@
+# strview/ — the strings-round1 phase-2 row: the nmapset-str six-phase
+# churn over `nmapset::HashMap`'s RANGE methods (put_range/get_range/
+# has_range/remove_range — the sv lanes), keys carved as fixed-width
+# 6-char windows of ONE generated parent string (no per-op key mint).
+# A module dir because it mounts `nmapset` (which pulls the `nmap`
+# host pkg); see nmapset-int/rut.toml. `ink` is declared for the
+# logger. The counter formula is nmapset-str's, but the keys differ
+# from the twin's `f"k{i}"`, so this row carries a NEW checksum pin:
+# computed first on rut, cross-verified on qjs/node, then ADDED to
+# expected.json as ONE disclosed line (the nmap-primmap precedent).
+name = "strview"
+entry.lib = "./main.rut"
+
+[deps]
+nmapset = { path = "../../../rut/nmapset" }
+ink = { path = "../../../rut/ink" }

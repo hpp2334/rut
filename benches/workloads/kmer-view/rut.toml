@@ -1,0 +1,16 @@
+# kmer-view/ — the strings-round1 phase-2 row: the k-mer counting of
+# nmap-knucleotide keyed through `nmapset::HashMap`'s RANGE methods
+# (put_range/get_range — the sv lanes; the key crosses as a borrowed
+# byte window of the parent, no key cell minted). A module dir (not a
+# loose file) because it mounts `nmapset` (which pulls the `nmap` host
+# pkg); see nmapset-int/rut.toml. `ink` is declared for the logger.
+# The op sequence, keys, values, and checksum formula are
+# nmap-knucleotide's EXACTLY, so the checksum must EQUAL the pinned
+# 2198604 — the disclosed gate is parity, and no new expected.json
+# line is added (the .js twin is the twin's materialized computation).
+name = "kmer_view"
+entry.lib = "./main.rut"
+
+[deps]
+nmapset = { path = "../../../rut/nmapset" }
+ink = { path = "../../../rut/ink" }

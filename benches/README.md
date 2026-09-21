@@ -95,6 +95,8 @@ against the reference in `workloads/expected.json`.
 | `nmap-knucleotide` | k-mer counting over `HashMap<str, i32>` (**nmapset**): 12-mer fill + fragment probes — the op stream of the removed `knucleotide` mapset row | seq = 200 000 | checksum `2198604` |
 | `json-decode` | the digest JSON decode: char-split + parser minting one `opaque` box per JSON value (and per object key), plus a downcast fold over the tree — REPS reps of a large generated document (1 200 rows; ~34k boxes minted per rep, ~100k total) | doc ~204 KB, reps 3 | checksum `4502015958359127277` |
 | `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
+| `kmer-view` | the `nmap-knucleotide` k-mer counting keyed through `nmapset::HashMap`'s **range methods** (strings-round1 phase 2 — the sv lanes: keys cross as borrowed byte windows of the sequence, no key cell minted; see the performance log) | seq = 200 000 | checksum `2198604` — the `nmap-knucleotide` pin; parity is the gate, no separate line |
+| `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
@@ -121,7 +123,11 @@ answers `i32::MIN` grow-first, so put is one crossing even on growth). The nmaps
 ships the mapset-exact mix64/FNV-1a constants, so every key hashes to the
 same bits the original mapset rows produced — the pins in `expected.json`
 (`734932704` / `1264308351` / `21500055` / `2198604`) ARE those values,
-and a mismatch is a bug. See the performance log below.
+and a mismatch is a bug. See the performance log below. Two strings-round1
+rows (`kmer-view`, `strview`) run the knuc/str op streams through the pkg's
+RANGE-keyed methods (`put_range`/`get_range`/`has_range`/`remove_range` —
+the sv lanes, keys crossing as borrowed byte windows of a parent) instead
+of slice-then-put; their provenance is disclosed in the performance log.
 
 ## Removed — the four `mapset` workloads (Sep 2026)
 
@@ -2180,6 +2186,147 @@ overlapped (three passes recorded above, honestly split).
 Files this phase: `benches/README.md` only. Scratch:
 `/tmp/opencode/batch-strings-round1/p0/` (stub workloads, pair JSONLs,
 probe binaries, bytes-audit repro). Tree clean apart from this section.
+
+## Performance log — strings-round1 phase 2: the view consumers + the view rows (Sep 2026)
+
+Phase 0d's minimal surface lands as a CONSUMER: the phase-1 sv
+crossings (`map_{entry,find,remove}_sv`) become reachable from
+`nmapset` users, and the two disclosed view rows exercise them
+end-to-end. No engine change, no VERSION bump, **no new crossings** —
+`rut/nmap/nmap.d.rut` is untouched this phase (both copies: the CLI
+fixture mirror already carries the sv decls), `expected.json` gains
+exactly one line.
+
+### The consumer surface: four additive range-keyed methods on `HashMap`
+
+`put_range` / `get_range` / `has_range` / `remove_range` on
+`HashMap<K, V>` (in `rut/nmapset/nmapset.rut`): the key crosses as a
+borrowed `(parent: str, off: i32, len: i32)` BYTE window through the sv
+lanes — hashed/compared over the range, no key cell ever minted on a
+probe, one owned copy on a fresh insert (stored keys stay owned; the
+stored-key/iteration law unchanged). `get_range -> ?V` is the plain
+`get` law; `put_range`/`remove_range` are `put`/`remove`'s exact
+shapes including the fused `i32::MIN` sentinel → grow + `vals`
+relocation drain + retry. Answers follow the same-key law: a range key
+and the equal-content `slice` key are THE SAME key through either
+spell (same recorded FNV-1a, same slot, same iteration position).
+
+Shape reasoning, recorded in the pkg header: **no view-keyed twin
+class** — keys stay `str`-kind and the sv lanes are an s-lane overload
+(§0.6; PrimMap's class split was over the VAL kind, where a get has no
+`V` value to dispatch through — that pressure does not exist here).
+The methods sit on the GENERIC class because rut has no
+per-instantiation divergence (the union bound is admission only — the
+round3 phase-0c verdict); the CONTRACT is `K = str` (the only key type
+with a range spelling), with `off`/`len` in bytes — note `str.slice`
+is codepoint-offset, so the two spellings agree numerically only on
+ASCII parents (both bench rows are ASCII; the distinction is
+documented, not hidden). `HashSet`/`PrimMap*` stay range-less: no
+consumer row needs them, and additive discipline beats symmetry.
+
+Tests (`crates/rut-driver/tests/nmap_viewkeys.rs`, 6 new): the parity
+law through the churn — the nmapset-str six-phase shape at n = 2000
+over one 6-char-slot parent, spelled both ways, one pinned checksum
+(`2572351`); lane interchange both directions on ONE table (range put
+→ slice get, slice put → range get, cross-lane removes, replace via
+either spell never grows the table, a slice VIEW as the parent
+flattens to the root); a 500-key multi-grow sweep through `put_range`
+(cap 4, sentinel grows + remove/re-add churn, every val exact — the
+drain works through the sv lane); the empty range key == the `""` key
+at every boundary; the UTF-8 boundary and past-end traps surfacing the
+house `Invalid` shape through the wrapper (the raw lanes'
+store-nothing-on-trap law is phase 1's suite, still green).
+Workspace: 77 suite runs, 474 tests, zero failures (was 76/468).
+
+### The rows
+
+- **`kmer-view`** (dir twin of `nmap-knucleotide`): the identical
+  k-mer counting — same LCG sequence, same 12-mer fill + 100 fragment
+  probes + 1-/2-mer maps, same readout and formula — with every hot
+  k-mer keyed through `get_range(seq, i, k)` / `put_range(seq, i, k,
+  ·)`. The twin's ~600,088 slice mints are gone; the readout tail
+  (20 cold lookups) keeps the twin's slice/f-string spelling on
+  purpose. Checksum = the pinned `2198604`; **no expected.json line**
+  (the pin is knuc's own line — parity is the gate). The .js twin is
+  nmap-knucleotide.js's materialized computation, unchanged (JS has no
+  borrowed-range key).
+- **`strview`** (twin of `nmapset-str`): the six-phase churn with keys
+  carved as fixed-width 6-char injective decimal slots of ONE
+  generated parent (`slot(i) = f"{100000+i}"`; churn keys read slots
+  `0..n-1`, never-inserted miss keys read slots `n..2n-1`), every op
+  through the range methods. This is the shape where the view lever
+  applies — phase 0a showed built keys gain nothing, carved keys are
+  the point. **Checksum provenance, disclosed**: the formula reads
+  counters + the value sum only (key content is invisible to it), and
+  the twin's counters and value stream were deliberately kept
+  identical — so the row's pin lands on `1264308351`, the SAME value
+  as the `nmapset-str` line, and `expected.json` gains that one
+  disclosed line (the nmap-primmap precedent: its pin equals
+  nmapset-int's `734932704`). Two provenance checks: the row answers
+  identically on rut/node/qjs, and a perturbation run (replace value
+  `i+3` → `i+7`) moves the checksum by exactly the predicted
+  `+200000` — the row computes its own answer, it is not echoing the
+  twin. The .js twin is the same materialized computation over
+  `substring`.
+- **json: no view row.** Phase 0b's census verdict stands
+  (dispatch-bound; token-slicing alone −11.8% against a 2× bigger term
+  views cannot touch).
+
+### The matched pairs (house method)
+
+One probe binary, both rows of each pair from the same tree,
+interleaved 10 rounds × 7 fresh-VM iters, order alternated per round;
+fuel/heap single-valued across every round of every row
+(deterministic):
+
+| pair | view row (ms) | str twin (ms) | median delta | rounds positive | fuel (view vs twin) | VM heap peak (view vs twin) |
+|---|---|---|---|---|---|---|
+| kmer-view vs nmap-knucleotide | **154.47** (147.9–158.5) | 172.53 (167.3–177.8) | **−19.59 ms = −11.4%** | 10/10, ranges non-overlapping | 37,614,177 vs 38,814,389 (−1,200,212, −3.1%) | 4,194,916 vs 4,195,084 (−168 B) |
+| strview vs nmapset-str | **38.95** (38.5–42.1) | 52.84 (51.8–62.0) | **−13.66 ms = −25.9%** | 10/10, ranges non-overlapping | 10,801,744 vs 9,551,761 (**+1,249,983, +13.1%**) | 2,032,173 vs 983,620 (**+1,048,553 B**) |
+
+- **kmer-view**: −19.59 ms over the row's exactly 600,088 k-mer sites
+  ≈ **−32.6 ns per deleted slice+recross** — the slice-cell mint
+  (phase 0a's ~10 ms bound) plus the view-key crossing indirection the
+  borrowed probe deletes. Fuel −3.1% is the slice callnat's ops; heap
+  moves −168 B because the peak only ever held a handful of the
+  600k slice cells alive at once (they die immediately) — heap was
+  never this row's story. Phase 0d's projection for the whole sv
+  shape was −7 to −12%; the pair lands at the top of it (phase 1
+  already banked the to_owned half; this is the slice-mint half plus
+  the direct-range crossing).
+- **strview**: −25.9% at **+13.1% fuel** — the honest inversion, and
+  the row's story: the twin's per-op `f"k{i}"` build was
+  TIME-expensive (render + concat + fresh cell + the probe reading a
+  scattered allocation) but fuel-CHEAP (~3 ops); the view spelling
+  trades it for a one-time parent build (100k f-string appends ≈ the
+  whole fuel increase) plus per-op window arithmetic and two extra
+  crossing args. Net: **−48.2 ns over the row's 283,334 range-keyed
+  ops**, with the probe now reading packed bytes out of one
+  contiguous parent block. Heap +1.05 MB is the 600,000-char parent
+  (plus append transients) living through the whole run — a fixed
+  O(parent) floor the per-op-mint twin never pays; both rows' live
+  stored-key sets are the same size, so the delta is exactly the
+  parent.
+
+Guards: full sanity run all rows × rut/qjs/node — zero checksum
+mismatches cross-runtime and against `expected.json` (76 cross rows;
+the four nmap pins `2198604` / `1264308351` / `21500055` / `734932704`
+and nmap-primmap's hold); fuel + heap **bit-identical** on every
+pinned probe row (knuc 38,814,389/4,195,084, str 9,551,761/983,620,
+int 20,703,284/1,966,551, primmap 17,950,301/324, hashset
+13,267,176/551, json 111,330,118, crossing-nop 104,000,032/236,
+hashmap-int 63,758,210, alloc 22,000,020/228, sieve 19,592,209). No
+neutral row moved anywhere (fuel/heap deterministic across all
+interleaved rounds — the phase-1 layout lesson's check; nothing needed
+isolating). Files this phase: `rut/nmapset/nmapset.rut` (+94, all
+additive), `benches/workloads/kmer-view/{main.rut,rut.toml}`,
+`benches/workloads/kmer-view.js`, `benches/workloads/strview/
+{main.rut,rut.toml}`, `benches/workloads/strview.js`,
+`benches/workloads/expected.json` (+1 line), `benches/README.md` (this
+section + the two Workloads-table lines), and
+`crates/rut-driver/tests/nmap_viewkeys.rs`. Scratch:
+`/tmp/opencode/batch-strings-round1/p2/` (smoke dirs, perturbation
+run, guard JSON, pair script + JSONL).
 
 ## Known limitations / deliberate choices
 

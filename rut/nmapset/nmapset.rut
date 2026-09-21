@@ -57,11 +57,33 @@
 // `get -> ?V` aliasing law is untouched — and stays the general
 // wrapper; the prim-val story ("users choose", the mapset/nmap
 // precedent) is the three lane classes.
+//
+// STRINGS-ROUND1 PHASE 2 (the view consumers): the sv crossings
+// (`map_{entry,find,remove}_sv` — a str key crossing as a BORROWED
+// `(parent, off, len)` BYTE range, hashed/compared over the range with
+// the s lanes' exact FNV-1a, owned copy taken only on a fresh insert)
+// become reachable HERE, as four additive range-keyed methods on
+// `HashMap`: `put_range` / `get_range` / `has_range` / `remove_range`.
+// SURFACE CHOICE (phase 0d/§0.6): NO view-keyed twin class — the keys
+// stay `str`-kind and an sv key IS the s key of the same content (same
+// recorded hash, same slot, same iteration position), so a range key
+// and the equal-content `slice` key are interchangeable through every
+// existing method; the PrimMap class split was over the VAL kind (a
+// get has no V value to dispatch through) and does not apply here.
+// The methods sit on the generic class because rut has no
+// per-instantiation divergence (the union bound is admission only —
+// the round3 phase-0c verdict); the CONTRACT is K = `str` (the only
+// key type with a range spelling), `off`/`len` are BYTE offsets with
+// the host's UTF-8 boundary trap (ASCII callers get byte == codepoint
+// for free; note `str.slice` is codepoint-offset — same numbers as
+// these byte offsets only on ASCII parents), and the loud `Invalid`
+// trap on a bad window leaves the table intact.
 
 use nmap::{ map_new, map_grow, map_take_reloc, map_cap, map_len,
             map_entry_i, map_entry_u, map_entry_b, map_entry_s, map_entry_y,
             map_find_i, map_find_u, map_find_b, map_find_s, map_find_y,
             map_remove_i, map_remove_u, map_remove_b, map_remove_s, map_remove_y,
+            map_entry_sv, map_find_sv, map_remove_sv,
             map_val_set_u, map_val_get_u, map_val_set_f, map_val_get_f };
 
 // ---- the private key lane (the typed crossings, phase 2) -----------
@@ -238,6 +260,78 @@ impl HashMap<K, V> {
 
     pub fn len(self) -> i32 {
         return map_len(self.t);
+    }
+
+    // ---- the range-keyed methods (strings-round1, phase 2) -----------
+    // The sv lanes as a HashMap surface: the key crosses as a borrowed
+    // `(parent, off, len)` BYTE range of any `str` value (an owned str
+    // or a slice view — the RFC 0042 boundary reads both as their
+    // range), hashed/compared OVER THE RANGE — the parent's octets
+    // never copy on a probe and no key cell is ever minted — while a
+    // fresh insert still stores ONE owned copy (stored keys stay
+    // owned, the stored-key/iteration law unchanged). Answers = the
+    // same-key laws of the plain methods: a range key and the
+    // equal-content `slice` key are THE SAME key through either spell.
+    // The grow path is `put`'s exact shape: the fused `i32::MIN`
+    // sentinel, then grow + the `vals` relocation drain + retry.
+    //
+    // Traps (house `Invalid`, table left intact): a negative or
+    // past-end window, or one ending mid-codepoint — `off`/`len` are
+    // bytes and the host checks both ends' UTF-8 boundaries.
+
+    /// `put_range` — insert-or-replace keyed over a byte range of
+    /// `parent`; `true` when the key was newly added. ONE crossing
+    /// (plus the sentinel's grow + drain + retry); on a replace the
+    /// owned stored key keeps its original bytes (same as `put`).
+    pub fn put_range(mut self, parent: str, off: i32, len: i32, v: V) -> bool {
+        let mut at = map_entry_sv(self.t, parent, off, len);
+        while (at <= -2147483647) {
+            let new_cap = map_grow(self.t);
+            let mut next: [?V] = [nil; new_cap];
+            while (true) {
+                let packed = map_take_reloc(self.t);
+                if (packed < 0) {
+                    break;
+                }
+                let old = (packed >> 32) as i32;
+                let new = (packed & 4294967295i64) as i32;
+                next[new] = self.vals[old];
+            }
+            self.vals = next;
+            at = map_entry_sv(self.t, parent, off, len);
+        }
+        if (at >= 0) {
+            self.vals[at] = v;
+            return false;
+        }
+        let slot = -(at + 1);
+        self.vals[slot] = v;
+        return true;
+    }
+
+    /// `get_range` — `nil` = absent; a hit reads the stored value at
+    /// the range key's slot (the same `get -> ?V` law as `get`).
+    pub fn get_range(self, parent: str, off: i32, len: i32) -> ?V {
+        let at = map_find_sv(self.t, parent, off, len);
+        if (at < 0) {
+            return nil;
+        }
+        return self.vals[at];
+    }
+
+    pub fn has_range(self, parent: str, off: i32, len: i32) -> bool {
+        return map_find_sv(self.t, parent, off, len) >= 0;
+    }
+
+    /// `remove_range` — the host tombstones the range-matched slot
+    /// (`true` when it was present); the value cell nils like `remove`.
+    pub fn remove_range(mut self, parent: str, off: i32, len: i32) -> bool {
+        let at = map_remove_sv(self.t, parent, off, len);
+        if (at < 0) {
+            return false;
+        }
+        self.vals[at] = nil;
+        return true;
     }
 }
 
