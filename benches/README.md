@@ -1395,6 +1395,198 @@ deltas; the verdict run is the gate and the confirmation. Workspace
 green (75 suites, 450 tests, zero failures). Tree clean; this section
 is the entire commit.
 
+## Performance log — nmapset-round3 phase 0: residual split, miss bound, consumer-shape spike (Sep 2026)
+
+Evidence phase for the native-val-column batch: three findings, no engine
+change, nothing committed but this section. The int row enters at 63.19 ms
+exec / 70.7 net = 1.12× qjs (probe exec 63.6 is parity with qjs's whole
+net), with 20.6 ms of measured residual above the round2 stub floor
+(42.57). The column attacks that residual and the phase-0 floor beneath
+it; this phase sizes the residual's terms, confirms the cache-miss bound
+by scaling, and decides the phase-2 consumer shape. Row baselines
+re-measured today for the batch (one probe binary, one session; fuel and
+VM-heap **bit-identical** to the close-out records on every row — nothing
+has moved):
+
+| row          | exec today (probe)   | fuel       | VM heap peak |
+|--------------|----------------------|------------|--------------|
+| nmapset-int  | 77.9 ms (A/B below)  | 20,703,284 | 1,966,527 B  |
+| nmapset-str  | 56.3 ms              | 9,551,761  | 983,596 B    |
+| hashmap-int  | 142.7 ms             | 63,758,210 | 8,258,103 B  |
+| crossing-nop | 96.8 ms              | 104,000,032| 236 B        |
+| nmap-hashset | checksum 21500055 (CLI control run) | 13,267,176 | 503 B |
+
+Machine note, recorded up front: today the box read the int row ~23% slower
+than the 63.6 ms close-out record (a parallel session builds on this same
+tree). Fuel and heap are bit-identical everywhere, and **every comparison
+below is same-session interleaved**, so the deltas and the split are
+machine-consistent; only the absolute medians carry the day's slowdown.
+
+### Finding 0a — the residual split: the relocation drain dominates, not the mint
+
+Method: throwaway stubs of `rut/nmapset/nmapset.rut` (NEVER committed —
+`git checkout --` restored after every pass, md5 re-verified, row checksum
+re-verified `734932704`), ONE fixed probe binary with the wrapper source
+flipped between interleaved rounds (the round2 phase-0 method — pkg
+sources are runtime-mounted), 5 rounds × 7 fresh-VM iters per side, order
+alternated, medians of round medians. Three stub shapes:
+
+- **MINT** — `get` returns a pre-built constant opt cell. Plan deviation,
+  recorded: a generic `V` has no literal, so the constant is the FIRST
+  hit's stored value, captured on hit #1 and returned for the remaining
+  99,999 (one mint survives out of 100k). The escape path stays — the
+  caller still receives a cell, derefs and releases it — so the measured
+  delta is the mint + sidecar-load term with the escape cancelled.
+  Checksum deterministic **29950000** and bit-exact reconciling:
+  25,150,000 (all counters) + 700,000 (sum = the constant 7 × 100k hits)
+  + 4,100,000 (hits·41).
+- **NOGROW** (the plan's drain stub) — `with_capacity(200000)` → cap 2^18
+  = 262144, the same final cap the row reaches anyway; the 0.7 load law
+  `(count + tomb + 1) × 10 >= cap × 7` never fires for 100k entries, so
+  the whole grow path is gone (host re-slot, table memsets, wrapper
+  drain). Checksum unchanged, `734932704`.
+- **DROPDRAIN** — grows kept, the 12-line relocation-drain loop dropped
+  (`next` stays all-nil). The replace phase rewrites every value before
+  the hit phase, so **the row checksum stays bit-identical
+  `734932704`** — this stub provably moves only drain traffic, and the
+  NOGROW-vs-DROPDRAIN pair splits the wrapper drain from the host grow
+  body, which the plan's single stub conflates.
+
+| side    | round medians (ms)            | median of medians | fuel       | heap peak  |
+|---------|-------------------------------|-------------------|------------|------------|
+| A — row | 74.95, 75.56, 79.46, 79.70, 78.44 | **78.44 ms**  | 20,703,284 | 1,966,527 B|
+| M — mint| 74.59, 72.08, 74.83, 78.08, 76.36 | 74.83 ms      | 21,003,289 | 1,966,535 B|
+| DG — no grow | 53.59, 56.04, 54.49, 59.10, 55.50 | **55.50 ms** | 17,400,095 | 1,311,143 B|
+| DD — drain dropped | 59.44, 61.70, 63.59, 62.58, 59.20 | 61.70 ms | 17,400,365 | 1,966,463 B|
+| MD — mint + no grow | 52.26, 51.77, 53.62, 54.56, 53.47 | **53.47 ms** | 17,700,100 | 1,311,119 B|
+
+The fuel ledger reconciles exactly and independently corroborates every
+stub: M +300,005 ops = the per-hit nil-test (~3 ops × 100k hits); DG/DD
+−3,303,189 / −3,302,919 ops = the drain loop at **18 ops × 183,489 moved
+slots** (15 grows; Σ count-at-grow = 183,489) plus the 15 grow crossings;
+MD = DG + M's 300,005 bit-exact (perfect fuel additivity). Heap
+corroborates the shapes: DG/MD sit at 1,311,143/1,311,119 B — the single
+262144 × 5 B sidecar, no per-grow `next` arrays; M is +8 B — the one
+cached cell.
+
+The split (deltas vs A, same session; share of today's 78.44 ms row):
+
+| term                                        | isolated by      | time      | share |
+|---------------------------------------------|------------------|-----------|-------|
+| wrapper relocation-drain loop               | DD               | **16.7 ms** | ~21% |
+| host grow body (re-slot probing + table memsets) | DG − DD     | 6.2 ms    | ~8%  |
+| hit-`get` mint + sidecar load               | M (powered pair) | 2.7 ms    | ~3.5%|
+| remaining put/remove element stream         | by difference    | ~0.3 ms   | ~0.4%|
+
+The mint term needed a powered pass to clear the day's noise: the 5-way
+pass's A−M delta (3.6 ms) had overlapping round ranges (74.95–79.70 vs
+72.08–78.08), so a dedicated A-vs-M 2-side pass ran — **A 77.94
+(77.46–78.57) vs M 75.23 (74.15–75.63), ranges non-overlapping → 2.7 ms**.
+Additivity check: DG + M terms sum to 26.55 ms vs the directly measured
+MD delta 24.97 ms (94% — the gap is interaction noise).
+
+**The correction this finding makes to the round2 close-out:** the
+residual's dominant term is NOT the hit-`get` mint (which the close-out
+listed first) — it is the **relocation drain, ~5× larger** (16.7 vs
+2.7 ms). Per moved slot the drain costs ~91 ns: 18 VM ops (~14 ns at the
+0.77 ns/op calibration) plus a `map_take_reloc` crossing plus the
+scattered rehash-destination writes into the doubling sidecar. The
+close-out's guess was wrong by rank, not by kind — and the rank swap
+strengthens the column's case: the native val column eliminates the
+wrapper drain **by construction** (the host relocates vals with the
+keys), which no wrapper-side change could.
+
+### Finding 0b — the cache-miss bound, confirmed by scaling
+
+Method: the int shape at four sizes — scratch module dirs under the batch
+run dir, deps pointing at the in-tree pkgs, pristine wrapper, one probe
+binary, 5 rounds × 7 fresh-VM iters, order rotated per round. Working set
+= keys + hashes + states (41 B/slot) + the `[?i32]` sidecar (5 B/slot):
+
+| N       | cap    | working set     | exec median | per-map-op | fuel/op |
+|---------|--------|-----------------|-------------|------------|---------|
+| 300     | 512    | ~24 KB — L1     | 0.144 ms    | **79.9 ns**| 32.6    |
+| 3,000   | 8192   | ~0.38 MB — L2   | 1.689 ms    | 93.8 ns    | 34.7    |
+| 30,000  | 65536  | ~2.7 MB — L3    | 17.628 ms   | 97.9 ns    | 33.6    |
+| 100,000 | 262144 | ~12 MB — DRAM   | 75.782 ms   | **126.3 ns**| 34.5   |
+
+Per-op fuel is constant across the ladder — so per-op TIME cannot be the
+stream. The climb is monotone across the hierarchy boundaries (+13.9,
++4.1, +28.4 ns): the cache-miss signature, and it prices the round2
+phase-0 budget's estimated-but-unmeasured ~37% host-table term. Full size
+pays **+46.4 ns/op (+58%) over the L1-resident shape = 37% of the
+per-op** — the phase-0 budget's estimate, now measured.
+
+What the interleaved column can recover, stated honestly: the +46 ns is
+BOTH line streams — the key probe over keys/hashes/states AND the sidecar
+access. Interleaving folds the val into the key's line, removing at most
+the sidecar's share of the miss term: **projected ~half the miss term,
+~20 ns/op (~15–20% of the row)**, with the key-probe misses remaining by
+construction (same probe, same keys, §0.3's checksum gate). The drain
+(16.7 ms) and mint/load (2.7–3.6 ms) terms are additional, directly
+measured, and removed by the same design.
+
+### Finding 0c — the consumer-shape spike: dual-mode is NOT expressible
+
+The §0.5 gate question: can a generic wrapper body branch
+per-instantiation on a type param's prim-ness (`HashMap<i32, i32>` routes
+put/get/remove through a val column while `HashMap<str, str>` keeps the
+sidecar)? Searched the RFCs and the compiler honestly:
+
+- **`requires` bounds are admission-only** (RFC 0013 §2, RFC 0043): they
+  gate which instantiations compile and prove widening to a bound-member
+  slot; the union's whole-bound contract requires EVERY member to provide
+  every called method — "the gate buys compile-time whole-bound checking,
+  not dynamic dispatch" — the opposite of per-member divergence. Static
+  dispatch on a bare `T` is RFC 0013 OQ-1, explicitly **deferred**.
+- **Reflection is runtime** (RFC 0037): `reflect<T>()` / `type_id` are
+  descriptor handles over host fns — a dual-mode body through them is a
+  runtime branch paying a check per op, compiling both paths through the
+  same ops, and the raw-repr element ops are not surface-reachable.
+- **Templates** (RFC 0027) are `f"..."` carriers, not type-level
+  computation. **No layout introspection exists at all** (RFC 0015:
+  "no `size_of<T>()` / `align_of<T>()`"). **Const generics** exist only
+  on builtin `Array<T, N>` and N is a value, not a type property
+  (RFC 0013 §2). Generic-target impls (`impl I for Vec<T>`) monomorphize,
+  but impl selection has no conditional-by-bound or specialization-order
+  form (RFC 0012).
+- What DOES exist is per-instantiation repr keying **inside the engine**:
+  `Repr::OptPrim / OptPrimRaw / OptPrimLoad(PrimTy)` are chosen from the
+  resolved element type at op-lowering (`rut-core/src/types.rs`), and
+  generic-class methods monomorphize per instantiation
+  (`rut-lir/src/lir/mod.rs`, "monomorphized per instantiation"). The
+  machinery that would execute a dual-mode design is real, but no surface
+  syntax routes a user generic's prim-ness into a body branch.
+
+**Verdict (§0.5): dual-mode NOT expressible → the fallback runs.** Phase 2
+lands a PUBLIC prim-val map class in nmapset over the phase-1 host val
+column: **`PrimMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 |
+u64 | bool | str | bytes, V requires i64 | u64 | f64 | bool>`** — the
+name follows the plan's own example; K keeps the closed union (host
+hashing unchanged), V is the four repr-distinct raw kinds that ride the
+u64 val lane. `HashMap` stays untouched (sidecar path, ref-V law, all
+laws); `get -> ?V` semantics preserved in the prim class (fresh opt per
+hit, round2's primitive-store law); the vals sidecar is absent by
+construction there. Constraints confirmed: a bench row may switch to
+`PrimMap` only under §0.1 — its checksum MUST still equal its pinned
+value AND the README discloses the switch; additive surface only, no
+module VERSION bump (§0.4).
+
+Deviations, recorded: (1) the mint stub's "pre-built constant" is
+cache-on-first-hit — a generic `V` has no literal; one mint of 100k
+survives and the escape path is kept so the delta isolates mint + load;
+(2) the drain stub ran in TWO shapes (the plan's NOGROW plus the
+checksum-preserving DROPDRAIN control) because the plan's single stub
+conflates the wrapper drain with the host grow body — the pair separates
+them; (3) today's absolute medians carry a ~+23% box slowdown vs the
+close-out record (parallel session on this tree) — fuel/heap bit-identical
+everywhere, all deltas same-session interleaved; (4) finding 0b ran a
+four-point ladder rather than two points so the miss term reads off the
+hierarchy boundaries instead of one ratio. Scratch (stubs, flip copies,
+ladder dirs, raw JSON) lives under `/tmp/opencode/batch-nmapset-round3/p0/`;
+`expected.json` untouched; workspace green (75 suites, 450 tests, zero
+failures); tree clean — this section is the entire commit.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
