@@ -1788,6 +1788,150 @@ runs, 468 tests, zero failures; was 76/460). Files:
 `nmap-primmap` bench files + the expected.json line, this section.
 Scratch under `/tmp/opencode/batch-nmapset-round3/p2/`.
 
+## Performance log — nmapset-round3 close-out: the verdict (Sep 2026)
+
+The batch's gate run, measurement only — no engine, stdlib, or workload
+change. Both runtime binaries (`rut` CLI + `rut-bench-probe`) rebuilt
+from THIS checkout at HEAD `5a26938` (tree clean; cargo fingerprints
+Fresh — every artifact verified against the committed sources), then the
+full suite in one pass: **28 workloads × rut/qjs/node from one checkout,
+exit 0, every checksum equal `expected.json`** — 82 cross rows, 79 of
+them checksum-carrying (`empty` carries none; `u64loop` is the one
+rut-only workload with no JS twin), zero mismatches. `expected.json` was
+touched exactly once all batch — phase 2's disclosed one-line
+`nmap-primmap` addition. The five nmapset pins hold bit-identically on
+every runtime: `734932704` / `1264308351` / `21500055` / `2198604`, and
+the new row answers its twin's exact sequence as `nmap-primmap =
+734932704` on rut/qjs/node. **Fuel and VM-heap are bit-identical to the
+phase-2 records on all 28 probe rows** — nothing outside the shipped
+design moved (nmapset-int 20,703,284; nmap-primmap 17,950,301; str
+9,551,761; hashmap-int 63,758,210; crossing-nop 104,000,032; nmap-hashset
+13,267,176) — and the **four phase-1 heap re-pins hold exactly**:
+nmapset-int 1,966,551; nmapset-str 983,620; nmap-knucleotide 4,195,084;
+nmap-hashset 551 B. Workspace green (77 suites, 468 tests, zero
+failures).
+
+Box state, recorded up front: this verdict ran calm (load ~0.2; phase 2
+recorded ~+9 %, phase 0 ~+23 %). The int rows are still compared as
+same-run pairs, because absolute medians carry day-to-day spread even
+when calm: the sidecar row read 72.84 here, 68.93 in phase 2's session,
+63.19 at the round2 calm close-out; the prim row reproduced 61.55 vs
+phase 2's 61.40.
+
+### The cumulative table (int shape: sidecar row → prim row)
+
+The batch's delta instrument is the same-run matched pair; this table
+reads it on verdict-day numbers, with the phase-0 baseline for
+orientation:
+
+| measure | phase-0 baseline (A) | verdict: nmapset-int (sidecar) | verdict: nmap-primmap (column) | pair delta |
+|---------|----------------------|--------------------------------|--------------------------------|------------|
+| probe exec | 78.44 ms¹ | 72.84 ms | **61.55 ms** | **−15.5 %** |
+| rut net | — | 75.13 ms | **68.12 ms** | −9.3 % |
+| fuel | 20,703,284 | 20,703,284 | 17,950,301 | −13.4 % |
+| VM heap | 1,966,527 B | 1,966,551 B² | **324 B** | −99.98 % |
+| per map op | ~130.7 ns¹ | 121.4 ns | **102.6 ns** | ~−18.8 ns/op |
+
+¹ phase-0's A-side median carries that day's +23 % box load — it orients,
+it does not measure. ² the +24 B Vec-header re-pin (phase 1), holding
+exactly.
+
+The batch's captured number stays phase 2's powered pair — interleaved
+10 rounds × 7 fresh-VM iters, order alternated, **61.40 vs 68.93 ms,
+−10.9 %, round ranges non-overlapping, ~−12.5 ns/map-op** — and this
+verdict's same-run pair (61.55 vs 72.84 exec, ~−18.8 ns/op) reproduces
+the direction with the honest spread stated: across the two sessions the
+pair reads −12.5 to −18.8 ns/op over identical fuel, i.e. the
+drain+mint deletion (the phase-0a stub model priced it at 16.7 + 2.7 =
+19.4 ms ≈ 32 ns/op over the row's exactly 600 k map ops) landed at
+roughly 40–60 % of the naive stub sum, the residual being the added val
+crossing per op and the column's own cache line, both priced in the
+phase-2 section. Floor marker unchanged: the round2 stub floor 42.57 —
+the prim row at 61.55 sits 1.45× above it, the remaining gap being the
+~37 % host-table body and the ~16 % VM stream the batch did not touch.
+
+### The qjs verdict on nmap-primmap (same-run nets, both sides)
+
+- **Whole-net terms: NOT ahead — 1.08×.** rut 68.12 vs qjs 62.97 ms.
+  The CLI's compile/mount carry (~7 ms) is the difference.
+- **Probe-exec terms: AT parity.** rut exec 61.55 vs qjs's WHOLE net
+  62.97 — the round2 placement held, now on the prim path.
+- Same run, the sidecar twin: rut 75.13 vs qjs 62.94 = 1.19×. The
+  column moved rut from 1.19× to 1.08× whole-net while qjs did not move
+  at all (62.94 → 62.97) — the entire gain is on the rut side, which is
+  what makes the pair clean.
+
+### The miss-model check: does the interleave keep its menu slot?
+
+Measured against the phase-0b projection, precisely: what the batch
+REALIZED (−12.5 to −18.8 ns/op) is the drain+mint deletion — VM-op
+traffic the stub model priced at ~32 ns/op — not the cache-side term.
+What shipped is a SEPARATE `vals` Vec (the phase-1 mandate), so the 0b
+projection ("interleaving folds the val into the key's line, removing at
+most the sidecar's share ~20 ns/op") remains UNTESTED by design. Verdict:
+**the interleave keeps its menu slot**, on three measured grounds:
+(1) the row is still miss-bound — the prim row's 102.6 ns/op sits
+between the 0b ladder's L3 rung (97.9) and its DRAM rung (126.3), with
+the ladder's +46.4 ns/op hierarchy climb still in the row; (2) every hit
+still streams a second line (`vals[slot]` today, the sidecar before)
+that interleaving folds into the key's line; (3) the A/B harness now
+exists and is live — the primmap row IS the measurement, with this run's
+numbers as its before-side. The batch DID validate the model's honest
+half: the realized cache-neutral win landing under the stub sum confirms
+the crossing+line costs phase 2 priced, and the ≤ ~20 ns/op interleave
+ceiling stands as the untested upside on top of them.
+
+### Honest neutrals
+
+Every row outside the prim path is a NEUTRAL: fuel and VM-heap
+bit-identical to the pre-batch records on all 27 non-primmap rows (the
+op stream provably did not move), exec medians differing only by box
+state (nmapset-str 53.50 vs the phase-0 loaded 56.3; hashmap-int 135.19
+vs 142.7; crossing-nop 94.33 vs 96.8; nmap-hashset 39.85, zero element
+ops). No performance claim is made for any row without a same-run pair
+behind it.
+
+Recorded here so the close-out is complete: the SHAPE DEVIATION stands
+as ratified in the phase-2 section (three lane classes
+`PrimMapI64/U64/F64<K>` — the V-generic get-side reinterpret is
+unspellable: no no-self trait call on primitives, no `as V`, union
+bounds admission-only). The **bool lane is DEFERRED, not dropped
+silently**: `?bool` unboxes at value reads, so `p == nil` diagnoses a
+width mismatch (RFC 0004 §3); a checker fix gates `PrimMapBool<K>`, and
+bool vals ride `PrimMapU64` as 0/1 today. The dead-KeyLane rider stays
+VOID. The `nmap-primmap` workload switch is disclosed per §0.1 (checksum
+equal to the pin, this log records the switch). Four heap pins moved
+once, in phase 1, by mechanism (+24 B Vec header per table box) and were
+re-pinned; they hold exactly here.
+
+### Re-baselined follow-up menu
+
+- **(a) Borrowed str slices** — the next big lever, now the largest
+  measured gap on the board: nmapset-str 1.49× its qjs twin (60.22 vs
+  40.35 net, this run), nmap-knucleotide 1.33× (189.89 vs 142.41),
+  json-decode 11.8× (722.39 vs 61.45) — all three copy str payloads
+  that this batch's own result shows can stay host-side.
+- **(b) The bool lane** — the `?bool` checker fix (value reads unbox →
+  nil comparison diagnoses a width mismatch, RFC 0004 §3). Unlocks
+  `PrimMapBool<K>` as the fourth lane; the design already prices it
+  (vals as 0/1 in the u64 column).
+- **(c) Interleaved column layout** — still priced (above), now with a
+  live harness: fold `vals[slot]` into the key slot's line inside
+  `nmap.rs`, A/B on the primmap row, predicted check ≤ ~20 ns/op against
+  this run's 102.6 ns/op.
+- **(d) Get-into-set copy fold** — mostly overtaken: the drain term it
+  targeted on the prim path is deleted by construction; only the
+  sidecar `HashMap` (ref-V) path retains the minor form. The dead-impl
+  cleanup is closed VOID.
+- **POST-BATCH (the NEXT session's job, not started here): the mapset
+  pkg removal** — user-directed and pre-inventoried in the batch run
+  log (no hard deps; 4 bench rows die with the pkg, workload deletion
+  WITH disclosure, round2's hashmap wins stay in the history).
+
+Files this phase: `benches/README.md` only. Scratch:
+`/tmp/opencode/batch-nmapset-round3/p3/` (verdict.json/.csv/.md +
+runner stdout/stderr). Tree clean apart from this section.
+
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
