@@ -130,3 +130,23 @@ pub host fn map_val_get_u(m: opaque, slot: i32) -> u64;
 pub host fn map_val_set_f(m: opaque, slot: i32, v: f64);
 
 pub host fn map_val_get_f(m: opaque, slot: i32) -> f64;
+// ---- the opaque val lane (refval-exp, phase 1 — EXPERIMENTAL) --------
+// The val column through REFERENCE values: the wrapper mints ONE
+// `opaque(v)` box per put and the column stores THE BOX behind one
+// self-releasing host-side owner. `map_val_get_o` answers the SAME box
+// (a fresh reference to it — no per-get wrap), so the wrapper's
+// `opaque.downcast<V>` recovers the LIVE inner cell — the one-cell law
+// (a get result IS the stored value; mutation through it is the map's;
+// a replace re-points future gets while held aliases keep the
+// pre-replace value). rc discipline (the phase-6 playbook, in-source on
+// the Rust side): retain on insert, release on overwrite and remove,
+// full release at table teardown incl. arena-teardown-with-live-cells,
+// no double-release path. Traps (loud `Invalid`): out-of-range slots
+// (the u lane's law) and FOREIGN opaques — a host payload box is not a
+// rut value and cannot be a map val. For REFERENCE V; prim vals belong
+// on the u/f lanes. This pair is the refval-exp experiment's surface:
+// additive, reverted with the experiment (plan §0.1).
+
+pub host fn map_val_set_o(m: opaque, slot: i32, v: opaque);
+
+pub host fn map_val_get_o(m: opaque, slot: i32) -> opaque;
