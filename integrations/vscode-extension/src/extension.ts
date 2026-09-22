@@ -9,7 +9,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Analysis, LspCompletionItem, LspDiag, LspRange, LspSymbol, RutWasm } from './wasm';
+import { Analysis, LspCompletionItem, LspDiag, LspLocation, LspRange, LspSymbol, RutWasm } from './wasm';
 
 const SELECTOR: vscode.DocumentSelector = { language: 'rut' };
 
@@ -88,7 +88,9 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
     registerSemanticTokens(rut),
     registerDocumentSymbols(rut),
     registerHover(rut),
-    registerCompletion(rut)
+    registerCompletion(rut),
+    registerDefinition(rut),
+    registerTypeDefinition(rut)
   );
 
   // workspace index off the hot activation path — hover/completion may
@@ -160,6 +162,35 @@ function registerCompletion(rut: RutWasm): vscode.Disposable {
   );
 }
 
+// ctrl+click / F12 — the wasm definition query, targets resolved to
+// real URIs (the embedded std surface jumps carry repo-relative paths
+// into the true rut/ sources)
+function registerDefinition(rut: RutWasm): vscode.Disposable {
+  return vscode.languages.registerDefinitionProvider(SELECTOR, {
+    provideDefinition(
+      doc: vscode.TextDocument,
+      position: vscode.Position
+    ): vscode.Location[] {
+      return resolveLocations(
+        rut.definition(doc.uri.toString(), position.line, position.character)
+      );
+    },
+  });
+}
+
+function registerTypeDefinition(rut: RutWasm): vscode.Disposable {
+  return vscode.languages.registerTypeDefinitionProvider(SELECTOR, {
+    provideTypeDefinition(
+      doc: vscode.TextDocument,
+      position: vscode.Position
+    ): vscode.Location[] {
+      return resolveLocations(
+        rut.typeDefinition(doc.uri.toString(), position.line, position.character)
+      );
+    },
+  });
+}
+
 // ---- workspace index (the wasm stand-in for the server's fs walk) ----
 
 async function indexWorkspace(rut: RutWasm): Promise<void> {
@@ -186,6 +217,35 @@ function analyzeDoc(rut: RutWasm, doc: vscode.TextDocument): Analysis {
 // LSP protocol numbers are 1-based; the vscode enums are 0-based, so the
 // mapping is `- 1` across the board (severity, symbol kind, completion
 // kind).
+
+// a definition target -> a vscode Location. A target with a scheme
+// parses as-is; a repo-relative path (the embedded std surface's true
+// source, e.g. `rut/pouch/pouch.rut`) resolves against the workspace
+// folders — a workspace that is the rut repo gets a real jump into the
+// stdlib. Nowhere to resolve: dropped (a clean miss, never a wrong jump).
+function resolveLocations(locs: LspLocation[]): vscode.Location[] {
+  const out: vscode.Location[] = [];
+  for (const l of locs) {
+    const uri = toTargetUri(l.uri);
+    if (uri) {
+      out.push(new vscode.Location(uri, toRange(l.range)));
+    }
+  }
+  return out;
+}
+
+function toTargetUri(raw: string): vscode.Uri | undefined {
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+    return vscode.Uri.parse(raw);
+  }
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const p = path.join(folder.uri.fsPath, raw);
+    if (fs.existsSync(p)) {
+      return vscode.Uri.file(p);
+    }
+  }
+  return undefined;
+}
 
 function toRange(r: LspRange): vscode.Range {
   return new vscode.Range(r.start.line, r.start.character, r.end.line, r.end.character);

@@ -12,7 +12,7 @@ use rut_lexer::token::{Tok, Token};
 use super::bindings::{self, Binding};
 use super::infer::is_cap;
 use super::render::{binding_markdown, render_candidates, render_fn_hits, render_member, render_primitive, render_ty, render_let};
-use super::types::{DefIndex, FnDef, LetDef, TyDef, TyForm};
+use super::types::{DefIndex, FnDef, LetDef, MemberSrc, TyDef, TyForm};
 use crate::semantic::is_keyword;
 
 pub(crate) fn contains(sp: Span, pos: u32) -> bool {
@@ -54,9 +54,9 @@ pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Option<
     // answer is final.
     if let Some(recv) = member_context(toks, t) {
         match member_hover(idxs, ast, &binds, pos, name, recv) {
-            MemberHit::Found(out) => return Some(HoverOut { markdown: out, span: t.span }),
-            MemberHit::None => return None,
-            MemberHit::UnknownReceiver => {} // fall through to the name search
+            MemberText::Found(out) => return Some(HoverOut { markdown: out, span: t.span }),
+            MemberText::None => return None,
+            MemberText::UnknownReceiver => {} // fall through to the name search
         }
     }
 
@@ -221,24 +221,42 @@ pub(crate) fn find_ty<'a>(idxs: &'a [&DefIndex], name: &str) -> Option<(&'a DefI
     idxs.iter().find_map(|i| i.ty(name).map(|t| (*i, t)))
 }
 
-/// The member-lookup verdict: found text, a final miss (the receiver's
-/// type is known — the gate or a genuine miss), or an unknown receiver
-/// (the caller may fall through to the bare-name search).
-enum MemberHit {
-    Found(String),
+/// The member-lookup verdict: found (a resolved declaration target), a
+/// final miss (the receiver's type is known — the gate or a genuine
+/// miss), or an unknown receiver (the caller may fall through to the
+/// bare-name search).
+pub(crate) enum MemberHit<'a> {
+    Found(MemberTarget<'a>),
     None,
     UnknownReceiver,
 }
 
-fn member_hover(
-    idxs: &[&DefIndex],
+/// where a member of `recv` actually declares — the shared resolver
+/// behind hover AND definition, one rule for both faces: own surface
+/// (methods, then fields), enum members, inherent impl-block methods,
+/// use-gated trait methods from impls targeting the receiver's type
+pub(crate) enum MemberTarget<'a> {
+    /// a method/field of the type's own surface (`via` renders trait
+    /// impls: `impl Drawable for Circle`)
+    Member(&'a DefIndex, &'a TyDef, &'a MemberSrc, Option<String>),
+    /// an enum member — hover shows the whole enum's block
+    EnumMember(&'a DefIndex, &'a TyDef, &'a MemberSrc),
+    /// an impl-block method (`impl T { fn m(self) ... }`)
+    ImplFn(&'a DefIndex, &'a FnDef),
+    /// a trait's declared method, dispatched through an impl
+    TraitMember(&'a DefIndex, &'a TyDef, &'a MemberSrc, String),
+}
+
+pub(crate) fn member_target<'a>(
+    idxs: &'a [&'a DefIndex],
     ast: &Ast,
     binds: &[Binding],
     pos: u32,
     member: &str,
-    recv: String,
-) -> MemberHit {
-    let Some(ty_name) = recv_type(idxs, binds, pos, &recv) else {
+    recv: &str,
+) -> MemberHit<'a> {
+    // (body unchanged — returns Found(MemberTarget::..) below)
+    let Some(ty_name) = recv_type(idxs, binds, pos, recv) else {
         return MemberHit::UnknownReceiver;
     };
     let Some((ti, ty)) = find_ty(idxs, &ty_name) else {
@@ -246,15 +264,15 @@ fn member_hover(
     };
     // own surface first
     if let Some(m) = ty.methods.iter().find(|m| m.name == member) {
-        return MemberHit::Found(render_member(ti, ty, m, None));
+        return MemberHit::Found(MemberTarget::Member(ti, ty, m, None));
     }
     if let Some(f) = ty.fields.iter().find(|f| f.name == member) {
-        return MemberHit::Found(render_member(ti, ty, f, None));
+        return MemberHit::Found(MemberTarget::Member(ti, ty, f, None));
     }
     if ty.form == TyForm::Enum {
-        // `Color.Red` — the member IS an enum member; show the enum
-        if ty.fields.iter().any(|f| f.name == member) {
-            return MemberHit::Found(render_ty(ti, ty));
+        // `Color.Red` — the member IS an enum member; hover shows the enum
+        if let Some(m) = ty.fields.iter().find(|f| f.name == member) {
+            return MemberHit::Found(MemberTarget::EnumMember(ti, ty, m));
         }
         return MemberHit::None;
     }
@@ -264,7 +282,7 @@ fn member_hover(
     for i in idxs {
         for f in &i.fns {
             if f.name == member && f.owner.as_deref() == Some(owner.as_str()) {
-                return MemberHit::Found(render_fn_hits(&[(*i, f)], f));
+                return MemberHit::Found(MemberTarget::ImplFn(i, f));
             }
         }
     }
@@ -283,16 +301,50 @@ fn member_hover(
                 continue;
             }
             if let Some(m) = t.methods.iter().find(|m| m.name == member) {
-                return MemberHit::Found(render_member(
+                return MemberHit::Found(MemberTarget::TraitMember(
                     home,
                     t,
                     m,
-                    Some(format!("impl {} for {}", im.trait_name, im.target_name)),
+                    format!("impl {} for {}", im.trait_name, im.target_name),
                 ));
             }
         }
     }
     MemberHit::None
+}
+
+/// hover's half: the resolved target's markdown (definition uses the
+/// target's spans instead — see `definition::member_location`)
+enum MemberText {
+    Found(String),
+    None,
+    UnknownReceiver,
+}
+
+fn member_hover(
+    idxs: &[&DefIndex],
+    ast: &Ast,
+    binds: &[Binding],
+    pos: u32,
+    member: &str,
+    recv: String,
+) -> MemberText {
+    match member_target(idxs, ast, binds, pos, member, &recv) {
+        MemberHit::Found(target) => MemberText::Found(render_target(target)),
+        MemberHit::None => MemberText::None,
+        MemberHit::UnknownReceiver => MemberText::UnknownReceiver,
+    }
+}
+
+/// the markdown a resolved member target renders to (hover's half of
+/// the shared resolver; definition uses the target's spans instead)
+pub(crate) fn render_target(t: MemberTarget) -> String {
+    match t {
+        MemberTarget::Member(i, ty, m, via) => render_member(i, ty, m, via),
+        MemberTarget::EnumMember(i, ty, _) => render_ty(i, ty),
+        MemberTarget::ImplFn(i, f) => render_fn_hits(&[(i, f)], f),
+        MemberTarget::TraitMember(i, ty, m, via) => render_member(i, ty, m, Some(via)),
+    }
 }
 
 /// the index declaring trait `name` — its home module; the declaration

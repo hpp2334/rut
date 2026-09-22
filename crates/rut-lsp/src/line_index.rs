@@ -3,10 +3,20 @@
 //! positions (line, UTF-16 code-unit column). LSP positions are UTF-16 by
 //! default; spans are bytes — this is the only place that converts.
 
+#[derive(Debug, Clone)]
 pub struct LineIndex {
     /// byte offset of each line start; `line_starts[0] == 0` always
     line_starts: Vec<u32>,
     len: u32,
+}
+
+impl Default for LineIndex {
+    /// a single empty line — position/byte clamp to (0, 0) / 0; every
+    /// real index is built with `new` (this exists only so `DefIndex`
+    /// can derive `Default` before its own `index` pass fills the field)
+    fn default() -> Self {
+        LineIndex { line_starts: vec![0], len: 0 }
+    }
 }
 
 impl LineIndex {

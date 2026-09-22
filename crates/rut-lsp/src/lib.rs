@@ -20,6 +20,7 @@
 
 pub mod analysis;
 pub mod completion;
+pub mod definition;
 pub mod hover;
 pub mod line_index;
 pub mod semantic;

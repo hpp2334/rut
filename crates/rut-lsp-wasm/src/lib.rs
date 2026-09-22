@@ -16,6 +16,8 @@
 //!   rut_forget(uri)                            drop a closed doc
 //!   rut_hover(uri, line, ch) -> ptr            LSP Hover JSON or null
 //!   rut_complete(uri, line, ch) -> ptr         LSP CompletionItem array
+//!   rut_definition(uri, line, ch) -> ptr       LSP Location array or null
+//!   rut_type_definition(uri, line, ch) -> ptr  LSP Location array or null
 //!   rut_add_def(uri, src)                      index a workspace file
 //!
 //! Every result is `[u32 little-endian length][bytes]` at the returned
@@ -182,6 +184,50 @@ pub extern "C" fn rut_complete(uri_ptr: *const u8, uri_len: usize, line: u32, ch
         rut_lsp::analysis::complete_at(uri, &src, defs, line, ch)
     };
     json_envelope(serde_json::json!(items))
+}
+
+/// definitions at an LSP position — the doc index first, then std +
+/// workspace; `null` when the doc is unknown, `[]` when nothing
+/// resolves. Targets carry the doc URI, a workspace origin, or the std
+/// surface's true `rut/...` source path (relative — the extension
+/// resolves it against the workspace).
+#[no_mangle]
+pub extern "C" fn rut_definition(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u32) -> *mut u8 {
+    let uri = unsafe { read_str(uri_ptr, uri_len) };
+    let Some(src) = state().docs.get(uri).cloned() else {
+        return envelope(b"null");
+    };
+    let locs = {
+        let defs = &state().defs;
+        rut_lsp::analysis::definition_at(uri, &src, defs, line, ch)
+    };
+    locations_envelope(&locs)
+}
+
+/// type definitions at an LSP position (an expression -> its type's
+/// declaration) — same shape as `rut_definition`
+#[no_mangle]
+pub extern "C" fn rut_type_definition(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u32) -> *mut u8 {
+    let uri = unsafe { read_str(uri_ptr, uri_len) };
+    let Some(src) = state().docs.get(uri).cloned() else {
+        return envelope(b"null");
+    };
+    let locs = {
+        let defs = &state().defs;
+        rut_lsp::analysis::type_definition_at(uri, &src, defs, line, ch)
+    };
+    locations_envelope(&locs)
+}
+
+/// the definition-target envelope — `DefLocation` is serde-free in
+/// `rut-lsp` (the pure core carries no serializer), so the shim spells
+/// the LSP `Location` JSON: `{ uri, range }`
+fn locations_envelope(locs: &[rut_lsp::definition::DefLocation]) -> *mut u8 {
+    let value: Vec<serde_json::Value> = locs
+        .iter()
+        .map(|l| serde_json::json!({ "uri": l.uri, "range": l.range }))
+        .collect();
+    json_envelope(serde_json::Value::Array(value))
 }
 
 /// index one workspace file (the host's stand-in for the native server's

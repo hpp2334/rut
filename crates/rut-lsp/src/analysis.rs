@@ -12,6 +12,7 @@ use rut_parser::{parse, Mode};
 use std::str::FromStr;
 
 use crate::completion;
+use crate::definition;
 use crate::hover;
 use crate::line_index::LineIndex;
 use crate::semantic::{self, RawSymbol, SymKind, TokenType};
@@ -214,6 +215,38 @@ pub fn complete_at(
         .into_iter()
         .map(completion::lsp_item)
         .collect()
+}
+
+/// definitions at an LSP position: the survey §3.3 layers (binding pass
+/// → decl layer → use graph → std surface). Empty = nothing resolves;
+/// multiple entries = the candidate list. Targets carry the doc URI, a
+/// workspace origin, or the std surface's true `rut/...` source path —
+/// the face resolves them (server: against the workspace root; wasm
+/// shim: the extension does).
+pub fn definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Vec<definition::DefLocation> {
+    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let ctx = definition::Ctx {
+        doc_uri: uri,
+        toks: &toks,
+        ast: &ast,
+        doc: &doc,
+        extra,
+    };
+    definition::definition(&ctx, byte_at(&normalized, line, ch))
+}
+
+/// type definitions at an LSP position: the expression's type head →
+/// that type's declaration (the cheap shape the survey priced)
+pub fn type_definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Vec<definition::DefLocation> {
+    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let ctx = definition::Ctx {
+        doc_uri: uri,
+        toks: &toks,
+        ast: &ast,
+        doc: &doc,
+        extra,
+    };
+    definition::type_definition(&ctx, byte_at(&normalized, line, ch))
 }
 
 // ---- symbols ----

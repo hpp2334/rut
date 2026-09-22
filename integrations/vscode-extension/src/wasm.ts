@@ -48,6 +48,14 @@ export interface LspHover {
   range?: LspRange;
 }
 
+/// an LSP Location — a definition target. `uri` is the doc itself, a
+/// workspace origin, or (embedded std surface) a repo-relative source
+/// path the extension resolves against the workspace
+export interface LspLocation {
+  uri: string;
+  range: LspRange;
+}
+
 export interface LspCompletionItem {
   label: string;
   kind?: number;
@@ -64,6 +72,8 @@ interface RutExports {
   rut_forget(uriPtr: number, uriLen: number): void;
   rut_hover(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_complete(uriPtr: number, uriLen: number, line: number, ch: number): number;
+  rut_definition(uriPtr: number, uriLen: number, line: number, ch: number): number;
+  rut_type_definition(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_add_def(uriPtr: number, uriLen: number, srcPtr: number, srcLen: number): void;
 }
 
@@ -113,6 +123,22 @@ export class RutWasm {
     return this.call(() => {
       const [u, ul] = this.put(uri);
       return this.e.rut_complete(u, ul, line, character);
+    });
+  }
+
+  /// go-to-definition at an LSP position — [] when nothing resolves
+  definition(uri: string, line: number, character: number): LspLocation[] {
+    return this.call(() => {
+      const [u, ul] = this.put(uri);
+      return this.e.rut_definition(u, ul, line, character);
+    });
+  }
+
+  /// go-to-type-definition at an LSP position — [] when nothing resolves
+  typeDefinition(uri: string, line: number, character: number): LspLocation[] {
+    return this.call(() => {
+      const [u, ul] = this.put(uri);
+      return this.e.rut_type_definition(u, ul, line, character);
     });
   }
 

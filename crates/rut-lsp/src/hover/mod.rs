@@ -21,7 +21,7 @@
 
 mod build;
 pub(crate) mod bindings;
-mod infer;
+pub(crate) mod infer;
 pub(crate) mod lookup;
 mod render;
 pub(crate) mod types;

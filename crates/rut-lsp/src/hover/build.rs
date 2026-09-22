@@ -13,6 +13,7 @@ use rut_lexer::token::{Tok, Token};
 use super::bindings::ident_span;
 use super::infer;
 use super::types::{ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, TyDef, TyForm, UseDef};
+use crate::line_index::LineIndex;
 
 /// `line` of a byte offset, 1-based
 fn line_of(src: &str, lo: u32) -> u32 {
@@ -206,7 +207,7 @@ fn enum_members(
 #[allow(clippy::too_many_arguments)]
 fn ty_def(
     src: &str,
-    _ast: &Ast,
+    toks: &[Token],
     name: &str,
     form: TyForm,
     generics: Vec<String>,
@@ -216,6 +217,7 @@ fn ty_def(
 ) -> TyDef {
     TyDef {
         name: name.to_string(),
+        name_span: ident_span(toks, span, name),
         form,
         generics,
         fields,
@@ -245,7 +247,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
-                    ast,
+                    toks,
                     ast.name(*name),
                     TyForm::Class,
                     generics_of(ast, generics),
@@ -259,7 +261,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
-                    ast,
+                    toks,
                     ast.name(*name),
                     TyForm::Dataclass,
                     generics_of(ast, generics),
@@ -272,7 +274,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
-                    ast,
+                    toks,
                     ast.name(*name),
                     TyForm::Trait,
                     generics_of(ast, generics),
@@ -287,7 +289,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 let ms = enum_members(src, ast, toks, span, members);
                 idx.types.push(ty_def(
                     src,
-                    ast,
+                    toks,
                     ast.name(*name),
                     TyForm::Enum,
                     Vec::new(),
@@ -312,8 +314,10 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 for m in methods {
                     let d = ast.method_decl(*m);
                     let sp = ast.span(m.id());
+                    let name = ast.name(d.name);
                     idx.fns.push(FnDef {
-                        name: ast.name(d.name).to_string(),
+                        name: name.to_string(),
+                        name_span: ident_span(toks, sp, name),
                         src: sig_src(src, ast, sp, d.body),
                         ret: d.ret.map(|r| ty_src(ast, r)),
                         doc: doc_before(src, sp.lo),
@@ -326,6 +330,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
             ItemKind::Fn(d) => {
                 idx.fns.push(FnDef {
                     name: ast.name(d.name).to_string(),
+                    name_span: ident_span(toks, span, ast.name(d.name)),
                     src: sig_src(src, ast, span, Some(d.body)),
                     ret: d.ret.map(|r| ty_src(ast, r)),
                     doc: doc_before(src, span.lo),
@@ -337,6 +342,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
             ItemKind::SurfaceFn { name, .. } => {
                 idx.fns.push(FnDef {
                     name: ast.name(*name).to_string(),
+                    name_span: ident_span(toks, span, ast.name(*name)),
                     src: sig_src(src, ast, span, None),
                     ret: None,
                     doc: doc_before(src, span.lo),
@@ -349,7 +355,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 let ms = members_of(src, ast, toks, members);
                 idx.types.push(ty_def(
                     src,
-                    ast,
+                    toks,
                     ast.name(*name),
                     TyForm::Builtin,
                     generics_of(ast, generics),
@@ -362,7 +368,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 let ms = members_of(src, ast, toks, members);
                 idx.types.push(ty_def(
                     src,
-                    ast,
+                    toks,
                     ast.name(*name),
                     TyForm::Primitive,
                     Vec::new(),
@@ -375,7 +381,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 let fs = field_members(src, ast, toks, fields);
                 idx.types.push(ty_def(
                     src,
-                    ast,
+                    toks,
                     ast.name(*name),
                     TyForm::HostDataclass,
                     Vec::new(),
@@ -388,7 +394,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
-                    ast,
+                    toks,
                     ast.name(*name),
                     TyForm::BuiltinTrait,
                     generics_of(ast, generics),
@@ -404,8 +410,10 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
             ItemKind::Alias(d) => {
                 // `type X = A;` / `type X = A | B;` (RFC 0043) — the
                 // target renders as written
+                let name = ast.name(d.name);
                 idx.types.push(TyDef {
-                    name: ast.name(d.name).to_string(),
+                    name: name.to_string(),
+                    name_span: ident_span(toks, span, name),
                     form: TyForm::Alias,
                     generics: Vec::new(),
                     fields: Vec::new(),
@@ -484,5 +492,10 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
             line: line_of(src, span.lo),
         });
     }
+    // the definition layer's target text: cross-file and std jumps
+    // convert their spans to LSP ranges against THIS index's own source
+    // (the wasm face cannot re-read files)
+    idx.src = src.to_string();
+    idx.lines = LineIndex::new(src);
     idx
 }

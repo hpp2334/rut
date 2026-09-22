@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
+use ls_types::request::{GotoTypeDefinitionParams, GotoTypeDefinitionResponse};
 use ls_types::*;
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::{Client, LanguageServer};
@@ -28,6 +29,10 @@ pub struct Backend {
     documents: Arc<RwLock<HashMap<Uri, String>>>,
     /// std surface + workspace files, in lookup order
     defs: Arc<RwLock<Vec<DefIndex>>>,
+    /// the workspace root (initialize's `root_uri`) — relative
+    /// definition targets (the std surface's true `rut/...` paths)
+    /// resolve against it
+    root: Arc<RwLock<Option<PathBuf>>>,
 }
 
 /// walk `root` for rut files; skip build/dependency trees and dot-dirs,
@@ -73,6 +78,7 @@ impl Backend {
             client,
             documents: Arc::new(RwLock::new(HashMap::new())),
             defs: Arc::new(RwLock::new(std_surface::indexes())),
+            root: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -105,6 +111,7 @@ impl LanguageServer for Backend {
         // workspace scan off the hot initialize path — hover may briefly
         // resolve against std + open docs only
         let defs = self.defs.clone();
+        let root_slot = self.root.clone();
         #[allow(deprecated)] // root_uri: VS Code still sends it first
         let root = params.root_uri.as_ref().map(|u| u.as_str().to_string());
         tokio::task::spawn_blocking(move || {
@@ -112,6 +119,7 @@ impl LanguageServer for Backend {
             let Ok(u) = Uri::from_str(&root) else { return };
             let Some(cow) = u.to_file_path() else { return };
             let path = cow.into_owned();
+            *root_slot.write().unwrap() = Some(path.clone());
             let mut guard = defs.write().unwrap();
             for f in collect_rut_files(&path) {
                 if let Some(idx) = index_file(&f) {
@@ -144,6 +152,8 @@ impl LanguageServer for Backend {
                 )),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                definition_provider: Some(OneOf::Left(true)),
+                type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_string()]),
                     ..Default::default()
@@ -229,4 +239,88 @@ impl LanguageServer for Backend {
         };
         Ok(Some(CompletionResponse::Array(items)))
     }
+
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let p = params.text_document_position_params.position;
+        let locs = {
+            let defs = self.defs.read().unwrap();
+            analysis::definition_at(uri.as_str(), &text, &defs, p.line, p.character)
+        };
+        Ok(self.locations(locs))
+    }
+
+    async fn goto_type_definition(
+        &self,
+        params: GotoTypeDefinitionParams,
+    ) -> Result<Option<GotoTypeDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let p = params.text_document_position_params.position;
+        let locs = {
+            let defs = self.defs.read().unwrap();
+            analysis::type_definition_at(uri.as_str(), &text, &defs, p.line, p.character)
+        };
+        Ok(self.locations(locs).map(|r| match r {
+            GotoDefinitionResponse::Array(v) => GotoTypeDefinitionResponse::Array(v),
+            other => GotoTypeDefinitionResponse::Scalar(match other {
+                GotoDefinitionResponse::Scalar(l) => l,
+                _ => unreachable!("locations() only builds Array/Scalar"),
+            }),
+        }))
+    }
+}
+
+impl Backend {
+    /// face-agnostic definition targets -> LSP locations: relative
+    /// targets (the std surface's true `rut/...` paths) resolve against
+    /// the workspace root; targets that resolve nowhere stay relative
+    /// (the client may still know the file — never a wrong jump)
+    fn locations(&self, locs: Vec<crate::definition::DefLocation>) -> Option<GotoDefinitionResponse> {
+        if locs.is_empty() {
+            return None;
+        }
+        let root = self.root.read().unwrap().clone();
+        let out: Vec<Location> = locs
+            .into_iter()
+            .filter_map(|l| {
+                Some(Location {
+                    uri: resolve_target_uri(&l.uri, root.as_deref())?,
+                    range: l.range,
+                })
+            })
+            .collect();
+        if out.is_empty() {
+            return None;
+        }
+        Some(GotoDefinitionResponse::Array(out))
+    }
+}
+
+/// a definition target string -> a URI: a real URI passes through, an
+/// absolute path becomes one, a relative path needs the workspace root
+fn resolve_target_uri(raw: &str, root: Option<&Path>) -> Option<Uri> {
+    // scheme = a letter/letter-digit run followed by `:` (RFC 3986) —
+    // checked on the raw string; ls-types' parser is strict about the rest
+    let has_scheme = raw
+        .split(':')
+        .next()
+        .is_some_and(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.')))
+        && raw.contains(':');
+    if has_scheme {
+        if let Ok(u) = Uri::from_str(raw) {
+            return Some(u);
+        }
+    }
+    let p = Path::new(raw);
+    let joined = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        root.map(|r| r.join(p))?
+    };
+    Uri::from_str(&format!("file://{}", joined.to_str()?)).ok()
 }

@@ -41,6 +41,8 @@ impl TyForm {
     }
 }
 
+use crate::line_index::LineIndex;
+
 #[derive(Debug, Clone)]
 pub struct MemberSrc {
     pub name: String,
@@ -90,6 +92,10 @@ pub struct UseDef {
 #[derive(Debug, Clone)]
 pub struct TyDef {
     pub name: String,
+    /// byte span of the name identifier — token recovery (names are
+    /// `IdentId`s); phase 2's definition target (the declaring ident,
+    /// not the whole decl)
+    pub name_span: Option<Span>,
     pub form: TyForm,
     pub generics: Vec<String>,
     pub fields: Vec<MemberSrc>,
@@ -104,6 +110,9 @@ pub struct TyDef {
 #[derive(Debug, Clone)]
 pub struct FnDef {
     pub name: String,
+    /// byte span of the name identifier — the definition target
+    /// (recovery may fail on a degenerate parse; `span` is the fallback)
+    pub name_span: Option<Span>,
     /// verbatim signature source
     pub src: String,
     /// the declared return as written (`None` = unwritten);
@@ -134,6 +143,17 @@ pub struct DefIndex {
     pub uses: Vec<UseDef>,
     /// label for provenance lines — the file's path, or `core`
     pub origin: String,
+    /// the normalized source this index was built over — cross-file
+    /// definition targets convert their byte spans to LSP ranges
+    /// against THIS text (the wasm face cannot re-read files)
+    pub src: String,
+    /// byte offsets ⇄ (line, UTF-16 col) over `src`
+    pub lines: LineIndex,
+    /// the true repo-relative path of an EMBEDDED source (the std
+    /// surface's `include_str!` origin: `rut/pouch/pouch.rut`) — the
+    /// definition layer jumps there instead of the provenance label,
+    /// so a workspace that is the rut repo lands in the real file
+    pub src_path: Option<String>,
 }
 
 impl DefIndex {

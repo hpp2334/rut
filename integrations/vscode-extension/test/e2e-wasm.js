@@ -14,6 +14,14 @@
 // nmapset/nmap_host completion (the std-surface 8/8 fix) — all against
 // the shipped binary.
 //
+// Phase 2 (lsp-features) adds the DEFINITION round trips: request
+// position → response span == the declaring ident EXACTLY, through all
+// three resolution layers — within-file (binding pass + decl layer),
+// cross-file (the use graph into a rut.add_def'ed module), and stdlib
+// (the embedded surface's true rut/... source path) — plus a
+// typeDefinition smoke. A feature without a gate through the shipped
+// artifact does not land.
+//
 // Runs headless in plain node — no `code` needed; the Extension Host
 // suite (test:host) stays the loud-skip lane on machines without VS Code.
 'use strict';
@@ -329,6 +337,173 @@ async function main() {
     smokes++;
   }
 
+  // ---- phase 2 (lsp-features): definition round trips — request pos →
+  // response span == the declaring ident EXACTLY. Three resolution
+  // layers gated through the SHIPPED artifact: within-file (the binding
+  // pass + decl layer), cross-file (the use graph), stdlib (the
+  // embedded surface's true rut/... source path) ----
+
+  // expected [line, char] of the ident at `at` inside `needle`'s line
+  const identAt = (src, lineRe, needle) => {
+    const [line, ch] = posOnLine(src, lineRe, needle);
+    return [line, ch, needle.length];
+  };
+  // the response must carry a location with `want.uri` whose span is
+  // the declaring ident EXACTLY — same start, same length
+  const eqRange = (locs, want, what) => {
+    const loc = locs.find((l) => l.uri === want.uri);
+    if (!loc) {
+      bad.push(`${what}: no location for ${want.uri} (got ${JSON.stringify(locs)})`);
+      return;
+    }
+    const g = loc.range;
+    const [wl, wc] = want.range;
+    const wlen = want.len;
+    if (g.start.line !== wl || g.start.character !== wc ||
+        g.end.line !== wl || g.end.character !== wc + wlen) {
+      bad.push(`${what}: span ${JSON.stringify(g)} != declaring ident [${wl},${wc}..+${wlen}]`);
+    }
+  };
+
+  // WITHIN-FILE: the binding pass (local ident → its declaring let),
+  // the decl layer (field read → the field's decl ident), and an impl
+  // method call → the impl fn's name ident
+  {
+    const uri = 'file:///ws/e2e-def-within.rut';
+    const src = [
+      'class Circle {',
+      '    r: f64;',
+      '}',
+      'struct Wrap {',
+      '    c: Circle;',
+      '}',
+      'impl Circle {',
+      '    fn area(self) -> f64 { return 3.14; }',
+      '}',
+      'fn go(wrap: Wrap) -> f64 {',
+      '    let inner = wrap.c;',
+      '    return inner.area() + inner.r;',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`def-within probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    // `inner` at its use → the declaring ident in `let inner`
+    let [dl, dc] = identAt(src, /return inner\.area\(\)/, 'inner');
+    let want = { uri, range: identAt(src, /let inner = wrap\.c;/, 'inner'), len: 5 };
+    let locs = rut.definition(uri, dl, dc);
+    eqRange(locs, want, 'within-file let binding');
+    // field read `wrap.c` → the field's decl ident `c` in Wrap
+    want = { uri, range: identAt(src, /^\s{4}c: Circle;/, 'c'), len: 1 };
+    ;[dl, dc] = identAt(src, /let inner = wrap\.c;/, 'c');
+    locs = rut.definition(uri, dl, dc);
+    eqRange(locs, want, 'within-file field read');
+    // method call `inner.area()` → the impl fn's name ident
+    want = { uri, range: identAt(src, /fn area\(self\)/, 'area'), len: 4 };
+    ;[dl, dc] = identAt(src, /return inner\.area\(\)/, 'area');
+    locs = rut.definition(uri, dl, dc);
+    eqRange(locs, want, 'within-file impl method');
+    smokes++;
+  }
+
+  // CROSS-FILE: a `use gadgets::{ Widget }` doc jumps into the
+  // exporting module (indexed via rut.add_def, pkg matched by its path
+  // segment) — both the use-statement name and the usage sites
+  {
+    const libUri = 'file:///ws/gadgets/lib.rut';
+    const libSrc = [
+      'class Widget {',
+      '    id: i32;',
+      '}',
+      '',
+    ].join('\n');
+    rut.addDef(libUri, libSrc);
+    const uri = 'file:///ws/e2e-def-cross.rut';
+    const src = [
+      'use gadgets::{ Widget };',
+      'fn main() -> nil {',
+      '    let w = Widget.new();',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`def-cross probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const want = {
+      uri: libUri,
+      range: identAt(libSrc, /^class Widget \{/, 'Widget'),
+      len: 6,
+    };
+    // the use-statement name — the survey's use-graph edge
+    let locs = rut.definition(uri, ...identAt(src, /^use gadgets::\{ Widget \};/, 'Widget'));
+    eqRange(locs, want, 'cross-file use name');
+    // and a usage site through the same edge
+    locs = rut.definition(uri, ...identAt(src, /let w = Widget\.new\(\);/, 'Widget'));
+    eqRange(locs, want, 'cross-file usage');
+    smokes++;
+  }
+
+  // STDLIB: `use pouch::{ Vec }` jumps into the EMBEDDED surface — the
+  // response carries the true rut/... path and the span of the
+  // declaring ident in the REAL pouch.rut source
+  {
+    const uri = 'file:///ws/e2e-def-std.rut';
+    const src = [
+      'use pouch::{ Vec };',
+      'fn main() -> nil {',
+      '    let v = Vec.new();',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`def-std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const real = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'pouch.rut'), 'utf8');
+    const wantUri = path.join('rut', 'pouch', 'pouch.rut');
+    const want = { uri: wantUri, range: identAt(real, /^pub class Vec/, 'Vec'), len: 3 };
+    let locs = rut.definition(uri, ...identAt(src, /^use pouch::\{ Vec \};/, 'Vec'));
+    if (!locs.length || locs[0].uri !== wantUri) {
+      bad.push(`std jump lost the true source path (got ${JSON.stringify(locs.map((l) => l.uri))})`);
+    } else {
+      eqRange(locs, want, 'std use name');
+    }
+    locs = rut.definition(uri, ...identAt(src, /let v = Vec\.new\(\);/, 'Vec'));
+    if (!locs.length || locs[0].uri !== wantUri) {
+      bad.push(`std usage jump lost the true source path (got ${JSON.stringify(locs.map((l) => l.uri))})`);
+    } else {
+      eqRange(locs, want, 'std usage');
+    }
+    smokes++;
+  }
+
+  // TYPE DEFINITION: an expression → its type's declaration (the cheap
+  // shape the survey priced — binding types via the phase-1 inference)
+  {
+    const uri = 'file:///ws/e2e-typedef.rut';
+    const src = [
+      'class Circle {',
+      '    r: f64;',
+      '}',
+      'fn go() -> f64 {',
+      '    let c = Circle.new(1.0);',
+      '    return c.r;',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`typedef probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const want = { uri, range: identAt(src, /^class Circle \{/, 'Circle'), len: 6 };
+    const locs = rut.typeDefinition(uri, ...identAt(src, /return c\.r;/, 'c'));
+    eqRange(locs, want, 'typeDefinition of a binding');
+    smokes++;
+  }
+
   // ---- the RFC 0044 dedicated diagnostic (M2's acceptance) ----
   {
     const b = rut.analyze('file:///ws/e2e-postfix.rut', 'fn f(p: i32?) -> nil {\n}\n');
@@ -381,7 +556,8 @@ async function main() {
   }
   console.log(`e2e-wasm: PASS — ${files.length} corpus files, 0 false diagnostics, ${symbols} symbols, ` +
     `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/RFC 0044/` +
-    `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover) ` +
+    `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover/` +
+    `def-within/def-cross/def-std/typeDefinition) ` +
     `through bin/rut-lsp.wasm`);
 }
 
