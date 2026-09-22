@@ -335,3 +335,88 @@ async fn hover_resolves_std_surface() {
     assert!(md.contains("len"), "string member: {md}");
     assert!(md.contains("core"), "provenance: {md}");
 }
+
+#[tokio::test]
+async fn inlay_hints_on_the_wire() {
+    let mut editor = spawn().await;
+    let src = "\
+class Circle {
+    r: f64;
+}
+impl Circle {
+    fn grown(self, k: f64) -> Circle { return self; }
+}
+fn go() -> f64 {
+    let c = Circle.new(1.0);
+    let big = c.grown(2.0);
+    return big.r;
+}
+";
+    let uri = "file:///w/inlay.rut";
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": uri, "languageId": "rut", "version": 1, "text": src
+            }}),
+        )
+        .await;
+
+    let mut notes = Vec::new();
+    // whole document
+    let resp = editor
+        .request(
+            "textDocument/inlayHint",
+            json!({
+                "textDocument": {"uri": uri},
+                "range": {"start": {"line": 0, "character": 0}, "end": {"line": 20, "character": 0}}
+            }),
+            &mut notes,
+        )
+        .await;
+    let hints = resp["result"].as_array().expect("hint array");
+    let labels: Vec<&str> = hints
+        .iter()
+        .map(|h| h["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(labels, vec![": Circle", ": Circle", "k:"], "unannotated lets then the call arg");
+    // kinds share the LSP numbering (1 Type, 2 Parameter)
+    assert_eq!(hints[0]["kind"], 1);
+    assert_eq!(hints[2]["kind"], 2);
+    // the type hint hangs right after the declaring ident (`let c⌊:⌋`)
+    assert_eq!(hints[0]["position"]["line"], 7);
+    assert_eq!(hints[0]["position"]["character"], 9);
+    // the tooltip is the hover markdown (the consistency law)
+    let tip = hints[0]["tooltip"]["value"].as_str().expect("tooltip");
+    assert!(tip.contains("let c: Circle"), "{tip}");
+    assert!(tip.contains("type inferred"), "{tip}");
+    // the param hint sits at the arg's first byte (`grown(⌊k:⌋2.0)`)
+    assert_eq!(hints[2]["position"]["line"], 8);
+    assert_eq!(hints[2]["position"]["character"], 22);
+
+    // a range elsewhere is empty — the client asks per visible region
+    let resp = editor
+        .request(
+            "textDocument/inlayHint",
+            json!({
+                "textDocument": {"uri": uri},
+                "range": {"start": {"line": 0, "character": 0}, "end": {"line": 4, "character": 0}}
+            }),
+            &mut notes,
+        )
+        .await;
+    assert!(resp["result"].as_array().expect("hint array").is_empty());
+
+    // an unknown document is null, never a guess
+    let resp = editor
+        .request(
+            "textDocument/inlayHint",
+            json!({
+                "textDocument": {"uri": "file:///w/never-opened.rut"},
+                "range": {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 0}}
+            }),
+            &mut notes,
+        )
+        .await;
+    assert!(resp["result"].is_null());
+}

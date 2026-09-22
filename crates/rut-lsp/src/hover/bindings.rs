@@ -293,8 +293,10 @@ impl Cx<'_> {
 }
 
 /// direct expression children — the scope walk's recursion edges
-/// (`Block`/`Lambda` are handled by the walker itself)
-fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle<AnyExpr>> {
+/// (`Block`/`Lambda` are handled by the walker itself). Shared with the
+/// inlay hints' call-site walk (one recursion rule, two consumers —
+/// the `member_target` precedent)
+pub(crate) fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle<AnyExpr>> {
     fn all(out: &mut Vec<NodeHandle<AnyExpr>>, hs: &[NodeHandle<AnyExpr>]) {
         out.extend_from_slice(hs);
     }

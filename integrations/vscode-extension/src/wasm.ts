@@ -63,6 +63,15 @@ export interface LspCompletionItem {
   documentation?: { kind: string; value: string };
 }
 
+/// an LSP InlayHint — the server supplies position + label (with the
+/// colon) + kind; the client renders the dotted decoration
+export interface LspInlayHint {
+  position: LspPosition;
+  label: string;
+  kind?: number;
+  tooltip?: { kind: string; value: string } | string;
+}
+
 interface RutExports {
   memory: WebAssembly.Memory;
   rut_begin(): void;
@@ -74,6 +83,14 @@ interface RutExports {
   rut_complete(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_definition(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_type_definition(uriPtr: number, uriLen: number, line: number, ch: number): number;
+  rut_inlay(
+    uriPtr: number,
+    uriLen: number,
+    startLine: number,
+    startCh: number,
+    endLine: number,
+    endCh: number
+  ): number;
   rut_add_def(uriPtr: number, uriLen: number, srcPtr: number, srcLen: number): void;
 }
 
@@ -139,6 +156,15 @@ export class RutWasm {
     return this.call(() => {
       const [u, ul] = this.put(uri);
       return this.e.rut_type_definition(u, ul, line, character);
+    });
+  }
+
+  /// inlay hints for a document range — the inline inference display
+  /// ([] when nothing resolves)
+  inlayHint(uri: string, start: LspPosition, end: LspPosition): LspInlayHint[] {
+    return this.call(() => {
+      const [u, ul] = this.put(uri);
+      return this.e.rut_inlay(u, ul, start.line, start.character, end.line, end.character);
     });
   }
 

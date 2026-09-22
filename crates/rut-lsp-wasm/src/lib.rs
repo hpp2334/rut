@@ -18,6 +18,7 @@
 //!   rut_complete(uri, line, ch) -> ptr         LSP CompletionItem array
 //!   rut_definition(uri, line, ch) -> ptr       LSP Location array or null
 //!   rut_type_definition(uri, line, ch) -> ptr  LSP Location array or null
+//!   rut_inlay(uri, sl, sc, el, ec) -> ptr      LSP InlayHint array or null
 //!   rut_add_def(uri, src)                      index a workspace file
 //!
 //! Every result is `[u32 little-endian length][bytes]` at the returned
@@ -228,6 +229,39 @@ fn locations_envelope(locs: &[rut_lsp::definition::DefLocation]) -> *mut u8 {
         .map(|l| serde_json::json!({ "uri": l.uri, "range": l.range }))
         .collect();
     json_envelope(serde_json::Value::Array(value))
+}
+
+/// inlay hints for a document range — the inline inference display:
+/// TYPE hints on unannotated bindings + PARAMETER hints at exact-arity
+/// call sites. `null` when the doc is unknown, `[]` when nothing
+/// resolves. The hints are full LSP values (position + label + kind +
+/// tooltip); the client renders them.
+#[no_mangle]
+pub extern "C" fn rut_inlay(
+    uri_ptr: *const u8,
+    uri_len: usize,
+    start_line: u32,
+    start_ch: u32,
+    end_line: u32,
+    end_ch: u32,
+) -> *mut u8 {
+    let uri = unsafe { read_str(uri_ptr, uri_len) };
+    let Some(src) = state().docs.get(uri).cloned() else {
+        return envelope(b"null");
+    };
+    let hints = {
+        let defs = &state().defs;
+        rut_lsp::analysis::inlay_hints_at(
+            uri,
+            &src,
+            defs,
+            ls_types::Range {
+                start: ls_types::Position { line: start_line, character: start_ch },
+                end: ls_types::Position { line: end_line, character: end_ch },
+            },
+        )
+    };
+    json_envelope(serde_json::json!(hints))
 }
 
 /// index one workspace file (the host's stand-in for the native server's

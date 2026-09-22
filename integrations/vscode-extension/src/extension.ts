@@ -9,7 +9,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Analysis, LspCompletionItem, LspDiag, LspLocation, LspRange, LspSymbol, RutWasm } from './wasm';
+import { Analysis, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSymbol, RutWasm } from './wasm';
 
 const SELECTOR: vscode.DocumentSelector = { language: 'rut' };
 
@@ -90,7 +90,8 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
     registerHover(rut),
     registerCompletion(rut),
     registerDefinition(rut),
-    registerTypeDefinition(rut)
+    registerTypeDefinition(rut),
+    registerInlayHints(rut)
   );
 
   // workspace index off the hot activation path — hover/completion may
@@ -187,6 +188,20 @@ function registerTypeDefinition(rut: RutWasm): vscode.Disposable {
       return resolveLocations(
         rut.typeDefinition(doc.uri.toString(), position.line, position.character)
       );
+    },
+  });
+}
+
+// the inline inference display — the wasm core supplies position +
+// label + the colon (type hints after unannotated bindings, param
+// names before exact-arity call args); VS Code renders the dotted
+// decoration and `editor.inlayHints` toggles it
+function registerInlayHints(rut: RutWasm): vscode.Disposable {
+  return vscode.languages.registerInlayHintsProvider(SELECTOR, {
+    provideInlayHints(doc: vscode.TextDocument, range: vscode.Range): vscode.InlayHint[] {
+      return rut
+        .inlayHint(doc.uri.toString(), range.start, range.end)
+        .map(toInlayHint);
     },
   });
 }
@@ -295,4 +310,20 @@ function toCompletionItem(c: LspCompletionItem): vscode.CompletionItem {
     item.documentation = new vscode.MarkdownString(c.documentation.value);
   }
   return item;
+}
+
+// LSP and vscode share the inlay-kind numbering (1 Type, 2 Parameter)
+// — passed through as-is, unlike the 1-based-vs-0-based enums above.
+function toInlayHint(h: LspInlayHint): vscode.InlayHint {
+  const hint = new vscode.InlayHint(
+    new vscode.Position(h.position.line, h.position.character),
+    h.label,
+    h.kind as vscode.InlayHintKind
+  );
+  if (h.tooltip) {
+    hint.tooltip = new vscode.MarkdownString(
+      typeof h.tooltip === 'string' ? h.tooltip : h.tooltip.value
+    );
+  }
+  return hint;
 }

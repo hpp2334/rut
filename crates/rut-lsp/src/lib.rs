@@ -10,18 +10,22 @@
 //! normalized source), `semantic` (the pure classifier — `legend`,
 //! `tokens`, `names`, `recover`, `symbols`), `analysis` (one pure pass
 //! over a document → LSP values, plus the document-level hover /
-//! completion queries shared by both faces), `std_surface` (the
-//! embedded std + its index), `hover` (the definition index + lookup —
-//! `types`, `build`, `lookup`, `infer`, `render`), `completion` (the
-//! same index, member + bare completion), `server` (the tower-lsp
-//! service — open doc + the embedded std surface + a workspace scan;
-//! feature `server`, native only). The wasm shim (`rut-lsp-wasm`) wraps
-//! the same pure core over a raw ABI — no server process.
+//! completion / definition / inlay queries shared by both faces),
+//! `std_surface` (the embedded std + its index), `hover` (the
+//! definition index + lookup — `types`, `build`, `lookup`, `infer`,
+//! `render`), `completion` (the same index, member + bare completion),
+//! `inlay` (the inline inference display — type hints on unannotated
+//! bindings, param-name hints at exact-arity call sites), `server` (the
+//! tower-lsp service — open doc + the embedded std surface + a
+//! workspace scan; feature `server`, native only). The wasm shim
+//! (`rut-lsp-wasm`) wraps the same pure core over a raw ABI — no server
+//! process.
 
 pub mod analysis;
 pub mod completion;
 pub mod definition;
 pub mod hover;
+pub mod inlay;
 pub mod line_index;
 pub mod semantic;
 pub mod std_surface;

@@ -14,6 +14,7 @@ use std::str::FromStr;
 use crate::completion;
 use crate::definition;
 use crate::hover;
+use crate::inlay;
 use crate::line_index::LineIndex;
 use crate::semantic::{self, RawSymbol, SymKind, TokenType};
 
@@ -247,6 +248,28 @@ pub fn type_definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line:
         extra,
     };
     definition::type_definition(&ctx, byte_at(&normalized, line, ch))
+}
+
+/// inlay hints over a document range (the survey §4.3): TYPE hints on
+/// unannotated bindings (the binding pass / decl layer's inference —
+/// the same text hover shows), PARAMETER hints at exact-arity call
+/// sites. Returns full LSP values; both faces hand them to their
+/// client as-is.
+pub fn inlay_hints_at(uri: &str, src: &str, extra: &[hover::DefIndex], range: Range) -> Vec<InlayHint> {
+    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let idxs = doc_idxs(&doc, extra);
+    let index = LineIndex::new(&normalized);
+    let ctx = inlay::Ctx {
+        ast: &ast,
+        toks: &toks,
+        doc: &doc,
+        idxs: &idxs,
+        index: &index,
+        src: &normalized,
+    };
+    let lo = index.byte(&normalized, range.start.line, range.start.character);
+    let hi = index.byte(&normalized, range.end.line, range.end.character);
+    inlay::hints(&ctx, lo, hi)
 }
 
 // ---- symbols ----

@@ -233,6 +233,19 @@ fn generics_of(ast: &Ast, gs: &[IdentId]) -> Vec<String> {
     gs.iter().map(|&g| ast.name(g).to_string()).collect()
 }
 
+/// declared parameter names in order, `self` excluded — the AST's own
+/// data, recorded once at index time; the inlay hints' call-site
+/// parameter names price exact-arity matches against this
+fn param_names(ast: &Ast, params: &[NodeHandle<AnyParam>]) -> Vec<String> {
+    params
+        .iter()
+        .filter_map(|p| match ast.param(*p) {
+            MemberKind::Param(d) => Some(ast.name(d.name).to_string()),
+            _ => None, // `self` / `mut self`
+        })
+        .collect()
+}
+
 /// Build the index for one document. `toks` is the same lex the parser
 /// consumed — the decl layer's name-span recovery rides it (no re-lex,
 /// no parser changes).
@@ -320,6 +333,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                         name_span: ident_span(toks, sp, name),
                         src: sig_src(src, ast, sp, d.body),
                         ret: d.ret.map(|r| ty_src(ast, r)),
+                        params: param_names(ast, &d.params),
                         doc: doc_before(src, sp.lo),
                         owner: Some(owner.clone()),
                         span: sp,
@@ -333,18 +347,20 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     name_span: ident_span(toks, span, ast.name(d.name)),
                     src: sig_src(src, ast, span, Some(d.body)),
                     ret: d.ret.map(|r| ty_src(ast, r)),
+                    params: param_names(ast, &d.params),
                     doc: doc_before(src, span.lo),
                     owner: None,
                     span,
                     line: line_of(src, span.lo),
                 });
             }
-            ItemKind::SurfaceFn { name, .. } => {
+            ItemKind::SurfaceFn { name, params, .. } => {
                 idx.fns.push(FnDef {
                     name: ast.name(*name).to_string(),
                     name_span: ident_span(toks, span, ast.name(*name)),
                     src: sig_src(src, ast, span, None),
                     ret: None,
+                    params: param_names(ast, params),
                     doc: doc_before(src, span.lo),
                     owner: None,
                     span,

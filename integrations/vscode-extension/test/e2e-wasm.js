@@ -22,6 +22,15 @@
 // typeDefinition smoke. A feature without a gate through the shipped
 // artifact does not land.
 //
+// Phase 3 (lsp-features) adds the INLAY smokes: type hints on
+// unannotated bindings and param-name hints at exact-arity call sites,
+// resolved through the REBUILT artifact at known corpus positions —
+// each label checked against the source's own ground truth (an
+// annotation or a decl-site type line in the same file, or the
+// stdlib's true pouch.rut decl) — plus the hover-consistency law (the
+// hint's type text is what hover shows for the same binding) and the
+// annotated-lets-never-restated + range-filter laws on a synthetic doc.
+//
 // Runs headless in plain node — no `code` needed; the Extension Host
 // suite (test:host) stays the loud-skip lane on machines without VS Code.
 'use strict';
@@ -504,6 +513,161 @@ async function main() {
     smokes++;
   }
 
+  // ---- phase 3 (lsp-features): INLAY hints through the SHIPPED
+  // artifact. CORPUS ground truth: every hint's label is checked
+  // against the source's own decl lines (an annotation elsewhere in the
+  // file, the callee's ret, or the stdlib's true pouch.rut decl). ----
+  {
+    const digestPath = path.join(REPO, 'examples', '02-digest', 'digest.rut');
+    const digestSrc = fs.readFileSync(digestPath, 'utf8');
+    const digestUri = `file://${digestPath}`;
+    const a = rut.analyze(digestUri, digestSrc);
+    if (a.diags.length !== 0) {
+      bad.push(`digest inlay probe has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const all = rut.inlayHint(
+      digestUri,
+      { line: 0, character: 0 },
+      { line: digestSrc.split('\n').length, character: 0 }
+    );
+    if (!all.length) bad.push('digest inlay: no hints at all');
+    // a TYPE hint hangs at the END of the binding ident (needle = the
+    // ident, so the hint position is needle-end); a PARAMETER hint sits
+    // at the arg's first byte (needle = the arg's first token)
+    const hintAt = (src, lineRe, needle, wantLabel, wantKind, gt, what) => {
+      const [line, ch] = posOnLine(src, lineRe, needle);
+      const at = wantKind === 1 ? ch + needle.length : ch;
+      const h = all.find((x) => x.position.line === line && x.position.character === at);
+      if (!h) {
+        bad.push(`${what}: no hint at ${line}:${at} (have ${all.filter((x) => x.position.line === line).map((x) => `${x.position.character}:${x.label}`).join(', ')})`);
+        return;
+      }
+      if (h.label !== wantLabel) {
+        bad.push(`${what}: label ${JSON.stringify(h.label)} != ${JSON.stringify(wantLabel)}`);
+      }
+      if (h.kind !== wantKind) {
+        bad.push(`${what}: kind ${h.kind} != ${wantKind}`);
+      }
+      if (gt && !gt.test(src)) {
+        bad.push(`${what}: ground-truth line missing from the corpus file`);
+      }
+    };
+    // `let src = "0123456789abcdef";` → str — GT: the file's own
+    // `fn hex_val(c: str)` param annotation
+    hintAt(digestSrc, /let src = "0123456789abcdef";/, 'src', ': str', 1,
+      /^fn hex_val\(c: str\) -> i32 \{/m, 'digest str let');
+    // `let d = hex_digits();` → Vec<str> — GT: the file's ANNOTATED
+    // `let d: Vec<str> = Vec.new();` three lines up
+    hintAt(digestSrc, /let d = hex_digits\(\);/, 'd', ': Vec<str>', 1,
+      /^    let d: Vec<str> = Vec\.new\(\);/m, 'digest vec let');
+    // `let v = hex_val(f"{c}");` → i32 — GT: the callee's `-> i32` ret
+    hintAt(digestSrc, /let v = hex_val\(f/, 'v', ': i32', 1,
+      /^fn hex_val\(c: str\) -> i32 \{/m, 'digest call ret let');
+    // for-c counter → i32 — GT: RFC 0007 §1 (the suffixless literal
+    // default; the same law the file's `let mut i = 0;` hints ride)
+    hintAt(digestSrc, /for \(let i = 0; i < n; i \+= 3\) \{/, 'i', ': i32', 1,
+      /^    let mut i = 0;/m, 'digest for-c counter');
+    // PARAMETER hint at the free call: `hex_val(f"{c}")` → `c:` —
+    // GT: the callee's own param name in its decl line
+    hintAt(digestSrc, /let v = hex_val\(f"\{c\}"\);/, 'f', 'c:', 2,
+      /^fn hex_val\(c: str\) -> i32 \{/m, 'digest free-call param');
+    // PARAMETER hint through the CROSS-FILE method: `d.push(f"{c}")` →
+    // `v:` — GT: the TRUE stdlib decl `pub fn push(mut self, v: T)`
+    const pouchSrc = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'pouch.rut'), 'utf8');
+    hintAt(digestSrc, /d\.push\(f"\{c\}"\);/, 'f', 'v:', 2, null, 'digest push param');
+    if (!/pub fn push\(mut self, v: T\) -> nil/.test(pouchSrc)) {
+      bad.push('digest push param: ground-truth push decl missing from pouch.rut');
+    }
+    // the hover-consistency law, gated through the artifact: the
+    // hint's type text IS what hover shows for the same binding
+    {
+      const [line, ch] = posOnLine(digestSrc, /let d = hex_digits\(\);/, 'd');
+      const h = rut.hover(digestUri, line, ch);
+      const hint = all.find((x) => x.position.line === line && x.position.character === ch + 1);
+      if (!h || !hint || !h.contents.value.includes(`let d: ${hint.label.slice(2)}`)) {
+        bad.push(`digest hover/hint consistency lost: hover=${h && JSON.stringify(h.contents.value.slice(0, 60))} hint=${hint && JSON.stringify(hint.label)}`);
+      }
+    }
+    smokes++;
+  }
+
+  // ---- phase 3: for-of corpus ground truth — the element of an
+  // ANNOTATED Vec<i32> types the loop variable, in a second corpus
+  // file (demo/src/examples/closures-generics.rut) ----
+  {
+    const cgPath = path.join(REPO, 'demo', 'src', 'examples', 'closures-generics.rut');
+    const cgSrc = fs.readFileSync(cgPath, 'utf8');
+    const cgUri = `file://${cgPath}`;
+    const a = rut.analyze(cgUri, cgSrc);
+    if (a.diags.length !== 0) {
+      bad.push(`closures-generics inlay probe has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const all = rut.inlayHint(cgUri, { line: 0, character: 0 }, { line: 9999, character: 0 });
+    const hintAt = (lineRe, needle, wantLabel, what) => {
+      const [line, ch] = posOnLine(cgSrc, lineRe, needle);
+      const h = all.find((x) => x.position.line === line && x.position.character === ch + needle.length);
+      if (!h) {
+        bad.push(`${what}: no hint at ${line}:${ch + needle.length}`);
+        return;
+      }
+      if (h.label !== wantLabel || h.kind !== 1) {
+        bad.push(`${what}: got ${JSON.stringify(h.label)} kind ${h.kind}, wanted ${JSON.stringify(wantLabel)} kind 1`);
+      }
+    };
+    // `for (let x of xs)` → i32 — GT: the iterable's own annotation
+    // `fn sum(xs: Vec<i32>)`: the element of Vec<i32> IS i32
+    hintAt(/for \(let x of xs\) \{/, 'x', ': i32', 'for-of elem');
+    // `let mut total = 0;` → i32 — the RFC 0007 literal default, GT:
+    // the file's annotated `a: i32` closure params
+    hintAt(/let mut total = 0;/, 'total', ': i32', 'literal default');
+    if (!/fn sum\(xs: Vec<i32>\) -> i32 \{/.test(cgSrc)) {
+      bad.push('for-of elem: ground-truth Vec<i32> annotation missing');
+    }
+    smokes++;
+  }
+
+  // ---- phase 3: the synthetic laws — annotated lets are NEVER
+  // restated, param hints skip `self`, the range filter narrows, and
+  // the tooltip is the hover markdown ----
+  {
+    const uri = 'file:///ws/e2e-inlay.rut';
+    const src = [
+      'class Circle {',
+      '    r: f64;',
+      '}',
+      'impl Circle {',
+      '    fn grown(self, k: f64) -> Circle { return self; }',
+      '}',
+      'fn go() -> Circle {',
+      '    let c = Circle.new(1.0);',
+      '    let d: Circle = Circle.new(1.0);',
+      '    return c.grown(2.0);',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`inlay probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const all = rut.inlayHint(uri, { line: 0, character: 0 }, { line: 99, character: 0 });
+    const labels = all.map((h) => `${h.position.line}:${h.label}(k${h.kind})`);
+    // exactly two: the unannotated `c` and the exact-arity grown arg —
+    // the ANNOTATED `d` is restated by nothing
+    if (labels.join(', ') !== '7:: Circle(k1), 9:k:(k2)') {
+      bad.push(`inlay synthetic hints drifted: [${labels.join(', ')}]`);
+    }
+    const tip = all[0] && all[0].tooltip && all[0].tooltip.value;
+    if (!tip || !tip.includes('let c: Circle') || !tip.includes('type inferred')) {
+      bad.push(`inlay tooltip is not the hover markdown: ${JSON.stringify(tip)}`);
+    }
+    // the range filter: only line 7's hint stays inside [7, 8)
+    const narrow = rut.inlayHint(uri, { line: 7, character: 0 }, { line: 8, character: 0 });
+    if (!(narrow.length === 1 && narrow[0].label === ': Circle')) {
+      bad.push(`inlay range filter leaked: ${JSON.stringify(narrow.map((h) => h.label))}`);
+    }
+    smokes++;
+  }
+
   // ---- the RFC 0044 dedicated diagnostic (M2's acceptance) ----
   {
     const b = rut.analyze('file:///ws/e2e-postfix.rut', 'fn f(p: i32?) -> nil {\n}\n');
@@ -557,7 +721,8 @@ async function main() {
   console.log(`e2e-wasm: PASS — ${files.length} corpus files, 0 false diagnostics, ${symbols} symbols, ` +
     `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/RFC 0044/` +
     `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover/` +
-    `def-within/def-cross/def-std/typeDefinition) ` +
+    `def-within/def-cross/def-std/typeDefinition/` +
+    `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws) ` +
     `through bin/rut-lsp.wasm`);
 }
 

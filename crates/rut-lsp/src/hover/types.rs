@@ -118,6 +118,11 @@ pub struct FnDef {
     /// the declared return as written (`None` = unwritten);
     /// inferred-type hovers read it for call initializers
     pub ret: Option<String>,
+    /// declared parameter NAMES in order, `self` excluded — recorded
+    /// from the AST at index time (no re-parsing of the verbatim
+    /// `src`); the call-site parameter-name hints price exact-arity
+    /// matches against it
+    pub params: Vec<String>,
     pub doc: Vec<String>,
     /// `Circle` for an inherent method, `impl Drawable for Circle` for a
     /// trait-impl method, `None` for a free fn
@@ -212,6 +217,13 @@ pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         // must carry)
         TypeKind::TyOpt { inner } => format!("?{}", ty_src(ast, *inner)),
         TypeKind::TyArray { elem } => format!("[{}]", ty_src(ast, *elem)),
+        // a written tuple annotation renders as written — `-> (opaque,
+        // str)` used to render empty, which leaked `: `-style hints and
+        // hovers (the inlay phase's find)
+        TypeKind::TyTuple { elems } => format!(
+            "({})",
+            elems.iter().map(|&e| ty_src(ast, e)).collect::<Vec<_>>().join(", ")
+        ),
         TypeKind::TyUnion { elems } => elems
             .iter()
             .map(|&e| ty_src(ast, e))

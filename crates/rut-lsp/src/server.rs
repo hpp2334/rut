@@ -1,5 +1,6 @@
 //! The LSP service — `Backend` over tower-lsp-server: full-document sync,
-//! semantic tokens (full), document symbols, hover, pushed diagnostics.
+//! semantic tokens (full), document symbols, hover, inlay hints, pushed
+//! diagnostics.
 //! One server, every editor that speaks LSP (VS Code via
 //! `integrations/vscode-extension`; Neovim / Helix / Zed / Emacs / Sublime
 //! configs in `integrations/README.md`). Hover/completion resolve against
@@ -154,6 +155,7 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
+                inlay_hint_provider: Some(OneOf::Left(true)),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_string()]),
                     ..Default::default()
@@ -272,6 +274,16 @@ impl LanguageServer for Backend {
                 _ => unreachable!("locations() only builds Array/Scalar"),
             }),
         }))
+    }
+
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        let uri = params.text_document.uri;
+        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let out = {
+            let defs = self.defs.read().unwrap();
+            analysis::inlay_hints_at(uri.as_str(), &text, &defs, params.range)
+        };
+        Ok(Some(out))
     }
 }
 
