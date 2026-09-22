@@ -2,8 +2,9 @@
 
 VS Code support for the [rut](../../README.md) language: grammar
 highlighting (TextMate + semantic tokens), diagnostics, the
-document-symbol outline, hover, and completions — powered by the
-language core running **as an in-process wasm module**. No server
+document-symbol outline, hover, completions, go-to-definition (plus
+type definition), references, inlay hints, and signature help — powered
+by the language core running **as an in-process wasm module**. No server
 process, no per-platform binaries: one `rut-lsp.wasm` serves every
 platform.
 
@@ -28,7 +29,8 @@ copy the folder into `~/.vscode/extensions`. Open any `.rut` file.
 `crates/rut-lsp-wasm` exposes the language core over a raw wasm ABI (the
 same envelope pattern as `rut-wasm` — no wasm-bindgen). `src/wasm.ts`
 binds that ABI; `src/extension.ts` registers semantic tokens,
-diagnostics, symbols, hover, and completion providers directly against
+diagnostics, symbols, hover, completion, definition, type-definition,
+references, inlay-hint, and signature-help providers directly against
 `vscode.languages`. There is no JSON-RPC and no language-client
 dependency — the module's results are already LSP values, serialized by
 serde_json. The workspace is indexed with `workspace.findFiles` and
@@ -70,12 +72,17 @@ npm run test:grammar   # standalone TextMate gate: the grammar asserted over
 npm run test:e2e       # through-wasm e2e gate: the SHIPPED bin/rut-lsp.wasm
                        # driven through the extension's own ABI binding
                        # (src/wasm.ts, bundled to out/wasm.js) over the full
-                       # corpus — zero false diagnostics — plus hover/
-                       # completion smoke (?T alias hover, member resolution
-                       # through a ?Circle binding, bare nmapset/nmap_host
-                       # completion, the RFC 0044 dedicated diagnostic).
-                       # Needs bin/rut-lsp.wasm (npm run build:wasm); runs
-                       # headless in plain node (§8,
+                       # corpus — zero false diagnostics — plus per-feature
+                       # smokes through the artifact: hover/completion
+                       # (?T alias, ?Circle member resolution, bare
+                       # nmapset/nmap_host completion, the RFC 0044
+                       # diagnostic), definition + typeDefinition
+                       # (within-file / cross-file / stdlib), inlay type +
+                       # param hints, references (shadow-aware + the
+                       # cross-file reverse edge), signature help
+                       # (verbatim signature, active slot, mismatch -> no
+                       # help). Needs bin/rut-lsp.wasm (npm run
+                       # build:wasm); runs headless in plain node (§8,
                        # docs/lsp-survey-extension.md)
 npm run test:host      # the Extension Host run (needs `code` on PATH and
                        # bin/rut-lsp.wasm built); SKIPS LOUDLY (exit 0) on
