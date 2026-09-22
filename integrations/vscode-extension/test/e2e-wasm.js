@@ -31,6 +31,13 @@
 // hint's type text is what hover shows for the same binding) and the
 // annotated-lets-never-restated + range-filter laws on a synthetic doc.
 //
+// Phase 4 (lsp-features) adds the REFERENCES + SIGNATURE-HELP smokes:
+// references round trips (a decl -> the EXACT expected use-position
+// set, shadow-aware across scopes, and cross-file through the use
+// graph's reverse edges in BOTH directions), and signature help
+// (verbatim signature + active parameter correct at first/middle/
+// nested positions; an arity mismatch -> no help).
+//
 // Runs headless in plain node — no `code` needed; the Extension Host
 // suite (test:host) stays the loud-skip lane on machines without VS Code.
 'use strict';
@@ -668,6 +675,189 @@ async function main() {
     smokes++;
   }
 
+  // ---- phase 4 (lsp-features): REFERENCES round trips — a decl ->
+  // the EXACT expected use-position set. Shadow-aware across scopes,
+  // and cross-file through the use graph's reverse edges in BOTH
+  // directions (lib-decl query finds the importer's sites; doc-side
+  // query finds the same set through the doc's own use graph). ----
+
+  // the byte offset of a reference — locations must carry (line, char)
+  const refAt = (src, needle, occurrence = 1) => {
+    const [line, ch] = posOf(src, needle, occurrence);
+    return line * 100000 + ch;
+  };
+  const refOffsets = (src, locs, uri) =>
+    locs
+      .filter((l) => l.uri === uri)
+      .map((l) => l.range.start.line * 100000 + l.range.start.character)
+      .sort((a, b) => a - b);
+
+  // WITHIN-FILE + SHADOW-AWARE: the outer v answers with its if-cond
+  // use + final return; the inner shadow answers with exactly its own
+  // return — neither leaks across the scope boundary
+  {
+    const uri = 'file:///ws/e2e-refs-shadow.rut';
+    const src = [
+      'fn go() -> i32 {',
+      '    let v = 1;',
+      '    if (v > 0) {',
+      '        let v = 2;',
+      '        return v;',
+      '    }',
+      '    return v;',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`refs-shadow probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    // the OUTER decl
+    let [dl, dc] = posOf(src, 'let v = 1;', 1);
+    let locs = rut.references(uri, dl, dc + 4, false);
+    let want = [refAt(src, 'v > 0'), refAt(src, 'return v;', 2) + 7].sort((x, y) => x - y);
+    let got = refOffsets(src, locs, uri);
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      bad.push(`outer v refs drifted: ${JSON.stringify(got)} != ${JSON.stringify(want)}`);
+    }
+    // the INNER decl: exactly its own return
+    ;[dl, dc] = posOf(src, 'let v = 2;', 1);
+    locs = rut.references(uri, dl, dc + 4, false);
+    if (!(locs.length === 1 && locs[0].range.start.line === 4)) {
+      bad.push(`inner v refs leaked: ${JSON.stringify(locs)}`);
+    }
+    // includeDeclaration appends the declaring ident
+    locs = rut.references(uri, dl, dc + 4, true);
+    if (!(locs.length === 2 && locs.some((l) => l.range.start.line === 3 && l.range.start.character === dc + 4))) {
+      bad.push(`includeDeclaration lost the decl ident: ${JSON.stringify(locs)}`);
+    }
+    smokes++;
+  }
+
+  // CROSS-FILE, both directions: the lib is indexed via rut.add_def
+  // (pkg matched by its path segment); the importing doc's use name +
+  // usage are the EXACT reference set of the lib's decl — queried from
+  // the doc side AND from the lib-decl side
+  {
+    const libUri = 'file:///ws/gadgets/lib.rut';
+    const libSrc = 'class Widget {\n    id: i32;\n}\n';
+    const mainUri = 'file:///ws/e2e-refs-cross.rut';
+    const mainSrc = 'use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n';
+    rut.addDef(libUri, libSrc);
+    rut.addDef(mainUri, mainSrc); // the extension indexes every workspace file
+    const a = rut.analyze(mainUri, mainSrc);
+    if (a.diags.length !== 0) {
+      bad.push(`refs-cross probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const want = [refAt(mainSrc, 'Widget }'), refAt(mainSrc, 'Widget.new')].sort((x, y) => x - y);
+    // from the importing doc's usage site
+    let [dl, dc] = posOf(mainSrc, 'Widget.new', 1);
+    let locs = rut.references(mainUri, dl, dc, false);
+    let got = refOffsets(mainSrc, locs, mainUri);
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      bad.push(`cross-file refs (doc side) drifted: ${JSON.stringify(got)} != ${JSON.stringify(want)}`);
+    }
+    // from the lib's DECL ident: the same two sites, carrying the doc's uri
+    const a2 = rut.analyze(libUri, libSrc);
+    if (a2.diags.length !== 0) {
+      bad.push(`refs-cross lib doc has ${a2.diags.length} diagnostic(s): ${JSON.stringify(a2.diags[0])}`);
+    }
+    ;[dl, dc] = posOf(libSrc, 'class Widget', 1);
+    locs = rut.references(libUri, dl, dc + 6, false);
+    if (!(locs.length === 2 && locs.every((l) => l.uri === mainUri))) {
+      bad.push(`cross-file refs (lib side) drifted: ${JSON.stringify(locs)}`);
+    }
+    smokes++;
+  }
+
+  // ---- phase 4: SIGNATURE HELP — the verbatim signature, the active
+  // parameter from the comma/paren depth (first/middle/nested), the
+  // method receiver through its type head, and a mismatch -> no help ----
+  {
+    const uri = 'file:///ws/e2e-sighelp.rut';
+    const src = [
+      'fn inner(a: i32) -> i32 {',
+      '    return a;',
+      '}',
+      'fn outer(b: i32, c: i32) -> i32 {',
+      '    return b + c;',
+      '}',
+      'fn hex_val(c: str, k: i32) -> i32 {',
+      '    return k;',
+      '}',
+      'class Circle {',
+      '    r: f64;',
+      '}',
+      'impl Circle {',
+      '    fn grown(self, k: f64) -> Circle { return self; }',
+      '}',
+      'fn arity(a: i32, b: i32) -> i32 {',
+      '    return a;',
+      '}',
+      'fn main() -> i32 {',
+      '    let x = outer(inner(1), 2);',
+      '    let h = hex_val("a", x);',
+      '    let bad: i32 = arity(1, 2, 3);',
+      '    let c = Circle.new(1.0);',
+      '    let g = c.grown(2.0);',
+      '    return x + h + bad + g.r as i32;',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`sighelp probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const wantHelp = (pos, wantLabel, wantActive, what) => {
+      const h = rut.signatureHelp(uri, pos[0], pos[1]);
+      if (!h) {
+        bad.push(`${what}: no help (wanted ${JSON.stringify(wantLabel)} slot ${wantActive})`);
+        return;
+      }
+      const sig = h.signatures[0];
+      if (sig.label !== wantLabel) {
+        bad.push(`${what}: label ${JSON.stringify(sig.label)} != ${JSON.stringify(wantLabel)}`);
+      }
+      if (h.activeParameter !== wantActive) {
+        bad.push(`${what}: activeParameter ${h.activeParameter} != ${wantActive}`);
+      }
+    };
+    // FIRST arg of a nested call: the innermost unclosed paren wins
+    wantHelp(posOf(src, 'inner(1)', 1).map((v, i) => (i === 1 ? v + 6 : v)), 'fn inner(a: i32) -> i32', 0, 'nested first arg');
+    // MIDDLE arg (after the nested call closed): the outer's second slot
+    wantHelp(posOf(src, ', 2);', 1).map((v, i) => (i === 1 ? v + 2 : v)), 'fn outer(b: i32, c: i32) -> i32', 1, 'outer second arg');
+    // the outer's FIRST arg (the inner call itself): slot 0
+    {
+      const [ol, oc] = posOf(src, 'outer(inner', 1);
+      wantHelp([ol, oc + 6], 'fn outer(b: i32, c: i32) -> i32', 0, 'outer first arg');
+    }
+    // free call: first arg then second
+    wantHelp(posOf(src, '"a"', 1), 'fn hex_val(c: str, k: i32) -> i32', 0, 'free call first arg');
+    wantHelp(posOf(src, ', x);', 1).map((v, i) => (i === 1 ? v + 2 : v)), 'fn hex_val(c: str, k: i32) -> i32', 1, 'free call second arg');
+    // METHOD call through a typed receiver: self never surfaces
+    {
+      const [ml, mc] = posOf(src, 'grown(2.0)', 1);
+      const h = rut.signatureHelp(uri, ml, mc + 6);
+      if (!h || h.signatures[0].label !== 'fn grown(self, k: f64) -> Circle' || h.activeParameter !== 0) {
+        bad.push(`method receiver help drifted: ${JSON.stringify(h)}`);
+      } else {
+        const labels = h.signatures[0].parameters.map((p) => p.label);
+        if (JSON.stringify(labels) !== JSON.stringify(['k: f64'])) {
+          bad.push(`method param pieces drifted: ${JSON.stringify(labels)}`);
+        }
+      }
+    }
+    // a mismatch shows NO help, never wrong help
+    {
+      const [bl, bc] = posOf(src, '2, 3);', 1);
+      const h = rut.signatureHelp(uri, bl, bc + 5);
+      if (h !== null) {
+        bad.push(`arity mismatch must show no help: ${JSON.stringify(h)}`);
+      }
+    }
+    smokes++;
+  }
+
   // ---- the RFC 0044 dedicated diagnostic (M2's acceptance) ----
   {
     const b = rut.analyze('file:///ws/e2e-postfix.rut', 'fn f(p: i32?) -> nil {\n}\n');
@@ -722,7 +912,8 @@ async function main() {
     `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/RFC 0044/` +
     `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover/` +
     `def-within/def-cross/def-std/typeDefinition/` +
-    `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws) ` +
+    `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
+    `refs-shadow/refs-cross/sighelp) ` +
     `through bin/rut-lsp.wasm`);
 }
 

@@ -19,6 +19,8 @@
 //!   rut_definition(uri, line, ch) -> ptr       LSP Location array or null
 //!   rut_type_definition(uri, line, ch) -> ptr  LSP Location array or null
 //!   rut_inlay(uri, sl, sc, el, ec) -> ptr      LSP InlayHint array or null
+//!   rut_references(uri, line, ch, incl) -> ptr LSP Location array or null
+//!   rut_signature_help(uri, line, ch) -> ptr   LSP SignatureHelp or null
 //!   rut_add_def(uri, src)                      index a workspace file
 //!
 //! Every result is `[u32 little-endian length][bytes]` at the returned
@@ -262,6 +264,51 @@ pub extern "C" fn rut_inlay(
         )
     };
     json_envelope(serde_json::json!(hints))
+}
+
+/// references — the definition index read BACKWARDS: every position
+/// whose go-to-definition lands on the declaration under `line`/`ch`.
+/// Within-file through the binding pass (shadow-aware), cross-file
+/// through the use graph's reverse edges. `include_decl` (0/1) follows
+/// the LSP toggle. `null` when the doc is unknown, `[]` when nothing
+/// resolves — the same `{uri, range}` Location JSON `rut_definition`
+/// speaks.
+#[no_mangle]
+pub extern "C" fn rut_references(
+    uri_ptr: *const u8,
+    uri_len: usize,
+    line: u32,
+    ch: u32,
+    include_decl: u32,
+) -> *mut u8 {
+    let uri = unsafe { read_str(uri_ptr, uri_len) };
+    let Some(src) = state().docs.get(uri).cloned() else {
+        return envelope(b"null");
+    };
+    let locs = {
+        let defs = &state().defs;
+        rut_lsp::analysis::references_at(uri, &src, defs, line, ch, include_decl != 0)
+    };
+    locations_envelope(&locs)
+}
+
+/// signature help at an LSP position — the callee resolves through the
+/// same machinery the parameter-name hints ride (free calls by unique
+/// recorded params, methods through the receiver's type head), the
+/// signature renders verbatim, the active parameter comes from the
+/// comma/paren depth at the request position. Ambiguity or arity
+/// mismatch → `null` (never wrong help).
+#[no_mangle]
+pub extern "C" fn rut_signature_help(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u32) -> *mut u8 {
+    let uri = unsafe { read_str(uri_ptr, uri_len) };
+    let Some(src) = state().docs.get(uri).cloned() else {
+        return envelope(b"null");
+    };
+    let out = {
+        let defs = &state().defs;
+        rut_lsp::analysis::signature_help_at(uri, &src, defs, line, ch)
+    };
+    json_envelope(serde_json::json!(out))
 }
 
 /// index one workspace file (the host's stand-in for the native server's

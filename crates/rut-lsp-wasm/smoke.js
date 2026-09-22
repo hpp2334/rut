@@ -91,6 +91,33 @@ fn go(g: Greeter) -> str {
   const stdHover = take(e.rut_hover(...put(stdUri), 1, STD_SRC.split("\n")[1].indexOf("len") + 1));
   assert.ok(stdHover && stdHover.contents.value.includes("len"), "std surface hover");
 
+  // references: the fn-local `g`'s decl -> its use in the body (the
+  // definition index read backwards); includeDeclaration adds the decl
+  const REF_SRC = "fn go(k: i32) -> i32 {\n    return k;\n}\n";
+  const refUri = "file:///ws/refs.rut";
+  e.rut_begin();
+  take(e.rut_analyze(...put(refUri), ...put(REF_SRC)));
+  e.rut_begin();
+  const refs = take(e.rut_references(...put(refUri), 0, 6, 0));
+  assert.ok(Array.isArray(refs) && refs.length === 1, `param refs: ${JSON.stringify(refs)}`);
+  assert.strictEqual(refs[0].range.start.line, 1, "the body use");
+  e.rut_begin();
+  const refsWithDecl = take(e.rut_references(...put(refUri), 0, 6, 1));
+  assert.strictEqual(refsWithDecl.length, 2, "includeDeclaration adds the decl ident");
+
+  // signature help: the verbatim signature + the active slot
+  const SIG_SRC = "fn hex_val(c: str, k: i32) -> i32 {\n    return k;\n}\nfn main() -> i32 {\n    return hex_val(\"a\", 2);\n}\n";
+  const sigUri = "file:///ws/sig.rut";
+  e.rut_begin();
+  take(e.rut_analyze(...put(sigUri), ...put(SIG_SRC)));
+  e.rut_begin();
+  const sigLines = SIG_SRC.split("\n");
+  const help = take(e.rut_signature_help(...put(sigUri), 4, sigLines[4].indexOf("2);")));
+  assert.ok(help && help.signatures.length === 1, `help: ${JSON.stringify(help)}`);
+  assert.strictEqual(help.signatures[0].label, "fn hex_val(c: str, k: i32) -> i32");
+  assert.strictEqual(help.signatures[0].parameters[1].label, "k: i32", "params as written");
+  assert.strictEqual(help.activeParameter, 1, "the cursor sits on the second arg");
+
   // forget: a closed doc is gone (run last — it closes the main doc)
   e.rut_begin();
   e.rut_forget(...put(URI));

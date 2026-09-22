@@ -16,7 +16,9 @@ use crate::definition;
 use crate::hover;
 use crate::inlay;
 use crate::line_index::LineIndex;
+use crate::references;
 use crate::semantic::{self, RawSymbol, SymKind, TokenType};
+use crate::signature_help;
 
 pub struct Analysis {
     pub diags: Vec<Diagnostic>,
@@ -226,12 +228,12 @@ pub fn complete_at(
 /// shim: the extension does).
 pub fn definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Vec<definition::DefLocation> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
         doc_uri: uri,
         toks: &toks,
         ast: &ast,
-        doc: &doc,
-        extra,
+        idxs: &idxs,
     };
     definition::definition(&ctx, byte_at(&normalized, line, ch))
 }
@@ -240,14 +242,24 @@ pub fn definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32,
 /// that type's declaration (the cheap shape the survey priced)
 pub fn type_definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Vec<definition::DefLocation> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
         doc_uri: uri,
         toks: &toks,
         ast: &ast,
-        doc: &doc,
-        extra,
+        idxs: &idxs,
     };
     definition::type_definition(&ctx, byte_at(&normalized, line, ch))
+}
+
+/// the token + AST half of `doc_ctx` — `references` re-parses candidate
+/// files over their indexed source (doc-sized files; the per-query
+/// re-parse is the house style — hover already rides it)
+pub(crate) fn parse_at(uri: &str, src: &str) -> (Vec<Token>, Ast) {
+    let normalized = normalize(src);
+    let (toks, _) = lex(&normalized);
+    let (ast, _) = parse(&normalized, mode_of(uri));
+    (toks, ast)
 }
 
 /// inlay hints over a document range (the survey §4.3): TYPE hints on
@@ -270,6 +282,47 @@ pub fn inlay_hints_at(uri: &str, src: &str, extra: &[hover::DefIndex], range: Ra
     let lo = index.byte(&normalized, range.start.line, range.start.character);
     let hi = index.byte(&normalized, range.end.line, range.end.character);
     inlay::hints(&ctx, lo, hi)
+}
+
+/// references at an LSP position (the survey §4.4): the definition index
+/// read BACKWARDS — a token is a reference iff go-to-definition from it
+/// lands on the declaration under the cursor. Within-file through the
+/// binding pass (shadow-aware), cross-file through the use graph's
+/// reverse edges. `include_declaration` per the LSP spec.
+pub fn references_at(
+    uri: &str,
+    src: &str,
+    extra: &[hover::DefIndex],
+    line: u32,
+    ch: u32,
+    include_declaration: bool,
+) -> Vec<definition::DefLocation> {
+    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let idxs = doc_idxs(&doc, extra);
+    let ctx = definition::Ctx {
+        doc_uri: uri,
+        toks: &toks,
+        ast: &ast,
+        idxs: &idxs,
+    };
+    references::references(&ctx, byte_at(&normalized, line, ch), include_declaration)
+}
+
+/// signature help at an LSP position (the survey §4.4): the callee
+/// resolves through phase 3's machinery (free calls by unique recorded
+/// params, methods through the receiver's type head), the signature
+/// renders verbatim, the active parameter comes from the comma/paren
+/// depth at the request position. Ambiguity or arity mismatch → no
+/// help, never wrong help.
+pub fn signature_help_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Option<SignatureHelp> {
+    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let idxs = doc_idxs(&doc, extra);
+    let ctx = signature_help::Ctx {
+        toks: &toks,
+        ast: &ast,
+        idxs: &idxs,
+    };
+    signature_help::signature_help(&ctx, byte_at(&normalized, line, ch))
 }
 
 // ---- symbols ----

@@ -85,6 +85,11 @@ impl Editor {
 }
 
 async fn spawn() -> Editor {
+    spawn_at("").await
+}
+
+/// `root`: a file:// uri scanned for rut files at initialize (empty = none)
+async fn spawn_at(root: &str) -> Editor {
     let (client_tx, server_rx) = tokio::io::duplex(4096);
     let (server_tx, client_rx) = tokio::io::duplex(4096);
     let (service, socket) = LspService::new(|client| Backend::new(client));
@@ -93,16 +98,22 @@ async fn spawn() -> Editor {
     });
     let mut editor = Editor { tx: client_tx, rx: client_rx, next_id: 0 };
     let mut drain = Vec::new();
+    let mut init_params = json!({"capabilities": {}});
+    if !root.is_empty() {
+        init_params["rootUri"] = json!(root);
+    }
     let init = editor
         .request(
             "initialize",
-            json!({"capabilities": {}}),
+            init_params,
             &mut drain,
         )
         .await;
     assert!(init["result"]["capabilities"]["semanticTokensProvider"].is_object());
     assert!(init["result"]["capabilities"]["documentSymbolProvider"].is_boolean());
     assert!(init["result"]["capabilities"]["textDocumentSync"].is_object());
+    assert!(init["result"]["capabilities"]["referencesProvider"].is_boolean());
+    assert!(init["result"]["capabilities"]["signatureHelpProvider"].is_object());
     editor.notify("initialized", json!({})).await;
     editor
 }
@@ -419,4 +430,236 @@ fn go() -> f64 {
         )
         .await;
     assert!(resp["result"].is_null());
+}
+
+#[tokio::test]
+async fn references_and_signature_help_on_the_wire() {
+    let mut editor = spawn().await;
+    // capabilities: both features advertised
+    // (checked on the initialize result inside spawn() for the older
+    // ones; here the two new ones)
+    // — spawn() asserts the pre-phase capabilities; the new ones:
+    let src = "\
+class Circle {
+    r: f64;
+}
+impl Circle {
+    fn grown(self, k: f64) -> Circle { return self; }
+}
+fn hex_val(c: str, k: i32) -> i32 {
+    return k;
+}
+fn go() -> i32 {
+    let v = 1;
+    if (v > 0) {
+        let v = 2;
+        return hex_val(\"a\", v);
+    }
+    return v + hex_val(\"b\", 0);
+}
+";
+    let uri = "file:///w/refs.rut";
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": uri, "languageId": "rut", "version": 1, "text": src
+            }}),
+        )
+        .await;
+    let mut notes = Vec::new();
+
+    // ---- references: the OUTER v — its if-condition use + final
+    // return; the inner shadow's decl/return do NOT leak in ----
+    let (l, c) = pos_of(src, "let v = 1;", 0);
+    let resp = editor
+        .request(
+            "textDocument/references",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": l, "character": c + 4},
+                "context": {"includeDeclaration": false}
+            }),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("reference locations");
+    let mut spots: Vec<(u32, u32)> = locs
+        .iter()
+        .map(|l| {
+            (
+                l["range"]["start"]["line"].as_u64().unwrap() as u32,
+                l["range"]["start"]["character"].as_u64().unwrap() as u32,
+            )
+        })
+        .collect();
+    spots.sort();
+    let (cl, cc) = pos_of(src, "if (v > 0)", 0);
+    let (rl, rc) = pos_of(src, "return v +", 0);
+    assert_eq!(
+        spots,
+        vec![(cl, cc + 4), (rl, rc + 7)],
+        "shadow-aware use set: {locs:?}"
+    );
+
+    // the INNER v: exactly its own hex_val argument
+    let (l2, c2) = pos_of(src, "let v = 2;", 0);
+    let resp = editor
+        .request(
+            "textDocument/references",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": l2, "character": c2 + 4},
+                "context": {"includeDeclaration": false}
+            }),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("inner refs");
+    assert_eq!(locs.len(), 1, "the shadow keeps its own uses: {locs:?}");
+    assert_eq!(locs[0]["range"]["start"]["line"], 13);
+
+    // includeDeclaration appends the declaring ident
+    let resp = editor
+        .request(
+            "textDocument/references",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": l2, "character": c2 + 4},
+                "context": {"includeDeclaration": true}
+            }),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("decl-inclusive refs");
+    assert_eq!(locs.len(), 2, "use + decl: {locs:?}");
+
+    // ---- signature help: active parameter from the comma depth ----
+    // needle: h0 e1 x2 _3 v4 a5 l6 (7 "8 a9 "10 ,11 ' '12 v13
+    let (l, c) = pos_of(src, "hex_val(\"a\", v)", 0);
+    let resp = editor
+        .request(
+            "textDocument/signatureHelp",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": l, "character": c + 8}
+            }),
+            &mut notes,
+        )
+        .await;
+    let help = resp["result"].as_object().expect("signature help");
+    let sig = &help["signatures"][0];
+    assert_eq!(
+        sig["label"].as_str().unwrap(),
+        "fn hex_val(c: str, k: i32) -> i32",
+        "the signature renders verbatim"
+    );
+    let params = sig["parameters"].as_array().unwrap();
+    let labels: Vec<&str> = params
+        .iter()
+        .map(|p| p["label"].as_str().unwrap())
+        .collect();
+    assert_eq!(labels, vec!["c: str", "k: i32"], "params as written");
+    assert_eq!(help["activeSignature"], 0);
+    assert_eq!(help["activeParameter"], 0, "the cursor sits on the first arg");
+    // the second arg highlights slot 1
+    let resp = editor
+        .request(
+            "textDocument/signatureHelp",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": l, "character": c + 13}
+            }),
+            &mut notes,
+        )
+        .await;
+    assert_eq!(resp["result"]["activeParameter"], 1);
+
+    // ---- a mismatch shows NO help (never wrong help) ----
+    let bad = "\
+fn f(a: i32, b: i32) -> i32 {
+    return a;
+}
+fn main() -> i32 {
+    return f(1, 2, 3);
+}
+";
+    let bad_uri = "file:///w/arity.rut";
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": bad_uri, "languageId": "rut", "version": 1, "text": bad
+            }}),
+        )
+        .await;
+    let (bl, bc) = pos_of(bad, "3);", 0);
+    let resp = editor
+        .request(
+            "textDocument/signatureHelp",
+            json!({
+                "textDocument": {"uri": bad_uri},
+                "position": {"line": bl, "character": bc}
+            }),
+            &mut notes,
+        )
+        .await;
+    assert!(resp["result"].is_null(), "three args for two params: {resp}");
+
+    // ---- cross-file references: the reverse use-graph edge. The
+    // server face indexes the workspace at initialize, so the importing
+    // doc and the exporting lib both live on a scratch disk workspace ----
+    let ws = std::env::temp_dir().join(format!("rut-lsp-refs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&ws);
+    std::fs::create_dir_all(ws.join("gadgets")).unwrap();
+    let lib_src = "class Widget {\n    id: i32;\n}\n";
+    let main_src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n";
+    let lib_uri = format!("file://{}/gadgets/lib.rut", ws.to_str().unwrap());
+    let main_uri = format!("file://{}/main.rut", ws.to_str().unwrap());
+    std::fs::write(ws.join("gadgets/lib.rut"), lib_src).unwrap();
+    std::fs::write(ws.join("main.rut"), main_src).unwrap();
+    let ws_uri = format!("file://{}", ws.to_str().unwrap());
+    let mut root_editor = spawn_at(&ws_uri).await;
+    // the workspace scan runs off the hot initialize path — give it a
+    // beat before the first cross-file query
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    let mut notes = Vec::new();
+    root_editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": lib_uri, "languageId": "rut", "version": 1, "text": lib_src
+            }}),
+        )
+        .await;
+    root_editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": main_uri, "languageId": "rut", "version": 1, "text": main_src
+            }}),
+        )
+        .await;
+    // references FROM THE LIB'S DECL: the importing doc's use name +
+    // usage come back through the reverse edge
+    let (wl, wc) = pos_of(lib_src, "class Widget", 0);
+    let resp = root_editor
+        .request(
+            "textDocument/references",
+            json!({
+                "textDocument": {"uri": lib_uri},
+                "position": {"line": wl, "character": wc + 6},
+                "context": {"includeDeclaration": false}
+            }),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("cross-file refs");
+    assert_eq!(locs.len(), 2, "use name + usage: {locs:?}");
+    assert!(locs.iter().all(|l| l["uri"] == main_uri), "{locs:?}");
+    let _ = remove_ws(ws);
+}
+
+fn remove_ws(ws: std::path::PathBuf) -> std::io::Result<()> {
+    std::fs::remove_dir_all(ws)
 }

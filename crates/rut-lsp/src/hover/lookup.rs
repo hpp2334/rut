@@ -352,3 +352,27 @@ pub(crate) fn render_target(t: MemberTarget) -> String {
 pub(crate) fn trait_decl<'a>(idxs: &'a [&'a DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
     find_ty(idxs, name).filter(|(_, t)| matches!(t.form, TyForm::Trait | TyForm::BuiltinTrait))
 }
+
+/// the inherent impl-block fn `impl ty_name { fn member(..) }` — the
+/// phase-3 callee rule, shared by the call-site PARAMETER hints and
+/// signature help (one rule, three consumers now — the `member_target`
+/// precedent). Own-surface methods (trait bodies, builtin/primitive
+/// surfaces) have no recorded params: a hit there is FINAL (the
+/// known-receiver-is-final law) and yields `None`, never a wrong
+/// signature from a same-named impl fn in another index.
+pub(crate) fn impl_method_fn<'a>(idxs: &[&'a DefIndex], ty_name: &str, member: &str) -> Option<&'a FnDef> {
+    for i in idxs {
+        if let Some(t) = i.ty(ty_name) {
+            if t.methods.iter().any(|m| m.name == member) {
+                return None;
+            }
+        }
+        let owner = format!("impl {ty_name}");
+        for f in &i.fns {
+            if f.name == member && f.owner.as_deref() == Some(owner.as_str()) {
+                return Some(f);
+            }
+        }
+    }
+    None
+}

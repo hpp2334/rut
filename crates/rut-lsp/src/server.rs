@@ -155,9 +155,14 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
                 type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
+                references_provider: Some(OneOf::Left(true)),
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_string()]),
+                    ..Default::default()
+                }),
+                signature_help_provider: Some(SignatureHelpOptions {
+                    trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -267,12 +272,11 @@ impl LanguageServer for Backend {
             let defs = self.defs.read().unwrap();
             analysis::type_definition_at(uri.as_str(), &text, &defs, p.line, p.character)
         };
+        // locations() only ever builds the Array response
         Ok(self.locations(locs).map(|r| match r {
             GotoDefinitionResponse::Array(v) => GotoTypeDefinitionResponse::Array(v),
-            other => GotoTypeDefinitionResponse::Scalar(match other {
-                GotoDefinitionResponse::Scalar(l) => l,
-                _ => unreachable!("locations() only builds Array/Scalar"),
-            }),
+            GotoDefinitionResponse::Scalar(l) => GotoTypeDefinitionResponse::Scalar(l),
+            _ => unreachable!("locations() only builds Array"),
         }))
     }
 
@@ -285,17 +289,43 @@ impl LanguageServer for Backend {
         };
         Ok(Some(out))
     }
+
+    async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
+        let uri = params.text_document_position.text_document.uri;
+        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let p = params.text_document_position.position;
+        let locs = {
+            let defs = self.defs.read().unwrap();
+            analysis::references_at(
+                uri.as_str(),
+                &text,
+                &defs,
+                p.line,
+                p.character,
+                params.context.include_declaration,
+            )
+        };
+        Ok(self.resolve_locations(locs))
+    }
+
+    async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let p = params.text_document_position_params.position;
+        let out = {
+            let defs = self.defs.read().unwrap();
+            analysis::signature_help_at(uri.as_str(), &text, &defs, p.line, p.character)
+        };
+        Ok(out)
+    }
 }
 
 impl Backend {
-    /// face-agnostic definition targets -> LSP locations: relative
-    /// targets (the std surface's true `rut/...` paths) resolve against
-    /// the workspace root; targets that resolve nowhere stay relative
-    /// (the client may still know the file — never a wrong jump)
-    fn locations(&self, locs: Vec<crate::definition::DefLocation>) -> Option<GotoDefinitionResponse> {
-        if locs.is_empty() {
-            return None;
-        }
+    /// face-agnostic definition/references targets -> LSP locations:
+    /// relative targets (the std surface's true `rut/...` paths) resolve
+    /// against the workspace root; targets that resolve nowhere stay
+    /// relative (the client may still know the file — never a wrong jump)
+    fn resolve_locations(&self, locs: Vec<crate::definition::DefLocation>) -> Option<Vec<Location>> {
         let root = self.root.read().unwrap().clone();
         let out: Vec<Location> = locs
             .into_iter()
@@ -307,9 +337,14 @@ impl Backend {
             })
             .collect();
         if out.is_empty() {
-            return None;
+            None
+        } else {
+            Some(out)
         }
-        Some(GotoDefinitionResponse::Array(out))
+    }
+
+    fn locations(&self, locs: Vec<crate::definition::DefLocation>) -> Option<GotoDefinitionResponse> {
+        self.resolve_locations(locs).map(GotoDefinitionResponse::Array)
     }
 }
 

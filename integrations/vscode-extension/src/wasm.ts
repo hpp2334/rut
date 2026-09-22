@@ -72,6 +72,28 @@ export interface LspInlayHint {
   tooltip?: { kind: string; value: string } | string;
 }
 
+/// an LSP ParameterInformation — the label is the param as written (a
+/// substring of the signature label)
+export interface LspParameterInformation {
+  label: string;
+}
+
+/// an LSP SignatureInformation — the verbatim `fn` signature plus its
+/// parameters as written
+export interface LspSignatureInformation {
+  label: string;
+  documentation?: { kind: string; value: string };
+  parameters?: LspParameterInformation[];
+}
+
+/// an LSP SignatureHelp — one signature, the active slot computed from
+/// the comma/paren depth at the request position
+export interface LspSignatureHelp {
+  signatures: LspSignatureInformation[];
+  activeSignature?: number;
+  activeParameter?: number;
+}
+
 interface RutExports {
   memory: WebAssembly.Memory;
   rut_begin(): void;
@@ -91,6 +113,8 @@ interface RutExports {
     endLine: number,
     endCh: number
   ): number;
+  rut_references(uriPtr: number, uriLen: number, line: number, ch: number, includeDecl: number): number;
+  rut_signature_help(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_add_def(uriPtr: number, uriLen: number, srcPtr: number, srcLen: number): void;
 }
 
@@ -165,6 +189,25 @@ export class RutWasm {
     return this.call(() => {
       const [u, ul] = this.put(uri);
       return this.e.rut_inlay(u, ul, start.line, start.character, end.line, end.character);
+    });
+  }
+
+  /// find references at an LSP position — the definition index read
+  /// backwards ([] when nothing resolves); includeDeclaration follows
+  /// the LSP toggle
+  references(uri: string, line: number, character: number, includeDeclaration: boolean): LspLocation[] {
+    return this.call(() => {
+      const [u, ul] = this.put(uri);
+      return this.e.rut_references(u, ul, line, character, includeDeclaration ? 1 : 0);
+    });
+  }
+
+  /// signature help at an LSP position — null when there is no call to
+  /// help with or the callee does not resolve to one known signature
+  signatureHelp(uri: string, line: number, character: number): LspSignatureHelp | null {
+    return this.call(() => {
+      const [u, ul] = this.put(uri);
+      return this.e.rut_signature_help(u, ul, line, character);
     });
   }
 

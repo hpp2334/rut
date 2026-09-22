@@ -9,7 +9,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Analysis, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSymbol, RutWasm } from './wasm';
+import { Analysis, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSignatureHelp, LspSymbol, RutWasm } from './wasm';
 
 const SELECTOR: vscode.DocumentSelector = { language: 'rut' };
 
@@ -91,7 +91,9 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
     registerCompletion(rut),
     registerDefinition(rut),
     registerTypeDefinition(rut),
-    registerInlayHints(rut)
+    registerReferences(rut),
+    registerInlayHints(rut),
+    registerSignatureHelp(rut)
   );
 
   // workspace index off the hot activation path — hover/completion may
@@ -204,6 +206,42 @@ function registerInlayHints(rut: RutWasm): vscode.Disposable {
         .map(toInlayHint);
     },
   });
+}
+
+// Shift+F12 / Find All References — the wasm references query (the
+// definition index read backwards); the LSP includeDeclaration toggle
+// rides the vscode ReferenceContext through
+function registerReferences(rut: RutWasm): vscode.Disposable {
+  return vscode.languages.registerReferenceProvider(SELECTOR, {
+    provideReferences(
+      doc: vscode.TextDocument,
+      position: vscode.Position,
+      context: vscode.ReferenceContext
+    ): vscode.Location[] {
+      return resolveLocations(
+        rut.references(doc.uri.toString(), position.line, position.character, context.includeDeclaration)
+      );
+    },
+  });
+}
+
+// signature help (`(` / `,` triggers) — the callee resolves through the
+// same machinery the param-name hints ride; a mismatch shows nothing
+function registerSignatureHelp(rut: RutWasm): vscode.Disposable {
+  return vscode.languages.registerSignatureHelpProvider(
+    SELECTOR,
+    {
+      provideSignatureHelp(
+        doc: vscode.TextDocument,
+        position: vscode.Position
+      ): vscode.SignatureHelp | undefined {
+        const h = rut.signatureHelp(doc.uri.toString(), position.line, position.character);
+        return h ? toSignatureHelp(h) : undefined;
+      },
+    },
+    '(',
+    ','
+  );
 }
 
 // ---- workspace index (the wasm stand-in for the server's fs walk) ----
@@ -326,4 +364,21 @@ function toInlayHint(h: LspInlayHint): vscode.InlayHint {
     );
   }
   return hint;
+}
+
+function toSignatureHelp(h: LspSignatureHelp): vscode.SignatureHelp {
+  const help = new vscode.SignatureHelp();
+  help.signatures = h.signatures.map((s) => {
+    const info = new vscode.SignatureInformation(
+      s.label,
+      s.documentation ? new vscode.MarkdownString(s.documentation.value) : undefined
+    );
+    info.parameters = (s.parameters ?? []).map((p) => new vscode.ParameterInformation(p.label));
+    return info;
+  });
+  help.activeSignature = h.activeSignature ?? 0;
+  if (h.activeParameter !== undefined) {
+    help.activeParameter = h.activeParameter;
+  }
+  return help;
 }

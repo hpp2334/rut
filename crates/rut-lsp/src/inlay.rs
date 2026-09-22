@@ -29,7 +29,7 @@ use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, Marku
 use rut_ast::ast::*;
 use rut_lexer::token::Token;
 
-use crate::hover::lookup::recv_type;
+use crate::hover::lookup::{self, recv_type};
 use crate::hover::types::{head_of_ty, DefIndex, FnDef};
 use crate::hover::{bindings, infer, BindKind, Binding};
 use crate::line_index::LineIndex;
@@ -288,25 +288,10 @@ impl CallCx<'_> {
     }
 
     /// the callee's parameter names, `self` excluded — inherent
-    /// impl-block methods only. Own-surface methods (trait bodies,
-    /// builtin/primitive surfaces) have no recorded params: a hit there
-    /// is FINAL (the known-receiver-is-final law) and yields no hints,
-    /// never a wrong name from a same-named impl fn
+    /// impl-block methods only, via the shared `impl_method_fn` rule
+    /// (own-surface methods are FINAL with no hints, never wrong names)
     fn method_params(&self, ty_name: &str, member: &str) -> Option<Vec<String>> {
-        for i in self.ctx.idxs {
-            if let Some(t) = i.ty(ty_name) {
-                if t.methods.iter().any(|m| m.name == member) {
-                    return None;
-                }
-            }
-            let owner = format!("impl {ty_name}");
-            for f in &i.fns {
-                if f.name == member && f.owner.as_deref() == Some(owner.as_str()) {
-                    return Some(f.params.clone());
-                }
-            }
-        }
-        None
+        lookup::impl_method_fn(self.ctx.idxs, ty_name, member).map(|f| f.params.clone())
     }
 
     /// one PARAMETER hint per arg, at the arg's first byte — only on

@@ -47,24 +47,26 @@ pub struct DefLocation {
 }
 
 /// everything one query needs — built per request over the normalized
-/// source (the same `doc_ctx` pipeline hover rides)
+/// source (the same `doc_ctx` pipeline hover rides). `idxs` is the
+/// lookup chain with the open document FIRST; `references` builds the
+/// same shape per candidate file, so the matcher runs unchanged there.
 pub struct Ctx<'a> {
     pub doc_uri: &'a str,
     pub toks: &'a [Token],
     pub ast: &'a Ast,
-    pub doc: &'a DefIndex,
-    pub extra: &'a [DefIndex],
+    /// the lookup chain: the open document first, then std + workspace
+    pub idxs: &'a [&'a DefIndex],
 }
 
 impl Ctx<'_> {
-    /// the lookup chain: the open document first, then std + workspace
-    fn idxs(&self) -> Vec<&DefIndex> {
-        std::iter::once(self.doc).chain(self.extra.iter()).collect()
+    /// the document's own index — the chain head
+    pub(crate) fn doc(&self) -> &DefIndex {
+        self.idxs[0]
     }
 }
 
 /// byte span -> LSP range over the TARGET index's own text
-fn loc_at(doc_uri: &str, i: &DefIndex, span: Span) -> DefLocation {
+pub(crate) fn loc_at(doc_uri: &str, i: &DefIndex, span: Span) -> DefLocation {
     let uri = if i.origin == doc_uri {
         doc_uri.to_string()
     } else {
@@ -80,7 +82,7 @@ fn loc_at(doc_uri: &str, i: &DefIndex, span: Span) -> DefLocation {
 
 /// byte span -> LSP range (the analysis layer's converter, inlined here
 /// so the module stays face-agnostic)
-fn range_of(index: &LineIndex, src: &str, span: Span) -> Range {
+pub(crate) fn range_of(index: &LineIndex, src: &str, span: Span) -> Range {
     let (l1, c1) = index.position(src, span.lo);
     let (l2, c2) = index.position(src, span.hi);
     Range {
@@ -105,7 +107,7 @@ fn origin_uri(origin: &str) -> String {
 /// does this index speak for `pkg`? — exact origin (the std surface's
 /// label), a path segment named `pkg` (…/pouch/pouch.rut), or the file
 /// stem (…/gadgets/lib.rut for pkg `gadgets`)
-fn matches_pkg(i: &DefIndex, pkg: &str) -> bool {
+pub(crate) fn matches_pkg(i: &DefIndex, pkg: &str) -> bool {
     let hay = i.src_path.as_deref().unwrap_or(&i.origin);
     if hay == pkg {
         return true;
@@ -147,11 +149,11 @@ fn chain_for<'a>(
 /// a type's definition target span — the declaring ident (token
 /// recovery at build time); the whole decl is the fallback when
 /// recovery failed on a degenerate parse
-fn ty_span(t: &TyDef) -> Span {
+pub(crate) fn ty_span(t: &TyDef) -> Span {
     t.name_span.unwrap_or(t.span)
 }
 
-fn fn_span(f: &FnDef) -> Span {
+pub(crate) fn fn_span(f: &FnDef) -> Span {
     f.name_span.unwrap_or(f.span)
 }
 
@@ -170,16 +172,16 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     if crate::semantic::is_keyword(name) {
         return Vec::new();
     }
-    let idxs = ctx.idxs();
-    let imported = import_map(ctx.doc);
+    let idxs = ctx.idxs;
+    let imported = import_map(ctx.doc());
 
     // 1. decl sites — the hovered span EXACTLY equals a recorded name
     //    span (field / enum member / module let): the declaration IS
     //    the answer (go-to-def on a decl → itself)
-    if decl_site(ctx.doc, t.span, name) {
+    if decl_site(ctx.doc(), t.span, name) {
         return vec![DefLocation {
             uri: ctx.doc_uri.to_string(),
-            range: range_of(&ctx.doc.lines, &ctx.doc.src, t.span),
+            range: range_of(&ctx.doc().lines, &ctx.doc().src, t.span),
         }];
     }
 
@@ -187,7 +189,7 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     //    on `Vec` inside `use pouch::Vec;` jumps to the exporting
     //    module's decl, strictly inside the named pkg
     if let Some(u) = ctx
-        .doc
+        .doc()
         .uses
         .iter()
         .find(|u| u.name == *name && u.name_span == Some(t.span))
@@ -207,7 +209,7 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     if binds.iter().any(|b| b.name == *name && b.decl_ident_span == t.span) {
         return vec![DefLocation {
             uri: ctx.doc_uri.to_string(),
-            range: range_of(&ctx.doc.lines, &ctx.doc.src, t.span),
+            range: range_of(&ctx.doc().lines, &ctx.doc().src, t.span),
         }];
     }
 
@@ -244,7 +246,7 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     if let Some(b) = bindings::resolve(&binds, pos, name) {
         return vec![DefLocation {
             uri: ctx.doc_uri.to_string(),
-            range: range_of(&ctx.doc.lines, &ctx.doc.src, b.decl_ident_span),
+            range: range_of(&ctx.doc().lines, &ctx.doc().src, b.decl_ident_span),
         }];
     }
 
@@ -281,8 +283,8 @@ pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     if crate::semantic::is_keyword(name) {
         return Vec::new();
     }
-    let idxs = ctx.idxs();
-    let imported = import_map(ctx.doc);
+    let idxs = ctx.idxs;
+    let imported = import_map(ctx.doc());
     let binds = bindings::collect(ctx.ast, ctx.toks, &idxs);
 
     // member position: the member's DECLARED type — `w.item` (a
@@ -430,8 +432,16 @@ mod tests {
         doc_at(DOC, src)
     }
 
-    fn ctx<'a>(d: &'a Doc, extra: &'a [DefIndex]) -> Ctx<'a> {
-        Ctx { doc_uri: DOC, toks: &d.toks, ast: &d.ast, doc: &d.index, extra }
+    /// run `query` against the ctx built from `d` + `extra` (the chain
+    /// lives here, so the Ctx's borrow of it is valid for the call)
+    fn run(
+        d: &Doc,
+        extra: &[DefIndex],
+        query: impl Fn(&Ctx) -> Vec<DefLocation>,
+    ) -> Vec<DefLocation> {
+        let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
+        let ctx = Ctx { doc_uri: DOC, toks: &d.toks, ast: &d.ast, idxs: &idxs };
+        query(&ctx)
     }
 
     /// byte offset of the `n`th (1-based) occurrence of `needle`
@@ -455,11 +465,11 @@ mod tests {
     }
 
     fn def(d: &Doc, pos: u32, extra: &[DefIndex]) -> Vec<DefLocation> {
-        definition(&ctx(d, extra), pos)
+        run(d, extra, |c| definition(c, pos))
     }
 
     fn typedef(d: &Doc, pos: u32, extra: &[DefIndex]) -> Vec<DefLocation> {
-        type_definition(&ctx(d, extra), pos)
+        run(d, extra, |c| type_definition(c, pos))
     }
 
     const WIDGET_DOC: &str = "class Widget {\n    id: i32;\n}\n";
