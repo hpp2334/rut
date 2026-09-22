@@ -2,9 +2,11 @@ use pouch::{ Vec };
 // RFC 0007 — literals & inference. Construction is a TYPE-CALL
 // (`Vec<f32>.filled(0.0, 1024)`).
 // Arrays `[a, b, c]` are shared heap cells (`[T]`, non-growable);
-// growables are `Vec<T>`. Both implement `Iter` (RFC 0012), so `a[i]`,
-// `a.len()` and `for (x of a)` lower through the same contract. The
-// `Iter<Target = T>` object form is a follow-up.
+// growables are `Vec<T>`. Both carry the engine-woven iteration
+// contract (`Iterator`, `__iterate` in core), so `a[i]`, `a.len()` and
+// `for (x of a)` lower through the same shape.
+// `bytes` is the binary primitive — `bytes(64)` zeroes a 64-octet
+// buffer; see the bytes example for encode/decode/clone.
 
 use ink::{ Logger };
 
@@ -30,10 +32,10 @@ fn literals(name: str) {
     let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable (copies elements)
     arr[0] = 7;                      // static sequence write (fused arrset)
     zero[0] = 9.0f32;                // through the Vec
-    let bin = bytes(64);             // binary data: bytes
+    let bin = bytes(64);             // binary data: 64 zeroed octets
     let p = Point { x: 1, y: 2 };    // struct literal: no `new`
 
-    log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()}");
+    log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}");
 }
 
 pub fn main() {

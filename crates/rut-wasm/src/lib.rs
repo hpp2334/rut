@@ -95,9 +95,11 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 
 /// The playground's library mounts (§0.9 of the host-pkgs plan): wasm
 /// has no filesystem, so the toolchain libs this host ships are
-/// EMBEDDED — `rt`'s host surface lowered from its `.d.rut`, `ink` and
-/// `pouch` as in-memory source. This host's choice, not the engine's:
-/// the driver knows none of these names.
+/// EMBEDDED — `rt`'s and `nmap_host`'s host surfaces lowered from their
+/// `.d.rut`s, `ink`, `pouch` and `nmapset` as in-memory source. This
+/// host's choice, not the engine's: the driver knows none of these
+/// names. (`nmap_host` + `nmapset` are the survey D6 amendment — the
+/// demo's map lane; `install_std_nmap` binds the crossings in `rut_run`.)
 fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     let mut session = rut_driver::Session::new();
     rut_driver::mount_std(&mut session); // core + calc
@@ -108,6 +110,17 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
     .expect("the rt surface is valid");
     rt.host_scope = Some("rt:log".to_string()); // rut-std's registration prefix
     session.register_module("rt", rt).expect("mount rt");
+    // the nmap lane (survey D6): the host surface lowers exactly like
+    // `rt` — its registration scope is the default (the module spec
+    // `nmap_host`), the prefix `install_std_nmap` registers under
+    let nmap_host = rut_driver::lower_decl_module(
+        include_str!("../../../rut/nmap_host/nmap.d.rut"),
+        "nmap.d.rut",
+    )
+    .expect("the nmap_host surface is valid");
+    session
+        .register_module("nmap_host", nmap_host)
+        .expect("mount nmap_host");
     session
         .register_module(
             "ink",
@@ -127,6 +140,19 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             },
         )
         .expect("mount pouch");
+    // `nmapset` — inline like `ink` (a generic-class module is
+    // source-inlined into its consumer); its `use nmap_host::` resolves
+    // against the mounted surface above
+    session
+        .register_module(
+            "nmapset",
+            rut_driver::Module {
+                source: Some(include_str!("../../../rut/nmapset/nmapset.rut").to_string()),
+                inline: true,
+                ..Default::default()
+            },
+        )
+        .expect("mount nmapset");
     rut_driver::compile_module_in(&mut session, src, rut_parser::Mode::Impl, "main")
 }
 
@@ -261,6 +287,10 @@ pub extern "C" fn rut_run(
         }
     });
     rut_std::math::install_std_math(&mut hosts);
+    // the nmap experiment's native key table (survey D6) — a program
+    // only reaches it when it declares `use nmap_host::{...}` or a pkg
+    // that does (`nmapset`); the CLI mounts it the same way
+    rut_std::nmap::install_std_nmap(&mut hosts);
     let mut vm = match rut_vm::interp::Vm::new(
         Rc::new(prog),
         &limits,

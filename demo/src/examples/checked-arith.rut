@@ -1,0 +1,40 @@
+// checked & wrapping arithmetic (RFC 0032 §1.1, RFC 0004 §3): the plain
+// `+`/`-`/`*` trap on overflow, so every integer width carries the
+// explicit ladder as compiler-lowered methods on the primitive —
+// ambient like the primitive itself (no `use`, RFC 0002 §3).
+// `wrapping_*` wraps two's-complement (the pin/protocol shape);
+// `checked_*` answers the v1.1 `(T, bool)` tuple — `ok` (`.1`) is false
+// EXACTLY when the mathematical result escaped the width, and `.0` is
+// the wrapped bits either way. Pick per call site: a checksum wraps, a
+// length checks.
+
+use ink::{ Logger };
+
+fn show(name: str, r: (u8, bool)) -> str {
+    return f"{name}=({r.0}, {r.1})";
+}
+
+pub fn main() {
+    let log = Logger.new("checked");
+
+    // wrapping: two's-complement, always defined
+    let mut v: u8 = 250;
+    v = v.wrapping_add(10);                  // 260 mod 256
+    let under = 0u8.wrapping_sub(1);
+    log.info(f"wrap={v} under={under}");
+
+    // checked: the (T, bool) tuple — false exactly on escape
+    log.info(show("over", 200u8.checked_add(100)));
+    log.info(show("ok", 200u8.checked_add(55)));
+    log.info(show("under", 0u8.checked_sub(1)));
+    log.info(show("mul", 100u8.checked_mul(3)));
+
+    // the i32 boundary: the default width's top edge wraps to the bottom
+    let top = 2147483647i32;
+    let i32over = top.checked_add(1);
+    log.info(f"i32 top=({i32over.0}, {i32over.1}) wrap={top.wrapping_add(1)}");
+
+    // wrapping round-trips: -1 + 1 is 0 again — the bits never lie
+    let steps = 0u8.wrapping_sub(1);
+    log.info(f"roundtrip={steps.wrapping_add(1)}");
+}

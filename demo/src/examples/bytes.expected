@@ -1,0 +1,5 @@
+round=true octets=8 chars=8
+header=RUT scratch.len=16
+alias same content: true
+clone same content: true
+octets=6 chars=5

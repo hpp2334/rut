@@ -166,7 +166,7 @@ export class Runner {
         {
           mode: "wasm",
           banner:
-            "live — rut.wasm · the playground slice: core, calc, rt, ink, pouch mounted (RFC 0041 §3)",
+            "live — rut.wasm · the playground slice: core, calc, rt, ink, pouch, nmapset mounted (RFC 0041 §3)",
         },
         api,
       );

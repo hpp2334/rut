@@ -1,12 +1,14 @@
 // RFC 0009 §"Representation" — recursive values. A record may name itself
-// through a POINTER field: `*Node` is one word, `nil` when absent (RFC
-// 0005). A binary tree is the canonical recursive shape.
+// through a nullable field: `?Node` is one word, `nil` when absent (RFC
+// 0005; the pointer shape today is the prefix-only nullable, RFC 0044 —
+// the old `*T` spelling diagnoses). A binary tree is the canonical
+// recursive shape.
 
 use ink::{ Logger };
 struct Node {
-    value: i32,
-    left: ?Node,
-    right: ?Node,
+    value: i32;
+    left: ?Node;
+    right: ?Node;
 }
 
 fn make(depth: i32, v: i32) -> Node {

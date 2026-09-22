@@ -1,6 +1,7 @@
-// RFC 0017 §1 — the cache/observer shape Weak<T> exists for. Weak itself
-// A cache lookup that finds nothing answers `nil` — the pointer's null
-// (RFC 0005) — and a hit answers a pointer that shares the cache's cell.
+// RFC 0017 §1 — the cache/observer shape, shown with TODAY's strong
+// refs: the cache holds its entries, so a hit's cell lives as long as
+// the cache does, and a lookup that finds nothing answers `nil` — the
+// nullable's absence (RFC 0005) — never a trap.
 
 use pouch::{ Vec };
 use ink::{ Logger };
@@ -18,7 +19,7 @@ impl Tile {
 }
 
 // the cache's whole job today: hold entries, evict on demand.
-// The hit returns a pointer that shares the cache's element.
+// The hit returns the STORED cell — it shares the cache's element.
 fn evict(cache: ?Vec<?Tile>, id: i32) -> ?Tile {
     for (let i = 0; i < cache.len(); i += 1) {
         if (cache[i].id() == id) {
@@ -36,11 +37,13 @@ pub fn main() {
     cache.push(alive);   // the cache now keeps the cell alive too
     let got = evict(cache, 1);
     log.info(f"held: {got != nil} id={got.id()}");
-    // `alive` is still a strong handle: dropping the cache entry later
-    // would NOT free the cell — that coupling is what Weak<T> breaks
-    // (RFC 0017 M5: `let w = Weak(alive); .. w.upgrade().is_some()`)
+    // `alive` is still a strong handle, and the cache holds a second:
+    // dropping one would NOT free the cell — the other still retains it.
+    // Breaking that coupling (a weak entry the cache does not retain) is
+    // exactly what RFC 0017 plans; today the strong-held cache IS the
+    // story, and the memory law is the program's (see node-cycle).
 
-    // and a lookup that finds nothing is just None — no trap
+    // and a lookup that finds nothing is just nil — no trap
     let miss = evict(cache, 99);
     log.info(f"miss: {miss != nil}");
 }

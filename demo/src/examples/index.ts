@@ -21,14 +21,22 @@ import classesSrc from "./classes.rut";
 import classesExpected from "./classes.expected";
 import closuresGenericsSrc from "./closures-generics.rut";
 import closuresGenericsExpected from "./closures-generics.expected";
-import dataclassesSrc from "./dataclasses.rut";
-import dataclassesExpected from "./dataclasses.expected";
+import structsSrc from "./structs.rut";
+import structsExpected from "./structs.expected";
 import literalsSrc from "./literals.rut";
 import literalsExpected from "./literals.expected";
+import checkedArithSrc from "./checked-arith.rut";
+import checkedArithExpected from "./checked-arith.expected";
+import strViewsSrc from "./str-views.rut";
+import strViewsExpected from "./str-views.expected";
+import bytesSrc from "./bytes.rut";
+import bytesExpected from "./bytes.expected";
 import opaqueSrc from "./opaque.rut";
 import opaqueExpected from "./opaque.expected";
 import whenSrc from "./when.rut";
 import whenExpected from "./when.expected";
+import mapsSrc from "./maps.rut";
+import mapsExpected from "./maps.expected";
 import nodeCycleSrc from "./node-cycle.rut";
 import nodeCycleExpected from "./node-cycle.expected";
 import treeSrc from "./tree.rut";
@@ -78,26 +86,50 @@ export const EXAMPLES: RutCase[] = [
   {
     id: "ex-closures-generics",
     name: "closures & generics",
-    blurb: "arrows, monomorphized generics, fn types, capture by value",
+    blurb: "anonymous fns (block bodies — RFC 0013 has no arrow form), monomorphized generics, fn types, capture",
     rfcs: "0013",
     source: closuresGenericsSrc,
     expected: lines(closuresGenericsExpected),
   },
   {
-    id: "ex-dataclasses",
-    name: "dataclasses",
-    blurb: "reference semantics (aliasing by default), own divergence, identity ==",
-    rfcs: "0009, 0011, 0016",
-    source: dataclassesSrc,
-    expected: lines(dataclassesExpected),
+    id: "ex-structs",
+    name: "structs",
+    blurb: "reference semantics (sharing by default), identity `==`",
+    rfcs: "0009, 0044",
+    source: structsSrc,
+    expected: lines(structsExpected),
   },
   {
     id: "ex-literals",
     name: "literals",
-    blurb: "numeric suffixes, plain/raw/format strings, fixed [T]",
+    blurb: "numeric suffixes, plain/raw/format strings, fixed [T], bytes buffers",
     rfcs: "0005, 0007",
     source: literalsSrc,
     expected: lines(literalsExpected),
+  },
+  {
+    id: "ex-checked-arith",
+    name: "checked arithmetic",
+    blurb: "wrapping_* wraps two's-complement, checked_* answers the (T, bool) tuple",
+    rfcs: "0032 §1.1, 0004 §3",
+    source: checkedArithSrc,
+    expected: lines(checkedArithExpected),
+  },
+  {
+    id: "ex-str-views",
+    name: "str views",
+    blurb: "O(1) slice views (a slice IS a str), codepoints — s.code / str.from_code",
+    rfcs: "0042, 0004",
+    source: strViewsSrc,
+    expected: lines(strViewsExpected),
+  },
+  {
+    id: "ex-bytes",
+    name: "bytes",
+    blurb: "the binary primitive — encode/decode, clone as the ONE copy (RFC 0044)",
+    rfcs: "0044 §3 §4, 0004",
+    source: bytesSrc,
+    expected: lines(bytesExpected),
   },
   {
     id: "ex-opaque",
@@ -116,9 +148,17 @@ export const EXAMPLES: RutCase[] = [
     expected: lines(whenExpected),
   },
   {
+    id: "ex-maps",
+    name: "maps & sets",
+    blurb: "the keyed-collection lane — HashMap/HashSet/PrimMapI64, keys admitted by the compile-time union bound",
+    rfcs: "0043 §A5, 0023 §2",
+    source: mapsSrc,
+    expected: lines(mapsExpected),
+  },
+  {
     id: "ex-node-cycle",
     name: "node cycle",
-    blurb: "reference cycles and the collector — the shape Weak<T> exists for",
+    blurb: "strong cycles keep cells alive — the program's responsibility; no collector, no weak refs yet",
     rfcs: "0017 §2",
     source: nodeCycleSrc,
     expected: lines(nodeCycleExpected),
@@ -126,7 +166,7 @@ export const EXAMPLES: RutCase[] = [
   {
     id: "ex-tree",
     name: "tree",
-    blurb: "recursive dataclasses (Option<Node>), composite fields as handle slots",
+    blurb: "recursive structs (?Node nullable fields), composite fields as handle slots",
     rfcs: "0009",
     source: treeSrc,
     expected: lines(treeExpected),

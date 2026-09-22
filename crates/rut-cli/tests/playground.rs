@@ -41,12 +41,14 @@ fn classics_run_and_match_their_expected_sidecars() {
 
         // the classics use the toolchain libs (`ink`+`rt`, `pouch`) —
         // third-party pkgs mounted from the tree (the driver doesn't
-        // know them)
+        // know them); `nmapset` is the map lane (survey D6: it pulls
+        // `nmap_host` through its `[deps]`)
         let mut s = rut_driver::Session::new();
         rut_driver::mount_std(&mut s);
         let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         rut_driver::mount_dir(&mut s, &tree.join("rut/ink")).expect("mount ink (+rt)");
         rut_driver::mount_dir(&mut s, &tree.join("rut/pouch")).expect("mount pouch");
+        rut_driver::mount_dir(&mut s, &tree.join("rut/nmapset")).expect("mount nmapset (+nmap_host)");
         let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "main");
         if !out.diags.is_empty() {
             failures.push(format!(
@@ -78,12 +80,15 @@ fn classics_run_and_match_their_expected_sidecars() {
             interrupt_every: 1024,
         };
         // the bindings BEFORE the Vm (RFC 0025): the compiled program
-        // carries calc's and rt:log's thunks (mount = declare = bind)
+        // carries calc's and rt:log's thunks (mount = declare = bind);
+        // `install_std_nmap` rides like the CLI's — reached only by a
+        // program that declares the nmap lane
         let mut hosts = rut_vm::interp::HostRegistry::new();
         rut_std::logger::install_std_log(&mut hosts, move |msg| {
             sink.borrow_mut().push(msg.to_string())
         });
         rut_std::math::install_std_math(&mut hosts);
+        rut_std::nmap::install_std_nmap(&mut hosts);
         let mut vm = match rut_vm::interp::Vm::new(
             Rc::new(prog),
             &limits,

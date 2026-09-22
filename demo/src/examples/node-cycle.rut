@@ -1,6 +1,10 @@
 // RFC 0017 — strong cycles keep cells alive: every holder retains, so
-// `a -> b -> a` never reaches refcount 0. Break back-pointers with a
-// pointer field — `next: *Node` — the classic reason `*T` exists.
+// `a -> b -> a` never reaches refcount 0. Today's pointer shape is the
+// nullable `?T` (prefix-only; RFC 0044) — the back-pointer field is
+// `next: ?Node`, and the cycle below is the program's responsibility:
+// no collector and no weak references exist yet (RFC 0017 is the
+// recorded plan). Break cycles by dropping a holder, or clear the
+// back-pointer (`b.next = nil`) before the holders leave scope.
 
 use ink::{ Logger };
 
@@ -29,7 +33,8 @@ pub fn main() {
     let log = Logger.new("cycle");
     let head = make_cycle();
     log.info(f"head.next alive: {head.next != nil}");
-
-    // The leak fix: hold `b` from `a` through Weak (RFC 0017 §1) so the
-    // pair frees deterministically at scope end.
+    // the cycle stays live to the end of scope: both cells free only
+    // when the retained handles do. The weak/collector story is RFC
+    // 0017's future, not today's surface — this example shows the
+    // shape honestly, leak and all.
 }

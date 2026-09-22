@@ -1,8 +1,7 @@
-// RFC 0009 — structs: open data records (v1.1 spells the keyword
-// `struct`; this classic predates the rename). By reference (RFC 0044):
+// RFC 0009 v1.1 — `struct`: the record keyword. By reference (RFC 0044):
 // every binding SHARES its cell — assignment is an O(1) handle move, and
 // a mutation through any binding is visible through all of them. All
-// fields public. Methods and impl blocks ARE allowed (see traits.rut for
+// fields public. Methods and impl blocks ARE allowed (see classes for
 // impls); here the idiom stays data + free functions. Constructed ONLY
 // by literal, everywhere (module-level let initializers included).
 
@@ -25,8 +24,8 @@ struct Style {
 }
 
 fn nudge(mut pt: ?Point) {     // nullable param: mutation is shared —
-    pt.x += 1;                     // writes through hit the caller's Point
-                                // (`mut` on the binding: RFC 0003 §1)
+    pt.x += 1;                 // writes through hit the caller's Point
+                               // (`mut` on the binding: RFC 0003 §1)
 }
 
 fn nudged(pt: Point) -> Point {    // no mutation: builds a NEW record
@@ -37,8 +36,8 @@ fn length(pt: Point) -> f64 {     // free function instead of a method
     return sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
 }
 
-fn dataclasses() {
-    let log = Logger.new("dataclasses");
+fn structs() {
+    let log = Logger.new("structs");
     let mut p = Point { x: 1, y: 2 };   // literal — the only construction
     p.x = 3;                            // needs the `mut` binding (RFC 0003 §1)
     let q = p;                          // SHARE: q and p name one cell (O(1))
@@ -63,5 +62,5 @@ fn dataclasses() {
 }
 
 pub fn main() {
-    dataclasses();
+    structs();
 }

@@ -1,7 +1,8 @@
 /**
  * Prepared cases (RFC 0041 §3). Each is self-contained — the host
- * provides the bundled packages (`ink`, `core`, `calc`, `rt`, `pouch`),
- * whose `info` lines stream back as output.
+ * provides the bundled packages (`ink`, `core`, `calc`, `rt`, `pouch`,
+ * plus the `nmapset` map lane), whose `info` lines stream back as
+ * output.
  *
  * `expected` is the case's SIDECAR: after every real run the page diffs
  * the engine's actual output against it (the sidecar flip, survey D2)
@@ -9,9 +10,8 @@
  * surface — RFC 0044: bindings share by reference (copy-by-value and
  * `own` are gone; `bytes.clone()` is the one copy), `==` is identity
  * for cells, the pointer shape is the nullable `?T` (prefix-only;
- * `*T`/`&v` diagnose) — plus no `dataclass` (spell it `struct`), no
- * `char` literals (1-codepoint `str`), no arrows (RFC 0013 block
- * bodies).
+ * `*T`/`&v` diagnose), records are spelled `struct`, `char` literals
+ * are 1-codepoint `str`, and RFC 0013 has no arrow form (block bodies).
  */
 
 export interface RutCase {
@@ -268,7 +268,16 @@ export const CASES: RutCase[] = [
   {
     id: "fuel-demo",
     name: "fuel demo (infinite loop)",
-    blurb: "budgets bite: while(true) parks on Trap::OutOfFuel — Resume continues the frame",
+    // the honest trap-at-default story (survey §2.3/D2): at the pinned
+    // DEFAULT budget (10M fuel / 4 MiB) the lesson IS the trap — ~10
+    // ops per iteration means zero tick lines fit, so the sidecar pins
+    // exactly one line: the trap. The old sidecar (tick
+    // 1000000/2000000/3000000, "…", a resume hint) described a
+    // ~40M-fuel magnitude and a preview-era fabrication; both died.
+    // The trap line participates: the pane renders `Trap::<name>` last.
+    // At a raised budget (or after Resume, which accumulates) the chip
+    // shows a diff BY DESIGN — this sidecar pins the default.
+    blurb: "budgets bite at the default: ~10 ops/iteration parks on Trap::OutOfFuel with zero ticks — Resume adds fuel and the SAME frame continues",
     rfcs: "0040 §2, 0034 §4",
     source: [
       "use ink::{Logger};",
@@ -284,14 +293,6 @@ export const CASES: RutCase[] = [
       "    }",
       "}",
     ].join("\n"),
-    // the HONEST expected at the pinned DEFAULT budget (10M / 4 MiB):
-    // ~10 ops per iteration means zero tick lines fit — the run parks
-    // immediately. The old sidecar (tick 1000000/2000000/3000000, "…",
-    // a resume hint) described a ~40M-fuel magnitude and a preview-era
-    // fabrication; both died (survey §2.3/D2). The trap line
-    // participates: the pane renders `Trap::<name>` last. At a raised
-    // budget (or after Resume, which accumulates) the chip shows a
-    // diff BY DESIGN — this sidecar pins the default.
     expected: [
       "Trap::OutOfFuel",
     ],

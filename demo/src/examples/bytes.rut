@@ -1,0 +1,41 @@
+// bytes — the binary primitive (RFC 0004 v1.1): a flat u8 buffer.
+// `str.encode()` mints one from text, `bytes.decode()` reads it back
+// (lossy UTF-8), and the type-methods build one directly (`bytes.from`
+// over a [u8], `bytes.zeroed(n)`). Bindings SHARE the buffer like every
+// cell (RFC 0044 §1) — assignment never copies — and `bytes.clone()` is
+// the ONE copy escape hatch (RFC 0044 §4): it mints a fresh buffer with
+// the same octets. `==` on bytes is CONTENT equality (RFC 0044 §3), so
+// a buffer and its clone compare true — the copy is for OWNERSHIP
+// boundaries (a callee that must own its buffer), not for reading.
+// There is no `own(x)`, no `make_ptr(v)`, no other copy anywhere.
+
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("bytes");
+
+    // text <-> octets
+    let s = "rut runs";
+    let b = s.encode();
+    log.info(f"round={b.decode() == s} octets={b.len()} chars={s.len()}");
+
+    // building buffers directly: from a [u8], or zeroed to a length
+    let header = bytes.from([82, 85, 84]);
+    let scratch = bytes.zeroed(16);
+    log.info(f"header={header.decode()} scratch.len={scratch.len()}");
+
+    // the sharing law: assignment aliases — one buffer, two names
+    let alias = header;
+    log.info(f"alias same content: {alias == header}");
+
+    // ...and `clone` is the one copy: a fresh buffer, same octets —
+    // still content-equal, because `==` is content for bytes
+    let diverged = header.clone();
+    log.info(f"clone same content: {diverged == header}");
+
+    // bytes is a first-class value: it shares into records and lanes
+    // like any cell (a map key lane takes it DIRECTLY — the host hashes
+    // the octets), and `len` counts octets, not codepoints
+    let multi = "héllo".encode();
+    log.info(f"octets={multi.len()} chars={multi.decode().len()}");
+}

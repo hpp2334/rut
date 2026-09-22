@@ -1,4 +1,5 @@
-// THE SMOKE (phase 1 gate) — headless, no browser, demo-owned.
+// THE SMOKE (the phase 1 gate, extended in phase 2) — headless, no
+// browser, demo-owned.
 //
 // Drives the SAME RutApi the React app uses (the bundled
 // src/runner.ts + src/cases.ts + src/verify.ts + src/examples —
@@ -6,7 +7,7 @@
 //   1. the runner law: a missing/invalid artifact boots to mode
 //      "error" naming the exact `npm run build:wasm` command; the
 //      error runner has no working methods — no silent anything;
-//   2. every prepared case (8 inline + 13 classics) REALLY compiles
+//   2. every prepared case (8 inline + 17 classics) REALLY compiles
 //      and runs through the wasm engine at the pinned default budget
 //      and verifies GREEN against its sidecar;
 //   3. the resume is REAL (survey D5): the parked frame continues —
@@ -14,13 +15,18 @@
 //      carries tick 2000000 (a re-run would print tick 1000000
 //      again), fuelUsed is cumulative across legs;
 //   4. a non-rut source gets real diagnostics and no binary — the
-//      preview-era fake clean compile is dead.
+//      preview-era fake clean compile is dead;
+//   5. THE GREP GATE (phase 2, survey §2): no dead-surface shapes
+//      anywhere under demo/src — dataclass-as-keyword, `where`
+//      clauses, `Ptr<`, `Hashable`, the removed `mapset` pkg, postfix
+//      `?T` — scanned over the WHOLE tree, comments included,
+//      whitelist nothing (the todolist app-law precedent).
 //
 // Exit 0 = every case real and verified. Any failure exits 1 LOUD.
 'use strict';
 
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 
@@ -115,7 +121,7 @@ check(runner.state.mode === 'wasm', 'the artifact boots to wasm mode', runner.st
 check(runner.isLive, 'the wasm runner is live');
 
 const all = [...api.CASES, ...api.EXAMPLES];
-check(all.length === 21, 'the full corpus is present (8 inline + 13 classics)', String(all.length));
+check(all.length === 25, 'the full corpus is present (8 inline + 17 classics)', String(all.length));
 
 for (const c of all) {
   runner.dropFrame();
@@ -220,6 +226,61 @@ console.log('\n[4] a non-rut source gets real diagnostics — no fake clean comp
   const bad = runner.compile('this is not rut at all');
   check(bad.diags.length > 0, 'diagnostics are real', JSON.stringify(bad.diags?.map((d) => d.msg)));
   check(bad.binary === undefined, 'no binary for a source that does not parse');
+}
+
+// ---- 5. the dead-surface grep gate (phase 2, survey §2) ----
+
+console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src');
+
+{
+  // the audit's removals, as exact shapes. The scan covers EVERY file
+  // under demo/src — comments included, whitelist nothing: a comment
+  // that teaches a dead spelling is the same dishonesty as code that
+  // uses it. `mapset` is word-bounded so the mounted `nmapset` lane
+  // (its replacement) passes; the postfix-`?` shape matches only
+  // type position (`i32?`, `Node?)` — word char/`]`, then `?`, then a
+  // type follower — so prefix `?T`, optional chaining, and ternaries
+  // never trip it.
+  const DEAD_SHAPES = [
+    ['dataclass (the dead record keyword — records are spelled `struct`)', /\bdataclass/],
+    ['`where` clause (removed by RFC 0043 — inline `requires`)', /\bwhere\b/],
+    ['`Ptr<` (the removed pointer type — the shape is the nullable `?T`)', /Ptr</],
+    ['`Hashable` (the removed trait — keys are admitted by the union bound)', /\bHashable\b/],
+    ['`mapset` (the removed pkg — the lane is the mounted nmapset)', /\bmapset\b/],
+    ['postfix `?T` (the nullable is prefix-only, RFC 0044 §2)', /[A-Za-z0-9_\]]\?(?=[;,=>)]|\s*$)/],
+  ];
+
+  function walk(dir) {
+    const out = [];
+    for (const entry of readdirSync(dir)) {
+      const p = join(dir, entry);
+      if (statSync(p).isDirectory()) {
+        out.push(...walk(p));
+      } else {
+        out.push(p);
+      }
+    }
+    return out;
+  }
+
+  const files = walk(join(DEMO, 'src')).sort();
+  check(files.length >= 40, `the scan covered ${files.length} files under demo/src`, String(files.length));
+
+  let hits = 0;
+  for (const file of files) {
+    const text = readFileSync(file, 'utf8');
+    const rel = file.slice(DEMO.length + 1);
+    for (const [label, re] of DEAD_SHAPES) {
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (re.test(lines[i])) {
+          hits += 1;
+          console.error(`FAIL  ${rel}:${i + 1}: ${label}\n      ${lines[i].trim()}`);
+        }
+      }
+    }
+  }
+  check(hits === 0, 'no dead-surface shapes in demo/src', `${hits} hits`);
 }
 
 // ---- verdict ----

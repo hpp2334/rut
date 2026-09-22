@@ -1,0 +1,74 @@
+// nmapset — the keyed-collection lane. `HashMap<K, V>` and `HashSet<T>`
+// wrap the native key table (the `nmap_host` crossings): the key crosses
+// DIRECTLY on a typed lane and the host hashes it (FNV-1a for `str` /
+// `bytes`, mix64 for the integers) — there is no hashing trait to
+// implement. Admission is the compile-time union bound (RFC 0043 §A5):
+// `K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str |
+// bytes` — a key type outside the set fails AT the instantiation (the
+// escape hatch: encode it canonically to `bytes`). `get` answers `?V` —
+// `nil` is absent (RFC 0005 §10), so a miss is COMPARED, never rendered:
+// `m.get(k) == nil`. A hit returns the STORED cell, not a copy (the
+// aliasing law, RFC 0044). The `PrimMapI64` lane keeps keys AND values
+// host-side (no per-value cell) — pick it when the payload is a plain
+// integer. Float keys are absent by design: floats have no stable
+// equality contract.
+
+use nmapset::{ HashMap, HashSet, PrimMapI64 };
+use ink::{ Logger };
+
+fn word_counts(log: Logger) {
+    // the str-key lane: put/get/has/remove/len over content-equal keys
+    let mut counts: HashMap<str, i32> = HashMap.new();
+    for (let w of ["rut", "runs", "rut", "real", "rut"]) {
+        let hit = counts.get(w);            // ?i32 — nil = first sight
+        let mut n = 1;
+        if (hit != nil) { n = hit + 1; }    // a hit auto-unboxes for `+`
+        counts.put(w, n);
+    }
+    let rut = "rut";
+    let runs = "runs";
+    log.info(f"rut={counts.get(rut)} runs={counts.get(runs)}");
+
+    // `put` answers whether the key was NEWLY added (a replace is false)
+    let replaced = counts.put(rut, 9);
+    log.info(f"replace={replaced} rut={counts.get(rut)}");
+
+    let gone = counts.remove(runs);
+    log.info(f"removed={gone} len={counts.len()} has={counts.has(runs)}");
+    log.info(f"miss is nil: {counts.get(runs) == nil}");
+}
+
+fn id_lane(log: Logger) {
+    // the unboxed lane: PrimMapI64<str> — id -> payload, values live in
+    // the host table's native column (put/get are one crossing each)
+    let mut scores: PrimMapI64<str> = PrimMapI64.new();
+    scores.put("a", 10i64);
+    scores.put("b", 20i64);
+    let a = "a";
+    let b = "b";
+    let c = "c";
+    log.info(f"a={scores.get(a)} b={scores.get(b)}");
+    log.info(f"miss is nil: {scores.get(c) == nil}");
+    scores.put("a", 11i64);                  // replace stores over the slot
+    log.info(f"a={scores.get(a)} len={scores.len()}");
+}
+
+fn badges(log: Logger) {
+    // HashSet<T> — membership only, no value machinery
+    let mut seen: HashSet<str> = HashSet.new();
+    let x = "x";
+    let y = "y";
+    let z = "z";
+    let first = seen.put(x);
+    let again = seen.put(x);
+    log.info(f"first={first} again={again} len={seen.len()}");
+    seen.put(y);
+    log.info(f"has x={seen.has(x)} has z={seen.has(z)}");
+}
+
+pub fn main() {
+    let log = Logger.new("maps");
+    word_counts(log);
+    id_lane(log);
+    badges(log);
+}
