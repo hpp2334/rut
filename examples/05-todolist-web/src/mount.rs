@@ -69,13 +69,21 @@ pub fn limits() -> rut_vm::interp::Limits {
 //   * `nmapset` — the keyed-collection pkg, source-inlined (`inline`,
 //     the ink treatment: a generic-class module splices into its
 //     consumer);
-//   * `store` — the app's "server" half (`store.rut`), a linked source
-//     module, the pouch treatment. DOM-FREE by construction: it never
-//     names a crossing.
+//   * `appkit` — the app unit's ONE splice: the "server" half
+//     (`store.rut`) and the widget framework (`t1.rut`) offered as a
+//     single inline module. WHY ONE: the graph splices each use's
+//     transitive sources per use, with no cross-use dedup — and store
+//     and t1 both ride pouch (t1 also rides nmapset), so a consumer
+//     importing both would define Vec twice. Spliced together they
+//     define everything once, and the unit's bound surface carries the
+//     host crossings the lowering needs. Both files stay verbatim and
+//     byte-untouched; the app imports `appkit::{ ... }` — the biz law
+//     (no crossing import), gated in `tests/app_law.rs`.
 
 pub const NMAP_HOST_D_RUT: &str = include_str!("../../../rut/nmap_host/nmap.d.rut");
 pub const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/nmapset.rut");
 pub const STORE_RUT: &str = include_str!("../store.rut");
+pub const T1_RUT: &str = include_str!("../t1.rut");
 
 /// core + pouch ONLY — the store's own session: `tests/store.rs` drives
 /// the "server" half with no web surface and no clock mounted at all.
@@ -105,12 +113,16 @@ pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String
         .map_err(|e| e.to_string())?;
     session
         .register_module(
-            "store",
-            // inline: the store's own source splices into the app unit
-            // WITH the pouch source it names — one Vec definition, no
-            // duplicate (a linked store would carry its spliced Vec as
-            // a second export at link time)
-            Module { source: Some(STORE_RUT.to_string()), inline: true, ..Default::default() },
+            "appkit",
+            // ONE inline module = the app unit's one splice: the store
+            // (the "server") + the widget framework, verbatim, in that
+            // order. The app imports this and nothing else — see the
+            // mount note above for why they ride together.
+            Module {
+                source: Some(format!("{STORE_RUT}\n{T1_RUT}")),
+                inline: true,
+                ..Default::default()
+            },
         )
         .map_err(|e| e.to_string())?;
     Ok(())

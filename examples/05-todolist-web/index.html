@@ -1,13 +1,218 @@
 <!doctype html>
 <!-- The 05-todolist-web page shell. The `#app` div is the static root
-     the host's `ui_get("app")` boot contract names — the same seeding
-     the twin's tests do with `seed_page("div", "app")`. The page's
-     program is `todolist.rut` (the phase-2 app); the shell itself is
-     untouched since phase 1. -->
+     the host's ui_get("app") boot contract names — the same seeding
+     the twin's tests do with seed_page("div", "app"). The page's
+     program is todolist.rut (the phase-2 app on the t1 widget
+     framework); the shell's one phase-2 duty is the STYLESHEET below:
+     every rule keys a token the framework's lowering emits (the t1-*
+     families, the variant tokens, the fixed utility ladder —
+     docs/t1-design.md §4.1/§5). Biz never writes a class; the
+     stylesheet never names a widget field. The variant->token map IS
+     the whole contract between them. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>05-todolist-web — the rut web host surface</title>
+    <style>
+      /* ---- the t1 theme ------------------------------------------
+           Keyed EXCLUSIVELY by the tokens the framework's lowering
+           emits. No app concept appears here; the app spells no
+           style. Transitions are possible at all because the keyed
+           diff keeps nodes alive across patches (§4.2) — under the
+           old clear+rebuild paints nothing survived long enough to
+           animate. */
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px 16px;
+        background: #f4f4f5;
+        color: #18181b;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* the page shell's own heading (static markup, above #app) */
+      h1 {
+        margin: 0 0 20px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: #a1a1aa;
+      }
+      h1 code { color: #71717a; }
+
+      /* the mount root: the app's column lives here */
+      #app { width: 100%; max-width: 460px; }
+
+      /* ---- layout families ------------------------------------- */
+
+      .t1-col { display: flex; flex-direction: column; }
+      .t1-row { display: flex; flex-direction: row; align-items: center; }
+      .t1-card {
+        background: #ffffff;
+        border: 1px solid #e4e4e7;
+        border-radius: 14px;
+        box-shadow:
+          0 1px 2px rgb(24 24 27 / 4%),
+          0 10px 30px rgb(24 24 27 / 6%);
+      }
+      .t1-spacer { flex: none; }
+
+      /* the utility ladder — the lowering's fixed rungs, enumerated
+         (0 emits no token; anything off the ladder is a loud lowering
+         trap, so these sixteen rules are the whole arbitrary-value
+         surface, and it is empty) */
+      .t1-gap-4 { gap: 4px; }
+      .t1-gap-8 { gap: 8px; }
+      .t1-gap-12 { gap: 12px; }
+      .t1-gap-16 { gap: 16px; }
+      .t1-pad-4 { padding: 4px; }
+      .t1-pad-8 { padding: 8px; }
+      .t1-pad-12 { padding: 12px; }
+      .t1-pad-16 { padding: 16px; }
+      .t1-size-4 { height: 4px; }
+      .t1-size-8 { height: 8px; }
+      .t1-size-12 { height: 12px; }
+      .t1-size-16 { height: 16px; }
+
+      /* ---- typography ------------------------------------------- */
+
+      .t1-text { line-height: 1.45; }
+      .t1-text--title {
+        font-size: 1.3rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .t1-text--body { font-size: 0.95rem; }
+      .t1-text--done {
+        color: #71717a;
+        text-decoration: line-through;
+        text-decoration-color: #a1a1aa;
+        text-decoration-thickness: 1.5px;
+      }
+      .t1-text--pending {
+        color: #52525b;
+        font-style: italic;
+        opacity: 0.85;
+      }
+      .t1-text--muted { color: #71717a; font-size: 0.82rem; }
+
+      /* ---- buttons ----------------------------------------------- */
+
+      .t1-btn {
+        font: inherit;
+        cursor: pointer;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        transition:
+          background-color 0.16s ease,
+          border-color 0.16s ease,
+          color 0.16s ease,
+          box-shadow 0.16s ease,
+          transform 0.08s ease;
+      }
+      .t1-btn:active { transform: translateY(1px); }
+      .t1-btn:focus-visible {
+        outline: 2px solid #6366f1;
+        outline-offset: 2px;
+      }
+      .t1-btn--primary {
+        background: #6366f1;
+        color: #ffffff;
+        padding: 9px 18px;
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgb(79 70 229 / 35%);
+      }
+      .t1-btn--primary:hover { background: #4f46e5; }
+      .t1-btn--quiet {
+        background: transparent;
+        color: #71717a;
+        border-color: #e4e4e7;
+        padding: 4px 11px;
+        font-size: 0.82rem;
+      }
+      .t1-btn--quiet:hover {
+        color: #18181b;
+        border-color: #d4d4d8;
+        background: #fafafa;
+      }
+
+      /* ---- the framework-owned checkbox (button[role=checkbox]) --
+           the glyph is the framework's visual: state is 100% the
+           app's, a flip is one class-token patch, and the little
+           scale/slide IS the diff's work made visible */
+
+      .t1-check {
+        position: relative;
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border: 1.5px solid #d4d4d8;
+        border-radius: 7px;
+        background: #ffffff;
+        cursor: pointer;
+        transition:
+          background-color 0.16s ease,
+          border-color 0.16s ease,
+          transform 0.08s ease;
+      }
+      .t1-check::after {
+        content: "";
+        position: absolute;
+        left: 5px;
+        top: 5.5px;
+        width: 9px;
+        height: 5px;
+        border-left: 2px solid #ffffff;
+        border-bottom: 2px solid #ffffff;
+        transform: rotate(-45deg) scale(0);
+        transform-origin: center;
+        transition: transform 0.14s ease;
+      }
+      .t1-check:hover { border-color: #6366f1; }
+      .t1-check:active { transform: scale(0.92); }
+      .t1-check:focus-visible {
+        outline: 2px solid #6366f1;
+        outline-offset: 2px;
+      }
+      .t1-check--on {
+        background: #6366f1;
+        border-color: #6366f1;
+      }
+      .t1-check--on::after { transform: rotate(-45deg) scale(1); }
+
+      /* ---- the field ---------------------------------------------- */
+
+      .t1-field {
+        flex: 1 1 auto;
+        min-width: 0;
+        font: inherit;
+        color: inherit;
+        padding: 9px 12px;
+        background: #ffffff;
+        border: 1px solid #d4d4d8;
+        border-radius: 9px;
+        transition:
+          border-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+      .t1-field::placeholder { color: #a1a1aa; }
+      .t1-field:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgb(99 102 241 / 14%);
+      }
+
+      /* rows read as one list: an even rhythm under the card's gap */
+      .t1-row { min-height: 34px; }
+    </style>
   </head>
   <body>
     <h1>rut — the <code>web::</code> host surface</h1>
