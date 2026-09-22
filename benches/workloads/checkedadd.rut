@@ -1,0 +1,36 @@
+use ink::{ Logger };
+
+// checkedadd — the `(T, ok)` pair economy, isolated (err-channel phase 1).
+// A hot loop over i64 pairs calling `a.checked_add(b)` through a helper
+// fn (the callee/caller shape every `(T, err)` return rides), destructured
+// `let (v, ok) = ...`; `v` accumulates into an i64 wrapping checksum and
+// the `ok == false` arm is counted SEPARATELY and folded into the same
+// checksum — both lanes are load-bearing, so a lowering that silently
+// drops either moves the pin. Inputs make the overflow arm deterministic
+// and rare-but-nonzero: b = i64::MAX - 1000, a sweeps [-1024, 1023], so
+// exactly 23 of every 2048 calls overflow (~1.1%; the ok lane is
+// exercised, not predicted-branch-only). One mint per call — the checked_*
+// family is compiler-intrinsic, zero source noise. Scale: 10M checked ops.
+// The pair's value lane is ±2^63-scale, so the .js twin accumulates in
+// BigInt (exact i64 wrapping); a double cannot represent one term.
+// Cross-check the pins: benches/workloads/expected.json.
+
+fn pair(a: i64, b: i64) -> (i64, bool) {
+    return a.checked_add(b);
+}
+
+pub fn main() -> nil {
+    let b: i64 = 9223372036854774807i64;
+    let mut s: i64 = 0;
+    let mut bad: i64 = 0;
+    for (let i = 0; i < 10000000; i += 1) {
+        let a: i64 = ((i % 2048) - 1024) as i64;
+        let (v, ok) = pair(a, b);
+        s = s.wrapping_add(v);
+        if (ok == false) {
+            bad = bad.wrapping_add(1);
+        }
+    }
+    s = s.wrapping_add(bad);
+    Logger.new("app").info(f"CHECKSUM {s}");
+}
