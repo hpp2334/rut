@@ -46,9 +46,45 @@ pub struct MemberSrc {
     pub name: String,
     /// verbatim source of the declaration (signature for methods)
     pub src: String,
+    /// the declared type as written — fields: the type; methods: the
+    /// return (`None` = unwritten, i.e. `nil`-returning). Inferred-type
+    /// hovers key on this instead of re-parsing `src`
+    pub ty: Option<String>,
+    /// byte span of the name identifier — token recovery (names are
+    /// `IdentId`s: the AST carries no name spans, no parser changes).
+    /// The field / enum-member decl-site hover and phase 2's
+    /// definition lookup key on it; `None` only when recovery fails
+    /// (a degenerate parse)
+    pub name_span: Option<Span>,
     pub doc: Vec<String>,
     /// 1-based line of the declaration
     pub line: u32,
+}
+
+/// a module-scope `let` — a real definition (the survey §3.2 decl
+/// layer: `ModuleLet` and `Use` were skipped by the old index)
+#[derive(Debug, Clone)]
+pub struct LetDef {
+    pub name: String,
+    pub name_span: Option<Span>,
+    /// declared annotation as written, else the initializer-derived
+    /// type (the same display-side heuristic the binding pass uses)
+    pub ty: Option<String>,
+    /// verbatim decl slice, through the initializer
+    pub src: String,
+    pub doc: Vec<String>,
+    pub span: Span,
+    pub line: u32,
+}
+
+/// a `use pkg::{ Name, .. }` import edge — the name's span is a
+/// definition target (phase 2: ctrl+click on `Vec` in the use jumps
+/// to the pouch decl)
+#[derive(Debug, Clone)]
+pub struct UseDef {
+    pub name: String,
+    pub name_span: Option<Span>,
+    pub pkg: String,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +106,9 @@ pub struct FnDef {
     pub name: String,
     /// verbatim signature source
     pub src: String,
+    /// the declared return as written (`None` = unwritten);
+    /// inferred-type hovers read it for call initializers
+    pub ret: Option<String>,
     pub doc: Vec<String>,
     /// `Circle` for an inherent method, `impl Drawable for Circle` for a
     /// trait-impl method, `None` for a free fn
@@ -89,6 +128,10 @@ pub struct DefIndex {
     pub types: Vec<TyDef>,
     pub fns: Vec<FnDef>,
     pub impls: Vec<ImplDef>,
+    /// module-scope lets (the decl layer)
+    pub lets: Vec<LetDef>,
+    /// use-imported names (the decl layer)
+    pub uses: Vec<UseDef>,
     /// label for provenance lines — the file's path, or `core`
     pub origin: String,
 }
@@ -111,6 +154,17 @@ pub(crate) fn ty_head(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         // receiver hover misses
         TypeKind::TyOpt { inner } => ty_head(ast, *inner),
         _ => String::new(),
+    }
+}
+
+/// the lookup head of a rendered type text — what member lookup keys
+/// on: `?Circle` → `Circle` (the RFC 0044 bind-like law), `Vec<i32>` →
+/// `Vec`. Display keeps the full text; only lookups cut it down
+pub(crate) fn head_of_ty(text: &str) -> String {
+    let t = text.trim_start_matches('?');
+    match t.find('<') {
+        Some(i) if t.ends_with('>') => t[..i].to_string(),
+        _ => t.to_string(),
     }
 }
 

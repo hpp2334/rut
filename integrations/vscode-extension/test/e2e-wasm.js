@@ -183,6 +183,152 @@ async function main() {
     smokes++;
   }
 
+  // ---- phase 1 (lsp-features): field DECL hover — hovering `item`
+  // inside `struct Slot { item: ?Circle; }` answers with the field's
+  // decl and its owning struct (the decl layer's token-recovered span) ----
+  {
+    const [line, ch] = posOnLine(fixtureSrc, /^\s*item: \?Circle;/, 'item');
+    const h = rut.hover(fixtureUri, line, ch);
+    if (!h || !h.contents.value.includes('item: ?Circle') || !h.contents.value.includes('in `Slot`')) {
+      bad.push(`field decl hover missed: ${h && JSON.stringify(h.contents.value.slice(0, 80))}`);
+    }
+    smokes++;
+  }
+
+  // ---- phase 1: inferred-type IDENT hover — `let c = Circle.new(1.0)`
+  // shows its inferred type at the use site (the display-side ruling) ----
+  {
+    const uri = 'file:///ws/e2e-inferred-ident.rut';
+    const src = [
+      'class Circle {',
+      '    r: f64;',
+      '}',
+      'fn go() -> f64 {',
+      '    let c = Circle.new(1.0);',
+      '    return c.r;',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`inferred-ident probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const [line, ch] = posOnLine(src, /return c\.r;/, 'c');
+    const h = rut.hover(uri, line, ch);
+    if (!h || !h.contents.value.includes('let c: Circle') || !h.contents.value.includes('type inferred')) {
+      bad.push(`inferred ident hover missed: ${h && JSON.stringify(h.contents.value.slice(0, 80))}`);
+    }
+    smokes++;
+  }
+
+  // ---- phase 1: receiver inference through a FIELD READ — the
+  // binding pass types `inner` from `wrap.c`, so the ident hover, the
+  // member hover AND member completion all resolve through it ----
+  {
+    const uri = 'file:///ws/e2e-field-read-recv.rut';
+    const src = [
+      'class Circle {',
+      '    r: f64;',
+      '}',
+      'struct Wrap {',
+      '    c: Circle;',
+      '}',
+      'impl Circle {',
+      '    fn grown(self, k: f64) -> Circle { return self; }',
+      '}',
+      'fn area(wrap: Wrap) -> f64 {',
+      '    let inner = wrap.c;',
+      '    let big = inner.grown(2.0);',
+      '    return big.r;',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`field-read probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    // the ident hover: the field-read initializer types the binding
+    const [iline, ich] = posOnLine(src, /let big = inner\.grown/, 'inner');
+    const ih = rut.hover(uri, iline, ich);
+    if (!ih || !ih.contents.value.includes('let inner: Circle')) {
+      bad.push(`field-read ident hover missed: ${ih && JSON.stringify(ih.contents.value.slice(0, 80))}`);
+    }
+    // the member hover THROUGH the field-read receiver
+    const mh = rut.hover(uri, iline, ich + 7); // the `grown` after `inner.`
+    if (!mh || !mh.contents.value.includes('fn grown(self, k: f64) -> Circle')) {
+      bad.push(`field-read receiver member hover missed: ${mh && JSON.stringify(mh.contents.value.slice(0, 80))}`);
+    }
+    // the member hover through the CHAINED-CALL receiver (`big.r`)
+    const [bline, bch] = posOnLine(src, /return big\.r;/, 'big.r');
+    const bh = rut.hover(uri, bline, bch + 4); // the `r` after `big.`
+    if (!bh || !bh.contents.value.includes('r: f64') || !bh.contents.value.includes('in `Circle`')) {
+      bad.push(`chained receiver field hover missed: ${bh && JSON.stringify(bh.contents.value.slice(0, 80))}`);
+    }
+    // member completion through the field-read receiver
+    const items = rut.complete(uri, iline, ich + 6); // right after `inner.`
+    const labels = items.map((i) => i.label);
+    for (const want of ['r', 'grown']) {
+      if (!labels.includes(want)) bad.push(`field-read completion lacks '${want}' (got ${labels.join(', ')})`);
+    }
+    smokes++;
+  }
+
+  // ---- phase 1: for-of loop-variable receiver — `[Point]` types the
+  // iteration binding, its member hover resolves ----
+  {
+    const uri = 'file:///ws/e2e-for-of-recv.rut';
+    const src = [
+      'struct Point {',
+      '    x: f64;',
+      '    y: f64;',
+      '}',
+      'fn sum(points: [Point]) -> f64 {',
+      '    let total = 0.0;',
+      '    for (let p of points) {',
+      '        total += p.x;',
+      '    }',
+      '    return total;',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`for-of probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const [pline, pch] = posOnLine(src, /total \+= p\.x;/, 'p');
+    const ph = rut.hover(uri, pline, pch);
+    if (!ph || !ph.contents.value.includes('p: Point') || !ph.contents.value.includes('loop variable')) {
+      bad.push(`for-of ident hover missed: ${ph && JSON.stringify(ph.contents.value.slice(0, 80))}`);
+    }
+    const mh = rut.hover(uri, pline, pch + 2); // the `x` after `p.`
+    if (!mh || !mh.contents.value.includes('x: f64') || !mh.contents.value.includes('in `Point`')) {
+      bad.push(`for-of receiver member hover missed: ${mh && JSON.stringify(mh.contents.value.slice(0, 80))}`);
+    }
+    smokes++;
+  }
+
+  // ---- phase 1 (M7): primitive type-token hover — `i32`/`bool` have
+  // no surface decl; the static blurb (width, range) is the answer ----
+  {
+    const uri = 'file:///ws/e2e-prim-hover.rut';
+    const src = 'fn pick(x: i32, ok: bool) -> i32 {\n    return x;\n}\n';
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`primitive probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const [line, ch] = posOnLine(src, /fn pick\(x: i32, ok: bool\)/, 'i32');
+    const h = rut.hover(uri, line, ch);
+    if (!h || !h.contents.value.includes('signed 32-bit') || !h.contents.value.includes('-2147483648 ..= 2147483647')) {
+      bad.push(`i32 primitive hover missed: ${h && JSON.stringify(h.contents.value.slice(0, 80))}`);
+    }
+    const [bline, bch] = posOnLine(src, /fn pick\(x: i32, ok: bool\)/, 'bool');
+    const bh = rut.hover(uri, bline, bch);
+    if (!bh || !bh.contents.value.includes('true` / `false')) {
+      bad.push(`bool primitive hover missed: ${bh && JSON.stringify(bh.contents.value.slice(0, 80))}`);
+    }
+    smokes++;
+  }
+
   // ---- the RFC 0044 dedicated diagnostic (M2's acceptance) ----
   {
     const b = rut.analyze('file:///ws/e2e-postfix.rut', 'fn f(p: i32?) -> nil {\n}\n');
@@ -234,7 +380,8 @@ async function main() {
     process.exit(1);
   }
   console.log(`e2e-wasm: PASS — ${files.length} corpus files, 0 false diagnostics, ${symbols} symbols, ` +
-    `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/RFC 0044) ` +
+    `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/RFC 0044/` +
+    `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover) ` +
     `through bin/rut-lsp.wasm`);
 }
 

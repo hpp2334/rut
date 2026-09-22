@@ -34,17 +34,14 @@ pub enum CompletionKind {
 
 /// Completions at `pos`: member items after `recv.` (filtered by the
 /// typed prefix), otherwise the keyword table plus the visible decls.
-pub fn complete(
-    idxs: &[&DefIndex],
-    src: &str,
-    toks: &[Token],
-    ast: &Ast,
-    pos: u32,
-) -> Vec<CompletionOut> {
+pub fn complete(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Vec<CompletionOut> {
     let Some((recv, prefix)) = recv_before(toks, pos) else {
         return bare_completions(idxs);
     };
-    member_completions(idxs, src, ast, pos, &recv, &prefix)
+    // the binding pass — member completion shares hover's receiver
+    // inference (field reads, chained calls, loop variables)
+    let binds = crate::hover::bindings::collect(ast, toks, idxs);
+    member_completions(idxs, ast, &binds, pos, &recv, &prefix)
 }
 
 /// The member-completion context at `pos`: the receiver's source text
@@ -72,13 +69,13 @@ fn recv_before(toks: &[Token], pos: u32) -> Option<(String, String)> {
 /// registered impls — the latter use-both gated (RFC 0012 §6).
 fn member_completions(
     idxs: &[&DefIndex],
-    src: &str,
     ast: &Ast,
+    binds: &[crate::hover::Binding],
     pos: u32,
     recv: &str,
     prefix: &str,
 ) -> Vec<CompletionOut> {
-    let Some(ty_name) = crate::hover::lookup::recv_type(idxs, src, ast, pos, recv) else {
+    let Some(ty_name) = crate::hover::lookup::recv_type(idxs, binds, pos, recv) else {
         return vec![];
     };
     let Some((_ti, ty)) = crate::hover::lookup::find_ty(idxs, &ty_name) else { return vec![] };
@@ -260,10 +257,10 @@ mod tests {
         let s = rut_lexer::lexer::normalize(src);
         let (toks, _) = rut_lexer::lexer::lex(&s);
         let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-        let idx = crate::hover::index(&s, &ast);
+        let idx = crate::hover::index(&s, &ast, &toks);
         let idxs = [&idx];
         let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
-        complete(&idxs, &s, &toks, &ast, pos)
+        complete(&idxs, &toks, &ast, pos)
     }
 
     fn labels(items: &[CompletionOut]) -> Vec<&str> {
@@ -296,17 +293,18 @@ return c.;
         // the foreign trait's method completes only once the doc uses it
         let surf_src = "trait Greeter {\nfn greet(self) -> nil;\n}\n";
         let s2 = rut_lexer::lexer::normalize(surf_src);
+        let (stoks, _) = rut_lexer::lexer::lex(&s2);
         let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Impl);
-        let surf = crate::hover::index(&s2, &sast);
+        let surf = crate::hover::index(&s2, &sast, &stoks);
 
         let mk = |doc: &str| {
             let d2 = rut_lexer::lexer::normalize(doc);
             let (toks, _) = rut_lexer::lexer::lex(&d2);
             let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-            let di = crate::hover::index(&d2, &ast);
+            let di = crate::hover::index(&d2, &ast, &toks);
             let idxs = [&di, &surf];
             let pos = d2.rfind("r.").unwrap() as u32 + 2;
-            complete(&idxs, &d2, &toks, &ast, pos)
+            complete(&idxs, &toks, &ast, pos)
         };
 
         let gated = "class Robot { }\nimpl Greeter for Robot { fn greet(self) -> nil { } }\nfn go(r: Robot) -> nil { r. }\n";
@@ -339,17 +337,18 @@ return c.;
         // the member list
         let core_src = "builtin primitive str {\nfn len(self) -> i32;\n}\n";
         let c2 = rut_lexer::lexer::normalize(core_src);
+        let (ctoks, _) = rut_lexer::lexer::lex(&c2);
         let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
-        let core = crate::hover::index(&c2, &cast);
+        let core = crate::hover::index(&c2, &cast, &ctoks);
 
         let doc = "fn f(s: str) -> i32 { return s. }\n";
         let d2 = rut_lexer::lexer::normalize(doc);
         let (toks, _) = rut_lexer::lexer::lex(&d2);
         let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-        let di = crate::hover::index(&d2, &ast);
+        let di = crate::hover::index(&d2, &ast, &toks);
         let idxs = [&di, &core];
         let pos = d2.rfind("s.").unwrap() as u32 + 2;
-        let items = complete(&idxs, &d2, &toks, &ast, pos);
+        let items = complete(&idxs, &toks, &ast, pos);
         assert!(labels(&items).contains(&"len"), "{:?}", labels(&items));
     }
 }

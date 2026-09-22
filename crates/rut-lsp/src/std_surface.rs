@@ -41,8 +41,9 @@ pub fn indexes() -> Vec<DefIndex> {
     .into_iter()
     .map(|(origin, src, mode)| {
         let src = rut_lexer::lexer::normalize(src);
+        let (toks, _) = rut_lexer::lexer::lex(&src);
         let (ast, _) = rut_parser::parse(&src, mode);
-        let mut idx = hover::index(&src, &ast);
+        let mut idx = hover::index(&src, &ast, &toks);
         idx.origin = origin.to_string();
         idx
     })

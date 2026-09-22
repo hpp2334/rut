@@ -48,7 +48,7 @@ pub fn analyze(src: &str, mode: Mode) -> Analysis {
         diags,
         tokens,
         symbols,
-        index: hover::index(&src, &ast),
+        index: hover::index(&src, &ast, &toks),
     }
 }
 
@@ -163,8 +163,9 @@ fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
 /// the definition index for one document (origin stamped with `uri`)
 pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
     let normalized = normalize(src);
+    let (toks, _) = lex(&normalized);
     let (ast, _) = parse(&normalized, mode_of(uri));
-    let mut idx = hover::index(&normalized, &ast);
+    let mut idx = hover::index(&normalized, &ast, &toks);
     idx.origin = uri.to_string();
     idx
 }
@@ -188,7 +189,7 @@ fn byte_at(normalized: &str, line: u32, ch: u32) -> u32 {
 pub fn hover_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Option<Hover> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
-    let h = hover::hover(&idxs, &normalized, &toks, &ast, byte_at(&normalized, line, ch))?;
+    let h = hover::hover(&idxs, &toks, &ast, byte_at(&normalized, line, ch))?;
     Some(Hover {
         contents: HoverContents::Markup(MarkupContent {
             kind: MarkupKind::Markdown,
@@ -209,7 +210,7 @@ pub fn complete_at(
 ) -> Vec<CompletionItem> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
-    completion::complete(&idxs, &normalized, &toks, &ast, byte_at(&normalized, line, ch))
+    completion::complete(&idxs, &toks, &ast, byte_at(&normalized, line, ch))
         .into_iter()
         .map(completion::lsp_item)
         .collect()

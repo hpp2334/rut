@@ -1,7 +1,10 @@
 //! Markdown rendering — verbatim-signature code blocks, provenance
-//! lines, doc paragraphs; a candidate list on ambiguity.
+//! lines, doc paragraphs; a candidate list on ambiguity. Plus the new
+//! phase-1 shapes: the binding pass's identifier hover, the M7
+//! primitive blurbs, and the module-let decl render.
 
-use super::types::{DefIndex, FnDef, MemberSrc, TyDef, TyForm};
+use super::bindings::Binding;
+use super::types::{DefIndex, FnDef, LetDef, MemberSrc, TyDef, TyForm};
 
 fn code_block(body: &str) -> String {
     format!("```rut\n{body}\n```")
@@ -132,6 +135,87 @@ pub(crate) fn render_candidates(many: &[(&DefIndex, &FnDef)]) -> String {
             i.origin,
             f.line
         ));
+    }
+    out
+}
+
+/// the identifier hover — the binding pass's record rendered: the
+/// binding as it binds (`let c: ?Circle`, `p: Point`), then the kind;
+/// an inferred type says so (the display-side scoping ruling: declared
+/// annotations render as written, inference is labeled)
+pub(crate) fn binding_markdown(b: &Binding) -> String {
+    let head = match &b.ty {
+        Some(t) => match b.kind {
+            super::bindings::BindKind::Let => format!("let {}: {t}", b.name),
+            _ => format!("{}: {t}", b.name),
+        },
+        None => match b.kind {
+            super::bindings::BindKind::Let => format!("let {}", b.name),
+            _ => b.name.clone(),
+        },
+    };
+    let mut out = code_block(&head);
+    out.push_str(&format!("\n{}", b.kind.label()));
+    if b.inferred {
+        out.push_str(" — type inferred");
+    }
+    out
+}
+
+/// M7 — the numeric/bool primitives have no surface decl to index
+/// (`str`/`bytes`/`opaque` do, through core's `builtin primitive`
+/// statements, and those keep their rich hover): synthesize the static
+/// blurb from rut-core's documented surface. Truthful constants only;
+/// `None` for names this table doesn't own
+pub(crate) fn render_primitive(name: &str) -> Option<String> {
+    let body = match name {
+        "bool" => {
+            return Some(format!(
+                "{}\n\nthe two booleans — `true` / `false`",
+                code_block("bool")
+            ));
+        }
+        "f32" => format!(
+            "{}\n\nIEEE-754 binary32 — the unsuffixed float default (RFC 0007 §1)\n\nliterals `1.0`, `1.0f32`",
+            code_block("f32")
+        ),
+        "f64" => format!(
+            "{}\n\nIEEE-754 binary64 — double precision\n\nliterals `1.0f64`",
+            code_block("f64")
+        ),
+        "i8" => prim_line(name, "signed", 8, "-128 ..= 127"),
+        "i16" => prim_line(name, "signed", 16, "-32768 ..= 32767"),
+        "i32" => prim_line(name, "signed", 32, "-2147483648 ..= 2147483647"),
+        "i64" => prim_line(name, "signed", 64, "-9223372036854775808 ..= 9223372036854775807"),
+        "u8" => prim_line(name, "unsigned", 8, "0 ..= 255"),
+        "u16" => prim_line(name, "unsigned", 16, "0 ..= 65535"),
+        "u32" => prim_line(name, "unsigned", 32, "0 ..= 4294967295"),
+        "u64" => prim_line(name, "unsigned", 64, "0 ..= 18446744073709551615"),
+        _ => return None,
+    };
+    Some(body)
+}
+
+fn prim_line(name: &str, signedness: &str, bits: u32, range: &str) -> String {
+    format!(
+        "{}\n\n{signedness} {bits}-bit integer — {range}\n\nliterals `0`, `0{name}`; the `wrapping_*` / `saturating_*` / `checked_*` members are compiler-lowered (core's `builtin impl {name}`, RFC 0032 §1.1)",
+        code_block(name)
+    )
+}
+
+/// the module-let decl render — verbatim slice, provenance, doc; the
+/// type line shows the annotation or the inferred head
+pub(crate) fn render_let(i: &DefIndex, l: &LetDef) -> String {
+    let mut out = code_block(&l.src);
+    out.push_str("\nmodule let");
+    if let Some(ty) = &l.ty {
+        out.push_str(&format!(" — `{ty}`"));
+    }
+    if !i.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&i.origin, l.line)));
+    }
+    for d in &l.doc {
+        out.push_str(&format!("\n\n{}", d));
     }
     out
 }

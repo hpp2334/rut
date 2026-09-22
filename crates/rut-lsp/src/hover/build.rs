@@ -1,10 +1,18 @@
-//! Building the index —one pass over a document's module items,
+//! Building the index — one pass over a document's module items,
 //! recovering verbatim signatures and doc comments from the source.
+//! The decl layer (the lsp-features survey §3.2): fields, enum
+//! members, module lets, and use-imported names all carry their name
+//! spans — token recovery over the lexed stream (`bindings::ident_span`;
+//! names are `IdentId`s, no parser changes) — so decl-site hover and
+//! phase 2's definition lookup are span-exact.
 
 use rut_ast::ast::*;
 use rut_lexer::span::Span;
+use rut_lexer::token::{Tok, Token};
 
-use super::types::{ty_head, ty_src, DefIndex, FnDef, ImplDef, MemberSrc, TyDef, TyForm};
+use super::bindings::ident_span;
+use super::infer;
+use super::types::{ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, TyDef, TyForm, UseDef};
 
 /// `line` of a byte offset, 1-based
 fn line_of(src: &str, lo: u32) -> u32 {
@@ -49,16 +57,25 @@ fn sig_src(src: &str, ast: &Ast, span: Span, body: Option<NodeHandle<BlockNode>>
         .to_string()
 }
 
-fn member(src: &str, name: &str, sig: String, span: Span) -> MemberSrc {
+fn member(
+    src: &str,
+    toks: &[Token],
+    name: &str,
+    sig: String,
+    ty: Option<String>,
+    span: Span,
+) -> MemberSrc {
     MemberSrc {
         name: name.to_string(),
         src: sig,
+        ty,
+        name_span: ident_span(toks, span, name),
         doc: doc_before(src, span.lo),
         line: line_of(src, span.lo),
     }
 }
 
-fn members_of(src: &str, ast: &Ast, methods: &[NodeHandle<MethodDeclNode>]) -> Vec<MemberSrc> {
+fn members_of(src: &str, ast: &Ast, toks: &[Token], methods: &[NodeHandle<MethodDeclNode>]) -> Vec<MemberSrc> {
     methods
         .iter()
         .map(|m| {
@@ -75,7 +92,8 @@ fn members_of(src: &str, ast: &Ast, methods: &[NodeHandle<MethodDeclNode>]) -> V
                 pre.push_str("async ");
             }
             let sig = format!("{pre}{}", sig_src(src, ast, sp, d.body));
-            member(src, ast.name(d.name), sig, sp)
+            let name = ast.name(d.name);
+            member(src, toks, name, sig, d.ret.map(|r| ty_src(ast, r)), sp)
         })
         .collect()
 }
@@ -116,7 +134,7 @@ fn strip_member_mods(mut s: &str) -> &str {
 
 /// field member list: the decl slice carries the modifiers (the field
 /// span starts before them) —strip, then re-render from the flags
-fn field_members(src: &str, ast: &Ast, fields: &[NodeHandle<FieldDeclNode>]) -> Vec<MemberSrc> {
+fn field_members(src: &str, ast: &Ast, toks: &[Token], fields: &[NodeHandle<FieldDeclNode>]) -> Vec<MemberSrc> {
     fields
         .iter()
         .map(|f| {
@@ -137,7 +155,50 @@ fn field_members(src: &str, ast: &Ast, fields: &[NodeHandle<FieldDeclNode>]) -> 
             )
             .to_string();
             let decl = format!("{vis}{body}");
-            member(src, ast.name(d.name), decl, sp)
+            let name = ast.name(d.name);
+            member(src, toks, name, decl, Some(ty_src(ast, d.ty)), sp)
+        })
+        .collect()
+}
+
+/// enum member list with token-recovered name spans — the recovery
+/// build.rs's old comment said this needed. The member idents are the
+/// non-keyword Ident run inside the decl's braces; generic parameters
+/// (`enum E<T>`) interleave but never match an expected member name,
+/// so the ordered match skips them honestly (a miss leaves `None`)
+fn enum_members(
+    src: &str,
+    ast: &Ast,
+    toks: &[Token],
+    span: Span,
+    members: &[(IdentId, Option<i64>)],
+) -> Vec<MemberSrc> {
+    let expected: Vec<&str> = members.iter().map(|(m, _)| ast.name(*m)).collect();
+    let mut spans: Vec<Option<Span>> = vec![None; expected.len()];
+    let mut k = 0usize;
+    for t in toks {
+        if t.span.lo < span.lo || t.span.hi > span.hi {
+            continue;
+        }
+        let Tok::Ident(text) = &t.tok else { continue };
+        if rut_parser::is_reserved_kw(text) {
+            continue;
+        }
+        if k < expected.len() && text == expected[k] {
+            spans[k] = Some(t.span);
+            k += 1;
+        }
+    }
+    expected
+        .iter()
+        .zip(spans)
+        .map(|(name, name_span)| MemberSrc {
+            name: name.to_string(),
+            src: name.to_string(),
+            ty: None,
+            name_span,
+            doc: Vec::new(),
+            line: line_of(src, span.lo),
         })
         .collect()
 }
@@ -170,15 +231,18 @@ fn generics_of(ast: &Ast, gs: &[IdentId]) -> Vec<String> {
     gs.iter().map(|&g| ast.name(g).to_string()).collect()
 }
 
-/// Build the index for one document.
-pub fn index(src: &str, ast: &Ast) -> DefIndex {
+/// Build the index for one document. `toks` is the same lex the parser
+/// consumed — the decl layer's name-span recovery rides it (no re-lex,
+/// no parser changes).
+pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
     let mut idx = DefIndex::default();
+    let mut pending_lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Span)> = Vec::new();
     for h in ast.module_items(ast.root) {
         let span = ast.span(h.id());
         match ast.item(*h) {
             ItemKind::Class { name, generics, fields, methods, .. } => {
-                let fs = field_members(src, ast, fields);
-                let ms = members_of(src, ast, methods);
+                let fs = field_members(src, ast, toks, fields);
+                let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
                     ast,
@@ -191,8 +255,8 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::Dataclass { name, generics, fields, methods, .. } => {
-                let fs = field_members(src, ast, fields);
-                let ms = members_of(src, ast, methods);
+                let fs = field_members(src, ast, toks, fields);
+                let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
                     ast,
@@ -205,7 +269,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::Trait { name, generics, methods, .. } => {
-                let ms = members_of(src, ast, methods);
+                let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
                     ast,
@@ -218,17 +282,9 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::Enum { name, members, .. } => {
-                // member list renders from names — spans would need token
-                // recovery; names are the hover's content
-                let ms = members
-                    .iter()
-                    .map(|(m, _)| MemberSrc {
-                        name: ast.name(*m).to_string(),
-                        src: ast.name(*m).to_string(),
-                        doc: Vec::new(),
-                        line: line_of(src, span.lo),
-                    })
-                    .collect();
+                // member spans recovered by token scan inside the enum's
+                // span (the recovery the old comment deferred)
+                let ms = enum_members(src, ast, toks, span, members);
                 idx.types.push(ty_def(
                     src,
                     ast,
@@ -259,6 +315,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     idx.fns.push(FnDef {
                         name: ast.name(d.name).to_string(),
                         src: sig_src(src, ast, sp, d.body),
+                        ret: d.ret.map(|r| ty_src(ast, r)),
                         doc: doc_before(src, sp.lo),
                         owner: Some(owner.clone()),
                         span: sp,
@@ -270,6 +327,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 idx.fns.push(FnDef {
                     name: ast.name(d.name).to_string(),
                     src: sig_src(src, ast, span, Some(d.body)),
+                    ret: d.ret.map(|r| ty_src(ast, r)),
                     doc: doc_before(src, span.lo),
                     owner: None,
                     span,
@@ -280,6 +338,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 idx.fns.push(FnDef {
                     name: ast.name(*name).to_string(),
                     src: sig_src(src, ast, span, None),
+                    ret: None,
                     doc: doc_before(src, span.lo),
                     owner: None,
                     span,
@@ -287,7 +346,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 });
             }
             ItemKind::BuiltinTy { name, generics, members, .. } => {
-                let ms = members_of(src, ast, members);
+                let ms = members_of(src, ast, toks, members);
                 idx.types.push(ty_def(
                     src,
                     ast,
@@ -300,7 +359,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::BuiltinPrimitive { name, members } => {
-                let ms = members_of(src, ast, members);
+                let ms = members_of(src, ast, toks, members);
                 idx.types.push(ty_def(
                     src,
                     ast,
@@ -313,7 +372,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::SurfaceDataclass { name, fields, .. } => {
-                let fs = field_members(src, ast, fields);
+                let fs = field_members(src, ast, toks, fields);
                 idx.types.push(ty_def(
                     src,
                     ast,
@@ -326,7 +385,7 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                 ));
             }
             ItemKind::BuiltinTrait { name, generics, methods, .. } => {
-                let ms = members_of(src, ast, methods);
+                let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
                     ast,
@@ -357,8 +416,73 @@ pub fn index(src: &str, ast: &Ast) -> DefIndex {
                     alias_target: Some(ty_src(ast, d.target)),
                 });
             }
-            ItemKind::ModuleLet { .. } | ItemKind::Use { .. } | ItemKind::Module { .. } => {}
+            ItemKind::ModuleLet { name, ty, init, .. } => {
+                // processed after the main walk: the initializer's
+                // inference may name THIS document's types
+                pending_lets.push((*name, *ty, *init, span));
+            }
+            ItemKind::Use { pkg, names } => {
+                // `use pouch::{ Vec, Vec2 };` / `use pouch::Vec;` — the
+                // pkg ident first, then the imported names in order
+                let pkg_text = ast.name(*pkg).to_string();
+                let expected: Vec<&str> = names.iter().map(|n| ast.name(*n)).collect();
+                let mut spans: Vec<Option<Span>> = vec![None; expected.len()];
+                let (mut seen_pkg, mut k) = (false, 0usize);
+                for t in toks {
+                    if t.span.lo < span.lo || t.span.hi > span.hi {
+                        continue;
+                    }
+                    let Tok::Ident(text) = &t.tok else { continue };
+                    if rut_parser::is_reserved_kw(text) {
+                        continue;
+                    }
+                    if !seen_pkg {
+                        seen_pkg = *text == pkg_text;
+                        continue;
+                    }
+                    if k < expected.len() && text == expected[k] {
+                        spans[k] = Some(t.span);
+                        k += 1;
+                    }
+                }
+                for (name, name_span) in expected.into_iter().zip(spans) {
+                    idx.uses.push(UseDef {
+                        name: name.to_string(),
+                        name_span,
+                        pkg: pkg_text.clone(),
+                    });
+                }
+            }
+            ItemKind::Module { .. } => {}
         }
+    }
+    // module lets — with the index's types/fns in place so a
+    // `let c = Circle.new(..)` at module scope infers its type
+    let lets = std::mem::take(&mut pending_lets);
+    for (name, ty, init, span) in lets {
+        let text = ast.name(name).to_string();
+        let ty_text = ty.map(|t| ty_src(ast, t)).or_else(|| {
+            let done: [&DefIndex; 1] = [&idx];
+            infer::expr_ty(ast, &[], &done, init)
+        });
+        // statement spans end at the next token (the parser's
+        // convention) — cut the verbatim slice at the decl's own `;`
+        let hi = toks
+            .iter()
+            .find(|t| t.tok == Tok::Semi && t.span.lo >= span.lo && t.span.hi <= span.hi)
+            .map(|t| t.span.hi)
+            .unwrap_or(span.hi);
+        idx.lets.push(LetDef {
+            name: text,
+            name_span: ident_span(toks, span, ast.name(name)),
+            ty: ty_text,
+            src: src[span.lo as usize..hi as usize]
+                .trim_end()
+                .to_string(),
+            doc: doc_before(src, span.lo),
+            span,
+            line: line_of(src, span.lo),
+        });
     }
     idx
 }
