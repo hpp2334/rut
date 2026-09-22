@@ -17,6 +17,20 @@
 //     deleted afterwards: the committed tree stays clean AND the
 //     glue is left in place so the page keeps working locally.
 //
+// The session (`runSession`) is byte-stable across phases: the read/
+// act ADAPTERS are what each DOM shape customizes. The page now
+// paints the t1 framework's LOWERED DOM, so the adapters translate
+// it at the selectors only:
+//
+//   * a committed row is `div.t1-row` under `#list` (hook `row-<id>`),
+//     children 0=check 1=title 2=del as before;
+//   * a check's state is the class TOKEN (`t1-check--on/--off` on the
+//     framework-owned `button[role=checkbox]`), not `[x]` text — the
+//     adapters map the token back to `[x]`/`[ ]` so the session's
+//     assertions keep reading as they always have;
+//   * a pending line (and a row's in-flight title — the same variant)
+//     is `span.t1-text--pending`, not `class=pending`.
+//
 // Missing artifact/CLI  -> exit 1 with the exact build command
 //                         (loud-fail: the gate guards the artifact).
 // Missing geckodriver   -> tier 2 skipped LOUDLY with the manual
@@ -232,7 +246,16 @@ async function tier1(gluePath) {
       this.value = undefined;
     }
     get firstChild() { return this.children[0] ?? null; }
-    appendChild(c) { this.children.push(c); return c; }
+    appendChild(c) {
+      // appendChild MOVES a child that is already live (the real DOM's
+      // own law, modelled by the rust twin at fake_dom.rs too) — the
+      // keyed diff's reorder path re-appends survivors, and a push
+      // here would duplicate the node instead of moving it
+      const at = this.children.indexOf(c);
+      if (at >= 0) this.children.splice(at, 1);
+      this.children.push(c);
+      return c;
+    }
     removeChild(c) {
       const at = this.children.indexOf(c);
       if (at < 0) throw new Error("NotFoundError");
@@ -281,21 +304,29 @@ async function tier1(gluePath) {
   new Uint8Array(w.memory.buffer, ptr, src.length).set(src);
   expect(w.rut_web_boot(ptr, src.length) === 0, "boot compiles, mounts, verifies, and runs main (rc 0)");
 
-  const committed = () => byId.get("list").children.filter((c) => c.attrs.get("class") !== "pending");
+  // The lowered DOM's adapters: committed rows are the `t1-row`
+  // children of #list; a pending line (or an in-flight row title) is
+  // the `t1-text--pending` variant; a check's state is its class
+  // token, mapped back to the `[x]`/`[ ]` the session has always
+  // asserted. Child order inside a row is unchanged: 0=mark 1=title.
+  const isRow = (c) => (c.attrs.get("class") ?? "").includes("t1-row");
+  const isPendingLine = (c) => (c.attrs.get("class") ?? "").includes("t1-text--pending");
+  const markOf = (row) => ((row.children[0].attrs.get("class") ?? "").includes("t1-check--on") ? "[x]" : "[ ]");
+  const committed = () => byId.get("list").children.filter(isRow);
   const field = byId.get("new-todo");
   const read = {
     status: async () => byId.get("status").textContent ?? "",
     placeholder: async () => field.attrs.get("placeholder") ?? "",
     buttonText: async () => byId.get("add-btn").textContent ?? "",
     fieldValue: async () => field.value ?? "",
-    rows: async () => committed().map((row) => `${row.children[0].textContent} ${row.children[1].textContent}`),
-    rowMarks: async () => committed().map((row) => row.children[0].textContent),
-    pending: async () => byId.get("list").children.filter((c) => c.attrs.get("class") === "pending")
+    rows: async () => committed().map((row) => `${markOf(row)} ${row.children[1].textContent}`),
+    rowMarks: async () => committed().map(markOf),
+    pending: async () => byId.get("list").children.filter(isPendingLine)
       .map((c) => c.textContent),
     // atomic by construction: these reads are local object reads
     snap: async () => ({
-      marks: committed().map((row) => row.children[0].textContent),
-      pending: byId.get("list").children.filter((c) => c.attrs.get("class") === "pending")
+      marks: committed().map(markOf),
+      pending: byId.get("list").children.filter(isPendingLine)
         .map((c) => c.textContent),
     }),
   };
@@ -399,12 +430,19 @@ async function tier2() {
     const keys = async (sel, t) => { await req("POST", `/session/${sid}/element/${await find(sel)}/value`, { text: t }); };
 
     const attrOfEl = (el, name) => req("GET", `/session/${sid}/element/${el}/attribute/${name}`);
+    // The lowered DOM, translated at the selectors only: rows are
+    // `div.t1-row` (hook `row-<id>`), the check is the framework's
+    // `button[role=checkbox]` whose STATE is the `t1-check--on/--off`
+    // token (mapped back to `[x]`/`[ ]` for the session), the title is
+    // the row's one `span`, a pending line is `span.t1-text--pending`.
+    // Child order 0=mark 1=title 2=del is unchanged.
     const rowIds = async () => {
-      const rows = await findAll("#list li:not(.pending)");
+      const rows = await findAll("#list .t1-row");
       const out = [];
       for (const row of rows) out.push(await attrOfEl(row, "id"));
       return out;
     };
+    const markTokenToText = (cls) => ((cls ?? "").includes("t1-check--on") ? "[x]" : "[ ]");
     // reads ride the page's own event loop (the app rebuilds rows
     // between polls, the module boots after load) — a transient
     // no-such/stale element is a poll miss, not a failure
@@ -420,25 +458,27 @@ async function tier2() {
       rows: async () => {
         const out = [];
         for (const id of await rowIds()) {
-          out.push(`${await soft(text(`#${id} .mark`))} ${await soft(text(`#${id} span`))}`);
+          out.push(`${markTokenToText(await soft(attr(`#${id} [role="checkbox"]`, "class")))} ${await soft(text(`#${id} span`))}`);
         }
         return out;
       },
       rowMarks: async () => {
         const out = [];
-        for (const id of await rowIds()) out.push((await soft(text(`#${id} .mark`))) ?? "");
+        for (const id of await rowIds()) {
+          out.push(markTokenToText(await soft(attr(`#${id} [role="checkbox"]`, "class"))));
+        }
         return out;
       },
       pending: async () => {
         const out = [];
-        for (const el of await findAll("#list li.pending")) out.push((await soft(req("GET", `/session/${sid}/element/${el}/text`))) ?? "");
+        for (const el of await findAll("#list span.t1-text--pending")) out.push((await soft(req("GET", `/session/${sid}/element/${el}/text`))) ?? "");
         return out;
       },
       // ONE in-page evaluation: both facts from a single instant,
       // immune to the read-between-reads race
       snap: async () => {
         const s = await req("POST", `/session/${sid}/execute/sync`, {
-          script: "return JSON.stringify({ marks: [...document.querySelectorAll('#list li:not(.pending) .mark')].map((b) => b.textContent), pending: [...document.querySelectorAll('#list li.pending')].map((l) => l.textContent) })",
+          script: "return JSON.stringify({ marks: [...document.querySelectorAll('#list .t1-row')].map((r) => r.children[0].classList.contains('t1-check--on') ? '[x]' : '[ ]'), pending: [...document.querySelectorAll('#list span.t1-text--pending')].map((l) => l.textContent) })",
           args: [],
         });
         return JSON.parse(s);
@@ -447,8 +487,8 @@ async function tier2() {
     const act = {
       type: (t) => keys("#new-todo", t),
       clickAdd: () => click("#add-btn"),
-      clickMark: (id) => click(`#row-${id} .mark`),
-      clickDel: (id) => click(`#row-${id} .del`),
+      clickMark: (id) => click(`#row-${id} [role="checkbox"]`),
+      clickDel: (id) => click(`#row-${id} button.t1-btn--quiet`),
     };
     try {
       await runSession(read, act);
