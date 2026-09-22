@@ -74,6 +74,7 @@ and `entry fn` as the host-callable surface.
 | `src/host.rs` | the native page owner (boot/fire/advance/pump) |
 | `src/mount.rs` | the session mounts (`mount_app_session`: core + pouch + nmap_host + nmapset + store + web, all sources `include_str!`-embedded — wasm32 has no filesystem) |
 | `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that only hands over the app source |
+| `gen/` | wasm-bindgen's generated browser glue (gitignored) — produced by the build recipe below, never committed |
 | `tests/store.rs` | the store's laws, DOM-free (9 tests) |
 | `tests/todolist_app.rs` | the twin gate: scripted sessions asserting the tree AND the turn order (15 tests) |
 | `tests/host_surface.rs` | the phase-1 crossing + trap matrix (22 tests) |
@@ -131,12 +132,13 @@ node tests/e2e-browser.mjs            # from examples/05-todolist-web
    `boot` → `last_error`) on a ~60-line fake DOM: the full scripted
    session, headless, no browser needed.
 3. **The browser tier (when geckodriver + firefox exist)** — generates
-   the glue beside `loader.js` exactly as the manual recipe says,
-   serves the dir over http, drives Firefox headless via raw WebDriver
-   HTTP (no npm deps): the same session typed and clicked on the live
-   page, then the generated glue is removed so the tree stays at the
-   loader's loud-fail contract. Missing binaries = loud skip with the
-   manual recipe (exit 0); a failed check = exit 1.
+   the glue into `gen/` exactly as the manual recipe says, serves the
+   dir over http, drives Firefox headless via raw WebDriver HTTP (no
+   npm deps): the same session typed and clicked on the live page.
+   `gen/` is gitignored, so nothing is cleaned up afterwards — the
+   tree stays at HEAD-clean and the page keeps working locally.
+   Missing binaries = loud skip with the manual recipe (exit 0); a
+   failed check = exit 1.
 
 Missing artifact or CLI → exit 1 with the exact build command: the
 gate guards the artifact, it does not silently skip it.
@@ -146,17 +148,20 @@ gate guards the artifact, it does not silently skip it.
 ```sh
 cd examples/05-todolist-web
 cargo build -p todolist-web --target wasm32-unknown-unknown --release
-wasm-bindgen --target web --out-dir . --out-name web_host \
+wasm-bindgen --target web --out-dir gen --out-name web_host \
   ../../target/wasm32-unknown-unknown/release/todolist_web.wasm
 python3 -m http.server        # then open http://localhost:8000/
 ```
 
 `--out-name web_host` is load-bearing: `loader.js` imports
-`./web_host.js`, and the generated glue fetches `./web_host_bg.wasm`
-beside itself. (The phase-1 recipe lacked the flag and named a file
+`./gen/web_host.js`, and the generated glue fetches
+`./web_host_bg.wasm` relative to ITSELF, so the subdir pair stays
+consistent. (The phase-1 recipe lacked the flag and named a file
 the loader does not import — recorded as a phase-3 deviation.) The
 CLI version must match the crate's wasm-bindgen (see Cargo.lock;
-wasm-pack's fetched install works).
+wasm-pack's fetched install works). `gen/` is gitignored, so the
+build never dirties the tree — no cleanup chore, and a stale glue
+just gets overwritten by the next build.
 
 **What you'll see**: an input and an Add button under "rut — the
 `web::` host surface". Type a title — the status line echoes the

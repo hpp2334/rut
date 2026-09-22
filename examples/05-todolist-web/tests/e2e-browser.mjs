@@ -10,12 +10,12 @@
 //     session the twin's tests run, headless.
 //
 //   tier 2 (when geckodriver + a browser exist): the REAL page —
-//     glue generated beside loader.js exactly as the manual recipe
-//     says, the dir served over http, Firefox headless via raw
+//     glue generated into gen/ exactly as the manual recipe says,
+//     the dir served over http, Firefox headless via raw
 //     WebDriver HTTP (no npm deps), the same session typed and
-//     clicked on the live DOM. The generated glue files are removed
-//     afterwards, so the committed state stays the loader's
-//     loud-fail contract.
+//     clicked on the live DOM. gen/ is gitignored, so nothing is
+//     deleted afterwards: the committed tree stays clean AND the
+//     glue is left in place so the page keeps working locally.
 //
 // Missing artifact/CLI  -> exit 1 with the exact build command
 //                         (loud-fail: the gate guards the artifact).
@@ -126,7 +126,7 @@ function makeGlue(bindgen, outDir) {
   if (r.status !== 0) {
     loudFail(
       "wasm-bindgen failed:\n" + (r.stderr ?? r.stdout ?? "") +
-      "\n(the manual recipe step: wasm-bindgen --target web --out-dir . --out-name web_host " +
+      "\n(the manual recipe step: wasm-bindgen --target web --out-dir gen --out-name web_host " +
       "target/wasm32-unknown-unknown/release/todolist_web.wasm)",
     );
   }
@@ -351,122 +351,119 @@ const EID = (e) => e["element-6066-11e4-a52e-4f735466cecf"] ?? e.ELEMENT;
 async function tier2() {
   console.log("\ntier 2 — the real page (Firefox headless, geckodriver over WebDriver)");
 
-  // the manual recipe, automated: glue BESIDE loader.js (the loader
-  // imports ./web_host.js; the glue fetches ./web_host_bg.wasm)
-  const generated = ["web_host.js", "web_host_bg.wasm", "web_host.d.ts", "web_host_bg.wasm.d.ts"]
-    .map((f) => path.join(EXAMPLE, f))
-    .filter((f) => !fs.existsSync(f)); // only ever delete what WE generated
+  // the manual recipe, automated: glue INTO gen/ (the gitignored
+  // output dir — the loader imports ./gen/web_host.js; the glue
+  // fetches ./web_host_bg.wasm relative to ITSELF, so the subdir
+  // pair stays consistent)
+  const GEN = path.join(EXAMPLE, "gen");
+  fs.mkdirSync(GEN, { recursive: true });
+  makeGlue(findBindgen(), GEN);
+  const { srv, port } = await serveStatic(EXAMPLE);
+  const gdPort = await freePort();
+  const gd = spawn("geckodriver", ["--port", String(gdPort)], { stdio: "ignore" });
+  const base = `http://127.0.0.1:${gdPort}`;
+  const req = async (method, p, body) => {
+    const r = await fetch(base + p, {
+      method,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: body === undefined ? {} : { "content-type": "application/json" },
+    });
+    const j = await r.json();
+    if (j.value && j.value.error) throw new Error(`webdriver ${method} ${p}: ${j.value.error} — ${j.value.message}`);
+    return j.value;
+  };
+  let sid = null;
   try {
-    makeGlue(findBindgen(), EXAMPLE);
-    const { srv, port } = await serveStatic(EXAMPLE);
-    const gdPort = await freePort();
-    const gd = spawn("geckodriver", ["--port", String(gdPort)], { stdio: "ignore" });
-    const base = `http://127.0.0.1:${gdPort}`;
-    const req = async (method, p, body) => {
-      const r = await fetch(base + p, {
-        method,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        headers: body === undefined ? {} : { "content-type": "application/json" },
-      });
-      const j = await r.json();
-      if (j.value && j.value.error) throw new Error(`webdriver ${method} ${p}: ${j.value.error} — ${j.value.message}`);
-      return j.value;
+    for (let i = 0; i < 50; i += 1) {
+      try { await req("GET", "/status"); break; } catch { await sleep(100); }
+    }
+    const caps = {
+      capabilities: {
+        alwaysMatch: { browserName: "firefox", "moz:firefoxOptions": { args: ["-headless"] } },
+      },
     };
-    let sid = null;
-    try {
-      for (let i = 0; i < 50; i += 1) {
-        try { await req("GET", "/status"); break; } catch { await sleep(100); }
-      }
-      const caps = {
-        capabilities: {
-          alwaysMatch: { browserName: "firefox", "moz:firefoxOptions": { args: ["-headless"] } },
-        },
-      };
-      if (process.env.FIREFOX_BIN) caps.capabilities.alwaysMatch["moz:firefoxOptions"].binary = process.env.FIREFOX_BIN;
-      sid = (await req("POST", "/session", caps)).sessionId;
-      await req("POST", `/session/${sid}/url`, { url: `http://127.0.0.1:${port}/index.html` });
+    if (process.env.FIREFOX_BIN) caps.capabilities.alwaysMatch["moz:firefoxOptions"].binary = process.env.FIREFOX_BIN;
+    sid = (await req("POST", "/session", caps)).sessionId;
+    await req("POST", `/session/${sid}/url`, { url: `http://127.0.0.1:${port}/index.html` });
 
-      const find = (sel) => req("POST", `/session/${sid}/element`, { using: "css selector", value: sel }).then(EID);
-      const findAll = async (sel) => (await req("POST", `/session/${sid}/elements`, { using: "css selector", value: sel })).map(EID);
-      // req() returns the wire value already: text -> string, a
-      // missing attribute/property -> null
-      const text = async (sel) => (await req("GET", `/session/${sid}/element/${await find(sel)}/text`)) ?? "";
-      const attr = async (sel, name) => req("GET", `/session/${sid}/element/${await find(sel)}/attribute/${name}`);
-      // the app sets the field's value via the JS property (set_value),
-      // not the attribute — read the property endpoint
-      const prop = async (sel, name) => req("GET", `/session/${sid}/element/${await find(sel)}/property/${name}`);
-      const click = async (sel) => { await req("POST", `/session/${sid}/element/${await find(sel)}/click`, {}); };
-      const keys = async (sel, t) => { await req("POST", `/session/${sid}/element/${await find(sel)}/value`, { text: t }); };
+    const find = (sel) => req("POST", `/session/${sid}/element`, { using: "css selector", value: sel }).then(EID);
+    const findAll = async (sel) => (await req("POST", `/session/${sid}/elements`, { using: "css selector", value: sel })).map(EID);
+    // req() returns the wire value already: text -> string, a
+    // missing attribute/property -> null
+    const text = async (sel) => (await req("GET", `/session/${sid}/element/${await find(sel)}/text`)) ?? "";
+    const attr = async (sel, name) => req("GET", `/session/${sid}/element/${await find(sel)}/attribute/${name}`);
+    // the app sets the field's value via the JS property (set_value),
+    // not the attribute — read the property endpoint
+    const prop = async (sel, name) => req("GET", `/session/${sid}/element/${await find(sel)}/property/${name}`);
+    const click = async (sel) => { await req("POST", `/session/${sid}/element/${await find(sel)}/click`, {}); };
+    const keys = async (sel, t) => { await req("POST", `/session/${sid}/element/${await find(sel)}/value`, { text: t }); };
 
-      const attrOfEl = (el, name) => req("GET", `/session/${sid}/element/${el}/attribute/${name}`);
-      const rowIds = async () => {
-        const rows = await findAll("#list li:not(.pending)");
+    const attrOfEl = (el, name) => req("GET", `/session/${sid}/element/${el}/attribute/${name}`);
+    const rowIds = async () => {
+      const rows = await findAll("#list li:not(.pending)");
+      const out = [];
+      for (const row of rows) out.push(await attrOfEl(row, "id"));
+      return out;
+    };
+    // reads ride the page's own event loop (the app rebuilds rows
+    // between polls, the module boots after load) — a transient
+    // no-such/stale element is a poll miss, not a failure
+    const soft = (p) => p.catch((e) => {
+      if (/no such|stale/.test(String(e))) return null;
+      throw e;
+    });
+    const read = {
+      status: async () => (await soft(text("#status"))) ?? "",
+      placeholder: async () => (await soft(attr("#new-todo", "placeholder"))) ?? "",
+      buttonText: async () => (await soft(text("#add-btn"))) ?? "",
+      fieldValue: async () => (await soft(prop("#new-todo", "value"))) ?? "",
+      rows: async () => {
         const out = [];
-        for (const row of rows) out.push(await attrOfEl(row, "id"));
+        for (const id of await rowIds()) {
+          out.push(`${await soft(text(`#${id} .mark`))} ${await soft(text(`#${id} span`))}`);
+        }
         return out;
-      };
-      // reads ride the page's own event loop (the app rebuilds rows
-      // between polls, the module boots after load) — a transient
-      // no-such/stale element is a poll miss, not a failure
-      const soft = (p) => p.catch((e) => {
-        if (/no such|stale/.test(String(e))) return null;
-        throw e;
-      });
-      const read = {
-        status: async () => (await soft(text("#status"))) ?? "",
-        placeholder: async () => (await soft(attr("#new-todo", "placeholder"))) ?? "",
-        buttonText: async () => (await soft(text("#add-btn"))) ?? "",
-        fieldValue: async () => (await soft(prop("#new-todo", "value"))) ?? "",
-        rows: async () => {
-          const out = [];
-          for (const id of await rowIds()) {
-            out.push(`${await soft(text(`#${id} .mark`))} ${await soft(text(`#${id} span`))}`);
-          }
-          return out;
-        },
-        rowMarks: async () => {
-          const out = [];
-          for (const id of await rowIds()) out.push((await soft(text(`#${id} .mark`))) ?? "");
-          return out;
-        },
-        pending: async () => {
-          const out = [];
-          for (const el of await findAll("#list li.pending")) out.push((await soft(req("GET", `/session/${sid}/element/${el}/text`))) ?? "");
-          return out;
-        },
-        // ONE in-page evaluation: both facts from a single instant,
-        // immune to the read-between-reads race
-        snap: async () => {
-          const s = await req("POST", `/session/${sid}/execute/sync`, {
-            script: "return JSON.stringify({ marks: [...document.querySelectorAll('#list li:not(.pending) .mark')].map((b) => b.textContent), pending: [...document.querySelectorAll('#list li.pending')].map((l) => l.textContent) })",
-            args: [],
-          });
-          return JSON.parse(s);
-        },
-      };
-      const act = {
-        type: (t) => keys("#new-todo", t),
-        clickAdd: () => click("#add-btn"),
-        clickMark: (id) => click(`#row-${id} .mark`),
-        clickDel: (id) => click(`#row-${id} .del`),
-      };
+      },
+      rowMarks: async () => {
+        const out = [];
+        for (const id of await rowIds()) out.push((await soft(text(`#${id} .mark`))) ?? "");
+        return out;
+      },
+      pending: async () => {
+        const out = [];
+        for (const el of await findAll("#list li.pending")) out.push((await soft(req("GET", `/session/${sid}/element/${el}/text`))) ?? "");
+        return out;
+      },
+      // ONE in-page evaluation: both facts from a single instant,
+      // immune to the read-between-reads race
+      snap: async () => {
+        const s = await req("POST", `/session/${sid}/execute/sync`, {
+          script: "return JSON.stringify({ marks: [...document.querySelectorAll('#list li:not(.pending) .mark')].map((b) => b.textContent), pending: [...document.querySelectorAll('#list li.pending')].map((l) => l.textContent) })",
+          args: [],
+        });
+        return JSON.parse(s);
+      },
+    };
+    const act = {
+      type: (t) => keys("#new-todo", t),
+      clickAdd: () => click("#add-btn"),
+      clickMark: (id) => click(`#row-${id} .mark`),
+      clickDel: (id) => click(`#row-${id} .del`),
+    };
+    try {
+      await runSession(read, act);
+    } catch (e) {
+      // the page's own state, for the log — then the failure stands
       try {
-        await runSession(read, act);
-      } catch (e) {
-        // the page's own state, for the log — then the failure stands
-        try {
-          const html = await req("POST", `/session/${sid}/execute/sync`, { script: "return document.body.innerHTML", args: [] });
-          console.error(`  page at failure: ${String(html).replace(/\s+/g, " ").slice(0, 500)}`);
-        } catch { /* session gone */ }
-        throw e;
-      }
-    } finally {
-      if (sid) { try { await req("DELETE", `/session/${sid}`); } catch { /* gone */ } }
-      gd.kill();
-      srv.close();
+        const html = await req("POST", `/session/${sid}/execute/sync`, { script: "return document.body.innerHTML", args: [] });
+        console.error(`  page at failure: ${String(html).replace(/\s+/g, " ").slice(0, 500)}`);
+      } catch { /* session gone */ }
+      throw e;
     }
   } finally {
-    for (const f of generated) { try { fs.unlinkSync(f); } catch { /* already gone */ } }
+    if (sid) { try { await req("DELETE", `/session/${sid}`); } catch { /* gone */ } }
+    gd.kill();
+    srv.close();
   }
 }
 
@@ -491,7 +488,7 @@ if (NODE_ONLY) {
     "\ntier 2 SKIPPED loudly — geckodriver/firefox not on PATH. The manual browser run:\n" +
     "  cd examples/05-todolist-web\n" +
     "  cargo build -p todolist-web --target wasm32-unknown-unknown --release\n" +
-    `  wasm-bindgen --target web --out-dir . --out-name web_host ${path.relative(EXAMPLE, WASM)}\n` +
+    `  wasm-bindgen --target web --out-dir gen --out-name web_host ${path.relative(EXAMPLE, WASM)}\n` +
     "  python3 -m http.server   # in that dir; then open http://localhost:8000/",
   );
 }

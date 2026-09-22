@@ -14,26 +14,28 @@
 // manual build step this batch does not fake:
 //
 //   cargo build -p todolist-web --target wasm32-unknown-unknown --release
-//   wasm-bindgen --target web --out-dir . --out-name web_host \
+//   wasm-bindgen --target web --out-dir gen --out-name web_host \
 //     ../../target/wasm32-unknown-unknown/release/todolist_web.wasm
 //
 // (`--out-name web_host` is the load-bearing part: this file imports
-// ./web_host.js, and the glue fetches ./web_host_bg.wasm beside it.)
+// ./gen/web_host.js, and the glue fetches ./web_host_bg.wasm relative
+// to ITSELF — the subdir pair stays consistent.) gen/ is gitignored,
+// so a build never dirties the tree.
 // Without the glue this loader fails LOUD below with exactly that
 // command — the repo's loud-fail law, never a silent skip. `node
 // tests/e2e-browser.mjs` is the automated gate over the same steps.
 
-const glueUrl = new URL("./web_host.js", import.meta.url);
+const glueUrl = new URL("./gen/web_host.js", import.meta.url);
 
 let glue;
 try {
   glue = await import(glueUrl.href);
 } catch (err) {
   throw new Error(
-    "05-todolist-web: the wasm-bindgen glue (./web_host.js) is missing — " +
+    "05-todolist-web: the wasm-bindgen glue (./gen/web_host.js) is missing — " +
       "a browser run is a manual build step:\n" +
       "  cargo build -p todolist-web --target wasm32-unknown-unknown --release\n" +
-      "  wasm-bindgen --target web --out-dir . --out-name web_host " +
+      "  wasm-bindgen --target web --out-dir gen --out-name web_host " +
       "../../target/wasm32-unknown-unknown/release/todolist_web.wasm\n" +
       `(original error: ${err})`,
   );
