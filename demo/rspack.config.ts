@@ -2,6 +2,16 @@ import type { RspackOptions } from "@rspack/core";
 import { CopyRspackPlugin, HtmlRspackPlugin, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 
+// react-refresh is a DEV-SERVER feature: its runtime ($RefreshReg$/
+// $RefreshSig$) comes from `rspack serve`. A static `npm run build`
+// bundle emitted the registration CALLS with no runtime — the shipped
+// page died on load with "ReferenceError: $RefreshReg$ is not defined"
+// and #root stayed empty (found by the phase-4 browser drive; the
+// smoke's node bundle never mounts React, so it couldn't see it).
+// npm sets npm_lifecycle_event per script, so the refresh machinery
+// rides the `dev` lane only.
+const isDevServe = process.env.npm_lifecycle_event === "dev";
+
 const config: RspackOptions = {
   context: __dirname,
   entry: "./src/main.tsx",
@@ -25,7 +35,7 @@ const config: RspackOptions = {
           jsc: {
             parser: { syntax: "typescript", tsx: true },
             transform: {
-              react: { runtime: "automatic", refresh: true },
+              react: { runtime: "automatic", refresh: isDevServe },
             },
           },
         },
@@ -43,7 +53,7 @@ const config: RspackOptions = {
     ],
   },
   plugins: [
-    new ReactRefreshRspackPlugin(),
+    ...(isDevServe ? [new ReactRefreshRspackPlugin()] : []),
     new HtmlRspackPlugin({ template: "./src/index.html" }),
     // ship rut.wasm with the bundle (RFC 0041 §3: the runner probes it)
     new CopyRspackPlugin({
