@@ -431,7 +431,7 @@ pins it): `4502015958359127277`. Full row (net medians, same-day run,
 
 | workload    | rut net | qjs net | node net | rut exec | fuel      | VM heap peak |
 |-------------|---------|---------|----------|----------|-----------|--------------|
-| json-decode | 675.2 ms| 62.3 ms | 24.3 ms  | 662.4 ms | 111.33 M  | 32.78 MB     |
+| json-decode | 675.2 ms| 62.3 ms | 24.3 ms  | 662.4 ms | 111.32 M  | 32.78 MB     |
 
 Placement: rut is ~10.8x qjs net and ~27.8x node net on the identical
 document — the row measures the interpreter's box churn (the per-value
@@ -444,7 +444,7 @@ shared across the reps (fresh cursor per rep), so the per-rep cost is
 the decode + fold — the churn the pooling phase (6) measured itself
 against (it held parity; see the close-out). Box counts:
 ~34k boxes minted per rep (19 values + 9 keys per row), ~100k across
-the 3 reps; ~37 M fuel per rep (`111.33 M` per main incl. gen+split).
+the 3 reps; ~37 M fuel per rep (`111.32 M` per main incl. gen+split).
 Repeated times are stable; treat the x-runtime gap as the baseline
 shape, not as saturation.
 
@@ -512,7 +512,7 @@ nmapset/hashset `734932704` / `1264308351` / `21500055` / `2198604`):
 
 | workload         | rut net before → after  | rut exec before → after | fuel         | VM heap peak |
 |------------------|-------------------------|-------------------------|--------------|--------------|
-| json-decode      | 675.2 → 676.2 ms (~0)   | 662.4 → 670.0 ms (+1.1%)| 111.33 M (=) | 32.78 MB (=) |
+| json-decode      | 675.2 → 676.2 ms (~0)   | 662.4 → 670.0 ms (+1.1%)| 111.32 M (=) | 32.78 MB (=) |
 | nmapset-int      | 92.6 → 94.6 ms (+2.2%)  | 81.7 → 84.5 ms (+3.4%)  | 21.10 M (=)  | 5.80 MB (=)  |
 | nmapset-str      | 71.8 → 64.4 ms (−10%)   | 54.9 → 58.4 ms (+6.4%)  | 9.74 M (=)   | 2.90 MB (=)  |
 | nmap-hashset     | 47.2 → 48.7 ms (+3.2%)  | 40.4 → 44.7 ms (+10.6%) | 13.27 M (=)  | 503 B (=)    |
@@ -579,7 +579,7 @@ every checksum):
 | nmap-knucleotide | 781.5 → 227.0 ms        | **−71%**   | 139.2 ms            | 323.66 M → 39.61 M  |
 | nmap-hashset     | 67.1 → 47.2 ms          | **−30%**   | 55.3 ms (**rut ahead**)| 16.98 M → 13.27 M |
 | nmapset-int      | 116.7 → 92.6 ms         | −21%       | 61.3 ms             | 24.80 M → 21.10 M   |
-| json-decode      | 675.2 → 676.2 ms        | ~0 (parity)| 62.3 ms            | 111.33 M (=)        |
+| json-decode      | 675.2 → 676.2 ms        | ~0 (parity)| 62.3 ms            | 111.32 M (=)        |
 
 (`=` bit-identical. Exec medians for the typed lanes: nmapset-str
 54.9 ms −74%, nmap-knucleotide 216.1 ms −71%, nmap-hashset 40.4 ms
@@ -587,7 +587,7 @@ every checksum):
 decomposition. Close-out verification re-run: full suite, all three
 runtimes, exit 0 — every row equals `expected.json`; the probe's fuel
 and VM-heap peaks are bit-identical on every nmap/json row (json
-665.0 ms / 111.33 M / 32.78 MB; nmapset-str 57.1 ms; nmap-knucleotide
+665.0 ms / 111.32 M / 32.78 MB; nmapset-str 57.1 ms; nmap-knucleotide
 207.9 ms; nmap-hashset 42.8 ms / 503 B; nmapset-int 82.8 ms), and the
 str rows' drift (nmapset-str net 63.9 ms this run) is the host's
 known day drift, not a code change — nothing has moved since phase 6.)
@@ -847,7 +847,7 @@ json-decode powered to 5 × 3 after a first-pass +4.2% flag):
 
 Honest note on json-decode: the 3×3 pass flagged +4.2%; a dedicated
 5-round pass read +0.4% (round medians before 660.9-680.2 vs after
-676.3-688.2, overlapping; fuel 111,330,118 and heap bit-identical both
+676.3-688.2, overlapping; fuel 111,322,915 and heap bit-identical both
 directions) — recorded as NEUTRAL, not a win and not a regression. No
 committed row regressed on its powered measurement — **stop-point
 (§0.5) not triggered**; the flat floors rule out a global codegen cost
@@ -933,7 +933,7 @@ not a win. nmap-knucleotide was never tier-measured in phases 1-2; its
 the map op. json-decode's −1.0% is within the parity band its phase-2
 entry already recorded (+0.4%); call it parity-to-slightly-better. Fuel
 and VM-heap peaks were **bit-identical before/after on every row**
-(13,267,176 / 21,103,284 / 9,735,095 / 39,612,955 / 111,330,118 ops;
+(13,267,176 / 21,103,284 / 9,735,095 / 39,612,955 / 111,322,915 ops;
 503 B / 5.80 MB / 2.90 MB / 11.85 MB / 32.78 MB). **Stop-point (§0.5):
 never triggered** — no row regressed beyond noise on its interleaved
 measurement, and the flat floors (B +0.6% / B4 −1.0%) rule out a
@@ -972,7 +972,7 @@ states the per-op budget. Row baselines re-measured for this batch
 |------------------|------------------|---------------|------------------|
 | nmapset-int      | 77.8 ms (A/B below) | 21,103,284 | 6,082,111 B (5.80 MiB) |
 | nmap-hashset     | 38.9 ms          | 13,267,176    | 503 B            |
-| json-decode      | 727.9 ms         | 111,330,118   | 34,377,147 B (32.78 MiB) |
+| json-decode      | 727.9 ms         | 111,322,915   | 34,377,027 B (32.78 MiB) |
 | crossing-nop     | 97.9 ms          | 104,000,032   | 236 B            |
 
 ### Finding 0a — KeyLane dispatch is already DIRECT (spliced to the lane crossing)
@@ -1218,7 +1218,7 @@ threaded dispatch, so the qjs-parity law holds by construction.
 | array            | 267.56 ms   | 210.01 ms  | **−21.5%** | 63,486,108 → 60,486,108 | 40,389,042 → 7,864,540 B  |
 | sieve            | 155.97 ms   | 43.10 ms   | **−72.4%** | 21,167,665 → 19,592,209 | 21,853,906 → 1,491,846 B  |
 | alloc            | 17.46 ms    | 17.31 ms   | −0.9%      | 22,000,020 (identical)  | 228 B (identical)         |
-| json-decode      | 671.5 ms    | 677.9 ms   | +0.9%      | 111,330,118 (identical) | 34,377,147 B (identical)  |
+| json-decode      | 671.5 ms    | 677.9 ms   | +0.9%      | 111,322,915 (identical) | 34,377,027 B (identical)  |
 
 Method: interleaved A/B, both probe binaries built from THIS checkout
 directory (before-source = b5ff868 rebuilt in place, then after-source
@@ -1296,7 +1296,7 @@ the phase-2 table byte-for-byte where the op stream is concerned:
 hashmap-int 63,758,210; hashset 55,696,689; array 60,486,108; sieve
 19,592,209; hashmap-str 111,306,605; knucleotide 417,970,983) **and
 bit-identical to the pre-batch records on every row that could not
-move** (json-decode 111,330,118 / 32.78 MB; alloc 22,000,020 / 228 B;
+move** (json-decode 111,322,915 / 32.78 MB; alloc 22,000,020 / 228 B;
 nmap-hashset 13,267,176 / 503 B; crossing-nop 104,000,032 / 236 B).
 
 **Cumulative vs the batch baseline** (probe exec medians; before =
@@ -1317,7 +1317,7 @@ recorded deltas; last column = today's verdict run):
 | knucleotide      | 952.18 ms | 925.88 ms           | −2.8%         | 910.9 ms    | 418,769,549 → 417,970,983 | 43.52 MB → 35.29 MB (−19%)|
 | hashmap-str      | 251.18 ms | 249.97 ms           | −0.5%         | 249.2 ms    | 111,489,939 → 111,306,605 | 10.29 MB → 8.29 MB (−19%) |
 | alloc            | 17.46 ms  | 17.31 ms            | −0.9% — parity| 17.4 ms     | 22,000,020 (identical)    | 228 B (identical)         |
-| json-decode      | 671.5 ms  | 677.9 ms            | +0.9% — parity| 662.9 ms    | 111,330,118 (identical)   | 34.38 MB (identical)      |
+| json-decode      | 671.5 ms  | 677.9 ms            | +0.9% — parity| 662.9 ms    | 111,322,915 (identical)   | 34.38 MB (identical)      |
 | nmap-hashset     | 38.9 ms   | neutral — below     | —             | 38.0 ms     | 13,267,176 (identical)    | 503 B (identical)         |
 
 (nmapset-int is −18.6% on the matched pair and −18.8% against the
@@ -1971,7 +1971,7 @@ pinned records on every row):
 |--------------|--------------------|-------------|--------------|
 | nmap-knuc    | 174–208 ms (day range across passes) | 38,814,389 | 4,195,084 B |
 | nmapset-str  | 53–63 ms           | 9,551,761   | 983,620 B    |
-| json-decode  | 708–950 ms         | 111,330,118 | 34,377,147 B |
+| json-decode  | 708–950 ms         | 111,322,915 | 34,377,027 B |
 | nmapset-int  | 62–71 ms           | 20,703,284  | 1,966,551 B  |
 | nmap-primmap | 62–65 ms           | 17,950,301  | 324 B        |
 | fasta        | 0.49–0.53 ms       | 200,029     | 16,806 B     |
@@ -2315,7 +2315,7 @@ the four nmap pins `2198604` / `1264308351` / `21500055` / `734932704`
 and nmap-primmap's hold); fuel + heap **bit-identical** on every
 pinned probe row (knuc 38,814,389/4,195,084, str 9,551,761/983,620,
 int 20,703,284/1,966,551, primmap 17,950,301/324, hashset
-13,267,176/551, json 111,330,118, crossing-nop 104,000,032/236,
+13,267,176/551, json 111,322,915, crossing-nop 104,000,032/236,
 hashmap-int 63,758,210, alloc 22,000,020/228, sieve 19,592,209). No
 neutral row moved anywhere (fuel/heap deterministic across all
 interleaved rounds — the phase-1 layout lesson's check; nothing needed
@@ -2347,7 +2347,7 @@ nmap-hashset `21500055`**. **Fuel and VM-heap are bit-identical to the
 phase-2 records on all 26 probe rows** (26/26 diff = 0, including the
 two new view rows: knuc 38,814,389/4,195,084; kmer-view
 37,614,177/4,194,916; str 9,551,761/983,620; strview
-10,801,744/2,032,173; json 111,330,118/34,377,147 — the post-b1a
+10,801,744/2,032,173; json 111,322,915/34,377,027 — the post-b1a
 accounting; int 20,703,284/1,966,551; primmap 17,950,301/324;
 hashset 13,267,176/551; crossing-nop 104,000,032/236; hashmap-int
 63,758,210; alloc 22,000,020/228; sieve 19,592,209). Workspace green
@@ -2426,7 +2426,7 @@ WORKLOAD-LEVEL lever** — it is a different decoder shape, not claimed
 by this batch's view mechanism. `string_join` replacing the f-string
 accumulator measured +3.6 % (the rc==1 in-place append path is
 already the optimal build spelling). The row is untouched: fuel
-111,330,118 / heap 34,377,147, checksum `4502015958359127277`,
+111,322,915 / heap 34,377,027, checksum `4502015958359127277`,
 bit-identical everywhere.
 
 ### Honest neutrals
@@ -2878,7 +2878,7 @@ refvals 56,899,541/28,801,340, nmapset-int 20,703,284/1,966,551,
 nmapset-str 9,551,761/983,620, nmap-knucleotide 38,814,389/4,195,084,
 nmap-hashset 13,267,176/551, nmap-primmap 17,950,301/324, kmer-view
 37,614,177/4,194,916, strview 10,801,744/2,032,173, json-decode
-111,330,118/34,377,147, crossing-nop 104,000,032/236, alloc
+111,322,915/34,377,027, crossing-nop 104,000,032/236, alloc
 22,000,020/228, sieve 19,592,209/1,491,846, array 60,486,108/7,864,540,
 fasta 200,029/16,806, binary-trees 1,048,552; workspace 525 tests,
 0 failures, 82 suites (the pre-experiment counts). What the batch
@@ -2911,7 +2911,7 @@ record (the refval-exp precedent: reversible no, analysis kept).
 | kmer-view    | 151.5–151.6 ms        | 37,614,177  | 4,194,916 B  |
 | strview      | 39.0–39.8 ms          | 10,801,744  | 2,032,173 B  |
 | nmap-hashset | 42.3 ms               | 13,267,176  | 551 B        |
-| json-decode  | 670.9 ms              | 111,330,118 | 34,377,147 B |
+| json-decode  | 670.9 ms              | 111,322,915 | 34,377,027 B |
 | refvals      | 340.5 ms              | 56,899,541  | 28,801,340 B |
 | nmapset-int  | 68.2 ms               | 20,703,284  | 1,966,551 B  |
 | nmap-primmap | 60.1 ms               | 17,950,301  | 324 B        |
@@ -3099,7 +3099,7 @@ mismatches, every fuel/heap pin BIT-IDENTICAL (nmapset-str
 9,551,761/983,620; nmap-knuc 38,814,389/4,195,084; kmer-view
 37,614,177/4,194,916; strview 10,801,744/2,032,173; nmap-hashset
 13,267,176/551; nmap-primmap 17,950,301/324; nmapset-int
-20,703,284/1,966,551; json-decode 111,330,118/34,377,147; refvals
+20,703,284/1,966,551; json-decode 111,322,915/34,377,027; refvals
 56,899,541/28,801,340; crossing-nop 104,000,032/236; alloc
 22,000,020/228; sieve 19,592,209/1,491,846; array 60,486,108/7,864,540;
 fasta 200,029/16,806; binary-trees 1,048,552); staged by explicit
@@ -3213,3 +3213,170 @@ binary-trees   1.335 ms  0.010 ms     10.2 ms    1048552       2.50 MB     —
 fannkuch       2.567 ms  0.330 ms     10.6 ms    2365060        1.5 KB     —
 sieve          2.483 ms  0.009 ms    181.1 ms   22201598      20.84 MB     —
 ```
+
+## Performance log — refcolumn round 2: the mint deleted, the remainder measured — REVERTED again (Sep 2026)
+
+The refval-round2 batch's verdict, and the second half of the two-round
+story. **Round 1** (the refcolumn sections above): the val column lost
++13.7% beyond noise, and the autopsy pinned the loss on the READ-BACK —
+`opaque.downcast<V>` minted a `(V, bool)` record cell per hit-get
+(~+175 ns/get, ~+87 ms on the row). **Round 2** (this batch): phase 0
+changed the surface IN PLACE — `downcast` yields `?T`, the alias
+handoff, NO allocation on either branch (VERSION 6 -> 7) — then phase 1
+revived the experiment re-spelled to the new recovery. The prediction
+was that the mint term collapses to ~+5-10 ms and the column flips to a
+net win on the strength of its build side. **The measurement: the mint
+was only ~half of the get-side term. The remainder (+~87 ns/get of
+crossing + box-chase + rc) still exceeds the build side's win, the row
+read SLOWER in all three powered passes (inside this box's noise), and
+both prongs of the pre-registered rule fire — the experiment is
+REVERTED again, one commit, downcast ?T kept.**
+
+### The matched pairs — three powered passes, one checkout, one build
+
+Both rows of one checkout, one release build, interleaved fresh-VM
+probe iters per side, order alternated per round, median of the round
+medians; fuel and heap are pure counts and were single-valued in every
+round of every pass (deterministic):
+
+| pass | refvals med-of-med (round range) | refcolumn med-of-med (round range) | Δ | ranges |
+|------|----------------------------------|------------------------------------|---|--------|
+| 1 — 7 rounds × 7 iters | 357.88 ms (349.9 – 392.6) | 381.10 ms (361.4 – 388.0) | **+23.22 ms (+6.5%)** | overlap |
+| 2 — 7 rounds × 7 iters | 354.50 ms (348.9 – 364.5) | 369.55 ms (360.8 – 397.1) | **+15.05 ms (+4.2%)** | overlap |
+| 3 — 9 rounds × 9 iters | 356.70 ms (351.2 – 382.3) | 366.58 ms (358.8 – 383.2) | **+9.89 ms (+2.8%)** | overlap |
+
+Box honesty, recorded because round 1's ranges need context: this VM is
+both slower and much noisier than round 1's box (refvals median
+354-358 ms here vs 337.68 there; round-median spread up to ±30 ms here
+vs ±5 there — pass 1 round 1 read 392.6 while its neighbours read
+~353). The direction is consistent — **refcolumn slower in all three
+passes** — but no pass achieves round 1's non-overlap; the delta lives
+INSIDE the noise every time. The pre-registered rule reads "SLOWER or
+inside noise -> REVERT"; here both prongs fire at once, so the verdict
+does not hinge on which one you weigh.
+
+The counts: fuel 53,390,560 vs 56,899,541 (**−3,508,981, −6.2%**;
+round 1: −1,508,981), VM heap peak 21,600,720 vs 28,801,340 B
+(**−7,200,620 B, −25%**) — 72.0 vs 96.0 B per live value, round 1's
+cell economics reproduced exactly. Per map op (pass 3): 277.7 vs
+270.2 ns, **+7.5 ns/op**.
+
+The qjs scoreboard CANNOT separate the rows on this box: two
+order-bracketed runs (5 reps + 1 warmup each, net medians) read
+refcolumn rut/qjs 1.16× then 1.25× and refvals 1.23× then 1.20× — the
+qjs nets moved 310-328 ms between the rows' turns on the IDENTICAL
+twin program (both rows' `.js` are the same computation), so the
+inter-row drift exceeds the row gap and the sign flips with run order.
+Round 1's scoreboard separated (1.21× vs 1.39×) because that box was
+quiet. What survives: no scoreboard regression was hidden — the
+powered probe pairs are the instrument, and they read "slower, inside
+noise". Checksums 140052990000 equal on rut/qjs/node for both rows
+throughout — the one-cell law carried perfectly, again.
+
+### The fuel ledger — exact, both rounds reconciled to the op
+
+Ten per-phase ladder clones (cumulative cut points of the row's churn,
+one ladder per map family, this tree, this session; each family pair's
+fold arithmetic is identical so it cancels in the delta; checksums
+equal across the families at every step):
+
+| phase (ops)                              | Δ fuel (rm − hm)         | per-op delta | round 1 | what changed |
+|------------------------------------------|--------------------------|--------------|---------|--------------|
+| fresh put w/ growth, m (100k, 15 grows)  | **−3,202,984**           | −32.03/put   | same    | nothing — round 1's term to the op |
+| fresh put w/ growth, g (200k, 16 grows)  | **−6,405,997**           | −32.03/put   | same    | nothing |
+| overwrite put, m (100k)                  | +100,000                 | +1.0/put     | +1.0    | nothing |
+| overwrite put, g (200k)                  | +200,000                 | +1.0/put     | +1.0    | nothing |
+| hit get, 2 fields (100k)                 | +1,200,000               | **+12.0/get**| +16.0   | **the mint: −4.0** |
+| miss get (20k)                           | 0                        | 0.0          | 0.0     | nothing |
+| rmw through the alias (100k)             | +1,200,000               | **+12.0/get**| +16.0   | **the mint: −4.0** |
+| read-back gets, 1 field (100k)           | +1,200,000               | **+12.0/get**| +16.0   | **the mint: −4.0** |
+| g read-back gets (200k)                  | +2,400,000               | **+12.0/get**| +16.0   | **the mint: −4.0** |
+| remove (50k) / has (100k) / re-add (50k) | −200,000                 | −5.0/0/+1.0  | same    | nothing |
+| **row total**                            | **−3,508,981**           |              |         | **= the measured row delta exactly** |
+
+Both rounds reconcile against each other BIT-EXACTLY: round 1 read
+−1,508,981; phase 0 deleted the `(V, bool)` mint at exactly
+**4 ops × 500k value-reading gets = −2,000,000**; −1,508,981 − 2,000,000
+= −3,508,981 = this round's measured delta. The get-side op stream is
+now the downcast's `tidof + icmp + br + MovRef` (+12 ops over the
+sidecar's arrget+deref spelling) — allocation-free exactly as phase 0
+claimed; the put/build paths never moved (their deltas match round 1
+to the op).
+
+### Where the TIME went — the remainder measured
+
+Fuel fell 6.2% while time rose 2.8-6.5%: the deleted ops were cheap,
+and the remaining added work is memory, not ops. Two instruments, one
+VM, interleaved:
+
+- **The build/put side still WINS**: the one-VM diagnostic running the
+  row's build structure (both map builds + both overwrite passes) reads
+  refcolumn 222.7 ms (214.1-228.2) vs refvals 252.3 ms (246.5-259.0) —
+  **−29.6 ms, non-overlapping** (fuel −9,308,981). Builds only, no
+  overwrite passes: 131.9 (123.9-135.0) vs 180.3 (171.6-188.3) —
+  **−48.5 ms, non-overlapping** (fuel −9,608,981). The drain deletion
+  is only ~7.6 ms of this at the crossing-nop calibration; the rest is
+  the leaner build shape itself — no `MakeOpt` cells, no charged sidecar
+  arrays, 7.2 MB live instead of 9.75 MB on the m-build (clone heap),
+  less memory traffic through every grow.
+- **The get side still LOSES — half of round 1**: the ladder's get-side
+  step deltas read +6.7 / +5.7 / +10.5 / +21.0 ms (100k 2-field / 100k
+  rmw / 100k 1-field / 200k 1-field) = **+43.9 ms over 500k
+  value-reading gets ≈ +88 ns/get**, vs round 1's +175. **The mint was
+  ~88 ns/get (~44 ms) — phase 0 bought back exactly that half.** The
+  residual ~+88 ns/get is the box re-hand package, term by term: the
+  second crossing frame (~a few ns), `TidOf` + cmp + br + `MovRef`
+  (+12 fuel ops ≈ 9-12 ns at the 0.77 ns/op calibration), and the
+  DOMINANT unpriced memory terms — the box->record double indirection
+  (every field read chases the box, then the payload slot: two cells
+  that landed far apart in the heap, where the sidecar row's slot and
+  cell are one cache-local load), and the re-handed handle's
+  retain/release rc pair per get. None of that is on the fuel meter,
+  and no SPELLING change removes it — it is the shape of storing a box
+  where the baseline stores a cell reference in a rut-owned array.
+- **The composition closes**: −29.6 (build side, one-VM) + 43.9
+  (get-side clone deltas) + 1.0 (miss gets, on a ZERO fuel delta —
+  clone noise, round 1's honesty note again) = **+15.3 ms**, inside the
+  measured row band (+9.9 to +23.2 across the three passes). The same
+  clone-time caveat as round 1 applies — the per-phase time sums are
+  not linearly additive; this composition is the one that closes, and
+  the row band is the claim.
+
+The heap story is unchanged from round 1's accounting (both sections
+above stand): refcolumn = 72.0 B/live value EXACT (record 40 + box 32;
+21,600,720 = 300k × 72 + base), refvals = 96.0 (record 40 + MakeOpt 32
++ charged sidecar blocks ~21 + transients ~3). The column wins heap by
+25% — the one axis it wins — and the get-side rc stayed neutral
+(heap single-valued across every pass round).
+
+### The decision, applied
+
+§0.6's pre-registered rule: SLOWER or inside noise -> REVERT the
+EXPERIMENT ONLY. Both prongs fire (slower in all three passes, inside
+noise in all three). Applied in this commit: `nmapset::RefMap` deleted,
+the `map_val_set_o`/`map_val_get_o` crossings deleted (both
+`nmap.d.rut` copies), the `refcolumn` row + `.js` twin + its
+`expected.json` line deleted, `nmap.rs` restored to its pre-revival
+state (the owner column, the packed reloc queue, and the size-144
+discipline revert together — they existed to make room for each
+other), the driver suite deleted. Every restored file is bit-identical
+to its phase-0-of-round-2 state. KEPT: the **downcast -> ?T change**
+(stands on its own — strictly less allocation for every opaque user,
+VERSION 7; json-decode's checksum unmoved, its fuel/heap re-pin
+111,322,915 / 34,377,027 now carried by the prose pins throughout this
+file, old values verbatim in this commit's body), the `refvals` row
+(pin 140052990000, fuel/heap pins reproduced bit-identically on this
+box), and this two-round record.
+
+What the two rounds bought, stated once so nobody re-runs the
+experiment a third time on a spelling: a ref-V val column's storage
+side is a real win (drain-free growth, −25% heap, −30..−48 ms on the
+build side) — and its read-back has a floor no crossing spelling
+reaches, because the stored unit is a BOX: ~+88 ns/get of crossing +
+double indirection + rc that survived the deletion of the mint that
+round 1 blamed. Round 1 removed the tuple; round 2 measured what was
+left; what is left is the box itself. A direct-ref lane (storing the
+record cell behind a rut-owned handle with no wrapper) is an engine
+representation change, out of the experiment's scope by design, and is
+where any third attempt would have to start. Phase 3 (close-out) does
+not run — the rule's fork sends the batch to close-out only on KEEP.

@@ -63,24 +63,8 @@
 //! phase 2 deletes never touches this column). Slots cross as caller-
 //! supplied indices and are validated like any host lane: out of
 //! range is a trap, not a read.
-//!
-//! The opaque-val column (refval-exp, phase 1 — EXPERIMENTAL): a
-//! second, LAZY column (`meta`, allocated at the first
-//! `map_val_set_o` — tables that never store an opaque val never pay
-//! for it) holding ONE self-releasing [`OpaqueRef`] owner per stored
-//! val box. The stored unit is the `opaque(v)` box the wrapper minted
-//! at put: `map_val_set_o` retains it (one map-owned handle),
-//! `map_val_get_o` re-hands THE SAME box (a cloned handle — no per-get
-//! wrap), and the wrapper unwraps with `opaque.downcast<V>` to the
-//! LIVE inner cell — the one-cell law. rc discipline (the phase-6
-//! playbook, plan §0.4): retain on insert; release on overwrite
-//! (replaced owner drops) and on remove (the tombstone drops the
-//! owner); FULL release at table teardown incl.
-//! arena-teardown-with-live-cells — the owners carry the arena, so the
-//! payload's `Drop` releases every stored cell (accounting refunded)
-//! wherever the box dies — and no double-release path exists (one
-//! owner per box at any instant; owners move by value on grow,
-//! replace on overwrite, drop once on remove/teardown).
+
+use std::collections::VecDeque;
 
 use rut_vm::interp::{HostRegistry, KeyPayload, Vm};
 use rut_vm::{OpaqueBox, OpaqueRef, Trap, TrapKind};
@@ -144,43 +128,13 @@ pub struct NativeTable {
     /// column's backing memory is plain Rust, invisible to cell
     /// accounting, and every row's checksum and fuel are untouched.
     vals: Vec<u64>,
-    /// The EXPERIMENTAL opaque-val column (refval-exp, phase 1 — see
-    /// the module header): one self-releasing `OpaqueRef` owner per
-    /// stored val box. LAZY — `None` until the first `map_val_set_o`,
-    /// cap-aligned once allocated, moved with the keys by `grow`,
-    /// dropped slot-wise by the tombstone and wholesale by the table's
-    /// `Drop`. `Option<Box<..>>` is one pointer wide, and the field
-    /// exists ONLY because the relocation queue below shrank from a
-    /// `VecDeque` (32 B) to a packed `Vec` (24 B) to keep
-    /// `size_of::<NativeTable>()` at exactly 144 — the shallow size
-    /// `OpaqueBox::alloc` charges at every `map_new`, so ANY growth
-    /// would move the existing rows' VM-heap pins (the batch's
-    /// bit-identical gate). Existing tables never touch this field.
-    meta: Option<Box<OpaqueVals>>,
     count: u32,
     tomb: u32,
     /// power of two, >= 4 — the index mask is `cap - 1`
     cap: u32,
-    /// the last grow's old→new slot pairs, PACKED
-    /// `(old << 32) | new` exactly as [`Self::take_reloc`] answers
-    /// them. Was a `VecDeque<(i32, i32)>` until the phase-1 experiment
-    /// needed its 8 bytes back (see `meta`): a `Vec<u64>` of packed
-    /// words is the same queue drained from the END — the contract is
-    /// the drained SET of independent pairs (each maps one old slot to
-    /// its new slot; the sidecar wrappers drain fully after every
-    /// grow), never an order, so the container is unobservable at the
-    /// crossings: same pairs, same `-1` drain end, same op count.
-    reloc: Vec<u64>,
+    /// the last grow's old→new slot pairs, drained by `take_reloc`
+    reloc: VecDeque<(i32, i32)>,
 }
-
-/// The experimental opaque-val column's element type (see the module
-/// header and `NativeTable::meta`): one owner per slot, `None` under
-/// EMPTY/DEAD slots. The owner IS the rc discipline: cloning bumps the
-/// stored box's cell (a get hands the caller its own reference),
-/// dropping releases (overwrite/remove/teardown), and the handle
-/// carries the arena, so releases are correct even at
-/// arena-teardown-with-live-cells.
-type OpaqueVals = Vec<Option<OpaqueRef>>;
 
 impl NativeTable {
     /// mapset's `with_capacity` law: round up to a power of two, never
@@ -199,11 +153,10 @@ impl NativeTable {
             keys: vec![KeyVal::Bits(0); c as usize],
             states: vec![0; c as usize],
             vals: vec![0; c as usize],
-            meta: None, // lazy: allocated at the first opaque val store
             count: 0,
             tomb: 0,
             cap: c,
-            reloc: Vec::new(),
+            reloc: VecDeque::new(),
         }
     }
 
@@ -308,20 +261,11 @@ impl NativeTable {
     }
 
     /// The shared remove tail: tombstone the found slot (the stored key
-    /// drops with the store) and answer it. The EXPERIMENTAL opaque
-    /// column's owner at the freed slot drops here too — RELEASE ON
-    /// REMOVE (refval-exp phase 1): the stored box's rc falls with the
-    /// map's reference, freeing the box and its inner value the moment
-    /// nothing else holds them (a held `get` alias keeps the value
-    /// alive — the mapset law). The prim column stays untouched:
-    /// presence-by-key leaves stale bits unreachable (round3 §0.3).
+    /// drops with the store) and answer it.
     #[inline]
     fn tombstone_at(&mut self, at: i32) -> i32 {
         self.keys[at as usize] = KeyVal::Bits(0);
         self.states[at as usize] = 2;
-        if let Some(o) = self.meta.as_mut() {
-            o[at as usize] = None; // the dropped owner releases the box
-        }
         self.count -= 1;
         self.tomb += 1;
         at
@@ -344,24 +288,13 @@ impl NativeTable {
     /// 1), so a column-backed wrapper needs no drain pass at all — the
     /// `reloc` queue stays for the `[?V]` sidecar path, unchanged.
     /// Slot assignment is untouched by the column, so iteration order
-    /// and every existing checksum hold by construction. The EXPERIMENTAL
-    /// opaque column moves in the same walk (phase 1): the owners are
-    /// MOVED slot-wise (`Option::take`) — never cloned — so each stored
-    /// box keeps exactly one map-owned reference across the rehash.
+    /// and every existing checksum hold by construction.
     pub fn grow(&mut self) -> i32 {
         let mut old_keys = std::mem::take(&mut self.keys);
         let old_hashes = std::mem::take(&mut self.hashes);
         let old_states = std::mem::take(&mut self.states);
         let old_vals = std::mem::take(&mut self.vals);
-        // the opaque column rides the same walk when it exists
-        let had_o = self.meta.is_some();
-        let mut old_o = self.meta.take().map(|b| *b).unwrap_or_default();
         let new_cap = self.cap * 2;
-        let mut new_o: OpaqueVals = if had_o {
-            vec![None; new_cap as usize]
-        } else {
-            Vec::new()
-        };
         self.keys = vec![KeyVal::Bits(0); new_cap as usize];
         self.hashes = vec![0; new_cap as usize];
         self.states = vec![0; new_cap as usize];
@@ -379,13 +312,7 @@ impl NativeTable {
             self.hashes[at as usize] = h;
             self.states[at as usize] = 1;
             self.vals[at as usize] = old_vals[i];
-            if had_o {
-                new_o[at as usize] = old_o[i].take();
-            }
-            self.reloc.push((((i as i64) << 32) | (at as i64)) as u64);
-        }
-        if had_o {
-            self.meta = Some(Box::new(new_o));
+            self.reloc.push_back((i as i32, at));
         }
         new_cap as i32
     }
@@ -393,13 +320,11 @@ impl NativeTable {
     /// The relocation iterator's next pair, packed for the single-scalar
     /// crossing: `-1` = drained; else `(old << 32) | new` — both are
     /// in-bounds slot indices, so the low word never reaches the sign.
-    /// A fresh table (no grow yet) drains immediately. The queue drains
-    /// from the END (a packed `Vec`, see the field doc): the contract is
-    /// the drained SET of independent pairs, never an order.
+    /// A fresh table (no grow yet) drains immediately.
     pub fn take_reloc(&mut self) -> i64 {
-        match self.reloc.pop() {
+        match self.reloc.pop_front() {
             None => -1,
-            Some(packed) => packed as i64,
+            Some((old, new)) => ((old as i64) << 32) | (new as i64),
         }
     }
 
@@ -436,64 +361,6 @@ impl NativeTable {
             ));
         }
         Ok(slot as usize)
-    }
-
-    // ---- the EXPERIMENTAL opaque-val column (refval-exp, phase 1) ----
-    // The rc discipline lives HERE and in the two crossings (the phase-6
-    // playbook, plan §0.4 — also documented on `meta` and in the module
-    // header):
-    // - RETAIN ON INSERT: the crossing hands over a fresh map-owned
-    //   handle (`OpaqueRef::clone` — one rc bump on the stored box's
-    //   cell); `val_set_o` stores it as the slot's sole owner.
-    // - RELEASE ON OVERWRITE: storing into an occupied slot replaces
-    //   the owner — the replaced handle drops and the old box (and its
-    //   inner value) releases unless a held `get` alias keeps it.
-    // - RELEASE ON REMOVE: `tombstone_at` drops the owner (above).
-    // - FULL RELEASE AT TABLE TEARDOWN, incl. arena-teardown-with-live-
-    //   cells: the column is plain `NativeTable` data — the payload's
-    //   `Drop` drops it wherever the box dies (mid-run rc-0 through
-    //   `pool::retire`, or inside arena teardown), and each owner
-    //   releases its own cell with the accounting refund (the handle
-    //   carries the arena). No double-release path: one owner per box
-    //   at any instant, moved by value on grow, replaced on overwrite,
-    //   dropped once on remove/teardown.
-    //
-    // An EMPTY/DEAD slot's entry is `None`; a get on a slot with no
-    // stored box is a caller bug (the map protocol only reads found
-    // slots, and presence-by-key has no nil tags) — a LOUD trap, not a
-    // silent read.
-
-    /// The opaque column's write crossing: store `v` (a map-owned
-    /// handle over the wrapper-minted `opaque(v)` box) at `slot`,
-    /// bounds-checked like every host lane. Replacing an occupied slot
-    /// releases the previous owner (RELEASE ON OVERWRITE). Allocates
-    /// the column on first use (lazy — tables that never store an
-    /// opaque val never touch it).
-    pub fn val_set_o(&mut self, slot: i32, v: OpaqueRef) -> Result<(), Trap> {
-        let at = self.val_slot(slot)?;
-        let cap = self.cap;
-        let col = self
-            .meta
-            .get_or_insert_with(|| Box::new(vec![None; cap as usize]));
-        col[at] = Some(v); // the replaced owner, if any, releases here
-        Ok(())
-    }
-
-    /// The opaque column's read crossing: a fresh caller-owned handle
-    /// over the SAME stored box (`OpaqueRef::clone` — one rc bump; the
-    /// map's own reference is untouched), bounds-checked like every
-    /// host lane. No per-get wrap: the box put minted IS the stored
-    /// unit, and the wrapper unwraps it with `opaque.downcast<V>` to
-    /// the live inner cell (the one-cell law).
-    pub fn val_get_o(&self, slot: i32) -> Result<OpaqueRef, Trap> {
-        let at = self.val_slot(slot)?;
-        match self.meta.as_ref().and_then(|o| o[at].as_ref()) {
-            Some(h) => Ok(h.clone()),
-            None => Err(Trap::new(
-                TrapKind::Invalid,
-                format!("nmap: no val stored at slot {slot} (the key is absent or was removed)"),
-            )),
-        }
     }
 
     /// The capacity, at the i32 boundary (`len()` and indexing are i32).
@@ -1109,62 +976,6 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
             b.with(|t| t.val_get(slot).map(f64::from_bits))?
         },
     );
-
-    // ---- the opaque val lane (refval-exp, phase 1 — EXPERIMENTAL) ----
-    // The val column through REFERENCE values: the wrapper mints ONE
-    // `opaque(v)` box per put and the column stores THE BOX — a
-    // self-releasing `OpaqueRef` owner per slot (the rc discipline is
-    // documented on `NativeTable::meta` / `val_set_o` / the module
-    // header: retain on insert, release on overwrite/remove, full
-    // release at teardown incl. arena-teardown-with-live-cells, no
-    // double-release path). `map_val_get_o` re-hands the SAME box (a
-    // cloned handle — one rc bump, transferred to the returned slot) —
-    // NO per-get wrap; the wrapper unwraps with `opaque.downcast<V>`,
-    // which answers the LIVE inner cell (the one-cell law: mutation
-    // through a get result is the map's value). The per-get unwrap is
-    // the lane's known term for phase-2 attribution.
-    //
-    // Traps (house `Invalid`): out-of-range slots (the shared
-    // `val_slot` law); a FOREIGN opaque — `v` must be a rut value box
-    // (CellData::OpaqueBox): a host payload box crossed as `opaque`
-    // cannot be a map val and is rejected at the store, loud. The
-    // classification rides the same H1 accessor the key lanes use: a
-    // prim/str/bytes payload is a rut box; `Unsupported(TY_OPAQUE)` is
-    // the host-box shape (a rut box can never carry an `opaque`-typed
-    // payload except through the degenerate nested-box spelling, which
-    // this lane also rejects — documented, not reachable through
-    // RefMap); any other `Unsupported` is a rut box over a record /
-    // optional — the lane's bread and butter.
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_val_set_o",
-        (OpaqueBox<NativeTable>, i32, OpaqueRef) -> (),
-        |vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32, v: OpaqueRef| -> Result<(), Trap> {
-            let foreign = match vm.opaque_key_payload(&v)? {
-                KeyPayload::Bits { .. } | KeyPayload::Str(_) | KeyPayload::Bytes(_) => false,
-                KeyPayload::Unsupported(ty) => ty == rut_core::types::TY_OPAQUE,
-            };
-            if foreign {
-                return Err(Trap::new(
-                    TrapKind::Invalid,
-                    "nmap: map_val_set_o: val is a host payload box, not a rut value — wrap the value with `opaque(v)` (host boxes cannot be map vals)".to_string(),
-                ));
-            }
-            // RETAIN ON INSERT: one map-owned handle over the box cell
-            let owned = v.clone();
-            b.with_mut(|t| t.val_set_o(slot, owned))?
-        },
-    );
-    rut_vm::register!(
-        hosts,
-        "nmap_host::map_val_get_o",
-        (OpaqueBox<NativeTable>, i32) -> OpaqueRef,
-        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32| -> Result<OpaqueRef, Trap> {
-            // the cloned handle transfers to the returned slot
-            // (Ret for OpaqueRef moves its reference count)
-            b.with(|t| t.val_get_o(slot))?
-        },
-    );
 }
 
 #[cfg(test)]
@@ -1721,28 +1532,6 @@ mod tests {
     /// Caller-supplied slots are validated like any host lane: negative
     /// and `>= cap` trap (`Invalid` + "out of range"), `cap - 1` is the
     /// legal edge.
-    // ---- the opaque val lane (refval-exp, phase 1) ---------------------
-
-    /// THE HEAP-PARITY GUARD: `OpaqueBox::alloc` charges the payload's
-    /// shallow `size_of` to the RFC 0040 budget at every `map_new`, and
-    /// the batch's gate is that every existing row's VM-heap pin stays
-    /// BIT-IDENTICAL — so `size_of::<NativeTable>()` must stay exactly
-    /// what the round3 phase-1 record fixed it at (144: the 120-byte
-    /// core + the prim val column's 24-byte Vec header). The
-    /// experimental `meta` field fits ONLY because the relocation queue
-    /// shrank from a `VecDeque` (32 B) to a packed `Vec` (24 B) in the
-    /// same breath. Anyone adding a field to this struct breaks the
-    /// bench's heap pins — this assertion is the tripwire; resize the
-    /// payload consciously (and re-pin) or pack, never just append.
-    #[test]
-    fn the_table_shallow_size_is_the_pinned_144() {
-        assert_eq!(
-            std::mem::size_of::<NativeTable>(),
-            144,
-            "size_of::<NativeTable>() moved — every map row's VM-heap pin moves with it"
-        );
-    }
-
     #[test]
     fn val_slot_addressing_traps_out_of_range() {
         let mut t = NativeTable::new(4);
