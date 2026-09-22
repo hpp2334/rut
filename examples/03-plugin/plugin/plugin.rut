@@ -106,22 +106,22 @@ entry fn init(bus: opaque) -> opaque {
 }
 
 entry fn on_join(c: opaque, name: str) {
-    let (mod, _) = opaque.downcast<?Moderator>(c);
+    let mod = opaque.downcast<?Moderator>(c);
     mod.on_join(name);
 }
 
 entry fn on_msg(c: opaque, user: str, text: str) {
-    let (mod, _) = opaque.downcast<?Moderator>(c);
+    let mod = opaque.downcast<?Moderator>(c);
     mod.on_msg(user, text);
 }
 
 entry fn on_leave(c: opaque, name: str) {
-    let (mod, _) = opaque.downcast<?Moderator>(c);
+    let mod = opaque.downcast<?Moderator>(c);
     mod.on_leave(name);
 }
 
 entry fn on_tick(c: opaque, n: i64) {
-    let (mod, _) = opaque.downcast<?Moderator>(c);
+    let mod = opaque.downcast<?Moderator>(c);
     mod.on_tick(n);
 }
 
@@ -132,7 +132,7 @@ entry fn render_line(topic: str, payload: str) -> str {
 }
 
 entry fn shutdown(c: opaque) -> i64 {
-    let (m, _) = opaque.downcast<?Moderator>(c);
+    let m = opaque.downcast<?Moderator>(c);
     m.say("system", f"shutdown: {m.stats()}");
     return m.msgs;
 }

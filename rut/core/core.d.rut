@@ -86,11 +86,14 @@ builtin primitive bytes {
 // `downcast<T>(o)` call diagnoses with the removal). Construction is a
 // CALL of the type name itself — `opaque.new(v)` was folded into
 // `opaque(v)` in the `?T` sweep (RFC 0044), there is no `new` static.
-// A false `.1` from `downcast` leaves `.0` at the type's zero value.
+// The recovery is the nullable (RFC 0044): a match IS the box's inner
+// cell (the alias law — mutation through it is the source's; a prim
+// payload reads the copied value), a mismatch is `nil` — never a
+// zero-value/flag tuple (refval-round2; RFC 0014 amended).
 // (builtin-surface phase 2: the interner/boot name is spelled
 // `opaque` — the type name is part of every host `.d.rut` crossing.)
 builtin primitive opaque {
-    fn downcast<T>(o: Self) -> (T, bool);
+    fn downcast<T>(o: Self) -> ?T;
 }
 
 // ---- numeric methods on the integer primitives (RFC 0032 §1.1 R2) ----

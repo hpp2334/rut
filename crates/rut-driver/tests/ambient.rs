@@ -48,11 +48,11 @@ fn builtins_resolve_with_no_use_statement() {
         "struct Point { x: i32; y: i32 }\n\
          pub fn main() -> i32 {\n\
              let b = opaque(Point { x: 3, y: 4 });\n\
-             let (p, ok) = opaque.downcast<Point>(b);\n\
-             assert(ok);\n\
+             let p = opaque.downcast<Point>(b);\n\
+             assert(p != nil);\n\
              let b2 = opaque(7);\n\
-             let (n, ok2) = opaque.downcast<i32>(b2);\n\
-             assert(ok2);\n\
+             let n = opaque.downcast<i32>(b2);\n\
+             assert(n != nil);\n\
              return p.x + p.y + n;\n\
          }\n",
     );
@@ -60,17 +60,16 @@ fn builtins_resolve_with_no_use_statement() {
 }
 
 #[test]
-fn opaque_downcast_member_carries_the_tuple_contract() {
-    // the member form keeps the free fn's `(T, bool)` semantics: a false
-    // `.1` leaves `.0` at the type's zero value (RFC 0014)
+fn opaque_downcast_member_carries_the_nullable_contract() {
+    // the member form yields the nullable (RFC 0014, refval-round2): a
+    // mismatch is `nil` — never a zero-value `.0` with a flag
     let v = run_main(
         "pub fn main() -> i32 {\n\
              let b = opaque(\"hello\");\n\
-             let (miss, ok) = opaque.downcast<i64>(b);\n\
-             if (ok) { return 1; }\n\
-             if (miss != 0) { return 2; }\n\
-             let (s, ok2) = opaque.downcast<str>(b);\n\
-             if (!ok2) { return 3; }\n\
+             let miss = opaque.downcast<i64>(b);\n\
+             if (miss != nil) { return 1; }\n\
+             let s = opaque.downcast<str>(b);\n\
+             if (s == nil) { return 3; }\n\
              return s.len() as i32;\n\
          }\n",
     );
@@ -99,8 +98,7 @@ fn the_old_spellings_are_gone() {
     let out = compile(
         "pub fn main() -> i32 {\n\
              let b = opaque(9);\n\
-             let (n, ok) = downcast<i32>(b);\n\
-             if (!ok) { return 0; }\n\
+             let n = downcast<i32>(b);\n\
              return n;\n\
          }\n",
     );
@@ -119,8 +117,8 @@ fn opaque_type_position_resolves_under_both_spellings() {
          pub fn main() -> i32 {\n\
              let b = keep(opaque(4));\n\
              let b2 = keep2(b);\n\
-             let (n, ok) = opaque.downcast<i32>(b2);\n\
-             if (!ok) { return 0; }\n\
+             let n = opaque.downcast<i32>(b2);\n\
+             if (n == nil) { return 0; }\n\
              return n;\n\
          }\n",
     );

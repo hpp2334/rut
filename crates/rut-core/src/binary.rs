@@ -391,7 +391,11 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// `OptPrim`/`OptPrimRaw`/`OptPrimLoad` repr codes; stale v5 artifacts carry
 /// Ref-repr element ops the new engines must not run on raw stores, and are
 /// rejected with the standard version error
-pub const VERSION: u32 = 6;
+/// v7: `opaque.downcast<T>(o)` yields `?T` (refval-round2) — a declared-
+/// surface change (the 5→6 precedent): stale v6 artifacts carry the tuple
+/// shape's `(T, bool)` lowering and are rejected with the standard version
+/// error
+pub const VERSION: u32 = 7;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();

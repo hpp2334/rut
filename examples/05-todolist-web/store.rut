@@ -315,7 +315,7 @@ entry fn store_new() -> opaque {
 }
 
 fn at(c: opaque) -> ?Store {
-    let (s, _) = opaque.downcast<?Store>(c);
+    let s = opaque.downcast<?Store>(c);
     return s;
 }
 

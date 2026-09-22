@@ -106,7 +106,7 @@ impl TodoList {
 
 /// The host-held container: one opaque box around all live lists.
 /// `createContainer` boxes it; every entry takes it back as its first
-/// argument and recovers it with `opaque.downcast<T>` (a wrong box traps cleanly).
+/// argument and recovers it with `opaque.downcast<T>` (a wrong box is `nil`).
 struct Lists {
     lists: Vec<TodoList>;    // handle = index; handles stay stable while held
 }
@@ -114,7 +114,7 @@ struct Lists {
 /// Recover list `h` out of the container. Internal — an ordinary fn,
 /// unrestricted types.
 fn at(c: opaque, h: u32) -> TodoList {
-    let (lists, _) = opaque.downcast<?Lists>(c);
+    let lists = opaque.downcast<?Lists>(c);
     return lists.lists[h as i32];
 }
 
@@ -126,7 +126,7 @@ entry fn createContainer() -> opaque {
 }
 
 entry fn create(c: opaque) -> u32 {
-    let (k, _) = opaque.downcast<?Lists>(c);
+    let k = opaque.downcast<?Lists>(c);
     k.lists.push(TodoList.new());
     return (k.lists.len() - 1) as u32;
 }

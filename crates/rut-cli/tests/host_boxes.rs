@@ -44,10 +44,11 @@ entry fn wrap_get(c: opaque, k: str) -> i64 {
 }
 entry fn erase_laws(c: opaque) -> bool {
     // RFC 0014 on a host payload box: it is an opaque and nothing more
-    // specific — no rut type recovers from it, checked, never a trap
-    let (_, i64_ok) = opaque.downcast<i64>(c);
-    let (_, str_ok) = opaque.downcast<str>(c);
-    return c is opaque && !i64_ok && !str_ok;
+    // specific — no rut type recovers from it, the recovery is `nil`,
+    // never a trap
+    let i64_hit = opaque.downcast<i64>(c) != nil;
+    let str_hit = opaque.downcast<str>(c) != nil;
+    return c is opaque && !i64_hit && !str_hit;
 }
 entry fn share(c: opaque) -> opaque {
     // a host box IS a handle — returning it shares identity (v1.1)

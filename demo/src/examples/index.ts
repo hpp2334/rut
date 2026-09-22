@@ -102,7 +102,7 @@ export const EXAMPLES: RutCase[] = [
   {
     id: "ex-opaque",
     name: "opaque",
-    blurb: "opaque.new / opaque.downcast<T> / is — erasure and checked recovery",
+    blurb: "opaque / opaque.downcast<T> -> ?T / is — erasure and checked recovery",
     rfcs: "0014",
     source: opaqueSrc,
     expected: lines(opaqueExpected),

@@ -131,15 +131,78 @@ pub fn main() -> nil {
     let box2 = opaque("hello");
     Logger.new("app").info(f"box1 is Point: {box1 is Point}");
     Logger.new("app").info(f"box2 is Point: {box2 is Point}");
-    let (p, ok) = opaque.downcast<Point>(box1);
-    if (ok) {
+    let p = opaque.downcast<Point>(box1);
+    if (p != nil) {
         Logger.new("app").info(f"recovered {p.x} {p.y}");
+    }
+    Logger.new("app").info(f"miss is nil: {opaque.downcast<Point>(box2) == nil}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["box1 is Point: true", "box2 is Point: false", "recovered 1 2", "miss is nil: true"]);
+}
+
+#[test]
+fn case3b_opaque_downcast_nullable_laws() {
+    // refval-round2: `opaque.downcast<T>(o) -> ?T` — the ALIAS handoff.
+    // A match hands the box itself back (no tuple mint, no allocation):
+    // the `?T` shares the box's inner cell, so writes through the
+    // recovery are the source's, in both directions, through every
+    // holder (the one-cell law). A prim payload reads the value copied
+    // at `opaque(v)` construction. A mismatch is `nil` — the
+    // zero-value-on-false tuple semantics is gone (RFC 0014 amended).
+    let src = r#"
+struct Point { x: i32; y: i32 }
+fn find(o: opaque) -> ?Point {
+    return opaque.downcast<Point>(o);
+}
+pub fn main() -> nil {
+    let log = Logger.new("app");
+    let mut pt = Point { x: 1, y: 2 };
+    let b = opaque(pt);
+    let mut p = opaque.downcast<Point>(b);
+    let mut q = opaque.downcast<Point>(b);
+    p.x = 9;                       // through the recovery...
+    q.y = 7;                       // ...through a second holder...
+    pt.y = 5;                      // ...and back the other way
+    log.info(f"alias law: {pt.x} {pt.y} {p.y} {q.x}");
+    // nil propagation: the mismatch flows through calls and guards
+    let miss = find(opaque("nope"));
+    log.info(f"miss is nil: {miss == nil}");
+    if (p != nil) {
+        log.info(f"guarded read: {p.x}");
     }
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["box1 is Point: true", "box2 is Point: false", "recovered 1 2"]);
+    assert_eq!(lines, vec!["alias law: 9 5 5 9", "miss is nil: true", "guarded read: 9"]);
+}
+
+#[test]
+fn case3c_opaque_downcast_prim_value_and_nil_trap() {
+    // prim T: the VALUE (the bits copied at construction — reassigning
+    // the source does not move the box's copy); wrong type -> nil; a
+    // nil reaching a dereference is the NilDeref trap, never a silent
+    // zero (the old `.0` zero-on-false is gone).
+    let src = r#"
+struct Point { x: i32; y: i32 }
+pub fn main() -> i32 {
+    let mut n = 5;
+    let b = opaque(n);
+    n = 9;
+    let v = opaque.downcast<i32>(b);
+    if (v == nil) { return 1; }
+    if (v != 5) { return 2; }
+    if (opaque.downcast<str>(b) != nil) { return 3; }
+    let miss = opaque.downcast<Point>(opaque("s"));
+    return miss.x;
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(lines, Vec::<String>::new());
+    assert_eq!(trap.as_deref(), Some("NilDeref"));
 }
 
 #[test]
@@ -744,7 +807,7 @@ struct Box { rows: Vec<Row>; }
 
 entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let (b, _) = opaque.downcast<?Box>(c);
+    let b = opaque.downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }
@@ -1839,7 +1902,7 @@ struct Row { id: i32; }
 struct Box { rows: Vec<Row>; }
 entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let (b, _) = opaque.downcast<?Box>(c);
+    let b = opaque.downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }

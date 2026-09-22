@@ -343,7 +343,7 @@ fn jparse_object(mut cur: ?Cur) -> (opaque, str) {
         }
         let key = jparse_string(cur);
         if (key.1 != "") { return (noopaque(), key.1); }
-        let (kdoc, _) = opaque.downcast<Json>(unwrap_box(key));
+        let kdoc = opaque.downcast<Json>(unwrap_box(key));
         let kstr = kdoc.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
@@ -414,8 +414,8 @@ fn lex_int(s: str) -> i64 {
 /// number lexemes via lex_int, fixed constants for the scalar tags —
 /// wrapped i64, mirrored bit-for-bit on the JS side.
 fn jdoc_sum(o: opaque) -> i64 {
-    let (j, ok) = opaque.downcast<Json>(o);
-    assert(ok == true, "json-decode: downcast failed in the fold pass");
+    let j = opaque.downcast<Json>(o);
+    assert(j != nil, "json-decode: downcast failed in the fold pass");
     let mut s: i64 = 0;
     when (j.tag) {
         JTag.Null -> { s = 1; },

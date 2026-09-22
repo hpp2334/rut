@@ -121,8 +121,8 @@ entry fn main() -> opaque {
 // The ONE re-entry point: every asynchronous fact arrives as an event
 // row, the pump re-passing the container. One entry, one shape.
 entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
-    let (root, ok) = opaque.downcast<?AppRoot>(c);
-    if (ok == false) {
+    let root = opaque.downcast<?AppRoot>(c);
+    if (root == nil) {
         panic("app: the event container is not an AppRoot — host drift");
     }
     let mut r: ?AppRoot = root;

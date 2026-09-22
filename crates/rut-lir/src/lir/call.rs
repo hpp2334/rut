@@ -343,15 +343,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(TY_BYTES)
     }
 
-    /// The `(T, bool)` erasure-box recovery, shared by the free
-    /// `downcast<T>(o)` alias and the `opaque.downcast<T>(o)` member
-    /// (RFC 0014): tidof + icmp + br + guarded unbox (RFC 0032 §1.1).
-    /// The box is in `orecv`; a false `.1` leaves `.0` at the type's
-    /// zero value.
+    /// The `?T` erasure-box recovery (RFC 0014, refval-round2): tidof +
+    /// icmp + br (the reified-type-id check, RFC 0015) + the ALIAS
+    /// handoff. No allocation on EITHER branch — the `(T, bool)` tuple's
+    /// `MakeRecord` mint (a record cell + field copy + bool + rc per
+    /// call, ~175 ns/get in the round-1 attribution) is gone: a match
+    /// hands the box ITSELF back as the `?T` (one `MovRef` retain — the
+    /// box shares its inner cell, the one-cell law; a prim payload's
+    /// bits were copied at `opaque(v)` construction, so the handoff is
+    /// value semantics for free), a mismatch is the null slot (nil).
+    /// The `?T` auto-deref (`GetF` field 0) reads through the box.
     pub(crate) fn emit_opaque_downcast(&mut self, want: TypeId, orecv: u16, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        // v1.1: downcast yields a TUPLE `(T, bool)` — the value and
-        // a success flag; no Option in the language anymore
-        let tty = self.ctx.mk_tuple([want, TY_BOOL].to_vec());
+        // refval-round2: downcast yields `?T` — nil on a mismatch (RFC
+        // 0014 amended); the zero-value-on-false `(T, bool)` is gone
+        let nty = self.ctx.mk_opt(want);
         let tid_reg = self.new_reg(TY_U32);
         self.emit(Op::TidOf { dst: tid_reg, obj: orecv }, sp.lo);
         let want_reg = self.new_reg(TY_U32);
@@ -359,27 +364,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.emit(Op::Const { dst: want_reg, k: wk as u32 }, sp.lo);
         let eq = self.new_reg(TY_BOOL);
         self.emit(cmpop(CmpOp::Eq, PrimTy::U32, eq, tid_reg, want_reg), sp.lo);
-        let dst = self.new_reg(tty);
+        let dst = self.new_reg(nty);
         let l_some = self.new_label();
         let l_none = self.new_label();
         let l_end = self.new_label();
         self.br(eq, l_some, l_none);
         self.bind(l_some);
-        let un = self.new_reg(want);
-        self.emit(Op::Unbox { dst: un, box_: orecv, ty: want }, sp.lo);
-        { let (argv_off, argc) = self.pool_args(&(vec![un, eq])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
+        // the ALIAS handoff: the result register takes the box's handle
+        // (MovRef = one retain). The box is the `?T` — its payload slot
+        // IS field 0 to every nullable use (deref, nil check).
+        self.emit(Op::MovRef { dst, src: orecv }, sp.lo);
         self.jmp(l_end);
         self.bind(l_none);
-        let zero = self.new_reg(want);
-        self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
-        let no = self.new_reg(TY_BOOL);
-        self.emit(Op::ConstRaw { dst: no, bits: 0 }, sp.lo);
-        { let (argv_off, argc) = self.pool_args(&(vec![zero, no])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
+        // the mismatch: the null slot — no cell, no zero value
+        self.emit(Op::ConstRaw { dst, bits: 0 }, sp.lo);
         self.bind(l_end);
-        // the value lives in `dst`; move it out so last_reg holds it
-        let out = self.new_reg(tty);
-        self.emit(Op::MovRef { dst: out, src: dst }, sp.lo);
-        Ok(tty)
+        Ok(nty)
     }
 
     pub(crate) fn compile_static_call(

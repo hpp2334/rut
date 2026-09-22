@@ -65,7 +65,7 @@ entry fn triple() -> (i64, f64, str) { let a: i64 = 1; let b: f64 = 2.5; return 
 entry fn nothing() -> nil { return; }
 entry fn make() -> opaque { let b: ?Box = Box { rows: Vec.new() }; return opaque(b); }
 entry fn put(c: opaque) -> u32 {
-    let (b, _) = opaque.downcast<?Box>(c);
+    let b = opaque.downcast<?Box>(c);
     b.rows.push(Row { id: 1 });
     return b.rows.len() as u32;
 }

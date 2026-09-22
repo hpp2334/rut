@@ -1,12 +1,18 @@
 use pouch::{ Vec };
 // RFC 0014 — opaque: explicit type erasure with checked recovery.
-// opaque(v) (the host class's construction method) forgets the static type, KEEPS the
-// runtime type; opaque.downcast<T> recovers it or yields None. `opaque` is the
-// erased-storage CONCRETE type — it composes like any class (`Vec<opaque>`,
-// fixed `[opaque]`, fields, returns). Under the all-cells regime
-// (RFC 0016 §1) boxing is ZERO-COPY: the box stores the cell handle, so
-// the box shares identity with the original. The only any-shaped value
-// in rut — and it can do nothing until recovered.
+// opaque(v) forgets the static type, KEEPS the runtime type;
+// opaque.downcast<T> recovers it as `?T` — the nullable (RFC 0044). A
+// match IS the box's inner cell (the alias law: writes through the
+// recovery are the source's, in both directions, through every holder);
+// a prim payload reads the copied value; a wrong type is `nil` — never
+// a trap, and never the old `(T, bool)` tuple (the zero-value-on-false
+// `.0`/`.1` spelling is gone: refval-round2, RFC 0014 amended). The
+// handoff allocates nothing — no per-call record mint.
+// `opaque` is the erased-storage CONCRETE type — it composes like any
+// class (`Vec<opaque>`, fixed `[opaque]`, fields, returns). Under the
+// all-cells regime (RFC 0016 §1) boxing is ZERO-COPY: the box stores
+// the cell handle, so the box shares identity with the original. The
+// only any-shaped value in rut — and it can do nothing until recovered.
 
 use ink::{ Logger };
 
@@ -29,13 +35,26 @@ fn erase_and_recover() {
     let box2 = opaque(Flavor.Sour);             // zero-copy (shares the cell)
     let box3 = opaque("hello");
 
-    let (p, ok) = opaque.downcast<Point>(box1);        // (Point, bool)
-    if (ok) {
-        log.info(f"point {p.x} {p.y}");
+    let p = opaque.downcast<Point>(box1);       // ?Point — the nullable
+    when (p != nil) {
+        true -> { log.info(f"point {p.x} {p.y}"); },
+        else  -> { log.info("point: nil"); },
     }
-    let (wrong, wrong_ok) = opaque.downcast<i32>(box2); // wrong type: false, no trap
-    log.info(f"sour? {opaque.downcast<Flavor>(box2).1} wrong? {wrong_ok}");
+    let wrong = opaque.downcast<i32>(box2);     // wrong type: nil, no trap
+    log.info(f"sour? {opaque.downcast<Flavor>(box2) != nil} wrong? {wrong == nil}");
     log.info(f"is str: {box3 is str}");   // `is` sees through the box
+}
+
+fn alias_law() {
+    let log = Logger.new("opaque");
+    let mut pt = Point { x: 1, y: 2 };
+    let b = opaque(pt);                         // the box shares pt's cell
+    let mut p = opaque.downcast<Point>(b);      // the ?T shares it too
+    let mut q = opaque.downcast<Point>(b);      // ...as does a second holder
+    p.x = 9;                                    // write through a recovery...
+    q.y = 7;                                    // ...through the other...
+    pt.y = 5;                                   // ...and back from the source
+    log.info(f"one cell: {pt.x} {pt.y} {p.y} {q.x}");
 }
 
 fn share_vs_copy() {
@@ -45,8 +64,22 @@ fn share_vs_copy() {
                                   // mutation through s is visible in o
     let o2 = opaque(s);    // a private copy, new identity
 
-    log.info(f"same session: {opaque.downcast<Session>(o).1}");
+    log.info(f"same session: {opaque.downcast<Session>(o) != nil}");
     log.info(f"distinct boxes: {o == o2}");     // false — two cells (RFC 0012 §4)
+}
+
+fn prim_value() {
+    let log = Logger.new("opaque");
+    let mut n = 5;
+    let b = opaque(n);            // a prim payload COPIES the bits
+    n = 9;                        // ...so the source moving stays out
+    let v = opaque.downcast<i32>(b);
+    when (v != nil) {
+        true -> { log.info(f"value {v}"); },
+        else  -> { log.info("value: nil"); },
+    }
+    let sbox = opaque("s");
+    log.info(f"str box misses i32: {opaque.downcast<i32>(sbox) == nil}");
 }
 
 fn nested() {
@@ -61,6 +94,8 @@ fn nested() {
 
 pub fn main() {
     erase_and_recover();
+    alias_law();
     share_vs_copy();
+    prim_value();
     nested();
 }

@@ -444,6 +444,10 @@ impl Machine for Vm {
                 .borrow()
                 .get(*field as usize)
                 .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
+            // the downcast ALIAS handoff (RFC 0014, refval-round2): the
+            // `?T` result IS the opaque box — the nullable deref reads
+            // its payload slot (mirror of the step-dispatch op_getf).
+            CellData::OpaqueBox { val, .. } if *field == 0 => *val,
             _ => return Err(Trap::new(TrapKind::Invalid, "getf on non-record")),
         };
         let old = unsafe { *regs.add(*dst as usize) };

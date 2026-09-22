@@ -149,7 +149,7 @@ fn merge_sort(mut xs: ?Vec<i32>) {
 
 /// The host-held bank: one opaque box around the data being sorted.
 /// `create` boxes it; every entry takes it back as its first argument
-/// and recovers it with `opaque.downcast<T>` (a wrong box traps cleanly).
+/// and recovers it with `opaque.downcast<T>` (a wrong box is `nil`).
 struct Bank {
     data: ?Vec<i32>;
 }
@@ -163,7 +163,7 @@ entry fn create() -> opaque {
 
 /// Host-supplied data, one element per call — exact inputs.
 entry fn push(c: opaque, x: i32) {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let b = opaque.downcast<?Bank>(c);
     b.data.push(x);
 }
 
@@ -174,7 +174,7 @@ entry fn push(c: opaque, x: i32) {
 /// (RFC 0004 §3: plain `*`
 /// traps; plain `<<` would too — xorshift is out).
 entry fn fill(c: opaque, n: u32, seed: u32) {
-    let mut (b, _) = opaque.downcast<?Bank>(c);
+    let mut b = opaque.downcast<?Bank>(c);
     let fresh: Vec<i32> = Vec.new();
     let mut x = seed | 1;         // the LCG needs an odd state
     for (let i = 0; i < n as i32; i += 1) {
@@ -188,7 +188,7 @@ entry fn fill(c: opaque, n: u32, seed: u32) {
 /// an ordinary value, not a trap.
 // errors are values: an empty string means success
 entry fn sort(c: opaque, algo: str) -> str {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let b = opaque.downcast<?Bank>(c);
     let mut unknown = false;
     when (algo) {
         "insertion" -> { insertion_sort(b.data); },
@@ -205,13 +205,13 @@ entry fn sort(c: opaque, algo: str) -> str {
 }
 
 entry fn len(c: opaque) -> i32 {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let b = opaque.downcast<?Bank>(c);
     return b.data.len();
 }
 
 /// Element `i`, or `0` past the end — pair with `has` (RFC 0005).
 entry fn get(c: opaque, i: i32) -> i32 {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let b = opaque.downcast<?Bank>(c);
     if (i < 0 || i >= b.data.len()) {
         return 0;
     }
@@ -219,14 +219,14 @@ entry fn get(c: opaque, i: i32) -> i32 {
 }
 
 entry fn has(c: opaque, i: i32) -> bool {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let b = opaque.downcast<?Bank>(c);
     return i >= 0 && i < b.data.len();
 }
 
 /// The machine-checkable form: a JSON array — `[1, 2, 3]`. One string
 /// crosses, so the host can assert a whole result in one compare.
 entry fn serialize(c: opaque) -> str {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let b = opaque.downcast<?Bank>(c);
     let xs = b.data;
     let mut out = "[";
     for (let i = 0; i < xs.len(); i += 1) {
@@ -240,7 +240,7 @@ entry fn serialize(c: opaque) -> str {
 
 /// The human listing the embedder prints.
 entry fn render(c: opaque) -> str {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let b = opaque.downcast<?Bank>(c);
     let xs = b.data;
     let mut out = f"Bank[{xs.len()}]";
     for (let v of xs) {
@@ -250,6 +250,6 @@ entry fn render(c: opaque) -> str {
 }
 
 entry fn is_sorted(c: opaque) -> bool {
-    let (b, _) = opaque.downcast<?Bank>(c);
+    let b = opaque.downcast<?Bank>(c);
     return sorted_up(b.data);
 }

@@ -49,13 +49,9 @@ fn kind<T requires Circle | Point>(x: T) -> i32 {
 }
 
 // RFC 0014: the boot primitive — erase into opaque, recover with
-// opaque.downcast (the call-shaped erasure form)
+// opaque.downcast (the ?T recovery: the box's cell, or nil)
 fn widen(o: opaque) -> ?Circle {
-    let (c, ok) = opaque.downcast<Circle>(o);
-    if (ok) {
-        return c;
-    }
-    return nil;
+    return opaque.downcast<Circle>(o);
 }
 
 fn main() -> nil {

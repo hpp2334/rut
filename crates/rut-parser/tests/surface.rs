@@ -187,7 +187,7 @@ fn builtin_impl_decl() {
 const BUILTIN_PRIMITIVE: &str = "\
 builtin primitive opaque {
     fn new<T>(v: T) -> Self;
-    fn downcast<T>(o: Self) -> (T, bool);
+    fn downcast<T>(o: Self) -> ?T;
 }
 ";
 

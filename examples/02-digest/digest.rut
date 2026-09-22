@@ -888,7 +888,7 @@ fn jparse_object(mut cur: ?Cur) -> (opaque, str) {
         }
         let key = jparse_string(cur);
         if (key.1 != "") { return (noopaque(), key.1); }
-        let (kdoc, _) = opaque.downcast<Json>(unwrap_box(key));
+        let kdoc = opaque.downcast<Json>(unwrap_box(key));
         let kstr = kdoc.str;
         jskip(cur);
         if (jpeek(cur) != ":") {
@@ -934,7 +934,7 @@ fn jencode(j: Json) -> str {
             let mut s = "[";
             for (let i = 0; i < j.arr.len(); i += 1) {
                 if (i > 0) { s = f"{s},"; }
-                let ae = opaque.downcast<Json>(j.arr[i]).0;
+                let ae = opaque.downcast<Json>(j.arr[i]);
                 s = f"{s}{jencode(ae)}";
             }
             out = f"{s}]";
@@ -944,7 +944,7 @@ fn jencode(j: Json) -> str {
             let mut s = "{";
             for (let i = 0; i < j.keys.len(); i += 1) {
                 if (i > 0) { s = f"{s},"; }
-                let vs = jencode(opaque.downcast<Json>(j.vals[i]).0);
+                let vs = jencode(opaque.downcast<Json>(j.vals[i]));
                 s = f"{s}{jquote(j.keys[i])}:{vs}";
             }
             out = f"{s}{rb}";
@@ -982,7 +982,7 @@ entry fn json_dec(s: str) -> (opaque, str) {
 }
 
 entry fn json_enc(o: opaque) -> str {
-    return jencode(opaque.downcast<Json>(o).0);
+    return jencode(opaque.downcast<Json>(o));
 }
 
 entry fn json_roundtrip(s: str) -> (str, str) {
@@ -990,7 +990,7 @@ entry fn json_roundtrip(s: str) -> (str, str) {
     if (v.1 != "") {
         return ("", v.1);
     }
-        let (vv, _) = opaque.downcast<Json>(v.0);
+        let vv = opaque.downcast<Json>(v.0);
     return (jencode(vv), "");
 }
 

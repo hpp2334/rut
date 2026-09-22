@@ -505,13 +505,14 @@ fn prim_store_release_walk_skips_element_slots() {
 
 // ---- serialization: the version gate ----------------------------------
 
-/// A VERSION-6 module decodes; the same bytes with the version word rolled
-/// back to 5 are rejected with the standard clear error (stale v5 artifacts
-/// carry Ref-repr element ops the new engines must not run on raw stores).
+/// A VERSION-7 module decodes; the same bytes with the version word rolled
+/// back to 6 are rejected with the standard clear error (stale v6 artifacts
+/// carry the `(T, bool)` downcast lowering the new engines must not run on
+/// the `?T` surface).
 #[test]
 fn version_gate_rejects_stale_artifacts() {
     use rut_core::binary::{decode, VERSION};
-    assert_eq!(VERSION, 6, "the repr change is the only allowed VERSION bump this phase");
+    assert_eq!(VERSION, 7, "the declared-surface change is the only allowed VERSION bump this phase");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,
@@ -523,10 +524,10 @@ fn version_gate_rejects_stale_artifacts() {
 
     let mut stale = bytes.clone();
     let ver_at = 4; // MAGIC (4) then the version u32
-    stale[ver_at..ver_at + 4].copy_from_slice(&5u32.to_le_bytes());
-    let err = decode(&stale).expect_err("a v5 artifact must be rejected");
+    stale[ver_at..ver_at + 4].copy_from_slice(&6u32.to_le_bytes());
+    let err = decode(&stale).expect_err("a v6 artifact must be rejected");
     assert!(
-        err.contains("unsupported module binary version 5"),
+        err.contains("unsupported module binary version 6"),
         "the standard clear error: {err}"
     );
 }

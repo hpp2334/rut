@@ -193,6 +193,14 @@ impl Vm {
                 .borrow()
                 .get(field as usize)
                 .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
+            // the downcast ALIAS handoff (RFC 0014, refval-round2): the
+            // `?T` result IS the opaque box, so the nullable deref (the
+            // only verified GetF shape here — the verifier admits field 0
+            // on an Opt register alone) reads the box's payload slot at
+            // the payload's own repr. Cell-repr payloads retain their
+            // handle below — mutation through the read hits the source
+            // cell; prim payloads read the bits copied at construction.
+            CellData::OpaqueBox { val, .. } if field == 0 => *val,
             _ => return Err(Trap::new(TrapKind::Invalid, "field on non-record")),
         };
         let old = self.cur_regs[dst as usize];
