@@ -4,12 +4,17 @@ import { EXAMPLES } from "./examples";
 import { BUILD_WASM_COMMAND, Runner } from "./runner";
 import { verifyAgainstExpected, type VerifyResult } from "./verify";
 import { CaseList, type CaseGroup } from "./components/CaseList";
-import { Editor } from "./components/Editor";
+import { Editor, type Highlight } from "./components/Editor";
 import { Panes, type PaneData } from "./components/Panes";
 import { StatusBar } from "./components/StatusBar";
+import { PLAYGROUND_DOC, RutLsp, decodeTokens } from "./lsp/rut-lsp";
+import { buildOverlay } from "./lsp/overlay";
 import type { CompileResult, Diag, RunResult } from "./wasm/rut-api";
 
 const EMPTY_PANES: PaneData = { output: [], irDump: "" };
+/** the while-typing re-analyze debounce (survey D3): a full-sync
+ * analyze of a doc-sized source is milliseconds */
+const ANALYZE_DEBOUNCE_MS = 150;
 
 /** the full-page boot-error panel — THE RUNNER LAW (survey D1):
  * wasm-or-error, the panes never mount without the artifact */
@@ -30,6 +35,32 @@ function BootError(props: { banner: string }): JSX.Element {
         <p className="boot-error-note">
           (builds <code>crates/rut-wasm</code> for wasm32 and copies it to{" "}
           <code>public/rut.wasm</code> — RFC 0041 §3)
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** the highlight boot-error panel — THE BINDING LAW (survey D3):
+ * highlight rides the analyzer or the page says so loudly; the panel
+ * rides the phase-1 error-panel shape and names the exact command */
+function LspError(props: { detail: string }): JSX.Element {
+  return (
+    <div className="boot-error">
+      <div className="boot-error-box">
+        <h1>rut-lsp.wasm missing or invalid</h1>
+        <p>
+          The playground&rsquo;s highlighting rides the analyzer&rsquo;s
+          semantic tokens — there is no fake fallback. Boot failed with:
+        </p>
+        <pre className="boot-error-detail">{props.detail}</pre>
+        <p>To build the artifact, run this in the demo/ directory:</p>
+        <pre className="boot-error-command">
+          <code>{BUILD_WASM_COMMAND}</code>
+        </pre>
+        <p className="boot-error-note">
+          (builds <code>crates/rut-lsp-wasm</code> for wasm32 and copies
+          it to <code>public/rut-lsp.wasm</code> — RFC 0041 §3)
         </p>
       </div>
     </div>
@@ -57,10 +88,61 @@ export function App(): JSX.Element {
   const runToken = useRef(0);
   /** the last successful compile — a Resume re-renders its AST/IR too */
   const lastCompiled = useRef<CompileResult | null>(null);
+  // the highlight layer (survey D3): one binding, booted once; the
+  // overlay + squiggles come from the debounced full rut_analyze
+  const [lsp, setLsp] = useState<RutLsp | null>(null);
+  const [lspMode, setLspMode] = useState<"booting" | "live" | "error">(
+    "booting",
+  );
+  const [lspDetail, setLspDetail] = useState("");
+  const [highlight, setHighlight] = useState<Highlight | null>(null);
 
   useEffect(() => {
     void Runner.boot().then(setRunner);
+    // the binding boots ONCE per page (its arena/legend live for the
+    // session); a failure is the visible error state, never a
+    // monochrome shrug
+    RutLsp.boot()
+      .then((l) => {
+        setLsp(l);
+        setLspMode("live");
+      })
+      .catch((err: unknown) => {
+        setLspDetail(err instanceof Error ? err.message : String(err));
+        setLspMode("error");
+      });
   }, []);
+
+  // the debounced FULL analyze per change (survey D3): case selects and
+  // edits both flow through `source`, so this one effect covers both
+  useEffect(() => {
+    if (!lsp) return;
+    let stale = false;
+    const timer = window.setTimeout(() => {
+      try {
+        const a = lsp.analyze(PLAYGROUND_DOC, source);
+        if (stale) return;
+        setHighlight({
+          lines: buildOverlay(
+            source,
+            decodeTokens(a.tokens.data),
+            lsp.legend,
+            a.diags,
+          ),
+          diags: a.diags,
+        });
+      } catch (err) {
+        // a failed analyze must never kill the page — loud in the
+        // console, monochrome in the editor (the honest interim)
+        console.error("rut-lsp analyze failed:", err);
+        setHighlight(null);
+      }
+    }, ANALYZE_DEBOUNCE_MS);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
+  }, [lsp, source]);
 
   const selectCase = useCallback(
     (c: RutCase) => {
@@ -179,6 +261,16 @@ export function App(): JSX.Element {
   if (runner && runner.state.mode === "error") {
     return <BootError banner={runner.state.banner} />;
   }
+  if (lspMode === "error") {
+    return (
+      <LspError
+        detail={
+          `${lspDetail} — run \`${BUILD_WASM_COMMAND}\` in demo/ ` +
+          `(RFC 0041 §3)`
+        }
+      />
+    );
+  }
 
   return (
     <div className="app">
@@ -197,7 +289,7 @@ export function App(): JSX.Element {
           selectedId={currentCase.id}
           onSelect={selectCase}
         />
-        <Editor value={source} onChange={editSource} />
+        <Editor value={source} onChange={editSource} highlight={highlight} />
         <Panes data={panes} source={source} verify={verify} />
       </main>
 

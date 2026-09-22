@@ -20,13 +20,23 @@
 //      anywhere under demo/src — dataclass-as-keyword, `where`
 //      clauses, `Ptr<`, `Hashable`, the removed `mapset` pkg, postfix
 //      `?T` — scanned over the WHOLE tree, comments included,
-//      whitelist nothing (the todolist app-law precedent).
+//      whitelist nothing (the todolist app-law precedent);
+//   6. THE HIGHLIGHT (phase 3, survey D3): through the SAME demo
+//      binding the editor uses (src/lsp/rut-lsp.ts bundled into the
+//      smoke entry) over the SHIPPED public/rut-lsp.wasm — the 14-type
+//      legend, ZERO false diagnostics across all 25 cases (the
+//      extension e2e's own law applied to the demo), and a census of
+//      known lines across the cases (keywords, primitives, types, fn
+//      names, strings at known positions) whose token classes match
+//      ground truth through the shared decodeTokens, and the overlay
+//      builder (the exact paint path) reconstructing every source
+//      EXACTLY — the double-layer alignment law.
 //
 // Exit 0 = every case real and verified. Any failure exits 1 LOUD.
 'use strict';
 
 import { createRequire } from 'node:module';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 
@@ -283,6 +293,184 @@ console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src
   check(hits === 0, 'no dead-surface shapes in demo/src', `${hits} hits`);
 }
 
+// ---- 6. the highlight: LSP semantic tokens through the demo binding ----
+
+console.log('\n[6] the highlight: semantic tokens + diagnostics through the demo binding');
+
+const LSP_ARTIFACT = join(DEMO, 'public', 'rut-lsp.wasm');
+if (!existsSync(LSP_ARTIFACT)) {
+  console.error(
+    `smoke: public/rut-lsp.wasm not found — this gate drives the SHIPPED ` +
+      `artifact through the demo's own binding; build it first:\n` +
+      `  cd demo && npm run build:wasm  (builds both artifacts)`);
+  process.exit(1);
+}
+
+{
+  // the SAME RutLsp class the React app boots — the exact load path,
+  // minus the browser host (the extension's e2e pattern)
+  const lsp = await api.RutLsp.boot(async () => exactAB(readFileSync(LSP_ARTIFACT)));
+
+  // the legend: the demo's CSS map keys on these NAMES (index -> name
+  // -> tok-<name>), never on a hardcoded order
+  const legend = lsp.legend;
+  check(
+    legend.length === 14,
+    'the legend carries the ABI-reported 14 token types',
+    JSON.stringify(legend),
+  );
+  for (const want of ['keyword', 'number', 'string', 'type', 'function', 'method', 'enumMember']) {
+    check(legend.includes(want), `the legend names '${want}'`);
+  }
+
+  // ZERO false diagnostics across all 25 cases through the binding —
+  // the extension e2e's own law (a gate that cannot pass while the
+  // shipped artifact and the language drift), applied to the demo
+  const analyses = new Map();
+  for (const c of all) {
+    const a = lsp.analyze(`file:///smoke/${c.id}.rut`, c.source);
+    analyses.set(c.id, a);
+    check(
+      a.diags.length === 0,
+      `${c.id}: zero false diagnostics through the binding`,
+      JSON.stringify(a.diags.map((d) => d.message)),
+    );
+    check(
+      a.tokens.data.length > 0,
+      `${c.id}: non-empty semantic token stream`,
+    );
+  }
+
+  // THE CENSUS: known lines across the cases — keywords, primitives,
+  // types, fn names, strings at known positions — the token classes
+  // match ground truth (every entry pinned against the shipped
+  // artifact's observed classification of that exact position)
+  const CENSUS = [
+    // keywords
+    ['hello-format', /^fn describe\(/, 'fn', 'keyword'],
+    ['hello-format', /^enum Flavor \{/, 'enum', 'keyword'],
+    ['hello-format', /return when \(f\) \{/, 'when', 'keyword'],
+    ['values-and-pointers', /^struct Point \{/, 'struct', 'keyword'],
+    ['values-and-pointers', /let mut p = Point \{/, 'mut', 'keyword'],
+    ['sieve', /^use pouch::\{Vec\};/, 'use', 'keyword'],
+    ['fuel-demo', /while \(true\) \{/, 'while', 'keyword'],
+    ['fuel-demo', /while \(true\) \{/, 'true', 'keyword'],
+    ['ex-type-aliases', /^trait Labeled \{/, 'trait', 'keyword'],
+    ['ex-type-aliases', /fn label\(self\) -> str;/, 'self', 'keyword'],
+    ['ex-classes', /^class Rect \{/, 'class', 'keyword'],
+    // primitives (contextual type names — the `type` class in type position)
+    ['hello-format', /^fn describe\(/, 'str', 'type'],
+    ['values-and-pointers', /^struct Point \{/, 'f32', 'type'],
+    ['sieve', /^fn sieve\(limit: i32\) -> Vec<i32> \{/, 'i32', 'type'],
+    ['tuple-errors', /^fn parse_u8\(s: str\) -> \(i32, str\) \{/, 'str', 'type'],
+    ['ex-type-aliases', /^type Meters = i64;/, 'i64', 'type'],
+    // types
+    ['opaque', /opaque\.downcast<Point>\(box1\);/, 'Point', 'type'],
+    ['sieve', /^fn sieve\(limit: i32\) -> Vec<i32> \{/, 'Vec', 'type'],
+    ['ex-type-aliases', /^type Meters = i64;/, 'Meters', 'type'],
+    ['ex-closures-generics', /fn sum\(xs: Vec<i32>\) -> i32 \{/, 'Vec', 'type'],
+    // fn names
+    ['hello-format', /^fn describe\(/, 'describe', 'function'],
+    ['sieve', /^fn sieve\(limit: i32\) -> Vec<i32> \{/, 'sieve', 'function'],
+    ['tuple-errors', /^fn parse_u8\(s: str\) -> \(i32, str\) \{/, 'parse_u8', 'function'],
+    ['closures-generics', /^fn map<T, U>\(v: Vec<T>, f: fn\(T\) -> U\) -> Vec<U> \{/, 'map', 'function'],
+    ['ex-closures-generics', /fn sum\(xs: Vec<i32>\) -> i32 \{/, 'sum', 'function'],
+    // strings
+    ['hello-format', /let name = "rut";/, '"rut"', 'string'],
+    ['when-exhaustive', /"red\+red"/, '"red+red"', 'string'],
+    // the name positions the legend also owns (the overlay paints them)
+    ['hello-format', /^enum Flavor \{/, 'Flavor', 'enum'],
+    ['values-and-pointers', /^struct Point \{/, 'Point', 'class'],
+    ['when-exhaustive', /Color\.Red\s+-> "red\+red",/, 'Red', 'enumMember'],
+    ['hello-format', /let name = "rut";/, 'name', 'variable'],
+    ['ex-type-aliases', /^trait Labeled \{/, 'Labeled', 'trait'],
+    ['ex-type-aliases', /fn label\(self\) -> str;/, 'label', 'method'],
+  ];
+
+  // [line, character] (0-based) of the needle on the first line
+  // matching lineRe — the e2e-wasm.js helper, inlined
+  function posOnLine(src, lineRe, needle) {
+    const ls = src.split('\n');
+    for (let i = 0; i < ls.length; i++) {
+      if (!lineRe.test(ls[i])) continue;
+      const ch = ls[i].indexOf(needle);
+      if (ch < 0) break;
+      return [i, ch];
+    }
+    throw new Error(`${JSON.stringify(needle)} not found on a line matching ${lineRe}`);
+  }
+
+  // the token class covering (line, ch), through the SHARED decode
+  // the editor's overlay builder uses
+  function tokenClassAt(id, line, ch) {
+    const a = analyses.get(id);
+    for (const t of api.decodeTokens(a.tokens.data)) {
+      if (t.line === line && ch >= t.start && ch < t.start + t.length) {
+        return legend[t.type];
+      }
+    }
+    return null;
+  }
+
+  for (const [id, re, needle, want] of CENSUS) {
+    const c = all.find((x) => x.id === id);
+    let at;
+    try {
+      at = posOnLine(c.source, re, needle);
+    } catch (err) {
+      check(false, `${id}: census position for ${needle}`, String(err.message));
+      continue;
+    }
+    const got = tokenClassAt(id, at[0], at[1]);
+    check(
+      got === want,
+      `${id}: '${needle}' classifies ${want}`,
+      `got ${JSON.stringify(got)} at ${at[0]}:${at[1]}`,
+    );
+  }
+
+  // THE OVERLAY (the paint path, survey D4): the same builder the
+  // editor renders must reconstruct every source EXACTLY (the
+  // double-layer alignment law — a mis-cut span is visible drift) and
+  // carry the token class on the exact span text
+  for (const c of all) {
+    const a = analyses.get(c.id);
+    const lines = api.buildOverlay(
+      c.source,
+      api.decodeTokens(a.tokens.data),
+      legend,
+      a.diags,
+    );
+    const rebuilt = lines
+      .map((spans) => spans.map((sp) => sp.text).join(''))
+      .join('\n');
+    check(
+      rebuilt === c.source,
+      `${c.id}: overlay spans reconstruct the source EXACTLY`,
+      JSON.stringify(rebuilt.slice(0, 80)),
+    );
+  }
+  {
+    const hf = analyses.get('hello-format');
+    const lines = api.buildOverlay(
+      all.find((x) => x.id === 'hello-format').source,
+      api.decodeTokens(hf.tokens.data),
+      legend,
+      hf.diags,
+    );
+    const ln = lines.findIndex((spans) =>
+      spans.some((sp) => sp.text.includes('"rut"')));
+    const stringSpan = ln >= 0
+      ? lines[ln].find((sp) => sp.text === '"rut"')
+      : undefined;
+    check(
+      stringSpan !== undefined && stringSpan.type === 'string',
+      `hello-format: the overlay paints "rut" as a string span`,
+      JSON.stringify(lines[ln]),
+    );
+  }
+}
+
 // ---- verdict ----
 
 console.log(`\nsmoke: ${passes} passed, ${failures} failed`);
@@ -290,4 +478,4 @@ if (failures > 0) {
   console.error('THE SMOKE IS RED — a case that does not really run and verify is not done.');
   process.exit(1);
 }
-console.log('THE SMOKE IS GREEN — every case really ran and verified; the resume really resumed.');
+console.log('THE SMOKE IS GREEN — every case really ran and verified; the resume really resumed; the highlight really classifies through the binding.');

@@ -167,18 +167,143 @@ body {
   font: 12px/1.5 var(--mono);
 }
 
-.editor-input {
+/* the double-layer editor body (survey D4): the overlay below paints
+   the analyzer's truth; the textarea above is transparent-text and owns
+   caret, selection, and the scroll both layers follow */
+
+.editor-body {
+  position: relative;
   flex: 1;
+  min-width: 0;
+}
+
+.editor-overlay {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 10px 12px;
+  font: 12px/1.5 var(--mono);
+  white-space: pre;
+  overflow: hidden;
+  color: var(--fg);
+  pointer-events: none;
+}
+
+/* hidden metrics probe for the diagnostics hover tip (same font) */
+.editor-probe {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+}
+
+.editor-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   resize: none;
   border: none;
   outline: none;
   background: transparent;
-  color: var(--fg);
+  color: transparent; /* the overlay is the visible text */
+  caret-color: var(--fg); /* the caret stays visible */
   padding: 10px 12px;
   font: 12px/1.5 var(--mono);
   white-space: pre;
   overflow: auto;
 }
+
+.editor-input::selection {
+  background: #2b3d57;
+  color: transparent;
+}
+
+/* diagnostics squiggles (survey D3): wavy underline; the message rides
+   the span title + the editor's hover tip */
+.squiggle {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--trap);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+.editor-tip {
+  position: absolute;
+  z-index: 5;
+  max-width: 380px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--fg);
+  font: 11px/1.5 var(--mono);
+  white-space: pre-wrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 40%);
+}
+
+/* the token-class -> CSS map (survey D3): keyed by the rut_legend()
+   NAMES through the `tok-<name>` class the overlay emits — never by a
+   hardcoded legend order */
+
+.tok-keyword {
+  color: #c678dd;
+}
+
+.tok-number {
+  color: #d19a66;
+}
+
+.tok-string {
+  color: #98c379;
+}
+
+.tok-type {
+  color: #e5c07b;
+}
+
+.tok-function {
+  color: #61afef;
+}
+
+.tok-method {
+  color: #56b6c2;
+}
+
+.tok-variable {
+  color: var(--fg);
+}
+
+.tok-parameter {
+  color: #e06c75;
+}
+
+.tok-property {
+  color: #e06c75;
+}
+
+.tok-enum {
+  color: #e5c07b;
+}
+
+.tok-enumMember {
+  color: #56b6c2;
+}
+
+.tok-class {
+  color: #e5c07b;
+}
+
+.tok-trait {
+  color: #56b6c2;
+}
+
+.tok-operator {
+  color: #7f8b9b;
+}
+
 
 /* panes */
 
