@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { AstNode } from "../wasm/rut-api";
+import type { AstNode, Diag } from "../wasm/rut-api";
+import type { VerifyResult } from "../verify";
 import { AstTree } from "./AstTree";
 
 export interface PaneData {
@@ -7,12 +8,18 @@ export interface PaneData {
   ast?: AstNode;
   irDump: string;
   trap?: string;
+  /** fatal compile diagnostics — rendered LOUD, never dropped silently */
+  diags?: Diag[];
 }
 
 const TABS = ["Output", "AST", "IR"] as const;
 type TabName = (typeof TABS)[number];
 
-export function Panes(props: { data: PaneData; source: string }): JSX.Element {
+export function Panes(props: {
+  data: PaneData;
+  source: string;
+  verify?: VerifyResult | null;
+}): JSX.Element {
   const [active, setActive] = useState<TabName>("Output");
 
   const output = [...props.data.output];
@@ -34,9 +41,39 @@ export function Panes(props: { data: PaneData; source: string }): JSX.Element {
         ))}
       </div>
       <div className="pane-bodies">
-        <pre className={cls("pane-body", active === "Output")}>
-          {output.length ? output.join("\n") : "(no output)"}
-        </pre>
+        <div className={cls("pane-body", active === "Output")}>
+          {props.data.diags && props.data.diags.length > 0 && (
+            <pre className="diags">
+              {"compile diagnostics:"}
+              {"\n"}
+              {props.data.diags
+                .map((d) => `  ✗ ${d.msg}${d.start != null ? ` (at ${d.start}..${d.end ?? d.start})` : ""}`)
+                .join("\n")}
+            </pre>
+          )}
+          {output.length ? (
+            <pre>{output.join("\n")}</pre>
+          ) : (
+            !props.data.diags && <pre>(no output)</pre>
+          )}
+          {props.verify && !props.verify.ok && (
+            <div className="diff">
+              <div className="diff-head">
+                ✗ differs from expected — line-paired (got vs sidecar):
+              </div>
+              <pre className="diff-body">
+                {props.verify.rows
+                  .map((r) => {
+                    if (r.same) return `  = ${r.n} | ${r.got}`;
+                    const got = r.got ?? "⟨missing⟩";
+                    const exp = r.expected ?? "⟨no sidecar line⟩";
+                    return `  ✗ ${r.n} | got:      ${got}\n    | expected: ${exp}`;
+                  })
+                  .join("\n")}
+              </pre>
+            </div>
+          )}
+        </div>
         <div className={cls("pane-body ast-pane", active === "AST")}>
           {props.data.ast ? (
             <AstTree root={props.data.ast} source={props.source} />

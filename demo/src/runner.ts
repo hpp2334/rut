@@ -1,33 +1,38 @@
 /**
- * RutApi resolution (RFC 0041 §3): probe public/rut.wasm at boot —
- * 200 → wasm mode; 404 → static-preview mode (expected output + banner).
+ * RutApi resolution — THE RUNNER LAW (RFC 0041 §3, survey D1): the page
+ * runs REAL wasm or it shows the error. There is no preview fallback.
+ * A missing/failing `rut.wasm` (404, network error, instantiate throw,
+ * an export surface that doesn't match this contract) boots the page
+ * into `mode: "error"` — a full-page panel naming the exact
+ * `npm run build:wasm` command — and the panes never mount.
  *
  * The wasm module is the rut-wasm crate over a raw ABI (RFC 0041 §2):
  *   exports: memory, rut_alloc(len) -> ptr,
  *            rut_compile(src_ptr, src_len) -> envelope,
- *            rut_run(bin_ptr, bin_len, fuel, heap) -> envelope
+ *            rut_run(bin_ptr, bin_len, fuel, heap) -> envelope,
+ *            rut_resume(extra_fuel, heap) -> envelope,   (survey D5)
+ *            rut_drop_frame() -> u32
  * An envelope is [u32 LE length][JSON bytes]; the compile envelope carries
  * the module binary base64-encoded (RFC 0033) — mirrored by rut-api.d.ts.
  */
 
 import type { CompileResult, RutApi, RunResult, Budget } from "./wasm/rut-api";
-import { CASES, type RutCase } from "./cases";
 
 export interface RunnerState {
-  mode: "wasm" | "preview";
+  mode: "wasm" | "error";
   banner: string;
 }
+
+/** the exact command the error panel and every loud failure name */
+export const BUILD_WASM_COMMAND = "npm run build:wasm";
 
 interface WasmExports {
   memory: WebAssembly.Memory;
   rut_alloc(len: number): number;
   rut_compile(srcPtr: number, srcLen: number): number;
-  rut_run(
-    binPtr: number,
-    binLen: number,
-    fuel: bigint,
-    heap: bigint,
-  ): number;
+  rut_run(binPtr: number, binLen: number, fuel: bigint, heap: bigint): number;
+  rut_resume(extraFuel: bigint, heap: bigint): number;
+  rut_drop_frame(): number;
 }
 
 function decodeBase64(b64: string): Uint8Array {
@@ -44,6 +49,22 @@ class WasmApi implements RutApi {
 
   constructor(inst: WebAssembly.Instance) {
     this.e = inst.exports as unknown as WasmExports;
+    // the artifact and the page ship together — an export surface that
+    // doesn't match THIS contract is an invalid artifact (loud, boot
+    // turns it into the error panel, never a half-working page)
+    const names: (keyof WasmExports)[] = [
+      "memory",
+      "rut_alloc",
+      "rut_compile",
+      "rut_run",
+      "rut_resume",
+      "rut_drop_frame",
+    ];
+    for (const n of names) {
+      if (n !== "memory" && typeof this.e[n] !== "function") {
+        throw new Error(`invalid rut.wasm: missing export ${n}`);
+      }
+    }
   }
 
   private write(bytes: Uint8Array): number {
@@ -87,8 +108,36 @@ class WasmApi implements RutApi {
       trap: parsed.trap ?? undefined,
       fuelUsed: parsed.fuelUsed ?? 0,
       heapBytes: parsed.heapBytes ?? 0,
+      parked: parsed.parked ?? false,
     };
   }
+
+  resume(extraFuel: number): RunResult {
+    const resPtr = this.e.rut_resume(
+      BigInt(Math.max(0, Math.floor(extraFuel))),
+      // the parked machine keeps the heap limit it was built with
+      BigInt(0),
+    );
+    const parsed = JSON.parse(this.readEnvelope(resPtr)) as RunResult;
+    return {
+      output: parsed.output ?? [],
+      trap: parsed.trap ?? undefined,
+      fuelUsed: parsed.fuelUsed ?? 0,
+      heapBytes: parsed.heapBytes ?? 0,
+      parked: parsed.parked ?? false,
+    };
+  }
+
+  dropFrame(): number {
+    return this.e.rut_drop_frame();
+  }
+}
+
+/** the browser byte source: same-origin fetch of the shipped artifact */
+async function fetchBytes(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`fetch ${url}: HTTP ${res.status}`);
+  return res.arrayBuffer();
 }
 
 export class Runner {
@@ -100,64 +149,69 @@ export class Runner {
     this.api = api;
   }
 
-  static async boot(): Promise<Runner> {
+  /**
+   * Boot the page. `load` overrides the byte source (the headless smoke
+   * reads the same file from disk); everything after the bytes —
+   * instantiate, export validation, mode decision — is the one shared
+   * path the browser uses.
+   */
+  static async boot(
+    load?: (url: string) => Promise<ArrayBuffer>,
+  ): Promise<Runner> {
     try {
-      const res = await fetch("rut.wasm");
-      if (res.ok) {
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        const { instance } = await WebAssembly.instantiate(bytes, {});
-        const api = new WasmApi(instance);
-        return new Runner(
-          {
-            mode: "wasm",
-            banner: "live — rut.wasm (M1 vertical slice: static core, no host modules)",
-          },
-          api,
-        );
-      }
-    } catch {
-      /* fall through to preview mode */
+      const bytes = await (load ?? fetchBytes)("rut.wasm");
+      const { instance } = await WebAssembly.instantiate(bytes, {});
+      const api = new WasmApi(instance);
+      return new Runner(
+        {
+          mode: "wasm",
+          banner:
+            "live — rut.wasm · the playground slice: core, calc, rt, ink, pouch mounted (RFC 0041 §3)",
+        },
+        api,
+      );
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return new Runner(
+        {
+          mode: "error",
+          banner:
+            `rut.wasm missing or invalid — run \`${BUILD_WASM_COMMAND}\` in demo/ ` +
+            `(RFC 0041 §3): ${detail}`,
+        },
+        null,
+      );
     }
-    return new Runner(
-      {
-        mode: "preview",
-        banner:
-          "static preview — wasm module not built (run `npm run build:wasm` in demo/, RFC 0041 §3). " +
-          "Output below is the annotated expectation, not a live run.",
-      },
-      null,
-    );
+  }
+
+  get isLive(): boolean {
+    return this.api !== null;
+  }
+
+  private live(): RutApi {
+    if (!this.api) {
+      throw new Error(
+        `runner is not live — the wasm module failed to boot; run \`${BUILD_WASM_COMMAND}\` in demo/`,
+      );
+    }
+    return this.api;
   }
 
   compile(src: string): CompileResult {
-    if (this.api) return this.api.compile(src);
-    return { diags: [], irDump: placeholder("LIR") };
+    return this.live().compile(src);
   }
 
-  run(
-    source: string,
-    binary: Uint8Array | undefined,
-    budget: Budget,
-    currentCase: RutCase | undefined,
-  ): RunResult {
-    if (this.api && binary) {
-      return this.api.run(binary, budget);
-    }
-    // preview mode: replay the case's annotated output
-    const expected =
-      currentCase?.expected ??
-      CASES.find((c) => c.source === source)?.expected ??
-      ["(no annotated expectation for custom sources in preview mode)"];
-    const lines = [...expected];
-    let trap: string | undefined;
-    if (currentCase?.id === "fuel-demo") {
-      lines.pop(); // the resume-hint line becomes the trap
-      trap = "OutOfFuel";
-    }
-    return { output: lines, trap, fuelUsed: 0, heapBytes: 0 };
+  run(binary: Uint8Array, budget: Budget): RunResult {
+    return this.live().run(binary, budget);
   }
-}
 
-function placeholder(what: string): string {
-  return `(${what} dump requires the wasm build — RFC 0041 §3)`;
+  /** continue the parked frame (survey D5) — accumulates output */
+  resume(extraFuel: number): RunResult {
+    return this.live().resume(extraFuel);
+  }
+
+  /** retire a parked frame (case switches must not inherit machines) */
+  dropFrame(): void {
+    this.api?.dropFrame();
+  }
 }

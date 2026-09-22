@@ -397,3 +397,122 @@ body {
 .stat.trap {
   color: var(--trap);
 }
+
+/* verify chip (survey D2): pass/fail of real-vs-sidecar */
+
+.chip {
+  font-size: 12px;
+  font-family: var(--mono);
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.chip-pass {
+  color: #7dd88a;
+  border-color: #2e5a38;
+  background: #16241a;
+}
+
+.chip-fail {
+  color: var(--trap);
+  border-color: #6b2f2f;
+  background: #2a1616;
+}
+
+/* compile diagnostics — loud, never dropped */
+
+.diags {
+  color: var(--warn);
+  border: 1px solid #5a4a20;
+  background: #3a2f18;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+}
+
+/* line-paired expected/got diff (survey D2) */
+
+.diff {
+  margin-top: 10px;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.diff-head {
+  color: var(--trap);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.diff-body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg-dim);
+}
+
+/* boot error — the full-page panel (survey D1: the runner law) */
+
+.boot-error {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.boot-error-box {
+  max-width: 640px;
+  border: 1px solid #6b2f2f;
+  background: var(--bg-panel);
+  border-radius: 10px;
+  padding: 22px 26px;
+}
+
+.boot-error-box h1 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  color: var(--trap);
+}
+
+.boot-error-box p {
+  margin: 10px 0;
+  color: var(--fg);
+}
+
+.boot-error-detail {
+  color: var(--fg-dim);
+  font: 12px/1.5 var(--mono);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.boot-error-command {
+  font: 14px/1.6 var(--mono);
+  background: var(--bg-input);
+  border: 1px solid var(--accent-dim);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+
+.boot-error-command code {
+  color: var(--accent);
+}
+
+.boot-error-note {
+  color: var(--fg-dim);
+  font-size: 12px;
+}
+
+.boot-error-note code {
+  font-family: var(--mono);
+}

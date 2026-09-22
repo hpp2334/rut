@@ -1,12 +1,17 @@
 /**
  * Prepared cases (RFC 0041 §3). Each is self-contained — the host
- * provides the bundled packages (`ink`, `core`, `pouch`), whose
- * `info` lines stream back as output.
- * `expected` carries the annotated output lines so the page works in
- * static-preview mode before the wasm build exists. Sources reflect
- * the v1.2 surface: copy-by-value structs, `(T, err)` tuples, `nil`
- * as the empty type/value, no `own`, no `dataclass`, no char
- * literals, no arrows.
+ * provides the bundled packages (`ink`, `core`, `calc`, `rt`, `pouch`),
+ * whose `info` lines stream back as output.
+ *
+ * `expected` is the case's SIDECAR: after every real run the page diffs
+ * the engine's actual output against it (the sidecar flip, survey D2)
+ * and the smoke gate does the same headlessly. Sources reflect TODAY's
+ * surface — RFC 0044: bindings share by reference (copy-by-value and
+ * `own` are gone; `bytes.clone()` is the one copy), `==` is identity
+ * for cells, the pointer shape is the nullable `?T` (prefix-only;
+ * `*T`/`&v` diagnose) — plus no `dataclass` (spell it `struct`), no
+ * `char` literals (1-codepoint `str`), no arrows (RFC 0013 block
+ * bodies).
  */
 
 export interface RutCase {
@@ -54,31 +59,31 @@ export const CASES: RutCase[] = [
     id: "values-and-pointers",
     name: "values & pointers",
     blurb: "bindings share by reference — identity == for cells, absence as ?T",
-    rfcs: "0016 §1, 0044, 0005 §8",
+    rfcs: "0044, 0016 §1, 0005 §8",
     source: [
       "use ink::{Logger};",
       "",
-      "struct Point { x: f32; y: f32; }",
+      "struct Point { x: f32; y: f32 }",
       "",
       "pub fn main() {",
       "    let log = Logger.new(\"case\");",
       "    let mut p = Point { x: 1, y: 2 };",
-      "    let q = p;                  // copy-by-value: q owns its own cell",
-      "    p.x = 4;                    // q.x is still 1",
+      "    let q = p;                  // share: q and p name ONE cell (RFC 0044)",
+      "    p.x = 4;                    // q.x is 4 now — sharing is the law",
       "    let same = Point { x: 1, y: 2 };",
       "    log.info(f\"q.x={q.x} p.x={p.x}\");",
-      "    log.info(f\"q==same {q == same}, p==same {p == same}\"); // structural ==",
-      "    let rp = &p;                // sharing requires a pointer",
-      "    rp.x = 9;                   // writes through the pointer (auto-deref)",
-      "    log.info(f\"rp.x={rp.x} p.x={p.x}\");              // p keeps 4",
-      "    let rq = &same;",
-      "    log.info(f\"rp==rp {rp == rp}, rp==rq {rp == rq}\"); // pointer identity",
+      "    log.info(f\"q==same {q == same}, p==same {p == same}\"); // cell identity ==",
+      "    let mut rp: ?Point = p;     // the pointer shape today: the nullable box",
+      "    rp.x = 9;                   // writes through the box (auto-deref) — shared",
+      "    log.info(f\"rp.x={rp.x} p.x={p.x}\");",
+      "    let rq: ?Point = same;",
+      "    log.info(f\"rp==rp {rp == rp}, rp==rq {rp == rq}\"); // box identity",
       "}",
     ].join("\n"),
     expected: [
-      "q.x=1 p.x=4",
-      "q==same true, p==same false",
-      "rp.x=9 p.x=4",
+      "q.x=4 p.x=4",
+      "q==same false, p==same false",
+      "rp.x=9 p.x=9",
       "rp==rp true, rp==rq false",
     ],
   },
@@ -263,8 +268,8 @@ export const CASES: RutCase[] = [
   {
     id: "fuel-demo",
     name: "fuel demo (infinite loop)",
-    blurb: "budgets bite: while(true) hits Trap::OutOfFuel — then resume",
-    rfcs: "0040 §2",
+    blurb: "budgets bite: while(true) parks on Trap::OutOfFuel — Resume continues the frame",
+    rfcs: "0040 §2, 0034 §4",
     source: [
       "use ink::{Logger};",
       "",
@@ -279,12 +284,16 @@ export const CASES: RutCase[] = [
       "    }",
       "}",
     ].join("\n"),
+    // the HONEST expected at the pinned DEFAULT budget (10M / 4 MiB):
+    // ~10 ops per iteration means zero tick lines fit — the run parks
+    // immediately. The old sidecar (tick 1000000/2000000/3000000, "…",
+    // a resume hint) described a ~40M-fuel magnitude and a preview-era
+    // fabrication; both died (survey §2.3/D2). The trap line
+    // participates: the pane renders `Trap::<name>` last. At a raised
+    // budget (or after Resume, which accumulates) the chip shows a
+    // diff BY DESIGN — this sidecar pins the default.
     expected: [
-      "tick 1000000",
-      "tick 2000000",
-      "tick 3000000",
-      "...",
-      "Trap::OutOfFuel — the frame is parked; press Resume to add fuel",
+      "Trap::OutOfFuel",
     ],
   },
 ];

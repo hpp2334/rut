@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-smoke/
 public/rut.wasm
 *.log
 .DS_Store

@@ -5,8 +5,11 @@
 //!   rut_alloc(len) -> ptr                      bump allocation
 //!   rut_compile(src_ptr, src_len) -> result    JSON envelope, base64 binary
 //!   rut_run(bin_ptr, bin_len, fuel, heap) -> result
-//!   rut_result_len() / rut_result_ptr()        read the last envelope
+//!   rut_resume(extra_fuel, heap) -> result     continue the parked frame
+//!   rut_drop_frame() -> u32                    retire the parked frame
 //! Every result is [u32 little-endian length][bytes] at the returned ptr.
+//! Run envelopes carry `"parked":bool` — true when the guest trapped
+//! OutOfFuel with a live frame that `rut_resume` can continue.
 
 #![allow(static_mut_refs)]
 
@@ -162,6 +165,14 @@ pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
 
 static OUTPUT: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(None);
 
+/// The one parked frame (survey D5). `rut_run` parks its `Vm` here when
+/// the guest traps OutOfFuel with a live frame — `rut_resume` adds fuel
+/// and continues THAT frame (the engine's own park/resume, RFC 0034 §4:
+/// the pc and locals ride in the Vm), never a restart. `rut_run`
+/// supersedes any parked frame (one Vm at a time; this module is
+/// single-threaded, RFC 0034) and `rut_drop_frame` retires it.
+static mut PARKED: Option<rut_vm::interp::Vm> = None;
+
 fn base64_decode(s: &str) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     let mut buf = 0u32;
@@ -188,6 +199,32 @@ fn base64_decode(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// Assemble a run envelope: accumulated output, trap, budgets, and the
+/// parked flag (additive fields — older consumers ignore them).
+fn run_envelope(output: &[String], trap: Option<&str>, fuel_used: u64, heap: u64, parked: bool) -> *mut u8 {
+    let mut json = String::new();
+    json.push_str("{\"output\":[");
+    for (i, l) in output.iter().enumerate() {
+        if i > 0 {
+            json.push(',');
+        }
+        json_escape(l, &mut json);
+    }
+    json.push_str("],\"trap\":");
+    match trap {
+        Some(t) => json_escape(t, &mut json),
+        None => json.push_str("null"),
+    }
+    json.push_str(",\"fuelUsed\":");
+    json.push_str(&fuel_used.to_string());
+    json.push_str(",\"heapBytes\":");
+    json.push_str(&heap.to_string());
+    json.push_str(",\"parked\":");
+    json.push_str(if parked { "true" } else { "false" });
+    json.push('}');
+    envelope(json.as_bytes())
+}
+
 #[no_mangle]
 pub extern "C" fn rut_run(
     bin_ptr: *const u8,
@@ -195,23 +232,17 @@ pub extern "C" fn rut_run(
     fuel: u64,
     heap_bytes: u64,
 ) -> *mut u8 {
+    // a fresh run supersedes any parked frame — the old machine (and its
+    // share of OUTPUT, reset just below) is retired first
+    unsafe { PARKED = None };
     let bin = unsafe { core::slice::from_raw_parts(bin_ptr, bin_len) };
-    let mut json = String::new();
     let decode_result = rut_core::binary::decode(bin);
     let prog = match decode_result {
         Ok(p) => p,
-        Err(e) => {
-            json.push_str("{\"output\":[],\"trap\":");
-            json_escape(&e, &mut json);
-            json.push_str(",\"fuelUsed\":0,\"heapBytes\":0}");
-            return envelope(json.as_bytes());
-        }
+        Err(e) => return run_envelope(&[], Some(&e), 0, 0, false),
     };
     if let Err(e) = rut_vm::verify::verify(&prog) {
-        json.push_str("{\"output\":[],\"trap\":");
-        json_escape(&e, &mut json);
-        json.push_str(",\"fuelUsed\":0,\"heapBytes\":0}");
-        return envelope(json.as_bytes());
+        return run_envelope(&[], Some(&e), 0, 0, false);
     }
     *OUTPUT.lock().unwrap() = Some(Vec::new());
     let limits = rut_vm::interp::Limits {
@@ -237,37 +268,23 @@ pub extern "C" fn rut_run(
         hosts,
     ) {
         Ok(vm) => vm,
+        Err(t) => return run_envelope(&[], Some(&t.name()), 0, 0, false),
+    };
+    let (trap, parked) = match vm.call::<_, ()>("main", ()) {
+        Ok(_) => (None, false),
         Err(t) => {
-            json.push_str("{\"output\":[],\"trap\":");
-            json_escape(&t.name(), &mut json);
-            json.push_str(",\"fuelUsed\":0,\"heapBytes\":0}");
-            return envelope(json.as_bytes());
+            let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
+            (Some(t.name()), parked)
         }
     };
-    let (trap, fuel_used) = match vm.call::<_, ()>("main", ()) {
-        Ok(_) => (None, vm.fuel_used),
-        Err(t) => (Some(t.name()), vm.fuel_used),
-    };
+    // read the counters BEFORE the machine moves into the parked slot
+    let fuel_used = vm.fuel_used;
     let heap = vm.heap_usage();
-    let lines = OUTPUT.lock().unwrap().take().unwrap_or_default();
-    json.push_str("{\"output\":[");
-    for (i, l) in lines.iter().enumerate() {
-        if i > 0 {
-            json.push(',');
-        }
-        json_escape(l, &mut json);
+    if parked {
+        unsafe { PARKED = Some(vm) };
     }
-    json.push_str("],\"trap\":");
-    match trap {
-        Some(t) => json_escape(&t, &mut json),
-        None => json.push_str("null"),
-    }
-    json.push_str(",\"fuelUsed\":");
-    json.push_str(&fuel_used.to_string());
-    json.push_str(",\"heapBytes\":");
-    json.push_str(&heap.to_string());
-    json.push('}');
-    envelope(json.as_bytes())
+    let lines = OUTPUT.lock().unwrap().clone().unwrap_or_default();
+    run_envelope(&lines, trap.as_deref(), fuel_used, heap, parked)
 }
 
 /// demo utilities (RFC 0041 §3 OQ-1: base64 in/out keeps the ABI tiny)
@@ -277,5 +294,239 @@ pub extern "C" fn rut_run_b64(bin_b64_ptr: *const u8, bin_b64_len: usize, fuel: 
     match base64_decode(s) {
         Some(b) => rut_run(b.as_ptr(), b.len(), fuel, heap),
         None => envelope(b"{\"output\":[],\"trap\":\"bad base64\",\"fuelUsed\":0,\"heapBytes\":0}"),
+    }
+}
+
+// ---- resume (survey D5: the UI's Resume is REAL, not a re-run) ----
+
+/// Continue the parked frame: add `extra_fuel` to the SAME machine and
+/// re-enter the run loop at the parked pc. The output envelope carries
+/// the ACCUMULATED lines of run+resumes (OUTPUT is never reset here —
+/// only a fresh `rut_run` resets it), cumulative `fuelUsed`, and
+/// `parked:true` when the frame parked again (it can run out of fuel
+/// twice — each resume keeps going). `heap` is accepted for ABI
+/// symmetry but the parked machine keeps the heap limit it was built
+/// with — a resume cannot grow a budget retroactively. With no parked
+/// frame this is LOUD: the trap names it, nothing silently re-runs.
+#[no_mangle]
+pub extern "C" fn rut_resume(extra_fuel: u64, _heap: u64) -> *mut u8 {
+    let mut vm = match unsafe { PARKED.take() } {
+        Some(vm) => vm,
+        None => {
+            return run_envelope(
+                &[],
+                Some("no parked frame — run first (resume continues, never restarts)"),
+                0,
+                0,
+                false,
+            )
+        }
+    };
+    vm.add_fuel(extra_fuel);
+    let (trap, parked) = match vm.resume::<()>() {
+        Ok(_) => (None, false),
+        Err(t) => {
+            let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
+            (Some(t.name()), parked)
+        }
+    };
+    let fuel_used = vm.fuel_used;
+    let heap = vm.heap_usage();
+    if parked {
+        unsafe { PARKED = Some(vm) };
+    }
+    // the ACCUMULATED lines — run + every resume so far
+    let lines = OUTPUT.lock().unwrap().clone().unwrap_or_default();
+    run_envelope(&lines, trap.as_deref(), fuel_used, heap, parked)
+}
+
+/// Retire the parked frame (a case switch must not inherit the previous
+/// case's machine). Returns 1 when a frame was dropped, 0 when none was
+/// parked.
+#[no_mangle]
+pub extern "C" fn rut_drop_frame() -> u32 {
+    match unsafe { PARKED.take() } {
+        Some(_) => 1,
+        None => 0,
+    }
+}
+
+// ---- host tests: the ABI is testable natively (crate-type includes
+// rlib; the same exports the wasm module offers run under `cargo test`)
+// — the park/resume law is gated HERE, in the workspace gate, not only
+// in the demo smoke. The statics (arena, OUTPUT, PARKED) are global, so
+// every ABI test serializes on one lock.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FUEL_DEMO: &str = r#"
+use ink::{Logger};
+
+pub fn main() {
+    let log = Logger.new("case");
+    let mut i = 0;
+    while (true) {
+        i += 1;
+        if (i % 1000000 == 0) {
+            log.info(f"tick {i}");
+        }
+    }
+}
+"#;
+
+    const HELLO: &str = r#"
+use ink::{Logger};
+
+pub fn main() {
+    let log = Logger.new("case");
+    log.info("hello");
+}
+"#;
+
+    /// every ABI test holds this — the statics are global
+    fn lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn compile_case(src: &str) -> Vec<u8> {
+        let out = compile_playground(src);
+        assert!(
+            out.diags.is_empty(),
+            "test case must compile: {:?}",
+            out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+        );
+        out.binary.expect("binary emitted")
+    }
+
+    /// copy bytes into the arena through the REAL `rut_alloc` and run
+    fn run_json(bin: &[u8], fuel: u64, heap: u64) -> String {
+        let ptr = rut_alloc(bin.len());
+        assert!(!ptr.is_null(), "arena exhausted");
+        unsafe { core::ptr::copy_nonoverlapping(bin.as_ptr(), ptr, bin.len()) };
+        let res = rut_run(ptr, bin.len(), fuel, heap);
+        read_envelope(res)
+    }
+
+    fn resume_json(extra_fuel: u64) -> String {
+        let res = rut_resume(extra_fuel, 0);
+        read_envelope(res)
+    }
+
+    /// [u32 LE len][json bytes] at the returned ptr
+    fn read_envelope(ptr: *mut u8) -> String {
+        unsafe {
+            let len = u32::from_le(core::ptr::read(ptr as *const u32)) as usize;
+            let bytes = core::slice::from_raw_parts(ptr.add(4), len);
+            String::from_utf8(bytes.to_vec()).unwrap()
+        }
+    }
+
+    fn field<'a>(json: &'a str, key: &str) -> &'a str {
+        let needle = format!("\"{key}\":");
+        let at = json.find(&needle).unwrap_or_else(|| panic!("no {key} in {json}"));
+        let rest = &json[at + needle.len()..];
+        // array values (output) scan to their MATCHING bracket — a naive
+        // cut at the first comma would split ["a","b"]
+        if rest.starts_with('[') {
+            let mut depth = 0usize;
+            let mut in_str = false;
+            for (i, c) in rest.char_indices() {
+                match c {
+                    '"' => in_str = !in_str,
+                    '[' if !in_str => depth += 1,
+                    ']' if !in_str => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return &rest[..=i];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            panic!("unbalanced array for {key} in {json}");
+        }
+        let end = rest.find([',', '}']).unwrap();
+        rest[..end].trim_matches('"')
+    }
+
+    #[test]
+    fn run_parks_on_fuel_and_resume_continues_never_restarts() {
+        let _g = lock();
+        let bin = compile_case(FUEL_DEMO);
+
+        // leg 1 at 12M: one tick (~10M ops to reach i=1M), parked
+        let j1 = run_json(&bin, 12_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j1, "output"), "[\"tick 1000000\"]", "{j1}");
+        assert_eq!(field(&j1, "trap"), "OutOfFuel", "{j1}");
+        assert_eq!(field(&j1, "parked"), "true", "{j1}");
+        let f1: u64 = field(&j1, "fuelUsed").parse().unwrap();
+        assert!((11_000_000..13_000_000).contains(&f1), "{j1}");
+
+        // resume with ZERO added fuel: re-traps at the parked pc — same
+        // output, same spent counter. A restart could not burn 12M on a
+        // zero budget; this pins the PARK.
+        let j2 = resume_json(0);
+        assert_eq!(field(&j2, "output"), "[\"tick 1000000\"]", "{j2}");
+        assert_eq!(field(&j2, "trap"), "OutOfFuel", "{j2}");
+        assert_eq!(field(&j2, "parked"), "true", "{j2}");
+        let f2: u64 = field(&j2, "fuelUsed").parse().unwrap();
+        assert!(f2 >= f1 && f2 < f1 + 1_000, "{j2} (f1={f1})");
+
+        // resume with 16M more: the frame CONTINUES — tick 2000000 fires
+        // (i never went back to 0; a restart's line would be a second
+        // "tick 1000000"), tick 3000000 does not (16M can't reach it),
+        // and the cumulative counter spans BOTH legs (>26M — a fresh
+        // 16M run can never report that).
+        let j3 = resume_json(16_000_000);
+        assert_eq!(
+            field(&j3, "output"),
+            "[\"tick 1000000\",\"tick 2000000\"]",
+            "{j3}"
+        );
+        assert_eq!(field(&j3, "trap"), "OutOfFuel", "{j3}");
+        assert_eq!(field(&j3, "parked"), "true", "{j3}");
+        let f3: u64 = field(&j3, "fuelUsed").parse().unwrap();
+        assert!(f3 > 26_000_000, "{j3} (f1={f1})");
+        assert!(!j3.contains("tick 3000000"), "{j3}");
+    }
+
+    #[test]
+    fn clean_run_does_not_park_and_drop_retires_the_frame() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        let j = run_json(&compile_case(HELLO), 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(field(&j, "parked"), "false", "{j}");
+        assert_eq!(field(&j, "output"), "[\"hello\"]", "{j}");
+        assert_eq!(unsafe { PARKED.is_some() }, false);
+        assert_eq!(rut_drop_frame(), 0, "nothing was parked");
+    }
+
+    #[test]
+    fn resume_without_a_frame_is_loud() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        let j = resume_json(10_000_000);
+        assert!(j.contains("no parked frame"), "{j}");
+        assert_eq!(field(&j, "parked"), "false", "{j}");
+        assert_eq!(field(&j, "output"), "[]", "{j}");
+    }
+
+    #[test]
+    fn fresh_run_supersedes_a_parked_frame_and_resets_output() {
+        let _g = lock();
+        let bin = compile_case(FUEL_DEMO);
+        // park a frame
+        let j1 = run_json(&bin, 12_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j1, "parked"), "true", "{j1}");
+        // a fresh rut_run drops it and RESETS the accumulated output —
+        // the new envelope carries exactly the new run's lines
+        let j2 = run_json(&bin, 12_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j2, "output"), "[\"tick 1000000\"]", "{j2}");
+        assert_eq!(field(&j2, "parked"), "true", "{j2}");
+        assert_eq!(rut_drop_frame(), 1, "the second run's frame was parked");
     }
 }

@@ -140,9 +140,24 @@ export interface RunResult {
   trap?: string;
   fuelUsed: number;
   heapBytes: number;
+  /**
+   * true when the guest trapped OutOfFuel with a live frame —
+   * `resume` continues THAT frame (rut_resume); a fresh `run`
+   * supersedes it (rut_drop_frame retires it explicitly)
+   */
+  parked?: boolean;
 }
 
 export interface RutApi {
   compile(src: string): CompileResult;
   run(binary: Uint8Array, budget: Budget): RunResult;
+  /**
+   * Continue the parked frame with `extraFuel` more ops — the engine's
+   * own park/resume (survey D5), NOT a re-run: locals and pc ride in
+   * the machine, output ACCUMULATES across run+resumes, fuelUsed is
+   * cumulative. Without a parked frame the trap names it (loud).
+   */
+  resume(extraFuel: number): RunResult;
+  /** retire the parked frame (case switch); returns 1 if one was dropped */
+  dropFrame(): number;
 }

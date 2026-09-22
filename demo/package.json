@@ -4,9 +4,11 @@
   "private": true,
   "description": "rut language playground — React + rspack + TypeScript; runs rut as wasm (RFC 0041 §3)",
   "scripts": {
-    "dev": "rspack serve",
-    "build": "rspack build",
-    "build:wasm": "cargo build -p rut-wasm --target wasm32-unknown-unknown --release && node -e \"require('fs').copyFileSync('../target/wasm32-unknown-unknown/release/rut_wasm.wasm','public/rut.wasm')\""
+    "dev": "node scripts/preflight-wasm.mjs && rspack serve",
+    "build": "node scripts/preflight-wasm.mjs && rspack build",
+    "build:wasm": "cargo build -p rut-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs",
+    "build:smoke": "rspack build --config rspack.smoke.config.ts",
+    "smoke": "node scripts/preflight-wasm.mjs && npm run build:smoke && node scripts/smoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
