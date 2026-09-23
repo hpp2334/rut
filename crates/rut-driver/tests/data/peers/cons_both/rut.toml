@@ -1,0 +1,9 @@
+# T3: BOTH peers present — both groups mount (peer-name BTreeMap
+# order, after the base) and both impl sets dispatch.
+name = "cons_both"
+entry.lib = "./cons.rut"
+
+[deps]
+json    = { path = "../json" }
+nmapset = { path = "../nmapset" }
+pouch   = { path = "../pouch" }

@@ -23,6 +23,13 @@
 //! names are bare `[a-zA-Z0-9_]+` identifiers; a miss points at the
 //! consumer manifest (`[deps]`).
 //!
+//! The dep kinds (RFC 0045): `[deps]` is today's transitively-mounted
+//! table; `[peer-deps]` is REQUIRED by default (the consumer supplies
+//! the peer) with `optional = true` marking the presence-mounted kind
+//! whose integration group is the descriptor's `lib` file; `[dev-deps]`
+//! mount only while building the pkg itself (the loader's law — the
+//! Session never sees a dev table).
+//!
 //! The reader below parses only the TOML subset the format uses
 //! (comments, `key = "string"`, dotted keys, `[section]`, inline tables)
 //! so the driver stays dependency-free and wasm-compatible.
@@ -103,6 +110,16 @@ pub struct Manifest {
     /// `[deps]` — exact specifier → descriptor (`path = "..."`). Kept for
     /// the host to resolve; the Session does not read the filesystem.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
+    /// `[peer-deps]` (RFC 0045 §2) — REQUIRED by default; the CONSUMER
+    /// supplies the peer, it is never pulled transitively. `optional =
+    /// true` marks the presence-mounted kind whose integration group is
+    /// the descriptor's `lib` file. Descriptors: `path` (string),
+    /// `optional` (bool), `lib` (string) — nothing else.
+    pub peer_deps: BTreeMap<String, BTreeMap<String, String>>,
+    /// `[dev-deps]` (RFC 0045 §2) — mounted ONLY when building/testing
+    /// the pkg itself (the program root), never in a consumer's world.
+    /// Same descriptor shape as `[deps]`.
+    pub dev_deps: BTreeMap<String, BTreeMap<String, String>>,
     /// `host_scope` — the host-fn registration prefix when it must differ
     /// from the package name (`rt` keeps its historical `rt:log` scope,
     /// RFC 0022)
@@ -123,6 +140,33 @@ impl std::fmt::Display for ManifestError {
     }
 }
 impl std::error::Error for ManifestError {}
+
+/// One recorded `[peer-deps]` declaration (RFC 0045 §2): the declaring
+/// pkg's claim about a peer. Peers are REQUIRED by default; `optional`
+/// marks the presence-mounted kind. `lib` names the peer-gated
+/// integration file — an impl-only `.rut` source, relative to the
+/// declaring pkg's manifest. `path` is directory-time metadata: never
+/// read for a dep's peer (presence is by NAME), read only at the
+/// declaring pkg's own build, where a broken path is the loud D3
+/// packaging-bug error.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PeerDecl {
+    pub optional: bool,
+    pub lib: Option<String>,
+    pub path: String,
+}
+
+impl PeerDecl {
+    /// The declaration a descriptor table describes — the loader and
+    /// [`Session::load_manifest`] share the reading.
+    pub(crate) fn of(desc: &BTreeMap<String, String>) -> PeerDecl {
+        PeerDecl {
+            optional: desc.get("optional").map(|v| v == "true").unwrap_or(false),
+            lib: desc.get("lib").cloned(),
+            path: desc.get("path").cloned().unwrap_or_default(),
+        }
+    }
+}
 
 /// Why a use path did not resolve. A miss points at the consumer
 /// manifest — the `[deps]` table (or the host) decides what exists.
@@ -157,6 +201,11 @@ impl std::error::Error for ResolveError {}
 pub struct Session {
     modules: BTreeMap<String, Module>,
     deps: BTreeMap<String, BTreeMap<String, String>>,
+    /// The `[peer-deps]` declarations the loader recorded (RFC 0045):
+    /// declaring pkg → peer spec → declaration. The loader's peer gate
+    /// reads it post-closure; the reference-site missing-peer
+    /// diagnostic (the D2 upgrade) resolves against it.
+    peers: BTreeMap<String, BTreeMap<String, PeerDecl>>,
 }
 
 impl Session {
@@ -213,6 +262,42 @@ impl Session {
         out
     }
 
+    /// Record a `[peer-deps]` declaration for `pkg` (RFC 0045). The
+    /// loader calls this while walking — it reads every mounted pkg's
+    /// manifest anyway, so the registry costs no extra I/O.
+    pub fn record_peer(&mut self, pkg: &str, peer: &str, decl: PeerDecl) {
+        self.peers.entry(pkg.to_string()).or_default().insert(peer.to_string(), decl);
+    }
+
+    /// The peer declarations the loader recorded: declaring pkg →
+    /// (peer spec → declaration). Phase 1's peer gate reads it
+    /// post-closure; phase 2's D2 upgrade reads it at resolve time.
+    pub fn peer_decls(&self) -> &BTreeMap<String, BTreeMap<String, PeerDecl>> {
+        &self.peers
+    }
+
+    /// Append peer-group source to a mounted module's body (RFC 0045
+    /// §3, presence-based group assembly): the combined text stays ONE
+    /// source string, so every existing consumer of `Module.source` —
+    /// the graph splice, bundles, the wasm mounts — is untouched.
+    pub fn append_source(&mut self, spec: &str, text: &str) -> Result<(), ManifestError> {
+        let Some(m) = self.modules.get_mut(spec) else {
+            return Err(ManifestError(format!(
+                "cannot append a peer group to `{spec}` — no such module is mounted"
+            )));
+        };
+        match &mut m.source {
+            Some(src) => {
+                src.push('\n');
+                src.push_str(text);
+                Ok(())
+            }
+            None => Err(ManifestError(format!(
+                "cannot append a peer group to `{spec}` — the module has no rut source body; a `.d.rut` decl surface does not gate (RFC 0045 §3)"
+            ))),
+        }
+    }
+
     /// Parse and mount a module manifest; a consumer manifest's `[deps]`
     /// are recorded for the host. Use [`parse_manifest`] directly when the
     /// parsed `Manifest` itself is needed.
@@ -224,6 +309,9 @@ impl Session {
                 entry: manifest.entry.clone(),
                 ..Default::default()
             })?;
+            for (peer, desc) in &manifest.peer_deps {
+                self.record_peer(name, peer, PeerDecl::of(desc));
+            }
         }
         for (spec, dep) in &manifest.deps {
             if !valid_spec(spec) {
@@ -252,8 +340,9 @@ fn valid_spec(spec: &str) -> bool {
 }
 
 /// Parse the `rut.toml` subset: top-level `name`, `entry.type` /
-/// `entry.lib` / `entry.ir` (bare or under `[entry]`), and `[deps]`
-/// entries whose values are inline tables.
+/// `entry.lib` / `entry.ir` (bare or under `[entry]`), and the dep
+/// tables `[deps]` / `[peer-deps]` / `[dev-deps]` (RFC 0045) whose
+/// values are inline tables.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     let mut m = Manifest::default();
     let mut section = Section::Top;
@@ -267,6 +356,8 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
             section = match inner.trim() {
                 "entry" => Section::Entry,
                 "deps" => Section::Deps,
+                "peer-deps" => Section::PeerDeps,
+                "dev-deps" => Section::DevDeps,
                 other => {
                     return Err(ManifestError(format!(
                         "line {}: unknown section `[{}]`",
@@ -319,17 +410,52 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 }
             },
             Section::Deps => {
-                if !valid_spec(&key) {
-                    return Err(ManifestError(format!(
-                        "line {}: dep `{key}` is not a bare package name — expected `[a-zA-Z0-9_]+`",
-                        lineno + 1
-                    )));
-                }
-                m.deps.insert(key, parse_inline_table(value, lineno)?);
+                check_dep_key(&key, lineno)?;
+                let desc = parse_deps_descriptor(value, lineno)?;
+                m.deps.insert(key, desc);
+            }
+            Section::PeerDeps => {
+                check_dep_key(&key, lineno)?;
+                let desc = parse_peer_descriptor(value, lineno, "peer-deps")?;
+                m.peer_deps.insert(key, desc);
+            }
+            Section::DevDeps => {
+                check_dep_key(&key, lineno)?;
+                let desc = parse_peer_descriptor(value, lineno, "dev-deps")?;
+                m.dev_deps.insert(key, desc);
             }
         }
     }
+    // D4 (RFC 0045 §2): `[peer-deps]` + `[dev-deps]` is the sanctioned
+    // both-kinds pairing (the ruling); anything riding `[deps]` beside
+    // either is a manifest error naming both rows — a pkg is either
+    // pulled transitively or required of the consumer / held for
+    // development, never both.
+    for name in m.deps.keys() {
+        if m.peer_deps.contains_key(name) {
+            return Err(ManifestError(format!(
+                "`{name}` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both (RFC 0045 §2)"
+            )));
+        }
+        if m.dev_deps.contains_key(name) {
+            return Err(ManifestError(format!(
+                "`{name}` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both (RFC 0045 §2)"
+            )));
+        }
+    }
     Ok(m)
+}
+
+/// A dep-table key is a bare package name — the same charset law as the
+/// manifest `name`.
+fn check_dep_key(key: &str, lineno: usize) -> Result<(), ManifestError> {
+    if !valid_spec(key) {
+        return Err(ManifestError(format!(
+            "line {}: dep `{key}` is not a bare package name — expected `[a-zA-Z0-9_]+`",
+            lineno + 1
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -337,6 +463,8 @@ enum Section {
     Top,
     Entry,
     Deps,
+    PeerDeps,
+    DevDeps,
 }
 
 fn parse_string(value: &str, lineno: usize) -> Result<String, ManifestError> {
@@ -367,8 +495,11 @@ fn parse_bool(value: &str, lineno: usize) -> Result<bool, ManifestError> {
     }
 }
 
-/// Parse `{ k = "v", k2 = "v2" }` (single-line, string values only).
-fn parse_inline_table(value: &str, lineno: usize) -> Result<BTreeMap<String, String>, ManifestError> {
+/// Split `{ k = v, k2 = v2 }` (single-line) into raw key/value pairs —
+/// values are NOT parsed here; each table's rules decide what a value
+/// may be (strings everywhere; `optional` is the one bool the grammar
+/// learns, RFC 0045 §2).
+fn inline_table_parts(value: &str, lineno: usize) -> Result<Vec<(String, String)>, ManifestError> {
     let v = value.trim();
     let Some(inner) = v.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
         return Err(ManifestError(format!(
@@ -376,7 +507,7 @@ fn parse_inline_table(value: &str, lineno: usize) -> Result<BTreeMap<String, Str
             lineno + 1
         )));
     };
-    let mut out = BTreeMap::new();
+    let mut out = Vec::new();
     for part in split_commas(inner) {
         let part = part.trim();
         if part.is_empty() {
@@ -385,9 +516,82 @@ fn parse_inline_table(value: &str, lineno: usize) -> Result<BTreeMap<String, Str
         let Some((k, val)) = split_eq(part) else {
             return Err(ManifestError(format!("line {}: bad table item `{part}`", lineno + 1)));
         };
-        out.insert(unquote(k.trim()).to_string(), parse_string(val.trim(), lineno)?);
+        out.push((unquote(k.trim()).to_string(), val.trim().to_string()));
     }
     Ok(out)
+}
+
+/// A `[deps]` descriptor: string-only values, and `optional` is
+/// rejected — it is a `[peer-deps]` attribute (RFC 0045 §2).
+fn parse_deps_descriptor(
+    value: &str,
+    lineno: usize,
+) -> Result<BTreeMap<String, String>, ManifestError> {
+    let mut out = BTreeMap::new();
+    for (k, val) in inline_table_parts(value, lineno)? {
+        if k == "optional" {
+            return Err(ManifestError(format!(
+                "line {}: `optional` is a `[peer-deps]` attribute — `[deps]` has no options",
+                lineno + 1
+            )));
+        }
+        out.insert(k, parse_string(&val, lineno)?);
+    }
+    Ok(out)
+}
+
+/// A `[peer-deps]`/`[dev-deps]` descriptor (RFC 0045 §2): `path` and
+/// `lib` are strings (`lib` is the peer-gated integration file — an
+/// impl-only `.rut` source; a `.d.rut` decl surface does not gate),
+/// `optional` is the one bool, and any other key is the `[entry]`
+/// strictness — a line-targeted error.
+fn parse_peer_descriptor(
+    value: &str,
+    lineno: usize,
+    table: &str,
+) -> Result<BTreeMap<String, String>, ManifestError> {
+    let mut out = BTreeMap::new();
+    for (k, val) in inline_table_parts(value, lineno)? {
+        match k.as_str() {
+            "path" => {
+                out.insert(k, parse_string(&val, lineno)?);
+            }
+            "lib" => {
+                let v = parse_string(&val, lineno)?;
+                if v.ends_with(".d.rut") {
+                    return Err(ManifestError(format!(
+                        "line {}: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate (RFC 0045 §3)",
+                        lineno + 1
+                    )));
+                }
+                out.insert(k, v);
+            }
+            "optional" => {
+                out.insert(k, parse_optional_flag(&val, lineno)?);
+            }
+            other => {
+                return Err(ManifestError(format!(
+                    "line {}: unknown `[{table}]` key `{other}`",
+                    lineno + 1
+                )));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// `optional` is the one bool the inline-table grammar learns (RFC 0045
+/// §2); peers are REQUIRED by default, so the flag must say `true` or
+/// `false` exactly. Stored as its source spelling.
+fn parse_optional_flag(value: &str, lineno: usize) -> Result<String, ManifestError> {
+    match value.trim() {
+        "true" => Ok("true".to_string()),
+        "false" => Ok("false".to_string()),
+        _ => Err(ManifestError(format!(
+            "line {}: `optional` expects `true` or `false`",
+            lineno + 1
+        ))),
+    }
 }
 
 /// Split at the first `=` outside a quoted string.
@@ -545,5 +749,130 @@ entry.type = "./pouch.d.rut"
         assert_eq!(m.host_scope, None);
         // a non-bool `inline` is a load error
         assert!(parse_manifest("inline = yes\n").is_err());
+    }
+
+    // ---- the dep kinds (RFC 0045): the three tables, `optional`, the
+    // `lib` group key, D4 — the T11 manifest-error shapes ----
+
+    /// The pinned grammar (survey §0), plus the §2.3 `lib` keys.
+    const JSON: &str = r#"
+name = "json"
+entry.lib = "./json.rut"
+
+[peer-deps]
+pouch   = { path = "../pouch",   optional = true, lib = "./serde_pouch.rut" }
+nmapset = { path = "../nmapset", optional = true, lib = "./serde_nmapset.rut" }
+
+[dev-deps]
+pouch   = { path = "../pouch" }
+nmapset = { path = "../nmapset" }
+"#;
+
+    #[test]
+    fn peer_and_dev_tables_parse() {
+        let m = parse_manifest(JSON).unwrap();
+        let pouch = m.peer_deps.get("pouch").unwrap();
+        assert_eq!(pouch.get("path").unwrap(), "../pouch");
+        assert_eq!(pouch.get("optional").unwrap(), "true");
+        assert_eq!(pouch.get("lib").unwrap(), "./serde_pouch.rut");
+        // `optional` defaults to false — REQUIRED by default
+        let req = parse_manifest("name = \"j\"\n[peer-deps]\nnmapset = { path = \"../nmapset\" }\n")
+            .unwrap();
+        assert_eq!(req.peer_deps.get("nmapset").unwrap().get("optional"), None);
+        // the sanctioned both-kinds pairing parses (pouch in peer + dev)
+        assert!(m.dev_deps.contains_key("pouch"));
+        assert_eq!(m.dev_deps.get("pouch").unwrap().get("path").unwrap(), "../pouch");
+    }
+
+    #[test]
+    fn t11_optional_rejected_inside_deps() {
+        let err = parse_manifest("[deps]\npouch = { path = \"../pouch\", optional = true }\n")
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "line 2: `optional` is a `[peer-deps]` attribute — `[deps]` has no options"
+        );
+    }
+
+    #[test]
+    fn t11_optional_must_be_a_bool() {
+        let err =
+            parse_manifest("[peer-deps]\npouch = { path = \"..\", optional = \"yes\" }\n")
+                .unwrap_err();
+        assert_eq!(err.to_string(), "line 2: `optional` expects `true` or `false`");
+    }
+
+    #[test]
+    fn t11_unknown_descriptor_key_is_line_targeted() {
+        let err =
+            parse_manifest("[peer-deps]\npouch = { path = \"..\", feats = \"x\" }\n").unwrap_err();
+        assert_eq!(err.to_string(), "line 2: unknown `[peer-deps]` key `feats`");
+        let err = parse_manifest("[dev-deps]\npouch = { path = \"..\", git = \"x\" }\n").unwrap_err();
+        assert_eq!(err.to_string(), "line 2: unknown `[dev-deps]` key `git`");
+    }
+
+    #[test]
+    fn t11_lib_must_be_a_rut_source() {
+        // a `.d.rut` lib key is a load error: decl surfaces don't gate
+        let err = parse_manifest(
+            "[peer-deps]\npouch = { path = \"..\", optional = true, lib = \"./pouch.d.rut\" }\n",
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "line 2: `lib` must be a `.rut` source — a `.d.rut` decl surface does not gate (RFC 0045 §3)"
+        );
+    }
+
+    #[test]
+    fn t11_d4_deps_beside_peer_or_dev_is_the_collision() {
+        let err = parse_manifest(
+            "name = \"j\"\n[deps]\npouch = { path = \"../pouch\" }\n[peer-deps]\npouch = { path = \"../pouch\", optional = true }\n",
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "`pouch` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both (RFC 0045 §2)"
+        );
+        let err = parse_manifest(
+            "name = \"j\"\n[deps]\npouch = { path = \"../pouch\" }\n[dev-deps]\npouch = { path = \"../pouch\" }\n",
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "`pouch` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both (RFC 0045 §2)"
+        );
+        // peer + dev together stays legal — the sanctioned pairing
+        assert!(parse_manifest(JSON).is_ok());
+    }
+
+    #[test]
+    fn t11_peer_dep_keys_are_bare_names() {
+        let err = parse_manifest("[peer-deps]\n\"std:pouch\" = { path = \"..\" }\n").unwrap_err();
+        assert!(err.to_string().contains("line 2"), "{err}");
+        assert!(err.to_string().contains("bare package name"), "{err}");
+    }
+
+    #[test]
+    fn session_records_peer_declarations() {
+        let mut s = Session::new();
+        s.load_manifest(JSON).unwrap();
+        let decl = s.peer_decls().get("json").and_then(|p| p.get("pouch")).unwrap();
+        assert_eq!(
+            *decl,
+            PeerDecl {
+                optional: true,
+                lib: Some("./serde_pouch.rut".into()),
+                path: "../pouch".into()
+            }
+        );
+        // append_source keeps ONE source string; a sourceless module refuses
+        let mut s = Session::new();
+        s.register_module("m", Module { source: Some("fn a() {}".into()), ..Default::default() })
+            .unwrap();
+        s.append_source("m", "fn b() {}").unwrap();
+        assert_eq!(s.resolve("m").unwrap().source.as_deref(), Some("fn a() {}\nfn b() {}"));
+        s.register_module("d", Module { ..Default::default() }).unwrap();
+        assert!(s.append_source("d", "fn c() {}").is_err());
     }
 }

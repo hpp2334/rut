@@ -1,0 +1,10 @@
+// json_broken's pouch group file — present and valid, so a consumer
+// supplying pouch by ITS OWN path still gets the group mounted
+// (presence is by NAME; the broken peer path is never read).
+use pouch::{Vec};
+
+impl JsonSerialize for Vec<T> {
+    fn json_serialize(self) -> str {
+        return "[vec]";
+    }
+}

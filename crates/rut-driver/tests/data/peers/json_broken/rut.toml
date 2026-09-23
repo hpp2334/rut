@@ -1,0 +1,8 @@
+# json_broken — T7's variant: the peer path does not resolve (a
+# packaging bug in the pkg itself). LOUD at json_broken's own build
+# (D3); INERT for a consumer (optional peer, presence is by NAME).
+name = "json_broken"
+entry.lib = "./json.rut"
+
+[peer-deps]
+pouch = { path = "../does-not-exist", optional = true, lib = "./serde_pouch.rut" }

@@ -1,0 +1,8 @@
+# T1 (matrix row 2): only json in [deps] — the optional peers are
+# absent and never touched: compiles green, SILENT. That IS the
+# feature; nothing pulls pouch/nmapset transitively.
+name = "cons_light"
+entry.lib = "./cons.rut"
+
+[deps]
+json = { path = "../json" }

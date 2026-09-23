@@ -12,7 +12,7 @@ use rut_core::types::{TyKind, TY_F32, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_NIL}
 use rut_core::{IdentId, sym};
 
 pub mod session;
-pub use session::{Entry, Manifest, ManifestError, Module, ResolveError, Session};
+pub use session::{Entry, Manifest, ManifestError, Module, PeerDecl, ResolveError, Session};
 
 pub mod decl;
 pub use decl::lower_decl_module;

@@ -1,0 +1,8 @@
+// T4's consumer: references pouch's Vec with pouch absent.
+use json::{JsonSerialize};
+use pouch::{Vec};
+
+fn go() -> str {
+    let v = Vec<i64>.filled(7, 3);
+    return v.json_serialize();
+}

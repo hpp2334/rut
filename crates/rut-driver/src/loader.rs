@@ -9,6 +9,7 @@
 //! The `Session` itself does no I/O (wasm hosts mount in memory); this
 //! native helper is the counterpart that reads files.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::bundle::{parse_bundle, write_bundle};
@@ -38,9 +39,19 @@ pub fn load_module_source(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))
 }
 
-/// Mount a directory's consumer manifest: its own module (if named) and every
-/// `[deps]` module, reading each dep's `rut.toml` and entry source. Returns the
+/// Mount a directory's consumer manifest: its own module (if named) and
+/// every `[deps]` module, reading each dep's `rut.toml` and entry source,
+/// then the RFC 0045 mount passes over the finished closure. Returns the
 /// session and the root spec (the directory's own `name`).
+///
+/// The mount order is the law (RFC 0045 §3):
+/// 1. the `[deps]` walk — unchanged;
+/// 2. the dev pass — the ROOT's `[dev-deps]` mount exactly like `[deps]`
+///    (a dep's dev table is never walked, so a consumer's world never
+///    contains it);
+/// 3. the peer gate — ONE post-closure pass (a peer may mount after its
+///    declarer alphabetically, so it cannot run during the walk);
+/// 4. compile — unchanged; `compile_graph` sees ordinary sources.
 pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
     let text = std::fs::read_to_string(dir.join("rut.toml")).map_err(|e| e.to_string())?;
     let manifest = parse_manifest(&text).map_err(|e| e.to_string())?;
@@ -54,7 +65,15 @@ pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
     session
         .register_module(&root, root_module)
         .map_err(|e| e.to_string())?;
-    resolve_deps(&mut session, dir, &manifest, &mut vec![dir.to_path_buf()])?;
+    record_peers(&mut session, &root, &manifest);
+    // the loader's own spec → dir map, for the peer gate's group reads —
+    // the Session itself stays I/O-free
+    let mut mounted = std::collections::BTreeMap::new();
+    mounted.insert(root.clone(), dir.to_path_buf());
+    let mut visiting = vec![dir.to_path_buf()];
+    resolve_deps(&mut session, dir, &manifest, &mut visiting, &mut mounted)?;
+    resolve_table(&mut session, dir, &manifest.dev_deps, &mut visiting, &mut mounted)?;
+    run_peer_gate(&mut session, &root, &mounted)?;
     Ok((session, root))
 }
 
@@ -131,11 +150,20 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         .clone()
         .ok_or_else(|| format!("{}: rut.toml has no `name`", origin.display()))?;
     let mut session = Session::new();
+    // Peer groups (RFC 0045 §3) ride format_version 3 — a v1/v2 loader
+    // would silently mount base-only, which is semantically wrong:
+    // refuse, never guess. v3 lands with the bundle land.
+    if !manifest.peer_deps.is_empty() {
+        return Err(format!(
+            "{}: rut.toml declares `[peer-deps]` — mounting peer groups needs bundle format_version 3 (RFC 0045 §3)",
+            origin.display()
+        ));
+    }
     if manifest.format_version == Some(1) {
         // §1: one module per bundle in v1
-        if !manifest.deps.is_empty() {
+        if !manifest.deps.is_empty() || !manifest.dev_deps.is_empty() {
             return Err(format!(
-                "{}: rut.toml declares `[deps]` — a v1 bundle is one module (RFC 0038 OQ-3)",
+                "{}: rut.toml declares dependency tables — a v1 bundle is one module (RFC 0038 OQ-3)",
                 origin.display()
             ));
         }
@@ -179,6 +207,12 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         })?;
         let dm = parse_manifest(&dep_toml)
             .map_err(|e| format!("{}: {pkg}/rut.toml: {e}", origin.display()))?;
+        if !dm.peer_deps.is_empty() {
+            return Err(format!(
+                "{}: {pkg}/rut.toml declares `[peer-deps]` — mounting peer groups needs bundle format_version 3 (RFC 0045 §3)",
+                origin.display()
+            ));
+        }
         let name =
             dm.name.clone().ok_or_else(|| format!("{}: {pkg}/rut.toml has no `name`", origin.display()))?;
         if session.resolve(&name).is_ok() {
@@ -272,6 +306,15 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
             dir.join("rut.toml").display()
         ));
     }
+    // a v2 bundle would carry the base entry only and silently mount
+    // base-only in a consumer's world — semantically wrong. Peer groups
+    // pack as format_version 3 (the bundle land, phase 2 of RFC 0045).
+    if !manifest.peer_deps.is_empty() {
+        return Err(format!(
+            "{} declares `[peer-deps]` — packing peer groups needs bundle format_version 3 (RFC 0045 §3)",
+            dir.join("rut.toml").display()
+        ));
+    }
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     collect_pkg_files(dir, &manifest, "", &mut entries)?;
     // the dep graph, recursively, deduplicated by package name
@@ -354,19 +397,43 @@ fn read_manifest(dir: &Path) -> Result<crate::session::Manifest, String> {
     parse_manifest(&text).map_err(|e| e.to_string())
 }
 
-/// Resolve a manifest's `[deps]` recursively (RFC 0041 §3): each entry
-/// is a relative `path` to a package directory, loaded and mounted
-/// under its key. **First mount wins** — a name already in the session
-/// (the embedder's, the root's, or an earlier dep's) is never
-/// overwritten; a dep whose manifest `name` disagrees with its key is
-/// an error naming both. `visiting` guards cycles.
+/// Record a manifest's `[peer-deps]` into the session's registry (RFC
+/// 0045): the loader reads every mounted pkg's manifest anyway, so the
+/// registry costs no extra I/O.
+fn record_peers(session: &mut Session, pkg: &str, manifest: &crate::session::Manifest) {
+    for (peer, desc) in &manifest.peer_deps {
+        session.record_peer(pkg, peer, crate::session::PeerDecl::of(desc));
+    }
+}
+
+/// Resolve a manifest's `[deps]` recursively (RFC 0041 §3) — pass 1 of
+/// the mount order.
 fn resolve_deps(
     session: &mut Session,
     dir: &Path,
     manifest: &crate::session::Manifest,
     visiting: &mut Vec<std::path::PathBuf>,
+    mounted: &mut BTreeMap<String, std::path::PathBuf>,
 ) -> Result<(), String> {
-    for (spec, desc) in &manifest.deps {
+    resolve_table(session, dir, &manifest.deps, visiting, mounted)
+}
+
+/// Walk one descriptor table — the `[deps]` walk (pass 1; pass 2 feeds
+/// it the root's `[dev-deps]`, which mounts exactly the same way).
+/// Each entry is a relative `path` to a package directory, loaded and
+/// mounted under its key. **First mount wins** — a name already in the
+/// session (the embedder's, the root's, or an earlier dep's) is never
+/// overwritten; a dep whose manifest `name` disagrees with its key is
+/// an error naming both. `visiting` guards cycles. Every mounted pkg's
+/// directory and `[peer-deps]` declarations are recorded for pass 3.
+fn resolve_table(
+    session: &mut Session,
+    dir: &Path,
+    table: &BTreeMap<String, BTreeMap<String, String>>,
+    visiting: &mut Vec<std::path::PathBuf>,
+    mounted: &mut BTreeMap<String, std::path::PathBuf>,
+) -> Result<(), String> {
+    for (spec, desc) in table {
         if session.resolve(spec).is_ok() {
             continue; // already mounted — the embedder's (or an earlier) mount wins
         }
@@ -392,9 +459,90 @@ fn resolve_deps(
         session
             .register_module(spec, dep_module)
             .map_err(|e| e.to_string())?;
+        record_peers(session, spec, &dm);
+        mounted.insert(spec.clone(), dep_dir.clone());
         visiting.push(dep_dir.clone());
-        resolve_deps(session, &dep_dir, &dm, visiting)?;
+        // a dep's dev-deps are NEVER walked — pass 2 is root-only, so a
+        // consumer's world never contains another pkg's dev table
+        resolve_deps(session, &dep_dir, &dm, visiting, mounted)?;
         visiting.pop();
+    }
+    Ok(())
+}
+
+/// Pass 3 (RFC 0045 §3) — the peer gate, ONE post-closure pass over the
+/// recorded peer declarations:
+///
+/// - required peer absent → the loud D1 mount error: names the pkg, the
+///   peer, and the fix. Never auto-pulled — the consumer supplies.
+/// - peer present (any reason) → the pkg's group file (the descriptor's
+///   `lib`, an impl-only `.rut`) is appended to its source —
+///   presence-based mounting, groups in peer-name order after the base.
+/// - optional peer absent → inert; the group simply never mounts.
+///
+/// The program root's own peer paths are read and name-checked even
+/// when dev-deps already supplied presence — a broken path is the loud
+/// D3 packaging-bug error at the pkg's own build (matrix row 6). A
+/// dep's peer paths are never read: presence is by NAME
+/// (first-mount-wins already guarantees the consumer's own path won),
+/// so a broken peer path is inert for an optional peer and unreachable
+/// for a required one (its absence is D1's business, not the path's).
+fn run_peer_gate(
+    session: &mut Session,
+    root: &str,
+    mounted: &BTreeMap<String, std::path::PathBuf>,
+) -> Result<(), String> {
+    // collected first, applied after — the registry borrows the session
+    let mut appends: Vec<(String, String)> = Vec::new();
+    for (pkg, peers) in session.peer_decls() {
+        let Some(pkg_dir) = mounted.get(pkg) else {
+            return Err(format!("pkg `{pkg}` declares `[peer-deps]` but is not mounted"));
+        };
+        for (peer, decl) in peers {
+            if pkg.as_str() == root {
+                // self-build: the path must resolve and name the peer —
+                // even when dev-deps already supplied presence
+                let peer_dir = pkg_dir.join(&decl.path);
+                match read_manifest(&peer_dir) {
+                    Ok(dm) if dm.name.as_deref() == Some(peer.as_str()) => {}
+                    Ok(dm) => {
+                        return Err(format!(
+                            "pkg `{pkg}`'s [peer-deps] entry `{peer}` points at `{path}` — the manifest there names it `{actual}` (a packaging bug in {pkg}; RFC 0045 §3)",
+                            path = decl.path,
+                            actual = dm.name.as_deref().unwrap_or("<unnamed>"),
+                        ));
+                    }
+                    Err(_) => {
+                        return Err(format!(
+                            "pkg `{pkg}`'s [peer-deps] entry `{peer}` points at `{path}` — cannot read a manifest there (a packaging bug in {pkg}; RFC 0045 §3)",
+                            path = decl.path,
+                        ));
+                    }
+                }
+            }
+            if session.resolve(peer).is_err() {
+                if decl.optional {
+                    continue; // inert — the group simply never mounts
+                }
+                // D1 (RFC 0045 §3): loud at mount, naming pkg + peer + fix
+                return Err(format!(
+                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.toml` `[deps]` (RFC 0045 §3)"
+                ));
+            }
+            let Some(lib) = &decl.lib else {
+                continue; // presence declared, no integration file to mount
+            };
+            let group_path = pkg_dir.join(lib);
+            let text = std::fs::read_to_string(&group_path).map_err(|_| {
+                format!(
+                    "pkg `{pkg}`'s [peer-deps] entry `{peer}` names the group `{lib}` — cannot read it (a packaging bug in {pkg}; RFC 0045 §3)"
+                )
+            })?;
+            appends.push((pkg.clone(), text));
+        }
+    }
+    for (pkg, text) in appends {
+        session.append_source(&pkg, &text).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -403,6 +551,13 @@ fn resolve_deps(
 /// an EXISTING session: the programmatic counterpart of a manifest's
 /// dep walk (native hosts, tests, plugin loaders). Returns the
 /// package's own name. A name already mounted wins (RFC 0029 §4).
+///
+/// This is an OFFER to someone else's program, not "building the pkg
+/// itself": no dev-deps are mounted (pass 2 is root-only) and the peer
+/// gate does not run here — the embedder's world grows incrementally,
+/// so presence is a program-closure property the program's own
+/// `load_dir_session`/compile owns (RFC 0045 §3). The pkg's peer
+/// declarations are still recorded for the session's registry.
 pub fn mount_dir(session: &mut Session, dir: &Path) -> Result<String, String> {
     let manifest = read_manifest(dir)?;
     let name = manifest
@@ -416,8 +571,10 @@ pub fn mount_dir(session: &mut Session, dir: &Path) -> Result<String, String> {
     session
         .register_module(&name, module)
         .map_err(|e| e.to_string())?;
+    record_peers(session, &name, &manifest);
     let mut visiting = vec![dir.to_path_buf()];
-    resolve_deps(session, dir, &manifest, &mut visiting)?;
+    let mut mounted = BTreeMap::new(); // the gate's map — not this path's pass
+    resolve_deps(session, dir, &manifest, &mut visiting, &mut mounted)?;
     Ok(name)
 }
 

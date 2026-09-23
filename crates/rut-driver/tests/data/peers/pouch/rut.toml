@@ -1,0 +1,8 @@
+# pouch — the hermetic stand-in (RFC 0045 fixtures): a generic class
+# with one method, shaped like the real pkg (a generic export splices
+# into consumers). Rides `base` so T8's peer-of-peer chain is real.
+name = "pouch"
+entry.lib = "./pouch.rut"
+
+[deps]
+base = { path = "../base" }

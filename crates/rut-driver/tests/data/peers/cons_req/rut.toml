@@ -1,0 +1,8 @@
+# T5 (matrix row 1): a REQUIRED peer the consumer did not supply — D1
+# loud at mount, naming the pkg, the peer, and the fix; never
+# auto-pulled.
+name = "cons_req"
+entry.lib = "./cons.rut"
+
+[deps]
+json_required = { path = "../json_required" }

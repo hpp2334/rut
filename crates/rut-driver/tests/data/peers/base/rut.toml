@@ -1,0 +1,5 @@
+# base — the core-shaped base pkg (RFC 0045 fixtures, T8's chain):
+# one concrete helper the pouch-shaped pkg rides, so the T8 chain has a
+# real dep walk under it.
+name = "base"
+entry.lib = "./base.rut"

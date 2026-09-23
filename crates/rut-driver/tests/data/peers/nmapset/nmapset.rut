@@ -1,0 +1,16 @@
+// nmapset — the hermetic stand-in (RFC 0045 fixtures): a two-param
+// generic class with one method.
+pub class Map<K, V> {
+    keys: [K];
+    vals: [V];
+}
+
+impl Map<K, V> {
+    pub fn single(k: K, v: V) -> Self {
+        return Self { keys: [k], vals: [v] };
+    }
+
+    pub fn first_key(self) -> K {
+        return self.keys[0];
+    }
+}

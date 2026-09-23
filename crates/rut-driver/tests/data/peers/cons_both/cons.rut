@@ -1,0 +1,13 @@
+// T3's consumer: both impl sets dispatch — Vec and Map ride json's
+// spliced unit (both groups mounted), so both resolve locally.
+use json::{JsonSerialize};
+
+fn go_vec() -> str {
+    let v = Vec<str>.filled("x", 2);
+    return v.json_serialize();
+}
+
+fn go_map() -> str {
+    let m = Map<str, i64>.single("k", 1);
+    return m.json_serialize();
+}

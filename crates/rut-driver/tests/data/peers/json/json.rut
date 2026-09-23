@@ -1,0 +1,19 @@
+// json — the dep-kinds fixture base (RFC 0045): the trait and every
+// public name live HERE; the base is pouch-free by law (the extraction
+// constraint), so json mounts light when no peer is present. The
+// peer-gated integration files are the impl-only groups beside this
+// file — they append to THIS module's source when the peer is present.
+pub trait JsonSerialize {
+    fn json_serialize(self) -> str;
+}
+
+// the base's own impl: json's surface works with zero peers mounted
+impl JsonSerialize for str {
+    fn json_serialize(self) -> str {
+        return self;
+    }
+}
+
+pub fn encode_str(s: str) -> str {
+    return s.json_serialize();
+}

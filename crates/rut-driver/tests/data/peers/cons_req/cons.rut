@@ -1,0 +1,6 @@
+// T5's consumer: json_required's surface only — nmapset never named.
+use json_required::{JsonSerialize, encode_str};
+
+fn via_helper() -> str {
+    return encode_str("hi");
+}

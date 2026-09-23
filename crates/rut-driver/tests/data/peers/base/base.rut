@@ -1,0 +1,5 @@
+// base — the core-shaped base pkg (RFC 0045 fixtures): one concrete
+// helper, no generics, linked like `core`.
+pub fn base_tag() -> str {
+    return "base";
+}

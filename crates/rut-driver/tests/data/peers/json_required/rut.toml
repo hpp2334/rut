@@ -1,0 +1,8 @@
+# json_required — T5's variant: a REQUIRED peer (no `optional` — peers
+# are required by default). The consumer must supply `nmapset` in its
+# own `[deps]`; absence is the loud D1 mount error.
+name = "json_required"
+entry.lib = "./json.rut"
+
+[peer-deps]
+nmapset = { path = "../nmapset" }

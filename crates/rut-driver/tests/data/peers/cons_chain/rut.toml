@@ -1,0 +1,9 @@
+# T8: peer-of-peer — the consumer supplies json AND pouch; pouch rides
+# base. The gate is ONE post-closure pass (base included), and groups
+# add no new pkg names, so no fixpoint is needed.
+name = "cons_chain"
+entry.lib = "./cons.rut"
+
+[deps]
+json  = { path = "../json" }
+pouch = { path = "../pouch" }

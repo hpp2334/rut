@@ -1,0 +1,9 @@
+// the nmapset integration group (RFC 0045 §3): impl-only, like the
+// pouch group. Mounted when `nmapset` is in the program's closure.
+use nmapset::{Map};
+
+impl JsonSerialize for Map<K, V> {
+    fn json_serialize(self) -> str {
+        return "[map]";
+    }
+}

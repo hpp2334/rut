@@ -1,0 +1,12 @@
+// the pouch integration group (RFC 0045 §3): impl-ONLY — it declares
+// no new public names, so the only way to reach it is trait dispatch on
+// pouch's Vec (never a bare unresolved-name). Mounted by the peer gate
+// when `pouch` is in the program's closure; its `use` joins the unit's
+// use list through the ordinary scan of the combined source.
+use pouch::{Vec};
+
+impl JsonSerialize for Vec<T> {
+    fn json_serialize(self) -> str {
+        return "[vec]";
+    }
+}

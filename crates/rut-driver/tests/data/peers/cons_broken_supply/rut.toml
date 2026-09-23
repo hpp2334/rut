@@ -1,0 +1,9 @@
+# T7 (§2.2, presence is by NAME): the consumer supplies pouch by its
+# OWN path — the broken peer path is never read and the group mounts
+# anyway (first-mount-wins already guaranteed the consumer's path won).
+name = "cons_broken_supply"
+entry.lib = "./cons.rut"
+
+[deps]
+json_broken = { path = "../json_broken" }
+pouch       = { path = "../pouch" }

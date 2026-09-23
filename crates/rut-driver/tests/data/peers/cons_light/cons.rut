@@ -1,0 +1,10 @@
+// T1's consumer: json's own surface only — zero peer names referenced.
+use json::{JsonSerialize, encode_str};
+
+fn direct(s: str) -> str {
+    return s.json_serialize();
+}
+
+fn via_helper() -> str {
+    return encode_str("hello");
+}

@@ -1,0 +1,11 @@
+# T11 (D4, end-to-end): the same name rides `[deps]` AND
+# `[peer-deps]` — the cross-table collision is a manifest error naming
+# both rows, loud through the loader path.
+name = "bad_d4"
+entry.lib = "./cons.rut"
+
+[deps]
+pouch = { path = "../pouch" }
+
+[peer-deps]
+pouch = { path = "../pouch", optional = true }

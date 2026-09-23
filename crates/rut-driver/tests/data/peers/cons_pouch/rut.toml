@@ -1,0 +1,9 @@
+# T2 (matrix row 4): the peer is PRESENT in the consumer's closure →
+# the integration group mounts automatically (presence-based) and its
+# impl dispatches; placement green.
+name = "cons_pouch"
+entry.lib = "./cons.rut"
+
+[deps]
+json  = { path = "../json" }
+pouch = { path = "../pouch" }

@@ -1,0 +1,10 @@
+# T4 (matrix row 3, phase-1 half): the consumer REFERENCES pouch while
+# pouch is absent. Today that miss is the bare NoModule text; phase 2's
+# D2 upgrade replaces it with the dedicated missing-peer diag — this
+# fixture pins the registry handoff (json's peer declaration is
+# session-resident) and the baseline.
+name = "cons_ref"
+entry.lib = "./cons.rut"
+
+[deps]
+json = { path = "../json" }

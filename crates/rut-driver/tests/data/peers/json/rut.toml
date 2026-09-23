@@ -1,0 +1,15 @@
+# json — the dep-kinds fixture pkg: the PINNED grammar (RFC 0045 §2,
+# the survey's §0 shape) plus the §2.3 `lib` group keys. The optional
+# peers carry the impl-only integration files; the dev-deps guarantee
+# presence while building json itself — the sanctioned both-kinds
+# pairing (T6/T9 self-build on this same manifest).
+name = "json"
+entry.lib = "./json.rut"
+
+[peer-deps]
+pouch   = { path = "../pouch",   optional = true, lib = "./serde_pouch.rut" }
+nmapset = { path = "../nmapset", optional = true, lib = "./serde_nmapset.rut" }
+
+[dev-deps]
+pouch   = { path = "../pouch" }
+nmapset = { path = "../nmapset" }

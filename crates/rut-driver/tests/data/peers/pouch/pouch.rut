@@ -1,0 +1,23 @@
+// pouch — the hermetic stand-in (RFC 0045 fixtures): a generic class
+// with one method. Its generic export makes it an inline unit — the
+// world the real pouch lives in.
+use base::{base_tag};
+
+pub class Vec<T> {
+    items: [T];
+}
+
+impl Vec<T> {
+    pub fn filled(v: T, n: i32) -> Self {
+        let mut items: [T] = [v; n];
+        return Self { items: items };
+    }
+
+    pub fn first(self) -> T {
+        return self.items[0];
+    }
+
+    pub fn pouch_tag() -> str {
+        return base_tag();
+    }
+}

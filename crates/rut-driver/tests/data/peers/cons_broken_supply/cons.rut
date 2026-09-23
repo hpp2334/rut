@@ -1,0 +1,9 @@
+// T7's presence-by-name consumer: the group's impl dispatches even
+// though json_broken's own peer path is broken — Vec rides json_broken's
+// spliced unit (no direct `use pouch`: the T10 shape is avoided).
+use json_broken::{JsonSerialize};
+
+fn go() -> str {
+    let v = Vec<i64>.filled(7, 3);
+    return v.json_serialize();
+}

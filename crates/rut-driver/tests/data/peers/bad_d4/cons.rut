@@ -1,0 +1,4 @@
+// bad_d4's entry — never loads: the manifest collides first (D4).
+pub fn go() -> i32 {
+    return 0;
+}

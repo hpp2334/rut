@@ -1,0 +1,8 @@
+# T7 (matrix row 6, consumer half): json_broken's peer path is broken,
+# but consumer-mode peer paths are NEVER read — the optional peer is
+# absent (inert), the group never mounts, silent success.
+name = "cons_broken"
+entry.lib = "./cons.rut"
+
+[deps]
+json_broken = { path = "../json_broken" }

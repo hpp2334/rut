@@ -1,0 +1,6 @@
+// T7's consumer: json_broken's base surface only.
+use json_broken::{JsonSerialize, encode_str};
+
+fn via_helper() -> str {
+    return encode_str("hi");
+}
