@@ -97,8 +97,18 @@ fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
 
 fn main() {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/digest.rut")).unwrap();
-    // the app's libs: core+calc (engine) and `pouch` — a third-party pkg
-    // the app declares, mounted from the toolchain tree
+    // the app's libs: core+calc (engine) and `pouch` + `json` —
+    // third-party pkgs the app declares, mounted from the toolchain
+    // tree (json after pouch, the std order). This consumer mounts json
+    // LIGHT (the base only — rut/json/rut.toml's own comment): the
+    // encode path below uses json's traits + writer directly and needs
+    // no peer group, so `assemble_peers` is deliberately not called.
+    // (This DOM's children are `Vec<opaque>`; the peer-gated
+    // `impl JsonSerialize for Vec<T>` instantiated at T = opaque
+    // miscompiles — its element `x.encode(w)` binds the `?T` row's
+    // uncompiled concrete twin and the binary fails load-time verify.
+    // An engine-side devirtualization gap, disclosed in the batch
+    // commit; a consumer encoding REAL element types wants the group.)
     let mut session = rut_driver::Session::new();
     rut_driver::mount_std(&mut session);
     rut_driver::mount_dir(
@@ -106,6 +116,11 @@ fn main() {
         std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch")),
     )
     .expect("mount pouch");
+    rut_driver::mount_dir(
+        &mut session,
+        std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/json")),
+    )
+    .expect("mount json");
     let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "digests");
     assert!(out.diags.is_empty());
     let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();

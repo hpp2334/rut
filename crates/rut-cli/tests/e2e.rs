@@ -1889,6 +1889,13 @@ fn dbg_digest() {
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
     .expect("mount pouch");
+    // json mounted light (the base only — the encode half's traits and
+    // writer; no peer group needed)
+    rut_driver::mount_dir(
+        &mut s,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/json"),
+    )
+    .expect("mount json");
     let out = rut_driver::compile_module_in(&mut s, &src, rut_parser::Mode::Impl, "digests");
     assert!(out.diags.is_empty(), "{:?}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
     println!("{}", out.ir_dump);

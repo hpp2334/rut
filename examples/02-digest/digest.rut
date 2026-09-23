@@ -1,5 +1,6 @@
 use pouch::{ Vec };
 use calc::{ Math };
+use json::{ encodeJson, EncodeJsonError, JsonSerialize, JsonWriter };
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
 //
 // The second algorithmic example: everything here operates on `bytes`
@@ -653,6 +654,12 @@ entry fn digest(algo: str, data: bytes) -> (bytes, str) {
 // expressible — so the tree is a tagged union by hand (JTag + Json),
 // with children boxed in `opaque` (RFC 0014) to break the recursion:
 // `Json` contains `Vec<opaque>`, each opaque boxes another `Json`.
+//
+// Since the rut-json batch's phase 2, the ENCODE half rides the std
+// json pkg (`impl JsonSerialize for Json` below — this example now
+// teaches the lib); the DECODE half stays the private cursor parser
+// until json's schema-less `JsonValue` lands (survey §2.10 keeps it as
+// the err-channel batch's historical proof).
 
 enum JTag { Null, False, True, Num, Str, Arr, Obj }
 
@@ -921,53 +928,53 @@ fn unwrap_box(r: (opaque, str)) -> opaque {
     return r.0;
 }
 
-/// Encode a tree back to compact JSON.
-fn jencode(j: Json) -> str {
-    let mut out = "";
-    when (j.tag) {
-        JTag.Null -> { out = "null"; },
-        JTag.False -> { out = "false"; },
-        JTag.True -> { out = "true"; },
-        JTag.Num -> { out = j.num; },
-        JTag.Str -> { out = jquote(j.str); },
-        JTag.Arr -> {
-            let mut s = "[";
-            for (let i = 0; i < j.arr.len(); i += 1) {
-                if (i > 0) { s = f"{s},"; }
-                let ae = opaque.downcast<Json>(j.arr[i]);
-                s = f"{s}{jencode(ae)}";
-            }
-            out = f"{s}]";
-        },
-        JTag.Obj -> {
-            let rb = "}";
-            let mut s = "{";
-            for (let i = 0; i < j.keys.len(); i += 1) {
-                if (i > 0) { s = f"{s},"; }
-                let vs = jencode(opaque.downcast<Json>(j.vals[i]));
-                s = f"{s}{jquote(j.keys[i])}:{vs}";
-            }
-            out = f"{s}{rb}";
-        },
+/// Encode a tree back to compact JSON — through the std json pkg's
+/// writer. This is the rut-json batch's phase-2 migration (survey
+/// §2.10): the private `jencode`/`jquote` f-string economy is gone,
+/// and this impl drives `JsonWriter` exactly as a user type would —
+/// RFC 0012's orphan-legal direction (json owns the trait, `Json` is
+/// this file's). Byte-identical to the old encoder on every input the
+/// golden tests pin: same member order, same verbatim number lexemes,
+/// same minimal escapes. Two disclosed deltas: (1) the old per-char
+/// `jquote` vec is the writer's RFC 8259 escape policy now — a raw C0
+/// control (which the old encoder passed through unescaped) renders
+/// `\u00xx` (stricter, never corrupt); (2) the old encoder recursed
+/// unboundedly — a deeper-than-128 tree now answers the writer's
+/// recoverable `Depth` err instead of exhausting the call stack.
+impl JsonSerialize for Json {
+    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        when (self.tag) {
+            JTag.Null -> { w.write_raw("null"); },
+            JTag.False -> { w.write_raw("false"); },
+            JTag.True -> { w.write_raw("true"); },
+            JTag.Num -> { w.write_raw(self.num); },
+            JTag.Str -> { w.write_str(self.str); },
+            JTag.Arr -> {
+                w.begin_array();
+                for (let i = 0; i < self.arr.len(); i += 1) {
+                    // downcast binds ?Json; the match law makes the
+                    // coerced binding the box's inner cell (a method
+                    // call ON the ?Json form is "CallM to a non-method"
+                    // in the verifier — coerce first, then dispatch)
+                    let ae: Json = opaque.downcast<Json>(self.arr[i]);
+                    let e = ae.encode(w);
+                    if (e != nil) { return e; }
+                }
+                w.end_array();
+            },
+            JTag.Obj -> {
+                w.begin_object();
+                for (let i = 0; i < self.keys.len(); i += 1) {
+                    w.key(self.keys[i]);
+                    let ve: Json = opaque.downcast<Json>(self.vals[i]);
+                    let e = ve.encode(w);
+                    if (e != nil) { return e; }
+                }
+                w.end_object();
+            },
+        }
+        return nil;
     }
-    return out;
-}
-
-/// Quote + minimally escape a JSON string body.
-fn jquote(s: str) -> str {
-    let q = "\"";
-    let body: Vec<str> = Vec.new();
-    for (let c of s) {
-        if (c == "\"") { body.push("\\\""); }
-        else if (c == "\\") { body.push("\\\\"); }
-        else if (c == "\n") { body.push("\\n"); }
-        else if (c == "\r") { body.push("\\r"); }
-        else if (c == "\t") { body.push("\\t"); }
-        else if (c == "\b") { body.push("\\b"); }
-        else if (c == "\f") { body.push("\\f"); }
-        else { body.push(f"{c}"); }
-    }
-    return f"{q}{join_chars(body)}{q}";
 }
 
 /// The crossing shape (err-channel phase 3): the value component is
@@ -996,7 +1003,17 @@ fn json_parse(s: str) -> (opaque, str) {
 }
 
 entry fn json_enc(o: opaque) -> str {
-    return jencode(opaque.downcast<Json>(o));
+    let j = opaque.downcast<Json>(o);
+    let (s, e) = encodeJson(j);
+    if (e != nil) {
+        // unreachable for any tree this file builds (the private
+        // decoder caps depth at 64; the writer's cap is 128) — and the
+        // entry's str surface has no err slot to carry the writer's
+        // Depth/NotFinite anyway
+        return "";
+    }
+    let out: str = s;
+    return out;
 }
 
 entry fn json_roundtrip(s: str) -> (str, str) {
@@ -1004,8 +1021,14 @@ entry fn json_roundtrip(s: str) -> (str, str) {
     if (v.1 != "") {
         return ("", v.1);
     }
-        let vv = opaque.downcast<Json>(v.0);
-    return (jencode(vv), "");
+    let vv = opaque.downcast<Json>(v.0);
+    let (out, e) = encodeJson(vv);
+    if (e != nil) {
+        let err: EncodeJsonError = e;
+        return ("", f"json: encode failed at {err.at}");
+    }
+    let text: str = out;
+    return (text, "");
 }
 
 /// A hand-built document for the embedder demo.

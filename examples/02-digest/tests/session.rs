@@ -22,6 +22,20 @@ fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch"),
     )
     .expect("mount pouch");
+    // json after pouch (the std order). Mounted LIGHT (the base only —
+    // rut/json/rut.toml's own comment): the encode path uses json's
+    // traits + writer directly and needs no peer group, so
+    // `assemble_peers` is deliberately not called. (This DOM's children
+    // are `Vec<opaque>`; the peer-gated `impl JsonSerialize for Vec<T>`
+    // instantiated at T = opaque miscompiles — its element
+    // `x.encode(w)` binds the `?T` row's uncompiled concrete twin and
+    // the binary fails load-time verify. An engine-side
+    // devirtualization gap, disclosed in the batch commit.)
+    rut_driver::mount_dir(
+        &mut s,
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/json"),
+    )
+    .expect("mount json");
     let out = rut_driver::compile_module_in(&mut s, SRC, rut_parser::Mode::Impl, "digests");
     assert!(out.diags.is_empty(), "{}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
     let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();

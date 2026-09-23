@@ -15,7 +15,13 @@ the shapes RFC 0023 §2 lets cross the host boundary:
 - **hashmap hash keys** — CRC-32 (reflected, bitwise, table-free),
   FNV-1a 32/64, djb2, sdbm
 - **JSON** — decode to an `opaque` tree, encode back, round-trip;
-  numbers are stored as verbatim lexemes so round-trips are exact
+  numbers are stored as verbatim lexemes so round-trips are exact.
+  Since the rut-json batch the **encode half rides the std `json` pkg**
+  (`rut/json`): `impl JsonSerialize for Json` drives the pkg's
+  `JsonWriter` — the exact shape a user type spells (RFC 0012's
+  orphan-legal direction: json owns the trait, `Json` is this file's).
+  The decode half stays the private cursor parser until json's
+  schema-less `JsonValue` lands
 
 The host verifies everything two independent ways:
 
@@ -37,15 +43,15 @@ b64([102, 111, 111, 98, 97, 114], url=false) = Zm9vYmFy  OK
 b64([102, 111, 111, 98, 97, 114], url=true) = Zm9vYmFy  OK
 b64([114, 117], url=false) = cnU=  OK
 digests, rut vs crates:
-  md5     empty         fuel    7432  d41d8cd98f00b204e9800998ecf8427e  OK
-  sha1    empty         fuel   11541  da39a3ee5e6b4b0d3255bfef95601890afd80709  OK
-  sha256  empty         fuel   18495  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  OK
-  sha512  empty         fuel   26460  cf83e135...7af927da3e  OK
-  md5     "abc"         fuel    7432  900150983cd24fb0d6963f7d28e17f72  OK
-  sha1    "abc"         fuel   11541  a9993e364706816aba3e25717850c26c9cd0d89d  OK
-  sha256  "abc"         fuel   18495  ba7816bf...f20015ad  OK
-  sha512  "abc"         fuel   26460  ddaf35a1...4ca49f  OK
-  md5     1 KiB lcg(42) fuel   109256  d6c1961991b0106647e36ca4ba12d345  OK
+  md5     empty         fuel    8419  d41d8cd98f00b204e9800998ecf8427e  OK
+  sha1    empty         fuel   12600  da39a3ee5e6b4b0d3255bfef95601890afd80709  OK
+  sha256  empty         fuel   18878  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  OK
+  sha512  empty         fuel   27766  cf83e135...7af927da3e  OK
+  md5     "abc"         fuel    8413  900150983cd24fb0d6963f7d28e17f72  OK
+  sha1    "abc"         fuel   12588  a9993e364706816aba3e25717850c26c9cd0d89d  OK
+  sha256  "abc"         fuel   18866  ba7816bf...f20015ad  OK
+  sha512  "abc"         fuel   27760  ddaf35a1...4ca49f  OK
+  md5     1 KiB lcg(42) fuel  113117  d6c1961991b0106647e36ca4ba12d345  OK
   ...
 sample_doc -> {"name":"rut","version":0.2,"tags":["tiny","fast","verified"],"meta":{"ok":true,"lines":607}}
 serde_json parses it: OK
@@ -63,7 +69,7 @@ json_dec("{,}") = "json: expected a key string at index 1"
 json_dec("{\"a\":1}") = ok (true)
 digest("md4")   = "unknown algorithm: md4"
 every row agrees: OK
-fuel used: 1007145 of Some(50000000)
+fuel used: 1014105 of Some(50000000)
 ```
 
 ## What it demonstrates
@@ -86,13 +92,24 @@ fuel used: 1007145 of Some(50000000)
   50 M fuel; the 64 KiB stress test raises the same session to 500 M
 - **the FNV/djb2/sdbm trio never shifts 64-bit words** — a deliberate
   demonstration that `&*`/`&+`/`^` alone carry the classic hash keys
+- **the serde model, lived in** (the rut-json batch): a user type
+  implements another pkg's trait — `impl JsonSerialize for Json` — and
+  the lib's writer does the byte work (the f-string accumulator, the
+  RFC 8259 escape policy, the 128-level depth law). The lib teaches
+  the shape every json consumer spells
 
 ## Limitations (honest ones)
 
-- JSON `\uXXXX` escapes are rejected with a clear error (rut strings
-  iterate `char`s and there is no codepoint→`char` constructor yet);
-  UTF-8 content itself round-trips fine
-- JSON strings do not validate raw control characters < 0x20, and the
-  encoder escapes only `" \ \n \r \t`
+- the private decoder still rejects JSON `\uXXXX` escapes with a clear
+  error (it waits for json's schema-less `JsonValue` to land, survey
+  §2.10); UTF-8 content itself round-trips fine
+- the private decoder does not validate raw control characters < 0x20
+  in strings; the lib's writer does the right thing on the way OUT —
+  it escapes the full RFC 8259 set, so a smuggled control re-encodes
+  as `\u00xx` (the old private encoder passed it through unescaped)
+- the encode side is the lib's writer: a tree deeper than 128 levels
+  answers a recoverable `Depth` err (the old private encoder recursed
+  unboundedly); decoded docs can never exceed the decoder's own cap
+  of 64, so this is unreachable through `json_roundtrip`
 - base64 decode is permissive about padding position beyond "no data
   after `=`" and "length % 4 != 1"

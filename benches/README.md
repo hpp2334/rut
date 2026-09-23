@@ -94,6 +94,7 @@ against the reference in `workloads/expected.json`.
 | `nmap-hashset` | `HashSet<i32>` (**nmapset**): adds, dup adds, probes, removals, intersection count — the op stream of the removed `hashset` mapset row | n = 100 000 | checksum `21500055` |
 | `nmap-knucleotide` | k-mer counting over `HashMap<str, i32>` (**nmapset**): 12-mer fill + fragment probes — the op stream of the removed `knucleotide` mapset row | seq = 200 000 | checksum `2198604` |
 | `json-decode` | the digest JSON decode: char-split + parser minting one `opaque` box per JSON value (and per object key), plus a downcast fold over the tree — REPS reps of a large generated document (1 200 rows; ~34k boxes minted per rep, ~100k total) | doc ~204 KB, reps 3 | checksum `4502015958359127277` |
+| `json-roundtrip` | the **std json pkg's** row (rut-json batch): the SAME generated document as `json-decode` (the LCG generator ported verbatim), decoded DIRECT into typed rows (`decodeJson<Vec<DocRow>>` — user `impl JsonDeserialize` dispatching json's traits) and re-encoded (`encodeJson`), then a value fold; the rut side is a module dir (`[deps] json + pouch + ink`) and the peer gate assembles group-pouch (the `Vec` field impls are load-bearing). The checksum is defined over the ROUND-TRIPPED VALUES, not lexemes — string codepoints, i64 values, bool 0/1, f64 via its shortest-round-trip decimal (rut has no f64↔u64 bitcast — the nmap precedent — so the bit-pattern fold in the survey's register is normalized to the injective decimal fold, mirrored exactly by the JS twin's `String(v)`); the encode output rides a rep-stable length assert, not the pin | doc ~204 KB, reps 3 | checksum `1960875332163557684` |
 | `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
 | `kmer-view` | the `nmap-knucleotide` k-mer counting keyed through `nmapset::HashMap`'s **range methods** (strings-round1 phase 2 — the sv lanes: keys cross as borrowed byte windows of the sequence, no key cell minted; see the performance log) | seq = 200 000 | checksum `2198604` — the `nmap-knucleotide` pin; parity is the gate, no separate line |
 | `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
@@ -155,6 +156,61 @@ touch to any surviving row.
   (`734932704` / `1264308351` / `21500055` / `2198604`) — they were
   pinned equal row-for-row while both pkg existed, so the pins did not
   move.
+
+## Performance log — json-roundtrip: the std json pkg's landing (Sep 2026)
+
+New row for the rut-json batch's phase 2 (the pkg landed in phase 1;
+the survey's §2.11 is the pre-registered method). `json-roundtrip`
+ports `json-decode`'s generator VERBATIM (same LCG, seed 42, same
+draws — identical data) and drives the same document through the std
+pkg: `decodeJson<Vec<DocRow>>` DIRECT into typed rows, then
+`encodeJson`, then the value fold. The JS twin does the same job with
+the engine's own `JSON.parse` + `JSON.stringify` and folds the same
+values (BigInt.asIntN discipline). All three runtimes agree on the
+checksum (twin gate, `expected.json` pins it):
+
+| workload        | rut net | qjs net | node net | fuel      | VM heap peak        |
+|-----------------|---------|---------|----------|-----------|---------------------|
+| json-roundtrip  | 930.9 ms| 40.3 ms | 43.0 ms  | 60,933,262| 10.18 MiB (10,674,377 B) |
+
+(5 paired sessions × 7 reps, warmup 1; medians. rut net spread across
+the sessions +2.4%, qjs +3.4%, node +6.7% — the host drifts a few
+percent between sessions on this host, the README's standing ±8-13%
+note below applies; fuel and heap were bit-identical in all 5
+sessions. rut/qjs = 23.1×, rut/node = 21.7×.)
+
+**The honest scoreboard:** json is still the suite's weakest lane vs
+qjs — the pkg's DIRECT decode is schema-driven and mints only the
+program's own values, but every classify/carve is interpreter
+dispatch, while the qjs twin rides the engine's own `JSON.parse` +
+`JSON.stringify`. The row is the baseline the json-side engine phases
+(per-char dispatch, the codepoint split, the writer accumulator) will
+measure against; no such phase is in this batch.
+
+Disclosed on the landing:
+
+- the fold normalization (the survey registered "f64 bit pattern
+  reinterpreted i64"; rut has no f64↔u64 bitcast — `rut-std/src/nmap.rs`
+  documents the same gap at its host boundary — so f64s fold their
+  shortest-round-trip decimal through the string fold; injective on
+  doubles, mirrored bit-for-bit by the JS twin at this doc's
+  magnitudes, and the twin agreement proves it for all 3 600 scores);
+- the twin's `JSON.stringify` addition (the register's twin sentence
+  names parse + fold only; a roundtrip row's same-job twin stringifies,
+  kept live by a rep-stable length assert on both sides);
+- `examples/02-digest`'s encode half migrated onto the lib in the same
+  phase (survey §2.10): `impl JsonSerialize for Json` replaces the
+  private `jencode`/`jquote`; the example's own golden tests (serde_json
+  cross-checks, canonical shape, idempotence, the `sample_doc` byte
+  pin) prove the output byte-identical. Two disclosed deltas there:
+  raw C0 controls now re-encode as `\u00xx` (stricter than the old
+  per-char quote — never corrupt), and a deeper-than-128 tree answers
+  the writer's recoverable `Depth` err instead of unbounded recursion;
+- the old `json-decode` row is untouched — its probe pins re-measured
+  bit-identical this batch (fuel 111,322,915, heap 34,377,027 B,
+  checksum `4502015958359127277`), and no other row moved: the full
+  suite after landing is 29 workloads × {rut, qjs, node} all equal to
+  `expected.json`, exit 0.
 
 ## Performance log — mapset-perf engine phases (Sep 2026)
 

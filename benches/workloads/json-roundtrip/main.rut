@@ -1,0 +1,424 @@
+use ink::{ Logger };
+use pouch::{ Vec };
+use json::{
+    decodeJson, encodeJson, DecodeErrorKind, DecodeJsonError, EncodeJsonError,
+    JsonDeserialize, JsonReader, JsonSerialize, JsonWriter,
+};
+
+// json-roundtrip — the std json pkg's bench row (rut-json batch,
+// phase 2; docs/rut-json-survey.md §2.11 is this file's contract).
+//
+// The document generator is json-decode's gen_doc ported VERBATIM (same
+// LCG, seed 42, same draws, same order — the generator is data, and
+// identical data is what makes cross-row comparisons meaningful).
+// Scale identical: 1200 rows x 6 vals x 3 reps, doc ~204 KB.
+//
+// Per rep: `decodeJson<Vec<DocRow>>(&doc)` DIRECT into typed rows (the
+// schema decides the grammar; no DOM), then `encodeJson(rows)` through
+// the same trait path, then the fold. This row is the first that
+// exercises std json end to end — and the peer model's own proof (the
+// rut.toml declares `[deps] json` + `[deps] pouch`; the gate assembles
+// group-pouch because pouch is present, and the `Vec<i64>`/`Vec<str>`
+// field encodes below dispatch through it).
+//
+// THE CHECKSUM (pre-registered): defined over the ROUND-TRIPPED
+// VALUES, not lexemes — strings fold codepoints
+// (`wrapping_mul(31).wrapping_add`), i64s fold their value, bools fold
+// 0/1, f64s fold their SHORTEST-ROUND-TRIP DECIMAL through the string
+// fold. One disclosed normalization against the register's "bit
+// pattern reinterpreted i64": rut has NO f64<->u64 bitcast (the
+// numeric `as` is a conversion, not a reinterpret — the same surface
+// gap the nmap pkg's host boundary documents,
+// crates/rut-std/src/nmap.rs:956), so the bit fold has no pure-rut
+// spelling. The shortest-round-trip decimal is injective on doubles,
+// so the fold distinguishes exactly the bit patterns the pin needs;
+// the JS twin's Number->String is the same shortest-repr algorithm and
+// at this doc's magnitudes both sides print the identical plain
+// decimal. Every rep asserts against the first.
+
+// ---------------------------------------------------------------- LCG ---
+// (verbatim from json-decode/main.rut)
+
+fn lcg(x: u32) -> u32 {
+    return x.wrapping_mul(1103515245).wrapping_add(12345);
+}
+
+fn alpha_vec() -> Vec<str> {
+    let a: Vec<str> = Vec.new();
+    for (let c of "abcdefghijklmnopqrstuvwx") {
+        a.push(f"{c}");
+    }
+    return a;
+}
+
+fn b2s(b: bool) -> str {
+    if (b) { return "true"; }
+    return "false";
+}
+
+// sign+magnitude draw -> JSON number text (never "-0"; both sides emit
+// the same digits for the same draw)
+fn val_text(sign: u32, mag: u32) -> str {
+    if (sign == 1 && mag != 0) {
+        return f"-{mag}";
+    }
+    return f"{mag}";
+}
+
+// ---------------------------------------------------------------- gen ---
+// (verbatim from json-decode/main.rut — every record draws in the fixed
+// order: id, name, active, score, six vals, tags, meta (rev + kind))
+
+fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
+    let parts: Vec<str> = Vec.new();
+    let mut x: u32 = 42;
+    for (let i = 0; i < rows; i += 1) {
+        if (i > 0) { parts.push(","); }
+        x = lcg(x);
+        let id = (((x >> 5) % 899998) as i32) + 100000;
+        x = lcg(x);
+        let na = ((x >> 3) % 24) as i32;
+        let nb = ((x >> 9) % 24) as i32;
+        x = lcg(x);
+        let ok = ((x >> 7) % 2) == 0;
+        x = lcg(x);
+        let si = (((x >> 11) % 9000) as i32) + 1000;
+        let sf = (((x >> 17) % 9000) as i32) + 1000;
+        x = lcg(x);
+        let v0 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v1 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v2 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v3 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v4 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let v5 = val_text((x >> 13) % 2, (x >> 19) % 100000);
+        x = lcg(x);
+        let ta1 = ((x >> 3) % 24) as i32;
+        let tb1 = ((x >> 9) % 24) as i32;
+        let ta2 = ((x >> 13) % 24) as i32;
+        let tb2 = ((x >> 21) % 24) as i32;
+        let ta3 = ((x >> 25) % 24) as i32;
+        let tb3 = ((x >> 1) % 24) as i32;
+        x = lcg(x);
+        let rev = (((x >> 7) % 9000) as i32) + 1000;
+        let ka = ((x >> 3) % 24) as i32;
+        let kb = ((x >> 9) % 24) as i32;
+        let row = f"{{\"id\":{id},\"name\":\"mm-{alpha[na]}{alpha[nb]}\",\"active\":{b2s(ok)},\"score\":{si}.{sf},\"vals\":[{v0},{v1},{v2},{v3},{v4},{v5}],\"tags\":[\"{alpha[ta1]}{alpha[tb1]}\",\"{alpha[ta2]}{alpha[tb2]}\",\"{alpha[ta3]}{alpha[tb3]}\"],\"note\":null,\"meta\":{{\"rev\":{rev},\"kind\":\"{alpha[ka]}{alpha[kb]}\"}}}}";
+        parts.push(row);
+    }
+    return f"[{string_join(parts.as_array())}]";
+}
+
+// -------------------------------------------------------- the row type ---
+//
+// The user story the impl matrix must demo (survey §2.6): the types are
+// THIS module's, the traits are json's — orphan-legal because the trait
+// is local (RFC 0012). The doc's fixed shape:
+//   {"id":I,"name":"mm-AB","active":B,"score":IIII.FFFF,
+//    "vals":[v0..v5],"tags":["ab","cd","ef"],"note":null,
+//    "meta":{"rev":R,"kind":"kl"}}
+
+struct DocMeta { rev: i64; kind: str; }
+struct DocRow {
+    id: i64;
+    name: str;
+    active: bool;
+    score: f64;
+    vals: Vec<i64>;
+    tags: Vec<str>;
+    note: ?i64;
+    meta: DocMeta;
+}
+
+impl JsonSerialize for DocMeta {
+    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.begin_object();
+        w.key("rev");
+        w.write_i64(self.rev);
+        w.key("kind");
+        w.write_str(self.kind);
+        w.end_object();
+        return nil;
+    }
+}
+
+// DocMeta's DECODE is not spelt as a trait impl here: the trait-static
+// form `DocMeta.decode(r)` is not an admitted receiver (struct types
+// aren't in the static-call receiver set), so DocRow's decode inlines
+// the shape directly onto the reader — see the "meta" arm below. The
+// ENCODE side rides normal method dispatch (`self.meta.encode(w)`).
+
+impl JsonSerialize for DocRow {
+    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.begin_object();
+        w.key("id");
+        w.write_i64(self.id);
+        w.key("name");
+        w.write_str(self.name);
+        w.key("active");
+        w.write_bool(self.active);
+        w.key("score");
+        w.write_f64(self.score);
+        w.key("vals");
+        let e = self.vals.encode(w);
+        if (e != nil) { return e; }
+        w.key("tags");
+        let e = self.tags.encode(w);
+        if (e != nil) { return e; }
+        w.key("note");
+        // the ?T row, spelled explicitly (the tree's law: deref then
+        // delegate — nil writes null, else the inner value's impl;
+        // a method call ON a ?T receiver nil-derefs at runtime, so the
+        // nil test is spelled out here)
+        if (self.note == nil) {
+            w.write_raw("null");
+        } else {
+            let nv: i64 = self.note;
+            let e = nv.encode(w);
+            if (e != nil) { return e; }
+        }
+        w.key("meta");
+        let e = self.meta.encode(w);
+        if (e != nil) { return e; }
+        w.end_object();
+        return nil;
+    }
+}
+
+impl JsonDeserialize for DocRow {
+    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        r.begin_object();
+        let mut id: ?i64 = nil;
+        let mut name: ?str = nil;
+        let mut active: ?bool = nil;
+        // `?bool == nil` is the nmapset-disclosed checker limit (the
+        // bool lane, rut/nmapset/nmapset.rut:373) — presence rides a
+        // flag instead
+        let mut have_active = false;
+        let mut score: ?f64 = nil;
+        let mut vals: ?Vec<i64> = nil;
+        let mut tags: ?Vec<str> = nil;
+        let mut note: ?i64 = nil;
+        let mut meta: ?DocMeta = nil;
+        while (r.more()) {
+            let k = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            when (k) {
+                "id" -> {
+                    let v = r.read_i64();
+                    if (r.failed()) { return (nil, r.error()); }
+                    id = v;
+                },
+                "name" -> {
+                    let v = r.read_str();
+                    if (r.failed()) { return (nil, r.error()); }
+                    name = v;
+                },
+                "active" -> {
+                    let v = r.read_bool();
+                    if (r.failed()) { return (nil, r.error()); }
+                    active = v;
+                    have_active = true;
+                },
+                "score" -> {
+                    let v = r.read_f64();
+                    if (r.failed()) { return (nil, r.error()); }
+                    score = v;
+                },
+                "vals" -> {
+                    let mut v = Vec<i64>.new();
+                    r.begin_array();
+                    while (r.more()) {
+                        let x = r.read_i64();
+                        if (r.failed()) { return (nil, r.error()); }
+                        v.push(x);
+                    }
+                    r.end_array();
+                    if (r.failed()) { return (nil, r.error()); }
+                    vals = v;
+                },
+                "tags" -> {
+                    let mut v = Vec<str>.new();
+                    r.begin_array();
+                    while (r.more()) {
+                        let x = r.read_str();
+                        if (r.failed()) { return (nil, r.error()); }
+                        v.push(x);
+                    }
+                    r.end_array();
+                    if (r.failed()) { return (nil, r.error()); }
+                    tags = v;
+                },
+                "note" -> {
+                    // the ?T row, spelled directly on the reader (survey
+                    // §2.6: null -> nil, else T)
+                    if (r.try_null()) {
+                        note = nil;
+                    } else {
+                        if (r.failed()) { return (nil, r.error()); }
+                        let v = r.read_i64();
+                        if (r.failed()) { return (nil, r.error()); }
+                        note = v;
+                    }
+                },
+                "meta" -> {
+                    // DocMeta's shape inlined onto the reader (the
+                    // trait-static form `DocMeta.decode(r)` is not an
+                    // admitted receiver here — struct types aren't in
+                    // the static-call receiver set, so the loop is
+                    // spelled directly, exactly the shape the trait fn
+                    // would run)
+                    r.begin_object();
+                    let mut rev: ?i64 = nil;
+                    let mut kind: ?str = nil;
+                    while (r.more()) {
+                        let mk = r.next_key();
+                        if (r.failed()) { return (nil, r.error()); }
+                        when (mk) {
+                            "rev" -> {
+                                let v = r.read_i64();
+                                if (r.failed()) { return (nil, r.error()); }
+                                rev = v;
+                            },
+                            "kind" -> {
+                                let v = r.read_str();
+                                if (r.failed()) { return (nil, r.error()); }
+                                kind = v;
+                            },
+                            else -> { r.skip_value(); },
+                        }
+                        if (r.failed()) { return (nil, r.error()); }
+                    }
+                    r.end_object();
+                    if (r.failed()) { return (nil, r.error()); }
+                    if (rev == nil || kind == nil) {
+                        let kd: DecodeErrorKind = DecodeErrorKind.WrongType;
+                        return (nil, DecodeJsonError { kind: kd, at: r.err_at() as i64, got: "", expected: "rev and kind" });
+                    }
+                    let ri: i64 = rev;
+                    let ki: str = kind;
+                    meta = DocMeta { rev: ri, kind: ki };
+                },
+                else -> { r.skip_value(); },
+            }
+            if (r.failed()) { return (nil, r.error()); }
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        if (id == nil || have_active == false || name == nil || score == nil
+            || vals == nil || tags == nil || meta == nil) {
+            let kd: DecodeErrorKind = DecodeErrorKind.WrongType;
+            return (nil, DecodeJsonError { kind: kd, at: r.err_at() as i64, got: "", expected: "every key of the row" });
+        }
+        let idi: i64 = id;
+        let ni: str = name;
+        let ai: bool = active;
+        let si: f64 = score;
+        let vi: Vec<i64> = vals;
+        let ti: Vec<str> = tags;
+        let mi: DocMeta = meta;
+        return (DocRow { id: idi, name: ni, active: ai, score: si,
+                         vals: vi, tags: ti, note: note, meta: mi }, nil);
+    }
+}
+
+// ----------------------------------------------------------------- fold ---
+// (the pre-registered value checksum; mirrored bit-for-bit by the JS
+// twin — see the header for the one disclosed f64 normalization)
+
+fn fold_str(mut h: i64, s: str) -> i64 {
+    for (let c of s) {
+        h = h.wrapping_mul(31 as i64).wrapping_add(c.code() as i64);
+    }
+    return h;
+}
+
+fn fold_f64(mut h: i64, v: f64) -> i64 {
+    return fold_str(h, f"{v}");
+}
+
+fn row_sum(mut h: i64, r: DocRow) -> i64 {
+    h = h.wrapping_mul(31 as i64).wrapping_add(r.id);
+    h = fold_str(h, r.name);
+    let mut b: i64 = 0;
+    if (r.active) { b = 1; }
+    h = h.wrapping_mul(31 as i64).wrapping_add(b);
+    h = fold_f64(h, r.score);
+    h = h.wrapping_mul(31 as i64).wrapping_add(r.vals.len() as i64);
+    for (let i = 0; i < r.vals.len(); i += 1) {
+        h = h.wrapping_mul(31 as i64).wrapping_add(r.vals[i]);
+    }
+    h = h.wrapping_mul(31 as i64).wrapping_add(r.tags.len() as i64);
+    for (let i = 0; i < r.tags.len(); i += 1) {
+        h = fold_str(h, r.tags[i]);
+    }
+    if (r.note == nil) {
+        h = h.wrapping_mul(31 as i64);
+    } else {
+        let nv: i64 = r.note;
+        h = h.wrapping_mul(31 as i64).wrapping_add(nv);
+    }
+    h = h.wrapping_mul(31 as i64).wrapping_add(r.meta.rev);
+    h = fold_str(h, r.meta.kind);
+    return h;
+}
+
+fn rows_sum(rows: Vec<DocRow>) -> i64 {
+    let mut t: i64 = rows.len() as i64;
+    for (let i = 0; i < rows.len(); i += 1) {
+        t = row_sum(t, rows[i]);
+    }
+    return t;
+}
+
+// ----------------------------------------------------------------- main ---
+
+// Scale constants (keep rut and JS in lockstep — identical to
+// json-decode's): ROWS x VALS values per row, REPS reps of
+// decode + encode + fold.
+fn rows_n() -> i32 { return 1200; }
+fn vals_n() -> i32 { return 6; }
+fn reps_n() -> i32 { return 3; }
+
+pub fn main() -> nil {
+    let rows = rows_n();
+    let vals = vals_n();
+    let reps = reps_n();
+    let alpha = alpha_vec();
+    let doc = gen_doc(rows, vals, alpha);
+    let mut total: i64 = 0;
+    let mut first: i64 = 0;
+    let mut first_len: i32 = 0;
+    for (let r = 0; r < reps; r += 1) {
+        let d = decodeJson<Vec<DocRow>>(doc);
+        if (d.1 != nil) {
+            panic("json-roundtrip: decode failed");
+        }
+        let decoded: Vec<DocRow> = d.0;
+        let et = encodeJson(decoded);
+        if (et.1 != nil) {
+            panic("json-roundtrip: encode failed");
+        }
+        let text: str = et.0;
+        // the encode's liveness gate (not the checksum — the pin folds
+        // values): the re-encoded doc's length is rep-stable
+        if (r == 0) {
+            first_len = text.len();
+        } else {
+            assert(text.len() == first_len, "json-roundtrip: encode length diverged");
+        }
+        let s = rows_sum(decoded);
+        if (r == 0) {
+            first = s;
+        } else {
+            assert(s == first, "json-roundtrip: rep diverged");
+        }
+        total = total.wrapping_mul(31 as i64).wrapping_add(s);
+    }
+    let final_c = total.wrapping_mul(31 as i64).wrapping_add(reps as i64);
+    Logger.new("app").info(f"CHECKSUM {final_c}");
+}

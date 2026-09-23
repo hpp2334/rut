@@ -1,0 +1,18 @@
+# json-roundtrip/ — the std json pkg's own bench row (the rut-json
+# batch, phase 2, survey §2.11's pre-registered method): the SAME
+# generated document as json-decode (the knucleotide LCG, seed 42 —
+# same draws, same order), decoded DIRECTLY into typed rows and
+# re-encoded — encode+decode round trips through the LIB (the trait
+# path: `impl JsonSerialize/JsonDeserialize for DocRow` in this file,
+# dispatching json's traits; no hand-rolled twin of the codec).
+# Module dir because it mounts `json` + `pouch`; the peer gate assembles
+# group-pouch onto json because pouch is present in this closure (the
+# Vec rows are load-bearing here). The checksum is defined over the
+# ROUND-TRIPPED VALUES, not lexemes, and must equal the JS twin's.
+name = "json_roundtrip"
+entry.lib = "./main.rut"
+
+[deps]
+json = { path = "../../../rut/json" }
+pouch = { path = "../../../rut/pouch" }
+ink = { path = "../../../rut/ink" }
