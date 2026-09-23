@@ -535,3 +535,172 @@ entry fn enc_arr_nested() -> str {
     let doc: str = s;
     return doc;
 }
+
+// ---- the json-perf batch phase 1: the reader's per-byte classification
+// and the writer's chunk-buffer shape, pinned through the public surface ----
+
+// classify one codepoint 0..256 through the reader's observable
+// behavior, one char:
+//   d  a digit (decodeJson<i64> accepts it alone)
+//   w  whitespace (a `ch + "1"` doc decodes to exactly 1)
+//   q  the string terminator (`"a{ch}b"` closes early -> Trailing)
+//   c  a raw control (invalid JSON inside a string -> Unexpected)
+//   e  the escape char (`\b` consumes the `b` -> value != "ab")
+//   .  content (passes through: `ab`)
+fn classify_one(cp: i32) -> str {
+    let ch = str.from_code(cp as u32);
+    // digit probe: the byte alone is a valid i64
+    let (v, e) = decodeJson<i64>(ch);
+    if (e == nil) { return "d"; }
+    // whitespace probe: the byte prefix is skipped, the 1 survives
+    let doc2 = f"{ch}1";
+    let (v2, e2) = decodeJson<i64>(doc2);
+    if (e2 == nil) {
+        let n: i64 = v2;
+        if (n == 1) { return "w"; }
+    }
+    // in-string probe: quote / control / escape / content
+    let doc3 = f"\"a{ch}b\"";
+    let (v3, e3) = decodeJson<str>(doc3);
+    if (e3 != nil) {
+        let err: DecodeJsonError = e3;
+        if (err.kind == DecodeErrorKind.Unexpected) { return "c"; }
+        return "q"; // the early close answers Trailing
+    }
+    let s: str = v3;
+    let want = f"a{ch}b";
+    if (s == want) { return "."; }
+    return "e"; // anything else in-string: the escape char itself
+}
+
+// the TOTAL classification: one char per codepoint 0..=255, in order
+entry fn classify_report() -> str {
+    let mut acc = "";
+    let mut i: i32 = 0;
+    while (i < 256) {
+        acc = f"{acc}{classify_one(i)}";
+        i += 1;
+    }
+    return acc;
+}
+
+// the array-context classification through `more`'s element loop.
+// HONEST NOTE: `more`'s own classes (comma / closers / other) are only
+// partially observable from the public surface — the element decoder's
+// opinion follows every "other" byte, so generic content is
+// indistinguishable from a wrong closer in the outcome. The buckets
+// that ARE observable:
+//   ,  the pair survives (comma, ws between elements, and bytes the
+//      element grammar merges into element 1: digits and `-`)
+//   ]  the byte closes the array cleanly (`[1]2]` -> Trailing)
+//   .  rejected (wrong closers AND content the element grammar misses)
+fn classify_more_one(cp: i32) -> str {
+    let ch = str.from_code(cp as u32);
+    let doc = f"[1{ch}2]";
+    let (v, e) = decodeJson<[i64]>(doc);
+    if (e == nil) { return ","; }
+    let err: DecodeJsonError = e;
+    if (err.kind == DecodeErrorKind.Trailing) { return "]"; }
+    return ".";
+}
+
+entry fn classify_more_report() -> str {
+    let mut acc = "";
+    let mut i: i32 = 0;
+    while (i < 256) {
+        acc = f"{acc}{classify_more_one(i)}";
+        i += 1;
+    }
+    return acc;
+}
+
+// the writer's chunk shape: output identical across many drains. 400
+// i64 leaves cross the ~1 KB cap repeatedly; keys before containers
+// exercise the drain order; escapes and nesting ride along
+entry fn writer_chunk_shapes() -> str {
+    let mut w = JsonWriter.new();
+    w.begin_object();
+    w.key("big");
+    w.begin_array();
+    let mut i: i32 = 0;
+    while (i < 400) {
+        w.write_i64(i as i64);
+        i += 1;
+    }
+    w.end_array();
+    w.key("nest");
+    w.begin_object();
+    w.key("a");
+    w.begin_array();
+    w.begin_array();
+    w.write_str("x\"y");
+    w.write_raw("null");
+    w.end_array();
+    w.begin_object();
+    w.end_object();
+    w.end_array();
+    w.key("s");
+    w.write_str("tab\there\n");
+    w.end_object();
+    w.key("empty");
+    w.begin_object();
+    w.end_object();
+    w.end_object();
+    let e = w.error();
+    if (e != nil) { return enc_err(e); }
+    return f"OK:{w.finish()}";
+}
+
+// a top-level flat stream with no containers at all: the chunk cap is
+// what keeps this shape linear
+entry fn writer_flat_stream() -> str {
+    let mut w = JsonWriter.new();
+    let mut i: i32 = 0;
+    while (i < 300) {
+        w.write_i64(i as i64);
+        i += 1;
+    }
+    let e = w.error();
+    if (e != nil) { return enc_err(e); }
+    return f"OK:{w.finish()}";
+}
+
+// NotFinite after a field run: the error offset must count every byte
+// already drained AND the pending chunk at fail time
+entry fn writer_not_finite_after_run(v: f64) -> str {
+    let mut w = JsonWriter.new();
+    w.begin_object();
+    w.key("a");
+    w.write_i64(1);
+    w.key("bad");
+    w.write_f64(v);
+    let e = w.error();
+    if (e != nil) { return enc_err(e); }
+    return "NOERR";
+}
+
+// Depth with a pending chunk: the key's bytes count in the offset
+entry fn writer_depth_key_offset() -> str {
+    let mut w = JsonWriter.new();
+    w.begin_object();
+    w.key("x");
+    let mut i: i32 = 0;
+    while (i < 128) {
+        w.begin_array();
+        i += 1;
+    }
+    w.key("over");
+    w.begin_object();
+    let e = w.error();
+    if (e != nil) { return enc_err(e); }
+    return "NOERR";
+}
+
+// the unbalanced clamp: a dangling key with no value and no end —
+// finish returns the accumulator as-is, chunk included
+entry fn writer_finish_dangling() -> str {
+    let mut w = JsonWriter.new();
+    w.begin_object();
+    w.key("dangling");
+    return f"RAW:{w.finish()}";
+}

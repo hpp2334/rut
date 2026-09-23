@@ -59,12 +59,20 @@
 // never trusted on unvalidated input; invalid octets answer
 // `InvalidUtf8`, never a silent U+FFFD.
 //
-// THE WRITER (survey §2.3): the f-string accumulator (`out = f"{out}{t}"`
-// through `mut self` — the rc==1 in-place append path, the strings-round1
-// census's own winner; `string_join` measured +3.6% SLOWER on exactly
-// this stream shape). The container stack is lazy: keys/counts ride in
-// fixed 128-slot columns (the depth cap) and assemble into the `$.a[2].b`
-// path ONLY on failure — the happy path never formats.
+// THE WRITER (survey §2.3, reshaped by the json-perf batch phase 1):
+// per-event output composes into a BOUNDED CHUNK BUFFER (`buf`, ~1 KB
+// cap) that drains into the accumulator `out` in ONE field append per
+// chunk. The shape this replaces appended every event straight to the
+// `out` field — the survey's §4 A/B measured that shape ~750x slower
+// per append than a local (the rc==1 in-place append path does not
+// fire through a class field, so every event copied the WHOLE
+// accumulator: ~6 GB of memcpy per json-roundtrip rep, invisible to
+// fuel). The chunk buffer bounds the copy per event to ~1 KB and pays
+// one O(|out|) copy per chunk instead of per event; `out` still
+// receives every byte in emit order, so the finished document is
+// byte-identical. The container stack is lazy: keys/counts ride in
+// fixed 128-slot columns (the depth cap) and assemble into the
+// `$.a[2].b` path ONLY on failure — the happy path never formats.
 //
 // ESCAPES (survey §2.3): exactly RFC 8259 — `"` `\` and the C0 controls;
 // DEL and non-ASCII pass through. Surrogates cannot occur in a rut str;
@@ -99,7 +107,10 @@ pub struct EncodeJsonError {
 // ---- the writer (survey §2.3) ----
 
 pub class JsonWriter {
-    out: str;           // THE accumulator
+    out: str;           // THE accumulator — one append per chunk drain
+    buf: str;           // the bounded chunk buffer: per-event output
+                        // composes here (capped ~1 KB) and drains to
+                        // `out` in one append per chunk
     depth: i32;         // open container count (the 128 cap)
     st_kind: [i32];     // per level: 1 object, 2 array — 128 slots, the cap
     st_key: [?str];     // per object level: the pending key (nil until key())
@@ -112,14 +123,27 @@ pub class JsonWriter {
 
 impl JsonWriter {
     pub fn new() -> Self {
-        return Self { out: "", depth: 0, st_kind: [0; 128], st_key: [nil; 128],
-                      st_n: [0; 128], top: 0, k: nil, at: 0, path: "" };
+        return Self { out: "", buf: "", depth: 0, st_kind: [0; 128],
+                      st_key: [nil; 128], st_n: [0; 128], top: 0, k: nil,
+                      at: 0, path: "" };
+    }
+
+    // THE CHUNK (json-perf phase 1): drain the buffer into the
+    // accumulator — one O(|out|) field append per ~KB of output
+    // instead of one per event. Every byte still reaches `out` in emit
+    // order, so output is byte-identical to the per-event shape.
+    fn flush_buf(mut self) {
+        if (self.buf != "") {
+            self.out = f"{self.out}{self.buf}";
+            self.buf = "";
+        }
     }
 
     // the finished document. Unbalanced begin/end is a caller bug and
     // returns the accumulator as-is (the sticky model reports real
     // failures; the finalized error set has no kind for misuse).
-    pub fn finish(self) -> str {
+    pub fn finish(mut self) -> str {
+        self.flush_buf();
         return self.out;
     }
 
@@ -136,6 +160,10 @@ impl JsonWriter {
 
     fn fail(mut self, kind: EncodeErrorKind) {
         if (self.k != nil) { return; }
+        // `at` is the output offset so far — drain the chunk first so
+        // the offset counts every emitted byte (byte-exact with the
+        // per-event shape this batch replaced)
+        self.flush_buf();
         self.k = kind;
         self.at = self.out.len() as i64;
         self.path = self.build_path();
@@ -162,10 +190,14 @@ impl JsonWriter {
         return p;
     }
 
-    // the parent level's comma + child count for a VALUE write
+    // the parent level's comma + child count for a VALUE write. The
+    // cap idiom after every buf append: when the chunk crosses ~1 KB,
+    // drain it — the per-event copy stays bounded and the O(events ×
+    // |out|) accumulator churn stays dead
     fn value_comma(mut self) {
         if (self.top > 0 && self.st_n[self.top - 1] > 0 && self.st_kind[self.top - 1] == 2) {
-            self.out = f"{self.out},";
+            self.buf = f"{self.buf},";
+            if (self.buf.len() >= 1024) { self.flush_buf(); }
         }
         if (self.top > 0) {
             self.st_n[self.top - 1] += 1;
@@ -181,7 +213,8 @@ impl JsonWriter {
         self.st_n[self.top] = 0;
         self.top += 1;
         self.depth += 1;
-        self.out = f"{self.out}{{";
+        self.buf = f"{self.buf}{{";
+        if (self.buf.len() >= 1024) { self.flush_buf(); }
     }
 
     pub fn begin_array(mut self) {
@@ -193,7 +226,8 @@ impl JsonWriter {
         self.st_n[self.top] = 0;
         self.top += 1;
         self.depth += 1;
-        self.out = f"{self.out}[";
+        self.buf = f"{self.buf}[";
+        if (self.buf.len() >= 1024) { self.flush_buf(); }
     }
 
     // an unbalanced end is a caller bug — clamped, never traps
@@ -202,7 +236,8 @@ impl JsonWriter {
         if (self.top > 0) {
             self.top -= 1;
             self.depth -= 1;
-            self.out = f"{self.out}}}";
+            self.buf = f"{self.buf}}}";
+            if (self.buf.len() >= 1024) { self.flush_buf(); }
         }
     }
 
@@ -211,7 +246,8 @@ impl JsonWriter {
         if (self.top > 0) {
             self.top -= 1;
             self.depth -= 1;
-            self.out = f"{self.out}]";
+            self.buf = f"{self.buf}]";
+            if (self.buf.len() >= 1024) { self.flush_buf(); }
         }
     }
 
@@ -220,12 +256,14 @@ impl JsonWriter {
         if (self.failed()) { return; }
         if (self.top > 0 && self.st_kind[self.top - 1] == 1) {
             if (self.st_n[self.top - 1] > 0) {
-                self.out = f"{self.out},";
+                self.buf = f"{self.buf},";
+                if (self.buf.len() >= 1024) { self.flush_buf(); }
             }
             self.st_n[self.top - 1] += 1;
             self.st_key[self.top - 1] = k;
         }
-        self.out = f"{self.out}{self.quote(k)}:";
+        self.buf = f"{self.buf}{self.quote(k)}:";
+        if (self.buf.len() >= 1024) { self.flush_buf(); }
     }
 
     // an escaped JSON string (value position — no comma for objects,
@@ -233,14 +271,16 @@ impl JsonWriter {
     pub fn write_str(mut self, s: str) {
         if (self.failed()) { return; }
         self.value_comma();
-        self.out = f"{self.out}{self.quote(s)}";
+        self.buf = f"{self.buf}{self.quote(s)}";
+        if (self.buf.len() >= 1024) { self.flush_buf(); }
     }
 
     // pre-rendered JSON (numbers, true/false/null — the impls' fast lane)
     pub fn write_raw(mut self, t: str) {
         if (self.failed()) { return; }
         self.value_comma();
-        self.out = f"{self.out}{t}";
+        self.buf = f"{self.buf}{t}";
+        if (self.buf.len() >= 1024) { self.flush_buf(); }
     }
 
     pub fn write_i64(mut self, v: i64) {

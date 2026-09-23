@@ -644,3 +644,124 @@ fn light_consumer_base_rows() {
     let arr: Option<String> = vm.call("enc_a", ()).unwrap_or_else(|e| panic!("{e:?}"));
     assert_eq!(arr, Some("[1,2]".to_string()));
 }
+
+// ---- the json-perf batch phase 1: the reader's per-byte classification
+// and the writer's chunk-buffer shape (unit pins through the public
+// surface; the Rust side computes the expectations independently) ----
+
+/// the expected per-codepoint class for `classify_one`, computed HERE.
+/// The rut ladder is: digit probe, ws probe, in-string probe — so the
+/// ws trio answers 'w' even though it is ALSO a raw control in-string
+/// (the dual classification the LUT experiment's bit 1|16 had to
+/// carry; the probe pins the observable behavior, not the mechanism):
+///   d digit (0-9), w whitespace, q string terminator,
+///   c raw control (in-string), e the escape char, . content
+fn expect_class(cp: u32) -> char {
+    if (0x30..=0x39).contains(&cp) {
+        return 'd';
+    }
+    match cp {
+        // the quote and the backslash are in-string classes first
+        0x22 => return 'q',
+        0x5C => return 'e',
+        // whitespace (the ws probe fires before the in-string one)
+        0x09 | 0x0A | 0x0D | 0x20 => return 'w',
+        _ => {}
+    }
+    if cp < 0x20 {
+        return 'c';
+    }
+    '.'
+}
+
+#[test]
+fn reader_byte_classification_total() {
+    let mut want = String::new();
+    for cp in 0..=255u32 {
+        want.push(expect_class(cp));
+    }
+    let mut vm = vm_at(PKG);
+    let out: String = vm.call("classify_report", ()).unwrap();
+    assert_eq!(out.len(), 256, "one class char per codepoint");
+    assert_eq!(out, want, "total byte classification");
+}
+
+#[test]
+fn reader_byte_classification_more() {
+    // the array-context classification: the pair survives the byte
+    // (comma, whitespace, and bytes the element grammar merges: digits
+    // and `-`), `]` closes cleanly, everything else is rejected — with
+    // the recorded honesty that a wrong closer and element-missed
+    // content share the rejection bucket (the element decoder's
+    // opinion follows more()'s "other" class on the public surface)
+    let mut want = String::new();
+    for cp in 0..=255u32 {
+        want.push(match cp {
+            0x09 | 0x0A | 0x0D | 0x20 | 0x2C | 0x2D | 0x30..=0x39 => ',',
+            0x5D => ']',
+            _ => '.',
+        });
+    }
+    let mut vm = vm_at(PKG);
+    let out: String = vm.call("classify_more_report", ()).unwrap();
+    assert_eq!(out.len(), 256, "one class char per codepoint");
+    assert_eq!(out, want, "total comma/closer classification");
+}
+
+#[test]
+fn writer_chunk_shapes_output_identical() {
+    // the oracle is built HERE from the serde model, independently of
+    // the writer's internal chunking: `{"big":[0,..,399],"nest":{..}}`
+    let mut big = String::from("[");
+    for i in 0..400 {
+        if i > 0 {
+            big.push(',');
+        }
+        big.push_str(&i.to_string());
+    }
+    big.push(']');
+    let want = format!(
+        "OK:{{\"big\":{},\"nest\":{{\"a\":[[\"x\\\"y\",null],{{}}],\"s\":\"tab\\there\\n\"}},\"empty\":{{}}}}",
+        big
+    );
+    let mut vm = vm_at(PKG);
+    let out: String = vm.call("writer_chunk_shapes", ()).unwrap();
+    assert_eq!(out, want, "chunked writer output byte-identical");
+}
+
+#[test]
+fn writer_chunk_flat_stream_and_dangling() {
+    // a containerless stream crosses the cap too; the top-level shape
+    // concatenates values with no separators (the caller's contract)
+    let mut flat = String::new();
+    for i in 0..300 {
+        flat.push_str(&i.to_string());
+    }
+    let mut vm = vm_at(PKG);
+    let out: String = vm.call("writer_flat_stream", ()).unwrap();
+    assert_eq!(out, format!("OK:{flat}"));
+
+    // the unbalanced clamp: a dangling key survives in the chunk
+    let mut vm = vm_at(PKG);
+    let out: String = vm.call("writer_finish_dangling", ()).unwrap();
+    assert_eq!(out, "RAW:{\"dangling\":");
+}
+
+#[test]
+fn writer_chunk_error_offsets() {
+    // NotFinite after a field run: at counts the drained chunk too —
+    // `{"a":1,"bad":` is 13 bytes
+    let mut vm = vm_at(PKG);
+    let out: String = vm.call("writer_not_finite_after_run", (f64::INFINITY,)).unwrap();
+    assert_eq!(out, "ERR:NotFinite@13:$.bad");
+
+    // Depth with a pending chunk: the outer object counts toward the
+    // cap, so the 128th bracket fails the sticky model and the pending
+    // key never emits: `{"x":` + 127 brackets = 132
+    let mut vm = vm_at(PKG);
+    let out: String = vm.call("writer_depth_key_offset", ()).unwrap();
+    assert!(
+        out.starts_with("ERR:Depth@132:$.x[1]"),
+        "depth offset through the chunk: {out}"
+    );
+}

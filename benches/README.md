@@ -212,7 +212,97 @@ Disclosed on the landing:
   suite after landing is 29 workloads × {rut, qjs, node} all equal to
   `expected.json`, exit 0.
 
+## Performance log — json-roundtrip: the json-perf batch phase 1, the writer's chunk buffer (Sep 2026)
+
+The json-perf batch's phase 1 (rut-side only, zero engine change —
+`docs/json-perf-survey.md` is the phase-0 survey this batch argues
+from). One change landed, in `rut/json`'s writer alone: per-event
+output no longer appends the accumulator one field-append each.
+The survey's §4 A/B measured the class-field accumulator shape ~750x
+slower per append than a local (the rc==1 in-place append path does
+not fire through a field, so each event copied the WHOLE accumulator —
+~6 GB of memcpy per rep at this doc's scale, invisible to fuel). The
+landed shape: per-event output composes into a bounded chunk buffer
+(`buf`, capped ~1 KB) that drains into `out` in ONE field append per
+chunk; `fail` drains before measuring its `at` offset and `finish`
+drains before returning, so error offsets and the finished document
+are byte-identical to the per-event shape. Output semantics are
+EXACTLY the per-event shape's — the checksum below is the pin.
+
+Interleaved A/B, one probe binary, the pkg source flipped between
+rounds (pkg sources are runtime-mounted; the round2 phase-0 method —
+zero build-placement confound), 5 rounds × 5 fresh-VM iters per side,
+order alternating, medians of round medians; fuel/heap bit-exact in
+every round of every side:
+
+| side        | exec med-of-med | round range      | fuel (bit-exact) | VM heap peak (bit-exact) |
+|-------------|-----------------|------------------|------------------|--------------------------|
+| before HEAD | 796.4 ms        | 793.7 – 856.4 ms | 60,933,262       | 10,674,377 B             |
+| after       | **215.5 ms**    | 214.2 – 217.1 ms | 61,840,477       | 4,550,508 B              |
+
+**exec −72.9%**, round ranges non-overlapping by 570 ms — nowhere near
+the ±1% noise gate. Encode's share of the row (the survey's 222.7
+ms/rep) collapses to single-digit milliseconds; the row's remaining
+time is decode + fold + the CLI's compile/mount. **The fuel/heap
+re-pin, disclosed with the old values verbatim: json-roundtrip fuel
+60,933,262 → 61,840,477 (+907,215 ops, +1.49% — the per-event cap
+checks and the extra buffer traffic fuel can see, pricing the killed
+6 GB of memcpy); json-roundtrip VM heap peak 10,674,377 → 4,550,508 B
+(−57.4% — the accumulator's dead per-event blocks are gone).** The
+checksum is IMMOVABLE and unchanged: `1960875332163557684` on rut/qjs/
+node, `expected.json` untouched. The json-decode canary is
+bit-identical (checksum `4502015958359127277`, fuel 111,322,915,
+heap 34,377,027 B — the row does not mount `rut/json`), and every
+other row's probe fuel/heap are bit-identical to their standing
+records (full suite, all runtimes, exit 0). Cross-runtime net medians
+this run: rut 326.5 ms, qjs 37.9 ms, node 21.8 ms — **rut/qjs falls
+23.1× → 8.6×**, past the survey's honest projection for phases 1-2
+combined (8-10×). Two ancillary effects, disclosed: the spliced unit
+grows by one writer method (the row's compile 30.7 → 104.6 ms — the
+driver's per-run cost, not the VM's; the probe exec column above
+excludes it), and the buffered output path lowers the row's peak RSS.
+
+Two phase-1 attempts measured and REVERTED per the batch's law — the
+analysis is the phase's second deliverable, and both numbers re-baseline
+phase 2:
+
+- **The 256-entry LUT classification: REVERTED.** The plan's predicted
+  −1.5-3 M fuel assumed compare chains are the classify stage's cost.
+  Measured (same flip method, the decode-only stage harness): the LUT
+  classify (range guard + indexed load + mask test) costs MORE VM ops
+  than the compare chains it replaced (+1.65 M fuel/rep, +11% of
+  decode) AND more wall time (dec exec 135.8 → 143.9 ms, +5.9%,
+  outside the ±1% gate in the wrong direction) — the census's own
+  finding stands confirmed: the classify stage is call-frame-bound,
+  and rut's compares are nearly free while array loads are not. The
+  per-byte classification semantics the LUT had to preserve are now
+  unit-pinned over all 256 codepoints (`classify_report` /
+  `classify_more_report` + the `reader_byte_classification_*` tests —
+  the pin any future classification change must keep).
+- **The octet-view charset scan in `quote` (the one call site today's
+  str surface admits): REVERTED.** `s.encode()` + indexed bytes
+  replaces the per-codepoint `slice(i,i+1).code()` walk exactly
+  (continuation octets cannot alias the three escape classes), but it
+  measured +84 ops/call (writer micro: 18.7 → 26.3 M) and +1.96 M
+  fuel/rep on the row with no exec win — rut's `bytes` indexing is
+  fuel-expensive per read. The survey's gap list stands as the fix:
+  `code_at` / a host-side class-scan primitive (phase 2), not a
+  rut-side spelling. With that, the "charset-scan call sites" lever
+  on TODAY's surface is measured EMPTY, and the writer's
+  `quote_slow`/`unescape`/`lit` slice-per-char walks stay as-is —
+  recorded, not approximated.
+
+What phase 2's growable builder must finish (the honest residual): the
+chunk shape still pays one O(|out|) copy per ~KB chunk (a fixed ~
+400-flush chain per rep) plus the per-event cap checks — the builder's
+amortized in-place growth deletes the remaining copies AND the cap
+machinery; the writer's public surface and this phase's output pins
+are its contract. Pre-sizing from a length estimate remains
+inexpressible (no reserve/capacity surface — recorded in the survey's
+gap list).
+
 ## Performance log — mapset-perf engine phases (Sep 2026)
+
 
 Four engine phases landed against these rows: boxless static trait
 dispatch + trait-impl/free-fn inlining, `MoveVal` last-use move
