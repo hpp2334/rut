@@ -415,6 +415,124 @@ starts_with boundaries, the builder's byte-exact accumulation across
 40k appends, pre-sizing, push_code's U+FFFD rule, the class aliasing
 law, and a scan+builder round trip.
 
+## Performance log — json-roundtrip: the json-perf batch phase 3, the str-op width question — measured, answered NO, REVERTED (Sep 2026)
+
+The json-perf batch's phase 3 (the survey's §6: "SIMD accelerates host
+scan kernels … measure the width factor, don't assume"). The phase-0
+brief named SWAR/explicit-SIMD for the scan primitive's inner loop as
+the dominant term. Measured against the landed phase-2 surface, the
+brief's premise does not hold: **the row's scans have no width to
+widen.** Every kernel change the phase attempted was REVERTED per the
+batch's method; this section is the deliverable.
+
+### The census — what a scan call actually looks like (instrumented probe, SCRATCH, never landed)
+
+Counters around each str-op native body, `json-roundtrip`, fresh-VM
+iters; per-iter counts are EXACT and deterministic (two sessions, 3 and
+4 iters, agree call for call — the op stream is pinned, so the native
+stream is):
+
+| native | calls/iter | shape |
+|---|---|---|
+| `StrScan` | 446,409 | scanned length **0 bytes: 67.8%**, 1–3 B: 9.6%, 4–7 B: 22.0%, **≥ 8 B: ZERO** — not one call in the row reaches even a single 8-byte SWAR block; mean 1.2 octets/call; ~178.6 KB scanned/rep over the ~204 KB doc (each byte ~0.87×) |
+| `StrCharAt` (code_at) | 597,507 | owned-ascii read, the O(1) flag-guarded byte load |
+| `StrBufPush` | 216,003 | mean 2.84 octets/push |
+| `StrStartsWith` | 9,000 | mean 4.2-octet head, one memcmp |
+| `StrBufFinish`/`New` | 3 / 3 | one materialization per rep |
+
+(The four class tables — `qt`/`tok`/`dig`/`stp`, 257 entries each —
+were keyed separately in the histogram; every one of them stays in the
+0–7-byte buckets.)
+
+### The approach call — SWAR vs explicit SIMD vs both: NEITHER, measured
+
+- **Width, the honest number: 1.0× achieved.** The 8–16× theoretical
+  prices long runs; the row's longest scan is 7 bytes. A SWAR loop
+  never completes one 8-byte block, and explicit SIMD's 16–32-byte
+  blocks fare strictly worse.
+- **Per-call shape compilation kills SWAR on generality anyway**: a
+  general `set[min(cp,len-1)]` table has no u64-expressible per-byte
+  membership test (SWAR cannot do indexed lookups), so the classic
+  shape-specialized form needs the stop-set decomposed per call — a
+  257-entry table walk that the micro prices at 62–78 ns against the
+  ENTIRE current call at 1.2–1.4 ns (row-mix, L2-resident, min of 7):
+  ~50× worse than what it replaces. Even at forced 64-byte scans it
+  still loses (67–77 vs 14 ns), and its only win is at 4 KB runs
+  (465 vs 855 ns, −45%) that no tokenizer scan in any workload ever
+  performs — and there it is bandwidth-capped, not width-capped.
+- **The loop is already ~2 cycles/byte scalar** (LLVM does fine on the
+  table-lookup loop; the "don't trust auto-vectorization" suspicion
+  was checked and the loop needs no rescue). A leaner hand form
+  (clamp hoisted, `tlen==0` early-exit, `tlen>=256` no-clamp
+  specialization — measured −10–16% of loop time) trims ~0.15
+  ns/call: the loop is ~10% of the body; the other ~90% is the fixed
+  per-call preamble (cell unpacking, the table borrow, bounds).
+- **wasm32 considered honestly**: SWAR's u64 tricks would have been
+  the zero-coupling choice (plain i64 ops in wasm32, no target
+  feature), and explicit SIMD would have been host-only now with a
+  wasm-simd128 menu — but since width is dead on the data, neither
+  question reaches the build system. Nothing lands; the wasm lane is
+  untouched.
+
+### The landing attempt, and the revert
+
+The one defensible candidate — semantics byte-identical, no new
+surface: `StrScan`'s body unpacked in ONE cell match (phase 2 paid
+three: type check, `char_len`, `as_bytes`/`as_str`), a single table
+`borrow()` (phase 2 borrowed twice), the table-length-specialized
+loops; `code_at`'s `StrCharAt` (the row's highest-volume str op)
+unpacking the owned-ascii case in one match in both interpreters.
+`starts_with` (9 k calls/iter) and `StrBuf` push/finish were measured
+below the noise floor and left alone. The attempt compiled clean,
+passed the full workspace suite (761 tests), kept fuel **31,543,783**
+and heap **3,423,642 B** bit-exact (the op stream cannot see host
+code), and was taken to the row:
+
+Interleaved A/B, ENGINE-ONLY flip (the pkg source never moves — the
+phase touches host code only), 5 rounds × 7 fresh-VM iters per side,
+order alternating, medians of round medians; fuel/heap bit-exact in
+every round of every side:
+
+| side | exec med-of-med | round range | fuel (bit-exact) | VM heap peak (bit-exact) |
+|------|-----------------|-------------|------------------|--------------------------|
+| before HEAD | 110.48 ms | 109.3 – 111.4 ms | 31,543,783 | 3,423,642 B |
+| attempt | 109.47 ms | 108.8 – 112.9 ms | 31,543,783 | 3,423,642 B |
+
+**−1.01 ms, −0.91% — INSIDE the ±1% gate.** Round ranges overlap
+heavily and the attempt owns the worst single round (112.9): the noise
+signature, not a win. Per the method — inside-noise → revert, keep
+analysis — the code came out of the tree; the probe re-verified the
+standing record (exec 109.1 ms, fuel/heap as above) after the revert.
+The survey's §6 phase-3 prediction ("exec −10-20% of the remaining
+scan time") is closed honestly: a −10-20% slice of scan time assumed a
+width win or a fat loop; the scan time that remains is per-call
+preamble spread over ~450 k calls of ≤ 7 bytes each, and the honest
+achievable slice is the ~1% the attempt measured — below the gate this
+batch runs on.
+
+What survives: this census (the call-shape data any future str-op
+phase argues from), the micro harness + numbers (scratch:
+`/tmp/opencode/batch-json-perf/p3/`), and the answered approach call —
+SWAR and SIMD are both the wrong tool for THIS surface's real scan
+shape; if a future workload ever shows ≥ 64-byte scans, the
+shape-specialized SWAR (with its per-call compilation threshold)
+re-opens with the crossover measured above.
+
+Gates on the phase (nothing landed, everything re-proven): full
+`cargo test --workspace` 761 passed / 0 failed; `cargo check --workspace
+--target wasm32-unknown-unknown` exit 0; full bench suite green —
+29 workloads × {rut, qjs, node}, every checksum equal to
+`expected.json` (json-roundtrip `1960875332163557684` on all three
+runtimes, `expected.json` untouched), every row bit-identical to its
+standing record; grammar-corpus PASS (70 files, 88202 tokens) and
+e2e-wasm PASS through the SHIPPED wasm (70 files, 0 false diagnostics,
+509 symbols). LSP lane: nothing the wasm lane compiles changed, so no
+rebuild or vsix re-issue is owed — state md5s, unchanged from the
+phase-2 record: bin/rut-lsp.wasm 8a8505e6efada7b91c720e1adcbe3bb1,
+rut-vscode-0.2.2.vsix c3bd856b30f92f1c247db23fa5462b67,
+out/wasm.js 1760d628bd6ecf7f6cdd5014f7b4a377. VERSION stays 10 (no
+new encodings — the landed tree is HEAD's).
+
 ## Performance log — mapset-perf engine phases (Sep 2026)
 
 
