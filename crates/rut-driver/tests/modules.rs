@@ -87,14 +87,23 @@ fn uses_and_links_a_type() {
         "surface exports Point"
     );
 
-    // root "app" scope 2 constructs the used type and reads its fields
+    // root "app" scope 2 constructs the used type and reads its fields.
+    // The constructed Point escapes through `sink` — a recursive fn is
+    // never inlined, so the record is a real call argument and keeps its
+    // mint (the err-channel phase-1 return-position fusion elides an
+    // inlined construct-then-read; an escaping construction must still
+    // mint, and this test pins the linked-type id on that mint).
     let root = rut_driver::compile_program(
         "use geo::{Point, origin};\n\
          fn mk() -> Point { return Point { x: 1, y: 2 }; }\n\
+         fn sink(p: Point, n: i32) -> i32 {\n\
+             if (n <= 0) { return p.y; }\n\
+             return sink(p, n - 1);\n\
+         }\n\
          fn main() -> i32 {\n\
              let p: Point = mk();\n\
              let q: Point = origin();\n\
-             return p.x + q.y;\n\
+             return sink(p, 1) + q.y;\n\
          }\n",
         Mode::Impl,
         "app",
