@@ -5,6 +5,9 @@
   marshaling format. See "Revision — implemented design" after §1.
 - **Date:** 2026-08-23
 - **Author:** hpp2334
+- **Revised:** 2026-09 — the err-channel amendment (end of this RFC):
+  `?T` crosses the boundary nil-flattened (the one `Opt` arm), and the
+  two-channel law — returned err = data, panic = drift.
 - **Depends on:** RFC 0022 (native modules), RFC 0016 (heap)
 - **Supersedes:** RFC 0005 §3 (pre-restructure)
 - **Part:** E — Host & FFI
@@ -85,3 +88,44 @@ clear on return. To keep data, the host copies — that is the whole rule.
 
 This is why RFC 0016 OQ-1 (non-moving heap) matters: non-moving keeps
 these borrows trivially sound forever.
+
+## Amendment (Sep 2026, err-channel): `?T` crosses nil-flattened — and the two-channel law
+
+Landed (err-channel phase 3, `docs/err-channel-report.md` §4). Three
+records against the text above:
+
+**The one `Opt` arm.** The crossing rule gains exactly one arm:
+**`?T` crosses iff `T` crosses** (`crosses_boundary`,
+`rut-core/src/types.rs`). This closes the gap between §1's own promise
+("optionals cross as the v1.1 tuples they were always spelled as" —
+the revision note above) and an implementation that predated it: the
+empirical base rejected `entry fn -> (?i64, str)` while the same
+signature with a prim first element compiled. The decode is
+**nil-flattening** — the null slot becomes `Value::Nil`, a some-slot
+decodes its payload (re-entering rut re-boxes through the ordinary
+`T → ?T` funnel); no `Value::Opt` variant exists (nil IS absence, the
+v1.1 convention). Tuples still cross field-by-field, so the answer
+channel **`(?T, err)`** types under the ORIGINAL rule — no
+err-specific carve-out, ever: a `?T` whose element does not cross
+still rejects (pinned as a compile-error test). RFC 0044 §2.4's "the
+host boundary does not admit `?T`" is superseded by this arm.
+
+**The two-channel law (the containment semantics).** A returned err is
+**data**: it crosses as the pair's second component and the host reads
+and acts on it. A panic is **drift**: it stays on the loud channel
+(`Result<Value, Trap>` — `Err` means a trapped turn, a bug), and never
+fills an err field. The convention on the pair (RFC 0044's amendment):
+empty err + a value = success; empty err + nil = "not found"; non-empty
+err = "failed" — the caller's convention, not boundary-enforced.
+
+**The envelopes.** The embedder surface (`vm.call -> Result<Value,
+Trap>`) decodes a `-> (?T, err)` entry positionally:
+`Value::Tuple([Nil|payload, Str(err)])`. The raw-ABI JSON envelope
+(rut-wasm) grows **`"err"` beside `"trap"`** — the two channels stay
+distinct by law: `trap` carries panics, `err` carries a returned
+failure; a soft-fail run reads `"trap": null, "err": "…"`. RFC 0035's
+amendment records the host-loop side (the web pump's decode-report-
+keep-draining). Module VERSION rides 8 — a check relaxation, not a
+format change (no new op/encoding/surface; old artifacts are
+behaviorally bit-identical because the old checker rejected exactly
+the shapes the new arm admits).

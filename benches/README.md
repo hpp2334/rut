@@ -3381,3 +3381,85 @@ record cell behind a rut-owned handle with no wrapper) is an engine
 representation change, out of the experiment's scope by design, and is
 where any third attempt would have to start. Phase 3 (close-out) does
 not run — the rule's fork sends the batch to close-out only on KEEP.
+
+## Performance log — err-channel: the return-position destructure fusion, proven on `checkedadd` (Sep 2026)
+
+The err-channel batch's engine result (`docs/err-channel-report.md`;
+the survey `docs/err-channel-survey.md` is the design record): the
+`(T, err)` answer pair is a `MakeRecord` heap mint, the census showed
+the mint's survivors are ~69% return-family pairs, and phase 1 deleted
+the hot shape — `ret_round` in `rut-lir`'s SROA family (post-inline):
+a mint whose register rides single-def `mov`/`movref` copies and is
+read only by destructuring `GetF`s is consumed; prim pairs unbox
+entirely, a ref component costs one retain at the handoff. Pure
+lowering: no IR/format/interpreter change, VERSION unaffected by it.
+
+### The row — before/after (the fusion's proof)
+
+The `checkedadd` row was added and pinned **BEFORE** the engine change
+(`685d7e5` — the survey §5's pre-registration; the only sanctioned
+kind of `expected.json` edit: a new-row addition), so the delta reads
+clean: 10M `a.checked_add(b)` calls through a helper fn (the
+callee/caller shape every `(T, err)` return rides post-inline — one
+`makerecord` → ret-slot `movref` → 2 × `getf` window per call),
+destructured `let (v, ok) = ..`, both lanes load-bearing in the
+checksum, the overflow arm deterministic at ~1.1% of calls.
+
+| meter | before (`685d7e5`) | after (`02ced3e`) | Δ |
+|---|---|---|---|
+| checksum | `-10015207202` | `-10015207202` | **identical** (rut = node twin = python model) |
+| exec median | 542.0 – 574.1 ms | 214.0 – 217.9 ms | **−60.3%** |
+| per checked call | ~54.2 – 57.4 ns | ~21.4 – 21.8 ns | **−32.7 – −35.6 ns** |
+| fuel | 310,336,881 | 270,336,881 | **−40,000,000 = −4 ops/call × 10M, EXACT** |
+| VM heap peak | 272 B | 232 B | **−40 B** |
+
+The fuel ledger reconciles to the op: the fused window deletes
+`makerecord` + `movref` + 2 × `getf` (−4 ops/call); the two
+replacement movs were forwarded away by the peephole. The predicted
+mint-tax band (survey §5) was 40–80 ns; the measured time delta is
+32.7–35.6 ns — disclosed just under the band — with ~3.1 ns of it
+dispatch at the 0.77 ns/op crossing-nop calibration and the rest the
+allocation + rc work the mint paid. Post-fusion rut ~matches V8's node
+column on the row (217.8 ms net).
+
+### The rest of the suite — bit-identical, three ways
+
+The survey predicted no existing row would move (no bench hot loop
+destructures tuples — census §1.4; the nmapset/refvals pair mints are
+`Pt` values escaping INTO `put()` calls, alloc/binary-trees mints are
+SROA-local or stored nodes) and the suite agreed, at every gate of the
+batch:
+
+- **Phase 1** (the fusion itself): every row's checksum, fuel AND heap
+  pin bit-identical, runner exit 0. Watched rows, old values verbatim,
+  all unchanged: json-decode fuel 111,322,915 / heap 34,377,027,
+  refvals fuel 56,899,541 / heap 28,801,340, alloc fuel 22,000,020,
+  binary-trees fuel 1,048,552 / heap 2,621,578, nmapset-int fuel
+  20,703,284. One honesty note: json-decode read +9.1% in one paired
+  run; re-measured 5× at 663.8–703.4 ms straddling the before-reading
+  with fuel bit-identical run-to-run — scheduler noise on a shared
+  box, not the fusion (the identical op stream is the proof).
+- **Phases 2–3** (StackTrace, then the entry-err contract): all 26
+  `expected.json` pins bit-identical at each gate — no row calls
+  capture, and no row's source adopts the `(?T, err)` shape.
+- **The base-vs-phase-3 worktree proof** (phase 3's close): a rut-only
+  A/B of the batch's END state against its base (`ed14b9b` worktree
+  vs `b367af1`) shows **every row's checksum AND fuel AND heap peak
+  identical** — the batch's net effect on the suite is the checkedadd
+  row's improvement and nothing else. `expected.json` was never
+  touched after the phase-1 row addition.
+
+The row is permanent and is the pair economy's canary: any future
+change touching minting, SROA, or the peephole reads
+`checkedadd` fuel first — −4 ops/call was the fusion; drift from
+270,336,881 without a disclosed cause is a bug. The census's 668
+surviving mints survive unchanged (668 → 668, disclosed: non-inlined
+callees' terminal rets and multi-writer join temps — real escapes the
+single-def envelope correctly declines); the pure ret-slot→destructure
+shape (the survey §1.5 probe: 5 survivors → 2, the two-return join
+left) and every future inlined `(T, err)` call site are what the row
+guards. Capture (`capture_stacktrace`, phase 2) is opt-in,
+pay-per-capture (~30 ns base + ~0.2 ns/frame, members lazy) — recorded
+here, not a row; the entry-err contract (phase 3) crossed no bench
+surface. Gates at each phase: workspace green (655 → 666 → 675
+passed), wasm32 exit 0, foreign stash untouched.

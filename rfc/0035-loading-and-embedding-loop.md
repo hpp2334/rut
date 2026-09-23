@@ -2,6 +2,9 @@
 
 - **Status:** Draft
 - **Date:** 2026-08-23
+- **Revised:** 2026-09 — the err-channel amendment (end of this RFC):
+  the host event loop's soft-fail semantics — a returned err is
+  decoded, reported, and the loop keeps draining; a panic stays loud.
 - **Author:** hpp2334
 - **Depends on:** RFC 0034 (VM core), RFC 0033 (binaries), RFC 0029
   (declaration files), RFC 0022 (native modules), RFC 0021 (workers)
@@ -105,6 +108,42 @@ fn on_vsync(&mut self) {
 
 No job executor, no `promise_to_future`, no `.then` under `Context`, no
 tslib `_ts_generator` downleveling — `await` is an opcode.
+
+## Amendment (Sep 2026, err-channel): soft-fail containment — the pump decodes, reports, and keeps draining
+
+Landed (err-channel phase 3, `docs/err-channel-report.md` §4), as the
+host-loop half of the two-channel law (RFC 0023's amendment is the
+boundary half). The entry surface of §1/§3 grows its answer channel:
+an `entry fn -> (?T, err)` decodes positionally at `vm.call` as
+`Value::Tuple([Nil|payload, Str(err)])` — **`Ok` with data in the
+pair**, never `Err`. `Err` remains exclusively the trapped turn: a
+bug, wiring drift, `OutOfFuel` — the loud channel, unchanged.
+
+**The soft-fail law for host event loops** (the pump pattern — §4's
+frame loop, realized by the web examples' `drain_queue`): per queued
+event, call the turn entry; on **`Ok`**, decode the pair — a non-empty
+err is REPORTED (surfaced to the user/log, retained in a
+`turned_errs` record) and the loop **keeps draining**: the container
+is re-adopted (or survives untouched), the queue proceeds, the page
+stays alive. A returned err must never poison the container or kill
+the drain — it is data the host acts on, per RFC 0044's pair law
+(empty err + value = success; empty err + nil = "not found"; non-empty
+err = "failed"). On **`Err`** (a trapped turn) the pump aborts LOUD —
+the drift detector stands; the `Vm` itself survives for the next good
+turn.
+
+**The raw-ABI envelope** (the wasm host's JSON): **`"err"` beside
+`"trap"`** — `trap` carries panics and NEVER fills `err`; a soft-fail
+run reads `{"trap": null, "err": "…"}`, a success reads
+`"err": null`, a panic reads `trap` set + `"err": null` (pinned by
+three envelope tests). Fuel/heap reporting is unchanged. The wasm
+lane's `rut_web_*` exports keep the `0 | -1` + last-error-slot
+envelope — the err text rides the existing slot, take-once, no ABI
+growth.
+
+Pinned by twin tests through the REAL pump: a `(nil, "boom")` turn
+returns `Ok`, is reported, and the next events work in the same drain;
+a panicked turn kills the pump loud and never crosses as data.
 
 ## Open questions
 

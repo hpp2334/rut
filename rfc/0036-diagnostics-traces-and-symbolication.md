@@ -1,6 +1,12 @@
 # RFC 0036: Diagnostics — Stack Traces, Locations & Symbolication
 
-- **Status:** Draft
+- **Status:** Draft — **REVISED (Sep 2026, err-channel)**: the capture
+  is a **`builtin class`** (`capture_stacktrace() -> StackTrace`, the
+  engine itself), superseding the host-fn + rut-wrapper design below
+  (§2/§5/§6 describe the superseded shape; the amendment at the end of
+  this RFC is the law). See also RFC 0025's amendment (the
+  builtin-class row's second instance) and RFC 0023's amendment (a
+  trace never crosses the host boundary).
 - **Date:** 2026-08-23
 - **Author:** hpp2334
 - **Depends on:** RFC 0034 (traps, frames), RFC 0033 (binaries, symbols),
@@ -150,6 +156,78 @@ Rust bodies live in the toolchain's std crate (RFC 0028, `debug`);
 `VmCtx` gains `capture_trace()` (native API, RFC 0022 §3), and the
 embedder surface gains `vm.symbolicate(&raw)` for hosts that log traces
 themselves (RFC 0035 §3) — tur, for instance, forwards them to devtools.
+
+## Amendment (Sep 2026, err-channel): `capture_stacktrace() -> StackTrace` — a `builtin class`, raw capture, lazy symbolication
+
+Landed (err-channel phase 2, `docs/err-channel-report.md` §1–2). The
+user ruling supersedes §2's wrapper paragraph, §5's sketch, and §6's
+package shape: **the engine itself implements the trace** — the
+`debug` host fns, the `Opaque` handle, and the rut-side wrapper class
+are all gone from the design. The declared surface, in the toolchain's
+decl file (`core.d.rut`) only:
+
+```rut
+builtin fn capture_stacktrace() -> StackTrace;
+builtin class StackTrace {
+    fn len(self) -> i32;         // frame count (innermost first)
+    fn name(self, i: i32) -> str; // frame i's function name
+    fn line(self, i: i32) -> i32; // call-site line (0 when stripped)
+    fn col(self, i: i32) -> i32;  // call-site column (0 when stripped)
+    fn render(self) -> str;       // the symbolication string (§3)
+}
+```
+
+That is RFC 0025's `builtin class` row exactly — the engine,
+compiler-lowered; nothing to bind; the decl is a pure signature
+contract (its amendment records this as the row's second instance).
+Not a `builtin primitive`: primitives are value types
+(`str`/`bytes`/`opaque`); a trace is a stateful engine snapshot with
+methods.
+
+**The consequences of `builtin class` over the wrapper:** no
+Opaque-box indirection; no `debug` host bodies to register (wasm32
+gets it for free — there are no host fns to bind); member dispatch
+through the engine's member contract. Capture lowers to `CallNat
+CaptureTrace`; the trace lives in a `CellData::Trace` cell — immutable
+snapshot, `own()` shares it by handle; it takes no user impls (the
+contract is closed) and never crosses the host boundary
+(`crosses_boundary` is false for it).
+
+**Capture is §2's `RawTrace` walk, RAW — minus native markers in v1:**
+the active frame innermost, then every saved frame outward, as
+`(func, call-site pc)` pairs — 8 B/frame, no name lookup, no source
+access, no symbolication at capture. Saved frame pcs are resume
+points, so symbolication backs one op to the call site. Target-independent
+by construction (the same walk runs on wasm32 — pinned byte-exact).
+`Trap`'s own unwind capture is unchanged; this surface is the opt-in
+rut-side snapshot.
+
+**Members symbolicate lazily, per index, on access** — §3's three
+restoration paths apply unchanged, through the loaded binaries' tables
+(§4). Decided AGAINST a `frames` field: a frame array would mint
+rut-side data per access, fix the representation into the surface, and
+pay for symbolication eagerly. Stripped builds degrade to `0`
+line/col. **The render format** (one whole-trace pass, innermost
+first): `at c_big (core:27:13)` symbolicated; `at c_big (core #3 @ pc
+25)` stripped. Out-of-range `i` traps `IndexOutOfBounds` (the index is
+a bug, not data — the loud-boundary convention).
+
+**Cost law:** capture is depth-proportional, pay-per-capture (~30 ns
+base + ~0.2 ns/frame measured); members are pay-per-access (`len()`
+O(1), one binary search per `name`/`line`/`col`); `render()` is the
+only whole-trace pass. The `?`/err propagation path stays zero-cost —
+§1's law stands. Opt-in at raise sites: a rich err carries
+`trace: ?StackTrace` only where the producer decides the cost is worth
+it (nil the default).
+
+**Naming, reconciled:** `capture_stack_trace` (this RFC's old spelling,
+and RFC 0028's) is superseded by the ruling's **`capture_stacktrace`**
+— the declared surface above is the one law; the old spelling
+diagnoses at any stale decl.
+
+**Version:** the surface addition bumped the module format **VERSION 7
+→ 8** (the declared-surface precedent; the func table also serializes
+its `pos` table beside the spans, so stale v7 artifacts are rejected).
 
 ## Open questions
 

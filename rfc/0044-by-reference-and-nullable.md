@@ -2,6 +2,10 @@
 
 - **Status:** Draft — landed (the byref-nullable batch; see §8)
 - **Date:** 2026-09-19
+- **Revised:** 2026-09 — the err-channel amendment (see the end of this
+  RFC): the `(?T, err)` pair is THE answer channel (law), and the
+  return-position destructure fusion makes minting that pair free
+  where it is used as a pair.
 - **Author:** hpp2334
 - **Depends on:** RFC 0004 (primitives), RFC 0005 (builtin generics — the
   `?T` type), RFC 0011 (reference semantics), RFC 0016 (the RC heap),
@@ -247,6 +251,44 @@ the per-store box and the stored cells outright, recovering the
   `opaque` member).
 - RFCs amended in place: 0004 §1/§2/§4, 0005 §8/§9/§10, 0007 (nil,
   array literals), 0016 §1/§2/§3/§4, 0042 §1/§6/§8.
+
+## Amendment (Sep 2026, err-channel): `(?T, err)` is THE answer channel — and the mint that pairs it is free
+
+Two laws land with the err-channel batch
+(`docs/err-channel-report.md`; the survey,
+`docs/err-channel-survey.md`, is the evidence):
+
+**1. The pair law.** `(?T, err)` — concretely `(value, ok)` /
+`(T, str)` — is THE answer channel, permanently. `Option`/`Result` stay
+dead by design (the v1.1 removal law, RFC 0005 §10); reasons belong in
+the type system, spelled as the pair. The convention, now documented as
+law: **empty err + a value = success; empty err + nil = "not found";
+non-empty err = "failed"** — the err channel disambiguates a
+legitimately-absent value from a failure. The exactly-one-non-nil
+invariant is the CALLER's convention, never boundary-enforced (the
+engine types the components and decodes them; it does not police the
+combination). At the host boundary the pair crosses field-by-field
+under RFC 0023's crossing rule (its amendment records the one `Opt`
+arm), so an `entry fn -> (?T, err)` is a first-class host answer.
+This supersedes §2.4's "the host boundary does not admit `?T`" (and
+closes OQ-2): the nullable crosses nil-flattened when its element
+crosses.
+
+**2. The fusion note.** The pair's cost anatomy — one `MakeRecord`
+heap mint + field writes + rc release per answer, measured ~+175 ns/get
+in the refcolumn round-1 attribution — no longer taxes the hot shape.
+A return-position destructure fusion (`ret_round` in `rut-lir`'s SROA
+family, post-inline) consumes a mint whose register is handed off
+through single-def copies and read only by destructuring `GetF`s: prim
+pairs unbox entirely, a ref component costs one retain at the handoff,
+no record cell. Measured on the `checkedadd` bench row: exec −60.3%,
+fuel −4 ops/call EXACT, heap −40 B, checksum bit-identical; every
+other suite row bit-identical. Pure lowering — no IR/format change,
+module VERSION unaffected by this item. Genuine escapes (a pair
+returned from a non-inlined callee, a pair stored into a container)
+still mint, correctly. The evidence, method, and census (668 surviving
+mints, 68.7% return-family pairs) live in the survey and report; the
+row is the pair economy's permanent canary.
 
 ## Open questions
 

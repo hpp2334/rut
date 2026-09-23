@@ -8,6 +8,9 @@
   not a load-time panic. A dynamic `fire(&[Value])` shape needs the
   `register_raw` escape hatch, expected unused. See also RFC 0023's
   revision note.)
+- **Revised:** 2026-09 — the err-channel amendment (end of this RFC):
+  the `builtin class` row's second instance (`StackTrace`), and the
+  crossing rule's one `Opt` arm on the entry surface.
 - **Date:** 2026-09-13
 - **Author:** hpp2334
 - **Depends on:** RFC 0022 (embedding), RFC 0023 §1 (the crossing rule),
@@ -169,6 +172,45 @@ builtin trait Name<T> { .. }        // engine-woven contract
 - **Workers**: an `Opaque` box may cross isolates only if the host
   registered the boxed type `send` (RFC 0021 §2) — checked at the
   transfer, by `TypeId`.
+
+## Amendment (Sep 2026, err-channel): the `builtin class` row's second instance — `StackTrace` — and the crossing rule's `Opt` arm
+
+Two records from the err-channel batch
+(`docs/err-channel-report.md`):
+
+**The `builtin class` row's second instance.** The table above gives
+the engine-owned keyword row one shape; `StackTrace` is its second big
+instance and the first ENGINE TYPE with a member contract spelled in
+the decl file (`core.d.rut`):
+
+```rut
+builtin fn capture_stacktrace() -> StackTrace;
+builtin class StackTrace { fn len/name/line/col/render .. }
+```
+
+The engine itself implements it — compiler-lowered (`CallNat` natives),
+declared in the toolchain's decl file only, nothing to bind, the decl a
+pure signature contract. The row's discipline held exactly as written:
+no host bodies, no Opaque wrapper (the RFC 0036 host-fn design it
+supersedes — see RFC 0036's amendment), member dispatch through the
+engine's member contract, wasm32 for free, and a VERSION bump for the
+declared-surface change (7 → 8). The precedent for the NEXT engine
+type: spell the member contract in `core.d.rut`, implement behind
+lowered calls, close the impl surface, keep the representation
+engine-side (lazy, per-access) rather than minting rut-side data into
+fields.
+
+**The crossing rule's one `Opt` arm.** The entry rule (RFC 0023 §1 —
+its amendment is the law) gained exactly one arm: `?T` crosses iff `T`
+crosses, decoded nil-flattened at the boundary. This is not an
+err-specific carve-out — it is the gap between RFC 0023 §1's own text
+("optionals cross as the v1.1 tuples they were always spelled as") and
+an implementation that predated it; the negative pin holds forever (a
+`?T` whose ELEMENT does not cross still rejects). The entry shape this
+enables is the answer channel `(?T, err)` (RFC 0044's amendment — the
+pair law). The `host fn` crossing set above reads unchanged: the same
+`crosses_boundary` answers both directions, so what an entry may
+return, a host fn may accept.
 
 ## Open questions
 
