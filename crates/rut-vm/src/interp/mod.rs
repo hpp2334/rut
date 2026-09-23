@@ -893,6 +893,7 @@ mod tests {
             labels: vec![],
             code: vec![],
             spans: vec![],
+            pos: vec![],
             host_id: None,
         });
         vm.prog = Rc::new(prog);

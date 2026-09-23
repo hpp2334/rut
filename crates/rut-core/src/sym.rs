@@ -150,6 +150,12 @@ pub const WELL_KNOWN: &[&str] = &[
     "size_of",    // SIZE_OF
     "align_of",   // ALIGN_OF
     "clone",      // CLONE
+    "capture_stacktrace", // CAPTURE_STACKTRACE
+    "StackTrace", // STACK_TRACE
+    "name",       // NAME
+    "line",       // LINE
+    "col",        // COL
+    "render",     // RENDER
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -219,6 +225,15 @@ pub const ALIGN_OF: IdentId = IdentId(53);
 // the one copy escape hatch — `bytes.clone()` (RFC 0044; every other
 // binding shares its cell)
 pub const CLONE: IdentId = IdentId(54);
+// the StackTrace surface (RFC 0036, err-channel phase 2): the opt-in
+// capture fn, the builtin class name, and its member contract —
+// well-known so every interner agrees on the surface names
+pub const CAPTURE_STACKTRACE: IdentId = IdentId(55);
+pub const STACK_TRACE: IdentId = IdentId(56);
+pub const NAME: IdentId = IdentId(57);
+pub const LINE: IdentId = IdentId(58);
+pub const COL: IdentId = IdentId(59);
+pub const RENDER: IdentId = IdentId(60);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -313,6 +328,12 @@ mod tests {
             ("size_of", SIZE_OF),
             ("align_of", ALIGN_OF),
             ("clone", CLONE),
+            ("capture_stacktrace", CAPTURE_STACKTRACE),
+            ("StackTrace", STACK_TRACE),
+            ("name", NAME),
+            ("line", LINE),
+            ("col", COL),
+            ("render", RENDER),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

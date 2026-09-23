@@ -147,6 +147,7 @@ impl<'a> GraphCompiler<'a> {
                     labels: vec![],
                     code: vec![],
                     spans: vec![],
+                    pos: vec![],
                     host_id: Some(surface.names.intern(&format!("{host_scope}::{name}"))),
                 });
             }

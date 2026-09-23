@@ -351,6 +351,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     .map(|op| remap_op(op, &map, &map_func, &sm, &tm, const_off))
                     .collect(),
                 spans: f.spans,
+                pos: f.pos,
                 host_id: f.host_id.map(nm),
             });
         }
@@ -407,6 +408,8 @@ fn remap_kind(
             ret: map(*ret),
         },
         TyKind::Opt { elem } => TyKind::Opt { elem: map(*elem) },
+        // the trace snapshot carries no type ids — the boot type is global
+        TyKind::Trace => TyKind::Trace,
     }
 }
 
@@ -487,6 +490,7 @@ mod tests {
             labels: vec![],
             code: vec![Op::Const { dst: 0, k: 0 }, Op::Ret { val: Some(0) }],
             spans: vec![],
+            pos: vec![],
             host_id: None,
         });
         p.exports.push((main, 0));
@@ -558,6 +562,7 @@ mod tests {
                 Op::Ret { val: Some(0) },
             ],
             spans: vec![],
+            pos: vec![],
             host_id: None,
         });
         p.exports.push((main, 0));

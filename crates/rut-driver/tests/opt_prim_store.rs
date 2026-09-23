@@ -512,7 +512,11 @@ fn prim_store_release_walk_skips_element_slots() {
 #[test]
 fn version_gate_rejects_stale_artifacts() {
     use rut_core::binary::{decode, VERSION};
-    assert_eq!(VERSION, 7, "the declared-surface change is the only allowed VERSION bump this phase");
+    // v8 is the err-channel phase 2 declared-surface change
+    // (`capture_stacktrace()` + the `StackTrace` builtin class + the
+    // `pos` span table, RFC 0036) — the 6→7 precedent this pin already
+    // enforced for the primitive-optional element store
+    assert_eq!(VERSION, 8, "the declared-surface change is the only allowed VERSION bump this phase");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,
@@ -524,10 +528,10 @@ fn version_gate_rejects_stale_artifacts() {
 
     let mut stale = bytes.clone();
     let ver_at = 4; // MAGIC (4) then the version u32
-    stale[ver_at..ver_at + 4].copy_from_slice(&6u32.to_le_bytes());
-    let err = decode(&stale).expect_err("a v6 artifact must be rejected");
+    stale[ver_at..ver_at + 4].copy_from_slice(&7u32.to_le_bytes());
+    let err = decode(&stale).expect_err("a v7 artifact must be rejected");
     assert!(
-        err.contains("unsupported module binary version 6"),
+        err.contains("unsupported module binary version 7"),
         "the standard clear error: {err}"
     );
 }

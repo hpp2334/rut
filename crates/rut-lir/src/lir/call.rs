@@ -212,6 +212,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Assert { cond, msg }, sp.lo);
                 return Ok(TY_NIL);
             }
+            sym::CAPTURE_STACKTRACE if core_fn => {
+                // capture_stacktrace() -> StackTrace (RFC 0036 §2,
+                // err-channel phase 2): the frame walk is the VM's, at
+                // run time — the native mints the trace cell. Opt-in at
+                // the raise site: nothing here touches the hot path.
+                if !args.is_empty() {
+                    self.ctx.err(sp, "capture_stacktrace() takes no arguments");
+                    return Err(());
+                }
+                let dst = self.new_reg(TY_STACK_TRACE);
+                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::CaptureTrace, recv: NOREG, argv_off, argc, dst }, sp.lo); }
+                return Ok(TY_STACK_TRACE);
+            }
             sym::STRING_JOIN if core_fn => {
                 // join every element of an `Array<str>` in one pass: the
                 // native sizes once and allocates once (RFC 0032 §1.1 R2).
@@ -951,6 +964,65 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.name(name)
                 ));
                 return Err(());
+            }
+            TyKind::Trace => {
+                // the StackTrace member contract (RFC 0036 §3/§5,
+                // err-channel phase 2): engine-builtins on the snapshot,
+                // lowered to the trace natives — lazy symbolication lives
+                // in the VM, per access
+                match (name, args.len()) {
+                    (sym::LEN, 0) => {
+                        let dst = self.new_reg(TY_I32);
+                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::TraceLen, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        return Ok(TY_I32);
+                    }
+                    (sym::NAME, 1) => {
+                        let it = self.compile_expr(args[0], Some(TY_I32))?;
+                        if it != TY_I32 {
+                            self.ctx.err(sp, "name(i) takes an `i32` index");
+                            return Err(());
+                        }
+                        let ir = self.last_reg;
+                        let dst = self.new_reg(TY_STR);
+                        { let (argv_off, argc) = self.pool_args(&(vec![ir])); self.emit(Op::CallNat { nat: Nat::TraceName, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        return Ok(TY_STR);
+                    }
+                    (sym::LINE, 1) => {
+                        let it = self.compile_expr(args[0], Some(TY_I32))?;
+                        if it != TY_I32 {
+                            self.ctx.err(sp, "line(i) takes an `i32` index");
+                            return Err(());
+                        }
+                        let ir = self.last_reg;
+                        let dst = self.new_reg(TY_I32);
+                        { let (argv_off, argc) = self.pool_args(&(vec![ir])); self.emit(Op::CallNat { nat: Nat::TraceLine, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        return Ok(TY_I32);
+                    }
+                    (sym::COL, 1) => {
+                        let it = self.compile_expr(args[0], Some(TY_I32))?;
+                        if it != TY_I32 {
+                            self.ctx.err(sp, "col(i) takes an `i32` index");
+                            return Err(());
+                        }
+                        let ir = self.last_reg;
+                        let dst = self.new_reg(TY_I32);
+                        { let (argv_off, argc) = self.pool_args(&(vec![ir])); self.emit(Op::CallNat { nat: Nat::TraceCol, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        return Ok(TY_I32);
+                    }
+                    (sym::RENDER, 0) => {
+                        let dst = self.new_reg(TY_STR);
+                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::TraceRender, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        return Ok(TY_STR);
+                    }
+                    _ => {
+                        self.ctx.err(sp, format!(
+                            "`StackTrace` has no method `{}` with {} argument(s) — its members are `len`/`name(i)`/`line(i)`/`col(i)`/`render`",
+                            self.ctx.name(name),
+                            args.len()
+                        ));
+                        return Err(());
+                    }
+                }
             }
             _ => {}
         }

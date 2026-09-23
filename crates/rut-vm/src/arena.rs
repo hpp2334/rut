@@ -288,8 +288,10 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
             }
         }
         // a host payload box has no rut-typed children — the Rust payload
-        // is dropped with the cell through its own Drop (RFC 0023/0026)
-        CellData::HostBoxed { .. } | CellData::Enum { .. } | CellData::Str(_) => {}
+        // is dropped with the cell through its own Drop (RFC 0023/0026);
+        // a trace cell's frames are plain (func, pc) words, never handles
+        CellData::HostBoxed { .. } | CellData::Enum { .. } | CellData::Str(_)
+        | CellData::Trace { .. } => {}
     }
     out
 }
@@ -305,7 +307,8 @@ pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
     // never build the child vec at all.
     let children = unsafe {
         match (*p).data {
-            CellData::Str(_) | CellData::Enum { .. } | CellData::HostBoxed { .. } => None,
+            CellData::Str(_) | CellData::Enum { .. } | CellData::HostBoxed { .. }
+            | CellData::Trace { .. } => None,
             _ => Some(collect_ref_children(&*p, &arena.plan)),
         }
     };

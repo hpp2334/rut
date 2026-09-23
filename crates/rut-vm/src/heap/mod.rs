@@ -22,7 +22,7 @@ mod value;
 pub use crate::arena::OpaqueRef;
 pub(crate) use blocks::Blocks;
 
-pub use cell::{cell, cell_of, ArrData, ArrKind, CellData, CellVal, Slots, StrVal};
+pub use cell::{cell, cell_of, ArrData, ArrKind, CellData, CellVal, Slots, StrVal, TraceFrame};
 pub use hostbox::OpaqueBox;
 pub use trap::{Trap, TrapKind};
 pub(crate) use value::{Slot, Value};
@@ -362,6 +362,14 @@ impl Heap {
         self.mint(0, CellData::Closure { func, captures }, n * 8)
     }
 
+    /// A `StackTrace` cell (RFC 0036 §2, err-channel phase 2): the raw
+    /// frames move in — capture's whole cost is this Vec plus the cell
+    /// header, depth-proportional, paid once per capture.
+    pub fn alloc_trace(&self, frames: Vec<TraceFrame>) -> Result<Slot, Trap> {
+        let n = frames.len() as u64;
+        self.mint(rut_core::types::TY_STACK_TRACE, CellData::Trace { frames }, n * 8)
+    }
+
     /// Enum member — the immortal singleton cell (RFC 0016 §1): the one
     /// place identity quietly behaves as value (RFC 0012 §4).
     pub fn enum_member(&self, ty: TypeId, member: u32) -> Result<Slot, Trap> {
@@ -536,11 +544,13 @@ impl Heap {
                 let inner = self.clone_slot(val, val_ty, table)?;
                 self.alloc_opaque(inner, val_ty)
             }
-            TyKind::Enum { .. } | TyKind::TraitObj { .. } => {
+            TyKind::Enum { .. } | TyKind::TraitObj { .. } | TyKind::Trace => {
                 // singletons & trait refs alias one cell — own() must mint a
                 // new identity; for enums that would break singleton `==`,
                 // so enums share (values, RFC 0006); trait objects have no
-                // standalone own semantics in v1 beyond the cell handle
+                // standalone own semantics in v1 beyond the cell handle.
+                // A trace is an immutable engine snapshot: the handle share
+                // IS the own — every holder sees the same captured frames.
                 Ok(s)
             }
         }

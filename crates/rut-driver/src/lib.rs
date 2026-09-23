@@ -302,7 +302,31 @@ pub fn compile_program_resolved(
             exports.push((n, f));
         }
     }
-    let funcs = std::mem::take(&mut ctx.funcs);
+    let mut funcs = std::mem::take(&mut ctx.funcs);
+    // RFC 0036 §4 — resolve pc → (line, col) beside the byte-offset span
+    // table, HERE while this module's source is in hand (the compiler's
+    // lowering carries byte offsets only). 1-based both; parallel to
+    // `spans` entry-for-entry, consumed lazily by the StackTrace members.
+    let line_starts: Vec<u32> = {
+        let mut ls = vec![0u32];
+        for (i, b) in src.bytes().enumerate() {
+            if b == b'\n' {
+                ls.push(i as u32 + 1);
+            }
+        }
+        ls
+    };
+    let line_col = |off: u32| -> (u32, u32) {
+        let line = line_starts.partition_point(|&s| s <= off);
+        if line == 0 {
+            return (0, 0);
+        }
+        let lo = line_starts[line - 1];
+        (line as u32, off - lo + 1)
+    };
+    for f in funcs.iter_mut() {
+        f.pos = f.spans.iter().map(|(_, lo)| line_col(*lo)).collect();
+    }
     let ir_dump = ir_dump_of(&funcs, &ctx.interner);
     // exported surface: every `pub` fn + its signature, for using modules
     let mut surface = rut_core::binary::Surface::default();

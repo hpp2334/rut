@@ -485,6 +485,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             labels,
             code,
             spans,
+            // pc → (line, col) is filled by the DRIVER, while the module
+            // source is in hand — the compiler's span table stays
+            // byte-offset-only (RFC 0036 §4)
+            pos: vec![],
             host_id: None,
         };
         let f = &mut c.ctx.funcs[fid as usize];
@@ -588,6 +592,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             labels,
             code,
             spans,
+            // pc → (line, col) is filled by the DRIVER, while the module
+            // source is in hand — the compiler's span table stays
+            // byte-offset-only (RFC 0036 §4)
+            pos: vec![],
             host_id: None,
         };
         let f = &mut c.ctx.funcs[fid as usize];
@@ -662,6 +670,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             labels,
             code,
             spans,
+            // pc → (line, col) is filled by the DRIVER, while the module
+            // source is in hand — the compiler's span table stays
+            // byte-offset-only (RFC 0036 §4)
+            pos: vec![],
             host_id: None,
         };
         let f = &mut c.ctx.funcs[fid as usize];

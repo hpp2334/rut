@@ -44,6 +44,25 @@ builtin fn on_drop<T>(p: ?T, cleanup: fn(?T)) -> nil;
 
 builtin fn string_join(parts: [str]) -> str;  // join in one pass (RFC 0007)
 
+// RFC 0036 (err-channel phase 2) — the opt-in stack snapshot:
+// `capture_stacktrace()` walks the VM's frame chain and stores RAW
+// frames only — no names, no source access, no symbolication at
+// capture. Every member symbolicates LAZILY, per access, against the
+// loaded program; out-of-range `i` traps (the index is a bug, not
+// data). Opt-in at raise sites: the err-propagation path stays
+// zero-cost. Builtin CLASS, not a primitive: a trace is a stateful
+// engine snapshot with methods (RFC 0025's `builtin class` row — the
+// decl is a pure signature contract).
+builtin fn capture_stacktrace() -> StackTrace;
+
+builtin class StackTrace {
+    fn len(self) -> i32;                 // frame count (innermost first)
+    fn name(self, i: i32) -> str;        // frame i's function name
+    fn line(self, i: i32) -> i32;        // call-site line (0 when stripped)
+    fn col(self, i: i32) -> i32;         // call-site column (0 when stripped)
+    fn render(self) -> str;              // the RFC 0036 symbolication string
+}
+
 
 // ---- engine builtin primitives (compiler-lowered members) ----
 // The boot primitives declare their surface here — `builtin primitive`,

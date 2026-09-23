@@ -540,6 +540,10 @@ impl Machine for Vm {
         let Op::CallNat { nat, recv, argv_off, argc, dst } = op else {
             unreachable_op!("op_call_nat: unexpected op")
         };
+        // pin the cursor to this op: the capture native reads cur_pc as
+        // frame 0's call site, and a trap inside the nat parks AT the nat
+        // (the same shape `call_host` keeps for its crossing)
+        self.cur_pc = pc;
         self.call_nat(*nat, *recv, *argv_off, *argc, *dst)?;
         Ok(Flow::Next(pc + 1))
     }

@@ -195,6 +195,12 @@ pub enum TyKind {
     TraitObj { trait_id: u32 },
     /// erasure box (RFC 0014)
     Opaque,
+    /// engine stack-trace snapshot (RFC 0036, err-channel phase 2) — the
+    /// `StackTrace` builtin class's runtime type: a stateful engine
+    /// snapshot with methods, never a value spelling (that is why this is
+    /// a `builtin class` and not a `builtin primitive`). The cell carries
+    /// the RAW captured frames; symbolication is lazy, per member access.
+    Trace,
     /// `?T` (RFC 0005, RFC 0044) — a nil-able cell; `nil` is the null slot.
     /// Same one-slot box the old `*T` pointer was: `T → ?T` boxes, `?T → T`
     /// reads field 0 (nil check on use)
@@ -242,6 +248,9 @@ pub const TY_OPAQUE: TypeId = 14;
 /// immutable binary buffer (RFC 0004) — appended after `Opaque`; fixed ids
 /// are wire-stable and must never be reordered
 pub const TY_BYTES: TypeId = 15;
+/// the `StackTrace` snapshot (RFC 0036, err-channel phase 2) — appended
+/// after `Bytes`; fixed ids are wire-stable and must never be reordered
+pub const TY_STACK_TRACE: TypeId = 16;
 /// A host payload box's runtime type as `TidOf` reports it (RFC 0023/0026):
 /// the payload is Rust, so no rut type describes it. Type ids are type-table
 /// indices, which can never reach this value — `downcast<T>` therefore
@@ -281,6 +290,7 @@ impl TypeTable {
         push(sym::STR, TyKind::Str);
         push(sym::OPAQUE, TyKind::Opaque);
         push(sym::BYTES, TyKind::Bytes);
+        push(sym::STACK_TRACE, TyKind::Trace);
         t.boot_len = t.types.len() as u32;
         t.scope_base = vec![0; scope as usize + 1];
         if packed {

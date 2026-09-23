@@ -39,6 +39,13 @@ pub struct FuncCode {
     pub code: Vec<Op>,
     /// pc → source byte offset (RFC 0036 — symbolication data)
     pub spans: Vec<(u32, u32)>,
+    /// pc → (line, col) — RFC 0036 §4's symbolication positions, PARALLEL
+    /// to `spans` entry-for-entry (emit order = pc order; the passes
+    /// preserve the pairing, and `pos` is filled AFTER them, at the
+    /// driver, while the module source is in hand). Resolved 1-based;
+    /// `0`/empty = stripped — symbolication degrades to pc-only text
+    /// (RFC 0036 §3).
+    pub pos: Vec<(u32, u32)>,
     /// host-function binding (RFC 0022/0026/0029): `Some(id)` when the
     /// function has no rut body — `Op::Call` dispatches to the embedder's
     /// impl registered under `interner.name(id)` (the ONE name kind that
@@ -154,6 +161,11 @@ pub enum NativeTy {
     /// name is ambient like the other builtins (the `opaque` surface
     /// spelling aliases it until the phase-2 interner rename)
     Opaque,
+    /// `StackTrace` — the engine snapshot (RFC 0036, err-channel phase
+    /// 2): a boot-table type whose members are the engine-builtins
+    /// (`len`/`name`/`line`/`col`/`render`); the decl is a pure
+    /// signature contract (RFC 0025's `builtin class` row)
+    StackTrace,
 }
 
 /// A builtin trait published by `core`'s native surface (RFC 0028):
@@ -224,6 +236,7 @@ pub const CORE_FNS: &[IdentId] = &[
     sym::ASSERT, sym::PANIC,
     sym::ON_DROP,
     sym::STRING_JOIN,
+    sym::CAPTURE_STACKTRACE,
 ];
 
 impl Surface {
@@ -258,7 +271,10 @@ impl Surface {
             .collect();
         Surface {
             names: Interner::new(),
-            native_types: vec![(sym::OPAQUE, NativeTy::Opaque)],
+            native_types: vec![
+                (sym::OPAQUE, NativeTy::Opaque),
+                (sym::STACK_TRACE, NativeTy::StackTrace),
+            ],
             native_traits: vec![(sym::ITERATOR, NativeTrait::Iterator)],
             native_fns: CORE_FNS.to_vec(),
             // core's one const: `use core::{NAN}` — the unwritable float
@@ -274,6 +290,7 @@ impl Surface {
 pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
     match name {
         sym::OPAQUE => Some(NativeTy::Opaque),
+        sym::STACK_TRACE => Some(NativeTy::StackTrace),
         _ => None,
     }
 }
@@ -395,7 +412,13 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// surface change (the 5→6 precedent): stale v6 artifacts carry the tuple
 /// shape's `(T, bool)` lowering and are rejected with the standard version
 /// error
-pub const VERSION: u32 = 7;
+/// v8: the StackTrace surface (RFC 0036, err-channel phase 2) — the
+/// `capture_stacktrace()` builtin fn + the `StackTrace` builtin class
+/// (the RFC 0025 member contract), a declared-surface change (the 6→7
+/// precedent); the func table also serializes `pos` (pc → line/col)
+/// beside `spans`, so stale v7 artifacts are rejected with the standard
+/// version error
+pub const VERSION: u32 = 8;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -510,6 +533,10 @@ pub fn encode(prog: &Program) -> Vec<u8> {
             e.u32(*pc);
             e.u32(*lo);
         }
+        for (line, col) in &f.pos {
+            e.u32(*line);
+            e.u32(*col);
+        }
         e.u8(f.host_id.is_some() as u8);
         if let Some(h) = f.host_id {
             e.u32(h.0);
@@ -571,6 +598,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u8(13);
             e.u32(*elem);
         }
+        TyKind::Trace => e.u8(14),
     }
 }
 
@@ -672,8 +700,15 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             let lo = d.u32()?;
             spans.push((pc, lo));
         }
+        // `pos` is parallel to `spans` (v8): one (line, col) per span entry
+        let mut pos = Vec::with_capacity(nspans);
+        for _ in 0..nspans {
+            let line = d.u32()?;
+            let col = d.u32()?;
+            pos.push((line, col));
+        }
         let host_id = if d.u8()? != 0 { Some(IdentId(d.u32()?)) } else { None };
-        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, argv, labels, code, spans, host_id });
+        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, argv, labels, code, spans, pos, host_id });
     }
     let nexp = d.u32()? as usize;
     let mut exports = Vec::with_capacity(nexp);
@@ -725,6 +760,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             TyKind::Fn { params, ret }
         }
         13 => TyKind::Opt { elem: d.u32()? },
+        14 => TyKind::Trace,
         t => return Err(format!("bad type kind tag {t}")),
     })
 }
@@ -906,6 +942,8 @@ fn nat(b: u8) -> Result<Nat, String> {
         0 => Nat::Str, 1 => Nat::Concat, 2 => Nat::StrLen,
         3 => Nat::ArrLen, 4 => Nat::StrJoin, 5 => Nat::StrSlice,
         6 => Nat::ArrSlice, 7 => Nat::BytesClone,
+        8 => Nat::CaptureTrace, 9 => Nat::TraceLen, 10 => Nat::TraceName,
+        11 => Nat::TraceLine, 12 => Nat::TraceCol, 13 => Nat::TraceRender,
         _ => return Err("bad nat tag".into()),
     })
 }
@@ -1085,6 +1123,7 @@ mod tests {
             labels: vec![],
             code: vec![],
             spans: vec![],
+            pos: vec![],
             host_id: None,
         });
         p.exports.push((main, 0));

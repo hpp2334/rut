@@ -204,6 +204,11 @@ impl<'a> Ctx<'a> {
                             self.err(sp, "`opaque` takes no generic arguments");
                             TY_I32
                         }
+                        (rut_core::binary::NativeTy::StackTrace, []) => TY_STACK_TRACE,
+                        (rut_core::binary::NativeTy::StackTrace, _) => {
+                            self.err(sp, "`StackTrace` takes no generic arguments");
+                            TY_I32
+                        }
                     };
                 }
                 {

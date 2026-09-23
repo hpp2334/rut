@@ -538,6 +538,25 @@ pub enum CellData {
         func: u32,
         captures: Vec<Slot>,
     },
+    /// engine stack-trace snapshot (RFC 0036 §2, err-channel phase 2) —
+    /// the `StackTrace` builtin class's payload: the RAW captured frames,
+    /// innermost first, nothing else. No symbolication data lives in the
+    /// cell: `name`/`line`/`col`/`render` resolve lazily, per access,
+    /// against the loaded program (the interner + the position table).
+    /// One frame is one call site — `(func, pc)`:
+    /// 8 bytes, so `len(frames) * 8` is the whole heap charge.
+    Trace { frames: Vec<TraceFrame> },
+}
+
+/// One captured frame — RFC 0036 §2's `RawFrame`, rut-only shape: the
+/// frame's function id and the CALL-SITE pc (the op that pushed the
+/// frame; for the innermost frame, the `CallNat` capture op itself).
+/// No name, no source position — capture is a raw walk of `vm.frames`
+/// and symbolication pays for the lookups only when someone reads them.
+#[derive(Clone, Copy, Debug)]
+pub struct TraceFrame {
+    pub func: u32,
+    pub pc: u32,
 }
 
 impl CellVal {

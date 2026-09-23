@@ -99,6 +99,24 @@ pub enum Nat {
     /// `b.clone()` — a one-shot buffer copy (RFC 0044): the ONLY copy
     /// escape hatch; recv = the bytes, no args, dst = the fresh buffer
     BytesClone,
+    /// `capture_stacktrace()` (RFC 0036 §2, err-channel phase 2): the
+    /// frame walk — RAW frames into a fresh `StackTrace` cell at dst,
+    /// no recv, no args
+    CaptureTrace,
+    /// `StackTrace.len(self)` — the frame count (O(1))
+    TraceLen,
+    /// `StackTrace.name(self, i)` — frame i's function name, resolved
+    /// lazily against the loaded program's interner
+    TraceName,
+    /// `StackTrace.line(self, i)` — frame i's call-site line (0 when
+    /// stripped)
+    TraceLine,
+    /// `StackTrace.col(self, i)` — frame i's call-site column (0 when
+    /// stripped)
+    TraceCol,
+    /// `StackTrace.render(self)` — the RFC 0036 symbolication string,
+    /// one whole-trace pass
+    TraceRender,
 }
 
 #[derive(Clone, Debug, PartialEq)]

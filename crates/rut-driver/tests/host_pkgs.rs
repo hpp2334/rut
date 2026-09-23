@@ -236,6 +236,7 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
         labels: vec![],
         code: vec![],
         spans: vec![],
+        pos: vec![],
         host_id: Some(host_key),
     });
     let limits = rut_vm::interp::Limits::default();
