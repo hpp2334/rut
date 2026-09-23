@@ -7,9 +7,10 @@
 //! Every test cites the missing-peer-matrix cell it pins
 //! (docs/dep-kinds-survey.md §3) — the suite IS the ruling, executable.
 //! Every fixture avoids the T10 collision shape (one consumer per
-//! shared inline pkg), so today's splice graph cannot move. D2 — the
-//! reference-site dedicated diagnostic — is phase 2's: T4 pins the
-//! session-resident registry handoff and today's baseline only.
+//! shared inline pkg — T10 itself lives in dep_dedup.rs). D2 — the
+//! reference-site dedicated diagnostic — landed with phase 2's graph/
+//! bundle work and resolves against the session-resident registry this
+//! phase populated; T4 pins the upgraded text.
 
 use std::path::Path;
 
@@ -87,12 +88,13 @@ fn t3_both_peers_mount_in_name_order() {
 }
 
 #[test]
-fn t4_reference_with_peer_absent_registry_handoff() {
-    // matrix row 3 — the phase-1 half: json's peer declaration is
-    // session-resident (the registry phase 2's D2 upgrade resolves
-    // against), and the reference misses TODAY with the bare
-    // NoModule text — the baseline D2 replaces. The dedicated diag is
-    // deliberately NOT implemented this phase.
+fn t4_reference_with_peer_absent_gets_the_dedicated_diag() {
+    // matrix row 3 — D2 (RFC 0045 §4): the consumer REFERENCES pouch
+    // while pouch is absent; the miss is a declared optional peer of a
+    // mounted pkg, so `resolve` answers with the DEDICATED diagnostic —
+    // pkg + peer + the integration it unlocks + the fix — never the
+    // bare NoModule text. (Phase 1 pinned the bare baseline here; the
+    // baseline flipped when phase 2's D2 upgrade landed.)
     let (s, _) = load("cons_ref").expect("the mount itself is silent (optional peer)");
     let decl = s
         .peer_decls()
@@ -102,14 +104,25 @@ fn t4_reference_with_peer_absent_registry_handoff() {
     assert!(decl.optional);
     assert_eq!(decl.lib.as_deref(), Some("./serde_pouch.rut"));
     let err = s.resolve("pouch").unwrap_err();
-    assert!(
-        err.to_string().contains("no module with that name is mounted"),
-        "today's bare NoModule baseline: {err}"
+    assert_eq!(
+        err.to_string(),
+        "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.toml` `[deps]` (RFC 0045 §4)",
+        "the dedicated diag, exact survey text"
     );
+    // the same text surfaces at the reference site through the graph
     let g = compile("cons_ref").unwrap();
     assert!(
-        g.diags.iter().any(|d| d.msg.contains("cannot resolve `pouch`")),
-        "the reference must still miss: {:?}",
+        g.diags
+            .iter()
+            .any(|d| d.msg.contains("cannot resolve `pouch`")
+                && d.msg.contains("`json`'s pouch integration is not mounted")
+                && d.msg.contains("(RFC 0045 §4)")),
+        "the reference must miss with D2: {:?}",
+        g.diags
+    );
+    assert!(
+        !g.diags.iter().any(|d| d.msg.contains("no module with that name is mounted")),
+        "the bare NoModule text must be gone: {:?}",
         g.diags
     );
 }

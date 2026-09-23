@@ -1,6 +1,11 @@
 # T2 (matrix row 4): the peer is PRESENT in the consumer's closure →
 # the integration group mounts automatically (presence-based) and its
 # impl dispatches; placement green.
+# The bundle keys are T12's: directory loading ignores them (RFC 0038
+# §2), and `pack_dir` needs them — this same world packs and loads as a
+# v3 bundle with the group riding the archive.
+format = "rutbundle"
+format_version = 3
 name = "cons_pouch"
 entry.lib = "./cons.rut"
 

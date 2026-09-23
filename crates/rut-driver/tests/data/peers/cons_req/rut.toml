@@ -1,6 +1,11 @@
 # T5 (matrix row 1): a REQUIRED peer the consumer did not supply — D1
 # loud at mount, naming the pkg, the peer, and the fix; never
 # auto-pulled.
+# The bundle keys are T12's: packed, the required peer is absent from
+# the archive's groups and D1 fires at bundle LOAD (directory loads
+# ignore the format keys, RFC 0038 §2).
+format = "rutbundle"
+format_version = 3
 name = "cons_req"
 entry.lib = "./cons.rut"
 

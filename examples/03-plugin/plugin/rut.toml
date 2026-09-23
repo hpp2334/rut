@@ -1,11 +1,12 @@
 # plugin/ — the moderator module (RFC 0035 §1: one directory is one module).
 #
-# The manifest is bundle-shaped (RFC 0038 §2, layout v2): directory
+# The manifest is bundle-shaped (RFC 0038 §2, layout v3): directory
 # loading ignores the format keys, and `rut pack plugin/` needs them —
 # so the same directory packs to a `.rutbundle` unchanged, with its
-# deps riding the bundle as `<pkg>/` groups.
+# deps riding the bundle as `<pkg>/` groups (v2; v3 adds the RFC 0045
+# peer groups — the packer emits v3 since the dep-kinds batch).
 format = "rutbundle"
-format_version = 2
+format_version = 3
 name = "plugin"
 entry.lib = "./plugin.rut"
 

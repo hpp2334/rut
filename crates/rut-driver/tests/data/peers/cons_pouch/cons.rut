@@ -2,9 +2,11 @@
 // peer's names ride json's spliced unit (one consumer per shared inline
 // pkg — the T10 shape is avoided: no direct `use pouch` here), so `Vec`
 // resolves as a local name of the combined unit, like any inlined dep.
+// `go` is an entry fn so T12 can run the packed bundle through the host
+// boundary and pin the dispatch result.
 use json::{JsonSerialize};
 
-fn go() -> str {
+entry fn go() -> str {
     let v = Vec<i64>.filled(7, 3);
     return v.json_serialize();
 }

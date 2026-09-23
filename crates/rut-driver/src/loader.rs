@@ -129,7 +129,9 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     let manifest = parse_manifest(&toml).map_err(|e| format!("{}: {e}", origin.display()))?;
     // §4: the layout version gates everything — refuse before reading
     // any other entry. v1: one module, rut sources only. v2: the whole
-    // dep graph rides `<pkg>/` groups (RFC 0038 OQ-3 answered).
+    // dep graph rides `<pkg>/` groups (RFC 0038 OQ-3 answered). v3: the
+    // RFC 0045 peer groups ride too — and this same gate is what makes
+    // an OLDER (v2-era) loader refuse a v3 bundle: refuse, never guess.
     if manifest.format.as_deref() != Some("rutbundle") {
         return Err(format!(
             "{}: rut.toml has no `format = \"rutbundle\"` — not a rut bundle",
@@ -137,27 +139,35 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         ));
     }
     match manifest.format_version {
-        Some(1) | Some(2) => {}
+        Some(1) | Some(2) | Some(3) => {}
         other => {
             return Err(format!(
-                "{}: unknown bundle format_version {other:?} — this loader knows versions 1 and 2",
+                "{}: unknown bundle format_version {other:?} — this loader knows versions 1, 2 and 3",
                 origin.display()
             ));
         }
     }
+    let is_v3 = manifest.format_version == Some(3);
     let root = manifest
         .name
         .clone()
         .ok_or_else(|| format!("{}: rut.toml has no `name`", origin.display()))?;
     let mut session = Session::new();
-    // Peer groups (RFC 0045 §3) ride format_version 3 — a v1/v2 loader
-    // would silently mount base-only, which is semantically wrong:
-    // refuse, never guess. v3 lands with the bundle land.
-    if !manifest.peer_deps.is_empty() {
+    // Peer groups (RFC 0045 §3) ride format_version 3: a v1/v2 layout
+    // has no group entries, so a peer-deps manifest there would silently
+    // mount base-only — semantically wrong; refuse, never guess.
+    if !is_v3 && !manifest.peer_deps.is_empty() {
         return Err(format!(
             "{}: rut.toml declares `[peer-deps]` — mounting peer groups needs bundle format_version 3 (RFC 0045 §3)",
             origin.display()
         ));
+    }
+    // the v3 peer gate's map: mounted pkg name → its archive prefix
+    // ("" for the root, `<pkg>/` for a group)
+    let mut prefixes: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    if is_v3 {
+        record_peers(&mut session, &root, &manifest);
+        prefixes.insert(root.clone(), String::new());
     }
     if manifest.format_version == Some(1) {
         // §1: one module per bundle in v1
@@ -189,8 +199,11 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         return Ok((session, root));
     }
 
-    // ---- v2: the root plus every `<pkg>/` dep group, resolved by NAME
-    // (the deps' `path` keys are directory-time only) ----
+    // ---- v2/v3: the root plus every `<pkg>/` dep group, resolved by
+    // NAME (the deps' `path` keys are directory-time only). v3 records
+    // each group's peer declarations and runs the peer gate after the
+    // walk — presence is by NAME inside the archive, exactly as in a
+    // directory world. ----
     let root_module = bundle_entry_module(&entries, "", &manifest)
         .map_err(|e| format!("{}: {e}", origin.display()))?;
     session
@@ -207,7 +220,7 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         })?;
         let dm = parse_manifest(&dep_toml)
             .map_err(|e| format!("{}: {pkg}/rut.toml: {e}", origin.display()))?;
-        if !dm.peer_deps.is_empty() {
+        if !is_v3 && !dm.peer_deps.is_empty() {
             return Err(format!(
                 "{}: {pkg}/rut.toml declares `[peer-deps]` — mounting peer groups needs bundle format_version 3 (RFC 0045 §3)",
                 origin.display()
@@ -223,6 +236,10 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         session
             .register_module(&name, m)
             .map_err(|e| e.to_string())?;
+        if is_v3 {
+            record_peers(&mut session, &name, &dm);
+            prefixes.insert(name.clone(), format!("{pkg}/"));
+        }
     }
     // every declared dep must be satisfied by a group
     for spec in manifest.deps.keys() {
@@ -233,7 +250,67 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
             ));
         }
     }
+    if is_v3 {
+        run_bundle_peer_gate(&mut session, &entries, &prefixes, origin)?;
+    }
     Ok((session, root))
+}
+
+/// The RFC 0045 peer gate over a mounted v3 bundle — pass 3 of the
+/// mount order, in-archive flavor: every group is already mounted
+/// (presence is by NAME; first-mount-wins), so
+///
+/// - required peer absent → the loud D1 mount error (matrix row 1);
+/// - optional peer absent → inert; the group simply never mounts;
+/// - peer present → the declarer's group file (the descriptor's `lib`,
+///   an impl-only `.rut`) is read from the archive and appended to its
+///   source. A declared group the archive does not carry is a load
+///   error — the §4-consistency row (a v3 bundle that declares a group
+///   must carry it).
+///
+/// The D3 path checks are directory-time law (a broken `[peer-deps]`
+/// path is the declaring pkg's own packaging bug): a bundle has no
+/// directories, the `path` keys never cross the pack boundary, and
+/// presence is by name.
+fn run_bundle_peer_gate(
+    session: &mut Session,
+    entries: &[(String, Vec<u8>)],
+    prefixes: &std::collections::BTreeMap<String, String>,
+    origin: &Path,
+) -> Result<(), String> {
+    // collected first, applied after — the registry borrows the session
+    let mut appends: Vec<(String, String)> = Vec::new();
+    for (pkg, peers) in session.peer_decls() {
+        for (peer, decl) in peers {
+            if session.resolve(peer).is_err() {
+                if decl.optional {
+                    continue; // inert — the group simply never mounts
+                }
+                // D1 (RFC 0045 §3): loud at load, naming pkg + peer + fix
+                return Err(format!(
+                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `{peer} = {{ path = \"..\" }}` to your `rut.toml` `[deps]` (RFC 0045 §3)"
+                ));
+            }
+            let Some(lib) = &decl.lib else {
+                continue; // presence declared, no integration file to mount
+            };
+            let Some(prefix) = prefixes.get(pkg) else {
+                return Err(format!(
+                    "pkg `{pkg}` declares `[peer-deps]` but is not mounted"
+                ));
+            };
+            let rel = lib.strip_prefix("./").unwrap_or(lib);
+            let key = bundle_key(&format!("{prefix}{rel}"))
+                .map_err(|e| format!("{}: {e}", origin.display()))?;
+            let text = read_entry(entries, &key)
+                .map_err(|e| format!("{}: {e}", origin.display()))?;
+            appends.push((pkg.clone(), text));
+        }
+    }
+    for (pkg, text) in appends {
+        session.append_source(&pkg, &text).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// Load a module directory (`rut.toml`) or a `.rutbundle` file — the two
@@ -260,9 +337,11 @@ fn entry_rel(manifest: &crate::session::Manifest) -> Option<&String> {
     manifest.entry.lib.as_ref().or(manifest.entry.type_path.as_ref())
 }
 
-/// Collect a package's files for a bundle: its `rut.toml` (byte-for-byte)
-/// plus its entry file, under `prefix` (empty for the root, `<pkg>/`
-/// for a dep).
+/// Collect a package's files for a bundle: its `rut.toml` (byte-for-byte),
+/// its entry file, and — the v3 layout (RFC 0045 §3) — each
+/// `[peer-deps]` descriptor's `lib` group file, all under `prefix`
+/// (empty for the root, `<pkg>/` for a dep). Descriptor order is the
+/// manifest's (BTreeMap), so the archive stays deterministic.
 fn collect_pkg_files(
     dir: &Path,
     manifest: &crate::session::Manifest,
@@ -279,19 +358,32 @@ fn collect_pkg_files(
     let src = std::fs::read_to_string(dir.join(rel))
         .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
     out.push((key, src.into_bytes()));
+    for desc in manifest.peer_deps.values() {
+        let Some(lib) = desc.get("lib") else {
+            continue; // presence declared, no integration file to pack
+        };
+        let rel = lib.strip_prefix("./").unwrap_or(lib);
+        let key = bundle_key(&format!("{prefix}{rel}"))?;
+        let src = std::fs::read_to_string(dir.join(rel))
+            .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
+        out.push((key, src.into_bytes()));
+    }
     Ok(())
 }
 
 /// Pack a module directory into a deterministic `.rutbundle` (RFC 0038 §3):
 /// `rut.toml` first, then the entry source, then — the v2 layout — the
 /// whole `[deps]` graph, each package under its own `<pkg>/` group
-/// (manifest + entry), recursively and deduplicated. Same input
+/// (manifest + entry), recursively and deduplicated; and — the v3
+/// layout (RFC 0045 §3) — each package's peer-gated integration files
+/// (`[peer-deps]` `lib` keys) beside its entry in its group. Same input
 /// directory ⇒ byte-identical bundle.
 ///
 /// This answers RFC 0038 OQ-3: a bundle is self-contained; its deps'
 /// `path` keys are directory-time only — the loader resolves groups by
 /// NAME. A v1 bundle (no deps, source-only) is the one-module special
-/// case the loader still accepts.
+/// case the loader still accepts; a v2 bundle still loads but no longer
+/// packs — the packer emits v3, the layout that carries peer groups.
 pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     let manifest = read_manifest(dir)?;
     if manifest.name.is_none() {
@@ -299,19 +391,12 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     }
     // the packed rut.toml is the directory's rut.toml byte-for-byte, so
     // the bundle keys must already be there — directory loading ignores
-    // them, but a bundle loader refuses without them (RFC 0038 §2)
-    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(2) {
+    // them, but a bundle loader refuses without them (RFC 0038 §2).
+    // v3 since the dep-kinds batch: peer groups ride the bundle (an
+    // older loader refuses the version — refuse, never guess).
+    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(3) {
         return Err(format!(
-            "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = 2`",
-            dir.join("rut.toml").display()
-        ));
-    }
-    // a v2 bundle would carry the base entry only and silently mount
-    // base-only in a consumer's world — semantically wrong. Peer groups
-    // pack as format_version 3 (the bundle land, phase 2 of RFC 0045).
-    if !manifest.peer_deps.is_empty() {
-        return Err(format!(
-            "{} declares `[peer-deps]` — packing peer groups needs bundle format_version 3 (RFC 0045 §3)",
+            "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = 3`",
             dir.join("rut.toml").display()
         ));
     }

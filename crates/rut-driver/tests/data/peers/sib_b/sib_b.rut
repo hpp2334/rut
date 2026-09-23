@@ -1,0 +1,19 @@
+// sib_b — T10's second sibling (RFC 0045 fixtures): the twin of sib_a
+// over the same shared pouch. Under dedup-by-origin pouch splices once
+// into the consumer's unit even though both siblings carry it.
+use pouch::{Vec};
+
+pub class Crate {
+    v: Vec<i64>;
+}
+
+impl Crate {
+    pub fn make(v: i64) -> Self {
+        let mut items = Vec<i64>.filled(v, 3);
+        return Self { v: items };
+    }
+
+    pub fn rest(self) -> i64 {
+        return self.v.first();
+    }
+}

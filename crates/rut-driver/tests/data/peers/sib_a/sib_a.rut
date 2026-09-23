@@ -1,0 +1,21 @@
+// sib_a — T10's first sibling (RFC 0045 fixtures): rides the shared
+// transitive inline pkg (pouch, a generic export), imported separately
+// by the consumer beside its sibling. `inline = true` keeps it on the
+// splice path — the pkg graph's dedup-by-origin is what makes the pair
+// compile (the pre-dedup graph defined Vec twice here).
+use pouch::{Vec};
+
+pub class Slot {
+    v: Vec<i64>;
+}
+
+impl Slot {
+    pub fn make(v: i64) -> Self {
+        let mut items = Vec<i64>.filled(v, 2);
+        return Self { v: items };
+    }
+
+    pub fn first(self) -> i64 {
+        return self.v.first();
+    }
+}

@@ -5,8 +5,11 @@
 //! linked (its `Surface` is bound into each using module). A module that exports
 //! a *generic* type (`Vec<T>`) cannot be linked — RFC 0013 monomorphizes at
 //! compile time, and the instantiation must happen where the class body
-//! lives — so its source is inlined into the consumer instead (its own
-//! relative includes are already merged by the loader).
+//! lives — so its source is spliced into the consumer instead. There is
+//! no include form to merge (one file is one module — loader.rs): the
+//! splice composes each unit from its transitive leaf list, deduped by
+//! origin spec, so two sibling uses sharing a transitive inline pkg
+//! splice that pkg exactly once (the dep-kinds survey §2.4).
 //!
 //! Programs are pushed in post-order, so the link order registers every
 //! scope before a dependent references it.
@@ -51,13 +54,19 @@ pub fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
     }
 }
 
-/// A resolved module: a linked scope, or source to inline.
+/// A resolved module: a linked scope, or a leaf list to splice.
 #[derive(Clone)]
 enum Unit {
     Linked { idx: usize, scope: rut_core::ScopeId },
-    /// source to splice into the consumer, plus the uses its own source
-    /// names (so the consumer binds them too)
-    Inline { source: String, bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> },
+    /// the ordered `(origin spec, own source)` leaves spliced into the
+    /// consumer — post-order (deps before users), deduplicated by
+    /// origin spec (first position wins), ending with the unit's own
+    /// leaf — plus the uses its own source names (so the consumer binds
+    /// them too). A second splice of the same origin can only duplicate
+    /// definitions (items are order-independent) and never contributes
+    /// a name the first splice did not, so skipping it is
+    /// semantics-preserving (dep-kinds survey §2.4).
+    Inline { leaves: Vec<(String, String)>, bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> },
 }
 
 struct GraphCompiler<'a> {
@@ -213,14 +222,38 @@ impl<'a> GraphCompiler<'a> {
             uses.push("core".to_string());
         }
 
+        // The splice composition (dep-kinds survey §2.4): every dep's
+        // leaf list extends ours SKIPPING specs already present — first
+        // position wins, so the order stays topological and a shared
+        // transitive inline pkg splices exactly once, no matter how many
+        // sibling uses ride it. A dep's accepted leaves join with the
+        // recursive "\n\n" seam (the old combined-text shape), each
+        // dep's subtree closes with the loop's "\n", and the unit's own
+        // source follows the final "\n" — byte-identical to the old
+        // per-dep `extra + "\n" + src` shape whenever nothing is
+        // deduped (T13).
         let mut extra = String::new();
+        let mut leaves: Vec<(String, String)> = Vec::new();
+        let mut spliced: HashSet<String> = HashSet::new();
         let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> = Vec::new();
         let mut bound_scopes = HashSet::new();
         for dep in &uses {
             match self.ensure(dep, true)? {
-                Unit::Inline { source, bound: b } => {
-                    extra.push_str(&source);
-                    extra.push('\n');
+                Unit::Inline { leaves: dep_leaves, bound: b } => {
+                    let mut accepted_here = 0usize;
+                    for (dep_spec, src) in dep_leaves {
+                        if spliced.insert(dep_spec.clone()) {
+                            if accepted_here > 0 {
+                                extra.push_str("\n\n");
+                            }
+                            extra.push_str(&src);
+                            leaves.push((dep_spec, src));
+                            accepted_here += 1;
+                        }
+                    }
+                    if accepted_here > 0 {
+                        extra.push('\n');
+                    }
                     for (sc, surf) in b {
                         if bound_scopes.insert(sc) {
                             bound.push((sc, surf));
@@ -239,6 +272,7 @@ impl<'a> GraphCompiler<'a> {
         // A declaration unit (`.d.rut`) takes no spliced bodies — its
         // use statements bind surfaces only; a decl file is pure surface
         // (RFC 0029), and Decl mode rejects implementations.
+        let own_leaf = (spec.to_string(), src.clone());
         let combined = if extra.is_empty() || module.is_decl {
             src
         } else {
@@ -282,10 +316,21 @@ impl<'a> GraphCompiler<'a> {
                 .any(|&p| matches!(program.types.kind(p), rut_core::types::TyKind::TraitObj { .. }))
         });
         // an explicitly-inlined module (e.g. `ink`), a generic export,
-        // or a trait-param export cannot be linked — splice the source
-        // (and the uses) in
+        // or a trait-param export cannot be linked — splice the leaves
+        // (and the uses) in. A decl unit's combined text is its own
+        // source only (no spliced bodies), so its leaf list is its own
+        // leaf alone — exactly what a consumer of the old combined text
+        // used to splice.
         if as_dep && (module.inline || has_generic || has_trait_param) {
-            let unit = Unit::Inline { source: combined, bound };
+            let mut leaves = leaves;
+            if module.is_decl {
+                // the combined text is the decl source alone
+                leaves = vec![own_leaf];
+            } else {
+                // post-order: the unit's own leaf closes the list
+                leaves.push(own_leaf);
+            }
+            let unit = Unit::Inline { leaves, bound };
             self.done.insert(spec.to_string(), unit.clone());
             return Some(unit);
         }

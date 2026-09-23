@@ -169,13 +169,22 @@ impl PeerDecl {
 }
 
 /// Why a use path did not resolve. A miss points at the consumer
-/// manifest — the `[deps]` table (or the host) decides what exists.
+/// manifest — the `[deps]` table (or the host) decides what exists —
+/// unless the missed name is a declared optional peer of a mounted pkg
+/// (RFC 0045 §4): then the dedicated missing-peer error answers, never
+/// the bare text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResolveError {
     /// not `[a-zA-Z0-9_]+`
     BadSpec { spec: String },
     /// no module with that exact name is mounted
     NoModule { spec: String },
+    /// D2 (RFC 0045 §4): the name is an OPTIONAL peer some mounted pkg
+    /// declared, and the peer is absent — its integration group never
+    /// mounted. Names the pkg, the peer, the integration it unlocks,
+    /// and the fix. (A REQUIRED peer's absence is louder still: D1 at
+    /// mount, so it never reaches resolve through the loader.)
+    PeerMissing { spec: String, pkg: String },
 }
 
 impl std::fmt::Display for ResolveError {
@@ -188,6 +197,10 @@ impl std::fmt::Display for ResolveError {
             ResolveError::NoModule { spec } => write!(
                 f,
                 "cannot resolve `{spec}` — no module with that name is mounted; declare it in your `rut.toml` `[deps]`"
+            ),
+            ResolveError::PeerMissing { spec, pkg } => write!(
+                f,
+                "cannot resolve `{spec}` — `{pkg}`'s {spec} integration is not mounted because the optional peer `{spec}` is absent from this program's closure; add `{spec} = {{ path = \"..\" }}` to your `rut.toml` `[deps]` (RFC 0045 §4)"
             ),
         }
     }
@@ -232,15 +245,37 @@ impl Session {
         self.mount(module)
     }
 
-    /// Exact resolution: the package name must be mounted as-is.
+    /// Exact resolution: the package name must be mounted as-is. A miss
+    /// that is a declared optional peer of some mounted pkg answers D2
+    /// (RFC 0045 §4) instead of the bare text — `resolve` is the ONE
+    /// path every reference-site miss flows through, so the dedicated
+    /// diagnostic holds by construction (item-level misses can never be
+    /// peer-gated: groups are impl-only, RFC 0045 §3).
     pub fn resolve(&self, spec: &str) -> Result<&Module, ResolveError> {
         if !valid_spec(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
         match self.modules.get(spec) {
             Some(m) => Ok(m),
-            None => Err(ResolveError::NoModule { spec: spec.to_string() }),
+            None => Err(self.peer_miss(spec)),
         }
+    }
+
+    /// The miss diagnostic for `spec`: when the name is a declared
+    /// OPTIONAL peer of some mounted pkg, D2 — pkg + peer + the
+    /// integration it unlocks + the fix; otherwise the bare NoModule
+    /// text. Declaring pkgs scan in mount (BTreeMap) order, so the
+    /// diagnostic is deterministic when several pkgs declare the same
+    /// peer. A REQUIRED peer's absence never reaches here through the
+    /// loader (the peer gate's D1 fires at mount); without the gate it
+    /// stays the bare miss — D1's business, not D2's.
+    fn peer_miss(&self, spec: &str) -> ResolveError {
+        for (pkg, peers) in &self.peers {
+            if peers.get(spec).is_some_and(|d| d.optional) {
+                return ResolveError::PeerMissing { spec: spec.to_string(), pkg: pkg.clone() };
+            }
+        }
+        ResolveError::NoModule { spec: spec.to_string() }
     }
 
     /// The host-fn table the mounted host pkgs declare (RFC 0025):
@@ -694,6 +729,33 @@ entry.type = "./pouch.d.rut"
         let err = s.resolve("missing").unwrap_err();
         assert_eq!(err, ResolveError::NoModule { spec: "missing".into() });
         assert!(err.to_string().contains("`rut.toml` `[deps]`"), "{}", err);
+    }
+
+    #[test]
+    fn d2_optional_peer_miss_names_pkg_peer_and_fix() {
+        // RFC 0045 §4 (D2): with json's registry entry recorded, a miss
+        // on the peer's name is the DEDICATED diagnostic — pkg + peer +
+        // the integration it unlocks + the fix — never the bare
+        // NoModule text. The pinned survey text, verbatim.
+        let mut s = Session::new();
+        s.load_manifest(JSON).unwrap();
+        let err = s.resolve("pouch").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `pouch = { path = \"..\" }` to your `rut.toml` `[deps]` (RFC 0045 §4)"
+        );
+        // a name NO pkg declares as a peer stays the bare miss
+        let err = s.resolve("stranger").unwrap_err();
+        assert_eq!(err, ResolveError::NoModule { spec: "stranger".into() });
+        // a REQUIRED peer's absence is D1's business (loud at mount);
+        // reached gate-less it stays the bare miss, not a false D2
+        let mut s = Session::new();
+        s.load_manifest(
+            "name = \"j\"\nentry.lib = \"./j.rut\"\n[peer-deps]\nnmapset = { path = \"../nmapset\" }\n",
+        )
+        .unwrap();
+        let err = s.resolve("nmapset").unwrap_err();
+        assert_eq!(err, ResolveError::NoModule { spec: "nmapset".into() });
     }
 
     #[test]

@@ -1,0 +1,11 @@
+# cons_sibs — T10's consumer (RFC 0045 fixtures): imports BOTH
+# pouch-riding siblings separately — the exact t1 collision shape (two
+# pkgs both riding a shared transitive inline pkg, imported
+# separately). Dedup-by-origin makes it structurally impossible; the
+# `appkit` workaround retires as a NECESSITY (it stays legal).
+name = "cons_sibs"
+entry.lib = "./cons.rut"
+
+[deps]
+sib_a = { path = "../sib_a" }
+sib_b = { path = "../sib_b" }

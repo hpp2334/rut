@@ -1,0 +1,11 @@
+// T10's consumer: two sibling uses, both splices containing pouch.
+// Pre-dedup this unit defined Vec twice — a compile error; with
+// dedup-by-origin it compiles green and both siblings' methods run.
+use sib_a::{Slot};
+use sib_b::{Crate};
+
+entry fn main() -> i64 {
+    let a = Slot.make(7);
+    let b = Crate.make(9);
+    return a.first() + b.rest();
+}
