@@ -185,6 +185,13 @@ fn pump_if_idle(state: &StateRc) {
             }
         }
     });
+    // soft-fail turns land in `turned_errs` (the pump keeps draining);
+    // this lane's one error surface is the last_error slot, so each
+    // reported err rides it too — read-once, the envelope pattern
+    let errs: Vec<String> = std::mem::take(&mut state.borrow_mut().turned_errs);
+    for e in errs {
+        record_error(&e);
+    }
 }
 
 /// Build the page state (sink → dom → state, weakly closed) and stash

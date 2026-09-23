@@ -87,10 +87,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `(a, b, ..)` (RFC 0007): a record with numeric fields.
                 // `()` no longer reaches here — the parser rejects it and
                 // points at `nil` (v1.2).
+                //
+                // The expected type flows in FIELD-BY-FIELD (err-channel
+                // phase 3): a tuple literal in a typed position (`return
+                // (nil, "")` under `-> (?T, str)`) hints each element with
+                // its field's type, so the per-element coercion funnel
+                // boxes `T → ?T` and types `nil` AS the nullable (the
+                // null slot) — the same field-by-field shape the crossing
+                // rule already speaks.
+                let hints: Option<Vec<TypeId>> = expected.and_then(|e| {
+                    match self.ctx.types.kind(e).clone() {
+                        TyKind::Data { fields } if fields.len() == elems.len() => {
+                            Some(fields.iter().map(|f| f.ty).collect())
+                        }
+                        _ => None,
+                    }
+                });
                 let mut etys = Vec::new();
                 let mut vals = Vec::new();
-                for e in &elems {
-                    let t = self.compile_expr(*e, None)?;
+                for (i, e) in elems.iter().enumerate() {
+                    let t = self.compile_expr(*e, hints.as_ref().map(|h| h[i]))?;
                     etys.push(t);
                     vals.push(self.last_reg);
                 }

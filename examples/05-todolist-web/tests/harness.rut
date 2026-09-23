@@ -55,8 +55,10 @@ struct Harness { }
 
 // The ONE re-entry point: every asynchronous fact arrives as an event
 // row, the pump re-passing the container `main` returned. One entry,
-// one shape.
-entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
+// one shape — including the phase-3 return: the entry-err pair
+// `(?opaque, str)`, the container nullable because the failure leg
+// leaves the value channel empty. The harness never soft-fails.
+entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
     let log = ui_get("log");
     let row = ui_create("li");
     if (kind == 1) {
@@ -72,7 +74,7 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
         }
     }
     ui_append(log, row);
-    let _ = c; // the harness keeps no state — the shape is the point
+    return (c, "");
 }
 
 // ---- probes: plain entry fns the tests call; each is the ordinary

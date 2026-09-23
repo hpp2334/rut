@@ -138,6 +138,13 @@ export interface RunResult {
   output: string[];
   /** "OutOfFuel" | "OutOfMemory" | "Interrupted" | trap kind, if any */
   trap?: string;
+  /**
+   * a RETURNED failure (err-channel phase 3): a `main` that returned
+   * the `(?T, err)` pair shape has its non-empty err surfaced here.
+   * Distinct from `trap` by law — trap carries panics and budget
+   * failures (bugs, drift); err carries data the page reads and acts on
+   */
+  err?: string;
   fuelUsed: number;
   heapBytes: number;
   /**

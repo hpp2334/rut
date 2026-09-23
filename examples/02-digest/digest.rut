@@ -970,7 +970,21 @@ fn jquote(s: str) -> str {
     return f"{q}{join_chars(body)}{q}";
 }
 
-entry fn json_dec(s: str) -> (opaque, str) {
+/// The crossing shape (err-channel phase 3): the value component is
+/// NULLABLE — a parse failure returns `(nil, why)` instead of a
+/// `noopaque()` sentinel, so the host's decode reads `None` + the err
+/// and the exactly-one-non-nil convention holds (the err channel tells
+/// absence-as-failure apart from a legitimately-absent value). The
+/// parser's own internals keep the `(opaque, str)` pair — only the
+/// entry surface crosses, under the ORIGINAL rule (?opaque crosses
+/// because opaque does).
+entry fn json_dec(s: str) -> (?opaque, str) {
+    let v = json_parse(s);
+    if (v.1 != "") { return (nil, v.1); }
+    return (v.0, "");
+}
+
+fn json_parse(s: str) -> (opaque, str) {
     let cur: ?Cur = Cur { cs: split_chars(s), pos: 0, depth: 0 };
     let v = jparse_value(cur);
     if (v.1 != "") { return (noopaque(), v.1); }
@@ -986,7 +1000,7 @@ entry fn json_enc(o: opaque) -> str {
 }
 
 entry fn json_roundtrip(s: str) -> (str, str) {
-    let v = json_dec(s);
+    let v = json_parse(s);
     if (v.1 != "") {
         return ("", v.1);
     }

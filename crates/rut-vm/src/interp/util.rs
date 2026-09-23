@@ -19,6 +19,26 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
             debug_assert!(!p.is_null(), "opaque slot without a cell");
             Value::Opaque(heap.opaque_handle(p))
         }
+        // `?T` crosses NIL-FLATTENED (RFC 0023 §1, err-channel phase 3):
+        // the null slot IS absence (`Value::Nil` — nil is the one absence,
+        // RFC 0044's zero value for a nullable is `ConstRaw 0`), and a
+        // some-slot is the MakeOpt box: decode its payload as T. A
+        // legitimately-absent value and a soft failure are told apart by
+        // the err channel beside them, never by a second nil.
+        TyKind::Opt { elem } => {
+            if unsafe { v.r.is_null() } {
+                Value::Nil
+            } else {
+                let cell = cell_of(v);
+                if let CellData::Record { fields } = &cell.data {
+                    if let Some(inner) = fields.borrow().get(0) {
+                        return slot_to_value(inner, *elem, prog, heap);
+                    }
+                }
+                debug_assert!(false, "opt slot without a payload box");
+                Value::Nil
+            }
+        }
         // tuples cross field-by-field (RFC 0007 v1.1)
         TyKind::Data { fields } => {
             let cell = cell_of(v);

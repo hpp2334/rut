@@ -418,6 +418,16 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// precedent); the func table also serializes `pos` (pc → line/col)
 /// beside `spans`, so stale v7 artifacts are rejected with the standard
 /// version error
+/// v8 (still): the entry-err contract (err-channel phase 3) rides 8 —
+/// `entry fn` returns widened to `(?T, err)` under the ORIGINAL rule,
+/// which is a CHECK relaxation, not a format change: no new op, no new
+/// type encoding (`Opt` already serializes), no declared-surface change.
+/// Old artifacts are bit-identical in behavior (their root ret types can
+/// never mention `Opt` — the old checker rejected exactly that), and the
+/// reverse direction is toolchain-guarded (an old compiler refuses the
+/// source, so it can never emit such an artifact). The 6→7 and 7→8 bumps
+/// were both format-affecting; this is not, and a bump would burn every
+/// cached v8 artifact for zero protection.
 pub const VERSION: u32 = 8;
 
 pub fn encode(prog: &Program) -> Vec<u8> {

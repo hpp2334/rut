@@ -19,7 +19,12 @@
 //   * `answer(tag)` is the server's one commit point. An unknown tag is
 //     a LOUD trap (the answer names no booked row — wiring drift); a
 //     rejected title and a lost id are ANSWERS, data the turn reads
-//     (RFC 0018 §4's cancellation-as-data law, at app scale).
+//     (RFC 0018 §4's cancellation-as-data law, at app scale). The
+//     answer crosses as the v1.1 `(line, err)` pair (err-channel phase
+//     3): a commit is `(line, "")`, a rejection or a lost id is
+//     `("", why)` — the entry-err shape the app surfaces through its
+//     own `on_event` err channel. `last` keeps the user-facing line
+//     whichever channel carried it.
 //
 // Per-kind latency: three clocks, so the twin can prove commits land in
 // deadline order across kinds at the app level (removes are fast, adds
@@ -126,8 +131,9 @@ impl Store {
     // ---- answer: the timer fired; find the row, apply or reject ----
 
     /// The server's one commit point. An unknown tag is a loud trap; a
-    /// rejected title or a lost id is an ANSWER (data, not a trap).
-    pub fn answer(mut self, tag: str) -> str {
+    /// rejected title or a lost id is an ANSWER (data, not a trap) — the
+    /// `("", why)` leg of the `(line, err)` pair.
+    pub fn answer(mut self, tag: str) -> (str, str) {
         let at = self.find_req(tag);
         if (at < 0) {
             panic(f"server: no request '{tag}' — the answer names no booked row");
@@ -150,34 +156,34 @@ impl Store {
         return self.commit_remove(req);
     }
 
-    fn commit_add(mut self, req: Req) -> str {
+    fn commit_add(mut self, req: Req) -> (str, str) {
         let title = req.title;
         if (title == "") {
             let line = "rejected '' — the title is empty";
             self.last = line;
-            return line;
+            return ("", line);
         }
         if (self.find_by_title(title) >= 0) {
             let line = f"rejected '{title}' — already on the list";
             self.last = line;
-            return line;
+            return ("", line);
         }
         let id = self.next_todo;
         self.next_todo += 1;
         self.items.push(Todo { id: id, title: title });
         let line = f"added '{title}' as #{id}";
         self.last = line;
-        return line;
+        return (line, "");
     }
 
-    fn commit_toggle(mut self, req: Req) -> str {
+    fn commit_toggle(mut self, req: Req) -> (str, str) {
         let at = self.find(req.todo);
         if (at < 0) {
             // the survey's lost-id shape, through the table: a remove
             // landed first — the answer says so, the turn moves on
             let line = f"skipped toggle #{req.todo} — the row is gone";
             self.last = line;
-            return line;
+            return ("", line);
         }
         self.items[at].done = self.items[at].done == false;
         let mut to = "open";
@@ -186,15 +192,15 @@ impl Store {
         }
         let line = f"toggled #{req.todo} to {to}";
         self.last = line;
-        return line;
+        return (line, "");
     }
 
-    fn commit_remove(mut self, req: Req) -> str {
+    fn commit_remove(mut self, req: Req) -> (str, str) {
         let at = self.find(req.todo);
         if (at < 0) {
             let line = f"skipped remove #{req.todo} — the row is gone";
             self.last = line;
-            return line;
+            return ("", line);
         }
         let title = self.items[at].title;
         let kept: Vec<Todo> = Vec.new();
@@ -207,7 +213,7 @@ impl Store {
         self.items = kept;
         let line = f"removed '{title}' (#{req.todo})";
         self.last = line;
-        return line;
+        return (line, "");
     }
 
     // ---- reads ----
@@ -342,8 +348,10 @@ entry fn store_request_remove(c: opaque, todo: i64) -> str {
     return req.tag;
 }
 
-/// The timer fired: commit (or reject). Unknown tag = loud trap.
-entry fn store_answer(c: opaque, tag: str) -> str {
+/// The timer fired: commit (or reject). The answer crosses as the
+/// entry-err shape — `(line, "")` for a commit, `("", why)` for a
+/// rejection or a lost id. Unknown tag = loud trap (drift).
+entry fn store_answer(c: opaque, tag: str) -> (str, str) {
     return at(c).answer(tag);
 }
 

@@ -117,6 +117,70 @@ fn typed_wrong_shape_is_a_named_trap() {
     assert!(err.msg.contains("args"), "{}", err.msg);
 }
 
+// ---- the entry-err shape (err-channel phase 3): `(?T, err)` crosses
+// under the ORIGINAL entry rule — the nullable's element answers it, no
+// err carve-out — and decodes NIL-FLATTENED: the null slot is `None` /
+// `Value::Nil`, a some-slot is the payload. The exactly-one-non-nil
+// channel convention is the CALLER's, documented, not the boundary's. ----
+
+const OPT_ERR: &str = r#"
+entry fn find(b: bool) -> (?i64, str) {
+    if (b) { return (7, ""); }
+    return (nil, "not found");
+}
+entry fn give_str(b: bool) -> (?str, str) {
+    if (b) { return ("payload", ""); }
+    return (nil, "boom");
+}
+"#;
+
+#[test]
+fn opt_err_pairs_cross_and_decode_nil_flattened() {
+    let mut vm = entry_vm(OPT_ERR);
+    // the value channel live: (payload, "") — exactly-one-non-nil
+    let (v, e): (Option<i64>, String) = vm.call("find", (true,)).unwrap();
+    assert_eq!((v, e.as_str()), (Some(7), ""));
+    // the err channel live: (nil, why) — the value component is nil and
+    // reads back as `None`, rut-nil and VM-nil indistinguishable
+    let (v, e): (Option<i64>, String) = vm.call("find", (false,)).unwrap();
+    assert_eq!((v, e.as_str()), (None, "not found"));
+    // a ref-repr element (`?str`) boxes and unboxes the same way
+    let (s, e): (Option<String>, String) = vm.call("give_str", (true,)).unwrap();
+    assert_eq!((s.as_deref(), e.as_str()), (Some("payload"), ""));
+    let (s, e): (Option<String>, String) = vm.call("give_str", (false,)).unwrap();
+    assert_eq!((s.as_deref(), e.as_str()), (None, "boom"));
+}
+
+#[test]
+fn the_driver_result_decodes_positionally() {
+    let mut vm = entry_vm(OPT_ERR);
+    // `Ret for Value`: the whole crossing as one tagged value — the raw
+    // shape envelope-style decoders read, `?T` already flattened
+    let v: rut_vm::Value = vm.call("find", (false,)).unwrap();
+    match v {
+        rut_vm::Value::Tuple(parts) => {
+            assert_eq!(parts.len(), 2);
+            assert_eq!(parts[0], rut_vm::Value::Nil);
+            assert_eq!(parts[1], rut_vm::Value::Str("not found".into()));
+        }
+        other => panic!("expected the pair shape, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_non_crossable_nullable_still_rejects() {
+    // no carve-out: `?Bag` fails exactly as `Bag` does — the nullable's
+    // ELEMENT answers the crossing rule (Bag is a class: a cell type,
+    // never a crossing currency)
+    let src = "class Bag { f: fn(i64) -> i64; }\nentry fn bad() -> (?Bag, str) { return (nil, \"x\"); }\n";
+    let out = compile(src, "m");
+    assert!(
+        out.diags.iter().any(|d| d.msg.contains("only primitives")),
+        "expected the crossing diagnostic, got {:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
+}
+
 // ---- host-fn payload boxes through the typed boundary (RFC 0026) ----
 
 #[test]

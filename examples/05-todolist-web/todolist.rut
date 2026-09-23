@@ -20,7 +20,10 @@
 //   main -> opaque(AppRoot)   the host keeps it; the pump re-passes it
 //                             on EVERY turn
 //   on_event(c, kind, s, d)   the one re-entry point; kind 1 = a DOM
-//                             event row, kind 2 = a timer answer
+//                             event row, kind 2 = a timer answer.
+//                             Returns (opaque(c), "") — or (nil, why)
+//                             on a soft failure (the entry-err shape
+//                             (?opaque, str))
 //
 // The container is a shared cell (RFC 0016): every turn mints write
 // access with one `let mut` and the writes survive the turn. T1Root —
@@ -130,8 +133,15 @@ entry fn main() -> opaque {
 }
 
 // The ONE re-entry point: every asynchronous fact arrives as an event
-// row, the pump re-passing the container. One entry, one shape.
-entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
+// row, the pump re-passing the container. One entry, one shape. The
+// return is the ENTRY-ERR shape (err-channel phase 3): `(?opaque, str)`
+// — `(opaque(c), "")` on a clean turn — the container re-crosses, the
+// state-crossing law made explicit — and `(nil, why)` on a soft
+// failure, where `why` is
+// DATA the host reads and acts on (the pump reports it and keeps
+// draining). Drift stays on the panic channel, loud: an unknown kind,
+// a stale subject, a foreign container.
+entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
     let root = opaque.downcast<?AppRoot>(c);
     if (root == nil) {
         panic("app: the event container is not an AppRoot — host drift");
@@ -145,17 +155,26 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
         let mut t1: ?T1Root = r.t1;
         let s = t1_subject(t1, subject);
         dispatch(r, s, detail);
-    } else {
-        if (kind == 2) {
-            // EV_TIMER — the "server" answers the booked request
-            let mut store: ?Store = r.store;
-            let line = store.answer(subject);
-            r.note = line;
-            paint(r);
-        } else {
-            panic(f"app: unknown event kind {kind}");
-        }
+        return (opaque(r), "");
     }
+    if (kind == 2) {
+        // EV_TIMER — the "server" answers the booked request. The
+        // answer's own err leg (a rejected title, a lost id) is DATA:
+        // the status line still tells the user, and the err channel
+        // tells the host. The container does NOT re-cross on a failed
+        // turn — exactly-one-non-nil; the pump keeps the one it holds.
+        let mut store: ?Store = r.store;
+        let ans = store.answer(subject);
+        if (ans.1 != "") {
+            r.note = ans.1;
+            paint(r);
+            return (nil, ans.1);
+        }
+        r.note = ans.0;
+        paint(r);
+        return (opaque(r), "");
+    }
+    panic(f"app: unknown event kind {kind}");
 }
 
 // One DOM event = one SUBJECT. Reads the container, books at most one

@@ -192,8 +192,15 @@ fn main() {
     println!("hex_dec(\"zz\")   = {err:?}");
     let (_v, err): (Vec<u8>, String) = vm.call("b64_dec", ("!*", false)).unwrap();
     println!("b64_dec(\"!*\")   = {err:?}");
-    let (_o, err): (rut_vm::OpaqueRef, String) = vm.call("json_dec", ("{,}",)).unwrap();
+    // the entry-err shape: json_dec crosses as `(?opaque, str)` — the
+    // failure leg is (None, why), the success leg (Some(doc), "") — the
+    // nil-flattened decode, pinned by this demo
+    let (o, err): (Option<rut_vm::OpaqueRef>, String) = vm.call("json_dec", ("{,}",)).unwrap();
+    assert!(o.is_none() && !err.is_empty(), "a failed json_dec is (nil, why)");
     println!("json_dec(\"{{,}}\") = {err:?}");
+    let (o, err): (Option<rut_vm::OpaqueRef>, String) = vm.call("json_dec", (r#"{"a":1}"#,)).unwrap();
+    assert!(o.is_some() && err.is_empty(), "a good json_dec is (Some, \"\") — exactly-one-non-nil");
+    println!("json_dec(\"{{\\\"a\\\":1}}\") = ok ({})", err.is_empty());
 
     println!("fuel used: {} of {:?}", vm.fuel_used, limits.fuel);
 }

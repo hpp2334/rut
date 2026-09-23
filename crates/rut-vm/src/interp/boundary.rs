@@ -3,8 +3,12 @@
 //! `Value`/`Slot` are the internal marshaling formats, invisible outside
 //! the crate. Owned impls (`String`, `Vec<u8>`) are the explicit "I keep
 //! this data" copy; `&str`/`&[u8]` host params (Phase 2) borrow the block
-//! store zero-copy. No `Option`/`Result` impls — optionals cross as v1.1
-//! tuples (RFC 0007 §7).
+//! store zero-copy. `Option<T>` reads a crossing `?T` NIL-FLATTENED (the
+//! err-channel phase 3: nil → `None`, the box's payload → `Some`) — the
+//! read direction only, no `into_slot`: there is no `Value::Opt`, so a
+//! host cannot mint a some-payload for rut yet. `Value` itself is also a
+//! `Ret`: the positional decode for hosts that read the raw driver
+//! result (`Value::Tuple` for a pair return) instead of a typed shape.
 
 use rut_core::types::{PrimTy, TypeId, TyKind};
 use rut_core::types::{
@@ -270,6 +274,37 @@ impl<T: 'static> Ret for OpaqueBox<T> {
     }
 }
 
+/// A crossing `?T` read NIL-FLATTENED (err-channel phase 3, RFC 0023 §1):
+/// the null slot is `None`, a some-slot is the MakeOpt box — its payload
+/// decodes as `T` under the element's own type. This is the typed twin of
+/// `slot_to_value`'s `TyKind::Opt` arm, so `(?T, err)` entry returns
+/// decode positionally as `(Option<T>, String)`; the caller's convention
+/// (exactly one of the two channels meaningful) lives with the caller.
+impl<T: Ret> Ret for Option<T> {
+    fn rust_name() -> &'static str { std::any::type_name::<Self>() }
+    fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
+        let TyKind::Opt { elem } = vm.prog.types.kind(declared) else {
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                format!("boundary: `{}` is not the option `{}` binds", vm.prog.type_name(declared), Self::rust_name()),
+            ));
+        };
+        if unsafe { slot.r.is_null() } {
+            return Ok(None); // the flat nil: zero bits, no box (RFC 0044)
+        }
+        let cell = cell_of(slot);
+        let CellData::Record { fields } = &cell.data else {
+            return Err(Trap::new(TrapKind::Invalid, "boundary: not an option box"));
+        };
+        let inner = fields
+            .borrow()
+            .get(0)
+            .ok_or_else(|| Trap::new(TrapKind::Invalid, "boundary: option box without a payload"))?;
+        Ok(Some(T::from_slot(vm, inner, *elem)?))
+    }
+    // no into_slot: the read direction only — see the module doc
+}
+
 /// tuples cross field-by-field (RFC 0007 v1.1) — the record cell's own
 /// field types drive each element's conversion
 macro_rules! tuple_ret {
@@ -320,6 +355,20 @@ tuple_ret!(A1, A2, A3, A4, A5);
 tuple_ret!(A1, A2, A3, A4, A5, A6);
 tuple_ret!(A1, A2, A3, A4, A5, A6, A7);
 tuple_ret!(A1, A2, A3, A4, A5, A6, A7, A8);
+
+/// The whole crossing as one Rust value — the POSITIONAL decode (the
+/// survey §4.2 driver result): a pair return arrives as `Value::Tuple`,
+/// its `?T` component already nil-flattened (`Value::Nil` / the payload's
+/// value), so a host reading the raw shape — the run envelope's decoder,
+/// generic tooling — reads the err convention off the second component
+/// without naming `T` in its type. `slot_to_value` IS the read; into_slot
+/// is meaningless (a `Value` has no declared type to bind against).
+impl Ret for Value {
+    fn rust_name() -> &'static str { "Value" }
+    fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
+        Ok(super::util::slot_to_value(slot, declared, &vm.prog, &vm.heap))
+    }
+}
 
 /// A Rust → rut argument for `Vm::call` (owned values; `&str`/`&[u8]`
 /// copy — the embedder's data, an explicit copy is the honest shape).

@@ -45,10 +45,8 @@ fn a_request_never_touches_the_list() {
 fn the_answer_commits_the_add() {
     let (mut v, c) = vm();
     let tag: String = v.call("store_request_add", (c.clone(), "milk")).unwrap();
-    assert_eq!(
-        v.call::<_, String>("store_answer", (c.clone(), tag)).unwrap(),
-        "added 'milk' as #1"
-    );
+    let (line, err) = v.call::<_, (String, String)>("store_answer", (c.clone(), tag)).unwrap();
+    assert_eq!((line.as_str(), err.as_str()), ("added 'milk' as #1", ""));
     assert_eq!(v.call::<_, String>("store_board", (c.clone(),)).unwrap(), "#1 [ ] milk");
     assert_eq!(v.call::<_, String>("store_counts", (c.clone(),)).unwrap(), "open=1 done=0 fly=0");
     assert_eq!(v.call::<_, String>("store_last", (c.clone(),)).unwrap(), "added 'milk' as #1");
@@ -58,13 +56,13 @@ fn the_answer_commits_the_add() {
 fn toggle_round_trip() {
     let (mut v, c) = vm();
     let tag: String = v.call("store_request_add", (c.clone(), "milk")).unwrap();
-    v.call::<_, String>("store_answer", (c.clone(), tag)).unwrap();
+    v.call::<_, (String, String)>("store_answer", (c.clone(), tag)).unwrap();
 
     let t2: String = v.call("store_request_toggle", (c.clone(), 1i64)).unwrap();
     assert_eq!(t2, "req:2");
     assert_eq!(v.call::<_, String>("store_board", (c.clone(),)).unwrap(), "#1 [ ] milk");
-    let line = v.call::<_, String>("store_answer", (c.clone(), t2)).unwrap();
-    assert_eq!(line, "toggled #1 to done");
+    let (line, err) = v.call::<_, (String, String)>("store_answer", (c.clone(), t2)).unwrap();
+    assert_eq!((line.as_str(), err.as_str()), ("toggled #1 to done", ""));
     assert_eq!(v.call::<_, String>("store_board", (c.clone(),)).unwrap(), "#1 [x] milk");
     assert_eq!(v.call::<_, String>("store_counts", (c.clone(),)).unwrap(), "open=0 done=1 fly=0");
 }
@@ -74,12 +72,12 @@ fn remove_round_trip() {
     let (mut v, c) = vm();
     for title in ["milk", "tea"] {
         let tag: String = v.call("store_request_add", (c.clone(), title)).unwrap();
-        v.call::<_, String>("store_answer", (c.clone(), tag)).unwrap();
+        v.call::<_, (String, String)>("store_answer", (c.clone(), tag)).unwrap();
     }
     let t3: String = v.call("store_request_remove", (c.clone(), 1i64)).unwrap();
     assert_eq!(t3, "req:3");
-    let line = v.call::<_, String>("store_answer", (c.clone(), t3)).unwrap();
-    assert_eq!(line, "removed 'milk' (#1)");
+    let (line, err) = v.call::<_, (String, String)>("store_answer", (c.clone(), t3)).unwrap();
+    assert_eq!((line.as_str(), err.as_str()), ("removed 'milk' (#1)", ""));
     assert_eq!(v.call::<_, String>("store_board", (c.clone(),)).unwrap(), "#2 [ ] tea");
 }
 
@@ -87,7 +85,7 @@ fn remove_round_trip() {
 fn latencies_differ_per_kind() {
     let (mut v, c) = vm();
     let a: String = v.call("store_request_add", (c.clone(), "milk")).unwrap();
-    v.call::<_, String>("store_answer", (c.clone(), a)).unwrap();
+    v.call::<_, (String, String)>("store_answer", (c.clone(), a)).unwrap();
     let t: String = v.call("store_request_toggle", (c.clone(), 1i64)).unwrap();
     let _ = t;
     let r: String = v.call("store_request_remove", (c.clone(), 1i64)).unwrap();
@@ -104,20 +102,21 @@ fn latencies_differ_per_kind() {
 fn a_rejected_title_is_an_answer_not_a_trap() {
     let (mut v, c) = vm();
     let tag: String = v.call("store_request_add", (c.clone(), "milk")).unwrap();
-    v.call::<_, String>("store_answer", (c.clone(), tag)).unwrap();
+    v.call::<_, (String, String)>("store_answer", (c.clone(), tag)).unwrap();
 
-    // the duplicate
+    // the duplicate: the ENTRY-ERR shape — ("", why), the value
+    // channel empty, the err channel carrying the reason
     let d: String = v.call("store_request_add", (c.clone(), "milk")).unwrap();
-    let line = v.call::<_, String>("store_answer", (c.clone(), d)).unwrap();
-    assert_eq!(line, "rejected 'milk' — already on the list");
+    let (line, err) = v.call::<_, (String, String)>("store_answer", (c.clone(), d)).unwrap();
+    assert_eq!((line.as_str(), err.as_str()), ("", "rejected 'milk' — already on the list"));
     assert_eq!(v.call::<_, String>("store_board", (c.clone(),)).unwrap(), "#1 [ ] milk");
     assert_eq!(v.call::<_, String>("store_counts", (c.clone(),)).unwrap(), "open=1 done=0 fly=0");
 
     // the empty title (the app's client gate never sends one; the
     // server rejects it anyway)
     let e: String = v.call("store_request_add", (c.clone(), "")).unwrap();
-    let line = v.call::<_, String>("store_answer", (c.clone(), e)).unwrap();
-    assert_eq!(line, "rejected '' — the title is empty");
+    let (line, err) = v.call::<_, (String, String)>("store_answer", (c.clone(), e)).unwrap();
+    assert_eq!((line.as_str(), err.as_str()), ("", "rejected '' — the title is empty"));
 }
 
 #[test]
@@ -144,17 +143,16 @@ fn an_unknown_todo_answers_an_empty_tag() {
 fn a_lost_id_is_an_answer_through_the_table() {
     let (mut v, c) = vm();
     let a: String = v.call("store_request_add", (c.clone(), "milk")).unwrap();
-    v.call::<_, String>("store_answer", (c.clone(), a)).unwrap();
+    v.call::<_, (String, String)>("store_answer", (c.clone(), a)).unwrap();
 
     // book a remove (fast) and a toggle (slow) on the same todo; the
     // remove's answer lands first and the toggle's id is lost — the
     // answer SAYS so instead of trapping or wedging
     let r: String = v.call("store_request_remove", (c.clone(), 1i64)).unwrap();
     let t: String = v.call("store_request_toggle", (c.clone(), 1i64)).unwrap();
-    assert_eq!(v.call::<_, String>("store_answer", (c.clone(), r)).unwrap(), "removed 'milk' (#1)");
-    assert_eq!(
-        v.call::<_, String>("store_answer", (c.clone(), t)).unwrap(),
-        "skipped toggle #1 — the row is gone"
-    );
+    let (line, err) = v.call::<_, (String, String)>("store_answer", (c.clone(), r)).unwrap();
+    assert_eq!((line.as_str(), err.as_str()), ("removed 'milk' (#1)", ""));
+    let (line, err) = v.call::<_, (String, String)>("store_answer", (c.clone(), t)).unwrap();
+    assert_eq!((line.as_str(), err.as_str()), ("", "skipped toggle #1 — the row is gone"));
     assert_eq!(v.call::<_, String>("store_board", (c.clone(),)).unwrap(), "");
 }

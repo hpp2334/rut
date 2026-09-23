@@ -60,6 +60,7 @@ json_roundtrip(tricky) = {"a":[1,2.5,-3e2],...}
 hex_dec("zz")   = "hex: invalid character at index 0"
 b64_dec("!*")   = "base64: invalid character `!`"
 json_dec("{,}") = "json: expected a key string at index 1"
+json_dec("{\"a\":1}") = ok (true)
 digest("md4")   = "unknown algorithm: md4"
 every row agrees: OK
 fuel used: 1007145 of Some(50000000)

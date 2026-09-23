@@ -177,6 +177,7 @@ export function App(): JSX.Element {
         ast: shown?.ast,
         irDump: shown?.irDump ?? "",
         trap: res.trap,
+        err: res.err,
       });
       setFuelUsed(res.fuelUsed);
       setHeapUsed(res.heapBytes);

@@ -55,6 +55,13 @@ pub struct WebState<D: DomBackend> {
     /// own law: rut has no mutable module state, so the store lives in
     /// the container the host passes back, the 00-todolist pattern).
     pub app: Option<OpaqueRef>,
+    /// The pump's report surface (err-channel phase 3): every
+    /// `on_event` turn's non-empty err component lands here — DATA the
+    /// host reads and acts on (the wasm lane forwards each into its
+    /// `rut_web_last_error` slot). A returned err is never a poison
+    /// pill; a TRAPPED turn still aborts the pump loudly through its
+    /// own channel.
+    pub turned_errs: Vec<String>,
     next_listener: i64,
     pub in_turn: bool,
 }
@@ -66,6 +73,7 @@ impl<D: DomBackend> WebState<D> {
             queue: VecDeque::new(),
             listeners: HashMap::new(),
             app: None,
+            turned_errs: Vec::new(),
             next_listener: 1, // listener ids are from 1 (the spec)
             in_turn: false,
         }
@@ -134,9 +142,19 @@ impl<D: DomBackend> WebState<D> {
 /// the queue and runs as the NEXT turn — sequential, never stacked.
 ///
 /// Every turn hands the app ITS container back (phase 2's entry shape,
-/// `on_event(c, kind, subject, detail)`): rut has no mutable module
-/// state (RFC 0003 §1), so the state crosses — the host holds the one
-/// opaque `main` returned and re-passes it each turn.
+/// `on_event(c, kind, subject, detail)`), and (err-channel phase 3) the
+/// turn answers the entry-err pair `(?opaque, str)`:
+///
+/// * `Err` — a trapped turn: a BUG, wiring drift. The pump aborts LOUD
+///   (`r?`), exactly as ever.
+/// * `Ok((Some(c), err))` — a clean turn: the re-crossed container is
+///   adopted, an empty err reported as nothing.
+/// * `Ok((None, why))` — a SOFT FAILURE: the err is reported into
+///   [`WebState::turned_errs`] and the pump KEEPS DRAINING. The nil
+///   value channel does not poison the container — the host keeps the
+///   one it holds (rut still owns it; the next turn runs), so the page
+///   lives. The exactly-one-non-nil convention is the caller's law;
+///   the pump reads it, never enforces it.
 pub fn drain_queue<D: DomBackend>(
     state: &Rc<RefCell<WebState<D>>>,
     vm: &mut Vm,
@@ -152,9 +170,16 @@ pub fn drain_queue<D: DomBackend>(
             )
         })?;
         state.borrow_mut().begin_turn();
-        let r = vm.call::<_, ()>("on_event", (app, ev.kind, ev.subject, ev.detail));
+        let r = vm.call::<_, (Option<OpaqueRef>, String)>("on_event", (app, ev.kind, ev.subject, ev.detail));
         state.borrow_mut().end_turn();
-        r?;
+        let (crossed, err) = r?;
+        if !err.is_empty() {
+            // a returned err is DATA — report it and keep the queue live
+            state.borrow_mut().turned_errs.push(err);
+        }
+        if let Some(c) = crossed {
+            state.borrow_mut().app = Some(c);
+        }
     }
 }
 

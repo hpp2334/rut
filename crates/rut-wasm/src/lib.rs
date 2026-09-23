@@ -9,12 +9,19 @@
 //!   rut_drop_frame() -> u32                    retire the parked frame
 //! Every result is [u32 little-endian length][bytes] at the returned ptr.
 //! Run envelopes carry `"parked":bool` — true when the guest trapped
-//! OutOfFuel with a live frame that `rut_resume` can continue.
+//! OutOfFuel with a live frame that `rut_resume` can continue — and
+//! `"err"` beside `"trap"` (err-channel phase 3): a `main` returning the
+//! `(?T, err)` pair shape surfaces its non-empty err there, while panics
+//! and budget traps stay on `trap` — the two channels never mix.
 
 #![allow(static_mut_refs)]
 
 use std::cell::RefCell;
 use std::rc::Rc;
+
+// the positional driver decode (`Ret for Value`) — the run envelope's
+// entry-err reader; aliased so the host's own JSON never collides
+use rut_vm::Value as RutValue;
 
 // ---- bump allocator over linear memory ----
 
@@ -225,9 +232,18 @@ fn base64_decode(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// Assemble a run envelope: accumulated output, trap, budgets, and the
-/// parked flag (additive fields — older consumers ignore them).
-fn run_envelope(output: &[String], trap: Option<&str>, fuel_used: u64, heap: u64, parked: bool) -> *mut u8 {
+/// Assemble a run envelope: accumulated output, trap, the entry-err
+/// channel, budgets, and the parked flag (additive fields — older
+/// consumers ignore them).
+///
+/// THE TWO CHANNELS STAY DISTINCT BY LAW (err-channel phase 3): `trap`
+/// carries panics and budget/lifecycle failures — bugs, wiring drift,
+/// the loud channel; `err` carries a RETURNED failure — a `main` that
+/// returned the `(?T, err)` pair shape has its second component read
+/// here when it is a non-empty `str` (the empty err is success, and any
+/// other return shape is just data: no err). A soft-fail run reads
+/// `"trap": null, "err": "<why>"`.
+fn run_envelope(output: &[String], trap: Option<&str>, err: Option<&str>, fuel_used: u64, heap: u64, parked: bool) -> *mut u8 {
     let mut json = String::new();
     json.push_str("{\"output\":[");
     for (i, l) in output.iter().enumerate() {
@@ -241,6 +257,11 @@ fn run_envelope(output: &[String], trap: Option<&str>, fuel_used: u64, heap: u64
         Some(t) => json_escape(t, &mut json),
         None => json.push_str("null"),
     }
+    json.push_str(",\"err\":");
+    match err {
+        Some(e) => json_escape(e, &mut json),
+        None => json.push_str("null"),
+    }
     json.push_str(",\"fuelUsed\":");
     json.push_str(&fuel_used.to_string());
     json.push_str(",\"heapBytes\":");
@@ -249,6 +270,22 @@ fn run_envelope(output: &[String], trap: Option<&str>, fuel_used: u64, heap: u64
     json.push_str(if parked { "true" } else { "false" });
     json.push('}');
     envelope(json.as_bytes())
+}
+
+/// The entry-err convention read off a return value: the pair shape's
+/// SECOND component, when it is a non-empty `str`. Anything else — nil,
+/// a non-pair, a non-str second, the empty success err — is no err.
+fn err_of_value(v: &rut_vm::Value) -> Option<String> {
+    if let rut_vm::Value::Tuple(parts) = v {
+        if parts.len() == 2 {
+            if let rut_vm::Value::Str(e) = &parts[1] {
+                if !e.is_empty() {
+                    return Some(e.clone());
+                }
+            }
+        }
+    }
+    None
 }
 
 #[no_mangle]
@@ -265,10 +302,10 @@ pub extern "C" fn rut_run(
     let decode_result = rut_core::binary::decode(bin);
     let prog = match decode_result {
         Ok(p) => p,
-        Err(e) => return run_envelope(&[], Some(&e), 0, 0, false),
+        Err(e) => return run_envelope(&[], Some(&e), None, 0, 0, false),
     };
     if let Err(e) = rut_vm::verify::verify(&prog) {
-        return run_envelope(&[], Some(&e), 0, 0, false);
+        return run_envelope(&[], Some(&e), None, 0, 0, false);
     }
     *OUTPUT.lock().unwrap() = Some(Vec::new());
     let limits = rut_vm::interp::Limits {
@@ -298,13 +335,17 @@ pub extern "C" fn rut_run(
         hosts,
     ) {
         Ok(vm) => vm,
-        Err(t) => return run_envelope(&[], Some(&t.name()), 0, 0, false),
+        Err(t) => return run_envelope(&[], Some(&t.name()), None, 0, 0, false),
     };
-    let (trap, parked) = match vm.call::<_, ()>("main", ()) {
-        Ok(_) => (None, false),
+    // the positional decode (RutValue): a `(?T, err)` main surfaces its
+    // err here; every other shape (nil mains included) has none. A trap
+    // NEVER fills err — the loud channel stays the loud channel.
+    let out = vm.call::<_, RutValue>("main", ());
+    let (trap, parked, err) = match out {
+        Ok(v) => (None, false, err_of_value(&v)),
         Err(t) => {
             let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
-            (Some(t.name()), parked)
+            (Some(t.name()), parked, None)
         }
     };
     // read the counters BEFORE the machine moves into the parked slot
@@ -314,7 +355,7 @@ pub extern "C" fn rut_run(
         unsafe { PARKED = Some(vm) };
     }
     let lines = OUTPUT.lock().unwrap().clone().unwrap_or_default();
-    run_envelope(&lines, trap.as_deref(), fuel_used, heap, parked)
+    run_envelope(&lines, trap.as_deref(), err.as_deref(), fuel_used, heap, parked)
 }
 
 /// demo utilities (RFC 0041 §3 OQ-1: base64 in/out keeps the ABI tiny)
@@ -323,7 +364,7 @@ pub extern "C" fn rut_run_b64(bin_b64_ptr: *const u8, bin_b64_len: usize, fuel: 
     let s = unsafe { read_str(bin_b64_ptr, bin_b64_len) };
     match base64_decode(s) {
         Some(b) => rut_run(b.as_ptr(), b.len(), fuel, heap),
-        None => envelope(b"{\"output\":[],\"trap\":\"bad base64\",\"fuelUsed\":0,\"heapBytes\":0}"),
+        None => envelope(b"{\"output\":[],\"trap\":\"bad base64\",\"err\":null,\"fuelUsed\":0,\"heapBytes\":0}"),
     }
 }
 
@@ -346,6 +387,7 @@ pub extern "C" fn rut_resume(extra_fuel: u64, _heap: u64) -> *mut u8 {
             return run_envelope(
                 &[],
                 Some("no parked frame — run first (resume continues, never restarts)"),
+                None,
                 0,
                 0,
                 false,
@@ -353,11 +395,12 @@ pub extern "C" fn rut_resume(extra_fuel: u64, _heap: u64) -> *mut u8 {
         }
     };
     vm.add_fuel(extra_fuel);
-    let (trap, parked) = match vm.resume::<()>() {
-        Ok(_) => (None, false),
+    let out = vm.resume::<RutValue>();
+    let (trap, parked, err) = match out {
+        Ok(v) => (None, false, err_of_value(&v)),
         Err(t) => {
             let parked = t.kind == rut_vm::TrapKind::OutOfFuel && vm.is_running();
-            (Some(t.name()), parked)
+            (Some(t.name()), parked, None)
         }
     };
     let fuel_used = vm.fuel_used;
@@ -367,7 +410,7 @@ pub extern "C" fn rut_resume(extra_fuel: u64, _heap: u64) -> *mut u8 {
     }
     // the ACCUMULATED lines — run + every resume so far
     let lines = OUTPUT.lock().unwrap().clone().unwrap_or_default();
-    run_envelope(&lines, trap.as_deref(), fuel_used, heap, parked)
+    run_envelope(&lines, trap.as_deref(), err.as_deref(), fuel_used, heap, parked)
 }
 
 /// Retire the parked frame (a case switch must not inherit the previous
@@ -558,5 +601,62 @@ pub fn main() {
         assert_eq!(field(&j2, "output"), "[\"tick 1000000\"]", "{j2}");
         assert_eq!(field(&j2, "parked"), "true", "{j2}");
         assert_eq!(rut_drop_frame(), 1, "the second run's frame was parked");
+    }
+
+    // ---- the entry-err channel (err-channel phase 3): "err" beside
+    // "trap". A (?T, err) main crosses under the ORIGINAL rule (the
+    // nullable's element answers it — these cases compile ONLY with the
+    // phase-3 `crosses_boundary` arm, so each is the gap-closed pin). ----
+
+    const SOFT_FAIL: &str = r#"
+entry fn main() -> (?str, str) {
+    return (nil, "boom");
+}
+"#;
+
+    const SOFT_OK: &str = r#"
+entry fn main() -> (?str, str) {
+    return ("the value", "");
+}
+"#;
+
+    const SOFT_PANIC: &str = r#"
+entry fn main() -> (?str, str) {
+    panic("wiring drift");
+}
+"#;
+
+    #[test]
+    fn a_returned_err_rides_err_beside_a_null_trap() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        let j = run_json(&compile_case(SOFT_FAIL), 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(field(&j, "err"), "boom", "{j}");
+        assert_eq!(field(&j, "parked"), "false", "{j}");
+    }
+
+    #[test]
+    fn an_empty_err_and_every_other_shape_surfaces_no_err() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        // the success leg: (value, "") — the value channel is live
+        let j = run_json(&compile_case(SOFT_OK), 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(field(&j, "err"), "null", "{j}");
+        // the nil main — not the pair shape at all, just data
+        let j = run_json(&compile_case(HELLO), 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(field(&j, "err"), "null", "{j}");
+        assert_eq!(field(&j, "output"), "[\"hello\"]", "{j}");
+    }
+
+    #[test]
+    fn a_panic_never_fills_err_the_channels_never_mix() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        let j = run_json(&compile_case(SOFT_PANIC), 10_000_000, 4 * 1024 * 1024);
+        assert_ne!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(field(&j, "err"), "null", "{j}");
     }
 }

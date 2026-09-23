@@ -32,8 +32,9 @@ entry fn main() -> opaque {
 
 // The ONE re-entry point: a DOM event row arrives with the listener id
 // as its subject; the framework translates id -> subject (LOUD miss),
-// and this harness's "biz" logs it.
-entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
+// and this harness's "biz" logs it. Returns the entry-err pair (the
+// phase-3 turn shape) — the harness never soft-fails.
+entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
     let h = opaque.downcast<?Harness>(c);
     if (kind == 1) {
         let mut root: ?T1Root = h.root;
@@ -44,6 +45,7 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
         panic(f"t1h: unknown event kind {kind}");
     }
     let _ = detail;
+    return (c, "");
 }
 
 // ---- shared scenario builders ---------------------------------------

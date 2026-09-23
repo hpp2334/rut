@@ -29,13 +29,22 @@ page is nothing *but* async. The pattern that fills the gap:
 
   ```rut
   entry fn main() -> opaque;
-  entry fn on_event(c: opaque, kind: i32, subject: str, detail: str);
+  entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str);
   ```
 
 * **every asynchronous fact is an event row.** One entry, one shape —
   kind 1 = EV_DOM, kind 2 = EV_TIMER; the host is the only writer of
   the queue (a FIFO with a re-entrancy guard — `events are queue,
   never stack`).
+* **the turn answers the entry-err pair** (err-channel phase 3). A
+  clean turn returns `(opaque(c), "")` — the container re-crosses, the
+  state-crossing law made explicit. A SOFT FAILURE returns
+  `(nil, why)`: the pump decodes the err, reports it
+  (`WebState::turned_errs`; the wasm lane forwards each into its
+  `rut_web_last_error` slot), and **keeps draining** — the page lives,
+  the container stays usable. A panic is still drift: it kills the
+  pump loud and never crosses as data. The twin containment proofs
+  live in `tests/todolist_app.rs` (`softfail.rut` isolates the law).
 * **the "server" is a request table, not a scheduler.** An add never
   touches the list: `store.request_add` books a `Req` row (tag, kind,
   latency) and the UI books one `tim_after(req.latency, req.tag)` —
@@ -155,6 +164,11 @@ recorded per the batch law — see `docs/todolist-web-report.md`, and
 * `on_event` grew a **leading container param** (phase 2): rut has no
   mutable module state, so the boot turn's returned opaque crosses
   back on every turn.
+* `on_event` grew the **entry-err return** (phase 3): the store's
+  `answer` lines split into the `(line, err)` pair — a commit is
+  `(line, "")`, a rejection or a lost id is `("", why)` — and the app
+  surfaces the why through `(?opaque, str)`'s err channel instead of
+  pretending every answer succeeded.
 * the dispatch table is `PrimMapI64<str>` — nmapset's keys are the
   SUBJECT (the semantic event name), never the host's listener id.
 

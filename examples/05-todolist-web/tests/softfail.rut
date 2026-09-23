@@ -1,0 +1,47 @@
+// softfail.rut — the twin's containment fixture (err-channel phase 3):
+// a page program whose `on_event` SOFT-FAILS on demand. The "boom"
+// subject returns `(nil, "boom")` — the err channel's failure shape —
+// and the "trap" subject panics (drift, loud as ever); every other
+// event counts a hit and returns `(opaque(container), "")`.
+//
+// This isolates the pump's decode-report-keep-draining law from the
+// app: no store, no widgets, no web crossings — a container, a
+// downcast, and the two channels. `tests/todolist_app.rs` drives it
+// through the REAL pump and proves the boundary between data and drift:
+// a returned err leaves the page alive and the container usable; a
+// panic still kills the pump.
+
+struct Tally { hits: i64 = 0 }
+
+entry fn main() -> opaque {
+    // the app's own shape: the nullable is a LET before the mint, so
+    // the box's payload is `?Tally` and `downcast<?Tally>` reads it
+    let t: ?Tally = Tally { hits: 0 };
+    return opaque(t);
+}
+
+entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
+    let t = opaque.downcast<?Tally>(c);
+    if (t == nil) {
+        panic("fixture: the event container is not a Tally — host drift");
+    }
+    let mut tt: ?Tally = t;
+    if (subject == "boom") {
+        // the soft failure: data for the host, the container untouched —
+        // exactly-one-non-nil (the value channel is empty)
+        return (nil, "boom");
+    }
+    if (subject == "trap") {
+        panic("fixture: the trapped turn — drift, loud as ever");
+    }
+    tt.hits += 1;
+    return (opaque(tt), "");
+}
+
+/// The twin's usability probe: the container survived, the counter is
+/// real. -1 only when the container is NOT a Tally (host drift).
+entry fn hits(c: opaque) -> i64 {
+    let t = opaque.downcast<?Tally>(c);
+    if (t == nil) { return -1; }
+    return t.hits;
+}

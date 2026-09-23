@@ -8,6 +8,8 @@ export interface PaneData {
   ast?: AstNode;
   irDump: string;
   trap?: string;
+  /** a RETURNED failure (err-channel phase 3) — beside trap, never mixed with it */
+  err?: string;
   /** fatal compile diagnostics — rendered LOUD, never dropped silently */
   diags?: Diag[];
 }
@@ -23,6 +25,7 @@ export function Panes(props: {
   const [active, setActive] = useState<TabName>("Output");
 
   const output = [...props.data.output];
+  if (props.data.err) output.push(`Err::${props.data.err}`);
   if (props.data.trap) output.push(`Trap::${props.data.trap}`);
 
   return (

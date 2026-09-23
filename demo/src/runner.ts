@@ -106,6 +106,7 @@ class WasmApi implements RutApi {
     return {
       output: parsed.output ?? [],
       trap: parsed.trap ?? undefined,
+      err: parsed.err ?? undefined,
       fuelUsed: parsed.fuelUsed ?? 0,
       heapBytes: parsed.heapBytes ?? 0,
       parked: parsed.parked ?? false,
@@ -122,6 +123,7 @@ class WasmApi implements RutApi {
     return {
       output: parsed.output ?? [],
       trap: parsed.trap ?? undefined,
+      err: parsed.err ?? undefined,
       fuelUsed: parsed.fuelUsed ?? 0,
       heapBytes: parsed.heapBytes ?? 0,
       parked: parsed.parked ?? false,

@@ -432,6 +432,12 @@ impl TypeTable {
     pub fn crosses_boundary(&self, id: TypeId) -> bool {
         match self.kind(id) {
             TyKind::Nil | TyKind::Prim(_) | TyKind::Str | TyKind::Bytes | TyKind::Opaque => true,
+            // `?T` crosses nil-flattened when T crosses (RFC 0023 §1's own
+            // promise: optionals cross as the v1.1 tuples they were always
+            // spelled as — the implementation only predates the text). The
+            // err-channel entry shape `(?T, err)` is exactly this arm: no
+            // err carve-out, the nullable's element answers the rule.
+            TyKind::Opt { elem } => self.crosses_boundary(*elem),
             // tuples cross field-by-field (RFC 0007 v1.1): `(bytes, str)`
             // is the error convention; named records still do not cross
             TyKind::Data { fields } => fields.iter().all(|f| self.crosses_boundary(f.ty)),

@@ -499,6 +499,20 @@ impl Vm {
             (Value::Nil, TyKind::Nil)
             | (Value::I64(0), TyKind::Nil) // `return;` crosses as a zero word
             | (Value::Nil, TyKind::Prim(_)) => Slot::int(0),
+            // nil binds a `?T` parameter as the null slot (the flat
+            // representation; RFC 0044's zero — there is no `Value::Opt`,
+            // so nil is the one shape the flat arm needs).
+            (Value::Nil, TyKind::Opt { .. }) => Slot::null(),
+            // a non-nil payload re-enters BOXED under `?T` (the host-side
+            // `T → ?T` funnel, RFC 0044): `call` decodes the root ret
+            // through `slot_to_value` — which nil-flattens — and then
+            // re-marshals that `Value` under the declared type, so a
+            // `?T` component arrives unboxed and `alloc_opt_value` makes
+            // the slot honest again before `Ret` reads it.
+            (v, TyKind::Opt { elem }) => {
+                let inner = self.value_in(v, elem).map_err(|m| format!("payload: {m}"))?;
+                self.heap.alloc_opt_value(ty, inner).map_err(|t| t.msg)?
+            }
             (Value::I64(n), TyKind::Prim(p)) => {
                 if !fits(*n, p) {
                     return Err(format!("`{n}` does not fit `{}`", self.prog.type_name(ty)));

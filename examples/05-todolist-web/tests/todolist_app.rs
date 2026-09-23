@@ -38,6 +38,7 @@ use todolist_web::host::WebHost;
 use todolist_web::{hosts, mount, state, DomBackend, WebState};
 
 const APP: &str = include_str!("../todolist.rut");
+const SOFTFAIL: &str = include_str!("softfail.rut");
 
 /// Boot the app on the twin: mount (core + pouch + nmap_host + nmapset
 /// + store + web + t1 — the app session), compile, bind BOTH body sets,
@@ -366,6 +367,16 @@ fn a_lost_id_is_an_answer_not_a_wedge() {
         Some("0 open | 0 done | 0 in flight — skipped toggle #1 — the row is gone")
     );
     assert!(host.with_dom(|d| d.pending_timers()).is_empty());
+    // the skip rode the ERR channel as well (data, not drift) — and the
+    // page proves alive with one more full round trip
+    assert_eq!(
+        host.state.borrow().turned_errs,
+        vec!["skipped toggle #1 — the row is gone".to_string()]
+    );
+    type_into(&mut host, "jam");
+    click(&mut host, "add-btn");
+    host.advance(400).unwrap();
+    assert_eq!(snap(&host, "row-2").child_texts, vec!["jam", "del"]);
 }
 
 // ---- the app's own trap shapes ----
@@ -408,9 +419,109 @@ fn a_stale_row_listener_traps_loud() {
 fn an_unknown_event_kind_traps_loud() {
     let (mut host, app) = make_host();
     let err = host
-        .call::<_, ()>("on_event", (app, 7i32, "1".to_string(), "".to_string()))
+        .call::<_, (Option<OpaqueRef>, String)>("on_event", (app, 7i32, "1".to_string(), "".to_string()))
         .unwrap_err();
     assert!(err.msg.contains("app: unknown event kind 7"), "{}", err.msg);
+}
+
+// ---- the twin containment proofs (err-channel phase 3) ----
+//
+// The boundary between DATA and DRIFT, pinned as tests. A turn returning
+// `(nil, why)` is DATA: the pump decodes the err, reports it, and KEEPS
+// DRAINING — the page stays alive, the container stays usable. A panic
+// is DRIFT: the pump dies loud, and nothing crosses as data. The
+// `softfail.rut` fixture isolates the law (a container, a downcast, the
+// two channels); the app's own rejected-add turn proves it on the real
+// page.
+
+/// The fixture host: `softfail.rut` on the plain store session — no web
+/// surface, no nmap, no widgets.
+fn make_fixture() -> WebHost<FakeDom> {
+    let mut session = Session::new();
+    mount::mount_store_session(&mut session).expect("the fixture session mounts");
+    let expected = session.expected_host_fns();
+    let prog = mount::compile_app(&mut session, SOFTFAIL).expect("the fixture compiles");
+
+    let (slot, sink) = state::weak_sink_slot::<FakeDom>();
+    let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));
+    state::bind_weak_sink(&slot, &shared);
+    shared.borrow_mut().dom.seed_page("div", "app");
+
+    let mut hosts = HostRegistry::new();
+    hosts.verify_against(&expected);
+    let vm = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), hosts)
+        .expect("the vm boots");
+    let mut host = WebHost::new(shared, vm);
+    host.boot().expect("the boot turn runs");
+    host
+}
+
+#[test]
+fn a_boom_turn_is_data_the_pump_reports_and_keeps_draining() {
+    let mut host = make_fixture();
+    host.state.borrow_mut().push_timer("boom");
+    // THE CONTAINMENT: the pump returns Ok straight through a soft
+    // failure — the turn's (nil, "boom") was data, not a poison pill
+    host.pump().expect("a returned err does not poison the pump");
+    assert_eq!(host.state.borrow().turned_errs, vec!["boom".to_string()]);
+    // the container survived the nil value channel — the NEXT event
+    // works, twice, and the counter is real (the host still holds the
+    // one container, rut still owns it)
+    host.state.borrow_mut().push_timer("tick");
+    host.pump().unwrap();
+    host.state.borrow_mut().push_timer("tick");
+    host.pump().unwrap();
+    let app = host.state.borrow().app.clone().unwrap();
+    assert_eq!(host.call::<_, i64>("hits", (app,)).unwrap(), 2);
+}
+
+#[test]
+fn a_panicked_turn_still_kills_the_pump_loud() {
+    let mut host = make_fixture();
+    host.state.borrow_mut().push_timer("trap");
+    let err = host.pump().unwrap_err();
+    assert!(err.msg.contains("fixture: the trapped turn"), "{}", err.msg);
+    // a trap never crosses as data, and drift kills THIS pump; the Vm
+    // itself is not poisoned — the next good turn runs
+    assert!(host.state.borrow().turned_errs.is_empty());
+    host.state.borrow_mut().push_timer("tick");
+    host.pump().unwrap();
+    let app = host.state.borrow().app.clone().unwrap();
+    assert_eq!(host.call::<_, i64>("hits", (app,)).unwrap(), 1);
+}
+
+#[test]
+fn a_rejected_add_crosses_the_err_channel_and_the_page_lives() {
+    let (mut host, _app) = make_host();
+    type_into(&mut host, "milk");
+    click(&mut host, "add-btn");
+    host.advance(400).unwrap();
+
+    // the duplicate's answer REJECTS — the app returns (nil, why), the
+    // pump reports the err and keeps draining
+    type_into(&mut host, "milk");
+    click(&mut host, "add-btn");
+    host.advance(400).unwrap();
+    assert_eq!(
+        host.state.borrow().turned_errs,
+        vec!["rejected 'milk' — already on the list".to_string()]
+    );
+    // the status line still told the user (the note leg painted before
+    // the soft return)
+    assert_eq!(
+        snap(&host, "status").text.as_deref(),
+        Some("1 open | 0 done | 0 in flight — rejected 'milk' — already on the list")
+    );
+
+    // and the container is USABLE: the next add commits, paints, flies
+    type_into(&mut host, "tea");
+    click(&mut host, "add-btn");
+    host.advance(400).unwrap();
+    assert_eq!(snap(&host, "row-2").child_texts, vec!["tea", "del"]);
+    assert_eq!(
+        snap(&host, "status").text.as_deref(),
+        Some("2 open | 0 done | 0 in flight — added 'tea' as #2")
+    );
 }
 
 #[test]
@@ -420,7 +531,7 @@ fn a_foreign_container_traps_loud() {
     // so on_event's downcast fails LOUD (host drift, named as such)
     let foreign: OpaqueRef = host.call("store_new", ()).unwrap();
     let err = host
-        .call::<_, ()>("on_event", (foreign, 1i32, "1".to_string(), "".to_string()))
+        .call::<_, (Option<OpaqueRef>, String)>("on_event", (foreign, 1i32, "1".to_string(), "".to_string()))
         .unwrap_err();
     assert!(err.msg.contains("app: the event container is not an AppRoot"), "{}", err.msg);
     // the real container is unharmed: a live turn still runs
