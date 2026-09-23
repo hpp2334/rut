@@ -468,4 +468,13 @@ trait's pkg or the type's pkg"; §4's table carries the same footnote.
   rule decides which sources may reach emit, never what emit produces
   (the module binary VERSION moved to 9 for this — policy, the 5→6
   precedent).
+- **The motivating legal case is rut-json's serde model (RFC 0028's
+  amendment).** json's base impls (the primitives, `?T`, `[T]`) and
+  its peer-gated container impls (RFC 0045's groups: `Vec<T>` from
+  pouch, the map-set types from nmapset) are trait-local by
+  construction — json owns the traits; and the consumer-side
+  `impl JsonSerialize for Json` (the 02-digest example) is the
+  type-local case. The phase-0 census found all 49 in-repo trait impls
+  on the legal side of this line and zero orphans, so the rule landed
+  against a clean corpus — no migration, no grandfathering.
 

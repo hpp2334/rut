@@ -75,6 +75,39 @@ package manager (RFC 0045 OQ-1). The full record: the survey, the
 diagnostics, and the test matrix in
 [`docs/dep-kinds-report.md`](../docs/dep-kinds-report.md).
 
+## The orphan rule — one of the pair is local
+
+Every `impl Trait for Type { .. }` needs **at least one of the pair
+defined in your pkg** — the trait's pkg or the type's pkg (RFC 0012
+§2a, the compiler's law since module VERSION 9). Write your impl in
+the pkg that owns a side: your own trait may speak about anyone's
+type, and anyone's trait may speak about your own type — 02-digest's
+`impl JsonSerialize for Json` is the type-local shape (json owns the
+trait, `Json` is that file's).
+
+- **Builtin types are in no pkg** — the primitives, `[T]`, `?T`,
+  `opaque`. Only a trait of your own pkg may be implemented for them
+  (json's twelve base impls — prims, `?T`, `[T]` — are the sanctioned
+  shape); a foreign trait over a builtin head is an orphan. The
+  asymmetry is deliberate: builtin *traits* (`Iterator`, `Index`,
+  `Disposal`) are core's decls, so implementing one for your own type
+  is the ordinary local case. `opaque` is a builtin too — a foreign
+  trait can never be implemented for it; its cross-type law is
+  RFC 0014's downcast (`opaque.downcast<T> -> ?T`, nil on a miss).
+- **Generic impls classify by the head** — `impl JsonSerialize for
+  Vec<T>` is json's to write (it does, peer-gated); your type
+  parameter `T` never makes the impl yours.
+- **Both foreign is an error**, named plainly:
+
+  ```
+  orphan impl: neither `JsonSerialize` nor `HashSet` is defined in this pkg — `JsonSerialize` is json's, `HashSet` is nmapset's; an `impl Trait for Type` needs at least one of the pair declared in its own pkg (RFC 0012 §2a)
+  ```
+
+The guarantee you get: a pkg's impl set is auditable — "who implements
+`JsonSerialize` for `Vec<T>`" has one answer and a grep to prove it —
+and adding a dependency adds the pairs its pkgs declare, never pairs a
+stranger invented. The record: `docs/orphan-rule-report.md`.
+
 ## The std `json` package — the surface, the rulings, the run recipe
 
 `rut/json/` is the ninth std pkg (after `core`, `calc`, `nmap_host`,

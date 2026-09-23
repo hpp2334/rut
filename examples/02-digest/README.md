@@ -18,8 +18,9 @@ the shapes RFC 0023 §2 lets cross the host boundary:
   numbers are stored as verbatim lexemes so round-trips are exact.
   Since the rut-json batch the **encode half rides the std `json` pkg**
   (`rut/json`): `impl JsonSerialize for Json` drives the pkg's
-  `JsonWriter` — the exact shape a user type spells (RFC 0012's
-  orphan-legal direction: json owns the trait, `Json` is this file's).
+  `JsonWriter` — the exact shape a user type spells (the orphan-legal
+  direction, RFC 0012 §2a — now the compiler's law: json owns the
+  trait, `Json` is this file's).
   The decode half stays the private cursor parser until json's
   schema-less `JsonValue` lands
 
@@ -96,7 +97,9 @@ fuel used: 1014105 of Some(50000000)
   implements another pkg's trait — `impl JsonSerialize for Json` — and
   the lib's writer does the byte work (the f-string accumulator, the
   RFC 8259 escape policy, the 128-level depth law). The lib teaches
-  the shape every json consumer spells
+  the shape every json consumer spells — and this block is the orphan
+  rule's type-local case (RFC 0012 §2a): the trait is json's, the type
+  is ours, so the pair is legal exactly here
 
 ## Limitations (honest ones)
 
