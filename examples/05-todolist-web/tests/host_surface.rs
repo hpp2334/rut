@@ -253,12 +253,13 @@ fn mounted_session() -> Session {
 
 #[test]
 fn the_app_compiles() {
-    // the phase-2 app (todolist.rut + the linked store.rut) is this
-    // example's page program — its compile gate rides the app session
-    // (the phase-1 shell demo grew into it; loader.js fetches it)
+    // the app package (rut/app/app) is this example's page program —
+    // its MIRROR-LANE compile gate rides the mirror session (the
+    // manifest lane's gate is tests/mount_lane.rs; loader.js fetches
+    // the same file this includes)
     let mut session = Session::new();
-    mount::mount_app_session(&mut session).expect("the app session mounts");
-    mount::compile_app(&mut session, include_str!("../todolist.rut"))
+    mount::mount_app_session(&mut session).expect("the mirror mounts");
+    mount::compile_app(&mut session, include_str!("../rut/app/app/app.rut"))
         .expect("the app compiles");
 }
 

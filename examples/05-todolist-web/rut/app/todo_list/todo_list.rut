@@ -1,0 +1,43 @@
+// todo_list.rut — THE LIST (TodoList, the survey §3 tree's view
+// layer): one keyed row per committed todo (commit order), then a
+// pending line per outstanding add (book order) — the round trip made
+// visible in the tree.
+//
+// THE TABLES. The §7.3 subject tables are built HERE, beside the
+// `.subject(...)` calls they mirror — drop-then-refill, fresh per
+// render, so the tables track THIS render's rows only and a stale
+// subject is a LOUD miss, the phase-1 action table's own law. rut has
+// no module state (RFC 0003 §1), so the tables RETURN to the app,
+// which owns them on the container: todo_list is pure but for the
+// maps it mints and hands back.
+//
+// This is the old `todolist.rut`'s `todo_list` fn, promoted to its
+// own package (the module law; and the view packages carry unambiguous
+// names — the component `row` took the short one, survey §3.3).
+
+use todos::{ Store };
+use widget::{ Widget };
+use nmapset::{ PrimMapI64 };
+use card::{ card };
+use text::{ pending };
+use todo_row::{ todo_row };
+
+/// The list tree plus this render's two subject tables (toggle, then
+/// remove) — the caller drops them onto the container.
+pub fn todo_list(store: ?Store) -> (Widget, PrimMapI64<str>, PrimMapI64<str>) {
+    let mut st: ?Store = store;
+    let mut tg: PrimMapI64<str> = PrimMapI64.new();
+    let mut rm: PrimMapI64<str> = PrimMapI64.new();
+
+    let mut list = card().pad(12).gap(8).hook("list");
+    for (let t of st.todos()) {
+        tg.put(f"toggle:{t.id}", t.id);
+        rm.put(f"remove:{t.id}", t.id);
+        list.w(todo_row(t, st.has_pending_for(t.id)));
+    }
+    for (let p of st.pending_add_titles()) {
+        list.w(pending(f"... {p}"));
+    }
+
+    return (list, tg, rm);
+}

@@ -1,0 +1,13 @@
+// button.rut — the BUTTON constructors: primary and quiet (see
+// col.rut for the component-layer law). The variant IS the styling
+// contract: the lowering maps each to its `t1-btn--*` token, and the
+// click listens under the widget's `.subject(...)`.
+use widget::{ Widget, WKind, BVariant };
+
+pub fn btn(label: str) -> Widget {
+    return Widget { kind: WKind.Button, bvar: BVariant.Primary, text: label };
+}
+
+pub fn quiet(label: str) -> Widget {
+    return Widget { kind: WKind.Button, bvar: BVariant.Quiet, text: label };
+}

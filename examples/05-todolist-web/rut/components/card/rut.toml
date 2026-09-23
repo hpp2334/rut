@@ -1,0 +1,9 @@
+# components/card/ — one widget kind, one package (the one-dir-one-module
+# law): the constructor(s) of the card vocabulary. Imports `widget` and
+# nothing else of t1 — the lowering and the core stay framework-private
+# (the survey §3.3 law, enforced at the component layer too).
+name = "card"
+entry.lib = "./card.rut"
+
+[deps]
+widget = { path = "../../t1/widget" }

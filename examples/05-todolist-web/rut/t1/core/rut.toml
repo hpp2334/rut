@@ -1,0 +1,25 @@
+# t1/core/ — the framework's STATE package: T1Root and its private
+# tables (els/regs/lids/prev), the mount, the listener registry, the
+# keyed diff, retirement. ONE stateful package on purpose (survey §3.1):
+# the tables are written across mount/render/retire and rut's landed
+# visibility has no scoped forms — separate packages would need `pub`
+# fields, publishing what the law keeps framework-private.
+#
+# `inline = true` is a first-class manifest key with a stated shape
+# reason: the twin harness reads root.els/regs/prev (t1p_ probes) —
+# cross-module field reads that compile only same-unit, so the package
+# SPLICES into its consumer with the graph's origin-dedup composing
+# each shared dependency once. This is per-package splicing (the
+# nmapset/ink treatment), NOT the retired appkit hack: appkit was ONE
+# module fabricated from many to dodge a double-splice; the hack and
+# its reason are both gone (survey §2.5, P1/P2/P3).
+name = "t1"
+entry.lib = "./t1.rut"
+inline = true
+
+[deps]
+widget = { path = "../widget" }
+lowering = { path = "../lowering" }
+pouch = { path = "../../../../../rut/pouch" }
+nmapset = { path = "../../../../../rut/nmapset" }
+web = { path = "../../web" }

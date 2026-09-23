@@ -1,14 +1,13 @@
 //! The t1 twin-gate support: boot the FRAMEWORK HARNESS
-//! (`tests/t1_harness.rut` over `t1.rut`, mounted inline like the
-//! store) on the fake-DOM twin, and the read helpers every t1 test
-//! shares — snapshots, live handles as twin node ids, listener ids
-//! found through the host's own listener rows (§6's law: hooks become
-//! the tests' vocabulary, numeric ids stay plumbing).
+//! (`tests/t1_harness.rut` over the mounted project) on the fake-DOM
+//! twin, and the read helpers every t1 test shares — snapshots, live
+//! handles as twin node ids, listener ids found through the host's own
+//! listener rows (§6's law: hooks become the tests' vocabulary, numeric
+//! ids stay plumbing).
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_driver::{ Module, Session };
 use rut_vm::interp::{ HostHooks, HostRegistry, Vm };
 use rut_vm::{ OpaqueBox, OpaqueRef };
 
@@ -16,28 +15,24 @@ use todolist_web::fake_dom::{ FakeDom, Snapshot };
 use todolist_web::host::WebHost;
 use todolist_web::{ hosts, mount, state, WebState };
 
-pub const T1: &str = include_str!("../../t1.rut");
 pub const HARNESS: &str = include_str!("../t1_harness.rut");
 
 /// The booted twin host the tests pass around.
 pub type Host = WebHost<FakeDom>;
 
-/// Boot the harness on the twin: the app session (core + pouch +
-/// nmap_host + nmapset + store + web) plus `t1` inline, compile the
-/// harness, bind BOTH body sets, `verify_against`, seed `#app`, run
-/// the boot turn — which mounts the framework and returns the
-/// container the pump re-passes every turn.
+/// Boot the harness on the twin: mount the MANIFEST (the rut/ project
+/// — t1 mounts `inline` per its own manifest, exactly the shape the
+/// probes need), compile the harness as its own root over the closure
+/// — the inline splice puts the framework's source in the harness
+/// unit, so the t1p_ probes read `root.els/regs/prev` same-unit —
+/// bind BOTH body sets, `verify_against`, seed `#app`, run the boot
+/// turn. (The old second hand-registration of t1 is gone: the
+/// manifest's `inline = true` IS that statement now.)
 pub fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
-    let mut session = Session::new();
-    mount::mount_app_session(&mut session).expect("the app session mounts");
-    session
-        .register_module(
-            "t1",
-            Module { source: Some(T1.to_string()), inline: true, ..Default::default() },
-        )
-        .expect("t1 mounts");
+    let (mut session, _root) = mount::load_project_session().expect("the rut/ project mounts");
     let expected = session.expected_host_fns();
-    let prog = mount::compile_app(&mut session, HARNESS).expect("the harness compiles");
+    let prog = mount::compile_root(&mut session, HARNESS, "t1_harness")
+        .expect("the harness compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));

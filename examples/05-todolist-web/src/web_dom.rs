@@ -221,8 +221,9 @@ fn page_state() -> Result<StateRc, String> {
 /// page is purely event-driven — the host owns the loop.
 fn boot_page(src: &str) -> Result<(), String> {
     let mut session = rut_driver::Session::new();
-    // the APP session (phase 2): core + pouch + nmap_host + nmapset +
-    // store + web — the loader hands over todolist.rut's source
+    // THE MIRROR (rut/rut.toml by hand — the Session is I/O-free):
+    // every package the manifest names; the loader hands over
+    // rut/app/app.rut's source
     crate::mount::mount_app_session(&mut session)?;
     let prog = crate::mount::compile_app(&mut session, src)?;
     let expected = session.expected_host_fns();

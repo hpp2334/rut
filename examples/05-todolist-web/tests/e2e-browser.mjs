@@ -51,7 +51,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const EXAMPLE = path.dirname(HERE); // examples/05-todolist-web
 const ROOT = path.resolve(EXAMPLE, "..", "..");
 const WASM = path.join(ROOT, "target", "wasm32-unknown-unknown", "release", "todolist_web.wasm");
-const APP_SRC = path.join(EXAMPLE, "todolist.rut");
+const APP_SRC = path.join(EXAMPLE, "rut", "app", "app", "app.rut");
 const BINDGEN_VERSION = "0.2.128"; // must match Cargo.lock's wasm-bindgen
 const NODE_ONLY = process.argv.includes("--node-only");
 

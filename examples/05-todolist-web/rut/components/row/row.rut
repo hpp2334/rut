@@ -1,0 +1,10 @@
+// row.rut — the Row constructor (see col.rut for the component-layer
+// law). Note the namespacing law this package embodies: the component
+// `row` took the short name, so the app's ROW VIEW builder is the
+// `todo_row` package — bare use-paths are one flat namespace and
+// first-mount-wins would silently skip a duplicate (survey §3.3).
+use widget::{ Widget, WKind };
+
+pub fn row() -> Widget {
+    return Widget { kind: WKind.Row };
+}

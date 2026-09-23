@@ -1,17 +1,21 @@
-// todolist.rut — the todolist APP, phase 2 of the batch: the rewrite
-// ON t1. The phase-1 shape — hand-built DOM, clear-and-rebuild paints,
-// per-paint listener churn, the packed action numbers — is GONE. This
-// file composes WIDGETS and routes SEMANTIC subjects; the framework
-// (`t1.rut`, spliced with the store into the app unit's one `appkit`
-// module) owns the tags, the tokens, the listener registry, and the
-// keyed diff. `store.rut` still owns the list and the request table,
-// byte-untouched.
+// app.rut — the todolist APP (the restructure's project entry, survey
+// §3): the rewrite ON t1, now honestly multi-package. The hand-built
+// DOM shape — clear-and-rebuild paints, per-paint listener churn, the
+// packed action numbers — is GONE. This package composes WIDGETS and
+// routes SEMANTIC subjects; the framework owns the tags, the tokens,
+// the listener registry, and the keyed diff (`rut/t1/*`); the store
+// owns the list and the request table (`rut/store/todos`); the two
+// view builders are their own packages (`todo_list`, `todo_row`).
 //
-// THE LAW (design §2.1). Biz code never sinks to the DOM's vocabulary:
-// no crossing is imported, no tag or style token is spelled, no
-// listener id is named. This is not an aspiration — it is a committed
-// gate (`tests/app_law.rs` reads this file and fails on violations),
-// so the rewrite cannot rot back into the phase-1 shape.
+// THE LAW (design §2.1, enforced by tests/app_law.rs over this
+// package). Biz code never sinks to the DOM's vocabulary: the import
+// set is EXACT — the widget vocabulary, the store's domain types, the
+// framework's four names, and ONE crossing name, `tim_after`, imported
+// by name from the `web` host pkg (the host's time, RFC 0018's own
+// law; the phase-1 shape resolved it through the app unit's bound
+// surface — the restructure imports it honestly). No tag or style
+// token is spelled, no listener id is named, no second crossing can
+// ride in: the gate pins the set.
 //
 // THE STATE MODEL (unchanged, RFC 0003 §1). rut has no mutable module
 // state, so the state lives in ONE container this module builds at
@@ -30,21 +34,23 @@
 // the framework's patch state — is a FIELD of the container (§7.1),
 // exactly like the store and the draft.
 //
-// THE COMPONENTS (the only vocabulary this file speaks):
+// THE COMPONENTS (the only vocabulary this package speaks):
 //
 //   view(r)                  App — the page tree: the head row, the
 //                            counts line, the card of rows + flights
-//   todo_list(r)             TodoList — one keyed row per committed
-//                            todo, then one line per outstanding add
+//   todo_list(store)         TodoList — one keyed row per committed
+//                            todo, one line per outstanding add, and
+//                            the subject tables RETURNED
 //   todo_row(t, flying)      TodoRow — check + title + quiet del,
-//                            keyed `row-<id>`
+//                            keyed `row-<id>` (lives in its package)
 //
 // view is PURE: it reads the store and the draft and builds widgets;
 // it runs no crossing (the one rut-side write it makes is §7.3's
-// subject tables, below). `paint` is the turn's ONE render: it hands
-// the tree to `t1_render`, whose keyed diff patches the live page in
-// place — nothing changed = nothing fires, a toggle = one token patch,
-// a committed remove retires the row's listeners. No rebuild, ever.
+// subject tables, which todo_list returns and view drops onto the
+// container). `paint` is the turn's ONE render: it hands the tree to
+// `t1_render`, whose keyed diff patches the live page in place —
+// nothing changed = nothing fires, a toggle = one token patch, a
+// committed remove retires the row's listeners. No rebuild, ever.
 //
 // THE SUBJECTS (§7.3). Widgets fire SEMANTIC subjects; the dispatch is
 // equality and map lookups, never arithmetic:
@@ -54,8 +60,8 @@
 //   "toggle:<id>"  a row's check — routed through the toggles table
 //   "remove:<id>"  a row's del — routed through the removes table
 //
-// The tables are built right beside the matching `.subject(...)` calls
-// (the todo id and the role are MAP lookups, never digit packing) and
+// The tables are built beside the matching `.subject(...)` calls (the
+// todo id and the role are MAP lookups, never digit packing) and
 // drop-then-refill on every render, so a subject for a row that left
 // the list is a LOUD miss — the same law the phase-1 action table
 // had. A stale or unknown LISTENER id dies one step earlier, in the
@@ -69,34 +75,38 @@
 // add the draft clears, and the DIFF clears the field: the value patch
 // rides the framework's one input crossing.
 //
-// THE SERVER. `store.rut` owns the list and the request table. An add
-// here does NOT touch the list: it books a Req row and one timer. The
-// timer is the ONE non-widget name this file spells — `tim_after`, the
-// host's clock (RFC 0018's own law: the host owns time). It is bound
-// through the appkit unit's own surface (the inline-splice law: the
-// consumer splices, the unit's imports bind), so no crossing package
-// is imported here; the gate pins the import set so nothing else can
-// ride in. The simulated round trip is VISIBLE twice over: a
-// "... title" pending line paints immediately, and the committed row
-// appears only when the timer's EV_TIMER turn answers the tag.
-// Per-kind latencies (add 400ms, toggle 250ms, remove 120ms) make
-// deadline-order commits observable across kinds.
+// THE SERVER. `rut/store/todos` owns the list and the request table.
+// An add here does NOT touch the list: it books a Req row and one
+// timer — `tim_after`, the ONE crossing name this package spells. The
+// simulated round trip is VISIBLE twice over: a "... title" pending
+// line paints immediately, and the committed row appears only when
+// the timer's EV_TIMER turn answers the tag. Per-kind latencies
+// (add 400ms, toggle 250ms, remove 120ms) make deadline-order commits
+// observable across kinds.
 //
 // Event kinds are the frozen numbers: 1 = EV_DOM, 2 = EV_TIMER.
 
-// The app unit's imports: `appkit` — the ONE splice the mount offers,
-// the store plus the widget framework verbatim (why one: the graph
-// splices each use's transitive sources per use, and store and t1 both
-// ride pouch, so together they would define Vec twice). The unit's
-// bound surface carries the host crossings the lowering needs — which
-// is how `tim_after` resolves without a crossing import here. The
-// consumer splices, the unit's imports bind the surfaces.
-use appkit::{
-    T1Root, Widget, Store, Todo,
-    t1_mount, t1_render, t1_subject,
-    col, row, card, text, done, pending, muted,
-    btn, quiet, check, field,
-};
+// The app's imports — the EXACT set the law gate pins (survey §5.1):
+// the widget type, the store's domain types, the framework's four
+// names, the two view builders, the component vocabulary, and the one
+// crossing name. PrimMapI64 needs NO import: the t1 core mounts
+// `inline`, its transitive nmapset splices into this unit, and the
+// name is unit-local — the same composition the tables have always
+// ridden (the gate's set equality is what keeps any OTHER package
+// from riding in).
+use web::{ tim_after };
+use todos::{ Store, Todo };
+use t1::{ T1Root, t1_mount, t1_render, t1_subject };
+use widget::{ Widget };
+use todo_list::{ todo_list };
+use todo_row::{ todo_row };
+use col::{ col };
+use row::{ row };
+use text::{ text, done, pending, muted };
+use button::{ btn, quiet };
+use checkbox::{ check };
+use field::{ field };
+use card::{ card };
 
 /// The app container: everything a turn needs, built once at boot and
 /// returned to the host, which re-passes it on every `on_event` turn.
@@ -252,7 +262,9 @@ fn paint(r: ?AppRoot) -> nil {
 
 // THE VIEW — App (§7.2). PURE: reads the store and the draft, builds
 // the whole widget tree. No crossing runs here; the tree is plain rut
-// data the twin could assert on its own.
+// data the twin could assert on its own. The one rut-side write is
+// §7.3's: the subject tables `todo_list` RETURNS are dropped onto the
+// container here, where the container lives.
 fn view(mut r: ?AppRoot) -> Widget {
     let mut store: ?Store = r.store;
 
@@ -270,55 +282,10 @@ fn view(mut r: ?AppRoot) -> Widget {
             .hook("status"),
     );
 
-    tree.w(todo_list(r));
+    let out = todo_list(store);
+    r.toggles = out.1;
+    r.removes = out.2;
+    tree.w(out.0);
     return tree;
 }
 
-// THE LIST — TodoList: one keyed row per committed todo (commit
-// order), then a pending line per outstanding add (book order) — the
-// round trip made visible in the tree. THE TABLES refill here, beside
-// the `.subject(...)` calls they mirror (§7.3): drop-then-refill, fresh
-// per render, so the tables track THIS render's rows only and a stale
-// subject is a LOUD miss, the phase-1 action table's own law.
-fn todo_list(mut r: ?AppRoot) -> Widget {
-    let mut store: ?Store = r.store;
-    let mut tg: PrimMapI64<str> = PrimMapI64.new();
-    let mut rm: PrimMapI64<str> = PrimMapI64.new();
-
-    let mut list = card().pad(12).gap(8).hook("list");
-    for (let t of store.todos()) {
-        tg.put(f"toggle:{t.id}", t.id);
-        rm.put(f"remove:{t.id}", t.id);
-        list.w(todo_row(t, store.has_pending_for(t.id)));
-    }
-    for (let p of store.pending_add_titles()) {
-        list.w(pending(f"... {p}"));
-    }
-
-    r.toggles = tg;
-    r.removes = rm;
-    return list;
-}
-
-// THE ROW — TodoRow. Keyed `row-<id>`: the diff's identity, so the row
-// SURVIVES every patch between commits (a rebuild would mint fresh
-// listeners per paint — that churn is dead). The check's `on` is app
-// state: a done flip patches one token. `flying` (a toggle or remove
-// in flight) turns the title into its in-flight variant — the "... "
-// cue the old paint spelled into the mark's text, now a variant patch
-// plus a text patch and nothing else.
-fn todo_row(t: Todo, flying: bool) -> Widget {
-    let mut w = row().gap(8).key(f"row-{t.id}").hook(f"row-{t.id}");
-    w.w(check(t.done).subject(f"toggle:{t.id}").hook(f"mark-{t.id}"));
-    let mut lbl = text(t.title);
-    if (flying) {
-        lbl = pending(f"... {t.title}");
-    } else {
-        if (t.done) {
-            lbl = done(t.title);
-        }
-    }
-    w.w(lbl.hook(f"lbl-{t.id}"));
-    w.w(quiet("del").subject(f"remove:{t.id}").hook(f"del-{t.id}"));
-    return w;
-}

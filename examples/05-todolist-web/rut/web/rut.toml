@@ -1,0 +1,10 @@
+# web/ — the DOM crossing as a first-class host pkg (the rut/calc and
+# examples/03-plugin/server shape, survey §2.4): a pure declaration
+# surface, bodies bound by the embedder (`install_web_hosts`). A decl
+# file loose at the example root was mountable only by hand; the module
+# law makes the directory the unit of placement, so the app's manifest
+# names `web` like any other package. `host_scope` stays `web` — the
+# registration prefix every crossing's host id carries.
+name = "web"
+entry.type = "./web.d.rut"
+host_scope = "web"

@@ -1,0 +1,11 @@
+# t1/widget/ — the Widget TYPE's package: the fat struct, the
+# WKind/TVariant/BVariant enums, the fluent builders (inherent impls
+# live in the type's module — rut-lir collect.rs's law, RFC 0012 §2)
+# and the predicates the lowering and the core read. Everything here is
+# data + fluent construction; no state, no crossings — the one t1
+# package a LINKED dep may export (concrete exports only).
+name = "widget"
+entry.lib = "./widget.rut"
+
+[deps]
+pouch = { path = "../../../../../rut/pouch" }

@@ -5,6 +5,13 @@
 //! and lost ids), an unknown tag traps loud, latencies differ per kind
 //! (the app-level deadline order rides on this), and the round trips
 //! for add/toggle/remove close.
+//!
+//! The mount is the MANIFEST route at package scale: `rut/store/todos`
+//! is its own package (`todos`, with `pouch` as its only dep), loaded
+//! with `load_dir_session` and compiled as the ROOT — which also makes
+//! this suite the survey §3.2(b) proof: a linked root calling its
+//! deps' class methods across the link boundary (the same path the
+//! app's fluent `.gap()` chains ride).
 
 use std::rc::Rc;
 
@@ -13,22 +20,18 @@ use rut_vm::OpaqueRef;
 
 use todolist_web::mount;
 
-const STORE: &str = include_str!("../store.rut");
-
-/// core + pouch ONLY — no `web`, no `nmap_host`: the store compiles and
-/// runs with no page and no clock in the session at all.
+/// core + pouch ONLY (the todos pkg's manifest closure) — no `web`, no
+/// `nmap_host`: the store compiles and runs with no page and no clock
+/// in the session at all.
 fn vm() -> (Vm, OpaqueRef) {
-    let mut session = Session::new();
-    mount::mount_store_session(&mut session).expect("the store session mounts");
-    let prog = mount::compile_app(&mut session, STORE).expect("the store compiles");
+    let (session, root) = mount::load_todos_session().expect("the todos package mounts");
+    assert_eq!(root, "todos", "the store suite's root spec is the todos pkg");
+    let prog = mount::compile_manifest(&session, &root).expect("the store compiles");
     let mut v = Vm::new(Rc::new(prog), &mount::limits(), HostHooks::default(), HostRegistry::new())
         .expect("the vm boots");
     let c: OpaqueRef = v.call("store_new", ()).unwrap();
     (v, c)
 }
-
-use rut_driver::Session;
-
 #[test]
 fn a_request_never_touches_the_list() {
     let (mut v, c) = vm();

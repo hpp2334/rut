@@ -1,27 +1,22 @@
-// t1.rut — the toy widget framework over the DOM crossings (phase 1 of
-// the `todolist-ui-framework` batch). Lives example-local next to
-// `store.rut`; the design is `docs/t1-design.md` (phase 0), which is
-// authoritative — including its five recorded deviations:
+// t1.rut — the toy widget framework's CORE (the state package of the
+// restructure's three-way t1 split, survey §3.1): T1Root — the patch
+// state with its framework-PRIVATE tables — the mount, the listener
+// registry, the keyed diff, and retirement. The Widget TYPE and its
+// fluent builders live in `t1/widget`; the tag/token table lives in
+// `t1/lowering`; this package is the state machine that owns them.
+// The design is `docs/t1-design.md` (phase 0), which is authoritative
+// — including its five recorded deviations:
 //
 //   * Checkbox lowers to a FRAMEWORK-OWNED button (`role=checkbox`
 //     + `t1-check--on/--off`), never a native input — app state is
 //     100% rut's, a toggle is one class-token patch;
 //   * there is NO `ui_unlisten` — listener retirement is rut-side
 //     table work (§4.3), the crossings stay ten;
-//   * gap/pad/size lower to a FIXED utility-token ladder
-//     (`t1-gap-8`, never arbitrary values, never a style attr);
+//   * the keyed diff patches in place — create/patch/retire below;
 //   * there is no closure-taking `Each` in v1 — rows are widgets
 //     with keys, built by a plain loop;
 //   * styling tokens are assert-able by the twin — the lowering's
 //     token map is the whole styling contract (§5).
-//
-// THE SHAPE (§2.3, the Json ruling's idiom): one fat `Widget` struct +
-// payloadless kind/variant enums (RFC 0006), recursive `Vec<Widget>`
-// children (RFC 0009 §6), optional variants as `?T` with `nil`
-// absence. Biz composes widgets with plain constructor fns and fluent
-// builders and never names a tag, a class token, a `web::` crossing,
-// or a listener id — tags and tokens live ONLY in the lowering table
-// below (§2.1's law; phase 2's grep gate enforces it).
 //
 // THE PATCH (§4.2): `t1_render` diffs the new tree against the
 // previous tree held in `T1Root` and applies minimal ops over the ten
@@ -44,6 +39,15 @@
 // listener id). Retirement needs the path->id direction — `prev`,
 // `els`, `regs` alone cannot answer "which ids did this removed
 // subtree own". Framework-private, like the rest of the tables.
+//
+// WHY ONE STATEFUL PACKAGE: the tables are written across mount,
+// render and retire, and rut's landed visibility is `pub` or
+// module-private (the scoped forms are AST-modeled, not parsed) —
+// splitting the machine would need `pub` fields, publishing to biz
+// the very tables the law keeps private (survey §3.1). The package
+// mounts `inline = true` for the same reason: the twin harness reads
+// these tables same-unit. Per-package splicing with the graph's
+// origin dedup — NOT the retired appkit concatenation (survey §2.5).
 
 use pouch::{ Vec };
 use nmapset::{ HashMap };
@@ -51,379 +55,8 @@ use web::{
     ui_get, ui_create, ui_set_text, ui_attr, ui_append, ui_remove,
     ui_set_input_value, ui_listen,
 };
-
-// ---- the widget vocabulary (§2.2/§2.3) ------------------------------
-
-// The kinds — payloadless (RFC 0006), the json ruling's JTag shape.
-enum WKind { Column, Row, Spacer, Card, Text, Button, Checkbox, Field }
-
-// Text's variants: title (page header), body (a row title), done
-// (struck, muted), pending (the `... title` in-flight row), muted
-// (the counts line).
-enum TVariant { Title, Body, Done, Pending, Muted }
-
-// Button's variants: primary (Add), quiet (the row's mark and del).
-enum BVariant { Primary, Quiet }
-
-/// One widget — the fat `Json` shape: kinds as enums, irrelevant
-/// fields defaulted, `children` making the tree recursive. Semantic
-/// options ONLY: there is no `tag` field and no `class` field.
-struct Widget {
-    kind: WKind = WKind.Text;
-    // -- controls
-    text: str = "";
-    tvar: ?TVariant = nil; // Text's variant
-    bvar: ?BVariant = nil; // Button's variant
-    on: bool = false; // Checkbox
-    placeholder: str = "";
-    value: str = ""; // Field (mirrors the draft)
-    // -- semantic options
-    subject: str = ""; // what this widget fires
-    hook: str = ""; // stable test id (the lowering emits it as `id`)
-    key: str = ""; // keyed-diff identity (defaults from hook)
-    // -- layout data (the utility-token ladder's inputs)
-    gap: i32 = 0;
-    pad: i32 = 0;
-    size: i32 = 0;
-    // -- layout
-    children: Vec<Widget> = Vec.new();
-}
-
-// ---- constructors (§2.4 — tur's helper-factory idiom: plain fns) ----
-
-pub fn col() -> Widget {
-    return Widget { kind: WKind.Column };
-}
-
-pub fn row() -> Widget {
-    return Widget { kind: WKind.Row };
-}
-
-pub fn card() -> Widget {
-    return Widget { kind: WKind.Card };
-}
-
-pub fn spacer(size: i32) -> Widget {
-    return Widget { kind: WKind.Spacer, size: size };
-}
-
-pub fn text(t: str) -> Widget {
-    return Widget { kind: WKind.Text, tvar: TVariant.Body, text: t };
-}
-
-pub fn done(t: str) -> Widget {
-    return Widget { kind: WKind.Text, tvar: TVariant.Done, text: t };
-}
-
-pub fn title(t: str) -> Widget {
-    return Widget { kind: WKind.Text, tvar: TVariant.Title, text: t };
-}
-
-pub fn pending(t: str) -> Widget {
-    return Widget { kind: WKind.Text, tvar: TVariant.Pending, text: t };
-}
-
-pub fn muted(t: str) -> Widget {
-    return Widget { kind: WKind.Text, tvar: TVariant.Muted, text: t };
-}
-
-pub fn btn(label: str) -> Widget {
-    return Widget { kind: WKind.Button, bvar: BVariant.Primary, text: label };
-}
-
-pub fn quiet(label: str) -> Widget {
-    return Widget { kind: WKind.Button, bvar: BVariant.Quiet, text: label };
-}
-
-pub fn check(on: bool) -> Widget {
-    return Widget { kind: WKind.Checkbox, on: on };
-}
-
-pub fn field() -> Widget {
-    return Widget { kind: WKind.Field };
-}
-
-// ---- the fluent builders (impl Widget, `mut self -> Self`) ----------
-
-impl Widget {
-    /// Append a child (no variadics — one at a time, per §2.4).
-    fn w(mut self, child: Widget) -> Self {
-        self.children.push(child);
-        return self;
-    }
-
-    fn gap(mut self, n: i32) -> Self {
-        self.gap = n;
-        return self;
-    }
-
-    fn pad(mut self, n: i32) -> Self {
-        self.pad = n;
-        return self;
-    }
-
-    fn size(mut self, n: i32) -> Self {
-        self.size = n;
-        return self;
-    }
-
-    /// The stable test id — the lowering emits it as the `id` attr.
-    fn hook(mut self, id: str) -> Self {
-        self.hook = id;
-        return self;
-    }
-
-    /// The keyed-diff identity; defaults from `hook` when unset.
-    fn key(mut self, id: str) -> Self {
-        self.key = id;
-        return self;
-    }
-
-    /// What this widget fires — the event's SEMANTIC name.
-    fn subject(mut self, s: str) -> Self {
-        self.subject = s;
-        return self;
-    }
-
-    /// The field's value (mirrors the app's draft).
-    fn value(mut self, v: str) -> Self {
-        self.value = v;
-        return self;
-    }
-
-    /// The placeholder (Field).
-    fn placeholder(mut self, p: str) -> Self {
-        self.placeholder = p;
-        return self;
-    }
-
-    /// The checkbox state (app state, rendered as a token).
-    fn on(mut self, b: bool) -> Self {
-        self.on = b;
-        return self;
-    }
-
-    fn variant_primary(mut self) -> Self {
-        self.bvar = BVariant.Primary;
-        return self;
-    }
-
-    fn variant_quiet(mut self) -> Self {
-        self.bvar = BVariant.Quiet;
-        return self;
-    }
-}
-
-// ---- the lowering (§4.1 — framework-private, biz never sees it) ----
-
-/// One row of the lowering table: the tag, the space-joined class
-/// tokens, and the event this widget listens to ("" = none).
-struct Lowered {
-    tag: str;
-    cls: str;
-    listens: str;
-}
-
-fn kind_name(w: Widget) -> str {
-    return when (w.kind) {
-        WKind.Column -> "Column",
-        WKind.Row -> "Row",
-        WKind.Spacer -> "Spacer",
-        WKind.Card -> "Card",
-        WKind.Text -> "Text",
-        WKind.Button -> "Button",
-        WKind.Checkbox -> "Checkbox",
-        WKind.Field -> "Field",
-    };
-}
-
-fn is_text(w: Widget) -> bool {
-    return when (w.kind) {
-        WKind.Text -> true,
-        else -> false,
-    };
-}
-
-fn is_field(w: Widget) -> bool {
-    return when (w.kind) {
-        WKind.Field -> true,
-        else -> false,
-    };
-}
-
-fn is_check(w: Widget) -> bool {
-    return when (w.kind) {
-        WKind.Checkbox -> true,
-        else -> false,
-    };
-}
-
-fn is_button(w: Widget) -> bool {
-    return when (w.kind) {
-        WKind.Button -> true,
-        else -> false,
-    };
-}
-
-/// Whose text content is real: Text's words and a Button's label.
-/// (Checkbox's glyph is its class token — the framework owns the
-/// visual; Field and the layout kinds carry no text.)
-fn takes_text(w: Widget) -> bool {
-    return when (w.kind) {
-        WKind.Text -> true,
-        WKind.Button -> true,
-        else -> false,
-    };
-}
-
-fn takes_children(w: Widget) -> bool {
-    return when (w.kind) {
-        WKind.Column -> true,
-        WKind.Row -> true,
-        WKind.Card -> true,
-        else -> false,
-    };
-}
-
-fn tag_of_kind(w: Widget) -> str {
-    return when (w.kind) {
-        WKind.Column -> "div",
-        WKind.Row -> "div",
-        WKind.Spacer -> "div",
-        WKind.Card -> "div",
-        WKind.Text -> "span",
-        WKind.Button -> "button",
-        WKind.Checkbox -> "button", // framework-owned, NOT a native input
-        WKind.Field -> "input",
-    };
-}
-
-fn tvar_token(v: TVariant) -> str {
-    return when (v) {
-        TVariant.Title -> "t1-text--title",
-        TVariant.Body -> "t1-text--body",
-        TVariant.Done -> "t1-text--done",
-        TVariant.Pending -> "t1-text--pending",
-        TVariant.Muted -> "t1-text--muted",
-    };
-}
-
-fn bvar_token(v: BVariant) -> str {
-    return when (v) {
-        BVariant.Primary -> "t1-btn--primary",
-        BVariant.Quiet -> "t1-btn--quiet",
-    };
-}
-
-fn check_token(on: bool) -> str {
-    if (on) {
-        return "t1-check--on";
-    }
-    return "t1-check--off";
-}
-
-/// The FIXED utility ladder (§5): `gap(8)` -> `t1-gap-8`. 0 means "no
-/// token"; anything off the ladder is a LOUD lowering trap — the token
-/// set stays enumerable and twin-assertible, and no `style` attr ever
-/// exists to smuggle CSS back into biz.
-fn ladder_token(name: str, n: i32) -> str {
-    if (n == 0) {
-        return "";
-    }
-    if (n == 4) {
-        return f"t1-{name}-4";
-    }
-    if (n == 8) {
-        return f"t1-{name}-8";
-    }
-    if (n == 12) {
-        return f"t1-{name}-12";
-    }
-    if (n == 16) {
-        return f"t1-{name}-16";
-    }
-    panic(f"t1: {name} {n} is off the utility ladder — 0/4/8/12/16 only");
-}
-
-/// Space-join two tokens, skipping empties.
-fn join_cls(a: str, b: str) -> str {
-    if (a == "") {
-        return b;
-    }
-    if (b == "") {
-        return a;
-    }
-    return f"{a} {b}";
-}
-
-/// The lowering table — TOTAL over WKind. Also the boundary where the
-/// fat struct's one dishonesty is caught: a control with children is
-/// an app bug, and it panics here, named, at lowering time.
-fn lower(w: Widget) -> Lowered {
-    if (takes_children(w) == false) {
-        if (w.children.len() > 0) {
-            let name = kind_name(w);
-            panic(f"t1: {name} takes no children — build layout with Column/Row/Card");
-        }
-    }
-
-    let tag = tag_of_kind(w);
-    let mut cls = when (w.kind) {
-        WKind.Column -> "t1-col",
-        WKind.Row -> "t1-row",
-        WKind.Spacer -> "t1-spacer",
-        WKind.Card -> "t1-card",
-        WKind.Text -> "t1-text",
-        WKind.Button -> "t1-btn",
-        WKind.Checkbox -> "t1-check",
-        WKind.Field -> "t1-field",
-    };
-    let mut listens = "";
-
-    if (is_text(w)) {
-        if (w.tvar == nil) {
-            panic("t1: Text without a variant — construct with text/done/title/pending/muted");
-        }
-        let v: TVariant = w.tvar;
-        cls = join_cls(cls, tvar_token(v));
-    }
-    if (is_button(w)) {
-        if (w.bvar == nil) {
-            panic("t1: Button without a variant — construct with btn/quiet");
-        }
-        let v: BVariant = w.bvar;
-        cls = join_cls(cls, bvar_token(v));
-        listens = "click";
-    }
-    if (is_check(w)) {
-        cls = join_cls(cls, check_token(w.on));
-        listens = "click";
-    }
-    if (is_field(w)) {
-        listens = "input"; // the value rides the event (event-carried law)
-    }
-
-    cls = join_cls(cls, ladder_token("gap", w.gap));
-    cls = join_cls(cls, ladder_token("pad", w.pad));
-    cls = join_cls(cls, ladder_token("size", w.size));
-
-    return Lowered { tag: tag, cls: cls, listens: listens };
-}
-
-/// The diff's identity for one child among its siblings: the explicit
-/// key, else the hook, else the positional `@i` (unkeyed static
-/// children match by position). The els table's key is the FULL PATH
-/// from the root, so equal sibling names in different subtrees cannot
-/// collide.
-fn key_of(w: Widget, i: i32) -> str {
-    if (w.key != "") {
-        return w.key;
-    }
-    if (w.hook != "") {
-        return w.hook;
-    }
-    return f"@{i}";
-}
+use widget::{ Widget, kind_name, is_check, is_field, takes_text, key_of };
+use lowering::{ lower };
 
 // ---- T1Root (§7.1) and the mount ------------------------------------
 
@@ -432,7 +65,7 @@ fn key_of(w: Widget, i: i32) -> str {
 pub struct T1Root {
     parent: ?opaque = nil; // the mounted root element
     prev: ?Widget = nil; // the previous tree — the diff's left side
-    els: ?HashMap<str, opaque> = nil; // path -> live handle (op application)
+    els: ?HashMap<str, opaque> = nil; // path -> live handle (ops application)
     regs: ?HashMap<str, str> = nil; // listener id (as crossed) -> subject
     lids: ?HashMap<str, i64> = nil; // path -> listener id (retirement)
 }

@@ -1,5 +1,7 @@
-//! The app's twin gate: the REAL `todolist.rut` (plus the linked
-//! `store.rut` and the inlined `t1.rut`) driven end to end on the fake
+//! The app's twin gate: the REAL project closure (`rut/` — the app
+//! package, the two view builders, the store, t1 and the components,
+//! mounted through the MANIFEST: `load_dir_session` on the rut/ root,
+//! RFC 0045's four passes for real) driven end to end on the fake
 //! DOM — scripted sessions asserting the tree AND the turn order, on
 //! the LOWERED DOM (the framework's tags and tokens). The laws checked
 //! here are the phase-1 laws, re-proven through the widgets:
@@ -24,7 +26,8 @@
 //! `tests/store.rs` (DOM-free); the phase-1 crossing and trap matrix
 //! is `tests/host_surface.rs`; the framework's own suite is
 //! `tests/t1_lowering.rs` + `tests/t1_diff.rs`; the biz-law gate is
-//! `tests/app_law.rs`.
+//! `tests/app_law.rs`; the two mount lanes are pinned together in
+//! `tests/mount_lane.rs`.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -37,19 +40,18 @@ use todolist_web::fake_dom::{FakeDom, Snapshot};
 use todolist_web::host::WebHost;
 use todolist_web::{hosts, mount, state, DomBackend, WebState};
 
-const APP: &str = include_str!("../todolist.rut");
 const SOFTFAIL: &str = include_str!("softfail.rut");
 
-/// Boot the app on the twin: mount (core + pouch + nmap_host + nmapset
-/// + store + web + t1 — the app session), compile, bind BOTH body sets,
-/// `verify_against`, `Vm::new`, seed the static page, run the boot turn
-/// — which mounts the framework, paints the first tree, and returns the
-/// app container the pump re-passes every turn.
+/// Boot the app on the twin: mount the MANIFEST (the rut/ project
+/// root — every package the survey §3 tree names, mounted as SEPARATE
+/// packages, no concatenation anywhere), compile the closure, bind
+/// BOTH body sets, `verify_against`, `Vm::new`, seed the static page,
+/// run the boot turn — which mounts the framework, paints the first
+/// tree, and returns the app container the pump re-passes every turn.
 fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
-    let mut session = Session::new();
-    mount::mount_app_session(&mut session).expect("the app session mounts");
+    let (session, root) = mount::load_project_session().expect("the rut/ project mounts");
     let expected = session.expected_host_fns();
-    let prog = mount::compile_app(&mut session, APP).expect("the app compiles");
+    let prog = mount::compile_manifest(&session, &root).expect("the app compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));

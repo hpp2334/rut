@@ -1,0 +1,12 @@
+// col.rut — the Column constructor (the survey §3 tree: the free
+// constructors are the COMPONENT layer — plain fns over the widget
+// type, the only t1 names biz composes directly). One package per
+// kind: one directory is one module (RFC 0035 §1).
+//
+// The fluent chain continues in the type's package (`widget`): col()
+// returns a Widget, and every `.gap()/.hook()/.w()` call binds there.
+use widget::{ Widget, WKind };
+
+pub fn col() -> Widget {
+    return Widget { kind: WKind.Column };
+}

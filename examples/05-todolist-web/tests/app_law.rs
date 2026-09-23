@@ -1,47 +1,99 @@
-//! THE LAW, ENFORCED (docs/t1-design.md §2.1): biz code composes
-//! WIDGETS. It never sinks to the DOM's vocabulary — no crossing is
-//! imported, no tag or style token is spelled, no listener id is
-//! named. Phase 2's rewrite made `todolist.rut` clean; this gate keeps
-//! it clean: it reads the app's source and fails LOUD on violations.
+//! THE LAW, ENFORCED (docs/t1-design.md §2.1, the restructure survey
+//! §5.1 contract): biz code composes WIDGETS. It never sinks to the
+//! DOM's vocabulary — no crossing is spelled beyond the one clock
+//! name, no tag or style token is written, no listener id is named.
+//! The gate reads the biz layer's sources (`rut/app/` — the entry plus
+//! the two view builders, whole-file, comments included, NO whitelist)
+//! and fails LOUD on violations.
 //!
-//! Three honest checks, no whitelist, no exceptions (the scan runs
-//! over the whole file, comments included):
+//! Four checks:
 //!
-//!   1. the import set is EXACTLY { appkit } — the app unit's one
-//!      splice, the store plus the widget framework verbatim (the
-//!      mount's own note records why they ride as one: the graph
-//!      splices each use's transitive sources per use, and store and
-//!      t1 both ride pouch). No crossing package is imported. (The
-//!      clock name `tim_after` is the one non-widget call the app
-//!      spells — the host's time, RFC 0018's own law — and it resolves
-//!      through the appkit unit's bound surface, the inline-splice
-//!      law. It is not an import, and the exact-import assertion keeps
-//!      any second surface from riding in.)
-//!   2. the file contains NO `Node`, no `web::`, no `ui_` (the
-//!      crossing prefix: get/create/set/attr/append/clear/listen), no
-//!      `class` attribute writes, and no tag literals — the manual DOM
-//!      building of phase 1 is dead and stays dead.
+//!   1. the app's import set is EXACTLY the survey §5.1's thirteen
+//!      packages, with each package's contributed names pinned —
+//!      `web` contributes ONLY `tim_after` (the one crossing name the
+//!      biz layer may spell, now imported honestly by name), `t1`
+//!      exactly the framework's four names, `todos` the domain types,
+//!      each component its constructor(s). A second crossing package,
+//!      a store internal (`atom`/`derived`), a lowering name — nothing
+//!      rides in: the set equality is the law.
+//!   2. the biz files contain NO `Node`, no `ui_` (the crossing
+//!      prefix), no `class=`/quoted `"class"`, and no tag literals or
+//!      DOM method names — the manual-DOM shape is dead and stays
+//!      dead. (Bare `web::` left this list in phase 1: the sanctioned
+//!      `use web::{tim_after};` contains it; the name pins above are
+//!      the crossing law now.)
 //!   3. the render path is really the framework's (`t1_render` once
-//!      per turn) and events really enter through subjects
-//!      (`t1_subject`, `.subject(...)`), with keyed rows (`.key(...)`)
-//!      — the widgets are the whole UI story, not a veneer.
+//!      per turn, in the entry's paint) and events really enter
+//!      through subjects (`t1_subject`, `.subject(...)`), with keyed
+//!      rows (`.key(...)` in the row builder) — the widgets are the
+//!      whole UI story, not a veneer.
+//!   4. the component packages keep their own layer honest by import
+//!      scoping (survey §3.3): each imports `widget` and NOTHING else
+//!      — the lowering and the core stay framework-private.
+//!
+//! The appkit retirement (survey §2.5, P2) is asserted here too: the
+//! word survives nowhere in `src/` — the concatenation module is gone,
+//! and this is the one-line assert that keeps it gone.
 
-/// The app source — the file this gate exists to guard.
-const APP: &str = include_str!("../todolist.rut");
+/// The biz layer's sources — the files this gate exists to guard.
+const APP: &str = include_str!("../rut/app/app/app.rut");
+const TODO_LIST: &str = include_str!("../rut/app/todo_list/todo_list.rut");
+const TODO_ROW: &str = include_str!("../rut/app/todo_row/todo_row.rut");
 
-/// The pkgs the app may import, exactly: the app unit's one splice —
-/// the store (the "server") + the widget framework, verbatim.
-const ALLOWED_PKG_IMPORTS: &[&str] = &["appkit"];
+/// The app's import law (survey §5.1): package -> the EXACT name list
+/// its `use` may contribute. Set equality on the packages; exact
+/// equality on each package's names.
+const APP_IMPORTS: &[(&str, &[&str])] = &[
+    ("web", &["tim_after"]),
+    ("todos", &["Store", "Todo"]),
+    ("t1", &["T1Root", "t1_mount", "t1_render", "t1_subject"]),
+    ("widget", &["Widget"]),
+    ("todo_list", &["todo_list"]),
+    ("todo_row", &["todo_row"]),
+    ("col", &["col"]),
+    ("row", &["row"]),
+    ("text", &["text", "done", "pending", "muted"]),
+    ("button", &["btn", "quiet"]),
+    ("checkbox", &["check"]),
+    ("field", &["field"]),
+    ("card", &["card"]),
+];
 
-/// The file's `use` statements' package names, in source order. A
-/// multi-line `use t1::{ ... };` still names its pkg on the first line.
-fn imports() -> Vec<String> {
+/// One `use` statement: the package and the names it contributes.
+fn parse_use(src: &str, use_kw_at: usize) -> Option<(String, Vec<String>)> {
+    let rest = &src[use_kw_at + 3..];
+    let rest = rest.trim_start();
+    let pkg_end = rest.find("::")?;
+    let pkg = rest[..pkg_end].trim().to_string();
+    let after = &rest[pkg_end + 2..];
+    let brace = after.find('{')?;
+    let close = after[brace + 1..].find('}')? + brace + 1;
+    let names: Vec<String> = after[brace + 1..close]
+        .split(',')
+        .map(|n| n.trim())
+        .filter(|n| !n.is_empty())
+        .map(|n| n.to_string())
+        .collect();
+    Some((pkg, names))
+}
+
+/// A source's `use` statements, in source order — the whole-file scan:
+/// no whitelist, no exceptions.
+fn imports(src: &str) -> Vec<(String, Vec<String>)> {
     let mut out = Vec::new();
-    for line in APP.lines() {
-        let t = line.trim_start();
-        if let Some(rest) = t.strip_prefix("use ") {
-            if let Some(pkg) = rest.split("::").next() {
-                out.push(pkg.trim().to_string());
+    let mut rest = src;
+    let mut base = 0usize;
+    while let Some(at) = rest.find("use ") {
+        let before = &rest[..at];
+        // whole-line `use` starts only — a word ending in "use" is not one
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        let indent_ok = before[line_start..].trim().is_empty();
+        let candidate = parse_use(src, base + at);
+        rest = &rest[at + 4..];
+        base += at + 4;
+        if indent_ok {
+            if let Some(parsed) = candidate {
+                out.push(parsed);
             }
         }
     }
@@ -49,31 +101,63 @@ fn imports() -> Vec<String> {
 }
 
 #[test]
-fn the_app_imports_widgets_and_the_store_only() {
+fn the_app_imports_exactly_the_project_vocabulary() {
+    let got = imports(APP);
     assert_eq!(
-        imports(),
-        ALLOWED_PKG_IMPORTS.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-        "the app's import set changed — biz may import exactly the app unit's \
-         one splice (appkit: the store + the widget framework); a crossing \
-         package has no business in the app unit (docs/t1-design.md §2.1)"
+        got.len(),
+        APP_IMPORTS.len(),
+        "the app's import set changed — biz may import exactly the survey \
+         §5.1 thirteen packages (the widget vocabulary, the store's \
+         domain types, the framework's four names, the two view \
+         builders, and web for the one clock name); got: {got:?}"
     );
+    for (i, (pkg, names)) in got.iter().enumerate() {
+        let (want_pkg, want_names) = APP_IMPORTS[i];
+        assert_eq!(pkg, want_pkg, "import #{i}'s package drifted");
+        let mut sorted: Vec<String> = names.clone();
+        sorted.sort();
+        let mut want: Vec<String> = want_names.iter().map(|s| s.to_string()).collect();
+        want.sort();
+        assert_eq!(
+            sorted, want,
+            "`{pkg}`'s contributed names drifted — the per-package name \
+             pins are the crossing law (survey §5.1)"
+        );
+    }
+    // P2 (survey §2.5): the appkit name survives nowhere in src/ — the
+    // concatenation module is gone and stays gone.
+    let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for entry in std::fs::read_dir(&src_dir).expect("src/ reads") {
+        let path = entry.expect("src/ entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("src file reads");
+        assert!(
+            !text.contains("appkit"),
+            "{} still names appkit — the concatenation module is retired \
+             (survey §2.5: a dedup gap is a dep-kinds bug report, never \
+             a workaround re-entering src/)",
+            path.display()
+        );
+    }
 }
 
 #[test]
-fn the_app_never_sinks_to_the_dom_vocabulary() {
+fn the_biz_layer_never_sinks_to_the_dom_vocabulary() {
     // `Node` — the DOM node vocabulary; elements are the lowering's
     //     private business.
-    // `web::` — the crossing namespace, as an import or a qualified
-    //     call.
     // `ui_` — the crossing prefix: get/create/set_text/attr/append/
     //     remove/clear/set_input_value/listen are all dead in biz.
+    //     (`web::` LEFT this list in phase 1: the sanctioned
+    //     `use web::{tim_after};` contains it — the name pins above
+    //     are the crossing law now.)
     // `class=` / a quoted "class" — raw styling; tokens are the
     //     lowering's emission, never the app's spelling.
-    // quoted tag literals and the DOM method names — the phase-1
-    //     manual building, banned outright.
+    // quoted tag literals and the DOM method names — the manual
+    //     building of the old shape, banned outright.
     const FORBIDDEN: &[&str] = &[
         "Node",
-        "web::",
         "ui_",
         "class=",
         "\"class\"",
@@ -93,19 +177,35 @@ fn the_app_never_sinks_to_the_dom_vocabulary() {
         "appendChild",
         "removeChild",
     ];
-    for token in FORBIDDEN {
-        assert!(
-            !APP.contains(token),
-            "the app names {token} — biz code composes widgets \
-             (docs/t1-design.md §2.1); the DOM vocabulary leaked back in"
-        );
+    for (file, src) in [("app.rut", APP), ("todo_list.rut", TODO_LIST), ("todo_row.rut", TODO_ROW)] {
+        for token in FORBIDDEN {
+            assert!(
+                !src.contains(token),
+                "{file} names {token} — biz code composes widgets \
+                 (docs/t1-design.md §2.1); the DOM vocabulary leaked back in"
+            );
+        }
+        // the framework's styling layer biz must never touch directly
+        // (the `web` crossing IS sanctioned — the one name, pinned by
+        // the import law above)
+        for pkg in ["lowering"] {
+            let bad = imports(src).iter().any(|(p, _)| p.as_str() == pkg);
+            assert!(
+                !bad,
+                "{file} imports {pkg} — the {pkg} layer is not biz's \
+                 to import (survey §3.3/§5.1)"
+            );
+        }
     }
 }
 
 #[test]
 fn the_widgets_are_the_whole_ui_story() {
-    assert!(
-        APP.contains("t1_render("),
+    // the entry: the render is the framework's — ONE t1_render per
+    // turn, in paint — and events enter through the subject lookup
+    assert_eq!(
+        APP.matches("t1_render(").count(),
+        1,
         "the paint must be the framework's — one t1_render per turn"
     );
     assert!(
@@ -113,6 +213,19 @@ fn the_widgets_are_the_whole_ui_story() {
         "DOM events must enter through the framework's subject lookup"
     );
     assert!(APP.contains(".subject("), "widgets fire SEMANTIC subjects");
-    assert!(APP.contains(".key("), "rows are keyed widgets — the diff's identity");
-    assert!(APP.contains("check("), "the done mark is the framework's checkbox");
+    assert!(APP.contains("fn paint("), "the turn's ONE render has its fn");
+    // the view builders: keyed rows, the framework's checkbox, the
+    // tables beside the subjects they mirror
+    for (file, src, pins) in [
+        ("todo_row.rut", TODO_ROW, vec![".key(", ".subject(", "check("]),
+        ("todo_list.rut", TODO_LIST, vec!["todo_row(", "PrimMapI64"]),
+    ] {
+        for pin in pins {
+            assert!(
+                src.contains(pin),
+                "{file} lost `{pin}` — the widgets are the whole UI story \
+                 (docs/t1-design.md §2.1)"
+            );
+        }
+    }
 }

@@ -2,20 +2,31 @@
 // shape): a minimal page program that mounts a T1Root on the seeded
 // `#app` and exposes the t1 surface to the twin tests as probes —
 // scenario renders (the ordinary `t1_mount` + `t1_render` calls),
-// registry reads, and the trap shapes. NOT the todolist app
-// (`todolist.rut` is phase 2's); nothing here is test-only machinery
+// registry reads, and the trap shapes. NOT the todolist app (the app
+// package `rut/app/app` is); nothing here is test-only machinery
 // beyond naming the scenarios.
+//
+// The imports are the split shape: the framework's four names from
+// `t1`, the Widget TYPE (and WKind, for the hand-built trap fixtures)
+// from `widget`, and each constructor from its component package.
 //
 // The "biz" half of this harness is one law: a fired listener is
 // translated through the framework's registry (`t1_subject` — a stale
 // or unknown id is the LOUD miss) and the SUBJECT is logged, so the
 // tests can read what a click delivered without parsing ids.
 
-use t1::{
-    T1Root, Widget, WKind, t1_mount, t1_render, t1_subject,
-    col, row, card, spacer, text, done, title, pending, muted,
-    btn, quiet, check, field,
-};
+use t1::{ T1Root, t1_mount, t1_render, t1_subject };
+use nmapset::{ HashMap };
+use pouch::{ Vec };
+use widget::{ Widget, WKind };
+use col::{ col };
+use row::{ row };
+use card::{ card };
+use spacer::{ spacer };
+use text::{ text, done, title, pending, muted };
+use button::{ btn, quiet };
+use checkbox::{ check };
+use field::{ field };
 
 struct Harness {
     root: ?T1Root = nil;

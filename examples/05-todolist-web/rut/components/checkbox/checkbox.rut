@@ -1,0 +1,9 @@
+// check.rut — the Checkbox constructor (see col.rut for the law). The
+// framework owns the visual: the lowering emits a button with
+// role=checkbox and the t1-check--on/--off token — app state, one
+// token patch per flip, never a native input.
+use widget::{ Widget, WKind };
+
+pub fn check(on: bool) -> Widget {
+    return Widget { kind: WKind.Checkbox, on: on };
+}

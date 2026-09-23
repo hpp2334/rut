@@ -3,7 +3,7 @@ name = "todolist-web"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "05-todolist-web — the todolist APP (phase 2 of the batch): the page program (todolist.rut over the linked store.rut server) on the phase-1 `web` pkg — ten crossings, one on_event entry that hands the app its container back, tim_after-simulated latency, the fake-DOM twin as the gate"
+description = "05-todolist-web — the todolist APP: the page program (the rut/ project: the app package over the todos server, the t1 widget framework and the component vocabulary, all manifest-mounted) on the phase-1 `web` pkg — ten crossings, one on_event entry that hands the app its container back, tim_after-simulated latency, the fake-DOM twin as the gate"
 
 [lib]
 # cdylib for the page; rlib so the twin gate (tests/) links the host half

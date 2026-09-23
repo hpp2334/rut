@@ -1,0 +1,8 @@
+// spacer.rut — the Spacer constructor (see col.rut for the law). The
+// size rides the utility ladder: spacer(8) -> `t1-spacer t1-size-8`;
+// anything off the ladder is the lowering's LOUD trap.
+use widget::{ Widget, WKind };
+
+pub fn spacer(size: i32) -> Widget {
+    return Widget { kind: WKind.Spacer, size: size };
+}

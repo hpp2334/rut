@@ -1,0 +1,6 @@
+// card.rut — the Card constructor (see col.rut for the law).
+use widget::{ Widget, WKind };
+
+pub fn card() -> Widget {
+    return Widget { kind: WKind.Card };
+}

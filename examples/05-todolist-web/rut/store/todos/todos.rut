@@ -1,12 +1,15 @@
-// store.rut — the "server" half of the todolist: the in-memory list and
+// todos.rut — the "server" half of the todolist: the in-memory list and
 // the request table (the survey §5.2 design, the hand-written async
 // machine spelled for real — the M3 migration road is recorded in the
-// survey §5.6, not faked as language async).
+// survey §5.6, not faked as language async). THIS FILE IS THE OLD
+// `store.rut` MOVED VERBATIM into the restructure's `todos` package
+// slot (survey §6: the atom rewrite is phase 2 — one risky thing per
+// phase); only this header's names changed.
 //
 // PURE rut: no `web::` crossings in this module. It compiles against
 // core+pouch alone and its host-test surface below is driven DOM-FREE by
 // `tests/store.rs` — the store's laws are checked without a page. The
-// app (`todolist.rut`) links this module and books the timers; the store
+// app (`rut/app/app`) links this module and books the timers; the store
 // never touches the clock itself.
 //
 // The honest semantics:

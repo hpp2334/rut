@@ -1,0 +1,25 @@
+// text.rut — the TEXT constructors: the five TVariants (title, body,
+// done, pending, muted) as plain fns over the widget type (see
+// col.rut for the component-layer law). The variant IS the styling
+// contract: the lowering maps each to its `t1-text--*` token.
+use widget::{ Widget, WKind, TVariant };
+
+pub fn text(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Body, text: t };
+}
+
+pub fn done(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Done, text: t };
+}
+
+pub fn title(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Title, text: t };
+}
+
+pub fn pending(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Pending, text: t };
+}
+
+pub fn muted(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Muted, text: t };
+}

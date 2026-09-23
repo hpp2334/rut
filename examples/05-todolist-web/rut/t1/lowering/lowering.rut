@@ -1,0 +1,154 @@
+// lowering.rut — the LOWERING table (t1's pure data layer, survey
+// §3.1): Widget -> Lowered, the tag, the space-joined class tokens,
+// and the event the widget listens to. This table is THE styling
+// contract (design §5) — the one place a tag or a token may be
+// spelled, which is why it lives in its own framework-private package:
+// components and biz import `widget`, never this.
+//
+// The five recorded deviations it implements (docs/t1-design.md §0):
+// checkbox lowers to a FRAMEWORK-OWNED button (role=checkbox +
+// t1-check--on/--off, never a native input); gap/pad/size lower to a
+// FIXED utility-token ladder (`t1-gap-8`, never arbitrary values,
+// never a style attr); the token set stays enumerable and
+// twin-assertible.
+//
+// Pure: no state, no crossings — concrete exports only, so the
+// package LINKS (the modules.rs Point path).
+
+use widget::{
+    Widget, WKind, TVariant, BVariant,
+    kind_name, is_text, is_field, is_check, is_button, takes_children,
+};
+
+/// One row of the lowering table: the tag, the space-joined class
+/// tokens, and the event this widget listens to ("" = none).
+pub struct Lowered {
+    tag: str;
+    cls: str;
+    listens: str;
+}
+
+fn tag_of_kind(w: Widget) -> str {
+    return when (w.kind) {
+        WKind.Column -> "div",
+        WKind.Row -> "div",
+        WKind.Spacer -> "div",
+        WKind.Card -> "div",
+        WKind.Text -> "span",
+        WKind.Button -> "button",
+        WKind.Checkbox -> "button", // framework-owned, NOT a native input
+        WKind.Field -> "input",
+    };
+}
+
+fn tvar_token(v: TVariant) -> str {
+    return when (v) {
+        TVariant.Title -> "t1-text--title",
+        TVariant.Body -> "t1-text--body",
+        TVariant.Done -> "t1-text--done",
+        TVariant.Pending -> "t1-text--pending",
+        TVariant.Muted -> "t1-text--muted",
+    };
+}
+
+fn bvar_token(v: BVariant) -> str {
+    return when (v) {
+        BVariant.Primary -> "t1-btn--primary",
+        BVariant.Quiet -> "t1-btn--quiet",
+    };
+}
+
+fn check_token(on: bool) -> str {
+    if (on) {
+        return "t1-check--on";
+    }
+    return "t1-check--off";
+}
+
+/// The FIXED utility ladder (§5): `gap(8)` -> `t1-gap-8`. 0 means "no
+/// token"; anything off the ladder is a LOUD lowering trap — the token
+/// set stays enumerable and twin-assertible, and no `style` attr ever
+/// exists to smuggle CSS back into biz.
+fn ladder_token(name: str, n: i32) -> str {
+    if (n == 0) {
+        return "";
+    }
+    if (n == 4) {
+        return f"t1-{name}-4";
+    }
+    if (n == 8) {
+        return f"t1-{name}-8";
+    }
+    if (n == 12) {
+        return f"t1-{name}-12";
+    }
+    if (n == 16) {
+        return f"t1-{name}-16";
+    }
+    panic(f"t1: {name} {n} is off the utility ladder — 0/4/8/12/16 only");
+}
+
+/// Space-join two tokens, skipping empties.
+fn join_cls(a: str, b: str) -> str {
+    if (a == "") {
+        return b;
+    }
+    if (b == "") {
+        return a;
+    }
+    return f"{a} {b}";
+}
+
+/// The lowering table — TOTAL over WKind. Also the boundary where the
+/// fat struct's one dishonesty is caught: a control with children is
+/// an app bug, and it panics here, named, at lowering time.
+pub fn lower(w: Widget) -> Lowered {
+    if (takes_children(w) == false) {
+        if (w.children.len() > 0) {
+            let name = kind_name(w);
+            panic(f"t1: {name} takes no children — build layout with Column/Row/Card");
+        }
+    }
+
+    let tag = tag_of_kind(w);
+    let mut cls = when (w.kind) {
+        WKind.Column -> "t1-col",
+        WKind.Row -> "t1-row",
+        WKind.Spacer -> "t1-spacer",
+        WKind.Card -> "t1-card",
+        WKind.Text -> "t1-text",
+        WKind.Button -> "t1-btn",
+        WKind.Checkbox -> "t1-check",
+        WKind.Field -> "t1-field",
+    };
+    let mut listens = "";
+
+    if (is_text(w)) {
+        if (w.tvar == nil) {
+            panic("t1: Text without a variant — construct with text/done/title/pending/muted");
+        }
+        let v: TVariant = w.tvar;
+        cls = join_cls(cls, tvar_token(v));
+    }
+    if (is_button(w)) {
+        if (w.bvar == nil) {
+            panic("t1: Button without a variant — construct with btn/quiet");
+        }
+        let v: BVariant = w.bvar;
+        cls = join_cls(cls, bvar_token(v));
+        listens = "click";
+    }
+    if (is_check(w)) {
+        cls = join_cls(cls, check_token(w.on));
+        listens = "click";
+    }
+    if (is_field(w)) {
+        listens = "input"; // the value rides the event (event-carried law)
+    }
+
+    cls = join_cls(cls, ladder_token("gap", w.gap));
+    cls = join_cls(cls, ladder_token("pad", w.pad));
+    cls = join_cls(cls, ladder_token("size", w.size));
+
+    return Lowered { tag: tag, cls: cls, listens: listens };
+}

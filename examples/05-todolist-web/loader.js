@@ -45,7 +45,7 @@ await glue.default(); // instantiate the module (the glue's init)
 
 const w = glue.initSync();
 const enc = new TextEncoder();
-const source = enc.encode(await (await fetch(new URL("./todolist.rut", import.meta.url))).text());
+const source = enc.encode(await (await fetch(new URL("./rut/app/app/app.rut", import.meta.url))).text());
 
 const ptr = w.rut_web_alloc(source.length);
 new Uint8Array(w.memory.buffer, ptr, source.length).set(source);

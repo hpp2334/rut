@@ -2,7 +2,7 @@
 // minimal page program that exercises every `web::` crossing through
 // REAL rut calls — build the DOM, register listeners, book a timer, and
 // echo every event back as a log row the twin reads. NOT the todolist
-// app (`todolist.rut` is); the probes below are the ordinary surface
+// app (the app package `rut/app/app` is); the probes below are the ordinary surface
 // the tests drive trap shapes through.
 //
 // Event kinds are the frozen numbers from web.d.rut: 1 = EV_DOM,
