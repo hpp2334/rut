@@ -75,6 +75,71 @@ package manager (RFC 0045 OQ-1). The full record: the survey, the
 diagnostics, and the test matrix in
 [`docs/dep-kinds-report.md`](../docs/dep-kinds-report.md).
 
+## The std `json` package — the surface, the rulings, the run recipe
+
+`rut/json/` is the ninth std pkg (after `core`, `calc`, `nmap_host`,
+`nmapset`, `pouch`, `ink`, `rt`, `bench-cross`) — pure rut, zero host
+fns, the RFC 0028 amendment is its law. Three entries and two traits:
+
+```rut
+fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
+fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, ?DecodeJsonError);
+fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError);
+
+trait JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
+trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
+```
+
+The locked rulings, user-visible as spells:
+
+- **`(?T, ?E)` with EXACTLY-ONE-NIL**: success is `(value, nil)`,
+  failure is `(nil, err)` — never a non-nullable `E`, never both
+  halves filled. Your destructure reads the wire: `let (s, e) =
+  encodeJson(v);` then check `e == nil`.
+- **`Self`, not a `<T>` param, on `JsonDeserialize`** — you cannot
+  decode an A-reader into B; the trait's static call IS the type.
+- **The streams are never nilable** (`mut w: JsonWriter`, `mut r:
+  JsonReader`): RFC 0044 sharing is the default; `?` only where
+  absence is a legitimate state.
+- **`decodeJsonBytes` is strict UTF-8** — `bytes.decode()` is lossy,
+  so the bytes entry validates first (invalid octets → `InvalidUtf8`,
+  never a silent U+FFFD). That is why there are two decode entries:
+  RFC 0043 keeps `str | bytes` params illegal.
+- **The error shapes** are RFC 0006's kind/details split:
+  `DecodeJsonError { kind, at, got, expected }` and
+  `EncodeJsonError { kind, at, path }` — `path` is the lazily-built
+  `$.rows[3].name` spelling, assembled only on failure.
+
+The fusion interplay: the happy path mints `(str, nil)` shaped
+pairs — and in `return encodeJson(v);` the pair never exists: the
+return-position destructure (02ced3e) dissolves the mint. Every
+consumer of this pkg rides that lowering, which makes json the
+fusion's real-world proof (the bench row's fuel is the witness).
+
+The honest scoreboard: json is the bench suite's weakest lane vs
+QuickJS — `json-roundtrip` runs **23.1×** qjs net (930.9 vs 40.3 ms
+on the same 204 KB document). The pkg's DIRECT decode mints only the
+program's own values, but every classify/carve is interpreter
+dispatch, while the qjs twin rides the engine's own `JSON.parse` +
+`JSON.stringify`. The row is the baseline future json-side engine
+phases measure against (`benches/README.md`'s performance log has the
+full entry).
+
+The run recipe:
+
+- **A module dir** (the full world): `[deps]` json by path — add
+  `pouch`/`nmapset` to the same table when you want the `Vec<T>` /
+  map-set impls; they are peer groups, mounted only when the peer is
+  in your closure anyway. `rut run <dir>` runs it.
+- **A loose file**: `rut run file.rut` with `use json::` in the
+  source — the CLI mounts json and runs the peer gate
+  (`assemble_peers`), same gating rules.
+- **The worked example**: `cargo run -p digests`
+  ([`02-digest/`](02-digest/)) — its encode half is the lib's
+  `impl JsonSerialize for Json`, golden-tested against serde_json
+  (9/9).
+- **The bench row**: `node benches/run.mjs --workload json-roundtrip`.
+
 The earlier parse-only design corpus (`basic/`, `concurrency/`,
 `workers/`, `network/`, `memory/`, `json/`, `gui/`, `host/`) was
 removed: its implemented parts moved to the playground classics, and the

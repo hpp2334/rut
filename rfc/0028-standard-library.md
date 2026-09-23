@@ -1,4 +1,4 @@
-# RFC 0028: The Standard Library — `core`, plus the swappable `pouch`/`calc`/`ink` packages
+# RFC 0028: The Standard Library — `core`, plus the swappable packages
 
 - **Status:** Draft
 - **Date:** 2026-08-23
@@ -10,6 +10,11 @@
   erasure type is the primitive `opaque` (RFC 0014 revised), and the
   prelude binds in every compilation unit — the use-gate below is
   superseded.
+- **Revised:** 2026-09 (rut-json) — **`json` joins the swappable set**
+  as the ninth package (§ "`json` — the serde package" below): the
+  DIRECT serde model, the container impls peer-gated through RFC 0045
+  (its first real consumer), and the dependency direction decided on
+  the record in that section.
 - **Author:** hpp2334
 - **Depends on:** RFC 0022–0027 (host & FFI), RFC 0029 (declaration files)
 - **Supersedes:** RFC 0005 §8 (pre-restructure)
@@ -59,9 +64,10 @@ use-gate by contract** — `use core::{NAN}` is explicit.
 contracts, RFC 0025
 revised.)
 
-**`pouch`, `calc`, `ink` are optional in-tree packages — swappable
-defaults, not required surface.** They ship in the toolchain's tree
-(`rut/pouch/`, `rut/calc/`, `rut/ink/`) and a module that wants one
+**`pouch`, `calc`, `ink`, `nmapset`, `json` are optional in-tree
+packages — swappable defaults, not required surface.** They ship in
+the toolchain's tree (`rut/pouch/`, `rut/calc/`, `rut/ink/`,
+`rut/nmapset/`, `rut/json/`) and a module that wants one
 declares it in its manifest `[deps]` (RFC 0041 §3); the community may
 replace any of them wholesale — nothing in the engine knows their names.
 **`pouch`** is a declaration file + Rust bodies + rut wrappers (RFC
@@ -193,6 +199,94 @@ struct LoadError {
 `vm.symbolicate(&raw)` restores names/spans from loaded binaries (RFC 0035
 §3, RFC 0036 §3) — and against stripped `--release` binaries, the
 `.rutc.map` sidecar does it offline (RFC 0036 §3).
+
+## `json` — the serde package
+
+The ninth package (`rut/json/`, landed by the rut-json batch): pure
+rut source, `inline = true`, **zero host fns** — a json mount adds no
+`expected_host_fns` entries, so RFC 0025's load-time exactness
+contract is untouched by any json consumer. The surface:
+
+```rut
+fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
+fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, ?DecodeJsonError);
+fn decodeJsonBytes<T requires JsonDeserialize>(b: bytes) -> (?T, ?DecodeJsonError);
+
+trait JsonSerialize   { fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError; }
+trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError); }
+```
+
+Decode is **DIRECT schema-driven**: the trait's `decode` reads its own
+expectations straight off the cursor — no intermediate DOM is built,
+so a `Vec<Row>` decode mints exactly the program's own values, once.
+The `JsonReader` splits the document's codepoints once into a
+`[?u32]` column and carves tokens as O(1) `StrView` slices (RFC
+0042); the `JsonWriter` is the rc==1 string accumulator (RFC 0007's
+append fast path). Numbers: `i64` exact (overflow is a `WrongType`
+error, never a silent wrap), `f64` two-tier — tier 1 IEEE-exact
+(split-multiply, single rounding), tier 2 best-effort ±1 ulp,
+disclosed; encode renders the shortest round-trip decimal. Depth is
+capped at 128 both directions, recoverable — the encode side's
+`Depth` error is the RFC 0017 story: the rc heap leaks strong cycles
+by law, so walking a cyclic structure is EXPECTED failure, data not
+trap. The `str`/`bytes` param pair is forced by RFC 0043 (unions are
+bound-only), and `decodeJsonBytes` is STRICT UTF-8 — `bytes.decode()`
+is lossy, and silently corrupting input is exactly the failure the
+pkg bans; invalid octets answer `InvalidUtf8`. Errors are RFC 0006's
+kind/details split — payloadless enums (`DecodeErrorKind` ×6;
+`EncodeErrorKind` `Depth`/`NotFinite`/`KeyUnsupported`) beside
+fixed-field structs (`at`, `got`/`expected` on decode; `at`, the
+lazily-built `$.rows[3].name` path on encode).
+
+**The dependency direction — decided, on the record.** json owns the
+serde traits: they are ordinary nominal traits LOCAL to json, and ALL
+container impls live IN json (`impl JsonSerialize for Vec<T>` and the
+map/set rows in json's files) — orphan-legal because the trait is
+local (RFC 0012's any-module impl law). Containers gain nothing,
+know nothing, and user types impl json's traits on their own types.
+The rejected alternatives:
+
+- **Runtime reflection** (RFC 0037's `Reflectable`/`Deserializable`
+  walk) — REJECTED, too slow: the measured dispatch volume is the
+  dominant term of the very census that priced this decision
+  (`benches/README.md`'s json-decode row: ~24% per-char str dispatch
+  + ~64% mint machinery; a reflection walk re-creates the first and
+  adds per-node vtable traffic to the second), and it would drag the
+  reflect pkg into every serde consumer.
+- **Engine-woven builtin traits** — REJECTED: a `JsonSerialize`
+  lowered like `Iterator` would couple the engine to one text
+  format, and require exactly the declared-surface VERSION event
+  json's addition otherwise avoids (pkg additions never bumped
+  VERSION — pouch, ink, nmapset, json all joined as source; the wire
+  never moved).
+- **Containers → json** (pouch/nmapset implementing json's traits) —
+  REJECTED on layering: the keyed collections would depend on a text
+  format, every container consumer would carry (or peer-gate) json,
+  and the impls would sit in modules that do not own the trait.
+
+**The dep-kinds interplay (RFC 0045's first real consumer).** The
+container impls ride *peer groups*: json's manifest is RFC 0045 §2's
+own example landed — `[peer-deps] pouch`/`nmapset` with `optional =
+true` and impl-only integration `lib`s that mount only when the peer
+is anywhere in the consumer's closure, plus the same peers as
+`[dev-deps]` (the sanctioned both-kinds pairing) so json's own test
+runs dispatch every group impl while a consumer without the peers
+mounts json light. And the pkg is `inline = true` for ink/nmapset's
+reason: json's entries are GENERIC FUNCTIONS, and a generic fn cannot
+cross a module link boundary — the exported surface of a linked pkg
+carries only monomorphic fns, so a linked json would answer `unknown
+function decodeJson` in every consumer. Source-inlining composes json
+into each consumer's unit, where the entries specialize per concrete
+argument — which is DIRECT decode's own law.
+
+The impl matrix (prims, `?T` null↔nil, `[T]` in the base; `Vec<T>`
+in the pouch group; the map/set rows DECODE in the nmapset group —
+map ENCODE waits on nmapset shipping an iteration surface), the
+exactly-one-nil law on the `(?T, ?E)` entries, and the bench record
+(`json-roundtrip`, checksum `1960875332163557684`) are the survey's
+(`docs/rut-json-survey.md`) and the batch report's
+(`docs/rut-json-report.md`); the user-facing summary lives in
+`examples/README.md`.
 
 ## The `core` prelude, v1.1 — removals diagnosed at the use site
 
