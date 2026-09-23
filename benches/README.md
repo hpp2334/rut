@@ -301,6 +301,120 @@ are its contract. Pre-sizing from a length estimate remains
 inexpressible (no reserve/capacity surface — recorded in the survey's
 gap list).
 
+## Performance log — json-roundtrip: the json-perf batch phase 2, the general scan/classify + builder surface (Sep 2026)
+
+The json-perf batch's phase 2 (the engine phase — the survey's gap
+list, §5, becomes the surface). The host gains GENERAL machinery only,
+anything a tokenizer wants, and json rewires onto it — the engine
+never learns json exists:
+
+- **`str.code_at(i)`** — the codepoint at a codepoint index (the
+  survey's gap 1). Lowers to the existing `StrCharAt` + conv, so it
+  rides today's encodings; it deletes the reader's `cs[p]` reads and
+  every slice-per-char mint left on the encode side.
+- **`str.scan(from, set)`** — the fused host-side scan/classify (gap
+  2, phase 1's handoff made it binding: classify is call-frame-bound,
+  so the WHOLE loop must leave the interpreter; a one-lookup-at-a-time
+  primitive is worthless). Walks codepoints from `from`, classifies
+  each through the caller's `[u8]` table (`set[min(cp, len-1)]`, `0`
+  keeps scanning), stops at the first nonzero class, and returns the
+  packed pair `(stop << 8) | class` — one rut call per token boundary,
+  O(calls) not O(bytes-in-rut). New `StrScan` native.
+- **`str.starts_with(from, head)`** — the prefix test at a codepoint
+  offset, compared host-side (gap 3's starts-with half; `lit()`
+  becomes one call with zero per-index cells). New `StrStartsWith`
+  native.
+- **`StrBuf`** — the growable string builder (gap 4): a `builtin
+  class` over an engine-owned UTF-8 block, constructed `StrBuf(cap)`
+  (pre-sizing — gap 4's second half, the phase-1 residual), with
+  `push(s)`/`push_code(c)` appends that mutate the builder's own block
+  in place (geometric growth, amortized O(1)), an O(1) tracked
+  `len()`, and `finish()` as the ONE materialization. New
+  `StrBufNew`/`StrBufPush`/`StrBufPushCode`/`StrBufLen`/`StrBufFinish`
+  natives and a `CellData::StrBuf` payload (own() deep-copies;
+  assignment shares, the class law).
+- **The codepoint split re-rides (gap 5)**: `JsonReader.of` no longer
+  materializes a `[?u32]` column — no per-codepoint walk, no column
+  alloc + drop; the reader is a direct cursor over `src`, and the
+  classify stage (skip_ws/digit_run/read_str's body scan/more's
+  lookahead/skip_value's dispatch) rides `scan` end-to-end.
+
+The json rewire is pkg-source-only: the trait surface, the reader/
+writer APIs, error kinds/offsets (`at` stays a codepoint offset), and
+every byte of output are unchanged — the checksum is the proof.
+
+**The pin: `json-roundtrip` checksum `1960875332163557684` is
+UNCHANGED on rut/qjs/node; `expected.json` untouched.**
+
+**The re-pin, disclosed with the old values verbatim:**
+
+- json-roundtrip fuel 61,840,477 → 31,543,783 (−30,296,694 ops,
+  −49.0%: the per-codepoint classify ops and the split leave the op
+  stream; what fuel still counts is the ~60 k scan/code_at calls, one
+  per token boundary, plus the unchanged carve/mint/fold work)
+- json-roundtrip VM heap peak 4,550,508 → 3,423,642 B (−24.8%: the
+  split column is gone and the builder's single amortized block
+  replaces the chunk-drain accumulator's block chain)
+
+Every OTHER row is bit-identical to its standing record — full suite,
+29 workloads × {rut, qjs, node}, exit 0, every checksum equal to
+`expected.json`, and every row's probe fuel/heap equal to the phase-1
+record: the json-decode canary is bit-identical (checksum
+`4502015958359127277`, fuel 111,322,915, heap 32.78 MB — the row does
+not mount `rut/json`, so the general-surface change is invisible to
+it), which is the no-mover proof this surface owes the whole suite.
+
+**MEASUREMENT** (interleaved A/B, 5 rounds × 5 fresh-VM iters per
+side, order alternating, medians of round medians; phase 2 changes the
+ENGINE as well as the pkg source, so both flip together — the probe
+binary is built at each side's HEAD in its own tree, and the
+runtime-mounted pkg source flips with it; fuel/heap bit-exact in every
+round of every side):
+
+| side        | exec med-of-med | round range      | fuel (bit-exact) | VM heap peak (bit-exact) |
+|-------------|-----------------|------------------|------------------|--------------------------|
+| before HEAD | 216.9 ms        | 216.3 – 218.6 ms | 61,840,477       | 4,550,508 B              |
+| after       | **110.3 ms**    | 109.2 – 111.4 ms | 31,543,783       | 3,423,642 B              |
+
+**exec −49.1%**, round ranges non-overlapping by ~105 ms — nowhere
+near the ±1% noise gate. The survey predicted fuel → ~38-45 M and exec
+→ ~250-350 ms from the 797 ms baseline; with phase 1's writer win
+already banked, the row lands at 31.5 M / 110 ms — decode's classify
+and the split now ride the host, and the writer is builder pushes.
+Cross-runtime net medians this run: rut 205.0 ms, qjs 37.2 ms, node
+40.5 ms — **rut/qjs falls 8.6× → 5.5×** (the JS nets drift ±10%+
+between sessions; the rut probe numbers above are the stable record).
+Disclosed ancillary: the row's compile moved 104.6 → 90.8 ms (the
+spliced unit shrinks — the chunk plumbing is gone), and the corpus's
+grammar token count moved 83,730 → 88,202 (the TextMate count includes
+comment text; the corpus itself is the same 70 files).
+
+**VERSION call: 9 → 10, disclosed** — the surface ADDS encodings: five
+new `Nat` tags (`StrBuf*`), two more with `StrScan`/`StrStartsWith`,
+the `StrBuf` boot type (type id 17, kind tag 15) and the
+`NativeTy::StrBuf` surface row. That is the 7→8 declared-surface
+precedent: a v9 engine must refuse v10 artifacts (they carry nat/kind
+tags it cannot decode) rather than misread them. `code_at` itself
+rides existing encodings (a `StrCharAt` + conv lowering, no new
+native), but the batch's call is per-surface, and the surface moves
+the wire. LSP lane per the lsp-align law — rut-lsp-wasm rebuilt at
+HEAD and re-issued SAME VERSION 0.2.2: bin/rut-lsp.wasm md5
+8a8505e6efada7b91c720e1adcbe3bb1, rut-vscode-0.2.2.vsix md5
+c3bd856b30f92f1c247db23fa5462b67 (out/wasm.js unchanged,
+1760d628bd6ecf7f6cdd5014f7b4a377 — the ABI binding source is
+untouched), npm test grammar-corpus PASS (70 files, 88202 tokens) +
+e2e-wasm PASS through the shipped wasm (70 files, 0 false diagnostics,
+509 symbols), host suite skipped loudly (no code binary).
+
+Tests: the pkg's 34-test gate stays green (semantics identical — the
+checksum proves it); the engine grows 11 pins
+(`scan_builder_surface`): code_at over ASCII/astral text, the packed
+scan result, the `set[min(cp, len-1)]` table rule over ASCII and
+non-ASCII, a scan-vs-table parity sweep over all 256 codepoints,
+starts_with boundaries, the builder's byte-exact accumulation across
+40k appends, pre-sizing, push_code's U+FFFD rule, the class aliasing
+law, and a scan+builder round trip.
+
 ## Performance log — mapset-perf engine phases (Sep 2026)
 
 

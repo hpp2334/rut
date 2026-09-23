@@ -546,6 +546,14 @@ pub enum CellData {
     /// One frame is one call site — `(func, pc)`:
     /// 8 bytes, so `len(frames) * 8` is the whole heap charge.
     Trace { frames: Vec<TraceFrame> },
+    /// the growable string builder (json-perf phase 2) — the `StrBuf`
+    /// builtin class's payload: the engine-owned UTF-8 octets (the same
+    /// block-backed `StrVal` shape as `Str`, grown geometrically in
+    /// place) plus the tracked codepoint count, so `len` stays O(1) on
+    /// non-ASCII builds too. Mutation is ONLY through the builder's
+    /// natives (`push`/`push_code`); `finish` copies the octets out to a
+    /// fresh immutable `str` cell and the builder keeps its buffer.
+    StrBuf { buf: StrVal, chars: u32 },
 }
 
 /// One captured frame — RFC 0036 §2's `RawFrame`, rut-only shape: the

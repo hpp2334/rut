@@ -512,11 +512,14 @@ fn prim_store_release_walk_skips_element_slots() {
 #[test]
 fn version_gate_rejects_stale_artifacts() {
     use rut_core::binary::{decode, VERSION};
-    // v9 is the orphan rule (RFC 0012 §2a, the orphan-rule batch's
+    // v10 is the general scan/classify + builder surface (the json-perf
+    // batch phase 2: the `StrScan`/`StrStartsWith`/`StrBuf*` natives +
+    // the `StrBuf` boot type, the 7→8 declared-surface precedent); v9
+    // was the orphan rule (RFC 0012 §2a, the orphan-rule batch's
     // rejection addition, the 5→6 precedent); v8 was the err-channel
     // phase 2 declared-surface change (`capture_stacktrace()` + the
     // `StackTrace` builtin class + the `pos` span table, RFC 0036)
-    assert_eq!(VERSION, 9, "the orphan rule is the only allowed VERSION bump this phase");
+    assert_eq!(VERSION, 10, "the scan/builder surface is the only allowed VERSION bump this phase");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

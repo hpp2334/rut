@@ -247,6 +247,58 @@ impl Heap {
         Ok(())
     }
 
+    /// A `StrBuf` builder cell (json-perf phase 2): one empty UTF-8
+    /// buffer pre-sized to `cap` octets (the block store class-rounds,
+    /// so small hints ride a size class; the charge is what the cell
+    /// actually holds), geometric growth from there. The tokenizer/
+    /// writer accumulator the field-append shapes could never spell.
+    pub fn alloc_str_buf(&self, cap: usize) -> Result<Slot, Trap> {
+        let block = self.arena.blocks.alloc(cap);
+        let real = self.arena.blocks.cap_of(block) as u64;
+        self.mint(
+            rut_core::types::TY_STRBUF,
+            CellData::StrBuf { buf: StrVal { block, len: 0, cap: real as u32, ascii: true }, chars: 0 },
+            real,
+        )
+    }
+
+    /// Append `extra` to a `StrBuf` cell's buffer in place (the caller
+    /// guarantees the cell is a builder). Growth is geometric inside the
+    /// block store — amortized O(1) per append; the charge is the
+    /// capacity the cell actually holds.
+    #[inline]
+    pub fn str_buf_append(&self, s: Slot, extra: &[u8], extra_chars: usize) -> Result<(), Trap> {
+        let p = unsafe { s.r } as *mut CellVal;
+        if !matches!(unsafe { &(*p).data }, CellData::StrBuf { .. }) {
+            return Err(Trap::new(TrapKind::Invalid, "push on non-builder"));
+        }
+        unsafe {
+            let cell = &mut *p;
+            let CellData::StrBuf { buf, chars } = &mut cell.data else { unreachable!() };
+            let need = buf.len as usize + extra.len();
+            if need > buf.cap as usize {
+                buf.block = self.arena.blocks.grow(buf.block, buf.len as usize, need);
+                buf.cap = self.arena.blocks.cap_of(buf.block) as u32;
+                let new_bytes = (CELL_OVERHEAD + 8 + buf.cap as u64).min(u32::MAX as u64) as u32;
+                self.charge((new_bytes as u64).saturating_sub(cell.bytes as u64))?;
+                cell.bytes = new_bytes;
+            }
+            buf.append(extra);
+            *chars += extra_chars as u32;
+        }
+        Ok(())
+    }
+
+    /// The builder's octets as an owned copy — `finish`'s payload. The
+    /// builder keeps its buffer (finish twice answers the same text).
+    pub fn str_buf_bytes(&self, s: Slot) -> Result<Vec<u8>, Trap> {
+        let p = unsafe { s.r } as *const CellVal;
+        match unsafe { &(*p).data } {
+            CellData::StrBuf { buf, .. } => Ok(buf.bytes().to_vec()),
+            _ => Err(Trap::new(TrapKind::Invalid, "finish on non-builder")),
+        }
+    }
+
     /// Immutable binary buffer (RFC 0004) — a `u8` array (the `bytes` type
     /// is an array of octets at the engine level).
     pub fn alloc_bytes(&self, b: Vec<u8>) -> Result<Slot, Trap> {
@@ -553,6 +605,23 @@ impl Heap {
                 // A trace is an immutable engine snapshot: the handle share
                 // IS the own — every holder sees the same captured frames.
                 Ok(s)
+            }
+            TyKind::StrBuf => {
+                // the builder is mutable state — own() deep-copies the
+                // buffer (value semantics: mutate the copy, never the
+                // original's output)
+                let cell = cell_of(s);
+                let (bytes, chars, cap) = match &cell.data {
+                    CellData::StrBuf { buf, chars } => (buf.bytes().to_vec(), *chars, buf.cap as usize),
+                    _ => return Err(Trap::new(TrapKind::Invalid, "own: not a builder")),
+                };
+                let dst = self.alloc_str_buf(cap)?;
+                let p = unsafe { dst.r } as *mut CellVal;
+                if let CellData::StrBuf { buf, chars: ch } = unsafe { &mut (*p).data } {
+                    unsafe { buf.append(&bytes) };
+                    *ch = chars;
+                }
+                Ok(dst)
             }
         }
     }

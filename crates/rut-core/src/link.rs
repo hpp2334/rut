@@ -410,6 +410,8 @@ fn remap_kind(
         TyKind::Opt { elem } => TyKind::Opt { elem: map(*elem) },
         // the trace snapshot carries no type ids — the boot type is global
         TyKind::Trace => TyKind::Trace,
+        // the builder carries no type ids — the boot type is global
+        TyKind::StrBuf => TyKind::StrBuf,
     }
 }
 

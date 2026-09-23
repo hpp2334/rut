@@ -63,6 +63,23 @@ builtin class StackTrace {
     fn render(self) -> str;              // the RFC 0036 symbolication string
 }
 
+// The growable string builder (json-perf phase 2): the accumulator with
+// amortized-O(1) appends — the shape the `out = f"{out}{t}"` field
+// accumulator could never be (every append copied the whole prefix).
+// Construct `StrBuf(cap)` with an octet capacity hint (pre-sizing; `0`
+// grows from small). A cell like `StackTrace`: methods mutate through
+// it, assignment shares it. The general machinery any encoder/tokenizer
+// wants; the engine never learns what is being built.
+builtin class StrBuf {
+    fn push(self, s: str);        // append a str's octets — amortized O(|s|)
+    fn push_code(self, c: u32);   // append one codepoint (invalid scalars
+                                  // mint U+FFFD — the from_code rule)
+    fn len(self) -> i32;          // codepoints so far (tracked, O(1))
+    fn finish(self) -> str;       // the ONE materialization: a fresh
+                                  // immutable str; the builder keeps its
+                                  // buffer (finish twice = same text)
+}
+
 
 // ---- engine builtin primitives (compiler-lowered members) ----
 // The boot primitives declare their surface here — `builtin primitive`,
@@ -74,8 +91,23 @@ builtin class StackTrace {
 builtin primitive str {
     fn len(self) -> i32;            // codepoints
     fn code(self) -> u32;           // the FIRST codepoint (traps on empty)
+    fn code_at(self, i: i32) -> u32; // the codepoint at codepoint index i
+                                     // (traps out of bounds — the index is
+                                     // a bug, not data)
     fn encode(self) -> bytes;       // the UTF-8 octets
     fn slice(self, from: i32, to: i32) -> str;  // O(1) view [from, to) — codepoint bounds (RFC 0042)
+    // The fused host-side scan/classify (json-perf phase 2) — the
+    // tokenizer primitive: walk codepoints from `from`, classify each
+    // through the caller's `[u8]` table (`set[min(cp, set.len()-1)]`,
+    // `0` keeps scanning), stop at the FIRST nonzero class; the whole
+    // per-byte loop runs in the host, so a tokenizer drives it in
+    // O(calls), not O(bytes) of interpreted ops. Returns the packed
+    // pair `(stop_index << 8) | stop_class`; end of input is
+    // `(s.len() << 8) | 0`.
+    fn scan(self, from: i32, set: [u8]) -> i64;
+    // Does the codepoint run at `from` spell `head`? Compared host-side
+    // (no per-character str cells); false past the end.
+    fn starts_with(self, from: i32, head: str) -> bool;
 }
 
 builtin primitive bytes {

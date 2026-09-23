@@ -201,6 +201,14 @@ pub enum TyKind {
     /// a `builtin class` and not a `builtin primitive`). The cell carries
     /// the RAW captured frames; symbolication is lazy, per member access.
     Trace,
+    /// the growable string builder (json-perf phase 2) — the `StrBuf`
+    /// builtin class's runtime type: a stateful engine-owned UTF-8 buffer
+    /// with amortized-O(1) appends (`push`/`push_code`), one final
+    /// `finish` -> str materialization, and a construction-time capacity
+    /// hint. The tokenizer/writer primitive ANY encoder wants; the engine
+    /// never learns what is being built. A cell like `Trace` — methods
+    /// mutate through it, assignment shares it.
+    StrBuf,
     /// `?T` (RFC 0005, RFC 0044) — a nil-able cell; `nil` is the null slot.
     /// Same one-slot box the old `*T` pointer was: `T → ?T` boxes, `?T → T`
     /// reads field 0 (nil check on use)
@@ -251,6 +259,9 @@ pub const TY_BYTES: TypeId = 15;
 /// the `StackTrace` snapshot (RFC 0036, err-channel phase 2) — appended
 /// after `Bytes`; fixed ids are wire-stable and must never be reordered
 pub const TY_STACK_TRACE: TypeId = 16;
+/// the `StrBuf` growable builder (json-perf phase 2) — appended after
+/// `StackTrace`; fixed ids are wire-stable and must never be reordered
+pub const TY_STRBUF: TypeId = 17;
 /// A host payload box's runtime type as `TidOf` reports it (RFC 0023/0026):
 /// the payload is Rust, so no rut type describes it. Type ids are type-table
 /// indices, which can never reach this value — `downcast<T>` therefore
@@ -291,6 +302,7 @@ impl TypeTable {
         push(sym::OPAQUE, TyKind::Opaque);
         push(sym::BYTES, TyKind::Bytes);
         push(sym::STACK_TRACE, TyKind::Trace);
+        push(sym::STRBUF, TyKind::StrBuf);
         t.boot_len = t.types.len() as u32;
         t.scope_base = vec![0; scope as usize + 1];
         if packed {

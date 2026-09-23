@@ -998,7 +998,8 @@ impl<'a> Ctx<'a> {
     pub(crate) fn member_has_method(&self, ty: TypeId, name: IdentId) -> bool {
         match self.types.kind(ty) {
             TyKind::Str => {
-                matches!(name, sym::LEN | sym::SLICE | sym::CODE | sym::ENCODE)
+                matches!(name, sym::LEN | sym::SLICE | sym::CODE | sym::ENCODE
+                    | sym::CODE_AT | sym::SCAN | sym::STARTS_WITH)
                     || self.has_trait_impl_method(ty, name)
             }
             TyKind::Bytes => {

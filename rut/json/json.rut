@@ -50,29 +50,33 @@
 // walking a cyclic structure answers (nil, Depth-err) — RFC 0017's
 // expected failure. Decode enforces it on container entry.
 //
-// THE READER (survey §2.2): an int-codes cursor. The doc's codepoints
-// split ONCE at `JsonReader.of` into a `[?u32]` column (raw payloads +
-// nil tags — the split's pushes box nothing), and every classify is two
-// int compares; token payloads carve as RFC 0042 O(1) views of the
-// original str (`src` rides beside `cs` for exactly that). The strict
-// UTF-8 DFA (§2.2) gates the bytes entry — `bytes.decode()` is LOSSY,
-// never trusted on unvalidated input; invalid octets answer
-// `InvalidUtf8`, never a silent U+FFFD.
+// THE READER (survey §2.2, reshaped by the json-perf batch phase 2): a
+// direct cursor over the doc str. The codepoint-split column is GONE —
+// `JsonReader.of` materializes nothing (the split was 15.1% of the
+// json-roundtrip row's fuel); every classify rides the general
+// scan/classify primitive (`str.scan`: a host-side loop over a
+// caller-supplied `[u8]` class table, one rut call per token boundary
+// instead of one op per codepoint), single-codepoint reads ride
+// `code_at`, and literal prefixes ride `starts_with`. Cursor arithmetic
+// and offsets stay CODEPOINT-based exactly as before (`at`/`got`
+// semantics unchanged; token payloads still carve as RFC 0042 O(1)
+// views of `src`). The strict UTF-8 DFA (§2.2) gates the bytes entry —
+// `bytes.decode()` is LOSSY, never trusted on unvalidated input;
+// invalid octets answer `InvalidUtf8`, never a silent U+FFFD.
 //
-// THE WRITER (survey §2.3, reshaped by the json-perf batch phase 1):
-// per-event output composes into a BOUNDED CHUNK BUFFER (`buf`, ~1 KB
-// cap) that drains into the accumulator `out` in ONE field append per
-// chunk. The shape this replaces appended every event straight to the
-// `out` field — the survey's §4 A/B measured that shape ~750x slower
-// per append than a local (the rc==1 in-place append path does not
-// fire through a class field, so every event copied the WHOLE
-// accumulator: ~6 GB of memcpy per json-roundtrip rep, invisible to
-// fuel). The chunk buffer bounds the copy per event to ~1 KB and pays
-// one O(|out|) copy per chunk instead of per event; `out` still
-// receives every byte in emit order, so the finished document is
-// byte-identical. The container stack is lazy: keys/counts ride in
-// fixed 128-slot columns (the depth cap) and assemble into the
-// `$.a[2].b` path ONLY on failure — the happy path never formats.
+// THE WRITER (survey §2.3, reshaped by the json-perf batch: phase 1's
+// chunk buffer, finished by phase 2's growable builder): per-event
+// output pushes into a StrBuf — the engine's growable builder, amortized
+// O(1) per push with one final materialization at finish(). Phase 1's
+// intermediate shape composed events into a bounded chunk buffer that
+// drained into a str field accumulator; the builder deletes that
+// machinery entirely — no cap checks, no flushes, and the ~400
+// O(|out|) drain copies per rep are gone (the survey's §4 field-append
+// mechanism, first priced at ~750x a local append). `at` is measured
+// straight off the builder, so error offsets are identical to every
+// earlier shape; the container stack is lazy: keys/counts ride in fixed
+// 128-slot columns (the depth cap) and assemble into the `$.a[2].b`
+// path ONLY on failure — the happy path never formats.
 //
 // ESCAPES (survey §2.3): exactly RFC 8259 — `"` `\` and the C0 controls;
 // DEL and non-ASCII pass through. Surrogates cannot occur in a rut str;
@@ -107,10 +111,7 @@ pub struct EncodeJsonError {
 // ---- the writer (survey §2.3) ----
 
 pub class JsonWriter {
-    out: str;           // THE accumulator — one append per chunk drain
-    buf: str;           // the bounded chunk buffer: per-event output
-                        // composes here (capped ~1 KB) and drains to
-                        // `out` in one append per chunk
+    out: StrBuf;        // THE accumulator — the growable builder
     depth: i32;         // open container count (the 128 cap)
     st_kind: [i32];     // per level: 1 object, 2 array — 128 slots, the cap
     st_key: [?str];     // per object level: the pending key (nil until key())
@@ -119,32 +120,28 @@ pub class JsonWriter {
     k: ?EncodeErrorKind; // sticky failure — nil until a step fails
     at: i64;
     path: str;
+    qt: [u8];           // quote's escape-class table: `"`->1, `\`->2,
+                        // C0 controls->3, everything else 0 (safe)
 }
 
 impl JsonWriter {
     pub fn new() -> Self {
-        return Self { out: "", buf: "", depth: 0, st_kind: [0; 128],
+        let mut qt: [u8] = [0; 257];
+        qt[0x22] = 1;
+        qt[0x5C] = 2;
+        let mut c: i32 = 0;
+        while (c < 0x20) { qt[c] = 3; c += 1; }
+        return Self { out: StrBuf(1024), depth: 0, st_kind: [0; 128],
                       st_key: [nil; 128], st_n: [0; 128], top: 0, k: nil,
-                      at: 0, path: "" };
+                      at: 0, path: "", qt: qt };
     }
 
-    // THE CHUNK (json-perf phase 1): drain the buffer into the
-    // accumulator — one O(|out|) field append per ~KB of output
-    // instead of one per event. Every byte still reaches `out` in emit
-    // order, so output is byte-identical to the per-event shape.
-    fn flush_buf(mut self) {
-        if (self.buf != "") {
-            self.out = f"{self.out}{self.buf}";
-            self.buf = "";
-        }
-    }
-
-    // the finished document. Unbalanced begin/end is a caller bug and
-    // returns the accumulator as-is (the sticky model reports real
-    // failures; the finalized error set has no kind for misuse).
+    // the finished document — the builder's ONE materialization.
+    // Unbalanced begin/end is a caller bug and returns the accumulator
+    // as-is (the sticky model reports real failures; the finalized error
+    // set has no kind for misuse).
     pub fn finish(mut self) -> str {
-        self.flush_buf();
-        return self.out;
+        return self.out.finish();
     }
 
     pub fn failed(self) -> bool {
@@ -160,10 +157,9 @@ impl JsonWriter {
 
     fn fail(mut self, kind: EncodeErrorKind) {
         if (self.k != nil) { return; }
-        // `at` is the output offset so far — drain the chunk first so
-        // the offset counts every emitted byte (byte-exact with the
-        // per-event shape this batch replaced)
-        self.flush_buf();
+        // `at` is the output offset so far — every push is already in
+        // the builder, so the offset counts every emitted byte
+        // (byte-exact with the chunk shape this batch replaced)
         self.k = kind;
         self.at = self.out.len() as i64;
         self.path = self.build_path();
@@ -191,13 +187,11 @@ impl JsonWriter {
     }
 
     // the parent level's comma + child count for a VALUE write. The
-    // cap idiom after every buf append: when the chunk crosses ~1 KB,
-    // drain it — the per-event copy stays bounded and the O(events ×
-    // |out|) accumulator churn stays dead
+    // builder's amortized growth needs no cap checks — appends are
+    // O(1) amortized all the way to a multi-MB document
     fn value_comma(mut self) {
         if (self.top > 0 && self.st_n[self.top - 1] > 0 && self.st_kind[self.top - 1] == 2) {
-            self.buf = f"{self.buf},";
-            if (self.buf.len() >= 1024) { self.flush_buf(); }
+            self.out.push(",");
         }
         if (self.top > 0) {
             self.st_n[self.top - 1] += 1;
@@ -213,8 +207,7 @@ impl JsonWriter {
         self.st_n[self.top] = 0;
         self.top += 1;
         self.depth += 1;
-        self.buf = f"{self.buf}{{";
-        if (self.buf.len() >= 1024) { self.flush_buf(); }
+        self.out.push("{");
     }
 
     pub fn begin_array(mut self) {
@@ -226,8 +219,7 @@ impl JsonWriter {
         self.st_n[self.top] = 0;
         self.top += 1;
         self.depth += 1;
-        self.buf = f"{self.buf}[";
-        if (self.buf.len() >= 1024) { self.flush_buf(); }
+        self.out.push("[");
     }
 
     // an unbalanced end is a caller bug — clamped, never traps
@@ -236,8 +228,7 @@ impl JsonWriter {
         if (self.top > 0) {
             self.top -= 1;
             self.depth -= 1;
-            self.buf = f"{self.buf}}}";
-            if (self.buf.len() >= 1024) { self.flush_buf(); }
+            self.out.push("}");
         }
     }
 
@@ -246,8 +237,7 @@ impl JsonWriter {
         if (self.top > 0) {
             self.top -= 1;
             self.depth -= 1;
-            self.buf = f"{self.buf}]";
-            if (self.buf.len() >= 1024) { self.flush_buf(); }
+            self.out.push("]");
         }
     }
 
@@ -256,14 +246,13 @@ impl JsonWriter {
         if (self.failed()) { return; }
         if (self.top > 0 && self.st_kind[self.top - 1] == 1) {
             if (self.st_n[self.top - 1] > 0) {
-                self.buf = f"{self.buf},";
-                if (self.buf.len() >= 1024) { self.flush_buf(); }
+                self.out.push(",");
             }
             self.st_n[self.top - 1] += 1;
             self.st_key[self.top - 1] = k;
         }
-        self.buf = f"{self.buf}{self.quote(k)}:";
-        if (self.buf.len() >= 1024) { self.flush_buf(); }
+        self.out.push(self.quote(k));
+        self.out.push(":");
     }
 
     // an escaped JSON string (value position — no comma for objects,
@@ -271,16 +260,14 @@ impl JsonWriter {
     pub fn write_str(mut self, s: str) {
         if (self.failed()) { return; }
         self.value_comma();
-        self.buf = f"{self.buf}{self.quote(s)}";
-        if (self.buf.len() >= 1024) { self.flush_buf(); }
+        self.out.push(self.quote(s));
     }
 
     // pre-rendered JSON (numbers, true/false/null — the impls' fast lane)
     pub fn write_raw(mut self, t: str) {
         if (self.failed()) { return; }
         self.value_comma();
-        self.buf = f"{self.buf}{t}";
-        if (self.buf.len() >= 1024) { self.flush_buf(); }
+        self.out.push(t);
     }
 
     pub fn write_i64(mut self, v: i64) {
@@ -309,41 +296,46 @@ impl JsonWriter {
     }
 
     // the escape policy: exactly RFC 8259 — `"` `\` and C0 controls; the
-    // shorthands first, other controls \u00xx, everything else verbatim
+    // shorthands first, other controls \u00xx, everything else verbatim.
+    // The clean check is ONE host-side scan (the escape-class table's
+    // first nonzero class is the first escape; class 0 at end = clean) —
+    // the phase-1 reverted octet scan and the slice-per-char walk it
+    // replaced both die here.
     fn quote(self, s: str) -> str {
-        let n = s.len();
-        let mut i: i32 = 0;
-        while (i < n) {
-            let c = s.slice(i, i + 1).code() as i32;
-            if (c == 0x22 || c == 0x5C || (c >= 0x00 && c < 0x20)) {
-                return self.quote_slow(s);
-            }
-            i += 1;
+        let r = s.scan(0, self.qt);
+        if ((r & 255) == 0) {
+            // the clean path: one append, zero per-char work
+            return f"\"{s}\"";
         }
-        // the clean path: one append, zero per-char work
-        return f"\"{s}\"";
+        return self.quote_slow(s, (r >> 8) as i32);
     }
 
-    fn quote_slow(self, s: str) -> str {
-        let mut acc = "\"";
+    // escape from `first` (the first escape site) on; the clean prefix
+    // [0, first) appends as one piece. Builds through a StrBuf — the
+    // local f-string accumulator it replaces was the one place the
+    // slice-per-char disease could still reach an escaped doc.
+    fn quote_slow(self, s: str, first: i32) -> str {
+        let b = StrBuf(s.len() * 2 + 2);
+        b.push("\"");
+        if (first > 0) { b.push(s.slice(0, first)); }
         let n = s.len();
-        let mut i: i32 = 0;
+        let mut i: i32 = first;
         while (i < n) {
-            let c = s.slice(i, i + 1).code() as i32;
+            let c = s.code_at(i) as i32;
             if (c == 0x22) {
-                acc = f"{acc}\\\"";
+                b.push("\\\"");
             } else if (c == 0x5C) {
-                acc = f"{acc}\\\\";
+                b.push("\\\\");
             } else if (c == 0x08) {
-                acc = f"{acc}\\b";
+                b.push("\\b");
             } else if (c == 0x0C) {
-                acc = f"{acc}\\f";
+                b.push("\\f");
             } else if (c == 0x0A) {
-                acc = f"{acc}\\n";
+                b.push("\\n");
             } else if (c == 0x0D) {
-                acc = f"{acc}\\r";
+                b.push("\\r");
             } else if (c == 0x09) {
-                acc = f"{acc}\\t";
+                b.push("\\t");
             } else if (c < 0x20) {
                 // \u00xx — c < 0x20, so both hex digits come from the low byte
                 let hex = "0123456789abcdef";
@@ -351,25 +343,33 @@ impl JsonWriter {
                 let lo = c & 15;
                 let hs = hex.slice(hi, hi + 1);
                 let ls = hex.slice(lo, lo + 1);
-                acc = f"{acc}\\u00{hs}{ls}";
+                b.push(f"\\u00{hs}{ls}");
             } else {
                 let ch = s.slice(i, i + 1);
-                acc = f"{acc}{ch}";
+                b.push(ch);
             }
             i += 1;
         }
-        return f"{acc}\"";
+        b.push("\"");
+        return b.finish();
     }
 }
 
-// ---- the reader (survey §2.2: the int-codes cursor) ----
+// ---- the reader (survey §2.2: the direct cursor) ----
 
 pub class JsonReader {
-    cs: [?u32];   // the doc's codepoints, split ONCE at open
-    n: i32;       // codepoint count
+    src: str;     // the doc itself — token payloads carve as views
+    n: i32;       // codepoint count (s.len() at open)
     pos: i32;     // codepoint cursor (at / offsets are codepoints everywhere)
     depth: i32;   // open container count (the 128 cap)
-    src: str;     // the original doc — token payloads carve as views
+    tok: [u8];    // dispatch class table: ws->0 (keep scanning), `{`->2,
+                  // `}`->3, `[`->4, `]`->5, `"`->6, `,`->7, `-`->8,
+                  // digits->9, `t`->10, `f`->11, `n`->12, `+`->13,
+                  // everything else (incl. all non-ASCII)->1
+    dig: [u8];    // number-lexeme table: digits->0 (keep scanning),
+                  // `.`->2, `e`/`E`->3, `+`/`-`->4, everything else->1
+    stp: [u8];    // string-body stop table: `"`->1, C0 controls->2,
+                  // `\`->3, everything else 0 (content)
     k: ?DecodeErrorKind; // sticky failure — nil until a step fails
     at: i32;
     got: str;
@@ -378,14 +378,25 @@ pub class JsonReader {
 
 impl JsonReader {
     pub fn of(s: str) -> Self {
-        let len = s.len();
-        let mut cs: [?u32] = [nil; len];
-        let mut i: i32 = 0;
-        for (let c of s) {
-            cs[i] = c.code();
-            i += 1;
-        }
-        return Self { cs: cs, n: len, pos: 0, depth: 0, src: s,
+        // the split column is GONE: no [?u32] materialization, no
+        // per-codepoint walk — the doc is the cursor's own text
+        let mut tok: [u8] = [1; 257];
+        tok[0x20] = 0; tok[0x09] = 0; tok[0x0A] = 0; tok[0x0D] = 0;
+        tok[0x7B] = 2; tok[0x7D] = 3; tok[0x5B] = 4; tok[0x5D] = 5;
+        tok[0x22] = 6; tok[0x2C] = 7; tok[0x2D] = 8; tok[0x2B] = 13;
+        tok[0x74] = 10; tok[0x66] = 11; tok[0x6E] = 12;
+        let mut d: i32 = 0x30;
+        while (d <= 0x39) { tok[d] = 9; d += 1; }
+        let mut dig: [u8] = [1; 257];
+        let mut g: i32 = 0x30;
+        while (g <= 0x39) { dig[g] = 0; g += 1; }
+        dig[0x2E] = 2; dig[0x65] = 3; dig[0x45] = 3; dig[0x2B] = 4; dig[0x2D] = 4;
+        let mut stp: [u8] = [0; 257];
+        stp[0x22] = 1; stp[0x5C] = 3;
+        let mut c: i32 = 0;
+        while (c < 0x20) { stp[c] = 2; c += 1; }
+        return Self { src: s, n: s.len(), pos: 0, depth: 0,
+                      tok: tok, dig: dig, stp: stp,
                       k: nil, at: 0, got: "", expected: "" };
     }
 
@@ -424,23 +435,19 @@ impl JsonReader {
 
     fn peek(self) -> i32 {
         if (self.pos >= self.n) { return -1; }
-        return self.cs[self.pos] as i32;
+        return self.src.code_at(self.pos) as i32;
     }
 
     fn char_text(self, p: i32) -> str {
         if (p < 0 || p >= self.n) { return ""; }
-        return str.from_code(self.cs[p] as u32);
+        return str.from_code(self.src.code_at(p));
     }
 
     pub fn skip_ws(mut self) {
-        while (self.pos < self.n) {
-            let c = self.cs[self.pos] as i32;
-            if (c == 0x20 || c == 0x09 || c == 0x0A || c == 0x0D) {
-                self.pos += 1;
-            } else {
-                return;
-            }
-        }
+        // ONE host-side scan: ws is exactly the tok table's class-0 set,
+        // so the scan's stop is the first non-whitespace codepoint
+        let r = self.src.scan(self.pos, self.tok);
+        self.pos = (r >> 8) as i32;
     }
 
     // ws-skipped cursor — the mark/rewind seam the [T] decode uses for
@@ -472,18 +479,10 @@ impl JsonReader {
         return false;
     }
 
-    // does the codepoint run at pos spell `lit`? (no consume)
+    // does the codepoint run at pos spell `lit`? (no consume) — one
+    // host-side compare, no per-index str cells
     fn lit(self, lit: str) -> bool {
-        let ln = lit.len();
-        if (self.pos + ln > self.n) { return false; }
-        let mut i: i32 = 0;
-        while (i < ln) {
-            if (self.cs[self.pos + i] as i32 != lit.slice(i, i + 1).code() as i32) {
-                return false;
-            }
-            i += 1;
-        }
-        return true;
+        return self.src.starts_with(self.pos, lit);
     }
 
     // the first `k` codepoints at pos as text (bounded — for `got`)
@@ -522,22 +521,20 @@ impl JsonReader {
 
     // a plain digit run — the RFC 8259 leading-zero law belongs to the
     // INTEGER part only (frac digits may lead with zeros), so it lives
-    // in check_lead_zero, not here
+    // in check_lead_zero, not here. ONE host-side scan over the dig
+    // table (digits are its class-0 set).
     fn digit_run(mut self) -> i32 {
-        let mut count: i32 = 0;
-        while (self.pos < self.n) {
-            let c = self.cs[self.pos] as i32;
-            if (c < 0x30 || c > 0x39) { break; }
-            self.pos += 1;
-            count += 1;
-        }
+        let r = self.src.scan(self.pos, self.dig);
+        let end = (r >> 8) as i32;
+        let count = end - self.pos;
+        self.pos = end;
         return count;
     }
 
     // the integer part's leading-zero law: `0` may stand alone or lead
     // a fraction, never head a multi-digit integer
     fn check_lead_zero(mut self, first: i32) -> bool {
-        if (self.pos - first >= 2 && self.cs[first] as i32 == 0x30) {
+        if (self.pos - first >= 2 && self.src.code_at(first) as i32 == 0x30) {
             self.fail(DecodeErrorKind.Unexpected, first, self.lexeme_from(first), "a JSON number");
             return false;
         }
@@ -598,7 +595,7 @@ impl JsonReader {
         let mut i = digit_start;
         let end = self.pos;
         while (i < end) {
-            let d = (self.cs[i] as i32 - 0x30) as i64;
+            let d = (self.src.code_at(i) as i32 - 0x30) as i64;
             if (acc < -922337203685477580i64) {
                 // acc * 10 would escape i64
                 overflow = true;
@@ -726,7 +723,7 @@ impl JsonReader {
                     ev = 100000;
                     break;
                 }
-                let d = (self.cs[ei] as i32 - 0x30) as i64;
+                let d = (self.src.code_at(ei) as i32 - 0x30) as i64;
                 ev = ev * 10 + d;
                 ei += 1;
             }
@@ -735,7 +732,7 @@ impl JsonReader {
         // `12` with id == 0 is impossible (signed_head admitted a digit);
         // `.` with no int head (".5") already failed the leading-zero/
         // digit-run law above — id+frac_len ≥ 1 holds here
-        let neg = self.cs[start] as i32 == 0x2D;
+        let neg = self.src.code_at(start) as i32 == 0x2D;
         let mut int_start = start;
         if (neg) { int_start = start + 1; }
         let int_len = id;
@@ -744,7 +741,7 @@ impl JsonReader {
 
     // the two-tier parse (survey §2.4). Digits live at
     // [int_start, int_start+int_len) then [f_start, f_start+frac_len)
-    // in the cs column; `exp` is the written exponent.
+    // in the doc; `exp` is the written exponent.
     fn build_f64(mut self, int_start: i32, int_len: i32, frac_len: i32, exp: i64, neg: bool) -> f64 {
         let f_start = int_start + int_len + 1; // past the '.'
         let total = int_len + frac_len;
@@ -755,7 +752,7 @@ impl JsonReader {
         while (p0 < total) {
             let mut zi = int_start + p0;
             if (p0 >= int_len) { zi = f_start + (p0 - int_len); }
-            if (self.cs[zi] as i32 != 0x30) { break; }
+            if (self.src.code_at(zi) as i32 != 0x30) { break; }
             p0 += 1;
         }
         if (p0 >= total) {
@@ -774,7 +771,7 @@ impl JsonReader {
         while (taken < keep) {
             let mut src_i = int_start + p0 + taken;
             if (p0 + taken >= int_len) { src_i = f_start + (p0 + taken - int_len); }
-            let d = (self.cs[src_i] as i32 - 0x30) as i64;
+            let d = (self.src.code_at(src_i) as i32 - 0x30) as i64;
             if (m > 922337203685477579i64) {
                 overflow = true;
                 break;
@@ -794,7 +791,7 @@ impl JsonReader {
         let mut rest_i = int_start + p0 + taken;
         if (p0 + taken >= int_len) { rest_i = f_start + (p0 + taken - int_len); }
         while (rest > 0) {
-            if (self.cs[rest_i] as i32 != 0x30) { dropped_zero = false; }
+            if (self.src.code_at(rest_i) as i32 != 0x30) { dropped_zero = false; }
             rest_i += 1;
             rest -= 1;
         }
@@ -851,7 +848,10 @@ impl JsonReader {
     }
 
     // read_str — verbatim docs carve as ONE RFC 0042 view; escaped docs
-    // build through the accumulator (the happy path never formats)
+    // build through a StrBuf. The body scan is ONE host-side pass per
+    // token piece: the stp table's classes are `"`->1, control->2,
+    // `\`->3, content 0 (keep scanning) — the walk the phase-2 scan
+    // primitive replaces paid one peek + three compares per codepoint
     pub fn read_str(mut self) -> str {
         self.skip_ws();
         if (self.peek() != 0x22) {
@@ -866,42 +866,50 @@ impl JsonReader {
         let start = self.pos;
         let mut esc = false;
         while (true) {
-            if (self.pos >= self.n) {
+            let r = self.src.scan(self.pos, self.stp);
+            let stop = (r >> 8) as i32;
+            let cls = (r & 255) as i32;
+            if (cls == 0) {
+                // end of doc, no close quote
+                self.pos = stop;
                 self.fail(DecodeErrorKind.Truncated, self.n, "", "a string");
                 return "";
             }
-            let c = self.cs[self.pos] as i32;
-            if (c == 0x22) { break; }
-            if (c < 0x20) {
+            if (cls == 2) {
                 // a raw control character is invalid JSON — never carried
-                self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "a string");
+                self.pos = stop;
+                self.fail(DecodeErrorKind.Unexpected, stop, self.char_text(stop), "a string");
                 return "";
             }
-            if (c == 0x5C) {
+            if (cls == 3) {
+                // the escape: the next codepoint is consumed blindly
+                // (the old walk's exact shape — a control after a
+                // backslash is not re-checked, semantics preserved)
                 esc = true;
-                self.pos += 1;
+                self.pos = stop + 1;
                 if (self.pos >= self.n) {
                     self.fail(DecodeErrorKind.Truncated, self.n, "", "a string");
                     return "";
                 }
+                self.pos = stop + 2;
+                continue;
             }
-            self.pos += 1;
+            // cls == 1: the close quote — carve the payload as a view
+            let raw = self.src.slice(start, stop);
+            self.pos = stop + 1;
+            if (!esc) { return raw; }
+            return self.unescape(raw);
         }
-        let raw = self.src.slice(start, self.pos);
-        self.pos += 1;
-        if (!esc) { return raw; }
-        return self.unescape(raw);
     }
 
     fn unescape(mut self, raw: str) -> str {
-        let mut acc = "";
         let rl = raw.len();
+        let mut b = StrBuf(rl);
         let mut i: i32 = 0;
         while (i < rl) {
-            let ch = raw.slice(i, i + 1);
-            let c = ch.code() as i32;
+            let c = raw.code_at(i) as i32;
             if (c != 0x5C) {
-                acc = f"{acc}{ch}";
+                b.push(raw.slice(i, i + 1));
                 i += 1;
                 continue;
             }
@@ -910,15 +918,15 @@ impl JsonReader {
                 self.fail(DecodeErrorKind.Unexpected, self.pos, "\\", "an escape");
                 return "";
             }
-            let e = raw.slice(i, i + 1).code() as i32;
-            if (e == 0x22) { acc = f"{acc}\""; i += 1; continue; }
-            if (e == 0x5C) { acc = f"{acc}\\"; i += 1; continue; }
-            if (e == 0x2F) { acc = f"{acc}/"; i += 1; continue; }
-            if (e == 0x62) { acc = f"{acc}\b"; i += 1; continue; }
-            if (e == 0x66) { acc = f"{acc}\f"; i += 1; continue; }
-            if (e == 0x6E) { acc = f"{acc}\n"; i += 1; continue; }
-            if (e == 0x72) { acc = f"{acc}\r"; i += 1; continue; }
-            if (e == 0x74) { acc = f"{acc}\t"; i += 1; continue; }
+            let e = raw.code_at(i) as i32;
+            if (e == 0x22) { b.push("\""); i += 1; continue; }
+            if (e == 0x5C) { b.push("\\"); i += 1; continue; }
+            if (e == 0x2F) { b.push("/"); i += 1; continue; }
+            if (e == 0x62) { b.push("\b"); i += 1; continue; }
+            if (e == 0x66) { b.push("\f"); i += 1; continue; }
+            if (e == 0x6E) { b.push("\n"); i += 1; continue; }
+            if (e == 0x72) { b.push("\r"); i += 1; continue; }
+            if (e == 0x74) { b.push("\t"); i += 1; continue; }
             if (e == 0x75) {
                 i += 1;
                 let h = self.hex4_at(raw, i);
@@ -930,8 +938,8 @@ impl JsonReader {
                     // an unpaired escape is invalid JSON rut cannot
                     // represent: Unexpected, never a silent replacement
                     let ok = nx + 6 <= rl
-                        && raw.slice(nx, nx + 1).code() as i32 == 0x5C
-                        && raw.slice(nx + 1, nx + 2).code() as i32 == 0x75;
+                        && raw.code_at(nx) as i32 == 0x5C
+                        && raw.code_at(nx + 1) as i32 == 0x75;
                     if (!ok) {
                         self.fail(DecodeErrorKind.Unexpected, self.pos, raw.slice(i - 2, nx), "a surrogate pair");
                         return "";
@@ -944,8 +952,7 @@ impl JsonReader {
                         return "";
                     }
                     let joined: u32 = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
-                    let j = str.from_code(joined);
-                    acc = f"{acc}{j}";
+                    b.push_code(joined);
                     i = nx + 6;
                     continue;
                 }
@@ -955,8 +962,7 @@ impl JsonReader {
                     self.fail(DecodeErrorKind.Unexpected, self.pos, raw.slice(i - 2, i + 4), "a codepoint");
                     return "";
                 }
-                let u = str.from_code(cp);
-                acc = f"{acc}{u}";
+                b.push_code(cp);
                 i = nx;
                 continue;
             }
@@ -965,7 +971,7 @@ impl JsonReader {
             self.fail(DecodeErrorKind.Unexpected, self.pos, got, "an escape");
             return "";
         }
-        return acc;
+        return b.finish();
     }
 
     // four hex digits at raw[i..i+4] -> (value, next index); sticky
@@ -974,11 +980,10 @@ impl JsonReader {
         let mut v: u32 = 0;
         let mut j: i32 = 0;
         while (j < 4) {
-            let hc = raw.slice(i + j, i + j + 1);
-            let c = hc.code() as i32;
+            let c = raw.code_at(i + j) as i32;
             let d = hex_digit(c);
             if (d < 0) {
-                self.fail(DecodeErrorKind.Unexpected, self.pos, hc, "4 hex digits");
+                self.fail(DecodeErrorKind.Unexpected, self.pos, raw.slice(i + j, i + j + 1), "4 hex digits");
                 return (0, i);
             }
             v = v * 16 + d as u32;
@@ -1043,23 +1048,29 @@ impl JsonReader {
     // more elements/members? consumes the separating comma — the loop
     // shape every decode impl spells:
     //   r.begin_array(); while (r.more()) { .. T.decode(r) .. } r.end_array();
+    // The ws-skip and the look-ahead are ONE fused scan: the tok
+    // table's classes dispatch `,` `]` `}` and "a value" without a
+    // second peek.
     pub fn more(mut self) -> bool {
-        self.skip_ws();
-        if (self.failed() || self.pos >= self.n) { return false; }
-        let c = self.peek();
-        if (c == 0x2C) {
+        if (self.failed()) { return false; }
+        let r = self.src.scan(self.pos, self.tok);
+        self.pos = (r >> 8) as i32;
+        let c = (r & 255) as i32;
+        if (c == 0) { return false; }   // end of input
+        if (c == 7) {
+            // ',': consumed — but a comma promises another element/
+            // member: `[1,]` is a grammar miss, never silent acceptance
             self.pos += 1;
-            self.skip_ws();
-            let c2 = self.peek();
-            // a comma promises another element/member: `[1,]` is a
-            // grammar miss, never silent acceptance
-            if (c2 == 0x5D || c2 == 0x7D) {
+            let r2 = self.src.scan(self.pos, self.tok);
+            self.pos = (r2 >> 8) as i32;
+            let c2 = (r2 & 255) as i32;
+            if (c2 == 5 || c2 == 3) {
                 self.fail(DecodeErrorKind.Unexpected, self.pos, self.char_text(self.pos), "an element or member");
                 return false;
             }
             return true;
         }
-        return !(c == 0x5D || c == 0x7D);
+        return !(c == 5 || c == 3);
     }
 
     // an object member's `"key":` half — read_str + the colon
@@ -1080,12 +1091,16 @@ impl JsonReader {
     }
 
     // skip one value grammatically — unknown keys and the [T] two-pass
-    // count ride this; container recursion re-enters the depth law
+    // count ride this; container recursion re-enters the depth law.
+    // The dispatch is the fused scan: ws-skip + the token's class in
+    // one host-side call.
     pub fn skip_value(mut self) {
-        self.skip_ws();
-        if (self.failed() || self.pos >= self.n) { return; }
-        let c = self.peek();
-        if (c == 0x7B) {
+        if (self.failed()) { return; }
+        let r = self.src.scan(self.pos, self.tok);
+        self.pos = (r >> 8) as i32;
+        let c = (r & 255) as i32;
+        if (c == 0) { return; }
+        if (c == 2) {
             self.begin_object();
             while (self.more()) {
                 let _ = self.next_key();
@@ -1096,7 +1111,7 @@ impl JsonReader {
             self.end_object();
             return;
         }
-        if (c == 0x5B) {
+        if (c == 4) {
             self.begin_array();
             while (self.more()) {
                 self.skip_value();
@@ -1105,20 +1120,20 @@ impl JsonReader {
             self.end_array();
             return;
         }
-        if (c == 0x22) {
+        if (c == 6) {
             let _ = self.read_str();
             return;
         }
-        if (c == 0x74 || c == 0x66) {
+        if (c == 10 || c == 11) {
             let _ = self.read_bool();
             return;
         }
-        if (c == 0x6E) {
+        if (c == 12) {
             let _ = self.try_null();
             return;
         }
         // a number: the f64 grammar is the union's superset
-        if (c == 0x2D || (c >= 0x30 && c <= 0x39)) {
+        if (c == 8 || c == 9) {
             let _ = self.read_f64();
             return;
         }

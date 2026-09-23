@@ -289,9 +289,10 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
         }
         // a host payload box has no rut-typed children — the Rust payload
         // is dropped with the cell through its own Drop (RFC 0023/0026);
-        // a trace cell's frames are plain (func, pc) words, never handles
+        // a trace cell's frames are plain (func, pc) words, never handles;
+        // a builder's block-backed octets are likewise never handles
         CellData::HostBoxed { .. } | CellData::Enum { .. } | CellData::Str(_)
-        | CellData::Trace { .. } => {}
+        | CellData::Trace { .. } | CellData::StrBuf { .. } => {}
     }
     out
 }
@@ -308,7 +309,7 @@ pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
     let children = unsafe {
         match (*p).data {
             CellData::Str(_) | CellData::Enum { .. } | CellData::HostBoxed { .. }
-            | CellData::Trace { .. } => None,
+            | CellData::Trace { .. } | CellData::StrBuf { .. } => None,
             _ => Some(collect_ref_children(&*p, &arena.plan)),
         }
     };
@@ -321,6 +322,7 @@ pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
         // discriminant check here measured +4% on the json-decode churn).
         match &mut (*p).data {
             CellData::Str(sv) => arena.blocks.free(sv.block),
+            CellData::StrBuf { buf, .. } => arena.blocks.free(buf.block),
             CellData::Array { items, .. } => arena.blocks.free(items.borrow().block),
             // host payload blocks park instead of deallocating (phase 6):
             // the dtor runs here, in place, exactly once; the block goes

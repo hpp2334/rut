@@ -117,6 +117,30 @@ pub enum Nat {
     /// `StackTrace.render(self)` — the RFC 0036 symbolication string,
     /// one whole-trace pass
     TraceRender,
+    /// `s.scan(from, set)` (json-perf phase 2) — the fused host-side
+    /// scan/classify: walk codepoints from `from`, classify each through
+    /// the caller's `[u8]` table, stop at the first nonzero class. The
+    /// result packs `(stop_index << 8) | stop_class` into one i64 — the
+    /// whole per-byte loop runs in the host, so a tokenizer drives it in
+    /// O(calls), not O(bytes) interpreted ops.
+    StrScan,
+    /// `s.starts_with(from, head)` (json-perf phase 2) — the prefix test
+    /// at a codepoint offset, compared host-side (no per-char cells)
+    StrStartsWith,
+    /// `StrBuf(cap)` — mint the builder: one UTF-8 block pre-sized to
+    /// `cap` octets (the pre-sizing the accumulator shapes could never
+    /// spell), geometric growth from there
+    StrBufNew,
+    /// `b.push(s)` — append a str's octets in place (amortized O(|s|),
+    /// no per-append copy of the grown prefix)
+    StrBufPush,
+    /// `b.push_code(c)` — append one codepoint
+    StrBufPushCode,
+    /// `b.len()` — the codepoint count so far (O(1): tracked, not scanned)
+    StrBufLen,
+    /// `b.finish()` — the ONE materialization: a fresh immutable `str`
+    /// cell holding the builder's octets (the builder keeps its buffer)
+    StrBufFinish,
 }
 
 #[derive(Clone, Debug, PartialEq)]

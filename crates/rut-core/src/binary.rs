@@ -166,6 +166,12 @@ pub enum NativeTy {
     /// (`len`/`name`/`line`/`col`/`render`); the decl is a pure
     /// signature contract (RFC 0025's `builtin class` row)
     StackTrace,
+    /// `StrBuf` — the growable string builder (json-perf phase 2): a
+    /// boot-table type whose members are the engine-builtins
+    /// (`push`/`push_code`/`len`/`finish`; constructed `StrBuf(cap)`),
+    /// the same `builtin class` row — a pure signature contract over an
+    /// engine-owned buffer
+    StrBuf,
 }
 
 /// A builtin trait published by `core`'s native surface (RFC 0028):
@@ -274,6 +280,7 @@ impl Surface {
             native_types: vec![
                 (sym::OPAQUE, NativeTy::Opaque),
                 (sym::STACK_TRACE, NativeTy::StackTrace),
+                (sym::STRBUF, NativeTy::StrBuf),
             ],
             native_traits: vec![(sym::ITERATOR, NativeTrait::Iterator)],
             native_fns: CORE_FNS.to_vec(),
@@ -291,6 +298,7 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
     match name {
         sym::OPAQUE => Some(NativeTy::Opaque),
         sym::STACK_TRACE => Some(NativeTy::StackTrace),
+        sym::STRBUF => Some(NativeTy::StrBuf),
         _ => None,
     }
 }
@@ -439,7 +447,14 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// version byte is the only provenance marker a `.rutc`/bundle carries
 /// about the law that produced it — rejecting-more can strand a source,
 /// and the byte is what says which law it was.
-pub const VERSION: u32 = 9;
+/// v10: the general scan/classify + builder surface (json-perf batch
+/// phase 2) — new opcode-stream encodings (the `StrScan`/`StrStartsWith`
+/// natives and the `StrBuf` builder's five), a new boot type (`StrBuf`,
+/// type id 17, kind tag 15) and a new declared-surface row
+/// (`NativeTy::StrBuf`) — the 7→8 precedent: a v9 engine rejects every
+/// v10 artifact's new nats/kinds with the standard version error, so
+/// stale artifacts must be refused, not misread.
+pub const VERSION: u32 = 10;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -620,6 +635,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u32(*elem);
         }
         TyKind::Trace => e.u8(14),
+        TyKind::StrBuf => e.u8(15),
     }
 }
 
@@ -782,6 +798,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         }
         13 => TyKind::Opt { elem: d.u32()? },
         14 => TyKind::Trace,
+        15 => TyKind::StrBuf,
         t => return Err(format!("bad type kind tag {t}")),
     })
 }
@@ -965,6 +982,9 @@ fn nat(b: u8) -> Result<Nat, String> {
         6 => Nat::ArrSlice, 7 => Nat::BytesClone,
         8 => Nat::CaptureTrace, 9 => Nat::TraceLen, 10 => Nat::TraceName,
         11 => Nat::TraceLine, 12 => Nat::TraceCol, 13 => Nat::TraceRender,
+        14 => Nat::StrScan, 15 => Nat::StrStartsWith,
+        16 => Nat::StrBufNew, 17 => Nat::StrBufPush, 18 => Nat::StrBufPushCode,
+        19 => Nat::StrBufLen, 20 => Nat::StrBufFinish,
         _ => return Err("bad nat tag".into()),
     })
 }

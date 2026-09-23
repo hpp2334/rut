@@ -96,6 +96,106 @@ impl Vm {
                     self.cur_regs[d as usize] = Slot::int(n);
                 }
             }
+            Nat::StrScan => {
+                // s.scan(from, set) — the fused host-side scan/classify
+                // (json-perf phase 2): walk codepoints from codepoint
+                // index `from`, class each through the caller's `[u8]`
+                // table (`set[min(cp, len-1)]`), stop at the first nonzero
+                // class. Result: `(stop << 8) | class`, end of input
+                // `(len << 8) | 0`. The whole per-byte loop runs HERE —
+                // the tokenizer pays one call, not one op per byte.
+                let s = self.reg(recv.unwrap());
+                let from = unsafe { self.reg(args[0]).i };
+                let scell = cell_of(s);
+                if !matches!(&scell.data, CellData::Str(_) | CellData::StrView { .. }) {
+                    return Err(Trap::new(TrapKind::Invalid, "scan on non-string"));
+                }
+                let clen = scell.char_len() as i64;
+                if from < 0 || from > clen {
+                    return Err(Trap::new(
+                        TrapKind::IndexOutOfBounds,
+                        format!("scan start {from} out of bounds (len {clen})"),
+                    ));
+                }
+                // the class table: a `[u8]` cell read in place — blocks
+                // never move, and the cell is retained by its register
+                // for the whole native call
+                let tcell = cell_of(self.reg(args[1]));
+                let (tblock, tlen) = match &tcell.data {
+                    CellData::Array { items, .. } if matches!(items.borrow().kind, crate::heap::ArrKind::U8) => {
+                        let d = items.borrow();
+                        (d.block, d.len as usize)
+                    }
+                    _ => return Err(Trap::new(TrapKind::Invalid, "scan: class table must be `[u8]`")),
+                };
+                let class_of = |cp: usize| -> u8 {
+                    if tlen == 0 { return 0; }
+                    unsafe { *tblock.add(cp.min(tlen - 1)) }
+                };
+                let mut res: i64 = (clen) << 8; // end of input: (len, 0)
+                if scell.str_ascii() {
+                    let bytes = scell.as_bytes();
+                    let mut i = from as usize;
+                    while i < bytes.len() {
+                        let cls = class_of(bytes[i] as usize);
+                        if cls != 0 {
+                            res = ((i as i64) << 8) | cls as i64;
+                            break;
+                        }
+                        i += 1;
+                    }
+                } else {
+                    let text = scell.as_str();
+                    let mut i: i64 = 0;
+                    for ch in text.chars() {
+                        if i >= from {
+                            let cls = class_of(ch as usize);
+                            if cls != 0 {
+                                res = (i << 8) | cls as i64;
+                                break;
+                            }
+                        }
+                        i += 1;
+                    }
+                }
+                if let Some(d) = dst {
+                    self.cur_regs[d as usize] = Slot::int(res);
+                }
+            }
+            Nat::StrStartsWith => {
+                // s.starts_with(from, head) — the prefix test at a
+                // codepoint offset, compared host-side (json-perf phase 2)
+                let s = self.reg(recv.unwrap());
+                let from = unsafe { self.reg(args[0]).i };
+                let scell = cell_of(s);
+                if !matches!(&scell.data, CellData::Str(_) | CellData::StrView { .. }) {
+                    return Err(Trap::new(TrapKind::Invalid, "starts_with on non-string"));
+                }
+                let clen = scell.char_len() as i64;
+                if from < 0 || from > clen {
+                    return Err(Trap::new(
+                        TrapKind::IndexOutOfBounds,
+                        format!("starts_with start {from} out of bounds (len {clen})"),
+                    ));
+                }
+                let hcell = cell_of(self.reg(args[1]));
+                if !matches!(&hcell.data, CellData::Str(_) | CellData::StrView { .. }) {
+                    return Err(Trap::new(TrapKind::Invalid, "starts_with: head must be a string"));
+                }
+                let head = hcell.as_str();
+                let text = scell.as_str();
+                let ok = if scell.str_ascii() && hcell.str_ascii() {
+                    let b = text.as_bytes();
+                    let h = head.as_bytes();
+                    let st = from as usize;
+                    st + h.len() <= b.len() && &b[st..st + h.len()] == h
+                } else {
+                    text.chars().skip(from as usize).take(head.chars().count()).eq(head.chars())
+                };
+                if let Some(d) = dst {
+                    self.cur_regs[d as usize] = Slot::bool(ok);
+                }
+            }
             Nat::StrSlice => {
                 // s.slice(from, to) — an O(1) window (RFC 0042): codepoint
                 // bounds here, byte offsets inside. The view retains the

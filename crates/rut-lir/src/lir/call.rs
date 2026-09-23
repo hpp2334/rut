@@ -316,6 +316,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if name == sym::BYTES {
             return self.compile_bytes_alloc(args, sp);
         }
+        // the builder's type-call: `StrBuf(cap)` (json-perf phase 2) —
+        // one UTF-8 block pre-sized to `cap` octets, geometric growth
+        // from there; `finish` materializes the immutable str
+        if name == sym::STRBUF {
+            let cap = match args.len() {
+                0 => {
+                    let z = self.new_reg(TY_I32);
+                    self.emit(Op::ConstRaw { dst: z, bits: 0 }, sp.lo);
+                    z
+                }
+                1 => {
+                    let t = self.compile_expr(args[0], Some(TY_I32))?;
+                    if t != TY_I32 {
+                        self.ctx.err(sp, format!("StrBuf(cap) takes an `i32` capacity hint, found `{}`", self.ctx.type_name(t)));
+                    }
+                    self.last_reg
+                }
+                _ => {
+                    self.ctx.err(sp, "StrBuf() or StrBuf(cap)");
+                    return Err(());
+                }
+            };
+            let dst = self.new_reg(TY_STRBUF);
+            { let (argv_off, argc) = self.pool_args(&(vec![cap])); self.emit(Op::CallNat { nat: Nat::StrBufNew, recv: NOREG, argv_off, argc, dst }, sp.lo); }
+            return Ok(TY_STRBUF);
+        }
         if self.ctx.find_data(name).is_some() {
             self.ctx.err(sp, format!(
                 "construction is a method call, never a type-call —use a class method ({}.new(..)) or a struct literal `{} {{ .. }}` (RFC 0010 §1)",
@@ -938,6 +964,68 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Ok(TY_I32);
                     }
                 }
+                if name == sym::CODE_AT && args.len() == 1 {
+                    // s.code_at(i) -> u32 (json-perf phase 2) — the
+                    // codepoint at codepoint index i; out-of-bounds traps
+                    // (the index is a bug, not data — the `slice` law)
+                    let it = self.compile_expr(args[0], Some(TY_I32))?;
+                    if it != TY_I32 {
+                        self.ctx.err(sp, "code_at(i) takes an `i32` index");
+                        return Err(());
+                    }
+                    let ir = self.last_reg;
+                    let creg = self.new_reg(TY_CHAR);
+                    self.emit(Op::StrCharAt { dst: creg, s: rreg, idx: ir }, sp.lo);
+                    let dst = self.new_reg(TY_U32);
+                    self.emit(Op::Conv { dst, src: creg, from: PrimTy::Char, to: PrimTy::U32 }, sp.lo);
+                    return Ok(TY_U32);
+                }
+                if name == sym::SCAN && args.len() == 2 {
+                    // s.scan(from, set) -> i64 (json-perf phase 2) — the
+                    // fused host-side scan/classify: walk codepoints from
+                    // `from`, classify each through the caller's `[u8]`
+                    // table (`set[min(cp, set.len()-1)]`), stop at the
+                    // first nonzero class. Returns the packed pair
+                    // `(stop_index << 8) | stop_class`; end of input is
+                    // `(s.len() << 8) | 0`. The whole per-byte loop runs
+                    // in the host — a tokenizer pays O(calls), not
+                    // O(bytes) of interpreted ops.
+                    let ft = self.compile_expr(args[0], Some(TY_I32))?;
+                    if ft != TY_I32 {
+                        self.ctx.err(sp, "scan(from, set) takes an `i32` start index");
+                        return Err(());
+                    }
+                    let fr = self.last_reg;
+                    let st = self.compile_expr(args[1], Some(TY_BYTES))?;
+                    if !matches!(self.ctx.types.kind(st), TyKind::Array { elem } if *elem == TY_U8) {
+                        self.ctx.err(sp, "scan(from, set) takes a `[u8]` class table — entry `min(cp, len-1)` classes each codepoint, `0` keeps scanning");
+                        return Err(());
+                    }
+                    let sr = self.last_reg;
+                    let dst = self.new_reg(TY_I64);
+                    { let (argv_off, argc) = self.pool_args(&(vec![fr, sr])); self.emit(Op::CallNat { nat: Nat::StrScan, recv: rreg, argv_off, argc, dst: dst }, sp.lo); }
+                    return Ok(TY_I64);
+                }
+                if name == sym::STARTS_WITH && args.len() == 2 {
+                    // s.starts_with(from, head) -> bool (json-perf phase
+                    // 2) — the prefix test at a codepoint offset,
+                    // compared host-side (no per-char str cells)
+                    let ft = self.compile_expr(args[0], Some(TY_I32))?;
+                    if ft != TY_I32 {
+                        self.ctx.err(sp, "starts_with(from, head) takes an `i32` start index");
+                        return Err(());
+                    }
+                    let fr = self.last_reg;
+                    let ht = self.compile_expr(args[1], Some(TY_STR))?;
+                    if ht != TY_STR {
+                        self.ctx.err(sp, "starts_with(from, head) takes a `str` head");
+                        return Err(());
+                    }
+                    let hr = self.last_reg;
+                    let dst = self.new_reg(TY_BOOL);
+                    { let (argv_off, argc) = self.pool_args(&(vec![fr, hr])); self.emit(Op::CallNat { nat: Nat::StrStartsWith, recv: rreg, argv_off, argc, dst: dst }, sp.lo); }
+                    return Ok(TY_BOOL);
+                }
                 // a registered trait impl on the ref target dispatches
                 // statically on the bare receiver (RFC 0012 §2/§5) — the
                 // concrete and slot ABIs coincide for ref targets (P1.1),
@@ -951,7 +1039,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let who = recv_name(&self.ctx, recv);
                 self.ctx.err(sp, format!(
-                    "`str` has no method `{}` — its members are `len`/`slice`/`code`/`encode` (`string_len({who})` is the free-fn spelling)",
+                    "`str` has no method `{}` — its members are `len`/`slice`/`code`/`code_at`/`scan`/`starts_with`/`encode` (`string_len({who})` is the free-fn spelling)",
                     self.ctx.name(name)
                 ));
                 return Err(());
@@ -1046,6 +1134,52 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => {
                         self.ctx.err(sp, format!(
                             "`StackTrace` has no method `{}` with {} argument(s) — its members are `len`/`name(i)`/`line(i)`/`col(i)`/`render`",
+                            self.ctx.name(name),
+                            args.len()
+                        ));
+                        return Err(());
+                    }
+                }
+            }
+            TyKind::StrBuf => {
+                // the StrBuf member contract (json-perf phase 2): the
+                // growable builder's engine-builtins — appends mutate the
+                // builder's own buffer in place (the amortized-O(1)
+                // accumulator), `finish` is the one materialization
+                match (name, args.len()) {
+                    (sym::PUSH, 1) => {
+                        let it = self.compile_expr(args[0], Some(TY_STR))?;
+                        if it != TY_STR {
+                            self.ctx.err(sp, "push(s) takes a `str`");
+                            return Err(());
+                        }
+                        let ar = self.last_reg;
+                        { let (argv_off, argc) = self.pool_args(&(vec![ar])); self.emit(Op::CallNat { nat: Nat::StrBufPush, recv: rreg, argv_off, argc, dst: NOREG }, sp.lo); }
+                        return Ok(TY_NIL);
+                    }
+                    (sym::PUSH_CODE, 1) => {
+                        let it = self.compile_expr(args[0], Some(TY_U32))?;
+                        if it != TY_U32 {
+                            self.ctx.err(sp, "push_code(c) takes a `u32` codepoint");
+                            return Err(());
+                        }
+                        let ar = self.last_reg;
+                        { let (argv_off, argc) = self.pool_args(&(vec![ar])); self.emit(Op::CallNat { nat: Nat::StrBufPushCode, recv: rreg, argv_off, argc, dst: NOREG }, sp.lo); }
+                        return Ok(TY_NIL);
+                    }
+                    (sym::LEN, 0) => {
+                        let dst = self.new_reg(TY_I32);
+                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrBufLen, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        return Ok(TY_I32);
+                    }
+                    (sym::FINISH, 0) => {
+                        let dst = self.new_reg(TY_STR);
+                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrBufFinish, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        return Ok(TY_STR);
+                    }
+                    _ => {
+                        self.ctx.err(sp, format!(
+                            "`StrBuf` has no method `{}` with {} argument(s) — its members are `push(s)`/`push_code(c)`/`len()`/`finish()`",
                             self.ctx.name(name),
                             args.len()
                         ));

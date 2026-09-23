@@ -462,6 +462,12 @@ impl<'a> Ctx<'a> {
                             self.err(sp, "`StackTrace` takes no impl blocks — its members are engine builtins (`len`/`name(i)`/`line(i)`/`col(i)`/`render`)");
                             return;
                         }
+                        // the builder likewise: closed engine contract
+                        // (json-perf phase 2)
+                        (rut_core::binary::NativeTy::StrBuf, _) => {
+                            self.err(sp, "`StrBuf` takes no impl blocks — its members are engine builtins (`push(s)`/`push_code(c)`/`len()`/`finish()`)");
+                            return;
+                        }
                     }
                 } else if segs[0].generics.is_empty() && self.extern_types.contains_key(&name) {
                     // a USED type (RFC 0035 §1): legal as a TRAIT-impl
