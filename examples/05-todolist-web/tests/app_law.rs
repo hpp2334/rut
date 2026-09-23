@@ -12,10 +12,13 @@
 //!      packages, with each package's contributed names pinned —
 //!      `web` contributes ONLY `tim_after` (the one crossing name the
 //!      biz layer may spell, now imported honestly by name), `t1`
-//!      exactly the framework's four names, `todos` the domain types,
-//!      each component its constructor(s). A second crossing package,
-//!      a store internal (`atom`/`derived`), a lowering name — nothing
-//!      rides in: the set equality is the law.
+//!      exactly the framework's four names, `todos` the domain types
+//!      (phase 2: the atom store's `TodoStore` — the store internals
+//!      `atom`/`derived` are NOT importable by biz, and the set
+//!      equality is what enforces that), each component its
+//!      constructor(s). A second crossing package, a store internal,
+//!      a lowering name — nothing rides in: the set equality is the
+//!      law.
 //!   2. the biz files contain NO `Node`, no `ui_` (the crossing
 //!      prefix), no `class=`/quoted `"class"`, and no tag literals or
 //!      DOM method names — the manual-DOM shape is dead and stays
@@ -26,7 +29,10 @@
 //!      per turn, in the entry's paint) and events really enter
 //!      through subjects (`t1_subject`, `.subject(...)`), with keyed
 //!      rows (`.key(...)` in the row builder) — the widgets are the
-//!      whole UI story, not a veneer.
+//!      whole UI story, not a veneer. Phase 2 (survey §5.1's
+//!      addition): `store.refresh()` appears in `paint` BEFORE
+//!      `view` — the within-turn atom flush is part of the render
+//!      law now.
 //!   4. the component packages keep their own layer honest by import
 //!      scoping (survey §3.3): each imports `widget` and NOTHING else
 //!      — the lowering and the core stay framework-private.
@@ -45,7 +51,7 @@ const TODO_ROW: &str = include_str!("../rut/app/todo_row/todo_row.rut");
 /// equality on each package's names.
 const APP_IMPORTS: &[(&str, &[&str])] = &[
     ("web", &["tim_after"]),
-    ("todos", &["Store", "Todo"]),
+    ("todos", &["TodoStore", "Todo"]),
     ("t1", &["T1Root", "t1_mount", "t1_render", "t1_subject"]),
     ("widget", &["Widget"]),
     ("todo_list", &["todo_list"]),
@@ -214,6 +220,17 @@ fn the_widgets_are_the_whole_ui_story() {
     );
     assert!(APP.contains(".subject("), "widgets fire SEMANTIC subjects");
     assert!(APP.contains("fn paint("), "the turn's ONE render has its fn");
+    // phase 2 (survey §5.1): the within-turn atom flush is part of the
+    // render law — `store.refresh()` runs in paint, BEFORE view
+    let paint_at = APP.find("fn paint(").expect("paint's source is in the app");
+    let refresh_at = APP[paint_at..].find("store.refresh();").expect("paint flushes the atom store")
+        + paint_at;
+    let view_at = APP[paint_at..].find("view(r);").expect("paint builds the view") + paint_at;
+    assert!(
+        refresh_at < view_at,
+        "paint must flush the atom store BEFORE building the view — the \
+         within-turn refresh precedes the one render (survey §4.3)"
+    );
     // the view builders: keyed rows, the framework's checkbox, the
     // tables beside the subjects they mirror
     for (file, src, pins) in [

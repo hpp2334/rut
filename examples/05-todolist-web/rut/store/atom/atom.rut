@@ -1,0 +1,207 @@
+// atom.rut — the atom CELL layer (restructure survey §4.2): the
+// generation rail and the two atom classes. This is the tur-adapted,
+// turn-law-shaped store the survey §4 designed — the STORE ideas of
+// tur's edgy (libs/tur-engine/src/core/edgy/reactive/store.rs), NOT
+// its reactivity: atoms are state CELLS; reads are plain field reads
+// with no rail traffic and no live channel (THE TURN-LAW RULING: tur's
+// no-re-render Val<T> live-props stays REJECTED — atoms feed the
+// once-per-turn keyed diff, they never push to the DOM). Writes mark
+// the rail; the flush is the turn boundary (`TodoStore.refresh`,
+// called ONCE per turn in paint BEFORE view — deriveds recompute at
+// most once per turn).
+//
+// WHAT TRANSFERRED FROM TUR (survey §1.2), and where it lives here:
+//
+//   * the generation rail — a write bumps the atom's generation; a
+//     derived's cached value is servable iff the generations it
+//     recorded (`Seen`, in the derived pkg) still match. `gens` is
+//     that per-atom counter, keyed by NAME.
+//   * mark-dirty-on-write, recompute-on-read — `set` stores + marks;
+//     nothing recomputes here. The "read" is the turn's one refresh
+//     before render, a deterministic flush point.
+//   * the dirty set as flush payload — `dirty` is the turn's write
+//     set, DEDUPED on push (N writes to one atom in a turn mark the
+//     name once; the GENERATION still moves per mark). `drain` takes
+//     and clears it — the survey §4.3 flush's first line.
+//   * equality-skip on writes — the str lane only (StrAtom.set). The
+//     RECORDED ASYMMETRY (survey §4.2): Vec/class-valued atoms mark
+//     on EVERY set.
+//   * atoms are cells the store materializes — not globals. There is
+//     no module-scope atom (RFC 0003 §1: a module `let` initializer
+//     is a load-time expression; a constructor call cannot live
+//     there anyway). The atoms are FIELDS of the domain store
+//     (`TodoStore.items$/reqs$/draft$/note$`), built once at boot;
+//     the NAME (a str) is the atom's key in the rail and the dirty
+//     set — the seam the derived-dep tables and the twins read
+//     (survey §4.1). FAMILIES ARE REJECTED (survey §4.6): no keyed
+//     cell factory exists here, and none should.
+//
+// THE TWO CLASSES (a split over the val kind, the recorded mechanism
+// for the equality-skip scope). rut's `==` is TYPE-DIRECTED at compile
+// time (RFC 0044: primitives by value, str by content, everything
+// else CELL IDENTITY), and a generic class's methods have no
+// per-instantiation divergence to specialize one method (the
+// nmapset-round3 phase-0c verdict — the same law that split
+// PrimMapI64/U64/F64 into three classes). So:
+//
+//   * `Atom<T>` — the general cell. `set` stores + marks, NO compare:
+//     a `==` in this generic body would compile at the param type,
+//     i.e. cell identity for `Vec<Todo>` — a same-cell re-set (the
+//     machine's `xs.push(..); items$.set(xs)` shape) would silently
+//     skip the mark and strand the deriveds. The asymmetry law
+//     forbids exactly that; so the general lane never compares.
+//   * `StrAtom` — the str lane (draft/note). `set` skips on CONTENT
+//     equality (`==` compiles StrCmp at this CONCRETE type — tur's
+//     `prev == value` for the closed lane), then stores + marks.
+//
+// Writes may happen ONLY where the survey §4.2 allows: the domain
+// machine (`todos`' booking/answer fns), the event dispatch
+// (`app.rut`'s on_event/dispatch), and this package's own `set`s.
+// `view` NEVER writes an atom.
+//
+// PURE rut like the rest of the store: no `web::` crossings, no
+// clock, no DOM — the store never touches either (the old store.rut
+// header's law, kept through the rewrite).
+
+use pouch::{ Vec };
+use nmapset::{ HashMap };
+
+// ---- the generation rail (tur's Slot.epoch, minus the multi-store) --
+
+/// The per-store rail: one generations map keyed by atom NAME and the
+/// turn's dirty set. One store, one KV, one gens map — tur's
+/// SharedReactive/StoreKv split exists to hold several stores per
+/// realm (survey §1.3); rut has exactly ONE store per app, so the
+/// machinery collapses into these two fields.
+pub class Rail {
+    gens: HashMap<str, i64>; // atom name -> current generation
+    dirty: Vec<str>;         // the turn's dirty set (deduped on push)
+}
+
+impl Rail {
+    pub fn new() -> Self {
+        return Self { gens: HashMap.new(), dirty: Vec.new() };
+    }
+
+    /// The write's one side effect: bump the atom's generation and
+    /// dedup-push the name onto the turn's dirty set. Package-private
+    /// in spirit — only the atom `set`s below call this.
+    fn mark(mut self, name: str) -> nil {
+        let g = self.gen_of(name);
+        self.gens.put(name, g + 1);
+        let mut seen = false;
+        for (let d of self.dirty) {
+            if (d == name) {
+                seen = true;
+            }
+        }
+        if (seen == false) {
+            self.dirty.push(name);
+        }
+    }
+
+    /// The atom's current generation — 0 for an atom never written.
+    /// The deriveds' staleness test reads exactly this (survey §4.3:
+    /// `stale(d)` iff any dep's current gen ≠ the gen recorded in
+    /// `d.seen` — tur's `Slot.epoch` check).
+    pub fn gen_of(self, name: str) -> i64 {
+        let hit = self.gens.get(name);
+        if (hit == nil) {
+            return 0;
+        }
+        return hit;
+    }
+
+    /// THE TURN BOUNDARY: take and clear the turn's dirty set. The
+    /// flush (`TodoStore.refresh`) drains once per turn; after it the
+    /// set is empty — a no-op turn marks nothing and drains nothing
+    /// (the no-cross-turn-leakage law, pinned by the store twins).
+    pub fn drain(mut self) -> Vec<str> {
+        let out = self.dirty;
+        self.dirty = Vec.new();
+        return out;
+    }
+}
+
+// ---- the general atom (the survey §4.2 sketch, verbatim shape) ------
+
+/// The general value cell: the field IS the cell; the name is the
+/// rail key. `v` is nil only pre-boot — `make` initializes at build.
+/// Reads (`get`) are plain field reads: no tracking, no rail traffic,
+/// no live channel. Writes (`set`) do exactly two things: store the
+/// value, mark the rail. NO equality skip on this lane (the header's
+/// recorded asymmetry: class-valued atoms mark on every set).
+pub class Atom<T> {
+    v: ?T = nil;
+    name: str = "";
+    rail: ?Rail = nil;
+}
+
+impl Atom<T> {
+    /// Build the cell: the initial value is born fresh — the rail is
+    /// NOT marked (nothing is dirty before the first write).
+    pub fn make(rail: ?Rail, name: str, init: T) -> Self {
+        return Self { v: init, name: name, rail: rail };
+    }
+
+    /// The atom's name — the rail/dirty-set key (and where a future
+    /// family would attach, survey §4.6; rejected, the door recorded).
+    pub fn name(self) -> str {
+        return self.name;
+    }
+
+    /// Plain read — no rail traffic. A `get` moves no generation and
+    /// dirties nothing (pinned by the store twins).
+    pub fn get(self) -> T {
+        return self.v;
+    }
+
+    /// The write: store + mark. Two things, in that order — nothing
+    /// recomputes here (recompute-on-read is the flush's job).
+    pub fn set(mut self, x: T) -> nil {
+        self.v = x;
+        let mut r: ?Rail = self.rail;
+        r.mark(self.name);
+    }
+}
+
+// ---- the str lane (the equality-skip scope, made concrete) ----------
+
+/// The str-valued atom: the same cell shape as `Atom<str>`, with tur's
+/// equality-skip built into `set` — a write of the CURRENT content
+/// marks NOTHING (no gen move, no dirty entry). `==` compiles StrCmp
+/// at this concrete type (RFC 0044's content equality); the general
+/// `Atom<T>` cannot host that compare (the header's split record).
+pub class StrAtom {
+    v: str = "";
+    name: str = "";
+    rail: ?Rail = nil;
+}
+
+impl StrAtom {
+    /// Build the cell; the initial value is born fresh (no mark).
+    pub fn make(rail: ?Rail, name: str, init: str) -> Self {
+        return Self { v: init, name: name, rail: rail };
+    }
+
+    pub fn name(self) -> str {
+        return self.name;
+    }
+
+    /// Plain read — no rail traffic.
+    pub fn get(self) -> str {
+        return self.v;
+    }
+
+    /// The write with the skip: equal content is a no-op — the dirty
+    /// set stays empty and the generation stays put (tur's
+    /// `prev == value` → no-op; survey §4.2, pinned by the twins).
+    pub fn set(mut self, x: str) -> nil {
+        if (self.v == x) {
+            return;
+        }
+        self.v = x;
+        let mut r: ?Rail = self.rail;
+        r.mark(self.name);
+    }
+}

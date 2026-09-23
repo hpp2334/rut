@@ -52,6 +52,8 @@ const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/nmapset.rut");
 const WIDGET_RUT: &str = include_str!("../rut/t1/widget/widget.rut");
 const LOWERING_RUT: &str = include_str!("../rut/t1/lowering/lowering.rut");
 const T1_RUT: &str = include_str!("../rut/t1/core/t1.rut");
+const ATOM_RUT: &str = include_str!("../rut/store/atom/atom.rut");
+const DERIVED_RUT: &str = include_str!("../rut/store/derived/derived.rut");
 const TODOS_RUT: &str = include_str!("../rut/store/todos/todos.rut");
 
 const COL_RUT: &str = include_str!("../rut/components/col/col.rut");
@@ -238,8 +240,23 @@ pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String
         )
         .map_err(|e| e.to_string())?;
 
-    // the store package (inline this phase — the OLD class; phase 2
-    // rewrites it into the atom system behind the same manifest slot)
+    // the store packages (survey §4 — the atom store, phase 2): the
+    // cell layer (atom: Rail + Atom<T> + StrAtom), the derived layer
+    // (derived: the declared DAG + Seen), the domain (todos: the
+    // atoms as fields, counts$ the derived, refresh() the flush) —
+    // all inline, exactly what their manifests state
+    session
+        .register_module(
+            "atom",
+            Module { source: Some(ATOM_RUT.to_string()), inline: true, ..Default::default() },
+        )
+        .map_err(|e| e.to_string())?;
+    session
+        .register_module(
+            "derived",
+            Module { source: Some(DERIVED_RUT.to_string()), inline: true, ..Default::default() },
+        )
+        .map_err(|e| e.to_string())?;
     session
         .register_module(
             "todos",

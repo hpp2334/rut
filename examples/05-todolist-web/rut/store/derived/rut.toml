@@ -1,0 +1,18 @@
+# store/derived/ — the DERIVED layer (restructure survey §4.3/§4.4):
+# the Derived trait (the declared DAG) + Seen (the generation
+# bookkeeping). PURE rut — imports the atom pkg and the collections,
+# nothing else of t1, no web, no clock (the store is standalone,
+# survey §3.3).
+#
+# `inline = true`: the trait is GENERIC over the store type
+# (`Derived<S>`), and a generic export splices by law — explicit
+# per-package composition with the graph's origin dedup, the same
+# shape as the atom pkg.
+name = "derived"
+entry.lib = "./derived.rut"
+inline = true
+
+[deps]
+atom = { path = "../atom" }
+pouch = { path = "../../../../../rut/pouch" }
+nmapset = { path = "../../../../../rut/nmapset" }

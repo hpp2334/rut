@@ -1,39 +1,71 @@
-// todos.rut — the "server" half of the todolist: the in-memory list and
-// the request table (the survey §5.2 design, the hand-written async
-// machine spelled for real — the M3 migration road is recorded in the
-// survey §5.6, not faked as language async). THIS FILE IS THE OLD
-// `store.rut` MOVED VERBATIM into the restructure's `todos` package
-// slot (survey §6: the atom rewrite is phase 2 — one risky thing per
-// phase); only this header's names changed.
+// todos.rut — the "server" half of the todolist, now AN ATOM STORE
+// (restructure survey §4): the domain migrates onto the store of
+// rut/store/atom + rut/store/derived — items/reqs/draft/note are
+// ATOMS (the store's FIELDS typed Atom<T>/StrAtom, built once at
+// boot — the field IS the cell, the name is the rail key, §4.1), and
+// the counts line is a DERIVED atom (counts$: "N open | M done |
+// K in flight", deps declared as [items, reqs], §4.3/§4.5) — the
+// counts-line law is now proven THROUGH derivation, by the twins and
+// by the 18 sessions' byte-identical status lines.
+//
+// THE TURN LAW (binding, the survey §0 ruling): atoms are state
+// cells; events WRITE atoms; derived atoms recompute via the
+// declared-DAG + generation-rail machinery WITHIN a turn; render
+// stays ONCE PER TURN through the keyed diff. Subscriptions mark
+// dirty — they never push to the DOM. The flush is
+// `TodoStore.refresh`, called ONCE per turn in paint BEFORE view
+// (survey §4.3); nothing recomputes eagerly here.
+//
+// WHAT IS NOT AN ATOM (kept plain, deliberately): `next_todo`/
+// `next_req` are the id machines' counters (never read by a view);
+// `last` is the answer channel's own log (the entry surface's
+// `store_last` reads it verbatim). The four UI-facing cells are the
+// atoms; the machine's plumbing is not.
+//
+// THE MACHINE'S WRITE DISCIPLINE (recorded, the by-reference law):
+// rut class values are CELL HANDLES (RFC 0044) — an in-place Vec
+// mutation through `get()` (push, index-assign) writes the stored
+// list WITHOUT touching the rail. So every machine mutation ends in
+// an EXPLICIT `set` of the mutated cell: the set is the law's write
+// point — it stores (the same cell; the mutation already landed) and
+// MARKS. `Atom<T>.set` on this lane never equality-skips (the
+// atom.rut header's recorded asymmetry), so the mark always fires.
+//
+// THE OLD SEMANTICS, UNMOVED: a request NEVER touches the list;
+// `request_add` books a `Req` row — the explicit continuation table
+// (RFC 0003 §1: state lives in this container, which the host passes
+// back every turn) — and the UI books one `tim_after` per row. The
+// list changes when the timer answers, as its own turn. `answer(tag)`
+// is the server's one commit point: an unknown tag is a LOUD trap; a
+// rejected title and a lost id are ANSWERS, data the turn reads (the
+// `(line, err)` entry-err shape, err-channel phase 3). `last` keeps
+// the user-facing line whichever channel carried it.
+//
+// Per-kind latency: three clocks, so the twin can prove commits land
+// in deadline order across kinds at the app level (removes are fast,
+// adds are slow).
 //
 // PURE rut: no `web::` crossings in this module. It compiles against
-// core+pouch alone and its host-test surface below is driven DOM-FREE by
-// `tests/store.rs` — the store's laws are checked without a page. The
-// app (`rut/app/app`) links this module and books the timers; the store
-// never touches the clock itself.
+// the atom store (atom + derived) and pouch alone — the store is
+// STANDALONE (survey §3.3: no widget, no web, no t1; the store never
+// touches the clock or the DOM). Its host-test surface below is
+// driven DOM-FREE by `tests/store.rs`. The app (`rut/app/app`) links
+// this module and books the timers; the store never touches the
+// clock itself.
 //
-// The honest semantics:
-//
-//   * a request NEVER touches the list. `request_add` books a `Req` row
-//     — the explicit continuation table (RFC 0003 §1: state lives in
-//     this container, which the host passes back every turn) — and the
-//     UI books one `tim_after` per row. The list changes when the timer
-//     answers, as its own turn.
-//   * `answer(tag)` is the server's one commit point. An unknown tag is
-//     a LOUD trap (the answer names no booked row — wiring drift); a
-//     rejected title and a lost id are ANSWERS, data the turn reads
-//     (RFC 0018 §4's cancellation-as-data law, at app scale). The
-//     answer crosses as the v1.1 `(line, err)` pair (err-channel phase
-//     3): a commit is `(line, "")`, a rejection or a lost id is
-//     `("", why)` — the entry-err shape the app surfaces through its
-//     own `on_event` err channel. `last` keeps the user-facing line
-//     whichever channel carried it.
-//
-// Per-kind latency: three clocks, so the twin can prove commits land in
-// deadline order across kinds at the app level (removes are fast, adds
-// are slow).
+// THIS FILE'S FENCES (two surfaces the app never sees):
+//   * the ATOM PROBE surface (`atom_*` entries) — the twins' DOM-free
+//     atom laws: the rail, the flush, the declared DAG, the derived
+//     freshness. Observability only; the app writes through its
+//     actions and reads in view.
+//   * the DERIVED-ON-DERIVED fixture (`ProbeUp`/`ProbeDown`/
+//     `ProbeStore` + the `probe_*` entries) — the topo-order twin's
+//     fixture, survey §5.3 ("added as a store-test fixture, not app
+//     surface" — the app's declared DAG is single-tier: counts$).
 
 use pouch::{ Vec };
+use atom::{ Atom, Rail, StrAtom };
+use derived::{ Derived, Seen };
 
 // the request kinds (the Req rows' `kind`)
 let KIND_ADD: i64 = 1;
@@ -63,17 +95,121 @@ pub struct Req {
     latency: i64;
 }
 
-pub class Store {
-    items: Vec<Todo>;
-    reqs: Vec<Req>;
+// ---- the derived atom: the counts line (survey §4.5) ----------------
+
+/// `counts$` — the status line's counts half, DERIVED: `"N open |
+/// M done | K in flight"`, deps DECLARED as [items, reqs]. The app's
+/// status line is `f"{counts$} — {note$.get()}"` — the SAME f-string
+/// bytes the 18 sessions assert verbatim (survey §4.5: the counts
+/// line law, now proven THROUGH the derivation). Held in declaration
+/// order on `TodoStore.ds`; the typed handle the app reads is
+/// `TodoStore.counts$`.
+pub class Counts {
+    v: str = ""; // the cache: the derived's value
+    seen: Seen; // the dep generations this cache computed at
+    deps_v: Vec<str>; // THE DECLARED DAG (the store layer's tracking)
+}
+
+impl Counts {
+    pub fn new() -> Self {
+        return Self { v: "", seen: Seen.new(), deps_v: Vec.from(["items", "reqs"]) };
+    }
+
+    /// The cached counts line — plain read, no rail traffic.
+    pub fn value(self) -> str {
+        return self.v;
+    }
+}
+
+impl Derived<TodoStore> for Counts {
+    fn dname(self) -> str {
+        return "counts";
+    }
+
+    fn deps(self) -> Vec<str> {
+        return self.deps_v;
+    }
+
+    fn stale(self, st: ?TodoStore) -> bool {
+        let mut s: ?TodoStore = st;
+        return self.seen.stale(self.deps_v, s.rail);
+    }
+
+    fn refresh(mut self, st: ?TodoStore) -> nil {
+        let mut s: ?TodoStore = st;
+        let items = s.items$.get();
+        let reqs = s.reqs$.get();
+        // the SAME formulas as the entry-level counters below — the
+        // bytes the status line has always shown
+        let mut open = 0;
+        for (let t of items) {
+            if (t.done == false) {
+                open += 1;
+            }
+        }
+        let done = items.len() - open;
+        self.v = f"{open} open | {done} done | {reqs.len()} in flight";
+        self.seen.note(self.deps_v, s.rail);
+    }
+}
+
+// ---- THE ATOM STORE (the container, survey §4.1/§4.5) ---------------
+
+/// The store: atoms as FIELDS, the deriveds in declaration order, one
+/// generation rail. Built ONCE at boot (`store_new` / the app's
+/// `main`); the host re-passes it every turn — no module state
+/// anywhere (RFC 0003 §1).
+pub class TodoStore {
+    rail: ?Rail; // THE generation rail (one store, one rail, one KV)
+    items$: Atom<Vec<Todo>>; // the committed list — "items"
+    reqs$: Atom<Vec<Req>>; // the booked requests — "reqs"
+    draft$: StrAtom; // the field's event-carried value — "draft"
+    note$: StrAtom; // the status line's tail — "note"
+    counts$: Counts; // the derived's typed handle (the app reads this)
+    ds: Vec<Derived<TodoStore>>; // the declared DAG, declaration order
+    recomputes: i32; // the flush's recompute counter (the twins' oracle)
     next_todo: i64;
     next_req: i64;
     last: str; // the last answer line, verbatim for the status element
 }
 
-impl Store {
+impl TodoStore {
     pub fn new() -> Self {
-        return Self { items: Vec.new(), reqs: Vec.new(), next_todo: 1, next_req: 1, last: "" };
+        let rail: ?Rail = Rail.new();
+        let counts: Counts = Counts.new();
+        let mut s = Self {
+            rail: rail,
+            items$: Atom.make(rail, "items", Vec.new()),
+            reqs$: Atom.make(rail, "reqs", Vec.new()),
+            draft$: StrAtom.make(rail, "draft", ""),
+            note$: StrAtom.make(rail, "note", ""),
+            counts$: counts,
+            ds: Vec.new(),
+            recomputes: 0,
+            next_todo: 1,
+            next_req: 1,
+            last: "",
+        };
+        // THE DECLARED DAG, in declaration order (topological —
+        // nothing derived reads a derived in v1, survey §4.3): the
+        // push shares the SAME instance the typed handle holds.
+        s.ds.push(s.counts$);
+        return s;
+    }
+
+    // ---- THE FLUSH (survey §4.3) — ONE call per turn, in paint,
+    // BEFORE view. Deriveds recompute AT MOST ONCE per turn. ----
+
+    pub fn refresh(mut self) -> nil {
+        self.rail.drain(); // the turn's writes, taken once
+        for (let d of self.ds) {
+            if (d.stale(self)) {
+                self.recomputes += 1; // the twins' recompute oracle
+                d.refresh(self); // recompute: read deps fresh, cache, note gens
+            }
+        }
+        // the rail drained to empty above; seen-gens now match gens —
+        // nothing survives the turn boundary except clean caches
     }
 
     // ---- book: the request table grows, the list does not ----
@@ -89,7 +225,9 @@ impl Store {
             title: title,
             latency: LATENCY_ADD,
         };
-        self.reqs.push(req);
+        let rs = self.reqs$.get();
+        rs.push(req);
+        self.reqs$.set(rs); // the write point: store + mark
         return req;
     }
 
@@ -127,29 +265,32 @@ impl Store {
             title: title,
             latency: latency,
         };
-        self.reqs.push(req);
+        let rs = self.reqs$.get();
+        rs.push(req);
+        self.reqs$.set(rs); // the write point: store + mark
         return req;
     }
 
     // ---- answer: the timer fired; find the row, apply or reject ----
 
     /// The server's one commit point. An unknown tag is a loud trap; a
-    /// rejected title or a lost id is an ANSWER (data, not a trap) — the
-    /// `("", why)` leg of the `(line, err)` pair.
+    /// rejected title or a lost id is an ANSWER (data, not a trap) —
+    /// the `("", why)` leg of the `(line, err)` pair.
     pub fn answer(mut self, tag: str) -> (str, str) {
         let at = self.find_req(tag);
         if (at < 0) {
             panic(f"server: no request '{tag}' — the answer names no booked row");
         }
-        let req = self.reqs[at];
+        let rs = self.reqs$.get();
+        let req = rs[at];
         let kept: Vec<Req> = Vec.new();
-        for (let r of self.reqs) {
+        for (let r of rs) {
             when (r.tag == tag) {
                 true -> {},            // consume the answered row
                 else -> { kept.push(r); },
             }
         }
-        self.reqs = kept;
+        self.reqs$.set(kept); // the write point: store + mark
         if (req.kind == KIND_ADD) {
             return self.commit_add(req);
         }
@@ -173,7 +314,9 @@ impl Store {
         }
         let id = self.next_todo;
         self.next_todo += 1;
-        self.items.push(Todo { id: id, title: title });
+        let its = self.items$.get();
+        its.push(Todo { id: id, title: title });
+        self.items$.set(its); // the write point: store + mark
         let line = f"added '{title}' as #{id}";
         self.last = line;
         return (line, "");
@@ -188,9 +331,11 @@ impl Store {
             self.last = line;
             return ("", line);
         }
-        self.items[at].done = self.items[at].done == false;
+        let mut its = self.items$.get();
+        its[at].done = its[at].done == false;
+        self.items$.set(its); // the write point: store + mark
         let mut to = "open";
-        if (self.items[at].done) {
+        if (its[at].done) {
             to = "done";
         }
         let line = f"toggled #{req.todo} to {to}";
@@ -205,30 +350,31 @@ impl Store {
             self.last = line;
             return ("", line);
         }
-        let title = self.items[at].title;
+        let its = self.items$.get();
+        let title = its[at].title;
         let kept: Vec<Todo> = Vec.new();
-        for (let t of self.items) {
+        for (let t of its) {
             when (t.id == req.todo) {
                 true -> {}, // drop the row
                 else -> { kept.push(t); },
             }
         }
-        self.items = kept;
+        self.items$.set(kept); // the write point: store + mark
         let line = f"removed '{title}' (#{req.todo})";
         self.last = line;
         return (line, "");
     }
 
-    // ---- reads ----
+    // ---- reads (plain atom reads — no rail traffic) ----
 
     /// The committed list, in order (shared — no copy).
     pub fn todos(self) -> Vec<Todo> {
-        return self.items;
+        return self.items$.get();
     }
 
     pub fn open_count(self) -> i32 {
         let mut n = 0;
-        for (let t of self.items) {
+        for (let t of self.items$.get()) {
             if (t.done == false) {
                 n += 1;
             }
@@ -237,26 +383,28 @@ impl Store {
     }
 
     pub fn done_count(self) -> i32 {
-        return self.items.len() - self.open_count();
+        let items = self.items$.get();
+        return items.len() - self.open_count();
     }
 
     /// Outstanding requests — the in-flight count the status shows.
     pub fn pending_count(self) -> i32 {
-        return self.reqs.len();
+        let reqs = self.reqs$.get();
+        return reqs.len();
     }
 
     /// The booked rows, book order, with latencies — the store tests'
-        /// deadline-order oracle (and `tests/todolist_app.rs` asserts the
+    /// deadline-order oracle (and `tests/todolist_app.rs` asserts the
     /// clock against the twin's timer queue).
     pub fn fly(self) -> Vec<Req> {
-        return self.reqs;
+        return self.reqs$.get();
     }
 
     /// The pending ADD titles, book order — the app's visible round
     /// trip (a dimmed row per outstanding add).
     pub fn pending_add_titles(self) -> Vec<str> {
         let mut titles: Vec<str> = Vec.new();
-        for (let r of self.reqs) {
+        for (let r of self.reqs$.get()) {
             if (r.kind == KIND_ADD) {
                 titles.push(r.title);
             }
@@ -267,7 +415,7 @@ impl Store {
     /// Any toggle/remove in flight for this todo — the row paints its
     /// "..." while the answer travels.
     pub fn has_pending_for(self, todo: i64) -> bool {
-        for (let r of self.reqs) {
+        for (let r of self.reqs$.get()) {
             if (r.todo == todo) {
                 if (r.kind == KIND_TOGGLE) {
                     return true;
@@ -287,8 +435,9 @@ impl Store {
     // ---- scans (private) ----
 
     fn find(self, todo: i64) -> i32 {
-        for (let i = 0; i < self.items.len(); i += 1) {
-            if (self.items[i].id == todo) {
+        let items = self.items$.get();
+        for (let i = 0; i < items.len(); i += 1) {
+            if (items[i].id == todo) {
                 return i;
             }
         }
@@ -296,8 +445,9 @@ impl Store {
     }
 
     fn find_req(self, tag: str) -> i32 {
-        for (let i = 0; i < self.reqs.len(); i += 1) {
-            if (self.reqs[i].tag == tag) {
+        let rs = self.reqs$.get();
+        for (let i = 0; i < rs.len(); i += 1) {
+            if (rs[i].tag == tag) {
                 return i;
             }
         }
@@ -305,8 +455,9 @@ impl Store {
     }
 
     fn find_by_title(self, title: str) -> i32 {
-        for (let i = 0; i < self.items.len(); i += 1) {
-            if (self.items[i].title == title) {
+        let items = self.items$.get();
+        for (let i = 0; i < items.len(); i += 1) {
+            if (items[i].title == title) {
                 return i;
             }
         }
@@ -314,17 +465,142 @@ impl Store {
     }
 }
 
+// ---- the derived-on-derived fixture (the topo-order twin's world;
+// NOT app surface — survey §5.3: "added as a store-test fixture").
+// ProbeUp reads the items$ atom; ProbeDown reads PROBEUP (the v1 DAG
+// has no derived-on-derived — the fixture proves the ONE-pass
+// declaration-order refresh recomputes upstream before downstream
+// and feeds downstream the FRESH upstream). ----
+
+pub class ProbeUp {
+    v: i32 = 0; // the cache: the items$ length
+    gen: i64 = 0; // the upstream's own generation (the downstream's dep)
+    seen: Seen; // the rail generations computed at
+    deps_v: Vec<str>; // declared: [items]
+}
+
+impl ProbeUp {
+    pub fn new() -> Self {
+        return Self { v: 0, gen: 0, seen: Seen.new(), deps_v: Vec.from(["items"]) };
+    }
+}
+
+impl Derived<ProbeStore> for ProbeUp {
+    fn dname(self) -> str {
+        return "up";
+    }
+
+    fn deps(self) -> Vec<str> {
+        return self.deps_v;
+    }
+
+    fn stale(self, st: ?ProbeStore) -> bool {
+        let mut s: ?ProbeStore = st;
+        return self.seen.stale(self.deps_v, s.rail);
+    }
+
+    fn refresh(mut self, st: ?ProbeStore) -> nil {
+        let mut s: ?ProbeStore = st;
+        let xs = s.items$.get();
+        self.v = xs.len();
+        self.seen.note(self.deps_v, s.rail);
+        self.gen += 1; // the downstream's staleness key moves
+        s.order.push("up");
+    }
+}
+
+pub class ProbeDown {
+    v: i32 = 0; // the cache: the upstream's value, doubled
+    up: ?ProbeUp = nil; // the upstream's typed handle
+    seen_up: i64 = 0; // the upstream gen this cache computed at
+    deps_v: Vec<str>; // declared: [up]
+}
+
+impl ProbeDown {
+    pub fn new(up: ?ProbeUp) -> Self {
+        return Self { v: 0, up: up, seen_up: 0, deps_v: Vec.from(["up"]) };
+    }
+}
+
+impl Derived<ProbeStore> for ProbeDown {
+    fn dname(self) -> str {
+        return "down";
+    }
+
+    fn deps(self) -> Vec<str> {
+        return self.deps_v;
+    }
+
+    fn stale(self, st: ?ProbeStore) -> bool {
+        let u = self.up;
+        return self.seen_up != u.gen; // a DERIVED dep keys on the upstream's gen
+    }
+
+    fn refresh(mut self, st: ?ProbeStore) -> nil {
+        let mut s: ?ProbeStore = st;
+        let u = self.up;
+        self.v = u.v * 2; // reads the upstream's FRESH cache — same pass
+        self.seen_up = u.gen;
+        s.order.push("down");
+    }
+}
+
+/// The fixture store: the same shape as TodoStore, one tier deeper.
+pub class ProbeStore {
+    rail: ?Rail;
+    items$: Atom<Vec<Todo>>;
+    up$: ProbeUp; // the typed handles the probe entries read
+    down$: ProbeDown;
+    ds: Vec<Derived<ProbeStore>>; // declaration order: up, then down
+    order: Vec<str>; // the recompute log, handed back per refresh
+    recomputes: i32;
+}
+
+impl ProbeStore {
+    pub fn new() -> Self {
+        let rail: ?Rail = Rail.new();
+        let upv: ProbeUp = ProbeUp.new();
+        let downv: ProbeDown = ProbeDown.new(upv);
+        let mut s = Self {
+            rail: rail,
+            items$: Atom.make(rail, "items", Vec.new()),
+            up$: upv,
+            down$: downv,
+            ds: Vec.new(),
+            order: Vec.new(),
+            recomputes: 0,
+        };
+        s.ds.push(s.up$);
+        s.ds.push(s.down$);
+        return s;
+    }
+
+    /// THE SAME flush shape as TodoStore.refresh — declaration order,
+    /// one pass, at most one recompute per derived.
+    pub fn refresh(mut self) -> nil {
+        self.rail.drain();
+        for (let d of self.ds) {
+            if (d.stale(self)) {
+                self.recomputes += 1;
+                d.refresh(self);
+            }
+        }
+    }
+}
+
 // ---- the host-test surface (the 00-todolist shape): the container is
 // an opaque the host holds and passes back; entries are concrete over
-// the crossing set. Driven DOM-FREE by tests/store.rs. ----
+// the crossing set. Driven DOM-FREE by tests/store.rs. SIGNATURES
+// UNCHANGED from the pre-atom store (survey §5.3: the entry surface
+// is frozen; the store behind it became the atom system). ----
 
 entry fn store_new() -> opaque {
-    let s: ?Store = Store.new();
+    let s: ?TodoStore = TodoStore.new();
     return opaque(s);
 }
 
-fn at(c: opaque) -> ?Store {
-    let s = opaque.downcast<?Store>(c);
+fn at(c: opaque) -> ?TodoStore {
+    let s = opaque.downcast<?TodoStore>(c);
     return s;
 }
 
@@ -399,4 +675,158 @@ entry fn store_counts(c: opaque) -> str {
 /// The last answer line, verbatim.
 entry fn store_last(c: opaque) -> str {
     return at(c).last_answer();
+}
+
+// ---- the ATOM PROBE surface (the twins' DOM-free atom laws;
+// observability only — the app writes through its actions and reads
+// in view; NOTHING here is app surface) ----
+
+/// THE FLUSH: `TodoStore.refresh` — one call, the turn boundary.
+entry fn atom_refresh(c: opaque) -> nil {
+    let mut s = at(c);
+    s.refresh();
+}
+
+/// The flush's recompute counter — the twins' freshness oracle.
+entry fn atom_recomputes(c: opaque) -> i32 {
+    let s = at(c);
+    return s.recomputes;
+}
+
+/// An atom's current rail generation — 0 when never written.
+entry fn atom_gen(c: opaque, name: str) -> i64 {
+    let s = at(c);
+    return s.rail.gen_of(name);
+}
+
+/// THE DIRTY SET, taken: drain + join ("a|b", "" when clean). Each
+/// call TAKES the set (the turn boundary's own move).
+entry fn atom_drain(c: opaque) -> str {
+    let mut s = at(c);
+    let mut out = "";
+    for (let d of s.rail.drain()) {
+        if (out != "") {
+            out = f"{out}|{d}";
+        } else {
+            out = d;
+        }
+    }
+    return out;
+}
+
+/// Write a str atom by name (the two str cells: draft, note).
+entry fn atom_str_set(c: opaque, name: str, v: str) -> nil {
+    let mut s = at(c);
+    if (name == "draft") {
+        s.draft$.set(v);
+        return;
+    }
+    if (name == "note") {
+        s.note$.set(v);
+        return;
+    }
+    panic(f"probe: no str atom '{name}' — the str lane is draft/note");
+}
+
+/// Read a str atom by name.
+entry fn atom_str_get(c: opaque, name: str) -> str {
+    let s = at(c);
+    if (name == "draft") {
+        return s.draft$.get();
+    }
+    if (name == "note") {
+        return s.note$.get();
+    }
+    panic(f"probe: no str atom '{name}' — the str lane is draft/note");
+}
+
+/// Write the Vec<Todo> atom: items$ := the one-todo list `[Todo{1,
+/// title}]` (a FRESH cell every call — the Vec lane never
+/// equality-skips; two calls with the same title mark twice).
+entry fn atom_items_set(c: opaque, title: str) -> nil {
+    let mut s = at(c);
+    let fresh: Vec<Todo> = Vec.new();
+    fresh.push(Todo { id: 1, title: title });
+    s.items$.set(fresh);
+}
+
+/// The derived's cached value — `counts$.value()`, the status line's
+/// counts half, byte-for-byte.
+entry fn atom_counts(c: opaque) -> str {
+    let s = at(c);
+    return s.counts$.value();
+}
+
+/// The declared DAG's node name — `ds[0].dname()`.
+entry fn atom_derived_name(c: opaque) -> str {
+    let s = at(c);
+    let d = s.ds[0];
+    return d.dname();
+}
+
+/// The declared DAG's edges, joined — `ds[0].deps()`.
+entry fn atom_derived_deps(c: opaque) -> str {
+    let s = at(c);
+    let d = s.ds[0];
+    let mut out = "";
+    for (let x of d.deps()) {
+        if (out != "") {
+            out = f"{out}|{x}";
+        } else {
+            out = x;
+        }
+    }
+    return out;
+}
+
+// ---- the fixture's probe entries (the topo twin; see the fence
+// above) ----
+
+entry fn probes_new() -> opaque {
+    let s: ?ProbeStore = ProbeStore.new();
+    return opaque(s);
+}
+
+fn pat(c: opaque) -> ?ProbeStore {
+    let s = opaque.downcast<?ProbeStore>(c);
+    return s;
+}
+
+/// Write the fixture's items$ (a fresh one-todo cell, marked) — the
+/// machine's write shape, fixture-sized.
+entry fn probe_bump(c: opaque, title: str) -> nil {
+    let mut s = pat(c);
+    let xs = s.items$.get();
+    xs.push(Todo { id: xs.len() as i64 + 1, title: title });
+    s.items$.set(xs);
+}
+
+/// THE FLUSH, fixture-sized: one pass, and THIS pass's recompute log
+/// handed back joined ("up|down") and cleared.
+entry fn probe_refresh(c: opaque) -> str {
+    let mut s = pat(c);
+    s.refresh();
+    let mut out = "";
+    for (let d of s.order) {
+        if (out != "") {
+            out = f"{out}|{d}";
+        } else {
+            out = d;
+        }
+    }
+    s.order = Vec.new();
+    return out;
+}
+
+/// The DOWNSTREAM cache's value — freshness made numeric (the
+/// upstream's value, doubled, read in the same pass).
+entry fn probe_lower(c: opaque) -> i32 {
+    let s = pat(c);
+    return s.down$.v;
+}
+
+/// The fixture's flush recompute counter.
+entry fn probe_recomputes(c: opaque) -> i32 {
+    let s = pat(c);
+    return s.recomputes;
 }

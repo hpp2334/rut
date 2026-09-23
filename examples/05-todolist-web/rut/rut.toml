@@ -22,9 +22,16 @@
 #                 keyed diff) — inline: the harness reads its private
 #                 tables same-unit, and that is splice composition, not
 #                 the retired appkit hack (per-package, deduped)
-#   store/todos   the "server": the list, the request table, the answer
-#                 machine — inline this phase (phase 1 keeps the OLD
-#                 store class verbatim; the atom rewrite is phase 2)
+#   store/atom     the atom CELL layer (survey §4.2): the generation
+#                  rail + Atom<T> + the StrAtom lane — inline (generic
+#                  exports splice by law)
+#   store/derived  the DERIVED layer (survey §4.3/§4.4): the Derived
+#                  trait (the declared DAG) + Seen — inline (generic
+#                  over the store type)
+#   store/todos    the "server": the list, the request table, the
+#                 answer machine — THE ATOM STORE (items/reqs/draft/
+#                 note as atoms, counts$ the derived, refresh() the
+#                 flush) — inline (Todo/TodoStore identity same-unit)
 #   components/*  the widget vocabulary, one package per kind (the
 #                 one-dir-one-module law: a directory holding N sibling
 #                 .rut files is not mountable as N modules, so
@@ -43,6 +50,8 @@ web = { path = "web" }
 widget = { path = "t1/widget" }
 lowering = { path = "t1/lowering" }
 t1 = { path = "t1/core" }
+atom = { path = "store/atom" }
+derived = { path = "store/derived" }
 todos = { path = "store/todos" }
 col = { path = "components/col" }
 row = { path = "components/row" }

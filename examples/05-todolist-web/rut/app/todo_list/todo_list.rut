@@ -15,7 +15,7 @@
 // own package (the module law; and the view packages carry unambiguous
 // names — the component `row` took the short one, survey §3.3).
 
-use todos::{ Store };
+use todos::{ TodoStore };
 use widget::{ Widget };
 use nmapset::{ PrimMapI64 };
 use card::{ card };
@@ -24,8 +24,8 @@ use todo_row::{ todo_row };
 
 /// The list tree plus this render's two subject tables (toggle, then
 /// remove) — the caller drops them onto the container.
-pub fn todo_list(store: ?Store) -> (Widget, PrimMapI64<str>, PrimMapI64<str>) {
-    let mut st: ?Store = store;
+pub fn todo_list(store: ?TodoStore) -> (Widget, PrimMapI64<str>, PrimMapI64<str>) {
+    let mut st: ?TodoStore = store;
     let mut tg: PrimMapI64<str> = PrimMapI64.new();
     let mut rm: PrimMapI64<str> = PrimMapI64.new();
 
