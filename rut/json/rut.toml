@@ -1,0 +1,32 @@
+# json — the 9th std pkg (the rut-json batch, phase 1). The base owns
+# every public name (traits, reader/writer classes, entries, errors);
+# the optional peers carry the impl-only integration groups — the
+# container rows of the survey's §2.6 matrix. Presence-based mounting:
+# a consumer whose closure holds `pouch` gets the Vec rows, one that
+# holds `nmapset` the map/set rows; the dev-deps guarantee both while
+# json builds itself (the peer gate's D3 path checks run on this very
+# manifest), so every group impl dispatches in json's own test runs.
+# RFC 0045 §2's own example, landed as the mechanism's first real
+# consumer.
+#
+# `inline = true` (ink/nmapset's flag, the same law): json's entries are
+# GENERIC FUNCTIONS, and a generic fn cannot cross a module link
+# boundary — the exported surface carries only monomorphic fns, so a
+# linked json would answer `unknown function decodeJson` in every
+# consumer. Source-inlining composes json into each consumer's unit,
+# where the entries specialize per concrete argument — DIRECT decode's
+# own law (survey §2.1: a decode mints exactly the program's own
+# values, once). The base alone splices exactly the same way (the light
+# consumer's law): the flag is not about the peer groups, it is about
+# the fn shape.
+name = "json"
+entry.lib = "./json.rut"
+inline = true
+
+[peer-deps]
+pouch    = { path = "../pouch",   optional = true, lib = "./group-pouch.rut" }
+nmapset  = { path = "../nmapset", optional = true, lib = "./group-nmapset.rut" }
+
+[dev-deps]
+pouch    = { path = "../pouch" }
+nmapset  = { path = "../nmapset" }

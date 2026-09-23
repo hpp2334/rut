@@ -1,0 +1,537 @@
+// the json pkg's test-fixture consumer (the rut-json batch phase 1).
+// Every entry answers a CANONICAL STRING so the Rust-side suite asserts
+// exact values with zero marshalling guesswork:
+//
+//   successes  ->  `OK:<payload>`
+//   failures   ->  `ERR:<Kind>@<at>:<got>:<expected>`   (decode)
+//                  `ERR:<Kind>@<at>:<path>`             (encode)
+//
+// The exactly-one-nil invariant pins its own entries: `pair_*` answer
+// `OK` / `ERR` / `BOTH` / `NEITHER` — the disjunction read off the wire.
+
+use json::{encodeJson, decodeJson, decodeJsonBytes};
+use json::{DecodeErrorKind, DecodeJsonError};
+use json::{EncodeErrorKind, EncodeJsonError};
+use json::{JsonReader, JsonWriter};
+use pouch::{Vec};
+use nmapset::{HashMap, HashSet, PrimMapI64, PrimMapU64, PrimMapF64};
+
+// equality chains — the enum name spells the member; a `when` select
+// over a used module's enum trips the completeness check's member probe
+// (an engine-side observation recorded in the commit body)
+fn dk_name(k: DecodeErrorKind) -> str {
+    if (k == DecodeErrorKind.Unexpected) { return "Unexpected"; }
+    if (k == DecodeErrorKind.Truncated) { return "Truncated"; }
+    if (k == DecodeErrorKind.InvalidUtf8) { return "InvalidUtf8"; }
+    if (k == DecodeErrorKind.WrongType) { return "WrongType"; }
+    if (k == DecodeErrorKind.Depth) { return "Depth"; }
+    if (k == DecodeErrorKind.Trailing) { return "Trailing"; }
+    return "Unknown";
+}
+
+fn ek_name(k: EncodeErrorKind) -> str {
+    if (k == EncodeErrorKind.Depth) { return "Depth"; }
+    if (k == EncodeErrorKind.NotFinite) { return "NotFinite"; }
+    if (k == EncodeErrorKind.KeyUnsupported) { return "KeyUnsupported"; }
+    return "Unknown";
+}
+
+fn dec_err(e: ?DecodeJsonError) -> str {
+    let err: DecodeJsonError = e;
+    let kn = dk_name(err.kind);
+    let at = err.at;
+    let got = err.got;
+    let want = err.expected;
+    return f"ERR:{kn}@{at}:{got}:{want}";
+}
+
+fn enc_err(e: ?EncodeJsonError) -> str {
+    let err: EncodeJsonError = e;
+    let kn = ek_name(err.kind);
+    let at = err.at;
+    let path = err.path;
+    return f"ERR:{kn}@{at}:{path}";
+}
+
+fn if_true(b: bool) -> str {
+    if (b) { return "true"; }
+    return "false";
+}
+
+// ---- the exactly-one-nil pair disjunction, read off the wire ----
+
+entry fn pair_dec_i64(s: str) -> str {
+    let (v, e) = decodeJson<i64>(s);
+    if (e != nil && v != nil) { return "BOTH"; }
+    if (e == nil && v == nil) { return "NEITHER"; }
+    if (e != nil) { return "ERR"; }
+    return "OK";
+}
+
+entry fn pair_enc_i64(v: i64) -> str {
+    let (s, e) = encodeJson(v);
+    if (e != nil && s != nil) { return "BOTH"; }
+    if (e == nil && s == nil) { return "NEITHER"; }
+    if (e != nil) { return "ERR"; }
+    return "OK";
+}
+
+entry fn pair_enc_cycle() -> str {
+    // the RFC 0017 story: a cyclic structure reaches the writer's depth
+    // limit and answers (nil, Depth-err) — data, never a trap
+    let mut w = JsonWriter.new();
+    w.begin_array();
+    w.begin_array();
+    let e = w.error();
+    if (e != nil) { return enc_err(e); }
+    return "NOERR";
+}
+
+// ---- i64 ----
+
+entry fn enc_i64(v: i64) -> str {
+    let (s, e) = encodeJson(v);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+entry fn dec_i64(s: str) -> str {
+    let (v, e) = decodeJson<i64>(s);
+    if (e != nil) { return dec_err(e); }
+    let n: i64 = v;
+    return f"OK:{n}";
+}
+
+// ---- f64 ----
+
+entry fn enc_f64(v: f64) -> str {
+    let (s, e) = encodeJson(v);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+entry fn dec_f64(s: str) -> str {
+    let (v, e) = decodeJson<f64>(s);
+    if (e != nil) { return dec_err(e); }
+    let x: f64 = v;
+    return f"OK:{x}";
+}
+
+// f64 round-trip stability: decode(encode(decode(c))) == decode(c)
+entry fn f64_rt(c: str) -> str {
+    let (v, e) = decodeJson<f64>(c);
+    if (e != nil) { return dec_err(e); }
+    let x: f64 = v;
+    let (s, ee) = encodeJson(x);
+    if (ee != nil) { return enc_err(ee); }
+    let doc: str = s;
+    let (v2, e2) = decodeJson<f64>(doc);
+    if (e2 != nil) { return dec_err(e2); }
+    let y: f64 = v2;
+    if (y == x) { return "STABLE"; }
+    return "DRIFTED";
+}
+
+// ---- bool ----
+
+entry fn enc_bool(b: bool) -> str {
+    let (s, e) = encodeJson(b);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+entry fn dec_bool(s: str) -> str {
+    let (v, e) = decodeJson<bool>(s);
+    if (e != nil) { return dec_err(e); }
+    if (v) { return "OK:true"; }
+    return "OK:false";
+}
+
+// ---- str ----
+
+entry fn enc_str(s: str) -> str {
+    let (doc, e) = encodeJson(s);
+    if (e != nil) { return enc_err(e); }
+    let d: str = doc;
+    return d;
+}
+
+entry fn dec_str(s: str) -> str {
+    let (v, e) = decodeJson<str>(s);
+    if (e != nil) { return dec_err(e); }
+    let out: str = v;
+    return f"OK:{out}";
+}
+
+// the escape ROUND trip (the survey's §2.3 escape policy, both halves
+// composed): decode(encode(s)) must answer s bit-exact for every shape
+// the escaper rewrites — quote, backslash, the C0 shorthands, the
+// \u00xx controls — and everything it passes through verbatim
+entry fn str_rt(s: str) -> str {
+    let (d, e) = encodeJson(s);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = d;
+    let (v, e2) = decodeJson<str>(doc);
+    if (e2 != nil) { return dec_err(e2); }
+    let out: str = v;
+    if (out == s) { return "RT"; }
+    return f"DRIFT:{out}";
+}
+
+// ---- [T] ----
+
+entry fn dec_arr(s: str) -> str {
+    let (v, e) = decodeJson<[i64]>(s);
+    if (e != nil) { return dec_err(e); }
+    let a: [i64] = v;
+    let n = a.len();
+    let mut acc = f"OK:len={n}";
+    let mut i: i32 = 0;
+    while (i < a.len()) {
+        acc = f"{acc}:{a[i]}";
+        i += 1;
+    }
+    return acc;
+}
+
+// ---- ?T ----
+
+entry fn dec_q_i64(s: str) -> str {
+    let (v, e) = decodeJson<?i64>(s);
+    if (e != nil) { return dec_err(e); }
+    // the null case: (nil, nil) — successful absence
+    if (v == nil) { return "OK:nil"; }
+    let inner: ?i64 = v;
+    let out = encodeJson(inner);
+    let d: str = out.0;
+    return f"OK:{d}";
+}
+
+entry fn enc_q_nil() -> str {
+    let q: ?i64 = nil;
+    let (s, e) = encodeJson(q);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+entry fn enc_q_val(v: i64) -> str {
+    let q: ?i64 = v;
+    let (s, e) = encodeJson(q);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+// ---- Vec<T> (the pouch group) ----
+
+entry fn dec_vec(s: str) -> str {
+    let (v, e) = decodeJson<Vec<i64>>(s);
+    if (e != nil) { return dec_err(e); }
+    let vec: Vec<i64> = v;
+    let n = vec.len();
+    let mut acc = f"OK:len={n}";
+    let mut i: i32 = 0;
+    while (i < vec.len()) {
+        acc = f"{acc}:{vec[i]}";
+        i += 1;
+    }
+    return acc;
+}
+
+entry fn enc_vec() -> str {
+    let mut v = Vec<str>.new();
+    v.push("a");
+    v.push("b");
+    let (s, e) = encodeJson(v);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+// the nested shape (survey §1.4 item 3's fixture): the group's unbounded
+// element T instantiates RECURSIVELY — `Vec<Vec<i64>>` dispatches the
+// group impl inside the group impl, per instantiation
+entry fn dec_vec_vec(s: str) -> str {
+    let (v, e) = decodeJson<Vec<Vec<i64>>>(s);
+    if (e != nil) { return dec_err(e); }
+    let vv: Vec<Vec<i64>> = v;
+    let outer = vv.len();
+    let first = vv[0];
+    let inner = first.len();
+    let h = first[0];
+    return f"OK:outer={outer}:inner={inner}:head={h}";
+}
+
+entry fn enc_vec_vec() -> str {
+    let mut inner = Vec<i64>.new();
+    inner.push(1);
+    inner.push(2);
+    let mut outer = Vec<Vec<i64>>.new();
+    outer.push(inner);
+    let (s, e) = encodeJson(outer);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+// ---- HashMap<str, str> (the nmapset group) ----
+
+entry fn dec_hm_ss(s: str) -> str {
+    let (v, e) = decodeJson<HashMap<str, str>>(s);
+    if (e != nil) { return dec_err(e); }
+    let m: HashMap<str, str> = v;
+    let a = m.get("a");
+    let la: ?str = a;
+    let av: str = la;
+    let n = m.len();
+    return f"OK:len={n}:a={av}";
+}
+
+entry fn dec_hm_ii(s: str) -> str {
+    // i64 keys parse from the doc's key text (§2.6); "01" normalizes to
+    // 1 so the duplicate is LAST WINS
+    let (v, e) = decodeJson<HashMap<i64, i64>>(s);
+    if (e != nil) { return dec_err(e); }
+    let m: HashMap<i64, i64> = v;
+    let one = m.get(1i64);
+    let o1: ?i64 = one;
+    let ov: i64 = o1;
+    let n = m.len();
+    return f"OK:len={n}:k1={ov}";
+}
+
+entry fn dec_hm_key_err(s: str) -> str {
+    let (v, e) = decodeJson<HashMap<i64, i64>>(s);
+    if (e != nil) { return dec_err(e); }
+    let m: HashMap<i64, i64> = v;
+    let n = m.len();
+    return f"OK:len={n}";
+}
+
+// ---- HashSet<i64> ----
+
+entry fn dec_hs(s: str) -> str {
+    let (v, e) = decodeJson<HashSet<i64>>(s);
+    if (e != nil) { return dec_err(e); }
+    let set: HashSet<i64> = v;
+    let h7 = set.has(7i64);
+    let hs = if_true(h7);
+    let n = set.len();
+    return f"OK:len={n}:has7={hs}";
+}
+
+// ---- PrimMap rows ----
+
+entry fn dec_pm_i64(s: str) -> str {
+    let (v, e) = decodeJson<PrimMapI64<str>>(s);
+    if (e != nil) { return dec_err(e); }
+    let m: PrimMapI64<str> = v;
+    let g = m.get("n");
+    let gn: ?i64 = g;
+    let gv: i64 = gn;
+    let n = m.len();
+    return f"OK:len={n}:n={gv}";
+}
+
+entry fn dec_pm_u64(s: str) -> str {
+    let (v, e) = decodeJson<PrimMapU64<str>>(s);
+    if (e != nil) { return dec_err(e); }
+    let m: PrimMapU64<str> = v;
+    let g = m.get("n");
+    let gn: ?u64 = g;
+    let gv: u64 = gn;
+    let n = m.len();
+    return f"OK:len={n}:n={gv}";
+}
+
+entry fn dec_pm_f64(s: str) -> str {
+    let (v, e) = decodeJson<PrimMapF64<str>>(s);
+    if (e != nil) { return dec_err(e); }
+    let m: PrimMapF64<str> = v;
+    let g = m.get("x");
+    let gx: ?f64 = g;
+    let gv: f64 = gx;
+    let n = m.len();
+    return f"OK:len={n}:x={gv}";
+}
+
+// bytes KEYS: no JSON spelling — the WrongType branch names the key
+// text and the spelling disclosure (KeyUnsupported itself is the
+// encode-side kind; it lands with the map encode half)
+entry fn dec_hm_bytes_key() -> str {
+    let (v, e) = decodeJson<HashMap<bytes, i64>>("{\"aa\": 1}");
+    if (e != nil) { return dec_err(e); }
+    let m: HashMap<bytes, i64> = v;
+    let n = m.len();
+    return f"OK:len={n}";
+}
+
+// ---- the depth limit, both directions ----
+
+// the decode-side depth law, on the reader's own container ops: a
+// DIRECT schema (Vec<i64>) answers WrongType at the first type
+// mismatch long before 128 levels of doc nesting accrue, so the cap is
+// probed on the reader directly
+entry fn reader_depth_ok() -> str {
+    let mut doc = "";
+    let mut k: i32 = 0;
+    while (k < 100) {
+        doc = f"{doc}[";
+        k += 1;
+    }
+    let mut r = JsonReader.of(doc);
+    let mut k2: i32 = 0;
+    while (k2 < 100) {
+        r.begin_array();
+        if (r.failed()) { return dec_err(r.error()); }
+        k2 += 1;
+    }
+    return "NOERR";
+}
+
+entry fn reader_depth() -> str {
+    let mut doc = "";
+    let mut k: i32 = 0;
+    while (k < 200) {
+        doc = f"{doc}[";
+        k += 1;
+    }
+    let mut r = JsonReader.of(doc);
+    let mut k2: i32 = 0;
+    while (k2 < 200) {
+        r.begin_array();
+        if (r.failed()) { return dec_err(r.error()); }
+        k2 += 1;
+    }
+    return "NOERR";
+}
+
+entry fn dec_deep(s: str) -> str {
+    let (v, e) = decodeJson<Vec<i64>>(s);
+    if (e != nil) { return dec_err(e); }
+    let vec: Vec<i64> = v;
+    let n = vec.len();
+    return f"OK:len={n}";
+}
+
+entry fn enc_deep(levels: i32) -> str {
+    let mut w = JsonWriter.new();
+    let mut k: i32 = 0;
+    while (k < levels) {
+        w.begin_array();
+        k += 1;
+    }
+    let e = w.error();
+    if (e != nil) { return enc_err(e); }
+    return "NOERR";
+}
+
+// ---- the writer's public surface (the serde model: user impls drive it) ----
+
+entry fn writer_demo() -> str {
+    let mut w = JsonWriter.new();
+    w.begin_object();
+    w.key("name");
+    w.write_str("rut");
+    w.key("n");
+    w.write_i64(-7);
+    w.key("ok");
+    w.write_bool(true);
+    w.key("x");
+    w.write_f64(1.5);
+    w.key("rows");
+    w.begin_array();
+    w.write_raw("1");
+    w.write_raw("2");
+    w.end_array();
+    w.end_object();
+    let e = w.error();
+    if (e != nil) { return enc_err(e); }
+    return f"OK:{w.finish()}";
+}
+
+entry fn writer_not_finite(v: f64) -> str {
+    let mut w = JsonWriter.new();
+    w.begin_object();
+    w.key("bad");
+    w.write_f64(v);
+    let e = w.error();
+    if (e != nil) { return enc_err(e); }
+    return "NOERR";
+}
+
+// ---- the reader's public surface ----
+
+entry fn reader_walk(s: str) -> str {
+    let mut r = JsonReader.of(s);
+    r.begin_object();
+    let mut got_name = "";
+    let mut got_age: i64 = 0;
+    while (r.more()) {
+        let k = r.next_key();
+        if (k == "name") {
+            got_name = r.read_str();
+        } else if (k == "age") {
+            got_age = r.read_i64();
+        } else {
+            r.skip_value();
+        }
+        if (r.failed()) { return dec_err(r.error()); }
+    }
+    r.end_object();
+    if (r.failed()) { return dec_err(r.error()); }
+    return f"OK:{got_name}:{got_age}";
+}
+
+// ---- decodeJsonBytes: STRICT UTF-8 ----
+
+entry fn dec_bytes(b: bytes) -> str {
+    let (v, e) = decodeJsonBytes<i64>(b);
+    if (e != nil) { return dec_err(e); }
+    let n: i64 = v;
+    return f"OK:{n}";
+}
+
+entry fn dec_bytes_str(b: bytes) -> str {
+    let (v, e) = decodeJsonBytes<str>(b);
+    if (e != nil) { return dec_err(e); }
+    let out: str = v;
+    return f"OK:{out}";
+}
+
+// ---- [T] encoders: the values build rut-side (the boundary crosses
+// scalars and strings only) ----
+
+entry fn enc_arr_empty() -> str {
+    let a: [i64] = [];
+    let (s, e) = encodeJson(a);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+entry fn enc_arr_three() -> str {
+    let mut a: [i64] = [7; 3];
+    a[1] = 8;
+    a[2] = 9;
+    let (s, e) = encodeJson(a);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}
+
+entry fn enc_arr_nested() -> str {
+    let mut first: [i64] = [1; 2];
+    first[1] = 2;
+    let mut second: [i64] = [3; 1];
+    let mut outer: [[i64]] = [first; 2];
+    outer[1] = second;
+    let (s, e) = encodeJson(outer);
+    if (e != nil) { return enc_err(e); }
+    let doc: str = s;
+    return doc;
+}

@@ -346,12 +346,12 @@ impl<'a> Ctx<'a> {
         trait_id: u32,
         env: &[(IdentId, TypeId)],
     ) -> TypeId {
-        if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
-            if segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY {
-                return self.mk_trait_obj(trait_id);
-            }
-        }
-        self.resolve_type(node, env)
+        // a trait declaration's `Self` is the trait object at any
+        // structural depth (`(?Self, ?E)` — the rut-json batch phase 1,
+        // gap 2's signature half); the impl side resolves against its
+        // concrete target through resolve_sig_ty
+        let tobj = self.mk_trait_obj(trait_id);
+        self.resolve_sig_ty_deep(node, env, Some(tobj))
     }
 
     /// Instantiate a generic trait for concrete type arguments (RFC 0013):
@@ -506,6 +506,26 @@ impl<'a> Ctx<'a> {
                     kind: TyKind::Data { fields: vec![] },
                 });
                 (ph, Some((sym::ARRAY, params)), false, false, false)
+            }
+            TypeKind::TyOpt { inner } => {
+                // `impl I for ?T` — the nullable impl target (the rut-json
+                // batch phase 1's sanctioned checker gap 1): mirrors the
+                // TyArray arm exactly — generic through the element
+                // parameter, a template id for duplicate detection and
+                // inst keys; the methods monomorphize per instantiation.
+                let Some(params) = self.ty_generic_idents(std::slice::from_ref(inner)) else {
+                    self.err(sp, "a generic impl target must name its type parameters (e.g. `?T`)");
+                    return;
+                };
+                if params.len() != 1 {
+                    self.err(sp, "`?T` takes one type parameter");
+                    return;
+                }
+                let ph = self.types.intern(RutType {
+                    name: sym::OPT,
+                    kind: TyKind::Data { fields: vec![] },
+                });
+                (ph, Some((sym::OPT, params)), false, false, false)
             }
             _ => {
                 self.err(

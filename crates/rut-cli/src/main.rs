@@ -110,11 +110,24 @@ fn run(path: &str, fuel: Option<u64>) {
         let mut s = rut_driver::Session::new();
         rut_driver::mount_std(&mut s);
         let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        for (name, dir) in [("ink", "rut/ink"), ("pouch", "rut/pouch")] {
+        // the std mount order (the rut-json survey §1.2's ruling): ink
+        // is independent; json slots after pouch and nmapset — the dep
+        // graph's new edges (json -> pouch, json -> nmapset) make that
+        // the only graph-respecting position
+        for (name, dir) in [
+            ("ink", "rut/ink"),
+            ("pouch", "rut/pouch"),
+            ("nmapset", "rut/nmapset"),
+            ("json", "rut/json"),
+        ] {
             if src.contains(&format!("use {name}::")) {
                 rut_driver::mount_dir(&mut s, &tree.join(dir)).expect("mount tree pkg");
             }
         }
+        // the loose-file gate (the survey §1.2's decision): the CLI is a
+        // full host — a loose file that `use json::` gets the
+        // peer-gated container groups exactly like a module-dir program
+        rut_driver::assemble_peers(&mut s).expect("assemble peer groups");
         let out = rut_driver::compile_module_in(&mut s, &src, mode_of(path), "main");
         if !out.diags.is_empty() {
             print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));

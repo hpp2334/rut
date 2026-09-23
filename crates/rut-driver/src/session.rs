@@ -35,6 +35,7 @@
 //! so the driver stays dependency-free and wasm-compatible.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 /// A module's entry points: where its surface and body live, relative to
 /// the module directory.
@@ -219,6 +220,15 @@ pub struct Session {
     /// reads it post-closure; the reference-site missing-peer
     /// diagnostic (the D2 upgrade) resolves against it.
     peers: BTreeMap<String, BTreeMap<String, PeerDecl>>,
+    /// The directory each mounted pkg came from (programmatic mounts —
+    /// `mount_dir` and the dep walks). The loader's `assemble_peers`
+    /// reads it to run the peer gate's append pass over a session built
+    /// mount-by-mount, where no single walk owns the pkg→dir map.
+    peer_dirs: BTreeMap<String, std::path::PathBuf>,
+    /// Pkgs whose peer groups the gate already mounted — a second gate
+    /// pass over the same session (the graph load ran one, an
+    /// `assemble_peers` call adds another) never double-appends.
+    groups_mounted: std::collections::BTreeSet<String>,
 }
 
 impl Session {
@@ -309,6 +319,29 @@ impl Session {
     /// post-closure; phase 2's D2 upgrade reads it at resolve time.
     pub fn peer_decls(&self) -> &BTreeMap<String, BTreeMap<String, PeerDecl>> {
         &self.peers
+    }
+
+    /// Record the directory a pkg was mounted from (programmatic
+    /// mounts). `assemble_peers` reads the map to run the gate's group
+    /// reads over a session built mount-by-mount.
+    pub fn record_peer_dir(&mut self, pkg: &str, dir: &Path) {
+        self.peer_dirs.entry(pkg.to_string()).or_insert_with(|| dir.to_path_buf());
+    }
+
+    /// The mounted pkgs' directories, first mount wins.
+    pub fn peer_dirs(&self) -> &BTreeMap<String, std::path::PathBuf> {
+        &self.peer_dirs
+    }
+
+    /// Mark `pkg`'s peer groups as already mounted — a second gate pass
+    /// over the same session skips them (no double-append).
+    pub fn mark_groups_mounted(&mut self, pkg: &str) {
+        self.groups_mounted.insert(pkg.to_string());
+    }
+
+    /// Was `pkg`'s peer group already appended by an earlier gate pass?
+    pub fn groups_mounted(&self, pkg: &str) -> bool {
+        self.groups_mounted.contains(pkg)
     }
 
     /// Append peer-group source to a mounted module's body (RFC 0045

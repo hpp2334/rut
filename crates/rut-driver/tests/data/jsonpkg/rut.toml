@@ -1,0 +1,13 @@
+# the json pkg's self-build-through-a-consumer fixture (the rut-json
+# batch phase 1): `[deps]` supplies json AND its peers, so the peer gate
+# mounts both groups — every container impl dispatches in every run.
+# The `jsonlight` fixture beside this one mounts json WITHOUT the peers:
+# base-only, the container rows never exist.
+name = "jsonpkg"
+entry.lib = "./main.rut"
+
+[deps]
+json = { path = "../../../../../rut/json" }
+pouch = { path = "../../../../../rut/pouch" }
+nmapset = { path = "../../../../../rut/nmapset" }
+nmap_host = { path = "../../../../../rut/nmap_host" }

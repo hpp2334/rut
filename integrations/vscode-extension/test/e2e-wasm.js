@@ -204,6 +204,12 @@ async function main() {
       if (!labels.includes(want)) bad.push(`bare completion lacks nmapset's '${want}' (${labels.length} items)`);
     }
     if (!labels.includes('map_entry')) bad.push(`bare completion lacks nmap_host's 'map_entry' (${labels.length} items)`);
+    // the 9th std pkg (the rut-json batch phase 1): json's base surface —
+    // the entries + the traits + the reader/writer — rides every bare
+    // completion exactly like nmapset's types do (std_surface 8 -> 9)
+    for (const want of ['encodeJson', 'decodeJson', 'decodeJsonBytes', 'JsonSerialize', 'JsonDeserialize', 'JsonReader', 'JsonWriter']) {
+      if (!labels.includes(want)) bad.push(`bare completion lacks json's '${want}' (${labels.length} items)`);
+    }
     smokes++;
   }
 

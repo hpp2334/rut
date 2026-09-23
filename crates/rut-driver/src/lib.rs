@@ -25,8 +25,8 @@ pub use bundle::{crc32, parse_bundle, write_bundle, BundleError};
 
 pub mod loader;
 pub use loader::{
-    compile_dir, load_bundle_bytes, load_bundle_session, load_dir_session, load_module_source,
-    load_path_session, mount_dir, pack_dir,
+    assemble_peers, compile_dir, load_bundle_bytes, load_bundle_session, load_dir_session,
+    load_module_source, load_path_session, mount_dir, pack_dir,
 };
 
 pub struct CompileOutput {

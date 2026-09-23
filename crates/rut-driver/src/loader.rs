@@ -65,6 +65,11 @@ pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
     session
         .register_module(&root, root_module)
         .map_err(|e| e.to_string())?;
+    // the root's dir rides the session's map too, so a later
+    // `assemble_peers` over this session can answer for the root's own
+    // peer declarations (the gate below already ran with the complete
+    // map; this keeps the session self-consistent)
+    session.record_peer_dir(&root, dir);
     record_peers(&mut session, &root, &manifest);
     // the loader's own spec → dir map, for the peer gate's group reads —
     // the Session itself stays I/O-free
@@ -309,6 +314,7 @@ fn run_bundle_peer_gate(
     }
     for (pkg, text) in appends {
         session.append_source(&pkg, &text).map_err(|e| e.to_string())?;
+        session.mark_groups_mounted(&pkg);
     }
     Ok(())
 }
@@ -544,6 +550,7 @@ fn resolve_table(
         session
             .register_module(spec, dep_module)
             .map_err(|e| e.to_string())?;
+        session.record_peer_dir(spec, &dep_dir);
         record_peers(session, spec, &dm);
         mounted.insert(spec.clone(), dep_dir.clone());
         visiting.push(dep_dir.clone());
@@ -580,6 +587,9 @@ fn run_peer_gate(
     // collected first, applied after — the registry borrows the session
     let mut appends: Vec<(String, String)> = Vec::new();
     for (pkg, peers) in session.peer_decls() {
+        if session.groups_mounted(pkg) {
+            continue; // an earlier gate pass over this session mounted them
+        }
         let Some(pkg_dir) = mounted.get(pkg) else {
             return Err(format!("pkg `{pkg}` declares `[peer-deps]` but is not mounted"));
         };
@@ -628,6 +638,7 @@ fn run_peer_gate(
     }
     for (pkg, text) in appends {
         session.append_source(&pkg, &text).map_err(|e| e.to_string())?;
+        session.mark_groups_mounted(&pkg);
     }
     Ok(())
 }
@@ -656,11 +667,27 @@ pub fn mount_dir(session: &mut Session, dir: &Path) -> Result<String, String> {
     session
         .register_module(&name, module)
         .map_err(|e| e.to_string())?;
+    session.record_peer_dir(&name, dir);
     record_peers(session, &name, &manifest);
     let mut visiting = vec![dir.to_path_buf()];
     let mut mounted = BTreeMap::new(); // the gate's map — not this path's pass
     resolve_deps(session, dir, &manifest, &mut visiting, &mut mounted)?;
     Ok(name)
+}
+
+/// The peer gate for sessions built mount-by-mount (RFC 0045 §3): runs
+/// the gate's append pass over the peer declarations every `mount_dir`/
+/// dep walk recorded, using the pkg→dir map those mounts left behind.
+/// The CLI's and the probe's single-file convenience lanes call this
+/// after their tree mounts, so a loose file that `use json::` gets the
+/// peer-gated container groups exactly like a module-dir program does.
+/// Presence-based as ever: an optional peer absent is inert; a required
+/// peer absent is the loud D1 error. Groups already mounted by an
+/// earlier gate pass over this session are skipped — never
+/// double-appended.
+pub fn assemble_peers(session: &mut Session) -> Result<(), String> {
+    let dirs = session.peer_dirs().clone();
+    run_peer_gate(session, "", &dirs)
 }
 
 /// Read a directory's `rut.toml` graph and compile it to one linked program.

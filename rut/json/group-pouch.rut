@@ -1,0 +1,41 @@
+// the pouch integration group (the rut-json batch, phase 1): impl-ONLY
+// by law (RFC 0045 §3) — it declares no new public names, so the only
+// way to reach it is trait dispatch on pouch's `Vec`. Appended to json's
+// own source by the peer gate when `pouch` is in the program's closure;
+// a consumer without pouch mounts json light and these rows simply never
+// exist (a reference then diagnoses D2, RFC 0045 §4).
+//
+// The survey §2.6 matrix rows: `Vec<T>` encodes an array, decodes an
+// array — elements through T's own impls, per instantiation (the
+// template law: this body monomorphizes per `Vec<..>` shape, so
+// `elem.encode(w)` / `T.decode(r)` bind the concrete impls — nested
+// `Vec<Vec<i64>>` closes recursively).
+
+use pouch::{Vec};
+
+impl JsonSerialize for Vec<T> {
+    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.begin_array();
+        for (let x of self) {
+            let e = x.encode(w);
+            if (e != nil) { return e; }
+        }
+        w.end_array();
+        return nil;
+    }
+}
+
+impl JsonDeserialize for Vec<T> {
+    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut v = Vec<T>.new();
+        r.begin_array();
+        while (r.more()) {
+            let (x, e) = T.decode(r);
+            if (e != nil) { return (nil, e); }
+            v.push(x);
+        }
+        r.end_array();
+        if (r.failed()) { return (nil, r.error()); }
+        return (v, nil);
+    }
+}

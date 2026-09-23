@@ -224,6 +224,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             .unwrap_or(TY_I32);
                         (ctx.mk_array(elem), None)
                     }
+                    Some((dname, params))
+                        if dname == &sym::OPT && params.len() == 1 =>
+                    {
+                        // `impl I for ?T` — self is the nullable itself
+                        // (the rut-json batch phase 1: the body checks
+                        // nil and derefs explicitly; the template's
+                        // element instantiation comes from the subst)
+                        let elem = inst
+                            .subst
+                            .iter()
+                            .find(|(n, _)| n == &params[0])
+                            .map(|(_, t)| *t)
+                            .unwrap_or(TY_I32);
+                        (ctx.mk_opt(elem), None)
+                    }
                     _ => {
                         let cname = ctx.datas.iter().find(|(_, d)| d.ty == im.target).map(|(n, _)| *n);
                         (im.target, cname)
@@ -834,19 +849,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     pub(crate) fn resolve_type_now(&mut self, node: NodeHandle<AnyTy>) -> TypeId {
-        // `Self` binds to the enclosing type inside method bodies
-        if let TypeKind::TyPath { segs, .. } = self.ctx.ast.ty(node) {
-            if segs.len() == 1 && segs[0].generics.is_empty() {
-                if segs[0].name == sym::SELF_TY {
-                    if let Some(t) = self.self_ty {
-                        return t;
-                    }
-                    self.ctx.err(self.ctx.ast.span(node.id()), "`Self` outside a type body");
-                    return TY_I32;
-                }
-            }
-        }
-        self.ctx.resolve_type(node, &self.subst)
+        // `Self` (bare or under `?`, at any structural depth — the
+        // rut-json batch phase 1) binds to the enclosing type inside
+        // method bodies
+        self.ctx.resolve_sig_ty_deep(node, &self.subst, self.self_ty)
     }
 
     pub(crate) fn lookup(&self, name: IdentId) -> Option<&Local> {

@@ -145,8 +145,13 @@ fn main() {
         let mut session = rut_driver::Session::new();
         rut_driver::mount_std(&mut session);
         let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        // the std mount order (the rut-json survey §1.2's ruling): json
+        // slots after pouch and nmapset
         rut_driver::mount_dir(&mut session, &tree.join("rut/ink")).expect("mount ink (+rt)");
         rut_driver::mount_dir(&mut session, &tree.join("rut/pouch")).expect("mount pouch");
+        rut_driver::mount_dir(&mut session, &tree.join("rut/nmapset")).expect("mount nmapset");
+        rut_driver::mount_dir(&mut session, &tree.join("rut/json")).expect("mount json");
+        rut_driver::assemble_peers(&mut session).expect("assemble peer groups");
         let out = rut_driver::compile_module_in(&mut session, &src, rut_parser::Mode::Impl, "bench");
         if !out.diags.is_empty() {
             print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));

@@ -22,6 +22,7 @@ pub const RT: &str = include_str!("../../../rut/rt/rt.d.rut");
 pub const BENCH_CROSS: &str = include_str!("../../../rut/bench-cross/bench_cross.d.rut");
 pub const POUCH: &str = include_str!("../../../rut/pouch/pouch.rut");
 pub const NMAPSET: &str = include_str!("../../../rut/nmapset/nmapset.rut");
+pub const JSON: &str = include_str!("../../../rut/json/json.rut");
 pub const INK: &str = include_str!("../../../rut/ink/ink.rut");
 
 const CORE_LABEL: &str = "core";
@@ -40,6 +41,7 @@ pub fn indexes() -> Vec<DefIndex> {
         ("bench_cross", BENCH_CROSS, rut_parser::Mode::Decl, "rut/bench-cross/bench_cross.d.rut"),
         ("pouch", POUCH, rut_parser::Mode::Impl, "rut/pouch/pouch.rut"),
         ("nmapset", NMAPSET, rut_parser::Mode::Impl, "rut/nmapset/nmapset.rut"),
+        ("json", JSON, rut_parser::Mode::Impl, "rut/json/json.rut"),
         ("ink", INK, rut_parser::Mode::Impl, "rut/ink/ink.rut"),
     ]
     .into_iter()
@@ -60,14 +62,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_eight_packages_embed_and_index() {
+    fn all_nine_packages_embed_and_index() {
         let idxs = indexes();
-        assert_eq!(idxs.len(), 8, "origins: {:?}", idxs.iter().map(|i| i.origin.clone()).collect::<Vec<_>>());
+        assert_eq!(idxs.len(), 9, "origins: {:?}", idxs.iter().map(|i| i.origin.clone()).collect::<Vec<_>>());
         for i in &idxs {
             assert!(!i.types.is_empty() || !i.fns.is_empty(), "{}: empty index", i.origin);
         }
         let origins: Vec<&str> = idxs.iter().map(|i| i.origin.as_str()).collect();
-        for want in ["core", "calc", "nmap_host", "rt", "bench_cross", "pouch", "nmapset", "ink"] {
+        for want in ["core", "calc", "nmap_host", "rt", "bench_cross", "pouch", "nmapset", "json", "ink"] {
             assert!(origins.contains(&want), "missing pkg `{want}`: {origins:?}");
         }
     }

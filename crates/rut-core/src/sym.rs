@@ -156,6 +156,7 @@ pub const WELL_KNOWN: &[&str] = &[
     "line",       // LINE
     "col",        // COL
     "render",     // RENDER
+    "Opt",        // OPT
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -234,6 +235,11 @@ pub const NAME: IdentId = IdentId(57);
 pub const LINE: IdentId = IdentId(58);
 pub const COL: IdentId = IdentId(59);
 pub const RENDER: IdentId = IdentId(60);
+// the nullable's structural impl-target placeholder (`impl I for ?T`,
+// the rut-json batch phase 1): the TyKind::Opt arm mirrors `Array` — a
+// template target whose methods monomorphize per element instantiation.
+// Compiler-internal interner name only (never a wire surface).
+pub const OPT: IdentId = IdentId(61);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -334,6 +340,7 @@ mod tests {
             ("line", LINE),
             ("col", COL),
             ("render", RENDER),
+            ("Opt", OPT),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

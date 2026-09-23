@@ -1,0 +1,73 @@
+use json::{encodeJson, decodeJson};
+
+// the light consumer: json mounts with NO peers in the closure — the
+// base alone (traits, reader/writer, prims, ?T, [T], entries). The
+// peer-gated container rows never exist here; referencing them
+// diagnoses D2 (RFC 0045 §4). Answers use the same canonical-string
+// convention as the jsonpkg fixture.
+
+entry fn enc_i(v: i64) -> str {
+    let (s, e) = encodeJson(v);
+    if (e != nil) { return "ERR"; }
+    let doc: str = s;
+    return doc;
+}
+
+entry fn dec_i(s: str) -> str {
+    let (v, e) = decodeJson<i64>(s);
+    if (e != nil) { return "ERR"; }
+    let n: i64 = v;
+    return f"OK:{n}";
+}
+
+entry fn dec_o(s: str) -> str {
+    let (v, e) = decodeJson<str>(s);
+    if (e != nil) { return "ERR"; }
+    let out: str = v;
+    return f"OK:{out}";
+}
+
+entry fn dec_b(s: str) -> str {
+    let (v, e) = decodeJson<bool>(s);
+    if (e != nil) { return "ERR"; }
+    if (v) { return "OK:true"; }
+    return "OK:false";
+}
+
+entry fn dec_f(s: str) -> str {
+    let (v, e) = decodeJson<f64>(s);
+    if (e != nil) { return "ERR"; }
+    let x: f64 = v;
+    return f"OK:{x}";
+}
+
+// [T] rides the BASE (no peers needed)
+entry fn enc_a() -> ?str {
+    let mut a: [i64] = [1; 2];
+    a[1] = 2;
+    let (s, e) = encodeJson(a);
+    if (e != nil) { return nil; }
+    return s;
+}
+
+entry fn dec_a(s: str) -> str {
+    let (v, e) = decodeJson<[i64]>(s);
+    if (e != nil) { return "ERR"; }
+    let a: [i64] = v;
+    let n = a.len();
+    let mut acc = f"OK:len={n}";
+    let mut i: i32 = 0;
+    while (i < n) {
+        acc = f"{acc}:{a[i]}";
+        i += 1;
+    }
+    return acc;
+}
+
+// ?T rides the BASE
+entry fn dec_q(s: str) -> str {
+    let (v, e) = decodeJson<?i64>(s);
+    if (e != nil) { return "ERR"; }
+    if (v == nil) { return "nil"; }
+    return "set";
+}

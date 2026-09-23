@@ -792,12 +792,44 @@ impl<'a> Ctx<'a> {
             .position(|i| !i.inherent && i.trait_id == trait_id && i.target == target)
     }
 
+    /// The impl satisfying `(trait, target)` INCLUDING the structural
+    /// template targets (the rut-json batch phase 1): a generic class
+    /// instantiation binds its class's template impl (`Vec<i64>` →
+    /// `impl I for Vec<T>`), and a nullable/array receiver binds its
+    /// element-generic impl (`?i64` → `impl I for ?T`, `[i64]` →
+    /// `impl I for [T]`). Admission (RFC 0043 bounds) and dispatch read
+    /// through this one law.
+    pub fn find_impl_for(&self, trait_id: u32, target: TypeId) -> Option<usize> {
+        self.impls
+            .iter()
+            .position(|i| {
+                if i.inherent || i.trait_id != trait_id {
+                    return false;
+                }
+                if i.target == target {
+                    return true;
+                }
+                if let Some((d, _)) = self.inst_data.get(&target) {
+                    if let Some(td) = self.find_data(*d) {
+                        if td.ty == i.target {
+                            return true;
+                        }
+                    }
+                }
+                match (self.types.kind(target), &i.target_data) {
+                    (TyKind::Opt { .. }, Some((d, params))) if *d == sym::OPT && params.len() == 1 => true,
+                    (TyKind::Array { .. }, Some((d, params))) if *d == sym::ARRAY && params.len() == 1 => true,
+                    _ => false,
+                }
+            })
+    }
+
     /// The impl satisfying `(trait, target)` wherever it lives: a local
     /// impl block, or another module's surface registration (RFC 0012
     /// §2/§5). Extern impls are gated on the trait's name having been
     /// used — an unused trait's impl is invisible to dispatch.
     pub fn find_impl_ex(&self, trait_id: u32, target: TypeId) -> Option<ImplHit> {
-        if let Some(idx) = self.find_impl(trait_id, target) {
+        if let Some(idx) = self.find_impl_for(trait_id, target) {
             return Some(ImplHit::Local(idx));
         }
         self.extern_impls.iter().position(|im| {
@@ -1062,12 +1094,52 @@ impl<'a> Ctx<'a> {
         env: &[(IdentId, TypeId)],
         self_ty: Option<TypeId>,
     ) -> TypeId {
-        if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
-            if segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY {
+        self.resolve_sig_ty_deep(node, env, self_ty)
+    }
+
+    /// Signature resolution with `Self` handled at ANY structural depth —
+    /// `fn decode(r) -> (?Self, ?E)` spells Self inside a PAIR (the
+    /// rut-json batch phase 1, gap 2's signature half). Bare `Self`
+    /// binds `self_ty`; structure (`?`, tuples, arrays) recurses; leaves
+    /// fall through to the ordinary resolver.
+    pub(crate) fn resolve_sig_ty_deep(
+        &mut self,
+        node: NodeHandle<AnyTy>,
+        env: &[(IdentId, TypeId)],
+        self_ty: Option<TypeId>,
+    ) -> TypeId {
+        let is_self = |segs: &Vec<rut_ast::ast::PathSeg>| {
+            segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY
+        };
+        match self.ast.ty(node) {
+            TypeKind::TyPath { segs, .. } if is_self(segs) => {
                 if let Some(t) = self_ty {
                     return t;
                 }
             }
+            TypeKind::TyOpt { inner } => {
+                if let TypeKind::TyPath { segs, .. } = self.ast.ty(*inner) {
+                    if is_self(segs) {
+                        if let Some(t) = self_ty {
+                            return self.mk_opt(t);
+                        }
+                    }
+                }
+                let elem = self.resolve_sig_ty_deep(*inner, env, self_ty);
+                return self.mk_opt(elem);
+            }
+            TypeKind::TyTuple { elems } => {
+                let mut etys = Vec::new();
+                for e in elems {
+                    etys.push(self.resolve_sig_ty_deep(*e, env, self_ty));
+                }
+                return self.mk_tuple(etys);
+            }
+            TypeKind::TyArray { elem } => {
+                let et = self.resolve_sig_ty_deep(*elem, env, self_ty);
+                return self.mk_array(et);
+            }
+            _ => {}
         }
         self.resolve_type(node, env)
     }

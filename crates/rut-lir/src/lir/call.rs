@@ -819,6 +819,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if is_type {
                     return self.compile_static_call(base, segs[0].generics.clone(), name, generics, args, expected, sp);
                 }
+                // an in-scope TYPE PARAMETER as the static receiver (the
+                // rut-json batch phase 1's sanctioned checker gap 2):
+                // `T.decode(r)` — the trait's Self param spelled by name
+                // (RFC 0012's no-self law). The body compiles per
+                // instantiation, so the parameter names its substituted
+                // concrete type here; the trait impl on THAT type answers.
+                if segs[0].generics.is_empty() {
+                    if let Some(&concrete) = self.subst.iter().find(|(n, _)| *n == base).map(|(_, t)| t) {
+                        return self.compile_trait_param_static_call(concrete, name, args, expected, sp);
+                    }
+                }
             }
         }
         // receiver bypass (RFC 0009/0016 v1.1): a mutating method operates
@@ -830,6 +841,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => None,
         };
+        // an exact nullable trait impl binds the NULLABLE ITSELF, before
+        // the auto-deref (the rut-json batch phase 1, sanctioned checker
+        // gap 1's dispatch side): `impl I for ?T` means a `?T` receiver
+        // calls that impl — nil IS a value it inspects — so the deref
+        // fallback below must never steal the call. No local match → the
+        // ordinary `p.m(..)` deref law continues unchanged.
+        let recv_opt_raw = match recv_raw {
+            Some((ty, reg)) => match self.ctx.types.kind(ty) {
+                TyKind::Opt { .. } => Some((ty, reg)),
+                _ => None,
+            },
+            None => None,
+        };
+        if let Some((ty, reg)) = recv_opt_raw {
+            if let Some((idx, midx)) = self.find_trait_impl_method(ty, name) {
+                return self.compile_trait_static_call(idx, midx, ty, reg, args, expected, sp, false);
+            }
+        }
         let (rt, rreg) = match recv_raw {
             Some((ty, reg)) => self.deref_for_use(ty, reg, sp.lo),
             None => {
@@ -1194,6 +1223,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((idx, mname, param)) = hit {
                 return self.compile_native_static_call(idx, mname, vec![(param, elem)], rreg, args, expected, sp);
             }
+            // a registered TRAIT impl over the array shape (`impl I for
+            // [T]` — the rut-json batch phase 1): the same static bind the
+            // Data/Prim arms answer, after the inherent surface misses —
+            // the receiver stays raw, the element instantiates the template
+            if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
+                return self.compile_trait_static_call(idx, midx, rt, rreg, args, expected, sp, false);
+            }
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(rt).clone() {
             // trait-typed receiver: ONLY that trait's methods (RFC 0012 §2).
@@ -1297,7 +1333,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .ctx
                     .inst_data
                     .get(&rt)
-                    .map_or(false, |(rd, _)| rd == d));
+                    .map_or(false, |(rd, _)| rd == d))
+                // structural template targets (the rut-json batch phase 1):
+                // a nullable or array receiver binds its element-generic
+                // impl (`impl I for ?T` / `impl I for [T]`) by shape
+                || matches!(&im.target_data, Some((d, params)) if params.len() == 1
+                    && match self.ctx.types.kind(rt) {
+                        TyKind::Opt { .. } => *d == sym::OPT,
+                        TyKind::Array { .. } => *d == sym::ARRAY,
+                        _ => false,
+                    });
             if !target_matches {
                 continue;
             }
@@ -1341,7 +1386,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let subst: Vec<(IdentId, TypeId)> = match &im.target_data {
             Some((_, params)) => match self.ctx.inst_data.get(&concrete).cloned() {
                 Some((_, cargs)) => params.iter().cloned().zip(cargs.into_iter()).collect(),
-                None => vec![],
+                // structural template targets: the element rides the
+                // receiver's own shape (`?elem` / `[elem]` — the rut-json
+                // batch phase 1's `impl I for ?T` / `[T]` dispatch)
+                None => match (self.ctx.types.kind(concrete), params.len()) {
+                    (TyKind::Opt { elem }, 1) => vec![(params[0], *elem)],
+                    (TyKind::Array { elem }, 1) => vec![(params[0], *elem)],
+                    _ => vec![],
+                },
             },
             None => vec![],
         };
@@ -1428,6 +1480,159 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
         { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
         Ok(ret_ty)
+    }
+
+    /// A trait method called through a TYPE PARAMETER's name —
+    /// `T.decode(r)` inside `fn decodeJson<T requires JsonDeserialize>`
+    /// (the rut-json batch phase 1's sanctioned checker gap 2; RFC 0012's
+    /// no-self trait method, the trait's Self param spelled by name).
+    /// Generic bodies compile per instantiation, so `param` is already
+    /// the substituted concrete type and the `(trait, type)` impl on it
+    /// answers. NO-SELF methods only: the callee's parameter list has no
+    /// receiver slot, so this lowers to a plain `Call` — a method with a
+    /// receiver is a caller-side error, never a silent misalign.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn compile_trait_param_static_call(
+        &mut self,
+        param: TypeId,
+        name: IdentId,
+        args: Vec<NodeHandle<AnyExpr>>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        // the local registry first (the impl and the generic body usually
+        // share a module — json's entries and its impls do), then another
+        // module's registration (RFC 0012 §2/§5)
+        if let Some((idx, midx)) = self.find_trait_impl_method(param, name) {
+            let im = self.ctx.impls[idx].clone();
+            let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
+            let tm = tdesc.methods[midx].clone();
+            // the trait method must be no-self: check the impl's own
+            // method node — its first param is the receiver slot when
+            // present, and a receiver would eat this call's first argument
+            let mnode = im.methods.iter().find(|(n, _)| *n == tm.name).map(|(_, n)| *n);
+            let has_recv = mnode.map_or(false, |mn| {
+                matches!(
+                    self.ctx.ast.method_decl(mn).params.first().map(|p| self.ctx.ast.param(*p)),
+                    Some(MemberKind::SelfParam(_))
+                )
+            });
+            if has_recv {
+                let t = self.ctx.name(tdesc.name);
+                let m = self.ctx.name(tm.name);
+                self.ctx.err(sp, format!(
+                    "`{m}` takes a receiver — `{t}` methods with `self` are called on a value, not the type parameter's name"
+                ));
+                return Err(());
+            }
+            // the impl method's own signature resolved under the target
+            // substitution (the same law as compile_trait_static_call's
+            // concrete ABI; `Self` spells the concrete target)
+            let subst: Vec<(IdentId, TypeId)> = match &im.target_data {
+                Some((_, params)) => match self.ctx.inst_data.get(&param).cloned() {
+                    Some((_, cargs)) => params.iter().cloned().zip(cargs.into_iter()).collect(),
+                    // structural template targets: the element rides the
+                    // receiver's own shape (`?elem` / `[elem]`)
+                    None => match (self.ctx.types.kind(param), params.len()) {
+                        (TyKind::Opt { elem }, 1) => vec![(params[0], *elem)],
+                        (TyKind::Array { elem }, 1) => vec![(params[0], *elem)],
+                        _ => vec![],
+                    },
+                },
+                None => vec![],
+            };
+            let (ptys, ret_ty) = match mnode {
+                Some(mn) => {
+                    let md = self.ctx.ast.method_decl(mn).clone();
+                    let mut ps = Vec::new();
+                    for p in md.params.iter() {
+                        match self.ctx.ast.param(*p) {
+                            MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                                ps.push(self.ctx.resolve_sig_ty(*t, &subst, Some(param)))
+                            }
+                            _ => ps.push(TY_I32),
+                        }
+                    }
+                    let ret = md.ret.map(|r| self.ctx.resolve_sig_ty(r, &subst, Some(param))).unwrap_or(TY_NIL);
+                    (ps, ret)
+                }
+                None => (tm.params.clone(), tm.ret),
+            };
+            if args.len() != ptys.len() {
+                self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                return Err(());
+            }
+            // the enclosing class for `Self`-ish statics in the body —
+            // the same probe compile_trait_static_call's inline path runs
+            let mut aregs = Vec::new();
+            for (i, a) in args.iter().enumerate() {
+                let t = self.compile_expr(*a, Some(ptys[i]))?;
+                if !self.widens(t, ptys[i]) {
+                    self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1,
+                        self.ctx.type_name(t),
+                        self.ctx.type_name(ptys[i])
+                    ));
+                }
+                aregs.push(self.last_reg);
+            }
+            // no inline here (P1.3 stays a receiver-call optimization):
+            // a no-self static body binds through the compiled Inst below
+            let key = self.ctx.impl_method_key(idx, tm.name, false);
+            let inst = crate::check::Inst {
+                key,
+                subst,
+                trait_origins: vec![],
+            };
+            let fid = self.ctx.ensure_inst(inst);
+            let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+            { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+            return Ok(ret_ty);
+        }
+        if let Some((eidx, midx)) = self.find_extern_trait_impl_method(param, name) {
+            let im = &self.ctx.extern_impls[eidx];
+            let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
+            let tm = tdesc.methods[midx].clone();
+            let list = im.methods_concrete.iter().find(|(n, _)| *n == tm.name);
+            let (fid, ptys, ret_ty) = match list {
+                Some(&(_, f)) => (f, tm.params.clone(), tm.ret),
+                None => match im.methods.iter().find(|(n, _)| *n == tm.name) {
+                    Some(&(_, f)) => (f, tm.params.clone(), tm.ret),
+                    None => {
+                        let t = self.ctx.name(tdesc.name);
+                        self.ctx.err(sp, format!("impl `{t}` is missing `{}`", self.ctx.name(tm.name)));
+                        return Err(());
+                    }
+                },
+            };
+            if args.len() != ptys.len() {
+                self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                return Err(());
+            }
+            let mut aregs = Vec::new();
+            for (i, a) in args.iter().enumerate() {
+                let t = self.compile_expr(*a, Some(ptys[i]))?;
+                if !self.widens(t, ptys[i]) {
+                    self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1,
+                        self.ctx.type_name(t),
+                        self.ctx.type_name(ptys[i])
+                    ));
+                }
+                aregs.push(self.last_reg);
+            }
+            let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+            { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+            return Ok(ret_ty);
+        }
+        self.ctx.err(sp, format!(
+            "`{}` has no trait impl providing `{}` in this instantiation — the bound `requires` clause names a trait whose impl is missing",
+            self.ctx.type_name(param),
+            self.ctx.name(name)
+        ));
+        Err(())
     }
 
     /// Another module's registration of the `(trait, type)` impl
