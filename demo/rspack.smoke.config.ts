@@ -33,9 +33,11 @@ const config: RspackOptions = {
           },
         },
       },
-      // the classics: example sources + expected sidecars as strings
+      // the classics: example sources as strings — rut-ONLY since the
+      // no-sidecars batch (expected rides inline in the case entries),
+      // so a leftover `.expected` import fails the build loudly
       {
-        test: /\.(rut|expected)$/,
+        test: /\.rut$/,
         type: "asset/source",
       },
     ],

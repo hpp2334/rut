@@ -33,7 +33,7 @@ command); `build:wasm` copies them with the same curated loud-fail.
   page runs real `compile`/`run` calls through the raw ABI of the
   `rut-wasm` crate (see `src/wasm/rut-api.d.ts` and
   `../crates/rut-wasm/src/lib.rs`). After every run the output is
-  diffed against the case's sidecar — the StatusBar chip shows
+  diffed against the case's inline expected — the StatusBar chip shows
   ✓/✗ (and a failing verify renders the line-paired diff). The banner
   names the real engine slice mounted into the wasm host.
 - **error mode**: there is no preview fallback. A missing/invalid
@@ -87,7 +87,7 @@ dropFrame(): number               // retire a parked frame (case switch)
 The demo host exposes the logger (+ calc's math) to the guest.
 Default budgets: 10M fuel / 4 MiB heap. Case 8 intentionally loops
 forever to demonstrate `Trap::OutOfFuel` + the resume button — and its
-sidecar pins the DEFAULT budget (zero ticks fit in 10M), so a raised
+expected pins the DEFAULT budget (zero ticks fit in 10M), so a raised
 fuel box or a Resume shows a verify diff BY DESIGN.
 
 ## Layout
@@ -101,9 +101,11 @@ src/
   App.tsx                layout, run/resume wiring, budget state, boot-error
                          panels (runner + LSP), the debounced re-analyze
   cases.ts               prepared cases (name, blurb, source, expected[])
-  verify.ts              the sidecar flip: real-vs-expected diff (survey D2)
-  examples/              the classics — real .rut files + .expected sidecars
-    index.ts             metadata + raw imports (asset/source); playground order
+  verify.ts              the real-run vs expected diff (survey D2's sidecar flip)
+  examples/              the classics — real .rut files, expected inline
+    index.ts             metadata + raw .rut imports (asset/source) + the
+                         inline expected blocks (the retired sidecars' bytes,
+                         verbatim); playground order
   runner.ts              wasm-or-error resolution (no fallback)
   lsp/
     rut-lsp.ts           the standalone rut-lsp.wasm binding (survey D3):
@@ -129,9 +131,9 @@ rspack.smoke.config.ts   bundles the app surface for node (dist-smoke/, gitignor
 ## Honest limits
 
 - **Custom edits verify against the case they came from.** A free-form
-  edit that still matches the sidecar stays green; one that doesn't
-  shows the diff. There is no per-document sidecar authoring — that is
-  the playground-editing menu item (see the batch report).
+  edit that still matches the case's expected stays green; one that
+  doesn't shows the diff. There is no per-document expected authoring —
+  that is the playground-editing menu item (see the batch report).
 - **The wasm host mounts a slice, not the whole std**: core, calc, rt,
   ink, pouch, nmapset (+ the nmap host bindings). `select`/`await`
   parse but have no host futures in this host — never taught, honestly.

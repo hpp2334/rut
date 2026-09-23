@@ -9,7 +9,9 @@
 //      error runner has no working methods — no silent anything;
 //   2. every prepared case (8 inline + 17 classics) REALLY compiles
 //      and runs through the wasm engine at the pinned default budget
-//      and verifies GREEN against its sidecar;
+//      and verifies GREEN against its inline expected (the classics'
+//      blocks are the retired *.expected sidecars' bytes, verbatim —
+//      md5 receipts in docs/demo-no-sidecars-survey.md §1.1);
 //   3. the resume is REAL (survey D5): the parked frame continues —
 //      zero-budget resume re-traps at the parked pc, +16M resume
 //      carries tick 2000000 (a re-run would print tick 1000000
@@ -30,7 +32,12 @@
 //      names, strings at known positions) whose token classes match
 //      ground truth through the shared decodeTokens, and the overlay
 //      builder (the exact paint path) reconstructing every source
-//      EXACTLY — the double-layer alignment law.
+//      EXACTLY — the double-layer alignment law;
+//   7. THE NO-SIDECARS GATE (the no-sidecars batch, survey §3): a raw
+//      fs walk of demo/ asserting zero `*.expected` basenames —
+//      untracked included BY CONSTRUCTION (git ls-files is blind to
+//      exactly the stray this gate exists to catch); node_modules
+//      pruned, dist/ and dist-smoke/ walked with everything else.
 //
 // Exit 0 = every case real and verified. Any failure exits 1 LOUD.
 'use strict';
@@ -123,7 +130,7 @@ console.log('\n[1] the runner law: missing/invalid artifact => mode "error"');
 
 // ---- 2. the real artifact: every case really runs and verifies green ----
 
-console.log('\n[2] every prepared case: REAL run, verified against its sidecar');
+console.log('\n[2] every prepared case: REAL run, verified against its inline expected');
 
 const bytes = exactAB(readFileSync(ARTIFACT));
 const runner = await api.Runner.boot(async () => bytes);
@@ -156,7 +163,7 @@ for (const c of all) {
   const v = api.verifyAgainstExpected(res, c.expected, api.DEFAULT_BUDGET.fuel);
   check(
     v.ok,
-    `${c.id}: REAL run matches its sidecar`,
+    `${c.id}: REAL run matches its inline expected`,
     JSON.stringify({ got: api.renderedLines(res), expected: c.expected }),
   );
 }
@@ -208,13 +215,13 @@ runner.dropFrame();
     `fuelUsed is cumulative across legs (${leg2.fuelUsed}) — a fresh 16M run can never report that`,
   );
 
-  // the accumulated verify vs the sidecar is a diff BY DESIGN (the
-  // sidecar pins the DEFAULT budget) — and says so
+  // the accumulated verify vs the case's expected is a diff BY DESIGN
+  // (the expected pins the DEFAULT budget) — and says so
   const v = api.verifyAgainstExpected(leg2, fuel.expected, 28_000_000);
-  check(!v.ok, 'the accumulated output diffs the default-budget sidecar by design');
+  check(!v.ok, 'the accumulated output diffs the default-budget expected by design');
   check(
     v.rows.some((r) => r.expected === 'Trap::OutOfFuel'),
-    'the diff pairs the trap line with its sidecar line',
+    'the diff pairs the trap line with its expected line',
   );
 
   // drop retires the frame; a further resume is LOUD
@@ -274,7 +281,9 @@ console.log('\n[5] the grep gate: no dead-surface shapes anywhere under demo/src
   }
 
   const files = walk(join(DEMO, 'src')).sort();
-  check(files.length >= 40, `the scan covered ${files.length} files under demo/src`, String(files.length));
+  // 52 files at the sidecar base; 35 after the no-sidecars batch
+  // retired the 17 *.expected sidecars (survey §1.1's arithmetic)
+  check(files.length >= 35, `the scan covered ${files.length} files under demo/src`, String(files.length));
 
   let hits = 0;
   for (const file of files) {
@@ -469,6 +478,36 @@ if (!existsSync(LSP_ARTIFACT)) {
       JSON.stringify(lines[ln]),
     );
   }
+}
+
+// ---- 7. the no-sidecars gate (the batch's law, committed) ----
+
+console.log("\n[7] the no-sidecars gate: find demo -name '*.expected' is empty");
+
+{
+  // `find demo -name '*.expected'` must stay EMPTY — untracked included
+  // (a raw fs walk, not git ls-files, which is blind to untracked strays).
+  // node_modules is pruned: vendored third-party land, not the demo's
+  // surface (zero strays there today — checked at base — so even the
+  // literal command is empty; the prune keeps a transitive dep's data
+  // file from ever red-ing our gate). dist/ and dist-smoke/ stay IN:
+  // they are inside demo/ and only ever carry build-emitted names.
+  function walkDemo(dir) {
+    const out = [];
+    for (const entry of readdirSync(dir)) {
+      if (entry === 'node_modules') continue;
+      const p = join(dir, entry);
+      if (statSync(p).isDirectory()) {
+        out.push(...walkDemo(p));
+      } else {
+        out.push(p);
+      }
+    }
+    return out;
+  }
+
+  const strays = walkDemo(DEMO).filter((p) => p.endsWith('.expected'));
+  check(strays.length === 0, "find demo -name '*.expected' is empty (untracked included)", strays.join(', '));
 }
 
 // ---- verdict ----

@@ -44,10 +44,12 @@ const config: RspackOptions = {
         test: /\.css$/,
         type: "css",
       },
-      // the classics (RFC 0041 §3): example sources + expected sidecars,
-      // imported as strings by demo/src/examples/index.ts
+      // the classics (RFC 0041 §3): example sources imported as strings
+      // by demo/src/examples/index.ts — rut-ONLY since the no-sidecars
+      // batch (expected rides inline in the case entries), so a leftover
+      // `.expected` import fails the build loudly
       {
-        test: /\.(rut|expected)$/,
+        test: /\.rut$/,
         type: "asset/source",
       },
     ],

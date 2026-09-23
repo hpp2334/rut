@@ -1,18 +1,95 @@
 //! Playground classics gate (RFC 0041 §3) — every `demo/src/examples/*.rut`
 //! compiles AND runs through the full pipeline, and its output matches the
-//! `.expected` sidecar next to it. The demo reads those same files raw, so
-//! the playground's static-preview promises are exactly what the pipeline
-//! produces — never a hand-written guess.
+//! case's inline `expected` lines (the `EXPECTED` table below; the demo's
+//! `src/examples/index.ts` carries the same values in TypeScript). The demo
+//! reads the same sources raw, so the playground's static-preview promises
+//! are exactly what the pipeline produces — never a hand-written guess.
 
 use std::cell::RefCell;
 use std::rc::Rc;
+
+/// the classics' expected outputs — carried VERBATIM from the retired
+/// `demo/src/examples/*.expected` sidecars (md5 receipts in
+/// docs/demo-no-sidecars-survey.md §1.1); enforced here natively and
+/// by the demo smoke through wasm — each gate enforces its own copy
+/// against the same engine, so neither copy can silently rot
+const EXPECTED: &[(&str, &[&str])] = &[
+    ("bytes", &[
+        "round=true octets=8 chars=8",
+        "header=RUT scratch.len=16",
+        "alias same content: true",
+        "clone same content: true",
+        "octets=6 chars=5",
+    ]),
+    ("checked-arith", &[
+        "wrap=4 under=255",
+        "over=(44, false)",
+        "ok=(255, true)",
+        "under=(255, false)",
+        "mul=(44, false)",
+        "i32 top=(-2147483648, false) wrap=-2147483648",
+        "roundtrip=0",
+    ]),
+    ("classes", &["count=2 area=12"]),
+    ("closures-generics", &[
+        "add=3 area=3.1415927 sum=6",
+        "head=10 name=a",
+    ]),
+    ("literals", &["a=10 e=1.5 d64=1.5 ch=h p.x=1 zero[0]=9 len=3 bin=64"]),
+    ("maps", &[
+        "rut=3 runs=1",
+        "replace=false rut=9",
+        "removed=true len=2 has=false",
+        "miss is nil: true",
+        "a=10 b=20",
+        "miss is nil: true",
+        "a=11 len=2",
+        "first=true again=false len=1",
+        "has x=true has z=false",
+    ]),
+    ("matrix-mul", &["out[0]=21 out[last]=107"]),
+    ("node-cycle", &["head.next alive: true"]),
+    ("opaque", &[
+        "point 1 2",
+        "sour? true wrong? true",
+        "is str: true",
+        "one cell: 9 5 5 9",
+        "same session: true",
+        "distinct boxes: false",
+        "value 5",
+        "str box misses i32: true",
+        "3 boxes; first is Point: true",
+        "vec 1",
+    ]),
+    // the trailing space is LOAD-BEARING: the engine emits it
+    ("quicksort", &["sorted: 1 2 2 3 5 7 8 9 "]),
+    ("sieve", &["25 primes up to 100, last=97"]),
+    ("str-views", &[
+        "word=world len=5 eq=true",
+        "iterated=5 reslice=or",
+        "chars=6 octets=7",
+        "accent=é",
+        "code=104 back=h round=true",
+    ]),
+    ("structs", &[
+        "len=6.324555320336759 color=16711935 area=6",
+        "same=true distinct=false fresh.x=7",
+    ]),
+    ("tree", &["nodes=15"]),
+    ("type-aliases", &["trip=1500 plain=1500 ridge/trench kind=trench"]),
+    ("weak-cache", &[
+        "held: true id=1",
+        "miss: false",
+    ]),
+    ("when", &["small"]),
+];
 
 fn examples_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../demo/src/examples")
 }
 
 #[test]
-fn classics_run_and_match_their_expected_sidecars() {
+fn classics_run_and_match_their_expected() {
     let dir = examples_dir();
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
@@ -31,13 +108,11 @@ fn classics_run_and_match_their_expected_sidecars() {
     let mut failures: Vec<String> = Vec::new();
     for path in &files {
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
         let src = std::fs::read_to_string(path).unwrap();
-        let expected: Vec<String> = std::fs::read_to_string(path.with_extension("expected"))
-            .unwrap_or_else(|e| panic!("{name}: cannot read sidecar: {e}"))
-            .trim_end_matches('\n')
-            .split('\n')
-            .map(str::to_string)
-            .collect();
+        let Some(expected) = EXPECTED.iter().find(|(n, _)| *n == stem).map(|(_, e)| *e) else {
+            panic!("{name}: no entry in the EXPECTED table — add the case's expected lines");
+        };
 
         // the classics use the toolchain libs (`ink`+`rt`, `pouch`) —
         // third-party pkgs mounted from the tree (the driver doesn't
@@ -106,8 +181,9 @@ fn classics_run_and_match_their_expected_sidecars() {
             continue;
         }
         let got = lines.borrow().clone();
-        if got != expected {
-            failures.push(format!("{name}:\n  got:  {got:?}\n  want: {expected:?}"));
+        let want: Vec<String> = expected.iter().map(|s| s.to_string()).collect();
+        if got != want {
+            failures.push(format!("{name}:\n  got:  {got:?}\n  want: {want:?}"));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));

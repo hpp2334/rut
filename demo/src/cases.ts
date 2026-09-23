@@ -4,9 +4,11 @@
  * plus the `nmapset` map lane), whose `info` lines stream back as
  * output.
  *
- * `expected` is the case's SIDECAR: after every real run the page diffs
- * the engine's actual output against it (the sidecar flip, survey D2)
- * and the smoke gate does the same headlessly. Sources reflect TODAY's
+ * `expected` is INLINE data (the no-sidecars batch: the classics'
+ * blocks are the retired sidecars' bytes, verbatim — survey §1.1's
+ * md5 receipts): after every real run the page diffs the engine's
+ * actual output against it (survey D2) and the smoke gate does the
+ * same headlessly. Sources reflect TODAY's
  * surface — RFC 0044: bindings share by reference (copy-by-value and
  * `own` are gone; `bytes.clone()` is the one copy), `==` is identity
  * for cells, the pointer shape is the nullable `?T` (prefix-only;

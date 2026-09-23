@@ -275,3 +275,20 @@ post-fix drive).
    shows a red diff BY DESIGN (the sidecar pins the default budget).
    A per-case "expected at budget B" table would let the chip stay
    green across budgets; today the honesty is the feature.
+
+## 9. Follow-up: the no-sidecars batch (phase 1, landed)
+
+This batch's storage law moved under the demo-real-run batch's
+descendants: `docs/demo-no-sidecars-survey.md` (phase 0) census'd the
+17 sidecars; phase 1 retired them. The verifier this report describes
+is untouched — the chip, the line-paired diff, and the smoke's
+real+verified law all survive; only where the expected bytes LIVE
+moved. The 17 files' contents (md5-receipted in the survey §1.1,
+quicksort's load-bearing trailing space included) now ride INLINE in
+the case entries (`examples/index.ts` template blocks, `cases.ts`
+already carried its 8), with a verbatim copy in
+`crates/rut-cli/tests/playground.rs`'s `EXPECTED` table so the native
+gate keeps its byte diff; the smoke gained the §7 no-sidecars walk
+(`find demo -name '*.expected'` empty, untracked included) and its §5
+scan pin re-pinned 40 → 35. The report's own wording above ("sidecar")
+is this batch's historical record; the live truth is inline expected.
