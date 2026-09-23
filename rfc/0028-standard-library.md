@@ -219,10 +219,15 @@ trait JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError
 Decode is **DIRECT schema-driven**: the trait's `decode` reads its own
 expectations straight off the cursor — no intermediate DOM is built,
 so a `Vec<Row>` decode mints exactly the program's own values, once.
-The `JsonReader` splits the document's codepoints once into a
-`[?u32]` column and carves tokens as O(1) `StrView` slices (RFC
-0042); the `JsonWriter` is the rc==1 string accumulator (RFC 0007's
-append fast path). Numbers: `i64` exact (overflow is a `WrongType`
+The `JsonReader` is a direct cursor over the source `str` (the early
+`[?u32]` codepoint column is gone — the json-perf batch's phase 2);
+its classify loops ride the host-side `str.scan` primitive end-to-end
+and tokens carve as O(1) `StrView` slices (RFC 0042); the
+`JsonWriter` accumulates through the `StrBuf` builder (amortized
+in-place growth, one `finish()` materialization — no longer the
+field-append rc==1 fast path, whose ~750× copy tax the json-perf
+survey measured). Both moves are output-byte-identical
+(`docs/json-perf-report.md`). Numbers: `i64` exact (overflow is a `WrongType`
 error, never a silent wrap), `f64` two-tier — tier 1 IEEE-exact
 (split-multiply, single rounding), tier 2 best-effort ±1 ulp,
 disclosed; encode renders the shortest round-trip decimal. Depth is
@@ -292,12 +297,22 @@ exactly-one-nil law on the `(?T, ?E)` entries, and the bench record
 
 The prelude surface is `assert`/`panic`, `on_drop`, `string_join`, the
 `str`/`bytes` member
-contracts (`s.len()`/`s.code()`/`s.encode()`,
-`b.len()`/`b.decode()`, `bytes.zeroed(n)`/`bytes.from(a)` —
-RFC 0004 §4), the `builtin impl i8..u64` numeric methods, and the
+contracts (`s.len()`/`s.code()`/`s.code_at(i)`/`s.encode()`,
+`s.slice(from, to)` (RFC 0042), `b.len()`/`b.decode()`,
+`bytes.zeroed(n)`/`bytes.from(a)` —
+RFC 0004 §4), the tokenizer members (`s.scan(from, set)` — the fused
+host-side scan/classify over a caller-owned `[u8]` class table,
+returning the packed `(stop << 8) | class`; `s.starts_with(from,
+head)` — the host-compared prefix test), the `StrBuf` growable builder
+(`StrBuf(cap)`, `push`/`push_code`, O(1) `len`, `finish()` the one
+materialization), the `builtin impl i8..u64` numeric methods, and the
 erasure statics `opaque.new`/`opaque.downcast<T>` (RFC 0014 revised —
 builtin-surface: both are members of the `builtin primitive opaque`,
-and the names are ambient).
+and the names are ambient). The tokenizer members and `StrBuf` are the
+json-perf batch's general-surface additions (VERSION 9 → 10
+disclosed): machinery any tokenizer or encoder wants — json was the
+first consumer, and the engine never learns what json is
+(`docs/json-perf-report.md` §4).
 `Option`/`Result`/`own` are removed (RFC 0005 §10), `char` is gone
 (RFC 0004 §4), and the free fn spellings `downcast<T>(o)`/`make_ptr(v)`
 are gone with them (builtin-surface): a use site — type position,

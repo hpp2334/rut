@@ -533,6 +533,59 @@ rut-vscode-0.2.2.vsix c3bd856b30f92f1c247db23fa5462b67,
 out/wasm.js 1760d628bd6ecf7f6cdd5014f7b4a377. VERSION stays 10 (no
 new encodings — the landed tree is HEAD's).
 
+## Performance log — json-roundtrip: the json-perf batch close-out (Sep 2026)
+
+The batch's consolidated record (the full report:
+`docs/json-perf-report.md`; the survey it argues from:
+`docs/json-perf-survey.md`). The four phase sections above each
+disclosed their piece — this section is the one table for the whole
+arc, with the no-mover attestations restated in one place. The law
+throughout: json stays rut, the host gained GENERAL machinery only,
+checksums immutable, every re-pin disclosed with its old value
+verbatim.
+
+The probe chain (in-process exec, fresh-VM iters, interleaved A/B,
+medians of round medians; fuel/heap bit-exact pure counts — the stable
+record; JS nets drift ±10%+ between sessions):
+
+| landed state | row exec (probe) | fuel (bit-exact) | VM heap peak (bit-exact) | rut/qjs |
+|---|---|---|---|---|
+| baseline (the rut-json pin) | 796.4 ms | 60,933,262 | 10,674,377 B | 23.1× (nets 930.9 vs 40.3) |
+| phase 1 — the writer's chunk buffer | 215.5 ms (−72.9%) | 61,840,477 (+1.49%, disclosed) | 4,550,508 B (−57.4%) | 8.6× (nets 326.5 vs 37.9) |
+| phase 2 — the general surface + the split + the builder | 110.3 ms (−49.1%) | 31,543,783 (−49.0%) | 3,423,642 B (−24.8%) | ~5.5× same-day (205.0 vs 37.2); **~2.7×** vs the baseline session's qjs |
+| phase 3 — SWAR/SIMD answered NO, the −0.91% trim reverted | 110.3 ms (bit-flat) | 31,543,783 (bit-flat) | 3,423,642 B (bit-flat) | unchanged |
+| **close-out total** | **−86.1%** | **−48.2%** | **−67.9%** | **23.1× → ~2.7×** |
+
+(The two rut/qjs framings, so nobody overclaims either direction:
+~5.5× is the honest SAME-DAY cross-runtime run at phase 2's HEAD, where
+rut's net pays the CLI's compile/mount the probe exec excludes; ~2.7×
+puts the stable probe exec 110.3 ms against the baseline session's qjs
+net 40.3 ms. The honest residual: decode at the interpreter floor —
+carve + mints + sticky-error checks + one host call per token
+boundary; the JS twins ride their engines' native JSON paths, and
+closing further would take the host learning what json is, which the
+law forbids.)
+
+**The no-mover attestations, batch-wide.** The checksum is immovable —
+`1960875332163557684` on rut/qjs/node in every phase, `expected.json`
+untouched from the first commit to the last. The json-decode canary is
+bit-identical throughout (`4502015958359127277`, fuel 111,322,915 —
+the row does not mount `rut/json`, so it proofs both the pkg-only and
+the engine phases). Every OTHER row of the suite is bit-identical to
+its standing record at every phase that touched the tree: phase 1
+(pkg-only) proved it on the full suite; phase 2 (the engine phase)
+re-proved it — 29 workloads × {rut, qjs, node}, exit 0, every row's
+probe fuel/heap equal to the phase-1 record, which is the no-mover
+proof a general-surface change owes the whole suite; phase 3 landed
+nothing and re-proved everything. Reverted-with-numbers along the way
+(each with its lesson in the report): the 256-entry LUT (+1.65 M fuel /
++5.9% decode exec — classify was call-frame-bound, not compare-bound),
+the octet charset scan (+84 ops/call, +1.96 M fuel, no exec win — the
+surface primitive was the fix), comma-folding (ditched in design), the
+SWAR/SIMD kernels (zero scans ≥ 8 bytes; shape compilation ~50× the
+call), and the −0.91% preamble trim (inside the ±1% gate → reverted
+per the method).
+
 ## Performance log — mapset-perf engine phases (Sep 2026)
 
 

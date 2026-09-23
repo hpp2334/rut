@@ -98,6 +98,9 @@ lexer diagnoses the removal), and no `char` in `str` iteration: a
 with integers:
 
 - `s.code() -> u32` — the FIRST codepoint of `s` (traps on empty).
+- `s.code_at(i: i32) -> u32` — the codepoint at codepoint index `i`
+  (traps out of bounds — the index is a bug, not data). Added with the
+  json-perf batch's tokenizer surface (`docs/json-perf-report.md`).
 - `str.from_code(n: u32) -> str` — the 1-codepoint `str` for `n`
   (compiler-lowered; UTF-8 encoded at materialization).
 
