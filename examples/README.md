@@ -19,6 +19,62 @@ them raw, and `crates/rut-cli/tests/playground.rs` compiles and runs
 every one against its `.expected` sidecar. The parser conformance suite
 (RFC 0030 §7) walks both trees.
 
+## Packages and manifests — the three dep kinds
+
+Every package carries a `rut.toml` (RFC 0041 §5 — `03-plugin`'s
+`plugin/` and `server/` are the in-tree examples). Since the dep-kinds
+batch (RFC 0045), a manifest relates to other packages through three
+tables: **`[deps]`** — transitively mounted, unchanged; **`[peer-deps]`**
+— **required by default** (the *consumer* supplies the peer; never
+pulled transitively) with `optional = true` marking the presence-mounted
+kind whose integration file — the descriptor's `lib`, an impl-only
+`.rut` — mounts only when the peer is anywhere in the program's
+closure; **`[dev-deps]`** — mounted only while building the pkg itself,
+never in a consumer's world.
+
+The motivating case is json's serde-model impls: `impl JsonSerialize
+for Vec<T>` written in json must not force every json consumer to
+mount pouch/nmapset. The pinned grammar:
+
+```toml
+# rut/json/rut.toml
+name = "json"
+
+[peer-deps]
+pouch    = { path = "../pouch",    optional = true }
+nmapset  = { path = "../nmapset",  optional = true }
+
+[dev-deps]
+pouch    = { path = "../pouch" }
+nmapset  = { path = "../nmapset" }
+```
+
+(json develops against real pouch/nmapset via the both-kinds pairing;
+its consumers mount json light — absent optional peers are silent,
+and referencing the integration names the fix instead of a bare
+unresolved-name.)
+
+Decisions this batch landed, visible in the examples:
+
+- **Dedup-by-origin at the splice** — two packages both riding a
+  shared transitive inline pkg now compose instead of colliding, so
+  [`05-todolist-web`](05-todolist-web/)'s `appkit` single-splice
+  wrapper retires as a NECESSITY: it was the workaround for the
+  duplicate-definition trap; it stays legal (one use, one leaf) and
+  the example is untouched.
+- **Required-by-default peers** — a missing required peer is a loud
+  mount error naming pkg + peer + the fix; silence is reserved for
+  absent *optional* peers, which is the feature.
+- **Bundles pack v3** — [`03-plugin`](03-plugin/)'s `plugin/rut.toml`
+  rides `format_version = 3` (RFC 0038's ledger): peer groups ride
+  the archive; an older loader refuses rather than guess.
+
+Not here, on purpose: registry/index deps and version-range selection
+— `[peer-deps]` is a presence relation over mounted packages, not a
+package manager (RFC 0045 OQ-1). The full record: the survey, the
+diagnostics, and the test matrix in
+[`docs/dep-kinds-report.md`](../docs/dep-kinds-report.md).
+
 The earlier parse-only design corpus (`basic/`, `concurrency/`,
 `workers/`, `network/`, `memory/`, `json/`, `gui/`, `host/`) was
 removed: its implemented parts moved to the playground classics, and the

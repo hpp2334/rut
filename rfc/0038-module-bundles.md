@@ -145,3 +145,40 @@ compile to identical programs (tested: the linked binaries are equal).
   `.rutc.map` under `format_version 2`, with the original draft's §4
   version rows and RFC 0029 §5's fast path. Blocked on module-binary
   linking (RFC 0033/0035).
+
+---
+
+## Amendment (Sep 2026): layout v3 — the peer groups ride the archive
+
+The dep kinds (RFC 0045) extend the OQ-3 answer: a package's
+`[peer-deps]` integration files (`lib` keys — impl-only `.rut`
+sources mounted by the peer gate) are part of the package, so a
+bundle that drops them would load base-only — semantically wrong.
+The version ledger:
+
+| version | layout | status |
+|---|---|---|
+| 1 | one module, sources only | loads (the one-module special case) |
+| 2 | the whole `[deps]` graph as `<pkg>/` groups (OQ-3) | loads; no longer packs |
+| 3 | + each package's `[peer-deps]` `lib` files beside its entry in its group | **the packer's output** |
+
+- **Packing**: `pack_dir` requires the bundle keys at
+  `format_version = 3` (a directory-shaped manifest without them is a
+  loud packing error naming the fix) and packs each pkg's `lib` files
+  deterministically (name order, same-input ⇒ byte-identical).
+  Directory loading still ignores the format keys (§2's law).
+- **Loading**: the loader knows 1 | 2 | 3 and still refuses unknown
+  versions **before reading anything else** (§2's gate — the same
+  gate makes an OLDER v2-era loader refuse a v3 bundle: refuse, never
+  guess). A manifest declaring `[peer-deps]` under `format_version`
+  1 or 2 is refused: those layouts have no group entries.
+- **The v3 load runs the peer gate over the archive** (RFC 0045 §3):
+  peer present → the group file is read from the zip and appended (a
+  declared group the archive lacks is a load error — refuse, never
+  guess); optional peer absent → inert; required peer absent → the
+  loud D1 error. The packed form and its directory compile to
+  identical programs (§6's law holds with groups — pinned by the
+  dep-kinds batch's T12).
+- Module binary VERSION is untouched: bundle `format_version` is a
+  separate ledger (§2), and impl-only groups add no host fns and no
+  binary sections (RFC 0045 §5).

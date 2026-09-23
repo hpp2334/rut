@@ -390,3 +390,36 @@ identity.** `a != b` is its negation (`!(a == b)`).
   `Hashable` (maps) while `==` stays identity.
 - `when` literal patterns are unaffected: arms match compile-time
   values, never runtime `==`.
+
+---
+
+## Amendment (Sep 2026): peer-gated impl groups — trait-local, gated before placement
+
+The dep kinds (RFC 0045) add *peer groups*: impl-only `.rut` files a
+package appends to its own source only when an optional peer is
+present in the consumer's closure (e.g. json's `impl JsonSerialize for
+Vec<T>`, mounted only when the consumer carries pouch). Their
+placement law, recorded here so the two RFCs agree:
+
+- **The peer-gated impl stays trait-local.** A group's impls are
+  trait impls in the declaring pkg — legal by §2's placement rule
+  ("trait impls are legal in any module"): the trait is the
+  declaring pkg's own, and the declaring pkg is where the impl lives.
+  No orphan question exists; the group is the trait's home module
+  speaking about the peer's type, which is exactly the shape §2
+  blesses.
+- **The gate precedes the orphan check.** The peer gate runs at LOAD
+  (RFC 0045 §3, one post-closure pass); placement and pair-uniqueness
+  run at COMPILE/LINK. The checker never sees a half-mounted world:
+  peer absent → the group text was never assembled → there is no
+  impl anywhere to place; peer present → the target type resolves
+  (the group's `use` of the peer binds it — mounted by definition).
+- **§5's duplicate-pair link error is the consumer-side guard**: a
+  consumer who hand-writes the same `(trait, type)` pair in a world
+  where the group mounted gets the link-time duplicate — loud and
+  correct, since the group already provides the impl. Documented
+  behavior, not a gap.
+- Groups are impl-only by law (RFC 0045 §3): they declare no new
+  public names, which is what keeps every peer-related miss on a
+  dedicated, peer-aware diagnostic path instead of a bare
+  unresolved-name.

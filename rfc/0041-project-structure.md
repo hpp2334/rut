@@ -383,3 +383,45 @@ the engine knows their names.
   binaries rebuilt from ONE checkout (cross-directory A/B builds are
   not layout-safe), fresh-VM iterations, honest neutrals recorded as
   neutral.
+
+---
+
+## Amendment (Sep 2026): the dep kinds — the manifest section's touchpoints
+
+§5's grammar grows two tables beside `[deps]` — the dep kinds of RFC
+0045 (which owns the law; this records where §5's text touches it):
+
+- **`[deps]`** (§5's bullet, law unchanged): still the transitively
+  mounted table — `pkg = { path = ".." }`, string-only descriptors,
+  recursive walk, cycle guard, first-mount wins. New: `optional` is
+  rejected here (`` `optional` is a `[peer-deps]` attribute —
+  `[deps]` has no options ``).
+- **`[peer-deps]`** (new bullet): required by default — the consumer
+  supplies the peer, never transitively pulled; `optional = true`
+  marks the presence-mounted kind whose integration group is the
+  descriptor's `lib` file. Descriptors: `path`, `optional`, `lib` —
+  nothing else (the `[entry]` strictness, line-targeted).
+- **`[dev-deps]`** (new bullet): mounted only when building/testing
+  the pkg itself — the program root; a dep's dev table is never
+  walked, so a consumer's world never contains it. Same descriptor
+  shape as `[deps]`.
+- **The resolution walk** (§5's recursion paragraph): the walk now
+  also records each mounted pkg's `[peer-deps]` declarations; after
+  the closure exists, ONE post-closure peer gate runs (RFC 0045 §3).
+  First-mount-wins is untouched — and is what makes presence-by-NAME
+  sound: a consumer's own path for a peer always wins over the
+  declarer's `path`, which stays directory-time metadata.
+- **The cross-table law**: a name in `[deps]` beside `[peer-deps]`/
+  `[dev-deps]` is an error naming both rows; peer + dev together is
+  the sanctioned both-kinds pairing (RFC 0045 §2).
+- **The entry bullet**: "one `.rut` per package" gains the group
+  caveat — a pkg may carry impl-only `.rut` group files named by
+  `[peer-deps]` `lib` keys; they are not entries, they mount only
+  with the peer, and they declare no public names (RFC 0045 §3).
+- **§5's closing paragraph stands unchanged and now covers peers
+  too**: nothing in the engine knows `pouch`'s or json's name — peer
+  presence is a property of the program's closure, resolved by name.
+
+The section's other keys (`name`, `entry.*`, `host_scope`, `inline`,
+the bundle keys) are untouched; RFC 0038's amendment records the
+bundle-side consequence (layout v3 packs the group files).
