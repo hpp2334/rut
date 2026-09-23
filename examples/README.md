@@ -61,7 +61,10 @@ Decisions this batch landed, visible in the examples:
   [`05-todolist-web`](05-todolist-web/)'s `appkit` single-splice
   wrapper retires as a NECESSITY: it was the workaround for the
   duplicate-definition trap; it stays legal (one use, one leaf) and
-  the example is untouched.
+  the example is untouched. (The retirement has since been EXECUTED by
+  the todolist-restructure batch — the example's packages mount
+  separately under the manifest route, appkit proven dead by
+  P1/P2/P3; see `docs/todolist-restructure-report.md` §2.)
 - **Required-by-default peers** — a missing required peer is a loud
   mount error naming pkg + peer + the fix; silence is reserved for
   absent *optional* peers, which is the feature.
