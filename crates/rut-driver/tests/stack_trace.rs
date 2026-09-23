@@ -108,7 +108,7 @@ fn capture_lowers_to_the_capture_native() {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core()), (3, collection)],
+        &[(2, rut_core::binary::Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     assert!(
@@ -359,21 +359,23 @@ fn discarded_capture_releases_cleanly() {
 }
 
 #[test]
-fn version_eight_rejects_stale_artifacts() {
-    // v8 is the declared-surface change (the 6→7 precedent): a v7
-    // header is rejected with the standard version error
+fn version_nine_rejects_stale_artifacts() {
+    // v9 is the orphan rule (RFC 0012 §2a, the 5→6 rejection-addition
+    // precedent); v8 was the declared-surface change (the 6→7
+    // precedent): a v7 header is rejected with the standard version
+    // error
     let mut bytes = Vec::new();
     bytes.extend_from_slice(rut_core::binary::MAGIC);
     bytes.extend_from_slice(&7u32.to_le_bytes());
     let err = rut_core::binary::decode(&bytes).unwrap_err();
     assert!(err.contains("unsupported module binary version 7"), "{err}");
-    // and a fresh compile round-trips under v8
+    // and a fresh compile round-trips under v9
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module("app_main", Module { source: Some("pub fn main() -> i32 { return 4; }".into()), ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);
-    assert_eq!(&bytes[4..8], &8u32.to_le_bytes(), "the header carries v8");
+    assert_eq!(&bytes[4..8], &9u32.to_le_bytes(), "the header carries v9");
     assert!(rut_core::binary::decode(&bytes).is_ok());
 }

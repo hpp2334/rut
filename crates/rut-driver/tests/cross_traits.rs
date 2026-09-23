@@ -1,10 +1,11 @@
-//! Cross-module traits & the impl registry (RFC 0012 §2/§5/§6): trait
-//! impls may live in ANY module — a trait declared in one, a type in
-//! another, the impl in a third. Per-module compiles cannot see each
-//! other's registrations, so module surfaces export traits + impls, the
-//! link merges them (duplicate `(trait, type)` pairs are a link error,
-//! global trait ids, cross-scope vtable fill), and the use-both gate
-//! holds at the call site.
+//! Cross-module traits & the impl registry (RFC 0012 §2/§2a/§5/§6): a
+//! trait impl lives where a side of the pair is owned — a trait
+//! declared in one module, a type in another, the impl in a module of
+//! either. Per-module compiles cannot see each other's registrations,
+//! so module surfaces export traits + impls, the link merges them
+//! (duplicate `(trait, type)` pairs are a link error, global trait ids,
+//! cross-scope vtable fill), and the use-both gate holds at the call
+//! site.
 
 use rut_driver::{GraphOutput, Module, Session};
 use rut_parser::Mode;
@@ -22,23 +23,36 @@ pub fn pick(k: bool) -> Shape {
 }
 ";
 
-/// A trait+type library with NO impls — the impl lives elsewhere.
+/// A type library with NO trait and NO impls — the trait and the impl
+/// live elsewhere.
 const SHAPES_LIB: &str = "\
-trait Shape { fn area(self) -> f64; }
 struct Point { x: f64 }
 pub fn make_point() -> Point { return Point { x: 3.0 }; }
 ";
 
-/// An impl module: `impl ForeignTrait for ForeignType` — both foreign
-/// (RFC 0012 §2), plus a helper its consumers can use.
+/// The trait + impl module: the trait is extras' own, the type is USED
+/// from shapes — the trait-local side of RFC 0012 §2a. The impl lives
+/// outside the type's module, so the registration crosses modules and
+/// the link merges it.
 const EXTRAS: &str = "\
-use shapes::{Shape, Point};
+use shapes::{Point};
+pub trait Shape { fn area(self) -> f64; }
 impl Shape for Point {
     fn area(self) -> f64 { return 42.0; }
 }
 pub fn describe() -> f64 {
     let p = Point { x: 1.0 };
     return p.area();
+}
+";
+
+/// A duplicate-writing module: `impl ForeignTrait for ForeignType` —
+/// both sides foreign to it (RFC 0012 §2a's orphan), re-registering a
+/// pair `shapes` already provides.
+const EXTRAS_DUP: &str = "\
+use shapes::{Shape, Point};
+impl Shape for Point {
+    fn area(self) -> f64 { return 42.0; }
 }
 pub fn make_point() -> Point { return Point { x: 5.0 }; }
 ";
@@ -129,17 +143,18 @@ fn main() -> i32 {
 }
 
 #[test]
-fn foreign_trait_impl_for_a_foreign_type_dispatches() {
-    // `Shape` is declared in `shapes`, `Point` too, but the impl lives
-    // in `extras` — the third-party-module shape of RFC 0012 §2: a
-    // consumer uses both names and calls through whichever module
-    // registered the impl.
+fn trait_local_impl_for_a_used_type_dispatches() {
+    // `Point` is declared in `shapes`; the trait AND the impl live in
+    // `extras`, which uses the type — the trait-local side of RFC 0012
+    // §2a (the json-group shape): the impl lives outside the type's
+    // module, and the consumer calls through the module that registered
+    // it.
     let p = linked(&[
         ("shapes", SHAPES_LIB),
         ("extras", EXTRAS),
         ("app", "\
-use shapes::{Shape, Point};
-use extras::{describe, make_point};
+use shapes::make_point;
+use extras::{Shape, describe};
 fn main() -> i32 {
     let p = make_point();
     let a = p.area();
@@ -152,7 +167,7 @@ fn main() -> i32 {
     assert!(dump.contains("callm"), "static bind through extras' impl:\n{dump}");
     assert!(!dump.contains("calli"), ":\n{dump}");
     // cross-scope vtable fill: extras' registration fills the GLOBAL row
-    // of shapes' Point (link merges used-block rows)
+    // of shapes' Point under extras' trait (link merges used-block rows)
     let Some((gid, _)) = trait_of(&p, "Shape") else { panic!("Shape in the global trait table") };
     let slot = p.slot_of(gid, 0).expect("global slot");
     let point = type_of(&p, "Point").expect("one global Point");
@@ -163,12 +178,56 @@ fn main() -> i32 {
 }
 
 #[test]
-fn duplicate_impl_pair_across_modules_is_a_link_error() {
-    // `shapes` and `extras` BOTH register (Shape, Point). Neither
-    // compile can see the other — the collision surfaces only at link.
+fn third_party_impl_is_the_orphan_error() {
+    // RFC 0012 §2a: a module owning NEITHER side of the pair cannot
+    // write the impl — the old any-module placement (both sides foreign
+    // to the writer) is exactly what the orphan rule rejects. The gate
+    // fires in the impl module's own compile, before anything links.
+    let extras = "\
+use shapes::{Shape, Point};
+impl Shape for Point {
+    fn area(self) -> f64 { return 42.0; }
+}
+pub fn make_point() -> Point { return Point { x: 5.0 }; }
+";
+    let g = graph(&[
+        ("shapes", "\
+pub trait Shape { fn area(self) -> f64; }
+struct Point { x: f64 }
+pub fn make_point() -> Point { return Point { x: 3.0 }; }
+"),
+        ("extras", extras),
+        ("app", "\
+use shapes::{Shape, Point};
+use extras::make_point;
+fn main() -> i32 {
+    let p = make_point();
+    let a = p.area();
+    return 0;
+}
+"),
+    ]);
+    assert!(g.program.is_none(), "the orphan impl must refuse to link");
+    assert!(
+        g.diags.iter().any(|d| d.msg.contains("orphan impl")
+            && d.msg.contains("`Shape` is shapes's")
+            && d.msg.contains("`Point` is shapes's")
+            && d.msg.contains("needs at least one of the pair declared in its own pkg")),
+        "{:?}",
+        g.diags
+    );
+}
+
+#[test]
+fn duplicate_impl_pair_reports_the_orphan_before_the_link() {
+    // `shapes` registers (Shape, Point) itself; `extras` writes the same
+    // pair owning NEITHER side. RFC 0012 §2a's ordering — placement
+    // precedes registration — fires the orphan gate in extras' own
+    // compile, so the collision never reaches §5's link check (which
+    // keeps its surface-level test in rut-core's link.rs).
     let g = graph(&[
         ("shapes", SHAPES),
-        ("extras", EXTRAS),
+        ("extras", EXTRAS_DUP),
         ("app", "\
 use extras::make_point;
 fn main() -> i32 { return 0; }
@@ -176,12 +235,18 @@ fn main() -> i32 { return 0; }
     ]);
     assert!(
         g.program.is_none(),
-        "the duplicate pair must refuse to link"
+        "the orphan impl must refuse to link"
     );
     assert!(
-        g.diags.iter().any(|d| d.msg.contains("duplicate impl")
-            && d.msg.contains("(Shape, Point)")),
+        g.diags.iter().any(|d| d.msg.contains("orphan impl")
+            && d.msg.contains("`Shape` is shapes's")
+            && d.msg.contains("`Point` is shapes's")),
         "{:?}",
+        g.diags
+    );
+    assert!(
+        !g.diags.iter().any(|d| d.msg.contains("duplicate impl")),
+        "the orphan precedes the pair registration: {:?}",
         g.diags
     );
 }
@@ -277,7 +342,7 @@ fn two_phase_surfaces_carry_traits_and_impls() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface)],
+        &[(1, surface, "shapes".to_string())],
     );
     assert!(app.diags.is_empty(), "{:?}", app.diags);
     let out = rut_core::link::link(vec![dep, app.program.expect("app")]).expect("link");

@@ -91,22 +91,23 @@ pub fn main() -> i32 {
 }
 
 #[test]
-fn foreign_trait_impl_for_a_foreign_type_runs() {
-    // the impl lives in a third module: `Shape` and `Point` are both
-    // foreign to it (RFC 0012 §2); the consumer uses both names and the
-    // call resolves through the module that registered the impl
+fn type_local_impl_for_a_foreign_trait_runs() {
+    // the impl lives in a second module: `Shape` is foreign to it, the
+    // type is its own (RFC 0012 §2a); the consumer uses both names and
+    // the call resolves through the module that registered the impl
     let extras = "\
-use shapes::{Shape, Point};
+use shapes::Shape;
+struct Point { x: f64 }
 impl Shape for Point {
     fn area(self) -> f64 { return 42.0; }
 }
 pub fn make_point() -> Point { return Point { x: 5.0 }; }
 ";
     let out = run_graph(&[
-        ("shapes", "trait Shape { fn area(self) -> f64; }\nstruct Point { x: f64 }\n"),
+        ("shapes", "trait Shape { fn area(self) -> f64; }\n"),
         ("extras", extras),
         ("app", "\
-use shapes::{Shape, Point};
+use shapes::Shape;
 use extras::make_point;
 pub fn main() -> i32 {
     let p = make_point();
@@ -115,5 +116,5 @@ pub fn main() -> i32 {
 }
 "),
     ]);
-    assert_eq!(out, 42, "extras' impl answered for shapes' Point");
+    assert_eq!(out, 42, "extras' impl answered for extras' Point");
 }

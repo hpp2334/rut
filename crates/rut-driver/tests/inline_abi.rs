@@ -17,7 +17,7 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core()), (3, collection)],
+        &[(2, rut_core::binary::Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
     )
 }
 
@@ -290,7 +290,7 @@ fn cross_module_bare_prim_call_binds_the_concrete_variant() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface)],
+        &[(1, surface, "dep".to_string())],
     );
     assert!(app.diags.is_empty(), "{:?}", app.diags);
     let app = app.program.expect("app program");

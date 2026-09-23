@@ -15,7 +15,7 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core()), (3, collection)],
+        &[(2, rut_core::binary::Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
     )
 }
 
@@ -395,9 +395,11 @@ fn inherent_impl_on_a_primitive_diagnoses() {
 }
 
 #[test]
-fn prim_target_admission_is_module_agnostic() {
-    // `impl ForeignTrait for i32` in a module that declares neither —
-    // RFC 0012 §2's admission pattern covers primitives too
+fn foreign_trait_for_a_builtin_is_an_orphan() {
+    // the §2a builtin clause: a primitive is in NO pkg, so a foreign
+    // trait's impl for one errs — the sanctioned direction is the
+    // trait's own pkg implementing it (the dep's `impl T for str`
+    // above compiled: the trait is local there)
     let dep = rut_driver::compile_program(
         "trait T { fn m(self) -> i32; }\n\
          impl T for str { fn m(self) -> i32 { return 7; } }\n",
@@ -417,13 +419,26 @@ fn prim_target_admission_is_module_agnostic() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface)],
+        &[(1, surface, "dep".to_string())],
     );
-    assert!(app.diags.is_empty(), "{:?}", app.diags);
+    assert!(app.program.is_none(), "the orphan must refuse to compile");
+    assert!(
+        app.diags.iter().any(|d| d.msg.contains("orphan impl")
+            && d.msg.contains("`T` is dep's")
+            && d.msg.contains("`i32` is a builtin, in no pkg")
+            && d.msg.contains("only a trait of this pkg may be implemented for a builtin")),
+        "{:?}",
+        app.diags
+    );
 }
 
 #[test]
-fn cross_module_duplicate_prim_pair_is_a_link_error() {
+fn duplicate_prim_pair_reports_the_orphan_before_the_link() {
+    // placement precedes registration (RFC 0012 §2a): the app's
+    // `impl T for i32` is foreign-trait × builtin — the orphan gate
+    // fires at collect, so the (T, i32) pair never reaches §5's
+    // duplicate link check (which keeps its own surface-level test in
+    // rut-core's link.rs)
     let dep = rut_driver::compile_program(
         "trait T { fn m(self) -> i32; }\n\
          impl T for i32 { fn m(self) -> i32 { return 1; } }\n",
@@ -442,14 +457,14 @@ fn cross_module_duplicate_prim_pair_is_a_link_error() {
         Mode::Impl,
         "app",
         2,
-        &[(1, dep.surface.clone())],
+        &[(1, dep.surface.clone(), "dep".to_string())],
     );
-    assert!(app.diags.is_empty(), "admission is per-module; the pair collides at link: {:?}", app.diags);
-    let err = rut_core::link::link(vec![dep, app.program.expect("app program")])
-        .expect_err("duplicate (T, i32) must refuse to link");
     assert!(
-        err.0.contains("duplicate impl") && err.0.contains("(T, i32)"),
-        "{err}"
+        app.program.is_none()
+            && app.diags.iter().any(|d| d.msg.contains("orphan impl")
+                && d.msg.contains("`T` is dep's")),
+        "the orphan gate precedes the pair registration: {:?}",
+        app.diags
     );
 }
 
@@ -482,7 +497,7 @@ fn prim_vtable_fill_survives_the_link() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface)],
+        &[(1, surface, "dep".to_string())],
     );
     assert!(app.diags.is_empty(), "{:?}", app.diags);
     let linked = rut_core::link::link(vec![dep, app.program.expect("app program")]).expect("link");

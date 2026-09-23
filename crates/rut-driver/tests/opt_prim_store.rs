@@ -512,11 +512,11 @@ fn prim_store_release_walk_skips_element_slots() {
 #[test]
 fn version_gate_rejects_stale_artifacts() {
     use rut_core::binary::{decode, VERSION};
-    // v8 is the err-channel phase 2 declared-surface change
-    // (`capture_stacktrace()` + the `StackTrace` builtin class + the
-    // `pos` span table, RFC 0036) — the 6→7 precedent this pin already
-    // enforced for the primitive-optional element store
-    assert_eq!(VERSION, 8, "the declared-surface change is the only allowed VERSION bump this phase");
+    // v9 is the orphan rule (RFC 0012 §2a, the orphan-rule batch's
+    // rejection addition, the 5→6 precedent); v8 was the err-channel
+    // phase 2 declared-surface change (`capture_stacktrace()` + the
+    // `StackTrace` builtin class + the `pos` span table, RFC 0036)
+    assert_eq!(VERSION, 9, "the orphan rule is the only allowed VERSION bump this phase");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

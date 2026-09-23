@@ -428,7 +428,18 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// source, so it can never emit such an artifact). The 6→7 and 7→8 bumps
 /// were both format-affecting; this is not, and a bump would burn every
 /// cached v8 artifact for zero protection.
-pub const VERSION: u32 = 8;
+/// v9: the orphan rule (RFC 0012 §2a, orphan-rule batch phase 1) — a
+/// REJECTION addition, the 5→6 precedent: a source whose `impl Trait for
+/// Type` names a trait and a type both defined outside its pkg compiles
+/// under 8 and is refused under 9. Codegen is invariant (the rule gates
+/// which sources reach emit, never what emit produces — dispatch,
+/// vtables and byte output are identical), so no decode/verify change
+/// rides this: the bump is policy, not format necessity, and a v8
+/// artifact remains behaviorally correct forever. It moves because the
+/// version byte is the only provenance marker a `.rutc`/bundle carries
+/// about the law that produced it — rejecting-more can strand a source,
+/// and the byte is what says which law it was.
+pub const VERSION: u32 = 9;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();

@@ -20,6 +20,8 @@ pub use decl::lower_decl_module;
 pub mod graph;
 pub use graph::{compile_graph, GraphOutput};
 
+pub use rut_lir::check::OriginLeaf;
+
 pub mod bundle;
 pub use bundle::{crc32, parse_bundle, write_bundle, BundleError};
 
@@ -49,27 +51,33 @@ pub struct ProgramOutput {
 }
 
 /// Compile one module under `scope`, binding used function surfaces
-/// (RFC 0029 surface / RFC 0035 §1). Does not flatten or encode.
+/// (RFC 0029 surface / RFC 0035 §1). Does not flatten or encode. Each
+/// bound use carries its exporter's spec (RFC 0012 §2a); no origin map —
+/// the single-file law, so the orphan check is inert here beyond the
+/// bound names' origins.
 pub fn compile_program(
     src: &str,
     mode: Mode,
     module_name: &str,
     scope: rut_core::ScopeId,
-    uses: &[(rut_core::ScopeId, rut_core::binary::Surface)],
+    uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String)],
 ) -> ProgramOutput {
-    compile_program_resolved(src, mode, module_name, scope, uses, !uses.is_empty())
+    compile_program_resolved(src, mode, module_name, scope, uses, !uses.is_empty(), &[])
 }
 
 /// As [`compile_program`] but with an explicit `allow_uses` flag — the
 /// graph compiler resolves every specifier itself (or inlines it), so it
-/// passes `true` even when a module's only uses were source-inlined.
+/// passes `true` even when a module's only uses were source-inlined —
+/// and with the unit's origin map (RFC 0012 §2a): the spliced leaves'
+/// byte ranges and declaring pkgs, empty for a no-splice unit.
 pub fn compile_program_resolved(
     src: &str,
     mode: Mode,
     module_name: &str,
     scope: rut_core::ScopeId,
-    uses: &[(rut_core::ScopeId, rut_core::binary::Surface)],
+    uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String)],
     allow_uses: bool,
+    origins: &[OriginLeaf],
 ) -> ProgramOutput {
     let (mut ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
@@ -83,7 +91,7 @@ pub fn compile_program_resolved(
     // written in `use { .. }` (RFC 0029 surface). Surface names are
     // ids in the exporter's interner (`surface.names`) — re-interned by
     // text into this module's.
-    for (_, surface) in uses {
+    for (_, surface, _) in uses {
         for f in &surface.funcs {
             ast.interner.intern(surface.names.name(f.name));
         }
@@ -96,6 +104,11 @@ pub fn compile_program_resolved(
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
     ctx.allow_uses = allow_uses;
+    // the orphan rule's locality inputs (RFC 0012 §2a): this unit's own
+    // pkg spec + the spliced leaves' origin map (empty = the single-file
+    // law — every decl's origin is the unit's own)
+    ctx.own_spec = module_name.to_string();
+    ctx.origins = origins.to_vec();
     // the binding gate: the names this module's `use` statements wrote
     // (RFC 0028/0029) — read off the AST before any binding runs
     for it in ast.module_items(ast.root).to_vec() {
@@ -111,8 +124,9 @@ pub fn compile_program_resolved(
         rut_core::ScopeId,
         &rut_core::binary::Surface,
         std::collections::HashMap<u32, u32>,
+        String,
     )> = Vec::new();
-    for (dep_scope, surface) in uses {
+    for (dep_scope, surface, origin) in uses {
         // ---- pass 1: trait declarations from every surface (RFC 0012
         // §5). A descriptor registers when its name was used, or when
         // any bound impl names it (an unused trait's impl must stay
@@ -133,19 +147,23 @@ pub fn compile_program_resolved(
                 continue;
             }
             let cid = ctx.add_extern_trait_decl(used_name, t, &surface.names);
+            // the trait's origin pkg rides the binding (RFC 0012 §2a)
+            if let Some(n) = used_name {
+                ctx.extern_origins.insert(n, origin.clone());
+            }
             tmap.insert(t.local, cid);
             ext_trait.insert(text.to_string(), cid);
         }
-        trait_maps.push((*dep_scope, surface, tmap));
+        trait_maps.push((*dep_scope, surface, tmap, origin.clone()));
     }
     // ---- pass 2: type descriptors (types first: descriptors must be in
     // the table before any own type is interned — TypeTable::use_block;
     // names re-intern from the exporter's interner)
-    for (_, surface, tmap) in &trait_maps {
+    for (_, surface, tmap, _) in &trait_maps {
         ctx.use_types(surface.types.clone(), &surface.names, &surface.scope_blocks, tmap);
     }
     // ---- pass 3: fns, consts, types, impls, natives
-    for (dep_scope, surface, _) in trait_maps.iter() {
+    for (dep_scope, surface, _, origin) in trait_maps.iter() {
         let dep_scope = *dep_scope;
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
@@ -180,6 +198,8 @@ pub fn compile_program_resolved(
                 // RFC 0043: the shared boot table needs no rebase)
                 let scope = t.scope.unwrap_or(dep_scope);
                 ctx.add_extern_type(id, rut_core::pack(scope, t.local), t.is_class);
+                // the type's origin pkg rides the binding (RFC 0012 §2a)
+                ctx.extern_origins.insert(id, origin.clone());
             }
         }
         // impl registrations (RFC 0012 §2): `(trait, target, method → fn)`,

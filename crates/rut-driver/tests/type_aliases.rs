@@ -16,7 +16,7 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core())],
+        &[(2, rut_core::binary::Surface::core(), "core".to_string())],
     )
 }
 
@@ -270,7 +270,7 @@ fn alias_exports_transparently_across_modules() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface), (3, rut_core::binary::Surface::core())],
+        &[(1, surface, "units".to_string()), (3, rut_core::binary::Surface::core(), "core".to_string())],
     );
     assert!(root.diags.is_empty(), "cross-module transparency: {:?}", root.diags);
 
@@ -289,7 +289,7 @@ fn alias_exports_transparently_across_modules() {
                 &[],
             );
             dep.program.expect("dep").surface.clone()
-        })],
+        }, "units".to_string())],
     )
     .diags
     .iter()

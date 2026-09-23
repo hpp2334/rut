@@ -539,6 +539,9 @@ impl<'a> Ctx<'a> {
         for m in methods {
             mths.push((self.ast.method_decl(*m).name, *m));
         }
+        // the orphan gate's target-side classification (RFC 0012 §2a) —
+        // every unresolvable shape already returned above
+        let (ty_display, ty_origin) = self.classify_target_origin(target);
         match trait_ref {
             None => {
                 if is_prim {
@@ -560,8 +563,68 @@ impl<'a> Ctx<'a> {
                 }
                 self.collect_impl_inherent(target, target_ty, target_data, is_local, mths)
             }
-            Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, mths),
+            Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, ty_display, ty_origin, mths),
         }
+    }
+
+    /// The orphan classification of the impl TARGET as written (RFC 0012
+    /// §2a): the head's display text and the pkg whose source declares it
+    /// — `None` for a builtin, in no pkg. The doors mirror
+    /// `collect_impl`'s target match, which has already rejected every
+    /// unresolvable shape. Locality is of the HEAD: a generic head's type
+    /// parameters never satisfy it, and a `?T`/`[T]` head peels to "no
+    /// pkg" — only a local trait may be implemented for a builtin.
+    fn classify_target_origin(&self, target: NodeHandle<AnyTy>) -> (String, Option<String>) {
+        match self.ast.ty(target) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
+                let name = segs[0].name;
+                let display = self.name(name).to_string();
+                if let Some(d) = self.find_data(name) {
+                    // a decl of THIS unit — own source or a spliced leaf;
+                    // the origin map tells the two apart
+                    let lo = self.ast.span(d.node.id()).lo;
+                    (display, Some(self.origin_of(lo).to_string()))
+                } else if self.extern_native_types.contains_key(&name) {
+                    // `opaque` (the closed `StackTrace` shape never gets
+                    // here) — a builtin, in no pkg
+                    (display, None)
+                } else if self.extern_types.contains_key(&name) {
+                    // a USED type: the exporter's spec rides the binding
+                    let origin = self
+                        .extern_origins
+                        .get(&name)
+                        .cloned()
+                        .unwrap_or_else(|| self.own_spec.clone());
+                    (display, Some(origin))
+                } else {
+                    // a primitive — in no pkg
+                    (display, None)
+                }
+            }
+            TypeKind::TyArray { .. } => ("[T]".to_string(), None),
+            TypeKind::TyOpt { .. } => ("?T".to_string(), None),
+            _ => (String::new(), None), // unreachable — collect_impl returned
+        }
+    }
+
+    /// The orphan classification of the impl's TRAIT name (RFC 0012 §2a):
+    /// the pkg whose source declares it. A builtin trait (`Iterator`,
+    /// `Index`, `Disposal`) is core's decl like every prelude name (RFC
+    /// 0012 §2) — its origin is `core`, never "no pkg". Every shape that
+    /// reaches the orphan gate resolved, so the own-spec fallback never
+    /// fires.
+    fn trait_origin(&self, name: IdentId) -> String {
+        if let Some(info) = self.find_trait(name) {
+            let lo = self.ast.span(info.node).lo;
+            return self.origin_of(lo).to_string();
+        }
+        if let Some(spec) = self.extern_origins.get(&name) {
+            return spec.clone();
+        }
+        if self.extern_traits.contains_key(&name) {
+            return "core".to_string();
+        }
+        self.own_spec.clone()
     }
 
     /// `impl T { .. }` — inherent methods. Local targets attach into the
@@ -651,16 +714,19 @@ impl<'a> Ctx<'a> {
         self.datas[idx].1.methods.extend(mths);
     }
 
-    /// `impl I for T { .. }` — a trait impl (any module): duplicate
-    /// (trait, type) pair, coverage (every trait method implemented;
-    /// signature match incl. `is_async` and receiver form), no extras,
-    /// then registration and eager monomorphization.
+    /// `impl I for T { .. }` — a trait impl (one of the pair local, RFC
+    /// 0012 §2a): the orphan gate, then duplicate (trait, type) pair,
+    /// coverage (every trait method implemented; signature match incl.
+    /// `is_async` and receiver form), no extras, then registration and
+    /// eager monomorphization.
     fn collect_impl_trait(
         &mut self,
         sp: rut_lexer::span::Span,
         trait_ref: NodeHandle<AnyTy>,
         target_ty: TypeId,
         target_data: Option<(IdentId, Vec<IdentId>)>,
+        ty_display: String,
+        ty_origin: Option<String>,
         mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     ) {
         let Some(trait_id) = self.resolve_trait_ref(trait_ref) else {
@@ -672,6 +738,44 @@ impl<'a> Ctx<'a> {
             }
             _ => return,
         };
+        // ---- the orphan gate (RFC 0012 §2a): at least one of the pair
+        // is defined in the pkg whose source DECLARED the block. The
+        // block's origin — its span's leaf on the origin map — is the
+        // law's "current pkg": the origin, not the compiling unit,
+        // decides, so a pkg's own impls stay legal in every unit that
+        // splices them while a consumer's hand-written cross-pkg pair
+        // errs. A bound name carries its exporter's spec; a builtin
+        // (`?T`, `[T]`, a primitive, `opaque`) is in no pkg — only a
+        // local trait may be implemented for one. Placement precedes
+        // registration: an orphan never reaches the duplicate check or
+        // the impl table.
+        let own = self.origin_of(sp.lo);
+        let trait_origin = self.trait_origin(trait_name);
+        if trait_origin != own && ty_origin.as_deref() != Some(own) {
+            let trait_side = format!("`{}` is {}'s", self.name(trait_name), trait_origin);
+            let type_side = match &ty_origin {
+                Some(pkg) => format!("`{}` is {}'s", ty_display, pkg),
+                None => format!("`{}` is a builtin, in no pkg", ty_display),
+            };
+            let tail = match ty_origin {
+                Some(_) => {
+                    "an `impl Trait for Type` needs at least one of the pair declared in its own pkg (RFC 0012 §2a)"
+                }
+                None => "only a trait of this pkg may be implemented for a builtin (RFC 0012 §2a)",
+            };
+            self.err(
+                sp,
+                format!(
+                    "orphan impl: neither `{}` nor `{}` is defined in this pkg — {}, {}; {}",
+                    self.name(trait_name),
+                    ty_display,
+                    trait_side,
+                    type_side,
+                    tail,
+                ),
+            );
+            return;
+        }
         if let Some(_prev) = self.find_impl(trait_id, target_ty) {
             self.err(sp, "duplicate impl for the same (trait, type) pair (RFC 0012 §2)");
             return;

@@ -66,7 +66,10 @@ enum Unit {
     /// definitions (items are order-independent) and never contributes
     /// a name the first splice did not, so skipping it is
     /// semantics-preserving (dep-kinds survey §2.4).
-    Inline { leaves: Vec<(String, String)>, bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> },
+    Inline {
+        leaves: Vec<(String, String)>,
+        bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)>,
+    },
 }
 
 struct GraphCompiler<'a> {
@@ -234,8 +237,13 @@ impl<'a> GraphCompiler<'a> {
         // deduped (T13).
         let mut extra = String::new();
         let mut leaves: Vec<(String, String)> = Vec::new();
+        // the origin map (RFC 0012 §2a): each accepted leaf's byte range
+        // in the combined text + the pkg whose source it is — pure
+        // metadata, the text's layout is untouched (T13's byte-identity
+        // holds). The unit's own leaf closes it below.
+        let mut origins: Vec<rut_lir::check::OriginLeaf> = Vec::new();
         let mut spliced: HashSet<String> = HashSet::new();
-        let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface)> = Vec::new();
+        let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)> = Vec::new();
         let mut bound_scopes = HashSet::new();
         for dep in &uses {
             match self.ensure(dep, true)? {
@@ -246,7 +254,13 @@ impl<'a> GraphCompiler<'a> {
                             if accepted_here > 0 {
                                 extra.push_str("\n\n");
                             }
+                            let lo = extra.len() as u32;
                             extra.push_str(&src);
+                            origins.push(rut_lir::check::OriginLeaf {
+                                lo,
+                                hi: extra.len() as u32,
+                                spec: dep_spec.clone(),
+                            });
                             leaves.push((dep_spec, src));
                             accepted_here += 1;
                         }
@@ -254,15 +268,18 @@ impl<'a> GraphCompiler<'a> {
                     if accepted_here > 0 {
                         extra.push('\n');
                     }
-                    for (sc, surf) in b {
+                    for (sc, surf, spc) in b {
                         if bound_scopes.insert(sc) {
-                            bound.push((sc, surf));
+                            bound.push((sc, surf, spc));
                         }
                     }
                 }
                 Unit::Linked { idx, scope } => {
                     if bound_scopes.insert(scope) {
-                        bound.push((scope, self.programs[idx].surface.clone()));
+                        // the exporter's spec rides the binding (RFC 0012
+                        // §2a) — a linked dep contributes no text, so its
+                        // names' origins travel here, not on the map
+                        bound.push((scope, self.programs[idx].surface.clone(), dep.clone()));
                     }
                 }
             }
@@ -273,11 +290,25 @@ impl<'a> GraphCompiler<'a> {
         // use statements bind surfaces only; a decl file is pure surface
         // (RFC 0029), and Decl mode rejects implementations.
         let own_leaf = (spec.to_string(), src.clone());
+        let src_len = src.len() as u32;
         let combined = if extra.is_empty() || module.is_decl {
             src
         } else {
             format!("{extra}\n{src}")
         };
+        // the own leaf closes the origin map (RFC 0012 §2a): after the
+        // final seam when spliced text precedes it, the whole text
+        // otherwise. A decl unit compiles its own source only — the
+        // spliced leaves never entered the text, so they leave no ranges.
+        if module.is_decl {
+            origins.clear();
+        }
+        let own_lo = if extra.is_empty() || module.is_decl { 0 } else { extra.len() as u32 + 1 };
+        origins.push(rut_lir::check::OriginLeaf {
+            lo: own_lo,
+            hi: own_lo + src_len,
+            spec: spec.to_string(),
+        });
         let scope = self.next_scope;
         self.next_scope += 1;
         let out = compile_program_resolved(
@@ -287,6 +318,7 @@ impl<'a> GraphCompiler<'a> {
             scope,
             &bound,
             true,
+            &origins,
         );
         if !out.diags.is_empty() || out.program.is_none() {
             self.diags.extend(out.diags);

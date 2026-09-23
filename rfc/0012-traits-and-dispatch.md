@@ -131,7 +131,8 @@ for (s of mixed) { s.area(); }          // vtable (multiple origins)
   site selects it.
 - **Traits are implemented for classes, dataclasses** (RFC 0009), **and
   primitives**: `impl Hashable for i32` registers like any trait impl —
-  any module may write it, and the duplicate rule is the §5 link check
+  any module of the trait's pkg or the type's pkg may write it (§2a),
+  and the duplicate rule is the §5 link check
   — while an inherent `impl i32 { .. }` diagnoses: a primitive's
   inherent surface is core's `builtin impl` (RFC 0032 §1.1). A
   primitive widens to `I` through the same nominal gate; its
@@ -209,8 +210,8 @@ error — no compatibility mode, the migration is total.
 
 | | `impl T { … }` | `impl I for T { … }` |
 |---|---|---|
-| Lives in | `.rut`, **T's module only** | `.rut`, **any module** |
-| Valid targets | local `struct`/`class`, or a `builtin class` this module declares (RFC 0029 §2) | any nominal type — foreign trait for foreign type is legal |
+| Lives in | `.rut`, **T's module only** | `.rut`, **any module of the trait's pkg or the type's pkg** (§2a) |
+| Valid targets | local `struct`/`class`, or a `builtin class` this module declares (RFC 0029 §2) | any nominal type — one of the pair must be local (§2a) |
 | `pub(..)` | ✅ classes only (RFC 0009; structs are all-public) | ❌ — trait impl methods are as visible as the trait |
 | `async` | ✅ | ✅ — must match the trait's signature |
 | no-`self` methods | ✅ (constructors, `on_finish`) | ✅ (declared by the trait, §7) |
@@ -228,10 +229,11 @@ impl Point {                            // inherent — Point's module only
   be a local type **or a `builtin class` this module's `.d.rut` declares**
   (the `LaunchedTask<T>` pattern, RFC 0028): the module owns the type,
   so it owns the methods.
-- **Trait-impl placement is free.** `impl I for T` may live in any
-  module — a module may adapt a foreign trait to a foreign type. The
-  registry merges at link time and the duplicate-`(trait, type)` rule
-  (§2) is the only constraint.
+- **Trait-impl placement is pair-local.** `impl I for T` may live in
+  any module of the trait's pkg or the type's pkg (§2a) — at least one
+  of the pair is the writing pkg's own. The registry merges at link
+  time and the duplicate-`(trait, type)` rule (§2) remains the only
+  constraint beyond placement.
 - **Bodies match the trait exactly.** Each method in a trait impl block
   matches the trait's signature — receiver form (`self`/`mut self`),
   params, return type, `async` spelling; a missing signature is a
@@ -423,3 +425,47 @@ placement law, recorded here so the two RFCs agree:
   public names, which is what keeps every peer-related miss on a
   dedicated, peer-aware diagnostic path instead of a bare
   unresolved-name.
+
+## Amendment (Sep 2026): the orphan rule — one of the pair is local (§2a)
+
+For every `impl Trait for Type { .. }` — **at least one of `Type` (the
+self type) or `Trait` must be defined in the current pkg.** Both
+foreign is a compile error with a dedicated diagnostic. This narrows
+§2's "trait impls are legal in any module" to "any module of the
+trait's pkg or the type's pkg"; §4's table carries the same footnote.
+
+- **"In current pkg" = declared by a source of this pkg**, tracked
+  through the mount/splice model: locality is a pkg-level property, and
+  each definition's origin survives splicing — a consumer unit compiles
+  spliced text, but the compiler knows which pkg's source each byte
+  range came from (the origin map). An orphan written in a consumer
+  against two foreign pkgs errors, precisely where the old law was
+  blind.
+- **Builtin types (`[T]`, the primitives, `?T`, `opaque`) are in no
+  pkg.** A builtin self type with a foreign trait is an orphan error;
+  only a local trait may be implemented for a builtin (json impling
+  `JsonSerialize` for `[T]` is legal — the trait is local). The
+  asymmetry is this RFC's own: builtin **traits** (`Iterator`, `Index`,
+  `Disposal`) are core decls like every prelude name (§2), so their
+  origin pkg is `core`; builtin **types** have no origin pkg at all.
+- **Generic impls: locality is of the head.** `impl JsonSerialize for
+  Vec<T>` is local exactly when `Vec`'s declaration is; the type
+  parameters (`T`) never satisfy locality. A `?T`/`[T]` head peels to
+  its element — a type parameter — so the head's locality is "builtin,
+  in no pkg".
+- **Ordering.** The peer gate precedes the orphan check (the gate runs
+  at LOAD, RFC 0045 §3 — the checker never sees a half-mounted world),
+  and placement precedes registration: an orphan never reaches the §5
+  duplicate check or the impl table, so a block that is both orphan and
+  duplicate reports the orphan. This supersedes the peer amendment's
+  consumer-side-guard sentence for cross-pkg pairs: a hand-written
+  `(trait, type)` pair whose sides are both foreign now reports the
+  orphan, not the §5 link duplicate; the duplicate check remains the
+  guard for pairs a group already provides where the writer owns a side.
+- **The module-level law is unchanged.** Inherent impls stay in the
+  type's module (§4); the §5 registry merge, the use-both gate (§6) and
+  the duplicate link check are untouched. Codegen is invariant: the
+  rule decides which sources may reach emit, never what emit produces
+  (the module binary VERSION moved to 9 for this — policy, the 5→6
+  precedent).
+

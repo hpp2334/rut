@@ -18,7 +18,7 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core())],
+        &[(2, rut_core::binary::Surface::core(), "core".to_string())],
     )
 }
 

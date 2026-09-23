@@ -18,6 +18,19 @@ mod resolve;
 
 // ---- decl indices ----
 
+/// One spliced leaf's byte range in the combined unit text, and the pkg
+/// whose source it is (RFC 0012 §2a). `lo` is inclusive, `hi` exclusive —
+/// the leaf's own text exactly, seams excluded. Built by the graph's
+/// composition (rut-driver), consumed through [`Ctx::origin_of`]; a unit
+/// compiled with an empty map has every definition's origin = its own
+/// spec, which keeps the orphan rule inert wherever no splice happened.
+#[derive(Clone, Debug)]
+pub struct OriginLeaf {
+    pub lo: u32,
+    pub hi: u32,
+    pub spec: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct EnumDecl {
     pub ty: TypeId,
@@ -228,6 +241,19 @@ pub struct Ctx<'a> {
     pub trait_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), u32>,
     /// whether `use` is resolved by the driver (module loading on)
     pub allow_uses: bool,
+    /// the spliced-leaf origin map (RFC 0012 §2a): byte range → the pkg
+    /// whose source it is. Empty for a no-splice unit.
+    pub origins: Vec<OriginLeaf>,
+    /// this unit's own pkg spec (= the module name) — the origin map's
+    /// fallback: with an empty map every definition's origin is the
+    /// unit's own spec, which is what keeps the orphan rule inert
+    /// wherever no splice happened
+    pub own_spec: String,
+    /// the origin pkg of every bound (used) name (RFC 0012 §2a): a used
+    /// type's or trait's DECLARING pkg, recorded beside the binding —
+    /// the origin map covers only spliced text, a linked dep contributes
+    /// no text, so its names carry their exporter's spec here
+    pub extern_origins: std::collections::HashMap<IdentId, String>,
     /// core's removed-name table, keyed by IdentId — interned once at
     /// construction, so removal diagnostics compare symbols, never text
     pub removed: std::collections::HashMap<IdentId, &'static str>,
@@ -372,6 +398,9 @@ impl<'a> Ctx<'a> {
             type_inst: std::collections::HashMap::new(),
             trait_inst: std::collections::HashMap::new(),
             allow_uses: false,
+            origins: Vec::new(),
+            own_spec: String::new(),
+            extern_origins: std::collections::HashMap::new(),
             removed,
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
@@ -705,6 +734,19 @@ impl<'a> Ctx<'a> {
     }
     pub fn find_alias(&self, name: IdentId) -> Option<&AliasDecl> {
         self.aliases.iter().find(|a| a.name == name)
+    }
+
+    /// The pkg whose source this byte offset was parsed from (RFC 0012
+    /// §2a). The search takes the FIRST leaf whose range extends past
+    /// `lo`, so a seam byte belongs to the following leaf — which makes
+    /// the own-source fallback exact (the own leaf opens right after the
+    /// final seam). `own_spec` when the map is empty or the offset lies
+    /// past every leaf.
+    pub fn origin_of(&self, lo: u32) -> &str {
+        match self.origins.partition_point(|l| l.hi <= lo) {
+            i if i < self.origins.len() => &self.origins[i].spec,
+            _ => &self.own_spec,
+        }
     }
 
     /// Settle an alias's target (RFC 0043 pass 1b): each member must

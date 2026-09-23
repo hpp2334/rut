@@ -26,7 +26,7 @@ fn uses_and_links_a_function() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface)],
+        &[(1, surface, "math".to_string())],
     );
     assert!(root.diags.is_empty(), "{:?}", root.diags);
     let root = root.program.expect("root program");
@@ -108,7 +108,7 @@ fn uses_and_links_a_type() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface)],
+        &[(1, surface, "geo".to_string())],
     );
     assert!(root.diags.is_empty(), "{:?}", root.diags);
     let app_ir = root.ir_dump.clone();
@@ -252,7 +252,7 @@ fn pouch_module_source_compiles() {
         1,
         // the prelude surface as the unit's one use (RFC 0028): the
         // pouch source itself uses core
-        &[(2, rut_core::binary::Surface::core())],
+        &[(2, rut_core::binary::Surface::core(), "core".to_string())],
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");

@@ -72,7 +72,7 @@ fn t10_the_collision_was_real() {
     let pouch_src = std::fs::read_to_string(Path::new(&format!("{PEERS}/pouch/pouch.rut")))
         .expect("pouch fixture source");
     let twice = format!("{pouch_src}\n\n{pouch_src}");
-    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true);
+    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true, &[]);
     assert!(
         out.program.is_none()
             && out.diags.iter().any(|d| d.msg.contains("duplicate")),
@@ -150,7 +150,7 @@ entry fn main() -> i64 {
 
     // the old-law composition of the very same chain
     let composed = format!("{cell_src}\n\n{wrap_src}\n\n{app_src}");
-    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true);
+    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true, &[]);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 
     let a = rut_core::binary::encode(&chain);
@@ -271,7 +271,7 @@ entry fn main() -> i64 {
     let wrap_combined = format!("{cell_src}\n\n{wrap_src}");
     let held_combined = format!("{box_src}\n\n{held_src}");
     let composed = format!("{wrap_combined}\n{held_combined}\n\n{app_src}");
-    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true);
+    let out = rut_driver::compile_program_resolved(&composed, Mode::Impl, "app", scope, &[], true, &[]);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
 
     let a = rut_core::binary::encode(&chain);
