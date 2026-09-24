@@ -1,9 +1,32 @@
 ---
 name: Batch Plan Implementation
-description: Execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the active complex model from models.jsonc (main.complex, or peak.complex during the workday 14:00–18:00 UTC+8 peak window), then creates one headless OpenCode session per task, each pinned to the active balance model from models.jsonc (a phase has one task, or several PARALLEL tasks when the plan splits it so), and dispatches their prompts, while a small watch-only subagent polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; continue phase by phase until the plan is done. No user interaction: decide autonomously, retry once, never delete sessions.
+description: EXPLICIT USER REQUEST ONLY — run this skill solely when the user asks for it BY NAME (e.g. "use batch-plan-impl"); a bare "go"/"execute the plan", or the existence of an approved batch-format plan, does NOT authorize it (implement directly in the current session instead). Once explicitly invoked: execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the active complex model from models.jsonc (main.complex, or peak.complex during the workday 14:00–18:00 UTC+8 peak window), then creates one headless OpenCode session per task, each pinned to the active balance model from models.jsonc (a phase has one task, or several PARALLEL tasks when the plan splits it so), and dispatches their prompts, while a small watch-only subagent polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; continue phase by phase until the plan is done. No user interaction once legitimately invoked: decide autonomously, retry once, never delete sessions.
 ---
 
 # Batch Plan Implementation
+
+## Invocation gate — explicit user request ONLY
+
+This skill runs ONLY when the user explicitly asks for it **by name**
+(e.g. "use batch-plan-impl", "run it with batch-plan-impl"). It is
+NEVER inferred from:
+
+- a bare "go" / "execute the plan" / "run it" / "start";
+- the existence of an approved plan, or a plan written in the batch
+  format (run-log paths, phase/commit conventions);
+- this session having authored, saved, or suggested the plan (or this
+  skill) earlier in the conversation.
+
+Any of those mean: implement the plan DIRECTLY in the current session,
+phase by phase, visibly to the user — or ask the user how they want it
+run. Do NOT fan out worker sessions. If you discover mid-batch that the
+invocation was not explicit: interrupt any dispatched worker sessions,
+leave the tree for review, and report.
+
+The "no user interaction / decide autonomously" policy below applies
+only AFTER this gate has passed.
+
+---
 
 Drive an existing multi-phase/step plan to completion — **unattended**. The
 user is usually away, so there is NO confirmation step and NO asking questions:
@@ -66,6 +89,7 @@ parallelism lives INSIDE a phase, never across phases.
 
 | Situation | Action |
 | --- | --- |
+| Invoked without the user explicitly asking for this skill BY NAME | Abort before touching anything: interrupt any dispatched worker sessions, leave the tree for review, report — then implement directly in-session or ask the user. |
 | No plan found anywhere | Abort before touching anything; report where you looked. |
 | Ambiguous phase boundaries/ordering | Best-effort split, record assumptions in the run log, proceed. |
 | Dirty working tree | `git stash push --include-untracked -m "batch-plan-impl: auto-stash <date>"`, record in run log, proceed. |
