@@ -63,6 +63,20 @@
 //! phase 2 deletes never touches this column). Slots cross as caller-
 //! supplied indices and are validated like any host lane: out of
 //! range is a trap, not a read.
+//!
+//! The handle column + the fused lanes (nmapset-hostops): the takeover
+//! — every impl control flow moves host-side. The table also carries
+//! `handles: Vec<i32>` (one STABLE birth index per key, relocated with
+//! the keys by `grow`), and the `map_h{put,find,remove}_*` family
+//! rides it: `hput` grows INTERNALLY at the load boundary and answers
+//! the packed `(handle << 1) | newly` i64; `hfind`/`hremove` answer
+//! the key's handle (or `-1`). A wrapper indexed by the handle has no
+//! sentinel loop, no relocation drain, and never reallocates its
+//! `[?V]` sidecar on grow. Handles are MONOTONIC birth indices, never
+//! recycled (v1; the churn cost is one nil sidecar slot per distinct
+//! key ever inserted). The legacy crossings stay bound — same table,
+//! same slots, same hashes — so every existing row's answers are
+//! untouched by construction.
 
 use std::collections::VecDeque;
 
@@ -128,6 +142,30 @@ pub struct NativeTable {
     /// column's backing memory is plain Rust, invisible to cell
     /// accounting, and every row's checksum and fuel are untouched.
     vals: Vec<u64>,
+    /// the handle column (nmapset-hostops): one STABLE birth index per
+    /// slot, assigned at first insert, relocated WITH the keys by
+    /// `grow` (the same re-slot walk — the handle is the key's
+    /// identity, not its address). The fused `hput`/`hfind`/`hremove`
+    /// lanes answer it; the wrapper's `[?V]` sidecar is indexed by it,
+    /// so the wrapper never drains and never reallocates on grow. An
+    /// EMPTY slot holds `-1`; a DEAD slot holds its dead key's handle
+    /// until the slot's next insert overwrites it with a fresh birth
+    /// (unreachable through the protocol — `find` never answers a DEAD
+    /// slot). MONOTONIC v1, no free-list: a removed key's sidecar slot
+    /// nils and dies with it; the cost under churn is one nil slot per
+    /// distinct key ever inserted (the survey §3a tradeoff).
+    ///
+    /// Accounting note (the vals precedent): another Vec header grows
+    /// `size_of::<NativeTable>()` 144 → 168 and `next_handle` packs
+    /// into the trailing padding — +24 B per table box at `map_new`.
+    /// Plain Rust backing, invisible to cell accounting; the legacy
+    /// crossings' paths never read this column, so every existing
+    /// row's checksum and fuel are untouched.
+    handles: Vec<i32>,
+    /// the next birth index — the table's lifetime insertion count,
+    /// bounded by BIRTHS not cap (the packed i64 answer's headroom
+    /// law: the handle rides i32 with room far past any real table)
+    next_handle: i32,
     count: u32,
     tomb: u32,
     /// power of two, >= 4 — the index mask is `cap - 1`
@@ -153,6 +191,8 @@ impl NativeTable {
             keys: vec![KeyVal::Bits(0); c as usize],
             states: vec![0; c as usize],
             vals: vec![0; c as usize],
+            handles: vec![-1; c as usize],
+            next_handle: 0,
             count: 0,
             tomb: 0,
             cap: c,
@@ -256,6 +296,11 @@ impl NativeTable {
         self.states[slot as usize] = 1;
         self.keys[slot as usize] = owned;
         self.hashes[slot as usize] = h;
+        // the fresh birth's stable handle (nmapset-hostops): monotonic,
+        // never recycled — the fused lanes answer it, and a reused DEAD
+        // slot overwrites its dead tenant's handle here
+        self.handles[slot as usize] = self.next_handle;
+        self.next_handle += 1;
         self.count += 1;
         -(slot + 1)
     }
@@ -294,11 +339,13 @@ impl NativeTable {
         let old_hashes = std::mem::take(&mut self.hashes);
         let old_states = std::mem::take(&mut self.states);
         let old_vals = std::mem::take(&mut self.vals);
+        let old_handles = std::mem::take(&mut self.handles);
         let new_cap = self.cap * 2;
         self.keys = vec![KeyVal::Bits(0); new_cap as usize];
         self.hashes = vec![0; new_cap as usize];
         self.states = vec![0; new_cap as usize];
         self.vals = vec![0; new_cap as usize];
+        self.handles = vec![-1; new_cap as usize];
         self.cap = new_cap;
         self.tomb = 0;
         self.reloc.clear();
@@ -312,6 +359,7 @@ impl NativeTable {
             self.hashes[at as usize] = h;
             self.states[at as usize] = 1;
             self.vals[at as usize] = old_vals[i];
+            self.handles[at as usize] = old_handles[i];
             self.reloc.push_back((i as i32, at));
         }
         new_cap as i32
@@ -361,6 +409,20 @@ impl NativeTable {
             ));
         }
         Ok(slot as usize)
+    }
+
+    /// The slot's stable handle — the fused lanes' answer. Callers pass
+    /// probe-validated slots (a found/fresh/removed slot from this
+    /// call), but the crossing honesty holds the same bounds check as
+    /// the val column (defense, never expected to fire).
+    fn handle_at(&self, slot: i32) -> Result<i32, Trap> {
+        if slot < 0 || slot >= self.cap as i32 {
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                format!("nmap: handle slot {slot} out of range (cap {})", self.cap),
+            ));
+        }
+        Ok(self.handles[slot as usize])
     }
 
     /// The capacity, at the i32 boundary (`len()` and indexing are i32).
@@ -672,6 +734,128 @@ fn typed_remove_sv(t: &mut NativeTable, parent: &str, off: i32, len: i32) -> Res
     t.remove_str_range(range, h)
 }
 
+// ---- the fused handle lanes (nmapset-hostops) ------------------------
+// ONE crossing per op with ALL control flow host-side. `hput` fuses
+// entry + INTERNAL grow + the packed answer; `hfind`/`hremove` answer
+// the key's STABLE handle or `-1`. The wrapper indexes its `[?V]`
+// sidecar by the handle — no sentinel loop, no relocation drain, no
+// slot ever crosses the boundary. The answers:
+// - `map_hput_*`: `(handle << 1) | newly` as i64 — bit 0 is the newly
+//   bit (`(ans & 1) == 1` — HashSet shares this lane and reads exactly
+//   that bit), the rest the handle. Handles are bounded by BIRTHS, not
+//   cap, so the i64 carrier has headroom far past any real table.
+// - `map_hfind_*` / `map_hremove_*`: the handle, or `-1` (absent).
+//   `hremove` answers the DEAD key's own handle (the tombstoned slot
+//   keeps it until reuse) so the wrapper can nil exactly that sidecar
+//   slot and release the cell.
+// The legacy lanes stay (the user's keep call): same table, same slot
+// assignment, same recorded hashes — the handle column is additive
+// state relocated with the keys, so the old crossings' answers and
+// every existing checksum are untouched by construction.
+
+/// The packed `hput` answer: bit 0 = the newly bit, the rest the handle.
+#[inline]
+fn pack_answer(hd: i32, newly: bool) -> i64 {
+    ((hd as i64) << 1) | (newly as i64)
+}
+
+/// The answer tail shared by every `hput` lane: the entry's slot answer
+/// (found `>= 0` / fresh `-(slot + 1)`) into the packed form.
+#[inline]
+fn packed_entry_answer(t: &NativeTable, at: i32) -> Result<i64, Trap> {
+    let (slot, newly) = if at >= 0 { (at, false) } else { (-(at + 1), true) };
+    Ok(pack_answer(t.handle_at(slot)?, newly))
+}
+
+/// The i/u/b/y lanes' fused put: hash, grow internally when the load
+/// factor would breach (ONE grow always suffices — count halves its
+/// ratio when cap doubles and tomb resets), then the owned entry.
+fn fused_put(t: &mut NativeTable, key: KeyVal) -> Result<i64, Trap> {
+    let h = hash_payload(&key);
+    let kind = kind_of(&key);
+    if t.needs_grow() {
+        t.grow();
+    }
+    let at = t.entry(kind, key, h)?;
+    packed_entry_answer(t, at)
+}
+
+/// The i/u/b/y lanes' fused find: probe, answer the handle or `-1`.
+fn fused_find(t: &NativeTable, key: &KeyVal) -> Result<i32, Trap> {
+    match typed_find(t, key)? {
+        at if at >= 0 => t.handle_at(at),
+        _ => Ok(-1),
+    }
+}
+
+/// The i/u/b/y lanes' fused remove: tombstone, answer the dead key's
+/// handle or `-1`.
+fn fused_remove(t: &mut NativeTable, key: &KeyVal) -> Result<i32, Trap> {
+    match typed_remove(t, key)? {
+        at if at >= 0 => t.handle_at(at),
+        _ => Ok(-1),
+    }
+}
+
+/// The s lane's fused put — the borrowed probe, zero-copy until a
+/// fresh insert materializes the owned stored form.
+fn fused_put_s(t: &mut NativeTable, k: &str) -> Result<i64, Trap> {
+    let h = hash_bytes(k.as_bytes());
+    if t.needs_grow() {
+        t.grow();
+    }
+    let at = t.entry_str_range(k, h)?;
+    packed_entry_answer(t, at)
+}
+
+/// The s lane's fused find.
+fn fused_find_s(t: &NativeTable, k: &str) -> Result<i32, Trap> {
+    match typed_find_s(t, k)? {
+        at if at >= 0 => t.handle_at(at),
+        _ => Ok(-1),
+    }
+}
+
+/// The s lane's fused remove.
+fn fused_remove_s(t: &mut NativeTable, k: &str) -> Result<i32, Trap> {
+    match typed_remove_s(t, k)? {
+        at if at >= 0 => t.handle_at(at),
+        _ => Ok(-1),
+    }
+}
+
+/// The sv lane's fused put: validate the byte window (the house
+/// `Invalid` trap on a bad range — the table is left intact), hash over
+/// the range, grow internally, insert. Same recorded hash and same slot
+/// as the s lane on the same content (the parity law) — and therefore
+/// the same HANDLE: an sv key and the equal-content `str` key are one
+/// key with one identity.
+fn fused_put_sv(t: &mut NativeTable, parent: &str, off: i32, len: i32) -> Result<i64, Trap> {
+    let range = sv_range(parent, off, len)?;
+    let h = hash_bytes(range.as_bytes());
+    if t.needs_grow() {
+        t.grow();
+    }
+    let at = t.entry_str_range(range, h)?;
+    packed_entry_answer(t, at)
+}
+
+/// The sv lane's fused find.
+fn fused_find_sv(t: &NativeTable, parent: &str, off: i32, len: i32) -> Result<i32, Trap> {
+    match typed_find_sv(t, parent, off, len)? {
+        at if at >= 0 => t.handle_at(at),
+        _ => Ok(-1),
+    }
+}
+
+/// The sv lane's fused remove.
+fn fused_remove_sv(t: &mut NativeTable, parent: &str, off: i32, len: i32) -> Result<i32, Trap> {
+    match typed_remove_sv(t, parent, off, len)? {
+        at if at >= 0 => t.handle_at(at),
+        _ => Ok(-1),
+    }
+}
+
 /// Install the nine `nmap_host` bodies under the `nmap_host` scope (the `calc`
 /// pattern, RFC 0023/0025): the callable's Rust shape IS the `.d.rut`
 /// row, so the surface declares exactly these signatures. `map_new`'s
@@ -974,6 +1158,163 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (OpaqueBox<NativeTable>, i32) -> f64,
         |_vm: &mut Vm, b: OpaqueBox<NativeTable>, slot: i32| -> Result<f64, Trap> {
             b.with(|t| t.val_get(slot).map(f64::from_bits))?
+        },
+    );
+
+    // ---- the fused handle lanes (nmapset-hostops) ----------------------
+    // 18 fns `map_h{put,find,remove}_{i,u,b,s,y,sv}`: the takeover
+    // surface. The key crosses DIRECTLY on the same typed lanes as the
+    // legacy family; the difference is the ANSWER and the control flow
+    // — `hput` grows INTERNALLY at the load boundary (the legacy
+    // `map_entry_*` sentinel loop and the wrapper's relocation drain
+    // both die here, host-side) and answers the packed
+    // `(handle << 1) | newly` i64; `hfind`/`hremove` answer the key's
+    // STABLE birth handle (or `-1`), which the wrapper's `[?V]` sidecar
+    // is indexed by. `HashSet` shares `hput` and reads bit 0. The
+    // legacy crossings above stay bound and documented — same table,
+    // same slots, same hashes.
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hput_i",
+        (OpaqueBox<NativeTable>, i64) -> i64,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i64, Trap> {
+            b.with_mut(|t| fused_put(t, KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hput_u",
+        (OpaqueBox<NativeTable>, u64) -> i64,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i64, Trap> {
+            b.with_mut(|t| fused_put(t, KeyVal::Bits(k)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hput_b",
+        (OpaqueBox<NativeTable>, bool) -> i64,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i64, Trap> {
+            b.with_mut(|t| fused_put(t, KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hput_s",
+        (OpaqueBox<NativeTable>, &str) -> i64,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i64, Trap> {
+            b.with_mut(|t| fused_put_s(t, k))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hput_y",
+        (OpaqueBox<NativeTable>, &[u8]) -> i64,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i64, Trap> {
+            b.with_mut(|t| fused_put(t, KeyVal::Bytes(k.to_vec())))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hput_sv",
+        (OpaqueBox<NativeTable>, &str, i32, i32) -> i64,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i64, Trap> {
+            b.with_mut(|t| fused_put_sv(t, parent, off, len))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hfind_i",
+        (OpaqueBox<NativeTable>, i64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i32, Trap> {
+            b.with(|t| fused_find(t, &KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hfind_u",
+        (OpaqueBox<NativeTable>, u64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i32, Trap> {
+            b.with(|t| fused_find(t, &KeyVal::Bits(k)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hfind_b",
+        (OpaqueBox<NativeTable>, bool) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i32, Trap> {
+            b.with(|t| fused_find(t, &KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hfind_s",
+        (OpaqueBox<NativeTable>, &str) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
+            b.with(|t| fused_find_s(t, k))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hfind_y",
+        (OpaqueBox<NativeTable>, &[u8]) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
+            b.with(|t| fused_find(t, &KeyVal::Bytes(k.to_vec())))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hfind_sv",
+        (OpaqueBox<NativeTable>, &str, i32, i32) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
+            b.with(|t| fused_find_sv(t, parent, off, len))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hremove_i",
+        (OpaqueBox<NativeTable>, i64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: i64| -> Result<i32, Trap> {
+            b.with_mut(|t| fused_remove(t, &KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hremove_u",
+        (OpaqueBox<NativeTable>, u64) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: u64| -> Result<i32, Trap> {
+            b.with_mut(|t| fused_remove(t, &KeyVal::Bits(k)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hremove_b",
+        (OpaqueBox<NativeTable>, bool) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: bool| -> Result<i32, Trap> {
+            b.with_mut(|t| fused_remove(t, &KeyVal::Bits(k as u64)))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hremove_s",
+        (OpaqueBox<NativeTable>, &str) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &str| -> Result<i32, Trap> {
+            b.with_mut(|t| fused_remove_s(t, k))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hremove_y",
+        (OpaqueBox<NativeTable>, &[u8]) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
+            b.with_mut(|t| fused_remove(t, &KeyVal::Bytes(k.to_vec())))?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hremove_sv",
+        (OpaqueBox<NativeTable>, &str, i32, i32) -> i32,
+        |_vm: &mut Vm, b: OpaqueBox<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
+            b.with_mut(|t| fused_remove_sv(t, parent, off, len))?
         },
     );
 }
@@ -2006,5 +2347,192 @@ mod tests {
             assert!(via_sv >= 0, "key {i} lost");
             assert_eq!(via_sv, typed_find_s(&t, &text_of(i)).unwrap(), "key {i}");
         }
+    }
+
+    // ---- the fused handle lanes (nmapset-hostops) ---------------------
+
+    #[test]
+    fn the_packed_answer_law_is_bit0_newly_rest_handle() {
+        // bit 0 = the newly bit, the rest the handle — distinct pairs
+        // answer distinctly, and handle 0 rides both flags (the probe's
+        // own PACK row, pinned)
+        assert_eq!(pack_answer(0, false), 0);
+        assert_eq!(pack_answer(0, true), 1);
+        assert_eq!(pack_answer(1, false), 2);
+        assert_eq!(pack_answer(1, true), 3);
+        assert_eq!(pack_answer(1_000_000_000, true), 2_000_000_001);
+        for hd in [0i32, 1, 7, 1 << 20] {
+            for newly in [false, true] {
+                let ans = pack_answer(hd, newly);
+                assert_eq!((ans & 1) == 1, newly);
+                assert_eq!((ans >> 1) as i32, hd);
+            }
+        }
+        // collision-freedom over the whole realistic range: the map is
+        // injective by construction (one bit vs the shifted rest)
+        let mut seen = std::collections::HashSet::new();
+        for hd in 0..2000i32 {
+            assert!(seen.insert(pack_answer(hd, true)));
+            assert!(seen.insert(pack_answer(hd, false)));
+        }
+    }
+
+    #[test]
+    fn hput_answers_handles_and_hfind_agrees() {
+        let mut t = NativeTable::new(8);
+        // three fresh births: handles 0, 1, 2 — each newly
+        for i in 0..3u64 {
+            let ans = fused_put(&mut t, bits(i)).unwrap();
+            assert_eq!(ans, pack_answer(i as i32, true), "birth {i}");
+        }
+        // replace: the SAME handle, newly = false
+        assert_eq!(
+            fused_put(&mut t, bits(1)).unwrap(),
+            pack_answer(1, false)
+        );
+        // hfind answers the handle; a miss is -1
+        assert_eq!(fused_find(&t, &bits(0)).unwrap(), 0);
+        assert_eq!(fused_find(&t, &bits(1)).unwrap(), 1);
+        assert_eq!(fused_find(&t, &bits(99)).unwrap(), -1);
+        assert_eq!(t.len(), 3);
+    }
+
+    #[test]
+    fn handles_survive_multi_grow_sweeps_untouched() {
+        // the takeover's core law: the handle is the key's identity —
+        // grow re-slots, the handle NEVER moves, and the wrapper's
+        // sidecar (indexed by it) never drains
+        let mut t = NativeTable::new(4);
+        let mut handles = Vec::new();
+        for i in 0..500u64 {
+            let ans = fused_put(&mut t, bits(i.wrapping_mul(0x9E3779B1))).unwrap();
+            assert_eq!(ans & 1, 1, "every key fresh");
+            handles.push((ans >> 1) as i32);
+        }
+        assert!(t.cap() >= 1024, "the sweep grew the table internally");
+        assert_eq!(t.len(), 500);
+        for (i, hd) in handles.iter().enumerate() {
+            let key = (i as u64).wrapping_mul(0x9E3779B1);
+            assert_eq!(fused_find(&t, &bits(key)).unwrap(), *hd, "key {i}");
+        }
+        // handles are the dense births 0..500
+        let mut sorted = handles.clone();
+        sorted.sort();
+        for (i, hd) in sorted.iter().enumerate() {
+            assert_eq!(*hd, i as i32);
+        }
+    }
+
+    #[test]
+    fn hput_grows_internally_exactly_at_the_load_boundary() {
+        // the legacy sentinel's boundary law, held by the fused lane
+        // without ever exposing a sentinel: the (count+1)th entry that
+        // would breach the load factor grows FIRST, stores, and answers
+        // a normal packed pair
+        let mut t = NativeTable::new(16);
+        for i in 0..11u64 {
+            // cap 16: (10+0+1)*10 = 110 < 112 — no grow yet, and the
+            // fused put must NOT have grown early either
+            fused_put(&mut t, bits(i)).unwrap();
+            assert_eq!(t.cap(), 16, "no premature grow at {i}");
+        }
+        // the 11th live entry would breach: hput grows internally
+        let ans = fused_put(&mut t, bits(11)).unwrap();
+        assert_eq!(t.cap(), 32, "the boundary put grew the table");
+        assert_eq!(ans & 1, 1);
+        assert_eq!(t.len(), 12);
+        assert_eq!(t.tomb, 0);
+        // nothing was lost, handles intact
+        for i in 0..12u64 {
+            assert!(fused_find(&t, &bits(i)).unwrap() >= 0, "key {i}");
+        }
+    }
+
+    #[test]
+    fn hremove_answers_the_dead_handle_and_reinsert_is_a_new_birth() {
+        let mut t = NativeTable::new(8);
+        fused_put(&mut t, bits(7)).unwrap(); // handle 0
+        fused_put(&mut t, bits(8)).unwrap(); // handle 1
+        // remove answers the DEAD key's OWN handle — the wrapper nils
+        // exactly that sidecar slot
+        assert_eq!(fused_remove(&mut t, &bits(7)).unwrap(), 0);
+        assert_eq!(fused_remove(&mut t, &bits(7)).unwrap(), -1);
+        assert_eq!(fused_find(&t, &bits(7)).unwrap(), -1);
+        // monotonic v1: the re-inserted key is a NEW birth (handle 2),
+        // never the recycled 0 — the removed slot's sidecar nil stays
+        // correct (slot 0 was nilled; the new birth writes slot 2)
+        let ans = fused_put(&mut t, bits(7)).unwrap();
+        assert_eq!(ans, pack_answer(2, true));
+        // the DEAD slot reuse moved the key to a new slot with a fresh
+        // handle, and the survivor is untouched
+        assert_eq!(fused_find(&t, &bits(8)).unwrap(), 1);
+    }
+
+    #[test]
+    fn the_sv_and_s_lanes_answer_one_handle() {
+        // the parity law extended to identity: an sv key and the
+        // equal-content str key are ONE key — same slot, same HANDLE —
+        // through every fused op, both directions. The full answers
+        // differ in the newly bit by design (the first put is a fresh
+        // birth, the second finds it); the HANDLE must not.
+        let mut t = NativeTable::new(8);
+        let parent = "xx-alpha-xx-beta-xx";
+        let via_sv = fused_put_sv(&mut t, parent, 3, 5).unwrap(); // "alpha"
+        let via_s = fused_put_s(&mut t, "alpha").unwrap();
+        assert_eq!(via_sv & 1, 1, "the sv put was the fresh birth");
+        assert_eq!(via_s & 1, 0, "the s put found the sv key: a replace");
+        assert_eq!(via_sv >> 1, via_s >> 1, "ONE key, ONE handle");
+        assert_eq!(
+            fused_find_s(&t, "alpha").unwrap(),
+            fused_find_sv(&t, parent, 3, 5).unwrap()
+        );
+        assert_eq!(
+            fused_remove_sv(&mut t, parent, 3, 5).unwrap(),
+            (via_s >> 1) as i32
+        );
+        assert_eq!(fused_find_s(&t, "alpha").unwrap(), -1);
+    }
+
+    #[test]
+    fn fused_lanes_agree_with_the_legacy_opaque_lane() {
+        // same table, same slots: the legacy `entry` answer's slot
+        // carries exactly the handle the fused lane packed (the
+        // additive-state law — the old crossings never read the
+        // column, the new ones never move a slot)
+        let mut t = NativeTable::new(8);
+        for i in 0..40u64 {
+            let key = i.wrapping_mul(0x9E3779B1);
+            let ans = fused_put(&mut t, bits(key)).unwrap();
+            let slot = t.find(KeyKind::Bits, &bits(key), mix64(key)).unwrap();
+            assert!(slot >= 0);
+            assert_eq!(t.handles[slot as usize], (ans >> 1) as i32, "key {i}");
+        }
+    }
+
+    #[test]
+    fn bytes_and_bool_lanes_ride_the_fused_family() {
+        // bytes on its own table (kinds are homogeneous per table)
+        let mut t = NativeTable::new(8);
+        assert_eq!(
+            fused_put(&mut t, KeyVal::Bytes(vec![1, 2, 3])).unwrap(),
+            pack_answer(0, true)
+        );
+        assert_eq!(fused_find(&t, &KeyVal::Bytes(vec![1, 2, 3])).unwrap(), 0);
+        assert_eq!(
+            fused_put(&mut t, KeyVal::Bytes(vec![1, 2, 3])).unwrap(),
+            pack_answer(0, false)
+        );
+        assert_eq!(fused_remove(&mut t, &KeyVal::Bytes(vec![1, 2, 3])).unwrap(), 0);
+        // bool on its own table — `true` is bits 1 on the b lane
+        let mut b = NativeTable::new(8);
+        assert_eq!(
+            fused_put(&mut b, bits(1)).unwrap(),
+            pack_answer(0, true),
+            "bool true = bits 1"
+        );
+        assert_eq!(fused_find(&b, &bits(1)).unwrap(), 0);
+        assert_eq!(fused_remove(&mut b, &bits(1)).unwrap(), 0);
+        // kind mixing still traps through the fused path
+        assert!(fused_put(&mut t, KeyVal::Str("s".into())).is_err());
     }
 }

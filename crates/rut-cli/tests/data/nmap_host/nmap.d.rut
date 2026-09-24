@@ -130,3 +130,62 @@ pub host fn map_val_get_u(m: opaque, slot: i32) -> u64;
 pub host fn map_val_set_f(m: opaque, slot: i32, v: f64);
 
 pub host fn map_val_get_f(m: opaque, slot: i32) -> f64;
+
+// ---- the fused handle lanes (nmapset-hostops) -----------------------
+// The takeover family: ONE crossing per op, ALL control flow host-
+// side. The table carries a STABLE birth handle per key (assigned at
+// first insert, relocated with the keys on grow, never recycled v1);
+// `hput` grows INTERNALLY at the load boundary — no sentinel loop, no
+// caller-side drain — and answers the packed `(handle << 1) | newly`
+// in i64: bit 0 is the newly bit (a replace answers bit 0 = 0;
+// `HashSet` shares the lane and reads exactly that bit), the rest the
+// handle. The handle space is bounded by BIRTHS, not cap, so the i64
+// carrier has headroom far past any real table's lifetime.
+// `hfind`/`hremove` answer the key's handle, or `-1` when absent —
+// `hremove` answers the DEAD key's own handle, so the wrapper nils
+// exactly that sidecar slot and releases the cell.
+//
+// The key shapes are the typed family's exact ones: the `i` lane
+// takes `i64` (wrapper-cast from i8..i64, sign-extension is the bits
+// law), `u` takes `u64` raw, `b` takes `bool`, `s`/`y` borrow
+// `str`/`bytes` zero-copy, `sv` a borrowed `(parent, off, len)` BYTE
+// range with the UTF-8 boundary trap — and the sv lane and the s lane
+// of the same content are ONE key: same recorded hash, same slot,
+// same HANDLE. The families above stay bound (legacy escape hatches,
+// the batch's keep call): same table, same slots, same hashes.
+
+pub host fn map_hput_i(m: opaque, k: i64) -> i64;
+
+pub host fn map_hput_u(m: opaque, k: u64) -> i64;
+
+pub host fn map_hput_b(m: opaque, k: bool) -> i64;
+
+pub host fn map_hput_s(m: opaque, k: str) -> i64;
+
+pub host fn map_hput_y(m: opaque, k: bytes) -> i64;
+
+pub host fn map_hput_sv(m: opaque, parent: str, off: i32, len: i32) -> i64;
+
+pub host fn map_hfind_i(m: opaque, k: i64) -> i32;
+
+pub host fn map_hfind_u(m: opaque, k: u64) -> i32;
+
+pub host fn map_hfind_b(m: opaque, k: bool) -> i32;
+
+pub host fn map_hfind_s(m: opaque, k: str) -> i32;
+
+pub host fn map_hfind_y(m: opaque, k: bytes) -> i32;
+
+pub host fn map_hfind_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
+
+pub host fn map_hremove_i(m: opaque, k: i64) -> i32;
+
+pub host fn map_hremove_u(m: opaque, k: u64) -> i32;
+
+pub host fn map_hremove_b(m: opaque, k: bool) -> i32;
+
+pub host fn map_hremove_s(m: opaque, k: str) -> i32;
+
+pub host fn map_hremove_y(m: opaque, k: bytes) -> i32;
+
+pub host fn map_hremove_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
