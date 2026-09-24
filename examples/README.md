@@ -95,8 +95,10 @@ trait, `Json` is that file's).
   asymmetry is deliberate: builtin *traits* (`Iterator`, `Index`,
   `Disposal`) are core's decls, so implementing one for your own type
   is the ordinary local case. `opaque` is a builtin too — a foreign
-  trait can never be implemented for it; its cross-type law is
-  RFC 0014's downcast (`opaque.downcast<T> -> ?T`, nil on a miss).
+  trait can never be implemented for it, so a capability probe on a box
+  finds nothing (`o is I` is `false`; `is` names the box, never the
+  payload — the 2026-09 opaque-is law, RFC 0014); its cross-type law
+  is RFC 0014's downcast (`opaque.downcast<T> -> ?T`, nil on a miss).
 - **Generic impls classify by the head** — `impl JsonSerialize for
   Vec<T>` is json's to write (it does, peer-gated); your type
   parameter `T` never makes the impl yours.
