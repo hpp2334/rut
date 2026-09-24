@@ -26,8 +26,8 @@ use todo_row::{ todo_row };
 /// remove) — the caller drops them onto the container. The tables are
 /// the keyed-collection family spelling (`HashMap<str, i64>` — the
 /// generic class; one name, one decl).
-pub fn todo_list(store: ?TodoStore) -> (Widget, HashMap<str, i64>, HashMap<str, i64>) {
-    let mut st: ?TodoStore = store;
+pub fn todo_list(store: TodoStore) -> (Widget, HashMap<str, i64>, HashMap<str, i64>) {
+    let mut st: TodoStore = store;
     let mut tg: HashMap<str, i64> = HashMap.new();
     let mut rm: HashMap<str, i64> = HashMap.new();
 

@@ -130,13 +130,13 @@ impl Derived<TodoStore> for Counts {
         return self.deps_v;
     }
 
-    fn stale(self, st: ?TodoStore) -> bool {
-        let mut s: ?TodoStore = st;
+    fn stale(self, st: TodoStore) -> bool {
+        let mut s: TodoStore = st;
         return self.seen.stale(self.deps_v, s.rail);
     }
 
-    fn refresh(mut self, st: ?TodoStore) -> nil {
-        let mut s: ?TodoStore = st;
+    fn refresh(mut self, st: TodoStore) -> nil {
+        let mut s: TodoStore = st;
         let items = s.items$.get();
         let reqs = s.reqs$.get();
         // the SAME formulas as the entry-level counters below — the
@@ -160,7 +160,7 @@ impl Derived<TodoStore> for Counts {
 /// `main`); the host re-passes it every turn — no module state
 /// anywhere (RFC 0003 §1).
 pub class TodoStore {
-    rail: ?Rail; // THE generation rail (one store, one rail, one KV)
+    rail: Rail; // THE generation rail (one store, one rail, one KV)
     items$: Atom<Vec<Todo>>; // the committed list — "items"
     reqs$: Atom<Vec<Req>>; // the booked requests — "reqs"
     draft$: StrAtom; // the field's event-carried value — "draft"
@@ -175,7 +175,7 @@ pub class TodoStore {
 
 impl TodoStore {
     pub fn new() -> Self {
-        let rail: ?Rail = Rail.new();
+        let rail: Rail = Rail.new();
         let counts: Counts = Counts.new();
         let mut s = Self {
             rail: rail,
@@ -494,13 +494,13 @@ impl Derived<ProbeStore> for ProbeUp {
         return self.deps_v;
     }
 
-    fn stale(self, st: ?ProbeStore) -> bool {
-        let mut s: ?ProbeStore = st;
+    fn stale(self, st: ProbeStore) -> bool {
+        let mut s: ProbeStore = st;
         return self.seen.stale(self.deps_v, s.rail);
     }
 
-    fn refresh(mut self, st: ?ProbeStore) -> nil {
-        let mut s: ?ProbeStore = st;
+    fn refresh(mut self, st: ProbeStore) -> nil {
+        let mut s: ProbeStore = st;
         let xs = s.items$.get();
         self.v = xs.len();
         self.seen.note(self.deps_v, s.rail);
@@ -511,13 +511,13 @@ impl Derived<ProbeStore> for ProbeUp {
 
 pub class ProbeDown {
     v: i32 = 0; // the cache: the upstream's value, doubled
-    up: ?ProbeUp = nil; // the upstream's typed handle
+    up: ProbeUp; // the upstream's typed handle
     seen_up: i64 = 0; // the upstream gen this cache computed at
     deps_v: Vec<str>; // declared: [up]
 }
 
 impl ProbeDown {
-    pub fn new(up: ?ProbeUp) -> Self {
+    pub fn new(up: ProbeUp) -> Self {
         return Self { v: 0, up: up, seen_up: 0, deps_v: Vec.from(["up"]) };
     }
 }
@@ -531,13 +531,13 @@ impl Derived<ProbeStore> for ProbeDown {
         return self.deps_v;
     }
 
-    fn stale(self, st: ?ProbeStore) -> bool {
+    fn stale(self, st: ProbeStore) -> bool {
         let u = self.up;
         return self.seen_up != u.gen; // a DERIVED dep keys on the upstream's gen
     }
 
-    fn refresh(mut self, st: ?ProbeStore) -> nil {
-        let mut s: ?ProbeStore = st;
+    fn refresh(mut self, st: ProbeStore) -> nil {
+        let mut s: ProbeStore = st;
         let u = self.up;
         self.v = u.v * 2; // reads the upstream's FRESH cache — same pass
         self.seen_up = u.gen;
@@ -547,7 +547,7 @@ impl Derived<ProbeStore> for ProbeDown {
 
 /// The fixture store: the same shape as TodoStore, one tier deeper.
 pub class ProbeStore {
-    rail: ?Rail;
+    rail: Rail;
     items$: Atom<Vec<Todo>>;
     up$: ProbeUp; // the typed handles the probe entries read
     down$: ProbeDown;
@@ -558,7 +558,7 @@ pub class ProbeStore {
 
 impl ProbeStore {
     pub fn new() -> Self {
-        let rail: ?Rail = Rail.new();
+        let rail: Rail = Rail.new();
         let upv: ProbeUp = ProbeUp.new();
         let downv: ProbeDown = ProbeDown.new(upv);
         let mut s = Self {

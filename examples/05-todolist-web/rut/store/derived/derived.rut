@@ -62,13 +62,13 @@ pub trait Derived<S> {
     /// The staleness test: true iff any declared dep's current rail
     /// generation differs from the generation recorded at the last
     /// recompute (or the derived never computed).
-    fn stale(self, st: ?S) -> bool;
+    fn stale(self, st: S) -> bool;
 
     /// The recompute: read the dep atoms' CURRENT values, store the
     /// cached result, note the dep generations. Runs AT MOST ONCE per
     /// turn (the flush's one pass guarantees it — the within-turn
     /// freshness law).
-    fn refresh(mut self, st: ?S) -> nil;
+    fn refresh(mut self, st: S) -> nil;
 }
 
 // ---- the seen-generations bookkeeping (tur's Slot.epoch) -------------
@@ -89,7 +89,7 @@ impl Seen {
     /// Record the current generation of every declared dep — called
     /// by a derived's `refresh` AFTER it stored its fresh value, so
     /// the cache's epoch line is the one this recompute happened at.
-    pub fn note(mut self, deps: Vec<str>, rail: ?Rail) -> nil {
+    pub fn note(mut self, deps: Vec<str>, rail: Rail) -> nil {
         for (let d of deps) {
             self.m.put(d, rail.gen_of(d));
         }
@@ -99,7 +99,7 @@ impl Seen {
     /// stale (no entry); any dep whose rail gen moved since `note`
     /// is stale. A dep NOT in `deps` cannot make this true — the
     /// per-dep law the twins pin.
-    pub fn stale(self, deps: Vec<str>, rail: ?Rail) -> bool {
+    pub fn stale(self, deps: Vec<str>, rail: Rail) -> bool {
         for (let d of deps) {
             let g = self.m.get(d);
             if (g == nil) {

@@ -126,21 +126,21 @@ impl Rail {
 // ---- the general atom (the survey §4.2 sketch, verbatim shape) ------
 
 /// The general value cell: the field IS the cell; the name is the
-/// rail key. `v` is nil only pre-boot — `make` initializes at build.
+/// rail key. `make` initializes `v` at build — the cell is never nil.
 /// Reads (`get`) are plain field reads: no tracking, no rail traffic,
 /// no live channel. Writes (`set`) do exactly two things: store the
 /// value, mark the rail. NO equality skip on this lane (the header's
 /// recorded asymmetry: class-valued atoms mark on every set).
 pub class Atom<T> {
-    v: ?T = nil;
+    v: T;
     name: str = "";
-    rail: ?Rail = nil;
+    rail: Rail;
 }
 
 impl Atom<T> {
     /// Build the cell: the initial value is born fresh — the rail is
     /// NOT marked (nothing is dirty before the first write).
-    pub fn make(rail: ?Rail, name: str, init: T) -> Self {
+    pub fn make(rail: Rail, name: str, init: T) -> Self {
         return Self { v: init, name: name, rail: rail };
     }
 
@@ -160,7 +160,7 @@ impl Atom<T> {
     /// recomputes here (recompute-on-read is the flush's job).
     pub fn set(mut self, x: T) -> nil {
         self.v = x;
-        let mut r: ?Rail = self.rail;
+        let mut r: Rail = self.rail;
         r.mark(self.name);
     }
 }
@@ -175,12 +175,12 @@ impl Atom<T> {
 pub class StrAtom {
     v: str = "";
     name: str = "";
-    rail: ?Rail = nil;
+    rail: Rail;
 }
 
 impl StrAtom {
     /// Build the cell; the initial value is born fresh (no mark).
-    pub fn make(rail: ?Rail, name: str, init: str) -> Self {
+    pub fn make(rail: Rail, name: str, init: str) -> Self {
         return Self { v: init, name: name, rail: rail };
     }
 
@@ -201,7 +201,7 @@ impl StrAtom {
             return;
         }
         self.v = x;
-        let mut r: ?Rail = self.rail;
+        let mut r: Rail = self.rail;
         r.mark(self.name);
     }
 }

@@ -130,10 +130,10 @@ use card::{ card };
 /// The draft and the note live IN the store now (the draft$/note$
 /// atoms); no duplicates on the container.
 struct AppRoot {
-    store: ?TodoStore = nil; // THE ATOM STORE (was the plain ?Store)
-    t1: ?T1Root = nil; // the framework's diff/registry state
-    toggles: ?HashMap<str, i64> = nil; // subject -> todo id (§7.3)
-    removes: ?HashMap<str, i64> = nil; // subject -> todo id (§7.3)
+    store: TodoStore; // THE ATOM STORE (was the plain ?Store)
+    t1: T1Root; // the framework's diff/registry state
+    toggles: HashMap<str, i64>; // subject -> todo id (§7.3)
+    removes: HashMap<str, i64>; // subject -> todo id (§7.3)
 }
 
 // The boot turn: mount the framework on the seeded root (index.html's
@@ -147,7 +147,7 @@ struct AppRoot {
 entry fn main() -> opaque {
     let toggles: HashMap<str, i64> = HashMap.new();
     let removes: HashMap<str, i64> = HashMap.new();
-    let mut store: ?TodoStore = TodoStore.new();
+    let mut store: TodoStore = TodoStore.new();
     store.note$.set("booted — type a title, press Add");
     let root: ?AppRoot = AppRoot {
         store: store,
@@ -179,7 +179,7 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, 
         // EV_DOM — the framework translates the firing listener id to
         // its widget's SUBJECT (§7.3); a stale or unknown id is the
         // registry's LOUD miss, named as such.
-        let mut t1: ?T1Root = r.t1;
+        let mut t1: T1Root = r.t1;
         let s = t1_subject(t1, subject);
         dispatch(r, s, detail);
         return (opaque(r), "");
@@ -191,7 +191,7 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, 
         // written to the note$ atom), and the err channel
         // tells the host. The container does NOT re-cross on a failed
         // turn — exactly-one-non-nil; the pump keeps the one it holds.
-        let mut store: ?TodoStore = r.store;
+        let mut store: TodoStore = r.store;
         let ans = store.answer(subject);
         if (ans.1 != "") {
             store.note$.set(ans.1);
@@ -214,7 +214,7 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, 
 // through `draft$.set`/`note$.set`, the bookings through the store's
 // machine.
 fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
-    let mut store: ?TodoStore = r.store;
+    let mut store: TodoStore = r.store;
 
     if (subject == "add") {
         // the click row carries no value; the field's value arrived
@@ -243,7 +243,7 @@ fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
         return;
     }
 
-    let mut toggles: ?HashMap<str, i64> = r.toggles;
+    let mut toggles: HashMap<str, i64> = r.toggles;
     let thit = toggles.get(subject);
     if (thit != nil) {
         let todo: i64 = thit;
@@ -256,7 +256,7 @@ fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
         paint(r);
         return;
     }
-    let mut removes: ?HashMap<str, i64> = r.removes;
+    let mut removes: HashMap<str, i64> = r.removes;
     let rhit = removes.get(subject);
     if (rhit != nil) {
         let todo: i64 = rhit;
@@ -280,10 +280,10 @@ fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
 // is bookkeeping before the view, never a gate around it: the render
 // runs unconditionally, exactly as every phase before.
 fn paint(r: ?AppRoot) -> nil {
-    let mut store: ?TodoStore = r.store;
+    let mut store: TodoStore = r.store;
     store.refresh(); // the within-turn flush — deriveds recompute at most once
     let tree = view(r);
-    let mut root: ?T1Root = r.t1;
+    let mut root: T1Root = r.t1;
     t1_render(root, tree);
 }
 
@@ -295,7 +295,7 @@ fn paint(r: ?AppRoot) -> nil {
 // §7.3's: the subject tables `todo_list` RETURNS are dropped onto the
 // container here, where the container lives.
 fn view(mut r: ?AppRoot) -> Widget {
-    let mut store: ?TodoStore = r.store;
+    let mut store: TodoStore = r.store;
 
     let mut tree = col().gap(12).pad(16).hook("root");
 

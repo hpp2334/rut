@@ -63,11 +63,11 @@ use lowering::{ lower };
 /// The patch state — plain rut data, a field of the app container
 /// (RFC 0003 §1: the state crosses, the host re-passes it).
 pub struct T1Root {
-    parent: ?opaque = nil; // the mounted root element
+    parent: opaque; // the mounted root element
     prev: ?Widget = nil; // the previous tree — the diff's left side
-    els: ?HashMap<str, opaque> = nil; // path -> live handle (ops application)
-    regs: ?HashMap<str, str> = nil; // listener id (as crossed) -> subject
-    lids: ?HashMap<str, i64> = nil; // path -> listener id (retirement)
+    els: HashMap<str, opaque>; // path -> live handle (ops application)
+    regs: HashMap<str, str>; // listener id (as crossed) -> subject
+    lids: HashMap<str, i64>; // path -> listener id (retirement)
 }
 
 /// Mount the framework on the element `root_id` (index.html's seeded
@@ -91,8 +91,8 @@ pub fn t1_mount(root_id: str) -> T1Root {
 /// The listener registry's one lookup, LOUD on a miss (§4.3): a firing
 /// id that answers no subject is stale or unknown — an app bug is a
 /// named trap, never a silent no-op.
-pub fn t1_subject(r: ?T1Root, id: str) -> str {
-    let mut regs: ?HashMap<str, str> = r.regs;
+pub fn t1_subject(r: T1Root, id: str) -> str {
+    let mut regs: HashMap<str, str> = r.regs;
     let hit = regs.get(id);
     if (hit == nil) {
         panic(f"t1: listener '{id}' answered no subject — stale or unknown");
@@ -106,7 +106,7 @@ pub fn t1_subject(r: ?T1Root, id: str) -> str {
 /// THE render — once per turn, any turn. First render builds the whole
 /// tree; every later render diffs against the previous tree and fires
 /// only the deltas. Nothing here ever rebuilds a surviving node.
-pub fn t1_render(mut r: ?T1Root, next: Widget) -> nil {
+pub fn t1_render(mut r: T1Root, next: Widget) -> nil {
     let path = key_of(next, 0);
     let prev = r.prev;
     if (prev == nil) {
@@ -124,8 +124,8 @@ pub fn t1_render(mut r: ?T1Root, next: Widget) -> nil {
 
 /// The live handle for a path — LOUD when the framework's own table
 /// has drifted (the patch named an element that never appeared).
-fn els_handle(r: ?T1Root, path: str) -> opaque {
-    let mut els: ?HashMap<str, opaque> = r.els;
+fn els_handle(r: T1Root, path: str) -> opaque {
+    let mut els: HashMap<str, opaque> = r.els;
     let hit = els.get(path);
     if (hit == nil) {
         panic(f"t1: no live handle for '{path}' — the patch named an element that never appeared");
@@ -134,19 +134,19 @@ fn els_handle(r: ?T1Root, path: str) -> opaque {
     return el;
 }
 
-fn els_drop(r: ?T1Root, path: str) -> nil {
-    let mut els: ?HashMap<str, opaque> = r.els;
+fn els_drop(r: T1Root, path: str) -> nil {
+    let mut els: HashMap<str, opaque> = r.els;
     els.remove(path);
 }
 
 /// First appearance: mint the element, the attrs (ui_attr only), the
 /// text or value, the ONE listener of its lifetime, then the children
 /// (parent-before-child, so handles stay live).
-fn create_subtree(mut r: ?T1Root, w: Widget, path: str, parent: ?opaque) -> nil {
+fn create_subtree(mut r: T1Root, w: Widget, path: str, parent: opaque) -> nil {
     let low = lower(w);
     let el: opaque = ui_create(low.tag);
 
-    let mut els: ?HashMap<str, opaque> = r.els;
+    let mut els: HashMap<str, opaque> = r.els;
     els.put(path, el);
 
     if (w.hook != "") {
@@ -164,14 +164,13 @@ fn create_subtree(mut r: ?T1Root, w: Widget, path: str, parent: ?opaque) -> nil 
             panic(f"t1: '{path}' listens but answers no subject — set .subject(...)");
         }
         let id: i64 = ui_listen(el, low.listens);
-        let mut regs: ?HashMap<str, str> = r.regs;
+        let mut regs: HashMap<str, str> = r.regs;
         regs.put(f"{id}", w.subject);
-        let mut lids: ?HashMap<str, i64> = r.lids;
+        let mut lids: HashMap<str, i64> = r.lids;
         lids.put(path, id);
     }
 
-    let p: opaque = parent;
-    ui_append(p, el);
+    ui_append(parent, el);
 
     if (takes_text(w)) {
         if (w.text != "") {
@@ -193,7 +192,7 @@ fn create_subtree(mut r: ?T1Root, w: Widget, path: str, parent: ?opaque) -> nil 
 /// Patch one surviving node in place — deltas only. The class compare
 /// is token-exact: a checkbox flip is one `ui_attr`, a text change is
 /// one `ui_set_text`, and a Field's value rides the input crossing.
-fn patch_tree(mut r: ?T1Root, old: Widget, new: Widget, path: str) -> nil {
+fn patch_tree(mut r: T1Root, old: Widget, new: Widget, path: str) -> nil {
     if (kind_name(old) != kind_name(new)) {
         let a = kind_name(old);
         let b = kind_name(new);
@@ -263,7 +262,7 @@ fn key_moved_to_back(v: Vec<str>, p: i32) -> Vec<str> {
 /// its live predecessor is the previously-placed new key; anything
 /// else moves to the back with one append. Walks the new order left to
 /// right, so after the walk the model IS the new order.
-fn patch_children(mut r: ?T1Root, old: Widget, new: Widget, path: str, parent: ?opaque) -> nil {
+fn patch_children(mut r: T1Root, old: Widget, new: Widget, path: str, parent: opaque) -> nil {
     let olds: Vec<Widget> = old.children;
     let news: Vec<Widget> = new.children;
 
@@ -327,15 +326,15 @@ fn patch_children(mut r: ?T1Root, old: Widget, new: Widget, path: str, parent: ?
 /// Retirement (§4.3 — the no-ui_unlisten law's rut-side half): drop
 /// every live handle and every listener row the removed subtree owns,
 /// so the registry tracks LIVE ids only.
-fn retire_subtree(mut r: ?T1Root, w: Widget, path: str) -> nil {
+fn retire_subtree(mut r: T1Root, w: Widget, path: str) -> nil {
     els_drop(r, path);
     let low = lower(w);
     if (low.listens != "") {
-        let mut lids: ?HashMap<str, i64> = r.lids;
+        let mut lids: HashMap<str, i64> = r.lids;
         let hit = lids.get(path);
         if (hit != nil) {
             let id: i64 = hit;
-            let mut regs: ?HashMap<str, str> = r.regs;
+            let mut regs: HashMap<str, str> = r.regs;
             regs.remove(f"{id}");
             lids.remove(path);
         }
