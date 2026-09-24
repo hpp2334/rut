@@ -1,0 +1,152 @@
+use ink::{ Logger };
+use pouch::{ Vec };
+use strbuild::{ StringBuilder };
+
+// strbuild — the std strbuild pkg's bench row (the strbuild batch,
+// phase 2; docs/strbuild-survey.md §5 is this file's PRE-REGISTERED
+// contract — the workload runs the design as written, no tuning).
+//
+// Two phases per round, exposing the two costs the directive names:
+//
+//   Phase A — churn: ONE builder pre-sized SMALL (`with_cap(64)`); an
+//     LCG (the knucleotide constants, seed 42 pinned) draws fragment
+//     lengths from {1, 3, 5, 7, 9} — odd sizes straddle the 8-byte
+//     class rounding — n = 2^20 appends per round. The 64-byte hint
+//     forces the documented geometric grows (log2(doc/64B) ~ 16 events
+//     per MB-scale doc), so growth is INSIDE the measurement, not
+//     assumed away. Every fragment's content is derivable (a repeated
+//     letter per length class), so the fold verifies content, not just
+//     counts.
+//   Phase B — build: ONE `build()` on the big doc per round (the
+//     amortized pattern — json's writer shape), plus the
+//     per-fragment-mint sub-phase: m = 2^16 short strings, each
+//     `with_cap(hint)` -> append -> `build()` — the `quote_slow` shape
+//     — so `build()`'s copy cost is visible per call, not amortized.
+//
+// THE CHECKSUM (pre-registered): round-tripped COUNTS + sampled
+// content, the json-roundtrip values-not-lexemes precedent — 32
+// grid-chosen sample fragments are re-sliced out of the BUILT doc and
+// compared content-exact before they fold; every phase-B build is
+// compared content-exact against its source fragment; counts fold
+// alongside. One LCG chain (seed 42) drives both phases and the sample
+// grid, so the .js twin replays the identical draw order. 4 rounds;
+// every rep asserts against the first (rounds replay the same chain).
+
+fn lcg(x: u32) -> u32 {
+    return x.wrapping_mul(1103515245).wrapping_add(12345);
+}
+
+// Scale constants (the survey's pre-registered values — keep rut and
+// JS in lockstep).
+fn n_appends() -> i32 { return 1048576; }   // 2^20, phase A per round
+fn m_builds() -> i32 { return 65536; }      // 2^16, phase B per round
+fn rounds_n() -> i32 { return 4; }
+fn samples_n() -> i32 { return 32; }
+
+// The fragment table: a repeated letter per length class — class k
+// answers letter k of "abcde" repeated 2k+1 times ("a", "bbb",
+// "ccccc", "ddddddd", "eeeeeeeee"), built through the pkg itself.
+fn frags() -> Vec<str> {
+    let a: Vec<str> = Vec.new();
+    let letters = "abcde";
+    let mut k: i32 = 0;
+    for (let c of letters) {
+        let mut b = StringBuilder.new();
+        let letter = f"{c}";
+        let n = 2 * k + 1;
+        for (let j = 0; j < n; j += 1) {
+            b.append(letter);
+        }
+        a.push(b.build());
+        k += 1;
+    }
+    return a;
+}
+
+// One round: phase A churn + build, phase B per-fragment mint/build.
+// Returns the round's fold value over counts + sampled content.
+fn round(fr: Vec<str>) -> i64 {
+    let mut x: u32 = 42;   // the LCG chain replays per round (the rep assert is real)
+    let n = n_appends();
+    let m = m_builds();
+    let sn = samples_n();
+
+    // ---- phase A: the churn (n appends into ONE 64-byte-hint builder) --
+    let mut b = StringBuilder.with_cap(64);
+    let mut cps: i32 = 0;          // codepoints appended
+    let mut ns: i32 = 0;           // samples taken
+    let mut poss = [0; 32];        // sample start offsets (codepoints)
+    let mut scls = [0; 32];        // sample length classes
+    for (let i = 0; i < n; i += 1) {
+        x = lcg(x);
+        let cls = ((x >> 16) % 5) as i32;
+        let frag = fr[cls];
+        b.append(frag);
+        cps += 2 * cls + 1;
+        // the sample grid: 32 fragments evenly across the churn — the
+        // offset is recorded from the builder's OWN O(1) len (the
+        // tracked-count law), content is checked against the BUILT doc
+        if (i % (n / sn) == sn / 2) {
+            poss[ns] = b.len() - (2 * cls + 1);
+            scls[ns] = cls;
+            ns += 1;
+        }
+    }
+
+    // ---- phase B, amortized half: the ONE build on the big doc -------
+    let doc = b.build();
+    assert(doc.len() == cps, "strbuild: doc len != appended codepoints");
+    let mut ha: i64 = 0;           // the sampled-content fold
+    for (let s = 0; s < ns; s += 1) {
+        let len = 2 * scls[s] + 1;
+        let piece = doc.slice(poss[s], poss[s] + len);
+        if (piece != fr[scls[s]]) {
+            panic("strbuild: sample content diverged");
+        }
+        for (let c of piece) {
+            ha = ha.wrapping_mul(31 as i64).wrapping_add(c.code() as i64);
+        }
+        ha = ha.wrapping_mul(31 as i64).wrapping_add(len as i64);
+    }
+
+    // ---- phase B, per-fragment-mint sub-phase (the quote_slow shape) --
+    let mut hb: i64 = 0;
+    let mut bcps: i64 = 0;
+    for (let j = 0; j < m; j += 1) {
+        x = lcg(x);
+        let hint = ((x >> 8) % 64) as i32;
+        x = lcg(x);
+        let cls = ((x >> 16) % 5) as i32;
+        let mut sb = StringBuilder.with_cap(hint);
+        sb.append(fr[cls]);
+        let built = sb.build();
+        if (built != fr[cls]) {
+            panic("strbuild: built content diverged");
+        }
+        hb = hb.wrapping_mul(31 as i64).wrapping_add(cls as i64);
+        bcps += (2 * cls + 1) as i64;
+    }
+
+    let s = (cps as i64).wrapping_mul(31 as i64).wrapping_add(ha)
+        .wrapping_mul(31 as i64).wrapping_add(hb)
+        .wrapping_mul(31 as i64).wrapping_add(bcps);
+    return s;
+}
+
+pub fn main() -> nil {
+    let fr = frags();
+    let reps = rounds_n();
+    let mut total: i64 = 0;
+    let mut first: i64 = 0;
+    for (let r = 0; r < reps; r += 1) {
+        let s = round(fr);
+        if (r == 0) {
+            first = s;
+        } else {
+            assert(s == first, "strbuild: rep diverged");
+        }
+        total = total.wrapping_mul(31 as i64).wrapping_add(s);
+    }
+    let final_c = total.wrapping_mul(31 as i64).wrapping_add(reps as i64);
+    Logger.new("app").info(f"CHECKSUM {final_c}");
+}

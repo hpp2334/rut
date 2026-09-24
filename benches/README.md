@@ -100,6 +100,7 @@ against the reference in `workloads/expected.json`.
 | `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
 | `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells, RFC 0044): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the `[?V]` relocation drain). K = i64 holds the hash term constant so the row isolates VALUE-side costs. (The refval-exp batch's phase-1 `refcolumn` twin re-spelled this exact op stream over the experimental host val column; phase 2 measured it SLOWER and the experiment was REVERTED — see the verdict log. The `refvals` row and its analysis are permanent.) | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
 | `checkedadd` | the **`(T, ok)` pair economy**, isolated (err-channel phase 1): a hot loop of `a.checked_add(b)` calls through a helper fn (the callee/caller shape every `(T, err)` return rides — one `makerecord` mint per call), destructured `let (v, ok) = …`; `v` accumulates into an i64 wrapping checksum and the `ok == false` arm is counted separately and folded into the SAME checksum — both lanes are load-bearing, so a lowering that silently drops either moves the pin. Inputs make the overflow arm deterministic and rare-but-nonzero (b = i64::MAX − 1000, a sweeps [−1024, 1023] → 23 of 2048 calls overflow). The value lane is ±2⁶³-scale, so the .js twin accumulates in BigInt (exact i64 wrapping; a double cannot represent one term) | 10M checked ops | checksum `-10015207202` |
+| `strbuild` | the **std strbuild pkg's** row (the strbuild batch, survey §5 pre-registered): the two-phase builder workload — phase A churns ONE builder pre-sized to a 64-byte hint with n = 2²⁰ LCG-drawn fragments (the knucleotide constants, seed 42) of lengths {1,3,5,7,9} — odd sizes straddle the 8-byte class rounding, and the documented geometric grows ride INSIDE the measurement; phase B takes ONE `build()` on the ~5 MB doc (the amortized pattern, json's writer shape) plus m = 2¹⁶ per-fragment `with_cap(hint)` → append → `build()` mints (the `quote_slow` shape, so the materialization cost is visible per call). The checksum folds round-tripped COUNTS + 32 grid-sampled content-exact fragments re-sliced from the BUILT doc + per-build content equality (values-not-lexemes, the json-roundtrip precedent); the .js twin rides `Array#join` (the idiom choice disclosed on the twin's header; a single-piece build answers the piece itself) | 4 rounds × (2²⁰ + 2¹⁶) | checksum `-1259380140398818172` |
 
 `sieve`, `quicksort`, `matrix-mul`, `mandelbrot`, `fannkuch`, `nbody` and
 `spectral-norm` follow the standard algorithms (fannkuch and nbody to the
@@ -3894,3 +3895,62 @@ pay-per-capture (~30 ns base + ~0.2 ns/frame, members lazy) — recorded
 here, not a row; the entry-err contract (phase 3) crossed no bench
 surface. Gates at each phase: workspace green (655 → 666 → 675
 passed), wasm32 exit 0, foreign stash untouched.
+
+## Performance log — strbuild: the std strbuild pkg's landing (Sep 2026)
+
+New row for the strbuild batch's phase 2 (the pkg landed in phase 1,
+`ed5aa29`; docs/strbuild-survey.md §5 is the PRE-REGISTERED design this
+row implements — written before any run, so the workload is not tuned
+to its own numbers). The row is the pkg's reason to exist, in both
+costs the directive names:
+
+- **Phase A — churn**: ONE builder pre-sized `with_cap(64)`; an LCG
+  (the knucleotide constants, seed 42) draws fragment lengths from
+  {1, 3, 5, 7, 9} — odd sizes straddle the 8-byte class rounding —
+  n = 2²⁰ appends per round, fragment content a repeated letter per
+  length class (derivable, so the fold verifies content, not just
+  counts). The 64-byte hint forces the documented geometric grows
+  (log₂(5.2 MB / 64 B) ≈ 16 class-rounded events per round) — growth
+  is INSIDE the measurement.
+- **Phase B — build**: ONE `build()` on the ~5.2 MB doc per round (the
+  amortized pattern — json's writer shape), plus the
+  **per-fragment-mint sub-phase**: m = 2¹⁶ short strings, each
+  `with_cap(hint)` → append → `build()` — the `quote_slow` shape — so
+  the materialization cost is visible per call, not amortized away.
+
+The checksum (pre-registered) folds round-tripped COUNTS + 32
+grid-chosen sample fragments re-sliced from the BUILT doc and compared
+content-exact before they fold, + per-build content equality in the
+mint sub-phase (the json-roundtrip values-not-lexemes precedent). The
+.js twin replays the identical LCG chain and folds the same values;
+its idiom choice is DISCLOSED on the twin's header: phase A rides
+`Array#push` + one `Array#join("")` per round (the engine's own
+rope-flattened build), phase B's single-piece build answers the piece
+itself (a degenerate `[piece].join("")` was rejected as ceremony, not
+idiom). All three runtimes agreed on the checksum on the first landing
+run (twin gate, `expected.json` pins it):
+
+| workload | rut net | qjs net | node net | fuel | VM heap peak |
+|----------|---------|---------|----------|------|--------------|
+| strbuild | 352.6 ms | 842.5 ms | 233.1 ms | 162,285,165 | 21.01 MiB (22,028,108 B) |
+
+(5 paired sessions × 7 fresh-VM probe iters for the in-process record:
+fuel and heap bit-identical in all 35 iters; exec session medians
+344.1 / 344.9 / 345.3 / 347.9 / 348.8 ms — med-of-med 345.3 ms, spread
++1.4%, inside the host's known drift. Cross nets are the same-day
+full-suite run, 3 reps + 1 warmup. rut is AHEAD of qjs on this row —
+0.42× net — the first string-churn row where the interpreter's
+in-place builder beats the JS idiom: `Array#join` over 1M tiny strings
+re-materializes the whole rope per round, and qjs pays it; node's JIT
+holds a 233.1 ms net lead. rut's node-net gap is the interpreter floor
+on the 4.3M-iteration append loops, not the builder.)
+
+Landing gates: full suite — all 28 rows × {rut, qjs, node} — exit 0,
+every checksum equal to `expected.json` (the row appended LAST; every
+pre-existing row untouched), json-roundtrip `1960875332163557684`
+immovable with fuel 31,975,807 / heap 3,423,706 B bit-identical (the
+phase-1 pin holds; this row is a NEW mount, it moves nothing).
+`cargo test --workspace` and the wasm32 check run at the phase's
+commit. The optimization pass that follows argues against the
+5×7 baseline above, per the survey's ranked candidates.
+
