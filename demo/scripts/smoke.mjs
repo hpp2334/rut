@@ -7,7 +7,7 @@
 //   1. the runner law: a missing/invalid artifact boots to mode
 //      "error" naming the exact `npm run build:wasm` command; the
 //      error runner has no working methods — no silent anything;
-//   2. every prepared case (8 inline + 17 classics) REALLY compiles
+//   2. every prepared case (9 inline + 17 classics) REALLY compiles
 //      and runs through the wasm engine at the pinned default budget
 //      and verifies GREEN against its inline expected (the classics'
 //      blocks are the retired *.expected sidecars' bytes, verbatim —
@@ -26,7 +26,7 @@
 //   6. THE HIGHLIGHT (phase 3, survey D3): through the SAME demo
 //      binding the editor uses (src/lsp/rut-lsp.ts bundled into the
 //      smoke entry) over the SHIPPED public/rut-lsp.wasm — the 14-type
-//      legend, ZERO false diagnostics across all 25 cases (the
+//      legend, ZERO false diagnostics across all 26 cases (the
 //      extension e2e's own law applied to the demo), and a census of
 //      known lines across the cases (keywords, primitives, types, fn
 //      names, strings at known positions) whose token classes match
@@ -138,7 +138,7 @@ check(runner.state.mode === 'wasm', 'the artifact boots to wasm mode', runner.st
 check(runner.isLive, 'the wasm runner is live');
 
 const all = [...api.CASES, ...api.EXAMPLES];
-check(all.length === 25, 'the full corpus is present (8 inline + 17 classics)', String(all.length));
+check(all.length === 26, 'the full corpus is present (9 inline + 17 classics)', String(all.length));
 
 for (const c of all) {
   runner.dropFrame();
@@ -332,7 +332,7 @@ if (!existsSync(LSP_ARTIFACT)) {
     check(legend.includes(want), `the legend names '${want}'`);
   }
 
-  // ZERO false diagnostics across all 25 cases through the binding —
+  // ZERO false diagnostics across all 26 cases through the binding —
   // the extension e2e's own law (a gate that cannot pass while the
   // shipped artifact and the language drift), applied to the demo
   const analyses = new Map();

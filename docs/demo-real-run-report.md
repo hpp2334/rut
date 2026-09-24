@@ -292,3 +292,61 @@ gate keeps its byte diff; the smoke gained the §7 no-sidecars walk
 (`find demo -name '*.expected'` empty, untracked included) and its §5
 scan pin re-pinned 40 → 35. The report's own wording above ("sidecar")
 is this batch's historical record; the live truth is inline expected.
+
+## 10. Follow-up: the stack-trace case (the demo-stacktrace-case batch, phase 1)
+
+Directive: *"in demo, add a case of stack trace."* Survey of record:
+`docs/demo-stacktrace-case-survey.md` (phase 0 — the census, the
+frozen 107-line source, the measured expected, the position map). The
+case landed inline in `cases.ts` (id `stack-trace`, RFC 0036, between
+`closures-generics` and `fuel-demo`): a padded `main → a → b → c`
+chain — the padding IS the checker's inline law taught (a callee with
+≤ 24 top-level statements inlines and the frames collapse; the
+survey's probes measured it live in the demo lane) — the capture deep
+in `c` returns the shared trace cell, `Logger` stays `main`'s local,
+and the finale traps `IndexOutOfBounds` on `st.name(9)` so the loud
+boundary pins as a green row (the fuel-demo precedent). The expected
+is the survey's measured wasm-lane bytes; `render()` rides ONE
+expected element with embedded newlines — the element-wise verifier
+compares it exact, the Output pane renders it as four visual lines.
+Positions are part of the contract: any line shift flips the chip BY
+DESIGN (survey §2.6, stated on the case's TS comment).
+
+The drive (this commit; agent-browser CLI, headless Chrome over CDP —
+the same lane as §6 — against a scratch build served statically, since
+the parallel deploy lane works in this tree; `demo/dist` untouched):
+
+| state | verified in-page | screenshot |
+|---|---|---|
+| boot | banner `live — rut.wasm · the playground slice: core, calc, rt, ink, pouch, nmapset mounted (RFC 0041 §3)`; all 26 cases listed; `stack trace 0036` sitting between `closures & generics` and `fuel demo` | `batch-demo-stacktrace/p1/1-boot.png` |
+| run-verified | select `stack trace` → the auto-run fires @ 1M: Output pane reads `depth: 4` / `innermost: c at 63:14` / `outermost: main` / the four `at fn (rt:…)` render rows / `Trap::IndexOutOfBounds` last; chip `✓ matches expected @ 1M fuel` (class `chip chip-pass`); telemetry `fuel used: 0`, `heap: 706 B`; zero console messages at every level | `batch-demo-stacktrace/p1/2-stack-trace-verified.png` |
+
+The quirks, disclosed before anyone chases them:
+
+- **`fuel used: 0` on this case's run is real, not a bug** — a
+  non-fuel trap exits the threaded loop without the final fuel sync,
+  so the envelope's `fuelUsed` reads 0 on the trap-finale run (the
+  same source without the trap measures ~129). Cosmetic; measured
+  twice at phase 0 (survey §1.6) and reproduced in this drive.
+- **The columns are the callee idents, measured**: `let st = …` sites
+  sit at col 14 (the directive sketch's comment said 13 — measured
+  values win), `return …;` sites at col 12.
+- **The `rt:` name and the +26 lines are the demo mount's splice
+  truth** (wasm-lane values; the native lane would print `core:` at
+  +0). That disclosure lives in the survey §1.3–1.4 and is re-proven
+  by the smoke every run — not captioned on the page, which cannot
+  keep a lane claim current.
+- **A phase-1 re-measure note**: phase 0's scratch probe3.mjs carries
+  a hand-template off-by-one (`67/95/99 + 26`) that prints
+  `EXPECTED-MATCH: false`; re-run at phase 1 start, the engine's live
+  bytes are exactly the survey's `63/92/120/124` — the survey's frozen
+  map is correct, the probe's template was wrong.
+
+Gates: smoke **281 passed / 0 failed** (26 cases real+verified, the
+grep gates zero-hit, the file-scan pin still 35), `tsc --noEmit`
+clean, scratch `npm run build` exit 0 (zero `$RefreshReg$` in the
+shipped bundle), `cargo test --workspace` **770 passed / 0 failed**,
+`cargo check --workspace --target wasm32-unknown-unknown` exit 0. The
+phase-1 diff: `demo/src/cases.ts` (the case),
+`demo/scripts/smoke.mjs` (the corpus pin 25 → 26 + its two
+same-arithmetic comments), `demo/README.md` (one word), this section.

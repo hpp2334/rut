@@ -92,7 +92,7 @@ cd demo && npm run build
 What was verified, state by state (screenshots in the batch report,
 `../docs/demo-real-run-report.md`):
 
-1. **boot** — banner reads `live — rut.wasm · …`, all 25 cases listed,
+1. **boot** — banner reads `live — rut.wasm · …`, all 26 cases listed,
    the overlay already painting LSP tokens;
 2. **run-verified** — Run on `hello, format`: real output
    (`hi rut! n=42 tab:` / `sour`), fuel 39 / heap 261 B, chip
