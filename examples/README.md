@@ -306,7 +306,9 @@ type-name-law section). Run recipe:
 - **A taste in ten lines**:
   `let mut m = HashMap<str, i64>.new(); m.put(k, v); let v = m.get(k);`
 - **The bench rows**: `node benches/run.mjs --workload
-  nmapset-int`, `--workload nmap-primmap`, `--workload nmap-hashset`.
+  nmapset-int`, `--workload nmap-hashset`, `--workload
+  nmap-knucleotide` (the `nmap-primmap` twin was RETIRED with the
+  nmapset-hostops takeover — see `benches/README.md`'s section).
 
 The earlier parse-only design corpus (`basic/`, `concurrency/`,
 `workers/`, `network/`, `memory/`, `json/`, `gui/`, `host/`) was

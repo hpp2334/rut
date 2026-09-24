@@ -98,7 +98,7 @@ against the reference in `workloads/expected.json`.
 | `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
 | `kmer-view` | the `nmap-knucleotide` k-mer counting keyed through `nmapset::HashMap`'s **range methods** (strings-round1 phase 2 — the sv lanes: keys cross as borrowed byte windows of the sequence, no key cell minted; see the performance log) | seq = 200 000 | checksum `2198604` — the `nmap-knucleotide` pin; parity is the gate, no separate line |
 | `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
-| `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells, RFC 0044): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the `[?V]` relocation drain). K = i64 holds the hash term constant so the row isolates VALUE-side costs. (The refval-exp batch's phase-1 `refcolumn` twin re-spelled this exact op stream over the experimental host val column; phase 2 measured it SLOWER and the experiment was REVERTED — see the verdict log. The `refvals` row and its analysis are permanent.) | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
+| `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells, RFC 0044): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the growth is host-internal since the nmapset-hostops takeover — the wrapper-side `[?V]` relocation drain this row was built to stress died there; the sweep still crosses every boundary). K = i64 holds the hash term constant so the row isolates VALUE-side costs. (The refval-exp batch's phase-1 `refcolumn` twin re-spelled this exact op stream over the experimental host val column; phase 2 measured it SLOWER and the experiment was REVERTED — see the verdict log. The `refvals` row and its analysis are permanent.) | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
 | `checkedadd` | the **`(T, ok)` pair economy**, isolated (err-channel phase 1): a hot loop of `a.checked_add(b)` calls through a helper fn (the callee/caller shape every `(T, err)` return rides — one `makerecord` mint per call), destructured `let (v, ok) = …`; `v` accumulates into an i64 wrapping checksum and the `ok == false` arm is counted separately and folded into the SAME checksum — both lanes are load-bearing, so a lowering that silently drops either moves the pin. Inputs make the overflow arm deterministic and rare-but-nonzero (b = i64::MAX − 1000, a sweeps [−1024, 1023] → 23 of 2048 calls overflow). The value lane is ±2⁶³-scale, so the .js twin accumulates in BigInt (exact i64 wrapping; a double cannot represent one term) | 10M checked ops | checksum `-10015207202` |
 | `strbuild` | the **std strbuild pkg's** row (the strbuild batch, survey §5 pre-registered): the two-phase builder workload — phase A churns ONE builder pre-sized to a 64-byte hint with n = 2²⁰ LCG-drawn fragments (the knucleotide constants, seed 42) of lengths {1,3,5,7,9} — odd sizes straddle the 8-byte class rounding, and the documented geometric grows ride INSIDE the measurement; phase B takes ONE `build()` on the ~5 MB doc (the amortized pattern, json's writer shape) plus m = 2¹⁶ per-fragment `with_cap(hint)` → append → `build()` mints (the `quote_slow` shape, so the materialization cost is visible per call). The checksum folds round-tripped COUNTS + 32 grid-sampled content-exact fragments re-sliced from the BUILT doc + per-build content equality (values-not-lexemes, the json-roundtrip precedent); the .js twin rides `Array#join` (the idiom choice disclosed on the twin's header; a single-piece build answers the piece itself) | 4 rounds × (2²⁰ + 2¹⁶) | checksum `-1259380140398818172` |
 
@@ -4189,3 +4189,67 @@ impls folded into the generic map impl (without the rows a generic
 impl and a partial-instantiation impl over one class collide at
 link); decoded values unchanged, the bytes-key diagnostic text held
 verbatim.
+
+## Performance log — nmapset-hostops: the host takeover (Sep 2026)
+
+The batch (docs/nmapset-hostops-survey.md, phase 0 `a445096`):
+the user directive — *"move the impl to hostm, rut part is just a
+wrapper at all"* — landed as 18 additive fused crossings
+(`map_h{put,find,remove}_{i,u,b,s,y,sv}`, phase 1 `2f5ea84`): the host
+table gained a STABLE birth handle per key (relocated with the keys
+inside the host's own grow; monotonic, never recycled v1), `hput`
+grows internally at the load boundary and answers the packed
+`(handle << 1) | newly`, and `nmapset.rut` became a one-crossing
+wrapper (596 → 310 lines, `inline = true` so every consumer's splice
+shrank with it): the sentinel grow loops (7 copies) and the sidecar
+relocation drain (2 copies) are GONE from rut — the sidecar is
+handle-indexed, append-only, doubled only when births outgrow the
+pre-size. The `PrimMap*` classes died with the batch (unreached since
+the type-name-law repeal — every spelling resolves to the family
+class) and the `nmap-primmap` twin RETIRED with them: it had measured
+the column lane until the repeal, then the sidecar's i64-val variant
+of `nmapset-int` (fuel 20,903,285 / heap 3,539,324 B at its last
+receipt) — zero coverage lost. The retirement set:
+`workloads/nmap-primmap/{rut.toml,main.rut}`, `workloads/
+nmap-primmap.js`, ONE expected.json line, the examples/README run
+recipe; the historical sections above stay as written.
+
+**Checksums IMMOVABLE** — the gate, on the landed tree, all rows ×
+{rut, node, qjs} green against expected.json: `nmapset-int` /
+`nmap-knucleotide` 734932704 / 2198604, `nmapset-str` 1264308351,
+`nmap-hashset` 21500055, `strview` 1264308351, `kmer-view` 2198604
+(parity), `refvals` 140052990000. The op stream never moved: slot
+assignment, probe order, and every per-key answer are bit-identical —
+the handle column is additive state the legacy lanes never read.
+
+**The movers** (base `f9016f5` vs landed, both trees measured
+same-session through `rut-bench-probe`, 5 fresh-VM iters, exact
+values; the four recorded rows cross-check the type-name-law receipts
+exactly):
+
+| workload | fuel old → new | Δ | heap old → new | Δ | exec old → new | Δ |
+|---|---|---|---|---|---|---|
+| nmapset-int | 20,703,284 → 21,571,682 | +4.2% | 1,966,551 B → 1,966,663 B | +112 B | 69.1 → 68.3 ms | −1.1% |
+| nmapset-str | 9,551,761 → 9,910,968 | +3.8% | 983,620 B → 984,086 B | +466 B | 53.6 → 51.7 ms | −3.4% |
+| nmap-hashset | 13,267,176 → 12,716,782 | **−4.2%** | 551 B → 615 B | +64 B | 43.6 → 44.0 ms | ±0 |
+| nmap-knucleotide | 38,814,389 → 37,419,557 | **−3.6%** | 4,195,084 B → 2,229,052 B | **−46.9%** | 170.6 → 155.5 ms | **−8.9%** |
+| kmer-view | 37,614,177 → 35,019,405 | **−6.9%** | 4,194,916 B → 2,228,884 B | **−46.9%** | 147.4 → 141.0 ms | −4.3% |
+| strview | 10,801,744 → 11,094,312 | +2.7% | 2,032,173 B → 2,032,285 B | +112 B | 38.8 → 39.0 ms | ±0 |
+| refvals | 56,899,541 → 55,633,341 | **−2.2%** | 28,801,340 B → 26,843,812 B | **−6.8%** | 383.8 → 260.6 ms | **−32.1%** |
+
+The shape of the movers is the takeover's own anatomy. FUEL splits
+two ways: the put-heavy sidecar rows (`int`/`str`/`strview`) pay the
+wrapper's ONE new piece of machinery — `vstore`'s fresh-append check
+(`hd == vlen` + the `vlen` bump) at +2.7–4.2% — while the
+probe-and-grow rows (`hashset`/`knucleotide`/`kmer-view`/`refvals`)
+SAVE the sentinel-loop condition the old wrapper evaluated on every
+put and the drain bookkeeping, −2.2–6.9%. HEAP: the view rows HALVE
+(−1.97 MB each) — the old sidecar was cap-indexed (`[nil; cap]`, cap
+512k for 200k keys), the new one is birth-indexed and dense; `refvals`
+drops 6.8% (birth-dense sidecar + the drain arrays gone); the flat
+rows move only +112 B (the two new sidecar fields); `nmap-hashset`'s
++64 B is the table box's shallow size (the handle column's Vec header
++ counter — the phase-1 accounting note, +24 B, measured here through
+the box). EXEC: `refvals` −32.1% is the honest headline — the row
+built to stress the relocation drain no longer pays it; the str and
+k-mer rows ride the same effect at −3.4–8.9%.
