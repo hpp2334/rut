@@ -1,15 +1,16 @@
 /**
- * The sidecar flip (survey D2): after every REAL run, the engine's
- * actual output is diffed against the case's `expected` sidecar. The
- * sidecar is the contract; the chip tells the truth about it.
+ * The verifier (survey D2): after every REAL run, the engine's actual
+ * output is diffed against the case's INLINE expected (the no-sidecars
+ * batch — the classics' blocks live in the case entries verbatim). The
+ * expected is the contract; the chip tells the truth about it.
  *
  * The trap line participates: the Output pane renders
- * `Trap::<name>` as the last line, so a sidecar pins it by carrying the
+ * `Trap::<name>` as the last line, so an expected pins it by carrying the
  * exact `Trap::OutOfFuel` line (fuel-demo).
  *
  * Determinism note: every case is deterministic GIVEN its budget, and
  * the verify records the fuel it compared at. fuel-demo is the one
- * budget-dependent case — its sidecar pins the DEFAULT budget
+ * budget-dependent case — its expected pins the DEFAULT budget
  * (10_000_000); a raised fuel box (or a Resume, which accumulates) is a
  * different program-run and shows a diff BY DESIGN.
  */
@@ -20,9 +21,9 @@ import type { RunResult } from "./wasm/rut-api";
 export interface DiffRow {
   /** 1-based line number */
   n: number;
-  /** the run's line — undefined when the sidecar has an extra line */
+  /** the run's line — undefined when the expected has an extra line */
   got?: string;
-  /** the sidecar's line — undefined when the run produced an extra line */
+  /** the expected's line — undefined when the run produced an extra line */
   expected?: string;
   same: boolean;
 }
@@ -41,7 +42,7 @@ export function renderedLines(res: RunResult): string[] {
   return res.trap ? [...res.output, `Trap::${res.trap}`] : [...res.output];
 }
 
-/** Diff a real run against a case's sidecar. */
+/** Diff a real run against a case's inline expected. */
 export function verifyAgainstExpected(
   res: RunResult,
   expected: string[],

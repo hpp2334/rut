@@ -22,6 +22,24 @@ export interface OverlaySpan {
   message?: string;
 }
 
+export interface OverlayMark {
+  start: number;
+  end: number;
+  type?: string;
+  message?: string;
+}
+
+/** The per-analyze overlay cache (the M-1 fix): the previous source's
+ * lines + marks. The incremental builder re-cuts ONLY the lines whose
+ * text or marks changed — every untouched line keeps its span-array
+ * identity, and the editor's memoized overlay row skips re-rendering. */
+export interface OverlayCache {
+  srcLines: string[];
+  lines: OverlaySpan[][];
+  tokMarks: OverlayMark[][];
+  diagMarks: OverlayMark[][];
+}
+
 interface Mark {
   start: number;
   end: number;
@@ -36,6 +54,25 @@ export function buildOverlay(
   legend: string[],
   diags: LspDiag[],
 ): OverlaySpan[][] {
+  return buildOverlayCached(
+    source,
+    tokens,
+    legend,
+    diags,
+    undefined,
+  ).lines;
+}
+
+/** The incremental shape of `buildOverlay` (the M-1 fix): identical
+ * output, but line arrays survive untouched across analyzes when a
+ * previous cache is handed in. */
+export function buildOverlayCached(
+  source: string,
+  tokens: DecodedToken[],
+  legend: string[],
+  diags: LspDiag[],
+  prev: OverlayCache | undefined,
+): OverlayCache {
   const lines = source.split("\n");
   const tokMarks: Mark[][] = lines.map(() => []);
   const diagMarks: Mark[][] = lines.map(() => []);
@@ -65,7 +102,46 @@ export function buildOverlay(
     }
   }
 
-  return lines.map((text, ln) => cutLine(text, tokMarks[ln], diagMarks[ln]));
+  const out = lines.map((text, ln) => {
+    // the line's text AND both mark sets unchanged -> keep the previous
+    // array identity (the memoized overlay row then bails); everything
+    // else is re-cut exactly as the fresh path would
+    const prevLines = prev?.lines;
+    const prevSrcLines = prev?.srcLines;
+    const prevTok = prev?.tokMarks;
+    const prevDiag = prev?.diagMarks;
+    if (
+      prevLines !== undefined &&
+      prevSrcLines !== undefined &&
+      prevTok !== undefined &&
+      prevDiag !== undefined &&
+      prevLines[ln] !== undefined &&
+      prevSrcLines[ln] === text &&
+      marksEqual(prevTok[ln] ?? [], tokMarks[ln]) &&
+      marksEqual(prevDiag[ln] ?? [], diagMarks[ln])
+    ) {
+      return prevLines[ln];
+    }
+    return cutLine(text, tokMarks[ln], diagMarks[ln]);
+  });
+  return { srcLines: lines, lines: out, tokMarks, diagMarks };
+}
+
+function marksEqual(a: OverlayMark[], b: OverlayMark[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.start !== y.start ||
+      x.end !== y.end ||
+      x.type !== y.type ||
+      x.message !== y.message
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function clamp(v: number, lo: number, hi: number): number {

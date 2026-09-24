@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { RutCase } from "../cases";
 
 export interface CaseGroup {
@@ -6,7 +7,9 @@ export interface CaseGroup {
   cases: RutCase[];
 }
 
-export function CaseList(props: {
+/** memo boundary (the M-1 fix): a source keystroke re-renders the
+ * editor only — the case list bails (stable groups/id/callback). */
+export const CaseList = memo(function CaseList(props: {
   groups: CaseGroup[];
   selectedId: string;
   onSelect: (c: RutCase) => void;
@@ -34,4 +37,4 @@ export function CaseList(props: {
       ))}
     </aside>
   );
-}
+});

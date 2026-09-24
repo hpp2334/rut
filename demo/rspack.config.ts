@@ -10,13 +10,20 @@ import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 // smoke's node bundle never mounts React, so it couldn't see it).
 // npm sets npm_lifecycle_event per script, so the refresh machinery
 // rides the `dev` lane only.
+//
+// The same split ships PRODUCTION React in dist (the journey audit's
+// L-1 ride-along): the build lane is mode "production", so the
+// development-only validators the M-1 profile caught burning ~27% of
+// active CPU (warnInvalidARIAProps, the key-prop warnings, jsxDEV) are
+// compiled out of the shipped bundle. The dev lane keeps mode
+// "development" for refresh + HMR + the dev-only double-render checks.
 const isDevServe = process.env.npm_lifecycle_event === "dev";
 
 const config: RspackOptions = {
   context: __dirname,
   entry: "./src/main.tsx",
-  mode: "development",
-  devtool: "source-map",
+  mode: isDevServe ? "development" : "production",
+  devtool: isDevServe ? "source-map" : false,
   output: {
     filename: "[name].js",
     path: "./dist",
@@ -35,7 +42,14 @@ const config: RspackOptions = {
           jsc: {
             parser: { syntax: "typescript", tsx: true },
             transform: {
-              react: { runtime: "automatic", refresh: isDevServe },
+              react: {
+                runtime: "automatic",
+                // jsx vs jsxDEV rides the lane: the shipped bundle gets
+                // the production jsx runtime (the dev validators die
+                // with it), the dev server keeps the dev runtime
+                development: isDevServe,
+                refresh: isDevServe,
+              },
             },
           },
         },

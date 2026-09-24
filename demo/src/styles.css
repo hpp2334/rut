@@ -148,6 +148,13 @@ body {
 .editor {
   display: flex;
   min-width: 0;
+  /* the height-chain fix (journey audit H-2): as a grid item our
+     min-height:auto let the gutter's full-length line-number pre grow
+     the column to the source's pixel height — the page scrolled, the
+     editor never did, and the textarea/overlay scroll sync stayed
+     disarmed. 0 clamps the column to its row; the textarea becomes the
+     real scroller and the existing JS sync engages as written. */
+  min-height: 0;
   border-right: 1px solid var(--border);
   background: var(--bg-input);
 }
@@ -155,6 +162,10 @@ body {
 .editor-gutter {
   flex: 0 0 44px;
   overflow: hidden;
+  /* defensive (audit H-2): the flex item clamps too, so the in-flow
+     line-number pre overflows the clipped gutter instead of feeding
+     its content height back into the column */
+  min-height: 0;
   padding: 10px 8px 10px 0;
   text-align: right;
   color: var(--fg-dim);
@@ -214,7 +225,12 @@ body {
 }
 
 .editor-input::selection {
-  background: #2b3d57;
+  /* the selection-legibility fix (journey audit H-1): the old opaque
+     #2b3d57 band covered the overlay's colored glyphs entirely — the
+     selected text vanished. The accent at 25% keeps the band a tint:
+     the glyphs (and any squiggle underline) show through it, the
+     textarea's own text stays transparent, the caret is unaffected. */
+  background: rgb(111 179 255 / 0.25);
   color: transparent;
 }
 

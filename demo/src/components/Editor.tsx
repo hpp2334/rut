@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, memo, useMemo, useRef, useState } from "react";
 import type { OverlaySpan } from "../lsp/overlay";
 import type { LspDiag } from "../lsp/rut-lsp";
 
@@ -16,12 +16,54 @@ const PAD_X = 12;
 const PAD_Y = 10;
 const PROBE_TEXT = "0000000000";
 
+/** One overlay line (the M-1 memo boundary): the row bails unless its
+ * span-array IDENTITY changed — the incremental builder in
+ * lsp/overlay.ts keeps untouched lines' arrays identical across
+ * analyzes, so a keystroke re-renders only the edited line instead of
+ * re-reconciling the whole ~4 000-span subtree. Rows carry their
+ * separating newline; the FINAL row's separator mirrors the textarea
+ * value's own trailing newline (`eol`), so the pre's content matches
+ * the value BYTE-FOR-BYTE in both cases (and the probe, riding after
+ * the content, defeats the pre end-tag newline-swallow) — both layers'
+ * scrollable heights then agree and the H-2 scroll-sync lands on exact
+ * equality even at the very bottom of a long source. */
+const OverlayLine = memo(function OverlayLine(props: {
+  spans: OverlaySpan[];
+  eol: boolean;
+}): JSX.Element {
+  return (
+    <Fragment>
+      {props.spans.map((sp, j) =>
+        sp.type || sp.squiggle ? (
+          <span
+            key={j}
+            className={sp.squiggle
+              ? sp.type
+                ? `tok-${sp.type} squiggle`
+                : "squiggle"
+              : `tok-${sp.type}`}
+            title={sp.message}
+          >
+            {sp.text}
+          </span>
+        ) : (
+          sp.text
+        ),
+      )}
+      {props.eol ? "\n" : null}
+    </Fragment>
+  );
+});
+
 /**
  * The zero-dep double-layer editor (survey D4): a transparent-text
  * <textarea> (caret + selection live here) exactly over a highlighted
  * <pre> overlay (the analyzer's truth), same font metrics, scroll-
- * synced like the gutter. Tab inserts two spaces. No editor dependency
- * (RFC 0041 §3 — a CodeMirror upgrade is a noted path, not taken).
+ * synced like the gutter. Tab inserts two spaces — UNMODIFIED Tab only
+ * (the H-3 un-trap: Shift+Tab/with-modifier Tab keep the browser's
+ * focus walk, and Escape blurs, so Run/Resume/budget/the pane tabs
+ * stay keyboard-reachable). No editor dependency (RFC 0041 §3 — a
+ * CodeMirror upgrade is a noted path, not taken).
  */
 export function Editor(props: {
   value: string;
@@ -29,6 +71,13 @@ export function Editor(props: {
   highlight?: Highlight | null;
 }): JSX.Element {
   const [lineCount, setLineCount] = useState(countLines(props.value));
+  // the gutter follows the value on EVERY path: typing updates it in
+  // onChange; an external swap (a case switch, a restore) re-syncs here
+  // during render — without this the gutter kept the previous case's
+  // line count until the next keystroke
+  const propLineCount = countLines(props.value);
+  if (propLineCount !== lineCount) setLineCount(propLineCount);
+
   const gutterRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLPreElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -37,7 +86,10 @@ export function Editor(props: {
   const tipRef = useRef<HTMLDivElement>(null);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab") {
+    // the H-3 un-trap: capture ONLY unmodified Tab — Shift+Tab (and any
+    // ctrl/meta chord) keeps the browser's focus walk, and Escape is
+    // the forward escape hatch
+    if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       const el = e.currentTarget;
       const { selectionStart: s, selectionEnd: en } = el;
@@ -46,6 +98,8 @@ export function Editor(props: {
       requestAnimationFrame(() => {
         el.selectionStart = el.selectionEnd = s + 2;
       });
+    } else if (e.key === "Escape") {
+      e.currentTarget.blur();
     }
   };
 
@@ -111,17 +165,26 @@ export function Editor(props: {
     tip.hidden = false;
   };
 
-  const numbers: string[] = [];
-  for (let i = 1; i <= lineCount; i++) numbers.push(String(i));
+  // the gutter text + the row array: memoized so a keystroke that
+  // changes neither skips recomputing them
+  const numbersText = useMemo(() => {
+    const numbers: string[] = [];
+    for (let i = 1; i <= lineCount; i++) numbers.push(String(i));
+    return numbers.join("\n") + "\n";
+  }, [lineCount]);
 
-  const lines = props.highlight
-    ? props.highlight.lines
-    : plainLines(props.value);
+  const lines = useMemo(
+    () => (props.highlight ? props.highlight.lines : plainLines(props.value)),
+    [props.highlight, props.value],
+  );
+  // the final row's separator mirrors the value's trailing newline so
+  // the overlay's content is the value byte-for-byte
+  const valueEndsNl = props.value.charCodeAt(props.value.length - 1) === 10;
 
   return (
     <div className="editor">
       <div className="editor-gutter" ref={gutterRef}>
-        <pre>{numbers.join("\n") + "\n"}</pre>
+        <pre>{numbersText}</pre>
       </div>
       <div
         className="editor-body"
@@ -130,26 +193,11 @@ export function Editor(props: {
       >
         <pre className="editor-overlay" ref={overlayRef} aria-hidden>
           {lines.map((spans, i) => (
-            <Fragment key={i}>
-              {spans.map((sp, j) =>
-                sp.type || sp.squiggle ? (
-                  <span
-                    key={j}
-                    className={sp.squiggle
-                      ? sp.type
-                        ? `tok-${sp.type} squiggle`
-                        : "squiggle"
-                      : `tok-${sp.type}`}
-                    title={sp.message}
-                  >
-                    {sp.text}
-                  </span>
-                ) : (
-                  sp.text
-                ),
-              )}
-              {i < lines.length - 1 ? "\n" : null}
-            </Fragment>
+            <OverlayLine
+              key={i}
+              spans={spans}
+              eol={i < lines.length - 1 || valueEndsNl}
+            />
           ))}
           <span ref={probeRef} className="editor-probe">
             {PROBE_TEXT}
