@@ -3954,3 +3954,160 @@ phase-1 pin holds; this row is a NEW mount, it moves nothing).
 commit. The optimization pass that follows argues against the
 5×7 baseline above, per the survey's ranked candidates.
 
+## Performance log — strbuild: the optimization pass — every candidate measured, none landed, the ledger (Sep 2026)
+
+The strbuild batch's phase 2 pass over the survey's ranked candidates
+(§5.4), run one by one against the 5×7 baseline above, per the house
+method (interleaved A/B, fresh-VM probe iters, order alternating,
+medians of round medians; fuel/heap expected bit-exact for host-side
+work — verified at every step). **The batch's headline is the method
+finding, and it is honest: on this row, ±1-3% candidate effects are
+unresolvable against build-placement jitter, and the one candidate big
+enough to resolve was a heap mover in both directions.** Nothing
+landed; the engine left this batch byte-identical (every row's fuel and
+VM-heap pin bit-exact to the landing record; the checksums immovable).
+Each candidate's number:
+
+**Candidate 0 (NEW — phase 1's disclosed +1.370% wrapper cost): NOT
+reclaimable in this batch's scope; the mechanisms are engine work —
+MENU.** The reconciliation receipt first: flipping `rut/json` back to
+its pre-migration shape reproduces phase 1's delta bit-exact on this
+machine today — fuel 31,543,783 / heap 3,423,642 vs migrated 31,975,807
+/ 3,423,706 (the +432,024 = +1.370%, exec +2.2% paired). The
+decomposition at the census's precision: the 216,003 appends/iter pay
+the phase-1-measured +2.000 ops each (the instance-cell `getf` hop +
+the inlined frame's arg re-bind `movref` — ≥ 432,006 of the 432,024),
+the rest rides the three per-iter mints (+3 per static `with_cap`
+frame) and builds (+1 per `build` hop). Rut-side shapes priced, all
+rejected:
+
+- **The mint-elimination restructure (quote writing straight into the
+  writer's accumulator), fuel-priced on a scratch A/B** (the
+  `quote_slow` anatomy as a class field — json's `JsonWriter` shape —
+  local mint + 13 appends + build + one field append, vs 15 direct
+  field appends; 100k strings, exact op counts): shape1 fuel
+  33,600,581, shape2 fuel **34,600,581 = +10.000 ops/escaped string
+  WORSE** (the wrapper tax on 15 field appends beats the mint+build
+  frames it deletes), exec −7.9% (the churn's host-side cost beats the
+  extra interpreter ops). A trade of a worse op stream for time on a
+  path the rows never execute (phase 1 proved the escape paths dead on
+  both json rows) — rejected under candidate 0's own "where honest"
+  charge. The op-stream regression would also invert if the engine
+  ever kills the append tax (below), making the restructure then
+  correct.
+- **The instance-cell hop, the arg re-bind, and the static-mint P1.3
+  gap are engine-lowering mechanisms** (a receiver-cell forwarding
+  lowering; a CallNat-ABI re-bind elision; static class-fn mint
+  eligibility in the P1.3 splicer). THE MENU (recorded, not
+  engine-hopped): landing any of the three takes the +432,024 back —
+  the append pair alone is ~432,006 ops/iter — and would retrospectively
+  make the quote restructure a pure win. `strbuild`'s row prices the
+  same mechanisms at +2 ops/append (~4.3M appends/row) plus +3/mint
+  (262k mints/row): the pkg face's tax is now VISIBLE on its own row,
+  which is what makes the menu item measurable when an engine phase
+  picks it up.
+
+**Candidate 1 (per-append double type-check dispatch; predicted 5-15%):
+measured, REVERTED — the yield is below the placement floor.** The fold
+landed cleanly in a scratch tree: ONE match for the piece's bytes and
+codepoint count (the old path walked the same data three times — type
+check, `char_len`, `as_bytes`), the builder checked once at the nat, the
+heap append's re-insurance match lifted to `unreachable!` (caller-
+checked; same traps, same messages). Fuel AND heap bit-identical on both
+rows (the op stream cannot see host code) — 162,285,165 / 22,028,108
+and 31,975,807 / 3,423,706. Exec: 5×7 read **−0.95%** (342.41 →
+339.16 ms, 5/5 paired rounds); a powered 7×9 read **−1.18%** (343.21 →
+339.18, 6/7 rounds); json-roundtrip parity (+0.64%, inside noise). Then
+the house rebuild test killed it: **the same source, rebuilt fresh, read
++4.35%** (base rounds stable 342-347 — not host drift). Two builds of
+one source span −1.18% … +4.35% against the same base: the delta tracks
+the BUILD, not the source (the crossing-fastpath close-out's
+build-placement law, now measured at ±2-5% on this row). Reverted; the
+true fold yield is ≲1% — the survey's 5-15% prediction answered NO.
+
+**Candidate 2 (build()'s double copy → single-copy mint; predicted
+1-3%): measured, REVERTED — same wall.** The scratch fold: `finish`
+allocates the str block and copies the builder's octets once (the old
+path built an intermediate `Vec` — two copies + a host alloc/free per
+build), the `ascii` flag riding the builder's own tracked bit (exact by
+construction; the content scan dies too), `str_buf_bytes` deleted with
+its last caller. Fuel/heap bit-identical both rows. Exec: build #1 read
+**+1.30%** on the row (1/5 rounds) but −0.97% on json (5/5 rounds);
+the rebuild read **−1.88%** (4/5 rounds). One source, two builds, a
+3.2-point spread: placement again; the mechanism's real yield —
+mechanically bigger than candidate 1's (a whole Vec cycle per build) —
+is still at or below the floor. Reverted; re-opens only with a
+build-ensemble method (N independent builds per side), which this batch
+did not owe.
+
+**Candidate 3 (pkg-level mint churn): BLOCKED BY LAW + priced — no
+home.** The reuse pattern (one scratch builder per writer, reused
+across strings) requires clearing between strings, and `clear` is ABSENT
+ON RECORD (survey §2: no nat, no call site — the finish-keeps-buffer
+law; adding it is new std surface, out of this batch's scope by
+directive). The only admissible shape was the quote restructure —
+priced under candidate 0 and rejected (+10 ops/escaped string). The
+row's own phase B stays the pre-registered mint-churn workload (it is
+the row's purpose, not a defect); its 262k mints/row now carry a
+measured +3-op tax each in the menu item's ledger.
+
+**Candidate 4 (growth factor 2× → 1.5×; predicted INSIDE NOISE →
+revert): measured, REVERTED — the pre-registered honest death, with
+better evidence than predicted.** The factor change (`want.max(c +
+c/2)` in `grow`) built clean; fuel bit-identical everywhere (the op
+stream is blind to the block store). Exec: row **+2.75%** (343.27 →
+352.70 ms), json **−2.20%** — both inside the placement band, i.e.
+unresolvable, exactly as pre-registered. The HEAP column is
+deterministic and is the real verdict: row VM-heap peak 22,028,108 →
+**20,579,116 (−6.58%** — the slack win, as designed) but json-roundtrip
+3,423,642 → **3,497,498 (+2.16%)** — more, smaller grows mean more
+old+new block coexistencies, so the watermark moves UP where builders
+are mid-sized. The factor is not a free knob: it moves every
+builder-heavy row's heap pin in BOTH directions (a full-suite re-pin
+bill) for an exec effect indistinguishable from build noise. Reverted;
+the power-of-2 factor's alignment with the block-store class list
+(16→2048 exact powers of two) and with malloc's size classes is
+recorded as load-bearing.
+
+**Candidate 5 (share/copy is the law): held — nobody optimized a copy
+in.** Verified on every candidate above: the folds append in place
+through the ONE shared cell (the piece's bytes copy once into the
+builder — THE append copy, unchanged); the single-copy finish is the
+MATERIALIZATION copy itself (was two, would be one — the engineered
+point, not a hot-path copy); the rejected restructure moved no copies;
+the factor moved no copies. The RFC 0044 shape (alias and param appends
+visible through the original; build-twice; the built str immune) stayed
+pinned green in the 8 `strbuild_pkg` unit tests throughout.
+
+**Reconciliation (the batch's law):** json-roundtrip checksum
+`1960875332163557684` immovable — verified at every probe run of every
+candidate, all three runtimes at the gates. Fuel movers: NONE — the
+pin stays **31,975,807 / 3,423,706 B** at every step (every candidate
+was host-side — fuel-blind by construction — or reverted; the pkg-side
+restructure was never landed). **Phase 1's +432,024 is NOT reclaimed;
+the goal is answered honestly: it is not reclaimable in this batch's
+scope** — the ops live in the engine's lowering (the menu above). The
+qjs/node scoreboard, honest: json-roundtrip nets this run rut 205.4 /
+qjs 39.2 / node 41.6 ms — engine unchanged, so no cross-runtime claim
+moves; on the NEW row rut is AHEAD of qjs (352.6 vs 842.5 ms net,
+0.42×) with node at 233.1 ms — the builder protocol is rut's win lane,
+and the interpreter floor on 4.3M append loops is the residual vs node.
+
+**Gates at the final tree (engine byte-identical to the landing, the
+row + its pins in place):** full suite — all 28 rows × {rut, qjs,
+node} — exit 0, every checksum equal to `expected.json`; workspace
+`cargo test --workspace` 779 passed / 0 failed; wasm32 check exit 0;
+tree clean. Scratch A/B receipts under
+`/tmp/opencode/batch-strbuild/p2/` (the candidate diffs, the bin-*
+builds, the interleaved JSONL records, the pricing probes, the
+reconciliation flip).
+
+**The method deliverable (what future batches owe this row):** the
+row is build-placement sensitive (±2-5% between same-source builds —
+22 MB of heap churn, 64+ grow events, 262k transient mints per run).
+Single-binary A/Bs cannot resolve ±1-3% candidate effects on it. An
+engine phase that wants to land sub-3% work here needs a build
+ensemble (N independent builds per side, med-of-builds) or a
+same-binary host-side toggle. Candidates 1 and 2 are the standing
+test cases: both are mechanically real, both priced below the floor
+with the current method.
