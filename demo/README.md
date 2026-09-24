@@ -44,6 +44,40 @@ command); `build:wasm` copies them with the same curated loud-fail.
   rides the analyzer or the page says so, never a monochrome shrug
   dressed up as success.
 
+## Auto-run and the editor (the journey batch's visible changes)
+
+Runs happen without the button:
+
+- **Selecting a case runs it immediately** — the panes and the chip
+  populate the moment a case opens. Auto-runs use a fixed 1M-fuel auto
+  budget and each carries the case's OWN expected, so the chip always
+  names the fuel it verified at (`✓ … @ 1M fuel`).
+- **Edits auto-run once typing settles** — the same 120 ms debounce
+  lane as the highlight, LAST-WINS: a rapid burst lands exactly one
+  run. An edit retires the chip at once (the verdict belongs to the
+  last run); the settled run posts a fresh verdict, so breaking the
+  case's contract while typing shows the ✗ + line-paired diff without
+  touching Run.
+- **Any auto-run drops a parked frame** — Resume can never point at a
+  frame from a foreign source. The park→resume lesson stays an explicit
+  ▶ Run sequence; the fuel-demo case parks the moment you select it
+  (its expected pins the trap, which matches at any budget, so the
+  auto chip stays green).
+- **▶ Run itself is unchanged**: it runs at the fuel box's budget
+  (default 10M) and its chip names that box.
+
+The editor:
+
+- **Long sources scroll inside the editor** — the textarea is the
+  scroller (height-bounded) and the gutter + overlay follow its scroll;
+  the page around the editor never scrolls away.
+- **Selection is legible** — the band is the accent at 25% alpha, so
+  the highlighted glyphs (and any squiggle underneath) show through it.
+- **The keyboard model** — unmodified Tab inserts two spaces and keeps
+  focus; Shift+Tab walks focus back out of the editor; Escape blurs it.
+  Run, Resume, the budget inputs, and the pane tabs are reachable by
+  keyboard.
+
 ## Drive it yourself (the no-fake acceptance)
 
 The smoke proves the engine slice headlessly; the browser proves the
@@ -66,10 +100,14 @@ What was verified, state by state (screenshots in the batch report,
 3. **squiggle** — `let n = 41 + 1;` → `41 + ;`: the offending `;`
    renders a wavy underline titled
    `expected an expression, found \`;\``; the chip retires on edit
-   (the verdict belongs to the last run);
+   (the verdict belongs to the last run — the journey batch's auto-run
+   then re-verdicts it once typing settles);
 4. **maps-case** — the gap-filler `maps & sets`: a real run through
    the nmap lane (HashMap/PrimMapI64/HashSet), verified green, fuel
    638 / heap 545 B.
+
+The demo-journey batch later re-drove this whole journey end-to-end
+(before/after pairs for every fix): `../docs/demo-journey-report.md`.
 
 ## The wasm contract
 
@@ -81,7 +119,8 @@ run(binary, { fuel, heapBytes }): { output, trap?, fuelUsed, heapBytes, parked? 
 resume(extraFuel): { ... }        // continues the PARKED frame — real
                                   // park/resume (rut_resume), output
                                   // accumulates, never a re-run
-dropFrame(): number               // retire a parked frame (case switch)
+dropFrame(): number               // retire a parked frame (case switch,
+                                  // any auto-run)
 ```
 
 The demo host exposes the logger (+ calc's math) to the guest.
@@ -137,11 +176,14 @@ rspack.smoke.config.ts   bundles the app surface for node (dist-smoke/, gitignor
 - **The wasm host mounts a slice, not the whole std**: core, calc, rt,
   ink, pouch, nmapset (+ the nmap host bindings). `select`/`await`
   parse but have no host futures in this host — never taught, honestly.
-- **dist/ ships development-mode React** (unminified, the dev banner):
-  the mode was kept untouched when the refresh defect was fixed;
-  minifying dist is a menu item, not a silent change.
-- **The highlight is one `rut_analyze` per keystroke-debounce** (~150
-  ms, full-sync, whole doc). Doc-sized sources make that milliseconds;
-  there is no delta endpoint upstream.
+- **dist/ ships production React** (the build lane's mode split —
+  `npm run dev` keeps react-refresh + dev React for iteration). The
+  development-mode validators that used to burn ~27% of active CPU on
+  big-doc keystrokes are gone from the shipped bundle; switching the
+  mode was its own measured pass, not a silent change.
+- **The highlight is one `rut_analyze` per keystroke-debounce** (120
+  ms, full-sync, whole doc). Doc-sized sources make that milliseconds
+  (measured 9.3 ms at 1560 lines); there is no delta endpoint upstream,
+  and the measured numbers keep it a menu item, not a silent change.
 - **Classifier gaps are recorded, not worked around** — see the MENU
   in `../docs/demo-real-run-report.md`.
