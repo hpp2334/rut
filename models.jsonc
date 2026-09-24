@@ -1,0 +1,11 @@
+// Model references (providerID/modelID) — main = Z.AI Coding Plan, peak = OpenCode Go
+{
+  "main": {
+    "complex": "zai-coding-plan/glm-5.3",
+    "balance": "zai-coding-plan/glm-5.3-flash"
+  },
+  "peak": {
+    "complex": "opencode-go/glm-5.3-flash",
+    "balance": "opencode-go/glm-5.3-flash"
+  }
+}

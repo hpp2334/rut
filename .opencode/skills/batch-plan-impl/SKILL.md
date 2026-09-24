@@ -1,6 +1,6 @@
 ---
 name: Batch Plan Implementation
-description: Execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the smarter plan model from opencode.jsonc, then creates one headless OpenCode session per task (a phase has one task, or several PARALLEL tasks when the plan splits it so) and dispatches their prompts, while a small watch-only subagent polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; continue phase by phase until the plan is done. No user interaction: decide autonomously, retry once, never delete sessions.
+description: Execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the active complex model from models.jsonc (main.complex, or peak.complex during the workday 14:00–18:00 UTC+8 peak window), then creates one headless OpenCode session per task, each pinned to the active balance model from models.jsonc (a phase has one task, or several PARALLEL tasks when the plan splits it so), and dispatches their prompts, while a small watch-only subagent polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; continue phase by phase until the plan is done. No user interaction: decide autonomously, retry once, never delete sessions.
 ---
 
 # Batch Plan Implementation
@@ -49,11 +49,18 @@ parallelism lives INSIDE a phase, never across phases.
   never into the subagent.
 - Never implement a phase in this session. You orchestrate and verify only.
 - Poll status every **60 seconds**. Do not use blocking waits.
-- Pin the **default model from `opencode.jsonc`** on every dispatch — phase
-  sessions and the watch subagent all use it (see step 3).
-- **Switch your session's MODEL to the plan model first** (`agents.plan.model`
-  in `opencode.jsonc` — the smarter model), **keeping the `build` agent/mode**,
-  so all orchestration reasoning runs on it (see step 0).
+- Models come from **`models.jsonc`** (repo root), never `opencode.jsonc`.
+  The ACTIVE pair follows the peak window (workdays 14:00–18:00 UTC+8):
+  `peak.complex`/`peak.balance` inside it, otherwise `main.complex`/
+  `main.balance`. Re-resolve before EVERY session create or dispatch — a
+  boundary can pass mid-batch (see step 0 / step 3).
+- Pin the **active balance model** on every dispatch — phase sessions and the
+  watch subagent all use it (see step 3).
+- **Switch your session's MODEL to the active complex model first**
+  (`main.complex`, or `peak.complex` inside the peak window), **keeping the
+  `build` agent/mode**, so all orchestration reasoning runs on it (see
+  step 0). A monitor session may nudge you at 13:50/18:10 (UTC+8) to re-apply
+  this switch — comply by re-running your own resolution.
 
 ## Autonomous decision policy
 
@@ -72,11 +79,13 @@ parallelism lives INSIDE a phase, never across phases.
 
 ## Workflow
 
-### 0. Switch this session's MODEL to the plan model (keep build mode)
+### 0. Resolve the active model pair and switch this session's MODEL (keep build mode)
 
-Before any batch work, switch **your own session's model** to the smarter plan
-model (`agents.plan.model` in `opencode.jsonc`, e.g. `zai-coding-plan/glm-5.3`)
-so all orchestration reasoning runs on it.
+Models live in **`models.jsonc`** at the repo root — never `opencode.jsonc`.
+The active pair follows the peak window (workdays 14:00–18:00 UTC+8):
+`peak.complex`/`peak.balance` inside it, otherwise `main.complex`/
+`main.balance`. Before any batch work, switch **your own session's model** to
+the active **complex** model so all orchestration reasoning runs on it.
 
 **Model only — the session's agent/mode stays `build`.** Never switch the
 agent to `plan`: that is a different thing (the read-only plan mode) and would
@@ -92,18 +101,23 @@ cd "$(git rev-parse --show-toplevel)"   # config + sessions are location-scoped
 opencode api get /api/session \
   | jq -r '.data | sort_by(.time.updated) | reverse | .[0] | .id'   # -> $SELF
 
-# The plan model from opencode.jsonc (strip // comments, then parse):
-sed 's://.*$::' opencode.jsonc | jq -r '.agents.plan.model'   # -> $PLAN_REF
+# The ACTIVE model pair from models.jsonc (strip // comments, then parse).
+# Peak window: workdays (Mon–Fri) 14:00–18:00 UTC+8 -> peak.*, otherwise main.*:
+DOW=$((10#$(TZ=Asia/Shanghai date +%u))); HM=$((10#$(TZ=Asia/Shanghai date +%H%M)))
+if [ "$DOW" -le 5 ] && [ "$HM" -ge 1400 ] && [ "$HM" -lt 1800 ]; then W=peak; else W=main; fi
+MODELS=$(sed 's://.*$::' models.jsonc)
+COMPLEX_REF=$(printf '%s' "$MODELS" | jq -r --arg w "$W" '.[$w].complex')   # you
+BALANCE_REF=$(printf '%s' "$MODELS" | jq -r --arg w "$W" '.[$w].balance')   # workers + subagents
 
 opencode api post /api/session/$SELF/model \
-  --data "$(jq -n --arg ref "$PLAN_REF" \
+  --data "$(jq -n --arg ref "$COMPLEX_REF" \
     '{model:{providerID:($ref|split("/")[0]), id:($ref|split("/")[1])}}')"
 ```
 
 Sanity-check `$SELF` against the session list if several sessions were touched
-in the same second. If `agents.plan.model` is unset or the switch fails,
-record it in the run log and continue on the current model — do not block the
-batch on this.
+in the same second. If `models.jsonc` is missing/unreadable or the switch
+fails, record it in the run log and continue on the current model — do not
+block the batch on this.
 
 ### 1. Collect the plan
 
@@ -139,15 +153,14 @@ pwd                             # record as $PROJECT_DIR (absolute)
 mkdir -p /tmp/opencode/batch-plan-impl   # scratch for payload files + run log
 ```
 
-Read the **default model** (`model` in `opencode.jsonc`). The endpoint is
-location-scoped, so run it with workdir = `$PROJECT_DIR`:
+Resolve the **active balance model** from `models.jsonc` — re-run the
+resolution from step 0 (the peak window may have flipped since step 0). This
+ref pins EVERY dispatch:
 
 ```sh
-opencode api get /api/model/default
-#   .data.providerID -> $MODEL_PROVIDER
-#   .data.modelID    -> $MODEL_ID
-#   $MODEL_JSON = {"providerID":"$MODEL_PROVIDER","id":"$MODEL_ID"}
-#   $MODEL_REF  = "$MODEL_PROVIDER/$MODEL_ID"
+# $BALANCE_REF from the step-0 resolution (re-checked NOW):
+#   $MODEL_JSON = {"providerID":"${BALANCE_REF%%/*}","id":"${BALANCE_REF##*/}"}
+#   $MODEL_REF  = $BALANCE_REF
 ```
 
 ### 4. Per phase (loop n = 1..N)
@@ -162,8 +175,8 @@ opencode api post /api/session \
 ```
 
 Extract `$SID` via `jq '.data.id'`. `location.directory` is REQUIRED — without
-it the session lands in the wrong directory. `model` pins the project default
-model explicitly; do not rely on inheritance.
+it the session lands in the wrong directory. `model` pins the active balance
+model explicitly (re-resolved per dispatch); do not rely on inheritance.
 
 #### b. Dispatch the phase prompt (you)
 
@@ -316,7 +329,7 @@ All sessions were kept (never deleted) — resume any of them from the session l
 | Action | Actor | Command |
 | --- | --- | --- |
 | Switch own model to plan model | you | `opencode api post /api/session/$SELF/model --data '{"model":{"providerID":"<p>","id":"<m>"}}'` (agent stays `build`) |
-| Read default model | you | `opencode api get /api/model/default` (workdir = `$PROJECT_DIR`) |
+| Resolve active model pair (step 0/3) | you | `DOW=$((10#$(TZ=Asia/Shanghai date +%u))); HM=$((10#$(TZ=Asia/Shanghai date +%H%M))); if [ "$DOW" -le 5 ] && [ "$HM" -ge 1400 ] && [ "$HM" -lt 1800 ]; then W=peak; else W=main; fi; sed 's://.*$::' models.jsonc \| jq -r --arg w "$W" '.[$w].complex, .[$w].balance'` |
 | Create session (pinned model) | you | `opencode api post /api/session --data "$(jq -n --arg t "..." --arg d "$PROJECT_DIR" --arg m "$MODEL_JSON" '{title:$t,location:{directory:$d},model:($m\|fromjson)}')"` |
 | Dispatch prompt | you | `opencode api post /api/session/$SID/prompt --data "$(cat payload.json)"` |
 | Poll newest message | subagent | `opencode api session.message.list --param sessionID=$SID --param order=desc --param limit=1` |
@@ -330,9 +343,11 @@ All sessions were kept (never deleted) — resume any of them from the session l
 - This project's `opencode.jsonc` allows all permissions
   (`"action": "*"` / `"effect": "allow"`), so phase sessions never pause on
   permission asks — no permission handling is needed anywhere in the batch.
-- The default model comes from `opencode.jsonc` (read via
-  `/api/model/default` at the project location) and is pinned explicitly on
-  every phase session AND the watch subagent.
+- Models come from `models.jsonc` at the repo root — the active pair follows
+  the peak window (workdays 14:00–18:00 UTC+8): you run on `<window>.complex`,
+  and every phase session AND watch subagent is pinned to `<window>.balance`.
+  Re-resolve before every dispatch; a monitor session may also nudge you at
+  13:50/18:10 (UTC+8) to re-apply the switch.
 - Payload JSON must be built with `jq -n --rawfile` / `jq -n --arg` — never
   string-interpolated (phase text contains quotes and newlines).
 
