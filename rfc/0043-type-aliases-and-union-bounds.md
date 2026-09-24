@@ -10,6 +10,18 @@
   resolution at the call site, monomorphized dispatch); the bound
   provenance tracking is specified, with its documented holes
   (closures, shadowing).
+- **Revised:** 2026-09-24 — §1 grows the **row form**: an alias head
+  may name CONCRETE members alongside its generic parameters
+  (`type HashMap<K, i64> = PrimMapI64<K>;`); rows resolve
+  concrete-first at the substitution-completing sites (the
+  concrete-shadows-generic shape lifts the duplicate-name check for
+  exactly this case) and expand to the row target under the head's
+  substitution before any table work — no IR, nothing on the wire;
+  impl targets expand through the row too (§1's row-form block).
+  §5's non-goal is narrowed to match (a row-shaped family is an
+  alias; the fully-generic ONE is not). The working realization is
+  RFC 0028's `nmapset` family — `docs/hashmap-surface-report.md` is
+  the record.
 - **Author:** hpp2334
 - **Depends on:** RFC 0002 (lexical structure — `type` leaves the
   reserved table, `where` leaves the keyword set), RFC 0012 (traits, the
@@ -24,7 +36,9 @@ Two admission-surface features, one removal:
 
 - `type X = A;` — a **transparent type alias**: `X` resolves to `A`'s
   `TypeId` everywhere (params, fields, returns, bounds). Chains expand;
-  cycles are a compile error. Non-generic in v1.
+  cycles are a compile error. Non-generic in v1 — except the ROW form
+  (§1, 2026-09: the head may pin concrete members,
+  `type X<K, i64> = ..;`, several rows under one name).
 - `type X = A | B;` — a **union alias**. Unions are **bound-only**:
   legal in `requires` bounds; a union in a value position is a compile
   error. There is no runtime union kind and no subtyping — RFC 0001's
@@ -61,9 +75,47 @@ typealias := 'pub'?('(',vis,')')? 'type' Ident '=' Type ';'
   resolution; `type A = B; type B = A;` diagnoses
   "recursive type alias" at the re-entered alias. Forward references are
   legal (targets validate after every module name is declared).
-- Aliases are **non-generic** in v1: `type X = Vec<T>;` is not
-  expressible (a generic alias would be a type constructor, not a
-  transparent name).
+- Aliases are **non-generic in v1, but row-capable (2026-09
+  amendment)** — the fully generic alias (`type X<T> = Vec<T>;`,
+  every member a parameter) remains inexpressible: it would be a type
+  constructor, not a transparent name. What v1 expresses is the ROW
+  FORM: the head may name CONCRETE members alongside its generic
+  parameters, admitting SEVERAL rows under one name:
+
+  ```
+  type HashMap<K, i64> = PrimMapI64<K>;
+  type HashMap<K, u64> = PrimMapU64<K>;
+  type HashMap<K, f64> = PrimMapF64<K>;
+  // ... with `pub class HashMap<K requires …, V>` as the generic
+  //     fallback under the SAME name
+  ```
+
+  - **Concrete-rows-first.** At a substitution-completing site
+    (RFC 0031 §2), concrete members bind the site's arguments
+    (parameters) and compare equal by `TypeId`; a row match expands
+    to the row TARGET under the head's substitution — the spelled
+    name resolves to the target's `TypeId` BEFORE any table work
+    (§4's law, unchanged). The class instantiates only when NO row
+    matches; the row is strictly more specific than the class, so no
+    ambiguity can arise. The C2 `duplicate type name` check lifts
+    exactly for this concrete-shadows-generic shape — a family name
+    may be both a class and a row table.
+  - **Impl targets and mints expand through the row.** `impl Trait
+    for HashMap<K, i64>` re-targets at the NODE level (the impl's
+    generic idents bind the head's parameter members; concrete
+    members must spell their types) and registers on the row
+    TARGET's class template — the same `(trait, type)` pair and
+    substitution the direct spelling produces. Plain aliases expand
+    in impl-target position too. Static-constructor mints
+    (`HashMap<str, i64>.new()`) and the expected-type inference arm
+    ride the same expansion. A row stranding that the TARGET class
+    has no method for (the range-on-the-column case,
+    `docs/hashmap-surface-report.md` §6) diagnoses exactly as the
+    direct spelling would.
+
+  (The working realization is RFC 0028's `nmapset` family — the
+  keyed-collections section in `examples/README.md` and the batch
+  record in `docs/hashmap-surface-report.md`.)
 
 ## 2. Union aliases — bound-only
 
@@ -193,8 +245,13 @@ gparam := Ident ('requires' bound)?     // fns, methods, and classes (§A5)
 
 ## 5. Non-goals
 
-- No generic aliases (`type Vec2<T> = Vec<T>`) — v1 aliases name one
-  type.
+- No fully-generic aliases (`type Vec2<T> = Vec<T>` — a head whose
+  members are ALL parameters; 2026-09 amendment: narrowed — the
+  concrete-member ROW form is the admitted shape (§1), several rows
+  may share one name; the general alias would be a type constructor
+  and stays a non-goal). The working realization: RFC 0028's
+  `nmapset` family (`pub type HashMap<K, i64> = PrimMapI64<K>;` and
+  siblings — `docs/hashmap-surface-report.md`).
 - No union value types, no runtime union kind, no `is`/`when` support
   over unions (RFC 0006: heterogeneous data goes through traits or
   enums).

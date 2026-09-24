@@ -252,6 +252,57 @@ The run recipe:
   `let mut b = StringBuilder.with_cap(1024); b.append(f"..."); ...; let s = b.build();`
 - **The bench row**: `node benches/run.mjs --workload strbuild`.
 
+## The keyed collections — one family, the val type picks the storage
+
+The std `nmapset` package (no deps of its own) is rut's keyed-collection
+surface, and it spells ONE way: `HashMap<K, V>` and `HashSet<T>`, with
+the **val type selecting the storage** — the key type parameter
+admits the closed set (`i8 | … | bytes`, compile-time at every
+instantiation) and the val decides the lane:
+
+- **`HashMap<K, i64>` / `<K, u64>` / `<K, f64>`** — the native
+  64-bit val columns, via one row per val type that resolves to the
+  internal column class at compile time: same descriptor, same
+  crossings, same fuel as spelling the internals by hand — the alias
+  law (RFC 0043 §1, the row form) is NO-IR by construction. This is
+  the faster lane, and the only lane for those vals.
+- **Everything else** (`i32` vals? a record `Pt` val? bare `V` in a
+  generic body) rides the **generic row** — the `[?V]` sidecar with
+  the grow drain — through the same name.
+- **`HashSet<T>`** is the host table alone, no machinery about vals.
+- **May spell differently than you expect**: no float KEYS (the
+  equality contract), no narrow-val columns, no bool val column (the
+  `?bool` nil-law gap), and no iteration surface yet (json's map
+  ENCODE waits on it).
+
+The internal class names behind the columns (`Prim`-prefixed, one
+per val kind) are **nmapset-internal implementation names** — spelled
+nowhere in a public surface: no std decl, no example, no bench, no
+demo, no doc names them (grep-pinned), and the LSP completes only the
+family. The set never had a prim-named twin; `HashSet` has always
+been the one spelling.
+
+
+One compat note: json's decode-side diagnostics did NOT move — a map
+keyed by `bytes` diagnoses exactly as before ("this key type has no
+JSON spelling"), because the decode impls ride the same `key_spells`
+branch the general map spelled (the `dec_hm_bytes_key` pin holds
+verbatim).
+
+Consumer-visible behavior of a put/get/has on the rows is the exact
+class the spelling names — `HashMap<i32, i64>` IS the `i64` val
+column; the bench suite pins this (checksum + fuel + VM heap
+bit-identical through the unification,
+`docs/hashmap-surface-report.md` §4). Run recipe:
+
+- **A module dir**: `[deps]` nmapset by path — `rut run <dir>`.
+- **A loose file**: `rut run file.rut` with `use nmapset::` in the
+  source — the CLI mounts nmapset by presence, same as json.
+- **A taste in ten lines**:
+  `let mut m = HashMap<str, i64>.new(); m.put(k, v); let v = m.get(k);`
+- **The bench rows**: `node benches/run.mjs --workload
+  nmapset-int`, `--workload nmap-primmap`, `--workload nmap-hashset`.
+
 The earlier parse-only design corpus (`basic/`, `concurrency/`,
 `workers/`, `network/`, `memory/`, `json/`, `gui/`, `host/`) was
 removed: its implemented parts moved to the playground classics, and the
