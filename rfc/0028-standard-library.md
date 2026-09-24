@@ -229,11 +229,17 @@ The `JsonReader` is a direct cursor over the source `str` (the early
 `[?u32]` codepoint column is gone — the json-perf batch's phase 2);
 its classify loops ride the host-side `str.scan` primitive end-to-end
 and tokens carve as O(1) `StrView` slices (RFC 0042); the
-`JsonWriter` accumulates through the `StrBuf` builder (amortized
-in-place growth, one `finish()` materialization — no longer the
+`JsonWriter` accumulates through the std `strbuild` pkg's
+`StringBuilder` (the tenth package — § "`strbuild` — the builder
+package"; the strbuild batch's phase-1 migration onto the pkg face):
+`append` rides the same ambient `StrBuf` cell (amortized in-place
+growth) and `build()` is the one materialization — no longer the
 field-append rc==1 fast path, whose ~750× copy tax the json-perf
-survey measured). Both moves are output-byte-identical
-(`docs/json-perf-report.md`). Numbers: `i64` exact (overflow is a `WrongType`
+survey measured. Both moves are output-byte-identical
+(`docs/json-perf-report.md`); the class face's own price is measured
+and disclosed — +432,024 fuel (+1.370%), three engine-lowering
+mechanisms, menued — in `docs/strbuild-phase1.md`, the checksum
+immovable through it. Numbers: `i64` exact (overflow is a `WrongType`
 error, never a silent wrap), `f64` two-tier — tier 1 IEEE-exact
 (split-multiply, single rounding), tier 2 best-effort ±1 ulp,
 disclosed; encode renders the shortest round-trip decimal. Depth is
@@ -354,7 +360,9 @@ host-side scan/classify over a caller-owned `[u8]` class table,
 returning the packed `(stop << 8) | class`; `s.starts_with(from,
 head)` — the host-compared prefix test), the `StrBuf` growable builder
 (`StrBuf(cap)`, `push`/`push_code`, O(1) `len`, `finish()` the one
-materialization), the `builtin impl i8..u64` numeric methods, and the
+materialization — the raw cell the `strbuild` pkg's `StringBuilder`
+faces, § "`strbuild` — the builder package" above), the `builtin
+impl i8..u64` numeric methods, and the
 erasure statics `opaque.new`/`opaque.downcast<T>` (RFC 0014 revised —
 builtin-surface: both are members of the `builtin primitive opaque`,
 and the names are ambient). The tokenizer members and `StrBuf` are the

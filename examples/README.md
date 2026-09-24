@@ -178,6 +178,80 @@ The run recipe:
   (9/9).
 - **The bench row**: `node benches/run.mjs --workload json-roundtrip`.
 
+## The std `strbuild` package — the class contract, the mut law, the row
+
+`rut/strbuild/` is the tenth std pkg (after `json`) — pure rut, zero
+host fns, zero deps: the engine's `StrBuf` builder cell is AMBIENT
+(RFC 0028 revised, builtin-surface), so the pkg compiles against
+`mount_std_core` alone and a strbuild mount adds no `expected_host_fns`
+entries and no dep edge of its own. The whole contract is one class:
+
+```rut
+pub class StringBuilder {
+    out: StrBuf;   // the engine cell — the whole pkg is this field
+}
+
+impl StringBuilder {
+    fn new() -> Self;                   // grow from small
+    fn with_cap(cap: i32) -> Self;      // pre-size to an octet HINT
+    fn append(mut self, value: str);    // the one appender (in place,
+                                        //   amortized O(|s|))
+    fn append_code(mut self, cp: u32);  // one codepoint (invalid
+                                        //   scalars mint U+FFFD)
+    fn len(self) -> i32;                // codepoints so far, O(1)
+    fn build(self) -> str;              // the ONE materialization —
+}                                       //   the builder KEEPS its buffer
+```
+
+That is the whole surface, closed on the record:
+`clear`/`reserve`/`capacity`/`append_char`/`append_i64` are ABSENT ON
+RECORD — no nat, no call site (adding one is a VERSION conversation
+for zero need). The rulings, user-visible as spells:
+
+- **The mut law is RFC 0044 sharing, not copying.** A binding shares
+  the ONE instance cell, whose `out` slot shares the ONE engine cell:
+  appends through an alias — or through a `mut b: StringBuilder`
+  parameter — land in the CALLER's document, visible through the
+  original. Copies happen at exactly two engineered points:
+  `build()`'s materialization and `grow`'s prefix move. `build()`
+  twice answers the same text; the built `str` is immune to later
+  appends.
+- **`with_cap` is a hint, not a promise** — honored as the mint
+  allocation (the block store class-rounds it), advisory as behavior:
+  every cap answers identical content and `len`; a negative hint is
+  the nat's `Invalid` trap.
+- **`append_code` inherits the engine's rule**: a surrogate mints
+  U+FFFD at the nat — the `str.from_code` rule, decided below the
+  pkg.
+- **`inline = true` is load-bearing**: a class-method module cannot
+  be linked; the flag keeps the methods resolvable at every
+  consumer's call site.
+
+json is the reference consumer: its writer's accumulator IS a
+`StringBuilder` field (`[deps] strbuild` — the peer groups are
+untouched, they never touch the builder). Honest accounting rides
+with it: the class face costs a measured +432,024 fuel (+1.370%) on
+`json-roundtrip` over the raw cell — engine-lowering cost, menued for
+a future engine batch (`docs/strbuild-phase1.md`,
+`docs/strbuild-report.md`), checksums immovable throughout.
+
+The scoreboard is the suite's surprise: on the pkg's own row,
+**rut is AHEAD of QuickJS** — 0.42× net (352.6 vs 842.5 ms; node's
+JIT leads at 233.1 ms). The JS idiom (`Array#push` + `Array#join("")`
+per round) re-materializes the whole rope per round; the builder
+appends in place and materializes once. Pins: fuel 162,285,165, VM
+heap peak 22,028,108 B (`benches/README.md`'s strbuild sections have
+the full entry + the optimization ledger).
+
+The run recipe:
+
+- **A module dir**: `[deps]` strbuild by path — `rut run <dir>`.
+- **A loose file**: `rut run file.rut` with `use strbuild::` in the
+  source — the CLI mounts strbuild by presence, same as json.
+- **A taste in ten lines**:
+  `let mut b = StringBuilder.with_cap(1024); b.append(f"..."); ...; let s = b.build();`
+- **The bench row**: `node benches/run.mjs --workload strbuild`.
+
 The earlier parse-only design corpus (`basic/`, `concurrency/`,
 `workers/`, `network/`, `memory/`, `json/`, `gui/`, `host/`) was
 removed: its implemented parts moved to the playground classics, and the
