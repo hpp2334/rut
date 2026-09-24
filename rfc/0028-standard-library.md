@@ -15,6 +15,11 @@
   DIRECT serde model, the container impls peer-gated through RFC 0045
   (its first real consumer), and the dependency direction decided on
   the record in that section.
+- **Revised:** 2026-09 (strbuild) — **`strbuild` joins the swappable
+  set as the tenth package** (§ "`strbuild` — the builder package"
+  below): a pure-rut class face over the engine's `StrBuf` builtin
+  cell, dep-free (the cell is ambient), and json's writer is its first
+  consumer.
 - **Author:** hpp2334
 - **Depends on:** RFC 0022–0027 (host & FFI), RFC 0029 (declaration files)
 - **Supersedes:** RFC 0005 §8 (pre-restructure)
@@ -64,10 +69,11 @@ use-gate by contract** — `use core::{NAN}` is explicit.
 contracts, RFC 0025
 revised.)
 
-**`pouch`, `calc`, `ink`, `nmapset`, `json` are optional in-tree
+**`pouch`, `calc`, `ink`, `nmapset`, `json`, `strbuild` are optional
+in-tree
 packages — swappable defaults, not required surface.** They ship in
 the toolchain's tree (`rut/pouch/`, `rut/calc/`, `rut/ink/`,
-`rut/nmapset/`, `rut/json/`) and a module that wants one
+`rut/nmapset/`, `rut/json/`, `rut/strbuild/`) and a module that wants one
 declares it in its manifest `[deps]` (RFC 0041 §3); the community may
 replace any of them wholesale — nothing in the engine knows their names.
 **`pouch`** is a declaration file + Rust bodies + rut wrappers (RFC
@@ -292,6 +298,49 @@ exactly-one-nil law on the `(?T, ?E)` entries, and the bench record
 (`docs/rut-json-survey.md`) and the batch report's
 (`docs/rut-json-report.md`); the user-facing summary lives in
 `examples/README.md`.
+
+## `strbuild` — the builder package
+
+The tenth package (`rut/strbuild/`, landed by the strbuild batch): pure
+rut source, `inline = true`, **zero host fns and zero deps** — `StrBuf`
+is an AMBIENT builtin (RFC 0028 revised, builtin-surface), so the pkg
+compiles against `mount_std_core` alone and a strbuild mount adds no
+`expected_host_fns` entries and no dep edge of its own. The whole pkg
+is one class over that cell:
+
+```rut
+pub class StringBuilder {
+    out: StrBuf;          // the engine cell — the whole pkg is this field
+}
+
+impl StringBuilder {
+    fn new() -> Self;                       // grow from small (StrBuf(0))
+    fn with_cap(cap: i32) -> Self;          // pre-size to an octet HINT
+    fn append(mut self, value: str);        // the one appender (StrBufPush)
+    fn append_code(mut self, cp: u32);      // one codepoint (StrBufPushCode;
+                                            //   invalid scalars mint U+FFFD)
+    fn len(self) -> i32;                    // codepoints so far (StrBufLen)
+    fn build(self) -> str;                  // the ONE materialization
+}                                           //   (StrBufFinish — the builder
+                                            //    keeps its buffer)
+```
+
+`inline = true` is load-bearing (ink/nmapset/json's flag): this is a
+CLASS-METHOD pkg, and a class-method module cannot be linked — the
+flag keeps the methods resolvable at every consumer's call site. RFC
+0044 sharing is the law underneath: a binding shares the ONE instance
+cell whose `out` slot shares the ONE engine cell — appends through an
+alias (or through a `mut b: StringBuilder` parameter) land in the
+caller's document; copies happen at exactly two engineered points
+(`build`'s materialization and `grow`'s prefix move). The member
+contract is closed on the record: `clear`/`reserve`/`capacity`/
+`append_char`/`append_i64` have no nat and no call site — adding one
+is a VERSION conversation for zero need. Mount order is 10th, after
+json (the ninth-package precedent: no engine table orders std pkgs —
+"the 10th" names the reading order and this paragraph). The engine
+learns nothing new: no nat ids, no TyKind, no opcodes, no surface row
+— VERSION stays 11, and json's writer is the pkg's first consumer
+(`[deps] strbuild`, the mapping in `docs/strbuild-survey.md` §4).
 
 ## The `core` prelude, v1.1 — removals diagnosed at the use site
 

@@ -1,0 +1,78 @@
+// strbuild/strbuild.rut — the 10th std pkg (docs/strbuild-survey.md is
+// this file's contract): the std-pkg face over the engine's growable
+// string builder. The engine cell is `StrBuf` (json-perf phase 2) —
+// AMBIENT (RFC 0028 revised, builtin-surface): no `use`, no manifest
+// dep, this pkg compiles against `mount_std_core` alone. The whole
+// pkg is ONE field on that cell; every member is ONE forwarded call —
+// no copy, no re-buffering, the share/copy law rides the cell.
+//
+//   pub class StringBuilder — the growable builder
+//     new()               grow from small (the StrBuf(0) path)
+//     with_cap(cap)       pre-size to a capacity HINT (octets; the
+//                         block store class-rounds it — advisory in
+//                         the engine's own terms, honored as the mint
+//                         allocation; never changes behavior)
+//     append(value: str)  append a str's octets in place — O(|s|)
+//                         amortized
+//     append_code(cp: u32)  append one codepoint (invalid scalars mint
+//                         U+FFFD — the str.from_code rule, decided at
+//                         the nat, not here)
+//     len() -> i32        the CODEPOINT count so far (tracked, O(1))
+//     build() -> str      the ONE materialization: a fresh immutable
+//                         str; the builder KEEPS its buffer (build
+//                         twice answers the same text; the built str
+//                         is immune to later appends)
+//
+// RFC 0044 sharing is the law underneath: a binding shares the ONE
+// instance cell, whose `out` slot shares the ONE engine cell — appends
+// through an alias are visible through the original; copies happen at
+// exactly two engineered points (build's materialization, grow's
+// prefix move). Methods live in an `impl` block (RFC 0012 — type
+// bodies declare fields only); mutating members take the `mut self`
+// receiver (the checker's license to mutate through the shared
+// handle, never a copy trigger).
+//
+// NO MORE MEMBERS ON RECORD: clear/reserve/capacity/append_char/
+// append_i64 have no nat and no call site (survey §2) — adding one is
+// a VERSION conversation for zero need.
+
+pub class StringBuilder {
+    out: StrBuf;          // the engine cell — the whole pkg is this field
+}
+
+impl StringBuilder {
+    // grow from small: the StrBuf(0) path (geometric growth from the
+    // smallest class)
+    pub fn new() -> Self {
+        return Self { out: StrBuf(0) };
+    }
+
+    // the pre-sized mint: `cap` is an OCTET hint (negative traps
+    // Invalid at the nat); the block store class-rounds it, so the
+    // charge is what the cell actually holds. A hint, not a promise —
+    // behavior is identical for every cap; only the allocation differs.
+    pub fn with_cap(cap: i32) -> Self {
+        return Self { out: StrBuf(cap) };
+    }
+
+    // append a str's octets IN PLACE through the shared cell
+    pub fn append(mut self, value: str) {
+        self.out.push(value);
+    }
+
+    // append one codepoint — the nat's U+FFFD rule for invalid scalars
+    pub fn append_code(mut self, cp: u32) {
+        self.out.push_code(cp);
+    }
+
+    // codepoints so far — tracked at append time, O(1), never a scan
+    pub fn len(self) -> i32 {
+        return self.out.len();
+    }
+
+    // the ONE materialization: a fresh immutable str copied from the
+    // buffer; the builder keeps its buffer (the finish-keeps-buffer law)
+    pub fn build(self) -> str {
+        return self.out.finish();
+    }
+}

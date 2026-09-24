@@ -4,12 +4,13 @@
 //! faces: the stdio server (`server`, native) and the wasm shim
 //! (`rut-lsp-wasm`) — one index, no drift.
 //!
-//! ALL EIGHT stdlib packages are embedded (the `rut.toml` `name` fields
-//! — what a `use` path spells): the four `entry.type` declaration
+//! ALL TEN stdlib packages are embedded (the `rut.toml` `name` fields
+//! — what a `use` path spells): the five `entry.type` declaration
 //! surfaces (`core`, `calc`, `nmap_host`, `rt`, `bench_cross`) and the
-//! four `entry.lib` sources (`pouch`, `nmapset`, `ink`) — the latter
-//! indexed in impl mode like the open document, so their class methods
-//! complete. Before the `rut-lsp-align` batch only core/calc/pouch were
+//! five `entry.lib` sources (`pouch`, `nmapset`, `json`, `ink`,
+//! `strbuild`) — the latter indexed in impl mode like the open
+//! document, so their class methods complete. Before the `rut-lsp-align`
+//! batch only core/calc/pouch were
 //! here and a bare user project got no `HashMap`/`HashSet`/`PrimMapI64`
 //! completion at all.
 
@@ -24,6 +25,7 @@ pub const POUCH: &str = include_str!("../../../rut/pouch/pouch.rut");
 pub const NMAPSET: &str = include_str!("../../../rut/nmapset/nmapset.rut");
 pub const JSON: &str = include_str!("../../../rut/json/json.rut");
 pub const INK: &str = include_str!("../../../rut/ink/ink.rut");
+pub const STRBUILD: &str = include_str!("../../../rut/strbuild/strbuild.rut");
 
 const CORE_LABEL: &str = "core";
 
@@ -43,6 +45,7 @@ pub fn indexes() -> Vec<DefIndex> {
         ("nmapset", NMAPSET, rut_parser::Mode::Impl, "rut/nmapset/nmapset.rut"),
         ("json", JSON, rut_parser::Mode::Impl, "rut/json/json.rut"),
         ("ink", INK, rut_parser::Mode::Impl, "rut/ink/ink.rut"),
+        ("strbuild", STRBUILD, rut_parser::Mode::Impl, "rut/strbuild/strbuild.rut"),
     ]
     .into_iter()
     .map(|(origin, src, mode, src_path)| {
@@ -62,15 +65,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_nine_packages_embed_and_index() {
+    fn all_ten_packages_embed_and_index() {
         let idxs = indexes();
-        assert_eq!(idxs.len(), 9, "origins: {:?}", idxs.iter().map(|i| i.origin.clone()).collect::<Vec<_>>());
+        assert_eq!(idxs.len(), 10, "origins: {:?}", idxs.iter().map(|i| i.origin.clone()).collect::<Vec<_>>());
         for i in &idxs {
             assert!(!i.types.is_empty() || !i.fns.is_empty(), "{}: empty index", i.origin);
         }
         let origins: Vec<&str> = idxs.iter().map(|i| i.origin.as_str()).collect();
-        for want in ["core", "calc", "nmap_host", "rt", "bench_cross", "pouch", "nmapset", "json", "ink"] {
+        for want in ["core", "calc", "nmap_host", "rt", "bench_cross", "pouch", "nmapset", "json", "ink", "strbuild"] {
             assert!(origins.contains(&want), "missing pkg `{want}`: {origins:?}");
+        }
+    }
+
+    #[test]
+    fn strbuild_class_methods_complete() {
+        // the 10th pkg's class-method surface completes from the std
+        // index alone: the six members exactly as censused
+        // (docs/strbuild-survey.md §2) — nothing more
+        let idxs = indexes();
+        let sb = idxs
+            .iter()
+            .find(|i| i.origin == "strbuild")
+            .expect("strbuild in the std surface");
+        let has_type = sb.types.iter().any(|t| t.name == "StringBuilder");
+        assert!(has_type, "std surface lacks the StringBuilder class");
+        let fns: Vec<&str> = sb.fns.iter().map(|f| f.name.as_str()).collect();
+        for want in ["new", "with_cap", "append", "append_code", "len", "build"] {
+            assert!(fns.contains(&want), "StringBuilder lacks `{want}`: {fns:?}");
+        }
+        for absent in ["clear", "reserve", "capacity", "append_char", "finish", "push"] {
+            assert!(!fns.contains(&absent), "StringBuilder must NOT carry `{absent}`: {fns:?}");
         }
     }
 

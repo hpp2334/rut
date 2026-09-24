@@ -1,0 +1,11 @@
+# the strbuild pkg's test-fixture consumer (the strbuild batch phase
+# 1): the pkg mounted through a real `[deps]` graph, every entry
+# answering a CANONICAL STRING so the Rust-side suite asserts exact
+# values with zero marshalling guesswork — the jsonpkg convention.
+# strbuild is dep-free (the cell is ambient), so this closure is the
+# pkg alone over mount_std_core.
+name = "strbuildpkg"
+entry.lib = "./main.rut"
+
+[deps]
+strbuild = { path = "../../../../../rut/strbuild" }

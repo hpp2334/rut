@@ -1,0 +1,17 @@
+# strbuild — the 10th std pkg (the strbuild batch, phase 1;
+# docs/strbuild-survey.md is the contract). A pure-rut face over the
+# engine's `StrBuf` builtin class: zero host fns, zero deps — the cell
+# is AMBIENT (RFC 0028 revised, builtin-surface), so this pkg compiles
+# against `mount_std_core` alone, exactly as json needs no host-fn dep.
+# No [peer-deps], no [dev-deps] — nothing to integrate with; pkg tests
+# ride the driver's program tests, json-style.
+#
+# `inline = true` — LOAD-BEARING, not stylistic (ink/nmapset/json's
+# flag, the same law): this is a CLASS-METHOD pkg, and a class-method
+# module cannot be linked — the flag keeps StringBuilder's methods
+# resolvable (and the checker's P1.3 receiver-call inlining live) at
+# every consumer's call site, so `b.append(...)` lowers to the same
+# forwarded CallNat the engine cell always cost.
+name = "strbuild"
+entry.lib = "./strbuild.rut"
+inline = true

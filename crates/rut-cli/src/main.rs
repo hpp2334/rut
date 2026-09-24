@@ -113,12 +113,16 @@ fn run(path: &str, fuel: Option<u64>) {
         // the std mount order (the rut-json survey §1.2's ruling): ink
         // is independent; json slots after pouch and nmapset — the dep
         // graph's new edges (json -> pouch, json -> nmapset) make that
-        // the only graph-respecting position
+        // the only graph-respecting position. strbuild is 10th, after
+        // json (RFC 0028's amendment): position-free for the graph —
+        // the row names the reading order, and json's own `[deps]`
+        // pulls the pkg regardless
         for (name, dir) in [
             ("ink", "rut/ink"),
             ("pouch", "rut/pouch"),
             ("nmapset", "rut/nmapset"),
             ("json", "rut/json"),
+            ("strbuild", "rut/strbuild"),
         ] {
             if src.contains(&format!("use {name}::")) {
                 rut_driver::mount_dir(&mut s, &tree.join(dir)).expect("mount tree pkg");

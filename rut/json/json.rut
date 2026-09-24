@@ -66,8 +66,9 @@
 //
 // THE WRITER (survey §2.3, reshaped by the json-perf batch: phase 1's
 // chunk buffer, finished by phase 2's growable builder): per-event
-// output pushes into a StrBuf — the engine's growable builder, amortized
-// O(1) per push with one final materialization at finish(). Phase 1's
+// output appends into a StringBuilder — the std strbuild pkg's face
+// over the engine's growable cell, amortized O(1) per append with one
+// final materialization at build(). Phase 1's
 // intermediate shape composed events into a bounded chunk buffer that
 // drained into a str field accumulator; the builder deletes that
 // machinery entirely — no cap checks, no flushes, and the ~400
@@ -89,6 +90,19 @@
 // impl rows (Vec via pouch; HashMap/HashSet/PrimMap via nmapset) live in
 // the impl-only group files the peer gate appends when the peer is in
 // the program's closure.
+//
+// THE WRITER'S ACCUMULATOR (strbuild batch phase 1): the builder rides
+// the std `strbuild` pkg — `StringBuilder`, the 10th std pkg's
+// class-method face over the same engine `StrBuf` cell this writer
+// pushed into directly before (docs/strbuild-survey.md §4 is the
+// mapping; `[deps] strbuild` below is the edge). Same nats, same
+// cells, same appends: `push` -> `append`, `push_code` ->
+// `append_code`, `finish` -> `build`, `len` stays `len`, and the three
+// mints go through `with_cap` (the pkg constructor is where a pre-size
+// is spelled). The exactly-one-nil laws, the sticky failure, the
+// offsets — all untouched.
+
+use strbuild::{ StringBuilder };
 
 // ---- errors (survey §0: kind enum + fixed-field struct) ----
 
@@ -111,7 +125,7 @@ pub struct EncodeJsonError {
 // ---- the writer (survey §2.3) ----
 
 pub class JsonWriter {
-    out: StrBuf;        // THE accumulator — the growable builder
+    out: StringBuilder; // THE accumulator — the strbuild face over the engine cell
     depth: i32;         // open container count (the 128 cap)
     st_kind: [i32];     // per level: 1 object, 2 array — 128 slots, the cap
     st_key: [?str];     // per object level: the pending key (nil until key())
@@ -131,7 +145,7 @@ impl JsonWriter {
         qt[0x5C] = 2;
         let mut c: i32 = 0;
         while (c < 0x20) { qt[c] = 3; c += 1; }
-        return Self { out: StrBuf(1024), depth: 0, st_kind: [0; 128],
+        return Self { out: StringBuilder.with_cap(1024), depth: 0, st_kind: [0; 128],
                       st_key: [nil; 128], st_n: [0; 128], top: 0, k: nil,
                       at: 0, path: "", qt: qt };
     }
@@ -141,7 +155,7 @@ impl JsonWriter {
     // as-is (the sticky model reports real failures; the finalized error
     // set has no kind for misuse).
     pub fn finish(mut self) -> str {
-        return self.out.finish();
+        return self.out.build();
     }
 
     pub fn failed(self) -> bool {
@@ -191,7 +205,7 @@ impl JsonWriter {
     // O(1) amortized all the way to a multi-MB document
     fn value_comma(mut self) {
         if (self.top > 0 && self.st_n[self.top - 1] > 0 && self.st_kind[self.top - 1] == 2) {
-            self.out.push(",");
+            self.out.append(",");
         }
         if (self.top > 0) {
             self.st_n[self.top - 1] += 1;
@@ -207,7 +221,7 @@ impl JsonWriter {
         self.st_n[self.top] = 0;
         self.top += 1;
         self.depth += 1;
-        self.out.push("{");
+        self.out.append("{");
     }
 
     pub fn begin_array(mut self) {
@@ -219,7 +233,7 @@ impl JsonWriter {
         self.st_n[self.top] = 0;
         self.top += 1;
         self.depth += 1;
-        self.out.push("[");
+        self.out.append("[");
     }
 
     // an unbalanced end is a caller bug — clamped, never traps
@@ -228,7 +242,7 @@ impl JsonWriter {
         if (self.top > 0) {
             self.top -= 1;
             self.depth -= 1;
-            self.out.push("}");
+            self.out.append("}");
         }
     }
 
@@ -237,7 +251,7 @@ impl JsonWriter {
         if (self.top > 0) {
             self.top -= 1;
             self.depth -= 1;
-            self.out.push("]");
+            self.out.append("]");
         }
     }
 
@@ -246,13 +260,13 @@ impl JsonWriter {
         if (self.failed()) { return; }
         if (self.top > 0 && self.st_kind[self.top - 1] == 1) {
             if (self.st_n[self.top - 1] > 0) {
-                self.out.push(",");
+                self.out.append(",");
             }
             self.st_n[self.top - 1] += 1;
             self.st_key[self.top - 1] = k;
         }
-        self.out.push(self.quote(k));
-        self.out.push(":");
+        self.out.append(self.quote(k));
+        self.out.append(":");
     }
 
     // an escaped JSON string (value position — no comma for objects,
@@ -260,14 +274,14 @@ impl JsonWriter {
     pub fn write_str(mut self, s: str) {
         if (self.failed()) { return; }
         self.value_comma();
-        self.out.push(self.quote(s));
+        self.out.append(self.quote(s));
     }
 
     // pre-rendered JSON (numbers, true/false/null — the impls' fast lane)
     pub fn write_raw(mut self, t: str) {
         if (self.failed()) { return; }
         self.value_comma();
-        self.out.push(t);
+        self.out.append(t);
     }
 
     pub fn write_i64(mut self, v: i64) {
@@ -311,31 +325,32 @@ impl JsonWriter {
     }
 
     // escape from `first` (the first escape site) on; the clean prefix
-    // [0, first) appends as one piece. Builds through a StrBuf — the
+    // [0, first) appends as one piece. Builds through a StringBuilder
+    // (the strbuild face over the engine cell) — the
     // local f-string accumulator it replaces was the one place the
     // slice-per-char disease could still reach an escaped doc.
     fn quote_slow(self, s: str, first: i32) -> str {
-        let b = StrBuf(s.len() * 2 + 2);
-        b.push("\"");
-        if (first > 0) { b.push(s.slice(0, first)); }
+        let b = StringBuilder.with_cap(s.len() * 2 + 2);
+        b.append("\"");
+        if (first > 0) { b.append(s.slice(0, first)); }
         let n = s.len();
         let mut i: i32 = first;
         while (i < n) {
             let c = s.code_at(i) as i32;
             if (c == 0x22) {
-                b.push("\\\"");
+                b.append("\\\"");
             } else if (c == 0x5C) {
-                b.push("\\\\");
+                b.append("\\\\");
             } else if (c == 0x08) {
-                b.push("\\b");
+                b.append("\\b");
             } else if (c == 0x0C) {
-                b.push("\\f");
+                b.append("\\f");
             } else if (c == 0x0A) {
-                b.push("\\n");
+                b.append("\\n");
             } else if (c == 0x0D) {
-                b.push("\\r");
+                b.append("\\r");
             } else if (c == 0x09) {
-                b.push("\\t");
+                b.append("\\t");
             } else if (c < 0x20) {
                 // \u00xx — c < 0x20, so both hex digits come from the low byte
                 let hex = "0123456789abcdef";
@@ -343,15 +358,15 @@ impl JsonWriter {
                 let lo = c & 15;
                 let hs = hex.slice(hi, hi + 1);
                 let ls = hex.slice(lo, lo + 1);
-                b.push(f"\\u00{hs}{ls}");
+                b.append(f"\\u00{hs}{ls}");
             } else {
                 let ch = s.slice(i, i + 1);
-                b.push(ch);
+                b.append(ch);
             }
             i += 1;
         }
-        b.push("\"");
-        return b.finish();
+        b.append("\"");
+        return b.build();
     }
 }
 
@@ -848,7 +863,7 @@ impl JsonReader {
     }
 
     // read_str — verbatim docs carve as ONE RFC 0042 view; escaped docs
-    // build through a StrBuf. The body scan is ONE host-side pass per
+    // build through a StringBuilder. The body scan is ONE host-side pass per
     // token piece: the stp table's classes are `"`->1, control->2,
     // `\`->3, content 0 (keep scanning) — the walk the phase-2 scan
     // primitive replaces paid one peek + three compares per codepoint
@@ -904,12 +919,12 @@ impl JsonReader {
 
     fn unescape(mut self, raw: str) -> str {
         let rl = raw.len();
-        let mut b = StrBuf(rl);
+        let mut b = StringBuilder.with_cap(rl);
         let mut i: i32 = 0;
         while (i < rl) {
             let c = raw.code_at(i) as i32;
             if (c != 0x5C) {
-                b.push(raw.slice(i, i + 1));
+                b.append(raw.slice(i, i + 1));
                 i += 1;
                 continue;
             }
@@ -919,14 +934,14 @@ impl JsonReader {
                 return "";
             }
             let e = raw.code_at(i) as i32;
-            if (e == 0x22) { b.push("\""); i += 1; continue; }
-            if (e == 0x5C) { b.push("\\"); i += 1; continue; }
-            if (e == 0x2F) { b.push("/"); i += 1; continue; }
-            if (e == 0x62) { b.push("\b"); i += 1; continue; }
-            if (e == 0x66) { b.push("\f"); i += 1; continue; }
-            if (e == 0x6E) { b.push("\n"); i += 1; continue; }
-            if (e == 0x72) { b.push("\r"); i += 1; continue; }
-            if (e == 0x74) { b.push("\t"); i += 1; continue; }
+            if (e == 0x22) { b.append("\""); i += 1; continue; }
+            if (e == 0x5C) { b.append("\\"); i += 1; continue; }
+            if (e == 0x2F) { b.append("/"); i += 1; continue; }
+            if (e == 0x62) { b.append("\b"); i += 1; continue; }
+            if (e == 0x66) { b.append("\f"); i += 1; continue; }
+            if (e == 0x6E) { b.append("\n"); i += 1; continue; }
+            if (e == 0x72) { b.append("\r"); i += 1; continue; }
+            if (e == 0x74) { b.append("\t"); i += 1; continue; }
             if (e == 0x75) {
                 i += 1;
                 let h = self.hex4_at(raw, i);
@@ -952,7 +967,7 @@ impl JsonReader {
                         return "";
                     }
                     let joined: u32 = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
-                    b.push_code(joined);
+                    b.append_code(joined);
                     i = nx + 6;
                     continue;
                 }
@@ -962,7 +977,7 @@ impl JsonReader {
                     self.fail(DecodeErrorKind.Unexpected, self.pos, raw.slice(i - 2, i + 4), "a codepoint");
                     return "";
                 }
-                b.push_code(cp);
+                b.append_code(cp);
                 i = nx;
                 continue;
             }
@@ -971,7 +986,7 @@ impl JsonReader {
             self.fail(DecodeErrorKind.Unexpected, self.pos, got, "an escape");
             return "";
         }
-        return b.finish();
+        return b.build();
     }
 
     // four hex digits at raw[i..i+4] -> (value, next index); sticky

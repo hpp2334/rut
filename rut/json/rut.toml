@@ -23,6 +23,14 @@ name = "json"
 entry.lib = "./json.rut"
 inline = true
 
+# the writer's accumulator rides the std builder (the strbuild batch
+# phase 1; docs/strbuild-survey.md §4): a REQUIRED dep, not a peer —
+# the writer cannot exist without the cell, so every json closure
+# carries strbuild. strbuild is itself dep-free (the cell is ambient)
+# and `inline = true`, so the edge adds no host surface and no link.
+[deps]
+strbuild = { path = "../strbuild" }
+
 [peer-deps]
 pouch    = { path = "../pouch",   optional = true, lib = "./group-pouch.rut" }
 nmapset  = { path = "../nmapset", optional = true, lib = "./group-nmapset.rut" }

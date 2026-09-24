@@ -1,0 +1,145 @@
+use strbuild::{ StringBuilder };
+
+// the strbuild pkg's unit pins (docs/strbuild-survey.md §2 is the
+// member contract; §1.5 the share/copy law). Every entry answers a
+// canonical string — `OK...` or `BAD:<claim>` — so the Rust-side suite
+// asserts exact values.
+//
+// The pins:
+//   - append/len/build round trips (ASCII + astral + empty)
+//   - the codepoint rule: append_code counts astral as ONE codepoint;
+//     an invalid scalar (surrogate) mints U+FFFD at the nat — the
+//     str.from_code rule, decided BELOW the pkg
+//   - the growth law: geometric growth is invisible to content —
+//     2^17 appends over a tiny hint cross ~16 class-rounded grows and
+//     answer byte-exact text
+//   - share/copy (RFC 0044): an alias appends through the ONE instance
+//     cell (visible through the original, through a param too); build
+//     twice answers the same text; the built str is immune to later
+//     appends
+//   - with_cap: honored as the mint allocation, ADVISORY as behavior —
+//     every cap (0, small, huge) answers identical content and len;
+//     the negative cap is the nat's `Invalid` trap (pinned Rust-side)
+
+fn check(got: str, want: str) -> str {
+    if (got == want) { return "OK"; }
+    return f"BAD:{got}";
+}
+
+// ---- append/len/build round trips ----
+
+entry fn roundtrip() -> str {
+    let mut b = StringBuilder.new();
+    b.append("he");
+    b.append("llo");
+    b.append(" ");
+    b.append("world");
+    if (b.len() != 11) { return "BAD:len"; }
+    return check(b.build(), "hello world");
+}
+
+entry fn roundtrip_empty() -> str {
+    let b = StringBuilder.new();
+    if (b.len() != 0) { return "BAD:len"; }
+    return check(b.build(), "");
+}
+
+entry fn roundtrip_astral() -> str {
+    let mut b = StringBuilder.with_cap(16);
+    b.append("a\u{1F600}b");            // ascii, astral, ascii
+    if (b.len() != 3) { return "BAD:len"; }
+    return check(b.build(), "a\u{1F600}b");
+}
+
+// ---- the codepoint rule ----
+
+entry fn append_code_law() -> str {
+    let mut b = StringBuilder.with_cap(16);
+    b.append("a");
+    b.append_code(0x1F600);             // astral: 1 codepoint, 4 octets
+    b.append_code(0x2026);              // BMP: 1 codepoint, 3 octets
+    b.append("z");
+    if (b.len() != 4) { return "BAD:len"; }
+    return check(b.build(), "a\u{1F600}\u{2026}z");
+}
+
+entry fn append_code_surrogate_mints_fffd() -> str {
+    // invalid scalars mint U+FFFD — the nat's rule, not the pkg's
+    let mut c = StringBuilder.with_cap(4);
+    c.append_code(0xD800);
+    if (c.len() != 1) { return "BAD:len"; }
+    return check(c.build(), "\u{FFFD}");
+}
+
+// ---- the growth law ----
+
+entry fn growth_is_invisible_to_content() -> str {
+    let mut b = StringBuilder.with_cap(8);
+    let mut i: i32 = 0;
+    while (i < 131072) {
+        b.append("abcd");
+        i += 1;
+    }
+    if (b.len() != 524288) { return "BAD:len"; }
+    let s = b.build();
+    if (s.len() != 524288) { return "BAD:str-len"; }
+    if (s.slice(0, 4) != "abcd") { return "BAD:head"; }
+    if (s.slice(262144, 262148) != "abcd") { return "BAD:middle"; }
+    if (s.slice(524284, 524288) != "abcd") { return "BAD:tail"; }
+    return "OK";
+}
+
+// ---- the share/copy law (RFC 0044) ----
+
+entry fn share_copy_law() -> str {
+    let mut b = StringBuilder.new();
+    b.append("one");
+    let alias = b;                      // shares the ONE instance cell
+    alias.append("+two");               // visible through the original
+    let s1 = b.build();
+    if (s1 != "one+two") { return "BAD:alias"; }
+    let s2 = b.build();                 // build twice: same text
+    if (s2 != "one+two") { return "BAD:build-twice"; }
+    alias.append("+three");             // the built str is IMMUNE
+    if (s1 != "one+two") { return "BAD:immune"; }
+    return check(b.build(), "one+two+three");
+}
+
+fn sink(mut b: StringBuilder) {
+    b.append("(sunk)");
+}
+
+entry fn param_shares_the_cell() -> str {
+    // the mut-non-nilable param law: the parameter shares the caller's
+    // instance cell — appends through it land in the caller's document
+    let mut b = StringBuilder.new();
+    b.append("a");
+    sink(b);
+    return check(b.build(), "a(sunk)");
+}
+
+// ---- with_cap: honored as the mint, advisory as behavior ----
+
+entry fn cap_hint_is_advisory() -> str {
+    let mut a = StringBuilder.new();            // grows from small
+    let mut z = StringBuilder.with_cap(0);      // explicit 0: the same path
+    let mut h = StringBuilder.with_cap(4096);   // pre-sized past the need
+    let mut i: i32 = 0;
+    while (i < 100) {
+        a.append("xy"); z.append("xy"); h.append("xy");
+        i += 1;
+    }
+    let sa = a.build();
+    let sz = z.build();
+    let sh = h.build();
+    if (sa != sz || sz != sh) { return "BAD:content"; }
+    if (a.len() != 200 || z.len() != 200 || h.len() != 200) { return "BAD:len"; }
+    if (sh.slice(0, 2) != "xy" || sh.slice(198, 200) != "xy") { return "BAD:ends"; }
+    return "OK";
+}
+
+// the negative hint: the nat's `Invalid` trap, unchanged by the face
+// (asserted Rust-side — a trap cannot ride a str answer)
+entry fn neg_cap() -> nil {
+    let _ = StringBuilder.with_cap(-1);
+}
