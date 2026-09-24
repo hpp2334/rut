@@ -252,48 +252,53 @@ The run recipe:
   `let mut b = StringBuilder.with_cap(1024); b.append(f"..."); ...; let s = b.build();`
 - **The bench row**: `node benches/run.mjs --workload strbuild`.
 
-## The keyed collections — one family, the val type picks the storage
+## The keyed collections — one family, the sidecar for every val
 
 The std `nmapset` package (no deps of its own) is rut's keyed-collection
-surface, and it spells ONE way: `HashMap<K, V>` and `HashSet<T>`, with
-the **val type selecting the storage** — the key type parameter
-admits the closed set (`i8 | … | bytes`, compile-time at every
-instantiation) and the val decides the lane:
+surface, and it spells ONE way: `HashMap<K, V>` and `HashSet<T>` — one
+class per name (one name = one type). The key type parameter admits
+the closed set (`i8 | … | bytes`, compile-time at every
+instantiation), and every val rides the same storage:
 
-- **`HashMap<K, i64>` / `<K, u64>` / `<K, f64>`** — the native
-  64-bit val columns, via one row per val type that resolves to the
-  internal column class at compile time: same descriptor, same
-  crossings, same fuel as spelling the internals by hand — the alias
-  law (RFC 0043 §1, the row form) is NO-IR by construction. This is
-  the faster lane, and the only lane for those vals.
-- **Everything else** (`i32` vals? a record `Pt` val? bare `V` in a
-  generic body) rides the **generic row** — the `[?V]` sidecar with
-  the grow drain — through the same name.
+- **Every `V` rides the `[?V]` sidecar** — the generic class's
+  parallel value array, grow drain and all: `HashMap<K, i64>`,
+  `<K, u64>`, `<K, f64>`, an `i32` val, a record `Pt` val, a bare `V`
+  in a generic body — the same machinery at different `V`. (An
+  alias-row form that routed the 64-bit vals to internal
+  native-val-column classes was repealed the day it landed — one name
+  = one type. The columns stay nmapset-internal, unreached by any
+  public spelling; the honest future shape for them is
+  differently-named classes — `docs/type-name-law-report.md` §5, §8.)
 - **`HashSet<T>`** is the host table alone, no machinery about vals.
 - **May spell differently than you expect**: no float KEYS (the
   equality contract), no narrow-val columns, no bool val column (the
   `?bool` nil-law gap), and no iteration surface yet (json's map
   ENCODE waits on it).
 
-The internal class names behind the columns (`Prim`-prefixed, one
-per val kind) are **nmapset-internal implementation names** — spelled
+The internal column classes (`Prim`-prefixed, one per val kind) are
+**nmapset-internal implementation names** — private, spelled
 nowhere in a public surface: no std decl, no example, no bench, no
 demo, no doc names them (grep-pinned), and the LSP completes only the
-family. The set never had a prim-named twin; `HashSet` has always
-been the one spelling.
+family. Their native val columns are real and priced (fuel +15-18 %,
+324 B vs MiB — `docs/type-name-law-survey.md` §4) but no public
+spelling reaches them. The set never had a prim-named twin; `HashSet`
+has always been the one spelling.
 
 
 One compat note: json's decode-side diagnostics did NOT move — a map
 keyed by `bytes` diagnoses exactly as before ("this key type has no
-JSON spelling"), because the decode impls ride the same `key_spells`
-branch the general map spelled (the `dec_hm_bytes_key` pin holds
-verbatim).
+JSON spelling"), because decode rides the ONE generic map impl and
+its `key_spells` branch (json's three val impls folded into it when
+the rows left; the `dec_hm_bytes_key` pin holds verbatim).
 
-Consumer-visible behavior of a put/get/has on the rows is the exact
-class the spelling names — `HashMap<i32, i64>` IS the `i64` val
-column; the bench suite pins this (checksum + fuel + VM heap
-bit-identical through the unification,
-`docs/hashmap-surface-report.md` §4). Run recipe:
+Consumer-visible behavior of a put/get/has is the exact class the
+spelling names — `HashMap<i32, i64>` IS the generic class, sidecar
+and all. The repeal's movers, on record: checksums IMMOVABLE (the op
+stream does not move — `nmap-primmap`'s pin stayed `734932704`),
+fuel/heap re-seated to the sidecar's measured cost (17,950,301 →
+20,903,285 fuel; 324 B → 3,539,324 B heap —
+`docs/type-name-law-report.md` §6 and `benches/README.md`'s
+type-name-law section). Run recipe:
 
 - **A module dir**: `[deps]` nmapset by path — `rut run <dir>`.
 - **A loose file**: `rut run file.rut` with `use nmapset::` in the
