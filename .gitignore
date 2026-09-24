@@ -1,4 +1,5 @@
 /target
+/.wrangler/
 demo/node_modules
 integrations/vscode-extension/node_modules
 integrations/vscode-extension/out

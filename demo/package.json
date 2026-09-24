@@ -9,7 +9,8 @@
     "build:wasm": "cargo build -p rut-wasm --target wasm32-unknown-unknown --release && cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs",
     "build:lsp": "cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs --lsp",
     "build:smoke": "rspack build --config rspack.smoke.config.ts",
-    "smoke": "node scripts/preflight-wasm.mjs && npm run build:smoke && node scripts/smoke.mjs"
+    "smoke": "node scripts/preflight-wasm.mjs && npm run build:smoke && node scripts/smoke.mjs",
+    "deploy": "node ../scripts/deploy.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",
