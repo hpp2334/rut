@@ -129,3 +129,48 @@ keep-draining). Module VERSION rides 8 — a check relaxation, not a
 format change (no new op/encoding/surface; old artifacts are
 behaviorally bit-identical because the old checker rejected exactly
 the shapes the new arm admits).
+
+## Amendment (Sep 2026, nmapset-hostops): the stable-handle law — one crossing per op
+
+Landed (docs/nmapset-hostops-report.md; phases `2f5ea84`/`54fceca`).
+Records against the text above — the `nmap_host` surface (§2's
+`pub host fn` law) grows the FUSED FAMILY, and the wrapper's impl
+control flow moves host-side with it:
+
+**The handle column.** The native table carries, alongside keys and
+recorded hashes, one **stable birth handle per key** — assigned at
+first insert, **monotonic** (never recycled in v1; a removed key's
+handle dies with it), and **relocated with the keys inside the host's
+own grow** (the same re-slot walk). The handle is the key's IDENTITY,
+not its address: slots move on grow, handles never do.
+
+**The fused family (18 crossings).** `map_h{put,find,remove}_{
+i,u,b,s,y,sv}` — the typed lanes' exact key shapes, three answers:
+`hput` fuses entry + **internal grow** at the load-factor boundary
+and answers the packed **`(handle << 1) | newly`** in `i64` (bit 0 =
+the newly flag — `HashSet` shares the lane and reads exactly it; the
+handle space is bounded by BIRTHS, not cap, so the i64 carrier has
+headroom far past any real table); `hfind`/`hremove` answer the key's
+handle, or `-1`; `hremove` names the **dead key's own handle**, so a
+sidecar wrapper nils exactly that slot and releases the cell. The sv
+lane and the s lane of the same content are ONE key — same slot, same
+handle.
+
+**The wrapper law.** A rut-side `[?V]` sidecar indexed by the handle
+is append-only (doubling when births outgrow the pre-size): no
+sentinel loop, no relocation drain, no per-grow reallocation.
+`get -> ?V`'s one-cell aliasing law is untouched by construction —
+`sidecar[handle]` IS the cell.
+
+**The legacy list (kept, escape hatches).** The round-1 opaque lanes
+(`map_entry`/`map_find`/`map_remove`), `map_needs_grow`, the sentinel
+`map_{entry,find,remove}_*` typed lanes, `map_grow` /
+`map_take_reloc`, and the val-column pairs `map_val_{set,get}_{u,f}`
+stay DECLARED and bound — same table, same slots, same recorded
+hashes. The wrapper no longer imports them; `nmap_valcolumn`'s driver
+suite keeps them exercised.
+
+**Checksum law.** The handle column is additive state the legacy
+paths never read; slot assignment, probe order, and every per-key
+answer are untouched — every existing bench pin is immovable through
+the takeover (measured, all rows × {rut, node, qjs}).

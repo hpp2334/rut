@@ -261,28 +261,36 @@ the closed set (`i8 | … | bytes`, compile-time at every
 instantiation), and every val rides the same storage:
 
 - **Every `V` rides the `[?V]` sidecar** — the generic class's
-  parallel value array, grow drain and all: `HashMap<K, i64>`,
-  `<K, u64>`, `<K, f64>`, an `i32` val, a record `Pt` val, a bare `V`
-  in a generic body — the same machinery at different `V`. (An
-  alias-row form that routed the 64-bit vals to internal
-  native-val-column classes was repealed the day it landed — one name
-  = one type. The columns stay nmapset-internal, unreached by any
-  public spelling; the honest future shape for them is
-  differently-named classes — `docs/type-name-law-report.md` §5, §8.)
+  parallel value array: `HashMap<K, i64>`, `<K, u64>`, `<K, f64>`, an
+  `i32` val, a record `Pt` val, a bare `V` in a generic body — the
+  same machinery at different `V`. Since the nmapset-hostops takeover
+  the sidecar is HANDLE-INDEXED and append-only — the host table owns
+  a stable birth handle per key and grows internally, so the wrapper
+  has no grow loop and no relocation drain (the old drain's cost is
+  the takeover's headline: `refvals` exec −32%). (An alias-row form
+  that routed the 64-bit vals to native-val-column classes was
+  repealed the day it landed — one name = one type — and the
+  column classes themselves were REMOVED with the takeover,
+  unreached by any public spelling since the repeal; the columns'
+  host crossings remain as legacy escape hatches —
+  `docs/type-name-law-report.md` §5, §8, `docs/nmapset-hostops-report.md`.)
 - **`HashSet<T>`** is the host table alone, no machinery about vals.
 - **May spell differently than you expect**: no float KEYS (the
   equality contract), no narrow-val columns, no bool val column (the
   `?bool` nil-law gap), and no iteration surface yet (json's map
   ENCODE waits on it).
 
-The internal column classes (`Prim`-prefixed, one per val kind) are
-**nmapset-internal implementation names** — private, spelled
-nowhere in a public surface: no std decl, no example, no bench, no
-demo, no doc names them (grep-pinned), and the LSP completes only the
-family. Their native val columns are real and priced (fuel +15-18 %,
-324 B vs MiB — `docs/type-name-law-survey.md` §4) but no public
-spelling reaches them. The set never had a prim-named twin; `HashSet`
-has always been the one spelling.
+The internal column classes (`Prim`-prefixed, one per val kind) were
+REMOVED in the nmapset-hostops batch — they had been nmapset-private
+implementation names, spelled nowhere in a public surface (grep-pinned,
+LSP completing only the family), and went UNREACHED the day the alias
+rows were repealed: every spelling resolved to the family class and its
+sidecar, so the classes carried dead weight. Their native val columns
+were real and priced (fuel +15-18 %, 324 B vs MiB —
+`docs/type-name-law-survey.md` §4); the columns' host CROSSINGS stay
+bound as legacy escape hatches, and a differently-named public column
+class remains the recorded future shape. The set never had a prim-named
+twin; `HashSet` has always been the one spelling.
 
 
 One compat note: json's decode-side diagnostics did NOT move — a map
