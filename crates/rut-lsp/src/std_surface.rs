@@ -11,8 +11,10 @@
 //! `strbuild`) — the latter indexed in impl mode like the open
 //! document, so their class methods complete. Before the `rut-lsp-align`
 //! batch only core/calc/pouch were
-//! here and a bare user project got no `HashMap`/`HashSet`/`PrimMapI64`
-//! completion at all.
+//! here and a bare user project got no `HashMap`/`HashSet` completion
+//! at all. (The hashmap-surface batch: the family rows resolve to the
+//! val-column classes, so what a bare project needs is exactly the two
+//! family names — the prim lane names left the public surface.)
 
 use crate::hover::{self, DefIndex};
 
@@ -53,6 +55,15 @@ pub fn indexes() -> Vec<DefIndex> {
         let (toks, _) = rut_lexer::lexer::lex(&src);
         let (ast, _) = rut_parser::parse(&src, mode);
         let mut idx = hover::index(&src, &ast, &toks);
+        // the std surface is the PUBLIC face (the hashmap-surface
+        // batch): nmapset's rows re-scope to the family — its internal
+        // lane classes are `pub`-less in the source now, and a
+        // pub-less type never rides the surface (completions, the
+        // bare-project index, hovers from it). Other pkgs keep their
+        // full index rows (their types are pub anyway).
+        if origin == "nmapset" {
+            idx.types.retain(|t| t.is_pub);
+        }
         idx.origin = origin.to_string();
         idx.src_path = Some(src_path.to_string());
         idx
@@ -102,14 +113,23 @@ mod tests {
     fn nmapset_lane_classes_reachable_bare() {
         // M3 (lsp-align survey): what a bare user project (no workspace
         // index) gets from the std surface alone — `use nmapset::{{ HashMap }};`
-        // must find the wrapper classes and the PrimMap lanes
+        // must find the family classes; the val-column rows resolve
+        // through `HashMap` (the hashmap-surface batch: the prim lane
+        // names are nmapset-internal now, and the surface offers the
+        // family pair only)
         let idxs = indexes();
         let has = |name: &str| {
             idxs.iter()
                 .any(|i| i.types.iter().any(|t| t.name == name))
         };
-        for want in ["HashMap", "HashSet", "PrimMapI64", "PrimMapU64", "PrimMapF64"] {
+        for want in ["HashMap", "HashSet"] {
             assert!(has(want), "std surface lacks `{want}`");
+        }
+        for absent in ["PrimMapI64", "PrimMapU64", "PrimMapF64"] {
+            assert!(
+                !idxs.iter().any(|i| i.types.iter().any(|t| t.name == absent)),
+                "std surface still offers `{absent}` — the prim lane names left the public surface"
+            );
         }
         // the host surface's opaque-crossing decl too (nmap.d.rut)
         assert!(

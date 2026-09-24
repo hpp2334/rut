@@ -387,7 +387,7 @@ pub class HashSet<T requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool 
 // neither this class nor `HashMap` ships an iteration surface, so the
 // parity law holds where order is observable: identical slots, identical
 // per-key answers, identical checksums.
-pub class PrimMapI64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
+class PrimMapI64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
     t: opaque;    // HostBoxed<NativeTable> — keys, recorded hashes, states, vals
 }
 
@@ -444,7 +444,7 @@ impl PrimMapI64<K> {
     }
 }
 
-pub class PrimMapU64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
+class PrimMapU64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
     t: opaque;
 }
 
@@ -493,7 +493,7 @@ impl PrimMapU64<K> {
     }
 }
 
-pub class PrimMapF64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
+class PrimMapF64<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
     t: opaque;
 }
 
@@ -540,6 +540,36 @@ impl PrimMapF64<K> {
         return map_len(self.t);
     }
 }
+
+// ---- the PUBLIC face (the hashmap-surface batch): the family rows ----
+//
+// The keyed-collection family spells ONE way — `HashMap<K, V>` /
+// `HashSet<T>` — and the VAL TYPE picks the storage: a row whose second
+// member is `i64`/`u64`/`f64` resolves to the prim-val class above
+// (the host table's native val column), and any other `V` instantiates
+// the generic class (the `[?V]` sidecar). Concrete rows match EXACTLY
+// first, at the substitution-completing site, and expand to the
+// target's TypeId BEFORE any table work — no IR, no layout change, no
+// encoded vocabulary (RFC 0043 §4): `HashMap<i32, i64>` IS
+// `PrimMapI64<i32>`, the same descriptor, the same fuel, the same
+// checksums, by construction. The three prim classes are
+// nmapset-INTERNAL now (their `pub` is gone): consumers spell the
+// family; only this source names the lanes.
+//
+//   `HashMap<K, i64>` ≡ PrimMapI64<K>  — i64 vals in the column
+//   (`put` stores `v as u64`, `get` re-reads `as i64`)
+//   `HashMap<K, u64>` ≡ PrimMapU64<K>  — raw bits both directions
+//   `HashMap<K, f64>` ≡ PrimMapF64<K>  — through `map_val_set_f` /
+//   `map_val_get_f` (`to_bits`/`from_bits` at the boundary)
+//
+// No row for narrow vals (the column is 64-bit — never existed), none
+// for `bool` (the `?bool` nil-law gap — the class header records the
+// repro; a bool val rides the sidecar or the u64 row explicitly), no
+// float KEYS (no stable equality contract). `HashSet` takes no rows:
+// one spelling, one storage.
+pub type HashMap<K, i64> = PrimMapI64<K>;
+pub type HashMap<K, u64> = PrimMapU64<K>;
+pub type HashMap<K, f64> = PrimMapF64<K>;
 
 impl HashSet<T> {
     pub fn new() -> Self {

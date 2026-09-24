@@ -150,8 +150,9 @@ touch to any surviving row.
   op streams are identical).
 - Migration for user-defined-key maps (the one thing only `mapset`
   admitted): encode the key canonically to `bytes` and key the
-  union-bounded `nmapset` classes (`HashMap`/`HashSet`/`PrimMap*`),
-  or vendor the old `mapset` source from git history. The nmap
+  union-bounded `nmapset` classes (`HashMap`/`HashSet` — the
+  val-column rows ride the family spelling), or vendor the old
+  `mapset` source from git history. The nmap
   runtime trap and the union-bound diagnostic now say the same.
 - The `nmapset` rows keep the deleted twins' exact checksums
   (`734932704` / `1264308351` / `21500055` / `2198604`) — they were
@@ -4111,3 +4112,46 @@ ensemble (N independent builds per side, med-of-builds) or a
 same-binary host-side toggle. Candidates 1 and 2 are the standing
 test cases: both are mechanically real, both priced below the floor
 with the current method.
+
+## Performance log — hashmap-surface: the surface flip (Sep 2026)
+
+The public keyed-collection surface became ONE family — `HashMap<K, V>`
+/ `HashSet<T>` — with the VAL TYPE selecting the storage: rows
+`HashMap<K, i64>` / `HashMap<K, u64>` / `HashMap<K, f64>` resolve
+concrete-first to the prim-val classes (the val column), and any other
+`V` instantiates the generic class (the `[?V]` sidecar). The prim lane
+names are nmapset-internal now. This section appends; the perf-log
+records above are their batches' history and keep their spellings (the
+strbuild precedent).
+
+**THE THEOREM, MEASURED** (the survey's pick — RFC 0043 alias rows,
+generalized to the per-instantiation row form): the alias resolves to
+the TARGET's TypeId BEFORE any table work (RFC 0043 §4's no-IR law) —
+`HashMap<i32, i64>` IS the val-column class the primmap row always ran,
+the same descriptor, the same IR, the same crossings. The
+`nmap-primmap` source re-spelled the val column's direct class name →
+`HashMap<i32, i64>` (constructor mint included) and every pin held
+BIT-IDENTICALLY on
+the rebuilt release binaries:
+
+| pin | value | status |
+|---|---|---|
+| `nmap-primmap` checksum | `734932704` | bit-identical (= `nmapset-int`, the design law) |
+| fuel | `17,950,301` | bit-identical |
+| VM-heap peak | `324 B` | bit-identical |
+
+The sibling nmapset pins never moved (their sources unchanged):
+`nmapset-int` 734932704 (fuel 20,703,284, heap 1,966,551), `nmapset-str`
+1264308351 (9,551,761 / 983,620), `nmap-knucleotide` 2198604, 
+`nmap-hashset` 21500055. `expected.json` was NOT touched by this batch
+— the pin is the gate.
+
+**The disclosed re-seat:** four live sites spelled the sidecar-i64
+shape `HashMap<str, i64>` (todolist-web's t1 lids, derived's dep-gens,
+atom's rail gens, and `nmap_valcolumn.rs`'s wrapper leg); under the
+rows they ride the val column — same prim-val semantics (fresh opt per
+hit), the faster lane, no bench row pinned the sidecar-i64 shape. The
+parity tests' cross-storage control legs went vacuous (both sides now
+spell the column) and were retuned, disclosed in the test headers;
+`nmap_valcolumn.rs`'s law now pins the row spelling against the raw
+crossings — the re-seat's own proof.

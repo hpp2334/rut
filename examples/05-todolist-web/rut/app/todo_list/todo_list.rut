@@ -17,17 +17,19 @@
 
 use todos::{ TodoStore };
 use widget::{ Widget };
-use nmapset::{ PrimMapI64 };
+use nmapset::{ HashMap };
 use card::{ card };
 use text::{ pending };
 use todo_row::{ todo_row };
 
 /// The list tree plus this render's two subject tables (toggle, then
-/// remove) — the caller drops them onto the container.
-pub fn todo_list(store: ?TodoStore) -> (Widget, PrimMapI64<str>, PrimMapI64<str>) {
+/// remove) — the caller drops them onto the container. The tables are
+/// the val-column row (`HashMap<str, i64>` — the hashmap-surface
+/// batch's family spelling; the row resolves to the prim-val class).
+pub fn todo_list(store: ?TodoStore) -> (Widget, HashMap<str, i64>, HashMap<str, i64>) {
     let mut st: ?TodoStore = store;
-    let mut tg: PrimMapI64<str> = PrimMapI64.new();
-    let mut rm: PrimMapI64<str> = PrimMapI64.new();
+    let mut tg: HashMap<str, i64> = HashMap.new();
+    let mut rm: HashMap<str, i64> = HashMap.new();
 
     let mut list = card().pad(12).gap(8).hook("list");
     for (let t of st.todos()) {

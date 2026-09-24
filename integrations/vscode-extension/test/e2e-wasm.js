@@ -200,8 +200,13 @@ async function main() {
       bad.push(`std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
     }
     const labels = rut.complete(uri, 0, 0).map((i) => i.label);
-    for (const want of ['HashMap', 'HashSet', 'PrimMapI64']) {
+    // the hashmap-surface batch: the completion pin offers the family
+    // pair — the val-column rows resolve through `HashMap`
+    for (const want of ['HashMap', 'HashSet']) {
       if (!labels.includes(want)) bad.push(`bare completion lacks nmapset's '${want}' (${labels.length} items)`);
+    }
+    for (const absent of ['PrimMapI64', 'PrimMapU64', 'PrimMapF64']) {
+      if (labels.includes(absent)) bad.push(`bare completion still offers the internal '${absent}'`);
     }
     if (!labels.includes('map_entry')) bad.push(`bare completion lacks nmap_host's 'map_entry' (${labels.length} items)`);
     // the 9th std pkg (the rut-json batch phase 1): json's base surface —

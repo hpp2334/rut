@@ -1,20 +1,24 @@
 use ink::{ Logger };
 
-use nmapset::{ PrimMapI64 };
+use nmapset::{ HashMap };
 
 // nmap-primmap — the nmapset-round3 phase-2 row: nmapset-int's churn
-// over `PrimMapI64<i32>` (the prim-val map class — keys AND values in
-// the native table's val column) instead of `HashMap<i32, i32>` (keys
-// native, values in a rut-side `[?V]` sidecar). The op sequence is
+// over `HashMap<i32, i64>` (the val-column row — keys AND values in
+// the native table's val column) instead of the `[?V]` sidecar (keys
+// native, values in a rut-side `[?V]` sidecar — the `HashMap<i32, i32>`
+// shape nmapset-int runs). The op sequence is
 // IDENTICAL — same keys, same values, same counters — so the checksum
 // must EQUAL `hashmap-int`'s / `nmapset-int`'s pinned 734932704: the
 // churn accumulates in i64 (the val lane is i64) and narrows once at
 // the return, which is bit-identical to the i32 wrapping arithmetic
-// (two's-complement addition is the same mod 2^32).
+// (two's-complement addition is the same mod 2^32). Until the
+// hashmap-surface batch renamed the surface this row spelled the val
+// column's direct class name; the family rows resolve to the very same
+// class — checksum, fuel and heap pins bit-identical by construction.
 // Scale: n = 100000 entries.
 
 fn churn(n: i32) -> i32 {
-    let mut m: PrimMapI64<i32> = PrimMapI64.new();
+    let mut m: HashMap<i32, i64> = HashMap.new();
     // build — every key is new
     let mut added: i64 = 0;
     for (let i = 0; i < n; i += 1) {

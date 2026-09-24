@@ -14,8 +14,9 @@ rut-core = { path = "../../crates/rut-core" }
 rut-parser = { path = "../../crates/rut-parser" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-vm = { path = "../../crates/rut-vm" }
-# nmap_host's bodies — the app's listener table is a PrimMapI64 (nmapset),
-# so the page boot binds the native key table next to the web crossings
+# nmap_host's bodies — the app's listener table rides the val-column
+# row `HashMap<str, i64>` (nmapset), so the page boot binds the native
+# key table next to the web crossings
 rut-std = { path = "../../crates/rut-std" }
 
 # The workspace's FIRST wasm-bindgen-family dependency — example-local

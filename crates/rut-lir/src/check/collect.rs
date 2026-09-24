@@ -237,22 +237,34 @@ impl<'a> Ctx<'a> {
     }
 
     /// Pass 1a — register a `type X = A;` / `type X = A | B;` alias
-    /// (RFC 0043). The target validates in pass 1b (`validate_alias`), so
-    /// forward references are legal; the name shares the duplicate-type-
-    /// name check with enums/records/traits.
+    /// (RFC 0043), or the ROW form `type X<K, i64> = A;` (the
+    /// hashmap-surface batch). The target validates in pass 1b
+    /// (`validate_alias`), so forward references are legal. The
+    /// duplicate-type-name check lifts EXACTLY for the
+    /// concrete-shadows-generic shape: several rows may share one
+    /// family name, and the rows may share the generic class's name —
+    /// the class is the fallback, the rows are strictly more specific.
+    /// Any other collision (a second plain alias, a plain alias over a
+    /// class, an enum/trait) still errors.
     pub(crate) fn declare_alias(&mut self, node: NodeId, d: &AliasData) {
         let sp = self.ast.span(node);
-        if self.find_alias(d.name).is_some()
-            || self.find_data(d.name).is_some()
+        let is_row = !d.params.is_empty();
+        let clash = self
+            .find_alias(d.name)
+            .map_or(false, |a| !(is_row && !a.params.is_empty()))
             || self.find_enum(d.name).is_some()
             || self.find_trait(d.name).is_some()
-        {
+            || self
+                .find_data(d.name)
+                .map_or(false, |dd| !(is_row && !dd.generics.is_empty()));
+        if clash {
             self.err(sp, format!("duplicate type name `{}`", self.name(d.name)));
             return;
         }
         self.aliases.push(AliasDecl {
             name: d.name,
             node,
+            params: d.params.clone(),
             target: d.target,
             resolved: None,
         });
@@ -427,71 +439,13 @@ impl<'a> Ctx<'a> {
         // A bare primitive name (`impl T for i32`) is a trait-impl
         // target too — trait impls only: a primitive's inherent surface
         // stays core's `builtin impl` (RFC 0012 §2 / RFC 0032 §1.1).
-        let (target_ty, target_data, is_local, is_used, is_prim) = match self.ast.ty(target) {
+        let (target_ty, target_data, is_local, is_used, is_prim, spell) = match self.ast.ty(target) {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let name = segs[0].name;
                 let generics = segs[0].generics.clone();
-                if let Some(d) = self.find_data(name).cloned() {
-                    if d.generics.is_empty() {
-                        (d.ty, None, true, false, false)
-                    } else {
-                        let Some(params) = self.ty_generic_idents(&generics) else {
-                            self.err(sp, "a generic impl target must name its type parameters (e.g. `Vec<T>`)");
-                            return;
-                        };
-                        if params.len() != d.generics.len() {
-                            self.err(sp, format!(
-                                "`{}<..>` takes {} type parameter(s), {} given",
-                                self.name(name), d.generics.len(), params.len()
-                            ));
-                            return;
-                        }
-                        (d.ty, Some((name, params)), true, false, false)
-                    }
-                } else if let Some(kind) = self.extern_native_types.get(&name).copied() {
-                    match (kind, generics.as_slice()) {
-                        (rut_core::binary::NativeTy::Opaque, []) => (TY_OPAQUE, None, false, false, false),
-                        (rut_core::binary::NativeTy::Opaque, _) => {
-                            self.err(sp, "`opaque` takes no type parameters");
-                            return;
-                        }
-                        // the trace snapshot takes no user impls: its
-                        // members are engine-builtins, the contract is
-                        // closed (RFC 0025's `builtin class` row)
-                        (rut_core::binary::NativeTy::StackTrace, _) => {
-                            self.err(sp, "`StackTrace` takes no impl blocks — its members are engine builtins (`len`/`name(i)`/`line(i)`/`col(i)`/`render`)");
-                            return;
-                        }
-                        // the builder likewise: closed engine contract
-                        // (json-perf phase 2)
-                        (rut_core::binary::NativeTy::StrBuf, _) => {
-                            self.err(sp, "`StrBuf` takes no impl blocks — its members are engine builtins (`push(s)`/`push_code(c)`/`len()`/`finish()`)");
-                            return;
-                        }
-                    }
-                } else if segs[0].generics.is_empty() && self.extern_types.contains_key(&name) {
-                    // a USED type (RFC 0035 §1): legal as a TRAIT-impl
-                    // target only — inherent impls stay in the type's
-                    // module (RFC 0012 §2). The id is the exporter's
-                    // scope-qualified one; link rebases it.
-                    (self.extern_types[&name], None, false, true, false)
-                } else if let Some(prim) = sym::primitive_ty(name) {
-                    // a primitive (integers, bool, str, bytes, …): trait
-                    // impls only, any module (RFC 0012 §2's
-                    // `impl ForeignTrait for ForeignType` pattern) — the
-                    // pair's uniqueness is a link check. Boot ids are
-                    // global, no rebase needed.
-                    if !generics.is_empty() {
-                        self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
-                        return;
-                    }
-                    (prim, None, false, false, true)
-                } else {
-                    self.err(
-                        sp,
-                        "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module (RFC 0012 §2)",
-                    );
-                    return;
+                match self.ty_path_impl_target(sp, name, generics) {
+                    Some(arm) => arm,
+                    None => return,
                 }
             }
             TypeKind::TyArray { elem } => {
@@ -511,7 +465,7 @@ impl<'a> Ctx<'a> {
                     name: sym::ARRAY,
                     kind: TyKind::Data { fields: vec![] },
                 });
-                (ph, Some((sym::ARRAY, params)), false, false, false)
+                (ph, Some((sym::ARRAY, params)), false, false, false, sym::ARRAY)
             }
             TypeKind::TyOpt { inner } => {
                 // `impl I for ?T` — the nullable impl target (the rut-json
@@ -531,7 +485,7 @@ impl<'a> Ctx<'a> {
                     name: sym::OPT,
                     kind: TyKind::Data { fields: vec![] },
                 });
-                (ph, Some((sym::OPT, params)), false, false, false)
+                (ph, Some((sym::OPT, params)), false, false, false, sym::OPT)
             }
             _ => {
                 self.err(
@@ -567,10 +521,258 @@ impl<'a> Ctx<'a> {
                     );
                     return;
                 }
-                self.collect_impl_inherent(target, target_ty, target_data, is_local, mths)
+                self.collect_impl_inherent(target, spell, target_ty, target_data, is_local, mths)
             }
             Some(tr) => self.collect_impl_trait(sp, tr, target_ty, target_data, ty_display, ty_origin, mths),
         }
+    }
+
+    /// The TyPath impl target, resolved (RFC 0012 §2 plus the
+    /// hashmap-surface batch's seam (c)): the ROW form re-targets
+    /// through the family's row first — `impl I for HashMap<K, i64>`
+    /// registers on the row TARGET's class template, the same
+    /// (trait, type) pair and substitution the direct spelling
+    /// produces; a PLAIN alias expands in impl-target position
+    /// (probe D1's lift — the alias spells the target's type); then
+    /// the ordinary chain: a local struct/class, a module-owned
+    /// `builtin class`, a used type (trait impls only), a primitive
+    /// (trait impls only). Returns the target's type id, its generic
+    /// template when generic, locality/used/prim flags, and the decl
+    /// name the inherent path attaches under (`spell` — the expansion's
+    /// decl, not the alias spelling). `None` = diagnosed, abort.
+    #[allow(clippy::type_complexity)]
+    fn ty_path_impl_target(
+        &mut self,
+        sp: rut_lexer::span::Span,
+        name: IdentId,
+        generics: Vec<NodeHandle<AnyTy>>,
+    ) -> Option<(TypeId, Option<(IdentId, Vec<IdentId>)>, bool, bool, bool, IdentId)> {
+        // (seam c) the row form: a family name with head members and
+        // generic arguments matches a row at the NODE level — the impl's
+        // own generic idents bind the head's parameter members, the
+        // concrete members must spell their types exactly.
+        if !generics.is_empty() {
+            if let Some((dname, rparams)) = self.impl_row_target(name, &generics) {
+                let Some(d) = self.find_data(dname).cloned() else {
+                    self.err(sp, format!("impl row target `{}` did not resolve", self.name(dname)));
+                    return None;
+                };
+                if rparams.len() != d.generics.len() {
+                    self.err(sp, format!(
+                        "`{}<..>` takes {} type parameter(s), {} given",
+                        self.name(dname), d.generics.len(), rparams.len()
+                    ));
+                    return None;
+                }
+                return Some((d.ty, Some((dname, rparams)), true, false, false, dname));
+            }
+        }
+        // (seam c, D1's lift) a PLAIN alias expands in impl-target
+        // position: `impl Paint for B2` where `type B2 = Box2;` compiles
+        // exactly as if `Box2` were spelled.
+        if generics.is_empty() {
+            if let Some(t) = self.plain_alias_target(name) {
+                if let Some((dname, d)) = self.datas.iter().find(|(_, d)| d.ty == t).cloned().map(|(n, d)| (n, d)) {
+                    return Some((d.ty, None, true, false, false, dname));
+                }
+            }
+        }
+        if let Some(d) = self.find_data(name).cloned() {
+            if d.generics.is_empty() {
+                Some((d.ty, None, true, false, false, name))
+            } else {
+                let Some(params) = self.ty_generic_idents(&generics) else {
+                    self.err(sp, "a generic impl target must name its type parameters (e.g. `Vec<T>`)");
+                    return None;
+                };
+                if params.len() != d.generics.len() {
+                    self.err(sp, format!(
+                        "`{}<..>` takes {} type parameter(s), {} given",
+                        self.name(name), d.generics.len(), params.len()
+                    ));
+                    return None;
+                }
+                Some((d.ty, Some((name, params)), true, false, false, name))
+            }
+        } else if let Some(kind) = self.extern_native_types.get(&name).copied() {
+            match (kind, generics.as_slice()) {
+                (rut_core::binary::NativeTy::Opaque, []) => Some((TY_OPAQUE, None, false, false, false, name)),
+                (rut_core::binary::NativeTy::Opaque, _) => {
+                    self.err(sp, "`opaque` takes no type parameters");
+                    None
+                }
+                // the trace snapshot takes no user impls: its
+                // members are engine-builtins, the contract is
+                // closed (RFC 0025's `builtin class` row)
+                (rut_core::binary::NativeTy::StackTrace, _) => {
+                    self.err(sp, "`StackTrace` takes no impl blocks — its members are engine builtins (`len`/`name(i)`/`line(i)`/`col(i)`/`render`)");
+                    None
+                }
+                // the builder likewise: closed engine contract
+                // (json-perf phase 2)
+                (rut_core::binary::NativeTy::StrBuf, _) => {
+                    self.err(sp, "`StrBuf` takes no impl blocks — its members are engine builtins (`push(s)`/`push_code(c)`/`len()`/`finish()`)");
+                    None
+                }
+            }
+        } else if generics.is_empty() && self.extern_types.contains_key(&name) {
+            // a USED type (RFC 0035 §1): legal as a TRAIT-impl
+            // target only — inherent impls stay in the type's
+            // module (RFC 0012 §2). The id is the exporter's
+            // scope-qualified one; link rebases it.
+            Some((self.extern_types[&name], None, false, true, false, name))
+        } else if let Some(prim) = sym::primitive_ty(name) {
+            // a primitive (integers, bool, str, bytes, …): trait
+            // impls only, any module (RFC 0012 §2's
+            // `impl ForeignTrait for ForeignType` pattern) — the
+            // pair's uniqueness is a link check. Boot ids are
+            // global, no rebase needed.
+            if !generics.is_empty() {
+                self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
+                return None;
+            }
+            Some((prim, None, false, false, true, name))
+        } else {
+            self.err(
+                sp,
+                "impl target must be a struct or class of this module — a `builtin class` takes impls only in its own module (RFC 0012 §2)",
+            );
+            None
+        }
+    }
+
+    /// The plain-alias expansion of an impl-target name (seam c):
+    /// `Some(target TypeId)` when `name` is a declared alias with NO
+    /// head members whose single target resolved to a type.
+    fn plain_alias_target(&mut self, name: IdentId) -> Option<TypeId> {
+        let a = self.find_alias(name)?;
+        if !a.params.is_empty() {
+            return None;
+        }
+        self.validate_alias(name);
+        let resolved = self.find_alias(name).and_then(|a| a.resolved);
+        match resolved {
+            Some(AliasTarget::Ty(t)) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// The row form in impl-target position (seam c, the
+    /// hashmap-surface batch): match `name`'s rows against the impl
+    /// head's generic nodes — the head's parameter members bind the
+    /// impl's own generic idents, the concrete members must resolve to
+    /// the very type spelled — and return the row TARGET's (decl name,
+    /// parameter idents) for the registration. `None` when the name
+    /// declares no rows or none match: the ordinary chain decides.
+    fn impl_row_target(
+        &mut self,
+        name: IdentId,
+        generics: &[NodeHandle<AnyTy>],
+    ) -> Option<(IdentId, Vec<IdentId>)> {
+        let rows = self.alias_rows(name);
+        if rows.is_empty() {
+            return None;
+        }
+        for (_, members, target) in rows {
+            if members.len() != generics.len() {
+                continue;
+            }
+            // match at the node level: a parameter member must spell a
+            // bare non-type name (the impl's generic); a concrete member
+            // must resolve to exactly its type
+            let mut binding: Vec<(IdentId, IdentId)> = Vec::new();
+            let mut matched = true;
+            for (mnode, gnode) in members.iter().copied().zip(generics.iter().copied()) {
+                match self.node_head_ident(gnode) {
+                    Some(gi) if !self.node_is_known_type(gnode) => match self.row_member_of(mnode) {
+                        RowMember::Param(p) => binding.push((p, gi)),
+                        RowMember::Concrete(_) => {
+                            matched = false;
+                            break;
+                        }
+                    },
+                    _ => match self.row_member_of(mnode) {
+                        RowMember::Param(_) => {
+                            matched = false;
+                            break;
+                        }
+                        RowMember::Concrete(t) => {
+                            let g = self.resolve_type(gnode, &[]);
+                            if g != t {
+                                matched = false;
+                                break;
+                            }
+                        }
+                    },
+                }
+            }
+            if !matched {
+                continue;
+            }
+            // the row target's head + args (owned first — the err calls
+            // below need &mut self)
+            let shape: Option<(IdentId, Vec<NodeHandle<AnyTy>>)> = match self.ast.ty(target) {
+                TypeKind::TyPath { segs, .. } => Some((
+                    segs[0].name,
+                    segs.last().expect("path has a segment").generics.clone(),
+                )),
+                _ => None,
+            };
+            let Some((thead, targs)) = shape else {
+                self.err(
+                    self.ast.span(target.id()),
+                    "a type-alias row's target must be a class (RFC 0043)",
+                );
+                return None;
+            };
+            // the row target's generic args must spell the head's
+            // bound parameters — the admitted form
+            // (`type HashMap<K, i64> = <the row's target class><K>;`)
+            let mut params: Vec<IdentId> = Vec::with_capacity(binding.len());
+            for ta in targs {
+                let Some(ai) = self.node_head_ident(ta) else {
+                    self.err(
+                        self.ast.span(ta.id()),
+                        "a row impl target must spell the head's parameters — a concrete target argument has no generic registration (RFC 0043)",
+                    );
+                    return None;
+                };
+                let Some(&(_, gi)) = binding.iter().find(|(p, _)| *p == ai) else {
+                    self.err(
+                        self.ast.span(ta.id()),
+                        "a row impl target must spell one of the head's parameters (RFC 0043)",
+                    );
+                    return None;
+                };
+                params.push(gi);
+            }
+            return Some((thead, params));
+        }
+        None
+    }
+
+    /// The bare single-segment ident a type node spells, when it does.
+    fn node_head_ident(&self, node: NodeHandle<AnyTy>) -> Option<IdentId> {
+        match self.ast.ty(node) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
+                Some(segs[0].name)
+            }
+            _ => None,
+        }
+    }
+
+    /// Is the node's head name a KNOWN type (primitive, declared,
+    /// used)? The impl-row matcher's parameter test — an unknown bare
+    /// name is the impl's own generic.
+    fn node_is_known_type(&self, node: NodeHandle<AnyTy>) -> bool {
+        let Some(n) = self.node_head_ident(node) else { return true };
+        sym::primitive_ty(n).is_some()
+            || self.find_enum(n).is_some()
+            || self.find_data(n).is_some()
+            || self.find_trait(n).is_some()
+            || self.find_alias(n).is_some()
+            || self.extern_native_types.contains_key(&n)
+            || self.extern_types.contains_key(&n)
     }
 
     /// The orphan classification of the impl TARGET as written (RFC 0012
@@ -590,6 +792,21 @@ impl<'a> Ctx<'a> {
                     // the origin map tells the two apart
                     let lo = self.ast.span(d.node.id()).lo;
                     (display, Some(self.origin_of(lo).to_string()))
+                } else if let Some(AliasTarget::Ty(t)) = self
+                    .find_alias(name)
+                    .filter(|a| a.params.is_empty())
+                    .and_then(|a| a.resolved)
+                {
+                    // (seam c) a plain alias expands: the origin is the
+                    // TARGET's decl (already validated — collect_impl's
+                    // target resolution ran first)
+                    match self.datas.iter().find(|(_, d)| d.ty == t) {
+                        Some((_, d)) => {
+                            let lo = self.ast.span(d.node.id()).lo;
+                            (display, Some(self.origin_of(lo).to_string()))
+                        }
+                        None => (display, None),
+                    }
                 } else if self.extern_native_types.contains_key(&name) {
                     // `opaque` (the closed `StackTrace` shape never gets
                     // here) — a builtin, in no pkg
@@ -640,16 +857,16 @@ impl<'a> Ctx<'a> {
     fn collect_impl_inherent(
         &mut self,
         target: NodeHandle<AnyTy>,
+        spell: IdentId,
         target_ty: TypeId,
         target_data: Option<(IdentId, Vec<IdentId>)>,
         is_local: bool,
         mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     ) {
-        let tname = match self.ast.ty(target) {
-            TypeKind::TyPath { segs, .. } if !segs.is_empty() => segs[0].name,
-            TypeKind::TyArray { .. } => sym::ARRAY,
-            _ => return,
-        };
+        // `spell` is the target's DECL name (the expansion's decl when
+        // the impl was spelled through an alias or a row — seam (c)),
+        // resolved by `ty_path_impl_target`
+        let tname = spell;
         if !is_local {
             // a `builtin class` inherent impl — registered for static
             // dispatch through the native shape

@@ -103,11 +103,12 @@
 // The app's imports — the EXACT set the law gate pins (survey §5.1):
 // the widget type, the store's domain types, the framework's four
 // names, the two view builders, the component vocabulary, and the one
-// crossing name. PrimMapI64 needs NO import: the t1 core mounts
-// `inline`, its transitive nmapset splices into this unit, and the
-// name is unit-local — the same composition the tables have always
-// ridden (the gate's set equality is what keeps any OTHER package
-// from riding in).
+// crossing name. The keyed-collection family needs NO import: the t1
+// core mounts `inline`, its transitive nmapset splices into this unit,
+// and the names are unit-local — the same composition the tables have
+// always ridden (the gate's set equality is what keeps any OTHER
+// package from riding in). The tables spell the val-column row
+// `HashMap<str, i64>` (the hashmap-surface batch's family spelling).
 use web::{ tim_after };
 use todos::{ TodoStore, Todo };
 use t1::{ T1Root, t1_mount, t1_render, t1_subject };
@@ -131,8 +132,8 @@ use card::{ card };
 struct AppRoot {
     store: ?TodoStore = nil; // THE ATOM STORE (was the plain ?Store)
     t1: ?T1Root = nil; // the framework's diff/registry state
-    toggles: ?PrimMapI64<str> = nil; // subject -> todo id (§7.3)
-    removes: ?PrimMapI64<str> = nil; // subject -> todo id (§7.3)
+    toggles: ?HashMap<str, i64> = nil; // subject -> todo id (§7.3)
+    removes: ?HashMap<str, i64> = nil; // subject -> todo id (§7.3)
 }
 
 // The boot turn: mount the framework on the seeded root (index.html's
@@ -144,8 +145,8 @@ struct AppRoot {
 // boot line BEFORE the first paint, so the status line is
 // pixel-identical from turn one (survey §4.5).
 entry fn main() -> opaque {
-    let toggles: PrimMapI64<str> = PrimMapI64.new();
-    let removes: PrimMapI64<str> = PrimMapI64.new();
+    let toggles: HashMap<str, i64> = HashMap.new();
+    let removes: HashMap<str, i64> = HashMap.new();
     let mut store: ?TodoStore = TodoStore.new();
     store.note$.set("booted — type a title, press Add");
     let root: ?AppRoot = AppRoot {
@@ -242,7 +243,7 @@ fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
         return;
     }
 
-    let mut toggles: ?PrimMapI64<str> = r.toggles;
+    let mut toggles: ?HashMap<str, i64> = r.toggles;
     let thit = toggles.get(subject);
     if (thit != nil) {
         let todo: i64 = thit;
@@ -255,7 +256,7 @@ fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
         paint(r);
         return;
     }
-    let mut removes: ?PrimMapI64<str> = r.removes;
+    let mut removes: ?HashMap<str, i64> = r.removes;
     let rhit = removes.get(subject);
     if (rhit != nil) {
         let todo: i64 = rhit;

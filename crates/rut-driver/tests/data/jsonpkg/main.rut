@@ -14,7 +14,7 @@ use json::{DecodeErrorKind, DecodeJsonError};
 use json::{EncodeErrorKind, EncodeJsonError};
 use json::{JsonReader, JsonWriter};
 use pouch::{Vec};
-use nmapset::{HashMap, HashSet, PrimMapI64, PrimMapU64, PrimMapF64};
+use nmapset::{HashMap, HashSet};
 
 // equality chains — the enum name spells the member; a `when` select
 // over a used module's enum trips the completeness check's member probe
@@ -324,12 +324,13 @@ entry fn dec_hs(s: str) -> str {
     return f"OK:len={n}:has7={hs}";
 }
 
-// ---- PrimMap rows ----
+// ---- the val-column rows (`HashMap<K, i64/u64/f64>` — the family
+// rows resolve to the prim-val classes) ----
 
 entry fn dec_pm_i64(s: str) -> str {
-    let (v, e) = decodeJson<PrimMapI64<str>>(s);
+    let (v, e) = decodeJson<HashMap<str, i64>>(s);
     if (e != nil) { return dec_err(e); }
-    let m: PrimMapI64<str> = v;
+    let m: HashMap<str, i64> = v;
     let g = m.get("n");
     let gn: ?i64 = g;
     let gv: i64 = gn;
@@ -338,9 +339,9 @@ entry fn dec_pm_i64(s: str) -> str {
 }
 
 entry fn dec_pm_u64(s: str) -> str {
-    let (v, e) = decodeJson<PrimMapU64<str>>(s);
+    let (v, e) = decodeJson<HashMap<str, u64>>(s);
     if (e != nil) { return dec_err(e); }
-    let m: PrimMapU64<str> = v;
+    let m: HashMap<str, u64> = v;
     let g = m.get("n");
     let gn: ?u64 = g;
     let gv: u64 = gn;
@@ -349,9 +350,9 @@ entry fn dec_pm_u64(s: str) -> str {
 }
 
 entry fn dec_pm_f64(s: str) -> str {
-    let (v, e) = decodeJson<PrimMapF64<str>>(s);
+    let (v, e) = decodeJson<HashMap<str, f64>>(s);
     if (e != nil) { return dec_err(e); }
-    let m: PrimMapF64<str> = v;
+    let m: HashMap<str, f64> = v;
     let g = m.get("x");
     let gx: ?f64 = g;
     let gv: f64 = gx;

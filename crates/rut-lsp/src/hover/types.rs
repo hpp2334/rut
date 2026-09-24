@@ -97,6 +97,10 @@ pub struct TyDef {
     /// not the whole decl)
     pub name_span: Option<Span>,
     pub form: TyForm,
+    /// `pub` on the declaration — the std surface offers pub rows only
+    /// (the hashmap-surface batch: nmapset's internal lane classes
+    /// leave the bare-project surface)
+    pub is_pub: bool,
     pub generics: Vec<String>,
     pub fields: Vec<MemberSrc>,
     pub methods: Vec<MemberSrc>,

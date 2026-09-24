@@ -235,7 +235,7 @@ fn the_widgets_are_the_whole_ui_story() {
     // tables beside the subjects they mirror
     for (file, src, pins) in [
         ("todo_row.rut", TODO_ROW, vec![".key(", ".subject(", "check("]),
-        ("todo_list.rut", TODO_LIST, vec!["todo_row(", "PrimMapI64"]),
+        ("todo_list.rut", TODO_LIST, vec!["todo_row(", "HashMap<str, i64>"]),
     ] {
         for pin in pins {
             assert!(

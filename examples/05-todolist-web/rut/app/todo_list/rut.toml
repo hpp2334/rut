@@ -4,8 +4,8 @@
 # calls they mirror (drop-then-refill per render; a stale subject is a
 # LOUD miss). Imports the store, the widget type, the card + text
 # vocabulary, and its row builder — plus nmapset, because the tables
-# ARE PrimMapI64s (the survey's per-package import list abbreviates
-# this one away; the maps cannot be spelled without it).
+# ARE the val-column row `HashMap<str, i64>` (the survey's
+# per-package import list abbreviates this one away).
 name = "todo_list"
 entry.lib = "./todo_list.rut"
 

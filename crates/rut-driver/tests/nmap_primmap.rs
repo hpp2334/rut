@@ -1,22 +1,30 @@
-//! The `nmapset` prim-val maps (nmapset-round3, phase 2): the
-//! `PrimMapI64` / `PrimMapU64` / `PrimMapF64` classes over the host
-//! table's native val column — keys AND values both Rust-side, no
-//! `[?V]` sidecar, no relocation drain (the host moves vals with the
-//! keys inside `map_grow`).
+//! The nmapset prim-val maps (nmapset-round3, phase 2): the val-column
+//! classes over the host table's native val column — keys AND values
+//! both Rust-side, no `[?V]` sidecar, no relocation drain (the host
+//! moves vals with the keys inside `map_grow`).
 //!
-//! Covered: the PARITY law — the identical op sequence over i32 keys /
-//! i64 vals through `PrimMapI64` and through today's
-//! `HashMap<i32, i64>` sidecar wrapper answers the SAME checksum
-//! (n = 2000 -> 2598000, the nmapset-int churn shape), the prim `get`
-//! semantics (fresh opt per hit — a held value keeps the pre-replace
-//! bits, a fresh get reads the replacement, identically on both
-//! classes), a multi-grow sweep under collisions THROUGH the wrapper,
-//! u64 raw-bit round-trips (2^63..2^64-1) and f64 bit round-trips
-//! incl. the -0.0 sign, K admission (the union diagnostic, unchanged),
-//! and the coexistence of the new classes with `HashMap`/`HashSet` in
-//! one program. The bool val lane is deferred (`?bool` cannot serve
-//! the `get -> ?V` nil law in today's checker — the class family's
-//! header comment records the repro).
+//! SPELLING (the hashmap-surface batch): the family rows
+//! `HashMap<K, i64>` / `HashMap<K, u64>` / `HashMap<K, f64>` resolve to
+//! these classes — the prim names are nmapset-internal now, so this
+//! suite spells the family throughout. The expansion is pre-table
+//! (RFC 0043 §4): the rows land on the very same TypeId, and every pin
+//! below held bit-identically through the rename. (The pre-batch
+//! spelling of these rows named the prim classes directly; that
+//! spelling is history now — this suite spells the family only.)
+//!
+//! DISCLOSED (the re-seat consequence): the PARITY law's control side
+//! went VACUOUS here — `HashMap<i32, i64>` used to spell the `[?V]`
+//! sidecar and the parity tests compared the two storages; under the
+//! rows BOTH spellings resolve to the column, so the cross-storage
+//! comparison compared the column with itself. The self-comparison legs
+//! are dropped (the raw-column half of `nmap_valcolumn.rs` keeps the
+//! meaningful law: the family spelling must equal the raw crossings);
+//! what stays is the CHECKSUM pins (2598000 and friends), the get
+//! semantics, the grow sweep, the u64/f64 lanes, K admission (the union
+//! diagnostic, unchanged), and the coexistence of the rows with the
+//! sidecar class and `HashSet` in one program. The bool val lane is
+//! deferred (`?bool` cannot serve the `get -> ?V` nil law in today's
+//! checker — the class family's header comment records the repro).
 
 use std::rc::Rc;
 
@@ -84,20 +92,22 @@ fn diags_of(src: &str) -> Vec<String> {
         .collect()
 }
 
-// ---- the parity law -------------------------------------------------
+// ---- the checksum law ------------------------------------------------
 
 /// The nmapset-int churn shape at n = 2000, keyed i32 with i64 vals,
-/// through BOTH val storages: `PrimMapI64` (the column) and
-/// `HashMap<i32, i64>` (the `[?V]` sidecar). Identical checksum — the
-/// pinned 2598000 the phase-1 column law also answers — plus the same
-/// per-key has/get answers after the churn (order where observable).
+/// through the val-column row spelling `HashMap<i32, i64>` (the
+/// hashmap-surface batch — the row resolves to the val-column class;
+/// the old cross-storage parity vs the `[?V]` sidecar went vacuous
+/// under the rows, see the header). The pinned 2598000 the phase-1
+/// column law answers — the same number the row answered when it was
+/// spelled with the direct class name this row replaced.
 const PARITY_SRC: &str = r#"
-use nmapset::{ HashMap, PrimMapI64 };
+use nmapset::{ HashMap };
 
 fn key(i: i32) -> i32 { return i.wrapping_mul(-1640531535); }
 
 fn churn_col(n: i32) -> i64 {
-    let mut m: PrimMapI64<i32> = PrimMapI64.new();
+    let mut m: HashMap<i32, i64> = HashMap.new();
     let mut added: i64 = 0;
     for (let i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64)) { added += 1; }
@@ -192,35 +202,36 @@ fn churn_sidecar(n: i32) -> i64 {
 
 pub fn main() -> i64 {
     let col = churn_col(2000);
-    let side = churn_sidecar(2000);
-    if (col != side) { return 0; }   // the caller pins the checksum itself
     return col;
 }
 "#;
 
 #[test]
-fn primmap_column_parity_with_the_hashmap_sidecar() {
+fn primmap_row_checksum_holds_through_the_family_spelling() {
     // the pinned literal: the nmapset-int churn shape at n = 2000 (the
     // phase-1 column law's number — sum 2013000 + the counters' prime
-    // weights), identical through both classes
+    // weights), unchanged through the family spelling (the row IS the
+    // column — the direct class spelling this row replaced answered
+    // the same number)
     assert_eq!(
         run_main(PARITY_SRC),
         2598000,
-        "PrimMapI64 column vs HashMap sidecar: same ops, same checksum"
+        "the val-column row through `HashMap<i32, i64>`: same ops, same checksum"
     );
 }
 
-/// The prim `get` semantics, mirrored against the sidecar in ONE
-/// program: a hit returns a FRESH opt holding the value's bits — a
-/// held `p1` keeps the pre-replace value (a prim copy, round-2
-/// semantics), a fresh get reads the replacement, remove nils the
-/// lookup without touching the held copy, and the re-insert lands the
-/// fresh value at the reused slot. Both classes answer identically.
+/// The prim `get` semantics through the family spelling: a hit returns
+/// a FRESH opt holding the value's bits — a held `p1` keeps the
+/// pre-replace value (a prim copy, round-2 semantics), a fresh get
+/// reads the replacement, remove nils the lookup without touching the
+/// held copy, and the re-insert lands the fresh value at the reused
+/// slot. (The old twin spelling of this law against the sidecar went
+/// vacuous under the rows — the law itself is unchanged.)
 const GET_SEMANTICS_SRC: &str = r#"
-use nmapset::{ HashMap, PrimMapI64 };
+use nmapset::{ HashMap };
 
 fn law_col() -> i64 {
-    let mut m: PrimMapI64<i32> = PrimMapI64.new();
+    let mut m: HashMap<i32, i64> = HashMap.new();
     let mut fails: i64 = 0;
     if (!m.put(1, 10)) { fails += 1; }
     let p1 = m.get(1);
@@ -236,34 +247,16 @@ fn law_col() -> i64 {
     return fails;
 }
 
-fn law_sidecar() -> i64 {
-    let mut m: HashMap<i32, i64> = HashMap.new();
-    let mut fails: i64 = 0;
-    if (!m.put(1, 10)) { fails += 1; }
-    let p1 = m.get(1);
-    if (p1 != 10i64) { fails += 2; }
-    if (m.put(1, 20) != false) { fails += 4; }
-    if (p1 != 10i64) { fails += 8; }
-    if (m.get(1) != 20i64) { fails += 16; }
-    if (m.remove(1) != true) { fails += 32; }
-    if (m.get(1) != nil) { fails += 64; }
-    if (p1 != 10i64) { fails += 128; }
-    if (m.put(1, 30) != true) { fails += 256; }
-    if (m.get(1) != 30i64) { fails += 512; }
-    return fails;
-}
-
 pub fn main() -> i64 {
     let a = law_col();
-    let b = law_sidecar();
-    if (a != 0 || b != 0) { return 1000 + a * 10 + b; }
+    if (a != 0) { return 1000 + a; }
     return 0;
 }
 "#;
 
 #[test]
-fn prim_get_semantics_match_the_sidecar_both_directions() {
-    assert_eq!(run_main(GET_SEMANTICS_SRC), 0, "fresh opt per hit, held copies keep pre-replace bits — identically on both classes");
+fn prim_get_semantics_hold_through_the_family_spelling() {
+    assert_eq!(run_main(GET_SEMANTICS_SRC), 0, "fresh opt per hit, held copies keep pre-replace bits");
 }
 
 // ---- growth under collisions, through the wrapper -------------------
@@ -274,10 +267,10 @@ fn prim_get_semantics_match_the_sidecar_both_directions() {
 /// after the dust settles — the wrapper must never drop a val across
 /// the sentinel grow (the drain is gone; the host moves the column).
 const GROW_SRC: &str = r#"
-use nmapset::{ PrimMapI64 };
+use nmapset::{ HashMap };
 
 pub fn main() -> i64 {
-    let mut m: PrimMapI64<i32> = PrimMapI64.with_capacity(4);
+    let mut m: HashMap<i32, i64> = HashMap.with_capacity(4);
     let mut fails: i64 = 0;
     let n = 500;
     // 500 keys from cap 4: the load law (count + 1)·10 >= cap·7 fires
@@ -311,15 +304,15 @@ fn primmap_vals_survive_multi_grow_under_collisions() {
 
 // ---- the u64 / f64 lanes at the wrapper -----------------------------
 
-/// Raw bits through `PrimMapU64`: the 2^63..2^64-1 sign range,
+/// Raw bits through the u64 row (`HashMap<K, u64>`): the 2^63..2^64-1 sign range,
 /// replace at the found slot (put answers false, new bits visible),
 /// the remove/re-insert staleness law (the reused DEAD slot takes the
 /// fresh val), negative i64-ish payloads as raw patterns.
 const U64_SRC: &str = r#"
-use nmapset::{ PrimMapU64 };
+use nmapset::{ HashMap };
 
 pub fn main() -> i64 {
-    let mut m: PrimMapU64<i32> = PrimMapU64.new();
+    let mut m: HashMap<i32, u64> = HashMap.new();
     let mut fails: i64 = 0;
     let big: u64 = 9223372036854775808u64;      // 2^63
     let max: u64 = 18446744073709551615u64;     // 2^64 - 1
@@ -351,14 +344,14 @@ fn primmap_u64_lane_round_trips_raw_bits() {
     assert_eq!(run_main(U64_SRC), 0);
 }
 
-/// Float bits through `PrimMapF64`: exact values, the -0.0 sign bit
+/// Float bits through the f64 row (`HashMap<K, f64>`): exact values, the -0.0 sign bit
 /// (1/-0.0 < 0 while 1/0.0 > 0 — value equality can't see it, bits
 /// can), replace, remove/re-add, mixed keys over a grow.
 const F64_SRC: &str = r#"
-use nmapset::{ PrimMapF64 };
+use nmapset::{ HashMap };
 
 pub fn main() -> i64 {
-    let mut m: PrimMapF64<i32> = PrimMapF64.new();
+    let mut m: HashMap<i32, f64> = HashMap.new();
     let mut fails: i64 = 0;
     if (!m.put(1, 1.5f64)) { fails += 1; }
     if (!m.put(2, -2.25f64)) { fails += 2; }
@@ -395,15 +388,17 @@ fn primmap_f64_lane_round_trips_float_bits() {
 
 // ---- admission + coexistence ----------------------------------------
 
-/// K admission is the SAME closed union as HashMap's: a user record
-/// fails at compile time naming the offending type and the union.
+/// K admission through the row is the SAME closed union: a user
+/// record fails at compile time naming the offending type and the
+/// union — the diagnostic text is the target class's own, unchanged
+/// through the row expansion.
 #[test]
 fn primmap_k_admission_names_the_union() {
     let ds = diags_of(
-        "use nmapset::{ PrimMapI64 };\n\
+        "use nmapset::{ HashMap };\n\
          struct Pt { x: i32; y: i32 }\n\
          pub fn main() -> i32 {\n\
-         \x20   let mut pm: PrimMapI64<Pt> = PrimMapI64.new();\n\
+         \x20   let mut pm: HashMap<Pt, i64> = HashMap.new();\n\
          \x20   return 0;\n\
          }\n",
     );
@@ -413,15 +408,15 @@ fn primmap_k_admission_names_the_union() {
     );
 }
 
-/// The new classes coexist with `HashMap` / `HashSet` in one program
-/// (additive surface — nothing about the existing classes moved), and
-/// a `str`-keyed PrimMap rides the s lane with i64 vals.
+/// The val-column rows coexist with the sidecar class and `HashSet`
+/// in one program: a `str`-keyed i64 map rides the column row, a
+/// `str`-valued map rides the sidecar, the set stays the set.
 #[test]
 fn primmap_coexists_with_hashmap_and_hashset() {
     let checksum = run_main(
-        "use nmapset::{ HashMap, HashSet, PrimMapI64 };\n\
+        "use nmapset::{ HashMap, HashSet };\n\
          pub fn main() -> i64 {\n\
-         \x20   let mut pm: PrimMapI64<str> = PrimMapI64.new();\n\
+         \x20   let mut pm: HashMap<str, i64> = HashMap.new();\n\
          \x20   let mut acc: i64 = 0;\n\
          \x20   for (let i = 0; i < 24; i += 1) {\n\
          \x20       if (pm.put(f\"k{i}\", i as i64 * 3)) { acc += 1; }\n\

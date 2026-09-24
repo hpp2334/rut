@@ -383,7 +383,7 @@ fn map_group() {
         ("dec_hs", "[7, 8]", "OK:len=2:has7=true"),
         ("dec_hs", "[7, 7]", "OK:len=1:has7=true"),
         ("dec_pm_i64", "{\"n\": 5}", "OK:len=1:n=5"),
-        // a u64 beyond i64's reach rides PrimMapU64
+        // a u64 beyond i64's reach rides the val-column row (`HashMap<K, u64>`)
         ("dec_pm_u64", "{\"n\": 18446744073709551615}", "OK:len=1:n=18446744073709551615"),
         ("dec_pm_f64", "{\"x\": 1.5}", "OK:len=1:x=1.5"),
         // the f64 key spelling normalizes: `1` back as 1.0 — the §2.6

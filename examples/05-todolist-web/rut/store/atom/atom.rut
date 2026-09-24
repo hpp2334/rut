@@ -41,8 +41,8 @@
 // time (RFC 0044: primitives by value, str by content, everything
 // else CELL IDENTITY), and a generic class's methods have no
 // per-instantiation divergence to specialize one method (the
-// nmapset-round3 phase-0c verdict — the same law that split
-// PrimMapI64/U64/F64 into three classes). So:
+// nmapset-round3 phase-0c verdict — the same law that split the
+// prim-val lanes into three classes under the family rows). So:
 //
 //   * `Atom<T>` — the general cell. `set` stores + marks, NO compare:
 //     a `==` in this generic body would compile at the param type,

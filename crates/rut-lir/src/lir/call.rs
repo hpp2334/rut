@@ -2,7 +2,7 @@
 //! generic instantiation by unification (RFC 0013 SS2), the RFC 0012
 //! vtable-always rule for trait members, trait-typed receivers, and field reads.
 
-use crate::check::{ImplHit, TcResult};
+use crate::check::{DataDecl, ImplHit, TcResult};
 use rut_core::ops::*;
 use rut_core::sym;
 use rut_core::types::*;
@@ -558,15 +558,44 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // class with a same-named method would shadow every later class
         // (two `new`s in one module made the second uncallable)
         if let Some((dname, d)) = self.ctx.datas.iter().find(|(n, _)| *n == base).map(|(n, d)| (*n, d.clone())) {
-            if let Some((_, mnode)) = d.methods.iter().find(|(m, _)| *m == member).cloned() {
-                // class instantiation args: explicit `Name<..>`, else the
-                // enclosing class's own args (a `Self`-ish call in a body)
-                let class_args: Vec<TypeId> = if !base_generics.is_empty() {
-                    base_generics.iter().map(|g| self.resolve_type_now(*g)).collect()
+            if let Some((_, fmnode)) = d.methods.iter().find(|(m, _)| *m == member).cloned() {
+                // The mint: (decl name, decl, method node, class args).
+                //
+                // The ROW form (RFC 0043 §1, the hashmap-surface batch):
+                // a substitution-completing site matches the family's
+                // concrete-member rows FIRST — explicit `HashMap<str,
+                // i64>.new()` re-targets the mint to the row TARGET's
+                // class — same decl, same method, the head's
+                // substitution — and the inference arm
+                // follows the expected type's own expansion (`let m:
+                // HashMap<str, i64>` names the target instantiation). The
+                // class instantiates only when no row matches. The
+                // expansion is pre-table (RFC 0043 §4): the mint lands on
+                // the target's instantiation.
+                let mint: (IdentId, DataDecl, NodeHandle<MethodDeclNode>, Vec<TypeId>) = if !base_generics.is_empty() {
+                    let args: Vec<TypeId> = base_generics.iter().map(|g| self.resolve_type_now(*g)).collect();
+                    match self.ctx.row_mint_target(dname, &args) {
+                        Some((rname, rargs)) => {
+                            let Some(rd) = self.ctx.find_data(rname).cloned() else {
+                                self.ctx.err(sp, format!("mint row target `{}` did not resolve", self.ctx.name(rname)));
+                                return Err(());
+                            };
+                            let Some(rmnode) = rd.methods.iter().find(|(m, _)| *m == member).map(|(_, n)| *n) else {
+                                self.ctx.err(sp, format!(
+                                    "`{}.{}` has no `{}` on the row's target class",
+                                    self.ctx.name(dname), self.ctx.name(member), self.ctx.name(member)
+                                ));
+                                return Err(());
+                            };
+                            (rname, rd, rmnode, rargs)
+                        }
+                        None => (dname, d.clone(), fmnode, args),
+                    }
                 } else if !d.generics.is_empty() && self.current_class == Some(dname) {
                     // a `Self`-ish call inside the class body: the enclosing
                     // method's class args
-                    d.generics
+                    let args: Vec<TypeId> = d
+                        .generics
                         .iter()
                         .map(|g| {
                             self.subst
@@ -575,11 +604,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 .map(|(_, t)| *t)
                                 .unwrap_or(TY_I32)
                         })
-                        .collect()
+                        .collect();
+                    (dname, d.clone(), fmnode, args)
                 } else if !d.generics.is_empty() {
                     // infer from the expected type: `let b: Box<i32> = Box.new(..)`
                     match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
-                        Some((ed, eargs)) if ed == dname => eargs,
+                        Some((ed, eargs)) if ed == dname => (dname, d.clone(), fmnode, eargs),
+                        Some((ed, eargs)) if self.ctx.row_target_heads(dname, ed, eargs.len()) => {
+                            let Some(rd) = self.ctx.find_data(ed).cloned() else {
+                                self.ctx.err(sp, format!("mint row target `{}` did not resolve", self.ctx.name(ed)));
+                                return Err(());
+                            };
+                            let Some(rmnode) = rd.methods.iter().find(|(m, _)| *m == member).map(|(_, n)| *n) else {
+                                self.ctx.err(sp, format!(
+                                    "`{}.{}` has no `{}` on the row's target class",
+                                    self.ctx.name(dname), self.ctx.name(member), self.ctx.name(member)
+                                ));
+                                return Err(());
+                            };
+                            (ed, rd, rmnode, eargs)
+                        }
                         _ => {
                             self.ctx.err(sp, format!(
                                 "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",
@@ -589,12 +633,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                     }
                 } else {
-                    vec![]
+                    (dname, d.clone(), fmnode, vec![])
                 };
+                let (dname, d, mnode, class_args) = mint;
                 if !d.generics.is_empty() && class_args.len() != d.generics.len() {
                     self.ctx.err(sp, format!(
                         "`{}`<..> takes {} type argument(s), {} given",
-                        self.ctx.name(base),
+                        self.ctx.name(dname),
                         d.generics.len(),
                         class_args.len()
                     ));

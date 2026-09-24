@@ -210,6 +210,7 @@ fn ty_def(
     toks: &[Token],
     name: &str,
     form: TyForm,
+    vis: Vis,
     generics: Vec<String>,
     fields: Vec<MemberSrc>,
     methods: Vec<MemberSrc>,
@@ -219,6 +220,7 @@ fn ty_def(
         name: name.to_string(),
         name_span: ident_span(toks, span, name),
         form,
+        is_pub: vis == Vis::Pub,
         generics,
         fields,
         methods,
@@ -255,7 +257,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
     for h in ast.module_items(ast.root) {
         let span = ast.span(h.id());
         match ast.item(*h) {
-            ItemKind::Class { name, generics, fields, methods, .. } => {
+            ItemKind::Class { vis, name, generics, fields, methods, .. } => {
                 let fs = field_members(src, ast, toks, fields);
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
@@ -263,13 +265,14 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     toks,
                     ast.name(*name),
                     TyForm::Class,
+                    *vis,
                     generics_of(ast, generics),
                     fs,
                     ms,
                     span,
                 ));
             }
-            ItemKind::Dataclass { name, generics, fields, methods, .. } => {
+            ItemKind::Dataclass { vis, name, generics, fields, methods, .. } => {
                 let fs = field_members(src, ast, toks, fields);
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
@@ -277,26 +280,28 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     toks,
                     ast.name(*name),
                     TyForm::Dataclass,
+                    *vis,
                     generics_of(ast, generics),
                     fs,
                     ms,
                     span,
                 ));
             }
-            ItemKind::Trait { name, generics, methods, .. } => {
+            ItemKind::Trait { vis, name, generics, methods, .. } => {
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
                     toks,
                     ast.name(*name),
                     TyForm::Trait,
+                    *vis,
                     generics_of(ast, generics),
                     Vec::new(),
                     ms,
                     span,
                 ));
             }
-            ItemKind::Enum { name, members, .. } => {
+            ItemKind::Enum { vis, name, members, .. } => {
                 // member spans recovered by token scan inside the enum's
                 // span (the recovery the old comment deferred)
                 let ms = enum_members(src, ast, toks, span, members);
@@ -305,6 +310,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     toks,
                     ast.name(*name),
                     TyForm::Enum,
+                    *vis,
                     Vec::new(),
                     ms,
                     Vec::new(),
@@ -374,6 +380,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     toks,
                     ast.name(*name),
                     TyForm::Builtin,
+                    Vis::Pub,
                     generics_of(ast, generics),
                     Vec::new(),
                     ms,
@@ -387,6 +394,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     toks,
                     ast.name(*name),
                     TyForm::Primitive,
+                    Vis::Pub,
                     Vec::new(),
                     Vec::new(),
                     ms,
@@ -400,6 +408,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     toks,
                     ast.name(*name),
                     TyForm::HostDataclass,
+                    Vis::Pub,
                     Vec::new(),
                     fs,
                     Vec::new(),
@@ -413,6 +422,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     toks,
                     ast.name(*name),
                     TyForm::BuiltinTrait,
+                    Vis::Pub,
                     generics_of(ast, generics),
                     Vec::new(),
                     ms,
@@ -431,6 +441,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     name: name.to_string(),
                     name_span: ident_span(toks, span, name),
                     form: TyForm::Alias,
+                    is_pub: d.vis == Vis::Pub,
                     generics: Vec::new(),
                     fields: Vec::new(),
                     methods: Vec::new(),

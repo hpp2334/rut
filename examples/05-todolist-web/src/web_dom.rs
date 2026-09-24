@@ -231,8 +231,9 @@ fn boot_page(src: &str) -> Result<(), String> {
     let state = page_state()?;
     let mut hosts = HostRegistry::new();
     crate::hosts::install_web_hosts(&mut hosts, &state);
-    // the app session mounts `nmap_host` (the listener table's
-    // PrimMapI64) — its bodies bind here, same join, before verify
+    // the app session mounts `nmap_host` (the listener table rides
+    // the val-column row `HashMap<str, i64>`) — its bodies bind here,
+    // same join, before verify
     rut_std::nmap::install_std_nmap(&mut hosts);
     hosts.verify_against(&expected);
 

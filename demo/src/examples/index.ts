@@ -193,7 +193,7 @@ small
   {
     id: "ex-maps",
     name: "maps & sets",
-    blurb: "the keyed-collection lane — HashMap/HashSet/PrimMapI64, keys admitted by the compile-time union bound",
+    blurb: "the keyed-collection lane — HashMap/HashSet with the val-column rows, keys admitted by the compile-time union bound",
     rfcs: "0043 §A5, 0023 §2",
     source: mapsSrc,
     expected: lines(`

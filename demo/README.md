@@ -103,7 +103,7 @@ What was verified, state by state (screenshots in the batch report,
    (the verdict belongs to the last run — the journey batch's auto-run
    then re-verdicts it once typing settles);
 4. **maps-case** — the gap-filler `maps & sets`: a real run through
-   the nmap lane (HashMap/PrimMapI64/HashSet), verified green, fuel
+   the nmap lane (the HashMap/HashSet family), verified green, fuel
    638 / heap 545 B.
 
 The demo-journey batch later re-drove this whole journey end-to-end

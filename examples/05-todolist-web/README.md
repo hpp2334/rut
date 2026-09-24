@@ -274,9 +274,10 @@ of them (it is DOM-free by import law). The host never grew an
 
 **6. Idiomatic current rut.** Dataclass-literal structs (`AppRoot`,
 `Todo`, `Req`, `Widget`), shared-cell containers (`let mut r: ?AppRoot
-= root`), `?T` nilables, `when` match, f-strings, `PrimMapI64<str>`
-(nmapset) as the subject tables, `opaque.downcast` at the trust
-boundary (RFC 0014), `entry fn` as the host-callable surface, and the
+= root`), `?T` nilables, `when` match, f-strings, the val-column row
+`HashMap<str, i64>` (nmapset) as the subject tables,
+`opaque.downcast` at the trust boundary (RFC 0014), `entry fn` as the
+host-callable surface, and the
 manifest-mounted package tree — the medium-scale shape above.
 
 ## The two state machines, one container
@@ -364,8 +365,9 @@ framework's five):
   rejection or a lost id is `("", why)` — and the app surfaces the why
   through `(?opaque, str)`'s err channel instead of pretending every
   answer succeeded.
-* the dispatch table is `PrimMapI64<str>` — nmapset's keys are the
-  SUBJECT (the semantic event name), never the host's listener id.
+* the dispatch table is the val-column row `HashMap<str, i64>` —
+  nmapset's keys are the SUBJECT (the semantic event name), never the
+  host's listener id.
 
 ## Gates
 

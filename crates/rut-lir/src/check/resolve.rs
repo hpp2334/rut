@@ -217,6 +217,21 @@ impl<'a> Ctx<'a> {
                     };
                 }
                 {
+                    // the ROW form (RFC 0043 §1, the hashmap-surface
+                    // batch): a family name's concrete-member rows match
+                    // EXACTLY first — the row expands to its target under
+                    // the head's substitution — and the generic class
+                    // spelled the same way instantiates when no row
+                    // matches. The expansion happens BEFORE any table
+                    // work (RFC 0043 §4: no IR, no layout, nothing
+                    // encoded) — the spelled name resolves to the
+                    // target's TypeId, the pure-rename law by
+                    // construction.
+                    if !seg.generics.is_empty() {
+                        if let Some(t) = self.expand_alias_row(name, &seg.generics, env) {
+                            return t;
+                        }
+                    }
                     // user types
                         if let Some(e) = self.find_enum(name).cloned() {
                             if !seg.generics.is_empty() {
@@ -350,6 +365,49 @@ impl<'a> Ctx<'a> {
                     }
             }
         }
+    }
+
+    /// The row form's use-site expansion (RFC 0043 §1, the
+    /// hashmap-surface batch): match the family's rows against the
+    /// spelled type arguments — a parameter member binds the argument,
+    /// a concrete member must equal it exactly — and resolve the
+    /// matched row's TARGET under that substitution. `None` when the
+    /// name declares no rows or none match: the caller falls through
+    /// to the generic class (the fallback).
+    pub(crate) fn expand_alias_row(
+        &mut self,
+        name: IdentId,
+        args: &[NodeHandle<AnyTy>],
+        env: &[(IdentId, TypeId)],
+    ) -> Option<TypeId> {
+        let rows = self.alias_rows(name);
+        if rows.is_empty() {
+            return None;
+        }
+        let resolved: Vec<TypeId> = args.iter().map(|g| self.resolve_type(*g, env)).collect();
+        for (_, members, target) in rows {
+            if members.len() != resolved.len() {
+                continue;
+            }
+            let mut binding: Vec<(IdentId, TypeId)> = Vec::new();
+            let mut matched = true;
+            for (mnode, &arg) in members.iter().copied().zip(resolved.iter()) {
+                match self.row_member_of(mnode) {
+                    RowMember::Param(p) => binding.push((p, arg)),
+                    RowMember::Concrete(t) if t == arg => {}
+                    RowMember::Concrete(_) => {
+                        matched = false;
+                        break;
+                    }
+                }
+            }
+            if !matched {
+                continue;
+            }
+            self.validate_alias(name);
+            return Some(self.resolve_type(target, &binding));
+        }
+        None
     }
 
 }

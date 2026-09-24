@@ -87,7 +87,8 @@
 // THIS BASE IS POUCH-FREE BY LAW (survey §2.7): no `Vec` anywhere — the
 // reader/writer grow over fixed `[?T]`/`[T]` columns sized by their own
 // limits, so json mounts light when no peer is present. The container
-// impl rows (Vec via pouch; HashMap/HashSet/PrimMap via nmapset) live in
+// impl rows (Vec via pouch; the HashMap/HashSet family via nmapset —
+// the val-column rows resolve through the same names) live in
 // the impl-only group files the peer gate appends when the peer is in
 // the program's closure.
 //

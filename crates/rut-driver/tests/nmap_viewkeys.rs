@@ -3,6 +3,15 @@
 //! `has_range` / `remove_range`, the key crossing as a borrowed
 //! `(parent, off, len)` BYTE range.
 //!
+//! SPELLING (the hashmap-surface batch): the range-keyed methods live
+//! on the GENERIC class, and the family rows re-seat `HashMap<str,
+//! i64>` to the val-column class — which has no range surface. This
+//! suite spells the no-row val `HashMap<str, i32>` (the nmapset-str
+//! shape this suite parity-matches anyway) so the range machinery
+//! stays testable; every pinned literal below is unchanged (the folded
+//! integers are the same). The range-surface-on-the-column question is
+//! a new-surface menu item, not a rename.
+//!
 //! Covered: the PARITY law through the wrapper — the nmapset-str churn
 //! shape spelled both ways over one parent (range methods vs
 //! slice-then-put) answers the SAME pinned checksum; lane
@@ -87,14 +96,14 @@ fn build_parent(n: i32) -> str {
 
 // the nmapset-str six-phase churn, RANGE-spelled
 fn churn_range(p: str, n: i32) -> i64 {
-    let mut m: HashMap<str, i64> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap.new();
     let mut added: i64 = 0;
     for (let i = 0; i < n; i += 1) {
-        if (m.put_range(p, i * 6, 6, i as i64)) { added += 1; }
+        if (m.put_range(p, i * 6, 6, i)) { added += 1; }
     }
     let mut replaced: i64 = 0;
     for (let i = 0; i < n; i += 1) {
-        if (m.put_range(p, i * 6, 6, i as i64 + 3) == false) { replaced += 1; }
+        if (m.put_range(p, i * 6, 6, i + 3) == false) { replaced += 1; }
     }
     let mut sum: i64 = 0;
     let mut hits: i64 = 0;
@@ -102,7 +111,7 @@ fn churn_range(p: str, n: i32) -> i64 {
         let q = m.get_range(p, i * 6, 6);
         if (q != nil) {
             hits += 1;
-            sum = sum.wrapping_add(q);
+            sum = sum.wrapping_add(q as i64);
         }
     }
     let mut misses: i64 = 0;
@@ -119,7 +128,7 @@ fn churn_range(p: str, n: i32) -> i64 {
     }
     let mut added2: i64 = 0;
     for (let i = 0; i < n; i += 3) {
-        if (m.put_range(p, i * 6, 6, 0i64 - i as i64)) { added2 += 1; }
+        if (m.put_range(p, i * 6, 6, 0 - i)) { added2 += 1; }
     }
     let mut c: i64 = sum;
     c = c.wrapping_add(added.wrapping_mul(31));
@@ -135,14 +144,14 @@ fn churn_range(p: str, n: i32) -> i64 {
 
 // the identical churn, SLICE-spelled (the pre-phase-2 spelling)
 fn churn_slice(p: str, n: i32) -> i64 {
-    let mut m: HashMap<str, i64> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap.new();
     let mut added: i64 = 0;
     for (let i = 0; i < n; i += 1) {
-        if (m.put(p.slice(i * 6, i * 6 + 6), i as i64)) { added += 1; }
+        if (m.put(p.slice(i * 6, i * 6 + 6), i)) { added += 1; }
     }
     let mut replaced: i64 = 0;
     for (let i = 0; i < n; i += 1) {
-        if (m.put(p.slice(i * 6, i * 6 + 6), i as i64 + 3) == false) { replaced += 1; }
+        if (m.put(p.slice(i * 6, i * 6 + 6), i + 3) == false) { replaced += 1; }
     }
     let mut sum: i64 = 0;
     let mut hits: i64 = 0;
@@ -150,7 +159,7 @@ fn churn_slice(p: str, n: i32) -> i64 {
         let q = m.get(p.slice(i * 6, i * 6 + 6));
         if (q != nil) {
             hits += 1;
-            sum = sum.wrapping_add(q);
+            sum = sum.wrapping_add(q as i64);
         }
     }
     let mut misses: i64 = 0;
@@ -167,7 +176,7 @@ fn churn_slice(p: str, n: i32) -> i64 {
     }
     let mut added2: i64 = 0;
     for (let i = 0; i < n; i += 3) {
-        if (m.put(p.slice(i * 6, i * 6 + 6), 0i64 - i as i64)) { added2 += 1; }
+        if (m.put(p.slice(i * 6, i * 6 + 6), 0 - i)) { added2 += 1; }
     }
     let mut c: i64 = sum;
     c = c.wrapping_add(added.wrapping_mul(31));
@@ -212,20 +221,20 @@ use nmapset::{ HashMap };
 
 pub fn main() -> i64 {
     let seq = "ACGTTCAGGCATXZ";
-    let mut m: HashMap<str, i64> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap.new();
     let mut f: i64 = 0;
     // range inserts, slice reads
     if (!m.put_range(seq, 0, 3, 1)) { f += 1; }      // "ACG"
     if (!m.put_range(seq, 3, 3, 2)) { f += 2; }      // "TTC"
-    if (m.get(seq.slice(0, 3)) != 1i64) { f += 4; }
+    if (m.get(seq.slice(0, 3)) != 1) { f += 4; }
     if (!m.has(seq.slice(3, 6))) { f += 8; }
     // slice put over a range key: replace, not a second entry
-    if (m.put(seq.slice(0, 3), 10i64)) { f += 16; }
+    if (m.put(seq.slice(0, 3), 10)) { f += 16; }
     if (m.len() != 2) { f += 32; }
-    if (m.get_range(seq, 0, 3) != 10i64) { f += 64; }
+    if (m.get_range(seq, 0, 3) != 10) { f += 64; }
     // a window key off the slot grid: range stores, slice finds
     if (!m.put_range(seq, 5, 4, 3)) { f += 128; }    // "CAGG"
-    if (m.get(seq.slice(5, 9)) != 3i64) { f += 256; }
+    if (m.get(seq.slice(5, 9)) != 3) { f += 256; }
     if (!m.has_range(seq, 5, 4)) { f += 512; }
     // cross-lane removes, both directions
     if (!m.remove(seq.slice(0, 3))) { f += 1024; }
@@ -238,8 +247,8 @@ pub fn main() -> i64 {
     // the surviving range key: this is a REPLACE (answers false)
     let win = seq.slice(0, 9);
     if (m.put_range(win, 3, 3, 99) != false) { f += 32768; }
-    if (m.get_range(seq, 3, 3) != 99i64) { f += 65536; }
-    if (m.get(seq.slice(3, 6)) != 99i64) { f += 131072; }
+    if (m.get_range(seq, 3, 3) != 99) { f += 65536; }
+    if (m.get(seq.slice(3, 6)) != 99) { f += 131072; }
     if (m.len() != 1) { f += 262144; }
     return f;
 }
@@ -268,27 +277,27 @@ pub fn main() -> i64 {
         let base = 1000 + i;
         p = f"{p}{base}";
     }
-    let mut m: HashMap<str, i64> = HashMap.with_capacity(4);
+    let mut m: HashMap<str, i32> = HashMap.with_capacity(4);
     let mut fails: i64 = 0;
     let n = 500;
     for (let i = 0; i < n; i += 1) {
-        if (!m.put_range(p, i * 4, 4, i as i64 * 7 + 1)) { fails += 1; }
+        if (!m.put_range(p, i * 4, 4, i * 7 + 1)) { fails += 1; }
     }
     if (m.len() != n) { fails += 64; }
     for (let i = 0; i < n; i += 3) {
         if (!m.remove_range(p, i * 4, 4)) { fails += 2; }
     }
     for (let i = 0; i < n; i += 3) {
-        if (!m.put_range(p, i * 4, 4, i as i64 * 7 + 1)) { fails += 4; }
+        if (!m.put_range(p, i * 4, 4, i * 7 + 1)) { fails += 4; }
     }
     for (let i = 0; i < n; i += 1) {
         let q = m.get_range(p, i * 4, 4);
         if (q == nil) { fails += 8; }
-        if (q != i as i64 * 7 + 1) { fails += 16; }
+        if (q != i * 7 + 1) { fails += 16; }
     }
     // the plain lanes see the same entries
     for (let i = 0; i < n; i += 97) {
-        if (m.get(p.slice(i * 4, i * 4 + 4)) != i as i64 * 7 + 1) { fails += 32; }
+        if (m.get(p.slice(i * 4, i * 4 + 4)) != i * 7 + 1) { fails += 32; }
     }
     return fails;
 }
@@ -308,14 +317,14 @@ use nmapset::{ HashMap };
 
 pub fn main() -> i64 {
     let s = "abc";
-    let mut a: HashMap<str, i64> = HashMap.new();
-    let mut b: HashMap<str, i64> = HashMap.new();
+    let mut a: HashMap<str, i32> = HashMap.new();
+    let mut b: HashMap<str, i32> = HashMap.new();
     let mut f: i64 = 0;
     if (!a.put_range(s, 3, 0, 7)) { f += 1; }
-    if (a.get("") != 7i64) { f += 2; }
+    if (a.get("") != 7) { f += 2; }
     if (!b.put("", 9)) { f += 4; }
-    if (b.get_range(s, 0, 0) != 9i64) { f += 8; }
-    if (b.get_range(s, 3, 0) != 9i64) { f += 16; }  // any boundary window of len 0
+    if (b.get_range(s, 0, 0) != 9) { f += 8; }
+    if (b.get_range(s, 3, 0) != 9) { f += 16; }  // any boundary window of len 0
     if (a.len() != 1 || b.len() != 1) { f += 32; }
     return f;
 }
@@ -346,7 +355,7 @@ const TRAP_SRC: &str = r#"
 use nmapset::{ HashMap };
 
 pub fn main() -> i64 {
-    let mut m: HashMap<str, i64> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap.new();
     m.put("ok", 1);
     let utf8 = "héllo";
     m.get_range(utf8, 0, 2);   // byte 2 is mid-codepoint: trap
@@ -371,7 +380,7 @@ const PAST_END_SRC: &str = r#"
 use nmapset::{ HashMap };
 
 pub fn main() -> i64 {
-    let mut m: HashMap<str, i64> = HashMap.new();
+    let mut m: HashMap<str, i32> = HashMap.new();
     m.put("ok", 1);
     let s = "abc";
     m.remove_range(s, 1, 3);   // 1 + 3 = 4 > 3 bytes: trap
