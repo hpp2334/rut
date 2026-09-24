@@ -246,13 +246,21 @@ impl Vm {
             }
             Op::IsType { dst, obj, want } => {
                 let cell = cell_of(r!(obj));
-                let ty = self.effective_ty(cell);
+                // the `is` law (RFC 0014, 2026-09): `is` names the box,
+                // never the payload — `o is X` misses for every payload
+                // X, `o is opaque` (or an alias) hits; recovery is
+                // `downcast<T>` only (its own TidOf keeps reading the
+                // payload). IsTrait below probes the box for the same
+                // reason.
+                let ty = cell.ty;
                 self.cur_regs[dst as usize] = Slot::bool(ty == want);
             }
             Op::IsTrait { dst, obj, want } => {
                 let ty = match self.scalar_recv_ty(obj) {
                     Some(t) => t,
-                    None => self.effective_ty(cell_of(r!(obj))),
+                    // the box probes its own vtable — TY_OPAQUE has no
+                    // impl rows (see IsType's law comment)
+                    None => cell_of(r!(obj)).ty,
                 };
                 let has = self
                     .prog

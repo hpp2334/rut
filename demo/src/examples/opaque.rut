@@ -1,7 +1,8 @@
 use pouch::{ Vec };
 // RFC 0014 — opaque: explicit type erasure with checked recovery.
-// opaque(v) forgets the static type, KEEPS the runtime type;
-// opaque.downcast<T> recovers it as `?T` — the nullable (RFC 0044). A
+// opaque(v) forgets the static type, keeps the runtime type FOR
+// downcast; `is` names the BOX, never the payload. Recovery is
+// opaque.downcast<T> -> `?T` — the nullable (RFC 0044). A
 // match IS the box's inner cell (the alias law: writes through the
 // recovery are the source's, in both directions, through every holder);
 // a prim payload reads the copied value; a wrong type is `nil` — never
@@ -42,7 +43,7 @@ fn erase_and_recover() {
     }
     let wrong = opaque.downcast<i32>(box2);     // wrong type: nil, no trap
     log.info(f"sour? {opaque.downcast<Flavor>(box2) != nil} wrong? {wrong == nil}");
-    log.info(f"is str: {box3 is str}");   // `is` sees through the box
+    log.info(f"is str: {box3 is str}");   // `is` names the box — misses every payload type; downcast recovers
 }
 
 fn alias_law() {
@@ -87,7 +88,7 @@ fn nested() {
     // heterogeneous FIXED array — pure data, one shared cell per slot
     // (RFC 0016 §1)
     let boxes: [opaque] = [opaque(Point { x: 3, y: 4 }), opaque("two"), opaque(Point { x: 5, y: 6 })];
-    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS — primitives recover via `opaque.downcast<T>`
+    log.info(f"{boxes.len()} boxes; first is Point: {boxes[0] is Point}");  // `is` needs a cell/trait RHS and names the BOX — the payload misses; recover via `opaque.downcast<T>`
     let vec: Vec<opaque> = Vec.from([opaque(5)]);
     log.info(f"vec {vec.len()}");
 }

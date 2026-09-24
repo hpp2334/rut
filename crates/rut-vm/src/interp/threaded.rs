@@ -721,7 +721,9 @@ impl Machine for Vm {
             unreachable_op!("op_istype: unexpected op")
         };
         let cell = cell_of(unsafe { *regs.add(*obj as usize) });
-        let ty = self.effective_ty(cell);
+        // the `is` law (RFC 0014, 2026-09): `is` names the box, never
+        // the payload — see the step.rs IsType body
+        let ty = cell.ty;
         unsafe { *regs.add(*dst as usize) = Slot::bool(ty == *want) };
         Ok(Flow::Next(pc + 1))
     }
@@ -732,7 +734,9 @@ impl Machine for Vm {
         };
         let ty = match self.scalar_recv_ty(*obj) {
             Some(t) => t,
-            None => self.effective_ty(cell_of(unsafe { *regs.add(*obj as usize) })),
+            // the box probes its own vtable — TY_OPAQUE has no impl
+            // rows (see the step.rs IsType body)
+            None => cell_of(unsafe { *regs.add(*obj as usize) }).ty,
         };
         let has = self
             .prog

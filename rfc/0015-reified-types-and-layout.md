@@ -197,7 +197,10 @@ impls scan — never for concrete tests; `downcast`'s check is
 itself — a composite to a trait `I` — needs no dispatch
 machinery and no allocation: a trait-typed value already *is* the object
 ref whose header reaches the vtable; `Opaque.new(v)` is the only box mint
-in the language (RFC 0014).
+in the language (RFC 0014). A box's answering type is the BOX: `is`
+reads the box cell's own type (`TY_OPAQUE` — no impl rows, so every
+`o is X`, concrete or trait, misses); only `downcast`'s `tidof` keeps
+reading the payload (the 2026-09 opaque-is law, RFC 0014).
 
 ## Open questions
 

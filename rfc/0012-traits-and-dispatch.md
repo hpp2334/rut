@@ -174,8 +174,13 @@ RHS a naming position restricted to the numeric primitives (RFC 0007
   (§1) and the probe — one runtime truth per value.
 - **`x is Opaque` is legal** — a plain concrete test ("is this value an
   `Opaque` handle?"), folding to `true` on `Opaque`-typed receivers with
-  the usual lint. On an `Opaque` receiver, `o is T` / `o is I` **see
-  through the box**: they test the boxed value's type (RFC 0014).
+  the usual lint. On an `Opaque` receiver, `o is T` / `o is I` answer
+  **by the box** (RFC 0014, the 2026-09 opaque-is law): both miss for
+  every payload type — recovery is `downcast<T>` only. The
+  concrete-`is X` case is deliberately NOT typeck-folded: the runtime
+  compare answers every spelling of the box's own type — the primitive
+  and its aliases alike — from the one runtime truth, where a
+  name-keyed fold is exactly how the alias wart was born.
 - **No flow sensitivity:** `if (x is Hashable) { .. }` grants nothing —
   no narrowing, no widening of `x` to `I` (a bound proves widening, RFC
   0037 §3 rule 5). The keyword answers; it does not admit.

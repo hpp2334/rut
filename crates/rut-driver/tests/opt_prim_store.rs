@@ -512,14 +512,22 @@ fn prim_store_release_walk_skips_element_slots() {
 #[test]
 fn version_gate_rejects_stale_artifacts() {
     use rut_core::binary::{decode, VERSION};
-    // v10 is the general scan/classify + builder surface (the json-perf
+    // v11 is the opaque-is law (the opaque-is batch phase 1: `is` on an
+    // opaque box answers BY THE BOX — the IsType/IsTrait op bodies read
+    // `cell.ty`, `o is X` misses for every payload X, `o is opaque`
+    // (or an alias) stays true, `downcast<T>` is the only recovery; a
+    // POLICY bump per the v9 precedent — the op stream is
+    // byte-identical, but the same `istype` bytes answer differently
+    // under the new engine, so old artifacts are NOT
+    // behavior-identical); v10 was the general scan/classify + builder
+    // surface (the json-perf
     // batch phase 2: the `StrScan`/`StrStartsWith`/`StrBuf*` natives +
     // the `StrBuf` boot type, the 7→8 declared-surface precedent); v9
     // was the orphan rule (RFC 0012 §2a, the orphan-rule batch's
     // rejection addition, the 5→6 precedent); v8 was the err-channel
     // phase 2 declared-surface change (`capture_stacktrace()` + the
     // `StackTrace` builtin class + the `pos` span table, RFC 0036)
-    assert_eq!(VERSION, 10, "the scan/builder surface is the only allowed VERSION bump this phase");
+    assert_eq!(VERSION, 11, "the opaque-is law is the only allowed VERSION bump this phase");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

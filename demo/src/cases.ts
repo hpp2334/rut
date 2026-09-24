@@ -113,7 +113,7 @@ export const CASES: RutCase[] = [
       "}",
     ].join("\n"),
     expected: [
-      "box1 is Point: true",
+      "box1 is Point: false",
       "box2 is Point: false",
       "recovered 1 2",
     ],

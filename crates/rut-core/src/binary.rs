@@ -447,6 +447,19 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// version byte is the only provenance marker a `.rutc`/bundle carries
 /// about the law that produced it — rejecting-more can strand a source,
 /// and the byte is what says which law it was.
+/// v11: the opaque-is law (opaque-is batch phase 1) — `is` on an
+/// opaque box answers BY THE BOX: `o is X` misses for every payload X
+/// (concrete AND trait — the IsType/IsTrait op bodies read `cell.ty`),
+/// `o is opaque` (or an alias) stays true, and `downcast<T>` is the
+/// only recovery (its TidOf keeps reading the payload — the ONE
+/// legitimate see-through). A POLICY bump per the v9 precedent: no new
+/// op, no new type encoding, no declared-surface row — the op stream
+/// is byte-identical before/after — but old artifacts are NOT
+/// behavior-identical (the same `istype` bytes answer differently
+/// under the new engine), so the v8 no-bump shield fails and the byte
+/// is what says which `is` law an artifact's answers belong to. The
+/// bump's cost is refusing pre-packed v10 `.rutbundle`s — forcing a
+/// re-pack under the law their bytes will actually run with.
 /// v10: the general scan/classify + builder surface (json-perf batch
 /// phase 2) — new opcode-stream encodings (the `StrScan`/`StrStartsWith`
 /// natives and the `StrBuf` builder's five), a new boot type (`StrBuf`,
@@ -454,7 +467,7 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// (`NativeTy::StrBuf`) — the 7→8 precedent: a v9 engine rejects every
 /// v10 artifact's new nats/kinds with the standard version error, so
 /// stale artifacts must be refused, not misread.
-pub const VERSION: u32 = 10;
+pub const VERSION: u32 = 11;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();

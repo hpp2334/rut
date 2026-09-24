@@ -124,13 +124,30 @@ pub fn main() -> nil {
 
 #[test]
 fn case3_opaque() {
+    // the opaque-is law (RFC 0014, 2026-09): an opaque answers `is X`
+    // FALSE for every payload type X — it is JUST OPAQUE; `is` never
+    // sees through the box; `downcast<T>() -> ?T` is the ONLY recovery
+    // (its own TidOf keeps reading the payload). `is opaque` — and its
+    // RFC 0043 alias spelling — is the one check that names what it
+    // is: TRUE. Every cell of the law table pinned below; the case
+    // fails if ANY of them regresses. (The pre-law rows said
+    // `box1 is Point: true` / `box1 is Hashable: true` — the see-through
+    // this law retires.)
     let src = r#"
+trait Hashable { fn hash(self) -> i32; }
 struct Point { x: f32; y: f32 }
+impl Hashable for Point {
+    fn hash(self) -> i32 { return 0; }
+}
+type BoxTy = opaque;
 pub fn main() -> nil {
     let box1 = opaque(Point { x: 1, y: 2 });
     let box2 = opaque("hello");
     Logger.new("app").info(f"box1 is Point: {box1 is Point}");
     Logger.new("app").info(f"box2 is Point: {box2 is Point}");
+    Logger.new("app").info(f"box1 is opaque: {box1 is opaque}");
+    Logger.new("app").info(f"box1 is BoxTy: {box1 is BoxTy}");
+    Logger.new("app").info(f"box1 is Hashable: {box1 is Hashable}");
     let p = opaque.downcast<Point>(box1);
     if (p != nil) {
         Logger.new("app").info(f"recovered {p.x} {p.y}");
@@ -140,7 +157,18 @@ pub fn main() -> nil {
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["box1 is Point: true", "box2 is Point: false", "recovered 1 2", "miss is nil: true"]);
+    assert_eq!(
+        lines,
+        vec![
+            "box1 is Point: false",
+            "box2 is Point: false",
+            "box1 is opaque: true",
+            "box1 is BoxTy: true",
+            "box1 is Hashable: false",
+            "recovered 1 2",
+            "miss is nil: true",
+        ]
+    );
 }
 
 #[test]

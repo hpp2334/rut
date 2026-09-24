@@ -170,13 +170,13 @@ octets=6 chars=5
     expected: lines(`
 point 1 2
 sour? true wrong? true
-is str: true
+is str: false
 one cell: 9 5 5 9
 same session: true
 distinct boxes: false
 value 5
 str box misses i32: true
-3 boxes; first is Point: true
+3 boxes; first is Point: false
 vec 1
 `),
   },
