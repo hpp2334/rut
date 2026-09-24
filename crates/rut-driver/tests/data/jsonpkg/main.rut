@@ -324,8 +324,8 @@ entry fn dec_hs(s: str) -> str {
     return f"OK:len={n}:has7={hs}";
 }
 
-// ---- the val-column rows (`HashMap<K, i64/u64/f64>` — the family
-// rows resolve to the prim-val classes) ----
+// ---- the prim-val spellings (`HashMap<K, i64/u64/f64>` — the
+// generic class; one name, one decl, the sidecar storage) ----
 
 entry fn dec_pm_i64(s: str) -> str {
     let (v, e) = decodeJson<HashMap<str, i64>>(s);

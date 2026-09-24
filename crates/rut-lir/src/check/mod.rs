@@ -73,42 +73,26 @@ pub struct TraitDeclInfo {
 
 /// What a validated type alias resolves to (RFC 0043). A single target
 /// binds the target's `TypeId`; a union alias is bound-only and never
-/// becomes a value type; a ROW alias (the hashmap-surface batch — the
-/// per-instantiation row form) resolves per use site, expanding to its
-/// target under the head's substitution. `Pending` marks an alias
+/// becomes a value type. `Pending` marks an alias
 /// mid-validation — re-entering it is a cycle.
 #[derive(Clone, Copy, Debug)]
 pub enum AliasTarget {
     Ty(TypeId),
     Union,
-    Row,
     Pending,
     Error,
 }
 
-/// `type X = A;` / `type X = A | B;` / the row form `type X<K, i64> = A;`
-/// (RFC 0043) — declared in pass 1a, target validated in pass 1b. The
-/// row form's `params` are the head members as written (empty for the
-/// plain and union forms); several rows may share one family name —
-/// the generic class spelled the same way stays the fallback.
+/// `type X = A;` / `type X = A | B;` (RFC 0043) — declared in pass 1a,
+/// target validated in pass 1b. Aliases are non-generic: one name, one
+/// decl (the row form is repealed).
 #[derive(Clone, Debug)]
 pub struct AliasDecl {
     pub name: IdentId,
     pub node: NodeId,
-    /// the row form's head members (empty for the plain/union forms)
-    pub params: Vec<NodeHandle<AnyTy>>,
     /// the target as written
     pub target: NodeHandle<AnyTy>,
     pub resolved: Option<AliasTarget>,
-}
-
-/// One alias-row head member (RFC 0043 §1's row form): a bare
-/// parameter name that binds the use site's type argument, or a
-/// concrete member that must equal it exactly (`TypeId` equality).
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum RowMember {
-    Param(IdentId),
-    Concrete(TypeId),
 }
 
 #[derive(Clone, Debug)]
@@ -768,12 +752,9 @@ impl<'a> Ctx<'a> {
     /// Settle an alias's target (RFC 0043 pass 1b): each member must
     /// resolve as a type or trait — located early errors; forward refs
     /// are legal, a cycle (`type A = B; type B = A;`) diagnoses at the
-    /// re-entered alias. Idempotent; `resolve_type` calls it on expansion.
-    /// The ROW form validates its head members (at least one concrete —
-    /// general generic aliases stay a non-goal, RFC 0043 §5) and walks
-    /// its target structurally: head-parameter leaves are fine, every
-    /// other leaf must resolve. The target's own arity/concreteness
-    /// checks fire at the first expansion (under the real substitution).
+    /// re-entered alias. The target resolves HERE, at the declaration —
+    /// used or not (`type Foo = NotAType;` diagnoses even in a dead
+    /// program); there is no deferring alias path.
     pub(crate) fn validate_alias(&mut self, name: IdentId) {
         let Some(idx) = self.aliases.iter().position(|a| a.name == name) else {
             return;
@@ -795,37 +776,6 @@ impl<'a> Ctx<'a> {
             Some(_) => return,
             None => {}
         }
-        if !self.aliases[idx].params.is_empty() {
-            self.aliases[idx].resolved = Some(AliasTarget::Pending);
-            let (params, target) = {
-                let a = &self.aliases[idx];
-                (a.params.clone(), a.target)
-            };
-            let mut param_names: Vec<IdentId> = Vec::new();
-            let mut concrete = 0usize;
-            for pnode in params {
-                match self.row_member_of(pnode) {
-                    RowMember::Param(n) => param_names.push(n),
-                    RowMember::Concrete(_) => concrete += 1,
-                }
-            }
-            let sp = self.ast.span(self.aliases[idx].node);
-            let n = self.aliases[idx].name;
-            if concrete == 0 {
-                self.err(
-                    sp,
-                    format!(
-                        "type-alias row `{}` needs at least one concrete head member — general generic aliases are a non-goal (RFC 0043 §5)",
-                        self.name(n)
-                    ),
-                );
-            }
-            self.validate_row_target(target, &param_names);
-            if matches!(self.aliases[idx].resolved, Some(AliasTarget::Pending)) {
-                self.aliases[idx].resolved = Some(AliasTarget::Row);
-            }
-            return;
-        }
         self.aliases[idx].resolved = Some(AliasTarget::Pending);
         let target = self.aliases[idx].target;
         match self.ast.ty(target) {
@@ -844,166 +794,6 @@ impl<'a> Ctx<'a> {
                 if matches!(self.aliases[idx].resolved, Some(AliasTarget::Pending)) {
                     self.aliases[idx].resolved = Some(AliasTarget::Ty(t));
                 }
-            }
-        }
-    }
-
-    /// The declared ROW aliases of one family name, in declaration
-    /// order (RFC 0043 §1's row form — the concrete-shadows-generic
-    /// table a consumer's `HashMap<str, i64>` matches against).
-    pub(crate) fn alias_rows(&self, name: IdentId) -> Vec<(IdentId, Vec<NodeHandle<AnyTy>>, NodeHandle<AnyTy>)> {
-        self.aliases
-            .iter()
-            .filter(|a| a.name == name && !a.params.is_empty())
-            .map(|a| (a.name, a.params.clone(), a.target))
-            .collect()
-    }
-
-    /// The row form's MINT redirect (the hashmap-surface batch): match
-    /// the family's rows against concrete type arguments — parameters
-    /// bind, concrete members equal exactly — and answer the row
-    /// TARGET's (head decl, resolved target args) under the binding.
-    /// The static-call mint lands there (`HashMap<str, i64>.new()` mints
-    /// the row target's instantiation); `None` = no rows or none match
-    /// — the class.
-    pub(crate) fn row_mint_target(&mut self, base: IdentId, args: &[TypeId]) -> Option<(IdentId, Vec<TypeId>)> {
-        let rows = self.alias_rows(base);
-        if rows.is_empty() {
-            return None;
-        }
-        for (_, members, target) in rows {
-            if members.len() != args.len() {
-                continue;
-            }
-            let mut binding: Vec<(IdentId, TypeId)> = Vec::new();
-            let mut matched = true;
-            for (mnode, &arg) in members.iter().copied().zip(args.iter()) {
-                match self.row_member_of(mnode) {
-                    RowMember::Param(p) => binding.push((p, arg)),
-                    RowMember::Concrete(t) if t == arg => {}
-                    RowMember::Concrete(_) => {
-                        matched = false;
-                        break;
-                    }
-                }
-            }
-            if !matched {
-                continue;
-            }
-            let shape: Option<(IdentId, Vec<NodeHandle<AnyTy>>)> = match self.ast.ty(target) {
-                TypeKind::TyPath { segs, .. } => Some((
-                    segs[0].name,
-                    segs.last().expect("path has a segment").generics.clone(),
-                )),
-                _ => None,
-            };
-            let Some((head, targs)) = shape else { return None };
-            let rargs: Vec<TypeId> = targs.iter().map(|g| self.resolve_type(*g, &binding)).collect();
-            return Some((head, rargs));
-        }
-        None
-    }
-
-    /// Does the family's row table hold a row whose TARGET head is
-    /// `head` with `nargs` target arguments? The inference arm's test:
-    /// the expected instantiation names the row target directly.
-    pub(crate) fn row_target_heads(&self, base: IdentId, head: IdentId, nargs: usize) -> bool {
-        self.alias_rows(base).iter().any(|(_, _, target)| {
-            match self.ast.ty(*target) {
-                TypeKind::TyPath { segs, .. } => {
-                    segs[0].name == head
-                        && segs.last().map_or(false, |s| s.generics.len() == nargs)
-                }
-                _ => false,
-            }
-        })
-    }
-
-    /// Classify one row-head member: a bare single-segment name that
-    /// resolves to NO declared/used/builtin type is the head's
-    /// parameter; anything else is concrete (resolved here — this runs
-    /// in pass 1b, every name is in scope).
-    pub(crate) fn row_member_of(&mut self, node: NodeHandle<AnyTy>) -> RowMember {
-        if let TypeKind::TyPath { segs, .. } = self.ast.ty(node) {
-            if segs.len() == 1 && segs[0].generics.is_empty() {
-                let name = segs[0].name;
-                let known = sym::primitive_ty(name).is_some()
-                    || self.find_enum(name).is_some()
-                    || self.find_data(name).is_some()
-                    || self.find_trait(name).is_some()
-                    || self.find_alias(name).is_some()
-                    || self.extern_native_types.contains_key(&name)
-                    || self.extern_types.contains_key(&name);
-                if !known {
-                    return RowMember::Param(name);
-                }
-            }
-        }
-        RowMember::Concrete(self.resolve_type(node, &[]))
-    }
-
-    /// The row form's target check: walk the type structurally — a
-    /// bare leaf naming one of the head's parameters is fine, a leaf
-    /// naming another ROW alias diagnoses (no row chains: the admitted
-    /// form targets a class), and every other leaf resolves for its
-    /// errors. Arity and exact shapes re-check at the first expansion.
-    fn validate_row_target(&mut self, node: NodeHandle<AnyTy>, params: &[IdentId]) {
-        // owned walk plan (the diagnose arms need &mut self)
-        enum Walk {
-            ParamLeaf,
-            Path { single_head: Option<IdentId>, gens: Vec<NodeHandle<AnyTy>> },
-            Opt(NodeHandle<AnyTy>),
-            Arr(NodeHandle<AnyTy>),
-            Tuple(Vec<NodeHandle<AnyTy>>),
-            Other,
-        }
-        let w = match self.ast.ty(node) {
-            TypeKind::TyPath { segs, .. }
-                if segs.len() == 1 && segs[0].generics.is_empty() && params.contains(&segs[0].name) =>
-            {
-                Walk::ParamLeaf
-            }
-            TypeKind::TyPath { segs, .. } => Walk::Path {
-                single_head: (segs.len() == 1).then_some(segs[0].name),
-                gens: segs.last().expect("path has a segment").generics.clone(),
-            },
-            TypeKind::TyOpt { inner } => Walk::Opt(*inner),
-            TypeKind::TyArray { elem } => Walk::Arr(*elem),
-            TypeKind::TyTuple { elems } => Walk::Tuple(elems.clone()),
-            _ => Walk::Other,
-        };
-        match w {
-            Walk::ParamLeaf => {}
-            Walk::Path { single_head, gens } => {
-                if let Some(head) = single_head {
-                    if let Some(a) = self.find_alias(head) {
-                        if !a.params.is_empty() {
-                            let sp = self.ast.span(node.id());
-                            self.err(
-                                sp,
-                                format!(
-                                    "a type-alias row's target must be a class — `{}` is itself a row (RFC 0043)",
-                                    self.name(head)
-                                ),
-                            );
-                            return;
-                        }
-                    }
-                }
-                for g in gens {
-                    self.validate_row_target(g, params);
-                }
-            }
-            Walk::Opt(inner) => self.validate_row_target(inner, params),
-            Walk::Arr(elem) => self.validate_row_target(elem, params),
-            Walk::Tuple(elems) => {
-                for e in elems {
-                    self.validate_row_target(e, params);
-                }
-            }
-            Walk::Other => {
-                // fn types / unions in a row target — resolve for the error
-                self.resolve_type(node, &[]);
             }
         }
     }

@@ -107,8 +107,8 @@
 // core mounts `inline`, its transitive nmapset splices into this unit,
 // and the names are unit-local — the same composition the tables have
 // always ridden (the gate's set equality is what keeps any OTHER
-// package from riding in). The tables spell the val-column row
-// `HashMap<str, i64>` (the hashmap-surface batch's family spelling).
+// package from riding in). The tables spell the family name
+// `HashMap<str, i64>` (one name, one decl — the generic class).
 use web::{ tim_after };
 use todos::{ TodoStore, Todo };
 use t1::{ T1Root, t1_mount, t1_render, t1_subject };

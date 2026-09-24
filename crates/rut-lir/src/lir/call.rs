@@ -561,36 +561,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((_, fmnode)) = d.methods.iter().find(|(m, _)| *m == member).cloned() {
                 // The mint: (decl name, decl, method node, class args).
                 //
-                // The ROW form (RFC 0043 §1, the hashmap-surface batch):
-                // a substitution-completing site matches the family's
-                // concrete-member rows FIRST — explicit `HashMap<str,
-                // i64>.new()` re-targets the mint to the row TARGET's
-                // class — same decl, same method, the head's
-                // substitution — and the inference arm
-                // follows the expected type's own expansion (`let m:
-                // HashMap<str, i64>` names the target instantiation). The
-                // class instantiates only when no row matches. The
-                // expansion is pre-table (RFC 0043 §4): the mint lands on
-                // the target's instantiation.
+                // The class is looked up BY NAME: `HashMap<K, i64>` IS
+                // the generic class (one name, one decl — the row form
+                // is repealed), so the explicit-arguments arm instanti-
+                // ates it directly and the inference arm follows the
+                // expected type's own instantiation.
                 let mint: (IdentId, DataDecl, NodeHandle<MethodDeclNode>, Vec<TypeId>) = if !base_generics.is_empty() {
                     let args: Vec<TypeId> = base_generics.iter().map(|g| self.resolve_type_now(*g)).collect();
-                    match self.ctx.row_mint_target(dname, &args) {
-                        Some((rname, rargs)) => {
-                            let Some(rd) = self.ctx.find_data(rname).cloned() else {
-                                self.ctx.err(sp, format!("mint row target `{}` did not resolve", self.ctx.name(rname)));
-                                return Err(());
-                            };
-                            let Some(rmnode) = rd.methods.iter().find(|(m, _)| *m == member).map(|(_, n)| *n) else {
-                                self.ctx.err(sp, format!(
-                                    "`{}.{}` has no `{}` on the row's target class",
-                                    self.ctx.name(dname), self.ctx.name(member), self.ctx.name(member)
-                                ));
-                                return Err(());
-                            };
-                            (rname, rd, rmnode, rargs)
-                        }
-                        None => (dname, d.clone(), fmnode, args),
-                    }
+                    (dname, d.clone(), fmnode, args)
                 } else if !d.generics.is_empty() && self.current_class == Some(dname) {
                     // a `Self`-ish call inside the class body: the enclosing
                     // method's class args
@@ -610,20 +588,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // infer from the expected type: `let b: Box<i32> = Box.new(..)`
                     match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
                         Some((ed, eargs)) if ed == dname => (dname, d.clone(), fmnode, eargs),
-                        Some((ed, eargs)) if self.ctx.row_target_heads(dname, ed, eargs.len()) => {
-                            let Some(rd) = self.ctx.find_data(ed).cloned() else {
-                                self.ctx.err(sp, format!("mint row target `{}` did not resolve", self.ctx.name(ed)));
-                                return Err(());
-                            };
-                            let Some(rmnode) = rd.methods.iter().find(|(m, _)| *m == member).map(|(_, n)| *n) else {
-                                self.ctx.err(sp, format!(
-                                    "`{}.{}` has no `{}` on the row's target class",
-                                    self.ctx.name(dname), self.ctx.name(member), self.ctx.name(member)
-                                ));
-                                return Err(());
-                            };
-                            (ed, rd, rmnode, eargs)
-                        }
                         _ => {
                             self.ctx.err(sp, format!(
                                 "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",

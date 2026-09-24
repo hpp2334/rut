@@ -24,8 +24,8 @@ use todo_row::{ todo_row };
 
 /// The list tree plus this render's two subject tables (toggle, then
 /// remove) — the caller drops them onto the container. The tables are
-/// the val-column row (`HashMap<str, i64>` — the hashmap-surface
-/// batch's family spelling; the row resolves to the prim-val class).
+/// the keyed-collection family spelling (`HashMap<str, i64>` — the
+/// generic class; one name, one decl).
 pub fn todo_list(store: ?TodoStore) -> (Widget, HashMap<str, i64>, HashMap<str, i64>) {
     let mut st: ?TodoStore = store;
     let mut tg: HashMap<str, i64> = HashMap.new();

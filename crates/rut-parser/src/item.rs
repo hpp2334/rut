@@ -191,28 +191,20 @@ impl UseFrame {
 // ---- type alias ----
 
 /// `pub(..)? type Name = Target;` (RFC 0043): a transparent alias, or a
-/// `Target` spelled `A | B` for the bound-only union; and the ROW form
-/// (the hashmap-surface batch): `type Name<P0, T1, ..> = Target;` — a
-/// head of `(Ident | Type)` members, at least one concrete, the class
-/// with the same name staying the generic fallback. Members parse as
-/// type nodes (a bare `K` is a `TyPath`); the checker classifies.
-/// `vis` rides the item like `TyDeclFrame`'s; the `use`-both rule stays
-/// the binding gate.
+/// `Target` spelled `A | B` for the bound-only union. Aliases are
+/// NON-GENERIC — `type Name<K, ..>` is a parse error (`expected =`,
+/// the one-name-one-decl law; the row form is repealed). `vis` rides
+/// the item like `TyDeclFrame`'s; the `use`-both rule stays the
+/// binding gate.
 pub(crate) struct TypeAliasFrame {
     vis: Vis,
     lo: u32,
     name: IdentId,
-    /// the row form's head members, as written (empty for the plain
-    /// and union forms)
-    params: Vec<NodeHandle<AnyTy>>,
-    /// where the frame is: collecting `<..>` head members, or waiting
-    /// for the `= Target` half
-    in_params: bool,
 }
 
 impl TypeAliasFrame {
     pub(crate) fn new(vis: Vis) -> Self {
-        TypeAliasFrame { vis, lo: 0, name: IdentId(0), params: Vec::new(), in_params: false }
+        TypeAliasFrame { vis, lo: 0, name: IdentId(0) }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -221,16 +213,6 @@ impl TypeAliasFrame {
             return Step::Pop(Done::Failed);
         };
         self.name = name;
-        // the row form's head: `type Name<K, i64> = ..` — members parse
-        // as type nodes; the checker classifies parameter vs concrete
-        if p.eat_punct(Tok::Lt) {
-            if p.eat_punct(Tok::Gt) {
-                p.err_here("an empty type-alias head `<>` — write the members or drop the brackets");
-                return Step::Pop(Done::Failed);
-            }
-            self.in_params = true;
-            return Step::Push(Frame::Type(TypeFrame::new(p)));
-        }
         p.expect(Tok::Eq);
         Step::Push(Frame::Type(TypeFrame::new_bound(p)))
     }
@@ -238,20 +220,9 @@ impl TypeAliasFrame {
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
             Done::Ty(ty) => {
-                if self.in_params {
-                    self.params.push(ty);
-                    if p.eat_punct(Tok::Comma) {
-                        return Step::Push(Frame::Type(TypeFrame::new(p)));
-                    }
-                    p.expect(Tok::Gt);
-                    self.in_params = false;
-                    p.expect(Tok::Eq);
-                    return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
-                }
                 p.expect(Tok::Semi);
-                let params = std::mem::take(&mut self.params);
                 let node = p.item(
-                    ItemKind::Alias(AliasData { vis: self.vis, name: self.name, params, target: ty }),
+                    ItemKind::Alias(AliasData { vis: self.vis, name: self.name, target: ty }),
                     Span::new(self.lo, p.span().hi),
                 );
                 Step::Pop(Done::Item(node))

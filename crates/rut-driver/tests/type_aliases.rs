@@ -314,3 +314,100 @@ fn alias_shadows_nothing_and_duplicate_names_diagnose() {
         "{ds:?}"
     );
 }
+
+// ---- the type-name-law batch (phase 1): one name = one type ----------
+//
+// The alias-row form is repealed: the head admits no members (a
+// generic head is a parse error again), the concrete-shadows-generic
+// lift is gone from `declare_alias`, and the duplicate-type-name check
+// is the plain symmetric four-way — the probed five-kind x both-orders
+// matrix diagnoses uniformly.
+
+#[test]
+fn alias_head_params_are_a_parse_error_again() {
+    // the row grammar's head seam reverts: `type Name<K, ..>` never
+    // reaches the checker — the parser expects `=` after the name
+    let ds = diags_of(
+        "type HashMap<K, i64> = i64;\n\
+         fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("expected =") && d.contains("found `<`")),
+        "a generic alias head is a parse error again: {ds:?}"
+    );
+    // the empty head died with the same seam
+    let ds = diags_of(
+        "type Foo<> = i64;\n\
+         fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("expected =")),
+        "`<>` is no special grammar: {ds:?}"
+    );
+}
+
+#[test]
+fn one_name_one_decl_diagnoses_in_both_orders() {
+    // alias-vs-class, both orders — the row-vs-class shape (silent in
+    // the class-first order under the removed lift) cannot even parse
+    // now; a PLAIN alias colliding with a class diagnoses both ways
+    for src in [
+        "class C { }\n type C = i64;\n fn main() -> i32 { return 0; }\n",
+        "type C = i64;\n class C { }\n fn main() -> i32 { return 0; }\n",
+    ] {
+        let ds = diags_of(src);
+        assert!(
+            ds.iter().any(|d| d.contains("duplicate type name `C`")),
+            "alias x class must diagnose both orders: {ds:?}"
+        );
+    }
+    // alias-vs-generic-struct, both orders (the lifted leg-2 shape)
+    for src in [
+        "struct W<T> { v: T }\n type W = i64;\n fn main() -> i32 { return 0; }\n",
+        "type W = i64;\n struct W<T> { v: T }\n fn main() -> i32 { return 0; }\n",
+    ] {
+        let ds = diags_of(src);
+        assert!(
+            ds.iter().any(|d| d.contains("duplicate type name `W`")),
+            "alias x generic struct must diagnose both orders: {ds:?}"
+        );
+    }
+    // alias-vs-alias (the row-vs-row family shape — two decls, one name)
+    let ds = diags_of(
+        "type A = i64;\n type A = str;\n fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("duplicate type name `A`")),
+        "two aliases, one name: {ds:?}"
+    );
+    // alias-vs-enum and alias-vs-trait (the legs that never had a lift)
+    let ds = diags_of("enum E { M }\n type E = i64;\n fn main() -> i32 { return 0; }\n");
+    assert!(ds.iter().any(|d| d.contains("duplicate type name `E`")), "{ds:?}");
+    let ds = diags_of("trait T { }\n type T = i64;\n fn main() -> i32 { return 0; }\n");
+    assert!(ds.iter().any(|d| d.contains("duplicate type name `T`")), "{ds:?}");
+}
+
+#[test]
+fn alias_target_resolves_at_declaration_used_or_not() {
+    // the RHS hole is closed for good: the target head resolves in
+    // pass 1b at the DECL — an unused alias with a nonsense target
+    // diagnoses with nothing ever expanding it
+    let ds = diags_of(
+        "type Foo = NotAType;\n\
+         pub fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("unknown type `NotAType`")),
+        "an unused nonsense alias target must diagnose at the decl: {ds:?}"
+    );
+    // and the arity of a parameterized target is checked at the decl
+    // too (a plain alias takes no arguments)
+    let ds = diags_of(
+        "type Bar = Missing<i64>;\n\
+         pub fn main() -> i32 { return 0; }\n",
+    );
+    assert!(
+        ds.iter().any(|d| d.contains("unknown type `Missing`")),
+        "an unknown parameterized target head diagnoses at the decl: {ds:?}"
+    );
+}

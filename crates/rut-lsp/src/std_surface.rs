@@ -12,9 +12,9 @@
 //! document, so their class methods complete. Before the `rut-lsp-align`
 //! batch only core/calc/pouch were
 //! here and a bare user project got no `HashMap`/`HashSet` completion
-//! at all. (The hashmap-surface batch: the family rows resolve to the
-//! val-column classes, so what a bare project needs is exactly the two
-//! family names — the prim lane names left the public surface.)
+//! at all. (The hashmap-surface batch re-scoped this surface to the
+//! family pair; the type-name-law batch repeals the alias-row form —
+//! nmapset's index carries the two classes and NO `type` rows.)
 
 use crate::hover::{self, DefIndex};
 
@@ -56,11 +56,11 @@ pub fn indexes() -> Vec<DefIndex> {
         let (ast, _) = rut_parser::parse(&src, mode);
         let mut idx = hover::index(&src, &ast, &toks);
         // the std surface is the PUBLIC face (the hashmap-surface
-        // batch): nmapset's rows re-scope to the family — its internal
-        // lane classes are `pub`-less in the source now, and a
-        // pub-less type never rides the surface (completions, the
-        // bare-project index, hovers from it). Other pkgs keep their
-        // full index rows (their types are pub anyway).
+        // batch): nmapset's internals stay off it — its lane classes
+        // are `pub`-less in the source now, and a pub-less type never
+        // rides the surface (completions, the bare-project index,
+        // hovers from it). Other pkgs keep their full index rows
+        // (their types are pub anyway).
         if origin == "nmapset" {
             idx.types.retain(|t| t.is_pub);
         }
@@ -113,10 +113,10 @@ mod tests {
     fn nmapset_lane_classes_reachable_bare() {
         // M3 (lsp-align survey): what a bare user project (no workspace
         // index) gets from the std surface alone — `use nmapset::{{ HashMap }};`
-        // must find the family classes; the val-column rows resolve
-        // through `HashMap` (the hashmap-surface batch: the prim lane
-        // names are nmapset-internal now, and the surface offers the
-        // family pair only)
+        // must find the family classes. (The type-name-law batch: the
+        // alias-row form is repealed — one name, one decl — so the
+        // surface offers the class pair and NO `type` rows: the three
+        // `pub type HashMap<K, ..>` index rows left with the row decls.)
         let idxs = indexes();
         let has = |name: &str| {
             idxs.iter()
@@ -131,6 +131,20 @@ mod tests {
                 "std surface still offers `{absent}` — the prim lane names left the public surface"
             );
         }
+        // the row decls' negative pin: nmapset's index carries NO
+        // alias-form entries at all (the three `pub type HashMap<K, ..>`
+        // rows were its only aliases — repealed with the row form)
+        let nmapset = idxs.iter().find(|i| i.origin == "nmapset").expect("nmapset in the std surface");
+        let alias_rows: Vec<&str> = nmapset
+            .types
+            .iter()
+            .filter(|t| t.form == crate::hover::TyForm::Alias)
+            .map(|t| t.name.as_str())
+            .collect();
+        assert!(
+            alias_rows.is_empty(),
+            "nmapset's index still carries alias rows {alias_rows:?} — the row form is repealed"
+        );
         // the host surface's opaque-crossing decl too (nmap.d.rut)
         assert!(
             idxs.iter()

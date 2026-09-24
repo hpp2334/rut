@@ -8,11 +8,10 @@
 // escape hatch: encode it canonically to `bytes`). `get` answers `?V` —
 // `nil` is absent (RFC 0005 §10), so a miss is COMPARED, never rendered:
 // `m.get(k) == nil`. A hit returns the STORED cell, not a copy (the
-// aliasing law, RFC 0044). The val-column rows — `HashMap<K, i64>` /
-// `HashMap<K, u64>` / `HashMap<K, f64>` — keep keys AND values
-// host-side (no per-value cell): spell the val type and the row picks
-// the lane. Float keys are absent by design: floats have no stable
-// equality contract.
+// aliasing law, RFC 0044). Every map rides the `[?V]` sidecar (the
+// type-name-law batch: the val-column alias rows are repealed — one
+// name, one decl). Float keys are absent by design: floats have no
+// stable equality contract.
 
 use nmapset::{ HashMap, HashSet };
 use ink::{ Logger };
@@ -40,9 +39,8 @@ fn word_counts(log: Logger) {
 }
 
 fn id_lane(log: Logger) {
-    // the unboxed lane: `HashMap<str, i64>` (the val-column row) —
-    // id -> payload, values live in the host table's native column
-    // (put/get are one crossing each)
+    // the id lane: `HashMap<str, i64>` — id -> payload over the
+    // keyed-collection family (one name, one decl)
     let mut scores: HashMap<str, i64> = HashMap.new();
     scores.put("a", 10i64);
     scores.put("b", 20i64);

@@ -1,30 +1,23 @@
-//! The nmapset prim-val maps (nmapset-round3, phase 2): the val-column
-//! classes over the host table's native val column — keys AND values
-//! both Rust-side, no `[?V]` sidecar, no relocation drain (the host
-//! moves vals with the keys inside `map_grow`).
+//! The nmapset keyed maps (nmapset-round3, phase 2): the family
+//! spellings `HashMap<K, i64>` / `HashMap<K, u64>` / `HashMap<K, f64>`.
 //!
-//! SPELLING (the hashmap-surface batch): the family rows
-//! `HashMap<K, i64>` / `HashMap<K, u64>` / `HashMap<K, f64>` resolve to
-//! these classes — the prim names are nmapset-internal now, so this
-//! suite spells the family throughout. The expansion is pre-table
-//! (RFC 0043 §4): the rows land on the very same TypeId, and every pin
-//! below held bit-identically through the rename. (The pre-batch
-//! spelling of these rows named the prim classes directly; that
-//! spelling is history now — this suite spells the family only.)
-//!
-//! DISCLOSED (the re-seat consequence): the PARITY law's control side
-//! went VACUOUS here — `HashMap<i32, i64>` used to spell the `[?V]`
-//! sidecar and the parity tests compared the two storages; under the
-//! rows BOTH spellings resolve to the column, so the cross-storage
-//! comparison compared the column with itself. The self-comparison legs
-//! are dropped (the raw-column half of `nmap_valcolumn.rs` keeps the
-//! meaningful law: the family spelling must equal the raw crossings);
-//! what stays is the CHECKSUM pins (2598000 and friends), the get
+//! SPELLING (the type-name-law batch): the alias-row form is repealed —
+//! one name, one decl — so these spellings ARE the generic class now
+//! and every map here rides the `[?V]` sidecar. DISCLOSED (the re-seat
+//! consequence): the val-column lane left the public surface — the same
+//! ops now cost the sidecar's measured price (the survey's sidekick
+//! pricing: fuel +15-18%, heap 324 B -> 1.9-3.5 MiB on the bench twins;
+//! the bench row's pins move to the sidecar values, checksums do NOT
+//! move). What stays is the CHECKSUM pins (2598000 and friends —
+//! storage-independent: values, not representation), the get
 //! semantics, the grow sweep, the u64/f64 lanes, K admission (the union
-//! diagnostic, unchanged), and the coexistence of the rows with the
-//! sidecar class and `HashSet` in one program. The bool val lane is
-//! deferred (`?bool` cannot serve the `get -> ?V` nil law in today's
-//! checker — the class family's header comment records the repro).
+//! diagnostic, the class's own), and the coexistence of the prim-val
+//! spellings with the ref-val class and `HashSet` in one program. The
+//! bool val lane stays deferred (`?bool` cannot serve the
+//! `get -> ?V` nil law in today's checker — the class family's header
+//! comment records the repro); the raw host-table column law lives in
+//! `nmap_valcolumn.rs` (`rut/nmap_host`'s own crossings), and a
+//! differently-named column class is the recorded future shape.
 
 use std::rc::Rc;
 
@@ -95,12 +88,11 @@ fn diags_of(src: &str) -> Vec<String> {
 // ---- the checksum law ------------------------------------------------
 
 /// The nmapset-int churn shape at n = 2000, keyed i32 with i64 vals,
-/// through the val-column row spelling `HashMap<i32, i64>` (the
-/// hashmap-surface batch — the row resolves to the val-column class;
-/// the old cross-storage parity vs the `[?V]` sidecar went vacuous
-/// under the rows, see the header). The pinned 2598000 the phase-1
-/// column law answers — the same number the row answered when it was
-/// spelled with the direct class name this row replaced.
+/// through the family spelling `HashMap<i32, i64>` (the type-name-law
+/// batch — the spelling IS the generic class now, so the ops ride the
+/// `[?V]` sidecar; the checksum is storage-independent and does not
+/// move, see the header). The pinned 2598000 the column law answered —
+/// the same number every storage of this op stream has answered.
 const PARITY_SRC: &str = r#"
 use nmapset::{ HashMap };
 
@@ -207,12 +199,11 @@ pub fn main() -> i64 {
 "#;
 
 #[test]
-fn primmap_row_checksum_holds_through_the_family_spelling() {
-    // the pinned literal: the nmapset-int churn shape at n = 2000 (the
-    // phase-1 column law's number — sum 2013000 + the counters' prime
-    // weights), unchanged through the family spelling (the row IS the
-    // column — the direct class spelling this row replaced answered
-    // the same number)
+fn primmap_checksum_holds_through_the_family_spelling() {
+    // the pinned literal: the nmapset-int churn shape at n = 2000 (sum
+    // 2013000 + the counters' prime weights), unchanged through the
+    // re-seat (the spelling is the sidecar class now — the checksum
+    // folds values, not storage)
     assert_eq!(
         run_main(PARITY_SRC),
         2598000,
@@ -220,13 +211,12 @@ fn primmap_row_checksum_holds_through_the_family_spelling() {
     );
 }
 
-/// The prim `get` semantics through the family spelling: a hit returns
-/// a FRESH opt holding the value's bits — a held `p1` keeps the
-/// pre-replace value (a prim copy, round-2 semantics), a fresh get
-/// reads the replacement, remove nils the lookup without touching the
-/// held copy, and the re-insert lands the fresh value at the reused
-/// slot. (The old twin spelling of this law against the sidecar went
-/// vacuous under the rows — the law itself is unchanged.)
+/// The `get` semantics through the family spelling: a hit returns a
+/// FRESH opt holding the value's bits — a held `p1` keeps the
+/// pre-replace value (VM opts are value copies; the sidecar re-seat
+/// does not move this law), a fresh get reads the replacement, remove
+/// nils the lookup without touching the held copy, and the re-insert
+/// lands the fresh value at the reused slot.
 const GET_SEMANTICS_SRC: &str = r#"
 use nmapset::{ HashMap };
 
@@ -388,10 +378,9 @@ fn primmap_f64_lane_round_trips_float_bits() {
 
 // ---- admission + coexistence ----------------------------------------
 
-/// K admission through the row is the SAME closed union: a user
-/// record fails at compile time naming the offending type and the
-/// union — the diagnostic text is the target class's own, unchanged
-/// through the row expansion.
+/// K admission is the SAME closed union: a user record fails at
+/// compile time naming the offending type and the union — the class's
+/// own diagnostic, met directly now (the row expansion is repealed).
 #[test]
 fn primmap_k_admission_names_the_union() {
     let ds = diags_of(
@@ -408,9 +397,9 @@ fn primmap_k_admission_names_the_union() {
     );
 }
 
-/// The val-column rows coexist with the sidecar class and `HashSet`
-/// in one program: a `str`-keyed i64 map rides the column row, a
-/// `str`-valued map rides the sidecar, the set stays the set.
+/// The prim-val spellings coexist with the ref-val class and `HashSet`
+/// in one program: a `str`-keyed i64 map and a `str`-valued map are
+/// instantiations of the ONE class, the set stays the set.
 #[test]
 fn primmap_coexists_with_hashmap_and_hashset() {
     let checksum = run_main(

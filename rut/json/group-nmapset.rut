@@ -5,17 +5,21 @@
 //
 // THE SURVEY §2.6 MATRIX, AS LANDED — the DECODE half:
 //
-//   HashMap<K, V> / HashSet<T> — plus the val-column rows
-//   `HashMap<K, i64>` / `HashMap<K, u64>` / `HashMap<K, f64>` (the
-//   hashmap-surface batch: the family rows expand to the prim-val
-//   classes, so these three impls register on the very same
-//   (trait, type) pairs the old Prim spellings did) — objects for the
-//   maps, arrays for the set, keys and elements through K's/T's own
-//   impls. K's key text parses by K's own
-//   shape (§2.6's prim-key policy): `str` verbatim, integers decimal,
-//   `bool` true/false, `f64` through the §2.4 parse; an unparsable key
-//   text is WrongType naming the text; duplicates that normalize
-//   together ("01" and "1") are LAST WINS — nmapset's `put` semantics.
+//   HashMap<K, V> / HashSet<T> — ONE map impl (the type-name-law
+//   batch: the alias-row form is repealed — one name, one decl — and
+//   the three val-column impls that used to register beside the
+//   generic one FOLDED into it; without the rows a generic impl and a
+//   partial-instantiation impl over one class collide at link). The
+//   val lane is V's OWN `decode` dispatch, per instantiation:
+//   `i64`/`f64` ride json's scalar impls, `u64` rides the gnu64
+//   impl below — objects for the maps, arrays for the set, keys and
+//   elements through K's/T's own impls. K's key text parses by K's
+//   own shape (§2.6's prim-key policy): `str` verbatim, integers
+//   decimal, `bool` true/false, `f64` through the §2.4 parse; an
+//   unparsable key text is WrongType naming the text; duplicates that
+//   normalize together ("01" and "1") are LAST WINS — nmapset's `put`
+//   semantics. `HashMap<K, i64/u64/f64>` now spells the generic class
+//   (the `[?V]` sidecar): same decoded values, sidecar storage.
 //
 // THE ENCODE HALF IS NOT LANDED — disclosed, not dropped silently: json
 // can encode a map only by WALKING it, and nmapset ships no iteration
@@ -100,8 +104,8 @@ impl KeyText for bool {
     fn key_spells() -> bool { return true; }
 }
 
-// the u64 digit fold — shared by the u64 val-column row's values and
-// the u64 KEY shape; the fold pre-checks its bound (no wrapping ops)
+// the u64 digit fold — the u64 VAL lane's values (below) and the u64
+// KEY shape; the fold pre-checks its bound (no wrapping ops)
 fn gnu64(t: str) -> ?u64 {
     let n = t.len();
     if (n == 0) { return nil; }
@@ -125,6 +129,28 @@ impl KeyText for u64 {
         return gnu64(t);
     }
     fn key_spells() -> bool { return true; }
+}
+
+// the u64 VAL lane (the fold): decodeJson<u64> and every `V.decode`
+// dispatch with V = u64 — `HashMap<str, u64>`'s element read — answer
+// the reader's number TEXT through the gnu64 fold, so a value beyond
+// i64's reach lands exactly and anything unparsable is WrongType
+// naming the text (the deleted val-row impl's body, verbatim)
+impl JsonDeserialize for u64 {
+    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let t = r.read_number_text();
+        if (r.failed()) { return (nil, r.error()); }
+        let v = gnu64(t);
+        if (v == nil) {
+            return (nil, DecodeJsonError {
+                kind: DecodeErrorKind.WrongType,
+                at: r.here() as i64,
+                got: t,
+                expected: "a u64",
+            });
+        }
+        return (v, nil);
+    }
 }
 
 impl KeyText for f64 {
@@ -195,114 +221,5 @@ impl JsonDeserialize for HashSet<T> {
         r.end_array();
         if (r.failed()) { return (nil, r.error()); }
         return (s, nil);
-    }
-}
-
-impl JsonDeserialize for HashMap<K, i64> {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut m = HashMap<K, i64>.new();
-        r.begin_object();
-        while (r.more()) {
-            let kt = r.next_key();
-            if (r.failed()) { return (nil, r.error()); }
-            let k = K.key_from_text(kt);
-            if (k == nil) {
-                // unparsable key text names itself (§2.6: WrongType); a
-                // bytes key is unparsable by definition — no JSON
-                // spelling (the header's disclosure). The val-column row
-                // carries the SAME key_spells branch as the general
-                // map's row: `HashMap<bytes, i64>` re-seats here, and the
-                // diagnostic text must not move with it.
-                let mut want = "a key this map's key type can parse";
-                if (!K.key_spells()) {
-                    want = "a key type JSON can spell (bytes keys have no JSON spelling)";
-                }
-                return (nil, DecodeJsonError {
-                    kind: DecodeErrorKind.WrongType,
-                    at: r.here() as i64,
-                    got: kt,
-                    expected: want,
-                });
-            }
-            let kk: K = k;
-            let v = r.read_i64();
-            if (r.failed()) { return (nil, r.error()); }
-            let _ = m.put(kk, v);
-        }
-        r.end_object();
-        if (r.failed()) { return (nil, r.error()); }
-        return (m, nil);
-    }
-}
-
-impl JsonDeserialize for HashMap<K, u64> {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut m = HashMap<K, u64>.new();
-        r.begin_object();
-        while (r.more()) {
-            let kt = r.next_key();
-            if (r.failed()) { return (nil, r.error()); }
-            let k = K.key_from_text(kt);
-            if (k == nil) {
-                let mut want = "a key this map's key type can parse";
-                if (!K.key_spells()) {
-                    want = "a key type JSON can spell (bytes keys have no JSON spelling)";
-                }
-                return (nil, DecodeJsonError {
-                    kind: DecodeErrorKind.WrongType,
-                    at: r.here() as i64,
-                    got: kt,
-                    expected: want,
-                });
-            }
-            let kk: K = k;
-            let t = r.read_number_text();
-            if (r.failed()) { return (nil, r.error()); }
-            let v = gnu64(t);
-            if (v == nil) {
-                return (nil, DecodeJsonError {
-                    kind: DecodeErrorKind.WrongType,
-                    at: r.here() as i64,
-                    got: t,
-                    expected: "a u64",
-                });
-            }
-            let vv: u64 = v;
-            let _ = m.put(kk, vv);
-        }
-        r.end_object();
-        if (r.failed()) { return (nil, r.error()); }
-        return (m, nil);
-    }
-}
-
-impl JsonDeserialize for HashMap<K, f64> {
-    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        let mut m = HashMap<K, f64>.new();
-        r.begin_object();
-        while (r.more()) {
-            let kt = r.next_key();
-            if (r.failed()) { return (nil, r.error()); }
-            let k = K.key_from_text(kt);
-            if (k == nil) {
-                let mut want = "a key this map's key type can parse";
-                if (!K.key_spells()) {
-                    want = "a key type JSON can spell (bytes keys have no JSON spelling)";
-                }
-                return (nil, DecodeJsonError {
-                    kind: DecodeErrorKind.WrongType,
-                    at: r.here() as i64,
-                    got: kt,
-                    expected: want,
-                });
-            }
-            let kk: K = k;
-            let v = r.read_f64();
-            if (r.failed()) { return (nil, r.error()); }
-            let _ = m.put(kk, v);
-        }
-        r.end_object();
-        if (r.failed()) { return (nil, r.error()); }
-        return (m, nil);
     }
 }

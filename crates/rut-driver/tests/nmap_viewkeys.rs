@@ -3,14 +3,13 @@
 //! `has_range` / `remove_range`, the key crossing as a borrowed
 //! `(parent, off, len)` BYTE range.
 //!
-//! SPELLING (the hashmap-surface batch): the range-keyed methods live
-//! on the GENERIC class, and the family rows re-seat `HashMap<str,
-//! i64>` to the val-column class — which has no range surface. This
-//! suite spells the no-row val `HashMap<str, i32>` (the nmapset-str
-//! shape this suite parity-matches anyway) so the range machinery
-//! stays testable; every pinned literal below is unchanged (the folded
-//! integers are the same). The range-surface-on-the-column question is
-//! a new-surface menu item, not a rename.
+//! SPELLING (the type-name-law batch): the range-keyed methods live
+//! on the GENERIC class — now the ONLY class (the alias-row form is
+//! repealed; one name, one decl). The suite spells the val
+//! `HashMap<str, i32>` (the nmapset-str shape this suite
+//! parity-matches anyway) so the pinned literals stay untouched; the
+//! range surface and the map are the same class, so nothing is
+//! stranded.
 //!
 //! Covered: the PARITY law through the wrapper — the nmapset-str churn
 //! shape spelled both ways over one parent (range methods vs

@@ -4155,3 +4155,37 @@ parity tests' cross-storage control legs went vacuous (both sides now
 spell the column) and were retuned, disclosed in the test headers;
 `nmap_valcolumn.rs`'s law now pins the row spelling against the raw
 crossings — the re-seat's own proof.
+
+## Performance log — type-name-law phase 1: the row repeal, the re-seat movers (Sep 2026)
+
+The alias-row form is REPEALED (one name = one type): the alias head
+admits no members again (a generic head is a parse error), the
+concrete-shadows-generic duplicate-name lift is gone, and the three
+`pub type HashMap<K, ..>` row decls left `rut/nmapset/nmapset.rut`.
+The row SPELLINGS survive everywhere (`HashMap<i32, i64>` is the
+generic class now) and re-seat to the `[?V]` sidecar by resolution —
+the hashmap-surface flip run in reverse. Because the MECHANISM changed
+(not the spelling), the rename theorem does not apply: what holds is
+that checksums fold the op stream, which does not move — so every
+checksum is IMMOVABLE while fuel/heap MOVE to the sidecar's measured
+cost (the survey's sidekick pricing). `nmap-primmap`'s source is
+UNTOUCHED (zero source edit); the movers are pure resolution:
+
+| pin | old (the val column) | new (the sidecar) | move |
+|---|---|---|---|
+| `nmap-primmap` checksum | `734932704` | `734932704` | immovable (= `nmapset-int`, the design law) |
+| fuel | `17,950,301` | `20,903,285` | **+16.4 %** (deterministic, 5 fresh-VM iters) |
+| VM-heap peak | `324 B` | `3,539,324 B` | 324 B -> 3.38 MiB (the `[?V]` relocation drain + per-entry cells) |
+
+The survey priced the move at fuel +15-18 % and heap 324 B vs
+1.9-3.5 MiB (the twins' table above); the landed value sits inside the
+band. The sibling pins never moved (their sources and resolutions
+unchanged): `nmapset-int` 734932704 (fuel 20,703,284, heap 1,966,551),
+`nmapset-str` 1264308351 (9,551,761 / 983,620), `nmap-knucleotide`
+2198604 (38,814,389 / 4,195,084), `nmap-hashset` 21500055
+(13,267,176 / 551). `expected.json` was NOT touched by this batch —
+checksums only, all equal, the pin is the gate. json's three val
+impls folded into the generic map impl (without the rows a generic
+impl and a partial-instantiation impl over one class collide at
+link); decoded values unchanged, the bytes-key diagnostic text held
+verbatim.

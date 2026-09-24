@@ -101,9 +101,6 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             ItemKind::Alias(d) => {
                 fields.push(field("vis", DumpVal::Vis(d.vis)));
                 fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
-                if !d.params.is_empty() {
-                    fields.push(field("params", DumpVal::Nodes(d.params.iter().map(|p| node_dump(a, p.id())).collect())));
-                }
                 fields.push(field("target", DumpVal::Node(Box::new(node_dump(a, d.target.id())))));
                 "Alias"
             }

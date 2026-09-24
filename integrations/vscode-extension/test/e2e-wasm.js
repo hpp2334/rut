@@ -199,11 +199,18 @@ async function main() {
     if (a.diags.length !== 0) {
       bad.push(`std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
     }
-    const labels = rut.complete(uri, 0, 0).map((i) => i.label);
-    // the hashmap-surface batch: the completion pin offers the family
-    // pair — the val-column rows resolve through `HashMap`
+    const bareItems = rut.complete(uri, 0, 0);
+    const labels = bareItems.map((i) => i.label);
+    // the type-name-law batch: the completion pin offers the family
+    // pair — the class pair itself (the alias-row form is repealed, so
+    // the `pub type HashMap<K, ..>` rows that used to sit beside the
+    // class in the index are gone; the completion detail is the CLASS)
     for (const want of ['HashMap', 'HashSet']) {
       if (!labels.includes(want)) bad.push(`bare completion lacks nmapset's '${want}' (${labels.length} items)`);
+    }
+    for (const nm of ['HashMap', 'HashSet']) {
+      const hit = bareItems.find((i) => i.label === nm);
+      if (hit && !/^class /.test(hit.detail || '')) bad.push(`bare completion '${nm}' is not the class: '${hit.detail}'`);
     }
     for (const absent of ['PrimMapI64', 'PrimMapU64', 'PrimMapF64']) {
       if (labels.includes(absent)) bad.push(`bare completion still offers the internal '${absent}'`);

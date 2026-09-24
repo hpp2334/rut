@@ -237,34 +237,25 @@ impl<'a> Ctx<'a> {
     }
 
     /// Pass 1a — register a `type X = A;` / `type X = A | B;` alias
-    /// (RFC 0043), or the ROW form `type X<K, i64> = A;` (the
-    /// hashmap-surface batch). The target validates in pass 1b
-    /// (`validate_alias`), so forward references are legal. The
-    /// duplicate-type-name check lifts EXACTLY for the
-    /// concrete-shadows-generic shape: several rows may share one
-    /// family name, and the rows may share the generic class's name —
-    /// the class is the fallback, the rows are strictly more specific.
-    /// Any other collision (a second plain alias, a plain alias over a
-    /// class, an enum/trait) still errors.
+    /// (RFC 0043), plain and union forms — one name, one decl: the
+    /// alias head admits no members (a generic head is a parse error)
+    /// and the duplicate-type-name check is the plain symmetric
+    /// four-way, exactly like the enum/data/trait declare sites. The
+    /// target validates in pass 1b (`validate_alias`), so forward
+    /// references are legal.
     pub(crate) fn declare_alias(&mut self, node: NodeId, d: &AliasData) {
         let sp = self.ast.span(node);
-        let is_row = !d.params.is_empty();
-        let clash = self
-            .find_alias(d.name)
-            .map_or(false, |a| !(is_row && !a.params.is_empty()))
+        if self.find_alias(d.name).is_some()
+            || self.find_data(d.name).is_some()
             || self.find_enum(d.name).is_some()
             || self.find_trait(d.name).is_some()
-            || self
-                .find_data(d.name)
-                .map_or(false, |dd| !(is_row && !dd.generics.is_empty()));
-        if clash {
+        {
             self.err(sp, format!("duplicate type name `{}`", self.name(d.name)));
             return;
         }
         self.aliases.push(AliasDecl {
             name: d.name,
             node,
-            params: d.params.clone(),
             target: d.target,
             resolved: None,
         });
@@ -547,26 +538,6 @@ impl<'a> Ctx<'a> {
         name: IdentId,
         generics: Vec<NodeHandle<AnyTy>>,
     ) -> Option<(TypeId, Option<(IdentId, Vec<IdentId>)>, bool, bool, bool, IdentId)> {
-        // (seam c) the row form: a family name with head members and
-        // generic arguments matches a row at the NODE level — the impl's
-        // own generic idents bind the head's parameter members, the
-        // concrete members must spell their types exactly.
-        if !generics.is_empty() {
-            if let Some((dname, rparams)) = self.impl_row_target(name, &generics) {
-                let Some(d) = self.find_data(dname).cloned() else {
-                    self.err(sp, format!("impl row target `{}` did not resolve", self.name(dname)));
-                    return None;
-                };
-                if rparams.len() != d.generics.len() {
-                    self.err(sp, format!(
-                        "`{}<..>` takes {} type parameter(s), {} given",
-                        self.name(dname), d.generics.len(), rparams.len()
-                    ));
-                    return None;
-                }
-                return Some((d.ty, Some((dname, rparams)), true, false, false, dname));
-            }
-        }
         // (seam c, D1's lift) a PLAIN alias expands in impl-target
         // position: `impl Paint for B2` where `type B2 = Box2;` compiles
         // exactly as if `Box2` were spelled.
@@ -642,11 +613,10 @@ impl<'a> Ctx<'a> {
     }
 
     /// The plain-alias expansion of an impl-target name (seam c):
-    /// `Some(target TypeId)` when `name` is a declared alias with NO
-    /// head members whose single target resolved to a type.
+    /// `Some(target TypeId)` when `name` is a declared alias whose
+    /// single target resolved to a type.
     fn plain_alias_target(&mut self, name: IdentId) -> Option<TypeId> {
-        let a = self.find_alias(name)?;
-        if !a.params.is_empty() {
+        if self.find_alias(name).is_none() {
             return None;
         }
         self.validate_alias(name);
@@ -655,100 +625,6 @@ impl<'a> Ctx<'a> {
             Some(AliasTarget::Ty(t)) => Some(t),
             _ => None,
         }
-    }
-
-    /// The row form in impl-target position (seam c, the
-    /// hashmap-surface batch): match `name`'s rows against the impl
-    /// head's generic nodes — the head's parameter members bind the
-    /// impl's own generic idents, the concrete members must resolve to
-    /// the very type spelled — and return the row TARGET's (decl name,
-    /// parameter idents) for the registration. `None` when the name
-    /// declares no rows or none match: the ordinary chain decides.
-    fn impl_row_target(
-        &mut self,
-        name: IdentId,
-        generics: &[NodeHandle<AnyTy>],
-    ) -> Option<(IdentId, Vec<IdentId>)> {
-        let rows = self.alias_rows(name);
-        if rows.is_empty() {
-            return None;
-        }
-        for (_, members, target) in rows {
-            if members.len() != generics.len() {
-                continue;
-            }
-            // match at the node level: a parameter member must spell a
-            // bare non-type name (the impl's generic); a concrete member
-            // must resolve to exactly its type
-            let mut binding: Vec<(IdentId, IdentId)> = Vec::new();
-            let mut matched = true;
-            for (mnode, gnode) in members.iter().copied().zip(generics.iter().copied()) {
-                match self.node_head_ident(gnode) {
-                    Some(gi) if !self.node_is_known_type(gnode) => match self.row_member_of(mnode) {
-                        RowMember::Param(p) => binding.push((p, gi)),
-                        RowMember::Concrete(_) => {
-                            matched = false;
-                            break;
-                        }
-                    },
-                    _ => match self.row_member_of(mnode) {
-                        RowMember::Param(_) => {
-                            matched = false;
-                            break;
-                        }
-                        RowMember::Concrete(t) => {
-                            let g = self.resolve_type(gnode, &[]);
-                            if g != t {
-                                matched = false;
-                                break;
-                            }
-                        }
-                    },
-                }
-            }
-            if !matched {
-                continue;
-            }
-            // the row target's head + args (owned first — the err calls
-            // below need &mut self)
-            let shape: Option<(IdentId, Vec<NodeHandle<AnyTy>>)> = match self.ast.ty(target) {
-                TypeKind::TyPath { segs, .. } => Some((
-                    segs[0].name,
-                    segs.last().expect("path has a segment").generics.clone(),
-                )),
-                _ => None,
-            };
-            let Some((thead, targs)) = shape else {
-                self.err(
-                    self.ast.span(target.id()),
-                    "a type-alias row's target must be a class (RFC 0043)",
-                );
-                return None;
-            };
-            // the row target's generic args must spell the head's
-            // bound parameters — the admitted form
-            // (`type HashMap<K, i64> = <the row's target class><K>;`)
-            let mut params: Vec<IdentId> = Vec::with_capacity(binding.len());
-            for ta in targs {
-                let Some(ai) = self.node_head_ident(ta) else {
-                    self.err(
-                        self.ast.span(ta.id()),
-                        "a row impl target must spell the head's parameters — a concrete target argument has no generic registration (RFC 0043)",
-                    );
-                    return None;
-                };
-                let Some(&(_, gi)) = binding.iter().find(|(p, _)| *p == ai) else {
-                    self.err(
-                        self.ast.span(ta.id()),
-                        "a row impl target must spell one of the head's parameters (RFC 0043)",
-                    );
-                    return None;
-                };
-                params.push(gi);
-            }
-            return Some((thead, params));
-        }
-        None
     }
 
     /// The bare single-segment ident a type node spells, when it does.
@@ -794,7 +670,6 @@ impl<'a> Ctx<'a> {
                     (display, Some(self.origin_of(lo).to_string()))
                 } else if let Some(AliasTarget::Ty(t)) = self
                     .find_alias(name)
-                    .filter(|a| a.params.is_empty())
                     .and_then(|a| a.resolved)
                 {
                     // (seam c) a plain alias expands: the origin is the

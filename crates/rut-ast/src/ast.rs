@@ -294,16 +294,12 @@ pub struct FnData {
 /// `pub(..)? type Name = Target;` — a transparent type alias (RFC 0043).
 /// `Target` may be a plain type (the name binds the target's id) or a
 /// `TyUnion` (`A | B` — a bound-only union alias, never a value type).
-/// The ROW form (the hashmap-surface batch, RFC 0043 §1's admitted
-/// generalization): `type Name<P0, T1, ..> = Target;` — a head of
-/// `(Ident | Type)` members where at least one member spells a concrete
-/// type. `params` holds the head members as type nodes (a bare `K` is a
-/// `TyPath`); empty for the plain and union forms.
+/// Aliases are NON-GENERIC (RFC 0043 v1; the row form
+/// `type Name<K, i64> = ..;` is repealed — one name, one decl).
 #[derive(Clone, Debug)]
 pub struct AliasData {
     pub vis: Vis,
     pub name: IdentId,
-    pub params: Vec<NodeHandle<AnyTy>>,
     pub target: NodeHandle<AnyTy>,
 }
 
@@ -314,8 +310,8 @@ pub enum ItemKind {
     /// bare `[a-zA-Z0-9_]+` name, resolved by the driver (RFC 0029 §2).
     Use { pkg: IdentId, names: Vec<IdentId> },
     /// `type X = A;` / `type X = A | B;` — transparent alias / bound-only
-    /// union alias (RFC 0043); the row form `type X<K, i64> = ..;` —
-    /// concrete-member rows over a family name (the hashmap-surface batch)
+    /// union alias (RFC 0043); aliases are non-generic (the row form is
+    /// repealed — one name, one decl)
     Alias(AliasData),
     ModuleLet { vis: Vis, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
     Enum { vis: Vis, name: IdentId, members: Vec<(IdentId, Option<i64>)> },

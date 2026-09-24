@@ -13,12 +13,13 @@
 //! and THE CHECKSUM LAW — the bench workload's full wrapper-shaped op
 //! sequence (build / replace / hits / misses / remove / re-scan /
 //! re-add) through the column must equal the same sequence through
-//! `nmapset.HashMap<i64, i64>` bit for bit. (The hashmap-surface
-//! batch: that family spelling resolves to the val column now — the
-//! law it pins IS the re-seat: the row spelling rides the raw
-//! crossings exactly. When the pair was spelled sidecar-vs-column the
-//! comparison crossed the two storages; today it pins spelling ==
-//! column.).
+//! `nmapset.HashMap<i64, i64>` bit for bit. (The type-name-law batch:
+//! the alias-row form is repealed, so that family spelling IS the
+//! generic class now — the comparison crosses the two storages AGAIN,
+//! sidecar vs raw crossings, exactly the pre-hashmap-surface shape:
+//! the checksum must agree because it folds values, not storage. The
+//! column stays the host's own raw lane; a public column class is the
+//! recorded differently-named future shape.)
 
 
 use std::rc::Rc;
@@ -136,10 +137,10 @@ entry fn val_grow_sweep(n: i64) -> i64 {
 
 // mounted over rut/nmap_host + rut/nmapset: THE CHECKSUM LAW — the bench
 // workload's op sequence (nmapset-int/main.rut's `churn`, keyed i64)
-// through the family row spelling `HashMap<i64, i64>` (which resolves
-// to the val column — the hashmap-surface batch's re-seat) vs the same
-// sequence through the raw crossings. Identical checksum or the row is
-// not riding the column.
+// through the family spelling `HashMap<i64, i64>` (the generic class —
+// the `[?V]` sidecar, since the row form's repeal) vs the same sequence
+// through the raw crossings. Identical checksum: the fold rides values,
+// not storage.
 const LAW_SRC: &str = r#"
 use nmap_host::{ map_new, map_grow, map_entry_i, map_find_i, map_remove_i, map_len,
             map_val_set_u, map_val_get_u };
@@ -235,7 +236,7 @@ fn col_churn(n: i64) -> i64 {
     return c;
 }
 
-// the SAME sequence through the family row spelling (the val column)
+// the SAME sequence through the family spelling (the sidecar class)
 fn wrap_churn(n: i64) -> i64 {
     let mut m: HashMap<i64, i64> = HashMap.new();
     let mut added: i64 = 0;
@@ -396,19 +397,18 @@ fn out_of_range_val_slots_trap() {
 }
 
 #[test]
-fn the_row_spelling_rides_the_column_bit_for_bit() {
+fn the_family_spelling_answers_the_raw_crossings_bit_for_bit() {
     let mut vm = vm_law();
     // the pinned literal: nmapset-int's churn shape at n = 2000 must
-    // produce the SAME checksum through the family row spelling
-    // `HashMap<i64, i64>` as through the raw crossings (the entry
-    // answers 0 on any disagreement — sum 2013000 + the counters'
-    // prime weights, hand-reconcilable from the churn above). Under
-    // the hashmap-surface batch this IS the re-seat pin: the spelling
-    // resolves to the val column, so it must answer the raw sequence
-    // exactly.
+    // produce the SAME checksum through the family spelling
+    // `HashMap<i64, i64>` (the sidecar class now — the row form is
+    // repealed) as through the raw crossings (the entry answers 0 on
+    // any disagreement — sum 2013000 + the counters' prime weights,
+    // hand-reconcilable from the churn above). Sidecar vs column: the
+    // cross-storage law again, exactly the pre-hashmap-surface shape.
     assert_eq!(
         vm.call::<_, i64>("checksum_law", (2000i64,)).unwrap(),
         2598000,
-        "the row spelling vs the raw crossings: same ops, same checksum"
+        "the family spelling vs the raw crossings: same ops, same checksum"
     );
 }
