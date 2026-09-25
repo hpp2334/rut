@@ -131,12 +131,21 @@ impl<'a> Ctx<'a> {
                     // trait inst (`Readable<str>`), not the placeholder
                     // template id — and yields to a hand-written concrete
                     // impl for the same pair (concrete-first, the v1 law)
-                    let insts: Vec<(TypeId, Vec<(IdentId, TypeId)>)> = self
+                    let mut insts: Vec<(TypeId, Vec<(IdentId, TypeId)>)> = self
                         .inst_data
                         .iter()
                         .filter(|(_, (d, _))| *d == dname)
                         .map(|(ty, (_, args))| (*ty, params.iter().cloned().zip(args.iter().cloned()).collect()))
                         .collect();
+                    // canonicalization (deterministic emission): `inst_data`
+                    // is a HashMap, and its iteration order feeds
+                    // `mk_trait_inst` (fresh trait ids append in call order),
+                    // the `fills` order (monomorphization queue → function
+                    // ids), and the vtable walk. Sort on the dense type id —
+                    // a stable key (type-table interning order is
+                    // source-order deterministic) — so the same source
+                    // always emits the same binary, run to run.
+                    insts.sort_by_key(|(ty, _)| self.types.dense(*ty));
                     for (ty, env) in insts {
                         let fill_trait_id = if im.is_template {
                             let args: Vec<TypeId> = im

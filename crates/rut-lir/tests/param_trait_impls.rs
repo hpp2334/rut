@@ -414,3 +414,61 @@ fn method_generic_arity_mismatch_is_one_clean_diagnostic() {
     assert_eq!(ds.len(), 1, "one diagnostic, not a cascade: {ds:?}");
     assert!(ds[0].contains("takes 1 generic argument(s), 2 given"), "{ds:?}");
 }
+
+/// deterministic generic-instance emission (phase 4b): the same source
+/// compiled twice — two fresh contexts in this process — must encode
+/// byte-identical binaries. `build_vtables` used to walk `inst_data`
+/// (a std HashMap) in RandomState order, so the generic-target arm's
+/// `mk_trait_inst` calls interned trait ids in a per-context random
+/// order and the two binaries diverged (swapped dense receiver-type
+/// ids / vtable rows). The walk is canonicalized on the dense type id.
+///
+/// The harness choice: an in-process double compile is the strongest
+/// guard available in this layout — each `Ctx` builds its own HashMaps
+/// with independent hasher seeds, so the two compiles here really do
+/// iterate `inst_data` in different orders (the same leak the scratch
+/// rutdiag repro's `ndet` subcommand caught run-to-run; its
+/// `selfcheck`/`lanes` subcommands cover the cross-process and
+/// two-lane shapes).
+#[test]
+fn double_compile_of_one_source_emits_identical_bytes() {
+    // four instantiations of the same generic target — the multi-entry
+    // `inst_data` shape that makes the (pre-fix) HashMap walk order
+    // observable in the emitted trait ids, function ids, and vtable rows
+    let src = "trait Readable<T> { fn atom_id(self) -> u32; }\n\
+               class Source<T> { id: u32 = 0; }\n\
+               impl Readable<T> for Source<T> {\n\
+                   fn atom_id(self) -> u32 { return self.id; }\n\
+               }\n\
+               pub fn read_id<T>(a: Readable<T>) -> u32 {\n\
+                   return a.atom_id();\n\
+               }\n\
+               class W {\n\
+                   a$: Source<i64>;\n\
+                   b$: Source<str>;\n\
+                   c$: Source<f64>;\n\
+                   d$: Source<bool>;\n\
+               }\n\
+               entry fn main() -> u32 {\n\
+                   let w = W { a$: Source { id: 1 }, b$: Source { id: 2 }, c$: Source { id: 3 }, d$: Source { id: 4 } };\n\
+                   let mut total: u32 = 0;\n\
+                   total = total + read_id(w.a$);\n\
+                   total = total + read_id(w.b$);\n\
+                   total = total + read_id(w.c$);\n\
+                   total = total + read_id(w.d$);\n\
+                   return total;\n\
+               }\n";
+    let first = compile(src);
+    assert!(first.diags.is_empty(), "{:?}", first.diags);
+    let bin1 = rut_core::binary::encode(&first.program.expect("first program"));
+    for round in 2..=4 {
+        let again = compile(src);
+        assert!(again.diags.is_empty(), "round {round}: {:?}", again.diags);
+        let bin = rut_core::binary::encode(&again.program.expect("program"));
+        assert_eq!(bin1, bin, "compile #{round} diverged from compile #1");
+    }
+    // canonicalization must not move semantics: the dispatch still runs
+    let mut vm = boot(src).expect("compiles");
+    let r: u32 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 10, "1 + 2 + 3 + 4 through the vtable rows");
+}
