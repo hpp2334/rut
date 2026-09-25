@@ -631,15 +631,29 @@ impl AtomFrame {
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
-    // -- struct literal: `Name { field: expr, .. }` / `Self { .. }` --
+    // -- struct literal: `Name { field: expr, .. }` / `Name<Ty> { .. }` /
+    //    `Self { .. }` --
 
     fn struct_enter(&mut self, p: &mut Parser, ty_name: IdentId, ident_consumed: bool) -> Step {
+        self.struct_enter_gen(p, ty_name, Vec::new(), ident_consumed)
+    }
+
+    /// The literal head with its generic arguments (`Source<str> { .. }`,
+    /// the generic record literal): the args were parsed as types by the
+    /// generic-argument scan, the `{` follows.
+    fn struct_enter_gen(
+        &mut self,
+        p: &mut Parser,
+        ty_name: IdentId,
+        generics: Vec<NodeHandle<AnyTy>>,
+        ident_consumed: bool,
+    ) -> Step {
         if !ident_consumed {
             p.bump(); // the type ident
         }
         p.bump(); // {
         let ty = p.typ(
-            TypeKind::TyPath { segs: vec![PathSeg { name: ty_name, generics: Vec::new() }] },
+            TypeKind::TyPath { segs: vec![PathSeg { name: ty_name, generics }] },
             self.lo,
         );
         self.stage = AtomStage::Struct { ty, fields: Vec::new() };
@@ -757,15 +771,33 @@ impl AtomFrame {
         match &mut self.stage {
             AtomStage::PathGen { segs, args } => {
                 let args = std::mem::take(args);
+                let mut segs = std::mem::take(segs);
                 segs[0].generics = args;
-                let segs = std::mem::take(segs);
+                // `Name<Ty> { .. }` — the generic record literal (RFC
+                // 0009): a single-segment head followed by `{` enters the
+                // literal with its arguments, the generic scan's commit
+                // already decided this was never a comparison
+                if segs.len() == 1 && matches!(p.tok(), Tok::LBrace) {
+                    let name = segs[0].name;
+                    let generics = std::mem::take(&mut segs[0].generics);
+                    return self.struct_enter_gen(p, name, generics, true);
+                }
                 self.stage = AtomStage::PathDots { segs };
                 self.pathdots_top(p)
             }
             AtomStage::PathDotGen { segs, name, args } => {
                 let args = std::mem::take(args);
                 let name = *name;
-                let mut segs = std::mem::take(segs);
+                let segs = std::mem::take(segs);
+                // `.name<..>(..)` — the call follows the generic args
+                // directly; the args are the METHOD's type parameters
+                if matches!(p.tok(), Tok::LParen) {
+                    p.bump();
+                    self.stage = AtomStage::PathDotCall { segs, name, generics: args, args: Vec::new() };
+                    return self.call_top(p);
+                }
+                // no call: the generic args close the path's final segment
+                let mut segs = segs;
                 segs.push(PathSeg { name, generics: args });
                 self.stage = AtomStage::PathDots { segs };
                 self.pathdots_top(p)

@@ -435,7 +435,16 @@ impl Parser {
             }
             i += 1;
             if depth == 0 {
-                return matches!(self.toks.get(i).map(|t| &t.tok), Some(Tok::LParen) | Some(Tok::Dot));
+                // the commit followers: `(` (TypeScript's call rule),
+                // `.` (path continuation — `MyMap<K, V>.new`), and ` { `
+                // (the generic record literal — `Source<str> { .. }`,
+                // RFC 0009). A comparison never sees one of the three
+                // directly after its `>`: the block brace trails a
+                // condition at depth 0 only when the `<` opened a type.
+                return matches!(
+                    self.toks.get(i).map(|t| &t.tok),
+                    Some(Tok::LParen) | Some(Tok::Dot) | Some(Tok::LBrace)
+                );
             }
             if depth < 0 {
                 return false;

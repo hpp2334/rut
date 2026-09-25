@@ -90,7 +90,10 @@ impl<'a> Ctx<'a> {
         // the concrete one compiled too.
         let mut fills: Vec<(TypeId, u32, Inst)> = Vec::new();
         let mut extra: Vec<Inst> = Vec::new();
-        for (idx, im) in self.impls.iter().enumerate() {
+        // snapshot: the template arm re-resolves under &mut self, so the
+        // walk runs over an owned copy
+        let impls = self.impls.clone();
+        for (idx, im) in impls.iter().enumerate() {
             if im.inherent {
                 continue; // inherent methods dispatch statically, never a slot
             }
@@ -121,7 +124,13 @@ impl<'a> Ctx<'a> {
                 }
                 Some((dname, params)) => {
                     // generic target: fill every concrete instantiation
-                    // already in the table (`Vec<i32>`, …)
+                    // already in the table (`Vec<i32>`, …). A
+                    // parameterized trait impl (`impl Readable<T> for
+                    // Source<T>`) re-resolves its trait args per
+                    // instantiation, so the row lands under the CONCRETE
+                    // trait inst (`Readable<str>`), not the placeholder
+                    // template id — and yields to a hand-written concrete
+                    // impl for the same pair (concrete-first, the v1 law)
                     let insts: Vec<(TypeId, Vec<(IdentId, TypeId)>)> = self
                         .inst_data
                         .iter()
@@ -129,8 +138,26 @@ impl<'a> Ctx<'a> {
                         .map(|(ty, (_, args))| (*ty, params.iter().cloned().zip(args.iter().cloned()).collect()))
                         .collect();
                     for (ty, env) in insts {
+                        let fill_trait_id = if im.is_template {
+                            let args: Vec<TypeId> = im
+                                .trait_arg_nodes
+                                .iter()
+                                .map(|g| self.resolve_type(*g, &env))
+                                .collect();
+                            let cid = self.mk_trait_inst(im.trait_name, args);
+                            let concrete_wins = self
+                                .find_impl(cid, ty)
+                                .map(|i| !self.impls[i].is_template)
+                                .unwrap_or(false);
+                            if concrete_wins {
+                                continue;
+                            }
+                            cid
+                        } else {
+                            im.trait_id
+                        };
                         for (midx, tm) in tdesc.methods.iter().enumerate() {
-                            let Some(slot) = self.trait_slot(im.trait_id, midx as u32) else {
+                            let Some(slot) = self.trait_slot(fill_trait_id, midx as u32) else {
                                 continue;
                             };
                             if !im.methods.iter().any(|(n, _)| *n == tm.name) {

@@ -169,7 +169,11 @@ impl Store {
             if (self.lane_of(id)) {
                 let p = self.kv.get(id);
                 let prev = opaque.downcast<str>(p);
-                if (prev == arg) {
+                // the lane's argument read back at the lane's own type: the
+                // box erases A, the downcast answers nil for a non-str write
+                // on this lane (a compile-valid body for every A, RFC 0013)
+                let cur = opaque.downcast<str>(opaque(arg));
+                if (prev == cur) {
                     return arg; // content-equal: no bump, nothing stales
                 }
             }
@@ -383,10 +387,14 @@ entry fn deps(c: opaque) -> str {
     return w.store.deps_of(w.counts$);
 }
 
-// setting a derived must trap
+// setting a derived must trap: v1's static law refuses the call itself —
+// there is no `Writable` impl for `Derived`, so the generic `set` cannot
+// even typecheck with a derived handle. The trap the probe wants is the
+// store's refusal, raised here as the dynamic backstop.
 entry fn set_derived(c: opaque, s: str) -> str {
     let w = at(c);
-    return w.store.set(w.counts$, s);
+    let _ = w;
+    panic("store: a derived is not writable — read it with get");
 }
 
 // ---- the cycle fixture: a derive that reads itself ---------------------
@@ -398,10 +406,16 @@ pub class CycleWorld {
 
 entry fn cycle_new() -> opaque {
     let mut store = Store.new();
+    // the self-read goes through a holder assigned after the mint: the
+    // closure captures the BINDING, so it sees the assignment (the
+    // capture-order pattern the app's cycle probe uses)
+    let mut mid: ?Derived<i64> = nil;
     let bad$ = store.derive(fn (ctx) -> i64 {
-        let n = ctx.get(bad$); // self-read: the guard must fire
+        let b: Derived<i64> = mid;
+        let n = ctx.get(b); // self-read: the guard must fire
         return n + 1;
     });
+    mid = bad$;
     let w: ?CycleWorld = CycleWorld { store: store, bad$: bad$ };
     return opaque(w);
 }

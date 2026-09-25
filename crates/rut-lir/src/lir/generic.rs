@@ -53,6 +53,35 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
+    /// The best-effort EXPECTED type for an argument whose parameter node
+    /// still mentions unbound generics (`f: fn(DeriveCtx) -> T` at a
+    /// call that has not inferred `T` yet): the free generics bind to
+    /// fresh placeholder types for the hint only, so a spelled lambda
+    /// (`fn (ctx) -> str { .. }`) takes its parameter annotations from
+    /// the BOUND part of the shape — unification then binds the real
+    /// values from the completed argument.
+    pub(crate) fn hint_with_placeholders(
+        &mut self,
+        node: NodeHandle<AnyTy>,
+        decl_generics: &[IdentId],
+        subst: &[(IdentId, TypeId)],
+    ) -> TypeId {
+        let free = self.free_generics(node, decl_generics, subst);
+        if free.is_empty() {
+            return self.resolve_type_now(node);
+        }
+        let mut hinted = subst.to_vec();
+        for g in &free {
+            let ph = self.ctx.param_placeholder(*g);
+            hinted.retain(|(n, _)| n != g);
+            hinted.push((*g, ph));
+        }
+        let saved = std::mem::replace(&mut self.subst, hinted);
+        let t = self.resolve_type_now(node);
+        self.subst = saved;
+        t
+    }
+
     /// structural unification: bind generic params from an argument's type
     pub(crate) fn unify_generic(
         &mut self,
@@ -112,6 +141,73 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     ));
                     Err(())
                 }
+            }
+            TypeKind::TyPath { segs, .. }
+                if segs.len() == 1
+                    && !segs[0].generics.is_empty()
+                    && self
+                        .ctx
+                        .find_trait(segs[0].name)
+                        .map(|t| !t.generics.is_empty())
+                        .unwrap_or(false)
+                    && !self.free_generics(param_node, decl_generics, subst).is_empty() =>
+            {
+                // a generic trait's instantiation against a concrete
+                // argument (`fn read_id<T>(a: Readable<T>)` over
+                // `Source<str>`): the widening's trait args come from the
+                // target's registered parameterized trait impl, re-resolved
+                // under the target's own substitution (`Readable<T>` →
+                // `Readable<str>`, the phase-2 unification) — then the
+                // param's argument slots unify against them element-wise,
+                // binding `T := str`. A trait-object argument unifies
+                // through its own instantiation's args.
+                let tname = segs[0].name;
+                let arg_nodes = segs[0].generics.clone();
+                let concrete: Vec<TypeId> = match self.ctx.types.kind(arg_ty).clone() {
+                    TyKind::TraitObj { trait_id } => {
+                        let hit = self
+                            .ctx
+                            .trait_inst
+                            .iter()
+                            .find(|(_, &id)| id == trait_id)
+                            .map(|(k, _)| k.clone());
+                        match hit {
+                            Some((n, args)) if n == tname => args,
+                            _ => {
+                                self.ctx.err(sp, format!(
+                                    "argument is `{}`, `{}` expected",
+                                    self.ctx.type_name(arg_ty),
+                                    self.ctx.name(tname)
+                                ));
+                                return Err(());
+                            }
+                        }
+                    }
+                    _ => match self.ctx.template_trait_args(tname, arg_nodes.len(), arg_ty) {
+                        Some(args) => args,
+                        None => {
+                            self.ctx.err(sp, format!(
+                                "no impl of `{}` for `{}` — a parameterized trait impl must cover the widening (RFC 0012 §4)",
+                                self.ctx.name(tname),
+                                self.ctx.type_name(arg_ty)
+                            ));
+                            return Err(());
+                        }
+                    },
+                };
+                if concrete.len() != arg_nodes.len() {
+                    self.ctx.err(sp, format!(
+                        "`{}` takes {} type argument(s), {} given",
+                        self.ctx.name(tname),
+                        concrete.len(),
+                        arg_nodes.len()
+                    ));
+                    return Err(());
+                }
+                for (node, c) in arg_nodes.iter().zip(concrete.into_iter()) {
+                    self.unify_generic(*node, c, decl_generics, subst, sp)?;
+                }
+                Ok(())
             }
             TypeKind::TyPath { .. } => {
                 // builtin containers (`opaque`): resolve and compare — the

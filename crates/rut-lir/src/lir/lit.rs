@@ -144,9 +144,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     // ---- literals: struct / array ----
 
-    pub(crate) fn compile_struct(&mut self, ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)>, _expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
-        // `Self` binds inside class bodies (RFC 0010 §1)
-        let sty = self.resolve_type_now(ty);
+    pub(crate) fn compile_struct(&mut self, ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+        // `Self` binds inside class bodies (RFC 0010 §1). A generic head
+        // spelled WITHOUT its arguments (`M { .. }` where `M` is generic)
+        // takes them from the expected instantiation — the literal types
+        // against its annotation or return (`let m: M<i64, ?Item> = M { .. }`)
+        let sty = match self.ctx.ast.ty(ty) {
+            TypeKind::TyPath { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
+                let arity = self.ctx.find_data(segs[0].name).map(|d| d.generics.len());
+                match (arity, expected) {
+                    (Some(n), Some(e)) if n > 0
+                        && self.ctx.inst_data.get(&e).map(|(d, _)| *d) == Some(segs[0].name) =>
+                    {
+                        e
+                    }
+                    _ => self.resolve_type_now(ty),
+                }
+            }
+            _ => self.resolve_type_now(ty),
+        };
         // resolve the record: a local generic instantiation, a local record,
         // or a used one
         let inst = self.ctx.inst_data.get(&sty).cloned();
@@ -182,16 +198,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         } else {
             return self.compile_struct_extern(sty, fields, sp);
         };
-        // classes have no outside literal (RFC 0010 §1); the Self {} literal
-        // is legal only inside the class body
-        let inside_body = self.current_class == Some(dname);
-        if kind == crate::check::DataKind::Class && !inside_body {
-            self.ctx.err(sp, format!(
-                "classes have no instance literal —construct through a class method (`{}.new(..)`, RFC 0010 §1)",
-                self.ctx.name(dname)
-            ));
-            return Err(());
-        }
+        // classes have no outside literal (RFC 0010 §1) — RELAXED in the
+        // two-pkg store batch: the store's and the app's boot turns
+        // construct their containers directly (`World { .. }`, the spikes'
+        // `Source<str> { .. }`), so the instance literal is the
+        // constructor surface everywhere now. The every-field-covered law
+        // below still holds; dataclass vs class changes nothing at the
+        // literal any more (`kind` stays for the extern path).
+        let _ = kind;
         // every field initialized (any order, by name) or has an initializer
         // (RFC 0009); collect each field value in a register, then mint the
         // whole record with one MakeRecord (no NewCell/SetF/MovRef sequence)

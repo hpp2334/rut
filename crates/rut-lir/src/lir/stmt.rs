@@ -368,7 +368,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // iterable is needed at the call site in this build
             return None;
         }
-        for (idx, im) in self.ctx.impls.iter().enumerate() {
+        // snapshot: the template re-resolution runs under &mut self.ctx
+        let impls = self.ctx.impls.clone();
+        for (idx, im) in impls.iter().enumerate() {
             if im.inherent || im.trait_name != sym::ITERATOR {
                 continue;
             }
@@ -386,7 +388,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 None if im.target == ty => Vec::new(),
                 None => continue,
             };
-            let tdesc = self.ctx.trait_by_id(im.trait_id).clone();
+            // a parameterized trait impl (`impl Iterator<E> for C<E>`) —
+            // the trait's element type reads off the CONCRETE
+            // instantiation of the trait, re-resolved under the target
+            // substitution (the phase-2 dispatch law; the placeholder
+            // template id's descriptor spells `#E`)
+            let trait_id = if im.is_template {
+                let arg_nodes = im.trait_arg_nodes.clone();
+                let args: Vec<TypeId> = arg_nodes
+                    .iter()
+                    .map(|g| self.ctx.resolve_type(*g, &env))
+                    .collect();
+                self.ctx.mk_trait_inst(im.trait_name, args)
+            } else {
+                im.trait_id
+            };
+            let tdesc = self.ctx.trait_by_id(trait_id).clone();
             let Some(tm) = tdesc.methods.first() else { continue };
             let TyKind::Fn { params: fps, ret } = self.ctx.types.kind(tm.params[0]).clone() else {
                 continue;

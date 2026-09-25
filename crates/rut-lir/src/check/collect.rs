@@ -766,6 +766,7 @@ impl<'a> Ctx<'a> {
                 target: target_ty,
                 target_data,
                 trait_arg_nodes: vec![],
+                is_template: false,
                 inherent: true,
                 methods: mths.clone(),
             });
@@ -1105,6 +1106,11 @@ impl<'a> Ctx<'a> {
             target: target_ty,
             target_data,
             trait_arg_nodes,
+            // a parameterized trait impl (`impl Readable<T> for
+            // Source<T>`) — some trait argument bound to a target
+            // parameter's placeholder — is the template the dispatch
+            // half instantiates per (trait inst, target inst)
+            is_template: !param_env.is_empty(),
             inherent: false,
             methods: mths.clone(),
         });
@@ -1174,7 +1180,7 @@ impl<'a> Ctx<'a> {
     /// resolution and the coverage check can proceed; it is a
     /// template-level type, never a runtime one — the phase-2 dispatch
     /// half substitutes the class's concrete argument per instantiation.
-    fn param_placeholder(&mut self, p: IdentId) -> TypeId {
+    pub(crate) fn param_placeholder(&mut self, p: IdentId) -> TypeId {
         let name = self.intern(&format!("#{}", self.name(p)));
         self.types.intern(RutType {
             name,

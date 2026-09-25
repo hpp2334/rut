@@ -112,6 +112,14 @@ pub struct ImplDecl {
     /// sequence/iterator contracts is argument 0, resolved at the use site
     /// under the target substitution.
     pub trait_arg_nodes: Vec<NodeHandle<AnyTy>>,
+    /// A parameterized trait impl (`impl Readable<T> for Source<T>`, the
+    /// phase-1 template form) — `trait_id` names the PLACEHOLDER trait
+    /// instantiation (its args are `#param` types), so every exact-match
+    /// consumer re-resolves the trait args per target instantiation (the
+    /// dispatch half: vtable fills, iterate, `find_or_mint_impl`). The
+    /// per-instantiation clones the mint registers carry the flag too, so
+    /// the concrete-first law sees them as the template's own rows.
+    pub is_template: bool,
     /// `impl T { .. }` — inherent methods (no trait involved); dispatch is
     /// always static (the receiver's concrete type names the impl)
     pub inherent: bool,
@@ -881,6 +889,134 @@ impl<'a> Ctx<'a> {
                 && im.target == target
                 && self.extern_trait_decls.contains_key(&im.trait_name)
         }).map(ImplHit::Extern)
+    }
+
+    // ---- parameterized trait impls: the dispatch half (phase 2) ----
+
+    /// The registered param-template impl answering (trait name, trait
+    /// arity) over `target`'s class instantiation, if any. A template is a
+    /// generic-target impl whose trait arguments mention the target's own
+    /// parameters (`impl Readable<T> for Source<T>`); the match is on the
+    /// class and its arity — the per-instantiation substitution happens at
+    /// the caller.
+    pub(crate) fn template_impl_for(
+        &self,
+        trait_name: IdentId,
+        trait_arity: usize,
+        target: TypeId,
+    ) -> Option<usize> {
+        let (dname, cargs) = self.inst_data.get(&target)?;
+        if cargs.is_empty() {
+            return None; // a non-generic record's impls register concretely
+        }
+        self.impls.iter().position(|im| {
+            if im.inherent || im.trait_name != trait_name {
+                return false;
+            }
+            match &im.target_data {
+                Some((d, params)) => {
+                    *d == *dname
+                        && params.len() == cargs.len()
+                        && im.trait_arg_nodes.len() == trait_arity
+                }
+                None => false,
+            }
+        })
+    }
+
+    /// The CONCRETE trait arguments a widening `(trait, target)` carries:
+    /// the template impl's trait-arg nodes re-resolved under the target
+    /// instantiation's substitution — `Readable<T>` over `Source<str>`
+    /// becomes `Readable<str>`. Repeated params (`Writable<T, T>`) resolve
+    /// positionally, every node independently. `None` when no template
+    /// matches the shape.
+    pub(crate) fn template_trait_args(
+        &mut self,
+        trait_name: IdentId,
+        trait_arity: usize,
+        target: TypeId,
+    ) -> Option<Vec<TypeId>> {
+        let idx = self.template_impl_for(trait_name, trait_arity, target)?;
+        let im = self.impls[idx].clone();
+        let (_, params) = im.target_data?;
+        let (_, cargs) = self.inst_data.get(&target).cloned()?;
+        let env: Vec<(IdentId, TypeId)> = params
+            .iter()
+            .cloned()
+            .zip(cargs.iter().cloned())
+            .collect();
+        let args: Vec<TypeId> = im
+            .trait_arg_nodes
+            .iter()
+            .map(|g| self.resolve_type(*g, &env))
+            .collect();
+        Some(args)
+    }
+
+    /// The exact-match door for trait dispatch (RFC 0012 §4/§5): a
+    /// CONCRETE impl wins unchanged (`find_impl` — also the mint cache);
+    /// on a miss, a parameterized trait impl whose unification PRODUCES
+    /// the requested trait instantiation is minted for the concrete
+    /// `(trait inst, target inst)` pair and its method bodies enter the
+    /// monomorphization queue under the instantiation's substitution.
+    /// Minting happens once — the minted registration IS the cache, every
+    /// later lookup hits `find_impl` directly. v1 policy: the mint arm
+    /// only runs on a miss, so a hand-written concrete impl
+    /// (`impl Readable<i64> for Source<i64>`) always shadows the
+    /// template's instantiation of the same pair.
+    pub fn find_or_mint_impl(&mut self, trait_id: u32, target: TypeId) -> Option<usize> {
+        if let Some(idx) = self.find_impl(trait_id, target) {
+            return Some(idx);
+        }
+        // the requested trait's (name, args) — a generic trait's
+        // instantiation (non-generic traits have exact impls or none)
+        let (tname, targs) = self
+            .trait_inst
+            .iter()
+            .find(|(_, &id)| id == trait_id)
+            .map(|(k, _)| k.clone())?;
+        let idx = self.template_impl_for(tname, targs.len(), target)?;
+        let im = self.impls[idx].clone();
+        let resolved = self.template_trait_args(tname, targs.len(), target)?;
+        // the unification must PRODUCE the requested instantiation —
+        // `Readable<T>` over `Source<str>` yields `Readable<str>`; any
+        // other resolution is a different impl, not this one
+        if resolved != targs || self.mk_trait_inst(tname, resolved.clone()) != trait_id {
+            return None;
+        }
+        let Some((_, params)) = im.target_data.clone() else {
+            return None;
+        };
+        let (_, cargs) = self.inst_data.get(&target).cloned()?;
+        let env: Vec<(IdentId, TypeId)> = params
+            .iter()
+            .cloned()
+            .zip(cargs.iter().cloned())
+            .collect();
+        // MINT: the concrete pair joins the registry as the template's
+        // clone — `target_data` (and the template flag) stay so the
+        // substitution machinery and the vtable fills keep working
+        // unchanged
+        self.impls.push(ImplDecl {
+            trait_id,
+            trait_name: im.trait_name,
+            target,
+            target_data: im.target_data.clone(),
+            trait_arg_nodes: im.trait_arg_nodes.clone(),
+            is_template: true,
+            inherent: false,
+            methods: im.methods.clone(),
+        });
+        let minted = self.impls.len() - 1;
+        // the instantiated method bodies (the vtable rows' callees)
+        for (mname, _) in &im.methods {
+            self.ensure_inst(Inst {
+                key: self.impl_method_key(minted, *mname, true),
+                subst: env.clone(),
+                trait_origins: vec![],
+            });
+        }
+        Some(minted)
     }
 
     /// Extern impls on `target` whose method set contains `name`

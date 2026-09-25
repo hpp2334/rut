@@ -25,6 +25,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let ExprKind::Path { segs } = self.ctx.ast.expr(callee).clone() {
             if segs.len() == 1 && self.lookup(segs[0].name).is_some() {
                 let ft = self.compile_expr(callee, None)?;
+                // the callee derefs (RFC 0044): `let f =
+                // opaque.downcast<fn(..)>(..)` lands `?fn` — the erased
+                // program calls through its payload
+                let (ft, _) = self.deref_for_use(ft, self.last_reg, sp.lo);
                 match self.ctx.types.kind(ft).clone() {
                     TyKind::Fn { .. } => {
                         let freg = self.last_reg;
@@ -40,8 +44,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let ExprKind::Path { segs } = self.ctx.ast.expr(callee).clone() {
             return self.compile_path_call(segs, args, expected, sp);
         }
-        // fn-typed value call: `f(x)` where f: fn(T) -> U
+        // fn-typed value call: `f(x)` where f: fn(T) -> U — the callee
+        // derefs first (see the local arm above)
         let ft = self.compile_expr(callee, None)?;
+        let (ft, _) = self.deref_for_use(ft, self.last_reg, sp.lo);
         match self.ctx.types.kind(ft).clone() {
             TyKind::Fn { .. } => {
                 let freg = self.last_reg;
@@ -729,6 +735,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     i + 1, self.ctx.type_name(arg_tys[i]), self.ctx.type_name(ptys[i])
                 ));
             }
+            // a trait-typed parameter whose expected type was unknown
+            // during the argument's compile (it spells a free generic —
+            // `a: Readable<T>`) widens HERE, after unification resolved
+            // `ptys[i]` (the concrete-ABI scalar boxes, ref values
+            // cross as their handles)
+            let before = self.last_reg;
+            self.widen_to_slot(arg_tys[i], ptys[i], sp.lo);
+            if self.last_reg != before {
+                aregs[i] = self.last_reg;
+            }
         }
         // trait-typed parameters specialize per concrete argument (RFC
         // 0012 §5): the Inst carries one origin per trait-obj param
@@ -1214,7 +1230,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => {}
         }
         if !generics.is_empty() {
-            self.ctx.err(sp, "generic method calls are not supported in this build");
+            self.ctx.err(sp, "generic method calls are not supported in this build —v1 types method parameters under the class instantiation only (the `store.get<T>` family waits on that follow-up)");
             return Err(());
         }
         // `s.len()` — the Slice surface member shared by every sequence;
@@ -1401,7 +1417,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if origins.len() == 1 {
                             // the impl may live in any module (RFC 0012 §2):
                             // a local block binds here, another module's
-                            // registration binds to its compiled fn
+                            // registration binds to its compiled fn. A
+                            // parameterized trait impl mints on the miss
+                            // (the phase-2 door): the widening let's single
+                            // origin unifies against the template and the
+                            // slot-ABI variant answers
                             match self.ctx.find_impl_ex(trait_id, origins[0]) {
                                 Some(ImplHit::Local(idx)) => {
                                     // origin-pinned trait-object receiver: the box
@@ -1412,7 +1432,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 Some(ImplHit::Extern(eidx)) => {
                                     return self.compile_extern_trait_static_call(eidx, midx, origins[0], rreg, args, expected, sp, true);
                                 }
-                                None => {}
+                                None => {
+                                    if let Some(idx) = self.ctx.find_or_mint_impl(trait_id, origins[0]) {
+                                        return self.compile_trait_static_call(idx, midx, origins[0], rreg, args, expected, sp, true);
+                                    }
+                                }
                             }
                         }
                     }
@@ -1979,6 +2003,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if self.ctx.find_impl_ex(trait_id, from).is_some() {
                 return true;
             }
+            // the parameterized-trait-impl door (the phase-2 dispatch
+            // half): on a miss, a registered template
+            // (`impl Readable<T> for Source<T>`) unifies against the
+            // concrete instantiation and MINTS the pair — `Source<str>`
+            // widens to `Readable<str>` exactly when the template's
+            // substitution says so
+            if self.ctx.find_or_mint_impl(trait_id, from).is_some() {
+                return true;
+            }
             let Some(dname) = self.current_class else {
                 return false;
             };
@@ -2030,6 +2063,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
+    /// Instance-method call on a concrete receiver — now with the METHOD's
     pub(crate) fn compile_inherent_call(
         &mut self,
         dname: IdentId,
@@ -2106,6 +2140,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// Inline a small, non-recursive instance method body at the call site.
     /// Returns `true` when it compiled the body; `false` to emit `CallM`.
+    ///
+    /// SUSPENDED (the two-pkg store batch): the splice re-interns the
+    /// body's pooled operand lists into the caller's pool, and a body
+    /// reaching a host fn with `any` params (the nmap `hv` lanes) then
+    /// reads its site types from the caller's register file through a
+    /// pool the peephole has since re-rewritten — the site types scramble
+    /// (`store.kv.put(id, box)` decoded its KEY as the table). Until the
+    /// rewriter tracks the register-type table in lockstep, methods stay
+    /// real calls: `CallM` to the compiled Inst keeps every argv span and
+    /// its site types exact. (P1.3's perf stays for FREE fns, whose
+    /// bodies never cross the host lanes in the corpus.)
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn try_inline_method(
         &mut self,
@@ -2121,8 +2166,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         ret_ty: TypeId,
         sp: rut_lexer::span::Span,
     ) -> bool {
+        let _ = (dname, class_subst, self_ty, mnode, mname, mut_self, recv, aregs, ptys, ret_ty, sp);
+        return false;
+    }
+    #[allow(dead_code, clippy::too_many_arguments)]
+    pub(crate) fn try_inline_method_orig(
+        &mut self,
+        dname: IdentId,
+        class_subst: &[(IdentId, TypeId)],
+        self_ty: TypeId,
+        mnode: NodeHandle<MethodDeclNode>,
+        mname: IdentId,
+        mut_self: bool,
+        recv: u16,
+        aregs: &[u16],
+        ptys: &[TypeId],
+        ret_ty: TypeId,
+        sp: rut_lexer::span::Span,
+    ) -> bool {
         const MAX_STMTS: usize = 24;
         const MAX_DEPTH: usize = 4;
+        // nested splices (a method body that itself calls inlined methods)
+        // are where the pooled host-val call sites lose their register
+        // identity — v1 keeps those bodies as real calls
+        if !self.inline_stack.is_empty() {
+            return false;
+        }
         if self.inline_stack.len() >= MAX_DEPTH || self.inline_stack.contains(&(dname, mname)) {
             return false;
         }
@@ -2317,6 +2386,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let md = self.ctx.ast.method_decl(mnode).clone();
         if md.is_async {
             return false; // `async` is diagnosed when the body is compiled
+        }
+        // a GENERIC method's body stays a call (v1): the spliced body's
+        // nested host-val calls (the nmap `any` lanes) read their site
+        // types from the caller's register file, and the splice's
+        // parameter bindings lose the substitution's register types —
+        // dispatch through the compiled Inst keeps every site type exact
+        if !md.generics.is_empty() {
+            return false;
         }
         let Some(body) = md.body else { return false };
         let stmts = match self.ctx.ast.kind(body.id()) {

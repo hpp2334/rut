@@ -1,13 +1,59 @@
-//! Parameterized trait impls, phase 1 (the checker half): `impl
-//! Readable<T> for Source<T>` registers as a TEMPLATE — the trait ref's
-//! bare-parameter arguments bind the target's own type parameters to
-//! placeholder types, coverage proceeds, and the v1 shape guard rejects
-//! the shapes the template cannot carry (a parameter nested in a type, a
-//! name that is neither a target parameter nor a type in scope) with one
-//! diagnostic each. Dispatch/unification is the phase-2 half: no test
-//! here may dispatch through the template.
+//! Parameterized trait impls: phase 1 registered the TEMPLATE (the
+//! checker half — the shape guard, the placeholder env, coverage); phase
+//! 2 is the DISPATCH half — unification, coercion, vtables. The tests
+//! here execute: a registered template's instantiation widens where
+//! `Readable<str>` is expected, the call dispatches to the template's
+//! method monomorphized at that instantiation, two instantiations get
+//! distinct correct vtable rows, the same works inside generic fn bodies
+//! (the fat-ref headline), repeated trait parameters
+//! (`Writable<T, T>`) resolve positionally, and a concrete impl still
+//! shadows the template's instantiation of the same pair (concrete-first).
 
 use rut_parser::Mode;
+use rut_driver::{Module, Session};
+
+/// A compile-and-run harness: core + the std surfaces mounted, the test
+/// source compiled as the root module, encoded + decoded (RFC 0033) —
+/// the same loop the example suites run.
+fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
+    let mut session = Session::new();
+    rut_driver::mount_std_core(&mut session);
+    let out = compile(src);
+    if !out.diags.is_empty() {
+        return Err(out
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; "));
+    }
+    session
+        .register_module("test", Module { source: Some(src.to_string()), inline: true, ..Default::default() })
+        .map_err(|e| format!("{e:?}"))?;
+    let compiled = rut_driver::compile_module_in(&mut session, src, Mode::Impl, "testroot");
+    if !compiled.diags.is_empty() {
+        return Err(compiled
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; "));
+    }
+    let bin = compiled.binary.expect("no binary");
+    let prog = rut_core::binary::decode(&bin).expect("decode");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(1_000_000),
+        heap_limit_bytes: Some(4 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    rut_vm::interp::Vm::new(
+        std::rc::Rc::new(prog),
+        &limits,
+        rut_vm::interp::HostHooks::default(),
+        rut_vm::interp::HostRegistry::new(),
+    )
+    .map_err(|e| format!("{e:?}"))
+}
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
     // the core surface bound as the one use (RFC 0028): these tests
@@ -140,4 +186,154 @@ fn exact_template_duplicate_still_errors() {
         ds[0].contains("duplicate impl for the same (trait, type) pair"),
         "{ds:?}"
     );
+}
+
+// ---- phase 2: the dispatch half (these tests EXECUTE) ----------------
+
+/// widening OUTSIDE a generic fn: two instantiations of one template,
+/// each boxed into its trait-object slot, each dispatching to its own
+/// monomorphized method body
+#[test]
+fn widening_dispatches_to_the_instantiated_template() {
+    let mut vm = boot(
+        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
+         class Source<T> { id: u32 = 0; }\n\
+         impl Readable<T> for Source<T> {\n\
+             fn atom_id(self) -> u32 { return self.id; }\n\
+         }\n\
+         entry fn main() -> u32 {\n\
+             let r: Readable<str> = Source<str> { id: 7 };\n\
+             let r2: Readable<i64> = Source<i64> { id: 9 };\n\
+             return r.atom_id() * 10 + r2.atom_id();\n\
+         }\n",
+    )
+    .expect("compiles");
+    let r: u32 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 79, "both instantiations dispatch correctly");
+}
+
+/// the same inside a GENERIC fn body: the fat-ref parameter (the
+/// phase's headline gate) — one body, two monomorphizations, each
+/// statically bound to its origin's method
+#[test]
+fn generic_fn_body_dispatches_per_monomorphization() {
+    let mut vm = boot(
+        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
+         class Source<T> { id: u32 = 0; }\n\
+         class Derived<T> { id: u32 = 0; }\n\
+         impl Readable<T> for Source<T> {\n\
+             fn atom_id(self) -> u32 { return self.id; }\n\
+         }\n\
+         impl Readable<T> for Derived<T> {\n\
+             fn atom_id(self) -> u32 { return self.id + 1; }\n\
+         }\n\
+         fn read_id<T>(a: Readable<T>) -> u32 { return a.atom_id(); }\n\
+         entry fn main() -> u64 {\n\
+             let s = Source<str> { id: 7 };\n\
+             let d = Derived<i64> { id: 9 };\n\
+             return (read_id(s) + read_id(d)) as u64;\n\
+         }\n",
+    )
+    .expect("compiles");
+    let r: u64 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 17, "read_id(s)=7 and read_id(d)=10 — per-instantiation dispatch");
+}
+
+/// the vtable: a trait-typed binding with TWO possible origins (a
+/// runtime branch) cannot bind statically — the call dispatches through
+/// the vtable rows the template filled for each concrete instantiation
+#[test]
+fn vtable_row_is_filled_for_the_instantiation() {
+    let mut vm = boot(
+        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
+         class Source<T> { id: u32 = 0; }\n\
+         class Derived<T> { id: u32 = 0; }\n\
+         impl Readable<T> for Source<T> {\n\
+             fn atom_id(self) -> u32 { return self.id; }\n\
+         }\n\
+         impl Readable<T> for Derived<T> {\n\
+             fn atom_id(self) -> u32 { return self.id + 100; }\n\
+         }\n\
+         entry fn main() -> u32 {\n\
+             let a: Readable<str> = Source<str> { id: 5 };\n\
+             let b: Readable<i64> = Derived<i64> { id: 6 };\n\
+             let mut pick: Readable<str> = a;\n\
+             let mut pick2: Readable<i64> = b;\n\
+             let use_b = 6 == 6;\n\
+             if (use_b) {\n\
+                 pick2 = Derived<i64> { id: 7 };\n\
+             }\n\
+             return pick.atom_id() + pick2.atom_id();\n\
+         }\n",
+    )
+    .expect("compiles");
+    let r: u32 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 112, "pick via the vtable (5) + pick2 via the vtable (107)");
+}
+
+/// repeated parameters (`Writable<T, T>`): the substitution is
+/// positional, every trait-argument node re-resolves independently, and
+/// the widened value dispatches to the template's method
+#[test]
+fn repeated_trait_parameters_dispatch() {
+    let mut vm = boot(
+        "trait Writable<A, R> { fn stamp(self) -> u32; }\n\
+         class Source<T> { id: u32 = 0; }\n\
+         impl Writable<T, T> for Source<T> {\n\
+             fn stamp(self) -> u32 { return self.id; }\n\
+         }\n\
+         entry fn main() -> u32 {\n\
+             let w: Writable<str, str> = Source<str> { id: 21 };\n\
+             return w.stamp();\n\
+         }\n",
+    )
+    .expect("compiles");
+    let r: u32 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 21, "Writable<T, T> over Source<str> dispatches");
+}
+
+/// concrete-first (the v1 law): a hand-written impl for a specific
+/// instantiation shadows the template's instantiation of the same pair
+#[test]
+fn concrete_impl_shadows_the_template_instantiation() {
+    let mut vm = boot(
+        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
+         class Source<T> { id: u32 = 0; }\n\
+         impl Readable<T> for Source<T> {\n\
+             fn atom_id(self) -> u32 { return self.id; }\n\
+         }\n\
+         impl Readable<i64> for Source<i64> {\n\
+             fn atom_id(self) -> u32 { return 999; }\n\
+         }\n\
+         entry fn main() -> u32 {\n\
+             let t: Readable<str> = Source<str> { id: 7 };\n\
+             let c: Readable<i64> = Source<i64> { id: 5 };\n\
+             return t.atom_id() * 1000 + c.atom_id();\n\
+         }\n",
+    )
+    .expect("compiles");
+    let r: u32 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 7999, "the template serves str; the concrete impl serves i64");
+}
+
+/// a template over TWO type parameters with MIXED concrete and
+/// parameter trait arguments (`R<Vec<i64>, T>`): only the parameter
+/// slots substitute, the concrete slots stay put
+#[test]
+fn mixed_concrete_and_parameter_trait_arguments() {
+    let mut vm = boot(
+        "trait Store<A, B> { fn mark(self) -> u32; }\n\
+         class Bag<T> { n: u32 = 1; }\n\
+         class Box2<T> { id: u32 = 0; }\n\
+         impl Store<Bag<i64>, T> for Box2<T> {\n\
+             fn mark(self) -> u32 { return self.id; }\n\
+         }\n\
+         entry fn main() -> u32 {\n\
+             let b: Store<Bag<i64>, str> = Box2<str> { id: 33 };\n\
+             return b.mark();\n\
+         }\n",
+    )
+    .expect("compiles");
+    let r: u32 = vm.call("main", ()).expect("runs");
+    assert_eq!(r, 33, "the concrete slot (Bag<i64>) stayed; the parameter slot substituted");
 }

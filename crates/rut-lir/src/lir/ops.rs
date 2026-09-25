@@ -28,7 +28,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // enclosing position (return/assignment/argument) seeds the lhs, then
         // rhs adapts to the lhs. Without it, `1.0 / x as f64` and unannotated
         // `4.0 * pi` would default the lhs to f32 and mismatch.
-        let lt = self.compile_expr(lhs, expected)?;
+        // `==`/`!=` EXCLUDE the seed: the comparison's result is `bool`, and
+        // seeding an operand with it would funnel a `?bool` lhs into its
+        // payload before the null-test sees the nullable (`if (b == nil)`,
+        // the store's lane probes) — the operands type by the shapes at
+        // hand, the pointer-vs-pointee law below decides.
+        let seed = if matches!(op, Eq | Ne) { None } else { expected };
+        let lt = self.compile_expr(lhs, seed)?;
         let lhs_reg = self.last_reg;
         // arithmetic/ordinal: a scalar-pointee pointer on the left reads
         // its pointee (RFC 0012 §6); the right side derefs through the

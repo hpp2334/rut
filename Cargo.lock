@@ -450,6 +450,7 @@ dependencies = [
  "rut-driver",
  "rut-lexer",
  "rut-parser",
+ "rut-vm",
 ]
 
 [[package]]
