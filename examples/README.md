@@ -252,28 +252,44 @@ The run recipe:
   `let mut b = StringBuilder.with_cap(1024); b.append(f"..."); ...; let s = b.build();`
 - **The bench row**: `node benches/run.mjs --workload strbuild`.
 
-## The keyed collections — one family, the sidecar for every val
+## The keyed collections — one family, the values in the entries
 
 The std `nmapset` package (no deps of its own) is rut's keyed-collection
 surface, and it spells ONE way: `HashMap<K, V>` and `HashSet<T>` — one
 class per name (one name = one type). The key type parameter admits
 the closed set (`i8 | … | bytes`, compile-time at every
-instantiation), and every val rides the same storage:
+instantiation), and every val lives IN the host table's entries:
 
-- **Every `V` rides the `[?V]` sidecar** — the generic class's
-  parallel value array: `HashMap<K, i64>`, `<K, u64>`, `<K, f64>`, an
-  `i32` val, a record `Pt` val, a bare `V` in a generic body — the
-  same machinery at different `V`. Since the nmapset-hostops takeover
-  the sidecar is HANDLE-INDEXED and append-only — the host table owns
-  a stable birth handle per key and grows internally, so the wrapper
-  has no grow loop and no relocation drain (the old drain's cost is
-  the takeover's headline: `refvals` exec −32%). (An alias-row form
-  that routed the 64-bit vals to native-val-column classes was
-  repealed the day it landed — one name = one type — and the
-  column classes themselves were REMOVED with the takeover,
+- **One crossing carries key AND value.** Since the nmap-hostvals
+  value migration the wrapper is pure delegation (`HashMap { t:
+  opaque }`) — put/get/has/remove/len are each ONE host crossing: a
+  prim `V` crosses as the 8 slot bytes (zero cells, zero copy), a
+  reference `V` shares its OWN cell into the entry — aliasing IS the
+  cell (two gets of one key name ONE cell, writes through a recovered
+  value land in the map, values release in-crossing on replace/remove
+  and at the map's death). `HashMap<K, i64>`, `<K, u64>`, `<K, f64>`,
+  an `i32` val, a record `Pt` val, a bare `V` in a generic body — the
+  same machinery at different `V`. The old rut-side `[?V]` sidecar is
+  HISTORY: handle-indexed and append-only after the nmapset-hostops
+  takeover (whose headline was killing the grow drain — `refvals`
+  exec −32%), deleted outright by the value migration — the migration
+  is also when nmapset-hostops phase 2's "zero loops" claim first
+  became TRUE of the file (`docs/nmap-hostvals-report.md` §7; the
+  measured record: fuel −30…−41%, prim-row VM heap to HUNDREDS of
+  bytes, in `benches/README.md`'s nmap-hostvals section). (An
+  alias-row form that routed the 64-bit vals to native-val-column
+  classes was repealed the day it landed — one name = one type — and
+  the column classes themselves were REMOVED with the takeover,
   unreached by any public spelling since the repeal; the columns'
   host crossings remain as legacy escape hatches —
   `docs/type-name-law-report.md` §5, §8, `docs/nmapset-hostops-report.md`.)
+- **The map is an `opaque`, and `opaque` has two kinds.** The `t`
+  field addresses a store entry of the Host kind — a HostOpaque (the
+  map's own host payload, one per map, borrow-checked by Rust's TypeId
+  on every crossing); the other kind, RutOpaque, is a rut value held
+  host-side. Two kinds, two identity worlds — TypeId exists only on
+  the Host path; rut-side `downcast` and `is` never consult it
+  (RFC 0014's amendment, RFC 0023's nmap-hostvals amendment).
 - **`HashSet<T>`** is the host table alone, no machinery about vals.
 - **May spell differently than you expect**: no float KEYS (the
   equality contract), no narrow-val columns, no bool val column (the
@@ -300,13 +316,16 @@ its `key_spells` branch (json's three val impls folded into it when
 the rows left; the `dec_hm_bytes_key` pin holds verbatim).
 
 Consumer-visible behavior of a put/get/has is the exact class the
-spelling names — `HashMap<i32, i64>` IS the generic class, sidecar
-and all. The repeal's movers, on record: checksums IMMOVABLE (the op
+spelling names — `HashMap<i32, i64>` IS the generic class, one
+crossing per op, values in the entries. The repeal's movers, on
+record: checksums IMMOVABLE (the op
 stream does not move — `nmap-primmap`'s pin stayed `734932704`),
 fuel/heap re-seated to the sidecar's measured cost (17,950,301 →
 20,903,285 fuel; 324 B → 3,539,324 B heap —
 `docs/type-name-law-report.md` §6 and `benches/README.md`'s
-type-name-law section). Run recipe:
+type-name-law section; the sidecar's story ends with the nmap-hostvals
+migration, whose own record is in `docs/nmap-hostvals-report.md`).
+Run recipe:
 
 - **A module dir**: `[deps]` nmapset by path — `rut run <dir>`.
 - **A loose file**: `rut run file.rut` with `use nmapset::` in the

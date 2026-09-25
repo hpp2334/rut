@@ -4253,3 +4253,82 @@ rows move only +112 B (the two new sidecar fields); `nmap-hashset`'s
 the box). EXEC: `refvals` −32.1% is the honest headline — the row
 built to stress the relocation drain no longer pays it; the str and
 k-mer rows ride the same effect at −3.4–8.9%.
+
+## Performance log — nmap-hostvals: the values cross (Sep 2026)
+
+The batch (docs/nmap-hostvals-survey.md, phase 0 `ab9bd9e`): the
+directives — *"host part impl, I recommend use HashMap"*, *"value can
+cross with opaque"*, *"rename to HostOpaque"*, *"avoid copy and
+allocation"*, *"remove 'char' entirely ... not clean"* — landed as
+five code phases: the char exorcism (VERSION 12, phase 1 `8352b50`),
+the Opaque store repr (the anchor cell dies, behavior frozen, phase 2
+`2a4716a`), the any arms (additive, phase 3 `6571549`), the real-
+HashMap core (phase 4 `8340c74`), and the value migration (the
+sidecar dies, phase 5 `365e6c2`). The full record:
+`docs/nmap-hostvals-report.md`. **Checksums IMMOVABLE all batch** —
+expected.json untouched; the closing gate was ALL 28 rows × {rut,
+node, qjs} = 85 result rows, 0 mismatches (family pins: nmapset-int
+734932704, nmapset-str 1264308351, nmap-hashset 21500055,
+nmap-knucleotide 2198604, kmer-view 2198604, strview 1264308351,
+refvals 140052990000, json-decode 4502015958359127277, json-roundtrip
+1960875332163557684).
+
+**The P4 movers** (base = the P3 commit `6571549` re-run in a scratch
+worktree, after = `8340c74`, same session, 3 probe iters; the wrapper
+was UNTOUCHED this phase — every row moved anyway, on the box charge
+168 → 40 and the reserve-shaped sidecar ladder):
+
+| row | checksum | fuel old → new | heap B old → new | exec ms old → new |
+|---|---|---|---|---|
+| nmapset-int | 734932704 = | 21,571,682 → 21,243,927 (−1.5%) | 1,966,663 → 1,720,767 (−12.5%) | 68.8 → 62.4 (−9.4%) |
+| nmapset-str | 1264308351 = | 9,910,968 → 9,747,053 (−1.7%) | 984,086 → 861,070 (−12.5%) | 53.7 → 49.3 (−8.2%) |
+| nmap-hashset | 21500055 = | 12,716,782 → 12,716,782 (**0, BIT-IDENTICAL**) | 615 → 343 (−272) | 45.8 → 39.9 (−12.9%) |
+| nmap-knucleotide | 2198604 = | 37,419,557 → 37,091,862 (−0.9%) | 2,229,052 → 1,983,156 (−11.0%) | 163.3 → 150.4 (−7.9%) |
+| kmer-view | 2198604 = | 35,019,405 → 34,691,710 (−0.9%) | 2,228,884 → 1,982,988 (−11.0%) | 139.2 → 131.0 (−5.9%) |
+| strview | 1264308351 = | 11,094,312 → 10,930,397 (−1.5%) | 2,032,285 → 1,909,269 (−6.1%) | 39.1 → 38.3 (−1.9%) |
+| refvals | 140052990000 = | 55,633,341 → 54,977,831 (−1.2%) | 26,843,812 → 26,188,180 (−2.4%) | 253.8 → 240.1 (−5.4%) |
+
+The mechanism, disclosed: `HashMap::with_capacity(8)` reserves 14, not
+the old power-of-two 8, so the (still present at P4) wrapper's
+`with_capacity` pre-sized its `[?V]` sidecar at 14 and the doubling
+ladder landed 14 → 28 → 56 → … — fewer `vstore` copy-loop iterations
+per churn (the errata'd nmapset-hostops "ZERO loops" loop). **The
+nmap-hashset no-V control**: no V, no sidecar — its fuel is
+BIT-IDENTICAL, the h-family's answers unchanged, proven by the one row
+that can see nothing else.
+
+**The P5 movers** (base = the P4 commit `8340c74` worktree, after =
+`365e6c2`, same protocol, 3 probe runs × 3 fresh-VM iters, min exec;
+the values cross INSIDE the crossing, the sidecar and its last loop
+delete):
+
+| row | fuel old → new | VM heap old → new | exec ms old → new |
+|---|---|---|---|
+| nmapset-int | 21,243,927 → 12,600,090 (**−40.7%**) | 1,720,767 → **311 B** (−99.98%) | 62.680 → 40.742 (−35.0%) |
+| nmapset-str | 9,747,053 → 6,133,436 (−37.1%) | 861,070 → 772 B (−99.9%) | 49.258 → 42.250 (−14.2%) |
+| nmap-hashset | 12,716,782 → 12,716,782 (**0.0%**) | 343 → 343 B (identical) | 40.562 → 42.421 — the receipt, below |
+| nmap-knucleotide | 37,091,862 → 23,608,704 (−36.4%) | 1,983,156 → 263,526 B | 147.810 → 122.352 (−17.2%) |
+| kmer-view | 34,691,710 → 23,008,616 (−33.7%) | 1,982,988 → 263,134 B | 128.626 → 101.329 (−21.2%) |
+| strview | 10,930,397 → 7,616,781 (−30.3%) | 1,909,269 → 1,048,973 B | 37.458 → 29.416 (−21.5%) |
+| refvals | 54,977,831 → 35,470,157 (−35.5%) | 26,188,180 → 12,000,492 B | 248.998 → 160.192 (**−35.7%**) |
+| json-roundtrip | 31,457,155 → 31,457,155 (**0.0%**) | 3,423,706 → 3,423,706 B (identical) | 110.192 → 110.221 (+0.03%) |
+
+The §0.8(n) receipt, measured: nmapset-int's VM heap drops BELOW the
+hashset floor (311 vs 343 B — which itself moved byte-for-byte with
+nothing) and does not regain it: the full-8-byte-slot value storage
+over-delivers; array-style width packing stays menu-only. refvals'
+record-mint churn halves (26.2 → 12.0 MB) with the alias law
+checksum-load-bearing and green. **The json-roundtrip identical
+receipt**: fuel AND heap byte-identical — the pkg's own map rows
+already rode the h-family, and the wrapper's V traffic is off its hot
+path; the record-V gate passed by standing still.
+
+**The crossing-cost verdict**: NO row regresses. The one adverse
+sample in the batch — nmap-hashset exec +4.6% in the P5 single-sample
+read — is noise, profiled: fuel byte-identical, code untouched by the
+phase, and the extended 7×3 measurement gives base median 40.763 ms vs
+P5 median 40.677 ms (base's own worst sample 44.194) — parity inside
+the band; json-roundtrip's +0.03% is the same band on a byte-identical
+op stream. The crossing-fastpath item stays closed on this evidence,
+and the extended profile is the recorded baseline for any future
+revisit.

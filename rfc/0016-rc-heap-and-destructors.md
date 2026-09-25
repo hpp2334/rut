@@ -252,6 +252,36 @@ before carving: over budget → `Trap::OutOfMemory`, resumable, no
 partial writes (RFC 0040 §1). `Vm::drop` frees the whole heap after
 the leak report (RFC 0017 §3).
 
+## Amendment (Sep 2026, nmap-hostvals): §3's finalize arm — store-entry death in the release walk
+
+Landed (docs/nmap-hostvals-report.md; phases `2a4716a`/`365e6c2`).
+§3's ordering guarantees gain the store-entry arm; the host opaque no
+longer lives in an arena cell (RFC 0014's amendment), so its death
+joins the same walk that frees cells:
+
+- **The walk.** At store-entry death (rc-0 inside the release walk,
+  after the `on_drop` pin check) the entry's payload is taken out, the
+  charge is refunded, the slot is freed — and only THEN the nested
+  work: `finalize(heap)` (the payload's opt-in hook, no-op default)
+  runs BEFORE the Box's own Drop, and a Rut entry's held cell releases
+  through the same walk (an entry holding a rut record recurses — the
+  record-field pattern, children through the walk that frees the
+  parent). Item 3's law is preserved by construction: "finalize first,
+  cells second" mirrors "dispose first, fields second".
+- **`on_drop` routes for entries too** — the same pin-and-queue the
+  cell path runs, keyed by the tagged slot word.
+- **The leak check is the BALANCE form** (debug-only, at teardown
+  after the cell walk): every insert died exactly once (inserts ==
+  deaths + teardown_freed) and the outstanding charges are exactly the
+  live entries' own. The strict "store is empty" form is unreachable
+  as an assertion: this VM's trap semantics leave torn frames
+  unreleased today (behavior-frozen), so live entries at teardown are
+  the pre-existing state — the balance law is what can be asserted
+  without false positives.
+- **§5's accounting note, resolved**: the store charges/refunds entry
+  bytes on insert/death, so the budget and the heap receipts stay
+  honest (`alloc_*` mints charge exactly the old anchor-cell bytes).
+
 ## Open questions
 
 - OQ-1: moving/compacting collector for long-lived UI heaps — defer to v2;

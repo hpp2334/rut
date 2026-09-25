@@ -129,6 +129,34 @@ it is rut source — the wrapper class is exactly that place.
   its Rust `Drop` runs, dropping the `HashMap` and rc-dec'ing every
   stored box. Deterministic, no collector involvement.
 
+## Amendment (Sep 2026, nmap-hostvals): the payload's repr moved — the store entry, `Opaque<T>`, the finalize-first death
+
+Landed (docs/nmap-hostvals-report.md; phase `2a4716a`). The container
+design above (one dispatch-table row per fn, bodies over concrete
+`Opaque` handles, the wrapper class on the consumer side) is
+UNCHANGED; the listings are historical spellings:
+
+- **`OpaqueBox<T>` is `Opaque<T>`.** The typed surface's verbs survive
+  on the new view — alloc (mints a store entry, charging exactly the
+  old anchor-cell bytes so accounting reads identical),
+  from_handle/from_value (the checked view; a wrong payload type traps
+  naming both sides), `with`/`with_mut` (call-scoped borrows,
+  entry-resident guards — a nested exclusive borrow traps exactly as
+  before; `with_mut` now flows the `&mut Vm`), `handle`. The instance
+  no longer lives in an arena cell: the rut-side `opaque` value
+  addresses a two-kind STORE ENTRY directly (RFC 0023's and RFC 0014's
+  amendments carry the law; the Rust example above predates the store).
+- **§4's memory note, re-homed.** "The instance lives in the `Opaque`
+  box; at rc-0 its Rust `Drop` runs" — now: at entry death (rc-0
+  inside the release walk) the entry's `finalize(heap)` hook runs
+  FIRST, then the Box's own Drop — the RFC 0016 §3 ordering preserved
+  by construction (its amendment records the walk). A container holding
+  rut values in Rut entries has them released through the same walk;
+  the determinism statement stands verbatim.
+- **Per-op churn is designed out.** The old `pool.rs` existed to
+  recycle per-op payload mints; a payload is now per-map/per-logger,
+  never per-op — the pool deleted with its rationale.
+
 ## Open questions
 
 - OQ-1: a `host dataclass` key surface for maps keyed by structured

@@ -174,3 +174,72 @@ suite keeps them exercised.
 paths never read; slot assignment, probe order, and every per-key
 answer are untouched — every existing bench pin is immovable through
 the takeover (measured, all rows × {rut, node, qjs}).
+
+## Amendment (Sep 2026, nmap-hostvals): the any arms — (Slot, call-site TyKind) in, the caller's V-typed register out — and the Opaque store repr law
+
+Landed (docs/nmap-hostvals-report.md; phases `6571549`/`2a4716a`/
+`365e6c2`). Records against the text above — the crossing rule gains
+the `any` shape this RFC's §1 never spelled, and the §2 borrow-guard
+home moves off the cell.
+
+**The any-arg law.** A host fn param spelled `any` (host-decl-only —
+`.d.rut` grammar arm + boot id; rut source cannot name it, RFC 0012's
+reservation stands) binds EVERY rut type with no box, no copy, no
+conversion op. The boundary hands the registered closure the arg's
+raw slot TOGETHER WITH the CALL SITE's static type — rut types live in
+the VM, never in Rust: `HostVal { slot, ty }` where `ty` is the arg
+register's own `FuncDef.regs` word (the same word the verifier checks
+reads against, RFC 0015 §5), its TyKind read through the program's
+type table, never cloned into the handle. A prim arg crosses as its
+immediate bits (the 8 bytes move as-is); a ref arg crosses as its
+ORIGIN SLOT — identity IS the cell, and a str view arg crosses the
+view's own cell. `Value`'s owned decode is never used on this path.
+
+**The any-answer law.** The answer Rust type is `Option<ValSlot>` with
+`ValSlot { Empty, Bits(Slot), Ref(Slot) }` — a pure storage shape, NOT
+a boundary type (a coherence probe proved the impl legal exactly on
+that condition). `Bits` moves the 8 bytes as-is — the untagged-slot
+discipline: an i32 V register holds the same word an i64 answer wrote
+(the ArrGet law, no width conversion exists to skip). `Ref` takes the
+ArrGet shape: RETAIN the answer, release the displaced — the register
+borrows its own rc, no box, no copy, no cell mint. `None` is the miss:
+the flat nil, the zero word. `Empty` TRAPS loudly before the dst write
+— the placeholder read is a caller bug, never a silent nil. The
+write-back branches on the DST register's OWN declared type — the
+caller's static V — and the trust law is documented at the decl site:
+the host answers the caller's V; a Bits answer into a ?ref register is
+a host bug and traps.
+
+**The `?V` write-back (the repr's one-box mint).** A wrapper's
+`get -> ?V` lands the answer directly in an optional-typed register,
+and RFC 0044's ?T repr is a one-slot box: a `?prim` register mints its
+transient opt value in the write-back (retaining raw prim bits as a
+cell pointer would be a wild write), a `?ref` register takes the ?V
+box ALIASING the stored cell (the aliased cell retains; the store
+keeps its own reference — aliasing IS the cell), and the Some/None tag
+cannot ride the raw returned word (a stored zero and the miss are the
+same 8 bytes — the un-erased answer rides a carry written by the
+adapter and taken one crossing later, the host-trap channel's
+discipline). None-misses mint nothing. This is the ONE disclosed
+allocation on the answer path, measured inside the winning numbers.
+
+**The Opaque store repr law — two kinds, the anchor's death.** The
+rut-side `opaque` value addresses ONE store entry directly —
+`OpaqueEntry::Host(HostOpaque)` (a host payload: `Box<dyn Any>` +
+type_name + the optional finalize thunk; TypeId exists ONLY here, the
+borrow gate) or `OpaqueEntry::Rut(RutOpaque)` (a rut value held
+host-side: the cell slot; identity IS the cell, the rut-side downcast
+reads the cell's runtime kind, NEVER TypeId). `CellData::HostBoxed`
+and `CellData::OpaqueBox` are DELETED from the cell enum; `OpaqueBox<T>`
+is deleted, the typed view is `Opaque<T>`; one allocation and one
+indirection fewer per opaque. Addressing is a tag bit on the slot word
+(entries 8-aligned, nil stays all-zero) — the tagged word
+self-identifies, so the ENTIRE generic rc web keeps its type-free
+discipline with zero call-site churn. §2's borrow guards move onto the
+entries — same law, new home; `from_handle`'s checked-borrow law is
+byte-for-byte the prior text (the two-kind law, once an error string,
+now an exhaustive match). The release hook is §5 of the store's own
+law — RFC 0016's amendment records the walk. The host-surface names
+(`Opaque` in decls, the boundary's rust_name) are unchanged; the Rust
+crate-internal names moved (RFC 0014/0025/0026's amendments record
+them per surface).

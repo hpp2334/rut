@@ -114,6 +114,42 @@ has type `nil` — nullable positions (`let p: ?T = nil`, `p == nil`,
 `left: nil` in a literal) type it as `?T` through expected-type
 propagation (RFC 0005 §8, RFC 0044).
 
+## Amendment (Sep 2026, nmap-hostvals): the char removal COMPLETED — the exorcism, wire tags 3/11 dead, opcode 48 retired, VERSION 12
+
+Landed (docs/nmap-hostvals-report.md; phase `8352b50`). §4 killed the
+SURFACE; the enumerated machinery survived in the IR, the VM, and the
+boundary. The exorcism deleted it — the removal is now total:
+
+- **Codepoints ride u32 end-to-end** — the decisive receipt was that
+  they always had: slots stored `v as u32 as i64`, and the VM's
+  conversion table has NO char arm (`Conv{Char↔U32}` rode the untagged
+  int branch as a raw bit trunc). `s.code()`/`s.code_at(i)` emit ONE
+  new op each (`StrCodeAt`, answering the u32 directly — the old
+  `StrCharAt` + `Conv` pair dies), `str.from_code(n)` and
+  `bytes.decode`'s mint go through the new `StrFromCode` native, and
+  the utf8 walkers drop their char intermediates (a small fuel win on
+  utf8-heavy rows, disclosed as receipts — fasta's fuel came back
+  bit-identical: its loop never rode the re-spelled walkers).
+- **The enumerated deletion**: `PrimTy::Char`, `ConstVal::Char`,
+  `ArrKind::Char`/`[char]`/`?char`, `Value::Char`, `Slot::ch/as_char`,
+  `alloc_char`'s char (retuned to take the u32 codepoint —
+  `char::from_u32`, U+FFFD lossy like `bytes.decode`; the repr
+  unchanged, a 1-codepoint STR cell — char never had a heap repr of
+  its own), the boundary's char impls and type-match arm.
+- **The wire** (VERSION 11 → 12): prim tag 11 withdrawn, const tag 3
+  withdrawn (decode-only dead since the literal removal), **opcode 48
+  RETIRED, never re-meaninged** (`StrCodeAt` takes NEW number 91; a
+  forced-past-version artifact fails by name), nat tag 21 added. The
+  boot type-table row at id 12 STAYS as a RESERVED `Nil` shell — the
+  fixed `TY_*` ids are wire-stable and never reorder; nothing reaches
+  it.
+- **§1's type-table `char` row is dead as of this amendment** (the
+  table above is kept as history). The surface laws are unchanged:
+  the lexer's char-literal diagnostic verbatim; type positions
+  diagnose through the removed-core check with the dedicated v1.1
+  message — now pin-tested with the enumerated kind gone from the
+  compiler entirely.
+
 ## Open questions
 
 - OQ-1: default type for uncontextualized literals — `i32` for integers and

@@ -212,6 +212,37 @@ pair law). The `host fn` crossing set above reads unchanged: the same
 `crosses_boundary` answers both directions, so what an entry may
 return, a host fn may accept.
 
+## Amendment (Sep 2026, nmap-hostvals): the repr change — the store handle, `Opaque<T>`, the `any` spelling
+
+Landed (docs/nmap-hostvals-report.md; phases `2a4716a`/`6571549`).
+The join contract above (signatures DERIVED from the Rust shape,
+verified against the `.d.rut` at the join) is UNCHANGED; the crossing
+set's spelling gained one row and the Rust-side names moved:
+
+- **The decl spelling gains `any`** (host-decl-only): the `crossing_ty`
+  whitelist's +1 arm, bound at load to a NEW boot type id — deliberately
+  NOT the VM's internal `u32::MAX` sentinel. Rut source cannot name it
+  (RFC 0012's reservation stands; the lexer diagnoses in `.rut` modes
+  exactly as before). The row's shape: `v: any` params and `-> any`
+  answers cross per RFC 0023's amendment — the boundary hands
+  `(slot, call-site TyKind)`, the answer writes the caller's V-typed
+  register.
+- **The Rust-side names moved, the surface names did not.** The
+  boundary's typed view was `OpaqueBox<T>`; it is `Opaque<T>` (the
+  rust_name is unchanged at "Opaque" — decl files and existing bindings
+  are untouched). `OpaqueRef` and `OpaqueBox<T>` are gone: a host holds
+  the STORE HANDLE, an 8-byte tagged word over the two-kind entry
+  (RFC 0023's amendment; RFC 0014's amendment records the store).
+  `Ret`/`CallArg`/`HostParam` re-based on the handle with the same
+  nil-check and token laws.
+- **The boxed payload, disclosed.** The entry's payload is
+  `Box<dyn Any>` + an optional monomorphized finalize thunk rather than
+  a `HostPayload`-bounded box (the orphan rule vs the test-pinned
+  mints); the observable law — payloads opt in, one per map/logger,
+  never per-op — is identical. `with_mut` now flows the `&mut Vm` (the
+  in-crossing rc work needs it; the closure no longer captures the vm
+  it was handed); `with` keeps the vm-free shared-borrow signature.
+
 ## Open questions
 
 - OQ-1: should `rutc` grow a lint that a wrapper class's `h: Opaque`

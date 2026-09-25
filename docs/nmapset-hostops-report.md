@@ -57,6 +57,12 @@ handle-indexed `vals/vlen/vcap` triple with `vstore` (fresh birth
 appends with the doubling; a replace stores over the cell), every
 method ONE crossing plus at most the sidecar store, the four range
 methods on the sv twins, `HashSet` sharing `hput` at bit 0.
+(ERRATA, Sep 2026 — the nmap-hostvals batch: "ZERO loops" was true of
+the METHOD BODIES only; the same paragraph's `vstore` "fresh birth
+appends with the doubling" WAS the surviving loop, and the claim
+became true of the FILE only when this sidecar deleted with the
+nmap-hostvals value migration — `docs/nmap-hostvals-report.md` §7.
+History as written above.)
 `PrimMap*` deleted; the twin retired (workload dir + `.js` +
 ONE `expected.json` line + the examples/README recipe; the perf log
 above stays as written — the not-rewritten precedent). Every driver
