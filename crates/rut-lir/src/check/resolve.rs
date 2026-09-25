@@ -8,6 +8,21 @@ use super::*;
 impl<'a> Ctx<'a> {
 
     pub fn resolve_trait_ref(&mut self, node: NodeHandle<AnyTy>) -> Option<u32> {
+        self.resolve_trait_ref_env(node, &[])
+    }
+
+    /// The impl-head trait ref, resolved under `env`: the ordinary
+    /// (empty-env) resolution except that a parameterized trait impl
+    /// (`impl Readable<T> for Source<T>`, v1) passes the target's own
+    /// type parameters bound to template placeholder types, so the
+    /// head's bare-parameter arguments name them instead of dying as
+    /// unknown types (see `collect_impl_trait`'s shape guard and
+    /// [`Ctx::param_placeholder`]).
+    pub fn resolve_trait_ref_env(
+        &mut self,
+        node: NodeHandle<AnyTy>,
+        env: &[(IdentId, TypeId)],
+    ) -> Option<u32> {
         match self.ast.ty(node).clone() {
             TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
                 let tname = segs[0].name;
@@ -18,7 +33,7 @@ impl<'a> Ctx<'a> {
                     let args: Vec<TypeId> = segs[0]
                         .generics
                         .iter()
-                        .map(|g| self.resolve_type(*g, &[]))
+                        .map(|g| self.resolve_type(*g, env))
                         .collect();
                     if args.len() != 1 {
                         self.err(self.ast.span(node.id()), format!(
@@ -44,7 +59,7 @@ impl<'a> Ctx<'a> {
                         let args: Vec<TypeId> = segs[0]
                             .generics
                             .iter()
-                            .map(|g| self.resolve_type(*g, &[]))
+                            .map(|g| self.resolve_type(*g, env))
                             .collect();
                         if args.len() != t.generics.len() {
                             self.err(self.ast.span(node.id()), format!(

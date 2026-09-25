@@ -816,7 +816,12 @@ impl<'a> Ctx<'a> {
     /// 0012 §2a): the orphan gate, then duplicate (trait, type) pair,
     /// coverage (every trait method implemented; signature match incl.
     /// `is_async` and receiver form), no extras, then registration and
-    /// eager monomorphization.
+    /// eager monomorphization. A parameterized trait impl (`impl
+    /// Readable<T> for Source<T>`, v1) registers as a TEMPLATE: the
+    /// trait ref's bare-parameter arguments bind the target's own
+    /// parameters to placeholder types (the v1 shape guard inside), the
+    /// registration reuses the generic-target shape (`target_data`),
+    /// and per-instantiation substitution is the phase-2 dispatch half.
     fn collect_impl_trait(
         &mut self,
         sp: rut_lexer::span::Span,
@@ -827,14 +832,78 @@ impl<'a> Ctx<'a> {
         ty_origin: Option<String>,
         mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     ) {
-        let Some(trait_id) = self.resolve_trait_ref(trait_ref) else {
+        // the trait ref's head, read before resolution: the v1 shape
+        // guard below needs the raw argument nodes (a non-path head
+        // stays `None` — resolve_trait_ref_env diagnoses the shape)
+        let head = match self.ast.ty(trait_ref) {
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
+                Some((segs[0].name, segs[0].generics.clone()))
+            }
+            _ => None,
+        };
+        // ---- the v1 shape guard for parameterized trait impls (the
+        // `impl Readable<T> for Source<T>` form): each trait argument is
+        // EITHER a concrete type (resolved as always) OR a bare
+        // single-segment ident naming one of the TARGET's own type
+        // parameters — bound to a template placeholder type so
+        // resolution and the coverage check proceed (the impl registers
+        // as a template; per-instantiation substitution is the phase-2
+        // dispatch half). Repeats are legal (`Writable<T, T>` — the same
+        // parameter in two slots). A parameter NESTED in a type
+        // (`Readable<Vec<T>>`) is a loud error naming the v1 rule, and
+        // so is a bare name that is neither a target parameter nor a
+        // type in scope. The guard runs BEFORE resolution so its
+        // diagnostic is the only one.
+        let param_env: Vec<(IdentId, TypeId)> = match (&target_data, &head) {
+            (Some((_, params)), Some((_, args))) => {
+                let mut env: Vec<(IdentId, TypeId)> = Vec::new();
+                for g in args {
+                    match self.ast.ty(*g) {
+                        TypeKind::TyPath { segs, .. }
+                            if segs.len() == 1 && segs[0].generics.is_empty() =>
+                        {
+                            let n = segs[0].name;
+                            if self.node_is_known_type(*g) {
+                                // a type in scope wins even when the name
+                                // doubles as a parameter (the impl-row
+                                // matcher's own law) — concrete, as always
+                            } else if params.contains(&n) {
+                                env.push((n, self.param_placeholder(n)));
+                            } else {
+                                self.err(
+                                    self.ast.span(g.id()),
+                                    format!(
+                                        "`{}` is neither a type in scope nor a type parameter of the impl target — a parameterized trait impl (v1) takes only concrete types or the target's own type parameters as trait arguments",
+                                        self.name(n),
+                                    ),
+                                );
+                                return;
+                            }
+                        }
+                        _ => {
+                            if self.ty_mentions_any(*g, params) {
+                                self.err(
+                                    self.ast.span(g.id()),
+                                    format!(
+                                        "`{}`: a parameterized trait impl (v1) takes only a concrete type or a bare type parameter of the target as a trait argument — a parameter nested inside a type is not supported yet",
+                                        bound_ty_str(self, *g),
+                                    ),
+                                );
+                                return;
+                            }
+                            // fully concrete — resolved as always
+                        }
+                    }
+                }
+                env
+            }
+            _ => vec![],
+        };
+        let Some(trait_id) = self.resolve_trait_ref_env(trait_ref, &param_env) else {
             return;
         };
-        let (trait_name, trait_arg_nodes) = match self.ast.ty(trait_ref) {
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
-                (segs[0].name, segs[0].generics.clone())
-            }
-            _ => return,
+        let Some((trait_name, trait_arg_nodes)) = head else {
+            return;
         };
         // ---- the orphan gate (RFC 0012 §2a): at least one of the pair
         // is defined in the pkg whose source DECLARED the block. The
@@ -886,7 +955,7 @@ impl<'a> Ctx<'a> {
             Some(info) if !info.generics.is_empty() => {
                 let args: Vec<TypeId> = trait_arg_nodes
                     .iter()
-                    .map(|g| self.resolve_type(*g, &[]))
+                    .map(|g| self.resolve_type(*g, &param_env))
                     .collect();
                 info.generics.iter().cloned().zip(args.into_iter()).collect()
             }
@@ -945,14 +1014,20 @@ impl<'a> Ctx<'a> {
                 continue;
             };
             let md = self.ast.method_decl(*mnode);
+            // the impl side resolves under the target's parameter
+            // placeholders too (empty for a concrete target — identical
+            // to the old empty env): a parameter-spelled signature
+            // (`fn get(self, k: T)`) must not die as an unknown type
+            // here; the (skipped-for-generic-targets) equality then
+            // compares placeholder against placeholder
             let (self_form, ptys) = self.impl_sig_params(
                 &md.params,
-                vec![],
+                param_env.clone(),
                 Some(target_ty),
             );
             let ret = md
                 .ret
-                .map(|r| self.resolve_sig_ty(r, &[], Some(target_ty)))
+                .map(|r| self.resolve_sig_ty(r, &param_env, Some(target_ty)))
                 .unwrap_or(TY_NIL);
             if md.is_async != req.is_async {
                 self.err(
@@ -1087,6 +1162,47 @@ impl<'a> Ctx<'a> {
             }
         }
         Some(out)
+    }
+
+    /// A template-level placeholder type for a generic target's parameter
+    /// (the `impl Readable<T> for Source<T>` form): a synthetic interned
+    /// type named `#<param>`. `#` is no identifier character, so the name
+    /// cannot collide with a user-spelled type, and structural interning
+    /// (`TypeTable::intern` dedups on `(name, kind)`) gives one stable id
+    /// per parameter name — which is what lands exact template duplicates
+    /// on the same (trait, type) pair. The placeholder exists so trait-ref
+    /// resolution and the coverage check can proceed; it is a
+    /// template-level type, never a runtime one — the phase-2 dispatch
+    /// half substitutes the class's concrete argument per instantiation.
+    fn param_placeholder(&mut self, p: IdentId) -> TypeId {
+        let name = self.intern(&format!("#{}", self.name(p)));
+        self.types.intern(RutType {
+            name,
+            kind: TyKind::Data { fields: vec![] },
+        })
+    }
+
+    /// Does this type node mention any of `params` at any depth? The v1
+    /// guard's nested-parameter test: `Readable<Vec<T>>` over a target
+    /// parameter `T` is exactly the shape the template registration
+    /// cannot carry yet, while a fully concrete nest (`Vec<i32>`) is not.
+    fn ty_mentions_any(&self, node: NodeHandle<AnyTy>, params: &[IdentId]) -> bool {
+        match self.ast.ty(node) {
+            TypeKind::TyPath { segs } => {
+                segs.iter().any(|s| params.contains(&s.name))
+                    || segs
+                        .iter()
+                        .any(|s| s.generics.iter().any(|g| self.ty_mentions_any(*g, params)))
+            }
+            TypeKind::TyFn { params: ps, ret } => {
+                ps.iter().any(|p| self.ty_mentions_any(*p, params))
+                    || self.ty_mentions_any(*ret, params)
+            }
+            TypeKind::TyOpt { inner } => self.ty_mentions_any(*inner, params),
+            TypeKind::TyArray { elem } => self.ty_mentions_any(*elem, params),
+            TypeKind::TyTuple { elems } => elems.iter().any(|e| self.ty_mentions_any(*e, params)),
+            _ => false,
+        }
     }
 
     /// Instantiate a generic record for concrete type arguments (RFC 0013

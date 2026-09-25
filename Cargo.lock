@@ -447,7 +447,9 @@ version = "0.1.0"
 dependencies = [
  "rut-ast",
  "rut-core",
+ "rut-driver",
  "rut-lexer",
+ "rut-parser",
 ]
 
 [[package]]

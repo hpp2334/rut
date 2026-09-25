@@ -13,3 +13,7 @@ path = "src/lib.rs"
 rut-core = { path = "../rut-core" }
 rut-lexer = { path = "../rut-lexer" }
 rut-ast = { path = "../rut-ast" }
+
+[dev-dependencies]
+rut-parser = { path = "../rut-parser" }
+rut-driver = { path = "../rut-driver" }
