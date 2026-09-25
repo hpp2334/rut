@@ -4,44 +4,51 @@
 // by the test fixture `crates/rut-cli/tests/data/nmap_host/nmap.d.rut` —
 // update BOTH when the surface changes.
 //
-// nmap-hostvals P4: the open-addressing core is DELETED — the round-1
-// opaque-keyed lanes (`map_entry`/`map_find`/`map_remove`), the fused
-// sentinel lanes (`map_{entry,find,remove}_{i,u,b,s,y,sv}`), and the
-// growth machinery (`map_needs_grow`/`map_grow`/`map_take_reloc`) left
-// with the probing vecs. The table is a real `HashMap` now; what
-// remains is the fused h-family (the ONE op family — `HashSet` shares
-// `hput` and reads bit 0), `map_new`/`map_len`/`map_cap`, and the raw
-// val lanes, RE-BASED from slot addressing onto the stable birth
-// handles. (P5 retires `map_cap` with the wrapper's pre-size read and
-// moves the values into the entries.)
+// nmap-hostvals P5: the VALUES live in the entries. `map_cap` retired
+// (with the values host-side there is no rut-side sidecar left to
+// pre-size; the table's own with_capacity hint rides `map_new`'s `cap`)
+// and the valued `hv` family lands: `map_hv{put,get,remove}` (+ the
+// `_sv` range twins) carry the value INSIDE the crossing as the
+// host-decl-only `any` type — the boundary hands the body the raw slot
+// TOGETHER WITH the call site's static type, a prim value stores `Bits`
+// (the 8 bytes move as-is), a reference value retains its OWN cell
+// (`Ref` — a str VIEW value stores the view's own cell; aliasing IS the
+// view). `map_hvget` answers the stored value through the any-answer:
+// `nil` = absent, `Bits`/`Ref` move the stored word/cell (a `?prim` V
+// register mints its one-slot opt box in the write-back, the
+// ArrGet{OptPrim} shape; a ref V register takes the ArrGet borrow
+// shape), and reading an `Empty` entry — an `hput` birth with no value
+// — TRAPS loudly (a caller bug, never a silent nil). `map_hvremove`
+// releases the held cell in-crossing and answers the dead key's handle
+// or `-1`. The key crosses as `any` too: the call site's static type
+// classifies it against the SAME closed set the h-family admits (floats
+// refused; prim bits and str/bytes octets bit-identical to the typed
+// lanes), and the mixed-kind admission trap fires before any value cell
+// is retained.
 //
 // The native side owns KEYS (closed set: the integer primitives,
-// `bool`, `str`, `bytes`) as `HashMap` keys — hashed with the pinned
-// mapset constants (mix64 / FNV-1a 64, bit-for-bit) through an identity
-// hasher, and compared by CONTENT. Reference values still live
-// rut-side in `nmapset`'s `[?V]` sidecar, indexed by the handle the
-// h-family answers.
+// `bool`, `str`, `bytes`), their HASHES, their HANDLES, and now the
+// VALUE CELLS as `HashMap` entries — hashed with the pinned mapset
+// constants (mix64 / FNV-1a 64, bit-for-bit) through an identity
+// hasher, compared by CONTENT, released by the payload's `finalize`
+// hook at store-entry death (RFC 0016 §3).
 
 pub host fn map_new(cap: i64) -> opaque;
 
 pub host fn map_len(m: opaque) -> i32;
-
-// HashMap's reserve, read back (the wrapper's `with_capacity` pre-sizes
-// its sidecar with it — a hint, never a behavior; retires at P5).
-pub host fn map_cap(m: opaque) -> i32;
 
 // ---- the raw val lanes (nmapset-round3; RE-BASED at nmap-hostvals
 // P4) -----------------------------------------------------------------
 // Raw u64 bits in/out, ONE pair for every primitive val kind
 // (i64/u64/f64/bool — the wrapper reinterprets client-side). The
 // address is a live birth HANDLE from the h-family (slots died with
-// the probing core): the bits land in that key's entry, replacing
-// whatever is stored. Bounds are the table's live births; a removed
-// key's handle traps (`no live entry`), never reinterpreted.
-// `map_val_get_u/f` answers the stored bits iff the entry's tag is
-// Bits — the `Empty` placeholder an `hput` birth holds TRAPS on a
-// valued read (a caller bug, never a silent zero), and so will a
-// reference cell from P5 on.
+// the probing core): the bits land in that key's entry, releasing any
+// displaced reference cell first (P5). Bounds are the table's live
+// births; a removed key's handle traps (`no live entry`), never
+// reinterpreted. `map_val_get_u/f` answers the stored bits iff the
+// entry's tag is Bits — the `Empty` placeholder an `hput` birth holds
+// TRAPS on a valued read, and so does a `Ref` cell from the valued
+// lanes (never a reinterpret).
 //
 // The f pair is the same storage through an `f64`-typed crossing:
 // `to_bits`/`from_bits` at the boundary, raw bits byte-for-byte both
@@ -55,7 +62,7 @@ pub host fn map_val_set_f(m: opaque, handle: i32, v: f64);
 
 pub host fn map_val_get_f(m: opaque, handle: i32) -> f64;
 
-// ---- the fused handle lanes (nmapset-hostops) — the ONE family ------
+// ---- the fused handle lanes (nmapset-hostops) — the h-family --------
 // ONE crossing per op, ALL control flow host-side. The table carries a
 // STABLE birth handle per key (assigned at first insert, never
 // recycled); `hput` inserts or replaces via the entry API and answers
@@ -64,9 +71,9 @@ pub host fn map_val_get_f(m: opaque, handle: i32) -> f64;
 // exactly that bit), the rest the handle. Growth is std's — internal,
 // and invisible to every answer (the handle is a birth, not an
 // address, so nothing ever relocates). `hfind`/`hremove` answer the
-// key's handle, or `-1` when absent — `hremove` answers the dead
-// key's own handle, so the wrapper nils exactly that sidecar slot and
-// releases the cell; a re-insert is a NEW birth.
+// key's handle, or `-1` when absent — `hremove` releases the entry's
+// held value cell in-crossing (P5) and answers the dead key's own
+// handle; a re-insert is a NEW birth.
 //
 // The key shapes: the `i` lane takes `i64` (wrapper-cast from i8..i64,
 // sign-extension is the bits law), `u` takes `u64` raw, `b` takes
@@ -110,3 +117,24 @@ pub host fn map_hremove_s(m: opaque, k: str) -> i32;
 pub host fn map_hremove_y(m: opaque, k: bytes) -> i32;
 
 pub host fn map_hremove_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
+
+// ---- the valued lanes (nmap-hostvals P5) — the hv family ------------
+// The value crosses INSIDE the put as `any` (see the header): ONE
+// crossing per op, the entry API with the value inside. The packed
+// put answer is bit-identical to the h-family's; the gets answer the
+// stored value (nil = absent); the removes release the held cell and
+// answer the dead key's handle or `-1`. The sv twins key over a
+// borrowed `(parent, off, len)` BYTE range with the UTF-8 boundary
+// trap — the same key and entry as the plain lanes' equal content.
+
+pub host fn map_hvput(m: opaque, k: any, v: any) -> i64;
+
+pub host fn map_hvget(m: opaque, k: any) -> any;
+
+pub host fn map_hvremove(m: opaque, k: any) -> i32;
+
+pub host fn map_hvput_sv(m: opaque, parent: str, off: i32, len: i32, v: any) -> i64;
+
+pub host fn map_hvget_sv(m: opaque, parent: str, off: i32, len: i32) -> any;
+
+pub host fn map_hvremove_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;

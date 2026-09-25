@@ -1,17 +1,19 @@
 //! The `nmap_host` host experiment, driven end to end the way the
 //! `nmapset` wrapper drives it — rut code calls the host surface and the
 //! payload lives Rust-side in `Opaque<NativeTable>` (RFC 0023/0026).
-//! (nmap-hostvals P4: the table is a real `HashMap`; the round-1
-//! opaque-keyed lanes, the sentinel family, and the grow/reloc
-//! machinery are gone — this suite rides the fused h-family, the ONE
-//! op family the wrapper itself uses.)
+//! (nmap-hostvals P5: the table is a real `HashMap` and the VALUES live
+//! in the entries — the fused h-family keeps `HashSet` fed, the valued
+//! `hv` family carries prim and reference values inside ONE crossing,
+//! and `map_cap` is retired with the sidecar it pre-sized.)
 //!
 //! Covered per the phase: insert / replace / find / miss / remove with
 //! the packed `(handle << 1) | newly` answers, the dead-handle +
 //! re-birth law (handles are never recycled), the str/bytes/sv key
-//! flavors with lane-crossing content equality, `map_cap`'s HashMap
-//! reserve read-back, and the payload Drop law at rc-0, including
-//! through a wrapper record's `opaque` field.
+//! flavors with lane-crossing content equality, the valued lanes
+//! (bits — including a stored zero, never the miss — and record cells
+//! with the release balance measured on the heap accounting), and the
+//! payload Drop law at rc-0, including through a wrapper record's
+//! `opaque` field.
 
 use std::rc::Rc;
 
@@ -22,11 +24,12 @@ use rut_vm::interp::Vm;
 const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/nmap_host");
 
 const SRC: &str = r#"
-use nmap_host::{ map_new, map_cap, map_len,
+use nmap_host::{ map_new, map_len,
             map_hput_i, map_hfind_i, map_hremove_i,
             map_hput_s, map_hfind_s, map_hremove_s,
             map_hput_y, map_hfind_y, map_hremove_y,
-            map_hput_sv, map_hfind_sv, map_hremove_sv };
+            map_hput_sv, map_hfind_sv, map_hremove_sv,
+            map_hvput, map_hvget, map_hvremove };
 
 entry fn new_map(cap: i64) -> opaque { return map_new(cap); }
 
@@ -39,8 +42,6 @@ entry fn find_i64(t: opaque, k: i64) -> i32 {
 }
 
 entry fn count(t: opaque) -> i32 { return map_len(t); }
-
-entry fn capacity(t: opaque) -> i32 { return map_cap(t); }
 
 // insert / replace / find / miss / remove — a fails accumulator the
 // test asserts at zero. Growth is std's: internal, invisible to the
@@ -242,6 +243,57 @@ entry fn sv_put_ok(t: opaque) -> i64 {
     let s: str = "abc";
     return map_hput_sv(t, s, 0, 3);
 }
+
+// ---- the valued lanes (nmap-hostvals P5) ----------------------------
+// the value crosses INSIDE the put as the call site's typed slot; a
+// stored ZERO must read as a hit (the any-answer's tag carries
+// Some-vs-absent, never the raw word), a miss answers nil, replace
+// keeps the handle and stores the new value, remove answers the dead
+// key's handle and kills the value.
+
+entry fn valued_bits(t: opaque) -> i64 {
+    let mut fails: i64 = 0;
+    if (map_hvput(t, 1, 0) & 1 != 1) { fails += 1; }        // fresh; value 0
+    let z: ?i64 = map_hvget(t, 1);
+    if (z == nil) { fails += 10; }                          // some(0), never the miss
+    if (z != 0) { fails += 100; }
+    let miss: ?i64 = map_hvget(t, 2);
+    if (miss != nil) { fails += 1000; }                     // the miss
+    if (map_hvput(t, 1, 5) & 1 != 0) { fails += 10000; }    // replace: not newly
+    let v: ?i64 = map_hvget(t, 1);
+    if (v != 5) { fails += 100000; }
+    if (map_hvremove(t, 1) < 0) { fails += 1000000; }
+    let gone: ?i64 = map_hvget(t, 1);
+    if (gone != nil) { fails += 10000000; }
+    if (map_hvremove(t, 1) != -1) { fails += 100000000; }
+    return fails;
+}
+
+// an hput birth (the Empty placeholder) read through a valued lane
+// traps loudly — a caller bug, never a silent nil (§0.8 g)
+entry fn empty_read_trap(t: opaque) -> i64 {
+    let _ = map_hput_i(t, 7);
+    let v: ?i64 = map_hvget(t, 7);
+    return v;
+}
+
+// str values: put retains the arg's OWN cell, get answers it inside a
+// fresh ?box (aliasing IS the cell), and the replace's displaced cell
+// releases exactly once — the balance is measured Rust-side.
+entry fn valued_strs(t: opaque) -> i64 {
+    let mut fails: i64 = 0;
+    let a: str = "alpha-alpha-alpha-alpha";
+    if (map_hvput(t, 1, a) & 1 != 1) { fails += 1; }
+    let got: ?str = map_hvget(t, 1);
+    if (got != a) { fails += 10; }
+    if (map_hvput(t, 2, "beta-value") & 1 != 1) { fails += 100; }
+    if (map_hvput(t, 1, "gamma-value") & 1 != 0) { fails += 1000; }   // replace
+    let g: ?str = map_hvget(t, 1);
+    if (g != "gamma-value") { fails += 10000; }
+    let b: ?str = map_hvget(t, 2);
+    if (b != "beta-value") { fails += 100000; }
+    return fails;
+}
 "#;
 
 fn vm_with_nmap() -> Vm {
@@ -364,4 +416,48 @@ fn sv_lanes_trap_mid_codepoint_and_out_of_range() {
     assert_eq!(vm.call::<_, i32>("count", (t.clone(),)).unwrap(), 0);
     assert!(vm.call::<_, i64>("sv_put_ok", (t.clone(),)).unwrap() & 1 == 1);
     assert_eq!(vm.call::<_, i32>("count", (t.clone(),)).unwrap(), 1);
+}
+
+// ---- the valued lanes (nmap-hostvals P5) ----------------------------
+
+/// Bits values end to end: a stored ZERO is some(0) — never the miss —
+/// the miss is nil, replace answers not-newly with the new bits, and
+/// remove answers the dead key's handle once and a miss after.
+#[test]
+fn valued_bits_round_trip_and_a_stored_zero_is_never_the_miss() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    assert_eq!(vm.call::<_, i64>("valued_bits", (t,)).unwrap(), 0);
+}
+
+/// An hput birth holds the `Empty` placeholder; a valued read of it
+/// traps loudly with the §0.8 g message and never answers a silent nil.
+#[test]
+fn an_empty_entry_read_through_a_valued_lane_traps_loudly() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    let err = vm.call::<_, i64>("empty_read_trap", (t,)).unwrap_err();
+    assert_eq!(err.kind, rut_vm::TrapKind::Invalid);
+    assert!(err.msg.contains("Empty") && err.msg.contains("placeholder"), "{}", err.msg);
+}
+
+/// The release balance of the valued lanes: str values retain their
+/// arg cells on store, the displaced cell releases exactly once on
+/// replace (a double release would panic the rc walk in debug; a leak
+/// would show here), and the entry death's `finalize` releases every
+/// held value — the heap accounting must close on the base.
+#[test]
+fn valued_lanes_release_exactly_once_through_replace_and_finalize() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    let base = vm.heap_usage();
+    assert_eq!(vm.call::<_, i64>("valued_strs", (t.clone(),)).unwrap(), 0);
+    assert_eq!(vm.call::<_, i32>("count", (t.clone(),)).unwrap(), 2);
+    // rc-0: the payload's finalize releases every held value cell with it
+    drop(t);
+    let after = vm.heap_usage();
+    assert!(
+        after <= base + 4096,
+        "valued tables must free at rc-0: base {base}, after {after}"
+    );
 }

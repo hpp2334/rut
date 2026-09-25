@@ -431,7 +431,7 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     rut_driver::mount_dir(&mut session, std::path::Path::new(NMAPSET_DIR))
         .expect("mount nmapset");
     let expected = session.expected_host_fns();
-    for f in ["map_new", "map_cap", "map_len", "map_hput_i", "map_hfind_i", "map_hremove_i"] {
+    for f in ["map_new", "map_len", "map_hput_i", "map_hfind_i", "map_hremove_i"] {
         assert!(
             expected.contains_key(&format!("nmap_host::{f}")),
             "the nmap_host surface must cross through the [deps] mount: {expected:?}"

@@ -7,7 +7,7 @@
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
 use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, CellData, CellVal, Heap, Slot, Trap, TrapKind, Value};
+use crate::heap::{cell_of, CellData, CellVal, Heap, Slot, Trap, TrapKind, ValSlot, Value};
 use crate::arena::OpaqueRef;
 use rut_core::ops::*;
 use rut_core::types::{
@@ -133,6 +133,17 @@ pub struct Vm {
     /// returning `Result`; `call_host` checks the flag the moment the
     /// body returns — the trap fires before the dst write
     host_trap: Option<Trap>,
+    /// the any-answer's tagged carry (nmap-hostvals P5): `Option<ValSlot>`'s
+    /// `into_slot` stashes the un-erased answer here and `call_host`'s any
+    /// write-back takes it. The returned word alone cannot carry the
+    /// Some/None tag — a stored zero and the miss are the same 8 bytes —
+    /// and a `?prim` V register's ArrGet shape needs the tag to mint the
+    /// one-slot opt value (or answer the flat null on the miss). Same
+    /// channel discipline as `host_trap`: written by the body's adapter,
+    /// read+cleared by the dispatch one crossing later; a trapped
+    /// crossing leaves it set but unreachable, and the next crossing's
+    /// stash overwrites before its own read.
+    host_val_out: Option<ValSlot>,
     /// reused arg-snapshot spill for host arities past `INLINE_ARITY`
     /// (never taken in practice; the stack covers the common case)
     slot_scratch: Vec<Slot>,
@@ -320,6 +331,7 @@ impl Vm {
             host_slots,
             host_keep,
             host_trap: None,
+            host_val_out: None,
             slot_scratch: Vec::new(),
             const_slots,
             reg_pool: Vec::new(),
@@ -688,7 +700,73 @@ impl Vm {
                 // could free it mid-step). A prim/any V register takes the 8
                 // bytes plain. Trust law (documented at the decl site): the
                 // host answers the caller's V.
-                if self.is_ref(fregs.get(d as usize).copied().unwrap_or(TY_ANY)) {
+                let dst_ty = fregs.get(d as usize).copied().unwrap_or(TY_ANY);
+                let dst_opt_elem: Option<TypeId> = if dst_ty != TY_ANY {
+                    match self.prog.types.kind(dst_ty) {
+                        TyKind::Opt { elem } => Some(*elem),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                if let Some(elem) = dst_opt_elem {
+                    // the ?V registers (nmap-hostvals P5 — the wrapper's
+                    // `get -> ?V`). The Some/None tag rode `host_val_out`
+                    // (the raw word cannot carry it: a stored zero and the
+                    // miss are the same 8 bytes).
+                    if !self.prog.types.repr_of(elem).is_ref() {
+                        // ?prim V: the ArrGet{OptPrim} shape — a Some(Bits)
+                        // answer MINTS the fresh one-slot opt value the
+                        // register owns (release the displaced, retain
+                        // nothing — the primitive-store tier's law, RFC
+                        // 0044 §5); the miss is the flat null. A Ref
+                        // answer here is the ?fn value shape: the box
+                        // aliases the cell, the cell retains
+                        // (op_make_opt's law).
+                        let cell = match self.host_val_out.take() {
+                            Some(ValSlot::Bits(w)) => self.heap.alloc_opt_value(dst_ty, w)?,
+                            Some(ValSlot::Ref(c)) => {
+                                let b = self.heap.alloc_opt_value(dst_ty, c)?;
+                                self.heap.retain(c);
+                                b
+                            }
+                            _ => Slot::int(0),
+                        };
+                        let old = std::mem::replace(&mut self.cur_regs[d as usize], cell);
+                        self.heap.release(old);
+                    } else {
+                        // ?ref V: a `?Pt` value IS the one-slot box wrapping
+                        // the cell (RFC 0044, the T → ?T law) — the stored
+                        // bare cell must cross INSIDE a box, and the ?V type
+                        // id exists only at this call site, so the
+                        // write-back mints it: the box ALIASES the stored
+                        // cell (op_make_opt's law — retain the aliased cell
+                        // into field 0), the register owns the box, and the
+                        // store keeps its own cell reference. Aliasing IS
+                        // the cell: two gets name ONE stored cell, and
+                        // writes through the box land in the map.
+                        match self.host_val_out.take() {
+                            Some(ValSlot::Ref(c)) => {
+                                let b = self.heap.alloc_opt_value(dst_ty, c)?;
+                                self.heap.retain(c);
+                                let old = std::mem::replace(&mut self.cur_regs[d as usize], b);
+                                self.heap.release(old);
+                            }
+                            Some(ValSlot::Bits(_)) => {
+                                return Err(Trap::new(
+                                    TrapKind::Invalid,
+                                    "any-answer: `Bits` into a reference V register — the host answers the caller's V (the trust law at the decl site)",
+                                ));
+                            }
+                            _ => {
+                                // the miss: the flat null into the ref register
+                                let old =
+                                    std::mem::replace(&mut self.cur_regs[d as usize], out);
+                                self.heap.release(old);
+                            }
+                        }
+                    }
+                } else if self.is_ref(dst_ty) {
                     let old = std::mem::replace(&mut self.cur_regs[d as usize], out);
                     self.heap.retain(out);
                     self.heap.release(old);

@@ -3,7 +3,8 @@
 //! package (the pure-rut `mapset` twin was removed in Sep 2026; these
 //! scenarios were ported from it and keep its pinned checksums — the
 //! old twin law lives in git history). Adapted where the surface
-//! differs (`with_capacity` sizes through the host's `map_cap`). PLUS
+//! differs (`with_capacity`'s `n` is the host table's own reserve
+//! hint). PLUS
 //! the two host-experiment specifics (phase 3): a user-defined key type
 //! is refused AT COMPILE TIME with the union-bound diagnostic (the
 //! class bound is the visible contract — escape hatches: encode the
@@ -53,8 +54,9 @@ fn diags_of(app_src: &str) -> Vec<String> {
 fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     let session = session_with(app_src);
     let expected = session.expected_host_fns();
-    for f in ["map_new", "map_cap", "map_len",
-              "map_hput_i", "map_hfind_i", "map_hremove_i"]
+    for f in ["map_new", "map_len",
+              "map_hput_i", "map_hfind_i", "map_hremove_i",
+              "map_hvput", "map_hvget", "map_hvremove"]
     {
         assert!(
             expected.contains_key(&format!("nmap_host::{f}")),

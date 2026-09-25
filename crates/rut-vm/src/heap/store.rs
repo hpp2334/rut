@@ -99,11 +99,39 @@ pub enum OpaqueEntry {
 /// - `Ref` — the value's OWN cell (retain on store; release on
 ///   replace/remove/finalize). Identity is the cell: a str VIEW arg
 ///   stores the view's cell — aliasing IS the view.
+#[derive(Clone, Copy)]
 pub enum ValSlot {
     Empty,
     Bits(Slot),
     Ref(Slot),
 }
+
+impl std::fmt::Debug for ValSlot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValSlot::Empty => write!(f, "ValSlot::Empty"),
+            ValSlot::Bits(s) => write!(f, "Bits({:#018x})", unsafe { s.i } as u64),
+            ValSlot::Ref(s) => write!(f, "Ref({:#018x})", unsafe { s.r } as usize),
+        }
+    }
+}
+
+/// Tag equality first, raw words second: `Bits` compares bit patterns
+/// (a stored `-0.0` is not a stored `0.0`), `Ref` compares cell
+/// identity — the aliasing law as an operator. `Empty` only equals
+/// `Empty`; a bits word and a cell pointer are different tags even
+/// when the bytes agree.
+impl PartialEq for ValSlot {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ValSlot::Empty, ValSlot::Empty) => true,
+            (ValSlot::Bits(a), ValSlot::Bits(b)) => unsafe { a.i == b.i },
+            (ValSlot::Ref(a), ValSlot::Ref(b)) => unsafe { a.r == b.r },
+            _ => false,
+        }
+    }
+}
+impl Eq for ValSlot {}
 
 /// One slab element: the entry + its rc + the borrow guard. `bytes` is
 /// the RFC 0040 charge the mint made, refunded at death.
