@@ -8,6 +8,10 @@
 //! (the fat-ref headline), repeated trait parameters
 //! (`Writable<T, T>`) resolve positionally, and a concrete impl still
 //! shadows the template's instantiation of the same pair (concrete-first).
+//! Phase 3 adds the generic INSTANCE-method call: the method's own type
+//! arguments join the class instantiation to key the monomorphized
+//! frame, and a spelled lambda argument takes its parameter types from
+//! the bound part of the expected shape (the placeholder hint).
 
 use rut_parser::Mode;
 use rut_driver::{Module, Session};
@@ -336,4 +340,77 @@ fn mixed_concrete_and_parameter_trait_arguments() {
     .expect("compiles");
     let r: u32 = vm.call("main", ()).expect("runs");
     assert_eq!(r, 33, "the concrete slot (Bag<i64>) stayed; the parameter slot substituted");
+}
+
+// ---- phase 3: generic instance-method frames --------------------------
+
+/// The stale-frame repro, minimized: the same generic body must compute
+/// identically as a FREE fn and as an INSTANCE method of a class. The
+/// method's own type arguments — spelled (`s.get<i64>(..)`) or inferred
+/// through the `Readable<T>` template (`s.get(..)`) — join the class
+/// instantiation to key the Inst, so the callee frame's parameters and
+/// the trait call inside it type per instantiation (v1 typed method
+/// parameters under the CLASS instantiation only, which left the
+/// generic-method frames computing stale/wrong values). The spelled
+/// lambda argument types its parameter from the BOUND part of the
+/// expected fn shape (the placeholder hint, the free-fn door's law,
+/// now wired in the method door too).
+#[test]
+fn generic_instance_method_frames_compute_like_free_fns() {
+    let mut vm = boot(
+        "trait Readable<T> { fn atom_id(self) -> u32; }\n\
+         class Source<T> { id: u32 = 0; }\n\
+         impl Readable<T> for Source<T> {\n\
+             fn atom_id(self) -> u32 { return self.id; }\n\
+         }\n\
+         class Ctx2 { x: i32 = 6; }\n\
+         class Store { cell: opaque; }\n\
+         impl Store {\n\
+             pub fn get<T>(self, a: Readable<T>) -> T {\n\
+                 let _ = a.atom_id();\n\
+                 return opaque.downcast<T>(self.cell);\n\
+             }\n\
+             pub fn lift<T>(self, f: fn(Ctx2) -> T) -> T {\n\
+                 return f(Ctx2 { x: 6 });\n\
+             }\n\
+         }\n\
+         pub fn get_free<T>(st: Store, a: Readable<T>) -> T {\n\
+             let _ = a.atom_id();\n\
+             return opaque.downcast<T>(st.cell);\n\
+         }\n\
+         entry fn main() -> i64 {\n\
+             let s = Store { cell: opaque(41 as i64) };\n\
+             let src = Source<i64> { id: 3 };\n\
+             let m_i = s.get<i64>(src);\n\
+             let m_infer = s.get(src);\n\
+             let f_i = get_free<i64>(s, src);\n\
+             let f_infer = get_free(s, src);\n\
+             let lifted = s.lift(fn (c) -> i64 { return c.x as i64; });\n\
+             return m_i + m_infer + f_i + f_infer + lifted;\n\
+         }\n",
+    )
+    .expect("compiles");
+    let r: i64 = vm.call("main", ()).expect("runs");
+    assert_eq!(
+        r, 170,
+        "method and free-fn frames answer 41 each; the spelled lambda lifts 6"
+    );
+}
+
+/// the method-generic arity guard: a call spelling more type arguments
+/// than the method declares diagnoses once, cleanly
+#[test]
+fn method_generic_arity_mismatch_is_one_clean_diagnostic() {
+    let ds = diags_of(
+        "class Store { n: u32 = 0; }\n\
+         impl Store {\n\
+             pub fn get<T>(self, k: u32) -> u32 { return self.n; }\n\
+         }\n\
+         entry fn main() -> u32 {\n\
+             let s = Store { n: 1 };\n\
+             return s.get<i64, str>(1);\n\
+         }\n",
+    );
+    assert_eq!(ds.len(), 1, "one diagnostic, not a cascade: {ds:?}");
+    assert!(ds[0].contains("takes 1 generic argument(s), 2 given"), "{ds:?}");
 }

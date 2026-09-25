@@ -168,13 +168,17 @@ impl Store {
         if (k == 0) {
             if (self.lane_of(id)) {
                 let p = self.kv.get(id);
-                let prev = opaque.downcast<str>(p);
-                // the lane's argument read back at the lane's own type: the
-                // box erases A, the downcast answers nil for a non-str write
-                // on this lane (a compile-valid body for every A, RFC 0013)
-                let cur = opaque.downcast<str>(opaque(arg));
-                if (prev == cur) {
-                    return arg; // content-equal: no bump, nothing stales
+                if (p != nil) {
+                    // never-written has no content to skip: any first
+                    // write is a change
+                    let prev = opaque.downcast<str>(p);
+                    // the lane's argument read back at the lane's own type: the
+                    // box erases A, the downcast answers nil for a non-str write
+                    // on this lane (a compile-valid body for every A, RFC 0013)
+                    let cur = opaque.downcast<str>(opaque(arg));
+                    if (prev == cur) {
+                        return arg; // content-equal: no bump, nothing stales
+                    }
                 }
             }
             self.kv.put(id, opaque(arg));
@@ -207,6 +211,11 @@ impl Store {
         self.n_recomputes += 1;
     }
 
+    /// Stale iff never computed, or any recorded dep gen moved — or a
+    /// dep that is itself a derived is stale (the ONE-PULL law: a write
+    /// an upstream has not re-read yet still refreshes the whole chain,
+    /// upstream first, on the next pull). A dep the derive never read
+    /// cannot make this true — per-dep staleness over DISCOVERED edges.
     fn stale(self, id: u32) -> bool {
         let deps = self.edges.get(id);
         if (deps == nil) {
@@ -223,6 +232,9 @@ impl Store {
             }
             if (g != self.gen_of(d)) {
                 return true;
+            }
+            if (self.kind_of(d) == 1 && self.stale(d)) {
+                return true; // the upstream moved through its own deps
             }
         }
         return false;
@@ -301,6 +313,7 @@ pub class World {
     store: Store;
     items$: Source<Vec<Item>>;
     note$: Source<str>;
+    draft$: Source<str>; // the never-read str lane: writes to it recompute nothing
     counts$: Derived<str>;
     doubled$: Derived<i64>; // derived-on-derived: reads len$
     len$: Derived<i64>;
@@ -311,16 +324,17 @@ entry fn world_new() -> opaque {
     let mut store = Store.new();
     let items$ = store.source<Vec<Item>>(Vec.new());
     let note$ = store.source_str("");
+    let draft$ = store.source_str("");
     let counts$ = store.derive(fn (ctx) -> str {
         let xs = ctx.get(items$);
-        let note = ctx.get(note$);
+        let note = ctx.get(note$); // the discovered edge: the read counts, the render stays the counts line
         let mut open = 0;
         for (let it of xs) {
             if (it.done == false) {
                 open += 1;
             }
         }
-        return f"{open} open | {xs.len() - open} done ({note})";
+        return f"{open} open | {xs.len() - open} done";
     });
     let len$ = store.derive(fn (ctx) -> i64 {
         let xs = ctx.get(items$);
@@ -340,6 +354,7 @@ entry fn world_new() -> opaque {
         store: store,
         items$: items$,
         note$: note$,
+        draft$: draft$,
         counts$: counts$,
         doubled$: doubled$,
         len$: len$,
@@ -367,14 +382,16 @@ entry fn add(c: opaque, id: i64) -> i64 {
     return w.store.set(w.add_m, id);
 }
 
+// the str-lane write the counts derive never reads (the real suite's
+// draft$ twin): same-content writes skip, content changes land
 entry fn note(c: opaque, s: str) -> nil {
     let w = at(c);
-    w.store.set(w.note$, s);
+    w.store.set(w.draft$, s);
 }
 
 entry fn note_get(c: opaque) -> str {
     let w = at(c);
-    return w.store.get(w.note$);
+    return w.store.get(w.draft$);
 }
 
 entry fn recomputes(c: opaque) -> i32 {

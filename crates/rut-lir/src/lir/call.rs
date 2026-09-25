@@ -694,6 +694,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Some(tn) if self.free_generics(tn, &decl_generics, &subst).is_empty() => {
                     Some(self.ctx.resolve_type(tn, &subst))
                 }
+                // the shape hint (the phase-2 placeholder env): a
+                // best-effort expected type whose unbound generics ride
+                // fresh placeholder types — a spelled lambda argument
+                // (`fn (ctx) -> str { .. }`) takes its parameter
+                // annotations from the BOUND part (`ctx: DeriveCtx`);
+                // unification below binds the real values
+                Some(tn) => Some(self.hint_with_placeholders(tn, &decl_generics, &subst)),
                 _ => None,
             };
             let t = self.compile_expr(*a, expected)?;
@@ -1229,8 +1236,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             _ => {}
         }
-        if !generics.is_empty() {
-            self.ctx.err(sp, "generic method calls are not supported in this build —v1 types method parameters under the class instantiation only (the `store.get<T>` family waits on that follow-up)");
+        // a generic METHOD call (`store.get<T>(a)`) resolves on a user
+        // class below (the inherent-method path takes the site's type
+        // arguments); every other receiver shape has no generic member
+        // surface in this build
+        if !generics.is_empty() && !matches!(self.ctx.types.kind(rt), TyKind::Data { .. }) {
+            self.ctx.err(sp, "generic method calls are not supported on this receiver — only class methods take type arguments (the `store.get<T>` family)");
             return Err(());
         }
         // `s.len()` — the Slice surface member shared by every sequence;
@@ -1348,7 +1359,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .map(|(mnode, cargs)| (dname, cargs, mnode))
             });
             if let Some((dname, class_args, mnode)) = found {
-                return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, args, expected, sp);
+                return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, generics, args, expected, sp);
             }
             if let Some((idx, midx)) = self.find_trait_impl_method(rt, name) {
                 // a bare concrete receiver calls the CONCRETE-ABI variant:
@@ -2063,7 +2074,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    /// Instance-method call on a concrete receiver — now with the METHOD's
+    /// Instance-method call on a concrete receiver. The method may be
+    /// GENERIC in its own right (`store.get<T>(a)`, the two-pkg store's
+    /// whole surface): its type arguments — spelled at the site or
+    /// inferred from the arguments through the same unification the
+    /// free-fn path runs (`ctx.get(items$)` binds `T` through the
+    /// `Readable<T>` template) — join the CLASS instantiation to form the
+    /// completed substitution. That full substitution resolves the
+    /// callee's signature AND keys the Inst, so a method's parameter
+    /// registers are typed per instantiation in the monomorphized frame —
+    /// v1's class-instantiation-only typing is what left a generic
+    /// method's `Readable<T>` parameter unresolved (the stale-wrong-value
+    /// frames the spike0 e-cluster died of).
     pub(crate) fn compile_inherent_call(
         &mut self,
         dname: IdentId,
@@ -2071,6 +2093,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self_ty: TypeId,
         mnode: NodeHandle<MethodDeclNode>,
         rreg: u16,
+        generics: Vec<NodeHandle<AnyTy>>,
         args: Vec<NodeHandle<AnyExpr>>,
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
@@ -2085,52 +2108,135 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         );
         let (params, ret, mname) = (md.params, md.ret, md.name);
         let _ = mut_self;
-        // inline bounds gate the completed substitution (RFC 0043)
-        self.ctx.admit_bounds(&md.bounds, &class_subst, sp);
-        let mut ptys = Vec::new();
+        // the method's own generics: explicit site arguments first
+        let decl_generics: Vec<IdentId> = md.generics.clone();
+        if generics.len() > decl_generics.len() {
+            self.ctx.err(sp, format!(
+                "`{}.{}` takes {} generic argument(s), {} given",
+                self.ctx.name(dname), self.ctx.name(mname), decl_generics.len(), generics.len()
+            ));
+            return Err(());
+        }
+        let mut subst = class_subst.clone();
+        for (g, node) in decl_generics.iter().zip(generics.iter()) {
+            let t = self.resolve_type_now(*node);
+            subst.push((*g, t));
+        }
+        if args.len() != params.len() - 1 {
+            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), params.len() - 1));
+            return Err(());
+        }
         // the callee's signature may spell `Self`/`T` — resolve under the
-        // CALLEE's class instantiation (the caller's context is irrelevant)
+        // CALLEE's instantiation (the caller's context is irrelevant)
         let saved_self = self.self_ty;
-        let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
+        let saved_subst = std::mem::replace(&mut self.subst, subst.clone());
         self.self_ty = Some(self_ty);
-        for p in params.iter().skip(1) {
-            match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
-                _ => ptys.push(TY_I32),
+        // compile args under best-effort expected types; a parameter node
+        // still spelling an unbound generic (`a: Readable<T>`) gets no
+        // hint — unification binds the generic from the argument
+        let param_nodes: Vec<Option<NodeHandle<AnyTy>>> = params
+            .iter()
+            .skip(1)
+            .map(|p| match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => Some(*t),
+                _ => None,
+            })
+            .collect();
+        let mut arg_tys: Vec<TypeId> = Vec::new();
+        let mut aregs: Vec<u16> = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            let expected = match param_nodes[i] {
+                Some(tn) if self.free_generics(tn, &decl_generics, &subst).is_empty() => {
+                    Some(self.resolve_type_now(tn))
+                }
+                // the shape hint (the phase-2 placeholder env): a
+                // best-effort expected type whose unbound generics ride
+                // fresh placeholder types — a spelled lambda argument
+                // (`fn (ctx) -> str { .. }`) takes its parameter
+                // annotations from the BOUND part (`ctx: DeriveCtx`);
+                // unification below binds the real values
+                Some(tn) => Some(self.hint_with_placeholders(tn, &decl_generics, &subst)),
+                _ => None,
+            };
+            let t = self.compile_expr(*a, expected)?;
+            if let Some(e) = expected {
+                self.widen_to_slot(t, e, sp.lo);
+            }
+            arg_tys.push(t);
+            aregs.push(self.last_reg);
+        }
+        // structural unification binds the method's remaining generics
+        for (i, tn) in param_nodes.iter().enumerate() {
+            if let Some(tn) = tn {
+                self.unify_generic(*tn, arg_tys[i], &decl_generics, &mut subst, sp)?;
+            }
+        }
+        for g in &decl_generics {
+            if !subst.iter().any(|(n, _)| n == g) {
+                self.ctx.err(sp, format!(
+                    "cannot infer generic parameter `{}` of `{}.{}` — annotate the call: `.{}<..>(..)`",
+                    self.ctx.name(*g), self.ctx.name(dname), self.ctx.name(mname), self.ctx.name(mname)
+                ));
+                return Err(());
+            }
+        }
+        // inline bounds gate the completed substitution (RFC 0043)
+        self.ctx.admit_bounds(&md.bounds, &subst, sp);
+        // final param/ret types under the completed substitution —
+        // through the FnCompiler resolver, so `Self` in the method's
+        // own signature binds to the receiver (the `new`/`bump` law)
+        self.subst = subst.clone();
+        let mut ptys = Vec::new();
+        for tn in param_nodes.iter() {
+            match tn {
+                Some(t) => ptys.push(self.resolve_type_now(*t)),
+                None => ptys.push(TY_I32),
             }
         }
         let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
         self.self_ty = saved_self;
         self.subst = saved_subst;
-        if args.len() != ptys.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
-            return Err(());
-        }
-        let mut aregs = Vec::new();
-        for (i, a) in args.iter().enumerate() {
-            let t = self.compile_expr(*a, Some(ptys[i]))?;
-            if !self.widens(t, ptys[i]) {
-                self.ctx.err(self.ctx.ast.span(a.id()), format!(
+        for (i, _) in args.iter().enumerate() {
+            if !self.widens(arg_tys[i], ptys[i]) {
+                self.ctx.err(self.ctx.ast.span(args[i].id()), format!(
                     "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
+                    i + 1, self.ctx.type_name(arg_tys[i]), self.ctx.type_name(ptys[i])
                 ));
             }
-            self.widen_to_slot(t, ptys[i], sp.lo);
-            // ptys here excludes `self` — args align 1:1
-            aregs.push(self.last_reg);
+            // a trait-typed parameter whose expected type was unknown
+            // during the argument's compile (it spells a free generic —
+            // `a: Readable<T>`) widens HERE, after unification resolved
+            // `ptys[i]` (the concrete-ABI scalar boxes, ref values
+            // cross as their handles)
+            let before = self.last_reg;
+            self.widen_to_slot(arg_tys[i], ptys[i], sp.lo);
+            if self.last_reg != before {
+                aregs[i] = self.last_reg;
+            }
+        }
+        // trait-typed parameters specialize per concrete argument (RFC
+        // 0012 §5): the Inst carries one origin per trait-obj param
+        let mut trait_origins = Vec::new();
+        for (i, _) in args.iter().enumerate() {
+            if matches!(self.ctx.types.kind(ptys[i]), TyKind::TraitObj { .. })
+                && !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::TraitObj { .. })
+            {
+                trait_origins.push(arg_tys[i]);
+            }
         }
         // small instance methods inline at the call site: the class's
         // `push`/`pop`/`freeze` are rut code (RFC 0005), so an interpreted
         // frame per call is the cost of the design; inlining removes it
+        // (generic methods never inline — the generic-method gate inside)
         if self.try_inline_method(
-            dname, &class_subst, self_ty, mnode, mname, mut_self, rreg, &aregs, &ptys, ret_ty, sp,
+            dname, &subst, self_ty, mnode, mname, mut_self, rreg, &aregs, &ptys, ret_ty, sp,
         ) {
             return Ok(ret_ty);
         }
         let inst = crate::check::Inst {
             key: crate::check::FnKey::Method { data: dname, name: mname },
-            subst: class_subst,
-            trait_origins: Vec::new(),
+            subst,
+            trait_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
         let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
