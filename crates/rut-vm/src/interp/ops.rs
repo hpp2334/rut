@@ -12,14 +12,43 @@ impl Vm {
         }
     }
 
-    pub(super) fn effective_ty(&self, cell: &crate::heap::CellVal) -> TypeId {
-        match &cell.data {
-            crate::heap::CellData::OpaqueBox { val_ty, .. } => *val_ty,
-            // a host payload box's rut type is the box itself (RFC 0023):
-            // `o is opaque` is true, `o is T` misses for every rut T
-            crate::heap::CellData::HostBoxed { .. } => cell.ty,
-            _ => cell.ty,
+    /// The rut-visible type of a value slot (RFC 0014/0023): a rut-value
+    /// box answers its payload's runtime type, a host payload box the box
+    /// itself (TY_OPAQUE — `o is opaque` true, `o is T` misses for every
+    /// rut T), anything else its cell's own type. Store entries (the P2
+    /// repr) read through the tag; cells fall through.
+    pub(super) fn effective_ty(&self, s: Slot) -> TypeId {
+        if let Some(e) = crate::heap::store::store_entry(s) {
+            return match &e.e {
+                crate::heap::store::OpaqueEntry::Host(_) => rut_core::types::TY_OPAQUE,
+                crate::heap::store::OpaqueEntry::Rut(r) => r.val_ty,
+            };
         }
+        cell_of(s).ty
+    }
+
+    /// The `is` law's type (RFC 0014, 2026-09): `is` names the BOX, never
+    /// the payload — any opaque (host or rut) answers TY_OPAQUE, so
+    /// `o is opaque` (or an alias) hits and `o is T` misses for every
+    /// payload T; recovery is `downcast<T>` only (its own TidOf keeps
+    /// reading the payload). IsTrait probes the same type.
+    pub(crate) fn is_ty(&self, s: Slot) -> TypeId {
+        if crate::heap::store::is_entry(s) {
+            return rut_core::types::TY_OPAQUE;
+        }
+        cell_of(s).ty
+    }
+
+    /// The TidOf/downcast law: a host payload box has no rut runtime type
+    /// — report the sentinel so `downcast<T>` compares false for every T
+    /// and yields None — never a trap (RFC 0014).
+    pub(crate) fn tid_ty(&self, s: Slot) -> TypeId {
+        if let Some(e) = crate::heap::store::store_entry(s) {
+            if let crate::heap::store::OpaqueEntry::Host(_) = &e.e {
+                return rut_core::types::HOST_BOX_TID;
+            }
+        }
+        self.effective_ty(s)
     }
 
     // ---- op bodies shared by `step` and the `run_loop` fast path ----
@@ -179,8 +208,30 @@ impl Vm {
     /// `GetF` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
     pub(super) fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32, repr: Repr) -> Result<(), Trap> {
-        let cell = cell_of(self.nil_checked(self.cur_regs[obj as usize])?);
-        if let Some(v) = window_getf(&self.heap, cell, self.cur_regs[obj as usize], repr) {
+        let raw = self.nil_checked(self.cur_regs[obj as usize])?;
+        // the downcast ALIAS handoff (RFC 0014, refval-round2): the `?T`
+        // result IS the opaque box, so the nullable deref (field 0) reads
+        // the box's payload slot at the payload's own repr — a store slot
+        // at P2, so the tag routes BEFORE any cell deref. Cell-repr
+        // payloads retain their handle below — mutation through the read
+        // hits the source cell; prim payloads read the bits copied at
+        // construction.
+        if crate::heap::store::is_entry(raw) {
+            let entry = crate::heap::store::store_entry(raw).unwrap();
+            let v = match (&entry.e, field) {
+                (crate::heap::store::OpaqueEntry::Rut(r), 0) => r.slot,
+                _ => return Err(Trap::new(TrapKind::Invalid, "field on non-record")),
+            };
+            let old = self.cur_regs[dst as usize];
+            self.cur_regs[dst as usize] = v;
+            if repr.is_ref() {
+                self.heap.retain(v);
+                self.heap.release(old);
+            }
+            return Ok(());
+        }
+        let cell = cell_of(raw);
+        if let Some(v) = window_getf(&self.heap, cell, raw, repr) {
             let old = self.cur_regs[dst as usize];
             self.cur_regs[dst as usize] = v;
             if repr.is_ref() {
@@ -193,14 +244,6 @@ impl Vm {
                 .borrow()
                 .get(field as usize)
                 .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
-            // the downcast ALIAS handoff (RFC 0014, refval-round2): the
-            // `?T` result IS the opaque box, so the nullable deref (the
-            // only verified GetF shape here — the verifier admits field 0
-            // on an Opt register alone) reads the box's payload slot at
-            // the payload's own repr. Cell-repr payloads retain their
-            // handle below — mutation through the read hits the source
-            // cell; prim payloads read the bits copied at construction.
-            CellData::OpaqueBox { val, .. } if field == 0 => *val,
             _ => return Err(Trap::new(TrapKind::Invalid, "field on non-record")),
         };
         let old = self.cur_regs[dst as usize];
@@ -215,7 +258,13 @@ impl Vm {
     /// `SetF` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
     pub(super) fn op_setf(&mut self, obj: Reg, field: u32, val: Reg, repr: Repr) -> Result<(), Trap> {
-        let cell = cell_of(self.nil_checked(self.cur_regs[obj as usize])?);
+        let raw = self.nil_checked(self.cur_regs[obj as usize])?;
+        // a store slot is never a record (defensive, the same trap the
+        // old box cells hit) — check the tag BEFORE any cell deref
+        if crate::heap::store::is_entry(raw) {
+            return Err(Trap::new(TrapKind::Invalid, "field-set on non-record"));
+        }
+        let cell = cell_of(raw);
         if let Some(t) = window_setf_trap(cell) {
             return Err(t);
         }
@@ -344,7 +393,7 @@ impl Vm {
         let recv = args[0];
         let ty = self
             .scalar_recv_ty(recv)
-            .unwrap_or_else(|| self.effective_ty(cell_of(self.cur_regs[recv as usize])));
+            .unwrap_or_else(|| self.effective_ty(self.cur_regs[recv as usize]));
         let fid = self
             .prog
             .vtables

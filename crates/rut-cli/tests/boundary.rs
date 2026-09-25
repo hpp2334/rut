@@ -191,12 +191,12 @@ fn typed_host_box_roundtrip() {
 entry fn ident(o: opaque) -> opaque { return o; }
 "#;
     let mut vm = entry_vm(src);
-    let boxed = rut_vm::OpaqueBox::alloc(&mut vm, vec!["a".to_string(), "b".to_string()])
+    let boxed = rut_vm::Opaque::alloc(&mut vm, vec!["a".to_string(), "b".to_string()])
         .expect("alloc host box");
-    let back: rut_vm::OpaqueBox<Vec<String>> =
+    let back: rut_vm::Opaque<Vec<String>> =
         vm.call("ident", (boxed,)).expect("typed crossing");
     assert_eq!(back.with(|v| v.clone()).unwrap(), vec!["a".to_string(), "b".to_string()]);
     // the payload type token is checked, never UB
-    let wrong: Result<rut_vm::OpaqueBox<u64>, _> = vm.call("ident", (back,));
+    let wrong: Result<rut_vm::Opaque<u64>, _> = vm.call("ident", (back,));
     assert!(wrong.is_err(), "a `Vec<String>` box must not read as `u64`");
 }

@@ -9,13 +9,11 @@
 use crate::arena::{release_ref_slot, Arena, ReleasePlan};
 use rut_core::types::{PrimTy, TypeId, TypeTable, TyKind};
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
 use std::rc::Rc;
 
 pub(crate) mod blocks;
 mod cell;
-mod hostbox;
-pub(crate) mod pool;
+pub(crate) mod store;
 mod trap;
 mod value;
 
@@ -23,7 +21,7 @@ pub use crate::arena::OpaqueRef;
 pub(crate) use blocks::Blocks;
 
 pub use cell::{cell, cell_of, ArrData, ArrKind, CellData, CellVal, Slots, StrVal, TraceFrame};
-pub use hostbox::OpaqueBox;
+pub use store::{HostPayload, Opaque};
 pub use trap::{Trap, TrapKind};
 pub use value::Value;
 pub(crate) use value::Slot;
@@ -43,8 +41,6 @@ pub struct HeapAcct {
 pub struct Heap {
     acct: Rc<HeapAcct>,
     arena: Rc<Arena>,
-    /// enum member singletons (RFC 0016 §1)
-    singletons: RefCell<HashMap<(TypeId, u32), *const CellVal>>,
 }
 
 const CELL_OVERHEAD: u64 = 24; // header + Rc box approximation
@@ -54,8 +50,21 @@ impl Heap {
         Heap {
             acct: Rc::new(HeapAcct { used: Cell::new(0), peak: Cell::new(0), limit: Cell::new(limit) }),
             arena: Rc::new(Arena::new(Rc::new(plan))),
-            singletons: RefCell::new(HashMap::new()),
         }
+    }
+
+    /// A two-`Rc` view over the same arena and budget — the release walk
+    /// builds it to run a Host payload's finalize hook, so the hook sees
+    /// a real `Heap` (alloc/release route into the SAME machine, never a
+    /// copy; the enum-singleton map lives on the arena, shared by view).
+    pub(crate) fn view(arena: &Rc<Arena>, acct: &Rc<HeapAcct>) -> Heap {
+        Heap { acct: acct.clone(), arena: arena.clone() }
+    }
+
+    /// The Opaque store (tests probe the live-entry count).
+    #[cfg(test)]
+    pub(crate) fn arena_store(&self) -> &crate::heap::store::Store {
+        &self.arena.store
     }
 
     pub fn used_bytes(&self) -> u64 {
@@ -393,26 +402,42 @@ impl Heap {
     }
 
     pub fn alloc_opaque(&self, val: Slot, val_ty: TypeId) -> Result<Slot, Trap> {
-        self.mint(rut_core::types::TY_OPAQUE, CellData::OpaqueBox { val, val_ty }, 8)
+        // the RFC 0014 box: a rut value held host-side as a Rut store
+        // entry (nmap-hostvals P2) — the anchor cell is gone; the charge
+        // matches the old anchor cell's, so the budget reads the same.
+        let bytes = CELL_OVERHEAD + 8;
+        self.charge(bytes)?;
+        Ok(self.arena.store.insert(
+            store::OpaqueEntry::Rut(store::RutOpaque { slot: val, val_ty }),
+            bytes,
+        ))
     }
 
     /// A host payload box (RFC 0023/0026): `val` — any `'static` Rust
-    /// value — moves into a `Box<dyn Any>` inside the arena behind an
-    /// `Opaque` surface; the box's own vtable drops it deterministically
-    /// at rc-0 (RFC 0016 §3). The cell accounts the payload's shallow
-    /// `size_of::<T>()` (RFC 0040); interior allocations a `T` makes are
+    /// value — moves into a `Host` store entry behind an `Opaque`
+    /// surface; the payload drops deterministically at rc-0 (RFC 0016
+    /// §3), after its `finalize` hook when it opted into [`HostPayload`]
+    /// (`finalize` carries the monomorphized hook; `None` = the no-op
+    /// default, the plain-embedder mint). The entry accounts the
+    /// payload's shallow `size_of::<T>()` (RFC 0040) — the same charge
+    /// the old anchor cell made; interior allocations a `T` makes are
     /// the host's own business.
-    pub fn alloc_host_box<T: 'static>(&self, val: T) -> Result<Slot, Trap> {
-        // the block comes from the OpaqueBox pool (phase 6) when a
-        // previously-died payload of the same (size, align) parked one —
-        // `pool::host_box` keeps the surface a plain `Box<T>` either way
-        let payload = pool::host_box(&self.arena, val) as Box<dyn std::any::Any>;
+    pub fn alloc_host_box<T: 'static>(
+        &self,
+        val: T,
+        finalize: Option<fn(&mut dyn std::any::Any, &Heap)>,
+    ) -> Result<Slot, Trap> {
         let n = (std::mem::size_of::<T>() as u64).max(8);
-        self.mint(
-            rut_core::types::TY_OPAQUE,
-            CellData::HostBoxed { payload, type_name: std::any::type_name::<T>(), borrows: Cell::new(0) },
-            n,
-        )
+        let bytes = CELL_OVERHEAD + n;
+        self.charge(bytes)?;
+        Ok(self.arena.store.insert(
+            store::OpaqueEntry::Host(store::HostOpaque {
+                payload: Box::new(val),
+                type_name: std::any::type_name::<T>(),
+                finalize,
+            }),
+            bytes,
+        ))
     }
 
     pub fn alloc_closure(&self, func: u32, captures: Vec<Slot>) -> Result<Slot, Trap> {
@@ -431,7 +456,7 @@ impl Heap {
     /// Enum member — the immortal singleton cell (RFC 0016 §1): the one
     /// place identity quietly behaves as value (RFC 0012 §4).
     pub fn enum_member(&self, ty: TypeId, member: u32) -> Result<Slot, Trap> {
-        if let Some(p) = self.singletons.borrow().get(&(ty, member)) {
+        if let Some(p) = self.arena.singletons.borrow().get(&(ty, member)) {
             return Ok(Slot { r: *p });
         }
         // account once, never on drop — immortal
@@ -444,16 +469,24 @@ impl Heap {
         };
         let p = self.arena.alloc_slot();
         unsafe { p.write(cell) };
-        self.singletons.borrow_mut().insert((ty, member), p as *const CellVal);
+        self.arena.singletons.borrow_mut().insert((ty, member), p as *const CellVal);
         Ok(Slot { r: p as *const CellVal })
     }
 
     // ---- ref discipline (RFC 0016 §5) ----
 
-    /// rc += 1 (immortal singletons saturate at `u32::MAX`).
+    /// rc += 1 (immortal singletons saturate at `u32::MAX`; store entries
+    /// — the tagged words — carry their own rc on the entry).
     pub fn retain(&self, s: Slot) {
         let p = unsafe { s.r };
         if p.is_null() {
+            return;
+        }
+        if store::is_entry(s) {
+            unsafe {
+                let c = &*store::untag_entry(p);
+                c.refs.set(c.refs.get().saturating_add(1));
+            }
             return;
         }
         unsafe {
@@ -489,30 +522,26 @@ impl Heap {
         self.arena.take_pending_drop().map(|(p, cleanup)| (Slot { r: p }, cleanup))
     }
 
-    /// rc -= 1; at zero the cell is dropped, its slot recycled, and its
-    /// ref-typed children collected and released recursively (RFC 0016 §3).
+    /// rc -= 1; at zero the cell (or store entry — the tagged slot words)
+    /// is dropped, its slot recycled, and its ref-typed children
+    /// collected and released recursively (RFC 0016 §3).
     pub fn release(&self, s: Slot) {
         release_ref_slot(&self.arena, &self.acct, s);
     }
 
-    /// Build an owning host handle for an `Opaque` cell (retains once).
+    /// Build an owning host handle for an `Opaque` slot (retains once).
     pub fn opaque_handle(&self, p: *const CellVal) -> OpaqueRef {
         OpaqueRef::new(&self.arena, &self.acct, p)
     }
 
-    /// The owning variant for a cell minted this instant (RFC 0023/0026):
+    /// The owning variant for a slot minted this instant (RFC 0023/0026):
     /// the handle takes over the mint reference instead of adding one, so
     /// `mint -> handle -> Value` accounts exactly one reference. The
-    /// embedder equivalent of `OpaqueBox::alloc` — for host fns that
+    /// embedder equivalent of `Opaque::alloc` — for host fns that
     /// build a box from rut-shaped parts (`alloc_str`/`alloc_opaque`)
     /// and hand it straight back.
     pub fn opaque_handle_take(&self, p: *const CellVal) -> OpaqueRef {
         OpaqueRef::owning(&self.arena, &self.acct, p)
-    }
-
-    /// The `(payload, payload type)` inside an `Opaque` handle (RFC 0014).
-    pub fn opaque_inner(&self, h: &OpaqueRef) -> Option<(Slot, TypeId)> {
-        cell_of(Slot { r: h.ptr() }).as_opaque()
     }
 
     /// Deep release of a slot by static type — used when dropping frames.
@@ -590,17 +619,23 @@ impl Heap {
                 // box once, share the inner handle (RFC 0014). A host
                 // payload box has no inner rut value to re-box (RFC 0023):
                 // own is a plain reference share — the box's identity and
-                // its payload Drop timing are unchanged.
-                let cell = cell_of(s);
-                if matches!(cell.data, CellData::HostBoxed { .. }) {
-                    self.retain(s);
-                    return Ok(s);
-                }
-                let Some((val, val_ty)) = cell.as_opaque() else {
+                // its payload Drop timing are unchanged. A rut-value box
+                // (a Rut store entry, P2) clones the inner and mints a
+                // NEW entry — value semantics for the box identity, the
+                // old anchor-cell law verbatim.
+                let Some(entry) = store::store_entry(s) else {
                     return Err(Trap::new(TrapKind::Invalid, "own: not a box"));
                 };
-                let inner = self.clone_slot(val, val_ty, table)?;
-                self.alloc_opaque(inner, val_ty)
+                match &entry.e {
+                    store::OpaqueEntry::Host(_) => {
+                        self.retain(s);
+                        Ok(s)
+                    }
+                    store::OpaqueEntry::Rut(r) => {
+                        let inner = self.clone_slot(r.slot, r.val_ty, table)?;
+                        self.alloc_opaque(inner, r.val_ty)
+                    }
+                }
             }
             TyKind::Enum { .. } | TyKind::TraitObj { .. } | TyKind::Trace => {
                 // singletons & trait refs alias one cell — own() must mint a

@@ -9,7 +9,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use rut_vm::{OpaqueBox, OpaqueRef, Trap, TrapKind};
+use rut_vm::{Opaque, OpaqueRef, Trap, TrapKind};
 use rut_vm::interp::Vm;
 
 const SRC: &str = r#"
@@ -124,19 +124,19 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
 fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>) {
     let invocations = invocations.clone();
     rut_vm::register!(hosts, "re::widget_new", () -> OpaqueRef, |vm: &mut Vm| -> Result<OpaqueRef, Trap> {
-        let b = OpaqueBox::alloc(vm, Widget { n: 0 })?;
+        let b = Opaque::alloc(vm, Widget { n: 0 })?;
         Ok(b.handle().clone())
     });
     rut_vm::register!(hosts, "re::boost", (i64,) -> i64, |vm: &mut Vm, x: i64| -> Result<i64, Trap> {
         let y: i64 = vm.call("inner", (x,))?;
         Ok(y + 1)
     });
-    rut_vm::register!(hosts, "re::borrow_try", (OpaqueBox<Widget>,) -> i64, |_vm: &mut Vm, b: OpaqueBox<Widget>| b.with(|w| w.n));
-    rut_vm::register!(hosts, "re::borrow_read", (OpaqueBox<Widget>,) -> i64, |_vm: &mut Vm, b: OpaqueBox<Widget>| b.with(|w| w.n));
-    rut_vm::register!(hosts, "re::borrow_conflict", (OpaqueBox<Widget>,) -> i64, |vm: &mut Vm, b: OpaqueBox<Widget>| -> Result<i64, Trap> {
+    rut_vm::register!(hosts, "re::borrow_try", (Opaque<Widget>,) -> i64, |_vm: &mut Vm, b: Opaque<Widget>| b.with(|w| w.n));
+    rut_vm::register!(hosts, "re::borrow_read", (Opaque<Widget>,) -> i64, |_vm: &mut Vm, b: Opaque<Widget>| b.with(|w| w.n));
+    rut_vm::register!(hosts, "re::borrow_conflict", (Opaque<Widget>,) -> i64, |vm: &mut Vm, b: Opaque<Widget>| -> Result<i64, Trap> {
         // hold the mutable borrow ACROSS a nested vm.call — rut code that
         // runs inside must not be able to borrow the same box
-        let r = b.with_mut(|w| {
+        let r = b.with_mut(vm, |vm, w| {
             w.n += 1;
             vm.call::<_, i64>("poke", (b.handle().clone(),))
         });

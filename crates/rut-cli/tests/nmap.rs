@@ -2,7 +2,7 @@
 //! key table behind `opaque` payload boxes, driven end to end the way
 //! the H3 wrapper will drive it — rut code computes the hash, boxes the
 //! key with `opaque(..)`, and calls the host surface; the payload lives
-//! Rust-side in `OpaqueBox<NativeTable>` (RFC 0023/0026).
+//! Rust-side in `Opaque<NativeTable>` (RFC 0023/0026).
 //!
 //! Covered per the phase: insert / replace / find / miss / remove,
 //! tombstone reuse, the load-factor law, grow with the relocation

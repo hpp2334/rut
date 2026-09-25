@@ -131,7 +131,7 @@ impl FakeDom {
     // ---- reads the tests make through real handles ----
 
     fn view<T>(&self, el: &OpaqueRef, f: impl FnOnce(&FakeNode) -> T) -> Result<T, Trap> {
-        let b = rut_vm::OpaqueBox::<El>::from_handle(el)?;
+        let b = rut_vm::Opaque::<El>::from_handle(el)?;
         match b.with(|el| self.nodes.get(&el.id)) {
             Ok(Some(node)) => Ok(f(node)),
             Ok(None) => Err(rut_vm::Trap::new(rut_vm::TrapKind::Invalid, "no such node")),

@@ -18,7 +18,7 @@ use rut_core::types::{
 
 use super::*;
 use crate::arena::OpaqueRef;
-use crate::heap::OpaqueBox;
+use crate::heap::Opaque;
 
 /// A rut → Rust conversion: read a slot under its declared type.
 /// `declared` is program-relative (the export's/field's own id), so the
@@ -244,15 +244,15 @@ impl Ret for OpaqueRef {
     }
 }
 
-impl<T: 'static> Ret for OpaqueBox<T> {
-    fn rust_name() -> &'static str { "OpaqueBox" }
+impl<T: 'static> Ret for Opaque<T> {
+    fn rust_name() -> &'static str { "Opaque" }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
-        expect_kind(vm, slot, declared, "OpaqueBox")?;
+        expect_kind(vm, slot, declared, "Opaque")?;
         let p = unsafe { slot.r };
         if p.is_null() {
-            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueBox`"));
+            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `Opaque`"));
         }
-        OpaqueBox::from_handle(&vm.heap.opaque_handle(p))
+        Opaque::from_handle(&vm.heap.opaque_handle(p))
     }
     #[inline] // hot lane
     fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
@@ -422,8 +422,8 @@ impl CallArg for OpaqueRef {
     fn into_value(self) -> Value { Value::Opaque(self) }
 }
 
-impl<T: 'static> CallArg for OpaqueBox<T> {
-    const NAME: &'static str = "OpaqueBox";
+impl<T: 'static> CallArg for Opaque<T> {
+    const NAME: &'static str = "Opaque";
     fn into_value(self) -> Value { Value::Opaque(self.handle().clone()) }
 }
 
@@ -629,9 +629,9 @@ impl HostParam for OpaqueRef {
 
 /// the typed payload view as a parameter — the payload type token is
 /// checked on the way in (`from_handle`), a wrong `T` is a trap
-impl<T: 'static> HostParam for OpaqueBox<T> {
+impl<T: 'static> HostParam for Opaque<T> {
     const TY: TypeId = TY_OPAQUE;
-    type Repr<'a> = OpaqueBox<T>;
+    type Repr<'a> = Opaque<T>;
     // FAST LANE + nil check (as `OpaqueRef`); `from_handle`'s payload
     // type token stays — it guards the Rust-side `T`, which no .d.rut
     // row can speak for.
@@ -639,12 +639,12 @@ impl<T: 'static> HostParam for OpaqueBox<T> {
     unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let p = unsafe { slot.r };
         if p.is_null() {
-            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueBox`"));
+            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `Opaque`"));
         }
-        OpaqueBox::from_handle(&vm.heap.opaque_handle(p))
+        Opaque::from_handle(&vm.heap.opaque_handle(p))
     }
     unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        expect_kind(vm, slot, TY_OPAQUE, "OpaqueBox")?;
+        expect_kind(vm, slot, TY_OPAQUE, "Opaque")?;
         Self::read(vm, slot)
     }
 }
@@ -934,7 +934,7 @@ mod fast_lane_tests {
             let err = err_of(<OpaqueRef as HostParam>::read(&vm, Slot::null()));
             assert_eq!(err.kind, TrapKind::NilDeref, "{}", err.msg);
             assert!(err.msg.contains("nil does not bind `OpaqueRef`"), "{}", err.msg);
-            let err = err_of(<OpaqueBox<u64> as HostParam>::read(&vm, Slot::null()));
+            let err = err_of(<Opaque<u64> as HostParam>::read(&vm, Slot::null()));
             assert_eq!(err.kind, TrapKind::NilDeref, "{}", err.msg);
         }
     }
@@ -1013,14 +1013,14 @@ mod fast_lane_tests {
     #[test]
     fn the_box_payload_token_still_traps_on_a_wrong_t() {
         let mut vm = bare_vm();
-        let boxed = crate::heap::OpaqueBox::alloc(&mut vm, 7i64).expect("alloc");
+        let boxed = crate::heap::Opaque::alloc(&mut vm, 7i64).expect("alloc");
         let slot = Slot { r: boxed.handle().ptr() };
         // the fast read keeps `from_handle`'s type-token check — a wrong
         // `T` is a trap, never a reinterpret
         unsafe {
-            let err = err_of(<OpaqueBox<u64> as HostParam>::read(&vm, slot));
+            let err = err_of(<Opaque<u64> as HostParam>::read(&vm, slot));
             assert!(err.msg.contains("not `u64`"), "{}", err.msg);
-            let ok = <OpaqueBox<i64> as HostParam>::read(&vm, slot).unwrap();
+            let ok = <Opaque<i64> as HostParam>::read(&vm, slot).unwrap();
             assert_eq!(ok.with(|v| *v).unwrap(), 7i64);
         }
     }

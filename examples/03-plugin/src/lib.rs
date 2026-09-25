@@ -8,7 +8,7 @@
 //!
 //! Both opaque directions meet here: rut's `Moderator` state comes back
 //! as a rut-constructed `opaque` (RFC 0014), the host's event bus goes
-//! in as a host-constructed [`OpaqueBox`]`<EventBus>` — `subscribe` and
+//! in as a host-constructed [`Opaque`]`<EventBus>` — `subscribe` and
 //! `emit` are that box's callbacks, reached only through the RFC 0023
 //! borrow guards.
 
@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use rut_vm::interp::{CallArg, HostHooks, Limits, Vm};
-use rut_vm::{OpaqueBox, OpaqueRef, Trap, TrapKind};
+use rut_vm::{Opaque, OpaqueRef, Trap, TrapKind};
 
 /// The host's server object — handed to rut as an opaque box. All host
 /// state lives here; the host fns reach it only through the `with`/
@@ -33,7 +33,7 @@ struct EventBus {
 /// `vm.call`.
 pub struct Plugin {
     vm: Vm,
-    bus: OpaqueBox<EventBus>,
+    bus: Opaque<EventBus>,
     state: OpaqueRef, // rut's `Moderator`, opaque to us
     table: HashMap<String, String>, // subscription snapshot from `init`
 }
@@ -73,7 +73,7 @@ impl Plugin {
         let mut vm = Vm::new(Rc::new(prog), limits, HostHooks::default(), hosts)?;
 
         // the handshake: bus in, state out
-        let bus = OpaqueBox::alloc(
+        let bus = Opaque::alloc(
             &mut vm,
             EventBus { subscriptions: HashMap::new(), lines: Vec::new(), emits: 0, renders: 0 },
         )?;
@@ -172,9 +172,9 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry) {
     rut_vm::register!(
         hosts,
         "server::subscribe",
-        (OpaqueBox<EventBus>, &str, &str) -> (),
-        |_vm: &mut Vm, bus: OpaqueBox<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
-            bus.with_mut(|b| b.subscriptions.insert(topic.to_string(), handler.to_string()))?;
+        (Opaque<EventBus>, &str, &str) -> (),
+        |vm: &mut Vm, bus: Opaque<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
+            bus.with_mut(vm, |_vm, b| b.subscriptions.insert(topic.to_string(), handler.to_string()))?;
             Ok(())
         },
     );
@@ -182,14 +182,14 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry) {
     rut_vm::register!(
         hosts,
         "server::emit",
-        (OpaqueBox<EventBus>, &str, &str) -> (),
-        |vm: &mut Vm, bus: OpaqueBox<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
+        (Opaque<EventBus>, &str, &str) -> (),
+        |vm: &mut Vm, bus: Opaque<EventBus>, topic: &str, handler: &str| -> Result<(), Trap> {
             // The bus stays MUTABLY BORROWED across the nested vm.call
             // (RFC 0022 §1 re-entrancy + RFC 0023 guard): `render_line` runs
             // on a fresh frame stack while the emitting handler is parked
             // mid-op, and a second `emit` fired from inside `render_line`
             // would trap on the guard instead of racing.
-            bus.with_mut(|b| -> Result<(), Trap> {
+            bus.with_mut(vm, |vm, b| -> Result<(), Trap> {
                 let line: String =
                     vm.call("render_line", (topic.to_string(), handler.to_string()))?;
                 b.lines.push(line);

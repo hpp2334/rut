@@ -9,9 +9,10 @@
 //! `OpaqueRef` is the host-facing handle (RFC 0014): it owns one arena
 //! reference and holds the shared arena, so it can outlive the `Vm`.
 
-use crate::heap::{blocks::Blocks, pool::{self, Pool}, CellData, CellVal, HeapAcct, Slot};
+use crate::heap::{Heap, blocks::Blocks, CellData, CellVal, HeapAcct, Slot};
+use crate::heap::store::{self, OpaqueEntry, Store};
 use rut_core::binary::FuncCode;
-use rut_core::types::{TypeTable, TyKind};
+use rut_core::types::{TypeTable, TypeId, TyKind};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::mem::MaybeUninit;
@@ -91,12 +92,16 @@ pub(crate) struct Arena {
     /// `OpaqueRef` keeps the arena (hence the store) alive for cells that
     /// outlive the `Vm`.
     pub(crate) blocks: Blocks,
-    /// Opaque pool (native-fastpath phase 6): parked `Box<dyn Any>` payload
-    /// blocks awaiting reuse by the next same-layout host mint
-    /// (see `heap/pool.rs`). LAST on purpose: adding a field ahead of the
-    /// others shifts their offsets inside the Arena allocation, and the
-    /// hot paths (`free`, `blocks`, `bump`, `plan`) measured the shift.
-    pub(crate) pool: RefCell<Pool>,
+    /// enum member singletons (RFC 0016 §1) — VM-owned state living on
+    /// the arena so a `Heap` is a cheap two-`Rc` view (`Heap::view`),
+    /// which the release walk builds to run a Host payload's finalize.
+    pub(crate) singletons: RefCell<HashMap<(TypeId, u32), *const CellVal>>,
+    /// the Opaque store (nmap-hostvals P2): the ONE home of every rut
+    /// `opaque` value — a slab of two-kind entries + free list, rc and
+    /// borrow guards on the entry. Same lifetime argument as `blocks`:
+    /// `OpaqueRef` keeps the arena (hence the store) alive while a host
+    /// holds a box across calls.
+    pub(crate) store: Store,
 }
 
 impl Arena {
@@ -109,7 +114,8 @@ impl Arena {
             drop_fns: RefCell::new(HashMap::new()),
             pending_drops: RefCell::new(Vec::new()),
             blocks: Blocks::new(),
-            pool: RefCell::new(Pool::new()),
+            singletons: RefCell::new(HashMap::new()),
+            store: Store::new(),
         }
     }
 
@@ -164,50 +170,67 @@ impl Drop for Arena {
         // (frees its `String`/`Vec` payload); recycled slots are uninitialised
         let free: HashSet<*mut CellVal> = self.free.borrow().iter().copied().collect();
         let chunks = self.chunks.borrow();
-        if chunks.is_empty() {
-            return;
-        }
-        let total = (chunks.len() - 1) * ARENA_CHUNK + self.bump.get();
-        for (ci, chunk) in chunks.iter().enumerate() {
-            let base = chunk.as_ptr() as *mut CellVal;
-            for i in 0..ARENA_CHUNK {
-                if ci * ARENA_CHUNK + i >= total {
-                    break;
-                }
-                let p = unsafe { base.add(i) };
-                if !free.contains(&p) {
-                    // free the cell's payload block(s) first — freeing needs
-                    // the &Arena that Drop glue would not have (same rule as
-                    // the release path below). ONE dispatch: host payloads
-                    // ride the same match as the block frees.
-                    let cell = unsafe { &mut *p };
-                    match &mut cell.data {
-                        // the live teardown: park (or free) the payload
-                        // block exactly as the rc-0 path does — the box's
-                        // own drop glue must not touch the pooled block
-                        CellData::HostBoxed { payload, .. } => {
-                            let taken = std::mem::replace(payload, Box::new(()));
-                            pool::retire(self, taken);
-                        }
-                        CellData::Str(sv) => self.blocks.free(sv.block),
-                        CellData::Array { items, .. } => self.blocks.free(items.borrow().block),
-                        _ => {}
+        if !chunks.is_empty() {
+            let total = (chunks.len() - 1) * ARENA_CHUNK + self.bump.get();
+            for (ci, chunk) in chunks.iter().enumerate() {
+                let base = chunk.as_ptr() as *mut CellVal;
+                for i in 0..ARENA_CHUNK {
+                    if ci * ARENA_CHUNK + i >= total {
+                        break;
                     }
-                    unsafe { std::ptr::drop_in_place(p) };
+                    let p = unsafe { base.add(i) };
+                    if !free.contains(&p) {
+                        // free the cell's payload block(s) first — freeing needs
+                        // the &Arena that Drop glue would not have (same rule as
+                        // the release path below)
+                        let cell = unsafe { &mut *p };
+                        match &mut cell.data {
+                            CellData::Str(sv) => self.blocks.free(sv.block),
+                            CellData::Array { items, .. } => self.blocks.free(items.borrow().block),
+                            _ => {}
+                        }
+                        unsafe { std::ptr::drop_in_place(p) };
+                    }
                 }
             }
         }
+        // the Opaque store's own teardown: entries still live here had no
+        // legal owner (an `OpaqueRef` would have kept this arena alive) —
+        // they are the trap-torn-frame survivors, and their payload
+        // `Box`es drop here. The debug balance check rides with it.
+        self.store.teardown();
     }
 }
 
 /// One reference gone. At rc-0 the cell dies — and its ref-typed children
 /// die with it (RFC 0016 §3): `release_cell` collects them and recurses,
 /// so a record's `str`/`Opaque`/vec fields no longer pin their children
-/// until VM end.
+/// until VM end. A store slot (the tagged word, nmap-hostvals P2) routes
+/// to the entry's own rc (`release_entry`) — the same law, new home.
 #[inline(always)]
-pub(crate) fn release_ref_slot(arena: &Arena, acct: &HeapAcct, s: Slot) {
+pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) {
     let p = unsafe { s.r };
     if p.is_null() {
+        return;
+    }
+    if store::is_entry(s) {
+        unsafe {
+            let e = store::untag_entry(p);
+            let c = &*e;
+            let n = c.refs.get();
+            if n <= 1 {
+                // on_drop (RFC 0016 §3): the same pin-and-queue the cell
+                // path runs — the key is the tagged word either way
+                if let Some(cleanup) = arena.take_drop_fn(p as usize) {
+                    c.refs.set(1);
+                    arena.pending_drops.borrow_mut().push((p, cleanup));
+                    return;
+                }
+                release_entry(arena, acct, e);
+            } else {
+                c.refs.set(n - 1);
+            }
+        }
         return;
     }
     unsafe {
@@ -268,12 +291,11 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
             }
         }
         // a user box stores the inner handle — its release is the box's
-        // own (RFC 0014: box death drops the boxed value's reference)
-        CellData::OpaqueBox { val, val_ty } => {
-            if plan.is_ref.get(*val_ty as usize).copied().unwrap_or(false) {
-                out.push(*val);
-            }
-        }
+        // own (RFC 0014: box death drops the boxed value's reference).
+        // That anchor cell is GONE at P2 (the rut-value box lives as a
+        // store entry now — `release_entry` walks its held slot); a rut
+        // `opaque` in a record field / array element is a store slot and
+        // routes through `release_ref_slot`'s entry path by its tag.
         // a str view retains the window's parent (RFC 0042)
         CellData::StrView { parent, .. } => out.push(*parent),
         // an array window retains its backing array (RFC 0042 §6)
@@ -287,11 +309,9 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
                 }
             }
         }
-        // a host payload box has no rut-typed children — the Rust payload
-        // is dropped with the cell through its own Drop (RFC 0023/0026);
         // a trace cell's frames are plain (func, pc) words, never handles;
         // a builder's block-backed octets are likewise never handles
-        CellData::HostBoxed { .. } | CellData::Enum { .. } | CellData::Str(_)
+        CellData::Enum { .. } | CellData::Str(_)
         | CellData::Trace { .. } | CellData::StrBuf { .. } => {}
     }
     out
@@ -301,14 +321,14 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
 /// release its ref-typed children (see `collect_ref_children`), run its
 /// destructor, and recycle the slot.
 #[inline(always)]
-pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
+pub(crate) fn release_cell(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut CellVal) {
     // children are collected first and released after the parent is
     // freed, so a release cascade can never observe the dying cell.
-    // Childless kinds (the churn case: strs, singletons, host boxes)
-    // never build the child vec at all.
+    // Childless kinds (the churn case: strs, singletons) never build
+    // the child vec at all.
     let children = unsafe {
         match (*p).data {
-            CellData::Str(_) | CellData::Enum { .. } | CellData::HostBoxed { .. }
+            CellData::Str(_) | CellData::Enum { .. }
             | CellData::Trace { .. } | CellData::StrBuf { .. } => None,
             _ => Some(collect_ref_children(&*p, &arena.plan)),
         }
@@ -317,22 +337,11 @@ pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
         // payload blocks die with the cell, explicitly — freeing needs the
         // &Arena this walk holds (payloads carry no Drop glue). Children
         // were collected above, so a ref-typed array's handles are already
-        // out before its block goes. ONE dispatch per death: the host
-        // payload rides the same match as the block frees (a second
-        // discriminant check here measured +4% on the json-decode churn).
+        // out before its block goes.
         match &mut (*p).data {
             CellData::Str(sv) => arena.blocks.free(sv.block),
             CellData::StrBuf { buf, .. } => arena.blocks.free(buf.block),
             CellData::Array { items, .. } => arena.blocks.free(items.borrow().block),
-            // host payload blocks park instead of deallocating (phase 6):
-            // the dtor runs here, in place, exactly once; the block goes
-            // back to the size-classed free list for the next same-layout
-            // mint. A dummy takes the cell's Box field so drop_in_place
-            // below cannot re-drop (or re-free) what the pool now owns.
-            CellData::HostBoxed { payload, .. } => {
-                let taken = std::mem::replace(payload, Box::new(()));
-                pool::retire(arena, taken);
-            }
             _ => {}
         }
         let bytes = (*p).bytes as u64;
@@ -347,7 +356,54 @@ pub(crate) fn release_cell(arena: &Arena, acct: &HeapAcct, p: *mut CellVal) {
     }
 }
 
-/// A host-held `Opaque` handle (RFC 0014): owns one arena reference.
+/// Drop a store entry whose rc reached zero (nmap-hostvals P2): the
+/// payload is taken out first (the dying entry is dead memory the moment
+/// the slot is recycled), the charge refunded, the slot freed — and only
+/// THEN the nested work, the record-field pattern (RFC 0016 §3): the
+/// Host payload's `finalize` hook runs before the Box's own Drop; a Rut
+/// entry's held slot releases through the same walk (an entry holding a
+/// rut record recurses through it).
+#[inline(always)]
+pub(crate) fn release_entry(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut store::EntryCell) {
+    debug_assert_eq!(
+        unsafe { (*p).borrows.get() },
+        0,
+        "entry death under a live borrow — a with_mut view holds an rc"
+    );
+    let taken = unsafe {
+        std::mem::replace(
+            &mut (*p).e,
+            OpaqueEntry::Rut(store::RutOpaque { slot: Slot::null(), val_ty: 0 }),
+        )
+    };
+    let bytes = unsafe { (*p).bytes } as u64;
+    arena.store.note_death(p, bytes);
+    acct.used.set(acct.used.get().saturating_sub(bytes));
+    match taken {
+        OpaqueEntry::Host(h) => {
+            // the finalize hook first (§0.8 i), the Box's own Drop second;
+            // the hook allocates/releases through a two-Rc `Heap` view —
+            // the same arena and budget, never a second machine
+            if let (Some(f), mut host) = (h.finalize, h) {
+                let heap = Heap::view(arena, acct);
+                f(host.payload.as_mut(), &heap);
+                drop(host);
+            }
+        }
+        OpaqueEntry::Rut(r) => {
+            // the held value cell dies with the entry (a prim payload is
+            // raw bits — nothing to release; the plan's is_ref table knows)
+            if arena.plan.is_ref.get(r.val_ty as usize).copied().unwrap_or(false) {
+                release_ref_slot(arena, acct, r.slot);
+            }
+        }
+    }
+}
+
+/// A host-held `Opaque` handle (RFC 0014; re-based on the Opaque store
+/// at nmap-hostvals P2): owns one store-entry reference. `ptr` is the
+/// TAGGED slot word — the same word a rut `opaque` slot carries — so the
+/// handle round-trips through `Slot` and the generic rc web routes it.
 pub struct OpaqueRef {
     arena: Rc<Arena>,
     acct: Rc<HeapAcct>,
@@ -355,21 +411,29 @@ pub struct OpaqueRef {
 }
 
 impl OpaqueRef {
+    /// The tagged slot word (build a `Slot` from it directly). Only the
+    /// tag-aware accessors may deref it — see `heap::store`.
     pub fn ptr(&self) -> *const CellVal {
         self.ptr
     }
+    /// The untagged slab pointer — the crate's own entry accessors only.
+    pub(crate) fn entry_ptr(&self) -> *mut store::EntryCell {
+        store::untag_entry(self.ptr)
+    }
     unsafe fn bump(ptr: *const CellVal) {
-        let c = unsafe { &*ptr };
+        let c = unsafe { &*store::untag_entry(ptr) };
         c.refs.set(c.refs.get().saturating_add(1));
     }
-    /// Wrap `ptr`, retaining once (the caller transfers ownership).
+    /// Wrap a tagged slot word, retaining once (the caller transfers
+    /// ownership).
     pub(crate) fn new(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, ptr: *const CellVal) -> OpaqueRef {
+        debug_assert!(store::is_entry(Slot { r: ptr }), "opaque_handle on a non-store slot");
         unsafe { Self::bump(ptr) };
         OpaqueRef { arena: arena.clone(), acct: acct.clone(), ptr }
     }
 
-    /// Wrap a cell JUST minted (`refs` == 1): the handle takes over the
-    /// mint reference instead of adding one. `OpaqueBox::alloc` and the
+    /// Wrap an entry JUST minted (`refs` == 1): the handle takes over the
+    /// mint reference instead of adding one. `Opaque::alloc` and the
     /// host-fn return path use this — mint, then hand straight to the
     /// boundary — so the box's first crossing owns exactly one reference.
     pub(crate) fn owning(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, ptr: *const CellVal) -> OpaqueRef {

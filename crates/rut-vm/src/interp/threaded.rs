@@ -430,6 +430,24 @@ impl Machine for Vm {
         if unsafe { s.r.is_null() } {
             return Err(Trap::new(TrapKind::NilDeref, "nil dereference"));
         }
+        // the downcast ALIAS handoff (RFC 0014, refval-round2): the `?T`
+        // result IS the opaque box — the nullable deref (field 0) reads
+        // its payload slot (mirror of the step-dispatch op_getf). A store
+        // slot at P2 — the tag routes BEFORE any cell deref.
+        if crate::heap::store::is_entry(s) {
+            let entry = crate::heap::store::store_entry(s).unwrap();
+            let v = match (&entry.e, field) {
+                (crate::heap::store::OpaqueEntry::Rut(r), 0) => r.slot,
+                _ => return Err(Trap::new(TrapKind::Invalid, "getf on non-record")),
+            };
+            let old = unsafe { *regs.add(*dst as usize) };
+            unsafe { *regs.add(*dst as usize) = v };
+            if repr.is_ref() {
+                self.heap.retain(v);
+                self.heap.release(old);
+            }
+            return Ok(Flow::Next(pc + 1));
+        }
         let cell = cell_of(s);
         if let Some(v) = window_getf(&self.heap, cell, s, *repr) {
             let old = unsafe { *regs.add(*dst as usize) };
@@ -444,10 +462,6 @@ impl Machine for Vm {
                 .borrow()
                 .get(*field as usize)
                 .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?,
-            // the downcast ALIAS handoff (RFC 0014, refval-round2): the
-            // `?T` result IS the opaque box — the nullable deref reads
-            // its payload slot (mirror of the step-dispatch op_getf).
-            CellData::OpaqueBox { val, .. } if *field == 0 => *val,
             _ => return Err(Trap::new(TrapKind::Invalid, "getf on non-record")),
         };
         let old = unsafe { *regs.add(*dst as usize) };
@@ -463,7 +477,13 @@ impl Machine for Vm {
         let Op::SetF { obj, field, val, repr } = op else {
             unreachable_op!("op_setf: unexpected op")
         };
-        let cell = cell_of(unsafe { *regs.add(*obj as usize) });
+        let raw = unsafe { *regs.add(*obj as usize) };
+        // a store slot is never a record (defensive, the same trap the old
+        // box cells hit) — check the tag BEFORE any cell deref
+        if crate::heap::store::is_entry(raw) {
+            return Err(Trap::new(TrapKind::Invalid, "setf on non-record"));
+        }
+        let cell = cell_of(raw);
         if let Some(t) = window_setf_trap(cell) {
             return Err(t);
         }
@@ -705,13 +725,8 @@ impl Machine for Vm {
 
     fn op_tidof(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::TidOf { dst, obj } = op else { unreachable_op!("op_tidof: unexpected op") };
-        let cell = cell_of(unsafe { *regs.add(*obj as usize) });
         // host payload boxes report the sentinel — see the step.rs TidOf
-        let ty = if matches!(cell.data, CellData::HostBoxed { .. }) {
-            rut_core::types::HOST_BOX_TID
-        } else {
-            self.effective_ty(cell)
-        };
+        let ty = self.tid_ty(unsafe { *regs.add(*obj as usize) });
         unsafe { *regs.add(*dst as usize) = Slot::int(ty as i64) };
         Ok(Flow::Next(pc + 1))
     }
@@ -720,10 +735,9 @@ impl Machine for Vm {
         let Op::IsType { dst, obj, want } = op else {
             unreachable_op!("op_istype: unexpected op")
         };
-        let cell = cell_of(unsafe { *regs.add(*obj as usize) });
         // the `is` law (RFC 0014, 2026-09): `is` names the box, never
         // the payload — see the step.rs IsType body
-        let ty = cell.ty;
+        let ty = self.is_ty(unsafe { *regs.add(*obj as usize) });
         unsafe { *regs.add(*dst as usize) = Slot::bool(ty == *want) };
         Ok(Flow::Next(pc + 1))
     }
@@ -736,7 +750,7 @@ impl Machine for Vm {
             Some(t) => t,
             // the box probes its own vtable — TY_OPAQUE has no impl
             // rows (see the step.rs IsType body)
-            None => cell_of(unsafe { *regs.add(*obj as usize) }).ty,
+            None => self.is_ty(unsafe { *regs.add(*obj as usize) }),
         };
         let has = self
             .prog
@@ -758,7 +772,12 @@ impl Machine for Vm {
 
     fn op_unbox(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Unbox { dst, box_, ty } = op else { unreachable_op!("op_unbox: unexpected op") };
-        let Some((val, val_ty)) = cell_of(unsafe { *regs.add(*box_ as usize) }).as_opaque() else {
+        let b = unsafe { *regs.add(*box_ as usize) };
+        let rut = crate::heap::store::store_entry(b).and_then(|e| match &e.e {
+            crate::heap::store::OpaqueEntry::Rut(r) => Some((r.slot, r.val_ty)),
+            crate::heap::store::OpaqueEntry::Host(_) => None,
+        });
+        let Some((val, val_ty)) = rut else {
             return Err(Trap::new(TrapKind::BadUnbox, "unbox on non-opaque"));
         };
         if val_ty != *ty {

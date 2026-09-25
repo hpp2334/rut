@@ -208,14 +208,14 @@ pub fn bind_weak_sink<D: DomBackend>(
     *slot.borrow_mut() = Some(Rc::downgrade(state));
 }
 
-/// Box a backend element as the opaque rut holds — `OpaqueBox<El>`: the
+/// Box a backend element as the opaque rut holds — `Opaque<El>`: the
 /// payload is invisible to rut (`o is opaque` holds, `downcast` misses),
 /// released deterministically at rc 0 (RFC 0014/0016 §3).
 pub fn box_element<D: DomBackend>(
     vm: &mut Vm,
     el: D::El,
 ) -> Result<OpaqueRef, Trap> {
-    Ok(rut_vm::OpaqueBox::<D::El>::alloc(vm, el)?.handle().clone())
+    Ok(rut_vm::Opaque::<D::El>::alloc(vm, el)?.handle().clone())
 }
 
 /// The uniform host-trap shape: `web::<fn>: <message>`.

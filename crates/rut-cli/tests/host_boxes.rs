@@ -14,7 +14,7 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rut_vm::{OpaqueBox, OpaqueRef, Trap};
+use rut_vm::{Opaque, OpaqueRef, Trap};
 use rut_vm::interp::Vm;
 
 const SRC: &str = r#"
@@ -123,15 +123,15 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
 fn install(hosts: &mut rut_vm::interp::HostRegistry, dropped: &Rc<Cell<bool>>) {
     let dropped = dropped.clone();
     rut_vm::register!(hosts, "boxes::store_new", () -> OpaqueRef, move |vm: &mut Vm| {
-        let b = OpaqueBox::alloc(vm, Store { map: HashMap::new(), dropped: dropped.clone() })?;
+        let b = Opaque::alloc(vm, Store { map: HashMap::new(), dropped: dropped.clone() })?;
         Ok(b.handle().clone())
     });
     rut_vm::register!(
         hosts,
         "boxes::store_set",
-        (OpaqueBox<Store>, &str, i64) -> (),
-        |_vm: &mut Vm, b: OpaqueBox<Store>, k: &str, v: i64| {
-            b.with_mut(|s| {
+        (Opaque<Store>, &str, i64) -> (),
+        |vm: &mut Vm, b: Opaque<Store>, k: &str, v: i64| {
+            b.with_mut(vm, |_vm, s| {
                 s.map.insert(k.to_string(), v);
             })
         },
@@ -139,16 +139,16 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, dropped: &Rc<Cell<bool>>) {
     rut_vm::register!(
         hosts,
         "boxes::store_get",
-        (OpaqueBox<Store>, &str) -> i64,
-        |_vm: &mut Vm, b: OpaqueBox<Store>, k: &str| -> Result<i64, Trap> {
+        (Opaque<Store>, &str) -> i64,
+        |_vm: &mut Vm, b: Opaque<Store>, k: &str| -> Result<i64, Trap> {
             Ok(b.with(|s| s.map.get(k).copied())?.unwrap_or(-1))
         },
     );
     rut_vm::register!(
         hosts,
         "boxes::store_size",
-        (OpaqueBox<Store>,) -> i64,
-        |_vm: &mut Vm, b: OpaqueBox<Store>| b.with(|s| s.map.len() as i64)
+        (Opaque<Store>,) -> i64,
+        |_vm: &mut Vm, b: Opaque<Store>| b.with(|s| s.map.len() as i64)
     );
 }
 
@@ -184,19 +184,19 @@ fn host_boxes_hold_any_rust_type() {
     assert_eq!(shared, held);
 
     // a wrong-type borrow is a checked error naming both sides
-    let err = OpaqueBox::<Widget>::from_handle(&held).err().expect("wrong type must be rejected");
+    let err = Opaque::<Widget>::from_handle(&held).err().expect("wrong type must be rejected");
     assert!(err.msg.contains("Store") && err.msg.contains("Widget"), "{}", err.msg);
 
     // a non-handle is rejected too
-    let err = OpaqueBox::<Widget>::from_handle(&held).err().expect("non-handle must be rejected");
+    let err = Opaque::<Widget>::from_handle(&held).err().expect("non-handle must be rejected");
     assert!(err.msg.contains("host box holds") || err.msg.contains("opaque"), "{}", err.msg);
 
     // the borrow guard (RFC 0023 §2): a nested exclusive borrow is a
     // checked trap, and a shared borrow is excluded while `&mut` is out
-    let b = OpaqueBox::<Store>::from_handle(&held).unwrap();
-    b.with_mut(|_| {
+    let b = Opaque::<Store>::from_handle(&held).unwrap();
+    b.with_mut(&mut vm, |vm, _| {
         assert!(b.with(|_| {}).is_err(), "shared borrow must be excluded under &mut");
-        let again = b.with_mut(|_| {});
+        let again = b.with_mut(vm, |_vm, _| {});
         assert!(again.unwrap_err().msg.contains("borrowed by an outer host call"));
     })
     .unwrap();

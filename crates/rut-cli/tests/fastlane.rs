@@ -67,7 +67,7 @@ fn install_fastlane(hosts: &mut rut_vm::interp::HostRegistry, kept_str: Rc<RefCe
         v.len() as i64
     });
     rut_vm::register!(hosts, "fastlane::make_ref", () -> OpaqueRef, |vm: &mut Vm| -> OpaqueRef {
-        rut_vm::OpaqueBox::alloc(vm, 42i64).expect("alloc").handle().clone()
+        rut_vm::Opaque::alloc(vm, 42i64).expect("alloc").handle().clone()
     });}
 
 fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
@@ -168,6 +168,6 @@ fn embedder_wrong_shape_traps_unchanged() {
     assert!(err.msg.contains("boundary:"), "{}", err.msg);
     assert!(err.msg.contains("`opaque`") && err.msg.contains("`i64`"), "{}", err.msg);
     // the right shape still crosses: the box arrives, payload intact
-    let back: rut_vm::OpaqueBox<i64> = vm.call("rt_ref_back", (5i64,)).unwrap();
+    let back: rut_vm::Opaque<i64> = vm.call("rt_ref_back", (5i64,)).unwrap();
     assert_eq!(back.with(|v| *v).unwrap(), 42i64);
 }

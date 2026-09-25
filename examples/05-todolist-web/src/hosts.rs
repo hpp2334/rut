@@ -2,13 +2,13 @@
 //! row, written ONCE generic over the backend — the wasm32 half and the
 //! twin share every trap law. Fallible bodies (`Result<_, Trap>`) carry
 //! backend messages verbatim under `web::<fn>: `; the handle plumbing
-//! is `OpaqueBox<El>` in, `OpaqueBox<El>` out.
+//! is `Opaque<El>` in, `Opaque<El>` out.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use rut_vm::interp::{HostRegistry, Vm};
-use rut_vm::{OpaqueBox, OpaqueRef, Trap};
+use rut_vm::{Opaque, OpaqueRef, Trap};
 
 use crate::backend::DomBackend;
 use crate::state::{box_element, web_trap, ListenerRow, WebState};
@@ -17,8 +17,8 @@ type Shared<D> = Rc<RefCell<WebState<D>>>;
 
 /// Borrow the boxed element payload for the call's duration; a foreign
 /// opaque is a loud trap naming the fn (never a silent zero).
-fn element<D: DomBackend>(el: &OpaqueRef, fn_name: &str) -> Result<OpaqueBox<D::El>, Trap> {
-    OpaqueBox::<D::El>::from_handle(el).map_err(|e| web_trap(fn_name, e.msg))
+fn element<D: DomBackend>(el: &OpaqueRef, fn_name: &str) -> Result<Opaque<D::El>, Trap> {
+    Opaque::<D::El>::from_handle(el).map_err(|e| web_trap(fn_name, e.msg))
 }
 
 /// Run one backend op through the box borrow, squashing the two error
@@ -26,7 +26,7 @@ fn element<D: DomBackend>(el: &OpaqueRef, fn_name: &str) -> Result<OpaqueBox<D::
 /// one `web::<fn>: ` trap shape. Generic over the payload `El` —
 /// associated-type projection (`D::El`) does not drive inference.
 fn backend_op<T, El: 'static>(
-    b: &OpaqueBox<El>,
+    b: &Opaque<El>,
     fn_name: &str,
     op: impl FnOnce(&El) -> Result<T, String>,
 ) -> Result<T, Trap> {
@@ -39,8 +39,8 @@ fn backend_op<T, El: 'static>(
 
 /// The two-box variant (parent/child ops).
 fn backend_op2<T, El: 'static>(
-    p: &OpaqueBox<El>,
-    c: &OpaqueBox<El>,
+    p: &Opaque<El>,
+    c: &Opaque<El>,
     fn_name: &str,
     op: impl FnOnce(&El, &El) -> Result<T, String>,
 ) -> Result<T, Trap> {

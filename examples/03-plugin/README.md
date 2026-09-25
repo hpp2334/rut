@@ -15,7 +15,7 @@ where **both opaque directions** meet:
   (`opaque.new(Moderator.new(bus))`, RFC 0014) — the host holds the
   handle and hands it back on every event.
 - the host's event bus lives Rust-side behind a **host-constructed**
-  `OpaqueBox<EventBus>` (RFC 0023/0026) — handed to `init` as the plugin's
+  `Opaque<EventBus>` (RFC 0023/0026) — handed to `init` as the plugin's
   view of the server. `subscribe` and `emit` are that box's callbacks.
 
 ## The layering — callbacks at the edges, classes in the middle

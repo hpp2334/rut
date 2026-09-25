@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rut_vm::interp::{ HostHooks, HostRegistry, Vm };
-use rut_vm::{ OpaqueBox, OpaqueRef };
+use rut_vm::{ Opaque, OpaqueRef };
 
 use todolist_web::fake_dom::{ FakeDom, Snapshot };
 use todolist_web::host::WebHost;
@@ -76,7 +76,7 @@ pub fn node_id(host: &mut WebHost<FakeDom>, app: &OpaqueRef, path: &str) -> u32 
 }
 
 fn el_id(h: &OpaqueRef) -> u32 {
-    OpaqueBox::<todolist_web::fake_dom::El>::from_handle(h)
+    Opaque::<todolist_web::fake_dom::El>::from_handle(h)
         .expect("an element handle")
         .with(|el| el.id)
         .expect("the element payload borrows")

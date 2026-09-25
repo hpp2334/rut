@@ -20,7 +20,7 @@
 ///   the exception's message.
 pub trait DomBackend: 'static {
     /// The element handle boxed across the boundary — an
-    /// `OpaqueBox<Self::El>` (RFC 0023): the payload is invisible to
+    /// `Opaque<Self::El>` (RFC 0023): the payload is invisible to
     /// rut, `o is opaque` holds, and its release at rc 0 is
     /// deterministic (RFC 0016 §3).
     type El: Clone + 'static;

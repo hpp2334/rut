@@ -233,26 +233,20 @@ impl Vm {
                 self.heap.release(old);
             }
             Op::TidOf { dst, obj } => {
-                let cell = cell_of(r!(obj));
                 // a host payload box has no rut runtime type (RFC 0023):
                 // report the sentinel so `downcast<T>` compares false for
                 // every T and yields None — never a trap (RFC 0014)
-                let ty = if matches!(cell.data, CellData::HostBoxed { .. }) {
-                    rut_core::types::HOST_BOX_TID
-                } else {
-                    self.effective_ty(cell)
-                };
+                let ty = self.tid_ty(r!(obj));
                 self.cur_regs[dst as usize] = Slot::int(ty as i64);
             }
             Op::IsType { dst, obj, want } => {
-                let cell = cell_of(r!(obj));
                 // the `is` law (RFC 0014, 2026-09): `is` names the box,
                 // never the payload — `o is X` misses for every payload
                 // X, `o is opaque` (or an alias) hits; recovery is
                 // `downcast<T>` only (its own TidOf keeps reading the
                 // payload). IsTrait below probes the box for the same
                 // reason.
-                let ty = cell.ty;
+                let ty = self.is_ty(r!(obj));
                 self.cur_regs[dst as usize] = Slot::bool(ty == want);
             }
             Op::IsTrait { dst, obj, want } => {
@@ -260,7 +254,7 @@ impl Vm {
                     Some(t) => t,
                     // the box probes its own vtable — TY_OPAQUE has no
                     // impl rows (see IsType's law comment)
-                    None => cell_of(r!(obj)).ty,
+                    None => self.is_ty(r!(obj)),
                 };
                 let has = self
                     .prog
@@ -279,7 +273,12 @@ impl Vm {
                 self.cur_regs[dst as usize] = Slot::bool(has);
             }
             Op::Unbox { dst, box_, ty } => {
-                let Some((val, val_ty)) = cell_of(r!(box_)).as_opaque() else {
+                let b = r!(box_);
+                let rut = crate::heap::store::store_entry(b).and_then(|e| match &e.e {
+                    crate::heap::store::OpaqueEntry::Rut(r) => Some((r.slot, r.val_ty)),
+                    crate::heap::store::OpaqueEntry::Host(_) => None,
+                });
+                let Some((val, val_ty)) = rut else {
                     return Err(Trap::new(TrapKind::BadUnbox, "unbox on non-opaque"));
                 };
                 if val_ty != ty {

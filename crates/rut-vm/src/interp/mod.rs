@@ -545,10 +545,14 @@ impl Vm {
             (Value::Str(s), TyKind::Str) => self.heap.alloc_str(s.clone()).map_err(|t| t.msg)?,
             (Value::Bytes(b), TyKind::Bytes) => self.heap.alloc_bytes(b.clone()).map_err(|t| t.msg)?,
             (Value::Opaque(h), TyKind::Opaque) => {
+                // the handle's word IS a store slot (the tagged entry
+                // pointer, nmap-hostvals P2) — the retain routes to the
+                // entry's rc, the parameter register owns its reference
                 let s = Slot { r: h.ptr() };
-                if !matches!(cell_of(s).data, CellData::OpaqueBox { .. } | CellData::HostBoxed { .. }) {
-                    return Err("not an opaque box".to_string());
-                }
+                debug_assert!(
+                    crate::heap::store::is_entry(s),
+                    "Value::Opaque carrying a non-store word"
+                );
                 self.heap.retain(s); // the parameter register owns its reference
                 s
             }
@@ -693,44 +697,40 @@ impl Vm {
     /// The key payload inside an `Opaque` box, classified against the
     /// closed native-key set (the nmap host experiment). Host code cannot
     /// read a rut-side box itself — `Slot` is crate-private — so this is
-    /// the one pub reader: the box's `CellData::OpaqueBox { val, val_ty }`
-    /// classifies by `val_ty` (ints/bool as raw bits, `str`/`bytes` as
-    /// owned copies), a host payload box (`CellData::HostBoxed`, RFC 0023)
-    /// has no rut value inside and is `Unsupported`, and any other
-    /// `val_ty` — a user-defined key — is `Unsupported` naming the type.
+    /// the one pub reader: a Rut entry's payload classifies by its
+    /// `val_ty` (ints/bool as raw bits, `str`/`bytes` as owned copies), a
+    /// Host payload entry (RFC 0023) has no rut value inside and is
+    /// `Unsupported`, and any other `val_ty` — a user-defined key — is
+    /// `Unsupported` naming the type.
     pub fn opaque_key_payload(&self, h: &OpaqueRef) -> Result<KeyPayload, Trap> {
-        let cell = cell_of(Slot { r: h.ptr() });
-        match &cell.data {
-            CellData::OpaqueBox { val, val_ty } => match *val_ty {
+        let entry = unsafe { &*h.entry_ptr() };
+        match &entry.e {
+            crate::heap::store::OpaqueEntry::Rut(r) => match r.val_ty {
                 TY_I8 | TY_I16 | TY_I32 | TY_I64 | TY_U8 | TY_U16 | TY_U32 | TY_U64 | TY_BOOL => {
-                    Ok(KeyPayload::Bits { val: unsafe { val.i } as u64, ty: *val_ty })
+                    Ok(KeyPayload::Bits { val: unsafe { r.slot.i } as u64, ty: r.val_ty })
                 }
                 TY_STR | TY_BYTES => {
                     // defensive: a `str`/`bytes` payload is a cell handle;
                     // a null there would deref below
-                    if unsafe { val.r }.is_null() {
+                    if unsafe { r.slot.r }.is_null() {
                         return Err(Trap::new(
                             TrapKind::NilDeref,
                             "opaque_key_payload: nil key payload",
                         ));
                     }
-                    let inner = cell_of(*val);
-                    Ok(match *val_ty {
+                    let inner = cell_of(r.slot);
+                    Ok(match r.val_ty {
                         TY_STR => KeyPayload::Str(inner.as_str().to_string()),
                         _ => KeyPayload::Bytes(inner.bytes_copy()),
                     })
                 }
                 other => Ok(KeyPayload::Unsupported(other)),
             },
-            // a host payload box: the payload is the host's own Rust
+            // a host payload entry: the payload is the host's own Rust
             // data (RFC 0023) — never a native key
-            CellData::HostBoxed { .. } => Ok(KeyPayload::Unsupported(cell.ty)),
-            // an `OpaqueRef` always names an opaque cell — defense, not
-            // a reachable state
-            _ => Err(Trap::new(
-                TrapKind::Invalid,
-                "opaque_key_payload: not an opaque box",
-            )),
+            crate::heap::store::OpaqueEntry::Host(_) => {
+                Ok(KeyPayload::Unsupported(rut_core::types::TY_OPAQUE))
+            }
         }
     }
 
@@ -811,7 +811,6 @@ mod tests {
         let b = vm.heap.alloc_opaque(val, ty).unwrap();
         vm.heap.opaque_handle_take(unsafe { b.r })
     }
-
     #[test]
     fn integer_and_bool_keys_cross_as_bits() {
         let vm = empty_vm();
@@ -873,8 +872,8 @@ mod tests {
     fn a_host_payload_box_is_unsupported() {
         let mut vm = empty_vm();
         // the box's payload is Rust, not a rut value (RFC 0023) — there
-        // is no key to read, and the cell's own type (Opaque) names it
-        let b = crate::heap::OpaqueBox::alloc(&mut vm, 42i64).unwrap();
+        // is no key to read, and the entry names Opaque for the trap
+        let b = crate::heap::Opaque::alloc(&mut vm, 42i64).unwrap();
         assert_eq!(
             vm.opaque_key_payload(b.handle()).unwrap(),
             KeyPayload::Unsupported(rut_core::types::TY_OPAQUE)

@@ -511,18 +511,6 @@ pub enum CellData {
     Enum { member: u32 },
     /// struct/class instance — the payload as one slot per field
     Record { fields: RefCell<Slots> },
-    /// Opaque box (RFC 0014): the value + its runtime type
-    OpaqueBox { val: Slot, val_ty: TypeId },
-    /// host payload box (RFC 0023/0026) — any `'static` Rust value behind
-    /// the same `opaque` surface; rut sees only the box (`opaque.downcast<T>`
-    /// misses, `o is opaque` is `true`), the host borrows it typed. The
-    /// box is the Rust concept it is: `dyn Any` erases the payload (its
-    /// own vtable drops it when the cell dies), `type_name` survives for
-    /// diagnostics (unrecoverable from the erased box), and the borrow
-    /// guard (RFC 0023 §2) rides in the cell. Boxed to keep `CellVal`
-    /// inside its size pin below; this is the cold host boundary, not a
-    /// hot-loop cell.
-    HostBoxed { payload: Box<dyn std::any::Any>, type_name: &'static str, borrows: Cell<u32> },
     /// closure value (RFC 0013) — v1 captures by value. The callee's
     /// signature (`params`/`ret`/capture types) is static program data in
     /// `prog.funcs[func]`; the cell carries only the function id and the
@@ -643,12 +631,6 @@ impl CellVal {
     pub fn as_enum_member(&self) -> Option<u32> {
         match &self.data {
             CellData::Enum { member } => Some(*member),
-            _ => None,
-        }
-    }
-    pub fn as_opaque(&self) -> Option<(Slot, TypeId)> {
-        match &self.data {
-            CellData::OpaqueBox { val, val_ty } => Some((*val, *val_ty)),
             _ => None,
         }
     }
