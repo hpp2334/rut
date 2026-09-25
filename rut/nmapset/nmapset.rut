@@ -1,74 +1,16 @@
-// nmapset/nmapset.rut — the keyed-collection WRAPPER (nmap-hostvals
-// P5): PURE DELEGATION. The host table owns the keys, their hashes,
-// their stable birth handles, AND the value cells — `HashMap { t:
-// opaque }` is the whole state, and every method is ONE crossing call.
-// The `[?V]` sidecar, its `vlen`/`vcap`, and the append-and-double
-// store loop are GONE (nmapset-hostops phase 2's "zero loops" claim
-// becomes TRUE of the file only now — the survey's errata): a prim V
-// crosses as the 8 slot bytes (zero cells, zero copy), a reference V
-// retains its OWN cell in-crossing (`Ref` storage — aliasing IS the
-// cell), values release in-crossing on replace/remove and at the
-// table's death (the payload's `finalize` hook, RFC 0016 §3).
+// nmapset/nmapset.rut — `HashMap`/`HashSet` as a thin wrapper over the
+// `nmap_host` table: the whole state is one `opaque` handle and every
+// method is a single host call. Key admission is the compile-time
+// union bound (no `f32`/`f64` — float keys have no stable equality
+// contract); a user-defined key type fails at instantiation (escape
+// hatch: encode it canonically to `bytes`). Values release host-side,
+// in-crossing on replace/remove and at the table's death (the
+// payload's `finalize` hook, RFC 0016 §3).
 //
-// THE ALIASING LAW (unchanged semantics, new home): `get` answers the
-// STORED cell, not a copy — two gets of one key name ONE cell until a
-// replace re-stores (held pointers keep reading the pre-replace cell;
-// remove nils the map's slot but not an independently held pointer).
-// The `get -> ?V` register shape is the ArrGet law: a ref V register
-// borrows the stored cell (retain/release in the write-back), a `?prim`
-// V register mints its own one-slot opt value in the write-back (the
-// RFC 0044 primitive-optional shape, `nil` = the null slot).
-//
-// Origin: the host-backed twin of the removed pure-rut `mapset`
-// package, checksum-pinned row for row — the bench pins
-// `734932704` / `1264308351` / `21500055` / `2198604` are still the
-// original mapset rows' values.
-//
-// DIVISION OF LABOR: the host owns EVERYTHING — keys + recorded hashes
-// + handles + growth + values (nmap.rs / nmap.d.rut). `put`'s ONE
-// crossing carries the value INSIDE it (the host-decl-only `any` arg:
-// the boundary hands the raw slot plus this call site's static type —
-// the untagged-slot discipline, §0.8 h); the key rides as `any` too and
-// the HOST classifies it against the closed set (the union bound below
-// is the compile-time admission; the host's classification is the same
-// closed set — prim bits and str/bytes octets bit-identical to the
-// typed lanes, floats refused). `with_capacity`'s `n` is the host
-// table's own reserve hint (there is no sidecar left to pre-size and
-// `map_cap` is retired).
-//
-// THE KEY LANE: the private `KeyLane` trait carries the h-family
-// (implemented only for the closed set, not exported — unimplementable
-// by users); integer members widen/identity into the `i`/`u` lanes
-// (sign-extension is the `KeyPayload::Bits` law), `bool` the `b` lane,
-// `str`/`bytes` the `s`/`y` lanes. It serves `HashSet` (which shares
-// `hput` and reads bit 0 — one family, no value machinery) and the
-// map's `has` (a find costs no V traffic). The VALUED ops do not ride
-// the trait — rut has no generic trait methods, so a per-key lane
-// cannot carry `V` — the value-carrying crossings take the key as
-// `any` and the host dispatches by the call site's static type.
-//
-// THE RANGE METHODS (strings-round1 phase 2, now on the hv sv lanes):
-// `put_range` / `get_range` / `has_range` / `remove_range` key over a
-// BORROWED `(parent, off, len)` BYTE range of any `str` value — hashed
-// and compared OVER THE RANGE (no key cell minted on a probe; a fresh
-// insert stores ONE owned copy), and a range key IS the s key of the
-// same content: same recorded hash, same entry, same HANDLE. `off`/
-// `len` are BYTE offsets; a window off UTF-8 boundaries or past the
-// parent's end is the host's loud `Invalid` trap (the table is left
-// intact). The CONTRACT is K = `str` (the only key type with a range
-// spelling; the methods sit on the generic class because rut has no
-// per-instantiation divergence — the union bound is admission only).
-//
-// The key set stays the CLOSED, COMPILE-TIME-ENFORCED union (`K
-// requires i8 | … | bytes` — a user-defined key fails at the
-// instantiation with the union diagnostic; escape hatches: encode
-// canonically to `bytes`, or vendor the removed mapset source from git
-// history).
-//
-// REMOVED WITH THE HOSTOPS (the type-name-law private classes):
-// `PrimMapI64` / `PrimMapU64` / `PrimMapF64` — the val-column lane
-// classes went UNREACHED when the alias rows were repealed; the
-// differently-named column class stays the recorded future shape.
+// THE ALIASING LAW: `get` answers the STORED cell, not a copy — two
+// gets of one key name one cell until a replace re-stores (held
+// pointers keep reading the pre-replace cell; remove nils the map's
+// slot but not an independently held pointer).
 
 use nmap_host::{ map_new, map_len,
             map_hput_i, map_hput_u, map_hput_b, map_hput_s, map_hput_y,
@@ -79,20 +21,23 @@ use nmap_host::{ map_new, map_len,
             map_hvput_sv, map_hvget_sv, map_hvremove_sv };
 
 // ---- the private key lane (the h-family's fused crossings) ----------
-
-// One private trait per lane op: `hput` (fused insert-or-replace +
-// internal grow, packed handle|newly answer), `hfind` (the key's
-// stable handle), `hremove` (release + tombstone, the dead key's
-// handle). Implemented ONLY for the closed key set; it is not
-// exported, so a user type cannot implement or reach it — the class
-// bound's type union is the whole admission story, and these methods
-// are just its hot path (HashSet's whole surface, the map's `has`).
+//
+// `hput` = insert-or-replace fused with internal grow, packed
+// handle|newly answer; `hfind` = the key's stable handle; `hremove` =
+// release + tombstone. Implemented only for the closed key set and
+// not exported — a user type cannot implement or reach it; the class
+// bound is the whole admission. Serves `HashSet`'s whole surface and
+// the map's `has`; the value-carrying ops cannot ride the trait (rut
+// has no generic trait methods) — they take the key as `any` and the
+// host dispatches on the call site's static type.
 trait KeyLane {
     fn hput(self, t: opaque) -> i64;
     fn hfind(self, t: opaque) -> i32;
     fn hremove(self, t: opaque) -> i32;
 }
 
+// integer members widen into the i/u lanes (sign-extension is the
+// KeyPayload::Bits law)
 impl KeyLane for i8 {
     fn hput(self, t: opaque) -> i64 { return map_hput_i(t, self as i64); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_i(t, self as i64); }
@@ -147,10 +92,9 @@ impl KeyLane for bool {
     fn hremove(self, t: opaque) -> i32 { return map_hremove_b(t, self); }
 }
 
-// `==` on `str`/`bytes` is CONTENT equality (RFC 0012 §4) — exactly
-// the key equality a hash table means, and the host hashes the content
-// byte-wise (FNV-1a 64). A user key type's escape hatch: encode it
-// canonically to `bytes` and take this lane.
+// `==` on `str`/`bytes` is CONTENT equality (RFC 0012 §4) — the key
+// equality a hash table means; the host hashes content byte-wise
+// (FNV-1a 64). `bytes` is also the user-key escape hatch.
 impl KeyLane for str {
     fn hput(self, t: opaque) -> i64 { return map_hput_s(t, self); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_s(t, self); }
@@ -166,13 +110,10 @@ impl KeyLane for bytes {
 // ---------------------------------------------------- the owners ----
 
 // `HashMap<K, V>` — the host table behind one `opaque` handle: keys,
-// hashes, handles, AND the value cells live host-side. Admission is
-// the union bound itself (RFC 0043 §A5): a key type outside the closed
-// set fails AT COMPILE TIME, naming the offending type and the union
-// (no `f32`/`f64` — float keys have no stable equality contract, as in
-// mapset).
+// hashes, handles, and the value cells all live host-side. Admission
+// is the union bound itself (RFC 0043 §A5).
 pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes, V> {
-    t: opaque;    // the NativeTable payload — the WHOLE state
+    t: opaque;    // the host table — the whole state
 }
 
 impl HashMap<K, V> {
@@ -180,27 +121,20 @@ impl HashMap<K, V> {
         return HashMap.with_capacity(8);
     }
 
-    // `n` crosses as the host table's reserve hint (std HashMap's own
-    // with_capacity); nothing rut-side pre-sizes anymore.
+    // `n` is the host table's reserve hint.
     pub fn with_capacity(n: i32) -> Self {
         return Self { t: map_new(n as i64) };
     }
 
-    // `put` — `true` when the key was newly added, `false` when an
-    // existing key's value was replaced. ONE crossing, the value
-    // inside it: the packed answer's low bit is the newly flag (the
-    // handle rides the high bits, unused here — nothing addresses a
-    // sidecar anymore).
+    // `true` when the key was newly added, `false` when an existing
+    // key's value was replaced (bit 0 of the packed answer).
     pub fn put(mut self, k: K, v: V) -> bool {
         let ans = map_hvput(self.t, k, v);
         return (ans & 1) == 1;
     }
 
-    // `get` — `nil` = absent (RFC 0005 §10). ONE crossing answering
-    // the stored value: the stored cell comes back, not a copy (two
-    // gets of one key name ONE cell until a replace re-stores — the
-    // aliasing law); a `?prim` V register mints its own opt value in
-    // the write-back, a ref V register borrows the stored cell.
+    // `nil` = absent (RFC 0005 §10); a hit answers the stored cell
+    // (the aliasing law).
     pub fn get(self, k: K) -> ?V {
         return map_hvget(self.t, k);
     }
@@ -209,10 +143,8 @@ impl HashMap<K, V> {
         return k.hfind(self.t) >= 0;
     }
 
-    // `remove` — ONE crossing: the host releases the held value cell
-    // in-crossing and answers the dead key's own handle (`>= 0` =
-    // was present). The handle itself is never reused (monotonic): a
-    // later re-insert of the same key is a NEW birth.
+    // `true` = was present; the held value releases in-crossing.
+    // Handles are never reused — a re-insert is a new entry.
     pub fn remove(mut self, k: K) -> bool {
         return map_hvremove(self.t, k) >= 0;
     }
@@ -221,24 +153,23 @@ impl HashMap<K, V> {
         return map_len(self.t);
     }
 
-    // ---- the range-keyed methods (strings-round1, phase 2) ----------
-    // The sv lanes as a HashMap surface: the key crosses as a borrowed
-    // `(parent, off, len)` BYTE range of any `str` value, hashed and
-    // compared OVER THE RANGE; the value rides the same crossing (the
-    // `put_range`/`get_range` laws are `put`/`get`'s, byte for byte).
-    // Traps: the house `Invalid` on a negative/past-end window or one
-    // ending mid-codepoint, the table left intact.
+    // ---- range-keyed methods (the sv lanes) -------------------------
+    // The key is a borrowed `(parent, off, len)` BYTE range of a `str`
+    // value, hashed and compared over the range (no key cell minted on
+    // a probe; a fresh insert stores one owned copy) — a range key IS
+    // the `s` key of the same content: same hash, entry, handle.
+    // `off`/`len` are byte offsets; a window off UTF-8 boundaries or
+    // past the parent's end is the host's `Invalid` trap, the table
+    // left intact. Contract: K = str.
 
-    /// `put_range` — insert-or-replace keyed over a byte range of
-    /// `parent`; `true` when the key was newly added. ONE crossing;
-    /// on a replace the owned stored key keeps its original bytes.
+    /// Insert-or-replace over a byte-range key; `true` = newly added.
+    /// On a replace the stored key keeps its original bytes.
     pub fn put_range(mut self, parent: str, off: i32, len: i32, v: V) -> bool {
         let ans = map_hvput_sv(self.t, parent, off, len, v);
         return (ans & 1) == 1;
     }
 
-    /// `get_range` — `nil` = absent; a hit answers the stored value at
-    /// the range key's entry (the same `get -> ?V` law as `get`).
+    /// `nil` = absent; a hit answers the stored value (the `get` law).
     pub fn get_range(self, parent: str, off: i32, len: i32) -> ?V {
         return map_hvget_sv(self.t, parent, off, len);
     }
@@ -247,18 +178,15 @@ impl HashMap<K, V> {
         return map_hfind_sv(self.t, parent, off, len) >= 0;
     }
 
-    /// `remove_range` — the host releases the held value and tombstones
-    /// the range-matched entry (`true` when it was present).
+    /// `true` = was present.
     pub fn remove_range(mut self, parent: str, off: i32, len: i32) -> bool {
         return map_hvremove_sv(self.t, parent, off, len) >= 0;
     }
 }
 
-// `HashSet<T>` — the host table alone, zero value machinery. It
-// SHARES the map's `hput` lane and reads bit 0 of the packed answer:
-// one family, one storage, the handle simply ignored. (Its entries'
-// values are the host's `Empty` placeholder — a valued read of a set
-// would trap loudly, but no set surface can spell one.)
+// `HashSet<T>` — the same host table, no value machinery: it shares
+// the map's `hput` lane and reads bit 0 of the packed answer, the
+// handle ignored.
 pub class HashSet<T requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes> {
     t: opaque;
 }
@@ -272,8 +200,7 @@ impl HashSet<T> {
         return Self { t: map_new(n as i64) };
     }
 
-    // `put` — `true` when the element was newly added (bit 0 of the
-    // shared hput answer; the growth it may have fused is host-side).
+    // `true` when the element was newly added (bit 0 of the answer).
     pub fn put(mut self, t: T) -> bool {
         return (t.hput(self.t) & 1) == 1;
     }
