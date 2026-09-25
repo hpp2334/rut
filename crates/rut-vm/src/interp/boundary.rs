@@ -12,7 +12,7 @@
 
 use rut_core::types::{PrimTy, TypeId, TyKind};
 use rut_core::types::{
-    TY_BOOL, TY_BYTES, TY_CHAR, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
+    TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
     TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
 };
 
@@ -69,7 +69,6 @@ fn expect_kind(vm: &Vm, slot: Slot, declared: TypeId, rust: &str) -> Result<(), 
         TyKind::Prim(PrimTy::F32) if rust == "f32" => Ok(()),
         TyKind::Prim(PrimTy::F64) if rust == "f64" => Ok(()),
         TyKind::Prim(PrimTy::Bool) if rust == "bool" => Ok(()),
-        TyKind::Prim(PrimTy::Char) if rust == "char" => Ok(()),
         TyKind::Str if rust == "String" || rust == "&str" => Ok(()),
         TyKind::Bytes if rust == "Vec<u8>" || rust == "&[u8]" => Ok(()),
         TyKind::Opaque if rust.starts_with("Opaque") => Ok(()),
@@ -180,19 +179,6 @@ impl Ret for bool {
     #[inline] // hot lane
     fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
         Ok(Slot::bool(self))
-    }
-}
-
-impl Ret for char {
-    const TY: TypeId = TY_CHAR;
-    fn rust_name() -> &'static str { "char" }
-    fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
-        expect_kind(vm, slot, declared, "char")?;
-        Ok(slot.as_char())
-    }
-    #[inline] // hot lane
-    fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
-        Ok(Slot::ch(self))
     }
 }
 
@@ -411,11 +397,6 @@ impl CallArg for bool {
     fn into_value(self) -> Value { Value::Bool(self) }
 }
 
-impl CallArg for char {
-    const NAME: &'static str = "char";
-    fn into_value(self) -> Value { Value::Char(self) }
-}
-
 impl CallArg for String {
     const NAME: &'static str = "String";
     fn into_value(self) -> Value { Value::Str(self) }
@@ -622,19 +603,6 @@ impl HostParam for bool {
     unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         expect_kind(vm, slot, TY_BOOL, "bool")?;
         Ok(slot.as_bool())
-    }
-}
-
-impl HostParam for char {
-    const TY: TypeId = TY_CHAR;
-    type Repr<'a> = char;
-    #[inline] // hot lane
-    unsafe fn read<'a>(_vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        Ok(slot.as_char())
-    }
-    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        expect_kind(vm, slot, TY_CHAR, "char")?;
-        Ok(slot.as_char())
     }
 }
 
@@ -928,10 +896,9 @@ mod fast_lane_tests {
                 assert_eq!(<u64 as HostParam>::read(&vm, Slot::int(bits)).unwrap(), bits as u64);
             }
             assert_eq!(<u64 as HostParam>::read(&vm, Slot::int(-1)).unwrap(), u64::MAX);
-            // floats/bool/char: the raw union reads
+            // floats/bool: the raw union reads
             assert_eq!(<f64 as HostParam>::read(&vm, Slot::float(-0.5)).unwrap(), -0.5);
             assert_eq!(<bool as HostParam>::read(&vm, Slot::bool(true)).unwrap(), true);
-            assert_eq!(<char as HostParam>::read(&vm, Slot::ch('λ')).unwrap(), 'λ');
         }
     }
 

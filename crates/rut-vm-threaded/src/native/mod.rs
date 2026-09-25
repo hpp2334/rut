@@ -148,7 +148,7 @@ op_handler!(h_makeclosure, op_makeclosure);
 op_handler!(h_panic, op_panic);
 op_handler!(h_assert, op_assert);
 op_handler!(h_conv, op_conv);
-op_handler!(h_strcharat, op_strcharat);
+op_handler!(h_strcodeat, op_strcodeat);
 
 fn table<M: Machine>() -> Table<M> {
     let mut t: [Handler<M>; NTAGS] = [h_slow::<M>; NTAGS];
@@ -232,7 +232,7 @@ fn table<M: Machine>() -> Table<M> {
     t[T_PANIC as usize] = h_panic::<M>;
     t[T_ASSERT as usize] = h_assert::<M>;
     t[T_CONV as usize] = h_conv::<M>;
-    t[T_STRCHARAT as usize] = h_strcharat::<M>;
+    t[T_STRCODEAT as usize] = h_strcodeat::<M>;
     Table { entries: t }
 }
 

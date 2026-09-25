@@ -4,7 +4,7 @@
 //!
 //! Recognized sequences:
 //! - `Array<T>` — fused `arrget`/`arrlen`/`arrset` (RFC 0032 §1.1 R2).
-//! - `str` / `bytes` — the primitive cells (`strcharat`/`strlen`,
+//! - `str` / `bytes` — the primitive cells (`strcodeat`/`strlen`,
 //!   `bytesget`/`byteslen`).
 //! - `Vec<T>` — builtin by shape: a record with a `buf: Array<T>` field
 //!   and a `len: i32` field (RFC 0028; the pouch class). `len`
@@ -137,11 +137,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(dst)
             }
             SliceSource::Str => {
-                // StrCharAt yields a char slot; convert to a 1-codepoint str
-                let creg = self.new_reg(TY_CHAR);
-                self.emit(Op::StrCharAt { dst: creg, s: recv, idx }, sp);
+                // StrCodeAt yields the u32 codepoint (the char exorcism's
+                // re-spell); StrFromCode mints the 1-codepoint str from it
+                let cp = self.new_reg(TY_U32);
+                self.emit(Op::StrCodeAt { dst: cp, s: recv, idx }, sp);
                 let dst = self.new_reg(TY_STR);
-                { let (argv_off, argc) = self.pool_args(&(vec![creg])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: dst }, sp); }
+                { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: dst }, sp); }
                 Ok(dst)
             }
             SliceSource::Bytes => {

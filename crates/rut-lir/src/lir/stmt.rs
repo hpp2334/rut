@@ -292,8 +292,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let iter_reg = self.last_reg;
         // `for (v of p)` auto-derefs a pointer (RFC 0005)
         let (it, iter_reg) = self.deref_for_use(it, iter_reg, sp.lo);
-        // v1.1: str iteration yields str elements (not char)
-        let it = if it == rut_core::types::TY_CHAR { rut_core::types::TY_STR } else { it };
         // the builtin sequences (Vec, Array, str, bytes) keep their fused
         // loops; a user type iterates through its registered
         // `impl Iterator<E> for T` (nominal, RFC 0012 §6)

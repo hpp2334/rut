@@ -836,9 +836,9 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_strcharat(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::StrCharAt { dst, s, idx } = op else {
-            unreachable_op!("op_strcharat: unexpected op")
+    fn op_strcodeat(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+        let Op::StrCodeAt { dst, s, idx } = op else {
+            unreachable_op!("op_strcodeat: unexpected op")
         };
         let str_cell = cell_of(unsafe { *regs.add(*s as usize) });
         let i = unsafe { (*regs.add(*idx as usize)).i };
@@ -868,7 +868,8 @@ impl Machine for Vm {
                 )
             })?
         };
-        unsafe { *regs.add(*dst as usize) = Slot::ch(c) };
+        // the u32 codepoint, straight into the slot (the char exorcism)
+        unsafe { *regs.add(*dst as usize) = Slot::int(c as u32 as i64) };
         Ok(Flow::Next(pc + 1))
     }
 }

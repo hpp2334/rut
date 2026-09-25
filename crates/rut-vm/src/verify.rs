@@ -448,7 +448,7 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*dst);
             push(*src);
         }
-        Op::StrCharAt { dst, s, idx } => {
+        Op::StrCodeAt { dst, s, idx } => {
             push(*dst);
             push(*s);
             push(*idx);

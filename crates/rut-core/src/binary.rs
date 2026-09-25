@@ -59,7 +59,6 @@ pub enum ConstVal {
     I64(i64),
     F64(f64),
     Bool(bool),
-    Char(char),
     Str(String),
     /// a `type_id<T>()` constant — a module-local `TypeId` at rest, rebased
     /// to the global type table at link (RFC 0035 §1)
@@ -467,7 +466,20 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// (`NativeTy::StrBuf`) — the 7→8 precedent: a v9 engine rejects every
 /// v10 artifact's new nats/kinds with the standard version error, so
 /// stale artifacts must be refused, not misread.
-pub const VERSION: u32 = 11;
+/// v12: the char exorcism (nmap-hostvals batch phase 1) — the
+/// enumerated `char` finishes dying and the wire moves with it: the
+/// char prim tag (11) is WITHDRAWN from `PrimTy` (opcode 47 `Conv`'s
+/// from/to operand bytes never carry it again — every codepoint now
+/// rides a plain u32), const tag 3 (`ConstVal::Char`, decode-only dead
+/// since the literal removal) is withdrawn, and opcode 48 (`StrCharAt`,
+/// the char-register op) is REPLACED by `StrCodeAt` (91) — the op at
+/// 48 is retired, NEVER re-meaninged: an old artifact fails at the
+/// version byte first, and one that forced past it still fails loudly
+/// (`bad opcode 48`). The new `Nat::StrFromCode` (21) and the reserved
+/// `TY_CHAR` boot row (a `Nil` shell holding the wire-stable ids fixed)
+/// ride the same bump. Old v11 artifacts are refused — none may be
+/// misread under the new law.
+pub const VERSION: u32 = 12;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -548,10 +560,9 @@ pub fn encode(prog: &Program) -> Vec<u8> {
                 e.u8(2);
                 e.u8(*v as u8);
             }
-            ConstVal::Char(v) => {
-                e.u8(3);
-                e.u32(*v as u32);
-            }
+            // const tag 3 is RETIRED (ConstVal::Char died with the char
+            // exorcism — zero mint sites since the literal removal); a
+            // stale artifact carrying it fails decode loudly
             ConstVal::Str(s) => {
                 e.u8(4);
                 e.str(s);
@@ -608,7 +619,7 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u8(match p {
                 PrimTy::U8 => 0, PrimTy::U16 => 1, PrimTy::U32 => 2, PrimTy::U64 => 3,
                 PrimTy::I8 => 4, PrimTy::I16 => 5, PrimTy::I32 => 6, PrimTy::I64 => 7,
-                PrimTy::F32 => 8, PrimTy::F64 => 9, PrimTy::Bool => 10, PrimTy::Char => 11,
+                PrimTy::F32 => 8, PrimTy::F64 => 9, PrimTy::Bool => 10,
             });
         }
         TyKind::Str => e.u8(2),
@@ -721,7 +732,8 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             0 => ConstVal::I64(d.i64()?),
             1 => ConstVal::F64(d.f64()?),
             2 => ConstVal::Bool(d.u8()? != 0),
-            3 => ConstVal::Char(char::from_u32(d.u32()?).unwrap_or('\0')),
+            // 3 is RETIRED (ConstVal::Char) — decode-only dead since the
+            // literal removal; the fallthrough names the tag loudly
             4 => ConstVal::Str(d.str()?),
             5 => ConstVal::TypeId(d.u32()?),
             t => return Err(format!("bad const tag {t}")),
@@ -776,7 +788,8 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         1 => TyKind::Prim(match d.u8()? {
             0 => PrimTy::U8, 1 => PrimTy::U16, 2 => PrimTy::U32, 3 => PrimTy::U64,
             4 => PrimTy::I8, 5 => PrimTy::I16, 6 => PrimTy::I32, 7 => PrimTy::I64,
-            8 => PrimTy::F32, 9 => PrimTy::F64, 10 => PrimTy::Bool, 11 => PrimTy::Char,
+            8 => PrimTy::F32, 9 => PrimTy::F64, 10 => PrimTy::Bool,
+            // 11 is RETIRED (the char prim) — a stale artifact fails loudly
             t => return Err(format!("bad prim tag {t}")),
         }),
         2 => TyKind::Str,
@@ -891,7 +904,7 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::Assert { cond, msg } => { e.u8(45); e.u16(*cond); e.u8opt(msg); }
         Op::LoopHead => e.u8(46),
         Op::Conv { dst, src, from, to } => { e.u8(47); e.u16(*dst); e.u16(*src); e.u8(from.to_u8()); e.u8(to.to_u8()); }
-        Op::StrCharAt { dst, s, idx } => { e.u8(48); e.u16(*dst); e.u16(*s); e.u16(*idx); }
+        Op::StrCodeAt { dst, s, idx } => { e.u8(91); e.u16(*dst); e.u16(*s); e.u16(*idx); }
         Op::ArrayCmp { eq, dst, a, b } => { e.u8(85); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
         Op::ArrGetF { dst, obj, field, idx, repr } => { e.u8(87); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u8(repr.to_u8()); }
         Op::ArrSetF { obj, field, idx, val, repr } => { e.u8(88); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
@@ -938,7 +951,10 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         45 => Op::Assert { cond: d.u16()?, msg: d.u8opt()? },
         46 => Op::LoopHead,
         47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: prim(d.u8()?)?, to: prim(d.u8()?)? },
-        48 => Op::StrCharAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
+        // 48 is RETIRED (StrCharAt died with the char exorcism — never
+        // re-meaninged): name the number loudly instead of the generic catch-all
+        48 => return Err("bad opcode 48 (StrCharAt retired by the char exorcism — recompile under VERSION 12)".into()),
+        91 => Op::StrCodeAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
         49 => Op::MakeRecord { dst: d.u16()?, ty: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
         50 => Op::AddF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         51 => Op::SubF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
@@ -998,6 +1014,7 @@ fn nat(b: u8) -> Result<Nat, String> {
         14 => Nat::StrScan, 15 => Nat::StrStartsWith,
         16 => Nat::StrBufNew, 17 => Nat::StrBufPush, 18 => Nat::StrBufPushCode,
         19 => Nat::StrBufLen, 20 => Nat::StrBufFinish,
+        21 => Nat::StrFromCode,
         _ => return Err("bad nat tag".into()),
     })
 }

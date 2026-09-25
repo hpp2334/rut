@@ -1,8 +1,9 @@
 //! `string_encode` / `bytes_decode` (RFC 0004) lowered as a composition of
 //! LIR ops — there is no VM native for either. `str` is a `CellData::Str`
 //! (a Rust `String`, UTF-8); `bytes` is a `u8` array. Both routines are
-//! loops over `StrCharAt` (encode) / `ArrGet` (decode) with the UTF-8 bit
-//! arithmetic emitted inline.
+//! loops over `StrCodeAt` (encode) / `ArrGet` (decode) with the UTF-8 bit
+//! arithmetic emitted inline — the codepoint rides a plain u32 register
+//! end-to-end (the char exorcism: no char intermediates, no Conv pairs).
 //!
 //! `bytes_decode` is lossy like `String::from_utf8_lossy`: an invalid lead
 //! byte or a missing/invalid continuation byte yields U+FFFD and advances
@@ -87,9 +88,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     fn arr_set_u8(&mut self, arr: u16, idx: u16, val: u16, sp: u32) {
         self.emit(Op::ArrSet { arr, idx, val, repr: Repr::Prim(PrimTy::U8) }, sp);
     }
-    fn str_char_at(&mut self, s: u16, idx: u16, sp: u32) -> u16 {
-        let d = self.new_reg(TY_CHAR);
-        self.emit(Op::StrCharAt { dst: d, s, idx }, sp);
+    fn str_code_at(&mut self, s: u16, idx: u16, sp: u32) -> u16 {
+        let d = self.new_reg(TY_U32);
+        self.emit(Op::StrCodeAt { dst: d, s, idx }, sp);
         d
     }
     fn to_u32(&mut self, src: u16, from: PrimTy, sp: u32) -> u16 {
@@ -121,10 +122,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let cond = self.i32_cmp(CmpOp::Lt, i, n, sp);
         self.br(cond, l_body, l_end);
         self.bind(l_body);
-        let cp = {
-            let ch = self.str_char_at(src, i, sp);
-            self.to_u32(ch, PrimTy::Char, sp)
-        };
+        let cp = self.str_code_at(src, i, sp);
         let len = self.imm_i32(1, sp);
         self.add_if_gt_u32(cp, 0x7F, len, sp);
         self.add_if_gt_u32(cp, 0x7FF, len, sp);
@@ -147,10 +145,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let cond2 = self.i32_cmp(CmpOp::Lt, i2, n, sp);
         self.br(cond2, l_body2, l_end2);
         self.bind(l_body2);
-        let cp2 = {
-            let ch = self.str_char_at(src, i2, sp);
-            self.to_u32(ch, PrimTy::Char, sp)
-        };
+        let cp2 = self.str_code_at(src, i2, sp);
         self.emit_utf8_write(cp2, out, w, sp);
         self.inc_i32(i2, sp);
         self.jmp(l_head2);
@@ -283,10 +278,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let adv = self.new_reg(TY_I32);
         self.emit_decode_one(src, i, n, cp, adv, sp);
 
-        let c = self.new_reg(TY_CHAR);
-        self.emit(Op::Conv { dst: c, src: cp, from: PrimTy::U32, to: PrimTy::Char }, sp);
+        // the 1-codepoint str mints straight from the u32 (the char
+        // exorcism: no Conv{U32→Char}, no char register)
         let cs = self.new_reg(TY_STR);
-        { let (argv_off, argc) = self.pool_args(&(vec![c])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: cs }, sp); }
+        { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: cs }, sp); }
         { let (argv_off, argc) = self.pool_args(&(vec![out, cs])); self.emit(Op::CallNat { nat: Nat::Concat, recv: NOREG, argv_off, argc, dst: out }, sp); }
 
         self.emit(arith(ArithOp::Add, PrimTy::I32, i, i, adv), sp);

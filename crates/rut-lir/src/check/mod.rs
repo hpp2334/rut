@@ -1278,7 +1278,7 @@ pub fn int_suffix_ty(s: IntSuffix) -> TypeId {
 }
 
 /// The ten numeric primitives — the only `as` cast source/target kinds
-/// (`Bool`/`Char` are excluded; RFC 0007 §1).
+/// (`Bool` is excluded; RFC 0007 §1).
 pub fn numeric_prim(p: PrimTy) -> bool {
     matches!(
         p,

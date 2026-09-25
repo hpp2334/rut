@@ -99,7 +99,7 @@ pub const T_MAKECLOSURE: u8 = 79;
 pub const T_PANIC: u8 = 80;
 pub const T_ASSERT: u8 = 81;
 pub const T_CONV: u8 = 82;
-pub const T_STRCHARAT: u8 = 83;
+pub const T_STRCODEAT: u8 = 83;
 pub const NTAGS: usize = 84;
 
 pub fn tag_of(op: &Op) -> u8 {
@@ -176,7 +176,7 @@ pub fn tag_of(op: &Op) -> u8 {
         Op::Panic { .. } => T_PANIC,
         Op::Assert { .. } => T_ASSERT,
         Op::Conv { .. } => T_CONV,
-        Op::StrCharAt { .. } => T_STRCHARAT,
+        Op::StrCodeAt { .. } => T_STRCODEAT,
         // every current variant has a tag; keep the fallback so a future op
         // still runs (via the match interpreter) instead of miscompiling
         #[allow(unreachable_patterns)]
@@ -395,7 +395,7 @@ pub trait Machine {
     fn op_panic(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_assert(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
     fn op_conv(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
-    fn op_strcharat(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
+    fn op_strcodeat(&mut self, op: &Op, regs: *mut Self::Word, pc: u32) -> Result<Flow<Self::Out>, Self::Err> { let _ = (op, regs, pc); unimplemented!() }
 }
 
 /// A threaded handler: same ABI, arguments, and return type for every op (a

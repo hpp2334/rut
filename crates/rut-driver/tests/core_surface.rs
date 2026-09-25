@@ -193,3 +193,36 @@ fn removed_names_self_diagnose_with_or_without_use() {
         out.diags
     );
 }
+
+/// The char exorcism's type-position pin (nmap-hostvals P1, §0.8 l): the
+/// surface died at RFC 0004 v1.1 and the enumerated kind is now GONE from
+/// the IR (`PrimTy::Char` deleted) — but `char` in a type position must
+/// still diagnose with the dedicated removal message, never "unknown type".
+/// The resolver consults `removed_core` BEFORE the primitive table, so the
+/// diagnostic path works without any char kind existing (the probe that
+/// decided the pin: `let x: char = 65;` and a `char` param on a REACHABLE
+/// fn, both carrying the diagnostic verbatim).
+#[test]
+fn removed_char_type_positions_diagnose_without_the_kind() {
+    for src in [
+        "fn main() -> i32 { let x: char = 65; return 0; }\n",
+        "fn f(c: char) -> u32 { return c; }\n\
+         fn main() -> i32 { return f(65) as i32; }\n",
+    ] {
+        let mut s = rut_driver::Session::new();
+        rut_driver::mount_std_core(&mut s);
+        s.register_module(
+            "app_main",
+            rut_driver::Module { source: Some(src.into()), ..Default::default() },
+        )
+        .unwrap();
+        let out = rut_driver::compile_graph(&s, "app_main");
+        assert!(
+            out.diags.iter().any(|d| d.msg.contains(
+                "`char` was removed — codepoints are `u32`: `s.code()` reads one, `str.from_code(n)` builds one (RFC 0004 v1.1)"
+            )),
+            "src: {src}\ndiags: {:?}",
+            out.diags
+        );
+    }
+}

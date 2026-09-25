@@ -42,7 +42,6 @@ fn const_to_slot(c: &ConstVal, heap: &Heap) -> Result<Slot, String> {
         ConstVal::I64(v) => Slot::int(*v),
         ConstVal::F64(v) => Slot::float(*v),
         ConstVal::Bool(v) => Slot::bool(*v),
-        ConstVal::Char(v) => Slot::ch(*v),
         ConstVal::Str(s) => heap
             .alloc_str(s.clone())
             .map_err(|t| format!("load: {}", t.msg))?,
@@ -522,7 +521,6 @@ impl Vm {
             (Value::F64(f), TyKind::Prim(PrimTy::F32)) => Slot::float(*f as f32 as f64),
             (Value::F64(f), TyKind::Prim(PrimTy::F64)) => Slot::float(*f),
             (Value::Bool(b), TyKind::Prim(PrimTy::Bool)) => Slot::bool(*b),
-            (Value::Char(c), TyKind::Prim(PrimTy::Char)) => Slot::ch(*c),
             (Value::Tuple(parts), TyKind::Data { fields }) => {
                 if parts.len() != fields.len() {
                     return Err(format!(
@@ -780,7 +778,7 @@ impl Vm {
 mod tests {
     use super::*;
     use rut_core::binary::Program;
-    use rut_core::types::{TypeTable, TY_CHAR, TY_F64};
+    use rut_core::types::{TypeTable, TY_F64};
 
     /// An empty program — no funcs, no consts, just the boot type table.
     fn empty_vm() -> Vm {
@@ -860,12 +858,15 @@ mod tests {
     #[test]
     fn unsupported_key_kinds_name_their_type() {
         let vm = empty_vm();
-        // floats and chars are rut values but not native keys — the
-        // user-defined-key trap's raw material
+        // floats and stack-trace cells are rut values but not native
+        // keys — the user-defined-key trap's raw material
         let f = boxed(&vm, Slot::float(1.5), TY_F64);
         assert_eq!(vm.opaque_key_payload(&f).unwrap(), KeyPayload::Unsupported(TY_F64));
-        let c = boxed(&vm, Slot::ch('x'), TY_CHAR);
-        assert_eq!(vm.opaque_key_payload(&c).unwrap(), KeyPayload::Unsupported(TY_CHAR));
+        let t = boxed(&vm, Slot::null(), rut_core::types::TY_STACK_TRACE);
+        assert_eq!(
+            vm.opaque_key_payload(&t).unwrap(),
+            KeyPayload::Unsupported(rut_core::types::TY_STACK_TRACE)
+        );
     }
 
     #[test]

@@ -128,7 +128,6 @@ pub enum ArrKind {
     U32,
     I32,
     F32,
-    Char,
     Bool,
     Opt(PrimTy),
 }
@@ -148,7 +147,6 @@ impl ArrKind {
             TyKind::Prim(PrimTy::U32) => ArrKind::U32,
             TyKind::Prim(PrimTy::I32) => ArrKind::I32,
             TyKind::Prim(PrimTy::F32) => ArrKind::F32,
-            TyKind::Prim(PrimTy::Char) => ArrKind::Char,
             TyKind::Prim(PrimTy::Bool) => ArrKind::Bool,
             // the primitive-optional store: `?prim` elements ride the raw
             // payload + nil tag; `?str`/`?record`/`??T` keep cell slots
@@ -165,7 +163,7 @@ impl ArrKind {
         match self {
             ArrKind::U8 | ArrKind::I8 | ArrKind::Bool => 1,
             ArrKind::U16 | ArrKind::I16 => 2,
-            ArrKind::U32 | ArrKind::I32 | ArrKind::F32 | ArrKind::Char => 4,
+            ArrKind::U32 | ArrKind::I32 | ArrKind::F32 => 4,
             ArrKind::Slots => 8,
             ArrKind::Opt(p) => p.width() + 1,
         }
@@ -216,7 +214,6 @@ impl ArrData {
             ArrKind::U32 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const u32) } as i64),
             ArrKind::I32 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const i32) } as i64),
             ArrKind::F32 => Slot::float(unsafe { std::ptr::read_unaligned(p as *const f32) } as f64),
-            ArrKind::Char => Slot::ch(char::from_u32(unsafe { std::ptr::read_unaligned(p as *const u32) }).unwrap_or('\0')),
             ArrKind::Bool => Slot::bool(unsafe { *(p as *const u8) } != 0),
             // the primitive-optional store: the generic slot decode yields
             // the null slot for nil, the RAW payload for some. This raw form
@@ -254,7 +251,6 @@ impl ArrData {
                 PrimTy::F32 => Slot::float(std::ptr::read_unaligned(e as *const f32) as f64),
                 PrimTy::F64 => Slot::float(std::ptr::read_unaligned(q as *const f64)),
                 PrimTy::Bool => Slot::bool(*e != 0),
-                PrimTy::Char => Slot::ch(char::from_u32(std::ptr::read_unaligned(e as *const u32)).unwrap_or('\0')),
             }
         }
     }
@@ -283,7 +279,6 @@ impl ArrData {
                 ArrKind::U32 => std::ptr::write_unaligned(p as *mut u32, unsafe { s.i } as u32),
                 ArrKind::I32 => std::ptr::write_unaligned(p as *mut i32, unsafe { s.i } as i32),
                 ArrKind::F32 => std::ptr::write_unaligned(p as *mut f32, unsafe { s.f } as f32),
-                ArrKind::Char => std::ptr::write_unaligned(p as *mut u32, s.as_char() as u32),
                 ArrKind::Bool => *(p as *mut u8) = s.as_bool() as u8,
                 // the primitive-optional store ENCODES the incoming proper
                 // `?prim` value (cell or null): nil stores tag 0 (payload
@@ -309,7 +304,6 @@ impl ArrData {
                             PrimTy::F32 => std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32),
                             PrimTy::F64 => std::ptr::write_unaligned(q as *mut f64, raw.as_f64()),
                             PrimTy::Bool => *e = raw.as_bool() as u8,
-                            PrimTy::Char => std::ptr::write_unaligned(e as *mut u32, raw.as_char() as u32),
                         }
                         *e.add(w) = 1;
                     }
@@ -408,7 +402,6 @@ impl ArrData {
                 ArrKind::Opt(PrimTy::F32) => std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32),
                 ArrKind::Opt(PrimTy::F64) => std::ptr::write_unaligned(q as *mut f64, raw.as_f64()),
                 ArrKind::Opt(PrimTy::Bool) => *e = raw.as_bool() as u8,
-                ArrKind::Opt(PrimTy::Char) => std::ptr::write_unaligned(e as *mut u32, raw.as_char() as u32),
                 _ => {}
             }
             *e.add(w) = 1;

@@ -141,6 +141,11 @@ pub enum Nat {
     /// `b.finish()` — the ONE materialization: a fresh immutable `str`
     /// cell holding the builder's octets (the builder keeps its buffer)
     StrBufFinish,
+    /// `str.from_code(n)` — the 1-codepoint `str` for codepoint `n`
+    /// (the char exorcism: the old `Nat::Str` char arm keyed on the now
+    /// dead `PrimTy::Char` static type; the codepoint rides a plain u32
+    /// register, so the native says what it is)
+    StrFromCode,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -290,8 +295,13 @@ pub enum Op {
     /// explicit numeric conversion `i32(x)` etc — always a call, never an
     /// operator (RFC 0007 §1); narrowing traps when the value doesn't fit
     Conv { dst: Reg, src: Reg, from: PrimTy, to: PrimTy },
-    /// string codepoint read (for-of strings, RFC 0008 §1); bounds trap
-    StrCharAt { dst: Reg, s: Reg, idx: Reg },
+    /// string codepoint read (the char exorcism's re-spell of the old
+    /// `StrCharAt`, which moved the wire at VERSION 12): answers the u32
+    /// CODEPOINT directly — the dst register is a u32 (never a char
+    /// intermediate; the slot already carried the codepoint as bits).
+    /// Bounds trap (the `slice` law). Used by `s.code()`, `s.code_at(i)`,
+    /// the encode walker, and str indexing.
+    StrCodeAt { dst: Reg, s: Reg, idx: Reg },
 
     /// fuel-check no-op back-edge marker (RFC 0040 §2: loop back-edges are
     /// natural checkpoints) — emitted at loop heads

@@ -9,15 +9,6 @@ impl Vm {
             Nat::Str => {
                 let v = self.reg(args[0]);
                 let ty = self.regs_ty(args[0]);
-                // a char renders by encoding straight into a fresh block —
-                // no intermediate `String` (the f-string `{c}` churn path:
-                // string-building loops hit this once per piece)
-                if matches!(self.prog.types.kind(ty), TyKind::Prim(PrimTy::Char)) {
-                    let c = char::from_u32(unsafe { v.i } as u32).unwrap_or('\u{FFFD}');
-                    let c = self.heap.alloc_char(c)?;
-                    self.store_result(dst, c)?;
-                    return Ok(());
-                }
                 // a string already formats to itself — alias the cell instead
                 // of re-rendering a copy (the `f"{s}"` identity; this is the
                 // bulk of the cost in string-churn workloads like fasta).
@@ -34,6 +25,15 @@ impl Vm {
                 }
                 let s = self.render(v, args[0])?;
                 let c = self.heap.alloc_str(s)?;
+                self.store_result(dst, c)?;
+            }
+            Nat::StrFromCode => {
+                // str.from_code(n) — the 1-codepoint str for the u32
+                // codepoint (the char exorcism: the old Nat::Str arm keyed
+                // on the now-dead PrimTy::Char static type; the native says
+                // what the u32 is instead). Lossy on out-range codes.
+                let v = self.reg(args[0]);
+                let c = self.heap.alloc_char(unsafe { v.i } as u32)?;
                 self.store_result(dst, c)?;
             }
             Nat::Concat => {
@@ -289,7 +289,6 @@ impl Vm {
             TyKind::Prim(PrimTy::F32) => Ok(format!("{}", unsafe { v.f } as f32)),
             TyKind::Prim(PrimTy::F64) => Ok(format!("{}", unsafe { v.f })),
             TyKind::Prim(PrimTy::Bool) => Ok(if v.as_bool() { "true".into() } else { "false".into() }),
-            TyKind::Prim(PrimTy::Char) => Ok(v.as_char().to_string()),
             TyKind::Prim(p) => Ok(match p {
                 // unsigned widths must format unsigned — the slot is an i64,
                 // so a u64 with bit 63 set would otherwise print negative

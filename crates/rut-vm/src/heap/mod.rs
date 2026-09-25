@@ -156,9 +156,14 @@ impl Heap {
         }
     }
 
-    /// A one-char `str` cell — the `{c}` f-string hole. UTF-8 encodes
-    /// straight into the block; no intermediate `String` ever exists.
-    pub fn alloc_char(&self, c: char) -> Result<Slot, Trap> {
+    /// A one-codepoint `str` cell from a `u32` codepoint — the
+    /// `str.from_code(n)` / `{c}` f-string mint (the char exorcism: the
+    /// codepoint rides a plain u32; the repr is unchanged — a 1-codepoint
+    /// STR cell, as it always was). UTF-8 encodes straight into the block;
+    /// no intermediate `String` ever exists. An out-of-range codepoint
+    /// renders U+FFFD, lossy like `bytes.decode`.
+    pub fn alloc_char(&self, code: u32) -> Result<Slot, Trap> {
+        let c = char::from_u32(code).unwrap_or('\u{FFFD}');
         let mut buf = [0u8; 4];
         let s = c.encode_utf8(&mut buf);
         let n = s.len() as u64;

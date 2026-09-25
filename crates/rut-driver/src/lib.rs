@@ -790,7 +790,7 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
         #[allow(unreachable_patterns)]
         Op::Pad { .. } => unreachable!("layout pin, never constructed"),
         Op::Conv { dst, src, from, to } => format!("conv r{dst}, r{src}, {} -> {}", from.name(), to.name()),
-        Op::StrCharAt { dst, s, idx } => format!("strcharat r{dst}, r{s}, r{idx}"),
+        Op::StrCodeAt { dst, s, idx } => format!("strcodeat r{dst}, r{s}, r{idx}"),
     }
 }
 

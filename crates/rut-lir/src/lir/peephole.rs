@@ -713,7 +713,7 @@ fn dst_slot(op: &mut Op) -> Option<&mut u16> {
         | Op::Box { dst, .. }
         | Op::MakeClosure { dst, .. }
         | Op::Conv { dst, .. }
-        | Op::StrCharAt { dst, .. } => Some(dst),
+        | Op::StrCodeAt { dst, .. } => Some(dst),
         Op::Call { dst, .. }
         | Op::CallM { dst, .. }
         | Op::CallI { dst, .. }
@@ -876,7 +876,7 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*src);
         }
-        Op::StrCharAt { dst, s, idx } => {
+        Op::StrCodeAt { dst, s, idx } => {
             d.push(*dst);
             u.push(*s);
             u.push(*idx);
@@ -999,7 +999,7 @@ fn replace_reads(op: &mut Op, pools: &mut Pools, from: u16, to: u16) {
             }
         }
         Op::Conv { src, .. } => f(src),
-        Op::StrCharAt { s, idx, .. } => {
+        Op::StrCodeAt { s, idx, .. } => {
             f(s);
             f(idx);
         }

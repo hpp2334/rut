@@ -512,7 +512,13 @@ fn prim_store_release_walk_skips_element_slots() {
 #[test]
 fn version_gate_rejects_stale_artifacts() {
     use rut_core::binary::{decode, VERSION};
-    // v11 is the opaque-is law (the opaque-is batch phase 1: `is` on an
+    // v12 is the char exorcism (nmap-hostvals batch phase 1: the
+    // enumerated `char` finishes dying — the char prim tag (11) is
+    // withdrawn from `PrimTy`, const tag 3 (`ConstVal::Char`) is
+    // withdrawn, and opcode 48 (`StrCharAt`) is REPLACED by `StrCodeAt`
+    // (91), never re-meaninged; every codepoint rides a plain u32 and
+    // the new `Nat::StrFromCode` (21) rides the same bump); v11 was the
+    // opaque-is law (the opaque-is batch phase 1: `is` on an
     // opaque box answers BY THE BOX — the IsType/IsTrait op bodies read
     // `cell.ty`, `o is X` misses for every payload X, `o is opaque`
     // (or an alias) stays true, `downcast<T>` is the only recovery; a
@@ -527,7 +533,7 @@ fn version_gate_rejects_stale_artifacts() {
     // rejection addition, the 5→6 precedent); v8 was the err-channel
     // phase 2 declared-surface change (`capture_stacktrace()` + the
     // `StackTrace` builtin class + the `pos` span table, RFC 0036)
-    assert_eq!(VERSION, 11, "the opaque-is law is the only allowed VERSION bump this phase");
+    assert_eq!(VERSION, 12, "the char exorcism is the only allowed VERSION bump this phase");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

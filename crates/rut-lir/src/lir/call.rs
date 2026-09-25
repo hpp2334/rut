@@ -504,10 +504,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     ));
                 }
                 let cp = self.last_reg;
-                let c = self.new_reg(TY_CHAR);
-                self.emit(Op::Conv { dst: c, src: cp, from: PrimTy::U32, to: PrimTy::Char }, sp.lo);
                 let dst = self.new_reg(TY_STR);
-                { let (argv_off, argc) = self.pool_args(&(vec![c])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
+                { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
                 return Ok(TY_STR);
             }
             _ => {}
@@ -934,13 +932,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match self.ctx.types.kind(rt) {
             TyKind::Str => {
                 if name == sym::CODE && args.is_empty() {
-                    // s.code() -> u32 — the FIRST codepoint; traps on empty
-                    let creg = self.new_reg(TY_CHAR);
+                    // s.code() -> u32 — the FIRST codepoint; traps on empty.
+                    // ONE op (the char exorcism: the slot already carried
+                    // the codepoint as bits — no char intermediate, no Conv)
+                    let dst = self.new_reg(TY_U32);
                     let zero = self.new_reg(TY_I32);
                     self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
-                    self.emit(Op::StrCharAt { dst: creg, s: rreg, idx: zero }, sp.lo);
-                    let dst = self.new_reg(TY_U32);
-                    self.emit(Op::Conv { dst, src: creg, from: PrimTy::Char, to: PrimTy::U32 }, sp.lo);
+                    self.emit(Op::StrCodeAt { dst, s: rreg, idx: zero }, sp.lo);
+                    self.last_reg = dst;
                     return Ok(TY_U32);
                 }
                 if name == sym::ENCODE && args.is_empty() {
@@ -983,10 +982,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Err(());
                     }
                     let ir = self.last_reg;
-                    let creg = self.new_reg(TY_CHAR);
-                    self.emit(Op::StrCharAt { dst: creg, s: rreg, idx: ir }, sp.lo);
+                    // ONE op — the u32 codepoint (the char exorcism's
+                    // re-spell; see s.code())
                     let dst = self.new_reg(TY_U32);
-                    self.emit(Op::Conv { dst, src: creg, from: PrimTy::Char, to: PrimTy::U32 }, sp.lo);
+                    self.emit(Op::StrCodeAt { dst, s: rreg, idx: ir }, sp.lo);
+                    self.last_reg = dst;
                     return Ok(TY_U32);
                 }
                 if name == sym::SCAN && args.len() == 2 {

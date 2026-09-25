@@ -339,7 +339,7 @@ impl Vm {
                 let v = self.convert(r!(src), from, to)?;
                 self.cur_regs[dst as usize] = v;
             }
-            Op::StrCharAt { dst, s, idx } => {
+            Op::StrCodeAt { dst, s, idx } => {
                 let str_cell = cell_of(r!(s));
                 let i = unsafe { r!(idx).i };
                 let c = if str_cell.str_ascii() {
@@ -364,7 +364,9 @@ impl Vm {
                         )
                     })?
                 };
-                self.cur_regs[dst as usize] = Slot::ch(c);
+                // the u32 codepoint, straight into the slot (the char
+                // exorcism: no char intermediate ever leaves this op)
+                self.cur_regs[dst as usize] = Slot::int(c as u32 as i64);
             }
         }
         Ok(())

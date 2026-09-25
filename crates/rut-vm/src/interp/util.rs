@@ -7,7 +7,6 @@ pub(super) fn slot_to_value(v: Slot, ty: TypeId, prog: &Program, heap: &Heap) ->
     match prog.types.kind(ty) {
         TyKind::Prim(PrimTy::F32) | TyKind::Prim(PrimTy::F64) => Value::F64(unsafe { v.f }),
         TyKind::Prim(PrimTy::Bool) => Value::Bool(v.as_bool()),
-        TyKind::Prim(PrimTy::Char) => Value::Char(v.as_char()),
         TyKind::Prim(_) | TyKind::Nil => Value::I64(unsafe { v.i }),
         TyKind::Str => Value::Str(cell_of(v).as_str().to_string()),
         // bytes is the one sequence that crosses (RFC 0023 §2, RFC 0004)

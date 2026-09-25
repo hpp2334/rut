@@ -10,7 +10,6 @@ pub enum Value {
     I64(i64),
     F64(f64),
     Bool(bool),
-    Char(char),
     Str(String),
     /// `Vec<u8>` buffer crossing (RFC 0023 §2)
     Bytes(Vec<u8>),
@@ -28,7 +27,6 @@ impl PartialEq for Value {
             (Value::I64(a), Value::I64(b)) => a == b,
             (Value::F64(a), Value::F64(b)) => a == b,
             (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Str(a), Value::Str(b)) => a == b,
             (Value::Bytes(a), Value::Bytes(b)) => a == b,
             // boxes compare by identity — the payload's type is erased
@@ -46,7 +44,6 @@ impl std::fmt::Debug for Value {
             Value::I64(v) => write!(f, "I64({v})"),
             Value::F64(v) => write!(f, "F64({v})"),
             Value::Bool(v) => write!(f, "Bool({v})"),
-            Value::Char(v) => write!(f, "Char({v:?})"),
             Value::Str(v) => write!(f, "Str({v:?})"),
             Value::Bytes(v) => write!(f, "Bytes(len {})", v.len()),
             Value::Opaque(_) => write!(f, "Opaque(<cell>)"),
@@ -63,7 +60,6 @@ impl Value {
             Value::I64(_) => "an integer",
             Value::F64(_) => "a float",
             Value::Bool(_) => "a bool",
-            Value::Char(_) => "a char",
             Value::Str(_) => "a string",
             Value::Bytes(_) => "bytes",
             Value::Opaque(_) => "an opaque",
@@ -79,7 +75,6 @@ pub union Slot {
     pub i: i64,
     pub f: f64,
     pub b: bool,
-    pub c: char,
     /// cell handle; null = "no cell". A raw pointer (not `Option<*const _>`)
     /// keeps `Slot` 8 bytes — `Option<*const T>` has no null niche and would
     /// double the slot (and every register file / cell payload with it).
@@ -99,14 +94,8 @@ impl Slot {
     pub fn bool(v: bool) -> Slot {
         Slot { i: v as i64 }
     }
-    pub fn ch(v: char) -> Slot {
-        Slot { i: v as u32 as i64 }
-    }
     pub fn as_bool(&self) -> bool {
         unsafe { self.i != 0 }
-    }
-    pub fn as_char(&self) -> char {
-        char::from_u32(unsafe { self.i } as u32).unwrap_or('\0')
     }
     /// Safe float read: sound whenever the slot holds an f64 — the
     /// verifier guarantees registers hold their declared types (RFC 0015
