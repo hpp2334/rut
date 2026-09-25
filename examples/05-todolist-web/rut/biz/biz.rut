@@ -7,7 +7,7 @@
 //   writes   store.set(source, v)       (plain)
 //            store.set(mutation, arg)   (the machine's verbs)
 //
-// THERE IS NO TodoStore. The store is a DECOUPLED-BIZ design (the ui
+// THERE IS NO domain container. The store is a DECOUPLED-BIZ design (the ui
 // package's Store knows no todo); what biz owns is HANDLES — the
 // sources, the derived, the mutations — bundled in `World`, the state
 // record the host re-passes every turn. The machine's counters
@@ -25,7 +25,7 @@
 //
 // THE TURN SHAPE (kept): one on_event entry, one paint per turn, the
 // ONE keyed-diff render. The FLUSH IS GONE (pull-on-read): paint does
-// not refresh — the view's first get computes what this turn's writes
+// no flush — the view's first get computes what this turn's writes
 // staled, at most once per write-set. The status line reads
 // store.get(counts$) — byte-identical to every phase before.
 //
@@ -117,7 +117,7 @@ fn has_pending_for(rs: Vec<Req>, todo: i64) -> bool {
     return false;
 }
 
-// ---- THE WORLD: the handles bundle (there is no TodoStore) -----------
+// ---- THE WORLD: the handles bundle (there is no domain container) -----
 
 /// The state record: the store, the atoms, the derived, the machine's
 /// mutations. Fields are HANDLES — keys into the store — and the
@@ -151,6 +151,12 @@ fn world_boot(boot_line: str) -> World {
     let last$ = store.source_str("");
     let next_todo$ = store.source<i64>(1);
     let next_req$ = store.source<i64>(1);
+    // the boot line lands in the note BEFORE the first paint, so the
+    // status line is pixel-identical from turn one (survey §4.5); the
+    // DOM-free suite boots with "" and leaves the note never-written
+    if (boot_line != "") {
+        store.set(note$, boot_line);
+    }
 
     // THE DERIVED — the counts line, deps discovered through the ctx,
     // never declared. The SAME formula the status line has always
@@ -287,7 +293,7 @@ fn world_boot(boot_line: str) -> World {
                 ctx.set(last$, line);
                 return ("", line);
             }
-            let its = ctx.get(items$);
+            let mut its = ctx.get(items$);
             its[at2].done = its[at2].done == false;
             ctx.set(items$, its); // the write point: store + mark
             let mut to = "open";
@@ -342,9 +348,9 @@ fn world_boot(boot_line: str) -> World {
 // because the session DECLARES the web crossings and the RFC 0025
 // contract is all-or-nothing; NO test here fires a crossing).
 // SIGNATURES UNCHANGED from the pre-atom surface (the survey §5.3
-// freeze, kept through the rewrite) except the retired probes:
-// atom_refresh/atom_drain/atom_gen/atom_derived_name die with the
-// flush; atom_derived_deps is atom_deps (the DISCOVERED DAG). ----
+// freeze, kept through the rewrite) except the retired probes — the
+// flush's helpers died with it; atom_derived_deps is atom_deps (the
+// DISCOVERED DAG). ----
 
 entry fn store_new() -> opaque {
     let w: ?World = world_boot("");
@@ -527,7 +533,7 @@ pub class Probe {
     items$: Source<i64>;
     up$: Derived<i64>;
     down$: Derived<i64>;
-    log: Vec<str>; // the closures' recompute log, drained by probe_refresh
+    log: Vec<str>; // the closures' recompute log, drained by probe_pull
 }
 
 entry fn probes_new() -> opaque {
@@ -569,8 +575,9 @@ entry fn probe_bump(c: opaque, v: i64) -> nil {
 
 /// THE PULL, fixture-sized: one get(down) — the chain recomputes in
 /// topo order — and THIS pull's recompute log handed back joined
-/// ("up|down") and drained.
-entry fn probe_refresh(c: opaque) -> str {
+/// ("up|down") and drained. (Named probe_PULL: pull-on-read is the
+/// freshness law, and the flush's old verb may not be spelled.)
+entry fn probe_pull(c: opaque) -> str {
     let p = pt(c);
     let mut s = p.store;
     let _ = s.get(p.down$);
@@ -603,8 +610,16 @@ entry fn probe_recomputes(c: opaque) -> i32 {
 }
 
 // ---- the cycle fixture: a$ reads b$, b$ reads a$ — a discovered
-// cycle. The nullable holder (mid) is assigned after both mints; the
-// closures capture the BINDING, so they see the assignment. ----
+// cycle. The handle crosses through a CLASS INSTANCE (reference
+// semantics): a local `?Derived` holder is captured BY VALUE, so the
+// closure would see the pre-assignment nil (a nil deref, not the
+// cycle) — the holder's field write AFTER both mints is what the
+// closures see. ----
+
+/// The late-bound handle: minted after a$, assigned before any read.
+pub class CycleHolder {
+    b$: ?Derived<i64> = nil;
+}
 
 pub class CycleProbe {
     store: Store;
@@ -613,9 +628,9 @@ pub class CycleProbe {
 
 entry fn probes_cycle_new() -> opaque {
     let mut store = Store.new();
-    let mid: ?Derived<i64> = nil;
+    let mut h: CycleHolder = CycleHolder { };
     let a$ = store.derive(fn (ctx) -> i64 {
-        let b: Derived<i64> = mid;
+        let b: Derived<i64> = h.b$;
         let v = ctx.get(b);
         return v + 1;
     });
@@ -623,7 +638,7 @@ entry fn probes_cycle_new() -> opaque {
         let v = ctx.get(a$);
         return v * 2;
     });
-    mid = b$;
+    h.b$ = b$;
     let p: ?CycleProbe = CycleProbe { store: store, a$: a$ };
     return opaque(p);
 }
@@ -639,7 +654,7 @@ entry fn probe_cycle_get(c: opaque) -> i64 {
 /// The app container: everything a turn needs, built once at boot and
 /// returned to the host, which re-passes it on every on_event turn.
 /// The framework's T1Root rides as a FIELD (§7.1) beside THE WORLD (the
-/// handles bundle — there is no TodoStore). The draft and the note live
+/// handles bundle — no domain container). The draft and the note live
 /// IN the store; no duplicates on the container.
 pub class AppRoot {
     world: World; // the handles + the machine
@@ -771,8 +786,8 @@ fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
 // THE PAINT (§7.2): NO flush line — pull-on-read. The view's first get
 // computes what this turn's writes staled, at most once per write-set;
 // then the tree goes to t1_render, whose keyed diff patches the live
-// page in place — nothing changed = nothing fires. The refresh the old
-// paint ran once per turn is RETIRED (the survey addendum records the
+// page in place — nothing changed = nothing fires. The turn-turn
+// flush the old paint ran is RETIRED (the survey addendum records the
 // reversal); the render itself stays unconditional, once per turn.
 fn paint(r: ?AppRoot) -> nil {
     let tree = view(r);

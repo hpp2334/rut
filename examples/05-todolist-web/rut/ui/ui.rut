@@ -1,41 +1,41 @@
-# ui/ — THE UI-FRAMEWORK PACKAGE (the two-package law): everything the
-# biz code speaks THROUGH but never spells — the atom store machinery
-# (Store, Source, Derived, Mutation), the t1 widget framework (the
-# Widget type, the lowering table, the keyed diff), and the component
-# vocabulary. ONE directory, ONE module, ONE entry file (RFC 0035 §1):
-# the framework's sections share the file because rut's landed
-# visibility is `pub` or module-private (t1/core's recorded reason),
-# and one module keeps the framework's private tables private for real.
-#
-# THE STORE'S SURFACE (the whole point of the merge — the jotai shape):
-#
-#   store.source<T>(v)                  -> Source<T>
-#   store.source_str(v)                 -> Source<str>
-#   store.derive<T>(fn (ctx) -> T)      -> Derived<T>   deps DISCOVERED
-#   store.mutation<A, R>(fn (ctx, a) -> R) -> Mutation<A, R>
-#   store.get(a)                        -> T            the one READ
-#   store.set(w, arg)                   -> R            the one WRITE
-#   store.recompute_count() / store.deps_of(a)          observability
-#
-# The handles carry ids and seeds, never methods; the machinery traits
-# (Readable/Writable) are module-private, so biz cannot name them —
-# and a Derived implements no Writable, so a derived is not writable
-# AT THE TYPE LEVEL. A derive's ctx exposes get ONLY (derives are pure
-# by construction); a mutation's ctx exposes get + set. Freshness is
-# PULL-ON-READ: get() recomputes a stale derived at most once per
-# write-set; there is no flush and no dirty set. The cycle guard (an
-# in-flight set) returns because discovered edges admit cycles — a
-# self-reading derive panics loud.
-#
-# `inline = true`: the package exports GENERIC types (Source<T> and
-# friends), and a generic export splices by law (graph.rs auto-splices
-# generics even without the flag; the flag keeps it explicit — the
-# atom/nmapset/ink precedent). Biz's unit and this unit compose with
-# the graph's origin dedup — NOT the retired appkit concatenation.
-#
-# PURE of biz: nothing here names a todo, a list, or an app — the
-# store is a DECOUPLED-BIZ design (RFC 0014's motivating pattern: the
-# reactivity library over opaque cells).
+// ui/ — THE UI-FRAMEWORK PACKAGE (the two-package law): everything the
+// biz code speaks THROUGH but never spells — the atom store machinery
+// (Store, Source, Derived, Mutation), the t1 widget framework (the
+// Widget type, the lowering table, the keyed diff), and the component
+// vocabulary. ONE directory, ONE module, ONE entry file (RFC 0035 §1):
+// the framework's sections share the file because rut's landed
+// visibility is `pub` or module-private (t1/core's recorded reason),
+// and one module keeps the framework's private tables private for real.
+//
+// THE STORE'S SURFACE (the whole point of the merge — the jotai shape):
+//
+//   store.source<T>(v)                  -> Source<T>
+//   store.source_str(v)                 -> Source<str>
+//   store.derive<T>(fn (ctx) -> T)      -> Derived<T>   deps DISCOVERED
+//   store.mutation<A, R>(fn (ctx, a) -> R) -> Mutation<A, R>
+//   store.get(a)                        -> T            the one READ
+//   store.set(w, arg)                   -> R            the one WRITE
+//   store.recompute_count() / store.deps_of(a)          observability
+//
+// The handles carry ids and seeds, never methods; the machinery traits
+// (Readable/Writable) are module-private, so biz cannot name them —
+// and a Derived implements no Writable, so a derived is not writable
+// AT THE TYPE LEVEL. A derive's ctx exposes get ONLY (derives are pure
+// by construction); a mutation's ctx exposes get + set. Freshness is
+// PULL-ON-READ: get() recomputes a stale derived at most once per
+// write-set; there is no flush and no dirty set. The cycle guard (an
+// in-flight set) returns because discovered edges admit cycles — a
+// self-reading derive panics loud.
+//
+// `inline = true`: the package exports GENERIC types (Source<T> and
+// friends), and a generic export splices by law (graph.rs auto-splices
+// generics even without the flag; the flag keeps it explicit — the
+// atom/nmapset/ink precedent). Biz's unit and this unit compose with
+// the graph's origin dedup — NOT the retired appkit concatenation.
+//
+// PURE of biz: nothing here names a todo, a list, or an app — the
+// store is a DECOUPLED-BIZ design (RFC 0014's motivating pattern: the
+// reactivity library over opaque cells).
 
 use pouch::{ Vec };
 use nmapset::{ HashMap };
@@ -265,14 +265,26 @@ impl Store {
                     // never-written has no content to skip: any first
                     // write is a change
                     let prev = opaque.downcast<str>(p);
-                    if (prev == arg) {
-                        return arg; // content-equal: no bump, nothing stales
+                    // the lane's argument read back at the lane's own type:
+                    // the box erases A, the downcast answers nil for a
+                    // non-str write on this lane (a compile-valid body for
+                    // every A, RFC 0013 — a Source's R IS its A, but the
+                    // body must compile for the general Writable<A, R>)
+                    let cur = opaque.downcast<str>(opaque(arg));
+                    // the compare rides a NAMED bool: the ?str compare
+                    // directly in an `if` condition beside the generic
+                    // downcast<R> return trips a checker edge (the spike's
+                    // `return arg` shape never instantiates A != R, so it
+                    // never meets this) — same law, same bytes of meaning
+                    let same: bool = prev == cur;
+                    if (same) {
+                        return opaque.downcast<R>(opaque(arg)); // content-equal: no bump, nothing stales
                     }
                 }
             }
             self.kv.put(id, opaque(arg));
             self.bump(id);
-            return arg;
+            return opaque.downcast<R>(opaque(arg));
         }
         panic("store: a derived is not writable — read it with get");
     }
@@ -303,11 +315,15 @@ impl Store {
         self.n_recomputes += 1;
     }
 
-    /// Stale iff never computed, or any recorded dep gen moved. A dep
-    /// the derive never read cannot make this true — per-dep
-    /// staleness, now over DISCOVERED edges (the old per-declared-dep
-    /// twin's law, kept, with the declaration made impossible to
-    /// stale).
+    /// Stale iff never computed, or any recorded dep gen moved — or a
+    /// dep that is itself a derived is stale (the ONE-PULL law: a write
+    /// an upstream has not re-read yet still refreshes the whole chain,
+    /// upstream first, on the next pull; a naive seen-vs-rail compare
+    /// would serve the downstream cache while the upstream's recompute
+    /// is still PENDING). A dep the derive never read cannot make this
+    /// true — per-dep staleness, now over DISCOVERED edges (the old
+    /// per-declared-dep twin's law, kept, with the declaration made
+    /// impossible to stale).
     fn stale(self, id: u32) -> bool {
         let deps = self.edges.get(id);
         if (deps == nil) {
@@ -324,6 +340,9 @@ impl Store {
             }
             if (g != self.gen_of(d)) {
                 return true;
+            }
+            if (self.kind_of(d) == 1 && self.stale(d)) {
+                return true; // the upstream moved through its own deps
             }
         }
         return false;

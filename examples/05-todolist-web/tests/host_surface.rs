@@ -253,13 +253,13 @@ fn mounted_session() -> Session {
 
 #[test]
 fn the_app_compiles() {
-    // the app package (rut/app/app) is this example's page program —
-    // its MIRROR-LANE compile gate rides the mirror session (the
-    // manifest lane's gate is tests/mount_lane.rs; loader.js fetches
-    // the same file this includes)
+    // the app package (rut/biz — the project root `app`) is this
+    // example's page program — its MIRROR-LANE compile gate rides the
+    // mirror session (the manifest lane's gate is tests/mount_lane.rs;
+    // loader.js fetches the same file this includes)
     let mut session = Session::new();
     mount::mount_app_session(&mut session).expect("the mirror mounts");
-    mount::compile_app(&mut session, include_str!("../rut/app/app/app.rut"))
+    mount::compile_app(&mut session, include_str!("../rut/biz/biz.rut"))
         .expect("the app compiles");
 }
 

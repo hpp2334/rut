@@ -15,5 +15,5 @@ entry.lib = "./biz.rut"
 
 [deps]
 ui = { path = "../ui" }
-pouch = { path = "../../../rut/pouch" }
-nmapset = { path = "../../../rut/nmapset" }
+pouch = { path = "../../../../rut/pouch" }
+nmapset = { path = "../../../../rut/nmapset" }

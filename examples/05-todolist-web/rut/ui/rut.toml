@@ -13,5 +13,5 @@ entry.lib = "./ui.rut"
 inline = true
 
 [deps]
-pouch = { path = "../../../rut/pouch" }
-nmapset = { path = "../../../rut/nmapset" }
+pouch = { path = "../../../../rut/pouch" }
+nmapset = { path = "../../../../rut/nmapset" }

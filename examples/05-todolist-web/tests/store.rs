@@ -267,8 +267,12 @@ fn the_counts_line_is_derived_and_the_status_line_reads_it() {
     v.call::<_, ()>("atom_items_set", (c.clone(), "tea".to_string())).unwrap();
     v.call::<_, ()>("atom_str_set", (c.clone(), "note".to_string(), "hello".to_string())).unwrap();
     // the SAME f-string bytes the app's status line shows and the
-    // 18 sessions assert: the counts half through the derivation
-    assert_eq!(v.call::<_, String>("atom_counts", (c.clone(),)).unwrap(), "2 open | 0 done | 0 in flight");
+    // 18 sessions assert: the counts half through the derivation.
+    // atom_items_set REPLACES items$ with the one-todo list (the Vec
+    // lane's recorded law, pinned by the_vec_lane_never_skips and
+    // a_get_after_a_write_set above) — after milk -> tea the board
+    // holds the one open tea.
+    assert_eq!(v.call::<_, String>("atom_counts", (c.clone(),)).unwrap(), "1 open | 0 done | 0 in flight");
     assert_eq!(v.call::<_, String>("atom_str_get", (c.clone(), "note".to_string())).unwrap(), "hello");
 }
 
@@ -281,13 +285,13 @@ fn deriveds_recompute_upstream_first_and_feed_downstream_fresh() {
     // the first pull computes the whole chain in topo order: up, then
     // down, downstream fed the FRESH upstream
     assert_eq!(v.call::<_, i64>("probe_lower", (p.clone(),)).unwrap(), 0);
-    assert_eq!(v.call::<_, String>("probe_refresh", (p.clone(),)).unwrap(), "up|down");
+    assert_eq!(v.call::<_, String>("probe_pull", (p.clone(),)).unwrap(), "up|down");
     // a source write refreshes the chain, upstream first, on ONE pull
     v.call::<_, ()>("probe_bump", (p.clone(), 3_i64)).unwrap();
     assert_eq!(v.call::<_, i64>("probe_lower", (p.clone(),)).unwrap(), 12);
-    assert_eq!(v.call::<_, String>("probe_refresh", (p.clone(),)).unwrap(), "up|down");
+    assert_eq!(v.call::<_, String>("probe_pull", (p.clone(),)).unwrap(), "up|down");
     // a clean pull recomputes nothing
-    assert_eq!(v.call::<_, String>("probe_refresh", (p.clone(),)).unwrap(), "");
+    assert_eq!(v.call::<_, String>("probe_pull", (p.clone(),)).unwrap(), "");
 }
 
 #[test]
@@ -299,11 +303,11 @@ fn an_upstream_only_recompute_still_refreshes_downstream() {
     let (mut v, c) = vm();
     let p: OpaqueRef = v.call("probes_new", ()).unwrap();
     assert_eq!(v.call::<_, i64>("probe_lower", (p.clone(),)).unwrap(), 0);
-    assert_eq!(v.call::<_, String>("probe_refresh", (p.clone(),)).unwrap(), "up|down");
+    assert_eq!(v.call::<_, String>("probe_pull", (p.clone(),)).unwrap(), "up|down");
     v.call::<_, ()>("probe_bump", (p.clone(), 5_i64)).unwrap();
     assert_eq!(v.call::<_, i64>("probe_lower", (p.clone(),)).unwrap(), 20);
     // down pulled AFTER up moved: the pair logged exactly one chain
-    assert_eq!(v.call::<_, String>("probe_refresh", (p.clone(),)).unwrap(), "up|down");
+    assert_eq!(v.call::<_, String>("probe_pull", (p.clone(),)).unwrap(), "up|down");
     assert_eq!(v.call::<_, i32>("probe_recomputes", (p.clone(),)).unwrap(), 4);
 }
 
