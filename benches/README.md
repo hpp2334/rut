@@ -4332,3 +4332,91 @@ the band; json-roundtrip's +0.03% is the same band on a byte-identical
 op stream. The crossing-fastpath item stays closed on this evidence,
 and the extended profile is the recorded baseline for any future
 revisit.
+
+## Performance log — nmapset-borrow-probe: the borrowed probe (Sep 2026)
+
+The batch (`docs/nmapset-borrow-probe-survey.md` phase 0 `d1f78de`,
+the core phase 1 `392fa6a`): every `s`/`sv`/`y`/any-lane probe now
+borrows — `hashbrown::HashTable<(KeyVal, Entry)>` (the runtime's first
+external dep, `default-features = false`: no ahash, no hasher trait at
+all — lanes hand in `hash_payload`'s pinned word) — and the ONE owned
+`KeyVal` copy survives only at a fresh insert (`KeyRef::to_keyval`).
+The module header's standing disclosure — *"the one measurable price
+of the real-HashMap directive"* — is deleted with the mechanism.
+
+**The census receipt** (the counting-allocator scratch, pre vs post,
+n = 50 000, same op stream; phase-0 raw output in the survey, post run
+captured before the scratch was stripped):
+
+| phase | ops | pre allocs | post allocs |
+|---|---:|---:|---:|
+| build (fresh inserts) | 50 000 | 50 012 | 50 012 |
+| replace | 50 000 | 50 000 | **0** |
+| hit-get | 50 000 | 50 000 | **0** |
+| miss-get | 50 000 | 50 000 | **0** |
+| remove-⅓ | 16 666 | 16 667 | **0** |
+| rescan | 50 000 | 50 000 | **0** |
+| re-add-⅓ | 16 666 | 16 667 | 16 667 |
+| **total** | 283 332 | **283 346** | **66 679 (−76.5%)** |
+
+Post, the native lanes read byte-identical to the borrowed stand-ins
+(path B/C of the survey) — the copy law is exact, not approximate.
+
+**The deterministic gates, all held**: fuel + VM-heap BIT-IDENTICAL on
+the six rows (23,008,616 / 12,716,782 / 23,608,704 / 12,600,090 /
+6,133,436 / 7,616,781; 257.0 KB / 343 B / 257.3 KB / 311 B / 772 B /
+1.00 MB) — the op stream provably did not move. Family checksums +
+parity pins bit-identical on {rut, qjs, node} (18/18 rows, 0
+mismatches). The shallow-size pin held at **40 unchanged** — the
+survey's expected re-pin did not materialize: hashbrown's raw table is
+exactly 24 B, std's own. Suites: rut-std 23/23, driver nmapset 7/7 +
+viewkeys 6 + primmap 7, cli nmap 9/9, wasm32 check green.
+
+**The movers (same-session pre/post, 3 reps + 1 warmup, net medians)**
+— read against the noise floor, which the UNTOUCHED qjs column prints
+in the same window:
+
+| row | rut pre → post | qjs pre → post (control) | node pre → post |
+|---|---|---|---|
+| nmapset-int (Bits control) | 44.8 → 44.7 | 62.3 → 62.8 | 29.5 → 26.3 |
+| nmap-hashset (Bits control) | 48.1 → 50.7 | 54.4 → 56.9 | 20.6 → 22.4 |
+| nmapset-str | 49.1 → 49.5 | 39.6 → 40.0 | 29.0 → 32.9 |
+| nmap-knucleotide | 140.6 → 141.1 | 139.1 → 144.4 | 54.4 → 51.7 |
+| kmer-view | 115.1 → 115.9 | 140.8 → 146.5 | 49.9 → 52.2 |
+| strview | 32.8 → 35.4 | 55.2 → 58.1 | 33.3 → 32.5 |
+
+The qjs lane is byte-identical code pre/post and moved +0.4…+5.7 ms
+the same direction as rut — the parallel lane's builds were running in
+this window, and today's three runs of the same pre-landing binary
+already spanned ±5–11% on the str rows (54.8 / 49.1 / —). Verdict:
+**the wall is noise-bound at these scales; no rut-specific movement is
+resolvable, and nothing regresses.** The two Bits controls — which
+this change cannot reach — drifted as much as the str rows (+2.6 ms on
+nmap-hashset), which is the measurement, not the mechanism.
+
+**The attribution correction (the batch's real finding)**: the survey
+predicted −1.7…−1.9 ms per str row from killing the per-op copy; the
+post-landing A/B proves that prediction WRONG in the honest direction.
+The landed lanes (A′) and the phase-0 pre-landing lanes read the SAME
+wall (median 11.7 vs 11.6 ms at n = 50 000; 214.4 vs 205.2 at
+n = 400 000) with 283 k → 67 k and 2.27 M → 533 k allocs
+respectively — glibc's tcache makes the small malloc/free pair nearly
+free, so the survey's A→C gap was **entry width** (56 B
+`KeyVal+Entry` vs 32 B `String→u64`: ~3 ms at 50 k, ~86 ms at 400 k),
+which the copy law never owned. What the landing therefore buys,
+measured and honest: (a) −76.5% of the host allocator traffic per
+str-row run — portable to hosts/allocators where a pair is NOT free
+(macOS, hardened malloc, instrumented builds) and scaling with map
+size; (b) the sv/y/any lanes zero-copy end to end (the design goal of
+the standing *"avoid copy and allocation"* directive); (c) no
+deterministic movement anywhere — fuel, heap, checksums, traps,
+admission-before-retain order all proven intact.
+
+**Menu (recorded, not landed)**: the remaining table-body term at
+scale is the 56 B bucket slot — `KeyVal`'s tag+24 `String` and
+`Entry`'s handle+`ValSlot`. Narrowing it inside the laws (`Box<str>`
+keys, 56 → 48 B) measures below the placement floor at the rows' own
+n = 50 000 and is only interesting for maps an order of magnitude
+larger; the kind-split enum core (survey option B) does not beat it
+on str rows either. The qjs scoreboard is unchanged: rut ahead on 4 of
+6 rows, ~tie on knucleotide, behind only on plain `nmapset-str`.
