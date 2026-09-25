@@ -86,6 +86,25 @@ pub enum OpaqueEntry {
     Rut(RutOpaque),
 }
 
+/// The value-storage repr (nmap-hostvals P3): host-side storage for a rut
+/// value carries its own tag — the `[?V]` array repr moved host-side
+/// (`Slot` is UNTAGGED 8 bytes, RFC 0015 §5 — the bytecode types it, so
+/// stored values must tag themselves). NEVER boxed: the 8-byte slot moves.
+///
+/// - `Empty` — the h-family placeholder: an entry that exists with no
+///   value (§0.8 g). Reading one through the any-answer TRAPS loudly —
+///   h-family insert + valued read is a caller bug, never a silent nil.
+/// - `Bits` — a prim immediate: zero cells, zero copy, the 8-byte slot
+///   moves as-is; the consumer's static type gives the word its meaning.
+/// - `Ref` — the value's OWN cell (retain on store; release on
+///   replace/remove/finalize). Identity is the cell: a str VIEW arg
+///   stores the view's cell — aliasing IS the view.
+pub enum ValSlot {
+    Empty,
+    Bits(Slot),
+    Ref(Slot),
+}
+
 /// One slab element: the entry + its rc + the borrow guard. `bytes` is
 /// the RFC 0040 charge the mint made, refunded at death.
 pub(crate) struct EntryCell {

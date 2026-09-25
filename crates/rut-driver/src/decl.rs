@@ -13,14 +13,15 @@
 use rut_ast::ast::{AnyTy, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
 use rut_core::types::{
     TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL,
-    TY_OPAQUE, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
+    TY_OPAQUE, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8, TY_VAL,
 };
 use rut_parser::{parse, Mode};
 
 use crate::session::Module;
 
 /// A crossing-set type name → its boot `TypeId` (RFC 0023 §1): the
-/// primitives, `str`/`bytes`, and `opaque`. Everything else a host
+/// primitives, `str`/`bytes`, and `opaque` — plus the host-decl-only
+/// `any` value lane (nmap-hostvals P3). Everything else a host
 /// signature may spell is a load error.
 fn crossing_ty(name: &str) -> Option<TypeId> {
     Some(match name {
@@ -39,6 +40,14 @@ fn crossing_ty(name: &str) -> Option<TypeId> {
         "u32" => TY_U32,
         "u64" => TY_U64,
         "opaque" => TY_OPAQUE,
+        // the `any` crossing (nmap-hostvals P3): HOST-DECL-only — a
+        // `.d.rut` host-fn param/answer spelling (decl-mode lexing admits
+        // it; .rut source keeps the name reserved). The trust law lives
+        // at this decl site: the host must answer the caller's static V —
+        // the dst register's own declared type (§0.8 h, the untagged-slot
+        // discipline). The id is TY_VAL, deliberately NOT the VM's
+        // u32::MAX TY_ANY sentinel (the survey's collision receipt).
+        "any" => TY_VAL,
         _ => return None,
     })
 }
@@ -90,7 +99,7 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
             let tyname = ty_text(&ast, th);
             let Some(t) = crossing_ty(&tyname) else {
                 return Err(format!(
-                    "{origin}: host fn `{fname}`: `{tyname}` is not a crossing type — host signatures are concrete over primitives, `str`, `bytes`, and `opaque` (RFC 0023 §1)"
+                    "{origin}: host fn `{fname}`: `{tyname}` is not a crossing type — host signatures are concrete over primitives, `str`, `bytes`, `opaque`, and the host-decl-only `any` (RFC 0023 §1; nmap-hostvals P3)"
                 ));
             };
             ptys.push(t);

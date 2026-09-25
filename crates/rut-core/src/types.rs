@@ -267,6 +267,22 @@ pub const TY_STACK_TRACE: TypeId = 16;
 /// the `StrBuf` growable builder (json-perf phase 2) — appended after
 /// `StackTrace`; fixed ids are wire-stable and must never be reordered
 pub const TY_STRBUF: TypeId = 17;
+/// the `any` crossing (nmap-hostvals P3): the HOST-DECL-only type — a
+/// `.d.rut` host-fn param/answer may spell it, and rut source cannot
+/// name it (the lexer keeps `any` reserved in `.rut` source; only the
+/// driver's decl-mode crossing table maps the spelling to this id).
+/// Appended after `StrBuf`; fixed ids are wire-stable and must never be
+/// reordered.
+///
+/// DELIBERATELY a normal small boot id, NEVER the VM interpreter's
+/// `TY_ANY` (`u32::MAX`) sentinel — those guards read `!= TY_ANY`, and
+/// a boot `any` on the sentinel id would invert every one of them (the
+/// survey's collision receipt). The boot row is a `Nil` shell (the
+/// `TY_CHAR` convention): the id must be a valid boot index — the
+/// graph crossing gate, `type_repr`, `is_ref`, and the HostSig join
+/// all index it — but no rut-side kind machinery reaches it, because
+/// no rut source can produce a value of this type.
+pub const TY_VAL: TypeId = 18;
 /// A host payload box's runtime type as `TidOf` reports it (RFC 0023/0026):
 /// the payload is Rust, so no rut type describes it. Type ids are type-table
 /// indices, which can never reach this value — `downcast<T>` therefore
@@ -313,6 +329,17 @@ impl TypeTable {
         push(sym::BYTES, TyKind::Bytes);
         push(sym::STACK_TRACE, TyKind::Trace);
         push(sym::STRBUF, TyKind::StrBuf);
+        // the `any` crossing (nmap-hostvals P3, TY_VAL above): HOST-DECL-only —
+        // a `.d.rut` host-fn param/answer spelling. rut source cannot name
+        // it (the lexer keeps `any` reserved in `.rut` source; decl mode
+        // admits the spelling and the driver's crossing table maps it to
+        // this CONST, never through this table). The row is a Nil SHELL
+        // (the TY_CHAR convention): the id must be a valid boot index —
+        // the crossing gate, the repr tables, and the HostSig join all
+        // read it — but no rut-side kind machinery ever reaches the row.
+        // The name rides the shell convention (sym::NIL); no P3-reachable
+        // diagnostic reads it.
+        push(sym::NIL, TyKind::Nil);
         t.boot_len = t.types.len() as u32;
         t.scope_base = vec![0; scope as usize + 1];
         if packed {

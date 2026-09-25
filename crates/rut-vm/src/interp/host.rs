@@ -22,8 +22,12 @@ use crate::heap::Slot;
 /// A host fn is one dispatch-table entry — the same unit every other
 /// table in the VM trades in (threaded op handlers, vtables): a code
 /// pointer, a state word, and the declared return for the refcount law.
+/// The `tys` slice is the call's arg-register STATIC types (the caller's
+/// `FuncDef.regs` words, snapshot beside the arg slots) — the any lane's
+/// decode reads them (nmap-hostvals P3); bindings without any params are
+/// joined with `any_args: false` and receive an empty slice.
 pub type Ctx = *const ();
-pub type HostCode = fn(&mut Vm, &[Slot], Ctx) -> Slot;
+pub type HostCode = fn(&mut Vm, &[Slot], &[TypeId], Ctx) -> Slot;
 
 /// A binding's signature — a fixed array, no heap: max host arity 8 is
 /// the boundary's own law (tuples cap at arity 8). DERIVED from the
@@ -76,17 +80,34 @@ pub(crate) struct HostSlot {
     /// existing 4-byte padding hole after `ret` — the entry stays
     /// 24 bytes (code + ctx + id), still `Copy`.
     pub ret_is_ref: bool,
+    /// the join's verdict on `ret == TY_VAL` (nmap-hostvals P3): the
+    /// any-answer write-back — the caller's static V (the dst register's
+    /// own type) types the returned word, so the transfer/borrow law of
+    /// a typed ret does not apply. Second padding bool, entry stays 24
+    /// bytes, still `Copy`.
+    pub ret_is_val: bool,
+    /// the join's verdict on the binding's params: does any row param
+    /// spell the `any` type? Only then does `call_host` snapshot the
+    /// arg registers' static types for the any lane's decode — a
+    /// binding without any params never pays the snapshot.
+    pub any_args: bool,
 }
 
 impl HostSlot {
     /// filler for non-host funcs — never dispatched (the `host_id`
     /// discriminant in the `FuncCode` routes, as in `hotpath(2)`)
-    fn never(_vm: &mut Vm, _slots: &[Slot], _ctx: Ctx) -> Slot {
+    fn never(_vm: &mut Vm, _slots: &[Slot], _tys: &[TypeId], _ctx: Ctx) -> Slot {
         debug_assert!(false, "non-host funcs never dispatch through host_slots");
         Slot::int(0)
     }
-    pub const NEVER: HostSlot =
-        HostSlot { code: Self::never, ctx: std::ptr::null(), ret: 0, ret_is_ref: false };
+    pub const NEVER: HostSlot = HostSlot {
+        code: Self::never,
+        ctx: std::ptr::null(),
+        ret: 0,
+        ret_is_ref: false,
+        ret_is_val: false,
+        any_args: false,
+    };
 }
 
 /// A host pkg's expected binding table (RFC 0025): `<scope>::<name>` →
@@ -157,6 +178,9 @@ impl HostRegistry {
                 TY_U32 => "u32",
                 TY_U64 => "u64",
                 TY_OPAQUE => "opaque",
+                // the `any` crossing (nmap-hostvals P3): named from the
+                // CONST — the boot row's name is the Nil shell, never read
+                rut_core::types::TY_VAL => "any",
                 _ => return format!("#{t:?}"),
             }
             .to_string()

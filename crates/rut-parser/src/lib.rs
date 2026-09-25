@@ -22,7 +22,6 @@
 
 use rut_ast::ast::*;
 use rut_lexer::diag::Diag;
-use rut_lexer::lexer::lex;
 use rut_lexer::span::{Span, NEST_MAX};
 use rut_lexer::token::{Tok, Token};
 
@@ -49,7 +48,9 @@ pub enum Mode {
 pub(crate) const EXPR_MAX: u32 = 64;
 
 pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
-    let (toks, mut diags) = lex(src);
+    // decl mode admits the `any` spelling (nmap-hostvals P3 — the
+    // host-decl value lane; see `rut_lexer::lexer::lex_mode`)
+    let (toks, mut diags) = rut_lexer::lexer::lex_mode(src, mode == Mode::Decl);
     let mut p = Parser {
         toks,
         pos: 0,

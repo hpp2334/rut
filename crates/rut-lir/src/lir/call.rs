@@ -300,6 +300,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let mut aregs = Vec::new();
             for (i, a) in args.iter().enumerate() {
                 let t = self.compile_expr(*a, Some(ef.params[i]))?;
+                // the any-arg coercion (nmap-hostvals P3): a host-decl
+                // `any` param binds EVERY rut type — the arg crosses as
+                // its own slot, its call-site static type riding beside
+                // it; no box, no copy, no conversion op exists to emit
                 if !self.widens(t, ef.params[i]) {
                     self.ctx.err(self.ctx.ast.span(a.id()), format!(
                         "argument {} is `{}`, `{}` expected",
@@ -308,9 +312,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 aregs.push(self.last_reg);
             }
-            let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
+            // the any-answer (nmap-hostvals P3): a `-> any` row has no
+            // register type of its own — the CALLER's static V (the
+            // context's expected type) types the dst register, and
+            // `call_host`'s any write-back reads it (the trust law at
+            // the decl site: the host answers the caller's V). Without
+            // an expected type the dst keeps the row's own TY_VAL.
+            let ret_ty = if ef.ret == rut_core::types::TY_VAL {
+                expected.unwrap_or(ef.ret)
+            } else {
+                ef.ret
+            };
+            let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
             { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
-            return Ok(ef.ret);
+            return Ok(ret_ty);
         }
         // builtin bytes type-call: `bytes(n)` zeroed (RFC 0004)
         if name == sym::BYTES {
@@ -1948,6 +1963,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// (yet) registered.
     pub(crate) fn widens(&mut self, from: TypeId, to: TypeId) -> bool {
         if from == to {
+            return true;
+        }
+        // the any-arg coercion (nmap-hostvals P3): a host-decl `any` param
+        // binds EVERY rut type — the arg crosses as its own slot, the call
+        // site's static type riding beside it (the boundary decodes from
+        // `FuncDef.regs` there). No box, no copy: TY_VAL never names a rut
+        // value (host-decl-only), so this arm can only fire against a
+        // `.d.rut` row's param — and the answer direction runs through the
+        // dst register's own expected type, never through this arm.
+        if to == rut_core::types::TY_VAL {
             return true;
         }
         if let TyKind::TraitObj { trait_id } = self.ctx.types.kind(to).clone() {

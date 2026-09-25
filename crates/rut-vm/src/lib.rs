@@ -8,4 +8,5 @@ pub mod verify;
 
 pub(crate) mod arena;
 
-pub use heap::{HostPayload, Opaque, OpaqueRef, Trap, TrapKind, Value};
+pub use heap::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot, Value};
+pub use interp::HostVal;
