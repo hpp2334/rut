@@ -1,0 +1,17 @@
+# ui/ — the UI-FRAMEWORK package (the two-package law): the atom store
+# machinery + the t1 widget framework + the component vocabulary, one
+# directory, one module, one entry file (RFC 0035 §1). See ui.rut's
+# header for the store's surface law and the package's composition.
+#
+# `inline = true`: generic exports splice by law (Source<T> and
+# friends); the flag keeps it explicit — the atom/nmapset/ink
+# precedent. `web` is the HOST DECL surface (RFC 0025): the embedder
+# registers it in both lanes (src/mount.rs), so it rides no manifest
+# path here — the registration prefix every crossing carries is `web`.
+name = "ui"
+entry.lib = "./ui.rut"
+inline = true
+
+[deps]
+pouch = { path = "../../../rut/pouch" }
+nmapset = { path = "../../../rut/nmapset" }

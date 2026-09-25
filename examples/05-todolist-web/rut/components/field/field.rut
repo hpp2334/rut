@@ -1,9 +1,0 @@
-// field.rut — the Field constructor (see col.rut for the law). The
-// value is EVENT-CARRIED: the lowering wires the "input" event, and
-// the fired row's detail carries the text — there is no read-back
-// crossing to name here.
-use widget::{ Widget, WKind };
-
-pub fn field() -> Widget {
-    return Widget { kind: WKind.Field };
-}

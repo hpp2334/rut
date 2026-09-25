@@ -1,0 +1,19 @@
+# biz/ — THE BIZ PACKAGE (the two-package law) and THE PROJECT ROOT:
+# the todolist's domain and app — the sources, the derived counts line,
+# the machine as mutations, the views, the app shell. ONE directory,
+# one module, one entry file (RFC 0035 §1). The root spec stays `app`
+# (the ABI shape: the host boots `main`, re-passes the container to
+# `on_event`; the mirror lane compiles the handed-over source under
+# this spec).
+#
+# THE SURFACE LAW (see biz.rut's header): biz reads with store.get,
+# writes with store.set (plain or mutation), and spells ONE crossing
+# name — tim_after. The ui package's machinery traits are
+# module-private; biz cannot name them even to import them.
+name = "app"
+entry.lib = "./biz.rut"
+
+[deps]
+ui = { path = "../ui" }
+pouch = { path = "../../../rut/pouch" }
+nmapset = { path = "../../../rut/nmapset" }

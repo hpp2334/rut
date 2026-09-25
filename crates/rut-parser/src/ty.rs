@@ -418,7 +418,19 @@ impl Parser {
                         return false;
                     }
                 }
-                Tok::Semi | Tok::Eof | Tok::RParen | Tok::RBrace => return false,
+                // `(A, B)` and `fn(A) -> R` arguments nest the same way —
+                // the parens INSIDE a generic list are type syntax
+                // (RFC 0007 tuples, RFC 0013 fn types), tracked like the
+                // brackets above; an unmatched `)` means the `<` was a
+                // comparison all along
+                Tok::LParen => depth += 1,
+                Tok::RParen => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        return false;
+                    }
+                }
+                Tok::Semi | Tok::Eof | Tok::RBrace => return false,
                 _ => {}
             }
             i += 1;

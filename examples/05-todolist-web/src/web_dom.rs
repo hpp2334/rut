@@ -223,7 +223,7 @@ fn boot_page(src: &str) -> Result<(), String> {
     let mut session = rut_driver::Session::new();
     // THE MIRROR (rut/rut.toml by hand — the Session is I/O-free):
     // every package the manifest names; the loader hands over
-    // rut/app/app.rut's source
+    // rut/biz/biz.rut's source
     crate::mount::mount_app_session(&mut session)?;
     let prog = crate::mount::compile_app(&mut session, src)?;
     let expected = session.expected_host_fns();

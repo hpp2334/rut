@@ -1,0 +1,1103 @@
+# ui/ — THE UI-FRAMEWORK PACKAGE (the two-package law): everything the
+# biz code speaks THROUGH but never spells — the atom store machinery
+# (Store, Source, Derived, Mutation), the t1 widget framework (the
+# Widget type, the lowering table, the keyed diff), and the component
+# vocabulary. ONE directory, ONE module, ONE entry file (RFC 0035 §1):
+# the framework's sections share the file because rut's landed
+# visibility is `pub` or module-private (t1/core's recorded reason),
+# and one module keeps the framework's private tables private for real.
+#
+# THE STORE'S SURFACE (the whole point of the merge — the jotai shape):
+#
+#   store.source<T>(v)                  -> Source<T>
+#   store.source_str(v)                 -> Source<str>
+#   store.derive<T>(fn (ctx) -> T)      -> Derived<T>   deps DISCOVERED
+#   store.mutation<A, R>(fn (ctx, a) -> R) -> Mutation<A, R>
+#   store.get(a)                        -> T            the one READ
+#   store.set(w, arg)                   -> R            the one WRITE
+#   store.recompute_count() / store.deps_of(a)          observability
+#
+# The handles carry ids and seeds, never methods; the machinery traits
+# (Readable/Writable) are module-private, so biz cannot name them —
+# and a Derived implements no Writable, so a derived is not writable
+# AT THE TYPE LEVEL. A derive's ctx exposes get ONLY (derives are pure
+# by construction); a mutation's ctx exposes get + set. Freshness is
+# PULL-ON-READ: get() recomputes a stale derived at most once per
+# write-set; there is no flush and no dirty set. The cycle guard (an
+# in-flight set) returns because discovered edges admit cycles — a
+# self-reading derive panics loud.
+#
+# `inline = true`: the package exports GENERIC types (Source<T> and
+# friends), and a generic export splices by law (graph.rs auto-splices
+# generics even without the flag; the flag keeps it explicit — the
+# atom/nmapset/ink precedent). Biz's unit and this unit compose with
+# the graph's origin dedup — NOT the retired appkit concatenation.
+#
+# PURE of biz: nothing here names a todo, a list, or an app — the
+# store is a DECOUPLED-BIZ design (RFC 0014's motivating pattern: the
+# reactivity library over opaque cells).
+
+use pouch::{ Vec };
+use nmapset::{ HashMap };
+use web::{
+    ui_get, ui_create, ui_set_text, ui_attr, ui_append, ui_remove,
+    ui_set_input_value, ui_listen,
+};
+
+// =====================================================================
+// §1 THE ATOM STORE — the machinery (the old store/atom + store/derived,
+// replaced by the one-kernel jotai shape; survey §4's declared DAG and
+// the flush are retired — the addendum records the reversal)
+// =====================================================================
+
+// ---- the store's eyes: MODULE-PRIVATE traits (biz cannot name them;
+// impl-trait methods ride the trait's visibility, RFC 0012) ----------
+
+trait Readable<T> {
+    fn atom_id(self) -> u32;
+    fn materialize(self, st: Store) -> nil; // first touch: the seed lands
+}
+
+trait Writable<A, R> {
+    fn atom_id(self) -> u32;
+}
+
+// ---- the handles: keys, not objects — NO methods, ever --------------
+
+/// The writable cell: its id and its seed (RFC 0014 materialize-on-
+/// touch). The general lane never equality-skips (RFC 0044: a generic
+/// == is cell identity — a same-cell re-set would strand the
+/// deriveds; the recorded asymmetry).
+pub class Source<T> {
+    id: u32 = 0;
+    seed: opaque;
+    str_lane: bool = false;
+}
+
+/// The derived cell: its id. Its program (an erased fn(DeriveCtx) -> T)
+/// lives in the store's table; the handle is a READ key, and it
+/// implements no Writable — a derived is not writable at the type
+/// level.
+pub class Derived<T> {
+    id: u32 = 0;
+}
+
+/// The write program: fn (MutCtx, A) -> R, invoked by store.set.
+pub class Mutation<A, R> {
+    id: u32 = 0;
+}
+
+impl Readable<T> for Source<T> {
+    fn atom_id(self) -> u32 { return self.id; }
+    fn materialize(self, st: Store) -> nil {
+        st.kv.put(self.id, self.seed);
+    }
+}
+
+impl Readable<T> for Derived<T> {
+    fn atom_id(self) -> u32 { return self.id; }
+    fn materialize(self, st: Store) -> nil {}
+}
+
+impl Writable<T, T> for Source<T> {
+    fn atom_id(self) -> u32 { return self.id; }
+}
+
+impl Writable<A, R> for Mutation<A, R> {
+    fn atom_id(self) -> u32 { return self.id; }
+}
+
+// ---- the ctx types: the whole world a program fn sees ---------------
+
+/// The derive fn's world: get ONLY — set does not exist here, so a
+/// derive is pure BY CONSTRUCTION (the survey's auto-tracking
+/// rejection is overturned: the closure's ctx.get calls ARE the dep
+/// declaration, discovered fresh on every recompute).
+pub class DeriveCtx {
+    store: Store;
+    reader: u32 = 0;
+}
+
+impl DeriveCtx {
+    /// THE tracking read: records the edge, then pulls the dep fresh.
+    pub fn get<T>(self, a: Readable<T>) -> T {
+        self.store.record_edge(self.reader, a.atom_id());
+        return self.store.get<T>(a);
+    }
+}
+
+/// The mutation fn's world: get + set. set delegates to the ONE write
+/// lane (the str content-skip and the gen bump live in Store.set), so
+/// every write in the app lands in exactly one place.
+pub class MutCtx {
+    store: Store;
+}
+
+impl MutCtx {
+    pub fn get<T>(self, a: Readable<T>) -> T {
+        return self.store.get<T>(a);
+    }
+    pub fn set<A, R>(self, w: Writable<A, R>, arg: A) -> R {
+        return self.store.set<A, R>(w, arg);
+    }
+}
+
+// ---- the store -------------------------------------------------------
+
+/// The kernel: one generation rail (gens), one opaque-cell KV (RFC
+/// 0014's motivating pattern), the discovered-edge and seen-generation
+/// tables, and the in-flight cycle guard. NOTHING here names a
+/// domain — the store is decoupled from biz by construction; the
+/// old TodoStore/ProbeStore containers are gone (their machinery was
+/// this class all along; their handles are biz data now).
+pub class Store {
+    ids: u32 = 0; // the fresh-id counter
+    gens: HashMap<u32, i64>; // THE RAIL: writes bump the written atom,
+    // a derived RECOMPUTE bumps the derived's own gen — that bump is
+    // what downstream staleness keys on (an upstream-only move must
+    // refresh downstream on its next get)
+    kv: HashMap<u32, opaque>; // values + derived caches (opaque boxes)
+    kinds: HashMap<u32, u32>; // 0 source | 1 derived | 2 mutation
+    lanes: HashMap<u32, bool>; // the str content-skip lane
+    programs: HashMap<u32, opaque>; // derived/mutation erased fns
+    edges: HashMap<u32, Vec<u32>>; // DISCOVERED deps: reader -> dep ids
+    seen: HashMap<u32, HashMap<u32, i64>>; // reader -> dep -> gen at last compute
+    in_flight: Vec<u32>; // the cycle guard (tur's, returned: discovered
+    // edges admit cycles — a re-entrant read is a loud trap)
+    n_recomputes: i32 = 0; // the twins' oracle
+}
+
+impl Store {
+    pub fn new() -> Self {
+        return Self {
+            ids: 0,
+            gens: HashMap.new(),
+            kv: HashMap.new(),
+            kinds: HashMap.new(),
+            lanes: HashMap.new(),
+            programs: HashMap.new(),
+            edges: HashMap.new(),
+            seen: HashMap.new(),
+            in_flight: Vec.new(),
+            n_recomputes: 0,
+        };
+    }
+
+    // ---- minting: the four constructors ----
+
+    /// The general cell: never equality-skips — every set bumps.
+    pub fn source<T>(mut self, v: T) -> Source<T> {
+        let id = self.ids;
+        self.ids += 1;
+        self.kinds.put(id, 0);
+        return Source<T> { id: id, seed: opaque(v), str_lane: false };
+    }
+
+    /// The str lane: a write of the CURRENT content marks nothing (the
+    /// recorded asymmetry — == compiles StrCmp at this concrete lane).
+    pub fn source_str(mut self, v: str) -> Source<str> {
+        let id = self.ids;
+        self.ids += 1;
+        self.kinds.put(id, 0);
+        self.lanes.put(id, true);
+        return Source<str> { id: id, seed: opaque(v), str_lane: true };
+    }
+
+    /// The derived: register the program, get the read key. Deps are
+    /// DISCOVERED on first read (and re-discovered on every recompute),
+    /// never declared — a stale declaration is impossible by
+    /// construction.
+    pub fn derive<T>(mut self, f: fn(DeriveCtx) -> T) -> Derived<T> {
+        let id = self.ids;
+        self.ids += 1;
+        self.kinds.put(id, 1);
+        self.programs.put(id, opaque(f));
+        return Derived<T> { id: id };
+    }
+
+    /// The write program: the machine's verbs live in mutation fns so
+    /// every multi-step write is a VALUE biz composes with store.set.
+    pub fn mutation<A, R>(mut self, f: fn(MutCtx, A) -> R) -> Mutation<A, R> {
+        let id = self.ids;
+        self.ids += 1;
+        self.kinds.put(id, 2);
+        self.programs.put(id, opaque(f));
+        return Mutation<A, R> { id: id };
+    }
+
+    // ---- THE TWO VERBS ----
+
+    /// The one READ — over sources and deriveds alike. Pull-on-read:
+    /// a derived recomputes here iff any recorded dep gen moved since
+    /// its last compute (at most once per write-set; there is no
+    /// flush — the survey §4.3 turn-boundary refresh is retired).
+    pub fn get<T>(mut self, a: Readable<T>) -> T {
+        let id = a.atom_id();
+        let k = self.kind_of(id);
+        if (k == 0) {
+            if (self.kv.get(id) == nil) {
+                a.materialize(self); // first touch: the seed lands
+            }
+        } else {
+            self.ensure_fresh<T>(id);
+        }
+        return opaque.downcast<T>(self.kv.get(id));
+    }
+
+    /// The one WRITE — over sources (plain) and mutations (programs).
+    /// The str content-skip lives here, in the ONE write lane. A
+    /// source set returns the value it stored (the echo); a mutation
+    /// set returns the program's answer. A derived is not writable —
+    /// the type system refuses it (no Writable impl) and this lane
+    /// refuses it again, loud, for trait-object callers.
+    pub fn set<A, R>(mut self, w: Writable<A, R>, arg: A) -> R {
+        let id = w.atom_id();
+        let k = self.kind_of(id);
+        if (k == 2) {
+            let p = self.programs.get(id);
+            let f = opaque.downcast<fn(MutCtx, A) -> R>(p);
+            return f(MutCtx { store: self }, arg);
+        }
+        if (k == 0) {
+            if (self.lane_of(id)) {
+                let p = self.kv.get(id);
+                if (p != nil) {
+                    // never-written has no content to skip: any first
+                    // write is a change
+                    let prev = opaque.downcast<str>(p);
+                    if (prev == arg) {
+                        return arg; // content-equal: no bump, nothing stales
+                    }
+                }
+            }
+            self.kv.put(id, opaque(arg));
+            self.bump(id);
+            return arg;
+        }
+        panic("store: a derived is not writable — read it with get");
+    }
+
+    // ---- the pull ----
+
+    /// Recompute iff stale, ONCE. The cycle guard: a derived still on
+    /// the in-flight stack that gets read again is a discovered cycle
+    /// — a declaration bug in a closure, named loud, drift-style.
+    fn ensure_fresh<T>(mut self, id: u32) -> nil {
+        for (let f of self.in_flight) {
+            if (f == id) {
+                panic(f"store: derived #{id} reads itself — a discovered cycle");
+            }
+        }
+        if (self.stale(id) == false) {
+            return;
+        }
+        self.in_flight.push(id);
+        self.edges.put(id, Vec.new()); // re-bind: this compute re-records
+        let p = self.programs.get(id);
+        let f = opaque.downcast<fn(DeriveCtx) -> T>(p);
+        let v = f(DeriveCtx { store: self, reader: id });
+        self.kv.put(id, opaque(v));
+        self.bump(id); // the VALUE moved — downstream keys on this gen
+        self.note_seen(id);
+        self.in_flight.pop();
+        self.n_recomputes += 1;
+    }
+
+    /// Stale iff never computed, or any recorded dep gen moved. A dep
+    /// the derive never read cannot make this true — per-dep
+    /// staleness, now over DISCOVERED edges (the old per-declared-dep
+    /// twin's law, kept, with the declaration made impossible to
+    /// stale).
+    fn stale(self, id: u32) -> bool {
+        let deps = self.edges.get(id);
+        if (deps == nil) {
+            return true; // never computed
+        }
+        let s = self.seen.get(id);
+        if (s == nil) {
+            return true;
+        }
+        for (let d of deps) {
+            let g = s.get(d);
+            if (g == nil) {
+                return true;
+            }
+            if (g != self.gen_of(d)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn note_seen(mut self, id: u32) -> nil {
+        let deps = self.edges.get(id);
+        let s: HashMap<u32, i64> = HashMap.new();
+        for (let d of deps) {
+            s.put(d, self.gen_of(d));
+        }
+        self.seen.put(id, s);
+    }
+
+    fn record_edge(mut self, reader: u32, dep: u32) -> nil {
+        let es = self.edges.get(reader);
+        es.push(dep);
+    }
+
+    fn gen_of(self, id: u32) -> i64 {
+        let g = self.gens.get(id);
+        if (g == nil) {
+            return 0;
+        }
+        return g;
+    }
+
+    fn bump(mut self, id: u32) -> nil {
+        self.gens.put(id, self.gen_of(id) + 1);
+    }
+
+    fn kind_of(self, id: u32) -> u32 {
+        let k = self.kinds.get(id);
+        if (k == nil) {
+            panic(f"store: atom #{id} is unknown");
+        }
+        return k;
+    }
+
+    fn lane_of(self, id: u32) -> bool {
+        let b = self.lanes.get(id);
+        if (b == nil) {
+            return false;
+        }
+        return b;
+    }
+
+    // ---- observability (the twins' oracle — observability ONLY; no
+    // app code reads these; the fence the old atom_* probes kept) ----
+
+    pub fn recompute_count(self) -> i32 {
+        return self.n_recomputes;
+    }
+
+    /// The discovered edges, joined by id ("0|1") — the declared-DAG
+    /// twin's successor: the DAG is now WHAT THE PROGRAM READS.
+    pub fn deps_of<T>(self, a: Readable<T>) -> str {
+        let deps = self.edges.get(a.atom_id());
+        let mut out = "";
+        for (let d of deps) {
+            if (out != "") {
+                out = f"{out}|{d}";
+            } else {
+                out = f"{d}";
+            }
+        }
+        return out;
+    }
+}
+
+// =====================================================================
+// §2 THE WIDGET TYPE (the old t1/widget — verbatim shape)
+// =====================================================================
+
+// The Widget TYPE's section: the fat `Json`-shape struct, the
+// payloadless kind/variant enums (RFC 0006), the fluent builders, and
+// the predicates the lowering and the diff read. Everything here is
+// data + fluent construction — no state, no crossings, no tags, no
+// tokens. The inherent impl lives in the type's module (rut-lir
+// collect.rs's law, RFC 0012 §2) — this one. The free CONSTRUCTORS
+// are not methods — they are the component vocabulary (§5), the layer
+// biz actually speaks.
+
+// ---- the widget vocabulary (§2.2/§2.3) ------------------------------
+
+// The kinds — payloadless (RFC 0006), the json ruling's JTag shape.
+pub enum WKind { Column, Row, Spacer, Card, Text, Button, Checkbox, Field }
+
+// Text's variants: title (page header), body (a row title), done
+// (struck, muted), pending (the `... title` in-flight row), muted
+// (the counts line).
+pub enum TVariant { Title, Body, Done, Pending, Muted }
+
+// Button's variants: primary (Add), quiet (the row's mark and del).
+pub enum BVariant { Primary, Quiet }
+
+/// One widget — the fat `Json` shape: kinds as enums, irrelevant
+/// fields defaulted, `children` making the tree recursive. Semantic
+/// options ONLY: there is no `tag` field and no `class` field.
+pub struct Widget {
+    kind: WKind = WKind.Text;
+    // -- controls
+    text: str = "";
+    tvar: ?TVariant = nil; // Text's variant
+    bvar: ?BVariant = nil; // Button's variant
+    on: bool = false; // Checkbox
+    placeholder: str = "";
+    value: str = ""; // Field (mirrors the draft)
+    // -- semantic options
+    subject: str = ""; // what this widget fires
+    hook: str = ""; // stable test id (the lowering emits it as `id`)
+    key: str = ""; // keyed-diff identity (defaults from hook)
+    // -- layout data (the utility-token ladder's inputs)
+    gap: i32 = 0;
+    pad: i32 = 0;
+    size: i32 = 0;
+    // -- layout
+    children: Vec<Widget> = Vec.new();
+}
+
+// ---- the fluent builders (impl Widget, `mut self -> Self`) ----------
+// The constructors live in the component section (§5).
+
+impl Widget {
+    /// Append a child (no variadics — one at a time, per §2.4).
+    fn w(mut self, child: Widget) -> Self {
+        self.children.push(child);
+        return self;
+    }
+
+    fn gap(mut self, n: i32) -> Self {
+        self.gap = n;
+        return self;
+    }
+
+    fn pad(mut self, n: i32) -> Self {
+        self.pad = n;
+        return self;
+    }
+
+    fn size(mut self, n: i32) -> Self {
+        self.size = n;
+        return self;
+    }
+
+    /// The stable test id — the lowering emits it as the `id` attr.
+    fn hook(mut self, id: str) -> Self {
+        self.hook = id;
+        return self;
+    }
+
+    /// The keyed-diff identity; defaults from `hook` when unset.
+    fn key(mut self, id: str) -> Self {
+        self.key = id;
+        return self;
+    }
+
+    /// What this widget fires — the event's SEMANTIC name.
+    fn subject(mut self, s: str) -> Self {
+        self.subject = s;
+        return self;
+    }
+
+    /// The field's value (mirrors the app's draft).
+    fn value(mut self, v: str) -> Self {
+        self.value = v;
+        return self;
+    }
+
+    /// The placeholder (Field).
+    fn placeholder(mut self, p: str) -> Self {
+        self.placeholder = p;
+        return self;
+    }
+
+    /// The checkbox state (app state, rendered as a token).
+    fn on(mut self, b: bool) -> Self {
+        self.on = b;
+        return self;
+    }
+
+    fn variant_primary(mut self) -> Self {
+        self.bvar = BVariant.Primary;
+        return self;
+    }
+
+    fn variant_quiet(mut self) -> Self {
+        self.bvar = BVariant.Quiet;
+        return self;
+    }
+}
+
+// ---- the predicates (read by the lowering and the diff) -------------
+
+pub fn kind_name(w: Widget) -> str {
+    return when (w.kind) {
+        WKind.Column -> "Column",
+        WKind.Row -> "Row",
+        WKind.Spacer -> "Spacer",
+        WKind.Card -> "Card",
+        WKind.Text -> "Text",
+        WKind.Button -> "Button",
+        WKind.Checkbox -> "Checkbox",
+        WKind.Field -> "Field",
+    };
+}
+
+pub fn is_text(w: Widget) -> bool {
+    return when (w.kind) {
+        WKind.Text -> true,
+        else -> false,
+    };
+}
+
+pub fn is_field(w: Widget) -> bool {
+    return when (w.kind) {
+        WKind.Field -> true,
+        else -> false,
+    };
+}
+
+pub fn is_check(w: Widget) -> bool {
+    return when (w.kind) {
+        WKind.Checkbox -> true,
+        else -> false,
+    };
+}
+
+pub fn is_button(w: Widget) -> bool {
+    return when (w.kind) {
+        WKind.Button -> true,
+        else -> false,
+    };
+}
+
+/// Whose text content is real: Text's words and a Button's label.
+pub fn takes_text(w: Widget) -> bool {
+    return when (w.kind) {
+        WKind.Text -> true,
+        WKind.Button -> true,
+        else -> false,
+    };
+}
+
+pub fn takes_children(w: Widget) -> bool {
+    return when (w.kind) {
+        WKind.Column -> true,
+        WKind.Row -> true,
+        WKind.Card -> true,
+        else -> false,
+    };
+}
+
+/// The diff's identity for one child among its siblings: the explicit
+/// key, else the hook, else the positional `@i`. The els table's key
+/// is the FULL PATH from the root, so equal sibling names in different
+/// subtrees cannot collide.
+pub fn key_of(w: Widget, i: i32) -> str {
+    if (w.key != "") {
+        return w.key;
+    }
+    if (w.hook != "") {
+        return w.hook;
+    }
+    return f"@{i}";
+}
+
+// =====================================================================
+// §3 THE LOWERING TABLE (the old t1/lowering — verbatim shape)
+// =====================================================================
+
+// Widget -> Lowered: the tag, the space-joined class tokens, and the
+// event the widget listens to. This table is THE styling contract
+// (design §5) — the one place a tag or a token may be spelled. The
+// five recorded deviations it implements (docs/t1-design.md §0):
+// checkbox lowers to a FRAMEWORK-OWNED button (role=checkbox +
+// t1-check--on/--off, never a native input); gap/pad/size lower to a
+// FIXED utility-token ladder (`t1-gap-8`, never arbitrary values,
+// never a style attr); the token set stays enumerable and
+// twin-assertible. Pure: no state, no crossings.
+
+/// One row of the lowering table: the tag, the space-joined class
+/// tokens, and the event this widget listens to ("" = none).
+pub struct Lowered {
+    tag: str;
+    cls: str;
+    listens: str;
+}
+
+fn tag_of_kind(w: Widget) -> str {
+    return when (w.kind) {
+        WKind.Column -> "div",
+        WKind.Row -> "div",
+        WKind.Spacer -> "div",
+        WKind.Card -> "div",
+        WKind.Text -> "span",
+        WKind.Button -> "button",
+        WKind.Checkbox -> "button", // framework-owned, NOT a native input
+        WKind.Field -> "input",
+    };
+}
+
+fn tvar_token(v: TVariant) -> str {
+    return when (v) {
+        TVariant.Title -> "t1-text--title",
+        TVariant.Body -> "t1-text--body",
+        TVariant.Done -> "t1-text--done",
+        TVariant.Pending -> "t1-text--pending",
+        TVariant.Muted -> "t1-text--muted",
+    };
+}
+
+fn bvar_token(v: BVariant) -> str {
+    return when (v) {
+        BVariant.Primary -> "t1-btn--primary",
+        BVariant.Quiet -> "t1-btn--quiet",
+    };
+}
+
+fn check_token(on: bool) -> str {
+    if (on) {
+        return "t1-check--on";
+    }
+    return "t1-check--off";
+}
+
+/// The FIXED utility ladder (§5): `gap(8)` -> `t1-gap-8`. 0 means "no
+/// token"; anything off the ladder is a LOUD lowering trap.
+fn ladder_token(name: str, n: i32) -> str {
+    if (n == 0) {
+        return "";
+    }
+    if (n == 4) {
+        return f"t1-{name}-4";
+    }
+    if (n == 8) {
+        return f"t1-{name}-8";
+    }
+    if (n == 12) {
+        return f"t1-{name}-12";
+    }
+    if (n == 16) {
+        return f"t1-{name}-16";
+    }
+    panic(f"t1: {name} {n} is off the utility ladder — 0/4/8/12/16 only");
+}
+
+/// Space-join two tokens, skipping empties.
+fn join_cls(a: str, b: str) -> str {
+    if (a == "") {
+        return b;
+    }
+    if (b == "") {
+        return a;
+    }
+    return f"{a} {b}";
+}
+
+/// The lowering table — TOTAL over WKind. Also the boundary where the
+/// fat struct's one dishonesty is caught: a control with children is
+/// an app bug, and it panics here, named, at lowering time.
+pub fn lower(w: Widget) -> Lowered {
+    if (takes_children(w) == false) {
+        if (w.children.len() > 0) {
+            let name = kind_name(w);
+            panic(f"t1: {name} takes no children — build layout with Column/Row/Card");
+        }
+    }
+
+    let tag = tag_of_kind(w);
+    let mut cls = when (w.kind) {
+        WKind.Column -> "t1-col",
+        WKind.Row -> "t1-row",
+        WKind.Spacer -> "t1-spacer",
+        WKind.Card -> "t1-card",
+        WKind.Text -> "t1-text",
+        WKind.Button -> "t1-btn",
+        WKind.Checkbox -> "t1-check",
+        WKind.Field -> "t1-field",
+    };
+    let mut listens = "";
+
+    if (is_text(w)) {
+        if (w.tvar == nil) {
+            panic("t1: Text without a variant — construct with text/done/title/pending/muted");
+        }
+        let v: TVariant = w.tvar;
+        cls = join_cls(cls, tvar_token(v));
+    }
+    if (is_button(w)) {
+        if (w.bvar == nil) {
+            panic("t1: Button without a variant — construct with btn/quiet");
+        }
+        let v: BVariant = w.bvar;
+        cls = join_cls(cls, bvar_token(v));
+        listens = "click";
+    }
+    if (is_check(w)) {
+        cls = join_cls(cls, check_token(w.on));
+        listens = "click";
+    }
+    if (is_field(w)) {
+        listens = "input"; // the value rides the event (event-carried law)
+    }
+
+    cls = join_cls(cls, ladder_token("gap", w.gap));
+    cls = join_cls(cls, ladder_token("pad", w.pad));
+    cls = join_cls(cls, ladder_token("size", w.size));
+
+    return Lowered { tag: tag, cls: cls, listens: listens };
+}
+
+// =====================================================================
+// §4 THE DIFF CORE (the old t1/core — verbatim shape)
+// =====================================================================
+
+// T1Root — the patch state with its framework-private tables — the
+// mount, the listener registry, the keyed diff, and retirement. The
+// design is docs/t1-design.md (phase 0), authoritative, including its
+// five recorded deviations (checkbox-as-button, no ui_unlisten,
+// patch-in-place, no closure Each, enumerable tokens).
+//
+// THE PATCH (§4.2): t1_render diffs the new tree against the previous
+// tree held in T1Root and applies minimal ops over the ten unchanged
+// crossings — match by key at each level, patch-in-place deltas only,
+// new keys create, gone keys remove, reorder re-appends survivors.
+// Nothing changed = nothing fires.
+//
+// THE REGISTRY (§4.3): the framework owns ONE id->subject table.
+// Listeners register exactly once per widget LIFETIME and retire on
+// remove; a fire on a retired or unknown id is LOUD.
+//
+// Element handles are keyed by PATH; `lids` (path -> listener id)
+// backs retirement. One stateful module on purpose: the tables are
+// written across mount/render/retire and module-private is the only
+// privacy rut lands — the sections share this file so the tables stay
+// framework-private for real (the old package split's recorded reason,
+// kept by the merge).
+
+// ---- T1Root (§7.1) and the mount ------------------------------------
+
+/// The patch state — plain rut data, a field of the app container
+/// (RFC 0003 §1: the state crosses, the host re-passes it).
+pub struct T1Root {
+    parent: opaque; // the mounted root element
+    prev: ?Widget = nil; // the previous tree — the diff's left side
+    els: HashMap<str, opaque>; // path -> live handle (ops application)
+    regs: HashMap<str, str>; // listener id (as crossed) -> subject
+    lids: HashMap<str, i64>; // path -> listener id (retirement)
+}
+
+/// Mount the framework on the element `root_id` (index.html's seeded
+/// `#app`). Unknown ids trap loud at the crossing.
+pub fn t1_mount(root_id: str) -> T1Root {
+    let parent = ui_get(root_id);
+    let els: HashMap<str, opaque> = HashMap.new();
+    let regs: HashMap<str, str> = HashMap.new();
+    let lids: HashMap<str, i64> = HashMap.new();
+    return T1Root {
+        parent: parent,
+        els: els,
+        regs: regs,
+        lids: lids,
+    };
+}
+
+// ---- the registry reads the framework needs -------------------------
+
+/// The listener registry's one lookup, LOUD on a miss (§4.3).
+pub fn t1_subject(r: T1Root, id: str) -> str {
+    let mut regs: HashMap<str, str> = r.regs;
+    let hit = regs.get(id);
+    if (hit == nil) {
+        panic(f"t1: listener '{id}' answered no subject — stale or unknown");
+    }
+    let s: str = hit;
+    return s;
+}
+
+// ---- the keyed diff/patch (§4.2) ------------------------------------
+
+/// THE render — once per turn, any turn. First render builds the whole
+/// tree; every later render diffs against the previous tree and fires
+/// only the deltas.
+pub fn t1_render(mut r: T1Root, next: Widget) -> nil {
+    let path = key_of(next, 0);
+    let prev = r.prev;
+    if (prev == nil) {
+        create_subtree(r, next, path, r.parent);
+    } else {
+        let old: Widget = prev;
+        if (key_of(old, 0) != path) {
+            let a = key_of(old, 0);
+            panic(f"t1: the root's key changed '{a}' -> '{path}' — remount is not a patch");
+        }
+        patch_tree(r, old, next, path);
+    }
+    r.prev = next;
+}
+
+/// The live handle for a path — LOUD when the framework's own table
+/// has drifted.
+fn els_handle(r: T1Root, path: str) -> opaque {
+    let mut els: HashMap<str, opaque> = r.els;
+    let hit = els.get(path);
+    if (hit == nil) {
+        panic(f"t1: no live handle for '{path}' — the patch named an element that never appeared");
+    }
+    let el: opaque = hit;
+    return el;
+}
+
+fn els_drop(r: T1Root, path: str) -> nil {
+    let mut els: HashMap<str, opaque> = r.els;
+    els.remove(path);
+}
+
+/// First appearance: mint the element, the attrs, the text or value,
+/// the ONE listener of its lifetime, then the children.
+fn create_subtree(mut r: T1Root, w: Widget, path: str, parent: opaque) -> nil {
+    let low = lower(w);
+    let el: opaque = ui_create(low.tag);
+
+    let mut els: HashMap<str, opaque> = r.els;
+    els.put(path, el);
+
+    if (w.hook != "") {
+        ui_attr(el, "id", w.hook);
+    }
+    ui_attr(el, "class", low.cls);
+    if (is_check(w)) {
+        ui_attr(el, "role", "checkbox");
+    }
+    if (w.placeholder != "") {
+        ui_attr(el, "placeholder", w.placeholder);
+    }
+    if (low.listens != "") {
+        if (w.subject == "") {
+            panic(f"t1: '{path}' listens but answers no subject — set .subject(...)");
+        }
+        let id: i64 = ui_listen(el, low.listens);
+        let mut regs: HashMap<str, str> = r.regs;
+        regs.put(f"{id}", w.subject);
+        let mut lids: HashMap<str, i64> = r.lids;
+        lids.put(path, id);
+    }
+
+    ui_append(parent, el);
+
+    if (takes_text(w)) {
+        if (w.text != "") {
+            ui_set_text(el, w.text);
+        }
+    }
+    if (is_field(w)) {
+        if (w.value != "") {
+            ui_set_input_value(el, w.value);
+        }
+    }
+
+    let kids: Vec<Widget> = w.children;
+    for (let j = 0; j < kids.len(); j += 1) {
+        create_subtree(r, kids[j], f"{path}/{key_of(kids[j], j)}", el);
+    }
+}
+
+/// Patch one surviving node in place — deltas only.
+fn patch_tree(mut r: T1Root, old: Widget, new: Widget, path: str) -> nil {
+    if (kind_name(old) != kind_name(new)) {
+        let a = kind_name(old);
+        let b = kind_name(new);
+        panic(f"t1: '{path}' changed kind {a} -> {b} — keys are identity");
+    }
+    let el = els_handle(r, path);
+    let low_old = lower(old);
+    let low_new = lower(new);
+
+    if (takes_text(new)) {
+        if (old.text != new.text) {
+            ui_set_text(el, new.text);
+        }
+    }
+    if (low_old.cls != low_new.cls) {
+        ui_attr(el, "class", low_new.cls);
+    }
+    if (is_field(new)) {
+        if (old.placeholder != new.placeholder) {
+            ui_attr(el, "placeholder", new.placeholder);
+        }
+        if (old.value != new.value) {
+            ui_set_input_value(el, new.value);
+        }
+    }
+
+    patch_children(r, old, new, path, el);
+}
+
+fn key_index_of(v: Vec<str>, k: str) -> i32 {
+    for (let i = 0; i < v.len(); i += 1) {
+        if (v[i] == k) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+fn old_index_of(olds: Vec<Widget>, k: str) -> i32 {
+    for (let j = 0; j < olds.len(); j += 1) {
+        if (key_of(olds[j], j) == k) {
+            return j;
+        }
+    }
+    return -1;
+}
+
+/// `cur` with the entry at `p` moved to the back — the model of what
+/// ui_append does to a surviving child (appendChild MOVES).
+fn key_moved_to_back(v: Vec<str>, p: i32) -> Vec<str> {
+    let mut out: Vec<str> = Vec.new();
+    let moved = v[p];
+    for (let i = 0; i < v.len(); i += 1) {
+        if (i != p) {
+            out.push(v[i]);
+        }
+    }
+    out.push(moved);
+    return out;
+}
+
+/// The children level of the diff: match by key, patch in place,
+/// create the new, remove the gone, and re-append survivors whose
+/// position broke (reorder = appends, zero creates, zero re-listens).
+fn patch_children(mut r: T1Root, old: Widget, new: Widget, path: str, parent: opaque) -> nil {
+    let olds: Vec<Widget> = old.children;
+    let news: Vec<Widget> = new.children;
+
+    let mut new_keys: Vec<str> = Vec.new();
+    for (let i = 0; i < news.len(); i += 1) {
+        new_keys.push(key_of(news[i], i));
+    }
+
+    let mut cur: Vec<str> = Vec.new();
+    for (let j = 0; j < olds.len(); j += 1) {
+        cur.push(key_of(olds[j], j));
+    }
+
+    for (let i = 0; i < news.len(); i += 1) {
+        let k = new_keys[i];
+        let cpath = f"{path}/{k}";
+        let at = old_index_of(olds, k);
+        if (at >= 0) {
+            patch_tree(r, olds[at], news[i], cpath);
+            // in place iff the live predecessor is the previous new key
+            let mut pred = "";
+            if (i > 0) {
+                pred = new_keys[i - 1];
+            }
+            let live_at = key_index_of(cur, k);
+            let mut in_place = false;
+            if (live_at == 0) {
+                if (pred == "") {
+                    in_place = true;
+                }
+            } else {
+                if (live_at > 0) {
+                    if (cur[live_at - 1] == pred) {
+                        in_place = true;
+                    }
+                }
+            }
+            if (in_place == false) {
+                ui_append(parent, els_handle(r, cpath));
+                cur = key_moved_to_back(cur, live_at);
+            }
+        } else {
+            create_subtree(r, news[i], cpath, parent);
+            cur.push(k);
+        }
+    }
+
+    // gone keys: fetch the live handle, retire the subtree's table
+    // rows, then detach — the registry tracks live ids only
+    for (let j = 0; j < olds.len(); j += 1) {
+        let ok = key_of(olds[j], j);
+        if (key_index_of(new_keys, ok) < 0) {
+            let cpath = f"{path}/{ok}";
+            let child = els_handle(r, cpath);
+            retire_subtree(r, olds[j], cpath);
+            ui_remove(parent, child);
+        }
+    }
+}
+
+/// Retirement (§4.3 — the no-ui_unlisten law's rut-side half): drop
+/// every live handle and every listener row the removed subtree owns.
+fn retire_subtree(mut r: T1Root, w: Widget, path: str) -> nil {
+    els_drop(r, path);
+    let low = lower(w);
+    if (low.listens != "") {
+        let mut lids: HashMap<str, i64> = r.lids;
+        let hit = lids.get(path);
+        if (hit != nil) {
+            let id: i64 = hit;
+            let mut regs: HashMap<str, str> = r.regs;
+            regs.remove(f"{id}");
+            lids.remove(path);
+        }
+    }
+    let kids: Vec<Widget> = w.children;
+    for (let j = 0; j < kids.len(); j += 1) {
+        retire_subtree(r, kids[j], f"{path}/{key_of(kids[j], j)}");
+    }
+}
+
+// =====================================================================
+// §5 THE COMPONENT VOCABULARY (the old components/* — one section now;
+// the free constructors are the layer biz composes: plain fns over the
+// widget type. The variant IS the styling contract — the lowering maps
+// each to its t1-*-- token.)
+// =====================================================================
+
+pub fn col() -> Widget {
+    return Widget { kind: WKind.Column };
+}
+
+pub fn row() -> Widget {
+    return Widget { kind: WKind.Row };
+}
+
+pub fn card() -> Widget {
+    return Widget { kind: WKind.Card };
+}
+
+pub fn spacer(size: i32) -> Widget {
+    return Widget { kind: WKind.Spacer, size: size };
+}
+
+/// The Field constructor. The value is EVENT-CARRIED: the lowering
+/// wires the "input" event, and the fired row's detail carries the
+/// text — there is no read-back crossing to name here.
+pub fn field() -> Widget {
+    return Widget { kind: WKind.Field };
+}
+
+pub fn check(on: bool) -> Widget {
+    return Widget { kind: WKind.Checkbox, on: on };
+}
+
+// the TEXT constructors: the five TVariants
+pub fn text(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Body, text: t };
+}
+
+pub fn done(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Done, text: t };
+}
+
+pub fn title(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Title, text: t };
+}
+
+pub fn pending(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Pending, text: t };
+}
+
+pub fn muted(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Muted, text: t };
+}
+
+// the BUTTON constructors: primary and quiet
+pub fn btn(label: str) -> Widget {
+    return Widget { kind: WKind.Button, bvar: BVariant.Primary, text: label };
+}
+
+pub fn quiet(label: str) -> Widget {
+    return Widget { kind: WKind.Button, bvar: BVariant.Quiet, text: label };
+}

@@ -37,7 +37,7 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
     assert_eq!(
         manifest_names, mirror_names,
         "the mirror drifted from the manifest — mount_app_session must \
-         register exactly rut/rut.toml's closure (minus the ABI root)"
+         register exactly rut/biz/rut.toml's closure (minus the ABI root)"
     );
 
     // same host surface: the `.d.rut` pkg and its scope ride the
@@ -54,7 +54,7 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
     // mirror" means when it is TRUE.
     let from_manifest = mount::compile_manifest(&manifest, &root)
         .expect("the manifest lane compiles");
-    let src = include_str!("../rut/app/app/app.rut");
+    let src = include_str!("../rut/biz/biz.rut");
     let from_mirror = mount::compile_app(&mut mirror, src)
         .expect("the mirror lane compiles");
     assert_eq!(
