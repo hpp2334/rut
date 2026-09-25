@@ -15,9 +15,11 @@
 //! spellings with the ref-val class and `HashSet` in one program. The
 //! bool val lane stays deferred (`?bool` cannot serve the
 //! `get -> ?V` nil law in today's checker — the class family's header
-//! comment records the repro); the raw host-table column law lives in
-//! `nmap_valcolumn.rs` (`rut/nmap_host`'s own crossings), and a
-//! differently-named column class is the recorded future shape.
+//! comment records the repro); the raw host-table column law moved at
+//! nmap-hostvals P4 into rut-std's unit tests (the handle-rebased
+//! `map_val_*` lanes over the real-HashMap table — `nmap_valcolumn.rs`
+//! retired with the slot addressing), and a differently-named column
+//! class is the recorded future shape.
 
 use std::rc::Rc;
 

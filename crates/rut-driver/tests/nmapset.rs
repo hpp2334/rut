@@ -53,8 +53,8 @@ fn diags_of(app_src: &str) -> Vec<String> {
 fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     let session = session_with(app_src);
     let expected = session.expected_host_fns();
-    for f in ["map_new", "map_entry", "map_find", "map_remove", "map_needs_grow",
-              "map_grow", "map_take_reloc", "map_cap", "map_len"]
+    for f in ["map_new", "map_cap", "map_len",
+              "map_hput_i", "map_hfind_i", "map_hremove_i"]
     {
         assert!(
             expected.contains_key(&format!("nmap_host::{f}")),

@@ -1,158 +1,79 @@
-// nmap_host/nmap.d.rut — the native key-table experiment's host surface (the
-// mapset-host plan): `pub host fn` decls only — the bodies live in
-// rut-std's `install_std_nmap` (RFC 0023 §2). Signatures are concrete
-// over the crossing set.
+// nmap_host/nmap.d.rut — the native key-table experiment's host surface:
+// `pub host fn` decls only — the bodies live in rut-std's
+// `install_std_nmap` (RFC 0023 §2). This file is mirrored BYTE-FOR-BYTE
+// by the test fixture `crates/rut-cli/tests/data/nmap_host/nmap.d.rut` —
+// update BOTH when the surface changes.
 //
-// The native side owns KEYS and their RECORDED HASHES (closed set:
-// the integer primitives, `bool`, `str`, `bytes`) plus — since round3
-// phase 1 — the raw val column below; reference values stay rut-side
-// in `nmapset`'s parallel array.
+// nmap-hostvals P4: the open-addressing core is DELETED — the round-1
+// opaque-keyed lanes (`map_entry`/`map_find`/`map_remove`), the fused
+// sentinel lanes (`map_{entry,find,remove}_{i,u,b,s,y,sv}`), and the
+// growth machinery (`map_needs_grow`/`map_grow`/`map_take_reloc`) left
+// with the probing vecs. The table is a real `HashMap` now; what
+// remains is the fused h-family (the ONE op family — `HashSet` shares
+// `hput` and reads bit 0), `map_new`/`map_len`/`map_cap`, and the raw
+// val lanes, RE-BASED from slot addressing onto the stable birth
+// handles. (P5 retires `map_cap` with the wrapper's pre-size read and
+// moves the values into the entries.)
 //
-// This fixture mirrors the committed `rut/nmap_host` surface byte-for-byte
-// in content: update BOTH when the surface changes.
-//
-// The two pair-shaped answers travel packed in one scalar because the
-// decl crossing set has no tuples:
-// - `map_remove`: `>= 0` = removed, the freed slot; `-1` = absent.
-// - `map_take_reloc`: `-1` = drained; else `(old << 32) | new`.
+// The native side owns KEYS (closed set: the integer primitives,
+// `bool`, `str`, `bytes`) as `HashMap` keys — hashed with the pinned
+// mapset constants (mix64 / FNV-1a 64, bit-for-bit) through an identity
+// hasher, and compared by CONTENT. Reference values still live
+// rut-side in `nmapset`'s `[?V]` sidecar, indexed by the handle the
+// h-family answers.
 
 pub host fn map_new(cap: i64) -> opaque;
 
-pub host fn map_entry(m: opaque, k: opaque, h: i64) -> i32;
-
-pub host fn map_find(m: opaque, k: opaque, h: i64) -> i32;
-
-pub host fn map_remove(m: opaque, k: opaque, h: i64) -> i32;
-
-pub host fn map_needs_grow(m: opaque) -> bool;
-
-pub host fn map_grow(m: opaque) -> i32;
-
-pub host fn map_take_reloc(m: opaque) -> i64;
-
-pub host fn map_cap(m: opaque) -> i32;
-
 pub host fn map_len(m: opaque) -> i32;
 
-// ---- the typed lanes (the mapset-host plan, phase 2) ---------------
-// 15 fns `map_{entry,find,remove}_{i,u,b,s,y}` over the closed key set:
-// the key crosses DIRECTLY — no `opaque(..)` mint, no wrapper-hash `h`
-// — and the table records the hash the HOST computed (mix64 / FNV-1a
-// 64 with mapset's exact constants, bit-for-bit). The `i` lane takes
-// `i64` — the wrapper casts i8..i64 into it (sign-extension is the
-// `KeyPayload::Bits` law, so the recorded bits match the Opaque lane's);
-// the `u` lane takes `u64` raw bits; `b` takes `bool` (0/1 bits);
-// `s`/`y` borrow `str`/`bytes` zero-copy.
-//
-// Answers, per op:
-// - `map_find_*`: `>= 0` = the found slot; `-1` = absent.
-// - `map_remove_*`: `>= 0` = removed, the freed slot; `-1` = absent.
-// - `map_entry_*`: fused grow-first — when inserting would breach the
-//   load factor it answers `i32::MIN` (a fresh insert is `-(slot + 1)
-//   >= -2^30`, so the encoding is collision-free) and the caller grows
-//   + drains + retries; otherwise the found slot or the fresh slot.
+// HashMap's reserve, read back (the wrapper's `with_capacity` pre-sizes
+// its sidecar with it — a hint, never a behavior; retires at P5).
+pub host fn map_cap(m: opaque) -> i32;
 
-pub host fn map_entry_i(m: opaque, k: i64) -> i32;
-
-pub host fn map_entry_u(m: opaque, k: u64) -> i32;
-
-pub host fn map_entry_b(m: opaque, k: bool) -> i32;
-
-pub host fn map_entry_s(m: opaque, k: str) -> i32;
-
-pub host fn map_entry_y(m: opaque, k: bytes) -> i32;
-
-pub host fn map_find_i(m: opaque, k: i64) -> i32;
-
-pub host fn map_find_u(m: opaque, k: u64) -> i32;
-
-pub host fn map_find_b(m: opaque, k: bool) -> i32;
-
-pub host fn map_find_s(m: opaque, k: str) -> i32;
-
-pub host fn map_find_y(m: opaque, k: bytes) -> i32;
-
-pub host fn map_remove_i(m: opaque, k: i64) -> i32;
-
-pub host fn map_remove_u(m: opaque, k: u64) -> i32;
-
-pub host fn map_remove_b(m: opaque, k: bool) -> i32;
-
-pub host fn map_remove_s(m: opaque, k: str) -> i32;
-
-pub host fn map_remove_y(m: opaque, k: bytes) -> i32;
-
-// ---- the sv lanes (strings-round1, phase 1) -------------------------
-// str keys cross as a BORROWED RANGE: `parent` is any str value (an
-// owned `str` cell or a slice view over one — both read as their range
-// through the RFC 0042 zero-copy boundary) and `off`/`len` carve the
-// probe range out of it in BYTES. The host hashes and compares OVER
-// THE RANGE — the parent's octets never copy on a probe; only a fresh
-// `map_entry_sv` insert stores an owned copy of the range, so stored
-// keys stay owned (the stored-key/iteration law unchanged). Both
-// offsets must sit on UTF-8 codepoint boundaries with `0 <= off`,
-// `0 <= len`, `off + len <= parent byte length` — anything else is the
-// loud `Invalid` trap. The hash constants are the s lanes' exact
-// FNV-1a 64, so an sv key and an s key of the same content are the
-// SAME key: same recorded hash, same slot, same iteration position —
-// either lane finds what the other stored. Answers = the typed lanes'
-// (`map_find_sv` / `map_remove_sv`: `>= 0` the slot, `-1` absent;
-// `map_entry_sv`: the fused grow-first `i32::MIN`, else the
-// found/fresh slot).
-
-pub host fn map_entry_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
-
-pub host fn map_find_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
-
-pub host fn map_remove_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
-
-// ---- the val column (nmapset-round3, phase 1) -----------------------
+// ---- the raw val lanes (nmapset-round3; RE-BASED at nmap-hostvals
+// P4) -----------------------------------------------------------------
 // Raw u64 bits in/out, ONE pair for every primitive val kind
-// (i64/u64/f64/bool — the wrapper reinterprets client-side). `slot` is
-// the index a previous `map_entry_*` / `map_find_*` / `map_remove_*`
-// call answered, valid while that key's slot stays occupied
-// (presence-by-key: the column has no nil tags; `map_remove_*` writes
-// nothing and the slot's next put stores a fresh val). Out-of-range
-// slots trap. Growth relocates the column host-side with the keys, so
-// this path needs no relocation drain.
-
-pub host fn map_val_set_u(m: opaque, slot: i32, v: u64);
-
-pub host fn map_val_get_u(m: opaque, slot: i32) -> u64;
-
-// ---- the f64 val lane (nmapset-round3, phase 2) ----------------------
-// The same column through an `f64`-typed crossing: `to_bits`/`from_bits`
-// at the boundary, raw bits byte-for-byte both directions. The wrapper
-// cannot spell the float reinterpret itself (rut's numeric `as` is a
-// value conversion, not a bitcast — RFC 0007 §1), so this pair is the
-// float lane's whole story. Slot law = the u lane's.
-
-pub host fn map_val_set_f(m: opaque, slot: i32, v: f64);
-
-pub host fn map_val_get_f(m: opaque, slot: i32) -> f64;
-
-// ---- the fused handle lanes (nmapset-hostops) -----------------------
-// The takeover family: ONE crossing per op, ALL control flow host-
-// side. The table carries a STABLE birth handle per key (assigned at
-// first insert, relocated with the keys on grow, never recycled v1);
-// `hput` grows INTERNALLY at the load boundary — no sentinel loop, no
-// caller-side drain — and answers the packed `(handle << 1) | newly`
-// in i64: bit 0 is the newly bit (a replace answers bit 0 = 0;
-// `HashSet` shares the lane and reads exactly that bit), the rest the
-// handle. The handle space is bounded by BIRTHS, not cap, so the i64
-// carrier has headroom far past any real table's lifetime.
-// `hfind`/`hremove` answer the key's handle, or `-1` when absent —
-// `hremove` answers the DEAD key's own handle, so the wrapper nils
-// exactly that sidecar slot and releases the cell.
+// (i64/u64/f64/bool — the wrapper reinterprets client-side). The
+// address is a live birth HANDLE from the h-family (slots died with
+// the probing core): the bits land in that key's entry, replacing
+// whatever is stored. Bounds are the table's live births; a removed
+// key's handle traps (`no live entry`), never reinterpreted.
+// `map_val_get_u/f` answers the stored bits iff the entry's tag is
+// Bits — the `Empty` placeholder an `hput` birth holds TRAPS on a
+// valued read (a caller bug, never a silent zero), and so will a
+// reference cell from P5 on.
 //
-// The key shapes are the typed family's exact ones: the `i` lane
-// takes `i64` (wrapper-cast from i8..i64, sign-extension is the bits
-// law), `u` takes `u64` raw, `b` takes `bool`, `s`/`y` borrow
-// `str`/`bytes` zero-copy, `sv` a borrowed `(parent, off, len)` BYTE
-// range with the UTF-8 boundary trap — and the sv lane and the s lane
-// of the same content are ONE key: same recorded hash, same slot,
-// same HANDLE. The families above stay bound (legacy escape hatches,
-// the batch's keep call): same table, same slots, same hashes.
+// The f pair is the same storage through an `f64`-typed crossing:
+// `to_bits`/`from_bits` at the boundary, raw bits byte-for-byte both
+// directions (rut has no float bitcast — RFC 0007 §1).
+
+pub host fn map_val_set_u(m: opaque, handle: i32, v: u64);
+
+pub host fn map_val_get_u(m: opaque, handle: i32) -> u64;
+
+pub host fn map_val_set_f(m: opaque, handle: i32, v: f64);
+
+pub host fn map_val_get_f(m: opaque, handle: i32) -> f64;
+
+// ---- the fused handle lanes (nmapset-hostops) — the ONE family ------
+// ONE crossing per op, ALL control flow host-side. The table carries a
+// STABLE birth handle per key (assigned at first insert, never
+// recycled); `hput` inserts or replaces via the entry API and answers
+// the packed `(handle << 1) | newly` in i64: bit 0 is the newly bit (a
+// replace answers bit 0 = 0; `HashSet` shares the lane and reads
+// exactly that bit), the rest the handle. Growth is std's — internal,
+// and invisible to every answer (the handle is a birth, not an
+// address, so nothing ever relocates). `hfind`/`hremove` answer the
+// key's handle, or `-1` when absent — `hremove` answers the dead
+// key's own handle, so the wrapper nils exactly that sidecar slot and
+// releases the cell; a re-insert is a NEW birth.
+//
+// The key shapes: the `i` lane takes `i64` (wrapper-cast from i8..i64,
+// sign-extension is the bits law), `u` takes `u64` raw, `b` takes
+// `bool`, `s`/`y` borrow `str`/`bytes`, `sv` a borrowed `(parent, off,
+// len)` BYTE range with the UTF-8 boundary trap — and the sv lane and
+// the s lane of the same content are ONE key: same entry, same
+// HANDLE.
 
 pub host fn map_hput_i(m: opaque, k: i64) -> i64;
 

@@ -145,11 +145,20 @@ mod tests {
             alias_rows.is_empty(),
             "nmapset's index still carries alias rows {alias_rows:?} — the row form is repealed"
         );
-        // the host surface's opaque-crossing decl too (nmap.d.rut)
+        // the host surface's fused h-family decl too (nmap.d.rut) —
+        // the P4 surface: the h-family is the ONE op family (the
+        // round-1 `map_entry` opaque lane and the sentinel family left
+        // with the probing core)
         assert!(
             idxs.iter()
-                .any(|i| i.fns.iter().any(|f| f.name == "map_entry")),
-            "std surface lacks nmap_host's map_entry"
+                .any(|i| i.fns.iter().any(|f| f.name == "map_hput_i")),
+            "std surface lacks nmap_host's map_hput_i"
+        );
+        // the round-1 lane's negative pin: the opaque-keyed crossing is
+        // GONE from the surface (the P4 cull)
+        assert!(
+            !idxs.iter().any(|i| i.fns.iter().any(|f| f.name == "map_entry")),
+            "std surface still offers nmap_host's map_entry — the probing core's lanes are deleted"
         );
     }
 }

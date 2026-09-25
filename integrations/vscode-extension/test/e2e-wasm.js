@@ -215,7 +215,10 @@ async function main() {
     for (const absent of ['PrimMapI64', 'PrimMapU64', 'PrimMapF64']) {
       if (labels.includes(absent)) bad.push(`bare completion still offers the internal '${absent}'`);
     }
-    if (!labels.includes('map_entry')) bad.push(`bare completion lacks nmap_host's 'map_entry' (${labels.length} items)`);
+    if (!labels.includes('map_hput_i')) bad.push(`bare completion lacks nmap_host's 'map_hput_i' (${labels.length} items)`);
+    // nmap-hostvals P4: the probing core's lanes left the surface — the
+    // round-1 opaque-keyed `map_entry` must not come back
+    if (labels.includes('map_entry')) bad.push(`bare completion still offers nmap_host's 'map_entry' (deleted at P4)`);
     // the 9th std pkg (the rut-json batch phase 1): json's base surface —
     // the entries + the traits + the reader/writer — rides every bare
     // completion exactly like nmapset's types do (std_surface 8 -> 9)
