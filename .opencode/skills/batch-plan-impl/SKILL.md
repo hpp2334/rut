@@ -164,7 +164,7 @@ best-effort and record your assumptions.
 
 ### 2. Run log
 
-Create `/tmp/opencode/batch-plan-impl/run.md` and record, as you go: the plan
+Create `/tmp/opencode/rut-batch-plan-impl/run.md` and record, as you go: the plan
 source, the parsed phase list, every autonomous decision (with reason), each
 session id, and each phase result. The final report is generated from this.
 
@@ -174,7 +174,7 @@ session id, and each phase result. The final report is generated from this.
 git status --porcelain          # if dirty: auto-stash (see policy), record it
 git rev-parse HEAD              # record as $BASE
 pwd                             # record as $PROJECT_DIR (absolute)
-mkdir -p /tmp/opencode/batch-plan-impl   # scratch for payload files + run log
+mkdir -p /tmp/opencode/rut-batch-plan-impl   # scratch for payload files + run log
 ```
 
 Resolve the **active balance model** from `models.jsonc` — re-run the
@@ -222,11 +222,11 @@ Write the phase prompt to a payload file (never interpolate raw text into
 #     branch has no upstream yet). A phase is only done once pushed.
 #   - Finish with a summary: what changed, files touched, test/build results.
 
-jq -n --rawfile text /tmp/opencode/batch-plan-impl/phase<n>.txt '{text:$text}' \
-  > /tmp/opencode/batch-plan-impl/phase<n>.json
+jq -n --rawfile text /tmp/opencode/rut-batch-plan-impl/phase<n>.txt '{text:$text}' \
+  > /tmp/opencode/rut-batch-plan-impl/phase<n>.json
 
 opencode api post /api/session/$SID/prompt \
-  --data "$(cat /tmp/opencode/batch-plan-impl/phase<n>.json)"
+  --data "$(cat /tmp/opencode/rut-batch-plan-impl/phase<n>.json)"
 # record .data.time.created as $SINCE (epoch ms)
 ```
 

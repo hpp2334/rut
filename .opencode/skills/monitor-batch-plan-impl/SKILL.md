@@ -24,11 +24,11 @@ never create or delete sessions.
 - **Target session id** (`$ORCH`) — normally given in the user message
   (`ses_...`). If not, auto-detect: the most recently active session in this
   project whose newest messages show batch-plan-impl activity (phase
-  dispatches, a plan queue, run logs under `/tmp/opencode/batch-*/run.md`).
+  dispatches, a plan queue, run logs under `/tmp/opencode/rut-batch-plan-impl/run.md`).
   State your choice explicitly.
 - **Interval** — 20 min (1200 s) unless the user says otherwise.
 - **Baseline** — plan queue `~/.opencode/plan/*.md`, the orchestrator's run
-  logs `/tmp/opencode/batch-*/run.md`, current git HEAD. Completed plan files
+  logs `/tmp/opencode/rut-batch-plan-impl/run.md`, current git HEAD. Completed plan files
   are never removed, so file existence is NOT the done-signal; "done" is the
   orchestrator's own report plus nothing left in flight.
 - **Model refs** — `models.jsonc` at the project root defines `main.complex`,
@@ -149,7 +149,7 @@ you changed.
 2. Read the target's ~30 newest messages to learn the mission, the phase
    currently in flight, and the remaining plan queue.
 3. Check the baseline: plan queue `~/.opencode/plan/`, run logs
-   `/tmp/opencode/batch-*/run.md`, `git -C $PROJECT_DIR log --oneline -5`.
+   `/tmp/opencode/rut-batch-plan-impl/run.md`, `git -C $PROJECT_DIR log --oneline -5`.
 4. Use the bundled status script for the recurring checks:
 
    ```sh
@@ -281,7 +281,7 @@ Nothing is pending — no timer is armed.
 - Peak boundaries are fixed UTC+8 (no DST); the machine clock may be in
   another zone — never use bare `date` for boundary math (the scripts use
   `TZ=Asia/Shanghai`).
-- Run log locations to consult for progress: `/tmp/opencode/batch-*/run.md`
+- Run log locations to consult for progress: `/tmp/opencode/rut-batch-plan-impl/run.md`
   (per-batch phase log) and `~/.opencode/plan/*.md` (the plan queue — the
   orchestrator adds files there as the user requests more work).
 - You are NOT the orchestrator: never load or imitate the `batch-plan-impl`
