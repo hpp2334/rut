@@ -483,3 +483,102 @@ trait's pkg or the type's pkg"; §4's table carries the same footnote.
   on the legal side of this line and zero orphans, so the rule landed
   against a clean corpus — no migration, no grandfathering.
 
+## Amendment (Sep 2026): parameterized trait impls — template registration, per-instantiation minting
+
+§2's generic-target bullet extends to the **trait side**:
+`impl Readable<T> for Source<T>` is legal — the trait-ref arguments may
+spell the target's own type parameters, and the impl registers as a
+**template** that serves every concrete instantiation. Landed in three
+phases: the checker half (b1735de), the dispatch half (bf0872b), and
+the generic-instance-method frames that give a `.get<T>(..)` call site
+the frame the mint mints for (7b379b2).
+
+- **Template registration (the checker half).** `collect_impl_trait`
+  runs a v1 shape guard, builds the target's parameter environment, and
+  resolves the trait-ref arguments under it (`resolve_trait_ref_env`,
+  `resolve.rs:21` — the old `resolve_trait_ref` stays as the
+  empty-env wrapper; concrete targets keep the old path byte-for-byte).
+  The coverage check resolves both sides' signatures under the same
+  env, so a parameter-spelled impl signature (`fn get(self, k: T)`)
+  does not cascade. Registration reuses the ordinary impl record — no
+  new form: the resolved template trait id (`Readable<#T>`, below)
+  rides the trait slot, the class template rides the target, the
+  parameter idents ride the target data, and the raw trait-arg nodes
+  are kept for the mint. The orphan gate (the amendment above) runs
+  before registration, unchanged.
+- **Per-instantiation minting (the dispatch half).** Both widening
+  doors — `FnCompiler::widens` (`call.rs:1999`, every let/arg/return
+  position, §4) and the trait-object receiver's static-bind arm (§1) —
+  consult `find_or_mint_impl` (`mod.rs:967`) on an ordinary impl-lookup
+  miss. Concrete impls win first; on a miss the registered template is
+  matched by (class, arity, trait name), its trait-arg nodes re-resolve
+  under the target instantiation's substitution, the result must
+  re-intern to exactly the requested trait instantiation
+  (`Readable<T>` over `Source<str>` mints `Readable<str>`), and the
+  minted impl registers at the concrete `(trait inst, target inst)`
+  pair. **Minting happens once — the registry entry is the cache.**
+  Method bodies enter the monomorphization queue under the
+  instantiation environment.
+- **Concrete-first is the overlap policy.** A hand-written `impl
+  Readable<i64> for Source<i64>` shadows the template everywhere:
+  dispatch (both doors), and the vtable build, which re-resolves a
+  template's trait args per instantiation and skips a pair a concrete
+  impl owns. Template-vs-concrete overlap is deliberately **not** a
+  collect-time check — the checker never attempts disjointness proofs;
+  dispatch resolves which impl serves a call site. Exact template
+  duplicates (same trait template, same class) still error loudly
+  through §2's ordinary duplicate-`(trait, type)` check. §5's link-time
+  merge is untouched — the template is a local registration like any
+  other.
+- **Repeated parameters are legal.** `impl W<T, T> for Pair2<T>` — the
+  arguments are positional and each node is resolved independently
+  (`template_trait_args`, `mod.rs:933`), so a repeated parameter
+  unifies to the same concrete type per instantiation.
+- **Vtable rows land under the concrete trait inst.** The vtable
+  build's per-instantiation re-resolution (`inst.rs:84`) and
+  `iterate_impl`'s twin for the iteration protocol (`stmt.rs:365`,
+  `impl Iterator<E> for C<E>`) mean §1's dispatch and §6's `for..of`
+  are unchanged at every call site — the rows simply exist per
+  instantiation where a template was registered.
+- **The call-site surface.** A method call may spell its type
+  arguments — `.get<T>(..)` — and any remaining method generics unify
+  structurally from the arguments; the completed substitution resolves
+  the callee signature and keys the monomorphized instance
+  (`compile_inherent_call`, `call.rs:2089`, mirroring the free-fn
+  door). Parser support landed alongside: generic record literals
+  (`Source<str> { .. }`), the `.name<..>(..)` method form, and fn types
+  as generic arguments.
+- **The V1 scope is law.** Each trait-ref argument is **either a
+  concrete type or a bare single-segment ident naming one of the
+  target's own as-written parameters**. Everything else is a diagnosed
+  error, one loud diagnostic each: a parameter nested inside a type
+  (`Readable<Vec<T>>`), and a bare name that is neither a target
+  parameter nor a type in scope (`impl Readable<T> for Source<U>`).
+  Arity mismatch keeps its existing diagnostic. A mixed spelling
+  (`impl Readable<T> for Source<i64>`) guard-errors on the unbound
+  name, since the env binds only the target's as-written parameters —
+  a recorded corner, not a gap to close quietly. **Templates are
+  same-unit only**: the extern-trait refusal ("generic trait … cannot
+  be implemented across modules") is untouched, so a template never
+  crosses the §5 link. No impl-level `where`, no bounds on template
+  parameters, no nested trait arguments — §2's standing rules, all
+  unchanged.
+- **`#<param>` placeholders are internal, not a surface type.** The
+  checker interns a synthetic fieldless type named `#<param>` per
+  parameter (`param_placeholder`, `collect.rs:1183`); `#` is no
+  identifier character (the lexer admits `$` in identifiers, so `$T`
+  could collide), and the type table's structural dedup yields one
+  stable id per parameter name — which is what makes exact-duplicate
+  detection an ordinary pair compare. Placeholders are template-level
+  only and never reach a runtime type: every dispatch substitutes the
+  class's concrete argument before any code exists.
+- **Evidence.** `crates/rut-lir/tests/param_trait_impls.rs` (14 tests —
+  registration, the v1 guard's negative probes, and six executing
+  dispatch cases: static widening, generic body per monomorphization,
+  vtable row fill, repeated parameters, concrete-first shadowing,
+  mixed concrete+parameter arguments); the spike lane
+  `examples/05-todolist-web/tests/spike0.rs`, 11/11 — spike_d's
+  generic-fn fat-ref dispatch, and the spike_e mini-store whose entire
+  surface (`store.get<T>` / `store.set` over module-private
+  `Readable<T>`/`Writable<T>` templates) compiles through the mint.
+

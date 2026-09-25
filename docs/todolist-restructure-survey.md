@@ -777,3 +777,158 @@ with their inline fallbacks (§3.2).
 | components -> t1 | components -> `widget` only | the biz law at the component layer; lowering/core stay framework-private (§3.3) |
 
 Scratch this phase: `/tmp/opencode/batch-todolist-restructure/p0/`.
+
+## Addendum (Sep 2026): the reversal — the store the generic-impls batch shipped
+
+The design above was written against one premise: rut had no way to
+intercept a read. This batch — the parameterized trait impls (RFC
+0012's amendment; commits b1735de, bf0872b, 7b379b2) — landed the
+machinery that premise lacked, and the example shipped the store this
+design rejected. This addendum records the reversal, decision by
+decision. Evidence for everything below is the spike lane
+`examples/05-todolist-web/tests/spike0.rs` (+ `spike0_store.rut`, the
+mini-store), **11/11 green**: closure-erasure roundtrip, `?T`/tuple
+generic args, generic trait impls + fat refs, and the mini-store's
+pull-on-read, discovered edges, str content-skip, derived-on-derived,
+cycle guard, derived-not-writable.
+
+### A.1 §1.3's rejections, overturned
+
+Three of §1.3's "NOT TRANSFERRED" rows are dead records now:
+
+- **Auto-tracking via the ctx's reads — TRANSFERRED.** The recorded
+  reason was "there are no closures to intercept" (§1.3, §4.4). That
+  premise died with RFC 0013's first-class fn types plus this batch's
+  dispatch: a derive IS a closure now —
+  `store.derive(fn (ctx) -> str { ... })` — and **the `ctx.get` calls
+  inside it are the dependency declaration**, discovered fresh every
+  recompute (tur's `tracker_stack` shape, `store.rs:384-434` — the
+  exact mechanism §1.1 censused and §1.3 declined). There is no
+  interception machinery at all: `DeriveCtx.get` records the edge as a
+  side effect of answering the read, the read riding a module-private
+  `Readable<T>` template and the mint (`find_or_mint_impl`, RFC 0012's
+  amendment) typing the frame.
+- **Mutation atoms + the `{get,set}` ctx — RETURNED, as the MutCtx.**
+  §1.3 rejected the mutation-atom layer because the event rail was the
+  mutation surface. The shipped shape keeps the event rail (one
+  `on_event`, subjects, dispatch — untouched) and adds the tur face
+  under it: `store.mutation(fn (ctx, title: str) -> Req { .. })` mints
+  an erased mutation; `store.set(mutation, arg)` is the machine's verb
+  lane — the ONE write door. The ctx asymmetry is the purity law:
+  a derive's ctx exposes `get` ONLY, a mutation's ctx exposes `get` +
+  `set`.
+- **The declared DAG (§4.4) — RETIRED.** "The twins pin the declared
+  DAG; a stale declaration is a failing test" is replaced by something
+  stronger: **impossible-to-stale by construction**. With discovered
+  edges there is no declaration to get wrong — `deps_of(a)` reads the
+  graph the store actually walked, and `stale()` follows the
+  discovered edges (one derived-dep level deep, upstream first), so a
+  chain cannot serve a stale value no matter what anyone declares. The
+  observability the twins wanted survives as surface
+  (`store.recompute_count()`, `store.deps_of(a)`), not as a
+  declaration to assert on.
+
+### A.2 What the reversal does NOT touch
+
+§1.3's remaining rejections stand: **live-props/SubscriberGraph** (the
+turn-law ruling rejects it again — rendering stays the keyed diff,
+once per turn), **`watch()`** (still no use case), **families**
+(§4.6 — the handles ARE named locals now, which is the family answer
+without the machinery), **the multi-store split** (one store, one KV —
+§1.3's simplification, kept).
+
+### A.3 §4.3's turn-boundary flush — RETIRED for pull-on-read
+
+The design's freshness law was the flush: `drain()` the dirty set,
+refresh stale deriveds in declaration order, then render (§4.3). The
+shipped law is tur's, with no flush point at all: **`get` recomputes a
+stale derived at most once per write-set** — the generation rail of
+§1.2 was the keeper and it is still the whole freshness mechanism (a
+cached value is servable iff its recorded gens match; a recompute
+re-records what it read). The write lane marks; the read lane pulls;
+there is no drain, no dirty set, no `store.refresh()` line in
+`paint` — §5.1's positive half for the refresh line is retired with
+it. **The render stays once per turn**, unconditionally, exactly as
+the freeze demands: the flush retirement changes WHEN freshness
+happens (first read after the writes), never HOW MANY times the diff
+runs.
+
+- **The cycle guard tur needed RETURNS** (§1.3 rejected it because
+  declared edges were acyclic by construction — discovered edges admit
+  cycles). An in-flight set makes a re-entrant read a LOUD trap: a
+  self-reading derive panics naming the cycle, it does not loop or
+  serve garbage. The spike pins it (`spike_e_cycle_guard`) alongside
+  the legal form of the same machinery (derived-on-derived refreshes
+  upstream-first on a single pull, `spike_e_derived_on_derived_...`).
+- **`Derived` is not writable, at the type level.** The runtime trap
+  exists, but the static refusal comes first: `Derived` implements no
+  `Writable`, so `store.set(derived, ..)` does not compile — the trait
+  law (RFC 0012: impl-trait methods ride the trait's visibility) doing
+  the type-system work the design wanted from the twin tests.
+
+### A.4 The TWO-PACKAGE law
+
+The §3 tree — sixteen packages, sixteen `rut.toml` — shipped as TWO:
+
+- **`rut/ui`** — the framework: the atom-store kernel, the t1 widget
+  framework, and the component vocabulary in ONE module (`inline =
+  true`; generic exports splice by law — the atom/nmapset precedent).
+  Pure of biz: nothing in it names a todo.
+- **`rut/biz`** — the domain and app in one module, and the PROJECT
+  ROOT (name = "app"): sources, derived counts line, the machine as
+  mutations, views, shell. Deps: `ui`, `pouch`, `nmapset`.
+
+The §3 per-file component packages, the `web/` host package (§2.4),
+and the appkit-retirement proof plan (§2.5) are overtaken: there is no
+sixteen-manifest closure to dedup, and `web.d.rut` RETURNED to the
+example root — it rides no manifest path in either package; **the
+embedder registers it in both lanes** (`src/mount.rs`), which is the
+honest shape for a surface that exists only where a host does.
+
+- **TodoStore died; the ProbeStore fixture died with it.** §4.1's
+  "atoms are the store object's FIELDS" and §4.5's `store: ?TodoStore`
+  are reversed: the store is a **decoupled-biz kernel** — RFC 0014's
+  opaque-KV pattern (values and erased fns live as `opaque` boxes in
+  id-keyed maps; `opaque.downcast<T>` at the read and dispatch
+  boundaries) — knowing no domain type. Biz holds HANDLES: `items$`,
+  `counts$`, `add_m` are minted at boot (`store.source<T>(..)`,
+  `store.derive(..)`, `store.mutation(..)`) and passed in a handles
+  bundle. §4.2's `Rail`/`Atom<T>` classes and §4.3's per-domain
+  `Derived` impls are gone — the machinery is one generic kernel, and
+  the domain writes closures instead of classes.
+- The boot ABI is unchanged (the root spec stays `app`: the host boots
+  `main`, re-passes the container to `on_event`), and the counts line
+  comes out of `store.get(counts$)`.
+
+### A.5 The visibility ruling
+
+rut's landed visibility is **`pub` or module-private** (§3.1's
+recorded reason — the scoped forms are AST-modeled, unparsed). The
+two-package law is what turns that limitation into the design's
+enforcement:
+
+- **One module per package is what makes the machinery private for
+  real.** The store's eyes — `Readable<T>`, `Writable<T>`,
+  `DeriveCtx`, `MutCtx` — are module-private IN `ui`, and `ui` is one
+  module, so **biz cannot name them even to import them**. §4's whole
+  worry about `pub` fields leaking framework tables dissolves: there
+  is no second module inside `ui` to leak into.
+- **The import-set law gate (`tests/app_law.rs`) is the second
+  enforcement half.** The gate (§5.1's contract, retargeted) asserts
+  biz's import set is EXACTLY the two-package vocabulary — `ui`'s
+  public names (`Store`, `Source`, `Derived`, `Mutation`, the widget
+  vocabulary), `pouch`/`nmapset`, and ONE crossing name (`tim_after`);
+  the machinery traits appear nowhere, and the forbidden scans (no
+  tags, no tokens, no DOM vocabulary) are unchanged. Compiler law and
+  gate law agree: the kernel is reachable only through
+  `store.get`/`store.set`.
+
+### A.6 The net
+
+The design's stack — declared DAG, flush, dirty set, Rail, Atom,
+TodoStore, sixteen manifests — is gone. What replaced it is smaller
+AND closer to tur: a generic opaque-KV kernel with discovered deps,
+pull-on-read, and a cycle guard; two packages; one crossing name. The
+turn law survived every reversal: render once per turn, events write,
+the DOM never hears about state — the model changed under the law,
+never the law itself.
