@@ -676,6 +676,23 @@ impl CellVal {
             _ => None,
         }
     }
+    /// The raw octets of a `bytes` cell WITHOUT copying — the block
+    /// store's own slice (the borrowed key probe, nmap-borrow-probe);
+    /// empty for any other shape. Same lifetime contract as
+    /// `as_str`/`as_bytes`: blocks never move, and a crossing's arg
+    /// register retains the cell for the call's scope.
+    pub fn bytes_view(&self) -> &[u8] {
+        match &self.data {
+            CellData::Str(v) => v.bytes(),
+            CellData::Array { items, .. } if items.borrow().kind == ArrKind::U8 => {
+                let d = items.borrow();
+                // SAFETY: the block lives as long as the cell (the same
+                // contract boundary's `&[u8]` crossing runs on)
+                unsafe { std::slice::from_raw_parts(d.block, d.len as usize) }
+            }
+            _ => &[],
+        }
+    }
     pub fn record_get(&self, field: u32) -> Option<Slot> {
         match &self.data {
             CellData::Record { fields } => fields.borrow().get(field as usize),

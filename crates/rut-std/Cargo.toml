@@ -12,3 +12,11 @@ path = "src/lib.rs"
 [dependencies]
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
+# the borrowed-probe table (nmapset-borrow-probe, docs survey §3): the
+# runtime's first external dep — already in the workspace lock (the LSP
+# chain), wasm-clean; provides `HashTable::{find, entry, find_entry}`
+# over a hand-rolled hash so probes never materialize a key. NO default
+# features: ahash/allocator-api2 are for the default hasher, which this
+# table never uses (the lane hands the hash word in); inline-more is
+# the pure inlining hint.
+hashbrown = { version = "0.14.5", default-features = false, features = ["inline-more"] }

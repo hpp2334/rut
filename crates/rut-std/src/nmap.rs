@@ -1,24 +1,36 @@
 //! `nmap_host` — the native key-table experiment's HOST half: a real
-//! `HashMap` whose entries live Rust-side behind an `opaque` payload
-//! (RFC 0023), so rut meets it only through the `pub host fn` surface
-//! bound by [`install_std_nmap`]. (The pure-rut `mapset` package — the
-//! original reference and general-key implementation — was REMOVED from
-//! the tree in Sep 2026, stdlib slim-down: general keys now mean a
-//! `bytes` encoding or the `nmapset` wrapper; the old source lives in
-//! git history.)
+//! `hashbrown::HashTable` whose entries live Rust-side behind an
+//! `opaque` payload (RFC 0023), so rut meets it only through the
+//! `pub host fn` surface bound by [`install_std_nmap`]. (The pure-rut
+//! `mapset` package — the original reference and general-key
+//! implementation — was REMOVED from the tree in Sep 2026, stdlib
+//! slim-down: general keys now mean a `bytes` encoding or the
+//! `nmapset` wrapper; the old source lives in git history.)
 //!
-//! Design (nmap-hostvals P4 — the real-HashMap core):
-//! - the table IS `HashMap<KeyVal, Entry, MapBuild>`: the open-
-//!   addressing machinery (the recorded-hash vecs, the state bytes and
-//!   their tombstones, the load-factor law, `grow` and its relocation
-//!   queue, the parallel handles vec) is DELETED — std owns probing,
-//!   growth, and rehash now. `KeyVal`'s `Hash` writes ONE u64 —
-//!   [`hash_payload`], the pinned mapset bits (mix64 for the integer/
-//!   bool lanes, FNV-1a 64 over the octets for `str`/`bytes`) — through
-//!   [`IdHasher`], the identity hasher: the map never re-hashes, it
-//!   only buckets on the same words the wrapper's `k.hash()` produces.
-//!   `Eq` is content equality (bits / octets), so an sv key and the
-//!   equal-content `str` key are ONE key with ONE entry;
+//! Design (nmap-borrow-probe — the survey and the receipts:
+//! `docs/nmapset-borrow-probe-survey.md`):
+//! - the table IS `hashbrown::HashTable<(KeyVal, Entry)>` (the
+//!   workspace's first external runtime dep — already in the lock via
+//!   the LSP chain, wasm-clean): the SwissTable machinery (control
+//!   bytes, buckets, the load-factor law, grow) stays the code std
+//!   itself runs, and THERE IS NO HASHER TRAIT — every lane hands the
+//!   table the hash word it computed itself, [`hash_payload`] through
+//!   [`KeyRef`]: the pinned mapset bits (mix64 for the integer/bool
+//!   lanes, FNV-1a 64 over the octets for `str`/`bytes`) — bit-for-bit
+//!   the words the retired identity-hasher path bucketed on, which is
+//!   why the pinned-literal tests and the bench checksums do not move;
+//!   the grow hasher re-derives them from the stored key, so growth's
+//!   rehash changes nothing either. `eq` is content equality over the
+//!   borrowed window, so an sv key and the equal-content `str` key are
+//!   ONE key with ONE entry;
+//! - THE COPY LAW (the price the old `std::HashMap` core charged —
+//!   phase 0 counted exactly 1.000 materializations per str-lane op,
+//!   283,332 per nmapset-str run): probes BORROW — [`KeyRef`] is a
+//!   `Bits` word or a `&str`/`&[u8]` window straight out of the
+//!   crossing — and the owned `KeyVal` is materialized ONLY at a fresh
+//!   insert, where the store needs it (`KeyRef::to_keyval`). `find`/
+//!   `find_entry` never allocate; `entry(hash, eq, hasher)` replaces
+//!   in place;
 //! - the key set is CLOSED (i8..i64, u8..u64, bool, str, bytes), fixed
 //!   by the table's first insert and admitted thereafter (the `kind`
 //!   field stays as the admission trap — a mismatch is a host/wrapper
@@ -51,16 +63,17 @@
 //!   hatch (exact-arm matched: bits answer bits, `Empty`/`Ref` trap,
 //!   never reinterpret; a `Ref` cell is released on overwrite).
 //!
-//! Borrowed keys: the old probing core compared `str` keys OVER the
-//! crossed octets (zero-copy until a fresh insert). std's `HashMap`
-//! has no borrowed probe, so the s/sv lanes materialize one owned
-//! `KeyVal::Str` per crossing — the copy moved from insert-only to
-//! per-crossing, the one measurable price of the real-HashMap
-//! directive, disclosed in the movers (hashing still runs over the
-//! octets via [`hash_payload`]; nothing else changed).
+//! Borrowed keys, end to end: the s/sv/y crossings hand the table a
+//! `&str`/`&[u8]` window (the sv lanes stay zero-copy through
+//! `sv_range`'s house `Invalid` checks), and the any-lane key decode
+//! returns a [`KeyRef`] borrowed from the arg cell — the ONE owned
+//! copy left in the whole surface is a fresh insert. Admission still
+//! runs BEFORE the value decode retains (the leak law), and since no
+//! iteration surface exists (`put/get/has/remove/len` + the range
+//! twins), bucket internals are unobservable.
 
-use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, Hash, Hasher};
+use hashbrown::hash_table;
+use hashbrown::HashTable;
 
 use rut_core::types::{PrimTy, TyKind};
 use rut_vm::heap::{cell_of, Heap};
@@ -85,44 +98,92 @@ pub enum KeyKind {
 
 /// A stored key: the closed native set as owned Rust data. `Eq` is
 /// content equality (the derive) — a key's identity in the map is WHAT
-/// IT SAYS, never where it lives. `Hash` is custom (below): ONE pre-
-/// hashed word, the pinned mapset bits.
+/// IT SAYS, never where it lives. No `Hasher` trait touches it
+/// anymore: the lanes hand the table [`hash_payload`]'s word directly,
+/// and probes borrow through [`KeyRef`] below (the owned copy is
+/// materialized only at a fresh insert).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KeyVal {
     /// the slot word's raw bits (a negative integer crosses
     /// sign-extended, exactly as it hashed wrapper-side)
     Bits(u64),
-    /// an owned `str` copy — short, once per call
+    /// an owned `str` copy — fresh inserts only
     Str(String),
-    /// an owned `bytes` copy — short, once per call
+    /// an owned `bytes` copy — fresh inserts only
     Bytes(Vec<u8>),
 }
 
-impl Hash for KeyVal {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(hash_payload(self)); // ONE u64 — the pinned mapset bits
+/// The BORROWED probe key (nmap-borrow-probe): what every crossing
+/// hands the table — the register word's raw bits, or a `&str`/
+/// `&[u8]` window straight from the cell or the sv range. `hash()` is
+/// [`hash_payload`]'s word by construction (both spellings funnel
+/// through `hash_bits`/`hash_bytes`, so a probe and its stored key
+/// bucket identically — the pinned bits); `eq_val` is content
+/// equality against the stored key (an sv window and the
+/// equal-content `str` are ONE key, spelled at the probe); and
+/// `to_keyval` is THE materialization — called only at a fresh
+/// insert, the whole copy law.
+#[derive(Clone, Copy, Debug)]
+pub enum KeyRef<'a> {
+    /// the slot word's raw bits (the sign/zero-extension law rides the
+    /// lane's cast, exactly as the typed h-family lanes spell it)
+    Bits(u64),
+    /// a borrowed str window — zero-copy probes, s and sv alike
+    Str(&'a str),
+    /// a borrowed bytes window — zero-copy probes
+    Bytes(&'a [u8]),
+}
+
+impl<'a> KeyRef<'a> {
+    /// The key's flavor — what `admit` checks (always equal to the
+    /// stored `KeyVal`'s own flavor).
+    pub fn kind(&self) -> KeyKind {
+        match self {
+            KeyRef::Bits(_) => KeyKind::Bits,
+            KeyRef::Str(_) => KeyKind::Str,
+            KeyRef::Bytes(_) => KeyKind::Bytes,
+        }
+    }
+
+    /// The table's hash word — the pinned mapset bits over the
+    /// borrowed window (no copy to hash through).
+    pub fn hash(&self) -> u64 {
+        match self {
+            KeyRef::Bits(v) => hash_bits(*v),
+            KeyRef::Str(s) => hash_bytes(s.as_bytes()),
+            KeyRef::Bytes(b) => hash_bytes(b),
+        }
+    }
+
+    /// Content equality against the stored owned key.
+    pub fn eq_val(&self, stored: &KeyVal) -> bool {
+        match (self, stored) {
+            (KeyRef::Bits(a), KeyVal::Bits(b)) => a == b,
+            (KeyRef::Str(a), KeyVal::Str(b)) => *a == b.as_str(),
+            (KeyRef::Bytes(a), KeyVal::Bytes(b)) => *a == b.as_slice(),
+            _ => false,
+        }
+    }
+
+    /// THE one materialization — a FRESH insert only (the copy law).
+    pub fn to_keyval(&self) -> KeyVal {
+        match self {
+            KeyRef::Bits(v) => KeyVal::Bits(*v),
+            KeyRef::Str(s) => KeyVal::Str((*s).to_owned()),
+            KeyRef::Bytes(b) => KeyVal::Bytes((*b).to_vec()),
+        }
     }
 }
 
-/// The identity hasher (the plan's P4 code block): the map buckets on
-/// the word [`KeyVal`]'s `Hash` writes — no second hashing pass, ever.
-/// The bits ARE the pinned mapset constants, so a host-side bucket
-/// assignment and the wrapper's own `k.hash()` agree bit for bit.
-#[derive(Default)]
-pub struct IdHasher(u64);
-
-impl Hasher for IdHasher {
-    fn write_u64(&mut self, v: u64) {
-        self.0 = v;
-    }
-    fn write(&mut self, _: &[u8]) {}
-    fn finish(&self) -> u64 {
-        self.0
+impl<'a> From<&'a KeyVal> for KeyRef<'a> {
+    fn from(k: &'a KeyVal) -> Self {
+        match k {
+            KeyVal::Bits(v) => KeyRef::Bits(*v),
+            KeyVal::Str(s) => KeyRef::Str(s.as_str()),
+            KeyVal::Bytes(b) => KeyRef::Bytes(b.as_slice()),
+        }
     }
 }
-
-/// The map's build hasher.
-pub type MapBuild = BuildHasherDefault<IdHasher>;
 
 /// One entry's value storage: a birth holds [`ValSlot::Empty`] until a
 /// value lane fills it; the valued `hv` lanes store [`ValSlot::Bits`]
@@ -138,21 +199,30 @@ pub(crate) struct Entry {
     pub(crate) val: ValSlot,
 }
 
-/// The native table: a real `HashMap` plus the admission kind and the
-/// birth counter. The keys are pure Rust data — their Drop frees them
-/// when the box's rc hits 0; the VALUES are rut cells ([`ValSlot::Ref`])
-/// and release through [`HostPayload::finalize`] at store-entry death.
+/// The native table: a real `HashTable` with borrowed probes
+/// (nmap-borrow-probe) plus the admission kind and the birth counter.
+/// The keys are pure Rust data — their Drop frees them when the box's
+/// rc hits 0; the VALUES are rut cells ([`ValSlot::Ref`]) and release
+/// through [`HostPayload::finalize`] at store-entry death.
 pub struct NativeTable {
     kind: KeyKind,
-    map: HashMap<KeyVal, Entry, MapBuild>,
+    /// the borrowed-probe table — one probe per op over the lane's own
+    /// hash word (no hasher trait, no key materialization)
+    map: HashTable<(KeyVal, Entry)>,
     /// the next birth index — the table's lifetime insertion count,
     /// bounded by BIRTHS not capacity (the packed i64 answer's headroom
     /// law: the handle rides i32 with room far past any real table)
     next_handle: i32,
 }
 
+/// The stored bucket's hash word — the grow hasher's closure (rehash
+/// re-derives exactly what the lane wrote, so growth moves no bucket).
+fn stored_hash(it: &(KeyVal, Entry)) -> u64 {
+    hash_payload(&it.0)
+}
+
 impl NativeTable {
-    /// `map_new`'s `cap` is HashMap's reserve: a lower bound on the
+    /// `map_new`'s `cap` is the table's reserve: a lower bound on the
     /// bucket capacity, honored by `with_capacity` (the power-of-two
     /// ≥ 4 rounding law died with the probing core). `cap` crosses as
     /// the `i64` the wrapper passes.
@@ -160,8 +230,32 @@ impl NativeTable {
         let cap = cap.clamp(0, i32::MAX as i64) as usize;
         NativeTable {
             kind: KeyKind::Unset,
-            map: HashMap::with_capacity_and_hasher(cap, MapBuild::default()),
+            map: HashTable::with_capacity(cap),
             next_handle: 0,
+        }
+    }
+
+    /// The fused put-path crossing, the BORROWED core: ONE probe —
+    /// `Occupied` → the same handle, `newly = false`, NOTHING
+    /// materialized (a replace never touches a key copy); `Vacant` →
+    /// a fresh monotonic birth with the [`ValSlot::Empty`] placeholder
+    /// and THE one owned copy (`to_keyval`), `newly = true`. The
+    /// packed answer is bit-for-bit the hostops lane's
+    /// `(handle << 1) | newly`.
+    fn hput_ref(&mut self, key: KeyRef<'_>) -> Result<i64, Trap> {
+        self.admit(key.kind())?;
+        let h = key.hash();
+        match self.map.entry(h, |it| key.eq_val(&it.0), stored_hash) {
+            hash_table::Entry::Occupied(e) => Ok(pack_answer(e.get().1.handle, false)),
+            hash_table::Entry::Vacant(v) => {
+                if self.kind == KeyKind::Unset {
+                    self.kind = key.kind(); // the first insert fixes the flavor
+                }
+                let handle = self.next_handle;
+                self.next_handle += 1;
+                v.insert((key.to_keyval(), Entry { handle, val: ValSlot::Empty }));
+                Ok(pack_answer(handle, true))
+            }
         }
     }
 
@@ -170,28 +264,51 @@ impl NativeTable {
     /// the value lanes overwrite in place); `Vacant` → a fresh
     /// monotonic birth with the [`ValSlot::Empty`] placeholder,
     /// `newly = true`. The packed answer is bit-for-bit the hostops
-    /// lane's `(handle << 1) | newly`.
+    /// lane's `(handle << 1) | newly`. (Owned-key entry — the lanes
+    /// reach the borrowed core directly; this shape serves the
+    /// typed-lane tests and answers exactly as before.)
     pub fn hput(&mut self, kind: KeyKind, key: KeyVal) -> Result<i64, Trap> {
         self.admit(kind)?;
-        Ok(match self.map.entry(key) {
-            std::collections::hash_map::Entry::Occupied(e) => pack_answer(e.get().handle, false),
-            std::collections::hash_map::Entry::Vacant(v) => {
-                if self.kind == KeyKind::Unset {
-                    self.kind = kind; // the first insert fixes the flavor
-                }
-                let handle = self.next_handle;
-                self.next_handle += 1;
-                v.insert(Entry { handle, val: ValSlot::Empty });
-                pack_answer(handle, true)
-            }
-        })
+        self.hput_ref(KeyRef::from(&key))
+    }
+
+    /// The fused lookup crossing, the BORROWED core: the key's handle,
+    /// or `-1` — over the window, no materialization.
+    fn hfind_ref(&self, key: KeyRef<'_>) -> Result<i32, Trap> {
+        self.admit(key.kind())?;
+        Ok(self
+            .map
+            .find(key.hash(), |it| key.eq_val(&it.0))
+            .map(|it| it.1.handle)
+            .unwrap_or(-1))
     }
 
     /// The fused lookup crossing: the key's handle, or `-1` — the
     /// wrapper answers `nil` / `false` from the sign.
     pub fn hfind(&self, kind: KeyKind, key: &KeyVal) -> Result<i32, Trap> {
         self.admit(kind)?;
-        Ok(self.map.get(key).map(|e| e.handle).unwrap_or(-1))
+        self.hfind_ref(KeyRef::from(key))
+    }
+
+    /// The fused remove crossing, the BORROWED core: `find_entry` is
+    /// ONE probe — the entry leaves the map, its held value cell (a
+    /// `Ref`, when a valued lane stored one) releases through the Vm
+    /// FIRST (the entry-death law; dropping a `Ref` bare would leak the
+    /// cell) — and the DEAD key's handle answers, or `-1` when absent.
+    /// The handle is never recycled: a re-insert is a NEW birth. This
+    /// is ALSO the `map_hvremove` body: removal is value-aware in
+    /// exactly one way, the release.
+    fn hremove_ref(&mut self, vm: &Vm, key: KeyRef<'_>) -> Result<i32, Trap> {
+        self.admit(key.kind())?;
+        match self.map.find_entry(key.hash(), |it| key.eq_val(&it.0)) {
+            Ok(occupied) => {
+                let ((_, entry), _slot) = occupied.remove();
+                let mut e = entry;
+                release_val(vm, &mut e.val);
+                Ok(e.handle)
+            }
+            Err(_) => Ok(-1),
+        }
     }
 
     /// The fused remove crossing: the entry leaves the map — its held
@@ -203,12 +320,39 @@ impl NativeTable {
     /// is value-aware in exactly one way, the release.
     pub fn hremove(&mut self, vm: &Vm, kind: KeyKind, key: &KeyVal) -> Result<i32, Trap> {
         self.admit(kind)?;
-        match self.map.remove(key) {
-            Some(mut e) => {
-                release_val(vm, &mut e.val);
-                Ok(e.handle)
+        self.hremove_ref(vm, KeyRef::from(key))
+    }
+
+    /// The valued put (the `map_hvput` body), the BORROWED core: the
+    /// entry API with the value INSIDE — ONE crossing carries it.
+    /// `Occupied` → release the old value in-crossing and store the
+    /// new (same handle, `newly = false`, no key copy); `Vacant` → a
+    /// fresh monotonic birth holding `val` (`newly = true`, the one
+    /// materialization). The packed answer is bit-for-bit the
+    /// h-family's. `val` arrives pre-decoded ([`decode_val`]: prim →
+    /// `Bits`, ref → the origin cell retained) with admission already
+    /// checked — `check_kind` ran BEFORE the retain, so a trapped
+    /// mixed-kind put cannot leak it (this method re-admits as
+    /// defense).
+    fn hvput_ref(&mut self, vm: &Vm, key: KeyRef<'_>, val: ValSlot) -> Result<i64, Trap> {
+        self.admit(key.kind())?;
+        let h = key.hash();
+        match self.map.entry(h, |it| key.eq_val(&it.0), stored_hash) {
+            hash_table::Entry::Occupied(mut e) => {
+                let ent = &mut e.get_mut().1;
+                release_val(vm, &mut ent.val);
+                ent.val = val;
+                Ok(pack_answer(ent.handle, false))
             }
-            None => Ok(-1),
+            hash_table::Entry::Vacant(v) => {
+                if self.kind == KeyKind::Unset {
+                    self.kind = key.kind(); // the first insert fixes the flavor
+                }
+                let handle = self.next_handle;
+                self.next_handle += 1;
+                v.insert((key.to_keyval(), Entry { handle, val }));
+                Ok(pack_answer(handle, true))
+            }
         }
     }
 
@@ -223,22 +367,33 @@ impl NativeTable {
     /// cannot leak it (this method re-admits as defense).
     pub fn hvput(&mut self, vm: &Vm, kind: KeyKind, key: KeyVal, val: ValSlot) -> Result<i64, Trap> {
         self.admit(kind)?;
-        Ok(match self.map.entry(key) {
-            std::collections::hash_map::Entry::Occupied(mut e) => {
-                release_val(vm, &mut e.get_mut().val);
-                e.get_mut().val = val;
-                pack_answer(e.get().handle, false)
-            }
-            std::collections::hash_map::Entry::Vacant(v) => {
-                if self.kind == KeyKind::Unset {
-                    self.kind = kind; // the first insert fixes the flavor
-                }
-                let handle = self.next_handle;
-                self.next_handle += 1;
-                v.insert(Entry { handle, val });
-                pack_answer(handle, true)
-            }
-        })
+        self.hvput_ref(vm, KeyRef::from(&key), val)
+    }
+
+    /// The valued get (the `map_hvget` body), the BORROWED core: one
+    /// `find` over the window; the stored [`ValSlot`] answers AS-IS —
+    /// `Bits` moves the 8 bytes, `Ref` names the STORED cell (aliasing
+    /// IS the cell: the `?V` register write-back retains its own
+    /// reference and the store keeps its own, the ArrGet shape). Absent
+    /// → `None` (the miss crosses as nil). An `Empty` entry — an
+    /// h-family birth read through a valued lane — TRAPS loudly
+    /// (§0.8 g: a caller bug, never a silent nil).
+    fn hvget_ref(&self, key: KeyRef<'_>) -> Result<Option<ValSlot>, Trap> {
+        self.admit(key.kind())?;
+        match self.map.find(key.hash(), |it| key.eq_val(&it.0)) {
+            None => Ok(None),
+            Some(it) => match &it.1.val {
+                ValSlot::Empty => Err(Trap::new(
+                    TrapKind::Invalid,
+                    format!(
+                        "nmap: valued get over the `Empty` placeholder (handle {}; an hput birth holds no value — a valued read of it is a caller bug, §0.8 g)",
+                        it.1.handle
+                    ),
+                )),
+                ValSlot::Bits(s) => Ok(Some(ValSlot::Bits(*s))),
+                ValSlot::Ref(s) => Ok(Some(ValSlot::Ref(*s))),
+            },
+        }
     }
 
     /// The valued get (the `map_hvget` body): the stored [`ValSlot`]
@@ -250,20 +405,7 @@ impl NativeTable {
     /// TRAPS loudly (§0.8 g: a caller bug, never a silent nil).
     pub fn hvget(&self, kind: KeyKind, key: &KeyVal) -> Result<Option<ValSlot>, Trap> {
         self.admit(kind)?;
-        match self.map.get(key) {
-            None => Ok(None),
-            Some(e) => match &e.val {
-                ValSlot::Empty => Err(Trap::new(
-                    TrapKind::Invalid,
-                    format!(
-                        "nmap: valued get over the `Empty` placeholder (handle {}; an hput birth holds no value — a valued read of it is a caller bug, §0.8 g)",
-                        e.handle
-                    ),
-                )),
-                ValSlot::Bits(s) => Ok(Some(ValSlot::Bits(*s))),
-                ValSlot::Ref(s) => Ok(Some(ValSlot::Ref(*s))),
-            },
-        }
+        self.hvget_ref(KeyRef::from(key))
     }
 
     /// The admission check the valued put lanes run BEFORE decoding
@@ -340,7 +482,8 @@ impl NativeTable {
     fn entry_by_handle(&self, handle: i32) -> Result<&Entry, Trap> {
         self.check_birth(handle)?;
         self.map
-            .values()
+            .iter()
+            .map(|it| &it.1)
             .find(|e| e.handle == handle)
             .ok_or_else(|| dead_handle_trap(handle, self.next_handle))
     }
@@ -351,7 +494,8 @@ impl NativeTable {
         // miss trap must not reach back through `&mut self`
         let births = self.next_handle;
         self.map
-            .values_mut()
+            .iter_mut()
+            .map(|it| &mut it.1)
             .find(|e| e.handle == handle)
             .ok_or_else(|| dead_handle_trap(handle, births))
     }
@@ -370,7 +514,7 @@ impl NativeTable {
     }
 
     /// The capacity, at the i32 boundary (`len()` and indexing are
-    /// i32) — HashMap's reserve, kept as a test/observation surface
+    /// i32) — the table's reserve, kept as a test/observation surface
     /// only: the `map_cap` crossing retired at P5 with the wrapper's
     /// sidecar pre-size (nothing rut-side has anything left to size).
     pub fn cap(&self) -> i32 {
@@ -404,8 +548,8 @@ impl NativeTable {
 /// payload's own Drop, deterministically.
 impl HostPayload for NativeTable {
     fn finalize(&mut self, heap: &Heap) {
-        for e in self.map.values_mut() {
-            if let ValSlot::Ref(s) = std::mem::replace(&mut e.val, ValSlot::Empty) {
+        for it in self.map.iter_mut() {
+            if let ValSlot::Ref(s) = std::mem::replace(&mut it.1.val, ValSlot::Empty) {
                 heap.release(s);
             }
         }
@@ -431,13 +575,18 @@ fn release_val(vm: &Vm, val: &mut ValSlot) {
 /// as the register word's raw bits (the sign/zero-extension law: the
 /// slot already holds the canonical i64-width word, so `-1i8` and
 /// `255u8` land on the same bits the typed lanes cast to), `str`/
-/// `bytes` as an owned copy of the cell's octets (a str VIEW key reads
-/// as its window — the s lane's law). Floats are REFUSED (no stable
-/// equality contract, as in mapset); everything else traps by name.
-fn decode_key(vm: &Vm, hv: &HostVal) -> Result<KeyVal, Trap> {
+/// `bytes` as a BORROWED window over the cell's octets (nmap-borrow-
+/// probe: no copy — a str VIEW key reads as its window, the s lane's
+/// law). The borrow's lifetime is the arg's; the cell outlives the
+/// probe under the crossing's retention contract (the caller's
+/// register owns the reference, the arena never moves cells — the
+/// same trust the `&str` param read runs on). Floats are REFUSED (no
+/// stable equality contract, as in mapset); everything else traps by
+/// name.
+fn decode_key<'a>(vm: &Vm, hv: &'a HostVal) -> Result<KeyRef<'a>, Trap> {
     match vm.prog.types.kind(hv.ty) {
         TyKind::Prim(p) if p.is_int() || *p == PrimTy::Bool => {
-            Ok(KeyVal::Bits(unsafe { hv.slot.i } as u64))
+            Ok(KeyRef::Bits(unsafe { hv.slot.i } as u64))
         }
         TyKind::Prim(p) => Err(Trap::new(
             TrapKind::Invalid,
@@ -446,8 +595,8 @@ fn decode_key(vm: &Vm, hv: &HostVal) -> Result<KeyVal, Trap> {
                 p.name()
             ),
         )),
-        TyKind::Str => Ok(KeyVal::Str(cell_of(hv.slot).as_str().to_owned())),
-        TyKind::Bytes => Ok(KeyVal::Bytes(cell_of(hv.slot).bytes_copy())),
+        TyKind::Str => Ok(KeyRef::Str(cell_of(hv.slot).as_str())),
+        TyKind::Bytes => Ok(KeyRef::Bytes(cell_of(hv.slot).bytes_view())),
         other => Err(Trap::new(
             TrapKind::Invalid,
             format!(
@@ -528,29 +677,23 @@ pub fn hash_bytes(bytes: &[u8]) -> u64 {
     h
 }
 
-/// The ONE shared payload hasher — the word [`KeyVal`]'s `Hash` writes
-/// into the map: mix64 for the integer/bool bits, FNV-1a 64 over the
-/// octets for `str`/`bytes`. Same inputs, nmapset.rut's constants,
-/// bit-exact.
-pub fn hash_payload(k: &KeyVal) -> u64 {
-    match k {
-        KeyVal::Bits(v) => (FNV_OFFSET ^ v).wrapping_mul(FNV_PRIME),
-        KeyVal::Str(s) => hash_bytes(s.as_bytes()),
-        KeyVal::Bytes(b) => hash_bytes(b),
-    }
+/// The integer/bool lane's word — mix64 over the two pinned constants
+/// (both hash spellings funnel through this and [`hash_bytes`], so a
+/// borrowed probe and its stored key are bit-identical by
+/// construction).
+fn hash_bits(v: u64) -> u64 {
+    (FNV_OFFSET ^ v).wrapping_mul(FNV_PRIME)
 }
 
-/// The payload's kind — the table's fixed flavor. All integer
-/// primitives and `bool` share `Bits` (equality is the payload bits:
-/// `255u8`, `255i64`, and `255i32` collapse to one key, exactly as the
-/// wrapper's homogeneous `K` guarantees), `str`/`bytes` are their own
-/// kinds.
-fn kind_of(key: &KeyVal) -> KeyKind {
-    match key {
-        KeyVal::Bits(_) => KeyKind::Bits,
-        KeyVal::Str(_) => KeyKind::Str,
-        KeyVal::Bytes(_) => KeyKind::Bytes,
-    }
+/// The ONE shared payload hasher — the exact word the table buckets a
+/// stored [`KeyVal`] on: mix64 for the integer/bool bits, FNV-1a 64
+/// over the octets for `str`/`bytes`. Same inputs, nmapset.rut's
+/// constants, bit-exact (the pinned-literal tests). No `Hasher` trait
+/// involved — lanes hand this word to `HashTable::{find, entry}`
+/// directly, and [`KeyRef::hash`] answers the same bits over the
+/// borrowed window.
+pub fn hash_payload(k: &KeyVal) -> u64 {
+    KeyRef::from(k).hash()
 }
 
 /// The sv lanes' range check (strings-round1 phase 1): `off`/`len` are
@@ -615,10 +758,11 @@ fn sv_range<'a>(parent: &'a str, off: i32, len: i32) -> Result<&'a str, Trap> {
 //   `hremove` answers the dead key's own handle so the wrapper can nil
 //   exactly that sidecar slot and release the cell.
 //
-// The borrowed s/sv lanes materialize one owned `KeyVal::Str` per
-// crossing (std has no borrowed probe — see the module header); the
-// hashing still runs over the octets, and an sv key and the
-// equal-content `str` key are ONE key: same entry, same HANDLE.
+// The s/sv/y lanes probe BORROWED (nmap-borrow-probe): the window
+// itself crosses as `&str`/`&[u8]` and the owned key exists only at a
+// fresh insert — the hash still runs over the octets, and an sv key
+// and the equal-content `str` key are ONE key: same entry, same
+// HANDLE.
 
 /// The packed `hput` answer: bit 0 = the newly bit, the rest the handle.
 #[inline]
@@ -626,37 +770,38 @@ fn pack_answer(hd: i32, newly: bool) -> i64 {
     ((hd as i64) << 1) | (newly as i64)
 }
 
-/// The i/u/b/y lanes' fused put: hash and insert/replace via the entry
-/// API — growth is std's, internal, and invisible to the answer.
+/// The i/u/b lanes' fused put: the borrowed core over the register
+/// word (`KeyRef::Bits` copies, nothing materializes) — growth is the
+/// table's own, internal, and invisible to the answer.
 fn fused_put(t: &mut NativeTable, key: KeyVal) -> Result<i64, Trap> {
-    t.hput(kind_of(&key), key)
+    t.hput_ref(KeyRef::from(&key))
 }
 
-/// The i/u/b/y lanes' fused find: the handle or `-1`.
+/// The i/u/b lanes' fused find: the handle or `-1`.
 fn fused_find(t: &NativeTable, key: &KeyVal) -> Result<i32, Trap> {
-    t.hfind(kind_of(key), key)
+    t.hfind_ref(KeyRef::from(key))
 }
 
-/// The i/u/b/y lanes' fused remove: the dead key's handle or `-1`,
+/// The i/u/b lanes' fused remove: the dead key's handle or `-1`,
 /// the held value releasing in-crossing.
 fn fused_remove(vm: &Vm, t: &mut NativeTable, key: &KeyVal) -> Result<i32, Trap> {
-    t.hremove(vm, kind_of(key), key)
+    t.hremove_ref(vm, KeyRef::from(key))
 }
 
-/// The s lane's fused put: one owned `KeyVal::Str` per crossing (std
-/// has no borrowed probe), the entry API on top of it.
+/// The s lane's fused put: BORROWED (nmap-borrow-probe — the window
+/// itself probes; the owned copy happens inside, a fresh insert only).
 fn fused_put_s(t: &mut NativeTable, k: &str) -> Result<i64, Trap> {
-    t.hput(KeyKind::Str, KeyVal::Str(k.to_owned()))
+    t.hput_ref(KeyRef::Str(k))
 }
 
-/// The s lane's fused find.
+/// The s lane's fused find: zero-copy.
 fn fused_find_s(t: &NativeTable, k: &str) -> Result<i32, Trap> {
-    t.hfind(KeyKind::Str, &KeyVal::Str(k.to_owned()))
+    t.hfind_ref(KeyRef::Str(k))
 }
 
-/// The s lane's fused remove.
+/// The s lane's fused remove: zero-copy.
 fn fused_remove_s(vm: &Vm, t: &mut NativeTable, k: &str) -> Result<i32, Trap> {
-    t.hremove(vm, KeyKind::Str, &KeyVal::Str(k.to_owned()))
+    t.hremove_ref(vm, KeyRef::Str(k))
 }
 
 /// The sv lane's fused put: validate the byte window (the house
@@ -792,7 +937,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         "nmap_host::map_hput_y",
         (Opaque<NativeTable>, &[u8]) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i64, Trap> {
-            b.with_mut(vm, |_vm, t| fused_put(t, KeyVal::Bytes(k.to_vec())))?
+            b.with_mut(vm, |_vm, t| t.hput_ref(KeyRef::Bytes(k)))?
         },
     );
     rut_vm::register!(
@@ -840,7 +985,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         "nmap_host::map_hfind_y",
         (Opaque<NativeTable>, &[u8]) -> i32,
         |_vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
-            b.with(|t| fused_find(t, &KeyVal::Bytes(k.to_vec())))?
+            b.with(|t| t.hfind_ref(KeyRef::Bytes(k)))?
         },
     );
     rut_vm::register!(
@@ -888,7 +1033,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         "nmap_host::map_hremove_y",
         (Opaque<NativeTable>, &[u8]) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
-            b.with_mut(vm, |vm, t| fused_remove(vm, t, &KeyVal::Bytes(k.to_vec())))?
+            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bytes(k)))?
         },
     );
     rut_vm::register!(
@@ -932,11 +1077,12 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (Opaque<NativeTable>, HostVal, HostVal) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: HostVal, v: HostVal| -> Result<i64, Trap> {
             let key = decode_key(vm, &k)?;
-            let kind = kind_of(&key);
             b.with_mut(vm, |vm, t| {
-                t.check_kind(kind)?;
+                // the admission check runs BEFORE `decode_val` retains
+                // (the leak law) — unchanged, keyed off the borrowed key
+                t.check_kind(key.kind())?;
                 let val = decode_val(vm, &v)?;
-                t.hvput(vm, kind, key, val)
+                t.hvput_ref(vm, key, val)
             })?
         },
     );
@@ -946,7 +1092,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (Opaque<NativeTable>, HostVal) -> Option<ValSlot>,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: HostVal| -> Result<Option<ValSlot>, Trap> {
             let key = decode_key(vm, &k)?;
-            b.with(|t| t.hvget(kind_of(&key), &key))?
+            b.with(|t| t.hvget_ref(key))?
         },
     );
     rut_vm::register!(
@@ -955,7 +1101,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (Opaque<NativeTable>, HostVal) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, k: HostVal| -> Result<i32, Trap> {
             let key = decode_key(vm, &k)?;
-            b.with_mut(vm, |vm, t| t.hremove(vm, kind_of(&key), &key))?
+            b.with_mut(vm, |vm, t| t.hremove_ref(vm, key))?
         },
     );
     rut_vm::register!(
@@ -964,11 +1110,12 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (Opaque<NativeTable>, &str, i32, i32, HostVal) -> i64,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32, v: HostVal| -> Result<i64, Trap> {
             let range = sv_range(parent, off, len)?;
-            let key = KeyVal::Str(range.to_owned());
+            let key = KeyRef::Str(range);
             b.with_mut(vm, |vm, t| {
-                t.check_kind(KeyKind::Str)?;
+                // admission before the retain, as everywhere (leak law)
+                t.check_kind(key.kind())?;
                 let val = decode_val(vm, &v)?;
-                t.hvput(vm, KeyKind::Str, key, val)
+                t.hvput_ref(vm, key, val)
             })?
         },
     );
@@ -978,7 +1125,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (Opaque<NativeTable>, &str, i32, i32) -> Option<ValSlot>,
         |_vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<Option<ValSlot>, Trap> {
             let range = sv_range(parent, off, len)?;
-            b.with(|t| t.hvget(KeyKind::Str, &KeyVal::Str(range.to_owned())))?
+            b.with(|t| t.hvget_ref(KeyRef::Str(range)))?
         },
     );
     rut_vm::register!(
@@ -987,7 +1134,7 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         (Opaque<NativeTable>, &str, i32, i32) -> i32,
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             let range = sv_range(parent, off, len)?;
-            b.with_mut(vm, |vm, t| t.hremove(vm, KeyKind::Str, &KeyVal::Str(range.to_owned())))?
+            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Str(range)))?
         },
     );
 }
@@ -1035,7 +1182,7 @@ mod tests {
     #[test]
     fn the_capacity_law_is_hashmaps_reserve_semantics() {
         // the open-addressing power-of-two law is gone with the probing
-        // core; `map_new`'s `cap` is HashMap's reserve — a lower bound
+        // core; `map_new`'s `cap` is the table's reserve — a lower bound
         // on capacity, which `map_cap` reads back for the wrapper's
         // sidecar pre-size (a hint, never a behavior)
         assert_eq!(NativeTable::new(0).cap(), 0);
