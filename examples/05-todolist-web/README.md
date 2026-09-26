@@ -328,8 +328,10 @@ module-private traits behind `pub` methods (RFC 0012's impl-trait
 visibility), first-class fns as values (`store.derive` / `store.mutation`
 take fn literals; `opaque.downcast` unwraps the erased program at the
 trust boundary, RFC 0014), dataclass-literal structs (`World`,
-`AppRoot`, `Todo`, `Req`, `Widget`), shared-cell containers (`let mut
-r: ?AppRoot = root`), `?T` nilables, `when` match, f-strings, the
+`AppRoot`, `Todo`, `Req`, `Widget`), shared-cell containers (the
+container crossing is NON-NULLABLE end to end: `opaque(AppRoot)` —
+`downcast<AppRoot>` — nil-checked unwrap `let mut r: AppRoot = root`),
+`?T` nilables, `when` match, f-strings, the
 val-column row `HashMap<str, i64>` (nmapset) as the subject tables,
 and the two-package manifest tree — the medium-scale shape above.
 

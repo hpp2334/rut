@@ -311,3 +311,28 @@ scratch scripted session because the suite itself carries no fuel instrumentatio
 ops-delta inverted under the literal reading (fields only) — the survey recommends the wider
 shape rather than reporting the inverted number as the result. (iv) conv4's `??AppRoot`
 diagnostic is recorded as the mechanism's own statement of where the conversion must stop.
+
+---
+
+## Addendum (Sep 2026): the AppRoot chain converted — the first after-shape, landed
+
+The two-package rewrite (RFC 0012's parameterized impls batch) already swept the
+framework side: ui's `T1Root` fns take `T1Root` plain, and the store's handles
+were never nullable. The container crossing kept `?AppRoot` as the last
+load-bearing nullable of §1.2's census — until now:
+
+- `main` builds and returns `opaque(AppRoot)` — payload `S`, not `?S` (the
+  box-payload law, §1.2: the type id distinguishes them, so both ends flipped
+  together: mint-side ascription dropped, `downcast<AppRoot>` spelled plain).
+- `on_event` keeps the nil-check + the named host-drift panic at the boundary
+  (the yield is `?AppRoot` by `mk_opt(want)` — a miss is nil, checked there),
+  then unwraps once: `let mut r: AppRoot = root`. The trap text is pinned by
+  `a_foreign_container_traps_loud`; the panic channel stays the drift channel.
+- `dispatch`/`paint`/`view` take `AppRoot` — §2.3's after-shape for the app
+  chain, verbatim. A container is never absent; the type now says so.
+
+What deliberately stays `?`: the frozen host-test surface (`wt -> ?World`,
+`pt -> ?Probe` — the §5.3 signature freeze; converting them is a twins-store
+signature change, a separate decision) and the true absent-state nils of §1's
+lawful list (`?Req` returns, the map misses). Gates: all 94 todolist-web tests
+green, the trap message byte-identical.

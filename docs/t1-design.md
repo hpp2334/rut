@@ -401,7 +401,7 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) {
     render(root.t1, view_of(root));   // THE render — once per turn, any turn
 }
 
-fn view_of(r: ?AppRoot) -> Widget {   // PURE: reads store + draft, builds widgets
+fn view_of(r: AppRoot) -> Widget {   // PURE: reads store + draft, builds widgets
     ...
 }
 ```

@@ -19,7 +19,7 @@ pub class AppRoot {
 // is pixel-identical from turn one (survey §4.5).
 entry fn main() -> opaque {
     let boot: World = world_boot("booted — type a title, press Add");
-    let mut root: ?AppRoot = AppRoot {
+    let root = AppRoot {
         world: boot,
         t1: t1_mount("app"),
         toggles: HashMap.new(),
@@ -35,11 +35,11 @@ entry fn main() -> opaque {
 // container does NOT re-cross on a failed turn; the pump keeps the one
 // it holds. Drift stays on the panic channel, loud.
 entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
-    let root = opaque.downcast<?AppRoot>(c);
+    let root = opaque.downcast<AppRoot>(c);
     if (root == nil) {
         panic("app: the event container is not an AppRoot — host drift");
     }
-    let mut r: ?AppRoot = root;
+    let mut r: AppRoot = root;
 
     if (kind == 1) {
         // EV_DOM — the framework translates the firing listener id to
@@ -74,7 +74,7 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, 
 // touch the list here — the commit is the timer turn's job. The WRITES
 // here are the plain leg (draft$/note$ — the app's own words); the
 // machine's writes land inside the mutations.
-fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
+fn dispatch(mut r: AppRoot, subject: str, detail: str) -> nil {
     let mut world: World = r.world;
 
     if (subject == "add") {
@@ -138,7 +138,7 @@ fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
 // page in place — nothing changed = nothing fires. The turn-turn
 // flush the old paint ran is RETIRED (the survey addendum records the
 // reversal); the render itself stays unconditional, once per turn.
-fn paint(r: ?AppRoot) -> nil {
+fn paint(r: AppRoot) -> nil {
     let tree = view(r);
     let mut root: T1Root = r.t1;
     t1_render(root, tree);
@@ -150,7 +150,7 @@ fn paint(r: ?AppRoot) -> nil {
 // crossing runs here; no atom is written here (survey §4.2: view never
 // writes). The one rut-side write is §7.3's: the subject tables
 // todo_list RETURNS are dropped onto the container here.
-fn view(mut r: ?AppRoot) -> Widget {
+fn view(mut r: AppRoot) -> Widget {
     let mut world: World = r.world;
 
     let mut tree = col().gap(12).pad(16).hook("root");
