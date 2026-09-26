@@ -5,39 +5,42 @@
 /// bundle owns no machinery: no rail, no flush, no recompute pass.
 /// Built ONCE at boot; the host re-passes it every turn (RFC 0003 §1).
 pub class World {
-    store: Store;
-    items$: Source<Vec<Todo>>; // the committed list — "the board"
-    reqs$: Source<Vec<Req>>; // the booked requests
-    draft$: Source<str>; // the field's event-carried value (str lane)
-    note$: Source<str>; // the status line's tail (str lane)
-    last$: Source<str>; // the answer channel's own log (str lane)
-    next_todo$: Source<i64>; // the id machine's counters — state cells
-    next_req$: Source<i64>; // now that the store is the state home
-    counts$: Derived<str>; // "N open | M done | K in flight"
-    add_m: Mutation<str, Req>;
-    toggle_m: Mutation<i64, ?Req>;
-    remove_m: Mutation<i64, ?Req>;
-    answer_m: Mutation<str, (str, str)>;
+    // THE FIELDS ARE PUB: the world is the app's state home and the
+    // store-probe spec (tests/store_probe.rut) reads the same handles
+    // the app does — one surface, no probe-only shape (RFC 0003 §2).
+    pub store: Store;
+    pub items$: Source<Vec<Todo>>; // the committed list — "the board"
+    pub reqs$: Source<Vec<Req>>; // the booked requests
+    pub draft$: Source<str>; // the field's event-carried value (str lane)
+    pub note$: Source<str>; // the status line's tail (str lane)
+    pub last$: Source<str>; // the answer channel's own log (str lane)
+    pub next_todo$: Source<i64>; // the id machine's counters — state cells
+    pub next_req$: Source<i64>; // now that the store is the state home
+    pub counts$: Derived<str>; // "N open | M done | K in flight"
+    pub add_m: Mutation<str, Req>;
+    pub toggle_m: Mutation<i64, ?Req>;
+    pub remove_m: Mutation<i64, ?Req>;
+    pub answer_m: Mutation<str, (str, str)>;
     // THE EVENT SURFACE (tur's onClick/onInput props): the mutations
     // the WIDGETS carry. The app wires them; the framework runs them.
     // Every wrapper returns the BOOKING as a box — opaque(Req) when a
     // timer must be booked, opaque(nil) when there is nothing to book.
-    draft_ev: Mutation<str, opaque>; // typing: draft$ + note$
-    add_ev: Mutation<str, opaque>; // the Add click (reads the draft)
-    toggle_row: Mutation<i64, opaque>; // per-row, arg-captured
-    remove_row: Mutation<i64, opaque>; // per-row, arg-captured
-    answer_ev: Mutation<str, (str, str)>; // the timer's wrapper
+    pub draft_ev: Mutation<str, opaque>; // typing: draft$ + note$
+    pub add_ev: Mutation<str, opaque>; // the Add click (reads the draft)
+    pub toggle_row: Mutation<i64, opaque>; // per-row, arg-captured
+    pub remove_row: Mutation<i64, opaque>; // per-row, arg-captured
+    pub answer_ev: Mutation<str, (str, str)>; // the timer's wrapper
     // THE REACTIVE PROPS (tur's reads-as-props): what the view WIRES,
     // resolved at the render door
-    draft_view$: Derived<str>; // the field's value mirror
-    status_line$: Derived<str>; // counts$ + note$ composed
-    list_tree$: Derived<Widget>; // the whole list card (tur's Each)
+    pub draft_view$: Derived<str>; // the field's value mirror
+    pub status_line$: Derived<str>; // counts$ + note$ composed
+    pub list_tree$: Derived<Widget>; // the whole list card (tur's Each)
 }
 
 /// Boot the world: the sources, the derived (deps DISCOVERED through
 /// the ctx), the machine's mutations. `boot_line` seeds the note (the
 /// app's boot turn; the DOM-free suite passes "").
-fn world_boot(boot_line: str) -> World {
+pub fn world_boot(boot_line: str) -> World {
     let mut store = Store.new();
     let items$ = store.source<Vec<Todo>>(Vec.new());
     let reqs$ = store.source<Vec<Req>>(Vec.new());

@@ -979,4 +979,10 @@ field-reach spellings and fails loud; the frozen test surface keeps
 them. One VM lesson recorded on the way: runtime closure mints inside
 a recompute abort (a makeclosure nil slot — the rejected-add session
 caught it), so tur's captured-index shape is spelled as DATA
-(`.on_row(m, id)`), never a closure.
+(`.on_row(m, id)`), never a closure. And the probe surface left the
+module entirely: the app's ABI is `main` + the event doors (one door
+per DOM event class — `on_click`/`on_input`/`on_timer`, named by the
+glue from the listener row it registered; kind codes are gone), and
+the DOM-free store probes are their own root spec
+(`tests/store_probe.rut`, `use app::{...}`) — the law gate counts the
+module's exports and fails on a fourth.

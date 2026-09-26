@@ -14,7 +14,7 @@
 # module-private; biz cannot name them even to import them.
 name = "app"
 entry.lib = "./biz.rut"
-entry.libs = ["./domain.rut", "./world.rut", "./entries.rut", "./app.rut"]
+entry.libs = ["./domain.rut", "./world.rut", "./app.rut"]
 
 [deps]
 ui = { path = "../ui" }

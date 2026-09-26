@@ -529,23 +529,10 @@ fn a_rejected_add_crosses_the_err_channel_and_the_page_lives() {
     );
 }
 
-#[test]
-fn a_foreign_container_traps_loud() {
-    let (mut host, app) = make_host();
-    // the store surface answers its own container — a different type,
-    // so the door's downcast fails LOUD (host drift, named as such)
-    let foreign: OpaqueRef = host.call("store_new", ()).unwrap();
-    let err = host
-        .call::<_, (Option<OpaqueRef>, String)>("on_click", (foreign, "1".to_string(), "".to_string()))
-        .unwrap_err();
-    assert!(err.msg.contains("app: the event container is not an AppRoot"), "{}", err.msg);
-    // the real container is unharmed: a live turn still runs
-    type_into(&mut host, "milk");
-    click(&mut host, "add-btn");
-    host.advance(400).unwrap();
-    assert_eq!(snap(&host, "row-1").child_texts, vec!["milk", "del"]);
-    let _ = app;
-}
+// the foreign-container pin lives in tests/store.rs now: the doors-
+// only ABI mints no container but the AppRoot main returned, so the
+// wrong-type drift is constructible only in the probe spec, where two
+// container shapes coexist.
 
 // ---- the guard's absorb behavior, at app scale ----
 

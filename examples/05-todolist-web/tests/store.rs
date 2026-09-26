@@ -51,13 +51,18 @@ use rut_vm::OpaqueRef;
 use todolist_web::fake_dom::FakeDom;
 use todolist_web::{hosts, mount, state, WebState};
 
-/// The project closure (spec `app`): biz + ui + pouch + nmapset +
-/// nmap_host, plus the web DECL — bodies bound below, never fired.
+const STORE_PROBE: &str = include_str!("store_probe.rut");
+
+/// The store-probe spec (tests/store_probe.rut): its own root module
+/// over the project's imports — the app's ABI stays `main` + the event
+/// doors, so the DOM-free surface lives in a fixture, like the t1
+/// harness. ui + biz + pouch + nmapset + nmap_host, plus the web DECL
+/// — bodies bound below, never fired.
 fn vm() -> (Vm, OpaqueRef) {
-    let (mut session, root) = mount::load_project_session().expect("the project mounts");
-    assert_eq!(root, "app", "the store suite's root spec is the app");
+    let (mut session, _root) = mount::load_project_session().expect("the project mounts");
     let expected = session.expected_host_fns();
-    let prog = mount::compile_manifest(&session, &root).expect("the project compiles");
+    let prog = mount::compile_root(&mut session, STORE_PROBE, "store_probe")
+        .expect("the store-probe spec compiles");
 
     let (slot, sink) = state::weak_sink_slot::<FakeDom>();
     let shared = Rc::new(RefCell::new(WebState::new(FakeDom::new(sink))));
@@ -76,6 +81,18 @@ fn vm() -> (Vm, OpaqueRef) {
 }
 
 // ---- the machine: the entry surface, signatures unchanged ------------
+
+#[test]
+fn a_foreign_container_traps_loud() {
+    // the app's doors-only ABI mints no container but the AppRoot main
+    // returned, so the wrong-type drift is constructible only HERE —
+    // the probe spec mints two shapes (World, Probe) and the World
+    // guard fails LOUD, named as such
+    let (mut v, _world) = vm();
+    let probes: OpaqueRef = v.call("probes_new", ()).unwrap();
+    let err = v.call::<_, String>("store_counts", (probes,)).unwrap_err();
+    assert!(err.msg.contains("probe: the store container is not a World"), "{}", err.msg);
+}
 
 #[test]
 fn a_request_never_touches_the_list() {

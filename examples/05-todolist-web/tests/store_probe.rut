@@ -1,11 +1,14 @@
-// ---- the host-test surface (DOM-FREE: driven by tests/store.rs on a
-// bare World — no t1, no DOM; the suite binds the fake-DOM bodies only
-// because the session DECLARES the web crossings and the RFC 0025
-// contract is all-or-nothing; NO test here fires a crossing).
-// SIGNATURES UNCHANGED from the pre-atom surface (the survey §5.3
-// freeze, kept through the rewrite) except the retired probes — the
-// flush's helpers died with it; atom_derived_deps is atom_deps (the
-// DISCOVERED DAG). ----
+// ---- THE STORE-PROBE SPEC (a test fixture, NOT the app): the DOM-
+// free surface tests/store.rs drives. It is its own root module —
+// `main` + the event doors are the APP's whole ABI (the law gate
+// counts them), so the probes live HERE, compiled over the project's
+// imports exactly like the t1 harness. No t1, no DOM; the suite binds
+// the fake-DOM bodies only because the session DECLARES the web
+// crossings and the RFC 0025 contract is all-or-nothing; NO test here
+// fires a crossing. ----
+
+use ui::{Store, Source, Derived, Mutation};
+use app::{World, world_boot, Todo};
 
 entry fn store_new() -> opaque {
     let w: ?World = world_boot("");
@@ -14,6 +17,9 @@ entry fn store_new() -> opaque {
 
 fn wt(c: opaque) -> ?World {
     let w = opaque.downcast<?World>(c);
+    if (w == nil) {
+        panic("probe: the store container is not a World — host drift");
+    }
     return w;
 }
 
@@ -177,9 +183,7 @@ entry fn atom_items_set(c: opaque, title: str) -> nil {
 }
 
 // ---- the derived-on-derived fixture (the topo-order twin's world;
-// NOT app surface — the survey §5.3 fence, KEPT, relocated: the store
-// layer is decoupled from biz, so the fixture lives in the biz pkg's
-// test surface, a store-test fixture over the GENERIC store). up$
+// NOT app surface — a fixture over the GENERIC store). up$
 // doubles items$; down$ doubles up$. The closures append their own
 // recompute log — the order the pull recomputed in. ----
 

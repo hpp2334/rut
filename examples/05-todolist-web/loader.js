@@ -54,7 +54,6 @@ const BIZ_LIBS = [
   "./rut/biz/biz.rut",
   "./rut/biz/domain.rut",
   "./rut/biz/world.rut",
-  "./rut/biz/entries.rut",
   "./rut/biz/app.rut",
 ];
 let text = "";

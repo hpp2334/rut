@@ -43,6 +43,10 @@ page is nothing *but* async. The pattern that fills the gap:
   entry fn on_timer(c: opaque, tag: str) -> (?opaque, str);
   ```
 
+* **THE ABI IS THE PAGE: `main` + the doors — nothing else.** The
+  DOM-free store probes are their own root module
+  (`tests/store_probe.rut`, `use app::{World, world_boot, Todo}`);
+  the law gate counts the module's exports and fails on a fourth.
 * **every asynchronous fact enters through a DOOR NAMED FOR ITS
   EVENT.** One door per class — `on_click`/`on_input` for DOM events
   (the glue owns the listener rows and derives the export from the
@@ -252,7 +256,10 @@ examples/05-todolist-web/
 │                                   embedder registers it in both lanes
 ├── src/                            the Rust host: state/pump, hosts,
 │                                   backends (web + fake twin), mount
-├── tests/                          the gates (94 tests, see Gates)
+├── tests/                          the gates (95 tests, see Gates)
+│   ├── store_probe.rut             the DOM-free probe spec (its own
+│   │                               module: `use app::` — the app's
+│   │                               ABI stays main + the doors)
 └── rut/                            TWO packages, TWO manifests
     ├── ui/                         THE FRAMEWORK package
     │   ├── rut.toml                name = "ui"; inline = true (generic
@@ -272,13 +279,12 @@ examples/05-todolist-web/
     └── biz/                        THE DOMAIN package AND the project
         │                           root (the ABI spec stays `app`)
         ├── rut.toml                name = "app"; [deps] ui + pouch +
-        │                           nmapset; entry.libs = the four
+        │                           nmapset; entry.libs = the three
         │                           section files
         ├── biz.rut                 the base: the law header + the use
         │                           set — ONE module once spliced
         ├── domain.rut              Todo/Req + the machine's pure scans
         ├── world.rut               World (the handles bundle) + boot
-        ├── entries.rut             the DOM-free probe surface
         └── app.rut                 the app shell + the two view
                                     builders
 ```
@@ -396,7 +402,7 @@ retired; freshness is the read's job now.
 | `rut/ui/rut.toml` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
 | `web.d.rut` | the `web` crossing's DECL surface (RFC 0025, `host_scope = "web"`) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
 | `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, RFC 0041 §5): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff (design: `docs/t1-design.md`); `components.rut` §5 the component vocabulary |
-| `rut/biz/*.rut` | the domain + app, one module, four files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `entries.rut` the machine mutations' DOM-free probe entries; `app.rut` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |
+| `rut/biz/*.rut` | the domain + app, one module, three files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `app.rut` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |
 | `src/state.rs` | the turn law: the FIFO queue, the one pump, the re-entrancy guard (`events are queue, never stack`) |
 | `src/hosts.rs` | the 10 registry bindings, written ONCE generic over the backend |
 | `src/backend.rs` | the `DomBackend` seam both lanes implement |
@@ -406,7 +412,7 @@ retired; freshness is the read's job now.
 | `src/mount.rs` | the session mount — TWO LANES over one closure: `load_dir_session` on `rut/biz` (native) and the per-package `register_module` mirror (wasm); both register `web.d.rut` by hand |
 | `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that fetch the biz module's files (`BIZ_LIBS`, the manifest's mirror) and hand over the spliced source; the stylesheet keys ONLY lowered tokens |
 | `gen/` | wasm-bindgen's generated browser glue (gitignored) — produced by the build recipe below, never committed |
-| `tests/store.rs` | the store's laws, DOM-free (17: the 9 machine laws + the 8 atom twins) |
+| `tests/store.rs` | the store's laws, DOM-free over `tests/store_probe.rut` (18: the 9 machine laws + the 8 atom twins + the foreign-container guard) |
 | `tests/todolist_app.rs` | the twin gate: 18 scripted sessions asserting the tree AND the turn order on the lowered DOM |
 | `tests/t1_lowering.rs` / `tests/t1_diff.rs` | the framework's bed: 14 lowering snapshots + 18 diff/lifecycle/trap tests (32) |
 | `tests/app_law.rs` | **the grep gate**: reads the biz module (base + libs, spliced) and fails loud if biz ever sinks to the DOM's vocabulary or names a retired store API (4 tests) |
@@ -457,12 +463,12 @@ framework's five):
 The test story has three lanes, all wired to run from one command:
 
 ```sh
-cargo test -p todolist-web      # the twin + the law (94 tests)
+cargo test -p todolist-web      # the twin + the law (95 tests)
 node tests/e2e-browser.mjs      # the artifact (from examples/05-todolist-web)
 ```
 
 **Lane 1 — the twin (the real gate, always on).** `cargo test -p
-todolist-web`, 94 tests over the SAME sources the browser runs (the
+todolist-web`, 95 tests over the SAME sources the browser runs (the
 manifest session's subgraphs and the app session mount `rut/` for
 real):
 

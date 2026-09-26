@@ -38,27 +38,13 @@
 //!   5. the appkit retirement (survey §2.5, P2): the word survives
 //!      nowhere in `src/`.
 
-/// The biz layer's source — the module this gate exists to guard: the
+/// The biz module's source — the module this gate exists to guard: the
 /// base plus `entry.libs`, spliced the manifest's way (RFC 0041 §5) —
-/// the gate reads what the program actually compiles.
+/// the gate reads what the program actually compiles. The store/atom
+/// probes are NOT here: they are a test spec (tests/store_probe.rut),
+/// their own module over the same imports — the app's ABI is `main`
+/// plus the event doors, nothing else.
 static BIZ: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-    splice(
-        include_str!("../rut/biz/biz.rut"),
-        &[
-            include_str!("../rut/biz/domain.rut"),
-            include_str!("../rut/biz/world.rut"),
-            include_str!("../rut/biz/entries.rut"),
-            include_str!("../rut/biz/app.rut"),
-        ],
-    )
-});
-
-/// The APP CODE alone (the base, the domain, the world, the shell) —
-/// entries.rut is the FROZEN host-test surface (survey §5.3): its
-/// handle verbs are the test probes' reads, pinned by the twins. The
-/// no-pull/no-push law below governs the app code; the test surface is
-/// exempt by the freeze.
-static APP_CODE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
     splice(
         include_str!("../rut/biz/biz.rut"),
         &[
@@ -255,8 +241,8 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
     // view wires REACTIVE PROPS (deriveds resolved at the render
     // door) and every write rides a mutation — the only reads and
     // writes are the ctx's own, inside derive/mutation closures. The
-    // handle verbs exist for the frozen test surface and ui's
-    // resolver; the app code's field-reach spellings fail loud.
+    // handle verbs belong to ui's resolver and the store-probe spec
+    // (tests/store_probe.rut); the module's own text has neither.
     assert!(
         BIZ.contains(".text_of(") && BIZ.contains(".value_of("),
         "the view wires reactive props — deriveds, not pulled values"
@@ -271,11 +257,25 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
          appear anywhere in biz, not even in comments"
     );
     assert!(
-        !APP_CODE.contains("$.get(") && !APP_CODE.contains("$.set("),
-        "the app code never pulls or pushes handles — reads are \
+        !BIZ.contains("$.get(") && !BIZ.contains("$.set("),
+        "the module never pulls or pushes handles — reads are \
          reactive props (derive + ctx.get), writes are mutations \
-         (ctx.set); the handle verbs are the test surface's, not \
-         the app's"
+         (ctx.set); the handle verbs live in the store-probe spec"
+    );
+    // THE ABI IS THE PAGE: exactly `main` + the doors. Every other
+    // host-callable surface is a test spec under tests/, never an
+    // export of the app module.
+    assert_eq!(
+        BIZ.match_indices("entry fn ").count(),
+        4,
+        "the app module exports main + the three event doors — \
+         nothing else (probes live in tests/*.rut fixtures)"
+    );
+    assert!(
+        !BIZ.contains("entry fn store_")
+            && !BIZ.contains("entry fn atom_")
+            && !BIZ.contains("entry fn probe_"),
+        "the store/atom probes are a test spec, not app ABI"
     );
     // THE DOORS: one entry per event class, NAMED FOR THE DOM EVENT
     // that produced it — the glue owns the listener rows and derives

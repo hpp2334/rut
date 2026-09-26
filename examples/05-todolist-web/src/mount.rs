@@ -80,7 +80,7 @@ pub fn ui_source() -> String {
 /// (mount_lane) and the wasm lane (loader.js) compose.
 pub fn biz_source() -> String {
     let mut src = String::from(BIZ_RUT);
-    for part in [DOMAIN_RUT, WORLD_RUT, ENTRIES_RUT, APP_RUT] {
+    for part in [DOMAIN_RUT, WORLD_RUT, APP_RUT] {
         src.push('\n');
         src.push_str(part);
     }
@@ -89,7 +89,6 @@ pub fn biz_source() -> String {
 const BIZ_RUT: &str = include_str!("../rut/biz/biz.rut");
 const DOMAIN_RUT: &str = include_str!("../rut/biz/domain.rut");
 const WORLD_RUT: &str = include_str!("../rut/biz/world.rut");
-const ENTRIES_RUT: &str = include_str!("../rut/biz/entries.rut");
 const APP_RUT: &str = include_str!("../rut/biz/app.rut");
 
 /// The rut/ project root — the manifest lane's mount point. Native
