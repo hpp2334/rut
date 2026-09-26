@@ -597,3 +597,64 @@ fn the_full_crud_session() {
     );
     assert!(host.with_dom(|d| d.pending_timers()).is_empty());
 }
+
+// ---- the long-journey probe: does the page survive many cycles? ------
+
+#[test]
+fn a_long_journey_survives_many_cycles() {
+    // rows stay CONSTANT (add, toggle, remove) — isolates history
+    // growth from row-count growth
+    let (mut host, _app) = make_host();
+    type_into(&mut host, "seed");
+    click(&mut host, "add-btn");
+    host.advance(500).unwrap();
+    for i in 1..=40 {
+        type_into(&mut host, &format!("x {i}"));
+        click(&mut host, "add-btn");
+        host.advance(450).unwrap_or_else(|e| panic!("cycle {i} add: {}", e.msg));
+        click(&mut host, &format!("mark-{i}"));
+        host.advance(300).unwrap_or_else(|e| panic!("cycle {i} toggle: {}", e.msg));
+        click(&mut host, &format!("del-{i}"));
+        host.advance(450).unwrap_or_else(|e| panic!("cycle {i} remove: {}", e.msg));
+        println!("cycle {i}: {}", snap(&host, "status").text.unwrap());
+    }
+}
+
+#[test]
+fn growing_rows_stay_under_fuel() {
+    let (mut host, _app) = make_host();
+    for i in 1..=30 {
+        type_into(&mut host, &format!("grow {i}"));
+        click(&mut host, "add-btn");
+        host.advance(450).unwrap_or_else(|e| panic!("row {i}: {}", e.msg));
+        println!("row {i}: {}", snap(&host, "status").text.unwrap());
+    }
+}
+
+// the mixed journey (the long-journey regression pin: this exact
+// shape froze the page when the example still ran under a per-call
+// fuel slice — the VM parked at cycle 8 and the pump never resumed)
+#[test]
+fn the_mixed_long_journey_still_completes() {
+    let (mut host, _app) = make_host();
+    let mut last_status = String::new();
+    for i in 1..=12 {
+        type_into(&mut host, &format!("stress {i}"));
+        click(&mut host, "add-btn");
+        host.advance(450).unwrap_or_else(|e| {
+            panic!("cycle {i} (add answer): {}", e.msg)
+        });
+        // the row is committed: toggle it done, then flush its answer
+        click(&mut host, &format!("mark-{i}"));
+        host.advance(300).unwrap_or_else(|e| {
+            panic!("cycle {i} (toggle answer): {}", e.msg)
+        });
+        last_status = snap(&host, "status").text.unwrap();
+        println!("cycle {i}: {last_status}");
+    }
+    // each cycle ends on its toggle answer (the add commits mid-cycle)
+    assert_eq!(
+        last_status,
+        "0 open | 12 done | 0 in flight — toggled #12 to done"
+    );
+}

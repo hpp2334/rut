@@ -188,7 +188,14 @@ fn verified(msgs: Vec<String>, binary: Option<Vec<u8>>) -> Result<Program, Strin
 /// is bounded, so latency never feeds fuel).
 pub fn limits() -> rut_vm::interp::Limits {
     rut_vm::interp::Limits {
-        fuel: Some(1_000_000),
+        // fuel is DISABLED for this example: fuel is an embedding-host
+        // scheduling slice (a turn that outlives one parks and waits
+        // for the host to resume), and this page's pump runs turns to
+        // completion — a slice cap here only means long journeys die
+        // mid-turn the moment the board grows past the budget (the
+        // crash the long-journey tests pin). The heap limit stays: the
+        // resource guard that matters is memory, not instructions.
+        fuel: None,
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     }
