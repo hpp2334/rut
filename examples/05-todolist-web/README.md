@@ -96,11 +96,19 @@ recorded deviations) makes a UI a VALUE:
   `index.html` possible: nodes survive long enough to animate.
 * **event mutations as props, not ids** (tur's onClick law —
   github.com/hpp2334/tur). Widgets CARRY their event mutations
-  (`.on_click(m)`, `.on_input(m)`); the framework owns the
-  listener-id registry, resolves the firing id to the widget's own
-  mutation, and runs it through the ONE write lane. Per-row semantics
-  ride `capture(w.toggle_row, t.id)` — the arg captured at view build;
-  a stale or unknown id is a loud miss.
+  (`.on_click(m)`, `.on_input(m)`, `.on_row(m, id)`); the framework
+  owns the listener-id registry, resolves the firing id to the
+  widget's own wiring, and runs it through the ONE write lane. The
+  row's arg is BOUND AS DATA (`.on_row(w.toggle_row, t.id)` — no
+  runtime closure); a stale or unknown id is a loud miss.
+* **reads are reactive props, never pulls** (tur's
+  `Text({ text: derive(...) })`). The view wires RECIPES —
+  `.value_of(draft_view$)`, `.text_of(status_line$)`, and whole
+  reactive subtrees via `live(list_tree$)` (tur's Each) — and reads
+  NOTHING; `t1_render` resolves the deriveds at the RENDER DOOR, so
+  pull-on-read freshness lands exactly where the tree meets the page.
+  Every write is a mutation (`ctx.set` inside); the only imperative
+  verb left is `m.run(arg)` at on_event's booking points.
 * **styling is a token contract.** `index.html`'s stylesheet keys
   ONLY the lowered tokens (the `t1-*` families, the fixed utility
   ladder, variant tokens); the app spells no class and the stylesheet
@@ -360,11 +368,14 @@ event row -> on_event -> t1_event            (the framework resolves
                                               write lane; the answer
                                               is the booking box)
            -> [tim_after(req)]               (when the box holds a Req)
-           -> view(r)                        (PURE reads: the first get
-                                              computes what this turn's
-                                              writes staled — pull-on-read,
-                                              at most once per write-set)
-           -> t1_render                      (the ONE keyed diff per turn)
+           -> view(r)                        (PURE WIRING — static
+                                              composition + reactive
+                                              props; reads nothing)
+           -> t1_render                      (THE RENDER DOOR: the
+                                              deriveds resolve here —
+                                              pull-on-read, at most
+                                              once per write-set —
+                                              then the ONE keyed diff)
 ```
 
 There is no flush step — the old paint's `store.refresh()` line is

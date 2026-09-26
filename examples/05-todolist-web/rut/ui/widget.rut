@@ -35,13 +35,27 @@ pub struct Widget {
     bvar: ?BVariant = nil; // Button's variant
     on: bool = false; // Checkbox
     placeholder: str = "";
-    value: str = ""; // Field (mirrors the draft)
+    value: str = ""; // Field (the resolved value; see value$)
+    // -- reactive props (tur's reads-as-props: the RECIPE rides the
+    // tree, never a pulled value; t1_render resolves them at the
+    // render door — pull-on-read freshness, moved to where the tree
+    // meets the page). nil = the literal arm.
+    text$: ?Derived<str> = nil; // a reactive Text content
+    value$: ?Derived<str> = nil; // a reactive Field value
+    live: ?Derived<Widget> = nil; // a reactive SUBTREE (tur's Each:
+    // the derived computes the whole branch; resolution splices it in)
     // -- semantic options
     on_click: ?Mutation<str, opaque> = nil; // tur's onClick prop: the
     // mutation the framework RUNS when this widget's listener fires
     // (clicks land here; the event detail is "")
     on_input: ?Mutation<str, opaque> = nil; // tur's onInput prop: the
     // mutation run with the input's carried value as the detail
+    on_row: ?Mutation<i64, opaque> = nil; // tur's
+    // `mutate((ctx, _ev) => act(ctx, index))` — the arg BOUND AS DATA,
+    // never a runtime closure (a VM makeclosure inside a recompute
+    // mints with a nil capture slot — the arena abort the rejected-add
+    // session caught; the binding is fields, the run is ev_run's)
+    row_arg: i64 = 0; // the bound arg (the row's id)
     hook: str = ""; // stable test id (the lowering emits it as `id`)
     key: str = ""; // keyed-diff identity (defaults from hook)
     // -- layout data (the utility-token ladder's inputs)
@@ -104,9 +118,33 @@ impl Widget {
         return self;
     }
 
-    /// The field's value (mirrors the app's draft).
+    /// tur's captured-index click, DATA-SHAPED: the machine mutation
+    /// plus its arg as fields — no runtime closure mint (see on_row's
+    /// comment); `ev_run` feeds it the bound arg on the firing event.
+    fn on_row(mut self, m: Mutation<i64, opaque>, arg: i64) -> Self {
+        self.on_row = m;
+        self.row_arg = arg;
+        return self;
+    }
+
+    /// The field's value — the LITERAL arm (tests, static shells).
     fn value(mut self, v: str) -> Self {
         self.value = v;
+        return self;
+    }
+
+    /// tur's `Text({ text: derive(...) })`: a REACTIVE text content —
+    /// the derived resolves at the render door; the literal `text`
+    /// it replaces is what the diff compares.
+    fn text_of(mut self, d: Derived<str>) -> Self {
+        self.text$ = d;
+        return self;
+    }
+
+    /// The reactive field value — the derived resolves at the render
+    /// door (the draft mirror without an eager pull at view build).
+    fn value_of(mut self, d: Derived<str>) -> Self {
+        self.value$ = d;
         return self;
     }
 

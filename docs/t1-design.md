@@ -509,3 +509,17 @@ event mutation**.
 §7.3's own test law holds unchanged: rows keyed, listeners minted once
 per widget lifetime, retirement drops registry rows — the t1 suites
 pin the same shapes with the new vocabulary.
+
+### Amendment note (cont.): reads follow — the render door
+
+The onClick amendment's other half: **reads are props too** (tur's
+`Text({ text: derive(...) })`, `Each({ items })`). The view wires
+recipes — `.text_of(d)`/`.value_of(d)` for content, `live(d)` for a
+whole reactive subtree — and reads nothing; `t1_render` resolves the
+deriveds before the diff (the RENDER DOOR), so pull-on-read freshness
+lands where the tree meets the page, and the resolved tree is what
+`prev` stores — reactive and literal arms diff alike. The rejected-add
+session also taught the binding law: a runtime closure minted inside a
+recompute (the first `capture` shape) hits a VM `makeclosure` nil-slot
+abort — the row's arg is therefore BOUND AS DATA (`.on_row(m, id)`),
+and the registry runs the data-shaped wiring (`Ev` + `ev_run`).

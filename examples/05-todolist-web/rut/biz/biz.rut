@@ -13,19 +13,25 @@
 //
 // THE SURFACE IS THE HANDLES (tur's law — github.com/hpp2334/tur: the
 // app never touches a store object; atoms and mutations are values the
-// app and the widgets pass around). Everything here speaks through the
-// handles and NOTHING else:
+// app and the widgets pass around). Everything here speaks through
+// REACTIVE PROPS and MUTATIONS, and nothing else:
 //
-//   reads    draft$.get() / counts$.get()      (sources + deriveds)
-//   writes   note$.set(v)                      (the plain leg)
-//            add_m.run(arg)                    (the machine's verbs)
-//   events   .on_click(m) / .on_input(m)       (widgets CARRY their
+//   reads    .value_of(draft_view$) / .text_of(status_line$) /
+//            live(list_tree$)      deriveds wired as PROPS, resolved
+//                                   at the render door (t1_render) —
+//                                   the view never pulls
+//   writes   add_m.run(arg)         the one imperative verb (on_event
+//                                   booking the machine's answer);
+//            every OTHER write is a mutation fn's own ctx.set
+//   events   .on_click(m) / .on_input(m)   (widgets CARRY their
 //            mutation; the framework runs it on the firing event)
 //
-// The store's own read/write verbs are ui-MODULE-PRIVATE: biz cannot
-// spell them — the compiler enforces the surface. The store appears in
-// biz exactly twice, both legal: world_boot MINTS through it, and the
-// host-test surface reads its observability (recompute_count/deps_of).
+// The ctx forms are the only read/write spellings in app code:
+// `ctx.get(a)` inside a derive, `ctx.set(a, v)` inside a mutation —
+// deps DISCOVERED through the ctx, never declared. The store's own
+// verbs are ui-MODULE-PRIVATE and the handles' verbs belong to the
+// frozen test surface (entries.rut) and ui's resolver — neither
+// appears in the app code, and the law gate greps for both.
 //
 // THERE IS NO domain container. The store is a DECOUPLED-BIZ design (the ui
 // package's Store knows no todo); what biz owns is HANDLES — the
@@ -47,7 +53,7 @@
 // ONE keyed-diff render. The FLUSH IS GONE (pull-on-read): paint does
 // no flush — the view's first get computes what this turn's writes
 // staled, at most once per write-set. The status line reads
-// counts$.get() — byte-identical to every phase before.
+// status_line$, byte-identical to every phase before.
 //
 // THE LAW GATE (tests/app_law.rs pins the import set): the handles'
 // vocabulary, the widget vocabulary, the framework's names, and ONE
@@ -58,9 +64,9 @@
 // spellings and fails loud.
 
 use ui::{
-    Store, Source, Derived, Mutation, capture,
+    Store, Source, Derived, Mutation,
     Widget, T1Root, t1_mount, t1_render, t1_event,
-    col, row, card, field, check, text, done, pending, muted, btn, quiet,
+    col, row, card, field, check, text, done, pending, muted, btn, quiet, live,
 };
 use pouch::{ Vec };
 use web::{ tim_after };

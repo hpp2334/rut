@@ -969,3 +969,15 @@ What did NOT change: pull-on-read, the cycle guard, the one write
 lane, the turn shape (one paint, one keyed diff), the 94-test suite's
 bytes. The law survived another reversal the same way it survived the
 others — the model changed under the law, never the law itself.
+
+The reads followed the writes: the view now wires REACTIVE PROPS
+(`.value_of`/`.text_of`/`live` — tur's `Text({text: derive(...)})` and
+`Each({items})`), resolved at the RENDER DOOR, and the app code has no
+pull or push left at all — `ctx.get` lives only inside derives,
+`ctx.set` only inside mutations, `m.run` only at on_event's booking
+points. The law gate greps the app code for the handle verbs'
+field-reach spellings and fails loud; the frozen test surface keeps
+them. One VM lesson recorded on the way: runtime closure mints inside
+a recompute abort (a makeclosure nil slot — the rejected-add session
+caught it), so tur's captured-index shape is spelled as DATA
+(`.on_row(m, id)`), never a closure.

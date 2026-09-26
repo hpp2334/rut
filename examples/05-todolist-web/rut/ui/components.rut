@@ -53,6 +53,16 @@ pub fn muted(t: str) -> Widget {
     return Widget { kind: WKind.Text, tvar: TVariant.Muted, text: t };
 }
 
+/// tur's `Each`/`Condition` shape, package-sized: a REACTIVE SUBTREE —
+/// the derived computes the whole branch (a list card, a conditional
+/// shell) from the atoms it reads; `t1_render` resolves it at the
+/// render door and the keyed diff patches the materialized tree. The
+/// node itself is a transparent splice point: it never reaches the
+/// lowering.
+pub fn live(d: Derived<Widget>) -> Widget {
+    return Widget { live: d };
+}
+
 // the BUTTON constructors: primary and quiet
 pub fn btn(label: str) -> Widget {
     return Widget { kind: WKind.Button, bvar: BVariant.Primary, text: label };

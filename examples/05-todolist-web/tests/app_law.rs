@@ -25,11 +25,12 @@
 //!      the framework's mutation resolution (`t1_event`, widgets
 //!      carrying `.on_click(...)`/`.on_input(...)`), rows are keyed —
 //!      and THE FLUSH IS GONE: `refresh` appears nowhere (pull-on-read
-//!      is the freshness law; the view's first get is the recompute
-//!      point), the view reads with the handles' `get`, the view half
-//!      never writes (no `.set(` between `fn view(` and the views),
-//!      and THE STORE'S OWN VERBS appear nowhere — they are
-//!      ui-module-private; the handles carry them.
+//!      is the freshness law; the RENDER DOOR is the recompute point),
+//!      the view wires REACTIVE PROPS (`.text_of`/`.value_of`/`live`,
+//!      never a pulled value), the view half never writes, THE APP
+//!      CODE never pulls or pushes a handle (`$.get(`/`$.set(` absent
+//!      — the ctx forms own every read and write), and THE STORE'S
+//!      OWN VERBS appear nowhere — they are ui-module-private.
 //!   4. THE MACHINERY TOMBSTONES: the retired API's names — TodoStore,
 //!      Rail, Seen, Atom, StrAtom, ProbeStore, refresh, drain, stale —
 //!      survive nowhere in biz. The store is the ui package's; biz
@@ -47,6 +48,22 @@ static BIZ: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
             include_str!("../rut/biz/domain.rut"),
             include_str!("../rut/biz/world.rut"),
             include_str!("../rut/biz/entries.rut"),
+            include_str!("../rut/biz/app.rut"),
+        ],
+    )
+});
+
+/// The APP CODE alone (the base, the domain, the world, the shell) —
+/// entries.rut is the FROZEN host-test surface (survey §5.3): its
+/// handle verbs are the test probes' reads, pinned by the twins. The
+/// no-pull/no-push law below governs the app code; the test surface is
+/// exempt by the freeze.
+static APP_CODE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    splice(
+        include_str!("../rut/biz/biz.rut"),
+        &[
+            include_str!("../rut/biz/domain.rut"),
+            include_str!("../rut/biz/world.rut"),
             include_str!("../rut/biz/app.rut"),
         ],
     )
@@ -72,13 +89,13 @@ const APP_IMPORTS: &[(&str, &[&str])] = &[
         "ui",
         &[
             // the store's public vocabulary — the store itself (boot's
-            // mint), the handle types, and the event binding
-            "Store", "Source", "Derived", "Mutation", "capture",
+            // mint) and the handle types
+            "Store", "Source", "Derived", "Mutation",
             // the widget type and the framework's four names
             "Widget", "T1Root", "t1_mount", "t1_render", "t1_event",
-            // the component constructors
+            // the component constructors (+ live: the reactive subtree)
             "col", "row", "card", "field", "check",
-            "text", "done", "pending", "muted", "btn", "quiet",
+            "text", "done", "pending", "muted", "btn", "quiet", "live",
         ],
     ),
     ("pouch", &["Vec"]),
@@ -234,17 +251,31 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
         "the flush is retired — pull-on-read replaced it; no refresh \
          may appear in biz"
     );
+    // THE APP CODE NEVER PULLS OR PUSHES (tur's law, completed): the
+    // view wires REACTIVE PROPS (deriveds resolved at the render
+    // door) and every write rides a mutation — the only reads and
+    // writes are the ctx's own, inside derive/mutation closures. The
+    // handle verbs exist for the frozen test surface and ui's
+    // resolver; the app code's field-reach spellings fail loud.
     assert!(
-        BIZ.contains(".get("),
-        "the view reads through the handles' get verb"
+        BIZ.contains(".text_of(") && BIZ.contains(".value_of("),
+        "the view wires reactive props — deriveds, not pulled values"
     );
-    // THE STORE IS NOT BIZ'S TO TOUCH (tur's law): the verbs live on
-    // the handles; the store's own are ui-module-private — their
-    // spellings may not appear anywhere in biz, not even in comments
+    assert!(
+        BIZ.contains("live("),
+        "the list rides a reactive subtree (tur's Each)"
+    );
     assert!(
         !BIZ.contains("store.get(") && !BIZ.contains("store.set("),
-        "the store's verbs are ui-private — biz reads and writes \
-         through the handles (a.get/a.set/m.run)"
+        "the store's verbs are ui-private — their spellings may not \
+         appear anywhere in biz, not even in comments"
+    );
+    assert!(
+        !APP_CODE.contains("$.get(") && !APP_CODE.contains("$.set("),
+        "the app code never pulls or pushes handles — reads are \
+         reactive props (derive + ctx.get), writes are mutations \
+         (ctx.set); the handle verbs are the test surface's, not \
+         the app's"
     );
     assert!(
         !BIZ.contains(".subject(") && !BIZ.contains("fn dispatch("),
@@ -254,7 +285,7 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
     // the view half never writes: between `fn view(` and the view
     // builders there is no set — view NEVER writes (survey §4.2)
     let view_at = BIZ.find("fn view(").expect("the view fn is in biz");
-    let views_end = BIZ[view_at..].find("fn todo_list(").expect("the views follow") + view_at;
+    let views_end = BIZ[view_at..].find("fn todo_row(").expect("the views follow") + view_at;
     let views = &BIZ[view_at..views_end];
     assert!(
         !views.contains(".set("),
@@ -262,7 +293,7 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
          never writes an atom)"
     );
     // keyed rows, the framework's checkbox, the event props on the rows
-    for pin in [".key(", ".on_click(", ".on_input(", "check(", "todo_row(", "capture("] {
+    for pin in [".key(", ".on_click(", ".on_input(", ".on_row(", ".text_of(", ".value_of(", "live(", "check(", "todo_row("] {
         assert!(
             BIZ.contains(pin),
             "biz lost `{pin}` — the widgets are the whole UI story \

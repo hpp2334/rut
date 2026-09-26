@@ -81,26 +81,6 @@ impl Mutation<A, R> {
     }
 }
 
-/// Bind an argument into an event mutation — tur's
-/// `mutate((ctx, _ev) => act(ctx, index))` shape: the widget carries
-/// the composed mutation; the framework runs it with the event's
-/// detail. CONCRETE over the row key (i64): a rut closure cannot yet
-/// capture a generic fn's own type params (the `unknown type` edge,
-/// recorded here) — the app's rows key on i64, and the day generic
-/// capture lands, this re-generalizes. The inner's R is `opaque` (the
-/// app's event wrappers box their bookings — `opaque(Req)` or
-/// `opaque(nil)`), so the run result passes through UNREBOXED: one
-/// box, one downcast at the caller. Mints into the inner's store —
-/// the ONE write lane keeps every event write.
-pub fn capture(m: Mutation<i64, opaque>, arg: i64) -> Mutation<str, opaque> {
-    let inner = m;
-    let bound = arg;
-    let host = m.st;
-    return host.mutation(fn (ctx: MutCtx, ev: str) -> opaque {
-        return ctx.set<i64, opaque>(inner, bound);
-    });
-}
-
 impl Readable<T> for Source<T> {
     fn atom_id(self) -> u32 { return self.id; }
     fn materialize(self, st: Store) -> nil {

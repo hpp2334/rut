@@ -29,14 +29,35 @@
 
 // ---- T1Root (§7.1) and the mount ------------------------------------
 
+/// One registered event wiring — DATA, never a runtime closure: the
+/// detail-fed arm (on_click/on_input) or the arg-bound arm (on_row +
+/// its arg, tur's captured index). `ev_run` picks the arm and RUNS it
+/// through the handle's own store (the ONE write lane).
+pub struct Ev {
+    m: ?Mutation<str, opaque> = nil; // the detail-fed arm
+    row: ?Mutation<i64, opaque> = nil; // the arg-bound arm
+    arg: i64 = 0; // the bound arg
+}
+
+/// Run a registered wiring: the detail arm if present, else the bound
+/// arm with its arg. The answer passes through (the booking box).
+pub fn ev_run(e: Ev, detail: str) -> opaque {
+    if (e.m != nil) {
+        let m: Mutation<str, opaque> = e.m;
+        return m.run(detail);
+    }
+    let r: Mutation<i64, opaque> = e.row;
+    return r.run(e.arg);
+}
+
 /// The patch state — plain rut data, a field of the app container
 /// (RFC 0003 §1: the state crosses, the host re-passes it).
 pub struct T1Root {
     parent: opaque; // the mounted root element
     prev: ?Widget = nil; // the previous tree — the diff's left side
     els: HashMap<str, opaque>; // path -> live handle (ops application)
-    regs: HashMap<str, Mutation<str, opaque>>; // listener id (as
-    // crossed) -> the widget's event mutation
+    regs: HashMap<str, Ev>; // listener id (as crossed) -> the
+    // widget's event wiring (a data-shaped binding)
     lids: HashMap<str, i64>; // path -> listener id (retirement)
 }
 
@@ -45,7 +66,7 @@ pub struct T1Root {
 pub fn t1_mount(root_id: str) -> T1Root {
     let parent = ui_get(root_id);
     let els: HashMap<str, opaque> = HashMap.new();
-    let regs: HashMap<str, Mutation<str, opaque>> = HashMap.new();
+    let regs: HashMap<str, Ev> = HashMap.new();
     let lids: HashMap<str, i64> = HashMap.new();
     return T1Root {
         parent: parent,
@@ -64,21 +85,52 @@ pub fn t1_mount(root_id: str) -> T1Root {
 /// answer passes through: the app's event wrappers return the BOOKING
 /// (an `opaque(Req)`) or `opaque(nil)` when there is nothing to book.
 pub fn t1_event(r: T1Root, id: str, detail: str) -> opaque {
-    let mut regs: HashMap<str, Mutation<str, opaque>> = r.regs;
+    let mut regs: HashMap<str, Ev> = r.regs;
     let hit = regs.get(id);
     if (hit == nil) {
         panic(f"t1: listener '{id}' answers no mutation — stale or unknown");
     }
-    let m: Mutation<str, opaque> = hit;
-    return m.run(detail);
+    let e: Ev = hit;
+    return ev_run(e, detail);
 }
 
 // ---- the keyed diff/patch (§4.2) ------------------------------------
+
+/// Materialize the reactive props (tur's reads-as-props): a `live`
+/// node is REPLACED by its resolved subtree; `text$`/`value$` resolve
+/// into the concrete fields — THE RENDER DOOR, where pull-on-read
+/// meets the page (a derived recomputes here iff its deps moved, at
+/// most once per write-set; the view that built this tree read
+/// nothing). The resolved tree is what the diff sees and what `prev`
+/// stores, so reactive and literal arms compare alike.
+fn resolve_tree(w: Widget) -> Widget {
+    let mut out = w;
+    if (out.live != nil) {
+        let d: Derived<Widget> = out.live;
+        return resolve_tree(d.get());
+    }
+    if (out.text$ != nil) {
+        let d: Derived<str> = out.text$;
+        out.text = d.get();
+    }
+    if (out.value$ != nil) {
+        let d: Derived<str> = out.value$;
+        out.value = d.get();
+    }
+    let kids: Vec<Widget> = out.children;
+    let mut resolved: Vec<Widget> = Vec.new();
+    for (let k of kids) {
+        resolved.push(resolve_tree(k));
+    }
+    out.children = resolved;
+    return out;
+}
 
 /// THE render — once per turn, any turn. First render builds the whole
 /// tree; every later render diffs against the previous tree and fires
 /// only the deltas.
 pub fn t1_render(mut r: T1Root, next: Widget) -> nil {
+    let next = resolve_tree(next);
     let path = key_of(next, 0);
     let prev = r.prev;
     if (prev == nil) {
@@ -131,20 +183,28 @@ fn create_subtree(mut r: T1Root, w: Widget, path: str, parent: opaque) -> nil {
         ui_attr(el, "placeholder", w.placeholder);
     }
     if (low.listens != "") {
-        // the event mutation: on_input when the widget takes input,
-        // else on_click (the vocabulary enforces the pairing — fields
-        // take on_input, buttons/checks take on_click)
-        let mut m: ?Mutation<str, opaque> = w.on_input;
-        if (m == nil) {
-            m = w.on_click;
+        // the event wiring: on_input when the widget takes input, else
+        // on_click, else the arg-bound on_row — at least one arm must
+        // exist (the vocabulary enforces the pairing: fields take
+        // on_input; buttons/checks take on_click or on_row)
+        let mut e = Ev { };
+        if (w.on_input != nil) {
+            e.m = w.on_input;
+        } else {
+            if (w.on_click != nil) {
+                e.m = w.on_click;
+            } else {
+                if (w.on_row != nil) {
+                    e.row = w.on_row;
+                    e.arg = w.row_arg;
+                } else {
+                    panic(f"t1: '{path}' listens but carries no mutation — set .on_click(...)/.on_input(...)/.on_row(...)");
+                }
+            }
         }
-        if (m == nil) {
-            panic(f"t1: '{path}' listens but carries no mutation — set .on_click(...)/.on_input(...)");
-        }
-        let evm: Mutation<str, opaque> = m;
         let id: i64 = ui_listen(el, low.listens);
-        let mut regs: HashMap<str, Mutation<str, opaque>> = r.regs;
-        regs.put(f"{id}", evm);
+        let mut regs: HashMap<str, Ev> = r.regs;
+        regs.put(f"{id}", e);
         let mut lids: HashMap<str, i64> = r.lids;
         lids.put(path, id);
     }
@@ -305,7 +365,7 @@ fn retire_subtree(mut r: T1Root, w: Widget, path: str) -> nil {
         let hit = lids.get(path);
         if (hit != nil) {
             let id: i64 = hit;
-            let mut regs: HashMap<str, Mutation<str, opaque>> = r.regs;
+            let mut regs: HashMap<str, Ev> = r.regs;
             regs.remove(f"{id}");
             lids.remove(path);
         }

@@ -26,6 +26,12 @@ pub class World {
     add_ev: Mutation<str, opaque>; // the Add click (reads the draft)
     toggle_row: Mutation<i64, opaque>; // per-row, arg-captured
     remove_row: Mutation<i64, opaque>; // per-row, arg-captured
+    answer_ev: Mutation<str, (str, str)>; // the timer's wrapper
+    // THE REACTIVE PROPS (tur's reads-as-props): what the view WIRES,
+    // resolved at the render door
+    draft_view$: Derived<str>; // the field's value mirror
+    status_line$: Derived<str>; // counts$ + note$ composed
+    list_tree$: Derived<Widget>; // the whole list card (tur's Each)
 }
 
 /// Boot the world: the sources, the derived (deps DISCOVERED through
@@ -36,17 +42,14 @@ fn world_boot(boot_line: str) -> World {
     let items$ = store.source<Vec<Todo>>(Vec.new());
     let reqs$ = store.source<Vec<Req>>(Vec.new());
     let draft$ = store.source_str("");
-    let note$ = store.source_str("");
+    // the boot line is the note's SEED (never a write): the app boots
+    // "booted — ..." and the status line is pixel-identical from turn
+    // one; the DOM-free suite boots "" and leaves the note never-
+    // written (the str-lane twin's pinned shape)
+    let note$ = store.source_str(boot_line);
     let last$ = store.source_str("");
     let next_todo$ = store.source<i64>(1);
     let next_req$ = store.source<i64>(1);
-    // the boot line lands in the note BEFORE the first paint, so the
-    // status line is pixel-identical from turn one (survey §4.5); the
-    // DOM-free suite boots with "" and leaves the note never-written
-    if (boot_line != "") {
-        note$.set(boot_line);
-    }
-
     // THE DERIVED — the counts line, deps discovered through the ctx,
     // never declared. The SAME formula the status line has always
     // shown; the first get computes it.
@@ -267,6 +270,59 @@ fn world_boot(boot_line: str) -> World {
         return opaque(r);
     });
 
+    /// THE TIMER'S WRAPPER: run the server's answer, then write the
+    /// status line's tail (the why on an err leg, the line on an ok
+    /// leg) — the app's on_event no longer writes anything itself.
+    let answer_ev = store.mutation(fn (ctx, tag: str) -> (str, str) {
+        let ans = ctx.set(answer_m, tag);
+        if (ans.1 != "") {
+            ctx.set(note$, ans.1);
+        } else {
+            ctx.set(note$, ans.0);
+        }
+        return ans;
+    });
+
+    // ---- THE REACTIVE PROPS (tur's reads-as-props) --------------------
+    //
+    // The view wires RECIPES, never pulled values: these deriveds ride
+    // the widget tree as props and t1_render resolves them at the
+    // RENDER DOOR (pull-on-read freshness, where the tree meets the
+    // page). The view fn reads NOTHING; deps are discovered on first
+    // resolve and re-discovered on every recompute.
+
+    /// the draft mirror: the field's value, reactive.
+    let draft_view$ = store.derive(fn (ctx) -> str {
+        return ctx.get(draft$);
+    });
+
+    /// the status line: counts$ + note$ composed — "N open | M done |
+    /// K in flight — <note>", byte-identical to every phase before.
+    let status_line$ = store.derive(fn (ctx) -> str {
+        return f"{ctx.get(counts$)} — {ctx.get(note$)}";
+    });
+
+    /// THE LIST, reactive (tur's Each): the whole card is a derived —
+    /// one keyed row per committed todo, one pending line per booked
+    /// add; the row controls carry their own arg-captured mutations,
+    /// minted fresh per recompute (the registry keeps a row's listener
+    /// from its CREATE; a row's id is stable for its lifetime, so the
+    /// captured args are equivalent).
+    let list_tree$ = store.derive(fn (ctx) -> Widget {
+        let items = ctx.get(items$);
+        let rs = ctx.get(reqs$);
+        let mut list = card().pad(12).gap(8).hook("list");
+        for (let t of items) {
+            list.w(todo_row(t, has_pending_for(rs, t.id), toggle_row, remove_row));
+        }
+        for (let rq of rs) {
+            if (rq.kind == KIND_ADD) {
+                list.w(pending(f"... {rq.title}"));
+            }
+        }
+        return list;
+    });
+
     return World {
         store: store,
         items$: items$,
@@ -285,6 +341,10 @@ fn world_boot(boot_line: str) -> World {
         add_ev: add_ev,
         toggle_row: toggle_row,
         remove_row: remove_row,
+        answer_ev: answer_ev,
+        draft_view$: draft_view$,
+        status_line$: status_line$,
+        list_tree$: list_tree$,
     };
 }
 

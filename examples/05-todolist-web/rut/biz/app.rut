@@ -56,16 +56,15 @@ entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, 
     }
     if (kind == 2) {
         // EV_TIMER — the "server" answers the booked request, THROUGH
-        // the machine's answer mutation. The answer's own err leg (a
-        // rejected title, a lost id) is DATA: the status line tells
-        // the user, and the err channel tells the host.
-        let ans = r.world.answer_m.run(subject);
+        // the machine's answer wrapper (the answer mutation + the
+        // status line's tail, one write lane). The answer's own err
+        // leg (a rejected title, a lost id) is DATA: the status line
+        // tells the user, and the err channel tells the host.
+        let ans = r.world.answer_ev.run(subject);
         if (ans.1 != "") {
-            r.world.note$.set(ans.1);
             paint(r);
             return (nil, ans.1);
         }
-        r.world.note$.set(ans.0);
         paint(r);
         return (opaque(r), "");
     }
@@ -84,59 +83,31 @@ fn paint(r: AppRoot) -> nil {
     t1_render(root, tree);
 }
 
-// THE VIEW — App (§7.2). PURE: it READS through the handles (the
-// counts through the derived counts$, the draft/note through their
-// sources) and builds the whole widget tree. No crossing runs here; no
-// atom is written here (survey §4.2: view never writes). EVENTS ARE
-// PROPS NOW (tur's shape): the field carries the draft mutation, the
-// Add button carries the add mutation, each row's check/del carries
-// its arg-captured mutation — no subject tables, nothing to stale.
+// THE VIEW — App (§7.2). PURE WIRING: the tree is STATIC COMPOSITION
+// plus REACTIVE PROPS (tur's reads-as-props) — the draft rides the
+// field as a derived, the status line is a derived, the whole list is
+// a derived subtree. The view READS NOTHING and writes nothing
+// (survey §4.2 kept, completed: the pulls moved to the render door);
+// the events ride the widgets' own mutations (on_click/on_input).
 fn view(mut r: AppRoot) -> Widget {
     let mut world: World = r.world;
 
     let mut tree = col().gap(12).pad(16).hook("root");
 
     let mut head = row().gap(8).hook("head");
-    head.w(field().placeholder("What needs doing?").value(world.draft$.get()).on_input(world.draft_ev).hook("new-todo"));
+    head.w(field().placeholder("What needs doing?").value_of(world.draft_view$).on_input(world.draft_ev).hook("new-todo"));
     head.w(btn("Add").on_click(world.add_ev).hook("add-btn"));
     tree.w(head);
 
-    // the counts line — EXACT, as every phase before, THROUGH the
-    // derivation by the derived handle's get: "N open | M done | K in
-    // flight", the note$ atom tailing it
-    tree.w(
-        muted(f"{world.counts$.get()} — {world.note$.get()}")
-            .hook("status"),
-    );
+    // the status line — a derived prop, resolved at the render door:
+    // "N open | M done | K in flight — <note>", byte-identical to
+    // every phase before
+    tree.w(muted("").text_of(world.status_line$).hook("status"));
 
-    tree.w(todo_list(world));
+    // the list — tur's Each, package-sized: the whole card is one
+    // derived subtree
+    tree.w(live(world.list_tree$));
     return tree;
-}
-
-// ---- THE LIST (the old todo_list package) -----------------------------
-// One keyed row per committed todo (commit order), then a pending line
-// per outstanding add (book order) — the round trip made visible.
-// Reads through the handles; the rows carry their own event mutations.
-
-/// The list tree. Reads the items and reqs sources through their
-/// handles (pull-on-read freshness is the handle get's own law).
-pub fn todo_list(world: World) -> Widget {
-    let mut w = world;
-
-    let items = w.items$.get();
-    let rs = w.reqs$.get();
-
-    let mut list = card().pad(12).gap(8).hook("list");
-    for (let t of items) {
-        list.w(todo_row(w, t, has_pending_for(rs, t.id)));
-    }
-    for (let rq of rs) {
-        if (rq.kind == KIND_ADD) {
-            list.w(pending(f"... {rq.title}"));
-        }
-    }
-
-    return list;
 }
 
 // ---- THE ROW (the old todo_row package) -------------------------------
@@ -144,12 +115,13 @@ pub fn todo_list(world: World) -> Widget {
 // the row SURVIVES every patch between commits. The check's `on` is app
 // state: a done flip patches one token. `flying` turns the title into
 // its in-flight variant. THE EVENT WIRING: each control carries its
-// machine mutation with the row's id captured (tur's
-// `mutate((ctx, _ev) => act(ctx, index))`, spelled capture(...)).
+// machine mutation with the row's id BOUND AS DATA (tur's
+// `mutate((ctx, _ev) => act(ctx, index))` — .on_row(m, id), no
+// runtime closure).
 
-pub fn todo_row(w: World, t: Todo, flying: bool) -> Widget {
+pub fn todo_row(t: Todo, flying: bool, toggle_row: Mutation<i64, opaque>, remove_row: Mutation<i64, opaque>) -> Widget {
     let mut row_w = row().gap(8).key(f"row-{t.id}").hook(f"row-{t.id}");
-    row_w.w(check(t.done).on_click(capture(w.toggle_row, t.id)).hook(f"mark-{t.id}"));
+    row_w.w(check(t.done).on_row(toggle_row, t.id).hook(f"mark-{t.id}"));
     let mut lbl = text(t.title);
     if (flying) {
         lbl = pending(f"... {t.title}");
@@ -159,6 +131,6 @@ pub fn todo_row(w: World, t: Todo, flying: bool) -> Widget {
         }
     }
     row_w.w(lbl.hook(f"lbl-{t.id}"));
-    row_w.w(quiet("del").on_click(capture(w.remove_row, t.id)).hook(f"del-{t.id}"));
+    row_w.w(quiet("del").on_row(remove_row, t.id).hook(f"del-{t.id}"));
     return row_w;
 }

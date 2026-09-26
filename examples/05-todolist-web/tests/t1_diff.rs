@@ -308,6 +308,30 @@ fn every_listener_row_fires_its_own_mutation() {
     }
 }
 
+// ---- the reactive props: the render door (tur's reads-as-props) ------
+
+#[test]
+fn reactive_props_resolve_at_the_render_door() {
+    let (mut host, app) = make_host();
+    render(&mut host, &app, "t1p_live_a");
+    assert_eq!(snap(&host, "lv").text.as_deref(), Some("n=7"));
+
+    // the SAME tree, the cell moved: the prop resolves fresh at the
+    // render door — one text patch, and nothing relistens
+    let listeners = host_listener_len(&host);
+    host.call::<_, ()>("t1p_live_bump", (app.clone(), 8_i64)).unwrap();
+    render(&mut host, &app, "t1p_live_a");
+    assert_eq!(snap(&host, "lv").text.as_deref(), Some("n=8"));
+    assert_eq!(host_listener_len(&host), listeners, "a reactive prop never mints a listener");
+
+    // the derived SUBTREE (live) materializes and patches the same way
+    render(&mut host, &app, "t1p_live_each_a");
+    assert_eq!(snap(&host, "lvt").text.as_deref(), Some("v=8"));
+    host.call::<_, ()>("t1p_live_bump", (app.clone(), 9_i64)).unwrap();
+    render(&mut host, &app, "t1p_live_each_a");
+    assert_eq!(snap(&host, "lvt").text.as_deref(), Some("v=9"));
+}
+
 // ---- the trap matrix through the patcher -----------------------------
 
 #[test]

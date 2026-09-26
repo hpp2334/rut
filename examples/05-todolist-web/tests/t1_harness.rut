@@ -12,7 +12,7 @@
 // be imported even by name).
 use ui::{
     Widget, WKind, T1Root, t1_mount, t1_render, t1_event,
-    Store, Source, Mutation,
+    Store, Source, Derived, Mutation, live,
     col, row, card, spacer, field, check,
     text, done, title, pending, muted, btn, quiet,
 };
@@ -29,6 +29,9 @@ struct Harness {
     root: T1Root;
     store: Store; // the label mutations' mint + write lane
     log$: Source<Vec<str>>; // the delivered labels, in order
+    num$: Source<i64>; // the reactive-props scenario's cell
+    num_view$: Derived<str>; // ... its derived view
+    each_view$: Derived<Widget>; // ... its derived SUBTREE (live)
 }
 
 /// The harness's one event shape: a mutation whose body appends its
@@ -51,7 +54,21 @@ fn log_m(h: ?Harness, label: str) -> Mutation<str, opaque> {
 entry fn main() -> opaque {
     let store = Store.new();
     let log$ = store.source<Vec<str>>(Vec.new());
-    let h: ?Harness = Harness { root: t1_mount("app"), store: store, log$: log$ };
+    let num$ = store.source<i64>(7);
+    let num_view$ = store.derive(fn (ctx) -> str {
+        return f"n={ctx.get(num$)}";
+    });
+    let each_view$ = store.derive(fn (ctx) -> Widget {
+        return col().hook("lvc").w(text(f"v={ctx.get(num$)}").hook("lvt"));
+    });
+    let h: ?Harness = Harness {
+        root: t1_mount("app"),
+        store: store,
+        log$: log$,
+        num$: num$,
+        num_view$: num_view$,
+        each_view$: each_view$,
+    };
     return opaque(h);
 }
 
@@ -304,7 +321,7 @@ entry fn t1p_els_steal(c: opaque, path: str) {
 entry fn t1p_regs_len(c: opaque) -> i32 {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
-    let mut regs: HashMap<str, Mutation<str, opaque>> = root.regs;
+    let mut regs: HashMap<str, Ev> = root.regs;
     return regs.len();
 }
 
@@ -313,7 +330,7 @@ entry fn t1p_regs_len(c: opaque) -> i32 {
 entry fn t1p_regs_has(c: opaque, id: str) -> bool {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
-    let mut regs: HashMap<str, Mutation<str, opaque>> = root.regs;
+    let mut regs: HashMap<str, Ev> = root.regs;
     return regs.has(id);
 }
 
@@ -375,4 +392,32 @@ entry fn t1p_prev_key(c: opaque) -> str {
         return w.key;
     }
     return w.hook;
+}
+
+// ---- the reactive-props scenarios (tur's reads-as-props) -------------
+
+/// A tree whose Text content is a DERIVED PROP — the resolve door is
+/// t1_render's: the same tree re-rendered after a cell write patches
+/// the text, because the prop resolves fresh each render.
+entry fn t1p_live_a(c: opaque) {
+    let h = opaque.downcast<?Harness>(c);
+    let mut root: T1Root = h.root;
+    let mut tree = col().gap(8).hook("livezone");
+    tree.w(text("").text_of(h.num_view$).hook("lv"));
+    t1_render(root, tree);
+}
+
+/// The reactive SUBTREE (tur's Each): the whole branch is a derived,
+/// materialized at the render door and keyed-diffed like any tree.
+entry fn t1p_live_each_a(c: opaque) {
+    let h = opaque.downcast<?Harness>(c);
+    let mut root: T1Root = h.root;
+    t1_render(root, col().gap(8).hook("livezone").w(live(h.each_view$)));
+}
+
+/// Test code may push the cell directly (the harness is the frozen
+/// test surface's peer, not the app).
+entry fn t1p_live_bump(c: opaque, v: i64) {
+    let h = opaque.downcast<?Harness>(c);
+    h.num$.set(v);
 }
