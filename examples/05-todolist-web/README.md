@@ -559,6 +559,22 @@ node scripts/dev-channel.mjs  # preflights (or loudly builds) the gen/ glue,
                               # tears down server + tunnel together)
 ```
 
+**When the tunnel 404s everybody**: cloudflared dials Cloudflare's
+edge on TCP/UDP **7844**; on a network that lets it reach only one
+argotunnel region, the tunnel *registers* but the edge routes no
+request to it — every visit is a bare empty 404, and `total_requests`
+in the metrics (`127.0.0.1:20242/metrics`) counts only `/health`
+probes. cloudflared's own connectivity pre-check prints the tell
+(`SUMMARY: Environment has critical failures`). `--protocol http2`
+does not help (same port). The durable shape is Pages — the page IS
+static (loader.js fetches the rut sources at runtime), so:
+
+```sh
+npx wrangler pages project create rut-todolist --production-branch main
+npx wrangler pages deploy . --project-name rut-todolist --branch main
+# → https://rut-todolist.pages.dev
+```
+
 `--out-name web_host` is load-bearing: `loader.js` imports
 `./gen/web_host.js`, and the generated glue fetches
 `./web_host_bg.wasm` relative to ITSELF, so the subdir pair stays
