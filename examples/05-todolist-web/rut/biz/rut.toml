@@ -5,7 +5,7 @@
 # `entry.libs` names the section files, the base splices first, the
 # array IS the order. The root spec stays `app`
 # (the ABI shape: the host boots `main`, re-passes the container to
-# `on_event`; the mirror lane compiles the handed-over source under
+# the event doors; the mirror lane compiles the handed-over source under
 # this spec).
 #
 # THE SURFACE LAW (see biz.rut's header): biz reads with store.get,

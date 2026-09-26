@@ -1,8 +1,9 @@
 //! The turn law (survey §5.1): there is no microtask queue, nobody
 //! polls, the host drives. Each DOM event or timer fire is ONE
-//! `vm.call("on_event", …)` turn; between turns rut is inert and the
-//! host holds only the event queue. `drain_queue` is that pump — the
-//! same code the twin's tests and the wasm32 page run.
+//! `vm.call("on_<event>", …)` turn (the door named for the event —
+//! `on_click`, `on_input`, `on_timer`, ...); between turns rut is
+//! inert and the host holds only the event queue. `drain_queue` is
+//! that pump — the same code the twin's tests and the wasm32 page run.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -13,16 +14,16 @@ use rut_vm::{OpaqueRef, Trap, TrapKind};
 
 use crate::backend::DomBackend;
 
-/// The frozen numeric event kinds (the survey §4.2 re-entry contract).
-/// rut reads them as data; the host is the only writer.
-pub const EV_DOM: i32 = 1;
-pub const EV_TIMER: i32 = 2;
-
-/// One asynchronous fact, host → rut: an `on_event` row.
-pub struct WebEvent {
-    pub kind: i32,
-    pub subject: String,
-    pub detail: String,
+/// One asynchronous fact, host → rut: an event row for ONE door. The
+/// host owns the listener rows (id → element + event name), so it
+/// knows the event class when it enqueues — the DOM row NAMES its
+/// event and the pump derives the export (`on_click`, `on_input`,
+/// `on_keydown`, ...); rut never re-derives a class from a kind code.
+/// `value` is the element's current value when the element IS an
+/// input (the detail law), "" otherwise.
+pub enum WebEvent {
+    Dom { id: i64, event: String, value: String },
+    Timer { tag: String },
 }
 
 /// What fired: a DOM listener (by id) or a timer (by tag). The sink's
@@ -51,12 +52,12 @@ pub struct WebState<D: DomBackend> {
     pub queue: VecDeque<WebEvent>,
     pub listeners: HashMap<i64, ListenerRow<D::El>>,
     /// The app container: the ONE opaque the boot turn returned, handed
-    /// back on every `on_event` turn (phase 2's shape — RFC 0003 §1's
+    /// back on every event turn (phase 2's shape — RFC 0003 §1's
     /// own law: rut has no mutable module state, so the store lives in
     /// the container the host passes back, the 00-todolist pattern).
     pub app: Option<OpaqueRef>,
-    /// The pump's report surface (err-channel phase 3): every
-    /// `on_event` turn's non-empty err component lands here — DATA the
+    /// The pump's report surface (err-channel phase 3): every event
+    /// turn's non-empty err component lands here — DATA the
     /// host reads and acts on (the wasm lane forwards each into its
     /// `rut_web_last_error` slot). A returned err is never a poison
     /// pill; a TRAPPED turn still aborts the pump loudly through its
@@ -92,19 +93,19 @@ impl<D: DomBackend> WebState<D> {
     /// never a rut diagnostic (the same class as the RFC 0025 boot
     /// panics).
     pub fn push_dom_event(&mut self, listener: i64) {
-        let el = match self.listeners.get(&listener) {
-            Some(row) => row.el.clone(),
+        let (el, event) = match self.listeners.get(&listener) {
+            Some(row) => (row.el.clone(), row.event.clone()),
             None => panic!(
                 "web: listener {listener} is not registered — host registry drift (an embedding bug, not a rut diagnostic)"
             ),
         };
-        let detail = self.dom.current_value(&el).unwrap_or_default();
-        self.queue.push_back(WebEvent { kind: EV_DOM, subject: listener.to_string(), detail });
+        let value = self.dom.current_value(&el).unwrap_or_default();
+        self.queue.push_back(WebEvent::Dom { id: listener, event, value });
     }
 
     /// A timer fired: the tag is the whole payload.
     pub fn push_timer(&mut self, tag: &str) {
-        self.queue.push_back(WebEvent { kind: EV_TIMER, subject: tag.to_string(), detail: String::new() });
+        self.queue.push_back(WebEvent::Timer { tag: tag.to_string() });
     }
 
     /// The sink's body: classify and enqueue.
@@ -142,8 +143,8 @@ impl<D: DomBackend> WebState<D> {
 /// the queue and runs as the NEXT turn — sequential, never stacked.
 ///
 /// Every turn hands the app ITS container back (phase 2's entry shape,
-/// `on_event(c, kind, subject, detail)`), and (err-channel phase 3) the
-/// turn answers the entry-err pair `(?opaque, str)`:
+/// `on_<event>(c, id, detail)` / `on_timer(c, tag)`), and (err-channel
+/// phase 3) the turn answers the entry-err pair `(?opaque, str)`:
 ///
 /// * `Err` — a trapped turn: a BUG, wiring drift. The pump aborts LOUD
 ///   (`r?`), exactly as ever.
@@ -170,7 +171,17 @@ pub fn drain_queue<D: DomBackend>(
             )
         })?;
         state.borrow_mut().begin_turn();
-        let r = vm.call::<_, (Option<OpaqueRef>, String)>("on_event", (app, ev.kind, ev.subject, ev.detail));
+        // THE DOOR: named for the event class the host already knows —
+        // the DOM row's event names the export; the timer has its own.
+        let r = match ev {
+            WebEvent::Dom { id, event, value } => {
+                let export = format!("on_{event}");
+                vm.call::<_, (Option<OpaqueRef>, String)>(export.as_str(), (app, id.to_string(), value))
+            }
+            WebEvent::Timer { tag } => {
+                vm.call::<_, (Option<OpaqueRef>, String)>("on_timer", (app, tag))
+            }
+        };
         state.borrow_mut().end_turn();
         let (crossed, err) = r?;
         if !err.is_empty() {

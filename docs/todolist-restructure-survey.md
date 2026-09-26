@@ -974,8 +974,7 @@ The reads followed the writes: the view now wires REACTIVE PROPS
 (`.value_of`/`.text_of`/`live` — tur's `Text({text: derive(...)})` and
 `Each({items})`), resolved at the RENDER DOOR, and the app code has no
 pull or push left at all — `ctx.get` lives only inside derives,
-`ctx.set` only inside mutations, `m.run` only at on_event's booking
-points. The law gate greps the app code for the handle verbs'
+`ctx.set` only inside mutations, `m.run` only at the timer door. The law gate greps the app code for the handle verbs'
 field-reach spellings and fails loud; the frozen test surface keeps
 them. One VM lesson recorded on the way: runtime closure mints inside
 a recompute abort (a makeclosure nil slot — the rejected-add session

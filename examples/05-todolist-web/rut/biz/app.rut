@@ -1,7 +1,7 @@
 // ---- THE APP (the shell; the views live below) ------------------------
 
 /// The app container: everything a turn needs, built once at boot and
-/// returned to the host, which re-passes it on every on_event turn.
+/// returned to the host, which re-passes it on every event turn.
 /// The framework's T1Root rides as a FIELD (§7.1) beside THE WORLD (the
 /// handles bundle — no domain container). The draft and the note live
 /// IN the store; no duplicates on the container. THE SUBJECT TABLES
@@ -28,47 +28,70 @@ entry fn main() -> opaque {
     return opaque(root);
 }
 
-// The ONE re-entry point: every asynchronous fact arrives as an event
-// row, the pump re-passing the container. Returns the ENTRY-ERR shape:
-// (opaque(c), "") on a clean turn, (nil, why) on a soft failure — the
-// container does NOT re-cross on a failed turn; the pump keeps the one
-// it holds. Drift stays on the panic channel, loud.
-entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
+// The RE-ENTRY DOORS: one per event class, NAMED FOR THE DOM EVENT
+// that produced it — the glue owns the listener rows (id -> element +
+// event name), so it knows the class when it enqueues and derives the
+// export (`on_click`, `on_input`, `on_keydown`, ...) instead of
+// shipping rut a kind code to re-derive. Every door re-passes the
+// container and answers the ENTRY-ERR shape: (opaque(c), "") on a
+// clean turn, (nil, why) on a soft failure — the container does NOT
+// re-cross on a failed turn; the pump keeps the one it holds. Drift
+// stays on the panic channel, loud.
+
+/// The container guard every door opens with: the host's re-passed
+/// opaque must be THE app container — drift is loud, named as such.
+fn take_app(c: opaque) -> AppRoot {
     let root = opaque.downcast<AppRoot>(c);
     if (root == nil) {
         panic("app: the event container is not an AppRoot — host drift");
     }
     let mut r: AppRoot = root;
+    return r;
+}
 
-    if (kind == 1) {
-        // EV_DOM — the framework resolves the firing listener to the
-        // widget's OWN event mutation and runs it through the ONE
-        // write lane (tur's onClick/onInput, framework-side). The
-        // answer is the booking box: opaque(Req) — book the timer —
-        // or opaque(nil), nothing to book.
-        let booked = t1_event(r.t1, subject, detail);
-        let req = opaque.downcast<Req>(booked);
-        if (req != nil) {
-            tim_after(req.latency, req.tag);
-        }
-        paint(r);
-        return (opaque(r), "");
+/// The DOM-event body shared by every `on_<event>` export: the
+/// framework resolves the firing listener id to the widget's OWN event
+/// mutation and runs it through the ONE write lane (tur's
+/// onClick/onInput, framework-side). `detail` is the listened input's
+/// current value when the element IS an input, "" otherwise (clicks
+/// carry nothing). The answer is the booking box: opaque(Req) — book
+/// the timer — or opaque(nil), nothing to book.
+fn dom_event(mut r: AppRoot, id: str, detail: str) -> (?opaque, str) {
+    let booked = t1_event(r.t1, id, detail);
+    let req = opaque.downcast<Req>(booked);
+    if (req != nil) {
+        tim_after(req.latency, req.tag);
     }
-    if (kind == 2) {
-        // EV_TIMER — the "server" answers the booked request, THROUGH
-        // the machine's answer wrapper (the answer mutation + the
-        // status line's tail, one write lane). The answer's own err
-        // leg (a rejected title, a lost id) is DATA: the status line
-        // tells the user, and the err channel tells the host.
-        let ans = r.world.answer_ev.run(subject);
-        if (ans.1 != "") {
-            paint(r);
-            return (nil, ans.1);
-        }
+    paint(r);
+    return (opaque(r), "");
+}
+
+/// The user clicked a widget (button, check, quiet del).
+entry fn on_click(c: opaque, id: str, detail: str) -> (?opaque, str) {
+    let mut r: AppRoot = take_app(c);
+    return dom_event(r, id, detail);
+}
+
+/// The user typed into the field — the value travels as `value`.
+entry fn on_input(c: opaque, id: str, value: str) -> (?opaque, str) {
+    let mut r: AppRoot = take_app(c);
+    return dom_event(r, id, value);
+}
+
+/// The timer door: the "server" answers the booked request, THROUGH
+/// the machine's answer wrapper (the answer mutation + the status
+/// line's tail, one write lane). The answer's own err leg (a rejected
+/// title, a lost id) is DATA: the status line tells the user, and the
+/// err channel tells the host.
+entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
+    let mut r: AppRoot = take_app(c);
+    let ans = r.world.answer_ev.run(tag);
+    if (ans.1 != "") {
         paint(r);
-        return (opaque(r), "");
+        return (nil, ans.1);
     }
-    panic(f"app: unknown event kind {kind}");
+    paint(r);
+    return (opaque(r), "");
 }
 
 // THE PAINT (§7.2): NO flush line — pull-on-read. The view's first get

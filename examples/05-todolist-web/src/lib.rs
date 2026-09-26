@@ -13,7 +13,7 @@
 //!   gate on native.
 //!
 //! Shared, target-independent: the registry bindings
-//! ([`hosts`], RFC 0025), the turn law ([`state`]: one `on_event` entry
+//! ([`hosts`], RFC 0025), the turn law ([`state`]: one door per event
 //! fn, the queue, the re-entrancy guard), the session mount
 //! ([`mount`]). Thinness law: no app names, no data shipping, no
 //! scheduler — the host knows nothing about todos.
@@ -31,4 +31,4 @@ pub mod host;
 pub mod web_dom;
 
 pub use backend::DomBackend;
-pub use state::{Ev, EvSink, WebEvent, WebState, EV_DOM, EV_TIMER};
+pub use state::{Ev, EvSink, WebEvent, WebState};

@@ -274,12 +274,12 @@ fn a_stale_fire_traps_loud_and_the_page_survives() {
 
 #[test]
 fn an_unknown_id_answers_no_mutation_loud() {
-    // the host-side row for an id rut never registered: on_event
+    // the host-side row for an id rut never registered: the door
     // delivers it straight to the registry — the miss is loud
     let (mut host, app) = make_host();
     render(&mut host, &app, "t1p_rows_a");
     let err = host
-        .call::<_, ()>("on_event", (app.clone(), 1i32, "4242".to_string(), "".to_string()))
+        .call::<_, ()>("on_click", (app.clone(), "4242".to_string(), "".to_string()))
         .unwrap_err();
     assert!(
         err.msg.contains("t1: listener '4242' answers no mutation — stale or unknown"),
@@ -379,12 +379,15 @@ fn the_root_key_cannot_change_under_a_patch() {
 }
 
 #[test]
-fn a_non_dom_event_kind_traps_in_the_harness() {
+fn a_timer_row_finds_no_door_in_the_harness() {
     let (mut host, app) = make_host();
+    // the harness books no requests, so it defines no on_timer door —
+    // a timer row routed here is a MISSING EXPORT: loud at the VM,
+    // never a silent paint
     let err = host
-        .call::<_, ()>("on_event", (app, 2i32, "req:1".to_string(), "".to_string()))
+        .call::<_, ()>("on_timer", (app, "req:1".to_string()))
         .unwrap_err();
-    assert!(err.msg.contains("t1h: unknown event kind 2"), "{}", err.msg);
+    assert!(err.msg.contains("on_timer"), "{}", err.msg);
 }
 
 // the mount keeps the container honest — the entry shape is the app's

@@ -75,7 +75,7 @@ impl<D: DomBackend> WebHost<D> {
 /// timers come from real JS tasks).
 impl WebHost<FakeDom> {
     /// Advance the twin's virtual clock, route every due timer, and
-    /// pump: the tim_after/on_event round trip, synchronously and
+    /// pump: the tim_after/on_timer round trip, synchronously and
     /// deterministically.
     pub fn advance(&mut self, ms: i64) -> Result<(), Trap> {
         // collect under the borrow (the clock tick fires nothing), then

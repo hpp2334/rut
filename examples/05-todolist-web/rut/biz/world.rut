@@ -272,7 +272,7 @@ fn world_boot(boot_line: str) -> World {
 
     /// THE TIMER'S WRAPPER: run the server's answer, then write the
     /// status line's tail (the why on an err leg, the line on an ok
-    /// leg) — the app's on_event no longer writes anything itself.
+    /// leg) — the app's timer door no longer writes anything itself.
     let answer_ev = store.mutation(fn (ctx, tag: str) -> (str, str) {
         let ans = ctx.set(answer_m, tag);
         if (ans.1 != "") {

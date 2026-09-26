@@ -277,6 +277,21 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
          (ctx.set); the handle verbs are the test surface's, not \
          the app's"
     );
+    // THE DOORS: one entry per event class, NAMED FOR THE DOM EVENT
+    // that produced it — the glue owns the listener rows and derives
+    // the export (on_click, on_input, ...; on_timer for the clock), so
+    // the kind-coded mega-entry is a tombstone: the host knows the
+    // class when it enqueues; rut never re-derives it from an integer.
+    for door in ["entry fn on_click(", "entry fn on_input(", "entry fn on_timer("] {
+        assert!(
+            BIZ.contains(door),
+            "the app answers every event class with a named door — missing {door}"
+        );
+    }
+    assert!(
+        !BIZ.contains("entry fn on_event(") && !BIZ.contains("kind: i32"),
+        "the kind-coded on_event is gone — doors, not codes"
+    );
     assert!(
         !BIZ.contains(".subject(") && !BIZ.contains("fn dispatch("),
         "the subject tables and their dispatcher are gone — events \

@@ -72,21 +72,29 @@ entry fn main() -> opaque {
     return opaque(h);
 }
 
-// The ONE re-entry point: a DOM event row arrives with the listener id
-// as its subject; the framework resolves the widget's OWN event
+// The event doors: one per DOM event class, NAMED FOR THE EVENT (the
+// glue derives the export from the listener row it registered). The
+// framework resolves the firing listener id to the widget's OWN event
 // mutation and runs it (tur's onClick/onInput, framework-side — the
 // mutation's body does the logging). Returns the entry-err pair (the
-// phase-3 turn shape) — the harness never soft-fails.
-entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
-    let h = opaque.downcast<?Harness>(c);
-    if (kind == 1) {
-        let mut root: T1Root = h.root;
-        let out = t1_event(root, subject, detail);
-        let _ = out;
-    } else {
-        panic(f"t1h: unknown event kind {kind}");
-    }
+// phase-3 turn shape) — the harness never soft-fails. No timer door:
+// the harness books no requests, so a timer row routed here is a
+// MISSING EXPORT — loud at the VM, never a silent paint.
+fn h_event(c: opaque, h: ?Harness, id: str, detail: str) -> (?opaque, str) {
+    let mut root: T1Root = h.root;
+    let out = t1_event(root, id, detail);
+    let _ = out;
     return (c, "");
+}
+
+entry fn on_click(c: opaque, id: str, detail: str) -> (?opaque, str) {
+    let h = opaque.downcast<?Harness>(c);
+    return h_event(c, h, id, detail);
+}
+
+entry fn on_input(c: opaque, id: str, value: str) -> (?opaque, str) {
+    let h = opaque.downcast<?Harness>(c);
+    return h_event(c, h, id, value);
 }
 
 // ---- shared scenario builders ---------------------------------------

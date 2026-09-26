@@ -38,13 +38,17 @@ page is nothing *but* async. The pattern that fills the gap:
 
   ```rut
   entry fn main() -> opaque;
-  entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str);
+  entry fn on_click(c: opaque, id: str, detail: str) -> (?opaque, str);
+  entry fn on_input(c: opaque, id: str, value: str) -> (?opaque, str);
+  entry fn on_timer(c: opaque, tag: str) -> (?opaque, str);
   ```
 
-* **every asynchronous fact is an event row.** One entry, one shape —
-  kind 1 = EV_DOM, kind 2 = EV_TIMER; the host is the only writer of
-  the queue (a FIFO with a re-entrancy guard — `events are queue,
-  never stack`).
+* **every asynchronous fact enters through a DOOR NAMED FOR ITS
+  EVENT.** One door per class — `on_click`/`on_input` for DOM events
+  (the glue owns the listener rows and derives the export from the
+  row's event name), `on_timer` for the clock; the host is the only
+  writer of the queue (a FIFO with a re-entrancy guard — `events are
+  queue, never stack`).
 * **the turn answers the entry-err pair** (err-channel phase 3). A
   clean turn returns `(opaque(c), "")` — the container re-crosses, the
   state-crossing law made explicit. A SOFT FAILURE returns
@@ -108,7 +112,7 @@ recorded deviations) makes a UI a VALUE:
   NOTHING; `t1_render` resolves the deriveds at the RENDER DOOR, so
   pull-on-read freshness lands exactly where the tree meets the page.
   Every write is a mutation (`ctx.set` inside); the only imperative
-  verb left is `m.run(arg)` at on_event's booking points.
+  verb left is `m.run(arg)` at the timer door.
 * **styling is a token contract.** `index.html`'s stylesheet keys
   ONLY the lowered tokens (the `t1-*` families, the fixed utility
   ladder, variant tokens); the app spells no class and the stylesheet
@@ -361,12 +365,15 @@ GONE — a row's event semantics ride the mutation its widget carries
 stale. A turn, end to end:
 
 ```
-event row -> on_event -> t1_event            (the framework resolves
+dom row   -> on_click / on_input -> t1_event  (the framework resolves
                                               the firing id to the
                                               widget's OWN mutation
                                               and runs it — the ONE
                                               write lane; the answer
                                               is the booking box)
+timer row -> on_timer                         (answer_ev: the machine's
+                                              answer + the note, one
+                                              write lane)
            -> [tim_after(req)]               (when the box holds a Req)
            -> view(r)                        (PURE WIRING — static
                                               composition + reactive
@@ -389,7 +396,7 @@ retired; freshness is the read's job now.
 | `rut/ui/rut.toml` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
 | `web.d.rut` | the `web` crossing's DECL surface (RFC 0025, `host_scope = "web"`) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
 | `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, RFC 0041 §5): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff (design: `docs/t1-design.md`); `components.rut` §5 the component vocabulary |
-| `rut/biz/*.rut` | the domain + app, one module, four files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `entries.rut` the machine mutations' DOM-free probe entries; `app.rut` `AppRoot`/`main`/`on_event`/`dispatch`/`paint`/`view`, the list + row builders |
+| `rut/biz/*.rut` | the domain + app, one module, four files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `entries.rut` the machine mutations' DOM-free probe entries; `app.rut` `AppRoot`/`main`/the event doors (`on_click`/`on_input`/`on_timer`)/`paint`/`view`, the list + row builders |
 | `src/state.rs` | the turn law: the FIFO queue, the one pump, the re-entrancy guard (`events are queue, never stack`) |
 | `src/hosts.rs` | the 10 registry bindings, written ONCE generic over the backend |
 | `src/backend.rs` | the `DomBackend` seam both lanes implement |

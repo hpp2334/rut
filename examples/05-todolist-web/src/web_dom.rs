@@ -245,7 +245,7 @@ fn boot_page(src: &str) -> Result<(), String> {
     )
     .map_err(|t| format!("vm boot: {}", t.msg))?;
     // the boot turn returns the app container; the pump re-passes it on
-    // every on_event turn (RFC 0003 §1 — no mutable module state)
+    // every event turn (RFC 0003 §1 — no mutable module state)
     let app: OpaqueRef = vm
         .call::<_, OpaqueRef>("main", ())
         .map_err(|t| format!("the boot turn trapped: {}", t.msg))?;

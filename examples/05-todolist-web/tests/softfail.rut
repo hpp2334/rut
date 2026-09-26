@@ -20,18 +20,18 @@ entry fn main() -> opaque {
     return opaque(t);
 }
 
-entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
+entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
     let t = opaque.downcast<?Tally>(c);
     if (t == nil) {
         panic("fixture: the event container is not a Tally — host drift");
     }
     let mut tt: ?Tally = t;
-    if (subject == "boom") {
+    if (tag == "boom") {
         // the soft failure: data for the host, the container untouched —
         // exactly-one-non-nil (the value channel is empty)
         return (nil, "boom");
     }
-    if (subject == "trap") {
+    if (tag == "trap") {
         panic("fixture: the trapped turn — drift, loud as ever");
     }
     tt.hits += 1;

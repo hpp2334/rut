@@ -9,7 +9,7 @@
 //   ./domain.rut   the domain types + the machine's pure scans
 //   ./world.rut    THE WORLD: the handles bundle + world_boot
 //   ./entries.rut  the DOM-free host-test surface + the probe fixtures
-//   ./app.rut      the shell (AppRoot, on_event, paint) + the views
+//   ./app.rut      the shell (AppRoot, the event doors, paint) + the views
 //
 // THE SURFACE IS THE HANDLES (tur's law — github.com/hpp2334/tur: the
 // app never touches a store object; atoms and mutations are values the
@@ -20,8 +20,8 @@
 //            live(list_tree$)      deriveds wired as PROPS, resolved
 //                                   at the render door (t1_render) —
 //                                   the view never pulls
-//   writes   add_m.run(arg)         the one imperative verb (on_event
-//                                   booking the machine's answer);
+//   writes   answer_ev.run(tag)     the one imperative verb (the timer
+//                                   door running the machine's answer);
 //            every OTHER write is a mutation fn's own ctx.set
 //   events   .on_click(m) / .on_input(m)   (widgets CARRY their
 //            mutation; the framework runs it on the firing event)
@@ -49,7 +49,7 @@
 // mutations never touch the clock — the app books tim_after from the
 // returned Req). view NEVER writes (the survey §4.2 law, kept).
 //
-// THE TURN SHAPE (kept): one on_event entry, one paint per turn, the
+// THE TURN SHAPE (kept): one door per event class, one paint per turn, the
 // ONE keyed-diff render. The FLUSH IS GONE (pull-on-read): paint does
 // no flush — the view's first get computes what this turn's writes
 // staled, at most once per write-set. The status line reads

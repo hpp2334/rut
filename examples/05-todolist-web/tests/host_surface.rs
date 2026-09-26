@@ -2,7 +2,7 @@
 //! the fake DOM, driven end to end through real rut calls — every
 //! crossing, the full trap matrix (unknown id, kind mismatch, DOM
 //! exception carried, the re-entrancy guard, listener drift), the
-//! tim_after/on_event round trip, and the RFC 0025 boot contract both
+//! tim_after/on_timer round trip, and the RFC 0025 boot contract both
 //! ways. This is what keeps `cargo test --workspace` a meaningful gate
 //! for a web example.
 
@@ -90,7 +90,7 @@ fn listener_ids_are_from_one_and_increment() {
 // ---- the round trips ----
 
 #[test]
-fn dom_event_round_trips_through_on_event() {
+fn dom_event_round_trips_through_its_door() {
     let mut host = make_host();
     host.fire_listener(1).unwrap(); // the add-btn "click" row
     let log: OpaqueRef = host.call("probe_get", ("log",)).unwrap();

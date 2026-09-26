@@ -53,28 +53,35 @@ entry fn main() -> opaque {
 /// shape honest (the state crosses, every turn).
 struct Harness { }
 
-// The ONE re-entry point: every asynchronous fact arrives as an event
-// row, the pump re-passing the container `main` returned. One entry,
-// one shape — including the phase-3 return: the entry-err pair
-// `(?opaque, str)`, the container nullable because the failure leg
-// leaves the value channel empty. The harness never soft-fails.
-entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
+// The event doors, one per DOM event: the harness keeps no state and
+// only LOGS what crossed — the listener id and the carried value (the
+// glue derives the export name from the row's event: on_click,
+// on_input, on_keydown; on_timer is the timer door). One shape per
+// door — including the phase-3 return: the entry-err pair
+// `(?opaque, str)`, the container re-crossing unchanged. The harness
+// never soft-fails.
+fn log_row(c: opaque, line: str) -> (?opaque, str) {
     let log = ui_get("log");
     let row = ui_create("li");
-    if (kind == 1) {
-        // EV_DOM — subject is the listener id; detail is the listened
-        // input's current value when the element IS an input, "" otherwise
-        ui_set_text(row, f"dom {subject} {detail}");
-    } else {
-        if (kind == 2) {
-            // EV_TIMER — subject is the tim_after tag
-            ui_set_text(row, f"timer {subject}");
-        } else {
-            ui_set_text(row, f"event {kind} {subject} {detail}");
-        }
-    }
+    ui_set_text(row, line);
     ui_append(log, row);
     return (c, "");
+}
+
+entry fn on_click(c: opaque, id: str, detail: str) -> (?opaque, str) {
+    return log_row(c, f"dom {id} {detail}");
+}
+
+entry fn on_input(c: opaque, id: str, value: str) -> (?opaque, str) {
+    return log_row(c, f"dom {id} {value}");
+}
+
+entry fn on_keydown(c: opaque, id: str, detail: str) -> (?opaque, str) {
+    return log_row(c, f"dom {id} {detail}");
+}
+
+entry fn on_timer(c: opaque, tag: str) -> (?opaque, str) {
+    return log_row(c, f"timer {tag}");
 }
 
 // ---- probes: plain entry fns the tests call; each is the ordinary

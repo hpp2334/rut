@@ -418,12 +418,15 @@ fn a_stale_row_listener_traps_loud() {
 }
 
 #[test]
-fn an_unknown_event_kind_traps_loud() {
+fn an_event_without_a_door_traps_loud() {
     let (mut host, app) = make_host();
+    // the app defines on_click/on_input/on_timer and nothing else — a
+    // DOM event class it has no door for (the glue routing keydown at
+    // a click-only page) is a MISSING EXPORT: loud at the VM
     let err = host
-        .call::<_, (Option<OpaqueRef>, String)>("on_event", (app, 7i32, "1".to_string(), "".to_string()))
+        .call::<_, (Option<OpaqueRef>, String)>("on_keydown", (app, "1".to_string(), "".to_string()))
         .unwrap_err();
-    assert!(err.msg.contains("app: unknown event kind 7"), "{}", err.msg);
+    assert!(err.msg.contains("on_keydown"), "{}", err.msg);
 }
 
 // ---- the twin containment proofs (err-channel phase 3) ----
@@ -530,10 +533,10 @@ fn a_rejected_add_crosses_the_err_channel_and_the_page_lives() {
 fn a_foreign_container_traps_loud() {
     let (mut host, app) = make_host();
     // the store surface answers its own container — a different type,
-    // so on_event's downcast fails LOUD (host drift, named as such)
+    // so the door's downcast fails LOUD (host drift, named as such)
     let foreign: OpaqueRef = host.call("store_new", ()).unwrap();
     let err = host
-        .call::<_, (Option<OpaqueRef>, String)>("on_event", (foreign, 1i32, "1".to_string(), "".to_string()))
+        .call::<_, (Option<OpaqueRef>, String)>("on_click", (foreign, "1".to_string(), "".to_string()))
         .unwrap_err();
     assert!(err.msg.contains("app: the event container is not an AppRoot"), "{}", err.msg);
     // the real container is unharmed: a live turn still runs
