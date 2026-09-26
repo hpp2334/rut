@@ -171,6 +171,11 @@ pub enum NativeTy {
     /// the same `builtin class` row — a pure signature contract over an
     /// engine-owned buffer
     StrBuf,
+    /// `Weak<T>` — the weak reference (RFC 0017 v1): a GENERIC builtin
+    /// class (instantiated `Weak<T>` at use, the `Array { elem }` shape);
+    /// its one member `upgrade()` is an engine builtin. Constructed by
+    /// type-call `Weak(v)` (the `opaque(v)` law).
+    Weak,
 }
 
 /// A builtin trait published by `core`'s native surface (RFC 0028):
@@ -280,6 +285,7 @@ impl Surface {
                 (sym::OPAQUE, NativeTy::Opaque),
                 (sym::STACK_TRACE, NativeTy::StackTrace),
                 (sym::STRBUF, NativeTy::StrBuf),
+                (sym::WEAK, NativeTy::Weak),
             ],
             native_traits: vec![(sym::ITERATOR, NativeTrait::Iterator)],
             native_fns: CORE_FNS.to_vec(),
@@ -298,6 +304,7 @@ pub fn core_native_type(name: IdentId) -> Option<NativeTy> {
         sym::OPAQUE => Some(NativeTy::Opaque),
         sym::STACK_TRACE => Some(NativeTy::StackTrace),
         sym::STRBUF => Some(NativeTy::StrBuf),
+        sym::WEAK => Some(NativeTy::Weak),
         _ => None,
     }
 }
@@ -479,7 +486,7 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// `TY_CHAR` boot row (a `Nil` shell holding the wire-stable ids fixed)
 /// ride the same bump. Old v11 artifacts are refused — none may be
 /// misread under the new law.
-pub const VERSION: u32 = 12;
+pub const VERSION: u32 = 13;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -660,6 +667,10 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
         }
         TyKind::Trace => e.u8(14),
         TyKind::StrBuf => e.u8(15),
+        TyKind::Weak { elem } => {
+            e.u8(16);
+            e.u32(*elem);
+        }
     }
 }
 
@@ -825,6 +836,7 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         13 => TyKind::Opt { elem: d.u32()? },
         14 => TyKind::Trace,
         15 => TyKind::StrBuf,
+        16 => TyKind::Weak { elem: d.u32()? },
         t => return Err(format!("bad type kind tag {t}")),
     })
 }
@@ -889,6 +901,8 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
         Op::MakeOpt { dst, src, ty } => { e.u8(89); e.u16(*dst); e.u16(*src); e.u32(*ty); }
         Op::OnDrop { obj, cleanup } => { e.u8(90); e.u16(*obj); e.u16(*cleanup); }
+        Op::WeakNew { dst, src, ty } => { e.u8(92); e.u16(*dst); e.u16(*src); e.u32(*ty); }
+        Op::WeakUpgrade { recv, dst, ty } => { e.u8(93); e.u16(*recv); e.u16(*dst); e.u32(*ty); }
         Op::ArrNew { dst, ty, len, repr } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); e.u8(repr.to_u8()); }
         Op::ArrLit { dst, ty, argv_off, argc } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u32(*argv_off); e.u16(*argc); }
         Op::ArrGet { dst, arr, idx, repr } => { e.u8(27); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u8(repr.to_u8()); }
@@ -953,8 +967,10 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: prim(d.u8()?)?, to: prim(d.u8()?)? },
         // 48 is RETIRED (StrCharAt died with the char exorcism — never
         // re-meaninged): name the number loudly instead of the generic catch-all
-        48 => return Err("bad opcode 48 (StrCharAt retired by the char exorcism — recompile under VERSION 12)".into()),
+        48 => return Err("bad opcode 48 (StrCharAt retired by the char exorcism — recompile under VERSION 13)".into()),
         91 => Op::StrCodeAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
+        92 => Op::WeakNew { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
+        93 => Op::WeakUpgrade { recv: d.u16()?, dst: d.u16()?, ty: d.u32()? },
         49 => Op::MakeRecord { dst: d.u16()?, ty: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
         50 => Op::AddF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
         51 => Op::SubF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },

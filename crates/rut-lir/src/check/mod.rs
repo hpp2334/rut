@@ -1363,6 +1363,16 @@ impl<'a> Ctx<'a> {
         })
     }
     /// `?T` (RFC 0005, RFC 0044) — nil-able cell (the old `*T` pointer)
+    /// `Weak<T>` — the weak reference (RFC 0017 v1). Generic like
+    /// `Array { elem }`: interned per instantiation, no boot row.
+    pub fn mk_weak(&mut self, elem: TypeId) -> TypeId {
+        let name = self.intern(&format!("Weak<{}>", self.type_name(elem)));
+        self.types.intern(RutType {
+            name,
+            kind: TyKind::Weak { elem },
+        })
+    }
+    /// `?T` (RFC 0005, RFC 0044) — a nil-able cell (the `mk_array` shape).
     pub fn mk_opt(&mut self, elem: TypeId) -> TypeId {
         let name = self.intern(&format!("?{}", self.type_name(elem)));
         self.types.intern(RutType {

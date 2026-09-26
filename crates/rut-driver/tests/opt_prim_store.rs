@@ -532,8 +532,10 @@ fn version_gate_rejects_stale_artifacts() {
     // was the orphan rule (RFC 0012 §2a, the orphan-rule batch's
     // rejection addition, the 5→6 precedent); v8 was the err-channel
     // phase 2 declared-surface change (`capture_stacktrace()` + the
-    // `StackTrace` builtin class + the `pos` span table, RFC 0036)
-    assert_eq!(VERSION, 12, "the char exorcism is the only allowed VERSION bump this phase");
+    // `StackTrace` builtin class + the `pos` span table, RFC 0036);
+    // v13 is the weak batch (RFC 0017 v1: `TyKind::Weak` + the two
+    // Weak ops — new encoded vocabulary, the bump law)
+    assert_eq!(VERSION, 13, "the weak batch owns this VERSION bump");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

@@ -363,6 +363,30 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             { let (argv_off, argc) = self.pool_args(&(vec![cap])); self.emit(Op::CallNat { nat: Nat::StrBufNew, recv: NOREG, argv_off, argc, dst }, sp.lo); }
             return Ok(TY_STRBUF);
         }
+        // the weak box's type-call: `Weak(v)` (RFC 0017 v1) — the
+        // `opaque(v)` construction law: a CALL of the type name itself.
+        // Exactly one argument; its type is the instantiation's elem and
+        // must be a reference type (every non-primitive is — the
+        // `Weak<i32>` admission diagnoses here, the `is_ref` gate).
+        if name == sym::WEAK {
+            if args.len() != 1 {
+                self.ctx.err(sp, "Weak(v) takes exactly one argument — the value to weak-reference");
+                return Err(());
+            }
+            let elem = self.compile_expr(args[0], None)?;
+            if !self.ctx.types.is_ref(elem) {
+                self.ctx.err(sp, format!(
+                    "weak needs a reference type — `{}` moves by value",
+                    self.ctx.type_name(elem)
+                ));
+                return Err(());
+            }
+            let weak_ty = self.ctx.mk_weak(elem);
+            let src = self.last_reg;
+            let dst = self.new_reg(weak_ty);
+            self.emit(Op::WeakNew { dst, src, ty: weak_ty }, sp.lo);
+            return Ok(weak_ty);
+        }
         if self.ctx.find_data(name).is_some() {
             self.ctx.err(sp, format!(
                 "construction is a method call, never a type-call —use a class method ({}.new(..)) or a struct literal `{} {{ .. }}` (RFC 0010 §1)",
@@ -1227,6 +1251,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => {
                         self.ctx.err(sp, format!(
                             "`StrBuf` has no method `{}` with {} argument(s) — its members are `push(s)`/`push_code(c)`/`len()`/`finish()`",
+                            self.ctx.name(name),
+                            args.len()
+                        ));
+                        return Err(());
+                    }
+                }
+            }
+            TyKind::Weak { elem } => {
+                // the Weak member contract (RFC 0017 v1): one engine
+                // builtin — `upgrade()` answers the live referent as `?T`
+                // or nil. For `Weak<?U>` the answer is `??U` (MakeOpt
+                // wraps the box — the sticky-`?` law, no unguarded unwrap).
+                match (name, args.len()) {
+                    (sym::UPGRADE, 0) => {
+                        let opt_ty = self.ctx.mk_opt(*elem);
+                        let dst = self.new_reg(opt_ty);
+                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::WeakUpgrade { recv: rreg, dst, ty: opt_ty }, sp.lo); }
+                        return Ok(opt_ty);
+                    }
+                    _ => {
+                        self.ctx.err(sp, format!(
+                            "`Weak` has no method `{}` with {} argument(s) — its member is `upgrade()`",
                             self.ctx.name(name),
                             args.len()
                         ));

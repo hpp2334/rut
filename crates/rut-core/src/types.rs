@@ -215,6 +215,13 @@ pub enum TyKind {
     /// Same one-slot box the old `*T` pointer was: `T → ?T` boxes, `?T → T`
     /// reads field 0 (nil check on use)
     Opt { elem: TypeId },
+    /// weak reference (RFC 0017 v1) — the `Weak<T>` builtin class's
+    /// runtime type: a WeakBox side cell holding an UNRETAINED slot word
+    /// to the referent, nulled when the referent dies. Generic like
+    /// `Array { elem }`: interned per instantiation (`mk_weak`), no boot
+    /// row. A ref type by the `is_ref` law (the box is a cell — the
+    /// referent it holds is not).
+    Weak { elem: TypeId },
     /// fn(P..) -> R — a closure value { func, captures } in one slot
     Fn { params: Vec<TypeId>, ret: TypeId },
 }

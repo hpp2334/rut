@@ -80,6 +80,23 @@ builtin class StrBuf {
                                   // buffer (finish twice = same text)
 }
 
+// The weak reference (RFC 0017 v1): a WeakBox side cell holding an
+// UNRETAINED word to the referent — a weak never keeps anything alive.
+// Construction is a CALL of the type name itself (the `opaque(v)` law):
+// `Weak(v)` mints `Weak<T>` over v's cell and traps on a nil `v`
+// ("weak on nil"); `T` must be a reference type (`Weak<i32>` diagnoses —
+// primitives move by value; `Weak<?U>` is legal and `upgrade` answers
+// `??U`). The referent's death nulls every box BEFORE any user code
+// runs — `upgrade()` answers `nil` deterministically from then on, even
+// from inside the dying cell's own cleanup. A weak edge closes no
+// cycle: strong cycles still leak to `Vm::drop` (RFC 0017 §2's stated
+// rule — this class is the first-class answer, not a collector).
+builtin class Weak<T> {
+    fn upgrade(self) -> ?T;       // the live referent retained into a
+                                  // fresh ?T, or nil once the referent
+                                  // died (repeat upgrades are stable)
+}
+
 
 // ---- engine builtin primitives (compiler-lowered members) ----
 // The boot primitives declare their surface here — `builtin primitive`,

@@ -284,6 +284,66 @@ impl Vm {
         Ok(())
     }
 
+    /// `WeakNew` (RFC 0017 v1) — `Weak(v)`: a WeakBox side cell holding
+    /// the referent's UNRETAINED slot word, registered into the
+    /// referent's weak list. `ty` is the instantiated `Weak<elem>` id.
+    /// THE ONE CONSUMING OP: the incoming reference is released and the
+    /// register nulled (frame teardown would otherwise release it again)
+    /// — the weak observes the BINDING's lifetime, never the temporary's
+    /// (without this, the argument's own +1 pinned the referent until the
+    /// frame ended and no death was ever observable mid-frame).
+    #[inline(always)]
+    pub(super) fn op_weak_new(&mut self, dst: Reg, src: Reg, ty: TypeId) -> Result<(), Trap> {
+        let v = self.cur_regs[src as usize];
+        let c = self.heap.alloc_weak(v, ty)?;
+        // consume the argument: the box took the word, not a reference
+        self.heap.release(v);
+        self.cur_regs[src as usize] = Slot::null();
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = c;
+        if self.is_ref(ty) {
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
+    /// `WeakUpgrade` (RFC 0017 v1) — `w.upgrade()`: the live referent
+    /// retained into a fresh `?elem` box (`ty` is the `?elem` id — the
+    /// MakeOpt mint minus the boxing of null), or the NULL SLOT when the
+    /// referent died: a true `nil`, never a box containing nil. The
+    /// referent word is the full slot value (tagged for store entries),
+    /// so `retain` routes either shape.
+    #[inline(always)]
+    pub(super) fn op_weak_upgrade(&mut self, recv: Reg, dst: Reg, ty: TypeId) -> Result<(), Trap> {
+        let w = self.cur_regs[recv as usize];
+        if unsafe { w.r.is_null() } {
+            return Err(Trap::new(TrapKind::NilDeref, "upgrade on nil"));
+        }
+        let raw = match unsafe { &(*w.r).data } {
+            CellData::WeakBox { referent } => referent.get(),
+            _ => return Err(Trap::new(TrapKind::Invalid, "upgrade on non-weak")),
+        };
+        let out = if unsafe { raw.r.is_null() } {
+            raw
+        } else {
+            self.heap.retain(raw);
+            match self.heap.alloc_opt_value(ty, raw) {
+                Ok(c) => c,
+                Err(e) => {
+                    // the box mint failed — give the retain back
+                    self.heap.release(raw);
+                    return Err(e);
+                }
+            }
+        };
+        let old = self.cur_regs[dst as usize];
+        self.cur_regs[dst as usize] = out;
+        if self.is_ref(ty) {
+            self.heap.release(old);
+        }
+        Ok(())
+    }
+
     /// `MakeOpt` — box `v` into a fresh one-slot cell (RFC 0044, the
     /// `T → ?T` coercion). The box ALIASES `v`'s cell — sharing, never a
     /// copy; primitives/`nil` copy the bits. `ty` is the nullable's own

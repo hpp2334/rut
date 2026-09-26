@@ -96,6 +96,14 @@ pub(crate) struct Arena {
     /// the arena so a `Heap` is a cheap two-`Rc` view (`Heap::view`),
     /// which the release walk builds to run a Host payload's finalize.
     pub(crate) singletons: RefCell<HashMap<(TypeId, u32), *const CellVal>>,
+    /// weak-reference lists (RFC 0017 v1): referent slot word -> the
+    /// WeakBox cells holding an unretained word to it. The `drop_fns`
+    /// shape — lazy, uncharged engine bookkeeping living on the arena
+    /// (same two-`Rc` view argument). Referent death nulls every box in
+    /// its list BEFORE anything that runs user code; box death
+    /// unregisters itself. Keyed by the full slot word (tagged for store
+    /// entries — the same keying `drop_fns` uses for both shapes).
+    weak_lists: RefCell<HashMap<usize, Vec<*const CellVal>>>,
     /// the Opaque store (nmap-hostvals P2): the ONE home of every rut
     /// `opaque` value — a slab of two-kind entries + free list, rc and
     /// borrow guards on the entry. Same lifetime argument as `blocks`:
@@ -115,7 +123,43 @@ impl Arena {
             pending_drops: RefCell::new(Vec::new()),
             blocks: Blocks::new(),
             singletons: RefCell::new(HashMap::new()),
+            weak_lists: RefCell::new(HashMap::new()),
             store: Store::new(),
+        }
+    }
+
+    /// Register a fresh WeakBox into its referent's weak list (RFC 0017).
+    /// `word` is the referent's full slot word.
+    pub(crate) fn weak_register(&self, word: usize, box_cell: *const CellVal) {
+        self.weak_lists.borrow_mut().entry(word).or_default().push(box_cell);
+    }
+
+    /// Referent death (RFC 0017): null every WeakBox in the referent's
+    /// list and drop the entry. Runs BEFORE the on_drop pin check and
+    /// any payload teardown — `dispose` bodies and queued cleanups that
+    /// call `upgrade()` see `nil`, deterministically, no window.
+    pub(crate) fn weak_null_list(&self, word: usize) {
+        if let Some(boxes) = self.weak_lists.borrow_mut().remove(&word) {
+            for b in boxes {
+                if let CellData::WeakBox { referent } = unsafe { &(*b).data } {
+                    referent.set(Slot::null());
+                }
+            }
+        }
+    }
+
+    /// Box death (RFC 0017): a dying WeakBox removes itself from its
+    /// referent's list (no-op when already dead — the list entry is
+    /// gone). Keeps the later nulling walk off freed cells.
+    pub(crate) fn weak_unregister(&self, word: usize, box_cell: *const CellVal) {
+        let mut lists = self.weak_lists.borrow_mut();
+        if let Some(v) = lists.get_mut(&word) {
+            if let Some(i) = v.iter().position(|&b| b == box_cell) {
+                v.swap_remove(i);
+            }
+            if v.is_empty() {
+                lists.remove(&word);
+            }
         }
     }
 
@@ -219,6 +263,11 @@ pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) 
             let c = &*e;
             let n = c.refs.get();
             if n <= 1 {
+                // weak nulling first (RFC 0017): an opaque box's death
+                // nulls its weak list before the pin check and before
+                // `release_entry`'s finalize — nothing that runs user
+                // code observes a live weak to a dying entry
+                arena.weak_null_list(p as usize);
                 // on_drop (RFC 0016 §3): the same pin-and-queue the cell
                 // path runs — the key is the tagged word either way
                 if let Some(cleanup) = arena.take_drop_fn(p as usize) {
@@ -240,6 +289,9 @@ pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) 
             return; // immortal singleton
         }
         if n <= 1 {
+            // weak nulling first (RFC 0017): the referent's boxes go
+            // dead before dispose/on_drop/user code can run
+            arena.weak_null_list(p as usize);
             // on_drop (RFC 0016 §3): a registered callback pins the cell
             // (refs stay 1) and queues it; the interpreter runs the
             // callback at a call boundary and releases the pin afterwards.
@@ -298,6 +350,9 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
         // routes through `release_ref_slot`'s entry path by its tag.
         // a str view retains the window's parent (RFC 0042)
         CellData::StrView { parent, .. } => out.push(*parent),
+        // a weak box holds an UNRETAINED referent word (RFC 0017) — never
+        // a child; its unregister runs in `release_cell` before this walk
+        CellData::WeakBox { .. } => {}
         // an array window retains its backing array (RFC 0042 §6)
         CellData::ArrView { parent, .. } => out.push(*parent),
         CellData::Closure { func, captures } => {
@@ -326,10 +381,21 @@ pub(crate) fn release_cell(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut CellV
     // freed, so a release cascade can never observe the dying cell.
     // Childless kinds (the churn case: strs, singletons) never build
     // the child vec at all.
+    // box death (RFC 0017): a dying WeakBox removes itself from its
+    // referent's list before its slot is recycled — the later nulling
+    // walk must never touch freed cells. (No block to free, no children:
+    // the referent word is deliberately not a Slot child.)
+    if let CellData::WeakBox { referent } = unsafe { &(*p).data } {
+        let word = referent.get();
+        if unsafe { !word.r.is_null() } {
+            arena.weak_unregister(unsafe { word.r } as usize, p);
+        }
+    }
     let children = unsafe {
         match (*p).data {
             CellData::Str(_) | CellData::Enum { .. }
-            | CellData::Trace { .. } | CellData::StrBuf { .. } => None,
+            | CellData::Trace { .. } | CellData::StrBuf { .. }
+            | CellData::WeakBox { .. } => None,
             _ => Some(collect_ref_children(&*p, &arena.plan)),
         }
     };

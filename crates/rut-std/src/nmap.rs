@@ -621,6 +621,7 @@ fn ty_label(kind: &TyKind) -> &'static str {
         TyKind::Opaque => "an opaque",
         TyKind::Trace => "a stack trace",
         TyKind::StrBuf => "a StrBuf",
+        TyKind::Weak { .. } => "a weak box",
         TyKind::Opt { .. } => "an optional",
         TyKind::Fn { .. } => "a fn value",
     }

@@ -535,6 +535,15 @@ pub enum CellData {
     /// natives (`push`/`push_code`); `finish` copies the octets out to a
     /// fresh immutable `str` cell and the builder keeps its buffer.
     StrBuf { buf: StrVal, chars: u32 },
+    /// weak reference (RFC 0017 v1) — the `Weak<T>` builtin class's
+    /// payload: the referent's raw slot word (tagged for store entries),
+    /// UNRETAINED — a weak never keeps its referent alive. `Cell` for
+    /// interior mutability: referent death nulls every box in its weak
+    /// list through shared `&` handles; null = dead. The full word (not
+    /// a plain pointer) so `retain`/`release` route tagged store-entry
+    /// referents correctly, and so the slot can ride straight into an
+    /// opt box on `upgrade`.
+    WeakBox { referent: std::cell::Cell<Slot> },
 }
 
 /// One captured frame — RFC 0036 §2's `RawFrame`, rut-only shape: the

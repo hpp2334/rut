@@ -360,7 +360,9 @@ fn discarded_capture_releases_cleanly() {
 
 #[test]
 fn version_nine_rejects_stale_artifacts() {
-    // v12 is the char exorcism (the nmap-hostvals batch phase 1: the
+    // v13 is the weak batch (RFC 0017 v1: `TyKind::Weak` + the two Weak
+    // ops — new encoded vocabulary, the bump law); v12 was the char
+    // exorcism (the nmap-hostvals batch phase 1: the
     // enumerated `char` finishes dying — the char prim tag (11) withdrawn,
     // const tag 3 (`ConstVal::Char`) withdrawn, opcode 48 (`StrCharAt`)
     // REPLACED by `StrCodeAt` (91), never re-meaninged); v11 was the
@@ -376,13 +378,13 @@ fn version_nine_rejects_stale_artifacts() {
     bytes.extend_from_slice(&7u32.to_le_bytes());
     let err = rut_core::binary::decode(&bytes).unwrap_err();
     assert!(err.contains("unsupported module binary version 7"), "{err}");
-    // and a fresh compile round-trips under v12
+    // and a fresh compile round-trips under v13
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
     s.register_module("app_main", Module { source: Some("pub fn main() -> i32 { return 4; }".into()), ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);
-    assert_eq!(&bytes[4..8], &12u32.to_le_bytes(), "the header carries v12");
+    assert_eq!(&bytes[4..8], &13u32.to_le_bytes(), "the header carries v13");
     assert!(rut_core::binary::decode(&bytes).is_ok());
 }

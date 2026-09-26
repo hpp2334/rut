@@ -164,11 +164,15 @@ pub const WELL_KNOWN: &[&str] = &[
     "push",       // PUSH
     "push_code",  // PUSH_CODE
     "finish",     // FINISH
+    "Weak",       // WEAK
+    "upgrade",    // UPGRADE
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
-/// every interner instance. Removed names (`Option`, `Result`,
-/// `Weak`) are deliberately absent: their diagnostics stay text-based.
+/// every interner instance. Removed names (`Option`, `Result`)
+/// are deliberately absent: their diagnostics stay text-based. (`Weak`
+/// joined the table in the weak batch, RFC 0017 v1 — it was absent
+/// while the M5 stub diagnosed it.)
 ///
 /// Used as `rut_core::SELF` etc.
 pub const SELF: IdentId = IdentId(0); // `self`
@@ -259,6 +263,13 @@ pub const STRBUF: IdentId = IdentId(65);
 pub const PUSH: IdentId = IdentId(66);
 pub const PUSH_CODE: IdentId = IdentId(67);
 pub const FINISH: IdentId = IdentId(68);
+
+// RFC 0017 v1 — the weak-reference surface: the `Weak<T>` builtin class
+// and its one member `upgrade()`. Well-known so every interner agrees
+// (the Weak name was previously reserved-by-absence — the M5 stub
+// diagnosed it; the weak batch gives it its real surface).
+pub const WEAK: IdentId = IdentId(69);
+pub const UPGRADE: IdentId = IdentId(70);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -367,6 +378,8 @@ mod tests {
             ("push", PUSH),
             ("push_code", PUSH_CODE),
             ("finish", FINISH),
+            ("Weak", WEAK),
+            ("upgrade", UPGRADE),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

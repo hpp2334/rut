@@ -387,6 +387,7 @@ fn remap_kind(
             kind.clone()
         }
         TyKind::Array { elem } => TyKind::Array { elem: map(*elem) },
+        TyKind::Weak { elem } => TyKind::Weak { elem: map(*elem) },
         TyKind::Enum { members } => TyKind::Enum {
             members: members
                 .iter()
@@ -432,6 +433,8 @@ fn remap_op(
         Op::MakeRecord { dst, ty, argv_off, argc } => Op::MakeRecord { dst, ty: map(ty), argv_off, argc },
         Op::Own { dst, src, ty } => Op::Own { dst, src, ty: map(ty) },
         Op::MakeOpt { dst, src, ty } => Op::MakeOpt { dst, src, ty: map(ty) },
+        Op::WeakNew { dst, src, ty } => Op::WeakNew { dst, src, ty: map(ty) },
+        Op::WeakUpgrade { recv, dst, ty } => Op::WeakUpgrade { recv, dst, ty: map(ty) },
         Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst, ty: map(ty), len, repr },
         Op::ArrLit { dst, ty, argv_off, argc } => Op::ArrLit { dst, ty: map(ty), argv_off, argc },
         Op::EnumNew { dst, ty, member } => Op::EnumNew { dst, ty: map(ty), member },

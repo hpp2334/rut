@@ -452,6 +452,25 @@ impl Heap {
         self.mint(rut_core::types::TY_STACK_TRACE, CellData::Trace { frames }, n * 8)
     }
 
+    /// A `Weak<T>` box (RFC 0017 v1): a WeakBox side cell holding the
+    /// referent's raw slot word — UNRETAINED (a weak never keeps its
+    /// referent alive) — registered into the referent's weak list so
+    /// referent death nulls it. `ty` is the instantiated `Weak<elem>`
+    /// id. Traps on a nil referent ("weak on nil" — the `on_drop` text).
+    /// Store-entry referents (opaque boxes, tagged words) register by the
+    /// same word the drop-fn map keys (D1).
+    pub fn alloc_weak(&self, referent: Slot, ty: TypeId) -> Result<Slot, Trap> {
+        let word = unsafe { referent.r };
+        if word.is_null() {
+            return Err(Trap::new(TrapKind::NilDeref, "weak on nil"));
+        }
+        let r = self.mint(ty, CellData::WeakBox { referent: Cell::new(referent) }, 8);
+        if let Ok(s) = &r {
+            self.arena.weak_register(word as usize, unsafe { s.r });
+        }
+        r
+    }
+
     /// Enum member — the immortal singleton cell (RFC 0016 §1): the one
     /// place identity quietly behaves as value (RFC 0012 §4).
     pub fn enum_member(&self, ty: TypeId, member: u32) -> Result<Slot, Trap> {
@@ -636,13 +655,16 @@ impl Heap {
                     }
                 }
             }
-            TyKind::Enum { .. } | TyKind::TraitObj { .. } | TyKind::Trace => {
+            TyKind::Enum { .. } | TyKind::TraitObj { .. } | TyKind::Trace | TyKind::Weak { .. } => {
                 // singletons & trait refs alias one cell — own() must mint a
                 // new identity; for enums that would break singleton `==`,
                 // so enums share (values, RFC 0006); trait objects have no
                 // standalone own semantics in v1 beyond the cell handle.
                 // A trace is an immutable engine snapshot: the handle share
                 // IS the own — every holder sees the same captured frames.
+                // A weak box is identity state over an unretained referent:
+                // the share IS the own (two boxes of one referent stay
+                // distinct cells — RFC 0017).
                 Ok(s)
             }
             TyKind::StrBuf => {

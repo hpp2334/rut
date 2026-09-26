@@ -746,6 +746,16 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*src);
         }
+        // WeakNew defs a fresh box and reads the referent; WeakUpgrade
+        // defs the answer and reads the box (RFC 0017)
+        Op::WeakNew { dst, src, .. } => {
+            d.push(*dst);
+            u.push(*src);
+        }
+        Op::WeakUpgrade { recv, dst, .. } => {
+            d.push(*dst);
+            u.push(*recv);
+        }
         Op::OnDrop { obj, cleanup } => {
             u.push(*obj);
             u.push(*cleanup);

@@ -683,6 +683,8 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
     };
     match op {
         Op::MakeOpt { dst, src, .. } => format!("makeopt r{dst}, r{src}"),
+        Op::WeakNew { dst, src, .. } => format!("weaknew r{dst}, r{src}"),
+        Op::WeakUpgrade { recv, dst, .. } => format!("weakupgrade r{dst}, r{recv}"),
         Op::OnDrop { obj, cleanup } => format!("ondrop r{obj}, r{cleanup}"),
         Op::Mov { dst, src } => format!("mov r{dst}, r{src}"),
         Op::MovRef { dst, src } => format!("movref r{dst}, r{src}"),

@@ -585,6 +585,12 @@ impl<'a> Ctx<'a> {
                     self.err(sp, "`StrBuf` takes no impl blocks — its members are engine builtins (`push(s)`/`push_code(c)`/`len()`/`finish()`)");
                     None
                 }
+                // the weak box likewise: closed engine contract
+                // (RFC 0017 v1) — its one member is the upgrade native
+                (rut_core::binary::NativeTy::Weak, _) => {
+                    self.err(sp, "`Weak` takes no impl blocks — its member is engine builtin (`upgrade()`)");
+                    None
+                }
             }
         } else if generics.is_empty() && self.extern_types.contains_key(&name) {
             // a USED type (RFC 0035 §1): legal as a TRAIT-impl

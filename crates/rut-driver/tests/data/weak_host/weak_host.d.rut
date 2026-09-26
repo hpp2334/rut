@@ -1,0 +1,5 @@
+// weak_host/weak_host.d.rut — the weak batch's host pkg: one host fn
+// minting a Rust-payload box (the D1 leg — a `Host` store entry
+// weak-referenced from script). The body binds in weak.rs.
+
+pub host fn make_box(n: i64) -> opaque;

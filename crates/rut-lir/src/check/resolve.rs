@@ -196,11 +196,10 @@ impl<'a> Ctx<'a> {
                     }
                     return p;
                 }
-                // Weak<T> — not in this build
-                if self.name(name) == "Weak" {
-                    self.err(sp, "Weak references are not supported in this build (RFC 0017, M5)");
-                    return TY_I32;
-                }
+                // `Weak<T>` resolves like every builtin now (RFC 0017 v1) —
+                // the pre-weak M5 stub ("not supported in this build") that
+                // pre-reserved the name is gone; the `Weak` row reaches the
+                // `core_ty` match below through the same ambient surface.
                 // a used core builtin container (RFC 0028): the
                 // prelude is used, never ambient — `Opaque`
                 // resolves only when the name was bound from the core
@@ -227,6 +226,17 @@ impl<'a> Ctx<'a> {
                         (rut_core::binary::NativeTy::StrBuf, []) => TY_STRBUF,
                         (rut_core::binary::NativeTy::StrBuf, _) => {
                             self.err(sp, "`StrBuf` takes no generic arguments — pre-size with the capacity: `StrBuf(cap)`");
+                            TY_I32
+                        }
+                        // RFC 0017 v1: the ONE generic builtin — `Weak<T>`
+                        // interns per instantiation (`mk_weak`, the
+                        // `mk_array` law). Exactly one parameter.
+                        (rut_core::binary::NativeTy::Weak, [g]) => {
+                            let elem = self.resolve_type(*g, env);
+                            self.mk_weak(elem)
+                        }
+                        (rut_core::binary::NativeTy::Weak, _) => {
+                            self.err(sp, "`Weak<T>` takes exactly one type parameter — the weak-referenced type");
                             TY_I32
                         }
                     };

@@ -393,6 +393,14 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*dst);
             push(*src);
         }
+        Op::WeakNew { dst, src, .. } => {
+            push(*dst);
+            push(*src);
+        }
+        Op::WeakUpgrade { recv, dst, .. } => {
+            push(*recv);
+            push(*dst);
+        }
         Op::OnDrop { obj, cleanup } => {
             push(*obj);
             push(*cleanup);
@@ -469,7 +477,8 @@ fn tys_of(op: &Op) -> Vec<u32> {
         Op::NewCell { ty, .. } | Op::Own { ty, .. }
         | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
         | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
-        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakeOpt { ty, .. } => vec![*ty],
+        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakeOpt { ty, .. }
+        | Op::WeakNew { ty, .. } | Op::WeakUpgrade { ty, .. } => vec![*ty],
         _ => Vec::new(),
     }
 }

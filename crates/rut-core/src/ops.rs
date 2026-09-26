@@ -254,6 +254,15 @@ pub enum Op {
     /// `on_drop(p, cleanup)` (RFC 0016 §3): run `cleanup(p)` when p's
     /// cell refcount reaches zero
     OnDrop { obj: Reg, cleanup: Reg },
+    /// `Weak(v)` (RFC 0017 v1): mint a WeakBox side cell holding an
+    /// UNRETAINED slot word to `v`'s cell. `ty` is the instantiated
+    /// `Weak<elem>` id (the MakeOpt law: the op carries its type — the
+    /// natives' CallNat form cannot). Traps on a nil `v` ("weak on nil").
+    WeakNew { dst: Reg, src: Reg, ty: TypeId },
+    /// `w.upgrade()` (RFC 0017 v1): the live referent retained into a
+    /// fresh `?elem` box (`ty` is the `?elem` id), or the NULL SLOT when
+    /// the referent died — a true `nil`, never a box containing nil.
+    WeakUpgrade { recv: Reg, dst: Reg, ty: TypeId },
 
     ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Array<T>(n) zeroed
     ArrLit { dst: Reg, ty: TypeId, argv_off: u32, argc: u16 }, // fixed Array<T, N>
