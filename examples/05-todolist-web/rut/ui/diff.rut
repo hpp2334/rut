@@ -14,9 +14,11 @@
 // new keys create, gone keys remove, reorder re-appends survivors.
 // Nothing changed = nothing fires.
 //
-// THE REGISTRY (§4.3): the framework owns ONE id->subject table.
+// THE REGISTRY (§4.3): the framework owns ONE id->mutation table.
 // Listeners register exactly once per widget LIFETIME and retire on
-// remove; a fire on a retired or unknown id is LOUD.
+// remove; a fire on a retired or unknown id is LOUD. The row is the
+// widget's event mutation (tur's onClick/onInput prop) — the handle
+// carries its store, so the framework never holds a store itself.
 //
 // Element handles are keyed by PATH; `lids` (path -> listener id)
 // backs retirement. One stateful module on purpose: the tables are
@@ -33,7 +35,8 @@ pub struct T1Root {
     parent: opaque; // the mounted root element
     prev: ?Widget = nil; // the previous tree — the diff's left side
     els: HashMap<str, opaque>; // path -> live handle (ops application)
-    regs: HashMap<str, str>; // listener id (as crossed) -> subject
+    regs: HashMap<str, Mutation<str, opaque>>; // listener id (as
+    // crossed) -> the widget's event mutation
     lids: HashMap<str, i64>; // path -> listener id (retirement)
 }
 
@@ -42,7 +45,7 @@ pub struct T1Root {
 pub fn t1_mount(root_id: str) -> T1Root {
     let parent = ui_get(root_id);
     let els: HashMap<str, opaque> = HashMap.new();
-    let regs: HashMap<str, str> = HashMap.new();
+    let regs: HashMap<str, Mutation<str, opaque>> = HashMap.new();
     let lids: HashMap<str, i64> = HashMap.new();
     return T1Root {
         parent: parent,
@@ -54,15 +57,20 @@ pub fn t1_mount(root_id: str) -> T1Root {
 
 // ---- the registry reads the framework needs -------------------------
 
-/// The listener registry's one lookup, LOUD on a miss (§4.3).
-pub fn t1_subject(r: T1Root, id: str) -> str {
-    let mut regs: HashMap<str, str> = r.regs;
+/// The listener registry's one resolution, LOUD on a miss (§4.3): run
+/// the firing widget's event mutation with the event's detail — the
+/// mutation carries its store, so the run rides the ONE write lane
+/// (the cycle guard, the in-flight set, all of it). The mutation's
+/// answer passes through: the app's event wrappers return the BOOKING
+/// (an `opaque(Req)`) or `opaque(nil)` when there is nothing to book.
+pub fn t1_event(r: T1Root, id: str, detail: str) -> opaque {
+    let mut regs: HashMap<str, Mutation<str, opaque>> = r.regs;
     let hit = regs.get(id);
     if (hit == nil) {
-        panic(f"t1: listener '{id}' answered no subject — stale or unknown");
+        panic(f"t1: listener '{id}' answers no mutation — stale or unknown");
     }
-    let s: str = hit;
-    return s;
+    let m: Mutation<str, opaque> = hit;
+    return m.run(detail);
 }
 
 // ---- the keyed diff/patch (§4.2) ------------------------------------
@@ -123,12 +131,20 @@ fn create_subtree(mut r: T1Root, w: Widget, path: str, parent: opaque) -> nil {
         ui_attr(el, "placeholder", w.placeholder);
     }
     if (low.listens != "") {
-        if (w.subject == "") {
-            panic(f"t1: '{path}' listens but answers no subject — set .subject(...)");
+        // the event mutation: on_input when the widget takes input,
+        // else on_click (the vocabulary enforces the pairing — fields
+        // take on_input, buttons/checks take on_click)
+        let mut m: ?Mutation<str, opaque> = w.on_input;
+        if (m == nil) {
+            m = w.on_click;
         }
+        if (m == nil) {
+            panic(f"t1: '{path}' listens but carries no mutation — set .on_click(...)/.on_input(...)");
+        }
+        let evm: Mutation<str, opaque> = m;
         let id: i64 = ui_listen(el, low.listens);
-        let mut regs: HashMap<str, str> = r.regs;
-        regs.put(f"{id}", w.subject);
+        let mut regs: HashMap<str, Mutation<str, opaque>> = r.regs;
+        regs.put(f"{id}", evm);
         let mut lids: HashMap<str, i64> = r.lids;
         lids.put(path, id);
     }
@@ -289,7 +305,7 @@ fn retire_subtree(mut r: T1Root, w: Widget, path: str) -> nil {
         let hit = lids.get(path);
         if (hit != nil) {
             let id: i64 = hit;
-            let mut regs: HashMap<str, str> = r.regs;
+            let mut regs: HashMap<str, Mutation<str, opaque>> = r.regs;
             regs.remove(f"{id}");
             lids.remove(path);
         }

@@ -9,8 +9,8 @@
 mod t1_support;
 
 use t1_support::{
-    els_has, els_len, host_listener_len, listener_of, log_of, make_host, node_id, regs_len,
-    regs_subject, render, snap, Host,
+    els_has, els_len, host_listener_len, listener_of, log_of, make_host, node_id, regs_has,
+    regs_len, render, snap, Host,
 };
 
 fn class_of(host: &Host, hook: &str) -> String {
@@ -195,11 +195,13 @@ fn a_keyed_remove_retires_its_subtree_completely() {
     }
     // the registry tracks LIVE ids only — row-2's rows are retired
     assert_eq!(regs_len(&mut host, &app), 2);
-    assert_eq!(regs_subject(&mut host, &app, mark2), "");
-    assert_eq!(regs_subject(&mut host, &app, del2), "");
-    // row-1's rows still answer
+    assert!(!regs_has(&mut host, &app, mark2), "row-2's rows are retired");
+    assert!(!regs_has(&mut host, &app, del2), "row-2's rows are retired");
+    // row-1's rows still answer their own mutations
     let mark1 = listener_of(&mut host, &app, "list/row-1/mark-1");
-    assert_eq!(regs_subject(&mut host, &app, mark1), "toggle:1");
+    assert!(regs_has(&mut host, &app, mark1));
+    host.fire_listener(mark1).unwrap();
+    assert_eq!(log_of(&mut host, &app), "toggle:1");
 }
 
 #[test]
@@ -231,7 +233,7 @@ fn listeners_register_on_appear_and_live_as_long_as_their_widget() {
     assert_eq!(host_listener_len(&host), 4);
     assert_eq!(regs_len(&mut host, &app), 4);
     let mark1 = listener_of(&mut host, &app, "list/row-1/mark-1");
-    assert_eq!(regs_subject(&mut host, &app, mark1), "toggle:1");
+    assert!(regs_has(&mut host, &app, mark1));
 
     // four more renders (toggle, swap, append, back) — not ONE fresh
     // id for the surviving rows; row-3's brief life minted exactly its
@@ -259,7 +261,7 @@ fn a_stale_fire_traps_loud_and_the_page_survives() {
     // NOT — the miss is the LOUD trap, named
     let err = host.fire_listener(mark2).unwrap_err();
     assert!(
-        err.msg.contains(&format!("t1: listener '{mark2}' answered no subject — stale or unknown")),
+        err.msg.contains(&format!("t1: listener '{mark2}' answers no mutation — stale or unknown")),
         "{}",
         err.msg
     );
@@ -271,7 +273,7 @@ fn a_stale_fire_traps_loud_and_the_page_survives() {
 }
 
 #[test]
-fn an_unknown_id_answers_no_subject_loud() {
+fn an_unknown_id_answers_no_mutation_loud() {
     // the host-side row for an id rut never registered: on_event
     // delivers it straight to the registry — the miss is loud
     let (mut host, app) = make_host();
@@ -280,27 +282,30 @@ fn an_unknown_id_answers_no_subject_loud() {
         .call::<_, ()>("on_event", (app.clone(), 1i32, "4242".to_string(), "".to_string()))
         .unwrap_err();
     assert!(
-        err.msg.contains("t1: listener '4242' answered no subject — stale or unknown"),
+        err.msg.contains("t1: listener '4242' answers no mutation — stale or unknown"),
         "{}",
         err.msg
     );
 }
 
 #[test]
-fn every_listener_row_fires_its_own_subject() {
+fn every_listener_row_fires_its_own_mutation() {
     let (mut host, app) = make_host();
     render(&mut host, &app, "t1p_rows_a");
-    for (path, subject) in [
+    let mut seen: Vec<&str> = Vec::new();
+    for (path, label) in [
         ("list/row-1/mark-1", "toggle:1"),
         ("list/row-1/del-1", "remove:1"),
         ("list/row-2/mark-2", "toggle:2"),
         ("list/row-2/del-2", "remove:2"),
     ] {
         let id = listener_of(&mut host, &app, path);
-        assert_eq!(regs_subject(&mut host, &app, id), subject);
+        assert!(regs_has(&mut host, &app, id), "{path} answers a live mutation");
         host.fire_listener(id).unwrap();
+        seen.push(label);
+        let joined = seen.join("|");
+        assert_eq!(log_of(&mut host, &app), joined, "the row's OWN mutation ran");
     }
-    assert_eq!(log_of(&mut host, &app), "toggle:1|remove:1|toggle:2|remove:2");
 }
 
 // ---- the trap matrix through the patcher -----------------------------

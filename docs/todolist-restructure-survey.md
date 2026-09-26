@@ -932,3 +932,40 @@ pull-on-read, and a cycle guard; two packages; one crossing name. The
 turn law survived every reversal: render once per turn, events write,
 the DOM never hears about state — the model changed under the law,
 never the law itself.
+
+---
+
+## Addendum (Sep 2026): the surface moves onto the handles — tur's law
+
+The two-verb surface ("biz may use exactly `store.get`/`store.set`")
+was the right law with the wrong spelling: it kept the STORE itself a
+biz-visible object, one `world.store` reach-around away from
+everything the law protected. tur (github.com/hpp2334/tur — the
+todolist case) shows the completed shape: the app never touches a
+store object; atoms and mutations are free-floating values the app and
+the widgets pass around, and a component's `onClick` IS a mutation
+prop. Ported:
+
+- **The handles carry their store** (a private back-ref) and the verbs
+  with it: `a.get()`, `a.set(v)`, `m.run(arg)`. The store's own
+  get/set became ui-MODULE-PRIVATE — the compiler now enforces what
+  the grep gate pinned. biz spells the store exactly twice, both
+  legal: world_boot mints through it; the host-test surface reads its
+  observability.
+- **Events are props**: `.on_click(m)`/`.on_input(m)` on the widget
+  vocabulary; `t1_event` resolves the firing listener to the widget's
+  OWN mutation and runs it (the framework never holds a store);
+  `capture(m, id)` binds a row's argument — the §7.3 subject tables
+  and the dispatch fn are gone, nothing to stale.
+- **The machine absorbs the turn steps**: add/toggle/remove event
+  wrappers (minted at boot) write the status notes the dispatcher
+  wrote, in the same order, and return the BOOKING as a box —
+  `opaque(Req)` when a timer must be booked, `opaque(nil)` when not.
+  The sessions' status lines are byte-identical (all 18 pinned).
+- The import set sheds `nmapset` (the subject tables were HashMap's
+  last biz use) and gains `capture`/`t1_event`.
+
+What did NOT change: pull-on-read, the cycle guard, the one write
+lane, the turn shape (one paint, one keyed diff), the 94-test suite's
+bytes. The law survived another reversal the same way it survived the
+others — the model changed under the law, never the law itself.

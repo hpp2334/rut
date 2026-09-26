@@ -101,9 +101,10 @@ pub fn regs_len(host: &mut WebHost<FakeDom>, app: &OpaqueRef) -> i32 {
     host.call("t1p_regs_len", (app.clone(),)).unwrap()
 }
 
-/// The subject one firing id answers, "" when absent (retired).
-pub fn regs_subject(host: &mut WebHost<FakeDom>, app: &OpaqueRef, id: i64) -> String {
-    host.call("t1p_regs_subject", (app.clone(), id.to_string())).unwrap()
+/// Whether one firing id answers a live event mutation (retired ids
+/// answer false; the fired LOG is where the labels live).
+pub fn regs_has(host: &mut WebHost<FakeDom>, app: &OpaqueRef, id: i64) -> bool {
+    host.call("t1p_regs_has", (app.clone(), id.to_string())).unwrap()
 }
 
 /// The framework's live handle rows (path -> element).

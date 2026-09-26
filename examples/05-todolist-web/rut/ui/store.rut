@@ -16,29 +16,89 @@ trait Writable<A, R> {
     fn atom_id(self) -> u32;
 }
 
-// ---- the handles: keys, not objects — NO methods, ever --------------
+// ---- the handles: keys that KNOW their store -----------------------
+//
+// tur's lesson (github.com/hpp2334/tur, the todolist case): the app
+// never touches a store object — atoms and mutations are FREE-FLOATING
+// values the framework and the app pass around (a component's
+// `onClick` IS a mutation prop). The port: every handle carries its
+// minting store as a private field, and the two verbs live ON the
+// handles. The store's own get/set are module-private below — biz
+// CANNOT spell them; the compiler enforces the surface, the grep gate
+// (tests/app_law.rs) only pins it.
 
-/// The writable cell: its id and its seed (RFC 0014 materialize-on-
-/// touch). The general lane never equality-skips (RFC 0044: a generic
-/// == is cell identity — a same-cell re-set would strand the
-/// deriveds; the recorded asymmetry).
+/// The writable cell: its id, its seed (RFC 0014 materialize-on-touch),
+/// and the store that minted it. The general lane never equality-skips
+/// (RFC 0044: a generic == is cell identity — a same-cell re-set would
+/// strand the deriveds; the recorded asymmetry).
 pub class Source<T> {
     id: u32 = 0;
     seed: opaque;
     str_lane: bool = false;
+    st: Store;
 }
 
-/// The derived cell: its id. Its program (an erased fn(DeriveCtx) -> T)
-/// lives in the store's table; the handle is a READ key, and it
-/// implements no Writable — a derived is not writable at the type
-/// level.
+/// The derived cell: its id and its store. Its program (an erased
+/// fn(DeriveCtx) -> T) lives in the store's table; the handle is a
+/// READ key, and it implements no Writable — a derived is not
+/// writable at the type level.
 pub class Derived<T> {
     id: u32 = 0;
+    st: Store;
 }
 
-/// The write program: fn (MutCtx, A) -> R, invoked by store.set.
+/// The write program: fn (MutCtx, A) -> R, plus the store that minted
+/// it. `run` invokes it through the ONE write lane.
 pub class Mutation<A, R> {
     id: u32 = 0;
+    st: Store;
+}
+
+impl Source<T> {
+    /// THE READ, handle-side: pull-on-read freshness through the store.
+    pub fn get(mut self) -> T {
+        return self.st.get<T>(self);
+    }
+    /// THE PLAIN WRITE, handle-side: one lane, str content-skip, bump.
+    pub fn set(mut self, v: T) -> nil {
+        self.st.set<T, T>(self, v);
+    }
+}
+
+impl Derived<T> {
+    /// THE READ, handle-side. No set exists here — a derived is not
+    /// writable (the type says so; the store says so again, loud).
+    pub fn get(mut self) -> T {
+        return self.st.get<T>(self);
+    }
+}
+
+impl Mutation<A, R> {
+    /// THE INVOCATION, handle-side: the program runs through the ONE
+    /// write lane (the cycle guard, the in-flight set, all of it).
+    pub fn run(mut self, arg: A) -> R {
+        return self.st.set<A, R>(self, arg);
+    }
+}
+
+/// Bind an argument into an event mutation — tur's
+/// `mutate((ctx, _ev) => act(ctx, index))` shape: the widget carries
+/// the composed mutation; the framework runs it with the event's
+/// detail. CONCRETE over the row key (i64): a rut closure cannot yet
+/// capture a generic fn's own type params (the `unknown type` edge,
+/// recorded here) — the app's rows key on i64, and the day generic
+/// capture lands, this re-generalizes. The inner's R is `opaque` (the
+/// app's event wrappers box their bookings — `opaque(Req)` or
+/// `opaque(nil)`), so the run result passes through UNREBOXED: one
+/// box, one downcast at the caller. Mints into the inner's store —
+/// the ONE write lane keeps every event write.
+pub fn capture(m: Mutation<i64, opaque>, arg: i64) -> Mutation<str, opaque> {
+    let inner = m;
+    let bound = arg;
+    let host = m.st;
+    return host.mutation(fn (ctx: MutCtx, ev: str) -> opaque {
+        return ctx.set<i64, opaque>(inner, bound);
+    });
 }
 
 impl Readable<T> for Source<T> {
@@ -144,7 +204,7 @@ impl Store {
         let id = self.ids;
         self.ids += 1;
         self.kinds.put(id, 0);
-        return Source<T> { id: id, seed: opaque(v), str_lane: false };
+        return Source<T> { id: id, seed: opaque(v), str_lane: false, st: self };
     }
 
     /// The str lane: a write of the CURRENT content marks nothing (the
@@ -154,7 +214,7 @@ impl Store {
         self.ids += 1;
         self.kinds.put(id, 0);
         self.lanes.put(id, true);
-        return Source<str> { id: id, seed: opaque(v), str_lane: true };
+        return Source<str> { id: id, seed: opaque(v), str_lane: true, st: self };
     }
 
     /// The derived: register the program, get the read key. Deps are
@@ -166,7 +226,7 @@ impl Store {
         self.ids += 1;
         self.kinds.put(id, 1);
         self.programs.put(id, opaque(f));
-        return Derived<T> { id: id };
+        return Derived<T> { id: id, st: self };
     }
 
     /// The write program: the machine's verbs live in mutation fns so
@@ -176,16 +236,18 @@ impl Store {
         self.ids += 1;
         self.kinds.put(id, 2);
         self.programs.put(id, opaque(f));
-        return Mutation<A, R> { id: id };
+        return Mutation<A, R> { id: id, st: self };
     }
 
-    // ---- THE TWO VERBS ----
+    // ---- THE TWO VERBS (module-private: the handles carry them) ----
 
     /// The one READ — over sources and deriveds alike. Pull-on-read:
     /// a derived recomputes here iff any recorded dep gen moved since
     /// its last compute (at most once per write-set; there is no
     /// flush — the survey §4.3 turn-boundary refresh is retired).
-    pub fn get<T>(mut self, a: Readable<T>) -> T {
+    /// MODULE-PRIVATE: biz reads through the handles' `get` — the
+    /// store itself is mint-and-observe surface only.
+    fn get<T>(mut self, a: Readable<T>) -> T {
         let id = a.atom_id();
         let k = self.kind_of(id);
         if (k == 0) {
@@ -204,7 +266,9 @@ impl Store {
     /// set returns the program's answer. A derived is not writable —
     /// the type system refuses it (no Writable impl) and this lane
     /// refuses it again, loud, for trait-object callers.
-    pub fn set<A, R>(mut self, w: Writable<A, R>, arg: A) -> R {
+    /// MODULE-PRIVATE: biz writes through the handles (`set`, `run`)
+    /// — the compiler enforces what the grep gate pins.
+    fn set<A, R>(mut self, w: Writable<A, R>, arg: A) -> R {
         let id = w.atom_id();
         let k = self.kind_of(id);
         if (k == 2) {

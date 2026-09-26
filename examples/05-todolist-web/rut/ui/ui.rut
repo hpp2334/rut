@@ -17,21 +17,32 @@
 //   ./diff.rut      §4 the diff core
 //   ./components.rut §5 the component vocabulary
 //
-// THE STORE'S SURFACE (the whole point of the merge — the jotai shape):
+// THE STORE'S SURFACE (tur's law, ported — github.com/hpp2334/tur: the
+// app never touches a store object; atoms and mutations are values the
+// app and the widgets pass around; a component's onClick IS a
+// mutation). MINTING and OBSERVABILITY live on the store; the two
+// VERBS live on the handles, and the store's own are module-private:
 //
-//   store.source<T>(v)                  -> Source<T>
-//   store.source_str(v)                 -> Source<str>
-//   store.derive<T>(fn (ctx) -> T)      -> Derived<T>   deps DISCOVERED
+//   store.source<T>(v)                  -> Source<T>     mint
+//   store.source_str(v)                 -> Source<str>   mint (str lane)
+//   store.derive<T>(fn (ctx) -> T)      -> Derived<T>    deps DISCOVERED
 //   store.mutation<A, R>(fn (ctx, a) -> R) -> Mutation<A, R>
-//   store.get(a)                        -> T            the one READ
-//   store.set(w, arg)                   -> R            the one WRITE
-//   store.recompute_count() / store.deps_of(a)          observability
+//   store.recompute_count() / store.deps_of(a)           observability
+//   a.get()                             -> T             THE read (handle)
+//   a.set(v)                            -> nil           the plain write (Source)
+//   m.run(arg)                          -> R             the invocation (Mutation)
+//   capture(m, arg)                     -> Mutation<str, opaque>
+//     the event binding: a widget carries the composed mutation; the
+//     framework runs it with the event's detail (tur's
+//     `mutate((ctx, _ev) => act(ctx, index))`)
 //
-// The handles carry ids and seeds, never methods; the machinery traits
-// (Readable/Writable) are module-private, so biz cannot name them —
-// and a Derived implements no Writable, so a derived is not writable
-// AT THE TYPE LEVEL. A derive's ctx exposes get ONLY (derives are pure
-// by construction); a mutation's ctx exposes get + set. Freshness is
+// The handles carry ids, seeds, and a PRIVATE store back-ref — the
+// verbs are the handles' own pub methods, so biz never needs the store
+// after boot; the machinery traits (Readable/Writable) are
+// module-private, so biz cannot name them — and a Derived implements
+// no Writable and no set, so a derived is not writable AT THE TYPE
+// LEVEL. A derive's ctx exposes get ONLY (derives are pure by
+// construction); a mutation's ctx exposes get + set. Freshness is
 // PULL-ON-READ: get() recomputes a stale derived at most once per
 // write-set; there is no flush and no dirty set. The cycle guard (an
 // in-flight set) returns because discovered edges admit cycles — a

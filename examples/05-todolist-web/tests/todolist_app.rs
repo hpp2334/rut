@@ -13,7 +13,7 @@
 //! * input values are EVENT-CARRIED (the field's value rides the
 //!   typing rows' detail; the click row carries none);
 //! * a stale or unknown listener id traps LOUD — now in the
-//!   framework's registry (`t1_subject`), since repaints no longer
+//!   framework's registry (`t1_event`), since repaints no longer
 //!   churn ids: a row's listener lives as long as the row does, and
 //!   dies with it;
 //! * the re-entrancy guard's absorb behavior at app scale;
@@ -402,7 +402,7 @@ fn a_stale_row_listener_traps_loud() {
     // phase-1 unknown-id law, re-pointed at the registry per §4.3)
     let err = host.fire_listener(stale).unwrap_err();
     assert!(
-        err.msg.contains(&format!("t1: listener '{stale}' answered no subject — stale or unknown")),
+        err.msg.contains(&format!("t1: listener '{stale}' answers no mutation — stale or unknown")),
         "{}",
         err.msg
     );

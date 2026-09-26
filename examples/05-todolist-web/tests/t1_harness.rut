@@ -11,57 +11,77 @@
 // one package now; its machinery traits are module-private and CANNOT
 // be imported even by name).
 use ui::{
-    Widget, WKind, T1Root, t1_mount, t1_render, t1_subject,
+    Widget, WKind, T1Root, t1_mount, t1_render, t1_event,
+    Store, Source, Mutation,
     col, row, card, spacer, field, check,
     text, done, title, pending, muted, btn, quiet,
 };
 use nmapset::{ HashMap };
 use pouch::{ Vec };
 //
-// The "biz" half of this harness is one law: a fired listener is
-// translated through the framework's registry (`t1_subject` — a stale
-// or unknown id is the LOUD miss) and the SUBJECT is logged, so the
-// tests can read what a click delivered without parsing ids.
+// The "biz" half of this harness is tur's law: every listening widget
+// CARRIES its event mutation (on_click/on_input), the framework runs
+// it on the firing listener (`t1_event` — a stale or unknown id is the
+// LOUD miss), and the mutation's own body logs its label, so the tests
+// can read what a click delivered without parsing ids.
 
 struct Harness {
     root: T1Root;
-    log: Vec<str> = Vec.new(); // the delivered subjects, in order
+    store: Store; // the label mutations' mint + write lane
+    log$: Source<Vec<str>>; // the delivered labels, in order
+}
+
+/// The harness's one event shape: a mutation whose body appends its
+/// LABEL to the log — the label spellings are the old subjects
+/// ("toggle:1", "remove:2"), so the log's bytes are unchanged.
+fn log_m(h: ?Harness, label: str) -> Mutation<str, opaque> {
+    let lg = h.log$;
+    let lab = label;
+    return h.store.mutation(fn (ctx, ev: str) -> opaque {
+        let l = ctx.get(lg);
+        l.push(lab);
+        ctx.set(lg, l);
+        return opaque(nil);
+    });
 }
 
 // The boot turn: mount the framework on #app and return the container
 // the pump re-passes every turn. No tree yet — the first render is a
 // probe's job (t1_render's create path).
 entry fn main() -> opaque {
-    let h: ?Harness = Harness { root: t1_mount("app") };
+    let store = Store.new();
+    let log$ = store.source<Vec<str>>(Vec.new());
+    let h: ?Harness = Harness { root: t1_mount("app"), store: store, log$: log$ };
     return opaque(h);
 }
 
 // The ONE re-entry point: a DOM event row arrives with the listener id
-// as its subject; the framework translates id -> subject (LOUD miss),
-// and this harness's "biz" logs it. Returns the entry-err pair (the
+// as its subject; the framework resolves the widget's OWN event
+// mutation and runs it (tur's onClick/onInput, framework-side — the
+// mutation's body does the logging). Returns the entry-err pair (the
 // phase-3 turn shape) — the harness never soft-fails.
 entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
     let h = opaque.downcast<?Harness>(c);
     if (kind == 1) {
         let mut root: T1Root = h.root;
-        let s = t1_subject(root, subject);
-        let mut lg: Vec<str> = h.log;
-        lg.push(s);
+        let out = t1_event(root, subject, detail);
+        let _ = out;
     } else {
         panic(f"t1h: unknown event kind {kind}");
     }
-    let _ = detail;
     return (c, "");
 }
 
 // ---- shared scenario builders ---------------------------------------
 
 /// The app-shaped row: checkbox + title + quiet del, keyed `row-<id>`.
-fn row_w(id: i64, name: str, on: bool) -> Widget {
+/// Each control CARRIES its event mutation (the old subject strings as
+/// the logged labels).
+fn row_w(h: ?Harness, id: i64, name: str, on: bool) -> Widget {
     let mut w = row().key(f"row-{id}").hook(f"row-{id}");
-    w.w(check(on).subject(f"toggle:{id}").hook(f"mark-{id}"));
+    w.w(check(on).on_click(log_m(h, f"toggle:{id}")).hook(f"mark-{id}"));
     w.w(text(name).hook(f"lbl-{id}"));
-    w.w(quiet("del").subject(f"remove:{id}").hook(f"del-{id}"));
+    w.w(quiet("del").on_click(log_m(h, f"remove:{id}")).hook(f"del-{id}"));
     return w;
 }
 
@@ -83,17 +103,17 @@ entry fn t1p_render_kinds(c: opaque) {
     cd.w(muted("3 open").hook("muted-line"));
     tree.w(cd);
     let mut head = row().gap(8).hook("head");
-    head.w(field().placeholder("What needs doing?").subject("type").hook("new-todo"));
-    head.w(btn("Add").subject("add").hook("add-btn"));
+    head.w(field().placeholder("What needs doing?").on_input(log_m(h, "type")).hook("new-todo"));
+    head.w(btn("Add").on_click(log_m(h, "add")).hook("add-btn"));
     tree.w(head);
     tree.w(spacer(8).hook("sp"));
     let mut r1 = row().key("row-1").hook("row-1");
-    r1.w(check(false).subject("toggle:1").hook("mark-1"));
+    r1.w(check(false).on_click(log_m(h, "toggle:1")).hook("mark-1"));
     r1.w(text("milk").hook("lbl-1"));
-    r1.w(quiet("del").subject("remove:1").hook("del-1"));
+    r1.w(quiet("del").on_click(log_m(h, "remove:1")).hook("del-1"));
     tree.w(r1);
     let mut r2 = row().key("row-2").hook("row-2");
-    r2.w(check(true).subject("toggle:2").hook("mark-2"));
+    r2.w(check(true).on_click(log_m(h, "toggle:2")).hook("mark-2"));
     r2.w(done("tea").hook("lbl-2"));
     tree.w(r2);
     tree.w(pending("... jam").hook("pend"));
@@ -107,8 +127,8 @@ entry fn t1p_rows_a(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
-    tree.w(row_w(1, "milk", false));
-    tree.w(row_w(2, "tea", false));
+    tree.w(row_w(h, 1, "milk", false));
+    tree.w(row_w(h, 2, "tea", false));
     t1_render(root, tree);
 }
 
@@ -117,8 +137,8 @@ entry fn t1p_rows_b(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
-    tree.w(row_w(2, "tea", false));
-    tree.w(row_w(1, "milk", false));
+    tree.w(row_w(h, 2, "tea", false));
+    tree.w(row_w(h, 1, "milk", false));
     t1_render(root, tree);
 }
 
@@ -127,7 +147,7 @@ entry fn t1p_rows_c(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
-    tree.w(row_w(1, "milk", false));
+    tree.w(row_w(h, 1, "milk", false));
     t1_render(root, tree);
 }
 
@@ -136,9 +156,9 @@ entry fn t1p_rows_d(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
-    tree.w(row_w(1, "milk", false));
-    tree.w(row_w(2, "tea", false));
-    tree.w(row_w(3, "jam", false));
+    tree.w(row_w(h, 1, "milk", false));
+    tree.w(row_w(h, 2, "tea", false));
+    tree.w(row_w(h, 3, "jam", false));
     t1_render(root, tree);
 }
 
@@ -147,8 +167,8 @@ entry fn t1p_rows_toggle(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = list_col();
-    tree.w(row_w(1, "milk", true));
-    tree.w(row_w(2, "tea", false));
+    tree.w(row_w(h, 1, "milk", true));
+    tree.w(row_w(h, 2, "tea", false));
     t1_render(root, tree);
 }
 
@@ -197,7 +217,7 @@ entry fn t1p_field_a(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(8).hook("form");
-    tree.w(field().placeholder("What needs doing?").subject("type").hook("new-todo"));
+    tree.w(field().placeholder("What needs doing?").on_input(log_m(h, "type")).hook("new-todo"));
     t1_render(root, tree);
 }
 
@@ -206,7 +226,7 @@ entry fn t1p_field_b(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     let mut tree = col().gap(8).hook("form");
-    tree.w(field().placeholder("What needs doing?").subject("type").hook("new-todo").value("milk"));
+    tree.w(field().placeholder("What needs doing?").on_input(log_m(h, "type")).hook("new-todo").value("milk"));
     t1_render(root, tree);
 }
 
@@ -250,8 +270,8 @@ entry fn t1p_trap_text_no_variant(c: opaque) {
     t1_render(root, Widget { kind: WKind.Text, text: "anon" });
 }
 
-/// A listening widget that answers no subject.
-entry fn t1p_trap_listener_no_subject(c: opaque) {
+/// A listening widget that carries no event mutation.
+entry fn t1p_trap_listener_no_mutation(c: opaque) {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
     t1_render(root, btn("anon").hook("bad"));
@@ -284,21 +304,17 @@ entry fn t1p_els_steal(c: opaque, path: str) {
 entry fn t1p_regs_len(c: opaque) -> i32 {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
-    let mut regs: HashMap<str, str> = root.regs;
+    let mut regs: HashMap<str, Mutation<str, opaque>> = root.regs;
     return regs.len();
 }
 
-/// "" when the id is absent — the tests assert exact subjects.
-entry fn t1p_regs_subject(c: opaque, id: str) -> str {
+/// Whether the id answers a live event mutation — the retirement
+/// asserts peek existence; the LABEL asserts live on the fired log.
+entry fn t1p_regs_has(c: opaque, id: str) -> bool {
     let h = opaque.downcast<?Harness>(c);
     let mut root: T1Root = h.root;
-    let mut regs: HashMap<str, str> = root.regs;
-    let hit = regs.get(id);
-    if (hit == nil) {
-        return "";
-    }
-    let s: str = hit;
-    return s;
+    let mut regs: HashMap<str, Mutation<str, opaque>> = root.regs;
+    return regs.has(id);
 }
 
 entry fn t1p_els_len(c: opaque) -> i32 {
@@ -329,10 +345,11 @@ entry fn t1p_els_handle(c: opaque, path: str) -> opaque {
     return el;
 }
 
-/// The delivered subjects, "|"-joined, in arrival order.
+/// The delivered labels, "|"-joined, in arrival order — the event
+/// mutations' own writes, read through the handle (pull-on-read).
 entry fn t1p_log(c: opaque) -> str {
     let h = opaque.downcast<?Harness>(c);
-    let lg: Vec<str> = h.log;
+    let lg: Vec<str> = h.log$.get();
     let mut out = "";
     let mut first = true;
     for (let s of lg) {

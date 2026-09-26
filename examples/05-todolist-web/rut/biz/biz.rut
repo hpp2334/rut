@@ -9,14 +9,23 @@
 //   ./domain.rut   the domain types + the machine's pure scans
 //   ./world.rut    THE WORLD: the handles bundle + world_boot
 //   ./entries.rut  the DOM-free host-test surface + the probe fixtures
-//   ./app.rut      the shell (AppRoot, dispatch, paint) + the views
+//   ./app.rut      the shell (AppRoot, on_event, paint) + the views
 //
-// Everything here speaks the store's two-verb surface and nothing
-// else of it:
+// THE SURFACE IS THE HANDLES (tur's law — github.com/hpp2334/tur: the
+// app never touches a store object; atoms and mutations are values the
+// app and the widgets pass around). Everything here speaks through the
+// handles and NOTHING else:
 //
-//   reads    store.get(atom)            (sources and deriveds alike)
-//   writes   store.set(source, v)       (plain)
-//            store.set(mutation, arg)   (the machine's verbs)
+//   reads    draft$.get() / counts$.get()      (sources + deriveds)
+//   writes   note$.set(v)                      (the plain leg)
+//            add_m.run(arg)                    (the machine's verbs)
+//   events   .on_click(m) / .on_input(m)       (widgets CARRY their
+//            mutation; the framework runs it on the firing event)
+//
+// The store's own read/write verbs are ui-MODULE-PRIVATE: biz cannot
+// spell them — the compiler enforces the surface. The store appears in
+// biz exactly twice, both legal: world_boot MINTS through it, and the
+// host-test surface reads its observability (recompute_count/deps_of).
 //
 // THERE IS NO domain container. The store is a DECOUPLED-BIZ design (the ui
 // package's Store knows no todo); what biz owns is HANDLES — the
@@ -38,20 +47,21 @@
 // ONE keyed-diff render. The FLUSH IS GONE (pull-on-read): paint does
 // no flush — the view's first get computes what this turn's writes
 // staled, at most once per write-set. The status line reads
-// store.get(counts$) — byte-identical to every phase before.
+// counts$.get() — byte-identical to every phase before.
 //
-// THE LAW GATE (tests/app_law.rs pins the import set): the store's
+// THE LAW GATE (tests/app_law.rs pins the import set): the handles'
 // vocabulary, the widget vocabulary, the framework's names, and ONE
 // crossing name, tim_after. No tag, no token, no listener id, no
 // machinery trait (Readable/Writable are ui-private — biz cannot name
-// them even to import them).
+// them even to import them), and NO STORE VERB anywhere in biz —
+// the store's get/set are module-private; the gate greps for their
+// spellings and fails loud.
 
 use ui::{
-    Store, Source, Derived, Mutation,
-    Widget, T1Root, t1_mount, t1_render, t1_subject,
+    Store, Source, Derived, Mutation, capture,
+    Widget, T1Root, t1_mount, t1_render, t1_event,
     col, row, card, field, check, text, done, pending, muted, btn, quiet,
 };
 use pouch::{ Vec };
-use nmapset::{ HashMap };
 use web::{ tim_after };
 

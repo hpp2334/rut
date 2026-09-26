@@ -86,7 +86,7 @@ recorded deviations) makes a UI a VALUE:
   each kind to its tag, class tokens and event — `check` lowers to
   `button[role=checkbox]` with the `t1-check--on/--off` token, `col`
   to `div.t1-col`. A control with children, a Text without a variant,
-  or a listener without a subject is a LOUD lowering panic.
+  or a listener without an event mutation is a LOUD lowering panic.
 * **the keyed diff patches in place.** Match children by key
   (`.key(...)`, defaulting from `.hook(...)`) with PATH keys, fire
   only deltas: nothing changed = nothing fires, a toggle is exactly
@@ -94,10 +94,13 @@ recorded deviations) makes a UI a VALUE:
   gone keys retire their listeners. No clear-and-rebuild paint
   exists — which is also what makes the CSS transitions in
   `index.html` possible: nodes survive long enough to animate.
-* **semantic subjects, not ids.** Widgets fire NAMES (`"add"`,
-  `"toggle:<id>"`); the framework owns the listener-id registry, so
-  the app never sees a number the host minted. Dispatch is equality
-  and map hits; a stale subject is a loud miss.
+* **event mutations as props, not ids** (tur's onClick law —
+  github.com/hpp2334/tur). Widgets CARRY their event mutations
+  (`.on_click(m)`, `.on_input(m)`); the framework owns the
+  listener-id registry, resolves the firing id to the widget's own
+  mutation, and runs it through the ONE write lane. Per-row semantics
+  ride `capture(w.toggle_row, t.id)` — the arg captured at view build;
+  a stale or unknown id is a loud miss.
 * **styling is a token contract.** `index.html`'s stylesheet keys
   ONLY the lowered tokens (the `t1-*` families, the fixed utility
   ladder, variant tokens); the app spells no class and the stylesheet
@@ -300,8 +303,9 @@ examples/05-todolist-web/
   by the twins).
 * **the import discipline** (acyclic, minimal, law-enforced —
   `tests/app_law.rs`): **biz imports `ui` and nothing else of the
-  framework's guts** — exactly the store's public names, the widget
-  type + mount/render/subject, and the component constructors; the
+  framework's guts** — exactly the store + the handle types + the
+  event binding (`capture`), the widget type + mount/render/event, and
+  the component constructors; the
   machinery traits (`Readable`/`Writable`) are ui-private, so biz
   CANNOT name them even to import them, and the gate pins biz's
   import set as a SET EQUALITY. The old per-layer packages (`store/`,
@@ -331,29 +335,36 @@ trust boundary, RFC 0014), dataclass-literal structs (`World`,
 `AppRoot`, `Todo`, `Req`, `Widget`), shared-cell containers (the
 container crossing is NON-NULLABLE end to end: `opaque(AppRoot)` —
 `downcast<AppRoot>` — nil-checked unwrap `let mut r: AppRoot = root`),
-`?T` nilables, `when` match, f-strings, the
-val-column row `HashMap<str, i64>` (nmapset) as the subject tables,
-and the two-package manifest tree — the medium-scale shape above.
+`?T` nilables, `when` match, f-strings, and
+the two-package manifest tree — the medium-scale shape above. The
+store's own verbs are ui-module-private: biz speaks `a.get()` /
+`a.set(v)` / `m.run(arg)` on the handles, exactly as tur's atoms are
+free-floating values.
 
 ## The two state machines, one container
 
 `AppRoot` carries BOTH machines as fields (RFC 0003 §1): the
 framework's `T1Root` (the patch state) and THE WORLD (the handles
-bundle — the store, the atoms, the derived, the mutations). The draft
-and the note live IN the store as sources (`draft$`, `note$` — they
-were always state); the subject tables (`toggles`/`removes`) stay
-plain maps rebuilt per render — they are the dispatch mirror, not
-state. A turn, end to end:
+bundle — the store, the atoms, the derived, the mutations, the event
+wrappers). The draft and the note live IN the store as sources
+(`draft$`, `note$` — they were always state). THE SUBJECT TABLES ARE
+GONE — a row's event semantics ride the mutation its widget carries
+(`capture(w.toggle_row, t.id)`), nothing to look up, nothing to
+stale. A turn, end to end:
 
 ```
-event row -> on_event -> dispatch -> STORE WRITES (store.set: plain
-                                      sources, or the machine's
-                                      mutations)
-           -> view(r)                (PURE reads: the first get
-                                      computes what this turn's
-                                      writes staled — pull-on-read,
-                                      at most once per write-set)
-           -> t1_render              (the ONE keyed diff per turn)
+event row -> on_event -> t1_event            (the framework resolves
+                                              the firing id to the
+                                              widget's OWN mutation
+                                              and runs it — the ONE
+                                              write lane; the answer
+                                              is the booking box)
+           -> [tim_after(req)]               (when the box holds a Req)
+           -> view(r)                        (PURE reads: the first get
+                                              computes what this turn's
+                                              writes staled — pull-on-read,
+                                              at most once per write-set)
+           -> t1_render                      (the ONE keyed diff per turn)
 ```
 
 There is no flush step — the old paint's `store.refresh()` line is
@@ -467,7 +478,7 @@ real):
   (base + libs, spliced the manifest's way)
   and fails LOUD: the import set is exactly the two-package
   vocabulary (the store's public names + the widget type +
-  `t1_mount`/`t1_render`/`t1_subject` + the component constructors +
+  `t1_mount`/`t1_render`/`t1_event` + `capture` + the component constructors +
   `web`'s ONE crossing `tim_after`) with per-name pins; no `Node`, no
   `ui_`, no class writes, no tag literals or DOM method names (whole
   file, comments included, no whitelist); the widgets are the whole

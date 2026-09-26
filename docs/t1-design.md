@@ -478,3 +478,34 @@ packed table had.
   adapted to hooks (§6), the stylesheet (§5).
 - **Phase 3**: tier 2 e2e on the lowered DOM + agent-browser live drive;
   README teaches both lessons; deviations menu closed out.
+
+---
+
+## Amendment (Sep 2026): §7.3 superseded — event mutations as props
+(tur's onClick law)
+
+The semantic-subject dispatch is retired. Its recorded goal — "packed
+numbers die; the app speaks names" — is kept and completed by the
+shape tur (github.com/hpp2334/tur) uses: **the widget carries its own
+event mutation**.
+
+- **`.on_click(m)` / `.on_input(m)`** replace `.subject(...)`: the
+  prop's value is a `Mutation<str, opaque>` (the event detail is its
+  argument). The registry row is the mutation itself, not a string —
+  the id → mutation table is `T1Root.regs`.
+- **`t1_event(root, id, detail) -> opaque`** replaces `t1_subject`:
+  resolve the firing id to the widget's mutation and RUN it through
+  the ONE write lane (the handle carries its store; the framework
+  never holds one). The answer is the app's booking box —
+  `opaque(Req)` to book a timer, `opaque(nil)` for nothing.
+- **`capture(m, arg)`** (ui) binds a row's id into an event mutation —
+  tur's `mutate((ctx, _ev) => act(ctx, index))`. The §7.3 subject
+  tables (`toggles`/`removes`) and the `dispatch` fn die with it:
+  nothing to look up, nothing to stale.
+- The per-row drift traps move where the data lives: the machine's
+  nil booking stays DATA (the twins pin the empty-tag answer), the
+  registry's stale-id miss stays the LOUD trap ("answers no mutation").
+
+§7.3's own test law holds unchanged: rows keyed, listeners minted once
+per widget lifetime, retirement drops registry rows — the t1 suites
+pin the same shapes with the new vocabulary.

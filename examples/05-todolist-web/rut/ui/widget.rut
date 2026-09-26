@@ -37,7 +37,11 @@ pub struct Widget {
     placeholder: str = "";
     value: str = ""; // Field (mirrors the draft)
     // -- semantic options
-    subject: str = ""; // what this widget fires
+    on_click: ?Mutation<str, opaque> = nil; // tur's onClick prop: the
+    // mutation the framework RUNS when this widget's listener fires
+    // (clicks land here; the event detail is "")
+    on_input: ?Mutation<str, opaque> = nil; // tur's onInput prop: the
+    // mutation run with the input's carried value as the detail
     hook: str = ""; // stable test id (the lowering emits it as `id`)
     key: str = ""; // keyed-diff identity (defaults from hook)
     // -- layout data (the utility-token ladder's inputs)
@@ -85,9 +89,18 @@ impl Widget {
         return self;
     }
 
-    /// What this widget fires — the event's SEMANTIC name.
-    fn subject(mut self, s: str) -> Self {
-        self.subject = s;
+    /// tur's `onClick(mutate(...))`: the mutation the framework runs
+    /// when this widget fires (buttons, checkboxes). The event's
+    /// SEMANTICS ride the mutation, not a subject string.
+    fn on_click(mut self, m: Mutation<str, opaque>) -> Self {
+        self.on_click = m;
+        return self;
+    }
+
+    /// tur's `{ onInput: mutate(...) }`: the mutation run with the
+    /// input's event-carried value (fields).
+    fn on_input(mut self, m: Mutation<str, opaque>) -> Self {
+        self.on_input = m;
         return self;
     }
 

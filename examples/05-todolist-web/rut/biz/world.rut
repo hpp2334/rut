@@ -18,6 +18,14 @@ pub class World {
     toggle_m: Mutation<i64, ?Req>;
     remove_m: Mutation<i64, ?Req>;
     answer_m: Mutation<str, (str, str)>;
+    // THE EVENT SURFACE (tur's onClick/onInput props): the mutations
+    // the WIDGETS carry. The app wires them; the framework runs them.
+    // Every wrapper returns the BOOKING as a box — opaque(Req) when a
+    // timer must be booked, opaque(nil) when there is nothing to book.
+    draft_ev: Mutation<str, opaque>; // typing: draft$ + note$
+    add_ev: Mutation<str, opaque>; // the Add click (reads the draft)
+    toggle_row: Mutation<i64, opaque>; // per-row, arg-captured
+    remove_row: Mutation<i64, opaque>; // per-row, arg-captured
 }
 
 /// Boot the world: the sources, the derived (deps DISCOVERED through
@@ -36,7 +44,7 @@ fn world_boot(boot_line: str) -> World {
     // status line is pixel-identical from turn one (survey §4.5); the
     // DOM-free suite boots with "" and leaves the note never-written
     if (boot_line != "") {
-        store.set(note$, boot_line);
+        note$.set(boot_line);
     }
 
     // THE DERIVED — the counts line, deps discovered through the ctx,
@@ -207,6 +215,58 @@ fn world_boot(boot_line: str) -> World {
         return (line, "");
     });
 
+    // ---- THE EVENT WRAPPERS (tur's onClick/onInput props) -----------
+    //
+    // What the WIDGETS carry. Each returns the BOOKING as a box:
+    // opaque(Req) — the app books tim_after from it — or opaque(nil)
+    // when there is nothing to book. The write ORDER is the law: the
+    // same writes, in the same order, as the dispatch legs they
+    // replace (the sessions' status lines are byte-pinned).
+
+    /// typing: mirror the carried value into the draft, note the line.
+    let draft_ev = store.mutation(fn (ctx, text: str) -> opaque {
+        ctx.set(draft$, text);
+        ctx.set(note$, f"typing '{text}'");
+        return opaque(nil);
+    });
+
+    /// the Add click: read the draft, gate, book, clear, note.
+    let add_ev = store.mutation(fn (ctx, ev: str) -> opaque {
+        let title = ctx.get(draft$);
+        if (title == "") {
+            ctx.set(note$, "type a title first");
+            return opaque(nil);
+        }
+        let req = ctx.set(add_m, title);
+        ctx.set(draft$, ""); // the draft moved into the request
+        ctx.set(note$, f"requested add '{title}'");
+        return opaque(req);
+    });
+
+    /// a row's check: book the toggle, note it. The machine's nil (an
+    /// unknown todo) is DATA — nothing to book, no trap (the twins
+    /// pin the empty-tag answer; the lost-id shape is the answer's).
+    let toggle_row = store.mutation(fn (ctx, todo: i64) -> opaque {
+        let req = ctx.set(toggle_m, todo);
+        if (req == nil) {
+            return opaque(nil);
+        }
+        ctx.set(note$, f"requested toggle #{todo}");
+        let r: Req = req;
+        return opaque(r);
+    });
+
+    /// a row's del: book the remove, note it. Same nil law.
+    let remove_row = store.mutation(fn (ctx, todo: i64) -> opaque {
+        let req = ctx.set(remove_m, todo);
+        if (req == nil) {
+            return opaque(nil);
+        }
+        ctx.set(note$, f"requested remove #{todo}");
+        let r: Req = req;
+        return opaque(r);
+    });
+
     return World {
         store: store,
         items$: items$,
@@ -221,6 +281,10 @@ fn world_boot(boot_line: str) -> World {
         toggle_m: toggle_m,
         remove_m: remove_m,
         answer_m: answer_m,
+        draft_ev: draft_ev,
+        add_ev: add_ev,
+        toggle_row: toggle_row,
+        remove_row: remove_row,
     };
 }
 

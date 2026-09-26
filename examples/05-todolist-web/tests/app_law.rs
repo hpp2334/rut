@@ -1,6 +1,7 @@
 //! THE LAW, ENFORCED (docs/t1-design.md §2.1, the restructure survey
 //! §5.1 contract, the two-package shape): biz code composes WIDGETS and
-//! speaks the store's TWO VERBS. It never sinks to the DOM's
+//! speaks THROUGH THE HANDLES (tur's law: the app never touches a
+//! store object). It never sinks to the DOM's
 //! vocabulary — no crossing is spelled beyond the one clock name, no
 //! tag or style token is written, no listener id is named. The gate
 //! reads the biz layer's source (the biz module's five files, spliced
@@ -10,9 +11,9 @@
 //! Five checks:
 //!
 //!   1. the app's import set is EXACTLY the two-package vocabulary —
-//!      `ui` (the store's four public names + the widget type + the
-//!      framework's four names + the component constructors), `pouch`
-//!      (Vec), `nmapset` (HashMap), and `web` contributing ONLY
+//!      `ui` (the store + the handle types + the event binding + the
+//!      widget type + the framework's four names + the component
+//!      constructors), `pouch` (Vec), and `web` contributing ONLY
 //!      `tim_after`. The store's machinery traits (Readable/Writable)
 //!      are ui-PRIVATE — they cannot be imported even by name; the set
 //!      equality is the second half of that law.
@@ -21,11 +22,14 @@
 //!      DOM method names.
 //!   3. the render path is really the framework's (`t1_render` once
 //!      per turn, in the entry's paint), events really enter through
-//!      subjects (`t1_subject`, `.subject(...)`), rows are keyed —
+//!      the framework's mutation resolution (`t1_event`, widgets
+//!      carrying `.on_click(...)`/`.on_input(...)`), rows are keyed —
 //!      and THE FLUSH IS GONE: `refresh` appears nowhere (pull-on-read
 //!      is the freshness law; the view's first get is the recompute
-//!      point), the view reads with `store.get`, and the view half
-//!      never writes (no `.set(` between `fn view(` and the views).
+//!      point), the view reads with the handles' `get`, the view half
+//!      never writes (no `.set(` between `fn view(` and the views),
+//!      and THE STORE'S OWN VERBS appear nowhere — they are
+//!      ui-module-private; the handles carry them.
 //!   4. THE MACHINERY TOMBSTONES: the retired API's names — TodoStore,
 //!      Rail, Seen, Atom, StrAtom, ProbeStore, refresh, drain, stale —
 //!      survive nowhere in biz. The store is the ui package's; biz
@@ -67,17 +71,17 @@ const APP_IMPORTS: &[(&str, &[&str])] = &[
     (
         "ui",
         &[
-            // the store's public vocabulary — handles and verbs only
-            "Store", "Source", "Derived", "Mutation",
+            // the store's public vocabulary — the store itself (boot's
+            // mint), the handle types, and the event binding
+            "Store", "Source", "Derived", "Mutation", "capture",
             // the widget type and the framework's four names
-            "Widget", "T1Root", "t1_mount", "t1_render", "t1_subject",
+            "Widget", "T1Root", "t1_mount", "t1_render", "t1_event",
             // the component constructors
             "col", "row", "card", "field", "check",
             "text", "done", "pending", "muted", "btn", "quiet",
         ],
     ),
     ("pouch", &["Vec"]),
-    ("nmapset", &["HashMap"]),
     ("web", &["tim_after"]),
 ];
 
@@ -208,20 +212,21 @@ fn the_biz_layer_never_sinks_to_the_dom_vocabulary() {
 #[test]
 fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
     // the entry: the render is the framework's — ONE t1_render per
-    // turn, in paint — and events enter through the subject lookup
+    // turn, in paint — and events enter through the framework's
+    // mutation resolution (tur's onClick/onInput, framework-run)
     assert_eq!(
         BIZ.matches("t1_render(").count(),
         1,
         "the paint must be the framework's — one t1_render per turn"
     );
     assert!(
-        BIZ.contains("t1_subject("),
-        "DOM events must enter through the framework's subject lookup"
+        BIZ.contains("t1_event("),
+        "DOM events must enter through the framework's mutation resolution"
     );
-    assert!(BIZ.contains(".subject("), "widgets fire SEMANTIC subjects");
+    assert!(BIZ.contains(".on_click("), "widgets CARRY their event mutations");
     assert!(BIZ.contains("fn paint("), "the turn's ONE render has its fn");
     // THE FLUSH IS RETIRED (the two-package store's freshness law):
-    // pull-on-read — the view's first store.get recomputes what the
+    // pull-on-read — the view's first handle get recomputes what the
     // turn's writes staled, at most once per write-set. No refresh
     // exists anywhere in biz, and the view READS.
     assert!(
@@ -230,8 +235,21 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
          may appear in biz"
     );
     assert!(
-        BIZ.contains("store.get("),
-        "the view reads through the store's get verb"
+        BIZ.contains(".get("),
+        "the view reads through the handles' get verb"
+    );
+    // THE STORE IS NOT BIZ'S TO TOUCH (tur's law): the verbs live on
+    // the handles; the store's own are ui-module-private — their
+    // spellings may not appear anywhere in biz, not even in comments
+    assert!(
+        !BIZ.contains("store.get(") && !BIZ.contains("store.set("),
+        "the store's verbs are ui-private — biz reads and writes \
+         through the handles (a.get/a.set/m.run)"
+    );
+    assert!(
+        !BIZ.contains(".subject(") && !BIZ.contains("fn dispatch("),
+        "the subject tables and their dispatcher are gone — events \
+         ride the widgets' own mutation props"
     );
     // the view half never writes: between `fn view(` and the view
     // builders there is no set — view NEVER writes (survey §4.2)
@@ -243,9 +261,8 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
         "the view half never writes — reads only (survey §4.2: view \
          never writes an atom)"
     );
-    // keyed rows, the framework's checkbox, the tables beside the
-    // subjects they mirror
-    for pin in [".key(", ".subject(", "check(", "todo_row(", "HashMap<str, i64>"] {
+    // keyed rows, the framework's checkbox, the event props on the rows
+    for pin in [".key(", ".on_click(", ".on_input(", "check(", "todo_row(", "capture("] {
         assert!(
             BIZ.contains(pin),
             "biz lost `{pin}` — the widgets are the whole UI story \
@@ -276,12 +293,19 @@ fn the_retired_store_api_survives_nowhere_in_biz() {
         ".stale(",
         ".value()",
         "counts$.value",
+        // the surface's own retired spellings: the store verbs moved
+        // onto the handles (ui-module-private on the store itself),
+        // and the subject machinery died with the mutation props
+        "store.get(",
+        "store.set(",
+        ".subject(",
+        "fn dispatch(",
     ];
     for name in TOMBSTONES {
         assert!(
             !BIZ.contains(name),
             "biz still names `{name}` — the retired store API is gone; \
-             biz holds handles and speaks store.get/store.set"
+             biz holds handles and speaks their verbs (a.get/a.set/m.run)"
         );
     }
 }

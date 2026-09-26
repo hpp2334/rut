@@ -20,14 +20,14 @@ fn wt(c: opaque) -> ?World {
 /// Books an add; answers the tag to hand `tim_after`.
 entry fn store_request_add(c: opaque, title: str) -> str {
     let mut w = wt(c);
-    let req = w.store.set(w.add_m, title);
+    let req = w.add_m.run(title);
     return req.tag;
 }
 
 /// Books a toggle; "" when the todo id is unknown.
 entry fn store_request_toggle(c: opaque, todo: i64) -> str {
     let mut w = wt(c);
-    let req = w.store.set(w.toggle_m, todo);
+    let req = w.toggle_m.run(todo);
     if (req == nil) {
         return "";
     }
@@ -37,7 +37,7 @@ entry fn store_request_toggle(c: opaque, todo: i64) -> str {
 /// Books a remove; "" when the todo id is unknown.
 entry fn store_request_remove(c: opaque, todo: i64) -> str {
     let mut w = wt(c);
-    let req = w.store.set(w.remove_m, todo);
+    let req = w.remove_m.run(todo);
     if (req == nil) {
         return "";
     }
@@ -49,13 +49,13 @@ entry fn store_request_remove(c: opaque, todo: i64) -> str {
 /// rejection or a lost id. Unknown tag = loud trap (drift).
 entry fn store_answer(c: opaque, tag: str) -> (str, str) {
     let mut w = wt(c);
-    return w.store.set(w.answer_m, tag);
+    return w.answer_m.run(tag);
 }
 
 /// The committed list as `#1 [x] milk|#2 [ ] tea` — the DOM-free board.
 entry fn store_board(c: opaque) -> str {
     let mut w = wt(c);
-    let items = w.store.get(w.items$);
+    let items = w.items$.get();
     let mut out = "";
     for (let t of items) {
         let mut mark = "[ ]";
@@ -75,7 +75,7 @@ entry fn store_board(c: opaque) -> str {
 /// kind. The deadline-order oracle.
 entry fn store_fly(c: opaque) -> str {
     let mut w = wt(c);
-    let rs = w.store.get(w.reqs$);
+    let rs = w.reqs$.get();
     let mut out = "";
     for (let r of rs) {
         let row_s = f"{r.tag}@{r.latency}";
@@ -92,8 +92,8 @@ entry fn store_fly(c: opaque) -> str {
 /// status line's counts half is the derived counts$).
 entry fn store_counts(c: opaque) -> str {
     let mut w = wt(c);
-    let items = w.store.get(w.items$);
-    let rs = w.store.get(w.reqs$);
+    let items = w.items$.get();
+    let rs = w.reqs$.get();
     let mut open = 0;
     for (let t of items) {
         if (t.done == false) {
@@ -107,7 +107,7 @@ entry fn store_counts(c: opaque) -> str {
 /// The last answer line, verbatim.
 entry fn store_last(c: opaque) -> str {
     let mut w = wt(c);
-    return w.store.get(w.last$);
+    return w.last$.get();
 }
 
 // ---- the ATOM PROBE surface (the twins' store laws; observability
@@ -123,7 +123,7 @@ entry fn atom_recomputes(c: opaque) -> i32 {
 /// The derived's value — the status line's counts half, byte-for-byte.
 entry fn atom_counts(c: opaque) -> str {
     let mut w = wt(c);
-    return w.store.get(w.counts$);
+    return w.counts$.get();
 }
 
 /// The DISCOVERED DAG's edges, joined by id — the declared-deps twin's
@@ -137,15 +137,15 @@ entry fn atom_deps(c: opaque) -> str {
 entry fn atom_str_set(c: opaque, name: str, v: str) -> nil {
     let mut w = wt(c);
     if (name == "draft") {
-        w.store.set(w.draft$, v);
+        w.draft$.set(v);
         return;
     }
     if (name == "note") {
-        w.store.set(w.note$, v);
+        w.note$.set(v);
         return;
     }
     if (name == "last") {
-        w.store.set(w.last$, v);
+        w.last$.set(v);
         return;
     }
     panic(f"probe: no str atom '{name}' — the str lane is draft/note/last");
@@ -155,13 +155,13 @@ entry fn atom_str_set(c: opaque, name: str, v: str) -> nil {
 entry fn atom_str_get(c: opaque, name: str) -> str {
     let mut w = wt(c);
     if (name == "draft") {
-        return w.store.get(w.draft$);
+        return w.draft$.get();
     }
     if (name == "note") {
-        return w.store.get(w.note$);
+        return w.note$.get();
     }
     if (name == "last") {
-        return w.store.get(w.last$);
+        return w.last$.get();
     }
     panic(f"probe: no str atom '{name}' — the str lane is draft/note/last");
 }
@@ -173,7 +173,7 @@ entry fn atom_items_set(c: opaque, title: str) -> nil {
     let mut w = wt(c);
     let fresh: Vec<Todo> = Vec.new();
     fresh.push(Todo { id: 1, title: title });
-    w.store.set(w.items$, fresh);
+    w.items$.set(fresh);
 }
 
 // ---- the derived-on-derived fixture (the topo-order twin's world;
@@ -224,8 +224,7 @@ fn pt(c: opaque) -> ?Probe {
 /// fixture-sized.
 entry fn probe_bump(c: opaque, v: i64) -> nil {
     let p = pt(c);
-    let mut s = p.store;
-    s.set(p.items$, v);
+    p.items$.set(v);
 }
 
 /// THE PULL, fixture-sized: one get(down) — the chain recomputes in
@@ -234,8 +233,7 @@ entry fn probe_bump(c: opaque, v: i64) -> nil {
 /// freshness law, and the flush's old verb may not be spelled.)
 entry fn probe_pull(c: opaque) -> str {
     let p = pt(c);
-    let mut s = p.store;
-    let _ = s.get(p.down$);
+    let _ = p.down$.get();
     let mut out = "";
     for (let d of p.log) {
         if (out != "") {
@@ -254,8 +252,7 @@ entry fn probe_pull(c: opaque) -> str {
 /// upstream's value, doubled, read through the same pull).
 entry fn probe_lower(c: opaque) -> i64 {
     let p = pt(c);
-    let mut s = p.store;
-    return s.get(p.down$);
+    return p.down$.get();
 }
 
 /// The fixture's recompute counter.
@@ -300,7 +297,6 @@ entry fn probes_cycle_new() -> opaque {
 
 entry fn probe_cycle_get(c: opaque) -> i64 {
     let p = opaque.downcast<?CycleProbe>(c);
-    let mut s = p.store;
-    return s.get(p.a$);
+    return p.a$.get();
 }
 

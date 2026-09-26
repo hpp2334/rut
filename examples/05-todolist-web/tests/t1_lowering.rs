@@ -178,9 +178,9 @@ fn a_text_without_a_variant_is_a_lowering_panic() {
 #[test]
 fn a_listener_without_a_subject_is_a_create_panic() {
     let (mut host, app) = make_host();
-    let err = host.call::<_, ()>("t1p_trap_listener_no_subject", (app,)).unwrap_err();
+    let err = host.call::<_, ()>("t1p_trap_listener_no_mutation", (app,)).unwrap_err();
     assert!(
-        err.msg.contains("listens but answers no subject — set .subject(...)"),
+        err.msg.contains("listens but carries no mutation — set .on_click(...)/.on_input(...)"),
         "{}",
         err.msg
     );
