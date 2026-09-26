@@ -33,8 +33,10 @@ fn read_entry(entries: &[(String, Vec<u8>)], key: &str) -> Result<String, String
     }
 }
 
-/// Read one module source file. One file is one module unit — there is
-/// no include form to expand (RFC 0035 §1: use paths are inter-module).
+/// Read one module source file. The language has no include form to
+/// expand (RFC 0035 §1: use paths are inter-module) — but a module may
+/// be AUTHORED as several files: the loader splices `entry.libs` into
+/// one source (RFC 0041 §5), which is assembly, not expansion.
 pub fn load_module_source(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))
 }
@@ -116,7 +118,14 @@ fn bundle_entry_module(
     }
     let rel = entry_rel(manifest)
         .ok_or_else(|| format!("module at bundle prefix `{prefix}` has no entry"))?;
-    let src = read(rel)?;
+    let mut src = read(rel)?;
+    // the multi-lib splice (RFC 0041 §5), the archive-side twin of
+    // `load_entry_module`'s: base first, then `libs` in manifest
+    // order, '\n'-joined — ONE source string
+    for lib in &manifest.entry.libs {
+        src.push('\n');
+        src.push_str(&read(lib)?);
+    }
     Ok(Module {
         source: Some(src),
         entry: manifest.entry.clone(),
@@ -144,15 +153,15 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         ));
     }
     match manifest.format_version {
-        Some(1) | Some(2) | Some(3) => {}
+        Some(1) | Some(2) | Some(3) | Some(4) => {}
         other => {
             return Err(format!(
-                "{}: unknown bundle format_version {other:?} — this loader knows versions 1, 2 and 3",
+                "{}: unknown bundle format_version {other:?} — this loader knows versions 1, 2, 3 and 4",
                 origin.display()
             ));
         }
     }
-    let is_v3 = manifest.format_version == Some(3);
+    let is_v3 = matches!(manifest.format_version, Some(3) | Some(4));
     let root = manifest
         .name
         .clone()
@@ -164,6 +173,16 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
     if !is_v3 && !manifest.peer_deps.is_empty() {
         return Err(format!(
             "{}: rut.toml declares `[peer-deps]` — mounting peer groups needs bundle format_version 3 (RFC 0045 §3)",
+            origin.display()
+        ));
+    }
+    // Multi-lib entries (RFC 0041 §5) ride format_version 4: a v1-v3
+    // layout carries one source per pkg, so a `libs` manifest there
+    // would silently mount base-only — semantically wrong; refuse,
+    // never guess (the same gate peer groups got at v3).
+    if manifest.format_version != Some(4) && !manifest.entry.libs.is_empty() {
+        return Err(format!(
+            "{}: rut.toml declares `entry.libs` — multi-lib entries need bundle format_version 4 (RFC 0041 §5)",
             origin.display()
         ));
     }
@@ -228,6 +247,12 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
         if !is_v3 && !dm.peer_deps.is_empty() {
             return Err(format!(
                 "{}: {pkg}/rut.toml declares `[peer-deps]` — mounting peer groups needs bundle format_version 3 (RFC 0045 §3)",
+                origin.display()
+            ));
+        }
+        if manifest.format_version != Some(4) && !dm.entry.libs.is_empty() {
+            return Err(format!(
+                "{}: {pkg}/rut.toml declares `entry.libs` — multi-lib entries need bundle format_version 4 (RFC 0041 §5)",
                 origin.display()
             ));
         }
@@ -345,9 +370,11 @@ fn entry_rel(manifest: &crate::session::Manifest) -> Option<&String> {
 
 /// Collect a package's files for a bundle: its `rut.toml` (byte-for-byte),
 /// its entry file, and — the v3 layout (RFC 0045 §3) — each
-/// `[peer-deps]` descriptor's `lib` group file, all under `prefix`
-/// (empty for the root, `<pkg>/` for a dep). Descriptor order is the
-/// manifest's (BTreeMap), so the archive stays deterministic.
+/// `[peer-deps]` descriptor's `lib` group file, and — the v4 layout
+/// (RFC 0041 §5) — each pkg's `entry.libs` files beside the entry, all
+/// under `prefix` (empty for the root, `<pkg>/` for a dep). Descriptor
+/// order is the manifest's (BTreeMap), so the archive stays
+/// deterministic.
 fn collect_pkg_files(
     dir: &Path,
     manifest: &crate::session::Manifest,
@@ -364,6 +391,16 @@ fn collect_pkg_files(
     let src = std::fs::read_to_string(dir.join(rel))
         .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
     out.push((key, src.into_bytes()));
+    // the v4 layout (RFC 0041 §5): each pkg's `entry.libs` files ride
+    // beside the entry, in manifest order — the array IS the order the
+    // loader splices back, so the archive stays deterministic
+    for lib in &manifest.entry.libs {
+        let rel = lib.strip_prefix("./").unwrap_or(lib);
+        let key = bundle_key(&format!("{prefix}{rel}"))?;
+        let src = std::fs::read_to_string(dir.join(rel))
+            .map_err(|e| format!("cannot read {}: {e}", dir.join(rel).display()))?;
+        out.push((key, src.into_bytes()));
+    }
     for desc in manifest.peer_deps.values() {
         let Some(lib) = desc.get("lib") else {
             continue; // presence declared, no integration file to pack
@@ -380,16 +417,18 @@ fn collect_pkg_files(
 /// Pack a module directory into a deterministic `.rutbundle` (RFC 0038 §3):
 /// `rut.toml` first, then the entry source, then — the v2 layout — the
 /// whole `[deps]` graph, each package under its own `<pkg>/` group
-/// (manifest + entry), recursively and deduplicated; and — the v3
-/// layout (RFC 0045 §3) — each package's peer-gated integration files
-/// (`[peer-deps]` `lib` keys) beside its entry in its group. Same input
-/// directory ⇒ byte-identical bundle.
+/// (manifest + entry), recursively and deduplicated; — the v3 layout
+/// (RFC 0045 §3) — each package's peer-gated integration files
+/// (`[peer-deps]` `lib` keys) beside its entry in its group; and — the
+/// v4 layout (RFC 0041 §5) — each package's `entry.libs` files beside
+/// its entry too. Same input directory ⇒ byte-identical bundle.
 ///
 /// This answers RFC 0038 OQ-3: a bundle is self-contained; its deps'
 /// `path` keys are directory-time only — the loader resolves groups by
 /// NAME. A v1 bundle (no deps, source-only) is the one-module special
-/// case the loader still accepts; a v2 bundle still loads but no longer
-/// packs — the packer emits v3, the layout that carries peer groups.
+/// case the loader still accepts; a v2 bundle still loads but no
+/// longer packs — as does a v3 one — the packer emits v4, the layout
+/// that carries multi-lib entries.
 pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     let manifest = read_manifest(dir)?;
     if manifest.name.is_none() {
@@ -398,11 +437,11 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, String> {
     // the packed rut.toml is the directory's rut.toml byte-for-byte, so
     // the bundle keys must already be there — directory loading ignores
     // them, but a bundle loader refuses without them (RFC 0038 §2).
-    // v3 since the dep-kinds batch: peer groups ride the bundle (an
-    // older loader refuses the version — refuse, never guess).
-    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(3) {
+    // v4 since the multi-lib batch: `entry.libs` files ride the bundle
+    // (an older loader refuses the version — refuse, never guess).
+    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(4) {
         return Err(format!(
-            "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = 3`",
+            "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = 4`",
             dir.join("rut.toml").display()
         ));
     }
@@ -460,7 +499,19 @@ fn load_entry_module(dir: &Path, manifest: &crate::session::Manifest) -> Result<
         m.entry = manifest.entry.clone();
         return Ok(m);
     }
-    let src = load_entry(dir, &manifest.entry)?;
+    let mut src = load_entry(dir, &manifest.entry)?;
+    // The multi-lib splice (RFC 0041 §5): the base `lib` first, then
+    // `libs` in manifest order, '\n'-joined exactly like the
+    // peer-group append — the combined text stays ONE source string,
+    // so every downstream consumer of `Module.source` (the graph
+    // splice, bundles, wasm mounts) is untouched. The manifest's array
+    // order is the canonical order: the splice never reads a directory
+    // listing, so same manifest ⇒ same module (the determinism law).
+    for rel in &manifest.entry.libs {
+        let text = load_module_source(&dir.join(rel))?;
+        src.push('\n');
+        src.push_str(&text);
+    }
     Ok(Module {
         source: Some(src),
         entry: manifest.entry.clone(),

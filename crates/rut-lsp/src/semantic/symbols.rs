@@ -55,6 +55,17 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             find_name(toks, span, ast.name(d.name), false),
             vec![],
         )),
+        // `use pkg::{A, B};` — an import is a document symbol: a
+        // module-shaped outline entry named for the package. Matters
+        // for multi-lib bases (RFC 0041 §5): a base file can be the
+        // law header + the use set alone, and an outline that ignored
+        // imports would show it empty.
+        ItemKind::Use { pkg, .. } => Some(sym(
+            ast.name(*pkg),
+            SymKind::Module,
+            find_name(toks, span, ast.name(*pkg), false),
+            vec![],
+        )),
         ItemKind::Alias(d) => Some(sym(
             ast.name(d.name),
             SymKind::Class,

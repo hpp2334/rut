@@ -1,0 +1,63 @@
+// =====================================================================
+// §5 THE COMPONENT VOCABULARY (the old components/* — one section now;
+// the free constructors are the layer biz composes: plain fns over the
+// widget type. The variant IS the styling contract — the lowering maps
+// each to its t1-*-- token.)
+// =====================================================================
+
+pub fn col() -> Widget {
+    return Widget { kind: WKind.Column };
+}
+
+pub fn row() -> Widget {
+    return Widget { kind: WKind.Row };
+}
+
+pub fn card() -> Widget {
+    return Widget { kind: WKind.Card };
+}
+
+pub fn spacer(size: i32) -> Widget {
+    return Widget { kind: WKind.Spacer, size: size };
+}
+
+/// The Field constructor. The value is EVENT-CARRIED: the lowering
+/// wires the "input" event, and the fired row's detail carries the
+/// text — there is no read-back crossing to name here.
+pub fn field() -> Widget {
+    return Widget { kind: WKind.Field };
+}
+
+pub fn check(on: bool) -> Widget {
+    return Widget { kind: WKind.Checkbox, on: on };
+}
+
+// the TEXT constructors: the five TVariants
+pub fn text(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Body, text: t };
+}
+
+pub fn done(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Done, text: t };
+}
+
+pub fn title(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Title, text: t };
+}
+
+pub fn pending(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Pending, text: t };
+}
+
+pub fn muted(t: str) -> Widget {
+    return Widget { kind: WKind.Text, tvar: TVariant.Muted, text: t };
+}
+
+// the BUTTON constructors: primary and quiet
+pub fn btn(label: str) -> Widget {
+    return Widget { kind: WKind.Button, bvar: BVariant.Primary, text: label };
+}
+
+pub fn quiet(label: str) -> Widget {
+    return Widget { kind: WKind.Button, bvar: BVariant.Quiet, text: label };
+}

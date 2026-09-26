@@ -1,0 +1,226 @@
+// ---- THE WORLD: the handles bundle (there is no domain container) -----
+
+/// The state record: the store, the atoms, the derived, the machine's
+/// mutations. Fields are HANDLES — keys into the store — and the
+/// bundle owns no machinery: no rail, no flush, no recompute pass.
+/// Built ONCE at boot; the host re-passes it every turn (RFC 0003 §1).
+pub class World {
+    store: Store;
+    items$: Source<Vec<Todo>>; // the committed list — "the board"
+    reqs$: Source<Vec<Req>>; // the booked requests
+    draft$: Source<str>; // the field's event-carried value (str lane)
+    note$: Source<str>; // the status line's tail (str lane)
+    last$: Source<str>; // the answer channel's own log (str lane)
+    next_todo$: Source<i64>; // the id machine's counters — state cells
+    next_req$: Source<i64>; // now that the store is the state home
+    counts$: Derived<str>; // "N open | M done | K in flight"
+    add_m: Mutation<str, Req>;
+    toggle_m: Mutation<i64, ?Req>;
+    remove_m: Mutation<i64, ?Req>;
+    answer_m: Mutation<str, (str, str)>;
+}
+
+/// Boot the world: the sources, the derived (deps DISCOVERED through
+/// the ctx), the machine's mutations. `boot_line` seeds the note (the
+/// app's boot turn; the DOM-free suite passes "").
+fn world_boot(boot_line: str) -> World {
+    let mut store = Store.new();
+    let items$ = store.source<Vec<Todo>>(Vec.new());
+    let reqs$ = store.source<Vec<Req>>(Vec.new());
+    let draft$ = store.source_str("");
+    let note$ = store.source_str("");
+    let last$ = store.source_str("");
+    let next_todo$ = store.source<i64>(1);
+    let next_req$ = store.source<i64>(1);
+    // the boot line lands in the note BEFORE the first paint, so the
+    // status line is pixel-identical from turn one (survey §4.5); the
+    // DOM-free suite boots with "" and leaves the note never-written
+    if (boot_line != "") {
+        store.set(note$, boot_line);
+    }
+
+    // THE DERIVED — the counts line, deps discovered through the ctx,
+    // never declared. The SAME formula the status line has always
+    // shown; the first get computes it.
+    let counts$ = store.derive(fn (ctx) -> str {
+        let items = ctx.get(items$);
+        let reqs = ctx.get(reqs$);
+        let mut open = 0;
+        for (let t of items) {
+            if (t.done == false) {
+                open += 1;
+            }
+        }
+        let done_n = items.len() - open;
+        return f"{open} open | {done_n} done | {reqs.len()} in flight";
+    });
+
+    // ---- THE MACHINE (mutations; every write is a ctx.set) ----
+
+    /// Book an add: the request table grows, the list does not — the
+    /// list changes when the timer's answer lands, as its own turn.
+    let add_m = store.mutation(fn (ctx, title: str) -> Req {
+        let id = ctx.get(next_req$);
+        ctx.set(next_req$, id + 1);
+        let req = Req {
+            id: id,
+            tag: f"req:{id}",
+            kind: KIND_ADD,
+            todo: 0,
+            title: title,
+            latency: LATENCY_ADD,
+        };
+        let rs = ctx.get(reqs$);
+        rs.push(req);
+        ctx.set(reqs$, rs); // the write point: store + mark
+        return req;
+    });
+
+    /// Book a toggle; nil when the todo id is unknown — the caller
+    /// (the UI) turns that into its loud listener-drift trap.
+    let toggle_m = store.mutation(fn (ctx, todo: i64) -> ?Req {
+        let items = ctx.get(items$);
+        if (find_todo(items, todo) < 0) {
+            return nil;
+        }
+        let id = ctx.get(next_req$);
+        ctx.set(next_req$, id + 1);
+        let req = Req {
+            id: id,
+            tag: f"req:{id}",
+            kind: KIND_TOGGLE,
+            todo: todo,
+            title: "",
+            latency: LATENCY_TOGGLE,
+        };
+        let rs = ctx.get(reqs$);
+        rs.push(req);
+        ctx.set(reqs$, rs);
+        return req;
+    });
+
+    /// Book a remove; nil when the todo id is unknown.
+    let remove_m = store.mutation(fn (ctx, todo: i64) -> ?Req {
+        let items = ctx.get(items$);
+        if (find_todo(items, todo) < 0) {
+            return nil;
+        }
+        let id = ctx.get(next_req$);
+        ctx.set(next_req$, id + 1);
+        let req = Req {
+            id: id,
+            tag: f"req:{id}",
+            kind: KIND_REMOVE,
+            todo: todo,
+            title: "",
+            latency: LATENCY_REMOVE,
+        };
+        let rs = ctx.get(reqs$);
+        rs.push(req);
+        ctx.set(reqs$, rs);
+        return req;
+    });
+
+    /// THE SERVER'S ONE COMMIT POINT, as a mutation. An unknown tag is
+    /// a LOUD trap; a rejected title or a lost id is an ANSWER — data
+    /// the turn reads (the ("", why) leg). Consumes the answered row,
+    /// then commits per kind, writing items$/last$ through the ctx.
+    let answer_m = store.mutation(fn (ctx, tag: str) -> (str, str) {
+        let rs = ctx.get(reqs$);
+        let at = find_req(rs, tag);
+        if (at < 0) {
+            panic(f"server: no request '{tag}' — the answer names no booked row");
+        }
+        let req = rs[at];
+        let kept: Vec<Req> = Vec.new();
+        for (let r of rs) {
+            if (r.tag != tag) {
+                kept.push(r);
+            }
+        }
+        ctx.set(reqs$, kept); // consume the answered row
+
+        if (req.kind == KIND_ADD) {
+            // commit_add
+            let title = req.title;
+            if (title == "") {
+                let line = "rejected '' — the title is empty";
+                ctx.set(last$, line);
+                return ("", line);
+            }
+            let items = ctx.get(items$);
+            if (find_by_title(items, title) >= 0) {
+                let line = f"rejected '{title}' — already on the list";
+                ctx.set(last$, line);
+                return ("", line);
+            }
+            let id = ctx.get(next_todo$);
+            ctx.set(next_todo$, id + 1);
+            let its = ctx.get(items$);
+            its.push(Todo { id: id, title: title });
+            ctx.set(items$, its); // the write point: store + mark
+            let line = f"added '{title}' as #{id}";
+            ctx.set(last$, line);
+            return (line, "");
+        }
+        if (req.kind == KIND_TOGGLE) {
+            // commit_toggle
+            let items = ctx.get(items$);
+            let at2 = find_todo(items, req.todo);
+            if (at2 < 0) {
+                // the lost-id shape: a remove landed first — the answer
+                // says so, the turn moves on
+                let line = f"skipped toggle #{req.todo} — the row is gone";
+                ctx.set(last$, line);
+                return ("", line);
+            }
+            let mut its = ctx.get(items$);
+            its[at2].done = its[at2].done == false;
+            ctx.set(items$, its); // the write point: store + mark
+            let mut to = "open";
+            if (its[at2].done) {
+                to = "done";
+            }
+            let line = f"toggled #{req.todo} to {to}";
+            ctx.set(last$, line);
+            return (line, "");
+        }
+        // commit_remove
+        let items = ctx.get(items$);
+        let at3 = find_todo(items, req.todo);
+        if (at3 < 0) {
+            let line = f"skipped remove #{req.todo} — the row is gone";
+            ctx.set(last$, line);
+            return ("", line);
+        }
+        let its = ctx.get(items$);
+        let gone = its[at3].title;
+        let kept2: Vec<Todo> = Vec.new();
+        for (let t of its) {
+            if (t.id != req.todo) {
+                kept2.push(t);
+            }
+        }
+        ctx.set(items$, kept2); // the write point: store + mark
+        let line = f"removed '{gone}' (#{req.todo})";
+        ctx.set(last$, line);
+        return (line, "");
+    });
+
+    return World {
+        store: store,
+        items$: items$,
+        reqs$: reqs$,
+        draft$: draft$,
+        note$: note$,
+        last$: last$,
+        next_todo$: next_todo$,
+        next_req$: next_req$,
+        counts$: counts$,
+        add_m: add_m,
+        toggle_m: toggle_m,
+        remove_m: remove_m,
+        answer_m: answer_m,
+    };
+}
+

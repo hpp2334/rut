@@ -3,7 +3,8 @@
 //! speaks the store's TWO VERBS. It never sinks to the DOM's
 //! vocabulary — no crossing is spelled beyond the one clock name, no
 //! tag or style token is written, no listener id is named. The gate
-//! reads the biz layer's source (`rut/biz/biz.rut` — whole-file,
+//! reads the biz layer's source (the biz module's five files, spliced
+//! the manifest's way — whole-text,
 //! comments included, NO whitelist) and fails LOUD on violations.
 //!
 //! Five checks:
@@ -32,8 +33,32 @@
 //!   5. the appkit retirement (survey §2.5, P2): the word survives
 //!      nowhere in `src/`.
 
-/// The biz layer's source — the file this gate exists to guard.
-const BIZ: &str = include_str!("../rut/biz/biz.rut");
+/// The biz layer's source — the module this gate exists to guard: the
+/// base plus `entry.libs`, spliced the manifest's way (RFC 0041 §5) —
+/// the gate reads what the program actually compiles.
+static BIZ: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    splice(
+        include_str!("../rut/biz/biz.rut"),
+        &[
+            include_str!("../rut/biz/domain.rut"),
+            include_str!("../rut/biz/world.rut"),
+            include_str!("../rut/biz/entries.rut"),
+            include_str!("../rut/biz/app.rut"),
+        ],
+    )
+});
+
+/// The loader's splice law, restated for the gate: base first, then
+/// libs in manifest order, '\n'-joined (crate::mount::biz_source is
+/// the same law).
+fn splice(base: &str, libs: &[&str]) -> String {
+    let mut src = base.to_string();
+    for part in libs {
+        src.push('\n');
+        src.push_str(part);
+    }
+    src
+}
 
 /// The app's import law: package -> the EXACT name list its `use` may
 /// contribute. Set equality on the packages; exact equality on each
@@ -99,7 +124,7 @@ fn imports(src: &str) -> Vec<(String, Vec<String>)> {
 
 #[test]
 fn the_app_imports_exactly_the_project_vocabulary() {
-    let got = imports(BIZ);
+    let got = imports(&BIZ);
     assert_eq!(
         got.len(),
         APP_IMPORTS.len(),

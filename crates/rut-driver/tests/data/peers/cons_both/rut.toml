@@ -4,7 +4,7 @@
 # bundle with BOTH groups riding the archive (directory loads ignore
 # the format keys, RFC 0038 §2).
 format = "rutbundle"
-format_version = 3
+format_version = 4
 name = "cons_both"
 entry.lib = "./cons.rut"
 

@@ -259,7 +259,7 @@ fn the_app_compiles() {
     // loader.js fetches the same file this includes)
     let mut session = Session::new();
     mount::mount_app_session(&mut session).expect("the mirror mounts");
-    mount::compile_app(&mut session, include_str!("../rut/biz/biz.rut"))
+    mount::compile_app(&mut session, &mount::biz_source())
         .expect("the app compiles");
 }
 

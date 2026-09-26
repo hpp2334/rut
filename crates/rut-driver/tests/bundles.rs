@@ -14,9 +14,9 @@ fn make_dir(base: &Path) -> std::path::PathBuf {
     std::fs::write(
         dir.join("rut.toml"),
         // bundle-shaped: the keys a `rut pack` needs are already there,
-        // and directory loading ignores them (RFC 0038 §2, layout v3 —
-        // v3 adds the RFC 0045 peer groups; the packer emits v3)
-        "format = \"rutbundle\"\nformat_version = 3\nname = \"mod\"\nentry.lib = \"./mod.rut\"\n",
+        // and directory loading ignores them (RFC 0038 §2, layout v4 —
+        // v4 adds RFC 0041 §5's `entry.libs` files; the packer emits v4)
+        "format = \"rutbundle\"\nformat_version = 4\nname = \"mod\"\nentry.lib = \"./mod.rut\"\n",
     )
     .unwrap();
     std::fs::write(
@@ -96,10 +96,10 @@ fn refusals() {
     assert!(err.contains("rut.toml"), "{err}");
 
     // unknown format_version — refused before anything else is read.
-    // This gate is also exactly what an OLDER (v2-era) loader applies
-    // to a v3 bundle: the version it does not know is refused before
-    // any entry is read — refuse, never guess (T12's refusal half).
-    let manifest = "format = \"rutbundle\"\nformat_version = 4\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
+    // This gate is also exactly what an OLDER loader applies to a
+    // newer bundle: the version it does not know is refused before any
+    // entry is read — refuse, never guess (T12's refusal half).
+    let manifest = "format = \"rutbundle\"\nformat_version = 5\nname = \"x\"\nentry.lib = \"./x.rut\"\n";
     let bad_version = rut_driver::write_bundle(&[
         ("rut.toml".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
@@ -226,7 +226,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     std::fs::create_dir_all(&main).unwrap();
     std::fs::write(
         main.join("rut.toml"),
-        "format = \"rutbundle\"\nformat_version = 3\nname = \"main\"\nentry.lib = \"./entry.rut\"\n[deps]\nm = { path = \"../m\" }\n",
+        "format = \"rutbundle\"\nformat_version = 4\nname = \"main\"\nentry.lib = \"./entry.rut\"\n[deps]\nm = { path = \"../m\" }\n",
     )
     .unwrap();
     std::fs::write(

@@ -6,7 +6,7 @@
 # deps riding the bundle as `<pkg>/` groups (v2; v3 adds the RFC 0045
 # peer groups — the packer emits v3 since the dep-kinds batch).
 format = "rutbundle"
-format_version = 3
+format_version = 4
 name = "plugin"
 entry.lib = "./plugin.rut"
 

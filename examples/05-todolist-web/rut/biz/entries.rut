@@ -1,0 +1,306 @@
+// ---- the host-test surface (DOM-FREE: driven by tests/store.rs on a
+// bare World — no t1, no DOM; the suite binds the fake-DOM bodies only
+// because the session DECLARES the web crossings and the RFC 0025
+// contract is all-or-nothing; NO test here fires a crossing).
+// SIGNATURES UNCHANGED from the pre-atom surface (the survey §5.3
+// freeze, kept through the rewrite) except the retired probes — the
+// flush's helpers died with it; atom_derived_deps is atom_deps (the
+// DISCOVERED DAG). ----
+
+entry fn store_new() -> opaque {
+    let w: ?World = world_boot("");
+    return opaque(w);
+}
+
+fn wt(c: opaque) -> ?World {
+    let w = opaque.downcast<?World>(c);
+    return w;
+}
+
+/// Books an add; answers the tag to hand `tim_after`.
+entry fn store_request_add(c: opaque, title: str) -> str {
+    let mut w = wt(c);
+    let req = w.store.set(w.add_m, title);
+    return req.tag;
+}
+
+/// Books a toggle; "" when the todo id is unknown.
+entry fn store_request_toggle(c: opaque, todo: i64) -> str {
+    let mut w = wt(c);
+    let req = w.store.set(w.toggle_m, todo);
+    if (req == nil) {
+        return "";
+    }
+    return req.tag;
+}
+
+/// Books a remove; "" when the todo id is unknown.
+entry fn store_request_remove(c: opaque, todo: i64) -> str {
+    let mut w = wt(c);
+    let req = w.store.set(w.remove_m, todo);
+    if (req == nil) {
+        return "";
+    }
+    return req.tag;
+}
+
+/// The timer fired: commit (or reject). The answer crosses as the
+/// entry-err shape — (line, "") for a commit, ("", why) for a
+/// rejection or a lost id. Unknown tag = loud trap (drift).
+entry fn store_answer(c: opaque, tag: str) -> (str, str) {
+    let mut w = wt(c);
+    return w.store.set(w.answer_m, tag);
+}
+
+/// The committed list as `#1 [x] milk|#2 [ ] tea` — the DOM-free board.
+entry fn store_board(c: opaque) -> str {
+    let mut w = wt(c);
+    let items = w.store.get(w.items$);
+    let mut out = "";
+    for (let t of items) {
+        let mut mark = "[ ]";
+        if (t.done) {
+            mark = "[x]";
+        }
+        if (out != "") {
+            out = f"{out}|#{t.id} {mark} {t.title}";
+        } else {
+            out = f"#{t.id} {mark} {t.title}";
+        }
+    }
+    return out;
+}
+
+/// The booked rows as `req:1@400|req:2@250` — book order, latency per
+/// kind. The deadline-order oracle.
+entry fn store_fly(c: opaque) -> str {
+    let mut w = wt(c);
+    let rs = w.store.get(w.reqs$);
+    let mut out = "";
+    for (let r of rs) {
+        let row_s = f"{r.tag}@{r.latency}";
+        if (out != "") {
+            out = f"{out}|{row_s}";
+        } else {
+            out = row_s;
+        }
+    }
+    return out;
+}
+
+/// `open=1 done=1 fly=2` — the counts line (the ENTRY format; the
+/// status line's counts half is the derived counts$).
+entry fn store_counts(c: opaque) -> str {
+    let mut w = wt(c);
+    let items = w.store.get(w.items$);
+    let rs = w.store.get(w.reqs$);
+    let mut open = 0;
+    for (let t of items) {
+        if (t.done == false) {
+            open += 1;
+        }
+    }
+    let done_n = items.len() - open;
+    return f"open={open} done={done_n} fly={rs.len()}";
+}
+
+/// The last answer line, verbatim.
+entry fn store_last(c: opaque) -> str {
+    let mut w = wt(c);
+    return w.store.get(w.last$);
+}
+
+// ---- the ATOM PROBE surface (the twins' store laws; observability
+// only — the app writes through the machine and reads in view) ----
+
+/// The flush's successor: the recompute COUNTER — the twins' freshness
+/// oracle over pull-on-read (a get after a write-set computes once).
+entry fn atom_recomputes(c: opaque) -> i32 {
+    let w = wt(c);
+    return w.store.recompute_count();
+}
+
+/// The derived's value — the status line's counts half, byte-for-byte.
+entry fn atom_counts(c: opaque) -> str {
+    let mut w = wt(c);
+    return w.store.get(w.counts$);
+}
+
+/// The DISCOVERED DAG's edges, joined by id — the declared-deps twin's
+/// successor: the DAG is now WHAT THE PROGRAM READS.
+entry fn atom_deps(c: opaque) -> str {
+    let w = wt(c);
+    return w.store.deps_of(w.counts$);
+}
+
+/// Write a str atom by name (the str cells: draft, note, last).
+entry fn atom_str_set(c: opaque, name: str, v: str) -> nil {
+    let mut w = wt(c);
+    if (name == "draft") {
+        w.store.set(w.draft$, v);
+        return;
+    }
+    if (name == "note") {
+        w.store.set(w.note$, v);
+        return;
+    }
+    if (name == "last") {
+        w.store.set(w.last$, v);
+        return;
+    }
+    panic(f"probe: no str atom '{name}' — the str lane is draft/note/last");
+}
+
+/// Read a str atom by name.
+entry fn atom_str_get(c: opaque, name: str) -> str {
+    let mut w = wt(c);
+    if (name == "draft") {
+        return w.store.get(w.draft$);
+    }
+    if (name == "note") {
+        return w.store.get(w.note$);
+    }
+    if (name == "last") {
+        return w.store.get(w.last$);
+    }
+    panic(f"probe: no str atom '{name}' — the str lane is draft/note/last");
+}
+
+/// Write the Vec<Todo> atom: items$ := the one-todo list (a FRESH cell
+/// every call — the Vec lane never equality-skips; two calls with the
+/// same title mark twice).
+entry fn atom_items_set(c: opaque, title: str) -> nil {
+    let mut w = wt(c);
+    let fresh: Vec<Todo> = Vec.new();
+    fresh.push(Todo { id: 1, title: title });
+    w.store.set(w.items$, fresh);
+}
+
+// ---- the derived-on-derived fixture (the topo-order twin's world;
+// NOT app surface — the survey §5.3 fence, KEPT, relocated: the store
+// layer is decoupled from biz, so the fixture lives in the biz pkg's
+// test surface, a store-test fixture over the GENERIC store). up$
+// doubles items$; down$ doubles up$. The closures append their own
+// recompute log — the order the pull recomputed in. ----
+
+pub class Probe {
+    store: Store;
+    items$: Source<i64>;
+    up$: Derived<i64>;
+    down$: Derived<i64>;
+    log: Vec<str>; // the closures' recompute log, drained by probe_pull
+}
+
+entry fn probes_new() -> opaque {
+    let mut store = Store.new();
+    let items$ = store.source<i64>(0);
+    let log: Vec<str> = Vec.new();
+    let up$ = store.derive(fn (ctx) -> i64 {
+        let v = ctx.get(items$);
+        log.push("up");
+        return v * 2;
+    });
+    let down$ = store.derive(fn (ctx) -> i64 {
+        let v = ctx.get(up$); // the DERIVED dep
+        log.push("down");
+        return v * 2;
+    });
+    let p: ?Probe = Probe {
+        store: store,
+        items$: items$,
+        up$: up$,
+        down$: down$,
+        log: log,
+    };
+    return opaque(p);
+}
+
+fn pt(c: opaque) -> ?Probe {
+    let p = opaque.downcast<?Probe>(c);
+    return p;
+}
+
+/// Write the fixture's source (a mark) — the machine's write shape,
+/// fixture-sized.
+entry fn probe_bump(c: opaque, v: i64) -> nil {
+    let p = pt(c);
+    let mut s = p.store;
+    s.set(p.items$, v);
+}
+
+/// THE PULL, fixture-sized: one get(down) — the chain recomputes in
+/// topo order — and THIS pull's recompute log handed back joined
+/// ("up|down") and drained. (Named probe_PULL: pull-on-read is the
+/// freshness law, and the flush's old verb may not be spelled.)
+entry fn probe_pull(c: opaque) -> str {
+    let p = pt(c);
+    let mut s = p.store;
+    let _ = s.get(p.down$);
+    let mut out = "";
+    for (let d of p.log) {
+        if (out != "") {
+            out = f"{out}|{d}";
+        } else {
+            out = d;
+        }
+    }
+    while (p.log.len() > 0) {
+        let _ = p.log.pop();
+    }
+    return out;
+}
+
+/// The DOWNSTREAM cache's value — freshness made numeric (the
+/// upstream's value, doubled, read through the same pull).
+entry fn probe_lower(c: opaque) -> i64 {
+    let p = pt(c);
+    let mut s = p.store;
+    return s.get(p.down$);
+}
+
+/// The fixture's recompute counter.
+entry fn probe_recomputes(c: opaque) -> i32 {
+    let p = pt(c);
+    return p.store.recompute_count();
+}
+
+// ---- the cycle fixture: a$ reads b$, b$ reads a$ — a discovered
+// cycle. The handle crosses through a CLASS INSTANCE (reference
+// semantics): a local `?Derived` holder is captured BY VALUE, so the
+// closure would see the pre-assignment nil (a nil deref, not the
+// cycle) — the holder's field write AFTER both mints is what the
+// closures see. ----
+
+/// The late-bound handle: minted after a$, assigned before any read.
+pub class CycleHolder {
+    b$: ?Derived<i64> = nil;
+}
+
+pub class CycleProbe {
+    store: Store;
+    a$: Derived<i64>;
+}
+
+entry fn probes_cycle_new() -> opaque {
+    let mut store = Store.new();
+    let mut h: CycleHolder = CycleHolder { };
+    let a$ = store.derive(fn (ctx) -> i64 {
+        let b: Derived<i64> = h.b$;
+        let v = ctx.get(b);
+        return v + 1;
+    });
+    let b$ = store.derive(fn (ctx) -> i64 {
+        let v = ctx.get(a$);
+        return v * 2;
+    });
+    h.b$ = b$;
+    let p: ?CycleProbe = CycleProbe { store: store, a$: a$ };
+    return opaque(p);
+}
+
+entry fn probe_cycle_get(c: opaque) -> i64 {
+    let p = opaque.downcast<?CycleProbe>(c);
+    let mut s = p.store;
+    return s.get(p.a$);
+}
+

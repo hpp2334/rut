@@ -1,0 +1,73 @@
+// ---- the domain types -------------------------------------------------
+
+// the request kinds (the Req rows' `kind`)
+let KIND_ADD: i64 = 1;
+let KIND_TOGGLE: i64 = 2;
+let KIND_REMOVE: i64 = 3;
+
+// the per-kind simulated latency, in ms
+let LATENCY_ADD: i64 = 400;
+let LATENCY_TOGGLE: i64 = 250;
+let LATENCY_REMOVE: i64 = 120;
+
+pub struct Todo {
+    id: i64;
+    title: str;
+    done: bool = false;
+}
+
+/// One booked request — a row of the continuation table. The UI reads
+/// `tag`/`latency` to book the timer; the machine reads the rest at
+/// answer time.
+pub struct Req {
+    id: i64;
+    tag: str;
+    kind: i64;
+    todo: i64; // TOGGLE/REMOVE target; ADD books 0
+    title: str;
+    latency: i64;
+}
+
+// ---- the machine's pure scans (no writes — the mutations write) ------
+
+fn find_todo(items: Vec<Todo>, todo: i64) -> i32 {
+    for (let i = 0; i < items.len(); i += 1) {
+        if (items[i].id == todo) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+fn find_req(rs: Vec<Req>, tag: str) -> i32 {
+    for (let i = 0; i < rs.len(); i += 1) {
+        if (rs[i].tag == tag) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+fn find_by_title(items: Vec<Todo>, title: str) -> i32 {
+    for (let i = 0; i < items.len(); i += 1) {
+        if (items[i].title == title) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+fn has_pending_for(rs: Vec<Req>, todo: i64) -> bool {
+    for (let r of rs) {
+        if (r.todo == todo) {
+            if (r.kind == KIND_TOGGLE) {
+                return true;
+            }
+            if (r.kind == KIND_REMOVE) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+

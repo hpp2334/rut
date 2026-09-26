@@ -242,25 +242,43 @@ examples/05-todolist-web/
     ├── ui/                         THE FRAMEWORK package
     │   ├── rut.toml                name = "ui"; inline = true (generic
     │   │                           exports splice by law); [deps] pouch
-    │   │                           + nmapset
-    │   └── ui.rut                  ONE module, five sections:
-    │                               §1 the atom store kernel (Store,
-    │                               Source/Derived/Mutation, the PRIVATE
-    │                               Readable/Writable traits)
-    │                               §2 the Widget type + builders
-    │                               §3 the lowering table (pure)
-    │                               §4 T1Root + the keyed diff
-    │                               §5 the component vocabulary
+    │   │                           + nmapset; entry.libs = the five
+    │   │                           section files (RFC 0041 §5)
+    │   ├── ui.rut                  the base: the law header + the use
+    │   │                           set — then the libs splice in array
+    │   │                           order, ONE module
+    │   ├── store.rut               §1 the atom store kernel (Store,
+    │   │                           Source/Derived/Mutation, the PRIVATE
+    │   │                           Readable/Writable traits)
+    │   ├── widget.rut              §2 the Widget type + builders
+    │   ├── lowering.rut            §3 the lowering table (pure)
+    │   ├── diff.rut                §4 T1Root + the keyed diff
+    │   └── components.rut          §5 the component vocabulary
     └── biz/                        THE DOMAIN package AND the project
         │                           root (the ABI spec stays `app`)
         ├── rut.toml                name = "app"; [deps] ui + pouch +
-        │                           nmapset
-        └── biz.rut                 ONE module: Todo/Req, World (the
-                                    handles bundle), the machine's four
-                                    mutations, the DOM-free probe
-                                    surface, the app shell, the two
-                                    view builders
+        │                           nmapset; entry.libs = the four
+        │                           section files
+        ├── biz.rut                 the base: the law header + the use
+        │                           set — ONE module once spliced
+        ├── domain.rut              Todo/Req + the machine's pure scans
+        ├── world.rut               World (the handles bundle) + boot
+        ├── entries.rut             the DOM-free probe surface
+        └── app.rut                 the app shell + the two view
+                                    builders
 ```
+
+* **one module, several files** (RFC 0041 §5, the multi-lib entry):
+  each package's body is authored as section files named by
+  `entry.libs` — the loader splices base-first, then the array order,
+  `'\n'`-joined, into ONE module. One namespace, one visibility scope:
+  a name private to `store.rut` is visible to `components.rut` and to
+  nothing outside `ui` — exactly the single-file privacy law, kept by
+  the splice. The manifest's array IS the canonical order (same
+  manifest ⇒ same module); the mirror (`src/mount.rs`) and the wasm
+  lane (`loader.js`'s `BIZ_LIBS`) spell the same list by hand, and
+  `tests/mount_lane.rs` pins manifest-lane and mirror-lane binaries
+  byte-identical through the splice.
 
 * **the manifest route.** The native lane mounts the DIRECTORY:
   `load_dir_session("rut/biz")` reads `rut/biz/rut.toml` and runs
@@ -346,8 +364,8 @@ retired; freshness is the read's job now.
 | `rut/biz/rut.toml` | the root manifest — name `app`, deps `ui`/pouch/nmapset; the module list the native lane walks |
 | `rut/ui/rut.toml` | the framework manifest — name `ui`, `inline = true`, deps pouch/nmapset |
 | `web.d.rut` | the `web` crossing's DECL surface (RFC 0025, `host_scope = "web"`) — flat at the example root, registered by hand in both lanes, verified both ways at boot |
-| `rut/ui/ui.rut` | the framework, one module: §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`), §2 the `Widget` type + fluent builders, §3 the lowering table, §4 `T1Root` + the keyed diff (design: `docs/t1-design.md`), §5 the component vocabulary |
-| `rut/biz/biz.rut` | the domain + app, one module: `Todo`/`Req`, `World`, the four machine mutations, the DOM-free probe entries, `AppRoot`/`main`/`on_event`/`dispatch`/`paint`/`view`, the list + row builders |
+| `rut/ui/*.rut` | the framework, one module, five files (`entry.libs`, RFC 0041 §5): `ui.rut` the base (law header + use set); `store.rut` §1 the store kernel (the private `Readable`/`Writable` traits, the handles, `Store`); `widget.rut` §2 the `Widget` type + fluent builders; `lowering.rut` §3 the lowering table; `diff.rut` §4 `T1Root` + the keyed diff (design: `docs/t1-design.md`); `components.rut` §5 the component vocabulary |
+| `rut/biz/*.rut` | the domain + app, one module, four files: `biz.rut` the base (law header + use set); `domain.rut` `Todo`/`Req` + the pure scans; `world.rut` `World` + boot; `entries.rut` the machine mutations' DOM-free probe entries; `app.rut` `AppRoot`/`main`/`on_event`/`dispatch`/`paint`/`view`, the list + row builders |
 | `src/state.rs` | the turn law: the FIFO queue, the one pump, the re-entrancy guard (`events are queue, never stack`) |
 | `src/hosts.rs` | the 10 registry bindings, written ONCE generic over the backend |
 | `src/backend.rs` | the `DomBackend` seam both lanes implement |
@@ -355,12 +373,12 @@ retired; freshness is the read's job now.
 | `src/fake_dom.rs` | the host twin: a HashMap element tree with the same semantics (appendChild moves) + a virtual timer clock |
 | `src/host.rs` | the native page owner (boot/fire/advance/pump) |
 | `src/mount.rs` | the session mount — TWO LANES over one closure: `load_dir_session` on `rut/biz` (native) and the per-package `register_module` mirror (wasm); both register `web.d.rut` by hand |
-| `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that fetch `./rut/biz/biz.rut` and hand over the source; the stylesheet keys ONLY lowered tokens |
+| `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that fetch the biz module's files (`BIZ_LIBS`, the manifest's mirror) and hand over the spliced source; the stylesheet keys ONLY lowered tokens |
 | `gen/` | wasm-bindgen's generated browser glue (gitignored) — produced by the build recipe below, never committed |
 | `tests/store.rs` | the store's laws, DOM-free (17: the 9 machine laws + the 8 atom twins) |
 | `tests/todolist_app.rs` | the twin gate: 18 scripted sessions asserting the tree AND the turn order on the lowered DOM |
 | `tests/t1_lowering.rs` / `tests/t1_diff.rs` | the framework's bed: 14 lowering snapshots + 18 diff/lifecycle/trap tests (32) |
-| `tests/app_law.rs` | **the grep gate**: reads `rut/biz/biz.rut` and fails loud if biz ever sinks to the DOM's vocabulary or names a retired store API (4 tests) |
+| `tests/app_law.rs` | **the grep gate**: reads the biz module (base + libs, spliced) and fails loud if biz ever sinks to the DOM's vocabulary or names a retired store API (4 tests) |
 | `tests/host_surface.rs` | the crossing + trap matrix (22 tests) |
 | `tests/mount_lane.rs` | the P3 proof: manifest lane == mirror lane, byte-identical (1 test) |
 | `tests/e2e-browser.mjs` | the through-the-artifact gate (see Gates) — plain node tier + real-browser tier |
@@ -443,7 +461,8 @@ real):
   it; deriveds recompute upstream first and feed downstream FRESH;
   an upstream-only recompute still refreshes downstream; a discovered
   cycle dies loud.
-* **the grep gate (4)** — `tests/app_law.rs` reads `rut/biz/biz.rut`
+* **the grep gate (4)** — `tests/app_law.rs` reads the biz module
+  (base + libs, spliced the manifest's way)
   and fails LOUD: the import set is exactly the two-package
   vocabulary (the store's public names + the widget type +
   `t1_mount`/`t1_render`/`t1_subject` + the component constructors +

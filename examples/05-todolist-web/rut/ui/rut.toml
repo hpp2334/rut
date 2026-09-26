@@ -1,7 +1,9 @@
 # ui/ — the UI-FRAMEWORK package (the two-package law): the atom store
-# machinery + the t1 widget framework + the component vocabulary, one
-# directory, one module, one entry file (RFC 0035 §1). See ui.rut's
-# header for the store's surface law and the package's composition.
+# machinery + the t1 widget framework + the component vocabulary. ONE
+# directory, ONE module, SEVERAL files (RFC 0041 §5, the multi-lib
+# entry): `entry.libs` names the section files, the base splices first,
+# the array IS the order. See ui.rut's header for the store's surface
+# law and the file map.
 #
 # `inline = true`: generic exports splice by law (Source<T> and
 # friends); the flag keeps it explicit — the atom/nmapset/ink
@@ -10,6 +12,7 @@
 # path here — the registration prefix every crossing carries is `web`.
 name = "ui"
 entry.lib = "./ui.rut"
+entry.libs = ["./store.rut", "./widget.rut", "./lowering.rut", "./diff.rut", "./components.rut"]
 inline = true
 
 [deps]

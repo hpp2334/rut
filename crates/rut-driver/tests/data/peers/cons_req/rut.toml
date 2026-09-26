@@ -5,7 +5,7 @@
 # the archive's groups and D1 fires at bundle LOAD (directory loads
 # ignore the format keys, RFC 0038 §2).
 format = "rutbundle"
-format_version = 3
+format_version = 4
 name = "cons_req"
 entry.lib = "./cons.rut"
 

@@ -1,5 +1,5 @@
 //! Bundle v3 (RFC 0038 §4 + RFC 0045 §3, phase 2): peer groups ride the
-//! archive. The packer emits `format_version = 3` and packs each
+//! archive. The packer emits `format_version = 4` and packs each
 //! package's `[peer-deps]` `lib` files beside its entry; the v3 loader
 //! resolves groups by name exactly like a directory world, then runs
 //! the peer gate over the archive — peer present → the group file is
@@ -138,14 +138,14 @@ fn t12_refuse_never_guess() {
     let entries: Vec<(String, Vec<u8>)> = vec![
         (
             "rut.toml".into(),
-            "format = \"rutbundle\"\nformat_version = 4\nname = \"x\"\nentry.lib = \"./x.rut\"\n"
+            "format = \"rutbundle\"\nformat_version = 5\nname = \"x\"\nentry.lib = \"./x.rut\"\n"
                 .as_bytes().to_vec(),
         ),
         ("x.rut".into(), b"fn main() -> i32 { return 7; }\n".to_vec()),
     ];
     let err = load_bytes(&rut_driver::write_bundle(&entries).unwrap()).unwrap_err();
     assert!(err.contains("format_version"), "{err}");
-    assert!(err.contains("1, 2 and 3"), "{err}");
+    assert!(err.contains("1, 2, 3 and 4"), "{err}");
 
     // --- a peer-deps manifest under format_version = 2 is refused: the
     // v2 layout has no group entries, so loading it would silently

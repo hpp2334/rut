@@ -54,8 +54,8 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
     // mirror" means when it is TRUE.
     let from_manifest = mount::compile_manifest(&manifest, &root)
         .expect("the manifest lane compiles");
-    let src = include_str!("../rut/biz/biz.rut");
-    let from_mirror = mount::compile_app(&mut mirror, src)
+    let src = mount::biz_source();
+    let from_mirror = mount::compile_app(&mut mirror, &src)
         .expect("the mirror lane compiles");
     assert_eq!(
         rut_core::binary::encode(&from_manifest),

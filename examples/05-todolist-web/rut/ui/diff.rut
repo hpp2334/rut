@@ -1,0 +1,302 @@
+// =====================================================================
+// §4 THE DIFF CORE (the old t1/core — verbatim shape)
+// =====================================================================
+
+// T1Root — the patch state with its framework-private tables — the
+// mount, the listener registry, the keyed diff, and retirement. The
+// design is docs/t1-design.md (phase 0), authoritative, including its
+// five recorded deviations (checkbox-as-button, no ui_unlisten,
+// patch-in-place, no closure Each, enumerable tokens).
+//
+// THE PATCH (§4.2): t1_render diffs the new tree against the previous
+// tree held in T1Root and applies minimal ops over the ten unchanged
+// crossings — match by key at each level, patch-in-place deltas only,
+// new keys create, gone keys remove, reorder re-appends survivors.
+// Nothing changed = nothing fires.
+//
+// THE REGISTRY (§4.3): the framework owns ONE id->subject table.
+// Listeners register exactly once per widget LIFETIME and retire on
+// remove; a fire on a retired or unknown id is LOUD.
+//
+// Element handles are keyed by PATH; `lids` (path -> listener id)
+// backs retirement. One stateful module on purpose: the tables are
+// written across mount/render/retire and module-private is the only
+// privacy rut lands — the sections share this file so the tables stay
+// framework-private for real (the old package split's recorded reason,
+// kept by the merge).
+
+// ---- T1Root (§7.1) and the mount ------------------------------------
+
+/// The patch state — plain rut data, a field of the app container
+/// (RFC 0003 §1: the state crosses, the host re-passes it).
+pub struct T1Root {
+    parent: opaque; // the mounted root element
+    prev: ?Widget = nil; // the previous tree — the diff's left side
+    els: HashMap<str, opaque>; // path -> live handle (ops application)
+    regs: HashMap<str, str>; // listener id (as crossed) -> subject
+    lids: HashMap<str, i64>; // path -> listener id (retirement)
+}
+
+/// Mount the framework on the element `root_id` (index.html's seeded
+/// `#app`). Unknown ids trap loud at the crossing.
+pub fn t1_mount(root_id: str) -> T1Root {
+    let parent = ui_get(root_id);
+    let els: HashMap<str, opaque> = HashMap.new();
+    let regs: HashMap<str, str> = HashMap.new();
+    let lids: HashMap<str, i64> = HashMap.new();
+    return T1Root {
+        parent: parent,
+        els: els,
+        regs: regs,
+        lids: lids,
+    };
+}
+
+// ---- the registry reads the framework needs -------------------------
+
+/// The listener registry's one lookup, LOUD on a miss (§4.3).
+pub fn t1_subject(r: T1Root, id: str) -> str {
+    let mut regs: HashMap<str, str> = r.regs;
+    let hit = regs.get(id);
+    if (hit == nil) {
+        panic(f"t1: listener '{id}' answered no subject — stale or unknown");
+    }
+    let s: str = hit;
+    return s;
+}
+
+// ---- the keyed diff/patch (§4.2) ------------------------------------
+
+/// THE render — once per turn, any turn. First render builds the whole
+/// tree; every later render diffs against the previous tree and fires
+/// only the deltas.
+pub fn t1_render(mut r: T1Root, next: Widget) -> nil {
+    let path = key_of(next, 0);
+    let prev = r.prev;
+    if (prev == nil) {
+        create_subtree(r, next, path, r.parent);
+    } else {
+        let old: Widget = prev;
+        if (key_of(old, 0) != path) {
+            let a = key_of(old, 0);
+            panic(f"t1: the root's key changed '{a}' -> '{path}' — remount is not a patch");
+        }
+        patch_tree(r, old, next, path);
+    }
+    r.prev = next;
+}
+
+/// The live handle for a path — LOUD when the framework's own table
+/// has drifted.
+fn els_handle(r: T1Root, path: str) -> opaque {
+    let mut els: HashMap<str, opaque> = r.els;
+    let hit = els.get(path);
+    if (hit == nil) {
+        panic(f"t1: no live handle for '{path}' — the patch named an element that never appeared");
+    }
+    let el: opaque = hit;
+    return el;
+}
+
+fn els_drop(r: T1Root, path: str) -> nil {
+    let mut els: HashMap<str, opaque> = r.els;
+    els.remove(path);
+}
+
+/// First appearance: mint the element, the attrs, the text or value,
+/// the ONE listener of its lifetime, then the children.
+fn create_subtree(mut r: T1Root, w: Widget, path: str, parent: opaque) -> nil {
+    let low = lower(w);
+    let el: opaque = ui_create(low.tag);
+
+    let mut els: HashMap<str, opaque> = r.els;
+    els.put(path, el);
+
+    if (w.hook != "") {
+        ui_attr(el, "id", w.hook);
+    }
+    ui_attr(el, "class", low.cls);
+    if (is_check(w)) {
+        ui_attr(el, "role", "checkbox");
+    }
+    if (w.placeholder != "") {
+        ui_attr(el, "placeholder", w.placeholder);
+    }
+    if (low.listens != "") {
+        if (w.subject == "") {
+            panic(f"t1: '{path}' listens but answers no subject — set .subject(...)");
+        }
+        let id: i64 = ui_listen(el, low.listens);
+        let mut regs: HashMap<str, str> = r.regs;
+        regs.put(f"{id}", w.subject);
+        let mut lids: HashMap<str, i64> = r.lids;
+        lids.put(path, id);
+    }
+
+    ui_append(parent, el);
+
+    if (takes_text(w)) {
+        if (w.text != "") {
+            ui_set_text(el, w.text);
+        }
+    }
+    if (is_field(w)) {
+        if (w.value != "") {
+            ui_set_input_value(el, w.value);
+        }
+    }
+
+    let kids: Vec<Widget> = w.children;
+    for (let j = 0; j < kids.len(); j += 1) {
+        create_subtree(r, kids[j], f"{path}/{key_of(kids[j], j)}", el);
+    }
+}
+
+/// Patch one surviving node in place — deltas only.
+fn patch_tree(mut r: T1Root, old: Widget, new: Widget, path: str) -> nil {
+    if (kind_name(old) != kind_name(new)) {
+        let a = kind_name(old);
+        let b = kind_name(new);
+        panic(f"t1: '{path}' changed kind {a} -> {b} — keys are identity");
+    }
+    let el = els_handle(r, path);
+    let low_old = lower(old);
+    let low_new = lower(new);
+
+    if (takes_text(new)) {
+        if (old.text != new.text) {
+            ui_set_text(el, new.text);
+        }
+    }
+    if (low_old.cls != low_new.cls) {
+        ui_attr(el, "class", low_new.cls);
+    }
+    if (is_field(new)) {
+        if (old.placeholder != new.placeholder) {
+            ui_attr(el, "placeholder", new.placeholder);
+        }
+        if (old.value != new.value) {
+            ui_set_input_value(el, new.value);
+        }
+    }
+
+    patch_children(r, old, new, path, el);
+}
+
+fn key_index_of(v: Vec<str>, k: str) -> i32 {
+    for (let i = 0; i < v.len(); i += 1) {
+        if (v[i] == k) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+fn old_index_of(olds: Vec<Widget>, k: str) -> i32 {
+    for (let j = 0; j < olds.len(); j += 1) {
+        if (key_of(olds[j], j) == k) {
+            return j;
+        }
+    }
+    return -1;
+}
+
+/// `cur` with the entry at `p` moved to the back — the model of what
+/// ui_append does to a surviving child (appendChild MOVES).
+fn key_moved_to_back(v: Vec<str>, p: i32) -> Vec<str> {
+    let mut out: Vec<str> = Vec.new();
+    let moved = v[p];
+    for (let i = 0; i < v.len(); i += 1) {
+        if (i != p) {
+            out.push(v[i]);
+        }
+    }
+    out.push(moved);
+    return out;
+}
+
+/// The children level of the diff: match by key, patch in place,
+/// create the new, remove the gone, and re-append survivors whose
+/// position broke (reorder = appends, zero creates, zero re-listens).
+fn patch_children(mut r: T1Root, old: Widget, new: Widget, path: str, parent: opaque) -> nil {
+    let olds: Vec<Widget> = old.children;
+    let news: Vec<Widget> = new.children;
+
+    let mut new_keys: Vec<str> = Vec.new();
+    for (let i = 0; i < news.len(); i += 1) {
+        new_keys.push(key_of(news[i], i));
+    }
+
+    let mut cur: Vec<str> = Vec.new();
+    for (let j = 0; j < olds.len(); j += 1) {
+        cur.push(key_of(olds[j], j));
+    }
+
+    for (let i = 0; i < news.len(); i += 1) {
+        let k = new_keys[i];
+        let cpath = f"{path}/{k}";
+        let at = old_index_of(olds, k);
+        if (at >= 0) {
+            patch_tree(r, olds[at], news[i], cpath);
+            // in place iff the live predecessor is the previous new key
+            let mut pred = "";
+            if (i > 0) {
+                pred = new_keys[i - 1];
+            }
+            let live_at = key_index_of(cur, k);
+            let mut in_place = false;
+            if (live_at == 0) {
+                if (pred == "") {
+                    in_place = true;
+                }
+            } else {
+                if (live_at > 0) {
+                    if (cur[live_at - 1] == pred) {
+                        in_place = true;
+                    }
+                }
+            }
+            if (in_place == false) {
+                ui_append(parent, els_handle(r, cpath));
+                cur = key_moved_to_back(cur, live_at);
+            }
+        } else {
+            create_subtree(r, news[i], cpath, parent);
+            cur.push(k);
+        }
+    }
+
+    // gone keys: fetch the live handle, retire the subtree's table
+    // rows, then detach — the registry tracks live ids only
+    for (let j = 0; j < olds.len(); j += 1) {
+        let ok = key_of(olds[j], j);
+        if (key_index_of(new_keys, ok) < 0) {
+            let cpath = f"{path}/{ok}";
+            let child = els_handle(r, cpath);
+            retire_subtree(r, olds[j], cpath);
+            ui_remove(parent, child);
+        }
+    }
+}
+
+/// Retirement (§4.3 — the no-ui_unlisten law's rut-side half): drop
+/// every live handle and every listener row the removed subtree owns.
+fn retire_subtree(mut r: T1Root, w: Widget, path: str) -> nil {
+    els_drop(r, path);
+    let low = lower(w);
+    if (low.listens != "") {
+        let mut lids: HashMap<str, i64> = r.lids;
+        let hit = lids.get(path);
+        if (hit != nil) {
+            let id: i64 = hit;
+            let mut regs: HashMap<str, str> = r.regs;
+            regs.remove(f"{id}");
+            lids.remove(path);
+        }
+    }
+    let kids: Vec<Widget> = w.children;
+    for (let j = 0; j < kids.len(); j += 1) {
+        retire_subtree(r, kids[j], f"{path}/{key_of(kids[j], j)}");
+    }
+}
+

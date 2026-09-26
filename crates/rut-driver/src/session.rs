@@ -45,6 +45,11 @@ pub struct Entry {
     pub type_path: Option<String>,
     /// body path — `.rut` source, or a compiled `.rutc`/`.d.ir`
     pub lib: Option<String>,
+    /// additional `.rut` body files, spliced after `lib` in listed
+    /// order — ONE module, one namespace (RFC 0041 §5, the multi-lib
+    /// entry; contrast the presence-gated impl-only peer groups of
+    /// RFC 0045 §3, which ride `[peer-deps]` instead)
+    pub libs: Vec<String>,
     /// compiled IR path (`.d.ir`)
     pub ir: Option<String>,
 }
@@ -408,9 +413,9 @@ fn valid_spec(spec: &str) -> bool {
 }
 
 /// Parse the `rut.toml` subset: top-level `name`, `entry.type` /
-/// `entry.lib` / `entry.ir` (bare or under `[entry]`), and the dep
-/// tables `[deps]` / `[peer-deps]` / `[dev-deps]` (RFC 0045) whose
-/// values are inline tables.
+/// `entry.lib` / `entry.libs` / `entry.ir` (bare or under `[entry]`),
+/// and the dep tables `[deps]` / `[peer-deps]` / `[dev-deps]`
+/// (RFC 0045) whose values are inline tables.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
     let mut m = Manifest::default();
     let mut section = Section::Top;
@@ -463,12 +468,14 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 // dotted entry keys: `entry.type = "..."` etc.
                 "entry.type" => m.entry.type_path = Some(parse_string(value, lineno)?),
                 "entry.lib" => m.entry.lib = Some(parse_string(value, lineno)?),
+                "entry.libs" => m.entry.libs = parse_string_array(value, lineno)?,
                 "entry.ir" => m.entry.ir = Some(parse_string(value, lineno)?),
                 _ => {} // forward-compatible: ignore unknown top-level keys
             },
             Section::Entry => match key.as_str() {
                 "type" => m.entry.type_path = Some(parse_string(value, lineno)?),
                 "lib" => m.entry.lib = Some(parse_string(value, lineno)?),
+                "libs" => m.entry.libs = parse_string_array(value, lineno)?,
                 "ir" => m.entry.ir = Some(parse_string(value, lineno)?),
                 other => {
                     return Err(ManifestError(format!(
@@ -511,6 +518,33 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
             )));
         }
     }
+    // The multi-lib entry law (RFC 0041 §5): `libs` is an ordered tail
+    // on the base `lib`, so the base must exist; every element is a
+    // `.rut` source (a `.d.rut` is a decl surface, not a body — the
+    // same refusal `[peer-deps]` `lib` gets); and no file rides twice
+    // — the splice would duplicate every name in it.
+    if !m.entry.libs.is_empty() {
+        if m.entry.lib.is_none() {
+            return Err(ManifestError(format!(
+                "`entry.libs` needs `entry.lib` — the multi-lib entry is a base file plus an ordered tail (RFC 0041 §5)"
+            )));
+        }
+        let base = m.entry.lib.as_deref().expect("checked just above");
+        let mut seen = vec![base.to_string()];
+        for lib in &m.entry.libs {
+            if lib == base || seen.contains(lib) {
+                return Err(ManifestError(format!(
+                    "`entry.libs` names `{lib}` twice — the splice would duplicate every name in it (RFC 0041 §5)"
+                )));
+            }
+            if lib.ends_with(".d.rut") || !lib.ends_with(".rut") {
+                return Err(ManifestError(format!(
+                    "`entry.libs` names `{lib}` — every lib is a `.rut` source (a `.d.rut` decl surface is not a body; RFC 0041 §5)"
+                )));
+            }
+            seen.push(lib.clone());
+        }
+    }
     Ok(m)
 }
 
@@ -548,6 +582,34 @@ fn parse_u64(value: &str, lineno: usize) -> Result<u64, ManifestError> {
     let v = value.trim();
     v.parse::<u64>()
         .map_err(|_| ManifestError(format!("line {}: expected an integer, found `{v}`", lineno + 1)))
+}
+
+/// Parse a single-line TOML string array — `["./a.rut", "./b.rut"]` —
+/// the value shape `entry.libs` takes (RFC 0041 §5). Strict: quoted
+/// strings, comma-separated, no trailing comma, nothing else.
+fn parse_string_array(value: &str, lineno: usize) -> Result<Vec<String>, ManifestError> {
+    let v = value.trim();
+    let Some(inner) = v.strip_prefix('[').and_then(|v| v.strip_suffix(']')) else {
+        return Err(ManifestError(format!(
+            "line {}: expected a `[\"..\", ..]` string array, found `{v}`",
+            lineno + 1
+        )));
+    };
+    let inner = inner.trim();
+    if inner.is_empty() {
+        return Err(ManifestError(format!(
+            "line {}: `libs` cannot be empty — drop the key for a single-file module (RFC 0041 §5)",
+            lineno + 1
+        )));
+    }
+    let mut out = Vec::new();
+    for part in inner.split(',') {
+        let part = part.trim();
+        // every element must be a quoted string — the trailing-comma
+        // and bare-word refusals fall out of the same check
+        out.push(parse_string(part, lineno)?);
+    }
+    Ok(out)
 }
 
 /// Parse `true` / `false`.

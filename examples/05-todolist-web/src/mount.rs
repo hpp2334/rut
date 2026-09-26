@@ -55,6 +55,42 @@ const NMAP_HOST_D_RUT: &str = include_str!("../../../rut/nmap_host/nmap.d.rut");
 const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/nmapset.rut");
 
 const UI_RUT: &str = include_str!("../rut/ui/ui.rut");
+// ui's `entry.libs` tail (rut.toml) — the mirror spells the manifest's
+// file list BY HAND (the mirror's whole job: an independent embedder
+// spelling what the manifest says; mount_lane pins the two together)
+const UI_STORE_RUT: &str = include_str!("../rut/ui/store.rut");
+const UI_WIDGET_RUT: &str = include_str!("../rut/ui/widget.rut");
+const UI_LOWERING_RUT: &str = include_str!("../rut/ui/lowering.rut");
+const UI_DIFF_RUT: &str = include_str!("../rut/ui/diff.rut");
+const UI_COMPONENTS_RUT: &str = include_str!("../rut/ui/components.rut");
+
+/// ui's source, spliced the manifest's way (RFC 0041 §5): base first,
+/// then `entry.libs` in array order, '\n'-joined — ONE module.
+pub fn ui_source() -> String {
+    let mut src = String::from(UI_RUT);
+    for part in [UI_STORE_RUT, UI_WIDGET_RUT, UI_LOWERING_RUT, UI_DIFF_RUT, UI_COMPONENTS_RUT] {
+        src.push('\n');
+        src.push_str(part);
+    }
+    src
+}
+
+/// biz's source, spliced the same way (biz.rut + its `entry.libs`
+/// tail) — the handed-over ABI source both the native mirror
+/// (mount_lane) and the wasm lane (loader.js) compose.
+pub fn biz_source() -> String {
+    let mut src = String::from(BIZ_RUT);
+    for part in [DOMAIN_RUT, WORLD_RUT, ENTRIES_RUT, APP_RUT] {
+        src.push('\n');
+        src.push_str(part);
+    }
+    src
+}
+const BIZ_RUT: &str = include_str!("../rut/biz/biz.rut");
+const DOMAIN_RUT: &str = include_str!("../rut/biz/domain.rut");
+const WORLD_RUT: &str = include_str!("../rut/biz/world.rut");
+const ENTRIES_RUT: &str = include_str!("../rut/biz/entries.rut");
+const APP_RUT: &str = include_str!("../rut/biz/app.rut");
 
 /// The rut/ project root — the manifest lane's mount point. Native
 /// only: the wasm lane has no filesystem and uses the mirror.
@@ -195,11 +231,13 @@ pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String
     // THE UI PACKAGE — the framework: the atom store machinery, the
     // widget type, the lowering table, the keyed diff, the component
     // vocabulary — ONE module (the two-package law; inline, its
-    // manifest's stated shape: generic exports splice by law)
+    // manifest's stated shape: generic exports splice by law). The
+    // multi-lib files ride through ui_source() — the manifest's
+    // `entry.libs`, spliced base-first in array order (RFC 0041 §5).
     session
         .register_module(
             "ui",
-            Module { source: Some(UI_RUT.to_string()), inline: true, ..Default::default() },
+            Module { source: Some(ui_source()), inline: true, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
 

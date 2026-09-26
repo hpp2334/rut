@@ -182,3 +182,34 @@ The version ledger:
 - Module binary VERSION is untouched: bundle `format_version` is a
   separate ledger (§2), and impl-only groups add no host fns and no
   binary sections (RFC 0045 §5).
+
+---
+
+## Amendment (Sep 2026): layout v4 — `entry.libs` files ride the
+archive
+
+The multi-lib entry (RFC 0041 §5 — a package's body authored as
+several `.rut` files, spliced into one module) extends the same
+ledger row v3 opened for peer groups: the lib files are part of the
+package, so a bundle that drops them would load base-only —
+semantically wrong.
+
+| version | layout | status |
+|---|---|---|
+| 1 | one module, sources only | loads (the one-module special case) |
+| 2 | the whole `[deps]` graph as `<pkg>/` groups (OQ-3) | loads; no longer packs |
+| 3 | + each package's `[peer-deps]` `lib` files beside its entry | loads; no longer packs |
+| 4 | + each package's `entry.libs` files beside its entry | **the packer's output** |
+
+- **Packing**: `pack_dir` requires the bundle keys at
+  `format_version = 4` and packs each pkg's `entry.libs` files beside
+  its entry in its group, in manifest order (the array IS the splice
+  order — same-input ⇒ byte-identical).
+- **Loading**: the loader knows 1 | 2 | 3 | 4; a manifest declaring
+  `entry.libs` under `format_version` 1-3 is refused (those layouts
+  carry one source per pkg) — the same gate peer groups got at v3,
+  and the same refusal an older loader gives a v4 bundle: refuse,
+  never guess. The v4 load splices the lib files exactly as the
+  directory loader does (RFC 0041 §5), so §6's law — the packed form
+  and its directory compile to identical programs — holds with
+  multi-lib entries (pinned by the rut-driver multi-lib suite).

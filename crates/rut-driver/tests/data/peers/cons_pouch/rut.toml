@@ -5,7 +5,7 @@
 # §2), and `pack_dir` needs them — this same world packs and loads as a
 # v3 bundle with the group riding the archive.
 format = "rutbundle"
-format_version = 3
+format_version = 4
 name = "cons_pouch"
 entry.lib = "./cons.rut"
 

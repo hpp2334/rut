@@ -45,7 +45,24 @@ await glue.default(); // instantiate the module (the glue's init)
 
 const w = glue.initSync();
 const enc = new TextEncoder();
-const source = enc.encode(await (await fetch(new URL("./rut/biz/biz.rut", import.meta.url))).text());
+// The app source is the biz MODULE: the base plus its `entry.libs`
+// tail, fetched and concatenated in rut/biz/rut.toml's array order —
+// the loader's splice law (RFC 0041 §5), restated for the wasm lane
+// (the browser has no manifest reader; this list IS the manifest's
+// mirror, the same duty src/mount.rs's mirror lane carries natively).
+const BIZ_LIBS = [
+  "./rut/biz/biz.rut",
+  "./rut/biz/domain.rut",
+  "./rut/biz/world.rut",
+  "./rut/biz/entries.rut",
+  "./rut/biz/app.rut",
+];
+let text = "";
+for (const rel of BIZ_LIBS) {
+  const part = await (await fetch(new URL(rel, import.meta.url))).text();
+  text += (text === "" ? "" : "\n") + part;
+}
+const source = enc.encode(text);
 
 const ptr = w.rut_web_alloc(source.length);
 new Uint8Array(w.memory.buffer, ptr, source.length).set(source);

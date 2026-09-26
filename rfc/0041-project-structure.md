@@ -425,3 +425,47 @@ the engine knows their names.
 The section's other keys (`name`, `entry.*`, `host_scope`, `inline`,
 the bundle keys) are untouched; RFC 0038's amendment records the
 bundle-side consequence (layout v3 packs the group files).
+
+---
+
+## Amendment (Sep 2026): the multi-lib entry — a package authored as
+several files
+
+§5's entry bullet ("the package's file: one `.rut` per package") gains
+its authored-file form: a package's body may be split across files.
+
+- **`entry.libs`** — an ordered list of `.rut` files beside the base
+  `entry.lib`: `entry.libs = ["./store.rut", "./t1.rut"]`. The loader
+  splices base-first, then `libs` in listed order, `'\n'`-joined, into
+  the ONE `Module.source` — the exact splice shape the peer-group
+  append established (RFC 0045 §3), minus the gate: multi-lib files
+  mount unconditionally.
+- **One module — the whole point.** The spliced text is one module:
+  one namespace, one visibility scope. A name private to one file is
+  visible to every other file of the package; the machinery-hiding
+  pattern (a store whose traits are module-private) works exactly as
+  in a single file. This is assembly, not a language include form —
+  RFC 0035 §1's "no include" law stands (use paths stay
+  inter-module).
+- **Contrast with peer groups** (RFC 0045 §3): group files are
+  PRESENCE-gated and therefore impl-only (a conditional pub name would
+  be a bare-name miss); multi-lib files are unconditional and are full
+  module citizens — types, fns, pub surface, all legal in any file.
+- **The manifest is the canonical order**: the splice never reads a
+  directory listing — same manifest ⇒ same module (the determinism
+  law). A `libs` row without `lib`, a `.d.rut` element (a decl
+  surface is not a body), or a file named twice are one loud manifest
+  error each, citing this section.
+- **Diagnostics consequence, recorded**: positions inside a spliced
+  file are offsets into the combined text — the same consequence the
+  peer-group splice accepted. File-accurate spans are a source-map
+  feature (RFC 0036 territory), not a manifest one.
+- **Bundles**: the lib files ride beside the entry at layout
+  `format_version = 4` (RFC 0038's amendment ledger); a `libs`
+  manifest under v1-v3 is refused, never base-mounted.
+
+The motivating case: `examples/05-todolist-web` — the two-package law
+landed with a 1122-line `ui.rut` and an 884-line `biz.rut`; the split
+restores the file-per-concern shape (`store`/`widget`/`lowering`/
+`diff`/`components`; `domain`/`world`/`entries`/`app`) without
+reintroducing the sixteen-manifest tree.

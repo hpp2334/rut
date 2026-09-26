@@ -1,0 +1,233 @@
+// ---- THE APP (the shell; the views live below) ------------------------
+
+/// The app container: everything a turn needs, built once at boot and
+/// returned to the host, which re-passes it on every on_event turn.
+/// The framework's T1Root rides as a FIELD (§7.1) beside THE WORLD (the
+/// handles bundle — no domain container). The draft and the note live
+/// IN the store; no duplicates on the container.
+pub class AppRoot {
+    world: World; // the handles + the machine
+    t1: T1Root; // the framework's diff/registry state
+    toggles: HashMap<str, i64>; // subject -> todo id (§7.3)
+    removes: HashMap<str, i64>; // subject -> todo id (§7.3)
+}
+
+// The boot turn: mount the framework on the seeded root (index.html's
+// static contract), paint the first tree, and RETURN the container the
+// host holds for the page's life. The store boots its atoms; the note$
+// atom takes the boot line BEFORE the first paint, so the status line
+// is pixel-identical from turn one (survey §4.5).
+entry fn main() -> opaque {
+    let boot: World = world_boot("booted — type a title, press Add");
+    let mut root: ?AppRoot = AppRoot {
+        world: boot,
+        t1: t1_mount("app"),
+        toggles: HashMap.new(),
+        removes: HashMap.new(),
+    };
+    paint(root);
+    return opaque(root);
+}
+
+// The ONE re-entry point: every asynchronous fact arrives as an event
+// row, the pump re-passing the container. Returns the ENTRY-ERR shape:
+// (opaque(c), "") on a clean turn, (nil, why) on a soft failure — the
+// container does NOT re-cross on a failed turn; the pump keeps the one
+// it holds. Drift stays on the panic channel, loud.
+entry fn on_event(c: opaque, kind: i32, subject: str, detail: str) -> (?opaque, str) {
+    let root = opaque.downcast<?AppRoot>(c);
+    if (root == nil) {
+        panic("app: the event container is not an AppRoot — host drift");
+    }
+    let mut r: ?AppRoot = root;
+
+    if (kind == 1) {
+        // EV_DOM — the framework translates the firing listener id to
+        // its widget's SUBJECT (§7.3); a stale or unknown id is the
+        // registry's LOUD miss, named as such.
+        let mut t1: T1Root = r.t1;
+        let s = t1_subject(t1, subject);
+        dispatch(r, s, detail);
+        return (opaque(r), "");
+    }
+    if (kind == 2) {
+        // EV_TIMER — the "server" answers the booked request, THROUGH
+        // the machine's answer mutation. The answer's own err leg (a
+        // rejected title, a lost id) is DATA: the status line tells
+        // the user, and the err channel tells the host.
+        let mut world: World = r.world;
+        let ans = world.store.set(world.answer_m, subject);
+        if (ans.1 != "") {
+            world.store.set(world.note$, ans.1);
+            paint(r);
+            return (nil, ans.1);
+        }
+        world.store.set(world.note$, ans.0);
+        paint(r);
+        return (opaque(r), "");
+    }
+    panic(f"app: unknown event kind {kind}");
+}
+
+// One DOM event = one SUBJECT. Reads the container, books at most one
+// request (through the machine's mutations), paints. Requests NEVER
+// touch the list here — the commit is the timer turn's job. The WRITES
+// here are the plain leg (draft$/note$ — the app's own words); the
+// machine's writes land inside the mutations.
+fn dispatch(mut r: ?AppRoot, subject: str, detail: str) -> nil {
+    let mut world: World = r.world;
+
+    if (subject == "add") {
+        // the click row carries no value; the field's value arrived
+        // event-carried on the typing rows (the draft atom)
+        let title = world.store.get(world.draft$);
+        if (title == "") {
+            world.store.set(world.note$, "type a title first");
+            paint(r);
+            return;
+        }
+        let req = world.store.set(world.add_m, title);
+        tim_after(req.latency, req.tag);
+        world.store.set(world.draft$, ""); // the draft moved into the
+        // request — the diff clears the field on this turn's render
+        world.store.set(world.note$, f"requested add '{title}'");
+        paint(r);
+        return;
+    }
+    if (subject == "field") {
+        // typing mirrors the carried value into the draft atom; the
+        // render patches one text line
+        world.store.set(world.draft$, detail);
+        world.store.set(world.note$, f"typing '{detail}'");
+        paint(r);
+        return;
+    }
+
+    let mut toggles: HashMap<str, i64> = r.toggles;
+    let thit = toggles.get(subject);
+    if (thit != nil) {
+        let todo: i64 = thit;
+        let req = world.store.set(world.toggle_m, todo);
+        if (req == nil) {
+            panic(f"app: toggle booked for todo {todo} — no such todo (subject drift)");
+        }
+        tim_after(req.latency, req.tag);
+        world.store.set(world.note$, f"requested toggle #{todo}");
+        paint(r);
+        return;
+    }
+    let mut removes: HashMap<str, i64> = r.removes;
+    let rhit = removes.get(subject);
+    if (rhit != nil) {
+        let todo: i64 = rhit;
+        let req = world.store.set(world.remove_m, todo);
+        if (req == nil) {
+            panic(f"app: remove booked for todo {todo} — no such todo (subject drift)");
+        }
+        tim_after(req.latency, req.tag);
+        world.store.set(world.note$, f"requested remove #{todo}");
+        paint(r);
+        return;
+    }
+    panic(f"app: subject '{subject}' answers no action — stale or unknown");
+}
+
+// THE PAINT (§7.2): NO flush line — pull-on-read. The view's first get
+// computes what this turn's writes staled, at most once per write-set;
+// then the tree goes to t1_render, whose keyed diff patches the live
+// page in place — nothing changed = nothing fires. The turn-turn
+// flush the old paint ran is RETIRED (the survey addendum records the
+// reversal); the render itself stays unconditional, once per turn.
+fn paint(r: ?AppRoot) -> nil {
+    let tree = view(r);
+    let mut root: T1Root = r.t1;
+    t1_render(root, tree);
+}
+
+// THE VIEW — App (§7.2). PURE: it READS the store (the counts through
+// the derived counts$, the draft/note through their atoms — the two-
+// verb surface's read half) and builds the whole widget tree. No
+// crossing runs here; no atom is written here (survey §4.2: view never
+// writes). The one rut-side write is §7.3's: the subject tables
+// todo_list RETURNS are dropped onto the container here.
+fn view(mut r: ?AppRoot) -> Widget {
+    let mut world: World = r.world;
+
+    let mut tree = col().gap(12).pad(16).hook("root");
+
+    let mut head = row().gap(8).hook("head");
+    head.w(field().placeholder("What needs doing?").value(world.store.get(world.draft$)).subject("field").hook("new-todo"));
+    head.w(btn("Add").subject("add").hook("add-btn"));
+    tree.w(head);
+
+    // the counts line — EXACT, as every phase before, now THROUGH the
+    // derivation by store.get(counts$): "N open | M done | K in
+    // flight", the note$ atom tailing it
+    tree.w(
+        muted(f"{world.store.get(world.counts$)} — {world.store.get(world.note$)}")
+            .hook("status"),
+    );
+
+    let out = todo_list(world);
+    r.toggles = out.1;
+    r.removes = out.2;
+    tree.w(out.0);
+    return tree;
+}
+
+// ---- THE LIST (the old todo_list package) -----------------------------
+// One keyed row per committed todo (commit order), then a pending line
+// per outstanding add (book order) — the round trip made visible.
+//
+// THE TABLES. The §7.3 subject tables are built HERE, beside the
+// .subject(...) calls they mirror — drop-then-refill, fresh per render,
+// so a stale subject is a LOUD miss. rut has no module state (RFC 0003
+// §1), so the tables RETURN to the app, which owns them.
+
+/// The list tree plus this render's two subject tables (toggle, then
+/// remove). Reads through the two-verb surface: store.get on the items
+/// and reqs sources.
+pub fn todo_list(world: World) -> (Widget, HashMap<str, i64>, HashMap<str, i64>) {
+    let mut w = world;
+    let mut tg: HashMap<str, i64> = HashMap.new();
+    let mut rm: HashMap<str, i64> = HashMap.new();
+
+    let items = w.store.get(w.items$);
+    let rs = w.store.get(w.reqs$);
+
+    let mut list = card().pad(12).gap(8).hook("list");
+    for (let t of items) {
+        tg.put(f"toggle:{t.id}", t.id);
+        rm.put(f"remove:{t.id}", t.id);
+        list.w(todo_row(t, has_pending_for(rs, t.id)));
+    }
+    for (let rq of rs) {
+        if (rq.kind == KIND_ADD) {
+            list.w(pending(f"... {rq.title}"));
+        }
+    }
+
+    return (list, tg, rm);
+}
+
+// ---- THE ROW (the old todo_row package) -------------------------------
+// check + title + quiet del, keyed `row-<id>` — the diff's identity, so
+// the row SURVIVES every patch between commits. The check's `on` is app
+// state: a done flip patches one token. `flying` turns the title into
+// its in-flight variant.
+
+pub fn todo_row(t: Todo, flying: bool) -> Widget {
+    let mut w = row().gap(8).key(f"row-{t.id}").hook(f"row-{t.id}");
+    w.w(check(t.done).subject(f"toggle:{t.id}").hook(f"mark-{t.id}"));
+    let mut lbl = text(t.title);
+    if (flying) {
+        lbl = pending(f"... {t.title}");
+    } else {
+        if (t.done) {
+            lbl = done(t.title);
+        }
+    }
+    w.w(lbl.hook(f"lbl-{t.id}"));
+    w.w(quiet("del").subject(f"remove:{t.id}").hook(f"del-{t.id}"));
+    return w;
+}

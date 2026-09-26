@@ -1,7 +1,9 @@
 # biz/ — THE BIZ PACKAGE (the two-package law) and THE PROJECT ROOT:
 # the todolist's domain and app — the sources, the derived counts line,
 # the machine as mutations, the views, the app shell. ONE directory,
-# one module, one entry file (RFC 0035 §1). The root spec stays `app`
+# ONE module, SEVERAL files (RFC 0041 §5, the multi-lib entry):
+# `entry.libs` names the section files, the base splices first, the
+# array IS the order. The root spec stays `app`
 # (the ABI shape: the host boots `main`, re-passes the container to
 # `on_event`; the mirror lane compiles the handed-over source under
 # this spec).
@@ -12,6 +14,7 @@
 # module-private; biz cannot name them even to import them.
 name = "app"
 entry.lib = "./biz.rut"
+entry.libs = ["./domain.rut", "./world.rut", "./entries.rut", "./app.rut"]
 
 [deps]
 ui = { path = "../ui" }
