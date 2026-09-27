@@ -126,6 +126,13 @@ pub struct Manifest {
     /// the pkg itself (the program root), never in a consumer's world.
     /// Same descriptor shape as `[deps]`.
     pub dev_deps: BTreeMap<String, BTreeMap<String, String>>,
+    /// `[style]` — the pkg's formatter knobs (the rut-fmt batch): flat
+    /// `key = value` rows read by the fmt crate's consumer, which
+    /// validates the keys and parses the values (the manifest layer
+    /// stays schema-free like the deps tables). Unknown keys are
+    /// ignored (the forward-compat rule); unknown VALUES trip the
+    /// formatter tool, never the loader.
+    pub style: BTreeMap<String, String>,
     /// `host_scope` — the host-fn registration prefix when it must differ
     /// from the package name (`rt` keeps its historical `rt:log` scope,
     /// RFC 0022)
@@ -431,6 +438,7 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 "deps" => Section::Deps,
                 "peer-deps" => Section::PeerDeps,
                 "dev-deps" => Section::DevDeps,
+                "style" => Section::Style,
                 other => {
                     return Err(ManifestError(format!(
                         "line {}: unknown section `[{}]`",
@@ -498,6 +506,13 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 check_dep_key(&key, lineno)?;
                 let desc = parse_peer_descriptor(value, lineno, "dev-deps")?;
                 m.dev_deps.insert(key, desc);
+            }
+            Section::Style => {
+                // `key = value` rows, string-typed, schema-free: the fmt
+                // crate validates keys and parses values (the manifest
+                // stays schema-free, the deps-table law); unknown keys
+                // ride, refused only by the tool that knows its schema
+                m.style.insert(key, parse_string(value, lineno)?);
             }
         }
     }
@@ -567,6 +582,11 @@ enum Section {
     Deps,
     PeerDeps,
     DevDeps,
+    /// `[style]` — the pkg's formatter knobs (the rut-fmt batch): flat
+    /// `key = value` rows, string-typed and schema-free (the consumer
+    /// of the manifest — the fmt crate — validates keys and parses
+    /// values; unknown keys are ignored, the forward-compat rule).
+    Style,
 }
 
 fn parse_string(value: &str, lineno: usize) -> Result<String, ManifestError> {

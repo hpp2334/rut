@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 rut-driver = { path = "../rut-driver" }
+rut-fmt = { path = "../rut-fmt" }
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
 rut-std = { path = "../rut-std" }

@@ -414,6 +414,7 @@ version = "0.1.0"
 dependencies = [
  "rut-core",
  "rut-driver",
+ "rut-fmt",
  "rut-lexer",
  "rut-parser",
  "rut-std",
@@ -432,6 +433,19 @@ dependencies = [
  "rut-core",
  "rut-lexer",
  "rut-lir",
+ "rut-parser",
+ "rut-std",
+ "rut-vm",
+]
+
+[[package]]
+name = "rut-fmt"
+version = "0.1.0"
+dependencies = [
+ "rut-ast",
+ "rut-core",
+ "rut-driver",
+ "rut-lexer",
  "rut-parser",
  "rut-std",
  "rut-vm",
