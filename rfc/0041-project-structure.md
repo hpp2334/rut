@@ -469,3 +469,51 @@ landed with a 1122-line `ui.rut` and an 884-line `biz.rut`; the split
 restores the file-per-concern shape (`store`/`widget`/`lowering`/
 `diff`/`components`; `domain`/`world`/`entries`/`app`) without
 reintroducing the sixteen-manifest tree.
+
+---
+
+## Amendment (Sep 2026): the `[style]` block — the formatter's manifest section
+
+§5's grammar grows one table beside the deps tables — the formatter's
+knobs (RFC 0030 §7's formatter, realized by the rut-fmt batch as
+`rut fmt`):
+
+- **`[style]`** — optional, flat `key = "value"` rows, string-typed and
+  schema-free AT THE MANIFEST LAYER: the loader accepts any keys and
+  hands the table to the tool that knows the schema (the deps-table
+  law — unknown keys ride, never a loader error). The known keys, v1:
+  `indent_width` (spaces per level, validated 1..=8, default 4) and
+  `max_width` (the soft line width, validated ≥ 20, default 100) —
+  the defaults are the corpus's own conventions. A malformed value is
+  a FORMATTER-tool error naming the key, never a compile error.
+- **Resolution**: the nearest ancestor manifest of the formatted file;
+  no ancestor manifest → defaults. The fmt crate consumes a resolved
+  `Style` and never reads the manifest itself (the Session's
+  layering law: the crate stays manifest-free and I/O-free).
+- **Nothing at the VM/IR level reads it**: `[style]` shapes printed
+  text, not program meaning — the compiler's IR and the wire format
+  are untouched, which is why the block is a manifest-grammar change
+  only (one new `Section`, one new table) and why the batch carried no
+  VERSION bump.
+
+---
+
+## Amendment (Sep 2026): the CLI grows `fmt` — M6's tooling row closes
+
+§2's `rut-cli` leaf (and RFC 0001 M6's tooling row) grows the
+formatter subcommand — `run`/`pack`/`dump` become `run`/`fmt`/`pack`/
+`dump`:
+
+- **`rut fmt <file.rut | dir> [--check]`** — the source formatter
+  (RFC 0030 §7's realized invariant). Default: rewrite in place.
+  `--check`: write nothing, exit 1, list the unformatted paths.
+  A `.d.rut` formats in declaration mode; a directory walks `*.rut`
+  recursively; style comes from the nearest ancestor `rut.toml`'s
+  `[style]` block (§5's amendment), defaults without one.
+- **The refusal law**: a source with diagnostics is refused — rendered
+  diags, exit 1, nothing rewritten. The formatter's input is a
+  parsed-clean module; it never guesses.
+- **No LSP coupling**: the formatter is a library (`rut-fmt`) the CLI
+  binds; the LSP may adopt the same crate for a format-on-request
+  action later, but nothing in the editor protocol changes with this
+  batch.

@@ -470,6 +470,35 @@ struct Diag { span: Span, msg: String,
 - Comments and blank lines are dropped from the AST (doc comments kept on
   declarations); formatting fidelity is the formatter's job, not the AST's.
 
+### §7 amendment (Sep 2026): the round-trip is REALIZED — `rut fmt`
+
+The formatter exists: `crates/rut-fmt`, the CLI's `fmt` subcommand.
+The invariant above is now TESTED LAW, not promise:
+
+- `pretty(ast)` is an **AST reprint** (canonical house layout from the
+  typed arena), plus a **comment gap-scan**: comments live in the byte
+  gaps BETWEEN lexed token spans (string and f-string-hole interiors
+  are token interiors), so the formatter recovers every `//` and block
+  comment with zero lexer/parser changes and re-attaches it — trailing
+  runs on their element's line, own-line runs at the enclosing indent.
+- The AST's two fidelity losses are reconstructed by the printer:
+  source parens (absent as nodes — the parse's grouping IS the tree;
+  the printer re-parens only where flat precedence would invert it,
+  by the reduce-level table) and literal re-derivation (floats from
+  their bits, shortest round-trip; strings re-quoted by the exact
+  inverse of the lexer's escape set).
+- **The corpus proves the invariant**: every file of the four-tree
+  corpus formats, REPARSES to a clean tree, is idempotent
+  (`fmt(fmt(x)) == fmt(x)`), and its dump tree (spans and literal
+  spellings aside — the formatter legitimately re-spells `0xff` as
+  `255`) is unchanged. Because the AST carries no paren nodes, the
+  deeper guarantee is the VM's: probe programs run through the full
+  pipeline before and after formatting and log identical lines
+  (`tests/semantic_equiv.rs`).
+- Style is the package's, not the tool's: a `[style]` manifest block
+  (RFC 0041 §5's amendment) — `indent_width`, `max_width`, defaults
+  4/100, unknown keys ride.
+
 ## Open questions
 
 - OQ-1: trailing commas — allowed in argument lists and dataclass literals?
@@ -708,6 +737,35 @@ struct Diag { span: Span, msg: String,
   conformance suite (declaration mode: `examples/**/*.d.rut`).
 - Comments and blank lines are dropped from the AST (doc comments kept on
   declarations); formatting fidelity is the formatter's job, not the AST's.
+
+### §7 amendment (Sep 2026): the round-trip is REALIZED — `rut fmt`
+
+The formatter exists: `crates/rut-fmt`, the CLI's `fmt` subcommand.
+The invariant above is now TESTED LAW, not promise:
+
+- `pretty(ast)` is an **AST reprint** (canonical house layout from the
+  typed arena), plus a **comment gap-scan**: comments live in the byte
+  gaps BETWEEN lexed token spans (string and f-string-hole interiors
+  are token interiors), so the formatter recovers every `//` and block
+  comment with zero lexer/parser changes and re-attaches it — trailing
+  runs on their element's line, own-line runs at the enclosing indent.
+- The AST's two fidelity losses are reconstructed by the printer:
+  source parens (absent as nodes — the parse's grouping IS the tree;
+  the printer re-parens only where flat precedence would invert it,
+  by the reduce-level table) and literal re-derivation (floats from
+  their bits, shortest round-trip; strings re-quoted by the exact
+  inverse of the lexer's escape set).
+- **The corpus proves the invariant**: every file of the four-tree
+  corpus formats, REPARSES to a clean tree, is idempotent
+  (`fmt(fmt(x)) == fmt(x)`), and its dump tree (spans and literal
+  spellings aside — the formatter legitimately re-spells `0xff` as
+  `255`) is unchanged. Because the AST carries no paren nodes, the
+  deeper guarantee is the VM's: probe programs run through the full
+  pipeline before and after formatting and log identical lines
+  (`tests/semantic_equiv.rs`).
+- Style is the package's, not the tool's: a `[style]` manifest block
+  (RFC 0041 §5's amendment) — `indent_width`, `max_width`, defaults
+  4/100, unknown keys ride.
 
 ## Open questions
 
