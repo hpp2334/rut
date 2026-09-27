@@ -169,6 +169,18 @@ rspack.config.ts         the page bundle (refresh = dev lane only — see the
 rspack.smoke.config.ts   bundles the app surface for node (dist-smoke/, gitignored)
 ```
 
+## Mobile
+
+The page is responsive below 880px — pure CSS over the same markup, no
+component changes: the three columns stack into a horizontal case-chip
+strip, a height-bounded editor row (the textarea stays the scroller —
+the H-2 law holds), and the panes; the status bar wraps. Touch targets
+get `pointer: coarse` sizing, hover-only styles hide behind
+`(hover: hover)`, and the shell rides `100dvh` so browser chrome never
+covers the status bar. `index.html` ships `maximum-scale=1` to stop
+iOS Safari's focus auto-zoom on the 12px code editor — iOS keeps pinch
+zoom regardless; Android forgoes it (honest trade, not a silent one).
+
 ## Honest limits
 
 - **Custom edits verify against the case they came from.** A free-form

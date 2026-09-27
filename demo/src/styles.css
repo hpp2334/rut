@@ -26,6 +26,12 @@ body,
   margin: 0;
 }
 
+html {
+  /* mobile: stop the landscape auto-inflation of text sizes */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
@@ -33,10 +39,20 @@ body {
   font-size: 14px;
 }
 
+/* every interactive element here is a button; manipulation drops the
+   double-tap-zoom delay on touch and is a no-op under a mouse */
+button {
+  touch-action: manipulation;
+}
+
 .app {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* 100% rides the LAYOUT viewport, so mobile browser chrome can cover
+     the status bar; dvh tracks the VISIBLE one (the declaration above
+     keeps every dvh-less browser on the old chain) */
+  height: 100dvh;
 }
 
 /* header */
@@ -124,8 +140,12 @@ body {
   font: inherit;
 }
 
-.case-list button:hover {
-  background: #232730;
+/* hover-only styling hides from touch devices (a tap would otherwise
+   leave the highlight stuck on the last-touched case) */
+@media (hover: hover) {
+  .case-list button:hover {
+    background: #232730;
+  }
 }
 
 .case-list button.selected {
@@ -405,8 +425,10 @@ body {
   cursor: pointer;
 }
 
-.ast-controls button:hover {
-  border-color: var(--accent, #7aa2f7);
+@media (hover: hover) {
+  .ast-controls button:hover {
+    border-color: var(--accent, #7aa2f7);
+  }
 }
 
 .ast-head {
@@ -656,4 +678,136 @@ body {
 
 .boot-error-note code {
   font-family: var(--mono);
+}
+
+/* ---- narrow screens / mobile -------------------------------------
+   Pure CSS: the same markup restyled, no component changes. The H-2
+   law survives — every grid row stays height-bounded, so the textarea
+   remains the editor's scroller and the JS scroll-sync engages as
+   written. */
+
+@media (max-width: 880px) {
+  /* the 3-column grid stacks: chip strip | editor | panes. The mins
+     keep every region usable; overflow-y lets a too-short viewport
+     (a landscape phone) scroll the stack instead of clipping it. */
+  .app-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(180px, 42vh) minmax(160px, 1fr);
+    grid-template-rows: auto minmax(180px, 42dvh) minmax(160px, 1fr);
+    overflow-y: auto;
+  }
+
+  /* the case list becomes a horizontal chip strip: groups side by
+     side, one scrollable row of chips, no sidebar */
+  .case-list {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 10px;
+  }
+
+  .case-list section {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* the sidebar's stacked-section margin has no meaning in a row */
+  .case-list section + section {
+    margin-top: 0;
+  }
+
+  .case-list ul {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  .case-list button {
+    width: auto;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
+    padding: 7px 10px;
+  }
+
+  /* the small mono caption has no room in a chip strip */
+  .case-rfcs {
+    display: none;
+  }
+
+  /* editor + panes: the column separators become row separators */
+  .editor {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .editor-gutter {
+    flex-basis: 32px; /* 3-digit line numbers still fit */
+  }
+
+  .panes {
+    min-height: 0; /* the grid-row twin of the H-2 clamp */
+  }
+
+  /* the status bar wraps onto a second line instead of overflowing */
+  .status-bar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .stat {
+    margin-left: 0; /* no auto-push on a wrapping bar */
+  }
+
+  /* 16px: iOS Safari focuses any smaller input with an auto-zoom
+     (belt to the maximum-scale=1 suspenders in index.html) */
+  .budget input {
+    font-size: 16px;
+  }
+}
+
+/* the header caption is the first thing a narrow screen can lose */
+@media (max-width: 600px) {
+  .app-sub {
+    display: none;
+  }
+}
+
+/* touch: reachable targets; pointer-coarse covers phones and tablets
+   without touching desktop's compact chrome */
+@media (pointer: coarse) {
+  .status-bar button {
+    min-height: 44px;
+    padding: 8px 16px;
+  }
+
+  .pane-bar button {
+    min-height: 40px;
+    padding: 8px 14px;
+  }
+
+  .case-list button {
+    min-height: 40px;
+  }
+
+  .ast-controls button {
+    min-height: 36px;
+    padding: 6px 14px;
+  }
+
+  .ast-toggle {
+    min-width: 24px;
+    min-height: 24px;
+  }
+
+  .budget input {
+    padding: 8px;
+  }
 }

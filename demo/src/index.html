@@ -2,7 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- maximum-scale=1: iOS Safari auto-zooms any sub-16px input on
+         focus — the 12px code editor would jump-zoom on every tap.
+         iOS keeps pinch zoom regardless (accessibility carve-out);
+         Android forgoes pinch but never auto-zoomed. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#14161a" />
     <title>rut playground</title>
   </head>
   <body>
