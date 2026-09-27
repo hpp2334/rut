@@ -11,6 +11,15 @@
 // gets of one key name one cell until a replace re-stores (held
 // pointers keep reading the pre-replace cell; remove nils the map's
 // slot but not an independently held pointer).
+//
+// THE SEAL LAW (phase 2a — no `any` in the crossings): values are
+// never inspected, so they cross as RFC 0014 erasure boxes — `put`
+// seals at the edge (`opaque(v)`; the map retains the box cell), `get`
+// answers the stored box and recovers with `opaque.downcast<V>` (the
+// box IS the `?V`, its payload the inner cell — the aliasing law rides
+// the box). Keys ARE inspected (hashed, kind-admitted), so they stay
+// typed: the KeyLane dispatch below picks the typed key row per K, the
+// `k.hfind(self.t)` precedent carried to the valued lanes.
 
 use nmap_host::{ map_new, map_len,
             map_hput_i, map_hput_u, map_hput_b, map_hput_s, map_hput_y,
@@ -18,6 +27,8 @@ use nmap_host::{ map_new, map_len,
             map_hremove_i, map_hremove_u, map_hremove_b, map_hremove_s, map_hremove_y,
             map_hput_sv, map_hfind_sv, map_hremove_sv,
             map_hvput, map_hvget, map_hvremove,
+            map_hvput_i, map_hvget_i, map_hvremove_i,
+            map_hvput_y, map_hvget_y, map_hvremove_y,
             map_hvput_sv, map_hvget_sv, map_hvremove_sv };
 
 // ---- the private key lane (the h-family's fused crossings) ----------
@@ -27,13 +38,17 @@ use nmap_host::{ map_new, map_len,
 // release + tombstone. Implemented only for the closed key set and
 // not exported — a user type cannot implement or reach it; the class
 // bound is the whole admission. Serves `HashSet`'s whole surface and
-// the map's `has`; the value-carrying ops cannot ride the trait (rut
-// has no generic trait methods) — they take the key as `any` and the
-// host dispatches on the call site's static type.
+// the map's `has`. The valued trio (`hvput`/`hvget`/`hvremove`)
+// dispatches the key the same way; the VALUE never enters the trait
+// (rut has no generic trait methods) — it crosses pre-sealed as the
+// erasure box, and `get`'s `?V` recovery is the caller's downcast.
 trait KeyLane {
     fn hput(self, t: opaque) -> i64;
     fn hfind(self, t: opaque) -> i32;
     fn hremove(self, t: opaque) -> i32;
+    fn hvput(self, t: opaque, v: opaque) -> i64;
+    fn hvget(self, t: opaque) -> ?opaque;
+    fn hvremove(self, t: opaque) -> i32;
 }
 
 // integer members widen into the i/u lanes (sign-extension is the
@@ -42,54 +57,83 @@ impl KeyLane for i8 {
     fn hput(self, t: opaque) -> i64 { return map_hput_i(t, self as i64); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_i(t, self as i64); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_i(t, self as i64); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self as i64, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self as i64); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
 impl KeyLane for i16 {
     fn hput(self, t: opaque) -> i64 { return map_hput_i(t, self as i64); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_i(t, self as i64); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_i(t, self as i64); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self as i64, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self as i64); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
 impl KeyLane for i32 {
     fn hput(self, t: opaque) -> i64 { return map_hput_i(t, self as i64); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_i(t, self as i64); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_i(t, self as i64); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self as i64, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self as i64); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
 impl KeyLane for i64 {
     fn hput(self, t: opaque) -> i64 { return map_hput_i(t, self); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_i(t, self); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_i(t, self); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self); }
 }
 
 impl KeyLane for u8 {
     fn hput(self, t: opaque) -> i64 { return map_hput_u(t, self as u64); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_u(t, self as u64); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_u(t, self as u64); }
+    // the valued bits lane is ONE i64 crossing — the cast keeps the
+    // bits, and bits ARE the key identity (the KeyPayload::Bits law)
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self as i64, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self as i64); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
 impl KeyLane for u16 {
     fn hput(self, t: opaque) -> i64 { return map_hput_u(t, self as u64); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_u(t, self as u64); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_u(t, self as u64); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self as i64, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self as i64); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
 impl KeyLane for u32 {
     fn hput(self, t: opaque) -> i64 { return map_hput_u(t, self as u64); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_u(t, self as u64); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_u(t, self as u64); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self as i64, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self as i64); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
 impl KeyLane for u64 {
     fn hput(self, t: opaque) -> i64 { return map_hput_u(t, self); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_u(t, self); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_u(t, self); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self as i64, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self as i64); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
 impl KeyLane for bool {
     fn hput(self, t: opaque) -> i64 { return map_hput_b(t, self); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_b(t, self); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_b(t, self); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_i(t, self as i64, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_i(t, self as i64); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_i(t, self as i64); }
 }
 
 // `==` on `str`/`bytes` is CONTENT equality (RFC 0012 §4) — the key
@@ -99,12 +143,18 @@ impl KeyLane for str {
     fn hput(self, t: opaque) -> i64 { return map_hput_s(t, self); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_s(t, self); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_s(t, self); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput(t, self, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget(t, self); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove(t, self); }
 }
 
 impl KeyLane for bytes {
     fn hput(self, t: opaque) -> i64 { return map_hput_y(t, self); }
     fn hfind(self, t: opaque) -> i32 { return map_hfind_y(t, self); }
     fn hremove(self, t: opaque) -> i32 { return map_hremove_y(t, self); }
+    fn hvput(self, t: opaque, v: opaque) -> i64 { return map_hvput_y(t, self, v); }
+    fn hvget(self, t: opaque) -> ?opaque { return map_hvget_y(t, self); }
+    fn hvremove(self, t: opaque) -> i32 { return map_hvremove_y(t, self); }
 }
 
 // ---------------------------------------------------- the owners ----
@@ -127,16 +177,22 @@ impl HashMap<K, V> {
     }
 
     // `true` when the key was newly added, `false` when an existing
-    // key's value was replaced (bit 0 of the packed answer).
+    // key's value was replaced (bit 0 of the packed answer). The value
+    // SEALS at this edge (the erasure box, RFC 0014) — the map never
+    // learns what V is.
     pub fn put(mut self, k: K, v: V) -> bool {
-        let ans = map_hvput(self.t, k, v);
+        let ans = k.hvput(self.t, opaque(v));
         return (ans & 1) == 1;
     }
 
     // `nil` = absent (RFC 0005 §10); a hit answers the stored cell
-    // (the aliasing law).
+    // (the aliasing law). The stored box IS the `?V` after the
+    // downcast — its payload is the inner cell, so held results keep
+    // reading the pre-replace value exactly as before.
     pub fn get(self, k: K) -> ?V {
-        return map_hvget(self.t, k);
+        let cell = k.hvget(self.t);
+        if (cell == nil) { return nil; }
+        return opaque.downcast<V>(cell);
     }
 
     pub fn has(self, k: K) -> bool {
@@ -146,7 +202,7 @@ impl HashMap<K, V> {
     // `true` = was present; the held value releases in-crossing.
     // Handles are never reused — a re-insert is a new entry.
     pub fn remove(mut self, k: K) -> bool {
-        return map_hvremove(self.t, k) >= 0;
+        return k.hvremove(self.t) >= 0;
     }
 
     pub fn len(self) -> i32 {
@@ -163,15 +219,19 @@ impl HashMap<K, V> {
     // left intact. Contract: K = str.
 
     /// Insert-or-replace over a byte-range key; `true` = newly added.
-    /// On a replace the stored key keeps its original bytes.
+    /// On a replace the stored key keeps its original bytes. The value
+    /// seals at this edge, as in `put`.
     pub fn put_range(mut self, parent: str, off: i32, len: i32, v: V) -> bool {
-        let ans = map_hvput_sv(self.t, parent, off, len, v);
+        let ans = map_hvput_sv(self.t, parent, off, len, opaque(v));
         return (ans & 1) == 1;
     }
 
-    /// `nil` = absent; a hit answers the stored value (the `get` law).
+    /// `nil` = absent; a hit answers the stored value (the `get` law,
+    /// through the box).
     pub fn get_range(self, parent: str, off: i32, len: i32) -> ?V {
-        return map_hvget_sv(self.t, parent, off, len);
+        let cell = map_hvget_sv(self.t, parent, off, len);
+        if (cell == nil) { return nil; }
+        return opaque.downcast<V>(cell);
     }
 
     pub fn has_range(self, parent: str, off: i32, len: i32) -> bool {

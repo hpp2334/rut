@@ -2,9 +2,11 @@
 //! `nmapset` wrapper drives it — rut code calls the host surface and the
 //! payload lives Rust-side in `Opaque<NativeTable>` (RFC 0023/0026).
 //! (nmap-hostvals P5: the table is a real `HashMap` and the VALUES live
-//! in the entries — the fused h-family keeps `HashSet` fed, the valued
-//! `hv` family carries prim and reference values inside ONE crossing,
-//! and `map_cap` is retired with the sidecar it pre-sized.)
+//! in the entries — the fused h-family keeps `HashSet` fed, and since
+//! the any-lane migration (2a) the valued `hv` family crosses
+//! CONCRETELY: typed keys per flavor, values SEALED as RFC 0014
+//! erasure boxes, and `map_cap` is retired with the sidecar it
+//! pre-sized.)
 //!
 //! Covered per the phase: insert / replace / find / miss / remove with
 //! the packed `(handle << 1) | newly` answers, the dead-handle +
@@ -29,7 +31,7 @@ use nmap_host::{ map_new, map_len,
             map_hput_s, map_hfind_s, map_hremove_s,
             map_hput_y, map_hfind_y, map_hremove_y,
             map_hput_sv, map_hfind_sv, map_hremove_sv,
-            map_hvput, map_hvget, map_hvremove };
+            map_hvput_i, map_hvget_i, map_hvremove_i };
 
 entry fn new_map(cap: i64) -> opaque { return map_new(cap); }
 
@@ -244,28 +246,33 @@ entry fn sv_put_ok(t: opaque) -> i64 {
     return map_hput_sv(t, s, 0, 3);
 }
 
-// ---- the valued lanes (nmap-hostvals P5) ----------------------------
-// the value crosses INSIDE the put as the call site's typed slot; a
-// stored ZERO must read as a hit (the any-answer's tag carries
-// Some-vs-absent, never the raw word), a miss answers nil, replace
-// keeps the handle and stores the new value, remove answers the dead
-// key's handle and kills the value.
+// ---- the valued lanes (nmap-hostvals P5; the seal law, 2a) ----------
+// the value SEALS at the call — `opaque(v)` mints the erasure box, the
+// map stores it, and a hit answers the SAME box (`?opaque`) for the
+// caller's `opaque.downcast<V>` to open: a box holding ZERO still
+// reads as a hit (Some/None is the answer's own tag now, never the
+// raw word), a miss answers nil, replace keeps the handle and stores
+// the new box, remove answers the dead key's handle and kills the box.
 
 entry fn valued_bits(t: opaque) -> i64 {
     let mut fails: i64 = 0;
-    if (map_hvput(t, 1, 0) & 1 != 1) { fails += 1; }        // fresh; value 0
-    let z: ?i64 = map_hvget(t, 1);
-    if (z == nil) { fails += 10; }                          // some(0), never the miss
-    if (z != 0) { fails += 100; }
-    let miss: ?i64 = map_hvget(t, 2);
-    if (miss != nil) { fails += 1000; }                     // the miss
-    if (map_hvput(t, 1, 5) & 1 != 0) { fails += 10000; }    // replace: not newly
-    let v: ?i64 = map_hvget(t, 1);
-    if (v != 5) { fails += 100000; }
-    if (map_hvremove(t, 1) < 0) { fails += 1000000; }
-    let gone: ?i64 = map_hvget(t, 1);
-    if (gone != nil) { fails += 10000000; }
-    if (map_hvremove(t, 1) != -1) { fails += 100000000; }
+    // the box TAGS the payload's type (the downcast law): seal an
+    // explicit i64, or `opaque(0)` faithfully holds the literal's own
+    // default width and downcast<i64> correctly misses
+    if (map_hvput_i(t, 1, opaque(0 as i64)) & 1 != 1) { fails += 1; }   // fresh; the box holds 0
+    let raw = map_hvget_i(t, 1);
+    if (raw == nil) { fails += 10; }                             // a hit, never the miss
+    let z: ?i64 = opaque.downcast<i64>(raw);
+    if (z != 0) { fails += 100; }                                // the box holds a zero
+    if (map_hvget_i(t, 2) != nil) { fails += 1000; }             // the miss
+    if (map_hvput_i(t, 1, opaque(5 as i64)) & 1 != 0) { fails += 10000; }  // replace: not newly
+    let raw2 = map_hvget_i(t, 1);
+    if (raw2 == nil) { fails += 100000; }
+    let v: ?i64 = opaque.downcast<i64>(raw2);
+    if (v != 5) { fails += 1000000; }
+    if (map_hvremove_i(t, 1) < 0) { fails += 10000000; }
+    if (map_hvget_i(t, 1) != nil) { fails += 100000000; }
+    if (map_hvremove_i(t, 1) != -1) { fails += 1000000000; }
     return fails;
 }
 
@@ -273,24 +280,25 @@ entry fn valued_bits(t: opaque) -> i64 {
 // traps loudly — a caller bug, never a silent nil (§0.8 g)
 entry fn empty_read_trap(t: opaque) -> i64 {
     let _ = map_hput_i(t, 7);
-    let v: ?i64 = map_hvget(t, 7);
-    return v;
+    let _ = map_hvget_i(t, 7);   // TRAPS: the placeholder is not a box
+    return 0;
 }
 
-// str values: put retains the arg's OWN cell, get answers it inside a
-// fresh ?box (aliasing IS the cell), and the replace's displaced cell
-// releases exactly once — the balance is measured Rust-side.
+// str values: the put seals the str's cell INSIDE a fresh box, the get
+// answers that box and the downcast opens it (the aliasing law rides
+// the box), and the replace's displaced box releases exactly once —
+// the balance is measured Rust-side.
 entry fn valued_strs(t: opaque) -> i64 {
     let mut fails: i64 = 0;
     let a: str = "alpha-alpha-alpha-alpha";
-    if (map_hvput(t, 1, a) & 1 != 1) { fails += 1; }
-    let got: ?str = map_hvget(t, 1);
+    if (map_hvput_i(t, 1, opaque(a)) & 1 != 1) { fails += 1; }
+    let got: ?str = opaque.downcast<str>(map_hvget_i(t, 1));
     if (got != a) { fails += 10; }
-    if (map_hvput(t, 2, "beta-value") & 1 != 1) { fails += 100; }
-    if (map_hvput(t, 1, "gamma-value") & 1 != 0) { fails += 1000; }   // replace
-    let g: ?str = map_hvget(t, 1);
+    if (map_hvput_i(t, 2, opaque("beta-value")) & 1 != 1) { fails += 100; }
+    if (map_hvput_i(t, 1, opaque("gamma-value")) & 1 != 0) { fails += 1000; }   // replace
+    let g: ?str = opaque.downcast<str>(map_hvget_i(t, 1));
     if (g != "gamma-value") { fails += 10000; }
-    let b: ?str = map_hvget(t, 2);
+    let b: ?str = opaque.downcast<str>(map_hvget_i(t, 2));
     if (b != "beta-value") { fails += 100000; }
     return fails;
 }

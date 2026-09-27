@@ -839,8 +839,21 @@ impl<'a> Ctx<'a> {
             kind: TyKind::Weak { elem },
         })
     }
-    /// `?T` (RFC 0005, RFC 0044) — a nil-able cell (the `mk_array` shape).
+    /// `?T` (RFC 0005, RFC 0044) — a nil-able cell (the `mk_array`
+    /// shape). The three crossing elems answer their BOOT rows (the
+    /// legal-host-returns phase): a source-spelled `?str`/`?bytes`/
+    /// `?opaque` and a `.d.rut` row's `-> ?T` are ONE type — the boot
+    /// id — so a wrapper fn returning a host row's optional widens by
+    /// identity, never by shape (the nominal law). The boot rows ARE
+    /// `Opt { elem }` of exactly these elems, and every program's table
+    /// carries them (boot_len).
     pub fn mk_opt(&mut self, elem: TypeId) -> TypeId {
+        match elem {
+            TY_STR => return TY_OPT_STR,
+            TY_BYTES => return TY_OPT_BYTES,
+            TY_OPAQUE => return TY_OPT_OPAQUE,
+            _ => {}
+        }
         let name = self.intern(&format!("?{}", self.type_name(elem)));
         self.types.intern(RutType {
             name,

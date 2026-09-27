@@ -47,37 +47,36 @@
 //!   unchanged, bit for bit;
 //! - values: `Entry { handle, val: ValSlot }` — every entry's value
 //!   lives IN the entry ([`ValSlot::Empty`] until a valued lane fills
-//!   it): `Bits` for prim values (the untagged 8-byte slot moves
-//!   as-is), `Ref` for reference values (the arg's OWN cell retained
-//!   on store; released on replace/remove/death — the copy/alloc
-//!   laws). The valued lanes are the `hv` family:
-//!   `map_hvput`/`map_hvget`/`map_hvremove` (+ the `_sv` range twins)
-//!   cross the value INSIDE the crossing as the any-arg
-//!   ([`rut_vm::HostVal`] — the raw slot plus the call site's static
-//!   type; a prim value stores `Bits`, a reference value retains its
-//!   origin slot), `map_hvget` answers the stored [`ValSlot`] through
-//!   the any-answer (`None` = the miss = nil; a `?prim` V register
-//!   mints its opt box in `call_host`'s write-back), and
-//!   `map_hvremove` releases the held cell in-crossing. The raw
-//!   `map_val_{set,get}_{u,f}` lanes stay as the bits-only escape
-//!   hatch (exact-arm matched: bits answer bits, `Empty`/`Ref` trap,
-//!   never reinterpret; a `Ref` cell is released on overwrite).
+//!   it). Since the any-lane migration (phase 2a) the valued lanes
+//!   SEAL: the `hv` family's value is RFC 0014's erasure box — the put
+//!   takes over the `v: opaque` param's one reference and the entry
+//!   holds the BOX cell ([`ValSlot::Ref`]; released on replace/remove/
+//!   death — the copy/alloc laws), `map_hvget` answers the stored box
+//!   as `?opaque` (a fresh owning handle; the aliasing law rides the
+//!   box), and a raw [`ValSlot::Bits`] cell — a `map_val_set_*` store
+//!   — is NOT a seal box: a valued get over it traps by name, never a
+//!   reinterpret. The raw `map_val_{set,get}_{u,f}` lanes stay as the
+//!   bits-only escape hatch (exact-arm matched: bits answer bits,
+//!   `Empty`/`Ref` trap, never reinterpret; a `Ref` cell is released
+//!   on overwrite).
 //!
-//! Borrowed keys, end to end: the s/sv/y crossings hand the table a
-//! `&str`/`&[u8]` window (the sv lanes stay zero-copy through
-//! `sv_range`'s house `Invalid` checks), and the any-lane key decode
-//! returns a [`KeyRef`] borrowed from the arg cell — the ONE owned
-//! copy left in the whole surface is a fresh insert. Admission still
-//! runs BEFORE the value decode retains (the leak law), and since no
-//! iteration surface exists (`put/get/has/remove/len` + the range
-//! twins), bucket internals are unobservable.
+//! Keys are TYPED now too (phase 2a): they are INSPECTED — hashed and
+//! kind-admitted — so they cross typed, one row per key flavor (bare =
+//! `str`, `_i` = the bits lane as one `i64` crossing, `_y` = `bytes`),
+//! and the host-side any-key decode is gone. Borrowed keys, end to
+//! end: the s/sv/y crossings hand the table a `&str`/`&[u8]` window
+//! (the sv lanes stay zero-copy through `sv_range`'s house `Invalid`
+//! checks), and the ONE owned copy left in the whole surface is a
+//! fresh insert. Admission still runs BEFORE the value reference is
+//! taken over (the leak law), and since no iteration surface exists
+//! (`put/get/has/remove/len` + the range twins), bucket internals are
+//! unobservable.
 
 use hashbrown::hash_table;
 use hashbrown::HashTable;
 
-use rut_core::types::{PrimTy, TyKind};
-use rut_vm::heap::{cell_of, Heap};
-use rut_vm::interp::{HostRegistry, HostVal, Vm};
+use rut_vm::heap::{Heap};
+use rut_vm::interp::{HostRegistry, Ret, Vm};
 use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot};
 
 /// Which payload flavor the table stores — fixed by the first inserted
@@ -186,13 +185,17 @@ impl<'a> From<&'a KeyVal> for KeyRef<'a> {
 }
 
 /// One entry's value storage: a birth holds [`ValSlot::Empty`] until a
-/// value lane fills it; the valued `hv` lanes store [`ValSlot::Bits`]
-/// (the untagged 8-byte slot moves as-is) or [`ValSlot::Ref`] (the
-/// arg's own cell, retained on store). Every release path — replace,
-/// remove, the raw lanes' overwrite, entry death (`finalize`) — frees
-/// the held cell through the Vm at hand, never a plain Drop (the
-/// release-context law, §0.8 i). The tag is the exact-arm-match law: a
-/// raw bits read TRAPS on `Empty`/`Ref`, never reinterprets.
+/// value lane fills it; the valued `hv` lanes store the SEAL BOX (the
+/// RFC 0014 erasure box cell, [`ValSlot::Ref`] — taken over from the
+/// `v: opaque` param's handle) and the raw `map_val_set_*` lanes store
+/// [`ValSlot::Bits`] (the untagged 8-byte slot). Every release path —
+/// replace, remove, the raw lanes' overwrite, entry death
+/// (`finalize`) — frees the held cell through the Vm at hand, never a
+/// plain Drop (the release-context law, §0.8 i); releasing a box cell
+/// walks its payload with it (RFC 0016 §3). The tag is the
+/// exact-arm-match law: a raw bits read TRAPS on `Empty`/`Ref`, never
+/// reinterprets, and a valued get TRAPS on `Bits` (bits are not a
+/// seal box).
 pub(crate) struct Entry {
     /// the key's stable birth index — monotonic, never recycled
     pub(crate) handle: i32,
@@ -329,11 +332,11 @@ impl NativeTable {
     /// new (same handle, `newly = false`, no key copy); `Vacant` → a
     /// fresh monotonic birth holding `val` (`newly = true`, the one
     /// materialization). The packed answer is bit-for-bit the
-    /// h-family's. `val` arrives pre-decoded ([`decode_val`]: prim →
-    /// `Bits`, ref → the origin cell retained) with admission already
-    /// checked — `check_kind` ran BEFORE the retain, so a trapped
-    /// mixed-kind put cannot leak it (this method re-admits as
-    /// defense).
+    /// h-family's. `val` arrives pre-owned — the row took over the
+    /// sealed box's one reference ([`seal_transfer`]) with admission
+    /// already checked — `check_kind` ran BEFORE the transfer, so a
+    /// trapped mixed-kind put cannot strand it (this method re-admits
+    /// as defense).
     fn hvput_ref(&mut self, vm: &Vm, key: KeyRef<'_>, val: ValSlot) -> Result<i64, Trap> {
         self.admit(key.kind())?;
         let h = key.hash();
@@ -361,10 +364,7 @@ impl NativeTable {
     /// old value in-crossing and store the new (same handle, `newly =
     /// false`); `Vacant` → a fresh monotonic birth holding `val`
     /// (`newly = true`). The packed answer is bit-for-bit the h-family's.
-    /// `val` arrives pre-decoded ([`decode_val`]: prim → `Bits`, ref →
-    /// the origin cell retained) with admission already checked —
-    /// `check_kind` ran BEFORE the retain, so a trapped mixed-kind put
-    /// cannot leak it (this method re-admits as defense).
+    /// `val` arrives pre-owned — see [`NativeTable::hvput_ref`].
     pub fn hvput(&mut self, vm: &Vm, kind: KeyKind, key: KeyVal, val: ValSlot) -> Result<i64, Trap> {
         self.admit(kind)?;
         self.hvput_ref(vm, KeyRef::from(&key), val)
@@ -372,12 +372,12 @@ impl NativeTable {
 
     /// The valued get (the `map_hvget` body), the BORROWED core: one
     /// `find` over the window; the stored [`ValSlot`] answers AS-IS —
-    /// `Bits` moves the 8 bytes, `Ref` names the STORED cell (aliasing
-    /// IS the cell: the `?V` register write-back retains its own
-    /// reference and the store keeps its own, the ArrGet shape). Absent
-    /// → `None` (the miss crosses as nil). An `Empty` entry — an
-    /// h-family birth read through a valued lane — TRAPS loudly
-    /// (§0.8 g: a caller bug, never a silent nil).
+    /// the row converts a `Ref` (the seal box) into an owning `?opaque`
+    /// handle, traps on `Bits` (a raw `map_val_set_*` store is not a
+    /// seal box), and traps on `Empty`. Absent → `None` (the miss
+    /// crosses as nil). An `Empty` entry — an h-family birth read
+    /// through a valued lane — TRAPS loudly (§0.8 g: a caller bug,
+    /// never a silent nil).
     fn hvget_ref(&self, key: KeyRef<'_>) -> Result<Option<ValSlot>, Trap> {
         self.admit(key.kind())?;
         match self.map.find(key.hash(), |it| key.eq_val(&it.0)) {
@@ -397,21 +397,21 @@ impl NativeTable {
     }
 
     /// The valued get (the `map_hvget` body): the stored [`ValSlot`]
-    /// answers AS-IS — `Bits` moves the 8 bytes, `Ref` names the
-    /// STORED cell (aliasing IS the cell: the `?V` register write-back
-    /// retains its own reference and the store keeps its own, the
-    /// ArrGet shape). Absent → `None` (the miss crosses as nil). An
-    /// `Empty` entry — an h-family birth read through a valued lane —
-    /// TRAPS loudly (§0.8 g: a caller bug, never a silent nil).
+    /// answers AS-IS — the ROW turns a `Ref` (the seal box) into the
+    /// `?opaque` answer; see [`NativeTable::hvget_ref`]. Absent →
+    /// `None` (the miss crosses as nil). An `Empty` entry — an
+    /// h-family birth read through a valued lane — TRAPS loudly (§0.8
+    /// g: a caller bug, never a silent nil).
     pub fn hvget(&self, kind: KeyKind, key: &KeyVal) -> Result<Option<ValSlot>, Trap> {
         self.admit(kind)?;
         self.hvget_ref(KeyRef::from(key))
     }
 
-    /// The admission check the valued put lanes run BEFORE decoding
-    /// (and retaining) the value: a trapped mixed-kind crossing must
-    /// not leak a retain it has not taken yet. [`NativeTable::hvput`]
-    /// re-admits internally as defense.
+    /// The admission check the valued put lanes run BEFORE taking over
+    /// the sealed box's reference ([`seal_transfer`]): a trapped
+    /// mixed-kind crossing must not strand a reference it has not been
+    /// given yet. [`NativeTable::hvput`] re-admits internally as
+    /// defense.
     pub fn check_kind(&self, kind: KeyKind) -> Result<(), Trap> {
         self.admit(kind)
     }
@@ -561,85 +561,47 @@ impl HostPayload for NativeTable {
 /// `Ref` cells release through the Vm at hand; `Bits`/`Empty` are raw
 /// words (and the placeholder) with nothing to free. The displaced tag
 /// becomes `Empty` first, so the caller's store/overwrite/drop can
-/// never double-release.
+/// never double-release. Since the seal law the `Ref` arm frees the
+/// erasure box — the box's own release walks its payload (RFC 0016
+/// §3), so the wrapper's V dies with its box exactly as it used to.
 fn release_val(vm: &Vm, val: &mut ValSlot) {
     if let ValSlot::Ref(s) = std::mem::replace(val, ValSlot::Empty) {
         vm.release(s);
     }
 }
 
-/// The any-arg KEY decode (`map_hvput`/`map_hvget`/`map_hvremove`): the
-/// CALL SITE's static type classifies the key (§0.8 m — rut types live
-/// in the VM, never in Rust), and the closed set admits exactly what
-/// the h-family's typed lanes admit — integer primitives and `bool`
-/// as the register word's raw bits (the sign/zero-extension law: the
-/// slot already holds the canonical i64-width word, so `-1i8` and
-/// `255u8` land on the same bits the typed lanes cast to), `str`/
-/// `bytes` as a BORROWED window over the cell's octets (nmap-borrow-
-/// probe: no copy — a str VIEW key reads as its window, the s lane's
-/// law). The borrow's lifetime is the arg's; the cell outlives the
-/// probe under the crossing's retention contract (the caller's
-/// register owns the reference, the arena never moves cells — the
-/// same trust the `&str` param read runs on). Floats are REFUSED (no
-/// stable equality contract, as in mapset); everything else traps by
-/// name.
-fn decode_key<'a>(vm: &Vm, hv: &'a HostVal) -> Result<KeyRef<'a>, Trap> {
-    match vm.prog.types.kind(hv.ty) {
-        TyKind::Prim(p) if p.is_int() || *p == PrimTy::Bool => {
-            Ok(KeyRef::Bits(unsafe { hv.slot.i } as u64))
-        }
-        TyKind::Prim(p) => Err(Trap::new(
-            TrapKind::Invalid,
-            format!(
-                "nmap: key type {} is not in the closed key set (floats have no stable equality contract)",
-                p.name()
-            ),
-        )),
-        TyKind::Str => Ok(KeyRef::Str(cell_of(hv.slot).as_str())),
-        TyKind::Bytes => Ok(KeyRef::Bytes(cell_of(hv.slot).bytes_view())),
-        other => Err(Trap::new(
-            TrapKind::Invalid,
-            format!(
-                "nmap: key type {} is not in the closed key set (integer primitives, bool, str, bytes)",
-                ty_label(other)
-            ),
-        )),
-    }
+/// The seal handoff (phase 2a): the `v: opaque` param arrives as an
+/// OWNED handle — the boundary's read took one reference — and the
+/// entry takes it over verbatim (`into_slot`'s TRANSFER, no extra
+/// retain; the crossing-ownership law). Called only AFTER admission
+/// and the sv range check: until the transfer the handle's own Drop
+/// releases, so a trapped crossing strands nothing (the leak law, in
+/// its new spelling).
+fn seal_transfer(v: OpaqueRef, vm: &mut Vm) -> Result<ValSlot, Trap> {
+    Ok(ValSlot::Ref(v.into_slot(vm)?))
 }
 
-/// A static type label for the key-refusal diagnostics.
-fn ty_label(kind: &TyKind) -> &'static str {
-    match kind {
-        TyKind::Nil => "nil",
-        TyKind::Prim(p) => p.name(),
-        TyKind::Str => "str",
-        TyKind::Bytes => "bytes",
-        TyKind::Array { .. } => "an array",
-        TyKind::Enum { .. } => "an enum",
-        TyKind::Data { .. } => "a record",
-        TyKind::TraitObj { .. } => "a trait object",
-        TyKind::Opaque => "an opaque",
-        TyKind::Trace => "a stack trace",
-        TyKind::StrBuf => "a StrBuf",
-        TyKind::Weak { .. } => "a weak box",
-        TyKind::Opt { .. } => "an optional",
-        TyKind::Fn { .. } => "a fn value",
-    }
-}
-
-/// The any-arg VALUE decode — the plan's P3 decode, verbatim shape (the
-/// copy/alloc laws): a prim value's 8 bytes move as-is (`Bits` — zero
-/// cells, zero copy, f64 riding the slot's `f` field, §0.8 f); every
-/// reference kind retains its ORIGIN slot in-crossing (`Ref` — a str
-/// VIEW arg stores the view's own cell; identity IS the cell). Called
-/// only AFTER admission, so a trapped put never takes the retain.
-fn decode_val(vm: &mut Vm, hv: &HostVal) -> Result<ValSlot, Trap> {
-    match vm.prog.types.kind(hv.ty) {
-        TyKind::Prim(_) => Ok(ValSlot::Bits(hv.slot)),
-        _ => {
-            vm.retain(hv.slot);
-            Ok(ValSlot::Ref(hv.slot))
-        }
+/// The `?opaque` answer (phase 2a): the stored cell as an owning box
+/// handle. `None` is the miss (the flat nil at the crossing); a `Ref`
+/// bumps once — the register owns the new reference, the store keeps
+/// its own (the aliasing law, now riding the box). A `Bits` cell is a
+/// raw `map_val_set_*` store, NOT a seal box — trap by name, never a
+/// reinterpret; `Empty` is the §0.8 g caller-bug trap (hvget_ref
+/// already refuses it; kept as defense).
+fn seal_answer(vm: &Vm, stored: Option<ValSlot>) -> Result<Option<OpaqueRef>, Trap> {
+    match stored {
+        None => Ok(None),
+        // Ret::from_slot IS the read: an owning handle over the box's
+        // slot word (one bump, TY_OPAQUE-checked)
+        Some(ValSlot::Ref(s)) => Ok(Some(OpaqueRef::from_slot(vm, s, rut_core::types::TY_OPAQUE)?)),
+        Some(ValSlot::Bits(_)) => Err(Trap::new(
+            TrapKind::Invalid,
+            "nmap: the stored value is raw bits (a `map_val_set_*` store), not a seal box — read it through the raw lanes (the valued lanes answer sealed boxes only)",
+        )),
+        Some(ValSlot::Empty) => Err(Trap::new(
+            TrapKind::Invalid,
+            "nmap: valued get over the `Empty` placeholder (an hput birth holds no value — a valued read of it is a caller bug, §0.8 g)",
+        )),
     }
 }
 
@@ -1046,87 +1008,153 @@ pub fn install_std_nmap(hosts: &mut HostRegistry) {
         },
     );
 
-    // ---- the valued lanes (nmap-hostvals P5) ---------------------------
-    // Six crossings `map_hv{put,get,remove}` (+ the `_sv` range twins):
-    // the value crosses INSIDE the put as the any-arg (`HostVal` — the
-    // raw slot plus the CALL SITE's static type; prim → `Bits`, the 8
-    // bytes as-is; reference → the origin cell retained, `Ref` — a str
-    // VIEW value stores the view's own cell), ONE crossing per op. The
-    // KEY crosses as `any` too: the wrapper's private KeyLane trait
-    // cannot carry a generic V (rut has no generic trait methods), so
-    // the typed-lane dispatch lives HOST-side — the site type
-    // classifies the key against the SAME closed set the h-family
-    // admits (floats refused; prim bits, str/bytes octets — the sign/
-    // zero-extension and content laws bit-identical), and the
-    // admission trap fires before any value cell is retained.
+    // ---- the valued lanes (nmap-hostvals P5; typed at phase 2a) ----
+    // Twelve crossings — `map_hv{put,get,remove}` in THREE key flavors
+    // (bare = `str`, `_i` = the bits lane, one `i64` crossing for every
+    // integer primitive and `bool` — the casts keep the bits, and bits
+    // ARE the key identity — `_y` = `bytes`) plus the `_sv` range
+    // twins. KEYS are INSPECTED (hashed, kind-admitted) so they stay
+    // TYPED; VALUES are never inspected, so they SEAL (RFC 0014): the
+    // put's `v: opaque` is the wrapper's `opaque(v)` erasure box, the
+    // entry takes over the param handle's one reference
+    // ([`seal_transfer`], after admission — the leak law), and the get
+    // answers `?opaque` — the STORED box ([`seal_answer`]; nil =
+    // absent).
     //
-    // - `map_hvput`: the entry API with the value inside — replace
-    //   releases the old value in-crossing, a fresh birth holds it;
+    // - `*_hvput*`: the entry API with the box inside — replace
+    //   releases the old box in-crossing, a fresh birth holds the new;
     //   the packed `(handle << 1) | newly` answer is bit-identical to
     //   the h-family's.
-    // - `map_hvget`: the any-answer — `None` crosses as the flat nil;
-    //   `Bits` moves the 8 bytes (a `?prim` V register mints its own
-    //   opt box in call_host's write-back, the ArrGet{OptPrim} shape);
-    //   `Ref` names the STORED cell (aliasing IS the cell — the
-    //   `get -> ?V` one-cell law); `Empty` — an h-family birth read
-    //   through a valued lane — TRAPS loudly (§0.8 g).
-    // - `map_hvremove`: the held cell releases in-crossing; the dead
+    // - `*_hvget*`: the stored box as `?opaque` — a fresh owning
+    //   handle, the register's rc (the aliasing law rides the box); a
+    //   `Bits` cell traps by name (never a reinterpret), an `Empty`
+    //   h-family birth TRAPS loudly (§0.8 g).
+    // - `*_hvremove*`: the held box releases in-crossing; the dead
     //   key's handle answers, `-1` when absent.
+
+    // the str lane (the bare names)
     rut_vm::register!(
         hosts,
         "nmap_host::map_hvput",
-        (Opaque<NativeTable>, HostVal, HostVal) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: HostVal, v: HostVal| -> Result<i64, Trap> {
-            let key = decode_key(vm, &k)?;
+        (Opaque<NativeTable>, &str, OpaqueRef) -> i64,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: &str, v: OpaqueRef| -> Result<i64, Trap> {
             b.with_mut(vm, |vm, t| {
-                // the admission check runs BEFORE `decode_val` retains
-                // (the leak law) — unchanged, keyed off the borrowed key
-                t.check_kind(key.kind())?;
-                let val = decode_val(vm, &v)?;
-                t.hvput_ref(vm, key, val)
+                // admission BEFORE the transfer: a trapped put strands
+                // nothing — until `seal_transfer` the handle's own Drop
+                // releases (the leak law)
+                t.check_kind(KeyKind::Str)?;
+                let sealed = seal_transfer(v, vm)?;
+                t.hvput_ref(vm, KeyRef::Str(k), sealed)
             })?
         },
     );
     rut_vm::register!(
         hosts,
         "nmap_host::map_hvget",
-        (Opaque<NativeTable>, HostVal) -> Option<ValSlot>,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: HostVal| -> Result<Option<ValSlot>, Trap> {
-            let key = decode_key(vm, &k)?;
-            b.with(|t| t.hvget_ref(key))?
+        (Opaque<NativeTable>, &str) -> Option<OpaqueRef>,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<Option<OpaqueRef>, Trap> {
+            let stored = b.with(|t| t.hvget_ref(KeyRef::Str(k)))??;
+            seal_answer(vm, stored)
         },
     );
     rut_vm::register!(
         hosts,
         "nmap_host::map_hvremove",
-        (Opaque<NativeTable>, HostVal) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, k: HostVal| -> Result<i32, Trap> {
-            let key = decode_key(vm, &k)?;
-            b.with_mut(vm, |vm, t| t.hremove_ref(vm, key))?
+        (Opaque<NativeTable>, &str) -> i32,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: &str| -> Result<i32, Trap> {
+            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Str(k)))?
+        },
+    );
+
+    // the bits lane — one `i64` crossing for every integer primitive
+    // and `bool` (the wrapper casts; the bits are the identity)
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hvput_i",
+        (Opaque<NativeTable>, i64, OpaqueRef) -> i64,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: i64, v: OpaqueRef| -> Result<i64, Trap> {
+            b.with_mut(vm, |vm, t| {
+                t.check_kind(KeyKind::Bits)?;
+                let sealed = seal_transfer(v, vm)?;
+                t.hvput_ref(vm, KeyRef::Bits(k as u64), sealed)
+            })?
         },
     );
     rut_vm::register!(
         hosts,
+        "nmap_host::map_hvget_i",
+        (Opaque<NativeTable>, i64) -> Option<OpaqueRef>,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<Option<OpaqueRef>, Trap> {
+            let stored = b.with(|t| t.hvget_ref(KeyRef::Bits(k as u64)))??;
+            seal_answer(vm, stored)
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hvremove_i",
+        (Opaque<NativeTable>, i64) -> i32,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: i64| -> Result<i32, Trap> {
+            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bits(k as u64)))?
+        },
+    );
+
+    // the bytes lane
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hvput_y",
+        (Opaque<NativeTable>, &[u8], OpaqueRef) -> i64,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8], v: OpaqueRef| -> Result<i64, Trap> {
+            b.with_mut(vm, |vm, t| {
+                t.check_kind(KeyKind::Bytes)?;
+                let sealed = seal_transfer(v, vm)?;
+                t.hvput_ref(vm, KeyRef::Bytes(k), sealed)
+            })?
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hvget_y",
+        (Opaque<NativeTable>, &[u8]) -> Option<OpaqueRef>,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<Option<OpaqueRef>, Trap> {
+            let stored = b.with(|t| t.hvget_ref(KeyRef::Bytes(k)))??;
+            seal_answer(vm, stored)
+        },
+    );
+    rut_vm::register!(
+        hosts,
+        "nmap_host::map_hvremove_y",
+        (Opaque<NativeTable>, &[u8]) -> i32,
+        |vm: &mut Vm, b: Opaque<NativeTable>, k: &[u8]| -> Result<i32, Trap> {
+            b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Bytes(k)))?
+        },
+    );
+
+    // the `_sv` range twins — the key is a borrowed `(parent, off,
+    // len)` BYTE range (the house UTF-8 boundary traps; the range runs
+    // BEFORE the transfer, as admission does)
+    rut_vm::register!(
+        hosts,
         "nmap_host::map_hvput_sv",
-        (Opaque<NativeTable>, &str, i32, i32, HostVal) -> i64,
-        |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32, v: HostVal| -> Result<i64, Trap> {
+        (Opaque<NativeTable>, &str, i32, i32, OpaqueRef) -> i64,
+        |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32, v: OpaqueRef| -> Result<i64, Trap> {
             let range = sv_range(parent, off, len)?;
             let key = KeyRef::Str(range);
             b.with_mut(vm, |vm, t| {
-                // admission before the retain, as everywhere (leak law)
+                // admission before the transfer, as everywhere (leak law)
                 t.check_kind(key.kind())?;
-                let val = decode_val(vm, &v)?;
-                t.hvput_ref(vm, key, val)
+                let sealed = seal_transfer(v, vm)?;
+                t.hvput_ref(vm, key, sealed)
             })?
         },
     );
     rut_vm::register!(
         hosts,
         "nmap_host::map_hvget_sv",
-        (Opaque<NativeTable>, &str, i32, i32) -> Option<ValSlot>,
-        |_vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<Option<ValSlot>, Trap> {
+        (Opaque<NativeTable>, &str, i32, i32) -> Option<OpaqueRef>,
+        |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<Option<OpaqueRef>, Trap> {
             let range = sv_range(parent, off, len)?;
-            b.with(|t| t.hvget_ref(KeyRef::Str(range)))?
+            let stored = b.with(|t| t.hvget_ref(KeyRef::Str(range)))??;
+            seal_answer(vm, stored)
         },
     );
     rut_vm::register!(
@@ -1447,39 +1475,66 @@ mod tests {
         }
     }
 
-    // ---- the valued hv lanes (nmap-hostvals P5) ------------------------
+    // ---- the valued hv lanes (nmap-hostvals P5; the seal law, 2a) ------
 
-    /// The valued lanes' bits law end to end: `hvput` stores `Bits` (the
-    /// 8 bytes move as-is — a stored ZERO must read back as some(0),
-    /// never as the miss), `hvget` answers `None` on a miss, replace
-    /// releases-and-stores with the SAME handle and `newly = false`,
-    /// `hremove` (the `map_hvremove` body) answers the dead key's
-    /// handle and kills the value, and the EMPTY trap fires when an
-    /// h-family birth is read through a valued lane (§0.8 g). Float
-    /// keys are refused on the any lanes (no stable equality contract).
+    /// The valued lanes' storage law end to end: a stored box (the
+    /// RFC 0014 erasure box, `Ref`) round-trips by IDENTITY — `hvget`
+    /// answers the SAME cell, two gets name one box (the aliasing
+    /// law) — a miss is `None`, replace releases-and-stores with the
+    /// SAME handle and `newly = false`, `hremove` (the `map_hvremove`
+    /// body) answers the dead key's handle and frees the box (the
+    /// inner str with it — the heap balance closes), and the EMPTY
+    /// trap fires when an h-family birth is read through a valued
+    /// lane (§0.8 g). A raw `Bits` cell still answers at the CORE
+    /// level (the raw lanes store it), while [`seal_answer`] — the
+    /// row's `?opaque` conversion — refuses it by name.
     #[test]
-    fn the_valued_lanes_round_trip_bits_trap_on_empty_and_refuse_float_keys() {
-        let vm = bare_vm();
+    fn the_valued_lanes_round_trip_boxes_trap_on_empty_and_refuse_raw_bits_at_the_row() {
+        let mut vm = bare_vm();
         let mut t = NativeTable::new(8);
-        // a stored zero is NOT the miss: the any-answer's tag carries it
+        let base = vm.heap_usage();
+        // seal a value the way the rows do: mint a box, take a handle,
+        // hand the rc across with [`seal_transfer`] (the same helper
+        // the `v: opaque` registrations run; two boxes of one payload
+        // type — equal charges, exact deltas)
+        let b0 = Opaque::alloc(&mut vm, 7i64).unwrap();
+        let p0 = b0.handle().ptr();
+        let sealed0 = seal_transfer(b0.handle().clone(), &mut vm).unwrap();
+        let held = vm.heap_usage();
+        assert!(held > base, "the box charges its payload: {base} -> {held}");
+        // a stored box reads back as the SAME cell — never a copy
         let ans = t
-            .hvput(&vm, KeyKind::Bits, bits(0), ValSlot::Bits(Slot::int(0)))
+            .hvput(&vm, KeyKind::Bits, bits(0), sealed0)
             .unwrap();
         assert_eq!(ans, pack_answer(0, true), "fresh birth");
-        match t.hvget(KeyKind::Bits, &bits(0)).unwrap() {
-            Some(ValSlot::Bits(s)) => assert_eq!(unsafe { s.i }, 0, "some(0), never nil"),
-            other => panic!("expected Bits, got {other:?}"),
+        drop(b0); // the mint rc folds; the store's own rc holds the box
+        assert_eq!(vm.heap_usage(), held, "the store took over the box's rc, no new charge");
+        let stored = t.hvget(KeyKind::Bits, &bits(0)).unwrap();
+        match stored {
+            Some(ValSlot::Ref(s)) => assert!(unsafe { s.r } == p0, "identity"),
+            other => panic!("expected Ref, got {other:?}"),
         }
-        assert_eq!(t.hvget(KeyKind::Bits, &bits(1)).unwrap(), None, "the miss");
-        // replace: same handle, newly = false, the new bits stored
+        let again = t.hvget(KeyKind::Bits, &bits(0)).unwrap();
+        assert_eq!(stored, again, "two gets, one cell");
+        // the row's ?opaque conversion: a fresh OWNING handle over the
+        // same box (the register's rc; the store keeps its own)
+        let handle = seal_answer(&vm, stored).unwrap().expect("some");
+        assert!(handle.ptr() == p0);
+        drop(handle); // the extra rc folds away
+        assert_eq!(vm.heap_usage(), held, "the answer's rc released");
+        // the miss is None
+        assert_eq!(t.hvget(KeyKind::Bits, &bits(1)).unwrap(), None);
+        // replace: same handle, newly = false, the new box stored —
+        // the displaced box releases in-crossing
+        let b1 = Opaque::alloc(&mut vm, 9i64).unwrap();
+        let sealed1 = seal_transfer(b1.handle().clone(), &mut vm).unwrap();
+        drop(b1);
+        let before_replace = vm.heap_usage();
         let ans = t
-            .hvput(&vm, KeyKind::Bits, bits(0), ValSlot::Bits(Slot::int(7)))
+            .hvput(&vm, KeyKind::Bits, bits(0), sealed1)
             .unwrap();
         assert_eq!(ans, pack_answer(0, false), "replace");
-        match t.hvget(KeyKind::Bits, &bits(0)).unwrap() {
-            Some(ValSlot::Bits(s)) => assert_eq!(unsafe { s.i }, 7),
-            other => panic!("expected Bits, got {other:?}"),
-        }
+        assert_eq!(vm.heap_usage(), held, "the displaced box freed in-crossing (equal charges)");
         // the h-family placeholder: an hput birth read through a valued
         // lane TRAPS loudly (§0.8 g)
         let ans = t.hput(KeyKind::Bits, bits(9)).unwrap();
@@ -1492,16 +1547,25 @@ mod tests {
             .hvput(&vm, KeyKind::Bits, bits(9), ValSlot::Bits(Slot::int(90)))
             .unwrap();
         assert_eq!(ans, pack_answer(hd, false), "the birth's handle, not newly");
-        // remove answers the dead key's handle; the value dies with it
+        // remove answers the dead key's handle; the box dies with it
         assert_eq!(t.hremove(&vm, KeyKind::Bits, &bits(0)).unwrap(), 0);
         assert_eq!(t.hvget(KeyKind::Bits, &bits(0)).unwrap(), None);
         assert_eq!(t.hremove(&vm, KeyKind::Bits, &bits(0)).unwrap(), -1);
-        // float keys are refused before anything is stored
-        let fslot = Slot::float(1.5);
-        let fkey = HostVal { slot: fslot, ty: rut_core::types::TY_F64 };
-        let err = decode_key(&vm, &fkey).unwrap_err();
-        assert!(err.msg.contains("floats have no stable equality contract"), "{}", err.msg);
-        // the table never saw the refused key
+        assert_eq!(vm.heap_usage(), base, "the removed key's box freed in-crossing");
+        // a raw `map_val_set_*` store is BITS, not a seal box: the core
+        // answers it (storage is value-shape-agnostic), the row's
+        // ?opaque conversion refuses it by name
+        t.val_set_u(&vm, hd, 90).unwrap();
+        match t.hvget(KeyKind::Bits, &bits(9)).unwrap() {
+            Some(ValSlot::Bits(s)) => assert_eq!(unsafe { s.i }, 90),
+            other => panic!("expected Bits at the core, got {other:?}"),
+        }
+        let err = seal_answer(&vm, t.hvget(KeyKind::Bits, &bits(9)).unwrap()).unwrap_err();
+        assert!(err.msg.contains("raw bits") && err.msg.contains("not a seal box"), "{}", err.msg);
+        // floats never reach the table: the typed key rows admit only
+        // the closed set (str/bits/bytes), so there is no float key
+        // crossing left to refuse — the admission trap is the wrapper's
+        // union bound (compile time), not a host decode
         assert_eq!(t.len(), 1, "nine survives; zero was removed");
     }
 
@@ -1509,7 +1573,10 @@ mod tests {
     /// with growth, replaces, removes, re-adds — driven through
     /// `hvput`/`hvget`/`hremove` must agree with a std `HashMap`
     /// reference on every observable (the live set, each key's value,
-    /// len, the handle identity), with Bits values throughout.
+    /// len, the handle identity). Values ride the raw `Bits` spelling
+    /// here — the core storage is value-shape-agnostic (the raw
+    /// `map_val_set_*` lanes store the same field); the row-level seal
+    /// law is the box test above and the rut-cli end-to-end suite.
     #[test]
     fn the_valued_lanes_match_a_reference_map() {
         let vm = bare_vm();
