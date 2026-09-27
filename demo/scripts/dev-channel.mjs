@@ -18,7 +18,27 @@ const TUNNEL_URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i;
 const devServer = spawn('rspack', ['serve'], { stdio: 'inherit' });
 const tunnel = spawn(
   'cloudflared',
-  ['tunnel', '--url', `http://localhost:${PORT}`],
+  [
+    'tunnel',
+    // http2, not the quic default: quick tunnels ride UDP 7844 only in
+    // quic mode, and restrictive NATs (the kind a demo room has) drop
+    // it — the self-check then registers ONE half-alive connection the
+    // edge never routes to (the empty-404 symptom). http2 rides TCP 443
+    // like every other HTTPS flow, so it survives where quic cannot.
+    '--protocol',
+    'http2',
+    // a config file of our own (empty): cloudflared picks up
+    // ~/.cloudflared/config.yml otherwise, and ANY leftover ingress
+    // there — with its http_status:404 catch-all — silently WINS over
+    // --url. The symptom is cruel: the tunnel registers, the URL is
+    // served, and every request is answered 404 by cloudflared itself
+    // (originService=http_status:404 in the debug log). /dev/null is
+    // empty, so --url is the whole ingress again.
+    '--config',
+    '/dev/null',
+    '--url',
+    `http://localhost:${PORT}`,
+  ],
   // cloudflared logs (including the URL) on stderr; keep stdout clear
   { stdio: ['ignore', 'ignore', 'pipe'] },
 );
