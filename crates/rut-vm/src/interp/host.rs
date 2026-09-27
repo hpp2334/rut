@@ -181,6 +181,12 @@ impl HostRegistry {
                 // the `any` crossing (nmap-hostvals P3): named from the
                 // CONST — the boot row's name is the Nil shell, never read
                 rut_core::types::TY_VAL => "any",
+                // the answer optionals (the legal-host-returns phase): the
+                // same law — the boot rows carry their elem's shell name,
+                // the `?` shape is named from the CONST
+                rut_core::types::TY_OPT_STR => "?str",
+                rut_core::types::TY_OPT_BYTES => "?bytes",
+                rut_core::types::TY_OPT_OPAQUE => "?opaque",
                 _ => return format!("#{t:?}"),
             }
             .to_string()

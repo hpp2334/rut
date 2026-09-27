@@ -16,11 +16,10 @@
 //! 4xx/5xx) is NOT a transport failure: `err` stays nil.
 //!
 //! The readback rows answer through the ANY lane (the `map_hvget`
-//! precedent, nmap-hostvals P3): the engine's verified-return table
-//! cannot bind a `?str`/`bytes` host answer (`Ret for Option<String>`/
-//! `Vec<u8>` is the read direction only, and `crossing_ty` refuses
-//! `?T` at the decl), so the host answers the CALLER's static V — a
-//! `?str` dst reads the err answer (nil unless status 0), a `bytes`
+//! precedent, nmap-hostvals P3): written before the answer lanes
+//! existed (`Ret for Option<String>` was the read direction only, and
+//! the decl refused `?T`), so the host answers the CALLER's static V —
+//! a `?str` dst reads the err answer (nil unless status 0), a `bytes`
 //! dst reads the body octets (§0.8 h's trust law, documented at the
 //! decl site). Each answer mints a fresh cell whose claim the payload
 //! KEEPS (`finalize` releases it at store-entry death) — the store-

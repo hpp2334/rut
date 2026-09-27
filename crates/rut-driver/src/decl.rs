@@ -13,7 +13,8 @@
 use rut_ast::ast::{AnyTy, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
 use rut_core::types::{
     TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL,
-    TY_OPAQUE, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8, TY_VAL,
+    TY_OPAQUE, TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
+    TY_VAL,
 };
 use rut_parser::{parse, Mode};
 
@@ -52,8 +53,27 @@ fn crossing_ty(name: &str) -> Option<TypeId> {
     })
 }
 
+/// The ANSWER-position crossing table (the legal-host-returns phase):
+/// the plain crossing set plus the three answer optionals — `?str`,
+/// `?bytes`, `?opaque` cross back nil-flattened (RFC 0023 §1's
+/// optionals law), each mapped to its fixed boot `Opt` row so the
+/// registry's `Option<T>` SIG verifies against the same CONST (the RFC
+/// 0025 join compares ids by identity). Params stay on the plain table:
+/// the host side has no `Option` param impls yet, and admitting the
+/// spelling there would strand the row at registration.
+fn crossing_ret_ty(name: &str) -> Option<TypeId> {
+    Some(match name {
+        "?str" => TY_OPT_STR,
+        "?bytes" => TY_OPT_BYTES,
+        "?opaque" => TY_OPT_OPAQUE,
+        _ => return crossing_ty(name),
+    })
+}
+
 /// Render a host signature's type node as text for diagnostics — a
-/// host signature is bare names; a nested shape reports as such.
+/// host signature is bare names over the crossing set; a nested shape
+/// reports as such. `?T` renders as `?` + its inner's text (the answer
+/// optionals are the one legal nesting).
 fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
     match ast.ty(h) {
         TypeKind::TyPath { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
@@ -62,6 +82,7 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         TypeKind::TyPath { segs } => {
             segs.iter().map(|s| ast.name(s.name)).collect::<Vec<_>>().join("::")
         }
+        TypeKind::TyOpt { inner } => format!("?{}", ty_text(ast, *inner)),
         _ => "<a nested type>".to_string(),
     }
 }
@@ -107,9 +128,9 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
         let rty = match ret {
             Some(r) => {
                 let tyname = ty_text(&ast, *r);
-                crossing_ty(&tyname).ok_or_else(|| {
+                crossing_ret_ty(&tyname).ok_or_else(|| {
                     format!(
-                        "{origin}: host fn `{fname}`: return `{tyname}` is not a crossing type (RFC 0023 §1)"
+                        "{origin}: host fn `{fname}`: return `{tyname}` is not a crossing type — returns cross over primitives, `str`, `bytes`, `opaque`, the host-decl-only `any`, and the answer optionals `?str`/`?bytes`/`?opaque` (RFC 0023 §1)"
                     )
                 })?
             }

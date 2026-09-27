@@ -4,16 +4,18 @@
 //! the crate. Owned impls (`String`, `Vec<u8>`) are the explicit "I keep
 //! this data" copy; `&str`/`&[u8]` host params (Phase 2) borrow the block
 //! store zero-copy. `Option<T>` reads a crossing `?T` NIL-FLATTENED (the
-//! err-channel phase 3: nil → `None`, the box's payload → `Some`) — the
-//! read direction only, no `into_slot`: there is no `Value::Opt`, so a
-//! host cannot mint a some-payload for rut yet. `Value` itself is also a
+//! err-channel phase 3: nil → `None`, the box's payload → `Some`) and —
+//! the legal-host-returns phase — ANSWERS through the three boot lanes:
+//! `Option<String>`/`Option<Vec<u8>>`/the opaque handles mint the opt box
+//! under `?str`/`?bytes`/`?opaque` (a `None` is the flat nil); other
+//! `T`s have no lane and trap (see `OPT_TY`). `Value` itself is also a
 //! `Ret`: the positional decode for hosts that read the raw driver
 //! result (`Value::Tuple` for a pair return) instead of a typed shape.
 
 use rut_core::types::{PrimTy, TypeId, TyKind};
 use rut_core::types::{
     TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
-    TY_STR, TY_U16, TY_U32, TY_U64, TY_U8, TY_VAL,
+    TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8, TY_VAL,
 };
 
 use super::*;
@@ -28,6 +30,10 @@ pub trait Ret: Sized {
     /// the fixed boot type this Rust type binds against (`u32::MAX` when
     /// the id is program-relative — tuples)
     const TY: TypeId = u32::MAX;
+    /// the boot `?T` answer row this type's option binds (the
+    /// legal-host-returns phase): `u32::MAX` — no lane, so `Option<Self>`
+    /// cannot cross back as a host-fn answer
+    const OPT_TY: TypeId = u32::MAX;
     /// a short Rust-side name for trap messages
     fn rust_name() -> &'static str;
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap>;
@@ -199,6 +205,8 @@ impl Ret for () {
 /// owned copy — the explicit "I keep this data" (RFC 0023 §2)
 impl Ret for String {
     fn rust_name() -> &'static str { "String" }
+    const TY: TypeId = TY_STR;
+    const OPT_TY: TypeId = TY_OPT_STR;
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "String")?;
         Ok(cell_of(slot).as_str().to_string())
@@ -212,6 +220,8 @@ impl Ret for String {
 /// owned copy — the explicit "I keep this data" (RFC 0023 §2)
 impl Ret for Vec<u8> {
     fn rust_name() -> &'static str { "Vec<u8>" }
+    const TY: TypeId = TY_BYTES;
+    const OPT_TY: TypeId = TY_OPT_BYTES;
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "Vec<u8>")?;
         Ok(cell_of(slot).bytes_copy())
@@ -224,6 +234,7 @@ impl Ret for Vec<u8> {
 
 impl Ret for OpaqueRef {
     const TY: TypeId = TY_OPAQUE;
+    const OPT_TY: TypeId = TY_OPT_OPAQUE;
     fn rust_name() -> &'static str { "OpaqueRef" }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "OpaqueRef")?;
@@ -246,6 +257,7 @@ impl Ret for OpaqueRef {
 
 impl<T: 'static> Ret for Opaque<T> {
     fn rust_name() -> &'static str { "Opaque" }
+    const OPT_TY: TypeId = TY_OPT_OPAQUE;
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "Opaque")?;
         let p = unsafe { slot.r };
@@ -266,7 +278,17 @@ impl<T: 'static> Ret for Opaque<T> {
 /// `slot_to_value`'s `TyKind::Opt` arm, so `(?T, err)` entry returns
 /// decode positionally as `(Option<T>, String)`; the caller's convention
 /// (exactly one of the two channels meaningful) lives with the caller.
+///
+/// The write direction is the legal-host-returns phase: a host-fn body
+/// may answer `Option<T>` when `T` has an answer lane (`OPT_TY` —
+/// `String`/`Vec<u8>`/the opaque handles). A Some mints the one-slot opt
+/// box under the boot `?T` row — the payload's own reference transfers
+/// into field 0 (`alloc_opt_value` stores the raw word), the box's rc
+/// becomes the register's — and a None is the flat nil, the zero word
+/// (RFC 0044). A type without a lane traps: only `?str`/`?bytes`/
+/// `?opaque` cross back.
 impl<T: Ret> Ret for Option<T> {
+    const TY: TypeId = T::OPT_TY;
     fn rust_name() -> &'static str { std::any::type_name::<Self>() }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         let TyKind::Opt { elem } = vm.prog.types.kind(declared) else {
@@ -288,7 +310,25 @@ impl<T: Ret> Ret for Option<T> {
             .ok_or_else(|| Trap::new(TrapKind::Invalid, "boundary: option box without a payload"))?;
         Ok(Some(T::from_slot(vm, inner, *elem)?))
     }
-    // no into_slot: the read direction only — see the module doc
+    fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
+        let ty = Self::TY;
+        if ty == u32::MAX {
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                format!(
+                    "`Option<{}>` does not cross as a host-fn answer — only `?str`/`?bytes`/`?opaque` have answer lanes (RFC 0023 §1)",
+                    T::rust_name()
+                ),
+            ));
+        }
+        match self {
+            None => Ok(Slot::int(0)), // the miss: the flat nil (RFC 0044's zero)
+            Some(v) => {
+                let raw = v.into_slot(vm)?;
+                vm.heap.alloc_opt_value(ty, raw)
+            }
+        }
+    }
 }
 
 /// tuples cross field-by-field (RFC 0007 v1.1) — the record cell's own
@@ -1540,5 +1580,232 @@ mod any_lane_tests {
         let err = vm.call_host(1, 0, 1, 1).expect_err("Bits into a ?ref register traps");
         assert!(err.msg.contains("trust law"), "{}", err.msg);
         assert_eq!(unsafe { vm.cur_regs[1].i }, 777, "the trap fired before the dst write");
+    }
+}
+
+// ---- the answer-lane tests (the legal-host-returns phase): the three
+// boot `?T` rows plus plain `bytes` cross back. `call_host` is driven
+// DIRECTLY (the any-lane tests' shape): funcs[0] is a plain caller frame
+// whose regs table the test types, funcs[1] is the joined host thunk
+// with the lane's own ret — the mint, the flat-nil miss, the rc
+// transfer, and the trap texts are the subject. ----
+
+#[cfg(test)]
+mod return_lane_tests {
+    use super::*;
+    use std::rc::Rc;
+
+    /// `unwrap_err` for the trap channel (the fast-lane tests' helper)
+    fn err_of<T>(r: Result<T, Trap>) -> Trap {
+        match r {
+            Ok(_) => panic!("expected a trap, got Ok"),
+            Err(t) => t,
+        }
+    }
+
+    /// A VM with a plain caller frame (`funcs[0]`, the regs table the
+    /// test types) and the `t::probe` host thunk (`funcs[1]`, the ret
+    /// the test names) joined to the registered body. The boot table
+    /// already carries the `?str`/`?bytes`/`?opaque` rows — a ret names
+    /// its CONST directly.
+    fn vm_with_ret(registry: HostRegistry, caller_regs: Vec<TypeId>, ret: TypeId) -> Vm {
+        let mut prog = rut_core::binary::Program::default();
+        prog.types = rut_core::types::TypeTable::boot();
+        let host_key = prog.interner.intern("t::probe");
+        let mut mk = |name: &str, regs: Vec<TypeId>, host: Option<rut_core::sym::IdentId>| {
+            rut_core::binary::FuncCode {
+                name: prog.interner.intern(name),
+                params: vec![],
+                ret: TY_NIL,
+                is_method: false,
+                n_captures: 0,
+                regs,
+                argv: vec![0],
+                labels: vec![],
+                code: vec![],
+                spans: vec![],
+                pos: vec![],
+                host_id: host,
+            }
+        };
+        prog.funcs.push(mk("main", caller_regs, None));
+        let mut thunk = mk("probe", vec![], Some(host_key));
+        thunk.ret = ret;
+        thunk.argv = vec![];
+        prog.funcs.push(thunk);
+        Vm::new(Rc::new(prog), &Limits::default(), HostHooks::default(), registry).expect("vm")
+    }
+
+    #[test]
+    fn the_answer_lanes_bind_by_identity() {
+        // the RFC 0025 join compares ids: the registry's Option SIG and
+        // the decl row's boot CONST must be the SAME word per lane
+        assert_eq!(<Option<String> as Ret>::TY, TY_OPT_STR);
+        assert_eq!(<Option<Vec<u8>> as Ret>::TY, TY_OPT_BYTES);
+        assert_eq!(<Option<OpaqueRef> as Ret>::TY, TY_OPT_OPAQUE);
+        assert_eq!(<Option<Opaque<i64>> as Ret>::TY, TY_OPT_OPAQUE);
+        // no lane, no binding: ?i32 cannot cross back
+        assert_eq!(<Option<i32> as Ret>::TY, u32::MAX);
+    }
+
+    #[test]
+    fn a_qstr_answer_mints_the_opt_box_and_reads_back_nil_flattened() {
+        let mut hosts = HostRegistry::new();
+        crate::register!(hosts, "t::probe", () -> Option<String>,
+            move |_vm: &mut Vm| Ok(Some("ada".to_string())),
+        );
+        let mut vm = vm_with_ret(hosts, vec![TY_I32, TY_OPT_STR], TY_OPT_STR);
+        let base = vm.heap_usage();
+        vm.cur_func = 0;
+        vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
+        vm.call_host(1, 0, 0, 1).expect("the crossing");
+        let reg = vm.cur_regs[1];
+        assert!(!unsafe { reg.r.is_null() }, "a Some answer mints the box");
+        // the mint is a one-slot ?str box whose payload is the answer
+        assert_eq!(
+            vm.prog.types.type_at(TY_OPT_STR).kind,
+            rut_core::types::TyKind::Opt { elem: TY_STR },
+        );
+        // the read direction closes the circle: nil-flattened decode
+        let back = <Option<String> as Ret>::from_slot(&vm, reg, TY_OPT_STR).expect("decode");
+        assert_eq!(back, Some("ada".to_string()), "the owned copy crossed back");
+        // balance: the register owns the box (field 0 owns the str cell)
+        vm.heap.release(reg);
+        assert_eq!(vm.heap_usage(), base, "the mint released exactly once");
+    }
+
+    #[test]
+    fn a_qstr_miss_answers_the_flat_nil_and_mints_nothing() {
+        let mut hosts = HostRegistry::new();
+        crate::register!(hosts, "t::probe", () -> Option<String>,
+            move |_vm: &mut Vm| Ok(None),
+        );
+        let mut vm = vm_with_ret(hosts, vec![TY_I32, TY_OPT_STR], TY_OPT_STR);
+        let base = vm.heap_usage();
+        vm.cur_func = 0;
+        vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
+        vm.call_host(1, 0, 0, 1).expect("the crossing");
+        assert_eq!(unsafe { vm.cur_regs[1].i }, 0, "the miss is the flat nil");
+        assert_eq!(vm.heap_usage(), base, "no cell minted for the miss");
+    }
+
+    #[test]
+    fn bytes_answers_are_the_owned_copy() {
+        // plain `bytes` crosses back through the existing Vec<u8>
+        // into_slot: one fresh cell per answer, its rc the register's
+        let mut hosts = HostRegistry::new();
+        crate::register!(hosts, "t::probe", () -> Vec<u8>,
+            move |_vm: &mut Vm| Ok(vec![1u8, 2, 3]),
+        );
+        let mut vm = vm_with_ret(hosts, vec![TY_I32, TY_BYTES], TY_BYTES);
+        let base = vm.heap_usage();
+        vm.cur_func = 0;
+        vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
+        vm.call_host(1, 0, 0, 1).expect("the crossing");
+        let reg = vm.cur_regs[1];
+        let back = <Vec<u8> as Ret>::from_slot(&vm, reg, TY_BYTES).expect("decode");
+        assert_eq!(back, vec![1u8, 2, 3], "the octets crossed");
+        vm.heap.release(reg);
+        assert_eq!(vm.heap_usage(), base, "the answer cell released exactly once");
+    }
+
+    #[test]
+    fn a_qbytes_answer_mints_under_the_bytes_lane() {
+        let mut hosts = HostRegistry::new();
+        crate::register!(hosts, "t::probe", () -> Option<Vec<u8>>,
+            move |_vm: &mut Vm| Ok(Some(vec![9u8, 8])),
+        );
+        let mut vm = vm_with_ret(hosts, vec![TY_I32, TY_OPT_BYTES], TY_OPT_BYTES);
+        let base = vm.heap_usage();
+        vm.cur_func = 0;
+        vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
+        vm.call_host(1, 0, 0, 1).expect("the crossing");
+        let reg = vm.cur_regs[1];
+        assert!(!unsafe { reg.r.is_null() }, "a Some answer mints the box");
+        let back = <Option<Vec<u8>> as Ret>::from_slot(&vm, reg, TY_OPT_BYTES).expect("decode");
+        assert_eq!(back, Some(vec![9u8, 8]));
+        vm.heap.release(reg);
+        assert_eq!(vm.heap_usage(), base, "box + payload released exactly once");
+    }
+
+    #[test]
+    fn a_qopaque_answer_wraps_the_handle_and_the_nil_case_is_flat() {
+        // the Some case: the handle's reference transfers into the box's
+        // field 0 — identity preserved, the balance closes exactly
+        let ptr: Rc<std::cell::Cell<usize>> = Rc::new(std::cell::Cell::new(0));
+        let p2 = ptr.clone();
+        let mut hosts = HostRegistry::new();
+        crate::register!(hosts, "t::probe", () -> Option<Opaque<i64>>,
+            move |vm: &mut Vm| {
+                let b = crate::heap::Opaque::alloc(vm, 7i64)?;
+                p2.set(b.handle().ptr() as usize);
+                Ok(Some(b))
+            },
+        );
+        let mut vm = vm_with_ret(hosts, vec![TY_I32, TY_OPT_OPAQUE], TY_OPT_OPAQUE);
+        let base = vm.heap_usage();
+        vm.cur_func = 0;
+        vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
+        vm.call_host(1, 0, 0, 1).expect("the crossing");
+        let reg = vm.cur_regs[1];
+        if let crate::heap::CellData::Record { fields } = &crate::heap::cell_of(reg).data {
+            let f0 = fields.borrow().get(0).unwrap_or(Slot::null());
+            assert_eq!(
+                unsafe { f0.r } as usize,
+                ptr.get(),
+                "the box field IS the minted handle's word (transferred, not copied)"
+            );
+        } else {
+            panic!("the ?opaque value is a one-slot box");
+        }
+        vm.heap.release(reg);
+        assert_eq!(vm.heap_usage(), base, "box + entry released exactly once");
+
+        // the nil case (the phase's law): None answers the flat nil —
+        // the caller's `== nil` test reads the zero word
+        let mut hosts = HostRegistry::new();
+        crate::register!(hosts, "t::probe", () -> Option<Opaque<i64>>,
+            move |_vm: &mut Vm| Ok(None),
+        );
+        let mut vm = vm_with_ret(hosts, vec![TY_I32, TY_OPT_OPAQUE], TY_OPT_OPAQUE);
+        let base = vm.heap_usage();
+        vm.cur_func = 0;
+        vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
+        vm.call_host(1, 0, 0, 1).expect("the crossing");
+        assert_eq!(unsafe { vm.cur_regs[1].i }, 0, "the nil case is the flat nil");
+        assert_eq!(vm.heap_usage(), base, "no cell minted for the nil");
+    }
+
+    #[test]
+    fn an_answer_without_a_lane_traps_and_names_the_law() {
+        // ?i32 has no answer lane: the trap fires BEFORE the dst write
+        let mut hosts = HostRegistry::new();
+        crate::register!(hosts, "t::probe", () -> Option<i32>,
+            move |_vm: &mut Vm| Ok(Some(5)),
+        );
+        let mut vm = vm_with_ret(hosts, vec![TY_I32, TY_I32], TY_I32);
+        vm.cur_func = 0;
+        vm.cur_regs = vec![Slot::int(0), Slot::int(777)];
+        let err = vm.call_host(1, 0, 0, 1).expect_err("a laneless answer traps");
+        assert!(err.msg.contains("does not cross as a host-fn answer"), "{}", err.msg);
+        assert!(err.msg.contains("?str"), "{}", err.msg);
+        assert_eq!(unsafe { vm.cur_regs[1].i }, 777, "the trap fired before the dst write");
+    }
+
+    #[test]
+    fn a_qstr_read_over_a_non_option_slot_names_the_mismatch() {
+        let vm = {
+            let mut hosts = HostRegistry::new();
+            crate::register!(hosts, "t::probe", () -> i64, move |_vm: &mut Vm| Ok(0));
+            vm_with_ret(hosts, vec![TY_I32], TY_I32)
+        };
+        let bytes = vm.heap.alloc_bytes(vec![1u8]).unwrap();
+        let err = err_of(<Option<String> as Ret>::from_slot(&vm, bytes, TY_BYTES));
+        assert!(err.msg.contains("is not the option"), "{}", err.msg);
+        // the nil-flattened read over a NULL slot binds only under a real
+        // `?T` — a null word against a non-option declared type is the
+        // reference-kind mismatch, never a silent None
+        let err = err_of(<Option<String> as Ret>::from_slot(&vm, Slot::null(), TY_BYTES));
+        assert!(err.msg.contains("is not the option"), "{}", err.msg);
     }
 }

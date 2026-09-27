@@ -290,6 +290,16 @@ pub const TY_STRBUF: TypeId = 17;
 /// all index it — but no rut-side kind machinery reaches it, because
 /// no rut source can produce a value of this type.
 pub const TY_VAL: TypeId = 18;
+/// the `?str` answer lane (the legal-host-returns phase): the boot row
+/// `Opt { elem: TY_STR }` a `.d.rut` `-> ?str` return maps to — the
+/// fixed id the registry's `Option<String>` binding verifies against.
+/// Appended after `TY_VAL`; fixed ids are wire-stable and must never be
+/// reordered.
+pub const TY_OPT_STR: TypeId = 19;
+/// the `?bytes` answer lane (the legal-host-returns phase): `Opt { elem: TY_BYTES }`.
+pub const TY_OPT_BYTES: TypeId = 20;
+/// the `?opaque` answer lane (the legal-host-returns phase): `Opt { elem: TY_OPAQUE }`.
+pub const TY_OPT_OPAQUE: TypeId = 21;
 /// A host payload box's runtime type as `TidOf` reports it (RFC 0023/0026):
 /// the payload is Rust, so no rut type describes it. Type ids are type-table
 /// indices, which can never reach this value — `downcast<T>` therefore
@@ -347,6 +357,18 @@ impl TypeTable {
         // The name rides the shell convention (sym::NIL); no P3-reachable
         // diagnostic reads it.
         push(sym::NIL, TyKind::Nil);
+        // the host-answer optionals (the legal-host-returns phase): REAL
+        // crossing rows — `?str`/`?bytes`/`?opaque` cross back
+        // nil-flattened (RFC 0023 §1's optionals law, the read direction
+        // always promised). The decl surface's `-> ?T` spellings map to
+        // the CONSTS above (the driver's answer table), and the registry's
+        // `Option<T>` SIG shares them, so the RFC 0025 join verifies the
+        // pair by identity. The row names ride the shell convention (the
+        // elem's own symbol — the TY_VAL row's law); a diagnostic that
+        // needs the `?` shape names it from the CONST.
+        push(sym::STR, TyKind::Opt { elem: TY_STR });
+        push(sym::BYTES, TyKind::Opt { elem: TY_BYTES });
+        push(sym::OPAQUE, TyKind::Opt { elem: TY_OPAQUE });
         t.boot_len = t.types.len() as u32;
         t.scope_base = vec![0; scope as usize + 1];
         if packed {
