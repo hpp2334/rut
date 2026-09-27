@@ -592,3 +592,15 @@ the frame the mint mints for (7b379b2).
   surface (`store.get<T>` / `store.set` over module-private
   `Readable<T>`/`Writable<T>` templates) compiles through the mint.
 
+
+## Amendment (Sep 2026, any-removal): the `any` reservation is universal
+
+`any` is no longer admitted anywhere. The decl-mode exemption that let a
+`.d.rut` `host fn` spell `any` as a param/answer type is gone: the
+lexer diagnoses the word in every mode — "rut has no `any`; use a trait
+type or `opaque` (RFC 0012, RFC 0014)" — and the host crossing set
+(RFC 0023 §1, final) has no `any` arm. Polymorphic host crossings seal
+through the erasure box (`opaque(v)` / `opaque.downcast<T>`, RFC 0014);
+the typed class faces keep their generic signatures. §1's "no
+object-type keyword anywhere in rut" law now has no host-decl
+exception either.

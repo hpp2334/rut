@@ -26,7 +26,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rut_vm::interp::Vm;
-use rut_vm::{Trap, ValSlot};
+use rut_vm::Trap;
 
 const SRC: &str = include_str!("../rgh.rut");
 const TREE_JSON: &str = include_str!("fixtures/tree.json");
@@ -117,13 +117,12 @@ fn boot(fix: impl Fn(&str) -> Result<(u16, Vec<u8>), String> + 'static) -> (Vm, 
         });
     let files_sink = sinks.files.clone();
     let fail_sink = sinks.fail_write.clone();
-    rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<ValSlot>,
-        move |vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<ValSlot>, Trap> {
+    rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
+        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
             let fail = fail_sink.borrow();
             if let Some((path, text)) = fail.as_ref() {
                 if path == dest {
-                    let cell = vm.alloc_str_cell(text.clone())?;
-                    return Ok(Some(ValSlot::Ref(cell)));
+                    return Ok(Some(text.clone()));
                 }
             }
             drop(fail);
@@ -448,8 +447,8 @@ fn live_smoke_over_the_real_cdn() {
             err_sink.borrow_mut().push(line.to_string());
             Ok(())
         });
-    rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<ValSlot>,
-        |_vm: &mut Vm, _dest: &str, _data: Vec<u8>| -> Result<Option<ValSlot>, Trap> { Ok(None) });
+    rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
+        |_vm: &mut Vm, _dest: &str, _data: Vec<u8>| -> Result<Option<String>, Trap> { Ok(None) });
     hosts.verify_against(&s.expected_host_fns());
     let mut vm =
         rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();

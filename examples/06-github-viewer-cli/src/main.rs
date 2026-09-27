@@ -17,7 +17,7 @@ use std::io::Write as _;
 use std::rc::Rc;
 
 use rut_vm::interp::Vm;
-use rut_vm::{Trap, ValSlot};
+use rut_vm::Trap;
 
 const MOUNT_DIRS: &[&str] = &[
     // the brain's libs: pouch (Vec) + nmapset + json, the std order
@@ -108,18 +108,11 @@ fn main() {
             let _ = o.flush();
             Ok(())
         });
-    rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<ValSlot>,
-        |vm: &mut Vm, path: &str, data: Vec<u8>| -> Result<Option<ValSlot>, Trap> {
+    rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
+        |_vm: &mut Vm, path: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
             match std::fs::write(path, &data) {
                 Ok(()) => Ok(None), // the flat nil — written
-                Err(e) => {
-                    // the `?str` answer: the io error's text, a fresh
-                    // str cell whose claim the next answer replaces
-                    // (the http_err law; the any lane's trust law —
-                    // the caller's dst IS `?str`)
-                    let cell = vm.alloc_str_cell(e.to_string())?;
-                    Ok(Some(ValSlot::Ref(cell)))
-                }
+                Err(e) => Ok(Some(e.to_string())), // the io error's text
             }
         });
     // the decl ↔ the bodies, loudly (RFC 0025): every mounted pkg's

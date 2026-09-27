@@ -10,11 +10,9 @@
 // so a bare `print(..)` call can never compile. `out` is the same
 // crossing under an honest name.
 //
-// The `write_file` answer is a `?str` in spirit — nil is success, the
-// text is the io error — but the crossing set (RFC 0023 §1) refuses
-// `?T` at a decl, so it spells the host-decl-only `any` lane and the
-// host answers the caller's static V (the `?str` dst reads the text;
-// the `http_err` precedent at rut/http_host).
+// The `write_file` answer crosses the `?str` answer lane (the
+// legal-host-returns phase): nil is success, the text is the io error
+// (the `http_err` precedent at rut/http_host).
 
 /// one line to stdout (the host appends the newline and flushes)
 pub host fn out(s: str);
@@ -22,6 +20,5 @@ pub host fn out(s: str);
 /// one line to stderr (the host appends the newline and flushes)
 pub host fn eprint(s: str);
 
-/// write `data` over `path` — the answer reads as `?str` at the call:
-/// nil = written, the text = the io error
-pub host fn write_file(path: str, data: bytes) -> any;
+/// write `data` over `path` — nil = written, the text = the io error
+pub host fn write_file(path: str, data: bytes) -> ?str;

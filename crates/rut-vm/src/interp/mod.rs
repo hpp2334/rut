@@ -7,7 +7,7 @@
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
 use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, CellData, CellVal, Heap, Slot, Trap, TrapKind, ValSlot, Value};
+use crate::heap::{cell_of, CellData, CellVal, Heap, Slot, Trap, TrapKind, Value};
 use crate::arena::OpaqueRef;
 use rut_core::ops::*;
 use rut_core::types::{
@@ -28,7 +28,7 @@ mod util;
 
 pub use host::{ExpectedHostFns, HostRegistry};
 use host::HostSlot;
-pub use boundary::{CallArg, CallArgs, HostVal, Ret};
+pub use boundary::{CallArg, CallArgs, Ret};
 
 // free helpers live in the submodules; pull them into `interp` so the
 // sibling modules reach them through `use super::*`
@@ -133,17 +133,6 @@ pub struct Vm {
     /// returning `Result`; `call_host` checks the flag the moment the
     /// body returns — the trap fires before the dst write
     host_trap: Option<Trap>,
-    /// the any-answer's tagged carry (nmap-hostvals P5): `Option<ValSlot>`'s
-    /// `into_slot` stashes the un-erased answer here and `call_host`'s any
-    /// write-back takes it. The returned word alone cannot carry the
-    /// Some/None tag — a stored zero and the miss are the same 8 bytes —
-    /// and a `?prim` V register's ArrGet shape needs the tag to mint the
-    /// one-slot opt value (or answer the flat null on the miss). Same
-    /// channel discipline as `host_trap`: written by the body's adapter,
-    /// read+cleared by the dispatch one crossing later; a trapped
-    /// crossing leaves it set but unreachable, and the next crossing's
-    /// stash overwrites before its own read.
-    host_val_out: Option<ValSlot>,
     /// reused arg-snapshot spill for host arities past `INLINE_ARITY`
     /// (never taken in practice; the stack covers the common case)
     slot_scratch: Vec<Slot>,
@@ -260,22 +249,13 @@ impl Vm {
                     // here; a degenerate program (ret id missing from
                     // the table — the unbound-thunk check below is the
                     // error that matters) reads Any, never a panic
-                    let ret_is_val = fc.ret == rut_core::types::TY_VAL;
-                    let ret_is_ref = !ret_is_val
-                        && fc.ret != TY_ANY
+                    let ret_is_ref = fc.ret != TY_ANY
                         && type_repr.get(fc.ret as usize).copied().unwrap_or(Repr::Any).is_ref();
-                    // the any lane (nmap-hostvals P3): does any row param
-                    // spell `any`? Only then does `call_host` snapshot the
-                    // arg registers' static types — a binding without any
-                    // params never pays the snapshot
-                    let any_args = b.sigs.slice().iter().any(|&t| t == rut_core::types::TY_VAL);
                     host_slots.push(HostSlot {
                         code: b.code,
                         ctx: b.ctx,
                         ret: fc.ret,
                         ret_is_ref,
-                        ret_is_val,
-                        any_args,
                     });
                 }
                 None => host_slots.push(HostSlot::NEVER),
@@ -373,7 +353,6 @@ impl Vm {
             host_slots,
             host_keep,
             host_trap: None,
-            host_val_out: None,
             slot_scratch: Vec::new(),
             const_slots,
             reg_pool: Vec::new(),
@@ -394,10 +373,10 @@ impl Vm {
         self.heap.used_bytes()
     }
 
-    /// The in-crossing rc (nmap-hostvals P3): a host body storing a value
-    /// through the any arms takes its own reference (`retain` — the plan's
-    /// "retain on store") and releases it when the value leaves the store
-    /// (`release` — "release on replace/remove"; §0.8 i's release-context
+    /// The in-crossing rc (RFC 0023 §2): a host body storing a rut
+    /// value takes its own reference (`retain` — the "retain on store"
+    /// law) and releases it when the value leaves the store (`release`
+    /// — "release on replace/remove"; §0.8 i's release-context
     /// law: rc work happens with the `Vm` at hand, inside the crossing).
     pub fn retain(&self, s: Slot) {
         self.heap.retain(s);
@@ -671,24 +650,17 @@ impl Vm {
         // life, so the slice stays valid through the end of this call;
         // only immutable argv-table words are read through it (the
         // program is frozen after construction — the same trust the
-        // threaded loop's raw pointers run on, RFC 0034). The caller's
-        // own `regs` table rides beside it: the any lane's site types
-        // (nmap-hostvals P3) are the CALL SITE's static arg types.
-        let (args, fregs): (&[Reg], &[TypeId]) = unsafe {
+        // threaded loop's raw pointers run on, RFC 0034).
+        let args: &[Reg] = unsafe {
             let prog = &*Rc::as_ptr(&self.prog);
             let f = self.cur_func as usize;
-            (
-                &prog.funcs[f].argv[argv_off as usize..argv_off as usize + argc as usize],
-                &prog.funcs[f].regs,
-            )
+            &prog.funcs[f].argv[argv_off as usize..argv_off as usize + argc as usize]
         };
         // snapshot the args: the register file may swap inside the body
         // (nested calls). `Slot` is Copy (one machine word, RFC 0015 §5).
         const INLINE_ARITY: usize = 8;
         let mut inline = [Slot::null(); INLINE_ARITY];
-        let mut inline_tys = [0u32; INLINE_ARITY];
         let mut spill: Vec<Slot> = Vec::new();
-        let tys_spill: Vec<TypeId>;
         let snapshot: &[Slot] = if args.len() <= INLINE_ARITY {
             for (i, a) in args.iter().enumerate() {
                 inline[i] = self.cur_regs[*a as usize];
@@ -699,32 +671,10 @@ impl Vm {
             spill.extend(args.iter().map(|a| self.cur_regs[*a as usize]));
             &spill
         };
-        // the any lane's site types (nmap-hostvals P3): the arg REGISTER's
-        // own static type — the same `FuncDef.regs` word the verifier
-        // checks reads against (RFC 0015 §5). Only bindings whose row
-        // spells `any` pay the snapshot (the join's bit); a missing word
-        // is the internal untyped sentinel — `HostVal::read_at_site`
-        // traps loudly on it, never decodes blind.
-        let tys: &[TypeId] = if slot.any_args {
-            if args.len() <= INLINE_ARITY {
-                for (i, a) in args.iter().enumerate() {
-                    inline_tys[i] = fregs.get(*a as usize).copied().unwrap_or(TY_ANY);
-                }
-                &inline_tys[..args.len()]
-            } else {
-                tys_spill = args
-                    .iter()
-                    .map(|a| fregs.get(*a as usize).copied().unwrap_or(TY_ANY))
-                    .collect();
-                &tys_spill
-            }
-        } else {
-            &[]
-        };
         // ONE indirect call — the same unit an op dispatch pays. The
         // adapter converts, invokes the body, and reports traps through
         // the channel.
-        let out = (slot.code)(self, snapshot, tys, slot.ctx);
+        let out = (slot.code)(self, snapshot, slot.ctx);
         if args.len() > INLINE_ARITY {
             self.slot_scratch = spill;
         }
@@ -736,91 +686,7 @@ impl Vm {
         // The is-ref verdict is the join's bit (phase 2) — no
         // `type_repr` lookup on the hot path.
         if let Some(d) = reg_opt(dst) {
-            if slot.ret_is_val {
-                // the any-answer (nmap-hostvals P3): the CALLER's static V —
-                // the dst register's own declared type — gives the word its
-                // meaning (§0.8 h, the untagged-slot discipline). A ref V
-                // register takes the ArrGet shape: retain the answer, release
-                // the displaced (the register borrows its own rc; the store
-                // keeps its own). RETAIN FIRST — the order is load-bearing
-                // when the answer IS the displaced cell (release-then-retain
-                // could free it mid-step). A prim/any V register takes the 8
-                // bytes plain. Trust law (documented at the decl site): the
-                // host answers the caller's V.
-                let dst_ty = fregs.get(d as usize).copied().unwrap_or(TY_ANY);
-                let dst_opt_elem: Option<TypeId> = if dst_ty != TY_ANY {
-                    match self.prog.types.kind(dst_ty) {
-                        TyKind::Opt { elem } => Some(*elem),
-                        _ => None,
-                    }
-                } else {
-                    None
-                };
-                if let Some(elem) = dst_opt_elem {
-                    // the ?V registers (nmap-hostvals P5 — the wrapper's
-                    // `get -> ?V`). The Some/None tag rode `host_val_out`
-                    // (the raw word cannot carry it: a stored zero and the
-                    // miss are the same 8 bytes).
-                    if !self.prog.types.repr_of(elem).is_ref() {
-                        // ?prim V: the ArrGet{OptPrim} shape — a Some(Bits)
-                        // answer MINTS the fresh one-slot opt value the
-                        // register owns (release the displaced, retain
-                        // nothing — the primitive-store tier's law, RFC
-                        // 0044 §5); the miss is the flat null. A Ref
-                        // answer here is the ?fn value shape: the box
-                        // aliases the cell, the cell retains
-                        // (op_make_opt's law).
-                        let cell = match self.host_val_out.take() {
-                            Some(ValSlot::Bits(w)) => self.heap.alloc_opt_value(dst_ty, w)?,
-                            Some(ValSlot::Ref(c)) => {
-                                let b = self.heap.alloc_opt_value(dst_ty, c)?;
-                                self.heap.retain(c);
-                                b
-                            }
-                            _ => Slot::int(0),
-                        };
-                        let old = std::mem::replace(&mut self.cur_regs[d as usize], cell);
-                        self.heap.release(old);
-                    } else {
-                        // ?ref V: a `?Pt` value IS the one-slot box wrapping
-                        // the cell (RFC 0044, the T → ?T law) — the stored
-                        // bare cell must cross INSIDE a box, and the ?V type
-                        // id exists only at this call site, so the
-                        // write-back mints it: the box ALIASES the stored
-                        // cell (op_make_opt's law — retain the aliased cell
-                        // into field 0), the register owns the box, and the
-                        // store keeps its own cell reference. Aliasing IS
-                        // the cell: two gets name ONE stored cell, and
-                        // writes through the box land in the map.
-                        match self.host_val_out.take() {
-                            Some(ValSlot::Ref(c)) => {
-                                let b = self.heap.alloc_opt_value(dst_ty, c)?;
-                                self.heap.retain(c);
-                                let old = std::mem::replace(&mut self.cur_regs[d as usize], b);
-                                self.heap.release(old);
-                            }
-                            Some(ValSlot::Bits(_)) => {
-                                return Err(Trap::new(
-                                    TrapKind::Invalid,
-                                    "any-answer: `Bits` into a reference V register — the host answers the caller's V (the trust law at the decl site)",
-                                ));
-                            }
-                            _ => {
-                                // the miss: the flat null into the ref register
-                                let old =
-                                    std::mem::replace(&mut self.cur_regs[d as usize], out);
-                                self.heap.release(old);
-                            }
-                        }
-                    }
-                } else if self.is_ref(dst_ty) {
-                    let old = std::mem::replace(&mut self.cur_regs[d as usize], out);
-                    self.heap.retain(out);
-                    self.heap.release(old);
-                } else {
-                    self.cur_regs[d as usize] = out;
-                }
-            } else if slot.ret_is_ref {
+            if slot.ret_is_ref {
                 let old = std::mem::replace(&mut self.cur_regs[d as usize], out);
                 self.heap.release(old);
             } else {
@@ -894,10 +760,10 @@ impl Vm {
     }
 
     /// Mint a rut `str` cell from owned text — the host-side twin of
-    /// the boundary's `String` return: a body answering the any lane
-    /// with a `?str`/`str` V register mints here and keeps the claim
-    /// (the write-back's retain mirrors it). The heap is
-    /// crate-private, so this pub mint is the only road.
+    /// the boundary's `String` return: a body answering a `?str`/`str`
+    /// row through its own storage mints here (the store keeps its own
+    /// claim; the caller's lane mints its crossing cell separately).
+    /// The heap is crate-private, so this pub mint is the only road.
     pub fn alloc_str_cell(&mut self, s: String) -> Result<Slot, Trap> {
         self.heap.alloc_str(s)
     }
@@ -1061,7 +927,7 @@ impl Vm {
     /// recovers through `Opaque<T>`, a plain cell is not a box. The
     /// slot is a BORROW of the entry's held value (the entry owns its
     /// reference; a body that keeps it takes its own retain — the
-    /// any-lane's law).
+    /// store's law).
     pub fn opaque_rut_value(&self, box_slot: Slot) -> Option<(Slot, TypeId)> {
         let e = crate::heap::store::store_entry(box_slot)?;
         match &e.e {
@@ -1232,16 +1098,14 @@ impl Vm {
             let params = self.prog.funcs[fid as usize].params.clone();
             const INLINE_ARITY: usize = 8;
             let mut snapshot = [Slot::null(); INLINE_ARITY];
-            let mut tys = [0u32; INLINE_ARITY];
             for (i, &s) in [fut, cx].iter().enumerate() {
                 let ty = params.get(i).copied().unwrap_or(0);
-                tys[i] = ty;
                 snapshot[i] = s;
                 if self.is_ref(ty) {
                     self.heap.retain(s);
                 }
             }
-            let _ = (host.code)(self, &snapshot[..2], &tys[..2], host.ctx);
+            let _ = (host.code)(self, &snapshot[..2], host.ctx);
             for (i, &s) in [fut, cx].iter().enumerate() {
                 if self.is_ref(params.get(i).copied().unwrap_or(0)) {
                     self.heap.release(s);

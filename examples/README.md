@@ -350,8 +350,8 @@ std pkgs (grep `rut/` — both count), and they arrive as a PAIR:
   ```rut
   pub host fn http_get(url: str) -> opaque;
   pub host fn http_status(r: opaque) -> i32;   // 0 = transport error
-  pub host fn http_err(r: opaque) -> any;      // nil unless status 0 (?str dst)
-  pub host fn http_body(r: opaque) -> any;     // the body octets (bytes dst)
+  pub host fn http_err(r: opaque) -> ?str;     // nil unless status 0
+  pub host fn http_body(r: opaque) -> bytes;   // the body octets
   ```
 
   The response handle is an `opaque` payload owning

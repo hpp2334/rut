@@ -75,11 +75,12 @@ Rules (RFC 0012 §7's frozen surface):
   disclosed v1 misuse, not a soundness hole.
 - `launch_future(launch_future(f))` is a **type error**: the receipt
   is not a `Future` (ruling 6).
-- v1 crosses the launch boundary with raw slots (`any`) under the
-  hood; the typed `Future<T> -> LaunchedFutureHandle<T>` arrow lives
-  in rut code (the `async_host` inline package) where the type system
-  holds it. User-written launchers over the same rows are first-class
-  (RFC 0012 §7's "users may write their own launchers").
+- v1 crosses the launch boundary with SEALED OPAQUES (the erasure box,
+  RFC 0014): the rows take `f: opaque` and answer `opaque`, and the
+  typed `Future<T> -> LaunchedFutureHandle<T>` arrow lives in rut code
+  (the `async_host` inline package) where `opaque.downcast<Future<..>>`
+  recovers the frame. User-written launchers over the same rows are
+  first-class (RFC 0012 §7's "users may write their own launchers").
 
 ## 3. What the compiler emits — the checkpoint desugaring
 

@@ -781,3 +781,12 @@ The invariant above is now TESTED LAW, not promise:
 - OQ-4: a lint for generic-scan near-misses (§4.2): source shaped like
   `a < b > (c)` parses as comparisons; the lint would suggest parens
   when the trailing `(c)` makes the comparison-chain reading suspicious.
+
+## Amendment (Sep 2026, any-removal): declaration mode loses `any`
+
+§3's `surfacedecl` rule types a `host fn` signature "concrete over the
+crossing set" — with the any-lane removal that set is closed
+(RFC 0023 §1's final form), and the word `any` draws the RFC 0002 §4
+reserved-word diagnostic in declaration mode exactly as in
+implementation mode. There is no decl-mode lexical exception; the
+grammar sketch itself never gains an `any` arm.

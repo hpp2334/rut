@@ -15,12 +15,12 @@
 use rut_core::types::{PrimTy, TypeId, TyKind};
 use rut_core::types::{
     TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
-    TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8, TY_VAL,
+    TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
 };
 
 use super::*;
 use crate::arena::OpaqueRef;
-use crate::heap::{Opaque, ValSlot};
+use crate::heap::Opaque;
 
 /// A rut → Rust conversion: read a slot under its declared type.
 /// `declared` is program-relative (the export's/field's own id), so the
@@ -396,68 +396,6 @@ impl Ret for Value {
     }
 }
 
-/// The any-answer (nmap-hostvals P3) — the write direction the boundary
-/// never had: a host fn answering a `.d.rut` `-> any` row hands back a
-/// [`ValSlot`], and the CALLER's static V (the dst register's own
-/// declared type, read from `FuncDef.regs` per call) gives the word its
-/// meaning — the untagged-slot discipline (§0.8 h, the ArrGet law):
-///
-/// - `Some(ValSlot::Ref(s))` — a ref V register takes the ArrGet shape:
-///   the answer is RETAINED into the register and the displaced value
-///   releases (the register borrows its own rc; the store keeps its
-///   own) — no box, no copy. A prim/any V register takes the 8 bytes
-///   plain (a cell pointer is bits; the bytecode types them — the trust
-///   law documented at the decl site: the host answers the caller's V).
-/// - `Some(ValSlot::Bits(s))` — the 8 bytes move as-is; an i32 V
-///   register holds the same word an i64 answer wrote (no width
-///   conversion exists to skip — the survey's ArrGet receipt). A `?prim`
-///   V register (P5, the wrapper's `get -> ?V`) takes the
-///   ArrGet{OptPrim} shape instead: `call_host` MINTS the one-slot opt
-///   value the register owns (release the displaced, retain nothing) —
-///   the Some/None tag rides the `Vm::host_val_out` carry, because a
-///   stored zero and the miss are the same 8 bytes and the mint must
-///   never answer `some(0)` for an absent key.
-/// - `None` — the miss: the flat nil, the zero word (null ref and nil
-///   prim are the same 8 bytes, RFC 0044's zero).
-/// - `Some(ValSlot::Empty)` — TRAPS loudly (§0.8 g): the h-family
-///   placeholder is a caller bug, never a silent nil.
-///
-/// The rc completion for a ref V register lives in `call_host`'s
-/// any write-back (retain first, then release the displaced — the order
-/// is load-bearing when the answer IS the displaced cell). The read
-/// direction does not exist: `TY_VAL` is host-decl-only, no rut export
-/// can return it, so `from_slot` is unreachable through a real program.
-impl Ret for Option<ValSlot> {
-    const TY: TypeId = TY_VAL;
-    fn rust_name() -> &'static str { "Option<ValSlot>" }
-    fn from_slot(_vm: &Vm, _slot: Slot, _declared: TypeId) -> Result<Self, Trap> {
-        Err(Trap::new(
-            TrapKind::Invalid,
-            "`any` is host-decl-only — embedder call results decode as `Value`, never as `ValSlot` (nmap-hostvals P3)",
-        ))
-    }
-    #[inline] // hot lane: the answer write's slot arms
-    fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
-        // the tagged carry (nmap-hostvals P5): call_host's ?prim write-back
-        // needs the Some/None tag the returned word cannot carry (a stored
-        // zero and the miss are the same 8 bytes) — stash the un-erased
-        // answer; the write-back takes it one crossing later (the
-        // `host_trap` channel's discipline). A PLAIN word answer is
-        // unaffected: the stash is read only on the ?prim arm.
-        // (`Option<ValSlot>` is Copy; `Empty` still traps below.)
-        vm.host_val_out = self;
-        match self {
-            None => Ok(Slot::int(0)), // the miss: the flat nil (RFC 0044's zero)
-            Some(ValSlot::Bits(s)) => Ok(s), // the 8 bytes move as-is
-            Some(ValSlot::Ref(s)) => Ok(s),  // the word moves; rc completes in call_host
-            Some(ValSlot::Empty) => Err(Trap::new(
-                TrapKind::Invalid,
-                "any-answer: `ValSlot::Empty` is the h-family placeholder, not an answer — a miss crosses as `None` (§0.8 g)",
-            )),
-        }
-    }
-}
-
 /// A Rust → rut argument for `Vm::call` (owned values; `&str`/`&[u8]`
 /// copy — the embedder's data, an explicit copy is the honest shape).
 /// Nameable so embedders can write their own typed dispatch helpers.
@@ -621,21 +559,6 @@ pub(crate) trait HostParam {
     /// it as the debug verifier); embedder marshalling is `Ret::from_slot`.
     #[allow(dead_code)] // the debug/embedder-verification twin — see doc
     unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap>;
-
-    /// The any-lane hook (nmap-hostvals P3): the adapter hands the CALL
-    /// SITE's static type alongside the arg slot — the same `FuncDef.regs`
-    /// word the verifier checks reads against (RFC 0015 §5), so the any
-    /// param can decode the untagged slot without a tag of its own. The
-    /// default IS the historical read: every typed param ignores the site
-    /// type (the join already proved the row), and only the any shape
-    /// ([`HostVal`]) overrides it. `TY_ANY` means the site type was not
-    /// snapshotted (an any binding's `call_host` always snapshots, so
-    /// reaching here with it is an internal error) — a typed param still
-    /// ignores it, per the trust law.
-    unsafe fn read_at_site<'a>(vm: &Vm, slot: Slot, site: TypeId) -> Result<Self::Repr<'a>, Trap> {
-        let _ = site;
-        Self::read(vm, slot)
-    }
 }
 
 macro_rules! param_prim {
@@ -834,78 +757,6 @@ impl HostParam for Vec<u8> {
     }
 }
 
-/// The any-arg (nmap-hostvals P3): the param shape for a `.d.rut` host fn
-/// spelling `v: any` — the boundary hands the registered closure the arg's
-/// raw slot TOGETHER WITH the CALL SITE's static type, undecoded. Rut
-/// types live in the VM, never in Rust (§0.8 m): `ty` is the call site's
-/// own `FuncDef.regs` word — the same static type the verifier checks
-/// reads against (RFC 0015 §5) — and its [`TyKind`] reads through the
-/// program's own table, never cloned into the handle:
-///
-/// ```ignore
-/// // the ARG — the plan's decode, verbatim shape (the copy/alloc laws):
-/// let vs = match vm.prog.types.kind(hv.ty) {
-///     rut_core::types::TyKind::Prim(_) => ValSlot::Bits(hv.slot), // the 8 bytes move as-is
-///     _ => { vm.heap.retain(hv.slot); ValSlot::Ref(hv.slot) }     // ref kinds: the arg's OWN cell
-/// };                                                              // (a str VIEW arg stores the view)
-/// ```
-///
-/// `Value::Str`'s owned decode is NEVER used: a ref arg crosses as its
-/// origin slot (identity IS the cell — a view arg crosses the view's own
-/// cell), a prim arg as its immediate bits. The slot is a BORROW of the
-/// caller's arg register (the register owns its reference); a host that
-/// stores the value takes its own retain — exactly the law above.
-///
-/// Host-decl-only by construction: [`HostParam::TY`] is `TY_VAL`, a boot
-/// id rut source cannot name, so this param shape can only bind a `.d.rut`
-/// row spelled `any`. There is no `CallArg` twin — the embedder `call`
-/// direction has no any lane (a host-decl fn is never an export).
-pub struct HostVal {
-    /// the arg slot, untagged 8 bytes (RFC 0015 §5): prim sites carry the
-    /// value's immediate bits, ref sites the cell handle
-    pub slot: Slot,
-    /// the CALL SITE's static type — decode through `vm.prog.types`
-    pub ty: TypeId,
-}
-
-impl HostVal {
-    /// The site type's descriptor — the read that drives the plan's
-    /// `Prim(_) => Bits, _ => Ref` decode. A shared table read, never a
-    /// clone (the copy/alloc laws).
-    pub fn kind<'a>(&self, types: &'a rut_core::types::TypeTable) -> &'a TyKind {
-        types.kind(self.ty)
-    }
-}
-
-impl HostParam for HostVal {
-    const TY: TypeId = TY_VAL;
-    type Repr<'a> = HostVal;
-    // the any lane NEVER reads without the site type — the adapter hands
-    // it through `read_at_site`; a direct `read` has no site to consult
-    unsafe fn read<'a>(_vm: &Vm, _slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        Err(Trap::new(
-            TrapKind::Invalid,
-            "internal: `any` param read without the call site's static type",
-        ))
-    }
-    unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
-        Self::read(vm, slot)
-    }
-    // the override: capture (slot, site) verbatim — no decode, no box, no
-    // copy; the closure decides from the site type (the plan's ARG law)
-    #[inline]
-    unsafe fn read_at_site<'a>(vm: &Vm, slot: Slot, site: TypeId) -> Result<Self::Repr<'a>, Trap> {
-        let _ = vm;
-        if site == super::TY_ANY {
-            return Err(Trap::new(
-                TrapKind::Invalid,
-                "internal: untyped `any` argument (the call site's static type was not snapshotted)",
-            ));
-        }
-        Ok(HostVal { slot, ty: site })
-    }
-}
-
 /// The body-return kind marker, solved by which impl the callable's
 /// return type matches — never written by the embedder (only named by
 /// the turbofish's `_`).
@@ -919,11 +770,7 @@ pub enum Fallible {}
 pub(crate) trait HostHandler<A, R, K>: 'static {
     /// the derived `.d.rut` row — a fixed array, no heap
     const SIG: crate::interp::host::HostSig;
-    /// `tys` is the call's arg-register static types (the caller's
-    /// `FuncDef.regs` words, snapshot beside the arg slots — empty when
-    /// the binding has no `any` params, the join's bit): the any lane's
-    /// `read_at_site` consumes it positionally; typed params never look.
-    fn entry(vm: &mut Vm, slots: &[Slot], tys: &[TypeId], ctx: crate::interp::host::Ctx) -> Slot;
+    fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot;
 }
 
 macro_rules! handler_fallible {
@@ -934,7 +781,7 @@ macro_rules! handler_fallible {
         {
             const SIG: crate::interp::host::HostSig =
                 crate::interp::host::HostSig::new(&[$($n::TY,)*], R::TY);
-            fn entry(vm: &mut Vm, slots: &[Slot], tys: &[TypeId], ctx: crate::interp::host::Ctx) -> Slot {
+            fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot {
                 // SAFETY: ctx is Box<F>, owned by vm.host_keep for the
                 // machine's lifetime; single thread (RFC 0034)
                 let f = unsafe { &mut *(ctx as *mut F) };
@@ -942,10 +789,8 @@ macro_rules! handler_fallible {
                     let mut i = 0usize;
                     // params through the unchecked fast lane (`read`):
                     // the join verified the sig (RFC 0025), the checker
-                    // typed the site — no per-call re-verification. The
-                    // site type rides along (the any lane's decode);
-                    // typed params ignore it (the default `read_at_site`)
-                    $( let $n = unsafe { $n::read_at_site(vm, slots[i], tys.get(i).copied().unwrap_or(super::TY_ANY)) }?; i += 1; )*
+                    // typed the site — no per-call re-verification
+                    $( let $n = unsafe { $n::read(vm, slots[i]) }?; i += 1; )*
                     f(vm, $($n,)*)
                 };
                 match run() {
@@ -968,14 +813,14 @@ macro_rules! handler_infallible {
         {
             const SIG: crate::interp::host::HostSig =
                 crate::interp::host::HostSig::new(&[$($n::TY,)*], R::TY);
-            fn entry(vm: &mut Vm, slots: &[Slot], tys: &[TypeId], ctx: crate::interp::host::Ctx) -> Slot {
+            fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot {
                 // SAFETY: as the fallible impl — Box<F> via host_keep
                 let f = unsafe { &mut *(ctx as *mut F) };
                 let out = {
                     let mut i = 0usize;
                     // params through the unchecked fast lane (`read`) —
                     // as the fallible impl above
-                    $( let $n = match unsafe { $n::read_at_site(vm, slots[i], tys.get(i).copied().unwrap_or(super::TY_ANY)) } {
+                    $( let $n = match unsafe { $n::read(vm, slots[i]) } {
                         Ok(a) => a,
                         Err(t) => return vm.trap_taken(t),
                     }; i += 1; )*
@@ -1068,7 +913,6 @@ mod fast_lane_tests {
     /// Drive the adapter itself (the HostSlot code pointer shape): box
     /// the body, call its `entry` with the given snapshot. `F` solves
     /// the fallibility marker, so both adapter families get exercised.
-    /// (No `any` params in these tests — the empty site-type slice.)
     fn entry_of<F, P, R, K>(vm: &mut Vm, f: F, slots: &[Slot]) -> Slot
     where
         F: HostHandler<(P,), R, K>,
@@ -1076,7 +920,7 @@ mod fast_lane_tests {
         let boxed = Box::new(f);
         let ctx = &*boxed as *const F as crate::interp::host::Ctx;
         std::mem::forget(boxed); // test-scoped leak: ctx must stay live
-        F::entry(vm, slots, &[], ctx)
+        F::entry(vm, slots, ctx)
     }
 
     #[test]
@@ -1222,370 +1066,9 @@ mod fast_lane_tests {
     }
 }
 
-// ---- the any-lane tests (nmap-hostvals P3): the arms are additive, so
-// these pin the NEW surface end-to-end — the site-type capture, the
-// origin-slot identity, the retain/release balance through both
-// directions, the no-alloc answer path, the untagged bits move, and the
-// §0.8 g Empty trap. `call_host` is driven DIRECTLY: funcs[0] is a plain
-// caller frame whose argv pool and regs table the test types, funcs[1]
-// is the joined host thunk — the arg snapshot, the site types, and the
-// dst write-back are the subject, not the op stream. ----
-
-#[cfg(test)]
-mod any_lane_tests {
-    use super::*;
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    /// A VM with a plain caller frame (`funcs[0]`, argv pool `[0, 1]`,
-    /// the regs table the test types) and the `t::probe` host thunk
-    /// (`funcs[1]`, ret `TY_VAL`) joined to the registered body.
-    fn vm_with(registry: HostRegistry, caller_regs: Vec<TypeId>) -> Vm {
-        vm_with_opt(registry, caller_regs, None).0
-    }
-
-    /// The same frame, with an optional `?elem` type appended to the type
-    /// table and (optionally) used as the dst register's declared type —
-    /// the P5 `?V` write-back arms' driver.
-    fn vm_with_opt(registry: HostRegistry, mut caller_regs: Vec<TypeId>, dst_opt: Option<TypeId>) -> (Vm, TypeId) {
-        let mut prog = rut_core::binary::Program::default();
-        prog.types = rut_core::types::TypeTable::boot();
-        let opt_ty = prog.types.types.len() as u32;
-        if let Some(elem) = dst_opt {
-            prog.types.types.push(rut_core::types::RutType {
-                name: rut_core::sym::NIL,
-                kind: rut_core::types::TyKind::Opt { elem },
-            });
-            caller_regs[1] = opt_ty;
-        }
-        let host_key = prog.interner.intern("t::probe");
-        let mut mk = |name: &str, regs: Vec<TypeId>, host: Option<rut_core::sym::IdentId>| rut_core::binary::FuncCode {
-            name: prog.interner.intern(name),
-            params: vec![],
-            ret: TY_NIL,
-            is_method: false,
-            n_captures: 0,
-            regs,
-            argv: vec![0, 1],
-            labels: vec![],
-            code: vec![],
-            spans: vec![],
-            pos: vec![],
-            host_id: host,
-        };
-        prog.funcs.push(mk("main", caller_regs, None));
-        let mut thunk = mk("probe", vec![], Some(host_key));
-        thunk.ret = TY_VAL;
-        thunk.argv = vec![];
-        prog.funcs.push(thunk);
-        (Vm::new(Rc::new(prog), &Limits::default(), HostHooks::default(), registry).expect("vm"), opt_ty)
-    }
-
-    #[test]
-    fn the_any_arg_hands_the_site_type_and_the_origin_slot() {
-        let site = Rc::new(std::cell::Cell::new(0u32));
-        let ptr = Rc::new(std::cell::Cell::new(0usize));
-        let mut hosts = HostRegistry::new();
-        let (site2, ptr2) = (site.clone(), ptr.clone());
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |_vm: &mut Vm, hv: HostVal| {
-                site2.set(hv.ty);
-                ptr2.set(unsafe { hv.slot.r as usize });
-                None // the miss: the flat nil
-            },
-        );
-        let mut vm = vm_with(hosts, vec![TY_STR, TY_STR]);
-        let s = vm.heap.alloc_str("hello".into()).unwrap();
-        vm.cur_func = 0;
-        vm.cur_regs = vec![s, Slot::null()];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        assert_eq!(site.get(), TY_STR, "the site type is the CALLER's register type");
-        assert_eq!(
-            ptr.get(),
-            unsafe { s.r } as usize,
-            "the arg's OWN cell crosses — the origin slot, no copy"
-        );
-        assert_eq!(unsafe { vm.cur_regs[1].i }, 0, "the miss wrote the flat nil");
-    }
-
-    #[test]
-    fn a_ref_stored_via_the_arg_arm_releases_exactly_once() {
-        // the host's "map put": retain the arg's own cell into storage,
-        // answer the miss — the crossing itself must not double-count
-        let stored: Rc<RefCell<Option<Slot>>> = Rc::new(RefCell::new(None));
-        let mut hosts = HostRegistry::new();
-        let st = stored.clone();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |vm: &mut Vm, hv: HostVal| {
-                vm.heap.retain(hv.slot);
-                *st.borrow_mut() = Some(hv.slot);
-                None
-            },
-        );
-        let mut vm = vm_with(hosts, vec![TY_STR, TY_STR]);
-        let base = vm.heap_usage();
-        let s = vm.heap.alloc_str("kept".into()).unwrap();
-        let after_alloc = vm.heap_usage();
-        vm.cur_func = 0;
-        vm.cur_regs = vec![s, Slot::null()];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        assert_eq!(
-            vm.heap_usage(),
-            after_alloc,
-            "the retain mints nothing (rc is a count, not a cell)"
-        );
-        // the map's remove, then the arg register's own release — the
-        // balance must close exactly on the base (no leak, no double:
-        // a double release panics the rc walk in debug)
-        let taken = stored.borrow_mut().take().unwrap();
-        vm.heap.release(taken);
-        vm.heap.release(vm.cur_regs[0]);
-        assert_eq!(vm.heap_usage(), base, "the balance closes on the base");
-    }
-
-    #[test]
-    fn a_ref_answer_keeps_the_cell_alive_and_releases_exactly_once() {
-        let stored: Rc<RefCell<Option<Slot>>> = Rc::new(RefCell::new(None));
-        let mut hosts = HostRegistry::new();
-        let st = stored.clone();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |vm: &mut Vm, hv: HostVal| {
-                // the plan's decode: ref kinds retain the arg's OWN cell
-                vm.heap.retain(hv.slot);
-                *st.borrow_mut() = Some(hv.slot);
-                Some(ValSlot::Ref(hv.slot))
-            },
-        );
-        let mut vm = vm_with(hosts, vec![TY_STR, TY_STR]);
-        let base = vm.heap_usage();
-        let s = vm.heap.alloc_str("kept".into()).unwrap();
-        let old = vm.heap.alloc_str("gone!".into()).unwrap();
-        let after_alloc = vm.heap_usage();
-        vm.cur_func = 0;
-        vm.cur_regs = vec![s, old];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        assert!(
-            Slot::same_ref(vm.cur_regs[1], s),
-            "identity: the answered word IS the stored cell"
-        );
-        assert!(
-            vm.heap_usage() < after_alloc,
-            "the displaced cell released with the write (the ArrGet shape)"
-        );
-        // the map's remove, the register's borrow, the arg register's own —
-        // every reference released exactly once
-        let taken = stored.borrow_mut().take().unwrap();
-        vm.heap.release(taken);
-        vm.heap.release(vm.cur_regs[1]);
-        vm.heap.release(vm.cur_regs[0]);
-        assert_eq!(vm.heap_usage(), base, "no leak, no double release");
-    }
-
-    #[test]
-    fn the_answer_path_mints_no_cells() {
-        // the pure borrow shape: a Ref answer into an any-typed dst —
-        // no retain, no release, no box, no copy: zero cells minted
-        let ptr = Rc::new(std::cell::Cell::new(0usize));
-        let mut hosts = HostRegistry::new();
-        let ptr2 = ptr.clone();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |_vm: &mut Vm, hv: HostVal| {
-                ptr2.set(unsafe { hv.slot.r } as usize);
-                Some(ValSlot::Ref(hv.slot))
-            },
-        );
-        let mut vm = vm_with(hosts, vec![TY_STR, TY_VAL]);
-        let base = vm.heap_usage();
-        let s = vm.heap.alloc_str("hello".into()).unwrap();
-        let after_alloc = vm.heap_usage();
-        vm.cur_func = 0;
-        vm.cur_regs = vec![s, Slot::null()];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        assert_eq!(vm.heap_usage(), after_alloc, "zero cells minted on the answer path");
-        assert_eq!(ptr.get(), unsafe { s.r } as usize, "the origin slot crossed");
-        vm.heap.release(vm.cur_regs[0]);
-        assert_eq!(vm.heap_usage(), base);
-    }
-
-    #[test]
-    fn prim_bits_move_untagged_into_a_narrower_v_register() {
-        // i64 in → i32-V-shaped register out: the SAME 8 bytes — the
-        // answer write performs no width conversion (the survey's
-        // ArrGet receipt, §0.8 h)
-        let site = Rc::new(std::cell::Cell::new(0u32));
-        let mut hosts = HostRegistry::new();
-        let site2 = site.clone();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |_vm: &mut Vm, hv: HostVal| {
-                site2.set(hv.ty);
-                Some(ValSlot::Bits(hv.slot))
-            },
-        );
-        let mut vm = vm_with(hosts, vec![TY_I64, TY_I32]);
-        let bits: i64 = 0x0123_4567_89AB_CDEF;
-        vm.cur_func = 0;
-        vm.cur_regs = vec![Slot::int(bits), Slot::int(0)];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        assert_eq!(site.get(), TY_I64, "the prim site's static type rode the arg");
-        assert_eq!(
-            unsafe { vm.cur_regs[1].i },
-            bits,
-            "the 8 bytes move as-is — the bytecode types them"
-        );
-    }
-
-    #[test]
-    fn an_empty_answer_traps_loudly() {
-        // §0.8 g: the h-family placeholder is a caller bug, never a
-        // silent nil — and the trap fires BEFORE the dst write
-        let mut hosts = HostRegistry::new();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |_vm: &mut Vm, _hv: HostVal| Some(ValSlot::Empty),
-        );
-        let mut vm = vm_with(hosts, vec![TY_STR, TY_STR]);
-        vm.cur_func = 0;
-        vm.cur_regs = vec![Slot::null(), Slot::int(777)];
-        let err = vm.call_host(1, 0, 1, 1).expect_err("Empty traps");
-        assert!(err.msg.contains("placeholder"), "{}", err.msg);
-        assert_eq!(unsafe { vm.cur_regs[1].i }, 777, "the trap fired before the dst write");
-    }
-
-    #[test]
-    fn a_view_arg_crosses_as_its_own_cell() {
-        // aliasing IS the view: an array window arg crosses the VIEW's
-        // cell — never the parent's, never a copy
-        let ptr = Rc::new(std::cell::Cell::new(0usize));
-        let mut hosts = HostRegistry::new();
-        let ptr2 = ptr.clone();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |_vm: &mut Vm, hv: HostVal| {
-                ptr2.set(unsafe { hv.slot.r } as usize);
-                Some(ValSlot::Ref(hv.slot))
-            },
-        );
-        let mut vm = vm_with(hosts, vec![TY_I32, TY_VAL]);
-        let arr = vm
-            .heap
-            .alloc_array_filled(TY_I32, 4, Slot::int(0), &vm.prog.types)
-            .unwrap();
-        let view = vm.heap.alloc_arr_view(arr, 1, 2).unwrap();
-        vm.cur_func = 0;
-        vm.cur_regs = vec![view, Slot::null()];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        assert_eq!(ptr.get(), unsafe { view.r } as usize, "the view's OWN cell crossed");
-        assert_ne!(ptr.get(), unsafe { arr.r } as usize, "never the parent");
-        // balance: the register borrowed (any-typed dst), the arg register
-        // owns — its release frees view + parent
-        vm.heap.release(vm.cur_regs[0]);
-    }
-
-    // ---- the ?V write-back arms (nmap-hostvals P5) ----------------------
-
-    /// A Some(Bits) answer into a `?prim` V register MINTS the one-slot
-    /// opt value (the ArrGet{OptPrim} shape): the register is a fresh
-    /// cell, never the flat null — a stored ZERO must read as `some(0)`,
-    /// not as the miss — and the mint balances exactly (register release
-    /// closes the heap on the base).
-    #[test]
-    fn a_bits_answer_into_a_qprim_register_mints_the_opt_value() {
-        let mut hosts = HostRegistry::new();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |_vm: &mut Vm, hv: HostVal| {
-                let _ = hv;
-                Some(ValSlot::Bits(Slot::int(0))) // the stored ZERO
-            },
-        );
-        let (mut vm, opt_ty) = vm_with_opt(hosts, vec![TY_I32, TY_I32], Some(TY_I32));
-        let base = vm.heap_usage();
-        vm.cur_func = 0;
-        vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        let reg = vm.cur_regs[1];
-        assert!(!unsafe { reg.r.is_null() }, "some(0) must mint, never answer the flat nil");
-        // the mint is a one-slot ?i32 cell whose payload IS the zero
-        assert_eq!(vm.prog.types.type_at(opt_ty).kind, rut_core::types::TyKind::Opt { elem: TY_I32 });
-        // balance: the register owns the mint; releasing it closes the heap
-        vm.heap.release(reg);
-        assert_eq!(vm.heap_usage(), base, "the mint released exactly once");
-    }
-
-    /// The miss into a `?prim` V register is the flat null — nil means
-    /// absent, and no opt cell is minted for it.
-    #[test]
-    fn the_miss_into_a_qprim_register_is_the_flat_null() {
-        let mut hosts = HostRegistry::new();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |_vm: &mut Vm, _hv: HostVal| None,
-        );
-        let (mut vm, _) = vm_with_opt(hosts, vec![TY_I32, TY_I32], Some(TY_I32));
-        let base = vm.heap_usage();
-        vm.cur_func = 0;
-        vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        assert!(unsafe { vm.cur_regs[1].r.is_null() }, "the miss is the flat nil");
-        assert_eq!(vm.heap_usage(), base, "no mint on the miss");
-    }
-
-    /// A Some(Ref) answer into a `?ref` V register arrives INSIDE the
-    /// fresh `?T` box (the RFC 0044 T → ?T law): the box aliases the
-    /// stored cell (field 0 IS the cell), the store keeps its own
-    /// reference, and the counts balance — the box's release refunds its
-    /// own cell reference, not the store's.
-    #[test]
-    fn a_ref_answer_into_a_qref_register_arrives_inside_the_opt_box() {
-        let mut hosts = HostRegistry::new();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |vm: &mut Vm, hv: HostVal| {
-                vm.heap.retain(hv.slot); // the store's own reference
-                Some(ValSlot::Ref(hv.slot))
-            },
-        );
-        let (mut vm, _) = vm_with_opt(hosts, vec![TY_STR, TY_STR], Some(TY_STR));
-        let base = vm.heap_usage();
-        let s = vm.heap.alloc_str("kept".into()).unwrap();
-        vm.cur_func = 0;
-        vm.cur_regs = vec![s, Slot::null()];
-        vm.call_host(1, 0, 1, 1).expect("the crossing");
-        let reg = vm.cur_regs[1];
-        assert!(!unsafe { reg.r.is_null() });
-        assert!(!Slot::same_ref(reg, s), "the register holds the ?str BOX, never the bare cell");
-        // the box aliases the stored cell: field 0 IS it
-        let cell = crate::heap::cell_of(reg);
-        if let crate::heap::CellData::Record { fields } = &cell.data {
-            let f0 = fields.borrow().get(0).unwrap_or(Slot::null());
-            assert!(Slot::same_ref(f0, s), "the box aliases the stored cell");
-        } else {
-            panic!("the ?str value is a one-slot box");
-        }
-        // balance: the register's box (owning its aliased-cell ref), then
-        // the store's own retain (the body's), then the arg register's
-        // mint ref — every count closes exactly
-        vm.heap.release(reg);
-        vm.heap.release(s); // the store's retained reference
-        vm.heap.release(s); // the arg register's original reference
-        assert_eq!(vm.heap_usage(), base, "no leak, no double release");
-    }
-
-    /// The trust law's loud edge: a `Bits` answer into a `?ref` V
-    /// register is a host bug and TRAPS before the dst write.
-    #[test]
-    fn a_bits_answer_into_a_qref_register_traps() {
-        let mut hosts = HostRegistry::new();
-        crate::register!(hosts, "t::probe", (HostVal,) -> Option<ValSlot>,
-            move |_vm: &mut Vm, hv: HostVal| Some(ValSlot::Bits(hv.slot)),
-        );
-        let (mut vm, _) = vm_with_opt(hosts, vec![TY_I32, TY_I32], Some(TY_STR));
-        vm.cur_func = 0;
-        vm.cur_regs = vec![Slot::int(0), Slot::int(777)];
-        let err = vm.call_host(1, 0, 1, 1).expect_err("Bits into a ?ref register traps");
-        assert!(err.msg.contains("trust law"), "{}", err.msg);
-        assert_eq!(unsafe { vm.cur_regs[1].i }, 777, "the trap fired before the dst write");
-    }
-}
-
 // ---- the answer-lane tests (the legal-host-returns phase): the three
 // boot `?T` rows plus plain `bytes` cross back. `call_host` is driven
-// DIRECTLY (the any-lane tests' shape): funcs[0] is a plain caller frame
+// DIRECTLY (the fast-lane tests' shape): funcs[0] is a plain caller frame
 // whose regs table the test types, funcs[1] is the joined host thunk
 // with the lane's own ret — the mint, the flat-nil miss, the rc
 // transfer, and the trap texts are the subject. ----

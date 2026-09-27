@@ -22,17 +22,15 @@ pub fn normalize(src: &str) -> String {
 }
 
 pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
-    lex_mode(src, false)
+    lex_mode(src)
 }
 
-/// Decl-mode lexing (nmap-hostvals P3): a `.d.rut` surface admits the
-/// `any` spelling as a bare identifier — the host-decl value lane's
-/// type, whitelisted by the driver's crossing table (`crossing_ty`). In
-/// `.rut` source the name stays reserved (the RFC 0012 law, verbatim):
-/// `any` is host-decl-only, rut source cannot name it.
-pub fn lex_mode(src: &str, decl: bool) -> (Vec<Token>, Vec<Diag>) {
+/// Decl-mode lexing (RFC 0030 §3): a `.d.rut` surface parses the same
+/// token vocabulary as `.rut` source — the reserved-word law (RFC 0002
+/// §4, `any` included since the any-lane removal) is mode-independent.
+pub fn lex_mode(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let normalized = normalize(src);
-    let mut lx = Lexer::new(&normalized, decl);
+    let mut lx = Lexer::new(&normalized);
     lx.run();
     (lx.toks, lx.diags)
 }
@@ -44,12 +42,10 @@ struct Lexer<'a> {
     pub diags: Vec<Diag>,
     depth: u32,
     depth_reported: bool,
-    /// `.d.rut` mode: the `any` reserved word is admitted (see [`lex_mode`])
-    decl: bool,
 }
 
 impl<'a> Lexer<'a> {
-    fn new(src: &'a str, decl: bool) -> Lexer<'a> {
+    fn new(src: &'a str) -> Lexer<'a> {
         let mut lx = Lexer {
             src: src.as_bytes(),
             pos: 0,
@@ -57,7 +53,6 @@ impl<'a> Lexer<'a> {
             diags: Vec::new(),
             depth: 0,
             depth_reported: false,
-            decl,
         };
         // skip BOM (RFC 0002 §1)
         if lx.src.starts_with(&[0xEF, 0xBB, 0xBF]) {
@@ -383,15 +378,12 @@ impl<'a> Lexer<'a> {
             "true" => self.push(Tok::Bool(true), lo),
             "false" => self.push(Tok::Bool(false), lo),
             w => {
-                // `any` is the host-decl value lane (nmap-hostvals P3):
-                // reserved in .rut source (the RFC 0012 law, verbatim),
-                // admitted as a bare identifier on the .d.rut decl
-                // surface — the driver's crossing_ty whitelist types it
-                // there
-                if !(self.decl && w == "any") {
-                    if let Some(msg) = reserved_word_msg(w) {
-                        self.err(self.span(lo), msg);
-                    }
+                // the reservation is UNIVERSAL (RFC 0012, RFC 0014): `any`
+                // draws the diagnostic in every mode — `.rut` source and
+                // `.d.rut` decls alike (the erasure box `opaque` is the
+                // only value lane)
+                if let Some(msg) = reserved_word_msg(w) {
+                    self.err(self.span(lo), msg);
                 }
                 self.push(Tok::Ident(w.to_string()), lo);
             }

@@ -243,3 +243,26 @@ law — RFC 0016's amendment records the walk. The host-surface names
 (`Opaque` in decls, the boundary's rust_name) are unchanged; the Rust
 crate-internal names moved (RFC 0014/0025/0026's amendments record
 them per surface).
+
+## Amendment (Sep 2026, any-removal): the crossing set, final — optionals cross back, polymorphism crosses sealed
+
+The any arms (the nmap-hostvals amendment above) are WITHDRAWN: the
+`any` spelling is gone from the decl grammar and from the boundary — no
+`HostVal` param shape, no `Option<ValSlot>` answer lane, no
+`host_val_out` tagged carry, no caller's-V write-back. §1 and §2 now
+read:
+
+- **The crossing set (§1's rule, final).** Params cross over the
+  primitives, `str`, `bytes`, and `opaque`; returns cross over the same
+  set PLUS the answer optionals `?str`/`?bytes`/`?opaque` —
+  nil-flattened, the err-channel amendment's read direction now landed
+  in BOTH directions (`Option<String>`/`Option<Vec<u8>>`/the opaque
+  handles mint the opt box; `None` is the flat nil). No other shape
+  crosses: the decl load refuses naming the offender (RFC 0025).
+- **Polymorphism crosses sealed (§2).** A value whose static type the
+  row cannot name crosses inside the erasure box — `opaque(v)` seals at
+  the call, `opaque.downcast<T>` recovers after, `x is T` probes
+  (RFC 0014). The typed class faces keep their generic signatures; only
+  the host-boundary rows are concrete (the nmapset `put`/`get` and the
+  async `__launch`/`__sleep` rows are the landed precedents). The
+  nmap-hostvals amendment's Opaque store repr law stands unchanged.

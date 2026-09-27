@@ -9,17 +9,17 @@
 // a real HTTP status); an HTTP status — any, 4xx/5xx included — is
 // not a transport failure.
 //
-// The readback rows answer through the ANY lane (the `map_hvget`
-// precedent, nmap-hostvals P3): the engine's verified-return table
-// cannot bind a `?str`/`bytes` host answer, so the host answers the
-// CALLER's static V — a `?str` dst reads the err answer (nil unless
-// status 0), a `bytes` dst reads the body octets, empty on transport
-// failure (§0.8 h's trust law lives at this decl site).
+// The readback rows answer through the typed answer lanes (the
+// legal-host-returns phase): `?str` crosses back nil-flattened (nil
+// unless status 0), `bytes` as an owned copy — each answer mints a
+// fresh cell the CALLER's register owns, so no claim bookkeeping
+// survives on the payload side (§0.8 h's trust law is retired with
+// the any lane).
 
 pub host fn http_get(url: str) -> opaque;
 
 pub host fn http_status(r: opaque) -> i32;   // 0 = transport error
 
-pub host fn http_err(r: opaque) -> any;      // nil unless status 0 (?str dst)
+pub host fn http_err(r: opaque) -> ?str;     // nil unless status 0
 
-pub host fn http_body(r: opaque) -> any;     // the body octets (bytes dst)
+pub host fn http_body(r: opaque) -> bytes;   // the body octets

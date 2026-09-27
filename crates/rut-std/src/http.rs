@@ -5,8 +5,8 @@
 //! ```rut
 //! pub host fn http_get(url: str) -> opaque;
 //! pub host fn http_status(r: opaque) -> i32;   // 0 = transport error
-//! pub host fn http_err(r: opaque) -> any;      // nil unless status 0
-//! pub host fn http_body(r: opaque) -> any;     // the body octets
+//! pub host fn http_err(r: opaque) -> ?str;     // nil unless status 0
+//! pub host fn http_body(r: opaque) -> bytes;   // the body octets
 //! ```
 //!
 //! The response handle is an `opaque` payload owning
@@ -15,16 +15,12 @@
 //! `err`, the body is empty on failure. An HTTP status (any, including
 //! 4xx/5xx) is NOT a transport failure: `err` stays nil.
 //!
-//! The readback rows answer through the ANY lane (the `map_hvget`
-//! precedent, nmap-hostvals P3): written before the answer lanes
-//! existed (`Ret for Option<String>` was the read direction only, and
-//! the decl refused `?T`), so the host answers the CALLER's static V —
-//! a `?str` dst reads the err answer (nil unless status 0), a `bytes`
-//! dst reads the body octets (§0.8 h's trust law, documented at the
-//! decl site). Each answer mints a fresh cell whose claim the payload
-//! KEEPS (`finalize` releases it at store-entry death) — the store-
-//! keeps-its-own claim the any-answer write-back's retain mirrors,
-//! so repeated reads close the balance exactly.
+//! The readback rows answer through the TYPED answer lanes (the
+//! legal-host-returns phase): `Ret for Option<String>` mints the
+//! `?str` opt box nil-flattened, `Ret for Vec<u8>` copies the octets
+//! into a fresh `bytes` cell — each answer's cell is owned by the
+//! CALLER's register, so the payload carries no claim bookkeeping (the
+//! any-lane era's store-keeps-its-own law retired with the lane).
 //!
 //! Two lanes install these bodies: [`install_std_http_with`] rides an
 //! injectable transport closure (the fixture lane — tests key it on
@@ -33,15 +29,12 @@
 //! feature is DEFAULT-OFF — reqwest-blocking does not build on
 //! wasm32-unknown-unknown, so only native embedders opt in.
 
-use rut_vm::heap::Heap;
 use rut_vm::interp::{HostRegistry, Vm};
-use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, ValSlot};
+use rut_vm::{HostPayload, Opaque, OpaqueRef, Trap};
 
 /// The response handle's payload — the plan's `{ status, err, body }`
-/// triple plus the answer cells' outstanding claims (see the module
-/// doc): `http_err`/`http_body` mint their crossing cell per call and
-/// the payload holds its own claim until the next mint replaces it or
-/// store-entry death releases it (the nmap entry law).
+/// triple. No finalize hook: the readbacks answer owned Rust values
+/// (`Option<String>`/`Vec<u8>`) whose crossing cells the caller owns.
 pub struct HttpResponse {
     /// the HTTP status word — 0 is RESERVED for transport failure
     status: u16,
@@ -49,55 +42,9 @@ pub struct HttpResponse {
     err: Option<String>,
     /// the body octets; empty on transport failure
     body: Vec<u8>,
-    /// the outstanding `?str` answer's claim (the failure text's cell)
-    err_cell: Option<Slot>,
-    /// the outstanding `bytes` answer's claim (the body's cell)
-    body_cell: Option<Slot>,
 }
 
-/// Store-entry death releases the outstanding answer claims — the
-/// release-context law at the payload's own Drop boundary (RFC 0016
-/// §3, the nmap `HostPayload` precedent).
-impl HostPayload for HttpResponse {
-    fn finalize(&mut self, heap: &Heap) {
-        if let Some(s) = self.err_cell.take() {
-            heap.release(s);
-        }
-        if let Some(s) = self.body_cell.take() {
-            heap.release(s);
-        }
-    }
-}
-
-impl HttpResponse {
-    /// `http_err`'s answer: `None` (the flat nil) unless status 0;
-    /// otherwise the failure text as a fresh `str` cell whose claim
-    /// the payload keeps (see the module doc).
-    fn err_answer(&mut self, vm: &mut Vm) -> Result<Option<ValSlot>, Trap> {
-        if let Some(s) = self.err_cell.take() {
-            vm.release(s);
-        }
-        match &self.err {
-            None => Ok(None),
-            Some(text) => {
-                let cell = vm.alloc_str_cell(text.clone())?;
-                self.err_cell = Some(cell);
-                Ok(Some(ValSlot::Ref(cell)))
-            }
-        }
-    }
-
-    /// `http_body`'s answer: the body octets as a fresh `bytes` cell —
-    /// the same store-keeps-its-own claim as [`HttpResponse::err_answer`].
-    fn body_answer(&mut self, vm: &mut Vm) -> Result<ValSlot, Trap> {
-        if let Some(s) = self.body_cell.take() {
-            vm.release(s);
-        }
-        let cell = vm.alloc_bytes_cell(self.body.clone())?;
-        self.body_cell = Some(cell);
-        Ok(ValSlot::Ref(cell))
-    }
-}
+impl HostPayload for HttpResponse {}
 
 /// Install the `http_host` bodies over an injectable transport: `f`
 /// maps a URL to `(status, body)` — or `Err(message)` for a transport
@@ -121,7 +68,7 @@ where
             };
             let b = Opaque::alloc_hosted(
                 vm,
-                HttpResponse { status, err, body, err_cell: None, body_cell: None },
+                HttpResponse { status, err, body },
             )?;
             Ok(b.handle().clone())
         },
@@ -137,17 +84,17 @@ where
     rut_vm::register!(
         hosts,
         "http_host::http_err",
-        (Opaque<HttpResponse>,) -> Option<ValSlot>,
-        |vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<ValSlot>, Trap> {
-            Ok(r.with_mut(vm, |vm, resp| resp.err_answer(vm))??)
+        (Opaque<HttpResponse>,) -> Option<String>,
+        |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<String>, Trap> {
+            Ok(r.with(|resp| resp.err.clone())?)
         },
     );
     rut_vm::register!(
         hosts,
         "http_host::http_body",
-        (Opaque<HttpResponse>,) -> Option<ValSlot>,
-        |vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<ValSlot>, Trap> {
-            Ok(r.with_mut(vm, |vm, resp| resp.body_answer(vm).map(Some))??)
+        (Opaque<HttpResponse>,) -> Vec<u8>,
+        |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Vec<u8>, Trap> {
+            Ok(r.with(|resp| resp.body.clone())?)
         },
     );
 }
@@ -251,7 +198,7 @@ entry fn twice(url: str) -> (bytes, bytes) {
         assert_eq!(got.1, None, "a transport success carries no err text");
         assert_eq!(got.2, b"hello rut");
         assert_eq!(seen.borrow().as_str(), "fixture://ok", "the url crosses verbatim");
-        // repeated reads ride fresh cells, same octets
+        // repeated reads answer fresh cells, same octets
         let (a, b): (Vec<u8>, Vec<u8>) = vm.call("twice", ("fixture://ok",)).unwrap();
         assert_eq!(a, b"hello rut");
         assert_eq!(b, b"hello rut");
@@ -278,11 +225,11 @@ entry fn twice(url: str) -> (bytes, bytes) {
     }
 
     #[test]
-    fn answer_claims_close_at_frame_exit_and_store_death() {
-        // every readback mints a cell the payload keeps its own claim
-        // on; when the probe's frame retires (the response handle's rc
-        // hits 0, `finalize` runs) the balance must close on the base —
-        // on the ok lane and the failure lane alike
+    fn answer_cells_close_at_frame_exit() {
+        // every readback mints a cell the CALLER's register owns (the
+        // typed answer lanes); when the probe's frame retires the
+        // balance must close on the base — on the ok lane and the
+        // failure lane alike
         let mut vm = boot(|url| match url {
             "fixture://bad" => Err("boom".into()),
             _ => Ok((200, b"payload".to_vec())),

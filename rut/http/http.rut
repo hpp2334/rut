@@ -21,16 +21,10 @@ impl Response {
     }
 
     /// the transport-failure text — nil unless status is 0
-    pub fn transport_error(self) -> ?str {
-        let e: ?str = http_err(self.r);
-        return e;
-    }
+    pub fn transport_error(self) -> ?str { return http_err(self.r); }
 
     /// the body octets — empty on transport failure
-    pub fn body(self) -> bytes {
-        let b: bytes = http_body(self.r);
-        return b;
-    }
+    pub fn body(self) -> bytes { return http_body(self.r); }
 
     /// the body as text — `bytes.decode()`, lossy
     pub fn text(self) -> str { return self.body().decode(); }

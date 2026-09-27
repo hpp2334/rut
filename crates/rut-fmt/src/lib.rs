@@ -40,7 +40,7 @@ use rut_parser::Mode;
 /// input is a parsed-clean module.
 pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<String>> {
     let normalized = rut_lexer::lexer::normalize(src);
-    let (toks, diags) = rut_lexer::lexer::lex_mode(&normalized, mode == Mode::Decl);
+    let (toks, diags) = rut_lexer::lexer::lex_mode(&normalized);
     if !diags.is_empty() {
         return Err(diags.iter().map(|d| d.msg.clone()).collect());
     }

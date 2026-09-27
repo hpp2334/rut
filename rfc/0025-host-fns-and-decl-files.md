@@ -243,6 +243,18 @@ set's spelling gained one row and the Rust-side names moved:
   in-crossing rc work needs it; the closure no longer captures the vm
   it was handed); `with` keeps the vm-free shared-borrow signature.
 
+## Amendment (Sep 2026, any-removal): the decl grammar loses `any`
+
+The nmap-hostvals amendment's "`any` spelling" arm is WITHDRAWN: the
+crossing whitelist maps the primitives, `str`, `bytes`, `opaque`, and —
+in return position — the answer optionals `?str`/`?bytes`/`?opaque`;
+nothing else. A `.d.rut` spelling `any` is the RFC 0012 reserved-word
+diagnostic at parse time, before the crossing check runs (there is no
+decl-mode lexical exception). The join contract is unchanged —
+signatures derived from the Rust shape, verified against the `.d.rut`
+at boot — and the `Option<String>`/`Option<Vec<u8>>` bindings verify
+against the same CONST boot rows the decl optionals map to.
+
 ## Open questions
 
 - OQ-1: should `rutc` grow a lint that a wrapper class's `h: Opaque`

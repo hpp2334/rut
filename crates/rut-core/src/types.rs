@@ -274,27 +274,11 @@ pub const TY_STACK_TRACE: TypeId = 16;
 /// the `StrBuf` growable builder (json-perf phase 2) — appended after
 /// `StackTrace`; fixed ids are wire-stable and must never be reordered
 pub const TY_STRBUF: TypeId = 17;
-/// the `any` crossing (nmap-hostvals P3): the HOST-DECL-only type — a
-/// `.d.rut` host-fn param/answer may spell it, and rut source cannot
-/// name it (the lexer keeps `any` reserved in `.rut` source; only the
-/// driver's decl-mode crossing table maps the spelling to this id).
-/// Appended after `StrBuf`; fixed ids are wire-stable and must never be
-/// reordered.
-///
-/// DELIBERATELY a normal small boot id, NEVER the VM interpreter's
-/// `TY_ANY` (`u32::MAX`) sentinel — those guards read `!= TY_ANY`, and
-/// a boot `any` on the sentinel id would invert every one of them (the
-/// survey's collision receipt). The boot row is a `Nil` shell (the
-/// `TY_CHAR` convention): the id must be a valid boot index — the
-/// graph crossing gate, `type_repr`, `is_ref`, and the HostSig join
-/// all index it — but no rut-side kind machinery reaches it, because
-/// no rut source can produce a value of this type.
-pub const TY_VAL: TypeId = 18;
 /// the `?str` answer lane (the legal-host-returns phase): the boot row
 /// `Opt { elem: TY_STR }` a `.d.rut` `-> ?str` return maps to — the
 /// fixed id the registry's `Option<String>` binding verifies against.
-/// Appended after `TY_VAL`; fixed ids are wire-stable and must never be
-/// reordered.
+/// Appended after the RESERVED row 18 (the retired `any` lane, below);
+/// fixed ids are wire-stable and must never be reordered.
 pub const TY_OPT_STR: TypeId = 19;
 /// the `?bytes` answer lane (the legal-host-returns phase): `Opt { elem: TY_BYTES }`.
 pub const TY_OPT_BYTES: TypeId = 20;
@@ -346,16 +330,13 @@ impl TypeTable {
         push(sym::BYTES, TyKind::Bytes);
         push(sym::STACK_TRACE, TyKind::Trace);
         push(sym::STRBUF, TyKind::StrBuf);
-        // the `any` crossing (nmap-hostvals P3, TY_VAL above): HOST-DECL-only —
-        // a `.d.rut` host-fn param/answer spelling. rut source cannot name
-        // it (the lexer keeps `any` reserved in `.rut` source; decl mode
-        // admits the spelling and the driver's crossing table maps it to
-        // this CONST, never through this table). The row is a Nil SHELL
-        // (the TY_CHAR convention): the id must be a valid boot index —
-        // the crossing gate, the repr tables, and the HostSig join all
-        // read it — but no rut-side kind machinery ever reaches the row.
-        // The name rides the shell convention (sym::NIL); no P3-reachable
-        // diagnostic reads it.
+        // RESERVED (the any-lane removal, the TY_CHAR convention): the
+        // `any` crossing row (nmap-hostvals P3) is GONE from the surface
+        // — the lexer refuses the spelling in every mode, the decl
+        // grammar has no `any` arm, and nothing maps to this id. The ROW
+        // stays so every id above it keeps its wire-stable boot position
+        // (the fixed ids must never be reordered); nothing reaches it.
+        // The name rides the shell convention (sym::NIL).
         push(sym::NIL, TyKind::Nil);
         // the host-answer optionals (the legal-host-returns phase): REAL
         // crossing rows — `?str`/`?bytes`/`?opaque` cross back
@@ -364,8 +345,8 @@ impl TypeTable {
         // the CONSTS above (the driver's answer table), and the registry's
         // `Option<T>` SIG shares them, so the RFC 0025 join verifies the
         // pair by identity. The row names ride the shell convention (the
-        // elem's own symbol — the TY_VAL row's law); a diagnostic that
-        // needs the `?` shape names it from the CONST.
+        // elem's own symbol — the reserved-row convention); a diagnostic
+        // that needs the `?` shape names it from the CONST.
         push(sym::STR, TyKind::Opt { elem: TY_STR });
         push(sym::BYTES, TyKind::Opt { elem: TY_BYTES });
         push(sym::OPAQUE, TyKind::Opt { elem: TY_OPAQUE });

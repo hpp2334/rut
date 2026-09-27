@@ -92,7 +92,7 @@ pub enum OpaqueEntry {
 /// stored values must tag themselves). NEVER boxed: the 8-byte slot moves.
 ///
 /// - `Empty` — the h-family placeholder: an entry that exists with no
-///   value (§0.8 g). Reading one through the any-answer TRAPS loudly —
+///   value (§0.8 g). Reading one as a stored value TRAPS loudly —
 ///   h-family insert + valued read is a caller bug, never a silent nil.
 /// - `Bits` — a prim immediate: zero cells, zero copy, the 8-byte slot
 ///   moves as-is; the consumer's static type gives the word its meaning.
