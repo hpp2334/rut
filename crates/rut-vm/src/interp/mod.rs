@@ -162,6 +162,21 @@ pub struct Vm {
     op_tags: Vec<Vec<u8>>,
     /// threaded handler table, built once and reused across bails
     thread_table: rut_vm_threaded::Table<Vm>,
+    // ---- the async driving loop (RFC 0018 / RFC 0035 §4) ----
+    /// launched/parked frames to (re)drive — plain cell handles, each
+    /// queue entry owning one reference (retained on enqueue, released
+    /// on pop)
+    ready: std::collections::VecDeque<Slot>,
+    /// sleep deadlines (the VM's virtual clock) → the frames they wake
+    timers: std::collections::BTreeMap<u64, Vec<Slot>>,
+    /// the virtual clock (deterministic: hosts advance it explicitly)
+    now_ms: u64,
+    /// every `Future<T>` instantiation's `yield` slot — `drive` tries
+    /// them in order off the receiver's vtable row
+    future_yield_slots: Vec<u32>,
+    /// the engine-minted cx record type (found by name; None when the
+    /// program never mentions async)
+    cx_ty: Option<TypeId>,
 }
 
 /// Const-generic op codes for the scalar op bodies — RFC 0032: the opcode is
@@ -314,6 +329,33 @@ impl Vm {
             .map(|f| f.code.iter().map(rut_vm_threaded::tag_of).collect())
             .collect();
         let thread_table = rut_vm_threaded::build_table::<Vm>();
+        // the async driving loop's boot scan (RFC 0018): every trait
+        // named `Future<..>` contributes its `yield` slot, and the cx
+        // record is the `RunContext`-named Data type — both minted by
+        // the compiler; programs without async scan to empty
+        let mut future_yield_slots: Vec<u32> = Vec::new();
+        let mut cx_ty: Option<TypeId> = None;
+        let cx_name = prog.interner.lookup(rut_core::async_frame::RUN_CONTEXT_TYPE);
+        for (tid, t) in prog.traits.iter().enumerate() {
+            if prog.interner.name(t.name).starts_with("Future<") {
+                if let Some(slot) = prog
+                    .trait_slots
+                    .iter()
+                    .position(|&(tr, m)| tr == tid as u32 && m == 0)
+                {
+                    future_yield_slots.push(slot as u32);
+                }
+            }
+        }
+        if let Some(cid) = cx_name {
+            cx_ty = prog
+                .types
+                .types
+                .iter()
+                .enumerate()
+                .find(|(_, t)| t.name == cid && matches!(t.kind, TyKind::Data { .. }))
+                .map(|(i, _)| i as TypeId);
+        }
         Ok(Vm {
             prog,
             heap,
@@ -340,6 +382,11 @@ impl Vm {
             type_repr,
             op_tags,
             thread_table,
+            ready: std::collections::VecDeque::new(),
+            timers: std::collections::BTreeMap::new(),
+            now_ms: 0,
+            future_yield_slots,
+            cx_ty,
         })
     }
 
@@ -923,6 +970,315 @@ impl Vm {
 
     fn is_ref(&self, ty: TypeId) -> bool {
         ty != TY_ANY && self.type_repr[ty as usize].is_ref()
+    }
+}
+
+/// The outcome of one drive step (RFC 0018): the driven frame either
+/// ran to completion (its state field retired to null) or suspended at
+/// a checkpoint (a non-null checkpoint singleton).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Drive {
+    Done,
+    Parked,
+}
+
+impl Vm {
+    // ---- the engine-half record API (RFC 0018) ----
+    // The host set's bodies receive `&mut Vm` (RFC 0022/0025) — launch,
+    // abort, and sleep live behind that crossing, so the frame-cell
+    // surgery they perform goes through these focused helpers.
+
+    /// Allocate a zeroed record of an in-table type; the slot owns one
+    /// reference. The sleep future's mint is the intended caller.
+    pub fn alloc_zeroed_record(&self, ty: TypeId, n: usize) -> Result<Slot, Trap> {
+        self.heap.alloc_record_zeroed(ty, n)
+    }
+
+    /// The checkpoint enum's immortal member singleton (the engine
+    /// half's state writes answer with the minted cell, per the survey).
+    pub fn enum_member_slot(&self, ty: TypeId, member: u32) -> Result<Slot, Trap> {
+        self.heap.enum_member(ty, member)
+    }
+
+    /// Read a record field; `None` on a non-record or out of range.
+    pub fn record_field(&self, cell: Slot, i: usize) -> Option<Slot> {
+        if unsafe { cell.r.is_null() } {
+            return None;
+        }
+        match &cell_of(cell).data {
+            CellData::Record { fields } => fields.borrow().get(i),
+            _ => None,
+        }
+    }
+
+    /// Write a record field with the full rc law (retain the new value,
+    /// release the old when the field is ref-repr). No-op on a
+    /// non-record or out of range.
+    pub fn set_record_field(&self, cell: Slot, i: usize, v: Slot) {
+        if unsafe { cell.r.is_null() } {
+            return;
+        }
+        let cell = cell_of(cell);
+        let CellData::Record { fields } = &cell.data else {
+            return;
+        };
+        let old = match fields.borrow_mut().set(i, v) {
+            Some(o) => o,
+            None => return,
+        };
+        let is_ref = match self.prog.types.kind(cell.ty) {
+            TyKind::Data { fields } => fields
+                .get(i)
+                .map(|f| self.prog.types.repr_of(f.ty).is_ref())
+                .unwrap_or(false),
+            _ => false,
+        };
+        if is_ref {
+            self.heap.retain(v);
+            self.heap.release(old);
+        }
+    }
+
+    // ---- the async driving loop (RFC 0018; the host loop's engine
+    // half — RFC 0035 §4's run_until_idle / next_deadline columns) ----
+
+    /// The virtual clock (deterministic tests: hosts advance it; the
+    /// sleep future's yield arms deadlines against it).
+    pub fn now_ms(&self) -> u64 {
+        self.now_ms
+    }
+    /// Advance/reset the virtual clock. `next_deadline` answers the
+    /// earliest sleep deadline; the host sets the clock to it (or
+    /// sleeps wall-time and sets the wall value).
+    pub fn set_now(&mut self, t_ms: u64) {
+        self.now_ms = t_ms;
+    }
+
+    /// `launch_future`'s engine half: the queue owns one reference from
+    /// here on (retained; released when the entry is driven).
+    pub fn launch(&mut self, fut: Slot) {
+        self.heap.retain(fut);
+        self.ready.push_back(fut);
+    }
+
+    /// `LaunchedFutureHandle::abort`'s engine half: flag the task's
+    /// cancellation (the cx probe reads it), re-enqueue so the probe at
+    /// its checkpoint fires the drop path. `false` when already retired
+    /// (state null — completed or dropped).
+    pub fn cancel(&mut self, task: Slot) -> bool {
+        if unsafe { task.r.is_null() } {
+            return false;
+        }
+        let cell = cell_of(task);
+        let CellData::Record { fields } = &cell.data else {
+            return false;
+        };
+        let finished = fields
+            .borrow()
+            .get(rut_core::async_frame::STATE_FIELD as usize)
+            .map(|s| unsafe { s.r.is_null() })
+            .unwrap_or(true);
+        if finished {
+            return false;
+        }
+        fields.borrow_mut().set(
+            rut_core::async_frame::CANCELLED_FIELD as usize,
+            Slot::bool(true),
+        );
+        self.launch(task);
+        true
+    }
+
+    /// The sleep future's yield arms its deadline here (engine-assisted
+    /// mint; the timer map holds the reference until it fires).
+    pub fn arm_timer(&mut self, deadline_ms: u64, fut: Slot) {
+        self.heap.retain(fut);
+        self.timers.entry(deadline_ms).or_default().push(fut);
+    }
+
+    /// Expire due timers into the ready queue; answer the earliest
+    /// remaining deadline (the host loop's next wake). `None` when no
+    /// timer is armed.
+    pub fn next_deadline(&mut self) -> Option<u64> {
+        loop {
+            let (&d, _) = self.timers.iter().next()?;
+            if d <= self.now_ms {
+                if let Some(waiting) = self.timers.remove(&d) {
+                    // the timer entry's references transfer to the queue
+                    for s in waiting {
+                        self.ready.push_back(s);
+                    }
+                }
+            } else {
+                return Some(d);
+            }
+        }
+    }
+
+    /// Frames not yet retired: the ready queue plus armed timers — the
+    /// host loop's idle test.
+    pub fn pending_tasks(&self) -> usize {
+        self.ready.len() + self.timers.values().map(|v| v.len()).sum::<usize>()
+    }
+
+    /// The ready queue's front slot, without driving it — a test/
+    /// tooling read for receipts held engine-side.
+    pub fn first_ready(&self) -> Slot {
+        *self.ready.front().unwrap()
+    }
+
+    /// Drain the ready queue: drive each frame once (to its park or its
+    /// completion). Every entry's reference is released here.
+    pub fn run_ready(&mut self) -> Result<usize, Trap> {
+        let mut n = 0;
+        while let Some(fut) = self.ready.pop_front() {
+            let r = self.drive(fut);
+            self.heap.release(fut);
+            r?;
+            n += 1;
+        }
+        Ok(n)
+    }
+
+    /// One drive step of a future: a re-entrant call of its `yield`
+    /// (the InterpCursor stash/restore — the RFC 0022 nested-entry
+    /// machinery), with a freshly minted cx over the frame edge. The
+    /// answer reads off the state field: null → [`Drive::Done`] (and a
+    /// registered awaiter, if any, re-enqueues), else [`Drive::Parked`].
+    pub fn drive(&mut self, fut: Slot) -> Result<Drive, Trap> {
+        if unsafe { fut.r.is_null() } {
+            return Err(Trap::new(TrapKind::NilDeref, "drive on nil"));
+        }
+        let ty = cell_of(fut).ty;
+        let fid = self
+            .future_yield_slots
+            .iter()
+            .find_map(|&slot| {
+                self.prog
+                    .vtables
+                    .get(ty as usize)
+                    .and_then(|v| v.get(slot as usize))
+                    .copied()
+                    .flatten()
+            })
+            .ok_or_else(|| {
+                Trap::new(
+                    TrapKind::Invalid,
+                    format!(
+                        "drive: {} is not a future — no `Future::yield` row in its vtable",
+                        self.prog.type_name(ty)
+                    ),
+                )
+            })?;
+        let cx_ty = self.cx_ty.ok_or_else(|| {
+            Trap::new(TrapKind::Invalid, "drive: the program has no `RunContext` cx record")
+        })?;
+        // the per-drive cx: one field, the frame edge (retained)
+        let cx = self.heap.alloc_record_zeroed(cx_ty, 1)?;
+        if let CellData::Record { fields } = &cell_of(cx).data {
+            self.heap.retain(fut);
+            fields.borrow_mut().set(0, fut);
+        }
+        let r = if self.prog.funcs[fid as usize].host_id.is_some() {
+            // the engine-backed thunk (RFC 0018): a bodyless FuncCode
+            // whose host body implements `Future::yield` — the sleep
+            // future's timer dance. Run the crossing directly on the
+            // (frame, cx) pair: the crossing borrows both (the
+            // op_call rc law — retain per ref param, release after).
+            let host = self.host_slots[fid as usize];
+            let params = self.prog.funcs[fid as usize].params.clone();
+            const INLINE_ARITY: usize = 8;
+            let mut snapshot = [Slot::null(); INLINE_ARITY];
+            let mut tys = [0u32; INLINE_ARITY];
+            for (i, &s) in [fut, cx].iter().enumerate() {
+                let ty = params.get(i).copied().unwrap_or(0);
+                tys[i] = ty;
+                snapshot[i] = s;
+                if self.is_ref(ty) {
+                    self.heap.retain(s);
+                }
+            }
+            let _ = (host.code)(self, &snapshot[..2], &tys[..2], host.ctx);
+            for (i, &s) in [fut, cx].iter().enumerate() {
+                if self.is_ref(params.get(i).copied().unwrap_or(0)) {
+                    self.heap.release(s);
+                }
+            }
+            if let Some(t) = self.host_trap.take() {
+                return Err(t);
+            }
+            Ok(Value::Nil)
+        } else {
+            // the call ABI (op_call_i's law): retain each argument the
+            // callee's signature takes by reference; the callee's root
+            // ret releases them — drive adds no references of its own
+            let mut regs: Vec<Slot> = vec![fut, cx];
+            for (i, &s) in regs.clone().iter().enumerate() {
+                if self.is_ref(self.param_ty(fid, i)) {
+                    self.heap.retain(s);
+                }
+            }
+            let nregs = self.prog.funcs[fid as usize].regs.len();
+            regs.resize(nregs, Slot::int(0));
+            if self.running {
+                // nested entry (a drive inside a drive — the host-fn
+                // lane): stash the outer cursor, run the callee to its
+                // root ret on a clean frame stack, restore either way
+                let outer = InterpCursor {
+                    frames: std::mem::take(&mut self.frames),
+                    func: self.cur_func,
+                    pc: self.cur_pc,
+                    regs: std::mem::take(&mut self.cur_regs),
+                    ret_dst: self.cur_ret_dst,
+                };
+                self.running = false;
+                self.enter(fid, regs, None);
+                let r = self.run_loop();
+                let r = self.drain_after(r);
+                self.frames = outer.frames;
+                self.cur_func = outer.func;
+                self.cur_pc = outer.pc;
+                self.cur_regs = outer.regs;
+                self.cur_ret_dst = outer.ret_dst;
+                self.running = true;
+                r
+            } else {
+                self.enter(fid, regs, None);
+                let r = self.run_loop();
+                self.drain_after(r)
+            }
+        };
+        let _ = r?; // a trap (including OutOfFuel) parks the frame at pc;
+        let st = cell_of(fut);
+        let _ = st;
+        // the outcome is the state field
+        let cell = cell_of(fut);
+        let CellData::Record { fields } = &cell.data else {
+            return Err(Trap::new(TrapKind::Invalid, "drive: future is not a record"));
+        };
+        let state = fields
+            .borrow()
+            .get(rut_core::async_frame::STATE_FIELD as usize)
+            .unwrap_or(Slot::null());
+        if unsafe { state.r.is_null() } {
+            // completion wakes the awaiter: re-enqueue (the queue takes
+            // its own reference) and clear the edge — one future, one
+            // awaiter, set only on the park path
+            let awaiter = fields
+                .borrow()
+                .get(rut_core::async_frame::AWAITER_FIELD as usize)
+                .unwrap_or(Slot::null());
+            if unsafe { !awaiter.r.is_null() } {
+                fields.borrow_mut().set(
+                    rut_core::async_frame::AWAITER_FIELD as usize,
+                    Slot::null(),
+                );
+                self.launch(awaiter);
+            }
+            Ok(Drive::Done)
+        } else {
+            Ok(Drive::Parked)
+        }
     }
 }
 

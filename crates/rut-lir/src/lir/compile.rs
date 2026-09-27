@@ -15,6 +15,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let FnKey::ForOfEmit { body, var } = inst.key {
             return Self::compile_for_of_emit_fn(ctx, fid, body, var);
         }
+        // an engine-backed thunk (RFC 0018): a bodyless FuncCode whose
+        // host_id names the embedder's registered body
+        if let FnKey::HostThunk(thunk_name) = inst.key {
+            return super::asyncfn::compile_host_thunk(ctx, fid, thunk_name);
+        }
         let (node, self_ty, is_method, class_name, slot_self) = match &inst.key {
             // handled by the early return above
             FnKey::ForOfEmit { .. } => unreachable!(),
@@ -131,12 +136,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 (m.id(), Some(self_ty), true, cname, slot_self)
             }
             FnKey::Lambda(_) => unreachable!(),
+            FnKey::HostThunk(_) => unreachable!(),
         };
         let is_async = match ctx.ast.kind(node) {
             Kind::Item(ItemKind::Fn(f)) => f.is_async,
             Kind::Member(MemberKind::MethodDecl(m)) => m.is_async,
             _ => return Ok(()),
         };
+        if is_async {
+            // the landing (RFC 0018): free async fns weave into the
+            // engine-backed Future impls; async METHODS diagnose (the
+            // loop's tasks are free fns in v1 — join lands with RFC 0019)
+            if !matches!(inst.key, FnKey::Free(_)) {
+                ctx.err(
+                    ctx.ast.span(node),
+                    "async methods are not woven in this build — the loop's tasks are async free fns; methods land with RFC 0019",
+                );
+                return Err(());
+            }
+            return super::asyncfn::compile_async_fn(ctx, inst, fid);
+        }
         let (params, ret, generics, body, fn_name) = match ctx.ast.kind(node) {
             Kind::Item(ItemKind::Fn(f)) => (
                 f.params.clone(),
@@ -154,13 +173,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ),
             _ => return Ok(()),
         };
-        if is_async {
-            ctx.err(
-                ctx.ast.span(node),
-                "`async` functions are not supported in this build —cold-poll futures land in M3 (RFC 0018)",
-            );
-            return Err(());
-        }
         // Type-union bounds in scope for THIS instantiation (RFC 0043 §3,
         // native-fastpath phase 1): the item's own bounds plus — for a
         // class method — the class's `requires`. Only union-SPELLED
@@ -223,6 +235,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             emit_closure: false,
             union_bounds,
             union_syms: std::collections::HashMap::new(),
+        async_frame: None,
         };
         // signature: params (self first for methods), resolved under subst.
         // Under the slot ABI (`slot_self`, a prim-target impl method) the
@@ -284,6 +297,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         is_mut: *is_mut,
                         loop_var: false,
                         origins: Vec::new(),
+                        field: NO_FIELD,
                     });
                 }
                 MemberKind::Param(ParamData { name, is_mut, .. }) => {
@@ -310,6 +324,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         is_mut: *is_mut,
                         loop_var: false,
                         origins,
+                        field: NO_FIELD,
                     });
                 }
                 _ => {}
@@ -405,6 +420,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             emit_closure: false,
             union_bounds: std::collections::HashMap::new(),
             union_syms: std::collections::HashMap::new(),
+        async_frame: None,
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type
@@ -427,12 +443,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, p) in params.iter().enumerate() {
             if let MemberKind::Param(ParamData { name, is_mut, .. }) = c.ctx.ast.param(*p) {
                 let reg = c.new_reg(param_tys[i]);
-                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD });
             }
         }
         for (n, t, m) in &caps {
             let reg = c.new_reg(*t);
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: Vec::new() });
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: Vec::new(), field: NO_FIELD });
             // captures are part of the fn's parameter list (after declared)
             param_tys.push(*t);
         }
@@ -510,15 +526,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             emit_closure: true,
             union_bounds: std::collections::HashMap::new(),
             union_syms: std::collections::HashMap::new(),
+        async_frame: None,
         };
         // the loop variable: the closure's parameter — a fresh binding
         // per iteration by construction (each emit call is a fresh frame);
         // loop-owned, so writes through it (the shared element) are legal
         let reg = c.new_reg(elem_ty);
-        c.locals.push(Local { name: var, reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new() });
+        c.locals.push(Local { name: var, reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD });
         for (n, t, m) in &caps {
             let reg = c.new_reg(*t);
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: Vec::new() });
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: Vec::new(), field: NO_FIELD });
         }
         let block: NodeHandle<BlockNode> = NodeHandle::new(body);
         if c.compile_block(block).is_err() {

@@ -300,3 +300,35 @@ builtin impl u64 {
 builtin trait Iterator<E> {
     fn __iterate(self, emit: fn(E) -> bool);
 }
+
+// RFC 0012 §7 / RFC 0018 — the async protocol, the Future-only
+// vocabulary. Two engine-named traits, user-open (ordinary `impl`
+// blocks register through the same path as `Iterator` impls):
+//
+// `Future<T>` — a cold, once-drivable computation. The engine weaves
+// `impl Future<T>` for every `async fn`'s hidden frame type; user
+// impls are launcher-drivable the same way. The driven half is ONE
+// member: `yield(cx)` — poll the frame once at its checkpoint. The
+// cx is receiver-like at async call sites: the engine mints it, the
+// way it mints `self`.
+//
+// `RunContext` — the cx protocol: `checkpoint` reads this frame's
+// resume state, `next_checkpoint` records the next one (the `mut`
+// receiver writes), `cancelled` reads the task's abort flag. The
+// members lower as inline field ops on the engine-minted cx record —
+// the frozen surface is this signature set, nothing more.
+//
+// v1 awaiting targets engine-woven futures (async-fn results and
+// `sleep`); user impls drive through launchers — join lands with
+// RFC 0019. `launch_future` / `LaunchedFutureHandle` / `sleep` are
+// HOST surface (the embedder's standard set), never core: users may
+// write their own launchers over this same Future surface.
+builtin trait Future<T> {
+    fn yield(cx: RunContext);
+}
+
+builtin trait RunContext {
+    fn checkpoint(self) -> u32;
+    fn next_checkpoint(mut self, v: u32) -> nil;
+    fn cancelled(self) -> bool;
+}

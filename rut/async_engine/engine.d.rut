@@ -1,0 +1,19 @@
+// async_engine/engine.d.rut — the async host set's engine rows
+// (RFC 0018). The futures themselves never cross the boundary (the
+// survey's law: engine-minted, compiler-owned); these rows cross only
+// the raw frame SLOT as `any` — the raw-slot lane, no box, no copy —
+// so the typed `Future<T> -> LaunchedFutureHandle<T>` arrow lives in
+// rut code (the `async_host` inline package), where the type system
+// can hold it.
+//
+// `__sleep_yield` is the sleep future's `Future::yield`: a bodyless
+// thunk the compiler mints whose `host_id` binds HERE — the one
+// engine-backed vtable row in the standard set.
+
+pub host fn __launch(f: any);
+
+pub host fn __abort(f: any) -> bool;
+
+pub host fn __sleep(ms: u32) -> any;
+
+pub host fn __sleep_yield(f: any, cx: any);

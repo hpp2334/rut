@@ -307,6 +307,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // used function: signature from the surface, a direct call to the
         // exporter's scope-qualified id (RFC 0029 surface / RFC 0035 §1)
         if let Some(ef) = self.ctx.extern_fn(name).cloned() {
+            // the engine-backed sleep future (RFC 0018): minting rides
+            // the first `__sleep` call — the host set's `sleep` wrapper
+            // is the only intended caller
+            if name == sym::SLEEP_RAW {
+                crate::lir::asyncfn::ensure_sleep_future(self.ctx)?;
+            }
             if !generics.is_empty() {
                 self.ctx.err(sp, format!("`{}` is a used fn and takes no type arguments", self.ctx.name(name)));
                 return Err(());

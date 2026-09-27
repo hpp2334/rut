@@ -469,6 +469,13 @@ impl Vm {
                     ),
                 )
             })?;
+        // an engine-backed thunk (RFC 0018): a bodyless FuncCode whose
+        // `host_id` names the registered body — the sleep future's
+        // `Future::yield`. Run the host crossing; there is no frame to
+        // enter (the same law `Op::Call` applies to host fns).
+        if self.prog.funcs[fid as usize].host_id.is_some() {
+            return self.call_host(fid, argv_off, argc, dst);
+        }
         let nregs = self.prog.funcs[fid as usize].regs.len();
         let mut regs = self.take_regs(nregs);
         for (i, &a) in args.iter().enumerate() {

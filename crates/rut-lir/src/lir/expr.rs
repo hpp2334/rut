@@ -186,8 +186,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, "`?` was removed — errors are `(T, err)` records; test the second element (RFC 0005 §10)");
                 Err(())
             }
-            ExprKind::Await { .. } | ExprKind::Select { .. } => {
-                self.ctx.err(sp, "coroutines are not supported in this build (RFC 0018—020, M3)");
+            ExprKind::Await { expr } => {
+                // the landing (RFC 0018): the await expansion runs inside
+                // an async body — elsewhere it diagnoses
+                crate::lir::asyncfn::compile_await(self, expr, sp)
+            }
+            ExprKind::Select { .. } => {
+                // `await select` keeps parsing (RFC 0019 §3); its
+                // semantics are the structured-competition batch
+                self.ctx.err(sp, "`await select` is not in this build — structured competition lands with RFC 0019");
                 Err(())
             }
             ExprKind::FStr { parts } => self.compile_fstr(parts, expected, sp),

@@ -504,6 +504,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // — statically bound for this concrete receiver (nominal, RFC
         // 0012 §5: an impl is registered for exactly this (trait, type))
         if let TyKind::Data { .. } = self.ctx.types.kind(rt).clone() {
+            // the cx protocol members (RFC 0012 §7 / RFC 0018) inline as
+            // FIELD OPS on the engine-minted record — no calls, the
+            // frozen surface is the signature set, the lowering is the
+            // compiler's (the state field holds the checkpoint enum's
+            // singleton; `checkpoint()` answers it — the divergence the
+            // survey blessed, invisible off the weave)
+            if rt == self.ctx.run_context_ty() {
+                return self.compile_cx_member(name, rreg, &args, sp);
+            }
             // the receiver is either an instantiated generic (decl + args in
             // `inst_data`) or a local non-generic record
             let target = match self.ctx.inst_data.get(&rt).cloned() {

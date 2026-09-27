@@ -107,7 +107,21 @@ fn on_vsync(&mut self) {
 ```
 
 No job executor, no `promise_to_future`, no `.then` under `Context`, no
-tslib `_ts_generator` downleveling — `await` is an opcode.
+tslib `_ts_generator` downleveling — the async layer is the checkpoint
+desugaring plus the driving loop's queues (RFC 0018 §3–4).
+
+**Amendment (Sep 2026, the async landing):** §4's loop columns are
+REAL VM API now — `run_ready()` is the `run_until_idle` column, and
+`next_deadline()` answers the earliest armed sleep deadline (the host
+advances the virtual clock with `set_now`, or parks wall-time and sets
+the wall value). `pending_tasks()` is the idle test. The host-fn
+driving surface for the columns: the embedder mounts the async
+packages (`async_engine` + `async_host`) and installs
+`install_std_async` — `launch_future`/`abort`/`sleep` are ordinary
+host fns over the VM's `launch`/`cancel`/`arm_timer` engine halves
+(ruling 8: users may write their own launchers over the same rows). A
+program that mounts nothing simply has no launcher; `await` stays
+cold-poll inline.
 
 ## Amendment (Sep 2026, err-channel): soft-fail containment — the pump decodes, reports, and keeps draining
 

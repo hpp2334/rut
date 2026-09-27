@@ -166,6 +166,24 @@ pub const WELL_KNOWN: &[&str] = &[
     "finish",     // FINISH
     "Weak",       // WEAK
     "upgrade",    // UPGRADE
+    // RFC 0018 (the async batch) — the Future-only vocabulary: the two
+    // engine traits, the cx protocol members, and the standard host
+    // set's names. Well-known so every interner agrees on the surface
+    // names the weave and the driving loop share.
+    "Future",     // FUTURE
+    "RunContext", // RUN_CONTEXT
+    "yield",      // YIELD
+    "checkpoint", // CHECKPOINT
+    "next_checkpoint", // NEXT_CHECKPOINT
+    "cancelled",  // CANCELLED
+    "abort",      // ABORT
+    "sleep",      // SLEEP
+    "launch_future", // LAUNCH_FUTURE
+    "LaunchedFutureHandle", // LAUNCHED_FUTURE_HANDLE
+    "__launch",   // LAUNCH_RAW
+    "__abort",    // ABORT_RAW
+    "__sleep",    // SLEEP_RAW
+    "__sleep_yield", // SLEEP_YIELD
 ];
 
 /// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
@@ -270,6 +288,22 @@ pub const FINISH: IdentId = IdentId(68);
 // diagnosed it; the weak batch gives it its real surface).
 pub const WEAK: IdentId = IdentId(69);
 pub const UPGRADE: IdentId = IdentId(70);
+
+// RFC 0018 — the async vocabulary (the Future-only landing)
+pub const FUTURE: IdentId = IdentId(71);
+pub const RUN_CONTEXT: IdentId = IdentId(72);
+pub const YIELD: IdentId = IdentId(73);
+pub const CHECKPOINT: IdentId = IdentId(74);
+pub const NEXT_CHECKPOINT: IdentId = IdentId(75);
+pub const CANCELLED: IdentId = IdentId(76);
+pub const ABORT: IdentId = IdentId(77);
+pub const SLEEP: IdentId = IdentId(78);
+pub const LAUNCH_FUTURE: IdentId = IdentId(79);
+pub const LAUNCHED_FUTURE_HANDLE: IdentId = IdentId(80);
+pub const LAUNCH_RAW: IdentId = IdentId(81);
+pub const ABORT_RAW: IdentId = IdentId(82);
+pub const SLEEP_RAW: IdentId = IdentId(83);
+pub const SLEEP_YIELD: IdentId = IdentId(84);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -380,6 +414,21 @@ mod tests {
             ("finish", FINISH),
             ("Weak", WEAK),
             ("upgrade", UPGRADE),
+            // RFC 0018 — the async vocabulary
+            ("Future", FUTURE),
+            ("RunContext", RUN_CONTEXT),
+            ("yield", YIELD),
+            ("checkpoint", CHECKPOINT),
+            ("next_checkpoint", NEXT_CHECKPOINT),
+            ("cancelled", CANCELLED),
+            ("abort", ABORT),
+            ("sleep", SLEEP),
+            ("launch_future", LAUNCH_FUTURE),
+            ("LaunchedFutureHandle", LAUNCHED_FUTURE_HANDLE),
+            ("__launch", LAUNCH_RAW),
+            ("__abort", ABORT_RAW),
+            ("__sleep", SLEEP_RAW),
+            ("__sleep_yield", SLEEP_YIELD),
         ];
         for (text, id) in cases {
             assert_eq!(WELL_KNOWN.get(id.0 as usize), Some(text), "id {id:?}");

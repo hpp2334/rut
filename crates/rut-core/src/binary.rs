@@ -189,6 +189,18 @@ pub enum NativeTrait {
     Index,
     /// `Iterator<T>` — the cursor contract (RFC 0012)
     Iterator,
+    /// `Future<T> { fn yield(cx: RunContext) }` — the async protocol's
+    /// driven half (RFC 0012 §7 / RFC 0018). Engine-named, user-open:
+    /// the compiler weaves `impl Future<T>` for every async fn's hidden
+    /// frame type; users may impl it for their own types (launcher-
+    /// drivable; v1 await targets engine-woven futures only).
+    Future,
+    /// `RunContext { checkpoint / next_checkpoint / cancelled }` — the
+    /// cx protocol (RFC 0012 §7). The NAME also resolves in type
+    /// position to the engine-minted cx record (`TyKind::Data`, one
+    /// frame-edge field), whose members inline as field ops — the trait
+    /// row is the frozen surface, the record is the lowering (RFC 0018).
+    RunContext,
 }
 
 /// The usable surface a module publishes.
@@ -287,7 +299,11 @@ impl Surface {
                 (sym::STRBUF, NativeTy::StrBuf),
                 (sym::WEAK, NativeTy::Weak),
             ],
-            native_traits: vec![(sym::ITERATOR, NativeTrait::Iterator)],
+            native_traits: vec![
+                (sym::ITERATOR, NativeTrait::Iterator),
+                (sym::FUTURE, NativeTrait::Future),
+                (sym::RUN_CONTEXT, NativeTrait::RunContext),
+            ],
             native_fns: CORE_FNS.to_vec(),
             // core's one const: `use core::{NAN}` — the unwritable float
             // (f64 bits materialized with `ConstRaw`)

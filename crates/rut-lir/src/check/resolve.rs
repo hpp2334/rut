@@ -44,6 +44,24 @@ impl<'a> Ctx<'a> {
                     }
                     return Some(self.mk_iterator_inst(tname, args[0]));
                 }
+                // `impl Future<T> for ..` (RFC 0018) — the same engine-
+                // woven lane: the trait is built per type-argument list,
+                // the user's impl registers launcher-drivable
+                if core_trait == Some(rut_core::binary::NativeTrait::Future) {
+                    let args: Vec<TypeId> = segs[0]
+                        .generics
+                        .iter()
+                        .map(|g| self.resolve_type(*g, env))
+                        .collect();
+                    if args.len() != 1 {
+                        self.err(self.ast.span(node.id()), format!(
+                            "`Future` takes 1 type parameter, {} given — `Future<T>` (RFC 0018)",
+                            args.len()
+                        ));
+                        return None;
+                    }
+                    return Some(self.mk_future_inst(tname, args[0]));
+                }
                 let id = if let Some(t) = self.find_trait(tname).cloned() {
                     if segs[0].generics.is_empty() {
                         if t.id == u32::MAX {
@@ -119,6 +137,50 @@ impl<'a> Ctx<'a> {
         });
         self.trait_inst.insert((name, vec![arg]), id);
         id
+    }
+
+    /// The `Future<T>` protocol contract (RFC 0012 §7 / RFC 0018): one
+    /// trait per type-argument list, its single member `yield(cx)`. The
+    /// engine weaves impls for async fn frames; user impls register
+    /// through the same trait (launcher-drivable). Mirrors
+    /// `mk_iterator_inst` — the descriptor's params exclude the
+    /// receiver, which the vtable ABI always supplies as argv[0].
+    pub fn mk_future_inst(&mut self, name: IdentId, arg: TypeId) -> u32 {
+        if let Some(&id) = self.trait_inst.get(&(name, vec![arg])) {
+            return id;
+        }
+        let id = self.traits.len() as u32;
+        let tname = self.intern(&format!("Future<{}>", self.type_name(arg)));
+        let cx = self.run_context_ty();
+        self.traits.push(TraitDesc {
+            name: tname,
+            methods: vec![rut_core::binary::TraitMethod {
+                name: sym::YIELD,
+                params: vec![cx],
+                ret: TY_NIL,
+            }],
+        });
+        self.trait_inst.insert((name, vec![arg]), id);
+        id
+    }
+
+    /// The engine-minted `RunContext` cx record (RFC 0018): one field —
+    /// the frame edge — laid out per `rut_core::async_frame`. The NAME
+    /// is the surface spelling, so `cx: RunContext` parameters and the
+    /// trait's method signatures all land on this one type; its members
+    /// inline as field ops in the weave and in user bodies alike.
+    pub fn run_context_ty(&mut self) -> TypeId {
+        if let Some(t) = self.run_context_ty {
+            return t;
+        }
+        let name = self.intern(rut_core::async_frame::RUN_CONTEXT_TYPE);
+        let fname = self.intern(rut_core::async_frame::RUN_CONTEXT_FRAME_FIELD);
+        let ty = self.types.intern(RutType {
+            name,
+            kind: TyKind::Data { fields: vec![FieldInfo { name: fname, ty: TY_OPAQUE }] },
+        });
+        self.run_context_ty = Some(ty);
+        ty
     }
 
     /// A type in a NAMING position (impl heads, requires lists, is RHS) —
@@ -292,6 +354,42 @@ impl<'a> Ctx<'a> {
                             }
                             let id = self.mk_iterator_inst(name, args[0]);
                             return self.mk_trait_obj(id);
+                        }
+                        // the `Future<T>` protocol (RFC 0012 §7 / RFC 0018):
+                        // engine-woven the same way — the trait is built per
+                        // type-argument list; the object type is what async
+                        // call results widen to and what `launch_future`
+                        // consumes
+                        if self.extern_traits.get(&name).copied()
+                            == Some(rut_core::binary::NativeTrait::Future)
+                        {
+                            let args: Vec<TypeId> = seg
+                                .generics
+                                .iter()
+                                .map(|g| self.resolve_type(*g, env))
+                                .collect();
+                            if args.len() != 1 {
+                                self.err(sp, format!(
+                                    "`Future` takes 1 type parameter, {} given — `Future<T>` (RFC 0018)",
+                                    args.len()
+                                ));
+                                return TY_I32;
+                            }
+                            let id = self.mk_future_inst(name, args[0]);
+                            return self.mk_trait_obj(id);
+                        }
+                        // the `RunContext` cx (RFC 0012 §7): the surface
+                        // name IS the engine-minted record's name — the
+                        // trait row is the frozen signature set, the
+                        // record is the lowering (field ops, no calls)
+                        if self.extern_traits.get(&name).copied()
+                            == Some(rut_core::binary::NativeTrait::RunContext)
+                        {
+                            if !seg.generics.is_empty() {
+                                self.err(sp, "`RunContext` takes no generic arguments (RFC 0018)");
+                                return TY_I32;
+                            }
+                            return self.run_context_ty();
                         }
                         if let Some(t) = self.find_trait(name).cloned() {
                             // a trait name in type position IS the

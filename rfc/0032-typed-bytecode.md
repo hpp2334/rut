@@ -178,10 +178,15 @@ The named type operations lower to R3 primitives:
   the prelude is compiler-lowered and binds in every compilation unit —
   no `use` gates them.
 
-## 2. Async lowering
+## 2. Async lowering — LANDED, op set untouched
 
-`async fn` compiles to a **state machine**: each `await` gets a state
-number; the resume table maps state → block; locals live across suspension
-points are promoted to frame slots that survive (RFC 0018 §4 sketches
-`CoroutineFrame`). `spawn` wraps the machine in a `Task`; `cancel` drops
-the frame at its suspension point (RFC 0019 §2).
+`async fn` compiles to a **state machine** (RFC 0018 §3, landed): each
+`await` gets a checkpoint state — a per-fn enum member singleton in the
+hidden frame's state field — and the resume dispatch is the existing
+`Op::BrTable` over it; locals are cell-backed frame fields
+(`GetF`/`SetF`). The async batch grew **zero rows** in this RFC's wire
+enums — no new `Op`, `Nat`, or `Intrinsic`; the cx members inline as
+field ops, the driven half is `Op::CallI` through the future's vtable
+row, suspension is a plain `Ret`. **VERSION stays 13**; bundles stay
+compatible (RFC 0033). There is no `spawn`/`Task` (RFC 0019 is the
+deferred remainder; the driving loop is RFC 0018 §4).

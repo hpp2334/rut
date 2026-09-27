@@ -277,6 +277,13 @@ pub fn compile_program_resolved(
     }
     for name in ctx.entries.clone() {
         if ctx.find_free_fn(name) {
+            // an async fn is not host-callable (its woven body takes the
+            // (frame, cx) pair — RFC 0018): it compiles at its call sites
+            if ctx.ast.fn_decl(ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n).unwrap())
+                .is_async
+            {
+                continue;
+            }
             roots.push(Inst { key: FnKey::Free(name), subst: vec![], trait_origins: vec![] });
         }
     }
@@ -288,6 +295,10 @@ pub fn compile_program_resolved(
             continue;
         }
         if !ctx.ast.fn_decl(node).generics.is_empty() {
+            continue;
+        }
+        // async fns ride the weave at their call sites (RFC 0018)
+        if ctx.ast.fn_decl(node).is_async {
             continue;
         }
         roots.push(Inst { key: FnKey::Free(name), subst: vec![], trait_origins: vec![] });
@@ -536,6 +547,21 @@ pub fn mount_std_core(session: &mut Session) {
 pub fn mount_std(session: &mut Session) {
     mount_std_core(session);
     mount_calc(session);
+}
+
+/// Mount the standard async set (RFC 0018): the engine rows
+/// (`async_engine` — a decl module) and the typed launcher surface
+/// (`async_host` — an inline rut package). Pair with
+/// `rut_std::async_host::install_std_async` before `Vm::new`; a session
+/// that mounts neither simply has no launcher, and `await` stays
+/// cold-poll inline.
+pub fn mount_std_async(session: &mut Session) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../rut")
+        .canonicalize()
+        .expect("the toolchain tree's rut/ dir");
+    mount_dir(session, &root.join("async_engine")).expect("mount async_engine");
+    mount_dir(session, &root.join("async_host")).expect("mount async_host");
 }
 
 /// Mount `calc` — a native module (RFC 0028): `f64` host functions

@@ -128,11 +128,14 @@ fn run(path: &str, fuel: Option<u64>) {
         // the row names the reading order, and json's own `[deps]`
         // pulls the pkg regardless
         for (name, dir) in [
+            ("rt", "rut/rt"),
             ("ink", "rut/ink"),
             ("pouch", "rut/pouch"),
             ("nmapset", "rut/nmapset"),
             ("json", "rut/json"),
             ("strbuild", "rut/strbuild"),
+            ("async_engine", "rut/async_engine"),
+            ("async_host", "rut/async_host"),
         ] {
             if src.contains(&format!("use {name}::")) {
                 rut_driver::mount_dir(&mut s, &tree.join(dir)).expect("mount tree pkg");
@@ -182,6 +185,10 @@ fn run(path: &str, fuel: Option<u64>) {
     // phase 0) — reached only by a program that declares
     // `use bench_cross::{...}` (the bench row)
     rut_std::bench_cross::install_std_bench_cross(&mut hosts);
+    // the async host set (RFC 0018): launch/abort/sleep bodies for the
+    // `async_engine` rows — reached only by a program that mounts the
+    // async packages (a `use async_host::` pulls the tree pkg)
+    rut_std::async_host::install_std_async(&mut hosts);
     let mut vm = match rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks, hosts) {
         Ok(vm) => vm,
         Err(t) => {
@@ -195,6 +202,24 @@ fn run(path: &str, fuel: Option<u64>) {
         Err(t) => {
             eprintln!("trap: {} — {}", t.name(), t.msg);
             std::process::exit(1);
+        }
+    }
+    // the async driving loop (RFC 0018 / RFC 0035 §4): drain the ready
+    // queue, advance the virtual clock to the next sleep deadline,
+    // repeat — idle when no frames and no timers remain. Capped, so a
+    // program that never idles fails loudly instead of hanging.
+    for _ in 0..1_000_000 {
+        if let Err(t) = vm.run_ready() {
+            eprintln!("trap: {} — {}", t.name(), t.msg);
+            std::process::exit(1);
+        }
+        match vm.next_deadline() {
+            Some(d) => vm.set_now(d),
+            None => {
+                if vm.pending_tasks() == 0 {
+                    break;
+                }
+            }
         }
     }
 }

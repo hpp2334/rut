@@ -10,7 +10,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         name: IdentId,
         generics: Vec<NodeHandle<AnyTy>>,
         args: Vec<NodeHandle<AnyExpr>>,
-        _expected: Option<TypeId>,
+        expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let Some(fnode) = self.ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n) else {
@@ -18,6 +18,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Err(());
         };
         let fd = self.ctx.ast.fn_decl(fnode).clone();
+        // the async landing (RFC 0018): an async fn's call site mints
+        // the frame — the cx is engine-minted like `self`, the call's
+        // value IS the frame cell (widening to `Future<T>` through the
+        // registered impl)
+        if fd.is_async {
+            if !generics.is_empty() {
+                self.ctx.err(sp, "generic async fns are not woven in this build (RFC 0018 v1)");
+                return Err(());
+            }
+            return crate::lir::asyncfn::compile_async_call(self, name, &fd, &args, expected, sp);
+        }
         let (decl_generics, params, ret) = (fd.generics, fd.params, fd.ret);
         if generics.len() > decl_generics.len() {
             self.ctx.err(sp, format!(

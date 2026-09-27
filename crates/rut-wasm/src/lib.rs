@@ -160,6 +160,27 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             },
         )
         .expect("mount nmapset");
+    // the async set (RFC 0018): the engine rows lower from their decl,
+    // the typed launcher surface mounts as an inline source module —
+    // `install_std_async` binds the crossings in `rut_run`
+    let async_engine = rut_driver::lower_decl_module(
+        include_str!("../../../rut/async_engine/engine.d.rut"),
+        "engine.d.rut",
+    )
+    .expect("the async_engine surface is valid");
+    session
+        .register_module("async_engine", async_engine)
+        .expect("mount async_engine");
+    session
+        .register_module(
+            "async_host",
+            rut_driver::Module {
+                source: Some(include_str!("../../../rut/async_host/async_host.rut").to_string()),
+                inline: true,
+                ..Default::default()
+            },
+        )
+        .expect("mount async_host");
     rut_driver::compile_module_in(&mut session, src, rut_parser::Mode::Impl, "main")
 }
 
@@ -328,6 +349,9 @@ pub extern "C" fn rut_run(
     // only reaches it when it declares `use nmap_host::{...}` or a pkg
     // that does (`nmapset`); the CLI mounts it the same way
     rut_std::nmap::install_std_nmap(&mut hosts);
+    // the async host set (RFC 0018): launch/abort/sleep bodies for the
+    // `async_engine` rows the playground mounts in `compile_playground`
+    rut_std::async_host::install_std_async(&mut hosts);
     let mut vm = match rut_vm::interp::Vm::new(
         Rc::new(prog),
         &limits,
@@ -341,6 +365,20 @@ pub extern "C" fn rut_run(
     // err here; every other shape (nil mains included) has none. A trap
     // NEVER fills err — the loud channel stays the loud channel.
     let out = vm.call::<_, RutValue>("main", ());
+    // the async driving loop (RFC 0018 / RFC 0035 §4): drain the ready
+    // queue, advance the virtual clock to the next sleep deadline. The
+    // loop is idle for programs that launch nothing. The fuel budget
+    // parks (OutOfFuel) still surface through `call`'s own result — a
+    // parked main takes the parked-slot path below, untouched.
+    if out.is_ok() && !vm.is_running() {
+        for _ in 0..1_000_000 {
+            if vm.run_ready().is_err() || vm.next_deadline().is_none() {
+                if vm.pending_tasks() == 0 {
+                    break;
+                }
+            }
+        }
+    }
     let (trap, parked, err) = match out {
         Ok(v) => (None, false, err_of_value(&v)),
         Err(t) => {

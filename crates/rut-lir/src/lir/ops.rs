@@ -340,6 +340,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             Vec::new()
                         };
                         self.set_origins(name, origins);
+                        // async weave (RFC 0018): mirror the write into
+                        // the frame cell — the park's ret releases
+                        // registers, the fields are what survive
+                        self.mirror_local(name, sp.lo);
                     }
                     Some(bin) => {
                         let cur = self.new_reg(l.ty);
@@ -360,6 +364,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         } else {
                             self.emit(Op::Mov { dst: l.reg, src: res }, sp.lo);
                         }
+                        // async weave (RFC 0018): mirror the write (above)
+                        self.mirror_local(name, sp.lo);
                     }
                 }
                 Ok(())

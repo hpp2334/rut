@@ -145,11 +145,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TypeKind::TyPath { segs, .. }
                 if segs.len() == 1
                     && !segs[0].generics.is_empty()
-                    && self
+                    && (self
                         .ctx
                         .find_trait(segs[0].name)
                         .map(|t| !t.generics.is_empty())
                         .unwrap_or(false)
+                        // the engine-woven `Future<T>` (RFC 0018): ambient,
+                        // not locally declared — its object arguments unify
+                        // through their own instantiation's args exactly
+                        // like a declared generic trait's
+                        || self
+                            .ctx
+                            .extern_traits
+                            .get(&segs[0].name)
+                            .copied()
+                            == Some(rut_core::binary::NativeTrait::Future))
                     && !self.free_generics(param_node, decl_generics, subst).is_empty() =>
             {
                 // a generic trait's instantiation against a concrete

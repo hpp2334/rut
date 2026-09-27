@@ -1,0 +1,348 @@
+// RFC 0018 — the async/await landing: the Future-only vocabulary.
+// The weave (checkpoint brtable, the await expansion, the cancelled
+// probe → drop path), the driving loop (ready + timer queues,
+// drive / next_deadline / cancel), and the standard host set
+// (async_engine + async_host). Trigger→completion is observed through
+// the rt logger's recording native — the fmt batch's semantic-test
+// pattern; diagnostics are pinned per message.
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use rut_driver::{compile_graph, lower_decl_module, mount_std_async, mount_std_core, Module, Session};
+use rut_std::async_host::install_std_async;
+use rut_std::logger::install_std_log;
+use rut_vm::interp::{HostRegistry, Limits, Vm};
+
+const RT_DECL: &str = include_str!("../../../rut/rt/rt.d.rut");
+
+fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
+    let mut s = Session::new();
+    mount_std_core(&mut s);
+    let mut rt = lower_decl_module(RT_DECL, "rt.d.rut").expect("the rt surface is valid");
+    rt.host_scope = Some("rt:log".to_string());
+    s.register_module("rt", rt).expect("mount rt");
+    mount_std_async(&mut s);
+    s.register_module("app", Module { source: Some(src.into()), ..Default::default() })
+        .expect("register app");
+    let out = compile_graph(&s, "app");
+    assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
+    let prog = out.program.expect("linked program");
+    let flat = rut_core::link::flatten(prog);
+    rut_vm::verify::verify(&flat).expect("verify");
+    let sink = Rc::new(RefCell::new(Vec::<String>::new()));
+    let mut hosts = HostRegistry::new();
+    let sink2 = sink.clone();
+    install_std_log(&mut hosts, move |m| sink2.borrow_mut().push(m.to_string()));
+    install_std_async(&mut hosts);
+    hosts.verify_against(&s.expected_host_fns());
+    let limits = Limits {
+        fuel: Some(4_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let vm = Vm::new(Rc::new(flat), &limits, rut_vm::interp::HostHooks::default(), hosts)
+        .expect("vm");
+    (vm, sink)
+}
+
+/// The host loop (RFC 0035 §4's columns): drain the ready queue, wake
+/// timers by advancing the virtual clock. Capped, so a stalled loop
+/// fails instead of hanging.
+fn run_loop(vm: &mut Vm, cap: usize) {
+    for _ in 0..cap {
+        vm.run_ready().expect("run_ready");
+        match vm.next_deadline() {
+            Some(d) => vm.set_now(d),
+            None => {
+                if vm.pending_tasks() == 0 {
+                    return;
+                }
+            }
+        }
+    }
+    panic!("the driving loop stalled: {} task(s) pending", vm.pending_tasks());
+}
+
+fn diags_of(src: &str) -> Vec<String> {
+    let mut s = Session::new();
+    mount_std_core(&mut s);
+    let mut rt = lower_decl_module(RT_DECL, "rt.d.rut").expect("rt");
+    rt.host_scope = Some("rt:log".to_string());
+    s.register_module("rt", rt).expect("mount rt");
+    mount_std_async(&mut s);
+    s.register_module("app", Module { source: Some(src.into()), ..Default::default() })
+        .expect("register app");
+    compile_graph(&s, "app").diags.iter().map(|d| d.msg.clone()).collect()
+}
+
+// ---- the weave runs ----
+
+#[test]
+fn launch_runs_to_completion() {
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::launch_future;
+
+async fn work(cx: RunContext, log: opaque, n: u32) -> nil {
+    logger_log(log, 2, "begin");
+    logger_log(log, 2, f"n={n}");
+    logger_log(log, 2, "end");
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(work(log, 7));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 100);
+    assert_eq!(*sink.borrow(), vec!["begin", "n=7", "end"]);
+}
+
+// ---- park/resume through the sleep pender ----
+
+#[test]
+fn park_and_resume_through_sleep() {
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::{ launch_future, sleep };
+
+async fn tick(cx: RunContext, log: opaque) -> nil {
+    for (let i = 0; i < 3; i += 1) {
+        logger_log(log, 2, f"tick{i}");
+        await sleep(10);
+    }
+    logger_log(log, 2, "done");
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(tick(log));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 100);
+    assert_eq!(*sink.borrow(), vec!["tick0", "tick1", "tick2", "done"]);
+    // the clock advanced: three 10ms sleeps
+    assert_eq!(vm.now_ms(), 30);
+}
+
+// ---- nested awaits ----
+
+#[test]
+fn nested_awaits() {
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::{ launch_future, sleep };
+
+async fn inner(cx: RunContext, log: opaque, tag: str) -> nil {
+    logger_log(log, 2, f"{tag}:enter");
+    await sleep(5);
+    logger_log(log, 2, f"{tag}:exit");
+}
+
+async fn outer(cx: RunContext, log: opaque) -> nil {
+    await inner(log, "a");
+    await inner(log, "b");
+    logger_log(log, 2, "outer:done");
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(outer(log));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 200);
+    assert_eq!(
+        *sink.borrow(),
+        vec!["a:enter", "a:exit", "b:enter", "b:exit", "outer:done"]
+    );
+}
+
+// ---- cancellation: abort → the probe at the checkpoint → the drop path ----
+//
+// The full arc, orchestrated in-rut (the receipt lives in rut): the
+// victim parks on a 60ms sleep; the killer waits 10ms, aborts the
+// victim's receipt, and re-aborts. The victim's resumed probe fires
+// the drop path; the second abort answers false (the state retired).
+
+#[test]
+fn abort_after_park_runs_the_drop_path_then_reports_false() {
+    let src = r#"
+use core::{ on_drop };
+use rt::{ create_logger, logger_log };
+use async_host::{ launch_future, sleep, LaunchedFutureHandle };
+
+async fn victim(cx: RunContext, log: opaque) -> nil {
+    let buf: ?StrBuf = StrBuf(8);
+    on_drop(buf, fn (b: ?StrBuf) {
+        logger_log(log, 2, "dropped:buf");
+    });
+    logger_log(log, 2, "victim:park");
+    await sleep(60);
+    logger_log(log, 2, "victim:unreachable");
+}
+
+async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
+    await sleep(10);
+    let ok = h.abort();
+    if (ok) { logger_log(log, 2, "killer:aborted"); }
+    // let the loop drive the flagged victim: its drop path retires it
+    await sleep(5);
+    let ok2 = h.abort();
+    if (ok2) { logger_log(log, 2, "killer:twice"); } else { logger_log(log, 2, "killer:second-false"); }
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    let v = launch_future(victim(log));
+    launch_future(killer(log, v));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 200);
+    assert_eq!(
+        *sink.borrow(),
+        vec![
+            "victim:park",
+            "killer:aborted",
+            "dropped:buf",        // the drop path drives before the killer's next wake
+            "killer:second-false",
+        ]
+    );
+    // the victim's 60ms sleep and the killer's 10ms + 5ms sleeps all
+    // armed; the loop's final advance lands on the last deadline (the
+    // killer's tail sleep armed after the clock had jumped to 60)
+    assert_eq!(vm.now_ms(), 65);
+}
+
+// ---- a fresh (never driven) task aborts before its body runs ----
+
+#[test]
+fn abort_before_first_drive_never_runs_the_body() {
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::launch_future;
+
+async fn job(cx: RunContext, log: opaque) -> nil {
+    logger_log(log, 2, "body-ran");
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(job(log));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    // the launched frame sits in the queue; cancel it BEFORE any drive
+    let task = vm_first_ready(&mut vm);
+    assert!(vm.cancel(task), "abort on a fresh task answers true");
+    vm.run_ready().expect("drive the flagged task");
+    assert!(sink.borrow().is_empty(), "the s0 probe saw the flag — the body never ran");
+}
+
+/// The queued task slot — the test-side stand-in for the receipt's
+/// frame edge (the VM's queue owns the launched frame).
+fn vm_first_ready(vm: &mut Vm) -> rut_vm::Slot {
+    vm.first_ready()
+}
+
+// ---- the cx protocol read from a body ----
+
+#[test]
+fn the_cx_cancelled_probe_answers_in_a_live_body() {
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::launch_future;
+
+async fn work(cx: RunContext, log: opaque) -> nil {
+    if (cx.cancelled()) { logger_log(log, 2, "flagged"); } else { logger_log(log, 2, "live"); }
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(work(log));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 100);
+    assert_eq!(*sink.borrow(), vec!["live"]);
+}
+
+// ---- on_drop ordering across resumptions ----
+
+#[test]
+fn on_drop_locals_fire_in_reverse_order_at_the_checkpoint() {
+    let src = r#"
+use core::{ on_drop };
+use rt::{ create_logger, logger_log };
+use async_host::{ launch_future, sleep, LaunchedFutureHandle };
+
+async fn victim(cx: RunContext, log: opaque) -> nil {
+    let a: ?StrBuf = StrBuf(4);
+    on_drop(a, fn (p: ?StrBuf) { logger_log(log, 2, "drop:a"); });
+    let b: ?StrBuf = StrBuf(4);
+    on_drop(b, fn (p: ?StrBuf) { logger_log(log, 2, "drop:b"); });
+    await sleep(60);
+    logger_log(log, 2, "unreachable");
+}
+
+async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
+    await sleep(30);
+    let ok = h.abort();
+    if (ok) { logger_log(log, 2, "killer:aborted"); } else { logger_log(log, 2, "killer:late"); }
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    let v = launch_future(victim(log));
+    launch_future(killer(log, v));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 200);
+    // `a` is declared before `b`, so at the resume arm's drop path `b`
+    // releases first (RFC 0016 §3 reverse binding order) — after the
+    // victim crossed its park
+    let lines = sink.borrow().clone();
+    let pa = lines.iter().position(|l| l == "drop:a").expect("drop:a ran");
+    let pb = lines.iter().position(|l| l == "drop:b").expect("drop:b ran");
+    assert!(pb < pa, "reverse declaration order: b before a, got {lines:?}");
+    assert!(!lines.iter().any(|l| l == "unreachable"));
+    assert!(lines.iter().any(|l| l == "killer:aborted"));
+}
+
+// ---- fuel accounting per drive step ----
+
+#[test]
+fn fuel_is_charged_per_drive_step() {
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::launch_future;
+
+async fn work(cx: RunContext, log: opaque) -> nil {
+    logger_log(log, 2, "ran");
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(work(log));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    let before = vm.fuel_used;
+    vm.run_ready().expect("the drive");
+    let after = vm.fuel_used;
+    assert!(after > before, "a drive step charges fuel: {before} -> {after}");
+    assert_eq!(*sink.borrow(), vec!["ran"]);
+}

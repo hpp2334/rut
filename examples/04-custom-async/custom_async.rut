@@ -1,38 +1,39 @@
-// custom_async.rut — user-implemented tasks and a user-written launcher
-// (04-custom-async).
+// custom_async.rut — a user-implemented future and a user-written
+// launcher (04-custom-async), in the Future-only vocabulary (RFC 0018).
 //
-// PARSE-ONLY CORPUS until the async plan lands (M3). The engine async
-// surface this file names — the `Task<T>` trait and its `TaskRunContext`
-// — is declared in core by the async plan (RFC 0012 §7), and the run
-// context itself is runtime-provided: the scheduler hands it to the
-// frame, and rut code cannot construct one yet. Nothing here can RUN
-// today; the file must PARSE, and it doubles as the
-// user-impl-of-builtin-trait test: `Task<T>` is an engine-named builtin
-// trait, and `impl Task<T> for CustomTask<T>` registers through the
-// ordinary nominal path — builtin traits are engine-NAMED, not
-// engine-CLOSED (RFC 0012 §7).
+// The async plan LANDED: `async fn(cx: RunContext, ..)` compiles into
+// the engine-woven `impl Future<T>` for its hidden frame, the driving
+// loop owns every launched future, and the standard launcher set
+// (`launch_future` / `LaunchedFutureHandle` / `sleep`) is the embedder's
+// host surface (the `async_engine` + `async_host` packages). This file
+// remains the user-impl-of-builtin-trait test: `Future<T>` is an
+// engine-named builtin trait, and `impl Future<nil> for CustomFuture`
+// registers through the ordinary nominal path — builtin traits are
+// engine-NAMED, not engine-CLOSED (RFC 0012 §7). A user future is
+// LAUNCHER-DRIVABLE (the driving loop finds its `Future::yield` row in
+// the vtable); v1 `await` targets engine-woven futures only (async-fn
+// results and `sleep`), and join lands with RFC 0019.
 //
-// The shape, in one paragraph: `CustomTask<T>` is a hand-written stage
-// machine — the same shape the `async fn` desugar emits for a frame,
-// spelled out in source. `impl Task<T> for CustomTask<T>` is the
-// resumption surface the runner drives, one `yield` per checkpoint.
-// `custom_launch_task` is a USER launcher over that same surface — the
-// drive law the engine's `launch_task` uses (RFC 0028) — plus the stats
-// this example exists to show: one audit counter per resumption,
-// cancellation probes counted as data, and a completion audit over the
-// shared `AuditLog` cell.
-
-use core::{ Task, TaskRunContext };
+// The shape, in one paragraph: `CustomFuture` is a hand-written stage
+// machine — the same shape the `async fn` weave emits for a hidden
+// frame, spelled out in source. `impl Future<nil> for CustomFuture`
+// is the resumption surface the driving loop drives, one `yield` per
+// checkpoint, the cx carrying the frame edge. `launch_custom` is a USER
+// launcher over that same Future surface — the ruling-8 law: the
+// engine's standard set is ordinary code any module may re-spell — plus
+// the stats this example exists to show: one audit counter per
+// resumption, the cancellation probe read as data, and a completion
+// audit over the shared `AuditLog` cell.
 
 // ---------------------------------------------------------------- audit --
 
 // The module-owned record every stat lands in. FIELDS ONLY (RFC 0012) —
 // the counters live in the inherent impl block below. The launcher takes
-// `*AuditLog`, so the embedder holds one cell and reads the whole run's
+// `?AuditLog`, so the embedder holds one cell and reads the whole run's
 // story out of it afterwards.
 
 struct AuditLog {
-    launches: u32;      // tasks this log saw started
+    launches: u32;      // futures this log saw started
     yields: u32;        // resumptions driven — one per checkpoint
     cancels: u32;       // cancellation probes that answered true
     checkpoints: u32;   // high-water mark of the context ledger
@@ -74,21 +75,20 @@ impl AuditLog {
 
 // -------------------------------------------------------------- machine --
 
-// The hand-written machine — what the `async fn` desugar would emit,
-// spelled out: a stage counter, an audit label, the payload the stages
-// carry, and the done flag. FIELDS ONLY (RFC 0012) — the stage logic
-// lives in the inherent impl block below.
+// The hand-written machine — what the `async fn` weave emits for a
+// hidden frame, spelled out: a stage counter, an audit label, the
+// payload the stages carry, and the done flag. FIELDS ONLY (RFC 0012) —
+// the stage logic lives in the inherent impl block below.
 
-struct CustomTask<T> {
+struct CustomFuture {
     steps: u32;      // checkpoints booked before the run finishes
     stage: str;      // what the current stage does (the audit's label)
-    value: T;        // the payload, carried one stage per checkpoint
     done: bool;      // the last stage ran
 }
 
-impl CustomTask<T> {
-    fn new(steps: u32, stage: str, value: T) -> Self {
-        return Self { steps: steps, stage: stage, value: value, done: false };
+impl CustomFuture {
+    fn new(steps: u32, stage: str) -> Self {
+        return Self { steps: steps, stage: stage, done: false };
     }
 
     /// One stage of work — what one resumption advances. `false` when
@@ -113,69 +113,93 @@ impl CustomTask<T> {
 
 // ----------------------------------------------------- the trait surface --
 
-// The nominal registration (RFC 0012): one impl block, `(trait, type)`
-// pair, duplicates are a link error. The trait is `builtin` — the engine
-// auto-implements it for desugared `async fn` frames, invisibly; a
-// hand-written machine registers through the same registry and rides the
-// same drive law.
-
-impl Task<T> for CustomTask<T> {
-    /// The resumption entry the runner drives — once per checkpoint,
-    /// with the frame's run context. No `self`: the frame IS the
-    /// receiver (the machine's locals are its state, RFC 0018); the
-    /// context is the only handle a resumption needs.
-    fn yield(cx: TaskRunContext) {
-        // the ledger: book the next seat one past this resumption —
-        // the same accounting every desugared frame runs (the member
-        // set is the async plan's to freeze)
+// The nominal registration (RFC 0012): one impl block, one `(trait,
+// type)` pair, duplicates are a link error. The trait is `builtin` —
+// the engine weaves it for every `async fn`'s hidden frame, invisibly;
+// a hand-written machine registers through the same registry and rides
+// the same drive law.
+//
+// The resumption entry the driving loop drives — once per checkpoint,
+// with the cx whose one field is the frame edge. The receiver IS the
+// frame (the machine's fields are its state, RFC 0018); the context is
+// the only handle a resumption needs. Inside, the frozen cx protocol
+// reads as data: `checkpoint` answers this frame's resume state,
+// `cancelled` answers the task's abort flag — cancellation is DATA the
+// frame reads, not an exception it catches (RFC 0018).
+impl Future<nil> for CustomFuture {
+    fn yield(self, cx: RunContext) {
+        // the ledger view: the frame's resume state, read as data
         let at = cx.checkpoint();
-        cx.next_checkpoint(at + 1);
-        // the cancellation probe: cancellation is DATA the frame reads,
-        // not an exception it catches (RFC 0018 §4). A cancelled frame
-        // re-books its own seat — the ledger reads `at` again, which
-        // the audit sees as "died here, did not advance" — and runs its
-        // drop path instead of the next stage.
+        // the cancellation probe: a cancelled frame stops advancing —
+        // the audit sees it as "died here, did not advance" — and runs
+        // its drop path instead of the next stage
         if (cx.cancelled()) {
-            cx.next_checkpoint(at);
+            self.done = true;
+            self.stage = f"{self.stage}@{at}:cancelled";
         }
     }
 }
 
 // ---------------------------------------------------------------- launch --
 
-// The launched handle — the user-space twin of the engine's
-// `LaunchedTask<T>` (RFC 0028): the trait-typed task and the shared
-// audit cell it was launched with.
+// The launched receipt — the user-space twin of the engine standard
+// set's `LaunchedFutureHandle` (the async_host package): the
+// future-typed stage machine and the shared audit cell it was launched
+// with. The receipt is NOT a Future (it cannot be awaited), not
+// re-launchable (ruling 6: a type error, never a runtime check), one
+// member: the cancel edge.
 
-struct CustomLaunched<T> {
-    task: Task<T>;     // trait-typed: the registered impl drives it
-    log: ?AuditLog;    // shared with the embedder — the stats survive
-    alive: bool;       // false once the audit saw the run end
+use async_engine::{ __abort, __launch };
+
+struct CustomLaunched {
+    task: ?Future<nil>;  // the cell reference (RFC 0044) — the driven frame
+    log: ?AuditLog;      // shared with the embedder — the stats survive
+    alive: bool;         // false once the audit saw the run end
 }
 
-impl CustomLaunched<T> {
-    fn new(t: Task<T>, log: ?AuditLog) -> Self {
+impl CustomLaunched {
+    fn new(t: ?Future<nil>, log: ?AuditLog) -> Self {
         return Self { task: t, log: log, alive: true };
+    }
+
+    /// The cancellation edge: flag the task, let the loop's re-drive
+    /// run the probe. `alive` flips off locally so the audit never
+    /// counts a second cancel on one receipt.
+    fn cancel(mut self) -> bool {
+        if (!self.alive) {
+            return false;
+        }
+        self.alive = false;
+        let t = self.task;
+        if (t == nil) {
+            return false;
+        }
+        let log = self.log;
+        if (log != nil) {
+            log.note_cancel();
+        }
+        return __abort(t);
     }
 }
 
-/// The user launcher. The task registers nothing new here — its impl
+/// The user launcher. The future registers nothing new here — its impl
 /// block already did; a launcher only supplies the DRIVING and the
-/// audit. This is the same division the engine's `launch_task` keeps
-/// (RFC 0028), over the same `Task` surface, so the machine never knows
-/// which one started it.
-fn custom_launch_task<T>(t: Task<T>, log: ?AuditLog) -> CustomLaunched<T> {
+/// audit. This is the same division the engine standard set's
+/// `launch_future` keeps (ruling 8), over the same `Future` surface, so
+/// the machine never knows which one started it.
+fn launch_custom(f: Future<nil>, log: ?AuditLog) -> CustomLaunched {
+    __launch(f);
     log.note_launch();
-    return CustomLaunched.new(t, log);
+    return CustomLaunched { task: f, log: log, alive: true };
 }
 
-/// The audit drive — the runnable twin of the engine loop. The engine
-/// drives the TRAIT surface (`t.yield(cx)`, the context handed over by
-/// the scheduler at M3); this walks the machine's own stages, one
-/// `advance` per booked checkpoint, and counts every resumption the
-/// audit would see. The shape is the drive law either way: run a stage,
-/// count it, stop on completion.
-fn audit_drive<T>(m: CustomTask<T>, l: CustomLaunched<T>) -> bool {
+/// The audit drive — the runnable twin of the engine loop's columns
+/// (RFC 0035 §4). The engine drives the TRAIT surface (the vtable's
+/// `Future::yield`, the cx minted per drive); this walks the machine's
+/// own stages, one `advance` per booked checkpoint, and counts every
+/// resumption the audit would see. The shape is the drive law either
+/// way: run a stage, count it, stop on completion.
+fn audit_drive(m: CustomFuture, l: CustomLaunched) -> bool {
     let mut driven: u32 = 0;
     while (m.advance()) {
         driven += 1;

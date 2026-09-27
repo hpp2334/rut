@@ -97,10 +97,11 @@ for (s of mixed) { s.area(); }          // vtable (multiple origins)
   a method: `x.count()` in the trait, defined in the type's impl block.
   Methods are instance methods and spell the `self` receiver like every
   other (`fn draw(self, g: Canvas) -> nil;`), **except** where an engine
-  contract declares a no-`self` method (§7): a `Task` resumption takes
-  the run context as its parameter, not a receiver. `async fn` signatures
+  contract spells a receiver-less descriptor method (§7): the descriptor's
+  params exclude the receiver — the vtable ABI always supplies argv[0]
+  (the `Iterator.__iterate` convention, RFC 0018). `async fn` signatures
   are legal in traits; a trait impl's method must match the trait's
-  `async` spelling exactly (RFC 0018 §2).
+  `async` spelling exactly (the `TraitReq.is_async` plumbing, RFC 0018 §2).
 - **Satisfaction is nominal — the impl block is the admission.**
   Structural ("duck") conformity does not satisfy a trait: a type that
   declares every member by shape is still not an `I` until some module
@@ -232,7 +233,7 @@ impl Point {                            // inherent — Point's module only
 - **Inherent placement.** `impl T { .. }` compiles only in the module
   that declares `T` — anywhere else is a compile error. The target may
   be a local type **or a `builtin class` this module's `.d.rut` declares**
-  (the `LaunchedTask<T>` pattern, RFC 0028): the module owns the type,
+  (the async_host receipt pattern, RFC 0018): the module owns the type,
   so it owns the methods.
 - **Trait-impl placement is pair-local.** `impl I for T` may live in
   any module of the trait's pkg or the type's pkg (§2a) — at least one
@@ -322,40 +323,49 @@ holes), in arithmetic and ordinal operands, and in `==`/`!=` against the
 pointee type. `*T == *T` stays identity, and pointer-vs-pointer is
 untouched everywhere — `p == nil` compares pointers.
 
-## 7. Engine contracts — `Task` and the run contexts
+## 7. Engine contracts — `Future` and the run context — LANDED
 
 The engine names builtin traits; it does not close them. A `builtin
-trait` (RFC 0029 §2) is compiler-backed — the engine auto-implements it
-for desugared frames — but **users implement it through the ordinary
-nominal path**: `impl Task<T> for CustomTask<T>` registers in the same
-registry as any other impl. Builtin traits are engine-*named*, not
-engine-*closed*.
-
-The async plan freezes the final member set; the shape it freezes to:
+trait` (RFC 0029 §2) is compiler-backed — the engine weaves it for
+desugared frames — but **users implement it through the ordinary
+nominal path**: `impl Future<nil> for CustomFuture` registers in the
+same registry as any other impl. Builtin traits are engine-*named*, not
+engine-*closed*. This section LANDED with the async batch (phase 2) —
+the vocabulary below is the frozen surface, `Task`/`TaskRunContext`/
+`LaunchedTask` are gone (the Future-only vocabulary, RFC 0018):
 
 ```rut
-// core — engine-woven async surface (illustrative; no async module exists)
-pub builtin trait Task<T> { fn yield(cx: TaskRunContext); }
-pub builtin trait TaskRunContext {
+// core/core.d.rut — the frozen async surface, LANDED
+builtin trait Future<T> { fn yield(cx: RunContext); }
+builtin trait RunContext {
     fn checkpoint(self) -> u32;
     fn next_checkpoint(mut self, v: u32) -> nil;   // mut receiver: it writes
     fn cancelled(self) -> bool;
 }
-pub builtin fn launch_task<T>(t: Task<T>) -> LaunchedTask<T>;
-pub builtin class LaunchedTask<T> { }
-impl LaunchedTask<T> { fn on_finish(v: T) -> Self { .. } }
 ```
 
+**The engine-vs-host split, as landed:** these two traits are CORE
+(ambient, `NativeTrait` rows in `Surface::core()` — the lockstep test
+keeps `core.d.rut` true). `launch_future` / `LaunchedFutureHandle` /
+`sleep` are **HOST surface, never core**: the `async_engine` decl rows +
+the `async_host` inline package + `install_std_async`, mounted by each
+embedder by choice — ordinary code over the open Future surface ("users
+may write their own launchers"). There are **no `Task` rows anywhere** —
+the launched future's receipt (`LaunchedFutureHandle<T>`) is a rut class
+in the host package, its own type, non-launchable and non-awaitable
+(ruling 6).
+
 All members are **methods** — one member kind, no call-vs-load ambiguity
-at the vtable boundary; non-`self` parameters are legal (§2) and are how
-engine contracts spell frame entry points. Cancellation is the
-**context probe**: the desugared frame checks `cx.cancelled()` after
-each resumption and runs its drop path (RFC 0018). `async fn(cx:
-TaskRunContext, …)` takes the context as its explicit first parameter.
-`launch_task` lives in **core** (there is no async module — RFC 0028);
-users may write their own launchers over the same `Task` surface —
-`examples/04-custom-async` is that user launcher, and doubles as the
-user-impl-of-a-builtin-trait test.
+at the vtable boundary; the descriptor's params exclude the receiver
+(the `Iterator` convention — the vtable ABI always supplies argv[0]).
+Cancellation is the **context probe**: the resumed frame checks its
+cancel flag at each checkpoint and runs its drop path (RFC 0018, RFC
+0016 §3 order). `async fn(cx: RunContext, …)` takes the context as its
+explicit first parameter — engine-minted at call sites and per drive,
+like `self`. The lowering: the cx members inline as field ops on the
+engine-minted cx record (`GetF`/`SetF` — no calls, no vtable rows for
+the members), and the driven half is one `CallI` through the future's
+vtable row (RFC 0018 §3's desugaring).
 
 ## 8. Equality — `==` is builtin: value for primitives, identity for cells
 

@@ -148,6 +148,23 @@ pub enum FnKey {
     /// `__iterate` protocol (RFC 0012 §6): `body` with `v: E` bound;
     /// `break` → `return false`, `continue` → `return true`
     ForOfEmit { body: NodeId, var: IdentId },
+    /// An engine-backed thunk (RFC 0018): a bodyless FuncCode whose
+    /// `host_id` names the embedder's registered body — the sleep
+    /// future's `Future::yield`. The VM joins it like any host fn.
+    HostThunk(IdentId),
+}
+
+/// The engine-minted async machinery of one compiled async fn (RFC 0018).
+#[derive(Clone, Copy, Debug)]
+pub struct AsyncLayout {
+    /// the hidden frame type (locals are its cell-backed fields)
+    pub frame_ty: TypeId,
+    /// the checkpoint enum (`s0` + one member per await)
+    pub ckpt_ty: TypeId,
+    /// the `Future<ret>` instantiation the frame implements
+    pub fut_inst: u32,
+    /// the yield's vtable slot under that instantiation
+    pub yield_slot: u32,
 }
 
 /// A monomorphization instantiation: fn key + generic substitution.
@@ -250,6 +267,32 @@ pub struct Ctx<'a> {
     pub type_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), TypeId>,
     /// generic-trait instantiation cache: (trait, type args) -> trait id
     pub trait_inst: std::collections::HashMap<(IdentId, Vec<TypeId>), u32>,
+    /// the async weave's engine-minted types (RFC 0018): the `RunContext`
+    /// cx record (lazily interned once), and per-async-fn hidden frame
+    /// types with their checkpoint enums. Engine frames are exactly the
+    /// types `await` accepts in v1 — the probe reads the engine-reserved
+    /// state field, so the operand must be an engine-woven future.
+    pub run_context_ty: Option<TypeId>,
+    pub engine_frames: std::collections::HashSet<TypeId>,
+    /// engine-vtable fills the minted impls contribute: (target type,
+    /// trait slot, func id) — the frame's `Future::yield` row and the
+    /// sleep future's engine-backed row. `build_vtables` applies them
+    /// after the ordinary impl walk (the minted impls have no AST
+    /// method nodes for the ordinary path to walk).
+    pub extra_vtable_fills: Vec<(TypeId, u32, u32)>,
+    /// whether the engine-backed sleep future machinery is already minted
+    pub sleep_minted: bool,
+    /// per compiled async fn: the minted frame type, checkpoint enum,
+    /// Future instantiation and its yield's vtable slot — minted by the
+    /// weave before the body compiles, read by every call site
+    pub async_layout: std::collections::HashMap<u32, AsyncLayout>,
+    /// frame type → (yield's vtable slot) — the await expansion reads
+    /// this to aim its `CallI` at the awaited frame's woven yield
+    pub frame_yield_slot: std::collections::HashMap<TypeId, u32>,
+    /// frame type → its checkpoint enum (the await expansion mints the
+    /// next state's singleton into the awaited... no — into the PARKING
+    /// frame; the map serves the weave's own bookkeeping and tests)
+    pub async_fns: std::collections::HashSet<IdentId>,
     /// whether `use` is resolved by the driver (module loading on)
     pub allow_uses: bool,
     /// the spliced-leaf origin map (RFC 0012 §2a): byte range → the pkg
@@ -408,6 +451,13 @@ impl<'a> Ctx<'a> {
             inst_data: std::collections::HashMap::new(),
             type_inst: std::collections::HashMap::new(),
             trait_inst: std::collections::HashMap::new(),
+            run_context_ty: None,
+            engine_frames: std::collections::HashSet::new(),
+            extra_vtable_fills: Vec::new(),
+            sleep_minted: false,
+            async_layout: std::collections::HashMap::new(),
+            frame_yield_slot: std::collections::HashMap::new(),
+            async_fns: std::collections::HashSet::new(),
             allow_uses: false,
             origins: Vec::new(),
             own_spec: String::new(),

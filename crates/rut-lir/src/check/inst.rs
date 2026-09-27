@@ -54,6 +54,7 @@ impl<'a> Ctx<'a> {
             }
             FnKey::Lambda(node) => format!("lambda@{}", node.0),
             FnKey::ForOfEmit { body, .. } => format!("forof@{}", body.0),
+            FnKey::HostThunk(name) => format!("host@{}", self.name(name)),
         }
     }
 
@@ -198,6 +199,13 @@ impl<'a> Ctx<'a> {
             if let Some(&fid) = self.inst_map.get(&inst) {
                 vt[self.types.dense(ty) as usize][slot as usize] = Some(fid);
             }
+        }
+        // the async weave's engine-minted impls (RFC 0018): the hidden
+        // frame's `Future::yield` row and the sleep future's engine-
+        // backed row — no AST method nodes, so the walk above can't
+        // see them; their (type, slot, fid) fills were recorded at mint
+        for (ty, slot, fid) in std::mem::take(&mut self.extra_vtable_fills) {
+            vt[self.types.dense(ty) as usize][slot as usize] = Some(fid);
         }
         vt
     }

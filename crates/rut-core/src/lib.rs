@@ -3,6 +3,7 @@
 //! (0033). rut-lir / rut-driver emit these; rut-vm loads, verifies,
 //! and runs them.
 
+pub mod async_frame;
 pub mod binary;
 pub mod id;
 pub mod link;

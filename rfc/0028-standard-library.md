@@ -46,9 +46,12 @@ revised): the array grammar `[T]` (RFC 0005 §9), the engine primitives
 `Iterator<T>` (RFC 0012; ordinary nominal impls for users,
 compiler-backed impls for the engine's own types; v1.1 removed
 `Disposal`/`Index` — `on_drop` and builtin indexing replaced them), and
-— when the async plan lands — `Task<T>` and its run contexts, plus
-`launch_task`/`LaunchedTask` as core builtin decls (RFC 0012 §7; there
-is **no async module**) — plus the prelude functions `assert`/`panic`
+— LANDED with the async batch — `Future<T>` and `RunContext` as core
+`NativeTrait` rows (RFC 0012 §7); `launch_future`/`LaunchedFutureHandle`/
+`sleep` are the EMBEDDER's surface (the `async_engine` + `async_host`
+packages and `install_std_async` — there is **no async module in core**;
+users may write their own launchers over the same Future surface) — plus
+the prelude functions `assert`/`panic`
 (RFC 0034 §2), `on_drop` (RFC 0016 §3), `string_join` (RFC 0007), and
 the primitive member contracts — `str`/`bytes` members, the `builtin
 impl i8..u64` numeric methods (RFC 0004 §3, RFC 0032 §1.1 R2), and the

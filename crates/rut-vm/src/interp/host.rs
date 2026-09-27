@@ -217,6 +217,13 @@ impl HostRegistry {
     /// leftover entries are the embedder's business — `verify_against`
     /// is the check that they were all declared).
     pub(crate) fn take_binding(&mut self, name: &str) -> Option<HostBinding> {
-        self.fns.remove(name)
+        // take the keep box (its ctx word must stay alive — the FIRST
+        // claim moves it into the Vm) but leave the entry: one binding
+        // may legitimately back several FuncCodes — the decl row and
+        // the compiler-minted thunk of the sleep yield are two bodies
+        // of the same host fn (RFC 0018)
+        let b = self.fns.get_mut(name)?;
+        let keep = b.keep.take();
+        Some(HostBinding { code: b.code, ctx: b.ctx, sigs: b.sigs, keep })
     }
 }

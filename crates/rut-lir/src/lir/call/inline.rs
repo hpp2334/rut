@@ -258,13 +258,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ret_ty = ret_ty;
         let base = self.locals.len();
         // bind `self` (well-known symbol) for the inlined body
-        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new() });
+        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new(), field: NO_FIELD });
         self.inline_self = Some((sym::SELF, recv));
         let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
         let mut ai = 0usize;
         for p in &params {
             if let MemberKind::Param(ParamData { name, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *name, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                self.locals.push(Local { name: *name, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD });
                 self.note_union_binding(*name, *ty);
                 ai += 1;
             }
@@ -355,7 +355,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut ai = 0usize;
         for p in &params {
             if let MemberKind::Param(ParamData { name: pname, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD });
                 self.note_union_binding(*pname, *ty);
                 ai += 1;
             }
@@ -459,13 +459,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let base = self.locals.len();
         // bind `self` (well-known symbol) for the inlined body — reads
         // alias the receiver register (no copy, RFC 0005 accessor rule)
-        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new() });
+        self.locals.push(Local { name: sym::SELF, reg: recv, ty: self_ty, is_mut: mut_self, loop_var: false, origins: Vec::new(), field: NO_FIELD });
         self.inline_self = Some((sym::SELF, recv));
         let params: Vec<NodeHandle<AnyParam>> = md.params.clone();
         let mut ai = 0usize;
         for p in &params {
             if let MemberKind::Param(ParamData { name: pname, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new() });
+                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD });
                 self.note_union_binding(*pname, *ty);
                 ai += 1;
             }

@@ -108,6 +108,13 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     let fields = match prog.types.kind(ty) {
                         TyKind::Data { fields } => Some(fields),
                         TyKind::Opt { .. } => None,
+                        // the async weave's driven-half field ops on a
+                        // trait-object-spelled future (RFC 0018): the
+                        // register holds an engine frame record the
+                        // static type erases; the repr law below is what
+                        // protects RC, and the field index is checked at
+                        // runtime against the concrete record
+                        TyKind::TraitObj { .. } => None,
                         _ => None,
                     };
                     match fields {
@@ -130,6 +137,14 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                             // read the boxed copy (RFC 0012 §6)
                             let elem_repr = match prog.types.kind(ty) {
                                 TyKind::Opt { elem } => prog.types.repr_of(*elem),
+                                TyKind::TraitObj { .. } => {
+                                    if *repr != Repr::Ref {
+                                        return Err(bad(
+                                            "field access on a future must be a ref slot".into(),
+                                        ));
+                                    }
+                                    return Ok(());
+                                }
                                 _ => return Err(bad("field access on a non-record".into())),
                             };
                             if *field != 0 || elem_repr != *repr {

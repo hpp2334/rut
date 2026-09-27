@@ -1,0 +1,11 @@
+# async_engine/ — the async host surface's engine rows (RFC 0018): the
+# crossing signature set the standard launcher needs. The embedding Rust
+# binds the bodies (`rut_std::async_host::install_std_async`); the
+# `async_host` inline package wraps them in the typed surface
+# (`launch_future` / `LaunchedFutureHandle::abort` / `sleep`).
+#
+# `host_scope` names the registration prefix; the use path spells the
+# bare package name (`use async_engine::{ __launch, __abort, __sleep }`).
+name = "async_engine"
+entry.type = "./engine.d.rut"
+host_scope = "async_engine"

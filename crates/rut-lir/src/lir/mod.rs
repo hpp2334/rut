@@ -17,6 +17,7 @@ mod compile;
 mod expr;
 mod generic;
 mod intrinsic;
+pub(crate) mod asyncfn;
 mod lit;
 mod ops;
 mod peephole;
@@ -99,6 +100,37 @@ pub(crate) struct Local {
     /// (a widening let, a copied binding, a specialized parameter)
     /// populate it — conservative by construction.
     origins: Vec<TypeId>,
+    /// the async frame-cell field backing this binding (RFC 0018) —
+    /// `NO_FIELD` outside an async body (plain register storage). The
+    /// cx and the hidden frame edge stay `NO_FIELD` even inside one:
+    /// the driving loop re-mints the cx per drive, so the argv pair is
+    /// always fresher than any mirror.
+    field: u32,
+}
+
+/// `Local.field` outside an async body.
+pub(crate) const NO_FIELD: u32 = u32::MAX;
+
+/// The async weave's per-function state, carried on the FnCompiler while
+/// an async fn's body compiles (RFC 0018).
+pub(crate) struct AsyncFrame {
+    /// argv[0] — the hidden frame cell (register 0 by construction)
+    pub frame_reg: u16,
+    /// argv[1] — the driving loop's cx (register 1; re-minted per drive)
+    pub cx_reg: u16,
+    /// the engine-minted frame type (locals patch its field list as
+    /// bindings compile — the `mk_data_inst` in-place law)
+    pub frame_ty: TypeId,
+    /// the checkpoint enum: `s0` plus one member per await; the member
+    /// list is patched after the body compiles
+    pub ckpt_ty: TypeId,
+    /// next checkpoint index to assign (1 — `s0` is the entry state)
+    pub next_state: u32,
+    /// next frame field index for a binding (`LOCALS_BASE` + params)
+    pub next_field: u32,
+    /// each await's resume-arm label, in state order — the dispatch
+    /// table reads it after the body compiles
+    pub arm_labels: Vec<u32>,
 }
 
 pub struct FnCompiler<'a, 'b> {
@@ -140,6 +172,9 @@ pub struct FnCompiler<'a, 'b> {
     /// locals bound from a union-bounded generic (param/let/field-copy
     /// provenance): local name → the bounded generic
     union_syms: HashMap<IdentId, IdentId>,
+    /// while an async fn's body compiles (RFC 0018): the frame edge,
+    /// the cx edge, and the checkpoint/field allocation counters
+    pub(crate) async_frame: Option<AsyncFrame>,
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
@@ -254,6 +289,62 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn emit(&mut self, op: Op, span_lo: u32) {
         self.spans.push((self.code.len() as u32, span_lo));
         self.code.push(op);
+    }
+
+    /// Bind a local, mirroring it into the async frame cell when the
+    /// async weave is active (RFC 0018): the binding takes the next
+    /// frame field and a `SetF` lands the value. Every body binding
+    /// goes through here — cell-backed uniformly, no liveness analysis
+    /// decides which locals survive a park.
+    pub(crate) fn bind_local(
+        &mut self,
+        name: IdentId,
+        reg: u16,
+        ty: TypeId,
+        is_mut: bool,
+        loop_var: bool,
+        origins: Vec<TypeId>,
+        sp_lo: u32,
+    ) {
+        let (mut field, mut frame_reg) = (NO_FIELD, 0);
+        if let Some(f) = &self.async_frame {
+            field = f.next_field;
+            frame_reg = f.frame_reg;
+        }
+        if field != NO_FIELD {
+            if let Some(f) = &mut self.async_frame {
+                f.next_field += 1;
+                let frame_ty = f.frame_ty;
+                // the frame type's field list grows with the body (the
+                // mk_data_inst in-place patch law): NewCell reads the
+                // final list at runtime
+                crate::lir::asyncfn::append_frame_field(self.ctx, frame_ty, name, ty);
+            }
+            let repr = self.ctx.types.repr_of(ty);
+            self.emit(Op::SetF { obj: frame_reg, field, val: reg, repr }, sp_lo);
+        }
+        self.locals.push(Local { name, reg, ty, is_mut, loop_var, origins, field });
+    }
+
+    /// The park-spill law, the other half of cell-backing: after a
+    /// write to an async local lands in its register, mirror it into
+    /// the frame field (assignments; bindings go through `bind_local`).
+    pub(crate) fn mirror_local(&mut self, name: IdentId, sp_lo: u32) {
+        let (reg, field, ty) = match self.locals.iter().rev().find(|l| l.name == name) {
+            Some(l) if l.field != NO_FIELD => (l.reg, l.field, l.ty),
+            _ => return,
+        };
+        let repr = self.ctx.types.repr_of(ty);
+        let frame_reg = self.async_frame.as_ref().map(|f| f.frame_reg).unwrap_or(0);
+        self.emit(Op::SetF { obj: frame_reg, field, val: reg, repr }, sp_lo);
+    }
+
+    /// A null-slot constant in a fresh register (the DONE sentinel and
+    /// the drop path's releases).
+    pub(crate) fn emit_null(&mut self, sp_lo: u32) -> u16 {
+        let dst = self.new_reg(TY_OPAQUE);
+        self.emit(Op::ConstRaw { dst, bits: 0 }, sp_lo);
+        dst
     }
 
     pub(crate) fn new_label(&mut self) -> u32 {

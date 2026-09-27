@@ -165,8 +165,15 @@ impl Vm {
                 let prog = Rc::clone(&self.prog);
                 let table = &prog.funcs[self.cur_func as usize].labels
                     [table_off as usize..table_off as usize + count as usize];
-                let cell = cell_of(r!(idx));
-                let m = cell.as_enum_member().unwrap_or(u32::MAX) as usize;
+                let raw = r!(idx);
+                // a null slot names no member: the dispatch falls to the
+                // default arm (the async weave retires a frame by nulling
+                // its state field — a re-drive lands here, RFC 0018)
+                let m = if unsafe { raw.r.is_null() } {
+                    u32::MAX as usize
+                } else {
+                    cell_of(raw).as_enum_member().unwrap_or(u32::MAX) as usize
+                };
                 self.cur_pc = table.get(m).copied().unwrap_or(default);
             }
 

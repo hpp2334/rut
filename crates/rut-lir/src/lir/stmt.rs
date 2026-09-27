@@ -66,7 +66,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // the sharing law (RFC 0044): the binding takes the
                         // initializer's cell handle — a share, never a copy
                         let reg = self.last_reg;
-                        self.locals.push(Local { name, reg, ty, is_mut, loop_var: false, origins });
+                        self.bind_local(name, reg, ty, is_mut, false, origins, sp.lo);
                         // union provenance (RFC 0043 §3, native-fastpath
                         // phase 1): an annotation spelling a union-bounded
                         // generic carries it; a copy takes its
@@ -118,14 +118,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 },
                                 sp.lo,
                             );
-                            self.locals.push(Local {
-                                name: *n,
-                                reg,
-                                ty: fty,
-                                is_mut,
-                                loop_var: false,
-                                origins: Vec::new(),
-                            });
+                            self.bind_local(*n, reg, fty, is_mut, false, Vec::new(), sp.lo);
                             // a fresh binding from a tuple field carries no
                             // union provenance
                             self.union_syms.remove(n);
@@ -180,7 +173,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // to the initializer's register
                 let t = self.compile_expr(init, None)?;
                 let reg = self.last_reg;
-                self.locals.push(Local { name: var, reg, ty: t, is_mut: true, loop_var: true, origins: Vec::new() });
+                self.bind_local(var, reg, t, true, true, Vec::new(), sp.lo);
                 let l_head = self.new_label();
                 let l_body = self.new_label();
                 let l_end = self.new_label();
@@ -339,7 +332,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // (`Vec<T>`'s `[?T]` backing, `[?T]` arrays) binds its handle and
         // every use auto-derefs; scalars copy their slot.
         let var_reg = self.emit_slice_get(iter_reg, idx, &info, sp.lo)?;
-        self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new() });
+        self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD });
         self.loops.push((l_cont, l_end));
         self.compile_block(body)?;
         self.loops.pop();

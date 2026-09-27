@@ -37,8 +37,10 @@ rut/
 │   ├── 02-digest/                 # byte-level codecs + hashes, host is the oracle
 │   ├── 03-plugin/                 # module directory + .rutbundle chat moderator
 │   └── 04-custom-async/           # parse-only corpus: a user impl of the
-│                                   #   builtin `Task<T>` trait + a user launcher
-│                                   #   (runnable when the async plan lands)
+│                                   #   builtin `Future<T>` trait + a user
+│                                   #   launcher — vocabulary port LANDED with
+│                                   #   the async batch (runnable harness: the
+│                                   #   disclosed follow-up, RFC 0018)
 ├── benches/                       # rut vs QuickJS-ng vs V8 (README)
 │   ├── README.md                  #   method, fairness rules, workloads
 │   ├── run.mjs                    #   cross-runtime runner (wall + peak RSS)

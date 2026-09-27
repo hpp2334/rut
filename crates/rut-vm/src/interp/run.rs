@@ -114,9 +114,13 @@ impl Vm {
             Op::BrTable { idx, table_off, count, default } => {
                 let table = &self.prog.funcs[self.cur_func as usize].labels
                     [*table_off as usize..*table_off as usize + *count as usize];
-                let m = cell_of(self.cur_regs[*idx as usize])
-                    .as_enum_member()
-                    .unwrap_or(u32::MAX) as usize;
+                let raw = self.cur_regs[*idx as usize];
+                // null names no member: the default arm (RFC 0018)
+                let m = if unsafe { raw.r.is_null() } {
+                    u32::MAX as usize
+                } else {
+                    cell_of(raw).as_enum_member().unwrap_or(u32::MAX) as usize
+                };
                 self.cur_pc = table.get(m).copied().unwrap_or(*default);
             }
             _ => {

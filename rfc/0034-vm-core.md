@@ -100,10 +100,35 @@ one. Coroutine frames are dropped on the way out — destructors run
   re-runs the host fn — the standing rule for any trap raised inside a
   host fn. The alternative is for the host fn itself to catch the trap,
   `add_fuel(n)`, and retry its nested call.
-- `run_until_idle()`: drain `ready` + all non-suspended frames until
+- `run_until_idle()`: drain `ready` + all runnable frames until
   nothing is runnable. `poll(deadline)`: like `run_until_idle` but bounded
   by wall time. These are the only stepping verbs (RFC 0001 "Host
   stepping").
+
+**Amendment (Sep 2026, the async landing — RFC 0018 §4):** the driving
+loop's queues and verbs are REAL now, as landed:
+
+- `ready: VecDeque<Slot>` — launched/parked frames; each queue entry
+  owns one reference (retained on enqueue, released on pop).
+- `timers: BTreeMap<u64, Vec<Slot>>` over the VM's virtual clock
+  (`now_ms` / `set_now` — deterministic; hosts advance it).
+- `run_ready()` drains the ready queue one `drive` per entry;
+  `next_deadline()` expires due timers into `ready` and answers the
+  earliest remaining deadline; `pending_tasks()` is the idle test.
+- `drive(fut)` — one re-entrant call of a future's `Future::yield`
+  (the `InterpCursor` stash/restore, the same machinery `call_raw`'s
+  nested entry uses), a freshly minted cx over the frame edge; the
+  answer (`Done | Parked`) reads off the frame's engine state field.
+  Fuel accounting rides the per-op budget unchanged: an `OutOfFuel`
+  mid-drive parks the frame at pc, and the async layer's resume
+  granularity is the frame's checkpoint state (a re-drive re-enters at
+  the checkpoint's arm — disclosed v1 semantics).
+- A completed drive re-enqueues the frame's `awaiter` edge — the
+  wake pair (awaiter edge on the awaited frame, pending edge on the
+  awaiter) is one-directional and cleared on resume, so no cycle
+  forms. (The old "non-suspended frames" phrasing is superseded: a
+  parked async frame is simply not in `ready` until its wake edge or
+  timer fires.)
 
 ## 5. Heap integration
 
