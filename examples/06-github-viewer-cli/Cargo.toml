@@ -1,0 +1,24 @@
+[package]
+name = "rgh"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "06-github-viewer-cli — a GitHub viewer CLI whose brain is rut (rgh.rut): argv carving, the jsDelivr tree JSON decode, and the human-size formatter all run in the VM; the Rust host only mounts packages, binds the HTTP bodies (rut-std's reqwest lane) and the example-local CLI-I/O rows, and exits with the brain's i32"
+
+[dependencies]
+rut-core = { path = "../../crates/rut-core" }
+rut-lexer = { path = "../../crates/rut-lexer" }
+rut-parser = { path = "../../crates/rut-parser" }
+rut-driver = { path = "../../crates/rut-driver" }
+rut-vm = { path = "../../crates/rut-vm" }
+# the std HTTP lane: reqwest lives behind the DEFAULT-OFF `http`
+# feature (native-only — reqwest-blocking does not build on wasm32;
+# rgh is a native CLI and this example is the feature's consumer)
+rut-std = { path = "../../crates/rut-std", features = ["http"] }
+
+[dev-dependencies]
+serde_json = "1"
+
+[[bin]]
+name = "rgh"
+path = "src/main.rs"

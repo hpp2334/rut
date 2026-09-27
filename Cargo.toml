@@ -20,6 +20,7 @@ members = [
     "examples/02-digest",
     "examples/03-plugin",
     "examples/05-todolist-web",
+    "examples/06-github-viewer-cli",
     "benches/probe",
 ]
 

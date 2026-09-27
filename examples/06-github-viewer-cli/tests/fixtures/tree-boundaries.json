@@ -1,0 +1,87 @@
+{
+	"type": "gh",
+	"name": "acme/widgets",
+	"version": "1.0.0",
+	"default": null,
+	"files": [
+		{
+			"type": "directory",
+			"name": "a",
+			"files": [
+				{
+					"type": "file",
+					"name": "one.txt",
+					"hash": "AAAA0AAA0AAA0AAA0AAA0AAA0AAA0AAA0AAA0AAA0A=",
+					"size": 0,
+					"time": "2026-01-01T00:00:00.000Z"
+				},
+				{
+					"type": "directory",
+					"name": "deep",
+					"files": [
+						{
+							"type": "file",
+							"name": "two.bin",
+							"hash": "BBBB1023BBBB1023BBBB1023BBBB1023BBBB1023B=",
+							"size": 1023
+						},
+						{
+							"type": "file",
+							"name": "gate.bin",
+							"hash": "CCCC1MIBCCCC1MIBCCCC1MIBCCCC1MIBCCCC1MIBC=",
+							"size": 1048576
+						},
+						{
+							"type": "file",
+							"name": "gate1.bin",
+							"hash": "DDDD1M0BDDDD1M0BDDDD1M0BDDDD1M0BDDDD1M0BD=",
+							"size": 1048577
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "directory",
+			"name": "b",
+			"files": [
+				{
+					"type": "file",
+					"name": "three.md",
+					"hash": "EEEE1KIBEEEE1KIBEEEE1KIBEEEE1KIBEEEE1KIBE=",
+					"size": 1024
+				},
+				{
+					"type": "file",
+					"name": "nohash.dat",
+					"size": 1536
+				}
+			]
+		},
+		{
+			"type": "directory",
+			"name": "c",
+			"files": [
+				{
+					"type": "file",
+					"name": "gib.txt",
+					"hash": "FFFF1GIBFFFF1GIBFFFF1GIBFFFF1GIBFFFF1GIBF=",
+					"size": 1073741824
+				},
+				{
+					"type": "file",
+					"name": "gibhalf.txt",
+					"hash": "GGGG1G5BGGGG1G5BGGGG1G5BGGGG1G5BGGGG1G5BG=",
+					"size": 1610612736,
+					"time": "2026-01-02T00:00:00.000Z"
+				}
+			]
+		},
+		{
+			"type": "file",
+			"name": "top.txt",
+			"hash": "HHHH7B7BHHHH7B7BHHHH7B7BHHHH7B7BHHHH7B7BH=",
+			"size": 7
+		}
+	]
+}

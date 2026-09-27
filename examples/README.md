@@ -1,7 +1,7 @@
 # rut examples — the runnable projects
 
-Five Cargo projects, five workspace members — five runnable end to end
-(four on the console, one in a browser), plus one parse-only corpus
+Six Cargo projects, six workspace members — six runnable end to end
+(five on the console, one in a browser), plus one parse-only corpus
 example:
 
 | Project | Run | Demonstrates |
@@ -12,6 +12,7 @@ example:
 | [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + `.rutbundle` (RFC 0038) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions |
 | [`04-custom-async/`](04-custom-async/) | parse-only — vocabulary port LANDED (RFC 0018), runnable harness is the disclosed follow-up | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits; the user-impl-of-builtin-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1, join lands with RFC 0019 |
 | [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless (survey: `docs/todolist-web-survey.md`) |
+| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`): argv carving, the tree JSON decode, and the human-size formatter run in the VM over the std `rut/http` lane (rut-std's reqwest behind the default-off `http` feature); the embedder binds the example-local CLI-I/O rows and the offline suite rides the fixture lane keyed on exact URLs |
 
 Short, self-contained programs — the classics — live in
 [`demo/src/examples/`](../demo/src/examples/): the playground imports
@@ -387,6 +388,13 @@ The run recipes:
   `rut run <dir>`; http's own `[deps]` pulls http_host.
 - **A loose file**: `rut run file.rut` with `use http::` in the
   source — the CLI mounts both pkgs by presence, same as json.
+- **The worked example**: [`06-github-viewer-cli/`](06-github-viewer-cli/)
+  — `rgh` consumes the pair from an embedder (`install_std_http`, the
+  reqwest lane) plus example-local CLI-I/O rows, with the fixture lane
+  (`install_std_http_with`, keyed on exact URLs) as its offline test
+  gate. See that example's README for the division of labor and the
+  two disclosures (`print` is a removed name; `?str` answers spell
+  `any` at the decl).
 
 ```rut
 use http::{ get };

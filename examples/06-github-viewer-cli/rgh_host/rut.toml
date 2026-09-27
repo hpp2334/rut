@@ -1,0 +1,7 @@
+# rgh_host/ — 06-github-viewer-cli's own CLI-I/O rows (the http_host
+# shape: a pure declaration surface, bodies in the embedding Rust).
+# `host_scope` names the registration prefix (`rgh_host::*`); the use
+# path spells the bare package name (`use rgh_host::{ out, eprint }`).
+name = "rgh_host"
+entry.type = "./rgh_host.d.rut"
+host_scope = "rgh_host"

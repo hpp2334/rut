@@ -1,0 +1,418 @@
+// rgh.rut — 06-github-viewer-cli's brain: a GitHub viewer CLI over the
+// jsDelivr CDN. The host (src/main.rs) hands argv across as ONE
+// `\n`-joined `str` (the RFC 0023 §2 crossing set admits prims/str/
+// bytes/opaque only — no arg lists), this file carves it, talks HTTP,
+// decodes the tree JSON, and answers an i32 the host exits with:
+//
+//   0 ok   1 runtime error (CDN, network, io)   2 usage
+//
+//   rgh --repo=owner/name --ref=<tag|branch|sha> list
+//   rgh --repo=owner/name --ref=<tag|branch|sha> download <repo-path> [<dest>]
+//
+// Division of labor: this file is the brain; every byte that leaves the
+// process (stdout lines, stderr lines, one file write) crosses a
+// `rgh_host` row, and every byte that enters (the HTTP bodies) crosses
+// the std `rut/http` lane. No `panic` on a data path — every failure is
+// a message + code.
+
+use pouch::{ Vec };
+use json::{
+    decodeJsonBytes, DecodeErrorKind, DecodeJsonError, EncodeJsonError, JsonDeserialize,
+    JsonReader, JsonSerialize, JsonWriter,
+};
+use http::{ get, Response };
+use rgh_host::{ out, eprint, write_file };
+
+// ------------------------------------------------------------- argv ----
+
+// The argv splitter. No `str.split` primitive exists — the 02-digest
+// `split_chars` precedent — so carve on the three whitespace kinds the
+// host joins with (space/tab/newline) using the tokenizer primitive
+// `s.scan(from, set)`: a `[u8]` class table marks the three octets, the
+// host walks codepoints, and each stop either ends a token or skips a
+// run of separators. Empty arguments cannot survive the join — argv
+// tokens are never empty — so the carve loses nothing.
+fn ws_table() -> [u8] {
+    // `scan` clamps codepoints at the table's end (`set[min(cp, len-1)]`),
+    // so the table must seat every classified codepoint EXACTLY and end
+    // with a zero slot: size 34 seats space (32) exactly and leaves
+    // index 33 — every codepoint above it — matching as token text.
+    let mut t: [u8] = [0; 34];
+    t[9] = 1;  // tab
+    t[10] = 1; // newline
+    t[32] = 1; // space
+    return t;
+}
+
+fn split_argv(args: str) -> Vec<str> {
+    let ws = ws_table();
+    let mut out: Vec<str> = Vec.new();
+    let n = args.len();
+    let mut i: i32 = 0;
+    while (i < n) {
+        // (stop << 8) | class — class 0 means end of input; the tail
+        // before it is still a token (the join's last argument carries
+        // no separator after it)
+        let r = args.scan(i, ws);
+        let stop = (r >> 8) as i32;
+        let cls = (r & 255) as i32;
+        if (cls == 0) {
+            if (stop > i) { out.push(args.slice(i, stop)); }
+            break;
+        }
+        if (stop > i) { out.push(args.slice(i, stop)); }
+        i = stop + 1;
+    }
+    return out;
+}
+
+// `--repo=v` demands exactly one '/' with a nonempty owner and a
+// nonempty name. Answers (ok, owner, name).
+fn carve_repo(v: str) -> (bool, str, str) {
+    let n = v.len();
+    let mut slashes = 0;
+    let mut at: i32 = -1;
+    let mut j: i32 = 0;
+    while (j < n) {
+        if (v.code_at(j) == 47) { slashes += 1; at = j; } // '/' = 47
+        j += 1;
+    }
+    if (slashes != 1 || at <= 0 || at >= n - 1) { return (false, "", ""); }
+    return (true, v.slice(0, at), v.slice(at + 1, n));
+}
+
+// the path's basename — everything after the final '/'
+fn basename(p: str) -> str {
+    let n = p.len();
+    let mut i = n - 1;
+    while (i >= 0) {
+        if (p.code_at(i) == 47) { return p.slice(i + 1, n); }
+        i -= 1;
+    }
+    return p;
+}
+
+// ------------------------------------------------------------- usage ---
+
+fn usage(why: str) -> i32 {
+    eprint(f"rgh: {why}");
+    eprint("usage: rgh --repo=owner/name --ref=<tag|branch|sha> list");
+    eprint("       rgh --repo=owner/name --ref=<tag|branch|sha> download <repo-path> [<dest>]");
+    return 2;
+}
+
+// ---------------------------------------------------------- parse -----
+
+struct Entry {
+    name: str;
+    size: i64;      // absent (jsDelivr's directories) lands as 0
+    hash: ?str;     // the entry's integrity hash, verbatim from the CDN
+    files: ?Vec<Entry>;  // present = a directory (walked, never printed)
+}
+
+// The files array. The trait-static form `Vec<Entry>.decode(r)` has no
+// admitted receiver spelling (struct instantiations are outside the
+// static-call receiver set — the json-roundtrip bench inlines the same
+// loop for the same reason), so the array row rides a generic shim: at
+// T = Entry it IS the peer-gated `impl JsonDeserialize for Vec<T>`'s
+// body, and `T.decode(r)` dispatches Entry's impl recursively.
+fn decode_entry_files<T requires JsonDeserialize>(mut r: JsonReader) -> (?Vec<T>, ?DecodeJsonError) {
+    let mut v = Vec<T>.new();
+    r.begin_array();
+    while (r.more()) {
+        let (x, e) = T.decode(r);
+        if (e != nil) { return (nil, e); }
+        v.push(x);
+    }
+    r.end_array();
+    if (r.failed()) { return (nil, r.error()); }
+    return (v, nil);
+}
+
+impl JsonDeserialize for Entry {
+    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        r.begin_object();
+        let mut name: ?str = nil;
+        let mut size: ?i64 = nil;
+        let mut hash: ?str = nil;
+        let mut files: ?Vec<Entry> = nil;
+        while (r.more()) {
+            let k = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            when (k) {
+                "name" -> {
+                    let v = r.read_str();
+                    if (r.failed()) { return (nil, r.error()); }
+                    name = v;
+                },
+                "size" -> {
+                    let v = r.read_i64();
+                    if (r.failed()) { return (nil, r.error()); }
+                    size = v;
+                },
+                "hash" -> {
+                    let v = r.read_str();
+                    if (r.failed()) { return (nil, r.error()); }
+                    hash = v;
+                },
+                "files" -> {
+                    let (v, e) = decode_entry_files<Entry>(r);
+                    if (e != nil) { return (nil, e); }
+                    files = v;
+                },
+                // "type", "time", and anything jsDelivr adds later: skipped
+                else -> { r.skip_value(); },
+            }
+            if (r.failed()) { return (nil, r.error()); }
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        if (name == nil) {
+            return (nil, DecodeJsonError { kind: DecodeErrorKind.WrongType, at: r.err_at() as i64, got: "", expected: "name" });
+        }
+        let nm: str = name;
+        let mut sz: i64 = 0;
+        if (size != nil) {
+            let v: i64 = size;
+            sz = v;
+        }
+        return (Entry { name: nm, size: sz, hash: hash, files: files }, nil);
+    }
+}
+
+// the serialize twin — load-bearing, not decoration. The peer-gated
+// `impl JsonSerialize for Vec<T>` (json's pouch group, spliced by
+// `assemble_peers` because pouch is in this program's closure)
+// monomorphizes at every `Vec<..>` shape in this unit, and `Vec<Entry>`
+// rides the struct field above; its element `x.encode(w)` needs Entry's
+// own encode COMPILED, or the binary fails load-time verify — the
+// engine-side devirtualization gap 02-digest disclosed (its consumer
+// hit it at T = opaque, where the orphan rule forbids the fix; Entry is
+// type-local, so this pkg can and does write the impl). The twin also
+// dispatches the peer row itself: `kids.encode(w)` below IS the
+// spliced `Vec<T>` encode at T = Entry.
+impl JsonSerialize for Entry {
+    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.begin_object();
+        w.key("name");
+        w.write_str(self.name);
+        w.key("size");
+        w.write_i64(self.size);
+        if (self.hash != nil) {
+            let h: str = self.hash;
+            w.key("hash");
+            w.write_str(h);
+        }
+        if (self.files != nil) {
+            let kids: Vec<Entry> = self.files;
+            w.key("files");
+            let e = kids.encode(w);
+            if (e != nil) { return e; }
+        }
+        w.end_object();
+        return nil;
+    }
+}
+
+// the document root — only its `files` array matters here
+struct Root {
+    files: ?Vec<Entry>;
+}
+
+impl JsonDeserialize for Root {
+    fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        r.begin_object();
+        let mut files: ?Vec<Entry> = nil;
+        while (r.more()) {
+            let k = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            when (k) {
+                "files" -> {
+                    let (v, e) = decode_entry_files<Entry>(r);
+                    if (e != nil) { return (nil, e); }
+                    files = v;
+                },
+                else -> { r.skip_value(); },
+            }
+            if (r.failed()) { return (nil, r.error()); }
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        return (Root { files: files }, nil);
+    }
+}
+
+// ------------------------------------------------------- formatting ---
+
+// human bytes, the plan's ladder: `N B` under 1024, then KiB/MiB/GiB —
+// one decimal only when the remainder is nonzero. The f-string hole is
+// a bare expression (RFC 0030 §1.1) with no format spec, so the tenth
+// is integer math: `rem * 10 / unit`, floor — `1536` -> `1.5 KiB`,
+// `1024` -> `1 KiB`, `1048576` -> `1 MiB`.
+fn with_tenths(whole: i64, rem: i64, unit: i64, name: str) -> str {
+    if (rem == 0) { return f"{whole} {name}"; }
+    let tenths = (rem * 10) / unit;
+    return f"{whole}.{tenths} {name}";
+}
+
+fn human_size(b: i64) -> str {
+    if (b < 1024) { return f"{b} B"; }
+    if (b < 1048576) { return with_tenths(b / 1024, b % 1024, 1024, "KiB"); }
+    if (b < 1073741824) { return with_tenths(b / 1048576, b % 1048576, 1048576, "MiB"); }
+    return with_tenths(b / 1073741824, b % 1073741824, 1073741824, "GiB");
+}
+
+// the line's third column: the entry hash's first 8 characters. The CDN
+// serves base64 text (44 chars, SRI-style), not hex — the first 8 chars
+// are the stable prefix; a missing hash prints as "-".
+fn hash8(h: ?str) -> str {
+    if (h == nil) { return "-"; }
+    let s: str = h;
+    return s.slice(0, 8);
+}
+
+// depth-first in API order: directories are walked (never printed), a
+// file prints one tab-separated line
+fn emit_dir(prefix: str, fs: Vec<Entry>) {
+    for (let e of fs) {
+        let mut pfx = prefix;
+        if (pfx.len() > 0) {
+            pfx = f"{pfx}/{e.name}";
+        } else {
+            pfx = e.name;
+        }
+        if (e.files != nil) {
+            let kids: Vec<Entry> = e.files;
+            emit_dir(pfx, kids);
+        } else {
+            out(f"{pfx}\t{human_size(e.size)}\t{hash8(e.hash)}");
+        }
+    }
+}
+
+// --------------------------------------------------------- the CDN ----
+
+// One response, mapped. Status 0 is the std lane's RESERVED transport
+// verdict (0 is never a real HTTP status) — its text is always present
+// by the lane's own law, so the deref cannot trap. 404 names the host
+// the caller actually checked; 403 is the CDN's rate-limit shape; any
+// other non-2xx is the bare status.
+fn map_response(resp: Response, notfound: str, host: str) -> ?str {
+    let s = resp.status();
+    if (s == 0) {
+        let why: str = resp.transport_error();
+        return f"rgh: network error: {why}";
+    }
+    if (s == 404) { return f"rgh: {notfound} (checked the CDN: {host})"; }
+    if (s == 403) { return "rgh: rate limited by the CDN (HTTP 403) — wait and retry"; }
+    if (!resp.ok()) { return f"rgh: CDN {s}"; }
+    return nil;
+}
+
+fn do_list(owner: str, repo: str, rf: str) -> i32 {
+    let url = f"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}";
+    let resp = get(url);
+    let err = map_response(resp, "no such repo or ref", "data.jsdelivr.com");
+    if (err != nil) {
+        let why: str = err;
+        eprint(why);
+        return 1;
+    }
+    let (tree, e) = decodeJsonBytes<Root>(resp.body());
+    if (e != nil) {
+        let why: DecodeJsonError = e;
+        eprint(f"rgh: the CDN's tree JSON did not parse at {why.at}: expected {why.expected}");
+        return 1;
+    }
+    if (tree != nil) {
+        let doc: Root = tree;
+        if (doc.files != nil) {
+            let fs: Vec<Entry> = doc.files;
+            emit_dir("", fs);
+        }
+    }
+    return 0;
+}
+
+fn do_download(owner: str, repo: str, rf: str, path: str, dest: str) -> i32 {
+    let url = f"https://cdn.jsdelivr.net/gh/{owner}/{repo}@{rf}/{path}";
+    let resp = get(url);
+    let err = map_response(resp, "no such file (or repo/ref)", "cdn.jsdelivr.net");
+    if (err != nil) {
+        let why: str = err;
+        eprint(why);
+        return 1;
+    }
+    let body = resp.body();
+    let werr: ?str = write_file(dest, body);
+    if (werr != nil) {
+        let why: str = werr;
+        eprint(f"rgh: {dest}: {why}");
+        return 1;
+    }
+    out(f"downloaded {path} ({body.len()} bytes) -> {dest}");
+    return 0;
+}
+
+// ------------------------------------------------------------ entry ---
+
+entry fn rgh_main(args: str) -> i32 {
+    let argv = split_argv(args);
+    let argc = argv.len();
+
+    // flags sit before the subcommand; each at most once
+    let mut owner = "";
+    let mut repo = "";
+    let mut rf = "";
+    let mut have_repo = false;
+    let mut have_ref = false;
+    let mut i: i32 = 0;
+    while (i < argc) {
+        let a = argv[i];
+        if (!a.starts_with(0, "--")) { break; }
+        if (a.starts_with(0, "--repo=")) {
+            if (have_repo) { return usage("--repo given twice"); }
+            let v = a.slice(7, a.len());
+            let (ok, o, r) = carve_repo(v);
+            if (!ok) { return usage(f"--repo={v} is not owner/name (exactly one '/', both sides nonempty)"); }
+            owner = o;
+            repo = r;
+            have_repo = true;
+        } else {
+            if (a.starts_with(0, "--ref=")) {
+                if (have_ref) { return usage("--ref given twice"); }
+                let v = a.slice(6, a.len());
+                if (v.len() == 0) { return usage("--ref wants a nonempty value"); }
+                rf = v;
+                have_ref = true;
+            } else {
+                return usage(f"unknown flag: {a}");
+            }
+        }
+        i += 1;
+    }
+    if (!have_repo) { return usage("missing --repo=owner/name"); }
+    if (!have_ref) { return usage("missing --ref=<tag|branch|sha>"); }
+    if (i >= argc) { return usage("missing a subcommand (list | download)"); }
+
+    let sub = argv[i];
+    if (sub == "list") {
+        if (i + 1 < argc) { return usage(f"list takes no arguments (got {argv[i + 1]})"); }
+        return do_list(owner, repo, rf);
+    }
+    if (sub == "download") {
+        if (i + 1 >= argc) { return usage("download needs a repo path"); }
+        let path = argv[i + 1];
+        if (path.len() == 0) { return usage("download needs a repo path"); }
+        if (path.code_at(path.len() - 1) == 47) {
+            return usage(f"download: {path} is a directory target — rgh downloads one file");
+        }
+        let mut dest = basename(path);
+        if (i + 2 < argc) {
+            dest = argv[i + 2];
+        }
+        if (i + 3 < argc) { return usage("download takes a repo path and at most one dest"); }
+        return do_download(owner, repo, rf, path, dest);
+    }
+    return usage(f"unknown subcommand: {sub} (want list | download)");
+}

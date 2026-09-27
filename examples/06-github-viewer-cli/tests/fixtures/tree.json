@@ -1,0 +1,2117 @@
+{
+	"type": "gh",
+	"name": "jquery/jquery",
+	"version": "3.7.1",
+	"default": null,
+	"files": [
+		{
+			"type": "directory",
+			"name": ".github",
+			"files": [
+				{
+					"type": "directory",
+					"name": "workflows",
+					"files": [
+						{
+							"type": "file",
+							"name": "node.js.yml",
+							"hash": "0RWKWqKGp1Y7LUQb+fi8f+2M4JjCR/LEOvCshXbIrOI=",
+							"size": 2860
+						}
+					]
+				},
+				{
+					"type": "file",
+					"name": "dependabot.yml",
+					"hash": "IU2UApHP2bmX32vHKAKqw93LtIlYQxlalEU/lyFQdco=",
+					"size": 115
+				},
+				{
+					"type": "file",
+					"name": "ISSUE_TEMPLATE.md",
+					"hash": "tVwde5reWjR0glcdMNGuwXmMTFTrXqZayvvNFMDDjBQ=",
+					"size": 814
+				},
+				{
+					"type": "file",
+					"name": "lock.yml",
+					"hash": "JxFuPhg95gOCsJolAKVzVyTpFQ3r9nWyiexzfX3yKWc=",
+					"size": 455
+				},
+				{
+					"type": "file",
+					"name": "PULL_REQUEST_TEMPLATE.md",
+					"hash": "Gv1rEqVAaLnskgTIp/OU64akwKsiBeUma3uTJXdVSOM=",
+					"size": 501
+				}
+			]
+		},
+		{
+			"type": "directory",
+			"name": "build",
+			"files": [
+				{
+					"type": "directory",
+					"name": "fixtures",
+					"files": [
+						{
+							"type": "file",
+							"name": "README.md",
+							"hash": "TefRAtsbuKrh13dQNC8Rty2oR7EpNNxQ9PmK8T1Blb0=",
+							"size": 1884
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "release",
+					"files": [
+						{
+							"type": "file",
+							"name": "cdn.js",
+							"hash": "+SCwypiKQLJcphVhz2GRamL9svDqInOk4CAW3tjezes=",
+							"size": 3584
+						},
+						{
+							"type": "file",
+							"name": "dist.js",
+							"hash": "gxEFUj1OBYI3YxhxqTZwPiUe+lRyv9iEOLV6zx7C1IY=",
+							"size": 4207
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "tasks",
+					"files": [
+						{
+							"type": "directory",
+							"name": "lib",
+							"files": [
+								{
+									"type": "file",
+									"name": "slim-build-flags.js",
+									"hash": "lkhrJCkpKy260JNJrja5wxgBOiwXiBjRmH2e5HT76SE=",
+									"size": 111
+								},
+								{
+									"type": "file",
+									"name": "spawn_test.js",
+									"hash": "oGuXhQ2ytu9H3yMozelpxYLn8f5SSPX2PGsz0PPleHw=",
+									"size": 438
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "build.js",
+							"hash": "1ID42+tO+aTTm9uvoWcOwfNMpzZKxipy7o7XY3/nwo0=",
+							"size": 10610
+						},
+						{
+							"type": "file",
+							"name": "dist.js",
+							"hash": "UU94facC7aDpYXzEtXorg1ILFxwW92yNf76tmvShYjY=",
+							"size": 1950
+						},
+						{
+							"type": "file",
+							"name": "node_smoke_tests.js",
+							"hash": "JYFXlkwZce0uMStsD40mNvFV3GQ4QY4fkK2ePEP0YpM=",
+							"size": 1491
+						},
+						{
+							"type": "file",
+							"name": "promises_aplus_tests.js",
+							"hash": "E8tNgCaAsO5ONacRr+uiQA0H+1r89y7AHARvFjYu0c0=",
+							"size": 794
+						},
+						{
+							"type": "file",
+							"name": "qunit_fixture.js",
+							"hash": "3DLQ52GAWNoq2DgAK6Vi307GTIDDt0ENWSSFIW4570I=",
+							"size": 495
+						},
+						{
+							"type": "file",
+							"name": "sourcemap.js",
+							"hash": "vV3ByklBnSZ+l2uY+CA2zBcCm4e/bxuIxBUNzkXV98k=",
+							"size": 574
+						},
+						{
+							"type": "file",
+							"name": "testswarm.js",
+							"hash": "7U5yQjADby+DRDbLhZ0rf9D5aizrkp2cfLvzPuZterQ=",
+							"size": 1617
+						}
+					]
+				},
+				{
+					"type": "file",
+					"name": "release.js",
+					"hash": "OvBCe63Snzx3pw34AHSpiwVSDTQVaIGFY3X3bR2a8gM=",
+					"size": 1928
+				}
+			]
+		},
+		{
+			"type": "directory",
+			"name": "dist",
+			"files": [
+				{
+					"type": "file",
+					"name": ".eslintrc.json",
+					"hash": "WqqrmpNnFSvaOoyrbi6e0SPIiWsuyKxu/4bLPohKUBg=",
+					"size": 577
+				},
+				{
+					"type": "file",
+					"name": "jquery.js",
+					"hash": "eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=",
+					"size": 285314
+				},
+				{
+					"type": "file",
+					"name": "jquery.min.js",
+					"hash": "/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=",
+					"size": 87533
+				},
+				{
+					"type": "file",
+					"name": "jquery.min.map",
+					"hash": "z3TVHGLSmRiZiRMOu0I7MEU1Mv3ImI2OK3GxuRZagLg=",
+					"size": 134755
+				},
+				{
+					"type": "file",
+					"name": "jquery.slim.js",
+					"hash": "UgvvN8vBkgO0luPSUl2s8TIlOSYRoGFAX4jlCIm9Adc=",
+					"size": 232015
+				},
+				{
+					"type": "file",
+					"name": "jquery.slim.min.js",
+					"hash": "kmHvs0B+OpCW5GVHUNjv9rOmY0IvSIRcf7zGUDTDQM8=",
+					"size": 70264
+				},
+				{
+					"type": "file",
+					"name": "jquery.slim.min.map",
+					"hash": "9FYmcgtx8qZo1OPPiPt/BJ/sz0EI8SRNUYsFLZDEEt4=",
+					"size": 107143
+				}
+			]
+		},
+		{
+			"type": "directory",
+			"name": "external",
+			"files": [
+				{
+					"type": "directory",
+					"name": "sinon",
+					"files": [
+						{
+							"type": "file",
+							"name": "LICENSE.txt",
+							"hash": "O8IwjZrkGnV2f+dCyuSnUM0vlaMPF+lBxdmhOvxuoL8=",
+							"size": 1572
+						},
+						{
+							"type": "file",
+							"name": "sinon.js",
+							"hash": "CbCmileu6hy24Fy0yD7L0JFkITcjfq4gyBYvIfhblb8=",
+							"size": 2186617
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "requirejs",
+					"files": [
+						{
+							"type": "file",
+							"name": "require.js",
+							"hash": "lIXwkX+X/PT2Ol6jZSAP/VfxI/RROCovmhrS4v1RrJs=",
+							"size": 86483
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "qunit",
+					"files": [
+						{
+							"type": "file",
+							"name": "LICENSE.txt",
+							"hash": "0KO+xctY1gYeVk6U/IqTWEpOciq0EuLFsFNAr72UuBU=",
+							"size": 1589
+						},
+						{
+							"type": "file",
+							"name": "qunit.css",
+							"hash": "toepOe5D+ddXgUOGsijnhymZna5bakJ0gwRC/3bK1b0=",
+							"size": 7875
+						},
+						{
+							"type": "file",
+							"name": "qunit.js",
+							"hash": "EQ5rv6kPFPKQUYY+P4H6fm/le+yFRLVAb//2PfBswfE=",
+							"size": 188837
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "npo",
+					"files": [
+						{
+							"type": "file",
+							"name": "npo.js",
+							"hash": "JrF52mnIfWnagCMDCqysE+uUMysvVUHCptX640/uYEI=",
+							"size": 8113
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "core-js",
+					"files": [
+						{
+							"type": "file",
+							"name": "core-js.js",
+							"hash": "mmU2yAEP5IKCRWRxZEA+e2oGOdfyJGQV+55ZFTLahW8=",
+							"size": 91873
+						},
+						{
+							"type": "file",
+							"name": "LICENSE.txt",
+							"hash": "ci4Rk5Aa0e1EYHU93tSD1oyirQUoxn+G92q8RrmqJfU=",
+							"size": 1064
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "bootstrap",
+					"files": [
+						{
+							"type": "file",
+							"name": "bootstrap.css",
+							"hash": "dytF8SOIB6pQuIPDkrS/inNZwKBGYuqjPX+ev2iCA04=",
+							"size": 280812
+						},
+						{
+							"type": "file",
+							"name": "bootstrap.min.css",
+							"hash": "fx038NkLY4U1TCrBDiu5FWPEa9eiZu01EiLryshJbCo=",
+							"size": 232914
+						},
+						{
+							"type": "file",
+							"name": "bootstrap.min.css.map",
+							"hash": "aK6EaF3bzgKXu86ktHC98MlPeLQlS93BVKSjhnOFLwM=",
+							"size": 589307
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "directory",
+			"name": "src",
+			"files": [
+				{
+					"type": "directory",
+					"name": "ajax",
+					"files": [
+						{
+							"type": "directory",
+							"name": "var",
+							"files": [
+								{
+									"type": "file",
+									"name": "location.js",
+									"hash": "NDHedxtpSVFey+vX5TvRRJoD+G06/QcbDyh0s9SVHTM=",
+									"size": 67
+								},
+								{
+									"type": "file",
+									"name": "nonce.js",
+									"hash": "QRkQqlaDsTyB9RjVD6CwFxRIvWQDiz6N6UsIkdHbuBA=",
+									"size": 72
+								},
+								{
+									"type": "file",
+									"name": "rquery.js",
+									"hash": "YYVkpdDrXsZjhfFtWDCRTSiLpkr1vp4GyCkT3yM7cwU=",
+									"size": 60
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "jsonp.js",
+							"hash": "VhbXyUs7CVi4zkt2vsJZQDrYL/fa97hPMmjk0U2+0SY=",
+							"size": 2753
+						},
+						{
+							"type": "file",
+							"name": "load.js",
+							"hash": "E/w7IKRRf7ScdUBFu4bqMuHTSoqbfR9n1oWWpe9pacM=",
+							"size": 1904
+						},
+						{
+							"type": "file",
+							"name": "script.js",
+							"hash": "93Tx77kab+4X8GLiyjLh9aGoNJ0SgBczEw2y5pRePpU=",
+							"size": 1637
+						},
+						{
+							"type": "file",
+							"name": "xhr.js",
+							"hash": "cW7GxcQW+7C1lQy8UKnmErxfLNQljkHCbc942rrmOAM=",
+							"size": 4355
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "attributes",
+					"files": [
+						{
+							"type": "file",
+							"name": "attr.js",
+							"hash": "59feTynWAT7CgZSWhHSyic7628bGiEUAS1bCKnK/+hg=",
+							"size": 3272
+						},
+						{
+							"type": "file",
+							"name": "classes.js",
+							"hash": "I/hS8F43glrG6XOJeHfA/FNJJn3ikMbyZEniotZCpnU=",
+							"size": 4527
+						},
+						{
+							"type": "file",
+							"name": "prop.js",
+							"hash": "K0a6tJVXO3Eq3XQy4ZjMpCDJhYlHa+cMtjIrqcODDR4=",
+							"size": 2857
+						},
+						{
+							"type": "file",
+							"name": "support.js",
+							"hash": "rf7gspjppZWRRAFLjo37xtL47HF47KkA6y4ByDxCGro=",
+							"size": 786
+						},
+						{
+							"type": "file",
+							"name": "val.js",
+							"hash": "iVD/tMU7YOno6TawkKdtX0G5pdxuQoIlYgO3DUoRYf8=",
+							"size": 4261
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "core",
+					"files": [
+						{
+							"type": "directory",
+							"name": "var",
+							"files": [
+								{
+									"type": "file",
+									"name": "rhtml.js",
+									"hash": "jl7H79JFEGt6uUMb5jRIxplZaU1c8kvP7FQYK+lXUZg=",
+									"size": 64
+								},
+								{
+									"type": "file",
+									"name": "rsingleTag.js",
+									"hash": "khqMyBhhPHfIlvAExAS7hS1xKMWz19QwUK1Ce2wiLfU=",
+									"size": 244
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "access.js",
+							"hash": "yL5IraumlPZeArOjnjHXxhmcEmlvbBF3YrEhg4nKhM0=",
+							"size": 1314
+						},
+						{
+							"type": "file",
+							"name": "camelCase.js",
+							"hash": "4dDcSpEXPura4IWiWNsuxkSPDkmcu9+Ad9+5c6XNhfU=",
+							"size": 550
+						},
+						{
+							"type": "file",
+							"name": "DOMEval.js",
+							"hash": "0zpwvlD+0LU02Xat2fS0X908fEnt9s6aqJzNxfVkrWo=",
+							"size": 1160
+						},
+						{
+							"type": "file",
+							"name": "init.js",
+							"hash": "zt3xKbCe7tZMRmSd3d+K243FT+sf/Y55hSG3SM/Sxn4=",
+							"size": 3345
+						},
+						{
+							"type": "file",
+							"name": "isAttached.js",
+							"hash": "8W9qrqRSterxlzYebSDNIxAnuvz1AaRAUay3Ws/jcPU=",
+							"size": 798
+						},
+						{
+							"type": "file",
+							"name": "nodeName.js",
+							"hash": "wr8FTTf4Xjrumc17c98zMwN+Foy2n9MjFR9FZ3LMPVI=",
+							"size": 176
+						},
+						{
+							"type": "file",
+							"name": "parseHTML.js",
+							"hash": "wodUQ/n+zMpSiZPrEfVSdjYmFPztugB/fZ3yyg7+aeo=",
+							"size": 1604
+						},
+						{
+							"type": "file",
+							"name": "parseXML.js",
+							"hash": "zdX/6jJdPXN0uLW0bTBO8rpE0WPcsKSVf8W5Av2jPvs=",
+							"size": 739
+						},
+						{
+							"type": "file",
+							"name": "ready.js",
+							"hash": "d9XBF6G844KdjAIl+GbgTnSA496Ezg/uI80iPkEqVVM=",
+							"size": 2101
+						},
+						{
+							"type": "file",
+							"name": "ready-no-deferred.js",
+							"hash": "WTOZf+1K9dmdl2nfWA+olfmiSGuvktozHpy8IpboP8c=",
+							"size": 2268
+						},
+						{
+							"type": "file",
+							"name": "readyException.js",
+							"hash": "LirlI4fo/drRWco6AIbAFGCkKr9DzSULnuMHXuFGASI=",
+							"size": 168
+						},
+						{
+							"type": "file",
+							"name": "stripAndCollapse.js",
+							"hash": "hhpC3nE2O3Z7+oAyD7VPZDntNrVASOiiewWtQxW/CnM=",
+							"size": 362
+						},
+						{
+							"type": "file",
+							"name": "support.js",
+							"hash": "/LKKQwLjjtDPHLOhIIzldxHIU841KQFYR6llmeM/fpA=",
+							"size": 631
+						},
+						{
+							"type": "file",
+							"name": "toType.js",
+							"hash": "EZjmklhe/ZXR3Ud3Icu/W46ZhYZK1yf2H0g63caI2+c=",
+							"size": 379
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "css",
+					"files": [
+						{
+							"type": "directory",
+							"name": "var",
+							"files": [
+								{
+									"type": "file",
+									"name": "cssExpand.js",
+									"hash": "pIru3vFVcHriTVkaJfRTIbpQad/DepyNFaBjiZ7FAz4=",
+									"size": 88
+								},
+								{
+									"type": "file",
+									"name": "getStyles.js",
+									"hash": "dxoVIYyPiykzozLUau3R/Xbjugn+dm+wF+PSQUyquSo=",
+									"size": 409
+								},
+								{
+									"type": "file",
+									"name": "isHiddenWithinTree.js",
+									"hash": "+JafLo9iMfZyr/SWdAjGEjftUquTa2xS66ig/m18pUI=",
+									"size": 1284
+								},
+								{
+									"type": "file",
+									"name": "rboxStyle.js",
+									"hash": "zGVzgK01nEM+WhD1wDzh8661wnRk4PSC+/rf9xNrXhg=",
+									"size": 123
+								},
+								{
+									"type": "file",
+									"name": "rcustomProp.js",
+									"hash": "/igD9qHEU3g1j2owrBdUm8SlwGLd637DbHP1ZHnOwqk=",
+									"size": 57
+								},
+								{
+									"type": "file",
+									"name": "rnumnonpx.js",
+									"hash": "LRluEam5e7bSDtWkIOjy2IwvPnHyDrB6UE5D0DAC9as=",
+									"size": 131
+								},
+								{
+									"type": "file",
+									"name": "swap.js",
+									"hash": "rnYr9PTTnladiC6GDyNB1IWx8lHf/zTCuv+ecEzH58A=",
+									"size": 501
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "addGetHookIf.js",
+							"hash": "SAsfHAPbzd+mgSmJvk0pan+zmiTDjq6wb2RRruZOk88=",
+							"size": 530
+						},
+						{
+							"type": "file",
+							"name": "adjustCSS.js",
+							"hash": "1jOz14fz9mH8DdBlTvRFFvbpGume8Tw3l6cW2amu42I=",
+							"size": 2002
+						},
+						{
+							"type": "file",
+							"name": "curCSS.js",
+							"hash": "mlj2zztwetf8cjaMYUnxWeptORNp0KIX4iN+s/oydTk=",
+							"size": 3305
+						},
+						{
+							"type": "file",
+							"name": "finalPropName.js",
+							"hash": "HhI7kKfWyYuqgk3eK2xB2rf2nfaE4QN9hXKEPL9eFtw=",
+							"size": 870
+						},
+						{
+							"type": "file",
+							"name": "hiddenVisibleSelectors.js",
+							"hash": "OK2VDpvtXiPtSfnaRDblna+WvlUGLyucjkRRvzVyjMI=",
+							"size": 317
+						},
+						{
+							"type": "file",
+							"name": "showHide.js",
+							"hash": "9r/4gVnvqiEZcEMLGjPOsK5k6Gsu1NaW16V3ExJNTww=",
+							"size": 2304
+						},
+						{
+							"type": "file",
+							"name": "support.js",
+							"hash": "CVmBa01wFYt6upYjvvbeAyaCIfgHpMDKfeo4ghzyVak=",
+							"size": 4854
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "data",
+					"files": [
+						{
+							"type": "directory",
+							"name": "var",
+							"files": [
+								{
+									"type": "file",
+									"name": "acceptData.js",
+									"hash": "35uwg+OJk5cSTc7P7t5DWnbHmfRRVw3fma2nnvsfo3Q=",
+									"size": 318
+								},
+								{
+									"type": "file",
+									"name": "dataPriv.js",
+									"hash": "GYc6ClSbTNsgg7nP5rfdebXdUJ9n/b46cHZgpEJBcIU=",
+									"size": 84
+								},
+								{
+									"type": "file",
+									"name": "dataUser.js",
+									"hash": "GYc6ClSbTNsgg7nP5rfdebXdUJ9n/b46cHZgpEJBcIU=",
+									"size": 84
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "Data.js",
+							"hash": "krbiq6tN69ZzZ8j6RsteQZKU6gTm7v4Mwmf2wxzPFNg=",
+							"size": 3956
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "deferred",
+					"files": [
+						{
+							"type": "file",
+							"name": "exceptionHook.js",
+							"hash": "e7LI7TRsHK4Voz/7AC1UCu0M6nk27hzZuzEVH/CN+GI=",
+							"size": 830
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "deprecated",
+					"files": [
+						{
+							"type": "file",
+							"name": "ajax-event-alias.js",
+							"hash": "LGMmobvS65SYvJ3qxWY4+PHlGJU/o7B0tzulUOMT0iA=",
+							"size": 296
+						},
+						{
+							"type": "file",
+							"name": "event.js",
+							"hash": "m2FGp5fYEKe2K+Z9WwLVsbYDBirRq+uxQWAQ7QQZS40=",
+							"size": 1160
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "effects",
+					"files": [
+						{
+							"type": "file",
+							"name": "animatedSelector.js",
+							"hash": "UNp+ly+E+UZTulYgpD9AefrP4tJnzxuBbGe7v4AX6Wg=",
+							"size": 244
+						},
+						{
+							"type": "file",
+							"name": "Tween.js",
+							"hash": "/yUB6ZKuBNHl34pYQ0mpyRvmwyysWmeBWMyueyk4nRs=",
+							"size": 3291
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "event",
+					"files": [
+						{
+							"type": "file",
+							"name": "trigger.js",
+							"hash": "/zQyja/QAmBoGEv+btAYxklo9bPGbsiW7xVXoA1V9Gw=",
+							"size": 5438
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "exports",
+					"files": [
+						{
+							"type": "file",
+							"name": "amd.js",
+							"hash": "QlfltqSbRAmFDQxEzYJo4hRtmiZIEPIUwah/R0Y666c=",
+							"size": 1024
+						},
+						{
+							"type": "file",
+							"name": "global.js",
+							"hash": "6hRtq0mMde4NDBlO8j59EfBms7XJjHwQ1c0dHNqQLJM=",
+							"size": 628
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "manipulation",
+					"files": [
+						{
+							"type": "directory",
+							"name": "var",
+							"files": [
+								{
+									"type": "file",
+									"name": "rscriptType.js",
+									"hash": "xzoVGObmf4ukpDZEvP9yMPEvBa7+PbQ5MskKlinMsVE=",
+									"size": 92
+								},
+								{
+									"type": "file",
+									"name": "rtagName.js",
+									"hash": "//ZK/tgd6BvYzYNxezDkOQ4X6GnSq0h5CrT3Z3f9zhs=",
+									"size": 304
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "_evalUrl.js",
+							"hash": "xtnY4zLoQ5RE8QlnSdmFKhXsqxmaZbII6ht92pzKzY4=",
+							"size": 690
+						},
+						{
+							"type": "file",
+							"name": "buildFragment.js",
+							"hash": "hDwdevty2+zN90uV/f83bNoVV9W5CSNBxmYu97mCAyo=",
+							"size": 2490
+						},
+						{
+							"type": "file",
+							"name": "getAll.js",
+							"hash": "NLujANIpF46XIzoSkVDCQ66Buu8h6lqKRfryQJty+Q0=",
+							"size": 654
+						},
+						{
+							"type": "file",
+							"name": "setGlobalEval.js",
+							"hash": "3L0phZ69PK1s3g+xxSf1D5X7nx+IiCnFEW3zT3ezDIw=",
+							"size": 381
+						},
+						{
+							"type": "file",
+							"name": "support.js",
+							"hash": "7nBwCuaa02UgxUff5u4k3pgJv+/y/Mbll+Ip4p9UxKc=",
+							"size": 1244
+						},
+						{
+							"type": "file",
+							"name": "wrapMap.js",
+							"hash": "ORYFpanXUcIbxA5kmrukpuGNWaB6+5AnQYKLBNPleSI=",
+							"size": 823
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "queue",
+					"files": [
+						{
+							"type": "file",
+							"name": "delay.js",
+							"hash": "ODsm9rcI6iL5KdKdJ8mZbxh/OuTRSJp8i7TRtyQx2Cw=",
+							"size": 534
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "selector",
+					"files": [
+						{
+							"type": "file",
+							"name": "contains.js",
+							"hash": "rjV9s32N8wIpiLz8gJmxTpCetemCvSRlkAAhrQI6uKo=",
+							"size": 418
+						},
+						{
+							"type": "file",
+							"name": "escapeSelector.js",
+							"hash": "bsWBpsSqTjLDvgmNTTIYyCeHj6c8jvgajt3a1ZVq1A4=",
+							"size": 773
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "traversing",
+					"files": [
+						{
+							"type": "directory",
+							"name": "var",
+							"files": [
+								{
+									"type": "file",
+									"name": "dir.js",
+									"hash": "Rjovcv9nhs+cmbOtOeoMt3c6+e47ehttatQUdJH2jgU=",
+									"size": 371
+								},
+								{
+									"type": "file",
+									"name": "rneedsContext.js",
+									"hash": "kMoDVjTLFo7G5Tk+NnDLP+9nrwiptZqHhe+cTZlivx8=",
+									"size": 128
+								},
+								{
+									"type": "file",
+									"name": "siblings.js",
+									"hash": "CPV8/Yh3Z5jQZ9Bjm73+hCLAVfihd/RaxGpkxfx502k=",
+									"size": 218
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "findFilter.js",
+							"hash": "6JpaMMZHQjK5B1OveqKZgLVWPvbhxQh2D/2pVnmmsRo=",
+							"size": 2352
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "var",
+					"files": [
+						{
+							"type": "file",
+							"name": "arr.js",
+							"hash": "KqEQ5OYuLmuBJfEmhHxBnmpGpv1pR72PM0lNLMZ/CW0=",
+							"size": 54
+						},
+						{
+							"type": "file",
+							"name": "class2type.js",
+							"hash": "MBPUIrJOxf7O2ci6pO1SDfVrDRjea/k2462G4VW2GTE=",
+							"size": 82
+						},
+						{
+							"type": "file",
+							"name": "document.js",
+							"hash": "+gND7PEyGjy4zMBPzDjNx5L80bv+rMbglBOyjehkLEc=",
+							"size": 67
+						},
+						{
+							"type": "file",
+							"name": "documentElement.js",
+							"hash": "UGnuEkSzjDDd72APy/FSv8HCuN4a6f/C3wXPIG0J6UQ=",
+							"size": 105
+						},
+						{
+							"type": "file",
+							"name": "flat.js",
+							"hash": "1nOV9o4uzd1Wwp2V0cKm2MaYNXf7zOmZjV1rUanE4zY=",
+							"size": 372
+						},
+						{
+							"type": "file",
+							"name": "fnToString.js",
+							"hash": "w2Smaz/FOStIVIVyE0Tmd5XPR1RS6P1FrdIYSK+yquo=",
+							"size": 92
+						},
+						{
+							"type": "file",
+							"name": "getProto.js",
+							"hash": "TkAAWmLMCc10fZJz/1iv0Q6oAYT+lzoGIjfex9NX6rU=",
+							"size": 73
+						},
+						{
+							"type": "file",
+							"name": "hasOwn.js",
+							"hash": "sQe5oZPwd2LkibqEj0FCDN4m6E+OCg8K0dCZyrQZsgk=",
+							"size": 110
+						},
+						{
+							"type": "file",
+							"name": "indexOf.js",
+							"hash": "QzhziawYimalbpg88AATiw4B+xiRGNLjRgKhv7FYKtE=",
+							"size": 82
+						},
+						{
+							"type": "file",
+							"name": "isFunction.js",
+							"hash": "QD2bS0kCT2OWpZsh+fvTOiuSgEuI28ncdAi6ia9KnGw=",
+							"size": 674
+						},
+						{
+							"type": "file",
+							"name": "isWindow.js",
+							"hash": "87bJYkMxAREhW0dXpBB4pgbRcjs3/b70wDmOCjQCBbo=",
+							"size": 126
+						},
+						{
+							"type": "file",
+							"name": "ObjectFunctionString.js",
+							"hash": "8ymI7EWwkjEMYhd3a6kSAO5G6KzCub9YqCT5pkxF1Ys=",
+							"size": 110
+						},
+						{
+							"type": "file",
+							"name": "pnum.js",
+							"hash": "Y403VoUQRLqYLZ1H953nd9UmAAOYNqril0kh0rVdR5U=",
+							"size": 100
+						},
+						{
+							"type": "file",
+							"name": "pop.js",
+							"hash": "7LEFh8UX87rO0E8gWPqTTgMJ6oKoTD6oxWduqEpZbpE=",
+							"size": 78
+						},
+						{
+							"type": "file",
+							"name": "push.js",
+							"hash": "ck7pyeuPlYAyci/q04Mo2sVNY1yGEIDGHu3LpGm/tEs=",
+							"size": 79
+						},
+						{
+							"type": "file",
+							"name": "rcheckableType.js",
+							"hash": "849PQpl513CvAi45KAyBwZvQYuApovHVrzG3SyKDRWk=",
+							"size": 79
+						},
+						{
+							"type": "file",
+							"name": "rcssNum.js",
+							"hash": "nV8R+j8wlF0LiI89UHWox6X7xk6cUiHsB1nu3rkJE0Y=",
+							"size": 136
+						},
+						{
+							"type": "file",
+							"name": "rnothtmlwhite.js",
+							"hash": "3H4lGanl/njZn/e17m1k0Tf6Zp6XESWJ1mRWm+zyWg4=",
+							"size": 202
+						},
+						{
+							"type": "file",
+							"name": "rtrimCSS.js",
+							"hash": "nc2bSe542NuoQThHtc1BhNLWlx3Q90lldvIkbMyttx8=",
+							"size": 174
+						},
+						{
+							"type": "file",
+							"name": "slice.js",
+							"hash": "RbB/TiVS4EzuMeF4djnrI+R+rh5L9OeQBL3M7+TJT9E=",
+							"size": 80
+						},
+						{
+							"type": "file",
+							"name": "sort.js",
+							"hash": "yWWDs/8WRe29Oef/nwpnA/FfhzdPkRxy5G+rlEpfLe0=",
+							"size": 79
+						},
+						{
+							"type": "file",
+							"name": "splice.js",
+							"hash": "it1g+Tid9uD+kzXMOqtrNPLr9f8J7XU+HMAdm0+KJwQ=",
+							"size": 81
+						},
+						{
+							"type": "file",
+							"name": "support.js",
+							"hash": "XMPzWuHe844wqbTSY/bOQ3IZ9b56nPMk8ibURLfrL2Y=",
+							"size": 117
+						},
+						{
+							"type": "file",
+							"name": "toString.js",
+							"hash": "Hh87skomwwu+CRIhgHuB57r89HwLkosBnbCADzaaLe8=",
+							"size": 104
+						},
+						{
+							"type": "file",
+							"name": "whitespace.js",
+							"hash": "voPiWP3dTMW51hHd5Mypv0kbNvX/2NXkBDAIIztcSus=",
+							"size": 125
+						}
+					]
+				},
+				{
+					"type": "file",
+					"name": ".eslintrc.json",
+					"hash": "ouS0Wj/B2J31mn9uS2D8EdhOYPb3LlzCW9Uki722vWY=",
+					"size": 907
+				},
+				{
+					"type": "file",
+					"name": "ajax.js",
+					"hash": "fEh+3jlXDMkkX4KCJQfpikyzrgYDZzkd/8ohYOvSiw8=",
+					"size": 22924
+				},
+				{
+					"type": "file",
+					"name": "attributes.js",
+					"hash": "mE2ygHkKZyKTqrdtEvX4O+gG8kAAVMny3B18lVC88iQ=",
+					"size": 217
+				},
+				{
+					"type": "file",
+					"name": "callbacks.js",
+					"hash": "4tvMCMKre12/X1YtVa6p+qsRKAuX3DF9cwVO0Yh/cmU=",
+					"size": 5552
+				},
+				{
+					"type": "file",
+					"name": "core.js",
+					"hash": "C8NLxw5vlAXov4GZbynPrx4Z4f1/uFXYO4IXpZZUkpI=",
+					"size": 10181
+				},
+				{
+					"type": "file",
+					"name": "css.js",
+					"hash": "Hz/rT97giCTXJgZHyh/xRms4X6KrFxKRrtaMDIHL6M0=",
+					"size": 14536
+				},
+				{
+					"type": "file",
+					"name": "data.js",
+					"hash": "PwKBGLu5Z7J4goPlQgQTEHUOTGwEGGU57XSoJEopuUM=",
+					"size": 4325
+				},
+				{
+					"type": "file",
+					"name": "deferred.js",
+					"hash": "9HsWccVR4p8hRAoj71UBjNHeBfl/iao120nd6JPDc/4=",
+					"size": 11376
+				},
+				{
+					"type": "file",
+					"name": "deprecated.js",
+					"hash": "V6f931ECfvZJ9SrG9Sme9SHv60qmgYuaym7TVnbkw/w=",
+					"size": 2406
+				},
+				{
+					"type": "file",
+					"name": "dimensions.js",
+					"hash": "izggf3FRXK7Wk9fayGxsSJ8D/xhlTyA2uU6mPpjvIfI=",
+					"size": 1756
+				},
+				{
+					"type": "file",
+					"name": "effects.js",
+					"hash": "SlGtUXE35f6SY0VtaZ3ErwmhjEj1qhTurIK+j0CRhXY=",
+					"size": 17417
+				},
+				{
+					"type": "file",
+					"name": "event.js",
+					"hash": "+fYSz9dsG6eV7DfdGt/8aFzGBKSX1UO01SzoXA5MzW4=",
+					"size": 27927
+				},
+				{
+					"type": "file",
+					"name": "jquery.js",
+					"hash": "fc9O2J+6kIzhYnKmr4mZLqD7gcP9zUFwqsRoaxiTl1U=",
+					"size": 626
+				},
+				{
+					"type": "file",
+					"name": "manipulation.js",
+					"hash": "MEe+Yj8xwHkPqIvKRwsIodzW/QwSeUl1O/CzYqkXZCE=",
+					"size": 12686
+				},
+				{
+					"type": "file",
+					"name": "offset.js",
+					"hash": "0Bap2860VFLOIlJaX26jqZ9PjueyMeREUlYHTqi3iJQ=",
+					"size": 6828
+				},
+				{
+					"type": "file",
+					"name": "queue.js",
+					"hash": "lQp6mzg7TypmtdCCngVWqXUBJ6ka4lh4/t8hTpF6fmg=",
+					"size": 3091
+				},
+				{
+					"type": "file",
+					"name": "selector.js",
+					"hash": "Dik7wBHOpppyYR60gRoAgslYD993Rhk3tLW/woW2wXg=",
+					"size": 60394
+				},
+				{
+					"type": "file",
+					"name": "selector-native.js",
+					"hash": "uZCHwulG3uHZCQ24zkC0B7+3pB/a7cvzufcOjgnL7iY=",
+					"size": 5167
+				},
+				{
+					"type": "file",
+					"name": "serialize.js",
+					"hash": "2vCowHgy+xA8RzkiiyoxPYBDZLUB/gU1uXkKmel/Iu4=",
+					"size": 3236
+				},
+				{
+					"type": "file",
+					"name": "traversing.js",
+					"hash": "G5VNDDBEJRm4eD6rKDE1B2y+L2dbhLE2ckhm8rZ3ixA=",
+					"size": 4697
+				},
+				{
+					"type": "file",
+					"name": "wrap.js",
+					"hash": "+VE7+oOJoDc8KAoIrsjCOvi4qOLRjeCs7WhDbWCq860=",
+					"size": 1477
+				},
+				{
+					"type": "file",
+					"name": "wrapper.js",
+					"hash": "/2w/cBHS4z9OD0wuxxGeJK3McI7K7eEYkF+6SV0RfJo=",
+					"size": 1534
+				}
+			]
+		},
+		{
+			"type": "directory",
+			"name": "test",
+			"files": [
+				{
+					"type": "directory",
+					"name": "data",
+					"files": [
+						{
+							"type": "directory",
+							"name": "ajax",
+							"files": [
+								{
+									"type": "file",
+									"name": "onunload.html",
+									"hash": "myIk1ULmnXUu3vEq9fNJMwkDKWBvI3Wk2vxJhAVv4Bo=",
+									"size": 703
+								},
+								{
+									"type": "file",
+									"name": "unreleasedXHR.html",
+									"hash": "odKoLEwoRsFF1P7zX2z6dbUIs74Gphz+Sf2AZqD2wD8=",
+									"size": 654
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "core",
+							"files": [
+								{
+									"type": "file",
+									"name": "aliased.html",
+									"hash": "lSw8KSBILp2m373BNzuqH9mhggbXb2lOTr6KrJ1CQHo=",
+									"size": 551
+								},
+								{
+									"type": "file",
+									"name": "cc_on.html",
+									"hash": "us/S1/qNSxZCWxbQzHrDPegHZxmeTcxMMFquKOhWSyg=",
+									"size": 472
+								},
+								{
+									"type": "file",
+									"name": "dynamic_ready.html",
+									"hash": "v+f/am/lmhCNnK3vbgvPwP3KZ+j3GSL/B02R0JYlLVc=",
+									"size": 842
+								},
+								{
+									"type": "file",
+									"name": "globaleval-context.html",
+									"hash": "VJ+NzLHMfOYUNXfpMTaYfOSK+S8SeG63XjOXEQM51Sg=",
+									"size": 275
+								},
+								{
+									"type": "file",
+									"name": "jquery-iterability-transpiled.html",
+									"hash": "9zfZGqhV8E2W/eJdYfVFb5QBI6ykFmit5amDUikcc7Y=",
+									"size": 455
+								},
+								{
+									"type": "file",
+									"name": "jquery-iterability-transpiled-es6.js",
+									"hash": "oZW02tzjPS9XLRWDfyQ+qsZ1ie6sCc79W+C1uSMFV1k=",
+									"size": 232
+								},
+								{
+									"type": "file",
+									"name": "onready.html",
+									"hash": "ZOjlf/H11247ycBRVDJgKBZeau+qVXsUByxxh3Bey5w=",
+									"size": 549
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "css",
+							"files": [
+								{
+									"type": "file",
+									"name": "cssWidthBeforeDocReady.html",
+									"hash": "EpJMSLx2gwZI5JgwTzLJ4F+HKWEgleThuroBnIkVgm4=",
+									"size": 374
+								},
+								{
+									"type": "file",
+									"name": "cssWidthBrowserZoom.html",
+									"hash": "7OC18vgQf/7fJv3cWRifQ4uDpZIuR1MPec60LxrLfyE=",
+									"size": 514
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "data",
+							"files": [
+								{
+									"type": "file",
+									"name": "dataAttrs.html",
+									"hash": "s1lnYovVooLfT7nvkw4b/6yMyo8MkErvhbe8vQmb6NM=",
+									"size": 449
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "dimensions",
+							"files": [
+								{
+									"type": "file",
+									"name": "documentLarge.html",
+									"hash": "dAK1iD5dcqWqud2nqFW8CejSQP9SvqQnjfvlKvBaM5s=",
+									"size": 540
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "event",
+							"files": [
+								{
+									"type": "file",
+									"name": "focusElem.html",
+									"hash": "yabdYrgWBPtw6r4r5Q5oOmttgvyzptou7B4rWQxuhMY=",
+									"size": 401
+								},
+								{
+									"type": "file",
+									"name": "focusinCrossFrame.html",
+									"hash": "9o2i8oNoP08ZLS7kOeWV2g3IMA8pRvAKqYKWZhHdsHQ=",
+									"size": 484
+								},
+								{
+									"type": "file",
+									"name": "interactiveReady.html",
+									"hash": "06TNqKP4NSMAV/pNXkC8W92Qw7QlkcRPclgy65c0nag=",
+									"size": 738
+								},
+								{
+									"type": "file",
+									"name": "onbeforeunload.html",
+									"hash": "W1jTUlbC4WVpFq6hwI5jSRmQC1J6LJYL1x3HBZGU26c=",
+									"size": 426
+								},
+								{
+									"type": "file",
+									"name": "promiseReady.html",
+									"hash": "LfXVWwBnjEK6OFMlIcwr+aMmCLwaubGiIpiPmtOCsvQ=",
+									"size": 533
+								},
+								{
+									"type": "file",
+									"name": "syncReady.html",
+									"hash": "b/yTAu/7zPma68e+7X0d/m5ExKo/pCVfYCELu1mtHgQ=",
+									"size": 771
+								},
+								{
+									"type": "file",
+									"name": "triggerunload.html",
+									"hash": "i3RvovXL9BTsd7cL9K8zqrF0uSkMIYyPfSTe/M8l5Bw=",
+									"size": 454
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "manipulation",
+							"files": [
+								{
+									"type": "file",
+									"name": "iframe-denied.html",
+									"hash": "gBKniVyOkwg/AYuaGcfJQQJZrSU6aFCJOeyv6Gh/aT4=",
+									"size": 910
+								},
+								{
+									"type": "file",
+									"name": "scripts-context.html",
+									"hash": "VJ+NzLHMfOYUNXfpMTaYfOSK+S8SeG63XjOXEQM51Sg=",
+									"size": 275
+								},
+								{
+									"type": "file",
+									"name": "set-global-scripttest.js",
+									"hash": "r/LsDx7aSSCfABIn8ECW7WTa+NHU8KudxmPaUDM6FB4=",
+									"size": 47
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "offset",
+							"files": [
+								{
+									"type": "file",
+									"name": "absolute.html",
+									"hash": "H192ILIL/oxNE1E8nv+q6L67Udz6eWWsLrTjoDLm1pk=",
+									"size": 1860
+								},
+								{
+									"type": "file",
+									"name": "body.html",
+									"hash": "oziy7ZQfk+l/7vPbuRBzHcHpN2MbnOBZdfLM8Qas/p4=",
+									"size": 925
+								},
+								{
+									"type": "file",
+									"name": "boxes.html",
+									"hash": "g+8qljw9PhgwvEQqcR2HSpYnlQU8URVazGQEszSbwNY=",
+									"size": 3007
+								},
+								{
+									"type": "file",
+									"name": "fixed.html",
+									"hash": "00MIgZbC/7cMrs+tgifOyHqg/lrDXHWJikFq0LdhlqY=",
+									"size": 1356
+								},
+								{
+									"type": "file",
+									"name": "relative.html",
+									"hash": "xBX0SuV49n6lmMdnApMkFGZj9VDnC+MdczfGYh6x8W0=",
+									"size": 1632
+								},
+								{
+									"type": "file",
+									"name": "scroll.html",
+									"hash": "NA0un/sL317ohXplgjSsHjMj3PpZubc1xHAvHMpN+wI=",
+									"size": 1560
+								},
+								{
+									"type": "file",
+									"name": "static.html",
+									"hash": "7sUqUoqR5vAmU1G99PIjCK0iH40dklvh+bw4StRRQVI=",
+									"size": 1512
+								},
+								{
+									"type": "file",
+									"name": "table.html",
+									"hash": "S4vNVtuFfLzbU0+r+N9nBGs5b4c+AWwSxW3aCKtgxBY=",
+									"size": 1315
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "selector",
+							"files": [
+								{
+									"type": "file",
+									"name": "cache.html",
+									"hash": "e9mzXItCsMBwdEt8MBcyoQSvkF8AAvVQ9/2QQdj3350=",
+									"size": 582
+								},
+								{
+									"type": "file",
+									"name": "html5_selector.html",
+									"hash": "Pw+JrtsZxg/d4+NSWObuKyIkRC1D80p/iDwuZ5cop7g=",
+									"size": 2066
+								},
+								{
+									"type": "file",
+									"name": "mixed_sort.html",
+									"hash": "Scm/LOVuZLsHmZiKy0N/AsuR0sq1hOJWWP/ULveSgGY=",
+									"size": 569
+								}
+							]
+						},
+						{
+							"type": "directory",
+							"name": "support",
+							"files": [
+								{
+									"type": "file",
+									"name": "bodyBackground.html",
+									"hash": "U5Fd85UBhQi85H494kWpINO/xhv6TurASzjhBOqVum4=",
+									"size": 743
+								},
+								{
+									"type": "file",
+									"name": "bootstrap.html",
+									"hash": "Xv5aykhZhNfHgcBeA/mSLh+96NTCdHfTBJyElrXCQgE=",
+									"size": 444
+								},
+								{
+									"type": "file",
+									"name": "csp.js",
+									"hash": "NfjenZpUTw3v7moTWz+dSofZhGJWu5l45qT6ldIYDXI=",
+									"size": 84
+								},
+								{
+									"type": "file",
+									"name": "csp.log",
+									"hash": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+									"size": 0
+								},
+								{
+									"type": "file",
+									"name": "getComputedSupport.js",
+									"hash": "t2b8twzp4R/M3cRrzMomzdeIUuCCAEJ/tRnsFrSNNtE=",
+									"size": 257
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "1x1.jpg",
+							"hash": "yg5WQThG4G6mehhcpKrHxxey55NIpcErZjgpGfe+EGk=",
+							"size": 693
+						},
+						{
+							"type": "file",
+							"name": "1x1.svg",
+							"hash": "KLfYhMPoBFxljiRWUPhgXqVNa6/nIn34bCUok0HKnDw=",
+							"size": 225
+						},
+						{
+							"type": "file",
+							"name": "badcall.js",
+							"hash": "bofpIjMQf1cS34xMkt9Aohveg0u8H6niVL7dn5d4AKk=",
+							"size": 13
+						},
+						{
+							"type": "file",
+							"name": "badjson.js",
+							"hash": "26BRBn/r8NqS4UDcJg22h2bXtcsp4n+vw05VA6IhiO8=",
+							"size": 17
+						},
+						{
+							"type": "file",
+							"name": "cleanScript.html",
+							"hash": "tJ0dIwlyACDnsvg1ZPZ5f3eU/SLf8uh+y9vvzNhYZYc=",
+							"size": 183
+						},
+						{
+							"type": "file",
+							"name": "csp.include.html",
+							"hash": "Z7GzkidcBYCBYgt/fngMyR5p2mbhOXzxWARnj0uca3w=",
+							"size": 356
+						},
+						{
+							"type": "file",
+							"name": "csp-nonce.html",
+							"hash": "dD0qaLzmfcYMwZcPN0trk2M84Ce0D/Pm4O357ca83nk=",
+							"size": 404
+						},
+						{
+							"type": "file",
+							"name": "csp-nonce.js",
+							"hash": "ey3xAqYrqaiPKDq14EM8cejYqC1xAnIJx08ORAgGuI8=",
+							"size": 244
+						},
+						{
+							"type": "file",
+							"name": "csp-nonce-external.html",
+							"hash": "OE/u4lp30U5d/eJrFwcHv4PD4H1c+/nzfSJ69FdEVRs=",
+							"size": 455
+						},
+						{
+							"type": "file",
+							"name": "csp-nonce-external.js",
+							"hash": "fWBkygc9p2R6bA57uA4jljckbbEEVfAbxEpyCoxWZSo=",
+							"size": 150
+						},
+						{
+							"type": "file",
+							"name": "csp-nonce-globaleval.html",
+							"hash": "9QADwrKkyvA9iO7xC3uXvR6rroas3J6NLi5Fi+xODqo=",
+							"size": 459
+						},
+						{
+							"type": "file",
+							"name": "csp-nonce-globaleval.js",
+							"hash": "2Dftb6gY2Azr8aYCwdWz022oOK7C0uU2NuN8+huQLOI=",
+							"size": 131
+						},
+						{
+							"type": "file",
+							"name": "dashboard.xml",
+							"hash": "wAH5MmviZObJcYm0dplg7tI85qTnBdkvk6vZAIptLBU=",
+							"size": 298
+						},
+						{
+							"type": "file",
+							"name": "frame.html",
+							"hash": "6uUx1oPZ0IPuJYpllUYhn9fGtW2FYXzRLEhAhjzo8Vk=",
+							"size": 168
+						},
+						{
+							"type": "file",
+							"name": "iframe.html",
+							"hash": "/sRK8iHR1E7iIC9CldAbmEVvzZMhPxaxT0Bwc8U7/pM=",
+							"size": 109
+						},
+						{
+							"type": "file",
+							"name": "iframeTest.js",
+							"hash": "+NbaRhyBl+XQUICm3M2YuwXbxR394o5BdAx2SsOplAM=",
+							"size": 254
+						},
+						{
+							"type": "file",
+							"name": "inner_module.js",
+							"hash": "pw8z+QP9jF9MVAS3/6eRVMpJvoCWjY91K5Ih8HwzbIU=",
+							"size": 61
+						},
+						{
+							"type": "file",
+							"name": "inner_nomodule.js",
+							"hash": "iS/1NKx2S//DXqKAYeIWUujdjcFM6E9xiF5g07Fz6N4=",
+							"size": 92
+						},
+						{
+							"type": "file",
+							"name": "jquery-1.9.1.js",
+							"hash": "/xF719OjoAycUE4fuRRkip/7dyidHq5jtqIFuEZtHxg=",
+							"size": 269989
+						},
+						{
+							"type": "file",
+							"name": "json_obj.js",
+							"hash": "gS7y18g6VT1T/Nnf8MLixQHHjAfZyM3abk81TIrzgk8=",
+							"size": 41
+						},
+						{
+							"type": "file",
+							"name": "mock.php",
+							"hash": "cJ27jCNMp1usJ05lun76BSCUJ/pRg1XKaWREujrLKVs=",
+							"size": 7776
+						},
+						{
+							"type": "file",
+							"name": "module.js",
+							"hash": "P78LpnQclJ03EYVqy8uhrSHKmRZy085hvsDlR8ZDXAI=",
+							"size": 55
+						},
+						{
+							"type": "file",
+							"name": "name.html",
+							"hash": "HbouAMRJi8jrUZqXuhrEJHfim5/ZUH2+CKGAg2zfeuk=",
+							"size": 94
+						},
+						{
+							"type": "file",
+							"name": "nomodule.js",
+							"hash": "x5UCAwBkhYROLMyLnQ0J/RqGOTDbN9I2Xnfba1EhNHk=",
+							"size": 86
+						},
+						{
+							"type": "file",
+							"name": "qunit-fixture.html",
+							"hash": "8WYtz4+Xqh+dGxOxp++8cQU96C1jjzUeClVUNHKb1yQ=",
+							"size": 13300
+						},
+						{
+							"type": "file",
+							"name": "readywait.html",
+							"hash": "pXIjK6kQ67s7K+NzRBjMZtLZvG5i6Qru12knCFXz468=",
+							"size": 1814
+						},
+						{
+							"type": "file",
+							"name": "test.include.html",
+							"hash": "OpL96Lt7eoJAvc6N/GjksJuqlxYfTx/0Tlu206Kjrwk=",
+							"size": 247
+						},
+						{
+							"type": "file",
+							"name": "test2.html",
+							"hash": "ozOuh3YlAyyhSYgorMNQlA52LiP/ZQ8QePqRbeaJIVM=",
+							"size": 139
+						},
+						{
+							"type": "file",
+							"name": "test3.html",
+							"hash": "ak2Mo3BpHD5xdFs8iAWJyB7J3/rp/3oRtFwMmOOlKZo=",
+							"size": 245
+						},
+						{
+							"type": "file",
+							"name": "testinit.js",
+							"hash": "xW3u/8nDCPtdpHabV2K6CQHnXK2SwYGyW0WFVWqOhQE=",
+							"size": 14769
+						},
+						{
+							"type": "file",
+							"name": "testinit-jsdom.js",
+							"hash": "Folo0RD4Zxqq0tZRe1UIWAs4JNgCN4EKDeg4SB4VQ7g=",
+							"size": 1992
+						},
+						{
+							"type": "file",
+							"name": "testrunner.js",
+							"hash": "Dy3OThfCPKkKCvsn8rbfUPULMhcspTDZfrehP79zc2c=",
+							"size": 2289
+						},
+						{
+							"type": "file",
+							"name": "testsuite.css",
+							"hash": "HDXuNyTWPHvfJU0tw0a1ICIyFPAM16OCH0BodvnsTkk=",
+							"size": 2057
+						},
+						{
+							"type": "file",
+							"name": "text.txt",
+							"hash": "5KyZ6UVneOuYJoxaWW+kbyiDILbjmrMkXCYPtYODoNM=",
+							"size": 287
+						},
+						{
+							"type": "file",
+							"name": "with_fries.xml",
+							"hash": "3I8GZRb9VeH3U27kvCYx8R598KIMcq1D8C+qNoxtWSs=",
+							"size": 740
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "integration",
+					"files": [
+						{
+							"type": "directory",
+							"name": "data",
+							"files": [
+								{
+									"type": "file",
+									"name": "gh-1764-fullscreen.js",
+									"hash": "nCQhOiXkB7oU+AXcYg+5ff1C0YFzM+NuoD/OuZuDyeo=",
+									"size": 3085
+								},
+								{
+									"type": "file",
+									"name": "gh-1764-fullscreen-iframe.css",
+									"hash": "OULteiBAlV/JY9KfyOYVI0d2XsrjPhYevaBAMYmWL7U=",
+									"size": 197
+								},
+								{
+									"type": "file",
+									"name": "gh-1764-fullscreen-iframe.html",
+									"hash": "tGAepoxZJO6bQvL6IJy3T4hSs22JvsuNHeQNDSS1Rlc=",
+									"size": 572
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": "gh-1764-fullscreen.html",
+							"hash": "6pfLfY0/r/SqMTCNC+D8CJNuM0+eZsyrCB8YFNKeGPI=",
+							"size": 817
+						},
+						{
+							"type": "file",
+							"name": "gh-2343-ie-radio-click.html",
+							"hash": "nTgDYHqxFeuCit/ewaCkx4q7t30Yg+++H5fMtphqklU=",
+							"size": 844
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "node_smoke_tests",
+					"files": [
+						{
+							"type": "directory",
+							"name": "lib",
+							"files": [
+								{
+									"type": "file",
+									"name": "ensure_global_not_created.js",
+									"hash": "ZuPrp8NWRq1v9W+sYD33SYAZ/UZb0/+8tRHXOU05NT8=",
+									"size": 499
+								},
+								{
+									"type": "file",
+									"name": "ensure_iterability_es6.js",
+									"hash": "3dfK+LuuIaoCnI6gMvJBfJFY/1/7lfCIPSIH1WZV1S0=",
+									"size": 630
+								},
+								{
+									"type": "file",
+									"name": "ensure_jquery.js",
+									"hash": "cnjb4/hWDJp4JgfoGmS1N2W+qLBIN+VG/J5thpNnLto=",
+									"size": 332
+								},
+								{
+									"type": "file",
+									"name": "jquery-module-specifier.js",
+									"hash": "WzfdbNlOXd9ebrndpm2PTXkx/eIZXZRtY56XZDC9ciE=",
+									"size": 487
+								}
+							]
+						},
+						{
+							"type": "file",
+							"name": ".eslintrc.json",
+							"hash": "Ax2N4tI7Y/QrWwIAO8bnL1kl8sdYgpKbdL/eD3O9t3o=",
+							"size": 164
+						},
+						{
+							"type": "file",
+							"name": "document_missing.js",
+							"hash": "GS3NtpNJqcEYTlnwFhAF93g63wqDriKkZsxZxQvTMow=",
+							"size": 472
+						},
+						{
+							"type": "file",
+							"name": "document_passed.js",
+							"hash": "hh+56Zelv80drGpdQ0UmiE9A92hAtJFtYRFacGtzc3k=",
+							"size": 534
+						},
+						{
+							"type": "file",
+							"name": "iterable_with_native_symbol.js",
+							"hash": "kmaBaHcu+o99q9k4DQIotS/VAi2b01Fe98MXyr2aMtc=",
+							"size": 438
+						},
+						{
+							"type": "file",
+							"name": "window_present_originally.js",
+							"hash": "Iva/yRoWGjWRtuPvr8ptBnrf1raPLJZGGIsBRoey+dg=",
+							"size": 547
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "promises_aplus_adapters",
+					"files": [
+						{
+							"type": "file",
+							"name": ".eslintrc.json",
+							"hash": "gSRjuvOJeAgdaFaQxsJeGuiIYT0nKcPdMA/TTu+7obs=",
+							"size": 60
+						},
+						{
+							"type": "file",
+							"name": "deferred.js",
+							"hash": "bJkT7Y0BSFNOf2KWWF9OkhTqWNk0HGyW5C1Pc9vLy2M=",
+							"size": 347
+						},
+						{
+							"type": "file",
+							"name": "when.js",
+							"hash": "PYp7QdOCEKraVkeDLo0tNo/0t1mUiS+hrJ3Sn7SPr9M=",
+							"size": 988
+						}
+					]
+				},
+				{
+					"type": "directory",
+					"name": "unit",
+					"files": [
+						{
+							"type": "file",
+							"name": "ajax.js",
+							"hash": "HpFwIhwq9SOjHJOL7oPjHOoeIUUgVXX6RVsax1Gubxo=",
+							"size": 89022
+						},
+						{
+							"type": "file",
+							"name": "animation.js",
+							"hash": "I8Ci1Qeyjb448Lgj5c2Ihq88svZpNsOZmySWuwuQCoI=",
+							"size": 8457
+						},
+						{
+							"type": "file",
+							"name": "attributes.js",
+							"hash": "oGbrw/SMC5OffjlYX9lp9levU6jRHzt/1q2UDjyTFxU=",
+							"size": 74934
+						},
+						{
+							"type": "file",
+							"name": "basic.js",
+							"hash": "uXHpJQOAcEAOBvtwcTuWNaSUFxhOXc4rZdOQcbymAlE=",
+							"size": 9364
+						},
+						{
+							"type": "file",
+							"name": "callbacks.js",
+							"hash": "yxvE4BQ+MSP+RuBw83VAO53roplXgIXHdLUWzVSl4Aw=",
+							"size": 11764
+						},
+						{
+							"type": "file",
+							"name": "core.js",
+							"hash": "19rfxmFffD5LTEVS02U584QpxpJIgIzJ3xKbglltrAY=",
+							"size": 55648
+						},
+						{
+							"type": "file",
+							"name": "css.js",
+							"hash": "XiGOotiyzaZqndXnU6Z0GZJDV9SCBS97AjQ7Su3+JZc=",
+							"size": 70035
+						},
+						{
+							"type": "file",
+							"name": "data.js",
+							"hash": "pMW9k7/dH7Shgy7z0jiBeECpgLzNGcXZ6xbxAUP3EaU=",
+							"size": 33714
+						},
+						{
+							"type": "file",
+							"name": "deferred.js",
+							"hash": "ShONYllkPmVyae54av/4E1ZloKGethOuIZs/Ln55QXg=",
+							"size": 34818
+						},
+						{
+							"type": "file",
+							"name": "deprecated.js",
+							"hash": "zkufgRRyPWi4StLMQkpPXmabx+PkqMFdN+1NfvmKcXc=",
+							"size": 23847
+						},
+						{
+							"type": "file",
+							"name": "dimensions.js",
+							"hash": "kK+uQfJufGKaf4EK8Q65H+Sc1sB1/Aa6StKdZmt4YvQ=",
+							"size": 37971
+						},
+						{
+							"type": "file",
+							"name": "effects.js",
+							"hash": "Zh/+m/OO16FBvQKsu7B3K6/2+w0kNIWC72yKfKiywjo=",
+							"size": 78631
+						},
+						{
+							"type": "file",
+							"name": "event.js",
+							"hash": "6URcwWMNWCZqOkj33IeLCUGruxwQnl+k3OLMJ6mPIQ4=",
+							"size": 105317
+						},
+						{
+							"type": "file",
+							"name": "exports.js",
+							"hash": "rpu/gnTxNPiRJZzYo0fH7B3JP+U245fgrHNOqh7+4U4=",
+							"size": 212
+						},
+						{
+							"type": "file",
+							"name": "manipulation.js",
+							"hash": "5ZonkyT6zghcK3VjpFA2bBbePYYnQL7swdxF9GltGhc=",
+							"size": 113364
+						},
+						{
+							"type": "file",
+							"name": "offset.js",
+							"hash": "NnwtdQXfgG9qSFzTQyijMy7z+01mMEpCIzI4jFW5+A4=",
+							"size": 35628
+						},
+						{
+							"type": "file",
+							"name": "queue.js",
+							"hash": "8XeurFmrcQMmWq5Eqw5AHS0Cud43J8OuHdqhXzVGOXU=",
+							"size": 8839
+						},
+						{
+							"type": "file",
+							"name": "ready.js",
+							"hash": "ww5TxfmxVKcIpkW7dcR0uRn9V6PfSOfFdTMONa+LIqY=",
+							"size": 4864
+						},
+						{
+							"type": "file",
+							"name": "selector.js",
+							"hash": "QnhfNGqe9tx4JwRZX/RPPv4AfYUjxwkHiS3VhDU+f8g=",
+							"size": 119329
+						},
+						{
+							"type": "file",
+							"name": "serialize.js",
+							"hash": "YrNyUqUD66GYU+GHZtYzex5hwD0KJosuaULpPxmWudI=",
+							"size": 9541
+						},
+						{
+							"type": "file",
+							"name": "support.js",
+							"hash": "nvpF02I/C2mlFq4bTM4SPPyuZCEkiH9jOlqJ1Ef+oEY=",
+							"size": 16152
+						},
+						{
+							"type": "file",
+							"name": "traversing.js",
+							"hash": "3ASHFjG5U7q1YK8oa2URtB8EfwzBypU4gStpDP1gs/4=",
+							"size": 54003
+						},
+						{
+							"type": "file",
+							"name": "tween.js",
+							"hash": "IKAwSYUhA9QPQ1/1EapGwDGzlBbjiT4++o/v2/9sWoA=",
+							"size": 10537
+						},
+						{
+							"type": "file",
+							"name": "wrap.js",
+							"hash": "d5ZNU6Njn7zQ59P71ZtTwrvbcqYxQMSnOrVleGIWfTY=",
+							"size": 14846
+						}
+					]
+				},
+				{
+					"type": "file",
+					"name": ".eslintrc.json",
+					"hash": "C2XP5CV3FHImj+bkTRWDT121F+7ZNBnCt/5n/2zTbGk=",
+					"size": 1481
+				},
+				{
+					"type": "file",
+					"name": "delegatetest.html",
+					"hash": "sp1KVADZZDnfQ30rTDxow0C0/aemEvTw8JkZhCtBFrk=",
+					"size": 6401
+				},
+				{
+					"type": "file",
+					"name": "hovertest.html",
+					"hash": "TemEI9WD5n1IwDMSGcWtUQZw/fSvQnjDqLXqMvTkT4I=",
+					"size": 3966
+				},
+				{
+					"type": "file",
+					"name": "index.html",
+					"hash": "Zps8VmqrFqv9qr6JrBqg+qFDoN+Lh5JbM/rBQLSp7BQ=",
+					"size": 2021
+				},
+				{
+					"type": "file",
+					"name": "jquery.js",
+					"hash": "ThNssqNq79+Xvo5Rd0/5fWYAVndGD4ML9qe/GBMbvdM=",
+					"size": 1993
+				},
+				{
+					"type": "file",
+					"name": "karma.context.html",
+					"hash": "oxPA21iclX+nN5HbgG6a+op1JVYI3Yyf9gyu2xcX/Jc=",
+					"size": 1386
+				},
+				{
+					"type": "file",
+					"name": "karma.debug.html",
+					"hash": "0kJ2vLw66MZUBEkjgCMZQzxGXfGhV3dU/Ha69Sd1fSc=",
+					"size": 1461
+				},
+				{
+					"type": "file",
+					"name": "localfile.html",
+					"hash": "dRtTiTgVxO4NGqIHVNZsGrbiD4dCwSQEt/PsKP8D0MI=",
+					"size": 1916
+				},
+				{
+					"type": "file",
+					"name": "middleware-mockserver.js",
+					"hash": "eAAFgEHKdTf5PTAqRvguKyrHu2Mw5LvqbIkmtZctZEc=",
+					"size": 9105
+				},
+				{
+					"type": "file",
+					"name": "networkerror.html",
+					"hash": "38OeXG8mO0bSr4zOgmMnJUszDOtdQWI6cp0QcY6uqIs=",
+					"size": 1560
+				},
+				{
+					"type": "file",
+					"name": "xhtml.php",
+					"hash": "S61lJpZGY+HIMClTNX3YRKNvVPJLMhLu08X+rFa4/FE=",
+					"size": 136
+				}
+			]
+		},
+		{
+			"type": "file",
+			"name": ".editorconfig",
+			"hash": "QKbMQnwhkXk7Qrigx7BWMQP9fOoaSCD2L9HJlCF1I2E=",
+			"size": 279
+		},
+		{
+			"type": "file",
+			"name": ".eslintignore",
+			"hash": "MKqhX+F6l7UZT41zVDJeh1gnw31p/UdLjdIV88sNpZI=",
+			"size": 381
+		},
+		{
+			"type": "file",
+			"name": ".eslintrc.json",
+			"hash": "RbC4srl9Z3jrmiMyJuVBJEoxW0aaz0/xiDZTTMUbFkk=",
+			"size": 56
+		},
+		{
+			"type": "file",
+			"name": ".eslintrc-browser.json",
+			"hash": "7IoT5EhzpoKl0wHHUyeeP8dY1w15pySdz3lLNuDe4SE=",
+			"size": 733
+		},
+		{
+			"type": "file",
+			"name": ".eslintrc-node.json",
+			"hash": "mzFXI7T1en0fTaNbkFg/nnxyOMxl6Yjo1nmOBUEbGEM=",
+			"size": 223
+		},
+		{
+			"type": "file",
+			"name": ".gitattributes",
+			"hash": "s5BTX5Nf5Bx7BTitu+UV6ii+oLMwpnYOF/AEkEVBvU8=",
+			"size": 207
+		},
+		{
+			"type": "file",
+			"name": ".gitignore",
+			"hash": "qnu2wKiIUGLV7h5hyoZqZ9hkfrFExz/DuArggltTQbY=",
+			"size": 317
+		},
+		{
+			"type": "file",
+			"name": ".mailmap",
+			"hash": "6Hx99tMtd6uaMLni50C3t7IXFsCFOyLLEAB1E2MNTYE=",
+			"size": 5799
+		},
+		{
+			"type": "file",
+			"name": ".npmignore",
+			"hash": "7l+8b4w5FN8bSwTssOXqKKD4REzA71jQPbG3YNokIRQ=",
+			"size": 116
+		},
+		{
+			"type": "file",
+			"name": ".npmrc",
+			"hash": "voXMRi50BYdia7y7HD7RxAsm5i7AcujL0naPI5FcKOY=",
+			"size": 16
+		},
+		{
+			"type": "file",
+			"name": "AUTHORS.txt",
+			"hash": "1zzSL2WDjA/DA3oIguvhNhxuhWVUEH7i71zQivPAdLk=",
+			"size": 14077
+		},
+		{
+			"type": "file",
+			"name": "CODE_OF_CONDUCT.md",
+			"hash": "0OhM5UmEokqphdnFBSqF0LAFBcG2VAuxZGquO9kYibY=",
+			"size": 160
+		},
+		{
+			"type": "file",
+			"name": "CONTRIBUTING.md",
+			"hash": "kwd3ThtG0H5PDt6FSX6DGyaYRzitDIVCUkrfU3rh4VM=",
+			"size": 7999
+		},
+		{
+			"type": "file",
+			"name": "Gruntfile.js",
+			"hash": "4mmdnmBOAJemLX6/PFfgJHFPK1eMH6GyO0FWaSXuCyQ=",
+			"size": 10916
+		},
+		{
+			"type": "file",
+			"name": "LICENSE.txt",
+			"hash": "1Nuevm8p9RaOrEWtcT8FViOsXQ3NW6ktoj1lCuASAg0=",
+			"size": 1097
+		},
+		{
+			"type": "file",
+			"name": "package.json",
+			"hash": "4KeUHWLkc7q6PX5HC78jLVZzahiTaWdNY1PgAaVi8zw=",
+			"size": 3782
+		},
+		{
+			"type": "file",
+			"name": "README.md",
+			"hash": "ICdl7RTdRZlzvxY365YGUHHhyFrxJduj6jHmNZQcu4s=",
+			"size": 14350
+		}
+	],
+	"links": {
+		"stats": "https://data.jsdelivr.com/v1/stats/packages/gh/jquery/jquery@3.7.1"
+	}
+}
