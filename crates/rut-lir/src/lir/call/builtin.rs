@@ -1,0 +1,279 @@
+//! Builtin receivers: `bytes(n)` allocation, the `?T` erasure-box recovery, and static calls to named builtins.
+
+use crate::check::{DataDecl, TcResult};
+use rut_core::sym;
+use crate::lir::*;
+
+impl<'a, 'b> FnCompiler<'a, 'b> {
+
+    /// `bytes(n)` — a zeroed immutable buffer of `n` octets (RFC 0004).
+    pub(crate) fn compile_bytes_alloc(&mut self, args: Vec<NodeHandle<AnyExpr>>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+        let len_reg = match args.len() {
+            0 => {
+                let z = self.new_reg(TY_I32);
+                self.emit(Op::ConstRaw { dst: z, bits: 0 }, sp.lo);
+                z
+            }
+            1 => {
+                let t = self.compile_expr(args[0], Some(TY_I32))?;
+                if t != TY_I32 {
+                    self.ctx.err(sp, format!("bytes(n) takes an `i32` length, found `{}`", self.ctx.type_name(t)));
+                }
+                self.last_reg
+            }
+            _ => {
+                self.ctx.err(sp, "bytes() or bytes(n)");
+                return Err(());
+            }
+        };
+        let dst = self.new_reg(TY_BYTES);
+        self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
+        Ok(TY_BYTES)
+    }
+
+    /// The `?T` erasure-box recovery (RFC 0014, refval-round2): tidof +
+    /// icmp + br (the reified-type-id check, RFC 0015) + the ALIAS
+    /// handoff. No allocation on EITHER branch — the `(T, bool)` tuple's
+    /// `MakeRecord` mint (a record cell + field copy + bool + rc per
+    /// call, ~175 ns/get in the round-1 attribution) is gone: a match
+    /// hands the box ITSELF back as the `?T` (one `MovRef` retain — the
+    /// box shares its inner cell, the one-cell law; a prim payload's
+    /// bits were copied at `opaque(v)` construction, so the handoff is
+    /// value semantics for free), a mismatch is the null slot (nil).
+    /// The `?T` auto-deref (`GetF` field 0) reads through the box.
+    pub(crate) fn emit_opaque_downcast(&mut self, want: TypeId, orecv: u16, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+        // refval-round2: downcast yields `?T` — nil on a mismatch (RFC
+        // 0014 amended); the zero-value-on-false `(T, bool)` is gone
+        let nty = self.ctx.mk_opt(want);
+        let tid_reg = self.new_reg(TY_U32);
+        self.emit(Op::TidOf { dst: tid_reg, obj: orecv }, sp.lo);
+        let want_reg = self.new_reg(TY_U32);
+        let wk = self.konst(ConstVal::TypeId(want));
+        self.emit(Op::Const { dst: want_reg, k: wk as u32 }, sp.lo);
+        let eq = self.new_reg(TY_BOOL);
+        self.emit(cmpop(CmpOp::Eq, PrimTy::U32, eq, tid_reg, want_reg), sp.lo);
+        let dst = self.new_reg(nty);
+        let l_some = self.new_label();
+        let l_none = self.new_label();
+        let l_end = self.new_label();
+        self.br(eq, l_some, l_none);
+        self.bind(l_some);
+        // the ALIAS handoff: the result register takes the box's handle
+        // (MovRef = one retain). The box is the `?T` — its payload slot
+        // IS field 0 to every nullable use (deref, nil check).
+        self.emit(Op::MovRef { dst, src: orecv }, sp.lo);
+        self.jmp(l_end);
+        self.bind(l_none);
+        // the mismatch: the null slot — no cell, no zero value
+        self.emit(Op::ConstRaw { dst, bits: 0 }, sp.lo);
+        self.bind(l_end);
+        Ok(nty)
+    }
+
+    pub(crate) fn compile_static_call(
+        &mut self,
+        base: IdentId,
+        base_generics: Vec<NodeHandle<AnyTy>>,
+        member: IdentId,
+        member_generics: Vec<NodeHandle<AnyTy>>,
+        args: Vec<NodeHandle<AnyExpr>>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        // core builtin statics (RFC 0028): the erasure primitive's
+        // `new`/`downcast` statics and the `bytes`/`str` constructors —
+        // AMBIENT now (RFC 0028 revised, builtin-surface): the arms fire
+        // whenever core is mounted, no `use` required
+        let core_ty = self.ctx.extern_native_types.get(&base).copied();
+        // Explicit type args on a static head are meaningful only where the
+        // member can use them (`Vec<u32>.from(..)` — the element type);
+        // everywhere else they stay unsupported rather than silently ignored.
+        let is_data = self.ctx.find_data(base).is_some();
+        if !base_generics.is_empty() && !is_data {
+            self.ctx.err(sp, format!(
+                "generic type paths (`{}<..>.{}`) are not supported in this build",
+                self.ctx.name(base), self.ctx.name(member)
+            ));
+            return Err(());
+        }
+        // a used namespace's members (`Math.sqrt`; RFC 0028) —
+        // routed by the bound head, name-generic
+        if self.ctx.is_extern_namespace(base) {
+            return self.compile_namespace_member(base, member, &args, expected, sp);
+        }
+        match (base, member) {
+            (sym::BYTES, sym::FROM) => {
+                // bytes.from(a) — copy an Array<u8> into an immutable
+                // buffer (RFC 0004)
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes.from(source) takes one `Array<u8>`");
+                    return Err(());
+                }
+                let hint = Some(self.ctx.mk_array(TY_U8));
+                let at = self.compile_expr(args[0], hint)?;
+                match self.ctx.types.kind(at) {
+                    TyKind::Array { elem } if *elem == TY_U8 => {}
+                    _ => {
+                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` —found `{}`", self.ctx.type_name(at)));
+                        return Err(());
+                    }
+                }
+                let src = self.last_reg;
+                let dst = self.new_reg(TY_BYTES);
+                self.emit(Op::Own { dst, src, ty: TY_BYTES }, sp.lo);
+                return Ok(TY_BYTES);
+            }
+            (sym::BYTES, sym::ZEROED) => {
+                // bytes.zeroed(n) — n zeroed octets (RFC 0004)
+                if args.len() != 1 {
+                    self.ctx.err(sp, "bytes.zeroed(n) takes one `i32`");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_I32))?;
+                if t != TY_I32 {
+                    self.ctx.err(sp, "bytes.zeroed takes an `i32`");
+                }
+                let len_reg = self.last_reg;
+                let dst = self.new_reg(TY_BYTES);
+                self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
+                return Ok(TY_BYTES);
+            }
+            (sym::STR, sym::FROM_CODE) => {
+                // str.from_code(n) -> str — the 1-codepoint str for the
+                // codepoint `n` (RFC 0004 v1.1: `char` is gone)
+                if args.len() != 1 {
+                    self.ctx.err(sp, "str.from_code(n) takes one `u32` codepoint");
+                    return Err(());
+                }
+                let t = self.compile_expr(args[0], Some(TY_U32))?;
+                if t != TY_U32 {
+                    self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
+                        "str.from_code takes a `u32`, found `{}`",
+                        self.ctx.type_name(t)
+                    ));
+                }
+                let cp = self.last_reg;
+                let dst = self.new_reg(TY_STR);
+                { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
+                return Ok(TY_STR);
+            }
+            _ => {}
+        }
+        // the erasure primitive's member static (RFC 0014, builtin-
+        // surface phase 2): `opaque.downcast<T>(o)` — construction moved
+        // to the call form `opaque(v)` (RFC 0044 sweep). The lowercase
+        // spelling IS the interner's own (`sym::OPAQUE`)
+        if core_ty == Some(rut_core::binary::NativeTy::Opaque) && base == sym::OPAQUE {
+            match member {
+                sym::DOWNCAST => {
+                    if args.len() != 1 || member_generics.len() != 1 {
+                        self.ctx.err(sp, "opaque.downcast<T>(o) takes one explicit type argument and one value (RFC 0014)");
+                        return Err(());
+                    }
+                    let want = self.resolve_type_now(member_generics[0]);
+                    if matches!(self.ctx.types.kind(want), TyKind::TraitObj { .. }) {
+                        self.ctx.err(sp, "downcast needs a CONCRETE type —trait objects have no recovery path (RFC 0014)");
+                        return Err(());
+                    }
+                    let t = self.compile_expr(args[0], Some(TY_OPAQUE))?;
+                    if t != TY_OPAQUE {
+                        self.ctx.err(sp, "downcast takes an `opaque` box (RFC 0014)");
+                        return Err(());
+                    }
+                    let orecv = self.last_reg;
+                    return self.emit_opaque_downcast(want, orecv, sp);
+                }
+                _ => {
+                    self.ctx.err(sp, format!(
+                        "`opaque` has no static `{}` — the primitive's member is `downcast<T>`; construct with `opaque(v)` (RFC 0014)",
+                        self.ctx.name(member)
+                    ));
+                    return Err(());
+                }
+            }
+        }
+        // enum helpers: Color.to_int(c) (RFC 0006)
+        if self.ctx.name(member) == "to_int" {
+            if let Some(e) = self.ctx.find_enum(base).cloned() {
+                let _ = e;
+                self.ctx.err(sp, "enum to_int/from_int are not supported in this build (RFC 0006)");
+                return Err(());
+            }
+        }
+        // class method call: `Circle.new(..)` (RFC 0010 §1) — resolve the
+        // class BY NAME first, then its member: searching for the first
+        // class with a same-named method would shadow every later class
+        // (two `new`s in one module made the second uncallable)
+        if let Some((dname, d)) = self.ctx.datas.iter().find(|(n, _)| *n == base).map(|(n, d)| (*n, d.clone())) {
+            if let Some((_, fmnode)) = d.methods.iter().find(|(m, _)| *m == member).cloned() {
+                // The mint: (decl name, decl, method node, class args).
+                //
+                // The class is looked up BY NAME: `HashMap<K, i64>` IS
+                // the generic class (one name, one decl — the row form
+                // is repealed), so the explicit-arguments arm instanti-
+                // ates it directly and the inference arm follows the
+                // expected type's own instantiation.
+                let mint: (IdentId, DataDecl, NodeHandle<MethodDeclNode>, Vec<TypeId>) = if !base_generics.is_empty() {
+                    let args: Vec<TypeId> = base_generics.iter().map(|g| self.resolve_type_now(*g)).collect();
+                    (dname, d.clone(), fmnode, args)
+                } else if !d.generics.is_empty() && self.current_class == Some(dname) {
+                    // a `Self`-ish call inside the class body: the enclosing
+                    // method's class args
+                    let args: Vec<TypeId> = d
+                        .generics
+                        .iter()
+                        .map(|g| {
+                            self.subst
+                                .iter()
+                                .find(|(n, _)| n == g)
+                                .map(|(_, t)| *t)
+                                .unwrap_or(TY_I32)
+                        })
+                        .collect();
+                    (dname, d.clone(), fmnode, args)
+                } else if !d.generics.is_empty() {
+                    // infer from the expected type: `let b: Box<i32> = Box.new(..)`
+                    match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
+                        Some((ed, eargs)) if ed == dname => (dname, d.clone(), fmnode, eargs),
+                        _ => {
+                            self.ctx.err(sp, format!(
+                                "cannot infer the type arguments for `{b}` — write `{b}<..>.{m}(..)` or annotate the binding",
+                                b = self.ctx.name(base), m = self.ctx.name(member)
+                            ));
+                            return Err(());
+                        }
+                    }
+                } else {
+                    (dname, d.clone(), fmnode, vec![])
+                };
+                let (dname, d, mnode, class_args) = mint;
+                if !d.generics.is_empty() && class_args.len() != d.generics.len() {
+                    self.ctx.err(sp, format!(
+                        "`{}`<..> takes {} type argument(s), {} given",
+                        self.ctx.name(dname),
+                        d.generics.len(),
+                        class_args.len()
+                    ));
+                    return Err(());
+                }
+                let self_ty = if d.generics.is_empty() {
+                    d.ty
+                } else {
+                    self.ctx.mk_data_inst(dname, class_args.clone(), sp)
+                };
+                return self.compile_direct_method(dname, class_args, self_ty, mnode, args, sp);
+            }
+        }        if let Some(e) = self.ctx.find_enum(base) {
+            let _ = e;
+            self.ctx.err(sp, format!("enum `{}` has no static `{}` in this build", self.ctx.name(base), self.ctx.name(member)));
+            return Err(());
+        }
+        let msg = self
+            .ctx
+            .not_in_core_scope(base)
+            .unwrap_or_else(|| format!("unknown name `{}.{}`", self.ctx.name(base), self.ctx.name(member)));
+        self.ctx.err(sp, msg);
+        Err(())
+    }
+
+}
