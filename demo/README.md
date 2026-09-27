@@ -11,6 +11,8 @@ cd demo
 npm install
 npm run build:wasm  # builds BOTH artifacts (rut.wasm + rut-lsp.wasm) and copies them to public/
 npm run dev         # http://localhost:8080 (dev server; react-refresh lives only here)
+npm run dev:channel # dev server + a throwaway https://<random>.trycloudflare.com URL for the room
+                    # (Cloudflare QUICK tunnel: no account, no config; needs `cloudflared` on PATH)
 npm run build       # -> dist/ (static; ships both wasm artifacts alongside the bundle)
 npm run smoke       # headless gate: every case really runs + verifies, no browser
 ```

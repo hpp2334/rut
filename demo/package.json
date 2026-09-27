@@ -5,6 +5,7 @@
   "description": "rut language playground — React + rspack + TypeScript; runs rut as wasm (RFC 0041 §3)",
   "scripts": {
     "dev": "node scripts/preflight-wasm.mjs && rspack serve",
+    "dev:channel": "node scripts/preflight-wasm.mjs && node scripts/dev-channel.mjs",
     "build": "node scripts/preflight-wasm.mjs && rspack build",
     "build:wasm": "cargo build -p rut-wasm --target wasm32-unknown-unknown --release && cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs",
     "build:lsp": "cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs --lsp",

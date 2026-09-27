@@ -17,7 +17,15 @@ import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 // active CPU (warnInvalidARIAProps, the key-prop warnings, jsxDEV) are
 // compiled out of the shipped bundle. The dev lane keeps mode
 // "development" for refresh + HMR + the dev-only double-render checks.
-const isDevServe = process.env.npm_lifecycle_event === "dev";
+// any `dev*` lane (dev, dev:channel, …) is a dev-server lane: refresh
+// + HMR + dev React ride all of them, not just the bare `dev`
+const isDevServe =
+  process.env.npm_lifecycle_event?.startsWith("dev") ?? false;
+// the demo-day tunnel lane: requests arrive with a Host header of
+// `*.trycloudflare.com`, which dev-server's default `auto` allow-list
+// rejects with "Invalid Host header" — the channel opens the list,
+// local dev keeps the strict default
+const isChannelServe = process.env.npm_lifecycle_event === "dev:channel";
 
 const config: RspackOptions = {
   context: __dirname,
@@ -82,6 +90,7 @@ const config: RspackOptions = {
     },
     port: 8080,
     hot: true,
+    ...(isChannelServe ? { allowedHosts: "all" as const } : {}),
   },
 };
 
