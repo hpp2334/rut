@@ -1,0 +1,10 @@
+# http_host/ — the std HTTP surface's host rows (the rut/http plan): a
+# pure declaration surface. The embedding Rust binds the bodies
+# (`rut_std::http::install_std_http{,_with}`); the `http` inline
+# package wraps them in the `Response` class.
+#
+# `host_scope` names the registration prefix; the use path spells the
+# bare package name (`use http_host::{ http_get, http_status }`).
+name = "http_host"
+entry.type = "./http_host.d.rut"
+host_scope = "http_host"

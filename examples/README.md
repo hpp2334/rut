@@ -337,6 +337,70 @@ Run recipe:
   nmap-knucleotide` (the `nmap-primmap` twin was RETIRED with the
   nmapset-hostops takeover — see `benches/README.md`'s section).
 
+## The std `http` lane — two pkgs, one feature, the host owns the socket
+
+`rut/http_host/` and `rut/http/` are the thirteenth and fourteenth
+std pkgs (grep `rut/` — both count), and they arrive as a PAIR:
+
+- **`http_host`** — the pure declaration surface, four `pub host fn`
+  rows over the crossing set (the rt/async_engine shape,
+  `host_scope = "http_host"`):
+
+  ```rut
+  pub host fn http_get(url: str) -> opaque;
+  pub host fn http_status(r: opaque) -> i32;   // 0 = transport error
+  pub host fn http_err(r: opaque) -> any;      // nil unless status 0 (?str dst)
+  pub host fn http_body(r: opaque) -> any;     // the body octets (bytes dst)
+  ```
+
+  The response handle is an `opaque` payload owning
+  `{ status, err, body }`; status **0 is RESERVED for transport
+  failure** (0 is never a real HTTP status) — an HTTP status, any
+  4xx/5xx included, is not a transport failure, so `err` stays nil and
+  the body carries the server's own error page. The readbacks answer
+  through the ANY lane (the `map_hvget` precedent): the engine's
+  verified-return table cannot bind a `?str`/`bytes` host answer, so
+  the host answers the caller's static V — a `?str` dst reads the err
+  text, a `bytes` dst reads the body octets.
+- **`http`** — the rut face over the handle (the ink pattern,
+  `inline = true` — the class-method law): `Response` with
+  `status`/`ok` (2xx)/`transport_error`/`body`/`text`
+  (`bytes.decode()`, lossy), and the one entry `get(url) -> Response`.
+
+The bodies live in rut-std, behind the DEFAULT-OFF `http` cargo
+feature: `reqwest` 0.12 (blocking, rustls-tls, gzip, brotli —
+redirects on) folds into `rut_std::http`, and the feature appears in
+NO default graph — reqwest-blocking does not build on
+wasm32-unknown-unknown, so rut-driver and rut-wasm stay clean. The
+native embedders opt in: `rut-cli` carries `features = ["http"]` on
+its rut-std dep and installs `install_std_http` (the reqwest lane);
+an embedder that wants its own transport — tests above all — calls
+`install_std_http_with(hosts, f)` where `f: Fn(&str) ->
+Result<(u16, Vec<u8>), String>` maps a URL to `(status, body)` or
+`Err(message)` (the status-0 lane): key the closure on the exact URL
+and answer recorded payloads — the fixture lane is the offline test
+double, zero network.
+
+The run recipes:
+
+- **A module dir**: `[deps] http = { path = ".../rut/http" }` —
+  `rut run <dir>`; http's own `[deps]` pulls http_host.
+- **A loose file**: `rut run file.rut` with `use http::` in the
+  source — the CLI mounts both pkgs by presence, same as json.
+
+```rut
+use http::{ get };
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("demo");
+    let r = get("https://example.com");
+    let e = r.transport_error();
+    if (e != nil) { log.error(e); return; }
+    log.info(f"status={r.status()} ok={r.ok()} len={r.body().len()}");
+}
+```
+
 The earlier parse-only design corpus (`basic/`, `concurrency/`,
 `workers/`, `network/`, `memory/`, `json/`, `gui/`, `host/`) was
 removed: its implemented parts moved to the playground classics, and the

@@ -1,0 +1,10 @@
+# http/ — the std HTTP lane's rut face: the `Response` class over the
+# `http_host` rows (the ink pattern). `inline = true` keeps the class
+# methods resolvable at every consumer's call site (a class-method
+# module cannot be linked; the ink/strbuild law).
+name = "http"
+entry.lib = "./http.rut"
+inline = true
+
+[deps]
+http_host = { path = "../http_host" }

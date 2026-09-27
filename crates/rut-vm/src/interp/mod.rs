@@ -893,6 +893,21 @@ impl Vm {
         Ok(self.heap.opaque_handle_take(unsafe { p.r }))
     }
 
+    /// Mint a rut `str` cell from owned text — the host-side twin of
+    /// the boundary's `String` return: a body answering the any lane
+    /// with a `?str`/`str` V register mints here and keeps the claim
+    /// (the write-back's retain mirrors it). The heap is
+    /// crate-private, so this pub mint is the only road.
+    pub fn alloc_str_cell(&mut self, s: String) -> Result<Slot, Trap> {
+        self.heap.alloc_str(s)
+    }
+
+    /// Mint a rut `bytes` cell from owned octets —
+    /// [`Vm::alloc_str_cell`]'s bytes twin.
+    pub fn alloc_bytes_cell(&mut self, b: Vec<u8>) -> Result<Slot, Trap> {
+        self.heap.alloc_bytes(b)
+    }
+
     /// The key payload inside an `Opaque` box, classified against the
     /// closed native-key set (the nmap host experiment). Host code cannot
     /// read a rut-side box itself — `Slot` is crate-private — so this is

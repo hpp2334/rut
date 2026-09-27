@@ -1,0 +1,42 @@
+// http/http.rut — the std HTTP lane's rut face: the `Response` class
+// over the host handle (the ink pattern). The host owns the response's
+// layout, so rut only ever holds an `opaque`. Status 0 is RESERVED for
+// transport failure (0 is never a real HTTP status) — an HTTP status,
+// any 4xx/5xx included, is not one; `transport_error` answers the
+// failure text and `ok` is the plain 2xx test.
+use http_host::{ http_get, http_status, http_err, http_body };
+
+pub class Response {
+    r: opaque;
+}
+
+impl Response {
+    /// the HTTP status word — 0 means the transport failed
+    pub fn status(self) -> i32 { return http_status(self.r); }
+
+    /// the 2xx test
+    pub fn ok(self) -> bool {
+        let s = self.status();
+        return s >= 200 && s < 300;
+    }
+
+    /// the transport-failure text — nil unless status is 0
+    pub fn transport_error(self) -> ?str {
+        let e: ?str = http_err(self.r);
+        return e;
+    }
+
+    /// the body octets — empty on transport failure
+    pub fn body(self) -> bytes {
+        let b: bytes = http_body(self.r);
+        return b;
+    }
+
+    /// the body as text — `bytes.decode()`, lossy
+    pub fn text(self) -> str { return self.body().decode(); }
+}
+
+/// the ONE entry: a GET over the std lane
+pub fn get(url: str) -> Response {
+    return Response { r: http_get(url) };
+}

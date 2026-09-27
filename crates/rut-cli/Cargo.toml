@@ -14,6 +14,9 @@ rut-driver = { path = "../rut-driver" }
 rut-fmt = { path = "../rut-fmt" }
 rut-core = { path = "../rut-core" }
 rut-vm = { path = "../rut-vm" }
-rut-std = { path = "../rut-std" }
+# native-only binary: the std HTTP lane rides here (the wasm graphs
+# dep rut-std WITHOUT the feature — reqwest-blocking does not build on
+# wasm32-unknown-unknown)
+rut-std = { path = "../rut-std", features = ["http"] }
 rut-lexer = { path = "../rut-lexer" }
 rut-parser = { path = "../rut-parser" }

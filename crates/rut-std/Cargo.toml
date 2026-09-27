@@ -20,3 +20,24 @@ rut-vm = { path = "../rut-vm" }
 # table never uses (the lane hands the hash word in); inline-more is
 # the pure inlining hint.
 hashbrown = { version = "0.14.5", default-features = false, features = ["inline-more"] }
+# the std HTTP lane's transport (the rut/http plan): DEFAULT-OFF is
+# load-bearing — reqwest-blocking does not build on wasm32-unknown-
+# unknown, so rut-driver and rut-wasm dep this crate WITHOUT the
+# feature and the wasm checks stay clean. rut-cli (native-only) opts
+# in with `features = ["http"]`.
+reqwest = { version = "0.12", default-features = false, features = [
+    "blocking",
+    "rustls-tls",
+    "gzip",
+    "brotli",
+], optional = true }
+
+[features]
+http = ["dep:reqwest"]
+
+[dev-dependencies]
+# the decl↔body contract tests (RFC 0025): mount `rut/http_host`,
+# compile a probe, `verify_against` — dev-deps never propagate
+rut-driver = { path = "../rut-driver" }
+rut-parser = { path = "../rut-parser" }
+rut-lexer = { path = "../rut-lexer" }

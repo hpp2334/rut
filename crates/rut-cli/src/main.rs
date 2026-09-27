@@ -126,7 +126,9 @@ fn run(path: &str, fuel: Option<u64>) {
         // the only graph-respecting position. strbuild is 10th, after
         // json (RFC 0028's amendment): position-free for the graph —
         // the row names the reading order, and json's own `[deps]`
-        // pulls the pkg regardless
+        // pulls the pkg regardless. The http pair closes the list on
+        // the same law (http after its http_host dep; http's own
+        // `[deps]` pulls http_host regardless)
         for (name, dir) in [
             ("rt", "rut/rt"),
             ("ink", "rut/ink"),
@@ -136,6 +138,8 @@ fn run(path: &str, fuel: Option<u64>) {
             ("strbuild", "rut/strbuild"),
             ("async_engine", "rut/async_engine"),
             ("async_host", "rut/async_host"),
+            ("http_host", "rut/http_host"),
+            ("http", "rut/http"),
         ] {
             if src.contains(&format!("use {name}::")) {
                 rut_driver::mount_dir(&mut s, &tree.join(dir)).expect("mount tree pkg");
@@ -189,6 +193,11 @@ fn run(path: &str, fuel: Option<u64>) {
     // `async_engine` rows — reached only by a program that mounts the
     // async packages (a `use async_host::` pulls the tree pkg)
     rut_std::async_host::install_std_async(&mut hosts);
+    // the std HTTP lane (the rut/http plan): get + the Response
+    // readbacks — reached only by a program that mounts the http
+    // packages (a `use http::` / `use http_host::` pulls the tree
+    // pkgs; reqwest is the CLI's, native-only)
+    rut_std::http::install_std_http(&mut hosts);
     let mut vm = match rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, hooks, hosts) {
         Ok(vm) => vm,
         Err(t) => {
