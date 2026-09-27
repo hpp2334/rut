@@ -1054,6 +1054,34 @@ impl Vm {
         }
     }
 
+    /// The rut-value box's payload — the RFC 0014 erasure box's
+    /// engine-half recovery for host bodies (the async lane's `opaque`
+    /// crossings): the held slot and its runtime type. `None` when the
+    /// slot is not a box holding a rut value — a host-payload box
+    /// recovers through `Opaque<T>`, a plain cell is not a box. The
+    /// slot is a BORROW of the entry's held value (the entry owns its
+    /// reference; a body that keeps it takes its own retain — the
+    /// any-lane's law).
+    pub fn opaque_rut_value(&self, box_slot: Slot) -> Option<(Slot, TypeId)> {
+        let e = crate::heap::store::store_entry(box_slot)?;
+        match &e.e {
+            crate::heap::store::OpaqueEntry::Rut(r) => Some((r.slot, r.val_ty)),
+            crate::heap::store::OpaqueEntry::Host(_) => None,
+        }
+    }
+
+    /// Seal a freshly minted rut value into the RFC 0014 erasure box
+    /// (the async lane's `__sleep` mint): the entry OWNS `val`'s
+    /// reference, and the returned owning handle carries the box's own
+    /// reference straight to the host-fn return path
+    /// (`Ret::into_slot` transfers it — the mint→crossing ownership
+    /// law, `opaque_handle_take`). `val_ty` is what `downcast<T>`
+    /// compares against on the rut side.
+    pub fn seal_opaque(&self, val: Slot, val_ty: TypeId) -> Result<crate::heap::OpaqueRef, Trap> {
+        let boxed = self.heap.alloc_opaque(val, val_ty)?;
+        Ok(self.heap.opaque_handle_take(unsafe { boxed.r }))
+    }
+
     // ---- the async driving loop (RFC 0018; the host loop's engine
     // half — RFC 0035 §4's run_until_idle / next_deadline columns) ----
 

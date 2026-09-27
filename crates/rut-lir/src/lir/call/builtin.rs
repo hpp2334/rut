@@ -171,7 +171,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return Err(());
                     }
                     let want = self.resolve_type_now(member_generics[0]);
-                    if matches!(self.ctx.types.kind(want), TyKind::TraitObj { .. }) {
+                    // RFC 0014 recovers concrete types; the ONE trait-
+                    // object exception is the engine-woven Future (the
+                    // async lane's crossings — phase 2b): the box stores
+                    // the construction site's `Future<T>` object spelling,
+                    // so `downcast<Future<nil>>` matches the sleep mint's
+                    // seal by the same id. Every other trait object keeps
+                    // the refusal (the RFC 0014 amendment lands with the
+                    // any-removal phase).
+                    let downcastable = match self.ctx.types.kind(want) {
+                        TyKind::TraitObj { trait_id } => {
+                            let tid = *trait_id;
+                            self.ctx
+                                .trait_inst
+                                .iter()
+                                .find(|(_, &id)| id == tid)
+                                .map(|((n, _), _)| *n == sym::FUTURE)
+                                .unwrap_or(false)
+                        }
+                        _ => true,
+                    };
+                    if !downcastable {
                         self.ctx.err(sp, "downcast needs a CONCRETE type —trait objects have no recovery path (RFC 0014)");
                         return Err(());
                     }

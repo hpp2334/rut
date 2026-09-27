@@ -178,7 +178,7 @@ impl CustomLaunched {
         if (log != nil) {
             log.note_cancel();
         }
-        return __abort(t);
+        return __abort(opaque(t));
     }
 }
 
@@ -188,7 +188,7 @@ impl CustomLaunched {
 /// `launch_future` keeps (ruling 8), over the same `Future` surface, so
 /// the machine never knows which one started it.
 fn launch_custom(f: Future<nil>, log: ?AuditLog) -> CustomLaunched {
-    __launch(f);
+    __launch(opaque(f));
     log.note_launch();
     return CustomLaunched { task: f, log: log, alive: true };
 }

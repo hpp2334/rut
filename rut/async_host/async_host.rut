@@ -2,8 +2,10 @@
 // (RFC 0018, ruling 8: launch_future / LaunchedFutureHandle / sleep are
 // HOST surface — ordinary code over the open Future surface, mounted by
 // each embedder by choice; users may write their own launchers the
-// same way). The engine rows cross only raw slots (`any`); this package
-// restores the typed arrow.
+// same way). The engine rows cross the RFC 0014 erasure box (`opaque`);
+// this package restores the typed arrow: `opaque(f)` seals the frame
+// on the way out, `opaque.downcast<Future<nil>>` recovers the sleep
+// mint on the way in.
 //
 // `Future<T>` is core's engine-woven trait (RFC 0012 §7): every async
 // fn's hidden frame implements it, and `await` is the in-body consume.
@@ -32,10 +34,11 @@ impl LaunchedFutureHandle<T> {
         if (f == nil) {
             return false;
         }
-        // read the cell reference through the box: the engine row takes
-        // the frame slot itself (the any lane passes it verbatim)
+        // read the cell reference through the box, then seal it: the
+        // engine row takes the frame as an RFC 0014 box and unboxes on
+        // its side
         let g: Future<T> = f;
-        return __abort(g);
+        return __abort(opaque(g));
     }
 }
 
@@ -45,13 +48,14 @@ impl LaunchedFutureHandle<T> {
 // shares stay readable, and both paths driving the same frame is a
 // disclosed v1 misuse (the survey's one-future-one-awaiter law).
 pub fn launch_future<T>(f: Future<T>) -> LaunchedFutureHandle<T> {
-    __launch(f);
+    __launch(opaque(f));
     return LaunchedFutureHandle { f: f };
 }
 
 // The one in-tree pender: a Future<nil> that parks its awaiter until
 // `ms` elapses on the VM's clock (engine-assisted mint; the driving
-// loop's timer queue does the waiting).
+// loop's timer queue does the waiting). The mint crosses SEALED under
+// the `Future<nil>` object spelling — the downcast is the recovery.
 pub fn sleep(ms: u32) -> Future<nil> {
-    return __sleep(ms);
+    return opaque.downcast<Future<nil>>(__sleep(ms));
 }

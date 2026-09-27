@@ -165,7 +165,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], None)?;
-                if matches!(self.ctx.types.kind(t), TyKind::TraitObj { .. }) {
+                // RFC 0014 seals concrete values; the ONE trait-object
+                // exception is the engine-woven Future (the async lane's
+                // crossings — phase 2b): `launch_future` hands the frame
+                // to the driving loop through the erasure box, and the
+                // box records the `Future<T>` object spelling so the
+                // `downcast<Future<..>>` recovery matches. Every other
+                // trait object keeps the refusal (the RFC 0014 amendment
+                // lands with the any-removal phase).
+                let sealed = match self.ctx.types.kind(t) {
+                    TyKind::TraitObj { trait_id } => {
+                        let tid = *trait_id;
+                        self.ctx
+                            .trait_inst
+                            .iter()
+                            .find(|(_, &id)| id == tid)
+                            .map(|((n, _), _)| *n == sym::FUTURE)
+                            .unwrap_or(false)
+                    }
+                    _ => true,
+                };
+                if !sealed {
                     self.ctx.err(sp, "`opaque` rejects trait objects —they are never boxed (RFC 0014)");
                     return Err(());
                 }

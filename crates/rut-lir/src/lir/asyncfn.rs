@@ -849,58 +849,125 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     });
     let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
     let thunk_name = ctx.intern("async_engine::__sleep_yield");
-    let tfid = ctx.ensure_inst(crate::check::Inst {
+    // the host thunk must EXIST (the wrapper calls it; the join resolves
+    // its binding) even though the fill now points at the wrapper
+    ctx.ensure_inst(crate::check::Inst {
         key: crate::check::FnKey::HostThunk(thunk_name),
         subst: vec![],
         trait_origins: vec![],
     });
-    ctx.extra_vtable_fills.push((frame_ty, slot, tfid));
+    // the SEALING WRAPPER (the opaque-crossings phase): the yield slot's
+    // ABI is engine-wide — recv = the raw frame, argv[1] = the raw cx
+    // (every weaved async fn shares it) — while the host row crosses
+    // `opaque`. The vtable fill points at this tiny compiler-minted fn,
+    // which seals both registers into RFC 0014 boxes and calls the host
+    // thunk; the row's wire is then boxes, the shared ABI is untouched.
+    let wrap_name = ctx.intern("async_engine::__sleep_yield.wrap");
+    let wfid = ctx.ensure_inst(crate::check::Inst {
+        key: crate::check::FnKey::HostThunk(wrap_name),
+        subst: vec![],
+        trait_origins: vec![],
+    });
+    ctx.extra_vtable_fills.push((frame_ty, slot, wfid));
     ctx.frame_yield_slot.insert(frame_ty, slot);
     ctx.engine_frames.insert(frame_ty);
     Ok(())
 }
 
-/// The engine thunk's FuncCode: bodyless, `host_id` names the
-/// embedder's registered body; the VM joins it like any host fn. The
-/// params spell the real (frame, cx) pair — the driving loop's call
-/// ABI retains and releases them like any ref-typed signature.
+/// The engine-backed sleep pair (RFC 0018): the host THUNK — bodyless,
+/// `host_id` names the embedder's registered body, params spell the row's
+/// `(opaque, opaque)` crossings — and the sealing WRAPPER the vtable fill
+/// binds (`ensure_sleep_future`): params spell the engine-wide yield ABI
+/// (the raw frame and cx), the code seals both into RFC 0014 boxes and
+/// calls the thunk. The driving loop's call sites (await, drive) keep
+/// their raw (frame, cx) registers; the boxes live and die inside the
+/// wrapper's own frame (ref-typed locals release at exit).
 pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -> TcResult<()> {
-    let frame = ctx
-        .types
-        .types
-        .iter()
-        .enumerate()
-        .find(|(_, t)| ctx.interner.name(t.name) == rut_core::async_frame::SLEEP_FRAME)
-        .map(|(i, _)| i as TypeId);
-    let cx = ctx
-        .types
-        .types
-        .iter()
-        .enumerate()
-        .find(|(_, t)| ctx.interner.name(t.name) == rut_core::async_frame::RUN_CONTEXT_TYPE)
-        .map(|(i, _)| i as TypeId);
-    let params = if thunk_name == ctx.intern("async_engine::__sleep_yield") {
-        match (frame, cx) {
-            (Some(f), Some(c)) => vec![f, c],
-            _ => vec![TY_VAL, TY_VAL],
-        }
-    } else {
-        vec![]
-    };
-    let fc = rut_core::binary::FuncCode {
-        name: thunk_name,
-        regs: params.clone(),
-        params,
-        ret: TY_NIL,
-        is_method: false,
-        n_captures: 0,
-        argv: vec![],
-        labels: vec![],
-        code: vec![],
-        spans: vec![],
-        pos: vec![],
-        host_id: Some(thunk_name),
-    };
-    ctx.funcs[fid as usize] = fc;
+    const THUNK: &str = "async_engine::__sleep_yield";
+    const WRAP: &str = "async_engine::__sleep_yield.wrap";
+    if thunk_name == ctx.intern(WRAP) {
+        // the wrapper: seal r0 (frame) and r1 (cx), call the host thunk
+        // with the boxes. Requires the sleep mint (the frame/cx types and
+        // the thunk's fid all exist once `ensure_sleep_future` ran).
+        let frame = ctx
+            .types
+            .types
+            .iter()
+            .enumerate()
+            .find(|(_, t)| ctx.interner.name(t.name) == rut_core::async_frame::SLEEP_FRAME)
+            .map(|(i, _)| i as TypeId);
+        let cx = ctx
+            .types
+            .types
+            .iter()
+            .enumerate()
+            .find(|(_, t)| ctx.interner.name(t.name) == rut_core::async_frame::RUN_CONTEXT_TYPE)
+            .map(|(i, _)| i as TypeId);
+        let (frame_ty, cx_ty) = match (frame, cx) {
+            (Some(f), Some(c)) => (f, c),
+            _ => {
+                ctx.err(
+                    ctx.ast.span(ctx.ast.root.id()),
+                    "the sleep yield wrapper needs the engine-minted frame and cx types",
+                );
+                return Err(());
+            }
+        };
+        let thunk_key = crate::check::FnKey::HostThunk(ctx.intern(THUNK));
+        let thunk_fid = ctx
+            .inst_map
+            .get(&crate::check::Inst {
+                key: thunk_key,
+                subst: vec![],
+                trait_origins: vec![],
+            })
+            .copied()
+            .expect("the sleep thunk is ensured before its wrapper compiles");
+        let fc = rut_core::binary::FuncCode {
+            name: thunk_name,
+            regs: vec![frame_ty, cx_ty, TY_OPAQUE, TY_OPAQUE],
+            params: vec![frame_ty, cx_ty],
+            ret: TY_NIL,
+            is_method: false,
+            n_captures: 0,
+            argv: vec![2, 3],
+            labels: vec![],
+            code: vec![
+                Op::Box { dst: 2, val: 0, ty: frame_ty },
+                Op::Box { dst: 3, val: 1, ty: cx_ty },
+                Op::Call { func: thunk_fid, argv_off: 0, argc: 2, dst: NOREG },
+                // well-formedness (RFC 0033 §2): the fn ends in Ret — the
+                // threaded `Call` answers Next(pc+1), so without this the
+                // dispatch walks past the code
+                Op::Ret { val: None },
+            ],
+            spans: vec![],
+            pos: vec![],
+            host_id: None,
+        };
+        ctx.funcs[fid as usize] = fc;
+        return Ok(());
+    }
+    if thunk_name == ctx.intern(THUNK) {
+        // the host thunk: params spell the ROW — both crossings are
+        // `opaque` boxes (the wrapper sealed them); `host_id` routes the
+        // registry to the registered body
+        let fc = rut_core::binary::FuncCode {
+            name: thunk_name,
+            regs: vec![TY_OPAQUE, TY_OPAQUE],
+            params: vec![TY_OPAQUE, TY_OPAQUE],
+            ret: TY_NIL,
+            is_method: false,
+            n_captures: 0,
+            argv: vec![],
+            labels: vec![],
+            code: vec![],
+            spans: vec![],
+            pos: vec![],
+            host_id: Some(thunk_name),
+        };
+        ctx.funcs[fid as usize] = fc;
+        return Ok(());
+    }
     Ok(())
 }

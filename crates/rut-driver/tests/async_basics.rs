@@ -321,6 +321,54 @@ pub fn main() -> nil {
     assert!(lines.iter().any(|l| l == "killer:aborted"));
 }
 
+// ---- the sealed mint recovers as a live Future ----
+
+// The mint crosses SEALED (`__sleep -> opaque`): the rut face's
+// `opaque.downcast<Future<nil>>` recovers it, and the recovered frame
+// drives, parks, resumes, and aborts like any other.
+
+#[test]
+fn a_bound_sleep_future_drives_and_aborts_through_the_box() {
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::{ launch_future, sleep, LaunchedFutureHandle };
+
+async fn parker(cx: RunContext, log: opaque) -> nil {
+    // the annotated binding: the downcast's `?Future<nil>` answer
+    // derefs into a `Future<nil>` binding — the one-consume surface
+    let s: Future<nil> = sleep(40);
+    logger_log(log, 2, "parked");
+    await s;
+    logger_log(log, 2, "unreachable");
+}
+
+async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
+    await sleep(10);
+    let ok = h.abort();
+    if (ok) { logger_log(log, 2, "aborted-the-parked"); }
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    let h = launch_future(parker(log));
+    launch_future(killer(log, h));
+}
+"#;
+    let (mut vm, sink) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 200);
+    assert_eq!(
+        *sink.borrow(),
+        vec!["parked", "aborted-the-parked"],
+        "the recovered sleep future parked; the abort fired before the 40ms wake"
+    );
+    // the clock's final position is the victim's armed 40ms deadline:
+    // the abort retired the frame at 10ms, but the park's armed timer
+    // still owns its map entry — the wake fires and drives a retired
+    // frame (a no-op), exactly the abort_after_park law
+    assert_eq!(vm.now_ms(), 40);
+}
+
 // ---- fuel accounting per drive step ----
 
 #[test]

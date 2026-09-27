@@ -181,7 +181,7 @@ class MyHandle {
 }
 
 fn launch(f: Future<nil>) -> MyHandle {
-    __launch(f);
+    __launch(opaque(f));
     return MyHandle { f: f };
 }
 

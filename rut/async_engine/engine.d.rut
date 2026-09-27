@@ -1,19 +1,35 @@
 // async_engine/engine.d.rut — the async host set's engine rows
-// (RFC 0018). The futures themselves never cross the boundary (the
-// survey's law: engine-minted, compiler-owned); these rows cross only
-// the raw frame SLOT as `any` — the raw-slot lane, no box, no copy —
-// so the typed `Future<T> -> LaunchedFutureHandle<T>` arrow lives in
-// rut code (the `async_host` inline package), where the type system
-// can hold it.
+// (RFC 0018). The futures themselves never cross the boundary raw (the
+// survey's law: engine-minted, compiler-owned); these rows cross the
+// RFC 0014 erasure box — `opaque(f)` seals a frame, `downcast<T>`
+// recovers it — so the typed `Future<T> -> LaunchedFutureHandle<T>`
+// arrow lives in rut code (the `async_host` inline package), where the
+// type system can hold it.
 //
-// `__sleep_yield` is the sleep future's `Future::yield`: a bodyless
-// thunk the compiler mints whose `host_id` binds HERE — the one
-// engine-backed vtable row in the standard set.
+// The crossings, one by one:
+//   `__launch` — the launcher seals the frame from rut (`opaque(f)`);
+//     the body unboxes to the frame slot and hands it to the driving
+//     loop (the queue takes its own reference).
+//   `__abort` — same seal; the body unboxes and flags + re-enqueues.
+//   `__sleep` — the one engine-assisted mint: the body builds the sleep
+//     frame and answers it SEALED under the `Future<nil>` object
+//     spelling, which is what `sleep`'s `downcast<Future<nil>>`
+//     recovers.
+//   `__sleep_yield` — the sleep future's `Future::yield`: a bodyless
+//     thunk the compiler mints whose `host_id` binds HERE. The yield
+//     slot's ABI is engine-wide (every weaved async fn shares it: the
+//     raw frame and cx), so the compiler mints a sealing wrapper that
+//     boxes both registers before the row is reached — the wire at this
+//     row is two boxes, and the body unboxes back to the raw pair.
+//
+// The engine-minted types themselves (`#frame@sleep`, the cx record)
+// are unspellable in rut source — `opaque` is the honest crossing
+// spelling: a sealed cell the body recovers through the erasure box.
 
-pub host fn __launch(f: any);
+pub host fn __launch(f: opaque);
 
-pub host fn __abort(f: any) -> bool;
+pub host fn __abort(f: opaque) -> bool;
 
-pub host fn __sleep(ms: u32) -> any;
+pub host fn __sleep(ms: u32) -> opaque;
 
-pub host fn __sleep_yield(f: any, cx: any);
+pub host fn __sleep_yield(f: opaque, cx: opaque);
