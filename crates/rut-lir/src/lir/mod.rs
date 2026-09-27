@@ -113,6 +113,7 @@ pub(crate) const NO_FIELD: u32 = u32::MAX;
 
 /// The async weave's per-function state, carried on the FnCompiler while
 /// an async fn's body compiles (RFC 0018).
+#[derive(Clone)]
 pub(crate) struct AsyncFrame {
     /// argv[0] — the hidden frame cell (register 0 by construction)
     pub frame_reg: u16,

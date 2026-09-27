@@ -1277,13 +1277,29 @@ impl Vm {
             // disclosed double-await misuse is absorbed by the dedup.
             self.note_host_park(ty, fut);
             if !self.host_frames.contains(&ty) {
-                let pend = fields
+                // the pending CHAIN walk: a woven awaiter's own park is
+                // compiled ops (the VM only sees THIS frame's park), so
+                // a chain of nested awaits hides the host future at its
+                // bottom — job parks on outer, outer on inner, inner on
+                // the host future. Each intermediate frame's pending
+                // edge leads deeper; the walk follows them until it
+                // finds the host frame to join (the poll set's whole
+                // business). Bounded — a misuse cycle cannot spin it.
+                let mut pend = fields
                     .borrow()
                     .get(rut_core::async_frame::PENDING_FIELD as usize)
                     .unwrap_or(Slot::null());
-                if unsafe { !pend.r.is_null() } {
+                let mut guard = 0u32;
+                while !unsafe { pend.r.is_null() } && guard < 64 {
                     let pty = cell_of(pend).ty;
-                    self.note_host_park(pty, pend);
+                    if self.host_frames.contains(&pty) {
+                        self.note_host_park(pty, pend);
+                        break;
+                    }
+                    pend = cell_of(pend)
+                        .record_get(rut_core::async_frame::PENDING_FIELD)
+                        .unwrap_or(Slot::null());
+                    guard += 1;
                 }
             }
             Ok(Drive::Parked)

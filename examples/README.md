@@ -12,7 +12,7 @@ example:
 | [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + `.rutbundle` (RFC 0038) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions |
 | [`04-custom-async/`](04-custom-async/) | parse-only — vocabulary port LANDED (RFC 0018), runnable harness is the disclosed follow-up | a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with per-checkpoint stats and cancellation audits; the user-impl-of-builtin-trait test. User futures are launcher-drivable; `await` targets engine-woven futures in v1, join lands with RFC 0019 |
 | [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless (survey: `docs/todolist-web-survey.md`) |
-| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`): argv carving, the tree JSON decode, and the human-size formatter run in the VM over the std `rut/http` lane (rut-std's reqwest behind the default-off `http` feature); the embedder binds the example-local CLI-I/O rows and the offline suite rides the fixture lane keyed on exact URLs |
+| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`rgh.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival |
 
 Short, self-contained programs — the classics — live in
 [`demo/src/examples/`](../demo/src/examples/): the playground imports
@@ -338,74 +338,148 @@ Run recipe:
   nmap-knucleotide` (the `nmap-primmap` twin was RETIRED with the
   nmapset-hostops takeover — see `benches/README.md`'s section).
 
-## The std `http` lane — two pkgs, one feature, the host owns the socket
+## The std `http` lane — two pkgs, one feature, an async-only face
 
 `rut/http_host/` and `rut/http/` are the thirteenth and fourteenth
-std pkgs (grep `rut/` — both count), and they arrive as a PAIR:
+std pkgs (grep `rut/` — both count), redesigned around the host
+future lane (`pub host async fn` + `register_async!`). They arrive
+as a PAIR:
 
-- **`http_host`** — the pure declaration surface, four `pub host fn`
-  rows over the crossing set (the rt/async_engine shape,
-  `host_scope = "http_host"`):
+- **`http_host`** — the pure declaration surface: THREE async rows
+  (the request, the drain, the stream read — each expands into its
+  `__start`/`__yield`/`__take`/`__cancel` family the weave drives)
+  and FIVE sync readbacks, all concrete over the crossing set:
 
   ```rut
-  pub host fn http_get(url: str) -> opaque;
-  pub host fn http_status(r: opaque) -> i32;   // 0 = transport error
-  pub host fn http_err(r: opaque) -> ?str;     // nil unless status 0
-  pub host fn http_body(r: opaque) -> bytes;   // the body octets
+  pub host async fn http_send(c: opaque, method: str, url: str,
+                              headers: str, body: bytes) -> opaque;
+  pub host async fn http_body(r: opaque) -> bytes;
+  pub host async fn http_stream_next(s: opaque) -> ?bytes;
+
+  pub host fn http_status(r: opaque) -> i32;      // 0 = transport error
+  pub host fn http_err(r: opaque) -> ?str;        // nil unless status 0
+  pub host fn http_read_err(r: opaque) -> ?str;   // sticky mid-read failure
+  pub host fn http_resp_stream(r: opaque) -> opaque; // mints the reader
   ```
 
   The response handle is an `opaque` payload owning
-  `{ status, err, body }`; status **0 is RESERVED for transport
-  failure** (0 is never a real HTTP status) — an HTTP status, any
-  4xx/5xx included, is not a transport failure, so `err` stays nil and
-  the body carries the server's own error page. The readbacks answer
-  through the ANY lane (the `map_hvget` precedent): the engine's
-  verified-return table cannot bind a `?str`/`bytes` host answer, so
-  the host answers the caller's static V — a `?str` dst reads the err
-  text, a `bytes` dst reads the body octets.
-- **`http`** — the rut face over the handle (the ink pattern,
-  `inline = true` — the class-method law): `Response` with
-  `status`/`ok` (2xx)/`transport_error`/`body`/`text`
-  (`bytes.decode()`, lossy), and the one entry `get(url) -> Response`.
+  `{ status, err, chunk source }`; status **0 is RESERVED for
+  transport failure** (0 is never a real HTTP status) — an HTTP
+  status, any 4xx/5xx included, is not a transport failure, so `err`
+  stays nil. `http_send` resolves at HEADERS (the wire body stays
+  UNREAD); the chunk source is the sequenced-Completer sibling — a
+  shared queue plus one pending completer slot per read — so the
+  stream lane walks the body chunk by chunk with bounded memory end
+  to end. THE ONE-SHOT LAW: `body()` (one future, the whole drain)
+  xor `byte_stream()` per response — a late/second taker DEGRADES
+  (empty drain / a dead reader whose `next` is an immediate EOF),
+  never traps, disclosed. A mid-read wire death is DATA: `next`
+  answers nil, `body` the short drain, `http_read_err` goes non-nil
+  and stays (sticky) — never a trap; a failed completer is NOT the
+  mid-read path.
+- **`http`** — the rut face over the handles (the ink pattern,
+  `inline = true` — the class-method law), ASYNC-ONLY and
+  unsuffixed: only the operations that really wait are async points;
+  everything else is sync construction sugar. `HttpClient.new()`
+  with the five verbs as BUILD sugars (`get`/`post`/`put`/`patch`/
+  `del` — sync, no I/O, each a one-step `RequestBuilder`), the
+  chainable builder (`method`/`url`/`header` — repeatable —
+  /`body`), `build()` freezing a re-sendable `Request`, and the
+  async points: `send(cx) -> Response` (THE one — resolves at
+  headers), `body(cx) -> bytes` (the drain), and on the minted
+  `ByteStream`: `next(cx) -> ?bytes` (nil = EOF-or-failed;
+  `error()` reads the same sticky fact). NO `text()` — callers
+  await `body()` then `.decode()`; NO query/params struct; NO
+  `_async` suffixes anywhere. The plan's usage chain compiles
+  verbatim:
+
+  ```rut
+  let client = HttpClient.new();
+  let resp = await client.request()
+      .method(ClientQueryMethod.Post)
+      .url("https://example.com/api")
+      .header("Accept", "application/json")
+      .body(payload)
+      .build()
+      .send(cx);
+  // terse: await client.get(u).build().send(cx)
+  ```
+
+  One engine adaptation, disclosed: async METHODS are not woven in
+  this build (the v1 diagnostic — the loop's tasks are async free
+  fns), so each async point is a sync method whose body calls the
+  private async free fn below it — the call mints the engine frame
+  inside the method and the method returns it typed `Future<T>`; the
+  caller's `await` consumes it (the `sleep` surface's exact
+  crossing). The face the caller sees is the async-only one. And the
+  DELETE verb is spelled `del`: `delete` is a REMOVED word in rut's
+  grammar (the dynamic-property statement; the `out`-not-`print`
+  precedent) — the same crossing under an honest name, the wire
+  still sees the canonical `DELETE`.
 
 The bodies live in rut-std, behind the DEFAULT-OFF `http` cargo
 feature: `reqwest` 0.12 (blocking, rustls-tls, gzip, brotli —
 redirects on) folds into `rut_std::http`, and the feature appears in
 NO default graph — reqwest-blocking does not build on
 wasm32-unknown-unknown, so rut-driver and rut-wasm stay clean. The
-native embedders opt in: `rut-cli` carries `features = ["http"]` on
-its rut-std dep and installs `install_std_http` (the reqwest lane);
-an embedder that wants its own transport — tests above all — calls
-`install_std_http_with(hosts, f)` where `f: Fn(&str) ->
-Result<(u16, Vec<u8>), String>` maps a URL to `(status, body)` or
-`Err(message)` (the status-0 lane): key the closure on the exact URL
-and answer recorded payloads — the fixture lane is the offline test
-double, zero network.
+reqwest lane is ONE worker thread per request over the shared
+blocking client: the thread sends, completes the send completer at
+HEADERS, then keeps reading the body into the chunk source through a
+fixed 16 KiB buffer (bounded memory; each read lands as one stream
+chunk). Cancellation rides the cancel arms as the disclosed
+best-effort: the thread finishes its blocking read and the late
+result is simply never taken. The async rows register through
+`rut_vm::register_async!` (the ONE closure law): the embedder's
+whole side is one closure answering a `Completer` per row family —
+the sync readbacks stay plain `register!`. An embedder that wants
+its own transport — tests above all — calls
+`install_std_http_with(hosts, f)` where `f: Fn(&str, &str, &str,
+&[u8]) -> Result<FixtureReply, String>` maps (method, url, headers,
+body) to a recorded reply — status + the CHUNK PLAN (deterministic
+small chunks) — or `Err(message)` (the status-0 lane): the fixture
+map's keys ARE the assertions, and the returned `HttpFixture` handle
+is the virtual clock (the test loop settles the dues and advances to
+`next_due()` — the send at tick 0, chunk i at tick i+1). Zero
+network.
 
 The run recipes:
 
 - **A module dir**: `[deps] http = { path = ".../rut/http" }` —
-  `rut run <dir>`; http's own `[deps]` pulls http_host.
+  `rut run <dir>`; http's own `[deps]` pulls http_host AND strbuild
+  (the builder's header accumulator). The fetch sites `await`, so
+  the program's entry runs under the launcher (`use async_host::
+  launch_future`).
 - **A loose file**: `rut run file.rut` with `use http::` in the
   source — the CLI mounts both pkgs by presence, same as json.
 - **The worked example**: [`06-github-viewer-cli/`](06-github-viewer-cli/)
   — `rgh` consumes the pair from an embedder (`install_std_http`, the
-  reqwest lane) plus example-local CLI-I/O rows, with the fixture lane
-  (`install_std_http_with`, keyed on exact URLs) as its offline test
-  gate. See that example's README for the division of labor and the
-  two disclosures (`print` is a removed name; `?str` answers spell
-  `any` at the decl).
+  reqwest lane) plus example-local CLI-I/O rows, its brain an async
+  free fn launched through `boot` + `launch_future`, with the fixture
+  lane (`install_std_http_with`, keyed on method+URL) as its offline
+  test gate. See that example's README for the division of labor and
+  the laws.
 
 ```rut
-use http::{ get };
-use ink::{ Logger };
+use http::HttpClient;
+use async_host::launch_future;
+use ink::Logger;
+
+async fn fetch(cx: RunContext, log: Logger, url: str) -> nil {
+    let client = HttpClient.new();
+    let r = await client.get(url).build().send(cx);
+    let e = r.transport_error();
+    if (e != nil) {
+        let why: str = e;
+        log.error(why);
+        return;
+    }
+    let b = await r.body(cx);
+    log.info(f"status={r.status()} ok={r.ok()} len={b.len()}");
+}
 
 pub fn main() {
     let log = Logger.new("demo");
-    let r = get("https://example.com");
-    let e = r.transport_error();
-    if (e != nil) { log.error(e); return; }
-    log.info(f"status={r.status()} ok={r.ok()} len={r.body().len()}");
+    launch_future(fetch(log, "https://example.com"));
 }
 ```
 

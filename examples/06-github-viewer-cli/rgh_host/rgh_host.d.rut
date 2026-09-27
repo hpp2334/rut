@@ -1,8 +1,8 @@
 // rgh_host/rgh_host.d.rut — 06-github-viewer-cli's own host rows (the
-// CLI I/O the brain cannot reach): two writers and one file write. The
-// HTTP rows are NOT here — rgh rides the std lane (`rut/http_host` +
-// `rut/http`, bodies in rut-std); a host pkg is example-local only when
-// the surface is example-local (RFC 0023 §2).
+// CLI I/O the brain cannot reach): two writers, the file rows, and the
+// exit. The HTTP rows are NOT here — rgh rides the std lane
+// (`rut/http_host` + `rut/http`, bodies in rut-std); a host pkg is
+// example-local only when the surface is example-local (RFC 0023 §2).
 //
 // One naming disclosure: the stdout row is `out`, not `print` — `print`
 // is a REMOVED core name whose use sites diagnose by symbol
@@ -10,9 +10,17 @@
 // so a bare `print(..)` call can never compile. `out` is the same
 // crossing under an honest name.
 //
-// The `write_file` answer crosses the `?str` answer lane (the
+// The `?str` answers cross the typed answer lane (the
 // legal-host-returns phase): nil is success, the text is the io error
-// (the `http_err` precedent at rut/http_host).
+// (the `http_err` precedent at rut/http_host). `exit` answers nil and
+// NEVER RETURNS in the embedder (the process exits with the code); the
+// test lane records the code and lets the brain retire.
+//
+// The file rows split truncate from append: `write_file` covers a
+// path (the download's truncate-first), `append_file` grows it — the
+// streaming download writes one chunk per row call (disk writes are
+// SYNC embedder rows; blocking the loop briefly is the CLI norm,
+// disclosed).
 
 /// one line to stdout (the host appends the newline and flushes)
 pub host fn out(s: str);
@@ -20,5 +28,14 @@ pub host fn out(s: str);
 /// one line to stderr (the host appends the newline and flushes)
 pub host fn eprint(s: str);
 
-/// write `data` over `path` — nil = written, the text = the io error
+/// write `data` over `path` (truncate-or-create) — nil = written, the
+/// text = the io error
 pub host fn write_file(path: str, data: bytes) -> ?str;
+
+/// append `data` to `path` (append-or-create) — nil = written, the
+/// text = the io error
+pub host fn append_file(path: str, data: bytes) -> ?str;
+
+/// exit the process with `code` (the embedder never returns from it;
+/// the test lane records instead)
+pub host fn exit(code: i32);

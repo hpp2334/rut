@@ -99,7 +99,17 @@ pub fn install_std_async(hosts: &mut HostRegistry) {
             let ckpt = find_ty(vm, af::SLEEP_CKPT)?;
             let frame_ty = find_ty(vm, af::SLEEP_FRAME)?;
             let fut_obj = find_ty(vm, FUTURE_NIL_OBJ)?;
-            let frame = vm.alloc_zeroed_record(frame_ty, 5)?;
+            // the minted frame type's own field count (state, cancelled,
+            // awaiter, pending, answer, ms) — the ANSWER lane joined the
+            // engine layout, so the count reads the type, never a literal
+            let nfields = match vm.prog.types.kind(frame_ty) {
+                rut_core::types::TyKind::Data { fields } => fields.len(),
+                _ => return Err(rut_vm::Trap::new(
+                    rut_vm::TrapKind::Invalid,
+                    "async engine: the sleep frame type is not a record",
+                )),
+            };
+            let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
             let s0 = vm.enum_member_slot(ckpt, 0)?;
             vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
             vm.set_record_field(frame, af::LOCALS_BASE as usize, Slot::int(ms as i64));

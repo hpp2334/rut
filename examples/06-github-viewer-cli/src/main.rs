@@ -1,17 +1,26 @@
-//! 06-github-viewer-cli — the Rust half of `rgh`: mount, bind, cross in,
-//! exit. The BRAIN is `rgh.rut`; this file owns only I/O:
+//! 06-github-viewer-cli — the Rust half of `rgh`: mount, bind, launch,
+//! pump, exit. The BRAIN is `rgh.rut` (an async free fn over the
+//! redesigned rut/http lane); this file owns only I/O:
 //!
 //! - argv crosses in as ONE `\n`-joined `str` (the RFC 0023 §2 crossing
 //!   set admits prims/str/bytes/opaque only — no arg lists);
 //! - the std HTTP lane is bound reqwest-side (`install_std_http` — the
 //!   feature is native-only by law; rgh never builds for wasm32);
 //! - the example-local `rgh_host` rows carry the CLI I/O: two line
-//!   writers and one `std::fs::write`;
-//! - the exit code IS `rgh_main`'s i32 return.
+//!   writers, the file pair (`write_file` truncates, `append_file`
+//!   grows — the streaming download's two halves), and the `exit` row
+//!   (the process exits with the brain's i32);
+//! - `boot` launches the brain (`launch_future` — the async_host
+//!   standard launcher); this file then pumps the driving loop to
+//!   idle (the RFC 0035 §4 run lane): `run_ready` + a short wall-clock
+//!   sleep per spin until `pending_tasks()` hits zero. The `exit` row
+//!   fires INSIDE the pump and never returns. A trap surfaces here as
+//!   exit 1 with the trap name.
 //!
 //! The offline suite (tests/session.rs) builds its own VM over the
-//! fixture lane (`install_std_http_with`) — this file never branches on
-//! test env, and nothing here touches the network at test time.
+//! fixture lane (`install_std_http_with`) and a recording `exit` body —
+//! this file never branches on test env, and nothing here touches the
+//! network at test time.
 
 use std::io::Write as _;
 use std::rc::Rc;
@@ -25,7 +34,8 @@ const MOUNT_DIRS: &[&str] = &[
     // the whole closure (the CLI's own loose-file recipe) — json's
     // impl-only integration groups mount because pouch/nmapset are in
     // it. The http pair closes the list on the same law (http after its
-    // http_host dep; http's own `[deps]` pulls http_host regardless).
+    // http_host dep; http's own [deps] pull http_host AND strbuild —
+    // the builder's header accumulator — regardless).
     "rut/pouch",
     "rut/nmapset",
     "rut/json",
@@ -38,6 +48,8 @@ fn main() {
 
     let mut session = rut_driver::Session::new();
     rut_driver::mount_std(&mut session);
+    // the async pair (the launcher set `boot` drives)
+    rut_driver::mount_std_async(&mut session);
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for dir in MOUNT_DIRS {
         rut_driver::mount_dir(&mut session, &tree.join(dir)).expect("mount tree pkg");
@@ -88,6 +100,8 @@ fn main() {
     // decl pkg's rows demand bodies, RFC 0025)
     rut_std::math::install_std_math(&mut hosts);
     rut_std::nmap::install_std_nmap(&mut hosts);
+    // the async engine's rows (the launcher set boot drives)
+    rut_std::async_host::install_std_async(&mut hosts);
     // the std HTTP lane — the reqwest side (UA + redirects live in
     // rut-std); the fixture lane is the tests', never this file's
     rut_std::http::install_std_http(&mut hosts);
@@ -115,6 +129,24 @@ fn main() {
                 Err(e) => Ok(Some(e.to_string())), // the io error's text
             }
         });
+    rut_vm::register!(hosts, "rgh_host::append_file", (&str, Vec<u8>) -> Option<String>,
+        |_vm: &mut Vm, path: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+            use std::io::Write as _;
+            let mut f = match std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                Ok(f) => f,
+                Err(e) => return Ok(Some(e.to_string())),
+            };
+            match f.write_all(&data).and_then(|_| f.flush()) {
+                Ok(()) => Ok(None),
+                Err(e) => Ok(Some(e.to_string())),
+            }
+        });
+    rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
+        |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
+            // the brain's one-way door: the pump dies here with the
+            // code it carried
+            std::process::exit(code);
+        });
     // the decl ↔ the bodies, loudly (RFC 0025): every mounted pkg's
     // host rows must have a binding with the declared signature
     hosts.verify_against(&session.expected_host_fns());
@@ -126,11 +158,26 @@ fn main() {
             std::process::exit(1);
         }
     };
-    match vm.call::<_, i32>("rgh_main", (args,)) {
-        Ok(code) => std::process::exit(code),
-        Err(t) => {
-            eprintln!("rgh: trap: {} — {}", t.name(), t.msg);
+    // launch the brain, then pump the driving loop to idle: real
+    // reqwest workers settle the completers from their threads (the
+    // wall-clock spin), `exit` fires mid-spin and never returns
+    if let Err(t) = vm.call::<_, ()>("boot", (args,)) {
+        eprintln!("rgh: boot fn: {} — {}", t.name(), t.msg);
+        std::process::exit(1);
+    }
+    loop {
+        match vm.run_ready() {
+            Ok(_) => {}
+            Err(t) => {
+                eprintln!("rgh: trap: {} — {}", t.name(), t.msg);
+                std::process::exit(1);
+            }
+        }
+        if vm.pending_tasks() == 0 {
+            // the brain retired WITHOUT exiting — a brain bug: loud
+            eprintln!("rgh: the brain retired without exit (a brain bug)");
             std::process::exit(1);
         }
+        std::thread::sleep(std::time::Duration::from_millis(2));
     }
 }

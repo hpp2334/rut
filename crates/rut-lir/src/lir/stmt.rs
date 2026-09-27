@@ -215,6 +215,70 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.jmp(l_end);
                     return Ok(());
                 }
+                // the async weave: the return value lands in the frame's
+                // ANSWER lane (the awaiting frame's resume arm reads it),
+                // then the frame retires exactly like the body-end
+                // completion — answer BEFORE state, or the woken awaiter
+                // reads a null (RFC 0018 §2's law, the value half)
+                if let Some(f) = self.async_frame.clone() {
+                    let ans_ty = match self.ctx.types.kind(f.frame_ty) {
+                        TyKind::Data { fields } => fields
+                            .get(rut_core::async_frame::ANSWER_FIELD as usize)
+                            .map(|fi| fi.ty)
+                            .unwrap_or(TY_NIL),
+                        _ => TY_NIL,
+                    };
+                    match value {
+                        Some(v) => {
+                            let t = self.compile_expr(v, Some(ans_ty))?;
+                            if !self.widens(t, ans_ty) {
+                                self.ctx.err(sp, format!(
+                                    "return type mismatch: `{}` expected, `{}` returned",
+                                    self.ctx.type_name(ans_ty), self.ctx.type_name(t)
+                                ));
+                            }
+                            self.widen_to_slot(t, ans_ty, sp.lo);
+                            let src = self.last_reg;
+                            let repr = self.ctx.types.repr_of(ans_ty);
+                            self.emit(
+                                Op::SetF {
+                                    obj: f.frame_reg,
+                                    field: rut_core::async_frame::ANSWER_FIELD,
+                                    val: src,
+                                    repr,
+                                },
+                                sp.lo,
+                            );
+                        }
+                        None => {
+                            if self.ctx.types.is_ref(ans_ty) {
+                                let null = self.emit_null(sp.lo);
+                                let repr = self.ctx.types.repr_of(ans_ty);
+                                self.emit(
+                                    Op::SetF {
+                                        obj: f.frame_reg,
+                                        field: rut_core::async_frame::ANSWER_FIELD,
+                                        val: null,
+                                        repr,
+                                    },
+                                    sp.lo,
+                                );
+                            }
+                        }
+                    }
+                    let null = self.emit_null(sp.lo);
+                    self.emit(
+                        Op::SetF {
+                            obj: f.frame_reg,
+                            field: rut_core::async_frame::STATE_FIELD,
+                            val: null,
+                            repr: Repr::Ref,
+                        },
+                        sp.lo,
+                    );
+                    self.emit(Op::Ret { val: None }, sp.lo);
+                    return Ok(());
+                }
                 match value {
                     Some(v) => {
                         let t = self.compile_expr(v, Some(self.ret_ty))?;

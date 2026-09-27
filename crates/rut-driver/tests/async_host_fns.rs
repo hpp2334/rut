@@ -387,6 +387,79 @@ pub fn main() -> nil {
     assert!(!sink.borrow().iter().any(|l| l == "unreachable"));
 }
 
+// ---- the ANSWER lane: await lifts the completed value ----
+
+#[test]
+fn await_delivers_the_host_answer() {
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::launch_future;
+use fixture::probe;
+
+async fn job(cx: RunContext, log: opaque, u: str) -> nil {
+    let v = await probe(u);
+    logger_log(log, 2, f"got:{v}");
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(job(log, "k:10"));
+}
+"#;
+    let (mut vm, sink, fx) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, &fx, 100);
+    assert_eq!(
+        *sink.borrow(),
+        vec!["got:done:k"],
+        "the await lifted the completed frame's answer"
+    );
+}
+
+#[test]
+fn await_delivers_through_user_frames_and_type_checks() {
+    // the rgh shape: a user async fn awaits another user async fn whose
+    // body awaits the HOST row — the value crosses two answer lanes
+    let src = r#"
+use rt::{ create_logger, logger_log };
+use async_host::launch_future;
+use fixture::probe;
+
+async fn inner(cx: RunContext, log: opaque, u: str) -> str {
+    logger_log(log, 2, "inner:start");
+    let v = await probe(u);
+    logger_log(log, 2, "inner:got");
+    return v;
+}
+
+async fn outer(cx: RunContext, log: opaque, u: str) -> str {
+    logger_log(log, 2, "outer:start");
+    let v = await inner(log, u);
+    logger_log(log, 2, f"outer:{v}");
+    return v;
+}
+
+async fn job(cx: RunContext, log: opaque, u: str) -> nil {
+    logger_log(log, 2, "job:start");
+    let v = await outer(log, u);
+    logger_log(log, 2, f"job:{v}");
+}
+
+pub fn main() -> nil {
+    let log = create_logger("t");
+    launch_future(job(log, "n:5"));
+}
+"#;
+    let (mut vm, sink, fx) = setup(src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, &fx, 100);
+    assert_eq!(
+        *sink.borrow(),
+        vec!["job:start", "outer:start", "inner:start", "inner:got", "outer:done:n", "job:done:n"],
+        "the answer crossed the user frame's answer lane, then the outer's"
+    );
+}
+
 // ---- the rows, driven directly: the marshal lane end to end ----
 
 #[test]

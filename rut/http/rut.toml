@@ -1,10 +1,15 @@
-# http/ — the std HTTP lane's rut face: the `Response` class over the
-# `http_host` rows (the ink pattern). `inline = true` keeps the class
-# methods resolvable at every consumer's call site (a class-method
-# module cannot be linked; the ink/strbuild law).
+# http/ — the std HTTP lane's rut face: the async-only client, builder
+# and response classes over the `http_host` rows (the ink pattern).
+# `inline = true` keeps the class methods resolvable at every
+# consumer's call site (a class-method module cannot be linked; the
+# ink/strbuild law).
 name = "http"
 entry.lib = "./http.rut"
 inline = true
 
 [deps]
 http_host = { path = "../http_host" }
+# the builder's header accumulator rides the std builder (the
+# strbuild batch; the json writer's exact precedent: a REQUIRED dep —
+# the builder cannot exist without the cell)
+strbuild = { path = "../strbuild" }

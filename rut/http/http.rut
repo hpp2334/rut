@@ -1,17 +1,191 @@
-// http/http.rut — the std HTTP lane's rut face: the `Response` class
-// over the host handle (the ink pattern). The host owns the response's
-// layout, so rut only ever holds an `opaque`. Status 0 is RESERVED for
-// transport failure (0 is never a real HTTP status) — an HTTP status,
-// any 4xx/5xx included, is not one; `transport_error` answers the
-// failure text and `ok` is the plain 2xx test.
-use http_host::{ http_get, http_status, http_err, http_body };
+// http/http.rut — the std HTTP lane's rut face (the redesign): an
+// ASYNC-ONLY, unsuffixed face over the `http_host` rows. Only the
+// operations that really wait are async points — `send`, `body`,
+// `next` — everything else (the client, the five verbs, the builder
+// chain, `build`, the response readbacks, the reader mint) is sync
+// construction sugar. NO `text()` (callers await `body()` then
+// `.decode()`); NO query/params struct; NO `_async` suffixes anywhere.
+//
+// THE SHAPE: the verbs hand back a `RequestBuilder`; `build()` freezes
+// a re-sendable `Request`; `send(cx)` is THE async point — the plan's
+// usage chain compiles verbatim:
+//
+//     let resp = await client.request()
+//         .method(ClientQueryMethod.Post)
+//         .url("https://example.com/api")
+//         .header("Accept", "application/json")
+//         .body(payload)
+//         .build()
+//         .send(cx);
+//
+// and the terse case is `await client.get(u).build().send(cx)`.
+//
+// One disclosed engine adaptation: async METHODS are not woven in this
+// build (the v1 diagnostic — the loop's tasks are async free fns), so
+// each async point is a sync method whose body calls the private async
+// free fn BELOW: the call mints the engine frame inside the method and
+// the method returns it typed `Future<T>`; the caller's `await`
+// consumes it (the `sleep` surface's exact crossing). The face the
+// caller sees is the async-only one above; the engine's async-method
+// refusal never shows.
+//
+// THE LAWS (the host side owns them; this face is the thin wrapper):
+// send resolves at HEADERS (the wire body stays unread — true
+// streaming); `body()` drains the remaining wire in one future;
+// `byte_stream()` mints the reader and `next()` walks it chunk by
+// chunk (nil = EOF-or-failed — `error()`/`read_error()` name which);
+// body xor stream per response — a late/second taker DEGRADES (empty
+// drain / immediate EOF), never traps. Status 0 is RESERVED for
+// transport failure (`transport_error()` answers it); a mid-read wire
+// death is DATA — the sticky `read_error()` goes non-nil and stays.
+// Cancellation is best-effort (a worker thread finishes its blocking
+// read; the late result is discarded — disclosed).
+use http_host::{
+    http_send, http_body, http_stream_next,
+    http_status, http_err, http_read_err, http_resp_stream,
+};
+use strbuild::{ StringBuilder };
 
+// the method dial — a builder input, never a wire format (the wire
+// sees the canonical verb str below)
+pub enum ClientQueryMethod { Get, Post, Put, Patch, Del }
+
+/// the shared client handle. The host lanes own their client state
+/// (the reqwest lane's shared blocking client; the fixture lane's
+/// virtual clock), so the handle crosses `http_send` untouched — the
+/// field exists so the face holds a client like the plan spells and a
+/// future per-client lane can key on it.
+pub class HttpClient {
+    c: opaque;
+}
+
+impl HttpClient {
+    pub fn new() -> Self {
+        return Self { c: opaque(nil) };
+    }
+
+    /// the manual entry: method defaults to GET
+    pub fn request(self) -> RequestBuilder {
+        return RequestBuilder { c: self.c, m: "GET", url: "", headers: StringBuilder.new(), body: "".encode() };
+    }
+
+    // the five verbs — BUILD sugars: sync, no I/O, each a one-step
+    // builder with the method dialed
+    pub fn get(self, url: str) -> RequestBuilder {
+        return self.request().url(url);
+    }
+    pub fn post(self, url: str, body: bytes) -> RequestBuilder {
+        return self.request().method(ClientQueryMethod.Post).url(url).body(body);
+    }
+    pub fn put(self, url: str, body: bytes) -> RequestBuilder {
+        return self.request().method(ClientQueryMethod.Put).url(url).body(body);
+    }
+    pub fn patch(self, url: str, body: bytes) -> RequestBuilder {
+        return self.request().method(ClientQueryMethod.Patch).url(url).body(body);
+    }
+    /// the DELETE verb — spelled `del` because `delete` is a REMOVED
+    /// word in rut's grammar (the dynamic-property statement; the
+    /// `out`-not-`print` precedent): the same crossing under an honest
+    /// name, the wire still sees the canonical `DELETE`
+    pub fn del(self, url: str) -> RequestBuilder {
+        return self.request().method(ClientQueryMethod.Del).url(url);
+    }
+}
+
+/// the chain: every step sync, every step `Self` (the shared-handle
+/// law — a builder mutates in place, the chain is spelling sugar)
+pub class RequestBuilder {
+    c: opaque;
+    m: str;
+    url: str;
+    headers: StringBuilder;   // repeatable, accumulates
+    body: bytes;              // empty = none (the disclosed merge)
+}
+
+impl RequestBuilder {
+    pub fn method(mut self, m: ClientQueryMethod) -> Self {
+        when (m) {
+            ClientQueryMethod.Get -> { self.m = "GET"; },
+            ClientQueryMethod.Post -> { self.m = "POST"; },
+            ClientQueryMethod.Put -> { self.m = "PUT"; },
+            ClientQueryMethod.Patch -> { self.m = "PATCH"; },
+            ClientQueryMethod.Del -> { self.m = "DELETE"; },
+        }
+        return self;
+    }
+
+    pub fn url(mut self, url: str) -> Self {
+        self.url = url;
+        return self;
+    }
+
+    /// repeatable — each call appends one `Name: value` line
+    pub fn header(mut self, name: str, value: str) -> Self {
+        if (self.headers.len() > 0) {
+            self.headers.append("\n");
+        }
+        self.headers.append(name);
+        self.headers.append(": ");
+        self.headers.append(value);
+        return self;
+    }
+
+    pub fn body(mut self, b: bytes) -> Self {
+        self.body = b;
+        return self;
+    }
+
+    /// freeze: a re-sendable Request (its own copy of the accumulated
+    /// header block; the builder stays mutable for another build)
+    pub fn build(self) -> Request {
+        return Request { c: self.c, m: self.m, url: self.url, headers: self.headers.build(), body: self.body };
+    }
+}
+
+/// the frozen request: canonical method str, the "\n"-joined header
+/// block ("" = none), body bytes (empty = none)
+pub class Request {
+    c: opaque;
+    m: str;
+    url: str;
+    headers: str;
+    body: bytes;
+}
+
+impl Request {
+    /// THE async point — resolves at HEADERS. The engine frame mints
+    /// in the call below (the cx is engine-minted — never passed);
+    /// `await` consumes the returned future (the disclosed
+    /// sync-method-over-free-fn adaptation).
+    pub fn send(self, cx: RunContext) -> Future<Response> {
+        let _ = cx;
+        return send_impl(self.c, self.m, self.url, self.headers, self.body);
+    }
+}
+
+// ---- the async points (private; one mint each) ----
+
+async fn send_impl(cx: RunContext, c: opaque, m: str, url: str, headers: str, body: bytes) -> Response {
+    let r: opaque = await http_send(c, m, url, headers, body);
+    return Response { r: r };
+}
+
+async fn body_impl(cx: RunContext, r: opaque) -> bytes {
+    return await http_body(r);
+}
+
+async fn next_impl(cx: RunContext, s: opaque) -> ?bytes {
+    return await http_stream_next(s);
+}
+
+/// the response handle: the host owns the layout, rut holds the opaque
 pub class Response {
     r: opaque;
 }
 
 impl Response {
-    /// the HTTP status word — 0 means the transport failed
+    /// the HTTP status word — 0 means the transport failed (0 is never
+    /// a real status; any real status, 4xx/5xx included, is not one)
     pub fn status(self) -> i32 { return http_status(self.r); }
 
     /// the 2xx test
@@ -23,14 +197,43 @@ impl Response {
     /// the transport-failure text — nil unless status is 0
     pub fn transport_error(self) -> ?str { return http_err(self.r); }
 
-    /// the body octets — empty on transport failure
-    pub fn body(self) -> bytes { return http_body(self.r); }
+    /// the sticky mid-read failure — nil until one fails, then
+    /// non-nil forever; meaningful after awaiting `body()`/`next()`
+    pub fn read_error(self) -> ?str { return http_read_err(self.r); }
 
-    /// the body as text — `bytes.decode()`, lossy
-    pub fn text(self) -> str { return self.body().decode(); }
+    /// the drain: the remaining wire in ONE future — empty on a
+    /// transport failure or after the stream lane took over (the
+    /// one-shot law's degrade)
+    pub fn body(self, cx: RunContext) -> Future<bytes> {
+        let _ = cx;
+        return body_impl(self.r);
+    }
+
+    /// mint the reader: instant, sync. One-shot vs `body()` — a late
+    /// mint (after a drain, or a second mint) answers a dead reader
+    /// whose `next()` is an immediate EOF.
+    pub fn byte_stream(self) -> ByteStream {
+        return ByteStream { s: http_resp_stream(self.r), r: self.r };
+    }
 }
 
-/// the ONE entry: a GET over the std lane
-pub fn get(url: str) -> Response {
-    return Response { r: http_get(url) };
+/// the chunk reader. Two handles, one disclosure: the row set has no
+/// stream-side error readback — `error()` reads the SAME sticky fact
+/// through the response row (`http_read_err`), so the class carries
+/// the response handle beside the reader.
+pub class ByteStream {
+    s: opaque;
+    r: opaque;
+}
+
+impl ByteStream {
+    /// one chunk per future; nil = EOF-or-failed (`error()` names
+    /// which). The chunk source is bounded end to end.
+    pub fn next(self, cx: RunContext) -> Future<?bytes> {
+        let _ = cx;
+        return next_impl(self.s);
+    }
+
+    /// the same sticky read failure, read through the response row
+    pub fn error(self) -> ?str { return http_read_err(self.r); }
 }

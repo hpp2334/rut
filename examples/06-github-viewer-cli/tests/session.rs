@@ -1,10 +1,14 @@
-//! 06-github-viewer-cli — the offline session gate.
+//! 06-github-viewer-cli — the offline session gate (the async brain
+//! over the REDESIGNED rut/http lane).
 //!
 //! ZERO network: the HTTP lane rides `install_std_http_with` (the
-//! fixture lane), keyed on the EXACT URLs the brain must build — the
-//! fixture map's keys ARE the URL assertions, a wrong URL is a test
-//! failure (an "unexpected url" transport error), never a
-//! pass-through. The fixtures are recorded payloads:
+//! fixture lane) keyed on method+URL — the fixture map's keys ARE the
+//! assertions (a wrong URL is a LOUD transport failure, never a
+//! pass-through), and the recorded reply's CHUNK PLAN arrives on the
+//! virtual clock: the send at tick 0, chunk i at tick i+1, the
+//! terminal (EOF or the mid-read failure) one tick later — the
+//! deterministic small chunks the streaming cases assert on. The
+//! recorded payloads:
 //!
 //! - `tree.json` — data.jsdelivr.com's tree for jquery/jquery@3.7.1,
 //!   verbatim (351 entries, 4 depths, base64 integrity hashes,
@@ -13,18 +17,21 @@
 //!   the human-size boundaries (0/1023/1024/1048576/1048577/1 GiB)
 //!   and a hash-less file;
 //! - `text.txt` / `binary.jpg` — cdn.jsdelivr.net file bodies (the
-//!   jpg is byte-verbatim, download must be binary-safe);
+//!   jpg is byte-verbatim; the streamed download must be binary-safe);
 //! - `notfound.json` — a real 404 body.
 //!
 //! The `list` expectations over the real tree are derived Rust-side
 //! from the same fixture (the 02-digest oracle pattern: the reference
 //! walks the JSON independently), while the boundary tree pins the
-//! format EXACTLY, string for string. A live smoke runs behind
-//! RGH_LIVE=1 only.
+//! format EXACTLY, string for string. The download cases ride the
+//! streamed lane (chunk-per-await, append per chunk) and the
+//! one-shot/sticky/degrade laws get their own probe. A live smoke
+//! runs behind RGH_LIVE=1 only (the reqwest lane, real DNS).
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use rut_std::http::{ FixtureReply, HttpFixture };
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
 
@@ -51,10 +58,14 @@ struct Sinks {
     out: Rc<RefCell<Vec<String>>>,
     /// every `eprint` line, in order
     err: Rc<RefCell<Vec<String>>>,
-    /// every successful `write_file`: (dest, bytes)
-    files: Rc<RefCell<Vec<(String, Vec<u8>)>>>,
-    /// when set, `write_file` to this dest answers this io error text
+    /// every successful file row: ("W"/"A" for write/append, dest, bytes)
+    files: Rc<RefCell<Vec<(char, String, Vec<u8>)>>>,
+    /// when set, a write/append to this dest answers this io error text
     fail_write: Rc<RefCell<Option<(String, String)>>>,
+    /// the `exit` row's code (the recording lane's one-way door)
+    code: Rc<RefCell<Option<i32>>>,
+    /// whether `exit` fired at all
+    exited: Rc<RefCell<bool>>,
 }
 
 impl Sinks {
@@ -64,6 +75,22 @@ impl Sinks {
     fn err_lines(&self) -> Vec<String> {
         self.err.borrow().clone()
     }
+    fn code(&self) -> i32 {
+        self.code.borrow().expect("the brain exited")
+    }
+    fn file_bytes(&self, dest: &str) -> Vec<u8> {
+        // the write (truncate) + the appends, in order — the file's content
+        let mut b = Vec::new();
+        for (kind, d, data) in self.files.borrow().iter() {
+            if d == dest {
+                if *kind == 'W' {
+                    b.clear();
+                }
+                b.extend_from_slice(data);
+            }
+        }
+        b
+    }
 }
 
 // -------------------------------------------------------------- boot ---
@@ -71,11 +98,16 @@ impl Sinks {
 /// Boot the brain over the fixture lane. Mounts what the embedder
 /// mounts (std + the brain's libs + the example's own host pkg), runs
 /// the peer gate, compiles `rgh.rut` in Impl mode, verifies, binds
-/// math + nmap + the fixture HTTP lane + the rgh_host rows over the
-/// sinks, and checks the decl ↔ bodies contract pre-boot (RFC 0025).
-fn boot(fix: impl Fn(&str) -> Result<(u16, Vec<u8>), String> + 'static) -> (Vm, Sinks) {
+/// math + nmap + the async engine + the fixture HTTP lane + the
+/// rgh_host rows over the sinks (exit RECORDS — the one-way door is
+/// the embedder's), and checks the decl ↔ bodies contract pre-boot
+/// (RFC 0025).
+fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static) -> (Vm, Sinks, HttpFixture) {
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
+    // the async pair (the launcher set `boot` drives — the embedder's
+    // own mount list carries it too)
+    rut_driver::mount_std_async(&mut s);
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
     for d in ["pouch", "nmapset", "json", "http_host", "http"] {
         rut_driver::mount_dir(&mut s, &tree.join(d)).expect("mount tree pkg");
@@ -102,7 +134,8 @@ fn boot(fix: impl Fn(&str) -> Result<(u16, Vec<u8>), String> + 'static) -> (Vm, 
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::math::install_std_math(&mut hosts);
     rut_std::nmap::install_std_nmap(&mut hosts);
-    rut_std::http::install_std_http_with(&mut hosts, fix);
+    rut_std::async_host::install_std_async(&mut hosts);
+    let fx = rut_std::http::install_std_http_with(&mut hosts, fix);
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
         move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
@@ -126,31 +159,97 @@ fn boot(fix: impl Fn(&str) -> Result<(u16, Vec<u8>), String> + 'static) -> (Vm, 
                 }
             }
             drop(fail);
-            files_sink.borrow_mut().push((dest.to_string(), data));
+            files_sink.borrow_mut().push(('W', dest.to_string(), data));
             Ok(None)
+        });
+    let files_sink = sinks.files.clone();
+    let fail_sink = sinks.fail_write.clone();
+    rut_vm::register!(hosts, "rgh_host::append_file", (&str, Vec<u8>) -> Option<String>,
+        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+            let fail = fail_sink.borrow();
+            if let Some((path, text)) = fail.as_ref() {
+                if path == dest {
+                    return Ok(Some(text.clone()));
+                }
+            }
+            drop(fail);
+            files_sink.borrow_mut().push(('A', dest.to_string(), data));
+            Ok(None)
+        });
+    let code_sink = sinks.code.clone();
+    let exited_sink = sinks.exited.clone();
+    rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
+        move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
+            *code_sink.borrow_mut() = Some(code);
+            *exited_sink.borrow_mut() = true;
+            Ok(()) // the recording lane: the brain retires, the loop idles
         });
     hosts.verify_against(&s.expected_host_fns()); // the decl ↔ the bodies
     let vm = rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts)
         .unwrap();
-    (vm, sinks)
+    (vm, sinks, fx)
 }
 
-/// the ONE crossing: argv joins with "\n", the i32 comes back
-fn run(vm: &mut Vm, args: &[&str]) -> i32 {
-    vm.call::<_, i32>("rgh_main", (args.join("\n"),)).unwrap()
-}
-
-/// a fixture lane keyed on exact URLs; an unknown URL is a LOUD
-/// failure — the brain built a URL no test asked for
-fn fixmap(entries: &[(&str, u16, &[u8])]) -> impl Fn(&str) -> Result<(u16, Vec<u8>), String> {
-    let map: std::collections::HashMap<String, (u16, Vec<u8>)> = entries
-        .iter()
-        .map(|(u, s, b)| (u.to_string(), (*s, b.to_vec())))
-        .collect();
-    move |url| match map.get(url) {
-        Some((s, b)) => Ok((*s, b.clone())),
-        None => Err(format!("rgh-test: unexpected url: {url}")),
+/// launch + pump: `boot` launches the brain, the driving loop runs to
+/// idle over the virtual clock (settle the fixture dues, advance to
+/// the next due/deadline — the async_host_fns shape), the exit code
+/// reads out of the recording lane
+fn run(vm: &mut Vm, fx: &HttpFixture, sinks: &Sinks, args: &[&str]) -> i32 {
+    vm.call::<_, ()>("boot", (args.join("\n"),)).unwrap();
+    for _ in 0..500 {
+        vm.run_ready().expect("run_ready");
+        if vm.pending_tasks() == 0 && !fx.has_pending() {
+            break;
+        }
+        if fx.settle(vm.now_ms()) {
+            continue;
+        }
+        let next = [fx.next_due(), vm.next_deadline()]
+            .into_iter()
+            .flatten()
+            .filter(|&d| d > vm.now_ms())
+            .min();
+        match next {
+            Some(d) => vm.set_now(d),
+            None => vm.set_now(vm.now_ms() + 1),
+        }
     }
+    assert!(
+        *sinks.exited.borrow(),
+        "the brain exited: {:?} / {:?}",
+        sinks.out_lines(),
+        sinks.err_lines()
+    );
+    sinks.code()
+}
+
+/// a fixture lane keyed on (method, url): a GET the map knows answers
+/// its recorded reply; anything else is a LOUD transport failure — the
+/// fixture map's keys ARE the assertions
+fn fixmap(entries: &[(&str, FixtureReply)]) -> impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> {
+    let map: std::collections::HashMap<String, FixtureReply> = entries
+        .iter()
+        .map(|(u, r)| (u.to_string(), r.clone()))
+        .collect();
+    move |method, url, _headers, body| {
+        if method != "GET" {
+            return Err(format!("rgh-test: unexpected method {method} for {url}"));
+        }
+        if !headers_empty_case(_headers) {
+            return Err(format!("rgh-test: unexpected headers for {url}"));
+        }
+        if !body.is_empty() {
+            return Err(format!("rgh-test: unexpected request body for {url}"));
+        }
+        match map.get(url) {
+            Some(r) => Ok(r.clone()),
+            None => Err(format!("rgh-test: unexpected url: {url}")),
+        }
+    }
+}
+
+fn headers_empty_case(_h: &str) -> bool {
+    true // rgh sends no headers today; the builder test in rut-std pins the format
 }
 
 // ------------------------------------------------- the Rust reference ---
@@ -204,7 +303,7 @@ fn expected_lines(tree_json: &str) -> Vec<String> {
     out
 }
 
-// -------------------------------------------------------------- tests ---
+// -------------------------------------------------------------- tests --
 
 #[test]
 fn usage_errors_exit_two_with_text() {
@@ -241,8 +340,8 @@ fn usage_errors_exit_two_with_text() {
         (&["--repo=o/r", "--ref=v1", "download", "x.txt", "a", "b"], "download takes a repo path and at most one dest"),
     ];
     for (args, why) in cases {
-        let (mut vm, sinks) = boot(fixmap(&[]));
-        let code = run(&mut vm, args);
+        let (mut vm, sinks, fx) = boot(fixmap(&[]));
+        let code = run(&mut vm, &fx, &sinks, args);
         assert_eq!(code, 2, "{args:?}: usage exits 2");
         let err = sinks.err_lines();
         assert_eq!(err.first().map(String::as_str), Some(format!("rgh: {why}").as_str()), "{args:?}: the reason leads stderr");
@@ -254,8 +353,11 @@ fn usage_errors_exit_two_with_text() {
 
 #[test]
 fn list_boundary_tree_exact() {
-    let (mut vm, sinks) = boot(fixmap(&[(BOUNDARY_URL, 200, BOUNDARY_JSON.as_bytes())]));
-    let code = run(&mut vm, &["--repo=acme/widgets", "--ref=1.0.0", "list"]);
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        BOUNDARY_URL,
+        FixtureReply::ok(200, BOUNDARY_JSON.as_bytes()),
+    )]));
+    let code = run(&mut vm, &fx, &sinks, &["--repo=acme/widgets", "--ref=1.0.0", "list"]);
     assert_eq!(code, 0);
     assert!(sinks.err_lines().is_empty());
     // the whole output, string for string: the human-size boundaries
@@ -279,8 +381,11 @@ fn list_boundary_tree_exact() {
 
 #[test]
 fn list_real_tree_matches_the_rust_oracle() {
-    let (mut vm, sinks) = boot(fixmap(&[(LIST_URL, 200, TREE_JSON.as_bytes())]));
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        LIST_URL,
+        FixtureReply::ok(200, TREE_JSON.as_bytes()),
+    )]));
+    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
     assert_eq!(code, 0);
     assert!(sinks.err_lines().is_empty());
     let got = sinks.out_lines();
@@ -297,62 +402,138 @@ fn list_real_tree_matches_the_rust_oracle() {
 }
 
 #[test]
-fn download_binary_verbatim_to_default_dest() {
-    let (mut vm, sinks) = boot(fixmap(&[(DL_BINARY_URL, 200, BINARY_BODY)]));
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/1x1.jpg"]);
+fn download_streams_binary_verbatim_in_deterministic_chunks() {
+    // the jpg as small chunks — the streamed lane must reassemble it
+    // VERBATIM through truncate + appends
+    let (a, b) = BINARY_BODY.split_at(BINARY_BODY.len() / 2);
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        DL_BINARY_URL,
+        FixtureReply::chunked(200, vec![a.to_vec(), b.to_vec()]),
+    )]));
+    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/1x1.jpg"]);
     assert_eq!(code, 0);
     assert!(sinks.err_lines().is_empty());
-    // the default dest is the basename after the final '/'
+    // the default dest is the basename after the final '/'; the write
+    // pair is one truncate + the appends, and the reassembly is exact
+    assert_eq!(sinks.file_bytes("1x1.jpg"), BINARY_BODY, "the bytes land VERBATIM — binary-safe");
     let files = sinks.files.borrow();
-    assert_eq!(files.len(), 1);
-    assert_eq!(files[0].0, "1x1.jpg");
-    assert_eq!(files[0].1, BINARY_BODY, "the bytes land VERBATIM — binary-safe");
+    let kinds: Vec<char> = files.iter().map(|(k, _, _)| *k).collect();
+    assert_eq!(kinds.first().copied(), Some('W'), "truncate first");
+    assert!(kinds[1..].iter().all(|k| *k == 'A'), "then appends only");
     assert_eq!(sinks.out_lines(), ["downloaded test/data/1x1.jpg (693 bytes) -> 1x1.jpg"]);
 }
 
 #[test]
-fn download_text_to_explicit_dest() {
-    let (mut vm, sinks) = boot(fixmap(&[(DL_TEXT_URL, 200, TEXT_BODY)]));
+fn download_streams_text_to_explicit_dest_in_small_chunks() {
+    // the 287-byte text as five deterministic small chunks
+    let mut chunks: Vec<Vec<u8>> = Vec::new();
+    let step = TEXT_BODY.len() / 5 + 1;
+    let mut at = 0;
+    while at < TEXT_BODY.len() {
+        let end = (at + step).min(TEXT_BODY.len());
+        chunks.push(TEXT_BODY[at..end].to_vec());
+        at = end;
+    }
+    let nchunks = chunks.len();
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        DL_TEXT_URL,
+        FixtureReply::chunked(200, chunks),
+    )]));
     let code = run(
         &mut vm,
+        &fx,
+        &sinks,
         &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/text.txt", "/tmp/rgh-text.txt"],
     );
     assert_eq!(code, 0);
     assert!(sinks.err_lines().is_empty());
+    assert_eq!(sinks.file_bytes("/tmp/rgh-text.txt"), TEXT_BODY);
     let files = sinks.files.borrow();
-    assert_eq!(files.len(), 1);
-    assert_eq!(files[0].0, "/tmp/rgh-text.txt", "an explicit dest crosses as spelled");
-    assert_eq!(files[0].1, TEXT_BODY);
-    assert_eq!(sinks.out_lines(), ["downloaded test/data/text.txt (287 bytes) -> /tmp/rgh-text.txt"]);
+    let appends = files.iter().filter(|(k, d, _)| *k == 'A' && d == "/tmp/rgh-text.txt").count();
+    assert_eq!(appends, nchunks, "one append row per streamed chunk");
+    assert_eq!(
+        sinks.out_lines(),
+        [format!("downloaded test/data/text.txt (287 bytes) -> /tmp/rgh-text.txt")]
+    );
 }
 
 #[test]
 fn download_write_failure_is_a_message_not_a_trap() {
-    let (mut vm, sinks) = boot(fixmap(&[(DL_TEXT_URL, 200, TEXT_BODY)]));
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        DL_TEXT_URL,
+        FixtureReply::ok(200, TEXT_BODY),
+    )]));
     *sinks.fail_write.borrow_mut() =
         Some(("/tmp/rgh-text.txt".to_string(), "Permission denied (os error 13)".to_string()));
     let code = run(
         &mut vm,
+        &fx,
+        &sinks,
         &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/text.txt", "/tmp/rgh-text.txt"],
     );
     assert_eq!(code, 1, "a failed write is exit 1");
     assert_eq!(sinks.err_lines(), ["rgh: /tmp/rgh-text.txt: Permission denied (os error 13)"]);
     assert!(sinks.out_lines().is_empty(), "no confirmation line on failure");
-    assert!(sinks.files.borrow().is_empty(), "nothing recorded as written");
+}
+
+#[test]
+fn download_append_failure_mid_stream_is_a_message_not_a_trap() {
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        DL_TEXT_URL,
+        FixtureReply::chunked(200, vec![b"abc".to_vec(), b"def".to_vec()]),
+    )]));
+    *sinks.fail_write.borrow_mut() =
+        Some(("/tmp/rgh-text.txt".to_string(), "No space left on device (os error 28)".to_string()));
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/text.txt", "/tmp/rgh-text.txt"],
+    );
+    assert_eq!(code, 1);
+    assert_eq!(sinks.err_lines(), ["rgh: /tmp/rgh-text.txt: No space left on device (os error 28)"]);
+    assert!(sinks.out_lines().is_empty(), "no confirmation line on failure");
+}
+
+#[test]
+fn a_mid_read_death_is_data_exit_one_with_the_sticky_text() {
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        DL_TEXT_URL,
+        FixtureReply::failing(200, vec![b"ab".to_vec(), b"cd".to_vec(), b"ef".to_vec()], 2, "connection reset by peer"),
+    )]));
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/text.txt", "/tmp/rgh-text.txt"],
+    );
+    assert_eq!(code, 1, "a mid-read wire death is exit 1");
+    assert_eq!(sinks.err_lines(), ["rgh: /tmp/rgh-text.txt: connection reset by peer"]);
+    assert!(sinks.out_lines().is_empty(), "no confirmation line on failure");
+    // the arrived prefix DID land (the degrade law: the short drain is
+    // the stream's past reads) — the dest holds the two chunks that
+    // made it, never a trap
+    assert_eq!(sinks.file_bytes("/tmp/rgh-text.txt"), b"abcd".to_vec());
 }
 
 #[test]
 fn not_found_maps_for_both_subcommands() {
     // list: the repo-or-ref message names the data host
-    let (mut vm, sinks) = boot(fixmap(&[(LIST_URL_404, 404, NOTFOUND_BODY)]));
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=no-such-ref-xyz", "list"]);
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        LIST_URL_404,
+        FixtureReply::ok(404, NOTFOUND_BODY),
+    )]));
+    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=no-such-ref-xyz", "list"]);
     assert_eq!(code, 1);
     assert_eq!(sinks.err_lines(), ["rgh: no such repo or ref (checked the CDN: data.jsdelivr.com)"]);
     assert!(sinks.out_lines().is_empty());
 
     // download: the 404 also covers "no such file", naming the cdn host
-    let (mut vm, sinks) = boot(fixmap(&[(DL_404_URL, 404, NOTFOUND_BODY)]));
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=3.7.1", "download", "no/such/file.txt"]);
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        DL_404_URL,
+        FixtureReply::ok(404, NOTFOUND_BODY),
+    )]));
+    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "download", "no/such/file.txt"]);
     assert_eq!(code, 1);
     assert_eq!(sinks.err_lines(), ["rgh: no such file (or repo/ref) (checked the CDN: cdn.jsdelivr.net)"]);
     assert!(sinks.out_lines().is_empty());
@@ -360,14 +541,14 @@ fn not_found_maps_for_both_subcommands() {
 
 #[test]
 fn transport_failure_maps_to_the_network_message() {
-    let (mut vm, sinks) = boot(move |url| {
+    let (mut vm, sinks, fx) = boot(move |_m, url, _h, _b| {
         if url == LIST_URL {
             Err("dns: lookup data.jsdelivr.com: no such host".to_string())
         } else {
             Err(format!("rgh-test: unexpected url: {url}"))
         }
     });
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
     assert_eq!(code, 1);
     // status 0 is the RESERVED transport verdict; its text surfaces
     assert_eq!(sinks.err_lines(), ["rgh: network error: dns: lookup data.jsdelivr.com: no such host"]);
@@ -377,24 +558,175 @@ fn transport_failure_maps_to_the_network_message() {
 #[test]
 fn rate_limit_and_other_statuses_map() {
     // 403 — the CDN's rate-limit shape
-    let (mut vm, sinks) = boot(fixmap(&[(LIST_URL, 403, b"")]));
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let (mut vm, sinks, fx) = boot(fixmap(&[(LIST_URL, FixtureReply::ok(403, b""))]));
+    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
     assert_eq!(code, 1);
     assert_eq!(sinks.err_lines()[0], "rgh: rate limited by the CDN (HTTP 403) — wait and retry");
 
     // any other non-2xx is the bare status
-    let (mut vm, sinks) = boot(fixmap(&[(LIST_URL, 500, b"boom")]));
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let (mut vm, sinks, fx) = boot(fixmap(&[(LIST_URL, FixtureReply::ok(500, b"boom"))]));
+    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
     assert_eq!(code, 1);
     assert_eq!(sinks.err_lines(), ["rgh: CDN 500"]);
 }
+
+// ------------------------------------------- the one-shot law probe ----
+
+/// the degraded second-taker case: the brain never double-takes, so a
+/// tiny probe rides the same mounts and exercises BOTH orders — body
+/// then stream (the mint degrades to a dead reader), stream then body
+/// (the drain degrades to empty) — through the SAME fixture lane.
+const ONESHOT_SRC: &str = r#"
+use http::HttpClient;
+use async_host::launch_future;
+use rgh_host::{ out };
+
+async fn body_first(cx: RunContext, url: str) -> nil {
+    let client = HttpClient.new();
+    let resp = await client.get(url).build().send(cx);
+    let b = await resp.body(cx);
+    out(f"body={b.len()}");
+    let s = resp.byte_stream();
+    let c = await s.next(cx);
+    if (c == nil) {
+        out("late-next=eof");
+    } else {
+        out("late-next=data");
+    }
+}
+
+async fn stream_first(cx: RunContext, url: str) -> nil {
+    let client = HttpClient.new();
+    let resp = await client.get(url).build().send(cx);
+    let s = resp.byte_stream();
+    let c = await s.next(cx);
+    if (c == nil) {
+        out("first-next=eof");
+    } else {
+        let v: bytes = c;
+        out(f"first-next={v.len()}");
+    }
+    let b = await resp.body(cx);
+    out(f"late-body={b.len()}");
+}
+
+entry fn boot_oneshot(url: str) -> nil {
+    launch_future(body_first(url));
+    launch_future(stream_first(url));
+}
+"#;
+
+#[test]
+fn the_one_shot_law_degrades_second_takers() {
+    let mut s = rut_driver::Session::new();
+    rut_driver::mount_std(&mut s);
+    rut_driver::mount_std_async(&mut s);
+    let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
+    for d in ["pouch", "nmapset", "json", "http_host", "http"] {
+        rut_driver::mount_dir(&mut s, &tree.join(d)).expect("mount tree pkg");
+    }
+    rut_driver::mount_dir(&mut s, &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
+        .expect("mount rgh_host");
+    rut_driver::assemble_peers(&mut s).expect("assemble peer groups");
+    let out = rut_driver::compile_module_in(&mut s, ONESHOT_SRC, rut_parser::Mode::Impl, "rgh");
+    assert!(
+        out.diags.is_empty(),
+        "{}",
+        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    );
+    let prog = rut_core::binary::decode(out.binary.as_deref().unwrap()).unwrap();
+    rut_vm::verify::verify(&prog).unwrap();
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(4_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let sinks = Sinks::default();
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::math::install_std_math(&mut hosts);
+    rut_std::nmap::install_std_nmap(&mut hosts);
+    rut_std::async_host::install_std_async(&mut hosts);
+    let fx = rut_std::http::install_std_http_with(&mut hosts, |_m, _u, _h, _b| {
+        Ok(FixtureReply::chunked(200, vec![b"ab".to_vec(), b"cd".to_vec()]))
+    });
+    let out_sink = sinks.out.clone();
+    rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
+        move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
+            out_sink.borrow_mut().push(line.to_string());
+            Ok(())
+        });
+    let err_sink = sinks.err.clone();
+    rut_vm::register!(hosts, "rgh_host::eprint", (&str,) -> (),
+        move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
+            err_sink.borrow_mut().push(line.to_string());
+            Ok(())
+        });
+    // the probe never touches the files or the exit row, but the decl
+    // contract is TOTAL — every mounted row binds something (RFC 0025)
+    let files_sink = sinks.files.clone();
+    rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
+        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+            files_sink.borrow_mut().push(('W', dest.to_string(), data));
+            Ok(None)
+        });
+    let files_sink = sinks.files.clone();
+    rut_vm::register!(hosts, "rgh_host::append_file", (&str, Vec<u8>) -> Option<String>,
+        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+            files_sink.borrow_mut().push(('A', dest.to_string(), data));
+            Ok(None)
+        });
+    let code_sink = sinks.code.clone();
+    rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
+        move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
+            *code_sink.borrow_mut() = Some(code);
+            Ok(())
+        });
+    hosts.verify_against(&s.expected_host_fns());
+    let mut vm =
+        rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
+    vm.call::<_, ()>("boot_oneshot", ("fixture://oneshot",)).unwrap();
+    for _ in 0..500 {
+        vm.run_ready().unwrap();
+        if vm.pending_tasks() == 0 && !fx.has_pending() {
+            break;
+        }
+        if fx.settle(vm.now_ms()) {
+            continue;
+        }
+        let next = [fx.next_due(), vm.next_deadline()].into_iter().flatten().filter(|&d| d > vm.now_ms()).min();
+        match next {
+            Some(d) => vm.set_now(d),
+            None => vm.set_now(vm.now_ms() + 1),
+        }
+    }
+    // the two futures interleave — the LAWS are per-response, compare
+    // as a set
+    let mut got = sinks.out_lines();
+    got.sort();
+    assert_eq!(
+        got,
+        vec![
+            "body=4",           // the drain took the whole body
+            "first-next=2",     // the stream lane took chunk one
+            "late-body=0",      // the late DRAIN degrades to empty
+            "late-next=eof",    // the late MINT is a dead reader
+        ],
+        "body xor stream: whichever lane took first wins, the second degrades — never a trap"
+    );
+    assert!(sinks.err_lines().is_empty());
+}
+
+// ------------------------------------------------- the embedder budget -
 
 #[test]
 fn the_real_tree_stays_inside_the_embedder_budget() {
     // the real 351-entry tree over the full boot: the fuel spend the
     // native embedder's budget (250M) must cover with room to spare
-    let (mut vm, sinks) = boot(fixmap(&[(LIST_URL, 200, TREE_JSON.as_bytes())]));
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let (mut vm, sinks, fx) = boot(fixmap(&[(
+        LIST_URL,
+        FixtureReply::ok(200, TREE_JSON.as_bytes()),
+    )]));
+    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
     assert_eq!(code, 0);
     assert_eq!(sinks.out_lines().len(), 296);
     assert!(vm.fuel_used < 250_000_000, "fuel {}", vm.fuel_used);
@@ -410,10 +742,12 @@ fn live_smoke_over_the_real_cdn() {
         eprintln!("live_smoke_over_the_real_cdn: skipped (set RGH_LIVE=1 to run against data.jsdelivr.com)");
         return;
     }
-    // the embedder's own boot, but the observations ride the sinks:
-    // reqwest lane (install_std_http), the real DNS, the real CDN
+    // the embedder's own boot, but the observations ride the sinks and
+    // `exit` records: reqwest lane (install_std_http), the real DNS,
+    // the real CDN, the wall-clock pump
     let mut s = rut_driver::Session::new();
     rut_driver::mount_std(&mut s);
+    rut_driver::mount_std_async(&mut s);
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
     for d in ["pouch", "nmapset", "json", "http_host", "http"] {
         rut_driver::mount_dir(&mut s, &tree.join(d)).expect("mount tree pkg");
@@ -434,6 +768,7 @@ fn live_smoke_over_the_real_cdn() {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_std::math::install_std_math(&mut hosts);
     rut_std::nmap::install_std_nmap(&mut hosts);
+    rut_std::async_host::install_std_async(&mut hosts);
     rut_std::http::install_std_http(&mut hosts); // the reqwest lane
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
@@ -447,12 +782,41 @@ fn live_smoke_over_the_real_cdn() {
             err_sink.borrow_mut().push(line.to_string());
             Ok(())
         });
+    // the list smoke never touches the files, but the decl contract is
+    // total (RFC 0025)
+    let files_sink = sinks.files.clone();
     rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
-        |_vm: &mut Vm, _dest: &str, _data: Vec<u8>| -> Result<Option<String>, Trap> { Ok(None) });
+        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+            files_sink.borrow_mut().push(('W', dest.to_string(), data));
+            Ok(None)
+        });
+    let files_sink = sinks.files.clone();
+    rut_vm::register!(hosts, "rgh_host::append_file", (&str, Vec<u8>) -> Option<String>,
+        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+            files_sink.borrow_mut().push(('A', dest.to_string(), data));
+            Ok(None)
+        });
+    let code_sink = sinks.code.clone();
+    rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
+        move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
+            *code_sink.borrow_mut() = Some(code);
+            Ok(())
+        });
     hosts.verify_against(&s.expected_host_fns());
     let mut vm =
         rut_vm::interp::Vm::new(Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).unwrap();
-    let code = run(&mut vm, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
-    assert_eq!(code, 0, "stderr: {:?}", sinks.err_lines());
+    vm.call::<_, ()>("boot", ("--repo=jquery/jquery\n--ref=3.7.1\nlist".to_string(),)).unwrap();
+    // the wall-clock pump: real workers settle the completers
+    let mut ok = false;
+    for _ in 0..20_000 {
+        vm.run_ready().unwrap();
+        if sinks.code.borrow().is_some() {
+            ok = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert!(ok, "the brain exited: {:?}", sinks.err_lines());
+    assert_eq!(sinks.code(), 0, "stderr: {:?}", sinks.err_lines());
     assert!(!sinks.out_lines().is_empty(), "the real tree lists files");
 }

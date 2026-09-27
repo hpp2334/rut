@@ -60,6 +60,10 @@ pub(crate) fn ensure_layout(ctx: &mut Ctx, fid: u32, fname: IdentId, ret_ty: Typ
         FieldInfo { name: ctx.intern("cancelled"), ty: TY_BOOL },
         FieldInfo { name: ctx.intern("awaiter"), ty: TY_OPAQUE },
         FieldInfo { name: ctx.intern("pending"), ty: TY_OPAQUE },
+        // the ANSWER lane (rut-core/async_frame::ANSWER_FIELD): a
+        // completing frame stores its value here before retiring the
+        // state field; the awaiting frame's resume arm reads it
+        FieldInfo { name: ctx.intern("answer"), ty: ret_ty },
     ];
     for (n, t) in &param_fields {
         fields.push(FieldInfo { name: *n, ty: *t });
@@ -176,7 +180,11 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
         pools: Pools::new(),
         spans: Vec::new(),
         locals: Vec::new(),
-        ret_ty: TY_NIL,
+        // the USER's return type — `return expr` in the body type-checks
+        // against it and its value lands in the frame's answer field
+        // (the FuncCode's own ret stays TY_NIL: the weaved fn is the
+        // Future::yield thunk, its answer rides the frame, not the ABI)
+        ret_ty,
         self_ty: None,
         subst: vec![],
         current_class: None,
@@ -356,10 +364,35 @@ fn emit_restore(c: &mut FnCompiler, sp_lo: u32) {
     }
 }
 
-/// Completion: the DONE sentinel (null) into the state field, then a
-/// plain Ret — a well-formed exit the driving loop reads off the state.
+/// Completion: the ANSWER lane first (nil — a valueless completion; a
+/// `return expr` stores the real value on its own path and retires the
+/// same way), then the DONE sentinel (null) into the state field, then
+/// a plain Ret — a well-formed exit the driving loop reads off the
+/// state. The order is the awaiter contract: the answer must be in
+/// place BEFORE the state retires, or the woken awaiter reads a null.
 fn emit_completion(c: &mut FnCompiler, sp_lo: u32) {
     let frame_reg = c.async_frame.as_ref().map(|f| f.frame_reg).unwrap_or(0);
+    let frame_ty = c.async_frame.as_ref().map(|f| f.frame_ty);
+    let ans_ty = frame_ty.and_then(|ty| match c.ctx.types.kind(ty) {
+        TyKind::Data { fields } => fields.get(af::ANSWER_FIELD as usize).map(|f| f.ty),
+        _ => None,
+    });
+    if let Some(ans_ty) = ans_ty {
+        if c.ctx.types.is_ref(ans_ty) {
+            // ref answers are nulled explicitly; prim answers are born
+            // zeroed by the NewCell (the zero word IS nil/0)
+            let null = c.emit_null(sp_lo);
+            c.emit(
+                Op::SetF {
+                    obj: frame_reg,
+                    field: af::ANSWER_FIELD,
+                    val: null,
+                    repr: c.ctx.types.repr_of(ans_ty),
+                },
+                sp_lo,
+            );
+        }
+    }
     let null = c.emit_null(sp_lo);
     c.emit(
         Op::SetF {
@@ -514,7 +547,6 @@ pub(crate) fn compile_await(
     let Some(frame) = c.async_frame.as_ref().map(|f| AsyncFrameView {
         frame_reg: f.frame_reg,
         cx_reg: f.cx_reg,
-        frame_ty: f.frame_ty,
     }) else {
         c.ctx.err(sp, "`await` outside an async fn — async/await is the Future-only vocabulary (RFC 0018); drive futures from an async body or through a launcher");
         return Err(());
@@ -587,6 +619,44 @@ pub(crate) fn compile_await(
         f.arm_labels.push(l_sresume);
     }
     let sp_lo = sp.lo;
+    // THE ANSWER: the awaited frame's element — the hidden frame's
+    // answer field (fields[ANSWER_FIELD]) or the `Future<T>`
+    // instantiation's T (the await expression's value, the rut-http
+    // face's whole point: `let r = await http_send(..)`).
+    let ans_ty = match c.ctx.types.kind(t) {
+        TyKind::Data { fields } => fields
+            .get(af::ANSWER_FIELD as usize)
+            .map(|f| f.ty)
+            .unwrap_or(TY_NIL),
+        TyKind::TraitObj { trait_id } => c
+            .ctx
+            .trait_inst
+            .iter()
+            .find(|(_, &id)| id == *trait_id)
+            .and_then(|((n, targs), _)| {
+                if *n == sym::FUTURE && !targs.is_empty() {
+                    Some(targs[0])
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(TY_NIL),
+        _ => TY_NIL,
+    };
+    let ans = c.new_reg(ans_ty);
+    // spill the future into MY pending edge FIRST — the probe may fall
+    // straight through (already-done future) or park, and the resume
+    // arm recovers the edge (and reads the answer) through this field
+    // either way
+    c.emit(
+        Op::SetF {
+            obj: frame.frame_reg,
+            field: af::PENDING_FIELD,
+            val: fut,
+            repr: Repr::Ref,
+        },
+        sp_lo,
+    );
     // probe: null state = already done → straight to the resume arm;
     // anything else (fresh or parked) → drive it one step
     let st = c.new_reg(TY_OPAQUE);
@@ -611,18 +681,15 @@ pub(crate) fn compile_await(
     );
     let l_park = c.new_label();
     c.br(st2, l_park, l_sresume);
-    // park: register the awaiter edges, record MY resume state, ret —
-    // the frame suspends; the driving loop re-enqueues it when the
-    // awaited frame completes (or the timer fires)
+    // park: register the awaiter edge (pending is already spilled),
+    // record MY resume state, ret — the frame suspends; the driving
+    // loop re-enqueues it when the awaited frame completes (or the
+    // timer fires)
     c.bind(l_park);
     {
         let frame_reg = frame.frame_reg;
         c.emit(
             Op::SetF { obj: fut, field: af::AWAITER_FIELD, val: frame_reg, repr: Repr::Ref },
-            sp_lo,
-        );
-        c.emit(
-            Op::SetF { obj: frame_reg, field: af::PENDING_FIELD, val: fut, repr: Repr::Ref },
             sp_lo,
         );
         let e = c.new_reg(ckpt_ty);
@@ -640,35 +707,46 @@ pub(crate) fn compile_await(
     }
     // the resume arm — the brtable lands here after the park, and the
     // ready paths fall in: the cancelled probe first, then the pending
-    // edges clear, then the locals restore, then the continuation
+    // edges clear, then the locals restore, then the ANSWER read, then
+    // the continuation
     c.bind(l_sresume);
     let l_drop = c.new_label();
     let l_live = c.new_label();
     emit_cancelled_probe(c, sp_lo, l_drop, l_live);
     c.bind(l_live);
+    let frame_reg = frame.frame_reg;
+    // the spilled edge IS the awaited future (set before the probe);
+    // clear both halves of the pair through it, and keep the register —
+    // the answer read below goes through the same edge
+    let fut2 = c.new_reg(t);
+    c.emit(
+        Op::GetF { dst: fut2, obj: frame_reg, field: af::PENDING_FIELD, repr: Repr::Ref },
+        sp_lo,
+    );
     {
-        let frame_reg = frame.frame_reg;
-        let pend = c.new_reg(frame.frame_ty);
-        c.emit(
-            Op::GetF { dst: pend, obj: frame_reg, field: af::PENDING_FIELD, repr: Repr::Ref },
-            sp_lo,
-        );
-        let l_clr = c.new_label();
-        let l_rest = c.new_label();
-        c.br(pend, l_clr, l_rest);
-        c.bind(l_clr);
         let null = c.emit_null(sp_lo);
         c.emit(
-            Op::SetF { obj: pend, field: af::AWAITER_FIELD, val: null, repr: Repr::Ref },
+            Op::SetF { obj: fut2, field: af::AWAITER_FIELD, val: null, repr: Repr::Ref },
             sp_lo,
         );
         c.emit(
             Op::SetF { obj: frame_reg, field: af::PENDING_FIELD, val: null, repr: Repr::Ref },
             sp_lo,
         );
-        c.bind(l_rest);
     }
     emit_restore(c, sp_lo);
+    // THE ANSWER READ: the completed frame stored its value in its
+    // answer lane before retiring the state field — the resume arm
+    // lifts it as the await expression's value
+    c.emit(
+        Op::GetF {
+            dst: ans,
+            obj: fut2,
+            field: af::ANSWER_FIELD,
+            repr: c.ctx.types.repr_of(ans_ty),
+        },
+        sp_lo,
+    );
     // the continuation label: the arm jumps to the code right after the
     // await (which may sit inside a loop — the state machine re-enters
     // the loop body at its continuation)
@@ -677,13 +755,16 @@ pub(crate) fn compile_await(
     c.bind(l_drop);
     emit_drop_path(c, sp_lo);
     c.bind(l_cont);
-    Ok(TY_NIL)
+    // the await's value — set AFTER the drop path's spill (new_reg
+    // drives last_reg, and the drop path's null constants must not
+    // win); the consumer (a let, an arg, a return) reads it from here
+    c.last_reg = ans;
+    Ok(ans_ty)
 }
 
 struct AsyncFrameView {
     frame_reg: u16,
     cx_reg: u16,
-    frame_ty: TypeId,
 }
 
 /// The async call site (`compile_free_fn_call`'s is_async arm): mint
@@ -823,6 +904,7 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
     let f_cancelled = ctx.intern("cancelled");
     let f_awaiter = ctx.intern("awaiter");
     let f_pending = ctx.intern("pending");
+    let f_answer = ctx.intern("answer");
     let f_ms = ctx.intern("ms");
     let frame_ty = ctx.types.intern(RutType {
         name: frame_name,
@@ -832,6 +914,9 @@ pub(crate) fn ensure_sleep_future(ctx: &mut Ctx) -> TcResult<()> {
                 FieldInfo { name: f_cancelled, ty: TY_BOOL },
                 FieldInfo { name: f_awaiter, ty: TY_OPAQUE },
                 FieldInfo { name: f_pending, ty: TY_OPAQUE },
+                // the ANSWER lane — every engine frame carries one (nil
+                // here; the await's resume arm reads it uniformly)
+                FieldInfo { name: f_answer, ty: TY_NIL },
                 FieldInfo { name: f_ms, ty: TY_U32 },
             ],
         },
@@ -1124,13 +1209,15 @@ pub(crate) fn ensure_host_async(
         Op::Box { dst: 3, val: 1, ty: cx_ty },
         Op::Call { func: yield_fid, argv_off: 0, argc: 2, dst: 4 },
         Op::Br { cond: 4, then_t: 12, else_t: 16 },
-        // settle (ready 1 / failed 2): retire, then marshal the answer
-        // — a failed completer traps HERE (the fail message rides the
-        // trap), a ready one lands in the answer field
-        Op::ConstRaw { dst: 5, bits: 0 },
-        Op::SetF { obj: 0, field: af::STATE_FIELD, val: 5, repr: Repr::Ref },
+        // settle (ready 1 / failed 2): marshal the answer FIRST — the
+        // state field's retirement below is the wake the awaiter's
+        // probe reads, and the answer must be in place before it (a
+        // failed completer traps HERE, through `__take`; the state
+        // stays armed behind the propagated trap)
         Op::Call { func: take_fid, argv_off: 2, argc: 1, dst: 6 },
         Op::SetF { obj: 0, field: af::HOST_ANSWER_FIELD, val: 6, repr: ctx.types.repr_of(ret_ty) },
+        Op::ConstRaw { dst: 5, bits: 0 },
+        Op::SetF { obj: 0, field: af::STATE_FIELD, val: 5, repr: Repr::Ref },
         Op::Ret { val: None },
     ];
     ctx.funcs[wfid as usize] = rut_core::binary::FuncCode {

@@ -26,11 +26,21 @@ pub const CANCELLED_FIELD: u32 = 1;
 pub const AWAITER_FIELD: u32 = 2;
 /// Field 3 — this frame's own park edge: the future THIS frame is
 /// parked on, kept so the resume arm can clear the awaited frame's
-/// awaiter edge (the one-directional pair never forms a cycle).
+/// awaiter edge (the one-directional pair never forms a cycle). The
+/// await expansion spills the future here BEFORE the probe (the park
+/// probe may fall straight through on an already-done future), so the
+/// resume arm can always recover the edge — and read the answer below.
 pub const PENDING_FIELD: u32 = 3;
+/// Field 4 — the ANSWER lane: a completing frame stores its value here
+/// BEFORE retiring the state field (the awaiting frame's resume arm
+/// reads it after the completion wake). A cancelled/dropped frame
+/// never stores one — its awaiter takes the drop path, never the
+/// answer read. `return` in an async body and every completion path
+/// (including the host wrapper's `__take` marshal) write this field.
+pub const ANSWER_FIELD: u32 = 4;
 /// First body-local field. Parameters first (call-site written), then
 /// bindings in declaration order — every local is cell-backed uniformly.
-pub const LOCALS_BASE: u32 = 4;
+pub const LOCALS_BASE: u32 = 5;
 
 /// The cx record's name — the surface spelling `RunContext` resolves to
 /// it in type position, and the driving loop finds it by this name to
@@ -58,6 +68,7 @@ pub const SLEEP_CKPT: &str = "#ckpt@sleep";
 pub const HOST_FRAME_PREFIX: &str = "#hframe@";
 /// Field 4 — the host future's ANSWER lane (`<name>__take`'s marshaled
 /// answer lands here when the frame retires; for a host frame this
-/// index is NOT a body local — host frames carry no locals). For the
-/// woven fn frames this index is the first body local, as everywhere.
-pub const HOST_ANSWER_FIELD: u32 = LOCALS_BASE;
+/// index is NOT a body local — host frames carry no locals). The same
+/// slot every engine frame answers through ([`ANSWER_FIELD`]); the
+/// separate name is the host lane's reading of it.
+pub const HOST_ANSWER_FIELD: u32 = ANSWER_FIELD;
