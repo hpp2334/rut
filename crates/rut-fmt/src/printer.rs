@@ -766,13 +766,16 @@ impl<'a> P<'a> {
                 self.sp();
                 self.block(f.body);
             }
-            ItemKind::SurfaceFn { vis, linkage, name, generics, params, ret } => {
+            ItemKind::SurfaceFn { vis, linkage, is_async, name, generics, params, ret } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text(linkage_str(linkage));
                 self.sp();
+                if is_async {
+                    self.text("async ");
+                }
                 self.text("fn ");
                 self.text(self.a.name(name));
                 self.gen_only(&generics);

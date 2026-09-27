@@ -48,3 +48,16 @@ pub const CKPT_PREFIX: &str = "#ckpt@";
 /// engine-minted body finds them by exactly these names).
 pub const SLEEP_FRAME: &str = "#frame@sleep";
 pub const SLEEP_CKPT: &str = "#ckpt@sleep";
+
+/// The HOST async fn's reserved frame-type prefix (`#hframe@<fn>`):
+/// the weave mints one per `pub host async fn` call target. Distinct
+/// from [`FRAME_PREFIX`] so the driving loop can tell the two frames
+/// apart by name alone — a host frame's state field holds the host
+/// cell (`<name>__start`'s opaque answer, an embedder `Completer`
+/// box), not a checkpoint singleton, and it joins the poll set.
+pub const HOST_FRAME_PREFIX: &str = "#hframe@";
+/// Field 4 — the host future's ANSWER lane (`<name>__take`'s marshaled
+/// answer lands here when the frame retires; for a host frame this
+/// index is NOT a body local — host frames carry no locals). For the
+/// woven fn frames this index is the first body local, as everywhere.
+pub const HOST_ANSWER_FIELD: u32 = LOCALS_BASE;

@@ -167,7 +167,15 @@ pub fn compile_program_resolved(
         let dep_scope = *dep_scope;
         for f in &surface.funcs {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(f.name)) {
-                ctx.add_extern_fn(id, rut_core::pack(dep_scope, f.local), f.params.clone(), f.ret);
+                ctx.add_extern_fn(
+                    id,
+                    rut_core::pack(dep_scope, f.local),
+                    f.params.clone(),
+                    f.ret,
+                    f.is_async,
+                    f.host
+                        .map(|h| surface.names.name(h).to_string()),
+                );
             }
         }
         // the integer prims' numeric methods (core's `builtin impl`
@@ -369,6 +377,8 @@ pub fn compile_program_resolved(
                     params: f.params.clone(),
                     ret: f.ret,
                     local: fid,
+                    is_async: false,
+                    host: None,
                 });
             }
         }
@@ -571,17 +581,17 @@ pub fn mount_std_async(session: &mut Session) {
 /// constants. The integer intrinsics live in `core` now — `builtin
 /// impl` methods on the primitives (RFC 0032 §1.1 R2).
 pub fn mount_calc(session: &mut Session) {
-    let u = |name: &str| (name.to_string(), vec![TY_F64], TY_F64);
-    let b = |name: &str| (name.to_string(), vec![TY_F64, TY_F64], TY_F64);
-    let uf = |name: &str| (name.to_string(), vec![TY_F32], TY_F32);
-    let bf = |name: &str| (name.to_string(), vec![TY_F32, TY_F32], TY_F32);
+    let u = |name: &str| (name.to_string(), vec![TY_F64], TY_F64, false);
+    let b = |name: &str| (name.to_string(), vec![TY_F64, TY_F64], TY_F64, false);
+    let uf = |name: &str| (name.to_string(), vec![TY_F32], TY_F32, false);
+    let bf = |name: &str| (name.to_string(), vec![TY_F32, TY_F32], TY_F32, false);
     let host_funcs = vec![
         u("sqrt"), u("floor"), u("ceil"), u("round"), u("trunc"),
         u("exp"), u("ln"), u("log2"), u("log10"),
         u("sin"), u("cos"), u("tan"), u("asin"), u("acos"), u("atan"),
         u("sinh"), u("cosh"), u("tanh"),
         b("pow"), b("atan2"), b("hypot"), b("copysign"),
-        ("fma".to_string(), vec![TY_F64, TY_F64, TY_F64], TY_F64),
+        ("fma".to_string(), vec![TY_F64, TY_F64, TY_F64], TY_F64, false),
         // the former float intrinsics — ordinary host fns now (the
         // integer intrinsics moved to core's `builtin impl` methods)
         u("abs"), b("min"), b("max"), u("signum"),
@@ -591,7 +601,7 @@ pub fn mount_calc(session: &mut Session) {
         uf("sin_f"), uf("cos_f"), uf("tan_f"), uf("asin_f"), uf("acos_f"), uf("atan_f"),
         uf("sinh_f"), uf("cosh_f"), uf("tanh_f"),
         bf("pow_f"), bf("atan2_f"), bf("hypot_f"), bf("copysign_f"),
-        ("fma_f".to_string(), vec![TY_F32, TY_F32, TY_F32], TY_F32),
+        ("fma_f".to_string(), vec![TY_F32, TY_F32, TY_F32], TY_F32, false),
         uf("abs_f"), bf("min_f"), bf("max_f"), uf("signum_f"),
     ];
 

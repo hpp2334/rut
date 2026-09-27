@@ -23,8 +23,8 @@ fn rt_loads_from_disk_with_its_historical_scope() {
     assert_eq!(
         m.host_funcs,
         vec![
-            ("create_logger".to_string(), vec![TY_STR], TY_OPAQUE),
-            ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_NIL),
+            ("create_logger".to_string(), vec![TY_STR], TY_OPAQUE, false),
+            ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_NIL, false),
         ]
     );
 }
@@ -40,8 +40,8 @@ fn server_loads_from_disk() {
     assert_eq!(
         m.host_funcs,
         vec![
-            ("subscribe".to_string(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL),
-            ("emit".to_string(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL),
+            ("subscribe".to_string(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL, false),
+            ("emit".to_string(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL, false),
         ]
     );
 }

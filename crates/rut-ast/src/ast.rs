@@ -353,10 +353,14 @@ pub enum ItemKind {
     /// `host fn` / `builtin fn` — .d.rut only (RFC 0030 §3). `host`:
     /// embedding-Rust body, concrete signature over the crossing set
     /// (RFC 0023 §1); `builtin`: engine-lowered (generics allowed —
-    /// nothing crosses a boundary).
+    /// nothing crosses a boundary). `is_async`: the host future lane —
+    /// calling one mints a cold engine-woven Future frame whose rows
+    /// (`<name>__start`/`__yield`/`__take`/`__cancel`) the embedder
+    /// registers with `register_async!`.
     SurfaceFn {
         vis: Vis,
         linkage: Linkage,
+        is_async: bool,
         name: IdentId,
         generics: Vec<IdentId>,
         params: Vec<NodeHandle<AnyParam>>,

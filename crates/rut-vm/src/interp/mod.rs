@@ -17,6 +17,7 @@ use rut_core::types::{
 use std::rc::Rc;
 
 mod boundary;
+mod completer;
 mod host;
 mod native;
 mod ops;
@@ -26,6 +27,7 @@ mod step;
 mod threaded;
 mod util;
 
+pub use completer::{Completer, FAILED, PENDING, READY};
 pub use host::{ExpectedHostFns, HostRegistry};
 use host::HostSlot;
 pub use boundary::{CallArg, CallArgs, Ret};
@@ -163,6 +165,16 @@ pub struct Vm {
     /// every `Future<T>` instantiation's `yield` slot — `drive` tries
     /// them in order off the receiver's vtable row
     future_yield_slots: Vec<u32>,
+    /// the host future lane: the minted `#hframe@` frame types (the
+    /// boot scan finds them by their reserved prefix). A frame of one
+    /// of these types completes through the poll set, not a compiled
+    /// body.
+    host_frames: Vec<u32>,
+    /// host futures parked on their Completers — the driving loop's
+    /// poll set. Each entry owns one reference (as `ready` does); the
+    /// poll drives each once per spin, releases on completion, and
+    /// keeps pending entries for the next spin.
+    host_pending: Vec<Slot>,
     /// the engine-minted cx record type (found by name; None when the
     /// program never mentions async)
     cx_ty: Option<TypeId>,
@@ -336,6 +348,19 @@ impl Vm {
                 .find(|(_, t)| t.name == cid && matches!(t.kind, TyKind::Data { .. }))
                 .map(|(i, _)| i as TypeId);
         }
+        // the host future lane (phase 4): the minted `#hframe@` frame
+        // types — reserved prefix, so the name IS the marker (no
+        // program-side wire field; VERSION untouched)
+        let host_frames: Vec<u32> = prog
+            .types
+            .types
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| {
+                prog.interner.name(t.name).starts_with(rut_core::async_frame::HOST_FRAME_PREFIX)
+            })
+            .map(|(i, _)| i as u32)
+            .collect();
         Ok(Vm {
             prog,
             heap,
@@ -365,6 +390,8 @@ impl Vm {
             timers: std::collections::BTreeMap::new(),
             now_ms: 0,
             future_yield_slots,
+            host_frames,
+            host_pending: Vec::new(),
             cx_ty,
         })
     }
@@ -822,6 +849,59 @@ impl Vm {
         Ok(self.prog.funcs[f as usize].ret)
     }
 
+    /// Direct dispatch of a REGISTERED host row by its registration
+    /// name (`call_raw` is the export twin; the compiler-minted row
+    /// thunks — the host future lane's `__start`/`__yield`/`__take`/
+    /// `__cancel` — are bodyless and carry no export entry). The args
+    /// convert through the row's declared params (`value_in`), the
+    /// body runs on the VM thread, and the answer decodes positionally
+    /// (`slot_to_value`). A test/tooling read, like `first_ready`.
+    pub fn call_host_row(&mut self, row: &str, args: &[Value]) -> Result<Value, Trap> {
+        let func = self
+            .prog
+            .funcs
+            .iter()
+            .position(|f| {
+                if f.host_id.is_none() {
+                    return false;
+                }
+                // minted thunks carry the registration name as their
+                // FuncCode name; decl rows carry it as the host_id (the
+                // FuncCode name stays the bare decl name)
+                self.prog.interner.name(f.name) == row
+                    || f.host_id.is_some_and(|h| self.prog.interner.name(h) == row)
+            })
+            .ok_or_else(|| Trap::new(TrapKind::Invalid, format!("no host row `{row}`")))? as u32;
+        let (params, ret) = {
+            let f = &self.prog.funcs[func as usize];
+            (f.params.clone(), f.ret)
+        };
+        if args.len() != params.len() {
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                format!("`{row}` takes {} args, {} given", params.len(), args.len()),
+            ));
+        }
+        let mut snapshot: Vec<Slot> = Vec::with_capacity(args.len());
+        for (i, a) in args.iter().enumerate() {
+            snapshot.push(self.value_in(a, params[i]).map_err(|m| {
+                Trap::new(TrapKind::Invalid, format!("`{row}` argument {i}: {m}"))
+            })?);
+        }
+        let slot = self.host_slots[func as usize];
+        let out = (slot.code)(self, &snapshot, slot.ctx);
+        if let Some(t) = self.host_trap.take() {
+            return Err(t);
+        }
+        // the answer decodes positionally; the out slot's reference is
+        // ours (the crossing-ownership law) — released after the decode
+        let v = util::slot_to_value(out, ret, &self.prog, &self.heap);
+        if slot.ret_is_ref {
+            self.heap.release(out);
+        }
+        Ok(v)
+    }
+
     fn regs_ty(&self, r: Reg) -> TypeId {
         self.prog.funcs[self.cur_func as usize]
             .regs
@@ -1024,10 +1104,15 @@ impl Vm {
         }
     }
 
-    /// Frames not yet retired: the ready queue plus armed timers — the
-    /// host loop's idle test.
+    /// Frames not yet retired: the ready queue, the armed timers, and
+    /// the host futures parked on their Completers — the host loop's
+    /// idle test. A worker that never completes keeps this above zero
+    /// (the disclosed best-effort cancellation law: the thread runs to
+    /// its blocking completion).
     pub fn pending_tasks(&self) -> usize {
-        self.ready.len() + self.timers.values().map(|v| v.len()).sum::<usize>()
+        self.ready.len()
+            + self.timers.values().map(|v| v.len()).sum::<usize>()
+            + self.host_pending.len()
     }
 
     /// The ready queue's front slot, without driving it — a test/
@@ -1036,15 +1121,15 @@ impl Vm {
         *self.ready.front().unwrap()
     }
 
-    /// Drain the ready queue: drive each frame once (to its park or its
-    /// completion). Every entry's reference is released here.
+    /// Drain the ready queue, then poll the host futures, then drain
+    /// again — until a spin produces no completion (the poll wakes
+    /// awaiters into the ready queue; one pass settles a completed
+    /// host future end to end). Every entry's reference is released
+    /// exactly once, here or in the poll set's own walk.
     pub fn run_ready(&mut self) -> Result<usize, Trap> {
-        let mut n = 0;
-        while let Some(fut) = self.ready.pop_front() {
-            let r = self.drive(fut);
-            self.heap.release(fut);
-            r?;
-            n += 1;
+        let mut n = self.drain_ready()?;
+        while self.poll_hosts()? {
+            n += self.drain_ready()?;
         }
         Ok(n)
     }
@@ -1184,8 +1269,88 @@ impl Vm {
             }
             Ok(Drive::Done)
         } else {
+            // the park: host-future bookkeeping. A parked HOST future
+            // joins the poll set itself (a launch-driven host future is
+            // only ever seen here); a woven frame parked on one joins
+            // ITS pending edge (the await site parks in compiled code,
+            // so the poll set would otherwise never learn of it). The
+            // disclosed double-await misuse is absorbed by the dedup.
+            self.note_host_park(ty, fut);
+            if !self.host_frames.contains(&ty) {
+                let pend = fields
+                    .borrow()
+                    .get(rut_core::async_frame::PENDING_FIELD as usize)
+                    .unwrap_or(Slot::null());
+                if unsafe { !pend.r.is_null() } {
+                    let pty = cell_of(pend).ty;
+                    self.note_host_park(pty, pend);
+                }
+            }
             Ok(Drive::Parked)
         }
+    }
+
+    /// The poll-set insert: one reference, one entry (the dedup makes
+    /// a double park on the same future a no-op — the disclosed v1
+    /// misuse, not a leak — and keeps the poll spin's own re-walk from
+    /// duplicating the entry it is still holding).
+    fn note_host_park(&mut self, ty: u32, fut: Slot) {
+        if !self.host_frames.contains(&ty) {
+            return;
+        }
+        if self.host_pending.iter().any(|s| Slot::same_ref(*s, fut)) {
+            return;
+        }
+        self.heap.retain(fut);
+        self.host_pending.push(fut);
+    }
+
+    /// One poll spin over the host-pending set: drive each frame once
+    /// (its `Future::yield` vtable fill — the minted wrapper — runs the
+    /// cancel probe / the `__yield` resumption probe). Completed frames
+    /// leave the set (the entry's reference released); pending frames
+    /// stay for the next spin. The walk keeps each entry IN the set
+    /// while it drives, so the drive's own re-park note dedups against
+    /// it, and an index walk (never `mem::take`) means a propagated
+    /// trap — the fail path through `__take` — leaves every reference
+    /// exactly where it belongs. Answers whether any frame COMPLETED,
+    /// so `run_ready` can drain the woken awaiters in the same pass.
+    fn poll_hosts(&mut self) -> Result<bool, Trap> {
+        let mut completed = false;
+        let mut i = 0usize;
+        while i < self.host_pending.len() {
+            let fut = self.host_pending[i];
+            match self.drive(fut) {
+                Ok(Drive::Done) => {
+                    self.host_pending.remove(i);
+                    self.heap.release(fut);
+                    completed = true;
+                }
+                Ok(Drive::Parked) => i += 1,
+                Err(t) => return Err(t),
+            }
+        }
+        Ok(completed)
+    }
+
+    /// The ready queue's drain (the `run_ready` body, split so the
+    /// host-poll spin can re-drain after a completion wake).
+    fn drain_ready(&mut self) -> Result<usize, Trap> {
+        let mut n = 0;
+        while let Some(fut) = self.ready.pop_front() {
+            let r = self.drive(fut);
+            self.heap.release(fut);
+            r?;
+            n += 1;
+        }
+        Ok(n)
+    }
+
+    /// The queued host-future slots, front first — the test/tooling
+    /// read for a frame the embedder wants to `cancel` (the
+    /// `first_ready` precedent, host side).
+    pub fn first_host_pending(&self) -> Option<Slot> {
+        self.host_pending.first().copied()
     }
 }
 

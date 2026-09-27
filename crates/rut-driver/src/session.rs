@@ -73,9 +73,13 @@ pub struct Module {
     /// shows the AST
     pub is_decl: bool,
     /// in-memory HOST surface (RFC 0022/0026): bodyless functions, bound by
-    /// the embedder at run time — `(name, params, ret)`. A module with these
-    /// and no `source` is a native module.
-    pub host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId)>,
+    /// the embedder at run time — `(name, params, ret, is_async)`. A module
+    /// with these and no `source` is a native module. `is_async` marks a
+    /// `host async fn` (the host future lane): the compiler weaves its call
+    /// sites into a cold engine-woven Future frame driven by the
+    /// `{scope}::{name}__start`/`__yield`/`__take`/`__cancel` rows the
+    /// embedder registers with `rut_vm::register_async!`.
+    pub host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId, bool)>,
     /// The host-fn registration scope — the `FuncCode` host-id prefix — when
     /// it must differ from the package name. `rt` stays the logger host
     /// module's use path while its internal registration naming remains
@@ -306,14 +310,38 @@ impl Session {
     /// the package name. The table feeds `Vm::verify_host_fns` — the
     /// load-time half of the `.d.rut` ↔ host-impl contract (a mismatch
     /// panics before any rut code runs).
+    ///
+    /// An `async` host row expands into its row family: the decl spells
+    /// one name but the embedder registers five bodies (the base name —
+    /// a trap, the weave never dispatches it — plus
+    /// `__start`/`__yield`/`__take`/`__cancel`), so the RFC 0025
+    /// "bound but undeclared" direction stays total for
+    /// `register_async!` registrations.
     pub fn expected_host_fns(
         &self,
     ) -> std::collections::BTreeMap<String, (Vec<rut_core::types::TypeId>, rut_core::types::TypeId)> {
+        use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE};
         let mut out = std::collections::BTreeMap::new();
         for (spec, m) in &self.modules {
             let scope = m.host_scope.as_deref().unwrap_or(spec);
-            for (name, params, ret) in &m.host_funcs {
+            for (name, params, ret, is_async) in &m.host_funcs {
                 out.insert(format!("{scope}::{name}"), (params.clone(), *ret));
+                if !*is_async {
+                    continue;
+                }
+                // the row family (the weave's wire, phase 4): start
+                // answers the state cell (the Completer box, `opaque`),
+                // yield is the resumption probe, take marshals the
+                // answer through the decl's own return type, cancel is
+                // the best-effort abort arm
+                let base = format!("{scope}::{name}");
+                out.insert(format!("{base}__start"), (params.clone(), TY_OPAQUE));
+                out.insert(
+                    format!("{base}__yield"),
+                    (vec![TY_OPAQUE, TY_OPAQUE], TY_I32),
+                );
+                out.insert(format!("{base}__take"), (vec![TY_OPAQUE], *ret));
+                out.insert(format!("{base}__cancel"), (vec![TY_OPAQUE], TY_NIL));
             }
         }
         out

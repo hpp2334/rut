@@ -328,6 +328,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // used function: signature from the surface, a direct call to the
         // exporter's scope-qualified id (RFC 0029 surface / RFC 0035 §1)
         if let Some(ef) = self.ctx.extern_fn(name).cloned() {
+            // the host future lane (phase 4): an async host fn's call
+            // mints the cold engine-woven frame over `__start`'s state
+            // cell — the weave owns the call site
+            if ef.is_async {
+                return crate::lir::asyncfn::compile_host_async_call(self, name, &ef, &args, expected, sp);
+            }
             // the engine-backed sleep future (RFC 0018): minting rides
             // the first `__sleep` call — the host set's `sleep` wrapper
             // is the only intended caller

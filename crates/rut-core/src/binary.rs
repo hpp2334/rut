@@ -76,6 +76,18 @@ pub struct SurfaceFn {
     pub ret: TypeId,
     /// module-local function id (the exporter's)
     pub local: u32,
+    /// `host async fn` — the host future lane: the importing compiler
+    /// weaves the call into a cold engine-woven Future frame whose row
+    /// family (`{host}__start`/`__yield`/`__take`/`__cancel`) the
+    /// embedder registers. Only decl/native modules set it (host rows
+    /// only); regular fn exports never cross async.
+    pub is_async: bool,
+    /// the row's registration name (`<scope>::<name>`, an
+    /// [`Interner`] id into THIS surface) — decl/native modules only.
+    /// The compiler derives the minted row family's host ids from it,
+    /// so the embedder's `register_async!` names stay the one source
+    /// of truth. `None` on ordinary fn exports.
+    pub host: Option<IdentId>,
 }
 
 /// One exported constant in a module's surface — `calc::PI` and

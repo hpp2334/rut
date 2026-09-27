@@ -158,6 +158,71 @@ fn host_fn_generics_are_rejected() {
     );
 }
 
+// ---- the host future lane (phase 4): `pub host async fn` ----
+
+const ASYNC_HOST_FN: &str = "\
+pub host async fn fetch(u: str) -> bytes;
+pub host fn tick() -> i32;
+";
+
+#[test]
+fn host_async_fn_parses() {
+    let (ast, diags) = parse(ASYNC_HOST_FN, Mode::Decl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 2);
+    let ItemKind::SurfaceFn { linkage, is_async, name, params, ret, .. } = ast.item(items[0])
+    else {
+        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
+    };
+    assert_eq!(*linkage, Linkage::Host);
+    assert!(*is_async, "the async marker must land on the decl");
+    assert_eq!(ast.name(*name), "fetch");
+    assert_eq!(params.len(), 1);
+    assert!(ret.is_some());
+    // the sync lane keeps its flag down
+    let ItemKind::SurfaceFn { is_async, .. } = ast.item(items[1]) else {
+        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[1]));
+    };
+    assert!(!*is_async);
+}
+
+#[test]
+fn host_async_fn_generics_are_rejected_with_the_same_words() {
+    // the async lane crosses concretely like its sync twin — the
+    // generic refusal is the same RFC 0023 §1 diagnostic
+    let (_, diags) = parse("pub host async fn fetch<T>(u: T) -> T;", Mode::Decl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("concrete") && d.msg.contains("RFC 0023")),
+        "generic async host fn must be diagnosed: {diags:?}"
+    );
+}
+
+#[test]
+fn host_async_fn_is_decl_only() {
+    // Mode-Impl misuse lands in the same diagnostic family as every
+    // other decl keyword
+    let (_, diags) = parse("pub host async fn fetch(u: str) -> bytes;", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("belong in a `.d.rut`")),
+        "impl mode must reject `host async fn`: {diags:?}"
+    );
+}
+
+#[test]
+fn host_async_fn_terminates_on_malformed() {
+    for src in [
+        "pub host async",
+        "pub host async fetch(u: str) -> bytes;",
+        "pub host async fn",
+        "pub host async fn f(",
+    ] {
+        let (_, diags) = parse(src, Mode::Decl);
+        let _ = diags.len(); // termination is the contract
+    }
+}
+
+
 #[test]
 fn builtin_impl_decl() {
     // RFC 0032 §1.1 R2: `builtin impl <prim> { .. }` — the integer

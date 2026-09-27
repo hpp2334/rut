@@ -4,9 +4,22 @@ use super::*;
 
 impl<'a> Ctx<'a> {
 
-    /// Bind a used function before body compilation.
-    pub fn add_extern_fn(&mut self, name: IdentId, func: u32, params: Vec<TypeId>, ret: TypeId) {
-        self.extern_fns.insert(name, ExternFn { func, params, ret });
+    /// Bind a used function before body compilation. `is_async` marks
+    /// the host future lane (`host async fn`); `host` carries the
+    /// row's registration name (`<scope>::<name>`) when the exporter
+    /// is a decl/native module — the minted row family's host ids
+    /// derive from it.
+    pub fn add_extern_fn(
+        &mut self,
+        name: IdentId,
+        func: u32,
+        params: Vec<TypeId>,
+        ret: TypeId,
+        is_async: bool,
+        host: Option<String>,
+    ) {
+        self.extern_fns
+            .insert(name, ExternFn { func, params, ret, is_async, host });
     }
 
     /// Bind a `builtin impl` numeric method of a primitive (core only,

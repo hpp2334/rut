@@ -227,6 +227,11 @@ pub struct Ctx<'a> {
     /// used functions, bound before body compilation (RFC 0029 surface):
     /// name -> signature + the exporter's scope-qualified function id
     pub extern_fns: std::collections::HashMap<IdentId, ExternFn>,
+    /// The host future lane's minted machinery, one per async host fn
+    /// this unit calls (phase 4): extern fn name -> layout (the hidden
+    /// `#hframe@` frame type, the `__start` thunk, the Future inst).
+    /// Idempotent per fn — the mint runs at the first call site.
+    pub host_async: std::collections::HashMap<IdentId, HostAsyncLayout>,
     /// core's `builtin impl` numeric methods (RFC 0032 §1.1 R2): method
     /// name → `(receiver prim, lowering id)` — ambient on primitives
     pub builtin_impls: std::collections::HashMap<IdentId, Vec<(TypeId, rut_core::ops::Intrinsic)>>,
@@ -317,11 +322,27 @@ pub struct Ctx<'a> {
 }
 
 /// A used function: the exporter's scope-qualified id and signature.
+/// `is_async`/`host` are the host future lane's fields (a decl/native
+/// exporter's `host async fn`): the call site weaves into the minted
+/// frame whose rows register under `host`.
 #[derive(Clone, Debug)]
 pub struct ExternFn {
     pub func: u32,
     pub params: Vec<TypeId>,
     pub ret: TypeId,
+    pub is_async: bool,
+    pub host: Option<String>,
+}
+
+/// The minted machinery of one async host fn (the host future lane,
+/// phase 4): the hidden `#hframe@` frame type the call site
+/// instantiates, the `__start` thunk's fid the call dispatches to, and
+/// the `Future<ret>` instantiation the result widens through.
+#[derive(Clone, Copy)]
+pub struct HostAsyncLayout {
+    pub frame_ty: TypeId,
+    pub start_fid: u32,
+    pub fut_inst: u32,
 }
 
 /// A trait exported by a used module's surface (RFC 0012 §5): the id of
@@ -437,6 +458,7 @@ impl<'a> Ctx<'a> {
             lambda_sigs: std::collections::HashMap::new(),
             entries: Vec::new(),
             extern_fns: std::collections::HashMap::new(),
+            host_async: std::collections::HashMap::new(),
             builtin_impls: std::collections::HashMap::new(),
             extern_consts: std::collections::HashMap::new(),
             extern_types: std::collections::HashMap::new(),

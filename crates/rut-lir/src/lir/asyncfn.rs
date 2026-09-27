@@ -971,3 +971,265 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
     }
     Ok(())
 }
+
+// ---- the host future lane (phase 4): `pub host async fn` ----
+//
+// Calling a host async fn mints a COLD engine-woven Future frame whose
+// state field holds a HOST cell — the opaque box the `__start` row
+// answers (the embedder's `Completer`; RFC 0018 §2's law: `await`
+// targets engine-woven futures via the engine-reserved state field).
+// There is no compiled body — the frame's `Future::yield` vtable fill
+// is the WRAPPER compiled below, which:
+//
+//   - retires immediately on a re-drive (state already null),
+//   - reads the frame's cancelled flag (the existing cx `cancelled()`
+//     data path) and maps it to the `__cancel` arm — the embedder's
+//     best-effort abort hook — then retires (the awaiting frame wakes
+//     at the re-probe and its cancelled probe runs its drop path),
+//   - otherwise calls the `__yield` resumption probe (0 pending /
+//     1 ready / 2 failed); nonzero retires the frame and calls
+//     `__take` — the answer marshaled onto the heap through a
+//     phase-1 return lane, stored in the frame's answer field. A
+//     failed answer traps AT THE AWAIT through `__take` (the
+//     Completer's fail message rides the trap).
+//
+// The rows are registered by the embedder with `rut_vm::register_async!`
+// under the ONE registration name the decl surface carries (`host` on
+// the ExternFn). No new ops — the wrapper compiles from existing
+// vocabulary (GetF/Br/Call/Box/SetF/Ret), so VERSION stays 13.
+
+/// Mint the host future machinery of one async host fn (idempotent per
+/// extern fn): the hidden frame type, the `Future<ret>` impl row, the
+/// wrapper vtable fill, and the four bodyless host thunks (`__start`/
+/// `__yield`/`__take`/`__cancel`) the wrapper and call site dispatch.
+pub(crate) fn ensure_host_async(
+    ctx: &mut Ctx,
+    name: IdentId,
+    ef: &crate::check::ExternFn,
+) -> TcResult<crate::check::HostAsyncLayout> {
+    if let Some(l) = ctx.host_async.get(&name) {
+        return Ok(*l);
+    }
+    let sp = ctx.ast.span(ctx.ast.root.id());
+    let ret_ty = ef.ret;
+    // the registration name is the row family's ONE source of truth —
+    // it rides the decl surface (`SurfaceFn::host`)
+    let Some(host) = ef.host.clone() else {
+        ctx.err(
+            sp,
+            format!(
+                "`{}` is an async host fn, but its surface carries no registration name — only `.d.rut` host rows can cross async (RFC 0025)",
+                ctx.name(name)
+            ),
+        );
+        return Err(());
+    };
+    // the hidden frame type: the engine-reserved layout, the HOST cell
+    // in the state field, the answer lane at LOCALS_BASE (host frames
+    // carry no body locals)
+    let frame_name = ctx.intern(&format!("{}{}", af::HOST_FRAME_PREFIX, ctx.name(name)));
+    let f_state = ctx.intern("state");
+    let f_cancelled = ctx.intern("cancelled");
+    let f_awaiter = ctx.intern("awaiter");
+    let f_pending = ctx.intern("pending");
+    let f_answer = ctx.intern("answer");
+    let frame_ty = ctx.types.intern(RutType {
+        name: frame_name,
+        kind: TyKind::Data {
+            fields: vec![
+                FieldInfo { name: f_state, ty: TY_OPAQUE },
+                FieldInfo { name: f_cancelled, ty: TY_BOOL },
+                FieldInfo { name: f_awaiter, ty: TY_OPAQUE },
+                FieldInfo { name: f_pending, ty: TY_OPAQUE },
+                FieldInfo { name: f_answer, ty: ret_ty },
+            ],
+        },
+    });
+    // the Future<ret> impl row (dispatch/widening/`is` see it; the
+    // vtable fill carries the yield slot)
+    let fut_inst = ctx.mk_future_inst(sym::FUTURE, ret_ty);
+    ctx.impls.push(ImplDecl {
+        trait_id: fut_inst,
+        trait_name: sym::FUTURE,
+        target: frame_ty,
+        target_data: None,
+        trait_arg_nodes: vec![],
+        is_template: false,
+        inherent: false,
+        methods: vec![],
+    });
+    let slot = ctx.trait_slot(fut_inst, 0).expect("Future has exactly one member");
+    let cx_ty = ctx.run_context_ty();
+    // the four bodyless host thunks; the minted FuncCode's NAME is the
+    // registered row name (the join resolves host_id by it)
+    let row = |ctx: &mut Ctx, suffix: &str, params: Vec<TypeId>, ret: TypeId| -> u32 {
+        let text = format!("{host}{suffix}");
+        let id = ctx.intern(&text);
+        let fid = ctx.ensure_inst(crate::check::Inst {
+            key: crate::check::FnKey::HostThunk(id),
+            subst: vec![],
+            trait_origins: vec![],
+        });
+        ctx.funcs[fid as usize] = rut_core::binary::FuncCode {
+            name: id,
+            regs: params.clone(),
+            params,
+            ret,
+            is_method: false,
+            n_captures: 0,
+            argv: vec![],
+            labels: vec![],
+            code: vec![],
+            spans: vec![],
+            pos: vec![],
+            host_id: Some(id),
+        };
+        fid
+    };
+    let start_fid = row(ctx, "__start", ef.params.clone(), TY_OPAQUE);
+    let yield_fid = row(ctx, "__yield", vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+    let take_fid = row(ctx, "__take", vec![TY_OPAQUE], ret_ty);
+    let cancel_fid = row(ctx, "__cancel", vec![TY_OPAQUE], TY_NIL);
+    // the sealing wrapper (the `__sleep_yield.wrap` precedent's cousin):
+    // the yield slot's ABI is engine-wide — recv = the raw frame,
+    // argv[1] = the raw cx — and the ROWS cross `opaque`. The state
+    // cell IS already an opaque box (the start row's answer), so only
+    // the cx seals; the hand-assembled ops carry the cancel probe and
+    // the take marshal.
+    let wrap_id = ctx.intern(&format!("{host}__yield.wrap"));
+    let wfid = ctx.ensure_inst(crate::check::Inst {
+        key: crate::check::FnKey::HostThunk(wrap_id),
+        subst: vec![],
+        trait_origins: vec![],
+    });
+    // regs: r0 frame, r1 cx, r2 state cell, r3 sealed cx, r4 probe
+    // answer (i32), r5 the null sentinel, r6 the take answer, r7 the
+    // cancelled flag. argv pool: [2, 3 | 2] — the yield's pair, then
+    // the state cell alone (cancel and take share the span).
+    let wrap_code = vec![
+        // a re-drive of a retired frame answers here
+        Op::GetF { dst: 2, obj: 0, field: af::STATE_FIELD, repr: Repr::Ref },
+        Op::Br { cond: 2, then_t: 3, else_t: 2 },
+        Op::Ret { val: None },
+        // the cancelled probe (the cx `cancelled()` data path)
+        Op::GetF { dst: 7, obj: 0, field: af::CANCELLED_FIELD, repr: ctx.types.repr_of(TY_BOOL) },
+        Op::Br { cond: 7, then_t: 5, else_t: 9 },
+        // cancel arm: the embedder's abort hook, then retire — the
+        // awaiting frame wakes and its own probe runs the drop path
+        Op::Call { func: cancel_fid, argv_off: 2, argc: 1, dst: NOREG },
+        Op::ConstRaw { dst: 5, bits: 0 },
+        Op::SetF { obj: 0, field: af::STATE_FIELD, val: 5, repr: Repr::Ref },
+        Op::Ret { val: None },
+        // the resumption probe: seal the cx, call `__yield`
+        Op::Box { dst: 3, val: 1, ty: cx_ty },
+        Op::Call { func: yield_fid, argv_off: 0, argc: 2, dst: 4 },
+        Op::Br { cond: 4, then_t: 12, else_t: 16 },
+        // settle (ready 1 / failed 2): retire, then marshal the answer
+        // — a failed completer traps HERE (the fail message rides the
+        // trap), a ready one lands in the answer field
+        Op::ConstRaw { dst: 5, bits: 0 },
+        Op::SetF { obj: 0, field: af::STATE_FIELD, val: 5, repr: Repr::Ref },
+        Op::Call { func: take_fid, argv_off: 2, argc: 1, dst: 6 },
+        Op::SetF { obj: 0, field: af::HOST_ANSWER_FIELD, val: 6, repr: ctx.types.repr_of(ret_ty) },
+        Op::Ret { val: None },
+    ];
+    ctx.funcs[wfid as usize] = rut_core::binary::FuncCode {
+        name: wrap_id,
+        regs: vec![frame_ty, cx_ty, TY_OPAQUE, TY_OPAQUE, TY_I32, TY_OPAQUE, ret_ty, TY_BOOL],
+        params: vec![frame_ty, cx_ty],
+        ret: TY_NIL,
+        is_method: false,
+        n_captures: 0,
+        argv: vec![2, 3, 2],
+        labels: vec![],
+        code: wrap_code,
+        spans: vec![],
+        pos: vec![],
+        host_id: None,
+    };
+    ctx.extra_vtable_fills.push((frame_ty, slot, wfid));
+    ctx.frame_yield_slot.insert(frame_ty, slot);
+    ctx.engine_frames.insert(frame_ty);
+    let l = crate::check::HostAsyncLayout { frame_ty, start_fid, fut_inst };
+    ctx.host_async.insert(name, l);
+    Ok(l)
+}
+
+/// The async host call site (`compile_free_fn_call`'s extern arm, the
+/// `is_async` split): call `__start` with the declared params (the
+/// answer IS the state cell), mint the cold frame over it, and hand
+/// the frame back — the call's value IS the frame, typed as its hidden
+/// type (which widens to `Future<T>` through the minted impl).
+pub(crate) fn compile_host_async_call(
+    c: &mut FnCompiler,
+    name: IdentId,
+    ef: &crate::check::ExternFn,
+    args: &[NodeHandle<AnyExpr>],
+    expected: Option<TypeId>,
+    sp: rut_lexer::span::Span,
+) -> TcResult<TypeId> {
+    let sp_lo = sp.lo;
+    let layout = ensure_host_async(c.ctx, name, ef)?;
+    if args.len() != ef.params.len() {
+        c.ctx.err(sp, format!(
+            "call arity: {} args for {} params",
+            args.len(),
+            ef.params.len()
+        ));
+        return Err(());
+    }
+    let mut aregs = Vec::new();
+    for (i, a) in args.iter().enumerate() {
+        let t = c.compile_expr(*a, Some(ef.params[i]))?;
+        if !c.widens(t, ef.params[i]) {
+            c.ctx.err(c.ctx.ast.span(a.id()), format!(
+                "argument {} is `{}`, `{}` expected",
+                i + 1, c.ctx.type_name(t), c.ctx.type_name(ef.params[i])
+            ));
+        }
+        c.widen_to_slot(t, ef.params[i], sp_lo);
+        aregs.push(c.last_reg);
+    }
+    // the crossing: `__start(args..)` answers the state cell (opaque)
+    let cell = c.new_reg(TY_OPAQUE);
+    {
+        let (argv_off, argc) = c.pool_args(&aregs);
+        c.emit(Op::Call { func: layout.start_fid, argv_off, argc, dst: cell }, sp_lo);
+    }
+    // the cold frame: zeroed, the host cell arms the state field — the
+    // await probe reads non-null and drives through the wrapper
+    let frame = c.new_reg(layout.frame_ty);
+    c.emit(Op::NewCell { dst: frame, ty: layout.frame_ty }, sp_lo);
+    c.emit(
+        Op::SetF { obj: frame, field: af::STATE_FIELD, val: cell, repr: Repr::Ref },
+        sp_lo,
+    );
+    // the consume's spelling (the `compile_async_call` tail): a
+    // `Future<..>`-typed context takes the trait object so the generic
+    // unify reads the instantiation's args
+    if let Some(e) = expected {
+        if let TyKind::TraitObj { trait_id } = c.ctx.types.kind(e) {
+            let hit = c
+                .ctx
+                .trait_inst
+                .iter()
+                .find(|(_, &id)| id == *trait_id)
+                .map(|(k, _)| k.clone());
+            if let Some((tname, targs)) = hit {
+                if tname == sym::FUTURE && !targs.is_empty() {
+                    if targs[0] == ef.ret {
+                        c.last_reg = frame;
+                        return Ok(e);
+                    }
+                    if c.ctx.type_name(targs[0]).starts_with('#') {
+                        let obj = c.ctx.mk_trait_obj(layout.fut_inst);
+                        c.last_reg = frame;
+                        return Ok(obj);
+                    }
+                }
+            }
+        }
+    }
+    c.last_reg = frame;
+    Ok(layout.frame_ty)
+}

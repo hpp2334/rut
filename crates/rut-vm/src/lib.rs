@@ -9,3 +9,4 @@ pub mod verify;
 pub(crate) mod arena;
 
 pub use heap::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot, Value};
+pub use interp::{Completer, FAILED, PENDING, READY};

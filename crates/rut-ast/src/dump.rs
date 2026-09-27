@@ -191,12 +191,15 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("body", DumpVal::Node(Box::new(node_dump(a, f.body.id())))));
                 "Fn"
             }
-            ItemKind::SurfaceFn { vis, linkage, name, generics, params, ret } => {
+            ItemKind::SurfaceFn { vis, linkage, is_async, name, generics, params, ret } => {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
                 fields.push(field("linkage", DumpVal::Str(match linkage {
                     Linkage::Host => "host",
                     Linkage::Builtin => "builtin",
                 }.to_string())));
+                if *is_async {
+                    fields.push(field("is_async", DumpVal::Flag(true)));
+                }
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
                 if !generics.is_empty() {
                     fields.push(field("generics", DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect())));

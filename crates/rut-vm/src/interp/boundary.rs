@@ -50,7 +50,7 @@ pub trait Ret: Sized {
 }
 
 /// check the declared type's kind; a mismatch is a trap naming both sides
-fn expect_kind(vm: &Vm, slot: Slot, declared: TypeId, rust: &str) -> Result<(), Trap> {
+pub(super) fn expect_kind(vm: &Vm, slot: Slot, declared: TypeId, rust: &str) -> Result<(), Trap> {
     let bad = |m: String| {
         Trap::new(
             TrapKind::Invalid,

@@ -1306,6 +1306,13 @@ impl FnFrame {
 //
 //     host fn name(params) -> T;        concrete signature over the
 //                                       crossing set (RFC 0023 §1)
+//     host async fn name(params) -> T;  the host future lane: calling
+//                                       mints a cold engine-woven
+//                                       Future frame; the embedder
+//                                       registers the `__start`/
+//                                       `__yield`/`__take`/`__cancel`
+//                                       row family with
+//                                       `register_async!`
 //     host struct Name { fields }    flat record; every field a
 //                                       crossing type; host-constructed
 //     builtin fn name<T>(params) -> T;  engine fn (generics fine —
@@ -1324,6 +1331,10 @@ pub(crate) struct SurfaceFrame {
     linkage: Linkage,
     lo: u32,
     stage: SuStage,
+    /// `host async fn name(..) -> T;` — the host future lane: the
+    /// minted rows (`__start`/`__yield`/`__take`/`__cancel`) drive an
+    /// embedder `Completer` through the engine-woven frame
+    is_async: bool,
     /// `builtin trait Name { .. }` — collects members like BuiltinTy
     /// but emits the trait node
     is_trait: bool,
@@ -1354,6 +1365,7 @@ impl SurfaceFrame {
             linkage,
             lo: 0,
             stage: SuStage::Params,
+            is_async: false,
             is_trait: false,
             is_impl: false,
             is_primitive: false,
@@ -1382,27 +1394,26 @@ impl SurfaceFrame {
 
     fn host_step(&mut self, p: &mut Parser) -> Step {
         match p.tok().clone() {
-            Tok::Ident(k) if k == "fn" => {
+            Tok::Ident(k) if k == "async" => {
+                // `pub host async fn name(params) -> T;` — the host
+                // future lane: calling one mints a COLD engine-woven
+                // Future frame whose state field holds the host cell
+                // (`__start`'s answer); the embedder registers the row
+                // family with `register_async!`. Concrete crossing
+                // signatures only — the generic rejection below is the
+                // same diagnostic the sync lane uses.
                 p.bump();
-                let Some(name) = p.expect_ident("a function name") else {
-                    return Step::Pop(Done::Failed);
-                };
-                self.name = name;
-                if matches!(p.tok(), Tok::Lt) {
-                    // RFC 0023 §1: a host fn's parameters and returns are
-                    // built from the crossing set — a generic parameter
-                    // has no shape the boundary could check
-                    p.err(
-                        p.span(),
-                        "host fn signatures are concrete —generic parameters cannot cross the boundary (RFC 0023 §1)",
-                    );
-                    let (gens, pending) = generic_params(p, false, "host fn");
-                    self.generics = gens;
-                    debug_assert!(pending.is_none(), "rejected bounds never suspend");
+                self.is_async = true;
+                match p.tok().clone() {
+                    Tok::Ident(k) if k == "fn" => self.host_fn_tail(p),
+                    _ => {
+                        let found = p.peek(0).describe();
+                        p.err_here(format!("expected `fn` after `host async`, found {found}"));
+                        Step::Pop(Done::Failed)
+                    }
                 }
-                self.stage = SuStage::Params;
-                Step::Push(Frame::Params(ParamsFrame::new()))
             }
+            Tok::Ident(k) if k == "fn" => self.host_fn_tail(p),
             Tok::Ident(k) if k == "struct" => {
                 p.bump();
                 let Some(name) = p.expect_ident("a struct name") else {
@@ -1425,6 +1436,32 @@ impl SurfaceFrame {
                 Step::Pop(Done::Failed)
             }
         }
+    }
+
+    /// The `fn` spelling after `host` (with or without the `async`
+    /// marker): the name, the generic rejection, then the params.
+    fn host_fn_tail(&mut self, p: &mut Parser) -> Step {
+        p.bump();
+        let Some(name) = p.expect_ident("a function name") else {
+            return Step::Pop(Done::Failed);
+        };
+        self.name = name;
+        if matches!(p.tok(), Tok::Lt) {
+            // RFC 0023 §1: a host fn's parameters and returns are
+            // built from the crossing set — a generic parameter
+            // has no shape the boundary could check. The async lane
+            // refuses with the same words: its answer type IS the
+            // decl's return, so a generic would strand the weave.
+            p.err(
+                p.span(),
+                "host fn signatures are concrete —generic parameters cannot cross the boundary (RFC 0023 §1)",
+            );
+            let (gens, pending) = generic_params(p, false, "host fn");
+            self.generics = gens;
+            debug_assert!(pending.is_none(), "rejected bounds never suspend");
+        }
+        self.stage = SuStage::Params;
+        Step::Push(Frame::Params(ParamsFrame::new()))
     }
 
     fn builtin_step(&mut self, p: &mut Parser) -> Step {
@@ -1628,6 +1665,7 @@ impl SurfaceFrame {
             ItemKind::SurfaceFn {
                 vis: Vis::Self_,
                 linkage: self.linkage,
+                is_async: self.is_async,
                 name: self.name,
                 generics: std::mem::take(&mut self.generics),
                 params: self.params.take().expect("surface fn without params"),

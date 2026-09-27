@@ -8,7 +8,10 @@
 //! What is NOT lowered (yet): `host struct` records and `builtin` decls
 //! stay parse-only surface — `opaque` covers host boxes, and `builtin`
 //! is the engine's (core's d.rut is mounted from `Surface::core`, not
-//! read from disk).
+//! read from disk). An `async` host fn lowers like any other row (its
+//! `is_async` flag rides the 4-tuple); the compiler weaves its call
+//! sites into the host future and the embedder registers the row
+//! family with `rut_vm::register_async!`.
 
 use rut_ast::ast::{AnyTy, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
 use rut_core::types::{
@@ -88,9 +91,9 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
         let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
         return Err(format!("{origin}: the surface does not parse: {}", msgs.join("; ")));
     }
-    let mut host_funcs: Vec<(String, Vec<TypeId>, TypeId)> = Vec::new();
+    let mut host_funcs: Vec<(String, Vec<TypeId>, TypeId, bool)> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
-        let ItemKind::SurfaceFn { linkage: Linkage::Host, name, params, ret, .. } = ast.item(it)
+        let ItemKind::SurfaceFn { linkage: Linkage::Host, is_async, name, params, ret, .. } = ast.item(it)
         else {
             continue;
         };
@@ -126,7 +129,7 @@ pub fn lower_decl_module(src: &str, origin: &str) -> Result<Module, String> {
             }
             None => TY_NIL,
         };
-        host_funcs.push((fname, ptys, rty));
+        host_funcs.push((fname, ptys, rty, *is_async));
     }
     Ok(Module {
         decl: Some(src.to_string()),

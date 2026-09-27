@@ -23,10 +23,10 @@ fn the_answer_lanes_spell_in_the_decl_grammar() {
     assert_eq!(
         m.host_funcs,
         vec![
-            ("qstr_pick".to_string(), vec![], TY_OPT_STR),
-            ("qbytes_pick".to_string(), vec![], TY_OPT_BYTES),
-            ("qopaque_pick".to_string(), vec![], TY_OPT_OPAQUE),
-            ("bytes_give".to_string(), vec![], TY_BYTES),
+            ("qstr_pick".to_string(), vec![], TY_OPT_STR, false),
+            ("qbytes_pick".to_string(), vec![], TY_OPT_BYTES, false),
+            ("qopaque_pick".to_string(), vec![], TY_OPT_OPAQUE, false),
+            ("bytes_give".to_string(), vec![], TY_BYTES, false),
         ],
         "each answer lane maps to its boot row"
     );

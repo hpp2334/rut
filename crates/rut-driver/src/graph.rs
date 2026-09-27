@@ -124,7 +124,7 @@ impl<'a> GraphCompiler<'a> {
             // host functions obey the same crossing rule as `entry fn`
             // (RFC 0023 §2 / RFC 0035 §3)
             let boot_tt = rut_core::types::TypeTable::boot();
-            for (name, params, ret) in &module.host_funcs {
+            for (name, params, ret, _is_async) in &module.host_funcs {
                 let bad = params.iter().any(|p| !boot_tt.crosses_boundary(*p))
                     || !boot_tt.crosses_boundary(*ret);
                 if bad {
@@ -141,12 +141,18 @@ impl<'a> GraphCompiler<'a> {
             self.next_scope += 1;
             let mut surface = rut_core::binary::Surface::default();
             let mut funcs = Vec::new();
-            for (i, (name, params, ret)) in module.host_funcs.iter().enumerate() {
+            for (i, (name, params, ret, is_async)) in module.host_funcs.iter().enumerate() {
                 surface.funcs.push(rut_core::binary::SurfaceFn {
                     name: surface.names.intern(name),
                     params: params.clone(),
                     ret: *ret,
                     local: i as u32,
+                    is_async: *is_async,
+                    // the registration name rides the surface: the
+                    // importer derives the minted row family's host ids
+                    // from it, so `register_async!`'s one literal stays
+                    // the source of truth on both sides
+                    host: Some(surface.names.intern(&format!("{host_scope}::{name}"))),
                 });
                 funcs.push(FuncCode {
                     name: surface.names.intern(name),
