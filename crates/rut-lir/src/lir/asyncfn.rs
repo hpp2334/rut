@@ -406,13 +406,13 @@ fn emit_completion(c: &mut FnCompiler, sp_lo: u32) {
     c.emit(Op::Ret { val: None }, sp_lo);
 }
 
-/// The drop path (RFC 0016 §3 order): retire the state first (a second
-/// abort answers `false`), clear this frame's pending edge (the awaited
-/// frame's awaiter slot must not keep a retired frame alive), then
-/// release every ref-typed cell-backed local — `SetF null` drops the
-/// refcount, the pending-drop drain runs the attached `on_drop`
-/// callbacks LIFO, so they fire in reverse declaration order — then a
-/// plain Ret.
+/// The drop path: retire the state first (a second abort answers
+/// `false`), clear this frame's pending edge (the awaited frame's
+/// awaiter slot must not keep a retired frame alive), then release
+/// every ref-typed cell-backed local — `SetF null` drops the refcount;
+/// the pending-drop drain is reinstated for `Disposal` in the next
+/// phase, running the attached callbacks LIFO, in reverse declaration
+/// order — then a plain Ret.
 fn emit_drop_path(c: &mut FnCompiler, sp_lo: u32) {
     let frame_reg = c.async_frame.as_ref().map(|f| f.frame_reg).unwrap_or(0);
     let null = c.emit_null(sp_lo);

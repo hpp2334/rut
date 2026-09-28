@@ -209,7 +209,6 @@ impl Vm {
             Op::MakeOpt { dst, src, ty } => self.op_make_opt(dst, src, ty)?,
             Op::WeakNew { dst, src, ty } => self.op_weak_new(dst, src, ty)?,
             Op::WeakUpgrade { recv, dst, ty } => self.op_weak_upgrade(recv, dst, ty)?,
-            Op::OnDrop { obj, cleanup } => self.op_on_drop(obj, cleanup)?,
 
             Op::ArrNew { dst, ty, len, repr } => {
                 let elem = match self.prog.types.kind(ty) {

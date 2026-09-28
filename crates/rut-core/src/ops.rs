@@ -251,9 +251,6 @@ pub enum Op {
     /// result is a nil-able `?T` (`ty` is the nullable's own type). The
     /// box ALIASES `v`'s cell (share, never copy); primitives copy bits.
     MakeOpt { dst: Reg, src: Reg, ty: TypeId },
-    /// `on_drop(p, cleanup)` (RFC 0016 §3): run `cleanup(p)` when p's
-    /// cell refcount reaches zero
-    OnDrop { obj: Reg, cleanup: Reg },
     /// `Weak.new(v)` (RFC 0017 v1): mint a WeakBox side cell holding an
     /// UNRETAINED slot word to `v`'s cell. `ty` is the instantiated
     /// `Weak<elem>` id (the MakeOpt law: the op carries its type — the

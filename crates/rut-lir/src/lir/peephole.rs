@@ -741,7 +741,7 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*src);
         }
-        // MakeOpt defs a fresh box; OnDrop reads both and defs nothing
+        // MakeOpt defs a fresh box
         Op::MakeOpt { dst, src, .. } => {
             d.push(*dst);
             u.push(*src);
@@ -755,10 +755,6 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
         Op::WeakUpgrade { recv, dst, .. } => {
             d.push(*dst);
             u.push(*recv);
-        }
-        Op::OnDrop { obj, cleanup } => {
-            u.push(*obj);
-            u.push(*cleanup);
         }
         Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
         | Op::ArrNew { dst, .. } | Op::EnumNew { dst, .. } => d.push(*dst),
@@ -958,10 +954,6 @@ fn replace_reads(op: &mut Op, pools: &mut Pools, from: u16, to: u16) {
         Op::Not { a, .. } | Op::NegF { a, .. } | Op::NegI { a, .. } => f(a),
         Op::Mov { src, .. } | Op::MovRef { src, .. } => f(src),
         Op::MakeOpt { src, .. } => f(src),
-        Op::OnDrop { obj, cleanup } => {
-            f(obj);
-            f(cleanup);
-        }
         Op::Br { cond, .. } => f(cond),
         Op::BrTable { idx, .. } => f(idx),
         Op::CallNat { recv, .. } => f(recv),

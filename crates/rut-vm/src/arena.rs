@@ -79,13 +79,6 @@ pub(crate) struct Arena {
     bump: Cell<usize>,
     /// which of a dying cell's children die with it (RFC 0016 §3)
     pub(crate) plan: Rc<ReleasePlan>,
-    /// `on_drop` callbacks (RFC 0016 §3): cell address -> cleanup closure.
-    /// The closure slot is retained for the map's lifetime.
-    drop_fns: RefCell<HashMap<usize, Slot>>,
-    /// cells whose drop callback is queued: (pinned cell, cleanup). The
-    /// interpreter drains these at call boundaries and releases the pin
-    /// after the callback runs.
-    pending_drops: RefCell<Vec<(*const CellVal, Slot)>>,
     /// the VM-owned block store (RFC 0039): variable-size cell payloads.
     /// Living here — not on `Heap` — because the release path (a free fn
     /// holding only `&Arena`) is what frees a cell's blocks, and because
@@ -97,12 +90,11 @@ pub(crate) struct Arena {
     /// which the release walk builds to run a Host payload's finalize.
     pub(crate) singletons: RefCell<HashMap<(TypeId, u32), *const CellVal>>,
     /// weak-reference lists (RFC 0017 v1): referent slot word -> the
-    /// WeakBox cells holding an unretained word to it. The `drop_fns`
-    /// shape — lazy, uncharged engine bookkeeping living on the arena
-    /// (same two-`Rc` view argument). Referent death nulls every box in
-    /// its list BEFORE anything that runs user code; box death
-    /// unregisters itself. Keyed by the full slot word (tagged for store
-    /// entries — the same keying `drop_fns` uses for both shapes).
+    /// WeakBox cells holding an unretained word to it. Lazy, uncharged
+    /// engine bookkeeping living on the arena (the same two-`Rc` view
+    /// argument). Referent death nulls every box in its list BEFORE
+    /// anything that runs user code; box death unregisters itself. Keyed
+    /// by the full slot word (tagged for store entries).
     weak_lists: RefCell<HashMap<usize, Vec<*const CellVal>>>,
     /// the Opaque store (nmap-hostvals P2): the ONE home of every rut
     /// `opaque` value — a slab of two-kind entries + free list, rc and
@@ -119,8 +111,6 @@ impl Arena {
             chunks: RefCell::new(Vec::new()),
             bump: Cell::new(ARENA_CHUNK),
             plan,
-            drop_fns: RefCell::new(HashMap::new()),
-            pending_drops: RefCell::new(Vec::new()),
             blocks: Blocks::new(),
             singletons: RefCell::new(HashMap::new()),
             weak_lists: RefCell::new(HashMap::new()),
@@ -135,9 +125,9 @@ impl Arena {
     }
 
     /// Referent death (RFC 0017): null every WeakBox in the referent's
-    /// list and drop the entry. Runs BEFORE the on_drop pin check and
-    /// any payload teardown — `dispose` bodies and queued cleanups that
-    /// call `upgrade()` see `nil`, deterministically, no window.
+    /// list and drop the entry. Runs BEFORE any payload teardown and
+    /// everything that runs user code — a `dispose` body that calls
+    /// `upgrade()` sees `nil`, deterministically, no window.
     pub(crate) fn weak_null_list(&self, word: usize) {
         if let Some(boxes) = self.weak_lists.borrow_mut().remove(&word) {
             for b in boxes {
@@ -161,33 +151,6 @@ impl Arena {
                 lists.remove(&word);
             }
         }
-    }
-
-    /// Attach a drop callback to a cell (RFC 0016 §3). One per cell — a
-    /// second attach is the caller's error to report. The closure slot is
-    /// retained for the map's lifetime.
-    pub(crate) fn set_drop_fn(&self, p: *const CellVal, cleanup: Slot) -> bool {
-        let key = p as usize;
-        let mut map = self.drop_fns.borrow_mut();
-        if map.contains_key(&key) {
-            return false;
-        }
-        map.insert(key, cleanup);
-        true
-    }
-
-    /// Take a cell off the drop queue: (pinned cell pointer, cleanup slot).
-    /// The caller owns the pin and the cleanup reference — release both
-    /// after the callback runs.
-    pub(crate) fn take_pending_drop(&self) -> Option<(*const CellVal, Slot)> {
-        self.pending_drops.borrow_mut().pop()
-    }
-
-    /// Remove and return a cell's registered drop callback (the release
-    /// path, when the cell's last reference dies). The taker owns the
-    /// retained cleanup slot.
-    pub(crate) fn take_drop_fn(&self, key: usize) -> Option<Slot> {
-        self.drop_fns.borrow_mut().remove(&key)
     }
 
     /// Hand out a slot (free list first, then bump within the last chunk).
@@ -268,13 +231,6 @@ pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) 
                 // `release_entry`'s finalize — nothing that runs user
                 // code observes a live weak to a dying entry
                 arena.weak_null_list(p as usize);
-                // on_drop (RFC 0016 §3): the same pin-and-queue the cell
-                // path runs — the key is the tagged word either way
-                if let Some(cleanup) = arena.take_drop_fn(p as usize) {
-                    c.refs.set(1);
-                    arena.pending_drops.borrow_mut().push((p, cleanup));
-                    return;
-                }
                 release_entry(arena, acct, e);
             } else {
                 c.refs.set(n - 1);
@@ -290,16 +246,8 @@ pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) 
         }
         if n <= 1 {
             // weak nulling first (RFC 0017): the referent's boxes go
-            // dead before dispose/on_drop/user code can run
+            // dead before dispose/user code can run
             arena.weak_null_list(p as usize);
-            // on_drop (RFC 0016 §3): a registered callback pins the cell
-            // (refs stay 1) and queues it; the interpreter runs the
-            // callback at a call boundary and releases the pin afterwards.
-            if let Some(cleanup) = arena.take_drop_fn(p as usize) {
-                c.refs.set(1);
-                arena.pending_drops.borrow_mut().push((p, cleanup));
-                return;
-            }
             release_cell(arena, acct, p as *mut CellVal);
         } else {
             c.refs.set(n - 1);

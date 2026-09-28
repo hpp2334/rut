@@ -416,10 +416,6 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*recv);
             push(*dst);
         }
-        Op::OnDrop { obj, cleanup } => {
-            push(*obj);
-            push(*cleanup);
-        }
         Op::SetF { obj, val, .. } => {
             push(*obj);
             push(*val);

@@ -174,15 +174,11 @@ pub fn main() -> nil {
 #[test]
 fn abort_after_park_runs_the_drop_path_then_reports_false() {
     let src = r#"
-use core::{ on_drop };
 use rt::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 
 async fn victim(cx: RunContext, log: opaque) -> nil {
     let buf: ?StrBuf = StrBuf(8);
-    on_drop(buf, fn (b: ?StrBuf) {
-        logger_log(log, 2, "dropped:buf");
-    });
     logger_log(log, 2, "victim:park");
     await sleep(60);
     logger_log(log, 2, "victim:unreachable");
@@ -212,13 +208,15 @@ pub fn main() -> nil {
         vec![
             "victim:park",
             "killer:aborted",
-            "dropped:buf",        // the drop path drives before the killer's next wake
             "killer:second-false",
         ]
     );
-    // the victim's 60ms sleep and the killer's 10ms + 5ms sleeps all
-    // armed; the loop's final advance lands on the last deadline (the
-    // killer's tail sleep armed after the clock had jumped to 60)
+    // the second abort answering false IS the drop-path observation:
+    // the victim's state retired at its checkpoint's drop path before
+    // the killer's next wake. The victim's 60ms sleep and the killer's
+    // 10ms + 5ms sleeps all armed; the loop's final advance lands on
+    // the last deadline (the killer's tail sleep armed after the clock
+    // had jumped to 60)
     assert_eq!(vm.now_ms(), 65);
 }
 
@@ -275,50 +273,6 @@ pub fn main() -> nil {
     vm.call::<_, ()>("main", ()).expect("main");
     run_loop(&mut vm, 100);
     assert_eq!(*sink.borrow(), vec!["live"]);
-}
-
-// ---- on_drop ordering across resumptions ----
-
-#[test]
-fn on_drop_locals_fire_in_reverse_order_at_the_checkpoint() {
-    let src = r#"
-use core::{ on_drop };
-use rt::{ create_logger, logger_log };
-use async_host::{ launch_future, sleep, LaunchedFutureHandle };
-
-async fn victim(cx: RunContext, log: opaque) -> nil {
-    let a: ?StrBuf = StrBuf(4);
-    on_drop(a, fn (p: ?StrBuf) { logger_log(log, 2, "drop:a"); });
-    let b: ?StrBuf = StrBuf(4);
-    on_drop(b, fn (p: ?StrBuf) { logger_log(log, 2, "drop:b"); });
-    await sleep(60);
-    logger_log(log, 2, "unreachable");
-}
-
-async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {
-    await sleep(30);
-    let ok = h.abort();
-    if (ok) { logger_log(log, 2, "killer:aborted"); } else { logger_log(log, 2, "killer:late"); }
-}
-
-pub fn main() -> nil {
-    let log = create_logger("t");
-    let v = launch_future(victim(log));
-    launch_future(killer(log, v));
-}
-"#;
-    let (mut vm, sink) = setup(src);
-    vm.call::<_, ()>("main", ()).expect("main");
-    run_loop(&mut vm, 200);
-    // `a` is declared before `b`, so at the resume arm's drop path `b`
-    // releases first (RFC 0016 §3 reverse binding order) — after the
-    // victim crossed its park
-    let lines = sink.borrow().clone();
-    let pa = lines.iter().position(|l| l == "drop:a").expect("drop:a ran");
-    let pb = lines.iter().position(|l| l == "drop:b").expect("drop:b ran");
-    assert!(pb < pa, "reverse declaration order: b before a, got {lines:?}");
-    assert!(!lines.iter().any(|l| l == "unreachable"));
-    assert!(lines.iter().any(|l| l == "killer:aborted"));
 }
 
 // ---- the sealed mint recovers as a live Future ----

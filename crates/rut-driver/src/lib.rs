@@ -517,7 +517,7 @@ pub fn compile_program_resolved(
 
 /// Mount `core` — the prelude surface (RFC 0028): the erasure
 /// primitive (`opaque`), the builtin trait (`Iterator`), and
-/// the compiler-lowered functions (`assert`/`panic`, `on_drop`, the
+/// the compiler-lowered functions (`assert`/`panic`, the
 /// `str`/`bytes` natives). v1.1 removed `Option`/`Result`/`own` — use
 /// sites diagnose with the removal. A
 /// native module with no body: its surface is
@@ -725,7 +725,6 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
         Op::MakeOpt { dst, src, .. } => format!("makeopt r{dst}, r{src}"),
         Op::WeakNew { dst, src, .. } => format!("weaknew r{dst}, r{src}"),
         Op::WeakUpgrade { recv, dst, .. } => format!("weakupgrade r{dst}, r{recv}"),
-        Op::OnDrop { obj, cleanup } => format!("ondrop r{obj}, r{cleanup}"),
         Op::Mov { dst, src } => format!("mov r{dst}, r{src}"),
         Op::MovRef { dst, src } => format!("movref r{dst}, r{src}"),
         Op::Const { dst, k } => format!("const r{dst}, k{k}"),

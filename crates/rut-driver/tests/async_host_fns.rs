@@ -326,16 +326,12 @@ pub fn main() -> nil {
 #[test]
 fn cancel_maps_the_data_path_to_the_arm_and_discards_late_results() {
     let src = r#"
-use core::{ on_drop };
 use rt::{ create_logger, logger_log };
 use async_host::{ launch_future, sleep, LaunchedFutureHandle };
 use fixture::hang;
 
 async fn victim(cx: RunContext, log: opaque) -> nil {
     let buf: ?StrBuf = StrBuf(4);
-    on_drop(buf, fn (b: ?StrBuf) {
-        logger_log(log, 2, "dropped:buf");
-    });
     await hang("x");
     logger_log(log, 2, "unreachable");
 }
@@ -354,10 +350,12 @@ pub fn main() -> nil {
 "#;
     let (mut vm, sink, fx) = setup(src);
     vm.call::<_, ()>("main", ()).expect("main");
-    // drive until the task abort has run the victim's drop path
+    // drive until the task abort has retired the victim: the ready
+    // queue and the timers drain, and only the hung host future stays
+    // pending on its Completer
     for _ in 0..200 {
         vm.run_ready().expect("run_ready");
-        if sink.borrow().iter().any(|l| l == "dropped:buf") {
+        if vm.pending_tasks() == 1 {
             break;
         }
         match vm.next_deadline() {
@@ -366,11 +364,15 @@ pub fn main() -> nil {
         }
     }
     assert!(
-        sink.borrow().iter().any(|l| l == "dropped:buf"),
-        "the victim's drop path ran: {:?}",
+        sink.borrow().iter().any(|l| l == "killer:aborted"),
+        "the killer ran: {:?}",
         sink.borrow()
     );
-    assert!(vm.pending_tasks() >= 1, "the hung host future is still parked");
+    assert_eq!(
+        vm.pending_tasks(),
+        1,
+        "the victim retired; the hung host future is the one still parked"
+    );
     // the task is gone; the host frame is the poll set's business —
     // cancel it through the cx data path and the arm fires
     let frame = vm.first_host_pending().expect("the hung future is reachable");

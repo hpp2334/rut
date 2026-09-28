@@ -1771,7 +1771,7 @@ pub fn main() -> nil {
     assert_eq!(lines, vec!["-1.5 0.25"]);
 }
 
-// ---- A1 surface (RFC 0005/0007/0013/0016): nil + *T, &x, on_drop,
+// ---- A1 surface (RFC 0005/0007/0013/0016): nil + *T, &x,
 // tuples, anonymous closures, zero-value field defaults ----
 
 #[test]
@@ -1842,22 +1842,6 @@ pub fn main() -> nil {
 "#;
     let (_, trap, _) = run_case(src, 100_000);
     assert_eq!(trap.as_deref(), Some("NilDeref"));
-}
-
-#[test]
-fn a1_on_drop_runs_at_refcount_zero() {
-    let src = r#"
-use core::{ on_drop };
-struct P { x: i32 = 0; }
-pub fn main() -> nil {
-    let p: ?P = P { x: 9 };
-    on_drop(p, fn (p: ?P) { Logger.new("t").info(f"dropped {p.x}"); });
-    Logger.new("t").info("body done");
-}
-"#;
-    let (lines, trap, _) = run_case(src, 100_000);
-    assert_eq!(trap, None);
-    assert_eq!(lines, vec!["body done", "dropped 9"]);
 }
 
 #[test]

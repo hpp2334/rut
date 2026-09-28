@@ -25,10 +25,10 @@ pub class LaunchedFutureHandle<T> {
 
 impl LaunchedFutureHandle<T> {
     // Mark the frame cancelled and re-enqueue it: the probe at its
-    // checkpoint fires the drop path (on_drop locals, RFC 0016 §3
-    // order). `false` when the future already finished — a completed
-    // frame's state is retired, and the engine answers false on it, so
-    // a repeat abort is stable (and harmless).
+    // checkpoint fires the drop path (the frame's locals release in
+    // reverse binding order). `false` when the future already finished
+    // — a completed frame's state is retired, and the engine answers
+    // false on it, so a repeat abort is stable (and harmless).
     pub fn abort(mut self) -> bool {
         let f = self.f;
         if (f == nil) {

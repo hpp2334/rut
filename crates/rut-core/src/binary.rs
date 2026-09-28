@@ -283,7 +283,6 @@ pub struct Surface {
 /// phase-2 sweep retires the call sites.)
 pub const CORE_FNS: &[IdentId] = &[
     sym::ASSERT, sym::PANIC,
-    sym::ON_DROP,
     sym::STRING_JOIN,
     sym::CAPTURE_STACKTRACE,
 ];
@@ -396,6 +395,7 @@ pub const REMOVED_CORE: &[(&str, &str)] = &[
     ("Array", "`Array` was removed — the array type is spelled `[T]`, construction is the repeat `[v; n]` (RFC 0005 §9)"),
     ("make_ptr", "`make_ptr(v)` was removed — write `?T`: a `T` widens into `?T` on assignment, `nil` is the null (RFC 0044)"),
     ("downcast", "`downcast<T>(o)` was removed — the erasure primitive carries it: `opaque.downcast<T>(o)` (builtin-surface)"),
+    ("on_drop", "`on_drop` was removed — implement `Disposal` for the type; the engine calls `dispose` at refcount zero"),
 ];
 
 /// The removal table keyed by [`IdentId`] — interned once per compiler
@@ -958,7 +958,6 @@ fn encode_op(e: &mut Enc, op: &Op) {
         Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
         Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
         Op::MakeOpt { dst, src, ty } => { e.u8(89); e.u16(*dst); e.u16(*src); e.u32(*ty); }
-        Op::OnDrop { obj, cleanup } => { e.u8(90); e.u16(*obj); e.u16(*cleanup); }
         Op::WeakNew { dst, src, ty } => { e.u8(92); e.u16(*dst); e.u16(*src); e.u32(*ty); }
         Op::WeakUpgrade { recv, dst, ty } => { e.u8(93); e.u16(*recv); e.u16(*dst); e.u32(*ty); }
         Op::ArrNew { dst, ty, len, repr } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); e.u8(repr.to_u8()); }
@@ -1007,7 +1006,6 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         23 => Op::SetF { obj: d.u16()?, field: d.u32()?, val: d.u16()?, repr: repr(d.u8()?)? },
         24 => Op::Own { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
         89 => Op::MakeOpt { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
-        90 => Op::OnDrop { obj: d.u16()?, cleanup: d.u16()? },
         25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()?, repr: repr(d.u8()?)? },
         26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
         27 => Op::ArrGet { dst: d.u16()?, arr: d.u16()?, idx: d.u16()?, repr: repr(d.u8()?)? },
@@ -1026,6 +1024,9 @@ fn decode_op(d: &mut Dec) -> Result<Op, String> {
         // 48 is RETIRED (StrCharAt died with the char exorcism — never
         // re-meaninged): name the number loudly instead of the generic catch-all
         48 => return Err("bad opcode 48 (StrCharAt retired by the char exorcism — recompile under VERSION 13)".into()),
+        // 90 is RETIRED (OnDrop died with the destructor removal — never
+        // re-meaninged): name the number loudly instead of the generic catch-all
+        90 => return Err("bad opcode 90 (OnDrop retired — cell-death code is the `Disposal` trait; recompile)".into()),
         91 => Op::StrCodeAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
         92 => Op::WeakNew { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
         93 => Op::WeakUpgrade { recv: d.u16()?, dst: d.u16()?, ty: d.u32()? },

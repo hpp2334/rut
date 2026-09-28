@@ -105,8 +105,7 @@ fn tuples_parse_and_destructure() {
 
 #[test]
 fn pointers_and_nil_parse() {
-    // RFC 0005 §9 + RFC 0044: `?T` types, the `nil` literal, the
-    // `on_drop` decl
+    // RFC 0005 §9 + RFC 0044: `?T` types, the `nil` literal
     let src = "fn f() -> nil { let p: ?i32 = 7; if (p != nil) { } }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");

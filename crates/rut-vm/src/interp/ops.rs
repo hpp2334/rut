@@ -380,13 +380,6 @@ impl Vm {
         Ok(())
     }
 
-    /// `OnDrop` — attach a cleanup closure to a cell (RFC 0016 §3).
-    #[inline(always)]
-    pub(super) fn op_on_drop(&mut self, obj: Reg, cleanup: Reg) -> Result<(), Trap> {
-        self.heap
-            .set_drop_fn(self.cur_regs[obj as usize], self.cur_regs[cleanup as usize])
-    }
-
     /// `nil` legality (RFC 0005): a null slot reaching a dereference is
     /// the `NilDeref` trap — never a silent read.
     #[inline]

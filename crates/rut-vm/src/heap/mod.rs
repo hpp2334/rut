@@ -456,9 +456,9 @@ impl Heap {
     /// referent's raw slot word — UNRETAINED (a weak never keeps its
     /// referent alive) — registered into the referent's weak list so
     /// referent death nulls it. `ty` is the instantiated `Weak<elem>`
-    /// id. Traps on a nil referent ("weak on nil" — the `on_drop` text).
-    /// Store-entry referents (opaque boxes, tagged words) register by the
-    /// same word the drop-fn map keys (D1).
+    /// id. Traps on a nil referent ("weak on nil").
+    /// Store-entry referents (opaque boxes, tagged words) register by
+    /// the same word the weak list keys (D1).
     pub fn alloc_weak(&self, referent: Slot, ty: TypeId) -> Result<Slot, Trap> {
         let word = unsafe { referent.r };
         if word.is_null() {
@@ -511,33 +511,6 @@ impl Heap {
             let c = &*p;
             c.refs.set(c.refs.get().saturating_add(1));
         }
-    }
-
-    /// Attach a drop callback to a cell (RFC 0016 §3). Traps on `nil` or a
-    /// second attach. The cleanup slot is retained for the map's lifetime.
-    pub fn set_drop_fn(&self, obj: Slot, cleanup: Slot) -> Result<(), Trap> {
-        let p = unsafe { obj.r };
-        if p.is_null() {
-            return Err(Trap::new(TrapKind::NilDeref, "on_drop on nil"));
-        }
-        if unsafe { cleanup.r.is_null() } {
-            return Err(Trap::new(TrapKind::Invalid, "on_drop: nil cleanup"));
-        }
-        self.retain(cleanup);
-        if !self.arena.set_drop_fn(p, cleanup) {
-            self.release(cleanup);
-            return Err(Trap::new(
-                TrapKind::Invalid,
-                "on_drop already attached to this pointer (RFC 0016 §3)",
-            ));
-        }
-        Ok(())
-    }
-
-    /// Pop one queued drop callback: `(pinned cell, cleanup)`. The caller
-    /// runs `cleanup(cell)` and then releases both.
-    pub fn take_pending_drop(&self) -> Option<(Slot, Slot)> {
-        self.arena.take_pending_drop().map(|(p, cleanup)| (Slot { r: p }, cleanup))
     }
 
     /// rc -= 1; at zero the cell (or store entry — the tagged slot words)

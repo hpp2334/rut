@@ -195,28 +195,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
                 return Ok(TY_OPAQUE);
             }
-            sym::ON_DROP if core_fn => {
-                // on_drop(p, cleanup) (RFC 0016 §3): cleanup runs when the
-                // cell's refcount reaches zero
-                if args.len() != 2 {
-                    self.ctx.err(sp, "on_drop(p, cleanup) takes two arguments (RFC 0016 §3)");
-                    return Err(());
-                }
-                let pt = self.compile_expr(args[0], None)?;
-                if !matches!(self.ctx.types.kind(pt), TyKind::Opt { .. }) {
-                    self.ctx.err(sp, "on_drop needs a nullable — `?T` (RFC 0016 §3 + RFC 0044)");
-                    return Err(());
-                }
-                let obj = self.last_reg;
-                let ct = self.compile_expr(args[1], None)?;
-                if !matches!(self.ctx.types.kind(ct), TyKind::Fn { .. }) {
-                    self.ctx.err(sp, "on_drop's cleanup must be a function value — `fn(?T)` (RFC 0016 §3)");
-                    return Err(());
-                }
-                let cleanup = self.last_reg;
-                self.emit(Op::OnDrop { obj, cleanup }, sp.lo);
-                return Ok(TY_NIL);
-            }
             sym::PANIC if core_fn => {
                 if args.len() != 1 {
                     self.ctx.err(sp, "panic(msg) takes a message (RFC 0034 §2)");
