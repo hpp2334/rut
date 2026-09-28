@@ -148,11 +148,14 @@ count=2
 
 ## Classes — sealed records
 
-A class adds three things to a struct: module-private fields,
-construction gated through class methods, and the option of cleanup
-hooks. There is no `constructor` keyword, no `new` operator, and no
-outside literal — the only way to build a class value from outside is
-to call a class method that chooses to.
+A class adds two things to a struct: module-private fields and
+construction gated through class methods. There is no `constructor`
+keyword, no `new` operator, and no outside literal — the only way to
+build a class value from outside is to call a class method that chooses
+to. (Cleanup hooks are not a class privilege: implement `Disposal` for
+either shape, and the engine calls `dispose` when the value's cell
+refcount reaches zero — see
+[Rc, dispose, and identity](../reference/rc-dispose-identity.md).)
 
 ```rut
 use ink::{ Logger };

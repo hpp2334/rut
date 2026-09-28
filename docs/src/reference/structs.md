@@ -154,12 +154,13 @@ Limits, exhaustively:
 
 - **no member visibility** — all fields are public, always;
 - **no class methods** — the literal is the only construction (open
-  literal vs class-method-gated *is* the struct/class distinction);
-- **no destructor** — a value shared everywhere has no single death to
-  hook; if you need one, write a class and attach `on_drop` (see
-  [Rc, dispose, and identity](rc-dispose-identity.md)).
+  literal vs class-method-gated *is* the struct/class distinction).
 
-Everything else class-shaped is allowed, including `impl` blocks.
+Everything else class-shaped is allowed, including `impl` blocks. And
+the old "no destructor" limit is gone: a shared value dies exactly when
+its cell's refcount reaches zero, so cleanup is one `impl` away —
+implement `Disposal` for the type and the engine calls `dispose` at
+that moment (see [Rc, dispose, and identity](rc-dispose-identity.md)).
 
 ## Traits and representation
 

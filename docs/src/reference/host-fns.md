@@ -5,7 +5,7 @@ One linkage keyword, one implementer:
 | keyword | implementation lives in | bound at link against |
 |---|---|---|
 | `host fn` / `host struct` | the **embedding Rust** — a typed registration | the load-time contract (below) |
-| `builtin fn` / `builtin class` / `builtin trait` / `builtin impl` | **the engine itself** — compiler-lowered | nothing; the decl is a pure signature contract |
+| `prelude builtin` / `pub builtin` rows | **the engine itself** — compiler-lowered | nothing; the decl is a pure signature contract |
 
 `extern` does not exist: rut→rut names resolve through use paths
 ([modules and visibility](modules-and-visibility.md)); host→rut entry
@@ -55,10 +55,11 @@ host struct Name { fields }           // flat record; every field a crossing
                                       // type; no methods, no field
                                       // initializers — the shape IS the
                                       // whole surface
-builtin fn name<T>(params) -> T;      // engine fn, compiler-lowered
-builtin class Name<T> { .. }          // engine type member contract
-builtin trait Name<T> { .. }          // engine-woven contract
-builtin impl i32 { .. }               // engine methods on a primitive
+prelude builtin fn name<T>(params) -> T;   // engine fn, compiler-lowered
+prelude builtin class Name<T> { .. }       // engine type member contract
+prelude builtin trait Name<T> { .. }       // engine-woven contract
+prelude builtin impl i32 { .. }            // engine methods on a primitive
+pub builtin trait Name<T> { .. }           // the import-gated twin (below)
 ```
 
 Rules:
@@ -81,6 +82,35 @@ Rules:
   ([traits and dispatch](traits.md)).
 - **`builtin` is a contextual keyword**: `.d.rut`-only; elsewhere it is a
   legal identifier.
+
+### The two builtin spellings
+
+A `builtin` decl spells one of two strict forms — a bare `builtin`
+diagnoses *"`builtin` must be spelled `prelude builtin` (ambient) or
+`pub builtin` (import-gated)"*:
+
+- **`prelude builtin`** — the **ambient** engine surface: the name
+  binds in every compilation unit, no `use` needed. The primitives and
+  their `builtin impl` methods, `opaque`, `Weak`, `StrBuf`,
+  `StackTrace`, `assert`/`panic`/`string_join`,
+  `capture_stacktrace`, and the `Iterator`/`Future`/`RunContext`
+  traits are all ambient.
+- **`pub builtin`** — the **import-gated** engine surface: the name
+  resolves only through `use core::{ .. }`, the way a package's names
+  do. Today's rows are the disposal pair — `Disposal` and
+  `DisposalContext` ([the Rc heap](rc-heap.md)).
+
+Using a `pub builtin` name without the use line is a resolution miss
+that names the fix, never a bare "unknown name":
+
+```text
+`Disposal` is not in scope — `use core::{ Disposal }`
+```
+
+The split is per name: a unit that imports one gated name still sees
+every ambient name for free, and an unused name in a `use core` line
+stays a lint, not an error.
+
 - **`opaque` wraps native state; there is no host class.** rut wraps the
   handle in a class of its own — the wrapper-class pattern
   ([native containers API surface](native-containers.md)). Destructors
@@ -103,7 +133,7 @@ complete as a surface.
 | `trait` | method signatures (+ `requires`) are the whole definition |
 | `struct` | fields only, with load-time initializers |
 | `host fn` / `host struct` | signatures only, concrete over the crossing set |
-| `builtin fn` / `class` / `trait` / `impl` | toolchain decl files only |
+| `prelude builtin` / `pub builtin` rows | toolchain decl files only — the two spellings above |
 
 Forbidden — the parser errors *"implementation in a declaration file"*:
 any fn/class body, statements. Symmetrically, a `.rut` file that spells

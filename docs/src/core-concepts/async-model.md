@@ -88,8 +88,8 @@ rides existing bytecode — no new opcodes, no new runtime machinery.
 
 `handle.abort()` flags the frame's cancellation and re-enqueues it. The
 probe at its next checkpoint branches to the drop path: locals release
-in reverse binding order, `on_drop` callbacks fire by refcount, and any
-pending `sleep` dies with the frame. Cancellation **never interrupts
+in reverse binding order, `Disposal` impls run at refcount zero, and
+any pending `sleep` dies with the frame. Cancellation **never interrupts
 mid-expression** — the checkpoint probe is the only place a
 cancellation becomes observable, so a cancelled function dies at a
 known-clean boundary. This is the same machinery that frees any heap

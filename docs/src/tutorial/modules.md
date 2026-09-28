@@ -72,8 +72,11 @@ use json::{ decodeJsonBytes, JsonDeserialize };
 
 Builtin names — the primitives, `str`/`bytes` members, `panic`,
 `assert`, `Vec`-free array grammar, `opaque` — are **ambient**: no
-`use` needed. Package names from your manifest are; an unused name in a
-`use` is a lint, not an error.
+`use` needed. The exceptions are core's import-gated pair,
+`Disposal`/`DisposalContext` — they resolve only through
+`use core::{ .. }`, like any package name. Package names from your
+manifest are imported the same way; an unused name in a `use` is a
+lint, not an error.
 
 Within one module, everything is visible — including declarations
 later in the file. Order never matters.

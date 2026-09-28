@@ -44,14 +44,14 @@ element traffic is plain slot moves.
 
 ## Deterministic destruction
 
-When a count reaches zero, destruction runs inline, in a fixed order:
+When a count reaches zero, destruction runs in a fixed order:
 
-1. **`on_drop` cleanups are pinned.** `on_drop<T>(p: ?T, cleanup:
-   fn(?T))` attaches a cleanup to a nullable binding — and a `?T`
-   binding *is* the cell reference, so this is "run this when the
-   object dies". One callback per binding; a second attach is a
-   compile error; the pinned callbacks drain at the next call
-   boundary.
+1. **Weak boxes null first, then `dispose`.** A type implementing the
+   `Disposal` trait gets its `dispose(mut self, cx: DisposalContext)`
+   called — the engine pins the dying cell, queues the call, and the
+   interpreter drains the queue at call boundaries. One impl per type;
+   `use core::{ Disposal, DisposalContext }` brings the pair in. Fields
+   release after the body returns.
 2. **Fields release in declaration order**, recursively — a dying
    record's strings, arrays, and boxes release their own references, so
    nothing is pinned until VM shutdown just because its owner died.
@@ -61,6 +61,7 @@ When a count reaches zero, destruction runs inline, in a fixed order:
    GC" (see [the host boundary](host-boundary.md)).
 
 ```rut
+use core::{ Disposal, DisposalContext };
 use ink::{ Logger };
 
 class Connection {
@@ -72,13 +73,17 @@ impl Connection {
     fn open(url: str, log: Logger) -> Connection {
         return Connection { url: url, log: log };
     }
-    fn close(self) { self.log.info(f"closed {self.url}"); }
+}
+
+impl Disposal for Connection {
+    fn dispose(mut self, cx: DisposalContext) {
+        self.log.info(f"closed {self.url}");
+    }
 }
 
 pub fn main() {
     let log = Logger.new("rc");
-    let conn: ?Connection = Connection.open("tcp://edge", log);
-    on_drop(conn, fn(c: ?Connection) { c.close(); });
+    let conn = Connection.open("tcp://edge", log);
     log.info("main is done — the count hits zero at the boundary");
 }
 ```
@@ -98,8 +103,8 @@ Two edge rules worth knowing:
   the object is deliberately immortalized (and logged) rather than
   wrapping — the same rule Swift uses.
 - **Weak boxes null first.** When a cell with weak watchers dies, every
-  `Weak` box to it is nulled *before* any user code runs — a cleanup
-  that calls `upgrade()` sees `nil`, deterministically.
+  `Weak` box to it is nulled *before* any user code runs — a dispose
+  body that calls `upgrade()` sees `nil`, deterministically.
 
 ## Weak references
 
@@ -148,7 +153,7 @@ until the VM is dropped; no collector ever runs, no pass interrupts
 execution, and destructor ordering never surprises you. Guidance is
 lint-level, not runtime:
 
-- resource-holding types (things with `on_drop` cleanups or host
+- resource-holding types (types with `Disposal` impls or host
   handles) must not participate in strong cycles;
 - parent/child and observer shapes take `Weak` back-pointers;
 - pure-data cycles are harmless — they cost only memory.

@@ -84,7 +84,7 @@ machine):
 | control | `Jmp`, `Br`, `BrTable` | `BrTable` arms in the `labels` pool |
 | calls | `Call`, `CallM`, `CallI`, `CallFn`, `CallNat`, `Ret` | see below |
 | records | `NewCell`, `MakeRecord`, `GetF`, `SetF` | `MakeRecord` allocates + initializes every field in one op; field operands bake the field's `Repr` |
-| ownership | `Own` (payload copy), `OnDrop` (cleanup at release-to-zero) | |
+| ownership | `Own` (payload copy; `bytes.clone()`'s lowering) | opcode 90 (`OnDrop`) is retired — cell-death code is the `Disposal` trait, dispatched by the release path, not an op ([the Rc heap](rc-heap.md)) |
 | nullables | `MakeOpt` | `T -> ?T`: box into a one-slot cell (shares, never copies) |
 | weak refs | `WeakNew`, `WeakUpgrade` | [Weak references](weak-refs.md) |
 | arrays | `ArrNew` (zeroed), `ArrLit` (fixed), `ArrGet`/`ArrSet`, `ArrGetF`/`ArrSetF` (fused field+index) | bounds trap; element repr baked in |

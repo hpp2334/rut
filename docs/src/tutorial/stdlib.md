@@ -106,10 +106,10 @@ same=true zeroed=4 from=3
 
 `opaque(v)` seals any value for recovery with
 `opaque.downcast<T>(o) -> ?T` — see [errors and
-optionality](errors.md). `on_drop(p, cleanup)` runs a callback when a
-cell's refcount reaches zero, and `Weak.new(v)` holds a non-keeping
-reference (`upgrade() -> ?T`, `nil` once the referent died) — the
-memory stories live in
+optionality](errors.md). Implementing `Disposal` for a type gives it
+cleanup code that runs when its cell's refcount reaches zero, and
+`Weak.new(v)` holds a non-keeping reference (`upgrade() -> ?T`, `nil`
+once the referent died) — the memory stories live in
 [the Rc heap and destructors](../reference/rc-heap.md) and
 [weak references](../reference/weak-refs.md).
 

@@ -43,8 +43,9 @@ at the op.
 
 - Direct calls are an index + jump; trait calls are two loads (vtable row)
   + an indirect jump.
-- Refcount retain/release are inline in the loop; a release to zero runs
-  the cell's `on_drop` cleanups and frees
+- Refcount retain/release are inline in the loop; a release to zero
+  nulls the weak list, queues the type's `dispose` body (the
+  `Disposal` contract), and frees
   ([The Rc heap and destructors](rc-heap.md)).
 - Fuel is accounted per op, with the fuller budget check amortized every
   `interrupt_every` ops.
@@ -97,7 +98,7 @@ pub enum TrapKind {
 **Traps are catchable only at the host boundary.** `vm.call(...)` returns
 `Result`; rut code never catches one — errors in rut are `(T, err)` tuples
 ([Errors and optionality](../tutorial/errors.md)). On the way out,
-frames are dropped and destructors run: `on_drop` cleanups fire, borrow
+frames are dropped and destructors run: `dispose` bodies fire, borrow
 guards release. The `Vm` itself survives a trap — the next call starts
 clean.
 

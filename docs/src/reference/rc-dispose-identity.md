@@ -27,24 +27,62 @@ fields and elements are pointer-sized handle slots, and the refcount
 walk sees every handle field via the compile-time field table (see
 [Reified types and layout](reified-types.md)).
 
-## Cleanups — `on_drop`
+## Disposal — the cell-death contract
 
-Destructors are attached, not implemented. The surface is the builtin
+Destructors are implemented, not attached. A type opts in with one
+`impl` block over the core trait `Disposal`:
 
 ```rut
-builtin fn on_drop<T>(p: ?T, cleanup: fn(?T)) -> nil;
+use core::{ Disposal, DisposalContext };
+use ink::{ Logger };
+
+struct Conn { log: Logger; url: str; }
+
+impl Disposal for Conn {
+    fn dispose(mut self, cx: DisposalContext) {
+        self.log.info(f"closed {self.url}");
+    }
+}
+
+pub fn main() {
+    let log = Logger.new("t");
+    let c = Conn { log: log, url: "tcp://edge" };
+    log.info("main is done");
+}   // c's refcount reaches zero here; dispose runs at the call boundary
 ```
 
-- `cleanup(p)` runs when the referenced cell's refcount reaches **zero**
-  — deterministic destruction, not a collector callback.
-- Fields are released after the cleanup body returns.
-- One callback per nullable; a **second attach is a compile error**.
+```text
+main is done
+closed tcp://edge
+```
+
+- `dispose` runs when the cell's refcount reaches **zero** —
+  deterministic destruction, not a collector callback. The dying value
+  arrives as `mut self`; the fields release after the body returns.
+- `cx: DisposalContext` is **engine-minted**, one per dispose call. It
+  is empty today — the parameter exists so the context can grow
+  additively without ever touching the trait signature.
+- `Disposal` and `DisposalContext` are the **import-gated** builtin
+  surface: `use core::{ Disposal, DisposalContext };` brings the pair
+  in ([core and the swappable packages](stdlib.md)). Using either
+  without the use line diagnoses
+  `` `Disposal` is not in scope — `use core::{ Disposal }` ``.
+- One impl per type, by trait coherence — there is no per-value
+  attach and nothing to attach twice.
+- The body runs at a call boundary, not re-entrantly inside the
+  release; the full sequence — weak boxes nulled first, then
+  `dispose`, then the recursive field walk — is
+  [the Rc heap](rc-heap.md)'s destruction order.
 - The host side of the same law: a host payload's finalizer runs at
   cell death, before the payload's own Rust `Drop`.
 
-Because a struct shared everywhere has no single death to hook, structs
-cannot carry destructors — if you need one, write a class whose handle
-*is* the ownership, and attach the cleanup where you mint it.
+The old attach-a-cleanup builtin `on_drop(p, cleanup)` was removed —
+the per-call attach model is gone; a `Disposal` impl is the one
+cleanup spelling, and the removed name's diagnostic says the same.
+
+Because every shared value now has a single knowable death — its
+refcount reaching zero — a struct can carry its own destructor: no
+wrapper class and no mint-site bookkeeping, just the impl.
 
 ## Weak references
 

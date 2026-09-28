@@ -218,16 +218,23 @@ engine-closed** — users implement them through the ordinary nominal
 path:
 
 ```rut
-builtin trait Future<T> { fn yield(cx: RunContext); }
-builtin trait RunContext {
+prelude builtin trait Future<T> { fn yield(cx: RunContext); }
+prelude builtin trait RunContext {
     fn checkpoint(self) -> u32;
     fn next_checkpoint(mut self, v: u32) -> nil;
     fn cancelled(self) -> bool;
 }
+pub builtin trait Disposal {
+    fn dispose(mut self, cx: DisposalContext);
+}
 ```
 
 `impl Future<nil> for CustomFuture` registers in the same registry as
-any other impl. See [Async and await](async.md).
+any other impl. The ambient traits need no `use`; the import-gated
+`Disposal` pair resolves through `use core::{ Disposal,
+DisposalContext }` (see
+[Host fns and declaration files](host-fns.md)). See
+[Async and await](async.md) and [the Rc heap](rc-heap.md).
 
 ## Equality
 

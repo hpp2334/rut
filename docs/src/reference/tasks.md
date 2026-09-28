@@ -44,9 +44,8 @@ observable** — it never interrupts mid-expression.
 At the probe, the frame runs its **drop path**:
 
 1. the pending edge is cleared — a pending `sleep` dies with the frame;
-2. every local with a cleanup runs it **deterministically, in reverse
-   declaration order** (`on_drop` callbacks fire,
-   [the Rc heap](rc-heap.md));
+2. every local releases **deterministically, in reverse declaration
+   order** (`Disposal` impls run, [the Rc heap](rc-heap.md));
 3. the state retires (null) — later `abort()` calls answer `false`.
 
 Inside a future impl, `cx.cancelled()` reads the same flag as data, so
@@ -56,17 +55,22 @@ synchronous at the engine level (flag + re-enqueue); a frame parked on
 a host future only observes the flag when the loop drives it again.
 
 ```rut
+use core::{ Disposal, DisposalContext };
+
 class Drops {
     n: u32;
-    fn note(mut self, len: u32) { self.n += 1; }
+}
+
+impl Disposal for Drops {
+    fn dispose(mut self, cx: DisposalContext) { self.n += 1; }
 }
 
 async fn job(cx: RunContext, seen: ?Drops) -> nil {
-    let buf: ?bytes = bytes.zeroed(64);
-    on_drop(buf, fn (b: ?bytes) { seen.note(b.len()); });
+    let buf = Drops { n: 0 };
     await sleep(5000);
     // if `job` is aborted while parked here, the probe at the sleep
-    // checkpoint runs the drop path: seen.note fires, then buf releases
+    // checkpoint runs the drop path: buf's dispose fires, then the
+    // locals release in reverse declaration order
 }
 ```
 

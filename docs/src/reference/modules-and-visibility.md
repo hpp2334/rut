@@ -52,9 +52,12 @@ for the user to annotate. An unreferenced use name is a lint, not an
 error.
 
 The engine's builtin names — the primitives, `opaque`, `panic`,
-`assert`, `type_id<T>()`, `str(x)`, the builtin traits — are **ambient**:
-no `use` is needed for them. Package code (`pouch`, `ink`, `nmapset`, ...)
-mounts only through `use`.
+`assert`, `type_id<T>()`, `str(x)`, the ambient builtin traits — are
+**ambient**: no `use` is needed for them. The one gated pair,
+`Disposal`/`DisposalContext`, resolves only through
+`use core::{ .. }` ([Host fns and declaration files](host-fns.md)).
+Package code (`pouch`, `ink`, `nmapset`, ...) mounts only through
+`use`.
 
 ### Module-level `let`
 

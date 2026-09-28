@@ -27,19 +27,6 @@ const SKIP: &[(&str, u32, &str)] = &[
         4,
         "imports `greet`, the package the reader builds earlier in the chapter",
     ),
-    // the destructor interim: `on_drop` is removed and nothing dispatches
-    // `Disposal::dispose` yet, so these blocks cannot compile — the docs
-    // lane rewrites them onto `Disposal` and clears the entries
-    (
-        "docs/src/core-concepts/memory.md",
-        2,
-        "uses `on_drop`, removed in the destructor interim — rewritten onto `Disposal` on the docs lane",
-    ),
-    (
-        "docs/src/reference/rc-heap.md",
-        1,
-        "uses `on_drop`, removed in the destructor interim — rewritten onto `Disposal` on the docs lane",
-    ),
 ];
 
 fn docs_src() -> std::path::PathBuf {

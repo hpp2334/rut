@@ -72,9 +72,9 @@ type term that follows:
 - A `?T` binding IS the cell reference — writes through it hit the
   shared cell (gated by `mut`, see
   [Modules and visibility](modules-and-visibility.md)).
-- `on_drop<T>(p: ?T, cleanup: fn(?T))` attaches a cleanup that runs when
-  the cell's refcount reaches zero — one callback per nullable, a second
-  attach is a compile error.
+- When the cell's refcount reaches zero, the engine runs the type's
+  `Disposal` impl (`dispose(self, cx)`) — the cell-death hook, not a
+  per-value attach ([the Rc heap](rc-heap.md)).
 - Across the host boundary `?T` crosses nil-flattened when its element
   crosses.
 

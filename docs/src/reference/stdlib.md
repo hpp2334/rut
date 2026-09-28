@@ -14,11 +14,15 @@ Anything else — `gfx`, `imaging`, your own `my_map` — is an **embedder
 package**: a declaration file plus Rust bodies registered the same way
 ([embedding and native modules](embedding.md)).
 
-## core — the ambient prelude
+## core — the prelude surface
 
 Every builtin name is in scope in every compilation unit; no `use` is
-needed. A `use core::{ … };` statement stays legal but is redundant. The
-one exception is the const `NAN`: `use core::{NAN}` is explicit.
+needed. A `use core::{ … };` statement stays legal but is redundant.
+The exceptions: the const `NAN`, and the `Disposal` pair — `Disposal`
+and `DisposalContext` are the **import-gated** spellings, resolving
+only through `use core::{ Disposal, DisposalContext }`. The two
+builtin spellings (ambient vs import-gated) are documented in
+[Host fns and declaration files](host-fns.md).
 
 ### Functions
 
@@ -26,7 +30,6 @@ one exception is the const `NAN`: `use core::{NAN}` is explicit.
 |---|---|
 | `assert(cond: bool, msg: str) -> nil` | trap `Assert` when false; `msg` may be omitted at the call site |
 | `panic(msg: str) -> nil` | abort with the message |
-| `on_drop<T>(p: ?T, cleanup: fn(?T)) -> nil` | run `cleanup(p)` when `p`'s cell refcount reaches zero; one callback per pointer |
 | `string_join(parts: [str]) -> str` | join in one pass |
 | `capture_stacktrace() -> StackTrace` | opt-in stack snapshot: raw frames only, symbols resolved lazily per access |
 | `str.from_code(n: u32) -> str` | the 1-codepoint string |
@@ -67,6 +70,7 @@ pre-sizes ([opaque](opaque.md), [weak references](weak-refs.md)).
 | `StackTrace` | `len() -> i32`, `name(i) -> str`, `line(i) -> i32`, `col(i) -> i32`, `render() -> str` |
 | `StrBuf` | `StrBuf(cap)`, `push(str)`, `push_code(u32)` (invalid scalars mint U+FFFD), `len() -> i32`, `finish() -> str` — the ONE materialization; the builder keeps its buffer |
 | `Weak<T>` | `Weak.new(v)` (traps on nil; reference types only), `upgrade() -> ?T` — `nil` once the referent died |
+| `DisposalContext` | no members — the engine-minted parameter of a `dispose` body; it exists so the context can grow without touching the trait signature |
 
 ### Engine-woven traits
 
@@ -75,6 +79,7 @@ pre-sizes ([opaque](opaque.md), [weak references](weak-refs.md)).
 | `Iterator<E>` | `fn __iterate(self, emit: fn(E) -> bool)` | `for (x of it)` desugars to it; `emit` returning `false` stops |
 | `Future<T>` | `fn yield(cx: RunContext)` | every `async fn`'s hidden frame implements it; `await` consumes it |
 | `RunContext` | `checkpoint() -> u32`, `next_checkpoint(mut self, v: u32) -> nil`, `cancelled() -> bool` | the async protocol's cx record ([async and await](async.md)) |
+| `Disposal` | `fn dispose(mut self, cx: DisposalContext)` | the cell-death contract: the engine calls it at refcount zero ([the Rc heap](rc-heap.md)); **import-gated** — `use core::{ Disposal, DisposalContext }` |
 
 Users implement these with ordinary `impl` blocks; the engine has
 compiler-backed impls for its own types.
@@ -105,6 +110,7 @@ constants are `calc`'s.
 | `char` | `str` of one codepoint; `s.code()`/`str.from_code(n)` |
 | free `downcast<T>(o)` | `opaque.downcast<T>(o)` |
 | `Array` as a name | the `[T]` grammar; `[v; n]` repeat construction |
+| `on_drop(p, cleanup)` | implement `Disposal` for the type — the engine calls `dispose` at refcount zero ([the Rc heap](rc-heap.md)) |
 | output builtins (`print`, `console`) | a logger package (`ink`) |
 
 No removed surface keeps compatibility routing: a removed head in an

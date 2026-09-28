@@ -63,7 +63,7 @@ Rules:
   `Future<T>` (the standard HTTP face does exactly this).
 - Cancellation-by-drop: the probe at the resumed checkpoint branches to
   a drop path that releases the frame's cell-backed locals (their
-  `on_drop` callbacks fire, [the Rc heap](rc-heap.md)), retires the
+  `Disposal` impls run, [the Rc heap](rc-heap.md)), retires the
   state, and returns.
 
 ## The cx protocol

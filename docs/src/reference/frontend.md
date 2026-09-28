@@ -158,8 +158,10 @@ Resync only ever skips forward.
 
 The mode is chosen by file extension: `Mode::Impl` for `.rut`,
 `Mode::Decl` for `.d.rut`. Both share one grammar; declaration mode adds
-the surface declarations — `host fn`, `host struct`, `builtin fn`,
-`builtin class`, `builtin trait` — and **forbids bodies**: any block,
+the surface declarations — `host fn`, `host struct`, and the builtin
+rows (`prelude builtin` / `pub builtin`, see
+[Host fns and declaration files](host-fns.md)) — and **forbids
+bodies**: any block,
 impl blocks included, is rejected with *implementation in a declaration
 file*. Implementation mode rejects `host`/`builtin` with the mirror
 message. The full surface and how bodies bind at load time live in

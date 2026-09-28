@@ -43,64 +43,59 @@ are emitted only where a reference can flow:
 - Debug builds assert the full counter discipline: retain/release
   pairing, no underflow, no double destruction.
 
-## Destruction — `on_drop`
+## Destruction — `Disposal`
 
-A cleanup attaches to a **nullable binding** — the cell reference
-itself — and runs when that cell's count reaches zero:
+A type opts into destructor code by implementing the core trait
+`Disposal` (see [Rc, dispose, and identity](rc-dispose-identity.md)
+for the trait surface):
 
 ```rut
-use core::{ on_drop };
+use core::{ Disposal, DisposalContext };
 use ink::{ Logger };
 
-struct AuditLog { n: i32; }
+struct Audit { log: Logger; n: i32; }
 
-fn load() -> ?bytes {
-    return bytes.from([1, 2, 3, 4]);
+impl Disposal for Audit {
+    fn dispose(mut self, cx: DisposalContext) {
+        self.log.info(f"released {self.n} octets");
+    }
 }
 
-fn audit(n: i32) {
-    let log = Logger.new("audit");
-    log.info(f"released {n} octets");
-}
-
-fn use_buf(buf: ?bytes) {
+fn work() {
     let log = Logger.new("work");
-    log.info(f"working with {buf.len()} octets");
-}
-
-fn work(log: ?AuditLog) {
-    let buf: ?bytes = load();
-    on_drop(buf, fn (b: ?bytes) { audit(b.len()); });  // runs at rc 0
-    use_buf(buf);
-}
+    let buf = Audit { log: log, n: 4 };
+    log.info("working — 4 octets in flight");
+}   // buf's count reaches zero here
 
 pub fn main() {
-    work(nil);
+    work();   // the boundary drains: dispose runs after main's body
 }
 ```
 
 ```text
-working with 4 octets
+working — 4 octets in flight
 released 4 octets
 ```
 
 Laws:
 
-- Signature: `on_drop<T>(p: ?T, cleanup: fn(?T))` — exactly two
-  arguments; `p` must be a nullable; the cleanup must be a function
-  value. All three are compile errors otherwise.
-- **One callback per cell**: a second `on_drop` on the same reference is
-  an error, never a silent overwrite.
-- `on_drop(nil, f)` traps ("on_drop on nil"); a nil cleanup traps at the
-  attach.
-- The callback runs **at a call boundary**, not re-entrantly inside the
-  release: death pins the cell, queues the cleanup, and the interpreter
-  drains the queue between calls, passing the dying referent as the
-  `?T` argument.
+- The engine calls `dispose(mut self, cx: DisposalContext)` exactly
+  once per cell death — when the strong count reaches zero. Types
+  without a `Disposal` impl release straight to the field walk.
+- The call runs **at a call boundary**, not re-entrantly inside the
+  release: death pins the cell and queues it, and the interpreter
+  drains the queue at its call boundaries — the root call's end for
+  sync code, each drive for the async weave — passing the pinned cell
+  as `self` with a freshly minted `cx`.
+- A dispose body may itself release references (a field walk that
+  kills a child whose own `dispose` is next): the drain loops until
+  the queue stays empty.
+- The context `cx` is engine-minted and empty today; it grows
+  additively, never by touching the trait signature.
 - Cancellation drops locals at the suspension point through the same
   machinery ([tasks](tasks.md)) — no special case.
 
-Note the difference from finalizer-based runtimes: a cleanup always
+Note the difference from finalizer-based runtimes: `dispose` always
 runs, exactly once, at a knowable point. There is no "later or never".
 
 ## Destruction order
@@ -108,9 +103,10 @@ runs, exactly once, at a knowable point. There is no "later or never".
 When a cell's strong count reaches zero:
 
 1. Every `Weak` box watching the cell is nulled **before any user code
-   runs** — a cleanup that calls `upgrade()` sees `nil`, deterministically
-   ([weak references](weak-refs.md)).
-2. A queued `on_drop` cleanup runs (pinned cell, then released).
+   runs** — a dispose body that calls `upgrade()` sees `nil`,
+   deterministically ([weak references](weak-refs.md)).
+2. The type's queued `dispose` body runs for cells whose type
+   implements `Disposal` (pinned cell, then released).
 3. Ref-typed children are released **recursively**: record fields in
    declaration order, sum payloads, array elements, `opaque` box inners,
    closure captures. The walk is driven by a per-type release plan built
@@ -154,10 +150,14 @@ When a cell's strong count reaches zero:
 ## Internals
 
 ```text
-Header:  rc: u32        // strong count; 0 = immortal sentinel
+Header:  rc: u32        // strong count; u32::MAX = immortal sentinel
          ty: u32        // index into the type table
-         flags: u32     // weak-list bit, drop-callback bit
+         bytes: u32     // accounted bytes, refunded on release
 ```
+
+The weak lists (referent slot word → its `WeakBox` cells) and the
+disposal-armed markers (cells whose `dispose` is queued or has run)
+are arena side tables, not header words.
 
 Cell kinds: string, vec (growable), array (fixed), slice view, record
 (every user struct/class — vtable + payload slots), enum (tag + payload
