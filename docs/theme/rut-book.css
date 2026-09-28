@@ -220,91 +220,65 @@ html.rust .rut-run-loud code {
   background: #ffffff;
 }
 
-/* .rut-lang — the EN | 中文 switch (theme/lang-toggle.js). A small
-   fixed pill on every page of BOTH editions, linking to the same page
-   in the other edition. Bottom-right corner: mdbook's sticky menu bar
-   owns the top strip (search/theme buttons) and the full-height
-   prev/next arrow strips own the side edges, so the corner is the one
-   spot that never collides; the z-index keeps clicks on the pill
-   instead of the next-chapter strip underneath. Hidden in print. */
-.rut-lang {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 0.35em;
-  padding: 0.25em 0.7em;
+/* .rut-lang-btn — the EN/中文 switch (theme/lang-toggle.js). A text
+   button in mdbook's sticky menu bar (the top-right strip that owns
+   print/theme/search), rightmost, on every page of BOTH editions; it
+   navigates to the same page in the other edition. Styled like the
+   menu bar's own icon buttons but with a text label, in the theme's
+   icon color so it reads as a control, not decoration. Hidden in
+   print, like the rest of the bar. */
+.rut-lang-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 5px 10px;
+  font-family: var(--sans, "Helvetica Neue", Helvetica, Arial, sans-serif);
   font-size: 0.8em;
   line-height: 1.4;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  opacity: 0.75;
-  transition: opacity 0.15s ease;
+  cursor: pointer;
+  color: var(--icons, #999);
+  transition: color 0.15s ease;
 }
-.rut-lang:hover,
-.rut-lang:focus-within {
-  opacity: 1;
+.rut-lang-btn:hover,
+.rut-lang-btn:focus-visible {
+  color: var(--link, #4183c4);
 }
-.rut-lang-item {
-  color: inherit;
-  text-decoration: none;
-}
-a.rut-lang-item:hover,
-a.rut-lang-item:focus-visible {
-  text-decoration: underline;
-}
-.rut-lang-current {
-  font-weight: 700;
+.rut-lang-btn:disabled {
   cursor: default;
-}
-.rut-lang-sep {
   opacity: 0.5;
+  color: var(--icons, #999);
 }
 
 /* ---- dark themes (ayu-flavored) ------------------------------------ */
-html.ayu .rut-lang,
-html.coal .rut-lang,
-html.navy .rut-lang {
-  color: #899ba6;
-  background: rgba(0, 0, 0, 0.45);
-  border-color: #2a3542;
+html.ayu .rut-lang-btn,
+html.coal .rut-lang-btn,
+html.navy .rut-lang-btn {
+  color: #a6adb8;
 }
-html.ayu a.rut-lang-item:hover,
-html.coal a.rut-lang-item:hover,
-html.navy a.rut-lang-item:hover,
-html.ayu a.rut-lang-item:focus-visible,
-html.coal a.rut-lang-item:focus-visible,
-html.navy a.rut-lang-item:focus-visible {
+html.ayu .rut-lang-btn:hover,
+html.coal .rut-lang-btn:hover,
+html.navy .rut-lang-btn:hover,
+html.ayu .rut-lang-btn:focus-visible,
+html.coal .rut-lang-btn:focus-visible,
+html.navy .rut-lang-btn:focus-visible {
   color: #ffd173;
-}
-html.ayu .rut-lang-current,
-html.coal .rut-lang-current,
-html.navy .rut-lang-current {
-  color: #e6e1cf;
 }
 
 /* ---- light themes (github-flavored) -------------------------------- */
-html.light .rut-lang,
-html.rust .rut-lang {
+html.light .rut-lang-btn,
+html.rust .rut-lang-btn {
   color: #59636e;
-  background: rgba(255, 255, 255, 0.85);
-  border-color: #d0d7de;
 }
-html.light a.rut-lang-item:hover,
-html.rust a.rut-lang-item:hover,
-html.light a.rut-lang-item:focus-visible,
-html.rust a.rut-lang-item:focus-visible {
+html.light .rut-lang-btn:hover,
+html.rust .rut-lang-btn:hover,
+html.light .rut-lang-btn:focus-visible,
+html.rust .rut-lang-btn:focus-visible {
   color: #8250df;
-}
-html.light .rut-lang-current,
-html.rust .rut-lang-current {
-  color: #1f2328;
 }
 
 @media print {
-  .rut-lang {
+  .rut-lang-btn {
     display: none;
   }
 }
