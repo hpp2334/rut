@@ -21,62 +21,62 @@ msgstr ""
 
 #: src/SUMMARY.md:7
 msgid "Quick Start"
-msgstr ""
+msgstr "快速开始"
 
 #: src/SUMMARY.md:9 src/quick-start/installation.md:1
 msgid "Installation"
-msgstr ""
+msgstr "安装"
 
 #: src/SUMMARY.md:10 src/quick-start/first-program.md:1
 msgid "Your first rut program"
-msgstr ""
+msgstr "你的第一个 rut 程序"
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
 #: src/reference/project-structure.md:145
 msgid "The playground"
-msgstr ""
+msgstr "Playground"
 
 #: src/SUMMARY.md:13
 msgid "Tutorial"
-msgstr ""
+msgstr "教程"
 
 #: src/SUMMARY.md:15 src/tutorial/values-and-variables.md:1
 msgid "Values and variables"
-msgstr ""
+msgstr "值与变量"
 
 #: src/SUMMARY.md:16 src/SUMMARY.md:60 src/tutorial/control-flow.md:1
 #: src/reference/control-flow.md:1
 msgid "Control flow and when"
-msgstr ""
+msgstr "控制流与 when"
 
 #: src/SUMMARY.md:17 src/SUMMARY.md:65 src/tutorial/functions.md:1
 #: src/reference/functions-closures-generics.md:1
 msgid "Functions, closures, and generics"
-msgstr ""
+msgstr "函数、闭包与泛型"
 
 #: src/SUMMARY.md:18 src/tutorial/types.md:1
 msgid "Structs, enums, and classes"
-msgstr ""
+msgstr "结构体、枚举与类"
 
 #: src/SUMMARY.md:19 src/tutorial/traits.md:1
 msgid "Traits and impl blocks"
-msgstr ""
+msgstr "trait 与 impl 块"
 
 #: src/SUMMARY.md:20 src/tutorial/errors.md:1
 msgid "Errors and optionality"
-msgstr ""
+msgstr "错误与可空性"
 
 #: src/SUMMARY.md:21 src/tutorial/modules.md:1
 msgid "Modules and packages"
-msgstr ""
+msgstr "模块与包"
 
 #: src/SUMMARY.md:22 src/tutorial/async.md:1
 msgid "Async: tasks, workers, and channels"
-msgstr ""
+msgstr "异步：任务、worker 与通道"
 
 #: src/SUMMARY.md:23 src/tutorial/stdlib.md:1
 msgid "The standard library"
-msgstr ""
+msgstr "标准库"
 
 #: src/SUMMARY.md:25
 msgid "Core Concepts"
@@ -182,7 +182,7 @@ msgstr ""
 
 #: src/SUMMARY.md:58 src/tutorial/types.md:18 src/reference/enums.md:1
 msgid "Enums"
-msgstr ""
+msgstr "枚举"
 
 #: src/SUMMARY.md:59 src/reference/literals-and-inference.md:1
 msgid "Literals and inference"
@@ -259,7 +259,7 @@ msgstr ""
 #: src/SUMMARY.md:84 src/tutorial/async.md:165
 #: src/reference/workers-and-channels.md:1
 msgid "Workers and channels"
-msgstr ""
+msgstr "worker 与通道"
 
 #: src/SUMMARY.md:86
 msgid "Embedding and interop"
@@ -349,7 +349,7 @@ msgstr ""
 #: src/SUMMARY.md:114 src/tutorial/modules.md:197
 #: src/reference/dependency-kinds.md:1
 msgid "Dependency kinds"
-msgstr ""
+msgstr "依赖种类"
 
 #: src/SUMMARY.md:115 src/reference/cli.md:1
 msgid "The rut CLI"
@@ -494,46 +494,46 @@ msgid ""
 "the `rut` binary (run / format / pack / dump) plus the language's in-tree "
 "packages, which the engine mounts automatically when you run a standalone "
 "file."
-msgstr ""
+msgstr "rut 是一套无需自举、从源码构建的工具链：一次 Rust 构建就给你 `rut` 二进制（run / format / pack / dump），外加这门语言随树内置的包——运行独立文件时，引擎会自动挂载它们。"
 
 #: src/quick-start/installation.md:8
 msgid "Prerequisites"
-msgstr ""
+msgstr "前提条件"
 
 #: src/quick-start/installation.md:10
 msgid ""
 "**Rust (nightly)** — the repo pins an exact nightly in "
 "`rust-toolchain.toml`; `rustup` installs it on the first build. Any recent "
 "`rustup` works."
-msgstr ""
+msgstr "**Rust（nightly）**——仓库在 `rust-toolchain.toml` 里锁定了一个确切的 nightly；首次构建时 `rustup` 会安装它。任何较新的 `rustup` 都行。"
 
 #: src/quick-start/installation.md:13
 msgid "**git** — for the checkout."
-msgstr ""
+msgstr "**git**——用于检出仓库。"
 
 #: src/quick-start/installation.md:15
 msgid ""
 "**Node.js 20+** — only if you want to build or drive the wasm playground "
 "(the rest of the book does not need it)."
-msgstr ""
+msgstr "**Node.js 20+**——仅当你要构建或驱动 wasm Playground 时才需要（本书的其余部分用不到它）。"
 
 #: src/quick-start/installation.md:18
 msgid "Build the toolchain"
-msgstr ""
+msgstr "构建工具链"
 
 #: src/quick-start/installation.md:20
 msgid "From a checkout of the repository:"
-msgstr ""
+msgstr "从仓库的检出开始："
 
 #: src/quick-start/installation.md:26
 msgid ""
 "This produces the `rut` binary at `target/release/rut`. Put it on your "
 "`PATH` (or call it by path — the pages here use the bare name):"
-msgstr ""
+msgstr "这会在 `target/release/rut` 生成 `rut` 二进制。把它放进你的 `PATH`（或直接按路径调用——这里的页面都使用裸名称）："
 
 #: src/quick-start/installation.md:31
 msgid "\"$PWD/target/release:$PATH\""
-msgstr ""
+msgstr "\"$PWD/target/release:$PATH\""
 
 #: src/quick-start/installation.md:32
 msgid ""
@@ -541,6 +541,9 @@ msgid ""
 "<file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] | dump "
 "<file.rut>\n"
 msgstr ""
+"# usage: rut — run <file.rut | dir | mod.rutbundle> [--fuel N] | fmt "
+"<file.rut | dir> [--check] | pack <dir> [-o out.rutbundle] | dump "
+"<file.rut>\n"
 
 #: src/quick-start/installation.md:36
 msgid ""
@@ -548,11 +551,11 @@ msgid ""
 "and the VM. It also carries the vendored packages from the repo's `rut/` "
 "directory (`core`, `pouch`, `ink`, `json`, …) — a standalone `hello.rut` "
 "that says `use ink::{ Logger };` just works, no manifest required."
-msgstr ""
+msgstr "这个二进制内嵌了整个引擎：词法分析器、语法分析器、编译器、类型化字节码和 VM。它还携带仓库 `rut/` 目录里自带的包（`core`、`pouch`、`ink`、`json` 等）——一个写着 `use ink::{ Logger };` 的独立 `hello.rut` 直接就能跑，不需要任何清单。"
 
 #: src/quick-start/installation.md:42
 msgid "Smoke-test it"
-msgstr ""
+msgstr "冒烟测试"
 
 #: src/quick-start/installation.md:45
 msgid ""
@@ -566,56 +569,65 @@ msgid ""
 "EOF\n"
 "rut run hello.rut\n"
 msgstr ""
+"<<'EOF'\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"hello\");\n"
+"    log.info(f\"hello, rut!\");\n"
+"}\n"
+"EOF\n"
+"rut run hello.rut\n"
 
 #: src/quick-start/installation.md:60
 msgid ""
 "If that printed, your toolchain is complete. Continue to [your first rut "
 "program](first-program.md)."
-msgstr ""
+msgstr "如果打印出了这一行，你的工具链就齐了。继续阅读[你的第一个 rut 程序](first-program.md)。"
 
 #: src/quick-start/installation.md:63
 msgid "Optional: the wasm playground"
-msgstr ""
+msgstr "可选：wasm Playground"
 
 #: src/quick-start/installation.md:65
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to "
 "WebAssembly. Building it needs one extra target:"
-msgstr ""
+msgstr "[Playground](playground.md) 运行的是同一个引擎，只是编译成了 WebAssembly。构建它需要一个额外的 target："
 
 #: src/quick-start/installation.md:73
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifact into "
 "place:"
-msgstr ""
+msgstr "或者，在 `demo/` 里走那条只需一条命令的路径，它还会把产物复制到位："
 
 #: src/quick-start/installation.md:80
 msgid "Optional: build this book"
-msgstr ""
+msgstr "可选：构建本书"
 
 #: src/quick-start/installation.md:82
 msgid ""
 "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
-msgstr ""
+msgstr "本文档是一个 [mdbook](https://rust-lang.github.io/mdBook/) 站点："
 
 #: src/quick-start/installation.md:87
 msgid "# live-reload preview at http://localhost:3000\n"
-msgstr ""
+msgstr "# live-reload preview at http://localhost:3000\n"
 
 #: src/quick-start/installation.md:88
 msgid "# static site in docs/book/\n"
-msgstr ""
+msgstr "# static site in docs/book/\n"
 
 #: src/quick-start/first-program.md:3
 msgid ""
 "rut feels like TypeScript on the surface and Rust underneath the hood. This "
 "page walks one file through the whole toolchain — running, formatting, "
 "inspecting, and budgeting — so every later page can assume the workflow."
-msgstr ""
+msgstr "rut 表面感觉像 TypeScript，引擎盖之下是 Rust。本页带着一个文件走完整条工具链——运行、格式化、检视、预算控制——之后的每一页都可以默认这套工作流。"
 
 #: src/quick-start/first-program.md:8
 msgid "Write and run"
-msgstr ""
+msgstr "编写并运行"
 
 #: src/quick-start/first-program.md:10
 msgid ""
@@ -629,46 +641,55 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"hello\");\n"
+"    let name = \"rut\";\n"
+"    log.info(f\"hello, {name}!\");\n"
+"}\n"
+"```"
 
 #: src/quick-start/first-program.md:20
 msgid "Save it as `hello.rut` and run it:"
-msgstr ""
+msgstr "把它保存为 `hello.rut` 并运行："
 
 #: src/quick-start/first-program.md:30
 msgid "Three things to notice:"
-msgstr ""
+msgstr "三个值得注意的点："
 
 #: src/quick-start/first-program.md:32
 msgid ""
 "**One file is one module.** There is no include form; cross-module code is "
 "reached through `use` paths (see the [modules "
 "tutorial](../tutorial/modules.md))."
-msgstr ""
+msgstr "**一个文件就是一个模块。**没有 include 形式；跨模块代码经由 `use` 路径到达（参见[模块教程](../tutorial/modules.md)）。"
 
 #: src/quick-start/first-program.md:35
 msgid ""
 "**`use ink::{ Logger };`** pulls `Logger` out of the `ink` package. When you "
 "`rut run` a standalone file, the vendored packages mount automatically — no "
 "manifest needed."
-msgstr ""
+msgstr "**`use ink::{ Logger };`** 把 `Logger` 从 `ink` 包里取出来。当你 `rut run` 一个独立文件时，自带的包会自动挂载——不需要清单。"
 
 #: src/quick-start/first-program.md:38
 msgid ""
 "**`f\"hello, {name}!\"`** is a format literal: `{expr}` interpolates any "
 "expression, rendered through the value's display contract."
-msgstr ""
+msgstr "**`f\"hello, {name}!\"`** 是格式化字面量：`{expr}` 插值任意表达式，并经由该值的 display 契约渲染。"
 
 #: src/quick-start/first-program.md:41
 msgid "`pub fn main()` is the entry the CLI calls."
-msgstr ""
+msgstr "`pub fn main()` 是 CLI 调用的入口。"
 
 #: src/quick-start/first-program.md:43
 msgid "Values, briefly"
-msgstr ""
+msgstr "值：速览"
 
 #: src/quick-start/first-program.md:45
 msgid "Extend the file — rut infers, and every type is known at compile time:"
-msgstr ""
+msgstr "扩展这个文件——rut 会推断，且每个类型在编译期都已知："
 
 #: src/quick-start/first-program.md:47
 msgid ""
@@ -689,6 +710,22 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"hello\");\n"
+"    let n = 10;            // i32 — the integer default\n"
+"    let scale = 1.5;       // f32 — the float default\n"
+"    let big: u64 = 10;     // u64 via annotation — fits the default\n"
+"    let flags = [1, 2, 3]; // [i32] — a fixed heap cell\n"
+"    let mut sum = 0;       // `mut` — this one is written to\n"
+"    for (let x of flags) {\n"
+"        sum += x * n;\n"
+"    }\n"
+"    log.info(f\"sum={sum} scale={scale}\");\n"
+"}\n"
+"```"
 
 #: src/quick-start/first-program.md:68
 msgid ""
@@ -696,44 +733,44 @@ msgid ""
 "and variables](../tutorial/values-and-variables.md) tutorial, and the exact "
 "rules live in [literals and "
 "inference](../reference/literals-and-inference.md)."
-msgstr ""
+msgstr "完整的巡礼——后缀、类型转换、字符串、`bytes`、结构体——在[值与变量](../tutorial/values-and-variables.md)教程里，确切的规则则在[字面量与推断](../reference/literals-and-inference.md)。"
 
 #: src/quick-start/first-program.md:73
 msgid "Format"
-msgstr ""
+msgstr "格式化"
 
 #: src/quick-start/first-program.md:75
 msgid "The formatter is the style — there is no configuration:"
-msgstr ""
+msgstr "格式化器就是风格——没有任何配置："
 
 #: src/quick-start/first-program.md:78 src/reference/cli.md:65
 msgid "# rewrite in place\n"
-msgstr ""
+msgstr "# rewrite in place\n"
 
 #: src/quick-start/first-program.md:79
 msgid "# verify only (note: --check goes AFTER the path)\n"
-msgstr ""
+msgstr "# verify only (note: --check goes AFTER the path)\n"
 
 #: src/quick-start/first-program.md:80
 msgid "# walk a directory tree, every *.rut file\n"
-msgstr ""
+msgstr "# walk a directory tree, every *.rut file\n"
 
 #: src/quick-start/first-program.md:83
 msgid ""
 "`--check` prints `unformatted: <file>` and exits `1` when a file needs "
 "changes, which makes it a clean CI gate. A file that does not parse is "
 "refused loudly rather than half-formatted."
-msgstr ""
+msgstr "`--check` 会在文件需要修改时打印 `unformatted: <file>` 并以 `1` 退出，这让它成为一道干净的 CI 门禁。解析不了的文件会被响亮地拒绝，而不是被格式化一半。"
 
 #: src/quick-start/first-program.md:87
 msgid "Inspect"
-msgstr ""
+msgstr "检视"
 
 #: src/quick-start/first-program.md:89
 msgid ""
 "`dump` compiles a single module and prints its structures — useful when a "
 "snippet behaves differently than you expect:"
-msgstr ""
+msgstr "`dump` 编译单个模块并打印它的结构——当代码片段的表现与你预期不同时很有用："
 
 #: src/quick-start/first-program.md:96
 msgid ""
@@ -741,16 +778,16 @@ msgid ""
 "packages, so it is the tool for surface questions (\"what does this lower "
 "to?\") rather than whole-program runs. The playground's **AST** and **IR** "
 "panes show the same two views live — see [the playground](playground.md)."
-msgstr ""
+msgstr "`dump` 让这个孤立的模块走过前端，_不_挂载那些包，因此它是回答“表面问题”（“这段代码被 lower 成了什么？”）的工具，而不是运行整个程序的工具。Playground 的 **AST** 和 **IR** 面板实时展示同样的两个视图——参见 [Playground](playground.md)。"
 
 #: src/quick-start/first-program.md:102
 msgid "Budget it"
-msgstr ""
+msgstr "设定预算"
 
 #: src/quick-start/first-program.md:104
 msgid ""
 "Every `rut run` is fuel-metered. Cap it with `--fuel N` (default 10,000,000):"
-msgstr ""
+msgstr "每次 `rut run` 都按燃料计量。用 `--fuel N` 设上限（默认 10,000,000）："
 
 #: src/quick-start/first-program.md:111
 msgid ""
@@ -758,40 +795,40 @@ msgid ""
 "the same contract the VM enforces for embedded hosts, along with heap "
 "ceilings and depth limits ([resource "
 "limits](../reference/resource-limits.md))."
-msgstr ""
+msgstr "耗尽燃料的程序会停下，并给出一条写明预算的诊断——这与 VM 为嵌入式宿主执行的契约相同，还有堆上限与深度限制（[资源限制](../reference/resource-limits.md)）。"
 
 #: src/quick-start/first-program.md:116
 msgid "Where next"
-msgstr ""
+msgstr "下一步"
 
 #: src/quick-start/first-program.md:118
 msgid ""
 "The [tutorial](../tutorial/values-and-variables.md) teaches the language "
 "hands-on, one concept per chapter."
-msgstr ""
+msgstr "[教程](../tutorial/values-and-variables.md)动手实地讲授这门语言，一章一个概念。"
 
 #: src/quick-start/first-program.md:120
 msgid ""
 "The [examples](../examples/index.md) are seven complete projects you can run "
 "today."
-msgstr ""
+msgstr "[示例](../examples/index.md)是七个今天就能运行的完整项目。"
 
 #: src/quick-start/first-program.md:122
 msgid ""
 "[Core concepts](../core-concepts/design-goals.md) explains _why_ the "
 "language is shaped the way it is."
-msgstr ""
+msgstr "[核心概念](../core-concepts/design-goals.md)解释这门语言_为何_被塑造成如今的形状。"
 
 #: src/quick-start/playground.md:3
 msgid ""
 "The playground is the zero-install way to run rut: the whole engine — lexer, "
 "parser, compiler, VM — compiled to WebAssembly and served as a static page. "
 "It is deployed at **<https://playground.rut.hpp2334.com>**."
-msgstr ""
+msgstr "Playground 是零安装运行 rut 的方式：整个引擎——词法分析器、语法分析器、编译器、VM——被编译成 WebAssembly，作为一个静态页面提供服务。它部署在 **<https://playground.rut.hpp2334.com>**。"
 
 #: src/quick-start/playground.md:8
 msgid "The layout"
-msgstr ""
+msgstr "页面布局"
 
 #: src/quick-start/playground.md:10
 msgid ""
@@ -800,21 +837,21 @@ msgid ""
 "language-surface tours (classes, closures & generics, structs, literals, "
 "checked arithmetic, str views, bytes, opaque, when, maps & sets, type "
 "aliases), then memory shapes (node cycle, tree, weak cache)."
-msgstr ""
+msgstr "**用例列表**——预先准备好的程序，排列顺序与仓库自家门禁运行它们的顺序一致：先是算法（筛法、快速排序、矩阵乘法），再是语言表面的巡礼（类、闭包与泛型、结构体、字面量、checked 算术、str 视图、bytes、opaque、when、映射与集合、类型别名），最后是内存形态（节点循环引用、树、弱引用缓存）。"
 
 #: src/quick-start/playground.md:16
 msgid ""
 "**Editor** — the case's source, live-editable. The cases are read from the "
 "same `.rut` files the repository's native test gate compiles and runs, so "
 "what you edit is the real corpus, not a copy."
-msgstr ""
+msgstr "**编辑器**——用例的源码，可实时编辑。用例读取自仓库原生测试门禁编译运行的同一批 `.rut` 文件，因此你编辑的是真实语料，不是副本。"
 
 #: src/quick-start/playground.md:19
 msgid ""
 "**Output / AST / IR panes** — every run shows the program's real output plus "
 "the two compile views: the parsed AST and the typed IR the compiler lowers "
 "to. `rut dump <file>` prints the same structures from the CLI."
-msgstr ""
+msgstr "**输出 / AST / IR 面板**——每次运行都显示程序的真实输出，外加两个编译视图：解析出的 AST 和编译器最终下降到的类型化 IR。`rut dump <file>` 从 CLI 打印同样的结构。"
 
 #: src/quick-start/playground.md:23
 msgid ""
@@ -823,11 +860,11 @@ msgid ""
 "not a bug: one prepared case parks on the out-of-fuel trap on purpose, and "
 "the Resume control adds fuel and continues the _same_ frame — that is "
 "structured-concurrency-grade resumption, not a restart."
-msgstr ""
+msgstr "**预算控制**——每次运行都在一个明确的燃料 + 堆预算下执行（默认 10,000,000 燃料 / 4 MiB 堆）。预算真正咬人是特性，不是缺陷：一个预备用例故意停在燃料耗尽的陷阱上，而 Resume 控件会追加燃料并继续_同一个_帧——这是结构化并发级别的恢复，不是重启。"
 
 #: src/quick-start/playground.md:30
 msgid "No silent fallback"
-msgstr ""
+msgstr "无静默回退"
 
 #: src/quick-start/playground.md:32
 msgid ""
@@ -837,42 +874,42 @@ msgid ""
 "On the deployed site this never happens; when you run a local build (below), "
 "the preflight exists so a stale artifact cannot masquerade as a working "
 "playground."
-msgstr ""
+msgstr "页面在启动时会探测 wasm 产物。如果引擎或语法高亮模块缺失或无效，你会看到一个整页错误，写明确切的构建命令——各面板绝不会以降级模式挂载。在部署的站点上这永远不会发生；当你运行本地构建（见下）时，这道预检是为了让陈旧的产物无法冒充可用的 Playground。"
 
 #: src/quick-start/playground.md:39
 msgid "Running it locally"
-msgstr ""
+msgstr "在本地运行"
 
 #: src/quick-start/playground.md:44
 msgid "# builds rut.wasm + rut-lsp.wasm, copies to public/\n"
-msgstr ""
+msgstr "# builds rut.wasm + rut-lsp.wasm, copies to public/\n"
 
 #: src/quick-start/playground.md:45
 msgid "# http://localhost:8080 with live reload\n"
-msgstr ""
+msgstr "# http://localhost:8080 with live reload\n"
 
 #: src/quick-start/playground.md:48
 msgid "Other lanes:"
-msgstr ""
+msgstr "其他方式："
 
 #: src/quick-start/playground.md:51
 msgid "# static build into dist/\n"
-msgstr ""
+msgstr "# static build into dist/\n"
 
 #: src/quick-start/playground.md:52
 msgid "# headless gate: every case really runs\n"
-msgstr ""
+msgstr "# headless gate: every case really runs\n"
 
 #: src/quick-start/playground.md:53
 msgid "# dev server + a throwaway public https URL for demos\n"
-msgstr ""
+msgstr "# dev server + a throwaway public https URL for demos\n"
 
 #: src/quick-start/playground.md:56
 msgid ""
 "The corpus itself is documented in [the playground "
 "corpus](../examples/playground-corpus.md), with the bigger end-to-end "
 "projects under [Examples](index.md)."
-msgstr ""
+msgstr "语料本身记录在 [Playground 语料](../examples/playground-corpus.md)，更大的端到端项目见[示例](index.md)。"
 
 #: src/tutorial/values-and-variables.md:3
 msgid ""
@@ -880,86 +917,86 @@ msgid ""
 "chapter covers the primitive types, how literals infer their types, how "
 "bindings work, and the one rule that organizes everything else: **primitives "
 "copy, every other value is a shared cell**."
-msgstr ""
+msgstr "rut 里的每个值都有一个类型，而且每个类型在编译期都已知。本章覆盖基本类型、字面量如何推断类型、绑定如何工作，以及组织其余一切的那条规则：**基本类型复制，其余所有值都是共享单元**。"
 
 #: src/tutorial/values-and-variables.md:8
 msgid ""
 "For the full grammar of literals and inference rules, see [the reference on "
 "literals and inference](../reference/literals-and-inference.md)."
-msgstr ""
+msgstr "字面量的完整语法与推断规则，见[字面量与推断参考](../reference/literals-and-inference.md)。"
 
 #: src/tutorial/values-and-variables.md:11
 msgid "The primitive types"
-msgstr ""
+msgstr "基本类型"
 
 #: src/tutorial/values-and-variables.md:13 src/reference/primitive-types.md:7
 msgid "Group"
-msgstr ""
+msgstr "类别"
 
 #: src/tutorial/values-and-variables.md:13 src/reference/primitive-types.md:7
 msgid "Types"
-msgstr ""
+msgstr "类型"
 
 #: src/tutorial/values-and-variables.md:13 src/reference/primitive-types.md:7
 #: src/reference/native-containers.md:115 src/reference/cli.md:130
 msgid "Notes"
-msgstr ""
+msgstr "说明"
 
 #: src/tutorial/values-and-variables.md:15
 msgid "unsigned integers"
-msgstr ""
+msgstr "无符号整数"
 
 #: src/tutorial/values-and-variables.md:15 src/reference/primitive-types.md:9
 #: src/reference/value-boundary.md:32
 msgid "`u8` `u16` `u32` `u64`"
-msgstr ""
+msgstr "`u8` `u16` `u32` `u64`"
 
 #: src/tutorial/values-and-variables.md:15 src/reference/primitive-types.md:9
 msgid "fixed width"
-msgstr ""
+msgstr "固定宽度"
 
 #: src/tutorial/values-and-variables.md:16
 msgid "signed integers"
-msgstr ""
+msgstr "有符号整数"
 
 #: src/tutorial/values-and-variables.md:16 src/reference/primitive-types.md:10
 #: src/reference/value-boundary.md:31
 msgid "`i8` `i16` `i32` `i64`"
-msgstr ""
+msgstr "`i8` `i16` `i32` `i64`"
 
 #: src/tutorial/values-and-variables.md:16 src/reference/primitive-types.md:10
 msgid "two's complement"
-msgstr ""
+msgstr "二进制补码"
 
 #: src/tutorial/values-and-variables.md:17
 msgid "floats"
-msgstr ""
+msgstr "浮点数"
 
 #: src/tutorial/values-and-variables.md:17 src/reference/primitive-types.md:11
 msgid "`f32` `f64`"
-msgstr ""
+msgstr "`f32` `f64`"
 
 #: src/tutorial/values-and-variables.md:17 src/reference/primitive-types.md:11
 msgid "IEEE 754"
-msgstr ""
+msgstr "IEEE 754"
 
 #: src/tutorial/values-and-variables.md:18
 msgid "boolean"
-msgstr ""
+msgstr "布尔"
 
 #: src/tutorial/values-and-variables.md:18 src/reference/primitive-types.md:12
 #: src/reference/literals-and-inference.md:140
 msgid "`bool`"
-msgstr ""
+msgstr "`bool`"
 
 #: src/tutorial/values-and-variables.md:18
 #: src/reference/literals-and-inference.md:140
 msgid "`true` / `false`"
-msgstr ""
+msgstr "`true` / `false`"
 
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 msgid "text"
-msgstr ""
+msgstr "文本"
 
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 #: src/reference/literals-and-inference.md:141
@@ -968,40 +1005,40 @@ msgstr ""
 #: src/reference/workers-and-channels.md:49 src/reference/value-boundary.md:35
 #: src/reference/value-boundary.md:36 src/reference/templates.md:19
 msgid "`str`"
-msgstr ""
+msgstr "`str`"
 
 #: src/tutorial/values-and-variables.md:19
 msgid "immutable UTF-8, compared by content"
-msgstr ""
+msgstr "不可变 UTF-8，按内容比较"
 
 #: src/tutorial/values-and-variables.md:20 src/reference/primitive-types.md:14
 msgid "binary"
-msgstr ""
+msgstr "二进制"
 
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
 #: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:86
 #: src/reference/by-reference-and-nullable.md:100
 #: src/reference/value-boundary.md:37 src/reference/value-boundary.md:38
 msgid "`bytes`"
-msgstr ""
+msgstr "`bytes`"
 
 #: src/tutorial/values-and-variables.md:20
 msgid "immutable octet buffer, compared by content"
-msgstr ""
+msgstr "不可变八位组缓冲区，按内容比较"
 
 #: src/tutorial/values-and-variables.md:21
 msgid "erased"
-msgstr ""
+msgstr "已擦除"
 
 #: src/tutorial/values-and-variables.md:21 src/examples/playground-corpus.md:56
 #: src/reference/primitive-types.md:18 src/reference/value-boundary.md:39
 #: src/reference/value-boundary.md:40
 msgid "`opaque`"
-msgstr ""
+msgstr "`opaque`"
 
 #: src/tutorial/values-and-variables.md:21
 msgid "a box holding any value — see [errors and optionality](errors.md)"
-msgstr ""
+msgstr "持有任意值的盒——参见[错误与可空性](errors.md)"
 
 #: src/tutorial/values-and-variables.md:23
 msgid ""
@@ -1009,11 +1046,11 @@ msgid ""
 "as one-codepoint `str`s, and codepoints read as `u32` (`s.code()`, "
 "`s.code_at(i)`) — see [string slicing and "
 "views](../reference/string-views.md)."
-msgstr ""
+msgstr "没有 `null`，没有 `undefined`，也没有字符类型。`str` 以单码点 `str` 的形式迭代，码点以 `u32` 读取（`s.code()`、`s.code_at(i)`）——参见[字符串切片与视图](../reference/string-views.md)。"
 
 #: src/tutorial/values-and-variables.md:28
 msgid "Variables: `let` and `let mut`"
-msgstr ""
+msgstr "变量：`let` 与 `let mut`"
 
 #: src/tutorial/values-and-variables.md:30
 msgid ""
@@ -1030,6 +1067,18 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"vars\");\n"
+"    let a = 10;          // an immutable binding\n"
+"    let mut b = 10;      // a mutable binding\n"
+"    b = 20;              // OK — b may be reassigned\n"
+"    // a = 30;           // ERROR: a is not `mut`\n"
+"    log.info(f\"a={a} b={b}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:47
 msgid ""
@@ -1037,7 +1086,7 @@ msgid ""
 "assigning to a field (`p.x = 3`), or assigning to an element (`xs[0] = 7`). "
 "Sharing is not gated by `mut` — two bindings can name the same value, and "
 "what `mut` controls is only who may write."
-msgstr ""
+msgstr "`mut` 是_经由那个名字写入_的许可：重新赋值这个绑定、给字段赋值（`p.x = 3`）、或给元素赋值（`xs[0] = 7`）。共享不以 `mut` 为门槛——两个绑定可以指同一个值，而 `mut` 控制的只是谁可以写。"
 
 #: src/tutorial/values-and-variables.md:52
 msgid ""
@@ -1045,18 +1094,18 @@ msgid ""
 "string, `nil` for nullables. Omit a field in a struct literal and it takes "
 "the field's initializer if there is one, else the type's zero value (see "
 "[structs, enums, and classes](types.md))."
-msgstr ""
+msgstr "每个类型都有零值：数字是 `0`，`bool` 是 `false`，字符串是空串，可空类型是 `nil`。在结构体字面量里省略一个字段，若该字段有初始化器，就取初始化器，否则取该类型的零值（参见[结构体、枚举与类](types.md)）。"
 
 #: src/tutorial/values-and-variables.md:57
 msgid "Numbers"
-msgstr ""
+msgstr "数字"
 
 #: src/tutorial/values-and-variables.md:59
 msgid ""
 "An unsuffixed integer literal defaults to `i32`; an unsuffixed float "
 "defaults to `f32`. The default is also a _ceiling_: a literal adapts to the "
 "expected type only while it fits the default."
-msgstr ""
+msgstr "不带后缀的整数字面量默认为 `i32`；不带后缀的浮点字面量默认为 `f32`。默认值同时也是_上限_：只有当字面量装得进默认类型时，它才会适配到期望的类型。"
 
 #: src/tutorial/values-and-variables.md:63
 msgid ""
@@ -1077,12 +1126,28 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"numbers\");\n"
+"    let a = 10;                        // i32\n"
+"    let b = 10u8;                      // u8 via suffix\n"
+"    let c: u64 = 10;                   // u64 via annotation — 10 fits\n"
+"    let big = 18446744073709551615u64; // past the i32 default: suffix "
+"required\n"
+"    let d = 1.5;                       // f32\n"
+"    let d64: f64 = 1.5;                // f64 via annotation\n"
+"    let hex = 0xFF_u32;                // 0x / 0b / 0o bases, _ separators\n"
+"    log.info(f\"a={a} d={d} d64={d64} hex={hex} big={big}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:83
 msgid ""
 "Conversions are explicit casts: `expr as T`. Casts truncate like C — they "
 "never trap."
-msgstr ""
+msgstr "转换是显式的：`expr as T`。`as` 转换像 C 一样截断——绝不触发陷阱。"
 
 #: src/tutorial/values-and-variables.md:86
 msgid ""
@@ -1096,10 +1161,19 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"casts\");\n"
+"    let cast = 300 as u8;   // 44 — keeps the low 8 bits\n"
+"    log.info(f\"cast={cast}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:100
 msgid "Arithmetic has two sharp edges:"
-msgstr ""
+msgstr "算术有两处锋利的边缘："
 
 #: src/tutorial/values-and-variables.md:102
 msgid ""
@@ -1107,24 +1181,24 @@ msgid ""
 "convert one side first. `let mut total = 0.0;` makes an `f32`, and adding an "
 "`f64` to it is a type error; annotate `let mut total: f64 = 0.0;` when you "
 "mean double precision."
-msgstr ""
+msgstr "**不同宽度不能混用。**两个操作数必须有相同的宽度——先把其中一侧转换过去。`let mut total = 0.0;` 得到一个 `f32`，给它加上 `f64` 是类型错误；要双精度时，请标注 `let mut total: f64 = 0.0;`。"
 
 #: src/tutorial/values-and-variables.md:106
 msgid ""
 "**Overflow, division by zero, and out-of-bounds indexing trap.** For the "
 "explicit non-trapping ladder (`wrapping_add`, `saturating_mul`, "
 "`checked_add`), see [the standard library](stdlib.md)."
-msgstr ""
+msgstr "**溢出、除以零和越界索引都会触发陷阱。**显式的非陷阱阶梯（`wrapping_add`、`saturating_mul`、`checked_add`）见[标准库](stdlib.md)。"
 
 #: src/tutorial/values-and-variables.md:110
 msgid "Text: plain, raw, and format strings"
-msgstr ""
+msgstr "文本：普通、原始与格式化字符串"
 
 #: src/tutorial/values-and-variables.md:112
 msgid ""
 "Three literal forms. A plain string is always inert — no interpolation ever "
 "happens implicitly."
-msgstr ""
+msgstr "三种字面量形式。普通字符串永远是惰性的——绝不会隐式发生插值。"
 
 #: src/tutorial/values-and-variables.md:115
 msgid ""
@@ -1141,6 +1215,18 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"text\");\n"
+"    let name = \"rut\";\n"
+"    let s = \"hi\\tname\";              // plain: escapes processed\n"
+"    let raw = r\"C:\\temp\\log.txt\";    // raw: every byte is literal\n"
+"    let t = f\"hi {name}!\";           // format: placeholders evaluated\n"
+"    log.info(f\"{s} | {raw} | {t}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:132
 msgid ""
@@ -1148,7 +1234,7 @@ msgid ""
 " \\r \\\\ \\\"` and `\\u{...}`). In an f-string, `{ expr }` splices any "
 "expression — identifiers, calls, arithmetic — except nested string literals "
 "(bind one to a variable first). `{{` and `}}` are literal braces:"
-msgstr ""
+msgstr "普通字符串与格式化字符串共享同一套转义（`\\t \\n \\r \\\\ \\\"` 和 `\\u{...}`）。在 f-string 里，`{ expr }` 可以拼进任何表达式——标识符、调用、算术——但不能嵌套字符串字面量（先把字符串绑定到一个变量）。`{{` 与 `}}` 是字面量的花括号："
 
 #: src/tutorial/values-and-variables.md:137
 msgid ""
@@ -1161,6 +1247,14 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"text\");\n"
+"    log.info(f\"open{{close}} braces\");   // prints: open{close} braces\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:150
 msgid ""
@@ -1170,15 +1264,15 @@ msgid ""
 "structs, classes, arrays, vecs — are a compile error inside an f-string; "
 "write a `to_string()`\\-style method and call it, or use a debug dump for "
 "development."
-msgstr ""
+msgstr "f-string 能渲染的东西：整数（十进制）、浮点数（最短往返十进制：`3.5`、`0.1`）、`bool`（`true`/`false`）、`str`（内容），以及枚举成员（它们的名字：`Color.Green` 渲染为 `Green`）。复合值——结构体、类、数组、vec——在 f-string 里是编译错误；写一个 `to_string()` 风格的方法并调用它，或者在开发时用调试转储。"
 
 #: src/tutorial/values-and-variables.md:157
 msgid "Sequences and buffers"
-msgstr ""
+msgstr "序列与缓冲区"
 
 #: src/tutorial/values-and-variables.md:159
 msgid "The fixed array `[T]` is built from a literal or a repeat:"
-msgstr ""
+msgstr "定长数组 `[T]` 由字面量或重复表达式构建："
 
 #: src/tutorial/values-and-variables.md:161
 msgid ""
@@ -1193,6 +1287,16 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"arrays\");\n"
+"    let arr = [1, 2, 3];         // [i32] — fixed length\n"
+"    let zero: [u8] = [0u8; 34];  // 34 slots of 0\n"
+"    log.info(f\"len={arr.len()} first={arr[0]} zero.len={zero.len()}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:176
 msgid ""
@@ -1200,14 +1304,14 @@ msgid ""
 "Vec };`): `Vec.new()`, `Vec.from([..])`, `Vec<i32>.filled(0, 1024)`, `push`, "
 "`pop`, `len`. Indexing and `for..of` work the same on both. See [the "
 "standard library](stdlib.md) for the full surface."
-msgstr ""
+msgstr "可增长序列是 `Vec<T>`（来自 `pouch` 包——`use pouch::{ Vec };`）：`Vec.new()`、`Vec.from([..])`、`Vec<i32>.filled(0, 1024)`、`push`、`pop`、`len`。索引和 `for..of` 在两者身上的工作方式相同。完整表面见[标准库](stdlib.md)。"
 
 #: src/tutorial/values-and-variables.md:182
 msgid ""
 "`bytes` is the binary primitive. `s.encode()` turns text into octets, "
 "`b.decode()` reads it back (lossy UTF-8), `bytes.zeroed(n)` and "
 "`bytes.from(a)` build buffers directly:"
-msgstr ""
+msgstr "`bytes` 是二进制基本类型。`s.encode()` 把文本变成八位组，`b.decode()` 把它读回来（有损 UTF-8），`bytes.zeroed(n)` 与 `bytes.from(a)` 直接构建缓冲区："
 
 #: src/tutorial/values-and-variables.md:186
 msgid ""
@@ -1222,17 +1326,27 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"bytes\");\n"
+"    let b = \"rut runs\".encode();\n"
+"    let ok = b.decode() == \"rut runs\";   // true — content comparison\n"
+"    log.info(f\"len={b.len()} roundtrip={ok}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:201
 msgid "Sharing: the one rule"
-msgstr ""
+msgstr "共享：唯一法则"
 
 #: src/tutorial/values-and-variables.md:203
 msgid ""
 "Primitives and `fn` values **copy** on assignment, argument passing, and "
 "return. **Every other value is a shared cell**: `let q = p` is an O(1) "
 "handle move, and a write through any alias is visible through all of them."
-msgstr ""
+msgstr "基本类型与 `fn` 值在赋值、传参和返回时**复制**。**其余每个值都是共享单元**：`let q = p` 是一次 O(1) 的句柄移动，经由任何一个别名做出的写入，经由所有别名都可见。"
 
 #: src/tutorial/values-and-variables.md:208
 msgid ""
@@ -1250,66 +1364,79 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: i32; y: i32 }\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"sharing\");\n"
+"    let mut p = Point { x: 1, y: 2 };\n"
+"    let q = p;          // q and p name ONE cell\n"
+"    p.x = 4;            // q.x is 4 now\n"
+"    log.info(f\"q.x={q.x} same cell: {q == p}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:226
 msgid "Equality follows the same split:"
-msgstr ""
+msgstr "相等性遵循同样的切分："
 
 #: src/tutorial/values-and-variables.md:228
 msgid "Operands"
-msgstr ""
+msgstr "操作数"
 
 #: src/tutorial/values-and-variables.md:228
 #: src/reference/rc-dispose-identity.md:82
 #: src/reference/by-reference-and-nullable.md:96
 msgid "`==` means"
-msgstr ""
+msgstr "`==` 的含义"
 
 #: src/tutorial/values-and-variables.md:230
 msgid "numbers, `bool`"
-msgstr ""
+msgstr "数字、`bool`"
 
 #: src/tutorial/values-and-variables.md:230
 msgid "value comparison"
-msgstr ""
+msgstr "值比较"
 
 #: src/tutorial/values-and-variables.md:231
 msgid "`str`, `bytes`"
-msgstr ""
+msgstr "`str`、`bytes`"
 
 #: src/tutorial/values-and-variables.md:231
 msgid "content comparison"
-msgstr ""
+msgstr "内容比较"
 
 #: src/tutorial/values-and-variables.md:232
 msgid "everything else"
-msgstr ""
+msgstr "其余一切"
 
 #: src/tutorial/values-and-variables.md:232
 msgid "cell identity — two separately-built literals are never equal"
-msgstr ""
+msgstr "单元同一性——两个分别构建的字面量永不相等"
 
 #: src/tutorial/values-and-variables.md:234
 msgid ""
 "The one copy escape hatch is `bytes.clone()` — a fresh buffer with the same "
 "octets. There is no generic copy for any other type; if you need a divergent "
 "value, build a new one."
-msgstr ""
+msgstr "唯一的复制逃生舱是 `bytes.clone()`——一个装着相同八位组的新缓冲区。其他任何类型都没有泛型复制；如果你需要一个会分叉的值，就新建一个。"
 
 #: src/tutorial/values-and-variables.md:238
 msgid ""
 "Absence is `nil` on a nullable `?T` — see [errors and "
 "optionality](errors.md)."
-msgstr ""
+msgstr "缺失是可空 `?T` 上的 `nil`——参见[错误与可空性](errors.md)。"
 
 #: src/tutorial/values-and-variables.md:241
 #: src/reference/literals-and-inference.md:79
 msgid "Tuples"
-msgstr ""
+msgstr "元组"
 
 #: src/tutorial/values-and-variables.md:243
 msgid "Records `(A, B)` are first-class values with numeric fields:"
-msgstr ""
+msgstr "记录 `(A, B)` 是带数字字段的一等值："
 
 #: src/tutorial/values-and-variables.md:245
 msgid ""
@@ -1328,12 +1455,26 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn divmod(a: i32, b: i32) -> (i32, i32) {\n"
+"    return (a / b, a % b);\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"tuples\");\n"
+"    let (q, r) = divmod(17, 5);   // destructuring\n"
+"    let t = (1, true);\n"
+"    log.info(f\"q={q} r={r} t.0={t.0}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:264
 msgid ""
 "The pair is also rut's standard error channel — the next chapters use it "
 "constantly."
-msgstr ""
+msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节会不断用到它。"
 
 #: src/tutorial/values-and-variables.md:267 src/tutorial/control-flow.md:309
 #: src/tutorial/functions.md:220 src/tutorial/types.md:270
@@ -1341,11 +1482,11 @@ msgstr ""
 #: src/tutorial/modules.md:241 src/tutorial/async.md:177
 #: src/tutorial/stdlib.md:312
 msgid "Put it together"
-msgstr ""
+msgstr "综合运用"
 
 #: src/tutorial/values-and-variables.md:269
 msgid "Save this as `literals.rut` and run `rut run literals.rut`:"
-msgstr ""
+msgstr "把它保存为 `literals.rut`，然后运行 `rut run literals.rut`："
 
 #: src/tutorial/values-and-variables.md:271
 msgid ""
@@ -1389,10 +1530,49 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: f32; y: f32 }\n"
+"\n"
+"fn literals(name: str) {\n"
+"    let log = Logger.new(\"literals\");\n"
+"    let a = 10;                      // i32 (default)\n"
+"    let b = 10u8;                    // u8 via suffix\n"
+"    let c: u64 = 10;                 // u64 via annotation — fits the "
+"default\n"
+"    let big = 18446744073709551615u64; // past the `i32` default: suffix "
+"REQUIRED\n"
+"    let cast = 300 as u8;            // 44 — `as` truncates\n"
+"    let d = 1.5;                     // f32 (default)\n"
+"    let e = 1.5f32;                  // f32 via suffix\n"
+"    let d64: f64 = 1.5;              // f64 via annotation\n"
+"    let s = \"hi\\tname\";              // plain string: escapes processed\n"
+"    let raw = r\"C:\\temp\\log.txt\";    // raw literal: NO escape "
+"processing\n"
+"    let t = f\"hi {name}!\";           // format literal\n"
+"    let ch = \"h\";                    // a 1-codepoint str\n"
+"    let mut arr = [1, 2, 3];         // [i32] — fixed array\n"
+"    let mut zero: Vec<f32> = Vec<f32>.filled(0.0, 1024);  // growable, flat\n"
+"    let grow = Vec<i32>.from([1, 2, 3]);  // array -> growable\n"
+"    arr[0] = 7;                      // element write needs `mut`\n"
+"    zero[0] = 9.0f32;\n"
+"    let bin = bytes(64);             // 64 zeroed octets\n"
+"    let p = Point { x: 1, y: 2 };    // struct literal: no `new`\n"
+"\n"
+"    log.info(f\"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} "
+"len={grow.len()} bin={bin.len()}\");\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    literals(\"rut\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/values-and-variables.md:311
 msgid "Next: [control flow and `when`](control-flow.md)."
-msgstr ""
+msgstr "下一章：[控制流与 when](control-flow.md)。"
 
 #: src/tutorial/control-flow.md:3
 msgid ""
@@ -1400,15 +1580,15 @@ msgid ""
 "and exactly one match construct: `when`, an exhaustive pattern _expression_. "
 "There is no `switch`, no `case`, no fallthrough. The full rules live in [the "
 "reference on control flow](../reference/control-flow.md)."
-msgstr ""
+msgstr "rut 有经典的结构化语句——`if`/`else`、`while`、`for`——以及恰好一个匹配构造：`when`，一个穷尽式的模式_表达式_。没有 `switch`，没有 `case`，没有贯穿。完整的规则见[控制流参考](../reference/control-flow.md)。"
 
 #: src/tutorial/control-flow.md:8
 msgid "`if` and `else`"
-msgstr ""
+msgstr "`if` 与 `else`"
 
 #: src/tutorial/control-flow.md:10
 msgid "Braces are always required, whatever the body length:"
-msgstr ""
+msgstr "无论主体多长，花括号都不可省："
 
 #: src/tutorial/control-flow.md:12
 msgid ""
@@ -1433,20 +1613,40 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"flow\");\n"
+"    for (let hits of [0, 5, 12]) {\n"
+"        let mut first = false;\n"
+"        let mut warm = false;\n"
+"        let mut hot = false;\n"
+"        if (hits == 0) {\n"
+"            first = true;\n"
+"        } else if (hits < 10) {\n"
+"            warm = true;\n"
+"        } else {\n"
+"            hot = true;\n"
+"        }\n"
+"        log.info(f\"hits={hits} first={first} warm={warm} hot={hot}\");\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:39
 msgid ""
 "The condition must be a `bool` — there is no truthiness coercion, and no "
 "parenthesized-assignment footgun."
-msgstr ""
+msgstr "条件必须是 `bool`——没有真值强转，也没有把赋值误写进括号条件的经典陷阱。"
 
 #: src/tutorial/control-flow.md:42
 msgid "Loops"
-msgstr ""
+msgstr "循环"
 
 #: src/tutorial/control-flow.md:44
 msgid "**`while`** repeats until its condition is false:"
-msgstr ""
+msgstr "**`while`** 在条件为假之前不断重复："
 
 #: src/tutorial/control-flow.md:46
 msgid ""
@@ -1468,12 +1668,29 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"sieve\");\n"
+"    let i = 2;\n"
+"    let limit = 12;\n"
+"    let mut marks = [0; 16];\n"
+"    let mut m = i * i;\n"
+"    while (m <= limit) {\n"
+"        marks[m] = 1;\n"
+"        m += i;\n"
+"    }\n"
+"    log.info(f\"marks[4]={marks[4]} marks[5]={marks[5]} stopped at "
+"m={m}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:67
 msgid ""
 "**`for..of`** iterates anything with elements: fixed arrays, `Vec`s, `str` "
 "(yielding one-codepoint `str`s), and `bytes` (yielding `u8`s):"
-msgstr ""
+msgstr "**`for..of`** 迭代任何有元素的东西：定长数组、`Vec`、`str`（产出单码点的 `str`）和 `bytes`（产出 `u8`）："
 
 #: src/tutorial/control-flow.md:70
 msgid ""
@@ -1493,16 +1710,31 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"loops\");\n"
+"    let mut n = 0;\n"
+"    for (let w of [\"rut\", \"runs\", \"rut\"]) {\n"
+"        // w is a str\n"
+"    }\n"
+"    for (let c of \"héllo\") {\n"
+"        n += 1;             // 5 iterations — codepoints, not the 6 bytes\n"
+"    }\n"
+"    log.info(f\"n={n}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:90
 msgid "The loop variable is always spelled `let` and is fresh each iteration."
-msgstr ""
+msgstr "循环变量永远写作 `let`，并且每次迭代都是崭新的。"
 
 #: src/tutorial/control-flow.md:92
 msgid ""
 "**Indexed `for`** is the C shape. The induction variable is _loop-owned_: "
 "the update clause (and the body) may assign it without `mut`."
-msgstr ""
+msgstr "**索引式 `for`** 是 C 的形状。归纳变量为_循环所拥有_：更新子句（以及循环体）不需要 `mut` 就能为它赋值。"
 
 #: src/tutorial/control-flow.md:95
 msgid ""
@@ -1521,22 +1753,36 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"loops\");\n"
+"    let xs = [3, 1, 4];\n"
+"    let n = xs.len();\n"
+"    let mut total = 0;\n"
+"    for (let i = 0; i < n; i += 1) {\n"
+"        total += xs[i];\n"
+"    }\n"
+"    log.info(f\"total={total}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:114
 msgid ""
 "**`break` and `continue`** work in every loop form; there are no labels and "
 "no `do..while`."
-msgstr ""
+msgstr "**`break` 与 `continue`** 在每一种循环形式里都能用；没有标签，也没有 `do..while`。"
 
 #: src/tutorial/control-flow.md:117 src/reference/lexical-structure.md:44
 msgid "`return`"
-msgstr ""
+msgstr "`return`"
 
 #: src/tutorial/control-flow.md:119
 msgid ""
 "`return expr;` exits the function. If the function returns nothing, the "
 "arrow is omitted and `return;` (or falling off the end) returns:"
-msgstr ""
+msgstr "`return expr;` 退出函数。如果函数不返回任何东西，箭头就省掉，`return;`（或执行到函数末尾）即返回："
 
 #: src/tutorial/control-flow.md:122
 msgid ""
@@ -1559,16 +1805,34 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn swap(mut xs: Vec<i32>, a: i32, b: i32) {\n"
+"    let t = xs[a];\n"
+"    xs[a] = xs[b];\n"
+"    xs[b] = t;\n"
+"    // no return — the function's type is nil\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"swap\");\n"
+"    let xs = Vec<i32>.from([1, 2, 3]);\n"
+"    swap(xs, 0, 2);\n"
+"    log.info(f\"first={xs[0]} last={xs[2]}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:145
 msgid "`when` — the one match"
-msgstr ""
+msgstr "`when`——唯一的匹配"
 
 #: src/tutorial/control-flow.md:147
 msgid ""
 "`when (value) { pattern -> body, ... }` is an expression: the first matching "
 "arm produces the value. No fallthrough — exactly one arm runs."
-msgstr ""
+msgstr "`when (value) { pattern -> body, ... }` 是一个表达式：第一个匹配的分支产出那个值。没有贯穿——恰好只有一个分支运行。"
 
 #: src/tutorial/control-flow.md:150
 msgid ""
@@ -1591,10 +1855,28 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn classify(n: i32) -> str {\n"
+"    return when (n) {\n"
+"        0       -> \"zero\",\n"
+"        1, 2, 3 -> \"small\",     // comma-separated alternatives\n"
+"        else    -> \"big\",       // the wildcard\n"
+"    };\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"when\");\n"
+"    for (let n of [0, 2, 9]) {\n"
+"        log.info(f\"{n}: {classify(n)}\");\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:175
 msgid "The arm body before the `,` is an expression; arms can also be blocks:"
-msgstr ""
+msgstr "`,` 之前的分支体是一个表达式；分支也可以是块："
 
 #: src/tutorial/control-flow.md:177
 msgid ""
@@ -1617,16 +1899,34 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Light { Green, Yellow, Red }\n"
+"\n"
+"fn go()    { Logger.new(\"light\").info(\"go\"); }\n"
+"fn brake() { Logger.new(\"light\").info(\"brake\"); }\n"
+"fn stop()  { Logger.new(\"light\").info(\"stop\"); }\n"
+"\n"
+"pub fn main() {\n"
+"    let l = Light.Yellow;\n"
+"    when (l) {\n"
+"        Light.Green  -> { go(); },\n"
+"        Light.Yellow -> { brake(); },\n"
+"        Light.Red    -> { stop(); },\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:200
 msgid ""
 "Used as a statement, a `when` must produce nothing — the block arms above "
 "are statement arms."
-msgstr ""
+msgstr "作为语句使用时，`when` 必须不产出任何东西——上面的块分支就是语句分支。"
 
 #: src/tutorial/control-flow.md:203 src/reference/control-flow.md:63
 msgid "Patterns"
-msgstr ""
+msgstr "模式"
 
 #: src/tutorial/control-flow.md:205
 msgid ""
@@ -1634,24 +1934,24 @@ msgid ""
 "`bool`, `str`), comma-separated alternatives, and `else`. There are no "
 "ranges, no destructuring, and no guards — an `if` inside the arm body does "
 "that job."
-msgstr ""
+msgstr "v1 的模式有：枚举成员（`Light.Red`）、字面量（整数、浮点数、`bool`、`str`）、逗号分隔的多选一，以及 `else`。没有范围，没有解构，也没有守卫——分支体内的 `if` 承担这份工作。"
 
 #: src/tutorial/control-flow.md:210
 msgid "Exhaustiveness is enforced"
-msgstr ""
+msgstr "穷尽性是强制检查的"
 
 #: src/tutorial/control-flow.md:212
 msgid ""
 "**Enum scrutinee:** either cover every member or add `else`. A partial "
 "`when` over an enum is a compile error — when you add a member later, the "
 "compiler finds every `when` you must extend."
-msgstr ""
+msgstr "**枚举被匹配值：**要么覆盖每个成员，要么加上 `else`。对枚举的残缺 `when` 是编译错误——日后你新增成员时，编译器会找出每一个你必须扩展的 `when`。"
 
 #: src/tutorial/control-flow.md:215
 msgid ""
 "**Any other scrutinee:** `else` is mandatory (integers and strings cannot be "
 "enumerated)."
-msgstr ""
+msgstr "**其他任何被匹配值：**`else` 是强制的（整数和字符串无法穷举）。"
 
 #: src/tutorial/control-flow.md:218
 msgid ""
@@ -1688,10 +1988,42 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Light { Green, Yellow, Red }\n"
+"\n"
+"fn go()    { Logger.new(\"light\").info(\"go\"); }\n"
+"fn brake() { Logger.new(\"light\").info(\"brake\"); }\n"
+"fn stop()  { Logger.new(\"light\").info(\"stop\"); }\n"
+"\n"
+"fn drive(l: Light) {\n"
+"    when (l) {\n"
+"        Light.Green  -> { go(); },\n"
+"        Light.Yellow -> { brake(); },\n"
+"        Light.Red    -> { stop(); },   // all members: no else needed\n"
+"    }\n"
+"}\n"
+"\n"
+"fn describe(n: i32) -> str {\n"
+"    return when (n) {\n"
+"        0    -> \"zero\",\n"
+"        else -> \"not zero\",            // non-enum scrutinee: else "
+"REQUIRED\n"
+"    };\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    drive(Light.Red);\n"
+"    let log = Logger.new(\"light\");\n"
+"    log.info(describe(0));\n"
+"    log.info(describe(7));\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:256
 msgid "`when` over a `bool` reads nicely as a two-arm check:"
-msgstr ""
+msgstr "对 `bool` 的 `when` 读起来像一个双分支检查："
 
 #: src/tutorial/control-flow.md:258
 msgid ""
@@ -1710,23 +2042,37 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: i32; y: i32 }\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"nullable\");\n"
+"    let p: ?Point = Point { x: 1, y: 2 };\n"
+"    when (p != nil) {\n"
+"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        else -> { log.info(\"point: nil\"); },\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:277
 msgid ""
 "Duplicate patterns — and arms made unreachable by an earlier one — are "
 "compile errors."
-msgstr ""
+msgstr "重复的模式——以及被更早的模式弄得不可达的分支——都是编译错误。"
 
 #: src/tutorial/control-flow.md:280
 msgid "One type across the arms"
-msgstr ""
+msgstr "各分支共用一个类型"
 
 #: src/tutorial/control-flow.md:282
 msgid ""
 "All arm expressions must agree: that shared type is the `when`'s type. A "
 "`when` that builds a value usually reads best wrapped in a function — the "
 "function's return type then pins every arm:"
-msgstr ""
+msgstr "所有分支表达式必须一致：那个共享的类型就是 `when` 的类型。构建值的 `when` 通常包进一个函数里读起来最好——函数的返回类型随之钉住每个分支："
 
 #: src/tutorial/control-flow.md:286
 msgid ""
@@ -1749,6 +2095,24 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Light { Green, Yellow, Red }\n"
+"\n"
+"fn light_for(i: i32) -> Light {\n"
+"    return when (i) {\n"
+"        0    -> Light.Green,\n"
+"        1    -> Light.Yellow,\n"
+"        else -> Light.Red,\n"
+"    };\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"light\");\n"
+"    log.info(f\"{light_for(0)} {light_for(1)} {light_for(5)}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:311
 msgid ""
@@ -1796,10 +2160,53 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Light { Green, Yellow, Red }\n"
+"\n"
+"fn action(l: Light) -> str {\n"
+"    return when (l) {\n"
+"        Light.Green  -> \"go\",\n"
+"        Light.Yellow -> \"brake\",\n"
+"        Light.Red    -> \"stop\",\n"
+"    };\n"
+"}\n"
+"\n"
+"fn light_for(i: i32) -> Light {\n"
+"    return when (i) {\n"
+"        0    -> Light.Green,\n"
+"        1    -> Light.Yellow,\n"
+"        else -> Light.Red,\n"
+"    };\n"
+"}\n"
+"\n"
+"fn classify(n: i32) -> str {\n"
+"    return when (n) {\n"
+"        0       -> \"zero\",\n"
+"        1, 2, 3 -> \"small\",\n"
+"        else    -> \"big\",\n"
+"    };\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"lights\");\n"
+"\n"
+"    for (let n of [0, 2, 9]) {\n"
+"        log.info(f\"{n}: {classify(n)}\");\n"
+"    }\n"
+"\n"
+"    let mut i = 0;\n"
+"    while (i < 3) {\n"
+"        log.info(action(light_for(i)));\n"
+"        i += 1;\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/control-flow.md:364
 msgid "Next: [functions, closures, and generics](functions.md)."
-msgstr ""
+msgstr "下一章：[函数、闭包与泛型](functions.md)。"
 
 #: src/tutorial/functions.md:3
 msgid ""
@@ -1807,17 +2214,17 @@ msgid ""
 "functions monomorphize at compile time — each instantiation gets its own "
 "specialized code. The details live in [the reference on functions, closures, "
 "and generics](../reference/functions-closures-generics.md)."
-msgstr ""
+msgstr "函数以 `fn` 声明，值可以是函数，泛型函数在编译期单态化——每个实例化都得到自己的专属代码。细节见[函数、闭包与泛型参考](../reference/functions-closures-generics.md)。"
 
 #: src/tutorial/functions.md:8
 msgid "Declaring functions"
-msgstr ""
+msgstr "声明函数"
 
 #: src/tutorial/functions.md:10
 msgid ""
 "Parameter and return types are always written. A function whose return type "
 "is omitted returns nothing:"
-msgstr ""
+msgstr "参数类型与返回类型总是要写出来。省略返回类型的函数不返回任何东西："
 
 #: src/tutorial/functions.md:13
 msgid ""
@@ -1846,30 +2253,54 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use calc::{ Math };\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: f32; y: f32 }\n"
+"\n"
+"fn swap(mut xs: Vec<i32>, a: i32, b: i32) {\n"
+"    let t = xs[a];\n"
+"    xs[a] = xs[b];\n"
+"    xs[b] = t;\n"
+"}\n"
+"\n"
+"fn length(pt: Point) -> f64 {\n"
+"    return Math.sqrt((pt.x * pt.x + pt.y * pt.y) as f64);\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"fns\");\n"
+"    let xs = Vec<i32>.from([1, 2, 3]);\n"
+"    swap(xs, 0, 2);\n"
+"    log.info(f\"first={xs[0]} length={length(Point { x: 3, y: 4 })}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/functions.md:42
 msgid ""
 "A `mut` parameter (`fn step(mut p: Point)`) is the callee's permission to "
 "write through `p` — and because non-primitive values share, that means the "
 "caller's value. A plain parameter promises not to write through it."
-msgstr ""
+msgstr "`mut` 参数（`fn step(mut p: Point)`）是被调用方经由 `p` 写入的许可——由于非基本类型值是共享的，这意味着写入的是调用方的值。普通参数则承诺不经由它写入。"
 
 #: src/tutorial/functions.md:47
 msgid ""
 "Recursion works as expected — functions are visible in their own bodies, and "
 "mutual recursion within a module needs no forward declaration."
-msgstr ""
+msgstr "递归如预期工作——函数在自己的函数体内可见，模块内的相互递归不需要前置声明。"
 
 #: src/tutorial/functions.md:51
 msgid "Anonymous functions"
-msgstr ""
+msgstr "匿名函数"
 
 #: src/tutorial/functions.md:53
 msgid ""
 "The closure spelling is an anonymous `fn` with a block body. There is no "
 "arrow shorthand — every closure states its parameter and return types, which "
 "is what lets it inhabit a first-class `fn` type:"
-msgstr ""
+msgstr "闭包的写法是一个带块主体的匿名 `fn`。没有箭头简写——每个闭包都写明自己的参数与返回类型，这正是它能栖身于一等 `fn` 类型的原因："
 
 #: src/tutorial/functions.md:57
 msgid ""
@@ -1890,11 +2321,27 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"closures\");\n"
+"    let add = fn (a: i32, b: i32) -> i32 { return a + b; };\n"
+"\n"
+"    let area_of = fn (r: f32) -> f32 {\n"
+"        let sq = r * r;\n"
+"        return sq * 3.14159265f32;\n"
+"    };\n"
+"\n"
+"    add(1, 2);          // call it like any function\n"
+"    log.info(f\"add={add(1, 2)} area={area_of(1)}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/functions.md:78
 msgid ""
 "Function types are written `fn(P..) -> R` and appear anywhere a type does:"
-msgstr ""
+msgstr "函数类型写作 `fn(P..) -> R`，并且可以出现在任何类型能出现的地方："
 
 #: src/tutorial/functions.md:81
 msgid ""
@@ -1912,6 +2359,19 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn apply(f: fn(i32) -> i32, v: i32) -> i32 {\n"
+"    return f(v);\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"fns\");\n"
+"    let double = fn (x: i32) -> i32 { return x * 2; };\n"
+"    log.info(f\"apply={apply(double, 21)}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/functions.md:99
 msgid ""
@@ -1921,19 +2381,19 @@ msgid ""
 "Since non-primitives share, a capture of a `Vec` or a struct is a handle to "
 "the same cell: writes through the closure are visible to everyone else "
 "holding it."
-msgstr ""
+msgstr "闭包捕获外围的绑定——闭包体看得见、用得上周围的局部变量，甚至在外围函数本该返回之后依然可以，因为被捕获的单元与闭包活得一样久。由于非基本类型是共享的，捕获一个 `Vec` 或结构体得到的是指向同一个单元的句柄：经闭包做出的写入，对其他所有持有者都可见。"
 
 #: src/tutorial/functions.md:106
 #: src/reference/functions-closures-generics.md:71
 msgid "Generics"
-msgstr ""
+msgstr "泛型"
 
 #: src/tutorial/functions.md:108
 msgid ""
 "A generic function declares type parameters in angle brackets. Each concrete "
 "instantiation is compiled separately (monomorphized), so generics cost "
 "nothing at runtime:"
-msgstr ""
+msgstr "泛型函数在尖括号里声明类型参数。每个具体实例化都单独编译（单态化），因此泛型在运行时零开销："
 
 #: src/tutorial/functions.md:112
 msgid ""
@@ -1956,34 +2416,52 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn first<T>(xs: [T], fallback: T) -> T {\n"
+"    if (xs.len() == 0) {\n"
+"        return fallback;\n"
+"    }\n"
+"    return xs[0];\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"generics\");\n"
+"    let head = first([10, 20], -1);      // first<i32> — inferred\n"
+"    let name = first([\"a\", \"b\"], \"?\");   // first<str> — a separate "
+"instance\n"
+"    log.info(f\"head={head} name={name}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/functions.md:134
 msgid ""
 "`T` is inferred from the arguments; you rarely spell `first<i32>(..)` "
 "explicitly. Two rules to know:"
-msgstr ""
+msgstr "`T` 由实参推断；你很少需要显式写出 `first<i32>(..)`。有两条规则值得知道："
 
 #: src/tutorial/functions.md:137
 msgid ""
 "A bare `T` has **no methods** — you cannot call anything on a value whose "
 "type is just `T`. Pass concrete values in, or take a trait-typed parameter "
 "instead (next chapter)."
-msgstr ""
+msgstr "裸的 `T` **没有任何方法**——你无法在类型仅为 `T` 的值上调用任何东西。要么传具体值进来，要么改用 trait 类型的参数（下一章）。"
 
 #: src/tutorial/functions.md:140
 msgid ""
 "In v1 a _generic class_ in a parameter position does not unify — `fn sum(xs: "
 "Vec<i32>)` is fine, but a function generic over `T` taking `Vec<T>` is not "
 "yet the shape to reach for. Concrete instantiations cover most code."
-msgstr ""
+msgstr "在 v1 里，参数位置上的_泛型类_不做统一——`fn sum(xs: Vec<i32>)` 没问题，但对 `T` 泛型又接收 `Vec<T>` 的函数还不是值得选用的形状。具体实例化覆盖大多数代码。"
 
 #: src/tutorial/functions.md:145
 msgid "`requires` bounds"
-msgstr ""
+msgstr "`requires` 约束"
 
 #: src/tutorial/functions.md:147
 msgid "An inline `requires` bound gates which instantiations compile:"
-msgstr ""
+msgstr "内联的 `requires` 约束限定哪些实例化可以编译："
 
 #: src/tutorial/functions.md:149
 msgid ""
@@ -2011,6 +2489,29 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"trait Labeled {\n"
+"    fn label(self) -> str;\n"
+"}\n"
+"\n"
+"struct Tag { id: i32 }\n"
+"\n"
+"impl Labeled for Tag {\n"
+"    fn label(self) -> str { return f\"tag-{self.id}\"; }\n"
+"}\n"
+"\n"
+"fn name<T requires Labeled>(x: T) -> str {\n"
+"    let w: Labeled = x;     // the bound proves this widening\n"
+"    return w.label();\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"bounds\");\n"
+"    log.info(name(Tag { id: 7 }));\n"
+"}\n"
+"```"
 
 #: src/tutorial/functions.md:177
 msgid ""
@@ -2018,7 +2519,7 @@ msgid ""
 "type satisfies the named trait (or union of traits), and it proves a "
 "`T`\\-typed value may be used as that trait type — it does not put methods "
 "on `T` itself. Union bounds admit any member:"
-msgstr ""
+msgstr "这个约束是_只管准入的_：它在每个调用点检查具体类型满足所写的 trait（或 trait 并集），并证明一个 `T` 类型的值可以用作那个 trait 类型——它不会把方法挂到 `T` 本身上。并集约束接受任何成员："
 
 #: src/tutorial/functions.md:186
 msgid ""
@@ -2026,18 +2527,18 @@ msgid ""
 "requires JsonDeserialize>(s: str)` — see [errors and "
 "optionality](errors.md). Bounds and unions are covered fully in [the "
 "reference on type aliases and union bounds](../reference/type-aliases.md)."
-msgstr ""
+msgstr "类型化 JSON 入口的写法正是如此——`decodeJson<T requires JsonDeserialize>(s: str)`——参见[错误与可空性](errors.md)。约束与并集在[类型别名与并集约束参考](../reference/type-aliases.md)里完整覆盖。"
 
 #: src/tutorial/functions.md:191
 msgid "Free functions are the default idiom"
-msgstr ""
+msgstr "自由函数是默认惯用法"
 
 #: src/tutorial/functions.md:193
 msgid ""
 "rut's records carry no methods (bodies are fields only; methods live in "
 "`impl` blocks — see [structs, enums, and classes](types.md)), so the "
 "everyday shape is small data plus free functions over it:"
-msgstr ""
+msgstr "rut 的记录不携带方法（主体只有字段；方法住在 `impl` 块里——参见[结构体、枚举与类](types.md)），因此日常的形状是小数据，外加作用于其上的自由函数："
 
 #: src/tutorial/functions.md:197
 msgid ""
@@ -2057,12 +2558,27 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: f32; y: f32 }\n"
+"\n"
+"fn nudged(pt: Point) -> Point {\n"
+"    return Point { x: pt.x + 1, y: pt.y };\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"free-fns\");\n"
+"    let p = nudged(Point { x: 2, y: 5 });\n"
+"    log.info(f\"p.x={p.x} p.y={p.y}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/functions.md:217
 msgid ""
 "Reach for methods when something is genuinely _the receiver's_ behavior, and "
 "for trait impls — everything else is a plain function."
-msgstr ""
+msgstr "当某件事确实是_接收者_的行为时才用方法，trait impl 也是如此——其余一切都是普通函数。"
 
 #: src/tutorial/functions.md:222
 msgid ""
@@ -2102,30 +2618,65 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn first<T>(xs: [T], fallback: T) -> T {\n"
+"    if (xs.len() == 0) {\n"
+"        return fallback;\n"
+"    }\n"
+"    return xs[0];\n"
+"}\n"
+"\n"
+"fn sum(xs: Vec<i32>) -> i32 {\n"
+"    let mut total = 0;\n"
+"    for (let x of xs) {\n"
+"        total += x;\n"
+"    }\n"
+"    return total;\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"closures\");\n"
+"    let add = fn (a: i32, b: i32) -> i32 { return a + b; };\n"
+"    let area_of = fn (r: f32) -> f32 {\n"
+"        let sq = r * r;\n"
+"        return sq * 3.14159265f32;\n"
+"    };\n"
+"    log.info(f\"add={add(1, 2)} area={area_of(1)} sum={sum(Vec<i32>.from([1, "
+"2, 3]))}\");\n"
+"\n"
+"    let head = first([10, 20], -1);       // first<i32> — monomorphized\n"
+"    let name = first([\"a\", \"b\"], \"?\");    // first<str> — separate "
+"instance\n"
+"    log.info(f\"head={head} name={name}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/functions.md:261
 msgid "Next: [structs, enums, and classes](types.md)."
-msgstr ""
+msgstr "下一章：[结构体、枚举与类](types.md)。"
 
 #: src/tutorial/types.md:3
 msgid "rut has three user-defined type forms, each with one job:"
-msgstr ""
+msgstr "rut 有三种用户自定义类型形式，各司一职："
 
 #: src/tutorial/types.md:5
 msgid "**`enum`** — a small set of named constants."
-msgstr ""
+msgstr "**`enum`**——一小批命名常量。"
 
 #: src/tutorial/types.md:6
 msgid ""
 "**`struct`** — an open data record: every field public, literal construction "
 "everywhere."
-msgstr ""
+msgstr "**`struct`**——开放的数据记录：所有字段公开，随处可用字面量构造。"
 
 #: src/tutorial/types.md:8
 msgid ""
 "**`class`** — a sealed record: private fields, construction through class "
 "methods only."
-msgstr ""
+msgstr "**`class`**——封闭的记录：字段私有，只能经由类方法构造。"
 
 #: src/tutorial/types.md:11
 msgid ""
@@ -2134,14 +2685,14 @@ msgid ""
 "reference pages are [structs](../reference/structs.md), "
 "[enums](../reference/enums.md), and [classes and "
 "constructors](../reference/classes.md)."
-msgstr ""
+msgstr "在这三者中，**类型主体只有字段**——每个方法都住在 `impl` 块里。写在类型主体里的 `fn` 是解析错误。参考页是[结构体](../reference/structs.md)、[枚举](../reference/enums.md)与[类与构造器](../reference/classes.md)。"
 
 #: src/tutorial/types.md:20
 msgid ""
 "An enum is a distinct named type over integer constants. No payloads, no "
 "methods, no computed members — where another language would use a union of "
 "literal strings, rut uses an enum:"
-msgstr ""
+msgstr "枚举是建立在整型常量之上的一个独立命名类型。没有载荷，没有方法，没有计算型成员——换作别的语言会在字面量字符串的并集上做文章的地方，rut 用枚举："
 
 #: src/tutorial/types.md:24
 msgid ""
@@ -2158,30 +2709,42 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"enum Light { Green, Yellow, Red }\n"
+"\n"
+"enum Direction { Up = 1, Down, Left, Right }   // 1, 2, 3, 4\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"enums\");\n"
+"    log.info(f\"{Light.Green} {Direction.Left} {Direction.Right}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/types.md:41
 msgid ""
 "Members are the enum's values and are spelled qualified: `Light.Green`. "
 "Explicit initializers set where the numbering starts; the rest continue from "
 "there."
-msgstr ""
+msgstr "成员就是枚举的值，书写时带限定：`Light.Green`。显式初始化器设定编号从哪里开始；其余成员从那里继续。"
 
 #: src/tutorial/types.md:45
 msgid ""
 "`when` over an enum must be exhaustive — every member, or an `else` arm (see "
 "[control flow and when](control-flow.md)). Enums render as their member name "
 "in format strings."
-msgstr ""
+msgstr "对枚举的 `when` 必须穷尽——覆盖每个成员，或带一个 `else` 分支（参见[控制流与 when](control-flow.md)）。枚举在格式化字符串里渲染为成员名。"
 
 #: src/tutorial/types.md:49
 msgid "Structs — open records"
-msgstr ""
+msgstr "结构体——开放的记录"
 
 #: src/tutorial/types.md:51
 msgid ""
 "Declare with `struct`, construct with a literal — anywhere in a function "
 "body, nested inside other literals. There is no `new`:"
-msgstr ""
+msgstr "用 `struct` 声明，用字面量构造——函数体内的任何位置，或嵌在其他字面量里。没有 `new`："
 
 #: src/tutorial/types.md:54
 msgid ""
@@ -2214,12 +2777,40 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point {\n"
+"    x: f32;\n"
+"    y: f32;\n"
+"}\n"
+"\n"
+"struct Rect {\n"
+"    min: Point;\n"
+"    max: Point;\n"
+"}\n"
+"\n"
+"struct Style {\n"
+"    color: u32 = 0xff00ff;      // field initializer: literals may omit it\n"
+"    width: f32 = 1;\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"structs\");\n"
+"    let p = Point { x: 1, y: 2 };                    // every field, by "
+"name\n"
+"    let s = Style {};                                // defaults fill the "
+"rest\n"
+"    let r = Rect { min: Point { x: 0, y: 0 }, max: p };\n"
+"    log.info(f\"r.max.x={r.max.x} width={s.width}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/types.md:85
 msgid ""
 "All fields are public, always — member visibility in a struct is a compile "
 "error. Privacy is what classes are for."
-msgstr ""
+msgstr "所有字段永远公开——给结构体成员标注可见性是编译错误。私有正是类存在的意义。"
 
 #: src/tutorial/types.md:88
 msgid ""
@@ -2227,7 +2818,7 @@ msgid ""
 "arguments, and returns all pass the handle, and a write through any alias is "
 "visible through all of them. Writing needs a `mut` binding or `mut` "
 "parameter:"
-msgstr ""
+msgstr "**结构体共享。**结构体值是指向堆单元的句柄：赋值、实参和返回传递的都是句柄，经由任何别名做出的写入，经所有别名都可见。写入需要 `mut` 绑定或 `mut` 参数："
 
 #: src/tutorial/types.md:93
 msgid ""
@@ -2245,19 +2836,32 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: f32; y: f32 }\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"sharing\");\n"
+"    let mut p = Point { x: 1, y: 2 };\n"
+"    let q = p;              // q and p name ONE cell\n"
+"    p.x = 4;                // q.x is 4 now\n"
+"    log.info(f\"q.x={q.x} same cell: {q == p}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/types.md:111
 msgid ""
 "`==` on struct values is **cell identity** — `q == p` is true (one cell), `p "
 "== Point { x: 4, y: 2 }` is false (a different cell). To compare field by "
 "field, write a function."
-msgstr ""
+msgstr "结构体值上的 `==` 是**单元同一性**——`q == p` 为 true（同一个单元），`p == Point { x: 4, y: 2 }` 为 false（另一个单元）。想逐字段比较，就写一个函数。"
 
 #: src/tutorial/types.md:115
 msgid ""
 "Recursive shapes are legal — a record may name itself through a nullable "
 "field, because `?Node` is one word:"
-msgstr ""
+msgstr "递归的形状是合法的——记录可以经由可空字段指涉自身，因为 `?Node` 就是一个词："
 
 #: src/tutorial/types.md:118
 msgid ""
@@ -2288,10 +2892,36 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Node {\n"
+"    value: i32;\n"
+"    left: ?Node;\n"
+"    right: ?Node;\n"
+"}\n"
+"\n"
+"fn count(n: ?Node) -> i32 {\n"
+"    let mut c = 1;\n"
+"    if (n.left != nil) { c += count(n.left); }\n"
+"    if (n.right != nil) { c += count(n.right); }\n"
+"    return c;\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"nodes\");\n"
+"    let n = Node {\n"
+"        value: 1,\n"
+"        left: Node { value: 2, left: nil, right: nil },\n"
+"        right: nil,\n"
+"    };\n"
+"    log.info(f\"count={count(n)}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/types.md:149
 msgid "Classes — sealed records"
-msgstr ""
+msgstr "类——封闭的记录"
 
 #: src/tutorial/types.md:151
 msgid ""
@@ -2300,7 +2930,7 @@ msgid ""
 "`constructor` keyword, no `new` operator, and no outside literal — the only "
 "way to build a class value from outside is to call a class method that "
 "chooses to."
-msgstr ""
+msgstr "类在结构体之上添加了三件事：模块私有的字段、经由类方法把关的构造，以及可选的清理钩子。没有 `constructor` 关键字，没有 `new` 运算符，也没有外部字面量——从外部构建类值的唯一方式，是调用一个愿意为你构建的类方法。"
 
 #: src/tutorial/types.md:157
 msgid ""
@@ -2332,36 +2962,63 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"class Counter {\n"
+"    n: i32 = 0;             // module-private — the class's business\n"
+"}\n"
+"\n"
+"impl Counter {\n"
+"    pub fn new() -> Self {                 // the construction surface\n"
+"        return Self { };                   // the class-private literal\n"
+"    }\n"
+"\n"
+"    pub fn press(mut self) {\n"
+"        self.n = self.n.wrapping_add(1);\n"
+"    }\n"
+"\n"
+"    pub fn count(self) -> i32 { return self.n; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"counter\");\n"
+"    let c = Counter.new();\n"
+"    c.press();\n"
+"    c.press();\n"
+"    log.info(f\"count={c.count()}\");      // 2\n"
+"}\n"
+"```"
 
 #: src/tutorial/types.md:189
 msgid "The pieces:"
-msgstr ""
+msgstr "组成部分如下："
 
 #: src/tutorial/types.md:191
 msgid ""
 "**A class method is just a function without `self`.** `Rect.new(w, h)`, "
 "`Version.parse(s)`, `Rect.from_square(s)` — any no-`self` method returning "
 "`Self` is a constructor. `new` is a convention, not syntax."
-msgstr ""
+msgstr "**类方法就是不带 `self` 的函数。**`Rect.new(w, h)`、`Version.parse(s)`、`Rect.from_square(s)`——任何不带 `self` 且返回 `Self` 的方法都是构造器。`new` 是约定，不是语法。"
 
 #: src/tutorial/types.md:194
 msgid ""
 "**The `Self { .. }` literal is class-private** — legal anywhere in the "
 "class's own impl block, never outside. This is the seal."
-msgstr ""
+msgstr "**`Self { .. }` 字面量是类私有的**——在类自己的 impl 块内的任何地方都合法，出了它就再也不合法。这就是封闭。"
 
 #: src/tutorial/types.md:196
 msgid ""
 "**Instance methods spell `self` explicitly** as the first parameter; `mut "
 "self` marks methods that write. There is no `this`, no static methods, no "
 "`get`/`set` syntax — a computed property is a method (`c.count()`)."
-msgstr ""
+msgstr "**实例方法把 `self` 显式写成第一个参数**；`mut self` 标记会写入的方法。没有 `this`，没有静态方法，没有 `get`/`set` 语法——计算属性就是一个方法（`c.count()`）。"
 
 #: src/tutorial/types.md:200
 msgid ""
 "**Construction is validation.** A constructor is an ordinary function — it "
 "can check arguments and refuse:"
-msgstr ""
+msgstr "**构造即验证。**构造器是一个普通函数——它可以检查实参并拒绝："
 
 #: src/tutorial/types.md:203
 msgid ""
@@ -2396,12 +3053,42 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"class Rect {\n"
+"    w: f32;\n"
+"    h: f32;\n"
+"}\n"
+"\n"
+"impl Rect {\n"
+"    pub fn new(w: f32, h: f32) -> Self {\n"
+"        if (w <= 0 || h <= 0) {\n"
+"            panic(\"Rect: negative extents\");\n"
+"        }\n"
+"        return Self { w: w, h: h };\n"
+"    }\n"
+"\n"
+"    pub fn from_square(s: f32) -> Self {\n"
+"        return Rect.new(s, s);\n"
+"    }\n"
+"\n"
+"    pub fn area(self) -> f32 { return self.w * self.h; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"rect\");\n"
+"    let r = Rect.new(3, 4);\n"
+"    let sq = Rect.from_square(2);\n"
+"    log.info(f\"area={r.area()} square={sq.area()}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/types.md:238
 msgid ""
 "A _try_\\-constructor answers the nullable — `nil` is a failed validation, "
 "not a crash:"
-msgstr ""
+msgstr "_try_ 构造器以可空作答——`nil` 是一次验证失败，不是崩溃："
 
 #: src/tutorial/types.md:241
 msgid ""
@@ -2414,38 +3101,46 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"impl Version {\n"
+"    pub fn parse(s: str) -> ?Version {\n"
+"        // ... split \"1.2\" — on failure:\n"
+"        return nil;\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/types.md:250
 msgid ""
 "**No inheritance.** There is no `extends`, no `super`, no overriding. Code "
 "sharing is composition (hold a helper in a field) or free functions; "
 "polymorphism is traits — the next chapter."
-msgstr ""
+msgstr "**没有继承。**没有 `extends`，没有 `super`，没有覆写。代码共享靠组合（把辅助对象放在字段里）或自由函数；多态靠 trait——下一章。"
 
 #: src/tutorial/types.md:254
 msgid "Visibility recap"
-msgstr ""
+msgstr "可见性小结"
 
 #: src/tutorial/types.md:256
 msgid "Struct members: public, always."
-msgstr ""
+msgstr "结构体成员：永远公开。"
 
 #: src/tutorial/types.md:257
 msgid ""
 "Class members: unannotated is module-private; `pub` exposes to importers "
 "(also `pub(mod)`, `pub(super)`, `pub(self)`)."
-msgstr ""
+msgstr "类成员：不标注即模块私有；`pub` 对导入方可见（另有 `pub(mod)`、`pub(super)`、`pub(self)`）。"
 
 #: src/tutorial/types.md:259
 msgid ""
 "The types themselves follow the same rule: `pub class Vec<T>` is importable, "
 "a bare `class Helper` stays in its module. See [modules and "
 "packages](modules.md)."
-msgstr ""
+msgstr "类型本身遵循同一条规则：`pub class Vec<T>` 可被导入，裸的 `class Helper` 则留在其模块内。参见[模块与包](modules.md)。"
 
 #: src/tutorial/types.md:263
 msgid "Struct or class?"
-msgstr ""
+msgstr "结构体还是类？"
 
 #: src/tutorial/types.md:265
 msgid ""
@@ -2453,7 +3148,7 @@ msgid ""
 "for a class when the type has rules that construction must enforce, holds "
 "private state that outsiders must not read, or owns a resource that needs "
 "explicit cleanup."
-msgstr ""
+msgstr "默认选结构体：数据进、数据出，像其他一切值一样共享。当类型带有构造时必须强制执行的规则、持有外人不得读取的私有状态、或拥有需要显式清理的资源时，才选类。"
 
 #: src/tutorial/types.md:272
 msgid ""
@@ -2507,10 +3202,59 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"class Counter {\n"
+"    n: i32 = 0;\n"
+"}\n"
+"\n"
+"impl Counter {\n"
+"    pub fn new() -> Self {\n"
+"        return Self { };\n"
+"    }\n"
+"\n"
+"    pub fn press(mut self) {\n"
+"        self.n = self.n.wrapping_add(1);\n"
+"    }\n"
+"\n"
+"    pub fn count(self) -> i32 { return self.n; }\n"
+"}\n"
+"\n"
+"class Rect {\n"
+"    w: f32;\n"
+"    h: f32;\n"
+"}\n"
+"\n"
+"impl Rect {\n"
+"    pub fn new(w: f32, h: f32) -> Self {\n"
+"        if (w <= 0 || h <= 0) {\n"
+"            panic(\"Rect: negative extents\");\n"
+"        }\n"
+"        return Self { w: w, h: h };\n"
+"    }\n"
+"\n"
+"    pub fn from_square(s: f32) -> Self {\n"
+"        return Rect.new(s, s);\n"
+"    }\n"
+"\n"
+"    pub fn area(self) -> f32 { return self.w * self.h; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"classes\");\n"
+"    let c = Counter.new();\n"
+"    c.press();\n"
+"    c.press();\n"
+"    let r = Rect.new(3, 4);\n"
+"    let sq = Rect.from_square(2.0f32);\n"
+"    log.info(f\"count={c.count()} area={r.area()} square={sq.area()}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/types.md:326
 msgid "Next: [traits and impl blocks](traits.md)."
-msgstr ""
+msgstr "下一章：[trait 与 impl 块](traits.md)。"
 
 #: src/tutorial/traits.md:3
 msgid ""
@@ -2520,28 +3264,28 @@ msgid ""
 "instance of it until someone writes the block. The full dispatch story is in "
 "[the reference on traits](../reference/traits.md) and [traits and "
 "dispatch](../core-concepts/traits-and-dispatch.md)."
-msgstr ""
+msgstr "trait 声明一组方法；类型通过写一个 impl 块来加入 trait。满足是**名义上的**——impl 块是唯一准入。某个类型的成员即便碰巧全都长得符合一个 trait 的形状，在有人写下那个块之前，它也不是该 trait 的实例。完整的分派故事见 [trait 参考](../reference/traits.md)与[trait 与分派](../core-concepts/traits-and-dispatch.md)。"
 
 #: src/tutorial/traits.md:10
 msgid "Declaring a trait"
-msgstr ""
+msgstr "声明 trait"
 
 #: src/tutorial/traits.md:12
 msgid ""
 "Traits declare method signatures — no bodies, no default implementations, no "
 "fields:"
-msgstr ""
+msgstr "trait 只声明方法签名——没有方法体，没有默认实现，没有字段："
 
 #: src/tutorial/traits.md:22
 msgid ""
 "Methods spell their receiver `self` explicitly, like every rut method. "
 "Anything that looks like a property is a method: declare `fn count(self) -> "
 "i32;`, not a field."
-msgstr ""
+msgstr "方法与每个 rut 方法一样，显式写出接收者 `self`。任何看起来像属性的东西都是方法：声明 `fn count(self) -> i32;`，而不是字段。"
 
 #: src/tutorial/traits.md:26
 msgid "Implementing a trait"
-msgstr ""
+msgstr "实现 trait"
 
 #: src/tutorial/traits.md:28
 msgid ""
@@ -2549,7 +3293,7 @@ msgid ""
 "trait's signature exactly; extra methods don't belong here (put those in an "
 "inherent block). Trait impl methods carry no `pub` — they are as visible as "
 "the trait."
-msgstr ""
+msgstr "`impl Trait for Type { .. }` 登记这一对组合。每个方法都必须与 trait 的签名完全一致；额外的方法不属于这里（把它们放进固有块）。trait impl 的方法不带 `pub`——它们的可见性与 trait 一致。"
 
 #: src/tutorial/traits.md:33
 msgid ""
@@ -2575,48 +3319,69 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"trait Shape {\n"
+"    fn area(self) -> f64;\n"
+"    fn name(self) -> str;\n"
+"}\n"
+"\n"
+"struct Circle { r: f64 }\n"
+"\n"
+"impl Shape for Circle {\n"
+"    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }\n"
+"    fn name(self) -> str { return \"circle\"; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"traits\");\n"
+"    let c = Circle { r: 1.0 };\n"
+"    log.info(f\"{c.name()}={c.area()}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/traits.md:59
 msgid "Rules worth knowing:"
-msgstr ""
+msgstr "几条值得知道的规则："
 
 #: src/tutorial/traits.md:61
 msgid ""
 "**One impl per (trait, type) pair, program-wide.** A duplicate is a link "
 "error."
-msgstr ""
+msgstr "**每个（trait, 类型）组合全程序只能有一个 impl。**重复是链接错误。"
 
 #: src/tutorial/traits.md:63
 msgid ""
 "**Placement:** an impl may live in a module of the trait's package or the "
 "type's package — at least one side must be yours. You cannot implement two "
 "foreign types to each other."
-msgstr ""
+msgstr "**位置：**impl 可以放在 trait 所在包或类型所在包的模块里——至少有一侧必须属于你。你不能给两个外部类型互相实现。"
 
 #: src/tutorial/traits.md:66
 msgid ""
 "**An empty impl block is legal** and acts as a marker: `impl Serializable "
 "for Point {}` says \"this type is in\" when the trait has no required "
 "methods."
-msgstr ""
+msgstr "**空 impl 块是合法的**，并可充当标记：当 trait 没有必需方法时，`impl Serializable for Point {}` 表示“该类型已加入”。"
 
 #: src/tutorial/traits.md:69
 msgid ""
 "**Primitives can implement traits too** (in the trait's own package or "
 "module) — the standard library uses this to give integer widths a common "
 "internal interface."
-msgstr ""
+msgstr "**基本类型也可以实现 trait**（在 trait 自己的包或模块内）——标准库正是用它给各个整数宽度提供了一个共通的内部接口。"
 
 #: src/tutorial/traits.md:73
 msgid "Inherent impls"
-msgstr ""
+msgstr "固有 impl"
 
 #: src/tutorial/traits.md:75
 msgid ""
 "`impl Type { .. }` — no trait — is where a type's own methods live: class "
 "methods like `new`, instance methods, helpers. It compiles only in the "
 "module that declares the type."
-msgstr ""
+msgstr "`impl Type { .. }`——不带 trait——是类型自身方法的家：`new` 这类类方法、实例方法、辅助方法。它只在声明该类型的模块里编译。"
 
 #: src/tutorial/traits.md:79
 msgid ""
@@ -2638,16 +3403,33 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Circle { r: f64 }\n"
+"\n"
+"impl Circle {\n"
+"    fn new(r: f64) -> Self {\n"
+"        return Self { r: r };\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"traits\");\n"
+"    let c = Circle.new(1.0);\n"
+"    log.info(f\"r={c.r}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/traits.md:101
 msgid "Using trait values"
-msgstr ""
+msgstr "使用 trait 值"
 
 #: src/tutorial/traits.md:103
 msgid ""
 "**Widening is implicit** at any position that expects the trait: an "
 "annotated binding, a field, an argument, a return."
-msgstr ""
+msgstr "**加宽是隐式的**，出现在任何期望该 trait 的位置：带标注的绑定、字段、实参、返回值。"
 
 #: src/tutorial/traits.md:106
 msgid ""
@@ -2673,12 +3455,33 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"trait Shape {\n"
+"    fn area(self) -> f64;\n"
+"    fn name(self) -> str;\n"
+"}\n"
+"\n"
+"struct Circle { r: f64 }\n"
+"\n"
+"impl Shape for Circle {\n"
+"    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }\n"
+"    fn name(self) -> str { return \"circle\"; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"traits\");\n"
+"    let c: Shape = Circle { r: 1.0 };   // Circle widens to Shape\n"
+"    log.info(f\"{c.name()}={c.area()}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/traits.md:132
 msgid ""
 "**Trait-typed parameters accept any implementor** — write the function once, "
 "call it with each concrete type:"
-msgstr ""
+msgstr "**trait 类型的参数接受任何实现方**——函数只写一次，用每个具体类型去调用："
 
 #: src/tutorial/traits.md:135
 msgid ""
@@ -2714,6 +3517,37 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"trait Shape {\n"
+"    fn area(self) -> f64;\n"
+"    fn name(self) -> str;\n"
+"}\n"
+"\n"
+"struct Circle { r: f64 }\n"
+"struct Square { side: f64 }\n"
+"\n"
+"impl Shape for Circle {\n"
+"    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }\n"
+"    fn name(self) -> str { return \"circle\"; }\n"
+"}\n"
+"\n"
+"impl Shape for Square {\n"
+"    fn area(self) -> f64 { return self.side * self.side; }\n"
+"    fn name(self) -> str { return \"square\"; }\n"
+"}\n"
+"\n"
+"fn describe(s: Shape) -> str {\n"
+"    return f\"{s.name()}={s.area()}\";\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"traits\");\n"
+"    log.info(describe(Circle { r: 1.0 }));\n"
+"    log.info(describe(Square { side: 3.0 }));\n"
+"}\n"
+"```"
 
 #: src/tutorial/traits.md:172
 msgid ""
@@ -2721,7 +3555,7 @@ msgid ""
 "Inside a single-typed context calls bind directly; iterating a collection of "
 "`Shape` dispatches through the value's vtable — the compiler picks, and "
 "mis-guessing costs one hop, never wrong behavior:"
-msgstr ""
+msgstr "**异构容器**在 trait 名字背后容纳混合的实现方。在单一类型的上下文中，调用直接绑定；迭代一个 `Shape` 集合则经由值的 vtable 分派——由编译器挑选，猜错只损失一次跳转，绝不会错行为："
 
 #: src/tutorial/traits.md:177
 msgid ""
@@ -2760,24 +3594,58 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"trait Shape {\n"
+"    fn area(self) -> f64;\n"
+"    fn name(self) -> str;\n"
+"}\n"
+"\n"
+"struct Circle { r: f64 }\n"
+"struct Square { side: f64 }\n"
+"\n"
+"impl Shape for Circle {\n"
+"    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }\n"
+"    fn name(self) -> str { return \"circle\"; }\n"
+"}\n"
+"\n"
+"impl Shape for Square {\n"
+"    fn area(self) -> f64 { return self.side * self.side; }\n"
+"    fn name(self) -> str { return \"square\"; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"traits\");\n"
+"    let mut shapes: Vec<Shape> = Vec.new();\n"
+"    shapes.push(Circle { r: 1.0 });\n"
+"    shapes.push(Square { side: 3.0 });\n"
+"    let mut total: f64 = 0.0;\n"
+"    for (let s of shapes) {\n"
+"        total += s.area();       // dispatches per element\n"
+"    }\n"
+"    log.info(f\"total={total} n={shapes.len()}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/traits.md:216
 msgid "Type tests: `is`"
-msgstr ""
+msgstr "类型测试：`is`"
 
 #: src/tutorial/traits.md:218
 msgid "`expr is Type` answers with a `bool` and never traps:"
-msgstr ""
+msgstr "`expr is Type` 以一个 `bool` 作答，且从不触发陷阱："
 
 #: src/tutorial/traits.md:220
 msgid "**Concrete RHS** — `p is Circle`: an exact-type test."
-msgstr ""
+msgstr "**具体类型在右侧**——`p is Circle`：精确类型测试。"
 
 #: src/tutorial/traits.md:221
 msgid ""
 "**Trait RHS** — `p is Shape`: a capability probe (\"does this value's type "
 "have an impl of `Shape`?\")."
-msgstr ""
+msgstr "**trait 在右侧**——`p is Shape`：能力探测（“这个值的类型有没有 `Shape` 的 impl？”）。"
 
 #: src/tutorial/traits.md:224
 msgid ""
@@ -2809,6 +3677,33 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"trait Shape {\n"
+"    fn area(self) -> f64;\n"
+"    fn name(self) -> str;\n"
+"}\n"
+"\n"
+"struct Circle { r: f64 }\n"
+"struct Square { side: f64 }\n"
+"\n"
+"impl Shape for Circle {\n"
+"    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }\n"
+"    fn name(self) -> str { return \"circle\"; }\n"
+"}\n"
+"\n"
+"impl Shape for Square {\n"
+"    fn area(self) -> f64 { return self.side * self.side; }\n"
+"    fn name(self) -> str { return \"square\"; }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"traits\");\n"
+"    let sq = Square { side: 2.0 };\n"
+"    log.info(f\"shape: {sq is Shape} circle: {sq is Circle}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/traits.md:256
 msgid ""
@@ -2818,11 +3713,11 @@ msgid ""
 "_forgotten_ until recovered — that is `opaque`, covered in [errors and "
 "optionality](errors.md) and [the reference on "
 "opaque](../reference/opaque.md)."
-msgstr ""
+msgstr "`is` 只回答问题，不改变任何东西——既没有窄化，也没有经由 trait 的向下转型。trait 类型的值经由其 trait 的方法来使用；如果你需要擦除存储的版本——一个在被取回之前_忘记_自身类型的值——那就是 `opaque`，见[错误与可空性](errors.md)与 [opaque 参考](../reference/opaque.md)。"
 
 #: src/tutorial/traits.md:263
 msgid "Bounds connect traits to generics"
-msgstr ""
+msgstr "约束把 trait 与泛型连接起来"
 
 #: src/tutorial/traits.md:265
 msgid ""
@@ -2830,17 +3725,17 @@ msgid ""
 "concrete type has an impl of `Labeled` — see [functions, closures, and "
 "generics](functions.md). The bound is what makes widening legal inside the "
 "body: `let w: Labeled = x;`."
-msgstr ""
+msgstr "`fn name<T requires Labeled>(x: T)` 只接受具体类型拥有 `Labeled` impl 的那些实例化——参见[函数、闭包与泛型](functions.md)。正是这个约束让函数体内的加宽合法：`let w: Labeled = x;`。"
 
 #: src/tutorial/traits.md:270
 msgid "Making your type iterable"
-msgstr ""
+msgstr "让你的类型可迭代"
 
 #: src/tutorial/traits.md:272
 msgid ""
 "A type becomes a `for..of` target by implementing the builtin `Iterator<E>` "
 "contract with its single resumption member:"
-msgstr ""
+msgstr "一个类型通过实现内置的 `Iterator<E>` 契约——及其唯一的恢复成员——成为 `for..of` 的目标："
 
 #: src/tutorial/traits.md:275
 msgid ""
@@ -2870,6 +3765,31 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct CountUp { n: i32 }\n"
+"\n"
+"impl Iterator<i32> for CountUp {\n"
+"    fn __iterate(self, emit: fn(i32) -> bool) {\n"
+"        for (let i = 1; i <= self.n; i += 1) {\n"
+"            if (!emit(i)) { return; }   // false = stop\n"
+"        }\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"iter\");\n"
+"    let ups = CountUp { n: 4 };\n"
+"    let got: Vec<i32> = Vec.new();   // shared: survives the loop's "
+"captures\n"
+"    for (let v of ups) {\n"
+"        got.push(v);\n"
+"    }\n"
+"    log.info(f\"n={got.len()} first={got[0]} last={got[got.len()-1]}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/traits.md:304
 msgid ""
@@ -2878,13 +3798,13 @@ msgid ""
 "desugar, so reassigning an enclosing _scalar_ inside the loop mutates a "
 "copy, not the original. Accumulate through something shared instead — "
 "`vec.push(v)` — or have the loop body act on values it can see directly."
-msgstr ""
+msgstr "`for (let v of it)` 会脱糖为带合成闭包的 `it.__iterate(emit)`。有一个需要知道的后果：循环体的捕获发生在脱糖之时，因此在循环内重新赋值外围的_标量_，改的是副本而不是原件。要累积，就通过某个共享的东西——`vec.push(v)`——或者让循环体作用于它能直接看到的值。"
 
 #: src/tutorial/traits.md:311
 msgid ""
 "The builtin sequences (`[T]`, `Vec<T>`, `str`, `bytes`) iterate without the "
 "trait — their loops are fused, never a per-element call."
-msgstr ""
+msgstr "内置序列（`[T]`、`Vec<T>`、`str`、`bytes`）无需这个 trait 即可迭代——它们的循环是融合的，绝不是逐元素调用。"
 
 #: src/tutorial/traits.md:316
 msgid ""
@@ -2934,48 +3854,93 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"trait Shape {\n"
+"    fn area(self) -> f64;\n"
+"    fn name(self) -> str;\n"
+"}\n"
+"\n"
+"struct Circle { r: f64 }\n"
+"struct Square { side: f64 }\n"
+"\n"
+"impl Shape for Circle {\n"
+"    fn area(self) -> f64 { return 3.14159 * self.r * self.r; }\n"
+"    fn name(self) -> str { return \"circle\"; }\n"
+"}\n"
+"\n"
+"impl Shape for Square {\n"
+"    fn area(self) -> f64 { return self.side * self.side; }\n"
+"    fn name(self) -> str { return \"square\"; }\n"
+"}\n"
+"\n"
+"fn describe(s: Shape) -> str {\n"
+"    return f\"{s.name()}={s.area()}\";\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"traits\");\n"
+"\n"
+"    let c: Shape = Circle { r: 1.0 };\n"
+"    log.info(describe(c));\n"
+"\n"
+"    let sq = Square { side: 2.0 };\n"
+"    log.info(f\"is shape: {sq is Shape}\");\n"
+"\n"
+"    let mut shapes: Vec<Shape> = Vec.new();\n"
+"    shapes.push(Circle { r: 1.0 });\n"
+"    shapes.push(Square { side: 3.0 });\n"
+"    let mut total: f64 = 0.0;\n"
+"    for (let s of shapes) {\n"
+"        total += s.area();\n"
+"    }\n"
+"    log.info(f\"total={total} n={shapes.len()}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/traits.md:368
 msgid "Next: [errors and optionality](errors.md)."
-msgstr ""
+msgstr "下一章：[错误与可空性](errors.md)。"
 
 #: src/tutorial/errors.md:3
 msgid ""
 "rut has no exceptions you catch, no `Result` enum, and no `null`. Two "
 "mechanisms cover everything:"
-msgstr ""
+msgstr "rut 没有你能捕获的异常，没有 `Result` 枚举，也没有 `null`。两个机制覆盖一切："
 
 #: src/tutorial/errors.md:6
 msgid "**Absence** is `nil` on a nullable `?T`."
-msgstr ""
+msgstr "**缺失**是可空 `?T` 上的 `nil`。"
 
 #: src/tutorial/errors.md:7
 msgid ""
 "**Failure** is a value in the second slot of a pair — the `(T, err)` answer "
 "channel."
-msgstr ""
+msgstr "**失败**是对偶第二个槽位里的值——`(T, err)` 应答通道。"
 
 #: src/tutorial/errors.md:9
 msgid ""
 "**Bugs** — broken contracts — trap loudly and immediately (`panic`, "
 "`assert`, a nil deref, an out-of-bounds index)."
-msgstr ""
+msgstr "**缺陷**——被破坏的契约——会响亮且立即地触发陷阱（`panic`、`assert`、对 nil 的解引用、越界索引）。"
 
 #: src/tutorial/errors.md:12
 msgid ""
 "The design background lives in [everything is a "
 "value](../core-concepts/everything-is-a-value.md)."
-msgstr ""
+msgstr "设计背景见[一切皆值](../core-concepts/everything-is-a-value.md)。"
 
 #: src/tutorial/errors.md:15
 msgid "`?T` and `nil`: absence"
-msgstr ""
+msgstr "`?T` 与 `nil`：缺失"
 
 #: src/tutorial/errors.md:17
 msgid ""
 "`?T` is a nil-able cell. A plain `T` always holds a value; `?T` is that "
 "value or `nil`:"
-msgstr ""
+msgstr "`?T` 是可为 nil 的单元。普通 `T` 总是持有一个值；`?T` 是那个值，或 `nil`："
 
 #: src/tutorial/errors.md:20
 msgid ""
@@ -2995,13 +3960,28 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Node {\n"
+"    value: i32;\n"
+"    left: ?Node;      // one word — recursive shapes are legal\n"
+"    right: ?Node;\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"nodes\");\n"
+"    let n = Node { value: 1, left: nil, right: nil };\n"
+"    log.info(f\"left is nil: {n.left == nil}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:40
 msgid ""
 "Lookups answer `?T`: a hit is the value, a miss is `nil`. Deref is automatic "
 "at every use — `p.x`, `p[i]`, `for (let x of p)`, arithmetic — and "
 "dereferencing a `nil` **traps** `NilDeref`, so guard first:"
-msgstr ""
+msgstr "查找以 `?T` 作答：命中是值，未命中是 `nil`。解引用在每次使用时自动发生——`p.x`、`p[i]`、`for (let x of p)`、算术——而对 `nil` 解引用会**触发陷阱** `NilDeref`，所以请先设守卫："
 
 #: src/tutorial/errors.md:44
 msgid ""
@@ -3022,12 +4002,28 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use nmapset::{ HashMap };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"optional\");\n"
+"    let mut scores: HashMap<str, i32> = HashMap.new();\n"
+"    scores.put(\"rut\", 41);\n"
+"    let mut n = 0;\n"
+"    let hit = scores.get(\"rut\");      // ?i32\n"
+"    if (hit != nil) {\n"
+"        n = hit + 1;                  // a hit auto-unwraps for `+`\n"
+"    }\n"
+"    log.info(f\"n={n}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:65
 msgid ""
 "`p == nil` compares against the null. There is no flow-typing: after the "
 "guard, hand the value to a typed binding when you want a plain `T`:"
-msgstr ""
+msgstr "`p == nil` 与空值比较。没有流类型化：守卫过后，想要普通 `T` 时，把值交给一个带类型的绑定："
 
 #: src/tutorial/errors.md:68
 msgid ""
@@ -3041,36 +4037,45 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"let err = map_response(resp, \"no such repo or ref\", "
+"\"data.jsdelivr.com\");\n"
+"if (err != nil) {\n"
+"    let why: str = err;           // the plain str behind the nullable\n"
+"    eprint(why);\n"
+"    return 1;\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:77
 msgid ""
 "`nil` in an expected-`?T` position just works: `let p: ?Node = nil;`, or a "
 "`left: nil` field in a literal."
-msgstr ""
+msgstr "在期望 `?T` 的位置，`nil` 直接可用：`let p: ?Node = nil;`，或字面量里的 `left: nil` 字段。"
 
 #: src/tutorial/errors.md:80
 msgid "The `(T, err)` answer channel"
-msgstr ""
+msgstr "`(T, err)` 应答通道"
 
 #: src/tutorial/errors.md:82
 msgid "Functions that can fail return a pair. The convention is uniform:"
-msgstr ""
+msgstr "可能失败的函数返回一个对偶。约定是统一的："
 
 #: src/tutorial/errors.md:84
 msgid "**empty err + a value** — success;"
-msgstr ""
+msgstr "**空 err + 一个值**——成功；"
 
 #: src/tutorial/errors.md:85
 msgid "**empty err + `nil`** — a legitimate \"not found\";"
-msgstr ""
+msgstr "**空 err + `nil`**——正当的“未找到”；"
 
 #: src/tutorial/errors.md:86
 msgid "**non-empty err** — failure."
-msgstr ""
+msgstr "**非空 err**——失败。"
 
 #: src/tutorial/errors.md:88
 msgid "The simplest err is a `str` message (empty string means success):"
-msgstr ""
+msgstr "最简单的 err 是一条 `str` 消息（空字符串表示成功）："
 
 #: src/tutorial/errors.md:90
 msgid ""
@@ -3084,12 +4089,21 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"fn hex_dec(s: str) -> (bytes, str) {\n"
+"    if (s.len() % 2 != 0) {\n"
+"        return (bytes.zeroed(0), \"hex: odd-length input\");\n"
+"    }\n"
+"    // ... decode ...\n"
+"    return (out.freeze(), \"\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:100
 msgid ""
 "Nullable halves make both slots explicit — this is the standard library's "
 "own shape, `(?T, ?E)`:"
-msgstr ""
+msgstr "可空的半边让两个槽位都显式——这正是标准库自身的形状，`(?T, ?E)`："
 
 #: src/tutorial/errors.md:103
 msgid ""
@@ -3100,10 +4114,16 @@ msgid ""
 "fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);\n"
 "```"
 msgstr ""
+"```rut\n"
+"// json's entry points\n"
+"fn decodeJson<T requires JsonDeserialize>(s: str) -> (?T, "
+"?DecodeJsonError);\n"
+"fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);\n"
+"```"
 
 #: src/tutorial/errors.md:109
 msgid "The caller destructures and checks the err half first:"
-msgstr ""
+msgstr "调用方解构，并先检查 err 那一半："
 
 #: src/tutorial/errors.md:111
 msgid ""
@@ -3123,6 +4143,21 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use json::{ decodeJson };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"json\");\n"
+"    let (n, e) = decodeJson<i64>(\"42\");\n"
+"    if (e == nil) {\n"
+"        log.info(f\"n={n}\");\n"
+"    } else {\n"
+"        let why = e;\n"
+"        log.info(f\"decode failed at {why.at}\");\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:131
 msgid ""
@@ -3130,17 +4165,17 @@ msgid ""
 "`x.checked_add(y)` answers `(T, bool)` where `.1` is `false` exactly when "
 "the result escaped the width — see [values and "
 "variables](values-and-variables.md)."
-msgstr ""
+msgstr "整数算术的 checked 阶梯是同一思想的微缩版：`x.checked_add(y)` 返回 `(T, bool)`，当且仅当结果超出该宽度时 `.1` 才为 `false`——参见[值与变量](values-and-variables.md)。"
 
 #: src/tutorial/errors.md:136
 msgid "Building an error type"
-msgstr ""
+msgstr "构建一个错误类型"
 
 #: src/tutorial/errors.md:138
 msgid ""
 "For errors a caller might want to _branch on_, pair a payloadless enum (the "
 "kind) with a fixed-field struct (the details). That is the shape `json` uses:"
-msgstr ""
+msgstr "对于调用方可能想要_据以分支_的错误，把一个无载荷的枚举（种类）与一个固定字段的结构体（细节）配成一对。这正是 `json` 使用的形状："
 
 #: src/tutorial/errors.md:142
 msgid ""
@@ -3156,10 +4191,21 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"pub enum DecodeErrorKind { Unexpected, Truncated, InvalidUtf8, WrongType, "
+"Depth, Trailing }\n"
+"\n"
+"pub struct DecodeJsonError {\n"
+"    kind: DecodeErrorKind;\n"
+"    at: i64;        // codepoint offset in the input\n"
+"    got: str;       // the offending text\n"
+"    expected: str;  // what the schema asked for here\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:153
 msgid "The caller picks: branch on `kind`, or just render the fields:"
-msgstr ""
+msgstr "调用方自行选择：按 `kind` 分支，或直接渲染字段："
 
 #: src/tutorial/errors.md:155
 msgid ""
@@ -3179,17 +4225,32 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use json::{ decodeJson };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"json\");\n"
+"    let (bad, be) = decodeJson<i64>(\"[1,2,3]\");\n"
+"    if (be != nil) {\n"
+"        let why = be;\n"
+"        // rejected at 0: got '[', wanted an i64\n"
+"        log.info(f\"rejected at {why.at}: got '{why.got}', wanted "
+"{why.expected}\");\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:174
 msgid ""
 "Enums have no payloads — the struct carries the data. This split keeps every "
 "error a plain value: copy it, store it in a log, put a location next to it, "
 "test it."
-msgstr ""
+msgstr "枚举没有载荷——数据由结构体携带。这个切分让每个错误都保持为普通值：复制它、存进日志、在旁边附上位置、测试它。"
 
 #: src/tutorial/errors.md:178
 msgid "`panic` and `assert`: for bugs, not for flow"
-msgstr ""
+msgstr "`panic` 与 `assert`：为缺陷而设，不为控制流"
 
 #: src/tutorial/errors.md:180
 msgid ""
@@ -3199,6 +4260,11 @@ msgid ""
 "false\n"
 "```"
 msgstr ""
+"```rut\n"
+"panic(\"Rect: negative extents\");        // abort with a message\n"
+"assert(total == expected, \"checksum\");  // abort when the condition is "
+"false\n"
+"```"
 
 #: src/tutorial/errors.md:185
 msgid ""
@@ -3206,25 +4272,25 @@ msgid ""
 "state, a caller error that is a programming mistake. Data problems — a bad "
 "byte in a file, a missing key, a network error — are _values_ and belong in "
 "the answer channel, so callers can recover."
-msgstr ""
+msgstr "当继续下去等于撒谎时使用它们：被破坏的不变式、不可能出现的状态、属于编程失误的调用方错误。数据问题——文件里的坏字节、缺失的键、网络错误——则是_值_，属于应答通道，调用方才能恢复。"
 
 #: src/tutorial/errors.md:190
 msgid ""
 "A trap's message and a stack trace (opt-in via `capture_stacktrace()`) land "
 "in the host's diagnostics — see [diagnostics, traces, and "
 "symbolication](../reference/diagnostics.md)."
-msgstr ""
+msgstr "陷阱的消息与栈追踪（可通过 `capture_stacktrace()` 选择启用）会进入宿主的诊断信息——参见[诊断、追踪与符号化](../reference/diagnostics.md)。"
 
 #: src/tutorial/errors.md:194
 msgid "Erasure when you truly need it"
-msgstr ""
+msgstr "真正需要擦除时"
 
 #: src/tutorial/errors.md:196
 msgid ""
 "When a value must cross a boundary that cannot name its type — host handles, "
 "heterogeneous boxes — `opaque(v)` seals it and `opaque.downcast<T>(o) -> ?T` "
 "recovers it (`nil` on a wrong type, never a trap):"
-msgstr ""
+msgstr "当一个值必须穿越一个无法说出其类型的边界——宿主句柄、异构盒——`opaque(v)` 将它封存，`opaque.downcast<T>(o) -> ?T` 将它取回（类型不符时得到 `nil`，绝不触发陷阱）："
 
 #: src/tutorial/errors.md:201
 msgid ""
@@ -3244,13 +4310,28 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: i32; y: i32 }\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"opaque\");\n"
+"    let box1 = opaque(Point { x: 1, y: 2 });\n"
+"    let p = opaque.downcast<Point>(box1);   // ?Point\n"
+"    when (p != nil) {\n"
+"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        else -> { log.info(\"point: nil\"); },\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:221
 msgid ""
 "`x is T` probes the box without recovering it. This is rut's only "
 "`any`\\-shaped value, and it can do nothing until recovered — see [the "
 "reference on opaque](../reference/opaque.md)."
-msgstr ""
+msgstr "`x is T` 不取回即可探查盒。这是 rut 唯一具有 `any` 形状的值，在被取回之前它什么也做不了——参见 [opaque 参考](../reference/opaque.md)。"
 
 #: src/tutorial/errors.md:227
 msgid ""
@@ -3291,10 +4372,46 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use json::{ decodeJson, encodeJson };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"json\");\n"
+"\n"
+"    // a successful decode: (value, nil)\n"
+"    let (n, e) = decodeJson<i64>(\"42\");\n"
+"    if (e == nil) {\n"
+"        log.info(f\"n={n}\");\n"
+"    } else {\n"
+"        let why = e;\n"
+"        log.info(f\"decode failed at {why.at}: {why.expected}\");\n"
+"    }\n"
+"\n"
+"    // encode answers the same shape: (?str, ?EncodeJsonError)\n"
+"    let (s, ee) = encodeJson<[i64]>([1, 2, 3]);\n"
+"    if (ee == nil) {\n"
+"        let text = s;\n"
+"        log.info(f\"s={text}\");\n"
+"    } else {\n"
+"        log.info(\"encode failed\");\n"
+"    }\n"
+"\n"
+"    // a bad decode: the (nil, err) half answers the failure\n"
+"    let (bad, be) = decodeJson<i64>(\"[1,2,3]\");\n"
+"    if (be == nil) {\n"
+"        log.info(\"unexpected success\");\n"
+"    } else {\n"
+"        let why = be;\n"
+"        log.info(f\"rejected at {why.at}: got '{why.got}', wanted "
+"{why.expected}\");\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/errors.md:269
 msgid "Next: [modules and packages](modules.md)."
-msgstr ""
+msgstr "下一章：[模块与包](modules.md)。"
 
 #: src/tutorial/modules.md:3
 msgid ""
@@ -3304,11 +4421,11 @@ msgid ""
 "visibility](../reference/modules-and-visibility.md), [project structure and "
 "rut.toml](../reference/project-structure.md), and [dependency "
 "kinds](../reference/dependency-kinds.md)."
-msgstr ""
+msgstr "一个 rut 文件就是一个模块：一个命名空间，一个可见性作用域。带有 `rut.toml` 的目录则是一个_包_——你依赖并分享的单位。本章沿这两个层级向上走。参考页是[模块与可见性](../reference/modules-and-visibility.md)、[项目结构与 rut.toml](../reference/project-structure.md)和[依赖种类](../reference/dependency-kinds.md)。"
 
 #: src/tutorial/modules.md:10
 msgid "What lives at module scope"
-msgstr ""
+msgstr "模块作用域里有什么"
 
 #: src/tutorial/modules.md:12
 msgid ""
@@ -3317,7 +4434,7 @@ msgid ""
 "and **loading a module executes nothing**. There is no load-time side-effect "
 "ordering to reason about; the host loads your module and calls its entry "
 "point (conventionally `pub fn main`)."
-msgstr ""
+msgstr "模块作用域只包含**声明**：`use`、`let`、`fn`、`struct`、`class`、`enum`、`trait`、`impl`。每条语句都住在函数体内——而且**加载模块不执行任何东西**。没有需要推理的加载期副作用顺序；宿主加载你的模块并调用它的入口点（惯例是 `pub fn main`）。"
 
 #: src/tutorial/modules.md:18
 msgid ""
@@ -3325,7 +4442,7 @@ msgid ""
 "`\"app\"`, `true`. Arithmetic, record literals, and calls to user functions "
 "are not accepted in this build (there is no mutable module state; programs "
 "build their state in `main`)."
-msgstr ""
+msgstr "模块级 `let` 的初始化器必须是加载期字面量——`42`、`\"app\"`、`true`。算术、记录字面量和对用户函数的调用在当前构建中不被接受（不存在可变的模块状态；程序在 `main` 里构建自己的状态）。"
 
 #: src/tutorial/modules.md:23
 msgid ""
@@ -3348,21 +4465,39 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: f32; y: f32 }\n"
+"\n"
+"let version = 1;                       // fine: a literal\n"
+"let app_name = \"app\";                  // any literal works\n"
+"\n"
+"fn main_body() { /* statements live here */ }\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"app\");\n"
+"    let origin = Point { x: 0, y: 0 }; // record literals live in function "
+"bodies\n"
+"    log.info(f\"{app_name} v{version} origin.x={origin.x}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/modules.md:45 src/reference/modules-and-visibility.md:99
 msgid "Visibility"
-msgstr ""
+msgstr "可见性"
 
 #: src/tutorial/modules.md:47
 msgid ""
 "Every declaration has a visibility, and unannotated means **module-private** "
 "— the safe default. Nothing leaks unless it says `pub`:"
-msgstr ""
+msgstr "每个声明都有一个可见性，不标注即**模块私有**——这是安全的默认。除非写明 `pub`，任何东西都不会外泄："
 
 #: src/tutorial/modules.md:51 src/reference/modules-and-visibility.md:105
 #: src/reference/literals-and-inference.md:111
 msgid "Form"
-msgstr ""
+msgstr "形式"
 
 #: src/tutorial/modules.md:51 src/reference/modules-and-visibility.md:105
 #: src/reference/primitive-types.md:25
@@ -3374,39 +4509,39 @@ msgstr ""
 #: src/reference/value-boundary.md:96 src/reference/host-fns.md:209
 #: src/reference/native-containers.md:103 src/reference/templates.md:40
 msgid "Meaning"
-msgstr ""
+msgstr "含义"
 
 #: src/tutorial/modules.md:53 src/reference/modules-and-visibility.md:107
 msgid "`pub fn ..`"
-msgstr ""
+msgstr "`pub fn ..`"
 
 #: src/tutorial/modules.md:53
 msgid "public — importable by any module, other packages included"
-msgstr ""
+msgstr "公开——任何模块都可导入，其他包也不例外"
 
 #: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:108
 msgid "`pub(mod) fn ..`"
-msgstr ""
+msgstr "`pub(mod) fn ..`"
 
 #: src/tutorial/modules.md:54
 msgid "visible everywhere in this package's module tree"
-msgstr ""
+msgstr "在本包的模块树内处处可见"
 
 #: src/tutorial/modules.md:55 src/reference/modules-and-visibility.md:109
 msgid "`pub(super) fn ..`"
-msgstr ""
+msgstr "`pub(super) fn ..`"
 
 #: src/tutorial/modules.md:55
 msgid "visible to the parent module only"
-msgstr ""
+msgstr "仅对父模块可见"
 
 #: src/tutorial/modules.md:56
 msgid "`fn ..`"
-msgstr ""
+msgstr "`fn ..`"
 
 #: src/tutorial/modules.md:56
 msgid "module-private (`pub(self)`) — the default"
-msgstr ""
+msgstr "模块私有（`pub(self)`）——默认值"
 
 #: src/tutorial/modules.md:58
 msgid ""
@@ -3414,15 +4549,15 @@ msgid ""
 "the exception: a struct is an open record — all members public, always, and "
 "its impl methods take no visibility annotation (they are as public as the "
 "type)."
-msgstr ""
+msgstr "同样的形式适用于类型、模块级 `let` 和类成员。结构体是例外：结构体是开放的记录——所有成员永远公开，其 impl 方法也不带可见性标注（它们与类型一样公开）。"
 
 #: src/tutorial/modules.md:63
 msgid "`use` — naming other modules"
-msgstr ""
+msgstr "`use`——命名其他模块"
 
 #: src/tutorial/modules.md:65
 msgid "`use` imports names with Rust-like paths:"
-msgstr ""
+msgstr "`use` 以类 Rust 的路径导入名字："
 
 #: src/tutorial/modules.md:73
 msgid ""
@@ -3430,23 +4565,23 @@ msgid ""
 "`Vec`\\-free array grammar, `opaque` — are **ambient**: no `use` needed. "
 "Package names from your manifest are; an unused name in a `use` is a lint, "
 "not an error."
-msgstr ""
+msgstr "内置名字——基本类型、`str`/`bytes` 的成员、`panic`、`assert`、不依赖 `Vec` 的数组语法、`opaque`——都是**环境自带**的：无需 `use`。而清单里的包名则需要 `use`；`use` 里未被使用的名字只是一个 lint，不是错误。"
 
 #: src/tutorial/modules.md:78
 msgid ""
 "Within one module, everything is visible — including declarations later in "
 "the file. Order never matters."
-msgstr ""
+msgstr "在同一模块内，一切彼此可见——包括文件中靠后的声明。顺序从不重要。"
 
 #: src/tutorial/modules.md:81
 msgid "Packages: `rut.toml`"
-msgstr ""
+msgstr "包：`rut.toml`"
 
 #: src/tutorial/modules.md:83
 msgid ""
 "A package is a directory with a manifest. The small but complete case — one "
 "library package and one app:"
-msgstr ""
+msgstr "包是带有清单的目录。小而完整的案例——一个库包加一个应用："
 
 #: src/tutorial/modules.md:96
 msgid ""
@@ -3460,6 +4595,15 @@ msgid ""
 "package\n"
 "```"
 msgstr ""
+"```toml\n"
+"# greet/pkg/rut.toml\n"
+"name = \"greet\"\n"
+"entry.lib = \"./greet.rut\"\n"
+"\n"
+"[deps]\n"
+"pouch = { path = \"../../rut/pouch\" }   # the toolchain tree's pouch "
+"package\n"
+"```"
 
 #: src/tutorial/modules.md:105
 msgid ""
@@ -3495,13 +4639,44 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"// greet/pkg/greet.rut\n"
+"use pouch::{ Vec };\n"
+"\n"
+"pub struct Greeting {\n"
+"    to: str;\n"
+"    lines: Vec<str>;\n"
+"}\n"
+"\n"
+"impl Greeting {\n"
+"    pub fn new(to: str) -> Self {\n"
+"        return Self { to: to, lines: Vec.new() };\n"
+"    }\n"
+"\n"
+"    pub fn add(mut self, line: str) {\n"
+"        self.lines.push(line);\n"
+"    }\n"
+"\n"
+"    pub fn render(self) -> str {\n"
+"        let mut out = f\"dear {self.to},\";\n"
+"        for (let line of self.lines) {\n"
+"            out = f\"{out} {line}\";\n"
+"        }\n"
+"        return out;\n"
+"    }\n"
+"}\n"
+"\n"
+"fn shout(msg: str) -> str {   // module-private: no `pub`, never importable\n"
+"    return f\"{msg}!\";\n"
+"}\n"
+"```"
 
 #: src/tutorial/modules.md:137
 msgid ""
 "The app names its dependencies in `[deps]`, by path — each package pulls its "
 "own dependencies along (`ink` brings the host surface `rt`; you never spell "
 "it):"
-msgstr ""
+msgstr "应用在 `[deps]` 里按路径写出自己的依赖——每个包把自己的依赖一路带上（`ink` 会带来宿主表面 `rt`；你从不需要写出它）："
 
 #: src/tutorial/modules.md:141
 msgid ""
@@ -3515,6 +4690,15 @@ msgid ""
 "ink = { path = \"../../rut/ink\" }       # the logger package\n"
 "```"
 msgstr ""
+"```toml\n"
+"# greet/app/rut.toml\n"
+"name = \"app\"\n"
+"entry.lib = \"./main.rut\"\n"
+"\n"
+"[deps]\n"
+"greet = { path = \"../pkg\" }\n"
+"ink = { path = \"../../rut/ink\" }       # the logger package\n"
+"```"
 
 #: src/tutorial/modules.md:151
 msgid ""
@@ -3532,10 +4716,23 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"// greet/app/main.rut\n"
+"use greet::{ Greeting };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"app\");\n"
+"    let mut g = Greeting.new(\"rut\");\n"
+"    g.add(\"hello\");\n"
+"    g.add(\"from a package\");\n"
+"    log.info(g.render());\n"
+"}\n"
+"```"
 
 #: src/tutorial/modules.md:165
 msgid "Run the app from its directory:"
-msgstr ""
+msgstr "在应用的目录里运行："
 
 #: src/tutorial/modules.md:175
 msgid ""
@@ -3544,11 +4741,11 @@ msgid ""
 "convenience: the `rut` CLI mounts the toolchain's tree packages when your "
 "file says `use ink::` or `use pouch::` — see [the rut "
 "CLI](../reference/cli.md)."
-msgstr ""
+msgstr "解析沿 `[deps]` 递归进行（依赖自己的 `[deps]` 随之一起挂载），带有环守卫与先挂载者优先。单个散文件则有一项便利：当你的文件写下 `use ink::` 或 `use pouch::` 时，`rut` CLI 会挂载工具链树里的包——参见 [rut CLI](../reference/cli.md)。"
 
 #: src/tutorial/modules.md:181
 msgid "One package, several files"
-msgstr ""
+msgstr "一个包，多个文件"
 
 #: src/tutorial/modules.md:183
 msgid ""
@@ -3556,7 +4753,7 @@ msgid ""
 "first, in listed order — into **one module**: one namespace, one visibility "
 "scope. A name private to one file is visible to every other file of the same "
 "package:"
-msgstr ""
+msgstr "包的主体可以拆分到多个文件。清单把它们拼接起来——基文件在前，按列出的顺序——拼成**一个模块**：一个命名空间，一个可见性作用域。对其中一个文件私有的名字，对同一个包的每个其他文件都可见："
 
 #: src/tutorial/modules.md:188
 msgid ""
@@ -3566,16 +4763,21 @@ msgid ""
 "entry.libs = [\"./domain.rut\", \"./world.rut\", \"./app.rut\"]\n"
 "```"
 msgstr ""
+"```toml\n"
+"name = \"app\"\n"
+"entry.lib = \"./biz.rut\"\n"
+"entry.libs = [\"./domain.rut\", \"./world.rut\", \"./app.rut\"]\n"
+"```"
 
 #: src/tutorial/modules.md:194
 msgid ""
 "This is assembly, not an include form — cross-package references still go "
 "through `use` paths."
-msgstr ""
+msgstr "这是组装，不是 include 形式——跨包的引用仍然经由 `use` 路径。"
 
 #: src/tutorial/modules.md:199
 msgid "Beyond `[deps]`, a manifest can declare two other relations:"
-msgstr ""
+msgstr "除 `[deps]` 之外，清单还能声明另外两种关系："
 
 #: src/tutorial/modules.md:201
 msgid ""
@@ -3584,13 +4786,13 @@ msgid ""
 "only if the peer is already in the program's closure. The standard library's "
 "`json` package uses this to attach its `Vec`/map serialization impls only "
 "for programs that carry the container packages."
-msgstr ""
+msgstr "**`[peer-deps]`**——本包_与之集成_但从不拉取的包：由消费方提供，或者（当 `optional = true` 时）仅当该 peer 已经在程序的闭包里才挂载集成。标准库的 `json` 包正是用它来只为携带容器包的程序附加自己的 `Vec`/map 序列化 impl。"
 
 #: src/tutorial/modules.md:207
 msgid ""
 "**`[dev-deps]`** — mounted only when building/testing the package itself, "
 "never for a consumer."
-msgstr ""
+msgstr "**`[dev-deps]`**——只在构建/测试该包自身时挂载，对消费方从不挂载。"
 
 #: src/tutorial/modules.md:210
 msgid ""
@@ -3603,51 +4805,59 @@ msgid ""
 "pouch = { path = \"../pouch\" }\n"
 "```"
 msgstr ""
+"```toml\n"
+"[peer-deps]\n"
+"pouch = { path = \"../pouch\", optional = true, lib = \"./group-pouch.rut\" "
+"}\n"
+"\n"
+"[dev-deps]\n"
+"pouch = { path = \"../pouch\" }\n"
+"```"
 
 #: src/tutorial/modules.md:218
 msgid "`entry fn` — the host-facing surface"
-msgstr ""
+msgstr "`entry fn`——面向宿主的表面"
 
 #: src/tutorial/modules.md:220
 msgid ""
 "`pub` publishes a name to other _rut_ modules. `entry` publishes a function "
 "to the _embedding host_, with its signature checked against the boundary's "
 "crossing rules at compile time:"
-msgstr ""
+msgstr "`pub` 把名字发布给其他 _rut_ 模块。`entry` 把函数发布给_嵌入宿主_，其签名在编译期按边界的穿越规则检查："
 
 #: src/tutorial/modules.md:228
 msgid ""
 "An embedded application drives these entries; `pub fn main` is the "
 "conventional entry the `rut run` CLI calls. See [the host "
 "boundary](../core-concepts/host-boundary.md)."
-msgstr ""
+msgstr "嵌入式应用驱动这些入口；`pub fn main` 是 `rut run` CLI 调用的惯例入口。参见[宿主边界](../core-concepts/host-boundary.md)。"
 
 #: src/tutorial/modules.md:232
 msgid "Tooling"
-msgstr ""
+msgstr "工具"
 
 #: src/tutorial/modules.md:235
 msgid "# compile + run\n"
-msgstr ""
+msgstr "# compile + run\n"
 
 #: src/tutorial/modules.md:236
 msgid "# format in place\n"
-msgstr ""
+msgstr "# format in place\n"
 
 #: src/tutorial/modules.md:237
 msgid "# a self-contained bundle\n"
-msgstr ""
+msgstr "# a self-contained bundle\n"
 
 #: src/tutorial/modules.md:243
 msgid ""
 "The `greet` project above is complete as shown — two directories, two "
 "manifests, two sources. Copy the trees into files and `rut run .` from "
 "`greet/app` to see:"
-msgstr ""
+msgstr "上面的 `greet` 项目如所示般完整——两个目录、两份清单、两个源文件。把这些目录树抄进文件，从 `greet/app` 运行 `rut run .`，就会看到："
 
 #: src/tutorial/modules.md:251
 msgid "Next: [async: tasks, workers, and channels](async.md)."
-msgstr ""
+msgstr "下一章：[异步：任务、worker 与通道](async.md)。"
 
 #: src/tutorial/async.md:3
 msgid ""
@@ -3658,18 +4868,18 @@ msgid ""
 "The model is described in [the async "
 "model](../core-concepts/async-model.md), with the full surface in [async and "
 "await](../reference/async.md) and [tasks](../reference/tasks.md)."
-msgstr ""
+msgstr "rut 的并发是**拉取式**的。`async fn` 编译成一个 _future_——一个冷的值，在被某种东西驱动之前什么也不做。没有一创建就启动的 promise，没有微任务队列，没有隐式调度：时间由宿主掌握，代码只有在驱动循环泵动它时才前进。这个模型在[异步模型](../core-concepts/async-model.md)中描述，完整表面见[异步与 await](../reference/async.md)与[任务](../reference/tasks.md)。"
 
 #: src/tutorial/async.md:12 src/reference/async.md:18
 msgid "`async fn` and `await`"
-msgstr ""
+msgstr "`async fn` 与 `await`"
 
 #: src/tutorial/async.md:14
 msgid ""
 "An `async fn` declares its context — `cx: RunContext` — as the _first "
 "parameter_. Calling it runs nothing: it returns a cold future. `await` is "
 "the one in-body suspension point, and it consumes the future:"
-msgstr ""
+msgstr "`async fn` 把自己的上下文——`cx: RunContext`——声明为_第一个参数_。调用它不会运行任何东西：它返回一个冷的 future。`await` 是函数体内唯一的挂起点，而且它会消费掉这个 future："
 
 #: src/tutorial/async.md:18
 msgid ""
@@ -3685,12 +4895,23 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"async fn countdown(cx: RunContext, log: Logger, n: u32) {\n"
+"    let mut i = n;\n"
+"    while (i > 0) {\n"
+"        log.info(f\"t-{i}\");\n"
+"        await sleep(500);       // park here; the loop resumes the frame\n"
+"        i -= 1;\n"
+"    }\n"
+"    log.info(\"lift-off\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/async.md:30
 msgid ""
 "The cx is engine-minted at call sites the way `self` is — you never pass it "
 "when _calling_ an async fn:"
-msgstr ""
+msgstr "cx 与 `self` 一样，在调用点由引擎铸造——_调用_ async fn 时你从不传它："
 
 #: src/tutorial/async.md:33
 msgid ""
@@ -3698,16 +4919,19 @@ msgid ""
 "launch_future(countdown(log, 3));   // no cx — the engine supplies it\n"
 "```"
 msgstr ""
+"```rut\n"
+"launch_future(countdown(log, 3));   // no cx — the engine supplies it\n"
+"```"
 
 #: src/tutorial/async.md:37
 msgid "Two consume paths, and exactly one per future:"
-msgstr ""
+msgstr "两条消费路径，每个 future 恰好取其一："
 
 #: src/tutorial/async.md:39
 msgid ""
 "**`await fut`** — drive it from this async fn's body. Legal only inside an "
 "`async fn`, and only for engine-woven futures (async-fn results and `sleep`)."
-msgstr ""
+msgstr "**`await fut`**——在这个 async fn 的体内驱动它。只在 `async fn` 内合法，且只适用于引擎织入的 future（async fn 的结果和 `sleep`）。"
 
 #: src/tutorial/async.md:42
 msgid ""
@@ -3715,21 +4939,21 @@ msgid ""
 "Returns a `LaunchedFutureHandle<T>`, which is _not_ a future: it cannot be "
 "awaited or re-launched. Its `abort()` flags cancellation; the frame notices "
 "at its next checkpoint and runs its cleanup."
-msgstr ""
+msgstr "**`launch_future(fut)`**——把它交给驱动循环，并保留一张回执。返回的 `LaunchedFutureHandle<T>` _不是_ future：不能 await，也不能再次 launch。它的 `abort()` 标记取消；帧在下一个检查点察觉到，并运行自己的清理。"
 
 #: src/tutorial/async.md:47
 msgid ""
 "`sleep(ms)` is the one built-in pender — a `Future<nil>` that parks its "
 "frame until the VM's clock reaches the deadline."
-msgstr ""
+msgstr "`sleep(ms)` 是唯一的内置 pender——一个 `Future<nil>`，它把自己的帧停靠住，直到 VM 的时钟走到期限为止。"
 
 #: src/tutorial/async.md:50
 msgid "Both `launch_future` and `sleep` come from the `async_host` package:"
-msgstr ""
+msgstr "`launch_future` 和 `sleep` 都来自 `async_host` 包："
 
 #: src/tutorial/async.md:56
 msgid "Who drives?"
-msgstr ""
+msgstr "谁来驱动？"
 
 #: src/tutorial/async.md:58
 msgid ""
@@ -3738,60 +4962,60 @@ msgid ""
 "advance the virtual clock to the next timer deadline, repeat — until nothing "
 "is pending. So a program launches work from `main` and the output simply "
 "appears:"
-msgstr ""
+msgstr "你从不编写驱动循环——_嵌入方_来写。`rut run` CLI 就是一个嵌入方：`main` 返回后它泵动循环——排空就绪的帧，把虚拟时钟推进到下一个定时器期限，如此往复——直到没有任何待处理的东西。于是程序从 `main` 发起工作，输出自然就出现了："
 
 #: src/tutorial/async.md:75
 msgid ""
 "Calling an async function and awaiting it in the same body is the "
 "straight-line case; launching is for concurrency — independent work that "
 "overlaps through the loop's interleaving."
-msgstr ""
+msgstr "在同一个体内调用异步函数并 await 它，是直线情形；launch 则用于并发——经由循环的交错而彼此重叠的独立工作。"
 
 #: src/tutorial/async.md:79
 msgid "Talking to the network: the `http` package"
-msgstr ""
+msgstr "与网络对话：`http` 包"
 
 #: src/tutorial/async.md:81
 msgid ""
 "The standard `http` package is async-only where work actually waits. "
 "Everything else — the client, the verbs, the builder — is sync construction "
 "sugar:"
-msgstr ""
+msgstr "标准 `http` 包只在真正等待的工作处才是异步的。其余一切——客户端、各个动词、构建器——都是同步的构造糖："
 
 #: src/tutorial/async.md:92
 msgid "The shape, step by step:"
-msgstr ""
+msgstr "这个形状，一步一步："
 
 #: src/tutorial/async.md:94
 msgid ""
 "`client.get(url)` (or `request()`, `post`, `put`, `patch`, `del`) hands back "
 "a `RequestBuilder`; `.method(..)`, `.url(..)`, `.header(k, v)` (repeatable), "
 "`.body(bytes)` chain on it."
-msgstr ""
+msgstr "`client.get(url)`（或 `request()`、`post`、`put`、`patch`、`del`）交还一个 `RequestBuilder`；`.method(..)`、`.url(..)`、`.header(k, v)`（可重复）、`.body(bytes)` 在它上面链式调用。"
 
 #: src/tutorial/async.md:97
 msgid "`.build()` freezes a re-sendable `Request`."
-msgstr ""
+msgstr "`.build()` 冻结出一个可重发的 `Request`。"
 
 #: src/tutorial/async.md:98
 msgid ""
 "**`.send(cx)` is the async point.** It resolves at _headers_ — the wire body "
 "is still unread."
-msgstr ""
+msgstr "**`.send(cx)` 是异步点。**它在_响应头_到达时完成——线上的响应体还没有读取。"
 
 #: src/tutorial/async.md:100
 msgid "From the `Response`, take one of two readbacks:"
-msgstr ""
+msgstr "从 `Response` 出发，有两条读取路径："
 
 #: src/tutorial/async.md:101
 msgid "`await resp.body(cx)` — drain the remaining body in one future;"
-msgstr ""
+msgstr "`await resp.body(cx)`——用一个 future 排干剩余的响应体；"
 
 #: src/tutorial/async.md:102
 msgid ""
 "`resp.byte_stream()` then `await stream.next(cx)` — one chunk per future, "
 "`nil` at end-of-stream, for bounded-memory downloads."
-msgstr ""
+msgstr "`resp.byte_stream()` 然后 `await stream.next(cx)`——每个 future 一个数据块，流结束时为 `nil`，适合有界内存的下载。"
 
 #: src/tutorial/async.md:105
 msgid ""
@@ -3800,13 +5024,13 @@ msgid ""
 "and 5xx included — is a normal response (`resp.ok()` is the 2xx test), and a "
 "mid-read wire death surfaces as `nil` from `next()` with the reason in "
 "`stream.error()`."
-msgstr ""
+msgstr "错误以数据的形式回来，而不是陷阱：状态 `0` 保留给传输失败（`resp.transport_error()` 携带原因），任何真实状态——包括 4xx 和 5xx——都是正常响应（`resp.ok()` 是 2xx 测试），而读取中途线路断开则表现为 `next()` 返回 `nil`，原因在 `stream.error()` 里。"
 
 #: src/tutorial/async.md:111
 msgid ""
 "A complete worker from the repository's GitHub-viewer example — send, then "
 "drain:"
-msgstr ""
+msgstr "来自仓库 GitHub-viewer 示例的一个完整 worker——先 send，再排干："
 
 #: src/tutorial/async.md:114
 msgid ""
@@ -3836,10 +5060,35 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, "
+"rf: str) -> i32 {\n"
+"    let url = "
+"f\"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}\";\n"
+"    let resp = await client.get(url).build().send(cx);\n"
+"    if (resp.status() == 0) {\n"
+"        let why: str = resp.transport_error();\n"
+"        eprint(f\"rgh: network error: {why}\");\n"
+"        return 1;\n"
+"    }\n"
+"    if (!resp.ok()) {\n"
+"        eprint(f\"rgh: CDN {resp.status()}\");\n"
+"        return 1;\n"
+"    }\n"
+"    let (tree, e) = decodeJsonBytes<Root>(await resp.body(cx));\n"
+"    if (e != nil) {\n"
+"        let why: DecodeJsonError = e;\n"
+"        eprint(f\"rgh: bad tree JSON at {why.at}\");\n"
+"        return 1;\n"
+"    }\n"
+"    // ... print the tree ...\n"
+"    return 0;\n"
+"}\n"
+"```"
 
 #: src/tutorial/async.md:138
 msgid "The stream lane walks chunks — send, then loop:"
-msgstr ""
+msgstr "流路径逐块行走——先 send，再循环："
 
 #: src/tutorial/async.md:140
 msgid ""
@@ -3858,10 +5107,24 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"let resp = await client.get(url).build().send(cx);\n"
+"let stream = resp.byte_stream();\n"
+"while (true) {\n"
+"    let c = await stream.next(cx);\n"
+"    if (c == nil) {\n"
+"        let rerr = stream.error();\n"
+"        if (rerr != nil) { return 1; }   // failed mid-read\n"
+"        break;                            // clean end of stream\n"
+"    }\n"
+"    let chunk: bytes = c;\n"
+"    total += chunk.len();\n"
+"}\n"
+"```"
 
 #: src/tutorial/async.md:155
 msgid "`await select`, join, and structured scopes"
-msgstr ""
+msgstr "`await select`、join 与结构化作用域"
 
 #: src/tutorial/async.md:157
 msgid ""
@@ -3871,7 +5134,7 @@ msgid ""
 "`handle.abort()` flags the frame, and the probe at its next checkpoint "
 "unwinds it deterministically, running cleanup in reverse declaration order. "
 "See [tasks](../reference/tasks.md) for the roadmap."
-msgstr ""
+msgstr "竞速 future（`await select { fut1 -> .., fut2 x -> .. }`）与接取已 launch 的 future 的值（`await handle`）在语法里写得出来，但在当前构建中不可用——编译器把它们拦下。取消_已经落地_：`handle.abort()` 给帧打上标记，下一个检查点处的探针确定性地将它展开，按声明的逆序运行清理。路线图见[任务](../reference/tasks.md)。"
 
 #: src/tutorial/async.md:167
 msgid ""
@@ -3884,7 +5147,7 @@ msgid ""
 "worker. The API is a host facility (`spawn_worker`, `Channel<T>`), so its "
 "shape depends on your embedder — see [workers and "
 "channels](../reference/workers-and-channels.md)."
-msgstr ""
+msgstr "要真正的并行，宿主可以生成 **worker**——独立线程上、拥有独立堆的独立 VM。没有共享内存：所有数据都经由类型化通道穿越，而什么可以穿越是一条受检规则——基本类型和 `str` 复制；单元（vec、记录、类实例）在独占持有时转移，否则深复制；端点（`Sender`/`Receiver`）转移；**闭包不穿越**。worker 里的陷阱只杀死那个 worker。这个 API 是宿主设施（`spawn_worker`、`Channel<T>`），它的形状取决于你的嵌入方——参见 [worker 与通道](../reference/workers-and-channels.md)。"
 
 #: src/tutorial/async.md:179
 msgid ""
@@ -3908,10 +5171,29 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use async_host::{ launch_future, sleep };\n"
+"use ink::{ Logger };\n"
+"\n"
+"async fn countdown(cx: RunContext, log: Logger, n: u32) {\n"
+"    let mut i = n;\n"
+"    while (i > 0) {\n"
+"        log.info(f\"t-{i}\");\n"
+"        await sleep(500);\n"
+"        i -= 1;\n"
+"    }\n"
+"    log.info(\"lift-off\");\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"countdown\");\n"
+"    launch_future(countdown(log, 3));\n"
+"}\n"
+"```"
 
 #: src/tutorial/async.md:206
 msgid "Next: [the standard library](stdlib.md)."
-msgstr ""
+msgstr "下一章：[标准库](stdlib.md)。"
 
 #: src/tutorial/stdlib.md:3
 msgid ""
@@ -3922,21 +5204,21 @@ msgid ""
 "line; the CLI mounts the tree packages for loose files automatically, and a "
 "package program lists them in its manifest). Any of them can be replaced "
 "wholesale; the engine knows none of their names."
-msgstr ""
+msgstr "标准库一分为二。**`core`** 是唯一真正的标准——一组_环境自带_的内置名字组成的前奏：在每个编译单元内都在作用域中，无需 `use`。其余则是一组随工具链树分发的**可换包**——想用某个包的程序要明说（一行 `use`；CLI 会为散文件自动挂载树内的包，而包程序则在清单里列出它们）。任何一个包都可以整体替换；引擎不知道它们任何一个的名字。"
 
 #: src/tutorial/stdlib.md:12
 msgid ""
 "The reference page is [core and the swappable "
 "packages](../reference/stdlib.md)."
-msgstr ""
+msgstr "参考页是 [core 与可换包](../reference/stdlib.md)。"
 
 #: src/tutorial/stdlib.md:14
 msgid "What's always there (`core`)"
-msgstr ""
+msgstr "永远可用的（`core`）"
 
 #: src/tutorial/stdlib.md:16
 msgid "Reporting and bugs"
-msgstr ""
+msgstr "报告与缺陷"
 
 #: src/tutorial/stdlib.md:18
 msgid ""
@@ -3946,16 +5228,21 @@ msgid ""
 "optional)\n"
 "```"
 msgstr ""
+"```rut\n"
+"panic(\"Rect: negative extents\");       // abort with a message\n"
+"assert(total == expected, \"checksum\"); // abort when false (message "
+"optional)\n"
+"```"
 
 #: src/tutorial/stdlib.md:23
 msgid "Integer safety ladder"
-msgstr ""
+msgstr "整数安全阶梯"
 
 #: src/tutorial/stdlib.md:25
 msgid ""
 "Every integer width carries compiler-lowered methods. Plain `+`/`-`/`*` trap "
 "on overflow; these never do:"
-msgstr ""
+msgstr "每个整数宽度都带有编译器下降（compiler-lowered）的方法。普通的 `+`/`-`/`*` 在溢出时触发陷阱；下面这些绝不会："
 
 #: src/tutorial/stdlib.md:28
 msgid ""
@@ -3972,16 +5259,28 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"ladder\");\n"
+"    let mut v: u8 = 250;\n"
+"    v = v.wrapping_add(10);            // 4 — two's-complement wrap\n"
+"    let over = 200u8.checked_add(100); // (44, false) — .1 false = escaped\n"
+"    let sat = 200u8.saturating_add(100); // 255 — clamp at the bounds\n"
+"    log.info(f\"v={v} over=({over.0}, {over.1}) sat={sat}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:45
 msgid ""
 "`checked_*` answers `(T, bool)`; `.0` holds the wrapped bits either way. "
 "Pick per call site: a checksum wraps, a length checks."
-msgstr ""
+msgstr "`checked_*` 返回 `(T, bool)`；无论结果如何，`.0` 都装着回绕后的位。按调用点取舍：校验和要回绕，长度要检查。"
 
 #: src/tutorial/stdlib.md:48
 msgid "`str` members"
-msgstr ""
+msgstr "`str` 成员"
 
 #: src/tutorial/stdlib.md:50
 msgid ""
@@ -4003,6 +5302,23 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"str\");\n"
+"    let s = \"héllo rut\";\n"
+"    log.info(f\"len={s.len()} first={s.code()}\");\n"
+"    log.info(f\"at1={s.code_at(1)} octets={s.encode().len()}\");\n"
+"    log.info(f\"view={s.slice(6, 9)}\");\n"
+"    let head: str = \"héllo\";\n"
+"    log.info(f\"starts={s.starts_with(0, head)}\");\n"
+"    let joined = string_join([\"rut\", \"runs\"]);\n"
+"    log.info(f\"joined={joined}\");\n"
+"    let h = str.from_code(72);\n"
+"    log.info(f\"from_code={h}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:77
 msgid ""
@@ -4012,11 +5328,11 @@ msgid ""
 "1-codepoint `str` for a `u32`. There is no `split` primitive; tokenizing "
 "rides `s.scan(from, set)` over a caller-owned `[u8]` class table. See "
 "[string slicing and views](../reference/string-views.md)."
-msgstr ""
+msgstr "`s.slice` 值得再看一眼：没有任何八位组移动；视图在父串之上记录一个窗口，它可以打印、按内容比较、迭代，还可以再切片。码点访问以整数书写——`str.from_code(n)` 用一个 `u32` 构建出单码点的 `str`。没有 `split` 原语；分词依靠 `s.scan(from, set)`，配一张调用方自备的 `[u8]` 类别表。参见[字符串切片与视图](../reference/string-views.md)。"
 
 #: src/tutorial/stdlib.md:84
 msgid "`bytes` members"
-msgstr ""
+msgstr "`bytes` 成员"
 
 #: src/tutorial/stdlib.md:86
 msgid ""
@@ -4034,10 +5350,23 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"bytes\");\n"
+"    let b = \"rut runs\".encode();\n"
+"    log.info(f\"len={b.len()} decode={b.decode()}\");\n"
+"    let copy = b.clone();     // the ONLY copy escape hatch\n"
+"    let z = bytes.zeroed(4);\n"
+"    let from = bytes.from([1, 2, 3]);\n"
+"    log.info(f\"same={copy == b} zeroed={z.len()} from={from.len()}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:105
 msgid "Erasure and cleanup"
-msgstr ""
+msgstr "擦除与清理"
 
 #: src/tutorial/stdlib.md:107
 msgid ""
@@ -4048,31 +5377,31 @@ msgid ""
 "the memory stories live in [the Rc heap and "
 "destructors](../reference/rc-heap.md) and [weak "
 "references](../reference/weak-refs.md)."
-msgstr ""
+msgstr "`opaque(v)` 封存任意值，供日后以 `opaque.downcast<T>(o) -> ?T` 取回——参见[错误与可空性](errors.md)。`on_drop(p, cleanup)` 在单元的引用计数归零时运行一个回调，`Weak(v)` 持有一个不保活的引用（`upgrade() -> ?T`，所指者死亡后为 `nil`）——内存的故事见 [Rc 堆与析构器](../reference/rc-heap.md)与[弱引用](../reference/weak-refs.md)。"
 
 #: src/tutorial/stdlib.md:116
 msgid "`StrBuf` — the raw growable builder"
-msgstr ""
+msgstr "`StrBuf`——原始的可增长构建器"
 
 #: src/tutorial/stdlib.md:118
 msgid ""
 "Prefer the package face below; the engine cell under it is `StrBuf(cap)` "
 "with `push`/`push_code`/`len`/`finish`."
-msgstr ""
+msgstr "请优先使用下方的包门面；它底下的引擎单元是 `StrBuf(cap)`，带 `push`/`push_code`/`len`/`finish`。"
 
 #: src/tutorial/stdlib.md:121
 msgid "One gated name"
-msgstr ""
+msgstr "唯一需要显式启用的名字"
 
 #: src/tutorial/stdlib.md:123
 msgid ""
 "`NAN` is core's single constant, deliberately name-explicit: `use core::{ "
 "NAN };`. The float constants live in `calc`."
-msgstr ""
+msgstr "`NAN` 是 core 唯一的常量，刻意要求显式点名：`use core::{ NAN };`。浮点常量住在 `calc` 里。"
 
 #: src/tutorial/stdlib.md:126
 msgid "`pouch` — the growable sequence"
-msgstr ""
+msgstr "`pouch`——可增长序列"
 
 #: src/tutorial/stdlib.md:128
 msgid ""
@@ -4101,6 +5430,30 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"pouch\");\n"
+"    let mut xs: Vec<i32> = Vec.new();         // or Vec.with_capacity(64)\n"
+"    xs.push(10);                              // amortized O(1)\n"
+"    let v = Vec<f32>.filled(0.0, 1024);       // n slots of one value\n"
+"    let w = Vec<i32>.from([1, 2, 3]);         // from a fixed array "
+"(copies)\n"
+"    let x = xs[0];                            // indexing\n"
+"    xs[0] = 42;                               // needs a `mut` binding\n"
+"    let last = xs.pop();                      // removes + returns; traps if "
+"empty\n"
+"    let n = xs.len();\n"
+"    let mut total = 0;\n"
+"    for (let e of w) {                        // iteration\n"
+"        total += e;\n"
+"    }\n"
+"    log.info(f\"x={x} last={last} len-after-pop={n} filled={v.len()} "
+"total={total}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:154
 msgid ""
@@ -4108,11 +5461,11 @@ msgid ""
 "the immutable `bytes`. `xs.as_array()` copies the live elements into a fixed "
 "`[T]`. A `slice(from, to)` window is compiler-lowered — an O(1) view that "
 "writes through to the parent vector."
-msgstr ""
+msgstr "`Vec<u8>` 是可变的字节构建器：`push` 进字节，然后 `freeze()` 成不可变的 `bytes`。`xs.as_array()` 把存活的元素复制进一个定长 `[T]`。`slice(from, to)` 窗口由编译器下降实现——一个写穿透到父向量的 O(1) 视图。"
 
 #: src/tutorial/stdlib.md:159
 msgid "`nmapset` — keyed collections"
-msgstr ""
+msgstr "`nmapset`——键控集合"
 
 #: src/tutorial/stdlib.md:161
 msgid ""
@@ -4142,6 +5495,31 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use nmapset::{ HashMap, HashSet };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"nmapset\");\n"
+"    let mut counts: HashMap<str, i32> = HashMap.new();\n"
+"    let fresh = counts.put(\"rut\", 1);          // answers true when the "
+"key was NEWLY added\n"
+"    let mut n = 0;\n"
+"    let hit = counts.get(\"rut\");   // ?i32 — nil means absent\n"
+"    if (hit != nil) { n = hit + 1; }\n"
+"    let there = counts.has(\"rut\");             // membership\n"
+"    let gone = counts.remove(\"runs\");         // answers whether it was "
+"there\n"
+"    let size = counts.len();\n"
+"\n"
+"    let mut seen: HashSet<str> = HashSet.new();\n"
+"    let first = seen.put(\"x\");     // true — newly added\n"
+"    let again = seen.put(\"x\");     // false\n"
+"    log.info(f\"fresh={fresh} n={n} has={there} removed={gone} "
+"len={size}\");\n"
+"    log.info(f\"first={first} again={again}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:189
 msgid ""
@@ -4150,11 +5528,11 @@ msgid ""
 "key escapes by encoding canonically to `bytes`. A hit returns the stored "
 "cell, not a copy. There is no iteration surface: maps and sets answer "
 "questions, they don't walk."
-msgstr ""
+msgstr "键来自一个固定集合——整数、`bool`、`str`、`bytes`（没有浮点数：它们没有稳定的相等契约）——由宿主做哈希；用户自定义的键以规范编码成 `bytes` 的方式破例。命中返回的是存储的单元，不是副本。没有迭代表面：map 和 set 回答问题，不做遍历。"
 
 #: src/tutorial/stdlib.md:195
 msgid "`strbuild` — the string builder"
-msgstr ""
+msgstr "`strbuild`——字符串构建器"
 
 #: src/tutorial/stdlib.md:197
 msgid ""
@@ -4175,16 +5553,32 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use strbuild::{ StringBuilder };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"strbuild\");\n"
+"    let n = 3;\n"
+"    let mut b = StringBuilder.new();     // or StringBuilder.with_cap(1024)\n"
+"    b.append(\"count: \");\n"
+"    b.append_code(33);                   // one codepoint\n"
+"    b.append(f\" up to {n}\");             // appends are amortized O(1)\n"
+"    let s = b.build();                   // the ONE materialization; builder "
+"keeps its buffer\n"
+"    log.info(s);\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:217
 msgid ""
 "Every `out = f\"{out}{chunk}\"` loop copies the whole prefix each time; the "
 "builder appends into one growable cell and copies once, at `build()`."
-msgstr ""
+msgstr "每个 `out = f\"{out}{chunk}\"` 循环都要把整个前缀复制一遍；构建器在一个可增长的单元里追加，只在 `build()` 时复制一次。"
 
 #: src/tutorial/stdlib.md:221
 msgid "`calc` — float math"
-msgstr ""
+msgstr "`calc`——浮点数学"
 
 #: src/tutorial/stdlib.md:223
 msgid ""
@@ -4208,16 +5602,35 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use calc::{ Math };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"calc\");\n"
+"    let x: f64 = -2.0;\n"
+"    let a: f64 = 3.0;\n"
+"    let b: f64 = 7.0;\n"
+"    let d = Math.sqrt(2.0);        // f64 host fns: sin, pow, atan2, fma, "
+"...\n"
+"    let f = Math.sqrt_f(2.0f32);   // f32 twins under a `_f` suffix\n"
+"    let mx = Math.max(a, b);\n"
+"    let sg = Math.signum(x);\n"
+"    log.info(f\"sqrt={d} sqrt_f={f} pi={Math.PI}\");\n"
+"    log.info(f\"abs={Math.abs(x)} min={Math.min(a, b)} max={mx} "
+"signum={sg}\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:246
 msgid ""
 "rut has no overloading, so the width lives in the name. The integer ladder "
 "is _not_ here — those are core's, always available."
-msgstr ""
+msgstr "rut 没有重载，所以宽度活在名字里。整数阶梯_不_在这里——那些是 core 的方法，永远可用。"
 
 #: src/tutorial/stdlib.md:249
 msgid "`json` — encode and decode"
-msgstr ""
+msgstr "`json`——编码与解码"
 
 #: src/tutorial/stdlib.md:251
 msgid ""
@@ -4238,6 +5651,22 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use json::{ decodeJson, encodeJson };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"json\");\n"
+"    let (n, e) = decodeJson<i64>(\"42\");            // (?T, ?E) — see "
+"errors\n"
+"    let (s, ee) = encodeJson<[i64]>([1, 2, 3]);    // (?str, "
+"?EncodeJsonError)\n"
+"    if (e == nil && ee == nil) {\n"
+"        let text = s;\n"
+"        log.info(f\"n={n} s={text}\");\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:270
 msgid ""
@@ -4247,15 +5676,15 @@ msgid ""
 "automatically when those packages are in your program. Error values are a "
 "kind enum plus a struct with `.at`/`.got`/`.expected` — see [errors and "
 "optionality](errors.md)."
-msgstr ""
+msgstr "解码是直接的、按模式驱动的：你的类型的 `impl JsonDeserialize` 恰好读取它期望的字段，没有中间树。你的类型用两个小 impl 选择加入；容器 impl（`Vec<T>`、map/set 家族）在这些包进入你的程序时自动挂载。错误值是一个种类枚举，外加一个带 `.at`/`.got`/`.expected` 的结构体——参见[错误与可空性](errors.md)。"
 
 #: src/tutorial/stdlib.md:278
 msgid "`ink` — logging"
-msgstr ""
+msgstr "`ink`——日志"
 
 #: src/tutorial/stdlib.md:280
 msgid "There is no `console`, no `print` — all output goes through a logger:"
-msgstr ""
+msgstr "没有 `console`，也没有 `print`——所有输出都经过一个 logger："
 
 #: src/tutorial/stdlib.md:282
 msgid ""
@@ -4270,6 +5699,16 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let n = 3;\n"
+"    let log = Logger.new(\"app\");\n"
+"    log.info(f\"started with {n} items\");\n"
+"    log.debug(\"...\"); log.warn(\"...\"); log.error(\"...\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:300
 msgid ""
@@ -4278,18 +5717,18 @@ msgid ""
 "declare a host surface in a `.d.rut`, wrap it in a rut class — is how _any_ "
 "embedder package reaches rut code; see [embedding and native "
 "modules](../reference/embedding.md)."
-msgstr ""
+msgstr "`Logger` 是架在宿主提供的句柄之上的普通 rut 类；嵌入方选择输出去向（`rut` CLI 打印到 stdout）。同一个模式——在 `.d.rut` 里声明宿主表面，再用一个 rut 类把它包起来——就是_任何_嵌入方包抵达 rut 代码的方式；参见[嵌入与原生模块](../reference/embedding.md)。"
 
 #: src/tutorial/stdlib.md:306
 msgid "`http`"
-msgstr ""
+msgstr "`http`"
 
 #: src/tutorial/stdlib.md:308
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
 "construction, `send(cx)` resolving at headers, body drains and byte streams "
 "— in [async: tasks, workers, and channels](async.md)."
-msgstr ""
+msgstr "异步 HTTP 客户端与并发那一章同住——构建器的构造、在响应头处完成的 `send(cx)`、响应体排干与字节流——见[异步：任务、worker 与通道](async.md)。"
 
 #: src/tutorial/stdlib.md:314
 msgid ""
@@ -4333,6 +5772,45 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"use strbuild::{ StringBuilder };\n"
+"use calc::{ Math };\n"
+"use ink::{ Logger };\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"std\");\n"
+"\n"
+"    // Vec: build, pop, read\n"
+"    let mut v: Vec<i32> = Vec.new();\n"
+"    v.push(10);\n"
+"    v.push(20);\n"
+"    v.push(30);\n"
+"    let last = v.pop();\n"
+"    log.info(f\"len={v.len()} last={last} first={v[0]}\");\n"
+"\n"
+"    // fixed arrays + string_join from core\n"
+"    let parts: Vec<str> = Vec.from([\"rut\", \"runs\"]);\n"
+"    log.info(f\"joined={string_join(parts.as_array())}\");\n"
+"\n"
+"    // StringBuilder: amortized appends, one materialization\n"
+"    let mut b = StringBuilder.new();\n"
+"    b.append(\"count: \");\n"
+"    b.append_code(33);\n"
+"    b.append(f\" up to {v.len()}\");\n"
+"    let s = b.build();\n"
+"    log.info(s);\n"
+"\n"
+"    // calc's Math namespace (f64) and its f32 twins (_f)\n"
+"    let d = Math.sqrt(2.0);\n"
+"    let f = Math.sqrt_f(2.0);\n"
+"    log.info(f\"sqrt2 f64~{d} f32~{f} pi={Math.PI}\");\n"
+"\n"
+"    // assert: the builtin bug-catcher\n"
+"    assert(v.len() == 2, \"vec should hold two\");\n"
+"    log.info(\"asserted\");\n"
+"}\n"
+"```"
 
 #: src/tutorial/stdlib.md:362
 msgid ""
@@ -4340,7 +5818,7 @@ msgid ""
 "concepts](../core-concepts/design-goals.md) explain _why_ the language is "
 "shaped the way it is, and the [reference](../reference/lexical-structure.md) "
 "pins down every rule."
-msgstr ""
+msgstr "教程到此完成。从这里出发，[核心概念](../core-concepts/design-goals.md)解释这门语言_为何_被塑造成如今的形状，[参考](../reference/lexical-structure.md)则钉牢每一条规则。"
 
 #: src/core-concepts/design-goals.md:3
 msgid ""
