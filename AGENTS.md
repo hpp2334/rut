@@ -44,3 +44,23 @@ acceptance):
 - Deployed target: `cd demo && npm run deploy` ships the playground to
   Cloudflare Pages (production from `master`):
   <https://playground.rut.hpp2334.com>.
+
+## Docs: the book lives in `docs/`, RFCs are gone
+
+- The user manual is an mdbook site: source in `docs/src/` (TOC:
+  `docs/src/SUMMARY.md`), built with `mdbook build docs` (install:
+  `cargo install mdbook --locked`). Sections: Quick Start, Tutorial,
+  Core Concepts, Examples, Reference. The deployed book is
+  <https://rut.hpp2334.com>.
+- There is NO `rfc/` directory anymore — its content was distilled into
+  the book. When code comments or older branches cite "RFC NNNN", map
+  the topic to a `docs/src/reference/*.md` page instead of looking for
+  the file. Do not reintroduce RFC-numbered citations in user-facing
+  prose (docs, READMEs); historical mentions inside source comments may
+  stay.
+- Docs deploy: `node scripts/deploy.cjs --book` (pages project
+  `rut-book` → `rut.hpp2334.com`); the demo target
+  (`node scripts/deploy.cjs`) is unchanged.
+- When you change language surface or CLI behavior, update the matching
+  book pages in the same change — `mdbook build docs` fails on dead
+  links and missing TOC files, so run it before committing doc edits.

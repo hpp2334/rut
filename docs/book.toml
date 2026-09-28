@@ -1,0 +1,19 @@
+[book]
+title = "The rut Book"
+authors = ["hpp2334"]
+description = "rut — a small, statically typed, embeddable scripting language with a Rust-flavored surface, reified types, and a no-JIT bytecode VM"
+src = "src"
+language = "en"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
+git-repository-url = "https://github.com/hpp2334/rut"
+edit-url-template = "https://github.com/hpp2334/rut/edit/master/docs/{path}"
+
+[output.html.search]
+enable = true
