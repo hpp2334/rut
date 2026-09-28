@@ -383,6 +383,7 @@ msgstr ""
 #: src/index.md:17
 msgid ""
 "```rut\n"
+"use ink::{ Logger };\n"
 "use pouch::{ Vec };\n"
 "\n"
 "fn sieve(limit: i32) -> Vec<i32> {\n"
@@ -410,82 +411,82 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/index.md:43
+#: src/index.md:44
 msgid "Where to go next"
 msgstr ""
 
-#: src/index.md:45
+#: src/index.md:46
 msgid "If you want to…"
 msgstr ""
 
-#: src/index.md:45 src/reference/async.md:74
+#: src/index.md:46 src/reference/async.md:74
 msgid "Read"
 msgstr ""
 
-#: src/index.md:47
+#: src/index.md:48
 msgid "Install the toolchain and run a program"
 msgstr ""
 
-#: src/index.md:47
+#: src/index.md:48
 msgid "[Quick Start](quick-start/installation.md)"
 msgstr ""
 
-#: src/index.md:48
+#: src/index.md:49
 msgid "Learn the language hands-on"
 msgstr ""
 
-#: src/index.md:48
+#: src/index.md:49
 msgid "the [Tutorial](tutorial/values-and-variables.md)"
 msgstr ""
 
-#: src/index.md:49
+#: src/index.md:50
 msgid "Understand _why_ the language is shaped this way"
 msgstr ""
 
-#: src/index.md:49
+#: src/index.md:50
 msgid "[Core Concepts](core-concepts/design-goals.md)"
 msgstr ""
 
-#: src/index.md:50
+#: src/index.md:51
 msgid "Study complete programs"
 msgstr ""
 
-#: src/index.md:50
+#: src/index.md:51
 msgid "[Examples](examples/index.md)"
 msgstr ""
 
-#: src/index.md:51
+#: src/index.md:52
 msgid "Look up exact rules"
 msgstr ""
 
-#: src/index.md:51
+#: src/index.md:52
 msgid "the [Reference](reference/lexical-structure.md)"
 msgstr ""
 
-#: src/index.md:53
+#: src/index.md:54
 msgid ""
 "The book is also served live at **<https://rut.hpp2334.com>**, and the wasm "
 "playground — where every snippet on this site runs in the browser — lives at "
 "**<https://playground.rut.hpp2334.com>**."
 msgstr ""
 
-#: src/index.md:57
+#: src/index.md:58
 msgid "The repo"
 msgstr ""
 
-#: src/index.md:67
+#: src/index.md:68
 msgid "Build everything from source:"
 msgstr ""
 
-#: src/index.md:70
+#: src/index.md:71
 msgid "# the `rut` binary: run / fmt / pack / dump\n"
 msgstr ""
 
-#: src/index.md:73
+#: src/index.md:74
 msgid "License"
 msgstr ""
 
-#: src/index.md:75
+#: src/index.md:76
 msgid "MIT OR Apache-2.0."
 msgstr ""
 

@@ -437,82 +437,82 @@ msgstr ""
 "}\n"
 "```"
 
-#: src/index.md:43
+#: src/index.md:44
 msgid "Where to go next"
 msgstr "接下来去哪里"
 
-#: src/index.md:45
+#: src/index.md:46
 msgid "If you want to…"
 msgstr "如果你想……"
 
-#: src/index.md:45 src/reference/async.md:74
+#: src/index.md:46 src/reference/async.md:74
 msgid "Read"
 msgstr "阅读"
 
-#: src/index.md:47
+#: src/index.md:48
 msgid "Install the toolchain and run a program"
 msgstr "安装工具链并运行一个程序"
 
-#: src/index.md:47
+#: src/index.md:48
 msgid "[Quick Start](quick-start/installation.md)"
 msgstr "[快速开始](quick-start/installation.md)"
 
-#: src/index.md:48
+#: src/index.md:49
 msgid "Learn the language hands-on"
 msgstr "动手学习这门语言"
 
-#: src/index.md:48
+#: src/index.md:49
 msgid "the [Tutorial](tutorial/values-and-variables.md)"
 msgstr "那份[教程](tutorial/values-and-variables.md)"
 
-#: src/index.md:49
+#: src/index.md:50
 msgid "Understand _why_ the language is shaped this way"
 msgstr "理解这门语言_为何_被塑造成如今的形状"
 
-#: src/index.md:49
+#: src/index.md:50
 msgid "[Core Concepts](core-concepts/design-goals.md)"
 msgstr "[核心概念](core-concepts/design-goals.md)"
 
-#: src/index.md:50
+#: src/index.md:51
 msgid "Study complete programs"
 msgstr "研读完整的程序"
 
-#: src/index.md:50
+#: src/index.md:51
 msgid "[Examples](examples/index.md)"
 msgstr "[示例](examples/index.md)"
 
-#: src/index.md:51
+#: src/index.md:52
 msgid "Look up exact rules"
 msgstr "查阅确切的规则"
 
-#: src/index.md:51
+#: src/index.md:52
 msgid "the [Reference](reference/lexical-structure.md)"
 msgstr "那份[参考](reference/lexical-structure.md)"
 
-#: src/index.md:53
+#: src/index.md:54
 msgid ""
 "The book is also served live at **<https://rut.hpp2334.com>**, and the wasm "
 "playground — where every snippet on this site runs in the browser — lives at "
 "**<https://playground.rut.hpp2334.com>**."
 msgstr "本书还有在线版 **<https://rut.hpp2334.com>**；wasm Playground——本站每一段代码都能在浏览器里运行——在 **<https://playground.rut.hpp2334.com>**。"
 
-#: src/index.md:57
+#: src/index.md:58
 msgid "The repo"
 msgstr "仓库"
 
-#: src/index.md:67
+#: src/index.md:68
 msgid "Build everything from source:"
 msgstr "从源码构建一切："
 
-#: src/index.md:70
+#: src/index.md:71
 msgid "# the `rut` binary: run / fmt / pack / dump\n"
 msgstr "# the `rut` binary: run / fmt / pack / dump\n"
 
-#: src/index.md:73
+#: src/index.md:74
 msgid "License"
 msgstr "许可证"
 
-#: src/index.md:75
+#: src/index.md:76
 msgid "MIT OR Apache-2.0."
 msgstr "MIT OR Apache-2.0."
 
