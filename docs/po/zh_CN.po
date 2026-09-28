@@ -80,81 +80,81 @@ msgstr "标准库"
 
 #: src/SUMMARY.md:25
 msgid "Core Concepts"
-msgstr ""
+msgstr "核心概念"
 
 #: src/SUMMARY.md:27 src/core-concepts/design-goals.md:1
 msgid "Design goals"
-msgstr ""
+msgstr "设计目标"
 
 #: src/SUMMARY.md:28 src/core-concepts/everything-is-a-value.md:1
 msgid "Everything is a value"
-msgstr ""
+msgstr "一切皆值"
 
 #: src/SUMMARY.md:29 src/core-concepts/reified-types.md:1
 msgid "Reified types and layouts"
-msgstr ""
+msgstr "具体化类型与布局"
 
 #: src/SUMMARY.md:30 src/SUMMARY.md:64
 #: src/core-concepts/traits-and-dispatch.md:1 src/reference/traits.md:1
 msgid "Traits and dispatch"
-msgstr ""
+msgstr "trait 与分派"
 
 #: src/SUMMARY.md:31 src/core-concepts/async-model.md:1
 msgid "The async model"
-msgstr ""
+msgstr "异步模型"
 
 #: src/SUMMARY.md:32 src/core-concepts/memory.md:1
 msgid "Memory: the Rc heap, weak refs, and cycles"
-msgstr ""
+msgstr "内存：Rc 堆、弱引用与循环引用"
 
 #: src/SUMMARY.md:33 src/core-concepts/host-boundary.md:1
 #: src/reference/vm-core.md:52
 msgid "The host boundary"
-msgstr ""
+msgstr "宿主边界"
 
 #: src/SUMMARY.md:34 src/core-concepts/the-vm.md:1
 msgid "The bytecode VM"
-msgstr ""
+msgstr "字节码 VM"
 
 #: src/SUMMARY.md:36
 msgid "Examples"
-msgstr ""
+msgstr "示例"
 
 #: src/SUMMARY.md:38 src/examples/index.md:1
 msgid "Examples index"
-msgstr ""
+msgstr "示例索引"
 
 #: src/SUMMARY.md:39 src/examples/00-todolist.md:1
 msgid "00 — Todolist"
-msgstr ""
+msgstr "00 — 待办清单"
 
 #: src/SUMMARY.md:40 src/examples/01-sort.md:1
 msgid "01 — Sort"
-msgstr ""
+msgstr "01 — 排序"
 
 #: src/SUMMARY.md:41 src/examples/02-digest.md:1
 msgid "02 — Digest"
-msgstr ""
+msgstr "02 — 摘要"
 
 #: src/SUMMARY.md:42 src/examples/03-plugin.md:1
 msgid "03 — Plugin"
-msgstr ""
+msgstr "03 — 插件"
 
 #: src/SUMMARY.md:43 src/examples/04-custom-async.md:1
 msgid "04 — Custom async"
-msgstr ""
+msgstr "04 — 自定义异步"
 
 #: src/SUMMARY.md:44 src/examples/05-todolist-web.md:1
 msgid "05 — Todolist web"
-msgstr ""
+msgstr "05 — Web 待办清单"
 
 #: src/SUMMARY.md:45 src/examples/06-github-viewer-cli.md:1
 msgid "06 — GitHub viewer CLI"
-msgstr ""
+msgstr "06 — GitHub 查看器 CLI"
 
 #: src/SUMMARY.md:46 src/examples/playground-corpus.md:1
 msgid "The playground corpus"
-msgstr ""
+msgstr "Playground 语料"
 
 #: src/SUMMARY.md:48
 msgid "Reference"
@@ -316,7 +316,7 @@ msgstr ""
 #: src/SUMMARY.md:104 src/core-concepts/the-vm.md:33
 #: src/reference/typed-bytecode.md:1
 msgid "Typed bytecode"
-msgstr ""
+msgstr "类型化字节码"
 
 #: src/SUMMARY.md:105 src/reference/module-binary.md:1
 msgid "Module binary and verification"
@@ -5827,7 +5827,7 @@ msgid ""
 "scripting layer of host applications — UI apps in particular — in the role a "
 "JavaScript engine usually plays: a safe, hot-reloadable language that drives "
 "the host's object graph."
-msgstr ""
+msgstr "rut 是一门小型、静态类型、可嵌入的脚本语言，语法带 Rust 风格，用 Rust 实现。它被设计为宿主应用的脚本层——尤其是 UI 应用——扮演通常由 JavaScript 引擎承担的角色：一门安全、可热重载的语言，驱动宿主的对象图。"
 
 #: src/core-concepts/design-goals.md:9
 msgid ""
@@ -5838,11 +5838,11 @@ msgid ""
 "bridge is re-parsed and re-coerced by hand. rut is built so those three "
 "problems cannot arise: **types are kept at runtime**, **coroutines are "
 "natively poll-based**, and **host values have deterministic lifetimes**."
-msgstr ""
+msgstr "差异是结构性的，不是表面文章。在嵌入式 JS 引擎里，宿主的类型被擦除（`Element`、`Store` 是空接口；真实类型只存在于 `.d.ts` 文件中，靠约定\"恢复\"回来），取消是在 promise 之上模拟的，而每一个跨越桥的值都要手工重新解析、重新转换。rut 的构建方式让这三个问题根本无从产生：**类型在运行时保留**，**协程原生基于 poll**，**宿主值拥有确定性的生命周期**。"
 
 #: src/core-concepts/design-goals.md:18
 msgid "The pillars"
-msgstr ""
+msgstr "支柱"
 
 #: src/core-concepts/design-goals.md:20
 msgid ""
@@ -5851,7 +5851,7 @@ msgid ""
 "carried at runtime — type tests, checked erasure, and host-boundary checks "
 "all read the same runtime truth. See [reified types and "
 "layouts](reified-types.md)."
-msgstr ""
+msgstr "**完全静态、具体化的类型。**没有动态类型，没有 `any`，没有渐进类型。每个值的确切类型为编译器所知，并在运行时携带——类型测试、受检擦除与宿主边界检查读取的都是同一份运行时事实。参见[具体化类型与布局](reified-types.md)。"
 
 #: src/core-concepts/design-goals.md:26
 msgid ""
@@ -5860,7 +5860,7 @@ msgid ""
 "buffer, not an array of boxed numbers. There is no JIT and none is needed — "
 "the code shape a JS JIT exists to speculate on (polymorphic property loads) "
 "does not exist in rut."
-msgstr ""
+msgstr "**类型让代码更快。**字节码是类型化的，泛型会单态化，原始类型缓冲区保持扁平：一个定长的 `f32` 数组就是一块打包的 `f32` 缓冲区，而不是装箱数字组成的数组。没有 JIT，也不需要 JIT——JS JIT 赖以投机优化的代码形态（多态属性加载）在 rut 里根本不存在。"
 
 #: src/core-concepts/design-goals.md:32
 msgid ""
@@ -5869,7 +5869,7 @@ msgid ""
 "erasure boxes) is a reference-counted cell whose handle copies in O(1). "
 "Sharing is the default and visible; there is no hidden copying. See "
 "[everything is a value](everything-is-a-value.md)."
-msgstr ""
+msgstr "**一切皆值——且只有两种如实的体制。**原始类型按值移动；每个复合类型（`str`、`bytes`、记录、数组、trait 对象、擦除盒）都是引用计数单元，复制的是它的句柄，O(1) 完成。共享是默认且可见的；不存在隐藏的复制。参见[一切皆值](everything-is-a-value.md)。"
 
 #: src/core-concepts/design-goals.md:38
 msgid ""
@@ -5877,7 +5877,7 @@ msgid ""
 "with Rust-style poll semantics: a future that nobody drives costs nothing, "
 "and cancellation drops the state machine at its suspension point. No "
 "promises, no microtask queue. See [the async model](async-model.md)."
-msgstr ""
+msgstr "**基于 poll 的协程。**`async`/`await` 编译为带 Rust 风格 poll 语义的冷状态机：无人驱动的 future 分文不费，取消则在暂停点丢弃状态机。没有 promise，没有微任务队列。参见[异步模型](async-model.md)。"
 
 #: src/core-concepts/design-goals.md:44
 msgid ""
@@ -5886,14 +5886,14 @@ msgid ""
 "(threads, sockets, textures) release at a knowable point, not \"sometime at "
 "GC\". Strong cycles leak by design; weak references are the first-class "
 "answer. See [memory](memory.md)."
-msgstr ""
+msgstr "**引用计数；没有收集器。**对象在最后一个引用消失的那一刻死亡，因此析构是确定性的——宿主资源（线程、套接字、纹理）在一个可知的时点释放，而不是\"GC 某时某刻\"。强循环引用按设计就会泄漏；弱引用才是一等公民的答案。参见[内存](memory.md)。"
 
 #: src/core-concepts/design-goals.md:50
 msgid ""
 "**No JIT.** All optimization happens ahead of time: fold, inline, "
 "monomorphize, emit typed bytecode. What you run is what you compiled — "
 "predictable startup, predictable per-op cost, no tiering."
-msgstr ""
+msgstr "**没有 JIT。**一切优化都提前发生：折叠、内联、单态化，产出类型化字节码。你运行的就是你编译的——启动可预期、每操作成本可预期、没有分层编译。"
 
 #: src/core-concepts/design-goals.md:54
 msgid ""
@@ -5902,17 +5902,17 @@ msgid ""
 "against reified types, and the host owns the event loop, the fuel budget, "
 "and the clock. See [the host boundary](host-boundary.md) and [the bytecode "
 "VM](the-vm.md)."
-msgstr ""
+msgstr "**以契约方式嵌入。**宿主注册原生函数，其 Rust 签名_就是_所声明的接口；每次跨越都针对具体化类型做类型检查，而事件循环、燃料预算与时钟都归宿主所有。参见[宿主边界](host-boundary.md)与[字节码 VM](the-vm.md)。"
 
 #: src/core-concepts/design-goals.md:60
 msgid "Why not JavaScript"
-msgstr ""
+msgstr "为什么不用 JavaScript"
 
 #: src/core-concepts/design-goals.md:62
 msgid ""
 "The case against shipping a JS engine — not just this or that implementation "
 "— is fourfold, and each item has a structural answer:"
-msgstr ""
+msgstr "反对内置 JS 引擎的理由——不针对某个具体实现，而是针对整类引擎——有四条，每一条都有一个结构层面的回答："
 
 #: src/core-concepts/design-goals.md:65
 msgid ""
@@ -5922,7 +5922,7 @@ msgid ""
 "`nil` on a nullable type, errors are values, and legacy JS keywords are "
 "reserved words whose error message tells you what to write instead. Nothing "
 "legacy can accrete."
-msgstr ""
+msgstr "**历史债务复利式累积。**两个表示\"空\"的值、会做转换的 `==`、`typeof null`、隐式分号：每一条都是永久性的负担，生态系统要永远为之重新实现补丁。rut 从一个封闭的小语法出发——缺失即可空类型上的 `nil`，错误是值，遗留的 JS 关键字则是保留字，其错误信息会告诉你该写什么。任何遗留物都无从沉积。"
 
 #: src/core-concepts/design-goals.md:72
 msgid ""
@@ -5932,7 +5932,7 @@ msgid ""
 "tiny: primitives, sequences, channels, string building. Everything else is "
 "library — maps and sets, JSON, logging, and the host's own domain are "
 "ordinary packages, several of them written _in rut_ and swappable."
-msgstr ""
+msgstr "**符合规范等于实现整个世界。**一个合规引擎需要 `BigInt`、`Intl`、`Date` 的种种怪癖、微任务顺序——在用户代码能跑起来之前就要投入数千人时。rut 的内置契约刻意保持极小：原始类型、序列、通道、字符串构建。其余一切都是库——map 与 set、JSON、日志以及宿主自身的领域都是普通的包，其中几个就是_in rut_ 写成的，而且可替换。"
 
 #: src/core-concepts/design-goals.md:80
 msgid ""
@@ -5942,7 +5942,7 @@ msgid ""
 "statically whenever the call site names one concrete type, and dynamic "
 "dispatch is a checked vtable hop that happens only where the program "
 "actually erases types."
-msgstr ""
+msgstr "**没有 JIT 就太慢。**纯解释执行的 JS 慢一到两个数量级，因为 JS 引擎的速度_就是_它的 JIT。rut 的无 JIT 立场之所以可行，恰恰因为这门语言是静态类型的：只要调用点指明了一个具体类型，调用就静态绑定；动态分派则是一次经过检查的 vtable 跳转，只发生在程序真正擦除类型的地方。"
 
 #: src/core-concepts/design-goals.md:87
 msgid ""
@@ -5950,46 +5950,46 @@ msgid ""
 "pointers, boxed array elements, collector overhead. rut's answer is layout: "
 "untagged 8-byte slots, record payloads as slot arrays, flat primitive "
 "buffers, and reference counting with no collector pass on the hot path."
-msgstr ""
+msgstr "**太占内存。**JS 的值都是盒子——每对象头部、带标签的指针、装箱的数组元素、收集器开销。rut 的答案是布局：无标签的 8 字节槽位、以槽数组存放的记录载荷、扁平的原始类型缓冲区，以及热路径上没有收集器扫描的引用计数。"
 
 #: src/core-concepts/design-goals.md:93
 msgid "What \"no dynamic typing\" leaves you"
-msgstr ""
+msgstr "\"没有动态类型\"给你留下什么"
 
 #: src/core-concepts/design-goals.md:95
 msgid "Erasure is never silent — it is spelled and checked:"
-msgstr ""
+msgstr "擦除从不悄悄发生——它被明确写出并接受检查："
 
 #: src/core-concepts/design-goals.md:97
 msgid ""
 "**Trait-typed values** (`d: Drawable`) for polymorphism. Dispatch is dynamic "
 "only where a value may be one of several concrete types, and a trait-typed "
 "value still carries its exact class at runtime."
-msgstr ""
+msgstr "**trait 类型的值**（`d: Drawable`）用于多态。只有当值可能是若干具体类型之一时，分派才是动态的；而且 trait 类型的值在运行时仍携带其确切的类。"
 
 #: src/core-concepts/design-goals.md:100
 msgid ""
 "**The `opaque` box** (`opaque(v)`, `opaque.downcast<T>(o)`) for storage. "
 "Erasure mints a checked box; recovery checks the runtime type and yields "
 "`nil` on a mismatch — never a silent wrong-type read."
-msgstr ""
+msgstr "**`opaque` 盒**（`opaque(v)`、`opaque.downcast<T>(o)`）用于存储。擦除铸造一个经过检查的盒；恢复则检查运行时类型，不匹配时给出 `nil`——绝不会悄悄读出错误类型的值。"
 
 #: src/core-concepts/design-goals.md:104
 msgid ""
 "JSON-shaped data, heterogeneous collections, and `any`\\-shaped host APIs "
 "all route through these two doors, which is what keeps \"every value has a "
 "runtime type\" true without giving up dynamism where it earns its keep."
-msgstr ""
+msgstr "JSON 形状的数据、异构集合以及 `any`\\-形状的宿主 API 都经由这两扇门——\"每个值都有运行时类型\"因此保持为真，同时在动态性真正物有所值之处，它也未被放弃。"
 
 #: src/core-concepts/design-goals.md:108
 msgid "The execution model"
-msgstr ""
+msgstr "执行模型"
 
 #: src/core-concepts/design-goals.md:115
 msgid ""
 "**One thread per VM.** A `Vm` instance runs on one thread with one heap and "
 "no atomics; workers are separate VMs communicating by typed message passing."
-msgstr ""
+msgstr "**每个 VM 一个线程。**一个 `Vm` 实例运行在一个线程上，拥有一套堆，不使用原子操作；worker 是彼此独立的 VM，通过类型化的消息传递通信。"
 
 #: src/core-concepts/design-goals.md:118
 msgid ""
@@ -5997,7 +5997,7 @@ msgid ""
 "queue, expire timers, poll with a deadline — plus op budgets and interrupt "
 "callbacks. A UI host drives script between frames and stays responsive; a "
 "test host virtualizes the clock and gets fully deterministic schedules."
-msgstr ""
+msgstr "**时间归宿主所有。**VM 暴露一组步进动词——排空就绪队列、让到期的定时器触发、带截止时间的 poll——外加操作预算与中断回调。UI 宿主在帧间驱动脚本并保持响应；测试宿主虚拟化时钟，得到完全确定性的调度。"
 
 #: src/core-concepts/design-goals.md:123
 msgid ""
@@ -6005,12 +6005,12 @@ msgid ""
 "failed `assert`) unwinds as a `Trap` value to the host call — rut code never "
 "catches one. Bugs become host-visible errors with a script backtrace, not "
 "corrupted state."
-msgstr ""
+msgstr "**陷阱止步于边界。**脚本中的 panic（溢出、对 nil 解引用、失败的 `assert`）会以 `Trap` 值的形式沿栈展开到宿主调用——rut 代码永远捕获不到它。bug 变成宿主可见、带脚本回溯的错误，而不是被破坏的状态。"
 
 #: src/core-concepts/design-goals.md:128 src/core-concepts/reified-types.md:143
 #: src/core-concepts/traits-and-dispatch.md:233 src/core-concepts/memory.md:199
 msgid "What this buys you"
-msgstr ""
+msgstr "这给你带来什么"
 
 #: src/core-concepts/design-goals.md:130
 msgid ""
@@ -6021,13 +6021,13 @@ msgid ""
 "with typed Rust closures, and the compiler plus the load-time verifier "
 "reject every mismatched shape before any script runs — there is no bridge "
 "boilerplate to maintain."
-msgstr ""
+msgstr "如果你在**写脚本**：赋值从不深拷贝；清理在最后一个引用消亡时运行；未命中是 `nil`，失败是一个返回的 `err` 字符串，崩溃则是伴随真实栈回溯的响亮陷阱。如果你在**做嵌入**：你在 rut 声明文件里一次性声明 API，用带类型的 Rust 闭包绑定它，编译器加上加载期校验器会在任何脚本运行之前拒绝每一个不匹配的形状——没有任何需要维护的桥接样板。"
 
 #: src/core-concepts/design-goals.md:138
 msgid ""
 "The rest of this section walks each pillar in depth; the tutorial shows the "
 "day-to-day syntax, and the reference pins down exact rules."
-msgstr ""
+msgstr "本节其余部分将逐一深入每根支柱；教程展示日常语法，参考手册钉死精确规则。"
 
 #: src/core-concepts/everything-is-a-value.md:3
 msgid ""
@@ -6036,69 +6036,69 @@ msgid ""
 "_immediate_ — moved by copying their bits. Every other type is a _cell_ — a "
 "heap object whose **handle** is what gets copied. That single split explains "
 "assignment, parameter passing, equality, and what `bytes.clone()` is for."
-msgstr ""
+msgstr "rut 的类型系统有一条主干：**每个名字绑定的都是值**，而值只有两种存在方式。原始类型与 `fn` 值是_立即的_——通过复制其比特位来移动。其余每种类型都是_单元_——一种堆对象，被复制的是它的**句柄**。仅这一条分界就解释了赋值、传参、相等判断，以及 `bytes.clone()` 存在的意义。"
 
 #: src/core-concepts/everything-is-a-value.md:10
 msgid "The two regimes"
-msgstr ""
+msgstr "两种体制"
 
 #: src/core-concepts/everything-is-a-value.md:12
 msgid "immediate"
-msgstr ""
+msgstr "立即"
 
 #: src/core-concepts/everything-is-a-value.md:12
 msgid "cells"
-msgstr ""
+msgstr "单元"
 
 #: src/core-concepts/everything-is-a-value.md:14
 msgid "types"
-msgstr ""
+msgstr "类型"
 
 #: src/core-concepts/everything-is-a-value.md:14
 msgid "`u8..u64`, `i8..i64`, `f32`, `f64`, `bool`, `fn` values"
-msgstr ""
+msgstr "`u8..u64`、`i8..i64`、`f32`、`f64`、`bool`、`fn` 值"
 
 #: src/core-concepts/everything-is-a-value.md:14
 msgid ""
 "`str`, `bytes`, `struct` and `class` records, `[T]` arrays, enums, trait "
 "objects, `opaque` boxes, `?T` boxes, closures' captured cells"
-msgstr ""
+msgstr "`str`、`bytes`、`struct` 与 `class` 记录、`[T]` 数组、枚举、trait 对象、`opaque` 盒、`?T` 盒、闭包捕获的单元"
 
 #: src/core-concepts/everything-is-a-value.md:15
 msgid "assignment"
-msgstr ""
+msgstr "赋值"
 
 #: src/core-concepts/everything-is-a-value.md:15
 msgid "copies the bits"
-msgstr ""
+msgstr "复制比特位"
 
 #: src/core-concepts/everything-is-a-value.md:15
 msgid "copies the handle (O(1))"
-msgstr ""
+msgstr "复制句柄（O(1)）"
 
 #: src/core-concepts/everything-is-a-value.md:16
 msgid "mutation"
-msgstr ""
+msgstr "变更"
 
 #: src/core-concepts/everything-is-a-value.md:16
 msgid "n/a — write the variable"
-msgstr ""
+msgstr "不适用——直接写入变量"
 
 #: src/core-concepts/everything-is-a-value.md:16
 msgid "visible through every alias"
-msgstr ""
+msgstr "经由每个别名都可见"
 
 #: src/core-concepts/everything-is-a-value.md:17
 msgid "`==`"
-msgstr ""
+msgstr "`==`"
 
 #: src/core-concepts/everything-is-a-value.md:17
 msgid "by value"
-msgstr ""
+msgstr "按值"
 
 #: src/core-concepts/everything-is-a-value.md:17
 msgid "`str`/`bytes`: by content; everything else: identity"
-msgstr ""
+msgstr "`str`/`bytes` 按内容；其余一切按身份"
 
 #: src/core-concepts/everything-is-a-value.md:19
 msgid ""
@@ -6106,11 +6106,11 @@ msgid ""
 "a `struct` value never silently deep-copies, a `str` never silently aliases. "
 "The regime is a property of the _type_, known at compile time, and the "
 "compiler emits the right move for it."
-msgstr ""
+msgstr "没有第三种体制。没有任何类型\"有时复制、有时共享\"：`struct` 值从不悄悄深拷贝，`str` 也从不悄悄别名化。体制是_类型_的属性，编译期即知，编译器会为它生成正确的移动指令。"
 
 #: src/core-concepts/everything-is-a-value.md:24
 msgid "Sharing is the law for cells"
-msgstr ""
+msgstr "共享是单元的法则"
 
 #: src/core-concepts/everything-is-a-value.md:26
 msgid ""
@@ -6118,7 +6118,7 @@ msgid ""
 "cell, the old binding releases it. Passing a million-element array to a "
 "function retains once. A loop binding iterates the _stored_ elements, not "
 "copies of them."
-msgstr ""
+msgstr "对任何单元类型写 `let b = a` 只是一次句柄移动：新绑定保留单元，旧绑定释放它。把一个百万元素的数组传给函数只保留一次。循环绑定迭代的是_存储的_元素，而不是它们的副本。"
 
 #: src/core-concepts/everything-is-a-value.md:31
 msgid ""
@@ -6136,6 +6136,19 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: f32; y: f32 }\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"values\");\n"
+"    let mut p = Point { x: 1, y: 2 };\n"
+"    let q = p;          // q and p name ONE cell\n"
+"    p.x = 4;            // q.x is 4 now — sharing is the law\n"
+"    log.info(f\"q.x = {q.x}\");   // read through the other alias\n"
+"}\n"
+"```"
 
 #: src/core-concepts/everything-is-a-value.md:49
 msgid ""
@@ -6144,7 +6157,7 @@ msgid ""
 "must be declared `mut` to be written through — never the sharing itself. "
 "Sharing is always safe: a handle keeps its referent alive, so nothing "
 "dangles, and there is no borrow checker because there are no loans."
-msgstr ""
+msgstr "经由别名做出的变更，会沿所有别名可见，双向皆然。真正把守_写入_的是 `mut`\\-绑定规则——绑定必须声明为 `mut` 才能通过它写入——而绝不是共享本身。共享始终安全：句柄会让其引用对象保活，因此没有任何东西悬空；没有借用检查器，因为根本不存在借用。"
 
 #: src/core-concepts/everything-is-a-value.md:55
 msgid ""
@@ -6154,12 +6167,12 @@ msgid ""
 "buffer, for interop hand-offs. There is no generic `clone`: a divergent "
 "value of any other type is unreachable by construction, which is what makes "
 "aliasing something you can reason about locally."
-msgstr ""
+msgstr "如果你想要一个不与任何东西别名的值，就亲手造一个：字面量、构造器，或者按需复制字段。这门语言恰好有一个复制逃生口——`bytes.clone()`，对二进制缓冲区做一次性深拷贝，服务于互操作交接。没有泛型 `clone`：任何其他类型的发散值在构造上都不可达，这正是别名可以被局部推理的原因。"
 
 #: src/core-concepts/everything-is-a-value.md:62
 #: src/reference/builtin-generic-types.md:46
 msgid "`?T` — the nullable"
-msgstr ""
+msgstr "`?T` —— 可空类型"
 
 #: src/core-concepts/everything-is-a-value.md:64
 msgid ""
@@ -6167,7 +6180,7 @@ msgid ""
 "is \"a `T` or `nil`\". `?` applies to the type term that follows, so `[?T]` "
 "is an array of nullables while `?[T]` is a nullable array, and `??T` chains "
 "(and unwraps transitively at use)."
-msgstr ""
+msgstr "缺失即可空类型上的 `nil`，写作类型上的前缀：`?T` 是\"一个 `T` 或 `nil`\"。`?` 作用于其后的类型项，因此 `[?T]` 是可空数组——元素可空——而 `?[T]` 是可空数组本身，`??T` 则可链式叠加（并在使用时传递式解包）。"
 
 #: src/core-concepts/everything-is-a-value.md:69
 msgid ""
@@ -6176,7 +6189,7 @@ msgid ""
 "shares it, boxing a primitive copies its bits. The deref is implicit at "
 "every value position: field access, method calls, indexing, iteration, "
 "arithmetic all read through the box."
-msgstr ""
+msgstr "这些转换一行就能说清：**`T → ?T` 装盒；`?T → T` 解引用。**盒是一个全新的一槽单元，_别名_值所在的单元——装盒一个记录就是共享它，装盒一个原始类型则复制其比特位。解引用在每个值位置都是隐式的：字段访问、方法调用、索引、迭代、算术，全都透过盒读取。"
 
 #: src/core-concepts/everything-is-a-value.md:75
 msgid ""
@@ -6200,6 +6213,25 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct User { id: i64; name: str }\n"
+"\n"
+"fn lookup(id: i64) -> ?User {\n"
+"    if (id == 7) { return User { id: 7, name: \"ada\" }; }\n"
+"    return nil;             // a miss is nil, nothing else\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"values\");\n"
+"    let u = lookup(7);                // ?User\n"
+"    log.info(f\"u.name = {u.name}\");   // auto-deref when non-nil\n"
+"    let missing = lookup(8);\n"
+"    log.info(f\"miss is nil: {missing == nil}\");   // guard where absence "
+"is expected\n"
+"}\n"
+"```"
 
 #: src/core-concepts/everything-is-a-value.md:99
 msgid ""
@@ -6207,25 +6239,25 @@ msgid ""
 "with `u == nil` where absence is expected; the trap is the bug-catcher, not "
 "the semantics. A miss is `nil` and nothing else: a lookup that finds nothing "
 "returns `?V`, and callers compare against `nil`."
-msgstr ""
+msgstr "抵达值用途的 `nil` 会触发陷阱（`NilDeref`）——绝不会悄悄读出一个值。在预期可能缺失之处用 `u == nil` 设守卫；陷阱是抓 bug 的工具，而不是语义本身。未命中就是 `nil`，别无他物：找不到结果的查找返回 `?V`，调用方与 `nil` 比较。"
 
 #: src/core-concepts/everything-is-a-value.md:105
 msgid "`==` is honest about the regime"
-msgstr ""
+msgstr "`==` 对体制如实相告"
 
 #: src/core-concepts/everything-is-a-value.md:107
 msgid "Primitives compare **by value**."
-msgstr ""
+msgstr "原始类型**按值**比较。"
 
 #: src/core-concepts/everything-is-a-value.md:108
 msgid "`str` compares **by content** (codepoints); `bytes` by octets."
-msgstr ""
+msgstr "`str` 按**内容**（码点）比较；`bytes` 按字节（octet）比较。"
 
 #: src/core-concepts/everything-is-a-value.md:109
 msgid ""
 "Everything else compares **by identity** — two bindings are equal exactly "
 "when they name the same cell."
-msgstr ""
+msgstr "其余一切**按身份**比较——两个绑定相等，当且仅当它们指名同一个单元。"
 
 #: src/core-concepts/everything-is-a-value.md:112
 msgid ""
@@ -6234,29 +6266,29 @@ msgid ""
 "comparison is a loop over fields, written where content is the contract. The "
 "one place identity quietly behaves like value equality: enum variants are "
 "immortal singletons, so `Flavor.Sour == Flavor.Sour` is `true`."
-msgstr ""
+msgstr "身份是完全共享唯一能捍卫的相等：两个分别构建的 `[1, 2]` 数组是两个单元，因此 `[1,2] == [1,2]` 是 `false`。内容比较是一个遍历字段的循环，写在内容才是契约的地方。身份唯一一处悄悄表现得像值相等的地方：枚举成员是不朽的单例，所以 `Flavor.Sour == Flavor.Sour` 是 `true`。"
 
 #: src/core-concepts/everything-is-a-value.md:119
 msgid "The answer channel: a pair"
-msgstr ""
+msgstr "应答通道：对偶"
 
 #: src/core-concepts/everything-is-a-value.md:121
 msgid ""
 "There is no exception type and no `Result` monad. Failures are data in the "
 "second element of a record — `(value, err)` — with one documented convention:"
-msgstr ""
+msgstr "没有异常类型，也没有 `Result` 单子。失败是对偶——`(value, err)`——第二个元素里的数据，配一条成文的约定："
 
 #: src/core-concepts/everything-is-a-value.md:125
 msgid "an **empty err plus a value** is success;"
-msgstr ""
+msgstr "**err 为空且带值**即成功；"
 
 #: src/core-concepts/everything-is-a-value.md:126
 msgid "an **empty err plus `nil`** means \"not found\";"
-msgstr ""
+msgstr "**err 为空且为 `nil`** 意为\"未找到\"；"
 
 #: src/core-concepts/everything-is-a-value.md:127
 msgid "a **non-empty err** means \"failed\"."
-msgstr ""
+msgstr "**err 非空**即为\"失败\"。"
 
 #: src/core-concepts/everything-is-a-value.md:129
 msgid ""
@@ -6297,6 +6329,42 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn parse_hex(s: str) -> (bytes, str) {\n"
+"    if (s.len() % 2 != 0) {\n"
+"        return (bytes.zeroed(0), \"hex: odd-length input\");\n"
+"    }\n"
+"    let n = s.len() / 2;\n"
+"    let mut buf: [u8] = [0u8; n];\n"
+"    for (let i = 0; i < n; i += 1) {\n"
+"        let hi = hex_digit(s.code_at(i * 2));\n"
+"        let lo = hex_digit(s.code_at(i * 2 + 1));\n"
+"        if (hi < 0 || lo < 0) {\n"
+"            return (bytes.zeroed(0), \"hex: not a digit\");\n"
+"        }\n"
+"        buf[i] = ((hi * 16) + lo) as u8;\n"
+"    }\n"
+"    return (bytes.from(buf), \"\");       // (data, \"\") on success\n"
+"}\n"
+"\n"
+"fn hex_digit(c: u32) -> i64 {\n"
+"    if (c >= 48 && c <= 57) { return (c - 48) as i64; }   // '0'..'9'\n"
+"    if (c >= 97 && c <= 102) { return (c - 87) as i64; }  // 'a'..'f'\n"
+"    return -1;\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"values\");\n"
+"    let (raw, err) = parse_hex(\"4869\");\n"
+"    if (err != \"\") { log.info(f\"err: {err}\"); return; }   // propagate\n"
+"    log.info(f\"ok: {raw.decode()} ({raw.len()} bytes)\");\n"
+"    let (raw, err) = parse_hex(\"486\");\n"
+"    if (err != \"\") { log.info(f\"err: {err}\"); }           // the failure "
+"channel\n"
+"}\n"
+"```"
 
 #: src/core-concepts/everything-is-a-value.md:170
 msgid ""
@@ -6304,32 +6372,32 @@ msgid ""
 "mint away — so this shape costs nothing on hot paths. At the host boundary "
 "the same pair crosses field by field, which makes `entry fn -> (?T, err)` "
 "the standard answer a Rust embedder reads."
-msgstr ""
+msgstr "返回位置的对偶解构是免费的——编译器会把铸造融合掉——所以这种形状在热路径上分文不费。在宿主边界，同一个对偶逐字段跨越，这让 `entry fn -> (?T, err)` 成为 Rust 嵌入方一眼即懂的标准应答。"
 
 #: src/core-concepts/everything-is-a-value.md:175
 msgid "Consequences you feel day to day"
-msgstr ""
+msgstr "日常能感受到的后果"
 
 #: src/core-concepts/everything-is-a-value.md:177
 msgid ""
 "**Reassignment is cheap.** Moving containers around — returning them, "
 "storing them, restructuring them — is handle traffic, not payload traffic. "
 "Algorithms that churn records and arrays pay aliasing, not copying."
-msgstr ""
+msgstr "**重新赋值很便宜。**把容器搬来搬去——返回、存储、重组——是句柄流量，不是载荷流量。大量周转记录与数组的算法付出的是别名代价，而不是复制代价。"
 
 #: src/core-concepts/everything-is-a-value.md:181
 msgid ""
 "**Loop variables are fresh per iteration but share elements.** A `for (let x "
 "of xs)` loop hands you the stored element; writes through it mutate the "
 "sequence. Each iteration is a fresh _binding_."
-msgstr ""
+msgstr "**循环变量每轮都是新的，但共享元素。**`for (let x of xs)` 循环交给你的是存储的元素；通过它写入会改变序列本身。每一轮都是一个全新的_绑定_。"
 
 #: src/core-concepts/everything-is-a-value.md:184
 msgid ""
 "**Containers of primitives stay flat.** A fixed `[i32]` is a packed `i32` "
 "buffer; growable sequences of primitives store raw payloads with a one-byte "
 "nil tag — no per-element heap box."
-msgstr ""
+msgstr "**原始类型容器保持扁平。**定长 `[i32]` 就是一块打包的 `i32` 缓冲区；可增长的原始类型序列直接存储裸载荷，外加一个字节的 nil 标签——没有逐元素的堆盒。"
 
 #: src/core-concepts/everything-is-a-value.md:187
 msgid ""
@@ -6337,7 +6405,7 @@ msgid ""
 "`opaque.downcast<T>(o)`, checked against the runtime type. See [reified "
 "types](reified-types.md) and the reference on "
 "[`opaque`](../reference/opaque.md)."
-msgstr ""
+msgstr "**擦除是一个盒。**`opaque(v)` 铸造一个擦除盒；恢复靠 `opaque.downcast<T>(o)`，对照运行时类型检查。参见[具体化类型](reified-types.md)以及关于 [`opaque`](../reference/opaque.md) 的参考章节。"
 
 #: src/core-concepts/everything-is-a-value.md:192
 msgid ""
@@ -6345,7 +6413,7 @@ msgid ""
 "destructors, weak references — is the next chapter's subject: "
 "[memory](memory.md). The exact rules live in the reference on [by-reference "
 "and nullable](../reference/by-reference-and-nullable.md)."
-msgstr ""
+msgstr "这一切底下的内存机制——引用计数、确定性析构、弱引用——是下一章的主题：[内存](memory.md)。精确规则见关于[按引用与可空](../reference/by-reference-and-nullable.md)的参考章节。"
 
 #: src/core-concepts/reified-types.md:3
 msgid ""
@@ -6354,11 +6422,11 @@ msgid ""
 "are _different types_ to the VM, with distinct identities and distinct "
 "method sets. This chapter explains where that reified reality lives, what it "
 "is used for, and how values are actually laid out."
-msgstr ""
+msgstr "rut 的类型不是编译期的虚构。每个值的确切类型在运行时可得——泛型也包括在内：对 VM 而言，`Cache<i32>` 和 `Cache<str>` 是_不同的类型_，有各自独立的身份和各自的方法集。本章讲清这种具体化的实在存于何处、用来做什么，以及值究竟是如何布局的。"
 
 #: src/core-concepts/reified-types.md:10
 msgid "The mental model"
-msgstr ""
+msgstr "心智模型"
 
 #: src/core-concepts/reified-types.md:12
 msgid ""
@@ -6367,48 +6435,48 @@ msgid ""
 "method tables its instances point at. Every heap cell's header names an "
 "entry in that table. A value never \"forgets\" its type, because its type is "
 "one field read away."
-msgstr ""
+msgstr "把 VM 想成在维护一张**类型表**：每个实例化的类型一个描述符——它的类别、字段列表、trait impl，复合类型还有其实例指向的方法表。每个堆单元的头部都指名该表中的一个条目。值绝不会\"忘记\"自己的类型，因为读一个字段就能拿到它。"
 
 #: src/core-concepts/reified-types.md:18
 msgid ""
 "Types themselves are not first-class script values — you cannot put a type "
 "in a variable or write a function over types. What you get is the "
 "language-facing _surfaces_ of reification:"
-msgstr ""
+msgstr "类型本身不是一等公民的脚本值——你不能把类型放进变量，也不能写以类型为对象的函数。你能得到的，是具体化面向语言的几个_表面_："
 
 #: src/core-concepts/reified-types.md:22
 msgid ""
 "**`is` type tests** — `x is Circle` (exact) and `x is Drawable` (capability: "
 "does this value's type have a registered impl?)."
-msgstr ""
+msgstr "**`is` 类型测试**——`x is Circle`（确切类型）与 `x is Drawable`（能力：这个值的类型是否注册了 impl？）。"
 
 #: src/core-concepts/reified-types.md:24
 msgid ""
 "**Checked erasure** — `opaque.downcast<T>(o)` reads the box's runtime type "
 "and recovers the payload, or `nil` on a mismatch."
-msgstr ""
+msgstr "**受检擦除**——`opaque.downcast<T>(o)` 读取盒的运行时类型并取回载荷，不匹配则得到 `nil`。"
 
 #: src/core-concepts/reified-types.md:26
 msgid ""
 "**Host-boundary checks** — native functions declare parameter types once; "
 "every call is checked against them."
-msgstr ""
+msgstr "**宿主边界检查**——原生函数一次性声明参数类型；每次调用都对照检查。"
 
 #: src/core-concepts/reified-types.md:28
 msgid ""
 "**Debugging and traces** — error messages, backtraces, and formatter output "
 "name real runtime types."
-msgstr ""
+msgstr "**调试与追踪**——错误信息、回溯与格式化输出都指名真实的运行时类型。"
 
 #: src/core-concepts/reified-types.md:31
 msgid "Why reification is load-bearing"
-msgstr ""
+msgstr "为什么具体化是承重墙"
 
 #: src/core-concepts/reified-types.md:33
 msgid ""
 "The reason rut can check everything cheaply is that the runtime type is "
 "always reachable:"
-msgstr ""
+msgstr "rut 能低成本检查一切，原因是运行时类型永远可达："
 
 #: src/core-concepts/reified-types.md:36
 msgid ""
@@ -6416,7 +6484,7 @@ msgid ""
 "str, str) -> nil` once; the VM checks each argument's runtime type at the "
 "crossing. There is no bridge-side \"re-parse-and-pray\" layer, because a "
 "wrong-shaped call fails loudly at the boundary."
-msgstr ""
+msgstr "**宿主边界不需要转换代码。**原生 fn 一次性声明 `(Opaque, str, str) -> nil`；VM 在跨越处检查每个实参的运行时类型。桥那一侧不存在\"重新解析然后祈祷\"的层，因为形状错误的调用会在边界响亮地失败。"
 
 #: src/core-concepts/reified-types.md:41
 msgid ""
@@ -6425,25 +6493,25 @@ msgid ""
 "box_ — `o is T` misses for every payload type — so the only way back to the "
 "payload is the checked recovery. Erasure without reification would be `any`; "
 "with reification it is a sealed box."
-msgstr ""
+msgstr "**擦除是受检的，不是盲目的。**`opaque(v)` 给盒盖章；`opaque.downcast<T>` 查验印章。盒回答类型测试时_以盒为准_——对每个载荷类型 `o is T` 都不命中——所以回到载荷的唯一途径是受检恢复。没有具体化的擦除就是 `any`；有了具体化，它是一个密封的盒。"
 
 #: src/core-concepts/reified-types.md:46
 msgid ""
 "**Distinct instantiations.** `Vec<f32>` and `Vec<f64>` are different types "
 "everywhere — in the type table, in method resolution, at the host boundary. "
 "Nothing about a generic's type argument is erased."
-msgstr ""
+msgstr "**不同的实例化互不相同。**`Vec<f32>` 和 `Vec<f64>` 在任何地方都是不同的类型——类型表里、方法解析里、宿主边界上。泛型类型实参的任何信息都不会被擦除。"
 
 #: src/core-concepts/reified-types.md:49
 msgid ""
 "**Serialization and tooling.** Reflection walks the same descriptors, which "
 "is how userland JSON encoding is complete without annotations or macros on "
 "your types."
-msgstr ""
+msgstr "**序列化与工具链。**反射遍历的正是同一批描述符，用户态的 JSON 编码因此无需在类型上加注解或宏就已然完备。"
 
 #: src/core-concepts/reified-types.md:53
 msgid "Slots: the untagged hot path"
-msgstr ""
+msgstr "槽位：无标签的热路径"
 
 #: src/core-concepts/reified-types.md:55
 msgid ""
@@ -6451,19 +6519,19 @@ msgid ""
 "The bytecode is typed — every register's static type is recorded in the "
 "function's signature and re-verified at load — so hot paths carry no type "
 "tags at all:"
-msgstr ""
+msgstr "在 VM 内部，寄存器和记录字段都是**无标签的 8 字节槽位**。字节码是类型化的——每个寄存器的静态类型都记录在函数签名中，并在加载时重新校验——所以热路径上完全不带类型标签："
 
 #: src/core-concepts/reified-types.md:63
 msgid "// ints, bool: the canonical scalar width\n"
-msgstr ""
+msgstr "// 整数、bool：规范的标量宽度\n"
 
 #: src/core-concepts/reified-types.md:64
 msgid "// floats: f32 widened\n"
-msgstr ""
+msgstr "// 浮点数：f32 宽化\n"
 
 #: src/core-concepts/reified-types.md:65
 msgid "// every non-primitive: a cell handle\n"
-msgstr ""
+msgstr "// 每个非原始类型：一个单元句柄\n"
 
 #: src/core-concepts/reified-types.md:69
 msgid ""
@@ -6471,11 +6539,11 @@ msgid ""
 "— a value that carries its type with it — exists only at the host boundary, "
 "where Rust code that cannot trust static types receives checked, typed "
 "values."
-msgstr ""
+msgstr "原始类型就是它的比特位；复合类型是指向单元的句柄。带标签的世界——值随身携带自己的类型——只存在于宿主边界：那里运行的是无法信任静态类型的 Rust 代码，接收的是经过检查、带类型的值。"
 
 #: src/core-concepts/reified-types.md:74
 msgid "Record layout: one slot per field"
-msgstr ""
+msgstr "记录布局：每个字段一个槽位"
 
 #: src/core-concepts/reified-types.md:76
 msgid ""
@@ -6483,36 +6551,36 @@ msgid ""
 "id), a pointer to the type's vtable when the type has methods, and the "
 "payload — **a slot array, one untagged slot per field, in declaration "
 "order**."
-msgstr ""
+msgstr "`struct` 和 `class` 值都住在一个单元里：一个头部（引用计数 + 类型 id）、一个指向类型 vtable 的指针（当该类型有方法时），以及载荷——**一个槽数组，按声明顺序每字段一个无标签槽位**。"
 
 #: src/core-concepts/reified-types.md:81
 msgid ""
 "Primitive fields are widened into their slot; composite fields are cell "
 "handles."
-msgstr ""
+msgstr "原始类型字段宽化后放入槽位；复合类型字段是单元句柄。"
 
 #: src/core-concepts/reified-types.md:83
 msgid ""
 "Visibility, generic parameters, and impl blocks elsewhere add _nothing_ — "
 "the payload depends only on the field list."
-msgstr ""
+msgstr "可见性、泛型参数以及别处的 impl 块都_不_占分毫——载荷只取决于字段列表。"
 
 #: src/core-concepts/reified-types.md:85
 msgid ""
 "Field access is by index; there are no hidden members and no inheritance, so "
 "there is no base-class prefix and nothing to walk."
-msgstr ""
+msgstr "字段访问按索引进行；没有隐藏成员，也没有继承，因此没有基类前缀，也无需遍历什么。"
 
 #: src/core-concepts/reified-types.md:87
 msgid ""
 "Fixed arrays of primitives (`[f32]`) keep their elements **flat and packed** "
 "at machine width — the one place values live inline. Growable sequences are "
 "rut-library classes over such arrays."
-msgstr ""
+msgstr "原始类型的定长数组（`[f32]`）让元素以机器宽度**扁平且紧实**地存放——这是值唯一内联存在的地方。可增长序列是 rut 库在这类数组之上实现的类。"
 
 #: src/core-concepts/reified-types.md:91
 msgid "Consequences:"
-msgstr ""
+msgstr "由此带来的后果："
 
 #: src/core-concepts/reified-types.md:93
 msgid ""
@@ -6520,23 +6588,23 @@ msgid ""
 "detail, not an API — rut has no C-ABI struct surface for hosts to mirror. "
 "Hosts see records only through the checked boundary (see [the host "
 "boundary](host-boundary.md))."
-msgstr ""
+msgstr "`size_of`/`align_of` 被刻意省去。布局是实现细节，不是 API——rut 没有可供宿主镜像的 C-ABI 结构体表面。宿主只能透过受检边界看见记录（参见[宿主边界](host-boundary.md)）。"
 
 #: src/core-concepts/reified-types.md:97
 msgid ""
 "A record's memory cost is its field count times 8 bytes plus the cell "
 "header, which is exactly what the heap budget charges."
-msgstr ""
+msgstr "一条记录的内存开销是字段数乘 8 字节再加单元头部，而这正是堆预算所计费的。"
 
 #: src/core-concepts/reified-types.md:99
 msgid ""
 "Widening a value to a trait type allocates nothing: the trait-typed value "
 "_is_ the same cell, reinterpreted through its vtable."
-msgstr ""
+msgstr "把值宽化为 trait 类型不分配任何东西：trait 类型的值_就是_同一个单元，只是透过其 vtable 重新解释。"
 
 #: src/core-concepts/reified-types.md:102
 msgid "Vtables: one per type, attached at construction"
-msgstr ""
+msgstr "vtable：每个类型一张，构造时挂接"
 
 #: src/core-concepts/reified-types.md:104
 msgid ""
@@ -6545,11 +6613,11 @@ msgid ""
 "implements, keyed by a global (trait instantiation, method) id — "
 "`Slice<Point>` and `Slice<str>` have separate slot sets, because they are "
 "separate trait instantiations."
-msgstr ""
+msgstr "单元的 vtable 在值构造时填好，此后不再改变。它指明确切类型，并为该类型实现的每个 trait 方法持有一个条目，以全局的（trait 实例化，方法）id 为键——`Slice<Point>` 和 `Slice<str>` 拥有各自独立的槽位集，因为它们是彼此独立的 trait 实例化。"
 
 #: src/core-concepts/reified-types.md:110
 msgid "A call through a trait object is two loads and an indirect jump:"
-msgstr ""
+msgstr "透过 trait 对象的调用是两次加载加一次间接跳转："
 
 #: src/core-concepts/reified-types.md:119
 msgid ""
@@ -6557,35 +6625,35 @@ msgid ""
 "direct call with no table involved. The dispatch rules that choose between "
 "the two are the subject of the next chapter, [traits and "
 "dispatch](traits-and-dispatch.md)."
-msgstr ""
+msgstr "固有方法调用——在具体的 `c` 上调用 `c.area()`——编译为直接调用，不涉及任何表。在两者之间做出选择的分派规则是下一章的主题：[trait 与分派](traits-and-dispatch.md)。"
 
 #: src/core-concepts/reified-types.md:124
 msgid "Type tests, lowered"
-msgstr ""
+msgstr "类型测试的下层形态"
 
 #: src/core-concepts/reified-types.md:126
 msgid "Every type test is a small, pure read:"
-msgstr ""
+msgstr "每个类型测试都是一次小型、纯粹的读取："
 
 #: src/core-concepts/reified-types.md:128
 msgid ""
 "**Concrete test** (`d is Circle`): load the value's runtime type id, "
 "compare. When the receiver's static type already answers, the compiler folds "
 "it to a constant."
-msgstr ""
+msgstr "**具体类型测试**（`d is Circle`）：加载值的运行时类型 id，比较。当接收者的静态类型已能作答时，编译器将其折叠为常量。"
 
 #: src/core-concepts/reified-types.md:131
 msgid ""
 "**Trait probe** (`x is Drawable`): load the type id, scan the descriptor's "
 "registered impl list. Pure in its inputs, so repeated probes deduplicate and "
 "invariant ones hoist."
-msgstr ""
+msgstr "**trait 探测**（`x is Drawable`）：加载类型 id，扫描描述符中已注册的 impl 列表。输入是纯的，因此重复的探测会去重，不变的探测会被外提。"
 
 #: src/core-concepts/reified-types.md:134
 msgid ""
 "**Downcast** (`opaque.downcast<T>(o)`): the same type-id compare, followed "
 "by the guarded payload extract."
-msgstr ""
+msgstr "**向下转型**（`opaque.downcast<T>(o)`）：同样的类型 id 比较，随后是带守卫的载荷提取。"
 
 #: src/core-concepts/reified-types.md:137
 msgid ""
@@ -6594,26 +6662,26 @@ msgid ""
 "userland metaprogramming. Reflection over data (walking fields to serialize) "
 "is a library facility built on the same tables; see the reference on "
 "[reflection](../reference/reflection.md)."
-msgstr ""
+msgstr "这里没有返回可操纵值的 `type_of(x)`，也没有运行时布局内省——描述符服务于 VM、各项检查与工具链，而不是用户态元编程。对数据做反射（遍历字段以序列化）是一个建立在同一批表之上的库设施；参见关于[反射](../reference/reflection.md)的参考章节。"
 
 #: src/core-concepts/reified-types.md:145
 msgid ""
 "Type errors are **runtime facts, not conventions**: a host call, a downcast, "
 "or a trait probe is checked against the same table the VM dispatches through."
-msgstr ""
+msgstr "类型错误是**运行时事实，而不是约定**：宿主调用、向下转型或 trait 探测，对照的都是 VM 分派所用的同一张表。"
 
 #: src/core-concepts/reified-types.md:148
 msgid ""
 "**One runtime truth per value** — the vtable that answers dispatch is the "
 "same one that answers `is`."
-msgstr ""
+msgstr "**每个值只有一份运行时事实**——回答分派的 vtable 与回答 `is` 的是同一张。"
 
 #: src/core-concepts/reified-types.md:150
 msgid ""
 "The tag-free hot path keeps the interpreter's arithmetic and field traffic "
 "at raw slot speed while reification costs only what the program's dynamic "
 "features actually use."
-msgstr ""
+msgstr "无标签的热路径让解释器的算术和字段流量保持裸槽位速度，而具体化只收程序动态特性真正用到的那部分费用。"
 
 #: src/core-concepts/traits-and-dispatch.md:3
 msgid ""
@@ -6622,11 +6690,11 @@ msgid ""
 "impl block is the admission, and nothing else. A type whose members happen "
 "to match a trait's shapes is _not_ an implementor; some module must say "
 "`impl I for T`."
-msgstr ""
+msgstr "rut 中的 trait 是一份**有名有姓的契约**：一列方法签名，类型可以按名实现——写进 impl 块。满足关系是名义上的：impl 块就是准入凭证，别无其他。成员碰巧长得像某个 trait 形状的类型_并不是_实现者；必须有某个模块写下 `impl I for T`。"
 
 #: src/core-concepts/traits-and-dispatch.md:9
 msgid "The shape of a trait"
-msgstr ""
+msgstr "trait 的形状"
 
 #: src/core-concepts/traits-and-dispatch.md:11
 msgid ""
@@ -6652,6 +6720,27 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"trait Shape {\n"
+"    fn area(self) -> f64;\n"
+"    fn scale(v: f64);\n"
+"}\n"
+"\n"
+"struct Point { x: f32; y: f32 }\n"
+"\n"
+"impl Shape for Point {\n"
+"    fn area(self) -> f64 { return self.x as f64; }\n"
+"    fn scale(v: f64) { }    // the impl must list every trait method\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"traits\");\n"
+"    let p = Point { x: 3, y: 4 };\n"
+"    log.info(f\"area = {p.area()}\");     // a concrete receiver: static\n"
+"}\n"
+"```"
 
 #: src/core-concepts/traits-and-dispatch.md:37
 msgid ""
@@ -6659,7 +6748,7 @@ msgid ""
 "properties, and no default implementations, ever. One member kind means one "
 "dispatch candidate per call; a default body would be a second candidate with "
 "a resolution law of its own."
-msgstr ""
+msgstr "**只有方法，没有方法体。**trait 声明签名——没有字段，没有属性，也永远没有默认实现。成员只有一种，意味着每次调用只有一个分派候选；默认方法体会成为第二个候选，并自带一套独立的解析法则。"
 
 #: src/core-concepts/traits-and-dispatch.md:41
 msgid ""
@@ -6667,7 +6756,7 @@ msgid ""
 "and may live only in the module that declares `T`. `impl I for T { .. }` "
 "defines a trait implementation; its methods are exactly the trait's, with no "
 "`pub` (they are as visible as the trait)."
-msgstr ""
+msgstr "**两种 impl 形式。**`impl T { .. }` 定义类型的_固有_方法，且只能存在于声明 `T` 的模块里。`impl I for T { .. }` 定义一个 trait 实现；其方法与 trait 的完全一致，不带 `pub`（它们的可见性与 trait 相同）。"
 
 #: src/core-concepts/traits-and-dispatch.md:45
 msgid ""
@@ -6675,7 +6764,7 @@ msgid ""
 "for the same type is a link error that names both. The impl registry — "
 "merged when modules link — is the single source of truth for \"who "
 "implements what\"."
-msgstr ""
+msgstr "**每对组合全程序只有一个 impl。**两个模块为同一类型实现同一 trait 是一个链接错误，会同时点名双方。impl 注册表——在模块链接时合并——是\"谁实现了什么\"的唯一事实来源。"
 
 #: src/core-concepts/traits-and-dispatch.md:49
 msgid ""
@@ -6683,7 +6772,7 @@ msgid ""
 "the type's package — at least one side of every `(trait, type)` pair must be "
 "yours. Implementing two foreign types' pairing is rejected outright; there "
 "is no orphan rule beyond that."
-msgstr ""
+msgstr "**放置位置对组合局部。**trait impl 可以放在 trait 所在的包或类型所在的包——每个 `(trait, type)` 组合至少有一侧属于你自己。实现两个外部类型的组合会被直接拒绝；除此之外没有别的孤儿规则。"
 
 #: src/core-concepts/traits-and-dispatch.md:53
 msgid ""
@@ -6693,23 +6782,23 @@ msgid ""
 "and its own method slots, and an impl may be parameterized by the target's "
 "own type parameters — `impl Encode<T> for Store<T>` registers a template "
 "that serves every instantiation, unless a concrete impl shadows it."
-msgstr ""
+msgstr "**任何名义类型都可以作为目标**——类、结构体，甚至原始类型（`impl MyTrait for i32` 像其他 impl 一样注册）。trait 可以是泛型的（`Wrap<T>`、`Iterator<E>`）；每个实例化都有自己的身份和自己的方法槽位，而且 impl 可以由目标自身的类型参数参数化——`impl Encode<T> for Store<T>` 注册的是一个服务所有实例化的模板，除非某个具体 impl 将其遮蔽。"
 
 #: src/core-concepts/traits-and-dispatch.md:61
 msgid ""
 "Type bodies are **fields only** — a `fn` inside a `struct` or `class` body "
 "is a parse error. Every method, inherent or trait, lives in an impl block."
-msgstr ""
+msgstr "类型体**只放字段**——`struct` 或 `class` 体内出现 `fn` 是解析错误。每个方法，无论固有还是 trait，都住在 impl 块里。"
 
 #: src/core-concepts/traits-and-dispatch.md:65
 msgid "Trait-typed values"
-msgstr ""
+msgstr "trait 类型的值"
 
 #: src/core-concepts/traits-and-dispatch.md:67
 msgid ""
 "A trait name in type position is the bare name — there is no object-type "
 "keyword:"
-msgstr ""
+msgstr "类型位置上的 trait 名就是裸名字——没有对象类型关键字："
 
 #: src/core-concepts/traits-and-dispatch.md:70
 msgid ""
@@ -6752,6 +6841,44 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"use pouch::{ Vec };\n"
+"\n"
+"trait Shape {\n"
+"    fn area(self) -> f64;\n"
+"}\n"
+"\n"
+"struct Circle { r: f64 }\n"
+"struct UnitSquare { side: f64 }\n"
+"\n"
+"impl Shape for Circle {\n"
+"    fn area(self) -> f64 { return 3.14159265358979 * self.r * self.r; }\n"
+"}\n"
+"\n"
+"impl Shape for UnitSquare {\n"
+"    fn area(self) -> f64 { return self.side * self.side; }\n"
+"}\n"
+"\n"
+"struct Canvas { log: Logger }\n"
+"\n"
+"impl Canvas {\n"
+"    fn render(self, a: f64) { self.log.info(f\"blitted a shape of area "
+"{a}\"); }\n"
+"}\n"
+"\n"
+"fn blit(g: Canvas, s: Shape) { g.render(s.area()); }   // a parameter over "
+"any Shape\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"shapes\");\n"
+"    let g = Canvas { log: log };\n"
+"    let mut mixed: Vec<Shape> = Vec.new();   // heterogeneous storage\n"
+"    mixed.push(Circle { r: 1.0 });\n"
+"    mixed.push(UnitSquare { side: 2.0 });\n"
+"    for (let s of mixed) { blit(g, s); }\n"
+"}\n"
+"```"
 
 #: src/core-concepts/traits-and-dispatch.md:112
 msgid ""
@@ -6761,64 +6888,64 @@ msgid ""
 "exactly one question: does the registry hold an `impl I for T`? There is no "
 "top type to widen to, and intersection types (`A & B`) are ruled out by "
 "design — when you need both contracts, declare a trait that spells both."
-msgstr ""
+msgstr "trait 类型的值是指向真实单元的引用，而且仍携带其确切的类。把具体值宽化到它实现的某个 trait，在赋值和传参时隐式发生，不分配任何东西，只受一个问题把守：注册表里有没有 `impl I for T`？没有可宽化的顶类型，交集类型（`A & B`）也被设计排除——当你同时需要两份契约时，就声明一个把两者都写明的 trait。"
 
 #: src/core-concepts/traits-and-dispatch.md:120
 msgid "Dispatch: the two-rule law"
-msgstr ""
+msgstr "分派：两条规则的法则"
 
 #: src/core-concepts/traits-and-dispatch.md:122
 msgid ""
 "Every method call compiles under one of exactly two rules, fixed at compile "
 "time as a property of the _call site_:"
-msgstr ""
+msgstr "每个方法调用都恰好按两条规则之一编译，编译期即固定，是_调用点_的属性："
 
 #: src/core-concepts/traits-and-dispatch.md:125
 msgid ""
 "**Static** — the call site names exactly one concrete type. The call binds "
 "directly to that type's method, no table involved:"
-msgstr ""
+msgstr "**静态**——调用点指名恰好一个具体类型。调用直接绑定到该类型的方法，不涉及任何表："
 
 #: src/core-concepts/traits-and-dispatch.md:127
 msgid "a concrete receiver (`c.area()` on `c: Circle`);"
-msgstr ""
+msgstr "具体接收者（`c: Circle` 上的 `c.area()`）；"
 
 #: src/core-concepts/traits-and-dispatch.md:128
 msgid ""
 "a trait-typed local whose single concrete origin the compiler tracked (`let "
 "d: Shape = Point { .. }; d.area()`);"
-msgstr ""
+msgstr "编译器跟踪到唯一具体来源的 trait 类型局部变量（`let d: Shape = Point { .. }; d.area()`）；"
 
 #: src/core-concepts/traits-and-dispatch.md:130
 msgid ""
 "a trait-typed _parameter_ — the function specializes per concrete argument "
 "at monomorphization, so a trait parameter is effectively an implicit generic "
 "bound;"
-msgstr ""
+msgstr "trait 类型的_参数_——函数在单态化时按具体实参特化，所以 trait 参数实际上是一个隐式的泛型约束；"
 
 #: src/core-concepts/traits-and-dispatch.md:133
 msgid "inside monomorphized generics."
-msgstr ""
+msgstr "单态化的泛型内部。"
 
 #: src/core-concepts/traits-and-dispatch.md:134
 msgid ""
 "**Vtable** — the receiver is trait-typed with multiple possible concrete "
 "origins:"
-msgstr ""
+msgstr "**vtable**——接收者是 trait 类型，且可能有多个具体来源："
 
 #: src/core-concepts/traits-and-dispatch.md:136
 msgid "elements of a heterogeneous container (`Vec<Shape>`);"
-msgstr ""
+msgstr "异构容器的元素（`Vec<Shape>`）；"
 
 #: src/core-concepts/traits-and-dispatch.md:137
 msgid "trait-typed field and element loads (the cell may hold any implementor);"
-msgstr ""
+msgstr "trait 类型的字段与元素加载（单元里可能装着任何实现者）；"
 
 #: src/core-concepts/traits-and-dispatch.md:139
 msgid ""
 "branch-merged bindings (`if` arms carrying different concretes into one "
 "trait-typed variable)."
-msgstr ""
+msgstr "分支合并的绑定（`if` 各分支把不同的具体类型汇入同一个 trait 类型变量）。"
 
 #: src/core-concepts/traits-and-dispatch.md:142
 msgid ""
@@ -6827,29 +6954,29 @@ msgid ""
 "code — an uncertain origin costs one vtable hop, never a wrong static bind. "
 "And the same descriptor that answers vtable calls answers `is` probes: one "
 "runtime truth per value."
-msgstr ""
+msgstr "来源分析是保守的：任何合并、间接或跨函数流动都按\"多个\"计。误判不会产生错误代码——来源不确定的代价只是一次 vtable 跳转，绝不会错误地静态绑定。而回答 vtable 调用的描述符同样回答 `is` 探测：每个值只有一份运行时事实。"
 
 #: src/core-concepts/traits-and-dispatch.md:148
 msgid "Type tests"
-msgstr ""
+msgstr "类型测试"
 
 #: src/core-concepts/traits-and-dispatch.md:150
 msgid ""
 "`expr is Type` yields a `bool` and is total — it never traps. Two probes, "
 "one keyword:"
-msgstr ""
+msgstr "`expr is Type` 产出 `bool` 且是全函数——它从不触发陷阱。两个探测，一个关键字："
 
 #: src/core-concepts/traits-and-dispatch.md:153
 msgid ""
 "**Concrete RHS**: is the value's exact type `T`? (No inheritance — a single "
 "id compare.)"
-msgstr ""
+msgstr "**具体类型右侧**：值的确切类型是不是 `T`？（没有继承——一次单独的 id 比较。）"
 
 #: src/core-concepts/traits-and-dispatch.md:155
 msgid ""
 "**Trait RHS**: does the value's exact type have a registered impl? A "
 "capability probe, usable on any value (`k is Hashable`)."
-msgstr ""
+msgstr "**trait 右侧**：值的确切类型有没有注册 impl？这是一次能力探测，可用于任何值（`k is Hashable`）。"
 
 #: src/core-concepts/traits-and-dispatch.md:158
 msgid ""
@@ -6859,11 +6986,11 @@ msgid ""
 "need `Circle`\\-specific behavior behind a `Drawable`, put that behavior in "
 "the trait. The one recovery path for erased values is the explicit `opaque` "
 "box (see the reference on [`opaque`](../reference/opaque.md))."
-msgstr ""
+msgstr "`is` 没有流敏感效应：探测为真不会收窄 `x`。当静态类型已能作答时，探测在编译期折叠。trait 类型的值完全不能向下转型到具体类型——如果你需要在 `Drawable` 背后做 `Circle`\\-特定的行为，就把那个行为放进 trait。被擦除的值唯一的恢复路径是显式的 `opaque` 盒（见关于 [`opaque`](../reference/opaque.md) 的参考章节）。"
 
 #: src/core-concepts/traits-and-dispatch.md:166
 msgid "Visibility: the use-both gate"
-msgstr ""
+msgstr "可见性：use 双侧闸门"
 
 #: src/core-concepts/traits-and-dispatch.md:168
 msgid ""
@@ -6872,15 +6999,15 @@ msgid ""
 "the type. A call that matches a registered impl whose trait no `use` brings "
 "in is an error — \"use `I` to call its methods on `T`\" — so an added trait "
 "method can never silently change what someone else's call site means."
-msgstr ""
+msgstr "调用 trait 方法要求**两个**名字都在作用域内：类型（靠声明或 `use`）_以及_ trait（靠 `use`）。固有方法只要类型在即可。如果一次调用匹配到某个已注册 impl，但其 trait 没有被任何 `use` 引入，就是错误——\"use `I` 才能在 `T` 上调用它的方法\"——因此新增一个 trait 方法永远不可能悄悄改变别人调用点的含义。"
 
 #: src/core-concepts/traits-and-dispatch.md:175 src/reference/traits.md:167
 msgid "The iteration protocol"
-msgstr ""
+msgstr "迭代协议"
 
 #: src/core-concepts/traits-and-dispatch.md:177
 msgid "A type is iterable when it implements the builtin `Iterator<E>` trait:"
-msgstr ""
+msgstr "类型实现了内置的 `Iterator<E>` trait 即可迭代："
 
 #: src/core-concepts/traits-and-dispatch.md:179
 msgid ""
@@ -6908,6 +7035,29 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"class CountUp {\n"
+"    n: i32;\n"
+"}\n"
+"\n"
+"impl Iterator<i32> for CountUp {\n"
+"    fn __iterate(self, emit: fn(i32) -> bool) {\n"
+"        for (let i = 1; i <= self.n; i += 1) {\n"
+"            if (!emit(i)) { return; }\n"
+"        }\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"iter\");\n"
+"    for (let v of CountUp { n: 3 }) {\n"
+"        log.info(f\"tick {v}\");\n"
+"    }\n"
+"    log.info(\"done\");\n"
+"}\n"
+"```"
 
 #: src/core-concepts/traits-and-dispatch.md:210
 msgid ""
@@ -6917,11 +7067,11 @@ msgid ""
 "binding per iteration by construction. The builtin sequences (`[T]`, `str`, "
 "`bytes`, and the standard growable `Vec`) keep fused index loops instead; "
 "they never pay a per-element call."
-msgstr ""
+msgstr "`for (let v of it) { body }` 会脱糖为带合成闭包的 `it.__iterate(emit)`：先跑循环体，然后 `emit` 返回 `true`；`break` 则返回 `false`。循环变量是闭包的参数——按构造每轮迭代都是全新绑定。内置序列（`[T]`、`str`、`bytes` 以及标准的可增长 `Vec`）则保留融合的索引循环；它们从不为每个元素付一次调用。"
 
 #: src/core-concepts/traits-and-dispatch.md:217
 msgid "Engine contracts are traits too"
-msgstr ""
+msgstr "引擎契约也是 trait"
 
 #: src/core-concepts/traits-and-dispatch.md:219
 msgid ""
@@ -6931,11 +7081,11 @@ msgid ""
 "other impl and be driven by the same loop. See [the async "
 "model](async-model.md) and the worked example in [04 — Custom "
 "async](../examples/04-custom-async.md)."
-msgstr ""
+msgstr "异步机制写成内置 trait——`Future<T>` 与 `RunContext`——引擎_命名_它们但不封闭它们：手写的类型可以像任何其他 impl 一样，通过同一个注册表写下 `impl Future<nil> for MyFuture`，被同一个循环驱动。参见[异步模型](async-model.md)以及[04 — 自定义异步](../examples/04-custom-async.md)中的完整示例。"
 
 #: src/core-concepts/traits-and-dispatch.md:226
 msgid "Equality is not a trait"
-msgstr ""
+msgstr "相等不是 trait"
 
 #: src/core-concepts/traits-and-dispatch.md:228
 msgid ""
@@ -6943,26 +7093,26 @@ msgid ""
 "value, `str`/`bytes` by content, everything else by cell identity. "
 "Field-wise comparison is a loop you write, or the map packages' own key "
 "rules. See [everything is a value](everything-is-a-value.md)."
-msgstr ""
+msgstr "`==` 是内置的，不能选择加入或退出：原始类型按值比较，`str`/`bytes` 按内容，其余一切按单元身份。逐字段比较是你自己写的循环，或者 map 包自带的键规则。参见[一切皆值](everything-is-a-value.md)。"
 
 #: src/core-concepts/traits-and-dispatch.md:235
 msgid ""
 "**Nominal satisfaction** keeps the registry exact: capability probes, "
 "widening, and vtable fills all read one table, so casts stay cheap and "
 "runtime identities stay meaningful."
-msgstr ""
+msgstr "**名义满足**让注册表保持精确：能力探测、宽化、vtable 填充读取的都是同一张表，因此转型保持廉价，运行时身份保持有意义。"
 
 #: src/core-concepts/traits-and-dispatch.md:238
 msgid ""
 "**The two-rule law** makes dispatch predictable: you can tell, per call "
 "site, whether you are paying a hop."
-msgstr ""
+msgstr "**两条规则的法则**让分派可预测：对每个调用点，你都能说出自己是否在付一次跳转的钱。"
 
 #: src/core-concepts/traits-and-dispatch.md:240
 msgid ""
 "**Placement rules** keep coherence decidable across packages without a "
 "global uniqueness proof — one of the pair is always local."
-msgstr ""
+msgstr "**放置规则**让跨包的连贯性可判定，无需全局唯一性证明——组合中总有一侧是本地的。"
 
 #: src/core-concepts/async-model.md:3
 msgid ""
@@ -6972,83 +7122,83 @@ msgid ""
 "the VM's queue. There are no promises, no microtask queue, and no implicit "
 "scheduling: **the host owns time**, and nothing runs unless the driving loop "
 "runs it."
-msgstr ""
+msgstr "rut 的并发是**拉取式**的，建立在一个名词之上：`Future<T>`。调用 `async fn` 什么也不运行——它产出一个冷 future。future 在有什么东西_驱动_它时才运行：另一个 async fn 里的 `await`，或一次进入 VM 队列的启动。没有 promise，没有微任务队列，没有隐式调度：**时间归宿主所有**，驱动循环不运行它，它就不运行。"
 
 #: src/core-concepts/async-model.md:10
 msgid "Pull, not push"
-msgstr ""
+msgstr "拉取，而非推送"
 
 #: src/core-concepts/async-model.md:12
 msgid "push (promises)"
-msgstr ""
+msgstr "推（promise）"
 
 #: src/core-concepts/async-model.md:12
 msgid "pull (rut futures)"
-msgstr ""
+msgstr "拉（rut future）"
 
 #: src/core-concepts/async-model.md:14 src/reference/async.md:12
 msgid "created"
-msgstr ""
+msgstr "创建时机"
 
 #: src/core-concepts/async-model.md:14
 msgid "starts on the next microtask"
-msgstr ""
+msgstr "在下一个微任务启动"
 
 #: src/core-concepts/async-model.md:14
 msgid "cold — nothing runs until awaited or launched"
-msgstr ""
+msgstr "冷——被 await 或被启动之前什么都不运行"
 
 #: src/core-concepts/async-model.md:15
 msgid "idle cost"
-msgstr ""
+msgstr "空闲开销"
 
 #: src/core-concepts/async-model.md:15
 msgid "reactions and queues exist whether or not anyone waits"
-msgstr ""
+msgstr "无论有没有人等待，反应与队列都存在"
 
 #: src/core-concepts/async-model.md:15 src/reference/async.md:13
 msgid "nobody drives ⇒ nobody pays"
-msgstr ""
+msgstr "无人驱动 ⇒ 无人付费"
 
 #: src/core-concepts/async-model.md:16
 msgid "per-await allocation"
-msgstr ""
+msgstr "每次 await 的分配"
 
 #: src/core-concepts/async-model.md:16
 msgid "promise + callback lists"
-msgstr ""
+msgstr "promise + 回调列表"
 
 #: src/core-concepts/async-model.md:16
 msgid "one hidden frame record per call"
-msgstr ""
+msgstr "每次调用一个隐藏帧记录"
 
 #: src/core-concepts/async-model.md:17 src/reference/async.md:15
 msgid "cancellation"
-msgstr ""
+msgstr "取消"
 
 #: src/core-concepts/async-model.md:17
 msgid "abort flags layered on top"
-msgstr ""
+msgstr "叠加上去的中止标志"
 
 #: src/core-concepts/async-model.md:17
 msgid "native: the frame is dropped at a checkpoint"
-msgstr ""
+msgstr "原生：帧在检查点被丢弃"
 
 #: src/core-concepts/async-model.md:18 src/reference/async.md:16
 msgid "host integration"
-msgstr ""
+msgstr "宿主集成"
 
 #: src/core-concepts/async-model.md:18 src/reference/async.md:16
 msgid "the host must drain a job queue"
-msgstr ""
+msgstr "宿主必须排空作业队列"
 
 #: src/core-concepts/async-model.md:18
 msgid "the host polls: drain ready frames, ask for the next deadline"
-msgstr ""
+msgstr "宿主做 poll：排空就绪帧，询问下一个截止时间"
 
 #: src/core-concepts/async-model.md:20 src/reference/opaque.md:9
 msgid "The surface"
-msgstr ""
+msgstr "语言表面"
 
 #: src/core-concepts/async-model.md:22
 msgid ""
@@ -7069,10 +7219,26 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use async_host::{ launch_future, sleep };\n"
+"use ink::{ Logger };\n"
+"\n"
+"async fn countdown(cx: RunContext, log: Logger, n: u32) -> nil {\n"
+"    for (let i = n; i > 0; i -= 1) {\n"
+"        log.info(f\"{i}\");\n"
+"        await sleep(1000);             // the only suspension spelling\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() -> nil {\n"
+"    let log = Logger.new(\"countdown\");\n"
+"    launch_future(countdown(log, 3));  // the other consume: launch\n"
+"}\n"
+"```"
 
 #: src/core-concepts/async-model.md:45
 msgid "The rules:"
-msgstr ""
+msgstr "规则如下："
 
 #: src/core-concepts/async-model.md:47
 msgid ""
@@ -7080,20 +7246,20 @@ msgid ""
 "the engine mints it at call sites and per drive, the way it mints `self`. It "
 "carries the frame edge: `checkpoint()` reads the resume state, `cancelled()` "
 "reads the task's abort flag."
-msgstr ""
+msgstr "**第一个参数是上下文。**`async fn f(cx: RunContext, ..)`——引擎在调用点、每次驱动时铸造它，如同铸造 `self`。它携带帧的边沿：`checkpoint()` 读取恢复状态，`cancelled()` 读取任务的中止标志。"
 
 #: src/core-concepts/async-model.md:51
 msgid ""
 "**Calling does not run.** `async fn f(..) -> T` describes a value that "
 "widens to `Future<T>`; it runs when awaited or launched."
-msgstr ""
+msgstr "**调用不等于运行。**`async fn f(..) -> T` 描述的是一个宽化为 `Future<T>` 的值；它只在被 await 或被启动时运行。"
 
 #: src/core-concepts/async-model.md:53
 msgid ""
 "**One consume law.** A future is consumed by `await` _or_ by `launch_future` "
 "— exactly one. The launch returns its own receipt type, which is not a "
 "future and cannot be launched or awaited again."
-msgstr ""
+msgstr "**单次消费法则。**future 只由 `await` _或_ `launch_future` 消费——恰好其一。启动返回它自己的回执类型，它不是 future，不能再次被启动或 await。"
 
 #: src/core-concepts/async-model.md:56
 msgid ""
@@ -7101,17 +7267,17 @@ msgid ""
 "Hand-written futures are _launcher-drivable_ — the driving loop finds their "
 "`Future::yield` in the vtable — which is how the standard `sleep` itself is "
 "built over the open trait surface."
-msgstr ""
+msgstr "**`await` 只面向引擎织入的 future**（async fn 的结果与 `sleep`）。手写的 future 是_可被启动器驱动_的——驱动循环在 vtable 里找到它们的 `Future::yield`——标准 `sleep` 本身正是构建在这个开放的 trait 表面之上。"
 
 #: src/core-concepts/async-model.md:61 src/reference/async.md:109
 msgid "What the compiler emits"
-msgstr ""
+msgstr "编译器产出什么"
 
 #: src/core-concepts/async-model.md:63
 msgid ""
 "An `async fn` compiles to one hidden frame — an ordinary heap cell — with a "
 "woven `Future::yield` that the driving loop calls once per resumption:"
-msgstr ""
+msgstr "`async fn` 编译为一个隐藏帧——一个普通的堆单元——带一个织入的 `Future::yield`，驱动循环在每次恢复时调用它一次："
 
 #: src/core-concepts/async-model.md:81
 msgid ""
@@ -7120,11 +7286,11 @@ msgid ""
 "parking releases only staging registers and no liveness analysis decides "
 "which locals survive a suspension. The whole weave rides existing bytecode — "
 "no new opcodes, no new runtime machinery."
-msgstr ""
+msgstr "state 字段_就是_程序计数器：恢复分派是检查点枚举上的一张跳转表。由于局部变量被镜像进帧单元，停车只释放暂存寄存器，没有任何活跃性分析来决定哪些局部变量能在暂停中幸存。整个织造骑在既有字节码上——没有新操作码，没有新运行时机制。"
 
 #: src/core-concepts/async-model.md:87
 msgid "Cancellation is drop"
-msgstr ""
+msgstr "取消即 drop"
 
 #: src/core-concepts/async-model.md:89
 msgid ""
@@ -7136,83 +7302,83 @@ msgid ""
 "becomes observable, so a cancelled function dies at a known-clean boundary. "
 "This is the same machinery that frees any heap object (see "
 "[memory](memory.md)); coroutine frames get no special case."
-msgstr ""
+msgstr "`handle.abort()` 标记帧的取消并将其重新入队。下一个检查点处的探测会分支到 drop 路径：局部变量按绑定的逆序释放，`on_drop` 回调按引用计数触发，任何挂起的 `sleep` 随帧一同消亡。取消**从不在表达式中途打断**——检查点探测是取消变得可观察的唯一位置，所以被取消的函数死在一个已知干净的边界上。这与释放任何堆对象用的是同一套机制（参见[内存](memory.md)）；协程帧没有特权。"
 
 #: src/core-concepts/async-model.md:98 src/reference/async.md:140
 msgid "The driving loop"
-msgstr ""
+msgstr "驱动循环"
 
 #: src/core-concepts/async-model.md:100
 msgid "The VM owns the queues; the embedder owns the loop:"
-msgstr ""
+msgstr "队列归 VM 所有；循环归嵌入方所有："
 
 #: src/core-concepts/async-model.md:103 src/core-concepts/host-boundary.md:30
 #: src/reference/vm-heap.md:98 src/reference/resource-limits.md:58
 #: src/reference/host-futures.md:108
 msgid "\"main\""
-msgstr ""
+msgstr "\"main\""
 
 #: src/core-concepts/async-model.md:103
 msgid "// script boots, launches futures\n"
-msgstr ""
+msgstr "// 脚本启动，发起 future\n"
 
 #: src/core-concepts/async-model.md:105
 msgid "// one drive per ready frame\n"
-msgstr ""
+msgstr "// 每个就绪帧驱动一次\n"
 
 #: src/core-concepts/async-model.md:106
 msgid "// expire due timers into ready\n"
-msgstr ""
+msgstr "// 把到期定时器转入就绪\n"
 
 #: src/core-concepts/async-model.md:107
 msgid "// the wall-clock stand-in\n"
-msgstr ""
+msgstr "// 墙钟的替身\n"
 
 #: src/core-concepts/async-model.md:109
 msgid "// idle\n"
-msgstr ""
+msgstr "// 空闲\n"
 
 #: src/core-concepts/async-model.md:113
 msgid ""
 "`sleep(ms)` arms a deadline on the VM's **virtual clock** (`vm.now_ms()` / "
 "`vm.set_now()`). A test host advances the clock by hand and gets fully "
 "deterministic schedules — a UI host just maps it to wall time."
-msgstr ""
+msgstr "`sleep(ms)` 在 VM 的**虚拟时钟**（`vm.now_ms()` / `vm.set_now()`）上设一个截止时间。测试宿主手动推进时钟，得到完全确定性的调度——UI 宿主只需把它映射到墙钟时间。"
 
 #: src/core-concepts/async-model.md:117
 msgid ""
 "Each queue entry owns one reference; a completed drive re-enqueues the "
 "awaiting frame through a one-directional edge pair, so wake wiring never "
 "forms a cycle."
-msgstr ""
+msgstr "每个队列条目持有一个引用；一次完成的驱动通过单向边对把等待中的帧重新入队，因此唤醒连线永远不会形成循环引用。"
 
 #: src/core-concepts/async-model.md:120
 msgid ""
 "Fuel accounting rides the ordinary per-op budget: a drive that runs out "
 "parks the frame at its checkpoint and resumes there later."
-msgstr ""
+msgstr "燃料核算走普通的每操作预算：燃料耗尽的驱动把帧停在它的检查点上，稍后从那里恢复。"
 
 #: src/core-concepts/async-model.md:123
 msgid "Host futures: `pub host async fn`"
-msgstr ""
+msgstr "宿主 future：`pub host async fn`"
 
 #: src/core-concepts/async-model.md:125
 msgid "Native code joins the same model. A declaration file spells the row:"
-msgstr ""
+msgstr "原生代码加入同一个模型。声明文件写下这样一行："
 
 #: src/core-concepts/async-model.md:133
 msgid ""
 "and the embedder binds it with **one closure** that starts the work and "
 "returns the future's state cell:"
-msgstr ""
+msgstr "嵌入方用**一个闭包**绑定它：闭包启动工作并返回 future 的状态单元："
 
 #: src/core-concepts/async-model.md:137
 msgid "\"http_host::http_stream_next\""
-msgstr ""
+msgstr "\"http_host::http_stream_next\""
 
 #: src/core-concepts/async-model.md:143
 msgid "// settle from any thread\n"
-msgstr ""
+msgstr "// 从任意线程落定\n"
 
 #: src/core-concepts/async-model.md:149
 msgid ""
@@ -7226,11 +7392,11 @@ msgid ""
 "cannot drift apart. IO written with plain `async`/`await` Rust maps onto "
 "this naturally: the work leaves the VM, and completion is one enqueue back "
 "into the ready queue."
-msgstr ""
+msgstr "`Completer<T>` 是一个小的共享单元：`complete(v)`/`fail(msg)` 可从任意线程调用（原子操作加互斥锁——VM 保持单线程），`fail` 的消息**在 await 处**变成陷阱；当脚本取消一个挂起的 future 时，可选的中止闭包会运行（迟到的结果随后被直接丢弃）。这个宏注册织造所驱动的整行族——start、probe、take、cancel——加载期检查则对照声明校验展开结果，声明与函数体因此不可能漂移分离。用普通 `async`/`await` Rust 写的 IO 自然映射到此：工作离开 VM，完成就是一次重新入队，回到就绪队列。"
 
 #: src/core-concepts/async-model.md:160
 msgid "Structured concurrency, honestly"
-msgstr ""
+msgstr "结构化并发，如实相告"
 
 #: src/core-concepts/async-model.md:162
 msgid ""
@@ -7247,7 +7413,7 @@ msgid ""
 "bridge](../reference/host-futures.md); the [GitHub viewer "
 "CLI](../examples/06-github-viewer-cli.md) example shows a full program "
 "living inside this loop."
-msgstr ""
+msgstr "这门语言今天刻意保持很小的词汇表：launch、abort 和 await。竞速（`await select { .. }`）与 join 已启动的 future（`await handle`）能解析但被编译期闸住——诊断把它们标为未来工作，结构化作用域（一个在退出时取消其子任务的块）也是同样的情况。现有机制已足以组织真实的程序——launch/abort 回执让你对后台工作拥有显式所有权，基于 drop 的取消给了它一个干净的开关——但模型中没有任何东西会替你悄悄取消兄弟任务。参见关于[异步与 await](../reference/async.md)、[任务](../reference/tasks.md)与[宿主 future 桥](../reference/host-futures.md)的参考章节；[GitHub 查看器 CLI](../examples/06-github-viewer-cli.md) 示例展示了一个完整程序如何活在这个循环里。"
 
 #: src/core-concepts/memory.md:3
 msgid ""
@@ -7258,11 +7424,11 @@ msgid ""
 "so it lives until the VM is torn down. rut makes that a stated rule and "
 "ships `Weak<T>` as the first-class answer, instead of hiding it behind a "
 "collector."
-msgstr ""
+msgstr "rut 的内存管理是**引用计数加确定性析构器，没有收集器**。对象在最后一个强引用消失的那一刻被销毁——落在一条可知的语句上，而不是\"将来某次 GC\"。代价是对循环引用的如实相告：强循环引用永远不会减到零，因此它活到 VM 被拆毁为止。rut 把这一点写成明文规则，并把 `Weak<T>` 作为一等公民的答案交付，而不是把它藏在收集器背后。"
 
 #: src/core-concepts/memory.md:11
 msgid "Everything is a cell"
-msgstr ""
+msgstr "一切皆单元"
 
 #: src/core-concepts/memory.md:13
 msgid ""
@@ -7272,13 +7438,13 @@ msgid ""
 "flags. The counts are plain integers: a VM runs on one thread with one heap, "
 "workers are separate VMs, and nothing is ever shared between them, so there "
 "are no atomics anywhere in the heap."
-msgstr ""
+msgstr "每个非原始类型的值——字符串、字节缓冲、数组、记录、枚举、trait 对象、擦除盒、可空盒、协程帧——都是一个堆单元。每个单元以一个头部开始：引用计数、类型 id 和几个标志位。计数就是普通整数：一个 VM 运行在一个线程上、拥有一套堆，worker 是彼此独立的 VM，两者之间永不共享任何东西，所以整个堆中没有任何原子操作。"
 
 #: src/core-concepts/memory.md:20
 msgid ""
 "Because assignments and passes copy _handles_, not payloads, the refcount "
 "traffic is exactly the aliasing the program performs:"
-msgstr ""
+msgstr "由于赋值与传参复制的是_句柄_而非载荷，引用计数的流量恰好就是程序实施的别名数量："
 
 #: src/core-concepts/memory.md:23
 msgid ""
@@ -7296,6 +7462,19 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Node { next: ?Node }\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"cells\");\n"
+"    let a: ?Node = Node { next: nil };\n"
+"    let b = a;              // one retain\n"
+"    log.info(f\"a == b: {a == b}\");   // one cell — it dies when the LAST "
+"of a, b goes away\n"
+"}\n"
+"```"
 
 #: src/core-concepts/memory.md:40
 msgid ""
@@ -7303,15 +7482,15 @@ msgid ""
 "only where references flow; scalar code pays nothing. Function boundaries do "
 "the paired inc/dec; a flat primitive buffer's element traffic is plain slot "
 "moves."
-msgstr ""
+msgstr "编译器知道每个寄存器的静态类型，因此只在引用流动之处生成引用感知的移动；标量代码分文不费。函数边界完成成对的增/减；扁平原始类型缓冲区的元素流量就是普通的槽位移动。"
 
 #: src/core-concepts/memory.md:45
 msgid "Deterministic destruction"
-msgstr ""
+msgstr "确定性析构"
 
 #: src/core-concepts/memory.md:47
 msgid "When a count reaches zero, destruction runs inline, in a fixed order:"
-msgstr ""
+msgstr "计数归零时，析构就地运行，顺序固定："
 
 #: src/core-concepts/memory.md:49
 msgid ""
@@ -7320,14 +7499,14 @@ msgid ""
 "reference, so this is \"run this when the object dies\". One callback per "
 "binding; a second attach is a compile error; the pinned callbacks drain at "
 "the next call boundary."
-msgstr ""
+msgstr "**`on_drop` 清理是钉住的。**`on_drop<T>(p: ?T, cleanup: fn(?T))` 给一个可空绑定挂上清理函数——而 `?T` 绑定_就是_单元引用，所以这就是\"对象死亡时运行这段代码\"。每个绑定一个回调；第二次挂载是编译错误；被钉住的回调在下一次调用边界排空。"
 
 #: src/core-concepts/memory.md:55
 msgid ""
 "**Fields release in declaration order**, recursively — a dying record's "
 "strings, arrays, and boxes release their own references, so nothing is "
 "pinned until VM shutdown just because its owner died."
-msgstr ""
+msgstr "**字段按声明顺序释放**，递归进行——垂死记录的字符串、数组和盒各自释放自己的引用，因此不会有什么仅仅因为其主人死亡就被钉到 VM 关机。"
 
 #: src/core-concepts/memory.md:58
 msgid ""
@@ -7335,7 +7514,7 @@ msgid ""
 "registered by the embedder releases its socket, texture, or thread when the "
 "last script reference disappears — never \"someday at GC\" (see [the host "
 "boundary](host-boundary.md))."
-msgstr ""
+msgstr "**宿主 opaque 在同一时点运行它们的 Rust `Drop`。**嵌入方注册的宿主句柄在最后一个脚本引用消失时释放它的套接字、纹理或线程——绝不是\"GC 某天\"（参见[宿主边界](host-boundary.md)）。"
 
 #: src/core-concepts/memory.md:63
 msgid ""
@@ -7362,6 +7541,28 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"class Connection {\n"
+"    url: str;\n"
+"    log: Logger;\n"
+"}\n"
+"\n"
+"impl Connection {\n"
+"    fn open(url: str, log: Logger) -> Connection {\n"
+"        return Connection { url: url, log: log };\n"
+"    }\n"
+"    fn close(self) { self.log.info(f\"closed {self.url}\"); }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"rc\");\n"
+"    let conn: ?Connection = Connection.open(\"tcp://edge\", log);\n"
+"    on_drop(conn, fn(c: ?Connection) { c.close(); });\n"
+"    log.info(\"main is done — the count hits zero at the boundary\");\n"
+"}\n"
+"```"
 
 #: src/core-concepts/memory.md:86
 msgid ""
@@ -7370,35 +7571,39 @@ msgid ""
 "closed tcp://edge\n"
 "```"
 msgstr ""
+"```text\n"
+"main is done — the count hits zero at the boundary\n"
+"closed tcp://edge\n"
+"```"
 
 #: src/core-concepts/memory.md:91
 msgid ""
 "Compare this with finalizer-based designs: there is no finalizer that \"may "
 "run later or never\", no flush phase, and no resource whose release time you "
 "cannot point at in your own code."
-msgstr ""
+msgstr "与基于 finalizer 的设计比较一下：没有\"可能晚点运行或永远不运行\"的 finalizer，没有冲刷阶段，也没有任何释放时间在你自己的代码里指不出来对的资源。"
 
 #: src/core-concepts/memory.md:95
 msgid "Two edge rules worth knowing:"
-msgstr ""
+msgstr "两条值得知道的边界规则："
 
 #: src/core-concepts/memory.md:97
 msgid ""
 "**Refcount overflow pins.** If a counter would exceed its maximum, the "
 "object is deliberately immortalized (and logged) rather than wrapping — the "
 "same rule Swift uses."
-msgstr ""
+msgstr "**引用计数溢出即钉死。**如果某个计数器即将超过最大值，对象会被刻意永生化（并记入日志），而不是回绕——Swift 用的也是同一条规则。"
 
 #: src/core-concepts/memory.md:100
 msgid ""
 "**Weak boxes null first.** When a cell with weak watchers dies, every `Weak` "
 "box to it is nulled _before_ any user code runs — a cleanup that calls "
 "`upgrade()` sees `nil`, deterministically."
-msgstr ""
+msgstr "**弱盒先置空。**当一个有弱观察者的单元死亡时，指向它的每个 `Weak` 盒会在_任何_用户代码运行之前被置空——调用 `upgrade()` 的清理函数确定性地看到 `nil`。"
 
 #: src/core-concepts/memory.md:104 src/reference/rc-dispose-identity.md:49
 msgid "Weak references"
-msgstr ""
+msgstr "弱引用"
 
 #: src/core-concepts/memory.md:106
 msgid ""
@@ -7406,7 +7611,7 @@ msgid ""
 "alive**; `w.upgrade()` answers `?T` — the retained referent, or `nil` once "
 "it died. Construction is a call of the type name, admission is checked "
 "(reference types only — `Weak<i32>` diagnoses), and `weak(nil)` traps."
-msgstr ""
+msgstr "`Weak(v)` 在 `v` 的单元上铸造一个 `Weak<T>`，它**永远不让任何东西保活**；`w.upgrade()` 回答 `?T`——被保留的引用对象，或它死掉之后的 `nil`。构造就是调用类型名，准入受检查（仅限引用类型——`Weak<i32>` 会被诊断），`weak(nil)` 触发陷阱。"
 
 #: src/core-concepts/memory.md:112
 msgid ""
@@ -7434,6 +7639,29 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"class Model {\n"
+"    name: str;\n"
+"}\n"
+"\n"
+"class View {\n"
+"    model: ?Model;\n"
+"    observer: ?Weak<Model>;      // a back-pointer that closes no cycle\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"rc\");\n"
+"    let mut m = Model { name: \"doc\" };\n"
+"    let v = View { model: nil, observer: Weak(m) };   // observe without "
+"owning\n"
+"    log.info(f\"holding {m.name}; the view holds only a weak edge\");\n"
+"    m = Model { name: \"next\" };   // the old cell's last strong reference "
+"dies here\n"
+"    log.info(f\"upgrade() answers nil: {v.observer.upgrade() == nil}\");\n"
+"}\n"
+"```"
 
 #: src/core-concepts/memory.md:139
 msgid ""
@@ -7441,32 +7669,32 @@ msgid ""
 "parent) and **caches** (a table that should not extend lifetimes) — are "
 "exactly what `Weak` is for. A path through a `Weak` does not close a strong "
 "cycle."
-msgstr ""
+msgstr "造成意外循环引用的两种形状——**回指指针**（child → parent）与**缓存**（不该延长生命周期的表）——恰好就是 `Weak` 的用武之地。经过 `Weak` 的路径不会闭合强循环引用。"
 
 #: src/core-concepts/memory.md:144
 msgid "The cycle policy"
-msgstr ""
+msgstr "循环引用策略"
 
 #: src/core-concepts/memory.md:146
 msgid ""
 "**A strong cycle is a leak — deterministically.** Its members live until the "
 "VM is dropped; no collector ever runs, no pass interrupts execution, and "
 "destructor ordering never surprises you. Guidance is lint-level, not runtime:"
-msgstr ""
+msgstr "**强循环引用就是泄漏——确定性的泄漏。**它的成员活到 VM 被 drop 为止；收集器从不运行，没有任何阶段会打断执行，析构顺序也从不让你意外。指导是 lint 级的，不是运行时的："
 
 #: src/core-concepts/memory.md:151
 msgid ""
 "resource-holding types (things with `on_drop` cleanups or host handles) must "
 "not participate in strong cycles;"
-msgstr ""
+msgstr "持有资源的类型（带 `on_drop` 清理或宿主句柄的东西）不得参与强循环引用；"
 
 #: src/core-concepts/memory.md:153
 msgid "parent/child and observer shapes take `Weak` back-pointers;"
-msgstr ""
+msgstr "父/子与观察者形状采用 `Weak` 回指指针；"
 
 #: src/core-concepts/memory.md:154
 msgid "pure-data cycles are harmless — they cost only memory."
-msgstr ""
+msgstr "纯数据的循环引用无害——它们只花费内存。"
 
 #: src/core-concepts/memory.md:156
 msgid ""
@@ -7475,68 +7703,68 @@ msgid ""
 "teardown the VM emits a **leak report** — surviving objects grouped by type "
 "with allocation sites — which is the primary tool for hunting accidental "
 "cycles. Behavior is fully deterministic, so a leak reproduces exactly."
-msgstr ""
+msgstr "这条规则并非让你独自面对：调试构建会断言引用计数纪律（保留/释放配对、无下溢、无双重释放），而 VM 在拆除时会输出一份**泄漏报告**——按类型分组、带分配位置的存活对象清单——它是猎捕意外循环引用的首要工具。行为完全确定，因此泄漏可以精确复现。"
 
 #: src/core-concepts/memory.md:163
 msgid "The self-managed heap"
-msgstr ""
+msgstr "自管堆"
 
 #: src/core-concepts/memory.md:165
 msgid ""
 "Host code may use `std` freely, but every byte backing a rut value is "
 "allocated through the VM's own heap manager. The discipline is the point, "
 "not the allocator:"
-msgstr ""
+msgstr "宿主代码可以随意使用 `std`，但支撑 rut 值的每一个字节都经由 VM 自己的堆管理器分配。要点在纪律，而不在分配器："
 
 #: src/core-concepts/memory.md:169
 msgid ""
 "**Cells** come from fixed-size arena chunks with freelists; a dead slot is "
 "reused by the next mint."
-msgstr ""
+msgstr "**单元**来自带空闲列表的定长 arena 块；死槽位会被下一次铸造复用。"
 
 #: src/core-concepts/memory.md:171
 msgid ""
 "**Variable-size payloads** (string octets, array element runs) live in "
 "size-classed blocks that never move; in-place geometric growth keeps append "
 "loops linear, and freelists recycle the common sizes."
-msgstr ""
+msgstr "**可变尺寸载荷**（字符串字节、数组元素段）住在按尺寸分级的块里，永不移动；就地几何增长让追加循环保持线性，空闲列表回收常见尺寸。"
 
 #: src/core-concepts/memory.md:174
 msgid ""
 "**Immortal singletons** — interned string literals, enum variants — live in "
 "a slab freed only at VM drop, carrying the \"no refcount\" sentinel."
-msgstr ""
+msgstr "**不朽单例**——驻留的字符串字面量、枚举成员——住在只在 VM drop 时释放的 slab 里，携带\"无引用计数\"哨兵。"
 
 #: src/core-concepts/memory.md:177
 msgid ""
 "**Nothing compacts.** The heap never moves cells, which is precisely what "
 "lets the boundary hand Rust zero-copy views into buffers (see [the host "
 "boundary](host-boundary.md))."
-msgstr ""
+msgstr "**永不压缩。**堆从不移动单元，这正是边界能把指向缓冲区的零拷贝视图交到 Rust 手里的原因（参见[宿主边界](host-boundary.md)）。"
 
 #: src/core-concepts/memory.md:181
 msgid "Why self-manage instead of using the host's allocator?"
-msgstr ""
+msgstr "为什么自管，而不用宿主的分配器？"
 
 #: src/core-concepts/memory.md:183
 msgid ""
 "**Budgets.** An embedder can say \"this script gets N bytes\" and get a "
 "clean, resumable out-of-memory trap instead of an OS abort. "
 "`vm.heap_usage()` is exact because every allocation is accounted."
-msgstr ""
+msgstr "**预算。**嵌入方可以说\"这个脚本只有 N 字节\"，然后得到一个干净、可恢复的内存耗尽陷阱，而不是操作系统级的中止。`vm.heap_usage()` 是精确的，因为每次分配都被记账。"
 
 #: src/core-concepts/memory.md:186
 msgid ""
 "**Teardown.** `Vm::drop` frees the whole heap in slab units after the leak "
 "report; nothing per-object leaks past the VM — important for wasm pages and "
 "plugin hosts that spawn and kill scripts."
-msgstr ""
+msgstr "**拆除。**`Vm::drop` 在泄漏报告之后按 slab 单位释放整个堆；没有任何按对象的东西泄漏出 VM 之外——这对会反复生成、杀掉脚本的 wasm 页面和插件宿主很重要。"
 
 #: src/core-concepts/memory.md:189
 msgid ""
 "**Leak reporting** walks the VM's own headers, which requires the VM's own "
 "headers everywhere."
-msgstr ""
+msgstr "**泄漏报告**遍历的是 VM 自己的头部，这要求处处都是 VM 自己的头部。"
 
 #: src/core-concepts/memory.md:192
 msgid ""
@@ -7545,20 +7773,20 @@ msgid ""
 "drop references and retry. See the reference on [resource "
 "limits](../reference/resource-limits.md) for the full knob set, and [the "
 "bytecode VM](the-vm.md) for how budgets interleave with execution."
-msgstr ""
+msgstr "预算检查在任何写入_之前_运行——失败的分配让堆保持逐字节相同——而且陷阱可恢复：调高限额继续，或者丢掉引用再试。完整的旋钮清单见关于[资源限制](../reference/resource-limits.md)的参考章节；预算如何与执行交织，见[字节码 VM](the-vm.md)。"
 
 #: src/core-concepts/memory.md:201
 msgid ""
 "**Deterministic resource release** — the property the whole design is "
 "organized around. If your script opened something, the closing statement is "
 "knowable."
-msgstr ""
+msgstr "**确定性的资源释放**——整个设计围绕它组织。如果你的脚本打开了什么，关闭它的语句是可知的。"
 
 #: src/core-concepts/memory.md:204
 msgid ""
 "**No pauses.** There is no collection pass; destruction happens inline at "
 "release-to-zero, so nothing ever interrupts a frame."
-msgstr ""
+msgstr "**没有停顿。**没有收集阶段；析构在计数释放到零时就地发生，所以没有任何东西会打断一帧。"
 
 #: src/core-concepts/memory.md:206
 msgid ""
@@ -7566,7 +7794,7 @@ msgid ""
 "explicitly (see [everything is a value](everything-is-a-value.md)), "
 "lifetimes are refcounts, and the one thing refcounts cannot do — cycles — is "
 "a documented rule with a first-class tool."
-msgstr ""
+msgstr "**一个小而诚实的心智模型。**共享靠引用，副本靠显式构建（参见[一切皆值](everything-is-a-value.md)），生命周期就是引用计数，而引用计数唯一做不到的事——循环引用——是一条成文规则配一件一等工具。"
 
 #: src/core-concepts/host-boundary.md:3
 msgid ""
@@ -7577,41 +7805,41 @@ msgid ""
 "argument re-parsing, no `as number`, no \"trust-me\" coercion — a value "
 "crossing either direction is checked against a reified runtime type, and a "
 "mismatch is a loud error naming both sides."
-msgstr ""
+msgstr "rut 生而为嵌入。宿主——一个 Rust 程序——拥有一台 VM，在 rut 源码里一次性声明自己的 API，用带类型的 Rust 闭包绑定实现，然后驱动一切。整个边界的设计规则：**做检查的是类型系统，而不是你的桥接代码。**没有实参重新解析，没有 `as number`，没有\"信我\"式强转——双向跨越的值都对照具体化运行时类型检查，不匹配就是一个点名双方的响亮错误。"
 
 #: src/core-concepts/host-boundary.md:12
 msgid "The embedding model"
-msgstr ""
+msgstr "嵌入模型"
 
 #: src/core-concepts/host-boundary.md:17
 msgid "\"app:gfx\""
-msgstr ""
+msgstr "\"app:gfx\""
 
 #: src/core-concepts/host-boundary.md:17
 msgid "\"gfx.d.rut\""
-msgstr ""
+msgstr "\"gfx.d.rut\""
 
 #: src/core-concepts/host-boundary.md:21
 msgid "\"app:gfx::newCanvas\""
-msgstr ""
+msgstr "\"app:gfx::newCanvas\""
 
 #: src/core-concepts/host-boundary.md:24
 msgid ""
 "// the join: every declared row must have a binding, and vice versa —\n"
 "// verified BEFORE any script runs\n"
-msgstr ""
+msgstr "// 接合：每一条声明的行都必须有绑定，反之亦然——\n// 在任何脚本运行之前校验\n"
 
 #: src/core-concepts/host-boundary.md:30
 msgid "// an entry point\n"
-msgstr ""
+msgstr "// 一个入口点\n"
 
 #: src/core-concepts/host-boundary.md:31
 msgid "// drive async work to idle\n"
-msgstr ""
+msgstr "// 把异步工作驱动到空闲\n"
 
 #: src/core-concepts/host-boundary.md:34
 msgid "The declaration file (a _host package_) spells the surface in rut:"
-msgstr ""
+msgstr "声明文件（一个_宿主包_）用 rut 写下接口："
 
 #: src/core-concepts/host-boundary.md:41
 msgid ""
@@ -7619,28 +7847,28 @@ msgid ""
 "mistake, never a script diagnostic: a declared row with no binding, a "
 "binding with no declaration, and signature drift. \"Mount what you bind\": "
 "an embedder that mounts a package declares its rows and must bind them."
-msgstr ""
+msgstr "加载期接合会把三种接线错误当作 panic 拒绝——那是嵌入方的失误，绝不是脚本诊断：声明了行却没有绑定、有绑定却没有声明，以及签名漂移。\"挂载什么就绑定什么\"：挂载一个包的嵌入方声明了它的行，就必须绑定它们。"
 
 #: src/core-concepts/host-boundary.md:47 src/reference/value-boundary.md:10
 msgid "The crossing set"
-msgstr ""
+msgstr "可跨越集合"
 
 #: src/core-concepts/host-boundary.md:49
 msgid ""
 "What may cross is a **compile-time property of the surface**, not a runtime "
 "negotiation:"
-msgstr ""
+msgstr "什么可以跨越，是**接口的编译期属性**，不是运行时协商："
 
 #: src/core-concepts/host-boundary.md:52
 msgid "**Parameters**: the primitives, `str`, `bytes`, and `opaque`."
-msgstr ""
+msgstr "**参数**：原始类型、`str`、`bytes` 与 `opaque`。"
 
 #: src/core-concepts/host-boundary.md:53
 msgid ""
 "**Returns**: the same set _plus_ the answer optionals `?str`, `?bytes`, "
 "`?opaque` — `Option<String>`, `Option<Vec<u8>>`, and the opaque handles mint "
 "the nullable box, with `None` as the flat `nil`."
-msgstr ""
+msgstr "**返回**：同一个集合_加上_应答可空类型 `?str`、`?bytes`、`?opaque`——`Option<String>`、`Option<Vec<u8>>` 与 opaque 句柄会铸造可空盒，`None` 就是扁平的 `nil`。"
 
 #: src/core-concepts/host-boundary.md:56
 msgid ""
@@ -7648,7 +7876,7 @@ msgid ""
 "err)` — a first-class entry answer. The two channels stay distinct by law: a "
 "_returned_ `err` is data the host reads and acts on; a _panic_ is drift and "
 "arrives on the trap channel, never filling an err field."
-msgstr ""
+msgstr "**对偶**逐字段跨越，这让错误约定——`(value, err)`——成为一等公民的入口应答。两条通道依律保持区分：_返回的_ `err` 是宿主读取并处置的数据；_panic_ 是漂移，走陷阱通道抵达，绝不会填进 err 字段。"
 
 #: src/core-concepts/host-boundary.md:62
 msgid ""
@@ -7658,37 +7886,37 @@ msgid ""
 "`any`: a polymorphic crossing seals its value in an erasure box (`opaque(v)` "
 "at the call, `opaque.downcast<T>` after), checked, never silent — see "
 "[reified types](reified-types.md)."
-msgstr ""
+msgstr "其余一切——用户的 struct 与 class、`Vec`、trait 类型的值、闭包——都留在 VM 内部。违反该集合的声明在声明处就是编译错误，而不是凌晨两点的失败调用。没有 `any`：多态跨越把它的值封进擦除盒（调用处 `opaque(v)`，之后 `opaque.downcast<T>`），受检、绝不无声——参见[具体化类型](reified-types.md)。"
 
 #: src/core-concepts/host-boundary.md:69
 msgid "The currency is typed Rust"
-msgstr ""
+msgstr "通货是带类型的 Rust"
 
 #: src/core-concepts/host-boundary.md:71
 msgid ""
 "On the Rust side the boundary speaks ordinary Rust types. Each type declares "
 "the rut type it binds against and converts checked:"
-msgstr ""
+msgstr "在 Rust 一侧，边界说的是普通的 Rust 类型。每种类型声明它绑定到的 rut 类型，并受检转换："
 
 #: src/core-concepts/host-boundary.md:74
 msgid ""
 "**Borrow, don't copy.** `&str` and `&[u8]` parameters read the VM's buffers "
 "zero-copy. The borrow is call-scoped — the type system makes smuggling it "
 "past the return a compile error."
-msgstr ""
+msgstr "**借用，不复制。**`&str` 与 `&[u8]` 参数零拷贝地读取 VM 的缓冲区。借用以调用为作用域——类型系统会让把它偷运过返回点成为编译错误。"
 
 #: src/core-concepts/host-boundary.md:77
 msgid ""
 "**Copy on purpose.** Owned `String`/`Vec<u8>` parameters are the explicit "
 "\"I keep this data\" choice."
-msgstr ""
+msgstr "**有意地复制。**拿到所有权的 `String`/`Vec<u8>` 参数是\"我要留下这份数据\"的显式选择。"
 
 #: src/core-concepts/host-boundary.md:79
 msgid ""
 "**`Opaque<T>`** is the typed view of a host handle: an 8-byte store handle "
 "the host holds and passes back; the payload stays host-owned (`Box<dyn Any>` "
 "plus an optional finalize hook)."
-msgstr ""
+msgstr "**`Opaque<T>`** 是宿主句柄的带类型视图：一个 8 字节的存储句柄，宿主持有并回传；载荷保持宿主所有（`Box<dyn Any>` 加一个可选的 finalize 钩子）。"
 
 #: src/core-concepts/host-boundary.md:83
 msgid ""
@@ -7697,18 +7925,18 @@ msgid ""
 "call traps with `borrowed by host` instead of racing. Guards clear on "
 "return. This is sound forever because the heap never moves objects (see "
 "[memory](memory.md))."
-msgstr ""
+msgstr "**借用守卫**让零拷贝视图在脚本运行期间安全：被借用的对象会被标记，脚本一侧经由重入调用做出的变更将以 `borrowed by host` 触发陷阱，而不是形成数据竞争。守卫在返回时清除。它永远健全，因为堆从不移动对象（参见[内存](memory.md)）。"
 
 #: src/core-concepts/host-boundary.md:89
 msgid "Wrapping host state: the class-in-rut pattern"
-msgstr ""
+msgstr "包装宿主状态：rut 类模式"
 
 #: src/core-concepts/host-boundary.md:91
 msgid ""
 "There is no \"host class\". Native state crosses as an `opaque` handle and a "
 "rut class wraps it — ordinary source the compiler can see and optimize "
 "around:"
-msgstr ""
+msgstr "没有\"宿主类\"。原生状态以 `opaque` 句柄跨越，rut 类包裹它——编译器看得见、也能围绕它优化的普通源码："
 
 #: src/core-concepts/host-boundary.md:105
 msgid ""
@@ -7719,11 +7947,11 @@ msgid ""
 "the wrapper's last reference goes, the handle's refcount hits zero and the "
 "payload's Rust `Drop` runs _at that point_ — sockets and textures close on "
 "script schedule, not at some future collection."
-msgstr ""
+msgstr "每个方法恰好就是一次宿主调用——魔法宿主类同样要付的跨越——但包装器还能承载 impl 块、校验，以及原生一侧从不需要知道的便利。边界保持这样小的回报：宿主资源确定性地死亡。包装器的最后一个引用消失时，句柄的引用计数归零，载荷的 Rust `Drop` _在那一刻_运行——套接字与纹理按脚本的日程关闭，而不是在将来某次收集中。"
 
 #: src/core-concepts/host-boundary.md:114
 msgid "Host functions are rows, dispatched by slot"
-msgstr ""
+msgstr "宿主函数是行，按槽位分派"
 
 #: src/core-concepts/host-boundary.md:116
 msgid ""
@@ -7731,7 +7959,7 @@ msgid ""
 "slot dispatch, so names are binding-time labels only — renaming a Rust-side "
 "binding target fails the join instead of silently rebinding. The surface "
 "grammar is small:"
-msgstr ""
+msgstr "每条声明的行在编译期得到一个稳定的槽位 id；调用编译为槽位分派，所以名字只是绑定期的标签——重命名 Rust 侧的绑定目标会让接合失败，而不是悄悄重绑。表面语法很小："
 
 #: src/core-concepts/host-boundary.md:121
 msgid ""
@@ -7741,6 +7969,11 @@ msgid ""
 "host struct Name { fields };      // flat record of crossing fields\n"
 "```"
 msgstr ""
+"```rut\n"
+"host fn name(params) -> T;        // concrete signature; no generics —\n"
+"                                  // a generic has no shape to check\n"
+"host struct Name { fields };      // flat record of crossing fields\n"
+"```"
 
 #: src/core-concepts/host-boundary.md:127
 msgid ""
@@ -7750,17 +7983,17 @@ msgid ""
 "(`pub host async fn`) are declared like any row and expand into a small row "
 "family the driving loop uses — the embedder binds them with one closure per "
 "future; see [the async model](async-model.md)."
-msgstr ""
+msgstr "`builtin` 声明（引擎自己的 fn、类和 trait——`str` 方法、`Weak`、`Future`）是引擎表面：嵌入方写不出它们，用户用普通 impl 块实现它们的 trait。异步行（`pub host async fn`）与任何行一样声明，并展开为驱动循环所用的一小组行族——嵌入方为每个 future 绑定一个闭包；参见[异步模型](async-model.md)。"
 
 #: src/core-concepts/host-boundary.md:135
 msgid "Re-entrancy, traps, budgets"
-msgstr ""
+msgstr "重入、陷阱、预算"
 
 #: src/core-concepts/host-boundary.md:137
 msgid ""
 "A native fn receives a context that may call **back into rut** (`vm.call`) — "
 "nested calls run under the same budget on a fresh frame stack."
-msgstr ""
+msgstr "原生 fn 收到的上下文可以**回调进 rut**（`vm.call`）——嵌套调用在同一预算下、崭新的一套帧栈上运行。"
 
 #: src/core-concepts/host-boundary.md:140
 msgid ""
@@ -7768,17 +8001,17 @@ msgid ""
 "or to hand back a future instead of blocking. A trap raised inside a native "
 "fn propagates to the host as an `Err(Trap)` with the native frame visible in "
 "the backtrace."
-msgstr ""
+msgstr "原生代码运行在**操作预算之外**：宿主被信任为快，或者会交还一个 future 而不是阻塞。原生 fn 内部抛出的陷阱以 `Err(Trap)` 传播到宿主，原生帧在回溯中可见。"
 
 #: src/core-concepts/host-boundary.md:144
 msgid ""
 "Traps are catchable **only at the boundary** — script never catches one. "
 "That is what keeps panics loud and state uncorrupted."
-msgstr ""
+msgstr "陷阱**只能在边界**被捕获——脚本永远捕获不到。正是这一点让 panic 保持响亮、状态保持完好。"
 
 #: src/core-concepts/host-boundary.md:147
 msgid "What was deliberately left out"
-msgstr ""
+msgstr "刻意留下的空白"
 
 #: src/core-concepts/host-boundary.md:149
 msgid ""
@@ -7788,7 +8021,7 @@ msgid ""
 "the checked boundary buy the property that makes embedding pleasant — every "
 "mismatch is a named, typed, load-time diagnostic instead of a runtime "
 "mystery."
-msgstr ""
+msgstr "没有 C ABI。没有 `register_struct`，没有 `size_of`，没有对记录布局的指针镜像：记录是 VM 内部的槽数组，宿主只能透过受检跨越看见它们。你在受检边界上让出的那几个字节，换来的是让嵌入舒心的性质——每个不匹配都是一个指名道姓、带类型、加载期的诊断，而不是运行时的谜团。"
 
 #: src/core-concepts/host-boundary.md:156
 msgid ""
@@ -7797,7 +8030,7 @@ msgid ""
 "borrows](../reference/value-boundary.md), [host fns and declaration "
 "files](../reference/host-fns.md), and the withdrawn C-struct experiment "
 "recorded at [repr(C) interop](../reference/repr-c.md)."
-msgstr ""
+msgstr "全部细节住在参考手册里：[嵌入与原生模块](../reference/embedding.md)、[值边界与借用](../reference/value-boundary.md)、[宿主 fn 与声明文件](../reference/host-fns.md)，以及记录在 [repr(C) 互操作](../reference/repr-c.md)的已撤回 C 结构体实验。"
 
 #: src/core-concepts/the-vm.md:3
 msgid ""
@@ -7807,43 +8040,43 @@ msgid ""
 "is exactly what was compiled. This chapter is the tour of that artifact — "
 "the instruction set, the module binary, the load-time verification, and the "
 "interpreter's execution and budgeting model."
-msgstr ""
+msgstr "rut 程序最终成为的一切，就是由寄存器 VM 执行的**类型化字节码**。没有 JIT，没有解释器分层，没有运行时投机：编译器提前完成一切优化，运行的就是编译过的东西。本章导览这个产物——指令集、模块二进制、加载期校验，以及解释器的执行与预算模型。"
 
 #: src/core-concepts/the-vm.md:10
 msgid "One struct, one thread, one heap"
-msgstr ""
+msgstr "一个结构体，一个线程，一套堆"
 
 #: src/core-concepts/the-vm.md:14
 msgid "// runtime type descriptors + vtables\n"
-msgstr ""
+msgstr "// 运行时类型描述符 + vtable\n"
 
 #: src/core-concepts/the-vm.md:15
 msgid "// the refcounted, self-managed heap\n"
-msgstr ""
+msgstr "// 引用计数的自管堆\n"
 
 #: src/core-concepts/the-vm.md:16
 msgid "// linked binaries\n"
-msgstr ""
+msgstr "// 已链接的二进制\n"
 
 #: src/core-concepts/the-vm.md:17
 msgid "// the call stack\n"
-msgstr ""
+msgstr "// 调用栈\n"
 
 #: src/core-concepts/the-vm.md:18
 msgid "// woken async frames\n"
-msgstr ""
+msgstr "// 被唤醒的异步帧\n"
 
 #: src/core-concepts/the-vm.md:19
 msgid "// the virtual clock's wheel\n"
-msgstr ""
+msgstr "// 虚拟时钟的轮盘\n"
 
 #: src/core-concepts/the-vm.md:20
 msgid "// fuel, heap budget, interrupt interval\n"
-msgstr ""
+msgstr "// 燃料、堆预算、中断间隔\n"
 
 #: src/core-concepts/the-vm.md:21
 msgid "// registered native bodies, clock, loader\n"
-msgstr ""
+msgstr "// 已注册的原生函数体、时钟、加载器\n"
 
 #: src/core-concepts/the-vm.md:25
 msgid ""
@@ -7853,7 +8086,7 @@ msgid ""
 "`next_deadline` for the timer wheel, `drive` for a single resumption. See "
 "[the host boundary](host-boundary.md) for the embed loop and [the async "
 "model](async-model.md) for the queues' role in scheduling."
-msgstr ""
+msgstr "VM 在构造上就是单线程的（`!Send`）；worker 是通过消息通信的独立 VM 实例。宿主持有一台并用方法驱动它：用 `call` 调入口点，用 `run_ready` 排空被唤醒的帧，用 `next_deadline` 查定时器轮盘，用 `drive` 做单次恢复。嵌入循环见[宿主边界](host-boundary.md)；队列在调度中的角色见[异步模型](async-model.md)。"
 
 #: src/core-concepts/the-vm.md:35
 msgid ""
@@ -7863,56 +8096,56 @@ msgid ""
 "tag-free (see [reified types](reified-types.md)) and what makes refcounting "
 "precise: the compiler emits plain moves for scalars and retain/release moves "
 "for references, with no runtime tag checks."
-msgstr ""
+msgstr "指令集基于寄存器：操作数是指向每帧槽位文件的 `u16` 索引，而**每个寄存器都有记录在函数签名中的静态类型**。正是这一个决定让热路径保持无标签（参见[具体化类型](reified-types.md)），也让引用计数精确：编译器为标量生成普通移动，为引用生成保留/释放移动，没有任何运行时标签检查。"
 
 #: src/core-concepts/the-vm.md:42
 msgid ""
 "Ops are small and fixed-size, with variadic operand lists (call arguments, "
 "branch tables) living in per-function pools. A representative sample:"
-msgstr ""
+msgstr "操作小而定长，变长的操作数列表（调用实参、分支表）放在每函数的池子里。一份代表性样本："
 
 #: src/core-concepts/the-vm.md:60
 msgid "The type system also decides what is _not_ an op:"
-msgstr ""
+msgstr "类型系统同样决定什么_不是_操作："
 
 #: src/core-concepts/the-vm.md:62
 msgid ""
 "**Nothing static.** What the type table can answer at compile time becomes a "
 "constant — no \"get type id\" instruction, no length load for a fixed-size "
 "array."
-msgstr ""
+msgstr "**没有静态之事。**类型表在编译期能回答的都会变成常量——没有\"取类型 id\"指令，定长数组也没有长度加载。"
 
 #: src/core-concepts/the-vm.md:65
 msgid ""
 "**Nothing polymorphic and nothing named.** A trait-typed receiver has "
 "exactly one op (the vtable call); string concatenation is a native call, not "
 "an opcode."
-msgstr ""
+msgstr "**没有多态之事，也没有按名之事。**trait 类型的接收者恰好对应一个操作（vtable 调用）；字符串拼接是一次原生调用，不是操作码。"
 
 #: src/core-concepts/the-vm.md:68
 msgid ""
 "**Concrete memory, control flow, and two readbacks.** Ops touch memory only "
 "through compile-time-known layouts, plus the two reads reification needs: "
 "\"what is it\" (`tidof`) and the guarded payload extract behind a downcast."
-msgstr ""
+msgstr "**具体的内存、控制流，外加两个读回。**操作只透过编译期已知的布局触碰内存，再加上具体化需要的两次读取：\"它是什么\"（`tidof`）与向下转型背后带守卫的载荷提取。"
 
 #: src/core-concepts/the-vm.md:73
 msgid "The module binary"
-msgstr ""
+msgstr "模块二进制"
 
 #: src/core-concepts/the-vm.md:75
 msgid ""
 "Compilation produces a versioned, self-contained binary per module: types, "
 "constants, functions (with their typed register signatures), imports, and a "
 "symbol table for backtraces. Its properties matter more than its layout:"
-msgstr ""
+msgstr "编译为每个模块产出一个带版本、自包含的二进制：类型、常量、函数（带各自的类型化寄存器签名）、导入，以及用于回溯的符号表。它的性质比它的布局更重要："
 
 #: src/core-concepts/the-vm.md:80
 msgid ""
 "**Deterministic.** The same sources plus the same dependency versions "
 "produce byte-identical binaries, so artifacts are cacheable by content hash "
 "and shippable instead of sources."
-msgstr ""
+msgstr "**确定性。**同样的源码加同样的依赖版本产出逐字节相同的二进制，因此产物可以按内容哈希缓存，可以交付二进制而非源码。"
 
 #: src/core-concepts/the-vm.md:83
 msgid ""
@@ -7920,7 +8153,7 @@ msgid ""
 "traces by default; a release build can strip them, and a sidecar map file "
 "(keyed by content hash) can restore symbolication later. See the reference "
 "on [diagnostics](../reference/diagnostics.md)."
-msgstr ""
+msgstr "**自描述但可剥离。**名字与源码区间默认为追踪保留；release 构建可以剥离它们，而一个旁车 map 文件（按内容哈希为键）可以在日后恢复符号化。参见关于[诊断](../reference/diagnostics.md)的参考章节。"
 
 #: src/core-concepts/the-vm.md:88
 msgid ""
@@ -7929,17 +8162,17 @@ msgid ""
 "are rejected. Cross-module trait calls specialize per concrete argument here "
 "too — the static-dispatch rule of [traits and "
 "dispatch](traits-and-dispatch.md) holds across module boundaries."
-msgstr ""
+msgstr "**链接期身份。**类型 id 静止时是模块局部的，链接时重定基到 VM 的全局表——impl 注册表在那里合并，重复被拒绝。跨模块 trait 调用也在这里按具体实参特化——[trait 与分派](traits-and-dispatch.md)的静态分派规则跨越模块边界依然成立。"
 
 #: src/core-concepts/the-vm.md:94
 msgid ""
 "**Little-endian everywhere**, by law — every serialized word, so artifacts "
 "are platform-independent by construction rather than by luck."
-msgstr ""
+msgstr "**处处小端**，依律而行——每个序列化的字都是——产物因此从构造上就平台无关，而不是靠运气。"
 
 #: src/core-concepts/the-vm.md:98
 msgid "Verification at load"
-msgstr ""
+msgstr "加载时校验"
 
 #: src/core-concepts/the-vm.md:100
 msgid ""
@@ -7950,7 +8183,7 @@ msgid ""
 "function — **corrupted binaries never execute**. This is also where crossing "
 "rules are enforced for host-facing signatures, so a non-crossing shape is "
 "rejected before any script runs."
-msgstr ""
+msgstr "加载会在任何东西执行之前重新检查每个函数：寄存器操作数对照签名、操作数池与跳转目标在范围内、类型操作数在类型表中存在、原生槽位已声明、异步状态表封闭。校验失败是一个指名模块与函数的加载错误——**损坏的二进制永不执行**。这里也是宿主向签名的跨越规则被强制之处，因此不可跨越的形状在任何脚本运行之前就被拒绝。"
 
 #: src/core-concepts/the-vm.md:108
 msgid ""
@@ -7959,11 +8192,11 @@ msgid ""
 "in the binary. A user function call in a module initializer is a compile "
 "error — there is no load-time execution at all. Loading a module runs "
 "nothing."
-msgstr ""
+msgstr "模块级初始化在编译期折叠：字面量、枚举成员、常量表达式与驻留字符串字面量都成为二进制中的常量。模块初始化器里的用户函数调用是编译错误——根本不存在加载期执行。加载模块不运行任何东西。"
 
 #: src/core-concepts/the-vm.md:114
 msgid "The interpreter loop and traps"
-msgstr ""
+msgstr "解释器循环与陷阱"
 
 #: src/core-concepts/the-vm.md:116
 msgid ""
@@ -7972,7 +8205,7 @@ msgid ""
 "resume state. Calls push frames; returns pop them; direct calls are an index "
 "plus jump, and trait calls are two loads plus an indirect jump through the "
 "vtable."
-msgstr ""
+msgstr "执行是一个跨帧的解码-分派循环。一个帧就是函数的代码、一个程序计数器、它的类型化寄存器文件，以及（对异步帧而言）恢复状态。调用压帧；返回弹帧；直接调用是一次索引加跳转，trait 调用是两次加载加一次透过 vtable 的间接跳转。"
 
 #: src/core-concepts/the-vm.md:122
 msgid ""
@@ -7983,29 +8216,29 @@ msgid ""
 "prints it), runs destructors on the way out, and unwinds as an `Err(Trap)` "
 "to the host call. Rut code cannot catch one; the boundary is the catch point "
 "(see [the host boundary](host-boundary.md))."
-msgstr ""
+msgstr "失败是**陷阱**，不是异常，也不是 Rust panic：普通运算符上的整数溢出、对 `nil` 解引用、越界索引、失败的 `assert` 或 `panic(..)`，或者耗尽的预算。陷阱捕获原始帧链（惰性渲染——只有当有人打印它时才做符号化），在退出路上运行析构器，并以 `Err(Trap)` 的形式沿栈展开到宿主调用。Rut 代码无法捕获它；边界就是捕获点（参见[宿主边界](host-boundary.md)）。"
 
 #: src/core-concepts/the-vm.md:131 src/reference/vm-core.md:104
 msgid "Budgets and interrupts"
-msgstr ""
+msgstr "预算与中断"
 
 #: src/core-concepts/the-vm.md:133
 msgid ""
 "Two knobs make it safe to run third-party code, both set at construction and "
 "mutable while running:"
-msgstr ""
+msgstr "两个旋钮让运行第三方代码变得安全，两者都在构造时设置、运行期间可变："
 
 #: src/core-concepts/the-vm.md:137
 msgid "// one unit per op, counts down\n"
-msgstr ""
+msgstr "// 每操作一个单位，倒数\n"
 
 #: src/core-concepts/the-vm.md:138
 msgid "// checked at every allocation\n"
-msgstr ""
+msgstr "// 每次分配都检查\n"
 
 #: src/core-concepts/the-vm.md:139
 msgid "// default: check every 1024 ops\n"
-msgstr ""
+msgstr "// 默认：每 1024 个操作检查一次\n"
 
 #: src/core-concepts/the-vm.md:142
 msgid ""
@@ -8014,24 +8247,24 @@ msgid ""
 "limit, or flip the interrupt flag and resume. A UI host yields mid-frame; a "
 "wasm page grants finite fuel; a test sets finite fuel plus a virtual clock "
 "and gets a deterministic hang proof."
-msgstr ""
+msgstr "耗尽是**可恢复的**：陷阱把帧停在原地——帧_就是_循环状态——宿主因此可以加燃料、调高堆限额或翻转中断标志然后恢复。UI 宿主在帧中途让步；wasm 页面发放有限燃料；测试设有限燃料加虚拟时钟，得到一份确定性的挂起证明。"
 
 #: src/core-concepts/the-vm.md:147
 msgid ""
 "The heap check runs _before_ any write, so an out-of-memory failure leaves "
 "the heap byte-identical (see [memory](memory.md))."
-msgstr ""
+msgstr "堆检查在任何写入_之前_运行，所以内存耗尽的失败让堆保持逐字节相同（参见[内存](memory.md)）。"
 
 #: src/core-concepts/the-vm.md:150
 msgid ""
 "Native functions run outside the fuel budget — a hanging native is a host "
 "bug by contract — and the interrupt hook is the host's lever at native "
 "return points."
-msgstr ""
+msgstr "原生函数运行在燃料预算之外——挂死的原生函数按契约就是宿主的 bug——而中断钩子是宿主在原生返回点上的操纵杆。"
 
 #: src/core-concepts/the-vm.md:154
 msgid "Why no JIT is viable"
-msgstr ""
+msgstr "为什么无 JIT 是可行的"
 
 #: src/core-concepts/the-vm.md:156
 msgid ""
@@ -8045,7 +8278,7 @@ msgid ""
 "run ahead of time. The result is a runtime with no warmup curve, no "
 "deoptimization asymmetries, and per-op costs you can reason about from the "
 "bytecode alone."
-msgstr ""
+msgstr "JS 引擎的速度就是它的 JIT，而 JIT 的存在是为了对多态属性加载做投机。rut 没有多态加载：字段访问按已知索引，调用点指名一个具体类型时调用就静态绑定，泛型被单态化，剩下的动态分派是一次如实且受检的 vtable 跳转。优化器的通货是**类型稳定性**——检查器证明的一切就是优化器得到的全部——而它的各个 pass（常量折叠、内联、单态化、寄存器级清理）全部提前运行。结果是一个没有预热曲线、没有反优化不对称性的运行时，每操作的成本可以从字节码本身推演。"
 
 #: src/core-concepts/the-vm.md:168
 msgid ""
@@ -8054,7 +8287,7 @@ msgid ""
 "verification](../reference/module-binary.md), [VM "
 "core](../reference/vm-core.md), and [resource limits and "
 "fuel](../reference/resource-limits.md)."
-msgstr ""
+msgstr "完整的表与法则住在参考手册里：[类型化字节码](../reference/typed-bytecode.md)、[模块二进制与校验](../reference/module-binary.md)、[VM 核心](../reference/vm-core.md)，以及[资源限制与燃料](../reference/resource-limits.md)。"
 
 #: src/examples/index.md:3
 msgid ""
@@ -8066,129 +8299,129 @@ msgid ""
 "programs the repo's gates compile and run in CI. Each project has its own "
 "page in this chapter; the classics share [The playground "
 "corpus](playground-corpus.md)."
-msgstr ""
+msgstr "仓库附带两类示例材料。`examples/` 目录收着 **六个可运行的 Cargo 项目**（五个控制台程序和一个浏览器页面），外加**一个仅解析的语料示例**。与它们并列，`demo/src/examples/` 收着 **Playground 经典案例**——web Playground 在浏览器里运行的短小自包含程序，也正是仓库的门禁在 CI 里编译并运行的那些程序。每个项目在本章都有自己的一页；经典案例共用[Playground 语料](playground-corpus.md)。"
 
 #: src/examples/index.md:12
 msgid "Project"
-msgstr ""
+msgstr "项目"
 
 #: src/examples/index.md:12
 msgid "Run"
-msgstr ""
+msgstr "运行"
 
 #: src/examples/index.md:12
 msgid "What it demonstrates"
-msgstr ""
+msgstr "演示内容"
 
 #: src/examples/index.md:14
 msgid "[00 — Todolist](00-todolist.md)"
-msgstr ""
+msgstr "[00 — 待办清单](00-todolist.md)"
 
 #: src/examples/index.md:14
 msgid "`cargo run -p todolist`"
-msgstr ""
+msgstr "`cargo run -p todolist`"
 
 #: src/examples/index.md:14
 msgid ""
 "an `entry fn` surface over a rut `class` — the host drives CRUD through "
 "`opaque` handles"
-msgstr ""
+msgstr "架在 rut `class` 之上的 `entry fn` 接口——宿主经由 `opaque` 句柄驱动 CRUD"
 
 #: src/examples/index.md:15
 msgid "[01 — Sort](01-sort.md)"
-msgstr ""
+msgstr "[01 — 排序](01-sort.md)"
 
 #: src/examples/index.md:15
 msgid "`cargo run -p sort`"
-msgstr ""
+msgstr "`cargo run -p sort`"
 
 #: src/examples/index.md:15
 msgid ""
 "five sorting algorithms behind one dispatcher entry; `when` on strings, the "
 "mut-binding law, fuel budgets"
-msgstr ""
+msgstr "一个分派入口背后的五种排序算法；对字符串的 `when`、mut 绑定法则、燃料预算"
 
 #: src/examples/index.md:16
 msgid "[02 — Digest](02-digest.md)"
-msgstr ""
+msgstr "[02 — 摘要](02-digest.md)"
 
 #: src/examples/index.md:16
 msgid "`cargo run -p digests`"
-msgstr ""
+msgstr "`cargo run -p digests`"
 
 #: src/examples/index.md:16
 msgid ""
 "byte-level codecs and hashes (MD5/SHA/base64/CRC/FNV); the host as an "
 "independent test oracle"
-msgstr ""
+msgstr "字节级编解码与哈希（MD5/SHA/base64/CRC/FNV）；宿主充当独立的测试 oracle"
 
 #: src/examples/index.md:17
 msgid "[03 — Plugin](03-plugin.md)"
-msgstr ""
+msgstr "[03 — 插件](03-plugin.md)"
 
 #: src/examples/index.md:17
 msgid "`cargo run -p plugin`"
-msgstr ""
+msgstr "`cargo run -p plugin`"
 
 #: src/examples/index.md:17
 msgid ""
 "a module directory + `.rutbundle` chat-moderator plugin; re-entrant "
 "`vm.call`, both `opaque` directions"
-msgstr ""
+msgstr "模块目录 + `.rutbundle` 聊天室审核插件；重入 `vm.call`，`opaque` 双向"
 
 #: src/examples/index.md:18
 msgid "[04 — Custom async](04-custom-async.md)"
-msgstr ""
+msgstr "[04 — 自定义异步](04-custom-async.md)"
 
 #: src/examples/index.md:18
 msgid "parse-only — no runnable harness"
-msgstr ""
+msgstr "仅解析——没有可运行骨架"
 
 #: src/examples/index.md:18
 msgid ""
 "a hand-written `impl Future<nil> for CustomFuture` plus a user launcher with "
 "per-checkpoint stats and cancellation audits"
-msgstr ""
+msgstr "手写的 `impl Future<nil> for CustomFuture`，外加一个带逐检查点统计与取消审计的用户启动器"
 
 #: src/examples/index.md:19
 msgid "[05 — Todolist web](05-todolist-web.md)"
-msgstr ""
+msgstr "[05 — Web 待办清单](05-todolist-web.md)"
 
 #: src/examples/index.md:19
 msgid "`cargo test -p todolist-web` + `node tests/e2e-browser.mjs`"
-msgstr ""
+msgstr "`cargo test -p todolist-web` + `node tests/e2e-browser.mjs`"
 
 #: src/examples/index.md:19
 msgid ""
 "a full page app whose brain is a two-package rut project — ten DOM/timer "
 "crossings over web_sys on wasm32"
-msgstr ""
+msgstr "一个整页应用，它的大脑是双包 rut 项目——wasm32 上经由 web_sys 的十次 DOM/定时器跨越"
 
 #: src/examples/index.md:20
 msgid "[06 — GitHub viewer CLI](06-github-viewer-cli.md)"
-msgstr ""
+msgstr "[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)"
 
 #: src/examples/index.md:20
 msgid "`cargo run -p rgh -- --repo=… --ref=… list`"
-msgstr ""
+msgstr "`cargo run -p rgh -- --repo=… --ref=… list`"
 
 #: src/examples/index.md:20
 msgid ""
 "`rgh` — an async rut brain over the std `http` lane; headers-then-stream "
 "downloads, fixture-lane tests"
-msgstr ""
+msgstr "`rgh`——架在 std `http` 链路上的异步 rut 大脑；先头部后数据流的下载，夹具链路测试"
 
 #: src/examples/index.md:21
 msgid "[The playground corpus](playground-corpus.md)"
-msgstr ""
+msgstr "[Playground 语料](playground-corpus.md)"
 
 #: src/examples/index.md:21
 msgid "`cd demo && npm run smoke`"
-msgstr ""
+msgstr "`cd demo && npm run smoke`"
 
 #: src/examples/index.md:21
 msgid "the classics: runnable programs, compiled and run by two gates"
-msgstr ""
+msgstr "经典案例：由两道门禁编译并运行的可运行程序"
 
 #: src/examples/index.md:23
 msgid ""
@@ -8197,11 +8430,11 @@ msgid ""
 "then drive it through typed `vm.call` sites — so the pages cross-link often: "
 "[00 — Todolist](00-todolist.md) establishes the pattern and [06 — GitHub "
 "viewer CLI](06-github-viewer-cli.md) stretches it the farthest."
-msgstr ""
+msgstr "所有 Cargo 命令都从仓库根目录运行。可运行的 crate 共享同一套会话模式——编译模块、校验二进制、绑定宿主 fn，然后经由带类型的 `vm.call` 站点驱动它——所以各页频繁互相链接：[00 — 待办清单](00-todolist.md)确立这一模式，[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)把它拉伸到最远。"
 
 #: src/examples/index.md:30
 msgid "The three dependency kinds"
-msgstr ""
+msgstr "三种依赖类型"
 
 #: src/examples/index.md:32
 msgid ""
@@ -8209,7 +8442,7 @@ msgid ""
 "rut.toml](../reference/project-structure.md)), and a manifest relates a "
 "package to other packages through **three tables**, all visible in the "
 "examples:"
-msgstr ""
+msgstr "每个包都带一份 `rut.toml` 清单（参见[项目结构与 rut.toml](../reference/project-structure.md)），清单通过**三张表**把一个包与其他包关联起来——在示例中全部可见："
 
 #: src/examples/index.md:37
 msgid ""
@@ -8217,7 +8450,7 @@ msgid ""
 "`03-plugin`'s `plugin/rut.toml` declares `server = { path = \"../server\" "
 "}`, and [05 — Todolist web](05-todolist-web.md)'s `biz` package declares "
 "`ui` (which itself pulls the collection packages)."
-msgstr ""
+msgstr "**`[deps]`**——普通依赖，传递式挂载。常见情形：`03-plugin` 的 `plugin/rut.toml` 声明 `server = { path = \"../server\" }`，而[05 — Web 待办清单](05-todolist-web.md)的 `biz` 包声明 `ui`（后者自己再拉取集合包）。"
 
 #: src/examples/index.md:42
 msgid ""
@@ -8232,25 +8465,25 @@ msgid ""
 "Digest](02-digest.md) consumes json _light_; [06 — GitHub viewer "
 "CLI](06-github-viewer-cli.md) calls `assemble_peers` and mounts the impl "
 "groups for real because the collections are in its closure."
-msgstr ""
+msgstr "**`[peer-deps]`**——默认必填：_消费方_提供对等包，而对等包永远不会被传递式拉取。把对等包标为 `optional = true` 会把它翻转成一种存在关系：它的集成文件（对等包使之可编译的纯 impl 代码）只在该对等包出现在程序闭包中的任何位置时才挂载。树内的例子是 std `json` 包的 serde 模型 impl——`impl JsonSerialize for Vec<T>` 写在 json 里，但绝不能强迫 json 的每个消费者都挂载集合包，所以那些 impl 作为可选对等包存在，并作为 json 自身测试的 `[dev-deps]`。[02 — 摘要](02-digest.md)轻量地消费 json；[06 — GitHub 查看器 CLI](06-github-viewer-cli.md) 调用 `assemble_peers` 真正挂载 impl 组，因为集合包在它的闭包里。"
 
 #: src/examples/index.md:54
 msgid ""
 "**`[dev-deps]`** — mounted only while building the package itself, never in "
 "a consumer's world. json develops against the real collection packages "
 "through the both-kinds pairing while its consumers mount it without them."
-msgstr ""
+msgstr "**`[dev-deps]`**——只在构建包本身时挂载，绝不进入消费者的世界。json 透过这种双类型配对对着真实的集合包开发，而它的消费者挂载它时并不带这些包。"
 
 #: src/examples/index.md:59
 msgid ""
 "The full rules — the loud missing-required-peer error, the silence of absent "
 "optional peers, dedup-by-origin at the splice, and what bundle format the "
 "packer emits — are on [Dependency kinds](../reference/dependency-kinds.md)."
-msgstr ""
+msgstr "完整的规则——缺必填对等包的响亮错误、可选对等包缺席时的静默、拼接处按来源去重，以及打包器产出什么捆绑包格式——都在[依赖类型](../reference/dependency-kinds.md)。"
 
 #: src/examples/index.md:64
 msgid "Reading order"
-msgstr ""
+msgstr "阅读顺序"
 
 #: src/examples/index.md:66
 msgid ""
@@ -8262,7 +8495,7 @@ msgid ""
 "counterpart. [03 — Plugin](03-plugin.md) is the one to study for packaging "
 "and module loading, and [04 — Custom async](04-custom-async.md) for what the "
 "future trait looks like from user code."
-msgstr ""
+msgstr "语言新手：先读[00 — 待办清单](00-todolist.md)和[01 — 排序](01-sort.md)了解嵌入形态，再读[Playground 语料](playground-corpus.md)小口尝语言表面。Web 这条线，[05 — Web 待办清单](05-todolist-web.md)是主角，[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)是它的网络对应物。打包与模块加载要研究的是[03 — 插件](03-plugin.md)；future trait 从用户代码看长什么样，看[04 — 自定义异步](04-custom-async.md)。"
 
 #: src/examples/00-todolist.md:3
 msgid ""
@@ -8273,27 +8506,27 @@ msgid ""
 "`TodoList` class with full CRUD; `src/main.rs` owns the session: compile, "
 "verify, then a scripted conversation of `vm.call`s. The one-sentence design "
 "rule: **the host owns the session, rut owns the data.**"
-msgstr ""
+msgstr "第一个可运行的宿主示例，也是本章其余部分的模板：一个 Rust 程序嵌入 rut，编译一个 rut **库**（其中没有 `main`），并经由其 `entry fn` 接口驱动这个库。划分是两个文件——`todolist.rut` 作为一个带完整 CRUD 的 `TodoList` 类，掌管数据与逻辑；`src/main.rs` 掌管会话：编译、校验，然后是一段按脚本进行的 `vm.call` 对话。一句话设计规则：**宿主拥有会话，rut 拥有数据。**"
 
 #: src/examples/00-todolist.md:12 src/examples/01-sort.md:11
 #: src/examples/02-digest.md:23 src/examples/03-plugin.md:14
 #: src/examples/05-todolist-web.md:14 src/examples/06-github-viewer-cli.md:14
 #: src/examples/playground-corpus.md:11
 msgid "Run it"
-msgstr ""
+msgstr "运行它"
 
 #: src/examples/00-todolist.md:15 src/examples/01-sort.md:14
 #: src/examples/02-digest.md:26 src/examples/03-plugin.md:17
 msgid "# from the repo root\n"
-msgstr ""
+msgstr "# 从仓库根目录\n"
 
 #: src/examples/00-todolist.md:16
 msgid "# the same session asserted as a test\n"
-msgstr ""
+msgstr "# 同一会话以测试形式断言\n"
 
 #: src/examples/00-todolist.md:19
 msgid "The run prints an abridged transcript like this:"
-msgstr ""
+msgstr "运行会打印出这样一份节选的对话记录："
 
 #: src/examples/00-todolist.md:21
 msgid ""
@@ -8311,17 +8544,30 @@ msgid ""
 "fuel used: 680 of Some(1000000)\n"
 "```"
 msgstr ""
+"```text\n"
+"added: #1, #2, #3\n"
+"set_done(#2, true)\n"
+"title_of(#2) = Opt(Some(Str(\"implement the VM\")))\n"
+"title_of(42) = Opt(None)\n"
+"remove(#1) = Res(Ok(Bool(true)))\n"
+"remove(#1) again = Res(Err(Str(\"no todo #1\")))\n"
+"TodoList[2]\n"
+"  #2 [x] implement the VM\n"
+"  #3 [ ] ship the demo\n"
+"second list #1: 0 todos\n"
+"fuel used: 680 of Some(1000000)\n"
+"```"
 
 #: src/examples/00-todolist.md:35 src/examples/01-sort.md:39
 #: src/examples/02-digest.md:51 src/examples/03-plugin.md:42
 #: src/examples/04-custom-async.md:29 src/examples/05-todolist-web.md:49
 #: src/examples/06-github-viewer-cli.md:39 src/examples/playground-corpus.md:68
 msgid "Code tour"
-msgstr ""
+msgstr "代码导览"
 
 #: src/examples/00-todolist.md:37
 msgid "The data: a class with a fields-only body"
-msgstr ""
+msgstr "数据：一个只有字段体的类"
 
 #: src/examples/00-todolist.md:39
 msgid ""
@@ -8332,7 +8578,7 @@ msgid ""
 "and `remove` — closed with a `main` so it runs on its own; the example file "
 "itself has no `main` — it is a library the host drives through its `entry "
 "fn` surface:"
-msgstr ""
+msgstr "`examples/00-todolist/todolist.rut` —— 类型体只有字段；方法住在固有 `impl` 块里（[结构体](../reference/structs.md)、[类与构造器](../reference/classes.md)）。未加注解的成员是模块私有的。下面的代码块是原封不动的类——`new`、`add` 与 `remove`——补了一个 `main` 收尾让它能独立运行；示例文件本身没有 `main`——它是一个由宿主经 `entry fn` 接口驱动的库："
 
 #: src/examples/00-todolist.md:48
 msgid ""
@@ -8395,6 +8641,64 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"use pouch::{ Vec };\n"
+"\n"
+"struct Todo {\n"
+"    id: i32;\n"
+"    title: str;\n"
+"    done: bool = false;      // field initializer — `done` may be omitted\n"
+"}\n"
+"\n"
+"pub class TodoList {\n"
+"    items: Vec<Todo>;         // unannotated members = module-private\n"
+"    next_id: i32;\n"
+"}\n"
+"\n"
+"impl TodoList {\n"
+"    pub fn new() -> Self {\n"
+"        return Self { items: Vec.new(), next_id: 1 };\n"
+"    }\n"
+"\n"
+"    // ---- CREATE ----\n"
+"\n"
+"    pub fn add(mut self, title: str) -> i32 {\n"
+"        let id = self.next_id;\n"
+"        self.items.push(Todo { id: id, title: title });\n"
+"        self.next_id += 1;\n"
+"        return id;\n"
+"    }\n"
+"\n"
+"    // ---- DELETE ----\n"
+"\n"
+"    pub fn remove(mut self, id: i32) -> bool {\n"
+"        let kept: Vec<Todo> = Vec.new();\n"
+"        let mut removed = false;\n"
+"        for (let t of self.items) {\n"
+"            when (t.id == id) {\n"
+"                true -> { removed = true; },   // drop the row\n"
+"                else -> { kept.push(t); },     // keep everything else\n"
+"            }\n"
+"        }\n"
+"        if (removed) {\n"
+"            self.items = kept;\n"
+"        }\n"
+"        return removed;\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"todos\");\n"
+"    let mut list = TodoList.new();\n"
+"    list.add(\"implement the VM\");\n"
+"    list.add(\"ship the demo\");\n"
+"    let first = list.remove(1);\n"
+"    let second = list.remove(1);\n"
+"    log.info(f\"remove(#1) = {first}, again = {second}, left: "
+"{list.items.len()}\");\n"
+"}\n"
+"```"
 
 #: src/examples/00-todolist.md:110
 msgid ""
@@ -8406,11 +8710,11 @@ msgid ""
 "ordinary code — `len`, `title_of` (which returns `\"\"` for a miss; the "
 "example pairs it with `has_title` because there is no `?.` sugar), and a "
 "`render` built from f-strings."
-msgstr ""
+msgstr "注意 `mut self`：经由类句柄写入需要 `mut` 绑定头，与 [01 — 排序](01-sort.md)在普通 vec 上演练的是同一条法则——`add` 与 `remove` 都声明了它。`remove` 透过一个 `when` 过滤：匹配的行被丢弃，其余全部保留，只有真的删掉了东西才重写列表。读取一侧（未展示）是普通代码——`len`、`title_of`（未命中返回 `\"\"`；示例把它与 `has_title` 配对，因为没有 `?.` 语法糖），以及一个用 f-string 搭出的 `render`。"
 
 #: src/examples/00-todolist.md:119
 msgid "The handle: one opaque box around the world"
-msgstr ""
+msgstr "句柄：一个包住世界的 opaque 盒"
 
 #: src/examples/00-todolist.md:121
 msgid ""
@@ -8419,7 +8723,7 @@ msgid ""
 "checked against that rule **at compile time** (see [the host "
 "boundary](../core-concepts/host-boundary.md)). So the library boxes its "
 "whole container once and the host holds the handle:"
-msgstr ""
+msgstr "`TodoList` 的实例永远无法跨入 Rust——可跨越集合只接纳原始类型、`str`、`bytes` 与 `opaque`，而 `entry fn` 签名**在编译期**对照这条规则检查（参见[宿主边界](../core-concepts/host-boundary.md)）。所以库把整个容器一次性装盒，宿主持有句柄："
 
 #: src/examples/00-todolist.md:127
 msgid ""
@@ -8446,6 +8750,28 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"struct Lists {\n"
+"    lists: Vec<TodoList>;    // handle = index; handles stay stable while "
+"held\n"
+"}\n"
+"\n"
+"fn at(c: opaque, h: u32) -> TodoList {\n"
+"    let lists = opaque.downcast<?Lists>(c);\n"
+"    return lists.lists[h as i32];\n"
+"}\n"
+"\n"
+"entry fn createContainer() -> opaque {\n"
+"    let ls: ?Lists = Lists { lists: Vec.new() };\n"
+"    return opaque(ls);\n"
+"}\n"
+"\n"
+"entry fn create(c: opaque) -> u32 {\n"
+"    let k = opaque.downcast<?Lists>(c);\n"
+"    k.lists.push(TodoList.new());\n"
+"    return (k.lists.len() - 1) as u32;\n"
+"}\n"
+"```"
 
 #: src/examples/00-todolist.md:149
 msgid ""
@@ -8457,45 +8783,45 @@ msgid ""
 "wrong box answers `nil`, never a trap ([opaque — erasure and "
 "downcast](../reference/opaque.md)). The internal helper `at` is an ordinary "
 "`fn` and may speak in full types."
-msgstr ""
+msgstr "有两点值得带走。第一，`entry fn` 标记的是宿主可调用接口——与 `pub` 不同，后者是面向其他 rut 模块的使用可见性，不携带任何跨越限制（[模块与可见性](../reference/modules-and-visibility.md)）。第二，擦除就是 `opaque(v)` 类型调用，恢复是 `opaque.downcast<T>(o) -> ?T`——错误的盒回答 `nil`，绝不触发陷阱（[opaque — 擦除与向下转型](../reference/opaque.md)）。内部辅助函数 `at` 是普通 `fn`，可以用完整类型说话。"
 
 #: src/examples/00-todolist.md:158
 msgid "The embedder: typed calls, budgets, and honest errors"
-msgstr ""
+msgstr "嵌入方：带类型的调用、预算与诚实的错误"
 
 #: src/examples/00-todolist.md:160
 msgid ""
 "`examples/00-todolist/src/main.rs` mounts core and the `pouch` package (for "
 "`Vec`), compiles in one call, verifies the binary, and then talks to the "
 "module through typed closures:"
-msgstr ""
+msgstr "`examples/00-todolist/src/main.rs` 挂载 core 与 `pouch` 包（为了 `Vec`），一次调用完成编译，校验二进制，然后透过带类型的闭包与模块对话："
 
 #: src/examples/00-todolist.md:165
 msgid "\"createContainer\""
-msgstr ""
+msgstr "\"createContainer\""
 
 #: src/examples/00-todolist.md:166
 msgid "\"create\""
-msgstr ""
+msgstr "\"create\""
 
 #: src/examples/00-todolist.md:169
 msgid "\"add\""
-msgstr ""
+msgstr "\"add\""
 
 #: src/examples/00-todolist.md:171
 msgid "\"implement the VM\""
-msgstr ""
+msgstr "\"implement the VM\""
 
 #: src/examples/00-todolist.md:172
 msgid "\"ship the demo\""
-msgstr ""
+msgstr "\"ship the demo\""
 
 #: src/examples/00-todolist.md:175
 msgid ""
 "The session runs under explicit budgets — fuel and a heap limit — so a "
 "runaway module fails loudly instead of hanging the host ([Resource limits "
 "and fuel](../reference/resource-limits.md)):"
-msgstr ""
+msgstr "会话在显式预算下运行——燃料与堆限额——所以失控的模块会响亮地失败，而不是把宿主吊死（[资源限制与燃料](../reference/resource-limits.md)）："
 
 #: src/examples/00-todolist.md:187
 msgid ""
@@ -8503,7 +8829,7 @@ msgid ""
 "typed view of a `bool` answer — the second remove returns `false`, and the "
 "debug print shows the value shape the crossing produces ([Value boundary and "
 "borrows](../reference/value-boundary.md))."
-msgstr ""
+msgstr "而对话记录里 `remove(#1) again = Res(Err(...))` 那一行，是 VM 对 `bool` 应答的带类型视图——第二次 remove 返回 `false`，调试打印展示的正是这次跨越产出的值形状（[值边界与借用](../reference/value-boundary.md)）。"
 
 #: src/examples/00-todolist.md:192 src/examples/01-sort.md:206
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:210
@@ -8511,43 +8837,43 @@ msgstr ""
 #: src/examples/06-github-viewer-cli.md:206
 #: src/examples/playground-corpus.md:187
 msgid "Takeaways"
-msgstr ""
+msgstr "要点"
 
 #: src/examples/00-todolist.md:194
 msgid ""
 "`entry fn` is the host-callable surface; its signatures are checked against "
 "the crossing rule at compile time, so a bad plan is a diagnostic, never a "
 "call-time surprise."
-msgstr ""
+msgstr "`entry fn` 是宿主可调用接口；它的签名在编译期对照跨越规则检查，所以坏计划是一个诊断，绝不是调用时的意外。"
 
 #: src/examples/00-todolist.md:197
 msgid ""
 "State lives rut-side in one `opaque` container the host holds and re-passes; "
 "plain values cross, instances never do."
-msgstr ""
+msgstr "状态活在 rut 一侧的一个 `opaque` 容器里，宿主持有并反复回传它；普通值跨越，实例永不跨越。"
 
 #: src/examples/00-todolist.md:199
 msgid "Erasure is `opaque(v)`; recovery is `opaque.downcast<T> -> ?T`."
-msgstr ""
+msgstr "擦除是 `opaque(v)`；恢复是 `opaque.downcast<T> -> ?T`。"
 
 #: src/examples/00-todolist.md:200
 msgid ""
 "Budgets (fuel + heap) are the embedder's call, and every embedder mistake "
 "comes back as a named trap."
-msgstr ""
+msgstr "预算（燃料 + 堆）由嵌入方说了算，嵌入方的每个失误都会以一个指名道姓的陷阱回来。"
 
 #: src/examples/00-todolist.md:202
 msgid ""
 "The same file works as a library: entries are compilation roots, so a module "
 "with no `main` still emits every entry."
-msgstr ""
+msgstr "同一个文件也能当库用：入口是编译根，所以没有 `main` 的模块仍然产出每个入口。"
 
 #: src/examples/00-todolist.md:205
 msgid ""
 "Next: [01 — Sort](01-sort.md) scales the pattern to five algorithms and "
 "shows what recursion costs in fuel. The crossing rules behind this page are "
 "in [the host boundary](../core-concepts/host-boundary.md)."
-msgstr ""
+msgstr "下一篇：[01 — 排序](01-sort.md)把这个模式扩展到五种算法，并展示递归的燃料账单。本页背后的跨越规则在[宿主边界](../core-concepts/host-boundary.md)。"
 
 #: src/examples/01-sort.md:3
 msgid ""
@@ -8558,17 +8884,17 @@ msgid ""
 "`entry fn` dispatcher. Where 00 is about the boundary, this one is about the "
 "language: recursion, `when` on strings, the mut-binding law, wrapping "
 "arithmetic, and visible fuel budgets."
-msgstr ""
+msgstr "第二个可运行的宿主示例，形状同[00 — 待办清单](00-todolist.md)：rut 写的五种排序算法——插入、冒泡、选择（循环形态），外加快速排序与归并排序（递归，就地 vs 非就地）——从 Rust 经由**一个** `entry fn` 分派器驱动。00 讲的是边界，这一篇讲的是语言：递归、对字符串的 `when`、mut 绑定法则、回绕算术，以及看得见的燃料预算。"
 
 #: src/examples/01-sort.md:15
 msgid "# every algorithm, edge cases, cross-agreement\n"
-msgstr ""
+msgstr "# 每种算法、边界情形、交叉一致性\n"
 
 #: src/examples/01-sort.md:18
 msgid ""
 "The run sorts a hand-picked input, then fills the bank with a deterministic "
 "pseudo-random vector and runs the full sweep, printing fuel per algorithm:"
-msgstr ""
+msgstr "运行先排序一个人工挑选的输入，然后用确定性伪随机向量填满银行并跑完整遍，逐算法打印燃料："
 
 #: src/examples/01-sort.md:22
 msgid ""
@@ -8585,16 +8911,28 @@ msgid ""
 "fuel used: 21142 of Some(5000000)\n"
 "```"
 msgstr ""
+"```text\n"
+"pushed: [5, 2, 9, 2]\n"
+"after insertion: [2, 2, 5, 9]\n"
+"fill(16, seed=42), each algorithm:\n"
+"  insertion true  fuel   2335  [208, 320, 353, ..., 854, 893]\n"
+"  bubble    true  fuel   3895  [208, 320, 353, ..., 854, 893]\n"
+"  selection true  fuel   3353  [208, 320, 353, ..., 854, 893]\n"
+"  quick     true  fuel   2241  [208, 320, 353, ..., 854, 893]\n"
+"  merge     true  fuel   4358  [208, 320, 353, ..., 854, 893]\n"
+"sort(bogus) = Res(Err(Str(\"unknown algorithm: bogus\")))\n"
+"fuel used: 21142 of Some(5000000)\n"
+"```"
 
 #: src/examples/01-sort.md:35
 msgid ""
 "The fuel column is the demo's quiet joke: quick \\< insertion \\< selection "
 "\\< bubble, exactly as the textbooks promise — and the VM counts it for you."
-msgstr ""
+msgstr "燃料那一列是这个演示不动声色的玩笑：quick \\< insertion \\< selection \\< bubble，与教科书的承诺分毫不差——而且 VM 替你把它数了出来。"
 
 #: src/examples/01-sort.md:41
 msgid "One opaque bank; the data never leaves rut"
-msgstr ""
+msgstr "一个 opaque 银行；数据永不离开 rut"
 
 #: src/examples/01-sort.md:43
 msgid ""
@@ -8603,7 +8941,7 @@ msgid ""
 "Todolist](00-todolist.md) pattern again. Results come back three ways, all "
 "crossing-shaped. `serialize` below is verbatim, plus a `main` that boxes a "
 "small bank the way `create()` does, so the block runs on its own:"
-msgstr ""
+msgstr "`Vec<i32>` 无法跨越宿主边界，所以 `create()` 把一个 `Bank` 装进 `opaque`，宿主持有句柄——又是[00 — 待办清单](00-todolist.md)的模式。结果以三种方式回来，全是跨越的形状。下面的 `serialize` 是原文照录，再加一个像 `create()` 那样给小银行装盒的 `main`，让代码块能独立运行："
 
 #: src/examples/01-sort.md:50
 msgid ""
@@ -8636,23 +8974,51 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"use pouch::{ Vec };\n"
+"\n"
+"struct Bank {\n"
+"    data: ?Vec<i32>;\n"
+"}\n"
+"\n"
+"entry fn serialize(c: opaque) -> str {\n"
+"    let b = opaque.downcast<?Bank>(c);\n"
+"    let xs = b.data;\n"
+"    let mut out = \"[\";\n"
+"    for (let i = 0; i < xs.len(); i += 1) {\n"
+"        if (i > 0) {\n"
+"            out = f\"{out}, \";\n"
+"        }\n"
+"        out = f\"{out}{xs[i]}\";\n"
+"    }\n"
+"    return f\"{out}]\";\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"sort\");\n"
+"    let bank: ?Bank = Bank { data: Vec<i32>.from([5, 2, 9, 2]) };\n"
+"    let c = opaque(bank);\n"
+"    log.info(f\"serialized: {serialize(c)}\");\n"
+"}\n"
+"```"
 
 #: src/examples/01-sort.md:83
 msgid ""
 "`serialize` is the workhorse: a whole result crosses as **one JSON array "
 "string**, so the host asserts an entire sort in one compare. `get(c, i)` / "
 "`has(c, i)` read element-by-element, and `is_sorted(c)` returns the verdict."
-msgstr ""
+msgstr "`serialize` 是干重活的：整个结果以**一个 JSON 数组字符串**跨越，宿主一次比较就能断言一整趟排序。`get(c, i)` / `has(c, i)` 逐元素读取，`is_sorted(c)` 给出判定。"
 
 #: src/examples/01-sort.md:88
 msgid "The dispatcher: `when` on strings, errors as values"
-msgstr ""
+msgstr "分派器：对字符串的 `when`，错误即值"
 
 #: src/examples/01-sort.md:90
 msgid ""
 "Every algorithm sits behind a single string-keyed entry. Unknown names are "
 "an ordinary value, not a trap — the empty string means success:"
-msgstr ""
+msgstr "每个算法都坐在一个按字符串为键的入口背后。未知名是普通值，不是陷阱——空字符串表示成功："
 
 #: src/examples/01-sort.md:93
 msgid ""
@@ -8675,16 +9041,34 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"entry fn sort(c: opaque, algo: str) -> str {\n"
+"    let b = opaque.downcast<?Bank>(c);\n"
+"    let mut unknown = false;\n"
+"    when (algo) {\n"
+"        \"insertion\" -> { insertion_sort(b.data); },\n"
+"        \"bubble\"    -> { bubble_sort(b.data); },\n"
+"        \"selection\" -> { selection_sort(b.data); },\n"
+"        \"quick\"     -> { quicksort(b.data, 0, b.data.len() - 1); },\n"
+"        \"merge\"     -> { merge_sort(b.data); },\n"
+"        else        -> { unknown = true; },\n"
+"    }\n"
+"    if (unknown) {\n"
+"        return f\"unknown algorithm: {algo}\";\n"
+"    }\n"
+"    return \"\";\n"
+"}\n"
+"```"
 
 #: src/examples/01-sort.md:112
 msgid ""
 "`when` with string-literal arms is the general dispatch idiom — see [Control "
 "flow and when](../reference/control-flow.md)."
-msgstr ""
+msgstr "带字符串字面量分支的 `when` 是通用的分派惯用法——参见[控制流与 when](../reference/control-flow.md)。"
 
 #: src/examples/01-sort.md:115
 msgid "Deterministic input in one call"
-msgstr ""
+msgstr "一次调用拿到确定性输入"
 
 #: src/examples/01-sort.md:117
 msgid ""
@@ -8694,7 +9078,7 @@ msgid ""
 "that explicit — plain `*` traps on overflow. The entry is verbatim (the "
 "`Bank` inlined so the block compiles alone), with a `main` that fills and "
 "prints what one call produces:"
-msgstr ""
+msgstr "`fill` 用线性同余生成器产生的 `n` 个伪随机值替换银行的内容，于是给基准测试定输入尺寸只需一次宿主往返，而不是每元素一次。u32 数学必须**回绕**，rut 把这一点写得明明白白——普通 `*` 在溢出时触发陷阱。入口是原文照录（`Bank` 内联进来让代码块独立编译），配一个填充并打印单次调用产出的 `main`："
 
 #: src/examples/01-sort.md:124
 msgid ""
@@ -8731,6 +9115,38 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"use pouch::{ Vec };\n"
+"\n"
+"struct Bank { data: ?Vec<i32>; }   // inlined from above — the block runs "
+"alone\n"
+"\n"
+"entry fn fill(c: opaque, n: u32, seed: u32) {\n"
+"    let mut b = opaque.downcast<?Bank>(c);\n"
+"    let fresh: Vec<i32> = Vec.new();\n"
+"    let mut x = seed | 1;         // the LCG needs an odd state\n"
+"    for (let i = 0; i < n as i32; i += 1) {\n"
+"        x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);\n"
+"        fresh.push((x % 1000) as i32);\n"
+"    }\n"
+"    b.data = fresh;\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"sort\");\n"
+"    let bank: ?Bank = Bank { data: nil };\n"
+"    let c = opaque(bank);\n"
+"    fill(c, 8, 42);\n"
+"    let b = opaque.downcast<?Bank>(c);\n"
+"    let xs = b.data;\n"
+"    let mut out = \"\";\n"
+"    for (let x of xs) {\n"
+"        out = f\"{out} {x}\";\n"
+"    }\n"
+"    log.info(f\"fill(8, seed=42):{out}\");\n"
+"}\n"
+"```"
 
 #: src/examples/01-sort.md:160
 msgid ""
@@ -8738,11 +9154,11 @@ msgid ""
 "honest spelling of two's-complement arithmetic — the [playground "
 "corpus](playground-corpus.md) has a whole `checked-arith` case on the "
 "contrast."
-msgstr ""
+msgstr "回绕家族（`wrapping_mul`、`wrapping_add`、`wrapping_shl`）是二进制补码算术的如实拼法——[Playground 语料](playground-corpus.md)里有一整个 `checked-arith` 案例专门对比。"
 
 #: src/examples/01-sort.md:165
 msgid "Recursion under fuel"
-msgstr ""
+msgstr "燃料之下的递归"
 
 #: src/examples/01-sort.md:167
 msgid ""
@@ -8750,7 +9166,7 @@ msgid ""
 "merges back through the shared handle. Both are plain recursive fns — the "
 "call-frame stack is the VM's, counted by the same fuel budget ([the bytecode "
 "VM](../core-concepts/the-vm.md)):"
-msgstr ""
+msgstr "快速排序就地分区；归并排序构建非就地的两半，再透过共享句柄归并回来。两者都是普通的递归 fn——调用帧栈就是 VM 的，按同一份燃料预算计费（[字节码 VM](../core-concepts/the-vm.md)）："
 
 #: src/examples/01-sort.md:183
 msgid ""
@@ -8759,121 +9175,121 @@ msgid ""
 "requires the `mut` binding head, while mere reads (and `push`) do not. That "
 "asymmetry is the mut-binding law, and every algorithm in this file declares "
 "it ([Modules and visibility](../reference/modules-and-visibility.md))."
-msgstr ""
+msgstr "注意 `mut xs` 参数头：vec 是句柄，所以调用内部的一次就地交换与银行共享——但**写入**句柄需要 `mut` 绑定头，而单纯的读取（以及 `push`）不需要。这个不对称就是 mut 绑定法则，本文件里每个算法都声明了它（[模块与可见性](../reference/modules-and-visibility.md)）。"
 
 #: src/examples/01-sort.md:190
 msgid "The embedder's sweep"
-msgstr ""
+msgstr "嵌入方的全遍"
 
 #: src/examples/01-sort.md:192
 msgid ""
 "`src/main.rs` drives the sweep and prints the fuel deltas, which is how the "
 "table above gets its numbers:"
-msgstr ""
+msgstr "`src/main.rs` 驱动全遍并打印燃料差值，上面那张表就是这样拿到数字的："
 
 #: src/examples/01-sort.md:196
 msgid "\"fill(16, seed=42), each algorithm:\""
-msgstr ""
+msgstr "\"fill(16, seed=42), each algorithm:\""
 
 #: src/examples/01-sort.md:197
 msgid "\"insertion\""
-msgstr ""
+msgstr "\"insertion\""
 
 #: src/examples/01-sort.md:197
 msgid "\"bubble\""
-msgstr ""
+msgstr "\"bubble\""
 
 #: src/examples/01-sort.md:197
 msgid "\"selection\""
-msgstr ""
+msgstr "\"selection\""
 
 #: src/examples/01-sort.md:197
 msgid "\"quick\""
-msgstr ""
+msgstr "\"quick\""
 
 #: src/examples/01-sort.md:197
 msgid "\"merge\""
-msgstr ""
+msgstr "\"merge\""
 
 #: src/examples/01-sort.md:198
 msgid "\"fill\""
-msgstr ""
+msgstr "\"fill\""
 
 #: src/examples/01-sort.md:200
 msgid "\"sort\""
-msgstr ""
+msgstr "\"sort\""
 
 #: src/examples/01-sort.md:201
 msgid "\"is_sorted\""
-msgstr ""
+msgstr "\"is_sorted\""
 
 #: src/examples/01-sort.md:202
 msgid "\"  {algo:<9} {sorted}  fuel {:>6}  {}\""
-msgstr ""
+msgstr "\"  {algo:<9} {sorted}  fuel {:>6}  {}\""
 
 #: src/examples/01-sort.md:208
 msgid ""
 "Same host pattern as [00 — Todolist](00-todolist.md), one entry richer: a "
 "single string-keyed dispatcher keeps the `entry fn` surface small."
-msgstr ""
+msgstr "与[00 — 待办清单](00-todolist.md)相同的宿主模式，多一个入口：单个按字符串为键的分派器让 `entry fn` 接口保持小巧。"
 
 #: src/examples/01-sort.md:211
 msgid ""
 "`Vec<T>` never crosses; a serialized JSON array makes a whole result one "
 "host-side compare."
-msgstr ""
+msgstr "`Vec<T>` 永不跨越；一个序列化的 JSON 数组让整个结果成为宿主侧的一次比较。"
 
 #: src/examples/01-sort.md:213
 msgid ""
 "Errors are values: an unknown algorithm comes back as a string, not a trap."
-msgstr ""
+msgstr "错误是值：未知算法作为字符串回来，不是陷阱。"
 
 #: src/examples/01-sort.md:215
 msgid ""
 "`mut` on a binding is a capability law, not a suggestion — and the wrapping "
 "arithmetic family is explicit about overflow."
-msgstr ""
+msgstr "绑定上的 `mut` 是能力法则，不是建议——而回绕算术家族对溢出毫不含糊。"
 
 #: src/examples/01-sort.md:217
 msgid ""
 "Fuel budgets make algorithmic differences visible from the host, for free."
-msgstr ""
+msgstr "燃料预算让算法差异从宿主一侧免费可见。"
 
 #: src/examples/01-sort.md:220
 msgid ""
 "Deep-dives: [the bytecode VM](../core-concepts/the-vm.md) explains what a "
 "unit of fuel counts; [02 — Digest](02-digest.md) takes the same session "
 "shape to the byte level."
-msgstr ""
+msgstr "深挖：[字节码 VM](../core-concepts/the-vm.md) 解释一个单位的燃料数的是什么；[02 — 摘要](02-digest.md)把同一会话形状带到字节层面。"
 
 #: src/examples/02-digest.md:3
 msgid ""
 "The byte-level example, in the shape of [00 — Todolist](00-todolist.md) and "
 "[01 — Sort](01-sort.md) — with a twist: this time the embedder is also the "
 "**oracle**. `digest.rut` is a byte-level library written in pure rut:"
-msgstr ""
+msgstr "字节级示例，形状同[00 — 待办清单](00-todolist.md)和[01 — 排序](01-sort.md)——带一个转折：这一次嵌入方同时还是 **oracle**。`digest.rut` 是一个纯 rut 写成的字节级库："
 
 #: src/examples/02-digest.md:8
 msgid ""
 "**encodings** — hex (encode/decode, case-insensitive) and base64 (standard + "
 "URL-safe alphabets, padding, invalid-input rejection)"
-msgstr ""
+msgstr "**编码**——hex（编码/解码，大小写不敏感）与 base64（标准 + URL 安全字母表、填充、非法输入拒绝）"
 
 #: src/examples/02-digest.md:10
 msgid ""
 "**crypto digests** — MD5, SHA-1, SHA-256, SHA-512 behind one "
 "`when`\\-on-string dispatcher"
-msgstr ""
+msgstr "**加密摘要**——MD5、SHA-1、SHA-256、SHA-512，藏在一个 `when`\\-按字符串分派的分派器背后"
 
 #: src/examples/02-digest.md:12
 msgid "**hashmap hash keys** — CRC-32, FNV-1a 32/64, djb2, sdbm"
-msgstr ""
+msgstr "**hashmap 哈希键**——CRC-32、FNV-1a 32/64、djb2、sdbm"
 
 #: src/examples/02-digest.md:13
 msgid ""
 "**JSON** — decode to an `opaque` tree, encode back, round-trip, with numbers "
 "stored as verbatim lexemes so round-trips are exact"
-msgstr ""
+msgstr "**JSON**——解码为 `opaque` 树、编码回去、往返一致，数字按原样词素存储，往返因此分毫不差"
 
 #: src/examples/02-digest.md:16
 msgid ""
@@ -8882,15 +9298,15 @@ msgid ""
 "`crc32fast`, `serde_json`) on canonical test vectors _and_ on deterministic "
 "pseudo-random inputs at every padding-edge length, plus a 64 KiB stress "
 "blob. `digest.rut` knows nothing about the crates; only the host compares."
-msgstr ""
+msgstr "rut 文件里没有任何东西信任自己：Rust 宿主把每个算法与独立的 crate（RustCrypto 哈希家族、`base64`、`crc32fast`、`serde_json`）交叉验证，既对规范测试向量，也对每一个填充边缘长度上的确定性伪随机输入，外加一个 64 KiB 的压力数据块。`digest.rut` 对那些 crate 一无所知；做比较的只有宿主。"
 
 #: src/examples/02-digest.md:27
 msgid "# the oracle, asserted\n"
-msgstr ""
+msgstr "# 被 assert 的 oracle\n"
 
 #: src/examples/02-digest.md:30
 msgid "The run prints one verified row per check — abridged:"
-msgstr ""
+msgstr "运行对每项检查打印一行已验证的结果——节选："
 
 #: src/examples/02-digest.md:32
 msgid ""
@@ -8914,10 +9330,29 @@ msgid ""
 "fuel used: 1014105 of Some(50000000)\n"
 "```"
 msgstr ""
+"```text\n"
+"hex([114, 117, 116, 33]) = 72757421\n"
+"b64([102, 111, 111, 98, 97, 114], url=false) = Zm9vYmFy  OK\n"
+"digests, rut vs crates:\n"
+"  md5     empty         fuel    8419  d41d8cd98f00b204e9800998ecf8427e  OK\n"
+"  sha256  \"abc\"         fuel   18866  ba7816bf...f20015ad  OK\n"
+"  md5     1 KiB lcg(42) fuel  113117  d6c1961991b0106647e36ca4ba12d345  OK\n"
+"sample_doc -> "
+"{\"name\":\"rut\",\"version\":0.2,\"tags\":[\"tiny\",\"fast\",\"verified\"],...}\n"
+"serde_json parses it: OK\n"
+"hash keys over that JSON text:\n"
+"  crc32   eccc5960  OK\n"
+"  fnv1a64 8ba697141da02e83  OK\n"
+"hex_dec(\"zz\")   = \"hex: invalid character at index 0\"\n"
+"json_dec(\"{,}\") = \"json: expected a key string at index 1\"\n"
+"digest(\"md4\")   = \"unknown algorithm: md4\"\n"
+"every row agrees: OK\n"
+"fuel used: 1014105 of Some(50000000)\n"
+"```"
 
 #: src/examples/02-digest.md:53
 msgid "The integer surface is enough for real algorithms"
-msgstr ""
+msgstr "整数表面足以支撑真实算法"
 
 #: src/examples/02-digest.md:55
 msgid ""
@@ -8926,7 +9361,7 @@ msgid ""
 "bitwise, and exactly the textbook loop. The entry is pure rut — no host, no "
 "manifest — so it runs on its own, here checked against the algorithm's "
 "canonical test value:"
-msgstr ""
+msgstr "`digest.rut` 跑在十六进制字面量、`u32`/`u64`、回绕家族和符号正确的移位上。CRC-32 是紧凑的展示品——无表、逐位、与教科书循环一模一样。入口是纯 rut——没有宿主、没有清单——所以它能独立运行，这里对照该算法的规范测试值："
 
 #: src/examples/02-digest.md:61
 msgid ""
@@ -8957,6 +9392,32 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"entry fn crc32(data: bytes) -> u32 {\n"
+"    let mut crc: u32 = 0xFFFFFFFFu32;\n"
+"    for (let b of data) {\n"
+"        crc = crc ^ b as u32;\n"
+"        for (let k = 0; k < 8; k += 1) {\n"
+"            if ((crc & 1) == 1) {\n"
+"                crc = (crc >> 1) ^ 0xEDB88320u32;\n"
+"            } else {\n"
+"                crc = crc >> 1;\n"
+"            }\n"
+"        }\n"
+"    }\n"
+"    return crc ^ 0xFFFFFFFFu32;\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"crc\");\n"
+"    let vector = \"123456789\".encode();   // the canonical CRC-32 test "
+"vector\n"
+"    log.info(f\"crc32(vector) = {crc32(vector)} — check value 0xCBF43926: "
+"{crc32(vector) == 0xCBF43926u32}\");\n"
+"}\n"
+"```"
 
 #: src/examples/02-digest.md:90
 msgid ""
@@ -8965,11 +9426,11 @@ msgid ""
 "width. The FNV/djb2/sdbm trio, by contrast, deliberately never shifts a "
 "64-bit word — `wrapping_mul`, `wrapping_add`, and `^` carry them, showing "
 "how far the primitive surface alone goes."
-msgstr ""
+msgstr "SHA-512 是最挑剔的那个：它的 64 位旋转需要 `>>` 在 `u64` 上是_逻辑_移位，需要 `wrapping_shl` 截断到操作数宽度。相比之下，FNV/djb2/sdbm 三件套刻意从不移位 64 位字——`wrapping_mul`、`wrapping_add` 与 `^` 撑起它们，展示了仅凭原始类型表面能走多远。"
 
 #: src/examples/02-digest.md:96
 msgid "`bytes` crosses directly; `opaque` appears exactly once"
-msgstr ""
+msgstr "`bytes` 直接跨越；`opaque` 恰好出现一次"
 
 #: src/examples/02-digest.md:98
 msgid ""
@@ -8979,7 +9440,7 @@ msgid ""
 "recursive JSON tree: rut has no recursive dataclass, so the tree is a tagged "
 "union by hand with children boxed in `opaque` to break the recursion "
 "([opaque — erasure and downcast](../reference/opaque.md)):"
-msgstr ""
+msgstr "字节载荷不需要包装器——`bytes` 在可跨越集合里，所以 `entry fn hex_enc(data: bytes) -> str` 迎面接下宿主的字节切片（[原始类型](../reference/primitive-types.md)）。文件中唯一一处擦除是递归的 JSON 树：rut 没有递归数据类，所以这棵树是手工打造的带标签联合，子节点装进 `opaque` 盒以打断递归（[opaque — 擦除与向下转型](../reference/opaque.md)）："
 
 #: src/examples/02-digest.md:106
 msgid ""
@@ -8996,17 +9457,29 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"enum JTag { Null, False, True, Num, Str, Arr, Obj }\n"
+"\n"
+"struct Json {\n"
+"    tag:  JTag;\n"
+"    num: str;          // verbatim lexeme — exact round-trips, no\n"
+"    str: str;          // float formatting anywhere in this file\n"
+"    arr:  Vec<opaque>;\n"
+"    keys: Vec<str>;\n"
+"    vals: Vec<opaque>;\n"
+"}\n"
+"```"
 
 #: src/examples/02-digest.md:119
 msgid ""
 "Storing numbers as their **verbatim lexemes** is what makes round-trips "
 "exact: `-3e2` decodes and re-encodes as `-3e2`, with no float formatting "
 "anywhere in the file."
-msgstr ""
+msgstr "把数字按**原样词素**存储正是往返精确的原因：`-3e2` 解码再编码还是 `-3e2`，全文件没有任何浮点格式化。"
 
 #: src/examples/02-digest.md:123
 msgid "The encode half rides the std `json` package"
-msgstr ""
+msgstr "编码半边骑在 std `json` 包上"
 
 #: src/examples/02-digest.md:125
 msgid ""
@@ -9015,7 +9488,7 @@ msgid ""
 "orphan rule's type-local case — json owns the trait, this file owns `Json`, "
 "so the pair is legal exactly here ([Traits and "
 "dispatch](../core-concepts/traits-and-dispatch.md)):"
-msgstr ""
+msgstr "编码一侧不是私有代码：它是 std `json` 包序列化 trait 的一个 `impl`，驱动该包的 writer。这是孤儿规则的类型本地情形——json 拥有 trait，本文件拥有 `Json`，所以这个组合恰好在这里合法（[trait 与分派](../core-concepts/traits-and-dispatch.md)）："
 
 #: src/examples/02-digest.md:131
 msgid ""
@@ -9053,6 +9526,39 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"impl JsonSerialize for Json {\n"
+"    fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {\n"
+"        when (self.tag) {\n"
+"            JTag.Null -> { w.write_raw(\"null\"); },\n"
+"            JTag.False -> { w.write_raw(\"false\"); },\n"
+"            JTag.True -> { w.write_raw(\"true\"); },\n"
+"            JTag.Num -> { w.write_raw(self.num); },\n"
+"            JTag.Str -> { w.write_str(self.str); },\n"
+"            JTag.Arr -> {\n"
+"                w.begin_array();\n"
+"                for (let i = 0; i < self.arr.len(); i += 1) {\n"
+"                    let ae: Json = opaque.downcast<Json>(self.arr[i]);\n"
+"                    let e = ae.encode(w);\n"
+"                    if (e != nil) { return e; }\n"
+"                }\n"
+"                w.end_array();\n"
+"            },\n"
+"            JTag.Obj -> {\n"
+"                w.begin_object();\n"
+"                for (let i = 0; i < self.keys.len(); i += 1) {\n"
+"                    w.key(self.keys[i]);\n"
+"                    let ve: Json = opaque.downcast<Json>(self.vals[i]);\n"
+"                    let e = ve.encode(w);\n"
+"                    if (e != nil) { return e; }\n"
+"                }\n"
+"                w.end_object();\n"
+"            },\n"
+"        }\n"
+"        return nil;\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/examples/02-digest.md:165
 msgid ""
@@ -9061,7 +9567,7 @@ msgid ""
 "(strings iterate as codepoints, so the source is split once into single-char "
 "strings and walked by index) — and every decode error is an honest string "
 "value, never a trap:"
-msgstr ""
+msgstr "入口接口随后把树交给 `encodeJson`，并把它回答的 `(str, err)` 对偶摊平。解码半边保持为一个私有的游标解析器（字符串按码点迭代，所以源串被一次性切成单字符字符串再按索引走）——而每个解码错误都是诚实的字符串值，绝不是陷阱："
 
 #: src/examples/02-digest.md:171
 msgid ""
@@ -9071,59 +9577,64 @@ msgid ""
 "json_dec(\"{,}\") = \"json: expected a key string at index 1\"\n"
 "```"
 msgstr ""
+"```text\n"
+"hex_dec(\"zz\")   = \"hex: invalid character at index 0\"\n"
+"b64_dec(\"!*\")   = \"base64: invalid character `!`\"\n"
+"json_dec(\"{,}\") = \"json: expected a key string at index 1\"\n"
+"```"
 
 #: src/examples/02-digest.md:177
 msgid "The host oracle, in miniature"
-msgstr ""
+msgstr "宿主 oracle，微缩版"
 
 #: src/examples/02-digest.md:179
 msgid ""
 "The host keeps three-line reference implementations for the hash keys with "
 "no canonical crate, and crates for everything else — then compares:"
-msgstr ""
+msgstr "对没有规范 crate 的哈希键，宿主备有三行参考实现；其余一切都用 crate——然后比较："
 
 #: src/examples/02-digest.md:184
 msgid "// the hash-key trio with no canonical crate: three-line references\n"
-msgstr ""
+msgstr "// 没有规范 crate 的哈希键三件套：三行参考实现\n"
 
 #: src/examples/02-digest.md:195
 msgid ""
 "The same session runs under 50 M fuel for the demos and raises to 500 M for "
 "the 64 KiB stress blob — budgets are the host's call, per call."
-msgstr ""
+msgstr "同一会话在演示时跑在 50 M 燃料下，对 64 KiB 压力数据块上调到 500 M——预算由宿主逐次调用决定。"
 
 #: src/examples/02-digest.md:201
 msgid ""
 "The integer surface (hex literals, `u32`/`u64`, wrapping ops, logical "
 "shifts) is enough for MD5-through-SHA-512 — verified, not asserted, against "
 "independent Rust."
-msgstr ""
+msgstr "整数表面（十六进制字面量、`u32`/`u64`、回绕运算、逻辑移位）足以支撑从 MD5 到 SHA-512——是对独立 Rust 验证过的，不是口头断言。"
 
 #: src/examples/02-digest.md:204
 msgid ""
 "`bytes` crosses the boundary directly; `opaque` is for the one place "
 "recursion needs breaking."
-msgstr ""
+msgstr "`bytes` 直接跨越边界；`opaque` 只用在递归需要被打断的那一处。"
 
 #: src/examples/02-digest.md:206
 msgid ""
 "The std `json` package is usable from day one: implement its serialize trait "
 "for your own type and its writer does the byte work ([core and the swappable "
 "packages](../reference/stdlib.md))."
-msgstr ""
+msgstr "std `json` 包从第一天就能用：为你的类型实现它的序列化 trait，它的 writer 替你做字节的活（[core 与可替换的包](../reference/stdlib.md)）。"
 
 #: src/examples/02-digest.md:209
 msgid ""
 "Errors are values, and the host-as-oracle pattern is the strongest test "
 "shape in this chapter."
-msgstr ""
+msgstr "错误是值，而宿主即 oracle 是本章最强的测试形态。"
 
 #: src/examples/02-digest.md:212
 msgid ""
 "The oracle pattern returns in [06 — GitHub viewer "
 "CLI](06-github-viewer-cli.md), where the fixture is a recorded HTTP lane "
 "instead of hash crates."
-msgstr ""
+msgstr "oracle 模式会在[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)回归，只是夹具换成录制的 HTTP 链路，而不是哈希 crate。"
 
 #: src/examples/03-plugin.md:3
 msgid ""
@@ -9136,18 +9647,18 @@ msgid ""
 "directory** and from a **`.rutbundle`** packed from that directory at "
 "runtime — the two forms of one contract ([Module "
 "bundles](../reference/bundles.md))."
-msgstr ""
+msgstr "一个 Rust 聊天室**服务器**配一个 rut **审核插件**——第一个同时建立在两件事之上的示例：**重入的 `vm.call`**（宿主调用 rut，而被 rut 调用的宿主 fn 在第一次调用还停着时又回调进 rut）与 **`opaque` 双向**（rut 递给宿主一个指向自己状态的句柄；宿主递给 rut 一个指向服务器事件总线的句柄）。它也是打包示例：插件从**模块目录**加载，也从运行时由该目录打包出的 **`.rutbundle`** 加载——同一契约的两种形态（[模块捆绑包](../reference/bundles.md)）。"
 
 #: src/examples/03-plugin.md:18
 msgid "# transcript asserted + bundle round-trip gates\n"
-msgstr ""
+msgstr "# 对话记录断言 + 捆绑包往返门禁\n"
 
 #: src/examples/03-plugin.md:21
 msgid ""
 "The demo drives one scripted session twice — once against the directory, "
 "once against the packed bundle — and prints both transcripts plus the "
 "round-trip proof. Abridged:"
-msgstr ""
+msgstr "演示把同一段脚本化会话跑两遍——一遍对着目录，一遍对着打包后的捆绑包——并打印两份对话记录加往返证明。节选："
 
 #: src/examples/03-plugin.md:37
 msgid ""
@@ -9155,23 +9666,23 @@ msgid ""
 "nested render (`emits == renders`), and gates the bundle form: round-trip "
 "equality, byte-determinism, and refusal on an unknown format version or CRC "
 "corruption."
-msgstr ""
+msgstr "测试套件逐字断言对话记录，证明每一行都穿过了嵌套 render（`emits == renders`），并为捆绑包形态设门禁：往返相等、逐字节确定性，以及对未知格式版本或 CRC 损坏的拒绝。"
 
 #: src/examples/03-plugin.md:44
 msgid "The layering: callbacks at the edges, classes in the middle"
-msgstr ""
+msgstr "分层：回调在边缘，类在中间"
 
 #: src/examples/03-plugin.md:46
 msgid ""
 "Four layers, and neither business layer ever touches the crossing protocol:"
-msgstr ""
+msgstr "四层，两个业务层都不触碰跨越协议："
 
 #: src/examples/03-plugin.md:56
 msgid ""
 "The moderator rules themselves are plain rut — flood control (three "
 "consecutive messages from one sender mutes them), muted users rejected on "
 "rejoin, a `!stats` command, tick heartbeats:"
-msgstr ""
+msgstr "审核规则本身就是普通的 rut——刷屏控制（同一发送者连续三条消息即被禁言）、被禁言用户重进即拒、一条 `!stats` 命令、tick 心跳："
 
 #: src/examples/03-plugin.md:60
 msgid ""
@@ -9200,16 +9711,40 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"pub fn on_msg(mut self, user: str, text: str) {\n"
+"    if (self.is_muted(user)) {\n"
+"        self.say(\"muted\", user);\n"
+"    } else if (text == \"!stats\") {\n"
+"        self.say(\"direct\", f\"{user}: {self.stats()}\");\n"
+"    } else {\n"
+"        if (user == self.last_sender) {\n"
+"            self.streak += 1;\n"
+"        } else {\n"
+"            self.last_sender = user;\n"
+"            self.streak = 1;\n"
+"        }\n"
+"        if (self.streak == 3) {\n"
+"            self.muted.push(user);\n"
+"            self.mutes += 1;\n"
+"            self.say(\"system\", f\"{user} muted for flooding\");\n"
+"        } else {\n"
+"            self.msgs += 1;\n"
+"            self.say(\"broadcast\", f\"<{user}> {text}\");\n"
+"        }\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/examples/03-plugin.md:85
 msgid ""
 "Every bus write funnels through one private `say(topic, payload)` — the "
 "business logic never spells a crossing."
-msgstr ""
+msgstr "每一次总线写入都汇入同一个私有的 `say(topic, payload)`——业务逻辑从不拼写跨越。"
 
 #: src/examples/03-plugin.md:88
 msgid "The handshake: both opaque directions meet"
-msgstr ""
+msgstr "握手：两个 opaque 方向会师"
 
 #: src/examples/03-plugin.md:90
 msgid ""
@@ -9217,7 +9752,7 @@ msgid ""
 "register **by name**: the plugin hands the host the export names it wants "
 "wired to each topic, and returns the handle to its own state (`init` is the "
 "entire handshake — bus box in, state handle out):"
-msgstr ""
+msgstr "闭包无法沿任一方向跨越边界，所以回调**按名注册**：插件把自己想接到各 topic 的导出名交给宿主，并返回指向自己状态的句柄（`init` 就是全部握手——总线盒进，状态句柄出）："
 
 #: src/examples/03-plugin.md:95
 msgid ""
@@ -9232,12 +9767,22 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"entry fn init(bus: opaque) -> opaque {\n"
+"    subscribe(bus, \"join\", \"on_join\");\n"
+"    subscribe(bus, \"msg\", \"on_msg\");\n"
+"    subscribe(bus, \"leave\", \"on_leave\");\n"
+"    subscribe(bus, \"tick\", \"on_tick\");\n"
+"    let mod_: ?Moderator = Moderator.new(bus);\n"
+"    return opaque(mod_);\n"
+"}\n"
+"```"
 
 #: src/examples/03-plugin.md:106
 msgid ""
 "rut's moderator state comes back as a **rut-constructed** `opaque` — the "
 "host holds the handle and passes it back on every event."
-msgstr ""
+msgstr "rut 的审核状态以一个 **rut 构造的** `opaque` 返回——宿主持有句柄，并在每个事件上回传。"
 
 #: src/examples/03-plugin.md:108
 msgid ""
@@ -9245,27 +9790,27 @@ msgid ""
 "`subscribe` and `emit` are that box's callbacks, reached only through the "
 "borrow guards ([Value boundary and borrows](../reference/value-boundary.md), "
 "[Embedding and native modules](../reference/embedding.md))."
-msgstr ""
+msgstr "宿主的 `EventBus` 以一个**宿主构造的** `Opaque<EventBus>` 进入——`subscribe` 与 `emit` 是这个盒的回调，只能透过借用守卫触及（[值边界与借用](../reference/value-boundary.md)、[嵌入与原生模块](../reference/embedding.md)）。"
 
 #: src/examples/03-plugin.md:114
 msgid "The re-entrant call: `emit` re-enters rut mid-op"
-msgstr ""
+msgstr "重入调用：`emit` 在操作中途重新进入 rut"
 
 #: src/examples/03-plugin.md:116
 msgid ""
 "The host binds the two `server` rows over its bus. The `emit` body is the "
 "interesting one — while the emitting handler is still parked mid-op, it "
 "makes a **nested** `vm.call(\"render_line\")` to format the wire line:"
-msgstr ""
+msgstr "宿主把 `server` 的两行绑定到自己的总线上。`emit` 的函数体是有趣的那个——当正在发事件的处理器还停在操作中途时，它发起一次**嵌套的** `vm.call(\"render_line\")` 来格式化线上的一行："
 
 #: src/examples/03-plugin.md:124 src/reference/embedding.md:35
 #: src/reference/host-fns.md:122
 msgid "\"server::emit\""
-msgstr ""
+msgstr "\"server::emit\""
 
 #: src/examples/03-plugin.md:129
 msgid "\"render_line\""
-msgstr ""
+msgstr "\"render_line\""
 
 #: src/examples/03-plugin.md:139
 msgid ""
@@ -9276,7 +9821,7 @@ msgid ""
 "`render_line` is the one-line entry the host re-enters — pure string work, "
 "so it runs on its own (the line it prints below is the transcript's "
 "broadcast row):"
-msgstr ""
+msgstr "（源码里这段代码上方的注释也值得一读。）总线在嵌套调用_期间_保持可变借用——值边界的借用守卫正是让这一切健全的机制：从 `render_line` 内部再发一次 `emit` 会在守卫上触发陷阱，而不是形成竞争。rut 一侧，`render_line` 是宿主重入的那行入口——纯字符串工作，所以它能独立运行（下面打印的那一行就是对话记录里的 broadcast 行）："
 
 #: src/examples/03-plugin.md:147
 msgid ""
@@ -9293,17 +9838,29 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"entry fn render_line(topic: str, payload: str) -> str {\n"
+"    return f\"[{topic}] {payload}\";\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"bus\");\n"
+"    log.info(render_line(\"broadcast\", \"<ada> hello world\"));\n"
+"}\n"
+"```"
 
 #: src/examples/03-plugin.md:164
 msgid "The packaging: one directory, two load forms"
-msgstr ""
+msgstr "打包：一个目录，两种加载形态"
 
 #: src/examples/03-plugin.md:166
 msgid ""
 "The plugin is a **module directory** — a manifest naming the entry plus its "
 "deps, loadable as-is and packable unchanged ([Project structure and "
 "rut.toml](../reference/project-structure.md)):"
-msgstr ""
+msgstr "插件是一个**模块目录**——一份清单写明入口及其依赖，可以原样加载、原样打包（[项目结构与 rut.toml](../reference/project-structure.md)）："
 
 #: src/examples/03-plugin.md:170
 msgid ""
@@ -9319,6 +9876,17 @@ msgid ""
 "pouch = { path = \"../../../rut/pouch\" }\n"
 "```"
 msgstr ""
+"```toml\n"
+"# plugin/rut.toml\n"
+"format = \"rutbundle\"\n"
+"format_version = 4\n"
+"name = \"plugin\"\n"
+"entry.lib = \"./plugin.rut\"\n"
+"\n"
+"[deps]\n"
+"server = { path = \"../server\" }\n"
+"pouch = { path = \"../../../rut/pouch\" }\n"
+"```"
 
 #: src/examples/03-plugin.md:182
 msgid ""
@@ -9326,7 +9894,7 @@ msgid ""
 "host package whose manifest points at a `.d.rut` decl file, with the Rust "
 "embedder binding the bodies ([Host fns and declaration "
 "files](../reference/host-fns.md)):"
-msgstr ""
+msgstr "`server/` 是有意思的那个依赖：一个**纯声明表面**——一个宿主包，其清单指向一个 `.d.rut` 声明文件，函数体由 Rust 嵌入方绑定（[宿主 fn 与声明文件](../reference/host-fns.md)）："
 
 #: src/examples/03-plugin.md:193
 msgid ""
@@ -9334,19 +9902,19 @@ msgid ""
 "`plugin.rutbundle` to temp, and loads it back through the identical "
 "`Plugin::load` — the transcript equality print is the proof. The CLI drives "
 "the same loader for any self-contained module:"
-msgstr ""
+msgstr "`main.rs` 用 `rut_driver::pack_dir` 打包同一个目录，把 `plugin.rutbundle` 写进临时目录，再经完全相同的 `Plugin::load` 加载回来——对话记录相等的打印就是证明。CLI 对任何自包含模块都驱动同一个加载器："
 
 #: src/examples/03-plugin.md:199
 msgid "# a module directory (rut.toml)\n"
-msgstr ""
+msgstr "# 一个模块目录（rut.toml）\n"
 
 #: src/examples/03-plugin.md:200
 msgid "# -> mod.rutbundle\n"
-msgstr ""
+msgstr "# -> mod.rutbundle\n"
 
 #: src/examples/03-plugin.md:201
 msgid "# the packed form\n"
-msgstr ""
+msgstr "# 打包形态\n"
 
 #: src/examples/03-plugin.md:204
 msgid ""
@@ -9355,44 +9923,44 @@ msgid ""
 "dispatcher that looks up the subscribed export name per topic — unknown "
 "topics are dropped, not trapped, so a server keeps running when a plugin "
 "didn't subscribe."
-msgstr ""
+msgstr "Rust 一侧镜像 rut 的分层：业务代码调用带类型的方法（`p.join(\"ada\")`、`p.msg(...)`），而 `vm.call` 只发生在一个分派器里，它按 topic 查订阅的导出名——未知 topic 被丢弃而不是触发陷阱，所以插件没订阅时服务器照常运转。"
 
 #: src/examples/03-plugin.md:212
 msgid ""
 "**One directory is one module**; the manifest names the entry and the deps, "
 "and the same directory packs to a `.rutbundle` unchanged."
-msgstr ""
+msgstr "**一个目录就是一个模块**；清单写明入口与依赖，同一目录原样打包成 `.rutbundle`。"
 
 #: src/examples/03-plugin.md:214
 msgid ""
 "**Registration by name, not by closure** — callbacks never cross the "
 "boundary as values, in either direction."
-msgstr ""
+msgstr "**按名注册，而非按闭包**——回调永不作为值跨越边界，任一方向都不例外。"
 
 #: src/examples/03-plugin.md:216
 msgid ""
 "**Re-entrancy is sound by construction**: a host fn can call back into rut "
 "mid-op, and the borrow guard turns a would-be data race into a loud trap."
-msgstr ""
+msgstr "**重入在构造上就是健全的**：宿主 fn 可以在操作中途回调进 rut，而借用守卫把本会成为数据竞争的东西变成一声响亮的陷阱。"
 
 #: src/examples/03-plugin.md:219
 msgid ""
 "**Both `opaque` directions** compose: rut-state-out, host-state-in, and "
 "neither side can inspect what the other erased."
-msgstr ""
+msgstr "**`opaque` 两个方向**可组合：rut 状态出、宿主状态进，双方都无法窥视对方擦除了什么。"
 
 #: src/examples/03-plugin.md:221
 msgid ""
 "The layering discipline — adapters own the crossing protocol, business logic "
 "stays pure — is what keeps a plugin auditable."
-msgstr ""
+msgstr "分层纪律——适配器独占跨越协议，业务逻辑保持纯粹——正是插件可审计的缘由。"
 
 #: src/examples/03-plugin.md:224
 msgid ""
 "The crossing rules this example lives on are in [the host "
 "boundary](../core-concepts/host-boundary.md); the load forms are specified "
 "in [Module bundles](../reference/bundles.md)."
-msgstr ""
+msgstr "本示例赖以立足的跨越规则在[宿主边界](../core-concepts/host-boundary.md)；加载形态规定在[模块捆绑包](../reference/bundles.md)。"
 
 #: src/examples/04-custom-async.md:3
 msgid ""
@@ -9406,39 +9974,39 @@ msgid ""
 "repo now because the parser's conformance suite compiles every example, so "
 "this vocabulary is checked to stay parseable ([Async and "
 "await](../reference/async.md))."
-msgstr ""
+msgstr "一个**仅解析**的示例：`examples/04-custom-async/custom_async.rut` 是单个 rut 文件，没有 Cargo 骨架——今天你没法运行它，而这是刻意的明示，不是疏忽。它展示的是从_用户_一侧看到的异步词汇：一个手写的 future 类型、一个引擎内置 `Future` trait 的 `impl`，以及一个带逐检查点统计与取消审计的用户自写启动器。能端到端驱动它的可运行骨架是后续工作；这个文件如今仍留在仓库里，因为解析器一致性套件会编译每个示例，所以这套词汇被持续检查着保持可解析（[异步与 await](../reference/async.md)）。"
 
 #: src/examples/04-custom-async.md:15
 msgid "\"Run\" it"
-msgstr ""
+msgstr "\"运行\"它"
 
 #: src/examples/04-custom-async.md:17
 msgid ""
 "There is no harness. The file is exercised by the parser conformance test, "
 "which walks every `.rut` file in `examples/`:"
-msgstr ""
+msgstr "没有骨架。这个文件由解析器一致性测试操练，该测试遍历 `examples/` 里的每个 `.rut` 文件："
 
 #: src/examples/04-custom-async.md:21
 msgid "# parses every example, incl. this one\n"
-msgstr ""
+msgstr "# 解析每个示例，包括本例\n"
 
 #: src/examples/04-custom-async.md:24
 msgid ""
 "To _read_ the same machinery running, see [06 — GitHub viewer "
 "CLI](06-github-viewer-cli.md): its brain is an `async fn` driven by the "
 "standard launcher this file re-spells by hand."
-msgstr ""
+msgstr "想_读_同一套机制运行起来的样子，见[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)：它的大脑是一个 `async fn`，由本文件手工重新拼写的标准启动器驱动。"
 
 #: src/examples/04-custom-async.md:31
 msgid "The audit log — the example's reason to exist"
-msgstr ""
+msgstr "审计日志——这个示例存在的理由"
 
 #: src/examples/04-custom-async.md:33
 msgid ""
 "`CustomFuture` is a stage machine, but the _point_ of the file is the "
 "accounting around it: every launch, resumption, cancellation, and completion "
 "lands in one module-owned record the embedder can read after the run:"
-msgstr ""
+msgstr "`CustomFuture` 是一台阶段机器，但这个文件的_要点_在围绕它的记账上：每次启动、恢复、取消和完成都落进一条模块私有的记录，嵌入方可以在运行结束后读取："
 
 #: src/examples/04-custom-async.md:38
 msgid ""
@@ -9452,17 +10020,26 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"struct AuditLog {\n"
+"    launches: u32;      // futures this log saw started\n"
+"    yields: u32;        // resumptions driven — one per checkpoint\n"
+"    cancels: u32;       // cancellation probes that answered true\n"
+"    checkpoints: u32;   // high-water mark of the context ledger\n"
+"    finished: u32;      // runs that walked every step they booked\n"
+"}\n"
+"```"
 
 #: src/examples/04-custom-async.md:48
 msgid ""
 "The launcher takes a shared `?AuditLog`, so the embedder holds one cell and "
 "reads the whole run's story out of it afterwards — `summary` renders the "
 "one-line audit."
-msgstr ""
+msgstr "启动器持有一个共享的 `?AuditLog`，嵌入方因此握着一个单元，之后从中读出整场运行的故事——`summary` 渲染单行审计。"
 
 #: src/examples/04-custom-async.md:52
 msgid "The machine — what `async fn` weaves, spelled out"
-msgstr ""
+msgstr "机器——`async fn` 织出的东西，摊开在明处"
 
 #: src/examples/04-custom-async.md:54
 msgid ""
@@ -9472,7 +10049,7 @@ msgid ""
 "the keyword hides. The machine itself is plain rut — only the _driving "
 "harness_ is missing — so the block below adds a `main` that advances it by "
 "hand; that is as far as one can run it today:"
-msgstr ""
+msgstr "当你写下 `async fn`，引擎会织出一个隐藏帧，其形状正是如此：一个阶段计数器、各阶段携带的载荷、一个 done 标志。`CustomFuture` 把这个形状在源码里拼写出来，让你看清关键字背后藏着什么。机器本身就是普通 rut——缺的只是_驱动骨架_——所以下面的代码块补了一个手动推进它的 `main`；这是今天能跑到的最远处："
 
 #: src/examples/04-custom-async.md:62
 msgid ""
@@ -9517,10 +10094,50 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct CustomFuture {\n"
+"    steps: u32;      // checkpoints booked before the run finishes\n"
+"    stage: str;      // what the current stage does (the audit's label)\n"
+"    done: bool;      // the last stage ran\n"
+"}\n"
+"\n"
+"impl CustomFuture {\n"
+"    fn new(steps: u32, stage: str) -> Self {\n"
+"        return Self { steps: steps, stage: stage, done: false };\n"
+"    }\n"
+"\n"
+"    /// One stage of work — what one resumption advances. `false` when\n"
+"    /// no stages are left: the runner's completion signal.\n"
+"    fn advance(mut self) -> bool {\n"
+"        if (self.done) {\n"
+"            return false;\n"
+"        }\n"
+"        if (self.steps == 0) {\n"
+"            self.done = true;\n"
+"            return false;\n"
+"        }\n"
+"        self.steps -= 1;\n"
+"        return true;\n"
+"    }\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"future\");\n"
+"    let mut f = CustomFuture.new(3, \"poll\");\n"
+"    let mut polls = 0;\n"
+"    while (f.advance()) {\n"
+"        polls += 1;\n"
+"    }\n"
+"    log.info(f\"3 steps took {polls} advancing polls, then advance() "
+"answered false (done={f.done})\");\n"
+"}\n"
+"```"
 
 #: src/examples/04-custom-async.md:106
 msgid "The trait surface: a user impl of a built-in trait"
-msgstr ""
+msgstr "trait 表面：内置 trait 的用户 impl"
 
 #: src/examples/04-custom-async.md:108
 msgid ""
@@ -9529,7 +10146,7 @@ msgid ""
 "engine _closed_. A hand-written machine registers through the ordinary "
 "nominal path, one impl block, and rides the same drive law ([Traits and "
 "dispatch](../core-concepts/traits-and-dispatch.md)):"
-msgstr ""
+msgstr "`Future` 是一个引擎命名的内置 trait——引擎为每个 `async fn` 的隐藏帧织入它——但内置 trait 是引擎_命名_的，不是引擎_封闭_的。手写的机器通过普通的名义路径注册，一个 impl 块，就骑上同一条驱动法则（[trait 与分派](../core-concepts/traits-and-dispatch.md)）："
 
 #: src/examples/04-custom-async.md:114
 msgid ""
@@ -9549,6 +10166,21 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"impl Future<nil> for CustomFuture {\n"
+"    fn yield(self, cx: RunContext) {\n"
+"        // the ledger view: the frame's resume state, read as data\n"
+"        let at = cx.checkpoint();\n"
+"        // the cancellation probe: a cancelled frame stops advancing —\n"
+"        // the audit sees it as \"died here, did not advance\" — and runs\n"
+"        // its drop path instead of the next stage\n"
+"        if (cx.cancelled()) {\n"
+"            self.done = true;\n"
+"            self.stage = f\"{self.stage}@{at}:cancelled\";\n"
+"        }\n"
+"    }\n"
+"}\n"
+"```"
 
 #: src/examples/04-custom-async.md:130
 msgid ""
@@ -9557,11 +10189,11 @@ msgid ""
 "reads as data: `checkpoint` answers this frame's resume state, `cancelled` "
 "answers the task's abort flag. Cancellation is a value the frame inspects, "
 "not an exception it catches."
-msgstr ""
+msgstr "接收者**就是**帧——机器的字段就是它的状态——而上下文是一次恢复所需的唯一句柄。冻结的上下文协议按数据来读：`checkpoint` 回答本帧的恢复状态，`cancelled` 回答任务的中止标志。取消是帧检查的一个值，不是它捕获的异常。"
 
 #: src/examples/04-custom-async.md:136
 msgid "The user launcher"
-msgstr ""
+msgstr "用户启动器"
 
 #: src/examples/04-custom-async.md:138
 msgid ""
@@ -9569,7 +10201,7 @@ msgid ""
 "`sleep`) is ordinary code any module may re-spell — that is the point of "
 "`launch_custom`. It supplies the driving and the audit over the same "
 "`Future` surface, so the machine never knows which launcher started it:"
-msgstr ""
+msgstr "引擎的标准启动器套装（`launch_future`、`LaunchedFutureHandle`、`sleep`）是任何模块都可以重新拼写的普通代码——这正是 `launch_custom` 的意义所在。它在同一 `Future` 表面上提供驱动与审计，所以机器永远不知道是哪个启动器启动了它："
 
 #: src/examples/04-custom-async.md:154
 msgid ""
@@ -9577,34 +10209,34 @@ msgid ""
 "cannot be awaited, and it is not re-launchable (that is a type error, never "
 "a runtime check). Its one real member is the cancel edge, which flags the "
 "task and lets the loop's re-drive run the probe:"
-msgstr ""
+msgstr "返回的 `CustomLaunched` 回执刻意**不是** future——它不能被 await，也不能再次启动（那是类型错误，绝不是运行时检查）。它唯一真正的成员是取消边：标记任务，让循环的再驱动去跑那个探测："
 
 #: src/examples/04-custom-async.md:178
 msgid ""
 "Alongside sits `audit_drive`, the audit twin of the engine loop's drive "
 "columns: run a stage, count the resumption, stop on completion."
-msgstr ""
+msgstr "旁边还坐着 `audit_drive`，引擎循环各驱动列的审计孪生：跑一个阶段，记一次恢复，完成即停。"
 
 #: src/examples/04-custom-async.md:181
 msgid "Scope, honestly"
-msgstr ""
+msgstr "范围，如实相告"
 
 #: src/examples/04-custom-async.md:183
 msgid "Two boundaries to keep straight when you read this file:"
-msgstr ""
+msgstr "读这个文件时要分清两条边界："
 
 #: src/examples/04-custom-async.md:185
 msgid ""
 "**User futures are launcher-drivable** — the driving loop finds the "
 "`Future::yield` row in the vtable, exactly as it does for woven frames."
-msgstr ""
+msgstr "**用户 future 可被启动器驱动**——驱动循环在 vtable 里找到 `Future::yield` 行，与对待织入帧完全一样。"
 
 #: src/examples/04-custom-async.md:188
 msgid ""
 "**`await` targets engine-woven futures only** in the current build (async-fn "
 "results and `sleep`); awaiting an arbitrary user impl, and joining "
 "concurrent futures, land with the next async milestone."
-msgstr ""
+msgstr "**`await` 只面向引擎织入的 future**（当前构建中：async fn 的结果与 `sleep`）；await 任意的用户 impl，以及 join 并发的 future，要等下一个异步里程碑。"
 
 #: src/examples/04-custom-async.md:192
 msgid ""
@@ -9614,38 +10246,38 @@ msgid ""
 "want the runnable version of the same story, read [06 — GitHub viewer "
 "CLI](06-github-viewer-cli.md), and for the model behind it, [the async "
 "model](../core-concepts/async-model.md)."
-msgstr ""
+msgstr "所以今天这个文件是一份解析受检的设计语料和教学文档：织造的形状、启动器的形状，以及 future trait 是用户可扩展表面这份证明——不是可运行的演示。想要同一个故事的可运行版本，去读[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)；想看背后的模型，去读[异步模型](../core-concepts/async-model.md)。"
 
 #: src/examples/04-custom-async.md:201
 msgid ""
 "`async fn` compiles to a hidden frame implementing `Future` — this file "
 "spells that frame out in user source."
-msgstr ""
+msgstr "`async fn` 编译为实现 `Future` 的隐藏帧——本文件在用户源码里把这个帧拼写出来。"
 
 #: src/examples/04-custom-async.md:203
 msgid ""
 "Built-in traits are engine-named, not engine-closed: `impl Future<nil> for "
 "YourType` registers through the ordinary path."
-msgstr ""
+msgstr "内置 trait 是引擎命名的，不是引擎封闭的：`impl Future<nil> for YourType` 走普通路径注册。"
 
 #: src/examples/04-custom-async.md:205
 msgid ""
 "Cancellation is data the frame reads (`cx.cancelled()`), and every "
 "checkpoint is observable (`cx.checkpoint()`)."
-msgstr ""
+msgstr "取消是帧读取的数据（`cx.cancelled()`），而每个检查点都可观察（`cx.checkpoint()`）。"
 
 #: src/examples/04-custom-async.md:207
 msgid ""
 "A launcher is just code: driving + audit over the public `Future` surface, "
 "re-spellable by any module."
-msgstr ""
+msgstr "启动器只是代码：公共 `Future` 表面上的驱动 + 审计，任何模块都可重新拼写。"
 
 #: src/examples/04-custom-async.md:209
 msgid ""
 "The file is parse-only by disclosure; the runnable harness is follow-up work "
 "— the machine itself is plain rut (it ran above), but nothing launches or "
 "drives it as a future yet."
-msgstr ""
+msgstr "本文件按明示仅限解析；可运行骨架是后续工作——机器本身是普通 rut（它在上面跑过了），但还没有任何东西把它作为 future 启动或驱动。"
 
 #: src/examples/05-todolist-web.md:3
 msgid ""
@@ -9658,15 +10290,15 @@ msgid ""
 "browser, a fake-DOM twin on native in the tests — owns the loop; rut owns "
 "the state. Pure rut: no event loop, no async keywords on the rut side; every "
 "asynchronous fact enters through a door named for its event."
-msgstr ""
+msgstr "一个整页应用——带模拟服务器的待办清单——其中**每一次 DOM 移动、每一个定时器都穿过十条已声明的宿主跨越**，而页面的大脑是一个**双包**的 rut 项目。`ui` 是框架：一个原子存储（jotai 的形态，用 rut 写）、一个部件类型、一个键控 diff，以及一套组件词汇。`biz` 是领域：表达为存储变更的待办清单机器，加上应用外壳。宿主——浏览器里是 wasm32 上的 web-sys，测试里是原生的假 DOM 孪生——拥有循环；rut 拥有状态。纯 rut：rut 一侧没有事件循环，没有 async 关键字；每个异步事实都经由一扇以自身事件命名的门进入。"
 
 #: src/examples/05-todolist-web.md:17
 msgid "# the twin + the law (95 tests), from the repo root\n"
-msgstr ""
+msgstr "# 孪生 + 法则（95 个测试），从仓库根目录\n"
 
 #: src/examples/05-todolist-web.md:19
 msgid "# the through-the-artifact gate (node tier + browser tier)\n"
-msgstr ""
+msgstr "# 穿过产物的门禁（node 层 + 浏览器层）\n"
 
 #: src/examples/05-todolist-web.md:22
 msgid ""
@@ -9676,11 +10308,11 @@ msgid ""
 "and skips nothing silently: tier 1 (plain node) drives the real wasm "
 "artifact through the loader's own ABI on a fake DOM; tier 2 (when "
 "geckodriver + Firefox exist) types and clicks the live page."
-msgstr ""
+msgstr "`cargo test` 在**假 DOM 孪生**上跑完整故事——一棵带真实 DOM 语义的 HashMap 元素树加一个虚拟定时器时钟——跑在与浏览器相同的 rut 源码上。e2e 脚本不悄悄构建任何东西，也不悄悄跳过任何东西：tier 1（纯 node）在假 DOM 上经加载器自己的 ABI 驱动真实的 wasm 产物；tier 2（当 geckodriver + Firefox 存在时）在活页面上打字、点击。"
 
 #: src/examples/05-todolist-web.md:30
 msgid "To open the page yourself:"
-msgstr ""
+msgstr "自己打开这个页面："
 
 #: src/examples/05-todolist-web.md:40
 msgid ""
@@ -9691,11 +10323,11 @@ msgid ""
 "title goes italic for ~250 ms, then the check fills and the title strikes "
 "through. The row animates because the keyed diff **kept the node alive** — "
 "nothing is cleared and rebuilt, ever."
-msgstr ""
+msgstr "你会看到：输入一个标题——状态行回显输入，计数纹丝不动（草稿不是计数的依赖）。按 Add——一行斜体的_待定_立即绘制出来，计数行翻成 `1 in flight`，约 400 毫秒后提交的行取而代之。切换一行的状态——标题斜体约 250 毫秒，然后勾选填上、标题划线。行之所以有动画，是因为键控 diff **让节点保活**——任何东西都不会被清空重建，永远。"
 
 #: src/examples/05-todolist-web.md:51
 msgid "The ABI is the page: `main` plus the doors"
-msgstr ""
+msgstr "ABI 就是页面：`main` 加各扇门"
 
 #: src/examples/05-todolist-web.md:53
 msgid ""
@@ -9703,7 +10335,7 @@ msgid ""
 "an `opaque` (rut has no mutable module state, so the host holds the state "
 "and re-passes it every turn — the [00 — Todolist](00-todolist.md) pattern at "
 "page scale):"
-msgstr ""
+msgstr "`rut/biz/app.rut` ——启动回合构建应用容器并把它作为 `opaque` 返回（rut 没有可变的模块状态，所以宿主持有状态并每回合回传——[00 — 待办清单](00-todolist.md)模式在页面尺度上的应用）："
 
 #: src/examples/05-todolist-web.md:58
 msgid ""
@@ -9719,6 +10351,17 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"entry fn main() -> opaque {\n"
+"    let boot: World = world_boot(\"booted — type a title, press Add\");\n"
+"    let root = AppRoot {\n"
+"        world: boot,\n"
+"        t1: t1_mount(\"app\"),\n"
+"    };\n"
+"    paint(root);\n"
+"    return opaque(root);\n"
+"}\n"
+"```"
 
 #: src/examples/05-todolist-web.md:70
 msgid ""
@@ -9727,7 +10370,7 @@ msgid ""
 "re-passes the container and answers the entry-err pair: `(opaque(c), \"\")` "
 "on a clean turn, `(nil, why)` on a soft failure the pump reports _while "
 "keeping the page alive_."
-msgstr ""
+msgstr "每个异步事实都经由一扇以自身事件命名的门进入——DOM 事件走 `on_click`/`on_input`，时钟走 `on_timer`。每扇门都回传容器并回答入口-err 对偶：干净回合回答 `(opaque(c), \"\")`，软失败回答 `(nil, why)`，由泵在_保住页面性命_的同时上报。"
 
 #: src/examples/05-todolist-web.md:76
 msgid ""
@@ -9743,6 +10386,17 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"fn dom_event(mut r: AppRoot, id: str, detail: str) -> (?opaque, str) {\n"
+"    let booked = t1_event(r.t1, id, detail);\n"
+"    let req = opaque.downcast<Req>(booked);\n"
+"    if (req != nil) {\n"
+"        tim_after(req.latency, req.tag);\n"
+"    }\n"
+"    paint(r);\n"
+"    return (opaque(r), \"\");\n"
+"}\n"
+"```"
 
 #: src/examples/05-todolist-web.md:88
 msgid ""
@@ -9750,11 +10404,11 @@ msgid ""
 "list — the machine books a request and the app books one `tim_after(latency, "
 "tag)`; the list changes only when the timer's turn runs the answer mutation "
 "(per-kind latency, so deadline-ordered commits are visible across kinds)."
-msgstr ""
+msgstr "这个\"服务器\"是一张请求表，不是调度器：添加从不触碰列表——机器登记一个请求，应用登记一次 `tim_after(latency, tag)`；列表只在定时器的回合运行应答变更时才改变（按类型各异的延迟，因此按截止时间排序的提交在不同类型间可见）。"
 
 #: src/examples/05-todolist-web.md:94
 msgid "The ten crossings"
-msgstr ""
+msgstr "十次跨越"
 
 #: src/examples/05-todolist-web.md:96
 msgid ""
@@ -9763,18 +10417,18 @@ msgid ""
 "everything else is strings, ints, and bools — no app names, no data "
 "shipping, no callbacks ([the host "
 "boundary](../core-concepts/host-boundary.md)):"
-msgstr ""
+msgstr "`web.d.rut`（平铺在示例根目录，两条通道都手工注册）声明了全部宿主表面。元素以 `opaque` 句柄跨越；其余一切都是字符串、整数和布尔——没有应用专名，没有数据搬运，没有回调（[宿主边界](../core-concepts/host-boundary.md)）："
 
 #: src/examples/05-todolist-web.md:115
 msgid ""
 "A wiring bug is loud: a missing id traps (`web::ui_get: no element '#x'`), a "
 "kind mismatch names both sides. The host never grew an app-specific crossing "
 "— the entire widget system fits over these ten rows, unchanged."
-msgstr ""
+msgstr "接线错误是响亮的：缺失的 id 触发陷阱（`web::ui_get: no element '#x'`），类型不匹配会点名双方。宿主从未长出任何应用专属的跨越——整个部件系统就架在这十行之上，分毫未改。"
 
 #: src/examples/05-todolist-web.md:120
 msgid "The store: jotai's shape over private traits"
-msgstr ""
+msgstr "存储：私有 trait 之上的 jotai 形态"
 
 #: src/examples/05-todolist-web.md:122
 msgid ""
@@ -9784,7 +10438,7 @@ msgid ""
 "**module-private**, so the domain package cannot name them even to import "
 "them — which is how \"a derived cell is not writable\" is enforced at the "
 "type level ([Traits and dispatch](../core-concepts/traits-and-dispatch.md)):"
-msgstr ""
+msgstr "`rut/ui/store.rut` 是内核。句柄是键，不是对象——`Source<T>`、`Derived<T>`、`Mutation<A, R>` 只携带 id，除经由所属存储路由之外没有任何自己的逻辑。机制 trait 是**模块私有的**，领域包连 import 它们的名字都拿不到——\"派生单元不可写\"就是这样在类型层面强制执行的（[trait 与分派](../core-concepts/traits-and-dispatch.md)）："
 
 #: src/examples/05-todolist-web.md:130
 msgid ""
@@ -9799,6 +10453,16 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"trait Readable<T> {\n"
+"    fn atom_id(self) -> u32;\n"
+"    fn materialize(self, st: Store) -> nil; // first touch: the seed lands\n"
+"}\n"
+"\n"
+"trait Writable<A, R> {\n"
+"    fn atom_id(self) -> u32;\n"
+"}\n"
+"```"
 
 #: src/examples/05-todolist-web.md:141
 msgid ""
@@ -9808,7 +10472,7 @@ msgid ""
 "`ctx.get` calls inside a derive closure ARE the dependency list, re-recorded "
 "on every recompute. The domain's counts line is the worked example "
 "(`rut/biz/world.rut`):"
-msgstr ""
+msgstr "新鲜度是**读时拉取**：一次写入 bumps 一个代数，`get` 至多在每个写集内把过期的派生重算一次。任何地方都没有冲刷步骤。依赖是**发现的，不是声明的**——derive 闭包内部的 `ctx.get` 调用就是依赖列表，每次重算都重新记录。领域的计数行就是完整的示范（`rut/biz/world.rut`）："
 
 #: src/examples/05-todolist-web.md:148
 msgid ""
@@ -9827,6 +10491,20 @@ msgid ""
 "});\n"
 "```"
 msgstr ""
+"```rut\n"
+"let counts$ = store.derive(fn (ctx) -> str {\n"
+"    let items = ctx.get(items$);\n"
+"    let reqs = ctx.get(reqs$);\n"
+"    let mut open = 0;\n"
+"    for (let t of items) {\n"
+"        if (t.done == false) {\n"
+"            open += 1;\n"
+"        }\n"
+"    }\n"
+"    let done_n = items.len() - open;\n"
+"    return f\"{open} open | {done_n} done | {reqs.len()} in flight\";\n"
+"});\n"
+"```"
 
 #: src/examples/05-todolist-web.md:163
 msgid ""
@@ -9834,11 +10512,11 @@ msgid ""
 "— multi-step write programs that run in the one write lane; the machine's "
 "counters are sources too, because with no domain container there is nowhere "
 "else for state to live."
-msgstr ""
+msgstr "写入经由变更 fn——`add_m`、`toggle_m`、`remove_m`、`answer_m`——运行在唯一写车道上的多步写程序；机器的计数器也是 source，因为没有领域容器，状态就无处可住。"
 
 #: src/examples/05-todolist-web.md:168
 msgid "Widgets are data; the diff does the DOM"
-msgstr ""
+msgstr "部件是数据；diff 负责 DOM"
 
 #: src/examples/05-todolist-web.md:170
 msgid ""
@@ -9849,7 +10527,7 @@ msgid ""
 "re-append on reorder, retire gone keys' listeners. Nothing changed = nothing "
 "fires ([HashMaps and sets](../reference/builtin-generic-types.md) carry the "
 "path-keyed tables):"
-msgstr ""
+msgstr "`view(r)` 是从应用状态到 `Widget` 树的纯函数——它不做任何跨越，也不读取任何东西（读取是响应式的 _props_，在渲染门上解析）。`t1_render` 把新树与 `T1Root` 持有的上一棵树做 diff，只触发增量：按键匹配子节点、就地打补丁、重排时重新追加、为消失的键注销监听器。没有变化 = 什么都不触发（路径为键的表由[HashMap 与集合](../reference/builtin-generic-types.md)承载）："
 
 #: src/examples/05-todolist-web.md:179
 msgid ""
@@ -9864,6 +10542,16 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"pub struct T1Root {\n"
+"    parent: opaque; // the mounted root element\n"
+"    prev: ?Widget = nil; // the previous tree — the diff's left side\n"
+"    els: HashMap<str, opaque>; // path -> live handle (ops application)\n"
+"    regs: HashMap<str, Ev>; // listener id (as crossed) -> the\n"
+"    // widget's event wiring (a data-shaped binding)\n"
+"    lids: HashMap<str, i64>; // path -> listener id (retirement)\n"
+"}\n"
+"```"
 
 #: src/examples/05-todolist-web.md:190
 msgid ""
@@ -9872,18 +10560,18 @@ msgid ""
 "framework resolves a firing listener id to that wiring. Styling is a token "
 "contract: the stylesheet keys only the lowered `t1-*` tokens, and the app "
 "spells no class."
-msgstr ""
+msgstr "事件接线以**数据而非闭包**的形式骑在部件上——一行的 toggle 变更带着已绑定的实参（`.on_row(w.toggle_row, t.id)`），框架把触发的监听器 id 解析到那份接线。样式是一份 token 契约：样式表只认_lower_ 之后的 `t1-*` token，应用不写任何 class。"
 
 #: src/examples/05-todolist-web.md:196
 msgid "Two packages, two manifests"
-msgstr ""
+msgstr "两个包，两份清单"
 
 #: src/examples/05-todolist-web.md:198
 msgid ""
 "A real project is not one file — but the package boundary is also the "
 "privacy boundary, which is why there are exactly two ([Project structure and "
 "rut.toml](../reference/project-structure.md)):"
-msgstr ""
+msgstr "真实的项目不止一个文件——但包边界同时是隐私边界，这正是只有两个包的原因（[项目结构与 rut.toml](../reference/project-structure.md)）："
 
 #: src/examples/05-todolist-web.md:202
 msgid ""
@@ -9899,6 +10587,17 @@ msgid ""
 "nmapset = { path = \"../../../../rut/nmapset\" }\n"
 "```"
 msgstr ""
+"```toml\n"
+"# rut/biz/rut.toml — the project root\n"
+"name = \"app\"\n"
+"entry.lib = \"./biz.rut\"\n"
+"entry.libs = [\"./domain.rut\", \"./world.rut\", \"./app.rut\"]\n"
+"\n"
+"[deps]\n"
+"ui = { path = \"../ui\" }\n"
+"pouch = { path = \"../../../../rut/pouch\" }\n"
+"nmapset = { path = \"../../../../rut/nmapset\" }\n"
+"```"
 
 #: src/examples/05-todolist-web.md:214
 msgid ""
@@ -9909,45 +10608,45 @@ msgid ""
 "native lane mounts the _directory_ — the manifest, not a Rust fn, is the "
 "module list. The wasm lane mounts the same packages by hand as a mirror, and "
 "a test pins both lanes to byte-identical binaries."
-msgstr ""
+msgstr "`entry.libs` 把多个文件拼接成一个模块（基文件在前，按数组顺序），所以 `store.rut` 私有的名字对 `components.rut` 可见，对 `ui` 之外的一切不可见——单文件隐私，保持在包尺度。`ui` 被标为 `inline = true`（它的泛型导出依法拼接），原生通道挂载_目录_——清单就是模块列表，而不是某个 Rust fn。wasm 通道作为镜像手工挂载同样的包，并且有一个测试把两条通道钉在逐字节相同的二进制上。"
 
 #: src/examples/05-todolist-web.md:225
 msgid ""
 "The page ABI is `main` plus doors named for their events; state lives in the "
 "container the host re-passes every turn."
-msgstr ""
+msgstr "页面 ABI 就是 `main` 加各扇以其事件命名的门；状态活在宿主每回合回传的容器里。"
 
 #: src/examples/05-todolist-web.md:227
 msgid ""
 "Ten thin crossings carried an entire reactive framework — the host stayed "
 "generic and never learned the word \"todo\"."
-msgstr ""
+msgstr "十条薄跨越扛起了整个响应式框架——宿主保持通用，从未学会\"todo\"这个词。"
 
 #: src/examples/05-todolist-web.md:229
 msgid ""
 "The store is jotai's shape in rut: discovered deps, pull-on-read freshness, "
 "mutations as the write lane, and type-level non-writability through private "
 "traits."
-msgstr ""
+msgstr "存储是 rut 里的 jotai 形态：发现的依赖、读时拉取的新鲜度、作为写车道的变更，以及透过私有 trait 达成的类型级不可写。"
 
 #: src/examples/05-todolist-web.md:232
 msgid ""
 "Widgets are values; the keyed diff is the only thing that speaks DOM, and "
 "patch-in-place is what makes the UI animatable."
-msgstr ""
+msgstr "部件是值；键控 diff 是唯一会讲 DOM 的东西，而就地打补丁正是 UI 可动画的原因。"
 
 #: src/examples/05-todolist-web.md:234
 msgid ""
 "Soft failures are data (`(nil, why)` and the pump keeps draining); a panic "
 "alone kills the page, loud."
-msgstr ""
+msgstr "软失败是数据（`(nil, why)`，泵继续排空）；只有 panic 才杀死页面，而且死得响亮。"
 
 #: src/examples/05-todolist-web.md:237
 msgid ""
 "The async shape this page _simulates_ (the request table + timers) is the "
 "real thing in [06 — GitHub viewer CLI](06-github-viewer-cli.md); the store's "
 "building blocks are in [the swappable packages](../reference/stdlib.md)."
-msgstr ""
+msgstr "本页_模拟_的异步形态（请求表 + 定时器）在[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)里是真家伙；存储的构件在[可替换的包](../reference/stdlib.md)。"
 
 #: src/examples/06-github-viewer-cli.md:3
 msgid ""
@@ -9960,21 +10659,21 @@ msgid ""
 "`2` usage). This is the worked example for the std `http` lane's redesigned "
 "face — `HttpClient`, builder-style construction, and async-only send with "
 "true streaming."
-msgstr ""
+msgstr "`rgh` 经由 jsDelivr CDN 列出并下载公开 GitHub 仓库中的文件——不用 GitHub API，不用令牌。它的**大脑是一个 rut 异步自由函数**：argv 切分、URL 构建、树状 JSON 解码、人性化尺寸格式化，每一条消息与每一个退出码都在 VM 里运行。Rust 那一半是纯粹的嵌入方：挂载包、绑定宿主函数体、启动大脑、把驱动循环泵送到空闲、带着大脑的 i32 退出（`0` 正常，`1` 运行时错误，`2` 用法错误）。这是 std `http` 链路重塑后新面孔的完整示范——`HttpClient`、builder 式构建，以及只异步的 send 加真正的流式传输。"
 
 #: src/examples/06-github-viewer-cli.md:19
 msgid "# the offline suite — zero network\n"
-msgstr ""
+msgstr "# 离线套件——零网络\n"
 
 #: src/examples/06-github-viewer-cli.md:20
 msgid "# opt-in live CDN check\n"
-msgstr ""
+msgstr "# 可选的线上 CDN 检查\n"
 
 #: src/examples/06-github-viewer-cli.md:23
 msgid ""
 "`list` prints one line per file, depth-first in the API's own order "
 "(directories are walked, never printed):"
-msgstr ""
+msgstr "`list` 每个文件打印一行，按 API 自身的顺序深度优先（目录被遍历，从不打印）："
 
 #: src/examples/06-github-viewer-cli.md:30
 msgid ""
@@ -9986,11 +10685,11 @@ msgid ""
 "assertions — and covers every usage error, the boundary tree's exact output, "
 "streamed binary downloads verified byte-verbatim, wire deaths, and status "
 "mappings."
-msgstr ""
+msgstr "尺寸阶梯在 1024 以下是 `N B`，之后是 KiB/MiB/GiB，只有余数非零时才带一位小数（`1536` → `1.5 KiB`，`1048577` → `1.0 MiB`）；最后一列是条目 base64 完整性哈希的前 8 个字符，缺席时为 `-`。离线套件骑在一条按方法 + URL 为键、配虚拟时钟的**夹具链路**上——夹具表的键就是断言本身——并覆盖每一种用法错误、边界树的精确输出、逐字节校验的流式二进制下载、线路死亡，以及状态码映射。"
 
 #: src/examples/06-github-viewer-cli.md:41
 msgid "The brain is async; the host launches and pumps"
-msgstr ""
+msgstr "大脑是异步的；宿主启动并泵送"
 
 #: src/examples/06-github-viewer-cli.md:43
 msgid ""
@@ -9998,37 +10697,37 @@ msgid ""
 "single `\\n"
 "`\\-joined string (no arg lists in the crossing set), and `boot` launches "
 "the brain with the standard launcher ([Tasks](../reference/tasks.md)):"
-msgstr ""
+msgstr "`rgh.rut` ——入口是一个 `boot` fn：宿主把 argv 以单个 `\\n`\\-连接的字符串跨越进来（可跨越集合里没有参数列表），`boot` 用标准启动器启动大脑（[任务](../reference/tasks.md)）："
 
 #: src/examples/06-github-viewer-cli.md:54
 msgid ""
 "The embedder then pumps the driving loop to idle — real reqwest workers "
 "settle the completers from their threads, and the process's one-way `exit` "
 "row fires mid-pump:"
-msgstr ""
+msgstr "嵌入方接着把驱动循环泵送到空闲——真实的 reqwest worker 从各自的线程落定 completer，而进程的单向 `exit` 行在泵送中途触发："
 
 #: src/examples/06-github-viewer-cli.md:63
 msgid "\"rgh: trap: {} — {}\""
-msgstr ""
+msgstr "\"rgh: trap: {} — {}\""
 
 #: src/examples/06-github-viewer-cli.md:68
 msgid "// the brain retired WITHOUT exiting — a brain bug: loud\n"
-msgstr ""
+msgstr "// 大脑没有 exit 就退场了——大脑 bug：响亮\n"
 
 #: src/examples/06-github-viewer-cli.md:69
 msgid "\"rgh: the brain retired without exit (a brain bug)\""
-msgstr ""
+msgstr "\"rgh: the brain retired without exit (a brain bug)\""
 
 #: src/examples/06-github-viewer-cli.md:76
 msgid ""
 "The awaits live at the fetch sites and only there — everything else (argv "
 "carving with the `scan`/`slice` tokenizer primitives, flags, JSON, "
 "formatting) is the same sync code it always was."
-msgstr ""
+msgstr "await 只住在取数站点，而且只在那里——其余一切（用 `scan`/`slice` 分词原语做的 argv 切分、旗标、JSON、格式化）都是一如既往的同步代码。"
 
 #: src/examples/06-github-viewer-cli.md:80
 msgid "The http face: build a request, await the send"
-msgstr ""
+msgstr "http 面孔：构建请求，await 发送"
 
 #: src/examples/06-github-viewer-cli.md:82
 msgid ""
@@ -10039,7 +10738,7 @@ msgid ""
 "grammar; the wire still sees canonical `DELETE`), and `send(cx)` is THE "
 "async point, resolving **at headers** — the wire body stays unread ([the "
 "async model](../core-concepts/async-model.md)):"
-msgstr ""
+msgstr "std `http` 包**只异步且无后缀**：真正要等的操作才是异步点，其余一切都是同步的构建语法糖。五个动词都是构建糖（`get`/`post`/ `put`/`patch`/`del` ——DELETE 动词拼作 `del`，因为 `delete` 是 rut 语法里的被移除词；线上看到的仍是规范的 `DELETE`），而 `send(cx)` 是那个 THE 异步点，**在头部就**解析——线上主体保持未读（[异步模型](../core-concepts/async-model.md)）："
 
 #: src/examples/06-github-viewer-cli.md:91
 msgid ""
@@ -10059,6 +10758,21 @@ msgid ""
 "    let (tree, e) = decodeJsonBytes<Root>(await resp.body(cx));\n"
 "```"
 msgstr ""
+"```rut\n"
+"async fn do_list(cx: RunContext, client: HttpClient, owner: str, repo: str, "
+"rf: str) -> i32 {\n"
+"    let url = "
+"f\"https://data.jsdelivr.com/v1/packages/gh/{owner}/{repo}@{rf}\";\n"
+"    let resp = await client.get(url).build().send(cx);\n"
+"    let err = map_response(resp, \"no such repo or ref\", "
+"\"data.jsdelivr.com\");\n"
+"    if (err != nil) {\n"
+"        let why: str = err;\n"
+"        eprint(why);\n"
+"        return 1;\n"
+"    }\n"
+"    let (tree, e) = decodeJsonBytes<Root>(await resp.body(cx));\n"
+"```"
 
 #: src/examples/06-github-viewer-cli.md:104
 msgid ""
@@ -10068,11 +10782,11 @@ msgid ""
 "`status() == 0` is the reserved transport verdict, 404 names the host that "
 "was checked, 403 is the rate-limit note, anything else non-2xx is the bare "
 "status."
-msgstr ""
+msgstr "`list` 是**排空**链路：一次 `body(cx)` await 拉下整棵树，JSON 解码走 std `json` 包的 reader，配本文件里的 `impl JsonDeserialize for Entry`。状态映射只有一个函数：`status() == 0` 是保留的传输判定，404 点名被检查的宿主，403 是限流提示，其余非 2xx 就是裸状态码。"
 
 #: src/examples/06-github-viewer-cli.md:111
 msgid "The download: true streaming, chunk by chunk"
-msgstr ""
+msgstr "下载：真正的流式，逐块进行"
 
 #: src/examples/06-github-viewer-cli.md:113
 msgid ""
@@ -10081,7 +10795,7 @@ msgid ""
 "lands through the **sync** `append_file` host row. The destination is "
 "truncated once first, so a stale file never leaks its tail into a fresh "
 "download:"
-msgstr ""
+msgstr "`download` 走过一个 `ByteStream`——`next(cx)` 每次 await 回答一个块（nil = EOF 或失败；粘性的 `error()` 指明是哪种），每个块经由**同步的** `append_file` 宿主行落地。目标文件先被一次性截断，所以陈旧文件绝不会把尾巴漏进新下载："
 
 #: src/examples/06-github-viewer-cli.md:119
 msgid ""
@@ -10111,6 +10825,31 @@ msgid ""
 "    }\n"
 "```"
 msgstr ""
+"```rut\n"
+"    let stream = resp.byte_stream();\n"
+"    let mut total: i32 = 0;\n"
+"    while (true) {\n"
+"        let c = await stream.next(cx);\n"
+"        if (c == nil) {\n"
+"            // EOF — or a mid-read failure? the sticky error names it\n"
+"            let rerr = stream.error();\n"
+"            if (rerr != nil) {\n"
+"                let why: str = rerr;\n"
+"                eprint(f\"rgh: {dest}: {why}\");\n"
+"                return 1;\n"
+"            }\n"
+"            break;\n"
+"        }\n"
+"        let chunk: bytes = c;\n"
+"        let werr: ?str = append_file(dest, chunk);\n"
+"        if (werr != nil) {\n"
+"            let why: str = werr;\n"
+"            eprint(f\"rgh: {dest}: {why}\");\n"
+"            return 1;\n"
+"        }\n"
+"        total += chunk.len();\n"
+"    }\n"
+"```"
 
 #: src/examples/06-github-viewer-cli.md:145
 msgid ""
@@ -10119,18 +10858,18 @@ msgid ""
 "worth knowing: per response it is `body()` **xor** `byte_stream()`, and a "
 "late/second taker degrades (an empty drain, a dead reader) rather than "
 "trapping."
-msgstr ""
+msgstr "内存全程有界，数据路径上的每个失败都是一条消息加一个退出码——绝不是 panic，绝不是陷阱。这条链路的一次性法则值得知道：每个响应要么 `body()` 要么 `byte_stream()`，**二选一**；迟到者或第二名取用者会退化（空排空、失效 reader）而不是触发陷阱。"
 
 #: src/examples/06-github-viewer-cli.md:151
 msgid "The readbacks, on the response handle"
-msgstr ""
+msgstr "读回，在响应句柄上"
 
 #: src/examples/06-github-viewer-cli.md:153
 msgid ""
 "The `Response` class wraps the host's opaque handle with sync readbacks — "
 "status, the 2xx test, the transport text, and the sticky mid-read failure "
 "([the std packages](../reference/stdlib.md)):"
-msgstr ""
+msgstr "`Response` 类用同步读回包装宿主的 opaque 句柄——状态、2xx 测试、传输文本，以及粘性的读取中途失败（[std 包](../reference/stdlib.md)）："
 
 #: src/examples/06-github-viewer-cli.md:158
 msgid ""
@@ -10154,10 +10893,29 @@ msgid ""
 "    pub fn read_error(self) -> ?str { return http_read_err(self.r); }\n"
 "```"
 msgstr ""
+"```rut\n"
+"impl Response {\n"
+"    /// the HTTP status word — 0 means the transport failed (0 is never\n"
+"    /// a real status; any real status, 4xx/5xx included, is not one)\n"
+"    pub fn status(self) -> i32 { return http_status(self.r); }\n"
+"\n"
+"    /// the 2xx test\n"
+"    pub fn ok(self) -> bool {\n"
+"        let s = self.status();\n"
+"        return s >= 200 && s < 300;\n"
+"    }\n"
+"\n"
+"    /// the transport-failure text — nil unless status is 0\n"
+"    pub fn transport_error(self) -> ?str { return http_err(self.r); }\n"
+"\n"
+"    /// the sticky mid-read failure — nil until one fails, then\n"
+"    /// non-nil forever; meaningful after awaiting `body()`/`next()`\n"
+"    pub fn read_error(self) -> ?str { return http_read_err(self.r); }\n"
+"```"
 
 #: src/examples/06-github-viewer-cli.md:178
 msgid "The embedder's mount list"
-msgstr ""
+msgstr "嵌入方的挂载清单"
 
 #: src/examples/06-github-viewer-cli.md:180
 msgid ""
@@ -10165,27 +10923,27 @@ msgid ""
 "collections, json, and the http pair, then `assemble_peers` runs the peer "
 "gate so json's impl-only integration groups mount because the collections "
 "are in the closure ([Dependency kinds](../reference/dependency-kinds.md)):"
-msgstr ""
+msgstr "`src/main.rs` 用一张表展示完整的程序闭包——集合包、json 与 http 二件套——然后 `assemble_peers` 跑对等门禁，让 json 的纯 impl 集成组得以挂载，因为集合包在闭包里（[依赖类型](../reference/dependency-kinds.md)）："
 
 #: src/examples/06-github-viewer-cli.md:188
 msgid "\"rut/pouch\""
-msgstr ""
+msgstr "\"rut/pouch\""
 
 #: src/examples/06-github-viewer-cli.md:189
 msgid "\"rut/nmapset\""
-msgstr ""
+msgstr "\"rut/nmapset\""
 
 #: src/examples/06-github-viewer-cli.md:190
 msgid "\"rut/json\""
-msgstr ""
+msgstr "\"rut/json\""
 
 #: src/examples/06-github-viewer-cli.md:191
 msgid "\"rut/http_host\""
-msgstr ""
+msgstr "\"rut/http_host\""
 
 #: src/examples/06-github-viewer-cli.md:192
 msgid "\"rut/http\""
-msgstr ""
+msgstr "\"rut/http\""
 
 #: src/examples/06-github-viewer-cli.md:196
 msgid ""
@@ -10197,44 +10955,44 @@ msgid ""
 "consequence: `rut run` cannot host rgh itself — its rows are example-local — "
 "but ordinary HTTP programs do run under `rut run`, which mounts the std http "
 "pair by presence."
-msgstr ""
+msgstr "HTTP 函数体经 `install_std_http` 绑定（reqwest 链路）；示例自己的行只有 CLI IO——`out`（stdout；`print` 是被移除的 core 名字）、`eprint`、文件对，以及 `exit`——声明在示例本地的 `rgh_host` 声明包里，并在启动时对照绑定校验（[宿主 fn 与声明文件](../reference/host-fns.md)）。一个后果：`rut run` 无法承载 rgh 本身——它的行是示例本地的——但普通的 HTTP 程序确实能在 `rut run` 下运行，后者按存在性挂载 std http 二件套。"
 
 #: src/examples/06-github-viewer-cli.md:208
 msgid ""
 "**An async rut program in production shape**: the brain awaits at the fetch "
 "sites only; the embedder launches, pumps to idle, and exits with the brain's "
 "code."
-msgstr ""
+msgstr "**一个生产形态的异步 rut 程序**：大脑只在取数站点 await；嵌入方启动、泵送到空闲，然后带着大脑的退出码退出。"
 
 #: src/examples/06-github-viewer-cli.md:211
 msgid ""
 "**Headers-first send + one-shot body/stream** is the whole mental model of "
 "the std http lane — drain JSON in one await, stream files chunk by chunk."
-msgstr ""
+msgstr "**头部优先的发送 + 一次性 body/流**就是 std http 链路的全部心智模型：一次 await 排空 JSON，逐块流式下载文件。"
 
 #: src/examples/06-github-viewer-cli.md:214
 msgid ""
 "**Failures are values end to end**: transport errors, 404s, wire deaths, and "
 "io errors all become messages plus exit codes."
-msgstr ""
+msgstr "**失败从头到尾都是值**：传输错误、404、线路死亡和 io 错误全部变成消息加退出码。"
 
 #: src/examples/06-github-viewer-cli.md:216
 msgid ""
 "**The fixture lane is the test gate**: recorded replies keyed on method + "
 "URL, deterministic chunks on a virtual clock, zero network."
-msgstr ""
+msgstr "**夹具链路就是测试门禁**：按方法 + URL 为键的录制回应、虚拟时钟上确定性的数据块、零网络。"
 
 #: src/examples/06-github-viewer-cli.md:219
 msgid ""
 "The peer gate is load-bearing here: mounting the collections is what makes "
 "json's `Vec<T>` serde impls compile into this unit."
-msgstr ""
+msgstr "对等门禁在这里是承重墙：挂载集合包，正是让 json 的 `Vec<T>` serde impl 编译进本单元的原因。"
 
 #: src/examples/06-github-viewer-cli.md:222
 msgid ""
 "The lane's declarations live in the std tree; for the runner behind `rut "
 "run`, see [the rut CLI](../reference/cli.md)."
-msgstr ""
+msgstr "这条链路的声明住在 std 树里；`rut run` 背后的运行器，见[rut CLI](../reference/cli.md)。"
 
 #: src/examples/playground-corpus.md:3
 msgid ""
@@ -10245,286 +11003,286 @@ msgid ""
 "are the fastest way to see the language surface in working code: algorithms "
 "first, then the language-surface tours, then the memory shapes. The same "
 "order is the playground's."
-msgstr ""
+msgstr "经典案例：十七个短小自包含的 rut 程序，位于 `demo/src/examples/`，web Playground 在选择器里提供它们，并在你的浏览器里运行。它们不是复制品——Playground **原样**导入这些 `.rut` 文件，所以你在那里编辑的就是本仓库交付的东西。经典案例是看语言表面在可运行代码中亮相的最快途径：先是算法，然后是语言表面巡礼，最后是内存形态。这个顺序也是 Playground 的顺序。"
 
 #: src/examples/playground-corpus.md:13
 msgid "The playground itself:"
-msgstr ""
+msgstr "Playground 本身："
 
 #: src/examples/playground-corpus.md:16
 msgid "# serve the playground locally\n"
-msgstr ""
+msgstr "# 本地伺服 Playground\n"
 
 #: src/examples/playground-corpus.md:20
 msgid ""
 "Pick a case and press run — and the classics shown in the tour below run in "
 "the book too, on their ▶ buttons. The gates that keep the corpus honest:"
-msgstr ""
+msgstr "挑一个案例按下运行——下面巡礼中出现的经典案例也能在书里跑，靠它们的 ▶ 按钮。守住这份语料诚实性的门禁："
 
 #: src/examples/playground-corpus.md:25
 msgid "# from the repo root — the native gate\n"
-msgstr ""
+msgstr "# 从仓库根目录——原生门禁\n"
 
 #: src/examples/playground-corpus.md:26
 msgid "# the wasm gate, headless\n"
-msgstr ""
+msgstr "# wasm 门禁，无头\n"
 
 #: src/examples/playground-corpus.md:29
 msgid "Concretely:"
-msgstr ""
+msgstr "具体而言："
 
 #: src/examples/playground-corpus.md:31
 msgid ""
 "`cargo test -p rut-cli --test playground` compiles **and runs** every "
 "classic through the full pipeline natively — a compile failure or a trap "
 "fails the gate."
-msgstr ""
+msgstr "`cargo test -p rut-cli --test playground` 经完整管线原生地编译**并运行**每个经典案例——编译失败或陷阱都会让门禁变红。"
 
 #: src/examples/playground-corpus.md:34
 msgid ""
 "`cd demo && npm run smoke` builds the demo bundle (wasm included) and drives "
 "every case through it, headless — the same run through the wasm engine."
-msgstr ""
+msgstr "`cd demo && npm run smoke` 构建 demo 打包件（含 wasm）并无头地驱动每个案例穿过它——同一次运行走的是 wasm 引擎。"
 
 #: src/examples/playground-corpus.md:38
 msgid ""
 "Both gates drive the same sources through the same engine — native and wasm "
 "— so a classic that stops running cleanly fails in CI, not in front of a "
 "reader."
-msgstr ""
+msgstr "两道门禁把同样的源码驱动过同一个引擎——原生与 wasm——所以一个不再能干净运行的经典案例会在 CI 里失败，而不是在读者面前。"
 
 #: src/examples/playground-corpus.md:42
 msgid "The seventeen cases"
-msgstr ""
+msgstr "十七个案例"
 
 #: src/examples/playground-corpus.md:44
 msgid "Case"
-msgstr ""
+msgstr "案例"
 
 #: src/examples/playground-corpus.md:44
 msgid "Demonstrates"
-msgstr ""
+msgstr "演示内容"
 
 #: src/examples/playground-corpus.md:44
 msgid "First line it prints"
-msgstr ""
+msgstr "打印的第一行"
 
 #: src/examples/playground-corpus.md:46
 msgid "`sieve`"
-msgstr ""
+msgstr "`sieve`"
 
 #: src/examples/playground-corpus.md:46
 msgid "Sieve of Eratosthenes — flat `Vec<u8>`/`Vec<i32>` primitive buffers"
-msgstr ""
+msgstr "埃拉托斯特尼筛法——扁平的 `Vec<u8>`/`Vec<i32>` 原始类型缓冲区"
 
 #: src/examples/playground-corpus.md:46
 msgid "`25 primes up to 100, last=97`"
-msgstr ""
+msgstr "`25 primes up to 100, last=97`"
 
 #: src/examples/playground-corpus.md:47
 msgid "`quicksort`"
-msgstr ""
+msgstr "`quicksort`"
 
 #: src/examples/playground-corpus.md:47
 msgid "in-place `Vec<i32>` mutation (handles, shared with the caller), recursion"
-msgstr ""
+msgstr "就地 `Vec<i32>` 变更（句柄，与调用方共享）、递归"
 
 #: src/examples/playground-corpus.md:47
 msgid "`sorted: 1 2 2 3 5 7 8 9`"
-msgstr ""
+msgstr "`sorted: 1 2 2 3 5 7 8 9`"
 
 #: src/examples/playground-corpus.md:48
 msgid "`matrix-mul`"
-msgstr ""
+msgstr "`matrix-mul`"
 
 #: src/examples/playground-corpus.md:48
 msgid "flat `Vec<f32>` hot loops — unboxed buffers, no per-element refcounts"
-msgstr ""
+msgstr "扁平 `Vec<f32>` 热循环——不装箱的缓冲区，没有逐元素引用计数"
 
 #: src/examples/playground-corpus.md:48
 msgid "`out[0]=21 out[last]=107`"
-msgstr ""
+msgstr "`out[0]=21 out[last]=107`"
 
 #: src/examples/playground-corpus.md:49
 msgid "`classes`"
-msgstr ""
+msgstr "`classes`"
 
 #: src/examples/playground-corpus.md:49
 msgid ""
 "class-method construction (`new`/`from`), `Self {}`, member `pub` + sealing"
-msgstr ""
+msgstr "类方法构造（`new`/`from`）、`Self {}`、成员 `pub` + 密封"
 
 #: src/examples/playground-corpus.md:49
 msgid "`count=2 area=12`"
-msgstr ""
+msgstr "`count=2 area=12`"
 
 #: src/examples/playground-corpus.md:50
 msgid "`closures-generics`"
-msgstr ""
+msgstr "`closures-generics`"
 
 #: src/examples/playground-corpus.md:50
 msgid "anonymous fns (block bodies), monomorphized generics, fn types, capture"
-msgstr ""
+msgstr "匿名 fn（块体）、单态化泛型、fn 类型、捕获"
 
 #: src/examples/playground-corpus.md:50
 msgid "`add=3 area=3.1415927 sum=6`"
-msgstr ""
+msgstr "`add=3 area=3.1415927 sum=6`"
 
 #: src/examples/playground-corpus.md:51
 msgid "`structs`"
-msgstr ""
+msgstr "`structs`"
 
 #: src/examples/playground-corpus.md:51
 msgid "reference semantics (sharing by default), identity `==`"
-msgstr ""
+msgstr "引用语义（默认共享）、身份 `==`"
 
 #: src/examples/playground-corpus.md:51
 msgid "`len=6.324555320336759 color=16711935 area=6`"
-msgstr ""
+msgstr "`len=6.324555320336759 color=16711935 area=6`"
 
 #: src/examples/playground-corpus.md:52
 msgid "`literals`"
-msgstr ""
+msgstr "`literals`"
 
 #: src/examples/playground-corpus.md:52
 msgid "numeric suffixes, plain/raw/format strings, fixed `[T]`, bytes buffers"
-msgstr ""
+msgstr "数字后缀、普通/原始/格式化字符串、定长 `[T]`、bytes 缓冲区"
 
 #: src/examples/playground-corpus.md:52
 msgid "`a=10 e=1.5 d64=1.5 ch=h p.x=1 zero[0]=9 len=3 bin=64`"
-msgstr ""
+msgstr "`a=10 e=1.5 d64=1.5 ch=h p.x=1 zero[0]=9 len=3 bin=64`"
 
 #: src/examples/playground-corpus.md:53
 msgid "`checked-arith`"
-msgstr ""
+msgstr "`checked-arith`"
 
 #: src/examples/playground-corpus.md:53
 msgid ""
 "`wrapping_*` wraps two's-complement, `checked_*` answers the `(T, bool)` "
 "tuple"
-msgstr ""
+msgstr "`wrapping_*` 回绕二进制补码，`checked_*` 回答 `(T, bool)` 元组"
 
 #: src/examples/playground-corpus.md:53
 msgid "`wrap=4 under=255`"
-msgstr ""
+msgstr "`wrap=4 under=255`"
 
 #: src/examples/playground-corpus.md:54
 msgid "`str-views`"
-msgstr ""
+msgstr "`str-views`"
 
 #: src/examples/playground-corpus.md:54
 msgid ""
 "O(1) slice views (a slice IS a str), codepoints — `s.code` / `str.from_code`"
-msgstr ""
+msgstr "O(1) 切片视图（切片就是一个 str）、码点——`s.code` / `str.from_code`"
 
 #: src/examples/playground-corpus.md:54
 msgid "`word=world len=5 eq=true`"
-msgstr ""
+msgstr "`word=world len=5 eq=true`"
 
 #: src/examples/playground-corpus.md:55
 msgid "the binary primitive — encode/decode, clone as the ONE copy"
-msgstr ""
+msgstr "二进制原始类型——编码/解码，clone 作为唯一的复制"
 
 #: src/examples/playground-corpus.md:55
 msgid "`round=true octets=8 chars=8`"
-msgstr ""
+msgstr "`round=true octets=8 chars=8`"
 
 #: src/examples/playground-corpus.md:56
 msgid ""
 "`opaque` / `opaque.downcast<T> -> ?T` / `is` — erasure and checked recovery"
-msgstr ""
+msgstr "`opaque` / `opaque.downcast<T> -> ?T` / `is`——擦除与受检恢复"
 
 #: src/examples/playground-corpus.md:56
 msgid "`point 1 2`"
-msgstr ""
+msgstr "`point 1 2`"
 
 #: src/examples/playground-corpus.md:57 src/reference/lexical-structure.md:44
 #: src/reference/control-flow.md:36
 msgid "`when`"
-msgstr ""
+msgstr "`when`"
 
 #: src/examples/playground-corpus.md:57
 msgid "`when` pattern expressions over enums, exhaustiveness"
-msgstr ""
+msgstr "对枚举的 `when` 模式表达式、穷举性"
 
 #: src/examples/playground-corpus.md:57
 msgid "`small`"
-msgstr ""
+msgstr "`small`"
 
 #: src/examples/playground-corpus.md:58
 msgid "`maps`"
-msgstr ""
+msgstr "`maps`"
 
 #: src/examples/playground-corpus.md:58
 msgid ""
 "the keyed-collection lane — `HashMap`/`HashSet`, keys admitted by the "
 "compile-time union bound"
-msgstr ""
+msgstr "键控集合链路——`HashMap`/`HashSet`，键由编译期联合约束接纳"
 
 #: src/examples/playground-corpus.md:58
 msgid "`rut=3 runs=1`"
-msgstr ""
+msgstr "`rut=3 runs=1`"
 
 #: src/examples/playground-corpus.md:59
 msgid "`node-cycle`"
-msgstr ""
+msgstr "`node-cycle`"
 
 #: src/examples/playground-corpus.md:59
 msgid "strong cycles keep cells alive — the program's responsibility"
-msgstr ""
+msgstr "强循环引用让单元保活——这是程序自己的责任"
 
 #: src/examples/playground-corpus.md:59
 msgid "`head.next alive: true`"
-msgstr ""
+msgstr "`head.next alive: true`"
 
 #: src/examples/playground-corpus.md:60
 msgid "`tree`"
-msgstr ""
+msgstr "`tree`"
 
 #: src/examples/playground-corpus.md:60
 msgid ""
 "recursive structs (`?Node` nullable fields), composite fields as handle slots"
-msgstr ""
+msgstr "递归结构体（`?Node` 可空字段）、作为句柄槽位的复合字段"
 
 #: src/examples/playground-corpus.md:60
 msgid "`nodes=15`"
-msgstr ""
+msgstr "`nodes=15`"
 
 #: src/examples/playground-corpus.md:61
 msgid "`weak-cache`"
-msgstr ""
+msgstr "`weak-cache`"
 
 #: src/examples/playground-corpus.md:61
 msgid "the cache/observer shape, shown with today's strong refs"
-msgstr ""
+msgstr "缓存/观察者形态，用今天的强引用演示"
 
 #: src/examples/playground-corpus.md:61
 msgid "`held: true id=1`"
-msgstr ""
+msgstr "`held: true id=1`"
 
 #: src/examples/playground-corpus.md:62
 msgid "`type-aliases`"
-msgstr ""
+msgstr "`type-aliases`"
 
 #: src/examples/playground-corpus.md:62
 msgid ""
 "transparent aliases, bound-only unions, inline `requires` at the call site"
-msgstr ""
+msgstr "透明别名、仅约束的联合、调用点上的内联 `requires`"
 
 #: src/examples/playground-corpus.md:62
 msgid "`trip=1500 plain=1500 ridge/trench kind=trench`"
-msgstr ""
+msgstr "`trip=1500 plain=1500 ridge/trench kind=trench`"
 
 #: src/examples/playground-corpus.md:64
 msgid ""
 "Output goes through `ink`'s `Logger` (the `log.info` lines above) — the same "
 "logging surface the std packages use ([core and the swappable "
 "packages](../reference/stdlib.md))."
-msgstr ""
+msgstr "输出经过 `ink` 的 `Logger`（上面的 `log.info` 行）——与 std 包所用相同的日志表面（[core 与可替换的包](../reference/stdlib.md)）。"
 
 #: src/examples/playground-corpus.md:70
 msgid "A classic, whole"
-msgstr ""
+msgstr "一个经典案例，完整版"
 
 #: src/examples/playground-corpus.md:72
 msgid ""
@@ -10532,7 +11290,7 @@ msgid ""
 "one log line — and the shared-handle mutation law in action (the sort writes "
 "through the caller's vec). Verbatim, so what runs here is exactly what the "
 "playground edits:"
-msgstr ""
+msgstr "`demo/src/examples/quicksort.rut` 是原型——导入、一个算法、一行日志——也是共享句柄变更法则的实战（排序透过调用方的 vec 写入）。原样照录，所以这里运行的正是 Playground 编辑的东西："
 
 #: src/examples/playground-corpus.md:77
 msgid ""
@@ -10584,22 +11342,69 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use pouch::{ Vec };\n"
+"// Quicksort — in-place Vec<i32> mutation (vecs are handles: the\n"
+"// mutation is shared with the caller), recursion, explicit conversions.\n"
+"\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn swap(mut xs: Vec<i32>, a: i32, b: i32) {\n"
+"    let t = xs[a];\n"
+"    xs[a] = xs[b];\n"
+"    xs[b] = t;\n"
+"}\n"
+"\n"
+"fn partition(xs: Vec<i32>, lo: i32, hi: i32) -> i32 {\n"
+"    let pivot = xs[hi];\n"
+"    let mut i = lo - 1;\n"
+"    for (let j = lo; j < hi; j += 1) {\n"
+"        if (xs[j] <= pivot) {\n"
+"            i += 1;\n"
+"            swap(xs, i, j);\n"
+"        }\n"
+"    }\n"
+"    swap(xs, i + 1, hi);\n"
+"    return i + 1;\n"
+"}\n"
+"\n"
+"fn quicksort(xs: Vec<i32>, lo: i32, hi: i32) {\n"
+"    if (lo >= hi) { return; }\n"
+"    let p = partition(xs, lo, hi);\n"
+"    quicksort(xs, lo, p - 1);\n"
+"    quicksort(xs, p + 1, hi);\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    let log = Logger.new(\"sort\");\n"
+"    let xs = Vec<i32>.from([5, 2, 9, 1, 7, 3, 8, 2]);   // fixed -> "
+"growable\n"
+"    quicksort(xs, 0, xs.len() - 1);\n"
+"\n"
+"    let mut out = \"\";\n"
+"    for (let i = 0; i < xs.len(); i += 1) {\n"
+"        out = f\"{out}{xs[i]} \";      // `mut`: rebinding; the f-string "
+"form builds in place\n"
+"    }\n"
+"    log.info(f\"sorted: {out}\");\n"
+"}\n"
+"```"
 
 #: src/examples/playground-corpus.md:127
 msgid ""
 "(The line above ends with the trailing space the program builds — one after "
 "every element — kept byte-for-byte.)"
-msgstr ""
+msgstr "（上面那行以程序构建出的尾随空格结尾——每个元素后面一个——逐字节保留。）"
 
 #: src/examples/playground-corpus.md:130
 msgid ""
 "Compare with [01 — Sort](01-sort.md): same algorithm, no host — run it here "
 "and compare with the fuel-counted host sweep."
-msgstr ""
+msgstr "与[01 — 排序](01-sort.md)对比：同一算法，没有宿主——在这里跑一遍，再与计燃料的宿主全遍对比。"
 
 #: src/examples/playground-corpus.md:133
 msgid "Erasure and checked recovery, in one screen"
-msgstr ""
+msgstr "擦除与受检恢复，一屏之内"
 
 #: src/examples/playground-corpus.md:135
 msgid ""
@@ -10608,7 +11413,7 @@ msgid ""
 "names the _box_, never the payload ([opaque — erasure and "
 "downcast](../reference/opaque.md)). The case's `erase_and_recover` verbatim, "
 "with its two payload types and a `main` so it runs in place:"
-msgstr ""
+msgstr "`opaque` 案例是擦除原语的参照——`opaque(v)` 忘掉静态类型，`opaque.downcast<T>` 回答可空类型，`is` 指名的是_盒_，绝不是载荷（[opaque — 擦除与向下转型](../reference/opaque.md)）。案例的 `erase_and_recover` 原样照录，带上它的两个载荷类型和一个 `main`，让它就地运行："
 
 #: src/examples/playground-corpus.md:142
 msgid ""
@@ -10642,10 +11447,39 @@ msgid ""
 "}\n"
 "```"
 msgstr ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Point { x: f32; y: f32 }\n"
+"enum Flavor { Sweet, Sour }\n"
+"\n"
+"fn erase_and_recover() {\n"
+"    let log = Logger.new(\"opaque\");\n"
+"    let box1 = opaque(Point { x: 1, y: 2 });    // erasure = type-call;\n"
+"    let box2 = opaque(Flavor.Sour);             // zero-copy (shares the "
+"cell)\n"
+"    let box3 = opaque(\"hello\");\n"
+"\n"
+"    let p = opaque.downcast<Point>(box1);       // ?Point — the nullable\n"
+"    when (p != nil) {\n"
+"        true -> { log.info(f\"point {p.x} {p.y}\"); },\n"
+"        else  -> { log.info(\"point: nil\"); },\n"
+"    }\n"
+"    let wrong = opaque.downcast<i32>(box2);     // wrong type: nil, no trap\n"
+"    log.info(f\"sour? {opaque.downcast<Flavor>(box2) != nil} wrong? {wrong "
+"== nil}\");\n"
+"    log.info(f\"is str: {box3 is str}\");   // `is` names the box — misses "
+"every payload type; downcast recovers\n"
+"}\n"
+"\n"
+"pub fn main() {\n"
+"    erase_and_recover();\n"
+"}\n"
+"```"
 
 #: src/examples/playground-corpus.md:175
 msgid "How a case is wired"
-msgstr ""
+msgstr "案例是如何接线的"
 
 #: src/examples/playground-corpus.md:177
 msgid ""
@@ -10657,39 +11491,39 @@ msgid ""
 "std tree — every `.rut` file in the repo must parse clean), and one "
 "quicksort log line ends with a trailing space the program builds on purpose "
 "— run it above and look closely."
-msgstr ""
+msgstr "每个经典案例都注册在 `demo/src/examples/index.ts` 里——一个 id、一句简介和原始源码，按 Playground 的顺序。上面的表引用了每个案例的第一行日志，巡礼的代码块就在这里运行——quicksort 与交付版分毫不差。浏览时有两个细节值得留意：这份语料也被解析器一致性测试遍历（与 `examples/` 及 std 树一道——仓库里每个 `.rut` 文件都必须干净解析），以及一行 quicksort 日志以程序刻意构建的尾随空格结尾——在上面运行它，凑近看。"
 
 #: src/examples/playground-corpus.md:189
 msgid ""
 "The classics are **live sources**, not string copies: the playground edits "
 "what the repo ships."
-msgstr ""
+msgstr "经典案例是**活的源码**，不是字符串复制品：Playground 编辑的就是仓库交付的。"
 
 #: src/examples/playground-corpus.md:191
 msgid ""
 "Every case is exercised by **two gates** — native and wasm — over the same "
 "engine."
-msgstr ""
+msgstr "每个案例都被**两道门禁**操练——原生与 wasm——跑在同一个引擎上。"
 
 #: src/examples/playground-corpus.md:193
 msgid ""
 "Seventeen files cover the language surface in run-sized doses: algorithms, "
 "types and traits, strings and bytes, erasure, patterns, maps, and the memory "
 "shapes."
-msgstr ""
+msgstr "十七个文件以一次运行的剂量覆盖语言表面：算法、类型与 trait、字符串与字节、擦除、模式、map，以及内存形态。"
 
 #: src/examples/playground-corpus.md:196
 msgid ""
 "When you change the language, these files are the first smoke test — and "
 "often the clearest place to demonstrate the change."
-msgstr ""
+msgstr "当你改动语言时，这些文件是第一道冒烟测试——而且往往也是最清晰的演示之地。"
 
 #: src/examples/playground-corpus.md:199
 msgid ""
 "For the bigger, host-driven versions of the same ideas, start at [00 — "
 "Todolist](00-todolist.md) and work up to [06 — GitHub viewer "
 "CLI](06-github-viewer-cli.md)."
-msgstr ""
+msgstr "想看同一批想法更大、由宿主驱动的版本，从[00 — 待办清单](00-todolist.md)出发，一路读到[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)。"
 
 #: src/reference/lexical-structure.md:3
 msgid ""
