@@ -410,9 +410,8 @@ fn emit_completion(c: &mut FnCompiler, sp_lo: u32) {
 /// `false`), clear this frame's pending edge (the awaited frame's
 /// awaiter slot must not keep a retired frame alive), then release
 /// every ref-typed cell-backed local — `SetF null` drops the refcount;
-/// the pending-drop drain is reinstated for `Disposal` in the next
-/// phase, running the attached callbacks LIFO, in reverse declaration
-/// order — then a plain Ret.
+/// the interpreter's disposal drain then runs `dispose` on the released
+/// cells LIFO, in reverse declaration order — and a plain Ret.
 fn emit_drop_path(c: &mut FnCompiler, sp_lo: u32) {
     let frame_reg = c.async_frame.as_ref().map(|f| f.frame_reg).unwrap_or(0);
     let null = c.emit_null(sp_lo);

@@ -290,11 +290,12 @@ prelude builtin impl u64 {
 
 // v1.1 removed `Index` from the prelude: indexing is builtin over
 // `[T]`/`Vec`/`str`/`bytes`. `Disposal` is BACK — registered again as
-// the cell-death contract (`pub builtin`, the import-gated spelling;
-// decl-only for now — nothing dispatches `dispose` yet, and the
-// language has no destructor mechanism in the interim). Library
-// contracts without engine knowledge (`Hashable`)
-// stay plain `trait` in their module.
+// the cell-death contract (`pub builtin`, the import-gated spelling):
+// the engine pins a cell whose type implements `Disposal` when its
+// strong count reaches zero (weak boxes null first) and runs
+// `dispose(self, cx)` at the next call boundary; the fields release
+// after it returns. Library contracts without engine knowledge
+// (`Hashable`) stay plain `trait` in their module.
 
 // RFC 0012 §6 — the iteration protocol. A type is iterable when it
 // declares this member (duck-typed satisfaction); `for (x of it)`

@@ -333,6 +333,10 @@ pub fn compile_program_resolved(
         }
     }
     let vtables = ctx.build_vtables();
+    // per-type disposal rows: `(target type, dispose func id)` per
+    // `impl ..: Disposal` — the release path's table, flowing module→link
+    // beside the vtables
+    let disposal_impls = ctx.disposal_impls();
     // finalize the entry table (RFC 0035 §3): `entry fn`s — plus the
     // conventional `main` when it is exported.
     let mut exports: Vec<(IdentId, u32)> = Vec::new();
@@ -502,6 +506,7 @@ pub fn compile_program_resolved(
         traits: ctx.traits,
         trait_slots,
         vtables,
+        disposal_impls,
         consts: ctx.consts,
         funcs,
         exports,

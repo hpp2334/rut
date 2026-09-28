@@ -45,10 +45,14 @@ pub struct Heap {
 const CELL_OVERHEAD: u64 = 24; // header + Rc box approximation
 
 impl Heap {
-    pub(crate) fn new(limit: Option<u64>, plan: ReleasePlan) -> Heap {
+    pub(crate) fn new(
+        limit: Option<u64>,
+        plan: ReleasePlan,
+        disposal_impls: Vec<Option<u32>>,
+    ) -> Heap {
         Heap {
             acct: Rc::new(HeapAcct { used: Cell::new(0), peak: Cell::new(0), limit: Cell::new(limit) }),
-            arena: Rc::new(Arena::new(Rc::new(plan))),
+            arena: Rc::new(Arena::new(Rc::new(plan), disposal_impls)),
         }
     }
 
@@ -452,6 +456,18 @@ impl Heap {
         self.mint(rut_core::types::TY_STACK_TRACE, CellData::Trace { frames }, n * 8)
     }
 
+    /// A fresh `DisposalContext` cell — the engine mints one per
+    /// `dispose` call. Empty surface for now (the parameter exists so
+    /// the context can grow without touching the trait signature); the
+    /// cell is a zero-field record-shaped shell over the boot type.
+    pub fn alloc_disposal_context(&self) -> Result<Slot, Trap> {
+        self.mint(
+            rut_core::types::TY_DISPOSAL_CONTEXT,
+            CellData::Record { fields: RefCell::new(Slots::zeroed(0)) },
+            0,
+        )
+    }
+
     /// A `Weak<T>` box (RFC 0017 v1): a WeakBox side cell holding the
     /// referent's raw slot word — UNRETAINED (a weak never keeps its
     /// referent alive) — registered into the referent's weak list so
@@ -518,6 +534,13 @@ impl Heap {
     /// collected and released recursively (RFC 0016 §3).
     pub fn release(&self, s: Slot) {
         release_ref_slot(&self.arena, &self.acct, s);
+    }
+
+    /// Pop one queued `dispose` call: `(pinned cell, dispose func id)`.
+    /// The caller runs `dispose(cell, cx)` with a fresh cx, then
+    /// releases the pin.
+    pub(crate) fn take_pending_dispose(&self) -> Option<(Slot, u32)> {
+        self.arena.take_pending_dispose().map(|(p, fid)| (Slot { r: p }, fid))
     }
 
     /// Build an owning host handle for an `Opaque` slot (retains once).

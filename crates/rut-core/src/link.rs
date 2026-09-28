@@ -62,6 +62,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     let mut out = Program {
         types: TypeTable::boot(),
         vtables: vec![Vec::new(); boot],
+        disposal_impls: vec![None; boot],
         ..Default::default()
     };
     out.name = modules
@@ -95,7 +96,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     let mut impl_owner: std::collections::HashMap<(u32, u32), String> =
         std::collections::HashMap::new();
 
-    for m in modules {
+    for mut m in modules {
         let nfuncs = m.funcs.len() as u32;
         let nconsts = m.consts.len() as u32;
 
@@ -277,6 +278,37 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             });
         }
         out.vtables.resize(out.types.types.len(), Vec::new());
+        out.disposal_impls.resize(out.types.types.len(), None);
+
+        // a module-local type index -> its global dense id. Boot-prefix
+        // ids are global by construction (a boot id packs to itself); a
+        // used block's dense index resolves through its scope's global
+        // base; a module's own block offsets by its base. The vtable rows
+        // and the disposal rows key the same ids.
+        let gi_of = |i: u32| -> Option<u32> {
+            if i < own_base {
+                if i < m_boot {
+                    // boot prefix: global by construction
+                    return Some(i);
+                }
+                // a used block's dense index -> its scope -> global base
+                let mut owner: Option<(crate::id::ScopeId, u32)> = None;
+                for (s, &b) in m.types.scope_base.iter().enumerate() {
+                    if s == crate::id::BOOT_SCOPE as usize || b < m_boot || b > i {
+                        continue;
+                    }
+                    match owner {
+                        Some((_, best)) if best > b => {}
+                        _ => owner = Some((s as crate::id::ScopeId, b)),
+                    }
+                }
+                let (s, b) = owner?;
+                let gb = *scope_base.get(&s)?;
+                Some(gb + (i - b))
+            } else {
+                Some(base + (i - own_base))
+            }
+        };
 
         // per-type vtables: keyed by type, slot-indexed, value = func id.
         // Rows for this module's OWN types are assigned; rows for types
@@ -284,32 +316,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         // module than the type (RFC 0012 §2), and its fills must reach
         // the global row the owner module laid down.
         for (i, vt) in m.vtables.into_iter().enumerate() {
-            let gi: u32 = if (i as u32) < own_base {
-                if (i as u32) < m_boot {
-                    // boot prefix: ids are global by construction (a boot
-                    // id packs to itself, RFC 0035 §1) — a primitive
-                    // trait-impl target's fill merges into the global
-                    // boot row (RFC 0012 §2)
-                    i as u32
-                } else {
-                    // a used block's dense index -> its scope -> global base
-                    let mut owner: Option<(crate::id::ScopeId, u32)> = None;
-                    for (s, &b) in m.types.scope_base.iter().enumerate() {
-                        if s == crate::id::BOOT_SCOPE as usize || b < m_boot || b > i as u32 {
-                            continue;
-                        }
-                        match owner {
-                            Some((_, best)) if best > b => {}
-                            _ => owner = Some((s as crate::id::ScopeId, b)),
-                        }
-                    }
-                    let Some((s, b)) = owner else { continue };
-                    let Some(&gb) = scope_base.get(&s) else { continue };
-                    gb + (i as u32 - b)
-                }
-            } else {
-                base + (i as u32 - own_base)
-            };
+            let Some(gi) = gi_of(i as u32) else { continue };
             let gi = gi as usize;
             if gi >= out.vtables.len() {
                 out.vtables.resize(gi + 1, Vec::new());
@@ -323,6 +330,19 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     row[sm(si as u32) as usize] = Some(map_func(fid));
                 }
             }
+        }
+
+        // per-type disposal rows: `(target type, dispose func id)` — the
+        // same remap the vtable loop applies, func ids rebased like every
+        // other func ref. A second fill is unreachable: the duplicate-
+        // impl check above rejected a repeated (Disposal, type) pair.
+        for (i, fid) in std::mem::take(&mut m.disposal_impls).into_iter().enumerate() {
+            let Some(fid) = fid else { continue };
+            let Some(gi) = gi_of(i as u32) else { continue };
+            if gi as usize >= out.disposal_impls.len() {
+                out.disposal_impls.resize(gi as usize + 1, None);
+            }
+            out.disposal_impls[gi as usize] = Some(map_func(fid));
         }
 
         // consts: `type_id` entries are rebased
@@ -502,6 +522,7 @@ mod tests {
         });
         p.exports.push((main, 0));
         p.vtables = vec![Vec::new(); p.types.types.len()];
+        p.disposal_impls = vec![None; p.types.types.len()];
         p
     }
 

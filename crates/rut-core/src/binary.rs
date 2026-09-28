@@ -426,6 +426,11 @@ pub struct Program {
     pub trait_slots: Vec<(u32, u32)>,
     /// per-type vtables: entry per type, mapping slot → func id
     pub vtables: Vec<Vec<Option<u32>>>,
+    /// per-type disposal rows: entry per type, `Some(dispose func id)`
+    /// when the type implements `Disposal` — the release path's table
+    /// (the engine calls `dispose` at refcount zero; never a vtable
+    /// slot). Module-local ids pre-link, global after.
+    pub disposal_impls: Vec<Option<u32>>,
     pub consts: Vec<ConstVal>,
     pub funcs: Vec<FuncCode>,
     pub exports: Vec<(IdentId, u32)>,
@@ -542,7 +547,13 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// or kind, which an older engine can neither place in its boot table
 /// nor decode, so stale artifacts are refused at the version byte
 /// instead of misread.
-pub const VERSION: u32 = 14;
+/// v15: the disposal dispatch — the binary gains a per-type `dispose`
+/// section beside the vtables (entries as `(ty, func)`, one row per
+/// type implementing `Disposal`). The v14 interim carried the surface
+/// decl-only and had no such section, so a stale v14 artifact would
+/// misparse the func table as disposal rows — refused at the version
+/// byte, the v10 precedent again.
+pub const VERSION: u32 = 15;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -606,6 +617,19 @@ pub fn encode(prog: &Program) -> Vec<u8> {
             e.u32(*s);
             e.u32(*f);
         }
+    }
+    // disposal rows: entries as (ty, func) — the None majority is
+    // implied (the decode rebuilds it)
+    let disp_entries: Vec<(u32, u32)> = prog
+        .disposal_impls
+        .iter()
+        .enumerate()
+        .filter_map(|(ty, f)| f.map(|f| (ty as u32, f)))
+        .collect();
+    e.u32(disp_entries.len() as u32);
+    for (ty, f) in &disp_entries {
+        e.u32(*ty);
+        e.u32(*f);
     }
     // consts
     e.u32(prog.consts.len() as u32);
@@ -793,6 +817,17 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         }
         vtables[ty] = vt;
     }
+    // disposal rows: entries as (ty, func); every unnamed type is None
+    let ndisp = d.u32()? as usize;
+    let mut disposal_impls = vec![None; types.types.len()];
+    for _ in 0..ndisp {
+        let ty = d.u32()? as usize;
+        let f = d.u32()?;
+        let Some(row) = disposal_impls.get_mut(ty) else {
+            return Err(format!("bad disposal row (type {ty})"));
+        };
+        *row = Some(f);
+    }
     let nconsts = d.u32()? as usize;
     let mut consts = Vec::with_capacity(nconsts);
     for _ in 0..nconsts {
@@ -847,7 +882,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         let f = d.u32()?;
         exports.push((n, f));
     }
-    Ok(Program { name, interner, types, traits, trait_slots, vtables, consts, funcs, exports, ..Default::default() })
+    Ok(Program { name, interner, types, traits, trait_slots, vtables, disposal_impls, consts, funcs, exports, ..Default::default() })
 }
 
 fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {

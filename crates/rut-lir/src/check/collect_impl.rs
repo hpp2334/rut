@@ -571,6 +571,30 @@ impl<'a> Ctx<'a> {
             self.err(sp, "duplicate impl for the same (trait, type) pair (RFC 0012 §2)");
             return;
         }
+        // the disposal contract's target gate: a CONCRETE user record
+        // type — the engine's release path keys the row by the cell's
+        // type id at refcount zero, so primitives and engine shapes
+        // refuse, and a generic target has no static row to fill
+        if trait_name == sym::DISPOSAL {
+            if target_data.is_some() {
+                self.err(
+                    sp,
+                    format!(
+                        "`{ty_display}` cannot implement Disposal — implement it for the concrete struct or class"
+                    ),
+                );
+                return;
+            }
+            if !matches!(self.types.kind(target_ty), TyKind::Data { .. }) {
+                self.err(
+                    sp,
+                    format!(
+                        "`{ty_display}` cannot implement Disposal — only a struct or class can (the engine calls `dispose` on the record's cell)"
+                    ),
+                );
+                return;
+            }
+        }
         // the trait's required signatures: from the trait's own AST when
         // it is declared here (async + receiver form live only there),
         // resolved under the impl's trait-argument substitution; from the
@@ -631,6 +655,7 @@ impl<'a> Ctx<'a> {
         // and receiver form matching — and nothing extra. Generic targets
         // (`impl .. for Vec<T>`) stay structural: their parameters only
         // become types at instantiation.
+        let dispose_name = self.intern("dispose");
         for req in &reqs {
             let Some((_, mnode)) = mths.iter().find(|(n, _)| *n == req.name) else {
                 let tname = self.name(self.trait_by_id(trait_id).name);
@@ -679,6 +704,15 @@ impl<'a> Ctx<'a> {
                         spell(req.self_form),
                         spell(self_form)
                     ),
+                );
+            }
+            // the disposal contract pins its receiver: the engine calls
+            // `dispose` on the pinned cell with `mut self` — a `self`
+            // (by-value) or receiver-less spelling refuses
+            if trait_name == sym::DISPOSAL && req.name == dispose_name && self_form != Some(true) {
+                self.err(
+                    self.ast.span(mnode.id()),
+                    "`dispose` must take `mut self` — the engine calls it on the cell at refcount zero",
                 );
             }
             if target_data.is_none() && (ptys != req.ptys || ret != req.ret) {

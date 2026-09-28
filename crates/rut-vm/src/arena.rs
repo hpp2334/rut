@@ -89,6 +89,20 @@ pub(crate) struct Arena {
     /// the arena so a `Heap` is a cheap two-`Rc` view (`Heap::view`),
     /// which the release walk builds to run a Host payload's finalize.
     pub(crate) singletons: RefCell<HashMap<(TypeId, u32), *const CellVal>>,
+    /// per-type `dispose` func ids (the `Disposal` contract): installed
+    /// at program load from the linked program's rows. The release path
+    /// (a free fn holding only `&Arena`) reads it at strong-count zero.
+    pub(crate) disposal_impls: Vec<Option<u32>>,
+    /// cells whose `dispose` is queued or has run: `(pinned cell,
+    /// func id)`. The interpreter drains these at call boundaries and
+    /// releases the pin after the call; LIFO — same-frame disposals
+    /// fire in reverse binding order.
+    pending_drops: RefCell<Vec<(*const CellVal, u32)>>,
+    /// cell addresses whose disposal is armed (queued or done) — the
+    /// pin's post-`dispose` release must not re-queue (the old drop-fn
+    /// map's take-on-read semantics, per-cell). The pin keeps the
+    /// address from being reused while the marker lives.
+    disposal_armed: RefCell<HashSet<usize>>,
     /// weak-reference lists (RFC 0017 v1): referent slot word -> the
     /// WeakBox cells holding an unretained word to it. Lazy, uncharged
     /// engine bookkeeping living on the arena (the same two-`Rc` view
@@ -105,17 +119,45 @@ pub(crate) struct Arena {
 }
 
 impl Arena {
-    pub(crate) fn new(plan: Rc<ReleasePlan>) -> Arena {
+    pub(crate) fn new(plan: Rc<ReleasePlan>, disposal_impls: Vec<Option<u32>>) -> Arena {
         Arena {
             free: RefCell::new(Vec::new()),
             chunks: RefCell::new(Vec::new()),
             bump: Cell::new(ARENA_CHUNK),
             plan,
+            disposal_impls,
+            pending_drops: RefCell::new(Vec::new()),
+            disposal_armed: RefCell::new(HashSet::new()),
             blocks: Blocks::new(),
             singletons: RefCell::new(HashMap::new()),
             weak_lists: RefCell::new(HashMap::new()),
             store: Store::new(),
         }
+    }
+
+    /// The dispose func id for a cell type, if its type implements
+    /// `Disposal` — the per-type rows installed at program load.
+    pub(crate) fn disposal_of(&self, ty: TypeId) -> Option<u32> {
+        self.disposal_impls.get(ty as usize).copied().flatten()
+    }
+
+    /// Arm a cell's disposal: its `dispose` is queued (or has run) —
+    /// the next release-to-zero proceeds straight to teardown.
+    pub(crate) fn arm_disposal(&self, key: usize) {
+        self.disposal_armed.borrow_mut().insert(key);
+    }
+
+    /// Consume the armed marker (the post-`dispose` release): `true`
+    /// when the cell's disposal had been armed.
+    pub(crate) fn take_armed_disposal(&self, key: usize) -> bool {
+        self.disposal_armed.borrow_mut().remove(&key)
+    }
+
+    /// Take a cell off the disposal queue: (pinned cell pointer, dispose
+    /// func id). The caller owns the pin — run `dispose(cell, cx)` and
+    /// release the pin afterwards.
+    pub(crate) fn take_pending_dispose(&self) -> Option<(*const CellVal, u32)> {
+        self.pending_drops.borrow_mut().pop()
     }
 
     /// Register a fresh WeakBox into its referent's weak list (RFC 0017).
@@ -231,6 +273,11 @@ pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) 
                 // `release_entry`'s finalize — nothing that runs user
                 // code observes a live weak to a dying entry
                 arena.weak_null_list(p as usize);
+                // No disposal pin here: a store entry is an engine box
+                // (never a `Disposal` impl target — those are user
+                // record cells). A Rut entry HOLDING a record releases
+                // the held slot below, and that release lands in the
+                // cell arm's disposal check.
                 release_entry(arena, acct, e);
             } else {
                 c.refs.set(n - 1);
@@ -248,6 +295,20 @@ pub(crate) fn release_ref_slot(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, s: Slot) 
             // weak nulling first (RFC 0017): the referent's boxes go
             // dead before dispose/user code can run
             arena.weak_null_list(p as usize);
+            // Disposal: a type with an `impl ..: Disposal` pins the cell
+            // (refs stay 1) and queues `(cell, dispose func id)`; the
+            // interpreter runs `dispose(self, cx)` at the next call
+            // boundary and releases the pin afterwards. The armed marker
+            // makes that post-dispose release fall through to teardown —
+            // one dispose per cell death.
+            if let Some(fid) = arena.disposal_of(c.ty) {
+                if !arena.take_armed_disposal(p as usize) {
+                    arena.arm_disposal(p as usize);
+                    c.refs.set(1);
+                    arena.pending_drops.borrow_mut().push((p, fid));
+                    return;
+                }
+            }
             release_cell(arena, acct, p as *mut CellVal);
         } else {
             c.refs.set(n - 1);

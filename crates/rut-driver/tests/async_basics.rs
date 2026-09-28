@@ -220,6 +220,122 @@ pub fn main() -> nil {
     assert_eq!(vm.now_ms(), 65);
 }
 
+// ---- Disposal at the cancellation checkpoint ----
+
+/// A dispose-implementing local that logs through the rt logger when
+/// the engine releases it — the Disposal analog of the old on_drop
+/// observation closures.
+const DROPLOG: &str = r#"
+class DropLog { log: opaque; }
+impl DropLog {
+    fn new(log: opaque) -> Self { return Self { log: log }; }
+}
+impl Disposal for DropLog {
+    fn dispose(mut self, cx: DisposalContext) {
+        logger_log(self.log, 2, "dropped:buf");
+    }
+}
+
+class DropTag { log: opaque; tag: str; }
+impl DropTag {
+    fn new(log: opaque, tag: str) -> Self { return Self { log: log, tag: tag }; }
+}
+impl Disposal for DropTag {
+    fn dispose(mut self, cx: DisposalContext) {
+        logger_log(self.log, 2, self.tag);
+    }
+}
+"#;
+
+#[test]
+fn abort_after_park_disposes_locals_at_the_checkpoint() {
+    let src = format!(
+        r#"{DROPLOG}
+use core::{{ Disposal, DisposalContext }};
+use rt::{{ create_logger, logger_log }};
+use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
+
+async fn victim(cx: RunContext, log: opaque) -> nil {{
+    let buf = DropLog.new(log);
+    logger_log(log, 2, "victim:park");
+    await sleep(60);
+    logger_log(log, 2, "victim:unreachable");
+}}
+
+async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {{
+    await sleep(10);
+    let ok = h.abort();
+    if (ok) {{ logger_log(log, 2, "killer:aborted"); }}
+    // let the loop drive the flagged victim: its checkpoint drop path
+    // releases the local, and the drive-end drain runs its dispose
+    await sleep(5);
+    let ok2 = h.abort();
+    if (ok2) {{ logger_log(log, 2, "killer:twice"); }} else {{ logger_log(log, 2, "killer:second-false"); }}
+}}
+
+pub fn main() -> nil {{
+    let log = create_logger("t");
+    let v = launch_future(victim(log));
+    launch_future(killer(log, v));
+}}
+"#
+    );
+    let (mut vm, sink) = setup(&src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 200);
+    assert_eq!(
+        *sink.borrow(),
+        vec![
+            "victim:park",
+            "killer:aborted",
+            "dropped:buf", // the dispose drives before the killer's next wake
+            "killer:second-false",
+        ]
+    );
+}
+
+#[test]
+fn dispose_locals_fire_in_reverse_order_at_the_checkpoint() {
+    let src = format!(
+        r#"{DROPLOG}
+use core::{{ Disposal, DisposalContext }};
+use rt::{{ create_logger, logger_log }};
+use async_host::{{ launch_future, sleep, LaunchedFutureHandle }};
+
+async fn victim(cx: RunContext, log: opaque) -> nil {{
+    let a = DropTag.new(log, "drop:a");
+    let b = DropTag.new(log, "drop:b");
+    await sleep(60);
+    logger_log(log, 2, "unreachable");
+}}
+
+async fn killer(cx: RunContext, log: opaque, h: LaunchedFutureHandle<nil>) -> nil {{
+    await sleep(30);
+    let ok = h.abort();
+    if (ok) {{ logger_log(log, 2, "killer:aborted"); }} else {{ logger_log(log, 2, "killer:late"); }}
+}}
+
+pub fn main() -> nil {{
+    let log = create_logger("t");
+    let v = launch_future(victim(log));
+    launch_future(killer(log, v));
+}}
+"#
+    );
+    let (mut vm, sink) = setup(&src);
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 200);
+    // `a` is declared before `b`, so at the resume arm's drop path `b`
+    // releases first (reverse binding order) and the LIFO drain runs its
+    // dispose first — after the victim crossed its park
+    let lines = sink.borrow().clone();
+    let pa = lines.iter().position(|l| l == "drop:a").expect("drop:a ran");
+    let pb = lines.iter().position(|l| l == "drop:b").expect("drop:b ran");
+    assert!(pb < pa, "reverse declaration order: b before a, got {lines:?}");
+    assert!(!lines.iter().any(|l| l == "unreachable"));
+    assert!(lines.iter().any(|l| l == "killer:aborted"));
+}
+
 // ---- a fresh (never driven) task aborts before its body runs ----
 
 #[test]

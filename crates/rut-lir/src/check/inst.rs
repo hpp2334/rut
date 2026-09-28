@@ -212,6 +212,32 @@ impl<'a> Ctx<'a> {
 
     // ---- module lets (RFC 0003 §1: load-time expressions only) ----
 
+    /// The per-type disposal rows (the cell-death dispatch): entry per
+    /// (dense) type — `Some(dispose func id)` when the type has an
+    /// `impl ..: Disposal`, None otherwise. The engine's release path
+    /// reads this table at refcount zero; the vtable row is never
+    /// consulted for it. Generic-target impls monomorphize at their call
+    /// sites and stay module-local — no static row.
+    pub fn disposal_impls(&mut self) -> Vec<Option<u32>> {
+        let mut out = vec![None; self.types.types.len()];
+        let dispose_name = self.intern("dispose");
+        let impls = self.impls.clone();
+        for (idx, im) in impls.iter().enumerate() {
+            if im.inherent || im.target_data.is_some() || im.trait_name != sym::DISPOSAL {
+                continue;
+            }
+            let key = Inst {
+                key: self.impl_method_key(idx, dispose_name, true),
+                subst: vec![],
+                trait_origins: vec![],
+            };
+            if let Some(&fid) = self.inst_map.get(&key) {
+                out[self.types.dense(im.target) as usize] = Some(fid);
+            }
+        }
+        out
+    }
+
     pub fn compile_module_lets(&mut self) {
         let entries: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>)> = self.lets.clone();
         for (_, ty, init) in entries {

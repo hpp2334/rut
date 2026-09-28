@@ -537,8 +537,12 @@ fn version_gate_rejects_stale_artifacts() {
     // Weak ops — new encoded vocabulary, the bump law); v14 is the
     // disposal surface (the `DisposalContext` boot type — id 22, kind
     // tag 17 — plus the `Disposal`/`DisposalContext` surface rows, the
-    // v10 declared-surface precedent)
-    assert_eq!(VERSION, 14, "the disposal surface owns this VERSION bump");
+    // v10 declared-surface precedent); v15 is the disposal dispatch —
+    // the binary gains the per-type `dispose` section beside the
+    // vtables (the v14 interim carried the surface decl-only and had
+    // no such section, so stale artifacts are refused rather than
+    // misread)
+    assert_eq!(VERSION, 15, "the disposal dispatch owns this VERSION bump");
     let out = rut_driver::compile_module(
         "pub fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

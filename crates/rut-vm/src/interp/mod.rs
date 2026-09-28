@@ -273,8 +273,11 @@ impl Vm {
                 None => host_slots.push(HostSlot::NEVER),
             }
         }
-        let heap =
-            Heap::new(limits.heap_limit_bytes, crate::arena::ReleasePlan::build(&prog.types, &prog.funcs));
+        let heap = Heap::new(
+            limits.heap_limit_bytes,
+            crate::arena::ReleasePlan::build(&prog.types, &prog.funcs),
+            prog.disposal_impls.clone(),
+        );
         let mut const_slots = Vec::with_capacity(prog.consts.len());
         for c in &prog.consts {
             let s = const_to_slot(c, &heap).map_err(|m| Trap::new(TrapKind::Invalid, m))?;
@@ -501,6 +504,9 @@ impl Vm {
             self.running = false; // enter() must not push a phantom frame
             self.enter(func, regs, None);
             let r = self.run_loop();
+            // queued `dispose` calls run before the cursor restore —
+            // the machine is idle here
+            let r = self.drain_disposal(r);
             self.frames = outer.frames;
             self.cur_func = outer.func;
             self.cur_pc = outer.pc;
@@ -510,8 +516,58 @@ impl Vm {
             r
         } else {
             self.enter(func, regs, None);
-            self.run_loop()
+            let r = self.run_loop();
+            self.drain_disposal(r)
         }
+    }
+
+    /// Run queued `dispose` calls after a successful root call: each
+    /// call receives the pinned cell as `self` and a freshly minted
+    /// `DisposalContext`; the pin's release afterwards is what finally
+    /// frees the cell. A dispose body may itself drop pointers — the
+    /// loop drains until the queue stays empty. A trap from the main
+    /// call skips the drain (unwinding semantics are OQ).
+    fn drain_disposal(&mut self, r: Result<Value, Trap>) -> Result<Value, Trap> {
+        let v = r?;
+        loop {
+            let Some((obj, fid)) = self.heap.take_pending_dispose() else {
+                break;
+            };
+            let done = match self.heap.alloc_disposal_context() {
+                Ok(cx) => {
+                    let d = self.run_dispose(fid, obj, cx);
+                    self.heap.release(cx);
+                    d
+                }
+                Err(e) => Err(e),
+            };
+            self.heap.release(obj);
+            done?;
+        }
+        Ok(v)
+    }
+
+    /// Call one `dispose` with the dying cell as `self` and the minted
+    /// cx as its second argument — the same frame machine, run to
+    /// completion. The call ABI's rc law: each argument the signature
+    /// takes by reference is retained here and released by the callee's
+    /// root ret (a trap parks the frame holding its own refs).
+    fn run_dispose(&mut self, fid: u32, obj: Slot, cx: Slot) -> Result<(), Trap> {
+        let nregs = self.prog.funcs[fid as usize].regs.len();
+        let mut regs = self.take_regs(nregs);
+        regs[0] = obj;
+        regs[1] = cx;
+        for (i, &s) in [obj, cx].iter().enumerate() {
+            if self.is_ref(self.param_ty(fid, i)) {
+                self.heap.retain(s);
+            }
+        }
+        let was_running = self.running;
+        self.running = false;
+        self.enter(fid, regs, None);
+        let r = self.run_loop();
+        self.running = was_running;
+        r.map(|_| ())
     }
 
     /// Host `Value` → slot under the callee's declared param type. A kind
@@ -1163,6 +1219,9 @@ impl Vm {
                 self.running = false;
                 self.enter(fid, regs, None);
                 let r = self.run_loop();
+                // queued `dispose` calls run before the cursor restore —
+                // a cancellation checkpoint's released locals dispose here
+                let r = self.drain_disposal(r);
                 self.frames = outer.frames;
                 self.cur_func = outer.func;
                 self.cur_pc = outer.pc;
@@ -1172,7 +1231,8 @@ impl Vm {
                 r
             } else {
                 self.enter(fid, regs, None);
-                self.run_loop()
+                let r = self.run_loop();
+                self.drain_disposal(r)
             }
         };
         let _ = r?; // a trap (including OutOfFuel) parks the frame at pc;
@@ -1322,6 +1382,7 @@ mod tests {
             traits: Vec::new(),
             trait_slots: Vec::new(),
             vtables: Vec::new(),
+            disposal_impls: Vec::new(),
             consts: Vec::new(),
             funcs: Vec::new(),
             exports: Vec::new(),

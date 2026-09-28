@@ -1844,6 +1844,145 @@ pub fn main() -> nil {
     assert_eq!(trap.as_deref(), Some("NilDeref"));
 }
 
+// ---- Disposal: the engine calls `dispose` at refcount zero ----
+
+#[test]
+fn disposal_runs_at_refcount_zero() {
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+struct P { x: i32 = 0; }
+impl Disposal for P { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"dropped {self.x}"); } }
+pub fn main() -> nil { let p = P { x: 9 }; Logger.new("t").info("body done"); }
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["body done", "dropped 9"]);
+}
+
+#[test]
+fn disposal_fires_in_reverse_binding_order_at_frame_end() {
+    // two locals, two types, each with a dispose: the frame-end release
+    // walks the registers in binding order, the drain pops LIFO — the
+    // later local's dispose runs first
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+struct A { }
+impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:a"); } }
+struct B { }
+impl Disposal for B { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("dispose:b"); } }
+pub fn main() -> nil {
+    let a = A { };
+    let b = B { };
+    Logger.new("t").info("body done");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["body done", "dispose:b", "dispose:a"]);
+}
+
+#[test]
+fn dispose_runs_when_a_binding_is_rebound_mid_frame() {
+    // the rebind drops the old cell's last strong handle INSIDE the
+    // frame; the drain at the root call's end runs its dispose
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+struct A { n: i32 = 0; }
+impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info(f"gone {self.n}"); } }
+pub fn main() -> nil {
+    let mut a = A { n: 1 };
+    a = A { n: 2 };
+    Logger.new("t").info("body done");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    // cell 1 dies at the rebind (mid-frame), cell 2 at the frame end —
+    // the LIFO drain runs the younger cell's dispose first
+    assert_eq!(lines, vec!["body done", "gone 2", "gone 1"]);
+}
+
+#[test]
+fn dispose_cascades_through_a_record_field() {
+    // the parent outlives the call; the child dies at the callee's ret —
+    // its dispose queues mid-run and drains at the root call's end
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+struct Kid { }
+impl Disposal for Kid { fn dispose(mut self, cx: DisposalContext) { Logger.new("t").info("kid gone"); } }
+struct Parent { kid: ?Kid = nil; }
+pub fn main() -> nil {
+    let p = Parent { kid: Kid { } };
+    Logger.new("t").info("body done");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["body done", "kid gone"]);
+}
+
+#[test]
+fn a_trap_in_dispose_propagates() {
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+struct A { }
+impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
+pub fn main() -> nil {
+    let a = A { };
+    Logger.new("t").info("body done");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 100_000);
+    assert_eq!(lines, vec!["body done"]);
+    assert_eq!(trap.as_deref(), Some("Panic"));
+}
+
+#[test]
+fn disposal_pins_the_mut_self_receiver() {
+    // the engine calls `dispose` on the pinned cell — a by-value `self`
+    // spelling refuses (the cx param + nil ret are the ordinary
+    // descriptor signature check)
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+struct P { x: i32 = 0; }
+impl Disposal for P { fn dispose(self, cx: DisposalContext) { } }
+pub fn main() -> nil { }
+"#;
+    let out = compile(
+        &format!("{src}\nuse ink::{{Logger}};\n"),
+        "main",
+    );
+    assert!(
+        out.diags
+            .iter()
+            .any(|d| format!("{d:?}").contains("`dispose` must take `mut self`")),
+        "{:?}",
+        out.diags
+    );
+}
+
+#[test]
+fn disposal_refuses_a_generic_target() {
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+class Box2<T> { v: T; }
+impl Disposal for Box2<T> { fn dispose(mut self, cx: DisposalContext) { } }
+pub fn main() -> nil { }
+"#;
+    let out = compile(
+        &format!("{src}\nuse ink::{{Logger}};\n"),
+        "main",
+    );
+    assert!(
+        out.diags
+            .iter()
+            .any(|d| format!("{d:?}").contains("cannot implement Disposal")),
+        "{:?}",
+        out.diags
+    );
+}
+
+
 #[test]
 fn a1_tuples_multi_return() {
     let src = r#"

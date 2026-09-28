@@ -35,6 +35,8 @@
 
 use rut_driver::{Module, Session};
 use rut_vm::OpaqueRef;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Compile, flatten, verify, and run `main` — the i32 checksum.
 fn run_main(src: &str) -> i32 {
@@ -99,6 +101,46 @@ fn compile_diags(src: &str) -> Vec<String> {
         .iter()
         .map(|d| format!("{d:?}"))
         .collect()
+}
+
+/// The logged lane (the e2e harness shape): ink's Logger captures lines
+/// — the observation channel for `dispose` bodies, which run at the
+/// root call's drain (or a drive's, on the async lanes).
+fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
+    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let mut s = Session::new();
+    rut_driver::mount_std(&mut s);
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    rut_driver::mount_dir(&mut s, &root.join("rut/ink")).expect("mount ink (+rt)");
+    s.register_module("app_main", Module { source: Some(combined.clone().into()), ..Default::default() }).unwrap();
+    let out = rut_driver::compile_graph(&s, "app_main");
+    assert!(
+        out.diags.is_empty(),
+        "unexpected diags:\n{}",
+        rut_lexer::diag::render_diags(&combined, &out.diags)
+    );
+    let prog = out.program.expect("linked program");
+    rut_vm::verify::verify(&prog).expect("verify");
+    let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+    let sink = lines.clone();
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    rut_std::logger::install_std_log(&mut hosts, move |msg| {
+        sink.borrow_mut().push(msg.to_string());
+    });
+    rut_std::math::install_std_math(&mut hosts);
+    hosts.verify_against(&s.expected_host_fns());
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(2_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::new(std::rc::Rc::new(prog), &limits, rut_vm::interp::HostHooks::default(), hosts).expect("vm");
+    let trap = match vm.call::<_, ()>("main", ()) {
+        Ok(_) => None,
+        Err(t) => Some(t.name()),
+    };
+    let out_lines = lines.borrow().clone();
+    (out_lines, trap)
 }
 
 const TILE: &str = r#"
@@ -174,7 +216,62 @@ pub fn main() -> i32 {{
     assert_eq!(run_main(&src), 10);
 }
 
+// ---- the cycle law (the logged lane — dispose is the observer) ------------
+
+#[test]
+fn weak_back_pointer_breaks_the_cycle_and_dispose_sees_nil() {
+    // The pair is BUILT in a callee (its temps die at the ret), the
+    // parent handle comes back fused (the sole reference), and the sever
+    // is `parent = nil` in main: parent dies → its dispose runs → the
+    // field release kills the child → the child's dispose runs (the
+    // drain loops). The child's dispose UPGRADES its weak back-pointer
+    // from INSIDE dispose: the parent's weak list was nulled before any
+    // user code ran, so the answer is nil — the deterministic-ordering
+    // pin (no resurrection, the shape frees to the last cell).
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+class Node {
+    name: str;
+    other: ?Node = nil;            // the STRONG edge (parent -> child)
+    back: ?Weak<?Node> = nil;      // the WEAK edge (child -> parent): the cycle cannot close
+}
+impl Node {
+    fn new(name: str) -> Self { return Self { name: name, other: nil, back: nil }; }
+}
+impl Disposal for Node {
+    fn dispose(mut self, cx: DisposalContext) {
+        if (self.back != nil) {
+            let b = self.back.upgrade();   // INSIDE dispose: the parent's box died first —
+            if (b != nil) { panic("cycle resurrected"); }   // the nulling preceded user code
+        }
+        Logger.new("w").info(f"{self.name} gone");
+    }
+}
+fn build() -> ?Node {
+    let mut p: ?Node = Node.new("p");
+    let mut c: ?Node = Node.new("c");
+    let oc: ?Node = c;
+    p.other = oc;                  // the STRONG edge
+    let wp: ?Weak<?Node> = Weak.new(p);
+    c.back = wp;                   // the WEAK edge — the cycle cannot close
+    return p;                      // the parent handle crosses; the child rides p.other
+}
+pub fn main() -> nil {
+    let mut parent = build();      // fused: parent is the ONLY reference
+    parent = nil;                  // sever: the whole shape must free, in order
+}
+"#;
+    let (lines, trap) = run_logged(src);
+    assert_eq!(trap, None, "dispose ran without trapping (no resurrection)");
+    assert_eq!(
+        lines,
+        vec!["p gone", "c gone"],
+        "both nodes freed — the weak back-pointer closed no cycle"
+    );
+}
+
 // ---- immortals --------------------------------------------------------------
+
 
 #[test]
 fn weak_over_immortal_enum_member_upgrades_forever() {

@@ -62,6 +62,18 @@ impl<'a> Ctx<'a> {
                     }
                     return Some(self.mk_future_inst(tname, args[0]));
                 }
+                // `impl Disposal for ..` — the cell-death contract: one
+                // trait per module, its single member `dispose(mut self,
+                // cx: DisposalContext)`; the engine's release path
+                // dispatches through the module's per-type disposal row,
+                // never a vtable slot
+                if core_trait == Some(rut_core::binary::NativeTrait::Disposal) {
+                    if !segs[0].generics.is_empty() {
+                        self.err(self.ast.span(node.id()), "`Disposal` takes no type parameters");
+                        return None;
+                    }
+                    return Some(self.mk_disposal_trait(tname));
+                }
                 let id = if let Some(t) = self.find_trait(tname).cloned() {
                     if segs[0].generics.is_empty() {
                         if t.id == u32::MAX {
@@ -161,6 +173,31 @@ impl<'a> Ctx<'a> {
             }],
         });
         self.trait_inst.insert((name, vec![arg]), id);
+        id
+    }
+
+    /// The `Disposal` contract (the cell-death trait): one trait per
+    /// module, its single member `dispose(mut self, cx: DisposalContext)`.
+    /// Mirrors `mk_future_inst` — the descriptor's params exclude the
+    /// receiver, which the call ABI always supplies as argv[0]. The
+    /// registration exists so the ordinary impl machinery checks
+    /// coverage/signatures and compiles the body; the engine's release
+    /// path reads the module's per-type disposal row, never a vtable.
+    pub fn mk_disposal_trait(&mut self, name: IdentId) -> u32 {
+        if let Some(&id) = self.trait_inst.get(&(name, vec![])) {
+            return id;
+        }
+        let id = self.traits.len() as u32;
+        let dispose = self.intern("dispose");
+        self.traits.push(TraitDesc {
+            name,
+            methods: vec![rut_core::binary::TraitMethod {
+                name: dispose,
+                params: vec![TY_DISPOSAL_CONTEXT],
+                ret: TY_NIL,
+            }],
+        });
+        self.trait_inst.insert((name, vec![]), id);
         id
     }
 
