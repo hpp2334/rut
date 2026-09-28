@@ -720,7 +720,7 @@ entry fn boot_stream(url: str) -> nil {
                 "app",
                 rut_driver::Module {
                     spec: "app".into(),
-                    source: Some(SRC.into()),
+                    body: rut_driver::ModuleBody::Source { text: SRC.into(), is_decl: false },
                     ..Default::default()
                 },
             )
@@ -898,7 +898,7 @@ entry fn boot(url: str) -> nil {
             rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
         }
         session
-            .register_module("app", rut_driver::Module { spec: "app".into(), source: Some(src.into()), ..Default::default() })
+            .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
             .expect("register");
         let g = rut_driver::compile_graph(&session, "app");
         assert!(g.diags.is_empty(), "{:?}", g.diags);
@@ -995,7 +995,7 @@ entry fn boot(url: str) -> nil {
             rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
         }
         session
-            .register_module("app", rut_driver::Module { spec: "app".into(), source: Some(src.into()), ..Default::default() })
+            .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
             .expect("register");
         let g = rut_driver::compile_graph(&session, "app");
         assert!(g.diags.is_empty(), "{:?}", g.diags);
@@ -1079,7 +1079,7 @@ entry fn boot() -> nil {
             rut_driver::mount_dir(&mut session, &pkg.join(d)).expect("mount pkg");
         }
         session
-            .register_module("app", rut_driver::Module { spec: "app".into(), source: Some(src.into()), ..Default::default() })
+            .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
             .expect("register");
         let g = rut_driver::compile_graph(&session, "app");
         assert!(g.diags.is_empty(), "{:?}", g.diags);
@@ -1203,7 +1203,7 @@ entry fn boot_stream(url: str) -> nil {
 }
 "#;
         session
-            .register_module("app", rut_driver::Module { spec: "app".into(), source: Some(stream_src.into()), ..Default::default() })
+            .register_module("app", rut_driver::Module { spec: "app".into(), body: rut_driver::ModuleBody::Source { text: stream_src.into(), is_decl: false }, ..Default::default() })
             .expect("register");
         let g = rut_driver::compile_graph(&session, "app");
         assert!(g.diags.is_empty(), "{:?}", g.diags);

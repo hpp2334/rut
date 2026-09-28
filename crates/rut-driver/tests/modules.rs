@@ -2,7 +2,7 @@
 //! (RFC 0029 surface / RFC 0035 §1).
 
 use rut_parser::Mode;
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 
 #[test]
 fn uses_and_links_a_function() {
@@ -165,11 +165,12 @@ fn graph_compiles_and_links_uses_in_order() {
     s.register_module(
         "math",
         Module {
-            source: Some(
-                "pub fn seven() -> i32 { return 7; }\n\
+            body: ModuleBody::Source {
+                text: "pub fn seven() -> i32 { return 7; }\n\
                  fn main() -> i32 { return seven(); }\n"
                     .into(),
-            ),
+                    is_decl: false,
+            },
             ..Default::default()
         },
     )
@@ -177,11 +178,12 @@ fn graph_compiles_and_links_uses_in_order() {
     s.register_module(
         "app_main",
         Module {
-            source: Some(
-                "use math::{ seven };\n\
+            body: ModuleBody::Source {
+                text: "use math::{ seven };\n\
                  fn main() -> i32 { return seven(); }\n"
                     .into(),
-            ),
+                    is_decl: false,
+            },
             ..Default::default()
         },
     )
@@ -211,12 +213,13 @@ fn graph_threads_a_type_through_a_chain() {
     s.register_module(
         "geo_base",
         Module {
-            source: Some(
-                "struct Point { x: i32; y: i32; }\n\
+            body: ModuleBody::Source {
+                text: "struct Point { x: i32; y: i32; }\n\
                  pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
                  fn main() -> i32 { return 0; }\n"
                     .into(),
-            ),
+                    is_decl: false,
+            },
             ..Default::default()
         },
     )
@@ -224,12 +227,13 @@ fn graph_threads_a_type_through_a_chain() {
     s.register_module(
         "geo_mid",
         Module {
-            source: Some(
-                "use geo_base::{Point, origin};\n\
+            body: ModuleBody::Source {
+                text: "use geo_base::{Point, origin};\n\
                  pub fn shifted() -> Point { return origin(); }\n\
                  fn main() -> i32 { return 0; }\n"
                     .into(),
-            ),
+                    is_decl: false,
+            },
             ..Default::default()
         },
     )
@@ -237,12 +241,13 @@ fn graph_threads_a_type_through_a_chain() {
     s.register_module(
         "app_main",
         Module {
-            source: Some(
-                "use geo_base::{Point};\n\
+            body: ModuleBody::Source {
+                text: "use geo_base::{Point};\n\
                  use geo_mid::{shifted};\n\
                  fn main() -> i32 { let p: Point = shifted(); return p.x; }\n"
                     .into(),
-            ),
+                    is_decl: false,
+            },
             ..Default::default()
         },
     )
@@ -340,14 +345,14 @@ fn consumer_uses_pouch_vec() {
     rut_driver::mount_std_core(&mut s);
     s.register_module(
         "pouch",
-        Module { source: Some(coll_src), ..Default::default() },
+        Module { body: ModuleBody::Source { text: coll_src, is_decl: false }, ..Default::default() },
     )
     .unwrap();
     s.register_module(
         "app_main",
         Module {
-            source: Some(
-                "use pouch::{ Vec };\n\
+            body: ModuleBody::Source {
+                text: "use pouch::{ Vec };\n\
                  fn main() -> i32 {\n\
                      let mut v: Vec<i32> = Vec.new();\n\
                      v.push(1);\n\
@@ -355,7 +360,8 @@ fn consumer_uses_pouch_vec() {
                      return v.len();\n\
                  }\n"
                     .into(),
-            ),
+                    is_decl: false,
+            },
             ..Default::default()
         },
     )
@@ -374,11 +380,12 @@ fn graph_reports_a_missing_dependency() {
     s.register_module(
         "app_main",
         Module {
-            source: Some(
-                "use missing::{nope};\n\
+            body: ModuleBody::Source {
+                text: "use missing::{nope};\n\
                  fn main() -> i32 { return 0; }\n"
                     .into(),
-            ),
+                    is_decl: false,
+            },
             ..Default::default()
         },
     )

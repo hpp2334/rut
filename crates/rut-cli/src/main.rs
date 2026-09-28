@@ -234,10 +234,11 @@ fn run(path: &str, fuel: Option<u64>) {
 }
 
 /// `rut pack <dir> [-o out.rutbundle]` — pack a module directory into a
-/// deterministic `.rutbundle` (RFC 0038).
+/// deterministic v5 **compiled** `.rutbundle` (linkable pkgs ride as
+/// `.rutc` binaries, splice-needed deps as source).
 fn pack(dir: &str, out: Option<&str>) {
     let p = std::path::Path::new(dir);
-    let bytes = match rut_bundle::pack(p, &rut_bundle::FsSource) {
+    let bytes = match rut_driver::pack_dir(p) {
         Ok(b) => b,
         Err(e) => {
             eprintln!("pack: {e}");

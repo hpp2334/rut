@@ -97,7 +97,7 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
     session
         .register_module(
             "app_re",
-            rut_driver::Module { spec: "app_re".into(), source: Some(SRC.into()), ..Default::default() },
+            rut_driver::Module { spec: "app_re".into(), body: rut_driver::ModuleBody::Source { text: SRC.into(), is_decl: false }, ..Default::default() },
         )
         .unwrap();
     let g = rut_driver::compile_graph(&session, "app_re");

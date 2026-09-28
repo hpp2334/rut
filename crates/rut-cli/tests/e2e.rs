@@ -1238,8 +1238,8 @@ fn pouch_vec_via_module_loader_runs() {
     s.register_module(
         "app_main",
         rut_driver::Module {
-            source: Some(
-                r#"
+            body: rut_driver::ModuleBody::Source {
+                text: r#"
 use pouch::{ Vec };
 use ink::{ Logger };
 pub fn main() -> nil {
@@ -1252,7 +1252,8 @@ pub fn main() -> nil {
 }
 "#
                 .into(),
-            ),
+                is_decl: false,
+            },
             ..Default::default()
         },
     )
@@ -1295,8 +1296,8 @@ fn std_collection_via_module_loader_runs() {
     s.register_module(
         "app_main",
         rut_driver::Module {
-            source: Some(
-                r#"
+            body: rut_driver::ModuleBody::Source {
+                text: r#"
 use core::{ string_join };
 use pouch::{ Vec };
 use ink::{ Logger };
@@ -1310,7 +1311,8 @@ pub fn main() -> nil {
 }
 "#
                 .into(),
-            ),
+                is_decl: false,
+            },
             ..Default::default()
         },
     )

@@ -33,7 +33,7 @@
 //! VERSION 13: the weak batch (TyKind::Weak + the two Weak ops — new
 //! encoded vocabulary, the bump law).
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 use rut_vm::OpaqueRef;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -42,7 +42,7 @@ use std::rc::Rc;
 fn run_main(src: &str) -> i32 {
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
@@ -67,7 +67,7 @@ fn run_main(src: &str) -> i32 {
 fn run_trap(src: &str) -> Option<String> {
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
@@ -95,7 +95,7 @@ fn run_trap(src: &str) -> Option<String> {
 fn compile_diags(src: &str) -> Vec<String> {
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     out.diags
         .iter()
@@ -112,7 +112,7 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     rut_driver::mount_std(&mut s);
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     rut_driver::mount_dir(&mut s, &root.join("rut/ink")).expect("mount ink (+rt)");
-    s.register_module("app_main", Module { source: Some(combined.clone().into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: combined.clone().into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(
         out.diags.is_empty(),
@@ -371,7 +371,7 @@ pub fn main() -> i32 {
     return probe_o(w);
 }
 "#;
-    s.register_module("app_main", Module { spec: "app_main".into(), source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { spec: "app_main".into(), body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
@@ -642,7 +642,7 @@ pub fn main() -> i32 {{
 }}
 "#
     );
-    s.register_module("app_main", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
@@ -679,7 +679,7 @@ pub fn main() -> i32 {{
 }}
 "#
     );
-    s.register_module("app_main", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");

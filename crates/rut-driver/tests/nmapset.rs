@@ -16,7 +16,7 @@
 
 use std::rc::Rc;
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
 
@@ -30,7 +30,7 @@ fn session_with(app_src: &str) -> Session {
     session
         .register_module(
             "app_main",
-            Module { spec: "app_main".into(), source: Some(app_src.into()), ..Default::default() },
+            Module { spec: "app_main".into(), body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() },
         )
         .unwrap();
     session

@@ -5,7 +5,7 @@
 //! compiles against them with no hand-written Rust surface.
 
 use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE, TY_STR};
-use rut_driver::{load_path_session, lower_decl_module, Session};
+use rut_driver::{ModuleBody, Session, load_path_session, lower_decl_module};
 use rut_vm::OpaqueRef;
 
 const RT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/rt");
@@ -17,11 +17,14 @@ fn rt_loads_from_disk_with_its_historical_scope() {
         load_path_session(std::path::Path::new(RT_DIR)).expect("rut/rt loads");
     assert_eq!(root, "rt");
     let m = session.resolve("rt").expect("rt mounted");
-    assert!(m.source.is_none(), "a host pkg has no body source");
-    assert!(m.is_decl);
+    assert!(
+        matches!(m.body, ModuleBody::Host { .. }),
+        "a host pkg is a host body — no rut source"
+    );
     assert_eq!(m.host_scope.as_deref(), Some("rt:log"));
+    let ModuleBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
     assert_eq!(
-        m.host_funcs,
+        *host_funcs,
         vec![
             ("create_logger".to_string(), vec![TY_STR], TY_OPAQUE, false),
             ("logger_log".to_string(), vec![TY_OPAQUE, TY_I32, TY_STR], TY_NIL, false),
@@ -35,10 +38,10 @@ fn server_loads_from_disk() {
         load_path_session(std::path::Path::new(SERVER_DIR)).expect("server loads");
     assert_eq!(root, "server");
     let m = session.resolve("server").expect("server mounted");
-    assert!(m.is_decl);
     assert_eq!(m.host_scope, None, "the registration scope defaults to the name");
+    let ModuleBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
     assert_eq!(
-        m.host_funcs,
+        *host_funcs,
         vec![
             ("subscribe".to_string(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL, false),
             ("emit".to_string(), vec![TY_OPAQUE, TY_STR, TY_STR], TY_NIL, false),
@@ -54,8 +57,8 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
         .register_module(
             "app",
             rut_driver::Module {
-                source: Some(
-                    "\n\
+                body: ModuleBody::Source {
+                    text: "\n\
                      use server::{ subscribe, emit };\n\
                      pub fn main() -> nil {\n\
                      \x20   let bus: opaque = opaque(0);\n\
@@ -63,7 +66,8 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
                      \x20   emit(bus, \"join\", \"ada\");\n\
                      }\n"
                         .into(),
-                ),
+                    is_decl: false,
+                },
                 ..Default::default()
             },
         )
@@ -77,14 +81,15 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
         .register_module(
             "app",
             rut_driver::Module {
-                source: Some(
-                    "\n\
+                body: ModuleBody::Source {
+                    text: "\n\
                      use server::{ subscribe };\n\
                      pub fn main() -> nil {\n\
                      \x20   subscribe(\"not a bus\", \"join\", \"on_join\");\n\
                      }\n"
                         .into(),
-                ),
+                    is_decl: false,
+                },
                 ..Default::default()
             },
         )

@@ -11,7 +11,7 @@ fn run_graph(modules: &[(&str, &str)]) -> i32 {
     let mut session = rut_driver::Session::new();
     for (spec, src) in modules {
         session
-            .register_module(spec, rut_driver::Module { source: Some(src.to_string()), ..Default::default() })
+            .register_module(spec, rut_driver::Module { body: rut_driver::ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() })
             .expect("mount");
     }
     let (root, _) = modules.last().expect("root");

@@ -15,7 +15,7 @@
 //! origin, not the unit, decides), and the no-map inertness (a
 //! single-file unit compiles its local impls untouched).
 
-use rut_driver::{GraphOutput, Module, Session};
+use rut_driver::{GraphOutput, Module, ModuleBody, Session};
 use rut_parser::Mode;
 
 /// A non-generic trait pkg — LINKED into its users (its names bind as
@@ -58,7 +58,7 @@ fn graph(modules: &[(&str, &str)]) -> GraphOutput {
     for (spec, src) in modules {
         let _ = s.register_module(
             spec,
-            Module { spec: spec.to_string(), source: Some(src.to_string()), ..Default::default() },
+            Module { spec: spec.to_string(), body: ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() },
         );
     }
     let (root, _) = modules.last().expect("root module");
@@ -369,8 +369,8 @@ fn consumer_impl_of_jsonserialize_for_hashset_errors() {
         "main",
         Module {
             spec: "main".into(),
-            source: Some(
-                "\
+            body: ModuleBody::Source {
+                text: "\
 use json::{ JsonSerialize, JsonWriter, EncodeJsonError };
 use nmapset::{ HashSet };
 
@@ -383,7 +383,8 @@ entry fn main() -> nil {
 }
 "
                 .into(),
-            ),
+                is_decl: false,
+            },
             ..Default::default()
         },
     )

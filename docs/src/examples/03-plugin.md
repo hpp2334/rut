@@ -170,13 +170,12 @@ plus its deps, loadable as-is and packable unchanged
 ```toml
 # plugin/rut.toml
 format = "rutbundle"
-format_version = 4
+format_version = 5
 name = "plugin"
 entry.lib = "./plugin.rut"
 
 [deps]
 server = { path = "../server" }
-pouch = { path = "../../../rut/pouch" }
 ```
 
 `server/` is the interesting dependency: a **pure declaration
@@ -190,10 +189,11 @@ pub host fn subscribe(bus: opaque, topic: str, handler: str);
 pub host fn emit(bus: opaque, topic: str, payload: str);
 ```
 
-`main.rs` packs the same directory with `rut_bundle::pack`, writes
-`plugin.rutbundle` to temp, and loads it back through the
-identical `Plugin::load` — the transcript equality print is the
-proof. The CLI drives the same loader for any self-contained module:
+`main.rs` packs the same directory with `rut_driver::pack_dir` — a
+v5 **compiled** bundle: the plugin rides as a `.rutc` binary, its host
+pkg `server` as a source group — writes `plugin.rutbundle` to temp, and
+loads it back through the identical `Plugin::load`. The transcript
+equality print is the proof. The CLI drives the same loader for any self-contained module:
 
 ```sh
 rut run path/to/mod            # a module directory (rut.toml)

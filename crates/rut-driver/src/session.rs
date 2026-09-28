@@ -34,9 +34,61 @@ use std::path::Path;
 
 use rut_bundle::{parse_manifest, valid_spec, Entry, ManifestError};
 
+/// What a mounted module's body IS. The graph dispatches on this:
+/// a source body compiles (and may splice), a compiled body pushes as
+/// decoded, a host body synthesizes its placeholder program.
+#[derive(Clone, Debug)]
+pub enum ModuleBody {
+    /// a `.rut` body — compile it. `is_decl` marks a declaration-mode
+    /// module (a `.d.rut` surface parsed as its own unit, RFC 0029):
+    /// nothing to compile or run, but `rut dump` shows the AST.
+    Source { text: String, is_decl: bool },
+    /// a decoded `.rutc` program (a v5 compiled bundle's payload): the
+    /// body already exists — the graph assigns it a fresh scope,
+    /// rebases its packed ids, and pushes it. The loader's decode gate
+    /// (version + surface verification) has passed.
+    Compiled(rut_core::binary::Program),
+    /// a native/host module (RFC 0022/0026): no rut body — bodyless
+    /// functions the embedder binds at run time, exported constants,
+    /// and the builtin rows (`core`'s prelude, `calc`'s `Math`). The
+    /// graph synthesizes a placeholder program from these rows.
+    Host {
+        /// `(name, params, ret, is_async)` — `is_async` marks a
+        /// `host async fn` (the host future lane)
+        host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId, bool)>,
+        /// exported constants: `(name, type, raw bits)` — `calc::PI`
+        consts: Vec<(String, rut_core::types::TypeId, u64)>,
+        /// Builtin containers published by name (`core` only), each
+        /// with its ambient bit — `true` (`prelude builtin`) binds in
+        /// every unit with no `use`, `false` (`pub builtin`) resolves
+        /// only through `use`
+        native_types: Vec<(String, rut_core::binary::NativeTy, bool)>,
+        /// Builtin traits published by name (`core` only), same
+        /// ambient-bit law as [`ModuleBody::Host`]'s `native_types`
+        native_traits: Vec<(String, rut_core::binary::NativeTrait, bool)>,
+        /// Compiler-lowered builtin function names (`core` only) — no
+        /// bodies; rut-lir lowers them. Each row carries its ambient
+        /// bit (same law)
+        native_fns: Vec<(String, bool)>,
+        /// Builtin-impl methods (`core` only, RFC 0032 §1.1 R2): the
+        /// integer primitives' numeric methods — `(receiver prim, name,
+        /// lowering id)`. Bodyless and hostless — rut-lir expands the
+        /// method call inline, ambient on the primitive.
+        native_impls: Vec<(rut_core::types::TypeId, String, rut_core::ops::Intrinsic)>,
+    },
+}
+
+impl Default for ModuleBody {
+    /// An empty source body — the manifest-only mount (a module whose
+    /// entries ride on other fields) parses to an empty unit.
+    fn default() -> ModuleBody {
+        ModuleBody::Source { text: String::new(), is_decl: false }
+    }
+}
+
 /// One mounted module: the bare package name it answers to, its entry
-/// files, and (for embedded hosts) in-memory source/surface text.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// files, and its body ([`ModuleBody`]).
+#[derive(Clone, Debug, Default)]
 pub struct Module {
     /// the exact package name — bare `[a-zA-Z0-9_]+`
     pub spec: String,
@@ -44,46 +96,13 @@ pub struct Module {
     /// `None` when the module has no namespace form (RFC 0028).
     pub namespace: Option<String>,
     pub entry: Entry,
-    /// in-memory `.rut` body (wasm hosts, tests, plugins)
-    pub source: Option<String>,
-    /// in-memory `.d.rut` surface
-    pub decl: Option<String>,
-    /// the body itself is a `.d.rut` surface (RFC 0029): parse in
-    /// declaration mode — nothing to compile or run, but `rut dump`
-    /// shows the AST
-    pub is_decl: bool,
-    /// in-memory HOST surface (RFC 0022/0026): bodyless functions, bound by
-    /// the embedder at run time — `(name, params, ret, is_async)`. A module
-    /// with these and no `source` is a native module. `is_async` marks a
-    /// `host async fn` (the host future lane): the compiler weaves its call
-    /// sites into a cold engine-woven Future frame driven by the
-    /// `{scope}::{name}__start`/`__yield`/`__take`/`__cancel` rows the
-    /// embedder registers with `rut_vm::register_async!`.
-    pub host_funcs: Vec<(String, Vec<rut_core::types::TypeId>, rut_core::types::TypeId, bool)>,
+    /// the body: `.rut` source, a decoded `.rutc`, or the native rows
+    pub body: ModuleBody,
     /// The host-fn registration scope — the `FuncCode` host-id prefix — when
     /// it must differ from the package name. `rt` stays the logger host
     /// module's use path while its internal registration naming remains
     /// `rt:log` (`rt:log::create_logger`), untouched since RFC 0022.
     pub host_scope: Option<String>,
-    /// Builtin-impl methods (`core` only, RFC 0032 §1.1 R2): the integer
-    /// primitives' numeric methods — `(receiver prim, name, lowering id)`.
-    /// Bodyless and hostless — `rut-lir` expands the method call
-    /// (`x.wrapping_add(y)`) inline, ambient on the primitive.
-    pub native_impls: Vec<(rut_core::types::TypeId, String, rut_core::ops::Intrinsic)>,
-    /// Exported constants: `(name, type, raw bits)` — `calc::PI`.
-    pub consts: Vec<(String, rut_core::types::TypeId, u64)>,
-    /// Builtin containers published by name (`core` only): the type is
-    /// the compiler's own; the row carries the name's ambient bit —
-    /// `true` (`prelude builtin`) binds in every unit with no `use`,
-    /// `false` (`pub builtin`) resolves only through `use`
-    pub native_types: Vec<(String, rut_core::binary::NativeTy, bool)>,
-    /// Builtin traits published by name (`core` only), each with its
-    /// ambient bit (same law as [`Module::native_types`])
-    pub native_traits: Vec<(String, rut_core::binary::NativeTrait, bool)>,
-    /// Compiler-lowered builtin function names (`core` only) — no
-    /// bodies; rut-lir lowers them. Each row carries its ambient bit
-    /// (same law as [`Module::native_types`])
-    pub native_fns: Vec<(String, bool)>,
     /// Force source-inlining into every consumer (`ink`): a module whose
     /// class methods must resolve at the call site cannot be linked.
     pub inline: bool,
@@ -176,6 +195,13 @@ pub struct Session {
     /// pass over the same session (the graph load ran one, an
     /// `assemble_peers` call adds another) never double-appends.
     groups_mounted: std::collections::BTreeSet<String>,
+    /// A mounted v5 compiled bundle's pack-time scope ledger (scope →
+    /// the spec that owned it when the closure was packed, engine
+    /// mounts included). A decoded program's foreign ids spell these
+    /// pack-time scopes; the graph's compiled-mount arm resolves each
+    /// through this table to the module to ensure — a reference with no
+    /// row is a load error (refuse, never guess).
+    bundle_scopes: BTreeMap<rut_core::id::ScopeId, String>,
 }
 
 impl Session {
@@ -254,8 +280,11 @@ impl Session {
         use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE};
         let mut out = std::collections::BTreeMap::new();
         for (spec, m) in &self.modules {
+            let ModuleBody::Host { host_funcs, .. } = &m.body else {
+                continue; // only host bodies declare host rows
+            };
             let scope = m.host_scope.as_deref().unwrap_or(spec);
-            for (name, params, ret, is_async) in &m.host_funcs {
+            for (name, params, ret, is_async) in host_funcs {
                 out.insert(format!("{scope}::{name}"), (params.clone(), *ret));
                 if !*is_async {
                     continue;
@@ -315,23 +344,36 @@ impl Session {
         self.groups_mounted.contains(pkg)
     }
 
+    /// Record one row of a v5 bundle's pack-time scope ledger (the
+    /// loader reads every row of `rut.scopes` at mount).
+    pub fn record_bundle_scope(&mut self, scope: rut_core::id::ScopeId, spec: &str) {
+        self.bundle_scopes.insert(scope, spec.to_string());
+    }
+
+    /// The spec a pack-time scope belonged to, per the mounted ledger.
+    pub fn bundle_scope(&self, scope: rut_core::id::ScopeId) -> Option<&str> {
+        self.bundle_scopes.get(&scope).map(String::as_str)
+    }
+
     /// Append peer-group source to a mounted module's body (RFC 0045
     /// §3, presence-based group assembly): the combined text stays ONE
-    /// source string, so every existing consumer of `Module.source` —
-    /// the graph splice, bundles, the wasm mounts — is untouched.
+    /// source string, so every consumer of a source body — the graph
+    /// splice, the wasm mounts — is untouched. A module without a
+    /// source body (a host pkg, a compiled `.rutc`) refuses: appended
+    /// groups are a source-shape law.
     pub fn append_source(&mut self, spec: &str, text: &str) -> Result<(), ManifestError> {
         let Some(m) = self.modules.get_mut(spec) else {
             return Err(ManifestError(format!(
                 "cannot append a peer group to `{spec}` — no such module is mounted"
             )));
         };
-        match &mut m.source {
-            Some(src) => {
+        match &mut m.body {
+            ModuleBody::Source { text: src, .. } => {
                 src.push('\n');
                 src.push_str(text);
                 Ok(())
             }
-            None => Err(ManifestError(format!(
+            _ => Err(ManifestError(format!(
                 "cannot append a peer group to `{spec}` — the module has no rut source body; a `.d.rut` decl surface does not gate (RFC 0045 §3)"
             ))),
         }
@@ -451,10 +493,11 @@ nmapset = { path = "../nmapset" }
         let mut s = Session::new();
         s.register_module(
             "my_map",
-            Module { source: Some("...".into()), ..Default::default() },
+            Module { body: ModuleBody::Source { text: "...".into(), is_decl: false }, ..Default::default() },
         )
         .unwrap();
-        assert_eq!(s.resolve("my_map").unwrap().source.as_deref(), Some("..."));
+        let m = s.resolve("my_map").unwrap();
+        assert!(matches!(&m.body, ModuleBody::Source { text, .. } if text == "..."));
     }
 
     #[test]
@@ -472,11 +515,34 @@ nmapset = { path = "../nmapset" }
         );
         // append_source keeps ONE source string; a sourceless module refuses
         let mut s = Session::new();
-        s.register_module("m", Module { source: Some("fn a() {}".into()), ..Default::default() })
-            .unwrap();
+        s.register_module(
+            "m",
+            Module { body: ModuleBody::Source { text: "fn a() {}".into(), is_decl: false }, ..Default::default() },
+        )
+        .unwrap();
         s.append_source("m", "fn b() {}").unwrap();
-        assert_eq!(s.resolve("m").unwrap().source.as_deref(), Some("fn a() {}\nfn b() {}"));
-        s.register_module("d", Module { ..Default::default() }).unwrap();
+        let m = s.resolve("m").unwrap();
+        assert!(
+            matches!(&m.body, ModuleBody::Source { text, .. } if text == "fn a() {}\nfn b() {}"),
+            "{:?}",
+            m.body
+        );
+        // a host body (no rut source) refuses the append
+        s.register_module(
+            "d",
+            Module {
+                body: ModuleBody::Host {
+                    host_funcs: vec![],
+                    consts: vec![],
+                    native_types: vec![],
+                    native_traits: vec![],
+                    native_fns: vec![],
+                    native_impls: vec![],
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert!(s.append_source("d", "fn c() {}").is_err());
     }
 }

@@ -71,11 +71,10 @@ is resolved against it once, at boot. A declared-but-unbound fn is a
 | `compile_graph(&s, root)` | compile a whole module directory graph |
 | `s.expected_host_fns()` | the mounted surfaces' declared host rows — the check table for `verify_against` |
 | `load_path_session(path)` | load a module **directory** or `.rutbundle`; returns `(session, root)` |
+| `pack_dir(dir)` | pack a module directory into a deterministic v5 **compiled** `.rutbundle` — root + linkable deps as `.rutc` binaries, splice-needed deps as source groups; returns the bytes ([module bundles](bundles.md)) |
 
-Packing a `.rutbundle` is not driver API — it lives in the `rut-bundle`
-crate: `rut_bundle::pack(dir, &rut_bundle::FsSource)` reads the directory
-through a one-method `Source` trait and returns the bundle bytes
-([module bundles](bundles.md)).
+The container, manifest grammar, and v5 reader live in the `rut-bundle`
+crate — std-only, filesystem-free over a one-method `Source` trait.
 
 `mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut`
 ([host fns and declaration files](host-fns.md)).

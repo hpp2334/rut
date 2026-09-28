@@ -23,7 +23,7 @@
 
 use std::rc::Rc;
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 use rut_vm::interp::Vm;
 
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
@@ -37,7 +37,7 @@ fn vm_nmapset(src: &str) -> Vm {
     session
         .register_module(
             "app",
-            Module { spec: "app".into(), source: Some(src.into()), ..Default::default() },
+            Module { spec: "app".into(), body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() },
         )
         .unwrap();
     let g = rut_driver::compile_graph(&session, "app");
@@ -77,7 +77,7 @@ fn diags_of(src: &str) -> Vec<String> {
     session
         .register_module(
             "app",
-            Module { spec: "app".into(), source: Some(src.into()), ..Default::default() },
+            Module { spec: "app".into(), body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() },
         )
         .unwrap();
     rut_driver::compile_graph(&session, "app")

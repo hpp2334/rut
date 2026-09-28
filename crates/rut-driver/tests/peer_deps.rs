@@ -40,7 +40,10 @@ fn green(rel: &str) {
 }
 
 fn source_of(s: &Session, spec: &str) -> String {
-    s.resolve(spec).expect(spec).source.clone().expect("source")
+    match &s.resolve(spec).expect(spec).body {
+        rut_driver::ModuleBody::Source { text, .. } => text.clone(),
+        other => panic!("{spec}: no source body: {other:?}"),
+    }
 }
 
 const POUCH_GROUP: &str = "impl JsonSerialize for Vec<T>";

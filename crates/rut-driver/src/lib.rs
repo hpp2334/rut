@@ -12,15 +12,18 @@ use rut_core::types::{TyKind, TY_F32, TY_F64, TY_I32, TY_OPAQUE, TY_STR, TY_NIL}
 use rut_core::{IdentId, sym};
 
 pub mod session;
-pub use session::{Module, PeerDecl, ResolveError, Session};
+pub use session::{Module, ModuleBody, PeerDecl, ResolveError, Session};
 
 pub mod decl;
 pub use decl::lower_decl_module;
 
 pub mod graph;
-pub use graph::{compile_graph, GraphOutput};
+pub use graph::{compile_graph, compile_units, linkable, GraphOutput, Linkability, Units};
 
 pub use rut_lir::check::OriginLeaf;
+
+pub mod pack;
+pub use pack::pack_dir;
 
 pub mod loader;
 pub use loader::{
@@ -550,15 +553,18 @@ pub fn mount_std_core(session: &mut Session) {
             // each row keeps its ambient bit — the binding loops read
             // it off the synthesized surface, so the `pub builtin`
             // spellings stay import-gated end to end
-            native_types: core.native_types.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
-            native_traits: core.native_traits.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
-            native_fns: core.native_fns.iter().map(|(n, a)| (txt(*n), *a)).collect(),
-            consts: core.consts.iter().map(|c| (txt(c.name), c.ty, c.bits)).collect(),
-            native_impls: core
-                .native_impls
-                .iter()
-                .map(|(t, n, i)| (*t, txt(*n), *i))
-                .collect(),
+            body: ModuleBody::Host {
+                native_types: core.native_types.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
+                native_traits: core.native_traits.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
+                native_fns: core.native_fns.iter().map(|(n, a)| (txt(*n), *a)).collect(),
+                consts: core.consts.iter().map(|c| (txt(c.name), c.ty, c.bits)).collect(),
+                native_impls: core
+                    .native_impls
+                    .iter()
+                    .map(|(t, n, i)| (*t, txt(*n), *i))
+                    .collect(),
+                host_funcs: vec![],
+            },
             ..Default::default()
         },
     );
@@ -645,8 +651,14 @@ pub fn mount_calc(session: &mut Session) {
         "calc",
         Module {
             namespace: Some("Math".to_string()),
-            host_funcs,
-            consts,
+            body: ModuleBody::Host {
+                host_funcs,
+                consts,
+                native_types: vec![],
+                native_traits: vec![],
+                native_fns: vec![],
+                native_impls: vec![],
+            },
             ..Default::default()
         },
     );
@@ -680,7 +692,10 @@ pub fn compile_module_in(
     let spec = module_name.to_string();
     if let Err(e) = session.register_module(
         &spec,
-        Module { source: Some(src.to_string()), is_decl: mode == Mode::Decl, ..Default::default() },
+        Module {
+            body: ModuleBody::Source { text: src.to_string(), is_decl: mode == Mode::Decl },
+            ..Default::default()
+        },
     ) {
         diags.push(Diag::new(rut_lexer::span::Span::new(0, 0), e.to_string()));
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };

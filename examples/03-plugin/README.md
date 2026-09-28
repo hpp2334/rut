@@ -3,10 +3,11 @@
 A Rust chat-room **server** with a rut **moderator plugin**, in the shape
 of [00-todolist](../00-todolist), [01-sort](../01-sort), and
 [02-digest](../02-digest) — but loaded as a **module directory**:
-`plugin/rut.toml` names the module (`app:plugin`), `plugin/plugin.rut` is
-the adapter, `plugin/moderator.rut` is the plugin, `src/lib.rs` is the
+`plugin/rut.toml` names the module (`plugin`), `plugin/plugin.rut` is
+the whole plugin (adapter + business logic), `src/lib.rs` is the
 embedder SDK, and `src/main.rs` drives a scripted session through **both
-load forms** — the directory and a `.rutbundle` packed from it at runtime
+load forms** — the directory and a v5 **compiled** `.rutbundle` packed
+from it at runtime
 ([bundles](../../docs/src/reference/bundles.md)). This is the first
 example built on **re-entrant `vm.call`**
 ([embedding](../../docs/src/reference/embedding.md)) — and the first
@@ -36,9 +37,9 @@ RUT biz (plugin/moderator.rut)  →  pure logic + emit, no entry fn
 Neither business layer touches the crossing protocol. `Moderator` holds
 the bus handle and speaks through one private `say(topic, payload)`;
 `Plugin` exposes `join`/`msg`/`tick`/`shutdown` and dispatches through
-one `fire`. The two rut files are one module: the loader inlines
-`./moderator.rut` into the entry (one scope, one interner), and the
-manifest is bundle-shaped so the same directory packs unchanged.
+one `fire`. The plugin stays free of generic packages, so it publishes
+compiled: the manifest is bundle-shaped (v5) and the same directory
+packs unchanged — linkable pkgs ride `.rutc`, host pkgs ride source.
 
 ## The round trip
 
@@ -69,9 +70,9 @@ cargo run -p plugin
 ```
 
 The transcript prints at the end, followed by the packed-form run: the
-same directory zipped to a `.rutbundle` in temp, loaded back, and driven
-through the identical session — the printed "identical" line is the
-round-trip proof. `tests/session.rs` asserts the transcript exactly,
+same directory packed to a v5 compiled `.rutbundle` in temp, loaded
+back, and driven through the identical session — the printed
+"identical" line is the round-trip proof. `tests/session.rs` asserts the transcript exactly,
 proves every line crossed the nested render (`emits == renders`), and
 gates the bundle form: round-trip equality, byte-determinism, and the
 refusal gates (unknown `format_version`, CRC corruption).

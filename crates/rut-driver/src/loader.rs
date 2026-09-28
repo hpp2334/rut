@@ -1,10 +1,12 @@
 //! Filesystem loader — read a module directory (`rut.toml`) or a packed
-//! `.rutbundle` (RFC 0038) into a [`Session`].
+//! `.rutbundle` into a [`Session`].
 //!
 //! One module is one directory with ONE entry file: its `use` statements
 //! are all inter-module paths (`use <pkg>::{A, B};`), resolved by the
 //! `Session` — there is no intra-module include form. A `.rutbundle` is
-//! the same contract zipped: `rut.toml` plus the rut entry source.
+//! the same contract zipped: the manifest plus the compiled root binary,
+//! its scope ledger, and each dep group as a compiled `.rutc` or a
+//! source file set.
 //!
 //! The `Session` itself does no I/O (wasm hosts mount in memory); this
 //! native helper is the counterpart that reads files.
@@ -13,9 +15,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use rut_bundle::{
-    bundle_key, entry_rel, parse_manifest, read_entry, Bundle, Entry, FsSource, Manifest,
+    bundle_key, entry_rel, parse_manifest, read_entry, Bundle, Entry, FsSource, GroupKind, Layout,
+    Manifest,
 };
-use crate::session::{Module, Session};
+use crate::session::{Module, ModuleBody, Session};
 
 /// Read a directory's `rut.toml` — the real-filesystem lane of
 /// [`rut_bundle::read_manifest`] (the crate itself never touches the
@@ -74,19 +77,10 @@ pub fn load_dir_session(dir: &Path) -> Result<(Session, String), String> {
     Ok((session, root))
 }
 
-/// Mount a `.rutbundle` file (RFC 0038): one module, its source read from
-/// the archive. The manifest's `format`/`format_version` are checked
-/// before anything else is read — an unknown layout is refused, never
-/// guessed at.
-pub fn load_bundle_session(path: &Path) -> Result<(Session, String), String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    load_bundle_bytes(&bytes, path)
-}
-
 /// Build a package's entry [`Module`] from bundle entries under
 /// `prefix` (empty for the root, `<pkg>/` for a dep group) — the
-/// in-archive counterpart of `load_entry_module`: `entry.type`-only is
-/// a host pkg (decl surface), else the lib source.
+/// in-archive counterpart of `load_entry_module` for a SOURCE group:
+/// `entry.type`-only is a host pkg (decl surface), else the lib source.
 fn bundle_entry_module(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -117,7 +111,7 @@ fn bundle_entry_module(
         src.push_str(&read(lib)?);
     }
     Ok(Module {
-        source: Some(src),
+        body: ModuleBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
         inline: manifest.inline,
         host_scope: manifest.host_scope.clone(),
@@ -125,143 +119,122 @@ fn bundle_entry_module(
     })
 }
 
-/// [`load_bundle_session`] over in-memory bytes (tests, embedders).
+/// Mount a `.rutbundle` (RFC 0038) — a v5 **compiled** bundle: the
+/// root's `.rutc` binary, its pack-time scope ledger, and each dep
+/// group as a compiled `.rutc` or a source file set. The gate order is
+/// the law: container CRC ([`Bundle::parse`]), manifest + exact
+/// `format_version = 5` ([`Layout::parse`]), per-group decode and
+/// verification (inside the layout parse) — then, and only then, the
+/// mount. Older layouts are refused with the one-line version error:
+/// refuse, never guess. Source sharing stays what it always was outside
+/// bundles: a directory.
+pub fn load_bundle_session(path: &Path) -> Result<(Session, String), String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    load_bundle_bytes(&bytes, path)
+}
+
+/// [`load_bundle_session`] over in-memory bytes (tests, embedders,
+/// wasm hosts).
 pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String), String> {
+    // gate 1: the container — every entry's CRC-32 verified
     let bundle = Bundle::parse(bytes).map_err(|e| format!("{}: {e}", origin.display()))?;
-    let toml = bundle
-        .read("rut.toml")
-        .map_err(|_| format!("{}: no `rut.toml` entry — not a rut bundle", origin.display()))?;
-    let manifest = parse_manifest(&toml).map_err(|e| format!("{}: {e}", origin.display()))?;
-    // §4: the layout version gates everything — refuse before reading
-    // any other entry. v1: one module, rut sources only. v2: the whole
-    // dep graph rides `<pkg>/` groups (RFC 0038 OQ-3 answered). v3: the
-    // RFC 0045 peer groups ride too — and this same gate is what makes
-    // an OLDER (v2-era) loader refuse a v3 bundle: refuse, never guess.
-    if manifest.format.as_deref() != Some("rutbundle") {
-        return Err(format!(
-            "{}: rut.toml has no `format = \"rutbundle\"` — not a rut bundle",
-            origin.display()
-        ));
-    }
-    match manifest.format_version {
-        Some(1) | Some(2) | Some(3) | Some(4) => {}
-        other => {
-            return Err(format!(
-                "{}: unknown bundle format_version {other:?} — this loader knows versions 1, 2, 3 and 4",
-                origin.display()
-            ));
-        }
-    }
-    let is_v3 = matches!(manifest.format_version, Some(3) | Some(4));
+    // gate 2 + 3: the manifest/version, then every group's decode +
+    // verification — the layout parse refuses anything it cannot
+    // decode, so a bad binary never reaches the session
+    let layout = Layout::parse(&bundle).map_err(|e| format!("{}: {e}", origin.display()))?;
+    let Layout::Compiled { manifest, root, scopes, groups } = layout;
     let entries = bundle.entries();
-    let root = manifest
+    let root_spec = manifest
         .name
         .clone()
         .ok_or_else(|| format!("{}: rut.toml has no `name`", origin.display()))?;
     let mut session = Session::new();
-    // Peer groups (RFC 0045 §3) ride format_version 3: a v1/v2 layout
-    // has no group entries, so a peer-deps manifest there would silently
-    // mount base-only — semantically wrong; refuse, never guess.
-    if !is_v3 && !manifest.peer_deps.is_empty() {
-        return Err(format!(
-            "{}: rut.toml declares `[peer-deps]` — mounting peer groups needs bundle format_version 3 (RFC 0045 §3)",
-            origin.display()
-        ));
+    // the scope ledger first: the graph's compiled-mount arm resolves
+    // every decoded foreign id through it
+    for (scope, spec) in &scopes {
+        session.record_bundle_scope(*scope, spec);
     }
-    // Multi-lib entries (RFC 0041 §5) ride format_version 4: a v1-v3
-    // layout carries one source per pkg, so a `libs` manifest there
-    // would silently mount base-only — semantically wrong; refuse,
-    // never guess (the same gate peer groups got at v3).
-    if manifest.format_version != Some(4) && !manifest.entry.libs.is_empty() {
-        return Err(format!(
-            "{}: rut.toml declares `entry.libs` — multi-lib entries need bundle format_version 4 (RFC 0041 §5)",
-            origin.display()
-        ));
-    }
-    // the v3 peer gate's map: mounted pkg name → its archive prefix
-    // ("" for the root, `<pkg>/` for a group)
-    let mut prefixes: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
-    if is_v3 {
-        record_peers(&mut session, &root, &manifest);
-        prefixes.insert(root.clone(), String::new());
-    }
-    if manifest.format_version == Some(1) {
-        // §1: one module per bundle in v1
-        if !manifest.deps.is_empty() || !manifest.dev_deps.is_empty() {
-            return Err(format!(
-                "{}: rut.toml declares dependency tables — a v1 bundle is one module (RFC 0038 OQ-3)",
-                origin.display()
-            ));
-        }
-        if manifest.entry.type_path.is_some() || manifest.entry.ir.is_some() {
-            return Err(format!(
-                "{}: rut.toml has entry.type/entry.ir — v1 bundles carry rut sources only",
-                origin.display()
-            ));
-        }
-        let rel = manifest
-            .entry
-            .lib
-            .as_ref()
-            .ok_or_else(|| format!("{}: rut.toml has no entry.lib", origin.display()))?;
-        let key = bundle_key(rel)?;
-        let src = read_entry(&entries, &key)?;
-        session
-            .register_module(
-                &root,
-                Module { source: Some(src), entry: manifest.entry.clone(), ..Default::default() },
-            )
-            .map_err(|e| e.to_string())?;
-        return Ok((session, root));
-    }
-
-    // ---- v2/v3: the root plus every `<pkg>/` dep group, resolved by
-    // NAME (the deps' `path` keys are directory-time only). v3 records
-    // each group's peer declarations and runs the peer gate after the
-    // walk — presence is by NAME inside the archive, exactly as in a
-    // directory world. ----
-    let root_module = bundle_entry_module(&entries, "", &manifest)
-        .map_err(|e| format!("{}: {e}", origin.display()))?;
+    // the root: a compiled module (the packer refuses any other root)
     session
-        .register_module(&root, root_module)
+        .register_module(
+            &root_spec,
+            Module {
+                body: ModuleBody::Compiled(root),
+                entry: manifest.entry.clone(),
+                inline: manifest.inline,
+                host_scope: manifest.host_scope.clone(),
+                ..Default::default()
+            },
+        )
         .map_err(|e| e.to_string())?;
-    let mut groups: std::collections::BTreeSet<String> = entries
-        .iter()
-        .filter_map(|(n, _)| n.split_once('/').map(|(p, _)| p.to_string()))
-        .collect();
-    groups.remove("rut.toml");
-    for pkg in groups {
-        let dep_toml = read_entry(&entries, &format!("{pkg}/rut.toml")).map_err(|_| {
-            format!("{}: bundle group `{pkg}/` has no `rut.toml`", origin.display())
-        })?;
+    record_peers(&mut session, &root_spec, &manifest);
+    // the archive's group prefixes (root "" first) — the peer gate's
+    // group reads key on these
+    let mut prefixes: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    prefixes.insert(root_spec.clone(), String::new());
+    for (prefix, kind) in &groups {
+        let dep_toml =
+            read_entry(entries, &format!("{prefix}/rut.toml")).map_err(|e| format!("{}: {e}", origin.display()))?;
         let dm = parse_manifest(&dep_toml)
-            .map_err(|e| format!("{}: {pkg}/rut.toml: {e}", origin.display()))?;
-        if !is_v3 && !dm.peer_deps.is_empty() {
-            return Err(format!(
-                "{}: {pkg}/rut.toml declares `[peer-deps]` — mounting peer groups needs bundle format_version 3 (RFC 0045 §3)",
-                origin.display()
-            ));
-        }
-        if manifest.format_version != Some(4) && !dm.entry.libs.is_empty() {
-            return Err(format!(
-                "{}: {pkg}/rut.toml declares `entry.libs` — multi-lib entries need bundle format_version 4 (RFC 0041 §5)",
-                origin.display()
-            ));
-        }
-        let name =
-            dm.name.clone().ok_or_else(|| format!("{}: {pkg}/rut.toml has no `name`", origin.display()))?;
+            .map_err(|e| format!("{}: {prefix}/rut.toml: {e}", origin.display()))?;
+        let name = dm
+            .name
+            .clone()
+            .ok_or_else(|| format!("{}: {prefix}/rut.toml has no `name`", origin.display()))?;
         if session.resolve(&name).is_ok() {
             continue; // first mount wins (the root, an earlier group)
         }
-        let m = bundle_entry_module(&entries, &format!("{pkg}/"), &dm)
-            .map_err(|e| format!("{}: {e}", origin.display()))?;
+        let module = match kind {
+            GroupKind::Compiled(program) => {
+                // a compiled group may not declare peer lib files —
+                // appending source into a compiled pkg is impossible
+                if dm.peer_deps.values().any(|d| d.contains_key("lib")) {
+                    return Err(format!(
+                        "{}: `{name}` is a compiled group and declares `[peer-deps]` lib files — a compiled pkg cannot take appended source (re-pack without it)",
+                        origin.display()
+                    ));
+                }
+                // the ledger must name the group, and the row must be
+                // the scope the binary itself carries (refuse, never
+                // guess — a mismatch is a corrupt or doctored bundle)
+                let Some(own) = rut_core::link::own_scope(program) else {
+                    return Err(format!(
+                        "{}: {prefix}/{}: the program carries no scope blocks",
+                        origin.display(),
+                        name
+                    ));
+                };
+                match scopes.iter().find(|(_, s)| s == &name) {
+                    Some(&(row, _)) if row == own => {}
+                    Some(&(row, _)) => {
+                        return Err(format!(
+                            "{}: `{name}`'s ledger row says scope {row}, but its binary carries {own}",
+                            origin.display()
+                        ));
+                    }
+                    None => {
+                        return Err(format!(
+                            "{}: the scope ledger does not name `{name}` — the bundle is incomplete",
+                            origin.display()
+                        ));
+                    }
+                }
+                Module {
+                    body: ModuleBody::Compiled(program.clone()),
+                    entry: dm.entry.clone(),
+                    inline: dm.inline,
+                    host_scope: dm.host_scope.clone(),
+                    ..Default::default()
+                }
+            }
+            GroupKind::Source => bundle_entry_module(entries, &format!("{prefix}/"), &dm)
+                .map_err(|e| format!("{}: {e}", origin.display()))?,
+        };
         session
-            .register_module(&name, m)
+            .register_module(&name, module)
             .map_err(|e| e.to_string())?;
-        if is_v3 {
-            record_peers(&mut session, &name, &dm);
-            prefixes.insert(name.clone(), format!("{pkg}/"));
-        }
+        record_peers(&mut session, &name, &dm);
+        prefixes.insert(name.clone(), format!("{prefix}/"));
     }
     // every declared dep must be satisfied by a group
     for spec in manifest.deps.keys() {
@@ -272,13 +245,11 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
             ));
         }
     }
-    if is_v3 {
-        run_bundle_peer_gate(&mut session, &entries, &prefixes, origin)?;
-    }
-    Ok((session, root))
+    run_bundle_peer_gate(&mut session, entries, &prefixes, origin)?;
+    Ok((session, root_spec))
 }
 
-/// The RFC 0045 peer gate over a mounted v3 bundle — pass 3 of the
+/// The RFC 0045 peer gate over a mounted bundle — pass 3 of the
 /// mount order, in-archive flavor: every group is already mounted
 /// (presence is by NAME; first-mount-wins), so
 ///
@@ -287,8 +258,8 @@ pub fn load_bundle_bytes(bytes: &[u8], origin: &Path) -> Result<(Session, String
 /// - peer present → the declarer's group file (the descriptor's `lib`,
 ///   an impl-only `.rut`) is read from the archive and appended to its
 ///   source. A declared group the archive does not carry is a load
-///   error — the §4-consistency row (a v3 bundle that declares a group
-///   must carry it).
+///   error — the consistency row (a bundle that declares a group must
+///   carry it).
 ///
 /// The D3 path checks are directory-time law (a broken `[peer-deps]`
 /// path is the declaring pkg's own packaging bug): a bundle has no
@@ -376,8 +347,8 @@ fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> 
     // The multi-lib splice (RFC 0041 §5): the base `lib` first, then
     // `libs` in manifest order, '\n'-joined exactly like the
     // peer-group append — the combined text stays ONE source string,
-    // so every downstream consumer of `Module.source` (the graph
-    // splice, bundles, wasm mounts) is untouched. The manifest's array
+    // so every downstream consumer of the source body (the graph
+    // splice, the wasm mounts) is untouched. The manifest's array
     // order is the canonical order: the splice never reads a directory
     // listing, so same manifest ⇒ same module (the determinism law).
     for rel in &manifest.entry.libs {
@@ -386,7 +357,7 @@ fn load_entry_module(dir: &Path, manifest: &Manifest) -> Result<Module, String> 
         src.push_str(&text);
     }
     Ok(Module {
-        source: Some(src),
+        body: ModuleBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
         // the manifest's mount properties ride the module regardless of
         // entry shape (`inline` is ink's; `host_scope` matters only for
@@ -402,7 +373,6 @@ fn load_entry(dir: &Path, entry: &Entry) -> Result<String, String> {
         .lib
         .as_ref()
         .or(entry.type_path.as_ref())
-        .or(entry.ir.as_ref())
         .ok_or_else(|| format!("module in {} has no entry", dir.display()))?;
     load_module_source(&dir.join(rel))
 }

@@ -95,7 +95,7 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
     session
         .register_module(
             "app_boxes",
-            rut_driver::Module { spec: "app_boxes".into(), source: Some(SRC.into()), ..Default::default() },
+            rut_driver::Module { spec: "app_boxes".into(), body: rut_driver::ModuleBody::Source { text: SRC.into(), is_decl: false }, ..Default::default() },
         )
         .unwrap();
     let g = rut_driver::compile_graph(&session, "app_boxes");

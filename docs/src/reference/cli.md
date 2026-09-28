@@ -90,9 +90,13 @@ rut pack plugins/server -o server.rutbundle
 
 Packs a module directory into a **deterministic** `.rutbundle` — same
 input, same bytes. Without `-o`, the output is written beside the input
-as `<dir-name>.rutbundle`. The bundle carries the compiled binaries, the
-declaration surfaces, the cached DeclIr, and symbol sidecars under a
-versioned manifest; `run` accepts it directly
+as `<dir-name>.rutbundle`. The bundle is **compiled** (format_version
+5): the root and every linkable package ride as `.rutc` binaries
+(bodies + surface — the linking truth), splice-needed packages
+(generic exports, trait-object parameters, `inline`) and host pkgs
+ride as source groups, and a scope ledger lets any loader rebase the
+binaries onto its own numbering. A root that cannot link is refused —
+share the directory instead. `run` accepts the bundle directly
 ([module bundles](bundles.md)).
 
 ## `dump`

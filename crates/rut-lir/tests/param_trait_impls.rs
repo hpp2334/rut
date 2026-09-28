@@ -14,7 +14,7 @@
 //! the bound part of the expected shape (the placeholder hint).
 
 use rut_parser::Mode;
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 
 /// A compile-and-run harness: core + the std surfaces mounted, the test
 /// source compiled as the root module, encoded + decoded (RFC 0033) —
@@ -32,7 +32,7 @@ fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
             .join("; "));
     }
     session
-        .register_module("test", Module { source: Some(src.to_string()), inline: true, ..Default::default() })
+        .register_module("test", Module { body: ModuleBody::Source { text: src.to_string(), is_decl: false },  inline: true, ..Default::default() })
         .map_err(|e| format!("{e:?}"))?;
     let compiled = rut_driver::compile_module_in(&mut session, src, Mode::Impl, "testroot");
     if !compiled.diags.is_empty() {

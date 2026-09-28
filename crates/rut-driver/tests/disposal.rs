@@ -13,7 +13,7 @@
 //! - the per-type rows ride the binary: a compiled module decodes with
 //!   its disposal row, and the func id survives encode → decode.
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 
 fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
@@ -21,7 +21,7 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     rut_driver::mount_std(&mut s);
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     rut_driver::mount_dir(&mut s, &root.join("rut/ink")).expect("mount ink (+rt)");
-    s.register_module("app_main", Module { source: Some(combined.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: combined.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
     let prog = out.program.expect("linked program");

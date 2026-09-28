@@ -62,6 +62,12 @@ source text by design; a partially translated book is a valid book.
 | compile | 编译 | the compiler → 编译器；frontend → 前端 |
 | symbolication | 符号化 | |
 | embed loop | 嵌入循环 | |
+| compiled group | 编译组 | a bundle dep whose `.rutc` rides（对照 source group） |
+| source group | 源码组 | a splice-needed dep / host pkg riding its source file set |
+| scope ledger | 作用域台账 | `rut.scopes` stays code；打包期作用域 → 打包期作用域 |
+| splice | 拼接 | splice-needed → 需要拼接；the splice law → 拼接法则 |
+| rebase | 重定基 | packed ids rebase onto the loader's numbering |
+| linkable | 可链接 | the splice law's verdict — Linkable |
 
 First mention of a glossary term in a chapter may carry the English in
 parentheses — 中文（English） — when the mapping is not obvious from

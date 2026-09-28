@@ -43,15 +43,13 @@ use std::collections::BTreeMap;
 pub struct Entry {
     /// `.d.rut` surface path — the declaration/type half (RFC 0029)
     pub type_path: Option<String>,
-    /// body path — `.rut` source, or a compiled `.rutc`/`.d.ir`
+    /// body path — a `.rut` source
     pub lib: Option<String>,
     /// additional `.rut` body files, spliced after `lib` in listed
     /// order — ONE module, one namespace (RFC 0041 §5, the multi-lib
     /// entry; contrast the presence-gated impl-only peer groups of
     /// RFC 0045 §3, which ride `[peer-deps]` instead)
     pub libs: Vec<String>,
-    /// compiled IR path (`.d.ir`)
-    pub ir: Option<String>,
 }
 
 /// A parsed `rut.toml` — either a module manifest (`name` + `entry.*`) or
@@ -114,7 +112,7 @@ pub fn valid_spec(spec: &str) -> bool {
 }
 
 /// Parse the `rut.toml` subset: top-level `name`, `entry.type` /
-/// `entry.lib` / `entry.libs` / `entry.ir` (bare or under `[entry]`),
+/// `entry.lib` / `entry.libs` (bare or under `[entry]`),
 /// and the dep tables `[deps]` / `[peer-deps]` / `[dev-deps]`
 /// (RFC 0045) whose values are inline tables.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
@@ -171,14 +169,18 @@ pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
                 "entry.type" => m.entry.type_path = Some(parse_string(value, lineno)?),
                 "entry.lib" => m.entry.lib = Some(parse_string(value, lineno)?),
                 "entry.libs" => m.entry.libs = parse_string_array(value, lineno)?,
-                "entry.ir" => m.entry.ir = Some(parse_string(value, lineno)?),
+                // `entry.ir` (the deleted DeclIr cache key) rides as an
+                // unknown key: old manifests keep parsing
+                "entry.ir" => {}
                 _ => {} // forward-compatible: ignore unknown top-level keys
             },
             Section::Entry => match key.as_str() {
                 "type" => m.entry.type_path = Some(parse_string(value, lineno)?),
                 "lib" => m.entry.lib = Some(parse_string(value, lineno)?),
                 "libs" => m.entry.libs = parse_string_array(value, lineno)?,
-                "ir" => m.entry.ir = Some(parse_string(value, lineno)?),
+                // `ir` (the deleted DeclIr cache key) rides as an unknown
+                // key: old manifests keep parsing
+                "ir" => {}
                 other => {
                     return Err(ManifestError(format!(
                         "line {}: unknown `[entry]` key `{other}`",

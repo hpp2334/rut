@@ -65,8 +65,8 @@ pub enum ConstVal {
     TypeId(TypeId),
 }
 
-/// One exported function in a module's surface (RFC 0029 DeclIr sketch):
-/// the usable name, its signature, and its module-local id. Names are
+/// One exported function in a module's surface: the usable name, its
+/// signature, and its module-local id. Names are
 /// [`IdentId`]s into the surface's own [`Surface::names`] interner — a
 /// surface is self-contained and crosses modules intact.
 #[derive(Clone, Debug, PartialEq)]

@@ -10,7 +10,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use rut_driver::{compile_graph, lower_decl_module, mount_std_async, mount_std_core, Module, Session};
+use rut_driver::{Module, ModuleBody, Session, compile_graph, lower_decl_module, mount_std_async, mount_std_core};
 use rut_std::async_host::install_std_async;
 use rut_std::logger::install_std_log;
 use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
@@ -129,7 +129,7 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let fixture =
         lower_decl_module(FIXTURE_DECL, "fixture.d.rut").expect("the fixture surface is valid");
     s.register_module("fixture", fixture).expect("mount fixture");
-    s.register_module("app", Module { source: Some(src.into()), ..Default::default() })
+    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
         .expect("register app");
     let out = compile_graph(&s, "app");
     assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
@@ -564,7 +564,7 @@ pub fn main() -> nil {
     launch_future(job(log, "t"));
 }
 "#;
-    s.register_module("app", Module { source: Some(app.into()), ..Default::default() })
+    s.register_module("app", Module { body: ModuleBody::Source { text: app.into(), is_decl: false }, ..Default::default() })
         .expect("register app");
     let out = compile_graph(&s, "app");
     assert!(out.diags.is_empty(), "diags: {:?}", out.diags);

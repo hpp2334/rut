@@ -5,7 +5,7 @@
 //! the minted boxes, and the exact heap balance.
 
 use rut_core::types::{TY_BYTES, TY_I64, TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR};
-use rut_driver::{lower_decl_module, Module, Session};
+use rut_driver::{Module, ModuleBody, Session, lower_decl_module};
 
 /// The host-decl surface under test: one row per new answer lane.
 const DECL: &str = "\
@@ -20,8 +20,11 @@ fn the_answer_lanes_spell_in_the_decl_grammar() {
     // `-> ?T` renders through ty_text's `?` shape and maps to its fixed
     // boot `Opt` row; plain `bytes` keeps its own boot id
     let m = lower_decl_module(DECL, "rets.d.rut").expect("the answer rows lower");
+    let ModuleBody::Host { ref host_funcs, .. } = m.body else {
+        panic!("a lowered decl is a host body");
+    };
     assert_eq!(
-        m.host_funcs,
+        *host_funcs,
         vec![
             ("qstr_pick".to_string(), vec![], TY_OPT_STR, false),
             ("qbytes_pick".to_string(), vec![], TY_OPT_BYTES, false),
@@ -129,7 +132,7 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
     s.register_module("rets", module).unwrap();
     s.register_module(
         "app",
-        Module { source: Some(src.into()), ..Default::default() },
+        Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() },
     )
     .unwrap();
     let out = rut_driver::compile_graph(&s, "app");

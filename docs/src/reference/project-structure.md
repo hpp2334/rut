@@ -33,7 +33,6 @@ The keys, all of them:
 | `entry.lib` | the body: one `.rut` file (or `.rutc`-style artifacts where supported) |
 | `entry.libs` | ordered extra `.rut` files — the **multi-lib entry** (below) |
 | `entry.type` | the declaration surface: one `.d.rut` file. `entry.type` alone makes a **host pkg** — a pure signature surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)) |
-| `entry.ir` | a compiled declaration cache (`.d.ir`), when present |
 | `[deps]` | the transitively mounted dependencies — string-valued descriptors: `pkg = { path = "..." }`, relative to this manifest. `optional` is rejected here. |
 | `[peer-deps]` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
 | `[dev-deps]` | mounted only while building/testing this pkg itself |

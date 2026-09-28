@@ -40,7 +40,7 @@
 //! in one file.
 
 use rut_core::binary::Program;
-use rut_driver::Module;
+use rut_driver::{Module, ModuleBody};
 
 // ---- the packages, embedded verbatim --------------------------------
 // The mirror reads the SAME files the manifest names. wasm32 has no
@@ -129,7 +129,7 @@ pub fn mount_host_session(session: &mut rut_driver::Session) -> Result<(), Strin
     session
         .register_module(
             "pouch",
-            Module { source: Some(POUCH_RUT.to_string()), ..Default::default() },
+            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
     register_web_surface(session)?;
@@ -208,7 +208,7 @@ pub fn mount_store_session(session: &mut rut_driver::Session) -> Result<(), Stri
     session
         .register_module(
             "pouch",
-            Module { source: Some(POUCH_RUT.to_string()), ..Default::default() },
+            Module { body: ModuleBody::Source { text: POUCH_RUT.to_string(), is_decl: false }, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -230,7 +230,7 @@ pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String
     session
         .register_module(
             "nmapset",
-            Module { source: Some(NMAPSET_RUT.to_string()), inline: true, ..Default::default() },
+            Module { body: ModuleBody::Source { text: NMAPSET_RUT.to_string(), is_decl: false },  inline: true, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
 
@@ -243,7 +243,7 @@ pub fn mount_app_session(session: &mut rut_driver::Session) -> Result<(), String
     session
         .register_module(
             "ui",
-            Module { source: Some(ui_source()), inline: true, ..Default::default() },
+            Module { body: ModuleBody::Source { text: ui_source(), is_decl: false },  inline: true, ..Default::default() },
         )
         .map_err(|e| e.to_string())?;
 

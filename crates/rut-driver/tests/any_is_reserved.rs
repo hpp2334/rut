@@ -4,7 +4,7 @@
 //! erasure box (`opaque(v)` + `downcast<T>`, RFC 0014) is the only
 //! value lane; these tests pin the refusal end to end.
 
-use rut_driver::{lower_decl_module, Module, Session};
+use rut_driver::{Module, ModuleBody, Session, lower_decl_module};
 use rut_lexer::lexer::lex_mode;
 use rut_parser::{parse, Mode};
 
@@ -57,7 +57,7 @@ fn rut_source_cannot_name_any() {
     s.register_module(
         "app",
         Module {
-            source: Some("pub fn main() -> nil {\n    let x: any = 1;\n}".into()),
+            body: ModuleBody::Source { text: "pub fn main() -> nil {\n    let x: any = 1;\n}".into(), is_decl: false },
             ..Default::default()
         },
     )
@@ -94,8 +94,8 @@ fn the_erasure_box_still_crosses() {
     s.register_module(
         "app",
         Module {
-            source: Some(
-                "use hmap::{ box_put, box_get };\n\
+            body: ModuleBody::Source {
+                text: "use hmap::{ box_put, box_get };\n\
                  pub fn main() -> i32 {\n\
                  \x20   let m: opaque = opaque(0);\n\
                  \x20   let put: i64 = box_put(m, opaque(\"ada\"));\n\
@@ -107,7 +107,8 @@ fn the_erasure_box_still_crosses() {
                  \x20   return t.len();\n\
                  }\n"
                 .into(),
-            ),
+                is_decl: false,
+            },
             ..Default::default()
         },
     )

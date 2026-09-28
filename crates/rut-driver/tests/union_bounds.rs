@@ -15,12 +15,12 @@
 //!   for every instantiation; each instantiation still dispatches the
 //!   concrete member's own impl (different members → different impls).
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 
 fn compile_app(src: &str) -> rut_driver::GraphOutput {
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     rut_driver::compile_graph(&s, "app")
 }
 

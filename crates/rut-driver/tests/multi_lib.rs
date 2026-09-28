@@ -7,15 +7,15 @@
 //! - one namespace: names private to one file resolve from another
 //!   (a lib file calls a base fn; the base calls a lib fn), and a
 //!   consumer imports a pub name a LIB file declares;
-//! - the splice order: `Module.source` is base, then libs in array
+//! - the splice order: the source body is base, then libs in array
 //!   order, '\n'-joined — the determinism law (never a dir listing);
 //! - the manifest laws: `libs` without `lib`, a `.d.rut` element, a
 //!   duplicated file — each one loud error;
-//! - bundles: format_version 4 carries the lib files (pack ⇒ load ⇒
-//!   run); a `libs` manifest under v3 is refused, never base-mounted.
+//! - bundles: the multi-lib pkg compiles to its `.rutc` (the splice
+//!   already happened at pack), so the archive carries the binary, not
+//!   the files; the packed form compiles identically to the directory
 
-use rut_bundle::{pack, FsSource};
-use rut_driver::{load_bundle_bytes, load_dir_session};
+use rut_driver::{load_bundle_bytes, load_dir_session, pack_dir};
 use std::path::{Path, PathBuf};
 
 fn scratch(tag: &str) -> PathBuf {
@@ -102,9 +102,11 @@ fn multi_lib_is_one_module_in_manifest_order() {
     let root = world("order", Some("\"./part_c.rut\", \"./part_b.rut\""), None);
     let (session, app_root) = load_dir_session(&root.join("app")).expect("load");
     let kid = session.resolve("kid").expect("kid mounted");
-    let src = kid.source.as_deref().expect("kid has source");
+    let rut_driver::ModuleBody::Source { text: src, .. } = &kid.body else {
+        panic!("kid has a source body");
+    };
     assert_eq!(
-        src,
+        src.as_str(),
         format!("{BASE}\n{LIB_C}\n{LIB_B}"),
         "the splice is base, then libs in manifest order, '\\n'-joined"
     );
@@ -139,32 +141,28 @@ fn manifest_libs_laws_are_loud() {
 }
 
 #[test]
-fn bundles_carry_libs_at_v4_and_refuse_below() {
-    let root = world("v4", Some("\"./part_b.rut\", \"./part_c.rut\""), Some(4));
-    let bytes = pack(&root.join("app"), &FsSource).expect("pack");
+fn multi_lib_packs_compiled_and_loads_identically() {
+    let root = world("v5", Some("\"./part_b.rut\", \"./part_c.rut\""), Some(5));
+    let bytes = pack_dir(&root.join("app")).expect("pack");
     // determinism: same dir ⇒ byte-identical bundle
-    assert_eq!(bytes, pack(&root.join("app"), &FsSource).unwrap());
-    // the archive carries the lib files beside the entry
+    assert_eq!(bytes, pack_dir(&root.join("app")).unwrap());
+    // the archive carries the compiled binaries — the splice already
+    // happened at pack time, so the lib FILES do not ride
     let names: Vec<String> =
         rut_bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
-    for key in ["kid/kid.rut", "kid/part_b.rut", "kid/part_c.rut"] {
+    for key in ["app.rutc", "rut.scopes", "kid/kid.rutc"] {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }
+    assert!(!names.iter().any(|n| n.ends_with(".rut")), "no source rides a linkable pkg: {names:?}");
     let (session, app_root) = load_bundle_bytes(&bytes, Path::new("mem")).expect("load");
-    assert_eq!(run_main(session, &app_root), 23);
+    assert_eq!(run_main(session.clone(), &app_root), 23);
 
-    // a `libs` manifest packed as v3 is refused at LOAD — the same
-    // refuse-never-guess gate peer groups got (RFC 0041 §5)
-    let root = world("v3", Some("\"./part_b.rut\""), Some(3));
-    let bytes = pack(&root.join("app"), &FsSource);
-    assert!(bytes.unwrap_err().contains("format_version = 4"), "the packer demands v4");
-    let entries = vec![
-        ("rut.toml".into(),
-            b"format = \"rutbundle\"\nformat_version = 3\nname = \"x\"\nentry.lib = \"./x.rut\"\nentry.libs = [\"./y.rut\"]\n".to_vec()),
-        ("x.rut".into(), b"fn main() -> i32 { return 0; }\n".to_vec()),
-        ("y.rut".into(), b"fn tail() -> i32 { return 1; }\n".to_vec()),
-    ];
-    let err = load_bundle_bytes(&rut_bundle::write_bundle(&entries).unwrap(), Path::new("mem"))
-        .unwrap_err();
-    assert!(err.contains("need bundle format_version 4"), "{err}");
+    // the packed form compiles to the SAME linked binary as the directory
+    let (dir_session, dir_root) = load_dir_session(&root.join("app")).expect("dir load");
+    let linked = |s: &rut_driver::Session, r: &str| {
+        let g = rut_driver::compile_graph(s, r);
+        assert!(g.diags.is_empty(), "{:?}", g.diags);
+        rut_core::binary::encode(&g.program.expect("linked"))
+    };
+    assert_eq!(linked(&dir_session, &dir_root), linked(&session, &app_root));
 }

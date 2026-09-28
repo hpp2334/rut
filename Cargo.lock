@@ -1043,6 +1043,9 @@ dependencies = [
 [[package]]
 name = "rut-bundle"
 version = "0.1.0"
+dependencies = [
+ "rut-core",
+]
 
 [[package]]
 name = "rut-cli"

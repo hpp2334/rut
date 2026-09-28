@@ -175,6 +175,7 @@ table. `debug` position folding and trace symbolication are covered in
 
 A `.d.rut` declaration surface does not produce a binary — it has no
 bodies, so it compiles to a signature surface only
-([Host fns and declaration files](host-fns.md)). And a `.rutbundle` is a
-source package, not a binary artifact: it carries `rut.toml` + sources and
-compiles on load ([Module bundles](bundles.md)).
+([Host fns and declaration files](host-fns.md)). And a `.rutbundle` is
+binaries plus their container: the compiled packages ride as `.rutc`
+binaries (this format), splice-needed packages and host pkgs as source
+groups ([Module bundles](bundles.md)).

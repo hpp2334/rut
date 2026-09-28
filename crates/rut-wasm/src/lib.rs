@@ -132,7 +132,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         .register_module(
             "ink",
             rut_driver::Module {
-                source: Some(include_str!("../../../rut/ink/ink.rut").to_string()),
+                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/ink/ink.rut").to_string(), is_decl: false },
                 inline: true,
                 ..Default::default()
             },
@@ -142,7 +142,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         .register_module(
             "pouch",
             rut_driver::Module {
-                source: Some(include_str!("../../../rut/pouch/pouch.rut").to_string()),
+                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/pouch/pouch.rut").to_string(), is_decl: false },
                 ..Default::default()
             },
         )
@@ -154,7 +154,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         .register_module(
             "nmapset",
             rut_driver::Module {
-                source: Some(include_str!("../../../rut/nmapset/nmapset.rut").to_string()),
+                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/nmapset/nmapset.rut").to_string(), is_decl: false },
                 inline: true,
                 ..Default::default()
             },
@@ -175,7 +175,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         .register_module(
             "async_host",
             rut_driver::Module {
-                source: Some(include_str!("../../../rut/async_host/async_host.rut").to_string()),
+                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/async_host/async_host.rut").to_string(), is_decl: false },
                 inline: true,
                 ..Default::default()
             },
@@ -192,7 +192,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         .register_module(
             "strbuild",
             rut_driver::Module {
-                source: Some(include_str!("../../../rut/strbuild/strbuild.rut").to_string()),
+                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/strbuild/strbuild.rut").to_string(), is_decl: false },
                 inline: true,
                 ..Default::default()
             },
@@ -202,7 +202,7 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
         .register_module(
             "json",
             rut_driver::Module {
-                source: Some(include_str!("../../../rut/json/json.rut").to_string()),
+                body: rut_driver::ModuleBody::Source { text: include_str!("../../../rut/json/json.rut").to_string(), is_decl: false },
                 inline: true,
                 ..Default::default()
             },

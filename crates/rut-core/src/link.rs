@@ -46,6 +46,266 @@ pub fn flatten(prog: Program) -> Program {
     link(vec![prog]).expect("flatten: single-module link cannot fail")
 }
 
+// ---- load-time rebase (the compiled-bundle mount) ----
+//
+// A decoded `.rutc` carries its compiler-emitted packed `(scope, local)`
+// ids verbatim, but NOT the type table's scope bookkeeping (`packed`,
+// `scope`, `scope_base` — the wire's surface section carries the same
+// blocks, so the loader rebuilds the bookkeeping from it). A mount
+// assigns the program a fresh scope and rewrites every scope half
+// through a map; boot ids are global by construction and pass through.
+
+/// Walk every packed `TypeId` a program carries: the type table's
+/// descriptors, trait methods, consts, function signatures and op
+/// operands, and the surface rows. The scope halves of these ids are
+/// the foreign references a rebase must rewrite.
+fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
+    fn kind(kind: &TyKind, f: &mut impl FnMut(TypeId)) {
+        match kind {
+            TyKind::Nil
+            | TyKind::Prim(_)
+            | TyKind::Str
+            | TyKind::Bytes
+            | TyKind::Opaque
+            | TyKind::Trace
+            | TyKind::StrBuf
+            | TyKind::DisposalContext
+            | TyKind::Enum { .. }
+            | TyKind::TraitObj { .. } => {}
+            TyKind::Array { elem } | TyKind::Weak { elem } | TyKind::Opt { elem } => f(*elem),
+            TyKind::Data { fields } => for fl in fields {
+                f(fl.ty);
+            },
+            TyKind::Fn { params, ret } => {
+                for p in params {
+                    f(*p);
+                }
+                f(*ret);
+            }
+        }
+    }
+    // op operands that carry a TypeId — the read-only twin of `remap_op`'s
+    // type arms (func ids are walked separately below)
+    fn op_tys(op: &Op, f: &mut impl FnMut(TypeId)) {
+        match op {
+            Op::NewCell { ty, .. }
+            | Op::MakeRecord { ty, .. }
+            | Op::Own { ty, .. }
+            | Op::MakeOpt { ty, .. }
+            | Op::WeakNew { ty, .. }
+            | Op::ArrNew { ty, .. }
+            | Op::ArrLit { ty, .. }
+            | Op::EnumNew { ty, .. }
+            | Op::IsType { want: ty, .. }
+            | Op::Unbox { ty, .. }
+            | Op::Box { ty, .. } => f(*ty),
+            _ => {}
+        }
+    }
+    let mut id = |t: TypeId| f(t);
+    for t in &prog.types.types {
+        kind(&t.kind, &mut id);
+    }
+    for tr in &prog.traits {
+        for m in &tr.methods {
+            for &p in &m.params {
+                id(p);
+            }
+            id(m.ret);
+        }
+    }
+    for c in &prog.consts {
+        if let ConstVal::TypeId(t) = c {
+            id(*t);
+        }
+    }
+    for fc in &prog.funcs {
+        for &p in &fc.params {
+            id(p);
+        }
+        id(fc.ret);
+        for &r in &fc.regs {
+            id(r);
+        }
+        for op in &fc.code {
+            op_tys(op, &mut id);
+        }
+    }
+    let s = &prog.surface;
+    for f in &s.funcs {
+        for &p in &f.params {
+            id(p);
+        }
+        id(f.ret);
+    }
+    for c in &s.consts {
+        id(c.ty);
+    }
+    for t in &s.types {
+        kind(&t.kind, &mut id);
+    }
+    for im in &s.impls {
+        id(im.target);
+    }
+    for (t, _, _) in &s.native_impls {
+        id(*t);
+    }
+}
+
+/// The scope ids a program's packed ids reference, boot excluded: its
+/// own block plus every used (foreign) block. `types` and the surface
+/// carry the block keys directly; ops and descriptors carry them in id
+/// halves — including function references, whose scope half names the
+/// exporting module.
+pub fn foreign_scopes(prog: &Program) -> std::collections::BTreeSet<crate::id::ScopeId> {
+    let mut out = std::collections::BTreeSet::new();
+    let mut push = |t: TypeId| {
+        let s = crate::id::scope_of(t);
+        if s != crate::id::BOOT_SCOPE {
+            out.insert(s);
+        }
+    };
+    walk_type_ids(prog, &mut push);
+    for &(s, _) in &prog.surface.scope_blocks {
+        if s != crate::id::BOOT_SCOPE {
+            out.insert(s);
+        }
+    }
+    for t in &prog.surface.type_exports {
+        if let Some(s) = t.scope {
+            if s != crate::id::BOOT_SCOPE {
+                out.insert(s);
+            }
+        }
+    }
+    for fc in &prog.funcs {
+        for op in &fc.code {
+            match op {
+                Op::Call { func, .. } | Op::CallM { func, .. } | Op::MakeClosure { func, .. } => {
+                    let s = crate::id::scope_of(*func);
+                    if s != crate::id::BOOT_SCOPE {
+                        out.insert(s);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+/// The scope a (packed) program interns its own types into: the carried
+/// scope block with the greatest base offset. The own block always
+/// closes the table (used blocks are appended first), so the maximum is
+/// the own scope; a tie means an empty own block, whose scope no id
+/// references, so either tie member answers.
+pub fn own_scope(prog: &Program) -> Option<crate::id::ScopeId> {
+    prog.surface
+        .scope_blocks
+        .iter()
+        .copied()
+        .filter(|&(s, _)| s != crate::id::BOOT_SCOPE)
+        .max_by_key(|&(_, off)| off)
+        .map(|(s, _)| s)
+}
+
+/// Rewrite every packed `(scope, local)` id's scope half through `map`
+/// (boot ids pass through — they are global by construction), and
+/// rebuild the type table's packed bookkeeping from the carried surface
+/// blocks: `packed = true`, the program's scope, and each block's dense
+/// base. A decoded program needs exactly this — the wire carries the
+/// ids and the blocks but not the bookkeeping — and a mount calls it
+/// once with the pack-time → load-time scope map. Dense (post-link)
+/// programs must not be rebased: their ids are not scope-qualified.
+pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id::ScopeId) -> Program {
+    let rb_t = |t: TypeId| -> TypeId {
+        let s = crate::id::scope_of(t);
+        if s == crate::id::BOOT_SCOPE {
+            t
+        } else {
+            crate::id::pack(map(s), crate::id::local_of(t))
+        }
+    };
+    let rb_f = |fid: u32| -> u32 {
+        let s = crate::id::scope_of(fid);
+        if s == crate::id::BOOT_SCOPE {
+            fid
+        } else {
+            crate::id::pack(map(s), crate::id::local_of(fid))
+        }
+    };
+    let nm = |n: IdentId| n;
+    let tm = |t: u32| t;
+    for t in prog.types.types.iter_mut() {
+        t.kind = remap_kind(&t.kind, &rb_t, &nm, &tm);
+    }
+    for tr in prog.traits.iter_mut() {
+        for m in tr.methods.iter_mut() {
+            m.params = m.params.iter().map(|&p| rb_t(p)).collect();
+            m.ret = rb_t(m.ret);
+        }
+    }
+    for c in prog.consts.iter_mut() {
+        if let ConstVal::TypeId(t) = c {
+            *t = rb_t(*t);
+        }
+    }
+    for fc in prog.funcs.iter_mut() {
+        fc.params = fc.params.iter().map(|&p| rb_t(p)).collect();
+        fc.ret = rb_t(fc.ret);
+        fc.regs = fc.regs.iter().map(|&r| rb_t(r)).collect();
+        fc.code = std::mem::take(&mut fc.code)
+            .into_iter()
+            .map(|op| remap_op(op, &rb_t, &rb_f, &tm, &tm, 0))
+            .collect();
+    }
+    // dense module-local tables (vtables, disposal rows, exports, trait
+    // slots) carry no scope halves — link rebases them by position
+    let s = &mut prog.surface;
+    for f in s.funcs.iter_mut() {
+        f.params = f.params.iter().map(|&p| rb_t(p)).collect();
+        f.ret = rb_t(f.ret);
+    }
+    for c in s.consts.iter_mut() {
+        c.ty = rb_t(c.ty);
+    }
+    for t in s.types.iter_mut() {
+        t.kind = remap_kind(&t.kind, &rb_t, &nm, &tm);
+    }
+    for &(scope, off) in &s.scope_blocks {
+        let mapped = if scope == crate::id::BOOT_SCOPE { scope } else { map(scope) };
+        set_scope_base(&mut prog.types, mapped, off);
+    }
+    for im in s.impls.iter_mut() {
+        im.target = rb_t(im.target);
+    }
+    for (t, _, _) in s.native_impls.iter_mut() {
+        *t = rb_t(*t);
+    }
+    // a decoded program's `scope` field is unset (the wire carries the
+    // ids and the blocks, not the field) — the own scope comes from the
+    // carried blocks, exactly like every own id's scope half
+    let own = own_scope(&prog).unwrap_or(prog.scope);
+    prog.scope = map(own);
+    // the packed bookkeeping: the carried blocks are local offsets from
+    // the boot prefix, so each block's dense base is boot_len + offset
+    let boot_len = crate::types::TypeTable::boot().types.len() as u32;
+    prog.types.packed = true;
+    prog.types.boot_len = boot_len;
+    prog.types.scope = prog.scope;
+    prog
+}
+
+/// Grow `scope_base` to fit `scope` and record the block's dense base.
+fn set_scope_base(tt: &mut TypeTable, scope: crate::id::ScopeId, off: u32) {
+    let boot_len = TypeTable::boot().types.len() as u32;
+    let need = scope as usize + 1;
+    if tt.scope_base.len() < need {
+        tt.scope_base.resize(need, 0);
+    }
+    tt.scope_base[scope as usize] = boot_len + off;
+}
+
 /// Merge `modules` (in use order) into one [`Program`].
 pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     if modules.is_empty() {

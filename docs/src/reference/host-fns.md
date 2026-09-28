@@ -254,27 +254,16 @@ A published package ships:
 
 | artifact | role |
 |---|---|
-| `mod.rutc` | the compiled module binary with bodies ([module binary and verification](module-binary.md)) |
-| `mod.d.rut` | the surface — hand-written, editable, publishable text |
-| `mod.d.ir` | the compiled **DeclIr** — a local cache, never shipped as a contract |
+| `mod.rutc` | the compiled module binary: bodies + the surface, the linking truth ([module binary and verification](module-binary.md)) |
+| `mod.d.rut` | the surface text — hand-written, editable, publishable (humans, LSP); documentation only, never the loader's source of truth |
 
-```rust
-struct DeclIr {          // serialized as .d.ir — no bodies, no code
-    version: CompilerVersion,   // exact compiler version
-    module: String,             // the specifier this surface answers to
-    exports: Vec<Symbol>,       // name, visibility, kind
-    types: Vec<RutType>,        // full resolved types incl. bounds
-    slots: Vec<(String, SlotId, Sig)>,  // host fn members, decl order
-    digest: DeclDigest,         // hash over everything above
-}
-```
-
-- `.d.ir` is **unstable across compiler versions**: on a version mismatch
-  the toolchain silently regenerates it from the sibling `.d.rut`.
-  Nothing may link or ship it as a compatibility surface.
-- Link compares the **decl digest** of the consumer's surface against the
-  binary's export table — a pure data compare. Drift is a load error
-  naming both modules, never a runtime surprise.
+- The surface rides the binary: a consumer binds `p`'s exports from
+  `mod.rutc` alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn
+  ids, trait-table indices, and namespace/host rows are not derivable
+  from text without guesswork.
+- Link compares the consumer's bound surface against the binary's
+  export table — a pure data compare. Drift is a load error naming
+  both modules, never a runtime surprise.
 - Publishing is not encryption: bodies are compiled and local names are
   stripped (`--release` drops member-name strings), but code is
   recoverable with effort. What publishing guarantees is API discipline.
@@ -285,13 +274,10 @@ When module `M` uses package `p`, the compiler resolves `p`'s surface,
 first hit wins:
 
 1. **source** — `p`'s rut source on the source path: compile it normally;
-2. **bundle** — a mounted `.rutbundle`: its bundled surface (regenerated
-   from the bundled `.d.rut` when version-stale); explicit mounts outrank
-   stray caches, never dev source;
-3. **cache** — `p`'s `.d.ir` with a matching compiler version: load
-   directly, no parse;
-4. **decl** — `p`'s `.d.rut`: compile it (and write the `.d.ir` cache);
-5. **host registry** — for host pkgs, the `.d.rut` the embedder ships
+2. **bundle** — a mounted `.rutbundle`: its compiled `.rutc` (bodies +
+   surface on the wire) — or its bundled source for a splice-needed
+   group; explicit mounts outrank stray sources, never dev source;
+3. **host registry** — for host pkgs, the `.d.rut` the embedder ships
    beside the registered implementation.
 
 Bodies resolve only at link/run. Compiling `M` against a package whose

@@ -17,7 +17,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 use rut_vm::OpaqueRef;
 use rut_vm::interp::Vm;
 
@@ -79,7 +79,7 @@ fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
     session
         .register_module(
             "app",
-            Module { spec: "app".into(), source: Some(SRC.into()), ..Default::default() },
+            Module { spec: "app".into(), body: ModuleBody::Source { text: SRC.into(), is_decl: false }, ..Default::default() },
         )
         .unwrap();
     let g = rut_driver::compile_graph(&session, "app");

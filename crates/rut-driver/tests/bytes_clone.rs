@@ -8,7 +8,7 @@
 //! original's storage is rewritten engine-side — lives beside the
 //! native in rut-vm's `interp::tests`.
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 use rut_parser::Mode;
 
 /// Compile-only harness: keeps the IR dump for the lowering assertions.
@@ -27,7 +27,7 @@ fn compile_program(src: &str) -> rut_driver::ProgramOutput {
 fn run_main(app_src: &str) -> i32 {
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { source: Some(app_src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");

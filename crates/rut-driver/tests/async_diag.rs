@@ -3,13 +3,13 @@
 // no-launcher mode proves ruling 8 (users may write their own
 // launchers — the engine knows none of these names).
 
-use rut_driver::{compile_graph, mount_std_async, mount_std_core, Module, Session};
+use rut_driver::{Module, ModuleBody, Session, compile_graph, mount_std_async, mount_std_core};
 
 fn diags_of(src: &str) -> Vec<String> {
     let mut s = Session::new();
     mount_std_core(&mut s);
     mount_std_async(&mut s);
-    s.register_module("app", Module { source: Some(src.into()), ..Default::default() })
+    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
         .expect("register app");
     compile_graph(&s, "app").diags.iter().map(|d| d.msg.clone()).collect()
 }
@@ -191,7 +191,7 @@ pub fn main() -> nil {
     launch(tick());
 }
 "#;
-    s.register_module("app", Module { source: Some(src.into()), ..Default::default() })
+    s.register_module("app", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() })
         .expect("register app");
     let out = compile_graph(&s, "app");
     assert!(out.diags.is_empty(), "diags: {:?}", out.diags);

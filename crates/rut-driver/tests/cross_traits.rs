@@ -7,7 +7,7 @@
 //! cross-scope vtable fill), and the use-both gate holds at the call
 //! site.
 
-use rut_driver::{GraphOutput, Module, Session};
+use rut_driver::{GraphOutput, Module, ModuleBody, Session};
 use rut_parser::Mode;
 
 const SHAPES: &str = "\
@@ -60,7 +60,7 @@ pub fn make_point() -> Point { return Point { x: 5.0 }; }
 fn graph(modules: &[(&str, &str)]) -> GraphOutput {
     let mut s = Session::new();
     for (spec, src) in modules {
-        let _ = s.register_module(spec, Module { source: Some(src.to_string()), ..Default::default() });
+        let _ = s.register_module(spec, Module { body: ModuleBody::Source { text: src.to_string(), is_decl: false }, ..Default::default() });
     }
     let (root, _) = modules.last().expect("root module");
     rut_driver::compile_graph(&s, root)

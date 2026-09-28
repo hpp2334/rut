@@ -22,14 +22,14 @@
 //! 24-statement budget where REAL frames are wanted (`pad`), so the pins
 //! are against genuinely separate FuncCodes.
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 use rut_parser::Mode;
 
 /// Compile, flatten, verify, and run `main` — the i32 checksum.
 fn run_main(src: &str) -> i32 {
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
@@ -54,7 +54,7 @@ fn run_main(src: &str) -> i32 {
 fn compile_vm(src: &str) -> (rut_core::binary::Program, rut_vm::interp::Vm) {
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let flat = rut_core::link::flatten(out.program.expect("linked program"));
@@ -317,7 +317,7 @@ fn render_degrades_when_stripped() {
     let src = chain_src();
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { source: Some(src.into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: src.into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let mut prog = out.program.expect("linked program");
@@ -383,7 +383,7 @@ fn version_nine_rejects_stale_artifacts() {
     // main tables, plus the reserved inherent-impl table)
     let mut s = Session::new();
     rut_driver::mount_std_core(&mut s);
-    s.register_module("app_main", Module { source: Some("pub fn main() -> i32 { return 4; }".into()), ..Default::default() }).unwrap();
+    s.register_module("app_main", Module { body: ModuleBody::Source { text: "pub fn main() -> i32 { return 4; }".into(), is_decl: false }, ..Default::default() }).unwrap();
     let out = rut_driver::compile_graph(&s, "app_main");
     let prog = out.program.expect("program");
     let bytes = rut_core::binary::encode(&prog);

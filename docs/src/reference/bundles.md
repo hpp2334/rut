@@ -1,35 +1,76 @@
 # Module bundles
 
 `rut pack mod/` reads a module directory and emits **one file** —
-`mod.rutbundle` — a zip archive carrying the manifest and the module's
-sources. A bundle is the same contract as the directory it was packed
-from, in one file: the loader mounts it exactly like the directory, and
-the two compile to identical programs.
+`mod.rutbundle` — a zip archive carrying the module **compiled**: the
+root's `.rutc` binary, its scope ledger, and each dependency as a
+compiled `.rutc` group or a source file set. A bundle is the same
+contract as the directory it was packed from, in one file: the loader
+mounts it exactly like the directory, and the two compile to identical
+programs.
 
 ## Layout rules
 
-- **Entry names are source paths relative to the module root**, flat —
-  `rut.toml`, `entry.rut`, `util.rut`, `<pkg>/…` group entries for deps.
-  No directories otherwise, no metadata entries. Unknown extra entries
-  are ignored by loaders (forward compatibility).
+- **Entry names are paths relative to the module root** — `rut.toml`,
+  `<pkg>.rutc`, `<pkg>.d.rut`, `<dep>/…` group entries for deps. No
+  directories otherwise, no metadata entries. Unknown extra entries are
+  ignored by loaders (forward compatibility).
 - The manifest's `name` is the package name the bundle answers to — a
   bare `[a-zA-Z0-9_]+` name, the same law as directory manifests.
 - Includes and splices never escape the archive: there is no outside.
 
+## The v5 layout
+
+```text
+rut.toml                 byte-for-byte; format = "rutbundle", format_version = 5
+rut.scopes               the pack-time scope ledger (scope = "spec" rows)
+<pkg>.rutc               the root's compiled binary — bodies + surface
+<pkg>.d.rut              the root's surface text (humans, LSP), when it declares one
+<dep>/rut.toml           per dep group, mixed kinds:
+<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.toml rides too)
+<dep>/<dep>.d.rut          its surface text, when it declares one
+<leaf>/rut.toml            splice-needed dep (inline / generic export /
+<leaf>/<leaf>.rut           trait-object params) or a host pkg → a source
+<leaf>/<leaf>.rut …         group: the source file set (entry, libs, peer groups)
+```
+
+- The **`.rutc` binaries are the linking truth**: bodies plus the
+  surface on the wire ([module binary and
+  verification](module-binary.md)). A consumer binds a compiled group's
+  exports from the binary alone — nothing is rebuilt from `.d.rut`
+  text. The `.d.rut` files ride for humans and tooling; the loader
+  never reads them.
+- The **scope ledger** names the pack-time scope of every linked module
+  in the closure (engine mounts included). A decoded program's ids
+  spell its pack-time scopes; the loader resolves each through the
+  ledger to the module to ensure and rebases the ids onto its own
+  numbering — pack-time and load-time numbering never have to agree. A
+  reference with no ledger row is refused.
+- **Mixed groups, one classifier**: the same splice law that rules the
+  graph (`inline`, a generic export, or a trait-object parameter —
+  [modules and visibility](modules-and-visibility.md)) decides each
+  package's kind. Refuse, never guess: the packer calls the graph's own
+  classifier, there is no second implementation.
+- **The root must be linkable** — else `pack: <pkg> exports generic
+  types / takes trait-object params / is inline — it cannot be
+  published compiled; share the directory instead`. (The generic
+  closure itself rides as source groups: a compiled group cannot carry
+  another package's instantiations.)
+
 ## The manifest — `rut.toml`
 
 First entry in the zip; TOML; the same subset the directory form uses,
-which is what makes a bundle-shaped directory pack unchanged:
+byte-for-byte the directory's manifest — which is what makes a
+bundle-shaped directory pack unchanged:
 
 ```toml
 format = "rutbundle"
-format_version = 4          # the bundle LAYOUT version — independent of
+format_version = 5          # the bundle LAYOUT version — independent of
                             #   the module-binary version
 name = "plugin"             # the package this bundle answers to
-entry.lib = "./plugin.rut"  # the entry source, relative to the root
-entry.libs = ["./store.rut"]  # optional: extra body files (multi-lib)
+entry.lib = "./plugin.rut"  # directory-time; the compiled form rides
+                            #   plugin.rutc instead
 
-[deps]                      # the whole dep graph rides the archive
+[deps]                      # the whole dep closure rides the archive
 server = { path = "../server" }
 ```
 
@@ -52,42 +93,47 @@ a newer bundle.
 
 | version | layout | status today |
 |---|---|---|
-| 1 | one module, sources only | loads (the one-module special case) |
-| 2 | + the whole `[deps]` graph as `<pkg>/` groups (manifest + entry each, recursively, deduplicated) | loads; no longer packs |
-| 3 | + each package's `[peer-deps]` `lib` group files beside its entry | loads; no longer packs |
-| 4 | + each package's `entry.libs` files beside its entry | **the packer's output** |
+| 1 | one module, sources only | refused — re-pack the directory |
+| 2 | + the whole `[deps]` graph as `<pkg>/` groups | refused — re-pack the directory |
+| 3 | + each package's `[peer-deps]` `lib` group files | refused — re-pack the directory |
+| 4 | + each package's `entry.libs` files | refused — re-pack the directory |
+| 5 | compiled: `.rutc` (v16) + `.d.rut` per linkable pkg, mixed source groups for splice-needed deps | **the packer's output** — this toolchain reads 5 only |
 
-Each extension exists because the added files are *part of the package*:
-a bundle that dropped peer groups or multi-lib files would load
-base-only — semantically wrong. Groups resolve **by name** (a dep's
-`path` key is directory-time metadata only), and a v4 load splices
-`entry.libs` exactly as the directory loader does: base first, then the
-list in manifest order — the array *is* the splice order
-([Dependency kinds](dependency-kinds.md)).
+Each historical extension existed because the added files were *part of
+the package*: a bundle that dropped peer groups or multi-lib files would
+load base-only — semantically wrong. v5 replaced the source contract
+with the compiled one: source sharing is a directory (`rut run <dir>`),
+as it always was outside bundles.
 
-A manifest that declares `[peer-deps]` or `entry.libs` under a layout
-older than the one that introduced them is refused — those layouts have
-no group entries and would silently mount base-only.
+A compiled group that declares `[peer-deps]` `lib` files is refused at
+pack (and a hand-doctored archive at load): appending source into a
+compiled package is impossible. Peer-gated packages publish inside v5
+the splice-needed way — as source groups, their group files riding
+beside the entry — and the loader's peer gate appends by presence
+exactly as in a directory world ([Dependency
+kinds](dependency-kinds.md)).
 
 ## The `rut-bundle` crate
 
-The container codec, the `rut.toml` grammar, and the packer live in the
-`rut-bundle` crate — std-only and **filesystem-free**. Every read goes
-through a one-method `Source` trait: `rut_bundle::FsSource` is the real
-filesystem (the CLI, native hosts); an in-memory path→bytes map serves
-tests and wasm hosts. `rut_bundle::pack(dir, &src)` returns the bundle
-bytes — writing the output file stays with the caller — and reads only
-manifest-named paths, never a directory listing. Mounting a bundle into
-a session stays in `rut-driver` ([Loading](loading.md)), over
-`rut_bundle::Bundle`, the parsed-and-CRC-verified reader.
+The container codec, the `rut.toml` grammar, the source file-set
+collector, and the v5 reader live in the `rut-bundle` crate — std-only
+and **filesystem-free**. Every read goes through a one-method `Source`
+trait: `rut_bundle::FsSource` is the real filesystem (the CLI, native
+hosts); an in-memory path→bytes map serves tests and wasm hosts. The
+packer itself needs the compiler and lives in `rut-driver`
+(`rut_driver::pack_dir`) — it returns the bundle bytes; writing the
+output file stays with the caller. Mounting a bundle into a session
+stays in `rut-driver` ([Loading](loading.md)), over
+`rut_bundle::Bundle` and its parsed `rut_bundle::Layout` — the
+compiled root, the ledger, and each group's kind.
 
 ## Deterministic packing
 
 Same directory + same toolchain ⇒ byte-identical `.rutbundle`:
 
-- fixed entry order — `rut.toml` first, then the entry source and every
-  transitive relative include in include order, then dep groups
-  (name order, deduplicated, recursive);
+- fixed entry order — `rut.toml` first, then the scope ledger, the
+  root's binary, then dep groups in name order (deduplicated,
+  recursive);
 - fixed (zeroed) timestamps;
 - STORE (no compression) — determinism over size.
 
@@ -98,16 +144,19 @@ content-cacheable, and two builds of the same module diff to nothing.
 ## Checks on load
 
 Every check runs at load time, before compilation and linking — a bad
-bundle never executes:
+bundle never executes. The order is the law: container, then manifest
+and version, then every group's decode, then the mount.
 
 | check | rule on mismatch |
 |---|---|
-| `rut.toml` present, `format = "rutbundle"` | refuse — not a rut bundle |
-| `format_version` known | refuse — unknown bundle layout |
 | zip entry CRC-32 | refuse — corrupt bundle (names the entry) |
-| entry name / UTF-8 / STORE method | refuse — corrupt or unsupported |
-| `entry.lib` present; includes + declared groups/libs resolvable in the zip | refuse — load error naming the entry |
-| a declared peer group missing from the archive | refuse — refuse, never guess |
+| `rut.toml` present, `format = "rutbundle"` | refuse — not a rut bundle |
+| `format_version` exactly 5 | refuse — "reads bundle format_version 5 only" |
+| `rut.scopes` present, every row a bare package name | refuse — not a v5 compiled bundle |
+| `<pkg>.rutc` decode: version, tables, surface ids | refuse — names the entry and the cause |
+| a compiled group's ledger row agrees with its binary's own scope | refuse — corrupt or doctored |
+| a compiled group declaring `[peer-deps]` `lib` files | refuse — appending into a compiled pkg is impossible |
+| every declared dep satisfied by a group | refuse — names the missing group |
 
 ## Loading
 
@@ -121,13 +170,14 @@ let (session, root) = rut_driver::load_path_session(Path::new("vendor/plugin.rut
 let (session, root) = rut_driver::load_bundle_bytes(&bytes, Path::new("mem"))?;
 ```
 
-After mounting, the package name resolves through the bundled sources
-exactly as the directory form does: the entry source is expanded
-(relative includes inlined, include-once), group and libs files splice
-in their manifest order, and the unit compiles under the manifest's
-`name` — then the normal pipeline takes over ([Loading and the embed
-loop](loading.md)). Loose directories and loose `.rut` files stay valid
-publish layouts; the bundle packages them, nothing requires it.
+After mounting, the package name resolves exactly as the directory form
+does — with one difference: a compiled group's body is the decoded
+program itself. The graph assigns it a fresh scope, rebases its packed
+ids through the ledger, and pushes it; source groups mount as sources
+and compile (or splice) exactly as a directory world. Then the normal
+pipeline takes over ([Loading and the embed loop](loading.md)). Loose
+directories and loose `.rut` files stay valid share layouts; the bundle
+packages them, nothing requires it.
 
 ## CLI
 
@@ -138,11 +188,3 @@ rut run <dir | mod.rutbundle>         # mount, compile, execute main
 
 The packed form and its directory compile to identical programs — pinned
 by tests (the linked binaries are equal).
-
-## What a bundle is not
-
-A bundle is a **source** contract: it carries `rut.toml` + `.rut`
-sources and compiles on load. A compiled-artifact payload (`.rutc`
-binaries plus declaration surfaces inside the zip) is not part of any
-layout version yet — when it lands it will be a new ledger row with its
-own consistency rules, and the source layouts above remain unchanged.

@@ -16,7 +16,7 @@
 
 use std::path::Path;
 
-use rut_driver::{Module, Session};
+use rut_driver::{Module, ModuleBody, Session};
 use rut_parser::Mode;
 
 const PEERS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
@@ -134,14 +134,14 @@ entry fn main() -> i64 {
 
     // the chain world: app -> wrap (inline) -> cell (generic export)
     let mut s = Session::new();
-    s.register_module("cell", Module { source: Some(cell_src.into()), ..Default::default() })
+    s.register_module("cell", Module { body: ModuleBody::Source { text: cell_src.into(), is_decl: false }, ..Default::default() })
         .unwrap();
     s.register_module(
         "wrap",
-        Module { source: Some(wrap_src.into()), inline: true, ..Default::default() },
+        Module { body: ModuleBody::Source { text: wrap_src.into(), is_decl: false },  inline: true, ..Default::default() },
     )
     .unwrap();
-    s.register_module("app", Module { source: Some(app_src.into()), ..Default::default() })
+    s.register_module("app", Module { body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() })
         .unwrap();
     let g = rut_driver::compile_graph(&s, "app");
     assert!(g.diags.is_empty(), "{:?}", g.diags);
@@ -242,21 +242,21 @@ entry fn main() -> i64 {
 }
 ";
     let mut s = Session::new();
-    s.register_module("cell", Module { source: Some(cell_src.into()), ..Default::default() })
+    s.register_module("cell", Module { body: ModuleBody::Source { text: cell_src.into(), is_decl: false }, ..Default::default() })
         .unwrap();
     s.register_module(
         "wrap",
-        Module { source: Some(wrap_src.into()), inline: true, ..Default::default() },
+        Module { body: ModuleBody::Source { text: wrap_src.into(), is_decl: false },  inline: true, ..Default::default() },
     )
     .unwrap();
-    s.register_module("boxx", Module { source: Some(box_src.into()), ..Default::default() })
+    s.register_module("boxx", Module { body: ModuleBody::Source { text: box_src.into(), is_decl: false }, ..Default::default() })
         .unwrap();
     s.register_module(
         "held",
-        Module { source: Some(held_src.into()), inline: true, ..Default::default() },
+        Module { body: ModuleBody::Source { text: held_src.into(), is_decl: false },  inline: true, ..Default::default() },
     )
     .unwrap();
-    s.register_module("app", Module { source: Some(app_src.into()), ..Default::default() })
+    s.register_module("app", Module { body: ModuleBody::Source { text: app_src.into(), is_decl: false }, ..Default::default() })
         .unwrap();
     let g = rut_driver::compile_graph(&s, "app");
     assert!(
