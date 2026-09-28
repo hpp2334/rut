@@ -22,8 +22,17 @@ edit-url-template = "https://github.com/hpp2334/rut/edit/master/docs/{path}"
 # mdbook 0.5 does NOT copy cross-tree additional-js into the build (the
 # tag would 404 once deployed), hence the committed shim; the token
 # palette reads well in both the ayu (default) and light themes.
+# rut-book.js (the ▶ Run buttons) runs AFTER the highlighter: it reads
+# block textContent, which spans don't disturb.
 additional-css = ["theme/rut-book.css"]
-additional-js = ["theme/rut-highlight.js"]
+additional-js = ["theme/rut-highlight.js", "theme/rut-book.js"]
+
+# The run-button artifact (wasm/rut.wasm at the book root) is NOT wired
+# here: mdbook 0.5 dropped `output.html.additional-resources` (the build
+# refuses the key — verified), so the deploy lane copies it post-build.
+# docs/wasm/ is gitignored build output; `node scripts/deploy.cjs --book`
+# builds crates/rut-wasm and copies it into both docs/wasm/ and the
+# rendered book/ before the sanity check.
 
 [output.html.search]
 enable = true

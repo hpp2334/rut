@@ -9,3 +9,7 @@ integrations/vscode-extension/dist
 
 # mdbook build output
 docs/book/
+
+# the book's run-button artifact (built from crates/rut-wasm, not committed;
+# scripts/deploy.cjs --book and docs/wasm/ own the build+copy lane)
+docs/wasm/

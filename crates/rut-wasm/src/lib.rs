@@ -181,6 +181,33 @@ fn compile_playground(src: &str) -> rut_driver::CompileOutput {
             },
         )
         .expect("mount async_host");
+    // the book lane (the run buttons in docs/): `json` and `strbuild`
+    // complete the CLI's loose-file host set — a book block that
+    // `use json::` / `use strbuild::` gets the same packages `rut run`
+    // mounts, so the book's buttons answer exactly like the CLI. The
+    // HTTP pair stays CLI-only by law: reqwest does not build on
+    // wasm32-unknown-unknown (this crate's own dependency note), so a
+    // `use http::` block fails to resolve here — loud, never silent.
+    session
+        .register_module(
+            "strbuild",
+            rut_driver::Module {
+                source: Some(include_str!("../../../rut/strbuild/strbuild.rut").to_string()),
+                inline: true,
+                ..Default::default()
+            },
+        )
+        .expect("mount strbuild");
+    session
+        .register_module(
+            "json",
+            rut_driver::Module {
+                source: Some(include_str!("../../../rut/json/json.rut").to_string()),
+                inline: true,
+                ..Default::default()
+            },
+        )
+        .expect("mount json");
     rut_driver::compile_module_in(&mut session, src, rut_parser::Mode::Impl, "main")
 }
 
@@ -366,15 +393,24 @@ pub extern "C" fn rut_run(
     // NEVER fills err — the loud channel stays the loud channel.
     let out = vm.call::<_, RutValue>("main", ());
     // the async driving loop (RFC 0018 / RFC 0035 §4): drain the ready
-    // queue, advance the virtual clock to the next sleep deadline. The
-    // loop is idle for programs that launch nothing. The fuel budget
-    // parks (OutOfFuel) still surface through `call`'s own result — a
-    // parked main takes the parked-slot path below, untouched.
+    // queue, advance the virtual clock to the next sleep deadline — the
+    // CLI's own loop (`rut run`): run what's ready, then jump `now` to
+    // the earliest armed timer so sleep futures fire. Idle for programs
+    // that launch nothing. The fuel budget parks (OutOfFuel) still
+    // surface through `call`'s own result — a parked main takes the
+    // parked-slot path below, untouched. A trapped async task stops the
+    // drain (the loud channel answers on the envelope's next read).
     if out.is_ok() && !vm.is_running() {
         for _ in 0..1_000_000 {
-            if vm.run_ready().is_err() || vm.next_deadline().is_none() {
-                if vm.pending_tasks() == 0 {
-                    break;
+            if vm.run_ready().is_err() {
+                break;
+            }
+            match vm.next_deadline() {
+                Some(d) => vm.set_now(d),
+                None => {
+                    if vm.pending_tasks() == 0 {
+                        break;
+                    }
                 }
             }
         }
@@ -639,6 +675,78 @@ pub fn main() {
         assert_eq!(field(&j2, "output"), "[\"tick 1000000\"]", "{j2}");
         assert_eq!(field(&j2, "parked"), "true", "{j2}");
         assert_eq!(rut_drop_frame(), 1, "the second run's frame was parked");
+    }
+
+    // ---- the book lane's mounts: `use json::` / `use strbuild::`
+    // resolve inside THIS host exactly like the CLI's loose-file set —
+    // the docs run buttons must answer the same `rut run` does ----
+
+    const BOOK_JSON: &str = r#"
+use json::{ decodeJson };
+use strbuild::{ StringBuilder };
+use ink::{ Logger };
+
+pub fn main() {
+    let log = Logger.new("book");
+    let (n, e) = decodeJson<i64>("42");
+    if (e == nil) {
+        log.info(f"n={n}");
+    }
+    let mut b = StringBuilder.new();
+    b.append("count: ");
+    b.append(f"up to {n}");
+    log.info(b.build());
+}
+"#;
+
+    #[test]
+    fn the_book_lane_json_and_strbuild_mounts_resolve() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        let j = run_json(&compile_case(BOOK_JSON), 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(
+            field(&j, "output"),
+            "[\"n=42\",\"count: up to 42\"]",
+            "{j}"
+        );
+    }
+
+    // the book's async block: launch + sleep must DRAIN like `rut run` —
+    // the driving loop advances the virtual clock to each armed timer,
+    // so the countdown completes (a clock that never moves parks after
+    // the first sleep and the lines after it never fire)
+    const BOOK_ASYNC: &str = r#"
+use async_host::{ launch_future, sleep };
+use ink::{ Logger };
+
+async fn countdown(cx: RunContext, log: Logger, n: u32) {
+    let mut i = n;
+    while (i > 0) {
+        log.info(f"t-{i}");
+        await sleep(500);
+        i -= 1;
+    }
+    log.info("lift-off");
+}
+
+pub fn main() {
+    let log = Logger.new("countdown");
+    launch_future(countdown(log, 3));
+}
+"#;
+
+    #[test]
+    fn the_book_lane_async_lane_drains_to_completion() {
+        let _g = lock();
+        unsafe { PARKED = None };
+        let j = run_json(&compile_case(BOOK_ASYNC), 10_000_000, 4 * 1024 * 1024);
+        assert_eq!(field(&j, "trap"), "null", "{j}");
+        assert_eq!(
+            field(&j, "output"),
+            "[\"t-3\",\"t-2\",\"t-1\",\"lift-off\"]",
+            "{j}"
+        );
     }
 
     // ---- the entry-err channel (err-channel phase 3): "err" beside

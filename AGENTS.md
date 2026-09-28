@@ -61,6 +61,22 @@ acceptance):
 - Docs deploy: `node scripts/deploy.cjs --book` (pages project
   `rut-book` → `rut.hpp2334.com`); the demo target
   (`node scripts/deploy.cjs`) is unchanged.
+- Book run buttons: qualifying ```rut blocks (those containing
+  `pub fn main`) get a "▶ Run" button (docs/theme/rut-book.js) that
+  runs the block in-browser on the rut wasm engine. The artifact is
+  built from `crates/rut-wasm` (`cargo build -p rut-wasm --target
+  wasm32-unknown-unknown --release`) and must land at
+  `docs/wasm/rut.wasm`; budgets mirror the playground's
+  DEFAULT_BUDGET (10,000,000 fuel / 4 MiB heap).
+- `docs/wasm/` is gitignored build output (like `docs/book/`) — never
+  commit the artifact; the `--book` deploy lane builds and copies it
+  into the rendered book (mdbook 0.5 dropped
+  `output.html.additional-resources`, so the lane does the copy).
+- Anti-rot gate for book code: `cargo test -p rut-cli --test
+  book_blocks` compiles + runs every runnable ```rut block in
+  docs/src natively and must pass whenever book code blocks change.
+  Blocks that cannot run yet are skipped in the test's SKIP table
+  with the reason — clear entries there when fixing docs content.
 - When you change language surface or CLI behavior, update the matching
   book pages in the same change — `mdbook build docs` fails on dead
   links and missing TOC files, so run it before committing doc edits.

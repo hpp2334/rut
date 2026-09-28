@@ -16,7 +16,18 @@
  *   node scripts/deploy.cjs [--book] [options]
  *
  * Options:
- *   --book            ship the docs book (mdbook) instead of the demo
+ *   --book            ship the docs book (mdbook) instead of the demo.
+ *                     The book lane also builds the ▶ Run buttons' wasm
+ *                     artifact: `rustup target add wasm32-unknown-unknown`
+ *                     (preflight) + `cargo build -p rut-wasm --target
+ *                     wasm32-unknown-unknown --release`, staged to
+ *                     docs/wasm/rut.wasm (gitignored build output; the
+ *                     build is skipped only when --no-build is passed AND
+ *                     the staged artifact already exists), then copied
+ *                     post-build into the rendered book — mdbook 0.5
+ *                     dropped `additional-resources`, so the lane does
+ *                     that copy itself. The post-build step also bakes
+ *                     static highlight spans (bake-book.mjs).
  *   --no-build        skip the build step (deploy the existing dist/)
  *   --project <name>  Pages project name        (env RUT_PAGES_PROJECT, default rut-playground / rut-book)
  *   --branch <name>   branch to deploy as       (env RUT_PAGES_BRANCH,   default: current git branch, else main)
@@ -127,6 +138,78 @@ if (unknown.length) {
 if (!doBuild) {
   info(dim("skipping build (--no-build)"));
 } else if (book) {
+  // ---- the book lane: artifact, then the rendered book ---------------
+  // (a) wasm preflight — the run buttons' artifact target. Die loudly
+  //     naming the exact command (the repo's no-silent-fallback law).
+  const haveTarget = spawnSync("rustup", ["target", "list", "--installed"], {
+    encoding: "utf8",
+  });
+  const installed =
+    haveTarget.status === 0 ? haveTarget.stdout.split(/\s+/) : [];
+  if (!installed.includes("wasm32-unknown-unknown")) {
+    info(dim("adding the wasm32 target — rustup target add wasm32-unknown-unknown"));
+    if (!dryRun) {
+      const add = spawnSync(
+        "rustup",
+        ["target", "add", "wasm32-unknown-unknown"],
+        { stdio: "inherit" }
+      );
+      if (add.status !== 0)
+        die(
+          "`rustup target add wasm32-unknown-unknown` failed (exit " +
+            (add.status ?? "?") + ") — install rustup and retry"
+        );
+    }
+  }
+
+  // (b) build crates/rut-wasm and stage the artifact. docs/wasm/ is
+  //     gitignored build output, so --no-build only skips this when the
+  //     staged artifact is already there; a missing artifact is built
+  //     even under --no-build (the sanity check below refuses a book
+  //     whose run buttons would 404).
+  const artifact = path.join(ROOT, "docs", "wasm", "rut.wasm");
+  const skipWasmBuild = !doBuild && fs.existsSync(artifact);
+  if (skipWasmBuild) {
+    info(dim("skipping the wasm build (--no-build) — docs/wasm/rut.wasm present"));
+  } else {
+    if (!doBuild)
+      info(
+        dim("docs/wasm/rut.wasm missing — building it despite --no-build (the artifact is not committed)")
+      );
+    info(
+      dim(
+        "building the run-button artifact — cargo build -p rut-wasm --target wasm32-unknown-unknown --release"
+      )
+    );
+    if (!dryRun) {
+      const built = spawnSync(
+        "cargo",
+        ["build", "-p", "rut-wasm", "--target", "wasm32-unknown-unknown", "--release"],
+        { cwd: ROOT, stdio: "inherit" }
+      );
+      if (built.status !== 0)
+        die(
+          "`cargo build -p rut-wasm --target wasm32-unknown-unknown --release` failed " +
+            "(exit " + (built.status ?? "?") + ") — run it directly for the full error"
+        );
+      const from = path.join(
+        ROOT,
+        "target",
+        "wasm32-unknown-unknown",
+        "release",
+        "rut_wasm.wasm"
+      );
+      if (!fs.existsSync(from))
+        die(
+          "cargo produced no target/wasm32-unknown-unknown/release/rut_wasm.wasm — " +
+            "check crates/rut-wasm's crate-type"
+        );
+      fs.mkdirSync(path.join(ROOT, "docs", "wasm"), { recursive: true });
+      fs.copyFileSync(from, artifact);
+    }
+  }
+
+  // (c) render the book
   const v = spawnSync("mdbook", ["--version"], { encoding: "utf8" });
   if (v.error?.code === "ENOENT") {
     die("mdbook not found — install it with `cargo install mdbook --locked`");
@@ -145,6 +228,42 @@ if (!doBuild) {
 }
 
 // ---------------------------------------------------------------------------
+// 1.5 book post-build: bake spans + stage the wasm artifact into the book
+//     (mdbook 0.5 dropped output.html.additional-resources — verified, the
+//     build refuses the key — so the lane does both copies itself; both
+//     are idempotent and also self-heal a --no-build deploy)
+// ---------------------------------------------------------------------------
+
+if (book && !dryRun) {
+  if (!fs.existsSync(dist)) {
+    die(`${dist} does not exist — run \`mdbook build docs\` (or deploy with the build step enabled)`);
+  }
+  const bake = path.join(
+    ROOT,
+    "integrations",
+    "rut-highlightjs",
+    "scripts",
+    "bake-book.mjs"
+  );
+  if (fs.existsSync(bake)) {
+    info(dim("baking static highlight spans — node integrations/rut-highlightjs/scripts/bake-book.mjs"));
+    const bk = spawnSync("node", [bake, dist], { cwd: ROOT, stdio: "inherit" });
+    if (bk.status !== 0)
+      die(`bake-book failed (exit ${bk.status ?? "?"}) — run \`node ${path.relative(ROOT, bake)} ${dist}\` directly`);
+  }
+  const artifact = path.join(ROOT, "docs", "wasm", "rut.wasm");
+  if (!fs.existsSync(artifact)) {
+    die(
+      "docs/wasm/rut.wasm is missing — run " +
+        "`cargo build -p rut-wasm --target wasm32-unknown-unknown --release` and " +
+        "copy target/wasm32-unknown-unknown/release/rut_wasm.wasm to docs/wasm/rut.wasm"
+    );
+  }
+  fs.mkdirSync(path.join(dist, "wasm"), { recursive: true });
+  fs.copyFileSync(artifact, path.join(dist, "wasm", "rut.wasm"));
+}
+
+// ---------------------------------------------------------------------------
 // 2. sanity-check what we are about to ship
 // ---------------------------------------------------------------------------
 
@@ -160,7 +279,18 @@ if (book) {
         `\`mdbook build docs\` (or deploy with the build step enabled)`
     );
   }
-  ok(`book ready: ${dist} (${htmls.length} pages) — ${isProduction ? bold("PRODUCTION") : `preview ${bold(branch)}`}`);
+  // the run buttons' artifact ships with the book — a missing one would
+  // 404 on every ▶ Run click (the buttons show the loud build panel,
+  // but a deploy that knowingly ships it is a broken deploy)
+  if (!fs.existsSync(path.join(dist, "wasm", "rut.wasm"))) {
+    die(
+      `${dist} is missing wasm/rut.wasm (the ▶ Run buttons would 404) — build the artifact ` +
+        `with \`cargo build -p rut-wasm --target wasm32-unknown-unknown --release\`, copy ` +
+        `target/wasm32-unknown-unknown/release/rut_wasm.wasm to docs/wasm/rut.wasm, then ` +
+        `\`mdbook build docs\` (or deploy with the build step enabled)`
+    );
+  }
+  ok(`book ready: ${dist} (${htmls.length} pages, wasm/rut.wasm) — ${isProduction ? bold("PRODUCTION") : `preview ${bold(branch)}`}`);
 } else {
   const need = ["index.html", "main.js", "rut.wasm", "rut-lsp.wasm"];
   const missing = need.filter((f) => !fs.existsSync(path.join(dist, f)));

@@ -76,10 +76,146 @@ html.light .hljs-meta, html.rust .hljs-meta {
   color: #59636e;
 }
 
-/* .rut-run — reserved hook for the upcoming in-book run controls:
-   runnable rut blocks will carry this class on their <pre> and the
-   affordance (border, run marker) gets styled here. Placeholder only —
-   no visual change yet. */
+/* .rut-run — the in-book run controls (theme/rut-book.js). Qualifying
+   blocks (```rut with `pub fn main`) carry this class on their <pre>
+   with a ▶ Run button and a collapsed output panel below. Colors
+   follow the same theme families as the token palette above. */
 pre.rut-run {
   position: relative;
+}
+
+.rut-run-btn {
+  position: absolute;
+  top: 0.45em;
+  right: 0.45em;
+  padding: 0.15em 0.7em;
+  font-size: 0.8em;
+  font-family: var(--mono, "Source Code Pro", Menlo, monospace);
+  line-height: 1.4;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  opacity: 0.75;
+  transition: opacity 0.15s ease;
+}
+.rut-run-btn:hover,
+.rut-run-btn:focus-visible {
+  opacity: 1;
+}
+.rut-run-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* the output panel: monospace, the code block's own box language */
+.rut-run-out {
+  margin: -0.6em 0 1.5em;
+  padding: 0.8em 1em;
+  font-family: var(--mono, "Source Code Pro", Menlo, monospace);
+  font-size: 0.85em;
+  line-height: 1.5;
+  border-radius: 5px;
+  overflow-x: auto;
+}
+.rut-run-out[hidden] {
+  display: none;
+}
+/* the `▶ running…` busy state */
+.rut-run-out.rut-run-busy .rut-run-muted {
+  animation: rut-run-pulse 1s ease-in-out infinite;
+}
+@keyframes rut-run-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.rut-run-err {
+  color: #ff7373;
+}
+.rut-run-fuel,
+.rut-run-muted {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+/* the LOUD missing/invalid-artifact panel (no silent fallback) */
+.rut-run-loud {
+  border: 1px solid #ff7373;
+  border-radius: 5px;
+  padding: 0.6em 0.9em;
+}
+.rut-run-loud-head {
+  font-weight: 700;
+}
+.rut-run-loud-why {
+  opacity: 0.75;
+  margin-top: 0.2em;
+}
+.rut-run-loud-fix {
+  margin-top: 0.5em;
+}
+.rut-run-loud code {
+  display: block;
+  margin-top: 0.3em;
+  padding: 0.4em 0.6em;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---- dark themes (ayu-flavored) ------------------------------------ */
+html.ayu .rut-run-btn,
+html.coal .rut-run-btn,
+html.navy .rut-run-btn {
+  color: #899ba6;
+  background: rgba(0, 0, 0, 0.25);
+  border-color: #2a3542;
+}
+html.ayu .rut-run-btn:hover,
+html.coal .rut-run-btn:hover,
+html.navy .rut-run-btn:hover,
+html.ayu .rut-run-btn:focus-visible,
+html.coal .rut-run-btn:focus-visible,
+html.navy .rut-run-btn:focus-visible {
+  color: #ffd173;
+  border-color: #ffd173;
+}
+html.ayu .rut-run-out,
+html.coal .rut-run-out,
+html.navy .rut-run-out {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid #2a3542;
+}
+html.ayu .rut-run-loud code,
+html.coal .rut-run-loud code,
+html.navy .rut-run-loud code {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* ---- light themes (github-flavored) -------------------------------- */
+html.light .rut-run-btn,
+html.rust .rut-run-btn {
+  color: #59636e;
+  background: rgba(255, 255, 255, 0.7);
+  border-color: #d0d7de;
+}
+html.light .rut-run-btn:hover,
+html.rust .rut-run-btn:hover,
+html.light .rut-run-btn:focus-visible,
+html.rust .rut-run-btn:focus-visible {
+  color: #8250df;
+  border-color: #8250df;
+}
+html.light .rut-run-out,
+html.rust .rut-run-out {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+}
+html.light .rut-run-err,
+html.rust .rut-run-err {
+  color: #cf222e;
+}
+html.light .rut-run-loud code,
+html.rust .rut-run-loud code {
+  background: #ffffff;
 }
