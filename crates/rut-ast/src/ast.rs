@@ -244,8 +244,15 @@ pub enum Linkage {
     /// `host` — the embedding Rust (a registered `NativeModule`)
     Host,
     /// `builtin` — the engine itself, compiler-lowered (core only;
-    /// nothing to register, the decl is a pure signature contract)
-    Builtin,
+    /// nothing to register, the decl is a pure signature contract).
+    /// TWO strict spellings: `prelude builtin` (ambient — binds without
+    /// any `use`) and `pub builtin` (import-gated — resolves only
+    /// through `use <pkg>::{ .. }`). A bare `builtin` diagnoses.
+    Builtin {
+        /// `true` for `prelude builtin` (ambient), `false` for
+        /// `pub builtin` (import-gated)
+        ambient: bool,
+    },
 }
 
 #[derive(Clone, Debug)]

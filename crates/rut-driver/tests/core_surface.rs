@@ -27,7 +27,10 @@ fn declared_names() -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>, Vec<
     for it in ast.module_items(ast.root).to_vec() {
         match ast.item(it) {
             ItemKind::SurfaceFn { name, linkage, generics, .. } => {
-                assert_eq!(*linkage, Linkage::Builtin, "the prelude's fns are all engine-lowered");
+                assert!(
+                    matches!(*linkage, Linkage::Builtin { .. }),
+                    "the prelude's fns are all engine-lowered"
+                );
                 assert!(
                     generics.is_empty() || !matches!(linkage, Linkage::Host),
                     "crossing signatures are concrete (RFC 0023 §1)"

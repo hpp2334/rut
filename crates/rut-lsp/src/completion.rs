@@ -335,7 +335,7 @@ return c.;
     fn string_receiver_completes_str_surface() {
         // std index ahead of the doc: `str`'s builtin contract supplies
         // the member list
-        let core_src = "builtin primitive str {\nfn len(self) -> i32;\n}\n";
+        let core_src = "prelude builtin primitive str {\nfn len(self) -> i32;\n}\n";
         let c2 = rut_lexer::lexer::normalize(core_src);
         let (ctoks, _) = rut_lexer::lexer::lex(&c2);
         let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);

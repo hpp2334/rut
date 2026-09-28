@@ -45,9 +45,22 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             // (RFC 0025). `extern` is removed — the loader + `entry fn`
             // cover it.
             "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
-            // `builtin` — contextual (a legal identifier everywhere else):
-            // the ENGINE surface, core only, compiler-lowered
-            "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin))),
+            // `prelude builtin` — the AMBIENT engine surface (core only,
+            // compiler-lowered). `prelude` is contextual: a legal
+            // identifier everywhere except directly before `builtin`
+            "prelude" if p.at_kw2("builtin") => {
+                p.bump();
+                Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: true })))
+            }
+            // bare `builtin` — the old spelling is gone: diagnosed, then
+            // recovered as ambient so downstream diagnostics stay sane
+            "builtin" => {
+                p.err(
+                    sp,
+                    "`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)",
+                );
+                Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: true })))
+            }
             "extern" => {
                 p.err(
                     sp,
@@ -94,15 +107,10 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             }
             "fn" => Some(Frame::Fn(FnFrame::new(vis, false, false))),
             "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host))),
-            // `builtin` dropped `pub` (builtin-surface phase 1): builtin
-            // names are AMBIENT — the engine's surface carries no
-            // visibility, so the old `pub builtin` spelling diagnoses
-            "builtin" => {
-                p.err_here(
-                    "`pub builtin` is removed —builtin names are ambient (no `use`, no visibility): write `builtin fn` / `builtin primitive` / `builtin impl` / `builtin trait` without `pub`",
-                );
-                None
-            }
+            // `pub builtin` — the IMPORT-GATED engine surface spelling:
+            // the decl resolves only through `use <pkg>::{ .. }` (the
+            // ambient twin is `prelude builtin`)
+            "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: false }))),
             "extern" => {
                 p.err_here(
                     "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader (RFC 0029 §2)",
@@ -1301,8 +1309,11 @@ impl FnFrame {
 // ---- host/builtin surface declarations (.d.rut, RFC 0030 §3) ----
 //
 // Two linkages (RFC 0025): `host` — the embedding Rust implements it;
-// `builtin` — the engine itself (compiler-lowered, core only). What
-// each may spell:
+// `builtin` — the engine itself (compiler-lowered, core only). Builtin
+// decls spell ONE of two forms: `prelude builtin` (ambient — binds in
+// every unit, no `use`) or `pub builtin` (import-gated — resolves only
+// through `use <pkg>::{ .. }`); a bare `builtin` diagnoses. What each
+// may spell:
 //
 //     host fn name(params) -> T;        concrete signature over the
 //                                       crossing set (RFC 0023 §1)
@@ -1315,14 +1326,18 @@ impl FnFrame {
 //                                       `register_async!`
 //     host struct Name { fields }    flat record; every field a
 //                                       crossing type; host-constructed
-//     builtin fn name<T>(params) -> T;  engine fn (generics fine —
-//                                       nothing crosses)
-//     builtin primitive <name> { .. }   a boot primitive's surface
-//                                       statement (`str`/`bytes`/
-//                                       `opaque`) — never a class
-//     builtin class Name<T> { methods } engine type's member contract
-//     builtin trait Name<T> { .. }      engine-woven contract (Index,
-//                                       Iterator, Disposal)
+//     prelude builtin fn name<T>(..);   engine fn, ambient (generics
+//                                       fine — nothing crosses); the
+//                                       same four kinds spell
+//                                       `pub builtin` when gated
+//     prelude builtin primitive <name> { .. }   a boot primitive's
+//                                       surface statement (`str`/
+//                                       `bytes`/`opaque`) — never a
+//                                       class
+//     prelude builtin class Name<T> { methods } engine type's member
+//                                       contract
+//     prelude builtin trait Name<T> { .. }      engine-woven contract
+//                                       (Index, Iterator, Disposal)
 //
 // `host class` and `extern` are gone: native state crosses as `opaque`
 // and rut wraps it in a class (the `Logger` pattern, RFC 0028).
@@ -1388,7 +1403,7 @@ impl SurfaceFrame {
         self.lo = p.bump().span.lo;
         match self.linkage {
             Linkage::Host => self.host_step(p),
-            Linkage::Builtin => self.builtin_step(p),
+            Linkage::Builtin { .. } => self.builtin_step(p),
         }
     }
 
@@ -1653,7 +1668,7 @@ impl SurfaceFrame {
                 p.sync_stmt();
                 match self.linkage {
                     Linkage::Host => Step::Pop(Done::Failed),
-                    Linkage::Builtin => self.members_top(p),
+                    Linkage::Builtin { .. } => self.members_top(p),
                 }
             }
             (_, d) => unreachable!("surface frame received the wrong child: {d:?}"),

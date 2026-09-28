@@ -143,7 +143,7 @@ fn misplaced_bounds_are_rejected() {
         ("struct S<T requires D> { v: T }", "`struct` generic parameters take no `requires` bounds"),
         ("trait Tr<T requires D> { }", "`trait` generic parameters take no `requires` bounds"),
         (
-            "trait D { fn d(self) -> u64; }\nbuiltin trait Bt<T requires D> { }",
+            "trait D { fn d(self) -> u64; }\nprelude builtin trait Bt<T requires D> { }",
             "`builtin trait` generic parameters take no `requires` bounds",
         ),
     ];

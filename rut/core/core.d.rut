@@ -12,27 +12,30 @@
 // 0025). The decls exist so users and the LSP see every signature — the
 // lockstep test keeps them true to rut-lir's lowering tables.
 //
-// Builtin names are AMBIENT (RFC 0028 revised, builtin-surface): no
-// `use` is needed — `pub builtin` is gone, `builtin` declares with no
-// visibility at all. (Pkg mounting by `use` — ink/pouch/calc — is a
-// different mechanism and unaffected.) The compiler's copy of this
-// surface is `rut_core::binary::Surface::core`; a driver test asserts
-// the two stay in lockstep. Type-calls spelled with the type name
-// (`x as i32` casts — RFC 0007) are syntax, not members.
+// Builtin decls spell `prelude builtin` or `pub builtin` — the two
+// strict spellings. `prelude builtin` binds AMBIENT: in scope in every
+// compilation unit, no `use` needed. `pub builtin` is the import-gated
+// form: it will resolve only through `use core::{ .. }` (core's surface
+// is entirely ambient `prelude builtin` today). (Pkg mounting by `use`
+// — ink/pouch/calc — is a different mechanism and unaffected.) The
+// compiler's copy of this surface is `rut_core::binary::Surface::core`;
+// a driver test asserts the two stay in lockstep. Type-calls spelled
+// with the type name (`x as i32` casts — RFC 0007) are syntax, not
+// members.
 
 // ---- engine functions (compiler-lowered) ----
 
 // RFC 0034 §2 — `msg` is optional at the call site (1 or 2 arguments).
-builtin fn assert(cond: bool, msg: str) -> nil;
+prelude builtin fn assert(cond: bool, msg: str) -> nil;
 
 // RFC 0034 §2 — abort with the message.
-builtin fn panic(msg: str) -> nil;
+prelude builtin fn panic(msg: str) -> nil;
 
 // RFC 0016 §3 — run `cleanup(p)` when `p`'s cell refcount reaches zero.
 // One callback per pointer; a second attach is a compile error.
 // (RFC 0044: the old `&v`/`*T` surface is now the nullable `?T` — a
 // `?T` binding IS the cell reference.)
-builtin fn on_drop<T>(p: ?T, cleanup: fn(?T)) -> nil;
+prelude builtin fn on_drop<T>(p: ?T, cleanup: fn(?T)) -> nil;
 
 // v1.1 codepoint access (RFC 0004 — `char` is gone): `s.code()` reads
 // the FIRST codepoint as a `u32` (traps on empty); `str.from_code(n)`
@@ -42,7 +45,7 @@ builtin fn on_drop<T>(p: ?T, cleanup: fn(?T)) -> nil;
 // pub method  s.code() -> u32
 // pub type-method  str.from_code(n: u32) -> str
 
-builtin fn string_join(parts: [str]) -> str;  // join in one pass (RFC 0007)
+prelude builtin fn string_join(parts: [str]) -> str;  // join in one pass (RFC 0007)
 
 // RFC 0036 (err-channel phase 2) — the opt-in stack snapshot:
 // `capture_stacktrace()` walks the VM's frame chain and stores RAW
@@ -53,9 +56,9 @@ builtin fn string_join(parts: [str]) -> str;  // join in one pass (RFC 0007)
 // zero-cost. Builtin CLASS, not a primitive: a trace is a stateful
 // engine snapshot with methods (RFC 0025's `builtin class` row — the
 // decl is a pure signature contract).
-builtin fn capture_stacktrace() -> StackTrace;
+prelude builtin fn capture_stacktrace() -> StackTrace;
 
-builtin class StackTrace {
+prelude builtin class StackTrace {
     fn len(self) -> i32;                 // frame count (innermost first)
     fn name(self, i: i32) -> str;        // frame i's function name
     fn line(self, i: i32) -> i32;        // call-site line (0 when stripped)
@@ -70,7 +73,7 @@ builtin class StackTrace {
 // grows from small). A cell like `StackTrace`: methods mutate through
 // it, assignment shares it. The general machinery any encoder/tokenizer
 // wants; the engine never learns what is being built.
-builtin class StrBuf {
+prelude builtin class StrBuf {
     fn push(self, s: str);        // append a str's octets — amortized O(|s|)
     fn push_code(self, c: u32);   // append one codepoint (invalid scalars
                                   // mint U+FFFD — the from_code rule)
@@ -92,7 +95,7 @@ builtin class StrBuf {
 // from inside the dying cell's own cleanup. A weak edge closes no
 // cycle: strong cycles still leak to `Vm::drop` (RFC 0017 §2's stated
 // rule — this class is the first-class answer, not a collector).
-builtin class Weak<T> {
+prelude builtin class Weak<T> {
     fn upgrade(self) -> ?T;       // the live referent retained into a
                                   // fresh ?T, or nil once the referent
                                   // died (repeat upgrades are stable)
@@ -108,7 +111,7 @@ builtin class Weak<T> {
 // members are declared per type — `str`/`bytes` carry their own member
 // contracts (RFC 0004 v1.1); `len` is the sequence member shared by
 // every sequence.
-builtin primitive str {
+prelude builtin primitive str {
     fn len(self) -> i32;            // codepoints
     fn code(self) -> u32;           // the FIRST codepoint (traps on empty)
     fn code_at(self, i: i32) -> u32; // the codepoint at codepoint index i
@@ -130,7 +133,7 @@ builtin primitive str {
     fn starts_with(self, from: i32, head: str) -> bool;
 }
 
-builtin primitive bytes {
+prelude builtin primitive bytes {
     fn len(self) -> i32;            // octets
     fn decode(self) -> str;         // UTF-8 (lossy)
     fn clone(self) -> bytes;        // a one-shot buffer copy — the ONLY
@@ -163,7 +166,7 @@ builtin primitive bytes {
 // zero-value/flag tuple (refval-round2; RFC 0014 amended).
 // (builtin-surface phase 2: the interner/boot name is spelled
 // `opaque` — the type name is part of every host `.d.rut` crossing.)
-builtin primitive opaque {
+prelude builtin primitive opaque {
     fn downcast<T>(o: Self) -> ?T;
 }
 
@@ -175,7 +178,7 @@ builtin primitive opaque {
 // §3); `checked_*` answers the v1.1 tuple `(T, bool)` — `ok` is false
 // exactly when the mathematical result escaped the width.
 
-builtin impl i8 {
+prelude builtin impl i8 {
     fn wrapping_add(self, y: i8) -> i8;
     fn wrapping_sub(self, y: i8) -> i8;
     fn wrapping_mul(self, y: i8) -> i8;
@@ -188,7 +191,7 @@ builtin impl i8 {
     fn checked_mul(self, y: i8) -> (i8, bool);
 }
 
-builtin impl i16 {
+prelude builtin impl i16 {
     fn wrapping_add(self, y: i16) -> i16;
     fn wrapping_sub(self, y: i16) -> i16;
     fn wrapping_mul(self, y: i16) -> i16;
@@ -201,7 +204,7 @@ builtin impl i16 {
     fn checked_mul(self, y: i16) -> (i16, bool);
 }
 
-builtin impl i32 {
+prelude builtin impl i32 {
     fn wrapping_add(self, y: i32) -> i32;
     fn wrapping_sub(self, y: i32) -> i32;
     fn wrapping_mul(self, y: i32) -> i32;
@@ -214,7 +217,7 @@ builtin impl i32 {
     fn checked_mul(self, y: i32) -> (i32, bool);
 }
 
-builtin impl i64 {
+prelude builtin impl i64 {
     fn wrapping_add(self, y: i64) -> i64;
     fn wrapping_sub(self, y: i64) -> i64;
     fn wrapping_mul(self, y: i64) -> i64;
@@ -227,7 +230,7 @@ builtin impl i64 {
     fn checked_mul(self, y: i64) -> (i64, bool);
 }
 
-builtin impl u8 {
+prelude builtin impl u8 {
     fn wrapping_add(self, y: u8) -> u8;
     fn wrapping_sub(self, y: u8) -> u8;
     fn wrapping_mul(self, y: u8) -> u8;
@@ -240,7 +243,7 @@ builtin impl u8 {
     fn checked_mul(self, y: u8) -> (u8, bool);
 }
 
-builtin impl u16 {
+prelude builtin impl u16 {
     fn wrapping_add(self, y: u16) -> u16;
     fn wrapping_sub(self, y: u16) -> u16;
     fn wrapping_mul(self, y: u16) -> u16;
@@ -253,7 +256,7 @@ builtin impl u16 {
     fn checked_mul(self, y: u16) -> (u16, bool);
 }
 
-builtin impl u32 {
+prelude builtin impl u32 {
     fn wrapping_add(self, y: u32) -> u32;
     fn wrapping_sub(self, y: u32) -> u32;
     fn wrapping_mul(self, y: u32) -> u32;
@@ -266,7 +269,7 @@ builtin impl u32 {
     fn checked_mul(self, y: u32) -> (u32, bool);
 }
 
-builtin impl u64 {
+prelude builtin impl u64 {
     fn wrapping_add(self, y: u64) -> u64;
     fn wrapping_sub(self, y: u64) -> u64;
     fn wrapping_mul(self, y: u64) -> u64;
@@ -300,7 +303,7 @@ builtin impl u64 {
 // declares this member (duck-typed satisfaction); `for (x of it)`
 // desugars to `it.__iterate(emit)` with a fresh per-iteration binding:
 // `emit` returning `false` stops the iteration (a `break`).
-builtin trait Iterator<E> {
+prelude builtin trait Iterator<E> {
     fn __iterate(self, emit: fn(E) -> bool);
 }
 
@@ -326,11 +329,11 @@ builtin trait Iterator<E> {
 // RFC 0019. `launch_future` / `LaunchedFutureHandle` / `sleep` are
 // HOST surface (the embedder's standard set), never core: users may
 // write their own launchers over this same Future surface.
-builtin trait Future<T> {
+prelude builtin trait Future<T> {
     fn yield(cx: RunContext);
 }
 
-builtin trait RunContext {
+prelude builtin trait RunContext {
     fn checkpoint(self) -> u32;
     fn next_checkpoint(mut self, v: u32) -> nil;
     fn cancelled(self) -> bool;

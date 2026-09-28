@@ -1,9 +1,11 @@
 //! `host`/`builtin` surface decls (RFC 0029 §2): `.d.rut` declares the
 //! host functions/dataclasses the runtime binds and the engine builtin
-//! contracts — `host fn string_len(s: str) -> i32;`, `builtin primitive
-//! opaque { .. }`. Parses in declaration mode only; the removed forms
-//! (`host primitive`, `host class`, `extern`, `pub builtin`) are
-//! rejected.
+//! contracts — `host fn string_len(s: str) -> i32;`, `prelude builtin
+//! primitive opaque { .. }`. Parses in declaration mode only; the
+//! removed forms (`host primitive`, `host class`, `extern`) are
+//! rejected, and `builtin` has TWO strict spellings — `prelude builtin`
+//! (ambient) and `pub builtin` (import-gated); the bare keyword
+//! diagnoses.
 
 use rut_ast::ast::*;
 use rut_parser::{parse, Mode};
@@ -11,7 +13,7 @@ use rut_parser::{parse, Mode};
 const FN_SURFACE: &str = "\
 // the string natives, declared where the host binds them
 pub host fn string_len(s: str) -> i32;
-builtin fn own<T>(x: T) -> T;
+prelude builtin fn own<T>(x: T) -> T;
 ";
 
 #[test]
@@ -29,12 +31,15 @@ fn host_fn_parses() {
     let ItemKind::SurfaceFn { linkage, generics, .. } = ast.item(items[1]) else {
         panic!("expected a SurfaceFn item, got {:?}", ast.item(items[1]));
     };
-    assert_eq!(*linkage, Linkage::Builtin);
+    assert!(
+        matches!(*linkage, Linkage::Builtin { ambient: true }),
+        "`prelude builtin fn` is the ambient builtin linkage: {linkage:?}"
+    );
     assert_eq!(generics.len(), 1, "builtin fn keeps its generics");
 }
 
 const BUILTIN_TRAIT: &str = "\
-builtin trait Index<T> {
+prelude builtin trait Index<T> {
     fn len(self) -> i32;
     fn get(self, i: i32) -> T;
 }
@@ -55,7 +60,7 @@ fn builtin_trait_parses() {
 }
 
 const BUILTIN_SURFACE: &str = "\
-builtin class Option<T> {
+prelude builtin class Option<T> {
     fn some(v: T) -> Self;
     fn is_some(self) -> bool;
 }
@@ -77,13 +82,13 @@ fn builtin_ty_parses() {
 
 #[test]
 fn builtin_requires_a_kind_word() {
-    // builtin decls spell their kind — `builtin primitive` / `builtin
-    // class` / `builtin trait` (RFC 0025); a bare `builtin Name { .. }`
-    // is diagnosed
-    let (_, diags) = parse("builtin Option<T> { fn some(v: T) -> Self; }", Mode::Decl);
+    // builtin decls spell their kind — `prelude builtin primitive` /
+    // `prelude builtin class` / `prelude builtin trait` (RFC 0025); a
+    // bare `builtin Name { .. }` is diagnosed
+    let (_, diags) = parse("prelude builtin Option<T> { fn some(v: T) -> Self; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("spells its kind")),
-        "a bare `builtin` decl must be diagnosed: {diags:?}"
+        "a kind-less `builtin` decl must be diagnosed: {diags:?}"
     );
 }
 
@@ -91,7 +96,7 @@ fn builtin_requires_a_kind_word() {
 fn zero_member_builtin_bodies_parse() {
     // an empty member contract is legal — e.g. a marker trait or a type
     // whose members are entirely compiler-lowered and invisible
-    let (ast, diags) = parse("builtin class Mark<T> { }", Mode::Decl);
+    let (ast, diags) = parse("prelude builtin class Mark<T> { }", Mode::Decl);
     assert!(diags.is_empty(), "zero-member builtin class must parse clean: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
@@ -100,7 +105,7 @@ fn zero_member_builtin_bodies_parse() {
     };
     assert!(members.is_empty());
 
-    let (ast, diags) = parse("builtin trait Mark { }", Mode::Decl);
+    let (ast, diags) = parse("prelude builtin trait Mark { }", Mode::Decl);
     assert!(diags.is_empty(), "zero-member builtin trait must parse clean: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
@@ -228,7 +233,7 @@ fn builtin_impl_decl() {
     // RFC 0032 §1.1 R2: `builtin impl <prim> { .. }` — the integer
     // primitives' numeric methods, bodiless `self` receivers, tuple
     // returns allowed (`checked_*`)
-    let src = "builtin impl i32 {\n\
+    let src = "prelude builtin impl i32 {\n\
                \x20   fn wrapping_add(self, y: i32) -> i32;\n\
                \x20   fn wrapping_shl(self, n: i32) -> i32;\n\
                \x20   fn checked_add(self, y: i32) -> (i32, bool);\n\
@@ -242,7 +247,7 @@ fn builtin_impl_decl() {
     assert_eq!(ast.name(*prim), "i32");
     assert_eq!(methods.len(), 3);
     // it is a declaration form: an implementation file rejects it
-    let (_, diags) = parse("builtin impl i32 { fn abs(self) -> i32; }", Mode::Impl);
+    let (_, diags) = parse("prelude builtin impl i32 { fn abs(self) -> i32; }", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("belong in a `.d.rut`")),
         "builtin impl in a .rut must be diagnosed: {diags:?}"
@@ -250,7 +255,7 @@ fn builtin_impl_decl() {
 }
 
 const BUILTIN_PRIMITIVE: &str = "\
-builtin primitive opaque {
+prelude builtin primitive opaque {
     fn new<T>(v: T) -> Self;
     fn downcast<T>(o: Self) -> ?T;
 }
@@ -274,7 +279,7 @@ fn builtin_primitive_parses() {
 
 #[test]
 fn builtin_primitive_takes_no_generics() {
-    let (_, diags) = parse("builtin primitive str<T> { fn len(self) -> i32; }", Mode::Decl);
+    let (_, diags) = parse("prelude builtin primitive str<T> { fn len(self) -> i32; }", Mode::Decl);
     assert!(
         diags.iter().any(|d| d.msg.contains("no generic arguments")),
         "a primitive takes no generic arguments: {diags:?}"
@@ -282,24 +287,70 @@ fn builtin_primitive_takes_no_generics() {
 }
 
 #[test]
-fn pub_builtin_is_removed() {
-    // builtin-surface phase 1: builtin names are AMBIENT — the old
-    // `pub builtin` spelling diagnoses (no deprecation tolerance)
-    let (_, diags) = parse("pub builtin fn own<T>(x: T) -> T;", Mode::Decl);
-    assert!(
-        diags.iter().any(|d| d.msg.contains("`pub builtin` is removed")),
-        "`pub builtin` must be diagnosed: {diags:?}"
-    );
-    let (_, diags) = parse("pub builtin class opaque { fn new<T>(v: T) -> Self; }", Mode::Decl);
-    assert!(
-        diags.iter().any(|d| d.msg.contains("`pub builtin` is removed")),
-        "`pub builtin class` must be diagnosed: {diags:?}"
-    );
-    // the bare spelling stays clean — every builtin decl drops `pub`
-    let (ast, diags) = parse("builtin fn assert(cond: bool, msg: str) -> nil;", Mode::Decl);
-    assert!(diags.is_empty(), "no-pub builtin fn must parse clean: {diags:?}");
+fn the_two_builtin_spellings_parse_clean() {
+    // TWO strict spellings: `prelude builtin` binds ambient, `pub
+    // builtin` is the import-gated form. Both parse cleanly and both
+    // keep the full builtin grammar (fn / class / trait / impl /
+    // primitive).
+    let (ast, diags) = parse("prelude builtin fn own<T>(x: T) -> T;", Mode::Decl);
+    assert!(diags.is_empty(), "`prelude builtin fn` must parse clean: {diags:?}");
     let items = ast.module_items(ast.root);
-    assert_eq!(items.len(), 1);
+    let ItemKind::SurfaceFn { linkage, .. } = ast.item(items[0]) else {
+        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
+    };
+    assert!(
+        matches!(*linkage, Linkage::Builtin { ambient: true }),
+        "`prelude builtin` is the ambient spelling: {linkage:?}"
+    );
+
+    let (ast, diags) = parse("pub builtin fn own<T>(x: T) -> T;", Mode::Decl);
+    assert!(diags.is_empty(), "`pub builtin fn` must parse clean: {diags:?}");
+    let items = ast.module_items(ast.root);
+    let ItemKind::SurfaceFn { linkage, .. } = ast.item(items[0]) else {
+        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
+    };
+    assert!(
+        matches!(*linkage, Linkage::Builtin { ambient: false }),
+        "`pub builtin` is the import-gated spelling: {linkage:?}"
+    );
+
+    // the kind words compose with both spellings
+    for src in [
+        "pub builtin class opaque { fn new<T>(v: T) -> Self; }",
+        "pub builtin trait Mark { }",
+        "pub builtin impl i32 { fn abs(self) -> i32; }",
+        "prelude builtin primitive opaque { fn downcast<T>(o: Self) -> ?T; }",
+    ] {
+        let (_, diags) = parse(src, Mode::Decl);
+        assert!(diags.is_empty(), "`{src}` must parse clean: {diags:?}");
+    }
+}
+
+#[test]
+fn bare_builtin_diagnoses_the_two_spellings() {
+    // the bare keyword is gone: it diagnoses with the two-spelling
+    // message and recovers as ambient so parsing continues
+    let (_, diags) = parse("builtin fn assert(cond: bool, msg: str) -> nil;", Mode::Decl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains(
+            "`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)"
+        )),
+        "bare `builtin` must diagnose the two spellings: {diags:?}"
+    );
+}
+
+#[test]
+fn prelude_is_contextual() {
+    // `prelude` is a legal identifier everywhere except directly
+    // before `builtin`
+    let (_, diags) = parse("fn f() -> i32 { let prelude = 3; return prelude; }", Mode::Impl);
+    assert!(diags.is_empty(), "`prelude` must stay a legal identifier: {diags:?}");
+    // ...and `prelude fn` is NOT a declaration form
+    let (_, diags) = parse("prelude fn f() -> i32 { return 0; }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("expected a declaration, found `prelude`")),
+        "`prelude` must diagnose when not before `builtin`: {diags:?}"
+    );
 }
 
 #[test]
@@ -332,7 +383,7 @@ fn host_fn_is_decl_only() {
         diags.iter().any(|d| d.msg.contains("RFC 0029")),
         "impl mode must reject the surface keyword: {diags:?}"
     );
-    let (_, diags) = parse("builtin fn own<T>(x: T) -> T;", Mode::Impl);
+    let (_, diags) = parse("prelude builtin fn own<T>(x: T) -> T;", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("RFC 0029")),
         "impl mode must reject the surface keyword: {diags:?}"
@@ -347,9 +398,11 @@ fn host_fn_terminates_on_malformed() {
         "host class {",
         "host struct L {",
         "host struct L { x",
-        "builtin Option<T> {",
+        "prelude builtin Option<T> {",
+        "prelude builtin fn f(",
+        "prelude builtin trait I {",
         "builtin fn f(",
-        "builtin trait I {",
+        "builtin class C {",
         "extern fn f();",
     ] {
         let (_, diags) = parse(src, Mode::Decl);

@@ -195,7 +195,7 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("vis", DumpVal::Vis(*vis)));
                 fields.push(field("linkage", DumpVal::Str(match linkage {
                     Linkage::Host => "host",
-                    Linkage::Builtin => "builtin",
+                    Linkage::Builtin { .. } => "builtin",
                 }.to_string())));
                 if *is_async {
                     fields.push(field("is_async", DumpVal::Flag(true)));

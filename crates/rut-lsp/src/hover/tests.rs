@@ -603,7 +603,7 @@ fn primitive_bool_and_float_hover() {
 fn surface_primitives_keep_their_rich_hover() {
     // `str`/`bytes`/`opaque` have surface decls — those must win over
     // the static blurb (the lsp-align smoke's `primitive str {` law)
-    let core_src = "builtin primitive str {\nfn len(self) -> i32;\n}\n";
+    let core_src = "prelude builtin primitive str {\nfn len(self) -> i32;\n}\n";
     let c2 = rut_lexer::lexer::normalize(core_src);
     let (ctoks, _) = rut_lexer::lexer::lex(&c2);
     let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);

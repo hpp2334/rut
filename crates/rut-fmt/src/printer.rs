@@ -797,26 +797,29 @@ impl<'a> P<'a> {
             }
             ItemKind::BuiltinTy { vis, name, generics, members } => {
                 let _ = vis;
-                self.text("builtin class ");
+                // the type-shaped builtin items carry no linkage field —
+                // the formatter emits the ambient spelling (`prelude
+                // builtin`), the form every decl file spells
+                self.text("prelude builtin class ");
                 self.text(self.a.name(name));
                 self.gen_only(&generics);
                 self.trait_body(members, span);
             }
             ItemKind::BuiltinTrait { vis, name, generics, methods } => {
                 let _ = vis;
-                self.text("builtin trait ");
+                self.text("prelude builtin trait ");
                 self.text(self.a.name(name));
                 self.gen_only(&generics);
                 self.trait_body(methods, span);
             }
             ItemKind::BuiltinPrimitive { name, members } => {
-                self.text("builtin primitive ");
+                self.text("prelude builtin primitive ");
                 self.text(self.a.name(name));
                 self.trait_body(members, span);
             }
             ItemKind::BuiltinImpl { vis, prim, methods } => {
                 let _ = vis;
-                self.text("builtin impl ");
+                self.text("prelude builtin impl ");
                 self.text(self.a.name(prim));
                 self.trait_body(methods, span);
             }
@@ -966,7 +969,9 @@ impl<'a> P<'a> {
 fn linkage_str(l: Linkage) -> &'static str {
     match l {
         Linkage::Host => "host",
-        Linkage::Builtin => "builtin",
+        // the two strict spellings: ambient and import-gated
+        Linkage::Builtin { ambient: true } => "prelude builtin",
+        Linkage::Builtin { ambient: false } => "pub builtin",
     }
 }
 
