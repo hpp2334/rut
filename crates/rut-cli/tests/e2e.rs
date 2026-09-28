@@ -29,6 +29,18 @@ fn expected_case_fns() -> ExpectedHostFns {
 }
 
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
+    let (lines, trap, vm) = run_case_keep_vm(src, fuel);
+    let out = lines.borrow().clone();
+    (out, trap, vm.fuel_used)
+}
+
+/// The `run_case` shape, handing back the live Vm (and the shared line
+/// sink) — for the cases that must drive a SECOND call on the same
+/// interpreter after the first one trapped.
+fn run_case_keep_vm(
+    src: &str,
+    fuel: u64,
+) -> (Rc<RefCell<Vec<String>>>, Option<String>, rut_vm::interp::Vm) {
     // append the logger use so the original spans stay put
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let out = compile(&combined, "main");
@@ -64,8 +76,7 @@ fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
     };
-    let lines = lines.borrow().clone();
-    (lines, trap, vm.fuel_used)
+    (lines, trap, vm)
 }
 
 /// Compile a snippet with the logger use appended (the original spans of
@@ -1935,6 +1946,34 @@ pub fn main() -> nil {
     let (lines, trap, _) = run_case(src, 100_000);
     assert_eq!(lines, vec!["body done"]);
     assert_eq!(trap.as_deref(), Some("Panic"));
+}
+
+#[test]
+fn the_vm_survives_a_trapping_dispose_for_the_next_call() {
+    // the trapping dispose surfaces as a trap AND leaves the Vm usable:
+    // the next call on the same interpreter runs to completion
+    let src = r#"
+use core::{ Disposal, DisposalContext };
+struct A { }
+impl Disposal for A { fn dispose(mut self, cx: DisposalContext) { panic("boom in dispose"); } }
+pub fn main() -> nil {
+    let a = A { };
+    Logger.new("t").info("body done");
+}
+entry fn next_call() -> i64 {
+    Logger.new("t").info("still here");
+    return 7;
+}
+"#;
+    let (lines, trap, mut vm) = run_case_keep_vm(src, 100_000);
+    assert_eq!(lines.borrow().clone(), vec!["body done"]);
+    assert_eq!(trap.as_deref(), Some("Panic"));
+    assert_eq!(
+        vm.call::<_, i64>("next_call", ())
+            .expect("vm survives the trapping dispose"),
+        7
+    );
+    assert_eq!(lines.borrow().clone(), vec!["body done", "still here"]);
 }
 
 #[test]
