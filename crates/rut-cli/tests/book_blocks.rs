@@ -19,14 +19,6 @@ use std::rc::Rc;
 /// Format: (path relative to the repo root, rut-block index (1-based),
 /// reason). Clearing entries is the book lane's job, never the gate's.
 const SKIP: &[(&str, u32, &str)] = &[
-    // the quicksort excerpt shows the archetype's algorithms only — the
-    // prose says the setup lines live in demo/src/examples/quicksort.rut,
-    // so the block itself has no `use ink::{Logger}` and cannot compile
-    (
-        "docs/src/examples/playground-corpus.md",
-        1,
-        "excerpt of demo/src/examples/quicksort.rut without its setup lines (no `use ink::{Logger}`)",
-    ),
     // the page illustrates module-level `let` bindings; the struct
     // literal initializer is exactly the load-time-expression case the
     // engine does not accept yet (literals only in this build)

@@ -141,12 +141,24 @@ bus stays mutably borrowed *across* the nested call — the value
 boundary's borrow guard is what makes that sound: a second `emit`
 fired from inside `render_line` would trap on the guard instead of
 racing. On the rut side, `render_line` is the one-line entry the host
-re-enters:
+re-enters — pure string work, so it runs on its own (the line it
+prints below is the transcript's broadcast row):
 
 ```rut
+use ink::{ Logger };
+
 entry fn render_line(topic: str, payload: str) -> str {
     return f"[{topic}] {payload}";
 }
+
+pub fn main() {
+    let log = Logger.new("bus");
+    log.info(render_line("broadcast", "<ada> hello world"));
+}
+```
+
+```text
+[broadcast] <ada> hello world
 ```
 
 ### The packaging: one directory, two load forms

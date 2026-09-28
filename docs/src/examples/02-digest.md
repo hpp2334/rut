@@ -54,9 +54,13 @@ fuel used: 1014105 of Some(50000000)
 
 `digest.rut` runs on hex literals, `u32`/`u64`, the wrapping family,
 and signedness-correct shifts. CRC-32 is the compact showcase —
-table-free, bitwise, and exactly the textbook loop:
+table-free, bitwise, and exactly the textbook loop. The entry is pure
+rut — no host, no manifest — so it runs on its own, here checked
+against the algorithm's canonical test value:
 
 ```rut
+use ink::{ Logger };
+
 entry fn crc32(data: bytes) -> u32 {
     let mut crc: u32 = 0xFFFFFFFFu32;
     for (let b of data) {
@@ -71,6 +75,16 @@ entry fn crc32(data: bytes) -> u32 {
     }
     return crc ^ 0xFFFFFFFFu32;
 }
+
+pub fn main() {
+    let log = Logger.new("crc");
+    let vector = "123456789".encode();   // the canonical CRC-32 test vector
+    log.info(f"crc32(vector) = {crc32(vector)} — check value 0xCBF43926: {crc32(vector) == 0xCBF43926u32}");
+}
+```
+
+```text
+crc32(vector) = 3421780262 — check value 0xCBF43926: true
 ```
 
 SHA-512 is the demanding one: its 64-bit rotations need `>>` to be a

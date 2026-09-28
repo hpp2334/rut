@@ -4,11 +4,9 @@ The classics: seventeen short, self-contained rut programs in
 `demo/src/examples/` that the web playground offers in its picker and
 runs in your browser. They are not copies — the playground imports
 the `.rut` files **raw**, so what you edit there is what this repo
-ships — and each case carries its expected output as inline data,
-pinned by two independent gates. The classics are the fastest way to
-see the language surface in working code: algorithms first, then the
-language-surface tours, then the memory shapes. The same order is the
-playground's.
+ships. The classics are the fastest way to see the language surface
+in working code: algorithms first, then the language-surface tours,
+then the memory shapes. The same order is the playground's.
 
 ## Run it
 
@@ -19,9 +17,9 @@ cd demo && npm run dev      # serve the playground locally
 # or use the deployed instance: https://playground.rut.hpp2334.com
 ```
 
-Pick a case, press run, and compare against the expected lines shown
-below — the playground's static preview promises exactly what the
-pipeline produces. The gates that guarantee it:
+Pick a case and press run — and the classics shown in the tour below
+run in the book too, on their ▶ buttons. The gates that keep the
+corpus honest:
 
 ```sh
 cargo test -p rut-cli --test playground   # from the repo root — the native gate
@@ -31,19 +29,19 @@ cd demo && npm run smoke                  # the wasm gate, headless
 Concretely:
 
 - `cargo test -p rut-cli --test playground` compiles **and runs**
-  every classic through the full pipeline natively and diffs its
-  output against the same expected lines.
+  every classic through the full pipeline natively — a compile failure
+  or a trap fails the gate.
 - `cd demo && npm run smoke` builds the demo bundle (wasm included)
-  and drives every case through it, headless — the same diff through
+  and drives every case through it, headless — the same run through
   the wasm engine.
 
-Each gate enforces its own copy of the expected output against the
-same engine, so neither the browser view nor the native table can
-silently rot.
+Both gates drive the same sources through the same engine — native
+and wasm — so a classic that stops running cleanly fails in CI, not
+in front of a reader.
 
 ## The seventeen cases
 
-| Case | Demonstrates | Expected output (first line) |
+| Case | Demonstrates | First line it prints |
 |---|---|---|
 | `sieve` | Sieve of Eratosthenes — flat `Vec<u8>`/`Vec<i32>` primitive buffers | `25 primes up to 100, last=97` |
 | `quicksort` | in-place `Vec<i32>` mutation (handles, shared with the caller), recursion | `sorted: 1 2 2 3 5 7 8 9` |
@@ -71,11 +69,18 @@ the same logging surface the std packages use
 
 ### A classic, whole
 
-`demo/src/examples/quicksort.rut` is the archetype: a dozen lines of
-setup, one algorithm, one log line — and the shared-handle mutation
-law in action (the sort writes through the caller's vec):
+`demo/src/examples/quicksort.rut` is the archetype — imports, one
+algorithm, one log line — and the shared-handle mutation law in
+action (the sort writes through the caller's vec). Verbatim, so what
+runs here is exactly what the playground edits:
 
 ```rut
+use pouch::{ Vec };
+// Quicksort — in-place Vec<i32> mutation (vecs are handles: the
+// mutation is shared with the caller), recursion, explicit conversions.
+
+use ink::{ Logger };
+
 fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
     let t = xs[a];
     xs[a] = xs[b];
@@ -115,17 +120,31 @@ pub fn main() {
 }
 ```
 
-Compare with [01 — Sort](01-sort.md): same algorithm, no host — the
-classic's expected output is the whole contract.
+```text
+sorted: 1 2 2 3 5 7 8 9 
+```
+
+(The line above ends with the trailing space the program builds —
+one after every element — kept byte-for-byte.)
+
+Compare with [01 — Sort](01-sort.md): same algorithm, no host — run
+it here and compare with the fuel-counted host sweep.
 
 ### Erasure and checked recovery, in one screen
 
 The `opaque` case is the reference for the erasure primitive —
 `opaque(v)` forgets the static type, `opaque.downcast<T>` answers the
 nullable, and `is` names the *box*, never the payload
-([opaque — erasure and downcast](../reference/opaque.md)):
+([opaque — erasure and downcast](../reference/opaque.md)). The case's
+`erase_and_recover` verbatim, with its two payload types and a `main`
+so it runs in place:
 
 ```rut
+use ink::{ Logger };
+
+struct Point { x: f32; y: f32 }
+enum Flavor { Sweet, Sour }
+
 fn erase_and_recover() {
     let log = Logger.new("opaque");
     let box1 = opaque(Point { x: 1, y: 2 });    // erasure = type-call;
@@ -141,30 +160,36 @@ fn erase_and_recover() {
     log.info(f"sour? {opaque.downcast<Flavor>(box2) != nil} wrong? {wrong == nil}");
     log.info(f"is str: {box3 is str}");   // `is` names the box — misses every payload type; downcast recovers
 }
+
+pub fn main() {
+    erase_and_recover();
+}
 ```
 
-### The expected-output contract
+```text
+point 1 2
+sour? true wrong? true
+is str: false
+```
 
-Each classic has a second half in `demo/src/examples/index.ts`: the
-case's `expected` lines, carried verbatim from the retired
-`*.expected` sidecar files. The shape is deliberately boring — an id,
-a blurb, the raw source, and the exact lines the pipeline must print
-(the table above quotes them). Both gates diff their run against
-those lines, so a playground case that drifts from the engine fails
-in CI, not in front of a reader.
+### How a case is wired
 
-Two details worth noticing when you browse: the corpus is walked by
-the parser conformance test too (alongside `examples/` and the std
-tree — every `.rut` file in the repo must parse clean), and one
-quicksort output line ends with a trailing space that the engine
-emits on purpose, so both gates diff it byte-for-byte.
+Each classic is registered in `demo/src/examples/index.ts` — an id, a
+blurb, and the raw source, in the playground's order. The table above
+quotes each case's first log line, and the tour's blocks run right
+here — quicksort exactly as shipped. Two details worth noticing when
+you browse: the corpus
+is walked by the parser conformance test too (alongside `examples/`
+and the std tree — every `.rut` file in the repo must parse clean),
+and one quicksort log line ends with a trailing space the program
+builds on purpose — run it above and look closely.
 
 ## Takeaways
 
 - The classics are **live sources**, not string copies: the
   playground edits what the repo ships.
-- Every case is pinned to its output by **two gates** — native and
-  wasm — over the same engine.
+- Every case is exercised by **two gates** — native and wasm — over
+  the same engine.
 - Seventeen files cover the language surface in run-sized doses:
   algorithms, types and traits, strings and bytes, erasure, patterns,
   maps, and the memory shapes.

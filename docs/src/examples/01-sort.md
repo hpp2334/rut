@@ -43,9 +43,14 @@ counts it for you.
 `Vec<i32>` cannot cross the host boundary, so `create()` boxes a
 `Bank` in an `opaque` and the host holds the handle — the
 [00 — Todolist](00-todolist.md) pattern again. Results come back
-three ways, all crossing-shaped:
+three ways, all crossing-shaped. `serialize` below is verbatim, plus
+a `main` that boxes a small bank the way `create()` does, so the
+block runs on its own:
 
 ```rut
+use ink::{ Logger };
+use pouch::{ Vec };
+
 struct Bank {
     data: ?Vec<i32>;
 }
@@ -62,6 +67,17 @@ entry fn serialize(c: opaque) -> str {
     }
     return f"{out}]";
 }
+
+pub fn main() {
+    let log = Logger.new("sort");
+    let bank: ?Bank = Bank { data: Vec<i32>.from([5, 2, 9, 2]) };
+    let c = opaque(bank);
+    log.info(f"serialized: {serialize(c)}");
+}
+```
+
+```text
+serialized: [5, 2, 9, 2]
 ```
 
 `serialize` is the workhorse: a whole result crosses as **one JSON
@@ -101,9 +117,16 @@ entry fn sort(c: opaque, algo: str) -> str {
 `fill` replaces the bank with `n` pseudo-random values from a
 linear-congruential generator, so sizing a benchmark input is one
 host round-trip, not one per element. The u32 math must **wrap**, and
-rut makes that explicit — plain `*` traps on overflow:
+rut makes that explicit — plain `*` traps on overflow. The entry is
+verbatim (the `Bank` inlined so the block compiles alone), with a
+`main` that fills and prints what one call produces:
 
 ```rut
+use ink::{ Logger };
+use pouch::{ Vec };
+
+struct Bank { data: ?Vec<i32>; }   // inlined from above — the block runs alone
+
 entry fn fill(c: opaque, n: u32, seed: u32) {
     let mut b = opaque.downcast<?Bank>(c);
     let fresh: Vec<i32> = Vec.new();
@@ -114,6 +137,24 @@ entry fn fill(c: opaque, n: u32, seed: u32) {
     }
     b.data = fresh;
 }
+
+pub fn main() {
+    let log = Logger.new("sort");
+    let bank: ?Bank = Bank { data: nil };
+    let c = opaque(bank);
+    fill(c, 8, 42);
+    let b = opaque.downcast<?Bank>(c);
+    let xs = b.data;
+    let mut out = "";
+    for (let x of xs) {
+        out = f"{out} {x}";
+    }
+    log.info(f"fill(8, seed=42):{out}");
+}
+```
+
+```text
+fill(8, seed=42): 798 893 208 375 746 353 452 555
 ```
 
 The wrapping family (`wrapping_mul`, `wrapping_add`, `wrapping_shl`)

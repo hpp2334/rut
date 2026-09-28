@@ -54,9 +54,14 @@ renders the one-line audit.
 When you write `async fn`, the engine weaves a hidden frame whose
 shape is exactly this: a stage counter, the payload the stages carry,
 and a done flag. `CustomFuture` spells that shape out in source, so
-you can see what the keyword hides:
+you can see what the keyword hides. The machine itself is plain rut —
+only the *driving harness* is missing — so the block below adds a
+`main` that advances it by hand; that is as far as one can run it
+today:
 
 ```rut
+use ink::{ Logger };
+
 struct CustomFuture {
     steps: u32;      // checkpoints booked before the run finishes
     stage: str;      // what the current stage does (the audit's label)
@@ -82,6 +87,20 @@ impl CustomFuture {
         return true;
     }
 }
+
+pub fn main() {
+    let log = Logger.new("future");
+    let mut f = CustomFuture.new(3, "poll");
+    let mut polls = 0;
+    while (f.advance()) {
+        polls += 1;
+    }
+    log.info(f"3 steps took {polls} advancing polls, then advance() answered false (done={f.done})");
+}
+```
+
+```text
+3 steps took 3 advancing polls, then advance() answered false (done=true)
 ```
 
 ### The trait surface: a user impl of a built-in trait
@@ -188,4 +207,5 @@ model behind it, [the async model](../core-concepts/async-model.md).
 - A launcher is just code: driving + audit over the public `Future`
   surface, re-spellable by any module.
 - The file is parse-only by disclosure; the runnable harness is
-  follow-up work.
+  follow-up work — the machine itself is plain rut (it ran above),
+  but nothing launches or drives it as a future yet.

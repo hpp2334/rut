@@ -40,9 +40,15 @@ fuel used: 680 of Some(1000000)
 methods live in an inherent `impl` block
 ([Structs](../reference/structs.md),
 [Classes and constructors](../reference/classes.md)). Unannotated
-members are module-private:
+members are module-private. The block below is the class verbatim —
+`new`, `add`, and `remove` — closed with a `main` so it runs on its
+own; the example file itself has no `main` — it is a library the host
+drives through its `entry fn` surface:
 
 ```rut
+use ink::{ Logger };
+use pouch::{ Vec };
+
 struct Todo {
     id: i32;
     title: str;
@@ -67,16 +73,9 @@ impl TodoList {
         self.next_id += 1;
         return id;
     }
-```
 
-Note `mut self`: writing through a class handle requires a `mut`
-binding head, the same law [01 — Sort](01-sort.md) exercises on plain
-vecs. The read side is ordinary code — `len`, `title_of` (which
-returns `""` for a miss; the example pairs it with `has_title`
-because there is no `?.` sugar), a `render` built from f-strings, and
-a `remove` that filters through a `when`:
+    // ---- DELETE ----
 
-```rut
     pub fn remove(mut self, id: i32) -> bool {
         let kept: Vec<Todo> = Vec.new();
         let mut removed = false;
@@ -91,7 +90,31 @@ a `remove` that filters through a `when`:
         }
         return removed;
     }
+}
+
+pub fn main() {
+    let log = Logger.new("todos");
+    let mut list = TodoList.new();
+    list.add("implement the VM");
+    list.add("ship the demo");
+    let first = list.remove(1);
+    let second = list.remove(1);
+    log.info(f"remove(#1) = {first}, again = {second}, left: {list.items.len()}");
+}
 ```
+
+```text
+remove(#1) = true, again = false, left: 1
+```
+
+Note `mut self`: writing through a class handle requires a `mut`
+binding head, the same law [01 — Sort](01-sort.md) exercises on plain
+vecs — `add` and `remove` both declare it. `remove` filters through a
+`when`: the matching row is dropped, everything else is kept, and the
+list is rewritten only if something was actually removed. The read
+side (not shown) is ordinary code — `len`, `title_of` (which returns
+`""` for a miss; the example pairs it with `has_title` because there
+is no `?.` sugar), and a `render` built from f-strings.
 
 ### The handle: one opaque box around the world
 
